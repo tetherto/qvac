@@ -357,17 +357,6 @@ static ggml_backend_t nmt_backend_init_gpu(const nmt_context_params& params) {
 
   if (params.use_gpu) {
     const size_t devCount = ggml_backend_dev_count();
-    for (size_t i = 0; i < devCount; ++i) {
-      ggml_backend_dev_t dev_cur = ggml_backend_dev_get(i);
-      enum ggml_backend_dev_type dev_type = ggml_backend_dev_type(dev_cur);
-      const char* name = ggml_backend_dev_name(dev_cur);
-      std::ostringstream oss_backend;
-      oss_backend << "  Backend[" << i << "]: type=" << dev_type
-                  << ", name=" << (name ? name : "(null)");
-      QLOG(
-          qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-          oss_backend.str());
-    }
 
     if (!gpuBackendLower.empty()) {
       // Mode 1: explicit gpu_backend filter.
@@ -383,14 +372,23 @@ static ggml_backend_t nmt_backend_init_gpu(const nmt_context_params& params) {
           continue;
         }
         if (cnt == params.gpu_device) {
-          dev = dev_cur;
-          std::ostringstream oss_selected;
-          oss_selected << "  **SELECTED explicit gpu_backend='"
-                       << params.gpu_backend
-                       << "'**: " << (name ? name : "(null)");
-          QLOG(
-              qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-              oss_selected.str());
+          ggml_backend_buffer_type_t buft =
+              ggml_backend_dev_buffer_type(dev_cur);
+          if (buft != nullptr) {
+            dev = dev_cur;
+            std::ostringstream oss_selected;
+            oss_selected << "  **SELECTED explicit gpu_backend='"
+                         << params.gpu_backend
+                         << "'**: " << (name ? name : "(null)");
+            QLOG(
+                qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+                oss_selected.str());
+          } else {
+            QLOG(
+                qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+                "[GPU] gpu_backend matched device but buffer type is null — "
+                "skipping");
+          }
         }
         if (++cnt > params.gpu_device) {
           break;

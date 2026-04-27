@@ -146,16 +146,6 @@ static buft_list_t make_buft_list(nmt_context_params& params) {
 
   if (params.use_gpu) {
     const size_t devCount = ggml_backend_dev_count();
-    for (size_t i = 0; i < devCount; ++i) {
-      ggml_backend_dev_t dev = ggml_backend_dev_get(i);
-      enum ggml_backend_dev_type dev_type = ggml_backend_dev_type(dev);
-      const char* name = ggml_backend_dev_name(dev);
-      std::ostringstream oss3;
-      oss3 << "  Backend[" << i << "]: type=" << dev_type
-           << ", name=" << (name ? name : "(null)");
-      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, oss3.str());
-    }
-
     bool selected = false;
 
     if (!gpuBackendLower.empty()) {
@@ -179,6 +169,11 @@ static buft_list_t make_buft_list(nmt_context_params& params) {
             QLOG(
                 qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
                 "  -> Added explicit gpu_backend buft to buft_list");
+          } else {
+            QLOG(
+                qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+                "[make_buft_list] gpu_backend matched device but buffer type "
+                "is null — will use CPU buffers");
           }
         }
         if (++cnt > params.gpu_device) {
@@ -241,6 +236,7 @@ static buft_list_t make_buft_list(nmt_context_params& params) {
             auto* buft = ggml_backend_dev_buffer_type(dev);
             if (buft) {
               buft_list.emplace_back(dev, buft);
+              selected = true;
               QLOG(
                   qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
                   "  -> Added compute buft to buft_list");

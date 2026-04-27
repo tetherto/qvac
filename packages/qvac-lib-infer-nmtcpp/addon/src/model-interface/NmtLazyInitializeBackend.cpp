@@ -104,23 +104,23 @@ void nmtGgmlAbortCallback(const char* message) {
 // exact crash we are chasing) therefore goes through an *uninstalled*
 // callback and falls back to stderr, which is dropped on Android.
 //
-// Workaround: enumerate every loaded shared object via dl_iterate_phdr
-// (which yields absolute paths for everything currently mapped into the
-// process, so we don't depend on backendsDir containing the .sos — ggml's
-// internal fallback search paths also load from other locations, making a
-// filesystem walk of backendsDir unreliable). For each libqvac-ggml*.so we
-// re-open with RTLD_NOLOAD (returns the existing handle without re-mapping),
-// dlsym the two setters out of it, and install our callbacks directly into
-// that .so's copy of the state.
+// Workaround: enumerate every loaded shared object via dl_iterate_phdr,
+// collect paths matching ggml backend .so files, then install callbacks in
+// a separate loop AFTER dl_iterate_phdr returns (to avoid holding the
+// Bionic linker lock while calling dlopen/dlclose, which can deadlock on
+// pre-API-30 devices).
+
+static std::vector<std::string> g_collectedBackendPaths;
+
 int backendSoIterCallback(
-    struct dl_phdr_info* info, size_t /*size*/, void* /*data*/) {
+    struct dl_phdr_info* info, size_t /*size*/, void* data) {
   if (info == nullptr || info->dlpi_name == nullptr ||
       info->dlpi_name[0] == '\0') {
     return 0;
   }
-  const char* path = info->dlpi_name;
-  const char* slash = strrchr(path, '/');
-  const char* filename = slash ? slash + 1 : path;
+  const char* soPath = info->dlpi_name;
+  const char* slash = strrchr(soPath, '/');
+  const char* filename = slash ? slash + 1 : soPath;
 
   if (strstr(filename, "ggml") == nullptr) {
     return 0;
@@ -129,28 +129,35 @@ int backendSoIterCallback(
     return 0;
   }
 
-  using LogSetFn = void (*)(ggml_log_callback, void*);
-  using AbortSetFn = void (*)(ggml_abort_callback_t);
-
-  void* handle = dlopen(path, RTLD_NOW | RTLD_NOLOAD);
-  if (handle == nullptr) {
-    return 0;
-  }
-  auto logSetFn = reinterpret_cast<LogSetFn>(dlsym(handle, "ggml_log_set"));
-  if (logSetFn != nullptr) {
-    logSetFn(&nmtGgmlLogCallback, nullptr);
-  }
-  auto abortSetFn =
-      reinterpret_cast<AbortSetFn>(dlsym(handle, "ggml_set_abort_callback"));
-  if (abortSetFn != nullptr) {
-    abortSetFn(&nmtGgmlAbortCallback);
-  }
-  dlclose(handle);
+  auto* paths = static_cast<std::vector<std::string>*>(data);
+  paths->emplace_back(soPath);
   return 0;
 }
 
 void installCallbacksInLoadedBackendSos() {
-  dl_iterate_phdr(&backendSoIterCallback, nullptr);
+  std::vector<std::string> paths;
+  dl_iterate_phdr(&backendSoIterCallback, &paths);
+
+  using LogSetFn = void (*)(ggml_log_callback, void*);
+  using AbortSetFn = void (*)(ggml_abort_callback_t);
+
+  for (const auto& soPath : paths) {
+    void* handle = dlopen(soPath.c_str(), RTLD_NOW | RTLD_NOLOAD);
+    if (handle == nullptr) {
+      continue;
+    }
+    auto logSetFn =
+        reinterpret_cast<LogSetFn>(dlsym(handle, "ggml_log_set"));
+    if (logSetFn != nullptr) {
+      logSetFn(&nmtGgmlLogCallback, nullptr);
+    }
+    auto abortSetFn =
+        reinterpret_cast<AbortSetFn>(dlsym(handle, "ggml_set_abort_callback"));
+    if (abortSetFn != nullptr) {
+      abortSetFn(&nmtGgmlAbortCallback);
+    }
+    dlclose(handle);
+  }
 }
 #endif
 } // namespace
