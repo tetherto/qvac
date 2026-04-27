@@ -141,15 +141,11 @@ static buft_list_t make_buft_list(const nmt_context_params& params) {
   ggml_backend_dev_t selected_dev = nmt_select_gpu_device(
       params.use_gpu, params.gpu_backend, params.gpu_device, "make_buft_list");
   if (selected_dev != nullptr) {
-    auto* buft = ggml_backend_dev_buffer_type(selected_dev);
-    if (buft != nullptr) {
-      buft_list.emplace_back(selected_dev, buft);
-      QLOG(
-          qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-          "  -> Added GPU buft to buft_list");
-    }
-    // If buft is null here, the shared helper already emitted a WARNING and
-    // we fall through to CPU buffers — same behaviour as before the refactor.
+    buft_list.emplace_back(
+        selected_dev, ggml_backend_dev_buffer_type(selected_dev));
+    QLOG(
+        qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+        "  -> Added GPU buft to buft_list");
   }
 
   std::ostringstream oss_selected;

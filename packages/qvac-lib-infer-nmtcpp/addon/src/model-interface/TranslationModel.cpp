@@ -817,7 +817,7 @@ std::string TranslationModel::getActiveBackendName() const {
   }
 #endif
 
-  if (!nmtCtx_ || !nmtCtx_->state) {
+  if (!nmtCtx_) {
     return "Unloaded";
   }
 
