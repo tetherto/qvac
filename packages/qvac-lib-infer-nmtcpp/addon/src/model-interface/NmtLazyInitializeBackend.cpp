@@ -28,10 +28,18 @@ int NmtLazyInitializeBackend::g_refCount = 0;
 namespace {
 void nmtGgmlLogCallback(
     enum ggml_log_level level, const char* text, void* /*user_data*/) {
-  if (text == nullptr) {
+  if (text == nullptr || text[0] == '\0') {
     return;
   }
-  Priority priority = Priority::DEBUG;
+
+  // Early exit for DEBUG messages — avoids heap allocations on the hot path.
+  // ggml emits dozens of DEBUG lines per forward pass; only ERROR/WARN/INFO
+  // are worth the cost of string construction + QLOG queue dispatch.
+  if (level == GGML_LOG_LEVEL_DEBUG) {
+    return;
+  }
+
+  Priority priority = Priority::INFO;
   switch (level) {
   case GGML_LOG_LEVEL_ERROR:
     priority = Priority::ERROR;
@@ -39,39 +47,35 @@ void nmtGgmlLogCallback(
   case GGML_LOG_LEVEL_WARN:
     priority = Priority::WARNING;
     break;
-  case GGML_LOG_LEVEL_INFO:
-    priority = Priority::INFO;
-    break;
-  case GGML_LOG_LEVEL_DEBUG:
   default:
     break;
   }
-  // Strip trailing newlines — ggml terminates messages with '\n' but our
-  // logger adds its own. Leaving both produces blank lines in logcat.
-  std::string message(text);
-  while (!message.empty() &&
-         (message.back() == '\n' || message.back() == '\r')) {
-    message.pop_back();
+
+  // Compute the trimmed length without heap allocation.
+  size_t len = std::strlen(text);
+  while (len > 0 && (text[len - 1] == '\n' || text[len - 1] == '\r')) {
+    --len;
   }
-  if (message.empty()) {
+  if (len == 0) {
     return;
   }
 
 #ifdef __ANDROID__
-  // Mirror ERROR/WARN through Android's logcat synchronously so crash-
-  // precursor messages (e.g. CL_CHECK error lines right before ggml_abort)
-  // survive even when the JS bridge hasn't flushed the async QLOG queue.
-  // DEBUG/INFO go through QLOG only to keep logcat tidy.
   if (level == GGML_LOG_LEVEL_ERROR || level == GGML_LOG_LEVEL_WARN) {
     __android_log_print(
         level == GGML_LOG_LEVEL_ERROR ? ANDROID_LOG_ERROR : ANDROID_LOG_WARN,
         "ggml-nmt",
-        "%s",
-        message.c_str());
+        "%.*s",
+        static_cast<int>(len),
+        text);
   }
 #endif
 
-  QLOG(priority, "[ggml] " + message);
+  std::string message;
+  message.reserve(7 + len);
+  message.append("[ggml] ");
+  message.append(text, len);
+  QLOG(priority, message);
 }
 
 // ggml_abort uses its own callback (not the log callback). Without this
@@ -114,21 +118,21 @@ int backendSoIterCallback(
       info->dlpi_name[0] == '\0') {
     return 0;
   }
-  std::string fullPath(info->dlpi_name);
-  auto slash = fullPath.find_last_of('/');
-  std::string filename =
-      slash == std::string::npos ? fullPath : fullPath.substr(slash + 1);
-  if (filename.find("ggml") == std::string::npos) {
+  const char* path = info->dlpi_name;
+  const char* slash = strrchr(path, '/');
+  const char* filename = slash ? slash + 1 : path;
+
+  if (strstr(filename, "ggml") == nullptr) {
     return 0;
   }
-  if (filename.find(".so") == std::string::npos) {
+  if (strstr(filename, ".so") == nullptr) {
     return 0;
   }
 
   using LogSetFn = void (*)(ggml_log_callback, void*);
-  using AbortSetFn = ggml_abort_callback_t (*)(ggml_abort_callback_t);
+  using AbortSetFn = void (*)(ggml_abort_callback_t);
 
-  void* handle = dlopen(fullPath.c_str(), RTLD_NOW | RTLD_NOLOAD);
+  void* handle = dlopen(path, RTLD_NOW | RTLD_NOLOAD);
   if (handle == nullptr) {
     return 0;
   }

@@ -14,6 +14,7 @@
 #include "nmt.hpp"
 #include "nmt_graph_decoder.hpp"
 #include "nmt_graph_encoder.hpp"
+#include "nmt_utils.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
 void nmt_batch_prep_legacy(
@@ -347,17 +348,6 @@ static ggml_backend_t nmt_backend_init_gpu(const nmt_context_params& params) {
   //      non-CPU device. When the guard is off, the fallback also
   //      skips OpenCL-named devices so Bergamot/IndicTrans on Adreno
   //      830 don't hit the q4_0 transpose crash (QVAC-17790).
-  auto name_contains = [](const char* n, const std::string& needle) {
-    if (n == nullptr || needle.empty()) {
-      return false;
-    }
-    std::string s(n);
-    std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) {
-      return static_cast<char>(std::tolower(c));
-    });
-    return s.find(needle) != std::string::npos;
-  };
-
   std::string gpuBackendLower = params.gpu_backend;
   std::transform(
       gpuBackendLower.begin(),
@@ -366,7 +356,8 @@ static ggml_backend_t nmt_backend_init_gpu(const nmt_context_params& params) {
       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 
   if (params.use_gpu) {
-    for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
+    const size_t devCount = ggml_backend_dev_count();
+    for (size_t i = 0; i < devCount; ++i) {
       ggml_backend_dev_t dev_cur = ggml_backend_dev_get(i);
       enum ggml_backend_dev_type dev_type = ggml_backend_dev_type(dev_cur);
       const char* name = ggml_backend_dev_name(dev_cur);
@@ -381,17 +372,17 @@ static ggml_backend_t nmt_backend_init_gpu(const nmt_context_params& params) {
     if (!gpuBackendLower.empty()) {
       // Mode 1: explicit gpu_backend filter.
       int cnt = 0;
-      for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
+      for (size_t i = 0; i < devCount; ++i) {
         ggml_backend_dev_t dev_cur = ggml_backend_dev_get(i);
         enum ggml_backend_dev_type dev_type = ggml_backend_dev_type(dev_cur);
         const char* name = ggml_backend_dev_name(dev_cur);
         if (dev_type == GGML_BACKEND_DEVICE_TYPE_CPU) {
           continue;
         }
-        if (!name_contains(name, gpuBackendLower)) {
+        if (!nmt_name_contains_ci(name, gpuBackendLower)) {
           continue;
         }
-        if (cnt == 0 || cnt == params.gpu_device) {
+        if (cnt == params.gpu_device) {
           dev = dev_cur;
           std::ostringstream oss_selected;
           oss_selected << "  **SELECTED explicit gpu_backend='"
@@ -405,21 +396,27 @@ static ggml_backend_t nmt_backend_init_gpu(const nmt_context_params& params) {
           break;
         }
       }
+      if (dev == nullptr) {
+        QLOG(
+            qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+            "[GPU] Explicit gpu_backend='" + params.gpu_backend +
+                "' matched no registered device — falling back to CPU");
+      }
     } else {
       // Mode 2: gated default.
 #ifdef QVAC_NMTCPP_USE_OPENCL
       int cnt = 0;
-      for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
+      for (size_t i = 0; i < devCount; ++i) {
         ggml_backend_dev_t dev_cur = ggml_backend_dev_get(i);
         enum ggml_backend_dev_type dev_type = ggml_backend_dev_type(dev_cur);
         const char* name = ggml_backend_dev_name(dev_cur);
         if (dev_type == GGML_BACKEND_DEVICE_TYPE_CPU) {
           continue;
         }
-        if (!name_contains(name, "opencl")) {
+        if (!nmt_name_contains_ci(name, "opencl")) {
           continue;
         }
-        if (cnt == 0 || cnt == params.gpu_device) {
+        if (cnt == params.gpu_device) {
           dev = dev_cur;
           std::ostringstream oss_selected;
           oss_selected << "  **SELECTED OpenCL backend**: " << name;
@@ -435,7 +432,7 @@ static ggml_backend_t nmt_backend_init_gpu(const nmt_context_params& params) {
 
       if (dev == nullptr) {
         int cnt2 = 0;
-        for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
+        for (size_t i = 0; i < devCount; ++i) {
           ggml_backend_dev_t dev_cur = ggml_backend_dev_get(i);
           enum ggml_backend_dev_type dev_type = ggml_backend_dev_type(dev_cur);
           const char* name = ggml_backend_dev_name(dev_cur);
@@ -443,11 +440,11 @@ static ggml_backend_t nmt_backend_init_gpu(const nmt_context_params& params) {
             continue;
           }
 #ifndef QVAC_NMTCPP_USE_OPENCL
-          if (name_contains(name, "opencl")) {
+          if (nmt_name_contains_ci(name, "opencl")) {
             continue;
           }
 #endif
-          if (cnt2 == 0 || cnt2 == params.gpu_device) {
+          if (cnt2 == params.gpu_device) {
             dev = dev_cur;
             std::ostringstream oss_selected;
             oss_selected << "  **SELECTED compute backend**: "

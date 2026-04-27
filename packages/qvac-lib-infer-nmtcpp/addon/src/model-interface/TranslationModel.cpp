@@ -87,6 +87,7 @@ BackendType TranslationModel::detectBackendType(const std::string& modelPath) {
 
 void TranslationModel::unload() {
   nmtCtx_ = nullptr;
+  activeBackendName_.clear();
 #ifdef HAVE_BERGAMOT
   bergamotCtx_ = nullptr;
 #endif
@@ -236,9 +237,11 @@ void TranslationModel::load() {
   nmt_context_params params = nmt_context_default_params();
   params.use_gpu = useGpu_;
   params.gpu_backend = gpuBackend_;
+  params.gpu_device = gpuDevice_;
 
   std::ostringstream oss;
-  oss << "[TRANSLATION MODEL] use_gpu set to: " << (useGpu_ ? "true" : "false");
+  oss << "[TRANSLATION MODEL] use_gpu=" << (useGpu_ ? "true" : "false")
+      << ", gpu_device=" << gpuDevice_;
   if (!gpuBackend_.empty()) {
     oss << ", gpu_backend='" << gpuBackend_ << "'";
   }
@@ -261,6 +264,31 @@ void TranslationModel::load() {
   isFirstSentence_ = true;
   srcLang_.clear();
   tgtLang_.clear();
+
+  // Cache the active backend name so getActiveBackendName() doesn't need to
+  // acquire the mutex and traverse the ggml API on every call.
+  {
+    activeBackendName_ = "CPU";
+    if (nmtCtx_->state) {
+      for (ggml_backend_t backend : nmtCtx_->state->backends) {
+        if (backend == nullptr) {
+          continue;
+        }
+        ggml_backend_dev_t dev = ggml_backend_get_device(backend);
+        if (dev == nullptr) {
+          continue;
+        }
+        if (ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_CPU) {
+          continue;
+        }
+        const char* name = ggml_backend_dev_name(dev);
+        if (name != nullptr) {
+          activeBackendName_ = std::string(name);
+        }
+        break;
+      }
+    }
+  }
 
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::INFO,
@@ -622,13 +650,39 @@ void TranslationModel::setConfig(
     }
   }
 
+  // Same pre-load lift for gpu_device — ordinal among matching devices.
+  if (auto it = config_.find("gpu_device"); it != config_.end()) {
+    if (const auto* asInt = std::get_if<int64_t>(&it->second)) {
+      setGpuDevice(static_cast<int>(*asInt));
+    } else if (const auto* asDouble = std::get_if<double>(&it->second)) {
+      setGpuDevice(static_cast<int>(*asDouble));
+    } else {
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+          "[TRANSLATION MODEL] 'gpu_device' config value is not a number; "
+          "ignoring");
+    }
+  }
+
   updateConfig();
 }
 
 void TranslationModel::setUseGpu(bool useGpu) { useGpu_ = useGpu; }
 
 void TranslationModel::setGpuBackend(const std::string& gpuBackend) {
-  gpuBackend_ = gpuBackend;
+  static constexpr size_t kMaxGpuBackendLen = 64;
+  if (gpuBackend.size() > kMaxGpuBackendLen) {
+    QLOG(
+        qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+        "[TRANSLATION MODEL] gpu_backend string too long; truncating to 64");
+    gpuBackend_ = gpuBackend.substr(0, kMaxGpuBackendLen);
+  } else {
+    gpuBackend_ = gpuBackend;
+  }
+}
+
+void TranslationModel::setGpuDevice(int gpuDevice) {
+  gpuDevice_ = gpuDevice;
 }
 
 void TranslationModel::updateConfig() {
@@ -688,41 +742,19 @@ void TranslationModel::updateConfig() {
 }
 
 std::string TranslationModel::getActiveBackendName() const {
-  // Bergamot is CPU-only by design — GGML backends are not consulted for it.
+  std::scoped_lock<std::mutex> scoped_lock(mtx_);
+
 #ifdef HAVE_BERGAMOT
   if (backendType_ == BackendType::BERGAMOT) {
     return "Bergamot-CPU";
   }
 #endif
 
-  std::scoped_lock<std::mutex> scoped_lock(mtx_);
-
   if (!nmtCtx_ || !nmtCtx_->state) {
     return "Unloaded";
   }
 
-  // nmt_backend_init() pushes the GPU backend first (if any), then ACCEL,
-  // then CPU. Returning the first non-CPU-type device name gives the active
-  // GPU/ACCEL backend name; if none found, fall back to "CPU".
-  for (ggml_backend_t backend : nmtCtx_->state->backends) {
-    if (backend == nullptr) {
-      continue;
-    }
-    ggml_backend_dev_t dev = ggml_backend_get_device(backend);
-    if (dev == nullptr) {
-      continue;
-    }
-    if (ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_CPU) {
-      continue;
-    }
-    const char* name = ggml_backend_dev_name(dev);
-    if (name == nullptr) {
-      continue;
-    }
-    return std::string(name);
-  }
-
-  return "CPU";
+  return activeBackendName_;
 }
 
 } // namespace qvac_lib_inference_addon_nmt
