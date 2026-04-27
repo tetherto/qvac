@@ -54,7 +54,6 @@ export const llmConfigBaseSchema = z.object({
     .union([z.number().int().min(0), z.enum(["integrated", "dedicated"])])
     .optional(),
   "split-mode": z.enum(["none", "layer", "row"]).optional(),
-  split_mode: z.enum(["none", "layer", "row"]).optional(),
   "tensor-split": z.string().optional(),
   /**
    * Writable directory for OpenCL kernel binary cache. Required on Android
