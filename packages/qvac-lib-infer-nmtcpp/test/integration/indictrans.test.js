@@ -70,7 +70,7 @@ const TEST_SENTENCE = 'Hello, how are you?'
  */
 const BASELINES = (() => {
   try {
-    const baselinePath = path.resolve(__dirname, 'perf-baselines.json')
+    const baselinePath = path.resolve(__dirname, 'fixtures/perf-baselines.json')
     if (!fs.existsSync(baselinePath)) return null
     return JSON.parse(fs.readFileSync(baselinePath, 'utf8'))
   } catch (err) {
@@ -151,7 +151,17 @@ async function runSingleTranslation (t, { modelPath, logger, useGpu, label }) {
     opts: { stats: true }
   })
   model.logger.setLevel('debug')
-  await model.load()
+
+  // If load() throws the freshly-constructed model is otherwise unreachable;
+  // the caller's finally block won't see it because we never returned.
+  // Tear it down explicitly before propagating so the native context is
+  // released deterministically (Bare/mobile GC timing is non-deterministic).
+  try {
+    await model.load()
+  } catch (err) {
+    try { await model.unload() } catch (_) { /* noop */ }
+    throw err
+  }
   t.pass(`${label} IndicTrans model loaded successfully`)
 
   const backendName = model.getActiveBackendName()
@@ -257,7 +267,10 @@ function resolveExecutionProvider (backendName, useGpu) {
     return backendName.toLowerCase().replace(/\s+/g, '-')
   }
   if (!useGpu) return 'cpu'
-  if (platform === 'android') return 'opencl'
+  // Android default is Vulkan since QVAC-17790 set USE_OPENCL=OFF; explicit
+  // OpenCL opt-in via config.gpu_backend='opencl' takes the non-fallback
+  // branch above where backendName is the actual ggml device name.
+  if (platform === 'android') return 'vulkan'
   if (platform === 'ios' || platform === 'darwin') return 'metal'
   return 'vulkan'
 }
@@ -275,8 +288,13 @@ test('IndicTrans CPU vs GPU output parity (EN->Hindi, beam=1)', { timeout: TEST_
     cpuRun = await runSingleTranslation(t, {
       modelPath, logger, useGpu: false, label: '[PARITY-CPU]'
     })
-    await cpuRun.model.unload()
-    cpuRun.model = null
+    // Use try/finally so a throwing unload still nulls cpuRun.model — the
+    // outer finally would otherwise call unload() twice on the same context.
+    try {
+      await cpuRun.model.unload()
+    } finally {
+      cpuRun.model = null
+    }
 
     gpuRun = await runSingleTranslation(t, {
       modelPath, logger, useGpu: true, label: '[PARITY-GPU]'

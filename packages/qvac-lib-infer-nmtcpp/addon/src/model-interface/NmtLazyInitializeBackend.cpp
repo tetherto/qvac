@@ -193,8 +193,14 @@ bool NmtLazyInitializeBackend::initialize(
 
 #ifdef __ANDROID__
   if (!openclCacheDir.empty()) {
-    auto oclCachePath =
-        (std::filesystem::path(openclCacheDir) / "opencl-cache").string();
+    // Canonicalize the caller-supplied path before forwarding to setenv() so
+    // a value containing `..` segments cannot redirect the OpenCL JIT cache
+    // outside the caller-intended directory. lexically_normal() collapses
+    // path-traversal sequences without requiring the directory to exist on
+    // disk yet (the cache subdirectory is created on first use).
+    std::filesystem::path normalized =
+        std::filesystem::path(openclCacheDir).lexically_normal();
+    auto oclCachePath = (normalized / "opencl-cache").string();
     setenv("GGML_OPENCL_CACHE_DIR", oclCachePath.c_str(), /*overwrite=*/1);
   }
 #endif

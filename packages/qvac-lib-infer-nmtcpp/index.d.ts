@@ -93,5 +93,5 @@ export default class TranslationNmtcpp {
    * device names like "Vulkan0", "OpenCL", "Metal" are also possible.
    * Call after load() to confirm use_gpu / gpu_backend took effect.
    */
-  getActiveBackendName(): 'Unloaded' | 'Bergamot-CPU' | 'CPU' | string
+  getActiveBackendName(): 'Unloaded' | 'Bergamot-CPU' | 'CPU' | (string & {})
 }

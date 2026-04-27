@@ -115,7 +115,7 @@ class TranslationInterface {
     } catch (err) {
       throw new QvacErrorAddonMarian({
         code: ERR_CODES.FAILED_TO_GET_BACKEND_NAME,
-        adds: [err.message],
+        adds: err.message,
         cause: err
       })
     }

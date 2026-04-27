@@ -119,7 +119,7 @@ template <typename T> static void read_safe(nmt_model_loader* loader, T& dest) {
 using buft_list_t =
     std::vector<std::pair<ggml_backend_dev_t, ggml_backend_buffer_type_t>>;
 
-static buft_list_t make_buft_list(nmt_context_params& params) {
+static buft_list_t make_buft_list(const nmt_context_params& params) {
   // Prio order: GPU -> CPU Extra -> CPU
   buft_list_t buft_list;
 
@@ -149,6 +149,18 @@ static buft_list_t make_buft_list(nmt_context_params& params) {
     bool selected = false;
 
     if (!gpuBackendLower.empty()) {
+#ifndef QVAC_NMTCPP_USE_OPENCL
+      // Mirror the warning in nmt_backend_init_gpu so callers see the same
+      // diagnostic from both selection paths when explicit OpenCL bypasses
+      // the build-time guard. See QVAC-17790.
+      if (gpuBackendLower.find("opencl") != std::string::npos) {
+        QLOG(
+            qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+            "[make_buft_list] Explicit gpu_backend='opencl' bypasses the "
+            "QVAC_NMTCPP_USE_OPENCL=OFF guard — Adreno 830 devices may still "
+            "abort with GGML_ASSERT(M % 4 == 0). Caller assumes risk.");
+      }
+#endif
       // Mode 1: explicit gpu_backend filter.
       int cnt = 0;
       for (size_t i = 0; i < devCount; ++i) {
