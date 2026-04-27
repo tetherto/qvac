@@ -734,8 +734,9 @@ void TranslationModel::setGpuBackend(const std::string& gpuBackend) {
   if (sanitized.size() != gpuBackend.size()) {
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-        "[TRANSLATION MODEL] gpu_backend sanitized (only [a-zA-Z0-9_-] "
-        "allowed; other chars stripped or value truncated to 64 bytes)");
+        "[TRANSLATION MODEL] gpu_backend rejected — contains disallowed "
+        "characters (only [a-zA-Z0-9_-] accepted); ignoring");
+    return;
   }
   gpuBackend_ = std::move(sanitized);
 }

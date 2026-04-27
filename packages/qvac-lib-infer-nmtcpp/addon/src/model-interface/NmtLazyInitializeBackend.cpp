@@ -28,6 +28,17 @@ int NmtLazyInitializeBackend::g_refCount = 0;
 // logcat on Android instead of silently going to stderr. Mirrors what
 // llama_log_set does in the llamacpp-llm addon. See QVAC-17790.
 namespace {
+
+std::string sanitizePrintableAscii(const std::string& input) {
+  std::string out;
+  out.reserve(input.size());
+  for (char raw : input) {
+    unsigned char c = static_cast<unsigned char>(raw);
+    out.push_back((c >= 0x20 && c < 0x7F) ? static_cast<char>(c) : '?');
+  }
+  return out;
+}
+
 void nmtGgmlLogCallback(
     enum ggml_log_level level, const char* text, void* /*user_data*/) {
   if (text == nullptr || text[0] == '\0') {
@@ -191,24 +202,18 @@ bool NmtLazyInitializeBackend::initializeLocked(
           Priority::WARNING,
           "Backend already initialized with different backendsDir. "
           "Previously initialized at: " +
-              g_recordedBackendsDir + ", requested: " + backendsDir);
+              sanitizePrintableAscii(g_recordedBackendsDir) +
+              ", requested: " + sanitizePrintableAscii(backendsDir));
     }
 #ifdef __ANDROID__
     if (!openclCacheDir.empty() && !g_recordedOpenclCacheDirInput.empty() &&
         openclCacheDir != g_recordedOpenclCacheDirInput) {
-      std::string sanitizedRequested;
-      sanitizedRequested.reserve(openclCacheDir.size());
-      for (char raw : openclCacheDir) {
-        unsigned char c = static_cast<unsigned char>(raw);
-        sanitizedRequested.push_back(
-            (c >= 0x20 && c < 0x7F) ? static_cast<char>(c) : '?');
-      }
       QLOG(
           Priority::WARNING,
           "Backend already initialized with different openclCacheDir. "
           "Previously initialized at: " +
-              g_recordedOpenclCacheDirInput +
-              ", requested: " + sanitizedRequested);
+              sanitizePrintableAscii(g_recordedOpenclCacheDirInput) +
+              ", requested: " + sanitizePrintableAscii(openclCacheDir));
     }
 #endif
     return false;
@@ -250,21 +255,11 @@ bool NmtLazyInitializeBackend::initializeLocked(
       }
     }
     if (!validPath) {
-      // Sanitize the value before embedding in the warning so a malformed
-      // path with control chars (\n, \r, ANSI) cannot inject fake log
-      // lines. Mirrors the gpu_backend sanitization in setGpuBackend().
-      std::string sanitized;
-      sanitized.reserve(openclCacheDir.size());
-      for (char raw : openclCacheDir) {
-        unsigned char c = static_cast<unsigned char>(raw);
-        sanitized.push_back(
-            (c >= 0x20 && c < 0x7F) ? static_cast<char>(c) : '?');
-      }
       QLOG(
           Priority::WARNING,
           "Rejecting suspicious openclCacheDir (must be absolute and free of "
           "'..' segments): " +
-              sanitized);
+              sanitizePrintableAscii(openclCacheDir));
     } else {
       auto oclCachePath =
           (requested.lexically_normal() / "opencl-cache").string();
@@ -276,16 +271,41 @@ bool NmtLazyInitializeBackend::initializeLocked(
 #endif
 
   if (!backendsDir.empty()) {
-    std::filesystem::path backendsDirPath(backendsDir);
+    std::filesystem::path requested(backendsDir);
+    bool validBackendsDir = requested.is_absolute();
+    if (validBackendsDir) {
+      for (const auto& seg : requested) {
+        if (seg == "..") {
+          validBackendsDir = false;
+          break;
+        }
+      }
+    }
+    if (!validBackendsDir) {
+      std::string sanitized;
+      sanitized.reserve(backendsDir.size());
+      for (char raw : backendsDir) {
+        unsigned char c = static_cast<unsigned char>(raw);
+        sanitized.push_back(
+            (c >= 0x20 && c < 0x7F) ? static_cast<char>(c) : '?');
+      }
+      QLOG(
+          Priority::WARNING,
+          "Rejecting suspicious backendsDir (must be absolute and free of "
+          "'..' segments): " +
+              sanitized);
+    } else {
+      std::filesystem::path backendsDirPath = requested.lexically_normal();
 #ifdef BACKENDS_SUBDIR
-    std::filesystem::path subdirPath(BACKENDS_SUBDIR);
-    backendsDirPath = backendsDirPath / subdirPath;
-    backendsDirPath = backendsDirPath.lexically_normal();
+      std::filesystem::path subdirPath(BACKENDS_SUBDIR);
+      backendsDirPath = backendsDirPath / subdirPath;
+      backendsDirPath = backendsDirPath.lexically_normal();
 #endif
-    QLOG(
-        Priority::INFO,
-        "Loading backends from directory: " + backendsDirPath.string());
-    ggml_backend_load_all_from_path(backendsDirPath.string().c_str());
+      QLOG(
+          Priority::INFO,
+          "Loading backends from directory: " + backendsDirPath.string());
+      ggml_backend_load_all_from_path(backendsDirPath.string().c_str());
+    }
   } else {
     QLOG(Priority::DEBUG, "Loading backends using default path");
     ggml_backend_load_all();
