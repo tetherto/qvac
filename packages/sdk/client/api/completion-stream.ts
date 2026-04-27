@@ -62,6 +62,17 @@ type CompletionParams = Omit<CompletionClientParams, "tools"> & {
  *   - `false` or `undefined`: No caching
  *   - ⚡ Performance: When cache exists, only the last message is sent to the model (includes multimodal attachments)
  *   - 🗑️ Cleanup: Use `deleteCache({ kvCacheKey })` to remove cached sessions
+ *
+ *   **Auto-cache (`kvCache: true`) — assistant turn contract.** When
+ *   pushing the assistant turn back into `history` for the next call,
+ *   use `(await run.final).cacheableAssistantContent`. That's the exact
+ *   string the SDK persisted to the cache key on this turn, so re-using
+ *   it verbatim guarantees the next-turn lookup hits.
+ *   - Any post-processing of the assistant text (rewriting, summarizing,
+ *     stripping model stop tokens like `<|im_end|>`) before pushing it
+ *     back will miss the cache. Push the canonical string unchanged.
+ *   - `cacheableAssistantContent` is omitted on tool-call turns - those
+ *     can't be auto-cached today.
  * @returns A CompletionRun — consume via `events` / `final`.
  * @example
  * ```typescript

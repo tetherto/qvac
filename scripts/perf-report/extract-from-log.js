@@ -45,6 +45,13 @@ function cleanJsonFromLogcat (raw) {
   // Only strip trailing ' when the leading wrapper was present
   if (/^'\[Bare\]',\s*'/.test(s)) {
     s = s.replace(/^'\[Bare\]',\s*'/, '').replace(/'$/, '')
+    // The ReactNativeJS bridge wraps content in a JS single-quoted string
+    // literal, which escapes embedded single quotes as \'. Those are valid
+    // JS string escapes but NOT valid JSON escapes — `JSON.parse` bails on
+    // strings like "aujourd\\'hui?" with "Bad escaped character". Unescape
+    // before parsing. `\\'` (literal `\` + `'`) is the only JS-but-not-JSON
+    // escape the bridge produces — `\n`, `\"`, `\\\\` are all shared.
+    s = s.replace(/\\'/g, "'")
   }
 
   return s.trim()
@@ -285,15 +292,28 @@ function walkDir (dir) {
 
 /**
  * Derives the Device Farm device name from a file path relative to logDir.
- * Device Farm artifacts are laid out as: <logDir>/<Device_Name>/TESTSPEC_OUTPUT.txt
- * Returns the first path segment after logDir with underscores replaced by spaces,
- * or null if the file is directly in logDir.
+ *
+ * Two layouts are supported:
+ *   1. Nested:  <logDir>/<Device_Name>/TESTSPEC_OUTPUT.txt
+ *      — returns the first path segment with underscores replaced by spaces.
+ *   2. Flat:    <logDir>/<Device_Name>_Tests_Suite_*.txt
+ *      — returns the filename prefix before the first Device-Farm phase
+ *        separator (Tests_Suite | Setup_Suite | Teardown_Suite | job).
+ *
+ * Returns null if neither layout matches (caller falls back to 'unknown').
  */
 function deriveDeviceName (filePath, logDir) {
   const rel = path.relative(logDir, filePath)
   const firstSeg = rel.split(path.sep)[0]
-  if (!firstSeg || firstSeg === path.basename(filePath)) return null
-  return firstSeg.replace(/_/g, ' ')
+  if (firstSeg && firstSeg !== path.basename(filePath)) {
+    return firstSeg.replace(/_/g, ' ')
+  }
+  // Flat layout: extract "Apple_iPhone_16_Pro" from
+  // "Apple_iPhone_16_Pro_Tests_Suite_Test_spec_output.txt".
+  const base = path.basename(filePath)
+  const m = base.match(/^(.+?)_(?:Tests_Suite|Setup_Suite|Teardown_Suite|job)_/)
+  if (m && m[1]) return m[1].replace(/_/g, ' ')
+  return null
 }
 
 function parseArgs () {

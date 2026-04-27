@@ -458,7 +458,7 @@ async function withMockDiffusionPlugin<T>(
     addonPackage: "@qvac/diffusion-cpp",
     loadConfigSchema: sdcppConfigSchema,
     createModel: function () {
-      return { model: { load: async function () {} }, loader: undefined };
+      return { model: { load: async function () {} } };
     },
     handlers: {
       diffusionStream: {
@@ -476,7 +476,6 @@ async function withMockDiffusionPlugin<T>(
       path: "/tmp/model.safetensors",
       config: {},
       modelType: ModelType.sdcppGeneration,
-      loader: undefined,
     });
     return await body(modelId);
   } finally {

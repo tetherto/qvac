@@ -220,38 +220,6 @@ jobs:
           cache: pip
           cache-dependency-path: ${{ env.WORKDIR }}/benchmarks/client/requirements.txt
 
-      - name: Configure scoped registry for @tetherto and @qvac packages
-        env:
-          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
-          WORKDIR: ${{ env.WORKDIR }}
-        shell: bash
-        run: |
-          echo "Configuring scoped registry for @tetherto and @qvac packages..."
-          set -eu
-
-          {
-            echo "registry=https://registry.npmjs.org/"
-            echo "@qvac:registry=https://registry.npmjs.org/"
-            echo "@tetherto:registry=https://npm.pkg.github.com/"
-            echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}"
-            echo "//npm.pkg.github.com/:_authToken=${GIT_PAT}"
-          } > .npmrc
-
-          # Also write .npmrc into the package workdir (monorepo-safe)
-          if [ -d "$WORKDIR" ]; then
-            cp .npmrc "$WORKDIR/.npmrc"
-          fi
-
-          if [ -n "${GIT_PAT:-}" ]; then
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
-          else
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
-          fi
-
       - name: Install bare runtime
         run: npm install -g bare
 
@@ -348,7 +316,6 @@ jobs:
         working-directory: ${{ env.WORKDIR }}/benchmarks/server
         run: |
           echo "Installing server dependencies..."
-          cp "$GITHUB_WORKSPACE/.npmrc" .npmrc
           npm install
 
       - name: Setup Python virtual environment

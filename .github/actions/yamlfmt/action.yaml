@@ -6,7 +6,6 @@ inputs:
     description: "Working directory inside the repo (monorepo package path)"
     required: false
     default: "."
-    type: string
 
 runs:
   using: composite

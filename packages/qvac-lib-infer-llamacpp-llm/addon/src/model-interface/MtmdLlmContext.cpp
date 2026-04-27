@@ -8,6 +8,7 @@
 #include <llama/mtmd/mtmd.h>
 #include <qvac-lib-inference-addon-cpp/Errors.hpp>
 
+#include "ContextSlider.hpp"
 #include "addon/LlmErrors.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 #include "utils/ChatTemplateUtils.hpp"
@@ -22,10 +23,9 @@ using namespace qvac_lib_inference_addon_llama::utils;
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 MtmdLlmContext::MtmdLlmContext(
     common_params& commonParams, common_init_result&& llamaInit,
-    bool toolsAtEnd)
-    : llamaInit_(std::move(llamaInit)), params_(commonParams),
+    ToolsCompactController& tools)
+    : tools_(tools), llamaInit_(std::move(llamaInit)), params_(commonParams),
       model_(llamaInit_.model.get()), lctx_(llamaInit_.context.get()) {
-  dynamicToolsState().setToolsAtEnd(toolsAtEnd);
 
   if (model_ == nullptr) {
     throw qvac_errors::StatusError(
@@ -43,8 +43,7 @@ MtmdLlmContext::MtmdLlmContext(
 
   vocab_ = llama_model_get_vocab(model_);
 
-  std::string chatTemplate =
-      getChatTemplate(model_, params_, dynamicToolsState().toolsAtEnd());
+  std::string chatTemplate = getChatTemplate(model_, params_, tools_.enabled());
   tmpls_ = common_chat_templates_init(model_, chatTemplate);
 
   smpl_.reset(common_sampler_init(model_, params_.sampling));
@@ -150,6 +149,12 @@ void MtmdLlmContext::tokenizeChat(
     const std::vector<common_chat_msg>& chatMsgs,
     const std::vector<common_chat_tool>& tools, mtmd::input_chunks& chunks,
     bool isCacheLoaded) {
+  if (chatMsgs.empty()) {
+    std::string errorMsg =
+        string_format("[MtmdLlm] %s: no chat messages provided\n", __func__);
+    throw qvac_errors::StatusError(ADDON_ID, toString(EmptyPrompt), errorMsg);
+  }
+
   common_chat_templates_inputs inputs;
   std::string formattedChat;
 
@@ -157,11 +162,13 @@ void MtmdLlmContext::tokenizeChat(
   bool addSpecial = false;
 
   if (nPast_ == 0 && !isCacheLoaded) {
-    dynamicToolsState().reset();
-    isLastMessageFromUser = true;
+    tools_.reset();
+    const auto& lastRole = chatMsgs.back().role;
+    isLastMessageFromUser = lastRole == "user" || lastRole == "tool";
     addSpecial = true;
   } else if (nPast_ > 0) {
-    isLastMessageFromUser = chatMsgs.back().role == "user";
+    isLastMessageFromUser =
+        chatMsgs.back().role == "user" || chatMsgs.back().role == "tool";
     common_sampler_reset(smpl_.get());
     addSpecial = false;
   }
@@ -204,7 +211,7 @@ void MtmdLlmContext::tokenizeChat(
     throw qvac_errors::StatusError(ADDON_ID, toString(EncoderFailed), errorMsg);
   }
 
-  if (dynamicToolsState().toolsAtEnd() && !tools.empty()) {
+  if (tools_.enabled() && !tools.empty()) {
     inputs.tools = {};
     inputs.add_generation_prompt = false;
     inputs.use_jinja = params_.use_jinja;
@@ -225,17 +232,13 @@ void MtmdLlmContext::tokenizeChat(
           bitmapsCPtr.size());
 
       if (resNoTools == 0) {
-        dynamicToolsState().setConversationOnlyTokens(
+        tools_.onTokenize(
+            mtmd_helper_get_n_tokens(chunks.ptr.get()),
             mtmd_helper_get_n_tokens(chunksNoTools.ptr.get()));
-        assert(
-            dynamicToolsState().conversationOnlyTokens() <=
-                static_cast<llama_pos>(
-                    mtmd_helper_get_n_tokens(chunks.ptr.get())) &&
-            "conversation-only tokens exceeds total tokens");
       }
     }
   } else {
-    dynamicToolsState().setConversationOnlyTokens(0);
+    tools_.onTokenize(mtmd_helper_get_n_tokens(chunks.ptr.get()), 0);
   }
 
   resetMedia();
@@ -269,37 +272,35 @@ bool MtmdLlmContext::evalMessageWithTools(
         ADDON_ID, toString(ContextOverflow), errorMsg);
   }
   if (nPast_ + nTokens >= llama_n_ctx(lctx_)) {
-
-    llama_pos leftTokens = nPast_ - firstMsgTokens_ - nDiscarded_;
-    if (leftTokens >= 0 &&
-        nPast_ + nTokens - nDiscarded_ < llama_n_ctx(lctx_)) {
-      auto* mem = llama_get_memory(lctx_);
-      llama_memory_seq_rm(
-          mem, 0, firstMsgTokens_, firstMsgTokens_ + nDiscarded_);
-      llama_memory_seq_add(
-          mem, 0, firstMsgTokens_ + nDiscarded_, nPast_, -nDiscarded_);
-      nPast_ -= nDiscarded_;
+    auto outcome = trySlidePrefill(
+        lctx_,
+        nPast_,
+        firstMsgTokens_,
+        static_cast<llama_pos>(nTokens),
+        nDiscarded_,
+        tools_);
+    switch (outcome.kind) {
+    case ContextSlideOutcome::Kind::Slid:
+      nPast_ = outcome.newNPast;
       ++nSlides_;
       QLOG_IF(
           Priority::DEBUG,
           string_format(
               "[MtmdLlm] Prefill step: discarded %d tokens after the first "
               "message\n",
-              nDiscarded_));
-    } else if (
-        leftTokens < 0 && firstMsgTokens_ + nTokens < llama_n_ctx(lctx_) &&
-        nDiscarded_ > 0) {
-      auto* mem = llama_get_memory(lctx_);
-      llama_memory_seq_rm(mem, 0, firstMsgTokens_, nPast_);
-      nPast_ = firstMsgTokens_;
+              outcome.discarded));
+      break;
+    case ContextSlideOutcome::Kind::FullWipe:
+      nPast_ = outcome.newNPast;
       ++nSlides_;
       QLOG_IF(
           Priority::DEBUG,
           string_format(
-              "[MtmdLlm] Prefill step: discarded %d tokens after the first "
+              "[MtmdLlm] Prefill step: wiped %d tokens after the first "
               "message\n",
-              nDiscarded_));
-    } else {
+              outcome.discarded));
+      break;
+    case ContextSlideOutcome::Kind::Overflow: {
       std::string errorMsg = string_format(
           "[MtmdLlm] context overflow at prefill step (%ld tokens, max "
           "%d)\n",
@@ -307,6 +308,9 @@ bool MtmdLlmContext::evalMessageWithTools(
           llama_n_ctx(lctx_));
       throw qvac_errors::StatusError(
           ADDON_ID, toString(ContextOverflow), errorMsg);
+    }
+    case ContextSlideOutcome::Kind::NotNeeded:
+      break;
     }
   }
 
@@ -354,8 +358,7 @@ bool MtmdLlmContext::evalMessageWithTools(
       nDiscarded_ = ctxSize - firstMsgTokens_ - 1;
     }
   }
-  dynamicToolsState().recordToolBoundary(
-      nPast_, static_cast<llama_pos>(nTokens));
+  tools_.onEvalComplete(nPast_, static_cast<llama_pos>(nTokens));
   return true;
 }
 
@@ -371,21 +374,17 @@ void MtmdLlmContext::flushPendingUtf8ToCallback(
 }
 
 void MtmdLlmContext::applyContextDiscard() {
-  if (nPast_ + 1 <= static_cast<llama_pos>(llama_n_ctx(lctx_)) ||
-      nDiscarded_ == 0) {
-    return;
+  auto outcome =
+      trySlideGeneration(lctx_, nPast_, firstMsgTokens_, nDiscarded_, tools_);
+  if (outcome.kind == ContextSlideOutcome::Kind::Slid) {
+    nPast_ = outcome.newNPast;
+    ++nSlides_;
+    QLOG_IF(
+        Priority::DEBUG,
+        string_format(
+            "[MtmdLlm] discarded %d tokens after the first message\n",
+            outcome.discarded));
   }
-  auto* mem = llama_get_memory(lctx_);
-  llama_memory_seq_rm(mem, 0, firstMsgTokens_, firstMsgTokens_ + nDiscarded_);
-  llama_memory_seq_add(
-      mem, 0, firstMsgTokens_ + nDiscarded_, nPast_, -nDiscarded_);
-  nPast_ -= nDiscarded_;
-  ++nSlides_;
-  QLOG_IF(
-      Priority::DEBUG,
-      string_format(
-          "[MtmdLlm] discarded %d tokens after the first message\n",
-          nDiscarded_));
 }
 
 void MtmdLlmContext::handleStopRequestAndAddEot(LlamaBatch& batch) {
@@ -424,6 +423,18 @@ bool MtmdLlmContext::generateResponse(
     }
     if (nPast_ + 1 > static_cast<llama_pos>(llama_n_ctx(lctx_)) &&
         nDiscarded_ == 0) {
+      QLOG_IF(
+          Priority::WARNING,
+          string_format(
+              "[MtmdLlm] generation overflow: context is full and nDiscarded "
+              "is "
+              "0 (nPast=%d, nCtx=%d, firstMsgTokens=%d, nPastBeforeTools=%d, "
+              "toolsCompact=%s)\n",
+              nPast_,
+              llama_n_ctx(lctx_),
+              firstMsgTokens_,
+              tools_.anchor(),
+              tools_.enabled() ? "true" : "false"));
       return false;
     }
     applyContextDiscard();
@@ -592,7 +603,7 @@ void MtmdLlmContext::loadMedia(const std::string& fname) {
 
 void MtmdLlmContext::resetState(bool resetStats) {
 
-  dynamicToolsState().reset();
+  tools_.reset();
   // Reset the n_past
   nPast_ = 0;
 

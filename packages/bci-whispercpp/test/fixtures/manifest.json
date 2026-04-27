@@ -5,35 +5,50 @@
       "timesteps": 910,
       "channels": 512,
       "expected_text": "You can see the code at this point as well.",
-      "day_idx": 1
+      "day_idx": 1,
+      "bci_transcription": "you can see the good at this point as well",
+      "bci_wer_vs_expected": null,
+      "bci_wer": 0.1
     },
     {
       "file": "neural_sample_1.bin",
       "timesteps": 749,
       "channels": 512,
       "expected_text": "How does it keep the cost down?",
-      "day_idx": 1
+      "day_idx": 1,
+      "bci_transcription": "how does it keep the cost said",
+      "bci_wer_vs_expected": null,
+      "bci_wer": 0.1429
     },
     {
       "file": "neural_sample_2.bin",
       "timesteps": 502,
       "channels": 512,
       "expected_text": "Not too controversial.",
-      "day_idx": 1
+      "day_idx": 1,
+      "bci_transcription": "not too controversial",
+      "bci_wer_vs_expected": null,
+      "bci_wer": 0.0
     },
     {
       "file": "neural_sample_3.bin",
       "timesteps": 962,
       "channels": 512,
       "expected_text": "The jury and a judge work together on it.",
-      "day_idx": 1
+      "day_idx": 1,
+      "bci_transcription": "the jury and a judge work together on it",
+      "bci_wer_vs_expected": null,
+      "bci_wer": 0.0
     },
     {
       "file": "neural_sample_4.bin",
       "timesteps": 584,
       "channels": 512,
       "expected_text": "Were quite vocal about it.",
-      "day_idx": 1
+      "day_idx": 1,
+      "bci_transcription": "we're quite vocal about it",
+      "bci_wer_vs_expected": null,
+      "bci_wer": 0.2
     }
   ]
 }

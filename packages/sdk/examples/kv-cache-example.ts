@@ -20,8 +20,8 @@ try {
 
   console.log("🧠 Testing KV Cache functionality...\n");
 
-  // First conversation with cache enabled
-  console.log("📝 First conversation (building cache):");
+  // First conversation with auto-keyed cache enabled
+  console.log("📝 First conversation (building cache for the next turn):");
   const history1 = [
     { role: "user", content: "What is the capital of France?" },
   ];
@@ -33,27 +33,26 @@ try {
     kvCache: true,
   }); // kvCache = true
 
-  let response1 = "";
   for await (const token of result1.tokenStream) {
-    response1 += token;
     process.stdout.write(token);
   }
 
-  const stats1 = await result1.stats;
+  const final1 = await result1.final;
+  const stats1 = final1.stats;
   console.log(`\n⏱️  First completion stats: ${JSON.stringify(stats1)}\n`);
 
-  // Continue conversation (should reuse cache from previous conversation)
-  console.log("🔄 Continuing conversation (reusing cache):");
+  // Continue conversation (should reuse the completed first-turn cache).
+  console.log("🔄 Continuing conversation (reusing previous turn cache):");
   const history2 = [
     { role: "user", content: "What is the capital of France?" },
-    { role: "assistant", content: response1.trim() },
+    { role: "assistant", content: final1.cacheableAssistantContent ?? final1.contentText },
     { role: "user", content: "What about Germany?" },
   ];
 
-  // This should:
-  // 1. Find existing cache from [user: "What is the capital of France?"] (history minus last message)
-  // 2. Load that cache and process the new "What about Germany?" message
-  // 3. Save the updated cache and rename it to include all messages
+  // Auto-keyed caching should:
+  // 1. Find the cache saved after turn 1 under [user, assistant]
+  // 2. Load that cache and process only the new "What about Germany?" user turn
+  // 3. Save the updated cache and rename it to include the new assistant response
   const result2 = completion({
     modelId,
     history: history2,

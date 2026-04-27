@@ -16,7 +16,7 @@ import {
   getShardPath,
   getModelsCacheDir,
   getSingleFileCachePath,
-} from "@/server/utils/cache";
+} from "@/server/utils/cache/paths";
 import { validateAndJoinPath } from "@/server/utils/path-security";
 import { ModelNotFoundError } from "@/utils/errors-server";
 
@@ -172,6 +172,17 @@ async function handleCompanionSetModel(
       fileEntries, legacyPaths, primaryKey,
     );
     if (legacyResult.isCached) return legacyResult;
+  } else {
+    // Legacy flat-cache compatibility for Bergamot-style companion sets.
+    // This is valid only for families whose runtime still works with explicit
+    // per-file absolute paths; it is not a generic rule for all companion sets.
+    const flatPaths = files.map((f) =>
+      getSingleFileCachePath(f.registryPath),
+    );
+    const flatResult = await checkCacheStatus(
+      fileEntries, flatPaths, primaryKey,
+    );
+    if (flatResult.isCached) return flatResult;
   }
 
   return canonicalResult;
