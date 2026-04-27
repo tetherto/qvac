@@ -715,7 +715,7 @@ std::any SdModel::process(const std::any& input) {
 
         genParams.ref_images = &initImg;
         genParams.ref_images_count = 1;
-        genParams.auto_resize_ref_image = true;
+        genParams.auto_resize_ref_image = gen.autoResizeRefImage;
       } else {
         // SDEdit path -- the vcpkg version of generate_image() rounds
         // width/height UP to a spatial multiple (typically 8) before
