@@ -215,7 +215,6 @@
     "hyperdb": "^4.16.1",
     "pear-pipe": "^1.0.6",
     "prettier": "^3.6.2",
-    "react-native": "0.81.5",
     "react-native-bare-kit": "0.12.3",
     "remark-cli": "^12.0.1",
     "remark-code-import": "^1.2.0",
@@ -257,7 +256,6 @@
     "hyperswarm": "^4.12.1",
     "llm-splitter": "~0.2.0",
     "pear-pipe": "^1.0.6",
-    "react-native": "0.81.5",
     "react-native-bare-kit": "0.12.3",
     "tar-stream": "^3.1.8"
   },
@@ -275,9 +273,6 @@
       "optional": true
     },
     "expo-file-system": {
-      "optional": true
-    },
-    "react-native": {
       "optional": true
     },
     "react-native-bare-kit": {
