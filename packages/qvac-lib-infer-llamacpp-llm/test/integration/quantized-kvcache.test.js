@@ -47,12 +47,16 @@ const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 // addon throws `TurboQuant ... not supported` during model load; the benchmark
 // detects that and skips the offending rows instead of failing. macOS x64 CI
 // is more unstable for GPU benchmarks, so skip the whole benchmark there.
+// Some Android GPUs (e.g. Galaxy S25 / Adreno 830 in CI) can time out even
+// on the first f16+f16 row, so this heavy benchmark is disabled on Android.
 const isDesktopGpu = (platform === 'linux' || platform === 'win32') && arch === 'x64'
 const isAndroid = platform === 'android'
 const tbqPqSupported = isDesktopGpu || isAndroid
 const skipReason = isDarwinX64
   ? 'Quantized KV cache benchmark is skipped on macOS x64'
-  : false
+  : isAndroid
+    ? 'Quantized KV cache benchmark is skipped on Android GPU CI'
+    : false
 
 // Model selection by platform.
 //
