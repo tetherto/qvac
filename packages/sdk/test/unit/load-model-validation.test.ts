@@ -122,3 +122,59 @@ test("assertModelSrcMatchesModelType: descriptor addon-only path normalizes thro
     );
   }
 });
+
+test("assertModelSrcMatchesModelType: legacy package-name engine matches canonical", (t) => {
+  const legacyDescriptor = {
+    src: "registry://example/llama.gguf",
+    engine: "@qvac/llm-llamacpp",
+  };
+
+  t.execution(() =>
+    assertModelSrcMatchesModelType(
+      legacyDescriptor,
+      ModelType.llamacppCompletion,
+    ),
+  );
+});
+
+test("assertModelSrcMatchesModelType: tag-style legacy engine resolves and detects mismatch", (t) => {
+  const tagStyleDescriptor = {
+    src: "registry://example/llama.gguf",
+    engine: "generation",
+  };
+
+  try {
+    assertModelSrcMatchesModelType(
+      tagStyleDescriptor,
+      ModelType.whispercppTranscription,
+    );
+    t.fail("Expected ModelSrcTypeMismatchError");
+  } catch (error) {
+    t.ok(error instanceof ModelSrcTypeMismatchError);
+    t.ok(
+      (error as Error).message.includes(ModelType.llamacppCompletion),
+      "tag-style 'generation' should resolve to canonical in the message",
+    );
+  }
+});
+
+test("assertModelSrcMatchesModelType: addon 'vad' resolves to onnx-vad canonical engine", (t) => {
+  const vadAddonDescriptor = {
+    src: "registry://example/silero-vad.onnx",
+    addon: "vad" as const,
+  };
+
+  try {
+    assertModelSrcMatchesModelType(
+      vadAddonDescriptor,
+      ModelType.whispercppTranscription,
+    );
+    t.fail("Expected ModelSrcTypeMismatchError");
+  } catch (error) {
+    t.ok(error instanceof ModelSrcTypeMismatchError);
+    t.ok(
+      (error as Error).message.includes("onnx-vad"),
+      "addon 'vad' should resolve to canonical 'onnx-vad' in the message",
+    );
+  }
+});
