@@ -77,51 +77,6 @@ export async function readSampleProse(
 }
 
 /**
- * Overrides sourced from the hand-written `errors.mdx` sample: curated summary
- * text and "thrown by" labels (which often contain non-function-call phrases
- * like "Internal RPC layer" or "Any API call (during SDK initialization)"
- * that no automated code-scan could produce).
- */
-export interface SampleErrorOverride {
-  summary: string;
-  thrownBy: string;
-}
-
-/**
- * Parse `errors.mdx` to extract per-error curated overrides from the Client
- * errors and Server errors tables. Returns a map keyed by error name (e.g.,
- * "INVALID_RESPONSE_TYPE"). Missing entries should fall back to extraction.
- */
-export async function readErrorOverrides(
-  samplesDir: string,
-): Promise<Map<string, SampleErrorOverride>> {
-  const overrides = new Map<string, SampleErrorOverride>();
-  let raw: string;
-  try {
-    raw = await fs.readFile(path.join(samplesDir, "errors.mdx"), "utf-8");
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return overrides;
-    throw err;
-  }
-  const { body } = splitFrontmatter(raw);
-  const sections = splitSections(body);
-  for (const section of sections) {
-    if (section.heading !== "Client errors" && section.heading !== "Server errors") {
-      continue;
-    }
-    for (const row of extractTableRows(section.content)) {
-      if (row.length < 4) continue;
-      const nameCell = stripCell(row[0]).replace(/^`|`$/g, "");
-      const summary = stripCell(row[2]);
-      const thrownBy = stripCell(row[3]);
-      if (!nameCell) continue;
-      overrides.set(nameCell, { summary, thrownBy });
-    }
-  }
-  return overrides;
-}
-
-/**
  * Parse `index.mdx` to extract per-function and per-object summaries from the
  * Functions / Object tables. The hand-written index contains curated summary
  * text that is often different (more concise) from the function page's own

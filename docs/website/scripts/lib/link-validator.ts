@@ -1,9 +1,7 @@
 /**
- * Cross-version link validation. Extracts internal links from MDX files
- * and resolves them to filesystem paths, reporting any broken references.
- *
- * Used both as a post-step in create-version-bundle.ts and as a standalone
- * Vitest test for (latest).
+ * Internal link validation for the docs site. Extracts internal links
+ * from MDX files and resolves them to filesystem paths, reporting any
+ * broken references. Used by `tests/link-integrity.test.ts`.
  */
 
 import * as fs from "fs/promises";
@@ -54,30 +52,22 @@ async function buildFileIndex(dir: string): Promise<Set<string>> {
 
 /**
  * Resolve an internal link path against the pre-built file index.
- * Handles the Fumadocs (latest) folder convention: unversioned paths
- * (e.g. /sdk/api/loadModel) resolve into (latest)/, while versioned
- * paths (e.g. /v0.7.0/sdk/api/loadModel) resolve directly.
+ *
+ * Every URL maps to a bare path under `content/docs/`. A link to
+ * `/sdk/api/v0.8.0` resolves to either `sdk/api/v0.8.0.mdx` or
+ * `sdk/api/v0.8.0/index.mdx`.
  */
 function resolveLink(linkPath: string, fileIndex: Set<string>): boolean {
   const cleaned = linkPath.replace(/\/$/, "").replace(/^\//, "");
-
-  const isVersioned = /^v\d+\.\d+\.\d+\//.test(cleaned);
-  const fsPrefixes = isVersioned
-    ? [cleaned]
-    : [cleaned, `(latest)/${cleaned}`];
-
-  for (const prefix of fsPrefixes) {
-    const candidates = [
-      `${prefix}.mdx`,
-      `${prefix}.md`,
-      `${prefix}/index.mdx`,
-      `${prefix}/index.md`,
-      prefix,
-    ];
-
-    for (const candidate of candidates) {
-      if (fileIndex.has(candidate)) return true;
-    }
+  const candidates = [
+    `${cleaned}.mdx`,
+    `${cleaned}.md`,
+    `${cleaned}/index.mdx`,
+    `${cleaned}/index.md`,
+    cleaned,
+  ];
+  for (const candidate of candidates) {
+    if (fileIndex.has(candidate)) return true;
   }
   return false;
 }

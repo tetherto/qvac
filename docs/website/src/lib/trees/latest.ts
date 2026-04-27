@@ -1,19 +1,7 @@
 import type { Node } from 'fumadocs-core/page-tree';
-import { source } from '@/lib/source';
-import { resolveIcon } from "@/lib/resolveIcon";
-import React from "react";
+import { resolveIcon } from '@/lib/resolveIcon';
+import React from 'react';
 import { SiExpo, SiElectron } from '@icons-pack/react-simple-icons';
-
-export function findFolderChildren(nodes: Node[], indexUrl: string): Node[] {
-  for (const node of nodes) {
-    if (node.type === 'folder') {
-      if (node.index?.url === indexUrl) return node.children;
-      const found = findFolderChildren(node.children, indexUrl);
-      if (found.length > 0) return found;
-    }
-  }
-  return [];
-}
 
 export const tree: Node[] = [
   {
@@ -33,7 +21,7 @@ export const tree: Node[] = [
         url: '/about-qvac/welcome',
         type: 'page',
         icon: resolveIcon('DoorOpen'),
-      }, 
+      },
       {
         name: 'Our vision',
         url: '/about-qvac/vision',
@@ -147,7 +135,6 @@ export const tree: Node[] = [
           { name: 'Sharded models', url: '/sdk/examples/utilities/sharded-models', type: 'page', icon: resolveIcon('Merge') },
         ],
       },
-      
     ],
   },
   {
@@ -159,13 +146,13 @@ export const tree: Node[] = [
         name: 'Build on Electron',
         url: '/sdk/tutorials/electron',
         type: 'page',
-        icon: React.createElement(SiElectron, { className: "h-4 w-4" }),
+        icon: React.createElement(SiElectron, { className: 'h-4 w-4' }),
       },
       {
         name: 'Build on Expo',
         url: '/sdk/tutorials/expo',
         type: 'page',
-        icon: React.createElement(SiExpo, { className: "h-4 w-4" }),
+        icon: React.createElement(SiExpo, { className: 'h-4 w-4' }),
       },
     ],
   },
@@ -175,10 +162,9 @@ export const tree: Node[] = [
   },
   {
     name: 'JS API',
-    type: 'folder',
+    url: '/sdk/api',
+    type: 'page',
     icon: resolveIcon('BookA'),
-    index: { type: 'page', name: 'API', url: '/sdk/api' },
-    children: findFolderChildren(source.pageTree.children, '/sdk/api'),
   },
   {
     name: 'CLI',
@@ -194,7 +180,7 @@ export const tree: Node[] = [
   },
   {
     name: 'Release notes',
-    url: 'https://github.com/tetherto/qvac/tree/main/packages/sdk/changelog',
+    url: '/sdk/release-notes',
     type: 'page',
     icon: resolveIcon('Tag'),
   },
@@ -215,8 +201,8 @@ export const tree: Node[] = [
     ],
   },
   {
-    type: "separator",
-    name: "Help",
+    type: 'separator',
+    name: 'Help',
   },
   {
     name: 'Support',

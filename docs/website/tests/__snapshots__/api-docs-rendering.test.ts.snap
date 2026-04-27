@@ -1,216 +1,123 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`errors-page template > renders the errors page with client and server errors 1`] = `
+exports[`single-page template > renders a complete API summary page 1`] = `
 "---
-title: Errors
-description: SDK error codes reference
+title: API Summary — v0.9.1
+description: One-page reference of all public functions and objects exported by @qvac/sdk
 ---
 
-## Example
+> Auto-generated from \`.d.ts\` declarations and TSDoc comments.
+>
+> For per-parameter and per-field details, hover symbols in your IDE or open
+> \`node_modules/@qvac/sdk/dist\`. This page is intentionally a high-level index.
+>
+> **Fields shown**: description, signature, throws, examples, deprecation.
+> **Fields intentionally omitted**: parameter descriptions, return field descriptions
+> (covered by IDE hover and \`.d.ts\` declarations).
+>
+> **Scope**: 3 functions in \`packages/sdk/client/api/\` plus the \`profiler\` object.
 
-\`\`\`typescript
-import { SDK_CLIENT_ERROR_CODES, SDK_SERVER_ERROR_CODES } from "@qvac/sdk";
-
-try {
-  await loadModel({ modelSrc: "/path/to/model.gguf", modelType: "llm" });
-} catch (error) {
-  if (error.code === SDK_SERVER_ERROR_CODES.MODEL_LOAD_FAILED) {
-    // handle model load failure
-  }
-}
-\`\`\`
-
-## Client errors
-
-Thrown on the client side (response validation, RPC, provider). Access via \`SDK_CLIENT_ERROR_CODES.{ERROR_NAME}\`.
-
-| Error | Code | Summary | Thrown by |
-| --- | --- | --- | --- |
-| \`INVALID_RESPONSE_TYPE\` | 50001 | Invalid response type received. | — |
-| \`RPC_CONNECTION_FAILED\` | 50203 | RPC connection failed. | — |
-
-## Server errors
-
-Thrown by the server (model operations, downloads, cache, RAG). Access via \`SDK_SERVER_ERROR_CODES.{ERROR_NAME}\`.
-
-| Error | Code | Summary | Thrown by |
-| --- | --- | --- | --- |
-| \`MODEL_NOT_FOUND\` | 52002 | Model ID not found in the registry. | — |
-| \`DOWNLOAD_CANCELLED\` | 53001 | Download cancelled. | — |"
-`;
-
-exports[`function-page template > renders a full function with all sections 1`] = `
-"---
-title: "completion( )"
-titleStyle: code
-description: Generates completion from a language model.
 ---
-
-<Callout type="warn" title="Deprecated">
-Use completionV2() instead.
-</Callout>
-
-\`\`\`ts
-function completion(params: CompletionParams): CompletionResult
-\`\`\`
-
-## Parameters
-
-| Name | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| params | [\`CompletionParams\`](#completionparams) | ✓ | The completion parameters |
-
-### \`CompletionParams\`
-
-| Field | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| modelId | \`string\` | ✓ | The model identifier |
-| history | \`HistoryMessage[]\` | ✓ | Array of messages |
-| stream | \`boolean\` | ✗ | Whether to stream tokens |
-
-#### \`HistoryMessage\`
-
-| Field | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| role | \`string\` | ✓ | Message role |
-| content | \`string\` | ✓ | Message content |
-
-## Returns
-
-The completion result object.
-
-### \`CompletionResult\`
-
-| Field | Type | Description |
-| --- | --- | --- |
-| text | \`Promise<string>\` | Complete generated text |
-| stats | \`CompletionStats \\| —\` | Performance statistics |
-
-### \`CompletionStats\`
-
-| Field | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| tokensPerSecond | \`number\` | ✓ | Tokens per second |
-
-## Throws
-
-| Error | When |
-| --- | --- |
-| \`INVALID_TOOLS_ARRAY\` | Invalid tools array provided |
-| \`COMPLETION_FAILED\` | Completion failed |
-
-## Example
-
-\`\`\`typescript
-const result = completion({ modelId: "llama-2", history: [{ role: "user", content: "Hello" }] });
-\`\`\`"
-`;
-
-exports[`function-page template > renders a minimal function (no optional sections) 1`] = `
-"---
-title: "ping( )"
-titleStyle: code
-description: Sends a ping request to the server.
----
-
-\`\`\`ts
-function ping(): Promise<{ type: "pong"; number: number }>
-\`\`\`
-
-
-## Returns
-
-The pong response."
-`;
-
-exports[`index-page template > renders the index page 1`] = `
-"---
-title: "@qvac/sdk"
-titleStyle: code
-description: API reference — v0.8.0
----
-
-## Overview
-
-\`@qvac/sdk\` npm package exposes a function-centric, typed JS API.
 
 ## Functions
 
-| Function | Summary |
-| --- | --- |
-| [\`completion()\`](./completion) | Generates completion from a language model. |
-| [\`ping()\`](./ping) | Sends a ping request to the server. |
+### \`completion\`
 
-## Shared types
+Generates completion from a language model based on conversation history.
 
-<Card href="./shared-types" title="Shared types">
-  Common type definitions used across SDK functions.
-</Card>
+**Signature**:
+
+\`\`\`ts
+declare function completion(params: CompletionParams): CompletionRun;
+\`\`\`
+
+**Throws**:
+
+- \`INVALID_TOOLS_ARRAY\` — Invalid tools array provided
+- \`INVALID_TOOL_SCHEMA\` — A tool has an invalid schema
+
+**Example**:
+\`\`\`ts
+const run = completion({ modelId: "llama-2", history: [] });
+\`\`\`
+
+---
+
+### \`suspend\`
+
+Suspends all active Hyperswarm and Corestore resources.
+
+**Signature**:
+
+\`\`\`ts
+declare function suspend(): Promise<void>;
+\`\`\`
+
+---
+
+### \`embed\`
+
+Has 2 overloads.
+
+#### Overload 1
+**Signature**:
+
+\`\`\`ts
+declare function embed(params: { modelId: string; text: string }): Promise<{ embedding: number[] }>;
+\`\`\`
+
+#### Overload 2
+**Signature**:
+
+\`\`\`ts
+declare function embed(params: { modelId: string; text: string[] }): Promise<{ embedding: number[][] }>;
+\`\`\`
+
+---
+
+## Objects
+
+### \`profiler\`
+
+Singleton object that collects and exports profiling data for SDK operations.
+
+**Shape**:
+
+\`\`\`ts
+const profiler: {
+  enable(options?: ProfilerRuntimeOptions): void;
+  disable(): void;
+};
+\`\`\`
+
+**Methods**:
+
+- **\`enable(options?)\`** — Enables profiling and resets aggregated data.
+- **\`disable()\`** — Disables profiling.
+
+**Example**:
+\`\`\`ts
+profiler.enable({ mode: "summary" });
+\`\`\`
+
+---
 
 ## Errors
 
-<Card href="./errors" title="Error codes">
-  All errors thrown by the SDK and how to handle them via \`SDK_CLIENT_ERROR_CODES\` and \`SDK_SERVER_ERROR_CODES\`.
-</Card>"
-`;
+Public error codes thrown across the SDK. Catch via \`instanceof QvacErrorBase\`
+and read \`error.code\` / \`error.cause\`. Code ranges:
+50,001–52,000 (client) and 52,001–54,000 (server).
 
-exports[`object-page template > renders an object page with fields 1`] = `
-"---
-title: "CompletionParams"
-titleStyle: code
-description: Parameters for the completion function.
----
+### Client errors
 
-## Fields
+| Error | Code | Summary |
+| --- | --- | --- |
+| \`INVALID_RESPONSE_TYPE\` | 50001 | Invalid response type received. |
+| \`RPC_CONNECTION_FAILED\` | 50203 | RPC connection failed. |
 
-| Field | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| modelId | \`string\` | ✓ | The model identifier |
-| stream | \`boolean\` | ✗ | Whether to stream |"
-`;
+### Server errors
 
-exports[`renderExpandedTypes > renders a flat expanded type 1`] = `
-"### \`Options\`
-
-| Field | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| timeout | \`number\` | ✓ | Timeout in ms |
-| retries | \`number\` | ✗ | — |"
-`;
-
-exports[`renderExpandedTypes > renders nested expanded types 1`] = `
-"### \`Outer\`
-
-| Field | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| inner | \`Inner\` | ✓ | Nested |
-
-#### \`Inner\`
-
-| Field | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| value | \`string\` | ✓ | The value |"
-`;
-
-exports[`shared-types template > renders a shared types page 1`] = `
-"---
-title: Shared types
-description: Shared type definitions used across SDK functions.
----
-
-## \`ModelType\`
-
-Supported model types.
-
-\`\`\`ts
-type ModelType = "llm" | "embed" | "tts"
-\`\`\`
-
-## \`CachePolicy\`
-
-Cache eviction policies.
-
-\`\`\`ts
-type CachePolicy = "lru" | "fifo"
-\`\`\`"
+| Error | Code | Summary |
+| --- | --- | --- |
+| \`MODEL_NOT_FOUND\` | 52002 | Model ID not found in the registry. |"
 `;

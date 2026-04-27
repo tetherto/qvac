@@ -6,7 +6,6 @@ import { validateLinks, extractInternalLinks } from '../scripts/lib/link-validat
 const TESTS_DIR = path.dirname(fileURLToPath(import.meta.url))
 const WEBSITE_DIR = path.resolve(TESTS_DIR, '..')
 const DOCS_BASE = path.join(WEBSITE_DIR, 'content', 'docs')
-const LATEST_DIR = path.join(DOCS_BASE, '(latest)')
 
 // ---------------------------------------------------------------------------
 // Unit tests for link extraction
@@ -43,12 +42,15 @@ describe('extractInternalLinks', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Integration test: validate links in (latest)
+// Integration test: validate every internal link in the docs tree.
+//
+// All non-API content lives at bare paths now (no `(latest)/` parens
+// folder), so link validation walks the entire `content/docs/` tree.
 // ---------------------------------------------------------------------------
 
-describe('(latest) link integrity', () => {
+describe('docs link integrity', () => {
   it('has no broken internal links', async () => {
-    const broken = await validateLinks(LATEST_DIR, DOCS_BASE)
+    const broken = await validateLinks(DOCS_BASE, DOCS_BASE)
     if (broken.length > 0) {
       const details = broken
         .map((b) => `  ${b.source} → ${b.target}`)

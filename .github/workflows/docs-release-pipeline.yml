@@ -91,7 +91,7 @@ jobs:
         working-directory: packages/sdk
         run: bun install
 
-      - name: Generate API docs
+      - name: Generate API summary
         working-directory: ${{ env.DOCS_DIR }}
         env:
           SDK_PATH: ${{ github.workspace }}/packages/sdk
@@ -101,6 +101,7 @@ jobs:
         run: >
           bun run scripts/generate-api-docs.ts
           ${{ steps.version.outputs.version }}
+          --latest
           --force-extract
           ${{ steps.ai.outputs.flag }}
 
@@ -115,11 +116,14 @@ jobs:
         id: release_notes
         working-directory: ${{ env.DOCS_DIR }}
         continue-on-error: true
-        run: bun run scripts/generate-release-notes.ts ${{ steps.version.outputs.version }}
+        # Aggregate every patch in the current minor (e.g. v0.9.0 + v0.9.1)
+        # into the "latest" page so a tiny patch doesn't bury the meaty
+        # minor's content from the version reader sees first.
+        run: bun run scripts/generate-release-notes.ts ${{ steps.version.outputs.version }} --latest --aggregate-minor
 
       - name: Update versions list
         working-directory: ${{ env.DOCS_DIR }}
-        run: bun run scripts/update-versions-list.ts ${{ steps.version.outputs.version }}
+        run: bun run scripts/update-versions-list.ts --latest=${{ steps.version.outputs.version }}
 
       - name: Run link validation tests
         working-directory: ${{ env.DOCS_DIR }}
@@ -129,9 +133,8 @@ jobs:
         id: changes
         run: |
           git add \
-            "${{ env.DOCS_DIR }}/content/docs/(latest)/sdk/api/" \
-            "${{ env.DOCS_DIR }}/content/docs/v${{ steps.version.outputs.version }}/sdk/api/" \
-            "${{ env.DOCS_DIR }}/content/docs/(latest)/release-notes.mdx" \
+            "${{ env.DOCS_DIR }}/content/docs/sdk/api/" \
+            "${{ env.DOCS_DIR }}/content/docs/sdk/release-notes/" \
             "${{ env.DOCS_DIR }}/src/lib/versions.ts" \
             "${{ env.DOCS_DIR }}/scripts/api-docs/api-data.json" \
             2>/dev/null || true
@@ -150,9 +153,9 @@ jobs:
           git config user.name "$BOT_NAME"
           git config user.email "$BOT_EMAIL"
           if [ "${{ steps.release_notes.outcome }}" = "success" ]; then
-            MSG="chore(docs): generate API docs + release notes for v${{ steps.version.outputs.version }} [skip ci]"
+            MSG="chore(docs): generate API summary + release notes for v${{ steps.version.outputs.version }} [skip ci]"
           else
-            MSG="chore(docs): generate API docs for v${{ steps.version.outputs.version }} [skip ci]"
+            MSG="chore(docs): generate API summary for v${{ steps.version.outputs.version }} [skip ci]"
           fi
           git commit -m "$MSG"
           git push origin main

@@ -2,19 +2,11 @@ import { describe, it, expect } from 'vitest'
 import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import nunjucks from 'nunjucks'
-import type { ApiFunction, ExpandedType, ErrorEntry } from '../scripts/api-docs/types'
+import type { ApiData, ApiFunction, ApiObject } from '../scripts/api-docs/types'
 import {
-  escapeTable,
   escapeTableLight,
   firstSentence,
-  slugify,
-  formatShortSignature,
-  escapeQuotes,
   stripFence,
-  leadingAliasName,
-  renderExpandedTypes,
-  renderErrorTable,
-  renderParamRow,
 } from '../scripts/api-docs/render'
 
 const SCRIPT_DIR = path.resolve(
@@ -30,25 +22,9 @@ function createTestEnv(): nunjucks.Environment {
     new nunjucks.FileSystemLoader(TEMPLATE_DIR),
     { autoescape: false, trimBlocks: true, lstripBlocks: true },
   )
-  env.addFilter('escapeTable', escapeTable)
   env.addFilter('escapeTableLight', escapeTableLight)
   env.addFilter('firstSentence', firstSentence)
-  env.addFilter('slugify', slugify)
-  env.addFilter('formatShortSignature', formatShortSignature)
-  env.addFilter('escapeQuotes', escapeQuotes)
   env.addFilter('stripFence', stripFence)
-  env.addFilter('leadingAliasName', leadingAliasName)
-  env.addFilter('lower', (s: string) => s.toLowerCase())
-  env.addFilter('replace', (s: string, from: string, to: string) =>
-    s.replace(new RegExp(from.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), to),
-  )
-  env.addGlobal('renderExpandedTypes', renderExpandedTypes)
-  env.addGlobal('renderErrorTable', renderErrorTable)
-  env.addGlobal('renderParamRow', renderParamRow)
-  // `sharedTypeNames` is populated by `renderApiDocs` at runtime from the
-  // computed shared-types set. Tests render individual templates in
-  // isolation, so provide an empty default to satisfy the `in` operator.
-  env.addGlobal('sharedTypeNames', [])
   return env
 }
 
@@ -56,125 +32,128 @@ function createTestEnv(): nunjucks.Environment {
 // Fixtures
 // ---------------------------------------------------------------------------
 
-const fullFunction: ApiFunction = {
+const completionFn: ApiFunction = {
   name: 'completion',
-  signature: 'function completion(params: CompletionParams): CompletionResult',
-  description: 'Generates completion from a language model. Returns streamed tokens.',
-  parameters: [
-    { name: 'params', type: 'CompletionParams', required: true, description: 'The completion parameters' },
-  ],
-  expandedParams: [
-    {
-      typeName: 'CompletionParams',
-      fields: [
-        { name: 'modelId', type: 'string', required: true, description: 'The model identifier' },
-        { name: 'history', type: 'HistoryMessage[]', required: true, description: 'Array of messages' },
-        { name: 'stream', type: 'boolean', required: false, description: 'Whether to stream tokens' },
-      ],
-      children: [
-        {
-          typeName: 'HistoryMessage',
-          fields: [
-            { name: 'role', type: 'string', required: true, description: 'Message role' },
-            { name: 'content', type: 'string', required: true, description: 'Message content' },
-          ],
-          children: [],
-        },
-      ],
-    },
-  ],
-  returns: { type: 'CompletionResult', description: 'The completion result object.' },
-  returnFields: [
-    { name: 'text', type: 'Promise<string>', required: true, description: 'Complete generated text' },
-    { name: 'stats', type: 'CompletionStats | undefined', required: false, description: 'Performance statistics' },
-  ],
-  expandedReturns: [
-    {
-      typeName: 'CompletionStats',
-      fields: [
-        { name: 'tokensPerSecond', type: 'number', required: true, description: 'Tokens per second' },
-      ],
-      children: [],
-    },
-  ],
-  throws: [
-    { error: 'INVALID_TOOLS_ARRAY', description: 'Invalid tools array provided' },
-    { error: 'COMPLETION_FAILED', description: 'Completion failed' },
-  ],
-  examples: [
-    '```typescript\nconst result = completion({ modelId: "llama-2", history: [{ role: "user", content: "Hello" }] });\n```',
-  ],
-  deprecated: 'Use completionV2() instead.',
-}
-
-const minimalFunction: ApiFunction = {
-  name: 'ping',
-  signature: 'function ping(): Promise<{ type: "pong"; number: number }>',
-  description: 'Sends a ping request to the server.',
+  signature: 'declare function completion(params: CompletionParams): CompletionRun;',
+  description: 'Generates completion from a language model based on conversation history.',
   parameters: [],
   expandedParams: [],
-  returns: { type: 'Promise<{ type: "pong"; number: number }>', description: 'The pong response.' },
+  returns: { type: 'CompletionRun', description: '' },
+  returnFields: [],
+  expandedReturns: [],
+  throws: [
+    { error: 'INVALID_TOOLS_ARRAY', description: 'Invalid tools array provided' },
+    { error: 'INVALID_TOOL_SCHEMA', description: 'A tool has an invalid schema' },
+  ],
+  examples: [
+    'const run = completion({ modelId: "llama-2", history: [] });',
+  ],
+}
+
+const minimalFn: ApiFunction = {
+  name: 'suspend',
+  signature: 'declare function suspend(): Promise<void>;',
+  description: 'Suspends all active Hyperswarm and Corestore resources.',
+  parameters: [],
+  expandedParams: [],
+  returns: { type: 'Promise<void>', description: '' },
   returnFields: [],
   expandedReturns: [],
 }
 
-const clientErrors: ErrorEntry[] = [
-  { name: 'INVALID_RESPONSE_TYPE', code: 50001, summary: 'Invalid response type received.' },
-  { name: 'RPC_CONNECTION_FAILED', code: 50203, summary: 'RPC connection failed.' },
-]
+const overloadedFn: ApiFunction = {
+  name: 'embed',
+  signature:
+    'declare function embed(params: { modelId: string; text: string }): Promise<{ embedding: number[] }>;\n' +
+    'declare function embed(params: { modelId: string; text: string[] }): Promise<{ embedding: number[][] }>;',
+  description: '',
+  parameters: [],
+  expandedParams: [],
+  returns: { type: 'Promise<{ embedding: number[] }>', description: '' },
+  returnFields: [],
+  expandedReturns: [],
+  overloads: [
+    {
+      signature:
+        'declare function embed(params: { modelId: string; text: string }): Promise<{ embedding: number[] }>;',
+    },
+    {
+      signature:
+        'declare function embed(params: { modelId: string; text: string[] }): Promise<{ embedding: number[][] }>;',
+    },
+  ],
+}
 
-const serverErrors: ErrorEntry[] = [
-  { name: 'MODEL_NOT_FOUND', code: 52002, summary: 'Model ID not found in the registry.' },
-  { name: 'DOWNLOAD_CANCELLED', code: 53001, summary: 'Download cancelled.' },
-]
+const profilerObject: ApiObject = {
+  name: 'profiler',
+  description: 'Singleton object that collects and exports profiling data for SDK operations.',
+  objectSignature:
+    'const profiler: {\n  enable(options?: ProfilerRuntimeOptions): void;\n  disable(): void;\n};',
+  fields: [],
+  children: [],
+  methods: [
+    {
+      name: 'enable',
+      signature: 'function enable(options?: ProfilerRuntimeOptions): void',
+      description: 'Enables profiling and resets all previously aggregated data.',
+      summary: 'Enables profiling and resets aggregated data.',
+      parameters: [
+        { name: 'options', type: 'ProfilerRuntimeOptions', required: false, description: '' },
+      ],
+      expandedParams: [],
+      returns: { type: 'void', description: '' },
+      returnFields: [],
+      expandedReturns: [],
+    },
+    {
+      name: 'disable',
+      signature: 'function disable(): void',
+      description: 'Disables profiling.',
+      summary: 'Disables profiling. New SDK operations will no longer be recorded.',
+      parameters: [],
+      expandedParams: [],
+      returns: { type: 'void', description: '' },
+      returnFields: [],
+      expandedReturns: [],
+    },
+  ],
+  examples: ['profiler.enable({ mode: "summary" });'],
+}
+
+const apiData: ApiData = {
+  version: '0.9.1',
+  generatedAt: 'unspecified',
+  functions: [completionFn, minimalFn, overloadedFn],
+  objects: [profilerObject],
+  errors: {
+    client: [
+      { name: 'INVALID_RESPONSE_TYPE', code: 50001, summary: 'Invalid response type received.' },
+      { name: 'RPC_CONNECTION_FAILED', code: 50203, summary: 'RPC connection failed.' },
+    ],
+    server: [
+      { name: 'MODEL_NOT_FOUND', code: 52002, summary: 'Model ID not found in the registry.' },
+    ],
+  },
+}
+
+const renderArgs = {
+  functions: apiData.functions,
+  objects: apiData.objects ?? [],
+  errors: apiData.errors,
+  versionLabel: 'v0.9.1',
+  scopeSummary: '3 functions in `packages/sdk/client/api/` plus the `profiler` object',
+}
 
 // ---------------------------------------------------------------------------
 // Filter unit tests
 // ---------------------------------------------------------------------------
 
-describe('escapeTable', () => {
-  it('escapes backslashes, pipes, and braces', () => {
-    expect(escapeTable('a\\b|c{d}e')).toBe('a\\\\b\\|c\\{d\\}e')
-  })
-})
-
-describe('escapeTableLight', () => {
-  it('escapes backslashes, braces, and pipes', () => {
-    expect(escapeTableLight('a\\b|c{d}e')).toBe('a\\\\b\\|c\\{d\\}e')
-  })
-})
-
 describe('firstSentence', () => {
   it('extracts first sentence ending with period', () => {
     expect(firstSentence('Hello world. More text here.')).toBe('Hello world.')
   })
-
   it('returns full text when no sentence boundary', () => {
     expect(firstSentence('no sentence here')).toBe('no sentence here')
-  })
-
-  it('handles exclamation marks', () => {
-    expect(firstSentence('Done! More.')).toBe('Done!')
-  })
-})
-
-describe('slugify', () => {
-  it('lowercases and replaces non-alphanumeric with dashes', () => {
-    expect(slugify('CompletionParams')).toBe('completionparams')
-    expect(slugify('Promise<string>')).toBe('promise-string-')
-  })
-})
-
-describe('formatShortSignature', () => {
-  it('strips function keyword and escapes pipes', () => {
-    expect(formatShortSignature('function foo(a: string | number): void'))
-      .toBe('foo(a: string \\| number): void')
-  })
-})
-
-describe('escapeQuotes', () => {
-  it('escapes double quotes', () => {
-    expect(escapeQuotes('say "hello"')).toBe('say \\"hello\\"')
   })
 })
 
@@ -182,220 +161,120 @@ describe('stripFence', () => {
   it('strips opening and closing fences', () => {
     expect(stripFence('```typescript\nconst x = 1;\n```')).toBe('const x = 1;')
   })
-
   it('handles fences without language', () => {
     expect(stripFence('```\ncode\n```')).toBe('code')
   })
 })
 
 // ---------------------------------------------------------------------------
-// renderExpandedTypes
+// single-page.njk rendering
 // ---------------------------------------------------------------------------
 
-describe('renderExpandedTypes', () => {
-  it('renders a flat expanded type', () => {
-    const types: ExpandedType[] = [
-      {
-        typeName: 'Options',
-        fields: [
-          { name: 'timeout', type: 'number', required: true, description: 'Timeout in ms' },
-          { name: 'retries', type: 'number', required: false, description: '' },
-        ],
-        children: [],
-      },
-    ]
-    expect(renderExpandedTypes(types, 3)).toMatchSnapshot()
-  })
-
-  it('renders nested expanded types', () => {
-    const types: ExpandedType[] = [
-      {
-        typeName: 'Outer',
-        fields: [{ name: 'inner', type: 'Inner', required: true, description: 'Nested' }],
-        children: [
-          {
-            typeName: 'Inner',
-            fields: [{ name: 'value', type: 'string', required: true, description: 'The value' }],
-            children: [],
-          },
-        ],
-      },
-    ]
-    expect(renderExpandedTypes(types, 3)).toMatchSnapshot()
-  })
-
-  it('caps heading depth at 5', () => {
-    const result = renderExpandedTypes(
-      [{ typeName: 'Deep', fields: [{ name: 'a', type: 'string', required: true, description: 'desc' }], children: [] }],
-      6,
-    )
-    expect(result).toContain('##### `Deep`')
-  })
-})
-
-// ---------------------------------------------------------------------------
-// Template rendering tests — verify Nunjucks templates produce valid output
-// ---------------------------------------------------------------------------
-
-describe('function-page template', () => {
+describe('single-page template', () => {
   const env = createTestEnv()
 
-  it('renders a full function with all sections', () => {
-    const mdx = env.render('function-page.njk', { fn: fullFunction }).trim()
-    const result = mdx.replace(/\bundefined\b/g, '\u2014')
-    expect(result).toMatchSnapshot()
-  })
-
-  it('renders a minimal function (no optional sections)', () => {
-    const mdx = env.render('function-page.njk', { fn: minimalFunction }).trim()
-    const result = mdx.replace(/\bundefined\b/g, '\u2014')
-    expect(result).toMatchSnapshot()
-  })
-
-  it('includes frontmatter', () => {
-    const mdx = env.render('function-page.njk', { fn: fullFunction }).trim()
-    expect(mdx).toMatch(/^---\ntitle:/)
-  })
-
-  it('includes deprecation callout when deprecated', () => {
-    const mdx = env.render('function-page.njk', { fn: fullFunction }).trim()
-    expect(mdx).toContain('<Callout type="warn" title="Deprecated">')
-    expect(mdx).toContain('Use completionV2() instead.')
-  })
-
-  it('omits deprecation callout when not deprecated', () => {
-    const mdx = env.render('function-page.njk', { fn: minimalFunction }).trim()
-    expect(mdx).not.toContain('Deprecated')
-  })
-
-  it('renders parameters table with expanded type links', () => {
-    const mdx = env.render('function-page.njk', { fn: fullFunction }).trim()
-    expect(mdx).toContain('[`CompletionParams`](#completionparams)')
-  })
-
-  it('renders throws section', () => {
-    const mdx = env.render('function-page.njk', { fn: fullFunction }).trim()
-    expect(mdx).toContain('## Throws')
-    expect(mdx).toContain('`INVALID_TOOLS_ARRAY`')
-  })
-
-  it('shows AI provenance callout for AI-generated descriptions', () => {
-    const aiFunction = { ...minimalFunction, descriptionSource: 'ai' as const }
-    const mdx = env.render('function-page.njk', { fn: aiFunction }).trim()
-    expect(mdx).toContain('AI-generated description')
-  })
-
-  it('shows AI provenance callout for AI-generated examples', () => {
-    const aiFunction = {
-      ...minimalFunction,
-      examples: ['```typescript\nconst x = 1;\n```'],
-      examplesSource: 'ai' as const,
-    }
-    const mdx = env.render('function-page.njk', { fn: aiFunction }).trim()
-    expect(mdx).toContain('AI-generated example')
-  })
-})
-
-describe('index-page template', () => {
-  const env = createTestEnv()
-
-  it('renders the index page', () => {
-    const result = env.render('index-page.njk', {
-      functions: [fullFunction, minimalFunction],
-      versionLabel: 'v0.8.0',
-    }).trim()
-    expect(result).toMatchSnapshot()
-  })
-
-  it('includes function table rows', () => {
-    const result = env.render('index-page.njk', {
-      functions: [fullFunction, minimalFunction],
-      versionLabel: 'v0.8.0',
-    }).trim()
-    expect(result).toContain('[`completion()`](./completion)')
-    expect(result).toContain('[`ping()`](./ping)')
-  })
-})
-
-describe('errors-page template', () => {
-  const env = createTestEnv()
-
-  it('renders the errors page with client and server errors', () => {
-    const result = env.render('errors-page.njk', {
-      errors: { client: clientErrors, server: serverErrors },
-    }).trim()
-    expect(result).toMatchSnapshot()
-  })
-
-  it('renders with only client errors', () => {
-    const result = env.render('errors-page.njk', {
-      errors: { client: clientErrors, server: [] },
-    }).trim()
-    expect(result).toContain('## Client errors')
-    expect(result).not.toContain('## Server errors')
-  })
-
-  it('renders with only server errors', () => {
-    const result = env.render('errors-page.njk', {
-      errors: { client: [], server: serverErrors },
-    }).trim()
-    expect(result).not.toContain('## Client errors')
-    expect(result).toContain('## Server errors')
-  })
-})
-
-// ---------------------------------------------------------------------------
-// Object and shared-types templates
-// ---------------------------------------------------------------------------
-
-describe('object-page template', () => {
-  const env = createTestEnv()
-
-  it('renders an object page with fields', () => {
-    const obj = {
-      name: 'CompletionParams',
-      description: 'Parameters for the completion function.',
-      fields: [
-        { name: 'modelId', type: 'string', required: true, description: 'The model identifier' },
-        { name: 'stream', type: 'boolean', required: false, description: 'Whether to stream' },
-      ],
-      children: [],
-    }
-    const mdx = env.render('object-page.njk', { obj }).trim()
-    expect(mdx).toContain('title: "CompletionParams"')
-    expect(mdx).toContain('## Fields')
-    expect(mdx).toMatch(/\|\s*modelId\s*\|/)
+  it('renders a complete API summary page', () => {
+    const mdx = env.render('single-page.njk', renderArgs).trim()
     expect(mdx).toMatchSnapshot()
   })
-})
 
-describe('shared-types template', () => {
-  const env = createTestEnv()
+  it('emits valid frontmatter with the version label', () => {
+    const mdx = env.render('single-page.njk', renderArgs).trim()
+    expect(mdx).toMatch(/^---\ntitle: API Summary — v0\.9\.1\n/)
+    expect(mdx).toContain('description: One-page reference of all public functions and objects exported by @qvac/sdk')
+  })
 
-  it('renders a shared types page', () => {
-    const types = [
-      {
-        name: 'ModelType',
-        description: 'Supported model types.',
-        definition: 'type ModelType = "llm" | "embed" | "tts"',
-        members: [
-          { name: 'llm', description: 'Large language model' },
-          { name: 'embed', description: 'Embedding model' },
-        ],
-      },
-      {
-        name: 'CachePolicy',
-        description: 'Cache eviction policies.',
-        definition: 'type CachePolicy = "lru" | "fifo"',
-      },
-    ]
-    const mdx = env.render('shared-types.njk', { types, versionLabel: 'v0.8.0' }).trim()
-    // New sample-aligned layout: `##` per type (not `###`), prose paragraph,
-    // no `## Overview`, and code fence only when the type has no `fields`.
-    expect(mdx).toContain('## `ModelType`')
-    expect(mdx).toContain('## `CachePolicy`')
-    expect(mdx).toContain('Supported model types.')
-    expect(mdx).toContain('type ModelType = "llm" | "embed" | "tts"')
-    expect(mdx).toMatchSnapshot()
+  it('emits the autogen / scope callout', () => {
+    const mdx = env.render('single-page.njk', renderArgs).trim()
+    expect(mdx).toContain('Auto-generated from `.d.ts` declarations and TSDoc comments.')
+    expect(mdx).toContain('**Scope**: 3 functions in `packages/sdk/client/api/` plus the `profiler` object.')
+  })
+
+  it('renders one ### heading per function', () => {
+    const mdx = env.render('single-page.njk', renderArgs).trim()
+    expect(mdx).toContain('### `completion`')
+    expect(mdx).toContain('### `suspend`')
+    expect(mdx).toContain('### `embed`')
+  })
+
+  it('renders signature, throws and example blocks for the simple-overload case', () => {
+    const mdx = env.render('single-page.njk', renderArgs).trim()
+    expect(mdx).toContain('**Signature**:')
+    expect(mdx).toContain('declare function completion(params: CompletionParams): CompletionRun;')
+    expect(mdx).toContain('**Throws**:')
+    expect(mdx).toContain('- `INVALID_TOOLS_ARRAY` — Invalid tools array provided')
+    expect(mdx).toContain('**Example**:')
+  })
+
+  it('renders #### Overload N subsections for multi-signature functions', () => {
+    const mdx = env.render('single-page.njk', renderArgs).trim()
+    expect(mdx).toContain('Has 2 overloads.')
+    expect(mdx).toContain('#### Overload 1')
+    expect(mdx).toContain('#### Overload 2')
+    expect(mdx).toContain('declare function embed(params: { modelId: string; text: string }): Promise<{ embedding: number[] }>;')
+    expect(mdx).toContain('declare function embed(params: { modelId: string; text: string[] }): Promise<{ embedding: number[][] }>;')
+  })
+
+  it('renders the profiler object section with shape and methods', () => {
+    const mdx = env.render('single-page.njk', renderArgs).trim()
+    expect(mdx).toContain('## Objects')
+    expect(mdx).toContain('### `profiler`')
+    expect(mdx).toContain('**Shape**:')
+    expect(mdx).toContain('**Methods**:')
+    expect(mdx).toMatch(/-\s+\*\*`enable\(options\?\)`\*\*\s+—\s+Enables profiling and resets aggregated data/)
+    expect(mdx).toContain('**Example**:')
+  })
+
+  it('renders the folded errors section with both client and server tables', () => {
+    const mdx = env.render('single-page.njk', renderArgs).trim()
+    expect(mdx).toContain('## Errors')
+    expect(mdx).toContain('### Client errors')
+    expect(mdx).toContain('### Server errors')
+    expect(mdx).toContain('| `INVALID_RESPONSE_TYPE` | 50001 | Invalid response type received. |')
+    expect(mdx).toContain('| `MODEL_NOT_FOUND` | 52002 | Model ID not found in the registry. |')
+  })
+
+  it('does not render parameter or return-field tables (those live in .d.ts)', () => {
+    const mdx = env.render('single-page.njk', renderArgs).trim()
+    expect(mdx).not.toMatch(/^\| Name \| Type \| Required\? \| Description \|$/m)
+    expect(mdx).not.toMatch(/^\| Field \| Type \| Required\? \| Description \|$/m)
+  })
+
+  it('skips the Errors section when the error tables are empty', () => {
+    const mdx = env
+      .render('single-page.njk', {
+        ...renderArgs,
+        errors: { client: [], server: [] },
+      })
+      .trim()
+    expect(mdx).toContain('## Errors')
+    expect(mdx).not.toContain('### Client errors')
+    expect(mdx).not.toContain('### Server errors')
+  })
+
+  it('skips the Objects section when no objects are exported', () => {
+    const mdx = env
+      .render('single-page.njk', {
+        ...renderArgs,
+        objects: [],
+      })
+      .trim()
+    expect(mdx).not.toContain('## Objects')
+  })
+
+  it('renders a deprecation callout for deprecated functions', () => {
+    const deprecatedFn: ApiFunction = {
+      ...minimalFn,
+      name: 'oldThing',
+      deprecated: 'Use newThing() instead.',
+    }
+    const mdx = env
+      .render('single-page.njk', {
+        ...renderArgs,
+        functions: [deprecatedFn],
+      })
+      .trim()
+    expect(mdx).toContain('### `oldThing`')
+    expect(mdx).toContain('> ⚠️ **Deprecated**: Use newThing() instead.')
   })
 })

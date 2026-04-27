@@ -68,6 +68,7 @@ export async function transcribe(
  * Streaming transcription with upfront audio: sends full audio, yields text
  * chunks as they arrive.
  *
+ * @overloadLabel "Upfront audio (deprecated)"
  * @param params - Transcription parameters including audio source.
  * @param options - Optional RPC options including per-call profiling.
  * @returns An async generator yielding text chunks as they become available.
@@ -85,6 +86,7 @@ export function transcribeStream(
  * The returned session is single-use. Attempting to iterate a second
  * time will throw a `TranscriptionFailedError`.
  *
+ * @overloadLabel "Bidirectional session"
  * @param params - Streaming transcription parameters.
  * @param params.modelId - The loaded transcription model to use
  * @param params.prompt - Optional initial prompt to guide transcription

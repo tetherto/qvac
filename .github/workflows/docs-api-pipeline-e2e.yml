@@ -1,13 +1,12 @@
-# End-to-end + determinism check for the API reference generation pipeline.
+# End-to-end + determinism check for the API summary generation pipeline.
 #
 # Runs on any PR that touches the pipeline itself (`docs/website/scripts/**`),
-# its templates, or the SDK source. Ensures Bruno's acceptance criteria stay
-# green:
+# its templates, or the SDK source.
 #
 #   1. Pipeline executes cleanly from a fresh checkout (no manual setup).
-#   2. api-data.json + every MDX page is produced.
+#   2. api-data.json + the single API-summary MDX page are produced.
 #   3. Output is deterministic: running twice with identical source produces
-#      byte-identical api-data.json.
+#      byte-identical api-data.json and MDX.
 
 name: Docs API Pipeline End-to-End
 
@@ -56,25 +55,40 @@ jobs:
         working-directory: packages/sdk
         run: bun install
 
+      - name: Read SDK version
+        id: sdk
+        working-directory: packages/sdk
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
       - name: First generation run
         env:
           SDK_PATH: ${{ github.workspace }}/packages/sdk
-        run: bun run docs:gen-api-dev --force-extract --no-ai
+        run: >
+          bun run scripts/generate-api-docs.ts
+          ${{ steps.sdk.outputs.version }}
+          --latest
+          --force-extract
+          --no-ai
 
       - name: Snapshot first run output
         run: |
           cp scripts/api-docs/api-data.json /tmp/api-data-run1.json
-          # Hash every generated MDX by content (sorted by path) so the
-          # comparison ignores filesystem metadata like mtime and inode
-          # ordering; those differ on each run even when the pipeline is
-          # fully deterministic because `fs.writeFile` always refreshes
-          # mtime. We only care that the bytes inside each file match.
-          find content/docs/dev/sdk/api -type f | LC_ALL=C sort | xargs sha256sum > /tmp/dev-run1-hashes.txt
+          # Hash the generated index.mdx by content so the comparison
+          # ignores filesystem metadata like mtime; we only care about
+          # the bytes.
+          sha256sum content/docs/sdk/api/index.mdx > /tmp/run1-hashes.txt
 
       - name: Second generation run (from scratch)
         env:
           SDK_PATH: ${{ github.workspace }}/packages/sdk
-        run: bun run docs:gen-api-dev --force-extract --no-ai
+        run: >
+          bun run scripts/generate-api-docs.ts
+          ${{ steps.sdk.outputs.version }}
+          --latest
+          --force-extract
+          --no-ai
 
       - name: Assert api-data.json is byte-identical across runs
         run: |
@@ -84,11 +98,11 @@ jobs:
           }
           echo "api-data.json is byte-identical"
 
-      - name: Assert dev MDX tree is byte-identical across runs
+      - name: Assert API summary MDX is byte-identical across runs
         run: |
-          find content/docs/dev/sdk/api -type f | LC_ALL=C sort | xargs sha256sum > /tmp/dev-run2-hashes.txt
-          diff -u /tmp/dev-run1-hashes.txt /tmp/dev-run2-hashes.txt || {
-            echo "::error::Dev MDX output differs across repeat runs (non-deterministic rendering)"
+          sha256sum content/docs/sdk/api/index.mdx > /tmp/run2-hashes.txt
+          diff -u /tmp/run1-hashes.txt /tmp/run2-hashes.txt || {
+            echo "::error::API summary MDX differs across repeat runs (non-deterministic rendering)"
             exit 1
           }
           echo "MDX output is byte-identical"
@@ -96,12 +110,11 @@ jobs:
       - name: Assert required output files exist
         run: |
           test -f scripts/api-docs/api-data.json
-          test -f content/docs/dev/sdk/api/index.mdx
-          test -f content/docs/dev/sdk/api/errors.mdx
-          test -f content/docs/dev/sdk/api/shared-types.mdx
-          FUNCTION_COUNT=$(find content/docs/dev/sdk/api -name '*.mdx' | wc -l)
-          echo "Generated MDX files: $FUNCTION_COUNT"
-          [ "$FUNCTION_COUNT" -ge 40 ] || {
-            echo "::error::Expected at least 40 MDX files, got $FUNCTION_COUNT"
-            exit 1
-          }
+          test -f content/docs/sdk/api/index.mdx
+          # The summary must include at least the standard surfaces.
+          for marker in "## Functions" "## Errors"; do
+            grep -qF "$marker" content/docs/sdk/api/index.mdx || {
+              echo "::error::content/docs/sdk/api/index.mdx is missing '$marker'"
+              exit 1
+            }
+          done

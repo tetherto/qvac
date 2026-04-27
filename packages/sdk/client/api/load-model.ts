@@ -27,6 +27,7 @@ const logger = getClientLogger();
  * When `onProgress` is provided, the function uses streaming to provide real-time download progress.
  * Otherwise, it uses a simple request-response pattern for faster execution.
  *
+ * @overloadLabel "Load new model"
  * @param options - An object that defines all configuration parameters required for loading the model, including:
  *   - modelSrc: The location from which the model weights are fetched (local path, remote URL, or Hyperdrive URL)
  *   - modelType: The type of model ("llm", "whisper", "embeddings", "nmt", or "tts")
@@ -117,6 +118,7 @@ export function loadModel(
 /**
  * Hot-reloads configuration on an already loaded model.
  *
+ * @overloadLabel "Hot-reload config"
  * @param options - Configuration for reloading config on an existing model:
  *   - modelId: The ID of an existing loaded model
  *   - modelType: The type of model (must match the loaded model)

@@ -2,14 +2,14 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/tetherto/qvac/docs/website/scripts/api-docs/api-data.schema.json",
   "title": "QVAC SDK ApiData",
-  "description": "Intermediate representation of the QVAC SDK's public API reference. Produced by `scripts/generate-api-docs.ts` after TypeDoc extraction + Zod `.describe()` merging + (optional) AI augmentation. Consumed by Nunjucks templates to render MDX docs. Conceptually plays the role openapi.json plays for HTTP APIs, tailored to a TypeScript/Zod SDK.",
+  "description": "Intermediate representation of the QVAC SDK's public API summary. Produced by `scripts/generate-api-docs.ts` after TypeDoc extraction + Zod `.describe()` merging + (optional) AI augmentation. Consumed by `single-page.njk` to render `content/docs/sdk/api/index.mdx` (or sibling `vX.Y.Z.mdx`).",
   "type": "object",
   "additionalProperties": false,
   "required": ["version", "generatedAt", "functions", "errors"],
   "properties": {
     "version": {
       "type": "string",
-      "description": "SDK semver being documented, or the literal `dev` for in-progress builds."
+      "description": "SDK semver being documented (e.g. `0.9.1`)."
     },
     "generatedAt": {
       "type": "string",
@@ -17,27 +17,17 @@
     },
     "functions": {
       "type": "array",
-      "description": "Top-level callable exports from `packages/sdk/index.ts`.",
+      "description": "Public functions re-exported from `packages/sdk/client/api/index.ts`.",
       "items": { "$ref": "#/$defs/ApiFunction" }
     },
     "objects": {
       "type": "array",
-      "description": "Exported value singletons with method-bundle shapes (e.g. `profiler`). Plain-data constants go in `constants` instead.",
+      "description": "Curated method-bundle singletons (today: just `profiler`).",
       "items": { "$ref": "#/$defs/ApiObject" }
-    },
-    "types": {
-      "type": "array",
-      "description": "Exported type aliases and interfaces surfaced by any public signature. Rendered on shared-types.mdx.",
-      "items": { "$ref": "#/$defs/ApiType" }
-    },
-    "constants": {
-      "type": "array",
-      "description": "Non-function, non-method-bundle value exports (PLUGIN_*, MODEL_TYPES, SDK_DEFAULT_PLUGINS, registries, ...). Rendered on constants.mdx.",
-      "items": { "$ref": "#/$defs/ApiConstant" }
     },
     "errors": {
       "type": "object",
-      "description": "Error code maps imported from `packages/sdk/schemas/sdk-errors-*.ts`.",
+      "description": "Error code maps imported from `packages/sdk/schemas/sdk-errors-*.ts`. Rendered as the folded `## Errors` section at the bottom of the summary page.",
       "additionalProperties": false,
       "required": ["client", "server"],
       "properties": {
@@ -62,7 +52,6 @@
         "required": { "type": "boolean" },
         "defaultValue": { "type": "string", "description": "Default value literal (from Zod `.default()` or JSDoc `@default`)." },
         "description": { "type": "string" },
-        "typeRef": { "type": "string", "description": "JSON-pointer to `#/types/<Name>` when the field's type is a named alias." },
         "typeStructure": { "$ref": "#/$defs/StructuredType" }
       }
     },
@@ -89,8 +78,7 @@
           "required": ["kind", "name"],
           "properties": {
             "kind": { "const": "reference" },
-            "name": { "type": "string" },
-            "typeRef": { "type": "string" }
+            "name": { "type": "string" }
           }
         },
         {
@@ -127,7 +115,7 @@
       "additionalProperties": false,
       "required": ["typeName", "fields", "children"],
       "properties": {
-        "typeName": { "type": "string", "description": "Heading label (e.g. `CompletionParams`, `inference` for discriminated-union variants)." },
+        "typeName": { "type": "string" },
         "fields": { "type": "array", "items": { "$ref": "#/$defs/TypeField" } },
         "children": { "type": "array", "items": { "$ref": "#/$defs/ExpandedType" } }
       }
@@ -141,8 +129,8 @@
         "signature": { "type": "string", "description": "Multi-line when the function declares overloads; one TypeScript `function …` line per overload." },
         "description": { "type": "string" },
         "descriptionSource": { "$ref": "#/$defs/ContentSource" },
-        "summary": { "type": "string", "description": "One-line summary used in the index table." },
-        "leadParagraph": { "type": "string", "description": "Narrative paragraph rendered between the signature and the first section." },
+        "summary": { "type": "string" },
+        "leadParagraph": { "type": "string" },
         "parameters": {
           "type": "array",
           "items": {
@@ -155,7 +143,6 @@
               "required": { "type": "boolean" },
               "defaultValue": { "type": "string" },
               "description": { "type": "string" },
-              "typeRef": { "type": "string" },
               "typeStructure": { "$ref": "#/$defs/StructuredType" }
             }
           }
@@ -168,7 +155,6 @@
           "properties": {
             "type": { "type": "string" },
             "description": { "type": "string" },
-            "typeRef": { "type": "string" },
             "typeStructure": { "$ref": "#/$defs/StructuredType" }
           }
         },
@@ -181,14 +167,42 @@
             "additionalProperties": false,
             "required": ["error", "description"],
             "properties": {
-              "error": { "type": "string", "description": "Error code constant name (e.g. `INVALID_RESPONSE_TYPE`)." },
+              "error": { "type": "string" },
               "description": { "type": "string" }
             }
           }
         },
         "examples": { "type": "array", "items": { "type": "string" } },
         "examplesSource": { "$ref": "#/$defs/ContentSource" },
-        "deprecated": { "type": "string", "description": "Deprecation message when the function carries `@deprecated`." }
+        "deprecated": { "type": "string" },
+        "overloads": {
+          "type": "array",
+          "description": "Per-overload breakdown for multi-signature functions. Each entry rendered as `#### Overload N` (with optional ` — Label` suffix) and its own description / signature / throws / examples.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["signature"],
+            "properties": {
+              "signature": { "type": "string" },
+              "description": { "type": "string" },
+              "throws": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["error", "description"],
+                  "properties": {
+                    "error": { "type": "string" },
+                    "description": { "type": "string" }
+                  }
+                }
+              },
+              "examples": { "type": "array", "items": { "type": "string" } },
+              "deprecated": { "type": "string" },
+              "label": { "type": "string", "description": "Author-provided short label, sourced from a `@overloadLabel \"...\"` JSDoc tag on the per-overload signature." }
+            }
+          }
+        }
       }
     },
     "ApiObject": {
@@ -206,48 +220,11 @@
         "children": { "type": "array", "items": { "$ref": "#/$defs/ExpandedType" } },
         "methods": {
           "type": "array",
-          "description": "When non-empty, the object is rendered as a namespace-style page with one subsection per method.",
+          "description": "Per-method ApiFunction records. The single-page renderer emits one bullet per method (`name(args?) — first-sentence summary`).",
           "items": { "$ref": "#/$defs/ApiFunction" }
         },
         "examples": { "type": "array", "items": { "type": "string" } },
         "examplesSource": { "$ref": "#/$defs/ContentSource" }
-      }
-    },
-    "ApiType": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["name", "description", "definition"],
-      "properties": {
-        "name": { "type": "string" },
-        "description": { "type": "string" },
-        "definition": { "type": "string", "description": "Pre-formatted TypeScript definition (`type X = …` or `interface X { … }`)." },
-        "fields": { "type": "array", "items": { "$ref": "#/$defs/TypeField" } },
-        "members": {
-          "type": "array",
-          "description": "Legacy simplified member list kept for backward compatibility.",
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["name", "description"],
-            "properties": {
-              "name": { "type": "string" },
-              "description": { "type": "string" }
-            }
-          }
-        },
-        "children": { "type": "array", "items": { "$ref": "#/$defs/ExpandedType" } }
-      }
-    },
-    "ApiConstant": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["name", "type", "description"],
-      "properties": {
-        "name": { "type": "string" },
-        "type": { "type": "string" },
-        "value": { "type": "string", "description": "Literal value when short enough to inline." },
-        "description": { "type": "string" },
-        "descriptionSource": { "$ref": "#/$defs/ContentSource" }
       }
     },
     "ErrorEntry": {
@@ -257,8 +234,7 @@
       "properties": {
         "name": { "type": "string" },
         "code": { "type": "integer" },
-        "summary": { "type": "string" },
-        "thrownBy": { "type": "string", "description": "Rendered list of `fnName()` call sites that throw this error. Curated labels (e.g. `Internal RPC layer`) come from the error sample override." }
+        "summary": { "type": "string" }
       }
     }
   }

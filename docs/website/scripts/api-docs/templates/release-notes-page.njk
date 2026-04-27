@@ -1,8 +1,12 @@
 ---
-title: "Release Notes — v{{ version }}"
-description: "What's new in QVAC SDK v{{ version }}"
+title: SDK Release Notes — v{{ version }}
+description: QVAC SDK release notes
 ---
 
+{% if not hasPreambleNpmLink %}
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/{{ version }}
+
+{% endif %}
 {% for p in preambles %}
 {{ p.content }}
 

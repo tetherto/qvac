@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import { Application, ReflectionKind } from "typedoc";
 import type { DeclarationReflection, SignatureReflection } from "typedoc";
-import type { ApiFunction, ApiObject, ApiType, ApiConstant, ExpandedType, TypeField, ErrorEntry, ApiData, StructuredType } from "./types.js";
+import type { ApiFunction, ApiObject, ApiOverload, ExpandedType, TypeField, ErrorEntry, ApiData, StructuredType } from "./types.js";
 import { auditTsDoc } from "./audit-tsdoc.js";
 import {
   readSampleProse,
@@ -217,21 +217,9 @@ export async function extractApiData(
   }
   console.log(`✓ Extracted ${apiObjects.length} API objects`);
 
-  const apiTypes = extractApiTypes(project);
-  const initialTypeCount = apiTypes.length;
-  supplementMissingTypes(apiTypes, sdkPath);
-  const supplementedCount = apiTypes.length - initialTypeCount;
-  console.log(
-    `✓ Extracted ${apiTypes.length} shared types` +
-      (supplementedCount > 0
-        ? ` (${supplementedCount} rescued from external re-exports)`
-        : ""),
-  );
-
-  const objectNames = new Set(apiObjects.map((o) => o.name));
-  const apiConstants = extractApiConstants(project, objectNames, sdkPath);
-  console.log(`✓ Extracted ${apiConstants.length} exported constants`);
-
+  // The single-page summary intentionally drops shared-types and constants
+  // pages — those details live in `.d.ts` for IDE/agent consumption. We
+  // skip the (slow, error-prone) extraction passes that fed them.
   const errors = await extractErrors(sdkPath);
 
   const apiData: ApiData = {
@@ -240,15 +228,8 @@ export async function extractApiData(
     generatedAt: resolveGeneratedAt(),
     functions: apiFunctions,
     objects: apiObjects.length > 0 ? apiObjects : undefined,
-    types: apiTypes.length > 0 ? apiTypes : undefined,
-    constants: apiConstants.length > 0 ? apiConstants : undefined,
     errors,
   };
-
-  // Cross-reference pass: populate `#/types/Name` pointers on every
-  // parameter/return/field whose type string matches a known `ApiType`.
-  // Runs after the full data is assembled so it can see every named type.
-  populateTypeRefs(apiData);
 
   await fs.writeFile(API_DATA_PATH, JSON.stringify(apiData, null, 2) + "\n", "utf-8");
   console.log(`✓ Wrote ${API_DATA_PATH}`);
@@ -534,8 +515,22 @@ function buildApiFunction(
   const perOverloadReturns = sourcePath
     ? readFunctionReturnTypesAllOverloads(sourcePath, name)
     : null;
+  const perOverloadThrows = sourcePath
+    ? readFunctionThrowsTagsAllOverloads(sourcePath, name)
+    : null;
 
-  const signatureLines = overloadSigs.map((s, idx) => {
+  // Build a per-overload record up-front so we can pair signature text
+  // with the per-signature TSDoc (description / examples / throws / label)
+  // before deduping.
+  type RawOverload = {
+    signature: string;
+    description: string;
+    examples: string[];
+    throws: Array<{ error: string; description: string }>;
+    deprecated?: string;
+    label?: string;
+  };
+  const rawOverloads: RawOverload[] = overloadSigs.map((s, idx) => {
     const syntacticForThisOverload = perOverloadParams?.[idx];
     const syntacticByName = new Map<string, string>();
     if (syntacticForThisOverload) {
@@ -553,16 +548,86 @@ function buildApiFunction(
       syntacticRet && syntacticRet.isReference
         ? syntacticRet.syntactic
         : formatType((s as any).type);
-    return buildSyntacticSignature(name, params, retType, s);
+    const sigText = buildSyntacticSignature(name, params, retType, s);
+
+    // Per-overload TSDoc lives on the signature's own comment when each
+    // overload has its own JSDoc block (this is the common pattern — see
+    // packages/sdk/client/api/embed.ts and load-model.ts).
+    const sigComment = (s as any).comment;
+    const sigBlockTags = sigComment?.blockTags ?? [];
+    const description = extractComment(sigComment?.summary) || "";
+    const examples = sigBlockTags
+      .filter((t: any) => t.tag === "@example")
+      .map((t: any) => extractComment(t.content));
+    // @throws — prefer the raw-source reader so the `{ErrorClass}` curly
+    // brace token survives. TypeDoc strips it from `t.content` before we
+    // see it, leaving the description as the only signal. Fall back to
+    // the parsed-from-typedoc form when the source reader can't find the
+    // overload (e.g. cross-file re-exports).
+    const sourceThrows = perOverloadThrows?.[idx];
+    const throws =
+      sourceThrows && sourceThrows.length > 0
+        ? sourceThrows
+        : sigBlockTags
+            .filter((t: any) => t.tag === "@throws")
+            .map((t: any) => {
+              const text = extractComment(t.content);
+              const m = text.match(/^\{([^}]+)\}\s*(.*)/);
+              if (m) return { error: m[1], description: m[2] };
+              return { error: text, description: "" };
+            })
+            .filter((t: any) => t.error);
+    // Author-provided short label, written as `@overloadLabel "Single text"`.
+    // When missing, the heading falls back to plain `Overload N`.
+    const labelTag = sigBlockTags.find((t: any) => t.tag === "@overloadLabel");
+    const labelRaw = labelTag ? extractComment(labelTag.content).trim() : "";
+    const label = labelRaw.replace(/^["']|["']$/g, "") || undefined;
+    // @deprecated on a specific overload — surfaces a warning in just that
+    // overload's section instead of the whole function.
+    const depTag = sigBlockTags.find((t: any) => t.tag === "@deprecated");
+    const deprecated = depTag
+      ? extractComment(depTag.content) || "This overload is deprecated."
+      : undefined;
+
+    return { signature: sigText, description, examples, throws, deprecated, label };
   });
+
   // De-dupe identical overload signatures (TypeDoc sometimes emits the
   // implementation signature as an extra entry matching one of the
-  // overloads; we only want each unique shape once).
-  const signature = Array.from(new Set(signatureLines)).join("\n");
+  // overloads; we only want each unique shape once). When duplicates carry
+  // different TSDoc, the first one wins — TypeDoc puts the implementation
+  // signature last and authors document the overloads, not the impl.
+  const seenSignatures = new Set<string>();
+  const uniqueOverloads: RawOverload[] = [];
+  for (const ov of rawOverloads) {
+    if (seenSignatures.has(ov.signature)) continue;
+    seenSignatures.add(ov.signature);
+    uniqueOverloads.push(ov);
+  }
+  const uniqueSignatures = uniqueOverloads.map((o) => o.signature);
+  const signature = uniqueSignatures.join("\n");
+
+  // Per-overload breakdown. Populated only when there's >1 unique
+  // signature so the renderer can emit one `#### Overload N` block per
+  // entry. Each entry carries its own description, throws, examples,
+  // deprecated state, and optional `@overloadLabel`.
+  const overloads: ApiOverload[] | undefined =
+    uniqueOverloads.length > 1
+      ? uniqueOverloads.map((ov) => {
+          const entry: ApiOverload = { signature: ov.signature };
+          if (ov.description) entry.description = ov.description;
+          if (ov.throws.length > 0) entry.throws = ov.throws;
+          if (ov.examples.length > 0) entry.examples = ov.examples;
+          if (ov.deprecated) entry.deprecated = ov.deprecated;
+          if (ov.label) entry.label = ov.label;
+          return entry;
+        })
+      : undefined;
 
   return {
     name,
     signature,
+    overloads,
     description: extractComment(summary) || "No description available",
     parameters,
     expandedParams,
@@ -700,6 +765,24 @@ function buildApiFunction(
   };
 }
 
+/**
+ * Scope filter: only public functions re-exported from
+ * `packages/sdk/client/api/index.ts` make it into the API summary.
+ *
+ * The single-page summary deliberately excludes auxiliary helpers
+ * (`close`, `getLogger`, `getModelByName/Path/Src`, `definePlugin`,
+ * `defineHandler`, `defineDuplexHandler`) — those live in `.d.ts` for
+ * IDE/agent consumption.
+ */
+function isInClientApiScope(sourcePath: string): boolean {
+  if (!sourcePath) return false;
+  const normalized = sourcePath.replace(/\\/g, "/");
+  if (!normalized.includes("/client/api/")) return false;
+  if (normalized.endsWith("/client/api/index.ts")) return false;
+  if (normalized.includes("/server/") || normalized.includes("/examples/")) return false;
+  return true;
+}
+
 function extractApiFunctions(project: any): ApiFunction[] {
   const functions: ApiFunction[] = [];
   const allFunctions = project.getReflectionsByKind(ReflectionKind.Function) as DeclarationReflection[];
@@ -717,8 +800,7 @@ function extractApiFunctions(project: any): ApiFunction[] {
     ) as SignatureReflection[];
     if (allSignatures.length === 0) continue;
     const sourcePath = (decl.sources?.[0]?.fullFileName ?? (decl as any).sources?.[0]?.file?.fullFileName ?? "") as string;
-    const normalizedPath = sourcePath.replace(/\\/g, "/");
-    if (normalizedPath && (normalizedPath.includes("/server/") || normalizedPath.includes("/examples/"))) continue;
+    if (!isInClientApiScope(sourcePath)) continue;
     functions.push(buildApiFunction(decl.name, decl, allSignatures[0], undefined, allSignatures));
   }
   return functions.sort((a, b) =>
@@ -748,6 +830,11 @@ function extractApiObjects(project: any): ApiObject[] {
     const sourcePath = (decl.sources?.[0]?.fullFileName ?? (decl as any).sources?.[0]?.file?.fullFileName ?? "") as string;
     const normalizedPath = sourcePath.replace(/\\/g, "/");
     if (normalizedPath && (normalizedPath.includes("/server/") || normalizedPath.includes("/examples/"))) continue;
+    // Object summary scope: only public, curated singletons. Today this is
+    // just `profiler` from `packages/sdk/profiling/`. Adding more curated
+    // objects here is a deliberate editorial decision — they show up on
+    // the single-page summary, so the bar should be intentional.
+    if (!normalizedPath.includes("/profiling/")) continue;
 
     const comment = decl.comment;
     const summary = comment?.summary;
@@ -797,165 +884,8 @@ function extractApiObjects(project: any): ApiObject[] {
 }
 
 // ---------------------------------------------------------------------------
-// Value-export constants (non-function, non-method-bundle exports)
+// Object signature builder (used by extractApiObjects above)
 // ---------------------------------------------------------------------------
-
-/**
- * Extract exported value constants that don't fit `extractApiObjects`'s
- * "method bundle" shape — plugin IDs, enum-like const objects, registry
- * lists, log identifiers, etc. Filters by **public index.ts exports**
- * (derived from the SDK barrel) so internal Zod schema variables and
- * helpers don't pollute the constants page.
- */
-function extractApiConstants(
-  project: any,
-  alreadyAsObjects: Set<string>,
-  sdkPath: string,
-): ApiConstant[] {
-  const constants: ApiConstant[] = [];
-  const publicNames = collectPublicValueExportNames(sdkPath);
-  const allVars = project.getReflectionsByKind(ReflectionKind.Variable) as DeclarationReflection[];
-
-  for (const refl of allVars) {
-    const decl = refl as DeclarationReflection;
-    if (alreadyAsObjects.has(decl.name)) continue;
-
-    // Only include constants that are publicly re-exported from index.ts.
-    // TypeDoc reflects every exported `const` in the SDK source tree — most
-    // are internal Zod schemas or helpers that don't belong in the public
-    // constants page.
-    if (publicNames.size > 0 && !publicNames.has(decl.name)) continue;
-
-    const sourcePath = (decl.sources?.[0]?.fullFileName ?? (decl as any).sources?.[0]?.file?.fullFileName ?? "") as string;
-    const normalizedPath = sourcePath.replace(/\\/g, "/");
-    if (normalizedPath && (normalizedPath.includes("/server/") || normalizedPath.includes("/examples/"))) continue;
-
-    const type = (decl as any).type;
-    const typeStr = formatType(type);
-
-    const comment = decl.comment ?? (decl as any).signatures?.[0]?.comment;
-    const summary = comment?.summary;
-    let description =
-      extractComment(summary) ||
-      readModuleJsDoc(sourcePath)?.description ||
-      "";
-
-    // Fallback: single-line Zod-idiomatic description by property name.
-    if (!description) description = lookupZodDescription(decl.name);
-
-    // Inline literal value — only when it's small enough to be useful in a
-    // one-cell table. Deliberately conservative to avoid dumping huge
-    // registry arrays into the page.
-    const value = formatConstantValue(decl);
-
-    constants.push({
-      name: decl.name,
-      type: typeStr,
-      value,
-      description: description || "No description available",
-    });
-  }
-
-  return constants.sort((a, b) =>
-    a.name.localeCompare(b.name, "en", { sensitivity: "base" }),
-  );
-}
-
-/**
- * Parse the SDK barrel (`index.ts`) — and any files it re-exports from via
- * `export * from "./x"` — to collect the set of value-export names that
- * are part of the public API. Handles `export { a, b }`, `export { a as b }`,
- * type-only specifiers (skipped), named-only vs `export * from` barrels.
- *
- * Uses syntactic parsing so it works regardless of whether the TS checker
- * has indexed the barrel yet.
- */
-function collectPublicValueExportNames(sdkPath: string): Set<string> {
-  const names = new Set<string>();
-  const visited = new Set<string>();
-
-  const scan = (filePath: string): void => {
-    const normalized = filePath.replace(/\\/g, "/");
-    if (visited.has(normalized)) return;
-    visited.add(normalized);
-
-    let raw: string;
-    try {
-      raw = fsSync.readFileSync(filePath, "utf-8");
-    } catch {
-      return;
-    }
-
-    const source = ts.createSourceFile(filePath, raw, ts.ScriptTarget.Latest, true);
-    ts.forEachChild(source, (node) => {
-      if (!ts.isExportDeclaration(node)) return;
-      const moduleSpec = node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)
-        ? node.moduleSpecifier.text
-        : null;
-
-      // `export type { X } from "./y"` or `export type { X }` — skip all.
-      if (node.isTypeOnly) return;
-
-      if (node.exportClause && ts.isNamedExports(node.exportClause)) {
-        for (const spec of node.exportClause.elements) {
-          if (spec.isTypeOnly) continue;
-          names.add(spec.name.text);
-        }
-        return;
-      }
-
-      // Barrel re-export: `export * from "./schemas"`. Resolve and recurse.
-      if (!node.exportClause && moduleSpec && moduleSpec.startsWith(".")) {
-        const resolved = path.resolve(path.dirname(filePath), moduleSpec);
-        for (const ext of [".ts", "/index.ts"]) {
-          const candidate = resolved + ext;
-          try {
-            if (fsSync.statSync(candidate).isFile()) {
-              scan(candidate);
-              break;
-            }
-          } catch {
-            // try next candidate
-          }
-        }
-      }
-    });
-  };
-
-  scan(path.join(sdkPath, "index.ts"));
-  return names;
-}
-
-/**
- * Render a small const's literal value for the Constants table. Returns
- * undefined when the value is too large to inline (threshold ~80 chars) or
- * not representable as a short string.
- */
-function formatConstantValue(decl: DeclarationReflection): string | undefined {
-  const MAX = 120;
-  const type = (decl as any).type;
-  const asAny = decl as any;
-
-  // TypeDoc stores "default" initializers on DeclarationReflection.defaultValue
-  // when it can infer them from the source.
-  const raw = asAny.defaultValue;
-  if (typeof raw === "string" && raw.trim()) {
-    const cleaned = raw.trim().replace(/\s+/g, " ");
-    if (cleaned.length <= MAX && cleaned !== "..." && cleaned !== "undefined") {
-      return cleaned;
-    }
-  }
-
-  // Literal type (e.g. `"hello"`, `42`, `true`) — pull it straight from the
-  // type reflection.
-  if (type?.type === "literal") {
-    if (typeof type.value === "string") return `"${type.value}"`;
-    if (type.value == null) return "null";
-    return String(type.value);
-  }
-
-  return undefined;
-}
 
 /**
  * Produce a pre-formatted TypeScript declaration summarizing an object's
@@ -986,233 +916,6 @@ function buildObjectSignature(
     }
   }
   return `const ${name}: {\n${lines.join("\n")}\n};`;
-}
-
-// ---------------------------------------------------------------------------
-// TypeDoc shared-type extraction (type aliases + interfaces)
-// ---------------------------------------------------------------------------
-
-function extractApiTypes(project: any): ApiType[] {
-  const types: ApiType[] = [];
-
-  const allTypeAliases = project.getReflectionsByKind(ReflectionKind.TypeAlias) as DeclarationReflection[];
-  const allInterfaces = project.getReflectionsByKind(ReflectionKind.Interface) as DeclarationReflection[];
-  const allReflections = [...allTypeAliases, ...allInterfaces];
-
-  for (const refl of allReflections) {
-    const decl = refl as DeclarationReflection;
-
-    const sourcePath = (decl.sources?.[0]?.fullFileName ?? (decl as any).sources?.[0]?.file?.fullFileName ?? "") as string;
-    const normalizedPath = sourcePath.replace(/\\/g, "/");
-    if (normalizedPath && (normalizedPath.includes("/server/") || normalizedPath.includes("/examples/"))) continue;
-
-    const comment = decl.comment;
-    const summary = comment?.summary;
-
-    const definition = formatTypeDefinition(decl);
-    const members = extractTypeMembers(decl);
-    const fields = extractTypeFields(decl);
-
-    types.push({
-      name: decl.name,
-      description: extractComment(summary) || "No description available",
-      definition,
-      members: members.length > 0 ? members : undefined,
-      fields: fields.length > 0 ? fields : undefined,
-    });
-  }
-
-  return types.sort((a, b) =>
-    a.name.localeCompare(b.name, "en", { sensitivity: "base" }),
-  );
-}
-
-/**
- * TypeDoc's `excludeExternals: true` drops types that resolve to files under
- * `node_modules/` — including SDK-public renamed re-exports like
- * `export type { Doc as RagDoc } from "@qvac/rag"`. This helper rescues those
- * by parsing the SDK's barrel (`index.ts`) and all `schemas/*.ts` for
- * `export type { ... }` / `export type X` / `export interface X`, then
- * synthesizes an `ApiType` entry (using the TS checker to produce a
- * structural definition) for any name not already present.
- *
- * Mutates the passed `types` array in place.
- */
-function supplementMissingTypes(
-  types: ApiType[],
-  sdkPath: string,
-): void {
-  if (!tsProgram || !tsChecker) return;
-  const existing = new Set(types.map((t) => t.name));
-
-  const sourcesToScan: string[] = [];
-  const pushIfExists = (rel: string) => {
-    const full = path.join(sdkPath, rel).replace(/\\/g, "/");
-    if (tsProgram!.getSourceFile(full)) sourcesToScan.push(full);
-  };
-  pushIfExists("index.ts");
-  pushIfExists("schemas/index.ts");
-  pushIfExists("schemas/rag.ts");
-
-  // Collect all `export type { Name, Name2 as AliasName, ... }` identifiers
-  // and any `export type X = ...` / `export interface X` declarations.
-  const publicTypeNames: string[] = [];
-  for (const file of sourcesToScan) {
-    const source = tsProgram.getSourceFile(file);
-    if (!source) continue;
-    ts.forEachChild(source, (node) => {
-      if (ts.isExportDeclaration(node) && node.exportClause && ts.isNamedExports(node.exportClause)) {
-        for (const spec of node.exportClause.elements) {
-          if (!spec.isTypeOnly && !(node as ts.ExportDeclaration).isTypeOnly) continue;
-          publicTypeNames.push(spec.name.text);
-        }
-      } else if (ts.isTypeAliasDeclaration(node) || ts.isInterfaceDeclaration(node)) {
-        const hasExport = node.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword);
-        if (hasExport) publicTypeNames.push(node.name.text);
-      }
-    });
-  }
-
-  for (const name of publicTypeNames) {
-    if (existing.has(name)) continue;
-
-    // Look up the symbol in the program. For a re-exported external alias,
-    // TypeDoc's checker can still resolve its structural form.
-    const symbol = findExportedSymbol(name, sourcesToScan);
-    if (!symbol) continue;
-    const type = tsChecker.getDeclaredTypeOfSymbol(symbol);
-    if (!type) continue;
-
-    // Produce a structural definition string + fields using the same format
-    // as the Zod-inferred anonymous objects elsewhere in the pipeline.
-    const fields = extractTsProperties(
-      type,
-      symbol.declarations?.[0] ?? (sourcesToScan[0] as any),
-      name,
-    );
-    const definition = `type ${name} = ${tsChecker.typeToString(type)}`;
-
-    types.push({
-      name,
-      description: "No description available",
-      definition,
-      fields: fields && fields.length > 0 ? fields : undefined,
-    });
-    existing.add(name);
-  }
-
-  types.sort((a, b) =>
-    a.name.localeCompare(b.name, "en", { sensitivity: "base" }),
-  );
-}
-
-/**
- * Find an exported symbol by name across a set of source files. Returns the
- * first match whose module exports include the name.
- */
-function findExportedSymbol(name: string, files: string[]): ts.Symbol | null {
-  if (!tsChecker || !tsProgram) return null;
-  for (const file of files) {
-    const source = tsProgram.getSourceFile(file);
-    if (!source) continue;
-    const fileSymbol = tsChecker.getSymbolAtLocation(source);
-    if (!fileSymbol) continue;
-    const exports = tsChecker.getExportsOfModule(fileSymbol);
-    for (const exp of exports) {
-      if (exp.name === name) {
-        // Re-export aliases need resolution to get the underlying symbol.
-        if (exp.flags & ts.SymbolFlags.Alias) {
-          return tsChecker.getAliasedSymbol(exp);
-        }
-        return exp;
-      }
-    }
-  }
-  return null;
-}
-
-/**
- * Extract fields from a type alias / interface declaration as full TypeField
- * records. Used by the shared-types page to render a `Field | Type | Required?
- * | Default | Description` table matching the sample layout.
- *
- * Returns an empty array for union aliases and for types with no own
- * properties (they fall back to the code-block definition).
- */
-function extractTypeFields(decl: DeclarationReflection): TypeField[] {
-  const type = (decl as any).type;
-  const children = decl.children ?? type?.declaration?.children;
-  if (!children || children.length === 0) return [];
-  // Hint Zod lookups with the parent type's own name so describes only
-  // resolve when the originating schema (via `z.infer<typeof X>`) matches.
-  const schemaHint = decl.name;
-  return children.map((c: any) => {
-    const tags = c.comment?.blockTags ?? [];
-    const defaultTag = tags.find((t: any) => t.tag === "@default" || t.tag === "@defaultValue");
-    const defaultValue = defaultTag ? extractComment(defaultTag.content) : undefined;
-    const tsDoc = extractComment(c.comment?.summary);
-    return {
-      name: c.name,
-      type: formatType(c.type),
-      required: !c.flags?.isOptional,
-      defaultValue: cleanDefaultValue(defaultValue),
-      description: tsDoc || lookupZodDescription(c.name, schemaHint),
-    };
-  });
-}
-
-function formatTypeDefinition(decl: DeclarationReflection): string {
-  const type = (decl as any).type;
-  if (!type) return `type ${decl.name} = unknown`;
-
-  if (type.type === "union" && type.types) {
-    const members = type.types.map((t: any) => {
-      if (t.type === "literal") return JSON.stringify(t.value);
-      return formatType(t);
-    });
-    return `type ${decl.name} = ${members.join(" | ")}`;
-  }
-
-  if (type.type === "reflection" && type.declaration?.children) {
-    const fields = type.declaration.children.map((c: any) => {
-      const opt = c.flags?.isOptional ? "?" : "";
-      return `  ${c.name}${opt}: ${formatType(c.type)};`;
-    });
-    return `interface ${decl.name} {\n${fields.join("\n")}\n}`;
-  }
-
-  if (decl.children && decl.children.length > 0) {
-    const fields = decl.children.map((c: any) => {
-      const opt = c.flags?.isOptional ? "?" : "";
-      return `  ${c.name}${opt}: ${formatType((c as any).type)};`;
-    });
-    return `interface ${decl.name} {\n${fields.join("\n")}\n}`;
-  }
-
-  return `type ${decl.name} = ${formatType(type)}`;
-}
-
-function extractTypeMembers(decl: DeclarationReflection): Array<{ name: string; description: string }> {
-  const type = (decl as any).type;
-
-  if (type?.type === "union" && type.types) {
-    return type.types
-      .filter((t: any) => t.type === "literal" && t.value != null)
-      .map((t: any) => ({
-        name: String(t.value),
-        description: "",
-      }));
-  }
-
-  const children = decl.children ?? type?.declaration?.children;
-  if (children && children.length > 0) {
-    return children.map((c: any) => ({
-      name: c.name,
-      description: extractComment(c.comment?.summary),
-    }));
-  }
-
-  return [];
 }
 
 // ---------------------------------------------------------------------------
@@ -1637,36 +1340,9 @@ function parseJsDocBlock(raw: string): { description: string; examples: string[]
  * Falls back to a single-field entry (error only, empty description) when the
  * JSDoc tag has no `{...}` type annotation.
  */
-function readFunctionThrowsTags(
-  fileName: string,
-  functionName: string,
+function parseThrowsFromJsDoc(
+  raw: string,
 ): Array<{ error: string; description: string }> {
-  if (!tsProgram) return [];
-  const normalizedPath = fileName.replace(/\\/g, "/");
-  const sourceFile = tsProgram.getSourceFile(normalizedPath);
-  if (!sourceFile) return [];
-
-  const fullText = sourceFile.getFullText();
-  let targetPos: number | null = null;
-  sourceFile.forEachChild((node) => {
-    if (targetPos !== null) return;
-    if (ts.isFunctionDeclaration(node) && node.name?.text === functionName) {
-      targetPos = node.pos;
-    }
-  });
-  if (targetPos === null) return [];
-
-  const commentRanges = ts.getLeadingCommentRanges(fullText, targetPos) ?? [];
-  const jsdoc = commentRanges
-    .reverse()
-    .find(
-      (r) =>
-        r.kind === ts.SyntaxKind.MultiLineCommentTrivia &&
-        fullText.slice(r.pos, r.pos + 3) === "/**",
-    );
-  if (!jsdoc) return [];
-
-  const raw = fullText.slice(jsdoc.pos, jsdoc.end);
   const inner = raw
     .replace(/^\/\*\*\s*/, "")
     .replace(/\s*\*\/$/, "")
@@ -1687,6 +1363,70 @@ function readFunctionThrowsTags(
     });
   }
   return entries;
+}
+
+function readFunctionThrowsTags(
+  fileName: string,
+  functionName: string,
+): Array<{ error: string; description: string }> {
+  const all = readFunctionThrowsTagsAllOverloads(fileName, functionName);
+  if (all.length === 0) return [];
+  // Concatenate every overload's @throws tags into a single function-level
+  // list (back-compat: this is the function-level fallback used by the
+  // top-level `fn.throws` field).
+  const seen = new Set<string>();
+  const merged: Array<{ error: string; description: string }> = [];
+  for (const list of all) {
+    for (const entry of list) {
+      const key = `${entry.error}|${entry.description}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(entry);
+    }
+  }
+  return merged;
+}
+
+/**
+ * Return one `@throws` array per declared overload of `functionName`,
+ * preserving order. Each entry is the throws list for one signature
+ * (including the implementation signature, which is typically dropped
+ * downstream because its signature text matches one of the overloads).
+ *
+ * Reads the raw source so the `{ErrorClass}` curly-brace token survives —
+ * TypeDoc's parsed comment objects strip it.
+ */
+function readFunctionThrowsTagsAllOverloads(
+  fileName: string,
+  functionName: string,
+): Array<Array<{ error: string; description: string }>> {
+  if (!tsProgram) return [];
+  const normalizedPath = fileName.replace(/\\/g, "/");
+  const sourceFile = tsProgram.getSourceFile(normalizedPath);
+  if (!sourceFile) return [];
+
+  const fullText = sourceFile.getFullText();
+  const positions: number[] = [];
+  sourceFile.forEachChild((node) => {
+    if (ts.isFunctionDeclaration(node) && node.name?.text === functionName) {
+      positions.push(node.pos);
+    }
+  });
+  if (positions.length === 0) return [];
+
+  return positions.map((pos) => {
+    const commentRanges = ts.getLeadingCommentRanges(fullText, pos) ?? [];
+    const jsdoc = commentRanges
+      .reverse()
+      .find(
+        (r) =>
+          r.kind === ts.SyntaxKind.MultiLineCommentTrivia &&
+          fullText.slice(r.pos, r.pos + 3) === "/**",
+      );
+    if (!jsdoc) return [];
+    const raw = fullText.slice(jsdoc.pos, jsdoc.end);
+    return parseThrowsFromJsDoc(raw);
+  });
 }
 
 /**
@@ -2502,64 +2242,6 @@ function buildStructuredType(type: any): StructuredType | undefined {
     return { kind: "object" };
   }
   return { kind: "unknown" };
-}
-
-/**
- * Post-pass: populate `typeRef` fields on every structured type node and on
- * top-level parameter/return/TypeField entries when the type name matches a
- * known `ApiType` in this ApiData's `types[]`. Result: any consumer can
- * follow `CompletionParams` → `#/types/CompletionParams` and fetch the
- * full definition without string parsing.
- */
-function populateTypeRefs(apiData: ApiData): void {
-  const typeNames = new Set((apiData.types ?? []).map((t) => t.name));
-  const refFor = (name: string): string | undefined =>
-    typeNames.has(name) ? `#/types/${name}` : undefined;
-
-  const annotateStructure = (s: StructuredType | undefined): void => {
-    if (!s) return;
-    if (s.kind === "reference") {
-      const ref = refFor(s.name);
-      if (ref) (s as { typeRef?: string }).typeRef = ref;
-    } else if (s.kind === "array") {
-      annotateStructure(s.element);
-    } else if (s.kind === "union") {
-      for (const v of s.variants) annotateStructure(v);
-    } else if (s.kind === "intersection") {
-      for (const p of s.parts) annotateStructure(p);
-    }
-  };
-
-  const annotateField = (f: {
-    type: string;
-    typeRef?: string;
-    typeStructure?: StructuredType;
-  }): void => {
-    annotateStructure(f.typeStructure);
-    // Top-level typeRef: match the raw type string (strip generics / union
-    // markers) against known aliases. Covers common cases like
-    // `CompletionParams`, `CompletionParams | undefined`, `CompletionParams[]`.
-    const bareName = f.type.replace(/^\s*|\s*$/g, "").match(/^([A-Z][A-Za-z0-9_]*)\b/)?.[1];
-    if (bareName) {
-      const ref = refFor(bareName);
-      if (ref) f.typeRef = ref;
-    }
-  };
-
-  for (const fn of apiData.functions) {
-    for (const p of fn.parameters) annotateField(p);
-    if (fn.returns) annotateField(fn.returns as any);
-  }
-  if (apiData.objects) {
-    for (const obj of apiData.objects) {
-      if (obj.methods) {
-        for (const m of obj.methods) {
-          for (const p of m.parameters) annotateField(p);
-          if (m.returns) annotateField(m.returns as any);
-        }
-      }
-    }
-  }
 }
 
 /**

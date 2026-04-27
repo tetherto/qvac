@@ -1,33 +1,36 @@
 #!/usr/bin/env bun
 /**
- * Generate API documentation from TypeScript source (TypeDoc → MDX).
- * Thin orchestrator that delegates to extract.ts (Phase 1) and render.ts (Phase 2).
+ * Generate the API summary MDX for one SDK version.
+ *
+ * Output target:
+ *   - latest:  content/docs/sdk/api/index.mdx
+ *   - older:   content/docs/sdk/api/v<X.Y.Z>.mdx
+ *
+ * The pipeline is:
+ *   1. Phase 1 — Extract: TypeDoc walks the SDK and writes api-data.json
+ *      (signatures, top-level descriptions, throws, examples, deprecated,
+ *      errors). Scope is restricted to functions re-exported from
+ *      `packages/sdk/client/api/index.ts` plus the `profiler` object.
+ *   2. Phase 1.5 — AI augmentation (optional): fills in missing prose. Skipped
+ *      with `--no-ai` and disabled by default in CI to keep output reproducible.
+ *   3. Phase 2 — Render: writes a single MDX through `single-page.njk`.
  *
  * Usage:
- *   bun run scripts/generate-api-docs.ts <version> [--no-update-latest] [--force-extract] [--no-ai]
- *   bun run scripts/generate-api-docs.ts --dev [--force-extract] [--no-ai]
- *   bun run scripts/generate-api-docs.ts --rollback
+ *   bun run scripts/generate-api-docs.ts <version> [--no-ai] [--force-extract]
+ *   bun run scripts/generate-api-docs.ts <version> --latest
  *
- * --dev writes to content/docs/dev/sdk/api/ without creating a versioned folder
- * or updating (latest). Use during day-to-day development of the next version.
+ * Flags:
+ *   --latest          Mark this version as the latest. Writes to index.mdx
+ *                     instead of v<X.Y.Z>.mdx.
+ *   --no-ai           Skip the AI augmentation phase (CI default).
+ *   --force-extract   Bypass mtime-based extraction cache.
  *
- * --force-extract bypasses the mtime-based extraction cache and always re-runs
- * TypeDoc. Without it, extraction is skipped when api-data.json is newer than
- * all .ts files under the SDK source tree.
+ * SDK_PATH env: override the SDK source root (default: ../../../packages/sdk
+ * relative to this script).
  *
- * --no-ai skips the optional AI augmentation phase. AI augmentation calls a
- * remote LLM which produces non-deterministic output, so any reproducibility /
- * byte-identity / CI workflow MUST pass --no-ai. CI pipelines default this on.
- * AI augmentation is only intended for curated manual runs where the author
- * will review and polish the generated content before committing.
- *
- * For reproducible output set SOURCE_DATE_EPOCH (reproducible-builds
- * convention). Without it, ApiData.generatedAt is the literal string
- * "unspecified" so byte-identity checks pass by default.
- *
- * Path format: content/docs/v{X.Y.Z}/sdk/api/ and content/docs/(latest)/sdk/api/
- * SDK path: Set SDK_PATH env to point to sdk package (default: ../../../packages/sdk
- * relative to this script, i.e. packages/sdk in the monorepo regardless of cwd).
+ * SOURCE_DATE_EPOCH env: when set, ApiData.generatedAt becomes a deterministic
+ * ISO timestamp (reproducible-builds convention). When unset it falls back to
+ * the literal string "unspecified" so byte-identity tests pass without env.
  */
 
 import * as fs from "fs/promises";
@@ -35,56 +38,41 @@ import * as path from "path";
 import { fileURLToPath } from "node:url";
 import { extractApiData } from "./api-docs/extract.js";
 import { renderApiDocs } from "./api-docs/render.js";
-import type { GenerateOptions } from "./api-docs/types.js";
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const API_DATA_PATH = path.join(SCRIPT_DIR, "api-docs", "api-data.json");
 
 // Resolve paths relative to this script's location (docs/website/scripts/)
-// rather than process.cwd() so that `npm run docs:gen-api-dev` and
-// `npx bun run scripts/generate-api-docs.ts` work identically whether
-// invoked from the repo root or from the docs/website directory.
+// rather than process.cwd() so the generator works whether invoked from the
+// repo root, from docs/website, or via `npm run` proxies.
 const DOCS_WEBSITE_DIR = path.resolve(SCRIPT_DIR, "..");
 const SDK_PATH =
   process.env.SDK_PATH ||
   path.resolve(SCRIPT_DIR, "..", "..", "..", "packages", "sdk");
 
-async function generateApiDocs(
-  version: string,
-  options: GenerateOptions = { updateLatest: true },
-) {
-  if (!options.devMode && !/^\d+\.\d+\.\d+$/.test(version)) {
+interface GenerateOptions {
+  isLatest: boolean;
+  forceExtract: boolean;
+  noAi: boolean;
+}
+
+async function generateApiDocs(version: string, options: GenerateOptions) {
+  if (!/^\d+\.\d+\.\d+$/.test(version)) {
     throw new Error(
-      `Invalid version format: "${version}"\nExpected semver: X.Y.Z (e.g., 0.6.1)`,
+      `Invalid version format: "${version}"\nExpected semver: X.Y.Z (e.g., 0.9.1)`,
     );
   }
 
-  const label = options.devMode ? "dev" : `v${version}`;
-  console.log(`📚 Generating API docs for ${label}...`);
-  if (!options.devMode) {
-    console.log(
-      `   Update latest: ${options.updateLatest ? "yes" : "no (backfill mode)"}`,
-    );
-  }
+  const versionLabel = options.isLatest ? `v${version} (latest)` : `v${version}`;
+  console.log(`📚 Generating API summary for ${versionLabel}...`);
   console.log(`   SDK path: ${SDK_PATH}`);
 
-  // Phase 1: Extract (reads SDK via TypeDoc; merges prose fallbacks from
-  // hand-authored samples under content/docs/(latest)/sdk/api/ so functions
-  // without full JSDoc still produce usable output).
-  const samplesDir = path.join(
-    DOCS_WEBSITE_DIR,
-    "content",
-    "docs",
-    "(latest)",
-    "sdk",
-    "api",
-  );
+  // Phase 1: Extract
   await extractApiData(SDK_PATH, version, {
     forceExtract: options.forceExtract,
-    samplesDir,
   });
 
-  // Phase 1.5: AI augmentation (optional)
+  // Phase 1.5: AI augmentation (optional, non-fatal on failure)
   if (!options.noAi) {
     try {
       const { isAugmentConfigured, augmentApiData } = await import(
@@ -105,174 +93,85 @@ async function generateApiDocs(
     }
   }
 
-  // Phase 2: Render
-  const outputFolder = options.devMode ? "dev" : `v${version}`;
-  const outputDir = path.join(
-    DOCS_WEBSITE_DIR,
-    "content",
-    "docs",
-    outputFolder,
-    "sdk",
-    "api",
+  // Phase 2: Render to a single MDX file.
+  const apiDir = path.join(DOCS_WEBSITE_DIR, "content", "docs", "sdk", "api");
+  const outputFile = path.join(
+    apiDir,
+    options.isLatest ? "index.mdx" : `v${version}.mdx`,
   );
-  await renderApiDocs(API_DATA_PATH, outputDir, {
-    versionLabel: label,
-    samplesDir,
+
+  await renderApiDocs(API_DATA_PATH, {
+    versionLabel,
+    outputFile,
   });
 
-  if (!options.devMode && options.updateLatest) {
-    await updateLatestSafely(version);
-  } else if (!options.devMode) {
-    console.log(`⏭️  Skipping latest update (--no-update-latest flag)`);
-  }
+  await smokeTest(outputFile);
 
-  await smokeTestDir(outputDir);
-
-  console.log(`✅ API docs generation complete for ${label}`);
-  console.log(`   Location: ${outputDir}`);
+  console.log(`✅ API docs generation complete for ${versionLabel}`);
+  console.log(`   Location: ${outputFile}`);
 }
 
-// ---------------------------------------------------------------------------
-// Latest management & smoke test
-// ---------------------------------------------------------------------------
-
-async function updateLatestSafely(version: string) {
-  const docsBase = path.join(DOCS_WEBSITE_DIR, "content", "docs");
-  const latestApiDir = path.join(docsBase, "(latest)", "sdk", "api");
-  const versionApiDir = path.join(docsBase, `v${version}`, "sdk", "api");
-  const backupDir = path.join(docsBase, ".latest-api-backup");
-
-  console.log(`📌 Updating (latest)/sdk/api/ to match v${version}...`);
-
-  try {
-    const stat = await fs.stat(latestApiDir);
-    if (stat.isDirectory()) {
-      await fs.rm(backupDir, { recursive: true, force: true });
-      await fs.cp(latestApiDir, backupDir, { recursive: true });
-      console.log("✓ Backed up current (latest)/sdk/api/ → .latest-api-backup");
-    }
-  } catch {
-    console.log("✓ No previous (latest)/sdk/api/ to backup (first generation)");
-  }
-
-  await fs.rm(latestApiDir, { recursive: true, force: true });
-  await fs.cp(versionApiDir, latestApiDir, { recursive: true });
-  console.log(`✓ Updated (latest)/sdk/api/ → v${version}`);
-}
-
-async function smokeTestDir(apiDir: string): Promise<void> {
+/**
+ * Verify the generated file is well-formed MDX with the structural markers
+ * the website depends on. Catches accidental template breakage in CI before
+ * a broken doc reaches production.
+ */
+async function smokeTest(filePath: string): Promise<void> {
   console.log(`🧪 Running smoke test...`);
 
-  const indexPath = path.join(apiDir, "index.mdx");
-  await fs.stat(indexPath);
-
-  const files = await fs.readdir(apiDir);
-  const mdxFiles = files.filter(
-    (f) => f.endsWith(".mdx") && f !== "index.mdx",
-  );
-  if (mdxFiles.length === 0) {
-    throw new Error("Smoke test failed: No function docs generated");
-  }
-
-  for (const file of mdxFiles) {
-    const content = await fs.readFile(
-      path.join(apiDir, file),
-      "utf-8",
+  const content = await fs.readFile(filePath, "utf-8");
+  if (!content.startsWith("---\n")) {
+    throw new Error(
+      `Smoke test failed: ${path.basename(filePath)} is missing frontmatter`,
     );
-    if (!content.startsWith("---\n")) {
+  }
+  for (const required of ["title:", "description:"]) {
+    if (!content.includes(required)) {
       throw new Error(
-        `Smoke test failed: Invalid MDX in ${file} (missing frontmatter)`,
+        `Smoke test failed: ${path.basename(filePath)} is missing ${required}`,
       );
     }
-    if (!content.includes("title:") || !content.includes("description:")) {
+  }
+  for (const heading of ["## Functions", "## Errors"]) {
+    if (!content.includes(heading)) {
       throw new Error(
-        `Smoke test failed: Invalid MDX in ${file} (missing required fields)`,
+        `Smoke test failed: ${path.basename(filePath)} is missing ${heading} section`,
       );
     }
   }
 
-  console.log(`✅ Smoke test passed (${mdxFiles.length} files verified)`);
-}
-
-async function rollbackLatest(): Promise<void> {
-  const docsBase = path.join(DOCS_WEBSITE_DIR, "content", "docs");
-  const latestApiDir = path.join(docsBase, "(latest)", "sdk", "api");
-  const backupDir = path.join(docsBase, ".latest-api-backup");
-
-  const backupExists = await fs
-    .stat(backupDir)
-    .then(() => true)
-    .catch(() => false);
-  if (!backupExists) {
-    console.log("⚠️  No backup available to rollback to");
-    return;
-  }
-
-  await fs.rm(latestApiDir, { recursive: true, force: true });
-  await fs.cp(backupDir, latestApiDir, { recursive: true });
-  await fs.rm(backupDir, { recursive: true, force: true });
-  console.log("✅ Rolled back (latest)/sdk/api/ to previous version");
+  console.log(`✅ Smoke test passed`);
 }
 
 // CLI
 const args = process.argv.slice(2);
 const versionArg = args.find((arg) => !arg.startsWith("--"));
-const updateLatest = !args.includes("--no-update-latest");
-const rollback = args.includes("--rollback");
-const devMode = args.includes("--dev");
+const isLatest = args.includes("--latest");
 const forceExtract = args.includes("--force-extract");
 const noAi = args.includes("--no-ai");
 
-if (rollback) {
-  rollbackLatest()
-    .then(() => process.exit(0))
-    .catch((err) => {
-      console.error("❌ Rollback failed:", err);
-      process.exit(1);
-    });
-} else if (devMode) {
-  generateApiDocs("dev", { updateLatest: false, devMode: true, forceExtract, noAi }).catch((error) => {
-    console.error("❌ Error generating dev API docs:", error.message);
-    if (error.stack) console.error("\nStack trace:", error.stack);
-    process.exit(1);
-  });
-} else if (!versionArg) {
-  console.error("❌ Error: Version argument required (or use --dev)\n");
+if (!versionArg) {
+  console.error("❌ Error: Version argument required\n");
   console.error("Usage:");
-  console.error("  bun run scripts/generate-api-docs.ts <version> [flags]");
-  console.error("  bun run scripts/generate-api-docs.ts --dev\n");
+  console.error("  bun run scripts/generate-api-docs.ts <version> [flags]\n");
   console.error("Flags:");
   console.error(
-    "  --dev                 Generate into dev/sdk/api/ (no versioned folder)",
+    "  --latest          Write to index.mdx instead of v<version>.mdx",
   );
+  console.error("  --no-ai           Skip AI augmentation (CI default)");
   console.error(
-    "  --no-update-latest    Skip updating latest/ (use for backfills)",
-  );
-  console.error("  --rollback            Restore previous version of latest/");
-  console.error(
-    "  --force-extract       Bypass mtime cache and re-run TypeDoc extraction",
-  );
-  console.error(
-    "  --no-ai               Skip AI augmentation step\n",
+    "  --force-extract   Bypass mtime cache and re-run TypeDoc extraction\n",
   );
   console.error("Examples:");
-  console.error("  bun run scripts/generate-api-docs.ts --dev");
-  console.error("  bun run scripts/generate-api-docs.ts 0.6.1");
-  console.error(
-    "  bun run scripts/generate-api-docs.ts 0.5.0 --no-update-latest",
-  );
-  console.error("  bun run scripts/generate-api-docs.ts --rollback");
+  console.error("  bun run scripts/generate-api-docs.ts 0.9.1 --latest");
+  console.error("  bun run scripts/generate-api-docs.ts 0.8.0 --no-ai");
   process.exit(1);
 } else {
-  generateApiDocs(versionArg, { updateLatest, forceExtract, noAi }).catch((error) => {
-    console.error("❌ Error generating API docs:", error.message);
-    if (error.stack) console.error("\nStack trace:", error.stack);
-    if (updateLatest) {
-      console.log("\n🔄 Attempting rollback...");
-      rollbackLatest().catch((e) =>
-        console.error("❌ Rollback also failed:", e),
-      );
-    }
-    process.exit(1);
-  });
+  generateApiDocs(versionArg, { isLatest, forceExtract, noAi }).catch(
+    (error) => {
+      console.error("❌ Error generating API docs:", error.message);
+      if (error.stack) console.error("\nStack trace:", error.stack);
+      process.exit(1);
+    },
+  );
 }

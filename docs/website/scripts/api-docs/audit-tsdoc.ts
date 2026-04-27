@@ -71,12 +71,13 @@ export async function auditTsDoc(
       (decl as any).sources?.[0]?.file?.fullFileName ??
       "") as string;
     const normalizedPath = sourcePath.replace(/\\/g, "/");
-    if (
-      normalizedPath &&
-      (normalizedPath.includes("/server/") ||
-        normalizedPath.includes("/examples/"))
-    )
-      continue;
+    // Audit scope mirrors the single-page API summary scope: only functions
+    // whose source lives under `packages/sdk/client/api/`. Helpers exported
+    // from `schemas/`, `models/`, etc. are intentionally out-of-scope and
+    // covered by their own .d.ts.
+    if (!normalizedPath.includes("/client/api/")) continue;
+    if (normalizedPath.endsWith("/client/api/index.ts")) continue;
+    if (normalizedPath.includes("/server/") || normalizedPath.includes("/examples/")) continue;
 
     const comment = decl.comment ?? (sig as any).comment;
     const blockTags =
@@ -136,12 +137,11 @@ export async function auditTsDoc(
       (decl as any).sources?.[0]?.file?.fullFileName ??
       "") as string;
     const normalizedPath = sourcePath.replace(/\\/g, "/");
-    if (
-      normalizedPath &&
-      (normalizedPath.includes("/server/") ||
-        normalizedPath.includes("/examples/"))
-    )
-      continue;
+    // Audit object methods only for the curated objects we render in the
+    // API summary. Currently that's just the `profiler` object under
+    // `packages/sdk/profiling/`; new public objects must opt in here.
+    if (!normalizedPath.includes("/profiling/")) continue;
+    if (normalizedPath.includes("/server/") || normalizedPath.includes("/examples/")) continue;
 
     for (const m of methodProps) {
       const sig = m.type.declaration.signatures[0] as SignatureReflection;

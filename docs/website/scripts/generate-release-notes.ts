@@ -1,13 +1,26 @@
 #!/usr/bin/env bun
 /**
- * Generates a unified release-notes MDX page for a given version by reading
- * CHANGELOG.md from each SDK pod package, normalizing section headings, merging
- * entries across packages, and rendering through a Nunjucks template.
+ * Generate a per-version release-notes MDX page for the SDK pod by reading
+ * CHANGELOG.md from each pod package, normalizing section headings, merging
+ * entries across packages, and rendering through `release-notes-page.njk`.
  *
- * Usage: bun run scripts/generate-release-notes.ts <version> [--ai]
- * Example: bun run scripts/generate-release-notes.ts 0.8.1
+ * Output target:
+ *   - latest:  content/docs/sdk/release-notes/index.mdx
+ *   - older:   content/docs/sdk/release-notes/v<X.Y.Z>.mdx
  *
- * --ai  Use AI to generate a summary preamble when none exists in changelogs.
+ * Usage: bun run scripts/generate-release-notes.ts <version> [--latest]
+ *                                                            [--aggregate-minor]
+ *                                                            [--ai]
+ *
+ * Flags:
+ *   --latest            Write to index.mdx instead of v<X.Y.Z>.mdx.
+ *   --aggregate-minor   Roll up every patch within the version's minor
+ *                       (e.g. v0.9.0 + v0.9.1) into a single page. Use
+ *                       this with --latest so the "latest" notes capture
+ *                       the cumulative minor release rather than just the
+ *                       most recent patch.
+ *   --ai                Use AI to generate a summary preamble when none
+ *                       exists in the changelogs.
  *
  * Expects to run from docs/website/ inside the monorepo.
  */
@@ -41,6 +54,25 @@ function parseChangelog(
   return { pkg, preamble, sections };
 }
 
+/**
+ * List every patch of `version`'s minor that has an entry in `filePath`,
+ * newest first (so v0.9.1 comes before v0.9.0 when both exist).
+ */
+function listPatchesInMinor(filePath: string, version: string): string[] {
+  if (!existsSync(filePath)) return [];
+  const content = readFileSync(filePath, "utf-8");
+  const [major, minor] = version.split(".");
+  const re = new RegExp(`^## \\[(${major}\\.${minor}\\.\\d+)\\]`, "gm");
+  const versions = new Set<string>();
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(content)) !== null) versions.add(m[1]);
+  return Array.from(versions).sort((a, b) => {
+    const ap = parseInt(a.split(".")[2], 10);
+    const bp = parseInt(b.split(".")[2], 10);
+    return bp - ap;
+  });
+}
+
 function parseOverrides(filePath: string): OverrideSection[] {
   if (!existsSync(filePath)) return [];
   const content = readFileSync(filePath, "utf-8");
@@ -51,10 +83,12 @@ async function main() {
   const args = process.argv.slice(2);
   const version = args.find((arg) => !arg.startsWith("--"));
   const useAi = args.includes("--ai");
+  const isLatest = args.includes("--latest");
+  const aggregateMinor = args.includes("--aggregate-minor");
 
   if (!version || !/^\d+\.\d+\.\d+$/.test(version)) {
     console.error(
-      "Usage: bun run scripts/generate-release-notes.ts <version> [--ai]"
+      "Usage: bun run scripts/generate-release-notes.ts <version> [--latest] [--aggregate-minor] [--ai]"
     );
     console.error("  version must be semver (e.g. 0.8.1)");
     process.exit(1);
@@ -63,7 +97,11 @@ async function main() {
   const websiteDir = process.cwd();
   const repoRoot = resolve(websiteDir, "../..");
 
-  console.log(`Generating release notes for v${version}...\n`);
+  console.log(
+    `Generating release notes for v${version}` +
+      (aggregateMinor ? ` (aggregating minor)` : "") +
+      `...\n`,
+  );
 
   const changelogs: PackageChangelog[] = [];
   for (const pkg of SDK_POD_PACKAGES) {
@@ -73,13 +111,42 @@ async function main() {
       pkg,
       "CHANGELOG.md"
     );
-    const parsed = parseChangelog(changelogPath, pkg, version);
-    if (parsed) {
-      console.log(`  Found v${version} in @qvac/${pkg}`);
-      changelogs.push(parsed);
-    } else if (!existsSync(changelogPath)) {
+    if (!existsSync(changelogPath)) {
       console.log(`  Skipping @qvac/${pkg} (no CHANGELOG.md)`);
-    } else {
+      continue;
+    }
+
+    // Versions to pull from this changelog. With --aggregate-minor we pull
+    // every patch in the minor (newest first) so the rendered page covers
+    // the cumulative release; otherwise just the named version.
+    const versionsToParse = aggregateMinor
+      ? listPatchesInMinor(changelogPath, version)
+      : [version];
+
+    if (versionsToParse.length === 0) {
+      console.log(`  Skipping @qvac/${pkg} (v${version} not found)`);
+      continue;
+    }
+
+    let pkgFound = false;
+    for (const v of versionsToParse) {
+      const parsed = parseChangelog(changelogPath, pkg, v);
+      if (parsed) {
+        // Tag aggregated entries with their patch version so the rendered
+        // sub-headings can disambiguate "added in v0.9.1 vs v0.9.0".
+        const taggedPkg = aggregateMinor && versionsToParse.length > 1
+          ? `${pkg} (v${v})`
+          : pkg;
+        console.log(`  Found v${v} in @qvac/${pkg}`);
+        changelogs.push({
+          pkg: taggedPkg,
+          preamble: parsed.preamble,
+          sections: parsed.sections,
+        });
+        pkgFound = true;
+      }
+    }
+    if (!pkgFound) {
       console.log(`  Skipping @qvac/${pkg} (v${version} not found)`);
     }
   }
@@ -154,20 +221,30 @@ async function main() {
     lstripBlocks: true,
   });
 
+  // Avoid emitting a duplicate `📦 NPM:` line: the SDK pod changelogs already
+  // include the NPM link in their preamble (per the CHANGELOG_LLM convention),
+  // so we only inject one when no preamble already carries it.
+  const npmLinkRe = new RegExp(
+    `npmjs\\.com/package/@qvac/sdk/v/${version.replace(/\./g, "\\.")}`,
+  );
+  const hasPreambleNpmLink = preambles.some((p) => npmLinkRe.test(p.content));
+
   const rendered = nunjucks.render("release-notes-page.njk", {
     version,
     categories,
     preambles,
     overrides,
     generatedDate: new Date().toISOString().split("T")[0],
+    hasPreambleNpmLink,
   });
 
   const outputPath = resolve(
     websiteDir,
     "content",
     "docs",
-    "(latest)",
-    "release-notes.mdx"
+    "sdk",
+    "release-notes",
+    isLatest ? "index.mdx" : `v${version}.mdx`,
   );
   mkdirSync(dirname(outputPath), { recursive: true });
   writeFileSync(outputPath, rendered.trim() + "\n", "utf-8");
