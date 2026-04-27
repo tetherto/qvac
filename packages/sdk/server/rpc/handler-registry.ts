@@ -18,6 +18,7 @@ import { stopProvideHandler } from "./handlers/stopProvideHandler";
 import { handleRag } from "@/server/rpc/handlers/rag";
 import { handleDeleteCache } from "@/server/rpc/handlers/delete-cache";
 import { handleTextToSpeech } from "@/server/rpc/handlers/text-to-speech";
+import { handleTextToSpeechStream } from "@/server/rpc/handlers/text-to-speech-stream";
 import { handleGetModelInfo } from "@/server/rpc/handlers/get-model-info";
 import { handleOCRStream } from "@/server/rpc/handlers/ocr-stream";
 import { handleHeartbeat } from "@/server/rpc/handlers/heartbeat";
@@ -111,6 +112,7 @@ export const registry: Record<string, HandlerEntry> = {
   loggingStream: { type: "stream", handler: handleLoggingStream },
   translate: { type: "stream", handler: handleTranslate },
   textToSpeech: { type: "stream", handler: handleTextToSpeech },
+  textToSpeechStream: { type: "duplex", handler: handleTextToSpeechStream },
   ocrStream: { type: "stream", handler: handleOCRStream },
   diffusionStream: { type: "stream", handler: handleDiffusionStream },
   pluginInvokeStream: { type: "stream", handler: handlePluginInvokeStream },

@@ -13,6 +13,7 @@ import { handleRag } from "./rag";
 import { cancelHandler } from "./cancelHandler";
 import { handleDeleteCache } from "./delete-cache";
 import { handleTextToSpeech } from "./text-to-speech";
+import { handleTextToSpeechStream } from "./text-to-speech-stream";
 import { handleGetModelInfo } from "./get-model-info";
 import { handleFinetune } from "./finetune";
 import { handleOCRStream } from "./ocr-stream";
@@ -45,6 +46,7 @@ export const handlers = {
   rag: handleRag,
   cancel: cancelHandler,
   textToSpeech: handleTextToSpeech,
+  textToSpeechStream: handleTextToSpeechStream,
   getModelInfo: handleGetModelInfo,
   finetune: handleFinetune,
   ocrStream: handleOCRStream,
