@@ -7,7 +7,7 @@ import { unregisterAddonLogger, getServerLogger } from "@/logging";
 import { type UnloadModelParams, unloadModelParamsSchema } from "@/schemas";
 import { ModelNotLoadedError } from "@/utils/errors-server";
 import { detectShardedModel } from "@/server/utils";
-import { getClearStorageTarget } from "@/server/utils/cache";
+import { getClearStorageTarget } from "@/server/utils/cache/paths";
 
 const logger = getServerLogger();
 

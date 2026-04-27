@@ -150,6 +150,52 @@ test("buildFinalFromEvents: raw fallback and absent fields", (t) => {
   t.is(final.stats, undefined, "no stats when none emitted");
 });
 
+// --- cacheableAssistantContent (auto-cache canonical contract) ---
+
+test("buildFinalFromEvents: cacheableAssistantContent strips think blocks and trims", (t) => {
+  const events: CompletionEvent[] = [
+    { type: "thinkingDelta", seq: 0, text: "let me think" },
+    { type: "contentDelta", seq: 1, text: "Paris." },
+    {
+      type: "completionDone",
+      seq: 2,
+      raw: { fullText: "  <think>let me think</think>Paris.\n" },
+    },
+  ];
+  const { final } = buildFinalFromEvents(events, new Map());
+
+  t.is(final.cacheableAssistantContent, "Paris.");
+});
+
+test("buildFinalFromEvents: cacheableAssistantContent falls back to contentText when raw absent", (t) => {
+  const events: CompletionEvent[] = [
+    { type: "contentDelta", seq: 0, text: "  just content  " },
+    { type: "completionDone", seq: 1 },
+  ];
+  const { final } = buildFinalFromEvents(events, new Map());
+
+  t.is(final.cacheableAssistantContent, "just content");
+});
+
+test("buildFinalFromEvents: cacheableAssistantContent omitted on tool-call turns", (t) => {
+  const call: ToolCall = { id: "c1", name: "echo", arguments: { msg: "hi" } };
+  const events: CompletionEvent[] = [
+    { type: "toolCall", seq: 0, call },
+    {
+      type: "completionDone",
+      seq: 1,
+      raw: { fullText: "<tool_call>...</tool_call>" },
+    },
+  ];
+  const { final } = buildFinalFromEvents(events, new Map());
+
+  t.is(
+    final.cacheableAssistantContent,
+    undefined,
+    "tool-call turns can't auto-cache; field is omitted to avoid misleading callers",
+  );
+});
+
 test("buildFinalFromEvents: returns error for error-done events", (t) => {
   const events: CompletionEvent[] = [
     {

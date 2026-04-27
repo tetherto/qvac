@@ -24,7 +24,6 @@ import {
   getCurrentCacheInfo,
   markCacheInitialized,
   renameCacheFile,
-  type CacheMessage,
 } from "@/server/bare/ops/kv-cache-utils";
 import {
   getModel,
@@ -37,6 +36,8 @@ import {
   setupToolGrammar,
 } from "@/server/utils/tool-integration";
 import { parseToolCalls } from "@/server/utils/tool-parser";
+import { buildAutoCacheSaveHistory, type CacheMessage } from "@/server/utils";
+import { getServerLogger } from "@/logging";
 import { AttachmentNotFoundError } from "@/utils/errors-server";
 import { nowMs } from "@/profiling";
 import {
@@ -47,8 +48,20 @@ import type { LlmStats } from "@/server/bare/types/addon-responses";
 import fs, { promises as fsPromises } from "bare-fs";
 import path from "bare-path";
 
+const logger = getServerLogger();
+
 interface ResponseWithStats {
   stats?: LlmStats;
+}
+
+interface CompletionResult {
+  modelExecutionMs: number;
+  stats?: CompletionStats;
+  toolCalls: ToolCall[];
+}
+
+interface ProcessModelResponseResult extends CompletionResult {
+  responseText: string;
 }
 
 interface ChatHistory {
@@ -255,7 +268,7 @@ async function* processModelResponse(
   cacheOptions?: CacheRunOptions,
 ): AsyncGenerator<
   { token: string; toolCallEvent?: ToolCallEvent },
-  { modelExecutionMs: number; stats?: CompletionStats; toolCalls: ToolCall[] },
+  ProcessModelResponseResult,
   unknown
 > {
   const runOptions: CacheRunOptions & { generationParams?: GenerationParams } =
@@ -333,6 +346,7 @@ async function* processModelResponse(
       hasDefinedValues(stats) ? stats : undefined,
     ),
     toolCalls: toolCallsResult,
+    responseText: accumulatedText,
   };
 }
 
@@ -343,7 +357,7 @@ export async function* completion(
   },
 ): AsyncGenerator<
   { token: string; toolCallEvent?: ToolCallEvent },
-  { modelExecutionMs: number; stats?: CompletionStats; toolCalls: ToolCall[] },
+  CompletionResult,
   unknown
 > {
   const { history, modelId, kvCache, tools, generationParams } = params;
@@ -426,7 +440,7 @@ export async function* completion(
         configHash,
         cacheMessages,
       );
-      const currentCacheInfo = await getCurrentCacheInfo(
+      const preResponseCacheInfo = await getCurrentCacheInfo(
         modelId,
         configHash,
         cacheMessages,
@@ -435,7 +449,7 @@ export async function* completion(
       cachePathToUse =
         existingCache !== null
           ? existingCache.cachePath
-          : currentCacheInfo.cachePath;
+          : preResponseCacheInfo.cachePath;
 
       let cacheExists = existingCache !== null;
       logCacheStatus("auto", cacheExists);
@@ -448,7 +462,7 @@ export async function* completion(
           "auto",
           tools && toolsEnabled ? tools : undefined,
         );
-        markCacheInitialized(modelId, configHash, currentCacheInfo.cacheKey);
+        markCacheInitialized(modelId, configHash, preResponseCacheInfo.cacheKey);
         cacheExists = true;
       }
 
@@ -466,23 +480,63 @@ export async function* completion(
         generationParams,
         { cacheKey: cachePathToUse, saveCacheToDisk: true },
       );
-      const saveVerified = await recordCacheSaveCount(
-        cachePathToUse,
-        history.length + 1,
+
+      // TODO: support auto-cache for tool-call turns by keying off the
+      // structured assistant/tool messages callers push into history,
+      // not result.responseText (which is raw tool-call markup here).
+      // Until then, remove any cache file the addon wrote so it doesn't
+      // leak on disk (the next turn would compute a different key and
+      // never reach it).
+      if (result.toolCalls.length > 0) {
+        logger.warn(
+          `[kv-cache] Auto cache tool-call turn; removing orphaned cache to avoid disk leak. path=${cachePathToUse}`,
+        );
+        try {
+          await fsPromises.unlink(cachePathToUse);
+        } catch (unlinkError) {
+          logger.warn(
+            `[kv-cache] Failed to remove orphaned tool-turn cache file; disk leak likely. path=${cachePathToUse} error=${unlinkError instanceof Error ? unlinkError.message : String(unlinkError)}`,
+          );
+        }
+        cachedMessageCounts.delete(cachePathToUse);
+        return result;
+      }
+
+      const savedHistory = buildAutoCacheSaveHistory(
+        cacheMessages,
+        result.responseText,
+      );
+      const postResponseCacheInfo = await getCurrentCacheInfo(
+        modelId,
+        configHash,
+        savedHistory,
       );
 
       if (
-        saveVerified &&
-        existingCache !== null &&
-        existingCache.cachePath !== currentCacheInfo.cachePath
+        !(await renameCacheFile(
+          cachePathToUse,
+          postResponseCacheInfo.cachePath,
+        ))
       ) {
-        cachedMessageCounts.delete(existingCache.cachePath);
-        cachedMessageCounts.set(currentCacheInfo.cachePath, history.length + 1);
-        await renameCacheFile(
-          existingCache.cachePath,
-          currentCacheInfo.cachePath,
+        logger.warn(
+          `[kv-cache] Auto cache rename failed; removing stale cache to avoid disk leak. from=${cachePathToUse} to=${postResponseCacheInfo.cachePath}`,
         );
+        try {
+          await fsPromises.unlink(cachePathToUse);
+        } catch (unlinkError) {
+          logger.warn(
+            `[kv-cache] Failed to remove stale cache file; disk leak likely. path=${cachePathToUse} error=${unlinkError instanceof Error ? unlinkError.message : String(unlinkError)}`,
+          );
+        }
+        cachedMessageCounts.delete(cachePathToUse);
+        return result;
       }
+
+      cachedMessageCounts.delete(cachePathToUse);
+      await recordCacheSaveCount(
+        postResponseCacheInfo.cachePath,
+        savedHistory.length,
+      );
 
       return result;
     }

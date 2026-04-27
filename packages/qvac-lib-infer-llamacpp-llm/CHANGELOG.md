@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.18.0] - 2026-04-22
+
+### Added
+
+#### Multi-GPU pipeline parallelism via `split-mode` config
+
+- New `split-mode` (`'none'` | `'layer'` | `'row'`) and `tensor-split` config options enable distributing a model across multiple GPUs via pipeline or tensor parallelism.
+
 ## [0.17.0] - 2026-04-21
 
 ### Changed

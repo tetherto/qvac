@@ -38,8 +38,8 @@
     "build:watch": "tsc --watch",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
-    "test": "tsx test/translate.test.ts",
-    "test:unit": "tsx test/translate.test.ts",
+    "test": "npx tsx --test test/*.test.ts",
+    "test:unit": "npx tsx --test test/*.test.ts",
     "test:bats": "npm run build && bats test/cli.bats",
     "test:e2e": "npm run build && bats test/cli.bats test/e2e.bats"
   },

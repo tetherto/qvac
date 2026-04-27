@@ -795,3 +795,65 @@ TEST_F(BackendSelectionTest, Finetuning_Llama_Adreno650_Throws) {
   MockModelMetaData meta(false, "llama");
   expectFinetuningThrows(mockBackend, BackendType::GPU, &meta);
 }
+
+// ---- getEffectiveGpuDeviceCount ----
+
+TEST_F(BackendSelectionTest, GpuCount_NoDevices_ReturnsZero) {
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(getEffectiveGpuDeviceCount(bckI), 0u);
+}
+
+TEST_F(BackendSelectionTest, GpuCount_OnlyCpu_ReturnsZero) {
+  mockBackend.addDevice(createCPUDevice("cpu", "cpu"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(getEffectiveGpuDeviceCount(bckI), 0u);
+}
+
+TEST_F(BackendSelectionTest, GpuCount_SingleDgpu_ReturnsOne) {
+  mockBackend.addDevice(createGPUDevice("nvidia rtx 4090", VULKAN0_BACK));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(getEffectiveGpuDeviceCount(bckI), 1u);
+}
+
+TEST_F(BackendSelectionTest, GpuCount_SingleIgpu_ReturnsOne) {
+  mockBackend.addDevice(createIGPUDevice("intel uhd 770", VULKAN0_BACK));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(getEffectiveGpuDeviceCount(bckI), 1u);
+}
+
+TEST_F(BackendSelectionTest, GpuCount_TwoDgpus_ReturnsTwo) {
+  mockBackend.addDevice(createGPUDevice("nvidia rtx 4090", VULKAN0_BACK));
+  mockBackend.addDevice(createGPUDevice("nvidia rtx 4090", VULKAN1_BACK));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(getEffectiveGpuDeviceCount(bckI), 2u);
+}
+
+TEST_F(BackendSelectionTest, GpuCount_DgpuPlusIgpu_ReturnsOnlyDgpuCount) {
+  mockBackend.addDevice(createGPUDevice("nvidia rtx 4060", VULKAN0_BACK));
+  mockBackend.addDevice(createIGPUDevice("intel uhd 770", VULKAN1_BACK));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(getEffectiveGpuDeviceCount(bckI), 1u);
+}
+
+TEST_F(BackendSelectionTest, GpuCount_TwoDgpusPlusIgpu_ReturnsDgpuCount) {
+  mockBackend.addDevice(createGPUDevice("nvidia rtx 4090", VULKAN0_BACK));
+  mockBackend.addDevice(createGPUDevice("nvidia rtx 4090", VULKAN1_BACK));
+  mockBackend.addDevice(createIGPUDevice("intel uhd 770", "Vulkan2"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(getEffectiveGpuDeviceCount(bckI), 2u);
+}
+
+TEST_F(BackendSelectionTest, GpuCount_TwoIgpus_ReturnsTwo) {
+  mockBackend.addDevice(createIGPUDevice("intel uhd 770", VULKAN0_BACK));
+  mockBackend.addDevice(createIGPUDevice("intel iris xe", VULKAN1_BACK));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(getEffectiveGpuDeviceCount(bckI), 2u);
+}
+
+TEST_F(BackendSelectionTest, GpuCount_AccelAndCpuIgnored) {
+  mockBackend.addDevice(createGPUDevice("nvidia rtx 4090", VULKAN0_BACK));
+  mockBackend.addDevice(createACCELDevice("accelerate", "blas"));
+  mockBackend.addDevice(createCPUDevice("cpu", "cpu"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(getEffectiveGpuDeviceCount(bckI), 1u);
+}
