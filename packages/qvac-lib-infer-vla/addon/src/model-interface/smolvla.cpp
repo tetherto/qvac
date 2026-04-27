@@ -1,8 +1,16 @@
+// Make off_t 64-bit on 32-bit POSIX targets so fseeko can address
+// past 2 GB (smolvla GGUF is ~2.2 GB). Must precede any system header.
+#ifndef _WIN32
+#define _FILE_OFFSET_BITS 64
+#endif
+
 #include "smolvla.hpp"
 
 #include <algorithm>
 #include <cassert>
 #include <chrono>
+#include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <numbers>
 #include <random>
@@ -1515,7 +1523,12 @@ extern "C" bool smolvla_load_model(const char* path, smolvla_model* model_ptr) {
       if (read_buf.size() < nbytes) {
         read_buf.resize(nbytes);
       }
-      if (fseek(f, (long)off, SEEK_SET) != 0 ||
+#ifdef _WIN32
+      int seek_err = _fseeki64(f, (int64_t)off, SEEK_SET);
+#else
+      int seek_err = fseeko(f, (off_t)off, SEEK_SET);
+#endif
+      if (seek_err != 0 ||
           fread(read_buf.data(), 1, nbytes, f) != nbytes) {
         fprintf(
             stderr,
