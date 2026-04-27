@@ -88,10 +88,8 @@ BackendType TranslationModel::detectBackendType(const std::string& modelPath) {
 }
 
 void TranslationModel::unload() {
-  {
-    std::scoped_lock<std::mutex> lock(mtx_);
-    activeBackendName_.clear();
-  }
+  std::scoped_lock<std::mutex> lock(mtx_);
+  activeBackendName_.clear();
   nmtCtx_ = nullptr;
 #ifdef HAVE_BERGAMOT
   bergamotCtx_ = nullptr;

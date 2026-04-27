@@ -110,9 +110,7 @@ void nmtGgmlAbortCallback(const char* message) {
 // Bionic linker lock while calling dlopen/dlclose, which can deadlock on
 // pre-API-30 devices).
 
-static std::vector<std::string> g_collectedBackendPaths;
-
-int backendSoIterCallback(
+int nmtBackendSoIterCallback(
     struct dl_phdr_info* info, size_t /*size*/, void* data) {
   if (info == nullptr || info->dlpi_name == nullptr ||
       info->dlpi_name[0] == '\0') {
@@ -134,12 +132,14 @@ int backendSoIterCallback(
   return 0;
 }
 
-void installCallbacksInLoadedBackendSos() {
+void nmtInstallCallbacksInLoadedBackendSos() {
   std::vector<std::string> paths;
-  dl_iterate_phdr(&backendSoIterCallback, &paths);
+  dl_iterate_phdr(&nmtBackendSoIterCallback, &paths);
 
   using LogSetFn = void (*)(ggml_log_callback, void*);
-  using AbortSetFn = void (*)(ggml_abort_callback_t);
+  // ggml_set_abort_callback returns the previously-installed callback; declare
+  // the typedef to match so the indirect call is ABI-correct.
+  using AbortSetFn = ggml_abort_callback_t (*)(ggml_abort_callback_t);
 
   for (const auto& soPath : paths) {
     void* handle = dlopen(soPath.c_str(), RTLD_NOW | RTLD_NOLOAD);
@@ -219,7 +219,7 @@ bool NmtLazyInitializeBackend::initialize(
   // Must run after backend loading (the backend .sos are only mapped into
   // the process after ggml_backend_load_all* returns) and regardless of
   // whether a backendsDir was provided.
-  installCallbacksInLoadedBackendSos();
+  nmtInstallCallbacksInLoadedBackendSos();
 #endif
 
   g_initialized = true;

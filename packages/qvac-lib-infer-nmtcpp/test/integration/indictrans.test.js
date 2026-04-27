@@ -64,11 +64,11 @@ const DEVICE_CONFIGS = [
 const TEST_SENTENCE = 'Hello, how are you?'
 
 /**
- * Load per-device-class baselines. Any run that exceeds a baseline emits a
- * warning (t.comment) — we do NOT fail CI. Hard thresholds are deferred until
- * the baseline variance is well-characterized.
+ * Per-device-class baselines, loaded once at module init. Any run that exceeds
+ * a baseline emits a warning (t.comment) — we do NOT fail CI. Hard thresholds
+ * are deferred until baseline variance is well-characterized.
  */
-function loadBaselines () {
+const BASELINES = (() => {
   try {
     const baselinePath = path.resolve(__dirname, 'perf-baselines.json')
     if (!fs.existsSync(baselinePath)) return null
@@ -76,7 +76,7 @@ function loadBaselines () {
   } catch (_) {
     return null
   }
-}
+})()
 
 /**
  * Pick a baseline bucket for the current run.
@@ -218,9 +218,8 @@ for (const deviceConfig of DEVICE_CONFIGS) {
       t.ok(metrics.fullOutput.length > 0, `${label} translation should not be empty`)
 
       // Phase 4.2: compare to baseline (warn-only).
-      const baselines = loadBaselines()
       compareToBaseline(t, label, metrics,
-        pickBaseline(baselines, executionProvider))
+        pickBaseline(BASELINES, executionProvider))
 
       t.pass(`${label} IndicTrans translation completed successfully`)
     } catch (e) {

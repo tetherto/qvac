@@ -73,6 +73,8 @@ bool ggml_graph_compute_helper(
 
   return t;
 }
+// NOLINTEND
+
 bool nmt_name_contains_ci(
     const char* name, const std::string& needle_lower) {
   if (name == nullptr || needle_lower.empty()) {
@@ -94,4 +96,3 @@ bool nmt_name_contains_ci(
   }
   return false;
 }
-// NOLINTEND

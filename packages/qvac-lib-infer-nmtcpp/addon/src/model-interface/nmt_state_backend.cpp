@@ -415,12 +415,21 @@ static ggml_backend_t nmt_backend_init_gpu(const nmt_context_params& params) {
           continue;
         }
         if (cnt == params.gpu_device) {
-          dev = dev_cur;
-          std::ostringstream oss_selected;
-          oss_selected << "  **SELECTED OpenCL backend**: " << name;
-          QLOG(
-              qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-              oss_selected.str());
+          ggml_backend_buffer_type_t buft =
+              ggml_backend_dev_buffer_type(dev_cur);
+          if (buft != nullptr) {
+            dev = dev_cur;
+            std::ostringstream oss_selected;
+            oss_selected << "  **SELECTED OpenCL backend**: " << name;
+            QLOG(
+                qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+                oss_selected.str());
+          } else {
+            QLOG(
+                qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+                "[GPU] OpenCL device matched but buffer type is null — "
+                "skipping");
+          }
         }
         if (++cnt > params.gpu_device) {
           break;
@@ -443,13 +452,22 @@ static ggml_backend_t nmt_backend_init_gpu(const nmt_context_params& params) {
           }
 #endif
           if (cnt2 == params.gpu_device) {
-            dev = dev_cur;
-            std::ostringstream oss_selected;
-            oss_selected << "  **SELECTED compute backend**: "
-                         << (name ? name : "(null)");
-            QLOG(
-                qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-                oss_selected.str());
+            ggml_backend_buffer_type_t buft =
+                ggml_backend_dev_buffer_type(dev_cur);
+            if (buft != nullptr) {
+              dev = dev_cur;
+              std::ostringstream oss_selected;
+              oss_selected << "  **SELECTED compute backend**: "
+                           << (name ? name : "(null)");
+              QLOG(
+                  qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+                  oss_selected.str());
+            } else {
+              QLOG(
+                  qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+                  "[GPU] Compute device matched but buffer type is null — "
+                  "skipping");
+            }
           }
           if (++cnt2 > params.gpu_device) {
             break;
