@@ -1929,7 +1929,6 @@ function extractTsProperties(
   const unwrapped = unwrapWrapperType(type) ?? type;
   const rawProps = unwrapped.getProperties();
   if (!rawProps || rawProps.length === 0) return null;
-  type = unwrapped;
 
   // Derive a schema hint chain. Caller-supplied hints win (outermost first).
   // Fall back to the TS type's own alias/symbol so `z.infer<typeof X>` ->

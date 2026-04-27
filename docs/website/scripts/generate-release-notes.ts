@@ -33,6 +33,7 @@ import {
   parseVersionBlock,
   mergeChangelogs,
   parseOverridesContent,
+  escapeRegExp,
   type PackageChangelog,
   type OverrideSection,
 } from "./lib/changelog-parser";
@@ -57,12 +58,20 @@ function parseChangelog(
 /**
  * List every patch of `version`'s minor that has an entry in `filePath`,
  * newest first (so v0.9.1 comes before v0.9.0 when both exist).
+ *
+ * `version` is user-supplied (CLI arg) so the major/minor segments are
+ * regex-escaped before interpolation. The pre-flight semver check in
+ * `main()` keeps this conservative — only digits and dots reach here —
+ * but escaping is still the correct defensive posture.
  */
 function listPatchesInMinor(filePath: string, version: string): string[] {
   if (!existsSync(filePath)) return [];
   const content = readFileSync(filePath, "utf-8");
   const [major, minor] = version.split(".");
-  const re = new RegExp(`^## \\[(${major}\\.${minor}\\.\\d+)\\]`, "gm");
+  const re = new RegExp(
+    `^## \\[(${escapeRegExp(major)}\\.${escapeRegExp(minor)}\\.\\d+)\\]`,
+    "gm",
+  );
   const versions = new Set<string>();
   let m: RegExpExecArray | null;
   while ((m = re.exec(content)) !== null) versions.add(m[1]);
@@ -224,8 +233,12 @@ async function main() {
   // Avoid emitting a duplicate `📦 NPM:` line: the SDK pod changelogs already
   // include the NPM link in their preamble (per the CHANGELOG_LLM convention),
   // so we only inject one when no preamble already carries it.
+  // `version` is user-supplied — escape every regex meta character (not just
+  // dots) before interpolating so an arbitrary CLI value can't smuggle a
+  // pattern in. The semver guard at the top of `main()` already restricts
+  // this to digits + dots in practice.
   const npmLinkRe = new RegExp(
-    `npmjs\\.com/package/@qvac/sdk/v/${version.replace(/\./g, "\\.")}`,
+    `npmjs\\.com/package/@qvac/sdk/v/${escapeRegExp(version)}`,
   );
   const hasPreambleNpmLink = preambles.some((p) => npmLinkRe.test(p.content));
 
