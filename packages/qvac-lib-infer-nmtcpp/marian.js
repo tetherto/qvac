@@ -102,13 +102,23 @@ class TranslationInterface {
    *   - 'Unloaded'     — model is not loaded
    *   - 'Bergamot-CPU' — Bergamot model (CPU-only by design)
    *   - 'CPU'          — GGML backend loaded, only CPU backend registered
+   *
+   * Synchronous by design: reads cached state populated at load() time.
    * @returns {string}
    */
   getActiveBackendName () {
     if (this._handle === null) {
       return 'Unloaded'
     }
-    return binding.getActiveBackendName(this._handle)
+    try {
+      return binding.getActiveBackendName(this._handle)
+    } catch (err) {
+      throw new QvacErrorAddonMarian({
+        code: ERR_CODES.FAILED_TO_GET_BACKEND_NAME,
+        adds: [err.message],
+        cause: err
+      })
+    }
   }
 
   /**

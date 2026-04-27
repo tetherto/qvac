@@ -73,7 +73,12 @@ const BASELINES = (() => {
     const baselinePath = path.resolve(__dirname, 'perf-baselines.json')
     if (!fs.existsSync(baselinePath)) return null
     return JSON.parse(fs.readFileSync(baselinePath, 'utf8'))
-  } catch (_) {
+  } catch (err) {
+    // Fail soft (threshold checks become no-ops) but surface the parse failure
+    // so a malformed perf-baselines.json doesn't silently disable regression
+    // gating in CI.
+    // eslint-disable-next-line no-console
+    console.warn(`[indictrans.test] failed to load perf-baselines.json: ${err && err.message ? err.message : err}`)
     return null
   }
 })()

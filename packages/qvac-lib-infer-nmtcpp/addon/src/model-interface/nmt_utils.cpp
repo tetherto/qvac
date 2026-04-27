@@ -1,5 +1,6 @@
 // NOLINTBEGIN
 #include <cctype>
+#include <cstring>
 #include <string>
 #include <thread>
 
@@ -80,11 +81,17 @@ bool nmt_name_contains_ci(
   if (name == nullptr || needle_lower.empty()) {
     return false;
   }
+  // Defensive bound: ggml device names should be NUL-terminated, but a
+  // misbehaving / adversarial backend .so could violate that. Cap the scan
+  // length so the inner loop can't read past the end of a malformed buffer.
+  static constexpr size_t kMaxNameLen = 256;
+  const size_t name_len = strnlen(name, kMaxNameLen);
+  const char* const name_end = name + name_len;
   const char* const needle = needle_lower.c_str();
-  for (const char* p = name; *p != '\0'; ++p) {
+  for (const char* p = name; p < name_end; ++p) {
     const char* s = p;
     const char* n = needle;
-    while (*s != '\0' && *n != '\0' &&
+    while (s < name_end && *n != '\0' &&
            static_cast<char>(
                std::tolower(static_cast<unsigned char>(*s))) == *n) {
       ++s;

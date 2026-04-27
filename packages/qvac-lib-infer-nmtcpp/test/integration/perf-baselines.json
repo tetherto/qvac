@@ -25,8 +25,26 @@
       }
     },
     {
+      "name": "darwin-arm64-metal",
+      "platform": "darwin",
+      "execution_provider": "metal",
+      "thresholds": {
+        "tps_min": null,
+        "total_time_ms_max": null
+      }
+    },
+    {
       "name": "desktop-vulkan",
       "platform": "linux",
+      "execution_provider": "vulkan",
+      "thresholds": {
+        "tps_min": null,
+        "total_time_ms_max": null
+      }
+    },
+    {
+      "name": "win32-x64-vulkan",
+      "platform": "win32",
       "execution_provider": "vulkan",
       "thresholds": {
         "tps_min": null,
