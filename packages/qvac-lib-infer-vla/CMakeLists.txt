@@ -1,19 +1,21 @@
 cmake_minimum_required(VERSION 3.25)
 
+option(ANDROID_STL "Android STL linkage" c++_shared)
 option(BUILD_TESTING "Build tests" OFF)
+option(ENABLE_COVERAGE "Enable coverage instrumentation for unit tests" OFF)
 if(BUILD_TESTING)
   list(APPEND VCPKG_MANIFEST_FEATURES "tests")
+endif()
+
+option(VK_PROFILING "Force vk performance logging in qvac-fabric" OFF)
+if(VK_PROFILING)
+  list(APPEND VCPKG_MANIFEST_FEATURES "vk-profiling")
 endif()
 
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
 set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
-
-# Android STL configuration must be set before project()
-if(DEFINED ENV{ANDROID_NDK} OR DEFINED ENV{ANDROID_NDK_HOME})
-  set(ANDROID_STL c++_shared)
-endif()
 
 project(qvac-lib-infer-vla C CXX)
 

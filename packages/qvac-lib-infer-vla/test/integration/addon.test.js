@@ -337,19 +337,24 @@ test('integration: module exports expected surface', (t) => {
   t.is(typeof padState, 'function')
 })
 
-test('integration: VlaModel rejects empty path', (t) => {
+test('integration: VlaModel rejects missing/invalid files.model', (t) => {
   let err1 = null
-  try { const m = new VlaModel(''); m.destroy() } catch (e) { err1 = e }
-  t.ok(err1 && /non-empty string/.test(err1.message))
+  try { const m = new VlaModel({ files: { model: [] } }); t.absent(m) } catch (e) { err1 = e }
+  t.ok(err1 && /non-empty array/.test(err1.message))
 
   let err2 = null
-  try { const m = new VlaModel(); m.destroy() } catch (e) { err2 = e }
-  t.ok(err2 && /non-empty string/.test(err2.message))
+  try { const m = new VlaModel(); t.absent(m) } catch (e) { err2 = e }
+  t.ok(err2 && /non-empty array/.test(err2.message))
+
+  let err3 = null
+  try { const m = new VlaModel({ files: { model: ['relative/path.gguf'] } }); t.absent(m) } catch (e) { err3 = e }
+  t.ok(err3 && /absolute path/.test(err3.message))
 })
 
-test('integration: VlaModel rejects missing GGUF file', (t) => {
+test('integration: VlaModel.load rejects missing GGUF file', async (t) => {
+  const m = new VlaModel({ files: { model: ['/definitely/does/not/exist.gguf'] } })
   let err = null
-  try { const m = new VlaModel('/definitely/does/not/exist.gguf'); m.destroy() } catch (e) { err = e }
+  try { await m.load() } catch (e) { err = e }
   t.ok(err, 'expected an error for missing GGUF')
 })
 
@@ -381,8 +386,12 @@ test('integration: end-to-end inference runs (needs GGUF)', { timeout: 1200000 }
     return
   }
 
-  const model = new VlaModel(path.resolve(modelPath))
-  t.teardown(() => model.destroy())
+  const model = new VlaModel({
+    files: { model: [path.resolve(modelPath)] },
+    opts: { stats: true }
+  })
+  t.teardown(async () => { await model.unload() })
+  await model.load()
 
   const hp = model.hparams
   t.ok(hp.chunkSize > 0)
@@ -401,7 +410,7 @@ test('integration: end-to-end inference runs (needs GGUF)', { timeout: 1200000 }
   const noise = new Float32Array(hp.chunkSize * hp.maxActionDim)
   for (let i = 0; i < noise.length; i++) noise[i] = 0
 
-  const { actions, stats } = model.run({
+  const response = await model.run({
     images: [img, img],
     imgWidth: size,
     imgHeight: size,
@@ -410,6 +419,7 @@ test('integration: end-to-end inference runs (needs GGUF)', { timeout: 1200000 }
     mask,
     noise
   })
+  const { actions, stats } = await response.await()
 
   t.ok(actions instanceof Float32Array)
   t.is(actions.length, hp.chunkSize * hp.actionDim)

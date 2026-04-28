@@ -9,7 +9,7 @@ export interface VlaHparams {
   visionImageSize: number
 }
 
-export interface VlaRunOptions {
+export interface VlaRunInput {
   images: Float32Array[]
   imgWidth?: number
   imgHeight?: number
@@ -32,11 +32,28 @@ export interface VlaRunResult {
   stats: VlaRunStats
 }
 
+export interface VlaModelOptions {
+  files: { model: string[] }
+  config?: Record<string, unknown>
+  logger?: unknown
+  opts?: { stats?: boolean }
+}
+
+export interface QvacResponse {
+  await(): Promise<VlaRunResult>
+  cancel(): Promise<void>
+  on(event: string, listener: (...args: unknown[]) => void): this
+}
+
 export class VlaModel {
-  constructor (ggufPath: string)
-  readonly hparams: VlaHparams
-  run (opts: VlaRunOptions): VlaRunResult
-  destroy (): void
+  constructor (options: VlaModelOptions)
+  readonly hparams: VlaHparams | null
+  load (): Promise<void>
+  run (input: VlaRunInput): Promise<QvacResponse>
+  pause (): Promise<void>
+  cancel (): Promise<void>
+  unload (): Promise<void>
+  getState (): { configLoaded: boolean }
 }
 
 export function preprocessImage (
@@ -47,3 +64,8 @@ export function preprocessImage (
 ): Float32Array
 
 export function padState (state: ArrayLike<number>, targetDim?: number): Float32Array
+
+export function pickPrimaryGgufPath (files: string[]): string
+
+declare const _default: typeof VlaModel
+export default _default
