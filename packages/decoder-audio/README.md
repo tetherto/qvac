@@ -1,4 +1,4 @@
-# qvac-lib-decoder-audio
+# decoder-audio
 
 This decoder library leverages FFmpeg for efficient audio decoding. It simplifies processing of input audio, particularly as a preprocessing step for other addons.
 
@@ -240,7 +240,7 @@ Coverage reports are generated in the 'coverage/unit/' directory. Open the corre
 
 ## Resources
 
-* GitHub Repo: [tetherto/qvac](https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-decoder-audio)
+* GitHub Repo: [tetherto/qvac](https://github.com/tetherto/qvac/tree/main/packages/decoder-audio)
 
 ## License
 

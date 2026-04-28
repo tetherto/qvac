@@ -6,6 +6,6 @@ export function getGlobalSingleton<T>(key: symbol, create: () => T): T {
   }
 
   const value = create();
-  global[key] = value as unknown;
+  global[key] = value;
   return value;
 }

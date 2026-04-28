@@ -12,7 +12,7 @@ on:
         description: "Working directory inside the repo (monorepo package path)"
         type: string
         required: false
-        default: "packages/qvac-lib-decoder-audio"
+        default: "packages/decoder-audio"
 
 jobs:
   run-integration-tests:

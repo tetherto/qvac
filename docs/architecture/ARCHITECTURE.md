@@ -273,7 +273,7 @@ All packages live in this monorepo under `packages/`:
 | `dl-hyperdrive` | `@qvac/dl-hyperdrive` | Hyperdrive data loader |
 | `dl-filesystem` | `@qvac/dl-filesystem` | Filesystem data loader |
 | `qvac-lib-infer-base` | `@qvac/infer-base` | Base inference client |
-| `qvac-lib-decoder-audio` | `@qvac/decoder-audio` | Audio decoding |
+| `decoder-audio` | `@qvac/decoder-audio` | Audio decoding |
 | `qvac-lib-logging` | `@qvac/logging` | Logging utilities |
 | `qvac-lib-error-base` | `@qvac/error` | Base error types |
 | `qvac-lib-langdetect-text` | `@qvac/langdetect-text` | Language detection |

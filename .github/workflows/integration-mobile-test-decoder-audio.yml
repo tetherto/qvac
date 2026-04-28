@@ -12,10 +12,10 @@ on:
         type: string
         required: false
       workdir:
-        description: "Package working directory in monorepo (e.g., packages/qvac-lib-decoder-audio)"
+        description: "Package working directory in monorepo (e.g., packages/decoder-audio)"
         type: string
         required: false
-        default: "packages/qvac-lib-decoder-audio"
+        default: "packages/decoder-audio"
   workflow_dispatch:
     inputs:
       ref:
@@ -28,10 +28,10 @@ on:
         required: false
         default: latest
       workdir:
-        description: "Package working directory in monorepo (e.g., packages/qvac-lib-decoder-audio)"
+        description: "Package working directory in monorepo (e.g., packages/decoder-audio)"
         type: string
         required: false
-        default: "packages/qvac-lib-decoder-audio"
+        default: "packages/decoder-audio"
 
 env:
   NODE_VERSION: "lts/*"
@@ -115,8 +115,8 @@ jobs:
 
       - name: Verify test files exist
         env:
-          WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-decoder-audio' }}
-        working-directory: ${{ format('./addon/{0}', inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-decoder-audio') }}
+          WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/decoder-audio' }}
+        working-directory: ${{ format('./addon/{0}', inputs.workdir || github.event.inputs.workdir || 'packages/decoder-audio') }}
         run: |
           echo "Verifying addon has mobile tests..."
 
@@ -161,22 +161,22 @@ jobs:
 
       - name: Install addon dependencies
         env:
-          WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-decoder-audio' }}
-        working-directory: ${{ format('./addon/{0}', inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-decoder-audio') }}
+          WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/decoder-audio' }}
+        working-directory: ${{ format('./addon/{0}', inputs.workdir || github.event.inputs.workdir || 'packages/decoder-audio') }}
         run: |
           echo "Installing addon dependencies..."
           npm install
 
       - name: Validate mobile tests are up-to-date
         env:
-          WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-decoder-audio' }}
-        working-directory: ${{ format('./addon/{0}', inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-decoder-audio') }}
+          WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/decoder-audio' }}
+        working-directory: ${{ format('./addon/{0}', inputs.workdir || github.event.inputs.workdir || 'packages/decoder-audio') }}
         run: npm run test:mobile:validate
 
       - name: Pack addon
         env:
-          WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-decoder-audio' }}
-        working-directory: ${{ format('./addon/{0}', inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-decoder-audio') }}
+          WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/decoder-audio' }}
+        working-directory: ${{ format('./addon/{0}', inputs.workdir || github.event.inputs.workdir || 'packages/decoder-audio') }}
         run: |
           echo "Packing addon..."
           mkdir -p dist
@@ -201,7 +201,7 @@ jobs:
 
       - name: Build test app with addon
         env:
-          WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-decoder-audio' }}
+          WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/decoder-audio' }}
         working-directory: ./test-framework
         run: |
           echo "Building test app with addon..."
