@@ -213,8 +213,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          repository: ${{ needs.context.outputs.repository }}
-          ref: ${{ needs.context.outputs.ref }}
+          repository: ${{ github.repository }}
+          ref: ${{ github.event_name == 'pull_request_target' && needs.context.outputs.base_sha || github.sha }}
           token: ${{ secrets.PAT_TOKEN }}
 
       - name: Download desktop RTF artifacts

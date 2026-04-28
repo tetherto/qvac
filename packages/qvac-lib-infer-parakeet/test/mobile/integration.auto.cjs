@@ -77,3 +77,24 @@ async function runNamedPathsAllModelsTest (options = {}) { // eslint-disable-lin
 async function runNamedPathsReloadTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/named-paths-reload.test.js', options)
 }
+
+module.exports = {
+  runAccuracyMultilangTest,
+  runAddonMultimodelTest,
+  runAddonTest,
+  runColdStartTimingTest,
+  runCorruptedModelTest,
+  runExternalDataStagingTest,
+  runIndividualFilePathsTest,
+  runLiveStreamSimulationTest,
+  runMobilePerfCtcCpuTest,
+  runMobilePerfCtcGpuTest,
+  runMobilePerfEouCpuTest,
+  runMobilePerfEouGpuTest,
+  runMobilePerfSortformerCpuTest,
+  runMobilePerfSortformerGpuTest,
+  runModelFileValidationTest,
+  runMultipleTranscriptionsTest,
+  runNamedPathsAllModelsTest,
+  runNamedPathsReloadTest
+}
