@@ -11,16 +11,13 @@ const testModelPath = path.join(tmpDir, 'qvac-test-models', 'ggml-tiny.bin')
 const testVadPath = path.join(tmpDir, 'qvac-test-models', 'ggml-silero-v5.1.2.bin')
 
 let modelsReady = false
-let modelsAvailable = false
 
 async function ensureModelsDownloaded () {
-  if (modelsReady) return modelsAvailable
+  if (modelsReady) return
 
-  const whisperResult = await ensureWhisperModel(testModelPath)
-  const vadReady = await ensureVADModel(testVadPath)
-  modelsAvailable = Boolean(whisperResult.success && vadReady)
+  await ensureWhisperModel(testModelPath)
+  await ensureVADModel(testVadPath)
   modelsReady = true
-  return modelsAvailable
 }
 
 /**
@@ -96,10 +93,7 @@ test('Should throw error when VAD model file does not exist', { timeout: 180000 
   TranscriptionWhispercpp.prototype.validateModelFiles?.restore?.()
 
   // Ensure model is downloaded
-  if (!await ensureModelsDownloaded()) {
-    t.pass('Test skipped - model or VAD model not available')
-    return
-  }
+  await ensureModelsDownloaded()
 
   const args = {
     files: {
@@ -137,10 +131,7 @@ test('Should not throw error when model file exists and VAD is not specified', {
   TranscriptionWhispercpp.prototype.validateModelFiles?.restore?.()
 
   // Ensure model is downloaded
-  if (!await ensureModelsDownloaded()) {
-    t.pass('Test skipped - model or VAD model not available')
-    return
-  }
+  await ensureModelsDownloaded()
 
   const args = {
     files: {
@@ -178,10 +169,7 @@ test('Should not throw error when both model and VAD model files exist', { timeo
   TranscriptionWhispercpp.prototype.validateModelFiles?.restore?.()
 
   // Ensure models are downloaded
-  if (!await ensureModelsDownloaded()) {
-    t.pass('Test skipped - model or VAD model not available')
-    return
-  }
+  await ensureModelsDownloaded()
 
   const args = {
     files: {
