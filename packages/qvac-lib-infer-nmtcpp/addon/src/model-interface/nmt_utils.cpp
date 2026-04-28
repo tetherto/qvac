@@ -251,8 +251,7 @@ ggml_backend_dev_t nmt_select_gpu_device(
       oss << "[" << log_prefix
           << "] Mode 2a OpenCL device found but buffer type was null — "
              "falling through to Mode 2b with ordinal 0";
-      QLOG(
-          qvac_lib_inference_addon_cpp::logger::Priority::WARNING, oss.str());
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING, oss.str());
     }
 #endif
     const int fallback_ordinal =
