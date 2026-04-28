@@ -15,21 +15,42 @@ namespace qvac_lib_infer_vla {
 
 namespace detail {
 
+// Indirection wrapper so an explicit `destroyVlaModel` can null out the inner
+// model pointer while leaving the heap object reachable for the GC finalizer.
+// Without this, `js_create_external` stores a pointer the C++ side cannot zero,
+// and a GC finalizer running after `destroyVlaModel` would re-`delete` a
+// dangling `VlaModel*`.
+struct VlaHandle {
+  VlaModel* model = nullptr;
+};
+
 inline void finalizeVlaModel(js_env_t* /*env*/, void* data, void* /*hint*/) {
-  delete static_cast<VlaModel*>(data);
+  auto* handle = static_cast<VlaHandle*>(data);
+  if (handle == nullptr) return;
+  delete handle->model;
+  handle->model = nullptr;
+  delete handle;
 }
 
 inline VlaModel* unwrap(js_env_t* env, js_value_t* external) {
   void* data = nullptr;
-  if (js_get_value_external(env, external, &data) != 0 || !data) {
+  if (js_get_value_external(env, external, &data) != 0 || data == nullptr) {
     throw std::runtime_error("invalid VLA model handle");
   }
-  return static_cast<VlaModel*>(data);
+  auto* handle = static_cast<VlaHandle*>(data);
+  if (handle->model == nullptr) {
+    throw std::runtime_error("VLA model has been destroyed");
+  }
+  return handle->model;
 }
 
-inline std::vector<float>
-typedArrayToFloat32Vector(js_env_t* env, js_value_t* value) {
-  float* data = nullptr;
+// Zero-copy view into a JS TypedArray's underlying ArrayBuffer. The pointer is
+// only valid for the duration of the surrounding native call (no JS callbacks
+// in flight), which is the contract the inference path already relies on.
+template <typename T>
+inline std::pair<const T*, size_t>
+typedArrayPtr(js_env_t* env, js_value_t* value, const char* expectedKind) {
+  T* data = nullptr;
   size_t len = 0;
   if (js_get_typedarray_info(
           env,
@@ -39,43 +60,9 @@ typedArrayToFloat32Vector(js_env_t* env, js_value_t* value) {
           &len,
           nullptr,
           nullptr) != 0) {
-    throw std::runtime_error("expected Float32Array");
+    throw std::runtime_error(std::string("expected ") + expectedKind);
   }
-  return std::vector<float>(data, data + len);
-}
-
-inline std::vector<int32_t>
-typedArrayToInt32Vector(js_env_t* env, js_value_t* value) {
-  int32_t* data = nullptr;
-  size_t len = 0;
-  if (js_get_typedarray_info(
-          env,
-          value,
-          nullptr,
-          reinterpret_cast<void**>(&data),
-          &len,
-          nullptr,
-          nullptr) != 0) {
-    throw std::runtime_error("expected Int32Array");
-  }
-  return std::vector<int32_t>(data, data + len);
-}
-
-inline std::vector<uint8_t>
-typedArrayToUint8Vector(js_env_t* env, js_value_t* value) {
-  uint8_t* data = nullptr;
-  size_t len = 0;
-  if (js_get_typedarray_info(
-          env,
-          value,
-          nullptr,
-          reinterpret_cast<void**>(&data),
-          &len,
-          nullptr,
-          nullptr) != 0) {
-    throw std::runtime_error("expected Uint8Array");
-  }
-  return std::vector<uint8_t>(data, data + len);
+  return {data, len};
 }
 
 inline js_value_t*
@@ -101,7 +88,7 @@ float32ArrayFromVector(js_env_t* env, const std::vector<float>& data) {
 
 } // namespace detail
 
-// createVlaModel(ggufPath: string) -> External<VlaModel*>
+// createVlaModel(ggufPath: string) -> External<VlaHandle*>
 inline js_value_t* createVlaModel(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
 
@@ -110,34 +97,39 @@ inline js_value_t* createVlaModel(js_env_t* env, js_callback_info_t* info) try {
       js::String(env, args.get(0, "ggufPath")).as<std::string>(env);
 
   auto model = std::make_unique<VlaModel>(ggufPath);
+  auto handle = std::make_unique<detail::VlaHandle>();
+  handle->model = model.release();
 
   js_value_t* external = nullptr;
   if (js_create_external(
-          env, model.get(), detail::finalizeVlaModel, nullptr, &external) !=
+          env, handle.get(), detail::finalizeVlaModel, nullptr, &external) !=
       0) {
+    delete handle->model;
     throw std::runtime_error("js_create_external failed");
   }
-  model.release(); // ownership transferred to the JS-side finalizer
+  handle.release(); // ownership transferred to the JS-side finalizer
   return external;
 }
 JSCATCH
 
 // destroyVlaModel(handle: External) -> undefined
+//
+// Eagerly frees the underlying VlaModel and zeroes the inner pointer in the
+// VlaHandle wrapper. The handle itself stays alive until the JS engine GCs the
+// external; finalizeVlaModel then frees the empty handle. Subsequent calls on
+// the same external throw via the unwrap() guard rather than UB on a freed
+// pointer.
 inline js_value_t*
 destroyVlaModel(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
 
   JsArgsParser args(env, info);
-  // js_remove_external would be ideal, but the finalizer will eventually run
-  // when the external is GC'd. We delete eagerly and replace the pointer with
-  // nullptr so subsequent calls throw.
   void* data = nullptr;
-  if (js_get_value_external(env, args.get(0, "handle"), &data) == 0 && data) {
-    delete static_cast<VlaModel*>(data);
-    // Note: the finalizer will still run on GC; it sees `data` from the
-    // external slot, which we can't zero from C++. This is safe because
-    // delete-on-zero-pointer is a noop and we never reach finalize with a
-    // live pointer that wasn't deleted here.
+  if (js_get_value_external(env, args.get(0, "handle"), &data) == 0 &&
+      data != nullptr) {
+    auto* handle = static_cast<detail::VlaHandle*>(data);
+    delete handle->model;
+    handle->model = nullptr;
   }
   js_value_t* undef = nullptr;
   js_get_undefined(env, &undef);
@@ -163,34 +155,46 @@ inline js_value_t* runVlaModel(js_env_t* env, js_callback_info_t* info) try {
   VlaModel* model = detail::unwrap(env, args.get(0, "handle"));
   js::Object opts(env, args.get(1, "opts"));
 
+  // Zero-copy: walk the images array and capture each underlying ArrayBuffer
+  // pointer. Pointers stay valid for the duration of this synchronous call
+  // because the JS engine is paused in the native callback.
   js::Array imagesArr = opts.getProperty<js::Array>(env, "images");
   const uint32_t imagesLen = imagesArr.size(env);
-  std::vector<std::vector<float>> images;
-  images.reserve(imagesLen);
+  std::vector<const float*> imagePtrs(imagesLen);
   for (uint32_t i = 0; i < imagesLen; i++) {
     js::TypedArray<float> elem = imagesArr.get<js::TypedArray<float>>(env, i);
-    images.push_back(detail::typedArrayToFloat32Vector(env, elem));
+    auto [ptr, len] = detail::typedArrayPtr<float>(env, elem, "Float32Array");
+    (void)len;
+    imagePtrs[i] = ptr;
   }
 
   const int imgWidth = opts.getPropertyAs<js::Number, int32_t>(env, "imgWidth");
   const int imgHeight =
       opts.getPropertyAs<js::Number, int32_t>(env, "imgHeight");
 
-  std::vector<float> state = detail::typedArrayToFloat32Vector(
-      env, opts.getProperty<js::TypedArray<float>>(env, "state"));
-  std::vector<int32_t> tokens = detail::typedArrayToInt32Vector(
-      env, opts.getProperty<js::TypedArray<int32_t>>(env, "tokens"));
-  std::vector<uint8_t> mask = detail::typedArrayToUint8Vector(
-      env, opts.getProperty<js::TypedArray<uint8_t>>(env, "mask"));
+  auto [statePtr, stateLen] = detail::typedArrayPtr<float>(
+      env, opts.getProperty<js::TypedArray<float>>(env, "state"),
+      "Float32Array");
+  auto [tokensPtr, tokensLen] = detail::typedArrayPtr<int32_t>(
+      env, opts.getProperty<js::TypedArray<int32_t>>(env, "tokens"),
+      "Int32Array");
+  auto [maskPtr, maskLen] = detail::typedArrayPtr<uint8_t>(
+      env, opts.getProperty<js::TypedArray<uint8_t>>(env, "mask"),
+      "Uint8Array");
 
-  std::vector<float> noise;
+  const float* noisePtr = nullptr;
+  size_t noiseLen = 0;
   if (auto noiseOpt =
           opts.getOptionalProperty<js::TypedArray<float>>(env, "noise")) {
-    noise = detail::typedArrayToFloat32Vector(env, *noiseOpt);
+    std::tie(noisePtr, noiseLen) =
+        detail::typedArrayPtr<float>(env, *noiseOpt, "Float32Array");
   }
 
-  VlaModel::RunResult result =
-      model->run(images, imgWidth, imgHeight, state, tokens, mask, noise);
+  VlaModel::RunResult result = model->run(
+      imagePtrs.data(), static_cast<int>(imagesLen), imgWidth, imgHeight,
+      statePtr, static_cast<int>(stateLen), tokensPtr,
+      static_cast<int>(tokensLen), maskPtr, static_cast<int>(maskLen), noisePtr,
+      static_cast<int>(noiseLen));
 
   js_value_t* obj = nullptr;
   if (js_create_object(env, &obj) != 0) {

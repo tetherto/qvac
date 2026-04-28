@@ -1395,7 +1395,13 @@ extern "C" bool smolvla_load_model(const char* path, smolvla_model* model_ptr) {
     int fd = open(path, O_RDONLY);
     if (fd >= 0) {
       struct stat st {};
-      if (fstat(fd, &st) == 0 && st.st_size > 0) {
+      if (fstat(fd, &st) == 0 && st.st_size > 0 &&
+          // Reject malformed/truncated GGUF (data_offset past EOF) before the
+          // unsigned subtraction below would wrap to a huge size.
+          (uint64_t)data_offset < (uint64_t)st.st_size &&
+          // Guard against off_t→size_t truncation on 32-bit targets where the
+          // 2 GB+ GGUF would otherwise alias to a smaller mapping.
+          (uint64_t)st.st_size <= (uint64_t)SIZE_MAX) {
         size_t file_size = (size_t)st.st_size;
         void* addr = mmap(nullptr, file_size, PROT_READ, MAP_PRIVATE, fd, 0);
         // The fd may be closed once mmap succeeds; the mapping holds a ref.
@@ -1465,7 +1471,12 @@ extern "C" bool smolvla_load_model(const char* path, smolvla_model* model_ptr) {
           fprintf(stderr, "%s: mmap failed (errno=%d)\n", __func__, errno);
         }
       } else {
-        fprintf(stderr, "%s: fstat failed for '%s'\n", __func__, path);
+        fprintf(
+            stderr,
+            "%s: skipping mmap fast path for '%s' "
+            "(fstat failed, file empty, data_offset >= file_size, or file > SIZE_MAX)\n",
+            __func__,
+            path);
         close(fd);
       }
     } else {
@@ -2260,36 +2271,40 @@ bool smolvla_inference_with_timing(
 
   std::vector<float> vt_data(chunk_size * hp.max_action_dim);
   std::vector<float> te_expanded(chunk_size * hp.expert_hidden_size);
+  // Hoist time-embedding scratch out of the ODE loop — one allocation reused
+  // across 10 steps instead of `num_ode_steps` per-iteration heap churns.
+  std::vector<float> te_single(hp.expert_hidden_size);
 
-  // Run 10 ODE steps, reusing the same graph
+  // Run 10 ODE steps, reusing the same graph. KV cache inputs were uploaded
+  // once before the loop above; ggml_set_input keeps them stable between
+  // ggml_backend_sched_graph_compute calls (we never reset the scheduler).
   for (int step = 0; step < hp.num_ode_steps; step++) {
     float t_val = 1.0f + step * dt;
 
-    // Re-set ALL inputs each step (KV cache may be overwritten by allocator)
     ggml_backend_tensor_set(g_xt, x_t.data(), 0, x_t.size() * sizeof(float));
-    for (int i = 0; i < hp.text_num_layers; i++) {
-      if (g_kk[i]->buffer) {
-        ggml_backend_tensor_set(
-            g_kk[i], kv_keys_data[i].data(), 0, kv_total * sizeof(float));
-      }
-      if (g_kv[i]->buffer) {
-        ggml_backend_tensor_set(
-            g_kv[i], kv_vals_data[i].data(), 0, kv_total * sizeof(float));
-      }
-    }
 
-    std::vector<float> te_single(hp.expert_hidden_size);
     compute_sinusoidal_time_embedding(
         t_val,
         hp.expert_hidden_size,
         hp.min_period,
         hp.max_period,
         te_single.data());
-    for (int j = 0; j < chunk_size; j++)
+    // Broadcast `te_single` to all `chunk_size` rows using a doubling
+    // pattern: ~log2(chunk_size) larger memcpys instead of `chunk_size`
+    // small ones (50 → ~7 calls for chunk_size=50).
+    const size_t row_floats = hp.expert_hidden_size;
+    const size_t row_bytes = row_floats * sizeof(float);
+    memcpy(te_expanded.data(), te_single.data(), row_bytes);
+    size_t filled = 1;
+    while (filled < (size_t)chunk_size) {
+      const size_t take =
+          std::min(filled, (size_t)chunk_size - filled);
       memcpy(
-          te_expanded.data() + j * hp.expert_hidden_size,
-          te_single.data(),
-          hp.expert_hidden_size * sizeof(float));
+          te_expanded.data() + filled * row_floats,
+          te_expanded.data(),
+          take * row_bytes);
+      filled += take;
+    }
     ggml_backend_tensor_set(
         g_te, te_expanded.data(), 0, te_expanded.size() * sizeof(float));
 

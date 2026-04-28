@@ -40,35 +40,34 @@ public:
   };
 
   // Run one inference call. Image buffers must be contiguous CHW float32 in
-  // [-1, 1], already resized+padded to (imgWidth × imgHeight). Tokens +
-  // mask describe the instruction; noise is an optional (chunkSize ×
-  // maxActionDim) float32 buffer (null -> model-internal random).
+  // [-1, 1], already resized+padded to (imgWidth × imgHeight). Tokens + mask
+  // describe the instruction; noise is an optional (chunkSize × maxActionDim)
+  // float32 buffer (null -> model-internal random).
+  //
+  // Buffers are not copied: the caller owns each pointer for the duration of
+  // the call. The mask is copied once into a small `bool` buffer because
+  // `smolvla_inference_with_timing` expects `const bool*` — values >1 in
+  // `maskBytes` collapse to `true`.
   //
   // Returns a (chunkSize × actionDim) row-major float32 vector plus the
   // per-stage timing captured during the call.
-  RunResult
-  run(const std::vector<std::vector<float>>& images, int imgWidth,
-      int imgHeight, const std::vector<float>& state,
-      const std::vector<int32_t>& tokens, const std::vector<uint8_t>& mask,
-      const std::vector<float>& noise) {
-    if (images.empty()) {
+  RunResult run(
+      const float* const* images, int nImages, int imgWidth, int imgHeight,
+      const float* state, int stateDim, const int32_t* tokens, int nTokens,
+      const uint8_t* maskBytes, int nMask, const float* noise,
+      int /*noiseLen*/) {
+    if (nImages <= 0 || images == nullptr) {
       throw std::invalid_argument("VlaModel::run: images must not be empty");
     }
-    if (tokens.size() != mask.size()) {
+    if (nTokens != nMask) {
       throw std::invalid_argument(
           "VlaModel::run: tokens and mask must be the same length");
     }
 
-    std::vector<const float*> imagePtrs;
-    imagePtrs.reserve(images.size());
-    for (const auto& img : images) {
-      imagePtrs.push_back(img.data());
-    }
-
-    std::vector<bool_as_char> maskCopy(mask.begin(), mask.end());
     static_assert(
-        sizeof(bool_as_char) == sizeof(bool),
+        sizeof(bool) == sizeof(unsigned char),
         "bool sizing assumption violated");
+    std::vector<bool_as_char> maskCopy(maskBytes, maskBytes + nMask);
 
     const int chunkSize = model_->hparams.chunk_size;
     const int actionDim = model_->hparams.action_dim;
@@ -76,23 +75,14 @@ public:
     result.actions.assign(static_cast<size_t>(chunkSize) * actionDim, 0.0f);
     int nActionsOut = 0;
 
-    const float* noisePtr = noise.empty() ? nullptr : noise.data();
-
+    // const_cast: smolvla_inference_with_timing's `const float**` parameter
+    // matches an extern "C" header that predates C++ const-correctness for
+    // pointer-to-pointer args; the function only reads through these.
     const bool ok = smolvla_inference_with_timing(
-        model_.get(),
-        imagePtrs.data(),
-        static_cast<int>(imagePtrs.size()),
-        imgWidth,
-        imgHeight,
-        state.data(),
-        static_cast<int>(state.size()),
-        tokens.data(),
-        reinterpret_cast<const bool*>(maskCopy.data()),
-        static_cast<int>(tokens.size()),
-        noisePtr,
-        result.actions.data(),
-        &nActionsOut,
-        &result.timing);
+        model_.get(), const_cast<const float**>(images), nImages, imgWidth,
+        imgHeight, state, stateDim, tokens,
+        reinterpret_cast<const bool*>(maskCopy.data()), nTokens, noise,
+        result.actions.data(), &nActionsOut, &result.timing);
 
     if (!ok) {
       throw std::runtime_error("SmolVLA inference failed");
