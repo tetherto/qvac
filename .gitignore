@@ -37,3 +37,6 @@ NOTICE_FULL_REPORT.txt
 packages/ocr-onnx/.claude/
 packages/ocr-onnx/.cursor/
 docs/website/scripts/api-docs/api-data.json
+
+# Local perf-report sim output (sim-*.js scripts)
+/tmp/

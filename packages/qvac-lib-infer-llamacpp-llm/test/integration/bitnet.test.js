@@ -5,6 +5,7 @@ const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
 const { ensureModel } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
+const { recordPerformance } = require('./_perf-helper.js')
 
 const os = require('bare-os')
 const isAndroid = os.platform() === 'android'
@@ -18,15 +19,34 @@ const PROMPT = [
   { role: 'user', content: 'What is 2 + 2?' }
 ]
 
-async function collectResponse (response) {
+// QVAC-17830: 1 warmup + 1 counted iteration. BitNet on Android
+// Device Farm is heavy enough that a single counted run already
+// gives a representative TTFT / TPS without ballooning the
+// integration suite. Scenario tag = 'bitnet' so the aggregator
+// puts the row under the bitnet section in the squashed summary.
+const PERF_RUNS = 1
+const PERF_WARMUP_RUNS = 1
+const PERF_LABEL = '[bitnet] [GPU]'
+
+async function runBitnetInference (addon, prompt) {
+  const startTime = Date.now()
+  const response = await addon.run(prompt)
   const chunks = []
-  await response
+  let error = null
+  response
     .onUpdate(data => { chunks.push(data) })
-    .await()
-  return chunks.join('').trim()
+    .onError(err => { error = err })
+  await response.await()
+  if (error) throw new Error('bitnet inference failed: ' + error)
+  return {
+    output: chunks.join('').trim(),
+    startTime,
+    endTime: Date.now(),
+    stats: response.stats || null
+  }
 }
 
-test('bitnet model can run simple inference', { timeout: 600_000, skip: !isAndroid }, async t => {
+test('bitnet model can run simple inference', { timeout: 900_000, skip: !isAndroid }, async t => {
   const [modelName, dirPath] = await ensureModel({
     modelName: BITNET_MODEL.name,
     downloadUrl: BITNET_MODEL.url
@@ -52,11 +72,30 @@ test('bitnet model can run simple inference', { timeout: 600_000, skip: !isAndro
 
   try {
     await addon.load()
-    const response = await addon.run(PROMPT)
-    const output = await collectResponse(response)
 
-    t.ok(output.length > 0, 'bitnet model should generate output')
-    t.comment(`BitNet output: "${output}"`)
+    for (let w = 1; w <= PERF_WARMUP_RUNS; w++) {
+      const { output, startTime, endTime } = await runBitnetInference(addon, PROMPT)
+      t.comment(
+        `${PERF_LABEL} warmup ${w}/${PERF_WARMUP_RUNS} ` +
+        `(${endTime - startTime}ms, ${output.length} chars) - perf NOT recorded`
+      )
+    }
+
+    let lastOutput = ''
+    for (let run = 1; run <= PERF_RUNS; run++) {
+      const { output, startTime, endTime, stats } = await runBitnetInference(addon, PROMPT)
+      lastOutput = output
+      const totalTime = endTime - startTime
+      t.comment(`${PERF_LABEL} run ${run}/${PERF_RUNS} BitNet output: "${output}"`)
+      t.comment(recordPerformance(PERF_LABEL, totalTime, {
+        _output: output,
+        stats,
+        deviceId: 'gpu',
+        scenario: 'bitnet'
+      }))
+    }
+
+    t.ok(lastOutput.length > 0, 'bitnet model should generate output')
   } finally {
     await addon.unload().catch(() => { })
     specLogger.release()

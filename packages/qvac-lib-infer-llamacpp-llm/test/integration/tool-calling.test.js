@@ -5,6 +5,7 @@ const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
 const { ensureModel } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
+const { recordPerformance } = require('./_perf-helper.js')
 const os = require('bare-os')
 
 const platform = os.platform()
@@ -131,7 +132,8 @@ async function collectResponse (response) {
   const stats = response.stats || {}
   return {
     text: chunks.join('').trim(),
-    generatedTokens: Number(stats.generatedTokens || 0)
+    generatedTokens: Number(stats.generatedTokens || 0),
+    stats
   }
 }
 
@@ -174,9 +176,18 @@ async function createToolModel (modelVariant) {
 }
 
 async function runPrompt (model, prompt) {
+  const startTime = Date.now()
   const response = await model.run(prompt)
-  return await collectResponse(response)
+  const collected = await collectResponse(response)
+  return {
+    ...collected,
+    startTime,
+    endTime: Date.now()
+  }
 }
+
+const epTag = useCpu ? 'CPU' : 'GPU'
+const deviceId = useCpu ? 'cpu' : 'gpu'
 
 test('[tools] prompt scenarios', { timeout: 1_800_000, skip: isDarwinX64 }, async t => {
   for (const modelVariant of TOOL_MODEL_VARIANTS) {
@@ -184,13 +195,33 @@ test('[tools] prompt scenarios', { timeout: 1_800_000, skip: isDarwinX64 }, asyn
     const label = `[${modelVariant.id}]`
 
     try {
+      // QVAC-17830: record one perf row per (model_variant x prompt)
+      // cell, scenario='tool-calling'. prompt1 is the cold inference
+      // (KV cache empty, function-spec prefill heavy); prompt2 reuses
+      // the loaded model so its TTFT/TPS reflect a warm follow-up
+      // call. Keeping both rows in the report shows the cold-vs-warm
+      // delta for the same model on the same device.
       const firstRun = await runPrompt(model, clonePrompt())
       t.ok(firstRun.text.length > 0, `${label} prompt1: generated text`)
       t.ok(firstRun.generatedTokens > 0, `${label} prompt1: generated tokens tracked`)
+      const perfLabel1 = `[tools batch] [${modelVariant.id}] [${epTag}]`
+      t.comment(recordPerformance(perfLabel1, firstRun.endTime - firstRun.startTime, {
+        _output: firstRun.text,
+        stats: firstRun.stats,
+        deviceId,
+        scenario: 'tool-calling'
+      }))
 
       const secondRun = await runPrompt(model, buildPrompt2(firstRun.text))
       t.ok(secondRun.text.length > 0, `${label} prompt2: generated text`)
       t.ok(secondRun.generatedTokens > 0, `${label} prompt2: generated tokens tracked`)
+      const perfLabel2 = `[tools followup] [${modelVariant.id}] [${epTag}]`
+      t.comment(recordPerformance(perfLabel2, secondRun.endTime - secondRun.startTime, {
+        _output: secondRun.text,
+        stats: secondRun.stats,
+        deviceId,
+        scenario: 'tool-calling'
+      }))
     } finally {
       await release()
     }

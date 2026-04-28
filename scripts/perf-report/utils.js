@@ -126,8 +126,7 @@ const _VISION_DETAIL_COLUMNS = [
   { key: 'ttft_ms', label: 'TTFT (ms)' },
   { key: 'generated_tokens', label: 'Gen Tokens' },
   { key: 'prompt_tokens', label: 'Prompt Tokens' },
-  { key: 'tps', label: 'TPS' },
-  { key: 'status', label: 'Status' }
+  { key: 'tps', label: 'TPS' }
 ]
 
 function _formatDetailCell (key, summary, categoricalVal) {
@@ -147,6 +146,39 @@ function _formatDetailCell (key, summary, categoricalVal) {
  * included — the same detail breakdown without requiring a
  * GITHUB_STEP_SUMMARY write from inside the Device Farm container.
  */
+// QVAC-17830: stable display order for the scenario partitions in
+// the per-device detail tables. Anything not in this list falls back
+// to alphabetical order after the known scenarios.
+const _SCENARIO_ORDER = ['image', 'tool-calling', 'bitnet', 'default']
+
+function _scenarioLabel (scn) {
+  if (!scn || scn === 'default') return 'default'
+  return scn
+}
+
+function _sortedScenarios (scnSet) {
+  const known = []
+  const extras = []
+  for (const scn of scnSet) {
+    if (_SCENARIO_ORDER.includes(scn)) known.push(scn)
+    else extras.push(scn)
+  }
+  known.sort((a, b) => _SCENARIO_ORDER.indexOf(a) - _SCENARIO_ORDER.indexOf(b))
+  extras.sort()
+  return [...known, ...extras]
+}
+
+function _groupTestsByScenario (testNames, scenarioMapForDevice) {
+  const buckets = {}
+  for (const t of testNames) {
+    const scn = (scenarioMapForDevice && scenarioMapForDevice[t]) || 'default'
+    if (!buckets[scn]) buckets[scn] = []
+    buckets[scn].push(t)
+  }
+  for (const k of Object.keys(buckets)) buckets[k].sort()
+  return buckets
+}
+
 function generateDeviceDetailTables (aggregated, addonType) {
   if (addonType !== 'vision') return ''
 
@@ -155,6 +187,7 @@ function generateDeviceDetailTables (aggregated, addonType) {
     devices,
     device_meta: deviceMeta = {},
     categorical = {},
+    scenarios = {},
     addon,
     run_numbers: runNumbers = []
   } = aggregated
@@ -163,7 +196,7 @@ function generateDeviceDetailTables (aggregated, addonType) {
 
   for (const devName of deviceNames) {
     const tests = devices[devName] || {}
-    const testNames = Object.keys(tests).sort()
+    const testNames = Object.keys(tests)
     if (!testNames.length) continue
 
     const meta = deviceMeta[devName] || {}
@@ -179,24 +212,38 @@ function generateDeviceDetailTables (aggregated, addonType) {
     // section gets its own anchor + TOC entry.
     lines.push(`### ${devName} \u2014 ${addon} (${platformArch})`)
     lines.push('')
-    lines.push(`> Run: ${runLabel}`)
+    const subline = [`Run: ${runLabel}`]
+    if (meta.gpu) subline.push(`GPU: ${meta.gpu}`)
+    lines.push(`> ${subline.join(' | ')}`)
     lines.push('')
 
-    const header = ['Test', 'EP', ..._VISION_DETAIL_COLUMNS.map(c => c.label)]
-    lines.push('| ' + header.join(' | ') + ' |')
-    lines.push('| ' + header.map(() => '---').join(' | ') + ' |')
+    const buckets = _groupTestsByScenario(testNames, scenarios[devName])
+    const orderedScenarios = _sortedScenarios(Object.keys(buckets))
+    const showScenarioHeading = orderedScenarios.length > 1 ||
+      (orderedScenarios.length === 1 && orderedScenarios[0] !== 'default')
 
-    for (const testName of testNames) {
-      const metrics = tests[testName] || {}
-      const cats = (categorical[devName] && categorical[devName][testName]) || {}
-      const ep = cats.execution_provider || '-'
-      const row = [testName, ep]
-      for (const col of _VISION_DETAIL_COLUMNS) {
-        row.push(_formatDetailCell(col.key, metrics[col.key], cats[col.key]))
+    for (const scn of orderedScenarios) {
+      if (showScenarioHeading) {
+        lines.push(`#### ${_scenarioLabel(scn)}`)
+        lines.push('')
       }
-      lines.push('| ' + row.join(' | ') + ' |')
+
+      const header = ['Test', 'EP', ..._VISION_DETAIL_COLUMNS.map(c => c.label)]
+      lines.push('| ' + header.join(' | ') + ' |')
+      lines.push('| ' + header.map(() => '---').join(' | ') + ' |')
+
+      for (const testName of buckets[scn]) {
+        const metrics = tests[testName] || {}
+        const cats = (categorical[devName] && categorical[devName][testName]) || {}
+        const ep = cats.execution_provider || '-'
+        const row = [testName, ep]
+        for (const col of _VISION_DETAIL_COLUMNS) {
+          row.push(_formatDetailCell(col.key, metrics[col.key], cats[col.key]))
+        }
+        lines.push('| ' + row.join(' | ') + ' |')
+      }
+      lines.push('')
     }
-    lines.push('')
   }
 
   return lines.join('\n')
@@ -231,29 +278,90 @@ function generateMarkdownReport (aggregated, opts) {
 
   const hasEp = parsed.some(p => p.ep !== '')
 
-  // --- Performance Summary (combined) ---
-  lines.push('### Performance Summary (Mean Total Time)')
-  lines.push('')
+  // QVAC-17830: squashed step-summary layout — one mini-table per
+  // headline metric (Total Time / TTFT / TPS), each row=test, col=
+  // device, cell="mean ±std". Replaces the long per-device detail
+  // tables in the GH summary while keeping mean ± std visible at a
+  // glance. The HTML artifact retains the full per-iteration
+  // breakdown via `--html-device-details`.
+  //
+  // Suppressed when no row has any data for the metric (e.g. OCR
+  // reports never produce ttft / tps so those tables would be all
+  // dashes).
+  const SUMMARY_METRICS = [
+    { key: 'total_time_ms', heading: 'Total Time', unit: 'ms', round: true, label: 'Mean Total Time (ms)' },
+    { key: 'ttft_ms', heading: 'TTFT', unit: 'ms', round: true, label: 'Mean TTFT (ms)' },
+    { key: 'tps', heading: 'TPS', unit: '', round: false, label: 'Mean TPS' }
+  ]
 
-  const perfHeader = hasEp ? ['Test', 'EP'] : ['Test']
-  for (const sn of shortNames) perfHeader.push(sn)
-  lines.push('| ' + perfHeader.join(' | ') + ' |')
-  lines.push('| ' + perfHeader.map(() => '---').join(' | ') + ' |')
+  const scenarioMap = aggregated.scenarios || {}
 
+  function _scenarioFor (devName, testFull) {
+    return (scenarioMap[devName] && scenarioMap[devName][testFull]) || 'default'
+  }
+
+  function _formatMeanStd (summary, unit, round) {
+    if (!summary || summary.mean == null) return '-'
+    const m = round ? Math.round(summary.mean) : summary.mean.toFixed(2)
+    const s = round ? Math.round(summary.std) : summary.std.toFixed(2)
+    return `${m} \u00b1${s}${unit}`
+  }
+
+  // Group tests by scenario so the squashed summary has the same
+  // implementation breakdown as the HTML detail tables. Picks the
+  // scenario from the FIRST device that recorded the test (sibling
+  // legs always share scenario for the same test name).
+  const testScenario = {}
   for (const t of parsed) {
-    const cells = hasEp ? [t.base, `**${t.ep}**`] : [t.full]
+    let scn = 'default'
     for (const devName of deviceNames) {
-      const metrics = devices[devName] && devices[devName][t.full]
-      if (metrics && metrics.total_time_ms) {
-        const s = metrics.total_time_ms
-        cells.push(`${Math.round(s.mean)} \u00b1${Math.round(s.std)}ms`)
-      } else {
-        cells.push('-')
+      if (devices[devName] && devices[devName][t.full]) {
+        scn = _scenarioFor(devName, t.full)
+        if (scn !== 'default') break
       }
     }
-    lines.push('| ' + cells.join(' | ') + ' |')
+    testScenario[t.full] = scn
   }
-  lines.push('')
+  const scenariosSeen = _sortedScenarios([...new Set(parsed.map(t => testScenario[t.full]))])
+  const showScenarioHeading = scenariosSeen.length > 1 ||
+    (scenariosSeen.length === 1 && scenariosSeen[0] !== 'default')
+
+  for (const metricSpec of SUMMARY_METRICS) {
+    const hasAnyData = parsed.some(t => deviceNames.some(d => {
+      const m = devices[d] && devices[d][t.full] && devices[d][t.full][metricSpec.key]
+      return m && m.mean != null
+    }))
+    if (!hasAnyData) continue
+
+    lines.push(`### ${metricSpec.label}`)
+    lines.push('')
+
+    for (const scn of scenariosSeen) {
+      const scopedTests = parsed.filter(t => testScenario[t.full] === scn)
+      if (!scopedTests.length) continue
+
+      if (showScenarioHeading) {
+        lines.push(`#### ${_scenarioLabel(scn)}`)
+        lines.push('')
+      }
+
+      const perfHeader = hasEp ? ['Test', 'EP'] : ['Test']
+      for (const sn of shortNames) perfHeader.push(sn)
+      lines.push('| ' + perfHeader.join(' | ') + ' |')
+      lines.push('| ' + perfHeader.map(() => '---').join(' | ') + ' |')
+
+      for (const t of scopedTests) {
+        const epCell = hasEp ? (t.ep ? `**${t.ep}**` : '-') : null
+        const cells = hasEp ? [t.base, epCell] : [t.full]
+        for (const devName of deviceNames) {
+          const metrics = devices[devName] && devices[devName][t.full]
+          cells.push(_formatMeanStd(metrics && metrics[metricSpec.key], metricSpec.unit, metricSpec.round))
+        }
+        lines.push('| ' + cells.join(' | ') + ' |')
+      }
+      lines.push('')
+    }
+  }
 
   // --- Quality Summary (combined) ---
   if (quality && Object.keys(quality).length > 0) {
@@ -321,7 +429,7 @@ function generateMarkdownReport (aggregated, opts) {
  */
 function aggregateReports (reports) {
   if (!reports.length) {
-    return { addon: 'unknown', devices: {}, run_numbers: [], quality: {}, device_meta: {}, categorical: {} }
+    return { addon: 'unknown', devices: {}, run_numbers: [], quality: {}, device_meta: {}, categorical: {}, scenarios: {} }
   }
 
   const addon = reports[0].addon
@@ -340,6 +448,12 @@ function aggregateReports (reports) {
   // device detail table can render the real backend / platform / status
   // instead of the blank "-" produced by summarize on strings.
   const categorical = {}
+  // QVAC-17830: scenarioMap[device][test] = 'image' | 'bitnet' |
+  // 'tool-calling' | 'default'. Lets the per-device detail tables
+  // partition rows by implementation so a single combined report can
+  // surface "image" and "tool-calling" numbers side by side without
+  // mixing them into one giant table.
+  const scenarioMap = {}
   // QVAC-17830: dedupe by (device, test, run_number). The combined
   // report folds sibling matrix legs (linux-x64-cpu+linux-x64-gpu,
   // linux-arm64-u22+linux-arm64-u24) onto one device name so users see
@@ -358,6 +472,7 @@ function aggregateReports (reports) {
     if (!deviceMap[deviceName]) deviceMap[deviceName] = {}
     if (!qualityMap[deviceName]) qualityMap[deviceName] = {}
     if (!categorical[deviceName]) categorical[deviceName] = {}
+    if (!scenarioMap[deviceName]) scenarioMap[deviceName] = {}
     if (!seenLeg[deviceName]) seenLeg[deviceName] = {}
     if (!deviceMeta[deviceName] && report.device) {
       deviceMeta[deviceName] = {
@@ -365,8 +480,15 @@ function aggregateReports (reports) {
         platform: report.device.platform || null,
         arch: report.device.arch || null,
         os_version: report.device.os_version || null,
+        gpu: report.device.gpu || null,
         runner: report.device.runner || null
       }
+    } else if (deviceMeta[deviceName] && report.device && report.device.gpu && !deviceMeta[deviceName].gpu) {
+      // Sibling matrix legs may report different gpu strings — keep
+      // the first non-null one we see (e.g. linux-x64-gpu reports
+      // NVIDIA, linux-x64-cpu reports null; fold both onto one
+      // device, surface the GPU label).
+      deviceMeta[deviceName].gpu = report.device.gpu
     }
 
     // Per-test "claim" set for THIS report. Once a sibling leg has
@@ -392,6 +514,15 @@ function aggregateReports (reports) {
 
       if (result.execution_provider != null) {
         categorical[deviceName][testKey].execution_provider = String(result.execution_provider)
+      }
+
+      // First non-default scenario wins per (device, test). Sibling
+      // matrix legs always tag the same test with the same scenario,
+      // so this is stable; if the field is missing or 'default' from
+      // an older report we won't overwrite a real one set later.
+      const scn = result.scenario && String(result.scenario)
+      if (scn && (!scenarioMap[deviceName][testKey] || scenarioMap[deviceName][testKey] === 'default')) {
+        scenarioMap[deviceName][testKey] = scn
       }
 
       for (const [metricKey, value] of Object.entries(result.metrics || {})) {
@@ -452,7 +583,8 @@ function aggregateReports (reports) {
     image_paths: imagePathMap,
     quality_details: qualityDetails,
     device_meta: deviceMeta,
-    categorical
+    categorical,
+    scenarios: scenarioMap
   }
 }
 
@@ -618,14 +750,14 @@ function _mdIterationHeaders (count, runNumbers) {
  */
 function _buildHtmlDetailSections (aggregated, addonType) {
   if (addonType !== 'vision') return ''
-  const { devices, device_meta: deviceMeta = {}, categorical = {}, addon, run_numbers: runNumbers = [] } = aggregated
+  const { devices, device_meta: deviceMeta = {}, categorical = {}, scenarios = {}, addon, run_numbers: runNumbers = [] } = aggregated
   const deviceNames = Object.keys(devices)
   if (!deviceNames.length) return ''
 
   let html = ''
   for (const devName of deviceNames) {
     const tests = devices[devName] || {}
-    const testNames = Object.keys(tests).sort()
+    const testNames = Object.keys(tests)
     if (!testNames.length) continue
 
     const meta = deviceMeta[devName] || {}
@@ -633,31 +765,48 @@ function _buildHtmlDetailSections (aggregated, addonType) {
       ? `${meta.platform}/${meta.arch}`
       : meta.platform || '-'
     const runLabel = runNumbers.length ? runNumbers.map(n => '#' + n).join(', ') : 'local'
+    const gpuLabel = meta.gpu ? ` \u00b7 GPU: ${meta.gpu}` : ''
 
-    const headerCells = ['Test', 'EP', ..._VISION_DETAIL_COLUMNS.map(c => c.label)]
-      .map(h => `<th>${escapeHtml(h)}</th>`).join('')
+    const buckets = _groupTestsByScenario(testNames, scenarios[devName])
+    const orderedScenarios = _sortedScenarios(Object.keys(buckets))
+    const showScenarioHeading = orderedScenarios.length > 1 ||
+      (orderedScenarios.length === 1 && orderedScenarios[0] !== 'default')
 
-    let bodyRows = ''
-    for (const testName of testNames) {
-      const metrics = tests[testName] || {}
-      const cats = (categorical[devName] && categorical[devName][testName]) || {}
-      const ep = cats.execution_provider || '-'
-      const cells = [escapeHtml(testName), escapeHtml(ep)]
-      for (const col of _VISION_DETAIL_COLUMNS) {
-        cells.push(escapeHtml(_formatDetailCell(col.key, metrics[col.key], cats[col.key])))
+    let scenarioBlocks = ''
+    for (const scn of orderedScenarios) {
+      const headerCells = ['Test', 'EP', ..._VISION_DETAIL_COLUMNS.map(c => c.label)]
+        .map(h => `<th>${escapeHtml(h)}</th>`).join('')
+
+      let bodyRows = ''
+      for (const testName of buckets[scn]) {
+        const metrics = tests[testName] || {}
+        const cats = (categorical[devName] && categorical[devName][testName]) || {}
+        const ep = cats.execution_provider || '-'
+        const cells = [escapeHtml(testName), escapeHtml(ep)]
+        for (const col of _VISION_DETAIL_COLUMNS) {
+          cells.push(escapeHtml(_formatDetailCell(col.key, metrics[col.key], cats[col.key])))
+        }
+        bodyRows += '<tr>' + cells.map(c => `<td>${c}</td>`).join('') + '</tr>'
       }
-      bodyRows += '<tr>' + cells.map(c => `<td>${c}</td>`).join('') + '</tr>'
+
+      const scenarioHeading = showScenarioHeading
+        ? `<h3 class="scenario-name">${escapeHtml(_scenarioLabel(scn))}</h3>`
+        : ''
+
+      scenarioBlocks += `
+        <div class="test-block">
+          ${scenarioHeading}
+          <table class="detail-table">
+            <thead><tr>${headerCells}</tr></thead>
+            <tbody>${bodyRows}</tbody>
+          </table>
+        </div>`
     }
 
     html += `
     <section class="device-card detail-card">
-      <h2 class="device-name">${escapeHtml(devName)} <span class="detail-sub">(${escapeHtml(platformArch)} \u00b7 Run ${escapeHtml(runLabel)} \u00b7 ${escapeHtml(addon)})</span></h2>
-      <div class="test-block">
-        <table class="detail-table">
-          <thead><tr>${headerCells}</tr></thead>
-          <tbody>${bodyRows}</tbody>
-        </table>
-      </div>
+      <h2 class="device-name">${escapeHtml(devName)} <span class="detail-sub">(${escapeHtml(platformArch)} \u00b7 Run ${escapeHtml(runLabel)} \u00b7 ${escapeHtml(addon)}${escapeHtml(gpuLabel)})</span></h2>
+${scenarioBlocks}
     </section>`
   }
 
@@ -1100,9 +1249,18 @@ function generateHtmlReport (aggregated, opts) {
   .detail-table tbody td:first-child,
   .detail-table tbody td:nth-child(2),
   .detail-table tbody td:nth-child(3),
-  .detail-table tbody td:nth-child(4),
-  .detail-table tbody td:last-child {
+  .detail-table tbody td:nth-child(4) {
     text-align: left;
+  }
+
+  /* Scenario sub-heading inside a detail-card test-block. */
+  .scenario-name {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--accent);
+    margin: 0.25rem 0 0.4rem;
+    text-transform: lowercase;
+    letter-spacing: 0.02em;
   }
 
   .q-good {

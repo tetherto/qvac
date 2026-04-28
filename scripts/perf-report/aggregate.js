@@ -35,7 +35,14 @@ function parseArgs (argv) {
     outputJson: null,
     outputHtml: null,
     repo: null,
-    deviceDetails: false,
+    // QVAC-17830: split MD vs HTML detail tables. The combined GH
+    // step summary has been getting noisy with one detail table per
+    // device, so we keep the markdown squashed (Mean ± std rollup
+    // only) and let the HTML artifact keep the full breakdown.
+    // `--device-details` is preserved as a "both" alias for back-compat
+    // with anything that already passes it.
+    mdDeviceDetails: false,
+    htmlDeviceDetails: false,
     help: false
   }
 
@@ -51,7 +58,12 @@ function parseArgs (argv) {
       case '--output-json': args.outputJson = argv[++i]; break
       case '--output-html': args.outputHtml = argv[++i]; break
       case '--repo': args.repo = argv[++i]; break
-      case '--device-details': args.deviceDetails = true; break
+      case '--device-details':
+        args.mdDeviceDetails = true
+        args.htmlDeviceDetails = true
+        break
+      case '--md-device-details': args.mdDeviceDetails = true; break
+      case '--html-device-details': args.htmlDeviceDetails = true; break
       case '--help': case '-h': args.help = true; break
     }
   }
@@ -74,7 +86,13 @@ OPTIONS:
   --output-json <path>  JSON summary output file (optional)
   --output-html <path>  HTML report file (optional, self-contained)
   --repo <owner/repo>   GitHub repository (default: current repo)
-  --device-details      Append per-device detail tables to the markdown AND HTML output
+  --device-details      Append per-device detail tables to BOTH markdown and HTML
+                        (alias for --md-device-details + --html-device-details)
+  --md-device-details   Append per-device detail tables to the markdown output only
+  --html-device-details Append per-device detail tables to the HTML output only
+                        (recommended for combined GH step summaries — keeps the
+                        markdown squashed to mean ± std while the HTML keeps the
+                        full per-device breakdown)
   -h, --help            Show this help
 
 EXAMPLES:
@@ -222,7 +240,7 @@ function main () {
     'vision'
 
   const markdown = generateMarkdownReport(aggregated, {
-    includeDeviceDetails: args.deviceDetails,
+    includeDeviceDetails: args.mdDeviceDetails,
     addonType: resolvedAddonType
   })
 
@@ -246,7 +264,7 @@ function main () {
     const dir = path.dirname(args.outputHtml)
     fs.mkdirSync(dir, { recursive: true })
     const html = generateHtmlReport(aggregated, {
-      includeDeviceDetails: args.deviceDetails,
+      includeDeviceDetails: args.htmlDeviceDetails,
       addonType: resolvedAddonType
     })
     fs.writeFileSync(args.outputHtml, html)
