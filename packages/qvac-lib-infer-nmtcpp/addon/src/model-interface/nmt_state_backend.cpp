@@ -437,8 +437,7 @@ nmt_backend_init(const nmt_context_params& params) {
       std::ostringstream oss;
       oss << "Skipping ACCEL device '" << (dev_name ? dev_name : "(null)")
           << "' — OpenCL guard is off (QVAC-17790)";
-      QLOG(
-          qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, oss.str());
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, oss.str());
       continue;
     }
 #endif
@@ -448,10 +447,8 @@ nmt_backend_init(const nmt_context_params& params) {
         std::strcmp(primary_desc, dev_desc) == 0) {
       std::ostringstream oss;
       oss << "Skipping ACCEL device '" << (dev_name ? dev_name : "(null)")
-          << "' — same physical GPU as primary ('"
-          << primary_desc << "')";
-      QLOG(
-          qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, oss.str());
+          << "' — same physical GPU as primary ('" << primary_desc << "')";
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, oss.str());
       continue;
     }
 
