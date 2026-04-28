@@ -573,21 +573,23 @@ std::any SdModel::process(const std::any& input) {
   //
   sd_image_t initImg{}; // single-image (SDEdit or 1x FLUX)
   std::vector<uint8_t> initPng;
-  std::vector<sd_image_t> refImgs; // multi-image FLUX fusion
-  // RAII guard: frees any pixel buffers in refImgs on scope exit (normal
-  // or exceptional). The single-image initImg is still freed explicitly
-  // below to keep the existing control-flow readable.
-  struct RefImgsGuard {
-    std::vector<sd_image_t>& v;
-    ~RefImgsGuard() {
-      for (auto& img : v) {
-        if (img.data) {
-          free(img.data);
-          img.data = nullptr;
-        }
+
+  // RAII wrapper for multi-image FLUX fusion reference images. Automatically
+  // frees pixel buffers on scope exit (normal or exceptional) using a custom
+  // deleter that iterates the vector and frees each sd_image_t.data pointer.
+  auto refImgsDeleter = [](std::vector<sd_image_t>* v) {
+    if (!v)
+      return;
+    for (auto& img : *v) {
+      if (img.data) {
+        free(img.data);
+        img.data = nullptr;
       }
     }
-  } refImgsGuard{refImgs};
+    delete v;
+  };
+  std::unique_ptr<std::vector<sd_image_t>, decltype(refImgsDeleter)> refImgs(
+      new std::vector<sd_image_t>(), refImgsDeleter);
 
   if (gen.mode == "img2img") {
     const bool isFluxFamily = config_.prediction == FLUX2_FLOW_PRED ||
@@ -616,7 +618,7 @@ std::any SdModel::process(const std::any& input) {
 
     // -- Multi-image (FLUX2 "fusion" mode) ---------------------------------
     if (nMulti > 0) {
-      refImgs.reserve(nMulti);
+      refImgs->reserve(nMulti);
       for (size_t i = 0; i < nMulti; ++i) {
         if (job.initImagesBytes[i].empty())
           throw StatusError(
@@ -631,21 +633,14 @@ std::any SdModel::process(const std::any& input) {
               general_error::InvalidArgument,
               "img2img: failed to decode init_images[" + std::to_string(i) +
                   "] (corrupt or unsupported format; supported: PNG, JPEG)");
-        refImgs.push_back(decoded);
+        refImgs->push_back(decoded);
       }
 
-      // Use the first reference to pick sensible output dimensions if the
-      // caller passed 0 as a sentinel (see addon.js) — auto_resize_ref_image
-      // handles the remaining refs. A caller who explicitly requests 512x512
-      // will get 512x512; one who omits dimensions gets first ref's size.
-      const int refW = static_cast<int>(refImgs.front().width);
-      const int refH = static_cast<int>(refImgs.front().height);
-      if (gen.width == 0 && gen.height == 0) {
-        genParams.width = refW;
-        genParams.height = refH;
-      }
-      gen.width = genParams.width;
-      gen.height = genParams.height;
+      // Output dimensions come from the JS shim (addon.js::_fillDimsFromImage,
+      // which falls back to the first reference's size when the caller omits
+      // width/height). C++ callers using the binding directly must supply
+      // both dimensions explicitly. auto_resize_ref_image handles the
+      // remaining refs.
 
       // clang-format off
       // NOTE: Homebrew and apt.llvm.org builds of clang-format-19 disagree on
@@ -665,7 +660,7 @@ std::any SdModel::process(const std::any& input) {
                                  "default, recommended for FLUX2-klein)")));
       // clang-format on
 
-      genParams.ref_images = refImgs.data();
+      genParams.ref_images = refImgs->data();
       genParams.ref_images_count = static_cast<int>(nMulti);
       genParams.auto_resize_ref_image = gen.autoResizeRefImage;
       // See SdGenConfig::increaseRefIndex for semantics. For FLUX2-klein the
