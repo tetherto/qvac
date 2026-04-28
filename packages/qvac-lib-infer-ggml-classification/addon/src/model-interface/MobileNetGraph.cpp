@@ -353,6 +353,24 @@ WeightsBundle loadWeights(
     if (idxN >= 0) {
       numClasses = gguf_get_val_u32(gguf, static_cast<int>(idxN));
     }
+    // The graph has compile-time fixed FC weights for `kNumClasses` and a
+    // matching `kNumClasses`-element output tensor; a GGUF that advertises
+    // a different class count cannot be served by this build of the
+    // addon. Reject up-front rather than letting downstream
+    // `ggml_backend_tensor_get(..., logits, sizeof(float)*kNumClasses)`
+    // either truncate (numClasses > kNumClasses) or read past the
+    // tensor buffer (numClasses < kNumClasses), and rather than letting
+    // the FC weight upload corrupt the classifier silently due to a
+    // shape mismatch.
+    if (numClasses != kNumClasses) {
+      raiseInvalid(
+          "GGUF metadata 'mobilenet.num_classes' (" +
+          std::to_string(numClasses) +
+          ") does not match the addon's compiled-in class count (" +
+          std::to_string(kNumClasses) +
+          "); rebuild @qvac/classification-ggml against this model or use "
+          "a GGUF with the expected number of classes");
+    }
     for (uint32_t i = 0; i < numClasses; ++i) {
       const std::string key = "mobilenet.class_" + std::to_string(i);
       const int64_t idx = gguf_find_key(gguf, key.c_str());
@@ -650,6 +668,25 @@ ComputeGraph buildGraph(const WeightsBundle& weights, ggml_backend_t backend) {
 
   cg.output = fc3;
   ggml_set_name(cg.output, "logits");
+
+  // Defence-in-depth invariant: every site that reads from
+  // `cg.output` (warmup pass and per-inference path) does so with a
+  // stack-allocated `float[kNumClasses]` and asks ggml for exactly
+  // `sizeof(float) * kNumClasses` bytes. If the graph as constructed
+  // ever ends up with a different output element count -- whether
+  // because of an upstream ggml change to how `mul_mat` shapes its
+  // result, an accidental edit to the classifier wiring above, or a
+  // future fine-tune slipping through the GGUF metadata check -- we
+  // would silently corrupt the read (truncation or OOB). Catch it
+  // here, before any inference runs.
+  if (ggml_nelements(cg.output) != static_cast<int64_t>(kNumClasses)) {
+    raise(
+        "Compute graph output has " +
+        std::to_string(ggml_nelements(cg.output)) +
+        " elements, expected " + std::to_string(kNumClasses) +
+        "; classifier wiring or GGUF weight shapes are inconsistent with "
+        "graph::kNumClasses");
+  }
 
   cg.graph = ggml_new_graph_custom(ctx, 8192, /*grads=*/false);
   ggml_build_forward_expand(cg.graph, cg.output);
