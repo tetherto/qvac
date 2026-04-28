@@ -28,9 +28,15 @@ const logger = getClientLogger();
 /**
  * Loads a model from a descriptor; `modelType` is inferred from `modelSrc`.
  * `modelConfig` narrows per-engine when `modelSrc.engine` is a literal,
- * otherwise falls back to a permissive shape. Throws `ModelTypeRequiredError`
- * if `modelType` cannot be inferred at runtime.
+ * otherwise falls back to a permissive shape.
  *
+ * @overloadLabel "From descriptor"
+ * @param options - Descriptor-based load options. `modelSrc` is a
+ *   `ModelDescriptor` (e.g. one of the `LLAMA_3_2_1B_INST_Q4_0`-style
+ *   constants); `modelType` is inferred from it.
+ * @param rpcOptions - Optional RPC options including per-call profiling.
+ * @returns Promise that resolves to the loaded model ID.
+ * @throws {ModelTypeRequiredError} When `modelType` cannot be inferred from `modelSrc` at runtime.
  * @example
  * ```typescript
  * await loadModel({ modelSrc: LLAMA_3_2_1B_INST_Q4_0, modelConfig: { ctx_size: 2048 } });
@@ -141,7 +147,14 @@ export function loadModel(
 
 /**
  * Loads a custom plugin model (any non-built-in `modelType` string).
- * `modelConfig` is plugin-defined; SDK does not narrow it.
+ * `modelConfig` is plugin-defined; the SDK does not narrow it.
+ *
+ * @overloadLabel "Custom plugin"
+ * @param options - Custom plugin load options. `modelType` can be any
+ *   string registered by a plugin; `modelConfig` is forwarded to the
+ *   plugin's `loadModel` handler unchanged.
+ * @param rpcOptions - Optional RPC options including per-call profiling.
+ * @returns Promise that resolves to the loaded model ID.
  */
 export function loadModel<T extends string>(
   options: LoadCustomPluginModelOptions<T>,

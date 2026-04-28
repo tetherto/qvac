@@ -12,7 +12,7 @@ description: One-page reference of all public functions and objects exported by 
 > **Fields intentionally omitted**: parameter descriptions, return field descriptions
 > (covered by IDE hover and `.d.ts` declarations).
 >
-> **Scope**: 36 functions in `packages/sdk/client/api/` plus the `profiler` object.
+> **Scope**: 38 functions in `packages/sdk/client/api/` plus the `profiler` object.
 
 ---
 
@@ -289,6 +289,36 @@ function finetune(params: FinetuneReplyParams, rpcOptions?: RPCOptions): Promise
 
 ---
 
+### `getLoadedModelInfo`
+
+Returns introspection info for a loaded `modelId` (local or delegated).
+
+For local models, `info.modelType` and `info.handlers` are authoritative.
+Use them to preflight an SDK call before sending the actual RPC, e.g.
+confirm that a model supports `transcribeStream` before calling `transcribe()`.
+
+For delegated models, only `modelId`, `isDelegated: true`, `providerInfo`,
+and `handlers: []` are populated. Preflight against a delegated model is
+best-effort and falls through to the provider's error response.
+
+Throws `ModelNotFoundError` if no entry exists for `modelId`.
+
+**Signature**:
+
+```ts
+function getLoadedModelInfo(params: GetLoadedModelInfoParams, rpcOptions?: RPCOptions): Promise<LoadedModelInfo>;
+```
+
+**Example**:
+```ts
+const info = await getLoadedModelInfo({ modelId });
+if (info.isDelegated || info.handlers.includes("completionStream")) {
+  // safe to call completion(); delegated path defers to provider
+}
+```
+
+---
+
 ### `getModelInfo`
 
 Returns status information for a catalog model, including cache state and loaded instances.
@@ -374,9 +404,30 @@ function invokePluginStream(options: InvokePluginOptions<TParams>, rpcOptions?: 
 
 ### `loadModel`
 
-Has 2 overloads.
+Has 4 overloads.
 
-#### Overload 1 — Load new model
+#### Overload 1 — From descriptor
+Loads a model from a descriptor; `modelType` is inferred from `modelSrc`.
+`modelConfig` narrows per-engine when `modelSrc.engine` is a literal,
+otherwise falls back to a permissive shape.
+
+**Signature**:
+
+```ts
+function loadModel(options: LoadModelDescriptorParam<S>, rpcOptions?: RPCOptions): Promise<string>;
+```
+
+**Throws**:
+
+- `ModelTypeRequiredError` — When `modelType` cannot be inferred from `modelSrc` at runtime.
+
+**Example**:
+```ts
+await loadModel({ modelSrc: LLAMA_3_2_1B_INST_Q4_0, modelConfig: { ctx_size: 2048 } });
+await loadModel({ modelSrc: WHISPER_TINY });
+```
+
+#### Overload 2 — Load new model
 Loads a machine learning model from a local path, remote URL, or Hyperdrive key.
 
 This function supports multiple model types: LLM (Large Language Model), Whisper (speech recognition),
@@ -403,7 +454,7 @@ function loadModel(options: LoadModelOptions, rpcOptions?: RPCOptions): Promise<
 const localModelId = await loadModel({
   modelSrc: "/home/user/models/llama-7b.gguf",
   modelType: "llm",
-  modelConfig: { contextSize: 2048 }
+  modelConfig: { ctx_size: 2048 }
 });
 
 // Local file path - relative path
@@ -416,7 +467,7 @@ const relativeModelId = await loadModel({
 const hyperdriveId = await loadModel({
   modelSrc: "pear://<hyperdrive-key>/llama-7b.gguf",
   modelType: "llm",
-  modelConfig: { contextSize: 2048 }
+  modelConfig: { ctx_size: 2048 }
 });
 
 // Remote HTTP/HTTPS URL with progress tracking
@@ -465,7 +516,17 @@ const modelId = await loadModel({
 });
 ```
 
-#### Overload 2 — Hot-reload config
+#### Overload 3 — Custom plugin
+Loads a custom plugin model (any non-built-in `modelType` string).
+`modelConfig` is plugin-defined; the SDK does not narrow it.
+
+**Signature**:
+
+```ts
+function loadModel(options: LoadCustomPluginModelOptions<T>, rpcOptions?: RPCOptions): Promise<string>;
+```
+
+#### Overload 4 — Hot-reload config
 Hot-reloads configuration on an already loaded model.
 
 **Signature**:
@@ -1033,10 +1094,46 @@ console.log(await state()); // "suspended"
 
 Converts text to speech audio using a loaded TTS model.
 
+Three modes selected by `params.stream` and `params.sentenceStream`:
+
+- `stream: false` (default) — collect all PCM samples and resolve once via
+  `result.buffer` (`Promise<number[]>`). `bufferStream` is empty.
+- `stream: true` — yield PCM samples through `result.bufferStream`
+  (`AsyncGenerator<number>`) as they arrive. `buffer` resolves to an empty
+  array.
+- `stream: true, sentenceStream: true` — also exposes `result.chunkUpdates`
+  (`AsyncGenerator<TtsSentenceChunkUpdate>`) so callers can mux per-sentence
+  metadata with the audio. Multiple consumers can iterate the response
+  independently via the underlying `TtsMulticast`.
+
+`result.done` resolves to `true` when synthesis completes cleanly, `false`
+if the consumer breaks out before the terminal frame, or rejects on a
+pipeline error. Awaiting `done` is safe even when no stream is iterated.
+
 **Signature**:
 
 ```ts
-function textToSpeech(params: TtsClientParams, options?: RPCOptions): { buffer: Promise<number[]>; bufferStream: AsyncGenerator<number>; done: Promise<boolean> };
+function textToSpeech(params: TtsClientParamsInput, options?: RPCOptions): TextToSpeechStreamResult;
+```
+
+**Throws**:
+
+- `TextToSpeechStreamFailedError` — When `sentenceStream: true` is paired
+        with `stream: false`, or when the underlying RPC stream errors.
+
+---
+
+### `textToSpeechStream`
+
+Duplex session: write UTF-8 text fragments (e.g. LLM token deltas) via `write`. Each string or
+Buffer should be a complete UTF-8 fragment. The worker forwards them to ONNX TTS `runStreaming`
+(optional sentence accumulation via request fields). Iterate the session for `TextToSpeechStreamResponse`
+lines (PCM in `buffer`, optional `chunkIndex` / `sentenceChunk`) until `done`.
+
+**Signature**:
+
+```ts
+function textToSpeechStream(params: TextToSpeechStreamClientParams, options?: RPCOptions): Promise<TextToSpeechStreamSession>;
 ```
 
 ---
@@ -1223,6 +1320,8 @@ and read `error.code` / `error.cause`. Code ranges:
 | `INVALID_TOOLS_ARRAY` | 50005 | Invalid tools array provided |
 | `INVALID_TOOL_SCHEMA` | 50006 | Invalid tool schema: … |
 | `OCR_FAILED` | 50007 | OCR operation failed… |
+| `MODEL_TYPE_REQUIRED` | 50008 | modelType is required: modelSrc is a plain string or lacks an engine/addon descriptor that can be inferred. Pass an explicit canonical modelType (e.g. "llamacpp-completion", "whispercpp-transcription", "nmtcpp-translation", "llamacpp-embedding", "onnx-tts", "onnx-ocr", "parakeet-transcription", "sdcpp-generation") or use a model constant that carries engine metadata. |
+| `MODEL_SRC_TYPE_MISMATCH` | 50009 | modelSrc describes "…", but modelType resolves to "…". Omit modelType to infer it automatically, or pass a matching modelType. |
 | `RPC_NO_HANDLER` | 50200 | No handler function registered for request type: … |
 | `RPC_REQUEST_NOT_SENT` | 50201 | Cannot perform operation - request has not been sent yet |
 | `RPC_RESPONSE_STREAM_NOT_CREATED` | 50202 | Cannot perform operation - response stream not created |
@@ -1276,6 +1375,8 @@ and read `error.code` / `error.cause`. Code ranges:
 | `OCR_FAILED` | 52412 | OCR operation failed… |
 | `IMAGE_FILE_NOT_FOUND` | 52413 | Image file not found or not accessible: … |
 | `INVALID_IMAGE_INPUT` | 52414 | Invalid image input type provided |
+| `TEXT_TO_SPEECH_STREAM_FAILED` | 52415 | Text-to-speech stream operation failed… |
+| `MODEL_OPERATION_NOT_SUPPORTED` | 52416 | Supported operations on this model: …. |
 | `RAG_SAVE_FAILED` | 52800 | Failed to save embeddings… |
 | `RAG_SEARCH_FAILED` | 52801 | Failed to search embeddings… |
 | `RAG_DELETE_FAILED` | 52802 | Failed to delete embeddings… |

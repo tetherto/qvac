@@ -309,9 +309,9 @@ Six GitHub Actions workflows automate the docs lifecycle:
 
 **What it does:**
 - Installs dependencies with Bun
-- Creates a placeholder `(latest)/sdk/api/index.mdx` (since generated API docs aren't committed)
+- Ensures a placeholder `content/docs/sdk/api/index.mdx` exists when the PR doesn't touch generated content (so `next build` doesn't 404 on the API summary page)
 - Runs `bun run build` to validate the site compiles
-- Runs Vitest tests (sidebar consistency, link integrity, rendering parity, changelog parser) excluding TSDoc completeness tests that require SDK source
+- Runs Vitest tests (sidebar consistency, link integrity, single-page rendering, changelog parser) excluding TSDoc completeness tests that require SDK source
 
 **Purpose:** Catches build errors and broken links in docs PRs before merge.
 
@@ -456,8 +456,6 @@ All scripts live in `docs/website/scripts/` and are designed to run with Bun.
 | `update-versions-list.ts` | `docs:update-versions` | Rebuilds `src/lib/versions.ts` from `sdk/api/v*.mdx` and `sdk/release-notes/v*.mdx` siblings on disk |
 | `run-docs-generate.ts` | `docs:generate` | Convenience: regenerates the latest summary + refreshes versions.ts using the monorepo SDK's `package.json` version (no version bump) |
 | `create-version-bundle.ts` | `docs:create-version` | Copies the current `index.mdx` of each versioned section to `vX.Y.Z.mdx` (called from `release-version.ts`) |
-| `migrate-api-bundles-to-single-page.ts` | `docs:migrate-api-bundles` | One-time migration from per-function MDX bundles to single-file summaries (used during the cutover; safe to keep around for cross-checking) |
-| `rewrite-api-links.ts` | `docs:rewrite-api-links` | One-time rewriter for `/sdk/api/<fn>` URLs to single-page anchors |
 | `lib/link-validator.ts` | -- | Internal link extraction + resolution (used by the link-integrity test) |
 
 ---
@@ -543,16 +541,16 @@ No API functions extracted. Check that:
 ### Version not found after generation
 
 ```
-Version vX.Y.Z was not found in content/docs/
+Version vX.Y.Z was not found
 ```
 
-**Cause:** `update-versions-list.ts` ran but the version directory doesn't exist.
+**Cause:** `update-versions-list.ts` ran but the version's MDX file doesn't exist on disk.
 
-**Fix:** Run `docs:generate-api` for the version first, then `docs:update-versions`.
+**Fix:** Run `docs:generate-api -- <version> --latest` (writes `index.mdx`) or `docs:generate-api -- <version>` (writes `vX.Y.Z.mdx`) first, then `docs:update-versions`. For a full release flow use `docs:release-version -- <version> --no-commit --no-pr` instead.
 
 ### Build fails in CI (PR checks)
 
-The PR check workflow creates a placeholder `(latest)/sdk/api/index.mdx` to avoid 404s during build. If the build still fails:
+The PR check workflow ensures a placeholder `content/docs/sdk/api/index.mdx` exists so `next build` doesn't 404 when a PR doesn't touch generated content. If the build still fails:
 
 1. Check that `source.config.ts` and `next.config.mjs` are valid
 2. Run `bun run build` locally to reproduce
@@ -560,21 +558,21 @@ The PR check workflow creates a placeholder `(latest)/sdk/api/index.mdx` to avoi
 
 ### Post-merge sync creates infinite loop
 
-If the sync bot's commits keep triggering the workflow:
+The post-merge sync workflow is currently disabled (production tracks `main`, so auto-commits would loop). When you re-enable it after production moves to `docs-production`:
 
 1. Set the `DOCS_SYNC_BOT_USER` repository variable to the bot's GitHub username
 2. The workflow skips runs when `github.actor` matches this variable
 3. Commits also use `[skip ci]` as an additional safeguard
 
-### Rollback (latest)/sdk/api/ to previous version
+### Recover a broken `index.mdx` after a bad release
 
-If a generation corrupted `(latest)/sdk/api/`:
+If a release ran but produced a broken `sdk/api/index.mdx` or `sdk/release-notes/index.mdx`, restore it by re-running the orchestrator against the previous version:
 
 ```bash
-bun run scripts/generate-api-docs.ts --rollback
+bun run scripts/release-version.ts <previous-version> --no-commit --no-pr --force-extract
 ```
 
-This restores `(latest)/sdk/api/` from the `.latest-api-backup/` directory created during the previous generation.
+Then revert the bad commit / branch state via `git`. There is no automatic backup directory — versioning is the safety net (every previous version exists as a sibling `vX.Y.Z.mdx`).
 
 ### Generated MDX contains "undefined" or "[object Object]"
 

@@ -18,8 +18,6 @@
     "docs:create-version": "bun run scripts/create-version-bundle.ts",
     "docs:release-version": "bun run scripts/release-version.ts",
     "docs:generate-release-notes": "bun run scripts/generate-release-notes.ts",
-    "docs:rewrite-api-links": "bun run scripts/rewrite-api-links.ts",
-    "docs:migrate-api-bundles": "bun run scripts/migrate-api-bundles-to-single-page.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:examples": "bun run scripts/test-code-examples.ts"

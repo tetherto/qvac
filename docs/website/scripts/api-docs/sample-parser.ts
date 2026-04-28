@@ -1,8 +1,8 @@
 /**
  * Sample prose parser.
  *
- * Reads hand-authored MDX samples under `content/docs/(latest)/sdk/api/`
- * and extracts prose fields (function description, parameter descriptions,
+ * Reads hand-authored MDX samples from a caller-supplied directory and
+ * extracts prose fields (function description, parameter descriptions,
  * expanded-type field descriptions, example code, throws entries).
  *
  * The extract phase uses this as a *fallback* source: SDK JSDoc always wins
