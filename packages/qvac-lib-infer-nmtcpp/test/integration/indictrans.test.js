@@ -46,66 +46,12 @@ const {
   createPerformanceCollector,
   formatPerformanceMetrics,
   isMobile,
-  platform
+  platform,
+  discoverGpuDevices,
+  MAX_GPU_DEVICE_PROBES
 } = require('./utils')
 
 const INDICTRANS_FIXTURE = path.resolve(__dirname, 'fixtures/indictrans.quality.json')
-
-/**
- * Maximum number of GPU device indices to probe during discovery.
- * Covers multi-GPU desktops (e.g. Vulkan0 + Vulkan1) and mixed-backend
- * mobile (Vulkan + OpenCL). Probing stops early when a device index
- * falls back to CPU, so the actual cost is O(N_real_devices + 1).
- */
-const MAX_GPU_DEVICE_PROBES = 4
-
-/**
- * Cached discovery result.  null = not yet probed.
- * @type {{ index: number, name: string }[] | null}
- */
-let _gpuDeviceCache = null
-
-/**
- * Probes the native GGML device list by loading a lightweight model with
- * increasing gpu_device indices.  Returns an array of
- * { index, name } for each device that resolved to a non-CPU backend.
- *
- * Results are cached so the expensive probe runs at most once per process.
- */
-async function discoverGpuDevices (modelPath) {
-  if (_gpuDeviceCache !== null) return _gpuDeviceCache
-  _gpuDeviceCache = []
-
-  for (let idx = 0; idx < MAX_GPU_DEVICE_PROBES; idx++) {
-    let model
-    try {
-      model = new TranslationNmtcpp({
-        files: { model: modelPath },
-        params: { mode: 'full', srcLang: 'eng_Latn', dstLang: 'hin_Deva' },
-        config: {
-          modelType: TranslationNmtcpp.ModelTypes.IndicTrans,
-          use_gpu: true,
-          gpu_device: idx,
-          beamsize: 1
-        },
-        logger: createLogger()
-      })
-      await model.load()
-      const name = model.getActiveBackendName()
-      await model.unload()
-
-      if (name === 'CPU' || name === 'Unloaded' || name === 'Bergamot-CPU') {
-        break
-      }
-      _gpuDeviceCache.push({ index: idx, name })
-    } catch (_) {
-      if (model) { try { await model.unload() } catch (__) { /* noop */ } }
-      break
-    }
-  }
-
-  return _gpuDeviceCache
-}
 
 const TEST_SENTENCE = 'Hello, how are you?'
 
@@ -123,8 +69,7 @@ const BASELINES = (() => {
     // Fail soft (threshold checks become no-ops) but surface the parse failure
     // so a malformed perf-baselines.json doesn't silently disable regression
     // gating in CI.
-    // eslint-disable-next-line no-console
-    console.warn(`[indictrans.test] failed to load perf-baselines.json: ${err && err.message ? err.message : err}`)
+    createLogger().warn(`[indictrans.test] failed to load perf-baselines.json: ${err && err.message ? err.message : err}`)
     return null
   }
 })()
@@ -244,7 +189,7 @@ async function runSingleTranslation (t, { modelPath, logger, useGpu, gpuDevice, 
 for (let gpuIdx = 0; gpuIdx < MAX_GPU_DEVICE_PROBES; gpuIdx++) {
   test(`IndicTrans backend [GPU device ${gpuIdx}] - English to Hindi translation`, { timeout: TEST_TIMEOUT }, async function (t) {
     const modelPath = await ensureIndicTransModel()
-    const devices = await discoverGpuDevices(modelPath)
+    const devices = await discoverGpuDevices()
     const device = devices.find(d => d.index === gpuIdx)
 
     if (!device) {
@@ -386,7 +331,7 @@ function resolveExecutionProvider (backendName, useGpu) {
 
 test('IndicTrans CPU vs GPU output parity (EN->Hindi, beam=1)', { timeout: TEST_TIMEOUT * (MAX_GPU_DEVICE_PROBES + 1) }, async function (t) {
   const modelPath = await ensureIndicTransModel()
-  const devices = await discoverGpuDevices(modelPath)
+  const devices = await discoverGpuDevices()
 
   if (devices.length === 0) {
     if (isMobile) {

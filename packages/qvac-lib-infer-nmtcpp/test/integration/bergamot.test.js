@@ -37,65 +37,12 @@ const {
   createPerformanceCollector,
   formatPerformanceMetrics,
   isMobile,
-  platform
+  platform,
+  discoverGpuDevices,
+  MAX_GPU_DEVICE_PROBES
 } = require('./utils')
 
 const BERGAMOT_FIXTURE = path.resolve(__dirname, 'fixtures/bergamot.quality.json')
-
-/**
- * Maximum GPU device indices to probe on mobile. Bergamot on desktop is
- * intgemm/CPU-only, so GPU discovery is limited to mobile.
- */
-const MAX_GPU_DEVICE_PROBES = 4
-
-let _gpuDeviceCache = null
-
-/**
- * Discover available GPU devices by probe-loading a Bergamot model with
- * increasing gpu_device indices.  Only runs on mobile; returns [] on desktop.
- */
-async function discoverGpuDevices (modelDir, modelFile, vocabFile) {
-  if (!isMobile) return []
-  if (_gpuDeviceCache !== null) return _gpuDeviceCache
-  _gpuDeviceCache = []
-
-  const fullVocabPath = path.join(modelDir, vocabFile)
-
-  for (let idx = 0; idx < MAX_GPU_DEVICE_PROBES; idx++) {
-    let model
-    try {
-      model = new TranslationNmtcpp({
-        files: {
-          model: path.join(modelDir, modelFile),
-          srcVocab: fullVocabPath,
-          dstVocab: fullVocabPath
-        },
-        params: { srcLang: 'en', dstLang: 'it' },
-        config: {
-          modelType: TranslationNmtcpp.ModelTypes.Bergamot,
-          beamsize: 1,
-          normalize: 1,
-          use_gpu: true,
-          gpu_device: idx
-        },
-        logger: createLogger()
-      })
-      await model.load()
-      const name = model.getActiveBackendName()
-      await model.unload()
-
-      if (name === 'CPU' || name === 'Unloaded' || name === 'Bergamot-CPU') {
-        break
-      }
-      _gpuDeviceCache.push({ index: idx, name })
-    } catch (_) {
-      if (model) { try { await model.unload() } catch (__) { /* noop */ } }
-      break
-    }
-  }
-
-  return _gpuDeviceCache
-}
 
 // ---------------------------------------------------------------------------
 // Per-GPU-device tests (mobile only).  On desktop only the CPU test runs.
@@ -109,7 +56,7 @@ if (isMobile) {
       const modelFile = allFiles.find(f => f.includes('.intgemm') && f.includes('.bin'))
       const vocabFile = allFiles.find(f => f.includes('.spm'))
 
-      const devices = await discoverGpuDevices(modelDir, modelFile, vocabFile)
+      const devices = isMobile ? await discoverGpuDevices() : []
       const device = devices.find(d => d.index === gpuIdx)
 
       if (!device) {

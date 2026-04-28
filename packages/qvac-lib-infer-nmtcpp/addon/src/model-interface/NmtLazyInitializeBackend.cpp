@@ -309,6 +309,17 @@ bool NmtLazyInitializeBackend::initializeLocked(
                 " — falling back to default backend loading");
         ggml_backend_load_all();
       } else {
+        auto resolvedStr = backendsDirPath.string();
+#ifdef __ANDROID__
+        if (resolvedStr.rfind("/data/", 0) != 0) {
+          QLOG(
+              Priority::WARNING,
+              "Rejecting backendsDir — resolved path outside /data/ prefix: " +
+                  sanitizePrintableAscii(resolvedStr) +
+                  " — falling back to default backend loading");
+          ggml_backend_load_all();
+        } else {
+#endif
 #ifdef BACKENDS_SUBDIR
         std::filesystem::path subdirPath(BACKENDS_SUBDIR);
         backendsDirPath = backendsDirPath / subdirPath;
@@ -327,6 +338,9 @@ bool NmtLazyInitializeBackend::initializeLocked(
                   sanitizePrintableAscii(backendsDirPath.string()));
           ggml_backend_load_all_from_path(backendsDirPath.string().c_str());
 #ifdef BACKENDS_SUBDIR
+        }
+#endif
+#ifdef __ANDROID__
         }
 #endif
       }

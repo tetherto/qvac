@@ -32,56 +32,14 @@ const {
   createPerformanceCollector,
   formatPerformanceMetrics,
   isMobile,
-  platform
+  platform,
+  discoverGpuDevices,
+  MAX_GPU_DEVICE_PROBES
 } = require('./utils')
 
 const PIVOT_BERGAMOT_FIXTURE = path.resolve(__dirname, 'fixtures/pivot-bergamot.quality.json')
 
 const PIVOT_TIMEOUT = isMobile ? 900_000 : 180_000
-
-/**
- * Maximum GPU device indices to probe on mobile.  Pivot-bergamot on desktop
- * is intgemm/CPU-only, so GPU discovery is limited to mobile.
- */
-const MAX_GPU_DEVICE_PROBES = 4
-
-let _gpuDeviceCache = null
-
-/**
- * Discover available GPU devices by probe-loading a pivot Bergamot model pair
- * with increasing gpu_device indices.  Only runs on mobile; returns [] on
- * desktop.  Results are cached after the first call.
- */
-async function discoverGpuDevices (esEnDir, esEn, enItDir, enIt) {
-  if (!isMobile) return []
-  if (_gpuDeviceCache !== null) return _gpuDeviceCache
-  _gpuDeviceCache = []
-
-  for (let idx = 0; idx < MAX_GPU_DEVICE_PROBES; idx++) {
-    let model
-    try {
-      model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt, {
-        use_gpu: true,
-        gpu_device: idx,
-        normalize: 1,
-        pivotNormalize: 1
-      }))
-      await model.load()
-      const name = model.getActiveBackendName()
-      await model.unload()
-
-      if (name === 'CPU' || name === 'Unloaded' || name === 'Bergamot-CPU') {
-        break
-      }
-      _gpuDeviceCache.push({ index: idx, name })
-    } catch (_) {
-      if (model) { try { await model.unload() } catch (__) { /* noop */ } }
-      break
-    }
-  }
-
-  return _gpuDeviceCache
-}
 
 /**
  * Ensures a Bergamot model pair is available on disk.
@@ -239,11 +197,7 @@ async function runEsEnItPivotTest (t, label, useGpu, gpuDevice) {
 if (isMobile) {
   for (let gpuIdx = 0; gpuIdx < MAX_GPU_DEVICE_PROBES; gpuIdx++) {
     test(`Pivot translation [GPU device ${gpuIdx}] - Spanish → English → Italian`, { timeout: PIVOT_TIMEOUT }, async function (t) {
-      const esEnDir = await ensureModelPair('es', 'en')
-      const enItDir = await ensureModelPair('en', 'it')
-      const esEn = findModelFiles(esEnDir)
-      const enIt = findModelFiles(enItDir)
-      const devices = await discoverGpuDevices(esEnDir, esEn, enItDir, enIt)
+      const devices = isMobile ? await discoverGpuDevices() : []
       const device = devices.find(d => d.index === gpuIdx)
 
       if (!device) {
@@ -612,11 +566,7 @@ async function runFrEnEsPivotTest (t, label, useGpu, gpuDevice) {
 if (isMobile) {
   for (let gpuIdx = 0; gpuIdx < MAX_GPU_DEVICE_PROBES; gpuIdx++) {
     test(`Pivot translation [GPU device ${gpuIdx}] - French → English → Spanish`, { timeout: PIVOT_TIMEOUT }, async function (t) {
-      const esEnDir = await ensureModelPair('es', 'en')
-      const enItDir = await ensureModelPair('en', 'it')
-      const esEn = findModelFiles(esEnDir)
-      const enIt = findModelFiles(enItDir)
-      const devices = await discoverGpuDevices(esEnDir, esEn, enItDir, enIt)
+      const devices = isMobile ? await discoverGpuDevices() : []
       const device = devices.find(d => d.index === gpuIdx)
 
       if (!device) {
