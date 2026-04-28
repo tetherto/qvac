@@ -13,8 +13,11 @@
  *   - No manual language prefixes needed (unlike raw model access)
  *
  * Platform Behavior:
- *   - Mobile (iOS/Android): Tests both CPU and GPU modes
- *   - Desktop (Linux/Windows/macOS): Tests both CPU and GPU (Vulkan) modes
+ *   - GPU devices are discovered at runtime via probe loading (cached)
+ *   - Each discovered GPU device gets its own test run with an identifiable
+ *     label (e.g. [GPU:0 Vulkan0], [GPU:1 OpenCL0])
+ *   - CPU always runs as a separate test
+ *   - Device indices beyond those discovered are automatically skipped
  *
  * Usage:
  *   bare test/integration/indictrans.test.js
@@ -49,17 +52,60 @@ const {
 const INDICTRANS_FIXTURE = path.resolve(__dirname, 'fixtures/indictrans.quality.json')
 
 /**
- * Device configurations for testing.
- *
- * The previous isMobile gate for GPU was removed — desktop now runs both CPU
- * and Vulkan. Runners without a usable GPU backend still exercise the code
- * path; the per-run assertion soft-skips on desktop when the GGML scheduler
- * returns CPU, and hard-fails on mobile (where GPU is required).
+ * Maximum number of GPU device indices to probe during discovery.
+ * Covers multi-GPU desktops (e.g. Vulkan0 + Vulkan1) and mixed-backend
+ * mobile (Vulkan + OpenCL). Probing stops early when a device index
+ * falls back to CPU, so the actual cost is O(N_real_devices + 1).
  */
-const DEVICE_CONFIGS = [
-  { id: 'gpu', useGpu: true },
-  { id: 'cpu', useGpu: false }
-]
+const MAX_GPU_DEVICE_PROBES = 4
+
+/**
+ * Cached discovery result.  null = not yet probed.
+ * @type {{ index: number, name: string }[] | null}
+ */
+let _gpuDeviceCache = null
+
+/**
+ * Probes the native GGML device list by loading a lightweight model with
+ * increasing gpu_device indices.  Returns an array of
+ * { index, name } for each device that resolved to a non-CPU backend.
+ *
+ * Results are cached so the expensive probe runs at most once per process.
+ */
+async function discoverGpuDevices (modelPath) {
+  if (_gpuDeviceCache !== null) return _gpuDeviceCache
+  _gpuDeviceCache = []
+
+  for (let idx = 0; idx < MAX_GPU_DEVICE_PROBES; idx++) {
+    let model
+    try {
+      model = new TranslationNmtcpp({
+        files: { model: modelPath },
+        params: { mode: 'full', srcLang: 'eng_Latn', dstLang: 'hin_Deva' },
+        config: {
+          modelType: TranslationNmtcpp.ModelTypes.IndicTrans,
+          use_gpu: true,
+          gpu_device: idx,
+          beamsize: 1
+        },
+        logger: createLogger()
+      })
+      await model.load()
+      const name = model.getActiveBackendName()
+      await model.unload()
+
+      if (name === 'CPU' || name === 'Unloaded' || name === 'Bergamot-CPU') {
+        break
+      }
+      _gpuDeviceCache.push({ index: idx, name })
+    } catch (_) {
+      if (model) { try { await model.unload() } catch (__) { /* noop */ } }
+      break
+    }
+  }
+
+  return _gpuDeviceCache
+}
 
 const TEST_SENTENCE = 'Hello, how are you?'
 
@@ -117,7 +163,7 @@ function compareToBaseline (t, label, metrics, baseline) {
  * The caller owns lifecycle assertions (backend presence, parity, etc.) —
  * this helper is deliberately focused on "run one sentence and collect".
  */
-async function runSingleTranslation (t, { modelPath, logger, useGpu, label }) {
+async function runSingleTranslation (t, { modelPath, logger, useGpu, gpuDevice, label }) {
   const perfCollector = createPerformanceCollector()
 
   // OpenCL on Android needs a writable cache directory. If GGML_OPENCL_CACHE_DIR
@@ -130,6 +176,9 @@ async function runSingleTranslation (t, { modelPath, logger, useGpu, label }) {
     use_gpu: useGpu,
     // beamsize=1 for deterministic decode (parity check uses this)
     beamsize: 1
+  }
+  if (typeof gpuDevice === 'number') {
+    config.gpu_device = gpuDevice
   }
   if (useGpu && platform === 'android') {
     const writableRoot = global.testDir || '/tmp'
@@ -186,48 +235,47 @@ async function runSingleTranslation (t, { modelPath, logger, useGpu, label }) {
   }
 }
 
-for (const deviceConfig of DEVICE_CONFIGS) {
-  const label = `[${deviceConfig.id.toUpperCase()}]`
+// --------------------------------------------------------------------------
+// Per-GPU-device tests.  We register one test slot per device index (0..MAX)
+// plus a CPU-only test.  At runtime each GPU slot calls discoverGpuDevices()
+// (cached) and self-skips when the probed index doesn't exist.
+// --------------------------------------------------------------------------
 
-  test(`IndicTrans backend ${label} - English to Hindi translation`, { timeout: TEST_TIMEOUT }, async function (t) {
+for (let gpuIdx = 0; gpuIdx < MAX_GPU_DEVICE_PROBES; gpuIdx++) {
+  test(`IndicTrans backend [GPU device ${gpuIdx}] - English to Hindi translation`, { timeout: TEST_TIMEOUT }, async function (t) {
     const modelPath = await ensureIndicTransModel()
+    const devices = await discoverGpuDevices(modelPath)
+    const device = devices.find(d => d.index === gpuIdx)
+
+    if (!device) {
+      t.comment(`[GPU:${gpuIdx}] No GPU device at index ${gpuIdx} — skipping`)
+      t.pass(`[GPU:${gpuIdx}] Skipped (device not present)`)
+      return
+    }
+
+    const label = `[GPU:${gpuIdx} ${device.name}]`
     t.ok(modelPath, `${label} IndicTrans model path should be available`)
     t.comment(`${label} Model path: ` + modelPath)
     t.comment('Platform: ' + platform + ', isMobile: ' + isMobile)
-    t.comment(`${label} Testing with use_gpu: ${deviceConfig.useGpu}`)
+    t.comment(`${label} Testing with use_gpu: true, gpu_device: ${gpuIdx}`)
 
     const logger = createLogger()
     let model
 
     try {
       const run = await runSingleTranslation(t, {
-        modelPath, logger, useGpu: deviceConfig.useGpu, label
+        modelPath,
+        logger,
+        useGpu: true,
+        gpuDevice: gpuIdx,
+        label
       })
       model = run.model
       const { metrics, backendName } = run
 
-      // Phase 2.1 assertion: when useGpu=true, the active backend must not be
-      // the CPU fallback. On desktop, we soft-skip with a warning — runner
-      // configuration (e.g. no Vulkan ICD installed) can legitimately force
-      // CPU fallback and must not fail CI. On mobile we hard-fail because
-      // OpenCL/Metal are a hard requirement there.
-      if (deviceConfig.useGpu) {
-        if (backendName === 'CPU') {
-          if (isMobile) {
-            t.fail(`${label} expected a GPU backend but got CPU fallback`)
-          } else {
-            t.comment(`${label} SOFT-SKIP: backend=CPU on desktop GPU run; likely no GPU ICD on runner`)
-          }
-        } else {
-          t.not(backendName, 'CPU', `${label} active backend should not be CPU when useGpu=true`)
-        }
-      }
+      t.not(backendName, 'CPU', `${label} active backend should not be CPU`)
 
-      // Phase 4.3: use the runtime backend name as the execution_provider
-      // tag. Fallback to the platform+useGpu string when the backend name
-      // looks like a sentinel, so reports stay sliceable when the assertion
-      // soft-skip above fires.
-      const executionProvider = resolveExecutionProvider(backendName, deviceConfig.useGpu)
+      const executionProvider = resolveExecutionProvider(backendName, true)
 
       t.comment(formatPerformanceMetrics(`[IndicTrans] ${label}`, metrics, {
         fixturePath: INDICTRANS_FIXTURE,
@@ -238,7 +286,6 @@ for (const deviceConfig of DEVICE_CONFIGS) {
 
       t.ok(metrics.fullOutput.length > 0, `${label} translation should not be empty`)
 
-      // Phase 4.2: compare to baseline (warn-only).
       compareToBaseline(t, label, metrics,
         pickBaseline(BASELINES, executionProvider))
 
@@ -258,6 +305,58 @@ for (const deviceConfig of DEVICE_CONFIGS) {
     }
   })
 }
+
+// CPU-only test
+test('IndicTrans backend [CPU] - English to Hindi translation', { timeout: TEST_TIMEOUT }, async function (t) {
+  const modelPath = await ensureIndicTransModel()
+  const label = '[CPU]'
+  t.ok(modelPath, `${label} IndicTrans model path should be available`)
+  t.comment(`${label} Model path: ` + modelPath)
+  t.comment('Platform: ' + platform + ', isMobile: ' + isMobile)
+  t.comment(`${label} Testing with use_gpu: false`)
+
+  const logger = createLogger()
+  let model
+
+  try {
+    const run = await runSingleTranslation(t, {
+      modelPath,
+      logger,
+      useGpu: false,
+      label
+    })
+    model = run.model
+    const { metrics, backendName } = run
+
+    const executionProvider = resolveExecutionProvider(backendName, false)
+
+    t.comment(formatPerformanceMetrics(`[IndicTrans] ${label}`, metrics, {
+      fixturePath: INDICTRANS_FIXTURE,
+      srcLang: 'eng_Latn',
+      dstLang: 'hin_Deva',
+      execution_provider: executionProvider
+    }))
+
+    t.ok(metrics.fullOutput.length > 0, `${label} translation should not be empty`)
+
+    compareToBaseline(t, label, metrics,
+      pickBaseline(BASELINES, executionProvider))
+
+    t.pass(`${label} IndicTrans translation completed successfully`)
+  } catch (e) {
+    t.fail(`${label} IndicTrans test failed: ` + e.message)
+    throw e
+  } finally {
+    if (model) {
+      try {
+        await model.unload()
+        t.pass(`${label} After model.unload().`)
+      } catch (e) {
+        t.comment(`${label} unload() error: ` + e.message)
+      }
+    }
+  }
+})
 
 /**
  * Normalize the active-backend string into a perf-report tag.
@@ -282,73 +381,88 @@ function resolveExecutionProvider (backendName, useGpu) {
 }
 
 // --------------------------------------------------------------------------
-// Phase 2.2 — CPU vs GPU output parity
+// Phase 2.2 — CPU vs GPU output parity (one test per discovered GPU device)
 // --------------------------------------------------------------------------
 
-test('IndicTrans CPU vs GPU output parity (EN->Hindi, beam=1)', { timeout: TEST_TIMEOUT * 2 }, async function (t) {
+test('IndicTrans CPU vs GPU output parity (EN->Hindi, beam=1)', { timeout: TEST_TIMEOUT * (MAX_GPU_DEVICE_PROBES + 1) }, async function (t) {
   const modelPath = await ensureIndicTransModel()
+  const devices = await discoverGpuDevices(modelPath)
+
+  if (devices.length === 0) {
+    if (isMobile) {
+      t.fail('Expected at least one GPU device on mobile')
+    } else {
+      t.comment('SOFT-SKIP: no GPU devices discovered — parity test is vacuous')
+      t.pass('Skipped (no GPU devices)')
+    }
+    return
+  }
+
+  t.comment('Discovered GPU devices: ' +
+    devices.map(d => `${d.name} (index ${d.index})`).join(', '))
+
   const logger = createLogger()
 
-  let cpuRun, gpuRun
+  // Run CPU once — reuse the translation for all parity comparisons
+  let cpuRun
   try {
     cpuRun = await runSingleTranslation(t, {
-      modelPath, logger, useGpu: false, label: '[PARITY-CPU]'
+      modelPath,
+      logger,
+      useGpu: false,
+      label: '[PARITY] CPU'
     })
     await cpuRun.model.unload()
     cpuRun.model = null
-
-    gpuRun = await runSingleTranslation(t, {
-      modelPath, logger, useGpu: true, label: '[PARITY-GPU]'
-    })
   } catch (e) {
-    t.fail('Parity test setup failed: ' + e.message)
+    t.fail('Parity CPU leg failed: ' + e.message)
     throw e
   }
 
-  try {
-    // Soft-skip rule: if the "GPU" leg actually ran on CPU, both legs are
-    // identical by construction — parity is vacuously true and uninformative.
-    if (gpuRun.backendName === 'CPU') {
-      if (isMobile) {
-        t.fail('Expected a GPU backend on mobile but got CPU fallback')
+  const cpuOut = (cpuRun.translation || '').trim()
+  t.comment(`[PARITY] CPU -> "${cpuOut}"`)
+
+  for (const device of devices) {
+    const parityLabel = `[PARITY:${device.index} ${device.name}]`
+    let gpuRun
+    try {
+      gpuRun = await runSingleTranslation(t, {
+        modelPath,
+        logger,
+        useGpu: true,
+        gpuDevice: device.index,
+        label: parityLabel
+      })
+
+      const gpuOut = (gpuRun.translation || '').trim()
+      t.comment(`${parityLabel} -> "${gpuOut}"`)
+
+      if (cpuOut === gpuOut) {
+        t.pass(`${parityLabel} CPU and ${device.name} outputs are string-equal`)
       } else {
-        t.comment('SOFT-SKIP: GPU leg ran on CPU (no desktop GPU backend); parity is vacuous')
-        return
+        let evaluateQuality
+        try {
+          const qmBase = path.join('..', '..', '..', '..', 'scripts', 'test-utils')
+          evaluateQuality = require(path.join(qmBase, 'quality-metrics')).evaluateQuality
+        } catch (e) {
+          t.comment(`Could not load quality-metrics: ${e.message}`)
+        }
+
+        if (evaluateQuality) {
+          const q = evaluateQuality([gpuOut], { reference_text: cpuOut })
+          const cer = typeof q.cer === 'number' ? q.cer : 1
+          t.comment(`${parityLabel} CER = ${(cer * 100).toFixed(2)}%`)
+          t.ok(cer < 0.01, `${parityLabel} outputs should match within CER<1% (got ${(cer * 100).toFixed(2)}%)`)
+        } else {
+          t.is(gpuOut, cpuOut, `${parityLabel} outputs must match`)
+        }
+      }
+    } catch (e) {
+      t.fail(`${parityLabel} parity test failed: ` + e.message)
+    } finally {
+      if (gpuRun && gpuRun.model) {
+        try { await gpuRun.model.unload() } catch (_) { /* noop */ }
       }
     }
-
-    const cpuOut = (cpuRun.translation || '').trim()
-    const gpuOut = (gpuRun.translation || '').trim()
-    t.comment(`[PARITY-CPU] -> "${cpuOut}"`)
-    t.comment(`[PARITY-GPU] -> "${gpuOut}" (backend=${gpuRun.backendName})`)
-
-    if (cpuOut === gpuOut) {
-      t.pass('CPU and GPU outputs are string-equal')
-      return
-    }
-
-    // Fall back to CER < 1% — CPU and GPU kernels can diverge by a character
-    // or two on numerically-sensitive inputs without being "wrong".
-    let evaluateQuality
-    try {
-      // Dynamic require to avoid bare-pack issues on mobile bundling.
-      const qmBase = path.join('..', '..', '..', '..', 'scripts', 'test-utils')
-      evaluateQuality = require(path.join(qmBase, 'quality-metrics')).evaluateQuality
-    } catch (e) {
-      t.comment(`Could not load quality-metrics: ${e.message}`)
-    }
-
-    if (evaluateQuality) {
-      const q = evaluateQuality([gpuOut], { reference_text: cpuOut })
-      const cer = typeof q.cer === 'number' ? q.cer : 1
-      t.comment(`CPU/GPU CER = ${(cer * 100).toFixed(2)}%`)
-      t.ok(cer < 0.01, `CPU/GPU outputs should match within CER<1% (got ${(cer * 100).toFixed(2)}%)`)
-    } else {
-      // Without CER we can't soften the check; require string equality.
-      t.is(gpuOut, cpuOut, 'CPU and GPU outputs must match')
-    }
-  } finally {
-    try { if (gpuRun && gpuRun.model) await gpuRun.model.unload() } catch (_) { /* noop */ }
-    try { if (cpuRun && cpuRun.model) await cpuRun.model.unload() } catch (_) { /* noop */ }
   }
 })
