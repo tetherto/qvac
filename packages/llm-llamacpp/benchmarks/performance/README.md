@@ -30,7 +30,7 @@ npm run run:param-sweep -- --addon-source npm
 ## Setup
 
 ```bash
-cd packages/qvac-lib-infer-llamacpp-llm/benchmarks/performance
+cd packages/llm-llamacpp/benchmarks/performance
 npm install
 ```
 

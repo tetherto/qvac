@@ -1,4 +1,4 @@
-# Build-only workflow. Publishing is handled by on-merge-qvac-lib-infer-llamacpp-llm.yml
+# Build-only workflow. Publishing is handled by on-merge-llm-llamacpp.yml
 name: Prebuilds (LLM)
 
 on:
@@ -11,7 +11,7 @@ on:
         description: "Working directory (optional)"
         required: false
         type: string
-        default: "packages/qvac-lib-infer-llamacpp-llm"
+        default: "packages/llm-llamacpp"
 
   workflow_call:
     inputs:
@@ -32,7 +32,7 @@ on:
         description: "Working directory (optional)"
         required: false
         type: string
-        default: "packages/qvac-lib-infer-llamacpp-llm"
+        default: "packages/llm-llamacpp"
 
 env:
   WORKDIR: ${{ inputs.workdir }}

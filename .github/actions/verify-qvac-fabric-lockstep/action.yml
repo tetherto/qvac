@@ -15,7 +15,7 @@ runs:
         set -euo pipefail
 
         files=(
-          "packages/qvac-lib-infer-llamacpp-llm/vcpkg.json"
+          "packages/llm-llamacpp/vcpkg.json"
           "packages/embed-llamacpp/vcpkg.json"
           "packages/qvac-lib-infer-nmtcpp/vcpkg.json"
         )

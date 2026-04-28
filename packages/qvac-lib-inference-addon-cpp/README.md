@@ -20,7 +20,7 @@ A header-only C++ library that provides common abstractions and infrastructure f
 This library sits between the Bare runtime and specific inference addons. Communication between JavaScript and native code is mediated by Bare runtime's native addon API.
 
 **Consumer Addons** (built on this library):
-- [qvac-lib-infer-llamacpp-llm](https://github.com/tetherto/qvac-lib-infer-llamacpp-llm) - LLM inference
+- [llm-llamacpp](https://github.com/tetherto/llm-llamacpp) - LLM inference
 - [qvac-lib-infer-whispercpp](https://github.com/tetherto/qvac-lib-infer-whispercpp) - Speech recognition
 - [qvac-lib-infer-nmtcpp](https://github.com/tetherto/qvac-lib-infer-nmtcpp) - Neural translation
 - [qvac-lib-infer-onnx-tts](https://github.com/tetherto/qvac-lib-infer-onnx-tts) - Text-to-speech
@@ -331,7 +331,7 @@ ctest --test-dir build --output-on-failure
 ### Consumer Addons
 
 Production addons built on this library:
-- [qvac-lib-infer-llamacpp-llm](https://github.com/tetherto/qvac-lib-infer-llamacpp-llm) - LLM inference
+- [llm-llamacpp](https://github.com/tetherto/llm-llamacpp) - LLM inference
 - [qvac-lib-infer-whispercpp](https://github.com/tetherto/qvac-lib-infer-whispercpp) - Speech recognition
 - [qvac-lib-infer-nmtcpp](https://github.com/tetherto/qvac-lib-infer-nmtcpp) - Neural translation
 - [qvac-lib-infer-onnx-tts](https://github.com/tetherto/qvac-lib-infer-onnx-tts) - Text-to-speech

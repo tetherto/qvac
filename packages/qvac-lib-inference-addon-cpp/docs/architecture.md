@@ -101,7 +101,7 @@ graph TB
     end
     
     subgraph "Inference Addons"
-        LLAMA[qvac-lib-infer-llamacpp-llm]
+        LLAMA[llm-llamacpp]
         WHISPER[qvac-lib-infer-whispercpp]
         NMT[qvac-lib-infer-nmtcpp]
         TTS[qvac-lib-infer-onnx-tts]
@@ -144,7 +144,7 @@ graph TB
 | Runtime | libuv Event Loop | Async I/O and threading |
 | Runtime | V8 JavaScript Engine | JavaScript execution |
 | Bridging | qvac-lib-inference-addon-cpp | JavaScript bridging and addon orchestration framework (this library) |
-| Addons | qvac-lib-infer-llamacpp-llm | LLM inference using llama.cpp |
+| Addons | llm-llamacpp | LLM inference using llama.cpp |
 | Addons | qvac-lib-infer-whispercpp | Speech-to-text using Whisper |
 | Addons | qvac-lib-infer-nmtcpp | Neural machine translation |
 | Addons | qvac-lib-infer-onnx-tts | Text-to-speech using ONNX |
@@ -159,7 +159,7 @@ graph TB
 ### Known Consumers
 
 Production addons built on this library:
-- **qvac-lib-infer-llamacpp-llm** - LLM inference using llama.cpp
+- **llm-llamacpp** - LLM inference using llama.cpp
 - **qvac-lib-infer-whispercpp** - Speech-to-text using Whisper
 - **qvac-lib-infer-nmtcpp** - Neural machine translation
 - **qvac-lib-infer-onnx-tts** - Text-to-speech using ONNX

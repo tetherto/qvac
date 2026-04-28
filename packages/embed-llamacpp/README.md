@@ -252,7 +252,7 @@ Integration tests are located in [`test/integration/`](./test/integration/) and 
 
 C++ unit tests live under [`addon/test/`](./addon/test/) and exercise the native components at a lower level, including backend selection, single-step inference, end-to-end embedding generation, and pooling. These tests validate the native implementation and help catch issues early in development.
 
-> **Note:** This package is *embeddings only*. There is no tool-calling, multimodal, KV-cache, or chat-template support — those features belong to the LLM addon ([`@qvac/llm-llamacpp`](../qvac-lib-infer-llamacpp-llm/)).
+> **Note:** This package is *embeddings only*. There is no tool-calling, multimodal, KV-cache, or chat-template support — those features belong to the LLM addon ([`@qvac/llm-llamacpp`](../llm-llamacpp/)).
 
 ## Glossary
 

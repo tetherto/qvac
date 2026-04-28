@@ -5,7 +5,7 @@ on:
     types:
       - closed
     paths:
-      - "packages/qvac-lib-infer-llamacpp-llm/**"
+      - "packages/llm-llamacpp/**"
   workflow_dispatch:
     inputs:
       version:

@@ -32,7 +32,7 @@ jobs:
     name: test-${{ matrix.platform }}-${{ matrix.arch }}
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      WORKDIR: packages/qvac-lib-infer-llamacpp-llm
+      WORKDIR: packages/llm-llamacpp
       NO_GPU: ${{ matrix.no_gpu || 'false' }}
     permissions:
       contents: read

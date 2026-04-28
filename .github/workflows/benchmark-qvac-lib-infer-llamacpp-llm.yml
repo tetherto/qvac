@@ -94,7 +94,7 @@ on:
       workdir:
         description: 'Working directory for the benchmark (default: root of the repository)'
         required: false
-        default: "packages/qvac-lib-infer-llamacpp-llm"
+        default: "packages/llm-llamacpp"
         type: string
   workflow_call:
     inputs:
@@ -171,7 +171,7 @@ on:
       workdir:
         description: 'Working directory for the benchmark (default: root of the repository)'
         required: false
-        default: "packages/qvac-lib-infer-llamacpp-llm"
+        default: "packages/llm-llamacpp"
         type: string
 
 permissions:
