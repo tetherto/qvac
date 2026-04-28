@@ -104,13 +104,25 @@ async function main() {
   }
 
   const websiteDir = process.cwd();
-  const repoRoot = resolve(websiteDir, "../..");
+  // `CHANGELOG_REPO_ROOT` lets the docs-release-pipeline point this script
+  // at a checkout frozen at the release commit, so concurrent merges to
+  // `main` during the workflow window can't smuggle stale or future
+  // CHANGELOG entries into the rendered release notes. When unset (local
+  // runs, post-merge sync) we fall back to the monorepo root above the
+  // docs website directory — same as before.
+  const repoRoot = process.env.CHANGELOG_REPO_ROOT
+    ? resolve(process.env.CHANGELOG_REPO_ROOT)
+    : resolve(websiteDir, "../..");
 
   console.log(
     `Generating release notes for v${version}` +
       (aggregateMinor ? ` (aggregating minor)` : "") +
-      `...\n`,
+      `...`,
   );
+  if (process.env.CHANGELOG_REPO_ROOT) {
+    console.log(`  Reading changelogs from: ${repoRoot}`);
+  }
+  console.log("");
 
   const changelogs: PackageChangelog[] = [];
   for (const pkg of SDK_POD_PACKAGES) {

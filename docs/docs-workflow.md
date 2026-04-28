@@ -409,7 +409,10 @@ GH_TOKEN=ghp_... bash .github/scripts/docs-ci-doctor.sh
 - Manual dispatch with a version input
 
 **What it does:**
-1. Checks out `main` at the latest commit
+1. **Dual checkout** to close a race window where a PR landing on `main` mid-pipeline could smuggle a not-yet-released function into the rendered API summary:
+   - `main-tree/` — `main` HEAD: docs scripts + commit/push target.
+   - `release-tree/` — frozen at `github.sha` (the trigger commit): SDK source + package CHANGELOGs.
+   `SDK_PATH` and `CHANGELOG_REPO_ROOT` both point at `release-tree/`, so TypeDoc and `generate-release-notes.ts` only ever see the released state.
 2. Extracts the version from the branch name, release tag, or manual input
 3. Runs `release-version.ts <version> --no-commit --no-pr --force-extract [--ai]`, which:
    - Freezes the outgoing version's `index.mdx` into a sibling `vX.Y.Z.mdx`

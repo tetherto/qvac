@@ -39,12 +39,35 @@ jobs:
     if: ${{ !vars.DOCS_SYNC_BOT_USER || github.actor != vars.DOCS_SYNC_BOT_USER }}
 
     steps:
-      - name: Checkout repository
+      # Dual checkout to close the race window where a PR landing on `main`
+      # mid-pipeline could smuggle a not-yet-released function into the SDK
+      # source the renderer reads — silently shipping wrong content under a
+      # stale version label.
+      #
+      # - `main-tree`  → docs scripts, content target, commit/push target.
+      #                  Always main HEAD so the workflow benefits from any
+      #                  fixes to the pipeline itself.
+      # - `release-tree` → SDK source + CHANGELOGs frozen at the trigger
+      #                    commit. SDK_PATH and CHANGELOG_REPO_ROOT point
+      #                    here so TypeDoc + the changelog parser can't
+      #                    pick up unrelated commits that landed on main
+      #                    after the trigger.
+      - name: Checkout main (docs scripts + commit target)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: main
+          path: main-tree
           fetch-depth: 0
           token: ${{ secrets.DOCS_SYNC_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Checkout release commit (SDK source + CHANGELOGs)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.sha }}
+          path: release-tree
+          fetch-depth: 1
+          sparse-checkout: |
+            packages
 
       - name: Extract version
         id: version
@@ -86,11 +109,11 @@ jobs:
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
 
       - name: Install docs dependencies
-        working-directory: ${{ env.DOCS_DIR }}
+        working-directory: main-tree/${{ env.DOCS_DIR }}
         run: bun install
 
-      - name: Install SDK dependencies
-        working-directory: packages/sdk
+      - name: Install SDK dependencies (release commit)
+        working-directory: release-tree/packages/sdk
         run: bun install
 
       - name: Release new docs version
@@ -100,9 +123,13 @@ jobs:
         #   3. Generates the new release notes (aggregating minor)
         #   4. Refreshes src/lib/versions.ts
         # `--no-commit --no-pr` defers git work to the workflow's bot identity.
-        working-directory: ${{ env.DOCS_DIR }}
+        # Both SDK_PATH and CHANGELOG_REPO_ROOT pin to release-tree so a PR
+        # that lands on main after the trigger can't influence what gets
+        # rendered for this version.
+        working-directory: main-tree/${{ env.DOCS_DIR }}
         env:
-          SDK_PATH: ${{ github.workspace }}/packages/sdk
+          SDK_PATH: ${{ github.workspace }}/release-tree/packages/sdk
+          CHANGELOG_REPO_ROOT: ${{ github.workspace }}/release-tree
           AI_AUGMENT_BASE_URL: ${{ secrets.AI_AUGMENT_BASE_URL }}
           AI_AUGMENT_API_KEY: ${{ secrets.AI_AUGMENT_API_KEY }}
           AI_AUGMENT_MODEL: ${{ vars.AI_AUGMENT_MODEL || '' }}
@@ -115,18 +142,19 @@ jobs:
           ${{ steps.ai.outputs.ai_flag }}
 
       - name: Run TSDoc audit (warning mode)
-        working-directory: ${{ env.DOCS_DIR }}
+        working-directory: main-tree/${{ env.DOCS_DIR }}
         env:
-          SDK_PATH: ${{ github.workspace }}/packages/sdk
+          SDK_PATH: ${{ github.workspace }}/release-tree/packages/sdk
         continue-on-error: true
         run: bun run scripts/api-docs/audit-tsdoc.ts
 
       - name: Run link validation tests
-        working-directory: ${{ env.DOCS_DIR }}
+        working-directory: main-tree/${{ env.DOCS_DIR }}
         run: bun run vitest run tests/link-integrity.test.ts
 
       - name: Check for changes
         id: changes
+        working-directory: main-tree
         run: |
           git add \
             "${{ env.DOCS_DIR }}/content/docs/sdk/api/" \
@@ -142,6 +170,7 @@ jobs:
 
       - name: Commit and push to main
         if: steps.changes.outputs.has_changes == 'true'
+        working-directory: main-tree
         env:
           BOT_NAME: ${{ vars.DOCS_SYNC_BOT_NAME || 'docs-sync-bot' }}
           BOT_EMAIL: ${{ vars.DOCS_SYNC_BOT_EMAIL || 'docs-sync-bot@users.noreply.github.com' }}
