@@ -8,11 +8,11 @@
 
 #include <gtest/gtest.h>
 
-#include "qvac-lib-inference-addon-cpp/ModelInterfaces.hpp"
-#include "qvac-lib-inference-addon-cpp/handlers/CppOutputHandlerImplementations.hpp"
-#include "qvac-lib-inference-addon-cpp/handlers/OutputHandler.hpp"
-#include "qvac-lib-inference-addon-cpp/queue/OutputCallbackCpp.hpp"
-#include "qvac-lib-inference-addon-cpp/queue/OutputQueue.hpp"
+#include "inference-addon-cpp/ModelInterfaces.hpp"
+#include "inference-addon-cpp/handlers/CppOutputHandlerImplementations.hpp"
+#include "inference-addon-cpp/handlers/OutputHandler.hpp"
+#include "inference-addon-cpp/queue/OutputCallbackCpp.hpp"
+#include "inference-addon-cpp/queue/OutputQueue.hpp"
 
 namespace qvac_lib_inference_addon_cpp {
 

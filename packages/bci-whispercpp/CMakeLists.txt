@@ -30,7 +30,7 @@ configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.clang-tidy
 configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.valgrind.supp
                ${CMAKE_CURRENT_SOURCE_DIR}/.valgrind.supp COPYONLY)
 
-find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/ModelInterfaces.hpp")
+find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/ModelInterfaces.hpp")
 find_package(whisper CONFIG REQUIRED)
 
 set(CMAKE_CXX_STANDARD 20)

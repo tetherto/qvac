@@ -7,7 +7,7 @@
 
 #include <common/common.h>
 #include <llama/common/common.h>
-#include <qvac-lib-inference-addon-cpp/Errors.hpp>
+#include <inference-addon-cpp/Errors.hpp>
 
 #include "addon/BertErrors.hpp"
 

@@ -3,7 +3,7 @@
 
 #include <gtest/gtest.h>
 
-#include "qvac-lib-inference-addon-cpp/Utils.hpp"
+#include "inference-addon-cpp/Utils.hpp"
 
 namespace qvac_lib_inference_addon_cpp::utils {
 

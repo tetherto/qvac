@@ -1,7 +1,7 @@
 #include <js.h>
 #include <bare.h>
 #include "test_logger.hpp"
-#include "qvac-lib-inference-addon-cpp/JsInterface.hpp"
+#include "inference-addon-cpp/JsInterface.hpp"
 
 auto testLoggerExports(js_env_t *env, js_value_t *exports) -> js_value_t* {
 

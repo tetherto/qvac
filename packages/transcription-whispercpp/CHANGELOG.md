@@ -94,7 +94,7 @@ When `exclusiveRun` is enabled (the default), a second call to `run()` or `runSt
 ## [0.5.5]
 
 ### Changed
-- Bumped `qvac-lib-inference-addon-cpp` to `1.1.5`.
+- Bumped `inference-addon-cpp` to `1.1.5`.
 - Restored JS-owned job ID routing after addon-cpp reverted the accidental `1.1.3` native callback `jobId` contract and `cancel(jobId)` API break.
 
 ### Added
@@ -112,7 +112,7 @@ When `exclusiveRun` is enabled (the default), a second call to `run()` or `runSt
 ## [0.5.3]
 
 ### Changed
-- Bumped `qvac-lib-inference-addon-cpp` to `1.1.3`.
+- Bumped `inference-addon-cpp` to `1.1.3`.
 - Updated the JS wrapper to consume the shared addon-cpp native job-id callback contract so late cancel/error events remain attached to the cancelled job instead of a newer accepted run.
 
 ### Added
@@ -144,7 +144,7 @@ The `TranscriptionWhispercpp` namespace now exports **`RuntimeStats`**, aligned 
 ## [0.5.0]
 
 ### Changed
-- Migrated the native addon implementation to `qvac-lib-inference-addon-cpp` 1.x (`IModel` + `AddonJs`/`AddonCpp`), replacing the removed legacy templated addon and jobs-handler path
+- Migrated the native addon implementation to `inference-addon-cpp` 1.x (`IModel` + `AddonJs`/`AddonCpp`), replacing the removed legacy templated addon and jobs-handler path
 - Updated the JS/native execution path to `createInstance` + `runJob` with parity-focused cancel/output lifecycle handling
 
 ### Added

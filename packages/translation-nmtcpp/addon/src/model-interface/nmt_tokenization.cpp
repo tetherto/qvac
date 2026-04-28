@@ -7,7 +7,7 @@
 #include <vector>
 
 #include "nmt.hpp"
-#include "qvac-lib-inference-addon-cpp/Logger.hpp"
+#include "inference-addon-cpp/Logger.hpp"
 
 using namespace std;
 

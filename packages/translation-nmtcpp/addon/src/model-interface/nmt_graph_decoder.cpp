@@ -16,7 +16,7 @@
 #include "nmt_state_backend.hpp"
 #include "nmt_tokenization.hpp"
 #include "nmt_utils.hpp"
-#include "qvac-lib-inference-addon-cpp/Logger.hpp"
+#include "inference-addon-cpp/Logger.hpp"
 
 // Helpers moved from nmt.cpp
 void nmt_compute_logprobs(

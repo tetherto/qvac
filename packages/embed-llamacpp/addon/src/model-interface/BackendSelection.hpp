@@ -7,7 +7,7 @@
 #include <variant>
 
 #include <llama.h>
-#include <qvac-lib-inference-addon-cpp/Errors.hpp>
+#include <inference-addon-cpp/Errors.hpp>
 
 namespace backend_selection {
 

@@ -2,8 +2,8 @@
 
 #include <thread>
 
-#include "qvac-lib-inference-addon-cpp/JsInterface.hpp"
-#include "qvac-lib-inference-addon-cpp/Logger.hpp" //For QLOG test only
+#include "inference-addon-cpp/JsInterface.hpp"
+#include "inference-addon-cpp/Logger.hpp" //For QLOG test only
 
 class TestLogger {
 };

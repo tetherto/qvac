@@ -34,7 +34,7 @@ This library simplifies running inference with the Whisper transcription model w
 | Windows | x64 | 10+ | ✅ Tier 1 | Vulkan |
 
 **Dependencies:**
-- qvac-lib-inference-addon-cpp (=0.12.2): C++ addon framework
+- inference-addon-cpp (=0.12.2): C++ addon framework
 - qvac-fabric-whisper.cpp (latest): Inference engine
 - Bare Runtime (≥1.24.2): JavaScript runtime
 - Linux requires Clang/LLVM 19 with libc++

@@ -55,7 +55,7 @@ The consumer's `vcpkg.json` only needs its own addon-specific dependencies. ONNX
   "version": "1.0.0",
   "dependencies": [
     {
-      "name": "qvac-lib-inference-addon-cpp",
+      "name": "inference-addon-cpp",
       "version>=": "1.0.0"
     },
     {
@@ -74,7 +74,7 @@ The consumer's `vcpkg.json` only needs its own addon-specific dependencies. ONNX
 
 Add any addon-specific vcpkg dependencies here. Do **not** add `onnxruntime`.
 
-**How `ocr-onnx` does it:** Its `vcpkg.json` lists `opencv4` (with specific features: `jpeg`, `png`, `quirc`, `tiff`, `webp`), `qvac-lib-inference-addon-cpp`, and `lint-cpp`. No `onnxruntime` — that comes from `@qvac/onnx`.
+**How `ocr-onnx` does it:** Its `vcpkg.json` lists `opencv4` (with specific features: `jpeg`, `png`, `quirc`, `tiff`, `webp`), `inference-addon-cpp`, and `lint-cpp`. No `onnxruntime` — that comes from `@qvac/onnx`.
 
 ---
 

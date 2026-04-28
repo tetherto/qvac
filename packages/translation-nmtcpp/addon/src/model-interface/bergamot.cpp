@@ -14,7 +14,7 @@
 #include "translator/parser.h"
 #include "common/options.h"
 #include "common/logging.h"
-#include "qvac-lib-inference-addon-cpp/Logger.hpp"
+#include "inference-addon-cpp/Logger.hpp"
 
 #ifdef USE_INTGEMM
 #include "intgemm/intgemm.h"

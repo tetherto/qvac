@@ -5,12 +5,12 @@
 #include <utility>
 #include <vector>
 
-#include <qvac-lib-inference-addon-cpp/ModelInterfaces.hpp>
-#include <qvac-lib-inference-addon-cpp/addon/AddonCpp.hpp>
-#include <qvac-lib-inference-addon-cpp/handlers/CppOutputHandlerImplementations.hpp>
-#include <qvac-lib-inference-addon-cpp/handlers/OutputHandler.hpp>
-#include <qvac-lib-inference-addon-cpp/queue/OutputCallbackCpp.hpp>
-#include <qvac-lib-inference-addon-cpp/queue/OutputCallbackInterface.hpp>
+#include <inference-addon-cpp/ModelInterfaces.hpp>
+#include <inference-addon-cpp/addon/AddonCpp.hpp>
+#include <inference-addon-cpp/handlers/CppOutputHandlerImplementations.hpp>
+#include <inference-addon-cpp/handlers/OutputHandler.hpp>
+#include <inference-addon-cpp/queue/OutputCallbackCpp.hpp>
+#include <inference-addon-cpp/queue/OutputCallbackInterface.hpp>
 
 #include "src/model-interface/TTSModel.hpp"
 

@@ -33,7 +33,7 @@ This addon uses NVIDIA's Parakeet ASR models in ONNX format:
 
 ## Built With
 
-This addon is built on [qvac-lib-inference-addon-cpp](https://github.com/tetherto/qvac-lib-inference-addon-cpp), which provides the foundational framework for QVAC inference addons.
+This addon is built on [inference-addon-cpp](https://github.com/tetherto/inference-addon-cpp), which provides the foundational framework for QVAC inference addons.
 
 ## Table of Contents
 
@@ -367,7 +367,7 @@ transcription-parakeet/
 │   ├── ParakeetModel.hpp       # Main model implementation
 │   ├── ParakeetModel.cpp       # ONNX Runtime integration
 │   ├── binding.cpp             # Bare addon registration
-│   └── qvac-lib-inference-addon-cpp/  # Base framework (header-only)
+│   └── inference-addon-cpp/  # Base framework (header-only)
 ├── models/                     # Downloaded ONNX models (not in git)
 ├── tests/                      # C++ tests
 ├── examples/                   # JavaScript usage examples
@@ -388,7 +388,7 @@ transcription-parakeet/
 | Windows | x64 | 10+ | ✅ Tier 1 | DirectML |
 
 **Dependencies:**
-- qvac-lib-inference-addon-cpp: C++ addon framework
+- inference-addon-cpp: C++ addon framework
 - ONNX Runtime: Inference engine
 - Bare Runtime: JavaScript runtime
 - Linux requires Clang/LLVM 19 with libc++
@@ -410,7 +410,7 @@ If the selected GPU provider fails at session creation, inference falls back to 
 - **Bare Runtime:** https://github.com/holepunchto/bare
 - **ONNX Runtime:** https://onnxruntime.ai/
 - **Parakeet Models:** https://github.com/altunene/parakeet-rs
-- **Base Framework:** https://github.com/tetherto/qvac-lib-inference-addon-cpp
+- **Base Framework:** https://github.com/tetherto/inference-addon-cpp
 
 ### Model Sources
 

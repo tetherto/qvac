@@ -5,7 +5,7 @@
 
 #include <ggml-backend.h>
 
-#include "qvac-lib-inference-addon-cpp/Logger.hpp"
+#include "inference-addon-cpp/Logger.hpp"
 
 using namespace qvac_lib_inference_addon_cpp::logger;
 

@@ -5,7 +5,7 @@
 #include <streambuf>
 
 #include <llama-cpp.h>
-#include <qvac-lib-inference-addon-cpp/Errors.hpp>
+#include <inference-addon-cpp/Errors.hpp>
 
 #include "GGUFShards.hpp"
 #include "common/common.h"

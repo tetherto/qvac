@@ -8,7 +8,7 @@
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-#include <qvac-lib-inference-addon-cpp/Errors.hpp>
+#include <inference-addon-cpp/Errors.hpp>
 
 #include "../src/model-interface/TranslationModel.hpp"
 

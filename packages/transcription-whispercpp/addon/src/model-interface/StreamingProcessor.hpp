@@ -10,7 +10,7 @@
 
 #include <whisper.h>
 
-#include "qvac-lib-inference-addon-cpp/queue/OutputQueue.hpp"
+#include "inference-addon-cpp/queue/OutputQueue.hpp"
 
 namespace qvac_lib_inference_addon_whisper {
 

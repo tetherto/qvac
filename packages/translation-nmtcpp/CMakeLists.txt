@@ -58,7 +58,7 @@ if(ANDROID)
   set(ANDROID_NATIVE_API_LEVEL "$ENV{ANDROID_NATIVE_API_LEVEL}")
 endif()
 
-find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/BlobsStream.hpp")
+find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/BlobsStream.hpp")
 
 find_package(ggml CONFIG REQUIRED)
 find_package(absl CONFIG QUIET)

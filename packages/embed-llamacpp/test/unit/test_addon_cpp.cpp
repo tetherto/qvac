@@ -13,7 +13,7 @@
 #include <vector>
 
 #include <gtest/gtest.h>
-#include <qvac-lib-inference-addon-cpp/addon/AddonCpp.hpp>
+#include <inference-addon-cpp/addon/AddonCpp.hpp>
 
 #include "addon/AddonCpp.hpp"
 #include "test_common.hpp"

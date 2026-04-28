@@ -11,7 +11,7 @@
 #include "nmt.hpp"
 #include "nmt_graph_decoder.hpp"
 #include "nmt_graph_encoder.hpp"
-#include "qvac-lib-inference-addon-cpp/Logger.hpp"
+#include "inference-addon-cpp/Logger.hpp"
 
 void nmt_batch_prep_legacy(
     nmt_batch& batch, const nmt_token* tokens, int n_tokens, int n_past,

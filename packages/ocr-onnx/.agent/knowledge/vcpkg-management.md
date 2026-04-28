@@ -58,7 +58,7 @@ Every addon package uses two registries configured in `vcpkg-configuration.json`
 }
 ```
 
-Hosts QVAC-specific packages: `qvac-fabric`, `qvac-lib-inference-addon-cpp`, `lint-cpp`, `onnxruntime`, `whisper-cpp`, `tokenizers-cpp`, `bergamot-translator`, `sentencepiece`, `ssplit`, and others.
+Hosts QVAC-specific packages: `qvac-fabric`, `inference-addon-cpp`, `lint-cpp`, `onnxruntime`, `whisper-cpp`, `tokenizers-cpp`, `bergamot-translator`, `sentencepiece`, `ssplit`, and others.
 
 **Authentication**: Requires `GH_TOKEN` (GitHub PAT) with read access to `tetherto/qvac-registry-vcpkg`. In CI, git credentials are configured automatically. Locally, HTTPS access works with token-based auth or credential helpers.
 
@@ -299,13 +299,13 @@ The llama.cpp fork maintained in `qvac-registry-vcpkg`. This is the core LLM inf
 - Platform-specific backends: Metal (macOS/iOS), Vulkan (Linux/Android), CPU fallback
 - Current version: `7248.1.2+` (version tracks llama.cpp upstream commits)
 
-### qvac-lib-inference-addon-cpp
+### inference-addon-cpp
 
 Shared C++ addon framework providing the JS<->C++ binding interface (`JsInterface.hpp`).
 
 - Used by: all addon packages
 - Current version: `1.1.2`
-- Provides: `find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/JsInterface.hpp")`
+- Provides: `find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/JsInterface.hpp")`
 
 ### lint-cpp
 
@@ -416,7 +416,7 @@ find_package(GTest CONFIG REQUIRED)
 
 # find_path for header-only or non-config packages
 find_path(PICOJSON_INCLUDE_DIRS "picojson/picojson.h")
-find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/JsInterface.hpp")
+find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/JsInterface.hpp")
 find_path(VCPKG_INSTALLED_PATH share/lint-cpp/.clang-format REQUIRED)
 ```
 
@@ -513,13 +513,13 @@ If a package can't be resolved:
 
 | Addon Package | vcpkg Dependencies | Overlay Ports | Custom Triplets |
 |--------------|-------------------|---------------|-----------------|
-| `llm-llamacpp` | qvac-fabric, qvac-lib-inference-addon-cpp, lint-cpp, picojson, opencl (Android) | qvac-fabric (local dev) | Linux clang-19 |
-| `embed-llamacpp` | qvac-fabric, qvac-lib-inference-addon-cpp, lint-cpp, opencl (Android) | qvac-fabric (local dev) | Linux clang-19 |
-| `ocr-onnx` | onnxruntime (platform EPs), opencv4, qvac-lib-inference-addon-cpp, lint-cpp | None | Release-only |
-| `tts-onnx` | onnxruntime (platform EPs), fmt, spdlog, tokenizers-cpp, qvac-lib-inference-addon-cpp, lint-cpp | None | Release-only (macOS/iOS) |
-| `transcription-parakeet` | onnxruntime, qvac-lib-inference-addon-cpp | None | Release-only |
-| `onnx` | onnxruntime (platform EPs), qvac-lib-inference-addon-cpp, lint-cpp | None | None |
-| `transcription-whispercpp` | whisper-cpp, qvac-lib-inference-addon-cpp, lint-cpp | None | None |
-| `translation-nmtcpp` | bergamot-translator, sentencepiece, ssplit, whisper-cpp, qvac-lib-inference-addon-cpp, lint-cpp | 7 ports (bergamot, marian-dev, intgemm, ruy, simd-utils, ssplit, whisper-cpp) | None |
-| `qvac-lib-inference-addon-cpp` | lint-cpp | None | None |
+| `llm-llamacpp` | qvac-fabric, inference-addon-cpp, lint-cpp, picojson, opencl (Android) | qvac-fabric (local dev) | Linux clang-19 |
+| `embed-llamacpp` | qvac-fabric, inference-addon-cpp, lint-cpp, opencl (Android) | qvac-fabric (local dev) | Linux clang-19 |
+| `ocr-onnx` | onnxruntime (platform EPs), opencv4, inference-addon-cpp, lint-cpp | None | Release-only |
+| `tts-onnx` | onnxruntime (platform EPs), fmt, spdlog, tokenizers-cpp, inference-addon-cpp, lint-cpp | None | Release-only (macOS/iOS) |
+| `transcription-parakeet` | onnxruntime, inference-addon-cpp | None | Release-only |
+| `onnx` | onnxruntime (platform EPs), inference-addon-cpp, lint-cpp | None | None |
+| `transcription-whispercpp` | whisper-cpp, inference-addon-cpp, lint-cpp | None | None |
+| `translation-nmtcpp` | bergamot-translator, sentencepiece, ssplit, whisper-cpp, inference-addon-cpp, lint-cpp | 7 ports (bergamot, marian-dev, intgemm, ruy, simd-utils, ssplit, whisper-cpp) | None |
+| `inference-addon-cpp` | lint-cpp | None | None |
 | `lint-cpp` | (none — self-contained) | None | None |

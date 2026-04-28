@@ -6,7 +6,7 @@
 #include <vector>
 
 #include <gtest/gtest.h>
-#include <qvac-lib-inference-addon-cpp/Errors.hpp>
+#include <inference-addon-cpp/Errors.hpp>
 
 #include "common/chat.h"
 #include "model-interface/LlamaModel.hpp"

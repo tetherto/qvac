@@ -10,7 +10,7 @@
 #include "LlmContext.hpp"
 #include "ToolsCompactController.hpp"
 #include "common/common.h"
-#include "qvac-lib-inference-addon-cpp/Logger.hpp"
+#include "inference-addon-cpp/Logger.hpp"
 
 class TextLlmContext : public LlmContext {
 public:

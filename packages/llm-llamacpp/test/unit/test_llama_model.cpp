@@ -9,7 +9,7 @@
 
 #include <gtest/gtest.h>
 #include <llama.h>
-#include <qvac-lib-inference-addon-cpp/Errors.hpp>
+#include <inference-addon-cpp/Errors.hpp>
 
 #include "model-interface/LlamaModel.hpp"
 #include "test_common.hpp"

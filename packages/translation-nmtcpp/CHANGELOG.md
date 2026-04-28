@@ -70,7 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Bumped `qvac-lib-inference-addon-cpp` vcpkg dependency to >=1.1.5
+- Bumped `inference-addon-cpp` vcpkg dependency to >=1.1.5
 - Removed legacy model download script (`scripts/download_model_from_s3.sh`)
 - Cleaned up documentation and comments
 

@@ -70,7 +70,7 @@
 Tier 1: Platform targets for which prebuilds are provided as defined by the .github/workflows/prebuilds-embed-llamacpp.yml workflow. Compilation and test failures for these targets will cause workflow runs to go red.
 
 **Dependencies:**
-- qvac-lib-inference-addon-cpp (≥1.1.2): C++ addon framework
+- inference-addon-cpp (≥1.1.2): C++ addon framework
 - @qvac/infer-base: Provides `createJobHandler` and `exclusiveRunQueue` helpers (composition, no base class)
 - qvac-fabric-llm.cpp (≥7248.2.3): Inference engine
 - Bare Runtime (≥1.24.0): JavaScript runtime (provides `bare-fs` for direct file streaming)
@@ -127,7 +127,7 @@ graph TB
 | Package | Type | Version | Purpose |
 |---------|------|---------|---------|
 | @qvac/infer-base | Framework | ^0.4.0 | `createJobHandler`, `exclusiveRunQueue`, `QvacResponse` helpers (composition, no base class) |
-| qvac-lib-inference-addon-cpp | Native | ≥1.1.2 | C++ addon framework |
+| inference-addon-cpp | Native | ≥1.1.2 | C++ addon framework |
 | llama.cpp | Native | ≥7248.2.1 | Inference engine |
 | Bare Runtime | Runtime | ≥1.24.0 | JavaScript execution, `bare-fs`, `bare-path` |
 
@@ -533,7 +533,7 @@ Use llama.cpp (via vcpkg) as the core inference engine instead of MLC-LLM, ONNX 
 
 ## Decision 2: Bare Runtime over Node.js
 
-See [qvac-lib-inference-addon-cpp Decision 4: Why Bare Runtime](https://github.com/tetherto/qvac-lib-inference-addon-cpp/blob/main/docs/architecture.md#decision-4-why-bare-runtime) for rationale.
+See [inference-addon-cpp Decision 4: Why Bare Runtime](https://github.com/tetherto/inference-addon-cpp/blob/main/docs/architecture.md#decision-4-why-bare-runtime) for rationale.
 
 **Summary:** Mobile support (iOS/Android), lightweight, modern addon API. Core business logic remains runtime-agnostic.
 
@@ -615,7 +615,7 @@ ML models can be gigabytes in size. llama.cpp expects either:
 
 ### Decision
 
-Use the custom `std::streambuf` over JavaScript-owned ArrayBuffers provided by `qvac-lib-inference-addon-cpp`. `GGMLBert._streamShards()` opens `bare-fs.createReadStream(path)` on each caller-supplied file, forwards each chunk into `addon.loadWeights({ filename, chunk, completed: false })`, and sends a final `{ completed: true }` marker per file. The addon appends each chunk as a blob in the streambuf; llama.cpp then reads across blobs without allocating a contiguous buffer.
+Use the custom `std::streambuf` over JavaScript-owned ArrayBuffers provided by `inference-addon-cpp`. `GGMLBert._streamShards()` opens `bare-fs.createReadStream(path)` on each caller-supplied file, forwards each chunk into `addon.loadWeights({ filename, chunk, completed: false })`, and sends a final `{ completed: true }` marker per file. The addon appends each chunk as a blob in the streambuf; llama.cpp then reads across blobs without allocating a contiguous buffer.
 
 ### Rationale
 

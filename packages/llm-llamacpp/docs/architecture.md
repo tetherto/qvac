@@ -67,7 +67,7 @@
 | Windows | x64 | 10+ | ✅ Tier 1 | Vulkan |
 
 **Dependencies:**
-- qvac-lib-inference-addon-cpp (≥1.1.2): C++ addon framework (single-job runner, runJob/activate/loadWeights/cancel/destroyInstance)
+- inference-addon-cpp (≥1.1.2): C++ addon framework (single-job runner, runJob/activate/loadWeights/cancel/destroyInstance)
 - qvac-fabric-llm.cpp (≥7248.2.3): Inference engine
 - @qvac/infer-base: `createJobHandler` and `exclusiveRunQueue` helpers (job/response lifecycle + single-job serialization)
 - @qvac/logging: `QvacLogger` wrapper
@@ -128,7 +128,7 @@ graph TB
 |---------|------|---------|
 | @qvac/infer-base | Framework | `createJobHandler`, `exclusiveRunQueue`, `QvacResponse` |
 | @qvac/logging | Framework | `QvacLogger` wrapper |
-| qvac-lib-inference-addon-cpp | Native | C++ addon framework (single-job runner) |
+| inference-addon-cpp | Native | C++ addon framework (single-job runner) |
 | qvac-fabric-llm.cpp | Native | Inference engine |
 | Bare Runtime | Runtime | JavaScript execution |
 
@@ -625,7 +625,7 @@ A comprehensive evaluation was conducted comparing six inference runtimes across
 
 ## Decision 2: Bare Runtime over Node.js
 
-See [qvac-lib-inference-addon-cpp Decision 4: Why Bare Runtime](https://github.com/tetherto/qvac-lib-inference-addon-cpp/blob/main/docs/architecture.md#decision-4-why-bare-runtime) for rationale.
+See [inference-addon-cpp Decision 4: Why Bare Runtime](https://github.com/tetherto/inference-addon-cpp/blob/main/docs/architecture.md#decision-4-why-bare-runtime) for rationale.
 
 **Summary:** Mobile support (iOS/Android), lightweight, modern addon API. Core business logic remains runtime-agnostic.
 
@@ -701,7 +701,7 @@ Even though the addon now reads shard files from disk via `bare-fs`, we still pr
 
 ### Decision
 
-Implement a custom `std::streambuf` over JavaScript-owned ArrayBuffers with incremental shard-by-shard loading, as provided by the `qvac-lib-inference-addon-cpp` framework. JavaScript forwards buffer chunks via `addon.loadWeights({ filename, chunk, completed })`; C++ wraps them in a `std::streambuf`, enabling llama.cpp to load sharded models incrementally with zero-copy access to JavaScript memory. See our [llama.cpp fork implementation](https://github.com/tetherto/qvac-ext-lib-llama.cpp/compare/master...tetherto:qvac-ext-lib-llama.cpp:temp-load-from-buffer?diff=unified&w).
+Implement a custom `std::streambuf` over JavaScript-owned ArrayBuffers with incremental shard-by-shard loading, as provided by the `inference-addon-cpp` framework. JavaScript forwards buffer chunks via `addon.loadWeights({ filename, chunk, completed })`; C++ wraps them in a `std::streambuf`, enabling llama.cpp to load sharded models incrementally with zero-copy access to JavaScript memory. See our [llama.cpp fork implementation](https://github.com/tetherto/qvac-ext-lib-llama.cpp/compare/master...tetherto:qvac-ext-lib-llama.cpp:temp-load-from-buffer?diff=unified&w).
 
 ### Rationale
 

@@ -1,6 +1,6 @@
 # Usage Guide
 
-This guide covers how to build new addons using `qvac-lib-inference-addon-cpp`.
+This guide covers how to build new addons using `inference-addon-cpp`.
 
 ## Table of Contents
 
@@ -13,14 +13,14 @@ This guide covers how to build new addons using `qvac-lib-inference-addon-cpp`.
 
 ## Building an Addon (C++ Developer Guide)
 
-This section shows how to build a new inference addon using `qvac-lib-inference-addon-cpp`.
+This section shows how to build a new inference addon using `inference-addon-cpp`.
 
 ### Implementing the Model Interface
 
 Your model must implement the `model::IModel` interface with a `process(std::any)` method:
 
 ```cpp
-#include <qvac-lib-inference-addon-cpp/ModelInterfaces.hpp>
+#include <inference-addon-cpp/ModelInterfaces.hpp>
 
 class MyModel : public model::IModel {
 public:
@@ -48,9 +48,9 @@ public:
 For JavaScript integration, use `AddonJs` which wraps `AddonCpp`:
 
 ```cpp
-#include <qvac-lib-inference-addon-cpp/addon/AddonJs.hpp>
-#include <qvac-lib-inference-addon-cpp/handlers/JsOutputHandlerImplementations.hpp>
-#include <qvac-lib-inference-addon-cpp/queue/OutputCallbackJs.hpp>
+#include <inference-addon-cpp/addon/AddonJs.hpp>
+#include <inference-addon-cpp/handlers/JsOutputHandlerImplementations.hpp>
+#include <inference-addon-cpp/queue/OutputCallbackJs.hpp>
 
 namespace my_addon {
   using namespace qvac_lib_inference_addon_cpp;
@@ -94,7 +94,7 @@ namespace my_addon {
 - **`JsTypedArrayOutputHandler<T>`** - Converts `std::vector<T>` to JavaScript typed arrays
 - **`Js2DArrayOutputHandler<ContainerT, T>`** - Converts 2D containers to JavaScript 2D arrays
 
-To implement a custom JavaScript output handler, extend `BaseOutputHandler<js_value_t*, YourOutputType>` and implement the conversion from your C++ type to a JavaScript value. See `src/qvac-lib-inference-addon-cpp/handlers/JsOutputHandlerImplementations.hpp` for examples.
+To implement a custom JavaScript output handler, extend `BaseOutputHandler<js_value_t*, YourOutputType>` and implement the conversion from your C++ type to a JavaScript value. See `src/inference-addon-cpp/handlers/JsOutputHandlerImplementations.hpp` for examples.
 
 ### Implementing runJob
 
@@ -118,7 +118,7 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) {
 Export your addon methods. Note that `createInstance` and `runJob` are addon-specific, while other methods use the provided `JsInterface`:
 
 ```cpp
-#include <qvac-lib-inference-addon-cpp/JsInterface.hpp>
+#include <inference-addon-cpp/JsInterface.hpp>
 
 using JsAPI = qvac_lib_inference_addon_cpp::JsInterface;
 

@@ -129,7 +129,7 @@ Job/response wiring uses **one** active **`QvacResponse`**, managed by **`create
 ## [0.7.3]
 
 ### Changed
-- Bumped `qvac-lib-inference-addon-cpp` to `1.1.5` (again).
+- Bumped `inference-addon-cpp` to `1.1.5` (again).
 
 ## [0.7.2]
 
@@ -167,12 +167,12 @@ The native Supertonic path gains multilingual support and related stabilization 
 A dedicated multilingual example script documents the new flow, and `index.d.ts` is expanded so Supertonic options and multilingual parameters are described accurately for TypeScript consumers.
 
 ### Other
-- Reverted `qvac-lib-inference-addon-cpp` to `1.1.2`.
+- Reverted `inference-addon-cpp` to `1.1.2`.
 
 ## [0.6.7]
 
 ### Changed
-- Bumped `qvac-lib-inference-addon-cpp` to `1.1.5`.
+- Bumped `inference-addon-cpp` to `1.1.5`.
 
 ## [0.6.6]
 
@@ -236,7 +236,7 @@ Instead of bumping the vcpkg registry baseline, a `version>=: "1.24.2"` constrai
 ## [0.6.0]
 
 ### Changed
-- Migrated the native addon implementation to `qvac-lib-inference-addon-cpp` 1.x (`IModel` + `AddonJs`/`AddonCpp`), replacing the removed legacy templated addon API
+- Migrated the native addon implementation to `inference-addon-cpp` 1.x (`IModel` + `AddonJs`/`AddonCpp`), replacing the removed legacy templated addon API
 - Updated JS/native runtime flow to `createInstance` + `runJob` semantics while preserving package-level behavior
 
 ### Fixed
@@ -320,7 +320,7 @@ Instead of bumping the vcpkg registry baseline, a `version>=: "1.24.2"` constrai
 
 ### Changed
 - CI/CD pipeline now auto-installs Rust targets for iOS and Android cross-compilation
-- Updated `tokenizers-cpp` (v0.1.1), vcpkg baseline, `qvac-lib-inference-addon-cpp` to v0.12.2
+- Updated `tokenizers-cpp` (v0.1.1), vcpkg baseline, `inference-addon-cpp` to v0.12.2
 
 ### Fixed
 - Windows-specific build issues

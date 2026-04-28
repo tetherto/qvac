@@ -10,8 +10,8 @@
 #include <gtest/gtest.h>
 
 #include "model-interface/ModelMetadata.hpp"
-#include "qvac-lib-inference-addon-cpp/GGUFShards.hpp"
-#include "qvac-lib-inference-addon-cpp/RuntimeStats.hpp"
+#include "inference-addon-cpp/GGUFShards.hpp"
+#include "inference-addon-cpp/RuntimeStats.hpp"
 
 namespace test_common {
 

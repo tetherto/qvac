@@ -1,7 +1,7 @@
 #include "LavaSREnhancer.hpp"
 
 #include "OrtSessionFactory.hpp"
-#include "qvac-lib-inference-addon-cpp/Logger.hpp"
+#include "inference-addon-cpp/Logger.hpp"
 
 #include <stdexcept>
 

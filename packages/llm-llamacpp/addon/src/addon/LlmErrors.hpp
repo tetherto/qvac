@@ -1,6 +1,6 @@
 #pragma once
 
-#include "qvac-lib-inference-addon-cpp/Errors.hpp"
+#include "inference-addon-cpp/Errors.hpp"
 
 namespace qvac_lib_inference_addon_llama::errors {
 constexpr const char* ADDON_ID = "LLM";

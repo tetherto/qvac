@@ -59,7 +59,7 @@ const SKIP_VCPKG_PORTS = new Set([
   'vcpkg-boost',
   'vcpkg-make',
   'lint-cpp',
-  'qvac-lib-inference-addon-cpp'
+  'inference-addon-cpp'
 ])
 
 // ---------------------------------------------------------------------------

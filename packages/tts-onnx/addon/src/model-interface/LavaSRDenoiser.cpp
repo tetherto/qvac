@@ -2,7 +2,7 @@
 
 #include "OrtSessionFactory.hpp"
 #include "dsp/DspConstants.hpp"
-#include "qvac-lib-inference-addon-cpp/Logger.hpp"
+#include "inference-addon-cpp/Logger.hpp"
 
 #include <algorithm>
 #include <cmath>

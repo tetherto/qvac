@@ -3,7 +3,7 @@
 #include "Logger.hpp"
 #include "JsUtils.hpp"
 #include "Utils.hpp"
-#include <qvac-lib-inference-addon-cpp/Errors.hpp>
+#include <inference-addon-cpp/Errors.hpp>
 #include <uv.h>
 
 #include <atomic>

@@ -164,7 +164,7 @@ target_sources(
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/dsp/FastLRMerge.cpp
 )
 
-find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/RuntimeStats.hpp")
+find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/RuntimeStats.hpp")
 find_package(tokenizers_cpp CONFIG REQUIRED)
 
 target_include_directories(

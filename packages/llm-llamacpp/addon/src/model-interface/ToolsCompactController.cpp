@@ -4,11 +4,11 @@
 #include <string>
 #include <utility>
 
-#include <qvac-lib-inference-addon-cpp/Errors.hpp>
+#include <inference-addon-cpp/Errors.hpp>
 
 #include "addon/LlmErrors.hpp"
 #include "common/common.h"
-#include "qvac-lib-inference-addon-cpp/Logger.hpp"
+#include "inference-addon-cpp/Logger.hpp"
 #include "utils/LoggingMacros.hpp"
 
 using namespace qvac_lib_inference_addon_llama::errors;

@@ -1,4 +1,4 @@
-# qvac-lib-inference-addon-cpp
+# inference-addon-cpp
 
 **Version:** 1.1.0  
 **Technology Stack:** C++20, CMake, vcpkg, Bare Runtime  
@@ -64,7 +64,7 @@ This is a header-only library. Include it in your addon's `vcpkg.json`:
 {
   "dependencies": [
     {
-      "name": "qvac-lib-inference-addon-cpp",
+      "name": "inference-addon-cpp",
       "version>=": "1.1.0"
     }
   ]
@@ -74,7 +74,7 @@ This is a header-only library. Include it in your addon's `vcpkg.json`:
 In your CMake configuration:
 
 ```cmake
-find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/JsInterface.hpp")
+find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/JsInterface.hpp")
 
 add_bare_module(module_name)
 
@@ -88,8 +88,8 @@ target_include_directories(
 Then in your C++ code:
 
 ```cpp
-#include <qvac-lib-inference-addon-cpp/addon/AddonCpp.hpp>
-#include <qvac-lib-inference-addon-cpp/JsInterface.hpp>
+#include <inference-addon-cpp/addon/AddonCpp.hpp>
+#include <inference-addon-cpp/JsInterface.hpp>
 ```
 
 ## Usage
@@ -99,7 +99,7 @@ Then in your C++ code:
 1. **Implement the model interface** with `process(std::any)`:
 
 ```cpp
-#include <qvac-lib-inference-addon-cpp/ModelInterfaces.hpp>
+#include <inference-addon-cpp/ModelInterfaces.hpp>
 
 class MyModel : public model::IModel {
 public:
@@ -117,9 +117,9 @@ public:
 2. **Create the addon** with output handlers:
 
 ```cpp
-#include <qvac-lib-inference-addon-cpp/addon/AddonCpp.hpp>
-#include <qvac-lib-inference-addon-cpp/handlers/CppOutputHandlerImplementations.hpp>
-#include <qvac-lib-inference-addon-cpp/queue/OutputCallbackCpp.hpp>
+#include <inference-addon-cpp/addon/AddonCpp.hpp>
+#include <inference-addon-cpp/handlers/CppOutputHandlerImplementations.hpp>
+#include <inference-addon-cpp/queue/OutputCallbackCpp.hpp>
 
 using namespace qvac_lib_inference_addon_cpp;
 
@@ -146,7 +146,7 @@ For more details, see [docs/usage.md](docs/usage.md).
 
 ### JavaScript API
 
-The authoritative API surface is defined in `src/qvac-lib-inference-addon-cpp/JsInterface.hpp`. Example usage:
+The authoritative API surface is defined in `src/inference-addon-cpp/JsInterface.hpp`. Example usage:
 
 ```javascript
 const addon = require('./my-addon')
@@ -196,7 +196,7 @@ QLOG(Logger::Level::DEBUG, "hello from C++");  // Macro version
 Build and run C++ tests using CMake and vcpkg:
 
 ```bash
-cd qvac-lib-inference-addon-cpp
+cd inference-addon-cpp
 
 # Configure
 cmake -S . -B build \
@@ -287,8 +287,8 @@ Large models may trigger OS kills:
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/tetherto/qvac-lib-inference-addon-cpp.git
-   cd qvac-lib-inference-addon-cpp
+   git clone https://github.com/tetherto/inference-addon-cpp.git
+   cd inference-addon-cpp
    ```
 
 2. **Configure with vcpkg toolchain:**
@@ -344,7 +344,7 @@ Production addons built on this library:
 
 ### External Resources
 
-- **GitHub Repository:** [tetherto/qvac-lib-inference-addon-cpp](https://github.com/tetherto/qvac-lib-inference-addon-cpp)
+- **GitHub Repository:** [tetherto/inference-addon-cpp](https://github.com/tetherto/inference-addon-cpp)
 - **vcpkg:** https://vcpkg.io/
 - **CMake Documentation:** https://cmake.org/documentation/
 - **libuv Documentation:** https://docs.libuv.org/

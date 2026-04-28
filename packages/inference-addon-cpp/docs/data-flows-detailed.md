@@ -3,7 +3,7 @@
 > ⚠️ **Warning:** These diagrams can become outdated as code evolves.  
 > For debugging, consider regenerating flow diagrams from actual code execution or recent code analysis rather than relying solely on these static diagrams.
 
-This document describes how data moves through the `qvac-lib-inference-addon-cpp` system, including the primary inference path and weight loading flow.
+This document describes how data moves through the `inference-addon-cpp` system, including the primary inference path and weight loading flow.
 
 **Audience:** Developers debugging complex behavior, contributors understanding system interactions.
 

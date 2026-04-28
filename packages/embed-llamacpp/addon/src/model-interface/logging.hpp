@@ -5,7 +5,7 @@
 
 #include <llama.h>
 
-#include "qvac-lib-inference-addon-cpp/Logger.hpp"
+#include "inference-addon-cpp/Logger.hpp"
 
 namespace qvac_lib_infer_llamacpp_embed::logging {
 

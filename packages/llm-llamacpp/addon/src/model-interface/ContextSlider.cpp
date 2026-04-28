@@ -2,7 +2,7 @@
 
 #include "ToolsCompactController.hpp"
 #include "common/common.h"
-#include "qvac-lib-inference-addon-cpp/Logger.hpp"
+#include "inference-addon-cpp/Logger.hpp"
 #include "utils/LoggingMacros.hpp"
 
 using namespace qvac_lib_inference_addon_cpp::logger;

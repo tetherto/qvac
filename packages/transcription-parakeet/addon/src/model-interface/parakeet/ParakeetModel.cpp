@@ -19,7 +19,7 @@
 
 #include "addon/ParakeetErrors.hpp"
 #include "onnxruntime/onnxruntime_cxx_api.h"
-#include "qvac-lib-inference-addon-cpp/Logger.hpp"
+#include "inference-addon-cpp/Logger.hpp"
 
 #pragma push_macro("QLOG")
 #undef QLOG

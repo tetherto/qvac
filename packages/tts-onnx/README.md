@@ -62,7 +62,7 @@ The engine is auto-detected based on the arguments you provide.
 | Windows | x64 | 10+ | ✅ Tier 1 | DirectML |
 
 **Dependencies:**
-- qvac-lib-inference-addon-cpp: C++ addon framework
+- inference-addon-cpp: C++ addon framework
 - ONNX Runtime: Inference engine
 - Chatterbox TTS: Neural text-to-speech engine with voice cloning
 - Supertonic TTS: Diffusion-based text-to-speech engine with pre-trained voices

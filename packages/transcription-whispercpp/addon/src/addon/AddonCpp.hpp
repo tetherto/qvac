@@ -3,11 +3,11 @@
 #include <memory>
 #include <vector>
 
-#include <qvac-lib-inference-addon-cpp/ModelInterfaces.hpp>
-#include <qvac-lib-inference-addon-cpp/addon/AddonCpp.hpp>
-#include <qvac-lib-inference-addon-cpp/handlers/CppOutputHandlerImplementations.hpp>
-#include <qvac-lib-inference-addon-cpp/handlers/OutputHandler.hpp>
-#include <qvac-lib-inference-addon-cpp/queue/OutputCallbackCpp.hpp>
+#include <inference-addon-cpp/ModelInterfaces.hpp>
+#include <inference-addon-cpp/addon/AddonCpp.hpp>
+#include <inference-addon-cpp/handlers/CppOutputHandlerImplementations.hpp>
+#include <inference-addon-cpp/handlers/OutputHandler.hpp>
+#include <inference-addon-cpp/queue/OutputCallbackCpp.hpp>
 
 #include "model-interface/whisper.cpp/WhisperConfig.hpp"
 #include "model-interface/whisper.cpp/WhisperModel.hpp"
