@@ -15,7 +15,7 @@ export const multiGpuConfigSmoke: TestDefinition = {
     estimatedDurationMs: 30000,
   },
   skip: {
-    reason: "Multi-GPU split-mode requires discrete GPUs; mobile devices run single-GPU or CPU only",
+    reason: "Tensor splitting across multiple GPUs cannot be exercised on mobile; devices expose a single GPU to the GGML backend",
     platforms: ["mobile-ios", "mobile-android"],
   },
 };
