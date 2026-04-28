@@ -291,6 +291,18 @@ export class TextToSpeechFailedError extends QvacErrorBase {
   }
 }
 
+export class TextToSpeechStreamFailedError extends QvacErrorBase {
+  constructor(details?: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.TEXT_TO_SPEECH_STREAM_FAILED,
+        details ? [details] : undefined,
+        cause,
+      ),
+    );
+  }
+}
+
 export class ConfigReloadNotSupportedError extends QvacErrorBase {
   constructor(modelId: string, cause?: unknown) {
     super(
@@ -312,6 +324,42 @@ export class ModelTypeMismatchError extends QvacErrorBase {
         cause,
       ),
     );
+  }
+}
+
+export class ModelOperationNotSupportedError extends QvacErrorBase {
+  readonly modelId: string;
+  readonly modelType: string;
+  readonly operation: string;
+  readonly supportedOperations: readonly string[];
+  readonly suggestedModelTypes: readonly string[];
+
+  constructor(
+    modelId: string,
+    modelType: string,
+    operation: string,
+    supportedOperations: readonly string[],
+    suggestedModelTypes: readonly string[],
+    cause?: unknown,
+  ) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.MODEL_OPERATION_NOT_SUPPORTED,
+        [
+          modelId,
+          modelType,
+          operation,
+          supportedOperations.join(", "),
+          suggestedModelTypes.join(", "),
+        ],
+        cause,
+      ),
+    );
+    this.modelId = modelId;
+    this.modelType = modelType;
+    this.operation = operation;
+    this.supportedOperations = supportedOperations;
+    this.suggestedModelTypes = suggestedModelTypes;
   }
 }
 

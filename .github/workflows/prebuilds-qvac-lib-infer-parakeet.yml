@@ -76,29 +76,15 @@ jobs:
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
     env:
-      VCPKG_BUILD_TYPE: release
       WORKDIR: ${{ inputs.workdir || 'packages/qvac-lib-infer-parakeet' }}
 
     steps:
-      - if: ${{ matrix.platform == 'android' }}
-        name: Select NDK
-        run: |
-          echo "ANDROID_NDK=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
-          echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
-          echo "ANDROID_NDK_ROOT=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
-
-      - if: ${{ startsWith(matrix.os, 'ubuntu') || matrix.os == 'ai-run-linux-gpu' }}
-        name: Maximize build space
-        run: |
-          sudo docker image prune --all --force
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /usr/share/dotnet
-
-      - if: ${{ matrix.platform == 'win32' }}
-        name: Configure windows runner
-        run: |
-          git config --system core.longpaths true
+      - name: Setup build host
+        uses: tetherto/qvac/.github/actions/setup-build-host@1d9b2165867d03c6edd675e402ee101a5d48a6d8
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+          linux-extra-packages: pkg-config libx11-dev libxcb1-dev libxkbcommon-dev
 
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -112,8 +98,8 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
-      - name: Setup vcpkg cache
-        uses: tetherto/qvac/.github/actions/setup-vcpkg-cache@0bbdca93da303a0b1634ba14a89cec085621078d
+      - name: Setup vcpkg
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@1d9b2165867d03c6edd675e402ee101a5d48a6d8
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
@@ -129,86 +115,8 @@ jobs:
         with:
           python-version: '3.12'
 
-      - if: ${{ matrix.platform == 'win32' && matrix.arch == 'arm64' }}
-        name: Rename win sdk folder to disable it
-        run: |
-          Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\Include\old-10.0.26100.0"
-          Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\bin\old-10.0.26100.0"
-          Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\Lib\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\Lib\old-10.0.26100.0"
-
-      - if: ${{ startsWith(matrix.os, 'macos') }}
-        name: Install vcpkg in macos
-        run: |
-          cd ..
-          git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git
-          cd vcpkg && ./bootstrap-vcpkg.sh -disableMetrics
-          VCPKG_ROOT=$(pwd)
-          echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
-          echo "$VCPKG_ROOT" >> $GITHUB_PATH
-
-      - if: ${{ startsWith(matrix.os, 'ubuntu') }}
-        name: Configure vcpkg in linux
-        run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
-
-      - if: ${{ matrix.platform == 'win32' }}
-        name: Install vcpkg in windows
-        shell: powershell
-        run: |
-          if ($env:VCPKG_INSTALLATION_ROOT -and (Test-Path $env:VCPKG_INSTALLATION_ROOT)) {
-            $vcpkgRoot = $env:VCPKG_INSTALLATION_ROOT -replace '\\', '/'
-          } else {
-            cd ..
-            git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git
-            cd vcpkg
-            .\bootstrap-vcpkg.bat -disableMetrics
-            $vcpkgRoot = (Get-Location).Path -replace '\\', '/'
-          }
-          echo "VCPKG_ROOT=$vcpkgRoot" >> $env:GITHUB_ENV
-          echo $vcpkgRoot >> $env:GITHUB_PATH
-
-      - if: ${{ matrix.platform == 'win32' }}
-        name: Configure cmake generator in windows
-        run: echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> $env:GITHUB_ENV
-
-      - if: ${{ matrix.platform == 'win32' && matrix.arch == 'x64' }}
-        run: echo "CMAKE_GENERATOR_PLATFORM=x64" >> $env:GITHUB_ENV
-
-      - if: ${{ matrix.platform == 'win32' && matrix.arch == 'x86' }}
-        run: echo "CMAKE_GENERATOR_PLATFORM=Win32" >> $env:GITHUB_ENV
-
-      - if: ${{ matrix.platform == 'win32' && matrix.arch == 'arm64' }}
-        run: echo "CMAKE_GENERATOR_PLATFORM=ARM64" >> $env:GITHUB_ENV
-
-      - if: ${{ matrix.platform == 'win32' }}
-        name: Disable parallel configuration for Visual Studio generator
-        run: echo "VCPKG_CMAKE_CONFIGURE_OPTIONS=--no-parallel-configure" >> $env:GITHUB_ENV
-
-      - if: ${{ startsWith(matrix.os, 'macos') }}
-        name: Disable parallel configuration for Apple toolchains
-        run: echo "VCPKG_CMAKE_CONFIGURE_OPTIONS=--no-parallel-configure" >> $GITHUB_ENV
-
-      - if: ${{ startsWith(matrix.os, 'ubuntu') }}
-        name: Update c++ tools
-        run: |
-          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc > /dev/null
-          sudo chmod 644 /etc/apt/trusted.gpg.d/apt.llvm.org.asc
-          wget https://apt.llvm.org/llvm.sh
-          chmod +x llvm.sh
-          sudo ./llvm.sh 19 all
-
-      - if: ${{ startsWith(matrix.os, 'ubuntu') }}
-        name: Update apt sources
-        run: sudo apt-get update
-
-      - if: ${{ matrix.platform == 'linux' }}
-        name: Install required packages linux
-        run: sudo apt-get install -y libxi-dev libxtst-dev libxrandr-dev pkg-config libx11-dev libxrandr-dev libxcb1-dev libxkbcommon-dev
-
-      - if: ${{ matrix.platform == 'android' }}
-        name: Configure runner for cross compilation - android
-        run: |
-          echo "ANDROID_TOOLCHAIN_ROOT=$(echo $ANDROID_NDK_HOME)/toolchains/llvm/prebuilt/linux-x86_64" >> $GITHUB_ENV
-          echo "ANDROID_NATIVE_API_LEVEL=34" >> $GITHUB_ENV
+      - name: Setup Apple Clang
+        uses: tetherto/qvac/.github/actions/setup-apple-clang@1d9b2165867d03c6edd675e402ee101a5d48a6d8
 
       - name: Install npm dependencies
         working-directory: ${{ env.WORKDIR }}
@@ -232,58 +140,11 @@ jobs:
         run: |
           bare-make install
 
-      - name: Strip debug symbols (skip windows and android)
-        if: ${{ matrix.platform != 'win32' && matrix.platform != 'android' }}
-        working-directory: ${{ env.WORKDIR }}
-        shell: bash
-        run: find prebuilds -name "*.bare" -exec strip {} \;
-
-      - name: Strip debug symbols (android)
-        if: ${{ matrix.platform == 'android' }}
-        working-directory: ${{ env.WORKDIR }}
-        shell: bash
-        run: find prebuilds -name "*.bare" -exec "$ANDROID_TOOLCHAIN_ROOT/bin/llvm-strip" --strip-debug {} \;
-
-      - name: Verify debug symbols are stripped (skip windows and android)
-        if: ${{ matrix.platform != 'win32' && matrix.platform != 'android' }}
-        working-directory: ${{ env.WORKDIR }}
-        shell: bash
-        run: |
-          echo "Checking for unstripped binaries..."
-          UNSTRIPPED=$(find prebuilds -name "*.bare" -exec sh -c 'file "$1" | grep -q "not stripped" && echo "$1"' _ {} \;)
-          if [ -n "$UNSTRIPPED" ]; then
-            echo "ERROR: The following binaries still contain debug symbols:"
-            echo "$UNSTRIPPED"
-            exit 1
-          fi
-          echo "All binaries are properly stripped."
-
-      - name: Verify debug symbols are stripped (android)
-        if: ${{ matrix.platform == 'android' }}
-        working-directory: ${{ env.WORKDIR }}
-        shell: bash
-        run: |
-          echo "Checking for debug sections in Android binaries..."
-          TOOLCHAIN="${ANDROID_TOOLCHAIN_ROOT:-${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64}"
-          READELF="${TOOLCHAIN}/bin/llvm-readelf"
-          if [ ! -x "${READELF}" ]; then
-            echo "ERROR: llvm-readelf not found at: ${READELF}"
-            exit 1
-          fi
-
-          WITH_DEBUG_SECTIONS=$(
-            find prebuilds -name "*.bare" -exec sh -c '
-              "$0" -S "$1" 2>/dev/null | grep -Eq "\.debug_|\.zdebug_" && echo "$1"
-            ' "${READELF}" {} \;
-          )
-
-          if [ -n "$WITH_DEBUG_SECTIONS" ]; then
-            echo "ERROR: The following binaries still contain debug sections (.debug_* / .zdebug_*):"
-            echo "$WITH_DEBUG_SECTIONS"
-            exit 1
-          fi
-
-          echo "All Android binaries have debug sections removed."
+      - name: Strip debug symbols
+        uses: tetherto/qvac/.github/actions/strip-prebuilds@1d9b2165867d03c6edd675e402ee101a5d48a6d8
+        with:
+          platform: ${{ matrix.platform }}
+          workdir: ${{ env.WORKDIR }}
 
       - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
@@ -307,4 +168,3 @@ jobs:
         with:
           name: prebuilds
           path: prebuilds
-
