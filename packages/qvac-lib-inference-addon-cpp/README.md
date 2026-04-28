@@ -340,7 +340,7 @@ Production addons built on this library:
 
 ### Dependencies
 
-- [qvac-lint-cpp](https://github.com/tetherto/qvac-lint-cpp) - Code quality tools
+- [lint-cpp](https://github.com/tetherto/lint-cpp) - Code quality tools
 
 ### External Resources
 

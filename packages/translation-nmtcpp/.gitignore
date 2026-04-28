@@ -22,7 +22,7 @@ __pycache__/
 poetry.lock
 .vscode
 
-# Added by qvac-lint-cpp
+# Added by lint-cpp
 .clang-format
 .clang-tidy
 .valgrind.supp

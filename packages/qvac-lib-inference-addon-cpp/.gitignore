@@ -3,7 +3,7 @@
 build/
 package-lock.json
 
-# Added by qvac-lint-cpp
+# Added by lint-cpp
 .clang-format
 .clang-tidy
 .valgrind.supp

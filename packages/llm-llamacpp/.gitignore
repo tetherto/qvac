@@ -25,7 +25,7 @@ p2p-models/
 *.gguf
 *.log
 .clang-tidy
-# Added by qvac-lint-cpp
+# Added by lint-cpp
 .clang-format
 benchmarks/results
 benchmarks/performance/results/
