@@ -1,4 +1,4 @@
-# Build-only workflow. Publishing is handled by on-merge-qvac-lib-infer-parakeet.yml
+# Build-only workflow. Publishing is handled by on-merge-transcription-parakeet.yml
 name: "Prebuilds (Parakeet)"
 
 on:
@@ -8,7 +8,7 @@ on:
         description: "Working directory for the package"
         type: string
         required: false
-        default: "packages/qvac-lib-infer-parakeet"
+        default: "packages/transcription-parakeet"
   workflow_call:
     inputs:
       ref:
@@ -22,7 +22,7 @@ on:
         description: "Working directory for the package"
         type: string
         required: false
-        default: "packages/qvac-lib-infer-parakeet"
+        default: "packages/transcription-parakeet"
 
 permissions:
   contents: read
@@ -76,7 +76,7 @@ jobs:
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
     env:
-      WORKDIR: ${{ inputs.workdir || 'packages/qvac-lib-infer-parakeet' }}
+      WORKDIR: ${{ inputs.workdir || 'packages/transcription-parakeet' }}
 
     steps:
       - name: Setup build host

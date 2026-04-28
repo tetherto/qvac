@@ -1,4 +1,4 @@
-# Contributing to qvac-lib-infer-parakeet
+# Contributing to transcription-parakeet
 
 Thank you for your interest in contributing! This document provides guidelines for contributing to the project.
 
@@ -95,7 +95,7 @@ Quick setup:
 ```bash
 # Clone your fork
 git clone https://github.com/tetherto/qvac.git
-cd qvac/packages/qvac-lib-infer-parakeet
+cd qvac/packages/transcription-parakeet
 
 # Install dependencies
 npm install

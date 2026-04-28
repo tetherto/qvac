@@ -1,6 +1,6 @@
 # Development Guide
 
-This guide provides detailed instructions for developing and contributing to qvac-lib-infer-parakeet.
+This guide provides detailed instructions for developing and contributing to transcription-parakeet.
 
 ## Prerequisites
 
@@ -64,7 +64,7 @@ npm install -g bare-runtime
 
 ```bash
 git clone https://github.com/tetherto/qvac.git
-cd qvac/packages/qvac-lib-infer-parakeet
+cd qvac/packages/transcription-parakeet
 ```
 
 ### Build Steps
@@ -106,7 +106,7 @@ npx bare-make install
 ## Project Structure
 
 ```
-qvac-lib-infer-parakeet/
+transcription-parakeet/
 ├── src/
 │   ├── ParakeetModel.hpp         # Model interface declaration
 │   ├── ParakeetModel.cpp         # Model implementation with ONNX Runtime

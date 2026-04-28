@@ -1,5 +1,5 @@
 {
-  "name": "qvac-lib-infer-parakeet",
+  "name": "transcription-parakeet",
   "version": "0.1.0",
   "dependencies": [
     "eigen3",

@@ -127,39 +127,39 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
 
       - name: Install NPM dependencies
-        working-directory: ${{ github.workspace }}/packages/qvac-lib-infer-parakeet
+        working-directory: ${{ github.workspace }}/packages/transcription-parakeet
         run: |
           npm install
           npm install -g bare bare-make
 
-      - run: mkdir -p "${{ runner.temp }}/qvac-lib-infer-parakeet"
+      - run: mkdir -p "${{ runner.temp }}/transcription-parakeet"
         shell: bash
-      - run: mkdir -p "${{ github.workspace }}/packages/qvac-lib-infer-parakeet/prebuilds"
+      - run: mkdir -p "${{ github.workspace }}/packages/transcription-parakeet/prebuilds"
         shell: bash
 
       - name: Download prebuilds from artifact
         if: ${{ !inputs.prebuild_package }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          path: ${{ runner.temp }}/qvac-lib-infer-parakeet
+          path: ${{ runner.temp }}/transcription-parakeet
           merge-multiple: true
 
       - if: ${{ !inputs.prebuild_package }}
         shell: bash
-        run: cp -r "${{ runner.temp }}/qvac-lib-infer-parakeet"/* "${{ github.workspace }}/packages/qvac-lib-infer-parakeet/prebuilds"
+        run: cp -r "${{ runner.temp }}/transcription-parakeet"/* "${{ github.workspace }}/packages/transcription-parakeet/prebuilds"
 
       - name: Download prebuilds from package
         if: ${{ inputs.prebuild_package }}
-        working-directory: ${{ runner.temp }}/qvac-lib-infer-parakeet
+        working-directory: ${{ runner.temp }}/transcription-parakeet
         shell: bash
         run: |
           npm pack ${{ inputs.prebuild_package }}
           tar -xzf *.tgz
-          cp -r ./package/prebuilds/* "${{ github.workspace }}/packages/qvac-lib-infer-parakeet/prebuilds"
+          cp -r ./package/prebuilds/* "${{ github.workspace }}/packages/transcription-parakeet/prebuilds"
 
       - name: Rename prebuilds from tetherto_ to qvac_ prefix
         if: ${{ inputs.prebuild_package }}
-        working-directory: ${{ github.workspace }}/packages/qvac-lib-infer-parakeet
+        working-directory: ${{ github.workspace }}/packages/transcription-parakeet
         shell: bash
         run: |
           find prebuilds -depth -name 'tetherto_*' | while read -r file; do
@@ -179,24 +179,24 @@ jobs:
       - name: Run integration test
         if: ${{ inputs.run_integration_tests != false }}
         shell: bash
-        working-directory: ${{ github.workspace }}/packages/qvac-lib-infer-parakeet
+        working-directory: ${{ github.workspace }}/packages/transcription-parakeet
         run: npm run test:integration
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
           INTEGRATION_TEST_TIMEOUT: ${{ matrix.platform == 'win32' && '1800' || '600' }}
-          LD_LIBRARY_PATH: ${{ github.workspace }}/packages/qvac-lib-infer-parakeet/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
-          DYLD_LIBRARY_PATH: ${{ github.workspace }}/packages/qvac-lib-infer-parakeet/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
+          LD_LIBRARY_PATH: ${{ github.workspace }}/packages/transcription-parakeet/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
+          DYLD_LIBRARY_PATH: ${{ github.workspace }}/packages/transcription-parakeet/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
 
       - name: Run RTF benchmark matrix
         if: ${{ always() && inputs.run_rtf_benchmarks != false }}
         continue-on-error: true
         shell: bash
-        working-directory: ${{ github.workspace }}/packages/qvac-lib-infer-parakeet
+        working-directory: ${{ github.workspace }}/packages/transcription-parakeet
         run: node scripts/run-rtf-benchmark-matrix.js
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
-          LD_LIBRARY_PATH: ${{ github.workspace }}/packages/qvac-lib-infer-parakeet/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
-          DYLD_LIBRARY_PATH: ${{ github.workspace }}/packages/qvac-lib-infer-parakeet/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
+          LD_LIBRARY_PATH: ${{ github.workspace }}/packages/transcription-parakeet/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
+          DYLD_LIBRARY_PATH: ${{ github.workspace }}/packages/transcription-parakeet/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
           QVAC_PARAKEET_BENCHMARK_DEVICE: ${{ matrix.os }}
           QVAC_PARAKEET_BENCHMARK_RUNNER: ${{ matrix.os }}
           QVAC_PARAKEET_BENCHMARK_MATRIX_JSON: ${{ inputs.benchmark_matrix_json || matrix.benchmark_matrix_json }}
@@ -207,7 +207,7 @@ jobs:
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: rtf-results-${{ matrix.os }}-${{ matrix.platform }}-${{ matrix.arch }}
-          path: ${{ github.workspace }}/packages/qvac-lib-infer-parakeet/benchmarks/results/rtf-benchmark-*.json
+          path: ${{ github.workspace }}/packages/transcription-parakeet/benchmarks/results/rtf-benchmark-*.json
           retention-days: 30
           if-no-files-found: ignore
 
@@ -215,7 +215,7 @@ jobs:
         if: ${{ always() && inputs.run_rtf_benchmarks != false }}
         continue-on-error: true
         shell: bash
-        working-directory: ${{ github.workspace }}/packages/qvac-lib-infer-parakeet
+        working-directory: ${{ github.workspace }}/packages/transcription-parakeet
         run: |
           echo "### RTF — ${{ matrix.platform }}-${{ matrix.arch }}" >> $GITHUB_STEP_SUMMARY
           node -e "

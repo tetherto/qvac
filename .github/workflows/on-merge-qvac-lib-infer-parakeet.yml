@@ -8,7 +8,7 @@ on:
       - feature-*
       - tmp-*
     paths:
-      - "packages/qvac-lib-infer-parakeet/**"
+      - "packages/transcription-parakeet/**"
       - ".github/workflows/*parakeet*.yml"
 
   workflow_dispatch:
@@ -95,9 +95,9 @@ jobs:
           base-ref: ${{ github.ref_name }}
           base-sha: ${{ github.event.before }}
           head-sha: ${{ github.sha }}
-          package-slug: qvac-lib-infer-parakeet
-          package-json-path: packages/qvac-lib-infer-parakeet/package.json
-          changelog-path: packages/qvac-lib-infer-parakeet/CHANGELOG.md
+          package-slug: transcription-parakeet
+          package-json-path: packages/transcription-parakeet/package.json
+          changelog-path: packages/transcription-parakeet/CHANGELOG.md
 
   # Build prebuilds (build + merge only, no publishing)
   build:
@@ -112,12 +112,12 @@ jobs:
       packages: write
       pull-requests: write
       id-token: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-parakeet.yml
+    uses: ./.github/workflows/prebuilds-transcription-parakeet.yml
     secrets: inherit
     with:
       repository: ${{ github.repository }}
       ref: ${{ github.ref }}
-      workdir: "packages/qvac-lib-infer-parakeet"
+      workdir: "packages/transcription-parakeet"
 
   # Publish to GitHub Package Registry (GPR) for non-release branches
   publish-gpr:
@@ -141,10 +141,10 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           name: prebuilds
-          path: packages/qvac-lib-infer-parakeet/prebuilds
+          path: packages/transcription-parakeet/prebuilds
 
       - name: Rename prebuild files from qvac_ to tetherto_ prefix
-        working-directory: packages/qvac-lib-infer-parakeet
+        working-directory: packages/transcription-parakeet
         run: |
           find prebuilds -depth -name 'qvac_*' | while read -r file; do
             dir=$(dirname "$file")
@@ -163,13 +163,13 @@ jobs:
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
-          workdir: packages/qvac-lib-infer-parakeet
+          workdir: packages/transcription-parakeet
           name-suffix: "-mono"
 
       - name: Capture published version
         id: capture_version
         if: success()
-        working-directory: packages/qvac-lib-infer-parakeet
+        working-directory: packages/transcription-parakeet
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -205,19 +205,19 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           name: prebuilds
-          path: packages/qvac-lib-infer-parakeet/prebuilds
+          path: packages/transcription-parakeet/prebuilds
 
       - name: Publish to NPM Package Registry
         id: publish
         uses: ./.github/actions/publish-library-to-npm
         with:
           tag: "latest"
-          workdir: packages/qvac-lib-infer-parakeet
+          workdir: packages/transcription-parakeet
 
       - name: Capture published version
         id: capture_version
         if: success()
-        working-directory: packages/qvac-lib-infer-parakeet
+        working-directory: packages/transcription-parakeet
         run: |
           VERSION=$(node -p "require('./package.json').version")
           PACKAGE_NAME=$(node -p "require('./package.json').name")
@@ -240,7 +240,7 @@ jobs:
       release_name: "QVAC Transcription Parakeet Addon"
       published_version: ${{ needs.publish-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}
-      workdir: "packages/qvac-lib-infer-parakeet"
+      workdir: "packages/transcription-parakeet"
 
   post-build-gate:
     name: Post-Build Gate
@@ -268,7 +268,7 @@ jobs:
       contents: read
       packages: read
       id-token: write
-    uses: ./.github/workflows/integration-test-qvac-lib-infer-parakeet.yml
+    uses: ./.github/workflows/integration-test-transcription-parakeet.yml
     needs: post-build-gate
     if: needs.post-build-gate.outputs.should_run_tests == 'true'
     secrets: inherit
@@ -277,7 +277,7 @@ jobs:
       ref: ${{ github.sha }}
 
   mobile-integration-tests:
-    uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-parakeet.yml
+    uses: ./.github/workflows/integration-mobile-test-transcription-parakeet.yml
     needs: post-build-gate
     if: needs.post-build-gate.outputs.should_run_tests == 'true'
     permissions:

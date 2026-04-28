@@ -5,7 +5,7 @@ on:
     types: [opened, synchronize, reopened, labeled]
     branches: [main, release-*, feature-*, tmp-*]
     paths:
-      - "packages/qvac-lib-infer-parakeet/**"
+      - "packages/transcription-parakeet/**"
       - ".github/workflows/*parakeet*.yml"
 
   workflow_dispatch:
@@ -133,7 +133,7 @@ jobs:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
           run-integration: ${{ needs.context.outputs.run_verify == 'true' }}
-          workdir: ${{ github.workspace }}/packages/qvac-lib-infer-parakeet
+          workdir: ${{ github.workspace }}/packages/transcription-parakeet
 
   cpp-lint:
     needs: context
@@ -143,7 +143,7 @@ jobs:
     with:
       sha: ${{ needs.context.outputs.base_sha }}
       pr_head_sha: ${{ needs.context.outputs.head_sha }}
-      workdir: packages/qvac-lib-infer-parakeet
+      workdir: packages/transcription-parakeet
 
   cpp-tests-coverage:
     permissions:
@@ -155,7 +155,7 @@ jobs:
       actions: read
     needs: context
     if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
-    uses: ./.github/workflows/cpp-test-coverage-qvac-lib-infer-parakeet.yml
+    uses: ./.github/workflows/cpp-test-coverage-transcription-parakeet.yml
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}
@@ -169,7 +169,7 @@ jobs:
       id-token: write
     needs: context
     if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-parakeet.yml
+    uses: ./.github/workflows/prebuilds-transcription-parakeet.yml
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}
@@ -182,7 +182,7 @@ jobs:
       id-token: write
     needs: [context, prebuild]
     if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
-    uses: ./.github/workflows/integration-test-qvac-lib-infer-parakeet.yml
+    uses: ./.github/workflows/integration-test-transcription-parakeet.yml
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}
@@ -196,7 +196,7 @@ jobs:
       id-token: write
     needs: [context, prebuild]
     if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
-    uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-parakeet.yml
+    uses: ./.github/workflows/integration-mobile-test-transcription-parakeet.yml
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}

@@ -259,7 +259,7 @@ All packages live in this monorepo under `packages/`:
 | `llm-llamacpp` | `@qvac/llm-llamacpp` | LLM completion (llama.cpp) |
 | `embed-llamacpp` | `@qvac/embed-llamacpp` | Text embeddings (llama.cpp) |
 | `qvac-lib-infer-whispercpp` | `@qvac/transcription-whispercpp` | Speech-to-text (whisper.cpp) |
-| `qvac-lib-infer-parakeet` | `@qvac/transcription-parakeet` | Speech-to-text (Parakeet) |
+| `transcription-parakeet` | `@qvac/transcription-parakeet` | Speech-to-text (Parakeet) |
 | `translation-nmtcpp` | `@qvac/translation-nmtcpp` | Translation (nmt.cpp) |
 | `tts-onnx` | `@qvac/tts-onnx` | Text-to-speech (ONNX) |
 | `ocr-onnx` | `@qvac/ocr-onnx` | OCR (ONNX) |
