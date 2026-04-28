@@ -278,13 +278,15 @@ const backendSettings = {
 }
 ```
 
-| Key | Type | Description |
-|-----|------|-------------|
-| `use_gpu` | boolean | Enable GPU inference. When `false` (default), only the CPU backend is used. Bergamot is CPU-only by design — this flag is effectively a no-op for Bergamot. |
-| `gpu_backend` | string | Case-insensitive **substring** match against the ggml device name (e.g. `"vulkan"`, `"vulkan0"`, `"opencl"`, `"metal"`). When set, the selector runs a single explicit pass and picks the first non-CPU device whose name contains the substring. When unset, the default gated selection runs (see [Backends](#backends)). Explicit `"opencl"` bypasses the build-time `USE_OPENCL` guard — an informed opt-in. |
-| `gpu_device` | int | Ordinal within the matching devices. Defaults to `0` (first match). Example: `{gpu_backend: "vulkan", gpu_device: 1}` picks the second Vulkan adapter. |
-| `backendsDir` | string | Path to the directory containing the runtime backend shared libraries (`libqvac-ggml-vulkan.so`, etc.). Defaults to `<package>/prebuilds` when unset, which is where `npm install` places the shipped prebuilds. |
-| `openclCacheDir` | string | **Android only.** Writable directory the OpenCL backend uses for its JIT kernel cache (forwarded via `GGML_OPENCL_CACHE_DIR`). The OpenCL backend falls back to a non-writable relative path if this is unset, which `ggml_abort()`s during init inside the app sandbox — always provide an app-writable path when exercising OpenCL on Android. |
+The three GPU control keys each accept a camelCase alias alongside the snake_case primary. Snake_case mirrors the C-struct field names; camelCase matches the `ocr-onnx` sibling addon convention. When both forms are present in the same config object, **snake_case takes precedence**.
+
+| Key | Alias | Type | Description |
+|-----|-------|------|-------------|
+| `use_gpu` | `useGPU` | boolean | Enable GPU inference. When `false` (default), only the CPU backend is used. Bergamot is CPU-only by design — this flag is effectively a no-op for Bergamot. |
+| `gpu_backend` | `gpuBackend` | string | Case-insensitive **substring** match against the ggml device name (e.g. `"vulkan"`, `"vulkan0"`, `"opencl"`, `"metal"`). When set, the selector runs a single explicit pass and picks the first non-CPU device whose name contains the substring. When unset, the default gated selection runs (see [Backends](#backends)). Explicit `"opencl"` bypasses the build-time `USE_OPENCL` guard — an informed opt-in. |
+| `gpu_device` | `gpuDevice` | int | Ordinal within the matching devices. Defaults to `0` (first match). Example: `{gpu_backend: "vulkan", gpu_device: 1}` picks the second Vulkan adapter. |
+| `backendsDir` | — | string | Path to the directory containing the runtime backend shared libraries (`libqvac-ggml-vulkan.so`, etc.). Defaults to `<package>/prebuilds` when unset, which is where `npm install` places the shipped prebuilds. Must be an absolute path; paths with `..` segments or unresolvable symlinks are rejected with a warning and fall back to the default prebuilds directory. |
+| `openclCacheDir` | — | string | **Android only.** Writable directory the OpenCL backend uses for its JIT kernel cache (forwarded via `GGML_OPENCL_CACHE_DIR`). Must be an absolute path; paths with `..` segments are rejected. The OpenCL backend falls back to a non-writable relative path if this is unset, which `ggml_abort()`s during init inside the app sandbox — always provide an app-writable path when exercising OpenCL on Android. |
 
 > **Tip:** Use `model.getActiveBackendName()` after `load()` to confirm which backend actually took the request — see [Additional Features](#additional-features). The GGML scheduler silently falls back to CPU when no usable GPU ICD is registered, and this is the only way to detect that.
 
