@@ -24,5 +24,9 @@ output/
 temp/
 *.deb
 *.zip
+# Ignore generated PNGs but keep test/example images in assets/
+!assets/**
+*.png
+test/model/
 test/integration/all.js
 test/unit/all.js
