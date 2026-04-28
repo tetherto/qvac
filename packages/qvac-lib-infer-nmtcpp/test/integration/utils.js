@@ -759,6 +759,78 @@ function formatPerformanceMetrics (label, metrics, opts = {}) {
 }
 
 // ============================================================================
+// GPU Device Discovery
+// ============================================================================
+
+/**
+ * Maximum GPU device indices to probe.  Covers multi-GPU desktops (e.g.
+ * Vulkan0 + Vulkan1) and mixed-backend mobile (Vulkan + OpenCL).  Probing
+ * stops early when a device index falls back to CPU, so the actual cost is
+ * O(N_real_devices + 1).
+ */
+const MAX_GPU_DEVICE_PROBES = 4
+
+/** @type {{ index: number, name: string }[] | null} */
+let _gpuDeviceCache = null
+
+/**
+ * Discovers available GPU devices by probe-loading an IndicTrans model with
+ * increasing gpu_device indices.  Returns an array of { index, name } for
+ * each device that resolved to a non-CPU backend.
+ *
+ * Uses IndicTrans regardless of which test file calls it — ggml device
+ * enumeration is device-dependent, not model-dependent, so a single probe
+ * model suffices for all backends (Bergamot, pivot, etc.).
+ *
+ * Results are cached process-wide so the expensive probe runs at most once.
+ *
+ * @returns {Promise<{ index: number, name: string }[]>}
+ */
+async function discoverGpuDevices () {
+  if (_gpuDeviceCache !== null) return _gpuDeviceCache
+  _gpuDeviceCache = []
+
+  const modelPath = await ensureIndicTransModel()
+  const TranslationNmtcpp = require('@qvac/translation-nmtcpp')
+
+  for (let idx = 0; idx < MAX_GPU_DEVICE_PROBES; idx++) {
+    let model
+    try {
+      const config = {
+        modelType: TranslationNmtcpp.ModelTypes.IndicTrans,
+        use_gpu: true,
+        gpu_device: idx,
+        beamsize: 1
+      }
+      if (platform === 'android') {
+        const writableRoot = (typeof global !== 'undefined' && global.testDir) || '/tmp'
+        config.openclCacheDir = path.join(writableRoot, 'opencl-cache-discover')
+        try { fs.mkdirSync(config.openclCacheDir, { recursive: true }) } catch (_) {}
+      }
+      model = new TranslationNmtcpp({
+        files: { model: modelPath },
+        params: { mode: 'full', srcLang: 'eng_Latn', dstLang: 'hin_Deva' },
+        config,
+        logger: createLogger()
+      })
+      await model.load()
+      const name = model.getActiveBackendName()
+      await model.unload()
+
+      if (name === 'CPU' || name === 'Unloaded' || name === 'Bergamot-CPU') {
+        break
+      }
+      _gpuDeviceCache.push({ index: idx, name })
+    } catch (_) {
+      if (model) { try { await model.unload() } catch (__) { /* noop */ } }
+      break
+    }
+  }
+
+  return _gpuDeviceCache
+}
+
+// ============================================================================
 // Module Exports
 // ============================================================================
 
@@ -777,5 +849,9 @@ module.exports = {
 
   // Performance metrics
   createPerformanceCollector,
-  formatPerformanceMetrics
+  formatPerformanceMetrics,
+
+  // GPU discovery
+  discoverGpuDevices,
+  MAX_GPU_DEVICE_PROBES
 }

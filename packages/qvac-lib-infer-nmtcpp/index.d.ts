@@ -52,9 +52,9 @@ export interface TranslationNmtcppConfig {
    * replaces the default gated selector with a single explicit pass.
    * An explicit "opencl" bypasses the build-time USE_OPENCL guard.
    *
-   * `gpuBackend` is the camelCase alias (preferred for new code); the
-   * snake_case form mirrors the C-struct field. Both accepted.
-   * If both are set, `gpu_backend` wins.
+   * `gpu_backend` mirrors the C-struct field and is the primary key.
+   * `gpuBackend` is the camelCase alias matching the `ocr-onnx` convention.
+   * Both forms are accepted; if both are set, `gpu_backend` takes precedence.
    */
   gpu_backend?: string
   gpuBackend?: string
