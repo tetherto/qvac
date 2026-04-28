@@ -189,7 +189,7 @@ export const kvCacheStatsVerification: TestDefinition = {
   },
   expectation: { validation: "type", expectedType: "string" },
   suites: ["smoke"],
-  metadata: { category: "kv-cache", dependency: "llm", estimatedDurationMs: 30000 },
+  metadata: { category: "kv-cache", dependency: "llm", estimatedDurationMs: 90000 },
 };
 
 export const kvCacheNoSystemPrompt: TestDefinition = {
