@@ -11,6 +11,7 @@ confirmed.txt
 packages/**/node_modules/
 packages/**/package-lock.json
 packages/**/.npmrc
+packages/sdk/bun.lock
 NOTICE_LOG.txt
 NOTICE_FULL_REPORT.txt
 .claude/worktrees
