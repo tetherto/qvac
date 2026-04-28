@@ -261,72 +261,6 @@ jobs:
         working-directory: ./monorepo/${{ inputs.workdir || env.PKG_DIR }}
         run: npm run test:mobile:validate
 
-      - name: Generate Bergamot Model URLs from Firefox CDN
-        working-directory: ./monorepo/${{ inputs.workdir || env.PKG_DIR }}
-        env:
-          BERGAMOT_LANG_PAIR: ${{ inputs.bergamot_language_pair || 'enit' }}
-        run: |
-          echo "🔑 Generating Bergamot model URLs from Firefox CDN for mobile tests..."
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "Language pair: $BERGAMOT_LANG_PAIR"
-
-          SRC_LANG="${BERGAMOT_LANG_PAIR:0:2}"
-          DST_LANG="${BERGAMOT_LANG_PAIR:2:2}"
-
-          RECORDS_URL="https://firefox.settings.services.mozilla.com/v1/buckets/main/collections/translations-models/records"
-          ATTACHMENT_BASE="https://firefox-settings-attachments.cdn.mozilla.net"
-
-          echo "Fetching model index from Mozilla Remote Settings..."
-          RECORDS=$(curl -sS "$RECORDS_URL")
-
-          # Extract model and vocab URLs from Firefox CDN
-          URLS=$(echo "$RECORDS" | python3 -c "
-          import sys, json
-          data = json.load(sys.stdin)
-          base = '${ATTACHMENT_BASE}'
-          for r in data.get('data', []):
-              if r.get('fromLang') == '${SRC_LANG}' and r.get('toLang') == '${DST_LANG}':
-                  att = r.get('attachment', {})
-                  loc = att.get('location', '')
-                  name = r.get('name', '') or att.get('filename', '')
-                  if loc and name:
-                      url = f'{base}/{loc}'
-                      if name.endswith('.bin') or 'model' in name.lower():
-                          print(f'MODEL|{url}')
-                      elif name.endswith('.spm') or 'vocab' in name.lower():
-                          print(f'VOCAB|{url}')
-          ")
-
-          BERGAMOT_MODEL_URL=""
-          BERGAMOT_VOCAB_URL=""
-          while IFS='|' read -r TYPE URL; do
-              if [ "$TYPE" = "MODEL" ] && [ -z "$BERGAMOT_MODEL_URL" ]; then
-                  BERGAMOT_MODEL_URL="$URL"
-              elif [ "$TYPE" = "VOCAB" ] && [ -z "$BERGAMOT_VOCAB_URL" ]; then
-                  BERGAMOT_VOCAB_URL="$URL"
-              fi
-          done <<< "$URLS"
-
-          if [ -n "$BERGAMOT_MODEL_URL" ]; then
-              echo "BERGAMOT_MODEL_URL=${BERGAMOT_MODEL_URL}" >> $GITHUB_ENV
-              echo "✅ Bergamot model URL: ${BERGAMOT_MODEL_URL}"
-          else
-              echo "⚠️  No Bergamot model URL found for ${BERGAMOT_LANG_PAIR}"
-          fi
-
-          if [ -n "$BERGAMOT_VOCAB_URL" ]; then
-              echo "BERGAMOT_VOCAB_URL=${BERGAMOT_VOCAB_URL}" >> $GITHUB_ENV
-              echo "✅ Bergamot vocab URL: ${BERGAMOT_VOCAB_URL}"
-          else
-              echo "⚠️  No Bergamot vocab URL found for ${BERGAMOT_LANG_PAIR}"
-          fi
-
-          echo ""
-          echo "✅ Bergamot model URLs generated from Firefox CDN"
-          echo "   Language pair: $BERGAMOT_LANG_PAIR"
-          echo "   Both Opus and Bergamot backends will be tested"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
         with:
@@ -334,70 +268,80 @@ jobs:
           aws-region: us-west-2
           role-duration-seconds: 7200 # 2hrs for device farm tests
 
-      - name: Generate IndicTrans Model URLs
+      # ─── Pre-fetch translation models on the runner ─────────────────────
+      # Mirrors the desktop integration workflow's model-staging pattern
+      # (see integration-test-qvac-lib-infer-nmtcpp.yml lines 157-179).
+      #
+      # Why: previously the mobile tests fetched models AT RUNTIME on the
+      # Device Farm phone (Bergamot from Firefox CDN, IndicTrans via a
+      # presigned S3 URL). That works on a desktop with premium internet
+      # but flakes routinely on Device Farm — the device sits in us-west-2
+      # while the model bucket is in eu-central-1, the radio is mobile-
+      # emulated, and 200 MB cross-region downloads time out under the
+      # 3-retry budget. End result: tests "passed" with zero translation
+      # actually performed (chrF++ unmeasurable).
+      #
+      # The fix: pre-fetch on the runner (which has fast network egress to
+      # any AWS region), drop the model files into test/mobile/testAssets/
+      # so the existing test-framework's "Copy testAssets if available"
+      # build step bundles them into the test app. The phone then loads
+      # models off-disk just like desktop does — no runtime network needed.
+      #
+      # Note: Bergamot also moves from Firefox CDN to the same S3 bucket
+      # the desktop tests use, so both code paths agree on which model
+      # bytes are tested across the matrix.
+      - name: Pre-fetch Bergamot models on runner
         working-directory: ./monorepo/${{ inputs.workdir || env.PKG_DIR }}
         env:
           AWS_REGION: eu-central-1
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         run: |
-          echo "🔑 Generating IndicTrans model URLs for mobile tests..."
+          echo "📥 Pre-fetching Bergamot models for mobile tests..."
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-          # Make the script executable
-          chmod +x scripts/generate-indictrans-presigned-urls.sh
-
-          # Generate presigned URL for IndicTrans model
-          # This will export INDICTRANS_MODEL_URL to GITHUB_ENV
-          ./scripts/generate-indictrans-presigned-urls.sh
-
+          mkdir -p test/mobile/testAssets/models/bergamot/enit
+          mkdir -p test/mobile/testAssets/models/bergamot/esen
+          mkdir -p test/mobile/testAssets/models/bergamot/fren
+          mkdir -p test/mobile/testAssets/models/bergamot/enes
+          aws s3 cp "s3://${MODEL_S3_BUCKET}/qvac_models_compiled/bergamot/bergamot-enit/2025-12-18/" test/mobile/testAssets/models/bergamot/enit --recursive
+          aws s3 cp "s3://${MODEL_S3_BUCKET}/qvac_models_compiled/bergamot/bergamot-esen/2025-12-18/" test/mobile/testAssets/models/bergamot/esen --recursive
+          aws s3 cp "s3://${MODEL_S3_BUCKET}/qvac_models_compiled/bergamot/bergamot-fren/2025-12-18/" test/mobile/testAssets/models/bergamot/fren --recursive
+          aws s3 cp "s3://${MODEL_S3_BUCKET}/qvac_models_compiled/bergamot/bergamot-enes/2025-12-18/" test/mobile/testAssets/models/bergamot/enes --recursive
           echo ""
-          echo "✅ IndicTrans model URL generated and exported"
+          echo "✅ Bergamot model directories:"
+          du -sh test/mobile/testAssets/models/bergamot/*
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-      - name: Bundle Model URLs in config files for APK to access
+      - name: Pre-fetch IndicTrans model on runner
         working-directory: ./monorepo/${{ inputs.workdir || env.PKG_DIR }}
         env:
-          BERGAMOT_MODEL_URL: ${{ env.BERGAMOT_MODEL_URL }}
-          BERGAMOT_VOCAB_URL: ${{ env.BERGAMOT_VOCAB_URL }}
-          INDICTRANS_MODEL_URL: ${{ env.INDICTRANS_MODEL_URL }}
+          AWS_REGION: eu-central-1
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         run: |
-          echo "📝 Creating model URL config files for mobile app bundling..."
-          echo "🔍 Debug: Checking environment variables..."
-          echo "   BERGAMOT_MODEL_URL: ${BERGAMOT_MODEL_URL:-NOTSET}"
-          echo "   BERGAMOT_VOCAB_URL: ${BERGAMOT_VOCAB_URL:-NOTSET}"
-          echo "   INDICTRANS_MODEL_URL: ${INDICTRANS_MODEL_URL:-NOTSET}"
-
-          # Create testAssets directory in the addon
-          mkdir -p test/mobile/testAssets
-
-          # Bundle Bergamot URLs
-          if [ -n "${BERGAMOT_MODEL_URL:-}" ] && [ -n "${BERGAMOT_VOCAB_URL:-}" ]; then
-            echo "✅ Creating Bergamot config..."
-            echo "{" > test/mobile/testAssets/bergamot-urls.json
-            echo "  \"modelUrl\": \"${BERGAMOT_MODEL_URL}\"," >> test/mobile/testAssets/bergamot-urls.json
-            echo "  \"vocabUrl\": \"${BERGAMOT_VOCAB_URL}\"" >> test/mobile/testAssets/bergamot-urls.json
-            echo "}" >> test/mobile/testAssets/bergamot-urls.json
-            echo "   ✅ Bergamot URLs bundled"
-            cat test/mobile/testAssets/bergamot-urls.json
-          else
-            echo "   ⚠️  Bergamot URLs not available"
-          fi
-
-          # Bundle IndicTrans URL
-          if [ -n "${INDICTRANS_MODEL_URL:-}" ]; then
-            echo "✅ Creating IndicTrans config..."
-            echo "{" > test/mobile/testAssets/indictrans-model-urls.json
-            echo "  \"modelUrl\": \"${INDICTRANS_MODEL_URL}\"" >> test/mobile/testAssets/indictrans-model-urls.json
-            echo "}" >> test/mobile/testAssets/indictrans-model-urls.json
-            echo "   ✅ IndicTrans URL bundled"
-            cat test/mobile/testAssets/indictrans-model-urls.json
-          else
-            echo "   ⚠️  IndicTrans URL not available"
-          fi
-
+          echo "📥 Pre-fetching IndicTrans model for mobile tests..."
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          mkdir -p test/mobile/testAssets/models/indictrans
+          # Mirror generate-indictrans-presigned-urls.sh's "find latest date dir" logic
+          BASE_PATH="qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-dist-200M"
+          MODEL_NAME="ggml-indictrans2-en-indic-dist-200M-q4_0.bin"
+          DATE_DIRS=$(aws s3 ls "s3://${MODEL_S3_BUCKET}/${BASE_PATH}/" --region eu-central-1 | grep "PRE" | awk '{print $2}' | sed 's/\///')
+          LATEST_DATE=$(echo "$DATE_DIRS" | sort | tail -1)
+          echo "   Using date: $LATEST_DATE"
+          aws s3 cp "s3://${MODEL_S3_BUCKET}/${BASE_PATH}/${LATEST_DATE}/${MODEL_NAME}" test/mobile/testAssets/models/indictrans/
           echo ""
-          echo "📂 testAssets directory contents:"
-          ls -la test/mobile/testAssets/
+          echo "✅ IndicTrans model file:"
+          ls -lah test/mobile/testAssets/models/indictrans/
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      - name: Verify staged model assets
+        working-directory: ./monorepo/${{ inputs.workdir || env.PKG_DIR }}
+        run: |
+          echo "📂 Final testAssets contents that will ship in the test app bundle:"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          find test/mobile/testAssets -type f -exec du -h {} \;
+          echo ""
+          TOTAL_SIZE=$(du -sh test/mobile/testAssets/models 2>/dev/null | awk '{print $1}')
+          echo "Total model bundle size: ${TOTAL_SIZE:-(none)}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
       - name: Pack addon
         working-directory: ./monorepo/${{ inputs.workdir || env.PKG_DIR }}
