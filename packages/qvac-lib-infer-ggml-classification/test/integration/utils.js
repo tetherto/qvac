@@ -87,6 +87,13 @@ const IMAGE_SAMPLES = [
 ]
 
 const MODEL_FILENAME = 'mobilenetv3_3class_v3_fp16.gguf'
+// On mobile, the React Native bundler in qvac-test-addon-mobile only
+// recognises a fixed set of asset extensions (`so, bin, model, bundle,
+// raw, onnx` per its metro.config.js). `.gguf` is not in that list, so
+// we package the weights under a `.gguf.bin` filename in
+// `test/mobile/testAssets/` -- see `scripts/copy-mobile-test-assets.js`.
+// Lookup on the device must therefore use the `.bin` filename.
+const MOBILE_MODEL_FILENAME = MODEL_FILENAME + '.bin'
 
 /**
  * Resolves the GGUF weights path for the integration suite.
@@ -97,28 +104,29 @@ const MODEL_FILENAME = 'mobilenetv3_3class_v3_fp16.gguf'
  *
  * On mobile (ios / android), the bare worklet runs from a packed
  * `app.bundle` whose `weights/` directory is not a real filesystem
- * path. The qvac-test-addon-mobile framework instead copies anything
- * under `test/mobile/testAssets/` to the device and exposes the
- * resulting on-device file:// URLs through `global.assetPaths`,
- * keyed by relative paths from the test module's perspective. We try
- * a couple of common key formats (matching what other addons do, see
- * `qvac-lib-infer-nmtcpp/test/integration/utils.js:loadConfigFromAssets`)
+ * path. The qvac-test-addon-mobile framework copies anything under
+ * `test/mobile/testAssets/` to the device and exposes the resulting
+ * on-device file:// URLs through `global.assetPaths`, keyed by
+ * relative paths from the test module's perspective. We try the
+ * common key formats (matching `qvac-lib-infer-nmtcpp:loadConfigFromAssets`)
  * and fall back to a desktop-style fs lookup so local non-CI builds
  * keep working too.
  *
  * If on mobile and the asset cannot be located, throw a clear error
  * up-front rather than letting `ImageClassifier.load()` fail with the
- * opaque `app.bundle/...` path -- and crucially, throwing here lets
- * the caller convert it into a brittle assertion failure rather than
- * an unhandled promise rejection that aborts the bare worklet.
+ * opaque `app.bundle/...` path -- crucially, throwing synchronously
+ * here lets the caller surface it as a brittle assertion failure
+ * rather than an unhandled promise rejection that aborts the bare
+ * worklet (the iOS Application_Crash_Report.ips signature we hit in
+ * CI runs 24891210942 and 24900278513).
  */
 function resolveModelPath () {
   if (isMobile && typeof global !== 'undefined' && global.assetPaths) {
     const candidates = [
-      `../../testAssets/${MODEL_FILENAME}`,
-      `../mobile/testAssets/${MODEL_FILENAME}`,
-      `testAssets/${MODEL_FILENAME}`,
-      `../testAssets/${MODEL_FILENAME}`
+      `../../testAssets/${MOBILE_MODEL_FILENAME}`,
+      `../mobile/testAssets/${MOBILE_MODEL_FILENAME}`,
+      `testAssets/${MOBILE_MODEL_FILENAME}`,
+      `../testAssets/${MOBILE_MODEL_FILENAME}`
     ]
     for (const key of candidates) {
       const mapped = global.assetPaths[key]
@@ -127,9 +135,9 @@ function resolveModelPath () {
       }
     }
     throw new Error(
-      `Mobile asset not found in global.assetPaths: ${MODEL_FILENAME}. ` +
+      `Mobile asset not found in global.assetPaths: ${MOBILE_MODEL_FILENAME}. ` +
       "Did 'npm run mobile:copy-prebuilds' run during test setup, " +
-      'and is `test/mobile/testAssets/' + MODEL_FILENAME + '` present?'
+      'and is `test/mobile/testAssets/' + MOBILE_MODEL_FILENAME + '` present?'
     )
   }
 
@@ -138,6 +146,7 @@ function resolveModelPath () {
   // self-contained and does not require an env override.
   const desktopCandidates = [
     path.resolve(__dirname, '..', 'mobile', 'testAssets', MODEL_FILENAME),
+    path.resolve(__dirname, '..', 'mobile', 'testAssets', MOBILE_MODEL_FILENAME),
     path.resolve(__dirname, '..', '..', 'weights', MODEL_FILENAME)
   ]
   for (const candidate of desktopCandidates) {

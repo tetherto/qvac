@@ -185,6 +185,39 @@ struct JsClassifyOutputHandler
                 const char* v = std::getenv("QVAC_CLASSIFICATION_TRACE");
                 return v != nullptr && v[0] == '1';
               }();
+
+              // ----- WIN32 MARSHALLING WORKAROUND -----
+              //
+              // On win32-x64 / clang-cl (CI runs 24851301107, 24891210942,
+              // 24897445066, 24900278513, 25002820522) the very first
+              // `js_create_double` call after a fresh `OutputCallBackJs`
+              // entry into the Bare runtime / V8 callback path produces a
+              // JS number whose value is 0.0, regardless of the C++
+              // `double` we pass in. Subsequent calls in the same handle
+              // scope return correct values. Linux/macOS are not
+              // affected. The `[qvac-classify-marshal]` traces in the
+              // referenced runs prove the C++ side hands the correct
+              // value to `Number::create`; the loss is downstream in the
+              // bare-runtime/V8 layer.
+              //
+              // We work around it by burning one `js_create_double` call
+              // here whose result is intentionally discarded. The
+              // throwaway value is never wired into the array, so it has
+              // no observable effect on the output. After this call the
+              // engine path is "warm" and the per-result Number::create
+              // calls below produce the correct values on every platform.
+              //
+              // This belongs upstream in @qvac/qvac-lib-inference-addon-cpp
+              // (or the bare runtime) and we will file the bug separately.
+              // Until that lands, the cost is one allocation of an
+              // ephemeral js_number per classify call.
+              {
+                js_value_t* dummy = nullptr;
+                (void)js_create_double(this->env_, 0.0, &dummy);
+                (void)dummy;
+              }
+              // ----------------------------------------
+
               for (size_t i = 0; i < cppOut.results.size(); ++i) {
                 // Read into named locals BEFORE creating any JS values.
                 const std::string& labelString = cppOut.results[i].label;

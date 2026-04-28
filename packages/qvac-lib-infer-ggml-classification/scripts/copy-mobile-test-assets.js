@@ -31,7 +31,27 @@ const PREBUILDS_DIR = path.join(ADDON_DIR, 'prebuilds')
 const WEIGHTS_DIR = path.join(ADDON_DIR, 'weights')
 const TEST_ASSETS_DIR = path.join(ADDON_DIR, 'test', 'mobile', 'testAssets')
 
-const WEIGHT_FILENAMES = ['mobilenetv3_3class_v3_fp16.gguf']
+// The qvac-test-addon-mobile framework's metro.config.js registers
+// `assetExts: ['so', 'bin', 'model', 'bundle', 'raw', 'onnx']`. It does
+// NOT include `.gguf`, so a file with that extension placed under
+// `testAssets/` is treated by the React Native bundler as a JS-source
+// request and the on-device build aborts with
+//   `Unable to resolve module ../assets/testAssets/<file>.gguf`
+// at the `:app:createBundleReleaseJsAndAssets` step (see CI run
+// 25002820522). We work around this by copying the GGUF blob with a
+// `.bin` suffix appended -- `.bin` is in the framework's accepted
+// list, the bundler treats it as a binary asset, and the file is
+// pushed to the device verbatim. ggml's `gguf_init_from_file` reads
+// by path and parses the GGUF magic bytes; it does not validate the
+// file extension, so the rename is purely a packaging detail.
+//
+// The pair below is `[<source filename in weights/>, <destination
+// filename in test/mobile/testAssets/>]`. `resolveModelPath()` in
+// `test/integration/utils.js` looks up the destination filename when
+// running on mobile.
+const WEIGHT_FILES = [
+  ['mobilenetv3_3class_v3_fp16.gguf', 'mobilenetv3_3class_v3_fp16.gguf.bin']
+]
 
 const ANDROID_FLAVOURS = ['android-arm64', 'android-arm', 'android-ia32', 'android-x64']
 const IOS_FLAVOURS = ['ios-arm64', 'ios-arm64-simulator', 'ios-x64-simulator']
@@ -78,16 +98,16 @@ function copyWeightsToTestAssets () {
   }
   fs.mkdirSync(TEST_ASSETS_DIR, { recursive: true })
   let copied = 0
-  for (const filename of WEIGHT_FILENAMES) {
-    const src = path.join(WEIGHTS_DIR, filename)
-    const dst = path.join(TEST_ASSETS_DIR, filename)
+  for (const [srcName, dstName] of WEIGHT_FILES) {
+    const src = path.join(WEIGHTS_DIR, srcName)
+    const dst = path.join(TEST_ASSETS_DIR, dstName)
     if (!fs.existsSync(src)) {
       console.error(`[mobile:copy-prebuilds] FATAL: required weights file missing: ${src}`)
       process.exit(1)
     }
     fs.copyFileSync(src, dst)
     const sizeMb = (fs.statSync(dst).size / 1024 / 1024).toFixed(1)
-    console.log(`[mobile:copy-prebuilds] Copied weights -> ${path.relative(ADDON_DIR, dst)} (${sizeMb} MB)`)
+    console.log(`[mobile:copy-prebuilds] Copied weights ${srcName} -> ${path.relative(ADDON_DIR, dst)} (${sizeMb} MB)`)
     copied++
   }
   if (copied === 0) {
