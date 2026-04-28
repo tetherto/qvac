@@ -14,10 +14,6 @@ export const multiGpuConfigSmoke: TestDefinition = {
     dependency: "llm",
     estimatedDurationMs: 30000,
   },
-  skip: {
-    reason: "MultiGpuExecutor is not registered in the mobile consumer; multi-GPU tensor splitting is a desktop configuration",
-    platforms: ["mobile-ios", "mobile-android"],
-  },
 };
 
 export const multiGpuTests = [multiGpuConfigSmoke];
