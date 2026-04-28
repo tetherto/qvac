@@ -153,7 +153,7 @@ export function transcribeStream(
     }
     return transcribeStreamWithAudio(params, options);
   }
-  const streamParams = params as TranscribeStreamClientParams;
+  const streamParams = params;
   if (streamParams.metadata === true) {
     return transcribeStreamDuplexMetadata(streamParams, options);
   }
