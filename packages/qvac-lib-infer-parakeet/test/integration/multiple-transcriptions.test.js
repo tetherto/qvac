@@ -32,7 +32,12 @@ const ALL_DEVICE_CONFIGS = [
 const DEVICE_CONFIGS = isMobile
   ? ALL_DEVICE_CONFIGS
   : ALL_DEVICE_CONFIGS.filter(c => c.id === 'cpu')
-const MOBILE_PERF_MODEL_TYPES = ['tdt', 'ctc', 'eou', 'sortformer']
+// Android can run the full model sweep on Device Farm. iOS remains scoped to
+// TDT until non-TDT models are validated there; the expanded iOS sweep caused
+// the app to background/crash during Device Farm monitoring.
+const MOBILE_PERF_MODEL_TYPES = platform.startsWith('android')
+  ? ['tdt', 'ctc', 'eou', 'sortformer']
+  : ['tdt']
 const PERF_MODEL_TYPES = isMobile ? MOBILE_PERF_MODEL_TYPES : ['tdt']
 
 async function resolvePerfModelPath (modelType) {
