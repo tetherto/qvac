@@ -25,7 +25,7 @@ const test = require('brittle')
 const path = require('bare-path')
 const fs = require('bare-fs')
 const TranslationNmtcpp = require('@qvac/translation-nmtcpp')
-const { downloadBergamotFromFirefox } = require('@qvac/translation-nmtcpp/lib/bergamot-model-fetcher')
+const { ensureBergamotModelFiles } = require('@qvac/translation-nmtcpp/lib/bergamot-model-fetcher')
 const {
   createLogger,
   createPerformanceCollector,
@@ -69,7 +69,15 @@ async function ensureModelPair (src, dst) {
 
   const writableRoot = isMobile ? (global.testDir || '/tmp') : path.resolve(__dirname, '../..')
   const destDir = path.join(writableRoot, 'model', 'bergamot', pairKey)
-  return downloadBergamotFromFirefox(src, dst, destDir)
+  // `ensureBergamotModelFiles` (not the raw `downloadBergamotFromFirefox`)
+  // short-circuits when destDir is already populated — important for the
+  // pivot test which calls this for the same language pair across four
+  // sub-tests (GPU/CPU × es→en→it and fr→en→es × 2 variants each). Without
+  // the short-circuit the test re-fetches every pair from Firefox CDN and
+  // blows through the 20-min per-test WDIO timeout on slow Device Farm
+  // lanes (root cause of the Samsung Galaxy S25 Ultra timeout in CI
+  // run 24796639547).
+  return ensureBergamotModelFiles(src, dst, destDir)
 }
 
 /**

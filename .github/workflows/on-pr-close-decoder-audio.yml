@@ -1,0 +1,66 @@
+name: On PR Close (Decoder-audio)
+
+on:
+  pull_request:
+    types:
+      - closed
+    paths:
+      - "packages/decoder-audio/**"
+      - ".github/workflows/*decoder-audio*.yml"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Specific version to target for deletion"
+        required: false
+        type: string
+      pr-number:
+        description: "PR number to target for deletion"
+        required: false
+        type: string
+      pattern:
+        description: "Pattern to target for deletion"
+        required: false
+        type: string
+      packages:
+        description: "Packages to target for deletion, space separated"
+        required: false
+        type: string
+        default: "decoder-audio"
+      dry-run:
+        description: "Is dry run? If true, lists versions without deleting."
+        type: boolean
+        default: true
+
+run-name: >-
+  Delete NPM Versions (decoder-audio)
+  v=${{ inputs.version }}
+  pr=${{ github.event_name == 'pull_request' && github.event.pull_request.number || inputs.pr-number }}
+  dry=${{ github.event_name == 'pull_request' && true || inputs.dry-run }}
+
+permissions:
+  contents: read
+
+jobs:
+  print-context:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - run: |
+          echo "Inputs Context: $INPUTS_CONTEXT"
+        env:
+          INPUTS_CONTEXT: ${{ toJSON(inputs) }}
+      - run: |
+          echo "GitHub Context: $GITHUB_CONTEXT"
+        env:
+          GITHUB_CONTEXT: ${{ toJSON(github) }}
+
+  delete-npm-versions-trigger:
+    permissions:
+      packages: write
+    uses: ./.github/workflows/public-delete-npm-versions.yml
+    with:
+      version: ${{ inputs.version }}
+      pr-number: ${{ github.event_name == 'pull_request' && github.event.pull_request.number || inputs.pr-number }}
+      pattern: ${{ inputs.pattern }}
+      packages: ${{ inputs.packages || 'decoder-audio' }}
+      dry-run: ${{ github.event_name == 'pull_request' && true || inputs.dry-run }}

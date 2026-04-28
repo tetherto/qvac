@@ -1,4 +1,4 @@
-const MIN_SDK_VERSION = '0.8.0'
+const MIN_SDK_VERSION = '0.9.0'
 const SDK_SPECIFIER = '@qvac/sdk'
 const SDK_PACKAGE_SPECIFIER = '@qvac/sdk/package'
 

@@ -1,7 +1,6 @@
 import type {
   Request,
   Response,
-  QvacConfig,
   RuntimeContext,
   CanonicalModelType,
 } from "@/schemas";
@@ -98,7 +97,7 @@ function applyDeviceDefaultsToLoadModel<T extends Request>(request: T): T {
   const rawConfig = (request.modelConfig as Record<string, unknown>) ?? {};
   const configWithDefaults = resolveModelConfig(canonicalType, rawConfig);
 
-  return { ...request, modelConfig: configWithDefaults } as T;
+  return { ...request, modelConfig: configWithDefaults };
 }
 
 function supportsProgressStreaming(request: Request) {
@@ -212,7 +211,7 @@ function createMockRPCRequest() {
             runtimeContext?: RuntimeContext;
           };
           if (initData.config) {
-            setSDKConfig(initData.config as QvacConfig);
+            setSDKConfig(initData.config);
           }
           if (initData.runtimeContext) {
             setRuntimeContext(initData.runtimeContext);
@@ -262,7 +261,7 @@ export async function getRPC() {
   if (!configInitialized) {
     const runtimeContext: RuntimeContext = {
       runtime: "bare",
-      platform: os.platform() as "darwin" | "linux" | "win32",
+      platform: os.platform(),
     };
     await initializeConfig(mockRPC, resolveConfig, runtimeContext);
     configInitialized = true;

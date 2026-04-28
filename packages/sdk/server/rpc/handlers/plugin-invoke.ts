@@ -28,7 +28,7 @@ function resolvePluginHandler(modelId: string, handlerName: string) {
   if (!modelEntry) {
     throw new ModelNotFoundError(modelId);
   }
-  if (modelEntry.isDelegated || !modelEntry.local) {
+  if (modelEntry.isDelegated) {
     throw new ModelIsDelegatedError(modelId);
   }
 

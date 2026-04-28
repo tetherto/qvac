@@ -5,6 +5,7 @@ import {
   loadModel,
   unloadModel,
   completion,
+  getLoadedModelInfo,
   LLAMA_3_2_1B_INST_Q4_0,
 } from "@qvac/sdk";
 import type { TestResult } from "@tetherto/qvac-test-suite";
@@ -12,6 +13,7 @@ import { DelegatedInferenceExecutor as SharedDelegatedInferenceExecutor } from "
 import {
   delegatedE2ECompletion,
   delegatedE2EStreaming,
+  delegatedE2ELoadedModelInfo,
 } from "../../delegated-inference-tests.js";
 import { generateTopic } from "../../utils/random.js";
 
@@ -32,6 +34,7 @@ export class DelegatedInferenceExecutor extends SharedDelegatedInferenceExecutor
       ...super.buildHandlers(),
       [delegatedE2ECompletion.testId]: this.e2eCompletion.bind(this),
       [delegatedE2EStreaming.testId]: this.e2eStreaming.bind(this),
+      [delegatedE2ELoadedModelInfo.testId]: this.e2eLoadedModelInfo.bind(this),
     };
   }
 
@@ -126,5 +129,42 @@ export class DelegatedInferenceExecutor extends SharedDelegatedInferenceExecutor
 
   async e2eStreaming(params: typeof delegatedE2EStreaming.params): Promise<TestResult> {
     return this.withDelegatedCompletion(params.history as Array<{ role: string; content: string }>, true);
+  }
+
+  async e2eLoadedModelInfo(): Promise<TestResult> {
+    return this.withRemoteProvider(async ({ topic, publicKey }) => {
+      const modelId = await loadModel({
+        modelSrc: LLAMA_3_2_1B_INST_Q4_0,
+        modelType: "llm",
+        delegate: { topic, providerPublicKey: publicKey, timeout: E2E_DELEGATION_TIMEOUT, fallbackToLocal: false },
+      });
+      try {
+        const info = await getLoadedModelInfo({ modelId });
+
+        if (!info.isDelegated) {
+          return {
+            passed: false,
+            output: `Expected isDelegated=true for delegated model, got isDelegated=false (modelType=${info.modelType})`,
+          };
+        }
+
+        const checks = {
+          modelIdMatches: info.modelId === modelId,
+          handlersIsEmptyArray: Array.isArray(info.handlers) && info.handlers.length === 0,
+          providerInfoTopicMatches: info.providerInfo.topic === topic,
+          providerInfoPublicKeyMatches: info.providerInfo.providerPublicKey === publicKey,
+        };
+
+        const allOk = Object.values(checks).every(Boolean);
+        const summary = `modelId=${info.modelId.substring(0, 8)}…, isDelegated=true, handlers=[], providerInfo.topic=${info.providerInfo.topic.substring(0, 8)}…, checks=${JSON.stringify(checks)}`;
+
+        if (!allOk) {
+          return { passed: false, output: `Delegated info mismatch: ${summary}` };
+        }
+        return { passed: true, output: `E2E delegated getLoadedModelInfo OK: ${summary}` };
+      } finally {
+        try { await unloadModel({ modelId }); } catch {}
+      }
+    });
   }
 }

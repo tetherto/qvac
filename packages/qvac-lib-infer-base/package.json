@@ -31,9 +31,6 @@
   "optionalDependencies": {
     "@qvac/diagnostics": "^0.1.0"
   },
-  "peerDependencies": {
-    "@qvac/dl-hyperdrive": "^0.1.0"
-  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tetherto/qvac.git",

@@ -1,8 +1,13 @@
 """Utility functions for TTS benchmarks"""
 
+import json
 import logging
+import os
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
+import platform as pyplatform
+import re
 import statistics
 import numpy as np
 
@@ -38,6 +43,276 @@ def calculate_percentiles(values: List[float]) -> Dict[str, float]:
         "p95": statistics.quantiles(sorted_vals, n=20)[18] if len(sorted_vals) >= 20 else sorted_vals[-1],
         "p99": statistics.quantiles(sorted_vals, n=100)[98] if len(sorted_vals) >= 100 else sorted_vals[-1]
     }
+
+
+def summarize_numeric_values(values: List[float]) -> Optional[Dict[str, float]]:
+    """Summarize numeric values with percentiles."""
+    nums = [float(v) for v in values if v is not None]
+    if not nums:
+        return None
+
+    percentiles = calculate_percentiles(nums)
+    return {
+        "mean": float(statistics.mean(nums)),
+        "min": float(min(nums)),
+        "max": float(max(nums)),
+        "stddev": float(statistics.pstdev(nums)) if len(nums) > 1 else 0.0,
+        "p50": float(percentiles["p50"]),
+        "p90": float(percentiles["p90"]),
+        "p95": float(percentiles["p95"]),
+        "p99": float(percentiles["p99"]),
+        "count": len(nums),
+    }
+
+
+def _sanitize_tag(value: str) -> str:
+    if not value:
+        return ""
+    return re.sub(r"[^a-z0-9]+", "-", str(value).lower()).strip("-")
+
+
+def _normalize_platform_name(raw_name: str) -> str:
+    value = str(raw_name or "").lower()
+    if value.startswith("win"):
+        return "win32"
+    if value == "darwin":
+        return "darwin"
+    if value == "linux":
+        return "linux"
+    return value or "unknown"
+
+
+def _normalize_arch(raw_arch: str) -> str:
+    value = str(raw_arch or "").lower()
+    return {
+        "x86_64": "x64",
+        "amd64": "x64",
+        "arm64": "arm64",
+        "aarch64": "arm64",
+    }.get(value, value or "unknown")
+
+
+def derive_benchmark_backend(platform_name: str, use_gpu: bool, backend_hint: str = "") -> str:
+    """Infer the backend family for the benchmark record."""
+    hint = str(backend_hint or "").lower()
+    if hint:
+        return hint
+    if not use_gpu:
+        return "cpu"
+    if platform_name == "darwin":
+        return "coreml"
+    if platform_name == "win32":
+        return "directml"
+    if platform_name == "linux":
+        return "cuda"
+    return "gpu"
+
+
+def _get_supertonic_benchmark_labels() -> Dict[str, str]:
+    return {
+        "label": os.environ.get("QVAC_SUPERTONIC_BENCHMARK_LABEL", ""),
+        "runner": os.environ.get("QVAC_SUPERTONIC_BENCHMARK_RUNNER", ""),
+        "device": os.environ.get("QVAC_SUPERTONIC_BENCHMARK_DEVICE", ""),
+        "backend": os.environ.get("QVAC_SUPERTONIC_BENCHMARK_BACKEND", ""),
+    }
+
+
+def _build_supertonic_quality_summary(round_trip_metrics: Optional[Dict]) -> Optional[Dict]:
+    if not round_trip_metrics or not round_trip_metrics.get("runs"):
+        return None
+
+    wer_summary = summarize_numeric_values([
+        run.get("avg_wer") for run in round_trip_metrics["runs"]
+        if run.get("avg_wer") is not None
+    ])
+    cer_summary = summarize_numeric_values([
+        run.get("avg_cer") for run in round_trip_metrics["runs"]
+        if run.get("avg_cer") is not None
+    ])
+
+    return {
+        "wer": wer_summary,
+        "cer": cer_summary,
+        "samplesTested": round_trip_metrics.get("total_tested", 0),
+    }
+
+
+def _build_supertonic_run_reports(
+    runs: List[TTSResults],
+    round_trip_metrics: Optional[Dict],
+) -> List[Dict]:
+    run_reports = []
+    quality_runs = (round_trip_metrics or {}).get("runs", [])
+
+    for run_idx, run in enumerate(runs, 1):
+        run_report = {
+            "iteration": run_idx,
+            "sampleCount": len(run.results),
+            "loadTimeMs": float(run.load_time_ms),
+            "totalGenerationMs": float(run.total_generation_ms),
+            "totalAudioDurationSec": float(run.total_audio_duration),
+            "summary": {
+                "rtf": summarize_numeric_values([result.rtf for result in run.results]),
+                "generationMs": summarize_numeric_values([result.generation_ms for result in run.results]),
+                "durationSec": summarize_numeric_values([result.duration_sec for result in run.results]),
+                "speedRealtime": summarize_numeric_values([
+                    (1 / result.rtf) for result in run.results if result.rtf > 0
+                ]),
+            },
+        }
+
+        if run_idx <= len(quality_runs):
+            quality_run = quality_runs[run_idx - 1]
+            run_report["quality"] = {
+                "avgWer": quality_run.get("avg_wer"),
+                "avgCer": quality_run.get("avg_cer"),
+                "minWer": quality_run.get("min_wer"),
+                "maxWer": quality_run.get("max_wer"),
+                "minCer": quality_run.get("min_cer"),
+                "maxCer": quality_run.get("max_cer"),
+                "perLanguage": quality_run.get("per_language", {}),
+                "perLanguageRtf": quality_run.get("per_language_rtf", {}),
+            }
+
+        run_reports.append(run_report)
+
+    return run_reports
+
+
+def build_supertonic_perf_report(
+    cfg: Config,
+    runs: List[TTSResults],
+    label: str,
+    round_trip_metrics: Optional[Dict] = None,
+    *,
+    result_language: Optional[str] = None,
+) -> Dict:
+    """Build a structured Supertonic benchmark report."""
+    if not runs:
+        raise ValueError("Supertonic benchmark report requires at least one run")
+
+    labels = _get_supertonic_benchmark_labels()
+    platform_name = _normalize_platform_name(pyplatform.system())
+    arch = _normalize_arch(pyplatform.machine())
+    platform_id = f"{platform_name}-{arch}"
+    backend = derive_benchmark_backend(platform_name, cfg.model.useGPU, labels["backend"])
+    language = result_language or cfg.model.language
+    model_dir = getattr(cfg.model, "modelDir", None)
+    all_results = [result for run in runs for result in run.results]
+
+    report = {
+        "schemaVersion": 1,
+        "benchmark": "supertonic-rtf",
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "platform": platform_id,
+        "platformName": platform_name,
+        "arch": arch,
+        "labels": {
+            "label": labels["label"],
+            "runner": labels["runner"],
+            "device": labels["device"],
+            "backend": backend,
+        },
+        "requested": {
+            "useGPU": bool(cfg.model.useGPU),
+            "backendHint": labels["backend"],
+            "deviceLabel": labels["device"],
+            "runnerLabel": labels["runner"],
+            "numRuns": cfg.comparison.num_runs,
+            "roundTripTest": cfg.comparison.round_trip_test,
+            "runPython": cfg.comparison.run_python,
+        },
+        "implementation": {
+            "key": label,
+            "name": runs[0].implementation,
+            "version": runs[0].version,
+        },
+        "model": {
+            "name": "supertonic",
+            "variant": Path(model_dir).name if model_dir else "supertonic",
+            "modelDir": model_dir,
+            "language": language,
+            "voiceName": cfg.model.voiceName or "F1",
+            "supertonicMultilingual": bool(getattr(cfg.model, "supertonicMultilingual", False)),
+        },
+        "dataset": {
+            "name": cfg.dataset.name,
+            "split": cfg.dataset.split,
+            "maxSamples": cfg.dataset.max_samples,
+            "language": language,
+        },
+        "config": {
+            "batchSize": cfg.server.batch_size,
+            "numRuns": cfg.comparison.num_runs,
+            "roundTripTest": cfg.comparison.round_trip_test,
+            "whisperModel": cfg.comparison.whisper_model,
+            "speed": getattr(cfg.model, "speed", None),
+            "numInferenceSteps": getattr(cfg.model, "numInferenceSteps", None),
+        },
+        "samples": {
+            "total": len(all_results),
+            "perRun": [len(run.results) for run in runs],
+        },
+        "summary": {
+            "rtf": summarize_numeric_values([result.rtf for result in all_results]),
+            "generationMs": summarize_numeric_values([result.generation_ms for result in all_results]),
+            "durationSec": summarize_numeric_values([result.duration_sec for result in all_results]),
+            "speedRealtime": summarize_numeric_values([
+                (1 / result.rtf) for result in all_results if result.rtf > 0
+            ]),
+            "loadTimeMs": summarize_numeric_values([run.load_time_ms for run in runs]),
+            "totalGenerationMs": summarize_numeric_values([run.total_generation_ms for run in runs]),
+            "totalAudioDurationSec": summarize_numeric_values([run.total_audio_duration for run in runs]),
+        },
+        "quality": _build_supertonic_quality_summary(round_trip_metrics),
+        "runs": _build_supertonic_run_reports(runs, round_trip_metrics),
+    }
+
+    return report
+
+
+def get_supertonic_report_filename(report: Dict) -> str:
+    """Get a stable filename for a structured Supertonic benchmark report."""
+    parts = [
+        "rtf-benchmark",
+        report.get("platform", "unknown"),
+        report.get("implementation", {}).get("key", "unknown"),
+        report.get("dataset", {}).get("language", "unknown"),
+        "gpu" if report.get("requested", {}).get("useGPU") else "cpu",
+    ]
+
+    backend = _sanitize_tag(report.get("labels", {}).get("backend", ""))
+    if backend and backend not in parts:
+        parts.append(backend)
+
+    label = _sanitize_tag(report.get("labels", {}).get("label", ""))
+    if label:
+        parts.append(label)
+
+    return "-".join(filter(None, parts)) + ".json"
+
+
+def save_supertonic_perf_report(
+    cfg: Config,
+    runs: List[TTSResults],
+    label: str,
+    round_trip_metrics: Optional[Dict] = None,
+    *,
+    result_language: Optional[str] = None,
+) -> Path:
+    """Write a structured Supertonic benchmark report to disk."""
+    results_root = _get_results_root()
+    report = build_supertonic_perf_report(
+        cfg,
+        runs,
+        label,
+        round_trip_metrics,
+        result_language=result_language,
+    )
+    report_path = results_root / get_supertonic_report_filename(report)
+    report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    logger.info(f"Saved structured benchmark report to {report_path}")
+    return report_path
 
 
 def save_single_result(
@@ -144,7 +419,7 @@ def save_single_result(
         ""
     ])
     
-    md_path.write_text("\n".join(lines), encoding="utf-8")
+    md_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     logger.info(f"Saved results to {md_path}")
 
 
@@ -627,6 +902,6 @@ def save_comparison_report(cfg: Config, addon_runs: List[TTSResults], python_run
         ""
     ])
     
-    md_path.write_text("\n".join(lines), encoding="utf-8")
+    md_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     logger.info(f"Saved comparison report to {md_path}")
 

@@ -106,6 +106,7 @@ OnnxInferSession::OnnxInferSession(const std::string &modelPath, bool useGPU,
     const Ort::AllocatedStringPtr inputName =
         session_->GetInputNameAllocated(i, allocator_);
     inputNames_.push_back(std::string(inputName.get()));
+    inputIndexByName_[inputNames_.back()] = i;
   }
 
   // collect output names
@@ -113,6 +114,7 @@ OnnxInferSession::OnnxInferSession(const std::string &modelPath, bool useGPU,
     Ort::AllocatedStringPtr outputName =
         session_->GetOutputNameAllocated(i, allocator_);
     outputNames_.push_back(std::string(outputName.get()));
+    outputIndexByName_[outputNames_.back()] = i;
   }
 }
 
@@ -159,6 +161,41 @@ void OnnxInferSession::run() {
                               .GetTensorTypeAndShapeInfo()
                               .GetElementType())});
   }
+
+  moveChainedOutputsIntoInputs();
+}
+
+void OnnxInferSession::moveChainedOutputsIntoInputs() {
+  if (outputToInputChain_.empty()) {
+    return;
+  }
+  for (const auto &[outputName, inputName] : outputToInputChain_) {
+    auto outIt = outputIndexByName_.find(outputName);
+    auto inIt = inputIndexByName_.find(inputName);
+    if (outIt == outputIndexByName_.end() || inIt == inputIndexByName_.end()) {
+      throw std::runtime_error("Chain failed: unknown output '" + outputName +
+                               "' or input '" + inputName + "'");
+    }
+    size_t outIdx = outIt->second;
+    size_t inIdx = inIt->second;
+    if (outIdx >= outputsTensorsValues_.size() ||
+        inIdx >= inputTensorsValues_.size()) {
+      throw std::runtime_error("Chain failed: tensor slot unavailable for '" +
+                               outputName + "' -> '" + inputName + "'");
+    }
+
+    inputTensorsValues_[inIdx] = std::move(outputsTensorsValues_[outIdx]);
+
+    auto shapeInfo = inputTensorsValues_[inIdx].GetTensorTypeAndShapeInfo();
+    inputTensors_[inIdx] = OrtTensor{
+        inputTensorsValues_[inIdx].GetTensorMutableData<void>(), inputName,
+        shapeInfo.GetShape(), onnxTypeToOurType(shapeInfo.GetElementType())};
+
+    // Mark this input as preserve-across-initInputTensors *after* it has been
+    // populated with real tensor data. Preserving an empty slot would stall
+    // the next run() with a NULL input error.
+    chainedInputNames_.insert(inputName);
+  }
 }
 
 std::vector<std::string> OnnxInferSession::getInputNames() const {
@@ -171,10 +208,33 @@ std::vector<std::string> OnnxInferSession::getOutputNames() const {
 
 void OnnxInferSession::initInputTensors(
     const std::vector<std::vector<int64_t>> &inputShapes) {
+  // Move chained input slots aside so they survive the reset below; all other
+  // slots are allocated fresh from `inputShapes`.
+  std::vector<Ort::Value> preservedValues(inputNames_.size());
+  std::vector<OrtTensor> preservedTensors(inputNames_.size());
+  std::vector<bool> hasPreserved(inputNames_.size(), false);
+
+  if (!chainedInputNames_.empty()) {
+    for (size_t i = 0; i < inputNames_.size() && i < inputTensorsValues_.size();
+         i++) {
+      if (chainedInputNames_.count(inputNames_[i])) {
+        preservedValues[i] = std::move(inputTensorsValues_[i]);
+        preservedTensors[i] = inputTensors_[i];
+        hasPreserved[i] = true;
+      }
+    }
+  }
+
   inputTensors_.clear();
   inputTensorsValues_.clear();
 
   for (size_t i = 0; i < session_->GetInputCount(); i++) {
+    if (hasPreserved[i]) {
+      inputTensorsValues_.push_back(std::move(preservedValues[i]));
+      inputTensors_.push_back(std::move(preservedTensors[i]));
+      continue;
+    }
+
     const Ort::TypeInfo inputTypeInfo = session_->GetInputTypeInfo(i);
     const Ort::ConstTensorTypeAndShapeInfo inputShapeInfo =
         inputTypeInfo.GetTensorTypeAndShapeInfo();
@@ -190,6 +250,53 @@ void OnnxInferSession::initInputTensors(
         OrtTensor{inputTensorsValues_[i].GetTensorMutableData<void>(),
                   inputNames_[i], inputShape, onnxTypeToOurType(onnxType)});
   }
+}
+
+void OnnxInferSession::setOutputToInputChain(
+    const std::vector<std::pair<std::string, std::string>> &mapping) {
+  // Validate up front so a bad mapping is surfaced at configuration time
+  // instead of deep inside the autoregressive loop at run().
+  for (const auto &[outputName, inputName] : mapping) {
+    if (outputIndexByName_.find(outputName) == outputIndexByName_.end()) {
+      throw std::runtime_error("setOutputToInputChain: unknown output '" +
+                               outputName + "'");
+    }
+    if (inputIndexByName_.find(inputName) == inputIndexByName_.end()) {
+      throw std::runtime_error("setOutputToInputChain: unknown input '" +
+                               inputName + "'");
+    }
+  }
+
+  // Full reset: preserve-names start empty and are only populated once an
+  // actual output value has been moved into the input slot (see
+  // moveChainedOutputsIntoInputs).
+  clearChainedInputs();
+  outputToInputChain_ = mapping;
+}
+
+void OnnxInferSession::clearChainedInputs() {
+  if (!chainedInputNames_.empty()) {
+    for (size_t i = 0; i < inputNames_.size() && i < inputTensorsValues_.size();
+         i++) {
+      if (chainedInputNames_.count(inputNames_[i])) {
+        // Release the backing Ort::Value AND null out the matching OrtTensor
+        // in lockstep so `getInput(name)` never hands out a pointer into the
+        // destructed allocation (inputTensors_[i].data became dangling the
+        // moment the Ort::Value was reset). Callers must `initInputTensors()`
+        // before re-using this slot.
+        inputTensorsValues_[i] = Ort::Value(nullptr);
+        if (i < inputTensors_.size()) {
+          inputTensors_[i] = OrtTensor{};
+        }
+      }
+    }
+  }
+  outputToInputChain_.clear();
+  chainedInputNames_.clear();
+}
+
+bool OnnxInferSession::isInputChained(const std::string &inputName) const {
+  return chainedInputNames_.count(inputName) != 0;
 }
 
 } // namespace qvac::ttslib::chatterbox
