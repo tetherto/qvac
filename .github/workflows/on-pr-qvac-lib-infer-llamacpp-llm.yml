@@ -260,15 +260,16 @@ jobs:
 
           mkdir -p combined-output
 
-          # QVAC-17830: only the HTML keeps the full per-device detail
-          # tables. The markdown — which is what gets piped into
-          # $GITHUB_STEP_SUMMARY — stays squashed (Mean ± std mini-tables
-          # for Total Time / TTFT / TPS, grouped by scenario) so the
-          # combined PR summary stops being a wall of detail tables.
+          # QVAC-17830: combined PR summary surfaces BOTH the squashed
+          # Mean ± std mini-tables (Total Time / TTFT / TPS, grouped
+          # by scenario) AND the per-device detail tables underneath
+          # them. Detail-table cells now render `mean ±std` themselves
+          # so the std is visible at every metric, not just the
+          # rolled-up ones. HTML keeps the same content.
           node scripts/perf-report/aggregate.js \
             --dir combined-reports \
             --addon-type vision \
-            --html-device-details \
+            --device-details \
             --output-html combined-output/performance-report-combined.html \
             --output-json combined-output/performance-summary-combined.json \
             --output combined-output/performance-report-combined.md
@@ -291,7 +292,7 @@ jobs:
             node scripts/perf-report/aggregate.js \
               --dir "$tmp_dir" \
               --addon-type vision \
-              --html-device-details \
+              --device-details \
               --output-html "per-device-reports/HTML-Report-${safe_name}.html" \
               2>/dev/null || true
 

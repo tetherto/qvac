@@ -129,14 +129,24 @@ const _VISION_DETAIL_COLUMNS = [
   { key: 'tps', label: 'TPS' }
 ]
 
+// QVAC-17830: detail-table cell formatter. Numeric cells render as
+// `<mean> ±<std>` to match the squashed mini-tables — that way the
+// std the user sees in the rollup is also visible per metric in the
+// detail breakdown. Token-count columns (generated_tokens /
+// prompt_tokens) stay as bare integers because deterministic
+// generation makes `±0` noise on every row.
+const _INTEGER_DETAIL_KEYS = new Set(['generated_tokens', 'prompt_tokens'])
+
 function _formatDetailCell (key, summary, categoricalVal) {
   if (categoricalVal != null && categoricalVal !== '') return String(categoricalVal)
   if (!summary || summary.mean == null) return '-'
-  const v = summary.mean
-  if (key.endsWith('_ms')) return String(Math.round(v))
-  if (key === 'tps') return v.toFixed(2)
-  if (Number.isInteger(v)) return String(v)
-  return v.toFixed(2)
+  const m = summary.mean
+  const s = summary.std == null ? 0 : summary.std
+  if (_INTEGER_DETAIL_KEYS.has(key)) return String(Math.round(m))
+  if (key.endsWith('_ms')) return `${Math.round(m)} \u00b1${Math.round(s)}`
+  if (key === 'tps') return `${m.toFixed(2)} \u00b1${s.toFixed(2)}`
+  if (Number.isInteger(m) && Number.isInteger(s)) return `${m} \u00b1${s}`
+  return `${m.toFixed(2)} \u00b1${s.toFixed(2)}`
 }
 
 /**

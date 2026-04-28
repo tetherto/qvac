@@ -290,7 +290,7 @@ execSync([
   'node', aggBin,
   '--dir', reportsDir,
   '--addon-type', 'vision',
-  '--html-device-details',
+  '--device-details',
   '--output-html', path.join(outputDir, 'performance-report-combined.html'),
   '--output-json', path.join(outputDir, 'performance-summary-combined.json'),
   '--output', path.join(outputDir, 'performance-report-combined.md')
