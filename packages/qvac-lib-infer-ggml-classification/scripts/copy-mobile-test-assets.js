@@ -30,6 +30,7 @@ const ADDON_DIR = path.resolve(__dirname, '..')
 const PREBUILDS_DIR = path.join(ADDON_DIR, 'prebuilds')
 const WEIGHTS_DIR = path.join(ADDON_DIR, 'weights')
 const TEST_ASSETS_DIR = path.join(ADDON_DIR, 'test', 'mobile', 'testAssets')
+const TEST_IMAGES_DIR = path.join(ADDON_DIR, 'test', 'images')
 
 // The qvac-test-addon-mobile framework's metro.config.js registers
 // `assetExts: ['so', 'bin', 'model', 'bundle', 'raw', 'onnx']`. It does
@@ -90,6 +91,43 @@ function fanOutPrebuilds (sourceFlavour, allFlavours) {
   }
 }
 
+// Copy every classification test image (`test/images/*.{jpg,jpeg,png}`)
+// into `test/mobile/testAssets/`. The qvac-test-addon-mobile framework
+// pushes everything under `test/mobile/testAssets/` to the device and
+// exposes their on-device paths through `global.assetPaths`, keyed by
+// `../../testAssets/<filename>`. Without this copy `loadImage()` in
+// `test/integration/utils.js` falls back to a desktop-style fs lookup
+// inside the packed `app.bundle/` (which is not a real filesystem) and
+// the bare runtime aborts with `FileError: ENOENT, open
+// "/app.bundle/backend/test/images/<file>"`. Image extensions
+// (`.jpg`/`.png`) are part of React Native's default `assetExts`, so
+// no rename is required (unlike the GGUF blob).
+function copyTestImagesToTestAssets () {
+  if (!fs.existsSync(TEST_IMAGES_DIR)) {
+    console.error(`[mobile:copy-prebuilds] FATAL: test images directory not found: ${TEST_IMAGES_DIR}`)
+    console.error('[mobile:copy-prebuilds] The integration test images must be present before mobile tests can run.')
+    process.exit(1)
+  }
+  fs.mkdirSync(TEST_ASSETS_DIR, { recursive: true })
+  const allowedExts = new Set(['.jpg', '.jpeg', '.png'])
+  let copied = 0
+  for (const entry of fs.readdirSync(TEST_IMAGES_DIR, { withFileTypes: true })) {
+    if (!entry.isFile()) continue
+    const ext = path.extname(entry.name).toLowerCase()
+    if (!allowedExts.has(ext)) continue
+    const src = path.join(TEST_IMAGES_DIR, entry.name)
+    const dst = path.join(TEST_ASSETS_DIR, entry.name)
+    fs.copyFileSync(src, dst)
+    const sizeKb = (fs.statSync(dst).size / 1024).toFixed(1)
+    console.log(`[mobile:copy-prebuilds] Copied test image ${entry.name} -> ${path.relative(ADDON_DIR, dst)} (${sizeKb} KB)`)
+    copied++
+  }
+  if (copied === 0) {
+    console.error(`[mobile:copy-prebuilds] FATAL: no test images were found in ${TEST_IMAGES_DIR}`)
+    process.exit(1)
+  }
+}
+
 function copyWeightsToTestAssets () {
   if (!fs.existsSync(WEIGHTS_DIR)) {
     console.error(`[mobile:copy-prebuilds] FATAL: weights directory not found: ${WEIGHTS_DIR}`)
@@ -121,6 +159,7 @@ function main () {
   fanOutPrebuilds('android-arm64', ANDROID_FLAVOURS)
   fanOutPrebuilds('ios-arm64', IOS_FLAVOURS)
   copyWeightsToTestAssets()
+  copyTestImagesToTestAssets()
   console.log('[mobile:copy-prebuilds] Done.')
 }
 

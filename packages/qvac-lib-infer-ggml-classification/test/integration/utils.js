@@ -156,8 +156,47 @@ function resolveModelPath () {
   return undefined
 }
 
+// Resolve the on-disk path for a test image, accounting for the packed
+// mobile bundle. On desktop the image lives under `test/images/<name>`;
+// on mobile the qvac-test-addon-mobile framework pushes everything
+// under `test/mobile/testAssets/` to the device and exposes the
+// resulting on-device file:// URLs through `global.assetPaths`, keyed
+// by `../../testAssets/<filename>` (matching what other addons such as
+// `ocr-onnx` and `lib-infer-diffusion` use). The pre-test
+// `scripts/copy-mobile-test-assets.js` step is responsible for putting
+// each `test/images/*.jpg` into `test/mobile/testAssets/` so this
+// lookup succeeds. We throw a clear synchronous error when the asset
+// is missing rather than letting `fs.readFileSync` fail with the
+// opaque `app.bundle/...` path that aborts the bare worklet (see CI
+// run 25004602841 logcat: ENOENT for
+// `/app.bundle/backend/test/images/meal_1.jpg`).
+function _resolveImagePath (name) {
+  if (isMobile && typeof global !== 'undefined' && global.assetPaths) {
+    const candidates = [
+      `../../testAssets/${name}`,
+      `../mobile/testAssets/${name}`,
+      `testAssets/${name}`,
+      `../testAssets/${name}`
+    ]
+    for (const key of candidates) {
+      const mapped = global.assetPaths[key]
+      if (mapped) {
+        return mapped.startsWith('file://') ? mapped.slice('file://'.length) : mapped
+      }
+    }
+    const known = Object.keys(global.assetPaths).slice(0, 8).join(', ')
+    throw new Error(
+      `Mobile test image not found in global.assetPaths: ${name}. ` +
+      "Did 'npm run mobile:copy-prebuilds' run during test setup, " +
+      'and is `test/mobile/testAssets/' + name + '` present? ' +
+      `assetPaths sample keys: [${known}]`
+    )
+  }
+  return path.join(IMAGE_DIR, name)
+}
+
 function loadImage (name) {
-  return fs.readFileSync(path.join(IMAGE_DIR, name))
+  return fs.readFileSync(_resolveImagePath(name))
 }
 
 function recordMetric (label, totalTimeMs, input) {
