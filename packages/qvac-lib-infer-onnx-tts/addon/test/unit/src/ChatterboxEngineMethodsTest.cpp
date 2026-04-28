@@ -21,6 +21,10 @@ public:
     languageModelSession_ = std::move(session);
   }
 
+  void setSpeechEncoderSession(std::unique_ptr<IOnnxInferSession> session) {
+    speechEncoderSession_ = std::move(session);
+  }
+
   using ChatterboxEngine::advancePositionIds;
   using ChatterboxEngine::assembleSpeechTokenSequence;
   using ChatterboxEngine::buildInitialPositionIds;
@@ -29,6 +33,8 @@ public:
   using ChatterboxEngine::convertToAudioResult;
   using ChatterboxEngine::enableKvCacheChaining;
   using ChatterboxEngine::hasSpeechEncoderCache;
+  using ChatterboxEngine::processSpeechEncoderOutputs;
+  using ChatterboxEngine::runSpeechEncoderAndCache;
   using ChatterboxEngine::selectNextToken;
   using ChatterboxEngine::writeKvToTensors;
 
@@ -618,6 +624,227 @@ TEST_F(KvCacheChainingTest, enableCalledTwiceResetsPreviousMapping) {
   engine_.setLanguageModelSession(std::move(mock));
   engine_.enableKvCacheChaining();
   engine_.enableKvCacheChaining();
+}
+
+// Regression coverage for Omar's review on PR #1745 (r3155500217):
+// runSpeechEncoderAndCache() must invalidate any previously valid cache at
+// entry, otherwise a partial/failed re-run leaves the engine pointing at
+// stale features from a prior successful load() while
+// processSpeechEncoderOutputs() / prepareCfgEmbeddings() guards see
+// `valid == true` and silently let synthesize() proceed with the wrong
+// reference audio.
+class RunSpeechEncoderAndCacheTest : public ::testing::Test {
+protected:
+  TestableChatterboxEngine engine_;
+};
+
+TEST_F(RunSpeechEncoderAndCacheTest,
+       invalidatesPriorValidCacheWhenEnsureSessionThrows) {
+  // Pre-populate a "valid" cache that mimics a previous successful load().
+  auto &cache = engine_.getMutableCache();
+  cache.audioFeatures.shape = {1, 1, 1};
+  cache.audioFeatures.data = {0.42f};
+  cache.promptToken.shape = {1, 1};
+  cache.promptToken.data = {123};
+  cache.speakerEmbeddings.shape = {1, 1};
+  cache.speakerEmbeddings.data = {0.5f};
+  cache.speakerFeatures.shape = {1, 1};
+  cache.speakerFeatures.data = {0.7f};
+  cache.valid = true;
+  ASSERT_TRUE(engine_.hasSpeechEncoderCache());
+
+  // No session injected and no SessionFactory set on the test engine, so
+  // ensureSession() will invoke an empty std::function and throw.
+  EXPECT_THROW(engine_.runSpeechEncoderAndCache(), std::bad_function_call);
+  EXPECT_FALSE(engine_.hasSpeechEncoderCache());
+  EXPECT_TRUE(engine_.getMutableCache().audioFeatures.data.empty());
+  EXPECT_TRUE(engine_.getMutableCache().promptToken.data.empty());
+  EXPECT_TRUE(engine_.getMutableCache().speakerEmbeddings.data.empty());
+  EXPECT_TRUE(engine_.getMutableCache().speakerFeatures.data.empty());
+}
+
+TEST_F(RunSpeechEncoderAndCacheTest,
+       invalidatesPriorValidCacheWhenSpeechEncoderInferThrows) {
+  auto &cache = engine_.getMutableCache();
+  cache.audioFeatures.shape = {1, 1, 1};
+  cache.audioFeatures.data = {0.42f};
+  cache.promptToken.shape = {1, 1};
+  cache.promptToken.data = {123};
+  cache.speakerEmbeddings.shape = {1, 1};
+  cache.speakerEmbeddings.data = {0.5f};
+  cache.speakerFeatures.shape = {1, 1};
+  cache.speakerFeatures.data = {0.7f};
+  cache.valid = true;
+  ASSERT_TRUE(engine_.hasSpeechEncoderCache());
+
+  // Inject a session whose initInputTensors() throws — simulates the
+  // forward pass blowing up after a prior successful load(), exactly
+  // the scenario Omar flagged.
+  auto mock = std::make_unique<::testing::NiceMock<OnnxInferSessionMock>>();
+  EXPECT_CALL(*mock, initInputTensors(::testing::_))
+      .WillOnce(::testing::Throw(std::runtime_error("simulated ORT failure")));
+  engine_.setSpeechEncoderSession(std::move(mock));
+
+  EXPECT_THROW(engine_.runSpeechEncoderAndCache(), std::runtime_error);
+  EXPECT_FALSE(engine_.hasSpeechEncoderCache());
+  EXPECT_TRUE(engine_.getMutableCache().audioFeatures.data.empty());
+}
+
+TEST_F(RunSpeechEncoderAndCacheTest, leavesAlreadyInvalidCacheInvalid) {
+  ASSERT_FALSE(engine_.hasSpeechEncoderCache());
+  EXPECT_THROW(engine_.runSpeechEncoderAndCache(), std::bad_function_call);
+  EXPECT_FALSE(engine_.hasSpeechEncoderCache());
+}
+
+class ProcessSpeechEncoderOutputsTest : public ::testing::Test {
+protected:
+  TestableChatterboxEngine engine_;
+
+  TensorData<float> inputsEmbs_;
+  TensorData<int64_t> promptToken_;
+  TensorData<float> speakerEmbeddings_;
+  TensorData<float> speakerFeatures_;
+  TensorData<int64_t> positionIds_;
+  TensorData<int64_t> attentionMask_;
+  std::unordered_map<std::string, TensorData<float>> pastKeyValues_;
+};
+
+TEST_F(ProcessSpeechEncoderOutputsTest, throwsWhenCacheIsInvalid) {
+  ASSERT_FALSE(engine_.hasSpeechEncoderCache());
+
+  EXPECT_THROW(engine_.processSpeechEncoderOutputs(
+                   inputsEmbs_, promptToken_, speakerEmbeddings_,
+                   speakerFeatures_, positionIds_, attentionMask_,
+                   pastKeyValues_),
+               std::runtime_error);
+}
+
+TEST_F(ProcessSpeechEncoderOutputsTest, throwsAfterCacheClearedExplicitly) {
+  auto &cache = engine_.getMutableCache();
+  cache.valid = true;
+  ASSERT_TRUE(engine_.hasSpeechEncoderCache());
+
+  engine_.clearSpeechEncoderCache();
+  ASSERT_FALSE(engine_.hasSpeechEncoderCache());
+
+  EXPECT_THROW(engine_.processSpeechEncoderOutputs(
+                   inputsEmbs_, promptToken_, speakerEmbeddings_,
+                   speakerFeatures_, positionIds_, attentionMask_,
+                   pastKeyValues_),
+               std::runtime_error);
+}
+
+// Throw-path coverage for the fail-loud guards added on top of PR #1674's
+// tensor_ops helpers. The happy paths above (concatenatesFloatTensorsAlongBatchDim,
+// preservesEmptyPastSequence, etc.) cover the success cases.
+TEST_F(TensorOpsConcatBatchTest, throwsWhenLeftShapeIsEmpty) {
+  TensorData<float> empty;
+  TensorData<float> nonEmpty;
+  nonEmpty.shape = {1, 2};
+  nonEmpty.data = {1.0f, 2.0f};
+
+  EXPECT_THROW(tensor_ops::concatBatch(empty, nonEmpty), std::invalid_argument);
+}
+
+TEST_F(TensorOpsConcatBatchTest, throwsWhenRightShapeIsEmpty) {
+  TensorData<float> nonEmpty;
+  nonEmpty.shape = {1, 2};
+  nonEmpty.data = {1.0f, 2.0f};
+  TensorData<float> empty;
+
+  EXPECT_THROW(tensor_ops::concatBatch(nonEmpty, empty), std::invalid_argument);
+}
+
+TEST_F(TensorOpsConcatBatchTest, throwsWhenRanksDiffer) {
+  TensorData<float> a;
+  a.shape = {1, 2, 3};
+  a.data = {1, 2, 3, 4, 5, 6};
+  TensorData<float> b;
+  b.shape = {1, 6};
+  b.data = {7, 8, 9, 10, 11, 12};
+
+  EXPECT_THROW(tensor_ops::concatBatch(a, b), std::invalid_argument);
+}
+
+TEST_F(TensorOpsConcatBatchTest, throwsWhenNonBatchDimensionsDiffer) {
+  TensorData<float> a;
+  a.shape = {1, 2, 3};
+  a.data = {1, 2, 3, 4, 5, 6};
+  TensorData<float> b;
+  b.shape = {1, 2, 4};
+  b.data = {7, 8, 9, 10, 11, 12, 13, 14};
+
+  EXPECT_THROW(tensor_ops::concatBatch(a, b), std::invalid_argument);
+}
+
+TEST_F(TensorOpsDuplicateBatchTest, throwsWhenShapeIsEmpty) {
+  TensorData<float> empty;
+
+  EXPECT_THROW(tensor_ops::duplicateBatch(empty), std::invalid_argument);
+}
+
+class TensorOpsReadLastStepLogitsTest : public ::testing::Test {};
+
+TEST_F(TensorOpsReadLastStepLogitsTest, throwsWhenTensorIsNot3D) {
+  std::vector<float> data(4, 0.0f);
+  OrtTensor twoDimTensor{data.data(), "logits", {2, 2}, OrtElementType::Fp32};
+
+  EXPECT_THROW(tensor_ops::readLastStepLogitsForBatch(twoDimTensor, 0),
+               std::runtime_error);
+}
+
+TEST_F(TensorOpsReadLastStepLogitsTest, throwsWhenTensorIs4D) {
+  std::vector<float> data(8, 0.0f);
+  OrtTensor fourDimTensor{
+      data.data(), "logits", {1, 2, 2, 2}, OrtElementType::Fp32};
+
+  EXPECT_THROW(tensor_ops::readLastStepLogitsForBatch(fourDimTensor, 0),
+               std::runtime_error);
+}
+
+TEST_F(TensorOpsReadLastStepLogitsTest, throwsWhenBatchIdxIsNegative) {
+  std::vector<float> data(4, 0.0f);
+  OrtTensor tensor{data.data(), "logits", {2, 1, 2}, OrtElementType::Fp32};
+
+  EXPECT_THROW(tensor_ops::readLastStepLogitsForBatch(tensor, -1),
+               std::out_of_range);
+}
+
+TEST_F(TensorOpsReadLastStepLogitsTest, throwsWhenBatchIdxEqualsBatchSize) {
+  std::vector<float> data(4, 0.0f);
+  OrtTensor tensor{data.data(), "logits", {2, 1, 2}, OrtElementType::Fp32};
+
+  EXPECT_THROW(tensor_ops::readLastStepLogitsForBatch(tensor, 2),
+               std::out_of_range);
+}
+
+TEST_F(TensorOpsReadLastStepLogitsTest, throwsWhenBatchIdxAboveBatchSize) {
+  std::vector<float> data(4, 0.0f);
+  OrtTensor tensor{data.data(), "logits", {2, 1, 2}, OrtElementType::Fp32};
+
+  EXPECT_THROW(tensor_ops::readLastStepLogitsForBatch(tensor, 100),
+               std::out_of_range);
+}
+
+TEST_F(TensorOpsReadLastStepLogitsTest,
+       returnsLastStepLogitsForRequestedBatch) {
+  // Tensor shape [batch=2, seq=2, vocab=3]; the function must extract the
+  // last step (index 1) from the requested batch row.
+  std::vector<float> data{
+      // batch 0
+      11.f, 12.f, 13.f, // step 0
+      14.f, 15.f, 16.f, // step 1 (last)
+      // batch 1
+      21.f, 22.f, 23.f, // step 0
+      24.f, 25.f, 26.f, // step 1 (last)
+  };
+  OrtTensor tensor{data.data(), "logits", {2, 2, 3}, OrtElementType::Fp32};
+
+  auto batch0 = tensor_ops::readLastStepLogitsForBatch(tensor, 0);
+  auto batch1 = tensor_ops::readLastStepLogitsForBatch(tensor, 1);
+
+  EXPECT_EQ(batch0, (std::vector<float>{14.f, 15.f, 16.f}));
+  EXPECT_EQ(batch1, (std::vector<float>{24.f, 25.f, 26.f}));
 }
 
 } // namespace qvac::ttslib::chatterbox::testing

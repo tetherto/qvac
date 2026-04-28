@@ -16,6 +16,15 @@ namespace qvac_lib_inference_addon_whisper {
 
 class WhisperModel;
 
+struct VadStateUpdate {
+  bool speaking = false;
+  float probability = 0.0F;
+};
+
+struct EndOfTurnEvent {
+  int silenceDurationMs = 0;
+};
+
 class StreamingProcessor {
 public:
   struct Config {
@@ -36,6 +45,8 @@ public:
         static_cast<int>(kDefaultMaxSpeechDurationS) * kDefaultSampleRate;
     int vadRunIntervalSamples =
         static_cast<int>(kVadRunIntervalS * kDefaultSampleRate);
+    bool emitVadEvents = false;
+    int endOfTurnSilenceMs = 0;
   };
 
   StreamingProcessor(
@@ -57,6 +68,7 @@ public:
 private:
   void processLoop();
   void processAudioRange(int startSample, int endSample);
+  void emitConversationEvents(bool speaking, float probability);
 
   WhisperModel& model_;
   std::shared_ptr<qvac_lib_inference_addon_cpp::OutputQueue> outputQueue_;
@@ -72,6 +84,13 @@ private:
 
   whisper_vad_context* vadCtx_ = nullptr;
   int bufferSizeAtLastVadRun_ = 0;
+  std::int64_t totalSamplesReceived_ = 0;
+  std::int64_t processBufferStartSample_ = 0;
+  std::int64_t lastSpeechEndSample_ = 0;
+  bool hasSeenSpeech_ = false;
+  bool wasSpeaking_ = false;
+  std::int64_t silenceStartSample_ = 0;
+  bool endOfTurnEmitted_ = false;
 
   std::thread thread_;
 };
