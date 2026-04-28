@@ -34,32 +34,18 @@ namespace {
 constexpr const char* kModelName = "mobilenetv3-small-ggml-classification";
 }
 
-struct ClassificationModel::Impl {
-  std::string modelPath;
-  ggml_backend_t backend = nullptr;
-  graph::WeightsBundle weights;
-  graph::ComputeGraph compute;
-  std::vector<std::string> labels;
-  int numThreads = 0;
-  bool loaded = false;
-  uint64_t lastInferenceUs = 0;
-};
-
 ClassificationModel::ClassificationModel(std::string modelPath)
-    : impl_(std::make_unique<Impl>()) {
-  impl_->modelPath = std::move(modelPath);
-}
+    : modelPath_(std::move(modelPath)) {}
 
 ClassificationModel::~ClassificationModel() {
-  if (!impl_) return;
   // ggml requires buffers to be freed strictly before the backend they were
   // allocated on. Explicitly reset the compute graph and weights bundle (both
   // own backend-allocated buffers) before releasing the backend itself.
-  impl_->compute.reset();
-  impl_->weights.reset();
-  if (impl_->backend != nullptr) {
-    ggml_backend_free(impl_->backend);
-    impl_->backend = nullptr;
+  compute_.reset();
+  weights_.reset();
+  if (backend_ != nullptr) {
+    ggml_backend_free(backend_);
+    backend_ = nullptr;
   }
 }
 
@@ -71,18 +57,14 @@ qvac_lib_inference_addon_cpp::RuntimeStats
 ClassificationModel::runtimeStats() const {
   using qvac_lib_inference_addon_cpp::RuntimeStats;
   RuntimeStats stats;
-  const double totalMs =
-      static_cast<double>(impl_ ? impl_->lastInferenceUs : 0) / 1000.0;
+  const double totalMs = static_cast<double>(lastInferenceUs_) / 1000.0;
   stats.emplace_back("total_time_ms", totalMs);
   return stats;
 }
 
 void ClassificationModel::setNumThreads(int threads) {
   std::scoped_lock lock(mutex_);
-  if (!impl_) {
-    return;
-  }
-  impl_->numThreads = threads;
+  numThreads_ = threads;
 }
 
 namespace {
@@ -152,30 +134,26 @@ bool traceEnabled() {
 
 void ClassificationModel::load() {
   std::scoped_lock lock(mutex_);
-  if (!impl_) {
-    throw StatusError(InternalError, "ClassificationModel::load on destroyed instance");
-  }
-  if (impl_->loaded) {
+  if (loaded_) {
     return;
   }
-  if (impl_->modelPath.empty()) {
+  if (modelPath_.empty()) {
     throw StatusError(
         InvalidArgument,
         "ClassificationModel requires a path to mobilenetv3 FP16 GGUF weights");
   }
 
-  impl_->backend = ggml_backend_cpu_init();
-  if (impl_->backend == nullptr) {
+  backend_ = ggml_backend_cpu_init();
+  if (backend_ == nullptr) {
     throw StatusError(InternalError, "Failed to initialize ggml CPU backend");
   }
 
-  impl_->labels.clear();
-  impl_->weights =
-      graph::loadWeights(impl_->modelPath, impl_->backend, impl_->labels);
-  if (impl_->labels.empty()) {
-    impl_->labels = {"food", "report", "other"};
+  labels_.clear();
+  weights_ = graph::loadWeights(modelPath_, backend_, labels_);
+  if (labels_.empty()) {
+    labels_ = {"food", "report", "other"};
   }
-  impl_->compute = graph::buildGraph(impl_->weights, impl_->backend);
+  compute_ = graph::buildGraph(weights_, backend_);
 
   // Cold-inference warmup. The first user-visible classify() can observe
   // non-finite logits on some platforms (notably win32-x64 in CI:
@@ -206,27 +184,27 @@ void ClassificationModel::load() {
         std::span<const uint8_t>(warmupRgb.data(), warmupRgb.size()),
         kWarmupSide, kWarmupSide, preprocess::kChannels);
     ggml_backend_tensor_set(
-        impl_->compute.input, warmupTensor.data(), 0,
+        compute_.input, warmupTensor.data(), 0,
         warmupTensor.size() * sizeof(float));
-    if (impl_->numThreads > 0) {
-      ggml_backend_cpu_set_n_threads(impl_->backend, impl_->numThreads);
+    if (numThreads_ > 0) {
+      ggml_backend_cpu_set_n_threads(backend_, numThreads_);
     }
-    (void)ggml_backend_graph_compute(impl_->backend, impl_->compute.graph);
+    (void)ggml_backend_graph_compute(backend_, compute_.graph);
     // Read the output back so the warmup is observably symmetric with
     // process(): on some backends the result of compute() only fully
     // materialises after the first tensor_get on the output buffer.
     float warmupLogits[graph::kNumClasses] = {0.0F};
     ggml_backend_tensor_get(
-        impl_->compute.output, warmupLogits, 0, sizeof(warmupLogits));
+        compute_.output, warmupLogits, 0, sizeof(warmupLogits));
     (void)warmupLogits;
   }
 
-  impl_->loaded = true;
+  loaded_ = true;
 
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::INFO,
       std::string("ClassificationModel loaded (") +
-          std::to_string(impl_->labels.size()) + " classes)");
+          std::to_string(labels_.size()) + " classes)");
 }
 
 std::any ClassificationModel::process(const std::any& input) {
@@ -236,7 +214,7 @@ std::any ClassificationModel::process(const std::any& input) {
   if (inPtr == nullptr) {
     throw StatusError(InvalidArgument, "ClassificationModel: invalid input type");
   }
-  if (!impl_ || !impl_->loaded) {
+  if (!loaded_) {
     throw StatusError(
         InternalError,
         "ClassificationModel: classify() called before load() or after unload()");
@@ -257,17 +235,17 @@ std::any ClassificationModel::process(const std::any& input) {
   }
 
   ggml_backend_tensor_set(
-      impl_->compute.input, inputTensor.data(), 0,
+      compute_.input, inputTensor.data(), 0,
       inputTensor.size() * sizeof(float));
 
   // Configure CPU threads if requested; otherwise libggml picks a sensible
   // default based on hardware concurrency.
-  if (impl_->numThreads > 0) {
-    ggml_backend_cpu_set_n_threads(impl_->backend, impl_->numThreads);
+  if (numThreads_ > 0) {
+    ggml_backend_cpu_set_n_threads(backend_, numThreads_);
   }
 
   ggml_status status =
-      ggml_backend_graph_compute(impl_->backend, impl_->compute.graph);
+      ggml_backend_graph_compute(backend_, compute_.graph);
   if (status != GGML_STATUS_SUCCESS) {
     throw StatusError(
         InternalError, "ggml_backend_graph_compute failed with status " +
@@ -277,7 +255,7 @@ std::any ClassificationModel::process(const std::any& input) {
   // Retrieve logits.
   float logits[graph::kNumClasses] = {0.0F};
   ggml_backend_tensor_get(
-      impl_->compute.output, logits, 0, sizeof(logits));
+      compute_.output, logits, 0, sizeof(logits));
 
   std::vector<float> probs = softmax(std::span<const float>(logits, graph::kNumClasses));
 
@@ -286,8 +264,8 @@ std::any ClassificationModel::process(const std::any& input) {
   ClassifyOutput output;
   output.results.reserve(probs.size());
   for (size_t i = 0; i < probs.size(); ++i) {
-    const std::string label = i < impl_->labels.size()
-                                  ? impl_->labels[i]
+    const std::string label = i < labels_.size()
+                                  ? labels_[i]
                                   : std::string("class_") + std::to_string(i);
     output.results.push_back({label, probs[i]});
   }
@@ -352,7 +330,7 @@ std::any ClassificationModel::process(const std::any& input) {
   }
 
   const auto t1 = std::chrono::steady_clock::now();
-  impl_->lastInferenceUs = static_cast<uint64_t>(
+  lastInferenceUs_ = static_cast<uint64_t>(
       std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count());
 
   return std::any(std::move(output));

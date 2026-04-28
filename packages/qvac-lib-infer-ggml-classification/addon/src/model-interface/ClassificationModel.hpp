@@ -9,8 +9,11 @@
 #include <variant>
 #include <vector>
 
+#include <ggml-backend.h>
 #include <qvac-lib-inference-addon-cpp/ModelInterfaces.hpp>
 #include <qvac-lib-inference-addon-cpp/RuntimeStats.hpp>
+
+#include "MobileNetGraph.hpp"
 
 namespace qvac_lib_infer_ggml_classification {
 
@@ -68,8 +71,23 @@ public:
   void setNumThreads(int threads);
 
 private:
-  struct Impl;
-  std::unique_ptr<Impl> impl_;
+  // Direct members instead of a PIMPL struct: the addon is internal,
+  // ggml types only flow into this header (not into any package
+  // consumer), and a flat layout is easier to navigate. Field
+  // ordering matters for destruction: ggml requires every buffer
+  // (compute graph + weights bundle) to be released BEFORE the
+  // backend they were allocated on, and ~ClassificationModel honours
+  // that ordering explicitly. The mutex is the last member declared
+  // because clang-tidy prefers initialised-before-used ordering and
+  // the mutex protects access to all of the above.
+  std::string modelPath_;
+  ggml_backend_t backend_ = nullptr;
+  graph::WeightsBundle weights_;
+  graph::ComputeGraph compute_;
+  std::vector<std::string> labels_;
+  int numThreads_ = 0;
+  bool loaded_ = false;
+  uint64_t lastInferenceUs_ = 0;
   mutable std::mutex mutex_;
 };
 
