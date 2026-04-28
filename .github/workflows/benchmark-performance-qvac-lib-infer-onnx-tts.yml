@@ -1,59 +1,28 @@
-name: Integration Tests (TTS)
+name: Benchmark Performance (Supertonic TTS)
 
 on:
   workflow_dispatch:
     inputs:
-      prebuild_package:
-        description: "NPM package containing prebuilds (e.g. @qvac/tts-onnx@1.0.0)"
-        required: true
+      repository:
+        description: "Repository to benchmark"
+        required: false
         type: string
       ref:
-        description: "Git ref to checkout"
+        description: "Git ref (branch/tag/SHA) to benchmark"
         required: false
         type: string
-      repository:
-        description: "Repository to checkout"
-        required: false
-        type: string
-      model:
-        description: "Model to use"
-        required: false
-        type: string
-      workdir:
-        description: "Relative path to package directory in monorepo"
-        type: string
-        required: false
-        default: "packages/qvac-lib-infer-onnx-tts"
-      tts_integration_profile:
-        description: "short = no WER, 2 multilingual langs; long = WER on all platforms, full multilingual"
-        type: choice
-        required: false
-        default: "short"
-        options:
-          - short
-          - long
-      run_integration_tests:
-        description: "Run the regular integration suite"
-        required: false
-        type: boolean
-        default: true
-      run_supertonic_desktop_benchmarks:
-        description: "Run the Supertonic desktop benchmark/reporting matrix"
-        required: false
-        type: boolean
-        default: false
-      supertonic_max_samples:
-        description: "Maximum samples per language for Supertonic benchmarks (0 = full dataset)"
+      max_samples:
+        description: "Maximum samples per language (0 = full dataset)"
         required: false
         type: number
         default: 25
-      supertonic_round_trip_test:
-        description: "Enable round-trip quality test for Supertonic benchmarks"
-        required: false
+      round_trip_test:
+        description: "Enable round-trip quality test (TTS -> Whisper -> WER/CER)"
+        required: true
         type: boolean
         default: true
-      supertonic_whisper_model:
-        description: "Whisper model for Supertonic benchmark quality checks"
+      whisper_model:
+        description: "Whisper model for round-trip quality checks"
         required: false
         type: choice
         default: tiny
@@ -62,169 +31,81 @@ on:
           - base
           - small
           - medium
-      supertonic_num_runs:
-        description: "Number of Supertonic benchmark runs per runner"
+      num_runs:
+        description: "Number of benchmark runs per device/backend"
         required: false
         type: number
         default: 1
-      supertonic_run_python:
-        description: "Run the Python baseline on CPU Supertonic benchmark jobs"
+      run_python:
+        description: "Run the Python baseline on CPU benchmark jobs"
+        required: true
+        type: boolean
+        default: true
+      include_desktop:
+        description: "Run the desktop benchmark matrix"
         required: false
         type: boolean
         default: true
-  workflow_call:
-    inputs:
-      ref:
-        description: "ref"
-        type: string
-      repository:
-        type: string
-      model:
-        type: string
-      workdir:
-        description: "Relative path to package directory in monorepo"
-        required: false
-        default: "packages/qvac-lib-infer-onnx-tts"
-        type: string
-      tts_integration_profile:
-        description: "short = no WER, 2 multilingual langs; long = WER on all platforms, full multilingual"
-        required: false
-        default: "short"
-        type: string
-      run_integration_tests:
-        description: "Run the regular integration suite"
-        required: false
-        default: true
-        type: boolean
-      run_supertonic_desktop_benchmarks:
-        description: "Run the Supertonic desktop benchmark/reporting matrix"
-        required: false
-        default: false
-        type: boolean
-      supertonic_max_samples:
-        description: "Maximum samples per language for Supertonic benchmarks (0 = full dataset)"
-        required: false
-        default: 25
-        type: number
-      supertonic_round_trip_test:
-        description: "Enable round-trip quality test for Supertonic benchmarks"
-        required: false
-        default: true
-        type: boolean
-      supertonic_whisper_model:
-        description: "Whisper model for Supertonic benchmark quality checks"
-        required: false
-        default: "tiny"
-        type: string
-      supertonic_num_runs:
-        description: "Number of Supertonic benchmark runs per runner"
-        required: false
-        default: 1
-        type: number
-      supertonic_run_python:
-        description: "Run the Python baseline on CPU Supertonic benchmark jobs"
-        required: false
-        default: true
-        type: boolean
+
+permissions:
+  contents: read
+  packages: read
+  id-token: write
 
 jobs:
-  run-integration-tests:
-    if: ${{ inputs.run_integration_tests != false }}
-    continue-on-error: true
-    runs-on: ${{ matrix.os }}
-    environment: release
-    name: test-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.os_version && format('-{0}', matrix.os_version) || '' }}-${{ matrix.variant }}
-    permissions:
-      contents: read
-      packages: read
-      id-token: write
-    strategy:
-      fail-fast: false
-      matrix:
-        # Only darwin-arm64 (macos-14-xlarge) runs all Chatterbox quantization variants; others use q4 only.
-        include:
-          - {os: ubuntu-22.04, variant: q4, platform: linux, arch: x64, os_version: u22}
-          - {os: ubuntu-24.04, variant: q4, platform: linux, arch: x64, os_version: u24}
-          - {os: ubuntu-24.04-arm, variant: q4, platform: linux, arch: arm64, os_version: u24}
-          - {os: macos-14-xlarge, variant: fp32, platform: darwin, arch: arm64, os_version: m14}
-          - {os: macos-14-xlarge, variant: fp16, platform: darwin, arch: arm64, os_version: m14}
-          - {os: macos-14-xlarge, variant: q4, platform: darwin, arch: arm64, os_version: m14}
-          - {os: macos-14-xlarge, variant: q4f16, platform: darwin, arch: arm64, os_version: m14}
-          - {os: macos-15-large, variant: q4, platform: darwin, arch: x64, os_version: m15}
-          - {os: windows-2022, variant: q4, platform: win32, arch: x64, os_version: w22,}
-
+  context:
+    runs-on: ubuntu-latest
+    outputs:
+      repository: ${{ steps.ctx.outputs.repository }}
+      ref: ${{ steps.ctx.outputs.ref }}
+      max_samples: ${{ steps.ctx.outputs.max_samples }}
+      round_trip_test: ${{ steps.ctx.outputs.round_trip_test }}
+      whisper_model: ${{ steps.ctx.outputs.whisper_model }}
+      num_runs: ${{ steps.ctx.outputs.num_runs }}
+      run_python: ${{ steps.ctx.outputs.run_python }}
+      include_desktop: ${{ steps.ctx.outputs.include_desktop }}
     steps:
-      - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
-        with:
-          node-version: lts/*
-
-      - name: Windows - enable git long paths
-        if: ${{ matrix.platform == 'win32' }}
+      - id: ctx
         shell: bash
-        run: git config --system core.longpaths true
-
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
-
-      - name: Configure AWS credentials via OIDC
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
-        with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          aws-region: eu-central-1
-
-      - name: Install NPM dependencies
-        working-directory: ${{ inputs.workdir }}
-        run: |
-          npm install
-          npm install -g bare bare-make
-
-      - name: Download prebuilds from artifact
-        if: ${{ !inputs.prebuild_package }}
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
-        with:
-          path: ${{ inputs.workdir }}/prebuilds
-          merge-multiple: true
-
-      - name: Download prebuilds from package
-        if: ${{ inputs.prebuild_package }}
-        working-directory: ${{ inputs.workdir }}
-        shell: bash
-        run: |
-          mkdir -p prebuilds
-          npm pack ${{ inputs.prebuild_package }} --pack-destination /tmp
-          tar -xzf /tmp/*.tgz -C /tmp
-          cp -r /tmp/package/prebuilds/* prebuilds/
-
-      - name: Linux - install dependencies
-        if: matrix.platform == 'linux' || matrix.platform == 'android'
-        shell: bash
-        run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
-
-      - name: Run integration test
-        working-directory: ${{ inputs.workdir }}
-        run: npm run test:integration
         env:
-          CHATTERBOX_VARIANT: ${{ matrix.variant }}
-          TTS_INTEGRATION_PROFILE: ${{ inputs.tts_integration_profile || 'short' }}
-          QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
+          INPUT_REPO: ${{ inputs.repository }}
+          INPUT_REF: ${{ inputs.ref }}
+          INPUT_MAX_SAMPLES: ${{ inputs.max_samples }}
+          INPUT_ROUND_TRIP_TEST: ${{ inputs.round_trip_test }}
+          INPUT_WHISPER_MODEL: ${{ inputs.whisper_model }}
+          INPUT_NUM_RUNS: ${{ inputs.num_runs }}
+          INPUT_RUN_PYTHON: ${{ inputs.run_python }}
+          INPUT_INCLUDE_DESKTOP: ${{ inputs.include_desktop }}
+          REPO: ${{ github.repository }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          repo="${INPUT_REPO:-$REPO}"
+          ref="${INPUT_REF:-$REF_NAME}"
+          echo "repository=$repo" >> "$GITHUB_OUTPUT"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "max_samples=${INPUT_MAX_SAMPLES:-25}" >> "$GITHUB_OUTPUT"
+          echo "round_trip_test=${INPUT_ROUND_TRIP_TEST}" >> "$GITHUB_OUTPUT"
+          echo "whisper_model=${INPUT_WHISPER_MODEL:-tiny}" >> "$GITHUB_OUTPUT"
+          echo "num_runs=${INPUT_NUM_RUNS:-1}" >> "$GITHUB_OUTPUT"
+          echo "run_python=${INPUT_RUN_PYTHON}" >> "$GITHUB_OUTPUT"
+          echo "include_desktop=${INPUT_INCLUDE_DESKTOP}" >> "$GITHUB_OUTPUT"
 
-      - name: Upload performance report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: perf-report-tts-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.variant }}-${{ github.run_number }}
-          path: ${{ inputs.workdir }}/test/results/performance-report.json
-          retention-days: 90
-          if-no-files-found: ignore
+  prebuild:
+    needs: context
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx-tts.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
 
-  run-supertonic-desktop-benchmarks:
-    if: ${{ inputs.run_supertonic_desktop_benchmarks == true }}
-    continue-on-error: true
+  desktop-benchmarks:
+    needs: [context, prebuild]
+    if: needs.context.outputs.include_desktop != 'false'
     runs-on: ${{ matrix.os }}
     environment: release
     timeout-minutes: 180
@@ -329,13 +210,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || github.ref }}
+          repository: ${{ needs.context.outputs.repository }}
+          ref: ${{ needs.context.outputs.ref }}
           token: ${{ secrets.PAT_TOKEN }}
 
       - name: Configure scoped registry for @tetherto and @qvac packages (Unix)
         if: ${{ matrix.platform != 'win32' }}
-        working-directory: ${{ inputs.workdir }}
+        working-directory: packages/qvac-lib-infer-onnx-tts
         env:
           GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -363,7 +244,7 @@ jobs:
 
       - name: Configure scoped registry for @tetherto and @qvac packages (Windows)
         if: ${{ matrix.platform == 'win32' }}
-        working-directory: ${{ inputs.workdir }}
+        working-directory: packages/qvac-lib-infer-onnx-tts
         env:
           GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -386,39 +267,15 @@ jobs:
           }
           Copy-Item -Path .npmrc -Destination benchmarks/server/.npmrc -Force
 
-      - name: Install NPM dependencies
-        working-directory: ${{ inputs.workdir }}
+      - name: Install Bare runtime
         run: |
-          npm install
           npm install -g bare bare-make
 
-      - name: Download prebuilds from artifact
-        if: ${{ !inputs.prebuild_package }}
+      - name: Download merged prebuilds
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          path: ${{ inputs.workdir }}/prebuilds
-          merge-multiple: true
-
-      - name: Download prebuilds from package (Unix)
-        if: ${{ inputs.prebuild_package && matrix.platform != 'win32' }}
-        working-directory: ${{ inputs.workdir }}
-        shell: bash
-        run: |
-          mkdir -p prebuilds
-          npm pack ${{ inputs.prebuild_package }} --pack-destination /tmp
-          tar -xzf /tmp/*.tgz -C /tmp
-          cp -r /tmp/package/prebuilds/* prebuilds/
-
-      - name: Download prebuilds from package (Windows)
-        if: ${{ inputs.prebuild_package && matrix.platform == 'win32' }}
-        working-directory: ${{ inputs.workdir }}
-        shell: powershell
-        run: |
-          New-Item -ItemType Directory -Force -Path prebuilds | Out-Null
-          npm pack ${{ inputs.prebuild_package }} --pack-destination $env:TEMP
-          $tgz = Get-ChildItem "$env:TEMP\*.tgz" | Select-Object -First 1
-          tar -xzf $tgz.FullName -C $env:TEMP
-          Copy-Item -Path "$env:TEMP\package\prebuilds\*" -Destination prebuilds -Recurse -Force
+          name: prebuilds
+          path: packages/qvac-lib-infer-onnx-tts/prebuilds
 
       - name: Linux - install runtime dependencies
         if: ${{ matrix.platform == 'linux' }}
@@ -434,23 +291,23 @@ jobs:
           brew install ffmpeg pkg-config
 
       - name: Install benchmark server dependencies
-        working-directory: ${{ inputs.workdir }}/benchmarks/server
+        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/server
         run: npm install
 
       - name: Download Supertonic models
-        working-directory: ${{ inputs.workdir }}/benchmarks/server
+        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/server
         run: npm run setup:supertonic
 
       - name: Install Python server dependencies
-        if: ${{ inputs.supertonic_run_python && matrix.run_python }}
-        working-directory: ${{ inputs.workdir }}/benchmarks/python-server
+        if: ${{ needs.context.outputs.run_python != 'false' && matrix.run_python }}
+        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/python-server
         run: |
           pip install --upgrade pip setuptools wheel
           pip install -r requirements-supertonic.txt
 
       - name: Install benchmark client dependencies (Unix)
         if: ${{ matrix.platform != 'win32' }}
-        working-directory: ${{ inputs.workdir }}/benchmarks/client
+        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/client
         shell: bash
         run: |
           pip install --upgrade pip setuptools wheel
@@ -461,7 +318,7 @@ jobs:
 
       - name: Install benchmark client dependencies (Windows)
         if: ${{ matrix.platform == 'win32' }}
-        working-directory: ${{ inputs.workdir }}/benchmarks/client
+        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/client
         shell: powershell
         run: |
           pip install --upgrade pip setuptools wheel
@@ -471,8 +328,8 @@ jobs:
           }
 
       - name: Start Python Native server (Unix)
-        if: ${{ matrix.platform != 'win32' && inputs.supertonic_run_python && matrix.run_python }}
-        working-directory: ${{ inputs.workdir }}/benchmarks/python-server
+        if: ${{ matrix.platform != 'win32' && needs.context.outputs.run_python != 'false' && matrix.run_python }}
+        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/python-server
         shell: bash
         run: |
           nohup python main.py > server.log 2>&1 &
@@ -484,8 +341,8 @@ jobs:
           fi
 
       - name: Start Python Native server (Windows)
-        if: ${{ matrix.platform == 'win32' && inputs.supertonic_run_python && matrix.run_python }}
-        working-directory: ${{ inputs.workdir }}/benchmarks/python-server
+        if: ${{ matrix.platform == 'win32' && needs.context.outputs.run_python != 'false' && matrix.run_python }}
+        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/python-server
         shell: powershell
         run: |
           $logPath = Join-Path $PWD "server.log"
@@ -513,7 +370,7 @@ jobs:
 
       - name: Start TTS Addon server (Unix)
         if: ${{ matrix.platform != 'win32' }}
-        working-directory: ${{ inputs.workdir }}/benchmarks/server
+        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/server
         shell: bash
         run: |
           nohup npm start > server.log 2>&1 &
@@ -525,7 +382,7 @@ jobs:
           fi
 
       - name: Clean old benchmark results
-        working-directory: ${{ inputs.workdir }}
+        working-directory: packages/qvac-lib-infer-onnx-tts
         shell: bash
         run: |
           rm -rf benchmarks/results/*.json
@@ -533,7 +390,7 @@ jobs:
 
       - name: Run Supertonic benchmark (Unix)
         if: ${{ matrix.platform != 'win32' }}
-        working-directory: ${{ inputs.workdir }}/benchmarks/client
+        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/client
         shell: bash
         env:
           PYTHONUNBUFFERED: "1"
@@ -544,19 +401,19 @@ jobs:
           QVAC_SUPERTONIC_BENCHMARK_RUNNER: ${{ matrix.runner_label }}
           QVAC_SUPERTONIC_BENCHMARK_DEVICE: ${{ matrix.device_label }}
           QVAC_SUPERTONIC_BENCHMARK_BACKEND: ${{ matrix.backend }}
-          QVAC_SUPERTONIC_BENCHMARK_MAX_SAMPLES: ${{ inputs.supertonic_max_samples }}
-          QVAC_SUPERTONIC_BENCHMARK_ROUND_TRIP_TEST: ${{ matrix.round_trip_test && inputs.supertonic_round_trip_test && 'true' || 'false' }}
-          QVAC_SUPERTONIC_BENCHMARK_WHISPER_MODEL: ${{ inputs.supertonic_whisper_model }}
-          QVAC_SUPERTONIC_BENCHMARK_NUM_RUNS: ${{ inputs.supertonic_num_runs }}
+          QVAC_SUPERTONIC_BENCHMARK_MAX_SAMPLES: ${{ needs.context.outputs.max_samples }}
+          QVAC_SUPERTONIC_BENCHMARK_ROUND_TRIP_TEST: ${{ matrix.round_trip_test && needs.context.outputs.round_trip_test != 'false' && 'true' || 'false' }}
+          QVAC_SUPERTONIC_BENCHMARK_WHISPER_MODEL: ${{ needs.context.outputs.whisper_model }}
+          QVAC_SUPERTONIC_BENCHMARK_NUM_RUNS: ${{ needs.context.outputs.num_runs }}
           QVAC_SUPERTONIC_BENCHMARK_USE_GPU: ${{ matrix.use_gpu && 'true' || 'false' }}
-          QVAC_SUPERTONIC_BENCHMARK_RUN_PYTHON: ${{ inputs.supertonic_run_python && matrix.run_python && 'true' || 'false' }}
+          QVAC_SUPERTONIC_BENCHMARK_RUN_PYTHON: ${{ needs.context.outputs.run_python != 'false' && matrix.run_python && 'true' || 'false' }}
         run: |
           python -u -m src.tts.main --config config/config-supertonic.yaml
           rm -rf /tmp/hf_cache || true
 
       - name: Run Supertonic benchmark (Windows)
         if: ${{ matrix.platform == 'win32' }}
-        working-directory: ${{ inputs.workdir }}
+        working-directory: packages/qvac-lib-infer-onnx-tts
         shell: powershell
         env:
           PYTHONUNBUFFERED: "1"
@@ -567,12 +424,12 @@ jobs:
           QVAC_SUPERTONIC_BENCHMARK_RUNNER: ${{ matrix.runner_label }}
           QVAC_SUPERTONIC_BENCHMARK_DEVICE: ${{ matrix.device_label }}
           QVAC_SUPERTONIC_BENCHMARK_BACKEND: ${{ matrix.backend }}
-          QVAC_SUPERTONIC_BENCHMARK_MAX_SAMPLES: ${{ inputs.supertonic_max_samples }}
-          QVAC_SUPERTONIC_BENCHMARK_ROUND_TRIP_TEST: ${{ matrix.round_trip_test && inputs.supertonic_round_trip_test && 'true' || 'false' }}
-          QVAC_SUPERTONIC_BENCHMARK_WHISPER_MODEL: ${{ inputs.supertonic_whisper_model }}
-          QVAC_SUPERTONIC_BENCHMARK_NUM_RUNS: ${{ inputs.supertonic_num_runs }}
+          QVAC_SUPERTONIC_BENCHMARK_MAX_SAMPLES: ${{ needs.context.outputs.max_samples }}
+          QVAC_SUPERTONIC_BENCHMARK_ROUND_TRIP_TEST: ${{ matrix.round_trip_test && needs.context.outputs.round_trip_test != 'false' && 'true' || 'false' }}
+          QVAC_SUPERTONIC_BENCHMARK_WHISPER_MODEL: ${{ needs.context.outputs.whisper_model }}
+          QVAC_SUPERTONIC_BENCHMARK_NUM_RUNS: ${{ needs.context.outputs.num_runs }}
           QVAC_SUPERTONIC_BENCHMARK_USE_GPU: ${{ matrix.use_gpu && 'true' || 'false' }}
-          QVAC_SUPERTONIC_BENCHMARK_RUN_PYTHON: ${{ inputs.supertonic_run_python && matrix.run_python && 'true' || 'false' }}
+          QVAC_SUPERTONIC_BENCHMARK_RUN_PYTHON: ${{ needs.context.outputs.run_python != 'false' && matrix.run_python && 'true' || 'false' }}
         run: |
           $serverDir = Join-Path $PWD "benchmarks/server"
           $clientDir = Join-Path $PWD "benchmarks/client"
@@ -610,7 +467,7 @@ jobs:
 
       - name: Stop servers (Unix)
         if: ${{ always() && matrix.platform != 'win32' }}
-        working-directory: ${{ inputs.workdir }}
+        working-directory: packages/qvac-lib-infer-onnx-tts
         shell: bash
         run: |
           if [ -f benchmarks/python-server/server.pid ]; then
@@ -624,7 +481,7 @@ jobs:
 
       - name: Stop servers (Windows)
         if: ${{ always() && matrix.platform == 'win32' }}
-        working-directory: ${{ inputs.workdir }}
+        working-directory: packages/qvac-lib-infer-onnx-tts
         shell: powershell
         run: |
           if (Test-Path benchmarks/python-server/server.pid) {
@@ -638,7 +495,7 @@ jobs:
 
       - name: Display server logs
         if: always()
-        working-directory: ${{ inputs.workdir }}
+        working-directory: packages/qvac-lib-infer-onnx-tts
         shell: bash
         run: |
           if [ -f benchmarks/server/server.log ]; then
@@ -658,30 +515,38 @@ jobs:
             cat benchmarks/python-server/server-error.log
           fi
 
+      - name: List structured benchmark results
+        if: always()
+        working-directory: packages/qvac-lib-infer-onnx-tts
+        shell: bash
+        run: |
+          ls -la benchmarks/results || true
+
       - name: Upload benchmark results
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: supertonic-rtf-results-${{ matrix.runner_label }}-${{ matrix.backend }}
-          path: ${{ inputs.workdir }}/benchmarks/results/
+          path: packages/qvac-lib-infer-onnx-tts/benchmarks/results/
           retention-days: 30
           if-no-files-found: ignore
 
-  summarize-supertonic-desktop-benchmarks:
-    if: ${{ always() && inputs.run_supertonic_desktop_benchmarks == true }}
-    needs: run-supertonic-desktop-benchmarks
+  summarize:
+    needs: [context, desktop-benchmarks]
+    if: always()
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || github.ref }}
+          repository: ${{ needs.context.outputs.repository }}
+          ref: ${{ needs.context.outputs.ref }}
           token: ${{ secrets.PAT_TOKEN }}
 
       - name: Download desktop benchmark artifacts
+        if: needs.context.outputs.include_desktop != 'false'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           pattern: supertonic-rtf-results-*

@@ -20,6 +20,7 @@ import { handleDeleteCache } from "@/server/rpc/handlers/delete-cache";
 import { handleTextToSpeech } from "@/server/rpc/handlers/text-to-speech";
 import { handleTextToSpeechStream } from "@/server/rpc/handlers/text-to-speech-stream";
 import { handleGetModelInfo } from "@/server/rpc/handlers/get-model-info";
+import { handleGetLoadedModelInfo } from "@/server/rpc/handlers/get-loaded-model-info";
 import { handleOCRStream } from "@/server/rpc/handlers/ocr-stream";
 import { handleHeartbeat } from "@/server/rpc/handlers/heartbeat";
 import { handleFinetune } from "@/server/rpc/handlers/finetune";
@@ -95,6 +96,7 @@ export const registry: Record<string, HandlerEntry> = {
   stopProvide: { type: "reply", handler: stopProvideHandler },
   deleteCache: { type: "reply", handler: handleDeleteCache },
   getModelInfo: { type: "reply", handler: handleGetModelInfo },
+  getLoadedModelInfo: { type: "reply", handler: handleGetLoadedModelInfo },
   pluginInvoke: { type: "reply", handler: handlePluginInvoke },
   modelRegistryList: { type: "reply", handler: handleModelRegistryList },
   modelRegistrySearch: { type: "reply", handler: handleModelRegistrySearch },

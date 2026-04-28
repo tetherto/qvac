@@ -21,11 +21,12 @@ export async function unloadModel(params: UnloadModelParams) {
 
   clearFinetuneRuntimeState(modelId);
 
-  if (entry.local?.model && entry.local.model.unload) {
-    await entry.local.model.unload();
-  }
-  if (clearStorage && entry.local) {
-    if (entry.local.path) {
+  if (!entry.isDelegated) {
+    if (entry.local.model.unload) {
+      await entry.local.model.unload();
+    }
+
+    if (clearStorage && entry.local.path) {
       const modelPath = entry.local.path;
       const modelFileName = path.basename(modelPath);
       const shardInfo = detectShardedModel(modelFileName);
