@@ -397,6 +397,9 @@ async function* processModelResponse(
     ...(responseWithStats.stats?.CacheTokens !== undefined && {
       cacheTokens: responseWithStats.stats.CacheTokens,
     }),
+    ...(responseWithStats.stats?.generatedTokens !== undefined && {
+      generatedTokens: responseWithStats.stats.generatedTokens,
+    }),
     ...(responseWithStats.stats?.backendDevice !== undefined && {
       backendDevice: responseWithStats.stats.backendDevice,
     }),
