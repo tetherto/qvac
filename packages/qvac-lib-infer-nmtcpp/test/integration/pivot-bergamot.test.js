@@ -25,10 +25,10 @@ const test = require('brittle')
 const path = require('bare-path')
 const fs = require('bare-fs')
 const TranslationNmtcpp = require('@qvac/translation-nmtcpp')
+const { ensureBergamotModelFiles } = require('@qvac/translation-nmtcpp/lib/bergamot-model-fetcher')
 const {
   createLogger,
   createPerformanceCollector,
-  ensureBergamotModel,
   formatPerformanceMetrics,
   isMobile,
   platform
@@ -57,22 +57,27 @@ const DEVICE_CONFIGS = isMobile
  */
 async function ensureModelPair (src, dst) {
   const pairKey = `${src}${dst}`
-  // Delegate to the shared utils.js helper, which now resolves models
-  // in this priority order:
-  //   1. Desktop pre-fetched dir (model/bergamot/<pair>/) — populated
-  //      by the desktop integration workflow's S3 pre-fetch step.
-  //   2. Mobile bundled testAssets — populated by the mobile workflow's
-  //      "Pre-fetch Bergamot models on runner" step (post-QVAC-16488).
-  //   3. Firefox Remote Settings CDN — local-dev / out-of-CI fallback.
-  //
-  // ensureBergamotModel itself short-circuits when the destDir is
-  // already populated, which is important for this pivot test that
-  // calls into it for the same language pair across CPU/GPU variants.
-  // Without the short-circuit, mobile tests re-extract from the bundle
-  // every variant and blow through the 20-min per-test WDIO timeout on
-  // slow Device Farm lanes (Samsung Galaxy S25 Ultra timeout, CI run
-  // 24796639547).
-  return ensureBergamotModel(pairKey)
+  const relativeDir = `../../model/bergamot/${pairKey}`
+  const modelDir = path.resolve(__dirname, relativeDir)
+
+  if (fs.existsSync(modelDir)) {
+    const files = fs.readdirSync(modelDir)
+    const hasModel = files.some(f => f.includes('.intgemm') || f.includes('.bin'))
+    const hasVocab = files.some(f => f.includes('.spm'))
+    if (hasModel && hasVocab) return modelDir
+  }
+
+  const writableRoot = isMobile ? (global.testDir || '/tmp') : path.resolve(__dirname, '../..')
+  const destDir = path.join(writableRoot, 'model', 'bergamot', pairKey)
+  // `ensureBergamotModelFiles` (not the raw `downloadBergamotFromFirefox`)
+  // short-circuits when destDir is already populated — important for the
+  // pivot test which calls this for the same language pair across four
+  // sub-tests (GPU/CPU × es→en→it and fr→en→es × 2 variants each). Without
+  // the short-circuit the test re-fetches every pair from Firefox CDN and
+  // blows through the 20-min per-test WDIO timeout on slow Device Farm
+  // lanes (root cause of the Samsung Galaxy S25 Ultra timeout in CI
+  // run 24796639547).
+  return ensureBergamotModelFiles(src, dst, destDir)
 }
 
 /**

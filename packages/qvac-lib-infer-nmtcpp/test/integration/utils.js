@@ -305,95 +305,123 @@ const DESKTOP_TIMEOUT = 120 * 1000
 const TEST_TIMEOUT = isMobile ? MOBILE_TIMEOUT : DESKTOP_TIMEOUT
 
 // ============================================================================
-// Asset Resolution Helpers
+// Download Helpers
 // ============================================================================
-//
-// The mobile test framework copies the entire test/mobile/testAssets/ tree
-// into the test app's bundled-asset area at build time and exposes a flat
-// map (global.assetPaths) keyed by the relative path the JS code uses to
-// refer to each asset. The two helpers below resolve real on-device fs
-// paths from that map.
-//
-// (Used to be a runtime download path here that fetched models from S3 /
-// Firefox CDN at test time — that's now obsolete since both Bergamot and
-// IndicTrans models are pre-fetched on the GitHub runner and bundled
-// directly into the test app. Replaced as part of QVAC-16488.)
 
 /**
- * Resolves the on-device filesystem path for a binary asset bundled
- * under test/mobile/testAssets/.
+ * Downloads a file from URL to destination path with redirect support
+ * Handles HTTP 301/302/307/308 redirects up to maxRedirects times
  *
- * The mobile test framework copies the entire test/mobile/testAssets/
- * tree into the test app's bundled-asset area at build time and
- * exposes a flat map (global.assetPaths) keyed by the relative path
- * the JS code uses to refer to each asset. This helper iterates the
- * usual candidate prefixes (mirroring loadConfigFromAssets) and
- * returns the first matching real-filesystem path, with the
- * `file://` URI prefix stripped so callers can pass it straight to
- * native APIs (the C++ addon's fopen() can't handle URI schemes).
- *
- * @param {string} subPath - relative path under testAssets/, e.g.
- *                           "models/indictrans/ggml-...bin"
- * @returns {string|null} - resolved fs path on the device, or null
+ * @param {string} url - Source URL to download from
+ * @param {string} destPath - Local file path to save to
+ * @param {number} [maxRedirects=5] - Maximum number of redirects to follow
+ * @returns {Promise<void>}
+ * @throws {Error} If download fails or redirects exceed limit
  */
-function resolveBundledAssetPath (subPath) {
-  if (!global.assetPaths) return null
-  const candidates = [
-    `../../testAssets/${subPath}`,
-    `../mobile/testAssets/${subPath}`,
-    `testAssets/${subPath}`,
-    `../testAssets/${subPath}`
-  ]
-  for (const candidate of candidates) {
-    if (global.assetPaths[candidate]) {
-      return global.assetPaths[candidate].replace('file://', '')
+async function downloadFile (url, destPath, maxRedirects = 5, maxRetries = 3) {
+  const fetch = require('bare-fetch')
+
+  // Retry loop for transient network errors (CONNECTION_LOST, socket hang up).
+  // Without this an unhandled rejection from bare-fetch on Device Farm's
+  // flaky mobile network can abort the whole Bare process — which surfaced
+  // on Samsung Galaxy S25 Ultra as a SIGABRT inside libbare-kit.so::
+  // js_callback_s::on_call during the second IndicTrans re-download.
+  let lastErr = null
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    if (attempt > 0) {
+      const backoffMs = 500 * (2 ** (attempt - 1))
+      console.log(`   Retry ${attempt}/${maxRetries - 1} after ${backoffMs}ms (last error: ${lastErr && lastErr.message})`)
+      await new Promise(resolve => setTimeout(resolve, backoffMs))
+    }
+    try {
+      console.log(`Downloading: ${url.substring(0, 60)}...`)
+      const response = await fetch(url, { redirect: 'follow', follow: maxRedirects })
+
+      if ([301, 302, 307, 308].includes(response.status)) {
+        const location = response.headers.get('location')
+        if (location && maxRedirects > 0) {
+          console.log(`   Following redirect to: ${location.substring(0, 60)}...`)
+          return downloadFile(location, destPath, maxRedirects - 1, maxRetries)
+        }
+        throw new Error(`HTTP ${response.status}: Redirect not followed (no location header or max redirects exceeded)`)
+      }
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const buffer = await response.arrayBuffer()
+      fs.writeFileSync(destPath, Buffer.from(buffer))
+      console.log(`Downloaded: ${path.basename(destPath)} (${(buffer.byteLength / 1024 / 1024).toFixed(1)}MB)`)
+      return
+    } catch (err) {
+      lastErr = err
+      // Only retry on network errors; HTTP status errors are deterministic.
+      if (err && /HTTP \d{3}/.test(err.message || '')) throw err
     }
   }
-  return null
+  throw new Error(`downloadFile failed after ${maxRetries} attempts: ${lastErr && lastErr.message}`)
 }
 
+// ============================================================================
+// Asset Configuration Loading
+// ============================================================================
+
 /**
- * Lists all bundled assets under a given testAssets/ subdirectory.
- * Returns an array of { sourcePath, filename } for every asset whose
- * key in global.assetPaths matches the candidate-prefix pattern and
- * lives under the requested subdirectory.
+ * Loads JSON configuration from testAssets directory
+ * Searches multiple candidate paths to support both mobile and desktop environments
  *
- * Used for Bergamot (model directory has multiple files: model,
- * vocab, shortlist, etc.); IndicTrans uses resolveBundledAssetPath
- * for the single-file case.
+ * Mobile: Uses global.assetPaths provided by test framework
+ * Desktop: Uses filesystem paths relative to test directory
  *
- * @param {string} subDir - relative dir under testAssets/, e.g.
- *                          "models/bergamot/enit"
- * @returns {Array<{sourcePath: string, filename: string}>}
+ * @param {string} filename - Configuration filename (e.g., 'bergamot-urls.json')
+ * @returns {Object|null} Parsed JSON configuration or null if not found
  */
-function listBundledAssets (subDir) {
-  if (!global.assetPaths) return []
-  const out = []
-  const seen = new Set()
-  const prefixes = [
-    `../../testAssets/${subDir}/`,
-    `../mobile/testAssets/${subDir}/`,
-    `testAssets/${subDir}/`,
-    `../testAssets/${subDir}/`
-  ]
-  for (const key of Object.keys(global.assetPaths)) {
-    for (const prefix of prefixes) {
-      if (!key.startsWith(prefix)) continue
-      const filename = key.slice(prefix.length)
-      // Reject anything in a deeper subdir — bergamot puts files flat
-      // under the lang-pair dir, so a slash here means we matched a
-      // sibling with the wrong prefix.
-      if (filename.includes('/')) continue
-      if (seen.has(filename)) continue
-      seen.add(filename)
-      out.push({
-        sourcePath: global.assetPaths[key].replace('file://', ''),
-        filename
-      })
-      break
+function loadConfigFromAssets (filename) {
+  let urlConfig = null
+
+  // Mobile: Check global.assetPaths (set by test framework)
+  if (global.assetPaths) {
+    const candidates = [
+      `../../testAssets/${filename}`,
+      `../mobile/testAssets/${filename}`,
+      `testAssets/${filename}`,
+      `../testAssets/${filename}`
+    ]
+
+    for (const candidate of candidates) {
+      if (global.assetPaths[candidate]) {
+        try {
+          const configData = fs.readFileSync(global.assetPaths[candidate].replace('file://', ''), 'utf8')
+          urlConfig = JSON.parse(configData)
+          console.log(`   Loaded config from asset: ${candidate}`)
+          return urlConfig
+        } catch (e) {
+          console.log(`   Failed to load asset ${candidate}: ${e.message}`)
+        }
+      }
     }
   }
-  return out
+
+  // Desktop: Check filesystem paths
+  const fallbackPaths = [
+    path.resolve(__dirname, `../mobile/testAssets/${filename}`),
+    path.resolve(__dirname, `../../test/mobile/testAssets/${filename}`)
+  ]
+
+  for (const fallbackPath of fallbackPaths) {
+    if (fs.existsSync(fallbackPath)) {
+      try {
+        urlConfig = JSON.parse(fs.readFileSync(fallbackPath, 'utf8'))
+        console.log(`   Loaded config from file: ${fallbackPath}`)
+        return urlConfig
+      } catch (e) {
+        console.log(`   Failed to parse ${fallbackPath}: ${e.message}`)
+      }
+    }
+  }
+
+  return null
 }
 
 // ============================================================================
@@ -413,9 +441,7 @@ async function ensureIndicTransModel () {
   const relativeDir = '../../model/indictrans'
   const modelPath = path.resolve(__dirname, relativeDir, modelFilename)
 
-  // Desktop: Check if model exists locally (pre-fetched by the
-  // integration-test workflow's "Download IndicTrans model from S3"
-  // step).
+  // Desktop: Check if model exists locally
   if (fs.existsSync(modelPath)) {
     const stats = fs.statSync(modelPath)
     const sizeMB = stats.size / (1024 * 1024)
@@ -430,117 +456,78 @@ async function ensureIndicTransModel () {
     throw new Error(`IndicTrans model not found at ${modelPath}. Please download it first.`)
   }
 
-  // Mobile: read from bundled testAssets, copy to writable disk on
-  // first access so the C++ addon's fopen() sees a real fs path.
-  // Models are pre-fetched on the GitHub runner by the mobile
-  // workflow's "Pre-fetch IndicTrans model on runner" step and
-  // bundled into the test app via the standard testAssets pattern.
-  // This replaces the old runtime presigned-URL download path,
-  // which routinely flaked on Device Farm because the phones (in
-  // us-west-2) can't reliably reach the model bucket (in
-  // eu-central-1) over their mobile-emulated network — see
-  // QVAC-16488 PR for the full context.
+  // Mobile: Download from presigned URL
+  const configFilename = 'indictrans-model-urls.json'
+  const urlConfig = loadConfigFromAssets(configFilename)
+
+  if (!urlConfig || !urlConfig.modelUrl) {
+    throw new Error('IndicTrans model URLs config not found - cannot download model on mobile')
+  }
+
   const writableRoot = global.testDir || '/tmp'
   const modelsDir = path.join(writableRoot, 'translation-models', 'indictrans')
   fs.mkdirSync(modelsDir, { recursive: true })
+
   const destPath = path.join(modelsDir, modelFilename)
 
-  // Cache hit: same model file is re-used across CPU/GPU variants
-  // within a single test session, so we copy from the bundle once.
+  // Cache hit: IndicTrans is 200MB+, so re-downloading for every test
+  // variant (GPU/CPU) wastes bandwidth and exposes each run to transient
+  // S3/Device-Farm network failures — the root cause of the Samsung
+  // Galaxy S25 Ultra CONNECTION_LOST → SIGABRT seen in CI run 1212.
   if (fs.existsSync(destPath)) {
-    const cachedMB = fs.statSync(destPath).size / (1024 * 1024)
+    const cachedStats = fs.statSync(destPath)
+    const cachedMB = cachedStats.size / (1024 * 1024)
     if (cachedMB >= 100) {
       console.log(`Reusing cached IndicTrans model: ${destPath} (${cachedMB.toFixed(1)}MB)`)
       return destPath
     }
-    console.log(`Cached IndicTrans model is undersized (${cachedMB.toFixed(2)}MB) — re-extracting from bundle`)
+    console.log(`Cached IndicTrans model is undersized (${cachedMB.toFixed(2)}MB) — re-downloading`)
   }
 
-  const bundledPath = resolveBundledAssetPath(`models/indictrans/${modelFilename}`)
-  if (!bundledPath) {
-    throw new Error(
-      'IndicTrans model not found in test app bundle. Expected at ' +
-      `testAssets/models/indictrans/${modelFilename}. The mobile workflow's ` +
-      '"Pre-fetch IndicTrans model on runner" step is responsible for staging it.'
-    )
-  }
+  await downloadFile(urlConfig.modelUrl, destPath)
 
-  console.log(`Extracting IndicTrans model from bundle: ${bundledPath} → ${destPath}`)
-  fs.copyFileSync(bundledPath, destPath)
-
-  const sizeMB = fs.statSync(destPath).size / (1024 * 1024)
+  // Validate downloaded model size
+  const stats = fs.statSync(destPath)
+  const sizeMB = stats.size / (1024 * 1024)
   if (sizeMB < 100) {
-    throw new Error(`Extracted IndicTrans model seems corrupted (expected ~127MB, got ${sizeMB.toFixed(2)}MB)`)
+    throw new Error(`Downloaded IndicTrans model seems corrupted (expected ~127MB, got ${sizeMB.toFixed(2)}MB)`)
   }
+
   return destPath
 }
 
 /**
- * Ensures Bergamot model files are available for a given language
- * pair (default: enit).
+ * Ensures Bergamot model is available
  *
- * Resolution order:
- *   1. Desktop pre-fetched local path (model/bergamot/<pair>/)
- *      — populated by the integration-test workflow's "Download
- *      Bergamot models from S3" step.
- *   2. Mobile bundled-asset extraction
- *      — populated by the mobile workflow's "Pre-fetch Bergamot
- *      models on runner" step into testAssets/models/bergamot/<pair>/,
- *      then copied to writable storage on first access here.
- *   3. Firefox Remote Settings CDN fallback (pre-existing path,
- *      kept for local-dev / out-of-CI scenarios where neither pre-
- *      fetch step ran).
+ * Download priority:
+ *   1. Check local path (../../model/bergamot/enit/)
+ *   2. Fallback: download directly from Firefox Remote Settings CDN
  *
- * @param {string} [langPair='enit'] - 4-char src+dst code
  * @returns {Promise<string>} Path to Bergamot model directory
  * @throws {Error} If model files not found/available
  */
-async function ensureBergamotModel (langPair = 'enit') {
+async function ensureBergamotModel () {
   const { ensureBergamotModelFiles } = require('@qvac/translation-nmtcpp/lib/bergamot-model-fetcher')
 
-  // 1) Desktop pre-fetched path
-  const desktopDir = path.resolve(__dirname, '../../model/bergamot', langPair)
-  if (fs.existsSync(desktopDir)) {
-    const files = fs.readdirSync(desktopDir)
-    if (files.some(f => f.includes('.intgemm')) && files.some(f => f.includes('.spm'))) {
-      return desktopDir
+  // Check pre-existing local model first
+  const relativeDir = '../../model/bergamot/enit'
+  const modelDir = path.resolve(__dirname, relativeDir)
+
+  if (fs.existsSync(modelDir)) {
+    const files = fs.readdirSync(modelDir)
+    const hasIntgemm = files.some(f => f.includes('.intgemm'))
+    const hasVocab = files.some(f => f.includes('.spm'))
+
+    if (hasIntgemm && hasVocab) {
+      return modelDir
     }
   }
 
-  // 2) Mobile: extract from bundled testAssets (models pre-fetched on
-  //    the GitHub runner by the mobile workflow). Replaces the old
-  //    runtime Firefox-CDN download path, which was unreliable on
-  //    Device Farm — see QVAC-16488 PR for context.
-  if (isMobile) {
-    const bundled = listBundledAssets(`models/bergamot/${langPair}`)
-    if (bundled.length > 0) {
-      const writableRoot = global.testDir || '/tmp'
-      const destDir = path.join(writableRoot, 'model', 'bergamot', langPair)
-      fs.mkdirSync(destDir, { recursive: true })
-
-      // Cache hit: re-use already-extracted files across CPU/GPU
-      // variants within a single test session.
-      const existing = fs.existsSync(destDir) ? fs.readdirSync(destDir) : []
-      const hasModel = existing.some(f => f.includes('.intgemm'))
-      const hasVocab = existing.some(f => f.includes('.spm'))
-      if (hasModel && hasVocab) {
-        console.log(`Reusing cached Bergamot ${langPair} model: ${destDir} (${existing.length} files)`)
-        return destDir
-      }
-
-      console.log(`Extracting Bergamot ${langPair} from bundle (${bundled.length} files) → ${destDir}`)
-      for (const { sourcePath, filename } of bundled) {
-        fs.copyFileSync(sourcePath, path.join(destDir, filename))
-      }
-      return destDir
-    }
-    console.log(`No bundled Bergamot ${langPair} found in testAssets — falling back to Firefox CDN`)
-  }
-
-  // 3) Local-dev / fallback: download from Firefox CDN.
+  // Not found locally — download from Firefox CDN
   const writableRoot = isMobile ? (global.testDir || '/tmp') : path.resolve(__dirname, '../..')
-  const destDir = path.join(writableRoot, 'model', 'bergamot', langPair)
-  return ensureBergamotModelFiles(langPair.slice(0, 2), langPair.slice(2, 4), destDir)
+  const destDir = path.join(writableRoot, 'model', 'bergamot', 'enit')
+
+  return ensureBergamotModelFiles('en', 'it', destDir)
 }
 
 // ============================================================================
