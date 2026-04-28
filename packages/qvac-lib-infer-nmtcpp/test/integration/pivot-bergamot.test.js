@@ -197,7 +197,7 @@ async function runEsEnItPivotTest (t, label, useGpu, gpuDevice) {
 if (isMobile) {
   for (let gpuIdx = 0; gpuIdx < MAX_GPU_DEVICE_PROBES; gpuIdx++) {
     test(`Pivot translation [GPU device ${gpuIdx}] - Spanish → English → Italian`, { timeout: PIVOT_TIMEOUT }, async function (t) {
-      const devices = isMobile ? await discoverGpuDevices() : []
+      const devices = await discoverGpuDevices()
       const device = devices.find(d => d.index === gpuIdx)
 
       if (!device) {
@@ -566,7 +566,7 @@ async function runFrEnEsPivotTest (t, label, useGpu, gpuDevice) {
 if (isMobile) {
   for (let gpuIdx = 0; gpuIdx < MAX_GPU_DEVICE_PROBES; gpuIdx++) {
     test(`Pivot translation [GPU device ${gpuIdx}] - French → English → Spanish`, { timeout: PIVOT_TIMEOUT }, async function (t) {
-      const devices = isMobile ? await discoverGpuDevices() : []
+      const devices = await discoverGpuDevices()
       const device = devices.find(d => d.index === gpuIdx)
 
       if (!device) {

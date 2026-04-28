@@ -56,7 +56,7 @@ if (isMobile) {
       const modelFile = allFiles.find(f => f.includes('.intgemm') && f.includes('.bin'))
       const vocabFile = allFiles.find(f => f.includes('.spm'))
 
-      const devices = isMobile ? await discoverGpuDevices() : []
+      const devices = await discoverGpuDevices()
       const device = devices.find(d => d.index === gpuIdx)
 
       if (!device) {
