@@ -1,20 +1,26 @@
 // Tools/Function calling test definitions
 import type { Expectation, TestDefinition } from "@tetherto/qvac-test-suite";
 
-const toolsCalledValidator = (result: unknown & { toolCalls?: Array<{ name: string }> }) => {
+type ToolsResult = { toolCalls?: Array<{ name: string }>; text?: string };
+
+export type ToolsExpectation =
+  | Expectation
+  | { validation: "custom"; validator: (result: ToolsResult) => boolean };
+
+const toolsCalledValidator = (result: ToolsResult) => {
   return Boolean(result.toolCalls && result.toolCalls.length > 0);
 };
 
-const toolsCalledExpectation: Expectation = {
+const toolsCalledExpectation: ToolsExpectation = {
   validation: "custom",
   validator: toolsCalledValidator,
 };
 
-const toolsNotCalledValidatorEqual = (numCalls: number) => (result: unknown & { toolCalls?: Array<{ name: string }> }) => {
+const toolsNotCalledValidatorEqual = (numCalls: number) => (result: ToolsResult) => {
   return Boolean(result.toolCalls && result.toolCalls.length === numCalls);
 };
 
-const toolsNotCalledExpectation: Expectation = {
+const toolsNotCalledExpectation: ToolsExpectation = {
   validation: "custom",
   validator: toolsNotCalledValidatorEqual(0),
 };
@@ -34,7 +40,7 @@ const createToolsTest = (
     };
   }>,
   toolsMode?: "static" | "dynamic",
-  expectation: Expectation = {
+  expectation: ToolsExpectation = {
     validation: "type",
     expectedType: "string",
   },
@@ -47,7 +53,7 @@ const createToolsTest = (
     stream: false,
     ...(toolsMode && { toolsMode }),
   },
-  expectation,
+  expectation: expectation as Expectation,
   ...(suites && { suites }),
   metadata: {
     category: "tools",
@@ -86,6 +92,7 @@ export const toolsSimpleFunction = createToolsTest(
     },
   ],
   undefined,
+  undefined,
   ["smoke"],
 );
 
@@ -119,6 +126,7 @@ export const toolsMultipleFunctions = createToolsTest(
       },
     },
   ],
+  undefined,
   undefined,
   ["smoke"],
 );

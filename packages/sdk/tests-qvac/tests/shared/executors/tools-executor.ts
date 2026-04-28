@@ -5,7 +5,7 @@ import {
   type Expectation,
 } from "@tetherto/qvac-test-suite";
 import { AbstractModelExecutor } from "./abstract-model-executor.js";
-import { toolsTests } from "../../tools-tests.js";
+import { toolsTests, type ToolsExpectation } from "../../tools-tests.js";
 
 export class ToolsExecutor extends AbstractModelExecutor<typeof toolsTests> {
   pattern = /^tools-/;
@@ -14,7 +14,7 @@ export class ToolsExecutor extends AbstractModelExecutor<typeof toolsTests> {
     toolsTests.map((test) => [test.testId, this.generic.bind(this)]),
   ) as never;
 
-  async generic(params: unknown, expectation: Expectation): Promise<TestResult> {
+  async generic(params: unknown, expectation: ToolsExpectation): Promise<TestResult> {
     const p = params as {
       history: Array<{ role: string; content: string }>;
       tools: Array<{
@@ -44,14 +44,23 @@ export class ToolsExecutor extends AbstractModelExecutor<typeof toolsTests> {
         const resultData =
           text ||
           (toolCalls && toolCalls.length > 0 ? "tool call made" : "no response");
-        return ValidationHelpers.validate(resultData, expectation);
+        return ValidationHelpers.validate(resultData, expectation as Expectation);
       }
 
       if (expectation.validation === "custom") {
-        return ValidationHelpers.validate({ toolCalls, text}, expectation);
+        const passed = expectation.validator({ toolCalls, text });
+        return {
+          passed,
+          output: passed
+            ? "custom validator passed"
+            : "custom validator returned false",
+        };
       }
 
-      return { passed: false, output: `Unhandled validation type: ${expectation.validation}`}
+      return {
+        passed: false,
+        output: `Unhandled validation type: ${(expectation as { validation: string }).validation}`,
+      };
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       return { passed: false, output: `Tools test failed: ${errorMsg}` };
