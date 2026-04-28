@@ -9,6 +9,7 @@ reset_history.sh
 confirmed.txt
 /node_modules
 packages/**/.npmrc
+packages/sdk/bun.lock
 NOTICE_LOG.txt
 NOTICE_FULL_REPORT.txt
 .claude/worktrees

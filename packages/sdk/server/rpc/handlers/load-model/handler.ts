@@ -63,10 +63,7 @@ export async function handleLoadModel(
       throw new PluginNotFoundError(canonicalModelType);
     }
 
-    let resolvedModelConfig = (request.modelConfig ?? {}) as Record<
-      string,
-      unknown
-    >;
+    let resolvedModelConfig = (request.modelConfig ?? {});
 
     const parseResult = plugin.loadConfigSchema.safeParse(resolvedModelConfig);
     if (!parseResult.success) {
@@ -115,7 +112,7 @@ export async function handleLoadModel(
     }
 
     const configStr = canonicalConfigString(
-      request.modelConfig as Record<string, unknown> | undefined,
+      request.modelConfig,
     );
     const modelHashInput = `${request.modelType}:${modelSrc}:${configStr}`;
     const modelId = generateShortHash(modelHashInput);
