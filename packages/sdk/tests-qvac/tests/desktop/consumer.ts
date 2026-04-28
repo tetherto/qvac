@@ -69,6 +69,7 @@ import { DesktopDiffusionExecutor } from "./executors/diffusion-executor.js";
 import { FinetuneExecutor } from "./executors/finetune-executor.js";
 import { LifecycleExecutor } from "../shared/executors/lifecycle-executor.js";
 import { ConfigExecutor } from "../shared/executors/config-executor.js";
+import { NoLingeringBareExecutor } from "./executors/no-lingering-bare-executor.js";
 
 const resources = new ResourceManager();
 
@@ -375,6 +376,7 @@ export const executor = createExecutor({
     new FinetuneExecutor(resources),
     new LifecycleExecutor(resources),
     new ConfigExecutor(),
+    new NoLingeringBareExecutor(),
   ],
   profiling: {
     init: () => profiler.enable({ mode: "summary", includeServerBreakdown: true }),
