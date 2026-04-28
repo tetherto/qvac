@@ -14,8 +14,6 @@
         "gtest",
         "vcpkg-tool-meson",
         "nlohmann-json",
-        "fmt",
-        "spdlog",
         "zlib"
       ]
     }

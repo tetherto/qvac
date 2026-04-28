@@ -10,6 +10,8 @@ export const SDK_CLIENT_ERROR_CODES = {
   INVALID_TOOLS_ARRAY: 50005,
   INVALID_TOOL_SCHEMA: 50006,
   OCR_FAILED: 50007,
+  MODEL_TYPE_REQUIRED: 50008,
+  MODEL_SRC_TYPE_MISMATCH: 50009,
 
   // RPC Communication Errors (50,200-50,399)
   RPC_NO_HANDLER: 50200,
@@ -71,6 +73,16 @@ const clientErrorDefinitions: ErrorCodesMap = {
     name: "OCR_FAILED",
     message: (details?: string) =>
       `OCR operation failed${details ? `: ${details}` : ""}`,
+  },
+  [SDK_CLIENT_ERROR_CODES.MODEL_TYPE_REQUIRED]: {
+    name: "MODEL_TYPE_REQUIRED",
+    message:
+      'modelType is required: modelSrc is a plain string or lacks an engine/addon descriptor that can be inferred. Pass an explicit canonical modelType (e.g. "llamacpp-completion", "whispercpp-transcription", "nmtcpp-translation", "llamacpp-embedding", "onnx-tts", "onnx-ocr", "parakeet-transcription", "sdcpp-generation") or use a model constant that carries engine metadata.',
+  },
+  [SDK_CLIENT_ERROR_CODES.MODEL_SRC_TYPE_MISMATCH]: {
+    name: "MODEL_SRC_TYPE_MISMATCH",
+    message: (inferred: string, resolved: string) =>
+      `modelSrc describes "${inferred}", but modelType resolves to "${resolved}". Omit modelType to infer it automatically, or pass a matching modelType.`,
   },
 
   // RPC Communication Errors (50,200-50,399)
@@ -171,6 +183,6 @@ const clientErrorDefinitions: ErrorCodesMap = {
   },
 };
 
-addCodes(clientErrorDefinitions, { name: "qvac-sdk-client", version: "1.1.0" });
+addCodes(clientErrorDefinitions, { name: "qvac-sdk-client", version: "1.2.0" });
 
 export { clientErrorDefinitions as SDK_CLIENT_ERROR_DEFINITIONS };
