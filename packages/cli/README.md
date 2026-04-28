@@ -8,8 +8,10 @@ This package is published to npm as **`@qvac/cli`** and lives in the QVAC monore
 
 - [Installation](#installation)
 - [Command Reference](#command-reference)
+  - [`doctor`](#doctor)
   - [`bundle sdk`](#bundle-sdk)
 - [Configuration](#configuration)
+- [System Requirements](#system-requirements)
 - [Development](#development)
 - [License](#license)
 
@@ -34,6 +36,56 @@ npx @qvac/cli <command>
 ```
 
 ## Command Reference
+
+### `doctor`
+
+Validate that the current host can run `@qvac/sdk` + `@qvac/cli` before you
+hit runtime errors. The command prints a human-readable report by default and
+exits `1` when any required check fails.
+
+```bash
+qvac doctor [options]
+```
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--json` | Output the report as JSON. |
+| `-q, --quiet` | Suppress stdout — only set the exit code. |
+| `-v, --verbose` | Detailed output. |
+
+**What it checks:**
+
+- **Runtime** — Node.js version (`>= 18`) and supported CLI host
+  (desktop platforms only; Android/iOS are SDK deploy targets reported
+  separately below).
+- **Hardware** — total RAM, available RAM (via `os.availableMemory()` on
+  Node 22+), GPU acceleration (Metal on macOS, `vulkaninfo` on
+  Linux/Windows), and free disk space in the current working directory.
+- **Deploy targets (SDK)** — desktop target matrix, Android (`adb`), and
+  iOS (`xcodebuild` on macOS). Missing mobile toolchains produce
+  warnings, not failures.
+- **Optional tools** — `ffmpeg` (microphone/transcription), Bare runtime,
+  Bun.
+- **Project** — whether `@qvac/sdk` is resolvable from the current
+  working directory (works for hoisted monorepo installs too).
+
+See [`system-requirements.md`](./system-requirements.md) for the full list of
+thresholds and rationale.
+
+**Examples:**
+
+```bash
+# Human-readable report
+qvac doctor
+
+# JSON for CI / scripts
+qvac doctor --json
+
+# Fail-fast in a script (exit 1 on any required check)
+qvac doctor --quiet || exit 1
+```
 
 ### `bundle sdk`
 
@@ -136,6 +188,16 @@ This file is primarily the SDK runtime config, but `qvac bundle sdk` also reads 
     "@qvac/sdk/nmtcpp-translation/plugin"
   ]
 }
+```
+
+## System Requirements
+
+See [`system-requirements.md`](./system-requirements.md) for the full list of
+required and recommended host dependencies. You can validate your environment
+at any time with:
+
+```bash
+qvac doctor
 ```
 
 ## Development
