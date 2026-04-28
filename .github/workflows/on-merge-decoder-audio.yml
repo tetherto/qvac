@@ -8,7 +8,7 @@ on:
       - feature-*
       - tmp-*
     paths:
-      - "packages/qvac-lib-decoder-audio/**"
+      - "packages/decoder-audio/**"
       - ".github/workflows/*decoder-audio*.yml"
   workflow_dispatch:
     inputs:
@@ -99,9 +99,9 @@ jobs:
           base-ref: ${{ github.ref_name }}
           base-sha: ${{ github.event.before }}
           head-sha: ${{ github.sha }}
-          package-slug: qvac-lib-decoder-audio
-          package-json-path: packages/qvac-lib-decoder-audio/package.json
-          changelog-path: packages/qvac-lib-decoder-audio/CHANGELOG.md
+          package-slug: decoder-audio
+          package-json-path: packages/decoder-audio/package.json
+          changelog-path: packages/decoder-audio/CHANGELOG.md
 
   run-integration-tests:
     needs: publish-logic
@@ -110,12 +110,12 @@ jobs:
       needs.publish-logic.outputs.publish_release == 'true' ||
       needs.publish-logic.outputs.publish_feature == 'true' ||
       needs.publish-logic.outputs.publish_tmp == 'true'
-    uses: ./.github/workflows/integration-test-qvac-lib-decoder-audio.yml
+    uses: ./.github/workflows/integration-test-decoder-audio.yml
     secrets: inherit
     with:
       repository: ${{ github.repository }}
       ref: ${{ github.sha }}
-      workdir: "packages/qvac-lib-decoder-audio"
+      workdir: "packages/decoder-audio"
 
   mobile-integration-tests:
     needs: publish-logic
@@ -129,12 +129,12 @@ jobs:
       needs.publish-logic.outputs.publish_release == 'true' ||
       needs.publish-logic.outputs.publish_feature == 'true' ||
       needs.publish-logic.outputs.publish_tmp == 'true'
-    uses: ./.github/workflows/integration-mobile-test-qvac-lib-decoder-audio.yml
+    uses: ./.github/workflows/integration-mobile-test-decoder-audio.yml
     secrets: inherit
     with:
       repository: ${{ github.repository }}
       ref: ${{ github.sha }}
-      workdir: "packages/qvac-lib-decoder-audio"
+      workdir: "packages/decoder-audio"
 
   publish-gpr:
     needs: [publish-logic, run-integration-tests, mobile-integration-tests]
@@ -159,7 +159,7 @@ jobs:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
-          workdir: "packages/qvac-lib-decoder-audio"
+          workdir: "packages/decoder-audio"
           name-suffix: "-mono"
 
   publish-release-npm:
@@ -185,7 +185,7 @@ jobs:
         uses: ./.github/actions/publish-library-to-npm
         with:
           tag: "latest"
-          workdir: "packages/qvac-lib-decoder-audio"
+          workdir: "packages/decoder-audio"
 
   publish-release:
     needs: [publish-release-npm]
@@ -201,4 +201,4 @@ jobs:
       release_name: "QVAC Decoder Audio Lib"
       published_version: ${{ needs.publish-release-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}
-      workdir: "packages/qvac-lib-decoder-audio"
+      workdir: "packages/decoder-audio"
