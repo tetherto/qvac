@@ -326,24 +326,24 @@ bool NmtLazyInitializeBackend::initializeLocked(
         } else {
 #endif
 #ifdef BACKENDS_SUBDIR
-        std::filesystem::path subdirPath(BACKENDS_SUBDIR);
-        backendsDirPath = backendsDirPath / subdirPath;
-        backendsDirPath = std::filesystem::canonical(backendsDirPath, ec);
-        if (ec) {
-          QLOG(
-              Priority::WARNING,
-              "backendsDir+subdir canonical() failed (" + ec.message() +
-                  ") — falling back to default backend loading");
-          ggml_backend_load_all();
-        } else {
+          std::filesystem::path subdirPath(BACKENDS_SUBDIR);
+          backendsDirPath = backendsDirPath / subdirPath;
+          backendsDirPath = std::filesystem::canonical(backendsDirPath, ec);
+          if (ec) {
+            QLOG(
+                Priority::WARNING,
+                "backendsDir+subdir canonical() failed (" + ec.message() +
+                    ") — falling back to default backend loading");
+            ggml_backend_load_all();
+          } else {
 #endif
-          QLOG(
-              Priority::INFO,
-              "Loading backends from directory: " +
-                  sanitizePrintableAscii(backendsDirPath.string()));
-          ggml_backend_load_all_from_path(backendsDirPath.string().c_str());
+            QLOG(
+                Priority::INFO,
+                "Loading backends from directory: " +
+                    sanitizePrintableAscii(backendsDirPath.string()));
+            ggml_backend_load_all_from_path(backendsDirPath.string().c_str());
 #ifdef BACKENDS_SUBDIR
-        }
+          }
 #endif
 #ifdef __ANDROID__
         }
