@@ -1,4 +1,4 @@
-# Task: Multi-Generation Support for lib-infer-diffusion
+# Task: Multi-Generation Support for infer-diffusion
 
 ## Overview
 
@@ -346,7 +346,7 @@ await model.unload()
 
 ## References
 
-- Current single-job implementation: `packages/lib-infer-diffusion/index.js:209-250`
-- C++ model interface: `packages/lib-infer-diffusion/addon/src/model-interface/SdModel.hpp`
-- Example usage: `packages/lib-infer-diffusion/examples/generate-image.js`
+- Current single-job implementation: `packages/infer-diffusion/index.js:209-250`
+- C++ model interface: `packages/infer-diffusion/addon/src/model-interface/SdModel.hpp`
+- Example usage: `packages/infer-diffusion/examples/generate-image.js`
 - Upstream library: [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp)

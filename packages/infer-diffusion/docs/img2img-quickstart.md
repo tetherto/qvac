@@ -4,7 +4,7 @@
 
 1. Download the models:
 ```bash
-cd packages/lib-infer-diffusion
+cd packages/infer-diffusion
 ./scripts/download-model-i2i.sh
 ```
 
