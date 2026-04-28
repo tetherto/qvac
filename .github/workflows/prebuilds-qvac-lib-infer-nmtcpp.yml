@@ -2,18 +2,32 @@
 name: Prebuilds (NMTCPP)
 
 on:
+  workflow_dispatch:
+    inputs:
+      workdir:
+        description: "Working directory (optional)"
+        required: false
+        type: string
+        default: "packages/qvac-lib-infer-nmtcpp"
+
   workflow_call:
     inputs:
       ref:
         description: "ref"
         type: string
+        required: false
       repository:
         type: string
+        required: false
         default: "tetherto/qvac"
-  workflow_dispatch:
+      workdir:
+        description: "Working directory (optional)"
+        required: false
+        type: string
+        default: "packages/qvac-lib-infer-nmtcpp"
 
 env:
-  PKG_DIR: packages/qvac-lib-infer-nmtcpp
+  WORKDIR: ${{ inputs.workdir }}
 
 permissions:
   contents: read
@@ -75,164 +89,49 @@ jobs:
         env:
           INPUT_REF: ${{ inputs.ref || github.ref }}
           INPUT_REPO: ${{ inputs.repository || github.repository }}
+          INPUT_WORKDIR: ${{ env.WORKDIR }}
           MATRIX_PLATFORM: ${{ matrix.platform }}
           MATRIX_ARCH: ${{ matrix.arch }}
           MATRIX_TAGS: ${{ matrix.tags }}
-          PKG_DIR_VAR: ${{ env.PKG_DIR }}
         run: |
           echo "Workflow inputs:"
           echo "Ref: $INPUT_REF"
           echo "Repository: $INPUT_REPO"
+          echo "Workdir: $INPUT_WORKDIR"
           echo "Matrix platform: $MATRIX_PLATFORM"
           echo "Matrix arch: $MATRIX_ARCH"
           echo "Matrix tags: $MATRIX_TAGS"
-          echo "PKG_DIR: $PKG_DIR_VAR"
 
-      - if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'ubuntu-24.04' }}
-        name: Update c++ tools
-        run: |
-          wget https://apt.llvm.org/llvm.sh
-          chmod +x llvm.sh
-          sudo ./llvm.sh 19 all
-
-      - if: ${{ matrix.os == 'windows-2022' }}
-        name: Configure windows runner
-        run: |
-          git config --system core.longpaths true
+      - name: Setup build host
+        uses: tetherto/qvac/.github/actions/setup-build-host@1d9b2165867d03c6edd675e402ee101a5d48a6d8
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
-          submodules: recursive
 
       - name: Setup AWS + Windows CLI
         uses: tetherto/qvac/.github/actions/setup-aws-prebuild@0bbdca93da303a0b1634ba14a89cec085621078d
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
-      - name: Setup vcpkg cache
-        uses: tetherto/qvac/.github/actions/setup-vcpkg-cache@0bbdca93da303a0b1634ba14a89cec085621078d
+      - name: Setup vcpkg
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@1d9b2165867d03c6edd675e402ee101a5d48a6d8
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
 
-      - if: ${{ matrix.platform == 'android' }}
-        name: Setup Android NDK
-        uses: nttld/setup-ndk@ed92fe6cadad69be94a966a7ee3271275e62f779 # 1.6.0
-        with:
-          ndk-version: r27c
-          add-to-path: true
-          local-cache: true
-
-      - if: ${{ matrix.platform == 'android' }}
-        name: Configure Android environment variables
-        shell: bash
-        run: |
-          echo "ANDROID_NDK_HOME=$ANDROID_NDK_ROOT" >> $GITHUB_ENV
-          echo "ANDROID_TOOLCHAIN_ROOT=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64" >> $GITHUB_ENV
-          echo "ANDROID_NATIVE_API_LEVEL=24" >> $GITHUB_ENV
-          echo "Android NDK setup:"
-          echo "  NDK_ROOT: $ANDROID_NDK_ROOT"
-          echo "  NDK_HOME: $ANDROID_NDK_ROOT"
-          echo "  Toolchain: $ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64"
-          echo "  API Level: 24"
-
       - name: Setup Bare tooling
         uses: tetherto/qvac/.github/actions/setup-bare-tooling@0bbdca93da303a0b1634ba14a89cec085621078d
 
-      - if: ${{ matrix.os == 'ubuntu-22.04' }}
-        name: Replace bare-make's CMake with compatible version
-        shell: bash
-        run: |
-          # Install CMake 3.28.3 which is compatible with older cmake_minimum_required
-          echo "Installing CMake 3.28.3..."
-          wget -O cmake.sh https://github.com/Kitware/CMake/releases/download/v3.28.3/cmake-3.28.3-linux-x86_64.sh
-          sudo sh cmake.sh --skip-license --prefix=/usr/local
-          rm cmake.sh
-
-          # Find and replace bare-make's bundled CMake 4.1
-          echo "Finding bare-make's cmake binary..."
-          BARE_MAKE_CMAKE=$(find /opt/hostedtoolcache/node -path "*/bare-make/node_modules/cmake-runtime-*/bin/cmake" 2>/dev/null | head -1)
-          echo "bare-make cmake location: $BARE_MAKE_CMAKE"
-
-          # Back up the original and replace with symlink
-          echo "Replacing bare-make's cmake with version 3.28.3..."
-          sudo cp "$BARE_MAKE_CMAKE" "${BARE_MAKE_CMAKE}.bak"
-          sudo rm "$BARE_MAKE_CMAKE"
-          sudo ln -s /usr/local/bin/cmake "$BARE_MAKE_CMAKE"
-
-          # Verify the replacement
-          echo "Verifying cmake version used by bare-make:"
-          "$BARE_MAKE_CMAKE" --version
-      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'arm64' }}
-        name: Rename win sdk folder to disable it
-        run: |
-          Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\Include\old-10.0.26100.0"
-          Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\bin\old-10.0.26100.0"
-          Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\Lib\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\Lib\old-10.0.26100.0"
-
-      - if: ${{ startsWith(matrix.os, 'macos-') }}
-        name: Install vcpkg in macos
-        run: |
-          cd ..
-          git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git
-          cd vcpkg && ./bootstrap-vcpkg.sh -disableMetrics
-          VCPKG_ROOT=$(pwd)
-          echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
-          echo "$VCPKG_ROOT" >> $GITHUB_PATH
-
-      - if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'ubuntu-24.04' }}
-        name: Configure vcpkg in linux
-        run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
-
-      - if: ${{ matrix.os == 'windows-2022' }}
-        name: Configure vcpkg in windows
-        run: echo ("VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" -replace '\\', '/') >> $env:GITHUB_ENV
-
-      - if: ${{ matrix.platform == 'android' }}
-        name: Select NDK
-        run: |
-          echo "ANDROID_NDK=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
-          echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
-          echo "ANDROID_NDK_ROOT=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
-
-      - name: Print run state
-        working-directory: ${{ env.PKG_DIR }}
-        shell: bash
-        run: |
-          echo "node version: $(node -v)"
-          echo "npm version: $(npm -v)"
-          echo "bare version: $(bare -v)"
-          echo "bare-make version: $(bare-make --version)"
-          echo "cmake version: $(cmake --version)"
-          npm list --global || true
-          npm list || true
-          npm list --global --depth 1 || true
-          npm list --all --depth 1 || true
-          echo "Environment variables:"
-          env | sort
-        continue-on-error: true
-
-      - if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'ubuntu-24.04' }}
-        name: Update apt sources
-        run: sudo apt-get update
-
-      - if: ${{ matrix.os == 'windows-2022' }}
-        name: Configure cmake generator in windows
-        run: echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> $env:GITHUB_ENV
-
-      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'x64' }}
-        run: echo "CMAKE_GENERATOR_PLATFORM=x64" >> $env:GITHUB_ENV
-
-      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'x86' }}
-        run: echo "CMAKE_GENERATOR_PLATFORM=Win32" >> $env:GITHUB_ENV
-
-      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'arm64' }}
-        run: echo "CMAKE_GENERATOR_PLATFORM=ARM64" >> $env:GITHUB_ENV
+      - name: Setup Apple Clang
+        uses: tetherto/qvac/.github/actions/setup-apple-clang@1d9b2165867d03c6edd675e402ee101a5d48a6d8
 
       - name: Setup Vulkan SDK
         uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@0bbdca93da303a0b1634ba14a89cec085621078d
@@ -244,328 +143,35 @@ jobs:
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
 
-      - name: Configure git
-        shell: bash
-        run: |
-          GIT_PAT="${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}"
-          git config --global --add url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
-          git config --global --add url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "git@github.com:"
-          git config --global --add url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "ssh://git@github.com/"
-
       - name: Install dependencies
-        working-directory: ${{ env.PKG_DIR }}
+        working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: npm install
 
-      - if: ${{ matrix.os == 'windows-2022' }}
-        name: Apply clang-cl compatibility fixes for Windows
-        working-directory: ${{ env.PKG_DIR }}
-        shell: bash
-        run: |
-          echo "Applying clang-cl compatibility fixes (bare-make uses clang-cl on all platforms)..."
-
-          # Fix 1: Remove /WX, /MP /GL, and /arch: flags from marian-dev that are incompatible with clang-cl
-          MARIAN_CMAKE="third-party/bergamot-translator/3rd_party/marian-dev/CMakeLists.txt"
-          if [ -f "$MARIAN_CMAKE" ]; then
-            echo "Removing clang-cl incompatible flags from marian CMakeLists.txt..."
-
-            # Line 163: Remove /WX from ALL_WARNINGS (clang-cl doesn't like /WX with -Wno-* flags)
-            sed -i 's|list(APPEND ALL_WARNINGS /WX; /W4;)|list(APPEND ALL_WARNINGS /W4;)|' "$MARIAN_CMAKE"
-
-            # Line 177: Remove /MP /GL from CMAKE_CXX_FLAGS_RELEASE (clang-cl specific issues)
-            sed -i 's| /MP /GL||' "$MARIAN_CMAKE"
-
-            # Line 225: Replace INTRINSICS which may be /arch:SSE2 (invalid for clang-cl x64) with /arch:AVX
-            # clang-cl on x64 only accepts AVX, AVX2, AVX512, AVX512F - NOT SSE2
-            # We use AVX which includes SSE4.1 (needed for _mm_round_ps intrinsics)
-            sed -i 's|set(INTRINSICS ${MSVC_BUILD_ARCH})|set(INTRINSICS "/arch:AVX")|' "$MARIAN_CMAKE"
-
-            # Remove /LTCG:incremental (appears elsewhere in the file)
-            sed -i 's/\/LTCG:incremental//g' "$MARIAN_CMAKE"
-
-            # Silence C++17 deprecation warnings for Windows clang-cl
-            sed -i 's|\(set(CMAKE_CXX_FLAGS[[:space:]]*"/EHsc.*\)\${DISABLE_GLOBALLY}")|\1${DISABLE_GLOBALLY} -D_SILENCE_CXX17_ITERATOR_BASE_CLASS_DEPRECATION_WARNING -D_SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING -Wno-deprecated-literal-operator -Wno-sign-compare -Wno-unused-parameter")|' "$MARIAN_CMAKE"
-
-            echo "Marian-dev CMakeLists.txt fixes applied"
-          fi
-
-          # Fix 2: Remove /WX from intgemm (treat warnings as errors conflicts with -Wno-* flags from clang-cl)
-          INTGEMM_CMAKE="third-party/bergamot-translator/3rd_party/marian-dev/src/3rd_party/intgemm/CMakeLists.txt"
-          if [ -f "$INTGEMM_CMAKE" ]; then
-            echo "Removing /WX from intgemm to allow clang-cl warnings..."
-            sed -i 's|add_compile_options(/W4 /WX)|add_compile_options(/W4)|' "$INTGEMM_CMAKE"
-          fi
-
-          # Fix 3: Remove /LTCG:incremental from fbgemm
-          FBGEMM_CMAKE="third-party/bergamot-translator/3rd_party/marian-dev/src/3rd_party/fbgemm/CMakeLists.txt"
-          if [ -f "$FBGEMM_CMAKE" ]; then
-            echo "Removing /LTCG:incremental from fbgemm..."
-            sed -i 's/\/LTCG:incremental//g' "$FBGEMM_CMAKE"
-          fi
-
-          # Fix 4: Remove /LTCG:incremental from root bergamot-translator
-          ROOT_CMAKE="third-party/bergamot-translator/CMakeLists.txt"
-          if [ -f "$ROOT_CMAKE" ]; then
-            echo "Removing /LTCG:incremental from bergamot-translator..."
-            sed -i 's/\/LTCG:incremental//g' "$ROOT_CMAKE"
-          fi
-
-          echo "clang-cl compatibility fixes applied"
-
-      - if: ${{ matrix.os == 'windows-2022' }}
-        name: Apply C++20 compatibility patches for Windows
-        working-directory: ${{ env.PKG_DIR }}
-        shell: bash
-        run: |
-          echo "Applying C++20 compatibility patches (bare-make forces C++20 via target properties)..."
-
-          # Fix std::result_of removal in C++20 - replace with std::invoke_result_t
-          # These third-party files use std::result_of which was removed in C++20
-
-          THREADPOOL_H="third-party/bergamot-translator/3rd_party/marian-dev/src/3rd_party/threadpool.h"
-          if [ -f "$THREADPOOL_H" ]; then
-            echo "Fixing threadpool.h for C++20 compatibility..."
-            # Line 52: function declaration
-            sed -i 's|-> std::future<typename std::result_of<F(Args\.\.\.)>::type>|-> std::future<std::invoke_result_t<F, Args...>>|g' "$THREADPOOL_H"
-            # Line 143: using declaration  
-            sed -i 's|using return_type = typename std::result_of<F(Args\.\.\.)>::type|using return_type = std::invoke_result_t<F, Args...>|g' "$THREADPOOL_H"
-            echo "threadpool.h patched"
-          fi
-
-          CLI_APP_HPP="third-party/bergamot-translator/3rd_party/marian-dev/src/3rd_party/CLI/App.hpp"
-          if [ -f "$CLI_APP_HPP" ]; then
-            echo "Fixing CLI/App.hpp for C++20 compatibility..."
-            # Fix _parse_arg return type
-            sed -i 's|typename std::result_of<decltype (&App::_parse_arg)(App, Args\.\.\.)>::type|std::invoke_result_t<decltype (\&App::_parse_arg), App, Args...>|g' "$CLI_APP_HPP"
-            # Fix _parse_subcommand return type
-            sed -i 's|typename std::result_of<decltype (&App::_parse_subcommand)(App, Args\.\.\.)>::type|std::invoke_result_t<decltype (\&App::_parse_subcommand), App, Args...>|g' "$CLI_APP_HPP"
-            echo "CLI/App.hpp patched"
-          fi
-
-          echo "C++20 compatibility patches applied"
-
-      - if: ${{ matrix.os == 'windows-2022' }}
-        name: Fix CMake version warnings for Windows
-        working-directory: ${{ env.PKG_DIR }}
-        shell: bash
-        run: |
-          echo "Fixing CMake minimum version warnings..."
-
-          # Fix clog CMake version (3.1 -> 3.5)
-          CLOG_CMAKE="third-party/bergamot-translator/3rd_party/marian-dev/src/3rd_party/ruy/third_party/cpuinfo/deps/clog/CMakeLists.txt"
-          if [ -f "$CLOG_CMAKE" ]; then
-            sed -i 's/CMAKE_MINIMUM_REQUIRED(VERSION 3.1 FATAL_ERROR)/CMAKE_MINIMUM_REQUIRED(VERSION 3.5 FATAL_ERROR)/' "$CLOG_CMAKE"
-            echo "clog CMakeLists.txt patched"
-          fi
-
-          # Fix sentencepiece CMake version (3.1 -> 3.5)
-          SENTENCEPIECE_CMAKE="third-party/bergamot-translator/3rd_party/marian-dev/src/3rd_party/sentencepiece/CMakeLists.txt"
-          if [ -f "$SENTENCEPIECE_CMAKE" ]; then
-            sed -i 's/cmake_minimum_required(VERSION 3.1 FATAL_ERROR)/cmake_minimum_required(VERSION 3.5 FATAL_ERROR)/' "$SENTENCEPIECE_CMAKE"
-            echo "sentencepiece CMakeLists.txt patched"
-          fi
-
-          echo "CMake version fixes applied"
-
-      - name: Create config.cmake for Bergamot backend
-        working-directory: ${{ env.PKG_DIR }}
-        shell: bash
-        run: |
-          echo "set(USE_BERGAMOT ON CACHE BOOL \"Enable Bergamot backend support\" FORCE)" > config.cmake
-          # Enable intgemm ONLY for x86/x64 platforms (intgemm requires x86 SIMD instructions)
-          # ARM platforms (darwin-arm64, ios-arm64, android-arm64) should NOT enable intgemm
-          if [[ "${{ matrix.platform }}" == "linux" || "${{ matrix.platform }}" == "win32" ]] && [[ "${{ matrix.arch }}" == "x64" || "${{ matrix.arch }}" == "x86" ]]; then
-            echo "set(USE_INTGEMM ON CACHE BOOL \"Use INTGEMM for int8 quantized models\" FORCE)" >> config.cmake
-          fi
-          # For x86/x64 platforms, set BUILD_ARCH explicitly instead of using 'native':
-          # - Linux x64: use x86-64-v2 (SSE4.2) for binary compatibility across runners
-          # - darwin-x64 & ios-x64-simulator: use x86-64-v2 to avoid 'apple-m1' errors when
-          #   cross-compiling x86_64 on ARM64 hosts (macos-14 runners). 'native' would expand
-          #   to 'apple-m1' which is not a valid x86_64 CPU target.
-          if [[ "${{ matrix.arch }}" == "x64" && ("${{ matrix.platform }}" == "linux" || "${{ matrix.platform }}" == "darwin" || "${{ matrix.platform }}" == "ios") ]]; then
-            echo "set(BUILD_ARCH x86-64-v2 CACHE STRING \"Target CPU architecture\" FORCE)" >> config.cmake
-          fi
-          # For ARM64 platforms, explicitly set BUILD_ARCH to armv8-a to prevent x86 arch being used
-          if [[ "${{ matrix.arch }}" == "arm64" && "${{ matrix.platform }}" == "linux" ]]; then
-            echo "set(BUILD_ARCH armv8-a CACHE STRING \"Target CPU architecture\" FORCE)" >> config.cmake
-          fi
-          echo "Configuration created:"
-          cat config.cmake
-
-      - name: Apply clog CMake version fix for ARM platforms
-        working-directory: ${{ env.PKG_DIR }}
-        shell: bash
-        run: |
-          CLOG_CMAKE="third-party/bergamot-translator/3rd_party/marian-dev/src/3rd_party/ruy/third_party/cpuinfo/deps/clog/CMakeLists.txt"
-          if [ -f "$CLOG_CMAKE" ]; then
-            echo "Found clog CMakeLists.txt, applying fix..."
-            sed -i.bak 's/CMAKE_MINIMUM_REQUIRED(VERSION 3\.1/CMAKE_MINIMUM_REQUIRED(VERSION 3.5/' "$CLOG_CMAKE"
-            echo "Verification:"
-            head -n 3 "$CLOG_CMAKE"
-          else
-            echo "Clog CMakeLists.txt not found at $CLOG_CMAKE (may not be needed for this platform)"
-          fi
-
-      - name: Apply sentencepiece CMake version fix
-        working-directory: ${{ env.PKG_DIR }}
-        shell: bash
-        run: |
-          SENTENCEPIECE_CMAKE="third-party/bergamot-translator/3rd_party/marian-dev/src/3rd_party/sentencepiece/CMakeLists.txt"
-          if [ -f "$SENTENCEPIECE_CMAKE" ]; then
-            echo "Found sentencepiece CMakeLists.txt, applying CMake version fix..."
-            sed -i.bak 's/cmake_minimum_required(VERSION 3\.1/cmake_minimum_required(VERSION 3.5/' "$SENTENCEPIECE_CMAKE"
-            echo "Verification:"
-            head -n 3 "$SENTENCEPIECE_CMAKE"
-          else
-            echo "sentencepiece CMakeLists.txt not found at $SENTENCEPIECE_CMAKE"
-          fi
-
-      - name: Fix std::result_of for C++17/C++20 compatibility
-        working-directory: ${{ env.PKG_DIR }}
-        shell: bash
-        run: |
-          echo "Replacing std::result_of with std::invoke_result for C++17/C++20 compatibility..."
-
-          # Fix CLI/App.hpp - has complex nested decltype patterns
-          # Original: std::result_of<decltype (&App::_parse_arg)(App, Args...)>::type
-          # Target:   std::invoke_result<decltype (&App::_parse_arg), App, Args...>::type
-          CLI_APP_HPP="third-party/bergamot-translator/3rd_party/marian-dev/src/3rd_party/CLI/App.hpp"
-          if [ -f "$CLI_APP_HPP" ]; then
-            echo "Fixing CLI/App.hpp..."
-            # Fix _parse_arg pattern
-            sed -i.bak 's/std::result_of<decltype (\&App::_parse_arg)(App, Args\.\.\.)>/std::invoke_result<decltype (\&App::_parse_arg), App, Args...>/g' "$CLI_APP_HPP"
-            # Fix _parse_subcommand pattern
-            sed -i.bak2 's/std::result_of<decltype (\&App::_parse_subcommand)(App, Args\.\.\.)>/std::invoke_result<decltype (\&App::_parse_subcommand), App, Args...>/g' "$CLI_APP_HPP"
-            echo "Verification:"
-            grep -n "invoke_result\|result_of" "$CLI_APP_HPP" | head -5 || echo "No result_of found (good)"
-          fi
-
-          # Fix threadpool.h - simpler pattern
-          # Original: std::result_of<F(Args...)>
-          # Target:   std::invoke_result<F, Args...>
-          THREADPOOL_H="third-party/bergamot-translator/3rd_party/marian-dev/src/3rd_party/threadpool.h"
-          if [ -f "$THREADPOOL_H" ]; then
-            echo "Fixing threadpool.h..."
-            sed -i.bak 's/std::result_of<F(Args\.\.\.)>/std::invoke_result<F, Args...>/g' "$THREADPOOL_H"
-            echo "Verification:"
-            grep -n "invoke_result\|result_of" "$THREADPOOL_H" | head -5 || echo "No result_of found (good)"
-          fi
-
-          echo "std::result_of fixes applied"
-
-      - name: Apply iOS set_xcode_property fix
-        working-directory: ${{ env.PKG_DIR }}
-        shell: bash
-        run: |
-          echo "Applying iOS set_xcode_property fix..."
-          SENTENCEPIECE_CMAKE="third-party/bergamot-translator/3rd_party/marian-dev/src/3rd_party/sentencepiece/src/CMakeLists.txt"
-          if [ -f "$SENTENCEPIECE_CMAKE" ]; then
-            echo "Found sentencepiece CMakeLists.txt, applying fix..."
-            # Comment out set_xcode_property calls that require a function not defined
-            sed -i.bak '/set_xcode_property/s/^/# /' "$SENTENCEPIECE_CMAKE"
-            echo "Verification:"
-            grep -A 2 "iOS" "$SENTENCEPIECE_CMAKE" | head -10 || echo "Pattern not found"
-          else
-            echo "sentencepiece CMakeLists.txt not found at $SENTENCEPIECE_CMAKE"
-          fi
-          echo "iOS set_xcode_property fix applied"
-
-      - name: Fix PCRE2 for Windows static linking
-        if: ${{ matrix.os == 'windows-2022' }}
-        working-directory: ${{ env.PKG_DIR }}
-        shell: bash
-        run: |
-          echo "Fixing PCRE2 for Windows static linking..."
-
-          # Fix 1: Library name - PCRE2 builds as pcre2-8-static.lib but CMake expects pcre2-8.lib
-          FINDPCRE2_CMAKE="third-party/bergamot-translator/3rd_party/ssplit-cpp/cmake/FindPCRE2.cmake"
-          if [ -f "$FINDPCRE2_CMAKE" ]; then
-            echo "Fixing FindPCRE2.cmake for Windows static library naming..."
-            sed -i.bak 's/\${CMAKE_STATIC_LIBRARY_PREFIX}pcre2-8\${CMAKE_STATIC_LIBRARY_SUFFIX}/${CMAKE_STATIC_LIBRARY_PREFIX}pcre2-8-static${CMAKE_STATIC_LIBRARY_SUFFIX}/' "$FINDPCRE2_CMAKE"
-            echo "Verification:"
-            grep -n "pcre2-8" "$FINDPCRE2_CMAKE" | head -3
-          fi
-
-          # Fix 2: Add PCRE2_STATIC define for ssplit to use static PCRE2 library
-          # Without this, ssplit headers expect DLL imports (__declspec(dllimport))
-          SSPLIT_CMAKE="third-party/bergamot-translator/3rd_party/ssplit-cpp/src/CMakeLists.txt"
-          if [ -f "$SSPLIT_CMAKE" ]; then
-            echo "Adding PCRE2_STATIC definition to ssplit..."
-            # Add PCRE2_STATIC to compile definitions for the ssplit target
-            # Insert after the target is created
-            if ! grep -q "PCRE2_STATIC" "$SSPLIT_CMAKE"; then
-              sed -i.bak '/target_link_libraries(ssplit/a target_compile_definitions(ssplit PRIVATE PCRE2_STATIC)' "$SSPLIT_CMAKE"
-              echo "Verification:"
-              grep -n "PCRE2_STATIC" "$SSPLIT_CMAKE" || echo "Pattern not found after insert"
-            fi
-          fi
-
-          echo "PCRE2 Windows fixes applied"
-
-      - name: Remove -march=native from cpuinfo and marian-dev
-        working-directory: ${{ env.PKG_DIR }}
-        shell: bash
-        run: |
-          echo "Removing -march=native from cpuinfo and marian-dev CMakeLists.txt..."
-
-          # Fix 1: Remove -march=native from marian-dev
-          MARIAN_CMAKE="third-party/bergamot-translator/3rd_party/marian-dev/CMakeLists.txt"
-          if [ -f "$MARIAN_CMAKE" ]; then
-            echo "Fixing marian-dev CMakeLists.txt..."
-            sed -i.bak3 's/-msse2//g' "$MARIAN_CMAKE"
-            sed -i.bak4 's/-march=native//g' "$MARIAN_CMAKE"
-            grep -n "march\|msse" "$MARIAN_CMAKE" | head -5 || echo "No x86-specific flags in marian-dev (good)"
-          fi
-
-          # Fix 2: Remove -march=native from cpuinfo (RUY dependency)
-          # cpuinfo's CMakeLists.txt adds -march=native which causes 'apple-m1' errors
-          # when cross-compiling x86_64 on ARM64 hosts
-          CPUINFO_CMAKE="third-party/bergamot-translator/3rd_party/marian-dev/src/3rd_party/ruy/third_party/cpuinfo/CMakeLists.txt"
-          if [ -f "$CPUINFO_CMAKE" ]; then
-            echo "Fixing cpuinfo CMakeLists.txt..."
-            sed -i.bak5 's/-march=native//g' "$CPUINFO_CMAKE"
-            grep -n "march" "$CPUINFO_CMAKE" | head -5 || echo "No march flags in cpuinfo (good)"
-          else
-            echo "cpuinfo CMakeLists.txt not found (may not be needed)"
-          fi
-
-          echo "-march=native removal complete"
-
       - name: Run bare-make generate
-        working-directory: ${{ env.PKG_DIR }}
+        working-directory: ${{ env.WORKDIR }}
         run: bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }}
 
-      - name: Build PCRE2 first for Windows (workaround for library naming)
-        if: ${{ matrix.os == 'windows-2022' }}
-        working-directory: ${{ env.PKG_DIR }}
-        shell: bash
-        run: |
-          echo "Building PCRE2 external project first..."
-          # Build just the pcre2 target to get the library installed
-          cd build
-          cmake --build . --target pcre2 --config Release || true
-          # Now create the expected library name as a copy
-          if [ -f "lib/pcre2-8-static.lib" ] && [ ! -f "lib/pcre2-8.lib" ]; then
-            echo "Creating copy: pcre2-8-static.lib -> pcre2-8.lib"
-            cp "lib/pcre2-8-static.lib" "lib/pcre2-8.lib"
-            ls -la lib/pcre2*.lib
-          fi
-          cd ..
-
       - name: Run bare-make build
-        working-directory: ${{ env.PKG_DIR }}
+        working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: bare-make build
 
       - name: Run bare-make install
-        working-directory: ${{ env.PKG_DIR }}
+        working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: bare-make install
+
+      - name: Strip debug symbols
+        uses: tetherto/qvac/.github/actions/strip-prebuilds@1d9b2165867d03c6edd675e402ee101a5d48a6d8
+        with:
+          platform: ${{ matrix.platform }}
+          workdir: ${{ env.WORKDIR }}
 
       - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
-          path: ${{ env.PKG_DIR }}/prebuilds/*
+          path: ${{ env.WORKDIR }}/prebuilds/*
 
   merge:
     runs-on: ubuntu-latest
@@ -584,4 +190,3 @@ jobs:
         with:
           name: prebuilds
           path: prebuilds
-

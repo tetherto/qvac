@@ -22,7 +22,7 @@ export async function* handleCompletionStreamDelegated(
   // Get delegation info from model registry
   const entry = getModelEntry(request.modelId);
 
-  if (!entry?.isDelegated || !entry.delegated) {
+  if (!entry?.isDelegated) {
     throw new ModelIsDelegatedError(request.modelId);
   }
 

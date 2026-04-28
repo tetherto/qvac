@@ -80,35 +80,9 @@ jobs:
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
     env:
-      VCPKG_BUILD_TYPE: release
       WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}
 
     steps:
-      - if: ${{ matrix.platform == 'android' }}
-        name: Select NDK
-        run: |
-          echo "ANDROID_NDK=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
-          echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
-          echo "ANDROID_NDK_ROOT=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
-
-      - if: ${{ startsWith(matrix.os, 'ubuntu') }}
-        name: Maximize build space
-        run: |
-          echo "=== Disk space before cleanup ==="
-          df -h /
-          sudo docker image prune --all --force
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /usr/share/swift
-          sudo rm -rf /opt/hostedtoolcache/go
-          # Remove Android SDK only for non-android builds (saves ~8GB)
-          if [[ "${{ matrix.platform }}" != "android" ]]; then
-            sudo rm -rf /usr/local/lib/android
-          fi
-          echo "=== Disk space after cleanup ==="
-          df -h /
-
       - name: Echo workflow inputs
         shell: bash
         env:
@@ -127,23 +101,11 @@ jobs:
           echo "Matrix arch: $MATRIX_ARCH"
           echo "Matrix tags: $MATRIX_TAGS"
 
-      - if: ${{ startsWith(matrix.os, 'ubuntu') }}
-        name: Update c++ tools
-        run: |
-          wget https://apt.llvm.org/llvm.sh
-          chmod +x llvm.sh
-          sudo ./llvm.sh 19 all
-
-      - if: ${{ startsWith(matrix.os, 'macos') }}
-        name: Unlink Homebrew fmt
-        # Unlink Homebrew fmt to prevent header conflicts with vcpkg's fmt
-        # (Homebrew fmt 12.x headers conflict with vcpkg fmt 11.x on Intel Macs)
-        run: brew unlink fmt || true
-
-      - if: ${{ matrix.platform == 'win32' }}
-        name: Configure windows runner
-        run: |
-          git config --system core.longpaths true
+      - name: Setup build host
+        uses: tetherto/qvac/.github/actions/setup-build-host@1d9b2165867d03c6edd675e402ee101a5d48a6d8
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
 
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -157,8 +119,8 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
-      - name: Setup vcpkg cache
-        uses: tetherto/qvac/.github/actions/setup-vcpkg-cache@0bbdca93da303a0b1634ba14a89cec085621078d
+      - name: Setup vcpkg
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@1d9b2165867d03c6edd675e402ee101a5d48a6d8
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
@@ -178,32 +140,8 @@ jobs:
         with:
           python-version: '3.12'
 
-      - if: ${{ matrix.platform == 'win32' && matrix.arch == 'arm64' }}
-        name: Rename win sdk folder to disable it
-        run: |
-          Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\Include\old-10.0.26100.0"
-          Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\bin\old-10.0.26100.0"
-          Rename-Item -Path "C:\Program Files (x86)\Windows Kits\10\Lib\10.0.26100.0" -NewName "C:\Program Files (x86)\Windows Kits\10\Lib\old-10.0.26100.0"
-
-      - if: ${{ startsWith(matrix.os, 'macos') }}
-        name: Remove Homebrew LLVM
-        working-directory: ${{ env.WORKDIR }}
-        run: bash ./ci/remove-brew-llvm.sh
-        shell: bash
-
-      - if: ${{ startsWith(matrix.os, 'macos') }}
-        name: Install vcpkg in macos
-        run: |
-          cd ..
-          git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git
-          cd vcpkg && ./bootstrap-vcpkg.sh -disableMetrics
-          VCPKG_ROOT=$(pwd)
-          echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
-          echo "$VCPKG_ROOT" >> $GITHUB_PATH
-
-      - if: ${{ startsWith(matrix.os, 'macos') }}
-        name: Select Xcode 16.4
-        run: sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
+      - name: Setup Apple Clang
+        uses: tetherto/qvac/.github/actions/setup-apple-clang@1d9b2165867d03c6edd675e402ee101a5d48a6d8
 
       - if: ${{ startsWith(matrix.os, 'macos') && matrix.platform == 'ios' }}
         name: Verify UIKit Frameworks
@@ -216,57 +154,6 @@ jobs:
 
           echo "Simulator SDK: $SDK_SIM"
           ls $SDK_SIM/System/Library/Frameworks | grep UIKit || echo "UIKit.framework missing in simulator SDK!"
-
-      - if: ${{ startsWith(matrix.os, 'ubuntu') }}
-        name: Configure vcpkg in linux
-        run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
-
-      - if: ${{ matrix.platform == 'win32' }}
-        name: Install vcpkg in windows
-        shell: powershell
-        run: |
-          if ($env:VCPKG_INSTALLATION_ROOT -and (Test-Path $env:VCPKG_INSTALLATION_ROOT)) {
-            $vcpkgRoot = $env:VCPKG_INSTALLATION_ROOT -replace '\\', '/'
-          } else {
-            cd ..
-            git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git
-            cd vcpkg
-            .\bootstrap-vcpkg.bat -disableMetrics
-            $vcpkgRoot = (Get-Location).Path -replace '\\', '/'
-          }
-          echo "VCPKG_ROOT=$vcpkgRoot" >> $env:GITHUB_ENV
-          echo $vcpkgRoot >> $env:GITHUB_PATH
-
-      - if: ${{ matrix.platform == 'win32' }}
-        name: Configure cmake generator in windows
-        run: echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> $env:GITHUB_ENV
-
-      - if: ${{ matrix.platform == 'win32' && matrix.arch == 'x64' }}
-        run: echo "CMAKE_GENERATOR_PLATFORM=x64" >> $env:GITHUB_ENV
-
-      - if: ${{ matrix.platform == 'win32' && matrix.arch == 'x86' }}
-        run: echo "CMAKE_GENERATOR_PLATFORM=Win32" >> $env:GITHUB_ENV
-
-      - if: ${{ matrix.platform == 'win32' && matrix.arch == 'arm64' }}
-        run: echo "CMAKE_GENERATOR_PLATFORM=ARM64" >> $env:GITHUB_ENV
-
-      - if: ${{ startsWith(matrix.os, 'ubuntu') }}
-        name: Update apt sources
-        run: sudo apt-get update
-
-      - if: ${{ matrix.platform == 'linux' }}
-        name: Install required packages linux
-        run: sudo apt-get install libxi-dev libxtst-dev libxrandr-dev
-
-      - if: ${{ matrix.os == 'ubuntu-24.04' && matrix.arch == 'arm64' }}
-        name: Install tooling for cross compilation - ubuntu arm64
-        run: sudo apt-get install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6-dev-arm64-cross lld
-
-      - if: ${{ matrix.platform == 'android' }}
-        name: Configure runner for cross compilation - android
-        run: |
-          echo "ANDROID_TOOLCHAIN_ROOT=$(echo $ANDROID_NDK_HOME)/toolchains/llvm/prebuilt/linux-x86_64" >> $GITHUB_ENV
-          echo "ANDROID_NATIVE_API_LEVEL=34" >> $GITHUB_ENV
 
       - name: Install npm dependencies
         working-directory: ${{ env.WORKDIR }}
@@ -297,7 +184,7 @@ jobs:
           rustup default stable
           rustup target add aarch64-apple-ios
           rustup target add aarch64-apple-ios-sim
-          echo "✅ iOS arm64 device Rust target installed"
+          echo "iOS arm64 device Rust target installed"
           rustup target list --installed
 
       - if: ${{ matrix.platform == 'ios' && matrix.arch == 'x64' }}
@@ -307,7 +194,7 @@ jobs:
           echo "Installing Rust target for iOS x64 simulator..."
           rustup default stable
           rustup target add x86_64-apple-ios
-          echo "✅ iOS x64 simulator Rust target installed"
+          echo "iOS x64 simulator Rust target installed"
           rustup target list --installed
 
       - if: ${{ matrix.platform == 'android' }}
@@ -319,7 +206,7 @@ jobs:
           # Install all Android targets
           rustup target add aarch64-linux-android
           rustup target add armv7-linux-androideabi
-          echo "✅ Android Rust targets installed"
+          echo "Android Rust targets installed"
           rustup target list --installed
 
       - name: Generate
@@ -334,16 +221,11 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: bare-make install
 
-      - name: Strip debug symbols (skip windows and android)
-        if: ${{ matrix.platform != 'win32' && matrix.platform != 'android' }}
-        shell: bash
-        working-directory: ${{ env.WORKDIR }}
-        run: find prebuilds -name "*.bare" -exec strip {} \;
-
-      - name: Strip debug symbols (skip windows and android)
-        if: ${{ matrix.platform != 'win32' && matrix.platform != 'android' }}
-        shell: bash
-        run: find ${{ env.WORKDIR }}/prebuilds -name "*.bare" -exec strip {} \;
+      - name: Strip debug symbols
+        uses: tetherto/qvac/.github/actions/strip-prebuilds@1d9b2165867d03c6edd675e402ee101a5d48a6d8
+        with:
+          platform: ${{ matrix.platform }}
+          workdir: ${{ env.WORKDIR }}
 
       - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
@@ -367,4 +249,3 @@ jobs:
         with:
           name: prebuilds
           path: prebuilds
-

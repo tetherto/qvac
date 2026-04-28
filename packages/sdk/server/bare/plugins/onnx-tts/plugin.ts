@@ -4,8 +4,11 @@ import ONNXTTS from "@qvac/tts-onnx";
 import {
   definePlugin,
   defineHandler,
+  defineDuplexHandler,
   ttsRequestSchema,
   ttsResponseSchema,
+  textToSpeechStreamRequestSchema,
+  textToSpeechStreamResponseSchema,
   ModelType,
   ttsConfigSchema,
   ADDON_TTS,
@@ -24,6 +27,7 @@ import {
   TtsReferenceAudioRequiredError,
 } from "@/utils/errors-server";
 import { textToSpeech } from "@/server/bare/plugins/onnx-tts/ops/text-to-speech";
+import { textToSpeechStream } from "@/server/bare/plugins/onnx-tts/ops/text-to-speech-stream";
 import { attachModelExecutionMs } from "@/profiling/model-execution";
 import { loadReferenceAudioAt24k } from "@/server/bare/plugins/onnx-tts/wav-helper";
 
@@ -299,6 +303,13 @@ export const ttsPlugin = definePlugin({
               type: "textToSpeech" as const,
               buffer: result.value.buffer,
               done: false,
+              ...(result.value.chunkIndex !== undefined
+                ? { chunkIndex: result.value.chunkIndex }
+                : {}),
+              ...(typeof result.value.sentenceChunk === "string" &&
+              result.value.sentenceChunk.length > 0
+                ? { sentenceChunk: result.value.sentenceChunk }
+                : {}),
             };
             result = await stream.next();
           }
@@ -310,6 +321,49 @@ export const ttsPlugin = definePlugin({
             done: true,
             ...(stats && { stats }),
           }, modelExecutionMs);
+        } finally {
+          await stream.return?.(undefined as never);
+        }
+      },
+    }),
+
+    textToSpeechStream: defineDuplexHandler({
+      requestSchema: textToSpeechStreamRequestSchema,
+      responseSchema: textToSpeechStreamResponseSchema,
+      streaming: true,
+      duplex: true,
+
+      handler: async function* (request, inputStream) {
+        const stream = textToSpeechStream(request, inputStream);
+        try {
+          let result = await stream.next();
+
+          while (!result.done) {
+            yield {
+              type: "textToSpeechStream" as const,
+              buffer: result.value.buffer,
+              done: false,
+              ...(result.value.chunkIndex !== undefined
+                ? { chunkIndex: result.value.chunkIndex }
+                : {}),
+              ...(typeof result.value.sentenceChunk === "string" &&
+              result.value.sentenceChunk.length > 0
+                ? { sentenceChunk: result.value.sentenceChunk }
+                : {}),
+            };
+            result = await stream.next();
+          }
+
+          const { modelExecutionMs, stats } = result.value;
+          yield attachModelExecutionMs(
+            {
+              type: "textToSpeechStream" as const,
+              buffer: [],
+              done: true,
+              ...(stats && { stats }),
+            },
+            modelExecutionMs,
+          );
         } finally {
           await stream.return?.(undefined as never);
         }

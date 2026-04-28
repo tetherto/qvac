@@ -1,5 +1,5 @@
 import { getModelEntry } from "@/server/bare/registry/model-registry";
-import { getPlugin } from "@/server/plugins";
+import { getAllPlugins, getPlugin } from "@/server/plugins";
 import type { PluginHandlerDefinition } from "@/schemas/plugin";
 import {
   profileReplyHandler,
@@ -8,8 +8,8 @@ import {
 import {
   ModelNotFoundError,
   ModelIsDelegatedError,
+  ModelOperationNotSupportedError,
   PluginNotFoundError,
-  PluginHandlerNotFoundError,
   PluginHandlerTypeMismatchError,
 } from "@/utils/errors-server";
 
@@ -27,7 +27,7 @@ function resolvePluginHandlerDef(
     throw new ModelNotFoundError(modelId);
   }
 
-  if (entry.isDelegated || !entry.local) {
+  if (entry.isDelegated) {
     throw new ModelIsDelegatedError(modelId);
   }
 
@@ -38,11 +38,20 @@ function resolvePluginHandlerDef(
 
   const handlerDef = plugin.handlers[handlerName];
   if (!handlerDef) {
-    const availableHandlers = Object.keys(plugin.handlers);
-    throw new PluginHandlerNotFoundError(
-      entry.local.modelType,
+    const loadedModelType = entry.local.modelType;
+    const supportedOperations = Object.keys(plugin.handlers);
+    const suggestedModelTypes = getAllPlugins()
+      .filter(
+        (p) => p.modelType !== loadedModelType && handlerName in p.handlers,
+      )
+      .map((p) => p.modelType);
+
+    throw new ModelOperationNotSupportedError(
+      modelId,
+      loadedModelType,
       handlerName,
-      availableHandlers,
+      supportedOperations,
+      suggestedModelTypes,
     );
   }
 

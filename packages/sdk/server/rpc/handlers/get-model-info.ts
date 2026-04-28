@@ -68,7 +68,7 @@ export async function handleGetModelInfo(
   const loadedInstances: LoadedInstance[] = [];
   for (const id of loadedModelIds) {
     const entry = getModelEntry(id);
-    if (!entry?.local) continue;
+    if (!entry || entry.isDelegated) continue;
 
     const matchesByName = entry.local.name && entry.local.name === name;
 
