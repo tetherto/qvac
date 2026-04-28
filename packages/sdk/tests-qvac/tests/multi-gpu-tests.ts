@@ -8,10 +8,15 @@ export const multiGpuConfigSmoke: TestDefinition = {
     ],
   },
   expectation: { validation: "contains-all", contains: ["4"] },
+  suites: ["smoke"],
   metadata: {
     category: "multi-gpu",
     dependency: "llm",
     estimatedDurationMs: 30000,
+  },
+  skip: {
+    reason: "Multi-GPU split-mode requires discrete GPUs; mobile devices run single-GPU or CPU only",
+    platforms: ["mobile-ios", "mobile-android"],
   },
 };
 
