@@ -6,7 +6,7 @@ argument-hint: "<package-name> <backend:onnxruntime|qvac-fabric|ggml|none>"
 
 # New Addon — Hello-World Scaffold
 
-Create a new addon package at `packages/<package-name>/` with the same structure used by the existing addons (tests, CMake, vcpkg, JS entry, CI workflows). The C++ side exposes one function `sayHello(name) -> string` and includes at least one `qvac-lib-inference-addon-cpp` header, so it "inherits" from the base addon. An inference backend (ONNX Runtime, qvac-fabric, raw ggml, or none) is wired in based on the second argument.
+Create a new addon package at `packages/<package-name>/` with the same structure used by the existing addons (tests, CMake, vcpkg, JS entry, CI workflows). The C++ side exposes one function `sayHello(name) -> string` and includes at least one `qvac-lib-inference-addon-cpp` header, so it "inherits" from the base addon. The JS side exposes a class with the **canonical addon shape** (constructor takes `{ files, config, logger, opts }`; `load`/`run`/`unload`/`pause`/`cancel`/`getState` lifecycle; `run()` returns a `QvacResponse` driven through `createJobHandler` + `exclusiveRunQueue` from `@qvac/infer-base`; logging via `@qvac/logging`). An inference backend (ONNX Runtime, qvac-fabric, raw ggml, or none) is wired in based on the second argument.
 
 Arguments in `$ARGUMENTS`:
 1. **package name** (required) — full directory name, e.g. `qvac-lib-infer-hello`
@@ -32,15 +32,16 @@ Derive (use these rules, announce the derived values to the user before proceedi
 
 ## Step 2 — Resolve backend-specific substitutions
 
-Use this table to fill in `BACKEND_VCPKG_DEPS`, `BACKEND_NPM_DEPS_JSON`, `BACKEND_CMAKE_FIND`, `BACKEND_CMAKE_LINK`, `BACKEND_LABEL`.
+Use this table to fill in `BACKEND_VCPKG_DEPS`, `BACKEND_NPM_DEPS`, `BACKEND_CMAKE_FIND`, `BACKEND_CMAKE_LINK`, `BACKEND_LABEL`.
+
+`BACKEND_NPM_DEPS` is appended **inside** the canonical `dependencies` block in `package.json` (`@qvac/infer-base`, `@qvac/logging`, `bare-fs`, `bare-path` are always present). When a backend adds packages, the substitution must include a leading `,` and matching indentation.
 
 ### `onnxruntime` — via `@qvac/onnx` npm package (not vcpkg)
 - `BACKEND_VCPKG_DEPS` = empty string
-- `BACKEND_NPM_DEPS_JSON` =
-  ```json
-  {
+- `BACKEND_NPM_DEPS` =
+  ```
+  ,
     "@qvac/onnx": "^0.14.0"
-  }
   ```
 - `BACKEND_CMAKE_FIND` =
   ```
@@ -58,7 +59,7 @@ Use this table to fill in `BACKEND_VCPKG_DEPS`, `BACKEND_NPM_DEPS_JSON`, `BACKEN
   ```json
   {"name": "qvac-fabric", "version>=": "7248.2.3"},
   ```
-- `BACKEND_NPM_DEPS_JSON` = `{}`
+- `BACKEND_NPM_DEPS` = empty string
 - `BACKEND_CMAKE_FIND` = `find_package(llama CONFIG REQUIRED)`
 - `BACKEND_CMAKE_LINK` =
   ```
@@ -71,7 +72,7 @@ Use this table to fill in `BACKEND_VCPKG_DEPS`, `BACKEND_NPM_DEPS_JSON`, `BACKEN
   ```json
   {"name": "ggml", "version>=": "2026-01-30#5"},
   ```
-- `BACKEND_NPM_DEPS_JSON` = `{}`
+- `BACKEND_NPM_DEPS` = empty string
 - `BACKEND_CMAKE_FIND` = `find_package(ggml CONFIG REQUIRED)`
 - `BACKEND_CMAKE_LINK` =
   ```
@@ -81,7 +82,7 @@ Use this table to fill in `BACKEND_VCPKG_DEPS`, `BACKEND_NPM_DEPS_JSON`, `BACKEN
 
 ### `none`
 - `BACKEND_VCPKG_DEPS` = empty string
-- `BACKEND_NPM_DEPS_JSON` = `{}`
+- `BACKEND_NPM_DEPS` = empty string
 - `BACKEND_CMAKE_FIND` = empty
 - `BACKEND_CMAKE_LINK` = empty
 - `BACKEND_LABEL` = `none (inference-addon-cpp only)`
@@ -101,7 +102,7 @@ performing **string substitution** on file contents. Placeholders:
 | `{{DISPLAY_NAME}}` | `$DISPLAY_NAME` |
 | `{{EXPORT_FN_NAME}}` | `$EXPORT_FN_NAME` |
 | `{{BACKEND_VCPKG_DEPS}}` | from table above |
-| `{{BACKEND_NPM_DEPS_JSON}}` | from table above |
+| `{{BACKEND_NPM_DEPS}}` | from table above |
 | `{{BACKEND_CMAKE_FIND}}` | from table above |
 | `{{BACKEND_CMAKE_LINK}}` | from table above |
 | `{{BACKEND_LABEL}}` | from table above |
@@ -126,7 +127,16 @@ File listing produced (all substituted):
 - `scripts/generate-mobile-integration-tests.js`, `scripts/validate-mobile-tests.js` — copied verbatim. Power the `test:mobile:generate` / `test:mobile:validate` npm scripts. Run `npm run test:mobile:generate` whenever you add or rename a `test/integration/*.test.js` file so `integration.auto.cjs` stays in sync.
 - `vcpkg/triplets/x64-linux.cmake`, `vcpkg/triplets/arm64-linux.cmake`, `vcpkg/toolchains/linux-clang.cmake` — **required** so gtest/other vcpkg deps build with libc++ and match the addon's `-stdlib=libc++` setting. Without these the C++ unit test target will fail to link.
 
-**JS unit test pattern:** `test/unit/*.test.js` must only import from pure-JS helper modules (e.g. `addon.js`), **never** from `index.js` or `binding.js`. CI's `ts-checks` job runs `npm run test:unit --if-present` without building the native addon, so unit tests that load the `.bare` binding will fail with `ADDON_NOT_FOUND`. Mirror the pattern used by `packages/qvac-lib-infer-llamacpp-embed/addon.js` + `test/unit/map-addon-event.test.js`: the scaffold's `addon.js` exports a pure-JS `normalizeName()` helper, `index.js` composes it with `binding.sayHello()`, and the unit test asserts against `normalizeName` only. Integration tests (`test/integration/*.test.js`) are allowed to load the native addon.
+**JS unit test pattern:** `test/unit/*.test.js` must only import from pure-JS helper modules (e.g. `addon.js`), **never** from `index.js` or `binding.js`. CI's `ts-checks` job runs `npm run test:unit --if-present` without building the native addon, so unit tests that load the `.bare` binding will fail with `ADDON_NOT_FOUND`. Mirror the pattern used by `packages/qvac-lib-infer-llamacpp-embed/addon.js` + `test/unit/map-addon-event.test.js`: the scaffold's `addon.js` exports a pure-JS `normalizeName()` helper, `index.js` composes it inside the canonical class's `_runInternal()`, and the unit test asserts against `normalizeName` only. Integration tests (`test/integration/*.test.js`) are allowed to load the native addon.
+
+**Canonical JS class shape (template ships with this — do not regress to a synchronous wrapper):**
+
+- `index.js` exports a class named `{{DISPLAY_NAME}}` with constructor `({ files, config = {}, logger = null, opts = {} } = {})`.
+- The constructor validates `files.model` is a non-empty array of absolute path strings (matches `LlmLlamacpp` and every other addon).
+- The class composes `createJobHandler({ cancel: () => /* … */ })` and `exclusiveRunQueue()` from `@qvac/infer-base`, and uses `new QvacLogger(logger)` from `@qvac/logging`. Both are runtime dependencies and are already declared in the template `package.json`.
+- Lifecycle: `async load()`, `async run(input)`, `async unload()`, `async pause()`, `async cancel()`, `getState()`. `run()` resolves to a `QvacResponse` (consumer awaits `response.await()` to receive the final result).
+- Synchronous backends (like the hello-world `binding.sayHello()`) drive the response by calling `this._job.start() → output(result) → end(stats, result)` inline; the wrapper still returns a `QvacResponse` so the public API stays uniform across addons.
+- Replace `_load()` and `_runInternal()` with the real model load + inference. Do **not** change the constructor signature or the lifecycle method names.
 
 ## Step 4 — Generate CI workflows
 
@@ -171,9 +181,10 @@ Run these sequentially from `packages/$PKG/`:
 2. `bare-make generate`
 3. `bare-make build`
 4. `bare-make install`
-5. `npm run test:unit` — must pass (brittle JS test)
-6. `npm run test:integration` — must pass (loads native `.bare` and asserts `sayHello()` output)
+5. `npm run test:unit` — must pass (brittle JS test against the pure-JS helper)
+6. `npm run test:integration` — must pass (instantiates the addon class, awaits `load()` + `run()` + `unload()`, asserts the `sayHello()` output flows through the `QvacResponse`)
 7. `npm run test:cpp` — must pass (GoogleTest C++ unit)
+8. `npm test` — must pass (alias for unit + integration; sanity check that the canonical entry point works)
 
 If any step fails:
 - Print the failing step and the last ~30 lines of its output.
@@ -187,10 +198,9 @@ Print a short summary:
 - Backend wired in
 - Count of CI workflows generated (expect 7)
 - Test results: unit/integration/cpp — pass/fail
-
 Then **offer Step 7** explicitly:
 
-> "The scaffold is in place with a working `sayHello` demo plus a minimal `HelloModel` showing the full AddonJs pattern. Want me to walk through the questions needed to shape `HelloModel` into your real Model (input/output types, interfaces, config, JS wrapper)? Answer 'yes' to start the interview, 'later' to stop here."
+> "The scaffold is in place with a working `sayHello` demo plus a minimal `HelloModel` showing the full AddonJs pattern, and the JS side already exposes the canonical addon class (`load` / `run` / `unload` / `pause` / `cancel` / `getState`). Want me to walk through the questions needed to shape `HelloModel` into your real Model and fill in `_load()` + `_runInternal()` (input/output types, interfaces, config)? Answer 'yes' to start the interview, 'later' to stop here."
 
 Do not start Step 7 unsolicited if the user said "just the scaffold" or similar in the original invocation.
 
@@ -229,8 +239,8 @@ Ask for the shape of the JS-side config object. Default: `{ path, config, backen
 **Q6 — Which output handler?**
 Using Q3's answer, propose one from 7.3 by default (`std::string` → `JsStringOutputHandler`, `std::vector<T>` → `JsTypedArrayOutputHandler<T>`, custom class → subclass `JsBaseOutputHandler`). Ask the user to confirm or override.
 
-**Q7 — JS wrapper class?**
-Three options: (a) none — leave `index.js` exposing the scaffold's `sayHello`, (b) thin — mirror `qvac-lib-infer-llamacpp-embed/index.js`, (c) feature-rich — copy another reference. Default: (b).
+**Q7 — JS wrapper class shape?**
+The scaffold already ships a thin canonical class in `index.js` (constructor `{ files, config, logger, opts }`; `load` / `run` / `unload` / `pause` / `cancel` / `getState`; `createJobHandler` + `exclusiveRunQueue` job composition). Three options: (a) **keep as-is** and just fill in `_load()` + `_runInternal()` — recommended default, (b) **extend** to mirror a feature-rich reference (`qvac-lib-infer-whispercpp/index.js` for streaming, `packages/ocr-onnx/index.js` for validation-heavy), (c) **replace** with a custom class shape (only if the canonical surface genuinely doesn't fit — discourage; consistency across the monorepo matters). Do **not** offer "leave the scaffold's `sayHello`" as an option — synchronous wrappers are not canonical. Default: (a).
 
 **Q8 — C++ test for the new Model?**
 Ask if the user wants a minimal GoogleTest case using `AddonCpp::createInstance()` (see 7.7). Default: yes.
@@ -242,7 +252,7 @@ Once all eight answers are collected, edit the scaffold **incrementally**, one f
 1. Rename `addon/src/model-interface/HelloModel.hpp` → the new class name, update interfaces (Q4), `Input`/`Output` types (Q2/Q3), stub `process()` to match the new signature (don't fake inference — leave a `TODO` body that throws `not implemented`).
 2. Update `AddonJs.hpp` — swap `HelloModel` for the new class, extend `createInstance` arg parsing per Q5, extend `runJob` input branches per Q2, swap the output handler per Q6.
 3. Update `AddonCpp.hpp` — mirror the Model swap + output handler.
-4. Update `index.js` per Q7.
+4. Update `index.js` per Q7 — for option (a) keep the canonical class as-is and only fill in `_load()` + `_runInternal()`; for (b) extend by adding methods (do **not** rewrite the constructor / lifecycle); for (c) replace only if the canonical surface genuinely doesn't fit.
 5. If Q8 is yes, add `test/unit/test_<your-model>.cpp` (GoogleTest, minimal).
 6. Update `package.json` `description` to reflect the real backend.
 7. Leave `sayHello` / `HelloWorld::greet` / `say-hello.test.js` / `addon.test.js` in place. Only remove them when the user says the new Model has replaced them.
@@ -321,15 +331,17 @@ if (type == "text") {
 
 Keep the JS side's `{ type, input }` contract — every real addon uses it.
 
-### 7.6 Add a JS wrapper class
+### 7.6 Adapt the canonical JS wrapper
 
-The scaffold exposes the native bindings directly; real addons wrap them in a class that provides a clean async API. Minimal vs. full examples:
+The scaffold's `index.js` already ships the canonical class shape (constructor `{ files, config, logger, opts }`; `load` / `run` / `unload` / `pause` / `cancel` / `getState`; `createJobHandler` + `exclusiveRunQueue`; `QvacLogger` from `@qvac/logging`). For most addons the right move is to keep the surface and only fill in `_load()` / `_runInternal()` to drive the new Model.
 
-- **Thin** (`qvac-lib-infer-llamacpp-embed/index.js`) — uses `@qvac/infer-base` `createJobHandler` + `exclusiveRunQueue`, maps addon events to `Output` / `JobEnded` / `Error`, streams shards via `loadWeights()`.
-- **Feature-rich** (`qvac-lib-infer-whispercpp/index.js`) — adds streaming audio, VAD, reload.
-- **Validation-heavy** (`packages/ocr-onnx/index.js`) — per-language filtering, file-path normalization, multi-mode selection.
+When the Model needs more, look at these references for shape (do **not** rewrite the constructor / lifecycle):
+- **Streaming output** (`qvac-lib-infer-llamacpp-llm/index.js`) — async addon events arrive via `_handleAddonOutputEvent`, fanned into `_job.output()` / `_job.end()` / `_job.fail()`.
+- **Streamed shard loading** (`qvac-lib-infer-llamacpp-llm/index.js#_streamShards`) — call `addon.loadWeights({ filename, chunk })` per shard before `addon.activate()`.
+- **Streaming audio + VAD** (`qvac-lib-infer-whispercpp/index.js`) — feature-rich extension built on top of the canonical surface.
+- **Validation-heavy input** (`packages/ocr-onnx/index.js`) — per-language filtering, file-path normalization, multi-mode selection.
 
-Copy the thin pattern first; add features only when the Model needs them.
+The synchronous-backend pattern (`binding.sayHello()` driven inline through `_job.start() → output → end`) is what the scaffold ships; switch to the async event-driven pattern only when the C++ side actually emits asynchronously.
 
 ### 7.7 Wire the C++ test harness
 
