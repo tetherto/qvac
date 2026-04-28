@@ -143,6 +143,9 @@ ggml_backend_dev_t nmt_select_gpu_device(
     int cnt = 0;
     for (size_t i = 0; i < devCount; ++i) {
       ggml_backend_dev_t dev_cur = ggml_backend_dev_get(i);
+      if (dev_cur == nullptr) {
+        continue;
+      }
       enum ggml_backend_dev_type dev_type = ggml_backend_dev_type(dev_cur);
       const char* name = ggml_backend_dev_name(dev_cur);
       if (dev_type == GGML_BACKEND_DEVICE_TYPE_CPU) {
@@ -197,6 +200,9 @@ ggml_backend_dev_t nmt_select_gpu_device(
     int cnt = 0;
     for (size_t i = 0; i < devCount; ++i) {
       ggml_backend_dev_t dev_cur = ggml_backend_dev_get(i);
+      if (dev_cur == nullptr) {
+        continue;
+      }
       enum ggml_backend_dev_type dev_type = ggml_backend_dev_type(dev_cur);
       const char* name = ggml_backend_dev_name(dev_cur);
       if (dev_type == GGML_BACKEND_DEVICE_TYPE_CPU) {
@@ -246,6 +252,9 @@ ggml_backend_dev_t nmt_select_gpu_device(
     int cnt2 = 0;
     for (size_t i = 0; i < devCount; ++i) {
       ggml_backend_dev_t dev_cur = ggml_backend_dev_get(i);
+      if (dev_cur == nullptr) {
+        continue;
+      }
       enum ggml_backend_dev_type dev_type = ggml_backend_dev_type(dev_cur);
       const char* name = ggml_backend_dev_name(dev_cur);
       if (dev_type == GGML_BACKEND_DEVICE_TYPE_CPU) {

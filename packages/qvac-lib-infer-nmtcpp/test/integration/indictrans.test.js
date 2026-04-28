@@ -270,7 +270,7 @@ for (const deviceConfig of DEVICE_CONFIGS) {
 function resolveExecutionProvider (backendName, useGpu) {
   if (backendName && backendName !== 'CPU' && backendName !== 'Unloaded' &&
       backendName !== 'Bergamot-CPU') {
-    return backendName.toLowerCase().replace(/\s+/g, '-')
+    return backendName.toLowerCase().replace(/\s+/g, '-').replace(/\d+$/, '')
   }
   if (!useGpu) return 'cpu'
   // Android default is Vulkan since QVAC-17790 set USE_OPENCL=OFF; explicit
