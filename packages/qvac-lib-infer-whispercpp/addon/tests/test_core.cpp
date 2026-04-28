@@ -201,10 +201,8 @@ TEST_F(StreamingProcessorTest, EmitsVadStateUpdatesAlongsideTranscriptOutput) {
 
   {
     StreamingProcessor processor(model, outputQueue, streamConfig);
-    processor.appendAudio(
-        std::vector<float>(
-            static_cast<std::size_t>(streamConfig.vadRunIntervalSamples),
-            0.0F));
+    processor.appendAudio(std::vector<float>(
+        static_cast<std::size_t>(streamConfig.vadRunIntervalSamples), 0.0F));
     processor.end();
   }
 
