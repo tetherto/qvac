@@ -1,17 +1,17 @@
 import { completion, loadModel, unloadModel, VERBOSITY } from "@qvac/sdk";
 
 // Multi-GPU inference distributes a model across multiple GPUs using llama.cpp's
-// built-in parallelism. Two split strategies are available:
+// built-in split modes. Two strategies are available:
 //
-// - "layer": pipeline parallelism — consecutive layers assigned to each GPU.
-//            Best for throughput on models too large to fit on one GPU.
-// - "row":   tensor parallelism — each tensor row split across GPUs.
-//            Lower latency but higher inter-GPU bandwidth requirement.
+// - "layer": splits layers and KV cache across GPUs.
+// - "row":   splits layers and KV cache across GPUs, and uses tensor parallelism
+//            where supported.
 //
 // tensor-split controls the proportion of work assigned to each GPU.
 // "1,1" distributes evenly across two GPUs; "3,1" assigns 75% to GPU 0.
 //
-// main-gpu selects which GPU handles the final computation and output layer.
+// main-gpu selects which GPU is used for the entire model when split-mode is
+// "none", and pins the primary device in multi-GPU mode.
 // Accepts an integer device index (0, 1, ...) or "integrated" / "dedicated".
 
 try {
