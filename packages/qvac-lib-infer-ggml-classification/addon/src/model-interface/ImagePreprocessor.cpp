@@ -62,6 +62,39 @@ std::vector<uint8_t> decodeToRgb(
     raise("Input image buffer too large for decoder");
   }
 
+  // Pre-decode header inspection: stbi_info_from_memory parses only the
+  // image header, so it lets us reject oversized / malformed images
+  // before stbi_load_from_memory allocates the full decoded RGB buffer
+  // (which for a 100 megapixel image would be ~300 MB). The same upper
+  // bound enforced post-decode is applied here too; we keep the
+  // post-decode check below as belt-and-braces in case stbi_info reports
+  // a different size than stbi_load eventually produces (e.g. for
+  // truncated streams that still parse a valid header).
+  {
+    int infoWidth = 0;
+    int infoHeight = 0;
+    int infoChannels = 0;
+    if (stbi_info_from_memory(
+            encodedBuffer.data(), static_cast<int>(encodedBuffer.size()),
+            &infoWidth, &infoHeight, &infoChannels) != 0) {
+      if (infoWidth <= 0 || infoHeight <= 0) {
+        raise("Decoded image has invalid dimensions");
+      }
+      if (static_cast<uint32_t>(infoWidth) > kMaxImageDimension ||
+          static_cast<uint32_t>(infoHeight) > kMaxImageDimension) {
+        raise(
+            "Image exceeds maximum allowed dimension (" +
+            std::to_string(kMaxImageDimension) + " px per axis); header "
+            "reported " + std::to_string(infoWidth) + "x" +
+            std::to_string(infoHeight));
+      }
+    }
+    // stbi_info returning 0 means the header could not be parsed --
+    // fall through to stbi_load_from_memory so the caller receives the
+    // exact stbi_failure_reason() rather than a generic "header bad"
+    // message from us.
+  }
+
   int width = 0;
   int height = 0;
   int channelsIgnored = 0;
