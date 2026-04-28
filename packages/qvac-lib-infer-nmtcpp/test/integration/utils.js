@@ -4,6 +4,7 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const os = require('bare-os')
 const process = require('bare-process')
+const TranslationNmtcpp = require('@qvac/translation-nmtcpp')
 
 // ============================================================================
 // Platform Detection
@@ -770,8 +771,8 @@ function formatPerformanceMetrics (label, metrics, opts = {}) {
  */
 const MAX_GPU_DEVICE_PROBES = 4
 
-/** @type {{ index: number, name: string }[] | null} */
-let _gpuDeviceCache = null
+/** @type {Promise<{ index: number, name: string }[]> | null} */
+let _gpuDevicePromise = null
 
 /**
  * Discovers available GPU devices by probe-loading an IndicTrans model with
@@ -782,16 +783,22 @@ let _gpuDeviceCache = null
  * enumeration is device-dependent, not model-dependent, so a single probe
  * model suffices for all backends (Bergamot, pivot, etc.).
  *
- * Results are cached process-wide so the expensive probe runs at most once.
+ * Results are cached as a Promise so concurrent callers await the same probe
+ * run (avoids the race where a second caller sees an in-progress empty array).
  *
  * @returns {Promise<{ index: number, name: string }[]>}
  */
-async function discoverGpuDevices () {
-  if (_gpuDeviceCache !== null) return _gpuDeviceCache
-  _gpuDeviceCache = []
+function discoverGpuDevices () {
+  if (_gpuDevicePromise !== null) return _gpuDevicePromise
+  _gpuDevicePromise = _probeGpuDevices()
+  return _gpuDevicePromise
+}
 
+const _logger = createLogger()
+
+async function _probeGpuDevices () {
+  const devices = []
   const modelPath = await ensureIndicTransModel()
-  const TranslationNmtcpp = require('@qvac/translation-nmtcpp')
 
   for (let idx = 0; idx < MAX_GPU_DEVICE_PROBES; idx++) {
     let model
@@ -820,14 +827,16 @@ async function discoverGpuDevices () {
       if (name === 'CPU' || name === 'Unloaded' || name === 'Bergamot-CPU') {
         break
       }
-      _gpuDeviceCache.push({ index: idx, name })
-    } catch (_) {
+      devices.push({ index: idx, name })
+    } catch (err) {
+      _logger.warn('[discoverGpuDevices] probe at gpu_device=' + idx +
+        ' failed: ' + (err && err.message ? err.message : String(err)))
       if (model) { try { await model.unload() } catch (__) { /* noop */ } }
       break
     }
   }
 
-  return _gpuDeviceCache
+  return devices
 }
 
 // ============================================================================
