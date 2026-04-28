@@ -1,6 +1,5 @@
 import type { RunOptions } from "@qvac/llm-llamacpp";
 import type {
-  CompletionDebugStats,
   CompletionParams,
   CompletionStats,
   GenerationParams,
@@ -52,7 +51,7 @@ import path from "bare-path";
 const logger = getServerLogger();
 
 interface ResponseWithStats {
-  stats?: LlmStats & CompletionDebugStats;
+  stats?: LlmStats;
 }
 
 interface CompletionResult {
@@ -392,23 +391,12 @@ async function* processModelResponse(
     ...(responseWithStats.stats?.backendDevice !== undefined && {
       backendDevice: responseWithStats.stats.backendDevice,
     }),
-    // @ts-expect-error test-error
-    promptTokens: responseWithStats.stats?.promptTokens ?? 0, // eslint-disable-line
-    generatedTokens: responseWithStats.stats?.generatedTokens ?? 0,
-  } as CompletionStats;
-
-  const debugStats: CompletionDebugStats = {
-    contextSlides: responseWithStats.stats?.contextSlides ?? 0,
-    nPastBeforeTools: responseWithStats.stats?.nPastBeforeTools ?? 0,
-    toolsTrimmed:responseWithStats.stats?.toolsTrimmed ?? 0,
-    firstMsgTokens: responseWithStats.stats?.firstMsgTokens ?? 0,
-  } as CompletionDebugStats;
+  };
 
   return {
     ...buildStreamResult(
       modelExecutionMs,
       hasDefinedValues(stats) ? stats : undefined,
-      debugStats,
     ),
     toolCalls: toolCallsResult,
     responseText: accumulatedText,

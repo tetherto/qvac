@@ -23,23 +23,18 @@ export function forwardModelExecution<T>(target: T, source: unknown): T {
   return attachModelExecutionMs(target, readModelExecutionMs(source));
 }
 
-export interface StreamResult<S = unknown, SD = unknown> {
+export interface StreamResult<S = unknown> {
   modelExecutionMs: number;
   stats?: S;
-  debugStats?: SD;
 }
 
-export function buildStreamResult<S extends Record<string, unknown>, SD extends Record<string, unknown>>(
+export function buildStreamResult<S extends Record<string, unknown>>(
   modelExecutionMs: number,
   stats?: S,
-  debugStats?: SD,
 ): StreamResult<S> {
   const result: StreamResult<S> = { modelExecutionMs };
   if (stats && hasDefinedValues(stats)) {
     result.stats = stats;
-  }
-  if (debugStats && hasDefinedValues(debugStats)) {
-    result.debugStats = debugStats;
   }
   return result;
 }
