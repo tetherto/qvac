@@ -37,11 +37,10 @@ export interface TranslationNmtcppConfig {
    * Enable GPU (non-CPU) compute backend. Read once at load() time.
    * Bergamot is CPU-only by design — this flag is a no-op for that backend.
    *
-   * `use_gpu` mirrors the C-struct field (`nmt_context_params::use_gpu`);
-   * `useGPU` is the camelCase alias preferred for new code so the config
-   * object reads consistently with `backendsDir`/`openclCacheDir` and
-   * matches the `ocr-onnx` convention (`useGPU` with caps acronym). Both
-   * forms are accepted; if both are set, `use_gpu` wins.
+   * `use_gpu` mirrors the C-struct field (`nmt_context_params::use_gpu`)
+   * and is the primary key. `useGPU` is the camelCase alias matching the
+   * `ocr-onnx` convention (caps acronym). Both forms are accepted; if
+   * both are set, `use_gpu` takes precedence.
    * @default false
    */
   use_gpu?: boolean

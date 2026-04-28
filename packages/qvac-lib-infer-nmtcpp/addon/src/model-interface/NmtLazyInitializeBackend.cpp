@@ -286,7 +286,9 @@ bool NmtLazyInitializeBackend::initializeLocked(
           Priority::WARNING,
           "Rejecting suspicious backendsDir (must be absolute and free of "
           "'..' segments): " +
-              sanitizePrintableAscii(backendsDir));
+              sanitizePrintableAscii(backendsDir) +
+              " — falling back to default backend loading");
+      ggml_backend_load_all();
     } else {
       std::filesystem::path backendsDirPath = requested.lexically_normal();
 #ifdef BACKENDS_SUBDIR
