@@ -2280,13 +2280,31 @@ bool smolvla_inference_with_timing(
   // across 10 steps instead of `num_ode_steps` per-iteration heap churns.
   std::vector<float> te_single(hp.expert_hidden_size);
 
-  // Run 10 ODE steps, reusing the same graph. KV cache inputs were uploaded
-  // once before the loop above; ggml_set_input keeps them stable between
-  // ggml_backend_sched_graph_compute calls (we never reset the scheduler).
+  // Run 10 ODE steps, reusing the same graph.
+  //
+  // Re-upload all inputs each step: the CPU path uses ggml_gallocr
+  // (alloc_staged_simple) which reuses input slots between
+  // ggml_backend_graph_compute calls, and Adreno Vulkan has similar
+  // semantics in practice. Without the per-step upload the action chunks
+  // diverge wildly from the PyTorch reference on those backends
+  // (cos_sim ≈ 0.31, max|Δ| ≈ 1.65 vs 0.020 on a sched-managed Vulkan
+  // path). Sched-managed multi-backend setups would tolerate skipping
+  // this re-upload, but the conditional branch isn't worth the
+  // correctness risk for ~80 MB of H2D traffic per inference.
   for (int step = 0; step < hp.num_ode_steps; step++) {
     float t_val = 1.0f + step * dt;
 
     ggml_backend_tensor_set(g_xt, x_t.data(), 0, x_t.size() * sizeof(float));
+    for (int i = 0; i < hp.text_num_layers; i++) {
+      if (g_kk[i]->buffer) {
+        ggml_backend_tensor_set(
+            g_kk[i], kv_keys_data[i].data(), 0, kv_total * sizeof(float));
+      }
+      if (g_kv[i]->buffer) {
+        ggml_backend_tensor_set(
+            g_kv[i], kv_vals_data[i].data(), 0, kv_total * sizeof(float));
+      }
+    }
 
     compute_sinusoidal_time_embedding(
         t_val,
