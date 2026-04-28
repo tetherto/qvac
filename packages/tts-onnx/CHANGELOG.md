@@ -252,7 +252,7 @@ Instead of bumping the vcpkg registry baseline, a `version>=: "1.24.2"` constrai
 - `models:ensure` script to download Chatterbox (en/multilingual, fp32/fp16) and Supertonic models; respects `CHATTERBOX_VARIANT`, `CHATTERBOX_LANGUAGE`; use `TTS_ENSURES=all` to ensure all variants
 
 ### Changed
-- Checkout step in `cpp-test-coverage-qvac-lib-infer-onnx-tts.yml` and `integration-test-qvac-lib-infer-onnx-tts.yml` now uses `PAT_TOKEN` for PR/fork compatibility
+- Checkout step in `cpp-test-coverage-tts-onnx.yml` and `integration-test-tts-onnx.yml` now uses `PAT_TOKEN` for PR/fork compatibility
 
 ## [0.5.4]
 

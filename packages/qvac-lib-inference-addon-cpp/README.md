@@ -23,7 +23,7 @@ This library sits between the Bare runtime and specific inference addons. Commun
 - [llm-llamacpp](https://github.com/tetherto/llm-llamacpp) - LLM inference
 - [qvac-lib-infer-whispercpp](https://github.com/tetherto/qvac-lib-infer-whispercpp) - Speech recognition
 - [translation-nmtcpp](https://github.com/tetherto/translation-nmtcpp) - Neural translation
-- [qvac-lib-infer-onnx-tts](https://github.com/tetherto/qvac-lib-infer-onnx-tts) - Text-to-speech
+- [tts-onnx](https://github.com/tetherto/tts-onnx) - Text-to-speech
 - [embed-llamacpp](https://github.com/tetherto/embed-llamacpp) - Embeddings
 - [qvac-lib-inference-addon-onnx-ocr-fasttext](https://github.com/tetherto/qvac-lib-inference-addon-onnx-ocr-fasttext) - OCR
 
@@ -334,7 +334,7 @@ Production addons built on this library:
 - [llm-llamacpp](https://github.com/tetherto/llm-llamacpp) - LLM inference
 - [qvac-lib-infer-whispercpp](https://github.com/tetherto/qvac-lib-infer-whispercpp) - Speech recognition
 - [translation-nmtcpp](https://github.com/tetherto/translation-nmtcpp) - Neural translation
-- [qvac-lib-infer-onnx-tts](https://github.com/tetherto/qvac-lib-infer-onnx-tts) - Text-to-speech
+- [tts-onnx](https://github.com/tetherto/tts-onnx) - Text-to-speech
 - [embed-llamacpp](https://github.com/tetherto/embed-llamacpp) - Embeddings
 - [qvac-lib-inference-addon-onnx-ocr-fasttext](https://github.com/tetherto/qvac-lib-inference-addon-onnx-ocr-fasttext) - OCR
 

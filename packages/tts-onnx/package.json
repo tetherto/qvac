@@ -70,10 +70,10 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tetherto/qvac.git",
-    "directory": "packages/qvac-lib-infer-onnx-tts"
+    "directory": "packages/tts-onnx"
   },
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-infer-onnx-tts#readme",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/tts-onnx#readme",
   "devDependencies": {
     "@qvac/langdetect-text": "^0.1.2",
     "@qvac/transcription-whispercpp": "^0.5.5",

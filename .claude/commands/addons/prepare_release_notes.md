@@ -43,7 +43,7 @@ Create `release-notes/vX.Y.Z.md` with these guidelines:
    - `embed-llamacpp`: `Embeddings Addon`
    - `llm-llamacpp`: `LLM Addon`
    - `translation-nmtcpp`: `NMT Addon`
-   - `qvac-lib-infer-onnx-tts`: `TTS ONNX Addon`
+   - `tts-onnx`: `TTS ONNX Addon`
    - `qvac-lib-infer-whispercpp`: `Transcription Whisper Addon`
    - `ocr-onnx`: `OCR Addon`
 

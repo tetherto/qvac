@@ -26,7 +26,7 @@ const ENGINE_MAP = {
   '@qvac/embed-llamacpp': 'embed-llamacpp',
   '@qvac/llm-llamacpp': 'llm-llamacpp',
   '@qvac/translation-nmtcpp': 'translation-nmtcpp',
-  '@qvac/tts-onnx': 'qvac-lib-infer-onnx-tts',
+  '@qvac/tts-onnx': 'tts-onnx',
   '@qvac/transcription-whispercpp': 'qvac-lib-infer-whispercpp',
   '@qvac/translation-llamacpp': 'llm-llamacpp',
   '@qvac/ocr-onnx': 'ocr-onnx',
@@ -76,7 +76,7 @@ const PYTHON_DEP_PATHS = {
     'scripts/conversion_scripts/requirements.txt',
     'benchmarks/quality_eval/requirements.txt'
   ],
-  'qvac-lib-infer-onnx-tts': [
+  'tts-onnx': [
     'benchmarks/python-server/requirements-supertonic.txt',
     'benchmarks/python-server/requirements-chatterbox.txt',
     'benchmarks/client/requirements.txt',

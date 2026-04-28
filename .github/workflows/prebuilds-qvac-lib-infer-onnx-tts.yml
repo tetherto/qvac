@@ -1,4 +1,4 @@
-# Build-only workflow. Publishing is handled by on-merge-qvac-lib-infer-onnx-tts.yml
+# Build-only workflow. Publishing is handled by on-merge-tts-onnx.yml
 name: Prebuilds (TTS)
 
 on:
@@ -7,7 +7,7 @@ on:
       workdir:
         description: "Working directory inside the repo (monorepo package path)"
         required: false
-        default: "packages/qvac-lib-infer-onnx-tts"
+        default: "packages/tts-onnx"
         type: string
 
   workflow_call:
@@ -25,7 +25,7 @@ on:
         description: "Working directory inside the repo (monorepo package path)"
         type: string
         required: false
-        default: "packages/qvac-lib-infer-onnx-tts"
+        default: "packages/tts-onnx"
 
 permissions:
   contents: read
@@ -80,7 +80,7 @@ jobs:
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
     env:
-      WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}
+      WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/tts-onnx' }}
 
     steps:
       - name: Echo workflow inputs
@@ -88,7 +88,7 @@ jobs:
         env:
           INPUT_REF: ${{ inputs.ref || github.ref }}
           INPUT_REPO: ${{ inputs.repository || github.repository }}
-          INPUT_WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}
+          INPUT_WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/tts-onnx' }}
           MATRIX_PLATFORM: ${{ matrix.platform }}
           MATRIX_ARCH: ${{ matrix.arch }}
           MATRIX_TAGS: ${{ matrix.tags }}

@@ -12,7 +12,7 @@ Workflow files live in `.github/workflows/` and fall into distinct categories by
 
 ### Native Addons (C++ packages)
 
-Packages: `llm-llamacpp`, `embed-llamacpp`, `qvac-lib-infer-onnx-tts`, `qvac-lib-infer-whispercpp`, `qvac-lib-infer-parakeet`, `translation-nmtcpp`, `decoder-audio`, `ocr-onnx`
+Packages: `llm-llamacpp`, `embed-llamacpp`, `tts-onnx`, `qvac-lib-infer-whispercpp`, `qvac-lib-infer-parakeet`, `translation-nmtcpp`, `decoder-audio`, `ocr-onnx`
 
 Each addon has a full suite of per-package workflows:
 
@@ -84,7 +84,7 @@ These are the native addon packages that have full CI workflows. The **short nam
 | `LLM` | `packages/llm-llamacpp` | `On PR Trigger (LLM)` |
 | `Embed` | `packages/embed-llamacpp` | `On PR Trigger (Embed)` |
 | `OCR` | `packages/ocr-onnx` | `On PR Trigger (OCR)` |
-| `TTS` | `packages/qvac-lib-infer-onnx-tts` | `On PR Trigger (TTS)` |
+| `TTS` | `packages/tts-onnx` | `On PR Trigger (TTS)` |
 | `Whispercpp` | `packages/qvac-lib-infer-whispercpp` | `On PR Trigger (Whispercpp)` |
 | `Parakeet` | `packages/qvac-lib-infer-parakeet` | `On PR Trigger (Parakeet)` |
 | `NMTCPP` | `packages/translation-nmtcpp` | `On PR Trigger (NMTCPP)` |

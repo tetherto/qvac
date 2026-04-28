@@ -8,7 +8,7 @@ on:
       - feature-*
       - tmp-*
     paths:
-      - "packages/qvac-lib-infer-onnx-tts/**"
+      - "packages/tts-onnx/**"
       - ".github/workflows/*onnx-tts*.yml"
 
   workflow_dispatch:
@@ -95,9 +95,9 @@ jobs:
           base-ref: ${{ github.ref_name }}
           base-sha: ${{ github.event.before }}
           head-sha: ${{ github.sha }}
-          package-slug: qvac-lib-infer-onnx-tts
-          package-json-path: packages/qvac-lib-infer-onnx-tts/package.json
-          changelog-path: packages/qvac-lib-infer-onnx-tts/CHANGELOG.md
+          package-slug: tts-onnx
+          package-json-path: packages/tts-onnx/package.json
+          changelog-path: packages/tts-onnx/CHANGELOG.md
 
   build:
     needs: publish-logic
@@ -111,12 +111,12 @@ jobs:
       packages: write
       pull-requests: write
       id-token: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx-tts.yml
+    uses: ./.github/workflows/prebuilds-tts-onnx.yml
     secrets: inherit
     with:
       repository: ${{ github.repository }}
       ref: ${{ github.ref }}
-      workdir: packages/qvac-lib-infer-onnx-tts
+      workdir: packages/tts-onnx
 
   publish-gpr:
     needs: [build, publish-logic]
@@ -131,7 +131,7 @@ jobs:
       contents: read
       packages: write
     env:
-      WORKDIR: packages/qvac-lib-infer-onnx-tts
+      WORKDIR: packages/tts-onnx
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -168,7 +168,7 @@ jobs:
       packages: write
       id-token: write
     env:
-      WORKDIR: packages/qvac-lib-infer-onnx-tts
+      WORKDIR: packages/tts-onnx
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -213,7 +213,7 @@ jobs:
       release_name: "QVAC TTS ONNX Addon"
       published_version: ${{ needs.publish-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}
-      workdir: packages/qvac-lib-infer-onnx-tts
+      workdir: packages/tts-onnx
 
   post-build-gate:
     name: Post-Build Gate
@@ -241,7 +241,7 @@ jobs:
       contents: read
       packages: read
       id-token: write
-    uses: ./.github/workflows/integration-test-qvac-lib-infer-onnx-tts.yml
+    uses: ./.github/workflows/integration-test-tts-onnx.yml
     needs: post-build-gate
     if: needs.post-build-gate.outputs.should_run_tests == 'true'
     secrets: inherit
@@ -251,7 +251,7 @@ jobs:
       tts_integration_profile: short
 
   mobile-integration-tests:
-    uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-onnx-tts.yml
+    uses: ./.github/workflows/integration-mobile-test-tts-onnx.yml
     needs: post-build-gate
     if: needs.post-build-gate.outputs.should_run_tests == 'true'
     permissions:

@@ -195,7 +195,7 @@ runs:
           qvac-lib-infer-whispercpp
           qvac-lib-infer-onnx-vad
           embed-llamacpp
-          qvac-lib-infer-onnx-tts
+          tts-onnx
           ocr-onnx
         )
 

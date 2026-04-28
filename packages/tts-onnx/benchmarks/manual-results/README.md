@@ -55,7 +55,7 @@ client, for example:
 These files are picked up automatically by:
 
 - `scripts/perf-report/aggregate-supertonic-rtf.js`
-- `.github/workflows/benchmark-performance-qvac-lib-infer-onnx-tts.yml`
+- `.github/workflows/benchmark-performance-tts-onnx.yml`
 
 Use this directory for results such as:
 

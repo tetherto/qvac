@@ -12,7 +12,7 @@ function parseArgs (argv) {
     output: '',
     jsonOutput: '',
     htmlOutput: '',
-    manualDir: path.resolve('packages/qvac-lib-infer-onnx-tts/benchmarks/manual-results')
+    manualDir: path.resolve('packages/tts-onnx/benchmarks/manual-results')
   }
 
   for (let i = 0; i < argv.length; i++) {

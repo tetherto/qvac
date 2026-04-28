@@ -1,4 +1,4 @@
-# qvac-lib-infer-onnx-tts
+# tts-onnx
 
 This library simplifies running Text-to-Speech (TTS) models within QVAC runtime applications. It provides an easy interface to load, execute, and manage TTS instances, supporting multiple data sources (called data loaders) and leveraging ONNX Runtime for efficient inference.
 
@@ -135,7 +135,7 @@ Before building, ensure you have the following installed:
 1. **Clone the repository**:
    ```bash
    git clone https://github.com/tetherto/qvac
-   cd qvac/packages/qvac-lib-infer-onnx-tts
+   cd qvac/packages/tts-onnx
    ```
 
 2. **Install dependencies**:

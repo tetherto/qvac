@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, "release-*"]
     paths:
-      - "packages/qvac-lib-infer-onnx-tts/**"
+      - "packages/tts-onnx/**"
 
   workflow_call:
     inputs:
@@ -20,7 +20,7 @@ on:
         description: "Package working directory in monorepo"
         required: false
         type: string
-        default: "packages/qvac-lib-infer-onnx-tts"
+        default: "packages/tts-onnx"
 
   workflow_dispatch:
     inputs:
@@ -28,7 +28,7 @@ on:
         description: "Package working directory in monorepo"
         required: false
         type: string
-        default: "packages/qvac-lib-infer-onnx-tts"
+        default: "packages/tts-onnx"
       ref:
         description: "Optional ref/sha override"
         required: false
@@ -59,7 +59,7 @@ jobs:
 
     env:
       VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg/cache,readwrite"
-      WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/qvac-lib-infer-onnx-tts' }}
+      WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/tts-onnx' }}
 
     steps:
       - if: ${{ matrix.os == 'ubuntu-22.04' }}

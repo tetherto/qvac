@@ -97,7 +97,7 @@ jobs:
       packages: write
       pull-requests: write
       id-token: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx-tts.yml
+    uses: ./.github/workflows/prebuilds-tts-onnx.yml
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}
@@ -216,7 +216,7 @@ jobs:
 
       - name: Configure scoped registry for @tetherto and @qvac packages (Unix)
         if: ${{ matrix.platform != 'win32' }}
-        working-directory: packages/qvac-lib-infer-onnx-tts
+        working-directory: packages/tts-onnx
         env:
           GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -244,7 +244,7 @@ jobs:
 
       - name: Configure scoped registry for @tetherto and @qvac packages (Windows)
         if: ${{ matrix.platform == 'win32' }}
-        working-directory: packages/qvac-lib-infer-onnx-tts
+        working-directory: packages/tts-onnx
         env:
           GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -275,7 +275,7 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           name: prebuilds
-          path: packages/qvac-lib-infer-onnx-tts/prebuilds
+          path: packages/tts-onnx/prebuilds
 
       - name: Linux - install runtime dependencies
         if: ${{ matrix.platform == 'linux' }}
@@ -291,23 +291,23 @@ jobs:
           brew install ffmpeg pkg-config
 
       - name: Install benchmark server dependencies
-        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/server
+        working-directory: packages/tts-onnx/benchmarks/server
         run: npm install
 
       - name: Download Supertonic models
-        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/server
+        working-directory: packages/tts-onnx/benchmarks/server
         run: npm run setup:supertonic
 
       - name: Install Python server dependencies
         if: ${{ needs.context.outputs.run_python != 'false' && matrix.run_python }}
-        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/python-server
+        working-directory: packages/tts-onnx/benchmarks/python-server
         run: |
           pip install --upgrade pip setuptools wheel
           pip install -r requirements-supertonic.txt
 
       - name: Install benchmark client dependencies (Unix)
         if: ${{ matrix.platform != 'win32' }}
-        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/client
+        working-directory: packages/tts-onnx/benchmarks/client
         shell: bash
         run: |
           pip install --upgrade pip setuptools wheel
@@ -318,7 +318,7 @@ jobs:
 
       - name: Install benchmark client dependencies (Windows)
         if: ${{ matrix.platform == 'win32' }}
-        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/client
+        working-directory: packages/tts-onnx/benchmarks/client
         shell: powershell
         run: |
           pip install --upgrade pip setuptools wheel
@@ -329,7 +329,7 @@ jobs:
 
       - name: Start Python Native server (Unix)
         if: ${{ matrix.platform != 'win32' && needs.context.outputs.run_python != 'false' && matrix.run_python }}
-        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/python-server
+        working-directory: packages/tts-onnx/benchmarks/python-server
         shell: bash
         run: |
           nohup python main.py > server.log 2>&1 &
@@ -342,7 +342,7 @@ jobs:
 
       - name: Start Python Native server (Windows)
         if: ${{ matrix.platform == 'win32' && needs.context.outputs.run_python != 'false' && matrix.run_python }}
-        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/python-server
+        working-directory: packages/tts-onnx/benchmarks/python-server
         shell: powershell
         run: |
           $logPath = Join-Path $PWD "server.log"
@@ -370,7 +370,7 @@ jobs:
 
       - name: Start TTS Addon server (Unix)
         if: ${{ matrix.platform != 'win32' }}
-        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/server
+        working-directory: packages/tts-onnx/benchmarks/server
         shell: bash
         run: |
           nohup npm start > server.log 2>&1 &
@@ -382,7 +382,7 @@ jobs:
           fi
 
       - name: Clean old benchmark results
-        working-directory: packages/qvac-lib-infer-onnx-tts
+        working-directory: packages/tts-onnx
         shell: bash
         run: |
           rm -rf benchmarks/results/*.json
@@ -390,7 +390,7 @@ jobs:
 
       - name: Run Supertonic benchmark (Unix)
         if: ${{ matrix.platform != 'win32' }}
-        working-directory: packages/qvac-lib-infer-onnx-tts/benchmarks/client
+        working-directory: packages/tts-onnx/benchmarks/client
         shell: bash
         env:
           PYTHONUNBUFFERED: "1"
@@ -413,7 +413,7 @@ jobs:
 
       - name: Run Supertonic benchmark (Windows)
         if: ${{ matrix.platform == 'win32' }}
-        working-directory: packages/qvac-lib-infer-onnx-tts
+        working-directory: packages/tts-onnx
         shell: powershell
         env:
           PYTHONUNBUFFERED: "1"
@@ -467,7 +467,7 @@ jobs:
 
       - name: Stop servers (Unix)
         if: ${{ always() && matrix.platform != 'win32' }}
-        working-directory: packages/qvac-lib-infer-onnx-tts
+        working-directory: packages/tts-onnx
         shell: bash
         run: |
           if [ -f benchmarks/python-server/server.pid ]; then
@@ -481,7 +481,7 @@ jobs:
 
       - name: Stop servers (Windows)
         if: ${{ always() && matrix.platform == 'win32' }}
-        working-directory: packages/qvac-lib-infer-onnx-tts
+        working-directory: packages/tts-onnx
         shell: powershell
         run: |
           if (Test-Path benchmarks/python-server/server.pid) {
@@ -495,7 +495,7 @@ jobs:
 
       - name: Display server logs
         if: always()
-        working-directory: packages/qvac-lib-infer-onnx-tts
+        working-directory: packages/tts-onnx
         shell: bash
         run: |
           if [ -f benchmarks/server/server.log ]; then
@@ -517,7 +517,7 @@ jobs:
 
       - name: List structured benchmark results
         if: always()
-        working-directory: packages/qvac-lib-infer-onnx-tts
+        working-directory: packages/tts-onnx
         shell: bash
         run: |
           ls -la benchmarks/results || true
@@ -527,7 +527,7 @@ jobs:
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: supertonic-rtf-results-${{ matrix.runner_label }}-${{ matrix.backend }}
-          path: packages/qvac-lib-infer-onnx-tts/benchmarks/results/
+          path: packages/tts-onnx/benchmarks/results/
           retention-days: 30
           if-no-files-found: ignore
 
@@ -557,7 +557,7 @@ jobs:
         run: |
           node scripts/perf-report/aggregate-supertonic-rtf.js \
             --dir benchmark-artifacts/desktop \
-            --manual-dir packages/qvac-lib-infer-onnx-tts/benchmarks/manual-results \
+            --manual-dir packages/tts-onnx/benchmarks/manual-results \
             --output benchmark-artifacts/supertonic-performance-findings.md \
             --output-json benchmark-artifacts/supertonic-performance-findings.json \
             --output-html benchmark-artifacts/supertonic-performance-findings.html
