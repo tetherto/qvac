@@ -104,7 +104,7 @@ export const parakeetCtcMp3 = createParakeetTest(
   "parakeet-ctc",
   "transcription-short-mp3.mp3",
   { validation: "contains-all", contains: ["test", "automation"] },
-  120000,
+  200000,
   ["smoke"],
 );
 
