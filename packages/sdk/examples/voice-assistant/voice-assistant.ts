@@ -132,9 +132,9 @@ const ttsModelId = await loadModel({
   modelConfig: {
     ttsEngine: "supertonic",
     language: "en",
-    speed: 1.05,
-    numInferenceSteps: 5,
-    supertonicMultilingual: false,
+    ttsSpeed: 1.05,
+    ttsNumInferenceSteps: 5,
+    ttsSupertonicMultilingual: false,
     ttsTextEncoderSrc: TTS_SUPERTONIC2_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32.src,
     ttsDurationPredictorSrc:
       TTS_SUPERTONIC2_OFFICIAL_DURATION_PREDICTOR_SUPERTONE_FP32.src,

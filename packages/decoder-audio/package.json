@@ -46,7 +46,7 @@
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",
-    "@qvac/infer-base": "^0.1.0",
+    "@qvac/infer-base": "^0.4.0",
     "@qvac/logging": "^0.1.0",
     "@qvac/response": "^0.1.0",
     "bare-assert": "^1.1.0",
@@ -60,9 +60,9 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tetherto/qvac.git",
-    "directory": "packages/qvac-lib-decoder-audio"
+    "directory": "packages/decoder-audio"
   },
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-decoder-audio#readme",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/decoder-audio#readme",
   "types": "index.d.ts"
 }

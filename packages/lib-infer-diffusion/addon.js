@@ -136,8 +136,40 @@ class SdInterface {
    * @returns {Promise<boolean>} true if job was accepted, false if busy
    */
   async runJob (params) {
-    // Pass init_image Uint8Array directly to C++ as a typed-array property
-    // (avoids JSON-encoding every byte as a number).
+    // Pass init_image / init_images Uint8Array(s) directly to C++ as
+    // typed-array properties (avoids JSON-encoding every byte as a number).
+    //
+    // Mutual-exclusion is enforced in index.js before we get here and in
+    // SdModel::process() on the C++ side, but we still guard against both
+    // being set at this boundary so a misuse of addon.js directly doesn't
+    // silently drop one of the buffers.
+    if (params.init_image && Array.isArray(params.init_images) && params.init_images.length > 0) {
+      throw new Error(
+        'addon.runJob: init_image and init_images are mutually exclusive — pick one.'
+      )
+    }
+
+    // ── Multi-reference ("fusion") path ─────────────────────────────────────
+    // FLUX2 in-context conditioning with N reference images. Dimensions are
+    // auto-resized inside generate_image() via auto_resize_ref_image, so we
+    // don't pre-align width/height here — the first reference's dimensions
+    // are used by SdModel::process() as the output default.
+    if (Array.isArray(params.init_images) && params.init_images.length > 0) {
+      const serializable = { ...params }
+      const imgBufs = serializable.init_images
+      delete serializable.init_images
+
+      this._fillDimsFromImage(serializable, imgBufs[0])
+
+      const paramsJson = JSON.stringify(serializable)
+      return this._binding.runJob(this._handle, {
+        type: 'text',
+        input: paramsJson,
+        initImageBuffers: imgBufs
+      })
+    }
+
+    // ── Single-image path (unchanged) ──────────────────────────────────────
     // Auto-detect width/height from the image header so the C++ tensor
     // dimensions always match the decoded image — without this, generate_image()
     // hits GGML_ASSERT(image.width == tensor->ne[0]).
@@ -146,13 +178,7 @@ class SdInterface {
       const imgBuf = serializable.init_image
       delete serializable.init_image
 
-      if (!serializable.width || !serializable.height) {
-        const dims = readImageDimensions(imgBuf)
-        if (dims) {
-          serializable.width = Math.ceil(dims.width / 8) * 8
-          serializable.height = Math.ceil(dims.height / 8) * 8
-        }
-      }
+      this._fillDimsFromImage(serializable, imgBuf)
 
       const paramsJson = JSON.stringify(serializable)
       return this._binding.runJob(this._handle, {
@@ -164,6 +190,26 @@ class SdInterface {
 
     const paramsJson = JSON.stringify(params)
     return this._binding.runJob(this._handle, { type: 'text', input: paramsJson })
+  }
+
+  /**
+   * Helper: fill missing dimensions from image buffer, preserving explicit values.
+   * If neither width nor height is set, read from the image and align to 8-pixel boundary.
+   * If one axis is set, only fill the missing axis from the image.
+   * @private
+   */
+  _fillDimsFromImage (params, buf) {
+    if (params.width && params.height) return // Both provided, no-op
+
+    const dims = readImageDimensions(buf)
+    if (!dims) return
+
+    if (!params.width) {
+      params.width = Math.ceil(dims.width / 8) * 8
+    }
+    if (!params.height) {
+      params.height = Math.ceil(dims.height / 8) * 8
+    }
   }
 
   /**

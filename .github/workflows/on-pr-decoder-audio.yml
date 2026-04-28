@@ -5,7 +5,7 @@ on:
     types: [opened, synchronize, reopened, labeled]
     branches: [main, release-*, feature-*, tmp-*]
     paths:
-      - "packages/qvac-lib-decoder-audio/**"
+      - "packages/decoder-audio/**"
       - ".github/workflows/*decoder-audio*.yml"
 
   workflow_dispatch:
@@ -27,7 +27,7 @@ on:
         description: "Package working directory in monorepo."
         required: false
         type: string
-        default: "packages/qvac-lib-decoder-audio"
+        default: "packages/decoder-audio"
 
   workflow_call:
     inputs:
@@ -44,7 +44,7 @@ on:
       workdir:
         required: false
         type: string
-        default: "packages/qvac-lib-decoder-audio"
+        default: "packages/decoder-audio"
 
 permissions:
   contents: read
@@ -102,14 +102,14 @@ jobs:
           set -euo pipefail
 
           if [[ "$EVENT_NAME" == "workflow_dispatch" || "$EVENT_NAME" == "workflow_call" ]]; then
-            workdir="${INPUT_WORKDIR:-packages/qvac-lib-decoder-audio}"
+            workdir="${INPUT_WORKDIR:-packages/decoder-audio}"
             repo="${INPUT_REPO:-$REPO}"
             ref="${INPUT_REF:-$REF_NAME}"
             run_verify="$INPUT_VERIFY"
             base_sha="$SHA"
             head_sha="$SHA"
           else
-            workdir="packages/qvac-lib-decoder-audio"
+            workdir="packages/decoder-audio"
             repo="$HEAD_REPO"
             ref="$HEAD_REF"
             run_verify="true"
@@ -157,7 +157,7 @@ jobs:
       contents: read
       packages: read
       id-token: write
-    uses: ./.github/workflows/integration-test-qvac-lib-decoder-audio.yml
+    uses: ./.github/workflows/integration-test-decoder-audio.yml
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}
@@ -172,7 +172,7 @@ jobs:
       id-token: write
     needs: context
     if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
-    uses: ./.github/workflows/integration-mobile-test-qvac-lib-decoder-audio.yml
+    uses: ./.github/workflows/integration-mobile-test-decoder-audio.yml
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}

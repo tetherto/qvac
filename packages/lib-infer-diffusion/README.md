@@ -345,6 +345,66 @@ const response = await model.run({
 
 The bundled test image (`assets/von-neumann.jpg`) is a 1956 portrait of John von Neumann sourced from the U.S. Department of Energy (Public Domain). See the [Credits](#credits) section for details.
 
+#### Multi-reference fusion (`init_images`) — FLUX.2 only
+
+**FLUX.2-klein only.** Pass `init_images` (an array of `Uint8Array` PNG/JPEG buffers) to blend multiple reference images into a single output via in-context conditioning. All references share one RoPE coordinate space (the library default, `increase_ref_index: false`), so their visual features blend via attention — this is the "fusion" behavior.
+
+This differs from single-image `init_image` in three ways:
+- **Parameter:** `init_images` (array) instead of `init_image` (single buffer)
+- **Target:** Generated from **pure noise** (not a noisy version of a single input), so the model creates a new composition attending to all references
+- **Text encoder behavior:** FLUX2-klein's Qwen3 does **not** receive vision tokens for the references. The `@imageN` tags in the prompt are purely **prose labels** for the model — the actual visual fusion is learned via attention in the DiT. Use them to anchor the prompt semantically (e.g. "use @image1 and @image2 as the two scientists").
+
+**Setup:**
+
+```js
+const fs = require('bare-fs')
+
+const refImage1 = fs.readFileSync('assets/von-neumann.jpg')
+const refImage2 = fs.readFileSync('assets/claude-shannon.jpg')
+
+const response = await model.run({
+  prompt: 'two scientists in @image1 and @image2 shaking hands in a lab, use @image1 and @image2 as the two scientists, black studio background, colorized.',
+  init_images: [refImage1, refImage2],
+  width: 624,
+  height: 624,
+  sample_method: 'euler',
+  cfg_scale: 1.0,
+  guidance: 3.5,
+  steps: 10,
+  seed: 42
+})
+```
+
+**`@imageN` tag conventions:**
+
+- **Optional but recommended:** Tags like `@image1`, `@image2`, … in your prompt help anchor the semantic meaning of each reference
+- **Not vision tokens:** Qwen3 on FLUX2-klein sees these as plain text; they don't bypass the text-only constraint
+- **Naming:** Use consistent, meaningful labels (e.g. `@person1`, `@background`, `@style_ref` if semantically clearer for your use case)
+- **Example prompts:**
+  - `"blend the faces of @image1 and @image2 into one person"` — fusion
+  - `"use the style of @image1 and the subject of @image2 together"` — style blending
+  - `"@image1 in the setting of @image2"` — composition blending
+
+**Parameters (specific to `init_images`):**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `init_images` | `Uint8Array[]` | — | Array of PNG/JPEG reference image buffers (mutually exclusive with `init_image`) |
+| `increase_ref_index` | boolean | `false` | If `false` (default), all refs share one RoPE coordinate slot → visual fusion via attention. If `true`, each ref gets its own RoPE index → typically makes one ref dominate (not recommended for FLUX2-klein) |
+| `auto_resize_ref_image` | boolean | `true` | Auto-resize all reference images to match `width`/`height` before VAE encoding. Disable only if you've pre-resized the buffers |
+
+**Tips for best results:**
+
+- **Similar aspect ratios:** References with differing aspect ratios may not blend as smoothly. Pre-resize to the target aspect ratio if possible
+- **Image quality matters:** Low-quality or heavily compressed references produce weaker fusion. Use PNG or high-quality JPEG
+- **Prompt anchoring:** Use the `@imageN` tags in your prompt to help the model understand the intent (even though it's text-only)
+- **Guidance & steps:** Lower guidance (`cfg_scale: 1.0`) and moderate steps (8–20) work well for fusion; too much guidance can collapse the blending to one dominant reference
+- **Identity preservation:** For portrait fusion, add phrases like "blend the features of @image1 and @image2" or "same pose, fused appearance"
+
+**Example walkthrough:**
+
+See `examples/generate-fusion.js` for a complete working example that fuses two scientists (von Neumann + Shannon) into a handshake scene.
+
 ### 7. Release Resources
 
 ```js
@@ -494,11 +554,17 @@ The underlying pattern across all these fixes is the same: our C++ config struct
 
 ## Credits
 
-### Test Image
+### Test Images
 
 `assets/von-neumann.jpg` — **John von Neumann** (1956).
 Source: U.S. Department of Energy, File ID: HD.3F.191.
 This image is in the **Public Domain** as a work of the U.S. Federal Government.
+
+`assets/claude-shannon.jpg` — **Claude Shannon**.
+Source: Bell Labs / [Wikimedia Commons](https://commons.wikimedia.org/wiki/Category:Claude_Shannon).
+Licensed under **Creative Commons Attribution-ShareAlike (CC BY-SA)**.
+Attribution must be preserved; any redistribution of this image or a derivative
+must be released under a compatible CC BY-SA license.
 
 ---
 

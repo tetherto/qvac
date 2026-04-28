@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.4]
+
+### Changed
+- Fixed bug that prevented Vulkan from being turned on by default on linux and windows
+
+## [0.6.3]
+
+### Added
+- Vulkan GPU acceleration enabled by default in CMakeLists.txt for Linux, Android, and Windows (macOS/iOS use Metal)
+- Dynamic ggml backend library installation in CMakeLists.txt for Android/Linux (matching the LLM addon pattern)
+- Vulkan SDK installation on Windows integration test runner so `vulkan-1.dll` is available at runtime
+- `atexit` cleanup handler in `binding.cpp` that clears streaming sessions before C++ static destructors run
+- Vulkan GPU smoke test in integration test workflow for Linux GPU runners
+- RTF performance benchmark workflow with multi-model/multi-audio matrix support
+
+### Changed
+- GPU usage is now opt-in: `use_gpu` defaults to `false` in `toWhisperContextParams` instead of inheriting the upstream default (`true`). Callers must explicitly set `use_gpu: true` to enable GPU acceleration.
+
+### Fixed
+- Fixed SIGSEGV (exit code 139) at process exit on Linux GPU runners caused by ggml Vulkan backend static destructor ordering (upstream whisper.cpp#2373)
+- Fixed "The specified module could not be found" error on Windows integration tests by installing the Vulkan runtime
+- Fixed `t.skip()` calls in GPU smoke test (brittle does not support `t.skip`, replaced with `t.pass`)
+
 ## [0.6.2]
 
 ### Changed

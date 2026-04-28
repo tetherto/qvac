@@ -12,7 +12,7 @@ Workflow files live in `.github/workflows/` and fall into distinct categories by
 
 ### Native Addons (C++ packages)
 
-Packages: `qvac-lib-infer-llamacpp-llm`, `qvac-lib-infer-llamacpp-embed`, `qvac-lib-infer-onnx-tts`, `qvac-lib-infer-whispercpp`, `qvac-lib-infer-parakeet`, `qvac-lib-infer-nmtcpp`, `qvac-lib-decoder-audio`, `ocr-onnx`
+Packages: `qvac-lib-infer-llamacpp-llm`, `qvac-lib-infer-llamacpp-embed`, `qvac-lib-infer-onnx-tts`, `qvac-lib-infer-whispercpp`, `qvac-lib-infer-parakeet`, `qvac-lib-infer-nmtcpp`, `decoder-audio`, `ocr-onnx`
 
 Each addon has a full suite of per-package workflows:
 
@@ -88,7 +88,7 @@ These are the native addon packages that have full CI workflows. The **short nam
 | `Whispercpp` | `packages/qvac-lib-infer-whispercpp` | `On PR Trigger (Whispercpp)` |
 | `Parakeet` | `packages/qvac-lib-infer-parakeet` | `On PR Trigger (Parakeet)` |
 | `NMTCPP` | `packages/qvac-lib-infer-nmtcpp` | `On PR Trigger (NMTCPP)` |
-| `Decoder-audio` | `packages/qvac-lib-decoder-audio` | `On PR Trigger (Decoder-audio)` |
+| `Decoder-audio` | `packages/decoder-audio` | `On PR Trigger (Decoder-audio)` |
 
 ### How to trigger manually
 

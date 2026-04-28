@@ -31,6 +31,6 @@ export function buildRegistryClientOptions(params: {
     outputFile,
     ...(maxRetries !== undefined && { maxRetries }),
     ...(onProgress && { onProgress }),
-    ...(signal && { signal: signal as unknown as globalThis.AbortSignal }),
+    ...(signal && { signal: signal }),
   };
 }

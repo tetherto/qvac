@@ -1,11 +1,34 @@
 # Changelog
 
+## [0.5.0] - 2026-04-21
+
+### Added
+
+- **FLUX.2 multi-reference fusion** (`init_images` parameter) — blend multiple reference images into a single output via in-context conditioning with RoPE-separated latent tokens
+- `@imageN` tag support in prompts for semantic anchoring of reference images (FLUX.2-klein + Qwen3 text encoder)
+- Fusion-specific parameters: `increase_ref_index` (default `false` — refs share one RoPE slot and blend via attention; recommended for FLUX.2-klein) and `auto_resize_ref_image` (default `true`) for fine-grained control over multi-ref conditioning
+- Comprehensive integration tests for FLUX.2 multi-reference fusion — both "injective" (spatial composition, `generate-image-flux2-fusion.test.js`) and "surjective" (face morphing / feature averaging, `generate-image-flux2-fusion-surjective.test.js`) scenarios
+- Example script demonstrating fusion workflow with two scientists (`examples/generate-fusion.js`)
+- Detailed README section on multi-reference fusion, `@imageN` tags, and best practices
+- Claude Shannon test image under `assets/` (Bell Labs / Wikimedia Commons, CC BY-SA) alongside the existing von Neumann image, with a credits section documenting both sources and licenses
+
+### Changed
+
+- Input validation for fusion parameters: strict type checking for `init_images` (non-empty array of `Uint8Array`), mutual exclusion against `init_image`, FLUX.2-only gating for `init_images` / `increase_ref_index` / `auto_resize_ref_image`, and dimension alignment checks (width/height multiples of 8)
+- Consolidated fusion examples: removed `generate-stepbrothers.js` and `multi-ref-flux2.js`, updated `generate-fusion.js` to a minimal two-scientist demo
+- `.gitignore` refined to ignore generated `*.png` at package root while preserving tracked images under `assets/**`
+
+### Removed
+
+- `scripts/download-flux2-small-decoder.sh` (unused)
+- `scripts/multi-ref-flux2-anime.sh` (superseded by `examples/generate-fusion.js`)
+
 ## [0.4.0] - 2026-04-21
 
 ### Added
 
-- Add LoRA support to diffusion generation via `run({ lora })`, forwarding a LoRA adapter path through the JS bridge and native addon into stable-diffusion.cpp's `sd_img_gen_params_t.loras` runtime path.
-- Add a real LoRA integration test that downloads a compatible SD2.1 LoRA adapter, runs image generation with it, and verifies a valid PNG output is produced.
+- LoRA support to diffusion generation via `run({ lora })`, forwarding a LoRA adapter path through the JS bridge and native addon into stable-diffusion.cpp's `sd_img_gen_params_t.loras` runtime path
+- Real LoRA integration test that downloads a compatible SD2.1 LoRA adapter, runs image generation with it, and verifies a valid PNG output is produced
 
 ## [0.3.0] - 2026-04-15
 
