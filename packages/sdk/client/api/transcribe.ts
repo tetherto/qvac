@@ -101,7 +101,7 @@ export function transcribeStream(
     );
     return transcribeStreamWithAudio(params, options);
   }
-  return transcribeStreamDuplex(params as TranscribeStreamClientParams, options);
+  return transcribeStreamDuplex(params, options);
 }
 
 async function* transcribeStreamWithAudio(

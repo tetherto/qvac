@@ -136,7 +136,7 @@ function transformMessage(
       name: message.name,
       description: message.description,
       parameters: message.parameters,
-    } as ChatHistory);
+    });
     return transformed;
   }
 

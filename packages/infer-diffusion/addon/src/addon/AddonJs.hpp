@@ -22,10 +22,10 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
 
   JsArgsParser args(env, info);
 
-  // ── Step 1: Extract model file paths from JS args[1] ────────────────────
+  // -- Step 1: Extract model file paths from JS args[1] --------------------
   // index.js selects which field to populate based on model family:
-  //   "path"               → model_path          (SD1.x / SDXL all-in-one
-  //   checkpoint) "diffusionModelPath" → diffusion_model_path (FLUX.2 [klein]
+  //   "path"               -> model_path          (SD1.x / SDXL all-in-one
+  //   checkpoint) "diffusionModelPath" -> diffusion_model_path (FLUX.2 [klein]
   //   standalone GGUF)
   // Exactly one of the two will be non-empty; SdModel::load() passes both to
   // sd_ctx_params_t and the library uses whichever is set.
@@ -39,17 +39,17 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   config.llmPath = args.getMapEntry(1, "llmPath");
   config.vaePath = args.getMapEntry(1, "vaePath");
 
-  // ── Step 2: Apply SD_CTX_HANDLERS to the "config" sub-object ─────────────
+  // -- Step 2: Apply SD_CTX_HANDLERS to the "config" sub-object -------------
   // configMap holds the flat key/value pairs from the second constructor arg
   // (e.g. { threads: "8", flash_attn: "true", ... }).
   // All values arrive as JS strings (coerced in addon.js).
   auto configMap = args.getSubmap(1, "config");
   applySdCtxHandlers(config, configMap);
 
-  // ── Step 3: Construct the model with the fully resolved config ────────────
+  // -- Step 3: Construct the model with the fully resolved config ------------
   auto model = make_unique<SdModel>(std::move(config));
 
-  // ── Step 4: Register output handlers ─────────────────────────────────────
+  // -- Step 4: Register output handlers -------------------------------------
   // Progress updates are JSON strings; image frames are uint8 byte arrays.
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
   outHandlers.add(make_shared<out_handl::JsStringOutputHandler>());
@@ -94,6 +94,22 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   if (initBuf.has_value())
     job.initImageBytes = std::move(initBuf.value());
 
+  // Multi-reference ("fusion") input: a JS Array of Uint8Array, forwarded by
+  // addon.js as `initImageBuffers`. FLUX2 supports attending to >=1 reference
+  // image in-context; the JS layer already rejects this for non-FLUX models
+  // and mutual-exclusion with initImageBuffer is enforced in SdModel::process.
+  auto initBufs =
+      inputObj.getOptionalProperty<js::Array>(env, "initImageBuffers");
+  if (initBufs.has_value()) {
+    auto arr = initBufs.value();
+    const uint32_t n = arr.size(env);
+    job.initImagesBytes.reserve(n);
+    for (uint32_t i = 0; i < n; ++i) {
+      auto elem = arr.get<js::TypedArray<uint8_t>>(env, i);
+      job.initImagesBytes.emplace_back(elem.as<std::vector<uint8_t>>(env));
+    }
+  }
+
   // Progress updates are queued as JSON strings (JsStringOutputHandler).
   job.progressCallback = [&instance](const std::string& progressJson) {
     instance.addonCpp->outputQueue->queueResult(std::any(progressJson));
@@ -109,10 +125,10 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
 JSCATCH
 
 /**
- * Activate the addon — loads model weights by calling SdModel::load() directly.
- * SdModel does not implement IModelAsyncLoad, so we bypass AddonCpp::activate()
- * (which routes through that interface) and call load() here instead.
- * Args: [0] instance handle
+ * Activate the addon -- loads model weights by calling SdModel::load()
+ * directly. SdModel does not implement IModelAsyncLoad, so we bypass
+ * AddonCpp::activate() (which routes through that interface) and call load()
+ * here instead. Args: [0] instance handle
  */
 inline js_value_t* activate(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;

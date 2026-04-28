@@ -103,7 +103,7 @@ export async function loadModel(
     const result = plugin.createModel({
       modelId,
       modelPath,
-      modelConfig: modelConfig as Record<string, unknown>,
+      modelConfig: modelConfig,
       modelName,
       artifacts,
     }) as { model: AnyModel };
