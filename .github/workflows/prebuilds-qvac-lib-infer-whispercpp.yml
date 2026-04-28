@@ -42,30 +42,29 @@ jobs:
           - os: ubuntu-22.04
             platform: linux
             arch: x64
-          - os: ubuntu-24.04-arm
+          - os: ubuntu-22.04-arm
             platform: linux
             arch: arm64
           - os: ubuntu-24.04
             platform: android
             arch: arm64
-            flags: -D ANDROID_STL=c++_shared
-          - os: macos-14
+          - os: macos-15
             platform: ios
             arch: arm64
-          - os: macos-14
+          - os: macos-15
             platform: ios
             arch: arm64
             tags: -simulator
             flags: --simulator
-          - os: macos-14
+          - os: macos-15
             platform: ios
             arch: x64
             tags: -simulator
             flags: --simulator
-          - os: macos-14
+          - os: macos-15
             platform: darwin
             arch: arm64
-          - os: macos-15
+          - os: macos-15-intel
             platform: darwin
             arch: x64
           - os: windows-2022
@@ -151,12 +150,25 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: npm install
 
+      - name: Compute cmake defines
+        shell: bash
+        run: |
+          DEFINES="-D BUILD_TESTING=OFF"
+          if [ "${{ matrix.platform }}" = "android" ]; then
+            DEFINES="$DEFINES -D ANDROID_STL=c++_shared"
+          fi
+          if [ "${{ matrix.platform }}" = "darwin" ] || [ "${{ matrix.platform }}" = "ios" ]; then
+            DEFINES="$DEFINES -D WHISPER_USE_METAL=ON"
+          else
+            DEFINES="$DEFINES -D WHISPER_USE_METAL=OFF"
+          fi
+          DEFINES="$DEFINES -D WHISPER_USE_CUDA=OFF -D WHISPER_USE_OPENVINO=OFF"
+          echo "DEFINES=$DEFINES" >> "$GITHUB_ENV"
+
       - name: Run bare-make generate
         shell: bash
         working-directory: ${{ env.WORKDIR }}
-        run: |
-          WHISPER_FLAGS="-D WHISPER_USE_METAL=${{ (matrix.platform == 'darwin' || matrix.platform == 'ios') && 'ON' || 'OFF' }} -D WHISPER_USE_CUDA=OFF -D WHISPER_USE_OPENVINO=OFF"
-          bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }} $WHISPER_FLAGS
+        run: bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }} $DEFINES
 
       - name: Run bare-make build
         shell: bash

@@ -51,21 +51,20 @@ jobs:
           - os: ubuntu-24.04
             platform: android
             arch: arm64
-            flags: -D ANDROID_STL=c++_shared
-          - os: macos-14
+          - os: macos-15
             platform: ios
             arch: arm64
-          - os: macos-14
+          - os: macos-15
             platform: ios
             arch: arm64
             tags: -simulator
             flags: --simulator
-          - os: macos-14
+          - os: macos-15
             platform: ios
             arch: x64
             tags: -simulator
             flags: --simulator
-          - os: macos-14
+          - os: macos-15
             platform: darwin
             arch: arm64
           - os: macos-15-intel
@@ -144,10 +143,19 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: npm install
 
+      - name: Compute cmake defines
+        shell: bash
+        run: |
+          DEFINES="-D BUILD_TESTING=OFF"
+          if [ "${{ matrix.platform }}" = "android" ]; then
+            DEFINES="$DEFINES -D ANDROID_STL=c++_shared"
+          fi
+          echo "DEFINES=$DEFINES" >> "$GITHUB_ENV"
+
       - name: Run bare-make generate
         working-directory: ${{ env.WORKDIR }}
-        run: |
-          bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }}
+        shell: bash
+        run: bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }} $DEFINES
 
       - name: Dump vcpkg build logs on failure
         if: failure()
