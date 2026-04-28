@@ -193,6 +193,7 @@
   "devDependencies": {
     "@eslint/js": "^9.33.0",
     "@expo/config-plugins": "^54.0.4",
+    "@huggingface/gguf": "^0.4.2",
     "@lancedb/lancedb": "^0.21.3",
     "@modelcontextprotocol/sdk": "^1.12.1",
     "@qvac/cli": "^0.2.4",
