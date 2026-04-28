@@ -11,7 +11,7 @@ vi.mock('@/lib/resolveIcon', () => ({
   resolveIcon: () => undefined,
 }))
 
-import { tree } from '@/lib/trees'
+import { customTree } from '@/lib/custom-tree'
 import type { Node } from 'fumadocs-core/page-tree'
 
 /**
@@ -55,7 +55,7 @@ function getExpectedPaths (url: string): string[] {
 }
 
 describe('sidebar-consistency', () => {
-  const urls = [...new Set(collectUrls(tree as Node[]))]
+  const urls = [...new Set(collectUrls(customTree as Node[]))]
 
   it.each(urls)('has content file for %s', (url) => {
     const candidates = getExpectedPaths(url)

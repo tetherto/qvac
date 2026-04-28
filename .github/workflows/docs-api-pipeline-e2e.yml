@@ -1,8 +1,8 @@
 # End-to-end + determinism check for the API summary generation pipeline.
 #
-# Runs on any PR that touches the pipeline itself (`docs/website/scripts/**`),
-# its templates, or the SDK source.
-#
+# DISABLED: workflow is paused for re-evaluation after the single-page
+# pipeline cutover. Re-enable by removing `if: false` on the `e2e` job
+# below. When re-enabled, intent is to verify:
 #   1. Pipeline executes cleanly from a fresh checkout (no manual setup).
 #   2. api-data.json + the single API-summary MDX page are produced.
 #   3. Output is deterministic: running twice with identical source produces
@@ -31,6 +31,7 @@ concurrency:
 
 jobs:
   e2e:
+    if: false # DISABLED — see comment at top of file
     name: End-to-end + determinism
     runs-on: ubuntu-latest
     timeout-minutes: 15

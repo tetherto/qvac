@@ -4,7 +4,7 @@ import type { LinkItemType } from 'fumadocs-ui/layouts/shared';
 import { FaGithub, FaDiscord, FaXTwitter } from 'react-icons/fa6';
 import { SiHuggingface } from '@icons-pack/react-simple-icons';
 import { KeetIcon } from '@/components/keet-icon';
-import { tree } from '@/lib/trees';
+import { customTree } from '@/lib/custom-tree';
 
 export default function Layout({ children }: LayoutProps<'/'>) {
   const linkItems: LinkItemType[] = [
@@ -51,7 +51,7 @@ export default function Layout({ children }: LayoutProps<'/'>) {
     <DocsLayout
       {...baseOptions()}
       links={linkItems}
-      tree={{ name: 'docs', $id: 'latest', children: tree }}
+      tree={{ name: 'docs', $id: 'latest', children: customTree }}
     >
       {children}
     </DocsLayout>

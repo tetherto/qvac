@@ -3,7 +3,17 @@ import { resolveIcon } from '@/lib/resolveIcon';
 import React from 'react';
 import { SiExpo, SiElectron } from '@icons-pack/react-simple-icons';
 
-export const tree: Node[] = [
+/**
+ * The single sidebar tree for the docs site. Imported directly by
+ * `src/app/(docs)/layout.tsx` — no per-version trees, no aggregator.
+ *
+ * Only the API summary and release notes are versioned (one MDX per
+ * version; latest at `index.mdx`, older at `vX.Y.Z.mdx`). The version
+ * dropdown next to the page title handles version switching for those
+ * sections; everything else here lives at a single bare path that always
+ * reflects the current SDK.
+ */
+export const customTree: Node[] = [
   {
     name: 'Home',
     url: '/',

@@ -8,13 +8,25 @@
  *   2. Generate the new API summary into `index.mdx` for the incoming
  *      version (delegated to `generate-api-docs.ts --latest`).
  *   3. Generate the new release notes into `index.mdx` (delegated to
- *      `generate-release-notes.ts --latest`).
+ *      `generate-release-notes.ts --latest --aggregate-minor`).
  *   4. Refresh `src/lib/versions.ts` from disk so the version selector
  *      reflects the new state (delegated to `update-versions-list.ts`).
  *   5. Optionally commit and open a PR to `docs-production`.
  *
  * Usage:
- *   bun run scripts/release-version.ts <new-version> [--no-commit] [--no-pr]
+ *   bun run scripts/release-version.ts <new-version>
+ *                                      [--no-commit] [--no-pr]
+ *                                      [--force-extract] [--ai]
+ *
+ * Flags:
+ *   --no-commit       Skip the automatic git commit step (CI default).
+ *   --no-pr           Skip opening the docs-production PR (CI default).
+ *   --force-extract   Bypass the mtime-based extraction cache (forwarded
+ *                     to `generate-api-docs.ts`). Use in CI to guarantee
+ *                     deterministic regeneration.
+ *   --ai              Enable AI augmentation in `generate-api-docs.ts`.
+ *                     Disabled by default so output stays reproducible
+ *                     and CI doesn't depend on a remote LLM.
  *
  * Example (releasing v0.10.0 when current latest is v0.9.1):
  *   bun run scripts/release-version.ts 0.10.0
@@ -56,7 +68,12 @@ function runStep(label: string, cmd: string): void {
 
 async function releaseVersion(
   newVersion: string,
-  options: { commit: boolean; pr: boolean },
+  options: {
+    commit: boolean;
+    pr: boolean;
+    forceExtract: boolean;
+    ai: boolean;
+  },
 ) {
   if (!/^\d+\.\d+\.\d+$/.test(newVersion)) {
     throw new Error(
@@ -102,9 +119,16 @@ async function releaseVersion(
     );
   }
 
+  // Compose the inner generate-api-docs flags. CI defaults are
+  // `--no-ai --force-extract` for reproducibility; local runs default to
+  // `--no-ai` (cache on) and let the developer opt into `--ai`.
+  const apiFlags: string[] = ["--latest"];
+  if (!options.ai) apiFlags.push("--no-ai");
+  if (options.forceExtract) apiFlags.push("--force-extract");
+
   runStep(
     `2️⃣  Generating ${incoming} API summary...`,
-    `bun run scripts/generate-api-docs.ts ${newVersion} --latest --no-ai`,
+    `bun run scripts/generate-api-docs.ts ${newVersion} ${apiFlags.join(" ")}`,
   );
 
   runStep(
@@ -159,10 +183,12 @@ const args = process.argv.slice(2);
 const versionArg = args.find((a) => !a.startsWith("--"));
 const noCommit = args.includes("--no-commit");
 const noPr = args.includes("--no-pr");
+const forceExtract = args.includes("--force-extract");
+const ai = args.includes("--ai");
 
 if (!versionArg || args.includes("--help") || args.includes("-h")) {
   console.log(
-    "Usage: bun run scripts/release-version.ts <new-version> [--no-commit] [--no-pr]",
+    "Usage: bun run scripts/release-version.ts <new-version> [flags]",
   );
   console.log("");
   console.log(
@@ -173,12 +199,23 @@ if (!versionArg || args.includes("--help") || args.includes("-h")) {
   );
   console.log("");
   console.log("Flags:");
-  console.log("  --no-commit  Skip the automatic git commit step.");
-  console.log("  --no-pr      Skip opening the docs-production PR.");
+  console.log("  --no-commit       Skip the automatic git commit step.");
+  console.log("  --no-pr           Skip opening the docs-production PR.");
+  console.log(
+    "  --force-extract   Bypass the mtime-based extraction cache (CI default).",
+  );
+  console.log(
+    "  --ai              Enable AI augmentation (off by default).",
+  );
   process.exit(versionArg ? 0 : 1);
 }
 
-releaseVersion(versionArg, { commit: !noCommit, pr: !noPr }).catch((err) => {
+releaseVersion(versionArg, {
+  commit: !noCommit,
+  pr: !noPr,
+  forceExtract,
+  ai,
+}).catch((err) => {
   console.error(`❌ Release failed: ${err.message}`);
   process.exit(1);
 });

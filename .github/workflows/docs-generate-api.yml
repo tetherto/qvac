@@ -75,7 +75,15 @@ jobs:
         working-directory: ${{ env.DOCS_DIR }}
         run: bun install
 
-      - name: Generate API summary
+      - name: Release new docs version
+        # release-version.ts orchestrates the full release flow:
+        #   1. Freezes the outgoing version's index.mdx into vX.Y.Z.mdx
+        #   2. Generates the new API summary into index.mdx
+        #   3. Generates the new release notes (aggregating minor)
+        #   4. Refreshes src/lib/versions.ts
+        # SDK_PATH points at the cloned SDK source; the script forwards it
+        # transparently to generate-api-docs.ts. `--no-commit --no-pr`
+        # defers git work to peter-evans/create-pull-request below.
         working-directory: ${{ env.DOCS_DIR }}
         run: |
           SUB="${{ env.SDK_SUBPATH }}"
@@ -88,19 +96,11 @@ jobs:
             echo "❌ SDK entry not found at $SDK_PATH/index.ts (check SDK_REPOSITORY and SDK_SUBPATH)"
             exit 1
           fi
-          # Always emit the dispatched version as `latest` — the docs site
-          # only ever serves one version off `index.mdx`. Older versions
-          # are frozen as `vX.Y.Z.mdx` siblings via create-version-bundle.ts
-          # before generation in `release-version.ts`.
-          bun run docs:generate-api ${{ steps.version.outputs.version }} --latest --no-ai
-
-      - name: Generate release notes
-        working-directory: ${{ env.DOCS_DIR }}
-        run: bun run docs:generate-release-notes ${{ steps.version.outputs.version }} --latest --aggregate-minor
-
-      - name: Update versions list
-        working-directory: ${{ env.DOCS_DIR }}
-        run: bun run docs:update-versions --latest=${{ steps.version.outputs.version }}
+          bun run scripts/release-version.ts \
+            ${{ steps.version.outputs.version }} \
+            --no-commit \
+            --no-pr \
+            --force-extract
 
       - name: Stage generated docs for PR
         run: |
