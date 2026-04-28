@@ -6,7 +6,7 @@ argument-hint: "[PR#|branch] [--only security|correctness|performance|consistenc
 
 # Code Review
 
-Run a comprehensive code review using 4 specialized review agents in parallel: security, correctness, performance, and consistency.
+Run a comprehensive code review using 4 specialized review agents: security, correctness, performance, and consistency.
 
 ## Usage
 
@@ -60,22 +60,36 @@ If the diff is empty, report "No changes to review" and stop.
 
 ### Step 3: Launch specialized reviewers in parallel
 
-Launch the selected review agents **in parallel** using the Agent tool. Each agent gets the same context.
+Launch the selected review agents **in parallel** as sub-agents.
 
-For each agent, use `subagent_type` matching the agent name and include in the prompt:
-- The review mode (PR number or branch name)
-- The repository: `tetherto/qvac`
-- Instruction to report findings in its standard format
+For each agent, set:
+- `subagent_type` to the reviewer name
+- `model: "sonnet"` to keep review costs down (Claude Code only — Cursor CLI inherits the parent model)
+- `readonly: true` (reviewers report only — they must not modify files)
+- `prompt` with enough context for the sub-agent to work independently (see template below)
 
 **Agents to launch** (all 4 unless `--only` filters):
 
-1. **security-reviewer**: "Review the code changes on [target] in repo tetherto/qvac. Focus only on security issues. Report findings in your standard format."
+1. **security-reviewer** — injection, auth bypass, credential exposure, OWASP patterns
+2. **correctness-reviewer** — logic bugs, edge cases, race conditions, test coverage
+3. **performance-reviewer** — allocations, blocking calls, memory leaks, N+1
+4. **consistency-reviewer** — cross-addon pattern enforcement, architecture alignment
 
-2. **correctness-reviewer**: "Review the code changes on [target] in repo tetherto/qvac. Focus only on correctness issues. Report findings in your standard format."
+**Prompt template** — adapt `[target]`, `[diff-command]`, and `[domain]` for each reviewer:
 
-3. **performance-reviewer**: "Review the code changes on [target] in repo tetherto/qvac. Focus only on performance issues. Report findings in your standard format."
+```
+Review the code changes on [target] in repo tetherto/qvac.
+To get the diff, run: [diff-command]
+Focus only on [domain] issues.
+Report each finding with: severity, file path and line, description, impact, and fix recommendation.
+If no issues found, report: "No [domain] issues identified."
+Do NOT fix code — report findings only.
+```
 
-4. **consistency-reviewer**: "Review the code changes on [target] in repo tetherto/qvac. Focus only on consistency and architecture issues. Report findings in your standard format."
+Where `[diff-command]` is:
+- PR mode: `gh pr diff <number> --repo tetherto/qvac`
+- Branch mode: `git diff main...<branch>`
+- Current branch mode: `git diff main...HEAD`
 
 ### Step 4: Check for forbidden files
 
@@ -128,7 +142,8 @@ Do NOT fix:
 
 ## Notes
 
-- All 4 reviewers run in parallel for speed
-- Each reviewer uses the sonnet model to keep costs down
+- All 4 reviewers run in parallel via sub-agents for speed
+- On Claude Code, set `model: "sonnet"` on each Agent tool call to keep costs down
+- On Cursor CLI, reviewers inherit the parent model (no model override available)
 - The skill itself coordinates and synthesizes — it does not duplicate reviewer work
 - Does NOT push to remote — the user handles that

@@ -25,7 +25,7 @@ using namespace qvac_lib_inference_addon_cpp;
 using namespace qvac_errors;
 
 // ---------------------------------------------------------------------------
-// Thread-local progress context — sd progress callbacks are process-global,
+// Thread-local progress context -- sd progress callbacks are process-global,
 // so we park the current job pointer in TLS to route progress back.
 // ---------------------------------------------------------------------------
 namespace {
@@ -36,7 +36,7 @@ struct ProgressCtx {
 };
 
 thread_local ProgressCtx tl_progressCtx;
-// Thread-local model pointer for abort callback routing — same pattern as
+// Thread-local model pointer for abort callback routing -- same pattern as
 // tl_progressCtx for progress.  Avoids relying on the process-global
 // sd_abort_cb_data when multiple SdModel instances could coexist.
 thread_local const SdModel* tl_abortModel = nullptr;
@@ -209,7 +209,7 @@ void sdProgressCallback(int step, int steps, float /*time*/, void* /*data*/) {
   tl_progressCtx.job->progressCallback(oss.str());
 }
 
-// Abort callback — wired into sd_set_abort_callback() so that
+// Abort callback -- wired into sd_set_abort_callback() so that
 // generate_image() can be interrupted mid-denoising.
 // Reads from thread-local tl_abortModel (not the global sd_abort_cb_data)
 // to avoid concurrency issues when multiple SdModel instances coexist.
@@ -287,7 +287,7 @@ PreparedLoras prepareLoras(const std::string& loraPath) {
 } // namespace
 
 // ---------------------------------------------------------------------------
-// Constructor — stores config, allocates nothing
+// Constructor -- stores config, allocates nothing
 // ---------------------------------------------------------------------------
 
 SdModel::SdModel(qvac_lib_inference_addon_sd::SdCtxConfig config)
@@ -297,13 +297,13 @@ SdModel::SdModel(qvac_lib_inference_addon_sd::SdCtxConfig config)
 }
 
 // ---------------------------------------------------------------------------
-// Destructor — releases the sd_ctx and all associated GPU/CPU memory
+// Destructor -- releases the sd_ctx and all associated GPU/CPU memory
 // ---------------------------------------------------------------------------
 
 SdModel::~SdModel() = default;
 
 // ---------------------------------------------------------------------------
-// load() — maps SdCtxConfig → sd_ctx_params_t, then calls new_sd_ctx()
+// load() -- maps SdCtxConfig -> sd_ctx_params_t, then calls new_sd_ctx()
 // ---------------------------------------------------------------------------
 
 void SdModel::load() {
@@ -315,13 +315,13 @@ void SdModel::load() {
   sd_ctx_params_t params{};
   sd_ctx_params_init(&params);
 
-  // Load the VAE encoder as well as the decoder so img2img (encode → denoise →
-  // decode) works.  sd_ctx_params_init() sets vae_decode_only = true by
+  // Load the VAE encoder as well as the decoder so img2img (encode -> denoise
+  // -> decode) works.  sd_ctx_params_init() sets vae_decode_only = true by
   // default which skips building the encoder graph and causes:
   //   GGML_ASSERT(!decode_only || decode_graph) in vae_encode()
   params.vae_decode_only = false;
 
-  // ── Model paths ────────────────────────────────────────────────────────────
+  // -- Model paths ------------------------------------------------------------
   // For FLUX.2 [klein] the GGUF contains only diffusion weights with no SD
   // version metadata KV pairs, so we must use diffusion_model_path.
   // Classic all-in-one SD1.x / SDXL checkpoints use model_path.
@@ -337,7 +337,7 @@ void SdModel::load() {
   params.vae_path = optPath(config_.vaePath);
   params.taesd_path = optPath(config_.taesdPath);
 
-  // ── Compute ────────────────────────────────────────────────────────────────
+  // -- Compute ----------------------------------------------------------------
   params.n_threads = config_.nThreads;
   params.flash_attn = config_.flashAttn;
   params.diffusion_flash_attn = config_.diffusionFlashAttn;
@@ -371,7 +371,7 @@ void SdModel::load() {
   }
 #endif
 
-  // ── Memory management ─────────────────────────────────────────────────────
+  // -- Memory management -----------------------------------------------------
   params.enable_mmap = config_.mmap;
   params.offload_params_to_cpu = config_.offloadToCpu;
 
@@ -410,26 +410,26 @@ void SdModel::load() {
 #endif
   params.keep_vae_on_cpu = config_.keepVaeOnCpu;
 
-  // ── Precision ─────────────────────────────────────────────────────────────
+  // -- Precision -------------------------------------------------------------
   params.wtype = config_.wtype;
   params.tensor_type_rules = config_.tensorTypeRules.empty()
                                  ? nullptr
                                  : config_.tensorTypeRules.c_str();
 
-  // ── Sampling RNG ──────────────────────────────────────────────────────────
+  // -- Sampling RNG ----------------------------------------------------------
   params.rng_type = config_.rngType;
   params.sampler_rng_type = config_.samplerRngType;
 
-  // ── Prediction type / LoRA ────────────────────────────────────────────────
+  // -- Prediction type / LoRA ------------------------------------------------
   params.prediction = config_.prediction;
   params.lora_apply_mode = config_.loraApplyMode;
 
-  // ── Convolution options ───────────────────────────────────────────────────
+  // -- Convolution options ---------------------------------------------------
   params.diffusion_conv_direct = config_.diffusionConvDirect;
   params.vae_conv_direct = config_.vaeConvDirect;
   params.force_sdxl_vae_conv_scale = config_.forceSDXLVaeConvScale;
 
-  // ── Internal ──────────────────────────────────────────────────────────────
+  // -- Internal --------------------------------------------------------------
   params.free_params_immediately = config_.freeParamsImmediately;
 
   sd_ctx_t* raw = new_sd_ctx(&params);
@@ -439,7 +439,7 @@ void SdModel::load() {
                                  : config_.diffusionModelPath;
     throw StatusError(
         general_error::InternalError,
-        "SdModel::load() failed — could not create stable-diffusion context. "
+        "SdModel::load() failed -- could not create stable-diffusion context. "
         "Check model path and format: " +
             path);
   }
@@ -452,7 +452,7 @@ void SdModel::load() {
 }
 
 // ---------------------------------------------------------------------------
-// process() — applies SdGenHandlers to JSON params, then calls generate_image
+// process() -- applies SdGenHandlers to JSON params, then calls generate_image
 // ---------------------------------------------------------------------------
 
 std::any SdModel::process(const std::any& input) {
@@ -484,7 +484,7 @@ std::any SdModel::process(const std::any& input) {
     ~CallbackGuard() { fn(); }
   } guard{clearCallbacks};
 
-  // ── Parse JSON params ─────────────────────────────────────────────────────
+  // -- Parse JSON params -----------------------------------------------------
   picojson::value v;
   const std::string parseErr = picojson::parse(v, job.paramsJson);
   if (!parseErr.empty())
@@ -495,7 +495,7 @@ std::any SdModel::process(const std::any& input) {
     throw StatusError(
         general_error::InvalidArgument, "Params must be a JSON object");
 
-  // ── Build SdGenConfig from handlers ───────────────────────────────────────
+  // -- Build SdGenConfig from handlers ---------------------------------------
   qvac_lib_inference_addon_sd::SdGenConfig gen{};
   qvac_lib_inference_addon_sd::applySdGenHandlers(
       gen, v.get<picojson::object>());
@@ -505,7 +505,7 @@ std::any SdModel::process(const std::any& input) {
         general_error::InvalidArgument,
         "Unsupported mode: '" + gen.mode + "'. Supported: txt2img, img2img.");
 
-  // ── Build sd_img_gen_params_t ─────────────────────────────────────────────
+  // -- Build sd_img_gen_params_t ---------------------------------------------
   sd_img_gen_params_t genParams{};
   sd_img_gen_params_init(&genParams);
 
@@ -532,13 +532,13 @@ std::any SdModel::process(const std::any& input) {
   genParams.sample_params.eta = gen.eta;
   genParams.sample_params.flow_shift = config_.flowShift;
 
-  // ── VAE tiling ────────────────────────────────────────────────────────────
+  // -- VAE tiling ------------------------------------------------------------
   genParams.vae_tiling_params.enabled = gen.vaeTiling;
   genParams.vae_tiling_params.tile_size_x = gen.vaeTileSizeX;
   genParams.vae_tiling_params.tile_size_y = gen.vaeTileSizeY;
   genParams.vae_tiling_params.target_overlap = gen.vaeTileOverlap;
 
-  // ── Step-caching ──────────────────────────────────────────────────────────
+  // -- Step-caching ----------------------------------------------------------
   sd_cache_params_init(&genParams.cache);
   genParams.cache.mode = gen.cacheMode;
   if (gen.cacheThreshold > 0.0f)
@@ -548,142 +548,239 @@ std::any SdModel::process(const std::any& input) {
   if (gen.cacheEnd > 0.0f)
     genParams.cache.end_percent = gen.cacheEnd;
 
-  // ── img2img ──────────────────────────────────────────────────────────────
+  // -- img2img --------------------------------------------------------------
   //
-  // Two code paths depending on model architecture:
+  // Three code paths depending on model architecture and input shape:
   //
-  //   FLUX2 (FLUX2_FLOW_PRED):
-  //     Uses ref_images — in-context conditioning. The input image is
+  //   FLUX2 (FLUX2_FLOW_PRED) with N reference images (N>=1):
+  //     Uses ref_images -- in-context conditioning. Each reference image is
   //     VAE-encoded into separate latent tokens that the FLUX transformer
   //     attends to via joint attention with distinct RoPE positions. The
   //     target starts from pure noise, so the model preserves features
-  //     (skin tone, structure, etc.) while generating a fully new image.
+  //     (skin tone, structure, etc.) from every reference while generating
+  //     a fully new image. N>=2 is "fusion" mode -- addressable in the prompt
+  //     as @image1, @image2, ...
+  //
+  //   FLUX (FLUX_FLOW_PRED) with a single reference image:
+  //     Same ref_images path as FLUX2, just a single ref. Multi-image is
+  //     rejected here because only FLUX2 defines the @imageN placeholders.
   //
   //   All other models (SD1.x, SD2.x, SDXL, SD3):
-  //     Uses init_image — traditional SDEdit. The input image is noised to
+  //     Uses init_image -- traditional SDEdit. The input image is noised to
   //     the level specified by `strength`, then denoised for the remaining
-  //     steps. Lower strength = closer to the original image.
+  //     steps. Lower strength = closer to the original image. Multi-image
+  //     is rejected outright for these architectures.
   //
-  sd_image_t initImg{};
+  sd_image_t initImg{}; // single-image (SDEdit or 1x FLUX)
   std::vector<uint8_t> initPng;
 
-  if (gen.mode == "img2img") {
-    // Prefer the binary buffer passed directly from the JS layer (Uint8Array,
-    // no JSON overhead).  Fall back to the JSON "init_image_bytes" array for
-    // backwards compatibility (e.g. C++ unit tests that build paramsJson by
-    // hand).
-    if (!job.initImageBytes.empty()) {
-      initPng = job.initImageBytes;
-    } else if (auto it = v.get<picojson::object>().find("init_image_bytes");
-               it != v.get<picojson::object>().end() &&
-               it->second.is<picojson::array>()) {
-      const auto& arr = it->second.get<picojson::array>();
-      initPng.reserve(arr.size());
-      for (const auto& el : arr)
-        initPng.push_back(static_cast<uint8_t>(el.get<double>()));
+  // RAII wrapper for multi-image FLUX fusion reference images. Automatically
+  // frees pixel buffers on scope exit (normal or exceptional) using a custom
+  // deleter that iterates the vector and frees each sd_image_t.data pointer.
+  auto refImgsDeleter = [](std::vector<sd_image_t>* v) {
+    if (!v)
+      return;
+    for (auto& img : *v) {
+      if (img.data) {
+        free(img.data);
+        img.data = nullptr;
+      }
     }
-    if (!initPng.empty())
-      initImg = decodePng(initPng);
+    delete v;
+  };
+  std::unique_ptr<std::vector<sd_image_t>, decltype(refImgsDeleter)> refImgs(
+      new std::vector<sd_image_t>(), refImgsDeleter);
 
-    if (!initImg.data)
+  if (gen.mode == "img2img") {
+    const bool isFluxFamily = config_.prediction == FLUX2_FLOW_PRED ||
+                              config_.prediction == FLUX_FLOW_PRED;
+    const bool isFlux2 = config_.prediction == FLUX2_FLOW_PRED;
+    const size_t nMulti = job.initImagesBytes.size();
+
+    // -- Input validation: mutual exclusion + FLUX-only for multi -----------
+    //
+    // These checks mirror the JS-layer validation in index.js but are
+    // duplicated here so the C++ API stays safe when called directly from
+    // unit tests or bindings that bypass index.js.
+    if (!job.initImageBytes.empty() && nMulti > 0)
       throw StatusError(
           general_error::InvalidArgument,
-          "img2img: failed to decode init_image (corrupt or unsupported "
-          "format)");
+          "img2img: init_image and init_images are mutually exclusive -- "
+          "pick one. Use init_images (with FLUX2) for multi-reference "
+          "fusion, or init_image for single-image conditioning.");
 
-    const int imgW = static_cast<int>(initImg.width);
-    const int imgH = static_cast<int>(initImg.height);
+    if (nMulti > 0 && !isFlux2)
+      throw StatusError(
+          general_error::InvalidArgument,
+          "img2img: init_images (multi-reference fusion) requires a FLUX2 "
+          "model with prediction='flux2_flow'. The current model does not "
+          "support @image1/@imageN in-context references.");
 
-    const bool useRefImages = config_.prediction == FLUX2_FLOW_PRED ||
-                              config_.prediction == FLUX_FLOW_PRED;
+    // -- Multi-image (FLUX2 "fusion" mode) ---------------------------------
+    if (nMulti > 0) {
+      refImgs->reserve(nMulti);
+      for (size_t i = 0; i < nMulti; ++i) {
+        if (job.initImagesBytes[i].empty())
+          throw StatusError(
+              general_error::InvalidArgument,
+              "img2img: init_images[" + std::to_string(i) +
+                  "] is empty -- every reference must be a non-empty "
+                  "PNG/JPEG buffer.");
 
-    if (useRefImages) {
-      // FLUX in-context conditioning: ref_images handles its own resizing
-      // via auto_resize_ref_image, so only override genParams dimensions
-      // when they are still at the 512×512 default.
-      if (gen.width == 512 && gen.height == 512) {
-        genParams.width = imgW;
-        genParams.height = imgH;
+        sd_image_t decoded = decodePng(job.initImagesBytes[i]);
+        if (!decoded.data)
+          throw StatusError(
+              general_error::InvalidArgument,
+              "img2img: failed to decode init_images[" + std::to_string(i) +
+                  "] (corrupt or unsupported format; supported: PNG, JPEG)");
+        refImgs->push_back(decoded);
       }
-      gen.width = genParams.width;
-      gen.height = genParams.height;
 
+      // Output dimensions come from the JS shim (addon.js::_fillDimsFromImage,
+      // which falls back to the first reference's size when the caller omits
+      // width/height). C++ callers using the binding directly must supply
+      // both dimensions explicitly. auto_resize_ref_image handles the
+      // remaining refs.
+
+      // clang-format off
+      // NOTE: Homebrew and apt.llvm.org builds of clang-format-19 disagree on
+      // whether the std::string(...) branches of this ternary should hang the
+      // call open-paren on its own line. Pinning the layout here keeps local
+      // and CI bit-for-bit.
       QLOG_IF(
           qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-          "img2img: " + std::to_string(imgW) + "x" + std::to_string(imgH) +
-              " — FLUX in-context conditioning (ref_images)");
+          "img2img: entering FLUX2 *fusion* mode -- " + std::to_string(nMulti) +
+              " reference images. increase_ref_index=" +
+              (gen.increaseRefIndex
+                   ? std::string("true (distinct RoPE slots per ref -- use "
+                                 "when the text encoder supports vision "
+                                 "tokens, e.g. Qwen-Image-Edit)")
+                   : std::string("false (refs tile into one coordinate "
+                                 "space -- visual feature fusion; CLI "
+                                 "default, recommended for FLUX2-klein)")));
+      // clang-format on
 
-      genParams.ref_images = &initImg;
-      genParams.ref_images_count = 1;
-      genParams.auto_resize_ref_image = true;
+      genParams.ref_images = refImgs->data();
+      genParams.ref_images_count = static_cast<int>(nMulti);
+      genParams.auto_resize_ref_image = gen.autoResizeRefImage;
+      // See SdGenConfig::increaseRefIndex for semantics. For FLUX2-klein the
+      // CLI default (false) is what produces visible fusion: both refs share
+      // a RoPE slot and their features blend in attention. Setting true
+      // tends to make one ref dominate.
+      genParams.increase_ref_index = gen.increaseRefIndex;
+      // Fall through to the generate_image() call below.
     } else {
-      // SDEdit path — the vcpkg version of generate_image() rounds
-      // width/height UP to a spatial multiple (typically 8) before
-      // creating tensors, then asserts init_image matches those aligned
-      // dimensions.  We must align here too and resize the decoded image
-      // if its pixel dimensions aren't already a multiple of 8.
-      constexpr int kAlign = 8;
-      const int alignedW = (imgW + kAlign - 1) / kAlign * kAlign;
-      const int alignedH = (imgH + kAlign - 1) / kAlign * kAlign;
+      // -- Single-image path (existing behaviour) --------------------------
+      if (!job.initImageBytes.empty()) {
+        initPng = job.initImageBytes;
+      } else if (auto it = v.get<picojson::object>().find("init_image_bytes");
+                 it != v.get<picojson::object>().end() &&
+                 it->second.is<picojson::array>()) {
+        const auto& arr = it->second.get<picojson::array>();
+        initPng.reserve(arr.size());
+        for (const auto& el : arr)
+          initPng.push_back(static_cast<uint8_t>(el.get<double>()));
+      }
+      if (!initPng.empty())
+        initImg = decodePng(initPng);
 
-      genParams.width = alignedW;
-      genParams.height = alignedH;
-      gen.width = alignedW;
-      gen.height = alignedH;
+      if (!initImg.data)
+        throw StatusError(
+            general_error::InvalidArgument,
+            "img2img: failed to decode init_image (corrupt or unsupported "
+            "format)");
 
-      if (imgW != alignedW || imgH != alignedH) {
+      const int imgW = static_cast<int>(initImg.width);
+      const int imgH = static_cast<int>(initImg.height);
+
+      if (isFluxFamily) {
+        // FLUX in-context conditioning: ref_images handles its own resizing
+        // via auto_resize_ref_image, so only override genParams dimensions
+        // when they are still at the 512x512 default.
+        if (gen.width == 512 && gen.height == 512) {
+          genParams.width = imgW;
+          genParams.height = imgH;
+        }
+        gen.width = genParams.width;
+        gen.height = genParams.height;
+
         QLOG_IF(
             qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-            "img2img: resizing " + std::to_string(imgW) + "x" +
-                std::to_string(imgH) + " → " + std::to_string(alignedW) + "x" +
-                std::to_string(alignedH) + " (align to " +
-                std::to_string(kAlign) + ")");
+            "img2img: " + std::to_string(imgW) + "x" + std::to_string(imgH) +
+                " -- FLUX in-context conditioning (ref_images, count=1)");
 
-        sd_image_t resized =
-            image_utils::resizeSdImage(initImg, alignedW, alignedH);
-        if (!resized.data)
-          throw StatusError(
-              general_error::InternalError,
-              "Failed to resize init_image from " + std::to_string(imgW) + "x" +
-                  std::to_string(imgH) + " to " + std::to_string(alignedW) +
-                  "x" + std::to_string(alignedH));
-        free(initImg.data);
-        initImg = resized;
-      }
+        genParams.ref_images = &initImg;
+        genParams.ref_images_count = 1;
+        genParams.auto_resize_ref_image = gen.autoResizeRefImage;
+      } else {
+        // SDEdit path -- the vcpkg version of generate_image() rounds
+        // width/height UP to a spatial multiple (typically 8) before
+        // creating tensors, then asserts init_image matches those aligned
+        // dimensions.  We must align here too and resize the decoded image
+        // if its pixel dimensions aren't already a multiple of 8.
+        constexpr int kAlign = 8;
+        const int alignedW = (imgW + kAlign - 1) / kAlign * kAlign;
+        const int alignedH = (imgH + kAlign - 1) / kAlign * kAlign;
 
-      QLOG_IF(
-          qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-          "img2img: " + std::to_string(alignedW) + "x" +
-              std::to_string(alignedH) + " — SDEdit (init_image, strength=" +
-              std::to_string(gen.strength) + ")");
+        genParams.width = alignedW;
+        genParams.height = alignedH;
+        gen.width = alignedW;
+        gen.height = alignedH;
 
-      genParams.init_image = initImg;
+        if (imgW != alignedW || imgH != alignedH) {
+          QLOG_IF(
+              qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+              "img2img: resizing " + std::to_string(imgW) + "x" +
+                  std::to_string(imgH) + " -> " + std::to_string(alignedW) +
+                  "x" + std::to_string(alignedH) + " (align to " +
+                  std::to_string(kAlign) + ")");
 
-      // The vcpkg version of generate_image() unconditionally calls
-      // sd_image_to_ggml_tensor() on mask_image (even when no mask was
-      // provided), which asserts mask_image dimensions match the tensor.
-      // Provide an all-white mask (= denoise everywhere) to satisfy it.
-      if (!genParams.mask_image.data) {
-        const size_t maskSize =
-            static_cast<size_t>(alignedW) * static_cast<size_t>(alignedH);
-        auto* maskData = static_cast<uint8_t*>(malloc(maskSize));
-        if (!maskData)
-          throw StatusError(
-              general_error::InternalError,
-              "Failed to allocate " + std::to_string(maskSize) +
-                  " bytes for SDEdit mask (" + std::to_string(alignedW) + "x" +
-                  std::to_string(alignedH) + ")");
-        memset(maskData, 255, maskSize);
-        genParams.mask_image = {
-            static_cast<uint32_t>(alignedW),
-            static_cast<uint32_t>(alignedH),
-            1,
-            maskData};
-      }
-    }
-  }
+          sd_image_t resized =
+              image_utils::resizeSdImage(initImg, alignedW, alignedH);
+          if (!resized.data)
+            throw StatusError(
+                general_error::InternalError,
+                "Failed to resize init_image from " + std::to_string(imgW) +
+                    "x" + std::to_string(imgH) + " to " +
+                    std::to_string(alignedW) + "x" + std::to_string(alignedH));
+          free(initImg.data);
+          initImg = resized;
+        }
 
-  // ── Generate ──────────────────────────────────────────────────────────────
+        QLOG_IF(
+            qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+            "img2img: " + std::to_string(alignedW) + "x" +
+                std::to_string(alignedH) + " -- SDEdit (init_image, strength=" +
+                std::to_string(gen.strength) + ")");
+
+        genParams.init_image = initImg;
+
+        // The vcpkg version of generate_image() unconditionally calls
+        // sd_image_to_ggml_tensor() on mask_image (even when no mask was
+        // provided), which asserts mask_image dimensions match the tensor.
+        // Provide an all-white mask (= denoise everywhere) to satisfy it.
+        if (!genParams.mask_image.data) {
+          const size_t maskSize =
+              static_cast<size_t>(alignedW) * static_cast<size_t>(alignedH);
+          auto* maskData = static_cast<uint8_t*>(malloc(maskSize));
+          if (!maskData)
+            throw StatusError(
+                general_error::InternalError,
+                "Failed to allocate " + std::to_string(maskSize) +
+                    " bytes for SDEdit mask (" + std::to_string(alignedW) +
+                    "x" + std::to_string(alignedH) + ")");
+          memset(maskData, 255, maskSize);
+          genParams.mask_image = {
+              static_cast<uint32_t>(alignedW),
+              static_cast<uint32_t>(alignedH),
+              1,
+              maskData};
+        }
+      } // end SDEdit else
+    } // end single-image else (nMulti == 0)
+  } // end gen.mode == "img2img"
+
+  // -- Generate --------------------------------------------------------------
   const auto t0 = std::chrono::steady_clock::now();
 
   SdImageBatch results(
@@ -717,14 +814,14 @@ std::any SdModel::process(const std::any& input) {
   // This intentionally differs from the LLM addon, which returns normally
   // on cancel (partial text output is still useful).  Diffusion produces no
   // partial images, so a "successful" completion with output_count=0 would
-  // be misleading — throwing gives the JS caller an explicit cancel signal.
+  // be misleading -- throwing gives the JS caller an explicit cancel signal.
   if (wasCancelled) {
     throw std::runtime_error("Job cancelled");
   }
 
   const auto t1 = std::chrono::steady_clock::now();
 
-  // ── Accumulate cumulative counters ─────────────────────────────────────────
+  // -- Accumulate cumulative counters -----------------------------------------
   const int64_t genMsI = static_cast<int64_t>(
       std::chrono::duration<double, std::milli>(t1 - t0).count());
   stats_.totalGenerationMs += genMsI;
@@ -735,8 +832,8 @@ std::any SdModel::process(const std::any& input) {
   stats_.totalPixels +=
       static_cast<int64_t>(gen.width) * gen.height * outputCount;
 
-  // ── Build stats for runtimeStats() ─────────────────────────────────────────
-  // Stats are stored and emitted via queueJobEnded() → runtimeStats().
+  // -- Build stats for runtimeStats() -----------------------------------------
+  // Stats are stored and emitted via queueJobEnded() -> runtimeStats().
   // process() returns std::any{} (empty) so images delivered via
   // outputCallback are not duplicated as a queueResult event.
   //
@@ -758,8 +855,8 @@ std::any SdModel::process(const std::any& input) {
   lastStats_.emplace_back("height", static_cast<int64_t>(gen.height));
   lastStats_.emplace_back("seed", gen.seed);
 
-  // Return empty — images are already delivered via outputCallback,
-  // and stats are emitted by queueJobEnded() → runtimeStats().
+  // Return empty -- images are already delivered via outputCallback,
+  // and stats are emitted by queueJobEnded() -> runtimeStats().
   return std::any{};
 }
 

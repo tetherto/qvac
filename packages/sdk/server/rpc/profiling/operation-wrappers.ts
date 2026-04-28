@@ -52,7 +52,7 @@ function getRequestProfilingMeta(
     return undefined;
   }
 
-  return meta as ProfilingRequestMeta;
+  return meta;
 }
 
 function resolvePerCallProfiling<TRequest>(
