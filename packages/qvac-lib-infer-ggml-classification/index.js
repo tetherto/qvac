@@ -8,50 +8,14 @@ const QvacLogger = require('@qvac/logging')
 const { ClassificationInterface } = require('./addon')
 
 const DEFAULT_WEIGHTS_FILENAME = 'mobilenetv3_3class_v3_fp16.gguf'
-const JPEG_MAGIC = [0xFF, 0xD8, 0xFF]
-const PNG_MAGIC = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
 
-function startsWith (buffer, magic) {
-  if (!buffer || buffer.length < magic.length) return false
-  for (let i = 0; i < magic.length; i++) {
-    if (buffer[i] !== magic[i]) return false
-  }
-  return true
-}
-
-function isSupportedEncoded (buffer) {
-  return startsWith(buffer, JPEG_MAGIC) || startsWith(buffer, PNG_MAGIC)
-}
-
-function assertBuffer (value) {
-  // Accept Node Buffer, bare-buffer Buffer, or plain Uint8Array.
-  if (value == null) {
-    throw new TypeError('Image input is required (got null or undefined)')
-  }
-  if (!(value instanceof Uint8Array)) {
-    throw new TypeError('Image input must be a Buffer or Uint8Array')
-  }
-  if (value.length === 0) {
-    throw new Error('Image input buffer is empty')
-  }
-}
-
-function normaliseDimensionOptions (options) {
-  if (!options) return {}
-  const { width, height, channels } = options
-  const any = width !== undefined || height !== undefined || channels !== undefined
-  if (!any) return {}
-  if (!(Number.isInteger(width) && width > 0)) {
-    throw new TypeError('options.width must be a positive integer when passing raw RGB bytes')
-  }
-  if (!(Number.isInteger(height) && height > 0)) {
-    throw new TypeError('options.height must be a positive integer when passing raw RGB bytes')
-  }
-  if (channels !== undefined && channels !== 3) {
-    throw new TypeError('options.channels must be 3 (RGB) when passing raw RGB bytes')
-  }
-  return { width, height, channels: channels ?? 3 }
-}
+// Argument parsing and validation -- types, ranges, raw-vs-encoded
+// dispatch, magic-byte sniffing -- all live in the C++ binding
+// (`packages/qvac-lib-infer-ggml-classification/addon/src/addon/AddonJs.hpp`,
+// `createInstance` and `runJob`). This module is intentionally a thin
+// pass-through so that there is exactly one source of truth for
+// "what counts as a valid argument" and JS callers cannot drift out
+// of sync with the native side.
 
 function resolveDefaultModelPath () {
   // Allow the caller to override via env var for tests, otherwise fall back
@@ -150,26 +114,17 @@ class ImageClassifier {
       throw new Error('Classifier not loaded. Call load() first.')
     }
 
-    assertBuffer(imageInput)
-
-    const dimOpts = normaliseDimensionOptions(options)
-    if (Object.keys(dimOpts).length === 0 && !isSupportedEncoded(imageInput)) {
-      throw new Error(
-        'Unsupported image format: pass a JPEG/PNG buffer, or raw RGB bytes ' +
-          'with { width, height, channels: 3 }'
-      )
-    }
-
-    const job = {
-      type: 'image',
-      content: imageInput,
-      ...dimOpts
-    }
-    if (options && options.topK !== undefined) {
-      if (!(Number.isInteger(options.topK) && options.topK > 0)) {
-        throw new TypeError('options.topK must be a positive integer')
-      }
-      job.topK = options.topK
+    // Build the job payload literally from the caller's arguments.
+    // Type, range, and shape validation are performed once on the
+    // C++ side in AddonJs::runJob; any TypeError / RangeError /
+    // structured StatusError surfaces as a Promise rejection on the
+    // returned classify() Promise. See the module-level comment.
+    const job = { type: 'image', content: imageInput }
+    if (options) {
+      if (options.width !== undefined) job.width = options.width
+      if (options.height !== undefined) job.height = options.height
+      if (options.channels !== undefined) job.channels = options.channels
+      if (options.topK !== undefined) job.topK = options.topK
     }
 
     return this._addon.classify(job)

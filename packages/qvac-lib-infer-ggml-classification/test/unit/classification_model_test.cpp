@@ -72,9 +72,8 @@ TEST_F(ClassificationModelTest, LoadSucceedsAndRunsInference) {
   std::vector<uint8_t> rawGray(qpp::kInputSize * qpp::kInputSize * 3, 128);
   qcc::ClassifyInput input;
   input.data = rawGray;
-  input.width = qpp::kInputSize;
-  input.height = qpp::kInputSize;
-  input.channels = 3;
+  input.rawRgb =
+      qcc::RawRgbDims{qpp::kInputSize, qpp::kInputSize, 3};
 
   std::any out;
   ASSERT_NO_THROW(out = model.process(input));
@@ -101,9 +100,8 @@ TEST_F(ClassificationModelTest, SequentialInferenceIsDeterministic) {
   std::vector<uint8_t> rawGray(qpp::kInputSize * qpp::kInputSize * 3, 128);
   qcc::ClassifyInput input;
   input.data = rawGray;
-  input.width = qpp::kInputSize;
-  input.height = qpp::kInputSize;
-  input.channels = 3;
+  input.rawRgb =
+      qcc::RawRgbDims{qpp::kInputSize, qpp::kInputSize, 3};
 
   std::any a = model.process(input);
   std::any b = model.process(input);
@@ -125,9 +123,8 @@ TEST_F(ClassificationModelTest, TopKFiltersResults) {
   std::vector<uint8_t> rawGray(qpp::kInputSize * qpp::kInputSize * 3, 128);
   qcc::ClassifyInput input;
   input.data = rawGray;
-  input.width = qpp::kInputSize;
-  input.height = qpp::kInputSize;
-  input.channels = 3;
+  input.rawRgb =
+      qcc::RawRgbDims{qpp::kInputSize, qpp::kInputSize, 3};
   input.topK = 1;
 
   std::any out = model.process(input);

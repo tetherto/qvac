@@ -256,20 +256,41 @@ inline js_value_t* createInstance(
     js_env_t* env, js_callback_info_t* info) try {
   addon_cpp::JsArgsParser args(env, info);
 
+  // Single-place parsing & validation of the JS-side configuration
+  // object. The JS wrapper passes config straight through; this is
+  // where every "is it a string / positive integer / present" rule
+  // lives, so there is one source of truth for what counts as a
+  // valid construction argument.
   auto configObj = args.getJsObject(1, "config");
   auto modelPath =
       configObj.getProperty<jsu::String>(env, "path").as<std::string>(env);
+  if (modelPath.empty()) {
+    throw StatusError(
+        InvalidArgument,
+        "Configuration 'path' is required and must be a non-empty string "
+        "pointing at the FP16 GGUF weights file");
+  }
 
   auto model = std::make_unique<ClassificationModel>(modelPath);
 
-  // Optional threads hint nested under `config`.
+  // Optional threads hint nested under `config`. When provided it
+  // must be a positive integer; bare-runtime's `as<int32_t>` truncates
+  // floats and accepts negatives without complaint, so we range-check
+  // explicitly.
   auto innerConfig =
       configObj.getOptionalProperty<jsu::Object>(env, "config");
   if (innerConfig.has_value()) {
     auto threadsOpt =
         innerConfig->getOptionalProperty<jsu::Number>(env, "threads");
     if (threadsOpt.has_value()) {
-      model->setNumThreads(threadsOpt->as<int32_t>(env));
+      const int32_t threads = threadsOpt->as<int32_t>(env);
+      if (threads < 1) {
+        throw StatusError(
+            InvalidArgument,
+            "Configuration 'config.threads' must be a positive integer "
+            "when provided; got " + std::to_string(threads));
+      }
+      model->setNumThreads(threads);
     }
   }
 
@@ -303,8 +324,11 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   addon_cpp::AddonJs& instance =
       addon_cpp::JsInterface::getInstance(env, args.get(0, "instance"));
 
-  // The JS layer delivers a single message of type "image" carrying the
-  // image buffer and, optionally, raw-RGB dimension metadata.
+  // Single-place parsing & validation of the JS-side per-call payload.
+  // Every "is the argument the right type / range / shape" rule for
+  // a classify() call lives here, so the JS wrapper can be a thin
+  // pass-through and the model + preprocessor only ever operate on
+  // an already-validated `ClassifyInput`.
   auto inputObj = args.getJsObject(1, "inputObj");
   auto type =
       inputObj.getProperty<jsu::String>(env, "type").as<std::string>(env);
@@ -317,14 +341,17 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
 
   ClassifyInput cppInput;
 
-  // Image buffer: accept Uint8Array / Buffer (stored as TypedArray on the JS
-  // side).
+  // Image buffer: accept Uint8Array / Buffer (stored as TypedArray on the
+  // JS side). The "is required" wording in the message is the contract
+  // surface; existing JS-side tests assert against the substring
+  // "required" / "null" / "undefined" for the null-input path.
   auto bufferVal = inputObj.getProperty(env, "content");
   if (!jsu::is<jsu::TypedArray<uint8_t>>(env, bufferVal)) {
     throw StatusError(
         InvalidArgument,
-        "Image 'content' must be a Uint8Array / Buffer of encoded JPEG/PNG "
-        "bytes or raw RGB bytes.");
+        "Image 'content' is required and must be a Uint8Array / Buffer of "
+        "encoded JPEG/PNG bytes or raw RGB bytes (got null, undefined, or "
+        "wrong type)");
   }
   auto ta = jsu::TypedArray<uint8_t>(env, bufferVal);
   auto span = ta.as<std::span<const uint8_t>>(env);
@@ -333,24 +360,67 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   }
   cppInput.data.assign(span.begin(), span.end());
 
-  // Optional dimension metadata for the raw-RGB path.
+  // Optional dimension metadata for the raw-RGB path. Either:
+  //   - none of {width, height, channels} are provided  -> encoded JPEG/PNG
+  //   - all three are provided and validated            -> raw RGB
+  // Anything in between is a programming error in the caller; reject
+  // explicitly rather than letting validateRawRgb produce a confusing
+  // size-mismatch error downstream.
   auto widthOpt = inputObj.getOptionalProperty<jsu::Number>(env, "width");
   auto heightOpt = inputObj.getOptionalProperty<jsu::Number>(env, "height");
   auto channelsOpt =
       inputObj.getOptionalProperty<jsu::Number>(env, "channels");
-  if (widthOpt.has_value()) {
-    cppInput.width = widthOpt->as<uint32_t>(env);
+  const int provided = (widthOpt.has_value() ? 1 : 0) +
+                       (heightOpt.has_value() ? 1 : 0) +
+                       (channelsOpt.has_value() ? 1 : 0);
+  if (provided != 0 && provided != 3) {
+    throw StatusError(
+        InvalidArgument,
+        "Raw RGB input requires all of 'width', 'height', and 'channels' "
+        "to be provided together; received " + std::to_string(provided) +
+        " of 3");
   }
-  if (heightOpt.has_value()) {
-    cppInput.height = heightOpt->as<uint32_t>(env);
-  }
-  if (channelsOpt.has_value()) {
-    cppInput.channels = channelsOpt->as<uint32_t>(env);
+  if (provided == 3) {
+    // bare-runtime's `as<uint32_t>` does a static_cast on a possibly-
+    // negative or fractional JS Number; range-check the int32_t view
+    // first so a negative width does not silently wrap to ~4 billion
+    // and tunnel into validateRawRgb as a buffer-size mismatch.
+    const int32_t w = widthOpt->as<int32_t>(env);
+    const int32_t h = heightOpt->as<int32_t>(env);
+    const int32_t c = channelsOpt->as<int32_t>(env);
+    if (w <= 0) {
+      throw StatusError(
+          InvalidArgument,
+          "Image 'width' must be a positive integer when passing raw RGB "
+          "bytes; got " + std::to_string(w));
+    }
+    if (h <= 0) {
+      throw StatusError(
+          InvalidArgument,
+          "Image 'height' must be a positive integer when passing raw RGB "
+          "bytes; got " + std::to_string(h));
+    }
+    if (c != 3) {
+      throw StatusError(
+          InvalidArgument,
+          "Image 'channels' must be exactly 3 (RGB) when passing raw RGB "
+          "bytes; got " + std::to_string(c));
+    }
+    cppInput.rawRgb = RawRgbDims{
+        static_cast<uint32_t>(w), static_cast<uint32_t>(h),
+        static_cast<uint32_t>(c)};
   }
 
   auto topKOpt = inputObj.getOptionalProperty<jsu::Number>(env, "topK");
   if (topKOpt.has_value()) {
-    cppInput.topK = topKOpt->as<uint32_t>(env);
+    const int32_t topK = topKOpt->as<int32_t>(env);
+    if (topK <= 0) {
+      throw StatusError(
+          InvalidArgument,
+          "Image 'topK' must be a positive integer when provided; got " +
+              std::to_string(topK));
+    }
+    cppInput.topK = static_cast<uint32_t>(topK);
   }
 
   return instance.runJob(std::any(std::move(cppInput)));

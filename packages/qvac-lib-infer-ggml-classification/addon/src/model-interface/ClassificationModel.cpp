@@ -222,10 +222,18 @@ std::any ClassificationModel::process(const std::any& input) {
 
   const auto t0 = std::chrono::steady_clock::now();
 
-  // Preprocess: image buffer -> FP32 WHCN tensor (224x224x3).
+  // Preprocess: image buffer -> FP32 WHCN tensor (224x224x3). The
+  // preprocessor still uses uint32_t = 0 internally as its
+  // "encoded path" indicator, but the JS-facing ClassifyInput now
+  // carries an explicit std::optional<RawRgbDims>; translate at the
+  // boundary so the preprocessor signature stays cheap.
+  const uint32_t rawW = inPtr->rawRgb.has_value() ? inPtr->rawRgb->width : 0;
+  const uint32_t rawH = inPtr->rawRgb.has_value() ? inPtr->rawRgb->height : 0;
+  const uint32_t rawC =
+      inPtr->rawRgb.has_value() ? inPtr->rawRgb->channels : 0;
   std::vector<float> inputTensor = preprocess::preprocessToTensor(
       std::span<const uint8_t>(inPtr->data.data(), inPtr->data.size()),
-      inPtr->width, inPtr->height, inPtr->channels);
+      rawW, rawH, rawC);
 
   const size_t expected = static_cast<size_t>(preprocess::kInputSize) *
                           preprocess::kInputSize * preprocess::kChannels;

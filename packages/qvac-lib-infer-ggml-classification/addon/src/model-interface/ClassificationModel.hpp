@@ -17,16 +17,31 @@
 
 namespace qvac_lib_infer_ggml_classification {
 
-/// Raw input accepted by the model: either an encoded JPEG/PNG buffer, or
-/// already-decoded RGB bytes carrying their dimensions.
+/// Dimensions for the raw-RGB classify path. Only populated when the
+/// caller explicitly provides `{ width, height, channels }` from JS;
+/// for an encoded JPEG/PNG buffer this struct is absent and the
+/// decoder picks the dimensions itself.
+struct RawRgbDims {
+  uint32_t width;
+  uint32_t height;
+  uint32_t channels; // validated == 3 at the binding boundary
+};
+
+/// Raw input accepted by the model. The two paths are distinguished by
+/// whether `rawRgb` is set:
+///   - rawRgb has_value()  -> `data` is already-decoded WHC RGB bytes
+///                            with the dimensions in `rawRgb`.
+///   - rawRgb empty        -> `data` is an encoded JPEG/PNG buffer; the
+///                            preprocessor decodes and reads the
+///                            dimensions from the file.
+/// This avoids the previous sentinel-zero convention (`width = 0`
+/// meant "not provided") that conflated the encoded path with a
+/// degenerate raw-input shape.
 struct ClassifyInput {
   std::vector<uint8_t> data;
-  // Raw pixel path: width/height/channels are set. Encoded path leaves them
-  // at 0 and lets the decoder pick the right dimensions.
-  uint32_t width = 0;
-  uint32_t height = 0;
-  uint32_t channels = 0;
-  // topK from caller; 0 means "return every class".
+  std::optional<RawRgbDims> rawRgb;
+  // 0 = caller did not request a topK filter, return every class.
+  // Any positive value is validated > 0 at the binding boundary.
   uint32_t topK = 0;
 };
 
