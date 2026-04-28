@@ -95,7 +95,6 @@ try {
             prefill_time_ms: null,
             decode_time_ms: null,
             vision_encode_time_ms: null,
-            image_prefill_time_ms: null,
             ttft_ms: null,
             generated_tokens: null,
             prompt_tokens: null,
@@ -188,8 +187,9 @@ try {
 // bare process. addonType=vision keeps the existing GITHUB_STEP_SUMMARY
 // columns (Total / TTFT / Gen Tokens / Prompt Tokens / TPS) and the
 // existing per-device detail-table layout. Non-VLM tests will simply
-// leave vision_encode_time_ms / image_prefill_time_ms as null, same
-// as VLM tests do today.
+// leave vision_encode_time_ms as null, same as VLM tests do today
+// until the native runtimeStats wires it up
+// (https://app.asana.com/1/45238840754660/project/1212638335655990/task/1214371583877702).
 const _perfReporter = createPerformanceReporter({
   addon: 'llamacpp-llm',
   addonType: 'vision'
@@ -281,9 +281,11 @@ function recordPerformance (label, totalTime, extra) {
     total_time_ms: Math.round(totalTime),
     prefill_time_ms: ttftMs !== null ? Math.round(ttftMs) : null,
     decode_time_ms: decodeMs,
-    // TODO(QVAC-17830 follow-up): expose these from native runtimeStats.
+    // mmproj / vision-encoder time. Native side wiring tracked under
+    // https://app.asana.com/1/45238840754660/project/1212638335655990/task/1214371583877702
+    // — until then this stays null and the column in the detail
+    // table renders as `-`.
     vision_encode_time_ms: null,
-    image_prefill_time_ms: null,
     ttft_ms: ttftMs !== null ? Math.round(ttftMs) : null,
     generated_tokens: generatedTokens,
     prompt_tokens: promptTokens,
