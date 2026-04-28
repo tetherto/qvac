@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-04-22
+
+### Added
+
+- Dynamic GGML backend loading for GPU acceleration. The NMT addon now discovers GGML backend plugins (OpenCL, Vulkan) at runtime via a new `NmtLazyInitializeBackend` singleton, mirroring the LLM addon's `LlamaLazyInitializeBackend` pattern.
+- New `backendsDir` config param — points at the directory containing GGML backend `.so` plugins (e.g. the Android APK's native-lib path), unblocking GPU-backed inference on Android.
+- New `openclCacheDir` config param — caches compiled OpenCL kernels for faster startup on subsequent loads.
+- GPU backend `.so` plugins are installed into prebuilds via the `GGML_AVAILABLE_BACKENDS` CMake loop.
+
 ## [2.0.3] - 2026-04-15
 
 ### Added

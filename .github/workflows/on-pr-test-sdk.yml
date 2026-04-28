@@ -19,6 +19,7 @@ on:
       - "packages/sdk/**"
 
 permissions:
+  id-token: write
   contents: read
   pull-requests: write
   packages: read

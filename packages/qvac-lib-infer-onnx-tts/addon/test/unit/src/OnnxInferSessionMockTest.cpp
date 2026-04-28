@@ -37,4 +37,30 @@ TEST(OnnxInferSessionMockTest, initInputTensorsIsInvokedWithShapes) {
   mock.initInputTensors(shapes);
 }
 
+TEST(OnnxInferSessionMockTest, setOutputToInputChainIsInvokedWithMapping) {
+  OnnxInferSessionMock mock;
+  std::vector<std::pair<std::string, std::string>> mapping = {
+      {"present.0.key", "past_key_values.0.key"},
+      {"present.0.value", "past_key_values.0.value"},
+  };
+  EXPECT_CALL(mock, setOutputToInputChain(::testing::Eq(mapping))).Times(1);
+  mock.setOutputToInputChain(mapping);
+}
+
+TEST(OnnxInferSessionMockTest, clearChainedInputsIsInvoked) {
+  OnnxInferSessionMock mock;
+  EXPECT_CALL(mock, clearChainedInputs()).Times(1);
+  mock.clearChainedInputs();
+}
+
+TEST(OnnxInferSessionMockTest, isInputChainedReturnsConfiguredValue) {
+  OnnxInferSessionMock mock;
+  EXPECT_CALL(mock, isInputChained("past_key_values.0.key"))
+      .WillOnce(::testing::Return(true));
+  EXPECT_CALL(mock, isInputChained("attention_mask"))
+      .WillOnce(::testing::Return(false));
+  EXPECT_TRUE(mock.isInputChained("past_key_values.0.key"));
+  EXPECT_FALSE(mock.isInputChained("attention_mask"));
+}
+
 } // namespace qvac::ttslib::chatterbox::testing

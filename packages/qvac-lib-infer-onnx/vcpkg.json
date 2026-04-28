@@ -4,22 +4,26 @@
   "dependencies": [
     {
       "name": "onnxruntime",
-      "platform": "!(android | osx | ios | windows)"
+      "platform": "!(android | osx | ios | windows)",
+      "version>=": "1.24.2#5"
     },
     {
       "name": "onnxruntime",
       "features": ["dml-ep"],
-      "platform": "windows"
+      "platform": "windows",
+      "version>=": "1.24.2#5"
     },
     {
       "name": "onnxruntime",
       "features": ["nnapi-ep"],
-      "platform": "android"
+      "platform": "android",
+      "version>=": "1.24.2#5"
     },
     {
       "name": "onnxruntime",
       "features": ["coreml-ep"],
-      "platform": "osx | ios"
+      "platform": "osx | ios",
+      "version>=": "1.24.2#5"
     },
     {
       "name": "qvac-lint-cpp",
