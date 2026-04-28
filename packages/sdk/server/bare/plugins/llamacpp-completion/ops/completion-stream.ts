@@ -74,6 +74,31 @@ interface ChatHistory {
   parameters?: unknown;
 }
 
+/**
+ * Tracks, per kv-cache file path, how many history messages have already
+ * been committed to that cache. The next static-mode turn reads this to
+ * send only the unsaved tail (`history.slice(savedCount)`), which lets a
+ * consumer push multiple messages between completions (e.g. an
+ * `[assistant, user]` recovery sequence) without resending the whole
+ * history.
+ *
+ * Lifecycle:
+ *   - `recordCacheSaveCount` writes here after each completion that
+ *     confirmed the addon persisted the cache file.
+ *   - `prepareMessagesForCache` reads it on the static path; if the
+ *     count is stale (greater than the current history length, i.e. the
+ *     consumer rewound their history), the entry is dropped and the
+ *     full non-system history is sent instead.
+ *   - `clearCachedMessageCounts` invalidates entries when their cache
+ *     file is deleted or moved.
+ *
+ * Dynamic-mode turns do not consume this map — the addon trims tools
+ * and the chain output from the kv-cache after each round, so
+ * `prepareMessagesForCache` falls back to role-based dispatch (see the
+ * jsdoc on that function). Writes still happen on dynamic-mode turns
+ * but are unread until/unless the same cache key is later used in
+ * static mode, which would surface as a stale entry and get dropped.
+ */
 const cachedMessageCounts = new Map<string, number>();
 
 type CompletionRunOptions = Pick<RunOptions, "cacheKey" | "saveCacheToDisk"> & {
