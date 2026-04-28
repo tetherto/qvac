@@ -77,6 +77,7 @@ target_sources(
   PRIVATE
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/smolvla.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
 )
 
 target_include_directories(

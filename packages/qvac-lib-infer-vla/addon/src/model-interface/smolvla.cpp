@@ -6,6 +6,8 @@
 
 #include "smolvla.hpp"
 
+#include "../utils/BackendSelection.hpp"
+
 #include <algorithm>
 #include <cassert>
 #include <chrono>
@@ -1140,10 +1142,13 @@ extern "C" bool smolvla_load_model(const char* path, smolvla_model* model_ptr) {
   model.has_gpu = false;
 
   // Prefer a GPU device if the plugin loader registered one
-  // (Vulkan on Linux/Windows/Android, Metal on macOS/iOS).
+  // (Vulkan on Linux/Windows/Android, Metal on macOS/iOS). Adreno < 800 is
+  // rejected by `vla_backend_selection::pickBestGpuDevice` so older
+  // Snapdragon devices (where ggml's OpenCL/Vulkan paths are unreliable)
+  // fall through to the CPU backend rather than crashing on
+  // `ggml_backend_dev_init`.
   {
-    ggml_backend_dev_t gpu =
-        ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_GPU);
+    ggml_backend_dev_t gpu = vla_backend_selection::pickBestGpuDevice();
     if (gpu) {
       ggml_backend_t gpu_backend = ggml_backend_dev_init(gpu, nullptr);
       if (gpu_backend) {
