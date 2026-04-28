@@ -95,9 +95,16 @@ interface ChatHistory {
  * Dynamic-mode turns do not consume this map — the addon trims tools
  * and the chain output from the kv-cache after each round, so
  * `prepareMessagesForCache` falls back to role-based dispatch (see the
- * jsdoc on that function). Writes still happen on dynamic-mode turns
- * but are unread until/unless the same cache key is later used in
- * static mode, which would surface as a stale entry and get dropped.
+ * jsdoc on that function). Writes still happen on dynamic-mode turns:
+ * the recorded count reflects the messages the SDK shipped, not the
+ * (possibly trimmed) on-disk cache shape. The map is internally
+ * consistent within a single mode.
+ *
+ * A `kvCache` key should not be reused across modes — the on-disk
+ * cache file's layout differs (anchored-and-trimmed in dynamic mode
+ * vs. linear in static mode), and the recorded count written by one
+ * mode would mis-slice on the next turn under the other. Callers
+ * should use a fresh `kvCache` key whenever they switch modes.
  */
 const cachedMessageCounts = new Map<string, number>();
 
