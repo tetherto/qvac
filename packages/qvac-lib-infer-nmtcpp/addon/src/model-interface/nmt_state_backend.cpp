@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
+#include <cstring>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -90,18 +91,17 @@ uint32_t nmt_kv_cache_get_padding(const struct nmt_context& ctx) {
   }
 
 #ifdef GGML_USE_METAL
-  if (ctx.params.use_gpu) {
-    return 32U;
-  }
+  return 32U;
 #endif
 
 #ifdef GGML_USE_CUDA
-  if (ctx.params.use_gpu) {
-    return 256U;
-  }
+  return 256U;
 #endif
 
-  return 1u;
+  // Vulkan (including Adreno): align to 32 for flash attention.
+  // Adreno 830 uses warp size 64 but 32 is the safe minimum that
+  // satisfies both desktop and mobile Vulkan implementations.
+  return 32U;
 }
 
 int32_t nmt_kv_cache_cell_max(const struct nmt_kv_cache& cache) {
@@ -403,9 +403,22 @@ nmt_backend_init(const nmt_context_params& params) {
   }
 
   // ACCEL backends (in addition to the primary if it was an ACCEL device).
-  // Skip dedup when primary_dev is null (ggml_backend_get_device returned
-  // null for a valid backend) to avoid false-positive skips where both
-  // sides compare as nullptr.
+  //
+  // On Android (and other mobile SoCs with a single physical GPU), multiple
+  // GGML backends (Vulkan, OpenCL) may register as separate ACCEL devices
+  // for the same hardware.  Initialising all of them adds synchronisation
+  // overhead in ggml_backend_sched without any parallel-compute benefit
+  // because the scheduler executes splits sequentially.
+  //
+  // Filter strategy:
+  //   1. Skip the device pointer already selected as primary (same as before).
+  //   2. Skip OpenCL devices when the build-time USE_OPENCL guard is off
+  //      (consistent with Mode 2b in nmt_select_gpu_device).
+  //   3. Skip any ACCEL device whose physical description matches the
+  //      primary — they are different API surfaces for the same GPU.
+  const char* primary_desc =
+      primary_dev ? ggml_backend_dev_description(primary_dev) : nullptr;
+
   for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
     ggml_backend_dev_t dev = ggml_backend_dev_get(i);
     if (dev == nullptr) {
@@ -414,13 +427,39 @@ nmt_backend_init(const nmt_context_params& params) {
     if (primary_dev != nullptr && dev == primary_dev) {
       continue;
     }
-    if (ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_ACCEL) {
-      ggml_backend_t backend = ggml_backend_dev_init(dev, nullptr);
-      if (!backend) {
-        continue;
-      }
-      result.push_back(backend);
+    if (ggml_backend_dev_type(dev) != GGML_BACKEND_DEVICE_TYPE_ACCEL) {
+      continue;
     }
+    const char* dev_name = ggml_backend_dev_name(dev);
+
+#ifndef QVAC_NMTCPP_USE_OPENCL
+    if (nmt_name_contains_ci(dev_name, "opencl")) {
+      std::ostringstream oss;
+      oss << "Skipping ACCEL device '" << (dev_name ? dev_name : "(null)")
+          << "' — OpenCL guard is off (QVAC-17790)";
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, oss.str());
+      continue;
+    }
+#endif
+
+    const char* dev_desc = ggml_backend_dev_description(dev);
+    if (primary_desc != nullptr && dev_desc != nullptr &&
+        std::strcmp(primary_desc, dev_desc) == 0) {
+      std::ostringstream oss;
+      oss << "Skipping ACCEL device '" << (dev_name ? dev_name : "(null)")
+          << "' — same physical GPU as primary ('"
+          << primary_desc << "')";
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, oss.str());
+      continue;
+    }
+
+    ggml_backend_t backend = ggml_backend_dev_init(dev, nullptr);
+    if (!backend) {
+      continue;
+    }
+    result.push_back(backend);
   }
 
   ggml_backend_t backend_cpu =

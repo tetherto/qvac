@@ -16,22 +16,28 @@
 #include "nmt.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
-// Get optimal number of threads for computation
-// Optimized for GitHub runners (typically 2 CPUs) and other environments
 int get_optimal_thread_count() {
   unsigned int hw_threads = std::thread::hardware_concurrency();
   if (hw_threads == 0) {
-    // Fallback if hardware_concurrency() fails
     return 2;
   }
-  // For GitHub runners (typically 2 CPUs), use both cores
-  // For machines with more cores, use most but leave 1-2 for system
+
+#ifdef __ANDROID__
+  // Mobile SoCs use big.LITTLE with heterogeneous cores.  Spreading work
+  // across all cores (e.g. 8 on Snapdragon 8 Elite) forces the scheduler
+  // onto slow efficiency cores.  Cap at 4 to stay on performance cores;
+  // empirically this matches the 2 prime + 2-3 big core layout of recent
+  // Snapdragon / Exynos / Dimensity SoCs.
+  const unsigned int android_max = 4;
+  return static_cast<int>(std::min(hw_threads, android_max));
+#endif
+
   if (hw_threads <= 2) {
-    return hw_threads; // Use all available cores
+    return hw_threads;
   } else if (hw_threads <= 16) {
-    return hw_threads - 1; // Leave 1 core
+    return hw_threads - 1;
   } else {
-    return hw_threads - 2; // Leave 2 cores for system on high-core machines
+    return hw_threads - 2;
   }
 }
 
