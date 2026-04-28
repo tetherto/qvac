@@ -228,6 +228,32 @@ inline js_value_t* runVlaModel(js_env_t* env, js_callback_info_t* info) try {
 }
 JSCATCH
 
+// getVlaBackendName(handle) -> string
+//
+// Name of the ggml backend the loaded model is running on ("CPU", "Vulkan",
+// "OpenCL", "Metal", …). Used by the integration test to tag each perf-report
+// row with its execution provider so CPU vs GPU runs are distinguishable in
+// the Step Summary tables.
+inline js_value_t*
+getVlaBackendName(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+  VlaModel* model = detail::unwrap(env, args.get(0, "handle"));
+  const std::string name = model->backendName();
+
+  js_value_t* str = nullptr;
+  if (js_create_string_utf8(
+          env,
+          reinterpret_cast<const utf8_t*>(name.c_str()),
+          name.size(),
+          &str) != 0) {
+    throw std::runtime_error("js_create_string_utf8 failed");
+  }
+  return str;
+}
+JSCATCH
+
 // getVlaHparams(handle) -> { chunkSize, actionDim, maxActionDim, maxStateDim,
 //                            tokenizerMaxLength, visionImageSize }
 inline js_value_t* getVlaHparams(js_env_t* env, js_callback_info_t* info) try {

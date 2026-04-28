@@ -20,6 +20,7 @@ js_value_t* qvacLibInferVlaExports(js_env_t* env, js_value_t* exports) {
   V("destroyVlaModel", qvac_lib_infer_vla::destroyVlaModel)
   V("runVlaModel", qvac_lib_infer_vla::runVlaModel)
   V("getVlaHparams", qvac_lib_infer_vla::getVlaHparams)
+  V("getVlaBackendName", qvac_lib_infer_vla::getVlaBackendName)
 #undef V
   // NOLINTEND(cppcoreguidelines-macro-usage)
 

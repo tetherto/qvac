@@ -48,6 +48,11 @@ export interface QvacResponse {
 export class VlaModel {
   constructor (options: VlaModelOptions)
   readonly hparams: VlaHparams | null
+  /**
+   * Name of the ggml backend the loaded model is running on
+   * ("CPU" / "Vulkan" / "OpenCL" / "Metal"). `null` before `load()`.
+   */
+  readonly backendName: string | null
   load (): Promise<void>
   run (input: VlaRunInput): Promise<QvacResponse>
   pause (): Promise<void>

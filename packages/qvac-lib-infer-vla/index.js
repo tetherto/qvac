@@ -72,6 +72,7 @@ class VlaModel {
     this._run = exclusiveRunQueue()
     this._handle = null
     this._hparams = null
+    this._backendName = null
     this._hasActiveResponse = false
     this.state = { configLoaded: false }
   }
@@ -93,6 +94,7 @@ class VlaModel {
     try {
       this._handle = binding.createVlaModel(ggufPath)
       this._hparams = binding.getVlaHparams(this._handle)
+      this._backendName = binding.getVlaBackendName(this._handle)
     } catch (loadError) {
       this.logger.error('Error during model load:', loadError)
       if (this._handle) {
@@ -105,6 +107,8 @@ class VlaModel {
   }
 
   get hparams () { return this._hparams }
+
+  get backendName () { return this._backendName }
 
   async run (input) {
     return this._run(() => this._runInternal(input))
@@ -165,6 +169,7 @@ class VlaModel {
         this._handle = null
       }
       this._hparams = null
+      this._backendName = null
       this.state.configLoaded = false
     })
   }

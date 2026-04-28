@@ -31,6 +31,16 @@ public:
 
   const smolvla_hparams& hparams() const { return model_->hparams; }
 
+  // Name of the ggml backend the model is currently running on (e.g. "CPU",
+  // "Vulkan", "OpenCL", "Metal"). Surfaced to JS so the perf reporter can tag
+  // each result with its execution provider. Returns "none" if no backend is
+  // initialised, "unknown" if ggml didn't supply a name.
+  std::string backendName() const {
+    if (model_->backend == nullptr) return "none";
+    const char* n = ggml_backend_name(model_->backend);
+    return n != nullptr ? std::string(n) : std::string("unknown");
+  }
+
   // Output of a single inference call.  Keeps the action chunk and the
   // per-stage wall-clock timings together so the JS layer can surface them
   // to the test harness / perf reporter.

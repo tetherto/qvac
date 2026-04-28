@@ -476,11 +476,16 @@ test('integration: end-to-end inference runs (needs GGUF)', { timeout: 1200000 }
     )
   }
 
+  const ep = model.backendName || null
+  console.log(`[VLA BACKEND] execution_provider=${ep ?? 'unknown'}`)
   _perfReporter.record('end-to-end inference (fixed fixture)', {
     total_time_ms: stats.total_ms,
     vision_time_ms: stats.vision_ms,
     smollm2_compute_time_ms: stats.smollm2_compute_ms,
     smollm2_total_time_ms: stats.smollm2_total_ms,
     ode_time_ms: stats.ode_ms
-  }, quality ? { quality } : undefined)
+  }, {
+    execution_provider: ep,
+    ...(quality ? { quality } : {})
+  })
 })
