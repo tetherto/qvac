@@ -5,16 +5,16 @@ import {
   type TestResult,
   type Expectation,
 } from "@tetherto/qvac-test-suite";
-import { multiGpuTests } from "../../multi-gpu-tests.js";
+import { multiGpuConfigSmoke, multiGpuTests } from "../../multi-gpu-tests.js";
 
 export class MultiGpuExecutor extends BaseExecutor<typeof multiGpuTests> {
   pattern = /^multi-gpu-/;
 
   protected handlers = {
-    "multi-gpu-config-smoke": this.configSmoke.bind(this),
-  } as never;
+    [multiGpuConfigSmoke.testId]: this.layerSplit.bind(this),
+  };
 
-  private async configSmoke(
+  private async layerSplit(
     params: unknown,
     expectation: unknown,
   ): Promise<TestResult> {
