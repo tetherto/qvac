@@ -32,12 +32,10 @@ const ALL_DEVICE_CONFIGS = [
 const DEVICE_CONFIGS = isMobile
   ? ALL_DEVICE_CONFIGS
   : ALL_DEVICE_CONFIGS.filter(c => c.id === 'cpu')
-// Android can run the full model sweep on Device Farm. iOS remains scoped to
-// TDT until non-TDT models are validated there; the expanded iOS sweep caused
-// the app to background/crash during Device Farm monitoring.
-const MOBILE_PERF_MODEL_TYPES = platform.startsWith('android')
-  ? ['tdt', 'ctc', 'eou', 'sortformer']
-  : ['tdt']
+// Keep the legacy mobile multiple-transcriptions path scoped to TDT. Non-TDT
+// mobile perf coverage lives in dedicated model/backend files so Device Farm
+// can report the exact failing case instead of one combined failure.
+const MOBILE_PERF_MODEL_TYPES = ['tdt']
 const PERF_MODEL_TYPES = isMobile ? MOBILE_PERF_MODEL_TYPES : ['tdt']
 
 async function resolvePerfModelPath (modelType) {
