@@ -10,8 +10,8 @@ const { preprocessImage, padState, DEFAULT_IMAGE_SIZE } = require('./addon.js')
 const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed'
 
 function pickPrimaryGgufPath (files) {
-  const SHARD_REGEX = /-\d+-of-\d+\.gguf$/
-  return files.find((p) => SHARD_REGEX.test(p)) || files[0]
+  const FIRST_SHARD_REGEX = /-0*1-of-\d+\.gguf$/
+  return files.find((p) => FIRST_SHARD_REGEX.test(p)) || files[0]
 }
 
 function validateRunInput (input, hparams) {
@@ -137,18 +137,14 @@ class VlaModel {
         noise: input.noise ?? undefined
       })
     } catch (err) {
+      this._hasActiveResponse = false
       this._job.fail(err)
       throw err
     }
 
     this._job.output(result)
     this._job.end(this.opts.stats ? result.stats : null, result)
-
-    const finalized = response.await().finally(() => { this._hasActiveResponse = false })
-    finalized.catch((err) => {
-      this.logger?.warn?.('Inference response rejected:', err?.message || err)
-    })
-    response.await = () => finalized
+    this._hasActiveResponse = false
 
     this.logger.info('Inference job completed')
     return response

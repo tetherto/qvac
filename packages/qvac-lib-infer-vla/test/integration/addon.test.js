@@ -155,6 +155,8 @@ function _streamDownload (url, destPath, maxRedirects = 5) {
 
     const req = https.request(url, (res) => {
       if ([301, 302, 307, 308].includes(res.statusCode)) {
+        // Drain the redirect body so bare-https can release the underlying socket.
+        if (typeof res.resume === 'function') res.resume()
         file.destroy()
         try { fs.unlinkSync(destPath) } catch (_) {}
         const location = res.headers.location
@@ -166,6 +168,7 @@ function _streamDownload (url, destPath, maxRedirects = 5) {
         return
       }
       if (res.statusCode < 200 || res.statusCode >= 300) {
+        if (typeof res.resume === 'function') res.resume()
         file.destroy()
         try { fs.unlinkSync(destPath) } catch (_) {}
         safeReject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage || ''}`))
@@ -173,15 +176,16 @@ function _streamDownload (url, destPath, maxRedirects = 5) {
       }
 
       const contentLength = parseInt(res.headers['content-length'] || '0', 10)
+      const LOG_INTERVAL_BYTES = 50 * 1024 * 1024 // log every 50 MB
       let downloadedBytes = 0
-      let nextLogMB = 50
+      let nextLogBytes = LOG_INTERVAL_BYTES
       res.on('data', (chunk) => {
         downloadedBytes += chunk.length
-        const mb = downloadedBytes / (1024 * 1024)
-        if (mb >= nextLogMB) {
+        if (downloadedBytes >= nextLogBytes) {
+          const mb = downloadedBytes / (1024 * 1024)
           const pct = contentLength > 0 ? ` (${((downloadedBytes / contentLength) * 100).toFixed(1)}%)` : ''
           console.log(`[vla-model] progress: ${mb.toFixed(0)}MB${pct}`)
-          nextLogMB += 50
+          nextLogBytes += LOG_INTERVAL_BYTES
         }
       })
       res.on('error', (err) => {

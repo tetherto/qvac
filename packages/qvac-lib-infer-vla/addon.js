@@ -13,12 +13,19 @@ const DEFAULT_IMAGE_SIZE = 512
  *
  * Matches the reference implementation in smolvla_ggml.py#preprocess_image:
  * ratio = max(w/size, h/size), resize with bilinear, left/top pad with 0,
- * scale to [-1, 1].
+ * scale to [-1, 1]. The pad region is filled with -1 (= 0 shifted into [-1, 1]).
+ *
+ * Bilinear resize, letterbox-pad and the [0,1]→[-1,1] shift run as a single
+ * pass over the output buffer; no `src` / `resized` intermediates are allocated
+ * (each call needs only the final 3*size*size Float32Array). Per-output-pixel
+ * coordinates are computed once and shared across the three channels.
  *
  * @param {Float32Array|Uint8Array|number[]} pixels - source pixels
  * @param {number} width - source width
  * @param {number} height - source height
- * @param {{ size?: number, layout?: 'hwc'|'chw' }} [opts]
+ * @param {{ size?: number, layout?: 'hwc'|'chw', scale?: 1|(1/255)|'auto' }} [opts]
+ *   `scale` skips the [0,255] vs [0,1] heuristic when the caller knows the
+ *   range (`1` = pixels already in [0,1], `1/255` = pixels in [0,255]).
  * @returns {Float32Array}
  */
 function preprocessImage (pixels, width, height, opts = {}) {
@@ -33,75 +40,75 @@ function preprocessImage (pixels, width, height, opts = {}) {
     throw new RangeError(`preprocessImage: expected ${expected} pixel values, got ${pixels.length}`)
   }
 
-  const normalize = detectScale(pixels)
+  const normalize = (opts.scale === 1 || opts.scale === 1 / 255) ? opts.scale : detectScale(pixels)
 
-  // 1) Materialize a planar CHW float32 source in [0, 1].
-  const src = new Float32Array(3 * width * height)
-  if (layout === 'hwc') {
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const hwcIdx = (y * width + x) * 3
-        for (let c = 0; c < 3; c++) {
-          src[c * width * height + y * width + x] = pixels[hwcIdx + c] * normalize
-        }
-      }
-    }
-  } else {
-    for (let i = 0; i < src.length; i++) src[i] = pixels[i] * normalize
-  }
-
-  // 2) Compute letterbox target size (aspect-ratio preserving).
+  // Letterbox target size (aspect-ratio preserving).
   const ratio = Math.max(width / size, height / size)
   const newW = Math.max(1, Math.floor(width / ratio))
   const newH = Math.max(1, Math.floor(height / ratio))
   const padLeft = size - newW
   const padTop = size - newH
-
-  // 3) Bilinear resize each channel.
-  const resized = new Float32Array(3 * newW * newH)
   const xScale = width / newW
   const yScale = height / newH
-  for (let c = 0; c < 3; c++) {
-    const plane = c * width * height
-    const outPlane = c * newW * newH
-    for (let yy = 0; yy < newH; yy++) {
-      const yIn = (yy + 0.5) * yScale - 0.5
-      const y0 = Math.max(0, Math.floor(yIn))
-      const y1 = Math.min(height - 1, y0 + 1)
-      const dy = Math.min(1, Math.max(0, yIn - y0))
-      for (let xx = 0; xx < newW; xx++) {
-        const xIn = (xx + 0.5) * xScale - 0.5
-        const x0 = Math.max(0, Math.floor(xIn))
-        const x1 = Math.min(width - 1, x0 + 1)
-        const dx = Math.min(1, Math.max(0, xIn - x0))
-        const a = src[plane + y0 * width + x0]
-        const b = src[plane + y0 * width + x1]
-        const cVal = src[plane + y1 * width + x0]
-        const d = src[plane + y1 * width + x1]
-        const v =
-          a * (1 - dx) * (1 - dy) +
-          b * dx * (1 - dy) +
-          cVal * (1 - dx) * dy +
-          d * dx * dy
-        resized[outPlane + yy * newW + xx] = v
-      }
-    }
-  }
 
-  // 4) Pad on left+top with zeros, shift into [-1, 1].
-  const out = new Float32Array(3 * size * size) // zero-initialised
-  for (let c = 0; c < 3; c++) {
-    const outPlane = c * size * size
-    const inPlane = c * newW * newH
-    for (let yy = 0; yy < newH; yy++) {
-      const outRow = outPlane + (yy + padTop) * size + padLeft
-      const inRow = inPlane + yy * newW
-      for (let xx = 0; xx < newW; xx++) {
-        out[outRow + xx] = resized[inRow + xx]
+  // Output starts at -1 so the pad region is already in [-1, 1] and we only
+  // need to overwrite the (newH × newW) inner region with the resized content.
+  const out = new Float32Array(3 * size * size)
+  out.fill(-1)
+
+  const planeStride = size * size
+  const widthHeight = width * height
+
+  for (let yy = 0; yy < newH; yy++) {
+    const yIn = (yy + 0.5) * yScale - 0.5
+    const y0 = Math.max(0, Math.floor(yIn))
+    const y1 = Math.min(height - 1, y0 + 1)
+    const dy = Math.min(1, Math.max(0, yIn - y0))
+    const dyInv = 1 - dy
+    const outY = yy + padTop
+
+    for (let xx = 0; xx < newW; xx++) {
+      const xIn = (xx + 0.5) * xScale - 0.5
+      const x0 = Math.max(0, Math.floor(xIn))
+      const x1 = Math.min(width - 1, x0 + 1)
+      const dx = Math.min(1, Math.max(0, xIn - x0))
+      const dxInv = 1 - dx
+      const outX = xx + padLeft
+
+      const w00 = dxInv * dyInv
+      const w10 = dx * dyInv
+      const w01 = dxInv * dy
+      const w11 = dx * dy
+
+      const outIdx = outY * size + outX
+
+      if (layout === 'hwc') {
+        const i00 = (y0 * width + x0) * 3
+        const i10 = (y0 * width + x1) * 3
+        const i01 = (y1 * width + x0) * 3
+        const i11 = (y1 * width + x1) * 3
+        for (let c = 0; c < 3; c++) {
+          const v =
+            pixels[i00 + c] * w00 +
+            pixels[i10 + c] * w10 +
+            pixels[i01 + c] * w01 +
+            pixels[i11 + c] * w11
+          // Apply scale and shift into [-1, 1] in one fused multiply-add.
+          out[c * planeStride + outIdx] = v * normalize * 2 - 1
+        }
+      } else {
+        for (let c = 0; c < 3; c++) {
+          const plane = c * widthHeight
+          const v =
+            pixels[plane + y0 * width + x0] * w00 +
+            pixels[plane + y0 * width + x1] * w10 +
+            pixels[plane + y1 * width + x0] * w01 +
+            pixels[plane + y1 * width + x1] * w11
+          out[c * planeStride + outIdx] = v * normalize * 2 - 1
+        }
       }
     }
   }
-  for (let i = 0; i < out.length; i++) out[i] = out[i] * 2 - 1
 
   return out
 }
