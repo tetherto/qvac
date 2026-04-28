@@ -5,6 +5,8 @@ const path = require('bare-path')
 const os = require('bare-os')
 const process = require('bare-process')
 
+const ImageClassifier = require('../../index')
+
 const platform = process.platform
 const isMobile = platform === 'ios' || platform === 'android'
 
@@ -95,6 +97,39 @@ const MODEL_FILENAME = 'mobilenetv3_3class_v3_fp16.gguf'
 // Lookup on the device must therefore use the `.bin` filename.
 const MOBILE_MODEL_FILENAME = MODEL_FILENAME + '.bin'
 
+// Strip an optional `file://` prefix from a URL-style path the mobile
+// harness might hand back through `global.assetPaths`. Using a regex
+// keeps it correct for triple-slash variants too (e.g.
+// `file:///abs/path`), where a naive `.slice('file://'.length)` would
+// leave a stray leading `/` -- harmless on POSIX-mobile but malformed
+// in any future environment that ever sees a Windows-style URL.
+function _stripFileUrlPrefix (mapped) {
+  return mapped.replace(/^file:\/\//, '')
+}
+
+// Probe `global.assetPaths` for `<filename>` under the four key shapes
+// the qvac-test-addon-mobile framework is known to use across addons
+// (`ocr-onnx`, `lib-infer-diffusion`, `qvac-lib-infer-nmtcpp`). Returns
+// the resolved on-device path on hit, or `null` on miss / off-mobile.
+// Centralised here so `resolveModelPath()` and `_resolveImagePath()`
+// share one source of truth for the lookup heuristic.
+function _resolveMobileAsset (filename) {
+  if (!isMobile || typeof global === 'undefined' || !global.assetPaths) {
+    return null
+  }
+  const candidates = [
+    `../../testAssets/${filename}`,
+    `../mobile/testAssets/${filename}`,
+    `testAssets/${filename}`,
+    `../testAssets/${filename}`
+  ]
+  for (const key of candidates) {
+    const mapped = global.assetPaths[key]
+    if (mapped) return _stripFileUrlPrefix(mapped)
+  }
+  return null
+}
+
 /**
  * Resolves the GGUF weights path for the integration suite.
  *
@@ -106,11 +141,9 @@ const MOBILE_MODEL_FILENAME = MODEL_FILENAME + '.bin'
  * `app.bundle` whose `weights/` directory is not a real filesystem
  * path. The qvac-test-addon-mobile framework copies anything under
  * `test/mobile/testAssets/` to the device and exposes the resulting
- * on-device file:// URLs through `global.assetPaths`, keyed by
- * relative paths from the test module's perspective. We try the
- * common key formats (matching `qvac-lib-infer-nmtcpp:loadConfigFromAssets`)
- * and fall back to a desktop-style fs lookup so local non-CI builds
- * keep working too.
+ * on-device file:// URLs through `global.assetPaths`. We try the
+ * common key formats via `_resolveMobileAsset` and fall back to a
+ * desktop-style fs lookup so local non-CI builds keep working too.
  *
  * If on mobile and the asset cannot be located, throw a clear error
  * up-front rather than letting `ImageClassifier.load()` fail with the
@@ -121,19 +154,9 @@ const MOBILE_MODEL_FILENAME = MODEL_FILENAME + '.bin'
  * CI runs 24891210942 and 24900278513).
  */
 function resolveModelPath () {
-  if (isMobile && typeof global !== 'undefined' && global.assetPaths) {
-    const candidates = [
-      `../../testAssets/${MOBILE_MODEL_FILENAME}`,
-      `../mobile/testAssets/${MOBILE_MODEL_FILENAME}`,
-      `testAssets/${MOBILE_MODEL_FILENAME}`,
-      `../testAssets/${MOBILE_MODEL_FILENAME}`
-    ]
-    for (const key of candidates) {
-      const mapped = global.assetPaths[key]
-      if (mapped) {
-        return mapped.startsWith('file://') ? mapped.slice('file://'.length) : mapped
-      }
-    }
+  if (isMobile) {
+    const resolved = _resolveMobileAsset(MOBILE_MODEL_FILENAME)
+    if (resolved) return resolved
     throw new Error(
       `Mobile asset not found in global.assetPaths: ${MOBILE_MODEL_FILENAME}. ` +
       "Did 'npm run mobile:copy-prebuilds' run during test setup, " +
@@ -157,34 +180,19 @@ function resolveModelPath () {
 }
 
 // Resolve the on-disk path for a test image, accounting for the packed
-// mobile bundle. On desktop the image lives under `test/images/<name>`;
-// on mobile the qvac-test-addon-mobile framework pushes everything
-// under `test/mobile/testAssets/` to the device and exposes the
-// resulting on-device file:// URLs through `global.assetPaths`, keyed
-// by `../../testAssets/<filename>` (matching what other addons such as
-// `ocr-onnx` and `lib-infer-diffusion` use). The pre-test
-// `scripts/copy-mobile-test-assets.js` step is responsible for putting
-// each `test/images/*.jpg` into `test/mobile/testAssets/` so this
-// lookup succeeds. We throw a clear synchronous error when the asset
-// is missing rather than letting `fs.readFileSync` fail with the
-// opaque `app.bundle/...` path that aborts the bare worklet (see CI
-// run 25004602841 logcat: ENOENT for
-// `/app.bundle/backend/test/images/meal_1.jpg`).
+// mobile bundle. Mobile lookup goes through the same
+// `_resolveMobileAsset` heuristic as `resolveModelPath`. We throw a
+// clear synchronous error when the asset is missing rather than
+// letting `fs.readFileSync` fail with the opaque `app.bundle/...`
+// path that aborts the bare worklet (see CI run 25004602841 logcat:
+// ENOENT for `/app.bundle/backend/test/images/meal_1.jpg`).
 function _resolveImagePath (name) {
-  if (isMobile && typeof global !== 'undefined' && global.assetPaths) {
-    const candidates = [
-      `../../testAssets/${name}`,
-      `../mobile/testAssets/${name}`,
-      `testAssets/${name}`,
-      `../testAssets/${name}`
-    ]
-    for (const key of candidates) {
-      const mapped = global.assetPaths[key]
-      if (mapped) {
-        return mapped.startsWith('file://') ? mapped.slice('file://'.length) : mapped
-      }
-    }
-    const known = Object.keys(global.assetPaths).slice(0, 8).join(', ')
+  if (isMobile) {
+    const resolved = _resolveMobileAsset(name)
+    if (resolved) return resolved
+    const known = (typeof global !== 'undefined' && global.assetPaths)
+      ? Object.keys(global.assetPaths).slice(0, 8).join(', ')
+      : '(no global.assetPaths)'
     throw new Error(
       `Mobile test image not found in global.assetPaths: ${name}. ` +
       "Did 'npm run mobile:copy-prebuilds' run during test setup, " +
@@ -197,6 +205,20 @@ function _resolveImagePath (name) {
 
 function loadImage (name) {
   return fs.readFileSync(_resolveImagePath(name))
+}
+
+// Standard test-instance factory. Resolves the GGUF path for the
+// current platform (desktop/mobile-aware) and wires the C++ logger
+// into a stderr sink. Callers should always go through this rather
+// than constructing `ImageClassifier` inline so any future
+// constructor-arg change lands in one place.
+function makeClassifier (overrides) {
+  const opts = {
+    modelPath: resolveModelPath(),
+    logger: createLogger()
+  }
+  if (overrides) Object.assign(opts, overrides)
+  return new ImageClassifier(opts)
 }
 
 function recordMetric (label, totalTimeMs, input) {
@@ -239,5 +261,6 @@ module.exports = {
   createLogger,
   recordMetric,
   recordLoadTime,
-  resolveModelPath
+  resolveModelPath,
+  makeClassifier
 }

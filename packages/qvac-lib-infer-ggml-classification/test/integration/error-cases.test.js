@@ -2,12 +2,7 @@
 
 const test = require('brittle')
 
-const ImageClassifier = require('../../index')
-const { loadImage, createLogger, TEST_TIMEOUT, resolveModelPath } = require('./utils')
-
-function makeClassifier () {
-  return new ImageClassifier({ modelPath: resolveModelPath(), logger: createLogger() })
-}
+const { loadImage, TEST_TIMEOUT, makeClassifier } = require('./utils')
 
 test('classify(null) rejects with structured error', async function (t) {
   t.timeout(TEST_TIMEOUT)

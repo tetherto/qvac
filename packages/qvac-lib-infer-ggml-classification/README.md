@@ -168,7 +168,7 @@ Depending on the platform, one call to `classifier.classify(buffer)` takes from 
 
 ### What affects `classify()` latency
 
-- `**threads**` — capped at `hardware_concurrency` by default. Lowering it trades latency for battery or contention with other addons (LLM, whisper) running on the same device.
+- **`threads`** — capped at `hardware_concurrency` by default. Lowering it trades latency for battery or contention with other addons (LLM, whisper) running on the same device.
 - **Input size** — the JPEG/PNG decode and the `stb_image_resize2` bilinear pass scale with source pixel count. The 224×224 tensor pass is fixed-cost; a 12 MP phone photo adds real overhead vs. a 640×480 webcam frame.
 - **First-call overhead** — `load()` already runs a full-pipeline warmup (synthetic-gradient pass through preprocess + GGML compute + output read) before returning, so the GGML compute buffers, weight buffer, and worker thread are fully materialised when the first `classify()` is dispatched. Even so, the first user-supplied call is typically a few tens of milliseconds slower than the steady-state average.
 - **Re-use** — `load()` once, `classify()` many times. Tearing down and rebuilding the model for each image is roughly 4–6× slower end-to-end and is never necessary outside of tests.
