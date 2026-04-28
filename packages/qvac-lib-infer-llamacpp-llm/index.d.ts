@@ -52,6 +52,10 @@ export interface LlamaConfig {
   verbosity?: NumericLike
   n_discarded?: NumericLike
   'main-gpu'?: NumericLike | string
+  /** How to split the model across GPUs: 'none' (default, single GPU), 'layer' (pipeline parallelism), 'row' (tensor parallelism). */
+  'split-mode'?: 'none' | 'layer' | 'row'
+  /** Proportions for distributing layers/rows across GPUs (e.g. '1,1' for equal split, '3,1' for 75/25). */
+  'tensor-split'?: string
   'cache-type-k'?: string
   'cache-type-v'?: string
   /** Writable directory for OpenCL kernel binary cache. Required on Android for fast GPU startup. */

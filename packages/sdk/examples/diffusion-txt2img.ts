@@ -27,7 +27,8 @@ const { progressStream, outputs, stats } = diffusion({
   width: 512,
   height: 512,
   steps: 20,
-  cfg_scale: 7.0,
+  guidance: 3.5,
+  cfg_scale: 1,
   seed: -1,
 });
 

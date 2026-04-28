@@ -399,3 +399,20 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
       outAdrenoVersion,
       isFinetuning);
 }
+
+size_t
+backend_selection::getEffectiveGpuDeviceCount(const BackendInterface& bckI) {
+  size_t gpuCount = 0;
+  size_t igpuCount = 0;
+  const size_t totalDevices = bckI.ggml_backend_dev_count();
+  for (size_t i = 0; i < totalDevices; ++i) {
+    ggml_backend_dev_t dev = bckI.ggml_backend_dev_get(i);
+    enum ggml_backend_dev_type devType = bckI.ggml_backend_dev_type(dev);
+    if (devType == GGML_BACKEND_DEVICE_TYPE_GPU) {
+      ++gpuCount;
+    } else if (devType == GGML_BACKEND_DEVICE_TYPE_IGPU) {
+      ++igpuCount;
+    }
+  }
+  return gpuCount > 0 ? gpuCount : igpuCount;
+}

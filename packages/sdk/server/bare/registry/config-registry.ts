@@ -22,6 +22,7 @@ const configRegistry: QvacConfig = {
   loggerConsoleOutput: undefined,
   httpDownloadConcurrency: undefined,
   registryDownloadMaxRetries: undefined,
+  registryStreamTimeoutMs: undefined,
   deviceDefaults: undefined,
 };
 
@@ -106,6 +107,16 @@ export function setSDKConfig(config: QvacConfig) {
     configRegistry.registryDownloadMaxRetries = config.registryDownloadMaxRetries;
     logger.info(
       `✅ Registry download max retries set to: ${config.registryDownloadMaxRetries}`,
+    );
+  }
+
+  if (
+    config.registryStreamTimeoutMs !== undefined &&
+    config.registryStreamTimeoutMs !== null
+  ) {
+    configRegistry.registryStreamTimeoutMs = config.registryStreamTimeoutMs;
+    logger.info(
+      `✅ Registry stream timeout set to: ${config.registryStreamTimeoutMs}ms`,
     );
   }
 

@@ -1,0 +1,95 @@
+name: Strip prebuilds
+description: >-
+  Strip debug symbols from compiled prebuild binaries in a platform-aware way,
+  then verify no debug sections remain. Always a no-op on Windows (debug info
+  lives in separate .pdb files). Uses the debug-only variant of strip on every
+  platform (strip -S on Apple, strip --strip-debug on Linux, llvm-strip
+  --strip-debug on Android) so that the dynamic symbol table required by
+  dlopen-loaded .bare / .so / .dylib files is preserved.
+
+inputs:
+  platform:
+    description: Build platform (linux, android, darwin, ios, win32)
+    required: true
+  workdir:
+    description: Directory containing the prebuilds/ folder
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - if: ${{ inputs.platform == 'darwin' || inputs.platform == 'ios' }}
+      name: Strip (Apple)
+      shell: bash
+      working-directory: ${{ inputs.workdir }}
+      run: |
+        set -euo pipefail
+        find prebuilds \( -name '*.bare' -o -name '*.so' -o -name '*.dylib' \) \
+          -exec strip -S {} \;
+
+    - if: ${{ inputs.platform == 'linux' }}
+      name: Strip (Linux)
+      shell: bash
+      working-directory: ${{ inputs.workdir }}
+      run: |
+        set -euo pipefail
+        find prebuilds \( -name '*.bare' -o -name '*.so' -o -name '*.dylib' \) \
+          -exec strip --strip-debug {} \;
+
+    - if: ${{ inputs.platform == 'android' }}
+      name: Strip (Android)
+      shell: bash
+      working-directory: ${{ inputs.workdir }}
+      run: |
+        set -euo pipefail
+        TOOLCHAIN="${ANDROID_TOOLCHAIN_ROOT:-${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64}"
+        LLVM_STRIP="${TOOLCHAIN}/bin/llvm-strip"
+        if [ ! -x "$LLVM_STRIP" ]; then
+          echo "::error::llvm-strip not found at $LLVM_STRIP"
+          exit 1
+        fi
+        find prebuilds \( -name '*.bare' -o -name '*.so' -o -name '*.dylib' \) \
+          -exec "$LLVM_STRIP" --strip-debug {} \;
+
+    - if: ${{ inputs.platform == 'darwin' || inputs.platform == 'ios' || inputs.platform == 'linux' }}
+      name: Verify strip (native)
+      shell: bash
+      working-directory: ${{ inputs.workdir }}
+      run: |
+        set -euo pipefail
+        echo "Checking for binaries that still contain debug info..."
+        WITH_DEBUG=$(
+          find prebuilds \( -name '*.bare' -o -name '*.so' -o -name '*.dylib' \) \
+            -exec sh -c 'file "$1" | grep -q "with debug_info" && echo "$1"' _ {} \;
+        )
+        if [ -n "$WITH_DEBUG" ]; then
+          echo "::error::The following binaries still contain debug info:"
+          echo "$WITH_DEBUG"
+          exit 1
+        fi
+        echo "All binaries have debug info removed."
+
+    - if: ${{ inputs.platform == 'android' }}
+      name: Verify strip (Android)
+      shell: bash
+      working-directory: ${{ inputs.workdir }}
+      run: |
+        set -euo pipefail
+        TOOLCHAIN="${ANDROID_TOOLCHAIN_ROOT:-${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64}"
+        READELF="${TOOLCHAIN}/bin/llvm-readelf"
+        if [ ! -x "$READELF" ]; then
+          echo "::error::llvm-readelf not found at $READELF"
+          exit 1
+        fi
+        WITH_DEBUG=$(
+          find prebuilds \( -name '*.bare' -o -name '*.so' -o -name '*.dylib' \) \
+            -exec sh -c '
+              "$0" -S "$1" 2>/dev/null | grep -Eq "\.debug_|\.zdebug_" && echo "$1"
+            ' "$READELF" {} \;
+        )
+        if [ -n "$WITH_DEBUG" ]; then
+          echo "::error::The following binaries still contain debug sections:"
+          echo "$WITH_DEBUG"
+          exit 1
+        fi
+        echo "All Android binaries have debug sections removed."
