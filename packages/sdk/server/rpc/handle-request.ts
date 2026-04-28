@@ -104,7 +104,7 @@ function attachProfilingMetaToRequest(
 ): void {
   if (!profilingMeta) return;
 
-  Object.defineProperty(request as Record<string, unknown>, PROFILING_KEY, {
+  Object.defineProperty(request, PROFILING_KEY, {
     value: profilingMeta,
     enumerable: false,
     configurable: true,

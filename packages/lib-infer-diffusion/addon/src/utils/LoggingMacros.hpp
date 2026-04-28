@@ -20,7 +20,7 @@ void setVerbosityLevel(std::unordered_map<std::string, std::string>& configMap);
 } // namespace logging
 } // namespace qvac_lib_inference_addon_sd
 
-// Conditional log macro – only emits if priority <= current global level
+// Conditional log macro - only emits if priority <= current global level
 // NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
 #define QLOG_IF(priority, message)                                             \
   do {                                                                         \

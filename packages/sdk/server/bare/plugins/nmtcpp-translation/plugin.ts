@@ -138,7 +138,7 @@ function createNmtModel(
   };
 
   const config: TranslationNmtcppConfig = {
-    modelType: TranslationNmtcpp.ModelTypes[engine as keyof typeof TranslationNmtcpp.ModelTypes],
+    modelType: TranslationNmtcpp.ModelTypes[engine],
     ...generationParams,
     ...(nmtConfig.engine === "Bergamot" && {
       ...(nmtConfig.normalize !== undefined && {

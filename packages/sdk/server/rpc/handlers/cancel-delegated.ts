@@ -52,7 +52,7 @@ function toProviderCancelRequest(request: CancelRequest): CancelRequest {
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { delegate: _delegate, ...providerRequest } = request;
-  return providerRequest as CancelRequest;
+  return providerRequest;
 }
 
 export async function handleCancelDelegated(
