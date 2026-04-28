@@ -21,7 +21,7 @@ This library sits between the Bare runtime and specific inference addons. Commun
 
 **Consumer Addons** (built on this library):
 - [llm-llamacpp](https://github.com/tetherto/llm-llamacpp) - LLM inference
-- [qvac-lib-infer-whispercpp](https://github.com/tetherto/qvac-lib-infer-whispercpp) - Speech recognition
+- [transcription-whispercpp](https://github.com/tetherto/transcription-whispercpp) - Speech recognition
 - [translation-nmtcpp](https://github.com/tetherto/translation-nmtcpp) - Neural translation
 - [tts-onnx](https://github.com/tetherto/tts-onnx) - Text-to-speech
 - [embed-llamacpp](https://github.com/tetherto/embed-llamacpp) - Embeddings
@@ -332,7 +332,7 @@ ctest --test-dir build --output-on-failure
 
 Production addons built on this library:
 - [llm-llamacpp](https://github.com/tetherto/llm-llamacpp) - LLM inference
-- [qvac-lib-infer-whispercpp](https://github.com/tetherto/qvac-lib-infer-whispercpp) - Speech recognition
+- [transcription-whispercpp](https://github.com/tetherto/transcription-whispercpp) - Speech recognition
 - [translation-nmtcpp](https://github.com/tetherto/translation-nmtcpp) - Neural translation
 - [tts-onnx](https://github.com/tetherto/tts-onnx) - Text-to-speech
 - [embed-llamacpp](https://github.com/tetherto/embed-llamacpp) - Embeddings

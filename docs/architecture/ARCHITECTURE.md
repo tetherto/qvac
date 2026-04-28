@@ -223,7 +223,7 @@ The SDK includes a client for the QVAC Model Registry (`@qvac/registry-client`),
 - [C++ Addon Framework](../packages/qvac-lib-inference-addon-cpp/docs/architecture.md)
 - [LLM Completion — llama.cpp](../packages/llm-llamacpp/docs/architecture.md)
 - [Embeddings — llama.cpp](../packages/embed-llamacpp/docs/architecture.md)
-- [Transcription — whisper.cpp](../packages/qvac-lib-infer-whispercpp/docs/architecture.md)
+- [Transcription — whisper.cpp](../packages/transcription-whispercpp/docs/architecture.md)
 - [Translation — nmt.cpp](../packages/translation-nmtcpp/docs/architecture.md)
 - [TTS — ONNX](../packages/tts-onnx/docs/architecture.md)
 - [OCR — ONNX](../packages/ocr-onnx/docs/architecture.md)
@@ -258,7 +258,7 @@ All packages live in this monorepo under `packages/`:
 |-----------|---------|---------|
 | `llm-llamacpp` | `@qvac/llm-llamacpp` | LLM completion (llama.cpp) |
 | `embed-llamacpp` | `@qvac/embed-llamacpp` | Text embeddings (llama.cpp) |
-| `qvac-lib-infer-whispercpp` | `@qvac/transcription-whispercpp` | Speech-to-text (whisper.cpp) |
+| `transcription-whispercpp` | `@qvac/transcription-whispercpp` | Speech-to-text (whisper.cpp) |
 | `transcription-parakeet` | `@qvac/transcription-parakeet` | Speech-to-text (Parakeet) |
 | `translation-nmtcpp` | `@qvac/translation-nmtcpp` | Translation (nmt.cpp) |
 | `tts-onnx` | `@qvac/tts-onnx` | Text-to-speech (ONNX) |

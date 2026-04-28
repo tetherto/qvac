@@ -423,7 +423,7 @@ There are no official ONNX models on huggingface from NVIDIA. These are converte
 
 ### Related Projects
 
-- [qvac-lib-infer-whispercpp](https://github.com/tetherto/qvac-lib-infer-whispercpp) - Alternative STT using Whisper
+- [transcription-whispercpp](https://github.com/tetherto/transcription-whispercpp) - Alternative STT using Whisper
 - [tts-onnx](https://github.com/tetherto/tts-onnx) - Text-to-speech
 - [llm-llamacpp](https://github.com/tetherto/llm-llamacpp) - LLM inference
 

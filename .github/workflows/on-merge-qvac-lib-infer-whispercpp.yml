@@ -8,7 +8,7 @@ on:
       - feature-*
       - tmp-*
     paths:
-      - "packages/qvac-lib-infer-whispercpp/**"
+      - "packages/transcription-whispercpp/**"
       - ".github/workflows/*whispercpp*.yml"
 
   workflow_dispatch:
@@ -93,9 +93,9 @@ jobs:
           base-ref: ${{ github.ref_name }}
           base-sha: ${{ github.event.before }}
           head-sha: ${{ github.sha }}
-          package-slug: qvac-lib-infer-whispercpp
-          package-json-path: packages/qvac-lib-infer-whispercpp/package.json
-          changelog-path: packages/qvac-lib-infer-whispercpp/CHANGELOG.md
+          package-slug: transcription-whispercpp
+          package-json-path: packages/transcription-whispercpp/package.json
+          changelog-path: packages/transcription-whispercpp/CHANGELOG.md
 
   build:
     needs: publish-logic
@@ -109,12 +109,12 @@ jobs:
       packages: write
       pull-requests: write
       id-token: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-whispercpp.yml
+    uses: ./.github/workflows/prebuilds-transcription-whispercpp.yml
     secrets: inherit
     with:
       repository: ${{ github.repository }}
       ref: ${{ github.ref }}
-      workdir: "packages/qvac-lib-infer-whispercpp"
+      workdir: "packages/transcription-whispercpp"
 
   publish-gpr:
     needs: [build, publish-logic]
@@ -130,7 +130,7 @@ jobs:
       contents: read
       packages: write
     env:
-      WORKDIR: packages/qvac-lib-infer-whispercpp
+      WORKDIR: packages/transcription-whispercpp
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -204,7 +204,7 @@ jobs:
       packages: write
       id-token: write
     env:
-      WORKDIR: packages/qvac-lib-infer-whispercpp
+      WORKDIR: packages/transcription-whispercpp
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -253,7 +253,7 @@ jobs:
       release_name: "QVAC Transcription Whisper Addon"
       published_version: ${{ needs.publish-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}
-      workdir: "packages/qvac-lib-infer-whispercpp"
+      workdir: "packages/transcription-whispercpp"
 
   post-build-gate:
     name: Post-Build Gate
@@ -281,17 +281,17 @@ jobs:
       contents: read
       packages: read
       id-token: write
-    uses: ./.github/workflows/integration-test-qvac-lib-infer-whispercpp.yml
+    uses: ./.github/workflows/integration-test-transcription-whispercpp.yml
     needs: post-build-gate
     if: needs.post-build-gate.outputs.should_run_tests == 'true'
     secrets: inherit
     with:
       repository: ${{ github.repository }}
       ref: ${{ github.sha }}
-      workdir: "packages/qvac-lib-infer-whispercpp"
+      workdir: "packages/transcription-whispercpp"
 
   mobile-integration-tests:
-    uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-whispercpp.yml
+    uses: ./.github/workflows/integration-mobile-test-transcription-whispercpp.yml
     needs: post-build-gate
     if: needs.post-build-gate.outputs.should_run_tests == 'true'
     permissions:
@@ -315,11 +315,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
-          gh workflow run benchmark-qvac-lib-infer-whispercpp.yml \
+          gh workflow run benchmark-transcription-whispercpp.yml \
             --repo ${{ github.repository }} \
             --ref ${{ github.ref_name }} \
             -f dataset_type=librispeech \
             -f language=english \
             -f model_size=tiny \
             -f streaming_mode=false \
-            -f workdir=packages/qvac-lib-infer-whispercpp
+            -f workdir=packages/transcription-whispercpp

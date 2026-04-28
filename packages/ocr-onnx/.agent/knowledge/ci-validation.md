@@ -12,7 +12,7 @@ Workflow files live in `.github/workflows/` and fall into distinct categories by
 
 ### Native Addons (C++ packages)
 
-Packages: `llm-llamacpp`, `embed-llamacpp`, `tts-onnx`, `qvac-lib-infer-whispercpp`, `transcription-parakeet`, `translation-nmtcpp`, `decoder-audio`, `ocr-onnx`
+Packages: `llm-llamacpp`, `embed-llamacpp`, `tts-onnx`, `transcription-whispercpp`, `transcription-parakeet`, `translation-nmtcpp`, `decoder-audio`, `ocr-onnx`
 
 Each addon has a full suite of per-package workflows:
 
@@ -85,7 +85,7 @@ These are the native addon packages that have full CI workflows. The **short nam
 | `Embed` | `packages/embed-llamacpp` | `On PR Trigger (Embed)` |
 | `OCR` | `packages/ocr-onnx` | `On PR Trigger (OCR)` |
 | `TTS` | `packages/tts-onnx` | `On PR Trigger (TTS)` |
-| `Whispercpp` | `packages/qvac-lib-infer-whispercpp` | `On PR Trigger (Whispercpp)` |
+| `Whispercpp` | `packages/transcription-whispercpp` | `On PR Trigger (Whispercpp)` |
 | `Parakeet` | `packages/transcription-parakeet` | `On PR Trigger (Parakeet)` |
 | `NMTCPP` | `packages/translation-nmtcpp` | `On PR Trigger (NMTCPP)` |
 | `Decoder-audio` | `packages/decoder-audio` | `On PR Trigger (Decoder-audio)` |

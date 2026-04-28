@@ -519,7 +519,7 @@ If a package can't be resolved:
 | `tts-onnx` | onnxruntime (platform EPs), fmt, spdlog, tokenizers-cpp, qvac-lib-inference-addon-cpp, qvac-lint-cpp | None | Release-only (macOS/iOS) |
 | `transcription-parakeet` | onnxruntime, qvac-lib-inference-addon-cpp | None | Release-only |
 | `onnx` | onnxruntime (platform EPs), qvac-lib-inference-addon-cpp, qvac-lint-cpp | None | None |
-| `qvac-lib-infer-whispercpp` | whisper-cpp, qvac-lib-inference-addon-cpp, qvac-lint-cpp | None | None |
+| `transcription-whispercpp` | whisper-cpp, qvac-lib-inference-addon-cpp, qvac-lint-cpp | None | None |
 | `translation-nmtcpp` | bergamot-translator, sentencepiece, ssplit, whisper-cpp, qvac-lib-inference-addon-cpp, qvac-lint-cpp | 7 ports (bergamot, marian-dev, intgemm, ruy, simd-utils, ssplit, whisper-cpp) | None |
 | `qvac-lib-inference-addon-cpp` | qvac-lint-cpp | None | None |
 | `qvac-lint-cpp` | (none — self-contained) | None | None |

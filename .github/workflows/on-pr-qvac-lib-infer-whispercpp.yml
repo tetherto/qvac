@@ -5,7 +5,7 @@ on:
     types: [opened, synchronize, reopened, labeled]
     branches: [main, release-*, feature-*, tmp-*]
     paths:
-      - "packages/qvac-lib-infer-whispercpp/**"
+      - "packages/transcription-whispercpp/**"
       - ".github/workflows/*whispercpp*.yml"
 
   workflow_dispatch:
@@ -27,7 +27,7 @@ on:
         description: "Package working directory in monorepo."
         required: false
         type: string
-        default: "packages/qvac-lib-infer-whispercpp"
+        default: "packages/transcription-whispercpp"
 
   workflow_call:
     inputs:
@@ -44,7 +44,7 @@ on:
       workdir:
         required: false
         type: string
-        default: "packages/qvac-lib-infer-whispercpp"
+        default: "packages/transcription-whispercpp"
 
 permissions:
   contents: read
@@ -102,14 +102,14 @@ jobs:
           set -euo pipefail
 
           if [[ "$EVENT_NAME" == "workflow_dispatch" || "$EVENT_NAME" == "workflow_call" ]]; then
-            workdir="${INPUT_WORKDIR:-packages/qvac-lib-infer-whispercpp}"
+            workdir="${INPUT_WORKDIR:-packages/transcription-whispercpp}"
             repo="${INPUT_REPO:-$REPO}"
             ref="${INPUT_REF:-$REF_NAME}"
             run_verify="$INPUT_VERIFY"
             base_sha="$SHA"
             head_sha="$SHA"
           else
-            workdir="packages/qvac-lib-infer-whispercpp"
+            workdir="packages/transcription-whispercpp"
             repo="$HEAD_REPO"
             ref="$HEAD_REF"
             run_verify="true"
@@ -170,7 +170,7 @@ jobs:
       id-token: write
     needs: [authorize, context]
     if: needs.authorize.outputs.allowed == 'true'
-    uses: ./.github/workflows/cpp-test-coverage-qvac-lib-infer-whispercpp.yml
+    uses: ./.github/workflows/cpp-test-coverage-transcription-whispercpp.yml
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}
@@ -184,7 +184,7 @@ jobs:
       id-token: write
     needs: [authorize, context]
     if: needs.authorize.outputs.allowed == 'true'
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-whispercpp.yml
+    uses: ./.github/workflows/prebuilds-transcription-whispercpp.yml
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}
@@ -197,7 +197,7 @@ jobs:
       id-token: write
     needs: [authorize, context, prebuild]
     if: needs.authorize.outputs.allowed == 'true'
-    uses: ./.github/workflows/integration-test-qvac-lib-infer-whispercpp.yml
+    uses: ./.github/workflows/integration-test-transcription-whispercpp.yml
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}
@@ -212,7 +212,7 @@ jobs:
       id-token: write
     needs: [authorize, context, prebuild]
     if: needs.authorize.outputs.allowed == 'true'
-    uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-whispercpp.yml
+    uses: ./.github/workflows/integration-mobile-test-transcription-whispercpp.yml
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}

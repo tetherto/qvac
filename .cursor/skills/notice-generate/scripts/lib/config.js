@@ -27,7 +27,7 @@ const ENGINE_MAP = {
   '@qvac/llm-llamacpp': 'llm-llamacpp',
   '@qvac/translation-nmtcpp': 'translation-nmtcpp',
   '@qvac/tts-onnx': 'tts-onnx',
-  '@qvac/transcription-whispercpp': 'qvac-lib-infer-whispercpp',
+  '@qvac/transcription-whispercpp': 'transcription-whispercpp',
   '@qvac/translation-llamacpp': 'llm-llamacpp',
   '@qvac/ocr-onnx': 'ocr-onnx',
   '@qvac/diffusion-cpp': 'infer-diffusion'
@@ -82,7 +82,7 @@ const PYTHON_DEP_PATHS = {
     'benchmarks/client/requirements.txt',
     'benchmarks/client/pyproject.toml'
   ],
-  'qvac-lib-infer-whispercpp': [
+  'transcription-whispercpp': [
     'benchmarks/ci/requirements-conversion.txt',
     'benchmarks/client/pyproject.toml'
   ],

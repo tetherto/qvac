@@ -27,7 +27,7 @@ find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
 set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 
-project(qvac-lib-infer-whispercpp CXX C)
+project(transcription-whispercpp CXX C)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   add_compile_options(-stdlib=libc++)
@@ -73,14 +73,14 @@ if((ANDROID OR UNIX) AND NOT APPLE)
   endforeach()
 endif()
 
-add_bare_module(qvac-lib-infer-whispercpp EXPORTS ${BACKEND_DL_LIBS})
+add_bare_module(transcription-whispercpp EXPORTS ${BACKEND_DL_LIBS})
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  target_link_options(${qvac-lib-infer-whispercpp}_module PRIVATE -Wl,--exclude-libs,ALL)
+  target_link_options(${transcription-whispercpp}_module PRIVATE -Wl,--exclude-libs,ALL)
 endif()
 
 target_sources(
-  ${qvac-lib-infer-whispercpp}
+  ${transcription-whispercpp}
   PRIVATE
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/JSAdapter.cpp
@@ -92,7 +92,7 @@ target_sources(
 )
 
 target_include_directories(
-  ${qvac-lib-infer-whispercpp}
+  ${transcription-whispercpp}
   PRIVATE
     ${PROJECT_SOURCE_DIR}/addon
     ${PROJECT_SOURCE_DIR}/addon/src
@@ -101,16 +101,16 @@ target_include_directories(
 )
 
 target_link_libraries(
-  ${qvac-lib-infer-whispercpp}
+  ${transcription-whispercpp}
   PRIVATE
     whisper::whisper
 )
 
-target_compile_definitions(${qvac-lib-infer-whispercpp} PUBLIC JS_LOGGER)
+target_compile_definitions(${transcription-whispercpp} PUBLIC JS_LOGGER)
 
 if(WIN32)
   target_link_libraries(
-    ${qvac-lib-infer-whispercpp}
+    ${transcription-whispercpp}
     PRIVATE
       msvcrt.lib
   )

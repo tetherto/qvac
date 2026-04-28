@@ -52,7 +52,7 @@ jobs:
       packages: write
       pull-requests: write
       id-token: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-whispercpp.yml
+    uses: ./.github/workflows/prebuilds-transcription-whispercpp.yml
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}
@@ -65,7 +65,7 @@ jobs:
       contents: read
       packages: read
       id-token: write
-    uses: ./.github/workflows/integration-test-qvac-lib-infer-whispercpp.yml
+    uses: ./.github/workflows/integration-test-transcription-whispercpp.yml
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}
@@ -101,7 +101,7 @@ jobs:
         run: |
           node scripts/perf-report/aggregate-whisper-rtf.js \
             --dir benchmark-artifacts/desktop \
-            --manual-dir packages/qvac-lib-infer-whispercpp/benchmarks/manual-results \
+            --manual-dir packages/transcription-whispercpp/benchmarks/manual-results \
             --output benchmark-artifacts/whisper-performance-findings.md \
             --output-json benchmark-artifacts/whisper-performance-findings.json
 

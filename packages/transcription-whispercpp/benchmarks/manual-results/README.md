@@ -43,7 +43,7 @@ File naming convention:
 These files are picked up automatically by:
 
 - `scripts/perf-report/aggregate-whisper-rtf.js`
-- `.github/workflows/benchmark-performance-qvac-lib-infer-whispercpp.yml`
+- `.github/workflows/benchmark-performance-transcription-whispercpp.yml`
 
 Use this directory for results such as:
 

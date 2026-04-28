@@ -5,7 +5,7 @@ on:
     types:
       - closed
     paths:
-      - "packages/qvac-lib-infer-whispercpp/**"
+      - "packages/transcription-whispercpp/**"
       - ".github/workflows/*whispercpp*.yml"
   workflow_dispatch:
     inputs:
@@ -25,7 +25,7 @@ on:
         description: "Packages to target for deletion, space separated"
         required: false
         type: string
-        default: "qvac-lib-infer-whispercpp"
+        default: "transcription-whispercpp"
       dry-run:
         description: "Is dry run? If true, lists versions without deleting."
         type: boolean
@@ -62,6 +62,6 @@ jobs:
       version: ${{ inputs.version }}
       pr-number: ${{ github.event_name == 'pull_request' && github.event.pull_request.number || inputs.pr-number }}
       pattern: ${{ inputs.pattern }}
-      packages: ${{ inputs.packages || 'qvac-lib-infer-whispercpp' }}
+      packages: ${{ inputs.packages || 'transcription-whispercpp' }}
       dry-run: ${{ github.event_name == 'pull_request' && true || inputs.dry-run }}
 

@@ -75,10 +75,10 @@ on:
         type: number
         default: -1
       workdir:
-        description: 'Package working directory in monorepo (e.g., packages/qvac-lib-infer-whispercpp)'
+        description: 'Package working directory in monorepo (e.g., packages/transcription-whispercpp)'
         required: false
         type: string
-        default: 'packages/qvac-lib-infer-whispercpp'
+        default: 'packages/transcription-whispercpp'
 
 permissions:
   contents: read
@@ -334,7 +334,7 @@ jobs:
           BENCHMARK_REF: ${{ github.event.inputs.ref || github.ref_name }}
         run: |
           echo "Fetching prebuilds artifact from latest successful prebuilds run..."
-          RUN_ID=$(gh run list --repo "$BENCHMARK_REPOSITORY" --workflow=prebuilds-qvac-lib-infer-whispercpp.yml --branch "$BENCHMARK_REF" --status=success --limit 1 --json databaseId --jq '.[0].databaseId')
+          RUN_ID=$(gh run list --repo "$BENCHMARK_REPOSITORY" --workflow=prebuilds-transcription-whispercpp.yml --branch "$BENCHMARK_REF" --status=success --limit 1 --json databaseId --jq '.[0].databaseId')
           if [ -z "$RUN_ID" ]; then
             echo "::warning::No successful prebuilds run found - will fall back to published npm package"
             exit 1

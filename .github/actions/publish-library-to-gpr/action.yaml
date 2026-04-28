@@ -192,7 +192,7 @@ runs:
           qvac-lib-inference-addon-mlc-ecog
           llm-llamacpp
           translation-nmtcpp
-          qvac-lib-infer-whispercpp
+          transcription-whispercpp
           onnx-vad
           embed-llamacpp
           tts-onnx

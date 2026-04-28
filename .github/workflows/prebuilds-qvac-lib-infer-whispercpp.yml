@@ -1,4 +1,4 @@
-# Build-only workflow. Publishing is handled by on-merge-qvac-lib-infer-whispercpp.yml
+# Build-only workflow. Publishing is handled by on-merge-transcription-whispercpp.yml
 name: "Prebuilds (Whispercpp)"
 
 on:
@@ -7,7 +7,7 @@ on:
       workdir:
         description: "Working directory"
         required: false
-        default: "packages/qvac-lib-infer-whispercpp"
+        default: "packages/transcription-whispercpp"
         type: string
 
   workflow_call:
@@ -23,7 +23,7 @@ on:
         description: "Working directory"
         type: string
         required: false
-        default: "packages/qvac-lib-infer-whispercpp"
+        default: "packages/transcription-whispercpp"
 
 permissions:
   contents: read
@@ -77,7 +77,7 @@ jobs:
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
     env:
-      WORKDIR: ${{ inputs.workdir || 'packages/qvac-lib-infer-whispercpp' }}
+      WORKDIR: ${{ inputs.workdir || 'packages/transcription-whispercpp' }}
 
     steps:
       - name: Echo workflow inputs

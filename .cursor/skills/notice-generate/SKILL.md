@@ -129,7 +129,7 @@ Reads existing NOTICE files across all packages (no scanning, no tokens needed) 
 | `llm-llamacpp` | `@qvac/llm-llamacpp` |
 | `translation-nmtcpp` | `@qvac/translation-nmtcpp` |
 | `tts-onnx` | `@qvac/tts-onnx` |
-| `qvac-lib-infer-whispercpp` | `@qvac/transcription-whispercpp` |
+| `transcription-whispercpp` | `@qvac/transcription-whispercpp` |
 | `ocr-onnx` | `@qvac/ocr-onnx` |
 | `infer-diffusion` | `@qvac/diffusion-cpp` |
 
