@@ -46,6 +46,7 @@ export interface QVACDownloadResult {
 export interface QVACDownloadOptions {
   timeout?: number
   peerTimeout?: number
+  maxRetries?: number
   outputFile?: string
   onProgress?: (progress: { downloaded: number, total: number, cachedBlocks: number, totalBlocks: number }) => void
   signal?: AbortSignal
@@ -53,6 +54,7 @@ export interface QVACDownloadOptions {
 
 export interface QVACBlobDownloadOptions {
   timeout?: number
+  maxRetries?: number
   outputFile?: string
   onProgress?: (progress: { downloaded: number, total: number, cachedBlocks: number, totalBlocks: number }) => void
   signal?: AbortSignal

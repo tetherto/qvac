@@ -32,6 +32,46 @@ on:
         options:
           - short
           - long
+      run_integration_tests:
+        description: "Run the regular integration suite"
+        required: false
+        type: boolean
+        default: true
+      run_supertonic_desktop_benchmarks:
+        description: "Run the Supertonic desktop benchmark/reporting matrix"
+        required: false
+        type: boolean
+        default: false
+      supertonic_max_samples:
+        description: "Maximum samples per language for Supertonic benchmarks (0 = full dataset)"
+        required: false
+        type: number
+        default: 25
+      supertonic_round_trip_test:
+        description: "Enable round-trip quality test for Supertonic benchmarks"
+        required: false
+        type: boolean
+        default: true
+      supertonic_whisper_model:
+        description: "Whisper model for Supertonic benchmark quality checks"
+        required: false
+        type: choice
+        default: tiny
+        options:
+          - tiny
+          - base
+          - small
+          - medium
+      supertonic_num_runs:
+        description: "Number of Supertonic benchmark runs per runner"
+        required: false
+        type: number
+        default: 1
+      supertonic_run_python:
+        description: "Run the Python baseline on CPU Supertonic benchmark jobs"
+        required: false
+        type: boolean
+        default: true
   workflow_call:
     inputs:
       ref:
@@ -51,9 +91,45 @@ on:
         required: false
         default: "short"
         type: string
+      run_integration_tests:
+        description: "Run the regular integration suite"
+        required: false
+        default: true
+        type: boolean
+      run_supertonic_desktop_benchmarks:
+        description: "Run the Supertonic desktop benchmark/reporting matrix"
+        required: false
+        default: false
+        type: boolean
+      supertonic_max_samples:
+        description: "Maximum samples per language for Supertonic benchmarks (0 = full dataset)"
+        required: false
+        default: 25
+        type: number
+      supertonic_round_trip_test:
+        description: "Enable round-trip quality test for Supertonic benchmarks"
+        required: false
+        default: true
+        type: boolean
+      supertonic_whisper_model:
+        description: "Whisper model for Supertonic benchmark quality checks"
+        required: false
+        default: "tiny"
+        type: string
+      supertonic_num_runs:
+        description: "Number of Supertonic benchmark runs per runner"
+        required: false
+        default: 1
+        type: number
+      supertonic_run_python:
+        description: "Run the Python baseline on CPU Supertonic benchmark jobs"
+        required: false
+        default: true
+        type: boolean
 
 jobs:
   run-integration-tests:
+    if: ${{ inputs.run_integration_tests != false }}
     continue-on-error: true
     runs-on: ${{ matrix.os }}
     environment: release
@@ -67,15 +143,15 @@ jobs:
       matrix:
         # Only darwin-arm64 (macos-14-xlarge) runs all Chatterbox quantization variants; others use q4 only.
         include:
-          - { os: ubuntu-22.04,     variant: q4,    platform: linux,  arch: x64,   os_version: u22 }
-          - { os: ubuntu-24.04,     variant: q4,    platform: linux,  arch: x64,   os_version: u24 }
-          - { os: ubuntu-24.04-arm, variant: q4,    platform: linux,  arch: arm64, os_version: u24 }
-          - { os: macos-14-xlarge,  variant: fp32,  platform: darwin, arch: arm64, os_version: m14 }
-          - { os: macos-14-xlarge,  variant: fp16,  platform: darwin, arch: arm64, os_version: m14 }
-          - { os: macos-14-xlarge,  variant: q4,    platform: darwin, arch: arm64, os_version: m14 }
-          - { os: macos-14-xlarge,  variant: q4f16, platform: darwin, arch: arm64, os_version: m14 }
-          - { os: macos-15-large,   variant: q4,    platform: darwin, arch: x64,   os_version: m15 }
-          - { os: windows-2022,     variant: q4,    platform: win32,  arch: x64,   os_version: w22 }
+          - {os: ubuntu-22.04, variant: q4, platform: linux, arch: x64, os_version: u22}
+          - {os: ubuntu-24.04, variant: q4, platform: linux, arch: x64, os_version: u24}
+          - {os: ubuntu-24.04-arm, variant: q4, platform: linux, arch: arm64, os_version: u24}
+          - {os: macos-14-xlarge, variant: fp32, platform: darwin, arch: arm64, os_version: m14}
+          - {os: macos-14-xlarge, variant: fp16, platform: darwin, arch: arm64, os_version: m14}
+          - {os: macos-14-xlarge, variant: q4, platform: darwin, arch: arm64, os_version: m14}
+          - {os: macos-14-xlarge, variant: q4f16, platform: darwin, arch: arm64, os_version: m14}
+          - {os: macos-15-large, variant: q4, platform: darwin, arch: x64, os_version: m15}
+          - {os: windows-2022, variant: q4, platform: win32, arch: x64, os_version: w22,}
 
     steps:
       - name: Setup Node.js
@@ -145,3 +221,491 @@ jobs:
           path: ${{ inputs.workdir }}/test/results/performance-report.json
           retention-days: 90
           if-no-files-found: ignore
+
+  run-supertonic-desktop-benchmarks:
+    if: ${{ inputs.run_supertonic_desktop_benchmarks == true }}
+    continue-on-error: true
+    runs-on: ${{ matrix.os }}
+    environment: release
+    timeout-minutes: 180
+    name: supertonic-${{ matrix.runner_label }}-${{ matrix.backend }}
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
+            runner_label: ubuntu-22.04
+            device_label: ubuntu-22.04-x64
+            backend: cpu
+            use_gpu: false
+            run_python: false
+            round_trip_test: true
+          - os: ai-run-linux-gpu
+            platform: linux
+            arch: x64
+            runner_label: ai-run-linux-gpu
+            device_label: ai-run-linux-gpu
+            backend: cpu
+            use_gpu: false
+            run_python: false
+            round_trip_test: true
+          - os: ai-run-linux-gpu
+            platform: linux
+            arch: x64
+            runner_label: ai-run-linux-gpu
+            device_label: ai-run-linux-gpu
+            backend: cuda
+            use_gpu: true
+            run_python: false
+            round_trip_test: true
+          - os: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
+            runner_label: ubuntu-24.04-arm
+            device_label: ubuntu-24.04-arm64
+            backend: cpu
+            use_gpu: false
+            run_python: false
+            round_trip_test: true
+          - os: macos-14-xlarge
+            platform: darwin
+            arch: arm64
+            runner_label: macos-14-xlarge
+            device_label: macos-14-xlarge
+            backend: cpu
+            use_gpu: false
+            run_python: false
+            round_trip_test: true
+          - os: macos-14-xlarge
+            platform: darwin
+            arch: arm64
+            runner_label: macos-14-xlarge
+            device_label: macos-14-xlarge
+            backend: coreml
+            use_gpu: true
+            run_python: false
+            round_trip_test: true
+          - os: windows-2022
+            platform: win32
+            arch: x64
+            runner_label: windows-2022
+            device_label: windows-2022-x64
+            backend: cpu
+            use_gpu: false
+            run_python: false
+            round_trip_test: false
+          - os: windows-2022
+            platform: win32
+            arch: x64
+            runner_label: windows-2022
+            device_label: windows-2022-x64
+            backend: directml
+            use_gpu: true
+            run_python: false
+            round_trip_test: false
+
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        with:
+          python-version: '3.14'
+
+      - name: Windows - enable git long paths
+        if: ${{ matrix.platform == 'win32' }}
+        shell: bash
+        run: git config --system core.longpaths true
+
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Configure scoped registry for @tetherto and @qvac packages (Unix)
+        if: ${{ matrix.platform != 'win32' }}
+        working-directory: ${{ inputs.workdir }}
+        env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+        shell: bash
+        run: |
+          echo "Configuring scoped registry for @tetherto and @qvac packages..."
+          set -eu
+          cat > .npmrc <<NPMRC
+          always-auth=true
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
+          NPMRC
+
+          if [ -n "${GIT_PAT:-}" ]; then
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
+          else
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
+          fi
+
+          cp .npmrc benchmarks/server/.npmrc
+
+      - name: Configure scoped registry for @tetherto and @qvac packages (Windows)
+        if: ${{ matrix.platform == 'win32' }}
+        working-directory: ${{ inputs.workdir }}
+        env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+        shell: powershell
+        run: |
+          $npmrc = @"
+          always-auth=true
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=$env:NPM_TOKEN
+          //npm.pkg.github.com/:_authToken=$env:GPR_TOKEN
+          "@
+          $npmrc | Out-File -FilePath .npmrc -Encoding utf8
+          if ($env:GIT_PAT) {
+            git config --global url."https://$($env:GIT_PAT):@github.com/".insteadOf "https://github.com/"
+          } else {
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
+          }
+          Copy-Item -Path .npmrc -Destination benchmarks/server/.npmrc -Force
+
+      - name: Install NPM dependencies
+        working-directory: ${{ inputs.workdir }}
+        run: |
+          npm install
+          npm install -g bare bare-make
+
+      - name: Download prebuilds from artifact
+        if: ${{ !inputs.prebuild_package }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: ${{ inputs.workdir }}/prebuilds
+          merge-multiple: true
+
+      - name: Download prebuilds from package (Unix)
+        if: ${{ inputs.prebuild_package && matrix.platform != 'win32' }}
+        working-directory: ${{ inputs.workdir }}
+        shell: bash
+        run: |
+          mkdir -p prebuilds
+          npm pack ${{ inputs.prebuild_package }} --pack-destination /tmp
+          tar -xzf /tmp/*.tgz -C /tmp
+          cp -r /tmp/package/prebuilds/* prebuilds/
+
+      - name: Download prebuilds from package (Windows)
+        if: ${{ inputs.prebuild_package && matrix.platform == 'win32' }}
+        working-directory: ${{ inputs.workdir }}
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path prebuilds | Out-Null
+          npm pack ${{ inputs.prebuild_package }} --pack-destination $env:TEMP
+          $tgz = Get-ChildItem "$env:TEMP\*.tgz" | Select-Object -First 1
+          tar -xzf $tgz.FullName -C $env:TEMP
+          Copy-Item -Path "$env:TEMP\package\prebuilds\*" -Destination prebuilds -Recurse -Force
+
+      - name: Linux - install runtime dependencies
+        if: ${{ matrix.platform == 'linux' }}
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mesa-vulkan-drivers
+
+      - name: macOS - install benchmark client dependencies
+        if: ${{ matrix.platform == 'darwin' }}
+        shell: bash
+        run: |
+          brew install ffmpeg pkg-config
+
+      - name: Install benchmark server dependencies
+        working-directory: ${{ inputs.workdir }}/benchmarks/server
+        run: npm install
+
+      - name: Download Supertonic models
+        working-directory: ${{ inputs.workdir }}/benchmarks/server
+        run: npm run setup:supertonic
+
+      - name: Install Python server dependencies
+        if: ${{ inputs.supertonic_run_python && matrix.run_python }}
+        working-directory: ${{ inputs.workdir }}/benchmarks/python-server
+        run: |
+          pip install --upgrade pip setuptools wheel
+          pip install -r requirements-supertonic.txt
+
+      - name: Install benchmark client dependencies (Unix)
+        if: ${{ matrix.platform != 'win32' }}
+        working-directory: ${{ inputs.workdir }}/benchmarks/client
+        shell: bash
+        run: |
+          pip install --upgrade pip setuptools wheel
+          pip install -r requirements.txt
+          if [ "${{ matrix.round_trip_test && 'true' || 'false' }}" = "true" ]; then
+            pip install -r requirements-roundtrip.txt
+          fi
+
+      - name: Install benchmark client dependencies (Windows)
+        if: ${{ matrix.platform == 'win32' }}
+        working-directory: ${{ inputs.workdir }}/benchmarks/client
+        shell: powershell
+        run: |
+          pip install --upgrade pip setuptools wheel
+          pip install -r requirements.txt
+          if ("${{ matrix.round_trip_test && 'true' || 'false' }}" -eq "true") {
+            pip install -r requirements-roundtrip.txt
+          }
+
+      - name: Start Python Native server (Unix)
+        if: ${{ matrix.platform != 'win32' && inputs.supertonic_run_python && matrix.run_python }}
+        working-directory: ${{ inputs.workdir }}/benchmarks/python-server
+        shell: bash
+        run: |
+          nohup python main.py > server.log 2>&1 &
+          echo $! > server.pid
+          sleep 10
+          if ! kill -0 "$(cat server.pid)" 2>/dev/null; then
+            cat server.log
+            exit 1
+          fi
+
+      - name: Start Python Native server (Windows)
+        if: ${{ matrix.platform == 'win32' && inputs.supertonic_run_python && matrix.run_python }}
+        working-directory: ${{ inputs.workdir }}/benchmarks/python-server
+        shell: powershell
+        run: |
+          $logPath = Join-Path $PWD "server.log"
+          $errorPath = Join-Path $PWD "server-error.log"
+          $proc = Start-Process -FilePath python -ArgumentList "main.py" -WorkingDirectory $PWD -RedirectStandardOutput $logPath -RedirectStandardError $errorPath -PassThru
+          $proc.Id | Out-File -FilePath server.pid -Encoding ascii
+          $healthy = $false
+          for ($i = 0; $i -lt 10; $i++) {
+            Start-Sleep -Seconds 2
+            if ($proc.HasExited) {
+              break
+            }
+            try {
+              Invoke-WebRequest -Uri "http://localhost:8081/" -UseBasicParsing | Out-Null
+              $healthy = $true
+              break
+            } catch {
+            }
+          }
+          if (-not $healthy) {
+            if (Test-Path $logPath) { Get-Content $logPath }
+            if (Test-Path $errorPath) { Get-Content $errorPath }
+            exit 1
+          }
+
+      - name: Start TTS Addon server (Unix)
+        if: ${{ matrix.platform != 'win32' }}
+        working-directory: ${{ inputs.workdir }}/benchmarks/server
+        shell: bash
+        run: |
+          nohup npm start > server.log 2>&1 &
+          echo $! > server.pid
+          sleep 5
+          if ! kill -0 "$(cat server.pid)" 2>/dev/null; then
+            cat server.log
+            exit 1
+          fi
+
+      - name: Clean old benchmark results
+        working-directory: ${{ inputs.workdir }}
+        shell: bash
+        run: |
+          rm -rf benchmarks/results/*.json
+          rm -rf benchmarks/results/*.md
+
+      - name: Run Supertonic benchmark (Unix)
+        if: ${{ matrix.platform != 'win32' }}
+        working-directory: ${{ inputs.workdir }}/benchmarks/client
+        shell: bash
+        env:
+          PYTHONUNBUFFERED: "1"
+          HF_DATASETS_CACHE: /tmp/hf_cache
+          QVAC_SUPERTONIC_BENCHMARK_ADDON_URL: http://localhost:8080/synthesize-supertonic
+          QVAC_SUPERTONIC_BENCHMARK_PYTHON_URL: http://localhost:8081/synthesize-supertonic
+          QVAC_SUPERTONIC_BENCHMARK_LABEL: ${{ matrix.runner_label }}-${{ matrix.backend }}
+          QVAC_SUPERTONIC_BENCHMARK_RUNNER: ${{ matrix.runner_label }}
+          QVAC_SUPERTONIC_BENCHMARK_DEVICE: ${{ matrix.device_label }}
+          QVAC_SUPERTONIC_BENCHMARK_BACKEND: ${{ matrix.backend }}
+          QVAC_SUPERTONIC_BENCHMARK_MAX_SAMPLES: ${{ inputs.supertonic_max_samples }}
+          QVAC_SUPERTONIC_BENCHMARK_ROUND_TRIP_TEST: ${{ matrix.round_trip_test && inputs.supertonic_round_trip_test && 'true' || 'false' }}
+          QVAC_SUPERTONIC_BENCHMARK_WHISPER_MODEL: ${{ inputs.supertonic_whisper_model }}
+          QVAC_SUPERTONIC_BENCHMARK_NUM_RUNS: ${{ inputs.supertonic_num_runs }}
+          QVAC_SUPERTONIC_BENCHMARK_USE_GPU: ${{ matrix.use_gpu && 'true' || 'false' }}
+          QVAC_SUPERTONIC_BENCHMARK_RUN_PYTHON: ${{ inputs.supertonic_run_python && matrix.run_python && 'true' || 'false' }}
+        run: |
+          python -u -m src.tts.main --config config/config-supertonic.yaml
+          rm -rf /tmp/hf_cache || true
+
+      - name: Run Supertonic benchmark (Windows)
+        if: ${{ matrix.platform == 'win32' }}
+        working-directory: ${{ inputs.workdir }}
+        shell: powershell
+        env:
+          PYTHONUNBUFFERED: "1"
+          HF_DATASETS_CACHE: /tmp/hf_cache
+          QVAC_SUPERTONIC_BENCHMARK_ADDON_URL: http://localhost:8080/synthesize-supertonic
+          QVAC_SUPERTONIC_BENCHMARK_PYTHON_URL: http://localhost:8081/synthesize-supertonic
+          QVAC_SUPERTONIC_BENCHMARK_LABEL: ${{ matrix.runner_label }}-${{ matrix.backend }}
+          QVAC_SUPERTONIC_BENCHMARK_RUNNER: ${{ matrix.runner_label }}
+          QVAC_SUPERTONIC_BENCHMARK_DEVICE: ${{ matrix.device_label }}
+          QVAC_SUPERTONIC_BENCHMARK_BACKEND: ${{ matrix.backend }}
+          QVAC_SUPERTONIC_BENCHMARK_MAX_SAMPLES: ${{ inputs.supertonic_max_samples }}
+          QVAC_SUPERTONIC_BENCHMARK_ROUND_TRIP_TEST: ${{ matrix.round_trip_test && inputs.supertonic_round_trip_test && 'true' || 'false' }}
+          QVAC_SUPERTONIC_BENCHMARK_WHISPER_MODEL: ${{ inputs.supertonic_whisper_model }}
+          QVAC_SUPERTONIC_BENCHMARK_NUM_RUNS: ${{ inputs.supertonic_num_runs }}
+          QVAC_SUPERTONIC_BENCHMARK_USE_GPU: ${{ matrix.use_gpu && 'true' || 'false' }}
+          QVAC_SUPERTONIC_BENCHMARK_RUN_PYTHON: ${{ inputs.supertonic_run_python && matrix.run_python && 'true' || 'false' }}
+        run: |
+          $serverDir = Join-Path $PWD "benchmarks/server"
+          $clientDir = Join-Path $PWD "benchmarks/client"
+          $logPath = Join-Path $serverDir "server.log"
+          $errorPath = Join-Path $serverDir "server-error.log"
+          $proc = Start-Process -FilePath bare.cmd -ArgumentList "index.js" -WorkingDirectory $serverDir -RedirectStandardOutput $logPath -RedirectStandardError $errorPath -PassThru
+          try {
+            $healthy = $false
+            for ($i = 0; $i -lt 15; $i++) {
+              Start-Sleep -Seconds 2
+              if ($proc.HasExited) {
+                break
+              }
+              try {
+                Invoke-WebRequest -Uri "http://localhost:8080/" -UseBasicParsing | Out-Null
+                $healthy = $true
+                break
+              } catch {
+              }
+            }
+
+            if (-not $healthy) {
+              if (Test-Path $logPath) { Get-Content $logPath }
+              if (Test-Path $errorPath) { Get-Content $errorPath }
+              exit 1
+            }
+
+            Push-Location $clientDir
+            python -u -m src.tts.main --config config/config-supertonic.yaml
+            Pop-Location
+          } finally {
+            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+            Remove-Item "$serverDir/server.pid" -ErrorAction SilentlyContinue
+          }
+
+      - name: Stop servers (Unix)
+        if: ${{ always() && matrix.platform != 'win32' }}
+        working-directory: ${{ inputs.workdir }}
+        shell: bash
+        run: |
+          if [ -f benchmarks/python-server/server.pid ]; then
+            kill "$(cat benchmarks/python-server/server.pid)" 2>/dev/null || true
+            rm -f benchmarks/python-server/server.pid
+          fi
+          if [ -f benchmarks/server/server.pid ]; then
+            kill "$(cat benchmarks/server/server.pid)" 2>/dev/null || true
+            rm -f benchmarks/server/server.pid
+          fi
+
+      - name: Stop servers (Windows)
+        if: ${{ always() && matrix.platform == 'win32' }}
+        working-directory: ${{ inputs.workdir }}
+        shell: powershell
+        run: |
+          if (Test-Path benchmarks/python-server/server.pid) {
+            Stop-Process -Id (Get-Content benchmarks/python-server/server.pid) -Force -ErrorAction SilentlyContinue
+            Remove-Item benchmarks/python-server/server.pid -ErrorAction SilentlyContinue
+          }
+          if (Test-Path benchmarks/server/server.pid) {
+            Stop-Process -Id (Get-Content benchmarks/server/server.pid) -Force -ErrorAction SilentlyContinue
+            Remove-Item benchmarks/server/server.pid -ErrorAction SilentlyContinue
+          }
+
+      - name: Display server logs
+        if: always()
+        working-directory: ${{ inputs.workdir }}
+        shell: bash
+        run: |
+          if [ -f benchmarks/server/server.log ]; then
+            echo "=== Addon Server ==="
+            cat benchmarks/server/server.log
+          fi
+          if [ -f benchmarks/server/server-error.log ]; then
+            echo "=== Addon Server Errors ==="
+            cat benchmarks/server/server-error.log
+          fi
+          if [ -f benchmarks/python-server/server.log ]; then
+            echo "=== Python Server ==="
+            cat benchmarks/python-server/server.log
+          fi
+          if [ -f benchmarks/python-server/server-error.log ]; then
+            echo "=== Python Server Errors ==="
+            cat benchmarks/python-server/server-error.log
+          fi
+
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: supertonic-rtf-results-${{ matrix.runner_label }}-${{ matrix.backend }}
+          path: ${{ inputs.workdir }}/benchmarks/results/
+          retention-days: 30
+          if-no-files-found: ignore
+
+  summarize-supertonic-desktop-benchmarks:
+    if: ${{ always() && inputs.run_supertonic_desktop_benchmarks == true }}
+    needs: run-supertonic-desktop-benchmarks
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Download desktop benchmark artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: supertonic-rtf-results-*
+          path: benchmark-artifacts/desktop
+          merge-multiple: true
+
+      - name: Generate consolidated benchmark report
+        run: |
+          node scripts/perf-report/aggregate-supertonic-rtf.js \
+            --dir benchmark-artifacts/desktop \
+            --manual-dir packages/qvac-lib-infer-onnx-tts/benchmarks/manual-results \
+            --output benchmark-artifacts/supertonic-performance-findings.md \
+            --output-json benchmark-artifacts/supertonic-performance-findings.json \
+            --output-html benchmark-artifacts/supertonic-performance-findings.html
+
+      - name: Add summary
+        run: cat benchmark-artifacts/supertonic-performance-findings.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload consolidated benchmark report
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: supertonic-performance-findings
+          path: |
+            benchmark-artifacts/supertonic-performance-findings.md
+            benchmark-artifacts/supertonic-performance-findings.json
+            benchmark-artifacts/supertonic-performance-findings.html
+          retention-days: 30

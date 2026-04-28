@@ -30,9 +30,27 @@ export const modelInfoPersistsAfterUnload: TestDefinition = {
   metadata: { category: "model-info", dependency: "llm", estimatedDurationMs: 5000 },
 };
 
+export const modelInfoLoadedGet: TestDefinition = {
+  testId: "model-info-loaded-get",
+  params: {},
+  expectation: { validation: "type", expectedType: "string" },
+  suites: ["smoke"],
+  metadata: { category: "model-info", dependency: "llm", estimatedDurationMs: 5000 },
+};
+
+export const modelInfoLoadedNotFound: TestDefinition = {
+  testId: "model-info-loaded-not-found",
+  params: { modelId: "nonexistent-model-id-deadbeef" },
+  expectation: { validation: "throws-error", errorContains: "not found" },
+  suites: ["smoke"],
+  metadata: { category: "model-info", dependency: "none", estimatedDurationMs: 2000 },
+};
+
 export const modelInfoTests = [
   modelInfoGet,
   modelInfoVerifyFiles,
   modelInfoMultipleModels,
   modelInfoPersistsAfterUnload,
+  modelInfoLoadedGet,
+  modelInfoLoadedNotFound,
 ];

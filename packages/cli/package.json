@@ -1,6 +1,6 @@
 {
   "name": "@qvac/cli",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Command-line interface for the QVAC ecosystem",
   "author": "Tether",
   "license": "Apache-2.0",
@@ -49,7 +49,7 @@
     "tsx": "^4.21.0"
   },
   "devDependencies": {
-    "@qvac/sdk": "^0.8.0",
+    "@qvac/sdk": "^0.9.0",
     "@types/node": "^25.3.3",
     "bats": "^1.13.0",
     "typescript": "^5.9.3"

@@ -188,7 +188,7 @@ runs:
           qvac-examples
           qvac-ext-lib-mlc
           qvac-ext-lib-tokenizers-cpp
-          qvac-lib-decoder-audio
+          decoder-audio
           qvac-lib-inference-addon-mlc-ecog
           qvac-lib-infer-llamacpp-llm
           qvac-lib-infer-nmtcpp
