@@ -22,7 +22,7 @@ on:
         description: "Heartbeat inactivity timeout in seconds (mobile inference blocks JS event loop)."
         required: false
         type: number
-        default: 600
+        default: 300
       filter:
         description: "Filter tests by category or testId prefix (comma-separated)"
         required: false

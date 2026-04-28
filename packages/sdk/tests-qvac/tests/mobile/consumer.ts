@@ -371,6 +371,7 @@ export const executor = createExecutor({
         "ocr-multiple-fonts",
       ], "OCR disabled on iOS (ONNX/CoreML OOM)"),
       new SkipExecutor(/^translation-afriquegemma-/, "AfriqueGemma 4B (~2.7 GB) exceeds iOS memory budget"),
+      new SkipExecutor(/^diffusion-/, "SD v2.1 1B Q8_0 cold-load on iOS Device Farm is too variable (5–15min)"),
     ] : []),
 
     // Real executors

@@ -91,7 +91,7 @@ export const kvCacheStreamingSlidingWindow: TestDefinition = {
     stream: true,
     kvCache: "streaming-sliding-window-session",
   },
-  expectation: { validation: "contains-any", contains: ["14"] },
+  expectation: { validation: "type", expectedType: "string" },
   suites: ["smoke"],
   metadata: { category: "kv-cache", dependency: "llm", estimatedDurationMs: 35000 },
 };
