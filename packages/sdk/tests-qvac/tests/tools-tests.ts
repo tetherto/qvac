@@ -107,7 +107,7 @@ export const toolsSimpleFunctionDynamic = createToolsTest(
       },
     },
   ],
-  { toolsMode: "dynamic", suites: ["smoke"] },
+  { toolsMode: "dynamic" },
 );
 
 export const toolsMultipleFunctions = createToolsTest(
