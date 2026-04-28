@@ -1,15 +1,8 @@
 cmake_minimum_required(VERSION 3.25)
 
-option(ANDROID_STL "Android STL linkage" c++_shared)
 option(BUILD_TESTING "Build tests" OFF)
-option(ENABLE_COVERAGE "Enable coverage instrumentation for unit tests" OFF)
 if(BUILD_TESTING)
   list(APPEND VCPKG_MANIFEST_FEATURES "tests")
-endif()
-
-option(VK_PROFILING "Force vk performance logging in qvac-fabric" OFF)
-if(VK_PROFILING)
-  list(APPEND VCPKG_MANIFEST_FEATURES "vk-profiling")
 endif()
 
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
