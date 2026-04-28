@@ -161,8 +161,7 @@ void StreamingProcessor::emitConversationEvents(
     wasSpeaking_ = false;
   }
 
-  if (!hasSeenSpeech_ || config_.endOfTurnSilenceMs <= 0 ||
-      endOfTurnEmitted_) {
+  if (!hasSeenSpeech_ || config_.endOfTurnSilenceMs <= 0 || endOfTurnEmitted_) {
     return;
   }
 
@@ -170,9 +169,9 @@ void StreamingProcessor::emitConversationEvents(
     silenceStartSample_ = lastSpeechEndSample_;
   }
 
-  const std::int64_t currentSample = processBufferStartSample_ +
-                                     static_cast<std::int64_t>(
-                                         processBuffer_.size());
+  const std::int64_t currentSample =
+      processBufferStartSample_ +
+      static_cast<std::int64_t>(processBuffer_.size());
   const int silenceDurationMs = static_cast<int>(
       (currentSample - silenceStartSample_) * 1000 /
       static_cast<std::int64_t>(config_.sampleRate));
@@ -257,10 +256,12 @@ void StreamingProcessor::processLoop() {
               CS_TO_SEC;
           float marginS = static_cast<float>(config_.speechPadMs) / 1000.0F;
           speaking = lastSegmentT1S + marginS >= totalDurationS;
-          lastSpeechEndSample_ = processBufferStartSample_ + std::min(
-              static_cast<int>(
-                  lastSegmentT1S * static_cast<float>(config_.sampleRate)),
-              bufferSize);
+          lastSpeechEndSample_ =
+              processBufferStartSample_ +
+              std::min(
+                  static_cast<int>(
+                      lastSegmentT1S * static_cast<float>(config_.sampleRate)),
+                  bufferSize);
           hasSeenSpeech_ = true;
         }
         // whisper.cpp's public VAD API gives us the speech decision here; it
