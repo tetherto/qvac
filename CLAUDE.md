@@ -126,7 +126,7 @@ qvac/
 │   ├── qvac-lib-dl-*/         # Data loaders (filesystem, hyperdrive)
 │   ├── qvac-lib-logging/      # Logging
 │   ├── qvac-lib-error-base/   # Error handling base
-│   ├── qvac-lib-registry-server/ # Distributed model registry
+│   ├── registry-server/ # Distributed model registry
 │   └── docs/                  # Documentation
 ├── scripts/                   # Build and validation scripts
 ├── .github/workflows/         # CI/CD (85+ workflow files)
