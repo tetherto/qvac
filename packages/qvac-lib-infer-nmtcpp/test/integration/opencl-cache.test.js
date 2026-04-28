@@ -1,4 +1,11 @@
 'use strict'
+/* global Bare */
+
+if (typeof Bare !== 'undefined' && Bare.on) {
+  Bare.on('unhandledRejection', (err) => {
+    console.error('[opencl-cache] Unhandled rejection:', err && (err.stack || err.message || err))
+  })
+}
 
 /**
  * OpenCL kernel cache behaviour test (Android only).

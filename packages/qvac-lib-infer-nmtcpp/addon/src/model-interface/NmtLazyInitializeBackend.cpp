@@ -268,6 +268,11 @@ bool NmtLazyInitializeBackend::initializeLocked(
             Priority::WARNING,
             "openclCacheDir weakly_canonical() failed (" + ec.message() +
                 "): " + sanitizePrintableAscii(openclCacheDir));
+      } else if (resolved.string().rfind("/data/", 0) != 0) {
+        QLOG(
+            Priority::WARNING,
+            "Rejecting openclCacheDir — resolved path outside /data/ prefix: " +
+                sanitizePrintableAscii(resolved.string()));
       } else {
         auto oclCachePath = (resolved / "opencl-cache").string();
         setenv("GGML_OPENCL_CACHE_DIR", oclCachePath.c_str(), /*overwrite=*/1);

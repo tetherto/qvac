@@ -4,7 +4,6 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const os = require('bare-os')
 const process = require('bare-process')
-const TranslationNmtcpp = require('@qvac/translation-nmtcpp')
 
 // ============================================================================
 // Platform Detection
@@ -799,6 +798,10 @@ const _logger = createLogger()
 async function _probeGpuDevices () {
   const devices = []
   const modelPath = await ensureIndicTransModel()
+  // Lazy require: utils.js is imported by test files that may not need the
+  // native addon (e.g. fixture-only helpers).  Loading it at module scope
+  // would force every consumer to load the addon unconditionally.
+  const TranslationNmtcpp = require('@qvac/translation-nmtcpp') // eslint-disable-line
 
   for (let idx = 0; idx < MAX_GPU_DEVICE_PROBES; idx++) {
     let model

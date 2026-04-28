@@ -196,6 +196,7 @@ ggml_backend_dev_t nmt_select_gpu_device(
   // Mode 2: gated default.
 #ifdef QVAC_NMTCPP_USE_OPENCL
   // Mode 2a: prefer OpenCL.
+  bool oclDeviceFoundButBuftNull = false;
   {
     int cnt = 0;
     for (size_t i = 0; i < devCount; ++i) {
@@ -221,10 +222,11 @@ ggml_backend_dev_t nmt_select_gpu_device(
           QLOG(
               qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, oss.str());
         } else {
+          oclDeviceFoundButBuftNull = true;
           std::ostringstream oss;
           oss << "[" << log_prefix
               << "] OpenCL device matched but buffer type is null — "
-                 "skipping";
+                 "skipping to Mode 2b fallback";
           QLOG(
               qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
               oss.str());
@@ -243,6 +245,16 @@ ggml_backend_dev_t nmt_select_gpu_device(
   // devices), reset the ordinal to 0 — the caller's gpu_device referred to
   // the OpenCL device namespace, not the full device list.
   if (dev == nullptr) {
+#ifdef QVAC_NMTCPP_USE_OPENCL
+    if (oclDeviceFoundButBuftNull) {
+      std::ostringstream oss;
+      oss << "[" << log_prefix
+          << "] Mode 2a OpenCL device found but buffer type was null — "
+             "falling through to Mode 2b with ordinal 0";
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::WARNING, oss.str());
+    }
+#endif
     const int fallback_ordinal =
 #ifdef QVAC_NMTCPP_USE_OPENCL
         0;

@@ -61,10 +61,11 @@ export interface TranslationNmtcppConfig {
 
   /**
    * Ordinal within the matching compute devices. Defaults to 0.
-   * Example: { gpuBackend: "vulkan", gpuDevice: 1 } → second Vulkan adapter.
+   * Example: { gpu_backend: "vulkan", gpu_device: 1 } → second Vulkan adapter.
    *
-   * `gpuDevice` is the camelCase alias; `gpu_device` mirrors the C struct.
-   * If both are set, `gpu_device` wins.
+   * `gpu_device` mirrors the C struct and is the primary key.
+   * `gpuDevice` is the camelCase alias.
+   * If both are set, `gpu_device` takes precedence.
    */
   gpu_device?: number
   gpuDevice?: number

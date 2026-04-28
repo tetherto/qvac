@@ -141,11 +141,20 @@ static buft_list_t make_buft_list(const nmt_context_params& params) {
   ggml_backend_dev_t selected_dev = nmt_select_gpu_device(
       params.use_gpu, params.gpu_backend, params.gpu_device, "make_buft_list");
   if (selected_dev != nullptr) {
-    buft_list.emplace_back(
-        selected_dev, ggml_backend_dev_buffer_type(selected_dev));
-    QLOG(
-        qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-        "  -> Added GPU buft to buft_list");
+    ggml_backend_buffer_type_t buft =
+        ggml_backend_dev_buffer_type(selected_dev);
+    if (buft != nullptr) {
+      buft_list.emplace_back(selected_dev, buft);
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+          "  -> Added GPU buft to buft_list");
+    } else {
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+          "[make_buft_list] nmt_select_gpu_device returned a device but "
+          "ggml_backend_dev_buffer_type returned null on re-query — "
+          "falling back to CPU");
+    }
   }
 
   std::ostringstream oss_selected;
