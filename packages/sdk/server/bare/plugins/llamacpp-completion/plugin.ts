@@ -12,6 +12,7 @@ import {
   ModelType,
   llmConfigBaseSchema,
   ADDON_LLM,
+  ToolsModeType,
   type CompletionEvent,
   type CreateModelParams,
   type PluginCapabilities,
@@ -56,6 +57,12 @@ function transformLlmConfig(llmConfig: LlmConfig) {
   if ("opencl_cache_dir" in transformed) {
     transformed["openclCacheDir"] = transformed["opencl_cache_dir"];
     delete transformed["opencl_cache_dir"];
+  }
+
+  if ("tools_mode" in transformed) {
+    transformed["tools_compact"] =
+      transformed["tools_mode"] === ToolsModeType.dynamic ? "true" : "false";
+    delete transformed["tools_mode"];
   }
 
   return transformed;
