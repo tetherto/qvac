@@ -15,7 +15,7 @@ export const multiGpuConfigSmoke: TestDefinition = {
     estimatedDurationMs: 30000,
   },
   skip: {
-    reason: "Tensor splitting across multiple GPUs cannot be exercised on mobile; devices expose a single GPU to the GGML backend",
+    reason: "MultiGpuExecutor is not registered in the mobile consumer; multi-GPU tensor splitting is a desktop configuration",
     platforms: ["mobile-ios", "mobile-android"],
   },
 };
