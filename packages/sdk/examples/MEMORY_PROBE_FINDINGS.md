@@ -213,21 +213,94 @@ sequence ends. Probe predictions match: chatterbox alone leaks +776 MB across 4
 cycles on desktop. iOS jetsam pressure forces this to manifest as crashes
 (observed: `diffusion-basic-txt2img` OOM-killed at 3.25 GB).
 
+## Local validation experiments (against the desktop probe)
+
+Two candidate fixes were applied locally and rebuilt to validate impact. Each
+re-ran the same 4-cycle probe.
+
+### Experiment A — `std::vector<float>().swap(textEmbWeight_)` (chatterbox)
+
+Idiomatic C++ "release vector capacity" replacement for `clear()`.
+
+| | Original | With swap |
+| --- | --- | --- |
+| Total drift | +776 MB | +1001-1136 MB across two runs |
+| Cycle 2 spike | +876 MB | +870 / +1089 MB |
+
+**Result: regression on macOS arm64 (~+250 MB worse, consistent across two runs).**
+Likely cause: `clear()` keeps the vector's heap region for next-cycle reuse;
+`swap()` returns it to the system allocator which on macOS doesn't return
+pages to the OS but may force the next allocation into a fresh region. Net
+worse RSS.
+
+This fix may still be correct on Linux (jemalloc / glibc allocators behave
+differently). Worth re-testing on Linux before applying. Currently not
+recommended on Apple targets.
+
+### Experiment B — `enableCpuMemArena = false` and `enableMemoryPattern = false`
+
+ORT session-options change: bypass the CPU memory arena and graph memory
+pattern optimization, both of which pre-allocate pools that ORT does not
+return to the OS on Session destruction.
+
+| Target | Original | Arena disabled | Improvement |
+| --- | --- | --- | --- |
+| **supertonic** | +445 MB | +358 MB | **−90 MB consistent** |
+| **OCR** | +553 MB | +526 MB | −30 MB |
+| **chatterbox** | +776 MB | mixed (cycle 2 −260 MB, cycle 3 +590 MB) | net 0 |
+
+**Result: real improvement on supertonic (-90 MB), small improvement on OCR
+(-30 MB), no net improvement on chatterbox.**
+
+The supertonic improvement is reproducible and worth shipping as a default.
+The OCR improvement is small but in the right direction. Chatterbox's
+dominant leak (the cycle-2 +1 GB spike) is somewhere else and the arena
+disable does not address it.
+
+### Verdict
+
+- Disabling the ORT memory arena helps every ONNX-stack target measured but
+  is not a silver bullet for chatterbox.
+- Chatterbox's dominant leak is **specifically on the second load/unload
+  cycle**, not on first or subsequent cycles. ~1 GB is allocated on the
+  second load that is never released by unload. This pattern is consistent
+  across runs (with and without each fix). Pinpointing the source needs
+  proper profiling tools (Instruments → Allocations, or `MallocStackLogging`
+  with `vmmap`/`leaks`) — beyond what this probe can identify.
+
 ## Recommended next steps for addon owners
 
-1. **`@qvac/tts-onnx`** (chatterbox priority):
-   - Reset `cangjieTable_` in `ChatterboxEngine::unload()`.
-   - Replace `textEmbWeight_.clear()` with swap-with-empty to release capacity.
-   - Clear `TTSModel::chatterboxConfig_.referenceAudio` in `TTSModel::unload()`.
-   - Audit any other language-/voice-keyed map / vector that survives unload.
+1. **Default `enableCpuMemArena = false` and `enableMemoryPattern = false`**
+   in `packages/qvac-lib-infer-onnx/src/qvac-onnx/OnnxConfig.hpp`.
 
-2. **Cross-addon ORT environment**:
+   Validated against the probe: -90 MB on supertonic, -30 MB on OCR with no
+   functional regressions. Easy single-file change. Performance impact
+   should be measured (the arena is documented as a perf optimization for
+   inference, but unmeasured for our cadence) but the memory win is real.
+
+2. **`@qvac/tts-onnx`** (chatterbox cycle-2 leak — NOT addressed by the
+   experiments above):
+   - Profile cycle 2 specifically with Instruments → Allocations or
+     `MallocStackLogging` to identify what allocates ~1 GB on the second
+     load that the first load doesn't.
+   - Likely candidates from code reading: graph-optimization caches, lazy
+     kernel kernel-implementation registration, second-call ORT internal
+     allocations. Not visible from the probe alone.
+   - The `textEmbWeight_` swap-with-empty change is **not** recommended on
+     macOS / iOS (regression measured); leave as `clear()` on Apple targets.
+   - Reset `cangjieTable_` in `ChatterboxEngine::unload()` (locale-dependent
+     correctness; not a leak driver in our probes).
+   - Clear `TTSModel::chatterboxConfig_.referenceAudio` in
+     `TTSModel::unload()` (small leak, correctness only).
+
+3. **Cross-addon ORT environment** (longer-term refactor):
    - Collapse the two `Ort::Env` singletons into one shared instance from
      `qvac-onnx`. `qvac-lib-infer-onnx-tts` should consume that env rather
      than declaring its own.
    - Investigate `OrtArenaCfg`'s `arena_extend_strategy` /
-     `max_dead_bytes_per_chunk` options to make the allocator return pages
-     more aggressively.
+     `max_dead_bytes_per_chunk` options (only relevant if the arena is kept
+     enabled; experiment B suggests it may be acceptable to just disable
+     entirely).
 
 3. **`@qvac/ocr-onnx`**:
    - Either collapse Windows path to use the same destructor as POSIX (and
