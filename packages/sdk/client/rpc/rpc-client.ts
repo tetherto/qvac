@@ -59,7 +59,7 @@ async function getRPCInstance(): Promise<RPCResult> {
   if (rpcInstance) return { rpc: await rpcInstance };
 
   const connectionStart = firstConnectionPending ? nowMs() : null;
-  rpcInstance = getRPC() as unknown as Promise<RPC>;
+  rpcInstance = getRPC();
   const rpc = await rpcInstance;
 
   if (connectionStart !== null && firstConnectionPending) {
@@ -119,7 +119,7 @@ async function sendBase<T extends Request>(
   logger.debug("RPC Client sending:", summarizeRequest(request));
   const payloadObj = signalDisable
     ? injectProfilingMetaIntoObject(
-        parsedRequest as Record<string, unknown>,
+        parsedRequest,
         createProfilingDisabledMeta(),
       )
     : parsedRequest;
@@ -158,7 +158,7 @@ async function sendProfiled<T extends Request>(
 
     const profilingMeta = createProfilingMeta(profileId, includeServer);
     const requestWithMeta = injectProfilingMetaIntoObject(
-      parsedRequest as Record<string, unknown>,
+      parsedRequest,
       profilingMeta,
     );
 
@@ -233,7 +233,7 @@ async function* streamBase<T extends Request>(
   logger.debug("RPC Client streaming:", summarizeRequest(request));
   const payloadObj = signalDisable
     ? injectProfilingMetaIntoObject(
-        parsedRequest as Record<string, unknown>,
+        parsedRequest,
         createProfilingDisabledMeta(),
       )
     : parsedRequest;
@@ -293,7 +293,7 @@ async function* streamProfiled<T extends Request>(
 
     const requestMeta = createProfilingMeta(profileId, includeServer);
     const requestWithMeta = injectProfilingMetaIntoObject(
-      parsedRequest as Record<string, unknown>,
+      parsedRequest,
       requestMeta,
     );
 
@@ -404,7 +404,7 @@ async function duplexBase<T extends Request>(
 
   const payloadObj = signalDisable
     ? injectProfilingMetaIntoObject(
-        parsedRequest as Record<string, unknown>,
+        parsedRequest,
         createProfilingDisabledMeta(),
       )
     : parsedRequest;
@@ -412,7 +412,7 @@ async function duplexBase<T extends Request>(
   const sessionPromise = createDuplexSession(payload, getNextCommandId());
   const session = await withTimeout(sessionPromise, timeout);
   return {
-    requestStream: session.requestStream as DuplexWritable,
+    requestStream: session.requestStream,
     responseStream: session.responseStream as DuplexReadable,
   };
 }
@@ -437,7 +437,7 @@ async function duplexProfiled<T extends Request>(
 
     const requestMeta = createProfilingMeta(profileId, includeServer);
     const requestWithMeta = injectProfilingMetaIntoObject(
-      parsedRequest as Record<string, unknown>,
+      parsedRequest,
       requestMeta,
     );
 
@@ -542,7 +542,7 @@ async function duplexProfiled<T extends Request>(
   };
 
   return {
-    requestStream: session.requestStream as DuplexWritable,
+    requestStream: session.requestStream,
     responseStream: wrappedResponseStream,
   };
 }

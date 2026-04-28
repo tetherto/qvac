@@ -36,6 +36,8 @@ export const SDK_SERVER_ERROR_CODES = {
   OCR_FAILED: 52412,
   IMAGE_FILE_NOT_FOUND: 52413,
   INVALID_IMAGE_INPUT: 52414,
+  TEXT_TO_SPEECH_STREAM_FAILED: 52415,
+  MODEL_OPERATION_NOT_SUPPORTED: 52416,
 
   // RAG Operations (52,800-52,999)
   RAG_SAVE_FAILED: 52800,
@@ -235,6 +237,11 @@ const serverErrorDefinitions: ErrorCodesMap = {
     message: (details?: string) =>
       `Text-to-speech operation failed${details ? `: ${details}` : ""}`,
   },
+  [SDK_SERVER_ERROR_CODES.TEXT_TO_SPEECH_STREAM_FAILED]: {
+    name: "TEXT_TO_SPEECH_STREAM_FAILED",
+    message: (details?: string) =>
+      `Text-to-speech stream operation failed${details ? `: ${details}` : ""}`,
+  },
   [SDK_SERVER_ERROR_CODES.CONFIG_RELOAD_NOT_SUPPORTED]: {
     name: "CONFIG_RELOAD_NOT_SUPPORTED",
     message: (modelId: string) =>
@@ -258,6 +265,24 @@ const serverErrorDefinitions: ErrorCodesMap = {
   [SDK_SERVER_ERROR_CODES.INVALID_IMAGE_INPUT]: {
     name: "INVALID_IMAGE_INPUT",
     message: "Invalid image input type provided",
+  },
+  [SDK_SERVER_ERROR_CODES.MODEL_OPERATION_NOT_SUPPORTED]: {
+    name: "MODEL_OPERATION_NOT_SUPPORTED",
+    message: (
+      modelId: string,
+      modelType: string,
+      operation: string,
+      supportedOperations: string,
+      suggestedModelTypes: string,
+    ) => {
+      const supportedClause = supportedOperations
+        ? ` Supported operations on this model: ${supportedOperations}.`
+        : " This model does not expose any operations.";
+      const suggestionClause = suggestedModelTypes
+        ? ` To use ${operation}, load a model of type: ${suggestedModelTypes}.`
+        : ` No model registered in this worker bundle exposes ${operation}.`;
+      return `Model "${modelId}" (type: ${modelType}) does not support ${operation}.${supportedClause}${suggestionClause}`;
+    },
   },
 
   // RAG Operations (52,800-52,999)

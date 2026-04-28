@@ -2,7 +2,6 @@
   "name": "qvac-lib-inference-tts",
   "version": "0.0.1",
   "dependencies": [
-    "fmt",
     {
       "name": "qvac-lib-inference-addon-cpp",
       "version>=": "1.1.5#1"
@@ -11,7 +10,6 @@
       "name": "qvac-lint-cpp",
       "version>=": "1.4.4#2"
     },
-    "spdlog",
     {
       "name": "tokenizers-cpp",
       "version>=": "0.1.1#2"

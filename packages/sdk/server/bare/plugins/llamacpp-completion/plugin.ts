@@ -1,4 +1,4 @@
-import LlmLlamacpp, { type Loader as LlmLoader } from "@qvac/llm-llamacpp";
+import LlmLlamacpp from "@qvac/llm-llamacpp";
 import llmAddonLogging from "@qvac/llm-llamacpp/addonLogging";
 import {
   definePlugin,
@@ -21,9 +21,7 @@ import {
   type LlmConfigInput,
 } from "@/schemas";
 import { createStreamLogger, registerAddonLogger } from "@/logging";
-import { parseModelPath } from "@/server/utils";
-import FilesystemDL from "@qvac/dl-filesystem";
-import { asLoader } from "@/server/bare/utils/loader-adapter";
+import { expandGGUFIntoShards } from "@/server/utils";
 import { completion } from "@/server/bare/plugins/llamacpp-completion/ops/completion-stream";
 import { finetune } from "@/server/bare/plugins/llamacpp-completion/ops/finetune";
 import { translate } from "@/server/bare/ops/translate";
@@ -69,28 +67,22 @@ function createLlmModel(
   llmConfig: LlmConfig,
   projectionModelPath?: string,
 ) {
-  const { dirPath, basePath } = parseModelPath(modelPath);
-  const loader = new FilesystemDL({ dirPath });
   const logger = createStreamLogger(modelId, ModelType.llamacppCompletion);
   registerAddonLogger(modelId, ModelType.llamacppCompletion, logger);
   const llmConfigStrings = transformLlmConfig(llmConfig);
+  const modelFiles = expandGGUFIntoShards(modelPath);
 
-  const args = {
-    loader: asLoader<LlmLoader>(loader),
-    opts: { stats: true },
+  const model = new LlmLlamacpp({
+    files: {
+      model: modelFiles,
+      ...(projectionModelPath && { projectionModel: projectionModelPath }),
+    },
+    config: llmConfigStrings,
     logger,
-    diskPath: dirPath,
-    modelName: basePath,
-    projectionModel: projectionModelPath
-      ? parseModelPath(projectionModelPath).basePath
-      : "",
-    modelPath,
-    modelConfig: llmConfigStrings,
-  };
+    opts: { stats: true },
+  });
 
-  const model = new LlmLlamacpp(args, llmConfigStrings);
-
-  return { model, loader };
+  return { model };
 }
 
 export const llmPlugin = definePlugin({
@@ -116,14 +108,14 @@ export const llmPlugin = definePlugin({
   createModel(params: CreateModelParams): PluginModelResult {
     const llmConfig = (params.modelConfig ?? {}) as LlmConfig;
 
-    const { model, loader } = createLlmModel(
+    const { model } = createLlmModel(
       params.modelId,
       params.modelPath,
       llmConfig,
       params.artifacts?.["projectionModelPath"],
     );
 
-    return { model, loader };
+    return { model };
   },
 
   handlers: {

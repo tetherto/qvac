@@ -13,6 +13,7 @@
 #include <fstream>
 #include <numeric>
 #include <sstream>
+#include <unordered_set>
 
 using namespace qvac_lib_inference_addon_cpp::logger;
 
@@ -408,6 +409,9 @@ void ChatterboxEngine::unload() {
   config_ = {};
   language_ = "";
   loaded_ = false;
+  // No need to pre-clear chained inputs here: the Ort::Value destructors
+  // fired by `languageModelSession_.reset()` release the chained tensor
+  // storage along with everything else the session owns.
   speechEncoderSession_.reset();
   embedTokensSession_.reset();
   conditionalDecoderSession_.reset();
@@ -574,10 +578,46 @@ void ChatterboxEngine::writeKvToTensors(
     const std::unordered_map<std::string, TensorData<float>> &pastKeyValues) {
   const auto &inputNames = languageModelSession_->getInputNames();
   for (size_t i = keyValueOffset_; i < inputNames.size(); i++) {
+    if (languageModelSession_->isInputChained(inputNames[i])) {
+      continue;
+    }
     OrtTensor tensor = languageModelSession_->getInput(inputNames[i]);
     const auto &kvData = pastKeyValues.at(inputNames[i]).data;
     writeFloatDataToTensor(tensor, kvData.data(), kvData.size());
   }
+}
+
+void ChatterboxEngine::enableKvCacheChaining() {
+  // Match `past_key_values.<layer>.<key|value>` inputs to `present.<...>`
+  // outputs by NAME rather than position. An index-based pairing would
+  // silently mis-wire the chain if a future ONNX export reorders inputs or
+  // outputs; a name-based pairing fails closed (unmatched inputs are simply
+  // skipped, matched pairs are always semantically correct).
+  const auto &inputNames = languageModelSession_->getInputNames();
+  const auto &outputNames = languageModelSession_->getOutputNames();
+
+  std::unordered_set<std::string> outputSet(outputNames.begin(),
+                                            outputNames.end());
+
+  static const std::string kPastPrefix = "past_key_values.";
+  static const std::string kPresentPrefix = "present.";
+
+  std::vector<std::pair<std::string, std::string>> mapping;
+  mapping.reserve(inputNames.size() - keyValueOffset_);
+
+  for (size_t i = keyValueOffset_; i < inputNames.size(); i++) {
+    const std::string &inName = inputNames[i];
+    if (inName.compare(0, kPastPrefix.size(), kPastPrefix) != 0) {
+      continue;
+    }
+    std::string outName = kPresentPrefix + inName.substr(kPastPrefix.size());
+    if (outputSet.count(outName) == 0) {
+      continue;
+    }
+    mapping.emplace_back(std::move(outName), inName);
+  }
+
+  languageModelSession_->setOutputToInputChain(mapping);
 }
 
 int64_t
@@ -607,11 +647,16 @@ void ChatterboxEngine::advancePositionIds(TensorData<int64_t> &positionIds,
 
 void ChatterboxEngine::cachePastKeyValues(
     std::unordered_map<std::string, TensorData<float>> &pastKeyValues) {
-  for (size_t i = keyValueOffset_;
-       i < languageModelSession_->getInputNames().size(); i++) {
-    const std::string inputName = languageModelSession_->getInputNames()[i];
-    const std::string outputName =
-        languageModelSession_->getOutputNames()[i - keyValueOffset_ + 1];
+  const auto &inputNames = languageModelSession_->getInputNames();
+  const auto &outputNames = languageModelSession_->getOutputNames();
+  for (size_t i = keyValueOffset_; i < inputNames.size(); i++) {
+    if (languageModelSession_->isInputChained(inputNames[i])) {
+      // Chaining already moved the `present.*` output into the matching
+      // `past_key_values.*` input for the next run(); no copy required.
+      continue;
+    }
+    const std::string &inputName = inputNames[i];
+    const std::string &outputName = outputNames[i - keyValueOffset_ + 1];
     OrtTensor outputTensor = languageModelSession_->getOutput(outputName);
 
     const int64_t numElements = getNumElements(outputTensor);
@@ -666,6 +711,8 @@ std::vector<int64_t> ChatterboxEngine::generateSpeechTokens(
     std::vector<int64_t> &inputIds, TensorData<int64_t> &positionIds,
     TensorData<float> &speakerEmbeddings, TensorData<float> &speakerFeatures) {
 
+  enableKvCacheChaining();
+
   TensorData<int64_t> promptToken;
   TensorData<int64_t> attentionMask;
   std::unordered_map<std::string, TensorData<float>> pastKeyValues;
@@ -674,6 +721,8 @@ std::vector<int64_t> ChatterboxEngine::generateSpeechTokens(
   runGenerationLoop(inputIds, positionIds, attentionMask, pastKeyValues,
                     promptToken, speakerEmbeddings, speakerFeatures,
                     generatedTokens);
+
+  languageModelSession_->clearChainedInputs();
 
   releaseSession(embedTokensSession_);
   releaseSession(languageModelSession_);
@@ -1201,6 +1250,8 @@ std::vector<int64_t> ChatterboxEngine::generateSpeechTokensWithCfg(
   attentionMask.data.resize(seqLen, 1);
   attentionMask.shape = {1, seqLen};
 
+  enableKvCacheChaining();
+
   std::unordered_map<std::string, TensorData<float>> batchedKv =
       initEmptyKvCache(2);
 
@@ -1213,6 +1264,8 @@ std::vector<int64_t> ChatterboxEngine::generateSpeechTokensWithCfg(
 
   QLOG(Priority::INFO,
        "CFG generated " + std::to_string(generatedTokens.size()) + " tokens");
+
+  languageModelSession_->clearChainedInputs();
 
   releaseSession(embedTokensSession_);
   releaseSession(languageModelSession_);

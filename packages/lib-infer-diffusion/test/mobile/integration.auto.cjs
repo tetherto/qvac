@@ -10,6 +10,14 @@ async function runApiBehaviorTest (options = {}) { // eslint-disable-line no-unu
   return runIntegrationModule('../integration/api-behavior.test.js', options)
 }
 
+async function runGenerateImageFlux2FusionSurjectiveTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/generate-image-flux2-fusion-surjective.test.js', options)
+}
+
+async function runGenerateImageFlux2FusionTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/generate-image-flux2-fusion.test.js', options)
+}
+
 async function runGenerateImageFlux2I2iTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/generate-image-flux2-i2i.test.js', options)
 }
@@ -38,6 +46,25 @@ async function runInputValidationTest (options = {}) { // eslint-disable-line no
   return runIntegrationModule('../integration/input-validation.test.js', options)
 }
 
+async function runLoraBridgeTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/lora-bridge.test.js', options)
+}
+
 async function runModelLoadingTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/model-loading.test.js', options)
+}
+
+module.exports = {
+  runApiBehaviorTest,
+  runGenerateImageFlux2FusionSurjectiveTest,
+  runGenerateImageFlux2FusionTest,
+  runGenerateImageFlux2I2iTest,
+  runGenerateImageFlux2Test,
+  runGenerateImageSd3I2iTest,
+  runGenerateImageSd3Test,
+  runGenerateImageSdxlTest,
+  runGenerateImageTest,
+  runInputValidationTest,
+  runLoraBridgeTest,
+  runModelLoadingTest
 }

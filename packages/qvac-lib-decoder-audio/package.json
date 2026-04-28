@@ -46,7 +46,7 @@
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",
-    "@qvac/infer-base": "^0.1.0",
+    "@qvac/infer-base": "^0.4.0",
     "@qvac/logging": "^0.1.0",
     "@qvac/response": "^0.1.0",
     "bare-assert": "^1.1.0",
