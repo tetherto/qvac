@@ -139,6 +139,7 @@ ggml_backend_dev_t nmt_select_gpu_device(
 #endif
     // Mode 1: explicit gpu_backend filter — pick the gpu_device-th matching
     // non-CPU device whose name contains the substring.
+    bool deviceFoundButBuftNull = false;
     int cnt = 0;
     for (size_t i = 0; i < devCount; ++i) {
       ggml_backend_dev_t dev_cur = ggml_backend_dev_get(i);
@@ -160,6 +161,7 @@ ggml_backend_dev_t nmt_select_gpu_device(
           QLOG(
               qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, oss.str());
         } else {
+          deviceFoundButBuftNull = true;
           std::ostringstream oss;
           oss << "[" << log_prefix
               << "] gpu_backend matched device but buffer type is null — "
@@ -175,8 +177,14 @@ ggml_backend_dev_t nmt_select_gpu_device(
     }
     if (dev == nullptr) {
       std::ostringstream oss;
-      oss << "[" << log_prefix << "] Explicit gpu_backend='" << gpu_backend
-          << "' matched no registered device — falling back to CPU";
+      if (deviceFoundButBuftNull) {
+        oss << "[" << log_prefix << "] Explicit gpu_backend='" << gpu_backend
+            << "' matched a device but its buffer type was null (unusable) "
+               "— falling back to CPU";
+      } else {
+        oss << "[" << log_prefix << "] Explicit gpu_backend='" << gpu_backend
+            << "' matched no registered device — falling back to CPU";
+      }
       QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING, oss.str());
     }
     return dev;

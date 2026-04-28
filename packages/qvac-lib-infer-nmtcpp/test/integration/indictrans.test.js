@@ -294,13 +294,8 @@ test('IndicTrans CPU vs GPU output parity (EN->Hindi, beam=1)', { timeout: TEST_
     cpuRun = await runSingleTranslation(t, {
       modelPath, logger, useGpu: false, label: '[PARITY-CPU]'
     })
-    // Use try/finally so a throwing unload still nulls cpuRun.model — the
-    // outer finally would otherwise call unload() twice on the same context.
-    try {
-      await cpuRun.model.unload()
-    } finally {
-      cpuRun.model = null
-    }
+    await cpuRun.model.unload()
+    cpuRun.model = null
 
     gpuRun = await runSingleTranslation(t, {
       modelPath, logger, useGpu: true, label: '[PARITY-GPU]'
