@@ -16,7 +16,7 @@ runs:
 
         files=(
           "packages/qvac-lib-infer-llamacpp-llm/vcpkg.json"
-          "packages/qvac-lib-infer-llamacpp-embed/vcpkg.json"
+          "packages/embed-llamacpp/vcpkg.json"
           "packages/qvac-lib-infer-nmtcpp/vcpkg.json"
         )
 

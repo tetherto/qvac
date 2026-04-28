@@ -40,7 +40,7 @@ Examples:
   source .env && node generate-notice.js --all --dry-run
   source .env && node generate-notice.js --all
   source .env && node generate-notice.js sdk
-  source .env && node generate-notice.js qvac-lib-infer-llamacpp-embed --dry-run
+  source .env && node generate-notice.js embed-llamacpp --dry-run
 `)
 }
 

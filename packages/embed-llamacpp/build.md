@@ -81,8 +81,8 @@ If you want to build the addon from source instead of using pre-built packages, 
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/tetherto/qvac-lib-infer-llamacpp-embed.git
-   cd qvac-lib-infer-llamacpp-embed
+   git clone https://github.com/tetherto/embed-llamacpp.git
+   cd embed-llamacpp
    ```
 
 2. **Install dependencies**:

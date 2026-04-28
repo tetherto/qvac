@@ -514,7 +514,7 @@ If a package can't be resolved:
 | Addon Package | vcpkg Dependencies | Overlay Ports | Custom Triplets |
 |--------------|-------------------|---------------|-----------------|
 | `qvac-lib-infer-llamacpp-llm` | qvac-fabric, qvac-lib-inference-addon-cpp, qvac-lint-cpp, picojson, opencl (Android) | qvac-fabric (local dev) | Linux clang-19 |
-| `qvac-lib-infer-llamacpp-embed` | qvac-fabric, qvac-lib-inference-addon-cpp, qvac-lint-cpp, opencl (Android) | qvac-fabric (local dev) | Linux clang-19 |
+| `embed-llamacpp` | qvac-fabric, qvac-lib-inference-addon-cpp, qvac-lint-cpp, opencl (Android) | qvac-fabric (local dev) | Linux clang-19 |
 | `ocr-onnx` | onnxruntime (platform EPs), opencv4, qvac-lib-inference-addon-cpp, qvac-lint-cpp | None | Release-only |
 | `qvac-lib-infer-onnx-tts` | onnxruntime (platform EPs), fmt, spdlog, tokenizers-cpp, qvac-lib-inference-addon-cpp, qvac-lint-cpp | None | Release-only (macOS/iOS) |
 | `qvac-lib-infer-parakeet` | onnxruntime, qvac-lib-inference-addon-cpp | None | Release-only |

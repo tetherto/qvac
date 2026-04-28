@@ -17,7 +17,7 @@ find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
 set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 
-project(qvac-lib-infer-llamacpp-embed C CXX)
+project(embed-llamacpp C CXX)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   add_compile_options(-stdlib=libc++)
@@ -54,14 +54,14 @@ if((ANDROID OR UNIX) AND NOT APPLE)
   endforeach()
 endif()  
 
-add_bare_module(qvac-lib-infer-llamacpp-embed EXPORTS ${BACKEND_DL_LIBS})
+add_bare_module(embed-llamacpp EXPORTS ${BACKEND_DL_LIBS})
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  target_link_options(${qvac-lib-infer-llamacpp-embed}_module PRIVATE -Wl,--exclude-libs,ALL)
+  target_link_options(${embed-llamacpp}_module PRIVATE -Wl,--exclude-libs,ALL)
 endif()
 
 target_sources(
-  ${qvac-lib-infer-llamacpp-embed}
+  ${embed-llamacpp}
   PRIVATE
   ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/utils.cpp
@@ -71,25 +71,25 @@ target_sources(
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/BertModel.cpp
 )
 target_include_directories(
-  ${qvac-lib-infer-llamacpp-embed}
+  ${embed-llamacpp}
   PRIVATE
     ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
     ${PROJECT_SOURCE_DIR}/addon/src
 )
 target_link_libraries(
-  ${qvac-lib-infer-llamacpp-embed}
+  ${embed-llamacpp}
   PRIVATE
     llama::llama llama::common
 )
 
-target_compile_definitions(${qvac-lib-infer-llamacpp-embed} PUBLIC JS_LOGGER)
+target_compile_definitions(${embed-llamacpp} PUBLIC JS_LOGGER)
 
 bare_target(bare_target_value)
 bare_module_target("." unused_target NAME module_name VERSION unused_version)
 set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/${module_name}")
-message("Building qvac-lib-infer-llamacpp-embed with BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VALUE}'")
+message("Building embed-llamacpp with BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VALUE}'")
 
-target_compile_definitions(${qvac-lib-infer-llamacpp-embed} PRIVATE BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}")
+target_compile_definitions(${embed-llamacpp} PRIVATE BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}")
 
 if(BUILD_TESTING)
   find_package(GTest CONFIG REQUIRED)
@@ -101,7 +101,7 @@ endif()
 
 if(WIN32)
   target_link_libraries(
-    ${qvac-lib-infer-llamacpp-embed}
+    ${embed-llamacpp}
     PRIVATE
       msvcrt.lib
   )

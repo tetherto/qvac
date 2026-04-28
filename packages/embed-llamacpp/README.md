@@ -1,4 +1,4 @@
-# qvac-lib-infer-llamacpp-embed
+# embed-llamacpp
 
 This native C++ addon, built using the `Bare` Runtime, simplifies running text embedding models to enable efficient generation of high-quality contextual text embeddings. It provides an easy interface to load, execute, and manage embedding model instances.
 
@@ -209,7 +209,7 @@ A second `run()` while a job is active is serialized by `exclusiveRunQueue` — 
 
 Clone the repository and navigate to it:
 ```bash
-cd qvac-lib-infer-llamacpp-embed
+cd embed-llamacpp
 ```
 
 Install dependencies:

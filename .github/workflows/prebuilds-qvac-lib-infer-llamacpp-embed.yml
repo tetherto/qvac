@@ -1,4 +1,4 @@
-# Build-only workflow. Publishing is handled by on-merge-qvac-lib-infer-llamacpp-embed.yml
+# Build-only workflow. Publishing is handled by on-merge-embed-llamacpp.yml
 name: Prebuilds (Embed)
 
 on:
@@ -11,7 +11,7 @@ on:
         description: "Working directory (optional)"
         required: false
         type: string
-        default: "packages/qvac-lib-infer-llamacpp-embed"
+        default: "packages/embed-llamacpp"
 
   workflow_call:
     inputs:
@@ -32,7 +32,7 @@ on:
         description: "Working directory (optional)"
         required: false
         type: string
-        default: "packages/qvac-lib-infer-llamacpp-embed"
+        default: "packages/embed-llamacpp"
 
 env:
   WORKDIR: ${{ inputs.workdir }}

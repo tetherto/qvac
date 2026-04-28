@@ -4,7 +4,7 @@ This directory contains performance benchmark runners for `@qvac/embed-llamacpp`
 
 ## Setup
 
-From `packages/qvac-lib-infer-llamacpp-embed`:
+From `packages/embed-llamacpp`:
 
 ```bash
 npm run performance:install
@@ -12,7 +12,7 @@ npm run performance:install
 
 ## Parameter Sweep
 
-Run from `packages/qvac-lib-infer-llamacpp-embed`:
+Run from `packages/embed-llamacpp`:
 
 ```bash
 npm run benchmarks:param-sweep
