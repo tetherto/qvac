@@ -261,11 +261,19 @@ bool NmtLazyInitializeBackend::initializeLocked(
           "'..' segments): " +
               sanitizePrintableAscii(openclCacheDir));
     } else {
-      auto oclCachePath =
-          (requested.lexically_normal() / "opencl-cache").string();
-      setenv("GGML_OPENCL_CACHE_DIR", oclCachePath.c_str(), /*overwrite=*/1);
-      g_recordedOpenclCacheDir = std::move(oclCachePath);
-      g_recordedOpenclCacheDirInput = openclCacheDir;
+      std::error_code ec;
+      auto resolved = std::filesystem::weakly_canonical(requested, ec);
+      if (ec) {
+        QLOG(
+            Priority::WARNING,
+            "openclCacheDir weakly_canonical() failed (" + ec.message() +
+                "): " + sanitizePrintableAscii(openclCacheDir));
+      } else {
+        auto oclCachePath = (resolved / "opencl-cache").string();
+        setenv("GGML_OPENCL_CACHE_DIR", oclCachePath.c_str(), /*overwrite=*/1);
+        g_recordedOpenclCacheDir = std::move(oclCachePath);
+        g_recordedOpenclCacheDirInput = openclCacheDir;
+      }
     }
   }
 #endif
@@ -290,17 +298,38 @@ bool NmtLazyInitializeBackend::initializeLocked(
               " — falling back to default backend loading");
       ggml_backend_load_all();
     } else {
-      std::filesystem::path backendsDirPath = requested.lexically_normal();
+      std::error_code ec;
+      std::filesystem::path backendsDirPath =
+          std::filesystem::canonical(requested, ec);
+      if (ec) {
+        QLOG(
+            Priority::WARNING,
+            "backendsDir canonical() failed (" + ec.message() +
+                "): " + sanitizePrintableAscii(backendsDir) +
+                " — falling back to default backend loading");
+        ggml_backend_load_all();
+      } else {
 #ifdef BACKENDS_SUBDIR
-      std::filesystem::path subdirPath(BACKENDS_SUBDIR);
-      backendsDirPath = backendsDirPath / subdirPath;
-      backendsDirPath = backendsDirPath.lexically_normal();
+        std::filesystem::path subdirPath(BACKENDS_SUBDIR);
+        backendsDirPath = backendsDirPath / subdirPath;
+        backendsDirPath = std::filesystem::canonical(backendsDirPath, ec);
+        if (ec) {
+          QLOG(
+              Priority::WARNING,
+              "backendsDir+subdir canonical() failed (" + ec.message() +
+                  ") — falling back to default backend loading");
+          ggml_backend_load_all();
+        } else {
 #endif
-      QLOG(
-          Priority::INFO,
-          "Loading backends from directory: " +
-              sanitizePrintableAscii(backendsDirPath.string()));
-      ggml_backend_load_all_from_path(backendsDirPath.string().c_str());
+          QLOG(
+              Priority::INFO,
+              "Loading backends from directory: " +
+                  sanitizePrintableAscii(backendsDirPath.string()));
+          ggml_backend_load_all_from_path(backendsDirPath.string().c_str());
+#ifdef BACKENDS_SUBDIR
+        }
+#endif
+      }
     }
   } else {
     QLOG(Priority::DEBUG, "Loading backends using default path");

@@ -403,9 +403,15 @@ nmt_backend_init(const nmt_context_params& params) {
   }
 
   // ACCEL backends (in addition to the primary if it was an ACCEL device).
+  // Skip dedup when primary_dev is null (ggml_backend_get_device returned
+  // null for a valid backend) to avoid false-positive skips where both
+  // sides compare as nullptr.
   for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
     ggml_backend_dev_t dev = ggml_backend_dev_get(i);
-    if (dev == primary_dev) {
+    if (dev == nullptr) {
+      continue;
+    }
+    if (primary_dev != nullptr && dev == primary_dev) {
       continue;
     }
     if (ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_ACCEL) {
