@@ -2292,18 +2292,19 @@ bool smolvla_inference_with_timing(
     // Broadcast `te_single` to all `chunk_size` rows using a doubling
     // pattern: ~log2(chunk_size) larger memcpys instead of `chunk_size`
     // small ones (50 → ~7 calls for chunk_size=50).
-    const size_t row_floats = hp.expert_hidden_size;
-    const size_t row_bytes = row_floats * sizeof(float);
-    memcpy(te_expanded.data(), te_single.data(), row_bytes);
-    size_t filled = 1;
-    while (filled < (size_t)chunk_size) {
-      const size_t take =
-          std::min(filled, (size_t)chunk_size - filled);
-      memcpy(
-          te_expanded.data() + filled * row_floats,
-          te_expanded.data(),
-          take * row_bytes);
-      filled += take;
+    if (chunk_size > 0) {
+      const size_t row_floats = hp.expert_hidden_size;
+      const size_t row_bytes = row_floats * sizeof(float);
+      memcpy(te_expanded.data(), te_single.data(), row_bytes);
+      size_t filled = 1;
+      while (filled < (size_t)chunk_size) {
+        const size_t take = std::min(filled, (size_t)chunk_size - filled);
+        memcpy(
+            te_expanded.data() + filled * row_floats,
+            te_expanded.data(),
+            take * row_bytes);
+        filled += take;
+      }
     }
     ggml_backend_tensor_set(
         g_te, te_expanded.data(), 0, te_expanded.size() * sizeof(float));
