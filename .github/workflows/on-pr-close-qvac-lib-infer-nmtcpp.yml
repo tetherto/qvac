@@ -19,7 +19,7 @@ on:
         description: "Packages to target for deletion, space separated"
         required: false
         type: string
-        default: "qvac-lib-infer-nmtcpp"
+        default: "translation-nmtcpp"
       dry-run:
         description: "Is dry run? If true, lists versions without deleting."
         type: boolean

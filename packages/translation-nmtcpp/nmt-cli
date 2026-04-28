@@ -185,7 +185,7 @@ EXAMPLES:
 NOTES:
   - This tool is used by benchmarks/quality_eval for BLEU score evaluation
   - Model configuration uses beam search (size=4) without sampling for deterministic output
-  - Run this script from the qvac-lib-infer-nmtcpp repository root directory
+  - Run this script from the translation-nmtcpp repository root directory
   - Bergamot models require .intgemm.alphas.bin model files and .spm vocabulary files
 `)
 }

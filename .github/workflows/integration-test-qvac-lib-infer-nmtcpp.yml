@@ -21,10 +21,10 @@ on:
         description: "Working directory inside the repo (monorepo package path)"
         type: string
         required: false
-        default: "packages/qvac-lib-infer-nmtcpp"
+        default: "packages/translation-nmtcpp"
 
 env:
-  PKG_DIR: packages/qvac-lib-infer-nmtcpp
+  PKG_DIR: packages/translation-nmtcpp
 
 jobs:
   run-integration-tests:

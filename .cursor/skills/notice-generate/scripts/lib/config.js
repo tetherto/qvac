@@ -25,7 +25,7 @@ const MODELS_JSON_PATH = path.join(
 const ENGINE_MAP = {
   '@qvac/embed-llamacpp': 'embed-llamacpp',
   '@qvac/llm-llamacpp': 'llm-llamacpp',
-  '@qvac/translation-nmtcpp': 'qvac-lib-infer-nmtcpp',
+  '@qvac/translation-nmtcpp': 'translation-nmtcpp',
   '@qvac/tts-onnx': 'qvac-lib-infer-onnx-tts',
   '@qvac/transcription-whispercpp': 'qvac-lib-infer-whispercpp',
   '@qvac/translation-llamacpp': 'llm-llamacpp',
@@ -72,7 +72,7 @@ const PYTHON_DEP_PATHS = {
   'llm-llamacpp': [
     'benchmarks/client/requirements.txt'
   ],
-  'qvac-lib-infer-nmtcpp': [
+  'translation-nmtcpp': [
     'scripts/conversion_scripts/requirements.txt',
     'benchmarks/quality_eval/requirements.txt'
   ],

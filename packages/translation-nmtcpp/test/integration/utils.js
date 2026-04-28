@@ -151,7 +151,7 @@ try {
   // scoring works on device without file I/O for fixture JSONs.
   //
   // The inline fixtures are a verbatim copy of the three
-  // packages/qvac-lib-infer-nmtcpp/test/integration/fixtures/*.quality.json
+  // packages/translation-nmtcpp/test/integration/fixtures/*.quality.json
   // files. Keep them in sync if the on-disk fixtures change.
   const _inlineFixtures = {
     'bergamot.quality.json': [

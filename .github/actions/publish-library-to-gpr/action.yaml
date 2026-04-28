@@ -191,7 +191,7 @@ runs:
           decoder-audio
           qvac-lib-inference-addon-mlc-ecog
           llm-llamacpp
-          qvac-lib-infer-nmtcpp
+          translation-nmtcpp
           qvac-lib-infer-whispercpp
           qvac-lib-infer-onnx-vad
           embed-llamacpp

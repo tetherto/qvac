@@ -579,7 +579,7 @@ JavaScript Dependencies
   @qvac/transcription-whispercpp@0.6.1
     https://github.com/tetherto/qvac
   @qvac/translation-nmtcpp@0.6.10
-    https://github.com/tetherto/qvac-lib-infer-nmtcpp
+    https://github.com/tetherto/translation-nmtcpp
   @qvac/tts-onnx@0.8.2
     https://github.com/tetherto/qvac
   adaptive-timeout@1.0.1

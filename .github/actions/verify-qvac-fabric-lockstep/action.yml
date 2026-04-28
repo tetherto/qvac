@@ -17,7 +17,7 @@ runs:
         files=(
           "packages/llm-llamacpp/vcpkg.json"
           "packages/embed-llamacpp/vcpkg.json"
-          "packages/qvac-lib-infer-nmtcpp/vcpkg.json"
+          "packages/translation-nmtcpp/vcpkg.json"
         )
 
         versions=()

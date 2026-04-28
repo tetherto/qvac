@@ -127,7 +127,7 @@ Reads existing NOTICE files across all packages (no scanning, no tokens needed) 
 |---|---|
 | `embed-llamacpp` | `@qvac/embed-llamacpp` |
 | `llm-llamacpp` | `@qvac/llm-llamacpp` |
-| `qvac-lib-infer-nmtcpp` | `@qvac/translation-nmtcpp` |
+| `translation-nmtcpp` | `@qvac/translation-nmtcpp` |
 | `qvac-lib-infer-onnx-tts` | `@qvac/tts-onnx` |
 | `qvac-lib-infer-whispercpp` | `@qvac/transcription-whispercpp` |
 | `ocr-onnx` | `@qvac/ocr-onnx` |

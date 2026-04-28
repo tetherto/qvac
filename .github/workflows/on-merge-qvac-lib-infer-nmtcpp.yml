@@ -8,7 +8,7 @@ on:
       - feature-*
       - tmp-*
     paths:
-      - "packages/qvac-lib-infer-nmtcpp/**"
+      - "packages/translation-nmtcpp/**"
       - ".github/workflows/*nmtcpp*.yml"
   workflow_dispatch:
     inputs:
@@ -97,9 +97,9 @@ jobs:
           base-ref: ${{ github.ref_name }}
           base-sha: ${{ github.event.before }}
           head-sha: ${{ github.sha }}
-          package-slug: qvac-lib-infer-nmtcpp
-          package-json-path: packages/qvac-lib-infer-nmtcpp/package.json
-          changelog-path: packages/qvac-lib-infer-nmtcpp/CHANGELOG.md
+          package-slug: translation-nmtcpp
+          package-json-path: packages/translation-nmtcpp/package.json
+          changelog-path: packages/translation-nmtcpp/CHANGELOG.md
 
   build:
     needs: [publish-logic, release-merge-guard]
@@ -119,7 +119,7 @@ jobs:
       packages: write
       pull-requests: write
       id-token: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-nmtcpp.yml
+    uses: ./.github/workflows/prebuilds-translation-nmtcpp.yml
     secrets: inherit
 
   publish-gpr:
@@ -136,7 +136,7 @@ jobs:
       contents: read
       packages: write
     env:
-      PKG_DIR: packages/qvac-lib-infer-nmtcpp
+      PKG_DIR: packages/translation-nmtcpp
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -175,7 +175,7 @@ jobs:
       packages: write
       id-token: write
     env:
-      PKG_DIR: packages/qvac-lib-infer-nmtcpp
+      PKG_DIR: packages/translation-nmtcpp
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -203,11 +203,11 @@ jobs:
       needs.publish-npm.outputs.published_version != ''
     permissions:
       contents: write
-    uses: ./.github/workflows/create-github-release-qvac-lib-infer-nmtcpp.yml
+    uses: ./.github/workflows/create-github-release-translation-nmtcpp.yml
     with:
       published_version: ${{ needs.publish-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}
-      workdir: "packages/qvac-lib-infer-nmtcpp"
+      workdir: "packages/translation-nmtcpp"
 
   post-build-gate:
     name: Post-Build Gate
@@ -235,7 +235,7 @@ jobs:
       contents: read
       packages: read
       id-token: write
-    uses: ./.github/workflows/integration-test-qvac-lib-infer-nmtcpp.yml
+    uses: ./.github/workflows/integration-test-translation-nmtcpp.yml
     needs: post-build-gate
     if: needs.post-build-gate.outputs.should_run_tests == 'true'
     secrets: inherit

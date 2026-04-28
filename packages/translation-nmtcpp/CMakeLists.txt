@@ -23,7 +23,7 @@ if(DEFINED ENV{ANDROID_NDK} OR DEFINED ENV{ANDROID_NDK_HOME})
   set(ANDROID_STL c++_shared)
 endif()
 
-project(qvac-lib-infer-nmtcpp
+project(translation-nmtcpp
   LANGUAGES C CXX)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
@@ -137,7 +137,7 @@ endif()
 bare_target(bare_target_value)
 bare_module_target("." unused_target NAME module_name VERSION unused_version)
 set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/${module_name}")
-message("Building qvac-lib-infer-nmtcpp with BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VALUE}'")
+message("Building translation-nmtcpp with BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VALUE}'")
 
 set(BACKEND_DL_LIBS "")
 if((ANDROID OR UNIX) AND NOT APPLE)
@@ -146,14 +146,14 @@ if((ANDROID OR UNIX) AND NOT APPLE)
   endforeach()
 endif()
 
-add_bare_module(qvac-lib-infer-nmtcpp EXPORTS ${BACKEND_DL_LIBS})
+add_bare_module(translation-nmtcpp EXPORTS ${BACKEND_DL_LIBS})
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  target_link_options(${qvac-lib-infer-nmtcpp}_module PRIVATE -Wl,--exclude-libs,ALL)
+  target_link_options(${translation-nmtcpp}_module PRIVATE -Wl,--exclude-libs,ALL)
 endif()
 
 target_sources(
-  ${qvac-lib-infer-nmtcpp}
+  ${translation-nmtcpp}
   PRIVATE
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TranslationModel.cpp
@@ -172,13 +172,13 @@ target_sources(
 # Add bergamot source files if enabled
 if(USE_BERGAMOT)
   target_sources(
-    ${qvac-lib-infer-nmtcpp}
+    ${translation-nmtcpp}
     PRIVATE
       ${PROJECT_SOURCE_DIR}/addon/src/model-interface/bergamot.cpp
   )
 endif()
 target_include_directories(
-  ${qvac-lib-infer-nmtcpp}
+  ${translation-nmtcpp}
   PRIVATE
     ${PROJECT_SOURCE_DIR}/addon/src
     ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
@@ -186,24 +186,24 @@ target_include_directories(
 
 if("${CMAKE_SYSTEM_PROCESSOR}" MATCHES "^(arm|aarch64|ARM64)")
   target_compile_definitions(
-    ${qvac-lib-infer-nmtcpp}
+    ${translation-nmtcpp}
     PRIVATE
     ARM FMA SSE
   )
 endif()
 
 target_compile_definitions(
-  ${qvac-lib-infer-nmtcpp}
+  ${translation-nmtcpp}
   PRIVATE
     JS_LOGGER
 )
 
-target_compile_definitions(${qvac-lib-infer-nmtcpp} PRIVATE BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}")
+target_compile_definitions(${translation-nmtcpp} PRIVATE BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}")
 
 # Add bergamot compile definition if enabled
 if(USE_BERGAMOT)
   target_compile_definitions(
-    ${qvac-lib-infer-nmtcpp}
+    ${translation-nmtcpp}
     PRIVATE
       HAVE_BERGAMOT
   )
@@ -211,7 +211,7 @@ endif()
 
 if(DEFINED SENTENCEPIECE_INCLUDE_DIRS)
   target_include_directories(
-    ${qvac-lib-infer-nmtcpp}
+    ${translation-nmtcpp}
     PRIVATE
       ${SENTENCEPIECE_INCLUDE_DIRS}
   )
@@ -219,7 +219,7 @@ endif()
 
 # Link core dependencies
 target_link_libraries(
-  ${qvac-lib-infer-nmtcpp}
+  ${translation-nmtcpp}
   PRIVATE
     ggml::ggml
 )
@@ -230,14 +230,14 @@ target_link_libraries(
 # Note: Bergamot includes its own sentencepiece, so we don't link vcpkg's sentencepiece.
 if(USE_BERGAMOT)
   target_link_libraries(
-    ${qvac-lib-infer-nmtcpp}
+    ${translation-nmtcpp}
     PRIVATE
       protobuf::libprotobuf
   )
 else()
   # When NOT using Bergamot, link vcpkg's sentencepiece and protobuf
   target_link_libraries(
-    ${qvac-lib-infer-nmtcpp}
+    ${translation-nmtcpp}
     PRIVATE
       ${SENTENCEPIECE_TARGET}
       protobuf::libprotobuf
@@ -246,7 +246,7 @@ endif()
 
 if(absl_FOUND)
   target_link_libraries(
-    ${qvac-lib-infer-nmtcpp}
+    ${translation-nmtcpp}
     PRIVATE
       absl::flags
       absl::flags_internal
@@ -256,7 +256,7 @@ endif()
 # Link bergamot library if enabled
 if(USE_BERGAMOT)
   target_link_libraries(
-    ${qvac-lib-infer-nmtcpp}
+    ${translation-nmtcpp}
     PRIVATE
       bergamot-translator::bergamot-translator
   )
@@ -264,7 +264,7 @@ endif()
 
 if(WIN32)
   target_link_libraries(
-    ${qvac-lib-infer-nmtcpp}
+    ${translation-nmtcpp}
     PRIVATE
       msvcrt.lib
   )

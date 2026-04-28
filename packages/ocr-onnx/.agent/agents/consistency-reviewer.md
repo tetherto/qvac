@@ -30,12 +30,12 @@ From the diff, determine which package(s) under `packages/` are being modified.
 
 ### Step 3: Establish the canonical patterns
 
-Read the reference addon implementations to understand the established patterns. Use `ocr-onnx` and `qvac-lib-infer-nmtcpp` as the canonical references:
+Read the reference addon implementations to understand the established patterns. Use `ocr-onnx` and `translation-nmtcpp` as the canonical references:
 
 ```bash
 # Read the reference implementations
 cat packages/ocr-onnx/index.js
-cat packages/qvac-lib-infer-nmtcpp/index.js
+cat packages/translation-nmtcpp/index.js
 ```
 
 Also check `package.json` scripts and structure of both reference packages.

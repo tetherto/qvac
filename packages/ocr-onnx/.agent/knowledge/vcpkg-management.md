@@ -261,7 +261,7 @@ When developing against a local build of `qvac-fabric` (the llama.cpp fork):
 
 ### NMT Overlay Ports (7 ports)
 
-Location: `packages/qvac-lib-infer-nmtcpp/vcpkg-overlays/`
+Location: `packages/translation-nmtcpp/vcpkg-overlays/`
 
 NMT has the most overlay ports of any package, each building a specific fork or patched version:
 
@@ -520,6 +520,6 @@ If a package can't be resolved:
 | `qvac-lib-infer-parakeet` | onnxruntime, qvac-lib-inference-addon-cpp | None | Release-only |
 | `qvac-lib-infer-onnx` | onnxruntime (platform EPs), qvac-lib-inference-addon-cpp, qvac-lint-cpp | None | None |
 | `qvac-lib-infer-whispercpp` | whisper-cpp, qvac-lib-inference-addon-cpp, qvac-lint-cpp | None | None |
-| `qvac-lib-infer-nmtcpp` | bergamot-translator, sentencepiece, ssplit, whisper-cpp, qvac-lib-inference-addon-cpp, qvac-lint-cpp | 7 ports (bergamot, marian-dev, intgemm, ruy, simd-utils, ssplit, whisper-cpp) | None |
+| `translation-nmtcpp` | bergamot-translator, sentencepiece, ssplit, whisper-cpp, qvac-lib-inference-addon-cpp, qvac-lint-cpp | 7 ports (bergamot, marian-dev, intgemm, ruy, simd-utils, ssplit, whisper-cpp) | None |
 | `qvac-lib-inference-addon-cpp` | qvac-lint-cpp | None | None |
 | `qvac-lint-cpp` | (none — self-contained) | None | None |

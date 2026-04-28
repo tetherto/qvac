@@ -22,7 +22,7 @@ This library sits between the Bare runtime and specific inference addons. Commun
 **Consumer Addons** (built on this library):
 - [llm-llamacpp](https://github.com/tetherto/llm-llamacpp) - LLM inference
 - [qvac-lib-infer-whispercpp](https://github.com/tetherto/qvac-lib-infer-whispercpp) - Speech recognition
-- [qvac-lib-infer-nmtcpp](https://github.com/tetherto/qvac-lib-infer-nmtcpp) - Neural translation
+- [translation-nmtcpp](https://github.com/tetherto/translation-nmtcpp) - Neural translation
 - [qvac-lib-infer-onnx-tts](https://github.com/tetherto/qvac-lib-infer-onnx-tts) - Text-to-speech
 - [embed-llamacpp](https://github.com/tetherto/embed-llamacpp) - Embeddings
 - [qvac-lib-inference-addon-onnx-ocr-fasttext](https://github.com/tetherto/qvac-lib-inference-addon-onnx-ocr-fasttext) - OCR
@@ -333,7 +333,7 @@ ctest --test-dir build --output-on-failure
 Production addons built on this library:
 - [llm-llamacpp](https://github.com/tetherto/llm-llamacpp) - LLM inference
 - [qvac-lib-infer-whispercpp](https://github.com/tetherto/qvac-lib-infer-whispercpp) - Speech recognition
-- [qvac-lib-infer-nmtcpp](https://github.com/tetherto/qvac-lib-infer-nmtcpp) - Neural translation
+- [translation-nmtcpp](https://github.com/tetherto/translation-nmtcpp) - Neural translation
 - [qvac-lib-infer-onnx-tts](https://github.com/tetherto/qvac-lib-infer-onnx-tts) - Text-to-speech
 - [embed-llamacpp](https://github.com/tetherto/embed-llamacpp) - Embeddings
 - [qvac-lib-inference-addon-onnx-ocr-fasttext](https://github.com/tetherto/qvac-lib-inference-addon-onnx-ocr-fasttext) - OCR
