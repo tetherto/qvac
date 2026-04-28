@@ -86,6 +86,67 @@ const IMAGE_SAMPLES = [
   { file: 'other_2.jpg', expected: 'other' }
 ]
 
+const MODEL_FILENAME = 'mobilenetv3_3class_v3_fp16.gguf'
+
+/**
+ * Resolves the GGUF weights path for the integration suite.
+ *
+ * On desktop, returns `undefined` so `new ImageClassifier()` falls
+ * back to its built-in default (the bundled `weights/` directory next
+ * to `index.js`).
+ *
+ * On mobile (ios / android), the bare worklet runs from a packed
+ * `app.bundle` whose `weights/` directory is not a real filesystem
+ * path. The qvac-test-addon-mobile framework instead copies anything
+ * under `test/mobile/testAssets/` to the device and exposes the
+ * resulting on-device file:// URLs through `global.assetPaths`,
+ * keyed by relative paths from the test module's perspective. We try
+ * a couple of common key formats (matching what other addons do, see
+ * `qvac-lib-infer-nmtcpp/test/integration/utils.js:loadConfigFromAssets`)
+ * and fall back to a desktop-style fs lookup so local non-CI builds
+ * keep working too.
+ *
+ * If on mobile and the asset cannot be located, throw a clear error
+ * up-front rather than letting `ImageClassifier.load()` fail with the
+ * opaque `app.bundle/...` path -- and crucially, throwing here lets
+ * the caller convert it into a brittle assertion failure rather than
+ * an unhandled promise rejection that aborts the bare worklet.
+ */
+function resolveModelPath () {
+  if (isMobile && typeof global !== 'undefined' && global.assetPaths) {
+    const candidates = [
+      `../../testAssets/${MODEL_FILENAME}`,
+      `../mobile/testAssets/${MODEL_FILENAME}`,
+      `testAssets/${MODEL_FILENAME}`,
+      `../testAssets/${MODEL_FILENAME}`
+    ]
+    for (const key of candidates) {
+      const mapped = global.assetPaths[key]
+      if (mapped) {
+        return mapped.startsWith('file://') ? mapped.slice('file://'.length) : mapped
+      }
+    }
+    throw new Error(
+      `Mobile asset not found in global.assetPaths: ${MODEL_FILENAME}. ` +
+      "Did 'npm run mobile:copy-prebuilds' run during test setup, " +
+      'and is `test/mobile/testAssets/' + MODEL_FILENAME + '` present?'
+    )
+  }
+
+  // Desktop / non-mobile: prefer the bundled weights file when present
+  // (matches ImageClassifier's default-path logic) so the test stays
+  // self-contained and does not require an env override.
+  const desktopCandidates = [
+    path.resolve(__dirname, '..', 'mobile', 'testAssets', MODEL_FILENAME),
+    path.resolve(__dirname, '..', '..', 'weights', MODEL_FILENAME)
+  ]
+  for (const candidate of desktopCandidates) {
+    if (fs.existsSync(candidate)) return candidate
+  }
+  // Let ImageClassifier fall back to its own default.
+  return undefined
+}
+
 function loadImage (name) {
   return fs.readFileSync(path.join(IMAGE_DIR, name))
 }
@@ -125,8 +186,10 @@ module.exports = {
   TEST_TIMEOUT,
   IMAGE_SAMPLES,
   IMAGE_DIR,
+  MODEL_FILENAME,
   loadImage,
   createLogger,
   recordMetric,
-  recordLoadTime
+  recordLoadTime,
+  resolveModelPath
 }

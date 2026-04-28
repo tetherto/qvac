@@ -3,11 +3,20 @@
 const test = require('brittle')
 
 const ImageClassifier = require('../../index')
-const { IMAGE_SAMPLES, loadImage, createLogger, TEST_TIMEOUT, recordMetric, recordLoadTime } = require('./utils')
+const {
+  IMAGE_SAMPLES,
+  loadImage,
+  createLogger,
+  TEST_TIMEOUT,
+  recordMetric,
+  recordLoadTime,
+  resolveModelPath
+} = require('./utils')
 
 test('load() + classify() returns a shaped result for every sample image', async function (t) {
   t.timeout(TEST_TIMEOUT)
-  const classifier = new ImageClassifier({ logger: createLogger() })
+  const modelPath = resolveModelPath()
+  const classifier = new ImageClassifier({ modelPath, logger: createLogger() })
   const loadStart = Date.now()
   await classifier.load()
   const loadElapsed = Date.now() - loadStart
@@ -81,7 +90,7 @@ test('load() + classify() returns a shaped result for every sample image', async
 
 test('topK limits output count', async function (t) {
   t.timeout(TEST_TIMEOUT)
-  const classifier = new ImageClassifier({ logger: createLogger() })
+  const classifier = new ImageClassifier({ modelPath: resolveModelPath(), logger: createLogger() })
   await classifier.load()
   try {
     const buffer = loadImage('meal_1.jpg')
@@ -107,7 +116,7 @@ test('topK limits output count', async function (t) {
 
 test('multiple sequential classifications produce consistent output', async function (t) {
   t.timeout(TEST_TIMEOUT)
-  const classifier = new ImageClassifier({ logger: createLogger() })
+  const classifier = new ImageClassifier({ modelPath: resolveModelPath(), logger: createLogger() })
   await classifier.load()
   try {
     const buffer = loadImage('report_1.jpg')
@@ -127,7 +136,7 @@ test('multiple sequential classifications produce consistent output', async func
 
 test('raw RGB bytes path', async function (t) {
   t.timeout(TEST_TIMEOUT)
-  const classifier = new ImageClassifier({ logger: createLogger() })
+  const classifier = new ImageClassifier({ modelPath: resolveModelPath(), logger: createLogger() })
   await classifier.load()
   try {
     const width = 10

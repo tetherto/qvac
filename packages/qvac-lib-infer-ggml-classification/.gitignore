@@ -24,3 +24,6 @@ scripts/check-js-validation.js
 # Internal validation set (confidential, must never be committed).
 test/images/internal/
 proposal/dataset_val/
+
+# Device Farm logs downloaded for local diagnostic; never committed.
+remote_logs/

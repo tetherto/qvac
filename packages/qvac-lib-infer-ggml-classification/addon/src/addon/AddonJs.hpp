@@ -8,8 +8,6 @@
 #include <vector>
 
 #include <js.h>
-#include <uv.h>
-
 #include <qvac-lib-inference-addon-cpp/Errors.hpp>
 #include <qvac-lib-inference-addon-cpp/JsInterface.hpp>
 #include <qvac-lib-inference-addon-cpp/JsUtils.hpp>
@@ -21,6 +19,7 @@
 #include <qvac-lib-inference-addon-cpp/queue/OutputCallbackInterface.hpp>
 #include <qvac-lib-inference-addon-cpp/queue/OutputCallbackJs.hpp>
 #include <qvac-lib-inference-addon-cpp/queue/OutputQueue.hpp>
+#include <uv.h>
 
 #include "model-interface/ClassificationModel.hpp"
 
