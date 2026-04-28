@@ -89,7 +89,7 @@ const PYTHON_DEP_PATHS = {
   'ocr-onnx': [
     'benchmarks/quality_eval/requirements.txt'
   ],
-  'qvac-lib-infer-onnx-vad': [
+  'onnx-vad': [
     'benchmarks/client/pyproject.toml'
   ]
 }

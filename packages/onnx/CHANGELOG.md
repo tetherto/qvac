@@ -14,7 +14,7 @@
 
 ### Changed
 
-- Upgraded the bundled ONNX Runtime toolchain from 1.22.0 to 1.24.2 by pinning `qvac-lib-infer-onnx` to the updated `qvac-registry-vcpkg` baseline
+- Upgraded the bundled ONNX Runtime toolchain from 1.22.0 to 1.24.2 by pinning `onnx` to the updated `qvac-registry-vcpkg` baseline
 - Restored the default XNNPack-enabled build against the compatible ONNX Runtime 1.24.2 registry revision
 - Refreshed package metadata and release documentation to match the new runtime baseline and release version
 

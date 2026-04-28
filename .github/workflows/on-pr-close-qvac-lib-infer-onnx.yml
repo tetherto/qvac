@@ -4,7 +4,7 @@ on:
     types:
       - closed
     paths:
-      - "packages/qvac-lib-infer-onnx/**"
+      - "packages/onnx/**"
   workflow_dispatch:
     inputs:
       version:

@@ -193,7 +193,7 @@ runs:
           llm-llamacpp
           translation-nmtcpp
           qvac-lib-infer-whispercpp
-          qvac-lib-infer-onnx-vad
+          onnx-vad
           embed-llamacpp
           tts-onnx
           ocr-onnx

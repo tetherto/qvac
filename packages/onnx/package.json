@@ -35,10 +35,10 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tetherto/qvac.git",
-    "directory": "packages/qvac-lib-infer-onnx"
+    "directory": "packages/onnx"
   },
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-infer-onnx#readme",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/onnx#readme",
   "devDependencies": {
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",

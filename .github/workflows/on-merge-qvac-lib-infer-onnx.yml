@@ -8,8 +8,8 @@ on:
       - feature-*
       - tmp-*
     paths:
-      - "packages/qvac-lib-infer-onnx/**"
-      - ".github/workflows/*qvac-lib-infer-onnx*.yml"
+      - "packages/onnx/**"
+      - ".github/workflows/*onnx*.yml"
 
   workflow_dispatch:
     inputs:
@@ -98,9 +98,9 @@ jobs:
           base-ref: ${{ github.ref_name }}
           base-sha: ${{ github.event.before }}
           head-sha: ${{ github.sha }}
-          package-slug: qvac-lib-infer-onnx
-          package-json-path: packages/qvac-lib-infer-onnx/package.json
-          changelog-path: packages/qvac-lib-infer-onnx/CHANGELOG.md
+          package-slug: onnx
+          package-json-path: packages/onnx/package.json
+          changelog-path: packages/onnx/CHANGELOG.md
 
   build:
     needs: publish-logic
@@ -114,7 +114,7 @@ jobs:
       packages: write
       pull-requests: write
       id-token: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx.yml
+    uses: ./.github/workflows/prebuilds-onnx.yml
     secrets: inherit
 
   publish-gpr:
@@ -131,7 +131,7 @@ jobs:
       contents: read
       packages: write
     env:
-      PKG_DIR: packages/qvac-lib-infer-onnx
+      PKG_DIR: packages/onnx
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -142,7 +142,7 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           name: prebuilds
-          path: packages/qvac-lib-infer-onnx/prebuilds
+          path: packages/onnx/prebuilds
 
       - name: Publish to GitHub Package Registry
         id: publish
@@ -150,7 +150,7 @@ jobs:
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
-          workdir: packages/qvac-lib-infer-onnx
+          workdir: packages/onnx
           name-suffix: "-mono"
 
   publish-npm:
@@ -169,7 +169,7 @@ jobs:
       packages: write
       id-token: write
     env:
-      PKG_DIR: packages/qvac-lib-infer-onnx
+      PKG_DIR: packages/onnx
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -180,14 +180,14 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           name: prebuilds
-          path: packages/qvac-lib-infer-onnx/prebuilds
+          path: packages/onnx/prebuilds
 
       - name: Publish to NPM Package Registry
         id: publish
         uses: ./.github/actions/publish-library-to-npm
         with:
           tag: "latest"
-          workdir: packages/qvac-lib-infer-onnx
+          workdir: packages/onnx
 
   publish-release:
     needs: [publish-npm]
@@ -197,11 +197,11 @@ jobs:
       needs.publish-npm.outputs.published_version != ''
     permissions:
       contents: write
-    uses: ./.github/workflows/create-github-release-qvac-lib-infer-onnx.yml
+    uses: ./.github/workflows/create-github-release-onnx.yml
     with:
       published_version: ${{ needs.publish-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}
-      workdir: "packages/qvac-lib-infer-onnx"
+      workdir: "packages/onnx"
 
   post-build-gate:
     name: Post-Build Gate
