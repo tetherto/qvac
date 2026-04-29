@@ -4,6 +4,15 @@ import { completionEventSchema } from "./completion-event";
 
 export { completionStatsSchema, type CompletionStats } from "./completion-event";
 
+/**
+ * Tool-call output dialect. Auto-detected from the model name; pass via
+ * `completion({ toolDialect })` to override.
+ *
+ * Expected raw model output per dialect:
+ * - `"hermes"`:   `<tool_call>{"name":"get_weather","arguments":{"city":"Tokyo"}}</tool_call>`
+ * - `"pythonic"`: `[get_weather(city="Tokyo")]` (optionally `<|tool_call_start|>...<|tool_call_end|>`-wrapped)
+ * - `"json"`:     `{"name":"get_weather","arguments":{"city":"Tokyo"}}` or `{"tool_calls":[{"name":"...","arguments":{...}}]}`
+ */
 export const toolDialectSchema = z.enum(["hermes", "pythonic", "json"]);
 
 export const attachmentSchema = z.object({
