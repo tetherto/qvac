@@ -2,12 +2,186 @@
 const fs = require('bare-fs')
 const path = require('bare-path')
 const os = require('bare-os')
+const process = require('bare-process')
 const { Readable } = require('bare-stream')
 const TranscriptionWhispercpp = require('../../index.js')
 
 const platform = os.platform()
 const arch = os.arch()
 const isMobile = platform === 'ios' || platform === 'android'
+
+// ---------------------------------------------------------------------------
+// Performance reporter - captures Whisper integration-test stats and emits
+// them through the shared QVAC perf-report pipeline (desktop) or via console
+// markers extractable from Device Farm logs (mobile).
+//
+// On desktop we require the shared scripts/test-utils/performance-reporter
+// directly. On mobile that path lives outside the addon package and bare-pack
+// can't bundle it, so we fall back to an inline lightweight reporter that
+// chunks JSON into [PERF_REPORT_START]/[PERF_CHUNK] markers - the exact
+// format scripts/perf-report/extract-from-log.js already understands.
+// ---------------------------------------------------------------------------
+let createPerformanceReporter
+const _scriptBase = path.join('..', '..', '..', '..', 'scripts', 'test-utils')
+try {
+  const perfReporterMod = require(path.join(_scriptBase, 'performance-reporter'))
+  perfReporterMod.configure({ fs, path, process, os })
+  createPerformanceReporter = perfReporterMod.createPerformanceReporter
+} catch (_) {
+  createPerformanceReporter = function (opts) {
+    const _results = []
+    const _startedAt = new Date().toISOString()
+    const _addon = (opts && opts.addon) || 'whispercpp'
+    const _addonType = (opts && opts.addonType) || 'whisper'
+    const _device = {
+      name: platform,
+      platform,
+      os_version: '',
+      arch: os.arch ? os.arch() : '',
+      runner: 'device-farm'
+    }
+
+    return {
+      record (testName, metrics, extra) {
+        const entry = {
+          test: testName,
+          execution_provider: (extra && extra.execution_provider) || null,
+          metrics: Object.assign({
+            real_time_factor: null,
+            wall_time_ms: null,
+            tps: null,
+            encoder_time_ms: null,
+            decoder_time_ms: null,
+            audio_duration_ms: null,
+            total_time_ms: null,
+            sample_count: null
+          }, metrics),
+          input: (extra && extra.input) || null,
+          output: (extra && extra.output) || null
+        }
+        _results.push(entry)
+      },
+      toJSON () {
+        return {
+          schema_version: '1.0',
+          addon: _addon,
+          addon_type: _addonType,
+          timestamp: _startedAt,
+          device: _device,
+          results: _results
+        }
+      },
+      writeReport () {
+        const json = JSON.stringify(this.toJSON())
+        const dirs = []
+        if (global.testDir) dirs.push(global.testDir)
+        if (platform === 'android') {
+          dirs.push('/sdcard/Android/data/io.tether.test.qvac/files')
+          dirs.push('/storage/emulated/0/Android/data/io.tether.test.qvac/files')
+          dirs.push('/data/local/tmp')
+        }
+        dirs.push('/tmp')
+        for (let di = 0; di < dirs.length; di++) {
+          try {
+            try { fs.mkdirSync(dirs[di], { recursive: true }) } catch (_) {}
+            const p = path.join(dirs[di], 'perf-report.json')
+            fs.writeFileSync(p, json)
+            console.log('[PERF_REPORT_PATH]' + p)
+          } catch (e) {
+            console.log('[perf-reporter] write to ' + dirs[di] + ' failed: ' + e.message)
+          }
+        }
+      },
+      writeStepSummary () {},
+      writeToConsole () {
+        try {
+          const json = JSON.stringify(this.toJSON())
+          const CHUNK = 800
+          if (json.length <= CHUNK) {
+            console.log('[PERF_REPORT_START]' + json + '[PERF_REPORT_END]')
+          } else {
+            const id = Date.now().toString(36)
+            const n = Math.ceil(json.length / CHUNK)
+            for (let i = 0; i < n; i++) {
+              console.log('[PERF_CHUNK:' + id + ':' + i + ':' + n + ']' + json.substring(i * CHUNK, (i + 1) * CHUNK))
+            }
+          }
+        } catch (err) {
+          console.log('[perf-reporter] mobile console write failed: ' + err.message)
+        }
+      },
+      get length () { return _results.length }
+    }
+  }
+}
+
+const _perfReporter = createPerformanceReporter({
+  addon: 'whispercpp',
+  addonType: 'whisper'
+})
+
+const _reportPath = path.resolve('.', 'test/results/performance-report.json')
+let _reportScheduled = false
+
+function _flushPerfReport () {
+  if (_perfReporter.length === 0) return
+  try { _perfReporter.writeReport(_reportPath) } catch (_) {}
+  try { _perfReporter.writeToConsole() } catch (_) {}
+}
+
+function _scheduleReportWrite () {
+  if (_reportScheduled) return
+  _reportScheduled = true
+  process.on('exit', _flushPerfReport)
+}
+
+function _numberOrNull (value) {
+  return typeof value === 'number' ? value : null
+}
+
+function _roundOrNull (value) {
+  return typeof value === 'number' ? Math.round(value) : null
+}
+
+/**
+ * Record a Whisper inference stats row through the shared perf reporter.
+ *
+ * @param {string} label - Test label, e.g. '[CPU] multi-transcribe run 1'.
+ * @param {Object} stats - Stats object from response.stats.
+ * @param {Object} [extra] - Optional { wallMs, output, executionProvider, input }.
+ */
+function recordWhisperStats (label, stats, extra) {
+  if (!stats || typeof stats !== 'object') return
+  const epOverride = extra && extra.executionProvider
+  const ep = epOverride || (/\[gpu\]/i.test(label) ? (platform === 'ios' ? 'coreml' : 'nnapi') : /\[cpu\]/i.test(label) ? 'cpu' : null)
+
+  const totalTimeSec = _numberOrNull(stats.totalTime)
+  const totalTimeMs = totalTimeSec !== null ? Math.round(totalTimeSec * 1000) : null
+  const wallMs = (extra && typeof extra.wallMs === 'number')
+    ? Math.round(extra.wallMs)
+    : (_roundOrNull(stats.totalWallMs) || totalTimeMs)
+
+  _perfReporter.record(label, {
+    real_time_factor: _numberOrNull(stats.realTimeFactor),
+    wall_time_ms: wallMs,
+    tps: _numberOrNull(stats.tokensPerSecond),
+    encoder_time_ms: _roundOrNull(stats.whisperEncodeMs),
+    decoder_time_ms: _roundOrNull(stats.whisperDecodeMs),
+    audio_duration_ms: _roundOrNull(stats.audioDurationMs),
+    total_time_ms: totalTimeMs || wallMs,
+    sample_count: _roundOrNull(stats.totalSamples)
+  }, {
+    execution_provider: ep,
+    input: extra && extra.input ? String(extra.input) : null,
+    output: extra && extra.output ? String(extra.output) : null
+  })
+  _scheduleReportWrite()
+
+  if (isMobile) {
+    try { _perfReporter.writeReport() } catch (_) {}
+    try { _perfReporter.writeToConsole() } catch (_) {}
+  }
+}
 
 const HF_WHISPER_BASE = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main'
 const HF_VAD_BASE = 'https://huggingface.co/ggml-org/whisper-vad/resolve/main'
@@ -720,5 +894,7 @@ module.exports = {
   validateAccuracy,
   isMobile,
   platform,
-  arch
+  arch,
+  recordWhisperStats,
+  flushWhisperPerfReport: _flushPerfReport
 }
