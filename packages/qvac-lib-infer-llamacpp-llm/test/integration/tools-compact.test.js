@@ -2,6 +2,7 @@
 
 const test = require('brittle')
 const path = require('bare-path')
+const fs = require('bare-fs')
 const LlmLlamacpp = require('../../index.js')
 const { ensureModel } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
@@ -501,5 +502,63 @@ test('[tools-compact] cache-aware empty-tools contract', { timeout: 600_000 }, a
     ],
     { ...opts, prefill: true },
     invalidReason
+  )
+})
+
+test('[tools-compact] prefill with tools persists cache and loads on fresh model', { timeout: 600_000 }, async t => {
+  if (cachedToolsSupport === false) {
+    t.comment('Skipping tools_compact behavior assertions: model/template runtime does not support tools in this environment')
+    t.pass('tools unsupported in runtime; assertions skipped')
+    return
+  }
+  const { model: probeModel, logs } = await setupModel(t)
+  if (!await ensureToolsSupportOrSkip(t, probeModel, logs)) return
+
+  const { model: warmModel, dirPath } = await setupModel(t)
+  const sessionName = path.join(dirPath, 'tools-compact-prefill-save.bin')
+
+  // Prefill the warmed [system, user, TOOL_A] prefix with persistence.
+  // tools_compact intentionally skips its post-generation trim on prefill,
+  // so the persisted cache must include the tool block.
+  const primeRun = await runAndCollect(
+    warmModel,
+    [
+      SYSTEM_MESSAGE,
+      { role: 'user', content: 'Start session with available tools.' },
+      TOOL_A
+    ],
+    { cacheKey: sessionName, saveCacheToDisk: true, prefill: true }
+  )
+
+  t.is(primeRun.stats.generatedTokens, 0, 'prefill emits no tokens')
+  t.ok(
+    primeRun.stats.CacheTokens > TOOL_A_TOKENS,
+    `prefill keeps the tool block in cache (CacheTokens=${primeRun.stats.CacheTokens} > TOOL_A_TOKENS=${TOOL_A_TOKENS})`
+  )
+  t.ok(fs.existsSync(sessionName), 'prefill + saveCacheToDisk wrote cache file to disk')
+  t.ok(fs.statSync(sessionName).size > 0, 'persisted prefill cache file is non-empty')
+
+  // Tear down the warm model so the only path to a non-zero CacheTokens on
+  // the follow-up turn is loading the persisted cache file from disk.
+  await warmModel.unload()
+
+  const { model: freshModel } = await setupModel(t)
+  const turn = await runAndCollect(
+    freshModel,
+    [
+      { role: 'user', content: 'What is the weather in Tokyo?' },
+      TOOL_A
+    ],
+    { cacheKey: sessionName, saveCacheToDisk: true }
+  )
+
+  t.ok(turn.output.length > 0, 'follow-up turn produces output from prefilled state')
+  t.ok(
+    turn.stats.CacheTokens > 0,
+    `follow-up loads prefilled cache from disk (CacheTokens=${turn.stats.CacheTokens} > 0)`
+  )
+  t.ok(
+    turn.stats.CacheTokens > primeRun.stats.CacheTokens,
+    `follow-up CacheTokens (${turn.stats.CacheTokens}) grew past prefilled prefix (${primeRun.stats.CacheTokens})`
   )
 })

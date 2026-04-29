@@ -242,12 +242,19 @@ backend_selection::parseMainGpu(const std::string& mainGpuStr) {
 
 std::optional<MainGpu> backend_selection::tryMainGpuFromMap(
     std::unordered_map<std::string, std::string>& configFilemap) {
-  std::optional<MainGpu> mainGpu = std::nullopt;
-  if (auto mainGpuIt = configFilemap.find("main-gpu");
-      mainGpuIt != configFilemap.end()) {
-    mainGpu = parseMainGpu(mainGpuIt->second);
-    configFilemap.erase(mainGpuIt);
+  auto hIt = configFilemap.find("main-gpu");
+  auto uIt = configFilemap.find("main_gpu");
+  if (hIt != configFilemap.end() && uIt != configFilemap.end()) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "both 'main-gpu' and 'main_gpu' are present; use one or the other.");
   }
+  auto it = (hIt != configFilemap.end()) ? hIt : uIt;
+  if (it == configFilemap.end()) {
+    return std::nullopt;
+  }
+  std::optional<MainGpu> mainGpu = parseMainGpu(it->second);
+  configFilemap.erase(it);
   return mainGpu;
 }
 

@@ -26750,17 +26750,33 @@ export const WHISPER_Q8_0_1 = {
   params: models[652].params,
 } as const;
 
-// Helper function to get model by name
+/**
+ * Looks up a model in the built-in catalog by its constant name.
+ *
+ * @param name - The model constant name (e.g. `"WHISPER_TINY"`) to look up.
+ * @returns The matching `RegistryItem`, or `undefined` when no catalog entry has that name.
+ */
 export function getModelByName(name: string): RegistryItem | undefined {
   return models.find((model) => model.name === name);
 }
 
-// Helper function to get model by registry path
+/**
+ * Looks up a model in the built-in catalog by its registry path.
+ *
+ * @param registryPath - Registry-relative path of the model to look up.
+ * @returns The matching `RegistryItem`, or `undefined` when no catalog entry has that registry path.
+ */
 export function getModelByPath(registryPath: string): RegistryItem | undefined {
   return models.find((model) => model.registryPath === registryPath);
 }
 
-// Helper function for blob-based lookups
+/**
+ * Looks up a model in the built-in catalog by model file ID and blob core key.
+ *
+ * @param modelId - The model file ID to match against the catalog.
+ * @param blobCoreKey - The Hyperdrive blob core key to match against the catalog.
+ * @returns The matching `RegistryItem`, or `undefined` when no catalog entry has both the given `modelId` and `blobCoreKey`.
+ */
 export function getModelBySrc(
   modelId: string,
   blobCoreKey: string,

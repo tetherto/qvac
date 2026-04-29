@@ -185,7 +185,14 @@ export type PluginInvokeStreamResponse = z.infer<
 
 /**
  * Helper function to define a plugin with full type inference.
- * This is an identity function that provides type checking.
+ *
+ * Identity function whose only role is to constrain `plugin` to the
+ * `QvacPlugin` shape so consumers get accurate autocompletion and type
+ * errors for plugin manifests without having to write an explicit type
+ * annotation.
+ *
+ * @param plugin - The plugin manifest to register.
+ * @returns The same `plugin` value, typed as the caller's `T`.
  */
 export function definePlugin<T extends QvacPlugin>(plugin: T): T {
   return plugin;
@@ -193,7 +200,14 @@ export function definePlugin<T extends QvacPlugin>(plugin: T): T {
 
 /**
  * Helper function to define a handler with full type inference.
- * This is an identity function that provides type checking.
+ *
+ * Identity function whose only role is to constrain `definition` to a
+ * `PluginHandlerDefinition<TRequest, TResponse>` so the Zod request /
+ * response schemas flow through to the handler body without an explicit
+ * type annotation on the caller side.
+ *
+ * @param definition - The plugin handler definition (request/response schemas and handler function).
+ * @returns The same `definition` value, typed as `PluginHandlerDefinition<TRequest, TResponse>`.
  */
 export function defineHandler<
   TRequest extends z.ZodType,
@@ -204,6 +218,17 @@ export function defineHandler<
   return definition;
 }
 
+/**
+ * Helper function to define a duplex (bidirectional streaming) handler with full type inference.
+ *
+ * Identity function whose only role is to constrain `definition` to a
+ * `DuplexPluginHandlerDefinition` and cast it to the unified
+ * `PluginHandlerDefinition` shape. This bridges TS function-parameter
+ * contravariance so duplex handlers can be registered alongside unary ones.
+ *
+ * @param definition - The duplex plugin handler definition (request/response schemas and streaming handler function).
+ * @returns The same `definition` value, typed as `PluginHandlerDefinition<TRequest, TResponse>`.
+ */
 export function defineDuplexHandler<
   TRequest extends z.ZodType,
   TResponse extends z.ZodType,

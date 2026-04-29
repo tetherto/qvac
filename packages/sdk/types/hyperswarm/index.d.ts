@@ -47,6 +47,26 @@ declare module "hyperswarm" {
     ): this;
     on(event: "error", listener: (error: Error) => void): this;
     on(event: "data", listener: (data: Buffer) => void): this;
+    once(
+      event: "open" | "close" | "error" | "timeout",
+      listener: () => void,
+    ): this;
+    once(event: "error", listener: (error: Error) => void): this;
+  }
+
+  export interface DhtConnectOptions {
+    keyPair?: {
+      publicKey: Buffer;
+      secretKey: Buffer;
+    };
+    relayAddresses?: unknown;
+    relayThrough?: Buffer[] | null;
+  }
+
+  export interface Dht {
+    connect(remotePublicKey: Buffer, opts?: DhtConnectOptions): Connection;
+    destroy(opts?: { force?: boolean }): Promise<void>;
+    fullyBootstrapped(): Promise<void>;
   }
 
   export default class Hyperswarm extends EventEmitter {
@@ -57,10 +77,12 @@ declare module "hyperswarm" {
       publicKey: Buffer;
       secretKey: Buffer;
     };
+    dht: Dht;
     discovery: unknown;
     destroyed: boolean;
     suspended: boolean;
     connecting: number;
+    relayThrough: ((force: boolean, swarm: Hyperswarm) => Buffer[] | null) | null;
 
     join(
       topic: Buffer,
@@ -71,6 +93,8 @@ declare module "hyperswarm" {
     };
 
     leave(topic: Buffer): void;
+
+    listen(): Promise<void>;
 
     flush(): Promise<void>;
 

@@ -93,6 +93,66 @@ test('runStreaming completes and delivers transcription output', async (t) => {
   )
 })
 
+test('runStreaming passes conversation config to native streaming', async (t) => {
+  const binding = new MockedBinding()
+  binding.setScriptedOutputs([
+    { text: 'configured stream', toAppend: false, start: 0, end: 1, id: 0 }
+  ])
+
+  const model = createMockedModel({ binding })
+  await model.load()
+
+  const response = await model.runStreaming(
+    makeAudioChunks(1, 16000),
+    {
+      emitVadEvents: true,
+      endOfTurnSilenceMs: 750,
+      vadRunIntervalMs: 125
+    }
+  )
+  await response.await()
+
+  t.ok(binding.lastStreamingConfig.emitVadEvents, 'emitVadEvents should be forwarded')
+  t.is(binding.lastStreamingConfig.endOfTurnSilenceMs, 750, 'end-of-turn threshold should be forwarded')
+  t.is(binding.lastStreamingConfig.vadRunIntervalMs, 125, 'VAD interval should be forwarded')
+})
+
+test('runStreaming forwards VAD and end-of-turn events without ending the job', async (t) => {
+  const events = []
+  const onOutput = (addon, event, jobId, output, error) => {
+    events.push({ event, jobId, output, error })
+  }
+
+  const binding = new MockedBinding()
+  binding.setScriptedOutputs([
+    { type: 'vad', speaking: true, probability: 1 },
+    { text: 'hello world', toAppend: false, start: 0, end: 5, id: 0 },
+    { type: 'endOfTurn', silenceDurationMs: 900 }
+  ])
+
+  const model = createMockedModel({ onOutput, binding })
+  await model.load()
+
+  const response = await model.runStreaming(
+    makeAudioChunks(2, 16000),
+    { emitVadEvents: true, endOfTurnSilenceMs: 900 }
+  )
+
+  const updates = []
+  response.onUpdate((data) => {
+    updates.push(data)
+  })
+
+  await response.await()
+
+  t.ok(events.find(e => e.event === 'VadState'), 'VadState event should be forwarded')
+  t.ok(events.find(e => e.event === 'EndOfTurn'), 'EndOfTurn event should be forwarded')
+  t.ok(events.find(e => e.event === 'JobEnded'), 'JobEnded should still complete the stream')
+  t.ok(updates.find(data => data?.type === 'vad'), 'VAD event should reach response output')
+  t.ok(updates.find(data => data?.type === 'endOfTurn'), 'EndOfTurn event should reach response output')
+  t.ok(updates.find(data => Array.isArray(data) && data[0]?.text === 'hello world'), 'Transcript output should still be delivered')
+})
+
 test('runStreaming delivers accumulated stats across segments', async (t) => {
   const events = []
   const onOutput = (addon, event, jobId, output, error) => {
