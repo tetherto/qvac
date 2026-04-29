@@ -140,6 +140,50 @@ void StreamingProcessor::processAudioRange(int startSample, int endSample) {
   }
 }
 
+void StreamingProcessor::emitConversationEvents(
+    bool speaking, float probability) {
+  if (config_.emitVadEvents) {
+    VadStateUpdate update;
+    update.speaking = speaking;
+    update.probability = probability;
+    outputQueue_->queueResult(std::any(update));
+  }
+
+  if (speaking) {
+    wasSpeaking_ = true;
+    silenceStartSample_ = 0;
+    endOfTurnEmitted_ = false;
+    return;
+  }
+
+  if (wasSpeaking_) {
+    silenceStartSample_ = lastSpeechEndSample_;
+    wasSpeaking_ = false;
+  }
+
+  if (!hasSeenSpeech_ || config_.endOfTurnSilenceMs <= 0 || endOfTurnEmitted_) {
+    return;
+  }
+
+  if (silenceStartSample_ == 0) {
+    silenceStartSample_ = lastSpeechEndSample_;
+  }
+
+  const std::int64_t currentSample =
+      processBufferStartSample_ +
+      static_cast<std::int64_t>(processBuffer_.size());
+  const int silenceDurationMs = static_cast<int>(
+      (currentSample - silenceStartSample_) * 1000 /
+      static_cast<std::int64_t>(config_.sampleRate));
+
+  if (silenceDurationMs >= config_.endOfTurnSilenceMs) {
+    EndOfTurnEvent event;
+    event.silenceDurationMs = silenceDurationMs;
+    outputQueue_->queueResult(std::any(event));
+    endOfTurnEmitted_ = true;
+  }
+}
+
 void StreamingProcessor::processLoop() {
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
@@ -165,9 +209,15 @@ void StreamingProcessor::processLoop() {
         return ended_ || !pendingAudio_.empty();
       });
 
+      if (processBuffer_.empty()) {
+        processBufferStartSample_ = totalSamplesReceived_;
+      }
+      const std::int64_t pendingSampleCount =
+          static_cast<std::int64_t>(pendingAudio_.size());
       processBuffer_.insert(
           processBuffer_.end(), pendingAudio_.begin(), pendingAudio_.end());
       pendingAudio_.clear();
+      totalSamplesReceived_ += pendingSampleCount;
 
       done = ended_;
       wasCancelled = cancelled_;
@@ -198,6 +248,25 @@ void StreamingProcessor::processLoop() {
             static_cast<float>(config_.sampleRate);
 
         constexpr float CS_TO_SEC = 0.01F;
+
+        bool speaking = false;
+        if (nSeg > 0) {
+          float lastSegmentT1S =
+              whisper_vad_segments_get_segment_t1(segments.get(), nSeg - 1) *
+              CS_TO_SEC;
+          float marginS = static_cast<float>(config_.speechPadMs) / 1000.0F;
+          speaking = lastSegmentT1S + marginS >= totalDurationS;
+          lastSpeechEndSample_ =
+              processBufferStartSample_ +
+              std::min(
+                  static_cast<int>(
+                      lastSegmentT1S * static_cast<float>(config_.sampleRate)),
+                  bufferSize);
+          hasSeenSpeech_ = true;
+        }
+        // whisper.cpp's public VAD API gives us the speech decision here; it
+        // does not expose per-run probabilities in the installed header.
+        emitConversationEvents(speaking, speaking ? 1.0F : 0.0F);
 
         int lastComplete = -1;
         for (int i = 0; i < nSeg; i++) {
@@ -259,6 +328,7 @@ void StreamingProcessor::processLoop() {
               bufferSize);
           processBuffer_.erase(
               processBuffer_.begin(), processBuffer_.begin() + trimPoint);
+          processBufferStartSample_ += trimPoint;
           bufferSizeAtLastVadRun_ = 0;
         }
       }
@@ -272,6 +342,7 @@ void StreamingProcessor::processLoop() {
                 std::to_string(processBuffer_.size()) + " samples");
         processAudioRange(0, static_cast<int>(processBuffer_.size()));
         processBuffer_.clear();
+        processBufferStartSample_ = totalSamplesReceived_;
         bufferSizeAtLastVadRun_ = 0;
       }
     }
@@ -300,6 +371,7 @@ void StreamingProcessor::processLoop() {
             std::to_string(processBuffer_.size()) + " samples");
     processAudioRange(0, static_cast<int>(processBuffer_.size()));
     processBuffer_.clear();
+    processBufferStartSample_ = totalSamplesReceived_;
   }
 
   if (hasError_) {
