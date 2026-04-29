@@ -117,18 +117,32 @@ jobs:
         if: matrix.platform == 'Android' && github.event_name != 'workflow_dispatch'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          path: addon/${{ inputs.workdir }}/prebuilds
+          path: ${{ runner.temp }}/prebuilds-android-staging
           pattern: ${{ env.PREBUILD_ARTIFACT_PREFIX }}android-*
           merge-multiple: true
+
+      - name: Move Android prebuilds from staging
+        if: matrix.platform == 'Android' && !inputs.package
+        run: |
+          mkdir -p addon/${{ inputs.workdir }}/prebuilds
+          cp -r ${{ runner.temp }}/prebuilds-android-staging/* addon/${{ inputs.workdir }}/prebuilds/ 2>/dev/null || true
+        shell: bash
         continue-on-error: true
 
       - name: Download iOS prebuilds (from artifacts)
         if: matrix.platform == 'iOS' && github.event_name != 'workflow_dispatch'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          path: addon/${{ inputs.workdir }}/prebuilds
+          path: ${{ runner.temp }}/prebuilds-ios-staging
           pattern: ${{ env.PREBUILD_ARTIFACT_PREFIX }}ios-*
           merge-multiple: true
+
+      - name: Move iOS prebuilds from staging
+        if: matrix.platform == 'iOS' && !inputs.package
+        run: |
+          mkdir -p addon/${{ inputs.workdir }}/prebuilds
+          cp -r ${{ runner.temp }}/prebuilds-ios-staging/* addon/${{ inputs.workdir }}/prebuilds/ 2>/dev/null || true
+        shell: bash
         continue-on-error: true
 
       - name: Download prebuilds (from npm - workflow_dispatch)

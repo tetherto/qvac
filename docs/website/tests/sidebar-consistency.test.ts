@@ -4,45 +4,21 @@ import path from 'node:path'
 
 const CONTENT_DIR = path.resolve(process.cwd(), 'content/docs')
 
-vi.mock('@/lib/source', async () => {
-  const { readdirSync, existsSync } = await import('node:fs')
-  const { resolve, join } = await import('node:path')
-
-  const contentDir = resolve(process.cwd(), 'content/docs')
-  const children: Record<string, unknown>[] = []
-
-  for (const entry of readdirSync(contentDir, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue
-    const apiDir = join(contentDir, entry.name, 'sdk', 'api')
-    if (!existsSync(apiDir)) continue
-
-    const urlPrefix = entry.name === '(latest)' ? '' : `/${entry.name}`
-    const folderChildren = readdirSync(apiDir)
-      .filter((f: string) => f.endsWith('.mdx') && f !== 'index.mdx')
-      .map((f: string) => ({
-        type: 'page' as const,
-        name: f.replace('.mdx', ''),
-        url: `${urlPrefix}/sdk/api/${f.replace('.mdx', '')}`,
-      }))
-
-    children.push({
-      type: 'folder',
-      name: 'API',
-      index: { type: 'page', name: 'API', url: `${urlPrefix}/sdk/api` },
-      children: folderChildren,
-    })
-  }
-
-  return { source: { pageTree: { children } } }
-})
-
+// resolveIcon imports `lucide-react` which only loads in a Next.js build.
+// The sidebar tree imports it transitively, so we stub it here so the test
+// can exercise the real tree without pulling the icon library.
 vi.mock('@/lib/resolveIcon', () => ({
   resolveIcon: () => undefined,
 }))
 
-import { getAllTrees } from '@/lib/trees'
+import { customTree } from '@/lib/custom-tree'
 import type { Node } from 'fumadocs-core/page-tree'
 
+/**
+ * Walk the tree and collect every internal page URL (skip external links,
+ * pages with explicit hash-only anchors stay as-is — the page is still
+ * required to exist).
+ */
 function collectUrls (nodes: Node[]): string[] {
   const urls: string[] = []
   for (const node of nodes) {
@@ -60,39 +36,30 @@ function collectUrls (nodes: Node[]): string[] {
   return urls
 }
 
-const trees = getAllTrees()
-const versionPrefixes = Object.keys(trees).filter(k => k !== 'latest')
-
+/**
+ * For a sidebar URL like `/sdk/api`, the content file resolves to either:
+ *   - `content/docs/sdk/api.mdx`, or
+ *   - `content/docs/sdk/api/index.mdx`
+ *
+ * Anchor-only URLs (`/#community`) resolve against the docs root index.
+ */
 function getExpectedPaths (url: string): string[] {
-  let cleanUrl = url.split('#')[0].replace(/^\//, '')
-
-  let contentPrefix = '(latest)'
-  for (const version of versionPrefixes) {
-    if (cleanUrl.startsWith(version + '/') || cleanUrl === version) {
-      contentPrefix = version
-      cleanUrl = cleanUrl.slice(version.length).replace(/^\//, '')
-      break
-    }
-  }
-
+  const cleanUrl = url.split('#')[0].replace(/^\//, '')
   if (!cleanUrl) {
-    return [path.join(CONTENT_DIR, contentPrefix, 'index.mdx')]
+    return [path.join(CONTENT_DIR, 'index.mdx')]
   }
-
   return [
-    path.join(CONTENT_DIR, contentPrefix, cleanUrl + '.mdx'),
-    path.join(CONTENT_DIR, contentPrefix, cleanUrl, 'index.mdx'),
+    path.join(CONTENT_DIR, cleanUrl + '.mdx'),
+    path.join(CONTENT_DIR, cleanUrl, 'index.mdx'),
   ]
 }
 
 describe('sidebar-consistency', () => {
-  describe.each(Object.entries(trees))('tree: %s', (_version, nodes) => {
-    const urls = [...new Set(collectUrls(nodes as Node[]))]
+  const urls = [...new Set(collectUrls(customTree as Node[]))]
 
-    it.each(urls)('has content file for %s', (url) => {
-      const candidates = getExpectedPaths(url)
-      const found = candidates.some(p => fs.existsSync(p))
-      expect(found, `No .mdx file for ${url}. Checked:\n  ${candidates.join('\n  ')}`).toBe(true)
-    })
+  it.each(urls)('has content file for %s', (url) => {
+    const candidates = getExpectedPaths(url)
+    const found = candidates.some((p) => fs.existsSync(p))
+    expect(found, `No .mdx file for ${url}. Checked:\n  ${candidates.join('\n  ')}`).toBe(true)
   })
 })
