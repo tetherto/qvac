@@ -102,7 +102,7 @@ jobs:
 
       - name: Verify that yaml files are formatted
         id: yamlfmt
-        uses: tetherto/qvac/.github/actions/yamlfmt@0bbdca93da303a0b1634ba14a89cec085621078d
+        uses: tetherto/qvac/.github/actions/yamlfmt@0d88d993e5e221bd8e9b3f8938f11e40417fcab7
         continue-on-error: true
 
       - name: Check for disallowed dependencies
@@ -118,7 +118,7 @@ jobs:
       - name: Run JavaScript tests
         id: run_js_tests
         continue-on-error: true
-        uses: tetherto/qvac/.github/actions/run-lint-and-unit-tests@0bbdca93da303a0b1634ba14a89cec085621078d
+        uses: tetherto/qvac/.github/actions/run-lint-and-unit-tests@0d88d993e5e221bd8e9b3f8938f11e40417fcab7
         with:
           gpr-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.GITHUB_TOKEN }}

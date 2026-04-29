@@ -106,7 +106,7 @@ jobs:
           echo "Matrix tags: $MATRIX_TAGS"
 
       - name: Setup build host
-        uses: tetherto/qvac/.github/actions/setup-build-host@1d9b2165867d03c6edd675e402ee101a5d48a6d8
+        uses: tetherto/qvac/.github/actions/setup-build-host@0d88d993e5e221bd8e9b3f8938f11e40417fcab7
         with:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
@@ -119,12 +119,12 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
 
       - name: Setup AWS + Windows CLI
-        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@0bbdca93da303a0b1634ba14a89cec085621078d
+        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@0d88d993e5e221bd8e9b3f8938f11e40417fcab7
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
       - name: Setup vcpkg
-        uses: tetherto/qvac/.github/actions/setup-vcpkg@1d9b2165867d03c6edd675e402ee101a5d48a6d8
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@0d88d993e5e221bd8e9b3f8938f11e40417fcab7
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
@@ -132,10 +132,10 @@ jobs:
           arch: ${{ matrix.arch }}
 
       - name: Setup Bare tooling
-        uses: tetherto/qvac/.github/actions/setup-bare-tooling@0bbdca93da303a0b1634ba14a89cec085621078d
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@0d88d993e5e221bd8e9b3f8938f11e40417fcab7
 
       - name: Setup Apple Clang
-        uses: tetherto/qvac/.github/actions/setup-apple-clang@1d9b2165867d03c6edd675e402ee101a5d48a6d8
+        uses: tetherto/qvac/.github/actions/setup-apple-clang@0d88d993e5e221bd8e9b3f8938f11e40417fcab7
 
       - if: ${{ startsWith(matrix.os, 'macos') && matrix.platform == 'ios' }}
         name: Verify UIKit Frameworks
@@ -166,12 +166,12 @@ jobs:
         run: bare-make install
 
       - name: Strip debug symbols
-        uses: tetherto/qvac/.github/actions/strip-prebuilds@1d9b2165867d03c6edd675e402ee101a5d48a6d8
+        uses: tetherto/qvac/.github/actions/strip-prebuilds@0d88d993e5e221bd8e9b3f8938f11e40417fcab7
         with:
           platform: ${{ matrix.platform }}
           workdir: ${{ env.WORKDIR }}
 
-      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: onnx-ocr-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
           path: ${{ env.WORKDIR }}/prebuilds
@@ -198,13 +198,13 @@ jobs:
           merge-multiple: true
 
       - name: Upload merged artifacts
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: prebuilds
           path: prebuilds
 
       - name: Setup AWS + Windows CLI
-        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@0bbdca93da303a0b1634ba14a89cec085621078d
+        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@0d88d993e5e221bd8e9b3f8938f11e40417fcab7
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
@@ -215,7 +215,7 @@ jobs:
           aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ocr/2025-04-25/detector_craft.onnx models/ocr/detector_craft.onnx
 
       - name: Upload models artifacts
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: models
           path: models

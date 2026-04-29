@@ -41,7 +41,7 @@ jobs:
 
       - name: Cache Vulkan SDK
         id: cache-vulkan
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/vulkan
           key: vulkan-sdk-${{ env.VULKAN_SDK_VERSION }}-${{ steps.runner-image.outputs.version }}
@@ -52,7 +52,7 @@ jobs:
 
       - name: Cache LLVM packages
         id: cache-llvm
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/llvm-debs
           key: llvm-debs-${{ env.LLVM_VERSION }}-${{ steps.runner-image.outputs.version }}-${{ steps.llvm-key.outputs.hash }}
@@ -94,7 +94,7 @@ jobs:
           echo "/usr/lib/llvm-${{ env.LLVM_VERSION }}/bin" >> $GITHUB_PATH
           clang-format-${{ env.LLVM_VERSION }} --version
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           submodules: recursive
@@ -105,13 +105,13 @@ jobs:
         run: git config --global --add url."https://${{ secrets.PAT_TOKEN }}:x-oauth-basic@github.com/".insteadOf "git@github.com:"
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "18.x"
 
       - name: Restore npm cache
         id: cache-npm
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.npm
           key: npm-${{ runner.os }}-${{ hashFiles(format('{0}/package-lock.json', inputs.workdir), format('{0}/package.json', inputs.workdir)) }}
@@ -143,7 +143,7 @@ jobs:
 
       - name: Get vcpkg cache
         id: cache-vcpkg
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: vcpkg/cache
           key: vcpkg-linux-x64-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg/ports/**') }}

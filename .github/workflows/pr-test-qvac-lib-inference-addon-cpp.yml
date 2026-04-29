@@ -79,7 +79,7 @@ jobs:
           workdir: ${{ env.PKG_DIR }}
         
       - name: Export GitHub Actions cache environment variables
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # 9.0.0
         with:
           script: |
             core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
@@ -171,7 +171,7 @@ jobs:
 
       - name: Get vcpkg cache
         id: cache-vcpkg
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # 5.0.5
         with:
           key: ${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles('packages/qvac-lib-inference-addon-cpp/vcpkg.json', 'packages/qvac-lib-inference-addon-cpp/vcpkg-configuration.json', 'packages/qvac-lib-inference-addon-cpp/vcpkg/ports/**') }}
           path: ${{ env.PKG_DIR }}/vcpkg/cache
