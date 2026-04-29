@@ -5,8 +5,9 @@ import type {
   GenerationParams,
   Tool,
   ToolCall,
+  ToolDialect,
 } from "@/schemas";
-import { type ToolCallEvent, TOOLS_MODE } from "@/schemas/tools";
+import { TOOLS_MODE } from "@/schemas/tools";
 import {
   logCacheDisabled,
   logCacheInit,
@@ -41,11 +42,10 @@ import {
 } from "@/server/bare/plugins/llamacpp-completion/ops/kv-cache-state";
 import {
   appendToolsToHistory,
-  checkForToolEvents,
+  detectToolDialect,
   prependToolsToHistory,
-  setupToolGrammar,
 } from "@/server/utils/tool-integration";
-import { parseToolCalls } from "@/server/utils/tool-parser";
+import { parseToolCalls } from "@/server/utils/tools";
 import { buildAutoCacheSaveHistory, type CacheMessage } from "@/server/utils";
 import { getServerLogger } from "@/logging";
 import { AttachmentNotFoundError } from "@/utils/errors-server";
@@ -343,11 +343,8 @@ async function* processModelResponse(
   tools?: Tool[],
   generationParams?: GenerationParams,
   cacheOptions?: CacheRunOptions,
-): AsyncGenerator<
-  { token: string; toolCallEvent?: ToolCallEvent },
-  ProcessModelResponseResult,
-  unknown
-> {
+  dialect?: ToolDialect,
+): AsyncGenerator<{ token: string }, ProcessModelResponseResult, unknown> {
   const runOptions: CacheRunOptions & { generationParams?: GenerationParams } =
     {
       ...(generationParams && { generationParams }),
@@ -369,28 +366,13 @@ async function* processModelResponse(
 
   let accumulatedText = "";
   let producedTokens = false;
-  const emittedToolCallPositions = new Set<number>();
   let toolCallsResult: ToolCall[] = [];
 
   for await (const token of response.iterate()) {
     const tokenStr = token as string;
     if (tokenStr.length > 0) producedTokens = true;
     accumulatedText += tokenStr;
-
     yield { token: tokenStr };
-
-    if (tools && tools.length > 0) {
-      const toolEvents = checkForToolEvents(
-        accumulatedText,
-        tokenStr,
-        tools,
-        emittedToolCallPositions,
-      );
-
-      for (const toolEvent of toolEvents) {
-        yield { token: "", toolCallEvent: toolEvent };
-      }
-    }
   }
   const modelExecutionMs = nowMs() - modelStart;
 
@@ -399,7 +381,7 @@ async function* processModelResponse(
   }
 
   if (tools && tools.length > 0) {
-    const { toolCalls } = parseToolCalls(accumulatedText, tools);
+    const { toolCalls } = parseToolCalls(accumulatedText, tools, dialect);
     toolCallsResult = toolCalls;
   }
 
@@ -437,12 +419,9 @@ export async function* completion(
   params: CompletionParams & {
     tools?: Tool[];
     generationParams?: GenerationParams;
+    toolDialect?: ToolDialect;
   },
-): AsyncGenerator<
-  { token: string; toolCallEvent?: ToolCallEvent },
-  CompletionResult,
-  unknown
-> {
+): AsyncGenerator<{ token: string }, CompletionResult, unknown> {
   const { history, modelId, kvCache, tools, generationParams } = params;
 
   const modelConfig = getModelConfig(modelId);
@@ -450,12 +429,12 @@ export async function* completion(
   const toolsMode = (modelConfig as { toolsMode?: string }).toolsMode;
   const dynamicTools =
     !!tools?.length && toolsEnabled && toolsMode === TOOLS_MODE.dynamic;
-  const staticTools =
-    !!tools?.length && toolsEnabled && !dynamicTools;
+  const staticTools = !!tools?.length && toolsEnabled && !dynamicTools;
 
-  if (tools && tools.length > 0 && toolsEnabled) {
-    setupToolGrammar(modelConfig as Record<string, unknown>, tools);
-  }
+  const dialect =
+    tools && tools.length > 0
+      ? (params.toolDialect ?? detectToolDialect(modelId))
+      : undefined;
 
   const model = getModel(modelId);
 
@@ -511,6 +490,7 @@ export async function* completion(
         tools,
         generationParams,
         { cacheKey: cachePathToUse, saveCacheToDisk: true },
+        dialect,
       );
       const wasCancelled = snapshotCancelCount(modelId) > cancelCountBefore;
 
@@ -593,6 +573,7 @@ export async function* completion(
         tools,
         generationParams,
         { cacheKey: cachePathToUse, saveCacheToDisk: true },
+        dialect,
       );
       const wasCancelled = snapshotCancelCount(modelId) > cancelCountBefore;
 
@@ -688,6 +669,8 @@ export async function* completion(
       transformedHistory,
       tools,
       generationParams,
+      undefined,
+      dialect,
     );
   }
 }
