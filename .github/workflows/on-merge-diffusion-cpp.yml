@@ -8,7 +8,7 @@ on:
       - feature-*
       - tmp-*
     paths:
-      - "packages/lib-infer-diffusion/**"
+      - "packages/diffusion-cpp/**"
       - ".github/workflows/*diffusion*.yml"
 
   workflow_dispatch:
@@ -102,9 +102,9 @@ jobs:
           base-ref: ${{ github.ref_name }}
           base-sha: ${{ github.event.before }}
           head-sha: ${{ github.sha }}
-          package-slug: lib-infer-diffusion
-          package-json-path: packages/lib-infer-diffusion/package.json
-          changelog-path: packages/lib-infer-diffusion/CHANGELOG.md
+          package-slug: diffusion-cpp
+          package-json-path: packages/diffusion-cpp/package.json
+          changelog-path: packages/diffusion-cpp/CHANGELOG.md
 
   # Build prebuilds (build + merge only, no publishing)
   build:
@@ -119,10 +119,10 @@ jobs:
       packages: write
       pull-requests: write
       id-token: write
-    uses: ./.github/workflows/prebuilds-lib-infer-diffusion.yml
+    uses: ./.github/workflows/prebuilds-diffusion-cpp.yml
     secrets: inherit
     with:
-      workdir: "packages/lib-infer-diffusion"
+      workdir: "packages/diffusion-cpp"
 
   # Publish to GitHub Package Registry (GPR) for non-release branches
   publish-gpr:
@@ -154,14 +154,14 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           name: prebuilds
-          path: packages/lib-infer-diffusion/prebuilds
+          path: packages/diffusion-cpp/prebuilds
 
       - name: Scope package as @tetherto for GPR
         shell: bash
         run: |
           set -euo pipefail
-          node -e "const fs=require('fs');const f='packages/lib-infer-diffusion/package.json';const p=JSON.parse(fs.readFileSync(f,'utf8'));const want='@tetherto/diffusion-cpp';if(p.name!==want){p.name=want;fs.writeFileSync(f,JSON.stringify(p,null,2));console.log('Set name to',p.name);}else{console.log('Already',p.name);} "
-          node -e "console.log('Effective package name (publish-gpr):', JSON.parse(require('fs').readFileSync('packages/lib-infer-diffusion/package.json','utf8')).name)"
+          node -e "const fs=require('fs');const f='packages/diffusion-cpp/package.json';const p=JSON.parse(fs.readFileSync(f,'utf8'));const want='@tetherto/diffusion-cpp';if(p.name!==want){p.name=want;fs.writeFileSync(f,JSON.stringify(p,null,2));console.log('Set name to',p.name);}else{console.log('Already',p.name);} "
+          node -e "console.log('Effective package name (publish-gpr):', JSON.parse(require('fs').readFileSync('packages/diffusion-cpp/package.json','utf8')).name)"
 
       - name: Publish to GitHub Package Registry
         id: publish
@@ -169,7 +169,7 @@ jobs:
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ inputs.tag || needs.publish-logic.outputs.gpr_tag }}
-          workdir: packages/lib-infer-diffusion
+          workdir: packages/diffusion-cpp
           name-suffix: "-mono"
 
   # Publish to NPM for release branches
@@ -203,10 +203,10 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           name: prebuilds
-          path: packages/lib-infer-diffusion/prebuilds
+          path: packages/diffusion-cpp/prebuilds
 
       - name: Scope package as @qvac for npm
-        working-directory: packages/lib-infer-diffusion
+        working-directory: packages/diffusion-cpp
         shell: bash
         run: |
           set -euo pipefail
@@ -218,7 +218,7 @@ jobs:
         uses: ./.github/actions/publish-library-to-npm
         with:
           tag: "latest"
-          workdir: packages/lib-infer-diffusion
+          workdir: packages/diffusion-cpp
 
   # Create GitHub release only for actual releases (after NPM publish)
   publish-release:
@@ -235,4 +235,4 @@ jobs:
       release_name: "QVAC Stable Diffusion Addon"
       published_version: ${{ needs.publish-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}
-      workdir: "packages/lib-infer-diffusion"
+      workdir: "packages/diffusion-cpp"
