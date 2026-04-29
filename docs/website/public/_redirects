@@ -1,15 +1,19 @@
-# Workaround: Sevalla CDN pathMap does not resolve directory-to-index.html
-# for path segments containing dots (e.g. v0.7.0). Placeholder rewrites
-# force the CDN to serve the correct index.html for versioned pages.
+# Sevalla CDN does not resolve directory-to-index.html for path segments
+# containing dots (e.g. `v0.7.0`). The new versioning model serves each
+# older version as a single sibling MDX (`/sdk/api/v0.7.0`), so we rewrite
+# those paths to their `index.html` explicitly.
 
-/v0.7.0/sdk/api/:page/ /v0.7.0/sdk/api/:page/index.html 200
-/v0.7.0/sdk/api/:page /v0.7.0/sdk/api/:page/index.html 200
-/v0.7.0/sdk/api/ /v0.7.0/sdk/api/index.html 200
+/sdk/api/v0.7.0/   /sdk/api/v0.7.0/index.html   200
+/sdk/api/v0.7.0    /sdk/api/v0.7.0/index.html   200
 
-/v0.8.0/sdk/api/:page/ /v0.8.0/sdk/api/:page/index.html 200
-/v0.8.0/sdk/api/:page /v0.8.0/sdk/api/:page/index.html 200
-/v0.8.0/sdk/api/ /v0.8.0/sdk/api/index.html 200
+/sdk/api/v0.8.0/   /sdk/api/v0.8.0/index.html   200
+/sdk/api/v0.8.0    /sdk/api/v0.8.0/index.html   200
 
-/v0.9.0/sdk/api/:page/ /v0.9.0/sdk/api/:page/index.html 200
-/v0.9.0/sdk/api/:page /v0.9.0/sdk/api/:page/index.html 200
-/v0.9.0/sdk/api/ /v0.9.0/sdk/api/index.html 200
+/sdk/release-notes/v0.7.0/   /sdk/release-notes/v0.7.0/index.html   200
+/sdk/release-notes/v0.7.0    /sdk/release-notes/v0.7.0/index.html   200
+
+/sdk/release-notes/v0.8.0/   /sdk/release-notes/v0.8.0/index.html   200
+/sdk/release-notes/v0.8.0    /sdk/release-notes/v0.8.0/index.html   200
+
+/sdk/release-notes/v0.9.0/   /sdk/release-notes/v0.9.0/index.html   200
+/sdk/release-notes/v0.9.0    /sdk/release-notes/v0.9.0/index.html   200

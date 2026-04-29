@@ -8,10 +8,9 @@ import { buttonVariants } from './ui/button';
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from './ui/popover';
 import { cva } from 'class-variance-authority';
 import {
-  VERSIONS,
-  LATEST_VERSION,
-  getVersionFromPath,
-  computeVersionedUrl,
+  computeSectionVersionUrl,
+  getCurrentVersion,
+  getVersionedSection,
 } from '@/lib/versions';
 
 const cache = new Map<string, string>();
@@ -241,31 +240,26 @@ export function ViewOptions({
   );
 }
 
+/**
+ * Visible only on URLs that fall inside a versioned section (currently
+ * `/sdk/api*` and `/sdk/release-notes*`). Switches between sibling MDX
+ * files via a full page reload (`window.location.href`) — Fumadocs is
+ * statically exported so cross-version navigation can't use `router.push`.
+ */
 export function VersionSelector() {
   const pathname = usePathname();
 
-  const isApiPage = pathname.includes('/sdk/api');
-  if (!isApiPage) return null;
+  const section = getVersionedSection(pathname);
+  if (!section) return null;
 
-  const currentVersion = getVersionFromPath(pathname) ?? LATEST_VERSION;
-  const currentLabel = VERSIONS.find((v) => v.value === currentVersion)?.label ?? currentVersion;
+  const currentVersion = getCurrentVersion(pathname, section);
+  const currentLabel =
+    section.versions.find((v) => v.value === currentVersion)?.label ??
+    currentVersion;
 
-  const visibleVersions = VERSIONS.filter(
-    (v) => !v.isDev || process.env.NEXT_PUBLIC_SHOW_DEV_DOCS === 'true'
-  );
-
-  async function handleVersionChange(targetVersion: string) {
-    if (targetVersion === currentVersion) return;
-    const targetUrl = computeVersionedUrl(pathname, targetVersion);
-    const targetIsLatest = VERSIONS.find((v) => v.value === targetVersion)?.isLatest;
-    const homeUrl = targetIsLatest ? '/sdk/api/' : `/${targetVersion}/sdk/api/`;
-
-    try {
-      const res = await fetch(targetUrl, { method: 'HEAD' });
-      window.location.href = res.ok ? targetUrl : homeUrl;
-    } catch {
-      window.location.href = homeUrl;
-    }
+  function handleVersionChange(targetVersion: string) {
+    if (!section || targetVersion === currentVersion) return;
+    window.location.href = computeSectionVersionUrl(section, targetVersion);
   }
 
   return (
@@ -285,7 +279,7 @@ export function VersionSelector() {
         <ChevronDown className="size-3.5 text-fd-muted-foreground" />
       </PopoverTrigger>
       <PopoverContent className="flex flex-col">
-        {visibleVersions.map((version) => (
+        {section.versions.map((version) => (
           <PopoverClose asChild key={version.value}>
             <button
               type="button"
