@@ -253,5 +253,31 @@
     "pear-pipe": "^1.0.6",
     "react-native-bare-kit": "^0.14.0"
   },
+  "peerDependenciesMeta": {
+    "@qvac/cli": {
+      "optional": true
+    },
+    "@modelcontextprotocol/sdk": {
+      "optional": true
+    },
+    "expo-build-properties": {
+      "optional": true
+    },
+    "expo-device": {
+      "optional": true
+    },
+    "expo-file-system": {
+      "optional": true
+    },
+    "react-native-bare-kit": {
+      "optional": true
+    },
+    "compact-encoding": {
+      "optional": true
+    },
+    "pear-pipe": {
+      "optional": true
+    }
+  },
   "patchedDependencies": {}
 }
