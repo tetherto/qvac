@@ -40,7 +40,8 @@ const SILENCE_MARKERS: Record<string, string> = {
 
 function getEngineModelType(modelId: string): string {
   const entry = getModelEntry(modelId);
-  return entry?.local?.modelType ?? "";
+  if (!entry || entry.isDelegated) return "";
+  return entry.local.modelType;
 }
 
 function getAudioFormat(modelId: string, engineType: string): AudioFormat {

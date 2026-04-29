@@ -7,10 +7,12 @@ export {
   toolSchema,
   toolCallSchema,
   toolCallErrorSchema,
+  TOOLS_MODE,
   type Tool,
   type ToolCall,
   type ToolCallError,
   type ToolCallWithCall,
+  type ToolsMode,
 } from "./tools";
 export * from "./delegate";
 export * from "./delete-cache";
@@ -75,6 +77,7 @@ export {
 } from "./profiling";
 export { runtimeContextSchema, type RuntimeContext } from "./runtime-context";
 export * from "./get-model-info";
+export * from "./get-loaded-model-info";
 export * from "./model-src-utils";
 export * from "./json-schema";
 export { type McpClient, type McpClientInput } from "./mcp-adapter";

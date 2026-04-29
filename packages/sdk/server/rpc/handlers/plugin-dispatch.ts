@@ -1,5 +1,5 @@
 import { getModelEntry } from "@/server/bare/registry/model-registry";
-import { getPlugin } from "@/server/plugins";
+import { getAllPlugins, getPlugin } from "@/server/plugins";
 import type { PluginHandlerDefinition } from "@/schemas/plugin";
 import {
   profileReplyHandler,
@@ -8,8 +8,8 @@ import {
 import {
   ModelNotFoundError,
   ModelIsDelegatedError,
+  ModelOperationNotSupportedError,
   PluginNotFoundError,
-  PluginHandlerNotFoundError,
   PluginHandlerTypeMismatchError,
 } from "@/utils/errors-server";
 
@@ -27,7 +27,7 @@ function resolvePluginHandlerDef(
     throw new ModelNotFoundError(modelId);
   }
 
-  if (entry.isDelegated || !entry.local) {
+  if (entry.isDelegated) {
     throw new ModelIsDelegatedError(modelId);
   }
 
@@ -38,11 +38,20 @@ function resolvePluginHandlerDef(
 
   const handlerDef = plugin.handlers[handlerName];
   if (!handlerDef) {
-    const availableHandlers = Object.keys(plugin.handlers);
-    throw new PluginHandlerNotFoundError(
-      entry.local.modelType,
+    const loadedModelType = entry.local.modelType;
+    const supportedOperations = Object.keys(plugin.handlers);
+    const suggestedModelTypes = getAllPlugins()
+      .filter(
+        (p) => p.modelType !== loadedModelType && handlerName in p.handlers,
+      )
+      .map((p) => p.modelType);
+
+    throw new ModelOperationNotSupportedError(
+      modelId,
+      loadedModelType,
       handlerName,
-      availableHandlers,
+      supportedOperations,
+      suggestedModelTypes,
     );
   }
 
@@ -57,7 +66,7 @@ function resolvePluginHandler<TRequest, TResponse>(
   const handlerDef = resolvePluginHandlerDef(modelId, handlerName);
 
   return {
-    result: handlerDef.handler(request as never) as
+    result: handlerDef.handler(request) as
       | Promise<TResponse>
       | AsyncGenerator<TResponse>,
     streaming: handlerDef.streaming,
@@ -106,7 +115,7 @@ export async function* dispatchPluginStream<TRequest, TResponse>(
         );
       }
       yield* handlerDef.handler(
-        request as never,
+        request,
         inputStream,
       ) as AsyncGenerator<TResponse>;
     } else {
@@ -124,7 +133,7 @@ export async function* dispatchPluginStream<TRequest, TResponse>(
           "reply",
         );
       }
-      yield* handlerDef.handler(request as never) as AsyncGenerator<TResponse>;
+      yield* handlerDef.handler(request) as AsyncGenerator<TResponse>;
     }
   });
 }

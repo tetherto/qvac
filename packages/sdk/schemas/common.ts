@@ -56,6 +56,10 @@ import {
   getModelInfoRequestSchema,
   getModelInfoResponseSchema,
 } from "./get-model-info";
+import {
+  getLoadedModelInfoRequestSchema,
+  getLoadedModelInfoResponseSchema,
+} from "./get-loaded-model-info";
 import { ocrStreamRequestSchema, ocrStreamResponseSchema } from "./ocr";
 import {
   diffusionStreamRequestSchema,
@@ -103,6 +107,7 @@ export const requestSchema = z.union([
   ragRequestSchema,
   deleteCacheRequestSchema,
   getModelInfoRequestSchema,
+  getLoadedModelInfoRequestSchema,
   ocrStreamRequestSchema,
   diffusionStreamRequestSchema,
   finetuneRequestSchema,
@@ -138,6 +143,7 @@ export const responseSchema = z.discriminatedUnion("type", [
   ragProgressUpdateSchema,
   deleteCacheResponseSchema,
   getModelInfoResponseSchema,
+  getLoadedModelInfoResponseSchema,
   ocrStreamResponseSchema,
   diffusionStreamResponseSchema,
   finetuneResponseSchema,

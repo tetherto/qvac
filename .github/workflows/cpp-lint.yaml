@@ -177,7 +177,7 @@ jobs:
       - name: Generate build system
         id: bare_make_generate
         working-directory: ${{ env.WORKDIR }}
-        run: bare-make generate
+        run: bare-make generate -D ENABLE_VULKAN=OFF
 
       - name: Check C++ files format
         id: cpp_files_fmt

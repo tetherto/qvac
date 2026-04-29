@@ -39,7 +39,10 @@ def _lazy_import_supertonic():
                         raise FileNotFoundError(
                             f"Supertonic model directory not found: {self.model_path}"
                         )
-                    self.tokenizer = AutoTokenizer.from_pretrained(self.model_path)
+                    self.tokenizer = AutoTokenizer.from_pretrained(
+                        self.model_path,
+                        use_fast=False,
+                    )
                     onnx_dir = os.path.join(self.model_path, "onnx")
                     for name in ("text_encoder.onnx", "latent_denoiser.onnx", "voice_decoder.onnx"):
                         p = os.path.join(onnx_dir, name)
