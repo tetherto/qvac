@@ -20,7 +20,7 @@ on:
         description: "Working directory (optional)"
         required: false
         type: string
-        default: "packages/lib-infer-diffusion"
+        default: "packages/diffusion-cpp"
 
 permissions:
   contents: write

@@ -6,7 +6,7 @@ const os = require('bare-os')
 const proc = require('bare-process')
 
 const ImgStableDiffusion = require('../../index.js')
-const { ensureModel } = require('./utils')
+const { ensureModel } = require('./utils.js')
 
 const platform = os.platform()
 const arch = os.arch()
