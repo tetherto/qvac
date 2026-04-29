@@ -5,10 +5,11 @@
 # pass `secrets: inherit` so the reusable can read PAT_TOKEN, AWS_OIDC_ROLE_ARN
 # and MODEL_S3_BUCKET.
 #
-# Coverage today: parakeet, onnx, nmtcpp, lib-infer-diffusion,
-# qvac-lib-infer-llamacpp-llm, qvac-lib-infer-llamacpp-embed, whispercpp.
-# Outliers not yet folded in: onnx-tts (per-platform Rust toolchains and
-# submodules) and ocr-onnx (custom merge job that pulls OCR models from S3).
+# Coverage today: parakeet, onnx, nmtcpp, diffusion-cpp,
+# qvac-lib-infer-llamacpp-llm, qvac-lib-infer-llamacpp-embed, whispercpp,
+# qvac-lib-infer-onnx-tts.
+# Outlier not yet folded in: ocr-onnx (custom merge job that pulls OCR
+# models from S3).
 name: "Prebuilds (reusable)"
 
 on:
@@ -82,6 +83,15 @@ on:
         default: ""
       setup-python-on-windows:
         description: "Install Python 3.12 on Windows runners (some vcpkg ports need it)"
+        type: boolean
+        required: false
+        default: false
+      setup-rust-toolchain:
+        description: >-
+          Ensure a stable Rust toolchain plus the per-platform stdlib targets
+          required by native crates that ship Rust code (iOS / Android via
+          `rustup target add ...`). On Windows the action will bootstrap
+          rustup itself if it isn't already on PATH.
         type: boolean
         required: false
         default: false
@@ -219,6 +229,13 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: npm install
+
+      - if: ${{ inputs.setup-rust-toolchain }}
+        name: Setup Rust toolchain
+        uses: ./.github/actions/setup-rust-prebuild
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
 
       - name: Compute cmake defines
         shell: bash
