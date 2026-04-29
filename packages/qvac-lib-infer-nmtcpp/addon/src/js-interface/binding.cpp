@@ -20,6 +20,7 @@ js_value_t* qvac_lib_infer_nmtcpp_exports(
 
   V("createInstance", qvac_lib_inference_addon_nmt::createInstance)
   V("runJob", qvac_lib_inference_addon_nmt::runJob)
+  V("getActiveBackendName", qvac_lib_inference_addon_nmt::getActiveBackendName)
 
   V("loadWeights", qvac_lib_inference_addon_cpp::JsInterface::loadWeights)
   V("activate", qvac_lib_inference_addon_cpp::JsInterface::activate)

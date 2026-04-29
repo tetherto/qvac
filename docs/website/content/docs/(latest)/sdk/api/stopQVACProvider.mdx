@@ -1,18 +1,14 @@
 ---
 title: "stopQVACProvider( )"
 titleStyle: code
-description: Stops a running provider service and leaves the specified topic.
+description: Stops the running provider service.
 ---
 
 ```ts
-function stopQVACProvider(params: StopProvideParams): Promise<object>;
+function stopQVACProvider(): Promise<object>;
 ```
 
-## Parameters
-
-| Name | Type | Required? | Description |
-| --- | --- | :---: | --- |
-| params.topic | `string` | ✓ | Topic hex string to leave |
+Stops the running provider service. Takes no arguments.
 
 ## Returns
 
@@ -28,5 +24,5 @@ function stopQVACProvider(params: StopProvideParams): Promise<object>;
 ## Example
 
 ```typescript
-await stopQVACProvider({ topic: "a1b2c3d4..." });
+await stopQVACProvider();
 ```

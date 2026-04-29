@@ -39,13 +39,12 @@ Common fields present in all variants:
 
 ### `Delegate`
 
-Optional delegation configuration for remote (P2P) inference:
+Optional delegation configuration for remote (P2P) inference. Consumers connect directly to the provider via the DHT using `providerPublicKey` — no topic or discovery step is required.
 
 | Field | Type | Required? | Default | Description |
 | --- | --- | :---: | --- | --- |
-| topic | `string` | ✓ | — | P2P topic for delegation |
-| providerPublicKey | `string` | ✓ | — | Provider's public key |
-| timeout | `number` | ✗ | — | Timeout in milliseconds (min 100) |
+| providerPublicKey | `string` | ✓ | — | Provider's public key (from `startQVACProvider`) |
+| timeout | `number` | ✗ | — | Timeout in milliseconds (min 100). On a cold DHT the first connect can take 15–45s — use a generous value (e.g. `60_000`). Subsequent connections reuse the open socket and are sub-second. |
 | fallbackToLocal | `boolean` | ✗ | `false` | Whether to fallback to local inference if delegation fails |
 | forceNewConnection | `boolean` | ✗ | `false` | Force a new connection to the provider |
 

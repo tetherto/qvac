@@ -19,11 +19,12 @@ Sends a heartbeat round-trip to verify that a delegated provider is online or th
 
 ### `DelegateBase`
 
+Consumers connect directly to the provider via the DHT using `providerPublicKey` — no topic or discovery step is required.
+
 | Field | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| topic | `string` | ✓ | Hyperswarm topic hex string |
-| providerPublicKey | `string` | ✓ | Provider peer public key hex string |
-| timeout | `number` | ✗ | Connection timeout in milliseconds (min 100) |
+| providerPublicKey | `string` | ✓ | Provider peer public key hex string (from `startQVACProvider`) |
+| timeout | `number` | ✗ | Connection timeout in milliseconds (min 100). On a cold DHT the first connect can take 15–45s. |
 | healthCheckTimeout | `number` | ✗ | Health check timeout in milliseconds (min 100) |
 
 ## Returns
@@ -49,7 +50,7 @@ Sends a heartbeat round-trip to verify that a delegated provider is online or th
 // Check if a delegated provider is online
 try {
   await heartbeat({
-    delegate: { topic: "topicHex", providerPublicKey: "peerHex", timeout: 3000 },
+    delegate: { providerPublicKey: "peerHex", timeout: 3000 },
   });
   console.log("Provider is online");
 } catch {

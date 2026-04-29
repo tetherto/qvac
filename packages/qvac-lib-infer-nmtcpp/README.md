@@ -21,6 +21,7 @@ This library simplifies the process of running various translation models within
     - [3. Create the `config` object](#3-create-the-config-object)
       - [Model-Specific Parameters](#model-specific-parameters)
       - [Generation/Decoding Parameters (IndicTrans Only)](#generationdecoding-parameters-indictrans-only)
+      - [Backend & GPU Settings](#backend--gpu-settings)
     - [4. Create Model Instance](#4-create-model-instance)
       - [IndicTrans2](#indictrans2)
       - [Bergamot](#bergamot)
@@ -48,6 +49,9 @@ This library simplifies the process of running various translation models within
     - [Available Packages](#available-packages)
       - [Main Package](#main-package)
   - [Backends](#backends)
+    - [Translation backend build flags](#translation-backend-build-flags)
+    - [Compute backend selection](#compute-backend-selection)
+    - [Compute backend build flag](#compute-backend-build-flag)
   - [Benchmarking](#benchmarking)
     - [Benchmark Results](#benchmark-results)
   - [Logging](#logging)
@@ -260,6 +264,32 @@ const generationParams = {
 }
 ```
 
+#### Backend & GPU Settings
+
+These config keys control which compute backend the native addon picks at load time. They are read once at `load()`; changing them after load has no effect (call `unload()` + `load()` to re-select a backend).
+
+```javascript
+const backendSettings = {
+  use_gpu: true,              // Enable GPU inference (default: false → CPU-only)
+  gpu_backend: 'vulkan',      // Optional: pick a specific backend by name substring
+  gpu_device: 0,              // Optional: ordinal within matching devices (default: 0)
+  backendsDir: './prebuilds', // Optional: dir where libqvac-ggml-*.so / *.dll live
+  openclCacheDir: '/path/ok'  // Optional (Android only): OpenCL kernel-cache dir
+}
+```
+
+The three GPU control keys each accept a camelCase alias alongside the snake_case primary. Snake_case mirrors the C-struct field names; camelCase matches the `ocr-onnx` sibling addon convention. When both forms are present in the same config object, **snake_case takes precedence**.
+
+| Key | Alias | Type | Description |
+|-----|-------|------|-------------|
+| `use_gpu` | `useGPU` | boolean | Enable GPU inference. When `false` (default), only the CPU backend is used. Bergamot is CPU-only by design — this flag is effectively a no-op for Bergamot. |
+| `gpu_backend` | `gpuBackend` | string | Case-insensitive **substring** match against the ggml device name (e.g. `"vulkan"`, `"vulkan0"`, `"opencl"`, `"metal"`). When set, the selector runs a single explicit pass and picks the first non-CPU device whose name contains the substring. When unset, the default gated selection runs (see [Backends](#backends)). Explicit `"opencl"` bypasses the build-time `USE_OPENCL` guard — an informed opt-in. |
+| `gpu_device` | `gpuDevice` | int | Ordinal within the matching devices. Defaults to `0` (first match). Example: `{gpu_backend: "vulkan", gpu_device: 1}` picks the second Vulkan adapter. |
+| `backendsDir` | — | string | Path to the directory containing the runtime backend shared libraries (`libqvac-ggml-vulkan.so`, etc.). Defaults to `<package>/prebuilds` when unset, which is where `npm install` places the shipped prebuilds. Must be an absolute path; paths with `..` segments or unresolvable symlinks are rejected with a warning and fall back to the default prebuilds directory. |
+| `openclCacheDir` | — | string | **Android only.** Writable directory the OpenCL backend uses for its JIT kernel cache (forwarded via `GGML_OPENCL_CACHE_DIR`). Must be an absolute path; paths with `..` segments are rejected. The OpenCL backend falls back to a non-writable relative path if this is unset, which `ggml_abort()`s during init inside the app sandbox — always provide an app-writable path when exercising OpenCL on Android. |
+
+> **Tip:** Use `model.getActiveBackendName()` after `load()` to confirm which backend actually took the request — see [Additional Features](#additional-features). The GGML scheduler silently falls back to CPU when no usable GPU ICD is registered, and this is the only way to detect that.
+
 ### 4. Create Model Instance
 
 Import `TranslationNmtcpp` and create an instance by combining `args` (from Step 2) with `config` parameters (from Step 3):
@@ -398,6 +428,16 @@ try {
 - **Cancel:** Translation can be cancelled mid-inference
 - **Progress Tracking:** Monitor loading progress with a callback function
 - **Performance Stats:** Measure inference time with the `stats` option
+- **Active Backend Inspection:** `model.getActiveBackendName()` returns the name of the backend that `load()` actually selected for inference, or a sentinel when no GPU backend is active. Useful for confirming `use_gpu` / `gpu_backend` selection actually took effect (the GGML scheduler silently falls back to CPU when no usable GPU ICD is registered):
+
+  ```javascript
+  await model.load()
+  const backend = model.getActiveBackendName()
+  console.log(`inference backend: ${backend}`)
+  // → "Vulkan0" | "OpenCL" | "Metal" | "CPU" | "Bergamot-CPU" | "Unloaded"
+  ```
+
+  Sentinels: `"Unloaded"` (not yet loaded), `"Bergamot-CPU"` (Bergamot backend — CPU-only by design, independent of `use_gpu`), `"CPU"` (GGML backend but only the CPU device registered).
 
 For a complete working example that brings all these steps together, see the [Quickstart Example](#quickstart-example) below.
 
@@ -631,12 +671,37 @@ The main package supports both backends and all their respective languages. See 
 
 ## Backends
 
-This project supports multiple backends (Bergamot/Firefox and IndicTrans2).
+This project supports multiple **translation backends** (Bergamot/Firefox and IndicTrans2) and, for IndicTrans2 at runtime, multiple **compute backends** (CPU, Vulkan, Metal, OpenCL).
+
+### Translation backend build flags
 
 The Bergamot backend is included in the build by default. To build without Bergamot support (reduces build time and dependencies):
 
 ```bash
 bare-make generate -D USE_BERGAMOT=OFF
+```
+
+### Compute backend selection
+
+At runtime, the addon picks a ggml compute device using the `use_gpu`, `gpu_backend`, and `gpu_device` config keys described in [Backend & GPU Settings](#backend--gpu-settings). When `use_gpu` is true and `gpu_backend` is **not** set, the selector falls back to a default gated pass:
+
+1. If built with `USE_OPENCL=ON`, prefer an OpenCL device first.
+2. Otherwise (and as a fallback in the `ON` case) pick any non-CPU device. When `USE_OPENCL=OFF` (the default), OpenCL-named devices are also excluded from the fallback — the OpenCL backend still loads as a shared library but is never selected automatically.
+
+An explicit `config.gpu_backend: 'opencl'` always bypasses the `USE_OPENCL` guard and selects OpenCL directly. The flag gates *automatic* selection only; caller-explicit requests are honored.
+
+### Compute backend build flag
+
+| Flag | Default | Purpose |
+|------|---------|---------|
+| `USE_OPENCL` | `OFF` | When `ON`, the runtime selector prefers OpenCL over other non-CPU devices when `use_gpu` is true and `gpu_backend` is unset. Off by default because the Adreno 830 q4_0 transpose path in `ggml-opencl` aborts on NMT tensors whose second dimension isn't a multiple of 4 (see [QVAC-17790 root-cause analysis](./nmtcpp-android-opencl-crash.md)). Callers that still want OpenCL can opt in per model via `config.gpu_backend: 'opencl'` regardless of this flag. |
+
+```bash
+# Default build (OpenCL not auto-selected)
+bare-make generate
+
+# Restore OpenCL-preferred selection (once the upstream ggml fix ships)
+bare-make generate -D USE_OPENCL=ON
 ```
 
 ## Benchmarking

@@ -1,5 +1,48 @@
 # Changelog
 
+## [0.19.0] - 2026-04-29
+
+This release adds per-request structured-output support to the LLM addon: callers can now constrain a single completion to either a JSON Schema or a raw GBNF grammar without reloading the model.
+
+### Added
+
+#### Per-request `json_schema` and `grammar` in `generationParams`
+
+`RunOptions.generationParams` accepts two new optional fields:
+
+- **`json_schema`** — JSON Schema applied to a single `run()` call. Accepts either a JSON Schema object literal or a pre-stringified JSON Schema. Internally converted to GBNF via llama.cpp's `json_schema_to_grammar()`, the same converter used by the load-time `--json-schema` config key.
+- **`grammar`** — raw GBNF string applied to a single `run()` call. Useful for non-JSON outputs (regex-like DSLs, CSV, custom syntaxes). Mirrors the load-time `--grammar` config key.
+
+The two are mutually exclusive — passing both throws a `TypeError` at the JS boundary.
+
+When either is set, the sampler is re-initialized for that request and the prior (typically load-time) grammar is restored automatically afterwards. This unblocks structured output for SDK consumers without forcing a model reload per request.
+
+```js
+// JSON Schema (recommended for structured output)
+await model.run(prompt, {
+  generationParams: {
+    json_schema: {
+      type: 'object',
+      properties: { name: { type: 'string' }, age: { type: 'integer' } },
+      required: ['name', 'age']
+    }
+  }
+})
+
+// GBNF (non-JSON outputs)
+await model.run(prompt, {
+  generationParams: {
+    grammar: 'root ::= ("yes" | "no")'
+  }
+})
+```
+
+A new `nlohmann-json` vcpkg dependency is pulled in (header-only) so the addon can call `json_schema_to_grammar()` directly without shipping a JSON-Schema-to-GBNF converter on the JS side.
+
+## Pull Requests
+
+- [#1787](https://github.com/tetherto/qvac/pull/1787) - feat[api]: per-request grammar / json_schema in llm-llamacpp generationParams
+
 ## [0.18.1] - 2026-04-29
 
 ### Fixed

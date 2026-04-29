@@ -5,15 +5,17 @@ description: Perform peer-to-peer inference delegation out-of-the-box via Holepu
 
 ## Overview
 
-Lets a **consumer** delegate inference requests to a remote **provider** in a P2P manner via [Hyperswarm](https://docs.pears.com/building-blocks/hyperswarm). Use it when an inference requires more resources than the local device are able to provide.
+Lets a **consumer** delegate inference requests to a remote **provider** in a P2P manner over the [Hyperswarm](https://docs.pears.com/building-blocks/hyperswarm) DHT. Use it when an inference requires more resources than the local device is able to provide.
+
+Connectivity is direct: the consumer opens a `dht.connect(providerPublicKey)` connection straight to the provider — there is no topic or discovery phase. The provider exposes itself on the DHT via its keypair, and consumers connect by public key.
 
 Delegation is configured at model-load time by passing a `delegate` object to [`loadModel()`](/sdk/api/loadModel). The provider is started separately using [`startQVACProvider()`](/sdk/api/startQVACProvider).
 
 ## Functions
 
 **Provider:**
-1. [`startQVACProvider()`](/sdk/api/startQVACProvider) — join a topic and serve requests
-2. [`stopQVACProvider()`](/sdk/api/stopQVACProvider) — leave the topic
+1. [`startQVACProvider()`](/sdk/api/startQVACProvider) — bind the DHT server on the provider's keypair and start accepting delegated requests
+2. [`stopQVACProvider()`](/sdk/api/stopQVACProvider) — stop accepting requests
 
 **Consumer:**
 1. [`loadModel()`](/sdk/api/loadModel) — with `delegate` option
@@ -24,15 +26,14 @@ For how to use each function, see [SDK — API reference](/sdk/api/).
 
 ## Provider
 
-Joins a topic and serves delegated requests. It publishes its public key to share with consumers.
+Binds the DHT server on its keypair and serves delegated requests. It publishes its public key; consumers use that key to connect directly.
 
 ## Consumer
 
 Creates a delegated model via `loadModel({ delegate: ... })`.
 `delegate` main options:
-- `topic`: topic hex string
-- `providerPublicKey`: provider public key
-- `timeout`: request timeout in ms (optional)
+- `providerPublicKey`: provider public key (required)
+- `timeout`: request timeout in ms (optional). Use a generous value (e.g. `60_000`) on the first call — cold-DHT bootstrap can take 15–45s. Subsequent calls reuse the open socket and are sub-second.
 - `fallbackToLocal`: if `true`, run locally when delegation fails (optional)
 - `forceNewConnection`: if `true`, do not reuse cached connections (optional)
 
@@ -62,7 +63,7 @@ The following script shows an example of a consumer that delegates `completion()
 
 ### Provider
 
-The following script shows an example of starting a provider and printing the `topic` + provider `publicKey` for consumers:
+The following script shows an example of starting a provider and printing its `publicKey` for consumers:
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -89,5 +90,6 @@ The following script shows an example of starting a provider and printing the `t
 ## Notes
 
 - Consumers do not handle reconnection automatically yet. If the provider restarts, restart the consumer.
-- To stop a running provider and leave the topic, call [`stopQVACProvider()`](/sdk/api/stopQVACProvider).
+- To stop a running provider, call [`stopQVACProvider()`](/sdk/api/stopQVACProvider).
 - When starting the provider, you can optionally set a firewall rule to allow/deny specific consumer public keys.
+- Cold-start DHT bootstrap on the first connect can take 15–45s; subsequent connections in the same process are sub-second.

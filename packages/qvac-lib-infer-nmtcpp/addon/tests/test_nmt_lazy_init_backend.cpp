@@ -1,6 +1,7 @@
 #include <filesystem>
 #include <string>
 
+#include <ggml-backend.h>
 #include <gtest/gtest.h>
 
 #include "model-interface/NmtLazyInitializeBackend.hpp"
@@ -41,8 +42,63 @@ TEST_F(
 
 TEST_F(NmtLazyInitializeBackendTest, InitializeWithBackendsDirDoesNotThrow) {
   std::string backendsDir = getTestBackendsDir();
+
+  // dev_count() is the device count (not the registry count); matches
+  // existing codebase patterns (see nmt_state_backend.cpp / nmt_loader.cpp).
+  // A loaded backend plugin registers >=1 device, so dev_count strictly
+  // increases on successful init when the backends dir actually contains at
+  // least one .so. When the dir has no plugins, dev_count stays unchanged
+  // — that's the expected behavior and must still not throw.
+  size_t devCountBefore = ggml_backend_dev_count();
+
+  bool hasBackendSo = false;
+  if (fs::exists(backendsDir) && fs::is_directory(backendsDir)) {
+    for (const auto& entry : fs::directory_iterator(backendsDir)) {
+      if (!entry.is_regular_file()) {
+        continue;
+      }
+      const std::string ext = entry.path().extension().string();
+      if (ext == ".so" || ext == ".dylib" || ext == ".dll") {
+        hasBackendSo = true;
+        break;
+      }
+    }
+  }
+
   EXPECT_NO_THROW({
     bool result = NmtLazyInitializeBackend::initialize(backendsDir);
+    (void)result;
+  });
+
+  size_t devCountAfter = ggml_backend_dev_count();
+  if (hasBackendSo) {
+    EXPECT_GT(devCountAfter, devCountBefore)
+        << "backendsDir contained a loadable plugin but dev_count did not "
+           "increase (before="
+        << devCountBefore << ", after=" << devCountAfter << ")";
+  } else {
+    // Without loadable plugins we still expect no crash; dev_count may be
+    // unchanged (or bumped by default/static backend registration).
+    EXPECT_GE(devCountAfter, devCountBefore);
+  }
+}
+
+TEST_F(NmtLazyInitializeBackendTest, InitializeWithNonExistentDirDoesNotCrash) {
+  // Passing a path that does not exist used to be a latent crash risk in
+  // earlier ggml backend loaders; confirm the loader swallows it cleanly
+  // and the process continues. Covers the "canonical path check" concern
+  // called out in the PR1617 feedback.
+  const std::string bogusDir = "/tmp/qvac-nmt-nonexistent-backends-dir-xyz";
+
+  // Make sure the path really doesn't exist — if a previous run left
+  // anything behind, clean it up. We only remove a single well-known
+  // directory name under /tmp.
+  std::error_code ec;
+  fs::remove_all(bogusDir, ec);
+  (void)ec;
+
+  EXPECT_NO_THROW({
+    bool result = NmtLazyInitializeBackend::initialize(bogusDir);
     (void)result;
   });
 }
