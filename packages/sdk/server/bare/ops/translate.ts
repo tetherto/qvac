@@ -8,6 +8,7 @@ import {
   AFRICAN_LANGUAGES_MAP,
 } from "@/schemas";
 import type TranslationNmtcpp from "@qvac/translation-nmtcpp";
+import type { GenerationParams, RunOptions } from "@qvac/llm-llamacpp";
 import { getLangName } from "@qvac/langdetect-text";
 import { nowMs } from "@/profiling";
 import { buildStreamResult } from "@/profiling/model-execution";
@@ -39,7 +40,14 @@ export function isAfrican(code: string | undefined) {
 // and a `repeat_penalty` of 1 — applying these per-call values causes "\n"
 // to be penalised, defeats the stop, and lets the model run to `predict`.
 // AfriqueGemma callers must set decoding via `modelConfig` at load time.
-const LLM_TRANSLATE_GENERATION_PARAMS = {
+type LlmTranslateGenerationParams = Required<
+  Pick<
+    GenerationParams,
+    "temp" | "top_k" | "top_p" | "repeat_penalty" | "seed" | "predict"
+  >
+>;
+
+const LLM_TRANSLATE_GENERATION_PARAMS: LlmTranslateGenerationParams = {
   temp: 0,
   top_k: 1,
   top_p: 1,
@@ -130,9 +138,12 @@ export async function* translate(
     canonicalModelType === ModelType.llamacppCompletion &&
     !shouldSkipPerCallSampling(entry.local.name)
   ) {
+    // AnyModel.run is intentionally erased to a single-arg signature in the
+    // registry layer (Omit<BaseInference, "addon">). Re-narrow to the engine
+    // shape so we get the same typing as @qvac/llm-llamacpp.run().
     const llmRun = model.run.bind(model) as (
       prompt: typeof input,
-      opts: { generationParams: Record<string, number> },
+      opts: RunOptions,
     ) => ReturnType<typeof model.run>;
     response = await llmRun(input, {
       generationParams: LLM_TRANSLATE_GENERATION_PARAMS,
