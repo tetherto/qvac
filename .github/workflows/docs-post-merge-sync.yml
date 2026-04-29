@@ -1,20 +1,15 @@
 # Post-merge: regenerate docs on main when SDK changes, commit back to main.
 # Keeps monorepo main in sync with generated docs.
-# Only triggered by SDK or docs-script changes (other libs not automated yet).
 #
-# DISABLED: production currently tracks `main` (not `docs-production`), so
-# auto-committing regenerated docs back to `main` would loop the workflow
-# back into itself on every push. Re-enable by removing `if: false` on the
-# `sync-docs` job once production is moved to `docs-production`.
+# Currently manual-only (workflow_dispatch). The original `push:` trigger to
+# `main` is intentionally not wired up while production tracks `main` (not
+# `docs-production`) — auto-committing regenerated docs back to `main` would
+# loop the workflow back into itself on every push. Restore the `push:`
+# trigger once production moves to `docs-production`.
 name: Docs Post-Merge Sync
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'packages/sdk/**'
-      - 'docs/website/scripts/**'
+  workflow_dispatch:
 
 concurrency:
   group: docs-post-merge-sync-${{ github.ref }}
@@ -22,7 +17,6 @@ concurrency:
 
 jobs:
   sync-docs:
-    if: false # DISABLED — see comment at top of file
     runs-on: ubuntu-latest
     permissions:
       contents: write

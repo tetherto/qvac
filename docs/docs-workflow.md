@@ -315,13 +315,13 @@ Six GitHub Actions workflows automate the docs lifecycle:
 
 **Purpose:** Catches build errors and broken links in docs PRs before merge.
 
-### 2. Docs Post-Merge Sync (currently disabled)
+### 2. Docs Post-Merge Sync (manual-only)
 
 **File:** `.github/workflows/docs-post-merge-sync.yml`
 
-**Status:** Currently disabled (`if: false` on the job). Re-enable when production hosting points at `docs-production` instead of `main`. While production tracks `main`, this workflow's auto-commits would loop into themselves.
+**Status:** Currently `workflow_dispatch:` only. The original `push:` trigger to `main` is intentionally not wired up — production tracks `main`, so auto-committing regenerated docs back to `main` would loop the workflow back into itself on every push. Restore the `push:` trigger once production moves to `docs-production`.
 
-**Triggers (when enabled):** Push to `main` when files change in `packages/sdk/**` or `docs/website/scripts/**`.
+**Triggers (current):** Manual dispatch from the Actions tab. **Triggers (intended once re-enabled):** Push to `main` when files change in `packages/sdk/**` or `docs/website/scripts/**`.
 
 **What it does (when enabled):**
 1. Checks out the repo
@@ -561,7 +561,7 @@ The PR check workflow ensures a placeholder `content/docs/sdk/api/index.mdx` exi
 
 ### Post-merge sync creates infinite loop
 
-The post-merge sync workflow is currently disabled (production tracks `main`, so auto-commits would loop). When you re-enable it after production moves to `docs-production`:
+The post-merge sync workflow is currently `workflow_dispatch:` only — its `push:` trigger to `main` is removed because production tracks `main` and auto-commits would loop. When you wire `push:` back on (after production moves to `docs-production`):
 
 1. Set the `DOCS_SYNC_BOT_USER` repository variable to the bot's GitHub username
 2. The workflow skips runs when `github.actor` matches this variable

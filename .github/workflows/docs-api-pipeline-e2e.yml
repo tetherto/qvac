@@ -1,8 +1,9 @@
 # End-to-end + determinism check for the API summary generation pipeline.
 #
-# DISABLED: workflow is paused for re-evaluation after the single-page
-# pipeline cutover. Re-enable by removing `if: false` on the `e2e` job
-# below. When re-enabled, intent is to verify:
+# Currently manual-only (workflow_dispatch) while we re-evaluate the right
+# automatic trigger after the single-page pipeline cutover. To re-enable on
+# PRs, restore a `pull_request:` block alongside `workflow_dispatch:`. The
+# job verifies:
 #   1. Pipeline executes cleanly from a fresh checkout (no manual setup).
 #   2. api-data.json + the single API-summary MDX page are produced.
 #   3. Output is deterministic: running twice with identical source produces
@@ -11,27 +12,17 @@
 name: Docs API Pipeline End-to-End
 
 on:
-  pull_request:
-    paths:
-      - "docs/website/scripts/**"
-      - "docs/website/package.json"
-      - "docs/website/package-lock.json"
-      - "packages/sdk/**"
-      - ".github/workflows/docs-api-pipeline-e2e.yml"
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: docs-api-e2e-${{ github.event.pull_request.number || github.sha }}
+  group: docs-api-e2e-${{ github.sha }}
   cancel-in-progress: true
 
 jobs:
   e2e:
-    if: false # DISABLED — see comment at top of file
     name: End-to-end + determinism
     runs-on: ubuntu-latest
     timeout-minutes: 15
