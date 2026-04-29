@@ -29,6 +29,23 @@ export function isAfrican(code: string | undefined) {
   return !!code && AFRICAN_LANGUAGES_MAP.has(code);
 }
 
+// Per-call sampling overrides applied to LLM translate. Greedy + fixed seed
+// makes output reproducible across calls; bounded predict prevents a runaway
+// from accumulating into the KV cache and overflowing ctx_size on a later
+// call; repeat_penalty > 1 breaks single-token echo loops (e.g. greedy
+// continuation of "bank" → "bank\nbank\n..."). Currently shared by every
+// non-African Llamacpp translation; the African branch is intentionally
+// excluded so AfriqueGemma's load-time config in the test consumer keeps
+// driving its decoding.
+const SALAMANDRA_TRANSLATE_GENERATION_PARAMS = {
+  temp: 0,
+  top_k: 1,
+  top_p: 1,
+  repeat_penalty: 1.3,
+  seed: 42,
+  predict: 256,
+};
+
 export async function* translate(
   params: TranslateParams,
 ): AsyncGenerator<string, { modelExecutionMs: number; stats?: TranslationStats }, unknown> {
@@ -103,25 +120,13 @@ export async function* translate(
 
   const modelStart = nowMs();
   let response;
-  // Translation is one-shot. Force greedy decoding with a fixed seed so output is
-  // deterministic across calls; bound output length so a runaway loop can't blow
-  // ctx_size on the next call. repeat_penalty > 1 also breaks single-token echo
-  // loops (e.g. greedy continuation of "bank" → "bank\nbank\n...").
-  // Skipped for the African branch — AfriqueGemma has its own load-time tuning.
   if (canonicalModelType === ModelType.llamacppCompletion && !afriquePrompt) {
     const llmRun = model.run.bind(model) as (
       prompt: typeof input,
       opts: { generationParams: Record<string, number> },
     ) => ReturnType<typeof model.run>;
     response = await llmRun(input, {
-      generationParams: {
-        temp: 0,
-        top_k: 1,
-        top_p: 1,
-        repeat_penalty: 1.3,
-        seed: 42,
-        predict: 256,
-      },
+      generationParams: SALAMANDRA_TRANSLATE_GENERATION_PARAMS,
     });
   } else {
     response = await model.run(input);
