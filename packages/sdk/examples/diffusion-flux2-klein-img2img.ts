@@ -2,7 +2,7 @@ import {
   loadModel,
   unloadModel,
   diffusion,
-  FLUX_2_KLEIN_4B_Q8_0,
+  FLUX_2_KLEIN_4B_Q4_0,
   FLUX_2_KLEIN_4B_VAE,
   QWEN3_4B_Q4_K_M,
 } from "@qvac/sdk";
@@ -14,7 +14,7 @@ import path from "path";
 const inputPath = process.argv[2];
 const prompt = process.argv[3] || "oil painting style, vibrant colors";
 const outputDir = process.argv[4] || ".";
-const diffusionModelSrc = process.argv[5] || FLUX_2_KLEIN_4B_Q8_0;
+const diffusionModelSrc = process.argv[5] || FLUX_2_KLEIN_4B_Q4_0;
 const llmModelSrc = process.argv[6] || QWEN3_4B_Q4_K_M;
 const vaeModelSrc = process.argv[7] || FLUX_2_KLEIN_4B_VAE;
 
