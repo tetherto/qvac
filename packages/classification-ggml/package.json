@@ -48,12 +48,12 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tetherto/qvac.git",
-    "directory": "packages/qvac-lib-infer-ggml-classification"
+    "directory": "packages/classification-ggml"
   },
   "author": "Tether",
   "license": "Apache-2.0",
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-infer-ggml-classification#readme",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/classification-ggml#readme",
   "devDependencies": {
     "@types/node": "^24.2.1",
     "bare-url": "^2.1.6",

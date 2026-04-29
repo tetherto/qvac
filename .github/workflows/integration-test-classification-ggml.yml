@@ -21,10 +21,10 @@ on:
         description: "Working directory inside the repo (monorepo package path)"
         type: string
         required: false
-        default: "packages/qvac-lib-infer-ggml-classification"
+        default: "packages/classification-ggml"
 
 env:
-  PKG_DIR: packages/qvac-lib-infer-ggml-classification
+  PKG_DIR: packages/classification-ggml
 
 jobs:
   run-integration-tests:

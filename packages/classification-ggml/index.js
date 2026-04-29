@@ -11,7 +11,7 @@ const DEFAULT_WEIGHTS_FILENAME = 'mobilenetv3_3class_v3_fp16.gguf'
 
 // Argument parsing and validation -- types, ranges, raw-vs-encoded
 // dispatch, magic-byte sniffing -- all live in the C++ binding
-// (`packages/qvac-lib-infer-ggml-classification/addon/src/addon/AddonJs.hpp`,
+// (`packages/classification-ggml/addon/src/addon/AddonJs.hpp`,
 // `createInstance` and `runJob`). This module is intentionally a thin
 // pass-through so that there is exactly one source of truth for
 // "what counts as a valid argument" and JS callers cannot drift out

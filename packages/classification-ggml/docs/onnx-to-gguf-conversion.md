@@ -141,7 +141,7 @@ any private validation data into the public package.
 
 ## 4. Update the bundled weights
 
-1. Place the new `.gguf` in `packages/qvac-lib-infer-ggml-classification/weights/`.
+1. Place the new `.gguf` in `packages/classification-ggml/weights/`.
 2. Keep the filename identical (`mobilenetv3_3class_v3_fp16.gguf`) or
    update `DEFAULT_WEIGHTS_FILENAME` in `index.js`.
 3. Bump the package version (`package.json` + `CHANGELOG.md`).

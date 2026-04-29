@@ -15,7 +15,7 @@ GGML-powered image classification addon for QVAC. Runs a fine-tuned MobileNetV3-
 
 
 Package name: `@qvac/classification-ggml`  
-Directory: `packages/qvac-lib-infer-ggml-classification`
+Directory: `packages/classification-ggml`
 
 ## Install
 
@@ -116,7 +116,7 @@ None take arguments. `load()` is idempotent — calling it twice is a no-op (che
 Prerequisites: clang-19, libc++-19-dev, vcpkg, bare ≥ 1.24, bare-make.
 
 ```bash
-cd packages/qvac-lib-infer-ggml-classification
+cd packages/classification-ggml
 npm install
 bare-make generate
 bare-make build

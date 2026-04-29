@@ -16,7 +16,7 @@ if(DEFINED ENV{ANDROID_NDK} OR DEFINED ENV{ANDROID_NDK_HOME})
   set(ANDROID_STL c++_shared)
 endif()
 
-project(qvac-lib-infer-ggml-classification LANGUAGES C CXX)
+project(classification-ggml LANGUAGES C CXX)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   add_compile_options(-stdlib=libc++)
@@ -47,7 +47,7 @@ find_package(ggml CONFIG REQUIRED)
 bare_target(bare_target_value)
 bare_module_target("." unused_target NAME module_name VERSION unused_version)
 set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/${module_name}")
-message(STATUS "Building qvac-lib-infer-ggml-classification with BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VALUE}'")
+message(STATUS "Building classification-ggml with BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VALUE}'")
 
 set(BACKEND_DL_LIBS "")
 if((ANDROID OR UNIX) AND NOT APPLE)
@@ -63,10 +63,10 @@ if((ANDROID OR UNIX) AND NOT APPLE)
   endforeach()
 endif()
 
-add_bare_module(qvac-lib-infer-ggml-classification EXPORTS ${BACKEND_DL_LIBS})
+add_bare_module(classification-ggml EXPORTS ${BACKEND_DL_LIBS})
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  target_link_options(${qvac-lib-infer-ggml-classification}_module PRIVATE -Wl,--exclude-libs,ALL)
+  target_link_options(${classification-ggml}_module PRIVATE -Wl,--exclude-libs,ALL)
 endif()
 
 set(ADDON_SOURCES
@@ -77,13 +77,13 @@ set(ADDON_SOURCES
 )
 
 target_sources(
-  ${qvac-lib-infer-ggml-classification}
+  ${classification-ggml}
   PRIVATE
     ${ADDON_SOURCES}
 )
 
 target_include_directories(
-  ${qvac-lib-infer-ggml-classification}
+  ${classification-ggml}
   PRIVATE
     ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
     ${STB_INCLUDE_DIRS}
@@ -91,7 +91,7 @@ target_include_directories(
 )
 
 target_link_libraries(
-  ${qvac-lib-infer-ggml-classification}
+  ${classification-ggml}
   PRIVATE
     ggml::ggml
     ggml::ggml-base
@@ -99,7 +99,7 @@ target_link_libraries(
 )
 
 target_compile_definitions(
-  ${qvac-lib-infer-ggml-classification}
+  ${classification-ggml}
   PRIVATE
     JS_LOGGER
     BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}"
@@ -107,7 +107,7 @@ target_compile_definitions(
 
 if(WIN32)
   target_link_libraries(
-    ${qvac-lib-infer-ggml-classification}
+    ${classification-ggml}
     PRIVATE
       msvcrt.lib
   )

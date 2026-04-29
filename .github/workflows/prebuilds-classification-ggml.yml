@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
 
 env:
-  PKG_DIR: packages/qvac-lib-infer-ggml-classification
+  PKG_DIR: packages/classification-ggml
 
 permissions:
   contents: read
