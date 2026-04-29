@@ -20,9 +20,22 @@
 // Guard against Bare's default abort() on unhandled promise rejections.
 // Without this, a transient network error during model fetch would
 // SIGABRT the process (see notes in indictrans.test.js and pivot-bergamot.test.js).
+// See indictrans.test.js for the full rationale on why we both catch
+// and then exit non-zero on `beforeExit`. tl;dr: catch to avoid the
+// Samsung SIGABRT, then propagate failure so CI doesn't lie about
+// passing when no translation actually ran.
+let _bergamotUnhandledRejection = null
 if (typeof Bare !== 'undefined' && Bare.on) {
   Bare.on('unhandledRejection', (err) => {
     console.error('[bergamot] Unhandled rejection:', err && (err.stack || err.message || err))
+    if (!_bergamotUnhandledRejection) _bergamotUnhandledRejection = err
+  })
+  Bare.on('beforeExit', () => {
+    if (_bergamotUnhandledRejection) {
+      console.error('[bergamot] FATAL: tests had unhandled rejections, exiting with code 1')
+      if (typeof Bare.exit === 'function') Bare.exit(1)
+      else if (typeof process !== 'undefined' && process.exit) process.exit(1)
+    }
   })
 }
 

@@ -23,15 +23,37 @@
  *   bare test/integration/indictrans.test.js
  */
 
-// Guard against Bare's default abort() on unhandled promise rejections.
-// Without this, a transient network error from bare-fetch during model
-// download (e.g. CONNECTION_LOST on Device Farm) abort()s the process
-// and surfaces as a SIGABRT inside libbare-kit.so::js_callback_s::on_call
-// — which is how the Android Samsung S25 Ultra job died in CI run 1212.
-// Mirrors the handler in pivot-bergamot.test.js.
+// Guard against Bare's default abort() on unhandled promise rejections,
+// then explicitly fail the process at exit time if any rejection was
+// captured.
+//
+// Why we catch: without this, a transient network error from bare-fetch
+// during model download (e.g. CONNECTION_LOST on Device Farm) abort()s
+// the process and surfaces as a SIGABRT inside libbare-kit.so —
+// which killed the Samsung S25 Ultra job in CI run 1212. We need
+// the process to keep running long enough to log the rejection and
+// flush console output.
+//
+// Why we ALSO exit non-zero on `beforeExit`: the previous handler just
+// logged and returned, which let Bare exit cleanly with code 0. Device
+// Farm then reported PASSED, GitHub Actions marked the job green, even
+// though zero translation actually happened. By exiting 1 here we make
+// "model download failed → no measurement" loud at every level (Bare
+// → Device Farm → GHA), so CI fails RED whenever the test couldn't run
+// instead of silently lying about it. See PR #1792 / QVAC-16488 thread
+// for the full debugging trail.
+let _indictransUnhandledRejection = null
 if (typeof Bare !== 'undefined' && Bare.on) {
   Bare.on('unhandledRejection', (err) => {
     console.error('[indictrans] Unhandled rejection:', err && (err.stack || err.message || err))
+    if (!_indictransUnhandledRejection) _indictransUnhandledRejection = err
+  })
+  Bare.on('beforeExit', () => {
+    if (_indictransUnhandledRejection) {
+      console.error('[indictrans] FATAL: tests had unhandled rejections, exiting with code 1')
+      if (typeof Bare.exit === 'function') Bare.exit(1)
+      else if (typeof process !== 'undefined' && process.exit) process.exit(1)
+    }
   })
 }
 

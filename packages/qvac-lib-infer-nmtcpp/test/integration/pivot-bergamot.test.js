@@ -17,9 +17,24 @@
  *   bare test/integration/pivot-bergamot.test.js
  */
 
+// See indictrans.test.js for the full rationale on why we both catch
+// and then exit non-zero on `beforeExit`. tl;dr: catch to avoid the
+// Samsung SIGABRT, then propagate failure so CI doesn't lie about
+// passing when no translation actually ran. The `Corestore is closed`
+// filter is preserved — that's a known benign tear-down race that
+// shouldn't fail the run.
+let _pivotBergamotUnhandledRejection = null
 Bare.on('unhandledRejection', (err) => {
   if (err && err.message && err.message.includes('Corestore is closed')) return
   console.error('[pivot-bergamot] Unhandled rejection:', err)
+  if (!_pivotBergamotUnhandledRejection) _pivotBergamotUnhandledRejection = err
+})
+Bare.on('beforeExit', () => {
+  if (_pivotBergamotUnhandledRejection) {
+    console.error('[pivot-bergamot] FATAL: tests had unhandled rejections, exiting with code 1')
+    if (typeof Bare.exit === 'function') Bare.exit(1)
+    else if (typeof process !== 'undefined' && process.exit) process.exit(1)
+  }
 })
 
 const test = require('brittle')
