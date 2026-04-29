@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.5]
+
+### Added
+- Added opt-in conversation streaming events to `runStreaming()`. Callers can pass `emitVadEvents`, `endOfTurnSilenceMs`, and `vadRunIntervalMs` to receive `{ type: "vad" }` state updates and `{ type: "endOfTurn" }` silence boundary events alongside transcript segments.
+- Added native `VadStateUpdate` and `EndOfTurnEvent` output handlers so VAD and end-of-turn events flow through the existing addon output queue without changing the default transcript-only streaming behavior.
+- Added `examples/example.mic-conversation.js`, a microphone streaming example that logs VAD state, end-of-turn signals, and transcript output from live audio.
+- Added C++ unit coverage for `StreamingProcessor` conversation events, JS unit coverage for event forwarding, and a live-stream integration variant that verifies VAD events are emitted with transcript output.
+
+### Changed
+- Extended `runStreaming(audioStream, opts?)` TypeScript declarations to include the new conversation streaming options and output event types.
+
 ## [0.6.4]
 
 ### Changed
