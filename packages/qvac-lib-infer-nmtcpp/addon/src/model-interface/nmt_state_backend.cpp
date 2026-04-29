@@ -1,8 +1,11 @@
 // NOLINTBEGIN
 #include "nmt_state_backend.hpp"
 
+#include <algorithm>
+#include <cctype>
 #include <cstdint>
 #include <sstream>
+#include <string>
 #include <vector>
 
 #include <ggml-backend.h>
@@ -11,6 +14,7 @@
 #include "nmt.hpp"
 #include "nmt_graph_decoder.hpp"
 #include "nmt_graph_encoder.hpp"
+#include "nmt_utils.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
 void nmt_batch_prep_legacy(
@@ -324,39 +328,35 @@ static ggml_backend_t nmt_backend_init_gpu(const nmt_context_params& params) {
       qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
       oss_gpu_init.str());
 
-  int cnt = 0;
-  if (params.use_gpu) {
-    for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
-      ggml_backend_dev_t dev_cur = ggml_backend_dev_get(i);
-      enum ggml_backend_dev_type dev_type = ggml_backend_dev_type(dev_cur);
-      const char* name = ggml_backend_dev_name(dev_cur);
-      std::ostringstream oss_backend;
-      oss_backend << "  Backend[" << i << "]: type=" << dev_type
-                  << ", name=" << name;
-      QLOG(
-          qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-          oss_backend.str());
-
-      if (dev_type == GGML_BACKEND_DEVICE_TYPE_GPU) {
-        std::ostringstream oss_found;
-        oss_found << "  Found GPU backend: " << name;
-        QLOG(
-            qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-            oss_found.str());
-        if (cnt == 0 || cnt == params.gpu_device) {
-          dev = dev_cur;
-          std::ostringstream oss_selected;
-          oss_selected << "  **SELECTED GPU**: " << name;
-          QLOG(
-              qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-              oss_selected.str());
-        }
-        if (++cnt > params.gpu_device) {
-          break;
-        }
-      }
-    }
-  }
+  // Compute-device selection when use_gpu=true.
+  //
+  // Matching compute devices by `!= CPU` (rather than a named GPU/ACCEL
+  // allow-list) is resilient to ggml inserting new enum values between
+  // builds; Android's qvac-fabric ggml reports some devices with an enum
+  // value between GPU and ACCEL.
+  //
+  // Two selection modes:
+  //   1. params.gpu_backend non-empty → explicit single-pass filter:
+  //      pick the first non-CPU device whose name contains gpu_backend
+  //      (case-insensitive substring). `gpu_device` is the ordinal
+  //      within matches, so {gpu_backend="vulkan", gpu_device=1} picks
+  //      the second Vulkan adapter. Bypasses the OpenCL guard — an
+  //      explicit "opencl" request is an informed opt-in.
+  //   2. params.gpu_backend empty → gated default: when
+  //      QVAC_NMTCPP_USE_OPENCL is defined, prefer an OpenCL-named
+  //      device first; otherwise (and always as a fallback) pick any
+  //      non-CPU device. When the guard is off, the fallback also
+  //      skips OpenCL-named devices so Bergamot/IndicTrans on Adreno
+  //      830 don't hit the q4_0 transpose crash (QVAC-17790).
+  // Delegate to the shared selector so make_buft_list (in nmt_loader.cpp)
+  // and this function agree on the same physical device — historical
+  // drift between the two has caused scheduler crashes (R2-C1, R4-C2).
+  // See nmt_utils.hpp for the contract.
+  dev = nmt_select_gpu_device(
+      params.use_gpu,
+      params.gpu_backend,
+      params.gpu_device,
+      "nmt_backend_init_gpu");
 
   if (dev == nullptr) {
     QLOG(
@@ -392,13 +392,28 @@ nmt_backend_init(const nmt_context_params& params) {
 
   ggml_backend_t backend_gpu = nmt_backend_init_gpu(params);
 
+  // Primary backend may also be an ACCEL device (see nmt_backend_init_gpu —
+  // Android Vulkan registers as ACCEL). Track the device pointer we already
+  // picked so the secondary ACCEL loop below doesn't re-init the same device.
+  ggml_backend_dev_t primary_dev =
+      backend_gpu ? ggml_backend_get_device(backend_gpu) : nullptr;
+
   if (backend_gpu) {
     result.push_back(backend_gpu);
   }
 
-  // ACCEL backends
+  // ACCEL backends (in addition to the primary if it was an ACCEL device).
+  // Skip dedup when primary_dev is null (ggml_backend_get_device returned
+  // null for a valid backend) to avoid false-positive skips where both
+  // sides compare as nullptr.
   for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
     ggml_backend_dev_t dev = ggml_backend_dev_get(i);
+    if (dev == nullptr) {
+      continue;
+    }
+    if (primary_dev != nullptr && dev == primary_dev) {
+      continue;
+    }
     if (ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_ACCEL) {
       ggml_backend_t backend = ggml_backend_dev_init(dev, nullptr);
       if (!backend) {

@@ -89,6 +89,30 @@ export class OCRFailedError extends QvacErrorBase {
   }
 }
 
+export class ModelTypeRequiredError extends QvacErrorBase {
+  constructor(cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.MODEL_TYPE_REQUIRED,
+        undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+export class ModelSrcTypeMismatchError extends QvacErrorBase {
+  constructor(inferred: string, resolved: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.MODEL_SRC_TYPE_MISMATCH,
+        [inferred, resolved],
+        cause,
+      ),
+    );
+  }
+}
+
 // ============== RPC Communication Errors ==============
 
 export class RPCNoHandlerError extends QvacErrorBase {

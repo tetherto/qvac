@@ -9,16 +9,32 @@
  * Example: Spanish → English → Italian (es→en + en→it)
  *
  * Platform Behavior:
- *   - Mobile (iOS/Android): Tests both CPU and GPU modes
- *   - Desktop: Tests CPU mode only
+ *   - Mobile (iOS/Android): GPU devices discovered at runtime, each gets its
+ *     own test run with identifiable label (e.g. [GPU:0 Vulkan0])
+ *   - Desktop: Tests CPU mode only (intgemm is CPU-optimized)
  *
  * Usage:
  *   bare test/integration/pivot-bergamot.test.js
  */
 
+// See indictrans.test.js for the full rationale on why we both catch
+// and then exit non-zero on `beforeExit`. tl;dr: catch to avoid the
+// Samsung SIGABRT, then propagate failure so CI doesn't lie about
+// passing when no translation actually ran. The `Corestore is closed`
+// filter is preserved — that's a known benign tear-down race that
+// shouldn't fail the run.
+let _pivotBergamotUnhandledRejection = null
 Bare.on('unhandledRejection', (err) => {
   if (err && err.message && err.message.includes('Corestore is closed')) return
   console.error('[pivot-bergamot] Unhandled rejection:', err)
+  if (!_pivotBergamotUnhandledRejection) _pivotBergamotUnhandledRejection = err
+})
+Bare.on('beforeExit', () => {
+  if (_pivotBergamotUnhandledRejection) {
+    console.error('[pivot-bergamot] FATAL: tests had unhandled rejections, exiting with code 1')
+    if (typeof Bare.exit === 'function') Bare.exit(1)
+    else if (typeof process !== 'undefined' && process.exit) process.exit(1)
+  }
 })
 
 const test = require('brittle')
@@ -31,21 +47,14 @@ const {
   createPerformanceCollector,
   formatPerformanceMetrics,
   isMobile,
-  platform
+  platform,
+  discoverGpuDevices,
+  MAX_GPU_DEVICE_PROBES
 } = require('./utils')
 
 const PIVOT_BERGAMOT_FIXTURE = path.resolve(__dirname, 'fixtures/pivot-bergamot.quality.json')
 
 const PIVOT_TIMEOUT = isMobile ? 900_000 : 180_000
-
-const ALL_DEVICE_CONFIGS = [
-  { id: 'gpu', useGpu: true },
-  { id: 'cpu', useGpu: false }
-]
-
-const DEVICE_CONFIGS = isMobile
-  ? ALL_DEVICE_CONFIGS
-  : ALL_DEVICE_CONFIGS.filter(c => c.id === 'cpu')
 
 /**
  * Ensures a Bergamot model pair is available on disk.
@@ -112,6 +121,7 @@ function createPivotArgs (primaryDir, primaryFiles, pivotDir, pivotFiles, opts =
       beamsize: 1,
       ...(opts.normalize !== undefined && { normalize: opts.normalize }),
       ...(opts.use_gpu !== undefined && { use_gpu: opts.use_gpu }),
+      ...(typeof opts.gpu_device === 'number' && { gpu_device: opts.gpu_device }),
       pivotConfig: {
         beamsize: 1,
         ...(opts.pivotNormalize !== undefined && { normalize: opts.pivotNormalize })
@@ -124,76 +134,102 @@ function createPivotArgs (primaryDir, primaryFiles, pivotDir, pivotFiles, opts =
 
 // ---------------------------------------------------------------------------
 // Test: Pivot translation happy path (es → en → it)
+// Per-GPU-device tests (mobile only) + CPU test.
 // ---------------------------------------------------------------------------
 
-for (const deviceConfig of DEVICE_CONFIGS) {
-  const label = `[${deviceConfig.id.toUpperCase()}]`
+/**
+ * Shared runner for the es→en→it pivot test on a specific GPU device or CPU.
+ */
+async function runEsEnItPivotTest (t, label, useGpu, gpuDevice) {
+  t.comment('Platform: ' + platform + ', isMobile: ' + isMobile)
+  t.comment(`${label} Testing with use_gpu: ${useGpu}` +
+    (typeof gpuDevice === 'number' ? `, gpu_device: ${gpuDevice}` : ''))
 
-  test(`Pivot translation ${label} - Spanish → English → Italian`, { timeout: PIVOT_TIMEOUT }, async function (t) {
-    t.comment('Platform: ' + platform + ', isMobile: ' + isMobile)
+  t.comment(`${label} Ensuring es→en model...`)
+  const esEnDir = await ensureModelPair('es', 'en')
+  t.ok(esEnDir, `${label} es→en model directory available`)
 
-    // Ensure both model pairs are available
-    t.comment(`${label} Ensuring es→en model...`)
-    const esEnDir = await ensureModelPair('es', 'en')
-    t.ok(esEnDir, `${label} es→en model directory available`)
+  t.comment(`${label} Ensuring en→it model...`)
+  const enItDir = await ensureModelPair('en', 'it')
+  t.ok(enItDir, `${label} en→it model directory available`)
 
-    t.comment(`${label} Ensuring en→it model...`)
-    const enItDir = await ensureModelPair('en', 'it')
-    t.ok(enItDir, `${label} en→it model directory available`)
+  const esEn = findModelFiles(esEnDir)
+  const enIt = findModelFiles(enItDir)
 
-    const esEn = findModelFiles(esEnDir)
-    const enIt = findModelFiles(enItDir)
+  t.ok(esEn.modelFile, `${label} es→en model file found`)
+  t.ok(esEn.vocabFile, `${label} es→en vocab file found`)
+  t.ok(enIt.modelFile, `${label} en→it model file found`)
+  t.ok(enIt.vocabFile, `${label} en→it vocab file found`)
 
-    t.ok(esEn.modelFile, `${label} es→en model file found`)
-    t.ok(esEn.vocabFile, `${label} es→en vocab file found`)
-    t.ok(enIt.modelFile, `${label} en→it model file found`)
-    t.ok(enIt.vocabFile, `${label} en→it vocab file found`)
+  const logger = createLogger()
+  const perfCollector = createPerformanceCollector()
+  let model
 
-    const logger = createLogger()
-    const perfCollector = createPerformanceCollector()
-    let model
+  try {
+    const opts = {
+      logger,
+      normalize: 1,
+      use_gpu: useGpu,
+      pivotNormalize: 1
+    }
+    if (typeof gpuDevice === 'number') opts.gpu_device = gpuDevice
 
-    try {
-      model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt, {
-        logger,
-        normalize: 1,
-        use_gpu: deviceConfig.useGpu,
-        pivotNormalize: 1
-      }))
+    model = new TranslationNmtcpp(createPivotArgs(esEnDir, esEn, enItDir, enIt, opts))
 
-      await model.load()
-      t.pass(`${label} Pivot model loaded (es→en→it)`)
+    await model.load()
+    t.pass(`${label} Pivot model loaded (es→en→it)`)
 
-      const testSentence = 'Buenos días, ¿cómo estás hoy?'
-      t.comment(`${label} Translating: "${testSentence}"`)
+    const testSentence = 'Buenos días, ¿cómo estás hoy?'
+    t.comment(`${label} Translating: "${testSentence}"`)
 
-      perfCollector.start()
+    perfCollector.start()
 
-      const response = await model.run(testSentence)
-      await response
-        .onUpdate(data => { perfCollector.onToken(data) })
-        .await()
+    const response = await model.run(testSentence)
+    await response
+      .onUpdate(data => { perfCollector.onToken(data) })
+      .await()
 
-      const addonStats = response.stats || {}
-      t.comment(`${label} Native addon stats: ${JSON.stringify(addonStats)}`)
-      const metrics = perfCollector.getMetrics(testSentence, addonStats)
-      t.comment(formatPerformanceMetrics(`[Pivot es→en→it] ${label}`, metrics, {
-        fixturePath: PIVOT_BERGAMOT_FIXTURE,
-        srcLang: 'es',
-        dstLang: 'it'
-      }))
+    const addonStats = response.stats || {}
+    t.comment(`${label} Native addon stats: ${JSON.stringify(addonStats)}`)
+    const metrics = perfCollector.getMetrics(testSentence, addonStats)
+    t.comment(formatPerformanceMetrics(`[Pivot es→en→it] ${label}`, metrics, {
+      fixturePath: PIVOT_BERGAMOT_FIXTURE,
+      srcLang: 'es',
+      dstLang: 'it'
+    }))
 
-      t.ok(metrics.fullOutput.length > 0, `${label} pivot translation produced output`)
-      t.pass(`${label} Pivot translation completed successfully`)
-    } finally {
-      if (model) {
-        try { await model.unload() } catch (e) {
-          t.comment(`${label} unload error: ${e.message}`)
-        }
+    t.ok(metrics.fullOutput.length > 0, `${label} pivot translation produced output`)
+    t.pass(`${label} Pivot translation completed successfully`)
+  } finally {
+    if (model) {
+      try { await model.unload() } catch (e) {
+        t.comment(`${label} unload error: ${e.message}`)
       }
     }
-  })
+  }
 }
+
+if (isMobile) {
+  for (let gpuIdx = 0; gpuIdx < MAX_GPU_DEVICE_PROBES; gpuIdx++) {
+    test(`Pivot translation [GPU device ${gpuIdx}] - Spanish → English → Italian`, { timeout: PIVOT_TIMEOUT }, async function (t) {
+      const devices = await discoverGpuDevices()
+      const device = devices.find(d => d.index === gpuIdx)
+
+      if (!device) {
+        t.comment(`[GPU:${gpuIdx}] No GPU device at index ${gpuIdx} — skipping`)
+        t.pass(`[GPU:${gpuIdx}] Skipped (device not present)`)
+        return
+      }
+
+      const label = `[GPU:${gpuIdx} ${device.name}]`
+      await runEsEnItPivotTest(t, label, true, gpuIdx)
+    })
+  }
+}
+
+test('Pivot translation [CPU] - Spanish → English → Italian', { timeout: PIVOT_TIMEOUT }, async function (t) {
+  await runEsEnItPivotTest(t, '[CPU]', false, undefined)
+})
 
 // ---------------------------------------------------------------------------
 // Test: Pivot stats are populated (regression for v0.6.1 hang fix)
@@ -470,73 +506,99 @@ test('Pivot translation - load, unload, reload cycle', { timeout: PIVOT_TIMEOUT 
 // English. This proves the feature is generic, not accidentally hardcoded.
 // ---------------------------------------------------------------------------
 
-for (const deviceConfig of DEVICE_CONFIGS) {
-  const label = `[${deviceConfig.id.toUpperCase()}]`
+/**
+ * Shared runner for the fr→en→es pivot test on a specific GPU device or CPU.
+ */
+async function runFrEnEsPivotTest (t, label, useGpu, gpuDevice) {
+  t.comment('Platform: ' + platform + ', isMobile: ' + isMobile)
+  t.comment(`${label} Testing with use_gpu: ${useGpu}` +
+    (typeof gpuDevice === 'number' ? `, gpu_device: ${gpuDevice}` : ''))
 
-  test(`Pivot translation ${label} - French → English → Spanish`, { timeout: PIVOT_TIMEOUT }, async function (t) {
-    t.comment('Platform: ' + platform + ', isMobile: ' + isMobile)
+  t.comment(`${label} Ensuring fr→en model...`)
+  const frEnDir = await ensureModelPair('fr', 'en')
+  t.ok(frEnDir, `${label} fr→en model directory available`)
 
-    t.comment(`${label} Ensuring fr→en model...`)
-    const frEnDir = await ensureModelPair('fr', 'en')
-    t.ok(frEnDir, `${label} fr→en model directory available`)
+  t.comment(`${label} Ensuring en→es model...`)
+  const enEsDir = await ensureModelPair('en', 'es')
+  t.ok(enEsDir, `${label} en→es model directory available`)
 
-    t.comment(`${label} Ensuring en→es model...`)
-    const enEsDir = await ensureModelPair('en', 'es')
-    t.ok(enEsDir, `${label} en→es model directory available`)
+  const frEn = findModelFiles(frEnDir)
+  const enEs = findModelFiles(enEsDir)
 
-    const frEn = findModelFiles(frEnDir)
-    const enEs = findModelFiles(enEsDir)
+  t.ok(frEn.modelFile, `${label} fr→en model file found`)
+  t.ok(frEn.vocabFile, `${label} fr→en vocab file found`)
+  t.ok(enEs.modelFile, `${label} en→es model file found`)
+  t.ok(enEs.vocabFile, `${label} en→es vocab file found`)
 
-    t.ok(frEn.modelFile, `${label} fr→en model file found`)
-    t.ok(frEn.vocabFile, `${label} fr→en vocab file found`)
-    t.ok(enEs.modelFile, `${label} en→es model file found`)
-    t.ok(enEs.vocabFile, `${label} en→es vocab file found`)
+  const logger = createLogger()
+  const perfCollector = createPerformanceCollector()
+  let model
 
-    const logger = createLogger()
-    const perfCollector = createPerformanceCollector()
-    let model
+  try {
+    const opts = {
+      params: { srcLang: 'fr', dstLang: 'es' },
+      logger,
+      normalize: 1,
+      use_gpu: useGpu,
+      pivotNormalize: 1
+    }
+    if (typeof gpuDevice === 'number') opts.gpu_device = gpuDevice
 
-    try {
-      model = new TranslationNmtcpp(createPivotArgs(frEnDir, frEn, enEsDir, enEs, {
-        params: { srcLang: 'fr', dstLang: 'es' },
-        logger,
-        normalize: 1,
-        use_gpu: deviceConfig.useGpu,
-        pivotNormalize: 1
-      }))
+    model = new TranslationNmtcpp(createPivotArgs(frEnDir, frEn, enEsDir, enEs, opts))
 
-      await model.load()
-      t.pass(`${label} Pivot model loaded (fr→en→es)`)
+    await model.load()
+    t.pass(`${label} Pivot model loaded (fr→en→es)`)
 
-      const testSentence = 'Bonjour, comment allez-vous aujourd\'hui?'
-      t.comment(`${label} Translating: "${testSentence}"`)
+    const testSentence = 'Bonjour, comment allez-vous aujourd\'hui?'
+    t.comment(`${label} Translating: "${testSentence}"`)
 
-      perfCollector.start()
+    perfCollector.start()
 
-      const response = await model.run(testSentence)
-      await response
-        .onUpdate(data => { perfCollector.onToken(data) })
-        .await()
+    const response = await model.run(testSentence)
+    await response
+      .onUpdate(data => { perfCollector.onToken(data) })
+      .await()
 
-      const addonStats = response.stats || {}
-      const metrics = perfCollector.getMetrics(testSentence, addonStats)
-      t.comment(formatPerformanceMetrics(`[Pivot fr→en→es] ${label}`, metrics, {
-        fixturePath: PIVOT_BERGAMOT_FIXTURE,
-        srcLang: 'fr',
-        dstLang: 'es'
-      }))
+    const addonStats = response.stats || {}
+    const metrics = perfCollector.getMetrics(testSentence, addonStats)
+    t.comment(formatPerformanceMetrics(`[Pivot fr→en→es] ${label}`, metrics, {
+      fixturePath: PIVOT_BERGAMOT_FIXTURE,
+      srcLang: 'fr',
+      dstLang: 'es'
+    }))
 
-      t.ok(metrics.fullOutput.length > 0, `${label} pivot translation produced output`)
-      t.pass(`${label} fr→en→es pivot translation completed successfully`)
-    } finally {
-      if (model) {
-        try { await model.unload() } catch (e) {
-          t.comment(`${label} unload error: ${e.message}`)
-        }
+    t.ok(metrics.fullOutput.length > 0, `${label} pivot translation produced output`)
+    t.pass(`${label} fr→en→es pivot translation completed successfully`)
+  } finally {
+    if (model) {
+      try { await model.unload() } catch (e) {
+        t.comment(`${label} unload error: ${e.message}`)
       }
     }
-  })
+  }
 }
+
+if (isMobile) {
+  for (let gpuIdx = 0; gpuIdx < MAX_GPU_DEVICE_PROBES; gpuIdx++) {
+    test(`Pivot translation [GPU device ${gpuIdx}] - French → English → Spanish`, { timeout: PIVOT_TIMEOUT }, async function (t) {
+      const devices = await discoverGpuDevices()
+      const device = devices.find(d => d.index === gpuIdx)
+
+      if (!device) {
+        t.comment(`[GPU:${gpuIdx}] No GPU device at index ${gpuIdx} — skipping`)
+        t.pass(`[GPU:${gpuIdx}] Skipped (device not present)`)
+        return
+      }
+
+      const label = `[GPU:${gpuIdx} ${device.name}]`
+      await runFrEnEsPivotTest(t, label, true, gpuIdx)
+    })
+  }
+}
+
+test('Pivot translation [CPU] - French → English → Spanish', { timeout: PIVOT_TIMEOUT }, async function (t) {
+  await runFrEnEsPivotTest(t, '[CPU]', false, undefined)
+})
 
 // ---------------------------------------------------------------------------
 // Test: Long multi-paragraph text

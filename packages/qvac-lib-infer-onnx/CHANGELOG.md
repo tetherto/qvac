@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.14.1] - 2026-04-21
+
+### Fixed
+
+- Patched ONNX Runtime 1.24.2 CoreML EP to fix `!model_path.empty()` crash when loading models with external data files (`.onnx_data` / `.onnx.data`) on macOS/iOS. Root cause: `TensorProtoWithExternalDataToTensorProto` passed the full model file path instead of its parent directory to `ReadExternalDataForTensor`. Backport of [microsoft/onnxruntime#28062](https://github.com/microsoft/onnxruntime/pull/28062). Upstream issue: [microsoft/onnxruntime#28005](https://github.com/microsoft/onnxruntime/issues/28005).
+
+### Changed
+
+- Pinned onnxruntime dependency to `>= 1.24.2#5` in `vcpkg.json` to pick up the CoreML fix from `qvac-registry-vcpkg`.
+
 ## [0.14.0] - 2026-03-30
 
 ### Changed

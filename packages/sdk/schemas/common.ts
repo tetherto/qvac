@@ -56,6 +56,10 @@ import {
   getModelInfoRequestSchema,
   getModelInfoResponseSchema,
 } from "./get-model-info";
+import {
+  getLoadedModelInfoRequestSchema,
+  getLoadedModelInfoResponseSchema,
+} from "./get-loaded-model-info";
 import { ocrStreamRequestSchema, ocrStreamResponseSchema } from "./ocr";
 import {
   diffusionStreamRequestSchema,
@@ -103,6 +107,7 @@ export const requestSchema = z.union([
   ragRequestSchema,
   deleteCacheRequestSchema,
   getModelInfoRequestSchema,
+  getLoadedModelInfoRequestSchema,
   ocrStreamRequestSchema,
   diffusionStreamRequestSchema,
   finetuneRequestSchema,
@@ -138,6 +143,7 @@ export const responseSchema = z.discriminatedUnion("type", [
   ragProgressUpdateSchema,
   deleteCacheResponseSchema,
   getModelInfoResponseSchema,
+  getLoadedModelInfoResponseSchema,
   ocrStreamResponseSchema,
   diffusionStreamResponseSchema,
   finetuneResponseSchema,
@@ -153,10 +159,31 @@ export const responseSchema = z.discriminatedUnion("type", [
 ]);
 
 export const rpcOptionsSchema = z.object({
-  timeout: z.number().min(100).optional(),
-  healthCheckTimeout: z.number().min(100).optional(),
-  forceNewConnection: z.boolean().optional(),
-  profiling: perCallProfilingSchema.optional(),
+  timeout: z
+    .number()
+    .min(100)
+    .optional()
+    .describe(
+      "Per-call RPC timeout in milliseconds; overrides the SDK-level default for this request only.",
+    ),
+  healthCheckTimeout: z
+    .number()
+    .min(100)
+    .optional()
+    .describe(
+      "Timeout in milliseconds for the health-check probe that precedes the RPC call.",
+    ),
+  forceNewConnection: z
+    .boolean()
+    .optional()
+    .describe(
+      "When `true`, skip any cached RPC connection and open a fresh one for this call.",
+    ),
+  profiling: perCallProfilingSchema
+    .optional()
+    .describe(
+      "Per-call profiler configuration; when present, overrides the SDK's global profiler settings for this request.",
+    ),
 });
 
 export type Request = z.input<typeof requestSchema>;

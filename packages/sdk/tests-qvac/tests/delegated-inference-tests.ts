@@ -58,8 +58,8 @@ export const delegatedConnectionFailure = createDelegatedTest(
   15000, undefined, ["smoke"],
 );
 
-export const delegatedInvalidTopic = createDelegatedTest(
-  "delegated-invalid-topic", {}, { validation: "throws-error", errorContains: "" }, 5000,
+export const delegatedInvalidProviderKey = createDelegatedTest(
+  "delegated-invalid-provider-key", {}, { validation: "throws-error", errorContains: "" }, 5000,
 );
 
 export const delegatedProviderNotFound = createDelegatedTest(
@@ -86,6 +86,14 @@ export const delegatedE2EStreaming = createDelegatedTest(
   { reason: "E2E delegation requires child_process (Desktop only)", platforms: ["mobile-ios", "mobile-android"] },
 );
 
+export const delegatedE2ELoadedModelInfo = createDelegatedTest(
+  "delegated-e2e-loaded-model-info",
+  {},
+  { validation: "type", expectedType: "string" },
+  180000,
+  { reason: "E2E delegation requires child_process (Desktop only)", platforms: ["mobile-ios", "mobile-android"] },
+);
+
 export const delegatedInferenceTests = [
   delegatedProviderStart,
   delegatedProviderStop,
@@ -95,8 +103,9 @@ export const delegatedInferenceTests = [
   delegatedHeartbeatProvider,
   delegatedCancelDownload,
   delegatedConnectionFailure,
-  delegatedInvalidTopic,
+  delegatedInvalidProviderKey,
   delegatedProviderNotFound,
   delegatedE2ECompletion,
   delegatedE2EStreaming,
+  delegatedE2ELoadedModelInfo,
 ];
