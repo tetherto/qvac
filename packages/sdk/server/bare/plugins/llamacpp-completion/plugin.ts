@@ -29,6 +29,7 @@ import { translate } from "@/server/bare/ops/translate";
 import { attachModelExecutionMs } from "@/profiling/model-execution";
 import { getModelConfig } from "@/server/bare/registry/model-registry";
 import { createCompletionNormalizer } from "@/server/utils/completion-normalizer";
+import { detectToolDialect } from "@/server/utils/tool-integration";
 
 function transformLlmConfig(llmConfig: LlmConfig) {
   const transformed = JSON.parse(
@@ -151,11 +152,16 @@ export const llmPlugin = definePlugin({
           thinkingFraming: request.captureThinking ? "thinkTags" : "none",
         };
 
+        const dialect = toolsActive
+          ? (request.toolDialect ?? detectToolDialect(request.modelId))
+          : "hermes";
+
         const normalizer = createCompletionNormalizer({
           capabilities,
           tools: request.tools ?? [],
           captureThinking: request.captureThinking ?? false,
           emitRawDeltas: request.emitRawDeltas ?? false,
+          toolDialect: dialect,
         });
 
         const stream = completion({
@@ -164,6 +170,7 @@ export const llmPlugin = definePlugin({
           kvCache: request.kvCache,
           ...(toolsActive && request.tools && { tools: request.tools }),
           ...(request.generationParams && { generationParams: request.generationParams }),
+          ...(toolsActive && { toolDialect: dialect }),
         });
 
         try {

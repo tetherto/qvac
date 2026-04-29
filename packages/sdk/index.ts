@@ -68,6 +68,7 @@ export {
   type TextToSpeechStreamResponse,
   type TextToSpeechStreamClientParams,
   type CompletionParams,
+  type ToolDialect,
   type RagSearchResult,
   type RagSaveEmbeddingsResult,
   type RagReindexResult,

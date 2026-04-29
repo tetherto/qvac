@@ -4,6 +4,8 @@ import { completionEventSchema } from "./completion-event";
 
 export { completionStatsSchema, type CompletionStats } from "./completion-event";
 
+export const toolDialectSchema = z.enum(["hermes", "pythonic", "json"]);
+
 export const attachmentSchema = z.object({
   path: z.string(),
 });
@@ -45,6 +47,7 @@ export const completionClientParamsSchema = completionParamsSchema.extend({
   generationParams: generationParamsSchema.optional(),
   captureThinking: z.boolean().optional(),
   emitRawDeltas: z.boolean().optional(),
+  toolDialect: toolDialectSchema.optional(),
 });
 
 export const completionStreamRequestSchema =
@@ -62,6 +65,7 @@ export const completionStreamResponseSchema = z
 
 export type GenerationParams = z.infer<typeof generationParamsSchema>;
 export type CompletionParams = z.infer<typeof completionParamsSchema>;
+export type ToolDialect = z.infer<typeof toolDialectSchema>;
 export type CompletionClientParams = z.input<
   typeof completionClientParamsSchema
 >;

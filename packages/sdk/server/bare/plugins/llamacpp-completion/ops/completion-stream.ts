@@ -5,6 +5,7 @@ import type {
   GenerationParams,
   Tool,
   ToolCall,
+  ToolDialect,
 } from "@/schemas";
 import { type ToolCallEvent, TOOLS_MODE } from "@/schemas/tools";
 import {
@@ -33,10 +34,10 @@ import {
 import {
   appendToolsToHistory,
   checkForToolEvents,
+  detectToolDialect,
   prependToolsToHistory,
-  setupToolGrammar,
 } from "@/server/utils/tool-integration";
-import { parseToolCalls } from "@/server/utils/tool-parser";
+import { parseToolCalls } from "@/server/utils/tools";
 import { buildAutoCacheSaveHistory, type CacheMessage } from "@/server/utils";
 import { getServerLogger } from "@/logging";
 import { AttachmentNotFoundError } from "@/utils/errors-server";
@@ -360,6 +361,7 @@ async function* processModelResponse(
   tools?: Tool[],
   generationParams?: GenerationParams,
   cacheOptions?: CacheRunOptions,
+  dialect?: ToolDialect,
 ): AsyncGenerator<
   { token: string; toolCallEvent?: ToolCallEvent },
   ProcessModelResponseResult,
@@ -385,7 +387,7 @@ async function* processModelResponse(
   );
 
   let accumulatedText = "";
-  const emittedToolCallPositions = new Set<number>();
+  const emittedToolCallKeys = new Set<string>();
   let toolCallsResult: ToolCall[] = [];
 
   for await (const token of response.iterate()) {
@@ -399,7 +401,8 @@ async function* processModelResponse(
         accumulatedText,
         tokenStr,
         tools,
-        emittedToolCallPositions,
+        emittedToolCallKeys,
+        dialect,
       );
 
       for (const toolEvent of toolEvents) {
@@ -414,7 +417,7 @@ async function* processModelResponse(
   }
 
   if (tools && tools.length > 0) {
-    const { toolCalls } = parseToolCalls(accumulatedText, tools);
+    const { toolCalls } = parseToolCalls(accumulatedText, tools, dialect);
     toolCallsResult = toolCalls;
   }
 
@@ -451,6 +454,7 @@ export async function* completion(
   params: CompletionParams & {
     tools?: Tool[];
     generationParams?: GenerationParams;
+    toolDialect?: ToolDialect;
   },
 ): AsyncGenerator<
   { token: string; toolCallEvent?: ToolCallEvent },
@@ -464,12 +468,12 @@ export async function* completion(
   const toolsMode = (modelConfig as { toolsMode?: string }).toolsMode;
   const dynamicTools =
     !!tools?.length && toolsEnabled && toolsMode === TOOLS_MODE.dynamic;
-  const staticTools =
-    !!tools?.length && toolsEnabled && !dynamicTools;
+  const staticTools = !!tools?.length && toolsEnabled && !dynamicTools;
 
-  if (tools && tools.length > 0 && toolsEnabled) {
-    setupToolGrammar(modelConfig as Record<string, unknown>, tools);
-  }
+  const dialect =
+    tools && tools.length > 0
+      ? (params.toolDialect ?? detectToolDialect(modelId))
+      : undefined;
 
   const model = getModel(modelId);
 
@@ -524,6 +528,7 @@ export async function* completion(
         tools,
         generationParams,
         { cacheKey: cachePathToUse, saveCacheToDisk: true },
+        dialect,
       );
       await recordCacheSaveCount(cachePathToUse, history.length + 1);
       return result;
@@ -580,6 +585,7 @@ export async function* completion(
         tools,
         generationParams,
         { cacheKey: cachePathToUse, saveCacheToDisk: true },
+        dialect,
       );
 
       // TODO: support auto-cache for tool-call turns by keying off the
@@ -657,6 +663,8 @@ export async function* completion(
       transformedHistory,
       tools,
       generationParams,
+      undefined,
+      dialect,
     );
   }
 }
