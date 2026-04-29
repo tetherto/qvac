@@ -18,10 +18,10 @@ export async function handleHeartbeatDelegated(
     );
   }
 
-  const { topic, providerPublicKey, timeout } = delegate;
+  const { providerPublicKey, timeout } = delegate;
 
   try {
-    const rpc = await getRPC(topic, providerPublicKey, { timeout });
+    const rpc = await getRPC(providerPublicKey, { timeout });
 
     const delegateOpts: DelegateOptions = {
       peerKey: providerPublicKey,

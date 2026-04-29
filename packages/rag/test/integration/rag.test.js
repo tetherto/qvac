@@ -7,46 +7,39 @@ const QvacLogger = require('@qvac/logging')
 
 const LlmPlugin = require('@qvac/llm-llamacpp')
 const EmbedderPlugin = require('@qvac/embed-llamacpp')
-const HyperDriveDL = require('@qvac/dl-hyperdrive')
 const Corestore = require('corestore')
 const HyperDB = require('hyperdb')
 
 const fs = require('bare-fs')
 const path = require('bare-path')
 
-const llamaDriveKey = 'afa79ee07c0a138bb9f11bfaee771fb1bdfca8c82d961cff0474e49827bd1de3'
-const gteDriveKey = 'd1896d9259692818df95bd2480e90c2d057688a4f7c9b1ae13ac7f5ee379d03e'
+const { ensureModels, RAG_MODELS } = require('../../examples/utils')
 
 const store = new Corestore('./store')
 
-const modelDir = './models'
-const modelName = 'gte-large_fp16.gguf'
+const modelName = RAG_MODELS.embedder.filename
 
 // Global test state to share resources across tests
-let llamaHdDL, gteHdDL, llm, embedder, embeddingFunction, llmAdapter, dbAdapter, rag
+let llm, embedder, embeddingFunction, llmAdapter, dbAdapter, rag
 let setupComplete = false
 
 // Helper function to ensure models are loaded
 async function ensureSetup () {
   if (setupComplete) return
 
-  console.log('Setting up RAG environment with HyperDriveDL...')
+  console.log('Setting up RAG environment...')
 
-  // Load embedder
-  gteHdDL = new HyperDriveDL({
-    key: `hd://${gteDriveKey}`,
-    store
-  })
+  // Fetch model files from the QVAC registry (skipped if already present locally)
+  const models = await ensureModels(['embedder', 'llm'])
 
-  const embedderArgs = {
-    loader: gteHdDL,
-    opts: { stats: true },
+  // Load embedder via the new files-based addon constructor
+  embedder = new EmbedderPlugin({
+    files: { model: [models.embedder.fullPath] },
+    config: { device: 'gpu', gpu_layers: '99' },
     logger: console,
-    diskPath: modelDir,
-    modelName
-  }
-  embedder = new EmbedderPlugin(embedderArgs, '-ngl\t99\n-dev\tgpu\n--embd-separator\t⟪§§§EMBED_SEP§§§⟫\n-c\t4096')
-  await embedder.load(false)
+    opts: { stats: true }
+  })
+  await embedder.load()
 
   embeddingFunction = async (text) => {
     const response = await embedder.run(text)
@@ -61,21 +54,14 @@ async function ensureSetup () {
     }
   }
 
-  // Load LLM
-  llamaHdDL = new HyperDriveDL({
-    key: `hd://${llamaDriveKey}`,
-    store
-  })
-
-  const llmArgs = {
-    loader: llamaHdDL,
-    opts: { stats: true },
+  // Load LLM via the new files-based addon constructor
+  llm = new LlmPlugin({
+    files: { model: [models.llm.fullPath] },
+    config: { ctx_size: '2048', gpu_layers: '99', device: 'gpu' },
     logger: console,
-    diskPath: modelDir,
-    modelName: 'Llama-3.2-1B-Instruct-Q4_0.gguf'
-  }
-  llm = new LlmPlugin(llmArgs, { ctx_size: '2048', gpu_layers: '99', device: 'gpu' })
-  await llm.load(false)
+    opts: { stats: true }
+  })
+  await llm.load()
   llmAdapter = new QvacLlmAdapter(llm)
 
   dbAdapter = new HyperDBAdapter({ store })
@@ -95,8 +81,8 @@ async function cleanup () {
 
   console.log('Cleaning up RAG environment...')
   if (rag) await rag.close()
-  if (llamaHdDL) await llamaHdDL.close()
-  if (gteHdDL) await gteHdDL.close()
+  if (llm) await llm.unload()
+  if (embedder) await embedder.unload()
   if (store) await store.close()
   setupComplete = false
   console.log('RAG environment cleaned up')

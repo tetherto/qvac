@@ -5,17 +5,18 @@ description: Starts a provider service that offers QVAC capabilities to remote p
 ---
 
 ```ts
-function startQVACProvider(params: ProvideParams): Promise<object>;
+function startQVACProvider(params?: ProvideParams): Promise<object>;
 ```
 
-The provider's keypair can be controlled via the seed option or the `QVAC_HYPERSWARM_SEED` environment variable.
+Starts a provider service that exposes this SDK instance to remote peers over the DHT. Consumers connect to the provider directly via its public key using `dht.connect(publicKey)` — no topic or discovery step is required.
+
+The provider's keypair (and therefore its public key) can be controlled via the `QVAC_HYPERSWARM_SEED` environment variable.
 
 ## Parameters
 
 | Name | Type | Required? | Description |
 | --- | --- | :---: | --- |
-| params.topic | `string` | ✓ | Topic hex string for peer discovery |
-| params.firewall | [`FirewallConfig`](#firewallconfig) | ✗ | Optional firewall configuration |
+| params.firewall | [`FirewallConfig`](#firewallconfig) | ✗ | Optional firewall configuration to allow/deny specific consumer public keys |
 
 ### `FirewallConfig`
 
@@ -26,7 +27,7 @@ The provider's keypair can be controlled via the seed option or the `QVAC_HYPERS
 
 ## Returns
 
-`Promise<object>` — The provide response containing `success`, `publicKey`, and optional `error`.
+`Promise<object>` — The provide response containing `success`, `publicKey`, and optional `error`. Share `publicKey` with consumers so they can connect via `delegate.providerPublicKey`.
 
 ## Throws
 
@@ -39,11 +40,17 @@ The provider's keypair can be controlled via the seed option or the `QVAC_HYPERS
 
 ```typescript
 const response = await startQVACProvider({
-  topic: "a1b2c3d4...",
   firewall: {
     mode: "allow",
     publicKeys: ["peer-public-key-hex"],
   },
 });
+console.log("Provider public key:", response.publicKey);
+```
+
+No-firewall variant:
+
+```typescript
+const response = await startQVACProvider();
 console.log("Provider public key:", response.publicKey);
 ```

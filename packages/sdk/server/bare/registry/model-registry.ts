@@ -20,7 +20,6 @@ export type AnyModel = Omit<BaseInference, "addon"> & {
 };
 
 interface DelegateOptions {
-  topic: string;
   providerPublicKey: string;
   timeout?: number | undefined;
   healthCheckTimeout?: number | undefined;
@@ -53,7 +52,6 @@ export function registerModel(
         name?: string | undefined;
       }
     | {
-        topic: string;
         providerPublicKey: string;
         timeout?: number;
         healthCheckTimeout?: number;
@@ -63,15 +61,14 @@ export function registerModel(
     throw new ModelAlreadyRegisteredError(id);
   }
 
-  const isDelegated = "topic" in options && "providerPublicKey" in options;
+  const isDelegated = "providerPublicKey" in options;
 
   if (isDelegated) {
-    const { topic, providerPublicKey, timeout, healthCheckTimeout } = options;
+    const { providerPublicKey, timeout, healthCheckTimeout } = options;
     modelRegistry.set(id, {
       id,
       isDelegated: true,
       delegated: {
-        topic,
         providerPublicKey,
         timeout,
         healthCheckTimeout,
@@ -79,7 +76,7 @@ export function registerModel(
     });
 
     logger.info(
-      `Delegated model registered: ${id} -> topic: ${topic}, provider: ${providerPublicKey}, timeout: ${timeout}ms`,
+      `Delegated model registered: ${id} -> provider: ${providerPublicKey}, timeout: ${timeout}ms`,
     );
   } else {
     modelRegistry.set(id, {

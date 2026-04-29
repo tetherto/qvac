@@ -1,4 +1,6 @@
 // NOLINTBEGIN
+#include <algorithm>
+#include <cctype>
 #include <cstdint>
 #include <cstring>
 #include <fstream>
@@ -117,7 +119,7 @@ template <typename T> static void read_safe(nmt_model_loader* loader, T& dest) {
 using buft_list_t =
     std::vector<std::pair<ggml_backend_dev_t, ggml_backend_buffer_type_t>>;
 
-static buft_list_t make_buft_list(nmt_context_params& params) {
+static buft_list_t make_buft_list(const nmt_context_params& params) {
   // Prio order: GPU -> CPU Extra -> CPU
   buft_list_t buft_list;
 
@@ -131,36 +133,27 @@ static buft_list_t make_buft_list(nmt_context_params& params) {
   oss2 << "Total backends available: " << ggml_backend_dev_count();
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, oss2.str());
 
-  // GPU
-  if (params.use_gpu) {
-    int cnt = 0;
-    for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
-      ggml_backend_dev_t dev = ggml_backend_dev_get(i);
-      enum ggml_backend_dev_type dev_type = ggml_backend_dev_type(dev);
-      const char* name = ggml_backend_dev_name(dev);
-      std::ostringstream oss3;
-      oss3 << "  Backend[" << i << "]: type=" << dev_type << ", name=" << name;
-      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, oss3.str());
-
-      if (dev_type == GGML_BACKEND_DEVICE_TYPE_GPU) {
-        QLOG(
-            qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-            "  -> This is a GPU backend!");
-
-        if (cnt == 0 || cnt == params.gpu_device) {
-          auto* buft = ggml_backend_dev_buffer_type(dev);
-          if (buft) {
-            buft_list.emplace_back(dev, buft);
-            QLOG(
-                qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-                "  -> Added to buft_list");
-          }
-        }
-
-        if (++cnt > params.gpu_device) {
-          break;
-        }
-      }
+  // GPU buft selection — delegate to the shared selector in nmt_utils so
+  // tensor buffers live on the same device nmt_backend_init_gpu picks.
+  // Repeated drift between this path and nmt_backend_init_gpu has been a
+  // recurring source of scheduler crashes (R2-C1, R4-C2); the shared helper
+  // is the structural fix per QVAC-17790 round-8 R8-D1.
+  ggml_backend_dev_t selected_dev = nmt_select_gpu_device(
+      params.use_gpu, params.gpu_backend, params.gpu_device, "make_buft_list");
+  if (selected_dev != nullptr) {
+    ggml_backend_buffer_type_t buft =
+        ggml_backend_dev_buffer_type(selected_dev);
+    if (buft != nullptr) {
+      buft_list.emplace_back(selected_dev, buft);
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+          "  -> Added GPU buft to buft_list");
+    } else {
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+          "[make_buft_list] nmt_select_gpu_device returned a device but "
+          "ggml_backend_dev_buffer_type returned null on re-query — "
+          "falling back to CPU");
     }
   }
 

@@ -6,7 +6,7 @@ const test = require('brittle')
 const { Readable } = require('streamx')
 
 const TranscriptionWhispercpp = require('../../index.js')
-const { ensureWhisperModel, getTestPaths, createAudioStream, isMobile } = require('./helpers.js')
+const { ensureWhisperModel, ensureVADModel, getTestPaths, createAudioStream, isMobile } = require('./helpers.js')
 
 // Create a pushable Readable to simulate a live input source.
 function createLiveReadable () {
@@ -216,6 +216,86 @@ test('Live segmented loop: repeated model.run per 3s chunk (no model teardown un
     }
   } catch (err) {
     console.error('Segmented live simulation failed:', err)
+    t.fail(err.message)
+  } finally {
+    if (model) {
+      await model.destroy()
+    }
+  }
+})
+
+test('Conversation mode streaming emits VAD events with transcript output', { timeout: 180000, skip: isMobile }, async (t) => {
+  const { modelPath, vadModelPath } = getTestPaths()
+  const audioPath = path.resolve(__dirname, '../../examples/samples/sample.raw')
+
+  const whisperResult = await ensureWhisperModel(modelPath)
+  const hasVadModel = await ensureVADModel(vadModelPath)
+
+  if (!fs.existsSync(audioPath)) {
+    console.log(` Conversation stream test skipped: audio file not found at ${audioPath}`) // eslint-disable-line
+    t.pass('Conversation stream skipped (audio not available)')
+    return
+  }
+
+  if (!whisperResult.isReal || !hasVadModel) {
+    t.pass('Conversation stream skipped (model or VAD unavailable)')
+    return
+  }
+
+  const constructorArgs = {
+    files: {
+      model: modelPath,
+      vadModel: vadModelPath
+    }
+  }
+
+  const config = {
+    path: modelPath,
+    whisperConfig: {
+      language: 'en',
+      audio_format: 's16le',
+      temperature: 0.0,
+      suppress_nst: true,
+      vad_params: {
+        threshold: 0.5,
+        min_silence_duration_ms: 300,
+        min_speech_duration_ms: 250,
+        max_speech_duration_s: 30,
+        speech_pad_ms: 30,
+        samples_overlap: 0.1
+      }
+    },
+    vadModelPath
+  }
+
+  let model
+  try {
+    model = new TranscriptionWhispercpp(constructorArgs, config)
+    await model._load()
+
+    const response = await model.runStreaming(createAudioStream(audioPath), {
+      emitVadEvents: true,
+      endOfTurnSilenceMs: 750,
+      vadRunIntervalMs: 300
+    })
+
+    const updates = []
+    response.onUpdate((data) => {
+      updates.push(data)
+    })
+
+    await response.await()
+
+    const vadEvents = updates.filter(data => data?.type === 'vad')
+    const transcriptOutputs = updates.flatMap(data => {
+      if (data?.type === 'vad' || data?.type === 'endOfTurn') return []
+      return Array.isArray(data) ? data : [data]
+    }).filter(item => typeof item?.text === 'string' && item.text.trim().length > 0)
+
+    t.ok(vadEvents.length > 0, 'Conversation stream should emit VAD events')
+    t.ok(transcriptOutputs.length > 0, 'Conversation stream should emit transcript output')
+  } catch (err) {
+    console.error('Conversation stream simulation failed:', err)
     t.fail(err.message)
   } finally {
     if (model) {
