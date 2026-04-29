@@ -18,9 +18,38 @@ const ALL_DEVICE_CONFIGS = [
   { id: 'gpu', useGPU: true },
   { id: 'cpu', useGPU: false }
 ]
+const CPU_ONLY_CONFIGS = ALL_DEVICE_CONFIGS.filter(c => c.id === 'cpu')
+
+function readTextFile (filePath) {
+  try {
+    if (!fs.existsSync(filePath)) return ''
+    return fs.readFileSync(filePath, 'utf8')
+  } catch (_) {
+    return ''
+  }
+}
+
+function isSamsungAndroidDevice () {
+  if (platform !== 'android') return false
+
+  const deviceInfo = [
+    os.getEnv ? os.getEnv('DEVICEFARM_DEVICE_NAME') : '',
+    os.getEnv ? os.getEnv('DEVICE_FARM_DEVICE_NAME') : '',
+    os.getEnv ? os.getEnv('ANDROID_MODEL') : '',
+    readTextFile('/system/build.prop'),
+    readTextFile('/vendor/build.prop'),
+    readTextFile('/product/build.prop')
+  ].join(' ').toLowerCase()
+
+  return deviceInfo.includes('samsung') ||
+    deviceInfo.includes('galaxy s25') ||
+    deviceInfo.includes('s938') ||
+    deviceInfo.includes('pa3q')
+}
+
 const DEVICE_CONFIGS = isMobile
-  ? ALL_DEVICE_CONFIGS
-  : ALL_DEVICE_CONFIGS.filter(c => c.id === 'cpu')
+  ? (isSamsungAndroidDevice() ? CPU_ONLY_CONFIGS : ALL_DEVICE_CONFIGS)
+  : CPU_ONLY_CONFIGS
 
 function getExecutionProvider (useGPU) {
   if (!useGPU) return 'cpu'
@@ -32,6 +61,9 @@ function getExecutionProvider (useGPU) {
 for (const deviceConfig of DEVICE_CONFIGS) {
   const epLabel = `[${deviceConfig.id.toUpperCase()}]`
   const executionProvider = getExecutionProvider(deviceConfig.useGPU)
+  if (isSamsungAndroidDevice() && deviceConfig.id === 'cpu') {
+    console.log('Samsung Android device detected; using CPU-only Whisper coverage to avoid known Adreno Vulkan crash')
+  }
 
   // On mobile, runs fewer transcriptions to avoid memory pressure.
   test(`Multiple consecutive transcriptions ${epLabel} should work without errors`, { timeout: 600000 }, async (t) => {
