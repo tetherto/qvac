@@ -33,21 +33,24 @@ You can load any [`llama.cpp`](https://github.com/ggml-org/llama.cpp)-compatible
 
 ## Features
 
-* Tool calls: let the model emit structured tool calls and stream tool-call events alongside tokens.
+* Event stream: `completion()` exposes a single ordered `events` async iterable plus an aggregated `final` promise. Events are discriminated by `type` — `contentDelta`, `thinkingDelta`, `toolCall`, `toolError`, `completionStats`, `completionDone`, `rawDelta`.
+* Thinking content: models that emit `<think>` blocks surface them as dedicated `thinkingDelta` events (enable with `captureThinking: true`), so consumers don't have to parse tags from raw text.
+* Tool calls: the model emits structured tool calls as `toolCall` events ordered alongside content and thinking in the same stream.
 * MCP: plug MCP servers into `completion()` so the model can use external tools (e.g., web search) via the same tool-call mechanism.
+* Raw output: with `emitRawDeltas: true`, every raw model token is also emitted as a `rawDelta` event in parallel to the structured events — useful for debugging or full-fidelity logging.
 * KV cache: cache and reuse the model’s key/value attention state to speed up follow-up turns in long conversations.
 
 ## Examples
 
 ### Usage
 
-The following script shows a basic example of completion:
+The canonical way to consume `completion()` is the `events` async iterable plus the aggregated `final` promise. The following script shows how to handle each event type and read the aggregated result:
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
 <WrapCode>
 
-```js file=<rootDir>/packages/sdk/dist/examples/llamacpp-p2p.js title="completion.js" lineNumbers
+```js file=<rootDir>/packages/sdk/dist/examples/completion-events.js title="completion-events.js" lineNumbers
 ```
 </WrapCode>
 </Tab>
@@ -55,15 +58,19 @@ The following script shows a basic example of completion:
 <Tab value="ts" label="TypeScript">
 <WrapCode>
 
-```ts file=<rootDir>/packages/sdk/examples/llamacpp-p2p.ts title="completion.ts" lineNumbers
+```ts file=<rootDir>/packages/sdk/examples/completion-events.ts title="completion-events.ts" lineNumbers
 ```
 </WrapCode>
 </Tab>
 </Tabs>
 
+<Callout type="info">
+The examples below (`Tool call`, `MCP`, `KV cache`) still consume `result.tokenStream` and `result.toolCallStream`, which are convenience wrappers around the canonical `events` / `final` stream shown above. Both APIs are supported; new code should prefer `events` / `final`.
+</Callout>
+
 ### Tool call
 
-The following script shows how to provide tool definitions to `completion()`, stream `toolCallStream` events, and read the parsed tool calls:
+The following script shows how to provide tool definitions to `completion()`, consume the streaming output, and read the parsed tool calls.
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -105,7 +112,7 @@ You create and manage the MCP client, connect it to one or more MCP servers, and
 </Tab>
 </Tabs>
 
-### KVcache
+### KV cache
 
 The following script enables `kvCache: true` to speed up follow-up turns, and then compares it with `kvCache: false` on the same history:
 
