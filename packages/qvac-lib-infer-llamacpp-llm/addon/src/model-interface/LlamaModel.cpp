@@ -46,6 +46,17 @@ using namespace qvac_lib_inference_addon_llama::errors;
 using namespace qvac_lib_inference_addon_cpp::logger;
 using namespace qvac_lib_inference_addon_llama::logging;
 
+/// @brief Persist the active KV cache to disk when the caller opted in via
+/// `saveCacheToDisk`. Shared by the prefill and post-generation paths so
+/// both honour the option identically. No-op when no cache is active.
+static void maybeSaveCacheToDisk(
+    bool saveCacheToDisk, std::optional<CacheManager>& cacheManager) {
+  if (saveCacheToDisk && cacheManager.has_value() &&
+      cacheManager->hasActiveCache()) {
+    cacheManager->saveCache();
+  }
+}
+
 static std::vector<std::string> split(const std::string& str, char delimiter) {
   auto trim = [](const std::string& str) -> std::string {
     auto start =
@@ -571,6 +582,7 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   }
 
   if (prompt.prefill) {
+    maybeSaveCacheToDisk(prompt.saveCacheToDisk, state_->cacheManager_);
     return out;
   }
 
@@ -617,10 +629,7 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
       state_->llmContext_->setFirstMsgTokens(state_->llmContext_->getNPast());
     }
   }
-  if (prompt.saveCacheToDisk && state_->cacheManager_.has_value() &&
-      state_->cacheManager_->hasActiveCache()) {
-    state_->cacheManager_->saveCache();
-  }
+  maybeSaveCacheToDisk(prompt.saveCacheToDisk, state_->cacheManager_);
 
   if (resolved.shouldResetAfterInference) {
     resetState(false);

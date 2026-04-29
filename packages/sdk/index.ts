@@ -91,6 +91,8 @@ export {
   type LoadedInstance,
   type CacheFileInfo,
   toolSchema,
+  TOOLS_MODE,
+  type ToolsMode,
   type McpClient,
   type McpClientInput,
   type OCRClientParams,
