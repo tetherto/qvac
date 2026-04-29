@@ -220,10 +220,10 @@ static struct ggml_tensor* build_siglip_transformer(
     k = ggml_cont(ctx, ggml_permute(ctx, k, 0, 2, 1, 3));
     v = ggml_cont(ctx, ggml_permute(ctx, v, 0, 2, 1, 3));
 
-    // Attention: softmax(Q @ K^T / sqrt(d)) @ V
+    // Attention: softmax(Q @ K^T / sqrt(d)) @ V — fused scale+softmax.
     struct ggml_tensor* attn = ggml_mul_mat(ctx, k, q); // (L, L, H)
-    attn = ggml_scale(ctx, attn, 1.0f / sqrtf((float)dh));
-    attn = ggml_soft_max(ctx, attn);
+    attn = ggml_soft_max_ext(
+        ctx, attn, nullptr, 1.0f / sqrtf((float)dh), 0.0f);
     struct ggml_tensor* attn_out = ggml_mul_mat(
         ctx, ggml_cont(ctx, ggml_transpose(ctx, v)), attn); // (dh, L, H)
 
@@ -475,19 +475,19 @@ static struct ggml_tensor* build_transformer_layer(
     v_expanded = ggml_reshape_3d(ctx, v_expanded, head_dim, num_heads, seq_len);
   }
 
-  // Attention computation
+  // Attention computation. We tried `ggml_flash_attn_ext` here (with the
+  // correct F16-mask + GGML_PREC_F32 recipe — see test/unit/
+  // test_flash_attn.cpp); it's mathematically correct but ~3× slower
+  // per layer on Intel Iris Xe Vulkan. Mobile GPUs (Adreno/Mali) may
+  // benefit; revisit on those backends.
   q = ggml_cont(ctx, ggml_permute(ctx, q, 0, 2, 1, 3));
   k_expanded = ggml_cont(ctx, ggml_permute(ctx, k_expanded, 0, 2, 1, 3));
   v_expanded = ggml_cont(ctx, ggml_permute(ctx, v_expanded, 0, 2, 1, 3));
 
   struct ggml_tensor* attn_weights = ggml_mul_mat(ctx, k_expanded, q);
-  attn_weights = ggml_scale(ctx, attn_weights, 1.0f / sqrtf((float)head_dim));
-
-  if (attn_mask) {
-    attn_weights = ggml_add(ctx, attn_weights, attn_mask);
-  }
-
-  attn_weights = ggml_soft_max(ctx, attn_weights);
+  // Fused scale + (optional) mask + softmax.
+  attn_weights = ggml_soft_max_ext(
+      ctx, attn_weights, attn_mask, 1.0f / sqrtf((float)head_dim), 0.0f);
 
   struct ggml_tensor* attn_out = ggml_mul_mat(
       ctx, ggml_cont(ctx, ggml_transpose(ctx, v_expanded)), attn_weights);
@@ -521,8 +521,8 @@ static struct ggml_tensor* build_transformer_layer(
     gate = smolvla_linear(ctx, hidden_states, lw.gate_proj_weight, nullptr);
     up = smolvla_linear(ctx, hidden_states, lw.up_proj_weight, nullptr);
   }
-  gate = smolvla_silu(ctx, gate);
-  struct ggml_tensor* mlp_out = ggml_mul(ctx, gate, up);
+  // Fused SwiGLU: silu(gate) * up.
+  struct ggml_tensor* mlp_out = ggml_swiglu_split(ctx, gate, up);
   mlp_out = smolvla_linear(ctx, mlp_out, lw.down_proj_weight, nullptr);
 
   // Residual
@@ -892,14 +892,13 @@ struct ggml_tensor* build_denoise_step_graph(
       v_exp = ggml_cont(ctx, ggml_permute(ctx, v_exp, 0, 2, 1, 3));
 
       struct ggml_tensor* attn_weights = ggml_mul_mat(ctx, k_exp, q);
-      attn_weights =
-          ggml_scale(ctx, attn_weights, 1.0f / sqrtf((float)head_dim));
-
-      if (self_attn_mask) {
-        attn_weights = ggml_add(ctx, attn_weights, self_attn_mask);
-      }
-
-      attn_weights = ggml_soft_max(ctx, attn_weights);
+      // Fused scale + mask + softmax.
+      attn_weights = ggml_soft_max_ext(
+          ctx,
+          attn_weights,
+          self_attn_mask,
+          1.0f / sqrtf((float)head_dim),
+          0.0f);
 
       struct ggml_tensor* attn_out = ggml_mul_mat(
           ctx, ggml_cont(ctx, ggml_transpose(ctx, v_exp)), attn_weights);
@@ -913,16 +912,18 @@ struct ggml_tensor* build_denoise_step_graph(
       hidden = ggml_add(ctx, attn_out, residual);
 
     } else {
-      // CROSS-ATTENTION: Q from expert, K/V from VLM cache (projected)
-      // Q projection
+      // CROSS-ATTENTION: Q from expert; K/V arrive pre-projected.
+      //
+      // The action expert's per-layer `k_proj` / `v_proj` only depend on the
+      // VLM KV cache, which is fixed across the 10 ODE denoise steps.
+      // `smolvla_inference_with_timing` runs those projections once per
+      // inference and overwrites `kv_keys_data[i]` / `kv_vals_data[i]`
+      // for cross-attn layers, so here we use the input slot directly.
       struct ggml_tensor* q =
           smolvla_linear(ctx, normed, lw.q_proj_weight, nullptr);
 
-      // K/V: project VLM cache through expert k/v_proj
-      struct ggml_tensor* k =
-          smolvla_linear(ctx, vlm_kv_keys[i], lw.k_proj_weight, nullptr);
-      struct ggml_tensor* v =
-          smolvla_linear(ctx, vlm_kv_vals[i], lw.v_proj_weight, nullptr);
+      struct ggml_tensor* k = vlm_kv_keys[i];
+      struct ggml_tensor* v = vlm_kv_vals[i];
 
       int kv_len = vlm_kv_keys[i]->ne[1]; // prefix_len
 
@@ -963,14 +964,13 @@ struct ggml_tensor* build_denoise_step_graph(
       v = ggml_cont(ctx, ggml_permute(ctx, v, 0, 2, 1, 3));
 
       struct ggml_tensor* attn_weights = ggml_mul_mat(ctx, k, q);
-      attn_weights =
-          ggml_scale(ctx, attn_weights, 1.0f / sqrtf((float)head_dim));
-
-      if (cross_attn_mask) {
-        attn_weights = ggml_add(ctx, attn_weights, cross_attn_mask);
-      }
-
-      attn_weights = ggml_soft_max(ctx, attn_weights);
+      // Fused scale + mask + softmax.
+      attn_weights = ggml_soft_max_ext(
+          ctx,
+          attn_weights,
+          cross_attn_mask,
+          1.0f / sqrtf((float)head_dim),
+          0.0f);
 
       struct ggml_tensor* attn_out = ggml_mul_mat(
           ctx, ggml_cont(ctx, ggml_transpose(ctx, v)), attn_weights);
@@ -1008,8 +1008,8 @@ struct ggml_tensor* build_denoise_step_graph(
       e_gate = smolvla_linear(ctx, hidden, lw.gate_proj_weight, nullptr);
       e_up = smolvla_linear(ctx, hidden, lw.up_proj_weight, nullptr);
     }
-    e_gate = smolvla_silu(ctx, e_gate);
-    struct ggml_tensor* mlp_out = ggml_mul(ctx, e_gate, e_up);
+    // Fused SwiGLU: silu(e_gate) * e_up.
+    struct ggml_tensor* mlp_out = ggml_swiglu_split(ctx, e_gate, e_up);
     mlp_out = smolvla_linear(ctx, mlp_out, lw.down_proj_weight, nullptr);
 
     hidden = ggml_add(ctx, mlp_out, residual);
@@ -2111,6 +2111,83 @@ bool smolvla_inference_with_timing(
   // Dump KV cache layer 0 for debugging
   dump_tensor("kv_key_layer00", kv_keys_data[0].data(), kv_total);
   dump_tensor("kv_val_layer00", kv_vals_data[0].data(), kv_total);
+
+  // ----------------------------------------------------------------
+  // Hoist cross-attention K/V projections out of the ODE loop.
+  //
+  // For each cross-attn expert layer (`i % self_attn_every_n != 0`),
+  // the action expert applies its own k_proj / v_proj to the VLM
+  // KV cache. The cache is invariant across the 10 ODE denoise
+  // steps, so projecting once per inference replaces 9 redundant
+  // matmul-pairs per cross-attn layer (~16 layers × 9 = 144
+  // redundant matmul pairs eliminated).
+  //
+  // We overwrite kv_keys_data[i] / kv_vals_data[i] in place because
+  // they are only consumed by the per-step upload below, and the
+  // ODE input slots are already sized to match (kv_dim, prefix_len)
+  // — the expert's kv_dim equals text's in stock SmolVLA.
+  // ----------------------------------------------------------------
+  {
+    const int expert_kv_dim = hp.expert_num_kv_heads * hp.expert_head_dim;
+    // The original cross-attn graph reshaped the projected K to
+    // (expert_head_dim, expert_num_kv_heads, prefix_len); the input slot
+    // was sized at text kv_dim, so the two were already implicitly
+    // assumed equal. Assert it explicitly now that we rely on it for
+    // the in-place overwrite below.
+    assert(expert_kv_dim == kv_dim &&
+           "cross-attn hoist requires expert kv_dim == text kv_dim");
+
+    for (int i = 0; i < hp.expert_num_layers; i++) {
+      const bool is_sa = (hp.self_attn_every_n > 0) &&
+                         (i % hp.self_attn_every_n == 0);
+      if (is_sa) continue;
+
+      const auto& elw = model.expert.layers[i];
+      if (!elw.k_proj_weight || !elw.v_proj_weight) continue;
+
+      staged_graph sg_xp = build_staged(model.backend, 32 * 1024 * 1024, 256);
+
+      struct ggml_tensor* g_kin = ggml_new_tensor_2d(
+          sg_xp.ctx, GGML_TYPE_F32, kv_dim, prefix_len);
+      ggml_set_name(g_kin, "kin");
+      ggml_set_input(g_kin);
+      struct ggml_tensor* g_vin = ggml_new_tensor_2d(
+          sg_xp.ctx, GGML_TYPE_F32, kv_dim, prefix_len);
+      ggml_set_name(g_vin, "vin");
+      ggml_set_input(g_vin);
+
+      struct ggml_tensor* k_proj =
+          smolvla_linear(sg_xp.ctx, g_kin, elw.k_proj_weight, nullptr);
+      struct ggml_tensor* v_proj =
+          smolvla_linear(sg_xp.ctx, g_vin, elw.v_proj_weight, nullptr);
+      ggml_set_name(k_proj, "kp");
+      ggml_set_output(k_proj);
+      ggml_set_name(v_proj, "vp");
+      ggml_set_output(v_proj);
+
+      ggml_build_forward_expand(sg_xp.gf, k_proj);
+      ggml_build_forward_expand(sg_xp.gf, v_proj);
+
+      if (model.has_gpu) {
+        alloc_staged_sched(sg_xp, model.backend, model.backend_cpu);
+      } else {
+        alloc_staged_simple(sg_xp, model.backend_cpu);
+      }
+
+      ggml_backend_tensor_set(
+          g_kin, kv_keys_data[i].data(), 0, kv_total * sizeof(float));
+      ggml_backend_tensor_set(
+          g_vin, kv_vals_data[i].data(), 0, kv_total * sizeof(float));
+      compute_staged(sg_xp, model.backend);
+
+      ggml_backend_tensor_get(
+          k_proj, kv_keys_data[i].data(), 0, kv_total * sizeof(float));
+      ggml_backend_tensor_get(
+          v_proj, kv_vals_data[i].data(), 0, kv_total * sizeof(float));
+
+      free_staged(sg_xp);
+    }
+  }
 
   free_staged(sg2);
   double t_smollm2_end = now_ms();

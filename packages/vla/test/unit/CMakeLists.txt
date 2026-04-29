@@ -4,6 +4,7 @@ add_executable(
   addon-test
   test_hparams.cpp
   test_backend_selection.cpp
+  test_flash_attn.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
 )
 
