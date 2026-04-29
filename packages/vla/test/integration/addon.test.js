@@ -384,6 +384,15 @@ test('integration: end-to-end inference runs (needs GGUF)', { timeout: 1200000 }
     t.ok(fs.existsSync(modelPath), `mobile: GGUF exists at ${modelPath}`)
     const sizeMB = fs.statSync(modelPath).size / (1024 * 1024)
     t.ok(sizeMB >= 100, `mobile: GGUF size ${sizeMB.toFixed(1)}MB >= 100MB`)
+
+    // The mobile workflow's `backend: cpu` matrix row writes `forceCpu: true`
+    // into testAssets/smolvla-urls.json. Mirror the desktop env-var override
+    // here so the same VLA_FORCE_CPU=1 path the C++ side reads is exercised.
+    const _urlConfig = _loadUrlsConfig()
+    if (_urlConfig && _urlConfig.forceCpu === true) {
+      process.env.VLA_FORCE_CPU = '1'
+      console.log('[vla-mobile] forceCpu=true from smolvla-urls.json → VLA_FORCE_CPU=1')
+    }
   } else if (!modelPath || !fs.existsSync(modelPath)) {
     t.comment(`skipping: set QVAC_VLA_MODEL to a valid GGUF (got "${modelPath ?? ''}")`)
     t.pass()

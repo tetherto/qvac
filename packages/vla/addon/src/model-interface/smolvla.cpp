@@ -1147,8 +1147,22 @@ extern "C" bool smolvla_load_model(const char* path, smolvla_model* model_ptr) {
   // Snapdragon devices (where ggml's OpenCL/Vulkan paths are unreliable)
   // fall through to the CPU backend rather than crashing on
   // `ggml_backend_dev_init`.
+  //
+  // VLA_FORCE_CPU=1 (any non-empty, non-"0" value) skips GPU selection so CI
+  // can run the same hardware twice — once on the GPU backend and once on CPU
+  // — to surface the speedup attributable to the accelerator.
   {
-    ggml_backend_dev_t gpu = vla_backend_selection::pickBestGpuDevice();
+    const char* force_cpu_env = std::getenv("VLA_FORCE_CPU");
+    const bool force_cpu =
+        force_cpu_env && force_cpu_env[0] != '\0' &&
+        std::string(force_cpu_env) != "0";
+    if (force_cpu) {
+      fprintf(stderr,
+              "%s: VLA_FORCE_CPU=%s set — skipping GPU selection, using CPU\n",
+              __func__, force_cpu_env);
+    }
+    ggml_backend_dev_t gpu =
+        force_cpu ? nullptr : vla_backend_selection::pickBestGpuDevice();
     if (gpu) {
       ggml_backend_t gpu_backend = ggml_backend_dev_init(gpu, nullptr);
       if (gpu_backend) {
