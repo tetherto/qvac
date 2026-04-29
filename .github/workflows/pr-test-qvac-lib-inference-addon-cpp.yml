@@ -8,6 +8,8 @@ on:
     types: [opened, synchronize, reopened, labeled]
     paths:
       - "packages/qvac-lib-inference-addon-cpp/**"
+      - ".github/workflows/pr-test-qvac-lib-inference-addon-cpp-js.yml"
+      - ".github/workflows/pr-test-qvac-lib-inference-addon-cpp.yml"
   workflow_dispatch:
 
 env:
@@ -191,3 +193,11 @@ jobs:
       - name: Debug build
         working-directory: ${{ env.PKG_DIR }}
         run: cmake --preset default -D BUILD_TESTING=ON -D CMAKE_BUILD_TYPE=Debug -S . -B build && cmake --build build
+
+  run-js-tests:
+    if: needs.authorize.outputs.allowed == 'true'
+    needs: authorize
+    uses: ./.github/workflows/pr-test-qvac-lib-inference-addon-cpp-js.yml
+    with:
+      caller_event_name: ${{ github.event_name }}
+    secrets: inherit

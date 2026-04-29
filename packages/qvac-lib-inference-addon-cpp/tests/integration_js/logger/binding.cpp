@@ -29,4 +29,3 @@ auto testLoggerExports(js_env_t *env, js_value_t *exports) -> js_value_t* {
 
 // NOLINTNEXTLINE(modernize-use-trailing-return-type)
 BARE_MODULE(test_logger, testLoggerExports)
-
