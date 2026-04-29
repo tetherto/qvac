@@ -30,7 +30,7 @@ env:
   PREBUILD_ARTIFACT_PREFIX: "sd-cpp-" # Prefix for prebuild artifacts (empty string for generic patterns)
   TEST_FRAMEWORK_REF: "main" # Branch/tag of qvac-test-addon-mobile framework
   APP_BUNDLE_ID: "io.tether.test.qvac" # Bundle ID for the test app (same for all addons)
-  ADDON_WORKDIR: "addon/packages/lib-infer-diffusion"
+  ADDON_WORKDIR: "addon/packages/diffusion-cpp"
 
 jobs:
   build-and-test:
@@ -882,7 +882,7 @@ jobs:
 
       # NOTE: Everything below remains unchanged from your source workflow.
       # The only monorepo-related change in this entire file is that "addon" operations
-      # now target addon/packages/lib-infer-diffusion via env.ADDON_WORKDIR.
+      # now target addon/packages/diffusion-cpp via env.ADDON_WORKDIR.
 
       - name: Create and Upload Test Spec
         id: upload_test_spec

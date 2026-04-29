@@ -13,7 +13,7 @@ on:
       - feature-*
       - tmp-*
     paths:
-      - "packages/lib-infer-diffusion/**"
+      - "packages/diffusion-cpp/**"
       - ".github/workflows/*diffusion*.yml"
   workflow_dispatch:
 
@@ -26,7 +26,7 @@ permissions:
   id-token: write
 
 env:
-  PKG_DIR: packages/lib-infer-diffusion
+  PKG_DIR: packages/diffusion-cpp
 
 jobs:
   authorize:
@@ -60,7 +60,7 @@ jobs:
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
-          workdir: packages/lib-infer-diffusion
+          workdir: packages/diffusion-cpp
 
   cpp-tests:
     if: needs.authorize.outputs.allowed == 'true'
@@ -68,7 +68,7 @@ jobs:
     uses: ./.github/workflows/cpp-tests-diffusion.yml
     secrets: inherit
     with:
-      workdir: packages/lib-infer-diffusion
+      workdir: packages/diffusion-cpp
       repository: ${{ github.event.pull_request.head.repo.full_name }}
       ref: ${{ github.event.pull_request.head.ref }}
 
@@ -80,7 +80,7 @@ jobs:
     with:
       sha: ${{ github.event.pull_request.base.sha }}
       pr_head_sha: ${{ github.event.pull_request.head.sha }}
-      workdir: packages/lib-infer-diffusion
+      workdir: packages/diffusion-cpp
 
   ts-checks:
     needs: authorize
@@ -94,11 +94,11 @@ jobs:
         with:
           node-version: 20
       - name: Install dependencies
-        working-directory: packages/lib-infer-diffusion
+        working-directory: packages/diffusion-cpp
         run: npm install
 
       - name: Type declaration check
-        working-directory: packages/lib-infer-diffusion
+        working-directory: packages/diffusion-cpp
         run: npm run test:dts
 
       - name: Run lint and unit tests
@@ -108,7 +108,7 @@ jobs:
           gpr-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.GITHUB_TOKEN }}
           registry-type: gpr
-          workdir: packages/lib-infer-diffusion
+          workdir: packages/diffusion-cpp
 
   prebuild:
     needs: [authorize, sanity-checks]
@@ -118,7 +118,7 @@ jobs:
       packages: write
       pull-requests: write
       id-token: write
-    uses: ./.github/workflows/prebuilds-lib-infer-diffusion.yml
+    uses: ./.github/workflows/prebuilds-diffusion-cpp.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
@@ -131,7 +131,7 @@ jobs:
       contents: read
       packages: read
       id-token: write
-    uses: ./.github/workflows/integration-test-lib-infer-diffusion.yml
+    uses: ./.github/workflows/integration-test-diffusion-cpp.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
@@ -145,7 +145,7 @@ jobs:
       id-token: write
     if: needs.authorize.outputs.allowed == 'true'
     needs: [authorize, prebuild]
-    uses: ./.github/workflows/integration-mobile-test-lib-infer-diffusion.yml
+    uses: ./.github/workflows/integration-mobile-test-diffusion-cpp.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}

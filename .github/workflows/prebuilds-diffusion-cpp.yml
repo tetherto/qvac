@@ -1,4 +1,4 @@
-# Build-only workflow. Publishing is handled by on-merge-lib-infer-diffusion.yml
+# Build-only workflow. Publishing is handled by on-merge-diffusion-cpp.yml
 name: Prebuilds (Stable Diffusion)
 
 on:
@@ -8,7 +8,7 @@ on:
         description: "Working directory (optional)"
         required: false
         type: string
-        default: "packages/lib-infer-diffusion"
+        default: "packages/diffusion-cpp"
 
   workflow_call:
     inputs:
@@ -24,7 +24,7 @@ on:
         description: "Working directory (optional)"
         required: false
         type: string
-        default: "packages/lib-infer-diffusion"
+        default: "packages/diffusion-cpp"
 
 env:
   WORKDIR: ${{ inputs.workdir }}

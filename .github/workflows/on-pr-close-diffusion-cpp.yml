@@ -5,7 +5,7 @@ on:
     types:
       - closed
     paths:
-      - "packages/lib-infer-diffusion/**"
+      - "packages/diffusion-cpp/**"
   workflow_dispatch:
     inputs:
       version:

@@ -7,7 +7,7 @@ on:
         description: "Working directory"
         type: string
         required: false
-        default: "packages/lib-infer-diffusion"
+        default: "packages/diffusion-cpp"
   workflow_call:
     inputs:
       ref:
@@ -22,7 +22,7 @@ on:
         description: "Working directory"
         type: string
         required: false
-        default: "packages/lib-infer-diffusion"
+        default: "packages/diffusion-cpp"
 
 permissions:
   contents: read
