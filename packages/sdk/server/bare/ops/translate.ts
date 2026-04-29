@@ -33,11 +33,13 @@ export function isAfrican(code: string | undefined) {
 // makes output reproducible across calls; bounded predict prevents a runaway
 // from accumulating into the KV cache and overflowing ctx_size on a later
 // call; repeat_penalty > 1 breaks single-token echo loops (e.g. greedy
-// continuation of "bank" → "bank\nbank\n..."). Currently shared by every
-// non-African Llamacpp translation; the African branch is intentionally
-// excluded so AfriqueGemma's load-time config in the test consumer keeps
-// driving its decoding.
-const SALAMANDRA_TRANSLATE_GENERATION_PARAMS = {
+// continuation of "bank" → "bank\nbank\n…").
+//
+// Skipped for AfriqueGemma: that model relies on load-time `stop_sequences`
+// and a `repeat_penalty` of 1 — applying these per-call values causes "\n"
+// to be penalised, defeats the stop, and lets the model run to `predict`.
+// AfriqueGemma callers must set decoding via `modelConfig` at load time.
+const LLM_TRANSLATE_GENERATION_PARAMS = {
   temp: 0,
   top_k: 1,
   top_p: 1,
@@ -45,6 +47,10 @@ const SALAMANDRA_TRANSLATE_GENERATION_PARAMS = {
   seed: 42,
   predict: 256,
 };
+
+function shouldSkipPerCallSampling(modelName: string | undefined): boolean {
+  return !!modelName && modelName.startsWith("AFRICAN_");
+}
 
 export async function* translate(
   params: TranslateParams,
@@ -120,13 +126,16 @@ export async function* translate(
 
   const modelStart = nowMs();
   let response;
-  if (canonicalModelType === ModelType.llamacppCompletion && !afriquePrompt) {
+  if (
+    canonicalModelType === ModelType.llamacppCompletion &&
+    !shouldSkipPerCallSampling(entry.local.name)
+  ) {
     const llmRun = model.run.bind(model) as (
       prompt: typeof input,
       opts: { generationParams: Record<string, number> },
     ) => ReturnType<typeof model.run>;
     response = await llmRun(input, {
-      generationParams: SALAMANDRA_TRANSLATE_GENERATION_PARAMS,
+      generationParams: LLM_TRANSLATE_GENERATION_PARAMS,
     });
   } else {
     response = await model.run(input);
