@@ -133,7 +133,7 @@ export const echoPlugin = definePlugin({
 
   createModel: (params: CreateModelParams): PluginModelResult => {
     const model = { id: params.modelId, load: async () => {} };
-    return { model, loader: null };
+    return { model };
   },
 
   handlers: {
