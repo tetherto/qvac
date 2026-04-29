@@ -54,6 +54,12 @@ type CompletionParams = Omit<CompletionClientParams, "tools"> & {
  * @param params.mcp - Optional array of MCP client inputs for tool integration
  * @param params.captureThinking - Best-effort parsing of `<think>` blocks into `thinkingDelta` events; `final.raw.fullText` always preserves the original output
  * @param params.emitRawDeltas - When true, every raw model token is also emitted as a `rawDelta` event
+ * @param params.responseFormat - Optional structured-output constraint applied to the model's output:
+ *   - `{ type: "text" }` — no constraint (default behavior)
+ *   - `{ type: "json_object" }` — output must be a JSON object
+ *   - `{ type: "json_schema", json_schema: { name, schema } }` — output must validate against `schema`
+ *
+ *   Cannot be combined with `tools` (tools already constrain output via their parameter schema).
  * @param params.kvCache - Optional KV cache configuration. Cache files are organized hierarchically:
  *   - Structure: `{kvCacheKey}/{modelId}/{configHash}.bin`
  *   - The configHash includes model config + system prompt to ensure cache isolation
@@ -207,6 +213,7 @@ export function completion(params: CompletionParams): CompletionRun {
         generationParams: params.generationParams,
         captureThinking: params.captureThinking,
         emitRawDeltas: params.emitRawDeltas,
+        responseFormat: params.responseFormat,
       };
 
       const responses: AsyncGenerator<unknown> = streamRpc(
@@ -237,7 +244,10 @@ export function completion(params: CompletionParams): CompletionRun {
           notifyWaiters();
 
           if (streamResponse.done) {
-            const { final, error } = buildFinalFromEvents(allEvents, allHandlers);
+            const { final, error } = buildFinalFromEvents(
+              allEvents,
+              allHandlers,
+            );
             if (error) {
               const err = new CompletionFailedError(error.message, error);
               finalRejecter(err);
