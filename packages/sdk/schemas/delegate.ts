@@ -1,8 +1,14 @@
 import { z } from "zod";
 
+const HYPERSWARM_PUBLIC_KEY_HEX = /^[0-9a-fA-F]{64}$/;
+
 export const delegateBaseSchema = z.object({
-  topic: z.string(),
-  providerPublicKey: z.string(),
+  providerPublicKey: z
+    .string()
+    .regex(
+      HYPERSWARM_PUBLIC_KEY_HEX,
+      "providerPublicKey must be a 64-character hex string (32-byte ed25519 public key)",
+    ),
   timeout: z.number().min(100).optional(),
   healthCheckTimeout: z.number().min(100).optional(),
 });

@@ -58,6 +58,7 @@ struct nmt_context_params nmt_context_default_params() {
       /*.use_gpu              =*/false,
       /*.flash_attn           =*/false,
       /*.gpu_device           =*/0,
+      /*.gpu_backend          =*/{},
   };
   return result;
 }

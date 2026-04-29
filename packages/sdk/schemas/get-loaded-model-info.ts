@@ -10,7 +10,6 @@ export const getLoadedModelInfoRequestSchema =
   });
 
 const delegatedProviderInfoSchema = z.object({
-  topic: z.string(),
   providerPublicKey: z.string(),
 });
 

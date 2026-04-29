@@ -121,6 +121,12 @@ resources.define("tools", {
   config: { ctx_size: 4096, tools: true },
 });
 
+resources.define("tools-dynamic", {
+  constant: QWEN3_1_7B_INST_Q4,
+  type: "llm",
+  config: { ctx_size: 4096, tools: true, toolsMode: "dynamic" },
+});
+
 resources.define("ocr", {
   constant: OCR_LATIN_RECOGNIZER_1,
   type: "ocr",

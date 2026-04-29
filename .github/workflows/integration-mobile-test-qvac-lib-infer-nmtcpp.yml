@@ -1742,6 +1742,41 @@ jobs:
           retention-days: 90
           if-no-files-found: ignore
 
+      # Workflow-level guard against the "green job, zero data" trap.
+      #
+      # Background: the test runner inside the React Native test app
+      # catches its own unhandled rejections (necessary to avoid the
+      # Samsung S25 Ultra SIGABRT in CI run 1212) and the upload-
+      # artifact step above is configured `if-no-files-found: ignore`
+      # so the workflow never sees a hard error from missing perf-
+      # report.json. Combined, these meant Device Farm could report
+      # PASSED for a job where the IndicTrans model never downloaded
+      # and zero translation actually ran — exactly what hit the
+      # QVAC-16488 PR validation in run 25080748160.
+      #
+      # The fix: explicitly fail this step if no performance-report.json
+      # was produced. The test files in this PR also fail loud at the
+      # Bare process-exit level (so Device Farm itself reports FAILED),
+      # but this step is a belt-and-suspenders guard so a future
+      # regression in those handlers can't silently re-introduce the
+      # green-but-empty state.
+      - name: Verify mobile perf-report was produced
+        if: always() && steps.schedule_run.outputs.run_arn_1
+        run: |
+          OUTPUT_DIR="perf-results-mobile/${{ matrix.platform }}"
+          if find "$OUTPUT_DIR" -name "performance-report.json" 2>/dev/null | grep -q .; then
+            echo "✅ Mobile produced performance-report.json:"
+            find "$OUTPUT_DIR" -name "performance-report.json" -exec ls -lh {} \;
+          else
+            echo "::error::No performance-report.json was extracted from ${{ matrix.platform }} test logs."
+            echo "::error::This means the mobile tests likely failed silently — either the model"
+            echo "::error::download bombed (NETWORK_ERROR cascade) or the test app exited before"
+            echo "::error::any translation completed. Check the bare console artifact:"
+            echo "::error::  console-logs-${{ matrix.platform }}"
+            echo "::error::for [Bare] / Unhandled rejection lines."
+            exit 1
+          fi
+
       # Console-log extraction/upload added in #1714. Keeps console artifacts
       # (logcat for Android, bare_console.log + appium.log pulled from
       # Customer_Artifacts.zip for iOS) separate from the raw Device Farm

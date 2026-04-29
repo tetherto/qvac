@@ -1,4 +1,4 @@
-import { suspend, resume, completion, modelRegistryList } from "@qvac/sdk";
+import { suspend, resume, state, completion, modelRegistryList, type LifecycleState } from "@qvac/sdk";
 import {
   ValidationHelpers,
   type TestResult,
@@ -13,9 +13,18 @@ import {
   lifecycleSuspendResumeInference,
   lifecycleRapidToggle,
   lifecycleSuspendDuringInference,
+  lifecycleStateTransitions,
+  lifecycleBlockedCompletion,
+  lifecycleBlockedRegistry,
 } from "../../lifecycle-tests.js";
 
 const formatError = (error: unknown): string => error instanceof Error ? error.message : String(error)
+
+const BLOCKED_ERROR_NAME = "LIFECYCLE_OPERATION_BLOCKED";
+const BLOCKED_TIMEOUT_MS = 5_000;
+const INFERENCE_DURING_SUSPEND_TIMEOUT_MS = 15_000;
+const ENSURE_ACTIVE_MAX_ATTEMPTS = 3;
+const ENSURE_ACTIVE_BACKOFF_BASE_MS = 100;
 
 export class LifecycleExecutor extends AbstractModelExecutor<typeof lifecycleTests> {
   pattern = /^lifecycle-/;
@@ -24,11 +33,7 @@ export class LifecycleExecutor extends AbstractModelExecutor<typeof lifecycleTes
 
   private registryWarmed = false;
 
-  /**
-   * Ensures the registry client is initialized so that its swarm and corestore
-   * are registered with the lifecycle coordinator. Without this, suspend/resume
-   * would operate on zero resources -- a no-op state flip.
-   */
+  /** Forces registry client init so suspend/resume operates on real resources. */
   private async warmRegistry(): Promise<void> {
     if (this.registryWarmed) return;
     await modelRegistryList();
@@ -42,11 +47,12 @@ export class LifecycleExecutor extends AbstractModelExecutor<typeof lifecycleTes
       await this.warmRegistry();
       const output = await this.runStrategy(testId);
       const elapsed = Date.now() - start;
-      await this.ensureActive();
+      await this.ensureActiveStrict();
       return ValidationHelpers.validate(`${output} (${elapsed}ms)`, expectation);
     } catch (error) {
-      await this.ensureActive();
-      return { passed: false, output: `lifecycle [${testId}] failed: ${formatError(error)}` };
+      const recoveryError = await this.ensureActiveStrict().then(() => null, (e: unknown) => formatError(e));
+      const detail = recoveryError ? ` [recovery also failed: ${recoveryError}]` : "";
+      return { passed: false, output: `lifecycle [${testId}] failed: ${formatError(error)}${detail}` };
     }
   }) as never;
 
@@ -70,29 +76,99 @@ export class LifecycleExecutor extends AbstractModelExecutor<typeof lifecycleTes
       case lifecycleSuspendDuringInference.testId:
         return await this.runSuspendDuringInference();
 
+      case lifecycleStateTransitions.testId:
+        return await this.runStateTransitions();
+
+      case lifecycleBlockedCompletion.testId:
+        return await this.runBlockedCompletion();
+
+      case lifecycleBlockedRegistry.testId:
+        return await this.runBlockedRegistry();
+
       default:
         throw new Error(`Unknown lifecycle test: ${testId}`);
     }
   }
 
+  private async assertState(expected: LifecycleState): Promise<void> {
+    const actual = await state();
+    if (actual !== expected) throw new Error(`Expected state "${expected}", got "${actual}"`);
+  }
+
+  /** Races a promise against a timeout; rejects with diagnostics if it hangs. */
+  private async withTimeout<T>(opName: string, p: Promise<T>, timeoutMs: number): Promise<T> {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(
+        () => reject(new Error(`${opName} timed out after ${timeoutMs}ms`)),
+        timeoutMs,
+      );
+    });
+    try {
+      return await Promise.race([p, timeout]);
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+    }
+  }
+
+  /** Expects `fn` to throw LIFECYCLE_OPERATION_BLOCKED; times out if it hangs. */
+  private async expectBlocked(
+    opName: string,
+    fn: () => Promise<unknown>,
+    timeoutMs = BLOCKED_TIMEOUT_MS,
+  ): Promise<void> {
+    try {
+      await this.withTimeout(opName, fn(), timeoutMs);
+      throw new Error(`${opName} should have thrown ${BLOCKED_ERROR_NAME} while suspended`);
+    } catch (error) {
+      if ((error as { name?: string }).name === BLOCKED_ERROR_NAME) return;
+      throw error;
+    }
+  }
+
+  /** Retries resume() with backoff until state is "active"; throws after max attempts. */
+  private async ensureActiveStrict(maxAttempts = ENSURE_ACTIVE_MAX_ATTEMPTS): Promise<void> {
+    let lastError: unknown;
+    let lastState: LifecycleState | undefined;
+    for (let i = 0; i < maxAttempts; i++) {
+      try {
+        await resume();
+        lastState = await state();
+        if (lastState === "active") return;
+      } catch (error) {
+        lastError = error;
+      }
+      if (i < maxAttempts - 1) await new Promise(r => setTimeout(r, ENSURE_ACTIVE_BACKOFF_BASE_MS * (i + 1)));
+    }
+    const reason = lastError
+      ? formatError(lastError)
+      : `last observed state: "${lastState}"`;
+    throw new Error(`Failed to restore runtime to "active" after ${maxAttempts} attempts: ${reason}`);
+  }
+
   private async runSuspendResume(): Promise<string> {
     await suspend();
+    await this.assertState("suspended");
+
     await resume();
+    await this.assertState("active");
 
     const models = await modelRegistryList();
-    return `suspend/resume round-trip OK, registry accessible after resume (${models.length} models)`;
+    return `suspend/resume round-trip OK, state transitions verified, registry accessible (${models.length} models)`;
   }
 
   private async runIdempotentSuspend(): Promise<string> {
     await suspend();
     await suspend();
-    return "Double suspend() OK";
+    await this.assertState("suspended");
+    return "Double suspend() OK, state confirmed suspended";
   }
 
   private async runIdempotentResume(): Promise<string> {
     await resume();
     await resume();
-    return "Double resume() while active OK";
+    await this.assertState("active");
+    return "Double resume() while active OK, state confirmed active";
   }
 
   private async runInference(): Promise<string> {
@@ -104,11 +180,10 @@ export class LifecycleExecutor extends AbstractModelExecutor<typeof lifecycleTes
       stream: false,
     }).text;
 
-    if (!textBefore?.trim()) {
-      throw new Error("Pre-suspend completion returned empty text");
-    }
+    if (!textBefore?.trim()) throw new Error("Pre-suspend completion returned empty text");
 
     await suspend();
+    await this.assertState("suspended");
     await resume();
 
     const textAfter = await completion({
@@ -117,12 +192,9 @@ export class LifecycleExecutor extends AbstractModelExecutor<typeof lifecycleTes
       stream: false,
     }).text;
 
-    if (!textAfter?.trim()) {
-      throw new Error("Post-resume completion returned empty text");
-    }
+    if (!textAfter?.trim()) throw new Error("Post-resume completion returned empty text");
 
-    const models = await modelRegistryList();
-    return `Inference preserved, registry OK (${models.length} models). Before: "${textBefore.trim()}", After: "${textAfter.trim()}"`;
+    return `Inference preserved across suspend/resume, pre and post completions non-empty`;
   }
 
   private async runSuspendDuringInference(): Promise<string> {
@@ -136,16 +208,18 @@ export class LifecycleExecutor extends AbstractModelExecutor<typeof lifecycleTes
 
     await suspend();
 
-    const text = await completionPromise;
+    const text = await this.withTimeout(
+      "completion during suspend",
+      completionPromise,
+      INFERENCE_DURING_SUSPEND_TIMEOUT_MS,
+    );
 
     await resume();
+    await this.assertState("active");
 
-    if (!text?.trim()) {
-      throw new Error("Completion during suspend returned empty text");
-    }
+    if (!text?.trim()) throw new Error("In-flight completion returned empty text");
 
-    const models = await modelRegistryList();
-    return `Suspend during inference OK, got ${text.trim().length} chars, registry accessible (${models.length} models)`;
+    return `Suspend during inference OK, in-flight completion resolved with ${text.trim().length} chars`;
   }
 
   private async runRapidToggle(): Promise<string> {
@@ -156,12 +230,59 @@ export class LifecycleExecutor extends AbstractModelExecutor<typeof lifecycleTes
 
     if (failures.length > 0) throw new Error(failures.join("; "));
 
+    // Unconditional resume() guarantees "active" because the lifecycle coordinator processes calls serially.
     await resume();
-    const models = await modelRegistryList();
-    return `Rapid suspend+resume resolved OK, registry accessible (${models.length} models)`;
+    await this.assertState("active");
+    return `Rapid suspend+resume resolved OK, state confirmed active`;
   }
 
-  private async ensureActive(): Promise<void> {
-    try { await resume(); } catch { /* best-effort restore for subsequent tests */ }
+  private async runStateTransitions(): Promise<string> {
+    await this.ensureActiveStrict();
+    await this.assertState("active");
+
+    await suspend();
+    await this.assertState("suspended");
+
+    await resume();
+    await this.assertState("active");
+
+    return `State transitions verified: active -> suspended -> active`;
+  }
+
+  private async runBlockedCompletion(): Promise<string> {
+    const modelId = await this.resources.ensureLoaded("llm");
+
+    await suspend();
+
+    await this.expectBlocked(
+      "completion()",
+      () => completion({ modelId, history: [{ role: "user", content: "Test" }], stream: false }).text,
+    );
+
+    await resume();
+    await this.assertState("active");
+
+    const text = await completion({
+      modelId,
+      history: [{ role: "user", content: "What is 2+2? Answer with only the number." }],
+      stream: false,
+    }).text;
+
+    if (!text?.trim()) throw new Error("Post-resume completion returned empty text");
+
+    return `Blocked completion verified: ${BLOCKED_ERROR_NAME} while suspended, non-empty result after resume`;
+  }
+
+  private async runBlockedRegistry(): Promise<string> {
+    await suspend();
+
+    await this.expectBlocked("modelRegistryList()", () => modelRegistryList());
+
+    await resume();
+    await this.assertState("active");
+
+    const models = await modelRegistryList();
+
+    return `Blocked registry verified: ${BLOCKED_ERROR_NAME} while suspended, ${models.length} models after resume`;
   }
 }

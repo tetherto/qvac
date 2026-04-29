@@ -88,7 +88,7 @@ Bash script for testing img2img via stable-diffusion.cpp CLI:
 ### Basic Usage
 
 ```javascript
-const ImgStableDiffusion = require('@qvac/lib-infer-diffusion')
+const ImgStableDiffusion = require('@qvac/diffusion-cpp')
 const fs = require('bare-fs')
 
 const model = new ImgStableDiffusion(
@@ -177,14 +177,14 @@ The implementation properly manages memory:
 ### Integration Test
 
 ```bash
-cd packages/lib-infer-diffusion
+cd packages/diffusion-cpp
 npm test -- test/integration/generate-image-flux2-i2i.test.js
 ```
 
 ### CLI Test
 
 ```bash
-cd packages/lib-infer-diffusion
+cd packages/diffusion-cpp
 ./scripts/headshot.sh
 ```
 
@@ -193,7 +193,7 @@ Expected output: `temp/nik_transformed.png`
 ### Example Script
 
 ```bash
-cd packages/lib-infer-diffusion
+cd packages/diffusion-cpp
 bare examples/img2img-flux2.js
 ```
 
