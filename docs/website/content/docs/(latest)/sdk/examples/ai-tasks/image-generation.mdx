@@ -1,11 +1,13 @@
 ---
 title: Image generation
-description: Text-to-image generation using Stable Diffusion.
+description: Text-to-image and image-to-image generation using Stable Diffusion.
 ---
 
 ## Overview
 
-Image generation uses [`qvac-ext-stable-diffusion.cpp`](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp) as the inference engine. Load a supported model using `modelType: "diffusion"`. Then, provide a text `prompt` describing the image to generate. 
+Image generation uses [`qvac-ext-stable-diffusion.cpp`](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp) as the inference engine. Load a supported model using `modelType: "diffusion"`. Then, provide a text `prompt` describing the image to generate.
+
+For image-to-image, also pass `init_image` (a `Uint8Array` of PNG bytes) — the model transforms the input guided by the prompt instead of starting from noise.
 
 `diffusion()` returns one or more PNG images as `Uint8Array` buffers. Use `progressStream` to track generation progress step-by-step.
 
@@ -69,6 +71,33 @@ The following script shows text-to-image generation using FLUX.2-klein with its 
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/diffusion-flux2-klein.ts title="diffusion-flux2-klein.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+### Image-to-image
+
+Pass `init_image` to transform an existing image guided by a text prompt. Behavior depends on the model family:
+
+- **SD / SDXL / SD3**: SDEdit-style. Use `strength` to control how much the source is preserved (`0` = keep source, `1` = ignore source).
+- **FLUX.2**: in-context conditioning. Requires `prediction: "flux2_flow"` in `modelConfig` at `loadModel()` time; `strength` is ignored on this path.
+
+The following script loads an SD 2.1 model and transforms an input image using `strength: 0.5`:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/diffusion-img2img.js title="diffusion-img2img.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/diffusion-img2img.ts title="diffusion-img2img.ts" lineNumbers
 ```
 </WrapCode>
 </Tab>
