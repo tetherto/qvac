@@ -102,7 +102,30 @@ export async function* translate(
         ];
 
   const modelStart = nowMs();
-  const response = await model.run(input);
+  let response;
+  // Translation is one-shot. Force greedy decoding with a fixed seed so output is
+  // deterministic across calls; bound output length so a runaway loop can't blow
+  // ctx_size on the next call. repeat_penalty > 1 also breaks single-token echo
+  // loops (e.g. greedy continuation of "bank" → "bank\nbank\n...").
+  // Skipped for the African branch — AfriqueGemma has its own load-time tuning.
+  if (canonicalModelType === ModelType.llamacppCompletion && !afriquePrompt) {
+    const llmRun = model.run.bind(model) as (
+      prompt: typeof input,
+      opts: { generationParams: Record<string, number> },
+    ) => ReturnType<typeof model.run>;
+    response = await llmRun(input, {
+      generationParams: {
+        temp: 0,
+        top_k: 1,
+        top_p: 1,
+        repeat_penalty: 1.3,
+        seed: 42,
+        predict: 256,
+      },
+    });
+  } else {
+    response = await model.run(input);
+  }
 
   // Check if the response has an iterate method (like LLM models)
   if (
