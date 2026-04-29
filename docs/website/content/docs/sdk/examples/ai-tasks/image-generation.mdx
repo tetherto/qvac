@@ -24,35 +24,13 @@ For how to use each function, see [SDK — API reference](/sdk/api/).
 
 Supported model families and their file layouts:
 
+- **FLUX.2-klein**: split layout — diffusion model `*.gguf` + LLM text encoder `*.gguf` (via `llmModelSrc`) + VAE `*.safetensors` (via `vaeModelSrc`).
 - **SD1.x, SD2.x**: single all-in-one `*.gguf` file. No companion files needed.
 - **SDXL, SD3**: may require separate CLIP/T5 text encoder files (`clipLModelSrc`, `clipGModelSrc`, `t5XxlModelSrc`) in `modelConfig` depending on the model variant.
-- **FLUX.2-klein**: split layout — diffusion model `*.gguf` + LLM text encoder `*.gguf` (via `llmModelSrc`) + VAE `*.safetensors` (via `vaeModelSrc`).
 
 For models available as constants, see [SDK — Models](/sdk/getting-started#models).
 
 ## Examples
-
-### Stable Diffusion
-
-The following script shows a minimal text-to-image generation example using a single all-in-one SD 2.1 model:
-
-<Tabs>
-<Tab value="js" label="JavaScript" default>
-<WrapCode>
-
-```js file=<rootDir>/packages/sdk/dist/examples/diffusion-simple.js title="diffusion-simple.js" lineNumbers
-```
-</WrapCode>
-</Tab>
-
-<Tab value="ts" label="TypeScript">
-<WrapCode>
-
-```ts file=<rootDir>/packages/sdk/examples/diffusion-simple.ts title="diffusion-simple.ts" lineNumbers
-```
-</WrapCode>
-</Tab>
-</Tabs>
 
 ### FLUX.2-klein
 
@@ -76,20 +54,15 @@ The following script shows text-to-image generation using FLUX.2-klein with its 
 </Tab>
 </Tabs>
 
-### Image-to-image
+### Stable Diffusion
 
-Pass `init_image` to transform an existing image guided by a text prompt. Behavior depends on the model family:
-
-- **SD / SDXL / SD3**: SDEdit-style. Use `strength` to control how much the source is preserved (`0` = keep source, `1` = ignore source).
-- **FLUX.2**: in-context conditioning. Requires `prediction: "flux2_flow"` in `modelConfig` at `loadModel()` time; `strength` is ignored on this path.
-
-The following script loads an SD 2.1 model and transforms an input image using `strength: 0.5`:
+The following script shows a minimal text-to-image generation example using a single all-in-one SD 2.1 model:
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
 <WrapCode>
 
-```js file=<rootDir>/packages/sdk/dist/examples/diffusion-img2img.js title="diffusion-img2img.js" lineNumbers
+```js file=<rootDir>/packages/sdk/dist/examples/diffusion-simple.js title="diffusion-simple.js" lineNumbers
 ```
 </WrapCode>
 </Tab>
@@ -97,7 +70,36 @@ The following script loads an SD 2.1 model and transforms an input image using `
 <Tab value="ts" label="TypeScript">
 <WrapCode>
 
-```ts file=<rootDir>/packages/sdk/examples/diffusion-img2img.ts title="diffusion-img2img.ts" lineNumbers
+```ts file=<rootDir>/packages/sdk/examples/diffusion-simple.ts title="diffusion-simple.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+
+
+### Image-to-image
+
+Pass `init_image` to transform an existing image guided by a text prompt. Behavior depends on the model family:
+
+- **FLUX.2**: in-context conditioning. Requires `prediction: "flux2_flow"` in `modelConfig` at `loadModel()` time; `strength` is ignored on this path.
+- **SD / SDXL / SD3**: SDEdit-style. Use `strength` to control how much the source is preserved (`0` = keep source, `1` = ignore source).
+
+The following script loads FLUX.2-klein in split-layout and transforms an input image using in-context conditioning (`prediction: "flux2_flow"`):
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/diffusion-flux2-klein-img2img.js title="diffusion-flux2-klein-img2img.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/diffusion-flux2-klein-img2img.ts title="diffusion-flux2-klein-img2img.ts" lineNumbers
 ```
 </WrapCode>
 </Tab>
