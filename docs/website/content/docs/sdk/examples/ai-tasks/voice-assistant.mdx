@@ -1,0 +1,83 @@
+---
+title: Voice assistant
+description: Real-time voice conversation pipeline — microphone → transcription → LLM → text-to-speech → speakers.
+---
+
+## Overview
+
+A voice assistant chains three AI capabilities into a continuous conversation loop: [transcription](/sdk/examples/ai-tasks/transcription) (ASR), [completion](/sdk/examples/ai-tasks/completion) (LLM), and [text-to-speech](/sdk/examples/ai-tasks/text-to-speech) (TTS). The microphone feeds audio into Whisper (with Silero VAD); each detected utterance becomes a message in a conversation history sent to the LLM; the LLM response is synthesized by Supertonic and played back through the speakers. The loop runs continuously until interrupted.
+
+Compared to using each capability individually, the key differences are:
+- You need to coordinate **three model loads** simultaneously (Whisper + VAD, LLM, and TTS bundle) — they all stay loaded for the duration of the session.
+- VAD parameters need **conservative tuning** to avoid the assistant transcribing its own TTS output (self-hearing feedback loop).
+- You must **gate the microphone during TTS playback** and apply a short post-playback cooldown so room reverb doesn't bleed into the next utterance.
+- You should **filter short or non-linguistic transcripts** (e.g. `"."`, `"[BLANK_AUDIO]"`) since Whisper hallucinates them from near-silent audio.
+
+## Functions
+
+Use the following sequence of function calls:
+1. [`loadModel()`](/sdk/api#loadmodel) three times — once per `modelType` (`"whisper"`, `"llm"`, `"tts"`).
+2. [`transcribeStream()`](/sdk/api#transcribestream) — open a streaming session that emits utterances on VAD-detected pauses.
+3. [`completion()`](/sdk/api#completion) — generate a response from the rolling conversation history (streamed).
+4. [`textToSpeech()`](/sdk/api#texttospeech) — synthesize the response into a PCM buffer.
+5. [`unloadModel()`](/sdk/api#unloadmodel) for each loaded model on shutdown.
+
+For how to use each function, see [SDK — API reference](/sdk/api/).
+
+## Models
+
+You load four model bundles in total:
+- A `qvac-ext-lib-whisper.cpp`-compatible model for transcription, plus a Silero VAD model.
+- A `llama.cpp`-compatible LLM for response generation.
+- A Supertonic TTS bundle (text encoder, duration predictor, vector estimator, vocoder, unicode indexer, config, and voice style).
+
+Recommended defaults (used in the example below):
+
+| Stage | Model |
+| --- | --- |
+| ASR | `WHISPER_TINY` |
+| VAD | `VAD_SILERO_5_1_2` |
+| LLM | `LLAMA_3_2_1B_INST_Q4_0` |
+| TTS | Supertonic2 (English) |
+
+For models available as constants, see [SDK — Models](/sdk/getting-started#models).
+
+## Requirements
+
+This example is **desktop-only**. Mobile (React Native / Expo) needs a different audio path and isn't covered here.
+
+- **FFmpeg** (with `ffplay`) on `PATH` — `ffmpeg` captures mic audio, `ffplay` plays back TTS output.
+- **Microphone** access (on macOS, the running shell needs mic permission in 'System Settings > Privacy & Security > Microphone').
+- **Speakers** connected and selected as the default output device.
+
+See the example's [README](https://github.com/tetherto/qvac/blob/main/packages/sdk/examples/voice-assistant/README.md) for per-OS install commands and how to select a non-default microphone via the `MIC_DEVICE` environment variable.
+
+## Example
+
+The following script implements the full loop with VAD tuning, mic gating during playback, and short-utterance filtering:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/voice-assistant/voice-assistant.js title="voice-assistant.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/voice-assistant/voice-assistant.ts title="voice-assistant.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="info">
+**Self-hearing prevention:** the example uses a deliberately conservative VAD threshold (`0.6`), a long silence tail (`min_silence_duration_ms: 700`), a post-playback cooldown (`POST_PLAYBACK_COOLDOWN_MS = 300`), and drops utterances under three letters. These knobs prevent the assistant from looping on its own TTS output. See the example's [README](https://github.com/tetherto/qvac/blob/main/packages/sdk/examples/voice-assistant/README.md#vad-tuning) for a tuning troubleshoot table.
+</Callout>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/sdk/getting-started/quickstart).
+</Callout>
