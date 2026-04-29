@@ -19,37 +19,51 @@ const ALL_DEVICE_CONFIGS = [
   { id: 'cpu', useGPU: false }
 ]
 const CPU_ONLY_CONFIGS = ALL_DEVICE_CONFIGS.filter(c => c.id === 'cpu')
+const TEST_OPTIONS_FILE = 'whisper-mobile-test-options.json'
 
-function readTextFile (filePath) {
+function readJsonFile (filePath) {
   try {
-    if (!fs.existsSync(filePath)) return ''
-    return fs.readFileSync(filePath, 'utf8')
-  } catch (_) {
-    return ''
+    if (!fs.existsSync(filePath)) return null
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'))
+  } catch (err) {
+    console.log('Failed to read ' + filePath + ': ' + err.message)
+    return null
   }
 }
 
-function isSamsungAndroidDevice () {
-  if (platform !== 'android') return false
+function getWhisperMobileOptions () {
+  if (!isMobile) return {}
 
-  const deviceInfo = [
-    os.getEnv ? os.getEnv('DEVICEFARM_DEVICE_NAME') : '',
-    os.getEnv ? os.getEnv('DEVICE_FARM_DEVICE_NAME') : '',
-    os.getEnv ? os.getEnv('ANDROID_MODEL') : '',
-    readTextFile('/system/build.prop'),
-    readTextFile('/vendor/build.prop'),
-    readTextFile('/product/build.prop')
-  ].join(' ').toLowerCase()
+  const candidates = []
+  if (global.testDir) candidates.push(path.join(global.testDir, TEST_OPTIONS_FILE))
+  if (platform === 'android') {
+    candidates.push('/sdcard/Android/data/io.tether.test.qvac/files/' + TEST_OPTIONS_FILE)
+    candidates.push('/storage/emulated/0/Android/data/io.tether.test.qvac/files/' + TEST_OPTIONS_FILE)
+  }
+  candidates.push(path.join(os.tmpdir(), TEST_OPTIONS_FILE))
 
-  return deviceInfo.includes('samsung') ||
-    deviceInfo.includes('galaxy s25') ||
-    deviceInfo.includes('s938') ||
-    deviceInfo.includes('pa3q')
+  for (const candidate of candidates) {
+    const options = readJsonFile(candidate)
+    if (options) {
+      console.log('Loaded Whisper mobile test options from ' + candidate + ': ' + JSON.stringify(options))
+      return options
+    }
+  }
+
+  return {}
 }
 
-const DEVICE_CONFIGS = isMobile
-  ? (isSamsungAndroidDevice() ? CPU_ONLY_CONFIGS : ALL_DEVICE_CONFIGS)
-  : CPU_ONLY_CONFIGS
+function getDeviceConfigs () {
+  const options = getWhisperMobileOptions()
+  if (options.whisperMobileMode === 'cpu-only') {
+    console.log('Device Farm test spec requested CPU-only Whisper mobile coverage')
+    return CPU_ONLY_CONFIGS
+  }
+
+  return isMobile ? ALL_DEVICE_CONFIGS : CPU_ONLY_CONFIGS
+}
+
+const DEVICE_CONFIGS = getDeviceConfigs()
 
 function getExecutionProvider (useGPU) {
   if (!useGPU) return 'cpu'
@@ -61,9 +75,6 @@ function getExecutionProvider (useGPU) {
 for (const deviceConfig of DEVICE_CONFIGS) {
   const epLabel = `[${deviceConfig.id.toUpperCase()}]`
   const executionProvider = getExecutionProvider(deviceConfig.useGPU)
-  if (isSamsungAndroidDevice() && deviceConfig.id === 'cpu') {
-    console.log('Samsung Android device detected; using CPU-only Whisper coverage to avoid known Adreno Vulkan crash')
-  }
 
   // On mobile, runs fewer transcriptions to avoid memory pressure.
   test(`Multiple consecutive transcriptions ${epLabel} should work without errors`, { timeout: 600000 }, async (t) => {
