@@ -65,7 +65,6 @@ jobs:
     with:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
-      run_benchmarks_only: true
 
   desktop-benchmarks:
     needs: [context, prebuild]
@@ -97,7 +96,6 @@ jobs:
     with:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
-      run_benchmarks_only: true
 
   summarize:
     needs: [context, desktop-benchmarks, mobile-benchmarks]
