@@ -31,7 +31,7 @@ jobs:
       id-token: write
 
     env:
-      WORKDIR: packages/qvac-lib-infer-vla
+      WORKDIR: packages/vla
 
     strategy:
       fail-fast: false

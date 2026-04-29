@@ -1,4 +1,4 @@
-# qvac-lib-infer-vla
+# @qvac/vla
 
 Hello-world inference addon scaffold built on `qvac-lib-inference-addon-cpp`.
 Inference backend: **raw ggml**.

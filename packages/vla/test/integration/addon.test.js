@@ -103,7 +103,7 @@ try {
   }
 }
 
-const _perfReporter = createPerformanceReporter({ addon: 'qvac-lib-infer-vla', addonType: 'vla' })
+const _perfReporter = createPerformanceReporter({ addon: 'vla', addonType: 'vla' })
 const _platform = os.platform()
 const _isMobile = _platform === 'ios' || _platform === 'android'
 const _reportPath = path.resolve('.', 'test/results/performance-report.json')

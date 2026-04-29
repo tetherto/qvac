@@ -1,4 +1,4 @@
-# Build-only workflow. Publishing is handled by on-merge-qvac-lib-infer-vla.yml
+# Build-only workflow. Publishing is handled by on-merge-vla.yml
 name: Prebuilds (Vla)
 
 on:
@@ -11,7 +11,7 @@ on:
         description: "Working directory (optional)"
         required: false
         type: string
-        default: "packages/qvac-lib-infer-vla"
+        default: "packages/vla"
 
   workflow_call:
     inputs:
@@ -32,7 +32,7 @@ on:
         description: "Working directory (optional)"
         required: false
         type: string
-        default: "packages/qvac-lib-infer-vla"
+        default: "packages/vla"
 
 env:
   WORKDIR: ${{ inputs.workdir }}
@@ -282,7 +282,7 @@ jobs:
 
       - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: qvac-lib-infer-vla-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
+          name: vla-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
           path: ${{ inputs.workdir }}/prebuilds
 
   merge:

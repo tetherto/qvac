@@ -13,4 +13,4 @@
 
 ## 0.1.0
 
-- Initial hello-world scaffold for `qvac-lib-infer-vla`.
+- Initial hello-world scaffold for `@qvac/vla`.

@@ -30,10 +30,10 @@ on:
 env:
   NODE_VERSION: 'lts/*'
   ADDON_NAME: '@qvac/vla'
-  PREBUILD_ARTIFACT_PREFIX: 'qvac-lib-infer-vla-'  # Prefix for prebuild artifacts
+  PREBUILD_ARTIFACT_PREFIX: 'vla-'  # Prefix for prebuild artifacts
   TEST_FRAMEWORK_REF: 'main'              # Branch/tag of qvac-test-addon-mobile framework
   APP_BUNDLE_ID: 'io.tether.test.qvac'    # Bundle ID for the test app (same for all addons)
-  ADDON_DIR: 'packages/qvac-lib-infer-vla'
+  ADDON_DIR: 'packages/vla'
 
 # Note: VLA mobile tests intentionally share the Device Farm project + device
 # pools provisioned for `@qvac/llm-llamacpp-embed`, so the `_LLAMACPP_EMBED`

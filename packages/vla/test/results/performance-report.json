@@ -1,0 +1,50 @@
+{
+  "schema_version": "1.0",
+  "addon": "qvac-lib-infer-vla",
+  "addon_type": "vla",
+  "timestamp": "2026-04-27T07:20:12.313Z",
+  "run_id": null,
+  "run_number": null,
+  "workflow": null,
+  "ref": null,
+  "sha": null,
+  "device": {
+    "name": "linux-x64",
+    "platform": "linux",
+    "os_version": "",
+    "arch": "x64",
+    "runner": "local"
+  },
+  "results": [
+    {
+      "test": "end-to-end inference (fixed fixture)",
+      "execution_provider": null,
+      "metrics": {
+        "total_time_ms": 9302.855652034283,
+        "detection_time_ms": null,
+        "recognition_time_ms": null,
+        "decode_time_ms": null,
+        "ttft_ms": null,
+        "generated_tokens": null,
+        "prompt_tokens": null,
+        "tps": null,
+        "text_regions": null,
+        "real_time_factor": null,
+        "sample_count": null,
+        "duration_ms": null,
+        "vision_time_ms": 5031.460020005703,
+        "smollm2_compute_time_ms": 1917.4660339951515,
+        "smollm2_total_time_ms": 2052.9606299996376,
+        "ode_time_ms": 2217.8436340093613
+      },
+      "input": null,
+      "output": null,
+      "quality": {
+        "action_max_abs_diff": 0.000939488410949707,
+        "action_mean_abs_diff": 0.00003076084756425449,
+        "action_cos_sim": 0.9999999879485427,
+        "compared": 350
+      }
+    }
+  ]
+}

@@ -13,8 +13,7 @@ on:
       - feature-*
       - tmp-*
     paths:
-      - "packages/qvac-lib-infer-vla/**"
-      - ".github/workflows/*qvac-lib-infer-vla*.yml"
+      - "packages/vla/**"
       - ".github/workflows/*-vla.yml"
   workflow_dispatch:
 
@@ -67,7 +66,7 @@ jobs:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
           run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
-          workdir: packages/qvac-lib-infer-vla
+          workdir: packages/vla
 
   cpp-lint:
     # Only runs when we have a PR base SHA to diff against. Workflow_dispatch
@@ -79,7 +78,7 @@ jobs:
     with:
       sha: ${{ github.event.pull_request.base.sha }}
       pr_head_sha: ${{ github.event.pull_request.head.sha }}
-      workdir: packages/qvac-lib-infer-vla
+      workdir: packages/vla
 
   cpp-tests:
     permissions:
@@ -109,11 +108,11 @@ jobs:
           node-version: 20
 
       - name: Install dependencies
-        working-directory: packages/qvac-lib-infer-vla
+        working-directory: packages/vla
         run: npm install
 
       - name: Type declaration check
-        working-directory: packages/qvac-lib-infer-vla
+        working-directory: packages/vla
         run: npm run test:dts
 
       - name: Run lint and unit tests
@@ -123,7 +122,7 @@ jobs:
           gpr-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.GITHUB_TOKEN }}
           registry-type: gpr
-          workdir: packages/qvac-lib-infer-vla
+          workdir: packages/vla
 
   prebuild:
     permissions:
@@ -133,7 +132,7 @@ jobs:
       id-token: write
     if: needs.authorize.outputs.allowed == 'true'
     needs: [authorize, sanity-checks]
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-vla.yml
+    uses: ./.github/workflows/prebuilds-vla.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
@@ -146,7 +145,7 @@ jobs:
       contents: read
       packages: read
       id-token: write
-    uses: ./.github/workflows/integration-test-qvac-lib-infer-vla.yml
+    uses: ./.github/workflows/integration-test-vla.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
@@ -160,7 +159,7 @@ jobs:
       id-token: write
     if: needs.authorize.outputs.allowed == 'true'
     needs: [authorize, prebuild]
-    uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-vla.yml
+    uses: ./.github/workflows/integration-mobile-test-vla.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}

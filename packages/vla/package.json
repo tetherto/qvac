@@ -43,12 +43,12 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tetherto/qvac.git",
-    "directory": "packages/qvac-lib-infer-vla"
+    "directory": "packages/vla"
   },
   "author": "Tether",
   "license": "Apache-2.0",
   "bugs": "https://github.com/tetherto/qvac/issues",
-  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-infer-vla#readme",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/vla#readme",
   "dependencies": {
     "@qvac/infer-base": "^0.4.0",
     "@qvac/logging": "^0.1.0",
