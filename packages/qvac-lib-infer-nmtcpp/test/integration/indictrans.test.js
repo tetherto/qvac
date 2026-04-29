@@ -190,19 +190,19 @@ for (let gpuIdx = 0; gpuIdx < MAX_GPU_DEVICE_PROBES; gpuIdx++) {
   test(`IndicTrans backend [GPU device ${gpuIdx}] - English to Hindi translation`, { timeout: TEST_TIMEOUT }, async function (t) {
     const modelPath = await ensureIndicTransModel()
     const devices = await discoverGpuDevices()
-    const device = devices.find(d => d.index === gpuIdx)
+    const device = devices[gpuIdx]
 
     if (!device) {
-      t.comment(`[GPU:${gpuIdx}] No GPU device at index ${gpuIdx} — skipping`)
+      t.comment(`[GPU:${gpuIdx}] No unique physical GPU at slot ${gpuIdx} — skipping`)
       t.pass(`[GPU:${gpuIdx}] Skipped (device not present)`)
       return
     }
 
-    const label = `[GPU:${gpuIdx} ${device.name}]`
+    const label = `[GPU:${device.index} ${device.name}]`
     t.ok(modelPath, `${label} IndicTrans model path should be available`)
     t.comment(`${label} Model path: ` + modelPath)
     t.comment('Platform: ' + platform + ', isMobile: ' + isMobile)
-    t.comment(`${label} Testing with use_gpu: true, gpu_device: ${gpuIdx}`)
+    t.comment(`${label} Testing with use_gpu: true, gpu_device: ${device.index}`)
 
     const logger = createLogger()
     let model
@@ -212,7 +212,7 @@ for (let gpuIdx = 0; gpuIdx < MAX_GPU_DEVICE_PROBES; gpuIdx++) {
         modelPath,
         logger,
         useGpu: true,
-        gpuDevice: gpuIdx,
+        gpuDevice: device.index,
         label
       })
       model = run.model

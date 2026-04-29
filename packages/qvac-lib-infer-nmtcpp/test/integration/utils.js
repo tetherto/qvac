@@ -795,6 +795,22 @@ function discoverGpuDevices () {
 
 const _logger = createLogger()
 
+/**
+ * Extracts a physical GPU ordinal from a ggml backend device name.
+ *
+ * ggml names follow the convention `<ApiType><Ordinal>` — e.g. "Vulkan0",
+ * "OpenCL0", "CUDA1", "Metal".  Different API backends sharing the same
+ * trailing ordinal refer to the same physical GPU (e.g. Vulkan0 and OpenCL0
+ * on a single-SoC mobile device both address the same Adreno/Mali chip).
+ *
+ * @param {string} name - ggml backend device name
+ * @returns {string} ordinal string used as deduplication key
+ */
+function _extractPhysicalGpuKey (name) {
+  const match = name.match(/(\d+)$/)
+  return match ? match[1] : '0'
+}
+
 async function _probeGpuDevices () {
   const devices = []
   const modelPath = await ensureIndicTransModel()
@@ -839,7 +855,31 @@ async function _probeGpuDevices () {
     }
   }
 
-  return devices
+  // Deduplicate backends that map to the same physical GPU.
+  // ggml names like "Vulkan0" and "OpenCL0" are different API surfaces for
+  // the same hardware — the trailing ordinal identifies the physical device.
+  // Keep only the first backend discovered per ordinal so tests don't
+  // redundantly initialise and run against the same chip twice.
+  const seen = new Map()
+  const unique = []
+  for (const device of devices) {
+    const physKey = _extractPhysicalGpuKey(device.name)
+    if (seen.has(physKey)) {
+      _logger.info('[discoverGpuDevices] Skipping ' + device.name +
+        ' (gpu_device=' + device.index + ') — same physical GPU as ' +
+        seen.get(physKey).name + ' (ordinal ' + physKey + ')')
+      continue
+    }
+    seen.set(physKey, device)
+    unique.push(device)
+  }
+
+  if (unique.length < devices.length) {
+    _logger.info('[discoverGpuDevices] Deduplicated ' + devices.length +
+      ' backends → ' + unique.length + ' unique physical GPU(s)')
+  }
+
+  return unique
 }
 
 // ============================================================================
