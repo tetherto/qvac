@@ -1508,6 +1508,30 @@ jobs:
             echo "::warning::No perf-report markers found in Device Farm logs"
           fi
 
+      - name: Render mobile perf-report into Step Summary
+        # Mirrors the desktop reporter's writeStepSummary() output so the
+        # mobile job's GitHub Actions summary tab carries the same per-device
+        # CPU-vs-GPU table you see for Linux/macOS/Windows. extract-from-log.js
+        # writes per-device subdirs when Device Farm runs more than one phone
+        # in the same pool (Pixel 9 Pro + Galaxy S25 Ultra), so loop over them.
+        if: always() && steps.schedule_run.outputs.run_arn
+        run: |
+          set -eu
+          OUT_DIR="mobile-perf"
+          shopt -s nullglob
+          REPORTS=( $(find "$OUT_DIR" -name 'performance-report.json' -type f) )
+          if [ ${#REPORTS[@]} -eq 0 ] && [ -f "$OUT_DIR/perf-report-${{ matrix.platform }}.json" ]; then
+            REPORTS=( "$OUT_DIR/perf-report-${{ matrix.platform }}.json" )
+          fi
+          if [ ${#REPORTS[@]} -eq 0 ]; then
+            echo "No perf-report.json found — skipping Step Summary render"
+            exit 0
+          fi
+          for r in "${REPORTS[@]}"; do
+            echo "Rendering Step Summary from $r"
+            node "${GITHUB_WORKSPACE}/scripts/perf-report/render-step-summary.js" "$r" "$GITHUB_STEP_SUMMARY"
+          done
+
       - name: Upload mobile perf-report
         if: always() && steps.schedule_run.outputs.run_arn
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
