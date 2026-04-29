@@ -69,9 +69,15 @@ class WhisperInterface {
       (Array.isArray(data) && data.length > 0) ||
       (data && typeof data === 'object' && typeof data.text === 'string')
     )
+    const isVadEvent = data && typeof data === 'object' && data.type === 'vad'
+    const isEndOfTurnEvent = data && typeof data === 'object' && data.type === 'endOfTurn'
 
     let mappedEvent = event
-    if (event === 'Error' || isError || String(event).includes('Error')) {
+    if (isVadEvent) {
+      mappedEvent = 'VadState'
+    } else if (isEndOfTurnEvent) {
+      mappedEvent = 'EndOfTurn'
+    } else if (event === 'Error' || isError || String(event).includes('Error')) {
       mappedEvent = 'Error'
     } else if (event === 'JobEnded' || isStats || String(event).includes('RuntimeStats')) {
       mappedEvent = 'JobEnded'
