@@ -151,13 +151,20 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
 
     if (!frame) return;
 
-    if (!raw.trim()) {
+    // Empty-payload guard. Strip frame markers and check the inner is
+    // non-empty; surface a toolError on empty payloads so the literal
+    // markers don't leak into contentDelta.
+    let inner = raw;
+    if (inner.startsWith(frame.open)) inner = inner.slice(frame.open.length);
+    if (inner.endsWith(frame.close)) {
+      inner = inner.slice(0, inner.length - frame.close.length);
+    }
+    if (inner.trim().length === 0) {
       events.push({
         type: "toolError",
         seq: nextSeq(),
         error: { code: "PARSE_ERROR", message: "Empty tool_call frame" },
       });
-      emitContent(events, raw);
       return;
     }
 

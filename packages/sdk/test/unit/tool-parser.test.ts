@@ -5,8 +5,6 @@ import {
   parseToolCalls,
   detectToolDialectFromName,
 } from "@/server/utils/tools";
-import { checkForToolEvents } from "@/server/utils/tool-integration";
-
 const weatherTool: Tool = {
   type: "function",
   name: "weather",
@@ -145,18 +143,6 @@ test("two same-name tools with different args → both parsed", (t) => {
   t.is(toolCalls.length, 2);
 });
 
-test("checkForToolEvents: respects open think blocks and emits after close", (t) => {
-  const accumulated = `<think>\n<tool_call>\n{"name": "weather", "arguments": {"args": ["Curitiba"]}}`;
-  const emitted = new Set<string>();
-  const blocked = checkForToolEvents(accumulated, "}", tools, emitted);
-  t.is(blocked.length, 0);
-
-  const closedThink = `<think>\nreasoning\n</think>\n\n<tool_call>\n{"name": "weather", "arguments": {"args": ["Curitiba"]}}\n</tool_call>`;
-  const events = checkForToolEvents(closedThink, "</tool_call>", tools, emitted);
-  t.is(events.length, 1);
-  t.is(events[0]?.call?.name, "weather");
-});
-
 test("matched-but-failed: malformed JSON inside Hermes frame surfaces PARSE_ERROR", (t) => {
   const text = `<tool_call>
 {name: "weather", arguments: {args: ["Paris"]}}
@@ -183,13 +169,47 @@ test("matched-but-failed: malformed Gemma tool_calls entry surfaces PARSE_ERROR"
   t.is(errors[0]?.code, "PARSE_ERROR");
 });
 
-test("matched-but-failed: half-emitted Hermes frame does not fall through to generic", (t) => {
+// Token-limit cutoff / abort / connection drop produces an open `<tool_call>`
+// with no close. parseHermesFormat now recovers the inner buffer directly
+// (the JSON / generic fallbacks downstream can't, because they JSON.parse the
+// whole text and the `<tool_call>` prefix makes that throw).
+test("incomplete Hermes frame: open without close recovers inner JSON", (t) => {
   const text = `<tool_call>
 {"name": "weather", "arguments": {"args": ["Paris"]}}`;
 
   const { toolCalls, errors } = parseToolCalls(text, tools);
-  t.is(toolCalls.length, 0);
+  t.is(toolCalls.length, 1);
+  t.is(toolCalls[0]?.name, "weather");
+  t.alike(toolCalls[0]?.arguments, { args: ["Paris"] });
   t.is(errors.length, 0);
+});
+
+// Same path also handles a truncated close-marker tail like `</tool` from a
+// mid-token cutoff — strip the partial tag, then parse the inner JSON.
+test("incomplete Hermes frame: truncated close-marker tail still recovers", (t) => {
+  const text = `<tool_call>
+{"name": "weather", "arguments": {"args": ["Paris"]}}
+</tool`;
+
+  const { toolCalls, errors } = parseToolCalls(text, tools);
+  t.is(toolCalls.length, 1);
+  t.is(toolCalls[0]?.name, "weather");
+  t.is(errors.length, 0);
+});
+
+// Regression guard for the fix: fully-framed payload (open + close present)
+// with broken inner JSON must still surface as `matched: true` + PARSE_ERROR
+// — the open-without-close fall-through must NOT weaken the matched-but-
+// failed semantics for complete frames.
+test("matched-but-failed: complete Hermes frame with broken JSON keeps PARSE_ERROR", (t) => {
+  const text = `<tool_call>
+{"name": "weather", "arguments": {"args": ["Paris"],}}
+</tool_call>`;
+
+  const { toolCalls, errors } = parseToolCalls(text, tools);
+  t.is(toolCalls.length, 0);
+  t.is(errors.length, 1);
+  t.is(errors[0]?.code, "PARSE_ERROR");
 });
 
 test("detectToolDialectFromName: LFM names and paths → pythonic", (t) => {
@@ -211,7 +231,11 @@ test("detectToolDialectFromName: LFM names and paths → pythonic", (t) => {
   }
 });
 
-test("detectToolDialectFromName: known Hermes-family models → hermes", (t) => {
+// Single negative pin: with the explicit qwen|hermes|mistral allowlist gone,
+// every non-LFM model (Qwen, Hermes, Mistral, Llama tool-calling fine-tunes,
+// unknowns, empty paths) routes to "hermes" via the catch-all. The hermes
+// parser chain is the catch-all; it also covers unknown JSON-payload models.
+test("detectToolDialectFromName: non-LFM models default to hermes", (t) => {
   const cases: Array<[string | undefined, string]> = [
     [
       "QWEN3_1_7B_INST_Q4",
@@ -226,18 +250,12 @@ test("detectToolDialectFromName: known Hermes-family models → hermes", (t) => 
       "MISTRAL_7B_INSTRUCT",
       "/Users/x/.qvac/models/abc_Mistral-7B-Instruct-v0.3-Q4_K_M.gguf",
     ],
-  ];
-
-  for (const [name, path] of cases) {
-    t.is(detectToolDialectFromName(name, path), "hermes");
-  }
-});
-
-// Regression: `tool_calling`-tagged Llama fine-tunes are intentionally NOT
-// auto-routed to pythonic. The mav23 / nguyenthanhthuan family emits JSON,
-// not Pythonic — see dialect.ts header for the rationale.
-test("detectToolDialectFromName: unknown and Llama variants use hermes catch-all", (t) => {
-  const cases: Array<[string | undefined, string]> = [
+    [undefined, "/cache/abc_Mistral-Nemo-Instruct-2407.gguf"],
+    // Llama tool-calling fine-tunes (mav23, nguyenthanhthuan, etc.)
+    // empirically emit OpenAI-style JSON, not pythonic, so they fall through
+    // the catch-all rather than being auto-routed to pythonic. Callers with
+    // a pythonic-emitting Llama variant should use `completion({ toolDialect:
+    // "pythonic" })` to opt in.
     [
       "LLAMA_TOOL_CALLING_1B_INST_Q4_K",
       "/Users/x/.qvac/models/abc_llama_3.2_1b_intruct_tool_calling_v2.Q4_K.gguf",
@@ -429,77 +447,6 @@ test("pythonic: does not eat top-level JSON tool-call shapes", (t) => {
   const { toolCalls, errors } = parseToolCalls(text, pythonicTools);
   t.is(toolCalls.length, 0);
   t.is(errors.length, 0);
-});
-
-// Regression: parsePythonicFormat synthesizes call.raw as JSON-stringified
-// args, which is never present in the source. Earlier position-based dedupe
-// silently dropped every Pythonic event; content-based keys fix it.
-test("checkForToolEvents: pythonic call emits toolCall (raw not in source text)", (t) => {
-  const accumulated = `<|tool_call_start|>[get_weather(city="Lima")]<|tool_call_end|>`;
-  const emitted = new Set<string>();
-  const events = checkForToolEvents(
-    accumulated,
-    "<|tool_call_end|>",
-    pythonicTools,
-    emitted,
-    "pythonic",
-  );
-  t.is(events.length, 1);
-  t.is(events[0]?.type, "toolCall");
-  t.is(events[0]?.call?.name, "get_weather");
-  t.alike(events[0]?.call?.arguments, { city: "Lima" });
-});
-
-test("checkForToolEvents: pythonic dedupes across repeated parses on later tokens", (t) => {
-  const accumulated = `<|tool_call_start|>[get_weather(city="Lima")]<|tool_call_end|>`;
-  const emitted = new Set<string>();
-
-  const first = checkForToolEvents(
-    accumulated,
-    "<|tool_call_end|>",
-    pythonicTools,
-    emitted,
-    "pythonic",
-  );
-  t.is(first.length, 1);
-
-  // Subsequent close-shaped tokens against the same accumulated text must not
-  // re-emit the same call.
-  const second = checkForToolEvents(
-    accumulated,
-    "]",
-    pythonicTools,
-    emitted,
-    "pythonic",
-  );
-  t.is(second.length, 0);
-});
-
-// Mirrors completion-normalizer's "repeated identical calls from same source
-// are preserved" pin: dedupe key must include occurrence index.
-test("checkForToolEvents: repeated identical pythonic calls in one frame each emit once", (t) => {
-  const accumulated = `<|tool_call_start|>[get_weather(city="Lima"), get_weather(city="Lima")]<|tool_call_end|>`;
-  const emitted = new Set<string>();
-
-  const first = checkForToolEvents(
-    accumulated,
-    "<|tool_call_end|>",
-    pythonicTools,
-    emitted,
-    "pythonic",
-  );
-  t.is(first.length, 2, "both identical calls emitted");
-  t.is(first[0]?.call?.name, "get_weather");
-  t.is(first[1]?.call?.name, "get_weather");
-
-  const second = checkForToolEvents(
-    accumulated,
-    "]",
-    pythonicTools,
-    emitted,
-    "pythonic",
-  );
-  t.is(second.length, 0, "re-parse on later token emits nothing new");
 });
 
 // Override semantics: parseToolCalls must respect the supplied dialect, not

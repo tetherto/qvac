@@ -7,7 +7,7 @@ import type {
   ToolCall,
   ToolDialect,
 } from "@/schemas";
-import { type ToolCallEvent, TOOLS_MODE } from "@/schemas/tools";
+import { TOOLS_MODE } from "@/schemas/tools";
 import {
   logCacheDisabled,
   logCacheInit,
@@ -33,7 +33,6 @@ import {
 } from "@/server/bare/registry/model-registry";
 import {
   appendToolsToHistory,
-  checkForToolEvents,
   detectToolDialect,
   prependToolsToHistory,
 } from "@/server/utils/tool-integration";
@@ -362,11 +361,7 @@ async function* processModelResponse(
   generationParams?: GenerationParams,
   cacheOptions?: CacheRunOptions,
   dialect?: ToolDialect,
-): AsyncGenerator<
-  { token: string; toolCallEvent?: ToolCallEvent },
-  ProcessModelResponseResult,
-  unknown
-> {
+): AsyncGenerator<{ token: string }, ProcessModelResponseResult, unknown> {
   const runOptions: CacheRunOptions & { generationParams?: GenerationParams } =
     {
       ...(generationParams && { generationParams }),
@@ -387,28 +382,12 @@ async function* processModelResponse(
   );
 
   let accumulatedText = "";
-  const emittedToolCallKeys = new Set<string>();
   let toolCallsResult: ToolCall[] = [];
 
   for await (const token of response.iterate()) {
     const tokenStr = token as string;
     accumulatedText += tokenStr;
-
     yield { token: tokenStr };
-
-    if (tools && tools.length > 0) {
-      const toolEvents = checkForToolEvents(
-        accumulatedText,
-        tokenStr,
-        tools,
-        emittedToolCallKeys,
-        dialect,
-      );
-
-      for (const toolEvent of toolEvents) {
-        yield { token: "", toolCallEvent: toolEvent };
-      }
-    }
   }
   const modelExecutionMs = nowMs() - modelStart;
 
@@ -456,11 +435,7 @@ export async function* completion(
     generationParams?: GenerationParams;
     toolDialect?: ToolDialect;
   },
-): AsyncGenerator<
-  { token: string; toolCallEvent?: ToolCallEvent },
-  CompletionResult,
-  unknown
-> {
+): AsyncGenerator<{ token: string }, CompletionResult, unknown> {
   const { history, modelId, kvCache, tools, generationParams } = params;
 
   const modelConfig = getModelConfig(modelId);

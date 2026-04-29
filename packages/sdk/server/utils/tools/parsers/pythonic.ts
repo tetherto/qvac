@@ -8,7 +8,7 @@ import {
 // Pythonic `[name(k=v), ...]` arrays. LFM 2.x is auto-routed; Llama-style
 // tokens are kept for callers that opt in via `completion({ toolDialect:
 // "pythonic" })` for a model known to emit Pythonic. Pure string parsing —
-// no eval/vm/Function (Bare-safe).
+// no eval/vm/Function (untrusted model output).
 const PYTHONIC_LFM_OPEN = "<|tool_call_start|>";
 const PYTHONIC_LFM_CLOSE = "<|tool_call_end|>";
 const PYTHONIC_LLAMA_OPEN = "<|start_header_id|>tool_call<|end_header_id|>";
@@ -126,6 +126,10 @@ function pyParseIdentifier(s: Scanner): string {
   return s.text.slice(start, s.pos);
 }
 
+// Identifier-as-string fallback: any bare word that isn't `True`/`False`/`None`
+// is returned as a string, so `[get_weather(city=Paris)]` still produces
+// `{ city: "Paris" }`. Side-effect: lowercase `null` / `true` / `false` from
+// JS-trained models also coerce to strings — validate against your tool schema.
 function pyParseValue(s: Scanner): unknown {
   pySkipWs(s);
   const c = pyPeek(s);

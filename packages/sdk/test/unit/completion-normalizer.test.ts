@@ -188,21 +188,54 @@ test("incomplete tool buffer at finish: emits toolError and fails open", (t) => 
   t.ok(types(events).includes("completionDone"));
 });
 
-test("empty frame (closed and incomplete): emits toolError and fails open", (t) => {
+// Empty-payload frames (truly empty inner buffer): the normalizer surfaces a
+// toolError but must NOT leak the literal `<tool_call>` / `</tool_call>`
+// markers into `contentDelta` — pre-fix, the dead `if (!raw.trim())` guard
+// never fired (raw always carried the markers) and the parser then re-emitted
+// raw as content, exposing markers to consumers.
+test("empty frame (closed and incomplete): emits toolError, no marker leak", (t) => {
   const closed = createCompletionNormalizer(
     baseConfig({ capabilities: TEXT_PARSE_CAPS, tools: [ECHO_TOOL] }),
   );
   const closedEvents = [...pushAll(closed, ["<tool_call></tool_call>"]), ...closed.finish()];
   t.ok(types(closedEvents).includes("toolError"), "closed empty: toolError");
-  t.ok(types(closedEvents).includes("contentDelta"), "closed empty: fails open");
+  t.absent(
+    types(closedEvents).includes("toolCall"),
+    "closed empty: no toolCall event",
+  );
+  const closedContent = texts(closedEvents, "contentDelta").join("");
+  t.absent(closedContent.includes("<tool_call>"), "closed empty: no open marker leak");
+  t.absent(closedContent.includes("</tool_call>"), "closed empty: no close marker leak");
 
   const incomplete = createCompletionNormalizer(
     baseConfig({ capabilities: TEXT_PARSE_CAPS, tools: [ECHO_TOOL] }),
   );
   const incompleteEvents = [...pushAll(incomplete, ["<tool_call>"]), ...incomplete.finish()];
   t.ok(types(incompleteEvents).includes("toolError"), "incomplete empty: toolError");
-  t.ok(types(incompleteEvents).includes("contentDelta"), "incomplete empty: fails open");
+  const incompleteContent = texts(incompleteEvents, "contentDelta").join("");
+  t.absent(
+    incompleteContent.includes("<tool_call>"),
+    "incomplete empty: no open marker leak",
+  );
   t.ok(types(incompleteEvents).includes("completionDone"));
+});
+
+// Whitespace-only inner payload exercises the strip-then-trim path —
+// `<tool_call>   \n  </tool_call>` should be treated identically to a truly
+// empty frame: toolError, no toolCall, no marker leak.
+test("empty frame (whitespace-only inner): treated as empty, no marker leak", (t) => {
+  const n = createCompletionNormalizer(
+    baseConfig({ capabilities: TEXT_PARSE_CAPS, tools: [ECHO_TOOL] }),
+  );
+  const events = [
+    ...pushAll(n, ["<tool_call>   \n  </tool_call>"]),
+    ...n.finish(),
+  ];
+  t.ok(types(events).includes("toolError"), "toolError emitted");
+  t.absent(types(events).includes("toolCall"), "no toolCall event");
+  const content = texts(events, "contentDelta").join("");
+  t.absent(content.includes("<tool_call>"), "no open marker leak");
+  t.absent(content.includes("</tool_call>"), "no close marker leak");
 });
 
 test("completionStats precedes completionDone", (t) => {

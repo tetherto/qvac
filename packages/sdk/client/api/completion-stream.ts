@@ -55,6 +55,7 @@ type CompletionParams = Omit<CompletionClientParams, "tools"> & {
  * @param params.captureThinking - Best-effort parsing of `<think>` blocks into `thinkingDelta` events; `final.raw.fullText` always preserves the original output
  * @param params.emitRawDeltas - When true, every raw model token is also emitted as a `rawDelta` event
  * @param params.toolDialect - Override the SDK's name-based dialect detection. Use when your model emits a known format (`"hermes"`, `"pythonic"`, or `"json"`) the auto-router doesn't recognise. Drives both streaming frame detection and finalization parsing.
+ * Common override case: Llama 3.x tool-calling fine-tunes that emit the native pythonic header (`<|start_header_id|>tool_call<|end_header_id|>...<|eot_id|>`).
  * @param params.kvCache - Optional KV cache configuration. Cache files are organized hierarchically:
  *   - Structure: `{kvCacheKey}/{modelId}/{configHash}.bin`
  *   - The configHash includes model config + system prompt to ensure cache isolation

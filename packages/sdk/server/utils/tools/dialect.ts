@@ -13,6 +13,5 @@ export function detectToolDialectFromName(
   const tag = `${(name ?? "").toLowerCase()}|${basename}`;
 
   if (/lfm[_-]?\d/.test(tag)) return "pythonic";
-  if (/qwen|hermes|mistral/.test(tag)) return "hermes";
   return "hermes";
 }

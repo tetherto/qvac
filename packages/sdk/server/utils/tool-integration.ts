@@ -1,9 +1,5 @@
-import type { Tool, ToolCall, ToolCallError, ToolDialect } from "@/schemas";
-import type { ToolCallEvent } from "@/schemas/tools";
-import {
-  parseToolCalls,
-  detectToolDialectFromName,
-} from "@/server/utils/tools";
+import type { Tool, ToolDialect } from "@/schemas";
+import { detectToolDialectFromName } from "@/server/utils/tools";
 import { getModelInfo } from "@/server/bare/registry/model-registry";
 
 interface HistoryMessage {
@@ -51,89 +47,4 @@ export function detectToolDialect(modelId: string): ToolDialect {
   const info = getModelInfo(modelId);
   if (!info) return "hermes";
   return detectToolDialectFromName(info.name, info.path);
-}
-
-function isInsideThinkBlock(text: string): boolean {
-  const lastOpen = text.lastIndexOf("<think>");
-  if (lastOpen === -1) return false;
-  const lastClose = text.lastIndexOf("</think>");
-  return lastClose < lastOpen;
-}
-
-// Cheap per-token gate before attempting a full parse.
-function tokenLooksLikeFrameClose(
-  token: string,
-  dialect: ToolDialect | undefined,
-): boolean {
-  switch (dialect) {
-    case "pythonic":
-      return (
-        token.includes("<|tool_call_end|>") ||
-        token.includes("<|eot_id|>") ||
-        token.includes("]")
-      );
-    case "json":
-      return token.includes("}");
-    case "hermes":
-    default:
-      return token.includes("</tool_call>") || token.includes("}");
-  }
-}
-
-// Dedupe key = content + per-call occurrence, so legitimate repeats like
-// `[f(x=1), f(x=1)]` each emit once while re-parses on later tokens don't.
-function toolCallBase(call: ToolCall): string {
-  return `call:${call.name}:${JSON.stringify(call.arguments)}`;
-}
-
-function toolErrorBase(error: ToolCallError): string {
-  return `err:${error.code}:${error.raw ?? ""}:${error.message}`;
-}
-
-export function checkForToolEvents(
-  accumulatedText: string,
-  currentToken: string,
-  tools: Tool[],
-  emittedToolCallKeys: Set<string>,
-  dialect?: ToolDialect,
-): ToolCallEvent[] {
-  const events: ToolCallEvent[] = [];
-
-  if (isInsideThinkBlock(accumulatedText)) {
-    return events;
-  }
-
-  if (!tokenLooksLikeFrameClose(currentToken, dialect)) {
-    return events;
-  }
-
-  const { toolCalls, errors } = parseToolCalls(
-    accumulatedText,
-    tools,
-    dialect,
-  );
-
-  const localCounts = new Map<string, number>();
-
-  for (const call of toolCalls) {
-    const base = toolCallBase(call);
-    const occurrence = (localCounts.get(base) ?? 0) + 1;
-    localCounts.set(base, occurrence);
-    const key = `${base}#${occurrence}`;
-    if (emittedToolCallKeys.has(key)) continue;
-    emittedToolCallKeys.add(key);
-    events.push({ type: "toolCall", call });
-  }
-
-  for (const error of errors) {
-    const base = toolErrorBase(error);
-    const occurrence = (localCounts.get(base) ?? 0) + 1;
-    localCounts.set(base, occurrence);
-    const key = `${base}#${occurrence}`;
-    if (emittedToolCallKeys.has(key)) continue;
-    emittedToolCallKeys.add(key);
-    events.push({ type: "toolCallError", error });
-  }
-
-  return events;
 }
