@@ -36,7 +36,12 @@ import {
   loggingStreamRequestSchema,
   loggingStreamResponseSchema,
 } from "./logging-stream";
-import { ttsRequestSchema, ttsResponseSchema } from "./text-to-speech";
+import {
+  ttsRequestSchema,
+  ttsResponseSchema,
+  textToSpeechStreamRequestSchema,
+  textToSpeechStreamResponseSchema,
+} from "./text-to-speech";
 import { errorResponseSchema } from "./error";
 import {
   ragRequestSchema,
@@ -51,6 +56,10 @@ import {
   getModelInfoRequestSchema,
   getModelInfoResponseSchema,
 } from "./get-model-info";
+import {
+  getLoadedModelInfoRequestSchema,
+  getLoadedModelInfoResponseSchema,
+} from "./get-loaded-model-info";
 import { ocrStreamRequestSchema, ocrStreamResponseSchema } from "./ocr";
 import {
   diffusionStreamRequestSchema,
@@ -91,12 +100,14 @@ export const requestSchema = z.union([
   embedRequestSchema,
   translateRequestSchema,
   ttsRequestSchema,
+  textToSpeechStreamRequestSchema,
   cancelRequestSchema,
   provideRequestSchema,
   stopProvideRequestSchema,
   ragRequestSchema,
   deleteCacheRequestSchema,
   getModelInfoRequestSchema,
+  getLoadedModelInfoRequestSchema,
   ocrStreamRequestSchema,
   diffusionStreamRequestSchema,
   finetuneRequestSchema,
@@ -123,6 +134,7 @@ export const responseSchema = z.discriminatedUnion("type", [
   embedResponseSchema,
   translateResponseSchema,
   ttsResponseSchema,
+  textToSpeechStreamResponseSchema,
   cancelResponseSchema,
   provideResponseSchema,
   stopProvideResponseSchema,
@@ -131,6 +143,7 @@ export const responseSchema = z.discriminatedUnion("type", [
   ragProgressUpdateSchema,
   deleteCacheResponseSchema,
   getModelInfoResponseSchema,
+  getLoadedModelInfoResponseSchema,
   ocrStreamResponseSchema,
   diffusionStreamResponseSchema,
   finetuneResponseSchema,

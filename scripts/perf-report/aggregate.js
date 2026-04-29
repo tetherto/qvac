@@ -17,8 +17,12 @@
 
 const fs = require('fs')
 const path = require('path')
-const { execSync } = require('child_process')
 const { aggregateReports, generateMarkdownReport, generateHtmlReport } = require('./utils')
+const {
+  listWorkflowRuns,
+  downloadRunArtifacts,
+  collectReportsFromDir
+} = require('./gh-artifacts')
 
 // ---------------------------------------------------------------------------
 // CLI argument parsing
@@ -88,64 +92,8 @@ EXAMPLES:
 }
 
 // ---------------------------------------------------------------------------
-// GitHub artifact download helpers
+// Report collection (gh + filesystem helpers live in ./gh-artifacts.js)
 // ---------------------------------------------------------------------------
-
-function ghExec (cmd) {
-  try {
-    return execSync(cmd, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim()
-  } catch (err) {
-    console.error(`gh command failed: ${cmd}`)
-    console.error(err.stderr || err.message)
-    return ''
-  }
-}
-
-function listWorkflowRuns (workflow, count, repo) {
-  const repoFlag = repo ? ` -R ${repo}` : ''
-  const json = ghExec(
-    `gh run list --workflow "${workflow}" --status completed --limit ${count} --json databaseId,displayTitle,conclusion,number${repoFlag}`
-  )
-  if (!json) return []
-  try { return JSON.parse(json) } catch (_) { return [] }
-}
-
-function downloadRunArtifacts (runId, destDir, artifactPattern, repo) {
-  const repoFlag = repo ? ` -R ${repo}` : ''
-  const patternFlag = artifactPattern ? ` -p "${artifactPattern}"` : ''
-  const runDir = path.join(destDir, String(runId))
-  fs.mkdirSync(runDir, { recursive: true })
-  ghExec(`gh run download ${runId} -D "${runDir}"${patternFlag}${repoFlag}`)
-  return runDir
-}
-
-// ---------------------------------------------------------------------------
-// Report collection
-// ---------------------------------------------------------------------------
-
-function collectReportsFromDir (dir) {
-  const reports = []
-
-  function walk (d) {
-    const entries = fs.readdirSync(d, { withFileTypes: true })
-    for (const entry of entries) {
-      const full = path.join(d, entry.name)
-      if (entry.isDirectory()) {
-        walk(full)
-      } else if (entry.name === 'performance-report.json') {
-        try {
-          const data = JSON.parse(fs.readFileSync(full, 'utf-8'))
-          reports.push(data)
-        } catch (err) {
-          console.error(`  skipping ${full}: ${err.message}`)
-        }
-      }
-    }
-  }
-
-  walk(dir)
-  return reports
-}
 
 function downloadAndCollect (workflow, runs, addon, repo) {
   console.log(`Querying last ${runs} completed runs of "${workflow}"...`)

@@ -1,5 +1,7 @@
-import { writeFileSync } from "fs";
-import { spawnSync } from "child_process";
+import { writeFileSync, unlinkSync } from "fs";
+import { spawn, spawnSync } from "child_process";
+import { platform, tmpdir } from "os";
+import { join } from "path";
 
 /**
  * Create WAV header for 16-bit PCM audio
@@ -71,6 +73,80 @@ export function createWav(
  * dance — no temp files, no platform switch, no hardcoded /tmp path (which
  * doesn't exist on Windows). Requires ffplay on PATH.
  */
+/**
+ * Play one mono s16le PCM chunk (as a minimal WAV) and wait for the player to finish.
+ * Chunks are played sequentially when awaited in order — suitable for streaming TTS output.
+ */
+export function playPcmInt16Chunk(
+  samples: number[],
+  sampleRate: number,
+): Promise<void> {
+  if (samples.length === 0) {
+    return Promise.resolve();
+  }
+
+  const audioData = int16ArrayToBuffer(samples);
+  const wavHeader = createWavHeader(audioData.length, sampleRate);
+  const wavFile = Buffer.concat([wavHeader, audioData]);
+  // `os.tmpdir()` resolves to the OS-specific temp directory (e.g. `%TEMP%`
+  // on Windows), so the Windows branch below no longer tries to read a
+  // POSIX-only `/tmp/...` path.
+  const tempFile = join(
+    tmpdir(),
+    `qvac-tts-chunk-${Date.now()}-${Math.random().toString(16).slice(2)}.wav`,
+  );
+  writeFileSync(tempFile, wavFile);
+
+  const currentPlatform = platform();
+  let audioPlayer: string;
+  let args: string[];
+
+  switch (currentPlatform) {
+    case "darwin":
+      audioPlayer = "afplay";
+      args = [tempFile];
+      break;
+    case "linux":
+      audioPlayer = "aplay";
+      args = [tempFile];
+      break;
+    case "win32":
+      audioPlayer = "powershell";
+      args = [
+        "-Command",
+        `Add-Type -AssemblyName presentationCore; (New-Object Media.SoundPlayer).LoadStream([System.IO.File]::ReadAllBytes('${tempFile}')).PlaySync()`,
+      ];
+      break;
+    default:
+      audioPlayer = "aplay";
+      args = [tempFile];
+  }
+
+  return new Promise(function (resolve, reject) {
+    const proc = spawn(audioPlayer, args, { stdio: "ignore" });
+    proc.on("error", function (err) {
+      try {
+        unlinkSync(tempFile);
+      } catch {
+        // ignore
+      }
+      reject(err);
+    });
+    proc.on("close", function (code) {
+      try {
+        unlinkSync(tempFile);
+      } catch {
+        // ignore
+      }
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error(`Audio player exited with code ${code}`));
+      }
+    });
+  });
+}
+
 export function playAudio(audioBuffer: Buffer): void {
   const result = spawnSync(
     "ffplay",

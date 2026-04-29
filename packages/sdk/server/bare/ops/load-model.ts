@@ -27,7 +27,6 @@ import {
   ModelFileLocateFailedError,
 } from "@/utils/errors-server";
 import { getPlugin } from "@/server/plugins";
-import type FilesystemDL from "@qvac/dl-filesystem";
 import { promises as fsPromises } from "bare-fs";
 import path from "bare-path";
 import { getServerLogger } from "@/logging";
@@ -104,10 +103,10 @@ export async function loadModel(
     const result = plugin.createModel({
       modelId,
       modelPath,
-      modelConfig: modelConfig as Record<string, unknown>,
+      modelConfig: modelConfig,
       modelName,
       artifacts,
-    }) as { model: AnyModel; loader: FilesystemDL };
+    }) as { model: AnyModel };
 
     await result.model.load(false);
 
@@ -123,7 +122,6 @@ export async function loadModel(
       config: modelConfig,
       modelType: modelType as CanonicalModelType,
       name: modelName,
-      loader: result.loader,
     });
 
     return modelInitializationTimeMs !== undefined

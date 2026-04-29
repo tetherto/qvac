@@ -14,6 +14,7 @@ import {
   type TranscribeStreamSession,
 } from "@/schemas/transcription";
 import { createErrorResponse } from "@/schemas/error";
+import { textToSpeechStreamRequestSchema } from "@/schemas/text-to-speech";
 
 type BrittleT = {
   is: Function;
@@ -493,6 +494,23 @@ test("transcribeStreamRequestSchema does not include audioChunk (duplex overload
   });
   t.ok(withExtra.success, "extra fields are stripped by zod");
   t.ok(!("audioChunk" in (withExtra.data ?? {})), "audioChunk absent from parsed output");
+});
+
+test("textToSpeechStreamRequestSchema accepts duplex TTS params", (t: BrittleT) => {
+  const valid = textToSpeechStreamRequestSchema.safeParse({
+    type: "textToSpeechStream",
+    modelId: "tts-1",
+    accumulateSentences: true,
+    sentenceDelimiterPreset: "latin",
+    flushAfterMs: 400,
+  });
+  t.ok(valid.success, "textToSpeechStream request is valid");
+  if (valid.success) {
+    t.is(valid.data.type, "textToSpeechStream");
+    t.is(valid.data.accumulateSentences, true);
+    t.is(valid.data.sentenceDelimiterPreset, "latin");
+    t.is(valid.data.flushAfterMs, 400);
+  }
 });
 
 test("duplex integration: empty/done-only handler produces no text segments", async (t: BrittleT) => {

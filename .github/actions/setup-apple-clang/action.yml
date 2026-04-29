@@ -1,0 +1,42 @@
+name: Setup Apple Clang
+description: >-
+  Uninstall any Homebrew LLVM formulae so macOS runners fall back to Apple
+  Clang. Required for darwin / ios builds that link against Apple system
+  frameworks (UIKit, CoreML, Metal) which Homebrew Clang cannot target.
+  Called unconditionally from every prebuild workflow; no-op on non-macOS
+  runners.
+
+runs:
+  using: composite
+  steps:
+    - if: ${{ runner.os == 'macOS' }}
+      name: Uninstall Homebrew LLVM
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        echo "Before cleanup — current clang path and version:"
+        which clang++ || true
+        clang++ --version || true
+
+        echo "Checking for any Homebrew LLVM installations..."
+        for pkg in $(brew list --formula | grep '^llvm@' || true); do
+          echo "Removing $pkg to prevent conflicts"
+          brew uninstall --ignore-dependencies "$pkg" || true
+        done
+
+        echo "Cleaning up brew environment..."
+        brew cleanup -s || true
+        hash -r || true
+
+        echo "After cleanup — verifying Apple clang:"
+        which clang++
+        xcrun --find clang++
+        clang++ --version || true
+
+        if which clang++ | grep -q "/opt/homebrew/"; then
+          echo "::error::Still using Homebrew clang++ after uninstall — aborting"
+          exit 1
+        fi
+
+        echo "Homebrew LLVM removed successfully. Apple Clang is now active."

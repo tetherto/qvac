@@ -57,6 +57,32 @@ function setupCli (): void {
       }
     })
 
+  program
+    .command('doctor')
+    .description('Validate that the host satisfies QVAC SDK system requirements')
+    .option('--json', 'Output the report as JSON')
+    .option('-q, --quiet', 'Suppress human-readable output (only set exit code)')
+    .option('-v, --verbose', 'Detailed output')
+    .action(async (options: {
+      json?: boolean
+      quiet?: boolean
+      verbose?: boolean
+    }) => {
+      try {
+        const { runDoctor } = await import('./doctor/index.js')
+        const report = await runDoctor({
+          projectRoot: process.cwd(),
+          json: options.json,
+          quiet: options.quiet,
+          verbose: options.verbose
+        })
+        if (!report.ok) process.exit(1)
+      } catch (error: unknown) {
+        handleError(error)
+        process.exit(1)
+      }
+    })
+
   const serveCmd = program
     .command('serve')
     .description('Start an API server backed by QVAC')

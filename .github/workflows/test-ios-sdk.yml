@@ -48,34 +48,42 @@ on:
         required: false
         type: string
     secrets:
+      # MQTT_*, NPM_TOKEN, and Apple signing secrets (TEST_APP_APPLE_*,
+      # APPLE_P12_PASSWORD, APPLE_KEYCHAIN_PASSWORD) are typically provided
+      # via the release environment (see jobs with `environment: release`).
+      # They are declared required: false here so `secrets: inherit` from a
+      # caller with no repo-level values does not fail at the workflow_call
+      # boundary; the jobs that consume them have environment access.
+      # PAT_TOKEN and AWS_OIDC_ROLE_ARN remain required:true because they are
+      # repo-level.
       PAT_TOKEN:
         required: true
       NPM_TOKEN:
-        required: true
+        required: false
       MQTT_PROTOCOL:
-        required: true
+        required: false
       MQTT_HOST:
-        required: true
+        required: false
       MQTT_PORT:
-        required: true
+        required: false
       MQTT_USERNAME:
-        required: true
+        required: false
       MQTT_PASSWORD:
-        required: true
+        required: false
       MQTT_CA_CERT:
         required: false
       AWS_OIDC_ROLE_ARN:
         required: true
       TEST_APP_APPLE_DISTRIBUTION_CERTIFICATE:
-        required: true
+        required: false
       APPLE_P12_PASSWORD:
-        required: true
+        required: false
       TEST_APP_APPLE_PROVISIONING_PROFILE:
-        required: true
+        required: false
       APPLE_KEYCHAIN_PASSWORD:
-        required: true
+        required: false
       APPLE_TEAM_ID:
-        required: true
+        required: false
 
 env:
   APP_BUNDLE_ID: "io.tether.test.qvac"
@@ -85,7 +93,32 @@ permissions:
   contents: read
 
 jobs:
+  report-start:
+    name: "[ios] report-start"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      comment-ids: ${{ steps.report.outputs.comment-ids }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: .github/actions/sdk-e2e-report-start
+          sparse-checkout-cone-mode: false
+
+      - name: Post running comment
+        id: report
+        uses: ./.github/actions/sdk-e2e-report-start
+        with:
+          family: ios
+          platforms: '["ios"]'
+          suite: ${{ inputs.suite }}
+          filter: ${{ inputs.filter }}
+          exclude-suite: ${{ inputs.exclude-suite }}
+
   build:
+    name: "[ios] build"
     runs-on: macos-14
     environment: release
     timeout-minutes: 60
@@ -343,11 +376,12 @@ jobs:
       - name: Upload IPA artifact
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: mobile-consumer-ipa
+          name: consumer-ipa-ios
           path: ${{ inputs.working-directory }}/build/consumers/ios/consumer.ipa
           retention-days: 7
 
   device-farm:
+    name: "[ios] device-farm"
     needs: build
     runs-on: ubuntu-latest
     environment: release
@@ -365,7 +399,7 @@ jobs:
       - name: Download IPA artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          name: mobile-consumer-ipa
+          name: consumer-ipa-ios
           path: ./ipa
 
       - name: Configure AWS credentials
@@ -532,6 +566,7 @@ jobs:
           retention-days: 1
 
   run-producer:
+    name: "[ios] run-producer"
     needs: build
     runs-on: ubuntu-latest
     environment: release
@@ -671,20 +706,98 @@ jobs:
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: ios-results-${{ github.run_number }}
+          name: results-ios
           path: ${{ inputs.working-directory }}/reports/
           retention-days: 30
+
+      - name: Download baseline (best-effort)
+        if: always() && github.event.pull_request.base.ref != ''
+        uses: dawidd6/action-download-artifact@20319c5641d495c8a52e688b7dc5fada6c3a9fbc # v8
+        continue-on-error: true
+        with:
+          workflow: test-ios-sdk.yml
+          branch: ${{ github.event.pull_request.base.ref }}
+          name: baseline-ios
+          path: ${{ inputs.working-directory }}/baseline
+          github_token: ${{ github.token }}
+          if_no_artifact_found: warn
+
+      - name: Compare vs baseline
+        if: always()
+        working-directory: ${{ inputs.working-directory }}
+        shell: node {0}
+        run: |
+          const fs = require('fs');
+          const path = require('path');
+          const { execSync } = require('child_process');
+
+          if (!fs.existsSync('baseline')) {
+            console.log('No baseline directory - skipping compare.');
+            process.exit(0);
+          }
+          const baselineFiles = fs.readdirSync('baseline').filter((f) => f.endsWith('.json'));
+          if (baselineFiles.length === 0) {
+            console.log('Baseline directory contains no json files - skipping compare.');
+            process.exit(0);
+          }
+          if (!fs.existsSync('reports')) {
+            console.log('No reports directory - skipping compare.');
+            process.exit(0);
+          }
+          const currentFiles = fs.readdirSync('reports')
+            .filter((f) => f.startsWith('results-') && f.endsWith('.json'));
+          if (currentFiles.length === 0) {
+            console.log('No current results json - skipping compare.');
+            process.exit(0);
+          }
+
+          const baseline = path.join('baseline', baselineFiles[0]);
+          const current = path.join('reports', currentFiles[0]);
+          execSync(
+            `npx qvac-test report:compare --baseline "${baseline}" --current "${current}" --output "comparison-ios.json"`,
+            { stdio: 'inherit' }
+          );
+
+      - name: Format comparison
+        if: always()
+        working-directory: ${{ inputs.working-directory }}
+        shell: node {0}
+        run: |
+          const fs = require('fs');
+          const { execSync } = require('child_process');
+
+          const input = 'comparison-ios.json';
+          if (!fs.existsSync(input)) {
+            console.log('No comparison json - skipping format.');
+            process.exit(0);
+          }
+          execSync(
+            `npx qvac-test report:format --input "${input}" --format markdown --output "section-ios.md"`,
+            { stdio: 'inherit' }
+          );
+
+      - name: Upload report section
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: report-section-ios
+          path: |
+            ${{ inputs.working-directory }}/section-*.md
+            ${{ inputs.working-directory }}/comparison-*.json
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Upload baseline (main/develop only)
         if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: ios-baseline
+          name: baseline-ios
           path: ${{ inputs.working-directory }}/reports/results-*.json
           retention-days: 90
           overwrite: true
 
   cleanup-device-farm:
+    name: "[ios] cleanup-device-farm"
     needs: [build, run-producer, device-farm]
     if: always()
     runs-on: ubuntu-latest
@@ -768,3 +881,26 @@ jobs:
           name: device-farm-logs-ios-${{ needs.build.outputs.runId }}
           path: ./device-farm-logs/
           retention-days: 30
+
+  report-finalize:
+    name: "[ios] report-finalize"
+    needs: [report-start, run-producer]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: .github/actions/sdk-e2e-report-finalize
+          sparse-checkout-cone-mode: false
+
+      - uses: ./.github/actions/sdk-e2e-report-finalize
+        with:
+          family: ios
+          platforms: '["ios"]'
+          comment-ids: ${{ needs.report-start.outputs.comment-ids }}
+          suite: ${{ inputs.suite }}
+          filter: ${{ inputs.filter }}
+          exclude-suite: ${{ inputs.exclude-suite }}

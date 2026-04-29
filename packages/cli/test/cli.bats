@@ -94,6 +94,22 @@ http_status() {
   [[ "${output}" =~ "--sdk-path" ]]
 }
 
+# ── CLI: doctor ───────────────────────────────────────────────────────
+
+@test "qvac doctor --help shows options" {
+  run ${QVAC} doctor --help
+  [[ "${status}" -eq 0 ]]
+  [[ "${output}" =~ "--json" ]]
+  [[ "${output}" =~ "QVAC SDK system requirements" ]]
+}
+
+@test "qvac doctor --json emits valid JSON with ok boolean" {
+  run ${QVAC} doctor --json
+  [[ "${status}" -eq 0 || "${status}" -eq 1 ]]
+  echo "${output}" | jq -e '.ok | type == "boolean"' >/dev/null
+  echo "${output}" | jq -e '.sections | length >= 1' >/dev/null
+}
+
 # ── CLI: error handling ───────────────────────────────────────────────
 
 @test "cli: missing config file exits 1" {
