@@ -9,8 +9,9 @@
  * Uses Mozilla's Bergamot project models optimized for CPU inference.
  *
  * Platform Behavior:
- *   - Mobile (iOS/Android): Tests both CPU and GPU modes
- *   - Desktop: Tests CPU mode only
+ *   - Mobile (iOS/Android): GPU devices discovered at runtime, each gets its
+ *     own test run with identifiable label (e.g. [GPU:0 Vulkan0])
+ *   - Desktop: Tests CPU mode only (intgemm is CPU-optimized)
  *
  * Usage:
  *   bare test/integration/bergamot.test.js
@@ -36,111 +37,172 @@ const {
   createPerformanceCollector,
   formatPerformanceMetrics,
   isMobile,
-  platform
+  platform,
+  discoverGpuDevices,
+  MAX_GPU_DEVICE_PROBES
 } = require('./utils')
 
 const BERGAMOT_FIXTURE = path.resolve(__dirname, 'fixtures/bergamot.quality.json')
 
-/**
- * Device configurations for testing
- * - Mobile (iOS/Android): Both CPU and GPU
- * - Desktop: CPU only
- */
-const ALL_DEVICE_CONFIGS = [
-  { id: 'gpu', useGpu: true },
-  { id: 'cpu', useGpu: false }
-]
+// ---------------------------------------------------------------------------
+// Per-GPU-device tests (mobile only).  On desktop only the CPU test runs.
+// ---------------------------------------------------------------------------
 
-const DEVICE_CONFIGS = isMobile
-  ? ALL_DEVICE_CONFIGS
-  : ALL_DEVICE_CONFIGS.filter(c => c.id === 'cpu')
+if (isMobile) {
+  for (let gpuIdx = 0; gpuIdx < MAX_GPU_DEVICE_PROBES; gpuIdx++) {
+    test(`Bergamot backend [GPU device ${gpuIdx}] - English to Italian translation`, { timeout: TEST_TIMEOUT }, async function (t) {
+      const modelDir = await ensureBergamotModel()
+      const allFiles = fs.readdirSync(modelDir)
+      const modelFile = allFiles.find(f => f.includes('.intgemm') && f.includes('.bin'))
+      const vocabFile = allFiles.find(f => f.includes('.spm'))
 
-for (const deviceConfig of DEVICE_CONFIGS) {
-  const label = `[${deviceConfig.id.toUpperCase()}]`
+      const devices = await discoverGpuDevices()
+      const device = devices.find(d => d.index === gpuIdx)
 
-  test(`Bergamot backend ${label} - English to Italian translation`, { timeout: TEST_TIMEOUT }, async function (t) {
-    const modelDir = await ensureBergamotModel()
-    t.ok(modelDir, `${label} Bergamot model path should be available`)
-    t.comment(`${label} Model directory: ` + modelDir)
-    t.comment('Platform: ' + platform + ', isMobile: ' + isMobile)
+      if (!device) {
+        t.comment(`[GPU:${gpuIdx}] No GPU device at index ${gpuIdx} — skipping`)
+        t.pass(`[GPU:${gpuIdx}] Skipped (device not present)`)
+        return
+      }
 
-    // Locate model and vocab files
-    const files = fs.readdirSync(modelDir)
-    const modelFile = files.find(f => f.includes('.intgemm') && f.includes('.bin'))
-    const vocabFile = files.find(f => f.includes('.spm'))
+      const label = `[GPU:${gpuIdx} ${device.name}]`
+      t.ok(modelDir, `${label} Bergamot model path should be available`)
+      t.comment(`${label} Model directory: ` + modelDir)
+      t.comment('Platform: ' + platform + ', isMobile: ' + isMobile)
+      t.comment(`${label} Testing with use_gpu: true, gpu_device: ${gpuIdx}`)
 
-    t.ok(modelFile, `${label} model file should exist`)
-    t.ok(vocabFile, `${label} vocab file should exist`)
+      const fullVocabPath = path.join(modelDir, vocabFile)
+      const logger = createLogger()
+      const perfCollector = createPerformanceCollector()
+      let model
 
-    const fullVocabPath = path.join(modelDir, vocabFile)
+      try {
+        model = new TranslationNmtcpp({
+          files: {
+            model: path.join(modelDir, modelFile),
+            srcVocab: fullVocabPath,
+            dstVocab: fullVocabPath
+          },
+          params: { srcLang: 'en', dstLang: 'it' },
+          config: {
+            modelType: TranslationNmtcpp.ModelTypes.Bergamot,
+            beamsize: 1,
+            normalize: 1,
+            use_gpu: true,
+            gpu_device: gpuIdx
+          },
+          logger,
+          opts: { stats: true }
+        })
+        model.logger.setLevel('debug')
+        await model.load()
+        t.pass(`${label} Bergamot model loaded successfully`)
 
-    const logger = createLogger()
-    const perfCollector = createPerformanceCollector()
-    let model
+        const testSentence = 'Hello, how are you?'
+        t.comment(`${label} Translating: "` + testSentence + '"')
 
-    t.comment(`${label} Testing with use_gpu: ${deviceConfig.useGpu}`)
+        perfCollector.start()
+        const response = await model.run(testSentence)
+        await response
+          .onUpdate(data => { perfCollector.onToken(data) })
+          .await()
 
-    try {
-      model = new TranslationNmtcpp({
-        files: {
-          model: path.join(modelDir, modelFile),
-          srcVocab: fullVocabPath,
-          dstVocab: fullVocabPath
-        },
-        params: {
+        const addonStats = response.stats || {}
+        t.comment(`${label} Native addon stats: ` + JSON.stringify(addonStats))
+        const metrics = perfCollector.getMetrics(testSentence, addonStats)
+        t.comment(formatPerformanceMetrics(`[Bergamot] ${label}`, metrics, {
+          fixturePath: BERGAMOT_FIXTURE,
           srcLang: 'en',
           dstLang: 'it'
-        },
-        config: {
-          modelType: TranslationNmtcpp.ModelTypes.Bergamot,
-          beamsize: 1,
-          normalize: 1,
-          use_gpu: deviceConfig.useGpu
-        },
-        logger,
-        opts: { stats: true }
-      })
-      model.logger.setLevel('debug')
-      await model.load()
-      t.pass(`${label} Bergamot model loaded successfully`)
+        }))
 
-      const testSentence = 'Hello, how are you?'
-      t.comment(`${label} Translating: "` + testSentence + '"')
-
-      // Start performance tracking
-      perfCollector.start()
-
-      const response = await model.run(testSentence)
-
-      await response
-        .onUpdate(data => {
-          perfCollector.onToken(data)
-        })
-        .await()
-
-      // Get and log performance metrics
-      const addonStats = response.stats || {}
-      t.comment(`${label} Native addon stats: ` + JSON.stringify(addonStats))
-      const metrics = perfCollector.getMetrics(testSentence, addonStats)
-      t.comment(formatPerformanceMetrics(`[Bergamot] ${label}`, metrics, {
-        fixturePath: BERGAMOT_FIXTURE,
-        srcLang: 'en',
-        dstLang: 'it'
-      }))
-
-      t.ok(metrics.fullOutput.length > 0, `${label} translation should not be empty`)
-      t.pass(`${label} Bergamot translation completed successfully`)
-    } catch (e) {
-      t.fail(`${label} Bergamot test failed: ` + e.message)
-      throw e
-    } finally {
-      if (model) {
-        try {
-          await model.unload()
-        } catch (e) {
-          t.comment(`${label} unload() error: ` + e.message)
+        t.ok(metrics.fullOutput.length > 0, `${label} translation should not be empty`)
+        t.pass(`${label} Bergamot translation completed successfully`)
+      } catch (e) {
+        t.fail(`${label} Bergamot test failed: ` + e.message)
+        throw e
+      } finally {
+        if (model) {
+          try { await model.unload() } catch (e) {
+            t.comment(`${label} unload() error: ` + e.message)
+          }
         }
       }
-    }
-  })
+    })
+  }
 }
+
+// CPU test (always runs)
+test('Bergamot backend [CPU] - English to Italian translation', { timeout: TEST_TIMEOUT }, async function (t) {
+  const modelDir = await ensureBergamotModel()
+  const label = '[CPU]'
+  t.ok(modelDir, `${label} Bergamot model path should be available`)
+  t.comment(`${label} Model directory: ` + modelDir)
+  t.comment('Platform: ' + platform + ', isMobile: ' + isMobile)
+
+  const allFiles = fs.readdirSync(modelDir)
+  const modelFile = allFiles.find(f => f.includes('.intgemm') && f.includes('.bin'))
+  const vocabFile = allFiles.find(f => f.includes('.spm'))
+
+  t.ok(modelFile, `${label} model file should exist`)
+  t.ok(vocabFile, `${label} vocab file should exist`)
+
+  const fullVocabPath = path.join(modelDir, vocabFile)
+  const logger = createLogger()
+  const perfCollector = createPerformanceCollector()
+  let model
+
+  t.comment(`${label} Testing with use_gpu: false`)
+
+  try {
+    model = new TranslationNmtcpp({
+      files: {
+        model: path.join(modelDir, modelFile),
+        srcVocab: fullVocabPath,
+        dstVocab: fullVocabPath
+      },
+      params: { srcLang: 'en', dstLang: 'it' },
+      config: {
+        modelType: TranslationNmtcpp.ModelTypes.Bergamot,
+        beamsize: 1,
+        normalize: 1,
+        use_gpu: false
+      },
+      logger,
+      opts: { stats: true }
+    })
+    model.logger.setLevel('debug')
+    await model.load()
+    t.pass(`${label} Bergamot model loaded successfully`)
+
+    const testSentence = 'Hello, how are you?'
+    t.comment(`${label} Translating: "` + testSentence + '"')
+
+    perfCollector.start()
+    const response = await model.run(testSentence)
+    await response
+      .onUpdate(data => { perfCollector.onToken(data) })
+      .await()
+
+    const addonStats = response.stats || {}
+    t.comment(`${label} Native addon stats: ` + JSON.stringify(addonStats))
+    const metrics = perfCollector.getMetrics(testSentence, addonStats)
+    t.comment(formatPerformanceMetrics(`[Bergamot] ${label}`, metrics, {
+      fixturePath: BERGAMOT_FIXTURE,
+      srcLang: 'en',
+      dstLang: 'it'
+    }))
+
+    t.ok(metrics.fullOutput.length > 0, `${label} translation should not be empty`)
+    t.pass(`${label} Bergamot translation completed successfully`)
+  } catch (e) {
+    t.fail(`${label} Bergamot test failed: ` + e.message)
+    throw e
+  } finally {
+    if (model) {
+      try { await model.unload() } catch (e) {
+        t.comment(`${label} unload() error: ` + e.message)
+      }
+    }
+  }
+})
