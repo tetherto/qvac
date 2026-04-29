@@ -21,10 +21,6 @@ on:
         required: false
         # monorepo default
         default: "tetherto/qvac"
-      tar-run-id:
-        type: string
-        required: false
-        default: "on-onnx"
       workdir:
         description: "Working directory (optional)"
         required: false
