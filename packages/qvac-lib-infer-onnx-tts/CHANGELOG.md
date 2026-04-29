@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Eager release of `speechEncoderSession_`** in `ChatterboxEngine::runSpeechEncoderAndCache()`. The previous `releaseSession(...)` call was a no-op in the default non-lazy loading path, so the encoder weights stayed resident even though they're never used after `load()` populates the cache. Replaced with an unconditional `speechEncoderSession_.reset()` that drops the weights in both lazy and non-lazy modes.
+- **`runInitialCfgStep` is now `void`.** The first sampled token is appended to the by-reference `generatedTokens` vector inside the function; the only caller (`generateSpeechTokensWithCfg`) did not read the previously-`int64_t` return value.
+- **`numThreads` parse error handling.** `TTSModel::createChatterboxConfig` now logs a `WARNING` with the offending value and `std::exception::what()` when `numThreads` cannot be parsed, instead of silently swallowing via `catch(...)`. The catch block also resets `config.numThreads = 0` so the fallback to the engine default (1 intra-op thread) is honored even on reload / per-request config updates that carried over a previously parsed valid value via `chatterboxConfig_` (otherwise the warning would lie and the prior thread count would silently persist).
+
+### Fixed
+
+- **Fail-loud validation in Chatterbox tensor and cache helpers.** `tensor_ops::concatBatch` / `duplicateBatch` now reject empty shapes and rank / non-batch-dim mismatches with `std::invalid_argument`. `tensor_ops::readLastStepLogitsForBatch` (promoted out of an anonymous namespace into `tensor_ops` so it's testable) validates that the logits tensor is 3D and that `batchIdx` is in range. `processSpeechEncoderOutputs` and `prepareCfgEmbeddings` throw `std::runtime_error` if the speech-encoder cache is not populated. These guard paths that were previously reachable as silent UB on a malformed ONNX export or an out-of-order call.
+- **`runSpeechEncoderAndCache()` invalidates `speechEncoderCache_` at entry.** Previously, a partial/failed re-run after a successful prior `load()` would leave the cache marked valid (the throw would interrupt the function before the cache contents were rewritten), which meant the new `processSpeechEncoderOutputs` / `prepareCfgEmbeddings` guards never tripped and the next `synthesize()` would silently run with stale reference-audio features. The function now resets `speechEncoderCache_ = {}` as its first statement so the post-throw state is always invalid.
+- **0.8.5 changelog corrections (carried forward).** The 0.8.5 entry listed a `trimPromptFromWaveform` (`std::move` + `resize`) optimization that was never actually shipped — the function does not exist in the merged code. The 0.8.5 entry also did not state explicitly that the speech-encoder caching change shifts ~2.7s of work from the first `synthesize()` call to `load()`. The 0.8.5 section is left as originally cut for historical accuracy; this entry records the corrections so they roll forward into the next release.
+
 ## [0.8.5]
 
 Performance improvements for the Chatterbox TTS pipeline: reference-audio encoding is done once during `load()` and cached for every `synthesize()` call, the CFG multilingual path runs with a single batched KV cache instead of two separate sessions, and the ONNX Runtime intra-op thread count is now configurable at construction time. On a 4-core CPU the English q4 model drops from RTF ≈ 20.9 to ≈ 15.7 (~25% faster), and every `synthesize()` call sees the same per-call cost — no more first-call penalty.

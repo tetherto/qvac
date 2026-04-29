@@ -177,6 +177,8 @@ const config = {
 | verbosity         | 0 – 3 (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | 0                            | Logging verbosity level                               |
 | n_discarded       | integer                                     | 0                            | Tokens to discard in sliding window context           |
 | main-gpu          | integer, `"integrated"`, or `"dedicated"`   | —                            | GPU selection for multi-GPU systems                   |
+| split-mode        | `"none"`, `"layer"`, or `"row"`             | `"none"`                     | How to split the model across GPUs ([details](./docs/multi-gpu.md)) |
+| tensor-split      | comma-separated proportions (e.g. `"1,1"`)  | —                            | GPU split ratios for layer/row parallelism ([details](./docs/multi-gpu.md)) |
 
 
 #### IGPU/GPU  selection logic:
@@ -188,6 +190,7 @@ const config = {
 | System with dedicated GPU only  | ✅ Uses dedicated GPU                 | ✅ Uses dedicated GPU               | ❌ Falls back to CPU                |
 | System with both                | ✅ Uses dedicated GPU (preferred)     | ✅ Uses dedicated GPU               | ✅ Uses integrated GPU              |
 
+For multi-GPU setups using `split-mode` and `tensor-split`, see the **[Multi-GPU Inference guide](./docs/multi-gpu.md)**.
 
 ### 4. Create Model Instance
 
@@ -315,6 +318,7 @@ npm run quickstart
 -   [LoRA Finetuning Pause/Resume](./examples/finetune/simple-lora-finetune-pause-resume.js) – Pause and resume finetuning.
 -   [LoRA Inference](./examples/simple-lora-inference.js) – Inference with a finetuned LoRA adapter.
 -   [Smart Home Finetune Showcase](./examples/finetune/showcase/smart-home-finetune.js) – Train a smart home tool-calling specialist, then [evaluate](./examples/finetune/showcase/smart-home-finetuned-test.js) baseline vs finetuned.
+-   [Multi-GPU Benchmark](./examples/multiGpuBenchmark.js) – Compares single-GPU, layer-parallel, and tensor-parallel split modes.
 -   [Bench Tools Placement](./examples/benchToolsPlacement.js) – Benchmarks standard vs `tools_compact` placement across multi-turn conversations.
 -   [Test Tool Removal](./examples/testToolRemoval.js) – Demonstrates dynamic tool addition and removal between turns.
 

@@ -195,10 +195,7 @@ export async function loadModel(
 
   // Infer `modelType` from `modelSrc` when omitted; the schema still validates
   // the resolved options below.
-  let resolvedOptions: Record<string, unknown> = options as unknown as Record<
-    string,
-    unknown
-  >;
+  let resolvedOptions = options as Record<string, unknown>;
   if (!isReloadConfig) {
     let modelType = resolvedOptions["modelType"];
     if (typeof modelType === "string") {
