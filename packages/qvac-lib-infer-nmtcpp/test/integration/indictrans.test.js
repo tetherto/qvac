@@ -13,11 +13,12 @@
  *   - No manual language prefixes needed (unlike raw model access)
  *
  * Platform Behavior:
- *   - GPU devices are discovered at runtime via probe loading (cached)
- *   - Each discovered GPU device gets its own test run with an identifiable
- *     label (e.g. [GPU:0 Vulkan0], [GPU:1 OpenCL0])
- *   - CPU always runs as a separate test
- *   - Device indices beyond those discovered are automatically skipped
+ *   - Mobile (iOS/Android): GPU devices are discovered at runtime via probe
+ *     loading (cached). Each discovered GPU device gets its own test run with
+ *     an identifiable label (e.g. [GPU:0 Vulkan0], [GPU:1 OpenCL0]).
+ *     A CPU vs GPU output parity test also runs.
+ *   - Desktop: CPU test only. Desktop CI Vulkan backends load successfully
+ *     but hang during ggml_backend_vk_compute, causing brittle timeouts.
  *
  * Usage:
  *   bare test/integration/indictrans.test.js
@@ -181,74 +182,79 @@ async function runSingleTranslation (t, { modelPath, logger, useGpu, gpuDevice, 
 }
 
 // --------------------------------------------------------------------------
-// Per-GPU-device tests.  We register one test slot per device index (0..MAX)
-// plus a CPU-only test.  At runtime each GPU slot calls discoverGpuDevices()
-// (cached) and self-skips when the probed index doesn't exist.
+// Per-GPU-device tests (mobile only).  On desktop only the CPU test runs.
+// Desktop CI runners expose Vulkan backends that load successfully but hang
+// during compute (observed on win32 ai-run-windows11-gpu-x64 — Vulkan0
+// tokenises correctly then never returns from ggml_backend_vk_compute),
+// causing brittle timeout → "Can't comment after end" failures.
+// Matches the gating pattern in bergamot.test.js and pivot-bergamot.test.js.
 // --------------------------------------------------------------------------
 
-for (let gpuIdx = 0; gpuIdx < MAX_GPU_DEVICE_PROBES; gpuIdx++) {
-  test(`IndicTrans backend [GPU device ${gpuIdx}] - English to Hindi translation`, { timeout: TEST_TIMEOUT }, async function (t) {
-    const modelPath = await ensureIndicTransModel()
-    const devices = await discoverGpuDevices()
-    const device = devices[gpuIdx]
+if (isMobile) {
+  for (let gpuIdx = 0; gpuIdx < MAX_GPU_DEVICE_PROBES; gpuIdx++) {
+    test(`IndicTrans backend [GPU device ${gpuIdx}] - English to Hindi translation`, { timeout: TEST_TIMEOUT }, async function (t) {
+      const modelPath = await ensureIndicTransModel()
+      const devices = await discoverGpuDevices()
+      const device = devices[gpuIdx]
 
-    if (!device) {
-      t.comment(`[GPU:${gpuIdx}] No unique physical GPU at slot ${gpuIdx} — skipping`)
-      t.pass(`[GPU:${gpuIdx}] Skipped (device not present)`)
-      return
-    }
+      if (!device) {
+        t.comment(`[GPU:${gpuIdx}] No unique physical GPU at slot ${gpuIdx} — skipping`)
+        t.pass(`[GPU:${gpuIdx}] Skipped (device not present)`)
+        return
+      }
 
-    const label = `[GPU:${device.index} ${device.name}]`
-    t.ok(modelPath, `${label} IndicTrans model path should be available`)
-    t.comment(`${label} Model path: ` + modelPath)
-    t.comment('Platform: ' + platform + ', isMobile: ' + isMobile)
-    t.comment(`${label} Testing with use_gpu: true, gpu_device: ${device.index}`)
+      const label = `[GPU:${device.index} ${device.name}]`
+      t.ok(modelPath, `${label} IndicTrans model path should be available`)
+      t.comment(`${label} Model path: ` + modelPath)
+      t.comment('Platform: ' + platform + ', isMobile: ' + isMobile)
+      t.comment(`${label} Testing with use_gpu: true, gpu_device: ${device.index}`)
 
-    const logger = createLogger()
-    let model
+      const logger = createLogger()
+      let model
 
-    try {
-      const run = await runSingleTranslation(t, {
-        modelPath,
-        logger,
-        useGpu: true,
-        gpuDevice: device.index,
-        label
-      })
-      model = run.model
-      const { metrics, backendName } = run
+      try {
+        const run = await runSingleTranslation(t, {
+          modelPath,
+          logger,
+          useGpu: true,
+          gpuDevice: device.index,
+          label
+        })
+        model = run.model
+        const { metrics, backendName } = run
 
-      t.not(backendName, 'CPU', `${label} active backend should not be CPU`)
+        t.not(backendName, 'CPU', `${label} active backend should not be CPU`)
 
-      const executionProvider = resolveExecutionProvider(backendName, true)
+        const executionProvider = resolveExecutionProvider(backendName, true)
 
-      t.comment(formatPerformanceMetrics(`[IndicTrans] ${label}`, metrics, {
-        fixturePath: INDICTRANS_FIXTURE,
-        srcLang: 'eng_Latn',
-        dstLang: 'hin_Deva',
-        execution_provider: executionProvider
-      }))
+        t.comment(formatPerformanceMetrics(`[IndicTrans] ${label}`, metrics, {
+          fixturePath: INDICTRANS_FIXTURE,
+          srcLang: 'eng_Latn',
+          dstLang: 'hin_Deva',
+          execution_provider: executionProvider
+        }))
 
-      t.ok(metrics.fullOutput.length > 0, `${label} translation should not be empty`)
+        t.ok(metrics.fullOutput.length > 0, `${label} translation should not be empty`)
 
-      compareToBaseline(t, label, metrics,
-        pickBaseline(BASELINES, executionProvider))
+        compareToBaseline(t, label, metrics,
+          pickBaseline(BASELINES, executionProvider))
 
-      t.pass(`${label} IndicTrans translation completed successfully`)
-    } catch (e) {
-      t.fail(`${label} IndicTrans test failed: ` + e.message)
-      throw e
-    } finally {
-      if (model) {
-        try {
-          await model.unload()
-          t.pass(`${label} After model.unload().`)
-        } catch (e) {
-          t.comment(`${label} unload() error: ` + e.message)
+        t.pass(`${label} IndicTrans translation completed successfully`)
+      } catch (e) {
+        t.fail(`${label} IndicTrans test failed: ` + e.message)
+        throw e
+      } finally {
+        if (model) {
+          try {
+            await model.unload()
+            t.pass(`${label} After model.unload().`)
+          } catch (e) {
+            t.comment(`${label} unload() error: ` + e.message)
+          }
         }
       }
-    }
-  })
+    })
+  }
 }
 
 // CPU-only test
@@ -326,88 +332,89 @@ function resolveExecutionProvider (backendName, useGpu) {
 }
 
 // --------------------------------------------------------------------------
-// Phase 2.2 — CPU vs GPU output parity (one test per discovered GPU device)
+// Phase 2.2 — CPU vs GPU output parity (mobile only)
+//
+// Desktop CI Vulkan backends hang during compute (see note above the
+// per-GPU-device tests), so running GPU translations in the parity test
+// would also time out.  Gate the entire test behind isMobile.
 // --------------------------------------------------------------------------
 
-test('IndicTrans CPU vs GPU output parity (EN->Hindi, beam=1)', { timeout: TEST_TIMEOUT * (MAX_GPU_DEVICE_PROBES + 1) }, async function (t) {
-  const modelPath = await ensureIndicTransModel()
-  const devices = await discoverGpuDevices()
+if (isMobile) {
+  test('IndicTrans CPU vs GPU output parity (EN->Hindi, beam=1)', { timeout: TEST_TIMEOUT * (MAX_GPU_DEVICE_PROBES + 1) }, async function (t) {
+    const modelPath = await ensureIndicTransModel()
+    const devices = await discoverGpuDevices()
 
-  if (devices.length === 0) {
-    if (isMobile) {
+    if (devices.length === 0) {
       t.fail('Expected at least one GPU device on mobile')
-    } else {
-      t.comment('SOFT-SKIP: no GPU devices discovered — parity test is vacuous')
-      t.pass('Skipped (no GPU devices)')
+      return
     }
-    return
-  }
 
-  t.comment('Discovered GPU devices: ' +
-    devices.map(d => `${d.name} (index ${d.index})`).join(', '))
+    t.comment('Discovered GPU devices: ' +
+      devices.map(d => `${d.name} (index ${d.index})`).join(', '))
 
-  const logger = createLogger()
+    const logger = createLogger()
 
-  // Run CPU once — reuse the translation for all parity comparisons
-  let cpuRun
-  try {
-    cpuRun = await runSingleTranslation(t, {
-      modelPath,
-      logger,
-      useGpu: false,
-      label: '[PARITY] CPU'
-    })
-    await cpuRun.model.unload()
-    cpuRun.model = null
-  } catch (e) {
-    t.fail('Parity CPU leg failed: ' + e.message)
-    throw e
-  }
-
-  const cpuOut = (cpuRun.translation || '').trim()
-  t.comment(`[PARITY] CPU -> "${cpuOut}"`)
-
-  for (const device of devices) {
-    const parityLabel = `[PARITY:${device.index} ${device.name}]`
-    let gpuRun
+    // Run CPU once — reuse the translation for all parity comparisons
+    let cpuRun
     try {
-      gpuRun = await runSingleTranslation(t, {
+      cpuRun = await runSingleTranslation(t, {
         modelPath,
         logger,
-        useGpu: true,
-        gpuDevice: device.index,
-        label: parityLabel
+        useGpu: false,
+        label: '[PARITY] CPU'
       })
-
-      const gpuOut = (gpuRun.translation || '').trim()
-      t.comment(`${parityLabel} -> "${gpuOut}"`)
-
-      if (cpuOut === gpuOut) {
-        t.pass(`${parityLabel} CPU and ${device.name} outputs are string-equal`)
-      } else {
-        let evaluateQuality
-        try {
-          const qmBase = path.join('..', '..', '..', '..', 'scripts', 'test-utils')
-          evaluateQuality = require(path.join(qmBase, 'quality-metrics')).evaluateQuality
-        } catch (e) {
-          t.comment(`Could not load quality-metrics: ${e.message}`)
-        }
-
-        if (evaluateQuality) {
-          const q = evaluateQuality([gpuOut], { reference_text: cpuOut })
-          const cer = typeof q.cer === 'number' ? q.cer : 1
-          t.comment(`${parityLabel} CER = ${(cer * 100).toFixed(2)}%`)
-          t.ok(cer < 0.01, `${parityLabel} outputs should match within CER<1% (got ${(cer * 100).toFixed(2)}%)`)
-        } else {
-          t.is(gpuOut, cpuOut, `${parityLabel} outputs must match`)
-        }
-      }
+      await cpuRun.model.unload()
+      cpuRun.model = null
     } catch (e) {
-      t.fail(`${parityLabel} parity test failed: ` + e.message)
-    } finally {
-      if (gpuRun && gpuRun.model) {
-        try { await gpuRun.model.unload() } catch (_) { /* noop */ }
+      t.fail('Parity CPU leg failed: ' + e.message)
+      throw e
+    }
+
+    const cpuOut = (cpuRun.translation || '').trim()
+    t.comment(`[PARITY] CPU -> "${cpuOut}"`)
+
+    for (const device of devices) {
+      const parityLabel = `[PARITY:${device.index} ${device.name}]`
+      let gpuRun
+      try {
+        gpuRun = await runSingleTranslation(t, {
+          modelPath,
+          logger,
+          useGpu: true,
+          gpuDevice: device.index,
+          label: parityLabel
+        })
+
+        const gpuOut = (gpuRun.translation || '').trim()
+        t.comment(`${parityLabel} -> "${gpuOut}"`)
+
+        if (cpuOut === gpuOut) {
+          t.pass(`${parityLabel} CPU and ${device.name} outputs are string-equal`)
+        } else {
+          let evaluateQuality
+          try {
+            const qmBase = path.join('..', '..', '..', '..', 'scripts', 'test-utils')
+            evaluateQuality = require(path.join(qmBase, 'quality-metrics')).evaluateQuality
+          } catch (e) {
+            t.comment(`Could not load quality-metrics: ${e.message}`)
+          }
+
+          if (evaluateQuality) {
+            const q = evaluateQuality([gpuOut], { reference_text: cpuOut })
+            const cer = typeof q.cer === 'number' ? q.cer : 1
+            t.comment(`${parityLabel} CER = ${(cer * 100).toFixed(2)}%`)
+            t.ok(cer < 0.01, `${parityLabel} outputs should match within CER<1% (got ${(cer * 100).toFixed(2)}%)`)
+          } else {
+            t.is(gpuOut, cpuOut, `${parityLabel} outputs must match`)
+          }
+        }
+      } catch (e) {
+        t.fail(`${parityLabel} parity test failed: ` + e.message)
+      } finally {
+        if (gpuRun && gpuRun.model) {
+          try { await gpuRun.model.unload() } catch (_) { /* noop */ }
+        }
       }
     }
-  }
-})
+  })
+}
