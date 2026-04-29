@@ -188,10 +188,24 @@ export async function close(): Promise<void> {
   closingPromise = (async () => {
     logger.info("🧹 Closing RPC client (Expo)");
 
-    // Ask the worker to release env-bound state (addon loggers, model
-    // instances) BEFORE we kill its V8 isolate. Mobile-specific need; on
-    // desktop the spawned worker process gets SIGTERM'd and the kernel
-    // reclaims everything regardless.
+    // terminate() crashes on Android (addon dlclose leaves pthread_key_t
+    // destructors dangling); iOS dyld no-ops dlclose so it's safe there.
+    // Non-iOS: drop refs only -- sending __shutdown__ without a follow-up
+    // terminate would clear the worker plugin registry.
+    let platform: string | undefined;
+    try {
+      platform = (await getRuntimeContext()).platform;
+    } catch (err) {
+      logger.debug("Failed to resolve runtime context for close()", { err });
+    }
+
+    if (platform !== "ios") {
+      rpcInstance = null;
+      rpcPromise = null;
+      return;
+    }
+
+    // iOS: existing pre-terminate cleanup + terminate.
     if (rpcInstance) {
       logger.info("🧹 Requesting worker pre-terminate cleanup");
       await sendShutdownMessage(rpcInstance);
