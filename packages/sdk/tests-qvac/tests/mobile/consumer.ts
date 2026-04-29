@@ -340,6 +340,14 @@ export const executor = createExecutor({
       "lifecycle-rapid-toggle",
       "lifecycle-suspend-during-inference",
     ], "suspend() hangs the runner on mobile"),
+    // diffusion-streaming-progress reliably times out on mobile and the
+    // leftover stream blocks the diffusion model from being evicted,
+    // hanging the next test that needs to free it (typically
+    // wrong-model-transcribe-on-llm via ResourceManager.evictExcept).
+    skipTests(
+      ["diffusion-streaming-progress"],
+      "diffusion stream times out on mobile and blocks subsequent eviction",
+    ),
     ...(Platform.OS === "ios" ? [
       skipTests([
         "ocr-sign-image",
