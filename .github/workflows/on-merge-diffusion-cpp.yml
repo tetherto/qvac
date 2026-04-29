@@ -102,7 +102,7 @@ jobs:
           base-ref: ${{ github.ref_name }}
           base-sha: ${{ github.event.before }}
           head-sha: ${{ github.sha }}
-          package-slug: infer-diffusion
+          package-slug: diffusion-cpp
           package-json-path: packages/diffusion-cpp/package.json
           changelog-path: packages/diffusion-cpp/CHANGELOG.md
 
@@ -119,7 +119,7 @@ jobs:
       packages: write
       pull-requests: write
       id-token: write
-    uses: ./.github/workflows/prebuilds-infer-diffusion.yml
+    uses: ./.github/workflows/prebuilds-diffusion-cpp.yml
     secrets: inherit
     with:
       workdir: "packages/diffusion-cpp"

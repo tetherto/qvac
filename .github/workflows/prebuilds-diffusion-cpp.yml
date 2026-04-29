@@ -1,4 +1,4 @@
-# Build-only workflow. Publishing is handled by on-merge-infer-diffusion.yml
+# Build-only workflow. Publishing is handled by on-merge-diffusion-cpp.yml
 name: Prebuilds (Stable Diffusion)
 
 on:

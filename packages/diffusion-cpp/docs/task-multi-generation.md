@@ -1,4 +1,4 @@
-# Task: Multi-Generation Support for infer-diffusion
+# Task: Multi-Generation Support for diffusion-cpp
 
 ## Overview
 
