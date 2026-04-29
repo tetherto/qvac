@@ -1488,94 +1488,25 @@ jobs:
           if-no-files-found: ignore
 
       - name: Extract mobile perf-report
+        # Use the canonical shared extractor (scripts/perf-report/extract-from-log.js).
+        # OCR proved this path works on Device Farm logs — it strips Android logcat
+        # prefixes, the ReactNativeJS bridge wrapper, and JS-string `\'` escapes the
+        # bare-runtime → BareKit → logcat pipeline injects, none of which the
+        # previous inline node script handled.
         if: always() && steps.schedule_run.outputs.run_arn
-        env:
-          LOG_DIR: devicefarm-logs/${{ matrix.platform }}
-          OUT_FILE: mobile-perf/perf-report-${{ matrix.platform }}.json
         run: |
-          node - <<'NODE'
-          const fs = require('fs');
-          const path = require('path');
-
-          const logDir = process.env.LOG_DIR;
-          const outFile = process.env.OUT_FILE;
-
-          function walk(dir, acc = []) {
-            let entries = [];
-            try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return acc; }
-            for (const e of entries) {
-              const p = path.join(dir, e.name);
-              if (e.isDirectory()) walk(p, acc); else acc.push(p);
-            }
-            return acc;
-          }
-
-          let json = null;
-          let source = null;
-
-          // 1) perf-report.json shipped directly as a Device Farm file artifact.
-          for (const f of walk(logDir)) {
-            if (path.basename(f) === 'perf-report.json') {
-              try {
-                const txt = fs.readFileSync(f, 'utf8').trim();
-                JSON.parse(txt);
-                json = txt; source = `file:${f}`; break;
-              } catch (e) { console.log(`[perf-extract] skipping ${f}: ${e.message}`); }
-            }
-          }
-
-          // 2) Single-block markers in any text artifact.
-          if (!json) {
-            for (const f of walk(logDir)) {
-              let content;
-              try { content = fs.readFileSync(f, 'utf8'); } catch { continue; }
-              const m = content.match(/\[PERF_REPORT_START\]([\s\S]*?)\[PERF_REPORT_END\]/);
-              if (m) {
-                try { JSON.parse(m[1]); json = m[1]; source = `marker:${f}`; break; }
-                catch (e) { console.log(`[perf-extract] marker parse fail in ${f}: ${e.message}`); }
-              }
-            }
-          }
-
-          // 3) Chunked markers: [PERF_CHUNK:id:i:n]<payload>
-          if (!json) {
-            for (const f of walk(logDir)) {
-              let content;
-              try { content = fs.readFileSync(f, 'utf8'); } catch { continue; }
-              const groups = new Map();
-              const re = /\[PERF_CHUNK:([^:\]]+):(\d+):(\d+)\]([^\n\r]*)/g;
-              let m;
-              while ((m = re.exec(content)) !== null) {
-                const [, id, iStr, nStr, payload] = m;
-                if (!groups.has(id)) groups.set(id, { n: +nStr, parts: new Map() });
-                const g = groups.get(id);
-                if (!g.parts.has(+iStr) || payload.length > g.parts.get(+iStr).length) {
-                  g.parts.set(+iStr, payload);
-                }
-              }
-              for (const [id, g] of groups) {
-                if (g.parts.size === g.n) {
-                  let assembled = '';
-                  for (let i = 0; i < g.n; i++) assembled += g.parts.get(i) || '';
-                  const start = assembled.indexOf('{');
-                  if (start > 0) assembled = assembled.slice(start);
-                  try { JSON.parse(assembled); json = assembled; source = `chunks:${f}:${id}`; break; }
-                  catch (e) { console.log(`[perf-extract] chunked parse fail (${id}) in ${f}: ${e.message}`); }
-                }
-              }
-              if (json) break;
-            }
-          }
-
-          if (!json) {
-            console.log('::warning::No perf-report.json or PERF_REPORT_* markers found in Device Farm logs');
-            process.exit(0);
-          }
-
-          fs.mkdirSync(path.dirname(outFile), { recursive: true });
-          fs.writeFileSync(outFile, json + '\n');
-          console.log(`[perf-extract] wrote ${outFile} (${json.length} bytes) from ${source}`);
-          NODE
+          set -eu
+          LOG_DIR="devicefarm-logs/${{ matrix.platform }}"
+          OUT_DIR="mobile-perf"
+          OUT_FILE="${OUT_DIR}/perf-report-${{ matrix.platform }}.json"
+          mkdir -p "$OUT_DIR"
+          node "${GITHUB_WORKSPACE}/scripts/perf-report/extract-from-log.js" \
+            "$LOG_DIR" \
+            "$OUT_FILE" \
+            --run-number "${{ github.run_number }}"
+          if [ ! -f "$OUT_FILE" ] && ! find "$OUT_DIR" -name 'performance-report.json' -type f | grep -q .; then
+            echo "::warning::No perf-report markers found in Device Farm logs"
+          fi
 
       - name: Upload mobile perf-report
         if: always() && steps.schedule_run.outputs.run_arn

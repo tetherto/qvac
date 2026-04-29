@@ -477,6 +477,21 @@ async function _runEndToEnd (t, modelPath, backend) {
       execution_provider: ep,
       ...(quality ? { quality } : {})
     })
+
+    // Mobile: flush after every record so the perf-report markers land in
+    // logcat / iOS console *before* the BareKit process exits. The
+    // `process.on('exit')` handler doesn't reliably fire on Device Farm
+    // (the device tears the process down before flushing), so OCR's
+    // canonical mobile path writes incrementally here. Desktop keeps the
+    // exit-handler flush — `_flushPerfReport` is idempotent.
+    if (_isMobile) {
+      try {
+        _perfReporter.writeReport()
+        _perfReporter.writeToConsole()
+      } catch (err) {
+        console.log('[perf-reporter] mobile incremental flush failed: ' + (err && err.message))
+      }
+    }
   } finally {
     await model.unload().catch(() => {})
   }
