@@ -6,15 +6,9 @@ import {
   profiler,
 } from "@qvac/sdk";
 
-const topicHex = process.argv[2];
-if (!topicHex) {
-  console.error("❌ Usage: bun run consumer-profiled.ts <topic> <publicKey>");
-  process.exit(1);
-}
-
-const providerPublicKey = process.argv[3];
+const providerPublicKey = process.argv[2];
 if (!providerPublicKey) {
-  console.error("❌ Usage: bun run consumer-profiled.ts <topic> <publicKey>");
+  console.error("❌ Usage: bun run consumer-profiled.ts <providerPublicKey>");
   process.exit(1);
 }
 
@@ -22,17 +16,15 @@ try {
   profiler.enable({ mode: "verbose", includeServerBreakdown: true });
   console.log("✓ Profiler enabled");
 
-  console.log(`\n📡 Topic: ${topicHex}`);
-  console.log(`🔑 Provider: ${providerPublicKey}\n`);
+  console.log(`\n🔑 Provider: ${providerPublicKey}\n`);
 
   console.log("→ Loading model (delegated, unary)...");
   const modelId = await loadModel({
     modelSrc: LLAMA_3_2_1B_INST_Q4_0,
     modelType: "llm",
     delegate: {
-      topic: topicHex,
       providerPublicKey,
-      timeout: 30_000,
+      timeout: 60_000,
     },
   });
   console.log(`✓ Model loaded: ${modelId}\n`);
