@@ -33,7 +33,7 @@ jobs:
   run-integration-tests:
     continue-on-error: true
     runs-on: ${{ matrix.os }}
-    environment: release
+    environment: ci
     name: test-${{ matrix.platform }}-${{ matrix.arch }}
 
     permissions:
@@ -80,7 +80,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ github.token }}
 
       - name: Install NPM dependencies
         working-directory: ${{ inputs.workdir || env.PKG_DIR }}
@@ -122,7 +122,7 @@ jobs:
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          role-to-assume: ${{ vars.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
 
       - name: Download onnx model files
@@ -130,7 +130,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p models/ocr/rec_dyn
-          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ocr/rec_dyn/ models/ocr/rec_dyn/ --recursive
+          aws s3 cp s3://${{ vars.MODEL_S3_BUCKET }}/qvac_models_compiled/ocr/rec_dyn/ models/ocr/rec_dyn/ --recursive
 
       - name: Run integration test
         working-directory: ${{ inputs.workdir || env.PKG_DIR }}

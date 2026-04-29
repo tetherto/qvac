@@ -132,7 +132,7 @@ jobs:
     if: ${{ inputs.run_integration_tests != false }}
     continue-on-error: true
     runs-on: ${{ matrix.os }}
-    environment: release
+    environment: ci
     name: test-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.os_version && format('-{0}', matrix.os_version) || '' }}-${{ matrix.variant }}
     permissions:
       contents: read
@@ -169,12 +169,12 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ github.token }}
 
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          role-to-assume: ${{ vars.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
 
       - name: Install NPM dependencies
@@ -226,7 +226,7 @@ jobs:
     if: ${{ inputs.run_supertonic_desktop_benchmarks == true }}
     continue-on-error: true
     runs-on: ${{ matrix.os }}
-    environment: release
+    environment: ci
     timeout-minutes: 180
     name: supertonic-${{ matrix.runner_label }}-${{ matrix.backend }}
     permissions:
@@ -331,59 +331,35 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ github.token }}
 
-      - name: Configure scoped registry for @tetherto and @qvac packages (Unix)
+      - name: Configure scoped registry for @qvac packages (Unix)
         if: ${{ matrix.platform != 'win32' }}
         working-directory: ${{ inputs.workdir }}
-        env:
-          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
         shell: bash
         run: |
-          echo "Configuring scoped registry for @tetherto and @qvac packages..."
+          echo "Configuring scoped registry for @qvac packages..."
           set -eu
           cat > .npmrc <<NPMRC
-          always-auth=true
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
-          @tetherto:registry=https://npm.pkg.github.com/
-          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
-          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
           NPMRC
 
-          if [ -n "${GIT_PAT:-}" ]; then
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
-          else
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
-          fi
+          git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
 
           cp .npmrc benchmarks/server/.npmrc
 
-      - name: Configure scoped registry for @tetherto and @qvac packages (Windows)
+      - name: Configure scoped registry for @qvac packages (Windows)
         if: ${{ matrix.platform == 'win32' }}
         working-directory: ${{ inputs.workdir }}
-        env:
-          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
         shell: powershell
         run: |
           $npmrc = @"
-          always-auth=true
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
-          @tetherto:registry=https://npm.pkg.github.com/
-          //registry.npmjs.org/:_authToken=$env:NPM_TOKEN
-          //npm.pkg.github.com/:_authToken=$env:GPR_TOKEN
           "@
           $npmrc | Out-File -FilePath .npmrc -Encoding utf8
-          if ($env:GIT_PAT) {
-            git config --global url."https://$($env:GIT_PAT):@github.com/".insteadOf "https://github.com/"
-          } else {
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
-          }
+          git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
           Copy-Item -Path .npmrc -Destination benchmarks/server/.npmrc -Force
 
       - name: Install NPM dependencies
@@ -679,7 +655,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ github.token }}
 
       - name: Download desktop benchmark artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1

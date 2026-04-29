@@ -83,7 +83,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ github.token }}
           path: addon
           fetch-depth: 0
 
@@ -92,7 +92,7 @@ jobs:
         with:
           repository: tetherto/qvac-test-addon-mobile
           ref: ${{ env.TEST_FRAMEWORK_REF }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ github.token }}
           path: test-framework
           fetch-depth: 0
 
@@ -702,7 +702,7 @@ jobs:
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          role-to-assume: ${{ vars.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
           role-duration-seconds: 7200 # 2hrs for device farm tests
 
@@ -721,7 +721,7 @@ jobs:
 
           echo "📤 Uploading app to AWS Device Farm..."
           UPLOAD_RESPONSE=$(aws devicefarm create-upload \
-            --project-arn "${{ secrets.LLM_AWS_DEVICE_FARM_PROJECT_ARN }}" \
+            --project-arn "${{ vars.LLM_AWS_DEVICE_FARM_PROJECT_ARN }}" \
             --name "$APP_NAME" \
             --type "$APP_TYPE" \
             --output json)
@@ -828,7 +828,7 @@ jobs:
           # Upload test package to AWS Device Farm
           echo "📤 Uploading test package to AWS Device Farm..."
           UPLOAD_RESPONSE=$(aws devicefarm create-upload \
-            --project-arn "${{ secrets.LLM_AWS_DEVICE_FARM_PROJECT_ARN }}" \
+            --project-arn "${{ vars.LLM_AWS_DEVICE_FARM_PROJECT_ARN }}" \
             --name "$ZIP_NAME" \
             --type "APPIUM_NODE_TEST_PACKAGE" \
             --output json)
@@ -1045,7 +1045,7 @@ jobs:
           
           echo "📤 Uploading test spec to Device Farm..."
           SPEC_RESPONSE=$(aws devicefarm create-upload \
-            --project-arn "${{ secrets.LLM_AWS_DEVICE_FARM_PROJECT_ARN }}" \
+            --project-arn "${{ vars.LLM_AWS_DEVICE_FARM_PROJECT_ARN }}" \
             --name "testspec.yml" \
             --type "APPIUM_NODE_TEST_SPEC" \
             --output json)
@@ -1083,9 +1083,9 @@ jobs:
         id: schedule_run
         run: |
           if [ "${{ matrix.platform }}" == "Android" ]; then
-            POOL_ARN="${{ secrets.LLM_ANDROID_DEVICE_POOL_ARN }}"
+            POOL_ARN="${{ vars.LLM_ANDROID_DEVICE_POOL_ARN }}"
           else
-            POOL_ARN="${{ secrets.LLM_IOS_DEVICE_POOL_ARN }}"
+            POOL_ARN="${{ vars.LLM_IOS_DEVICE_POOL_ARN }}"
           fi
           
           # Set run name based on trigger
@@ -1101,7 +1101,7 @@ jobs:
           echo "Run Name: $RUN_NAME"
           
           RUN_ARN=$(aws devicefarm schedule-run \
-            --project-arn "${{ secrets.LLM_AWS_DEVICE_FARM_PROJECT_ARN }}" \
+            --project-arn "${{ vars.LLM_AWS_DEVICE_FARM_PROJECT_ARN }}" \
             --device-pool-arn "$POOL_ARN" \
             --app-arn "${{ steps.upload_app.outputs.app_upload_arn }}" \
             --name "$RUN_NAME" \
@@ -1298,7 +1298,7 @@ jobs:
         if: always() && steps.schedule_run.outputs.run_arn
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          role-to-assume: ${{ vars.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
           role-session-name: device-farm-logs
 

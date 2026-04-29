@@ -31,7 +31,6 @@ on:
 jobs:
   run-cpp-tests:
     runs-on: ${{ matrix.runner || matrix.os }}
-    environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-cpp-tests
     permissions:
       contents: read
@@ -89,7 +88,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ github.token }}
 
       - name: Install NPM dependencies
         working-directory: ${{ env.WORKDIR }}

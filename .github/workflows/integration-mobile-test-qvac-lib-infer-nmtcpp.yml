@@ -89,7 +89,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ github.token }}
           path: monorepo
           fetch-depth: 0
 
@@ -98,7 +98,7 @@ jobs:
         with:
           repository: tetherto/qvac-test-addon-mobile
           ref: ${{ env.TEST_FRAMEWORK_REF }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ github.token }}
           path: test-framework
           fetch-depth: 0
 
@@ -330,7 +330,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
         with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          role-to-assume: ${{ vars.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
           role-duration-seconds: 7200 # 2hrs for device farm tests
 
@@ -338,7 +338,7 @@ jobs:
         working-directory: ./monorepo/${{ inputs.workdir || env.PKG_DIR }}
         env:
           AWS_REGION: eu-central-1
-          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+          MODEL_S3_BUCKET: ${{ vars.MODEL_S3_BUCKET }}
         run: |
           echo "🔑 Generating IndicTrans model URLs for mobile tests..."
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

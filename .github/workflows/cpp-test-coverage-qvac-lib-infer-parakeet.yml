@@ -22,7 +22,6 @@ jobs:
       id-token: write
       checks: write
     runs-on: ${{ matrix.os }}
-    environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}-cpp-tests
     strategy:
       fail-fast: false
@@ -41,7 +40,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ github.token }}
           lfs: true
 
       - name: Setup Node.js

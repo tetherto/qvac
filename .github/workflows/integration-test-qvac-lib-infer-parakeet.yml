@@ -54,10 +54,9 @@ jobs:
     timeout-minutes: 60
     continue-on-error: true
     runs-on: ${{ matrix.os }}
-    environment: release
     name: ${{ matrix.os }}-${{ matrix.platform }}-${{ matrix.arch }}-integration-tests
     env:
-      GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     permissions:
       contents: read
       packages: read
@@ -124,7 +123,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ github.token }}
 
       - name: Install NPM dependencies
         working-directory: ${{ github.workspace }}/packages/qvac-lib-infer-parakeet
@@ -182,7 +181,7 @@ jobs:
         working-directory: ${{ github.workspace }}/packages/qvac-lib-infer-parakeet
         run: npm run test:integration
         env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           INTEGRATION_TEST_TIMEOUT: ${{ matrix.platform == 'win32' && '1800' || '600' }}
           LD_LIBRARY_PATH: ${{ github.workspace }}/packages/qvac-lib-infer-parakeet/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
           DYLD_LIBRARY_PATH: ${{ github.workspace }}/packages/qvac-lib-infer-parakeet/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
@@ -194,7 +193,7 @@ jobs:
         working-directory: ${{ github.workspace }}/packages/qvac-lib-infer-parakeet
         run: node scripts/run-rtf-benchmark-matrix.js
         env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           LD_LIBRARY_PATH: ${{ github.workspace }}/packages/qvac-lib-infer-parakeet/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
           DYLD_LIBRARY_PATH: ${{ github.workspace }}/packages/qvac-lib-infer-parakeet/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
           QVAC_PARAKEET_BENCHMARK_DEVICE: ${{ matrix.os }}

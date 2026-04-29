@@ -23,7 +23,6 @@ on:
 jobs:
   run-integration-tests:
     runs-on: ${{ matrix.runner || matrix.os }}
-    environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}-integration-tests
     permissions:
       contents: read
@@ -79,7 +78,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ github.token }}
 
       - name: Install NPM dependencies
         working-directory: ${{ env.WORKDIR }}

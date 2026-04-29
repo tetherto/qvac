@@ -92,7 +92,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ github.token }}
           path: addon
           fetch-depth: 0
 
@@ -101,7 +101,7 @@ jobs:
         with:
           repository: tetherto/qvac-test-addon-mobile
           ref: ${{ env.TEST_FRAMEWORK_REF }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ github.token }}
           path: test-framework
           fetch-depth: 0
 
@@ -696,7 +696,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          role-to-assume: ${{ vars.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
           role-duration-seconds: 7200 # 2hrs for device farm tests
 

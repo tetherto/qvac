@@ -30,7 +30,7 @@ jobs:
   run-integration-tests:
     timeout-minutes: 60
     runs-on: ${{ matrix.os }}
-    environment: release
+    environment: ci
     name: ${{ matrix.platform }}-${{ matrix.arch }}-integration-tests
     permissions:
       contents: read
@@ -76,7 +76,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ github.token }}
 
       - name: Install NPM dependencies
         working-directory: ${{ inputs.workdir || env.PKG_DIR }}
@@ -151,7 +151,7 @@ jobs:
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          role-to-assume: ${{ vars.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
 
       - name: Download Bergamot models from S3
@@ -160,10 +160,10 @@ jobs:
         run: |
           echo "Downloading Bergamot models from S3..."
           mkdir -p model/bergamot
-          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/bergamot/bergamot-enit/2025-12-18/" model/bergamot/enit --recursive
-          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/bergamot/bergamot-esen/2025-12-18/" model/bergamot/esen --recursive
-          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/bergamot/bergamot-fren/2025-12-18/" model/bergamot/fren --recursive
-          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/bergamot/bergamot-enes/2025-12-18/" model/bergamot/enes --recursive
+          aws s3 cp "s3://${{ vars.MODEL_S3_BUCKET }}/qvac_models_compiled/bergamot/bergamot-enit/2025-12-18/" model/bergamot/enit --recursive
+          aws s3 cp "s3://${{ vars.MODEL_S3_BUCKET }}/qvac_models_compiled/bergamot/bergamot-esen/2025-12-18/" model/bergamot/esen --recursive
+          aws s3 cp "s3://${{ vars.MODEL_S3_BUCKET }}/qvac_models_compiled/bergamot/bergamot-fren/2025-12-18/" model/bergamot/fren --recursive
+          aws s3 cp "s3://${{ vars.MODEL_S3_BUCKET }}/qvac_models_compiled/bergamot/bergamot-enes/2025-12-18/" model/bergamot/enes --recursive
           echo ""
           echo "Bergamot model directories:"
           ls -la model/bergamot/
@@ -174,7 +174,7 @@ jobs:
         run: |
           echo "Downloading IndicTrans en-indic model from S3..."
           mkdir -p model/indictrans
-          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-dist-200M/2026-01-01/ggml-indictrans2-en-indic-dist-200M-q4_0.bin" model/indictrans/
+          aws s3 cp "s3://${{ vars.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-dist-200M/2026-01-01/ggml-indictrans2-en-indic-dist-200M-q4_0.bin" model/indictrans/
           echo "IndicTrans model files:"
           ls -la model/indictrans/
 

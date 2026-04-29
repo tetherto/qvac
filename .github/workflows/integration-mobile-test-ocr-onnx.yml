@@ -86,7 +86,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ github.token }}
           path: addon
           fetch-depth: 0
 
@@ -95,7 +95,7 @@ jobs:
         with:
           repository: tetherto/qvac-test-addon-mobile
           ref: ${{ env.TEST_FRAMEWORK_REF }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ github.token }}
           path: test-framework
           fetch-depth: 0
 
@@ -289,7 +289,7 @@ jobs:
       - name: Configure AWS credentials via OIDC for model download
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          role-to-assume: ${{ vars.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
           role-duration-seconds: 7200 # 2hrs for device farm tests
 
@@ -297,7 +297,7 @@ jobs:
         working-directory: ./addon/${{ inputs.workdir || env.PKG_DIR }}
         shell: bash
         env:
-          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+          MODEL_S3_BUCKET: ${{ vars.MODEL_S3_BUCKET }}
         run: |
           echo "🔑 Generating presigned URLs for OCR models..."
           chmod +x scripts/generate-ocr-presigned-urls.sh
@@ -754,7 +754,7 @@ jobs:
       - name: Configure AWS credentials via OIDC for Device Farm
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          role-to-assume: ${{ vars.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
           role-duration-seconds: 7200 # 2hrs for device farm tests
 
@@ -1611,7 +1611,7 @@ jobs:
         if: always() && (steps.schedule_run.outputs.run_arn_perf || steps.schedule_run.outputs.run_arn_regular)
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          role-to-assume: ${{ vars.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
           role-session-name: device-farm-logs
 

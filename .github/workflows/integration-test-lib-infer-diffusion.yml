@@ -26,7 +26,7 @@ jobs:
     timeout-minutes: ${{ matrix.timeout || 360 }}
     continue-on-error: true
     runs-on: ${{ matrix.runner }}
-    environment: release
+    environment: ci
     name: test-${{ matrix.platform }}-${{ matrix.arch }}
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -84,8 +84,6 @@ jobs:
         if: ${{ matrix.platform == 'win32' }}
         run: |
           git config --system core.longpaths true
-          git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "https://github.com/"
-          git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "git@github.com:"
         shell: powershell
 
       - name: Checkout code
@@ -93,71 +91,48 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ github.token }}
 
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          role-to-assume: ${{ vars.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
 
-      - name: Configure scoped registry for @tetherto and @qvac packages (Linux/macOS)
+      - name: Configure scoped registry for @qvac packages (Linux/macOS)
         if: ${{ matrix.platform != 'win32' }}
         working-directory: ${{ env.WORKDIR }}
-        env:
-          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
         run: |
           echo "=== Debug: Github event name is '${{ github.event_name }}' ==="
-          echo "Configuring scoped registry for @tetherto and @qvac packages..."
+          echo "Configuring scoped registry for @qvac packages..."
           set -eu
-          echo "Writing .npmrc for dual registry install…"
+          echo "Writing .npmrc..."
           cat > .npmrc <<NPMRC
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
-          @tetherto:registry=https://npm.pkg.github.com/
-          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
-          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
           NPMRC
 
-          if [ -n "${GIT_PAT:-}" ]; then
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
-          else
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
-          fi
+          git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
         shell: bash
 
-      - name: Configure scoped registry for @tetherto and @qvac packages (Windows)
+      - name: Configure scoped registry for @qvac packages (Windows)
         if: ${{ matrix.platform == 'win32' }}
         working-directory: ${{ env.WORKDIR }}
-        env:
-          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
         run: |
           echo "=== Debug: Github event name is '${{ github.event_name }}' ==="
-          echo "=== Configuring scoped registry for @tetherto and @qvac packages ==="
-          echo "Writing .npmrc for dual registry install…"
+          echo "=== Configuring scoped registry for @qvac packages ==="
+          echo "Writing .npmrc..."
           @"
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
-          @tetherto:registry=https://npm.pkg.github.com/
-          //registry.npmjs.org/:_authToken=$env:NPM_TOKEN
-          //npm.pkg.github.com/:_authToken=$env:GPR_TOKEN
           "@ | Out-File -FilePath .npmrc -Encoding utf8
 
           echo "=== Verifying .npmrc creation ==="
           Get-Content .npmrc
           echo "=================================="
 
-          if ($env:GIT_PAT) {
-            git config --global url."https://$env:GIT_PAT:@github.com/".insteadOf "https://github.com/"
-            git config --global url."https://$env:GIT_PAT:@github.com/".insteadOf "git@github.com:"
-          } else {
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
-          }
+          git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
         shell: powershell
 
       - name: Install NPM dependencies

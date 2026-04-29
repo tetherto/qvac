@@ -41,7 +41,6 @@ env:
 jobs:
   cpp-tests:
     runs-on: ${{ matrix.os }}
-    environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}-cpp-tests
     permissions:
       contents: read
@@ -75,7 +74,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.event.inputs.ref || github.event.pull_request.head.sha || github.sha }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ github.token }}
           lfs: true
           fetch-depth: 0
 
@@ -126,7 +125,7 @@ jobs:
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          role-to-assume: ${{ vars.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
 
       - name: Ensure TTS models for integration tests

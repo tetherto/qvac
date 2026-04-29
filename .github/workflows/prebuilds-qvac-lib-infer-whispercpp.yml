@@ -73,7 +73,6 @@ jobs:
             arch: x64
 
     runs-on: ${{ matrix.os }}
-    environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
     env:
@@ -110,18 +109,18 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ github.token }}
           fetch-depth: 0
 
       - name: Setup AWS + Windows CLI
         uses: tetherto/qvac/.github/actions/setup-aws-prebuild@0bbdca93da303a0b1634ba14a89cec085621078d
         with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          role-to-assume: ${{ vars.AWS_OIDC_ROLE_ARN }}
 
       - name: Setup vcpkg
         uses: tetherto/qvac/.github/actions/setup-vcpkg@1d9b2165867d03c6edd675e402ee101a5d48a6d8
         env:
-          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+          MODEL_S3_BUCKET: ${{ vars.MODEL_S3_BUCKET }}
         with:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
@@ -135,11 +134,11 @@ jobs:
       - name: Setup Vulkan SDK
         uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@0bbdca93da303a0b1634ba14a89cec085621078d
         env:
-          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+          MODEL_S3_BUCKET: ${{ vars.MODEL_S3_BUCKET }}
         with:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
-          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-role-to-assume: ${{ vars.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
 
       - if: ${{ startsWith(matrix.os, 'macos') }}
