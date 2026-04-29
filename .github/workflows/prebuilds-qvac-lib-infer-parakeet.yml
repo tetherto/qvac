@@ -38,6 +38,7 @@ jobs:
       workdir: ${{ inputs.workdir }}
       ref: ${{ inputs.ref }}
       repository: ${{ inputs.repository }}
+      artifact-name-prefix: parakeet-
       linux-extra-packages: pkg-config libx11-dev libxcb1-dev libxkbcommon-dev
       setup-python-on-windows: true
     secrets: inherit
