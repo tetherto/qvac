@@ -370,10 +370,121 @@ test('integration: VlaModel.load rejects missing GGUF file', async (t) => {
 // + quality comparison must all succeed. Any failure is a hard test failure;
 // silent skips on mobile are forbidden because they produced false-positive
 // PASS results in prior runs (see QVAC-VLA mobile CI history).
-test('integration: end-to-end inference runs (needs GGUF)', { timeout: 1200000 }, async (t) => {
+//
+// The test runs each backend (`auto` then `cpu`) in the same process, sharing
+// one model download and one addon-install pass per runner. On a CPU-only
+// runner both rows naturally collapse onto the CPU backend; the duplicate is
+// kept for matrix symmetry so the perf-report has a uniform shape across
+// runners. On runners with a real GPU the two rows give an apples-to-apples
+// CPU-vs-accelerator delta.
+async function _runEndToEnd (t, modelPath, backend) {
+  // Each iteration owns its own VlaModel and explicitly `unload()`s before
+  // returning so memory-constrained mobile devices don't hold two copies of
+  // the weights at once. `t.teardown` would defer release to end-of-test,
+  // which on Android/iOS pushes us past the device-farm OOM limit.
+  const model = new VlaModel({
+    files: { model: [path.resolve(modelPath)] },
+    opts: { stats: true }
+  })
+
+  try {
+    await model.load({ backend })
+
+    const hp = model.hparams
+    t.ok(hp.chunkSize > 0)
+    t.ok(hp.actionDim > 0)
+
+    const size = hp.visionImageSize
+    const dummy = new Uint8Array(size * size * 3).fill(128)
+    const img = preprocessImage(dummy, size, size, { size })
+
+    const tokens = new Int32Array(hp.tokenizerMaxLength)
+    const mask = new Uint8Array(hp.tokenizerMaxLength)
+    tokens[0] = 1 // BOS-like token
+    mask[0] = 1
+
+    const state = padState([0, 0, 0, 0, 0, 0], hp.maxStateDim)
+    const noise = new Float32Array(hp.chunkSize * hp.maxActionDim)
+    for (let i = 0; i < noise.length; i++) noise[i] = 0
+
+    const response = await model.run({
+      images: [img, img],
+      imgWidth: size,
+      imgHeight: size,
+      state,
+      tokens,
+      mask,
+      noise
+    })
+    const { actions, stats } = await response.await()
+
+    t.ok(actions instanceof Float32Array)
+    t.is(actions.length, hp.chunkSize * hp.actionDim)
+
+    // Per-component timings must be present and non-negative numbers.
+    t.ok(stats && typeof stats === 'object')
+    for (const key of ['vision_ms', 'smollm2_compute_ms', 'smollm2_total_ms', 'ode_ms', 'total_ms']) {
+      t.is(typeof stats[key], 'number', `stats.${key} is a number`)
+      t.ok(stats[key] >= 0, `stats.${key} >= 0`)
+    }
+    console.log(
+      `[VLA TIMING ${backend}] vision=${stats.vision_ms.toFixed(0)}ms ` +
+      `smollm2_compute=${stats.smollm2_compute_ms.toFixed(0)}ms ` +
+      `smollm2_total=${stats.smollm2_total_ms.toFixed(0)}ms ` +
+      `ode=${stats.ode_ms.toFixed(0)}ms ` +
+      `total=${stats.total_ms.toFixed(0)}ms`
+    )
+
+    const ref = _loadReference()
+    let quality
+    if (ref && ref.chunk_size === hp.chunkSize && ref.action_dim === hp.actionDim) {
+      const cmp = _compareActions(actions, ref.actions)
+      quality = cmp
+      console.log(
+        `[VLA QUALITY ${backend}] vs ${ref.model}: max|Δ|=${cmp.action_max_abs_diff.toFixed(4)} ` +
+        `mean|Δ|=${cmp.action_mean_abs_diff.toFixed(4)} cos=${cmp.action_cos_sim.toFixed(4)} ` +
+        `(${cmp.compared} values)`
+      )
+      // Tolerances: ggml uses f32 throughout but PyTorch may use a different
+      // dtype on load.  With zero noise + BOS-only tokens the dynamic range is
+      // small, so we keep the bar loose (0.25 absolute) and rely on cosine
+      // similarity (>0.9) for a structural sanity check.
+      t.ok(
+        cmp.action_max_abs_diff < 0.25,
+        `max |Δ| ${cmp.action_max_abs_diff.toFixed(4)} < 0.25 vs PyTorch`
+      )
+      t.ok(
+        cmp.action_cos_sim > 0.9,
+        `cosine similarity ${cmp.action_cos_sim.toFixed(4)} > 0.9 vs PyTorch`
+      )
+    } else {
+      t.comment(
+        ref
+          ? `skipping reference comparison: shape mismatch (ref=${ref.chunk_size}x${ref.action_dim}, actual=${hp.chunkSize}x${hp.actionDim})`
+          : 'skipping reference comparison: pt_actions_libero_fixed.json not found'
+      )
+    }
+
+    const ep = model.backendName || null
+    console.log(`[VLA BACKEND ${backend}] execution_provider=${ep ?? 'unknown'}`)
+    _perfReporter.record(`end-to-end inference (${backend})`, {
+      total_time_ms: stats.total_ms,
+      vision_time_ms: stats.vision_ms,
+      smollm2_compute_time_ms: stats.smollm2_compute_ms,
+      smollm2_total_time_ms: stats.smollm2_total_ms,
+      ode_time_ms: stats.ode_ms
+    }, {
+      execution_provider: ep,
+      ...(quality ? { quality } : {})
+    })
+  } finally {
+    await model.unload().catch(() => {})
+  }
+}
+
+test('integration: end-to-end inference runs (needs GGUF)', { timeout: 1800000 }, async (t) => {
   let modelPath = process.env.QVAC_VLA_MODEL
   if (_isMobile) {
-    // Mobile: fetch or fail. No graceful-skip path.
     try {
       modelPath = await _ensureMobileModel()
     } catch (err) {
@@ -384,117 +495,13 @@ test('integration: end-to-end inference runs (needs GGUF)', { timeout: 1200000 }
     t.ok(fs.existsSync(modelPath), `mobile: GGUF exists at ${modelPath}`)
     const sizeMB = fs.statSync(modelPath).size / (1024 * 1024)
     t.ok(sizeMB >= 100, `mobile: GGUF size ${sizeMB.toFixed(1)}MB >= 100MB`)
-
-    // The mobile workflow's `backend: cpu` matrix row writes `forceCpu: true`
-    // into testAssets/smolvla-urls.json. Mirror the desktop env-var override
-    // here so the same VLA_FORCE_CPU=1 path the C++ side reads is exercised.
-    const _urlConfig = _loadUrlsConfig()
-    if (_urlConfig && _urlConfig.forceCpu === true) {
-      process.env.VLA_FORCE_CPU = '1'
-      console.log('[vla-mobile] forceCpu=true from smolvla-urls.json → VLA_FORCE_CPU=1')
-    }
   } else if (!modelPath || !fs.existsSync(modelPath)) {
     t.comment(`skipping: set QVAC_VLA_MODEL to a valid GGUF (got "${modelPath ?? ''}")`)
     t.pass()
     return
   }
 
-  const model = new VlaModel({
-    files: { model: [path.resolve(modelPath)] },
-    opts: { stats: true }
-  })
-  t.teardown(async () => { await model.unload() })
-  await model.load()
-
-  const hp = model.hparams
-  t.ok(hp.chunkSize > 0)
-  t.ok(hp.actionDim > 0)
-
-  const size = hp.visionImageSize
-  const dummy = new Uint8Array(size * size * 3).fill(128)
-  const img = preprocessImage(dummy, size, size, { size })
-
-  const tokens = new Int32Array(hp.tokenizerMaxLength)
-  const mask = new Uint8Array(hp.tokenizerMaxLength)
-  tokens[0] = 1 // BOS-like token
-  mask[0] = 1
-
-  const state = padState([0, 0, 0, 0, 0, 0], hp.maxStateDim)
-  const noise = new Float32Array(hp.chunkSize * hp.maxActionDim)
-  for (let i = 0; i < noise.length; i++) noise[i] = 0
-
-  const response = await model.run({
-    images: [img, img],
-    imgWidth: size,
-    imgHeight: size,
-    state,
-    tokens,
-    mask,
-    noise
-  })
-  const { actions, stats } = await response.await()
-
-  t.ok(actions instanceof Float32Array)
-  t.is(actions.length, hp.chunkSize * hp.actionDim)
-
-  // Per-component timings must be present and non-negative numbers.
-  t.ok(stats && typeof stats === 'object')
-  for (const key of ['vision_ms', 'smollm2_compute_ms', 'smollm2_total_ms', 'ode_ms', 'total_ms']) {
-    t.is(typeof stats[key], 'number', `stats.${key} is a number`)
-    t.ok(stats[key] >= 0, `stats.${key} >= 0`)
+  for (const backend of ['auto', 'cpu']) {
+    await _runEndToEnd(t, modelPath, backend)
   }
-  console.log(
-    `[VLA TIMING] vision=${stats.vision_ms.toFixed(0)}ms ` +
-    `smollm2_compute=${stats.smollm2_compute_ms.toFixed(0)}ms ` +
-    `smollm2_total=${stats.smollm2_total_ms.toFixed(0)}ms ` +
-    `ode=${stats.ode_ms.toFixed(0)}ms ` +
-    `total=${stats.total_ms.toFixed(0)}ms`
-  )
-
-  // Compare against the PyTorch reference when both:
-  //   (a) the reference is available, and
-  //   (b) the shape matches (chunk_size × action_dim).
-  // The reference is produced by scripts/generate_reference.py.
-  const ref = _loadReference()
-  let quality
-  if (ref && ref.chunk_size === hp.chunkSize && ref.action_dim === hp.actionDim) {
-    const cmp = _compareActions(actions, ref.actions)
-    quality = cmp
-    console.log(
-      `[VLA QUALITY] vs ${ref.model}: max|Δ|=${cmp.action_max_abs_diff.toFixed(4)} ` +
-      `mean|Δ|=${cmp.action_mean_abs_diff.toFixed(4)} cos=${cmp.action_cos_sim.toFixed(4)} ` +
-      `(${cmp.compared} values)`
-    )
-    // Tolerances: ggml uses f32 throughout but PyTorch may use a different
-    // dtype on load.  With zero noise + BOS-only tokens the dynamic range is
-    // small, so we keep the bar loose (0.25 absolute) and rely on cosine
-    // similarity (>0.9) for a structural sanity check.
-    t.ok(
-      cmp.action_max_abs_diff < 0.25,
-      `max |Δ| ${cmp.action_max_abs_diff.toFixed(4)} < 0.25 vs PyTorch`
-    )
-    t.ok(
-      cmp.action_cos_sim > 0.9,
-      `cosine similarity ${cmp.action_cos_sim.toFixed(4)} > 0.9 vs PyTorch`
-    )
-  } else {
-    t.comment(
-      ref
-        ? `skipping reference comparison: shape mismatch (ref=${ref.chunk_size}x${ref.action_dim}, actual=${hp.chunkSize}x${hp.actionDim})`
-        : 'skipping reference comparison: pt_actions_libero_fixed.json not found'
-    )
-  }
-
-  const ep = model.backendName || null
-  console.log(`[VLA BACKEND] execution_provider=${ep ?? 'unknown'}`)
-  _perfReporter.record('end-to-end inference (fixed fixture)', {
-    total_time_ms: stats.total_ms,
-    vision_time_ms: stats.vision_ms,
-    smollm2_compute_time_ms: stats.smollm2_compute_ms,
-    smollm2_total_time_ms: stats.smollm2_total_ms,
-    ode_time_ms: stats.ode_ms
-  }, {
-    execution_provider: ep,
-    ...(quality ? { quality } : {})
-  })
 })

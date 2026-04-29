@@ -77,22 +77,25 @@ class VlaModel {
     this.state = { configLoaded: false }
   }
 
-  async load () {
+  async load ({ backend = 'auto' } = {}) {
+    if (backend !== 'auto' && backend !== 'cpu') {
+      throw new TypeError(`load: backend must be 'auto' or 'cpu' (got: ${backend})`)
+    }
     return this._run(async () => {
       if (this.state.configLoaded) return
-      await this._load()
+      await this._load(backend)
       this.state.configLoaded = true
     })
   }
 
-  async _load () {
+  async _load (backend) {
     this.logger.info('Starting model load')
     const ggufPath = pickPrimaryGgufPath(this._files)
     if (!fs.existsSync(ggufPath)) {
       throw new Error(`SmolVLA GGUF not found: ${ggufPath}`)
     }
     try {
-      this._handle = binding.createVlaModel(ggufPath)
+      this._handle = binding.createVlaModel(ggufPath, backend)
       this._hparams = binding.getVlaHparams(this._handle)
       this._backendName = binding.getVlaBackendName(this._handle)
     } catch (loadError) {

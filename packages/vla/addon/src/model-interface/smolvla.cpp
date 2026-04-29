@@ -1066,7 +1066,7 @@ gguf_get_tensor_by_name(struct ggml_context* ctx, const char* name) {
 
 extern "C" smolvla_handle_t smolvla_create(const char* model_path) {
   auto* model = new smolvla_model();
-  if (!smolvla_load_model(model_path, model)) {
+  if (!smolvla_load_model(model_path, model, /*force_cpu=*/false)) {
     delete model;
     return nullptr;
   }
@@ -1105,9 +1105,11 @@ extern "C" void smolvla_destroy(smolvla_handle_t handle) {
 
 // ============================================================
 
-extern "C" bool smolvla_load_model(const char* path, smolvla_model* model_ptr) {
+extern "C" bool smolvla_load_model(const char* path, smolvla_model* model_ptr,
+                                   bool force_cpu) {
   smolvla_model& model = *model_ptr;
-  fprintf(stderr, "%s: loading model from '%s'\n", __func__, path);
+  fprintf(stderr, "%s: loading model from '%s' (force_cpu=%d)\n", __func__,
+          path, force_cpu ? 1 : 0);
 
   // Load all backend plugins (Vulkan, Metal, CUDA, …) shipped next to the
   // addon. The qvac-fabric ggml port installs each backend as a shared library
@@ -1148,18 +1150,13 @@ extern "C" bool smolvla_load_model(const char* path, smolvla_model* model_ptr) {
   // fall through to the CPU backend rather than crashing on
   // `ggml_backend_dev_init`.
   //
-  // VLA_FORCE_CPU=1 (any non-empty, non-"0" value) skips GPU selection so CI
-  // can run the same hardware twice — once on the GPU backend and once on CPU
-  // — to surface the speedup attributable to the accelerator.
+  // `force_cpu` skips GPU selection so the integration test can run the same
+  // hardware twice — once on the GPU backend and once on CPU — surfacing the
+  // speedup attributable to the accelerator without spinning up two CI jobs.
   {
-    const char* force_cpu_env = std::getenv("VLA_FORCE_CPU");
-    const bool force_cpu =
-        force_cpu_env && force_cpu_env[0] != '\0' &&
-        std::string(force_cpu_env) != "0";
     if (force_cpu) {
-      fprintf(stderr,
-              "%s: VLA_FORCE_CPU=%s set — skipping GPU selection, using CPU\n",
-              __func__, force_cpu_env);
+      fprintf(stderr, "%s: force_cpu=true — skipping GPU selection\n",
+              __func__);
     }
     ggml_backend_dev_t gpu =
         force_cpu ? nullptr : vla_backend_selection::pickBestGpuDevice();

@@ -53,7 +53,7 @@ export class VlaModel {
    * ("CPU" / "Vulkan" / "OpenCL" / "Metal"). `null` before `load()`.
    */
   readonly backendName: string | null
-  load (): Promise<void>
+  load (opts?: { backend?: 'auto' | 'cpu' }): Promise<void>
   run (input: VlaRunInput): Promise<QvacResponse>
   pause (): Promise<void>
   cancel (): Promise<void>

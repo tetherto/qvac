@@ -1,8 +1,8 @@
 {
   "schema_version": "1.0",
-  "addon": "qvac-lib-infer-vla",
+  "addon": "vla",
   "addon_type": "vla",
-  "timestamp": "2026-04-27T07:20:12.313Z",
+  "timestamp": "2026-04-29T12:59:46.953Z",
   "run_id": null,
   "run_number": null,
   "workflow": null,
@@ -17,10 +17,10 @@
   },
   "results": [
     {
-      "test": "end-to-end inference (fixed fixture)",
-      "execution_provider": null,
+      "test": "end-to-end inference (auto)",
+      "execution_provider": "Vulkan0",
       "metrics": {
-        "total_time_ms": 9302.855652034283,
+        "total_time_ms": 2552.0652640014887,
         "detection_time_ms": null,
         "recognition_time_ms": null,
         "decode_time_ms": null,
@@ -32,17 +32,47 @@
         "real_time_factor": null,
         "sample_count": null,
         "duration_ms": null,
-        "vision_time_ms": 5031.460020005703,
-        "smollm2_compute_time_ms": 1917.4660339951515,
-        "smollm2_total_time_ms": 2052.9606299996376,
-        "ode_time_ms": 2217.8436340093613
+        "vision_time_ms": 1181.4483079984784,
+        "smollm2_compute_time_ms": 239.08078199625015,
+        "smollm2_total_time_ms": 306.25251599401236,
+        "ode_time_ms": 1064.3130830004811
       },
       "input": null,
       "output": null,
       "quality": {
-        "action_max_abs_diff": 0.000939488410949707,
-        "action_mean_abs_diff": 0.00003076084756425449,
-        "action_cos_sim": 0.9999999879485427,
+        "action_max_abs_diff": 0.0031636953353881836,
+        "action_mean_abs_diff": 0.00015916946211031504,
+        "action_cos_sim": 0.999999826260298,
+        "compared": 350
+      }
+    },
+    {
+      "test": "end-to-end inference (cpu)",
+      "execution_provider": "CPU",
+      "metrics": {
+        "total_time_ms": 10440.365733996034,
+        "detection_time_ms": null,
+        "recognition_time_ms": null,
+        "decode_time_ms": null,
+        "ttft_ms": null,
+        "generated_tokens": null,
+        "prompt_tokens": null,
+        "tps": null,
+        "text_regions": null,
+        "real_time_factor": null,
+        "sample_count": null,
+        "duration_ms": null,
+        "vision_time_ms": 6459.755052998662,
+        "smollm2_compute_time_ms": 1605.917985998094,
+        "smollm2_total_time_ms": 1740.2786189988256,
+        "ode_time_ms": 2240.264674000442
+      },
+      "input": null,
+      "output": null,
+      "quality": {
+        "action_max_abs_diff": 0.0008730888366699219,
+        "action_mean_abs_diff": 0.000043994068567241944,
+        "action_cos_sim": 0.9999999853323274,
         "compared": 350
       }
     }

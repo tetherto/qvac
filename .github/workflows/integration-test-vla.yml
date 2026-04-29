@@ -36,61 +36,36 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # `backend: auto` lets the addon pick the best backend the runner
-        # exposes (Metal on Apple silicon, Vulkan on Linux/Windows GPU
-        # runners, CPU otherwise). `backend: cpu` sets VLA_FORCE_CPU=1 so the
-        # same hardware is also exercised on the CPU path — that side-by-side
-        # is the entire point of running both rows. Runners with no GPU
-        # prebuild only need a single row (auto == cpu).
+        # One row per runner. The integration test itself runs the model twice
+        # — once on the runner's preferred backend (Metal/Vulkan/…) and once
+        # forced onto CPU — so the perf-report artifact for each row carries
+        # both numbers without doubling the model download or addon install.
         include:
-          # Run Linux x64 tests on both Ubuntu 22.04 and 24.04 to ensure compatibility
           - os: ubuntu-22.04
             platform: linux
             arch: x64
-            backend: auto
           - os: ubuntu-24.04
             platform: linux
             arch: x64
-            backend: auto
-            runner: ai-run-linux-gpu
-          - os: ubuntu-24.04
-            platform: linux
-            arch: x64
-            backend: cpu
             runner: ai-run-linux-gpu
           - os: ubuntu-22.04-arm
             platform: linux
             arch: arm64
-            backend: auto
             runner: ubuntu-22.04-arm
           - os: ubuntu-24.04-arm
             platform: linux
             arch: arm64
-            backend: auto
             runner: ubuntu-24.04-arm
           - os: mac-mini-m4
             platform: darwin
             arch: arm64
-            backend: auto
-            runner: mac-mini-m4-gpu
-          - os: mac-mini-m4
-            platform: darwin
-            arch: arm64
-            backend: cpu
             runner: mac-mini-m4-gpu
           - os: macos-15-large
             platform: darwin
             arch: x64
-            backend: auto
           - os: windows-11
             platform: win32
             arch: x64
-            backend: auto
-            runner: ai-run-windows11-gpu
-          - os: windows-11
-            platform: win32
-            arch: x64
-            backend: cpu
             runner: ai-run-windows11-gpu
 
     steps:
@@ -413,7 +388,6 @@ jobs:
         shell: bash
         env:
           QVAC_VLA_MODEL: ${{ (matrix.platform == 'darwin' && matrix.arch == 'x64') && '' || format('{0}/{1}/model/vla/smolvla-libero-f32-fixed.gguf', github.workspace, env.WORKDIR) }}
-          VLA_FORCE_CPU: ${{ matrix.backend == 'cpu' && '1' || '' }}
         run: |
           set +e
           # Stream test output AND capture it so we can inspect the TAP summary
@@ -439,14 +413,13 @@ jobs:
         shell: powershell
         env:
           QVAC_VLA_MODEL: ${{ github.workspace }}/${{ env.WORKDIR }}/model/vla/smolvla-libero-f32-fixed.gguf
-          VLA_FORCE_CPU: ${{ matrix.backend == 'cpu' && '1' || '' }}
         run: npm run test:integration ${{ matrix.platform }}-${{ matrix.arch }}
 
       - name: Upload performance report
         if: ${{ always() }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: vla-perf-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.os }}-${{ matrix.backend }}
+          name: vla-perf-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.os }}
           path: ${{ env.WORKDIR }}/test/results/performance-report.json
           if-no-files-found: ignore
           retention-days: 14

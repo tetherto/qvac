@@ -88,15 +88,22 @@ float32ArrayFromVector(js_env_t* env, const std::vector<float>& data) {
 
 } // namespace detail
 
-// createVlaModel(ggufPath: string) -> External<VlaHandle*>
+// createVlaModel(ggufPath: string, backend: 'auto' | 'cpu') -> External<VlaHandle*>
+//
+// `backend === 'cpu'` forces the CPU backend even on a runner that has a
+// usable GPU; any other value (including the canonical `'auto'`) lets the
+// addon pick the best device via `pickBestGpuDevice`.
 inline js_value_t* createVlaModel(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
 
   JsArgsParser args(env, info);
   const std::string ggufPath =
       js::String(env, args.get(0, "ggufPath")).as<std::string>(env);
+  const std::string backend =
+      js::String(env, args.get(1, "backend")).as<std::string>(env);
+  const bool forceCpu = (backend == "cpu");
 
-  auto model = std::make_unique<VlaModel>(ggufPath);
+  auto model = std::make_unique<VlaModel>(ggufPath, forceCpu);
   auto handle = std::make_unique<detail::VlaHandle>();
   handle->model = model.release();
 

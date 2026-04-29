@@ -55,29 +55,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # `backend: auto` lets the addon pick Vulkan (Adreno >= 800) or Metal;
-        # `backend: cpu` forces VLA_FORCE_CPU=1 inside the bundled config so
-        # the same device is also exercised on the CPU path. The Pixel 9 Pro
-        # (Adreno 730) already gets CPU under `auto` — its `cpu` row is
-        # redundant in practice but kept for symmetry across the matrix and
-        # so the perf-report artifact set is uniform.
+        # One row per platform. The integration test itself runs the model
+        # twice (auto then cpu) inside the same Bare process, sharing the
+        # one-time GGUF download and addon install. Pixel 9 Pro (Adreno 730)
+        # falls through to CPU on `auto` already; the dual-row perf-report
+        # collapses naturally there.
         include:
           - platform: Android
             os: ubuntu-24.04
             runner: ai-run-linux
-            backend: auto
-          - platform: Android
-            os: ubuntu-24.04
-            runner: ai-run-linux
-            backend: cpu
           - platform: iOS
             os: macos-14
             runner: macos-14
-            backend: auto
-          - platform: iOS
-            os: macos-14
-            runner: macos-14
-            backend: cpu
 
     steps:
       # Free up disk space on Ubuntu runner to prevent "No space left on device" errors
@@ -361,32 +350,19 @@ jobs:
         working-directory: ${{ env.ADDON_DIR }}
         env:
           SMOLVLA_MODEL_URL: ${{ env.SMOLVLA_MODEL_URL }}
-          # `forceCpu` is read by test/integration/addon.test.js, which sets
-          # process.env.VLA_FORCE_CPU before VlaModel.load() so the C++
-          # backend selector skips the GPU pick. Mirrors the desktop matrix's
-          # VLA_FORCE_CPU env override; on mobile we plumb through a bundled
-          # config file because env vars don't propagate to the BareKit-hosted
-          # process the same way.
-          MATRIX_BACKEND: ${{ matrix.backend }}
         run: |
           echo "📝 Creating model URL config files for mobile app bundling..."
           echo "   SMOLVLA_MODEL_URL: ${SMOLVLA_MODEL_URL:+SET}${SMOLVLA_MODEL_URL:-NOTSET}"
-          echo "   MATRIX_BACKEND:    ${MATRIX_BACKEND}"
 
           mkdir -p test/mobile/testAssets
 
           if [ -n "${SMOLVLA_MODEL_URL:-}" ]; then
-            FORCE_CPU="false"
-            if [ "${MATRIX_BACKEND}" = "cpu" ]; then
-              FORCE_CPU="true"
-            fi
             cat > test/mobile/testAssets/smolvla-urls.json <<JSON
           {
-            "modelUrl": "${SMOLVLA_MODEL_URL}",
-            "forceCpu": ${FORCE_CPU}
+            "modelUrl": "${SMOLVLA_MODEL_URL}"
           }
           JSON
-            echo "   ✅ SmolVLA URL bundled (forceCpu=${FORCE_CPU})"
+            echo "   ✅ SmolVLA URL bundled"
             # Do not echo the URL itself (it's a presigned URL with creds).
             head -c 120 test/mobile/testAssets/smolvla-urls.json
             echo ""
@@ -1506,7 +1482,7 @@ jobs:
         if: always() && steps.schedule_run.outputs.run_arn
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: devicefarm-logs-vla-${{ matrix.platform }}-${{ matrix.backend }}
+          name: devicefarm-logs-vla-${{ matrix.platform }}
           path: devicefarm-logs/
           retention-days: 30
           if-no-files-found: ignore
@@ -1515,7 +1491,7 @@ jobs:
         if: always() && steps.schedule_run.outputs.run_arn
         env:
           LOG_DIR: devicefarm-logs/${{ matrix.platform }}
-          OUT_FILE: mobile-perf/perf-report-${{ matrix.platform }}-${{ matrix.backend }}.json
+          OUT_FILE: mobile-perf/perf-report-${{ matrix.platform }}.json
         run: |
           node - <<'NODE'
           const fs = require('fs');
@@ -1605,7 +1581,7 @@ jobs:
         if: always() && steps.schedule_run.outputs.run_arn
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: vla-perf-mobile-${{ matrix.platform }}-${{ matrix.backend }}
+          name: vla-perf-mobile-${{ matrix.platform }}
           path: mobile-perf/
           retention-days: 14
           if-no-files-found: ignore

@@ -13,8 +13,12 @@ namespace qvac_lib_infer_vla {
 // Owns a loaded SmolVLA model plus scratch buffers for an inference call.
 class VlaModel {
 public:
-  explicit VlaModel(const std::string& ggufPath) : model_(new smolvla_model()) {
-    if (!smolvla_load_model(ggufPath.c_str(), model_.get())) {
+  // `forceCpu`: skip GPU device selection and run on the CPU backend only.
+  // Wired up so the integration test can compare CPU vs GPU on the same
+  // runner without spinning up a second CI job.
+  explicit VlaModel(const std::string& ggufPath, bool forceCpu = false)
+      : model_(new smolvla_model()) {
+    if (!smolvla_load_model(ggufPath.c_str(), model_.get(), forceCpu)) {
       throw std::runtime_error(
           "failed to load SmolVLA model from: " + ggufPath);
     }

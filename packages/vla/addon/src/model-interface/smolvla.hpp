@@ -281,8 +281,10 @@ bool smolvla_run(
 // Free model using opaque handle
 void smolvla_destroy(smolvla_handle_t handle);
 
-// Load model from GGUF file (C++ API)
-bool smolvla_load_model(const char* path, smolvla_model* model);
+// Load model from GGUF file (C++ API).
+// `force_cpu`: when true, skip GPU device selection and run on the CPU backend
+// only. Used by the integration test to compare CPU vs GPU on the same runner.
+bool smolvla_load_model(const char* path, smolvla_model* model, bool force_cpu);
 
 // Free model resources
 void smolvla_free_model(smolvla_model* model);
