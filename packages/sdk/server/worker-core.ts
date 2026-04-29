@@ -96,6 +96,51 @@ export type BareDirectShutdownReason =
   | "unhandled-rejection"
   | "ipc-disconnect";
 
+/**
+ * Run the cleanup body shared by terminal and graceful-shutdown paths.
+ * Clears plugin registries (which calls each addon's `releaseLogger` →
+ * frees env-bound js_ref_t state), unloads all loaded models (which calls
+ * each addon's `destroyInstance`), and closes infra (swarm, rag, downloads,
+ * registry client). Does NOT touch the worker lock or call `process.exit`.
+ */
+async function runCleanup(): Promise<void> {
+  clearRegistries();
+  await Promise.allSettled([
+    destroySwarm(),
+    closeAllRagInstances(),
+    cleanupDownloads(),
+    unloadAllModels(),
+    closeRegistryClient(),
+  ]);
+}
+
+/**
+ * Pre-terminate cleanup, callable while the worker is still alive.
+ *
+ * On platforms where the worker lives in the same OS process as the JS host
+ * (i.e. mobile via react-native-bare-kit Worklet), `process.exit()` would
+ * kill the entire app. This path runs the same registry/model cleanup as
+ * `shutdownBareDirectWorker` but skips the lock release + exit, leaving the
+ * caller (typically the SDK client about to call `worklet.terminate()`)
+ * responsible for tearing the worker down.
+ *
+ * Critical for clean termination: addons hold static state with js_ref_t
+ * handles into the current V8 isolate; without this cleanup, those refs
+ * survive into the next worklet's isolate and crash on first access.
+ */
+export async function cleanupForTerminate(): Promise<void> {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+
+  logger.info("🧹 Pre-terminate cleanup starting...");
+  try {
+    await runCleanup();
+    logger.info("✅ Pre-terminate cleanup completed");
+  } catch (error) {
+    logger.error("❌ Error during pre-terminate cleanup:", error);
+  }
+}
+
 export async function shutdownBareDirectWorker(
   reason: BareDirectShutdownReason,
 ): Promise<void> {
@@ -112,14 +157,7 @@ export async function shutdownBareDirectWorker(
   logger.info(messages[reason]);
 
   try {
-    clearRegistries();
-    await Promise.allSettled([
-      destroySwarm(),
-      closeAllRagInstances(),
-      cleanupDownloads(),
-      unloadAllModels(),
-      closeRegistryClient(),
-    ]);
+    await runCleanup();
     logger.info("✅ Cleanup completed successfully");
   } catch (error) {
     logger.error("❌ Error during shutdown cleanup:", error);
