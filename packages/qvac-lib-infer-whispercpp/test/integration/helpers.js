@@ -479,6 +479,7 @@ async function runTranscription (params, expectation = {}) {
   const config = {
     path: modelPath,
     vadModelPath,
+    contextParams: params.contextParams,
     whisperConfig: {
       language: whisperConfig.language || 'en',
       audio_format: whisperConfig.audio_format || 's16le',
@@ -494,7 +495,8 @@ async function runTranscription (params, expectation = {}) {
     files: {
       model: modelPath,
       ...(vadModelPath ? { vadModel: vadModelPath } : {})
-    }
+    },
+    ...(params.opts ? { opts: params.opts } : {})
   }
 
   if (typeof modelPath === 'string' && !fs.existsSync(modelPath)) {
@@ -644,7 +646,10 @@ async function runTranscription (params, expectation = {}) {
           tokensPerSecond: jobStats.tokensPerSecond ? Number(jobStats.tokensPerSecond.toFixed(2)) : jobStats.tokensPerSecond,
           realTimeFactor: jobStats.realTimeFactor ? Number(jobStats.realTimeFactor.toFixed(5)) : jobStats.realTimeFactor,
           audioDurationMs: jobStats.audioDurationMs,
-          totalSamples: jobStats.totalSamples
+          totalSamples: jobStats.totalSamples,
+          totalWallMs: jobStats.totalWallMs,
+          whisperEncodeMs: jobStats.whisperEncodeMs,
+          whisperDecodeMs: jobStats.whisperDecodeMs
         }
       : null
 
