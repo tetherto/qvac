@@ -8,7 +8,8 @@ const {
   TEST_TIMEOUT,
   recordMetric,
   recordLoadTime,
-  makeClassifier
+  makeClassifier,
+  cleanupClassifier
 } = require('./utils')
 
 test('load() + classify() returns a shaped result for every sample image', async function (t) {
@@ -81,7 +82,7 @@ test('load() + classify() returns a shaped result for every sample image', async
       recordMetric(`classify:${sample.file}`, elapsed, sample.file)
     }
   } finally {
-    await classifier.unload()
+    await cleanupClassifier(classifier)
   }
 })
 
@@ -107,7 +108,7 @@ test('topK limits output count', async function (t) {
     t.ok(top2[0].confidence >= top2[1].confidence,
       `topK=2 sorted desc (got ${top2[0].confidence} vs ${top2[1].confidence})`)
   } finally {
-    await classifier.unload()
+    await cleanupClassifier(classifier)
   }
 })
 
@@ -127,7 +128,7 @@ test('multiple sequential classifications produce consistent output', async func
     t.ok(Math.abs(a[0].confidence - b[0].confidence) < 1e-5,
       `top confidence is deterministic on CPU (a=${a[0].confidence}, b=${b[0].confidence})`)
   } finally {
-    await classifier.unload()
+    await cleanupClassifier(classifier)
   }
 })
 
@@ -151,6 +152,6 @@ test('raw RGB bytes path', async function (t) {
     t.ok(Math.abs(sum - 1) < 1e-3,
       `raw input probabilities sum ≈ 1.0 (sum=${sum.toFixed(6)})`)
   } finally {
-    await classifier.unload()
+    await cleanupClassifier(classifier)
   }
 })

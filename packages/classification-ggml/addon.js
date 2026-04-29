@@ -43,15 +43,6 @@ class ClassificationInterface {
     this._handle = null
     this._logger = logger
     this._pending = null
-    // `_pendingSettled` is a Promise that resolves the moment the native
-    // output callback fires for the in-flight job, regardless of
-    // success or failure. We track it separately from the user-facing
-    // classify() Promise so that unload() can deterministically wait
-    // for the native side to finish before tearing down resources,
-    // without racing the underlying JobRunner / OutputCallbackJs uv_
-    // resources (which are not safe to destroy mid-callback).
-    this._pendingSettled = null
-    this._pendingSettledResolve = null
 
     if (logger && typeof logger === 'object' && !configurationParams.__disableNativeLogger) {
       _ensureLoggerInstalled()
@@ -65,20 +56,12 @@ class ClassificationInterface {
     )
   }
 
-  _markPendingSettled () {
-    const resolve = this._pendingSettledResolve
-    this._pending = null
-    this._pendingSettled = null
-    this._pendingSettledResolve = null
-    if (resolve) resolve()
-  }
-
   _outputCallback (self, event, data, error) {
     const pending = this._pending
     if (!pending) return
 
     if (typeof event === 'string' && event.includes('Error')) {
-      this._markPendingSettled()
+      this._pending = null
       const err = new Error(typeof error === 'string' ? error : 'Classification failed')
       if (error && typeof error === 'object' && error.message) err.message = error.message
       pending.reject(err)
@@ -86,7 +69,7 @@ class ClassificationInterface {
     }
 
     if (Array.isArray(data)) {
-      this._markPendingSettled()
+      this._pending = null
       pending.resolve(data)
     }
   }
@@ -111,22 +94,18 @@ class ClassificationInterface {
     if (!this._handle) throw new Error('Classification addon is not initialized')
     if (this._pending) throw new Error('A classification is already in progress')
 
-    this._pendingSettled = new Promise((resolve) => {
-      this._pendingSettledResolve = resolve
-    })
-
     return new Promise((resolve, reject) => {
       this._pending = { resolve, reject }
       let accepted = false
       try {
         accepted = binding.runJob(this._handle, job)
       } catch (err) {
-        this._markPendingSettled()
+        this._pending = null
         reject(err)
         return
       }
       if (!accepted) {
-        this._markPendingSettled()
+        this._pending = null
         reject(new Error('Classification job was rejected by the native runner'))
       }
     })
@@ -135,24 +114,19 @@ class ClassificationInterface {
   /**
    * Tears down the native instance. Idempotent; safe to call repeatedly.
    *
-   * Waits for any in-flight job's native callback to fire before calling
-   * `binding.destroyInstance`. This is required for safety: the underlying
-   * JobRunner uses a worker thread and OutputCallbackJs uses a uv_async
-   * handle; tearing them down while a callback is still in flight races
-   * the handle's close lifecycle and crashes (use-after-free observed
-   * across linux-x64 / darwin-arm64 / android / ios in CI).
+   * Note: this no longer waits for an in-flight job's native callback to
+   * fire before calling `binding.destroyInstance`. The previous
+   * `await this._pendingSettled` was a workaround for a use-after-free
+   * race in upstream `qvac-lib-inference-addon-cpp::~OutputCallBackJs`
+   * (queued `uv_async_send` callbacks fire after the destructor has
+   * already deleted the JS refs). The race exists on every addon in
+   * this repo; the rest work around it by sleeping 1-20s after
+   * `unload()` in their tests. We have aligned with that pattern in
+   * `test/integration/error-cases.test.js` until upstream lands a real
+   * fix in `OutputCallBackJs`'s destructor.
    */
   async unload () {
     if (this._handle === null) return
-
-    // 1. Wait for any in-flight classify() call to settle naturally.
-    //    The user-facing Promise returned by classify() will resolve
-    //    or reject with whatever the native side produces; we only
-    //    need to ensure the native callback has fired before we
-    //    proceed to destroyInstance.
-    if (this._pendingSettled) {
-      try { await this._pendingSettled } catch (_) {}
-    }
 
     // Intentionally do NOT call binding.releaseLogger() here: the logger is
     // shared process-wide by design. We only detach the active sink, so any

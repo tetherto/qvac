@@ -221,6 +221,21 @@ function makeClassifier (overrides) {
   return new ImageClassifier(opts)
 }
 
+// Two-phase sleep around unload() to dodge an upstream
+// OutputCallBackJs use-after-free race (same workaround pattern as
+// ocr-onnx and llamacpp-llm tests). See remote_logs/issues_report.md.
+const PRE_UNLOAD_YIELD_MS = isMobile ? 1000 : 500
+const UNLOAD_DRAIN_MS = isMobile ? 3000 : 2000
+
+async function cleanupClassifier (classifier) {
+  if (!classifier) return
+  await new Promise(resolve => setTimeout(resolve, PRE_UNLOAD_YIELD_MS))
+  try {
+    await classifier.unload()
+  } catch (_) {}
+  await new Promise(resolve => setTimeout(resolve, UNLOAD_DRAIN_MS))
+}
+
 function recordMetric (label, totalTimeMs, input) {
   _perfReporter.record(label, {
     total_time_ms: Math.round(totalTimeMs)
@@ -262,5 +277,6 @@ module.exports = {
   recordMetric,
   recordLoadTime,
   resolveModelPath,
-  makeClassifier
+  makeClassifier,
+  cleanupClassifier
 }

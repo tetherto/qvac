@@ -28,8 +28,7 @@ js_value_t* qvac_lib_infer_ggml_classification_exports(
   V("destroyInstance",
     qvac_lib_inference_addon_cpp::JsInterface::destroyInstance)
   V("setLogger", qvac_lib_inference_addon_cpp::JsInterface::setLogger)
-  V("releaseLogger",
-    qvac_lib_inference_addon_cpp::JsInterface::releaseLogger)
+  V("releaseLogger", qvac_lib_inference_addon_cpp::JsInterface::releaseLogger)
 
 #undef V
   // NOLINTEND(cppcoreguidelines-macro-usage)

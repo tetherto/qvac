@@ -11,15 +11,12 @@
 #include <qvac-lib-inference-addon-cpp/Errors.hpp>
 #include <qvac-lib-inference-addon-cpp/JsInterface.hpp>
 #include <qvac-lib-inference-addon-cpp/JsUtils.hpp>
-#include <qvac-lib-inference-addon-cpp/Logger.hpp>
 #include <qvac-lib-inference-addon-cpp/ModelInterfaces.hpp>
 #include <qvac-lib-inference-addon-cpp/addon/AddonJs.hpp>
 #include <qvac-lib-inference-addon-cpp/handlers/JsOutputHandlerImplementations.hpp>
 #include <qvac-lib-inference-addon-cpp/handlers/OutputHandler.hpp>
-#include <qvac-lib-inference-addon-cpp/queue/OutputCallbackInterface.hpp>
 #include <qvac-lib-inference-addon-cpp/queue/OutputCallbackJs.hpp>
 #include <qvac-lib-inference-addon-cpp/queue/OutputQueue.hpp>
-#include <uv.h>
 
 #include "model-interface/ClassificationModel.hpp"
 
@@ -30,129 +27,6 @@ namespace jsu = qvac_lib_inference_addon_cpp::js;
 
 using qvac_errors::StatusError;
 using qvac_errors::general_error::InvalidArgument;
-
-/// Wrapper around `addon_cpp::OutputCallBackJs` that defers destruction
-/// of the inner callback to a future libuv iteration, avoiding a
-/// use-after-free race against pending `uv_async_send` callbacks.
-///
-/// Root cause (in `qvac-lib-inference-addon-cpp:OutputCallBackJs`):
-///   The upstream destructor calls `uv_close(asyncHandle, deleter)` --
-///   which is asynchronous -- and then IMMEDIATELY runs
-///   `js_delete_reference` on its JS handle/callback refs before
-///   returning. When a `jsOutputCallback` invocation was queued by a
-///   `uv_async_send` from the worker thread just before destruction,
-///   it fires on a later libuv iteration and dereferences the freed
-///   `OutputCallBackJs` (and its already-deleted JS refs). This is the
-///   SIGSEGV observed on linux-x64 / darwin-arm64 / android / ios in CI
-///   across rapid ImageClassifier create/destroy cycles.
-///
-/// Fix (this wrapper):
-///   `AddonCpp`'s destructor order is:
-///     1. `~AddonCpp()` body runs `outputCallback_->stop()`.
-///     2. `jobRunner_` is destroyed -- JOINS the worker thread (no more
-///        new `uv_async_send` can be scheduled after this point).
-///     3. `outputCallback_` is destroyed -- THIS wrapper's destructor.
-///     4. Any async callbacks queued BEFORE step 2 are still pending on
-///        the libuv loop; they fire on the next iteration.
-///
-///   Our destructor releases ownership of the inner callback into a
-///   heap-owned `uv_check_t`. On the next libuv iteration, after the
-///   poll phase (during which any pending async callback for the inner
-///   fires safely -- inner is still alive), the `uv_check_t` callback
-///   runs, deletes the inner (which synchronously triggers the
-///   upstream `~OutputCallBackJs` -- now with no racing async callback
-///   left to use-after-free), and finally closes itself.
-///
-/// This is a real lifetime-management fix, not a workaround. When
-/// upstream's destructor is fixed (we'll upstream the patch
-/// separately), this wrapper becomes a pass-through.
-class DeferredOutputCallBackJs : public addon_cpp::OutputCallBackInterface {
-public:
-  DeferredOutputCallBackJs(
-      js_env_t* env,
-      std::unique_ptr<addon_cpp::OutputCallBackJs>&& inner)
-      : env_(env), inner_(std::move(inner)) {}
-
-  DeferredOutputCallBackJs(const DeferredOutputCallBackJs&) = delete;
-  DeferredOutputCallBackJs& operator=(const DeferredOutputCallBackJs&) = delete;
-
-  ~DeferredOutputCallBackJs() {
-    if (!inner_) return;
-
-    // Stopping first is important: it makes any racing `jsOutputCallback`
-    // bail out early rather than attempting JS-side work.
-    inner_->stop();
-
-    uv_loop_t* loop = nullptr;
-    if (js_get_env_loop(env_, &loop) != 0 || loop == nullptr) {
-      // We can't schedule deferred cleanup. Best effort: destroy the
-      // inner synchronously. This path is not expected in practice;
-      // if it happens we accept the upstream race.
-      QLOG(
-          addon_cpp::logger::Priority::WARNING,
-          "DeferredOutputCallBackJs: could not get env loop; falling back "
-          "to synchronous inner destruction.");
-      return;
-    }
-
-    // Release ownership into a raw pointer that the check callback owns
-    // from here on. If any step below fails, we fall back to destroying
-    // the inner synchronously (same as the upstream behaviour).
-    auto* rawInner = inner_.release();
-
-    auto* check = new uv_check_t{};
-    if (uv_check_init(loop, check) != 0) {
-      delete check;
-      delete rawInner;
-      QLOG(
-          addon_cpp::logger::Priority::WARNING,
-          "DeferredOutputCallBackJs: uv_check_init failed; inner destroyed "
-          "synchronously.");
-      return;
-    }
-
-    // `uv_check_t` callbacks fire in the libuv phase AFTER the I/O poll
-    // phase, which is where `uv_async_t` callbacks are dispatched.
-    // So by the time our check fires, any previously-queued async
-    // callback on the inner's handle has already run to completion
-    // (against the still-alive inner). Safe to destroy inner now.
-    uv_handle_set_data(
-        reinterpret_cast<uv_handle_t*>(check), rawInner);
-    uv_check_start(check, &DeferredOutputCallBackJs::onCheck);
-    // We also unref the check so it doesn't keep the loop alive by
-    // itself (the loop exits when only "unref'd" handles remain).
-    uv_unref(reinterpret_cast<uv_handle_t*>(check));
-  }
-
-  void initializeProcessingThread(
-      std::shared_ptr<addon_cpp::OutputQueue> outputQueue) final {
-    inner_->initializeProcessingThread(std::move(outputQueue));
-  }
-
-  void notify() final { inner_->notify(); }
-  void stop() final {
-    if (inner_) inner_->stop();
-  }
-
-private:
-  static void onCheck(uv_check_t* check) {
-    auto* rawInner = static_cast<addon_cpp::OutputCallBackJs*>(
-        uv_handle_get_data(reinterpret_cast<uv_handle_t*>(check)));
-    uv_check_stop(check);
-    // Destroying the inner here runs `~OutputCallBackJs` which calls
-    // `uv_close` on its own async handle and `js_delete_reference`
-    // on its JS refs. By now, any pending async callback for that
-    // handle has already fired in this same iteration's poll phase,
-    // so there is no racing reader of the inner's state.
-    delete rawInner;
-    uv_close(
-        reinterpret_cast<uv_handle_t*>(check),
-        [](uv_handle_t* h) { delete reinterpret_cast<uv_check_t*>(h); });
-  }
-
-  js_env_t* env_;
-  std::unique_ptr<addon_cpp::OutputCallBackJs> inner_;
-};
 
 /// Handler mapping ClassifyOutput → JS array of { label, confidence }.
 ///
@@ -186,37 +60,13 @@ struct JsClassifyOutputHandler
                 return v != nullptr && v[0] == '1';
               }();
 
-              // ----- WIN32 MARSHALLING WORKAROUND -----
-              //
-              // On win32-x64 / clang-cl (CI runs 24851301107, 24891210942,
-              // 24897445066, 24900278513, 25002820522) the very first
-              // `js_create_double` call after a fresh `OutputCallBackJs`
-              // entry into the Bare runtime / V8 callback path produces a
-              // JS number whose value is 0.0, regardless of the C++
-              // `double` we pass in. Subsequent calls in the same handle
-              // scope return correct values. Linux/macOS are not
-              // affected. The `[qvac-classify-marshal]` traces in the
-              // referenced runs prove the C++ side hands the correct
-              // value to `Number::create`; the loss is downstream in the
-              // bare-runtime/V8 layer.
-              //
-              // We work around it by burning one `js_create_double` call
-              // here whose result is intentionally discarded. The
-              // throwaway value is never wired into the array, so it has
-              // no observable effect on the output. After this call the
-              // engine path is "warm" and the per-result Number::create
-              // calls below produce the correct values on every platform.
-              //
-              // This belongs upstream in @qvac/qvac-lib-inference-addon-cpp
-              // (or the bare runtime) and we will file the bug separately.
-              // Until that lands, the cost is one allocation of an
-              // ephemeral js_number per classify call.
+              // Win32-x64 burn-one workaround: the first `js_create_double` of the
+              // process returns 0.0 on Azure CI runners only.
               {
                 js_value_t* dummy = nullptr;
                 (void)js_create_double(this->env_, 0.0, &dummy);
                 (void)dummy;
               }
-              // ----------------------------------------
 
               for (size_t i = 0; i < cppOut.results.size(); ++i) {
                 // Read into named locals BEFORE creating any JS values.
@@ -300,16 +150,9 @@ inline js_value_t* createInstance(
       outHandlers;
   outHandlers.add(std::make_shared<JsClassifyOutputHandler>());
 
-  auto innerCallback = std::make_unique<addon_cpp::OutputCallBackJs>(
+  auto callback = std::make_unique<addon_cpp::OutputCallBackJs>(
       env, args.get(0, "jsHandle"), args.getFunction(2, "outputCallback"),
       std::move(outHandlers));
-
-  // Wrap the upstream callback in our deferred-destruction adapter so
-  // rapid ImageClassifier create/destroy cycles don't hit the
-  // use-after-free race in upstream's ~OutputCallBackJs. See the
-  // DeferredOutputCallBackJs class comment above for root cause.
-  auto callback = std::make_unique<DeferredOutputCallBackJs>(
-      env, std::move(innerCallback));
 
   auto addon = std::make_unique<addon_cpp::AddonJs>(
       env, std::move(callback),

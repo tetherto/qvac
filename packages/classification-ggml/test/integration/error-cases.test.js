@@ -2,7 +2,7 @@
 
 const test = require('brittle')
 
-const { loadImage, TEST_TIMEOUT, makeClassifier } = require('./utils')
+const { loadImage, TEST_TIMEOUT, makeClassifier, cleanupClassifier } = require('./utils')
 
 test('classify(null) rejects with structured error', async function (t) {
   t.timeout(TEST_TIMEOUT)
@@ -11,7 +11,7 @@ test('classify(null) rejects with structured error', async function (t) {
   try {
     await t.exception.all(() => classifier.classify(null), /required|null|undefined/i)
   } finally {
-    await classifier.unload()
+    await cleanupClassifier(classifier)
   }
 })
 
@@ -22,7 +22,7 @@ test('classify(empty buffer) rejects', async function (t) {
   try {
     await t.exception.all(() => classifier.classify(Buffer.alloc(0)), /empty/i)
   } finally {
-    await classifier.unload()
+    await cleanupClassifier(classifier)
   }
 })
 
@@ -34,7 +34,7 @@ test('classify(non-image buffer without dims) rejects', async function (t) {
     await t.exception.all(() => classifier.classify(Buffer.from('not an image')),
       /unsupported|jpeg|png/i)
   } finally {
-    await classifier.unload()
+    await cleanupClassifier(classifier)
   }
 })
 
@@ -47,7 +47,7 @@ test('classify(truncated JPEG) rejects without crashing', async function (t) {
     const truncated = full.slice(0, Math.min(128, full.length))
     await t.exception.all(() => classifier.classify(truncated), /decode|corrupt|invalid|jpeg/i)
   } finally {
-    await classifier.unload()
+    await cleanupClassifier(classifier)
   }
 })
 
@@ -62,7 +62,7 @@ test('classify(raw bytes with mismatched dimensions) rejects', async function (t
       /does not match|size/i
     )
   } finally {
-    await classifier.unload()
+    await cleanupClassifier(classifier)
   }
 })
 
@@ -75,24 +75,33 @@ test('classify(bmp buffer) rejects as unsupported format', async function (t) {
     const bmp = Buffer.from([0x42, 0x4D, 0x00, 0x00, 0x00, 0x00])
     await t.exception.all(() => classifier.classify(bmp), /unsupported|jpeg|png/i)
   } finally {
-    await classifier.unload()
+    await cleanupClassifier(classifier)
   }
 })
 
 test('classify before load() rejects', async function (t) {
   t.timeout(TEST_TIMEOUT)
   const classifier = makeClassifier()
-  await t.exception.all(
-    () => classifier.classify(loadImage('meal_1.jpg')),
-    /not loaded|load\(\)/i
-  )
+  try {
+    await t.exception.all(
+      () => classifier.classify(loadImage('meal_1.jpg')),
+      /not loaded|load\(\)/i
+    )
+  } finally {
+    // Even though we never called `load()`, `makeClassifier()` did
+    // construct the native instance (createInstance allocates the
+    // worker thread + OutputCallBackJs). Tear it down through the
+    // standard cleanup so the next test does not race against any
+    // residual native resources still in flight.
+    await cleanupClassifier(classifier)
+  }
 })
 
 test('classify after unload() rejects', async function (t) {
   t.timeout(TEST_TIMEOUT)
   const classifier = makeClassifier()
   await classifier.load()
-  await classifier.unload()
+  await cleanupClassifier(classifier)
   await t.exception.all(
     () => classifier.classify(loadImage('meal_1.jpg')),
     /not loaded|load\(\)/i
@@ -108,7 +117,7 @@ test('tiny 1x1 raw image is accepted (upscaled)', async function (t) {
     const result = await classifier.classify(tiny, { width: 1, height: 1, channels: 3 })
     t.is(result.length, 3, 'returns all classes for 1x1 upscale')
   } finally {
-    await classifier.unload()
+    await cleanupClassifier(classifier)
   }
 })
 
@@ -119,6 +128,6 @@ test('load -> unload -> load cycles do not leak handles', async function (t) {
     await classifier.load()
     const r = await classifier.classify(loadImage('meal_1.jpg'))
     t.ok(Array.isArray(r), `cycle ${i}: classify works`)
-    await classifier.unload()
+    await cleanupClassifier(classifier)
   }
 })
