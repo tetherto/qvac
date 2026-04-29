@@ -15,6 +15,10 @@ let rpcPromise: Promise<RPC> | null = null;
 let workletInstance: Worklet | null = null;
 let workletInitialized = false;
 let cachedRuntimeContext: RuntimeContext | undefined;
+// Set while close() is in flight. Concurrent callers share the same
+// promise instead of double-sending __shutdown__ or re-entering the
+// terminate block on already-null state.
+let closingPromise: Promise<void> | null = null;
 
 logger.debug("EXPO RPC Client bundle");
 
@@ -175,29 +179,45 @@ async function sendShutdownMessage(rpc: RPC): Promise<void> {
   }
 }
 
-export async function close() {
-  logger.info("🧹 Closing RPC client (Expo)");
+export async function close(): Promise<void> {
+  // Concurrent callers (or a getRPC retry that overlaps with a manual
+  // close) share the in-flight close promise instead of each sending
+  // their own __shutdown__ and racing on the terminate block.
+  if (closingPromise) return closingPromise;
 
-  // Ask the worker to release env-bound state (addon loggers, model
-  // instances) BEFORE we kill its V8 isolate. Mobile-specific need; on
-  // desktop the spawned worker process gets SIGTERM'd and the kernel
-  // reclaims everything regardless.
-  if (rpcInstance) {
-    logger.info("🧹 Requesting worker pre-terminate cleanup");
-    await sendShutdownMessage(rpcInstance);
-  }
+  closingPromise = (async () => {
+    logger.info("🧹 Closing RPC client (Expo)");
 
-  rpcInstance = null;
-  rpcPromise = null;
-  if (workletInstance) {
-    logger.info("🐻🔫 Terminating bare worklet");
-    try {
-      workletInstance.terminate();
-    } catch (error) {
-      logger.debug("Failed to terminate worklet", { error });
+    // Ask the worker to release env-bound state (addon loggers, model
+    // instances) BEFORE we kill its V8 isolate. Mobile-specific need; on
+    // desktop the spawned worker process gets SIGTERM'd and the kernel
+    // reclaims everything regardless.
+    if (rpcInstance) {
+      logger.info("🧹 Requesting worker pre-terminate cleanup");
+      await sendShutdownMessage(rpcInstance);
     }
-    workletInstance = null;
-    workletInitialized = false;
+
+    rpcInstance = null;
+    rpcPromise = null;
+    if (workletInstance) {
+      logger.info("🐻🔫 Terminating bare worklet");
+      try {
+        workletInstance.terminate();
+      } catch (error) {
+        logger.debug("Failed to terminate worklet", { error });
+      }
+      workletInstance = null;
+      workletInitialized = false;
+    }
+  })();
+
+  try {
+    await closingPromise;
+  } finally {
+    // Reset so a subsequent close() (e.g. after a fresh getRPC spawned
+    // a new worklet) can run again. Body guards on rpcInstance / workletInstance
+    // make a redundant call a no-op if state is already cleared.
+    closingPromise = null;
   }
 }
 
