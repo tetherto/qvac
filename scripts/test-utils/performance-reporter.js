@@ -107,9 +107,9 @@ const QUALITY_COLUMNS = {
     { key: 'key_value_accuracy', label: 'KV Accuracy' }
   ],
   vla: [
-    { key: 'action_max_abs_diff', label: 'Max |Δ|', unit: 'raw' },
-    { key: 'action_mean_abs_diff', label: 'Mean |Δ|', unit: 'raw' },
-    { key: 'action_cos_sim', label: 'Cosine Sim' }
+    { key: 'action_max_abs_diff', label: 'Max \\|Δ\\|', unit: 'raw' },
+    { key: 'action_mean_abs_diff', label: 'Mean \\|Δ\\|', unit: 'raw' },
+    { key: 'action_cos_sim', label: 'Cosine Sim', unit: 'cos-sim' }
   ]
 }
 
@@ -307,6 +307,7 @@ function createPerformanceReporter (opts) {
             if (v === null || v === undefined) return '-'
             if (typeof v === 'number') {
               if (c.unit === 'raw') return v.toFixed(4)
+              if (c.unit === 'cos-sim') return v.toFixed(8)
               return (v * 100).toFixed(1) + '%'
             }
             return String(v)

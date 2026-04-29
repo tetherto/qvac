@@ -71,9 +71,13 @@ function fmtMetric (col, value) {
   return String(value)
 }
 
-function fmtQuality (value) {
+function fmtQuality (col, value) {
   if (value === null || value === undefined) return '-'
-  if (typeof value === 'number') return (value * 100).toFixed(1) + '%'
+  if (typeof value === 'number') {
+    if (col && col.unit === 'raw') return value.toFixed(4)
+    if (col && col.unit === 'cos-sim') return value.toFixed(8)
+    return (value * 100).toFixed(1) + '%'
+  }
   return String(value)
 }
 
@@ -125,7 +129,7 @@ function renderMarkdown (report, opts) {
     lines.push('| ' + qHeader.map(() => '---').join(' | ') + ' |')
     for (const r of qualityResults) {
       const cells = [r.test || '-']
-      for (const c of uniqueQCols) cells.push(fmtQuality(r.quality[c.key]))
+      for (const c of uniqueQCols) cells.push(fmtQuality(c, r.quality[c.key]))
       lines.push('| ' + cells.join(' | ') + ' |')
     }
     lines.push('')
