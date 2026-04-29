@@ -38,6 +38,30 @@ async function runLiveStreamSimulationTest (options = {}) { // eslint-disable-li
   return runIntegrationModule('../integration/live-stream-simulation.test.js', options)
 }
 
+async function runMobilePerfCtcCpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/mobile-perf-ctc-cpu.test.js', options)
+}
+
+async function runMobilePerfCtcGpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/mobile-perf-ctc-gpu.test.js', options)
+}
+
+async function runMobilePerfEouCpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/mobile-perf-eou-cpu.test.js', options)
+}
+
+async function runMobilePerfEouGpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/mobile-perf-eou-gpu.test.js', options)
+}
+
+async function runMobilePerfSortformerCpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/mobile-perf-sortformer-cpu.test.js', options)
+}
+
+async function runMobilePerfSortformerGpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/mobile-perf-sortformer-gpu.test.js', options)
+}
+
 async function runModelFileValidationTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/model-file-validation.test.js', options)
 }
@@ -63,6 +87,12 @@ module.exports = {
   runExternalDataStagingTest,
   runIndividualFilePathsTest,
   runLiveStreamSimulationTest,
+  runMobilePerfCtcCpuTest,
+  runMobilePerfCtcGpuTest,
+  runMobilePerfEouCpuTest,
+  runMobilePerfEouGpuTest,
+  runMobilePerfSortformerCpuTest,
+  runMobilePerfSortformerGpuTest,
   runModelFileValidationTest,
   runMultipleTranscriptionsTest,
   runNamedPathsAllModelsTest,
