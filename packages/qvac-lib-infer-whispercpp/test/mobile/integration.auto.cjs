@@ -34,3 +34,7 @@ async function runModelFileValidationTest (options = {}) { // eslint-disable-lin
 async function runMultipleTranscriptionsTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/multiple-transcriptions.test.js', options)
 }
+
+async function runRtfBenchmarkTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../benchmark/rtf-benchmark.test.js', options)
+}

@@ -15,7 +15,6 @@ const path = require('bare-path')
 const process = require('bare-process')
 const TranscriptionWhispercpp = require('../../index.js')
 const binding = require('../../binding')
-const FakeDL = require('../mocks/loader.fake.js')
 const {
   detectPlatform,
   setupJsLogger,
@@ -23,6 +22,7 @@ const {
   ensureWhisperModel,
   generateTestAudio,
   createAudioStream,
+  getAssetPath,
   isMobile
 } = require('../integration/helpers.js')
 
@@ -66,7 +66,7 @@ function getBenchmarkSettings () {
     modelPath: path.join(modelsDir, modelFile),
     numWarmup: getEnvInteger('QVAC_WHISPER_BENCHMARK_WARMUP_RUNS', 1),
     numRuns: getEnvInteger('QVAC_WHISPER_BENCHMARK_RUNS', isMobile ? 3 : 5),
-    useGPU: getEnvBoolean('QVAC_WHISPER_BENCHMARK_USE_GPU', false),
+    useGPU: getEnvBoolean('QVAC_WHISPER_BENCHMARK_USE_GPU', isMobile),
     gpuDevice: getEnvInteger('QVAC_WHISPER_BENCHMARK_GPU_DEVICE', 0),
     threads: getEnvInteger('QVAC_WHISPER_BENCHMARK_THREADS', 0),
     backendHint,
@@ -138,6 +138,95 @@ function stats (values) {
   }
 }
 
+function getMobileReportDirs () {
+  const dirs = []
+  if (global.testDir) dirs.push(global.testDir)
+  if (platform.startsWith('android')) {
+    dirs.push('/sdcard/Android/data/io.tether.test.qvac/files')
+    dirs.push('/storage/emulated/0/Android/data/io.tether.test.qvac/files')
+    dirs.push('/data/local/tmp')
+  }
+  dirs.push('/tmp')
+  return dirs
+}
+
+function createPerfReport (benchmarkSettings, report, platformName, archName) {
+  const backend = getRequestedBackendFamily(platformName, benchmarkSettings.useGPU, benchmarkSettings.backendHint)
+  const rtf = report.summary.rtf || {}
+  const wallMs = report.summary.wallMs || {}
+  const tps = report.summary.tokensPerSecond || {}
+  const encodeMs = report.summary.whisperEncodeMs || {}
+  const decodeMs = report.summary.whisperDecodeMs || {}
+  const ep = benchmarkSettings.useGPU ? backend : 'cpu'
+
+  return {
+    schema_version: '1.0',
+    addon: 'whispercpp',
+    addon_type: 'whisper',
+    timestamp: report.timestamp,
+    device: {
+      name: benchmarkSettings.deviceLabel || platform,
+      platform: platformName || platform,
+      os_version: '',
+      arch: archName || '',
+      runner: benchmarkSettings.runnerLabel || (isMobile ? 'device-farm' : 'local')
+    },
+    results: [{
+      test: '[' + ep.toUpperCase() + '] ' + benchmarkSettings.modelFile.replace(/\.bin$/, ''),
+      execution_provider: ep,
+      metrics: {
+        total_time_ms: Number(wallMs.mean) || null,
+        real_time_factor: Number(rtf.mean) || null,
+        wall_time_ms: Number(wallMs.mean) || null,
+        tps: Number(tps.mean) || null,
+        encoder_time_ms: Number(encodeMs.mean) || null,
+        decoder_time_ms: Number(decodeMs.mean) || null,
+        audio_duration_ms: Math.round(report.audio.durationSec * 1000),
+        sample_count: report.runs.length
+      },
+      input: benchmarkSettings.modelFile,
+      output: null
+    }]
+  }
+}
+
+function writePerfReportToMobilePaths (perfReport) {
+  const json = JSON.stringify(perfReport)
+  for (const dir of getMobileReportDirs()) {
+    try {
+      try { fs.mkdirSync(dir, { recursive: true }) } catch (_) {}
+      const reportPath = path.join(dir, 'perf-report.json')
+      fs.writeFileSync(reportPath, json)
+      console.log('[PERF_REPORT_PATH]' + reportPath)
+    } catch (err) {
+      console.log('[perf-reporter] write to ' + dir + ' failed: ' + err.message)
+    }
+  }
+}
+
+function writePerfReportToConsole (perfReport) {
+  const json = JSON.stringify(perfReport)
+  const chunkSize = 800
+  if (json.length <= chunkSize) {
+    console.log('[PERF_REPORT_START]' + json + '[PERF_REPORT_END]')
+    return
+  }
+
+  const id = Date.now().toString(36)
+  const chunkCount = Math.ceil(json.length / chunkSize)
+  for (let i = 0; i < chunkCount; i++) {
+    const chunk = json.substring(i * chunkSize, (i + 1) * chunkSize)
+    console.log('[PERF_CHUNK:' + id + ':' + i + ':' + chunkCount + ']' + chunk)
+  }
+}
+
+function emitMobilePerfReport (benchmarkSettings, report, platformName, archName) {
+  if (!isMobile) return
+  const perfReport = createPerfReport(benchmarkSettings, report, platformName, archName)
+  try { writePerfReportToMobilePaths(perfReport) } catch (_) {}
+  try { writePerfReportToConsole(perfReport) } catch (_) {}
+}
+
 function getAudioDurationSec (samplePath) {
   const rawBuffer = fs.readFileSync(samplePath)
   return rawBuffer.length / 2 / SAMPLE_RATE
@@ -174,11 +263,6 @@ async function runSingleBenchmark (model, samplePath) {
 }
 
 test('RTF benchmark: collect whisper real-time factor on CI device', { timeout: 600000 }, async (t) => {
-  if (isMobile) {
-    t.pass('RTF benchmark is only collected on desktop CI runners')
-    return
-  }
-
   const benchmarkSettings = getBenchmarkSettings()
   const upperBound = getUpperBound(benchmarkSettings)
   const [platformName, archName] = platform.split('-')
@@ -201,8 +285,11 @@ test('RTF benchmark: collect whisper real-time factor on CI device', { timeout: 
 
     await ensureWhisperModel(benchmarkSettings.modelPath)
 
-    let samplePath = path.join(samplesDir, 'sample.raw')
-    if (!fs.existsSync(samplePath)) {
+    let samplePath = isMobile
+      ? getAssetPath('sample.raw')
+      : path.join(samplesDir, 'sample.raw')
+
+    if (!fs.existsSync(samplePath) && !isMobile) {
       samplePath = generateTestAudio(audioPath)
       console.log(`Using generated benchmark audio: ${samplePath}`)
     }
@@ -220,7 +307,6 @@ test('RTF benchmark: collect whisper real-time factor on CI device', { timeout: 
       files: {
         model: benchmarkSettings.modelPath
       },
-      loader: new FakeDL({}),
       opts: { stats: true }
     }
 
@@ -386,6 +472,7 @@ test('RTF benchmark: collect whisper real-time factor on CI device', { timeout: 
       runnerLabel: benchmarkSettings.runnerLabel,
       summary: report.summary
     })}`)
+    emitMobilePerfReport(benchmarkSettings, report, platformName, archName)
 
     t.is(allResults.length, benchmarkSettings.numRuns, `Completed ${benchmarkSettings.numRuns} benchmark runs`)
     t.ok(rtfStats.mean > 0, 'Mean RTF should be positive')
