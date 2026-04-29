@@ -64,6 +64,8 @@ export {
   VERBOSITY,
   type Attachment,
   type TranscribeStreamSession,
+  type TranscribeStreamMetadataSession,
+  type TranscribeSegment,
   type TextToSpeechStreamSession,
   type TextToSpeechStreamResponse,
   type TextToSpeechStreamClientParams,

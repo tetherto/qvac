@@ -417,6 +417,12 @@ struct nmt_context_params {
   bool use_gpu;
   bool flash_attn;
   int gpu_device;
+  // Case-insensitive substring filter on the ggml device name
+  // (e.g. "vulkan", "vulkan0", "opencl", "metal"). Empty → fall back to
+  // the default gated selection in nmt_backend_init_gpu. gpu_device
+  // still acts as an ordinal among matching devices, so
+  // {gpu_backend="vulkan", gpu_device=1} picks the second Vulkan adapter.
+  std::string gpu_backend;
 };
 
 struct nmt_context {
