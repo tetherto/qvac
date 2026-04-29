@@ -22,6 +22,14 @@ import {
 
 let coreInitialized = false;
 let rpcInitialized = false;
+// Set true when the cleanup body has run at least once. Lets both
+// cleanupForTerminate (pre-terminate path) and shutdownBareDirectWorker
+// (signal/exit path) call runCleanup() without doing duplicate work.
+let cleanupRan = false;
+// Set true when shutdownBareDirectWorker is in flight. Distinct from
+// cleanupRan: cleanupForTerminate must NOT set this, otherwise a later
+// SIGTERM/SIGINT/uncaught-exception would early-return at the guard
+// in shutdownBareDirectWorker and skip releaseWorkerLock + process.exit.
 let isShuttingDown = false;
 
 const logger = getServerLogger();
@@ -102,8 +110,15 @@ export type BareDirectShutdownReason =
  * frees env-bound js_ref_t state), unloads all loaded models (which calls
  * each addon's `destroyInstance`), and closes infra (swarm, rag, downloads,
  * registry client). Does NOT touch the worker lock or call `process.exit`.
+ *
+ * Idempotent: subsequent calls are no-ops via the `cleanupRan` flag. The
+ * underlying clearPlugins / unloadAllModels / closers are also idempotent
+ * on empty registries, but the flag avoids the redundant log noise and
+ * allocator churn.
  */
 async function runCleanup(): Promise<void> {
+  if (cleanupRan) return;
+  cleanupRan = true;
   clearRegistries();
   await Promise.allSettled([
     destroySwarm(),
@@ -129,8 +144,11 @@ async function runCleanup(): Promise<void> {
  * survive into the next worklet's isolate and crash on first access.
  */
 export async function cleanupForTerminate(): Promise<void> {
-  if (isShuttingDown) return;
-  isShuttingDown = true;
+  // Intentionally does NOT set isShuttingDown — that flag is reserved for
+  // shutdownBareDirectWorker so a later SIGTERM/SIGINT still gets to run
+  // the lock release + process.exit path. runCleanup is idempotent on its
+  // own, so a follow-up shutdownBareDirectWorker call won't redo the body.
+  if (cleanupRan) return;
 
   logger.info("🧹 Pre-terminate cleanup starting...");
   try {
@@ -157,6 +175,7 @@ export async function shutdownBareDirectWorker(
   logger.info(messages[reason]);
 
   try {
+    // Idempotent: if cleanupForTerminate already ran, this is a no-op.
     await runCleanup();
     logger.info("✅ Cleanup completed successfully");
   } catch (error) {
