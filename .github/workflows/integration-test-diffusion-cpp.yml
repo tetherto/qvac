@@ -30,7 +30,7 @@ jobs:
     name: test-${{ matrix.platform }}-${{ matrix.arch }}
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      WORKDIR: packages/lib-infer-diffusion
+      WORKDIR: packages/diffusion-cpp
       NO_GPU: ${{ matrix.no_gpu || 'false' }}
     permissions:
       contents: read
@@ -166,22 +166,22 @@ jobs:
           npm install
           npm install -g bare bare-make bare-runtime bare-https brittle
 
-      - run: mkdir -p ${{ runner.temp }}/qvac-lib-infer-diffusion
+      - run: mkdir -p ${{ runner.temp }}/qvac-diffusion-cpp
       - run: mkdir -p ${{ env.WORKDIR }}/prebuilds
 
       - name: Download prebuilds (from artifacts)
         if: ${{ !inputs.prebuild_package }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          path: ${{ runner.temp }}/qvac-lib-infer-diffusion
+          path: ${{ runner.temp }}/qvac-diffusion-cpp
           merge-multiple: true
 
       - if: ${{ !inputs.prebuild_package }}
-        run: cp -r ${{ runner.temp }}/qvac-lib-infer-diffusion/* ${{ env.WORKDIR }}/prebuilds
+        run: cp -r ${{ runner.temp }}/qvac-diffusion-cpp/* ${{ env.WORKDIR }}/prebuilds
 
       - name: Download prebuilds from package (Linux/macOS)
         if: ${{ inputs.prebuild_package && matrix.platform != 'win32' }}
-        working-directory: ${{ runner.temp }}/qvac-lib-infer-diffusion
+        working-directory: ${{ runner.temp }}/qvac-diffusion-cpp
         shell: bash
         run: |
           PACKAGE="${{ inputs.prebuild_package }}"
@@ -208,7 +208,7 @@ jobs:
 
       - name: Download prebuilds from package (Windows)
         if: ${{ inputs.prebuild_package && matrix.platform == 'win32' }}
-        working-directory: ${{ runner.temp }}/qvac-lib-infer-diffusion
+        working-directory: ${{ runner.temp }}/qvac-diffusion-cpp
         shell: powershell
         run: |
           $PACKAGE = "${{ inputs.prebuild_package }}"

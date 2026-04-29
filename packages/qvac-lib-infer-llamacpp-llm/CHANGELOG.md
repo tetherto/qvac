@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.18.1] - 2026-04-29
+
+### Fixed
+
+#### `saveCacheToDisk` is now honoured on prefill-only runs
+
+When `processPromptImpl` ran with `prompt.prefill === true`, it returned early and skipped the post-inference branch that persists the KV cache. As a result, a prefill warm-up call with `saveCacheToDisk: true` and a valid `cacheKey` would build the cache in memory but never write it to disk, defeating the purpose of priming the cache for a follow-up turn.
+
+The save logic has been extracted into a new static helper `maybeSaveCacheToDisk(...)` that preserves the original guard (`saveCacheToDisk && cacheManager has value && hasActiveCache()`). Both the `prompt.prefill` early-return branch and the post-generation path now go through this helper, so prefill and full inference persist the cache identically.
+
+A subsequent normal turn that reuses the same `cacheKey` will now correctly load the prefilled tokens from disk and only tokenize/process the incremental delta.
+
+#### `main_gpu` underscore variant is now accepted
+
+The `main_gpu` configuration key was silently ignored - only `main-gpu` (hyphen) was recognised by `tryMainGpuFromMap`, even though every other config parameter accepts both hyphen and underscore forms. This inconsistency could cause GPU selection to quietly not apply, leaving inference on an unintended device.
+
+`main_gpu` is now treated as an alias for `main-gpu` in `BackendSelection`, matching the behaviour of `split-mode`/`split_mode` and `tensor-split`/`tensor_split`. Providing both forms simultaneously still throws an error, as with the other dual-form parameters.
+
+### Documentation
+
+#### New multi-GPU inference guide
+
+A new document at `docs/multi-gpu.md` explains how to distribute a model across multiple GPUs using the four interacting parameters: `device`, `split-mode`, `tensor-split`, and `main-gpu`. It covers:
+
+- The three `split-mode` values (`'none'`, `'layer'`, `'row'`) and what pipeline vs tensor parallelism means in practice.
+- Backend-specific behaviour for tensor parallelism - only CUDA and SYCL implement true split-buffer tensor parallelism; Vulkan and Metal fall back to layer parallelism even when `'row'` is requested.
+- How `tensor-split` proportions are normalised and applied per GPU.
+- How `main-gpu` behaves differently between integrated and dedicated GPUs and across split modes.
+- Worked examples for common hardware configurations.
+
 ## [0.18.0] - 2026-04-22
 
 ### Added
