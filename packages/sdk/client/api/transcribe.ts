@@ -35,6 +35,7 @@ function buildTranscribeRequest(params: TranscribeClientParams): TranscribeReque
  * Transcribe audio and return the complete text. Accepts either a file
  * path or an audio buffer.
  *
+ * @param params - Transcription parameters.
  * @param params.modelId - The identifier of the transcription model to use
  * @param params.audioChunk - Audio input as either a file path (string) or audio buffer
  * @param params.prompt - Optional initial prompt to guide the transcription
@@ -100,6 +101,11 @@ export async function transcribe(
  *
  * Streaming transcription with upfront audio: sends full audio, yields text
  * chunks as they arrive.
+ *
+ * @overloadLabel "Upfront audio (deprecated)"
+ * @param params - Transcription parameters including audio source.
+ * @param options - Optional RPC options including per-call profiling.
+ * @returns An async generator yielding text chunks as they become available.
  */
 export function transcribeStream(
   params: TranscribeClientParams & { metadata: true },
@@ -118,11 +124,14 @@ export function transcribeStream(
  * The returned session is single-use. Attempting to iterate a second
  * time will throw a `TranscriptionFailedError`.
  *
+ * @overloadLabel "Bidirectional session"
+ * @param params - Streaming transcription parameters.
  * @param params.modelId - The loaded transcription model to use
  * @param params.prompt - Optional initial prompt to guide transcription
  * @param params.metadata - When true, the session yields transcript segment
  *                          objects (`{ text, startMs, endMs, append, id }`)
  *                          instead of plain text. Whisper engine only.
+ * @param options - Optional RPC options including per-call profiling.
  * @returns A session object: call `write(buffer)` to feed audio,
  *          iterate with `for await (...)` to receive transcription,
  *          and `end()` to signal end of audio.

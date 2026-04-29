@@ -12,7 +12,7 @@ on:
   workflow_call:
     inputs:
       ref:
-        description: 'ref'
+        description: "ref"
         type: string
       repository:
         type: string
@@ -33,138 +33,12 @@ jobs:
       contents: write
       pull-requests: write
       id-token: write
-      packages: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-22.04
-            platform: linux
-            arch: x64
-          - os: ubuntu-22.04-arm
-            platform: linux
-            arch: arm64
-          - os: ubuntu-24.04
-            platform: android
-            arch: arm64
-            flags: -D ANDROID_STL=c++_shared
-          - os: macos-14
-            platform: ios
-            arch: arm64
-          - os: macos-14
-            platform: ios
-            arch: arm64
-            tags: -simulator
-            flags: --simulator
-          - os: macos-14
-            platform: ios
-            arch: x64
-            tags: -simulator
-            flags: --simulator
-          - os: macos-14
-            platform: darwin
-            arch: arm64
-          - os: macos-15-large
-            platform: darwin
-            arch: x64
-          - os: windows-2022
-            platform: win32
-            arch: x64
-
-    runs-on: ${{ matrix.os }}
-    environment: release
-    name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
-
-    env:
-      WORKDIR: ${{ inputs.workdir || 'packages/qvac-lib-infer-parakeet' }}
-
-    steps:
-      - name: Setup build host
-        uses: tetherto/qvac/.github/actions/setup-build-host@1d9b2165867d03c6edd675e402ee101a5d48a6d8
-        with:
-          platform: ${{ matrix.platform }}
-          arch: ${{ matrix.arch }}
-          linux-extra-packages: pkg-config libx11-dev libxcb1-dev libxkbcommon-dev
-
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          repository: ${{ inputs.repository }}
-          ref: ${{ inputs.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
-
-      - name: Setup AWS + Windows CLI
-        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@0bbdca93da303a0b1634ba14a89cec085621078d
-        with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-
-      - name: Setup vcpkg
-        uses: tetherto/qvac/.github/actions/setup-vcpkg@1d9b2165867d03c6edd675e402ee101a5d48a6d8
-        env:
-          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
-        with:
-          platform: ${{ matrix.platform }}
-          arch: ${{ matrix.arch }}
-
-      - name: Setup Bare tooling
-        uses: tetherto/qvac/.github/actions/setup-bare-tooling@0bbdca93da303a0b1634ba14a89cec085621078d
-
-      - if: ${{ matrix.platform == 'win32' }}
-        name: Setup Python on self-hosted Windows runner
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Setup Apple Clang
-        uses: tetherto/qvac/.github/actions/setup-apple-clang@1d9b2165867d03c6edd675e402ee101a5d48a6d8
-
-      - name: Install npm dependencies
-        working-directory: ${{ env.WORKDIR }}
-        run: npm install
-
-      - name: Run bare-make generate
-        working-directory: ${{ env.WORKDIR }}
-        shell: bash
-        run: |
-          bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }}
-
-      - name: Run bare-make build
-        working-directory: ${{ env.WORKDIR }}
-        shell: bash
-        run: |
-          bare-make build
-
-      - name: Run bare-make install
-        working-directory: ${{ env.WORKDIR }}
-        shell: bash
-        run: |
-          bare-make install
-
-      - name: Strip debug symbols
-        uses: tetherto/qvac/.github/actions/strip-prebuilds@1d9b2165867d03c6edd675e402ee101a5d48a6d8
-        with:
-          platform: ${{ matrix.platform }}
-          workdir: ${{ env.WORKDIR }}
-
-      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
-        with:
-          name: parakeet-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
-          path: ${{ env.WORKDIR }}/prebuilds
-
-  merge:
-    runs-on: ubuntu-latest
-    needs: prebuild
-    permissions:
-      contents: write
-    steps:
-      - name: Download all build artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
-        with:
-          path: prebuilds
-          merge-multiple: true
-
-      - name: Upload merged artifacts
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
-        with:
-          name: prebuilds
-          path: prebuilds
+    uses: ./.github/workflows/reusable-prebuilds.yml
+    with:
+      workdir: ${{ inputs.workdir }}
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+      artifact-name-prefix: parakeet-
+      linux-extra-packages: pkg-config libx11-dev libxcb1-dev libxkbcommon-dev
+      setup-python-on-windows: true
+    secrets: inherit
