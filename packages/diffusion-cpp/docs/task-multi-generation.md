@@ -346,7 +346,7 @@ await model.unload()
 
 ## References
 
-- Current single-job implementation: `packages/infer-diffusion/index.js:209-250`
-- C++ model interface: `packages/infer-diffusion/addon/src/model-interface/SdModel.hpp`
-- Example usage: `packages/infer-diffusion/examples/generate-image.js`
+- Current single-job implementation: `packages/diffusion-cpp/index.js:209-250`
+- C++ model interface: `packages/diffusion-cpp/addon/src/model-interface/SdModel.hpp`
+- Example usage: `packages/diffusion-cpp/examples/generate-image.js`
 - Upstream library: [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp)

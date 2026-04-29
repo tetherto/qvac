@@ -8,7 +8,7 @@ on:
         description: "Working directory (optional)"
         required: false
         type: string
-        default: "packages/infer-diffusion"
+        default: "packages/diffusion-cpp"
 
   workflow_call:
     inputs:
@@ -24,7 +24,7 @@ on:
         description: "Working directory (optional)"
         required: false
         type: string
-        default: "packages/infer-diffusion"
+        default: "packages/diffusion-cpp"
 
 env:
   WORKDIR: ${{ inputs.workdir }}

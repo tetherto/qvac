@@ -30,7 +30,7 @@ jobs:
     name: test-${{ matrix.platform }}-${{ matrix.arch }}
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      WORKDIR: packages/infer-diffusion
+      WORKDIR: packages/diffusion-cpp
       NO_GPU: ${{ matrix.no_gpu || 'false' }}
     permissions:
       contents: read
