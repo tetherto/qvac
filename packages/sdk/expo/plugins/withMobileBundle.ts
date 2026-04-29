@@ -103,7 +103,7 @@ function resolveCliCommand(projectRoot: string): string {
     "node_modules",
     "@qvac",
     "cli",
-    "src",
+    "dist",
     "index.js",
   );
 

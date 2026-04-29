@@ -81,7 +81,7 @@ export function translate(
     ...(isLlm && {
       from: sourceLanguage,
     }),
-  } as TranslateRequest;
+  };
 
   let stats: TranslationStats | undefined;
   let statsResolver: (value: TranslationStats | undefined) => void = () => {};

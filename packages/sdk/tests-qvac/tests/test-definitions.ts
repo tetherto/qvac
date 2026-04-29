@@ -28,6 +28,7 @@ import { diffusionTests } from "./diffusion-tests.js";
 import { finetuneTests } from "./finetune-tests.js";
 import { lifecycleTests } from "./lifecycle-tests.js";
 import { configTests } from "./config-tests.js";
+import { noLingeringBareTests } from "./no-lingering-bare-tests.js";
 import { wrongModelTests } from "./wrong-model-tests.js";
 
 // Model loading tests
@@ -269,6 +270,9 @@ export const tests = [
 
   // Wrong-model error tests
   ...wrongModelTests,
+
+  // No-lingering-bare regression tests
+  ...noLingeringBareTests,
 
   // Additional model tests
   modelSwitchLlm,

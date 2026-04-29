@@ -66,7 +66,7 @@ try {
   console.log(`Model loaded: ${modelId}\n`);
 
   console.log("Opening live session...");
-  const session = await transcribeStream({ modelId });
+  const session = await transcribeStream({ modelId, metadata: true });
   console.log("Session open. Streaming audio...\n");
 
   const ffmpeg = spawn(
@@ -101,16 +101,20 @@ try {
     session.end();
   });
 
-  const segments: string[] = [];
-  for await (const text of session) {
-    segments.push(text.trim());
-    console.log(`  [${segments.length}] ${text.trim()}`);
+  const segments: { text: string; startMs: number; endMs: number }[] = [];
+  for await (const segment of session) {
+    segments.push(segment);
+    const start = (segment.startMs / 1000).toFixed(2);
+    const end = (segment.endMs / 1000).toFixed(2);
+    console.log(
+      `  [${segments.length}] [${start}s → ${end}s] (id=${segment.id}, append=${segment.append}) ${segment.text.trim()}`,
+    );
   }
 
   console.log("\n=== Results ===");
   console.log(`Segments: ${segments.length}`);
   if (segments.length > 0) {
-    console.log(`Transcript: ${segments.join(" ")}`);
+    console.log(`Transcript: ${segments.map((s) => s.text.trim()).join(" ")}`);
   } else {
     console.log("WARNING: No transcription segments received!");
   }

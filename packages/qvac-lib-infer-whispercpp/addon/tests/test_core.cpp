@@ -1,6 +1,8 @@
 // Test file to verify whisper-core compiles without JavaScript dependencies
+#include <any>
 #include <filesystem>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -9,6 +11,9 @@
 
 #include "WhisperTypes.hpp"
 #include "addon/WhisperErrors.hpp"
+#include "model-interface/StreamingProcessor.hpp"
+#include "qvac-lib-inference-addon-cpp/queue/OutputCallbackInterface.hpp"
+#include "qvac-lib-inference-addon-cpp/queue/OutputQueue.hpp"
 #include "whisper.cpp/WhisperConfig.hpp"
 #include "whisper.cpp/WhisperModel.hpp"
 
@@ -22,6 +27,28 @@ std::string getValidModelPath() {
 bool hasValidModelPath() {
   return std::filesystem::exists(getValidModelPath());
 }
+
+std::string getValidVadModelPath() {
+  return "../../../models/ggml-silero-v5.1.2.bin";
+}
+
+bool hasValidVadModelPath() {
+  return std::filesystem::exists(getValidVadModelPath());
+}
+
+class TestOutputCallback
+    : public qvac_lib_inference_addon_cpp::OutputCallBackInterface {
+public:
+  void initializeProcessingThread(
+      std::shared_ptr<qvac_lib_inference_addon_cpp::OutputQueue>
+      /*outputQueue*/) override {}
+
+  void notify() override { notifyCount += 1; }
+
+  void stop() override {}
+
+  int notifyCount = 0;
+};
 
 class WhisperCoreSimpleTest : public ::testing::Test {};
 
@@ -142,6 +169,65 @@ TEST_F(WhisperTypesTest, TranscriptionProfile) {
 
   // Test enum comparison
   EXPECT_NE(defaultProfile, vadProfile);
+}
+
+class StreamingProcessorTest : public ::testing::Test {};
+
+TEST_F(StreamingProcessorTest, EmitsVadStateUpdatesAlongsideTranscriptOutput) {
+  if (!hasValidModelPath() || !hasValidVadModelPath()) {
+    GTEST_SKIP()
+        << "Skipping: whisper and VAD model files are required for streaming "
+           "processor event test";
+  }
+
+  WhisperConfig whisperConfig;
+  whisperConfig.whisperContextCfg["model"] = getValidModelPath();
+  whisperConfig.whisperMainCfg["language"] = std::string("en");
+  whisperConfig.whisperMainCfg["temperature"] = 0.0F;
+  whisperConfig.miscConfig["caption_enabled"] = false;
+
+  WhisperModel model(whisperConfig);
+  TestOutputCallback callback;
+  auto outputQueue =
+      std::make_shared<qvac_lib_inference_addon_cpp::OutputQueue>(
+          callback, model);
+
+  StreamingProcessor::Config streamConfig;
+  streamConfig.vadModelPath = getValidVadModelPath();
+  streamConfig.emitVadEvents = true;
+  streamConfig.vadRunIntervalSamples =
+      StreamingProcessor::Config::kDefaultSampleRate;
+  streamConfig.endOfTurnSilenceMs = 0;
+
+  {
+    StreamingProcessor processor(model, outputQueue, streamConfig);
+    processor.appendAudio(std::vector<float>(
+        static_cast<std::size_t>(streamConfig.vadRunIntervalSamples), 0.0F));
+    processor.end();
+  }
+
+  const auto outputs = outputQueue->clear();
+  bool hasVadState = false;
+  bool hasTranscriptOutput = false;
+
+  for (const auto& output : outputs) {
+    if (const auto* vadState = std::any_cast<VadStateUpdate>(&output);
+        vadState != nullptr) {
+      hasVadState = true;
+      EXPECT_FALSE(vadState->speaking);
+      EXPECT_EQ(vadState->probability, 0.0F);
+    }
+
+    if (const auto* transcripts =
+            std::any_cast<std::vector<Transcript>>(&output);
+        transcripts != nullptr) {
+      hasTranscriptOutput = true;
+    }
+  }
+
+  EXPECT_TRUE(hasVadState);
+  EXPECT_TRUE(hasTranscriptOutput);
+  EXPECT_GT(callback.notifyCount, 0);
 }
 
 // ============================================================================
