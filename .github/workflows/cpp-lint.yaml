@@ -22,6 +22,8 @@ env:
 
 jobs:
   cpp-lint:
+    permissions:
+      contents: read
     runs-on: ai-run-linux
     env:
       VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg/cache,readwrite"

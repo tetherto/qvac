@@ -19,7 +19,7 @@ import ts from "typescript";
 
 const DOCS_DIR = process.cwd();
 const MONOREPO_ROOT = path.resolve(DOCS_DIR, "../..");
-const LATEST_CONTENT = path.join(DOCS_DIR, "content", "docs", "(latest)");
+const DOCS_CONTENT = path.join(DOCS_DIR, "content", "docs");
 const SDK_DIR = path.join(MONOREPO_ROOT, "packages", "sdk");
 
 const FILE_REF_RE = /file=<rootDir>\/([\S]+)/g;
@@ -44,7 +44,14 @@ interface CodeBlock {
 }
 
 async function findMdxFiles(): Promise<string[]> {
-  return glob("**/*.mdx", { cwd: LATEST_CONTENT, absolute: true });
+  // Versioned API summary / release-notes snapshots are excluded — their
+  // examples are frozen and shouldn't be re-validated against the current
+  // SDK source tree.
+  return glob("**/*.mdx", {
+    cwd: DOCS_CONTENT,
+    absolute: true,
+    ignore: ["sdk/api/v*.mdx", "sdk/release-notes/v*.mdx"],
+  });
 }
 
 // ---------------------------------------------------------------------------
