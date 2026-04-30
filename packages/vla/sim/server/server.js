@@ -168,9 +168,9 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(404, { 'content-type': 'text/plain' })
     res.end('not found')
   } catch (err) {
-    console.error('predict error:', err && err.stack || err)
+    console.error('predict error:', (err && err.stack) || err)
     res.writeHead(500, { 'content-type': 'text/plain' })
-    res.end(String(err && err.message || err))
+    res.end(String((err && err.message) || err))
   }
 })
 
@@ -184,6 +184,6 @@ const server = http.createServer(async (req, res) => {
     console.log(`vla-server listening on http://${HOST}:${PORT}`)
   })
 })().catch((err) => {
-  console.error('vla-server: failed to start:', err && err.stack || err)
+  console.error('vla-server: failed to start:', (err && err.stack) || err)
   process.exit(1)
 })

@@ -89,7 +89,7 @@ async function runBackend (backend) {
     try {
       await runBackend(b)
     } catch (err) {
-      console.error(`bench: ${b} failed — ${err && err.stack || err}`)
+      console.error(`bench: ${b} failed — ${(err && err.stack) || err}`)
       process.exit(2)
     }
   }
