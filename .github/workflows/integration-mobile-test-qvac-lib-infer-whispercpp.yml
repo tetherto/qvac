@@ -961,6 +961,17 @@ jobs:
             printf '      - echo "Verifying wdio installation..."\n'
             printf '      - ls -la node_modules/.bin/ | grep wdio || echo "wdio not found in .bin"\n'
             printf '      - node node_modules/@wdio/cli/bin/wdio.js --version || echo "wdio version check failed"\n'
+            if [ "${{ matrix.platform }}" == "Android" ]; then
+              printf '      - echo "Checking for Samsung-specific Whisper options..."\n'
+              printf '      - |\n'
+              printf '        DEVICE_NAME_LOWER=$(echo "$DEVICEFARM_DEVICE_NAME" | tr "[:upper:]" "[:lower:]")\n'
+              printf '        if echo "$DEVICE_NAME_LOWER" | grep -qE "samsung|s25"; then\n'
+              printf '          echo "[whisper-mobile] Samsung device detected; writing CPU-only options"\n'
+              printf '          mkdir -p /sdcard/Android/data/io.tether.test.qvac/files || true\n'
+              printf '          printf "{\"whisperMobileMode\":\"cpu-only\"}" > /sdcard/Android/data/io.tether.test.qvac/files/whisper-mobile-test-options.json\n'
+              printf '          ls -l /sdcard/Android/data/io.tether.test.qvac/files/whisper-mobile-test-options.json || true\n'
+              printf '        fi\n'
+            fi
             printf '      - echo "Creating wdio config for Device Farm..."\n'
             printf '      - echo "%s" | base64 -d > tests/wdio.config.devicefarm.js\n' "$WDIO_CONFIG_B64"
             printf '      - cat tests/wdio.config.devicefarm.js\n'
