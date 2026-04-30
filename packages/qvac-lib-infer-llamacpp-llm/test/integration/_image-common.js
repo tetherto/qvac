@@ -36,8 +36,10 @@ const {
   recordPerformance
 } = require('./_perf-helper.js')
 
-const noGpuEnv = (process.env && process.env.NO_GPU) ||
-  (typeof os.getEnv === 'function' ? os.getEnv('NO_GPU') : '')
+// Bare doesn't define `process` as a global at module-init time, so
+// guard the Node-style fallback with `typeof process !== 'undefined'`.
+const noGpuEnv = (typeof os.getEnv === 'function' ? os.getEnv('NO_GPU') : '') ||
+  (typeof process !== 'undefined' && process.env ? process.env.NO_GPU : '')
 const noGpu = String(noGpuEnv || '').toLowerCase() === 'true'
 
 // CPU-only platforms (no GPU inference path today)
@@ -83,8 +85,15 @@ const TEST_CONSTANTS = {
 //
 // Override via env when running the benchmark workflow:
 //   QVAC_PERF_RUNS=3        QVAC_PERF_WARMUP_RUNS=1
-const _envInt = (key, fallback) => {
-  const v = parseInt(process.env[key] || '', 10)
+//
+// Read env via bare-os (Bare doesn't define `process` as a global at
+// module-init time), with a guarded `process.env` fallback for
+// Node code paths that import this file.
+function _envInt (key, fallback) {
+  let raw = ''
+  if (typeof os.getEnv === 'function') raw = os.getEnv(key) || ''
+  if (!raw && typeof process !== 'undefined' && process.env) raw = process.env[key] || ''
+  const v = parseInt(raw, 10)
   return Number.isFinite(v) && v > 0 ? v : fallback
 }
 const PERF_RUNS = _envInt('QVAC_PERF_RUNS', 1)

@@ -27,8 +27,16 @@ const PROMPT = [
 // it up if we want mean ± std numbers.
 // Scenario tag = 'bitnet' so the aggregator puts the row under the
 // bitnet section in the squashed summary.
-const _envInt = (key, fallback) => {
-  const v = parseInt(process.env[key] || '', 10)
+//
+// Read env via bare-os — Bare doesn't define `process` as a global
+// at module-init time, so referencing `process.env` here would throw
+// `ReferenceError: process is not defined`. Fall back to
+// `process.env` only via a `typeof` guard for Node code paths.
+function _envInt (key, fallback) {
+  let raw = ''
+  if (typeof os.getEnv === 'function') raw = os.getEnv(key) || ''
+  if (!raw && typeof process !== 'undefined' && process.env) raw = process.env[key] || ''
+  const v = parseInt(raw, 10)
   return Number.isFinite(v) && v > 0 ? v : fallback
 }
 const PERF_RUNS = _envInt('QVAC_PERF_RUNS', 1)

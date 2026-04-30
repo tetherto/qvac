@@ -21,8 +21,10 @@ const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
 // fell back since no Vulkan device was present) but emitted rows
 // tagged [GPU] — making the combined report show GPU bars on a CPU
 // runner. Same NO_GPU detection pattern as _image-common.js.
-const noGpuEnv = (process.env && process.env.NO_GPU) ||
-  (typeof os.getEnv === 'function' ? os.getEnv('NO_GPU') : '')
+// Bare doesn't define `process` as a global at module-init time, so
+// the fallback to `process.env` is guarded with `typeof process`.
+const noGpuEnv = (typeof os.getEnv === 'function' ? os.getEnv('NO_GPU') : '') ||
+  (typeof process !== 'undefined' && process.env ? process.env.NO_GPU : '')
 const noGpu = String(noGpuEnv || '').toLowerCase() === 'true'
 const useCpu = isLinuxArm64 || noGpu
 
