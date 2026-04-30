@@ -5,7 +5,7 @@ export const ttsChatterboxShortText: TestDefinition = {
   params: { text: "Hello, how are you today?", stream: false },
   expectation: { validation: "type", expectedType: "string" },
   suites: ["smoke"],
-  metadata: { category: "tts", dependency: "tts-chatterbox", estimatedDurationMs: 30000 },
+  metadata: { category: "tts", dependency: "tts-chatterbox", estimatedDurationMs: 200000 },
 };
 
 export const ttsChatterboxMediumText: TestDefinition = {
