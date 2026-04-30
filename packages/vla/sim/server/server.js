@@ -18,7 +18,10 @@ const PORT = Number(process.env.PORT || 8765)
 const MAX_BODY_BYTES = 32 * 1024 * 1024
 
 console.log(`vla-server: loading ${MODEL_PATH}`)
-const model = new VlaModel({ files: { model: [MODEL_PATH] } })
+// `opts: { stats: true }` makes VlaModel surface per-stage timings on the
+// QvacResponse — without it `result.stats` is null and the wire-format
+// `stats` field would be empty.
+const model = new VlaModel({ files: { model: [MODEL_PATH] }, opts: { stats: true } })
 
 function readBody (req) {
   return new Promise((resolve, reject) => {
@@ -147,7 +150,12 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && req.url === '/predict') {
       const body = await readBody(req)
       const opts = parseRequest(body)
-      const { actions, stats } = await model.run(opts)
+      // model.run() returns a QvacResponse — the actual `{ actions, stats }`
+      // payload comes from response.await(). Single-step destructuring would
+      // give `actions === undefined` and crash encodeResponse below.
+      // Canonical pattern, mirrors test/integration/addon.test.js:513-514.
+      const response = await model.run(opts)
+      const { actions, stats } = await response.await()
       const out = encodeResponse(actions, stats)
       res.writeHead(200, {
         'content-type': 'application/octet-stream',
