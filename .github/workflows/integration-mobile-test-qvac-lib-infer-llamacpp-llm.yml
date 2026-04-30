@@ -1774,7 +1774,7 @@ jobs:
 
       - name: Upload performance report
         if: always() && steps.schedule_run.outputs.run_arn_1
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: perf-report-llamacpp-llm-${{ matrix.platform }}-${{ github.run_number }}
           path: |

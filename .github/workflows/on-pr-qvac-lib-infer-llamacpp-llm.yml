@@ -174,6 +174,21 @@ jobs:
   # before scanning for perf-report artifacts. Fixes the race where
   # test-darwin-x64 (or any slow desktop job) finished AFTER the old
   # mobile-local combine-reports had already shipped the summary.
+  # SECURITY (CodeQL js/cache-poisoning, alerts 733/734):
+  # This job runs in the privileged `pull_request_target` context (see
+  # `on:` at the top of this file). The integration matrix it depends
+  # on already runs PR-author code on real hardware, so this aggregator
+  # by definition consumes attacker-controllable artifacts. The
+  # mitigations are:
+  #   - `permissions: contents: read` only — no write access, no
+  #     packages / id-token / pull-requests permissions.
+  #   - No use of `actions/cache` here, so there is no shared cache
+  #     for a malicious PR to poison for the default branch.
+  #   - `aggregate.js` does not touch GITHUB_TOKEN, secrets, or any
+  #     external network endpoints; its only outputs are artifact files.
+  #   - `device.name` (the only attacker-controllable string we let
+  #     near a filesystem path) is sanitised through a strict
+  #     `[A-Za-z0-9-]` allowlist + 64-char cap below before use.
   combine-perf-reports:
     name: Combined Performance Report
     needs: [authorize, run-integration-tests, run-mobile-integration-tests]
@@ -276,17 +291,28 @@ jobs:
         if: always()
         shell: bash
         run: |
+          # SECURITY: this job runs in pull_request_target context and the
+          # `performance-report.json` files are produced by PR-author code.
+          # `device.name` is therefore attacker-controlled. We do not
+          # interpolate it into shell or pass it as code; we sanitise it to
+          # an alphanumeric+hyphen filename slug capped at 64 chars before
+          # using it as a path suffix, which prevents path traversal and
+          # any kind of shell-meta exposure even if the JSON were crafted.
           mkdir -p per-device-reports
           for json in $(find combined-reports -name "performance-report.json" -type f 2>/dev/null); do
-            device_name=$(node -e "const d=JSON.parse(require('fs').readFileSync('$json','utf8'));console.log((d.device&&d.device.name)||'Unknown')" 2>/dev/null)
+            device_name=$(node -e "const d=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));process.stdout.write((d.device&&typeof d.device.name==='string'?d.device.name:'Unknown'))" "$json" 2>/dev/null)
             [ -z "$device_name" ] || [ "$device_name" = "Unknown" ] && continue
 
-            safe_name=$(echo "$device_name" | tr ' ' '-')
+            # Strict allowlist: collapse anything that is not [A-Za-z0-9-]
+            # to '_', then truncate to 64 characters.
+            safe_name=$(printf '%s' "$device_name" | LC_ALL=C tr -c 'A-Za-z0-9-' '_' | cut -c1-64)
+            [ -z "$safe_name" ] && continue
+
             tmp_dir=$(mktemp -d)
             mkdir -p "$tmp_dir/device"
             cp "$json" "$tmp_dir/device/performance-report.json"
 
-            echo "Generating HTML for $device_name..."
+            echo "Generating HTML for $device_name (slug: $safe_name)..."
             node scripts/perf-report/aggregate.js \
               --dir "$tmp_dir" \
               --addon-type vision \
@@ -301,7 +327,7 @@ jobs:
 
       - name: Upload combined HTML report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: HTML-Report-All-Platforms-${{ github.run_number }}
           path: combined-output/performance-report-combined.html
@@ -310,7 +336,7 @@ jobs:
 
       - name: Upload per-device HTML reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: HTML-Reports-Per-Device-${{ github.run_number }}
           path: per-device-reports/

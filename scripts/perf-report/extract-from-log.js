@@ -360,8 +360,7 @@ function parseArgs () {
     outputPath: null,
     runNumber: null,
     filter: null,
-    merge: false,
-    deviceFromFilename: null
+    merge: false
   }
   const positional = []
   for (let i = 2; i < process.argv.length; i++) {
@@ -371,8 +370,6 @@ function parseArgs () {
       args.filter = process.argv[++i]
     } else if (process.argv[i] === '--merge') {
       args.merge = true
-    } else if (process.argv[i] === '--device-from-filename' && i + 1 < process.argv.length) {
-      args.deviceFromFilename = process.argv[++i]
     } else {
       positional.push(process.argv[i])
     }
@@ -424,24 +421,6 @@ function mergeDeviceReports (reports) {
   return base
 }
 
-/**
- * Parses a device name out of a Device Farm artifact filename using
- * a caller-supplied JavaScript regex whose first capture group is the
- * device name (underscores converted to spaces). Used when all
- * artifacts are downloaded into a single flat directory (addon
- * workflows that pull the `devicefarm-logs-<platform>` zip) and the
- * directory-based `deriveDeviceName` cannot distinguish devices.
- */
-function deriveDeviceFromFilename (filePath, regex) {
-  if (!regex) return null
-  try {
-    const re = new RegExp(regex)
-    const m = path.basename(filePath).match(re)
-    if (m && m[1]) return m[1].replace(/_/g, ' ').trim()
-  } catch (_) { /* bad pattern — fall through */ }
-  return null
-}
-
 function filterResults (report, pattern) {
   if (!pattern) return
   const keywords = pattern.split('|').map(k => k.trim().toLowerCase()).filter(Boolean)
@@ -464,10 +443,10 @@ function injectCIMetadata (report, runNumber) {
 }
 
 function main () {
-  const { logDir, outputPath, runNumber, filter, merge, deviceFromFilename } = parseArgs()
+  const { logDir, outputPath, runNumber, filter, merge } = parseArgs()
 
   if (!logDir || !outputPath) {
-    console.error('Usage: node extract-from-log.js <log-dir> <output-path> [--run-number N] [--filter PATTERN] [--merge] [--device-from-filename REGEX]')
+    console.error('Usage: node extract-from-log.js <log-dir> <output-path> [--run-number N] [--filter PATTERN] [--merge]')
     process.exit(1)
   }
 
@@ -485,9 +464,7 @@ function main () {
   const deviceReports = {}
 
   for (const file of files) {
-    const dirName = deriveDeviceName(file, logDir)
-    const fileName = deriveDeviceFromFilename(file, deviceFromFilename)
-    const key = dirName || fileName || 'unknown'
+    const key = deriveDeviceName(file, logDir) || 'unknown'
 
     if (merge) {
       // Delta emits: each record() call produces a one-row report, so
