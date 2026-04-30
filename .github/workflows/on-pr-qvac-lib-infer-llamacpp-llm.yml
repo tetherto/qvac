@@ -262,7 +262,18 @@ jobs:
           done
 
       - name: Generate combined report
+        shell: bash
         run: |
+          # SECURITY (CodeQL alert 733, actions/cache-poisoning/poisonable-step):
+          # `aggregate.js` is checked out from PR head and runs in the
+          # umbrella's pull_request_target context. The job-level
+          # `permissions: contents: read` (no actions/cache, no secrets,
+          # no GITHUB_TOKEN write usage) bounds the blast radius — see
+          # the block comment on the `combine-perf-reports` job above.
+          # The script's only side effect is writing artifact files to
+          # `combined-output/`; the artifacts themselves are uploaded
+          # via SHA-pinned `actions/upload-artifact` and consumed only
+          # by reviewers from the run page.
           if ! find combined-reports -name "performance-report.json" -type f 2>/dev/null | grep -q .; then
             echo "No performance reports found."
             exit 0
