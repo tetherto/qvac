@@ -4,18 +4,67 @@ permissions:
   contents: read
 
 on:
-  workflow_call:
-    inputs:
-      caller_event_name:
-        description: Event name from the registered caller workflow.
-        required: true
-        type: string
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+    paths:
+      - "packages/qvac-lib-inference-addon-cpp/**"
+      - ".github/workflows/pr-test-qvac-lib-inference-addon-cpp-js.yml"
+  workflow_dispatch:
 
 env:
   PKG_DIR: packages/qvac-lib-inference-addon-cpp
 
 jobs:
+  authorize-js-tests:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      allowed: ${{ steps.auth.outputs.allowed }}
+    steps:
+      - name: Authorize JS tests
+        id: auth
+        env:
+          EVENT: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.repository }}
+          AUTHOR_ASSOC: ${{ github.event.pull_request.author_association }}
+          HAS_VERIFY_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'verify') }}
+        run: |
+          if [ "$EVENT" != "pull_request" ]; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "$HEAD_REPO" = "$BASE_REPO" ]; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ "$AUTHOR_ASSOC" =~ ^(MEMBER|OWNER|COLLABORATOR)$ ]]; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "$ACTION" = "synchronize" ]; then
+            echo "::error::External fork pushed new commits; re-apply the verify label after review to run JS tests."
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          if [ "$HAS_VERIFY_LABEL" = "true" ]; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "::error::External fork PR requires the verify label before JS tests run."
+          echo "allowed=false" >> "$GITHUB_OUTPUT"
+          exit 1
+
   run-js-tests:
+    needs: authorize-js-tests
+    if: needs.authorize-js-tests.outputs.allowed == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -68,17 +117,10 @@ jobs:
         shell: bash
 
     steps:
-      - if: ${{ inputs.caller_event_name == 'pull_request_target' }}
-        name: Checkout PR head
+      - name: Checkout source
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
-          ref: ${{ github.event.pull_request.head.ref }}
           persist-credentials: false
-
-      - if: ${{ inputs.caller_event_name == 'workflow_dispatch' }}
-        name: Checkout workflow ref
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
 
       - name: yamlfmt
         uses: ./.github/actions/yamlfmt

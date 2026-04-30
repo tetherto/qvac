@@ -194,11 +194,3 @@ jobs:
         working-directory: ${{ env.PKG_DIR }}
         run: cmake --preset default -D BUILD_TESTING=ON -D CMAKE_BUILD_TYPE=Debug -S . -B build && cmake --build build
 
-  run-js-tests:
-    if: needs.authorize.outputs.allowed == 'true'
-    needs: authorize
-    permissions:
-      contents: read
-    uses: ./.github/workflows/pr-test-qvac-lib-inference-addon-cpp-js.yml
-    with:
-      caller_event_name: ${{ github.event_name }}
