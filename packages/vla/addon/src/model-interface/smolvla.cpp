@@ -49,15 +49,6 @@ to_f32(struct ggml_context* ctx, struct ggml_tensor* x) {
   return x;
 }
 
-// Truncate F32 to BF16 precision (round to BF16 then back to F32)
-// This matches PyTorch's hidden.to(bfloat16) behavior
-static struct ggml_tensor*
-to_bf16_precision(struct ggml_context* ctx, struct ggml_tensor* x) {
-  // Cast F32 -> BF16 -> F32: truncates mantissa to 7 bits
-  struct ggml_tensor* bf16 = ggml_cast(ctx, x, GGML_TYPE_BF16);
-  return ggml_cast(ctx, bf16, GGML_TYPE_F32);
-}
-
 static struct ggml_tensor* smolvla_layer_norm(
     struct ggml_context* ctx, struct ggml_tensor* x, struct ggml_tensor* weight,
     struct ggml_tensor* bias, float eps) {
@@ -101,29 +92,6 @@ static struct ggml_tensor* smolvla_linear(
     out = ggml_add(ctx, out, to_f32(ctx, bias));
   }
   return out;
-}
-
-// ============================================================
-// RoPE: Rotary Position Embedding (split-half formulation)
-// ============================================================
-
-// Apply RoPE to tensor x of shape (B, L, H, D) given position_ids (B, L)
-// SmolVLA uses split-half: [x1*cos - x2*sin, x2*cos + x1*sin]
-// max_wavelength = 10000
-static struct ggml_tensor* smolvla_rope(
-    struct ggml_context* ctx, struct ggml_tensor* x,
-    struct ggml_tensor* position_ids, int head_dim,
-    float max_wavelength = 10000.0f) {
-  // GGML's ggml_rope implements the standard RoPE
-  // We need mode=0 for the split-half (non-interleaved) formulation
-  // n_dims = head_dim (apply to all dims)
-  // In GGML: ggml_rope(ctx, x, positions, n_dims, mode)
-  // mode 0 = standard, mode 2 = neox (interleaved)
-  // SmolVLA uses split-half which is mode 0
-
-  // x shape in GGML: (D, H, L, B) due to row-major convention
-  // position_ids: (L, B)
-  return ggml_rope(ctx, x, position_ids, head_dim, GGML_ROPE_TYPE_NEOX);
 }
 
 // ============================================================
@@ -719,6 +687,17 @@ void compute_sinusoidal_time_embedding(
   }
 }
 
+void compute_sinusoidal_time_embedding_cached(
+    float timestep, const float* inv_periods, int dimension, float* out) {
+  const int half_dim = dimension / 2;
+  const float two_pi_t = 2.0f * std::numbers::pi_v<float> * timestep;
+  for (int i = 0; i < half_dim; i++) {
+    const float angle = inv_periods[i] * two_pi_t;
+    out[i] = sinf(angle);
+    out[half_dim + i] = cosf(angle);
+  }
+}
+
 // ============================================================
 // Action Expert: Full forward with ODE loop
 // ============================================================
@@ -1232,7 +1211,21 @@ extern "C" bool smolvla_load_model(const char* path, smolvla_model* model_ptr,
   hp.chunk_size = gguf_get_u32(gguf, "smolvla.flow.chunk_size", 50);
   hp.max_action_dim = gguf_get_u32(gguf, "smolvla.flow.max_action_dim", 32);
   hp.max_state_dim = gguf_get_u32(gguf, "smolvla.flow.max_state_dim", 32);
-  hp.action_dim = gguf_get_u32(gguf, "smolvla.flow.action_dim", 6);
+  hp.action_dim = gguf_get_u32(gguf, "smolvla.flow.action_dim", 7);
+
+  // Precompute 1/period table for the sinusoidal time embedding. Constant
+  // across all ODE steps so we pay the powf cost once instead of per-step.
+  {
+    const int half_dim = hp.expert_hidden_size / 2;
+    model.time_embed_inv_periods.resize(half_dim);
+    const float ratio = hp.max_period / hp.min_period;
+    for (int i = 0; i < half_dim; i++) {
+      const float fraction =
+          (half_dim > 1) ? (float)i / (float)(half_dim - 1) : 0.0f;
+      const float period = hp.min_period * powf(ratio, fraction);
+      model.time_embed_inv_periods[i] = 1.0f / period;
+    }
+  }
 
   fprintf(stderr, "%s: hparams loaded\n", __func__);
   fprintf(
@@ -1427,61 +1420,104 @@ extern "C" bool smolvla_load_model(const char* path, smolvla_model* model_ptr,
           size_t tensor_data_size = file_size - data_offset;
           size_t max_tensor_size = ggml_get_max_tensor_size(ctx_data);
 
-          ggml_backend_buffer_t buf = ggml_backend_dev_buffer_from_host_ptr(
-              dev, tensor_data_base, tensor_data_size, max_tensor_size);
-
-          if (buf) {
-            // Wire each tensor to its position inside the mmap'd region.
-            int n_alloc_ok = 0;
-            int n_alloc_fail = 0;
-            for (int64_t i = 0; i < n_tensors_in_gguf; i++) {
-              const char* name = gguf_get_tensor_name(gguf, i);
-              struct ggml_tensor* t = ggml_get_tensor(ctx_data, name);
-              if (!t) {
-                continue;
-              }
-              size_t off = gguf_get_tensor_offset(gguf, i);
-              void* tensor_addr = (char*)tensor_data_base + off;
-              if (ggml_backend_tensor_alloc(buf, t, tensor_addr) ==
-                  GGML_STATUS_SUCCESS) {
-                n_alloc_ok++;
-              } else {
-                n_alloc_fail++;
-                fprintf(
-                    stderr,
-                    "%s: tensor_alloc failed for '%s'\n",
-                    __func__,
-                    name);
-              }
+          // Reject crafted GGUFs whose per-tensor (offset, nbytes) would point
+          // outside the mapped region — a later read through such a tensor
+          // would be an out-of-bounds memory access.
+          bool bounds_ok = true;
+          for (int64_t i = 0; i < n_tensors_in_gguf; i++) {
+            const char* name = gguf_get_tensor_name(gguf, i);
+            struct ggml_tensor* t = ggml_get_tensor(ctx_data, name);
+            if (!t) {
+              continue;
             }
-            ggml_backend_buffer_set_usage(buf, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
-            model.bufs_w.push_back(buf);
-            model.mmap_addr = addr;
-            model.mmap_size = file_size;
-            used_mmap = true;
-            fprintf(
-                stderr,
-                "%s: mmap+host_ptr buffer: %.1f MB (max_tensor=%.1f MB), "
-                "%d/%lld tensors wired\n",
-                __func__,
-                tensor_data_size / (1024.0 * 1024.0),
-                max_tensor_size / (1024.0 * 1024.0),
-                n_alloc_ok,
-                (long long)n_tensors_in_gguf);
-            if (n_alloc_fail > 0) {
+            size_t off = gguf_get_tensor_offset(gguf, i);
+            size_t nbytes = ggml_nbytes(t);
+            if (off > tensor_data_size || nbytes > tensor_data_size - off) {
               fprintf(
                   stderr,
-                  "%s: WARNING %d tensor_alloc calls failed\n",
+                  "%s: tensor '%s' bounds exceed mapped region "
+                  "(off=%zu nbytes=%zu region=%zu) — falling back to alloc+copy\n",
                   __func__,
-                  n_alloc_fail);
+                  name,
+                  off,
+                  nbytes,
+                  tensor_data_size);
+              bounds_ok = false;
+              break;
             }
-          } else {
-            fprintf(
-                stderr,
-                "%s: buffer_from_host_ptr returned NULL — falling back to "
-                "alloc+copy\n",
-                __func__);
+          }
+
+          if (!bounds_ok) {
             munmap(addr, file_size);
+          } else {
+            // Hint the OS to prefetch the file so the first inference doesn't
+            // demand-page its way through 2+ GB of weights.
+            madvise(addr, file_size, MADV_WILLNEED);
+
+            ggml_backend_buffer_t buf = ggml_backend_dev_buffer_from_host_ptr(
+                dev, tensor_data_base, tensor_data_size, max_tensor_size);
+
+            if (buf) {
+              // Wire each tensor to its position inside the mmap'd region.
+              int n_alloc_ok = 0;
+              int n_alloc_fail = 0;
+              for (int64_t i = 0; i < n_tensors_in_gguf; i++) {
+                const char* name = gguf_get_tensor_name(gguf, i);
+                struct ggml_tensor* t = ggml_get_tensor(ctx_data, name);
+                if (!t) {
+                  continue;
+                }
+                size_t off = gguf_get_tensor_offset(gguf, i);
+                void* tensor_addr = (char*)tensor_data_base + off;
+                if (ggml_backend_tensor_alloc(buf, t, tensor_addr) ==
+                    GGML_STATUS_SUCCESS) {
+                  n_alloc_ok++;
+                } else {
+                  n_alloc_fail++;
+                  fprintf(
+                      stderr,
+                      "%s: tensor_alloc failed for '%s'\n",
+                      __func__,
+                      name);
+                }
+              }
+
+              if (n_alloc_fail > 0) {
+                // A partially-wired buffer would leave some tensors with
+                // unusable pointers; running inference against it is UB.
+                // Tear down and fall through to the alloc+copy path.
+                fprintf(
+                    stderr,
+                    "%s: %d tensor_alloc calls failed — falling back to alloc+copy\n",
+                    __func__,
+                    n_alloc_fail);
+                ggml_backend_buffer_free(buf);
+                munmap(addr, file_size);
+              } else {
+                ggml_backend_buffer_set_usage(
+                    buf, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
+                model.bufs_w.push_back(buf);
+                model.mmap_addr = addr;
+                model.mmap_size = file_size;
+                used_mmap = true;
+                fprintf(
+                    stderr,
+                    "%s: mmap+host_ptr buffer: %.1f MB (max_tensor=%.1f MB), "
+                    "%d/%lld tensors wired\n",
+                    __func__,
+                    tensor_data_size / (1024.0 * 1024.0),
+                    max_tensor_size / (1024.0 * 1024.0),
+                    n_alloc_ok,
+                    (long long)n_tensors_in_gguf);
+              }
+            } else {
+              fprintf(
+                  stderr,
+                  "%s: buffer_from_host_ptr returned NULL — falling back to "
+                  "alloc+copy\n",
+                  __func__);
+              munmap(addr, file_size);
+            }
           }
         } else {
           fprintf(stderr, "%s: mmap failed (errno=%d)\n", __func__, errno);
@@ -1711,6 +1747,39 @@ bool smolvla_inference_with_timing(
   const double t_total_start = now_ms();
   smolvla_model& model = *model_ptr;
   const auto& hp = model.hparams;
+
+  // Validate caller-supplied counts before they feed into tensor sizing.
+  // Without these, large/negative values would overflow int arithmetic in
+  // n_visual_tokens and prefix_len, leading to under-sized tensor allocations
+  // and out-of-bounds writes during graph build.
+  constexpr int kMaxImages = 16;
+  if (n_images <= 0 || n_images > kMaxImages) {
+    fprintf(
+        stderr,
+        "%s: invalid n_images=%d (expected 1..%d)\n",
+        __func__,
+        n_images,
+        kMaxImages);
+    return false;
+  }
+  if (lang_len < 0 || lang_len > hp.tokenizer_max_length) {
+    fprintf(
+        stderr,
+        "%s: invalid lang_len=%d (expected 0..%d)\n",
+        __func__,
+        lang_len,
+        hp.tokenizer_max_length);
+    return false;
+  }
+  if (state_dim < 0 || state_dim > hp.max_state_dim) {
+    fprintf(
+        stderr,
+        "%s: invalid state_dim=%d (expected 0..%d)\n",
+        __func__,
+        state_dim,
+        hp.max_state_dim);
+    return false;
+  }
 
   int n_visual_tokens = n_images * hp.tokens_per_image();
   int prefix_len = n_visual_tokens + lang_len + 1; // +1 for state token
@@ -2394,11 +2463,10 @@ bool smolvla_inference_with_timing(
       }
     }
 
-    compute_sinusoidal_time_embedding(
+    compute_sinusoidal_time_embedding_cached(
         t_val,
+        model.time_embed_inv_periods.data(),
         hp.expert_hidden_size,
-        hp.min_period,
-        hp.max_period,
         te_single.data());
     // Broadcast `te_single` to all `chunk_size` rows using a doubling
     // pattern: ~log2(chunk_size) larger memcpys instead of `chunk_size`

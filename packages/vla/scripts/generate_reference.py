@@ -12,7 +12,7 @@ Usage (one-off, from the package root):
     ./scripts/generate_reference.py                              # default: HuggingFaceVLA/smolvla_libero
     ./scripts/generate_reference.py --model lerobot/smolvla_base
     ./scripts/generate_reference.py --output test/integration/assets/pt_actions_libero_fixed.json
-    ./scripts/generate_reference.py --action-dim 6               # match C++ hparams.action_dim
+    ./scripts/generate_reference.py --action-dim 7               # match C++ hparams.action_dim
 
 Requires the same conda/venv that runs LeRobot (torch + lerobot installed).
 """
@@ -100,7 +100,7 @@ def main() -> int:
     parser.add_argument(
         "--action-dim",
         type=int,
-        default=6,
+        default=7,
         help="How many leading action dims to keep (matches C++ hparams.action_dim).",
     )
     parser.add_argument(

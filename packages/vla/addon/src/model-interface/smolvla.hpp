@@ -68,7 +68,7 @@ struct smolvla_hparams {
   int chunk_size = 50;
   int max_action_dim = 32;
   int max_state_dim = 32;
-  int action_dim = 6; // actual action DOF
+  int action_dim = 7; // actual action DOF
   float min_period = 4e-3f;
   float max_period = 4.0f;
 
@@ -200,6 +200,11 @@ struct smolvla_model {
   void* mmap_addr = nullptr;
   size_t mmap_size = 0;
 
+  // Precomputed `1/period` table for the sinusoidal time embedding. Sized
+  // to `expert_hidden_size / 2` and populated once at load time so the
+  // per-ODE-step embedding only needs sinf/cosf, not powf.
+  std::vector<float> time_embed_inv_periods;
+
   // Backends
   ggml_backend_t backend;     // primary (Vulkan if available)
   ggml_backend_t backend_cpu; // CPU fallback for unsupported ops
@@ -258,6 +263,11 @@ struct ggml_tensor* build_denoise_step_graph(
 void compute_sinusoidal_time_embedding(
     float timestep, int dimension, float min_period, float max_period,
     float* out);
+
+// Fast variant that uses a precomputed `1/period` table (size = dimension/2).
+// `out` must be sized `dimension`. Used on the ODE hot path.
+void compute_sinusoidal_time_embedding_cached(
+    float timestep, const float* inv_periods, int dimension, float* out);
 
 #ifdef __cplusplus
 extern "C" {

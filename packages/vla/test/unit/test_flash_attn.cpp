@@ -64,18 +64,6 @@ AttnInputs make_inputs() {
   return in;
 }
 
-// Pack a single inference graph + run on CPU, return the output as a flat
-// host-side vector with logical shape (head_dim*num_heads, seq_len).
-std::vector<float>
-run_graph(struct ggml_cgraph* gf, ggml_backend_t backend,
-          struct ggml_tensor* out_tensor) {
-  ggml_gallocr_t allocr =
-      ggml_gallocr_new(ggml_backend_get_default_buffer_type(backend));
-  ggml_gallocr_reserve(allocr, gf);
-  ggml_gallocr_alloc_graph(allocr, gf);
-  return std::vector<float>{}; // unused — caller does compute + read back
-}
-
 // ----------------------------------------------------------------------------
 // Reference: unfused attention with explicit GQA repeat (matches what the
 // production code does today inside build_transformer_layer).

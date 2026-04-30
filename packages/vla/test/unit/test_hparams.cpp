@@ -12,6 +12,7 @@ TEST(SmolvlaHparams, DefaultsMatchSmolVlaConfig) {
   EXPECT_EQ(hp.chunk_size, 50);
   EXPECT_EQ(hp.max_action_dim, 32);
   EXPECT_EQ(hp.max_state_dim, 32);
+  EXPECT_EQ(hp.action_dim, 7);
 }
 
 TEST(SmolvlaHparams, DerivedShapesMatchPaper) {

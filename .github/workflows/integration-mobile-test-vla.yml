@@ -357,15 +357,10 @@ jobs:
           mkdir -p test/mobile/testAssets
 
           if [ -n "${SMOLVLA_MODEL_URL:-}" ]; then
-            cat > test/mobile/testAssets/smolvla-urls.json <<JSON
-          {
-            "modelUrl": "${SMOLVLA_MODEL_URL}"
-          }
-          JSON
-            echo "   ✅ SmolVLA URL bundled"
+            jq -n --arg url "$SMOLVLA_MODEL_URL" \
+              '{modelUrl: $url}' > test/mobile/testAssets/smolvla-urls.json
+            echo "   ✅ SmolVLA URL bundled ($(wc -c < test/mobile/testAssets/smolvla-urls.json) bytes)"
             # Do not echo the URL itself (it's a presigned URL with creds).
-            head -c 120 test/mobile/testAssets/smolvla-urls.json
-            echo ""
           else
             echo "   ⚠️  SmolVLA URL not available"
             exit 1

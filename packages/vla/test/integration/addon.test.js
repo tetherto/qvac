@@ -437,7 +437,12 @@ async function _runEndToEnd (t, modelPath, backend) {
 
     const ref = _loadReference()
     let quality
-    if (ref && ref.chunk_size === hp.chunkSize && ref.action_dim === hp.actionDim) {
+    if (ref && (ref.chunk_size !== hp.chunkSize || ref.action_dim !== hp.actionDim)) {
+      t.fail(
+        `reference shape mismatch (ref=${ref.chunk_size}x${ref.action_dim}, actual=${hp.chunkSize}x${hp.actionDim}); ` +
+        'regenerate test/integration/assets/pt_actions_libero_fixed.json with matching dims'
+      )
+    } else if (ref) {
       const cmp = _compareActions(actions, ref.actions)
       quality = cmp
       console.log(
@@ -458,11 +463,7 @@ async function _runEndToEnd (t, modelPath, backend) {
         `cosine similarity ${cmp.action_cos_sim.toFixed(4)} > 0.9 vs PyTorch`
       )
     } else {
-      t.comment(
-        ref
-          ? `skipping reference comparison: shape mismatch (ref=${ref.chunk_size}x${ref.action_dim}, actual=${hp.chunkSize}x${hp.actionDim})`
-          : 'skipping reference comparison: pt_actions_libero_fixed.json not found'
-      )
+      t.comment('skipping reference comparison: pt_actions_libero_fixed.json not found')
     }
 
     const ep = model.backendName || null
