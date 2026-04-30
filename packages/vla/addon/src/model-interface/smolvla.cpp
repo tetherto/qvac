@@ -443,11 +443,10 @@ static struct ggml_tensor* build_transformer_layer(
     v_expanded = ggml_reshape_3d(ctx, v_expanded, head_dim, num_heads, seq_len);
   }
 
-  // Attention computation. We tried `ggml_flash_attn_ext` here (with the
-  // correct F16-mask + GGML_PREC_F32 recipe — see test/unit/
-  // test_flash_attn.cpp); it's mathematically correct but ~3× slower
-  // per layer on Intel Iris Xe Vulkan. Mobile GPUs (Adreno/Mali) may
-  // benefit; revisit on those backends.
+  // Attention computation. ggml_flash_attn_ext was measured ~3× slower
+  // per layer on Intel Iris Xe Vulkan (correct F16-mask + GGML_PREC_F32
+  // recipe). Mobile GPUs (Adreno/Mali) may benefit; revisit on those
+  // backends.
   q = ggml_cont(ctx, ggml_permute(ctx, q, 0, 2, 1, 3));
   k_expanded = ggml_cont(ctx, ggml_permute(ctx, k_expanded, 0, 2, 1, 3));
   v_expanded = ggml_cont(ctx, ggml_permute(ctx, v_expanded, 0, 2, 1, 3));
