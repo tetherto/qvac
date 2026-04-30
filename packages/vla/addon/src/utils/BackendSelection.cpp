@@ -48,27 +48,27 @@ ggml_backend_dev_t pickBestGpuDevice() {
     const std::string desc = descRaw ? descRaw : "";
     const int adreno = parseAdrenoModel(desc);
 
-    if (adreno > 0 && adreno < 800) {
+    // Reject every Adreno generation we can identify. The original cutoff
+    // assumed Adreno >= 800 had working Vulkan drivers, but mobile CI on
+    // Samsung Galaxy S25 Ultra (Adreno 830) produced numerically broken
+    // output: cos sim 0.73 vs PyTorch on the real-LIBERO fixture, where
+    // every other accepted Vulkan target (Apple Metal, NVIDIA, Intel Iris,
+    // Mali on Pixel 9 Pro) lands above 0.999. Re-enable a specific Adreno
+    // model only with evidence that its driver round-trips ggml matmul
+    // correctly (cos > 0.99 on the real-LIBERO fixture).
+    if (adreno > 0) {
       fprintf(
           stderr,
-          "vla_backend_selection: skipping Adreno %d GPU (driver/OpenCL "
-          "unreliable below 800) — will fall back to CPU\n",
+          "vla_backend_selection: skipping Adreno %d GPU (driver path "
+          "produces incorrect ggml output) — will fall back to CPU\n",
           adreno);
       continue;
     }
 
-    if (adreno >= 800) {
-      fprintf(
-          stderr,
-          "vla_backend_selection: Adreno %d GPU accepted: %s\n",
-          adreno,
-          desc.c_str());
-    } else {
-      fprintf(
-          stderr,
-          "vla_backend_selection: non-Adreno GPU accepted: %s\n",
-          desc.c_str());
-    }
+    fprintf(
+        stderr,
+        "vla_backend_selection: non-Adreno GPU accepted: %s\n",
+        desc.c_str());
 
     if (fallbackGpu == nullptr) {
       fallbackGpu = dev;
