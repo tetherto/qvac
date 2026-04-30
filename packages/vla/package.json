@@ -36,6 +36,7 @@
     "binding.js",
     "index.js",
     "index.d.ts",
+    "lib",
     "prebuilds",
     "LICENSE",
     "NOTICE"
@@ -50,6 +51,7 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://github.com/tetherto/qvac/tree/main/packages/vla#readme",
   "dependencies": {
+    "@qvac/error": "^0.1.0",
     "@qvac/infer-base": "^0.4.0",
     "@qvac/logging": "^0.1.0",
     "bare-fs": "^4.5.1",
