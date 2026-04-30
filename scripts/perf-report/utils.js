@@ -270,6 +270,15 @@ function generateMarkdownReport (aggregated, opts) {
   lines.push(`## ${addon} Performance Report`)
   lines.push(`Generated: ${generated_at} | CI Runs: ${run_numbers.join(', ')} | Iterations: ${iterCount}`)
   lines.push('')
+  // QVAC-17830: short legend so reviewers don't read intra-scenario
+  // dashes as broken data. Per-scenario column filtering above
+  // already drops devices that have ZERO data in a scenario block
+  // (e.g. bitnet only ever shows the Android columns); the dashes
+  // that remain are gated tests like medgemma-4b-it (desktop-only,
+  // too heavy for mobile) or platform/runner gaps (e.g. no GPU
+  // available on darwin-x64 / linux-arm64 CI runners).
+  lines.push('> `-` = scenario not run on that device (test gating or runner capability — e.g. `medgemma-4b-it` is desktop-only, mobile only runs `qwen3-1.7b`; `darwin-x64` / `linux-arm64` have no GPU runner).')
+  lines.push('')
 
   const deviceNames = Object.keys(devices)
   if (!deviceNames.length) return lines.join('\n') + '\n'
@@ -352,20 +361,37 @@ function generateMarkdownReport (aggregated, opts) {
       const scopedTests = parsed.filter(t => testScenario[t.full] === scn)
       if (!scopedTests.length) continue
 
+      // QVAC-17830: per-scenario column filtering. The cross-platform
+      // table previously rendered ALL device columns for every
+      // scenario block, so e.g. the bitnet block (Android-only by
+      // design — see bitnet.test.js `skip: !isAndroid`) showed 7
+      // empty desktop/iOS columns of dashes, which made the report
+      // look broken when it was actually intentional. Drop columns
+      // that have zero data in this scenario × metric.
+      const scopedDeviceNames = deviceNames.filter(d => {
+        return scopedTests.some(t => {
+          const m = devices[d] && devices[d][t.full] && devices[d][t.full][metricSpec.key]
+          return m && m.mean != null
+        })
+      })
+      if (!scopedDeviceNames.length) continue
+
+      const scopedShortNames = scopedDeviceNames.map(_shortDeviceName)
+
       if (showScenarioHeading) {
         lines.push(`#### ${_scenarioLabel(scn)}`)
         lines.push('')
       }
 
       const perfHeader = hasEp ? ['Test', 'EP'] : ['Test']
-      for (const sn of shortNames) perfHeader.push(sn)
+      for (const sn of scopedShortNames) perfHeader.push(sn)
       lines.push('| ' + perfHeader.join(' | ') + ' |')
       lines.push('| ' + perfHeader.map(() => '---').join(' | ') + ' |')
 
       for (const t of scopedTests) {
         const epCell = hasEp ? (t.ep ? `**${t.ep}**` : '-') : null
         const cells = hasEp ? [t.base, epCell] : [t.full]
-        for (const devName of deviceNames) {
+        for (const devName of scopedDeviceNames) {
           const metrics = devices[devName] && devices[devName][t.full]
           cells.push(_formatMeanStd(metrics && metrics[metricSpec.key], metricSpec.unit, metricSpec.round))
         }
