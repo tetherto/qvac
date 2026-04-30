@@ -100,6 +100,22 @@ MtmdLlmContext::MtmdLlmContext(
     antipromptTokens_.insert(
         antipromptTokens_.end(), tempTokens.begin(), tempTokens.end());
   }
+
+  isHarmonyModel_ =
+      qvac_lib_inference_addon_llama::utils::isHarmonyModel(model_);
+  if (isHarmonyModel_) {
+    harmonyCallToken_ =
+        qvac_lib_inference_addon_llama::utils::getHarmonyCallToken(lctx_);
+    if (harmonyCallToken_ == LLAMA_TOKEN_NULL) {
+      isHarmonyModel_ = false;
+    }
+  }
+  QLOG_IF(
+      Priority::DEBUG,
+      string_format(
+          "[MtmdLlm] Harmony detection: isHarmony=%d callToken=%d\n",
+          isHarmonyModel_,
+          harmonyCallToken_));
 }
 
 void MtmdLlmContext::initVisionContext() {
@@ -453,7 +469,25 @@ bool MtmdLlmContext::generateResponse(
       }
     }
 
-    if (llama_vocab_is_eog(vocab_, tokenId) || checkAntiprompt()) {
+    bool isEos = llama_vocab_is_eog(vocab_, tokenId);
+
+    if (isEos && isHarmonyModel_ && params_.use_jinja &&
+        tokenId == harmonyCallToken_) {
+      QLOG_IF(
+          Priority::DEBUG,
+          string_format(
+              "[MtmdLlm] Harmony <|call|> stop: tokenId=%d\n", tokenId));
+      if (outputCallback) {
+        std::string callMarker = common_token_to_piece(lctx_, tokenId, true);
+        if (!callMarker.empty()) {
+          outputCallback(callMarker);
+        }
+      }
+      flushPendingUtf8ToCallback(outputCallback);
+      break;
+    }
+
+    if (isEos || checkAntiprompt()) {
       flushPendingUtf8ToCallback(outputCallback);
       break;
     }
