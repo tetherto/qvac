@@ -8,7 +8,6 @@ import type { DelegatedHandlerOptions } from "@/server/rpc/profiling";
 const logger = getServerLogger();
 
 type DelegationTarget = {
-  topic: string;
   providerPublicKey: string;
   timeout?: number;
 };
@@ -22,7 +21,6 @@ function resolveDelegationTarget(
       return null;
     }
     const target: DelegationTarget = {
-      topic: entry.delegated.topic,
       providerPublicKey: entry.delegated.providerPublicKey,
     };
     if (entry.delegated.timeout !== undefined) {
@@ -33,7 +31,6 @@ function resolveDelegationTarget(
 
   if (request.operation === "downloadAsset" && request.delegate) {
     const target: DelegationTarget = {
-      topic: request.delegate.topic,
       providerPublicKey: request.delegate.providerPublicKey,
     };
     if (request.delegate.timeout !== undefined) {
@@ -68,7 +65,7 @@ export async function handleCancelDelegated(
   }
 
   try {
-    const rpc = await getRPC(target.topic, target.providerPublicKey, {
+    const rpc = await getRPC(target.providerPublicKey, {
       timeout: target.timeout,
     });
 

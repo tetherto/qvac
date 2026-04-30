@@ -15,7 +15,6 @@ import {
   delegatedE2EStreaming,
   delegatedE2ELoadedModelInfo,
 } from "../../delegated-inference-tests.js";
-import { generateTopic } from "../../utils/random.js";
 
 const E2E_DELEGATION_TIMEOUT = 60_000;
 const E2E_PROVIDER_STARTUP_TIMEOUT = 60_000;
@@ -38,9 +37,9 @@ export class DelegatedInferenceExecutor extends SharedDelegatedInferenceExecutor
     };
   }
 
-  private spawnProvider(topic: string): Promise<{ publicKey: string; process: ChildProcess }> {
+  private spawnProvider(): Promise<{ publicKey: string; process: ChildProcess }> {
     return new Promise((resolve, reject) => {
-      const child = spawn(process.execPath, [providerScriptPath, topic], {
+      const child = spawn(process.execPath, [providerScriptPath], {
         stdio: ["ignore", "pipe", "pipe"],
         env: { ...process.env },
       });
@@ -77,12 +76,11 @@ export class DelegatedInferenceExecutor extends SharedDelegatedInferenceExecutor
   }
 
   private async withRemoteProvider<T>(
-    fn: (ctx: { topic: string; publicKey: string }) => Promise<T>,
+    fn: (ctx: { publicKey: string }) => Promise<T>,
   ): Promise<T> {
-    const topic = generateTopic();
-    const provider = await this.spawnProvider(topic);
+    const provider = await this.spawnProvider();
     try {
-      return await fn({ topic, publicKey: provider.publicKey });
+      return await fn({ publicKey: provider.publicKey });
     } finally {
       provider.process.kill("SIGTERM");
     }
@@ -92,11 +90,11 @@ export class DelegatedInferenceExecutor extends SharedDelegatedInferenceExecutor
     history: Array<{ role: string; content: string }>,
     stream: boolean,
   ): Promise<TestResult> {
-    return this.withRemoteProvider(async ({ topic, publicKey }) => {
+    return this.withRemoteProvider(async ({ publicKey }) => {
       const modelId = await loadModel({
         modelSrc: LLAMA_3_2_1B_INST_Q4_0,
         modelType: "llm",
-        delegate: { topic, providerPublicKey: publicKey, timeout: E2E_DELEGATION_TIMEOUT, fallbackToLocal: false },
+        delegate: { providerPublicKey: publicKey, timeout: E2E_DELEGATION_TIMEOUT, fallbackToLocal: false },
       });
       try {
         const result = completion({ modelId, history, stream });
@@ -132,11 +130,11 @@ export class DelegatedInferenceExecutor extends SharedDelegatedInferenceExecutor
   }
 
   async e2eLoadedModelInfo(): Promise<TestResult> {
-    return this.withRemoteProvider(async ({ topic, publicKey }) => {
+    return this.withRemoteProvider(async ({ publicKey }) => {
       const modelId = await loadModel({
         modelSrc: LLAMA_3_2_1B_INST_Q4_0,
         modelType: "llm",
-        delegate: { topic, providerPublicKey: publicKey, timeout: E2E_DELEGATION_TIMEOUT, fallbackToLocal: false },
+        delegate: { providerPublicKey: publicKey, timeout: E2E_DELEGATION_TIMEOUT, fallbackToLocal: false },
       });
       try {
         const info = await getLoadedModelInfo({ modelId });
@@ -151,12 +149,11 @@ export class DelegatedInferenceExecutor extends SharedDelegatedInferenceExecutor
         const checks = {
           modelIdMatches: info.modelId === modelId,
           handlersIsEmptyArray: Array.isArray(info.handlers) && info.handlers.length === 0,
-          providerInfoTopicMatches: info.providerInfo.topic === topic,
           providerInfoPublicKeyMatches: info.providerInfo.providerPublicKey === publicKey,
         };
 
         const allOk = Object.values(checks).every(Boolean);
-        const summary = `modelId=${info.modelId.substring(0, 8)}…, isDelegated=true, handlers=[], providerInfo.topic=${info.providerInfo.topic.substring(0, 8)}…, checks=${JSON.stringify(checks)}`;
+        const summary = `modelId=${info.modelId.substring(0, 8)}…, isDelegated=true, handlers=[], providerInfo.providerPublicKey=${info.providerInfo.providerPublicKey.substring(0, 8)}…, checks=${JSON.stringify(checks)}`;
 
         if (!allOk) {
           return { passed: false, output: `Delegated info mismatch: ${summary}` };

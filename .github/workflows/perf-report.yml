@@ -14,6 +14,7 @@ on:
           - nmtcpp
           - llamacpp-llm
           - onnx-tts
+          - parakeet
       workflow_name:
         description: "Integration test workflow name to query"
         type: choice
@@ -24,6 +25,7 @@ on:
           - "Integration Tests (NMTCPP)"
           - "Integration Tests (LLM)"
           - "Integration Tests (TTS)"
+          - "Mobile Integration Tests (Parakeet)"
       runs:
         description: "Number of recent runs to aggregate"
         type: number
@@ -119,6 +121,15 @@ jobs:
             --output reports/onnx-tts-performance.md \
             --output-json reports/onnx-tts-performance.json \
             --output-html reports/onnx-tts-performance.html || true
+
+          echo "=== Parakeet (Mobile) ==="
+          node scripts/perf-report/aggregate.js \
+            --addon parakeet \
+            --workflow "Mobile Integration Tests (Parakeet)" \
+            --runs 6 \
+            --output reports/parakeet-mobile-performance.md \
+            --output-json reports/parakeet-mobile-performance.json \
+            --output-html reports/parakeet-mobile-performance.html || true
 
       # ─── Phase B: COMET quality scoring for NMT (weekly aggregate only) ───
       # Runs only on the Monday scheduled trigger, or on workflow_dispatch
