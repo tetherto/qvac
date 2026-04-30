@@ -28,6 +28,7 @@ function toFunctionName (fileName) {
 
 function buildFileContents (files) {
   const lines = []
+  const functionNames = files.map(toFunctionName)
   lines.push("'use strict'")
   lines.push("require('./integration-runtime.cjs')")
   lines.push('')
@@ -39,7 +40,7 @@ function buildFileContents (files) {
 
   for (let i = 0; i < files.length; i++) {
     const file = files[i]
-    const fnName = toFunctionName(file)
+    const fnName = functionNames[i]
     const relativePath = `../integration/${file}`
     lines.push(`async function ${fnName} (options = {}) { // eslint-disable-line no-unused-vars`)
     lines.push(`  return runIntegrationModule('${relativePath}', options)`)
@@ -48,6 +49,14 @@ function buildFileContents (files) {
       lines.push('')
     }
   }
+
+  lines.push('')
+  lines.push('module.exports = {')
+  for (let i = 0; i < functionNames.length; i++) {
+    const suffix = i < functionNames.length - 1 ? ',' : ''
+    lines.push(`  ${functionNames[i]}${suffix}`)
+  }
+  lines.push('}')
 
   return `${lines.join('\n')}\n`
 }

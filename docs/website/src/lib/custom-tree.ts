@@ -142,6 +142,7 @@ export const customTree: Node[] = [
           { name: 'Logging', url: '/sdk/examples/utilities/logging', type: 'page', icon: resolveIcon('Activity') },
           { name: 'Profiler', url: '/sdk/examples/utilities/profiler', type: 'page', icon: resolveIcon('Timer') },
           { name: 'Download lifecycle', url: '/sdk/examples/utilities/download-lifecycle', type: 'page', icon: resolveIcon('Download') },
+          { name: 'Runtime lifecycle', url: '/sdk/examples/utilities/runtime-lifecycle', type: 'page', icon: resolveIcon('Moon') },
           { name: 'Sharded models', url: '/sdk/examples/utilities/sharded-models', type: 'page', icon: resolveIcon('Merge') },
         ],
       },

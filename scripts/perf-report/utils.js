@@ -53,7 +53,11 @@ const METRIC_LABELS = {
   text_regions: 'Text regions',
   real_time_factor: 'RTF',
   sample_count: 'Samples',
-  duration_ms: 'Duration'
+  duration_ms: 'Duration',
+  wall_time_ms: 'Wall time',
+  encoder_time_ms: 'Encoder time',
+  decoder_time_ms: 'Decoder time',
+  audio_duration_ms: 'Audio duration'
 }
 
 function metricLabel (key) {
