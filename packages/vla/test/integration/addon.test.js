@@ -282,26 +282,61 @@ process.on('exit', _flushPerfReport)
 
 // ---------------------------------------------------------------------------
 // Quality: tolerance-based comparison against a PyTorch reference.
-// The reference is produced by scripts/generate_reference.py on the exact
-// same fixed fixture (pixel=128, BOS token, zero state, zero noise).
+// Two fixtures, produced by separate one-off scripts:
+//   - 'fixed' fixture (scripts/generate_reference.py): synthetic gray pixels
+//     + BOS-only tokens + zero state + zero noise. Tiny and self-contained;
+//     catches numerical drift in the C++ port but barely exercises the
+//     vision encoder or attention paths.
+//   - 'real'  fixture (sim/dump_fixture.py): one frame from a LIBERO
+//     MuJoCo reset (real instruction + non-zero state + deterministic
+//     seeded noise + rendered RGB pixels). Exercises the full graph the
+//     way real input does. The pixel buffers ship as committed raw uint8
+//     .bin files alongside the JSON so no PNG decoder is needed on
+//     Bare/mobile.
 // ---------------------------------------------------------------------------
 
-function _loadReference () {
+function _resolveAssetPath (relName) {
   const candidates = [
-    path.resolve('.', 'test/integration/assets/pt_actions_libero_fixed.json'),
-    path.resolve(__dirname, 'assets/pt_actions_libero_fixed.json')
+    path.resolve('.', `test/integration/assets/${relName}`),
+    path.resolve(__dirname, `assets/${relName}`)
   ]
   if (global.assetPaths) {
-    const p = global.assetPaths['../../testAssets/pt_actions_libero_fixed.json']
+    const p = global.assetPaths[`../../testAssets/${relName}`]
     if (p) candidates.unshift(p.replace('file://', ''))
   }
   for (const p of candidates) {
     try {
-      const raw = fs.readFileSync(p, 'utf-8')
-      return JSON.parse(raw)
+      if (fs.existsSync(p)) return p
     } catch (_) {}
   }
   return null
+}
+
+function _loadReference (name) {
+  const p = _resolveAssetPath(`pt_actions_libero_${name}.json`)
+  if (!p) return null
+  try {
+    return JSON.parse(fs.readFileSync(p, 'utf-8'))
+  } catch (_) {
+    return null
+  }
+}
+
+function _loadRealPixels () {
+  const left = _resolveAssetPath('libero_real_left.bin')
+  const right = _resolveAssetPath('libero_real_right.bin')
+  if (!left || !right) return null
+  try {
+    const buf = (p) => {
+      const data = fs.readFileSync(p)
+      // Bare-fs returns Buffer; ensure a Uint8Array view that doesn't
+      // alias other parts of the read buffer (defensive copy).
+      return new Uint8Array(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength))
+    }
+    return { left: buf(left), right: buf(right) }
+  } catch (_) {
+    return null
+  }
 }
 
 function _compareActions (actual, reference) {
@@ -377,7 +412,79 @@ test('integration: VlaModel.load rejects missing GGUF file', async (t) => {
 // kept for matrix symmetry so the perf-report has a uniform shape across
 // runners. On runners with a real GPU the two rows give an apples-to-apples
 // CPU-vs-accelerator delta.
-async function _runEndToEnd (t, modelPath, backend) {
+// Build the inputs for a fixture. Returns `null` if the fixture's assets
+// aren't available (so callers can skip gracefully); throws if the fixture
+// is malformed.
+function _buildFixtureInputs (name, hp) {
+  if (name === 'fixed') {
+    const size = hp.visionImageSize
+    const dummy = new Uint8Array(size * size * 3).fill(128)
+    const img = preprocessImage(dummy, size, size, { size })
+    const tokens = new Int32Array(hp.tokenizerMaxLength)
+    const mask = new Uint8Array(hp.tokenizerMaxLength)
+    tokens[0] = 1 // BOS-like token
+    mask[0] = 1
+    const state = padState([0, 0, 0, 0, 0, 0], hp.maxStateDim)
+    const noise = new Float32Array(hp.chunkSize * hp.maxActionDim) // zeros
+    return { images: [img, img], imgWidth: size, imgHeight: size, state, tokens, mask, noise }
+  }
+
+  if (name === 'real') {
+    const ref = _loadReference('real')
+    const pixels = _loadRealPixels()
+    if (!ref || !pixels || !ref.inputs) return null
+
+    const size = hp.visionImageSize
+    if (ref.image_size !== size) {
+      throw new Error(
+        `real fixture image_size=${ref.image_size} but addon visionImageSize=${size}; ` +
+        'regenerate test/integration/assets/pt_actions_libero_real.json with matching dims'
+      )
+    }
+    const expectedBytes = size * size * 3
+    if (pixels.left.length !== expectedBytes || pixels.right.length !== expectedBytes) {
+      throw new Error(
+        `real fixture pixel buffer size mismatch (left=${pixels.left.length}, right=${pixels.right.length}, expected=${expectedBytes}); ` +
+        'regenerate libero_real_{left,right}.bin'
+      )
+    }
+
+    const left = preprocessImage(pixels.left, size, size, { size })
+    const right = preprocessImage(pixels.right, size, size, { size })
+
+    if (ref.tokenizer_max_length !== hp.tokenizerMaxLength) {
+      throw new Error(
+        `real fixture tokenizer_max_length=${ref.tokenizer_max_length} but addon tokenizerMaxLength=${hp.tokenizerMaxLength}`
+      )
+    }
+    const tokens = Int32Array.from(ref.inputs.tokens)
+    const mask = Uint8Array.from(ref.inputs.token_mask, (v) => (v ? 1 : 0))
+    if (tokens.length !== hp.tokenizerMaxLength || mask.length !== hp.tokenizerMaxLength) {
+      throw new Error('real fixture tokens/mask length mismatch')
+    }
+
+    if (ref.inputs.state.length !== hp.maxStateDim) {
+      throw new Error(
+        `real fixture state.length=${ref.inputs.state.length} but addon maxStateDim=${hp.maxStateDim}`
+      )
+    }
+    const state = Float32Array.from(ref.inputs.state)
+
+    const noiseLen = hp.chunkSize * hp.maxActionDim
+    if (ref.inputs.noise.length !== noiseLen) {
+      throw new Error(
+        `real fixture noise.length=${ref.inputs.noise.length} but expected ${noiseLen}`
+      )
+    }
+    const noise = Float32Array.from(ref.inputs.noise)
+
+    return { images: [left, right], imgWidth: size, imgHeight: size, state, tokens, mask, noise }
+  }
+
+  throw new Error(`unknown fixture name: ${name}`)
+}
+
+async function _runEndToEnd (t, modelPath, backend, fixtureName) {
   // Each iteration owns its own VlaModel and explicitly `unload()`s before
   // returning so memory-constrained mobile devices don't hold two copies of
   // the weights at once. `t.teardown` would defer release to end-of-test,
@@ -387,6 +494,8 @@ async function _runEndToEnd (t, modelPath, backend) {
     opts: { stats: true }
   })
 
+  const tag = `${fixtureName}/${backend}`
+
   try {
     await model.load({ backend })
 
@@ -394,28 +503,16 @@ async function _runEndToEnd (t, modelPath, backend) {
     t.ok(hp.chunkSize > 0)
     t.ok(hp.actionDim > 0)
 
-    const size = hp.visionImageSize
-    const dummy = new Uint8Array(size * size * 3).fill(128)
-    const img = preprocessImage(dummy, size, size, { size })
+    const inputs = _buildFixtureInputs(fixtureName, hp)
+    if (!inputs) {
+      t.comment(
+        `[${tag}] skipping: real fixture assets not found ` +
+        '(run scripts/generate_reference.py --fixture real)'
+      )
+      return
+    }
 
-    const tokens = new Int32Array(hp.tokenizerMaxLength)
-    const mask = new Uint8Array(hp.tokenizerMaxLength)
-    tokens[0] = 1 // BOS-like token
-    mask[0] = 1
-
-    const state = padState([0, 0, 0, 0, 0, 0], hp.maxStateDim)
-    const noise = new Float32Array(hp.chunkSize * hp.maxActionDim)
-    for (let i = 0; i < noise.length; i++) noise[i] = 0
-
-    const response = await model.run({
-      images: [img, img],
-      imgWidth: size,
-      imgHeight: size,
-      state,
-      tokens,
-      mask,
-      noise
-    })
+    const response = await model.run(inputs)
     const { actions, stats } = await response.await()
 
     t.ok(actions instanceof Float32Array)
@@ -428,25 +525,25 @@ async function _runEndToEnd (t, modelPath, backend) {
       t.ok(stats[key] >= 0, `stats.${key} >= 0`)
     }
     console.log(
-      `[VLA TIMING ${backend}] vision=${stats.vision_ms.toFixed(0)}ms ` +
+      `[VLA TIMING ${tag}] vision=${stats.vision_ms.toFixed(0)}ms ` +
       `smollm2_compute=${stats.smollm2_compute_ms.toFixed(0)}ms ` +
       `smollm2_total=${stats.smollm2_total_ms.toFixed(0)}ms ` +
       `ode=${stats.ode_ms.toFixed(0)}ms ` +
       `total=${stats.total_ms.toFixed(0)}ms`
     )
 
-    const ref = _loadReference()
+    const ref = _loadReference(fixtureName)
     let quality
     if (ref && (ref.chunk_size !== hp.chunkSize || ref.action_dim !== hp.actionDim)) {
       t.fail(
-        `reference shape mismatch (ref=${ref.chunk_size}x${ref.action_dim}, actual=${hp.chunkSize}x${hp.actionDim}); ` +
-        'regenerate test/integration/assets/pt_actions_libero_fixed.json with matching dims'
+        `[${tag}] reference shape mismatch (ref=${ref.chunk_size}x${ref.action_dim}, actual=${hp.chunkSize}x${hp.actionDim}); ` +
+        `regenerate test/integration/assets/pt_actions_libero_${fixtureName}.json with matching dims`
       )
     } else if (ref) {
       const cmp = _compareActions(actions, ref.actions)
       quality = cmp
       console.log(
-        `[VLA QUALITY ${backend}] vs ${ref.model}: max|Δ|=${cmp.action_max_abs_diff.toFixed(4)} ` +
+        `[VLA QUALITY ${tag}] vs ${ref.model}: max|Δ|=${cmp.action_max_abs_diff.toFixed(4)} ` +
         `mean|Δ|=${cmp.action_mean_abs_diff.toFixed(4)} cos=${cmp.action_cos_sim.toFixed(4)} ` +
         `(${cmp.compared} values)`
       )
@@ -461,19 +558,19 @@ async function _runEndToEnd (t, modelPath, backend) {
       // gripper sign flips without masking real regressions.
       t.ok(
         cmp.action_max_abs_diff < 1.5,
-        `max |Δ| ${cmp.action_max_abs_diff.toFixed(4)} < 1.5 vs PyTorch`
+        `[${tag}] max |Δ| ${cmp.action_max_abs_diff.toFixed(4)} < 1.5 vs PyTorch`
       )
       t.ok(
         cmp.action_cos_sim > 0.95,
-        `cosine similarity ${cmp.action_cos_sim.toFixed(4)} > 0.95 vs PyTorch`
+        `[${tag}] cosine similarity ${cmp.action_cos_sim.toFixed(4)} > 0.95 vs PyTorch`
       )
     } else {
-      t.comment('skipping reference comparison: pt_actions_libero_fixed.json not found')
+      t.comment(`[${tag}] skipping reference comparison: pt_actions_libero_${fixtureName}.json not found`)
     }
 
     const ep = model.backendName || null
-    console.log(`[VLA BACKEND ${backend}] execution_provider=${ep ?? 'unknown'}`)
-    _perfReporter.record(`end-to-end inference (${backend})`, {
+    console.log(`[VLA BACKEND ${tag}] execution_provider=${ep ?? 'unknown'}`)
+    _perfReporter.record(`end-to-end inference (${tag})`, {
       total_time_ms: stats.total_ms,
       vision_time_ms: stats.vision_ms,
       smollm2_compute_time_ms: stats.smollm2_compute_ms,
@@ -522,7 +619,16 @@ test('integration: end-to-end inference runs (needs GGUF)', { timeout: 1800000 }
     return
   }
 
-  for (const backend of ['auto', 'cpu']) {
-    await _runEndToEnd(t, modelPath, backend)
+  // Two fixtures × two backends:
+  //   - 'fixed': synthetic gray pixels + BOS-only tokens — fast smoke +
+  //     numerical correctness. Always runs (assets are committed).
+  //   - 'real':  real LIBERO frame + instruction + state + seeded noise —
+  //     exercises the full vision/attention/ODE graph. Skipped with a
+  //     comment if its assets aren't committed yet (run
+  //     scripts/generate_reference.py --fixture real once to generate).
+  for (const fixtureName of ['fixed', 'real']) {
+    for (const backend of ['auto', 'cpu']) {
+      await _runEndToEnd(t, modelPath, backend, fixtureName)
+    }
   }
 })
