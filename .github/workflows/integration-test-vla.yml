@@ -146,7 +146,7 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: |
           npm install
-          npm install -g bare bare-make
+          npm install -g bare bare-make bare-runtime bare-https brittle
 
       - name: Download prebuilds (from artifacts)
         if: ${{ !inputs.prebuild_package }}
