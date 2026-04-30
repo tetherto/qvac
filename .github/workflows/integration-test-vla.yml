@@ -403,6 +403,25 @@ jobs:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
 
+      # Diagnostic: dump the prebuilt addon's DLL import table so we can see
+      # which dependency LoadLibrary is missing when the addon fails to load.
+      # `dumpbin /dependents` is shipped with Visual Studio Build Tools, which
+      # the ai-run-windows11-gpu runner has installed.
+      - name: Windows - dump addon DLL imports (diagnostic)
+        if: matrix.platform == 'win32'
+        working-directory: ${{ env.WORKDIR }}
+        shell: powershell
+        run: |
+          $addon = Get-ChildItem -Recurse -Filter 'qvac__vla*.bare' prebuilds/ | Select-Object -First 1
+          if (-not $addon) { Write-Host "no .bare in prebuilds/"; exit 0 }
+          Write-Host "addon: $($addon.FullName)"
+          $vsdir = Get-ChildItem -Path "C:\Program Files\Microsoft Visual Studio\2022" -Filter dumpbin.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $vsdir) {
+            $vsdir = Get-ChildItem -Path "C:\Program Files (x86)\Microsoft Visual Studio" -Filter dumpbin.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          }
+          if (-not $vsdir) { Write-Host "dumpbin not found"; exit 0 }
+          & $vsdir.FullName /dependents $addon.FullName
+
       - name: Run integration test (Linux/macOS)
         if: ${{ matrix.platform != 'win32' }}
         working-directory: ${{ env.WORKDIR }}
