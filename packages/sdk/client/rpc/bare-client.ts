@@ -25,6 +25,7 @@ import { getAllPlugins } from "@/server/plugins";
 import {
   initializeWorkerCore,
   shutdownBareDirectWorker,
+  cleanupForTerminate,
 } from "@/server/worker-core";
 import { assertLifecycleAllowed } from "@/server/bare/runtime-lifecycle";
 
@@ -216,6 +217,27 @@ function createMockRPCRequest() {
           if (initData.runtimeContext) {
             setRuntimeContext(initData.runtimeContext);
           }
+          return Buffer.from(JSON.stringify({ success: true }));
+        } catch (error) {
+          return Buffer.from(
+            JSON.stringify({
+              success: false,
+              error: error instanceof Error ? error.message : String(error),
+            }),
+          );
+        }
+      }
+
+      // Handle special pre-terminate cleanup signal. In direct mode the
+      // bare runtime is the host JS context, so we run cleanup but never
+      // exit the process here.
+      if (
+        typeof requestData === "object" &&
+        "type" in requestData &&
+        requestData.type === "__shutdown__"
+      ) {
+        try {
+          await cleanupForTerminate();
           return Buffer.from(JSON.stringify({ success: true }));
         } catch (error) {
           return Buffer.from(

@@ -185,6 +185,12 @@ export const customTree: Node[] = [
     icon: resolveIcon('Terminal'),
   },
   {
+    name: 'System requirements',
+    url: '/system-requirements',
+    type: 'page',
+    icon: resolveIcon('Stethoscope'),
+  },
+  {
     name: 'HTTP server',
     url: '/http-server',
     type: 'page',
