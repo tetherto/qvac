@@ -270,14 +270,12 @@ function generateMarkdownReport (aggregated, opts) {
   lines.push(`## ${addon} Performance Report`)
   lines.push(`Generated: ${generated_at} | CI Runs: ${run_numbers.join(', ')} | Iterations: ${iterCount}`)
   lines.push('')
-  // QVAC-17830: short legend so reviewers don't read intra-scenario
-  // dashes as broken data. Per-scenario column filtering above
-  // already drops devices that have ZERO data in a scenario block
-  // (e.g. bitnet only ever shows the Android columns); the dashes
-  // that remain are gated tests like medgemma-4b-it (desktop-only,
-  // too heavy for mobile) or platform/runner gaps (e.g. no GPU
-  // available on darwin-x64 / linux-arm64 CI runners).
-  lines.push('> `-` = scenario not run on that device (test gating or runner capability — e.g. `medgemma-4b-it` is desktop-only, mobile only runs `qwen3-1.7b`; `darwin-x64` / `linux-arm64` have no GPU runner).')
+  // QVAC-17830: terse one-liner so reviewers don't read dashes as
+  // broken data. Per-scenario column filtering already drops devices
+  // with zero data in a scenario; the dashes that remain are
+  // intentional test gates (model too heavy for mobile, no GPU on
+  // that runner, etc.).
+  lines.push('> _`-` = not run on this device._')
   lines.push('')
 
   const deviceNames = Object.keys(devices)
@@ -300,19 +298,22 @@ function generateMarkdownReport (aggregated, opts) {
   const hasEp = parsed.some(p => p.ep !== '')
 
   // QVAC-17830: squashed step-summary layout — one mini-table per
-  // headline metric (Total Time / TTFT / TPS), each row=test, col=
-  // device, cell="mean ±std". Replaces the long per-device detail
-  // tables in the GH summary while keeping mean ± std visible at a
-  // glance. The HTML artifact retains the full per-iteration
-  // breakdown via `--html-device-details`.
-  //
-  // Suppressed when no row has any data for the metric (e.g. OCR
-  // reports never produce ttft / tps so those tables would be all
-  // dashes).
+  // headline metric, each row=test, col=device, cell="mean ±std".
+  // Per the latest review feedback we surface the full breakdown
+  // (Total / Prefill / Decode / Vision Encode / TTFT / TPS) instead
+  // of just Total/TTFT/TPS so the cross-platform comparison shows
+  // the same numbers as the per-device detail tables. Each table
+  // is suppressed when EVERY cell is null (e.g. vision_encode_time_ms
+  // is currently null everywhere until the native timer lands —
+  // Asana 1214371583877702 — so its table won't render yet) and
+  // is also suppressed for OCR reports that never produce TTFT/TPS.
   const SUMMARY_METRICS = [
-    { key: 'total_time_ms', heading: 'Total Time', unit: 'ms', round: true, label: 'Mean Total Time (ms)' },
-    { key: 'ttft_ms', heading: 'TTFT', unit: 'ms', round: true, label: 'Mean TTFT (ms)' },
-    { key: 'tps', heading: 'TPS', unit: '', round: false, label: 'Mean TPS' }
+    { key: 'total_time_ms', unit: 'ms', round: true, label: 'Mean Total Time (ms)' },
+    { key: 'prefill_time_ms', unit: 'ms', round: true, label: 'Mean Prefill (ms)' },
+    { key: 'decode_time_ms', unit: 'ms', round: true, label: 'Mean Decode (ms)' },
+    { key: 'vision_encode_time_ms', unit: 'ms', round: true, label: 'Mean Vision Encode (ms)' },
+    { key: 'ttft_ms', unit: 'ms', round: true, label: 'Mean TTFT (ms)' },
+    { key: 'tps', unit: '', round: false, label: 'Mean TPS' }
   ]
 
   const scenarioMap = aggregated.scenarios || {}
