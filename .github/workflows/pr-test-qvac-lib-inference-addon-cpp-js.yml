@@ -60,8 +60,9 @@ jobs:
           #   asan: false
           #   run_tests: false
     runs-on: ${{ matrix.runner }}
-    environment: release
     name: js-${{ matrix.name }}
+    permissions:
+      contents: read
     defaults:
       run:
         shell: bash
@@ -73,7 +74,7 @@ jobs:
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           ref: ${{ github.event.pull_request.head.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          persist-credentials: false
 
       - if: ${{ inputs.caller_event_name == 'workflow_dispatch' }}
         name: Checkout workflow ref
@@ -137,7 +138,7 @@ jobs:
             echo "::group::$package_name"
             if (
               cd "$package_dir"
-              npm install --package-lock=false
+              npm install --package-lock=false --ignore-scripts
               npm exec -- standard
               bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }}
               bare-make build
@@ -172,7 +173,7 @@ jobs:
             echo "::group::$package_name ASAN"
             if (
               cd "$package_dir"
-              npm install --package-lock=false
+              npm install --package-lock=false --ignore-scripts
               npm exec -- standard
               rm -rf build prebuilds
               CXXFLAGS="-fsanitize=address -fno-omit-frame-pointer" \

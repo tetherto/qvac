@@ -197,7 +197,8 @@ jobs:
   run-js-tests:
     if: needs.authorize.outputs.allowed == 'true'
     needs: authorize
+    permissions:
+      contents: read
     uses: ./.github/workflows/pr-test-qvac-lib-inference-addon-cpp-js.yml
     with:
       caller_event_name: ${{ github.event_name }}
-    secrets: inherit
