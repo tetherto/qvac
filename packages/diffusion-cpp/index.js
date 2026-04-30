@@ -5,7 +5,7 @@ const QvacLogger = require('@qvac/logging')
 const { createJobHandler, exclusiveRunQueue } = require('@qvac/infer-base')
 const { SdInterface, mapAddonEvent } = require('./addon')
 
-const COMPANION_FILE_KEYS = ['clipL', 'clipG', 't5Xxl', 'llm', 'vae']
+const COMPANION_FILE_KEYS = ['clipL', 'clipG', 't5Xxl', 'llm', 'vae', 'esrgan']
 
 function assertAbsolute (key, value) {
   if (typeof value !== 'string' || value.length === 0) {
@@ -34,6 +34,7 @@ class ImgStableDiffusion {
    * @param {string} [args.files.t5Xxl] - T5-XXL text encoder (SD3, absolute path)
    * @param {string} [args.files.llm] - LLM text encoder (FLUX.2 klein, absolute path)
    * @param {string} [args.files.vae] - VAE file (absolute path)
+   * @param {string} [args.files.esrgan] - ESRGAN upscaler model (absolute path)
    * @param {object} [args.config] - SD context configuration (threads, device, type, etc.).
    *   Optional — when omitted, the addon forwards an empty config and the C++ layer falls
    *   back to stable-diffusion.cpp defaults for every parameter.
@@ -92,6 +93,7 @@ class ImgStableDiffusion {
       t5XxlPath: this._files.t5Xxl || '',
       llmPath: this._files.llm || '',
       vaePath: this._files.vae || '',
+      esrganPath: this._files.esrgan || '',
       config: this._config
     }
 
@@ -217,6 +219,8 @@ class ImgStableDiffusion {
    * @param {boolean} [params.vae_tiling=false]     - Enable VAE tiling (for large images)
    * @param {string}  [params.cache_preset]         - Cache preset: slow/medium/fast/ultra
    * @param {string}  [params.lora]                 - Non-empty absolute path to a LoRA adapter (.safetensors, etc.)
+   * @param {boolean|object} [params.upscale]        - Post-generation ESRGAN upscale (requires files.esrgan)
+   * @param {number} [params.upscale.repeats=1]      - Number of ESRGAN passes
    * @param {Uint8Array} [params.init_image]        - Source image bytes for img2img (PNG/JPEG).
    *                                                   FLUX2: in-context conditioning (ref_images).
    *                                                   Others: SDEdit (init_image + strength).
@@ -398,6 +402,10 @@ class ImgStableDiffusion {
       if (!path.isAbsolute(params.lora)) {
         throw new TypeError(`params.lora must be an absolute path (got: ${params.lora})`)
       }
+    }
+
+    if (params.upscale != null && params.upscale !== false && !this._files.esrgan) {
+      throw new Error('ESRGAN upscale requested but files.esrgan was not provided')
     }
 
     // FLUX models require an explicit prediction type for img2img (single ref).
