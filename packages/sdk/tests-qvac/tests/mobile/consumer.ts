@@ -336,6 +336,7 @@ export const executor = createExecutor({
     ], "HTTP test disabled on mobile (OOM)"),
     new SkipExecutor(/^finetune-/, "Finetune tests disabled on mobile"),
     new SkipExecutor(/^tools-(?!simple-function$|no-function-match$)/, "Tools test disabled on mobile"),
+    new SkipExecutor(/^diffusion-/, "SD v2.1 1B Q8_0 cold-load is too heavy for Device Farm devices (iOS variable 5–15min, Android blocks JS thread >300s and trips heartbeat)"),
     // suspend() hangs the test runner on mobile (the lifecycle coordinator
     // pauses MQTT/network ops and never resumes within the test timeout).
     // Only resume-idempotent is safe -- it does not call suspend().
@@ -346,14 +347,6 @@ export const executor = createExecutor({
       "lifecycle-rapid-toggle",
       "lifecycle-suspend-during-inference",
     ], "suspend() hangs the runner on mobile"),
-    // diffusion-streaming-progress reliably times out on mobile and the
-    // leftover stream blocks the diffusion model from being evicted,
-    // hanging the next test that needs to free it (typically
-    // wrong-model-transcribe-on-llm via ResourceManager.evictExcept).
-    skipTests(
-      ["diffusion-streaming-progress"],
-      "diffusion stream times out on mobile and blocks subsequent eviction",
-    ),
     ...(Platform.OS === "ios" ? [
       skipTests([
         "ocr-sign-image",
@@ -370,6 +363,7 @@ export const executor = createExecutor({
         "ocr-multi-sized-text",
         "ocr-multiple-fonts",
       ], "OCR disabled on iOS (ONNX/CoreML OOM)"),
+      new SkipExecutor(/^translation-afriquegemma-/, "AfriqueGemma 4B (~2.7 GB) exceeds iOS memory budget"),
     ] : []),
 
     // Real executors
