@@ -27,9 +27,7 @@ jobs:
         env:
           EVENT: ${{ github.event_name }}
           ACTION: ${{ github.event.action }}
-          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
-          BASE_REPO: ${{ github.repository }}
-          AUTHOR_ASSOC: ${{ github.event.pull_request.author_association }}
+          LABEL_NAME: ${{ github.event.label.name }}
           HAS_VERIFY_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'verify') }}
         run: |
           if [ "$EVENT" != "pull_request" ]; then
@@ -37,20 +35,16 @@ jobs:
             exit 0
           fi
 
-          if [ "$HEAD_REPO" = "$BASE_REPO" ]; then
-            echo "allowed=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          if [[ "$AUTHOR_ASSOC" =~ ^(MEMBER|OWNER|COLLABORATOR)$ ]]; then
-            echo "allowed=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
           if [ "$ACTION" = "synchronize" ]; then
-            echo "::error::External fork pushed new commits; re-apply the verify label after review to run JS tests."
+            echo "::notice::New commits pushed; re-apply the verify label after review to run JS tests."
             echo "allowed=false" >> "$GITHUB_OUTPUT"
-            exit 1
+            exit 0
+          fi
+
+          if [ "$ACTION" != "labeled" ] || [ "$LABEL_NAME" != "verify" ]; then
+            echo "::notice::JS tests run only when the verify label is freshly applied."
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
           if [ "$HAS_VERIFY_LABEL" = "true" ]; then
@@ -58,7 +52,7 @@ jobs:
             exit 0
           fi
 
-          echo "::error::External fork PR requires the verify label before JS tests run."
+          echo "::error::JS tests require the verify label."
           echo "allowed=false" >> "$GITHUB_OUTPUT"
           exit 1
 
