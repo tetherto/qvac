@@ -31,6 +31,11 @@ bool isQwen3Architecture(const std::string& architecture) {
   return archStr == "qwen3";
 }
 
+bool isHarmonyArchitecture(const std::string& architecture) {
+  const std::string archStr = normalizeArchitecture(architecture);
+  return archStr == "gpt-oss";
+}
+
 bool modelNameLooksLikeQwen3(const std::string& modelName) {
   std::string normalizedName = modelName;
   std::transform(
@@ -83,6 +88,23 @@ bool isQwen3Model(const ::llama_model* model) {
 
   return supportsToolsCompactForModelMetadata(
       getModelArchitecture(model), getModelName(model));
+}
+
+bool isHarmonyModel(const ::llama_model* model) {
+  if (model == nullptr) {
+    return false;
+  }
+  std::optional<std::string> arch = getModelArchitecture(model);
+  return arch.has_value() && isHarmonyArchitecture(arch.value());
+}
+
+llama_token getHarmonyCallToken(::llama_context* lctx) {
+  std::vector<llama_token> tokens =
+      common_tokenize(lctx, "<|call|>", false, true);
+  if (tokens.size() == 1) {
+    return tokens[0];
+  }
+  return LLAMA_TOKEN_NULL;
 }
 
 bool supportsToolsCompactForModelMetadata(

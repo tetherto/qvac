@@ -53,6 +53,24 @@ TextLlmContext::TextLlmContext(
           lctx_, reasoningState_);
     }
 
+    isHarmonyModel_ =
+        qvac_lib_inference_addon_llama::utils::isHarmonyModel(model_);
+    if (isHarmonyModel_) {
+      harmonyCallToken_ =
+          qvac_lib_inference_addon_llama::utils::getHarmonyCallToken(lctx_);
+      if (harmonyCallToken_ == LLAMA_TOKEN_NULL) {
+        isHarmonyModel_ = false;
+      }
+    }
+    QLOG_IF(
+        Priority::DEBUG,
+        string_format(
+            "[TextLlm] Harmony detection: isHarmony=%d callToken=%d "
+            "useJinja=%d\n",
+            isHarmonyModel_,
+            harmonyCallToken_,
+            params_.use_jinja));
+
     std::string chatTemplate =
         getChatTemplate(model_, params_, tools_.enabled());
     tmpls_ = common_chat_templates_init(model_, chatTemplate);
@@ -508,6 +526,22 @@ bool TextLlmContext::generateResponse(
               tokenId, tokenStr, *batch, nPast_, outputCallback)) {
         continue;
       }
+    }
+
+    if (isEos && isHarmonyModel_ && params_.use_jinja &&
+        tokenId == harmonyCallToken_) {
+      QLOG_IF(
+          Priority::DEBUG,
+          string_format(
+              "[TextLlm] Harmony <|call|> stop: tokenId=%d\n", tokenId));
+      if (outputCallback) {
+        std::string callMarker = common_token_to_piece(lctx_, tokenId, true);
+        if (!callMarker.empty()) {
+          outputCallback(callMarker);
+        }
+      }
+      flushPendingUtf8ToCallback(outputCallback);
+      break;
     }
 
     if (isEos || checkAntiprompt()) {

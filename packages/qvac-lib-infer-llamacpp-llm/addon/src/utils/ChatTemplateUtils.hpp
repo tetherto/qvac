@@ -14,6 +14,8 @@ namespace qvac_lib_inference_addon_llama {
 namespace utils {
 
 bool isQwen3Model(const ::llama_model* model);
+bool isHarmonyModel(const ::llama_model* model);
+llama_token getHarmonyCallToken(::llama_context* lctx);
 std::optional<std::string> getModelArchitecture(const ::llama_model* model);
 bool supportsToolsCompactForModelMetadata(
     const std::optional<std::string>& architecture,
