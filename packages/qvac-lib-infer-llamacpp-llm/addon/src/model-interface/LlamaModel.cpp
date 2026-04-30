@@ -182,6 +182,62 @@ void LlamaModel::tuneConfigMap(
     }
   }
 
+  // Adreno 800+: cap GPU layer offload.
+  const bool needsGpuLayerCap = adrenoVersion.has_value() &&
+                                adrenoVersion.value() >= kAdrenoUbatchThreshold;
+  if (needsGpuLayerCap) {
+    constexpr int64_t kAdrenoGpuLayersCap = 6;
+    if (notUserSet("gpu-layers", "gpu_layers") &&
+        notUserSet("n-gpu-layers", "n_gpu_layers")) {
+      configFilemap["gpu-layers"] = std::to_string(kAdrenoGpuLayersCap);
+      QLOG_IF(
+          Priority::INFO,
+          "[LlamaModel] Adreno 800+: defaulting gpu-layers=6\n");
+    } else {
+      std::string key;
+      if (configFilemap.count("gpu-layers")) {
+        key = "gpu-layers";
+      } else if (configFilemap.count("gpu_layers")) {
+        key = "gpu_layers";
+      } else if (configFilemap.count("n-gpu-layers")) {
+        key = "n-gpu-layers";
+      } else {
+        key = "n_gpu_layers";
+      }
+      int64_t userVal;
+      try {
+        userVal = std::stoll(configFilemap[key]);
+      } catch (const std::exception& e) {
+        QLOG_IF(
+            Priority::ERROR,
+            string_format(
+                "[LlamaModel] Adreno 800+: invalid %s "
+                "\"%s\" (%s), falling back to %" PRId64 "\n",
+                key.c_str(),
+                configFilemap[key].c_str(),
+                e.what(),
+                kAdrenoGpuLayersCap));
+        userVal = kAdrenoGpuLayersCap;
+      }
+      const int64_t clamped = std::min(userVal, kAdrenoGpuLayersCap);
+      if (clamped < userVal) {
+        QLOG_IF(
+            Priority::WARNING,
+            string_format(
+                "[LlamaModel] Adreno 800+: %s=%" PRId64
+                " exceeds safe maximum %" PRId64 ", clamping to %" PRId64 "\n",
+                key.c_str(),
+                userVal,
+                kAdrenoGpuLayersCap,
+                clamped));
+      }
+      configFilemap.erase("gpu_layers");
+      configFilemap.erase("n-gpu-layers");
+      configFilemap.erase("n_gpu_layers");
+      configFilemap["gpu-layers"] = std::to_string(clamped);
+    }
+  }
+
   if (isFinetuning && !finetuneOverrides.gpuSupportsF16OutProd) {
     if (notUserSet("cache-type-k", "cache_type_k")) {
       configFilemap["cache-type-k"] = "f32";
