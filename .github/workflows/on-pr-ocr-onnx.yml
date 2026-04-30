@@ -65,7 +65,11 @@ jobs:
     needs: [authorize, changes]
     if: |
       (needs.changes.outputs.pkg == 'true' &&
-       needs.authorize.outputs.allowed == 'true') ||
+       needs.authorize.outputs.allowed == 'true' &&
+       (
+         contains(fromJSON('["MEMBER","OWNER","COLLABORATOR"]'), github.event.pull_request.author_association) ||
+         contains(github.event.pull_request.labels.*.name, 'verify')
+       )) ||
       github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-22.04
     env:

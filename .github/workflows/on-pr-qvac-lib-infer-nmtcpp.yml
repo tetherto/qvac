@@ -74,7 +74,16 @@ jobs:
 
   sanity-checks:
     needs: [authorize, changes, verify-fabric-lockstep]
-    if: always() && ((needs.changes.outputs.pkg == 'true' && needs.authorize.outputs.allowed == 'true') || github.event_name == 'workflow_dispatch')
+    if: |
+      always() && (
+        (needs.changes.outputs.pkg == 'true' &&
+         needs.authorize.outputs.allowed == 'true' &&
+         (
+           contains(fromJSON('["MEMBER","OWNER","COLLABORATOR"]'), github.event.pull_request.author_association) ||
+           contains(github.event.pull_request.labels.*.name, 'verify')
+         )) ||
+        github.event_name == 'workflow_dispatch'
+      )
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code

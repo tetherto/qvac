@@ -56,7 +56,12 @@ jobs:
         run: 'echo "Verified qvac-fabric version: ${{ steps.lockstep.outputs.version }}"'
 
   sanity-checks:
-    if: needs.authorize.outputs.allowed == 'true'
+    if: |
+      needs.authorize.outputs.allowed == 'true' &&
+      (
+        contains(fromJSON('["MEMBER","OWNER","COLLABORATOR"]'), github.event.pull_request.author_association) ||
+        contains(github.event.pull_request.labels.*.name, 'verify')
+      )
     needs: [authorize, verify-fabric-lockstep]
     runs-on: ubuntu-latest
     steps:

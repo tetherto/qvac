@@ -118,7 +118,12 @@ jobs:
           echo "  run_verify=$run_verify"
 
   sanity-checks:
-    if: needs.authorize.outputs.allowed == 'true'
+    if: |
+      needs.authorize.outputs.allowed == 'true' &&
+      (
+        contains(fromJSON('["MEMBER","OWNER","COLLABORATOR"]'), github.event.pull_request.author_association) ||
+        contains(github.event.pull_request.labels.*.name, 'verify')
+      )
     needs: [authorize, context]
     runs-on: ubuntu-latest
     steps:
