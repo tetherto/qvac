@@ -29,7 +29,7 @@ env:
 
 jobs:
   cpp-lint:
-    runs-on: ai-run-linux
+    runs-on: ubuntu-22.04
     environment: release
     permissions:
       contents: read
