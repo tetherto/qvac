@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.17.3] - 2026-04-30
+
+### Fixed
+
+#### `saveCacheToDisk` is now honoured on prefill-only runs
+
+When `processPromptImpl` ran with `prompt.prefill === true`, it returned early and skipped the post-inference branch that persists the KV cache. As a result, a prefill warm-up call with `saveCacheToDisk: true` and a valid `cacheKey` would build the cache in memory but never write it to disk, defeating the purpose of priming the cache for a follow-up turn.
+
+The save logic has been extracted into a new static helper `maybeSaveCacheToDisk(...)` that preserves the original guard (`saveCacheToDisk && cacheManager has value && hasActiveCache()`). Both the `prompt.prefill` early-return branch and the post-generation path now go through this helper, so prefill and full inference persist the cache identically.
+
+A subsequent normal turn that reuses the same `cacheKey` will now correctly load the prefilled tokens from disk and only tokenize/process the incremental delta.
+
 ## [0.17.2] - 2026-04-30
 
 ### Fixed
