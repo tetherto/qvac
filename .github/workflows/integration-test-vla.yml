@@ -93,6 +93,7 @@ jobs:
           GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           GIT_PAT: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           echo "Configuring scoped registry for @tetherto and @qvac packages..."
@@ -111,7 +112,7 @@ jobs:
             git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
           else
             # Using the workflow's GITHUB_TOKEN for git clones when possible
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://${GH_TOKEN}:@github.com/".insteadOf "https://github.com/"
           fi
 
       - name: Configure scoped registry for @tetherto and @qvac packages (Windows)
@@ -121,6 +122,7 @@ jobs:
           GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           GIT_PAT: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           echo "=== Configuring scoped registry for @tetherto and @qvac packages ==="
           echo "Writing .npmrc for dual registry install…"
@@ -136,7 +138,7 @@ jobs:
           if ($env:GIT_PAT) {
             git config --global url."https://$env:GIT_PAT:@github.com/".insteadOf "https://github.com/"
           } else {
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://$env:GH_TOKEN:@github.com/".insteadOf "https://github.com/"
           }
         shell: powershell
 
@@ -239,8 +241,7 @@ jobs:
           echo "npm version: $(npm -v)"
           echo "bare version: $(bare -v)"
           echo "bare-make version: $(bare-make --version)"
-          npm list
-          npm config list
+          npm list --depth=0
         continue-on-error: true
 
       - name: Install gh cli for ai-run-linux-gpu
