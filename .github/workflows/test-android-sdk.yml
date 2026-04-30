@@ -19,11 +19,6 @@ on:
         required: false
         type: number
         default: 600
-      consumer-inactivity-timeout:
-        description: "Heartbeat inactivity timeout in seconds (mobile inference blocks JS event loop)."
-        required: false
-        type: number
-        default: 300
       filter:
         description: "Filter tests by category or testId prefix (comma-separated)"
         required: false
@@ -558,7 +553,6 @@ jobs:
           echo "Starting producer..."
           echo "   Run ID: ${{ needs.build.outputs.runId }}"
           echo "   Consumer timeout: ${{ inputs.consumer-timeout }}s"
-          echo "   Consumer inactivity timeout: ${{ inputs.consumer-inactivity-timeout }}s"
           echo "   Filter: ${{ inputs.filter || '(none)' }}"
           echo "   Suite: ${{ inputs.suite || '(all)' }}"
           echo "   Exclude suite: ${{ inputs.exclude-suite || '(none)' }}"
@@ -581,7 +575,6 @@ jobs:
           npx qvac-test run:producer \
             --runId "${{ needs.build.outputs.runId }}" \
             --consumer-timeout "${{ inputs.consumer-timeout }}" \
-            --consumer-inactivity-timeout "${{ inputs.consumer-inactivity-timeout }}" \
             --config . \
             $FILTER_ARG \
             $SUITE_ARG \
