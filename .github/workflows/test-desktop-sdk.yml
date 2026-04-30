@@ -209,9 +209,48 @@ jobs:
             console.log('✅ Client key written');
           }
 
+      - name: Resolve cache dirs (Windows)
+        if: runner.os == 'Windows'
+        working-directory: ${{ inputs.project-directory }}
+        shell: bash
+        run: |
+          BUN_CACHE_DIR="$(bun pm cache)"
+          NPM_CACHE_DIR="$(npm config get cache)"
+          echo "BUN_CACHE_DIR=$BUN_CACHE_DIR" >> "$GITHUB_ENV"
+          echo "NPM_CACHE_DIR=$NPM_CACHE_DIR" >> "$GITHUB_ENV"
+          echo "Resolved bun cache dir: $BUN_CACHE_DIR"
+          echo "Resolved npm cache dir: $NPM_CACHE_DIR"
+
+      - name: Restore bun cache (Windows)
+        id: bun-cache
+        if: runner.os == 'Windows'
+        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          path: ${{ env.BUN_CACHE_DIR }}
+          key: bun-cache-${{ runner.os }}-${{ hashFiles('packages/sdk/package.json') }}
+          restore-keys: |
+            bun-cache-${{ runner.os }}-
+
+      - name: Restore npm cache (Windows)
+        id: npm-cache
+        if: runner.os == 'Windows'
+        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          path: ${{ env.NPM_CACHE_DIR }}
+          key: npm-cache-${{ runner.os }}-${{ hashFiles('packages/sdk/tests-qvac/package.json') }}
+          restore-keys: |
+            npm-cache-${{ runner.os }}-
+
       - name: Install dependencies (root)
         working-directory: ${{ inputs.project-directory }}
         run: bun install
+
+      - name: Save bun cache (Windows)
+        if: runner.os == 'Windows' && steps.bun-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          path: ${{ env.BUN_CACHE_DIR }}
+          key: bun-cache-${{ runner.os }}-${{ hashFiles('packages/sdk/package.json') }}
 
       - name: Build project (root)
         working-directory: ${{ inputs.project-directory }}
@@ -245,6 +284,13 @@ jobs:
       - name: Install dependencies (consumer)
         working-directory: ${{ inputs.working-directory }}
         run: npm install --install-links
+
+      - name: Save npm cache (Windows)
+        if: runner.os == 'Windows' && steps.npm-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          path: ${{ env.NPM_CACHE_DIR }}
+          key: npm-cache-${{ runner.os }}-${{ hashFiles('packages/sdk/tests-qvac/package.json') }}
 
       - name: Build project (consumer)
         working-directory: ${{ inputs.working-directory }}
