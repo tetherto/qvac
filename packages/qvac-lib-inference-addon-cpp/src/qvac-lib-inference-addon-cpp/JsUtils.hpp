@@ -1,6 +1,5 @@
 #pragma once
 
-#include <atomic>
 #include <cstdint>
 #include <cstring>
 #include <exception>
@@ -305,21 +304,15 @@ protected:
     // runners where the first js_create_double() in the process can produce
     // an invalid JS value even though it returns success.
     // TODO: Remove this burn-once workaround once Bare/libjs ships a fix.
-    bool expected = false;
-    if (hasCreatedDouble_.compare_exchange_strong(expected, true)) {
+    static bool hasBurnedDouble = [](js_env_t* env) {
       js_value_t* burned = nullptr;
-      auto err = js_create_double(env, value, &burned);
-      if (err != 0) {
-        return err;
-      }
-    }
+      (void)js_create_double(env, 0, &burned);
+      return true;
+    }(env);
+    (void)hasBurnedDouble;
 #endif
     return js_create_double(env, value, result);
   }
-
-#if defined(_WIN32)
-  inline static std::atomic_bool hasCreatedDouble_{false};
-#endif
 
   static int as_(js_env_t* env, js_value_t* value, double* result) {
     return js_get_value_double(env, value, result);
