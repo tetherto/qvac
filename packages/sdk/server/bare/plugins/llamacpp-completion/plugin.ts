@@ -171,6 +171,7 @@ export const llmPlugin = definePlugin({
           ...(toolsActive && request.tools && { tools: request.tools }),
           ...(request.generationParams && { generationParams: request.generationParams }),
           ...(toolsActive && { toolDialect: dialect }),
+          ...(request.responseFormat && { responseFormat: request.responseFormat }),
         });
 
         try {
@@ -203,11 +204,14 @@ export const llmPlugin = definePlugin({
 
           const finalEvents = request.stream ? terminalEvents : batchedEvents;
 
-          yield attachModelExecutionMs({
-            type: "completionStream" as const,
-            done: true,
-            events: finalEvents,
-          }, modelExecutionMs);
+          yield attachModelExecutionMs(
+            {
+              type: "completionStream" as const,
+              done: true,
+              events: finalEvents,
+            },
+            modelExecutionMs,
+          );
         } finally {
           await stream.return?.(undefined as never);
         }
@@ -243,12 +247,15 @@ export const llmPlugin = definePlugin({
           }
 
           const { modelExecutionMs, stats } = result.value;
-          yield attachModelExecutionMs({
-            type: "translate" as const,
-            token: "",
-            done: true,
-            ...(stats && { stats }),
-          }, modelExecutionMs);
+          yield attachModelExecutionMs(
+            {
+              type: "translate" as const,
+              token: "",
+              done: true,
+              ...(stats && { stats }),
+            },
+            modelExecutionMs,
+          );
         } finally {
           await stream.return?.(undefined as never);
         }

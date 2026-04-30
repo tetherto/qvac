@@ -3,6 +3,7 @@ import type {
   CompletionParams,
   CompletionStats,
   GenerationParams,
+  ResponseFormat,
   Tool,
   ToolCall,
   ToolDialect,
@@ -46,6 +47,7 @@ import {
   prependToolsToHistory,
 } from "@/server/utils/tool-integration";
 import { parseToolCalls } from "@/server/utils/tools";
+import { getResponseFormatJsonSchema } from "@/server/utils/response-format";
 import { buildAutoCacheSaveHistory, type CacheMessage } from "@/server/utils";
 import { getServerLogger } from "@/logging";
 import { AttachmentNotFoundError } from "@/utils/errors-server";
@@ -92,8 +94,17 @@ interface ChatHistory {
   parameters?: unknown;
 }
 
+// Internal generation-params shape forwarded to the addon. Extends the
+// public `GenerationParams` with `json_schema` (a JSON-Schema string the
+// addon will convert to GBNF) so structured-output requests can constrain
+// sampling per request without mutating the shared `modelConfig`. The
+// addon types in `@qvac/llm-llamacpp@0.17.1`+ already include this field;
+// the explicit `&` here keeps typing correct against `^0.16.0` until the
+// dep bump propagates and is harmless once it has.
+type CompletionGenerationParams = GenerationParams & { json_schema?: string };
+
 type CompletionRunOptions = Pick<RunOptions, "cacheKey" | "saveCacheToDisk"> & {
-  generationParams?: GenerationParams;
+  generationParams?: CompletionGenerationParams;
 };
 
 // Re-export so existing callers keep their import surface intact. The pure
@@ -341,20 +352,21 @@ async function* processModelResponse(
   model: AnyModel,
   messagesToSend: ChatHistory[],
   tools?: Tool[],
-  generationParams?: GenerationParams,
+  generationParams?: CompletionGenerationParams,
   cacheOptions?: CacheRunOptions,
   dialect?: ToolDialect,
 ): AsyncGenerator<{ token: string }, ProcessModelResponseResult, unknown> {
-  const runOptions: CacheRunOptions & { generationParams?: GenerationParams } =
-    {
-      ...(generationParams && { generationParams }),
-      ...(cacheOptions?.cacheKey !== undefined && {
-        cacheKey: cacheOptions.cacheKey,
-      }),
-      ...(cacheOptions?.saveCacheToDisk !== undefined && {
-        saveCacheToDisk: cacheOptions.saveCacheToDisk,
-      }),
-    };
+  const runOptions: CacheRunOptions & {
+    generationParams?: CompletionGenerationParams;
+  } = {
+    ...(generationParams && { generationParams }),
+    ...(cacheOptions?.cacheKey !== undefined && {
+      cacheKey: cacheOptions.cacheKey,
+    }),
+    ...(cacheOptions?.saveCacheToDisk !== undefined && {
+      saveCacheToDisk: cacheOptions.saveCacheToDisk,
+    }),
+  };
   const hasRunOptions = Object.keys(runOptions).length > 0;
 
   const modelStart = nowMs();
@@ -420,9 +432,11 @@ export async function* completion(
     tools?: Tool[];
     generationParams?: GenerationParams;
     toolDialect?: ToolDialect;
+    responseFormat?: ResponseFormat;
   },
 ): AsyncGenerator<{ token: string }, CompletionResult, unknown> {
-  const { history, modelId, kvCache, tools, generationParams } = params;
+  const { history, modelId, kvCache, tools, generationParams, responseFormat } =
+    params;
 
   const modelConfig = getModelConfig(modelId);
   const toolsEnabled = (modelConfig as { tools?: boolean }).tools === true;
@@ -435,6 +449,25 @@ export async function* completion(
     tools && tools.length > 0
       ? (params.toolDialect ?? detectToolDialect(modelId))
       : undefined;
+
+  // `responseFormat` is forwarded to the addon as a per-request
+  // `generationParams.json_schema`, which the addon converts to GBNF and
+  // applies for the duration of the request only. This avoids mutating
+  // the shared `modelConfig` and is therefore safe under concurrent
+  // completions on the same model. `tools` still constrain output through
+  // their parameter schema and the dialect-specific parser chain (mutually
+  // exclusive with a non-text `responseFormat` at the schema layer).
+  let mergedGenerationParams: CompletionGenerationParams | undefined =
+    generationParams;
+  if (responseFormat && !(tools && tools.length > 0)) {
+    const jsonSchema = getResponseFormatJsonSchema(responseFormat);
+    if (jsonSchema !== undefined) {
+      mergedGenerationParams = {
+        ...(generationParams ?? {}),
+        json_schema: jsonSchema,
+      };
+    }
+  }
 
   const model = getModel(modelId);
 
@@ -488,7 +521,7 @@ export async function* completion(
         model,
         messagesToSend,
         tools,
-        generationParams,
+        mergedGenerationParams,
         { cacheKey: cachePathToUse, saveCacheToDisk: true },
         dialect,
       );
@@ -554,7 +587,11 @@ export async function* completion(
           "auto",
           staticTools ? tools : undefined,
         );
-        markCacheInitialized(modelId, configHash, preResponseCacheInfo.cacheKey);
+        markCacheInitialized(
+          modelId,
+          configHash,
+          preResponseCacheInfo.cacheKey,
+        );
         cacheExists = true;
       }
 
@@ -571,7 +608,7 @@ export async function* completion(
         model,
         messagesToSend,
         tools,
-        generationParams,
+        mergedGenerationParams,
         { cacheKey: cachePathToUse, saveCacheToDisk: true },
         dialect,
       );
@@ -668,7 +705,7 @@ export async function* completion(
       model,
       transformedHistory,
       tools,
-      generationParams,
+      mergedGenerationParams,
       undefined,
       dialect,
     );
