@@ -107,13 +107,14 @@ export const customTree: Node[] = [
           { name: 'Completion', url: '/sdk/examples/ai-tasks/completion', type: 'page', icon: resolveIcon('MessagesSquare') },
           { name: 'Text embeddings', url: '/sdk/examples/ai-tasks/text-embeddings', type: 'page', icon: resolveIcon('Hash') },
           { name: 'Translation', url: '/sdk/examples/ai-tasks/translation', type: 'page', icon: resolveIcon('Languages') },
-          { name: 'Transcription', url: '/sdk/examples/ai-tasks/transcription', type: 'page', icon: resolveIcon('Mic') },
+          { name: 'Transcription', url: '/sdk/examples/ai-tasks/transcription', type: 'page', icon: resolveIcon('Speech') },
           { name: 'Text-to-Speech', url: '/sdk/examples/ai-tasks/text-to-speech', type: 'page', icon: resolveIcon('Volume2') },
           { name: 'OCR', url: '/sdk/examples/ai-tasks/ocr', type: 'page', icon: resolveIcon('ScanText') },
           { name: 'Image generation', url: '/sdk/examples/ai-tasks/image-generation', type: 'page', icon: resolveIcon('Image') },
           { name: 'Multimodal', url: '/sdk/examples/ai-tasks/multimodal', type: 'page', icon: resolveIcon('GalleryHorizontal') },
           { name: 'Fine-tuning', url: '/sdk/examples/ai-tasks/fine-tuning', type: 'page', icon: resolveIcon('FlaskConical') },
           { name: 'RAG', url: '/sdk/examples/ai-tasks/rag', type: 'page', icon: resolveIcon('ScanSearch') },
+          { name: 'Voice assistant', url: '/sdk/examples/ai-tasks/voice-assistant', type: 'page', icon: resolveIcon('Mic') },
         ],
       },
       {
@@ -182,6 +183,12 @@ export const customTree: Node[] = [
     url: '/cli',
     type: 'page',
     icon: resolveIcon('Terminal'),
+  },
+  {
+    name: 'System requirements',
+    url: '/system-requirements',
+    type: 'page',
+    icon: resolveIcon('Stethoscope'),
   },
   {
     name: 'HTTP server',
