@@ -1,4 +1,4 @@
-import { getModel } from "@/server/bare/registry/model-registry";
+import { getModelEntry } from "@/server/bare/registry/model-registry";
 import {
   translateServerParamsSchema,
   normalizeModelType,
@@ -12,6 +12,11 @@ import { getLangName } from "@qvac/langdetect-text";
 import { nowMs } from "@/profiling";
 import { buildStreamResult } from "@/profiling/model-execution";
 import type { NmtResponse, LlmResponse } from "@/server/bare/types/addon-responses";
+import {
+  ModelIsDelegatedError,
+  ModelNotFoundError,
+  ModelTypeMismatchError,
+} from "@/utils/errors-server";
 
 export function getLanguage(code: string | undefined): string {
   if (!code) return "";
@@ -28,15 +33,30 @@ export async function* translate(
   params: TranslateParams,
 ): AsyncGenerator<string, { modelExecutionMs: number; stats?: TranslationStats }, unknown> {
   const { modelId, text, modelType: inputModelType } = params;
-  const canonicalModelType = normalizeModelType(inputModelType);
+
+  const entry = getModelEntry(modelId);
+  if (!entry) {
+    throw new ModelNotFoundError(modelId);
+  }
+  if (entry.isDelegated) {
+    throw new ModelIsDelegatedError(modelId);
+  }
+  const canonicalModelType = entry.local.modelType;
+  const model = entry.local.model;
+
+  if (inputModelType !== undefined) {
+    const requestedCanonical = normalizeModelType(inputModelType);
+    if (requestedCanonical !== canonicalModelType) {
+      throw new ModelTypeMismatchError(canonicalModelType, requestedCanonical);
+    }
+  }
+
   const isLlm = canonicalModelType === ModelType.llamacppCompletion;
   const from = isLlm ? (params as { from?: string }).from : undefined;
   const to = isLlm ? (params as { to: string }).to : undefined;
   const context = isLlm ? (params as { context?: string }).context : undefined;
   const afriquePrompt = isLlm && (isAfrican(from) || isAfrican(to));
   translateServerParamsSchema.parse(params);
-
-  const model = getModel(modelId);
 
   const fromLanguage = getLanguage(from);
   const toLanguage = getLanguage(to);

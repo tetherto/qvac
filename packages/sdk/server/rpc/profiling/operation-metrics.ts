@@ -114,8 +114,8 @@ export function buildOperationEvent(
     if (extracted) Object.assign(gauges, extracted);
   }
 
-  const requestTags = config.getTags?.(request as never);
-  const resultTags = config.getTagsFromResult?.(finalResponse as never);
+  const requestTags = config.getTags?.(request);
+  const resultTags = config.getTagsFromResult?.(finalResponse);
   const tags = { ...requestTags, ...resultTags };
 
   const hasGauges = Object.keys(gauges).length > 0;
@@ -206,6 +206,24 @@ registerOperationMetrics<{ modelId?: string }, { stats?: TranscribeStats }>({
 
 registerOperationMetrics<{ modelId?: string }, { stats?: TtsStats }>({
   op: "textToSpeech",
+  kind: "handler",
+  getTags: (req) => (req.modelId ? { modelId: req.modelId } : {}),
+  fromFinalChunk: (res) => {
+    const gauges: Record<string, number> = {};
+    const modelExecMs = readModelExecutionMs(res);
+    if (modelExecMs !== undefined) gauges["modelExecutionTime"] = modelExecMs;
+    if (res.stats?.audioDuration !== undefined) gauges["audioDuration"] = res.stats.audioDuration;
+    if (res.stats?.totalSamples !== undefined) gauges["totalSamples"] = res.stats.totalSamples;
+    return Object.keys(gauges).length > 0 ? gauges : undefined;
+  },
+});
+
+// Duplex sibling of `textToSpeech`. Server emits the same `TtsStats` on the
+// final chunk (via `collectTtsStats`), so the gauge set mirrors the
+// non-streaming path; without registering here, sessions would silently
+// skip `modelExecutionTime` / `audioDuration` / `totalSamples` metrics.
+registerOperationMetrics<{ modelId?: string }, { stats?: TtsStats }>({
+  op: "textToSpeechStream",
   kind: "handler",
   getTags: (req) => (req.modelId ? { modelId: req.modelId } : {}),
   fromFinalChunk: (res) => {

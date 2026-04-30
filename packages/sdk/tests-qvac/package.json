@@ -15,9 +15,10 @@
   },
   "dependencies": {
     "@qvac/sdk": "file:..",
-    "@tetherto/qvac-test-suite": "^0.6.0",
+    "@tetherto/qvac-test-suite": "^0.6.1",
     "mqtt": "^5.14.1",
-    "react-native-bare-kit": "^0.11.4"
+    "react-native": "0.81.5",
+    "react-native-bare-kit": "0.12.3"
   },
   "devDependencies": {
     "typescript": "^5.9.3"

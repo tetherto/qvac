@@ -1,0 +1,123 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`single-page template > renders a complete API summary page 1`] = `
+"---
+title: API Summary — v0.9.1
+description: One-page reference of all public functions and objects exported by @qvac/sdk
+---
+
+> Auto-generated from \`.d.ts\` declarations and TSDoc comments.
+>
+> For per-parameter and per-field details, hover symbols in your IDE or open
+> \`node_modules/@qvac/sdk/dist\`. This page is intentionally a high-level index.
+>
+> **Fields shown**: description, signature, throws, examples, deprecation.
+> **Fields intentionally omitted**: parameter descriptions, return field descriptions
+> (covered by IDE hover and \`.d.ts\` declarations).
+>
+> **Scope**: 3 functions in \`packages/sdk/client/api/\` plus the \`profiler\` object.
+
+---
+
+## Functions
+
+### \`completion\`
+
+Generates completion from a language model based on conversation history.
+
+**Signature**:
+
+\`\`\`ts
+declare function completion(params: CompletionParams): CompletionRun;
+\`\`\`
+
+**Throws**:
+
+- \`INVALID_TOOLS_ARRAY\` — Invalid tools array provided
+- \`INVALID_TOOL_SCHEMA\` — A tool has an invalid schema
+
+**Example**:
+\`\`\`ts
+const run = completion({ modelId: "llama-2", history: [] });
+\`\`\`
+
+---
+
+### \`suspend\`
+
+Suspends all active Hyperswarm and Corestore resources.
+
+**Signature**:
+
+\`\`\`ts
+declare function suspend(): Promise<void>;
+\`\`\`
+
+---
+
+### \`embed\`
+
+Has 2 overloads.
+
+#### Overload 1
+**Signature**:
+
+\`\`\`ts
+declare function embed(params: { modelId: string; text: string }): Promise<{ embedding: number[] }>;
+\`\`\`
+
+#### Overload 2
+**Signature**:
+
+\`\`\`ts
+declare function embed(params: { modelId: string; text: string[] }): Promise<{ embedding: number[][] }>;
+\`\`\`
+
+---
+
+## Objects
+
+### \`profiler\`
+
+Singleton object that collects and exports profiling data for SDK operations.
+
+**Shape**:
+
+\`\`\`ts
+const profiler: {
+  enable(options?: ProfilerRuntimeOptions): void;
+  disable(): void;
+};
+\`\`\`
+
+**Methods**:
+
+- **\`enable(options?)\`** — Enables profiling and resets aggregated data.
+- **\`disable()\`** — Disables profiling.
+
+**Example**:
+\`\`\`ts
+profiler.enable({ mode: "summary" });
+\`\`\`
+
+---
+
+## Errors
+
+Public error codes thrown across the SDK. Catch via \`instanceof QvacErrorBase\`
+and read \`error.code\` / \`error.cause\`. Code ranges:
+50,001–52,000 (client) and 52,001–54,000 (server).
+
+### Client errors
+
+| Error | Code | Summary |
+| --- | --- | --- |
+| \`INVALID_RESPONSE_TYPE\` | 50001 | Invalid response type received. |
+| \`RPC_CONNECTION_FAILED\` | 50203 | RPC connection failed. |
+
+### Server errors
+
+| Error | Code | Summary |
+| --- | --- | --- |
+| \`MODEL_NOT_FOUND\` | 52002 | Model ID not found in the registry. |"
+`;

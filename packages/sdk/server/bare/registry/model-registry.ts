@@ -20,7 +20,6 @@ export type AnyModel = Omit<BaseInference, "addon"> & {
 };
 
 interface DelegateOptions {
-  topic: string;
   providerPublicKey: string;
   timeout?: number | undefined;
   healthCheckTimeout?: number | undefined;
@@ -35,12 +34,9 @@ interface LocalOptions {
   name?: string | undefined;
 }
 
-export interface ModelEntry {
-  id: string;
-  isDelegated: boolean;
-  local?: LocalOptions;
-  delegated?: DelegateOptions;
-}
+export type ModelEntry =
+  | { id: string; isDelegated: true; delegated: DelegateOptions }
+  | { id: string; isDelegated: false; local: LocalOptions };
 
 // Global registry state - using stateless functions to manage it
 const modelRegistry = new Map<string, ModelEntry>();
@@ -56,7 +52,6 @@ export function registerModel(
         name?: string | undefined;
       }
     | {
-        topic: string;
         providerPublicKey: string;
         timeout?: number;
         healthCheckTimeout?: number;
@@ -66,15 +61,14 @@ export function registerModel(
     throw new ModelAlreadyRegisteredError(id);
   }
 
-  const isDelegated = "topic" in options && "providerPublicKey" in options;
+  const isDelegated = "providerPublicKey" in options;
 
   if (isDelegated) {
-    const { topic, providerPublicKey, timeout, healthCheckTimeout } = options;
+    const { providerPublicKey, timeout, healthCheckTimeout } = options;
     modelRegistry.set(id, {
       id,
       isDelegated: true,
       delegated: {
-        topic,
         providerPublicKey,
         timeout,
         healthCheckTimeout,
@@ -82,7 +76,7 @@ export function registerModel(
     });
 
     logger.info(
-      `Delegated model registered: ${id} -> topic: ${topic}, provider: ${providerPublicKey}, timeout: ${timeout}ms`,
+      `Delegated model registered: ${id} -> provider: ${providerPublicKey}, timeout: ${timeout}ms`,
     );
   } else {
     modelRegistry.set(id, {
@@ -112,11 +106,9 @@ export function getModel(id: string): AnyModel {
   if (!entry) {
     throw new ModelNotFoundError(id);
   }
-
-  if (!entry.local) {
+  if (entry.isDelegated) {
     throw new ModelIsDelegatedError(id);
   }
-
   return entry.local.model;
 }
 
@@ -146,7 +138,7 @@ export function getModelInfo(id: string): {
   name?: string;
 } | null {
   const entry = modelRegistry.get(id);
-  if (!entry || !entry.local) {
+  if (!entry || entry.isDelegated) {
     return null;
   }
 
@@ -172,7 +164,7 @@ export function getModelInfo(id: string): {
 
 export function getModelConfig(id: string): unknown {
   const entry = modelRegistry.get(id);
-  if (!entry || !entry.local) {
+  if (!entry || entry.isDelegated) {
     throw new ModelNotFoundError(id);
   }
   return entry.local.config;
@@ -183,7 +175,7 @@ export function updateModelConfig(id: string, config: unknown): void {
   if (!entry) {
     throw new ModelNotFoundError(id);
   }
-  if (!entry.local) {
+  if (entry.isDelegated) {
     throw new ModelIsDelegatedError(id);
   }
   entry.local.config = config;
@@ -210,10 +202,12 @@ export async function unloadAllModels(): Promise<void> {
   for (const modelId of modelIds) {
     const entry = modelRegistry.get(modelId);
     try {
-      if (entry?.local?.model?.unload) {
-        await entry.local.model.unload();
+      if (entry && !entry.isDelegated) {
+        if (entry.local.model.unload) {
+          await entry.local.model.unload();
+        }
+        logger.debug(`Model unloaded: ${modelId}`);
       }
-      if (entry?.local) logger.debug(`Model unloaded: ${modelId}`);
     } catch (error) {
       logger.error(
         `Error unloading model ${modelId}:`,

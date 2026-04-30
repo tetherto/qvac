@@ -1,0 +1,83 @@
+name: Setup vcpkg
+description: >-
+  Point VCPKG_ROOT at the runner's pre-installed vcpkg (Linux, Windows) or do
+  a shallow blobless sparse bootstrap (macOS), pin policy env vars
+  (VCPKG_BUILD_TYPE=release to skip debug libs, --no-parallel-configure to
+  stabilize Visual Studio / Apple toolchain configuration), and enable the
+  shared S3-backed binary cache.
+
+inputs:
+  platform:
+    description: Build platform (linux, android, darwin, ios, win32)
+    required: true
+  arch:
+    description: Build architecture (x64, arm64)
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Validate S3 cache settings
+      shell: bash
+      run: |
+        if [ -z "${MODEL_S3_BUCKET:-}" ]; then
+          echo "::error::MODEL_S3_BUCKET is required"
+          exit 1
+        fi
+
+    - if: ${{ runner.os == 'macOS' }}
+      name: Bootstrap vcpkg on macOS
+      shell: bash
+      run: |
+        set -euo pipefail
+        cd ..
+        # Shallow + blobless + sparse clone; ports/ and versions/ are not
+        # needed when consuming the S3 binary cache, so skip them to cut
+        # the download to ~a few MB.
+        git clone --depth=1 --filter=blob:none --sparse https://github.com/microsoft/vcpkg.git
+        cd vcpkg
+        git sparse-checkout set --no-cone '/*' '!/ports' '!/versions'
+        ./bootstrap-vcpkg.sh -disableMetrics
+        VCPKG_ROOT=$(pwd)
+        echo "VCPKG_ROOT=$VCPKG_ROOT" >> "$GITHUB_ENV"
+        echo "$VCPKG_ROOT" >> "$GITHUB_PATH"
+
+    - if: ${{ runner.os == 'Linux' }}
+      name: Configure vcpkg on Linux
+      shell: bash
+      run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> "$GITHUB_ENV"
+
+    - if: ${{ runner.os == 'Windows' }}
+      name: Configure vcpkg on Windows
+      shell: powershell
+      run: |
+        if (-not $env:VCPKG_INSTALLATION_ROOT -or -not (Test-Path $env:VCPKG_INSTALLATION_ROOT)) {
+          Write-Error "VCPKG_INSTALLATION_ROOT is not set or does not exist; expected a pre-installed vcpkg on the runner"
+          exit 1
+        }
+        $vcpkgRoot = $env:VCPKG_INSTALLATION_ROOT -replace '\\', '/'
+        echo "VCPKG_ROOT=$vcpkgRoot" >> $env:GITHUB_ENV
+        echo $vcpkgRoot >> $env:GITHUB_PATH
+
+    - name: Export vcpkg policy env
+      shell: bash
+      run: |
+        echo "VCPKG_BUILD_TYPE=release" >> "$GITHUB_ENV"
+        echo "VCPKG_CMAKE_CONFIGURE_OPTIONS=--no-parallel-configure" >> "$GITHUB_ENV"
+
+    - name: Configure vcpkg binary sources
+      shell: bash
+      env:
+        INPUT_PLATFORM: ${{ inputs.platform }}
+        INPUT_ARCH: ${{ inputs.arch }}
+      run: |
+        for var in INPUT_PLATFORM INPUT_ARCH; do
+          val="${!var}"
+          clean=$(printf '%s' "$val" | tr -cd 'a-zA-Z0-9/_.-')
+          if [[ "$clean" != "$val" ]]; then
+            echo "::error::${var} contains invalid characters"
+            exit 1
+          fi
+        done
+
+        echo "VCPKG_BINARY_SOURCES=clear;x-aws,s3://${MODEL_S3_BUCKET}/vcpkg-cache/${INPUT_PLATFORM}-${INPUT_ARCH}/,readwrite" >> "$GITHUB_ENV"

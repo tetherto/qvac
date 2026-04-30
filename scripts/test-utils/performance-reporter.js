@@ -147,6 +147,14 @@ const METRIC_COLUMNS = {
     { key: 'smollm2_total_time_ms', label: 'SmolLM2 Total (ms)' },
     { key: 'ode_time_ms', label: 'ODE (ms)' }
   ],
+  parakeet: [
+    { key: 'real_time_factor', label: 'RTF' },
+    { key: 'wall_time_ms', label: 'Wall (ms)' },
+    { key: 'tps', label: 'Tokens/sec' },
+    { key: 'encoder_time_ms', label: 'Encoder (ms)' },
+    { key: 'decoder_time_ms', label: 'Decoder (ms)' },
+    { key: 'audio_duration_ms', label: 'Audio (ms)' }
+  ],
   generic: [
     { key: 'total_time_ms', label: 'Total Time (ms)' },
     { key: 'tps', label: 'TPS' }

@@ -1,0 +1,1436 @@
+---
+title: API Summary — v0.9.1 (latest)
+description: One-page reference of all public functions and objects exported by @qvac/sdk
+---
+
+> Auto-generated from `.d.ts` declarations and TSDoc comments.
+>
+> For per-parameter and per-field details, hover symbols in your IDE or open
+> `node_modules/@qvac/sdk/dist`. This page is intentionally a high-level index.
+>
+> **Fields shown**: description, signature, throws, examples, deprecation.
+> **Fields intentionally omitted**: parameter descriptions, return field descriptions
+> (covered by IDE hover and `.d.ts` declarations).
+>
+> **Scope**: 38 functions in `packages/sdk/client/api/` plus the `profiler` object.
+
+---
+
+## Functions
+
+### `cancel`
+
+Cancels an ongoing operation.
+
+**Signature**:
+
+```ts
+function cancel(params: CancelParams): Promise<void>;
+```
+
+**Throws**:
+
+- `QvacErrorBase` — When the response type is invalid or when the cancellation fails
+
+**Examples**:
+```ts
+// Cancel inference
+await cancel({ operation: "inference", modelId: "model-123" });
+```
+
+```ts
+// Pause download (preserves partial file for automatic resume)
+await cancel({ operation: "downloadAsset", downloadKey: "download-key" });
+```
+
+```ts
+// Cancel download completely (deletes partial file)
+await cancel({ operation: "downloadAsset", downloadKey: "download-key", clearCache: true });
+```
+
+```ts
+// Cancel delegated remote download
+await cancel({
+  operation: "downloadAsset",
+  downloadKey: "download-key",
+  delegate: { topic: "topicHex", providerPublicKey: "peerHex" },
+});
+```
+
+```ts
+// Cancel RAG operation on default workspace
+await cancel({ operation: "rag" });
+```
+
+```ts
+// Cancel RAG operation on specific workspace
+await cancel({ operation: "rag", workspace: "my-workspace" });
+```
+
+---
+
+### `completion`
+
+Generates completion from a language model based on conversation history.
+
+Returns a `CompletionRun` whose canonical surfaces are:
+
+ - `events`  — `AsyncIterable<CompletionEvent>` of ordered, typed events.
+ - `final`   — `Promise<CompletionFinal>` with aggregated results once the
+               stream ends (content, thinking, tool calls, stats, raw text).
+
+Legacy convenience fields (`tokenStream`, `text`, `toolCallStream`,
+`toolCalls`, `stats`) are still available but deprecated — they derive
+from `events` / `final` internally.
+
+**Signature**:
+
+```ts
+function completion(params: CompletionParams): CompletionRun;
+```
+
+**Example**:
+```ts
+import { z } from "zod";
+
+const run = completion({
+  modelId: "llama-2",
+  history: [
+    { role: "user", content: "What's the weather in Tokyo?" }
+  ],
+  stream: true,
+  captureThinking: true,
+  tools: [{
+    name: "get_weather",
+    description: "Get current weather",
+    parameters: z.object({
+      city: z.string().describe("City name"),
+    }),
+    handler: async (args) => {
+      return { temperature: 22, condition: "sunny" };
+    }
+  }]
+});
+
+for await (const event of run.events) {
+  if (event.type === "contentDelta") process.stdout.write(event.text);
+  if (event.type === "toolCall") console.log(event.call.name, event.call.arguments);
+}
+
+const result = await run.final;
+for (const toolCall of await result.toolCalls) {
+  if (toolCall.invoke) {
+    const toolResult = await toolCall.invoke();
+    console.log(toolResult);
+  }
+}
+```
+
+---
+
+### `deleteCache`
+
+Deletes KV cache files.
+
+**Signature**:
+
+```ts
+function deleteCache(params: { all: true } | { kvCacheKey: string; modelId?: string }): Promise<{ success: boolean }>;
+```
+
+**Throws**:
+
+- `QvacErrorBase` — When the cache parameters are invalid (`InvalidDeleteCacheParamsError`) or the server reports a delete failure (`DeleteCacheFailedError`).
+
+**Example**:
+```ts
+// Delete all caches
+await deleteCache({ all: true });
+
+// Delete entire cache key (all models)
+await deleteCache({ kvCacheKey: "my-session" });
+
+// Delete only specific model within cache key
+await deleteCache({ kvCacheKey: "my-session", modelId: "model-abc123" });
+```
+
+---
+
+### `diffusion`
+
+Generates images using a loaded diffusion model.
+
+**Signature**:
+
+```ts
+function diffusion(params: DiffusionClientParams): DiffusionResult;
+```
+
+**Example**:
+```ts
+// txt2img
+const { outputs, stats } = diffusion({ modelId, prompt: "a cat" });
+const buffers = await outputs;
+fs.writeFileSync("output.png", buffers[0]);
+
+// img2img (SD/SDXL — SDEdit)
+const initImage = fs.readFileSync("input.png");
+const { outputs } = diffusion({ modelId, prompt: "oil painting style", init_image: initImage, strength: 0.7 });
+
+// img2img (FLUX.2 — in-context conditioning)
+// IMPORTANT: FLUX img2img requires `prediction: "flux2_flow"` to be set on the
+// model config at loadModel time (e.g. `loadModel(src, { modelType: "diffusion",
+// modelConfig: { prediction: "flux2_flow" } })`).
+const { outputs } = diffusion({ modelId, prompt: "turn into watercolor", init_image: initImage });
+
+// With progress tracking
+const { progressStream, outputs } = diffusion({ modelId, prompt: "a cat" });
+for await (const { step, totalSteps } of progressStream) {
+  console.log(`${step}/${totalSteps}`);
+}
+const buffers = await outputs;
+```
+
+---
+
+### `downloadAsset`
+
+Downloads an asset (model file) without loading it into memory.
+
+This function is specifically designed for download-only operations and
+doesn't accept runtime configuration options like modelConfig or delegate.
+Use this for download-only operations instead of loadModel for better semantic clarity.
+
+**Signature**:
+
+```ts
+function downloadAsset(options: DownloadAssetOptions, rpcOptions?: RPCOptions): Promise<string>;
+```
+
+**Throws**:
+
+- `QvacErrorBase` — When asset download fails, with details in the error message
+- `QvacErrorBase` — When streaming ends unexpectedly (only when using onProgress)
+- `QvacErrorBase` — When receiving an invalid response type from the server
+
+**Example**:
+```ts
+// Download model without loading
+const assetId = await downloadAsset({
+  assetSrc: "/path/to/model.gguf",
+  seed: true
+});
+
+// Download with progress tracking
+const assetId = await downloadAsset({
+  assetSrc: "pear://key123/model.gguf",
+  onProgress: (progress) => {
+    console.log(`Downloaded: ${progress.percentage}%`);
+  }
+});
+```
+
+---
+
+### `embed`
+
+Has 2 overloads.
+
+#### Overload 1 — Single text
+Generates embeddings for a single text using a specified model.
+
+**Signature**:
+
+```ts
+function embed(params: { modelId: string; text: string }, options?: RPCOptions): Promise<{ embedding: number[]; stats?: EmbedStats }>;
+```
+
+**Throws**:
+
+- `QvacErrorBase` — When the response type is invalid or when the embedding fails
+
+#### Overload 2 — Multiple texts
+Generates embeddings for multiple texts using a specified model.
+
+**Signature**:
+
+```ts
+function embed(params: { modelId: string; text: string[] }, options?: RPCOptions): Promise<{ embedding: number[][]; stats?: EmbedStats }>;
+```
+
+**Throws**:
+
+- `QvacErrorBase` — When the response type is invalid or when the embedding fails
+
+---
+
+### `finetune`
+
+Has 2 overloads.
+
+#### Overload 1 — Run / start / resume
+Run / start / resume a finetune job. Returns a handle with a streaming
+`progressStream` and a terminal `result` promise.
+
+**Signature**:
+
+```ts
+function finetune(params: FinetuneRunParams, rpcOptions?: RPCOptions): FinetuneHandle;
+```
+
+#### Overload 2 — Stop / getState / pause / cancel
+Stop / pause / cancel an in-flight finetune, or query its current state.
+
+**Signature**:
+
+```ts
+function finetune(params: FinetuneReplyParams, rpcOptions?: RPCOptions): Promise<FinetuneResult>;
+```
+
+---
+
+### `getLoadedModelInfo`
+
+Returns introspection info for a loaded `modelId` (local or delegated).
+
+For local models, `info.modelType` and `info.handlers` are authoritative.
+Use them to preflight an SDK call before sending the actual RPC, e.g.
+confirm that a model supports `transcribeStream` before calling `transcribe()`.
+
+For delegated models, only `modelId`, `isDelegated: true`, `providerInfo`,
+and `handlers: []` are populated. Preflight against a delegated model is
+best-effort and falls through to the provider's error response.
+
+Throws `ModelNotFoundError` if no entry exists for `modelId`.
+
+**Signature**:
+
+```ts
+function getLoadedModelInfo(params: GetLoadedModelInfoParams, rpcOptions?: RPCOptions): Promise<LoadedModelInfo>;
+```
+
+**Example**:
+```ts
+const info = await getLoadedModelInfo({ modelId });
+if (info.isDelegated || info.handlers.includes("completionStream")) {
+  // safe to call completion(); delegated path defers to provider
+}
+```
+
+---
+
+### `getModelInfo`
+
+Returns status information for a catalog model, including cache state and loaded instances.
+
+**Signature**:
+
+```ts
+function getModelInfo(params: GetModelInfoParams): Promise<{ actualSize?: number; addon: "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "other"; blobBlockLength?: number; blobBlockOffset?: number; blobByteOffset?: number; blobCoreKey?: string; cachedAt?: Date; cacheFiles: { actualSize?: number; cachedAt?: Date; expectedSize: number; filename: string; isCached: boolean; path: string; sha256Checksum: string }[]; engine?: string; expectedSize: number; isCached: boolean; isLoaded: boolean; loadedInstances?: { config?: unknown; loadedAt: Date; registryId: string }[]; modelId: string; name: string; params?: string; quantization?: string; registryPath?: string; registrySource?: string; sha256Checksum: string }>;
+```
+
+**Throws**:
+
+- `QvacErrorBase` — When the response type is invalid (`InvalidResponseError`) or the RPC layer fails.
+
+---
+
+### `heartbeat`
+
+Checks if a delegated provider is online by sending a heartbeat round-trip.
+Can also be used to check if the local SDK worker is responsive.
+
+**Signature**:
+
+```ts
+function heartbeat(params?: { delegate?: { healthCheckTimeout?: number; providerPublicKey: string; timeout?: number; topic: string } }): Promise<HeartbeatResponse>;
+```
+
+**Throws**:
+
+- `QvacErrorBase` — When the provider is unreachable or the response is invalid.
+
+**Examples**:
+```ts
+// Check if a delegated provider is online
+try {
+  await heartbeat({
+    delegate: { topic: "topicHex", providerPublicKey: "peerHex", timeout: 3000 },
+  });
+  console.log("Provider is online");
+} catch {
+  console.log("Provider is offline");
+}
+```
+
+```ts
+// Check if the local SDK worker is responsive
+await heartbeat();
+```
+
+---
+
+### `invokePlugin`
+
+Invoke a non-streaming plugin handler.
+
+**Signature**:
+
+```ts
+function invokePlugin(options: InvokePluginOptions<TParams>, rpcOptions?: RPCOptions): Promise<TResponse>;
+```
+
+**Throws**:
+
+- `QvacErrorBase` — When the response type is invalid (`InvalidResponseError`) or the RPC layer fails.
+
+---
+
+### `invokePluginStream`
+
+Invoke a streaming plugin handler.
+
+**Signature**:
+
+```ts
+function invokePluginStream(options: InvokePluginOptions<TParams>, rpcOptions?: RPCOptions): AsyncGenerator<TResponse>;
+```
+
+**Throws**:
+
+- `QvacErrorBase` — When an intermediate response has the wrong type (`InvalidResponseError`) or the RPC layer fails.
+
+---
+
+### `loadModel`
+
+Has 4 overloads.
+
+#### Overload 1 — From descriptor
+Loads a model from a descriptor; `modelType` is inferred from `modelSrc`.
+`modelConfig` narrows per-engine when `modelSrc.engine` is a literal,
+otherwise falls back to a permissive shape.
+
+**Signature**:
+
+```ts
+function loadModel(options: LoadModelDescriptorParam<S>, rpcOptions?: RPCOptions): Promise<string>;
+```
+
+**Throws**:
+
+- `ModelTypeRequiredError` — When `modelType` cannot be inferred from `modelSrc` at runtime.
+
+**Example**:
+```ts
+await loadModel({ modelSrc: LLAMA_3_2_1B_INST_Q4_0, modelConfig: { ctx_size: 2048 } });
+await loadModel({ modelSrc: WHISPER_TINY });
+```
+
+#### Overload 2 — Load new model
+Loads a machine learning model from a local path, remote URL, or Hyperdrive key.
+
+This function supports multiple model types: LLM (Large Language Model), Whisper (speech recognition),
+embeddings, NMT (translation), and TTS. It can handle both local file paths and Hyperdrive URLs (pear://).
+
+When `onProgress` is provided, the function uses streaming to provide real-time download progress.
+Otherwise, it uses a simple request-response pattern for faster execution.
+
+**Signature**:
+
+```ts
+function loadModel(options: LoadModelOptions, rpcOptions?: RPCOptions): Promise<string>;
+```
+
+**Throws**:
+
+- `QvacErrorBase` — When model loading fails, with details in the error message
+- `QvacErrorBase` — When streaming ends unexpectedly (only when using onProgress)
+- `QvacErrorBase` — When receiving an invalid response type from the server
+
+**Example**:
+```ts
+// Local file path - absolute path
+const localModelId = await loadModel({
+  modelSrc: "/home/user/models/llama-7b.gguf",
+  modelType: "llm",
+  modelConfig: { ctx_size: 2048 }
+});
+
+// Local file path - relative path
+const relativeModelId = await loadModel({
+  modelSrc: "./models/whisper-base.gguf",
+  modelType: "whisper"
+});
+
+// Hyperdrive URL with key and path
+const hyperdriveId = await loadModel({
+  modelSrc: "pear://<hyperdrive-key>/llama-7b.gguf",
+  modelType: "llm",
+  modelConfig: { ctx_size: 2048 }
+});
+
+// Remote HTTP/HTTPS URL with progress tracking
+const remoteId = await loadModel({
+  modelSrc: "https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGUF/resolve/main/llama-2-7b-chat.Q4_K_M.gguf",
+  modelType: "llm",
+  onProgress: (progress) => {
+    console.log(`Downloaded: ${progress.percentage}%`);
+  }
+});
+
+// Multimodal model with projection
+const multimodalId = await loadModel({
+  modelSrc: "https://huggingface.co/.../main-model.gguf",
+  modelType: "llm",
+  modelConfig: {
+    ctx_size: 512,
+    projectionModelSrc: "https://huggingface.co/.../projection-model.gguf"
+  },
+  onProgress: (progress) => {
+    console.log(`Loading: ${progress.percentage}%`);
+  }
+});
+
+// Whisper with VAD model
+const whisperId = await loadModel({
+  modelSrc: "https://huggingface.co/.../whisper-model.gguf",
+  modelType: "whisper",
+  modelConfig: {
+    mode: "caption",
+    output_format: "plaintext",
+    min_seconds: 2,
+    max_seconds: 6,
+    vadModelSrc: "https://huggingface.co/.../vad-model.bin"
+  }
+});
+
+// Load with automatic logging - logs from the model will be forwarded to your logger
+import { getLogger } from "@/logging";
+const logger = getLogger("my-app");
+
+const modelId = await loadModel({
+  modelSrc: "/path/to/model.gguf",
+  modelType: "llm",
+  logger // Pass logger in options
+});
+```
+
+#### Overload 3 — Custom plugin
+Loads a custom plugin model (any non-built-in `modelType` string).
+`modelConfig` is plugin-defined; the SDK does not narrow it.
+
+**Signature**:
+
+```ts
+function loadModel(options: LoadCustomPluginModelOptions<T>, rpcOptions?: RPCOptions): Promise<string>;
+```
+
+#### Overload 4 — Hot-reload config
+Hot-reloads configuration on an already loaded model.
+
+**Signature**:
+
+```ts
+function loadModel(options: ReloadConfigOptions, rpcOptions?: RPCOptions): Promise<string>;
+```
+
+**Throws**:
+
+- `QvacErrorBase` — When model reload fails, with details in the error message
+- `QvacErrorBase` — When receiving an invalid response type from the server
+
+**Example**:
+```ts
+// Load new model
+const modelId = await loadModel({
+  modelSrc: "pear://<hyperdrive-key>/whisper-tiny.gguf",
+  modelType: "whisper",
+  modelConfig: { language: "en" },
+});
+
+// Later, update the config without reloading the model
+await loadModel({
+  modelId,
+  modelType: "whisper",
+  modelConfig: { language: "es" },
+});
+```
+
+---
+
+### `loggingStream`
+
+Opens a logging stream to receive real-time logs.
+
+**Signature**:
+
+```ts
+function loggingStream(params: LoggingParams): AsyncGenerator<LoggingStreamResponse>;
+```
+
+**Throws**:
+
+- `QvacErrorBase` — When the response type is invalid or when the stream fails
+
+**Example**:
+```ts
+// Open a logging stream for a model
+const logStream = loggingStream({ id: 'my-model-id' });
+
+// Or stream SDK server logs
+const sdkLogs = loggingStream({ id: SDK_LOG_ID });
+
+for await (const logMessage of logStream) {
+  console.log(`[${logMessage.level}] ${logMessage.namespace}: ${logMessage.message}`);
+}
+```
+
+---
+
+### `modelRegistryGetModel`
+
+Fetches a single model entry from the registry by its path and source.
+
+**Signature**:
+
+```ts
+function modelRegistryGetModel(registryPath: string, registrySource: string): Promise<ModelRegistryEntry>;
+```
+
+**Throws**:
+
+- `ModelRegistryQueryFailedError` — When the model cannot be located or the registry query fails.
+
+---
+
+### `modelRegistryList`
+
+Returns all available models from the QVAC distributed model registry.
+
+**Signature**:
+
+```ts
+function modelRegistryList(): Promise<ModelRegistryEntry[]>;
+```
+
+**Throws**:
+
+- `ModelRegistryQueryFailedError` — When the registry query fails.
+
+---
+
+### `modelRegistrySearch`
+
+Searches the model registry with optional filters for model type, engine, and quantization.
+
+**Signature**:
+
+```ts
+function modelRegistrySearch(params: ModelRegistrySearchParams): Promise<ModelRegistryEntry[]>;
+```
+
+**Throws**:
+
+- `ModelRegistryQueryFailedError` — When the registry query fails.
+
+---
+
+### `ocr`
+
+Performs Optical Character Recognition (OCR) on an image to extract text.
+
+**Signature**:
+
+```ts
+function ocr(params: OCRClientParams): { blocks: Promise<{ bbox?: [number, number, number, number]; confidence?: number; text: string }[]>; blockStream: AsyncGenerator<{ bbox?: [number, number, number, number]; confidence?: number; text: string }[]>; stats: Promise<{ detectionTime?: number; recognitionTime?: number; totalTime?: number } | undefined> };
+```
+
+**Example**:
+```ts
+// Non-streaming mode (default) - get all blocks at once
+const { blocks } = ocr({ modelId, image: "/path/to/image.png" });
+for (const block of await blocks) {
+  console.log(block.text, block.bbox, block.confidence);
+}
+
+// Streaming mode - process blocks as they arrive
+const { blockStream } = ocr({ modelId, image: imageBuffer, stream: true });
+for await (const blocks of blockStream) {
+  console.log("Detected:", blocks);
+}
+```
+
+---
+
+### `ragChunk`
+
+Chunks documents into smaller pieces for embedding.
+Part of the segregated flow: ragChunk() → embed() → ragSaveEmbeddings()
+
+**Signature**:
+
+```ts
+function ragChunk(params: RagChunkParams, options?: RPCOptions): Promise<RagDoc[]>;
+```
+
+**Throws**:
+
+- `RAGChunkFailedError` — When the operation fails
+
+**Example**:
+```ts
+const chunks = await ragChunk({
+  documents: ["Long document text here..."],
+  chunkOpts: {
+    chunkSize: 256,
+    chunkOverlap: 50,
+    chunkStrategy: "paragraph",
+  },
+});
+```
+
+---
+
+### `ragCloseWorkspace`
+
+Closes a RAG workspace, releasing in-memory resources (Corestore, HyperDB adapter, RAG instance).
+
+**Workspace lifecycle:** Workspaces are implicitly opened.
+This function explicitly closes them, releasing memory and file locks. The workspace data
+remains on disk unless `deleteOnClose` is set to true.
+
+**Signature**:
+
+```ts
+function ragCloseWorkspace(params?: RagCloseWorkspaceParams, options?: RPCOptions): Promise<void>;
+```
+
+**Throws**:
+
+- `RAGCloseWorkspaceFailedError` — When the operation fails
+
+**Example**:
+```ts
+// Close a specific workspace
+await ragCloseWorkspace({ workspace: "my-docs" });
+
+// Close and delete in one call
+await ragCloseWorkspace({ workspace: "my-docs", deleteOnClose: true });
+```
+
+---
+
+### `ragDeleteEmbeddings`
+
+Deletes document embeddings from the RAG vector database.
+
+**Workspace lifecycle:** This operation requires an existing workspace.
+
+**Signature**:
+
+```ts
+function ragDeleteEmbeddings(params: RagDeleteEmbeddingsParams, options?: RPCOptions): Promise<void>;
+```
+
+**Throws**:
+
+- `RAGDeleteFailedError` — When the operation fails or workspace doesn't exist
+
+**Example**:
+```ts
+await ragDeleteEmbeddings({
+  ids: ["doc-1", "doc-2"],
+  workspace: "my-docs",
+});
+```
+
+---
+
+### `ragDeleteWorkspace`
+
+Deletes a RAG workspace and all its data.
+The workspace must not be currently loaded/in-use.
+
+**Signature**:
+
+```ts
+function ragDeleteWorkspace(params: RagDeleteWorkspaceParams, options?: RPCOptions): Promise<void>;
+```
+
+**Throws**:
+
+- `RAGDeleteFailedError` — When the workspace doesn't exist or is currently loaded
+
+**Example**:
+```ts
+await ragDeleteWorkspace({ workspace: "my-docs" });
+```
+
+---
+
+### `ragIngest`
+
+Ingests documents into the RAG vector database.
+Full pipeline: chunk → embed → save
+
+**Workspace lifecycle:** This operation implicitly opens (or creates) the workspace.
+The workspace remains open until closed.
+
+**Signature**:
+
+```ts
+function ragIngest(params: RagIngestParams, options?: RPCOptions): Promise<{ processed: RagSaveEmbeddingsResult[]; droppedIndices: number[] }>;
+```
+
+**Throws**:
+
+- `RAGSaveFailedError` — When the operation fails
+- `StreamEndedError` — When streaming ends unexpectedly (only when using onProgress)
+
+**Example**:
+```ts
+// Simple ingest
+const result = await ragIngest({
+  modelId,
+  documents: ["Document 1", "Document 2"],
+});
+
+// With progress tracking
+const result = await ragIngest({
+  modelId,
+  documents: ["Document 1", "Document 2"],
+  workspace: "my-docs",
+  onProgress: (stage, current, total) => {
+    console.log(`[${stage}] ${current}/${total}`);
+  },
+});
+```
+
+---
+
+### `ragListWorkspaces`
+
+Lists all RAG workspaces with their open status.
+
+Returns all workspaces that exist on disk. The `open` field indicates whether
+the workspace is currently loaded in memory and holding active resources
+(Corestore, HyperDB adapter, and possibly a RAG instance).
+
+**Signature**:
+
+```ts
+function ragListWorkspaces(options?: RPCOptions): Promise<RagWorkspaceInfo[]>;
+```
+
+**Throws**:
+
+- `RAGListWorkspacesFailedError` — When the operation fails
+
+**Example**:
+```ts
+const workspaces = await ragListWorkspaces();
+// [{ name: "default", open: true }, { name: "my-docs", open: false }]
+```
+
+---
+
+### `ragReindex`
+
+Reindexes the RAG database to optimize search performance.
+For HyperDB, this rebalances centroids using k-means clustering.
+
+**Workspace lifecycle:** This operation requires an existing workspace.
+
+**Note:** Reindex requires a minimum number of documents to perform clustering.
+For HyperDB, this is 16 documents by default. If there are insufficient documents,
+`reindexed` will be `false` with `details` explaining the reason.
+
+**Signature**:
+
+```ts
+function ragReindex(params: RagReindexParams, options?: RPCOptions): Promise<RagReindexResult>;
+```
+
+**Throws**:
+
+- `RAGSaveFailedError` — When the operation fails or workspace doesn't exist
+- `StreamEndedError` — When streaming ends unexpectedly (only when using onProgress)
+
+**Example**:
+```ts
+// Simple reindex
+const result = await ragReindex({
+  workspace: "my-docs",
+});
+
+// Check result
+if (!result.reindexed) {
+  console.log("Reindex skipped:", result.details?.reason);
+}
+
+// With progress tracking
+const result = await ragReindex({
+  workspace: "my-docs",
+  onProgress: (stage, current, total) => {
+    console.log(`[${stage}] ${current}/${total}`);
+  },
+});
+```
+
+---
+
+### `ragSaveEmbeddings`
+
+Saves pre-embedded documents to the RAG vector database.
+Part of the segregated flow: chunk() → embed() → saveEmbeddings()
+
+**Workspace lifecycle:** This operation implicitly opens (or creates) the workspace.
+The workspace remains open until closed.
+
+**Signature**:
+
+```ts
+function ragSaveEmbeddings(params: RagSaveEmbeddingsParams, options?: RPCOptions): Promise<RagSaveEmbeddingsResult[]>;
+```
+
+**Throws**:
+
+- `RAGSaveFailedError` — When the operation fails
+- `StreamEndedError` — When streaming ends unexpectedly (only when using onProgress)
+
+**Example**:
+```ts
+// Segregated flow
+const chunks = await ragChunk({ documents: ["text1", "text2"] });
+const { embedding: embeddings } = await embed({ modelId, text: chunks.map(c => c.content) });
+const embeddedDocs = chunks.map((chunk, i) => ({
+  ...chunk,
+  embedding: embeddings[i],
+  embeddingModelId: modelId,
+}));
+const result = await ragSaveEmbeddings({
+  documents: embeddedDocs,
+  workspace: "my-workspace",
+});
+```
+
+---
+
+### `ragSearch`
+
+Searches for similar documents in the RAG vector database.
+
+**Workspace lifecycle:** This operation requires an existing workspace. If the workspace
+doesn't exist, returns an empty array.
+
+**Signature**:
+
+```ts
+function ragSearch(params: RagSearchParams, options?: RPCOptions): Promise<RagSearchResult[]>;
+```
+
+**Throws**:
+
+- `RAGSearchFailedError` — When the operation fails
+
+**Example**:
+```ts
+const results = await ragSearch({
+  modelId,
+  query: "AI and machine learning",
+  topK: 5,
+  workspace: "my-docs",
+});
+```
+
+---
+
+### `resume`
+
+Resumes the SDK runtime: restores all suspended Hyperswarm and Corestore
+resources and releases the lifecycle gate so all SDK operations are allowed
+again.
+
+Safe to call from any lifecycle state — `resume()` is never blocked by the
+lifecycle gate (along with `suspend()` and `state()`). Idempotent. Also
+serves as the recovery path after a partial suspend failure.
+
+After `resume()` resolves successfully, runtime state is `"active"` and
+non-lifecycle SDK operations are accepted normally.
+
+Behavior of in-flight operations from before the previous `suspend()`:
+  - P2P / Hyperdrive downloads: continue automatically once their underlying
+    swarm/corestore is restored
+  - Delegated reply RPCs: auto-recover once the swarm reconnects
+    (subject to delegate `timeout`)
+  - Delegated stream RPCs: not recovered — re-issue after `resume()` works normally.
+
+**Signature**:
+
+```ts
+function resume(): Promise<void>;
+```
+
+**Throws**:
+
+- `RPCError` — When one or more resources fail to resume. On partial
+  failure the runtime stays `"suspended"` (operations remain blocked) so
+  callers can retry `resume()`.
+
+**Example**:
+```ts
+// Foreground handler
+await resume();
+console.log(await state()); // "active"
+```
+
+---
+
+### `startQVACProvider`
+
+Starts a provider service that offers QVAC capabilities to remote peers.
+The provider's keypair can be controlled via the seed option or QVAC_HYPERSWARM_SEED environment variable.
+
+**Signature**:
+
+```ts
+function startQVACProvider(params: ProvideParams): Promise<{ error?: string; publicKey?: string; success: boolean; type: "provide" }>;
+```
+
+**Throws**:
+
+- `QvacErrorBase` — When the response type is not "provide" or the request fails.
+
+---
+
+### `state`
+
+Returns the current runtime lifecycle state.
+
+Safe to call from any lifecycle state — `state()` is never blocked by the
+lifecycle gate (along with `suspend()` and `resume()`).
+
+**Signature**:
+
+```ts
+function state(): Promise<LifecycleState>;
+```
+
+**Throws**:
+
+- `InvalidResponseError` — When the response envelope does not match the request type.
+
+**Example**:
+```ts
+// Branch on lifecycle state before issuing work
+const current = await state();
+if (current !== "active") {
+  await resume();
+}
+```
+
+---
+
+### `stopQVACProvider`
+
+Stops a running provider service and leaves the specified topic.
+
+**Signature**:
+
+```ts
+function stopQVACProvider(params: StopProvideParams): Promise<{ error?: string; success: boolean; type: "stopProvide" }>;
+```
+
+**Throws**:
+
+- `QvacErrorBase` — When the response type is not "stopProvide" or the request fails.
+
+---
+
+### `suspend`
+
+Suspends the SDK runtime: pauses all registered Hyperswarm and Corestore
+resources and engages the lifecycle gate so non-lifecycle operations are
+blocked until `resume()` is called.
+
+Safe to call from any lifecycle state — `suspend()` is never blocked by the
+lifecycle gate (along with `resume()` and `state()`). Idempotent.
+
+After `suspend()` resolves, runtime state is `"suspended"` and any non-
+lifecycle SDK operation throws `LifecycleOperationBlockedError` until
+`resume()` is called.
+
+In-flight operations started before suspend:
+  - P2P / Hyperdrive downloads: stall cleanly, continue after `resume()`
+  - HTTP downloads: bypass suspend entirely (bytes keep flowing)
+  - Local native inference: runs to completion regardless
+  - Delegated reply RPCs: stall, then auto-recover after `resume()`
+    (subject to delegate `timeout`)
+  - Delegated stream RPCs: severed, consumer iterator hangs silently;
+    re-issue after `resume()` works normally.
+
+**Signature**:
+
+```ts
+function suspend(): Promise<void>;
+```
+
+**Throws**:
+
+- `RPCError` — When one or more resources fail to suspend. The runtime
+  still commits to `"suspended"` so callers can recover with `resume()`.
+
+**Example**:
+```ts
+// Background handler
+await suspend();
+console.log(await state()); // "suspended"
+```
+
+---
+
+### `textToSpeech`
+
+Converts text to speech audio using a loaded TTS model.
+
+Three modes selected by `params.stream` and `params.sentenceStream`:
+
+- `stream: false` (default) — collect all PCM samples and resolve once via
+  `result.buffer` (`Promise<number[]>`). `bufferStream` is empty.
+- `stream: true` — yield PCM samples through `result.bufferStream`
+  (`AsyncGenerator<number>`) as they arrive. `buffer` resolves to an empty
+  array.
+- `stream: true, sentenceStream: true` — also exposes `result.chunkUpdates`
+  (`AsyncGenerator<TtsSentenceChunkUpdate>`) so callers can mux per-sentence
+  metadata with the audio. Multiple consumers can iterate the response
+  independently via the underlying `TtsMulticast`.
+
+`result.done` resolves to `true` when synthesis completes cleanly, `false`
+if the consumer breaks out before the terminal frame, or rejects on a
+pipeline error. Awaiting `done` is safe even when no stream is iterated.
+
+**Signature**:
+
+```ts
+function textToSpeech(params: TtsClientParamsInput, options?: RPCOptions): TextToSpeechStreamResult;
+```
+
+**Throws**:
+
+- `TextToSpeechStreamFailedError` — When `sentenceStream: true` is paired
+        with `stream: false`, or when the underlying RPC stream errors.
+
+---
+
+### `textToSpeechStream`
+
+Duplex session: write UTF-8 text fragments (e.g. LLM token deltas) via `write`. Each string or
+Buffer should be a complete UTF-8 fragment. The worker forwards them to ONNX TTS `runStreaming`
+(optional sentence accumulation via request fields). Iterate the session for `TextToSpeechStreamResponse`
+lines (PCM in `buffer`, optional `chunkIndex` / `sentenceChunk`) until `done`.
+
+**Signature**:
+
+```ts
+function textToSpeechStream(params: TextToSpeechStreamClientParams, options?: RPCOptions): Promise<TextToSpeechStreamSession>;
+```
+
+---
+
+### `transcribe`
+
+Transcribe audio and return the complete text. Accepts either a file
+path or an audio buffer.
+
+**Signature**:
+
+```ts
+function transcribe(params: TranscribeClientParams, options?: RPCOptions): Promise<string>;
+```
+
+---
+
+### `transcribeStream`
+
+> ⚠️ **Deprecated**: Pass audio via `transcribe()` instead. This overload will be
+removed in the next major version.
+
+Streaming transcription with upfront audio: sends full audio, yields text
+chunks as they arrive.
+
+Has 2 overloads.
+
+#### Overload 1 — Upfront audio (deprecated)
+> ⚠️ **Deprecated**: Pass audio via `transcribe()` instead. This overload will be
+removed in the next major version.
+
+Streaming transcription with upfront audio: sends full audio, yields text
+chunks as they arrive.
+
+**Signature**:
+
+```ts
+function transcribeStream(params: TranscribeClientParams, options?: RPCOptions): AsyncGenerator<string>;
+```
+
+#### Overload 2 — Bidirectional session
+Opens a bidirectional streaming transcription session. Audio is streamed
+in via `write()`, and transcription text is yielded as the model's VAD
+detects complete speech segments.
+
+The returned session is single-use. Attempting to iterate a second
+time will throw a `TranscriptionFailedError`.
+
+**Signature**:
+
+```ts
+function transcribeStream(params: TranscribeStreamClientParams, options?: RPCOptions): Promise<TranscribeStreamSession>;
+```
+
+---
+
+### `translate`
+
+Translates text from one language to another using a specified translation model.
+Supports both NMT (Neural Machine Translation) and LLM models.
+
+**Signature**:
+
+```ts
+function translate(params: TranslateClientParams, options?: RPCOptions): { stats: Promise<{ cacheTokens?: number; decodeTime?: number; encodeTime?: number; timeToFirstToken?: number; tokensPerSecond?: number; totalTime?: number; totalTokens?: number } | undefined>; text: Promise<string>; tokenStream: AsyncGenerator<string> };
+```
+
+**Throws**:
+
+- `QvacErrorBase` — When translation fails with an error message or when language detection fails
+
+**Example**:
+```ts
+// Streaming mode (default)
+const result = translate({
+  modelId: "modelId",
+  text: "Hello world",
+  from: "en",
+  to: "es"
+  modelType: "llm",
+});
+
+for await (const token of result.tokenStream) {
+  console.log(token);
+}
+
+// Non-streaming mode
+const response = translate({
+  modelId: "modelId",
+  text: "Hello world",
+  from: "en",
+  to: "es"
+  modelType: "llm",
+  stream: false,
+});
+
+console.log(await response.text);
+```
+
+---
+
+### `unloadModel`
+
+Unloads a previously loaded model from the server.
+
+When the last model is unloaded (no more models remain), this function
+automatically closes the RPC connection, allowing the process to exit
+naturally without requiring manual cleanup.
+
+**Signature**:
+
+```ts
+function unloadModel(params: UnloadModelParams): Promise<void>;
+```
+
+**Throws**:
+
+- `QvacErrorBase` — When the response type is invalid or when the unload operation fails
+
+---
+
+## Objects
+
+### `profiler`
+
+QVAC SDK Profiler
+
+**Shape**:
+
+```ts
+const profiler: {
+  clear(): void;
+  disable(): void;
+  enable(options?: ProfilerRuntimeOptions): void;
+  exportJSON(options?: { includeRecentEvents?: boolean }): ProfilerExport;
+  exportSummary(): string;
+  exportTable(): string;
+  getAggregates(): Record<string, AggregatedStats>;
+  getConfig(): ResolvedProfilerConfig;
+  isEnabled(): boolean;
+  onRecord(callback: (event: ProfilingEvent) => void): () => void;
+};
+```
+
+**Methods**:
+
+- **`clear()`** — Clears all aggregated data and the recent-events ring buffer.
+- **`disable()`** — Disables profiling.
+- **`enable(options?)`** — Enables profiling and resets all previously aggregated data.
+- **`exportJSON(options?)`** — Exports profiling data as a structured JSON object suitable for machine consumption.
+- **`exportSummary()`** — Exports a short, human-readable summary string of the aggregated stats.
+- **`exportTable()`** — Exports aggregated stats as a formatted ASCII table suitable for terminal output.
+- **`getAggregates()`** — Returns all aggregated stats keyed by operation name.
+- **`getConfig()`** — Returns the current effective profiler configuration.
+- **`isEnabled()`** — Returns whether profiling is currently enabled.
+- **`onRecord(callback)`** — Registers a listener for profiling events; returns an unsubscribe function.
+
+**Example**:
+```ts
+import { profiler } from "@qvac/sdk";
+
+profiler.enable({ mode: "summary" });
+// ... run SDK operations ...
+console.log(profiler.exportTable());
+profiler.disable();
+```
+
+---
+
+## Errors
+
+Public error codes thrown across the SDK. Catch via `instanceof QvacErrorBase`
+and read `error.code` / `error.cause`. Code ranges:
+50,001–52,000 (client) and 52,001–54,000 (server).
+
+### Client errors
+
+| Error | Code | Summary |
+| --- | --- | --- |
+| `INVALID_RESPONSE_TYPE` | 50001 | Invalid response type received, expected: … |
+| `INVALID_OPERATION_IN_RESPONSE` | 50002 | Invalid operation type in response |
+| `STREAM_ENDED_WITHOUT_RESPONSE` | 50003 | Stream ended without receiving final response |
+| `INVALID_AUDIO_CHUNK_TYPE` | 50004 | Invalid audio chunk type received |
+| `INVALID_TOOLS_ARRAY` | 50005 | Invalid tools array provided |
+| `INVALID_TOOL_SCHEMA` | 50006 | Invalid tool schema: … |
+| `OCR_FAILED` | 50007 | OCR operation failed… |
+| `MODEL_TYPE_REQUIRED` | 50008 | modelType is required: modelSrc is a plain string or lacks an engine/addon descriptor that can be inferred. Pass an explicit canonical modelType (e.g. "llamacpp-completion", "whispercpp-transcription", "nmtcpp-translation", "llamacpp-embedding", "onnx-tts", "onnx-ocr", "parakeet-transcription", "sdcpp-generation") or use a model constant that carries engine metadata. |
+| `MODEL_SRC_TYPE_MISMATCH` | 50009 | modelSrc describes "…", but modelType resolves to "…". Omit modelType to infer it automatically, or pass a matching modelType. |
+| `RPC_NO_HANDLER` | 50200 | No handler function registered for request type: … |
+| `RPC_REQUEST_NOT_SENT` | 50201 | Cannot perform operation - request has not been sent yet |
+| `RPC_RESPONSE_STREAM_NOT_CREATED` | 50202 | Cannot perform operation - response stream not created |
+| `RPC_CONNECTION_FAILED` | 50203 | RPC connection failed: … |
+| `RPC_INIT_TIMEOUT` | 50204 | RPC initialization timed out after …ms — the worker process may have failed to start |
+| `PROVIDER_START_FAILED` | 50400 | Failed to start provider… |
+| `PROVIDER_STOP_FAILED` | 50401 | Failed to stop provider… |
+| `DELEGATE_NO_FINAL_RESPONSE` | 50402 | No final response received from delegated provider |
+| `DELEGATE_PROVIDER_ERROR` | 50403 | Delegated provider error: … |
+| `DELEGATE_CONNECTION_FAILED` | 50404 | Failed to connect to delegated provider: … |
+| `SDK_NOT_FOUND_IN_NODE_MODULES` | 50600 | QVAC SDK not found in node_modules. Checked: @qvac/sdk, @tetherto/sdk-mono, @tetherto/sdk-dev |
+| `WORKER_FILE_NOT_FOUND` | 50601 | Worker file not found at … |
+| `CONFIG_FILE_NOT_FOUND` | 50602 | Config file not found. Searched: …. Create qvac.config.json, qvac.config.js, or qvac.config.ts in your project root. |
+| `CONFIG_FILE_INVALID` | 50603 | Config file at … is invalid: … |
+| `CONFIG_FILE_PARSE_FAILED` | 50604 | Failed to parse config file at …: … |
+| `CONFIG_VALIDATION_FAILED` | 50605 | Config validation failed: … |
+| `PEAR_WORKER_ENTRY_REQUIRED` | 50606 | No plugins registered. Pear apps must spawn … as the worker entry. Run \\ |
+| `MULTIPLE_SDK_INSTALLATIONS` | 50607 | Multiple QVAC SDK installations found: …. Remove all but one to avoid conflicts. |
+| `PROFILER_INVALID_CAPACITY` | 50800 | Ring buffer capacity must be at least … |
+
+### Server errors
+
+| Error | Code | Summary |
+| --- | --- | --- |
+| `MODEL_ALREADY_REGISTERED` | 52001 | Model with ID "…" is already registered |
+| `MODEL_NOT_FOUND` | 52002 | Model with ID "…" not found |
+| `MODEL_NOT_LOADED` | 52003 | Model with ID "…" is not loaded |
+| `MODEL_IS_DELEGATED` | 52004 | Model "…" is a delegated model and cannot be accessed directly |
+| `UNKNOWN_MODEL_TYPE` | 52005 | Unknown model type: …. If using a custom worker bundle, ensure the plugin for "…" is included in your qvac.config plugins array and rebuild with "npx qvac bundle sdk". |
+| `MODEL_LOAD_FAILED` | 52200 | Failed to load model… |
+| `MODEL_FILE_NOT_FOUND` | 52201 | Model file not found: … |
+| `MODEL_FILE_NOT_FOUND_IN_DIR` | 52202 | … model file … not found in directory … |
+| `MODEL_FILE_LOCATE_FAILED` | 52203 | Failed to locate … model file: … |
+| `PROJECTION_MODEL_REQUIRED` | 52204 | Projection model source is required for multimodal LLM models |
+| `VAD_MODEL_REQUIRED` | 52205 | VAD model source is required for this configuration |
+| `TTS_ARTIFACTS_REQUIRED` | 52208 | TTS (Chatterbox) requires ttsTokenizerSrc, ttsSpeechEncoderSrc, ttsEmbedTokensSrc, ttsConditionalDecoderSrc, and ttsLanguageModelSrc |
+| `TTS_REFERENCE_AUDIO_REQUIRED` | 52209 | TTS (Chatterbox) requires referenceAudioSrc (path or URL to a WAV file for voice cloning) |
+| `PARAKEET_ARTIFACTS_REQUIRED` | 52210 | Parakeet model sources are missing. TDT requires parakeetEncoderSrc, parakeetDecoderSrc, parakeetVocabSrc, parakeetPreprocessorSrc. CTC requires parakeetCtcModelSrc, parakeetTokenizerSrc. Sortformer requires parakeetSortformerSrc. |
+| `MODEL_UNLOAD_FAILED` | 52400 | Failed to unload model… |
+| `EMBED_FAILED` | 52401 | Failed to generate embeddings… |
+| `EMBED_NO_EMBEDDINGS` | 52402 | No embeddings returned from model |
+| `TRANSCRIPTION_FAILED` | 52403 | Transcription failed… |
+| `AUDIO_FILE_NOT_FOUND` | 52404 | Audio file not found or not accessible: … |
+| `TRANSLATION_FAILED` | 52405 | Translation failed… |
+| `COMPLETION_FAILED` | 52406 | Completion failed… |
+| `ATTACHMENT_NOT_FOUND` | 52407 | Attachment not found at path: … |
+| `CANCEL_FAILED` | 52408 | Failed to cancel operation… |
+| `TEXT_TO_SPEECH_FAILED` | 52409 | Text-to-speech operation failed… |
+| `CONFIG_RELOAD_NOT_SUPPORTED` | 52410 | Model "…" does not support hot config reload |
+| `MODEL_TYPE_MISMATCH` | 52411 | Model type mismatch: expected "…", got "…" |
+| `OCR_FAILED` | 52412 | OCR operation failed… |
+| `IMAGE_FILE_NOT_FOUND` | 52413 | Image file not found or not accessible: … |
+| `INVALID_IMAGE_INPUT` | 52414 | Invalid image input type provided |
+| `TEXT_TO_SPEECH_STREAM_FAILED` | 52415 | Text-to-speech stream operation failed… |
+| `MODEL_OPERATION_NOT_SUPPORTED` | 52416 | Supported operations on this model: …. |
+| `RAG_SAVE_FAILED` | 52800 | Failed to save embeddings… |
+| `RAG_SEARCH_FAILED` | 52801 | Failed to search embeddings… |
+| `RAG_DELETE_FAILED` | 52802 | Failed to delete embeddings… |
+| `RAG_UNKNOWN_OPERATION` | 52803 | Unknown RAG operation: … |
+| `RAG_HYPERDB_FAILED` | 52804 | HyperDB RAG operation failed: … |
+| `RAG_WORKSPACE_MODEL_MISMATCH` | 52805 | Workspace "…" is configured for model "…", but you're trying to use model "…". Use a different workspace or the same model |
+| `RAG_WORKSPACE_NOT_FOUND` | 52806 | RAG workspace not found: … |
+| `RAG_WORKSPACE_IN_USE` | 52807 | RAG workspace '…' is currently in use. Close it first. |
+| `RAG_WORKSPACE_CLOSE_FAILED` | 52808 | Failed to close RAG workspace… |
+| `RAG_LIST_WORKSPACES_FAILED` | 52809 | Failed to list RAG workspaces… |
+| `RAG_CHUNK_FAILED` | 52810 | Failed to chunk documents… |
+| `RAG_WORKSPACE_NOT_OPEN` | 52811 | RAG workspace '…' is not open |
+| `FILE_NOT_FOUND` | 53000 | File not found: … |
+| `DOWNLOAD_CANCELLED` | 53001 | Download was cancelled |
+| `CHECKSUM_VALIDATION_FAILED` | 53002 | Checksum validation failed for … |
+| `HTTP_ERROR` | 53003 | HTTP error: … … |
+| `NO_RESPONSE_BODY` | 53004 | No response body received from HTTP request |
+| `RESPONSE_BODY_NOT_READABLE` | 53005 | Response body is not readable |
+| `NO_BLOB_FOUND` | 53006 | No blob found for … |
+| `DOWNLOAD_ASSET_FAILED` | 53007 | Failed to download asset… |
+| `SEEDING_NOT_SUPPORTED` | 53008 | Seeding is only supported for hyperdrive models |
+| `HYPERDRIVE_DOWNLOAD_FAILED` | 53009 | Hyperdrive download failed: … |
+| `INVALID_SHARD_URL_PATTERN` | 53010 | URL does not contain a valid sharded model pattern: … |
+| `ARCHIVE_EXTRACTION_FAILED` | 53011 | Failed to extract archive: … |
+| `ARCHIVE_UNSUPPORTED_TYPE` | 53012 | Unsupported archive type: … |
+| `ARCHIVE_MISSING_SHARDS` | 53013 | Archive is missing required shard file: … |
+| `PARTIAL_DOWNLOAD_OFFLINE` | 53014 | Cannot resume partial download (… bytes downloaded) - unable to connect. URL: … |
+| `REGISTRY_DOWNLOAD_FAILED` | 53015 | Registry download failed: … |
+| `DELETE_CACHE_FAILED` | 53200 | Failed to delete cache… |
+| `INVALID_DELETE_CACHE_PARAMS` | 53201 | Invalid deleteCache parameters - provide either modelId or cacheKey |
+| `CACHE_DIR_NOT_ABSOLUTE` | 53202 | Cache directory must be an absolute path |
+| `CACHE_DIR_NOT_WRITABLE` | 53203 | Cache directory is not writable: …… |
+| `SET_CONFIG_FAILED` | 53350 | Failed to set config… |
+| `CONFIG_ALREADY_SET` | 53351 | Config has already been set and is immutable. Config can only be set once during SDK initialization. |
+| `FFMPEG_NOT_AVAILABLE` | 53500 | FFmpeg is not available on this system |
+| `AUDIO_PLAYER_FAILED` | 53501 | Audio player failed: … |
+| `INVALID_AUDIO_CHUNK_TYPE` | 53502 | Invalid audio chunk type |
+| `DELEGATE_NO_FINAL_RESPONSE` | 53700 | No final response received from delegated provider |
+| `DELEGATE_CONNECTION_FAILED` | 53701 | Failed to connect to delegated provider: … |
+| `DELEGATE_PROVIDER_ERROR` | 53702 | Delegated provider error: … |
+| `RPC_NO_DATA_RECEIVED` | 53703 | No data received from request |
+| `RPC_UNKNOWN_REQUEST_TYPE` | 53704 | Unknown request type received: … |
+| `PLUGIN_NOT_FOUND` | 53850 | Plugin not found for model type "…". If using a custom worker bundle, ensure the plugin is included in your qvac.config plugins array and rebuild with "npx qvac bundle sdk". |
+| `PLUGIN_HANDLER_NOT_FOUND` | 53851 | Handler "…" not found in plugin "…" |
+| `PLUGIN_REQUEST_VALIDATION_FAILED` | 53852 | Request validation failed for handler "…"… |
+| `PLUGIN_RESPONSE_VALIDATION_FAILED` | 53853 | Response validation failed for handler "…"… |
+| `PLUGIN_ALREADY_REGISTERED` | 53854 | Plugin already registered for modelType: … |
+| `PLUGIN_HANDLER_TYPE_MISMATCH` | 53855 | Handler "…" is …, but was called as …. Use invokePlugin() for reply handlers and invokePluginStream() for streaming handlers. |
+| `PLUGIN_LOGGING_INVALID` | 53856 | Plugin "…" has invalid logging configuration: … |
+| `PLUGIN_DEFINITION_INVALID` | 53857 | Plugin definition invalid for "…": … |
+| `PLUGIN_MODEL_TYPE_RESERVED` | 53858 | modelType "…" is reserved for built-in plugins |
+| `PLUGIN_LOAD_CONFIG_VALIDATION_FAILED` | 53859 | modelConfig validation failed for "…": … |
+| `LIFECYCLE_SUSPEND_FAILED` | 53600 | Runtime suspend failed… |
+| `LIFECYCLE_RESUME_FAILED` | 53601 | Runtime resume failed… |
+| `LIFECYCLE_OPERATION_BLOCKED` | 53602 | Operation "…" is blocked while runtime state is "…" |
+| `PATH_TRAVERSAL` | 53900 | Path traversal detected: "…" escapes base directory "…" |
+| `QVAC_MODEL_REGISTRY_QUERY_FAILED` | 53950 | QVAC model registry query failed… |

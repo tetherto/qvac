@@ -54,7 +54,7 @@ if (fs.existsSync(manifestPath)) {
 for await (const resource of link(
   projectRoot,
   {
-    target: ["android-arm64", "android-arm", "android-ia32", "android-x64"],
+    hosts: ["android-arm64", "android-arm", "android-ia32", "android-x64"],
     out: addonsDir,
   },
   pkg,

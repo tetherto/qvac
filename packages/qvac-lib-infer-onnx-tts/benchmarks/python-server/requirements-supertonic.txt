@@ -7,3 +7,4 @@ numpy>=1.24.0
 # Supertonic TTS (ONNX + Transformers tokenizer) - Python 3.12+
 onnxruntime>=1.16.0
 transformers>=4.30.0
+sentencepiece>=0.2.0
