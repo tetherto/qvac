@@ -391,6 +391,18 @@ jobs:
           echo "SmolVLA model files:"
           ls -la model/vla/
 
+      # The prebuilt Windows addon links against ggml-vulkan.dll, which itself
+      # depends on the Vulkan loader (vulkan-1.dll). Without this step the
+      # `bare` runtime fails to load the addon with LoadLibrary error 126
+      # ("The specified module could not be found"). Same pattern used by
+      # integration-test-qvac-lib-infer-whispercpp.yml.
+      - name: Windows - install Vulkan runtime
+        if: matrix.platform == 'win32'
+        uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@0bbdca93da303a0b1634ba14a89cec085621078d
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+
       - name: Run integration test (Linux/macOS)
         if: ${{ matrix.platform != 'win32' }}
         working-directory: ${{ env.WORKDIR }}
