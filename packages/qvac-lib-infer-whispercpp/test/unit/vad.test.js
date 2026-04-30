@@ -2,7 +2,6 @@
 
 const test = require('brittle')
 const TranscriptionWhispercpp = require('../../index.js')
-const FakeDL = require('../mocks/loader.fake.js')
 const MockedBinding = require('../mocks/MockedBinding.js')
 const { wait, transitionCb } = require('../mocks/utils.js')
 const { WhisperInterface } = require('../../whisper')
@@ -21,10 +20,10 @@ function createTestModel ({ onOutput = () => { }, vadModelPath = 'ggml-silero-v5
   sinon.stub(TranscriptionWhispercpp.prototype, 'validateModelFiles').returns(undefined)
 
   const args = {
-    modelName: 'ggml-tiny.bin',
-    vadModelName: vadModelPath,
-    loader: new FakeDL({}),
-    params: {}
+    files: {
+      model: 'ggml-tiny.bin',
+      vadModel: vadModelPath
+    }
   }
   const config = {
     vadModelPath,
@@ -79,9 +78,10 @@ test('VAD mode processes audio with voice activity detection', async (t) => {
 
   if (outputEvents.length > 0) {
     t.ok(outputEvents[0].output, 'Should have transcription output')
-    t.is(typeof outputEvents[0].output, 'string', 'Output should be string')
-    t.ok(outputEvents[0].output.includes('Mock transcription') ||
-      outputEvents[0].output.includes('Silent audio detected'),
+    t.ok(Array.isArray(outputEvents[0].output), 'Output should be wrapped in array')
+    const transcript = outputEvents[0].output[0]
+    t.ok(transcript.text.includes('Mock transcription') ||
+      transcript.text.includes('Silent audio detected'),
     'Should contain mock transcription or silence detection text')
   }
 
@@ -114,20 +114,15 @@ test('VAD handles invalid audio input gracefully', async (t) => {
 
   await model.load()
 
-  // Test with null input - should generate an error event
-  await model.addon.append({ type: 'audio', input: null })
-
-  // Test with undefined input - should generate an error event
-  await model.addon.append({ type: 'audio', input: undefined })
-
-  // Test with malformed input - should generate an error event
-  await model.addon.append({ type: 'audio', input: 'invalid' })
-
-  await wait()
-
-  // Check that error events were generated for invalid inputs
-  const errorEvents = events.filter(e => e.event === 'Error')
-  t.ok(errorEvents.length > 0, 'Should generate error events for invalid inputs')
+  // Test invalid append payloads - wrapper should reject these immediately.
+  for (const invalidInput of [null, undefined, 'invalid']) {
+    try {
+      await model.addon.append({ type: 'audio', input: invalidInput })
+      t.fail('Expected append to reject invalid input')
+    } catch (error) {
+      t.ok(error, 'Invalid input should throw')
+    }
+  }
 
   // Verify that the addon is still functional after errors
   const validAudio = new Uint8Array([1, 2, 3, 4, 5])

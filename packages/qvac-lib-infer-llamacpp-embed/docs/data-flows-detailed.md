@@ -10,7 +10,7 @@
 
 - [Model Loading Flow](#model-loading-flow)
 - [Batch Embedding Generation Flow](#batch-embedding-generation-flow)
-- [Weight Loading Flow](#weight-loading-flow)
+- [Weight Streaming Flow](#weight-streaming-flow)
 - [Single Text Embedding Flow](#single-text-embedding-flow)
 
 ---
@@ -23,45 +23,40 @@
 sequenceDiagram
     participant App as Application
     participant GGMLBert as GGMLBert
-    participant WP as WeightsProvider
-    participant DL as DataLoader
+    participant FS as bare-fs
     participant BI as BertInterface
     participant Addon as Addon<BertModel>
     participant BM as BertModel
     participant LLAMA as llama.cpp
-    
-    App->>GGMLBert: new GGMLBert(args, config)
-    GGMLBert->>GGMLBert: Store config, modelName, diskPath
-    GGMLBert->>WP: new WeightsProvider(loader)
-    
-    App->>GGMLBert: load(closeLoader, onProgress)
-    GGMLBert->>BI: new BertInterface(binding, params, callbacks)
+
+    App->>GGMLBert: new GGMLBert({ files, config, logger, opts })
+    GGMLBert->>GGMLBert: Store files array, config, opts
+    GGMLBert->>GGMLBert: createJobHandler + exclusiveRunQueue
+
+    App->>GGMLBert: load()
+    GGMLBert->>GGMLBert: pick primaryGgufPath = first entry matching /-\d+-of-\d+\.gguf$/<br/>(falls back to files.model[0] for non-sharded models)
+    GGMLBert->>BI: new BertInterface(binding, { path: primaryGgufPath, config }, outputCb)
     BI->>Addon: createInstance(params)
     Addon->>BM: BertModel(path, config, backendsDir)
     BM->>BM: Delayed init (InitLoader)
-    
-    alt Sharded Model
-        GGMLBert->>GGMLBert: _loadWeights(onProgress)
-        GGMLBert->>WP: streamFiles(shards, onChunk, onProgress)
-        loop For each shard
-            WP->>DL: getStream(shard)
-            DL-->>WP: Stream chunks
-            WP->>GGMLBert: onChunk(chunkedWeightsData)
-            GGMLBert->>BI: loadWeights({filename, chunk, completed})
-            BI->>Addon: loadWeights(handle, data)
-            Addon->>BM: set_weights_for_file(filename, streambuf)
-            BM->>LLAMA: llama_model_load_fulfill_split_future()
+
+    alt Sharded Model (files.length > 1)
+        GGMLBert->>GGMLBert: _streamShards()
+        loop For each absolute path in files.model (in order)
+            GGMLBert->>FS: fs.createReadStream(absolutePath)
+            loop For each chunk
+                FS-->>GGMLBert: chunk
+                GGMLBert->>BI: loadWeights({filename, chunk, completed: false})
+                BI->>Addon: loadWeights(handle, data)
+                Addon->>BM: Append blob to streambuf for filename
+            end
+            GGMLBert->>BI: loadWeights({filename, chunk: null, completed: true})
+            BI->>Addon: mark file complete
         end
-    else Single File Model
-        GGMLBert->>GGMLBert: downloadWeights(onProgress)
-        GGMLBert->>WP: downloadFiles([modelName], diskPath, opts)
-        loop Download progress
-            WP->>DL: download(modelName, diskPath)
-            DL-->>WP: Progress updates
-            WP->>GGMLBert: onDownloadProgress(bytes)
-        end
+    else Single File Model (files.length == 1)
+        Note over GGMLBert: Skip streaming — addon will read path directly on activate()
     end
-    
+
     GGMLBert->>BI: activate()
     BI->>Addon: activate(handle)
     Addon->>BM: load()
@@ -70,7 +65,7 @@ sequenceDiagram
     BM->>BM: initializeBackend(backendsDir)
     BM->>BM: setupParams(modelPath, config)
     BM->>LLAMA: initFromConfig(params, path, streams, shards)
-    LLAMA->>LLAMA: Load model weights
+    LLAMA->>LLAMA: Load model weights (from streambufs or path)
     LLAMA-->>BM: model, context
     BM->>BM: Initialize batch, vocab, pooling
     BM-->>Addon: Model loaded
@@ -79,31 +74,42 @@ sequenceDiagram
     GGMLBert-->>App: Model loaded
 ```
 
+### Caller Contract for `files.model`
+
+- **Absolute paths only.** `GGMLBert` does not resolve relative paths or discover companion files.
+- **Order matters.** For sharded GGUFs, callers pass the `.tensors.txt` companion first, then shards `00001-of-N`, `00002-of-N`, …, `N-of-N` in numeric order. The addon scans the array for the first entry matching the shard regex `/-\d+-of-\d+\.gguf$/` and uses that as the primary path handed to llama.cpp's `params.model.path`. For non-sharded single-file models, the only entry is used. The `.tensors.txt` file is consumed by the streaming layer (along with the shards) but is never the primary path.
+- **All files required.** Every shard and the `.tensors.txt` file must be present in the array; missing any file will fail at load time.
+- **No download step.** The addon reads bytes from disk via `bare-fs`. Distribution, caching, and integrity are the caller's responsibility.
+
 ### Sharded Model Loading Detail
 
 ```mermaid
 sequenceDiagram
-    participant JS as JavaScript
+    participant App as Application
+    participant GGMLBert as GGMLBert
+    participant FS as bare-fs
     participant Cpp as C++ Addon
     participant Stream as BlobsStream
     participant LLAMA as llama.cpp
-    
-    Note over JS: WeightsProvider streams shards
-    JS->>Cpp: loadWeights({filename: "model-00001-of-00005.gguf", chunk: ArrayBuffer, completed: false})
-    Cpp->>Stream: Append blob to streambuf
-    Stream->>Stream: Store ArrayBuffer reference
-    
-    JS->>Cpp: loadWeights({filename: "model-00002-of-00005.gguf", chunk: ArrayBuffer, completed: false})
-    Cpp->>Stream: Append blob to streambuf
-    
-    Note over JS: Last shard
-    JS->>Cpp: loadWeights({filename: "model-00005-of-00005.gguf", chunk: ArrayBuffer, completed: true})
-    Cpp->>Stream: Append final blob, mark complete
-    
+
+    Note over App: Caller passes every file explicitly
+    App->>GGMLBert: new GGMLBert({ files: { model: [tensorsTxt, shard1..shardN] }, ... })
+    App->>GGMLBert: load()
+
+    loop For each absolute path (in order)
+        GGMLBert->>FS: createReadStream(path)
+        loop For each chunk
+            FS-->>GGMLBert: Buffer chunk
+            GGMLBert->>Cpp: loadWeights({filename, chunk, completed: false})
+            Cpp->>Stream: Append blob to streambuf (zero-copy)
+        end
+        GGMLBert->>Cpp: loadWeights({filename, chunk: null, completed: true})
+        Cpp->>Stream: Mark file complete
+    end
+
     Note over Cpp: activate() called
-    Cpp->>LLAMA: llama_model_load() with streambuf
-    LLAMA->>Stream: seekg(), read() operations
-    Stream->>Stream: Navigate across blobs
+    Cpp->>LLAMA: llama_model_load() with streambufs
+    LLAMA->>Stream: seekg(), read() operations across blobs
     Stream-->>LLAMA: Model weight data
     LLAMA->>LLAMA: Parse GGUF, load tensors
     LLAMA-->>Cpp: Model loaded
@@ -162,8 +168,8 @@ sequenceDiagram
     Addon->>Addon: uv_async_send()
     
     Note over Addon: UV async callback (JS thread)
-    Addon->>BI: jsOutputCallback('Output', jobId, embeddings)
-    BI->>GGMLBert: outputCb('Output', jobId, embeddings)
+    Addon->>BI: jsOutputCallback('Output', embeddings)
+    BI->>GGMLBert: outputCb('Output', embeddings)
     GGMLBert->>GGMLBert: Convert to Float32Array[]
     GGMLBert-->>App: Response.await() resolves with embeddings
 ```
@@ -195,47 +201,38 @@ flowchart TD
 
 ---
 
-## Weight Loading Flow
+## Weight Streaming Flow
 
-### Streaming Weight Loading Sequence
+### Direct File Streaming Sequence
+
+`GGMLBert` has no `WeightsProvider` and no data loader. It streams each caller-supplied absolute path straight from disk using `bare-fs.createReadStream` and forwards chunks to the native addon. Distribution (downloading, P2P, cache, integrity) happens entirely outside this package.
 
 ```mermaid
 sequenceDiagram
-    participant JS as JavaScript
-    participant WP as WeightsProvider
-    participant DL as DataLoader
+    participant JS as GGMLBert
+    participant FS as bare-fs
     participant BI as BertInterface
     participant Addon as Addon<BertModel>
     participant Stream as BlobsStream
     participant LLAMA as llama.cpp
-    
-    JS->>WP: streamFiles(shards, onChunk, onProgress)
-    WP->>WP: Expand shards from modelName
-    
-    loop For each shard file
-        WP->>DL: getStream(shard)
-        DL-->>WP: AsyncIterable<Uint8Array>
-        
+
+    Note over JS: Caller passed files.model = [file1, file2, ...]
+    loop For each absolute path (in order)
+        JS->>FS: fs.createReadStream(path)
         loop For each chunk
-            DL-->>WP: Uint8Array chunk
-            WP->>WP: Track progress
-            WP->>JS: onProgress({currentFile, currentFileProgress, overallProgress})
-            WP->>JS: onChunk({filename, chunk, completed: false})
+            FS-->>JS: Buffer chunk
+            JS->>BI: loadWeights({filename, chunk, completed: false})
+            BI->>Addon: loadWeights(handle, data)
+            Addon->>Stream: Append blob (zero-copy ArrayBuffer ref)
         end
-        
-        DL-->>WP: Stream complete
-        WP->>JS: onChunk({filename, chunk: null, completed: true})
+        FS-->>JS: stream end
+        JS->>BI: loadWeights({filename, chunk: null, completed: true})
+        BI->>Addon: loadWeights(handle, data)
+        Addon->>Stream: Mark file complete
     end
-    
-    Note over JS: All shards streamed
-    JS->>BI: loadWeights({filename, chunk, completed})
-    BI->>Addon: loadWeights(handle, data)
-    Addon->>Addon: Convert Uint8Array to std::streambuf
-    Addon->>Stream: Append blob
-    Stream->>Stream: Store ArrayBuffer reference (zero-copy)
-    
+
     Note over Addon: activate() called later
-    Addon->>LLAMA: llama_model_load() with streambuf
+    Addon->>LLAMA: llama_model_load() with streambufs
     LLAMA->>Stream: seekg(offset)
     Stream->>Stream: Find blob containing offset
     Stream->>Stream: Calculate position within blob
@@ -325,8 +322,8 @@ sequenceDiagram
     Addon->>Addon: uv_async_send()
     
     Note over Addon: UV async callback (JS thread)
-    Addon->>BI: jsOutputCallback('Output', jobId, embeddings)
-    BI->>GGMLBert: outputCb('Output', jobId, embeddings)
+    Addon->>BI: jsOutputCallback('Output', embeddings)
+    BI->>GGMLBert: outputCb('Output', embeddings)
     GGMLBert->>GGMLBert: Convert to Float32Array
     GGMLBert-->>App: Response.await() resolves with embedding
 ```
@@ -340,8 +337,8 @@ sequenceDiagram
 ```mermaid
 flowchart TD
     Start([run input]) --> CheckType{Is Array?}
-    CheckType -->|Yes| ArrayPath[type: 'sequences'<br/>input: string[]]
-    CheckType -->|No| StringPath[type: 'text'<br/>input: string]
+    CheckType -->|Yes| ArrayPath["type: 'sequences'<br/>input: array of strings"]
+    CheckType -->|No| StringPath["type: 'text'<br/>input: string"]
     ArrayPath --> RunJob[runJob to addon]
     StringPath --> RunJob
     RunJob --> Return[Return QvacResponse with fixed job id]
@@ -354,7 +351,7 @@ flowchart TD
     Start([process Input]) --> Visit[std::visit input]
     Visit --> CheckVariant{Input type?}
     CheckVariant -->|string| SinglePath[encode_host_f32 string]
-    CheckVariant -->|vector<string>| BatchPath[encode_host_f32_sequences vector]
+    CheckVariant -->|"vector&lt;string&gt;"| BatchPath[encode_host_f32_sequences vector]
     SinglePath --> TokenizeSingle[Tokenize single string]
     BatchPath --> TokenizeBatch[Tokenize all strings]
     TokenizeSingle --> CheckContext1{> 512 tokens?}
@@ -372,4 +369,4 @@ flowchart TD
 
 ---
 
-**Last Updated:** 2026-02-17
+**Last Updated:** 2026-04-16

@@ -101,17 +101,41 @@ model:
 
 ## Usage
 
-Run the benchmark with:
+Run the benchmark with the default TDT config:
 
 ```bash
 poetry run python -m src.parakeet.main --config config/config.yaml
+```
+
+### Per-Model Config Files
+
+Each model type has a dedicated config file with appropriate defaults:
+
+| Config File | Model Type | Description |
+|-------------|------------|-------------|
+| `config/config.yaml` | TDT | Token-and-Duration Transducer (default) |
+| `config/config-ctc.yaml` | CTC | Connectionist Temporal Classification |
+| `config/config-eou.yaml` | EOU | End-of-Utterance streaming model |
+| `config/config-sortformer.yaml` | Sortformer | Speaker diarization (WER/CER disabled) |
+
+Run a specific model benchmark:
+
+```bash
+# CTC benchmark
+poetry run python -m src.parakeet.main --config config/config-ctc.yaml
+
+# EOU benchmark (streaming enabled by default)
+poetry run python -m src.parakeet.main --config config/config-eou.yaml
+
+# Sortformer benchmark (diarization, no WER/CER)
+poetry run python -m src.parakeet.main --config config/config-sortformer.yaml
 ```
 
 The client will:
 
 1. Load the specified dataset (LibriSpeech or FLEURS) and convert it to raw audio files
 2. Send paths to audio files to the server for transcription
-3. Calculate WER and CER scores
+3. Calculate WER and CER scores (when enabled)
 4. Report timing statistics
 
 ### Using Different Datasets and Languages
@@ -131,6 +155,21 @@ Parakeet supports multiple model architectures:
 ```yaml
 model:
   model_type: "ctc"  # or "tdt", "eou", "sortformer"
+```
+
+### Trigger Script
+
+Trigger benchmarks from the command line using the script in `../../scripts/`:
+
+```bash
+# Trigger a single model type
+../../scripts/trigger-benchmark.sh -t ctc
+
+# Trigger all model types in one run
+../../scripts/trigger-benchmark.sh -t all
+
+# With custom sample count and watch mode
+../../scripts/trigger-benchmark.sh -t eou -m 100 -W
 ```
 
 ## Output
@@ -153,10 +192,10 @@ poetry run python -m pytest tests/ -v
 
 | Type | Description | Best For |
 |------|-------------|----------|
-| `tdt` | Token-and-Duration Transducer | General purpose, accurate |
-| `ctc` | Connectionist Temporal Classification | Faster inference |
-| `eou` | End-of-Utterance | Live transcription with end detection |
-| `sortformer` | Sortformer architecture | Advanced use cases |
+| `tdt` | Token-and-Duration Transducer | General purpose, multilingual, accurate |
+| `ctc` | Connectionist Temporal Classification | English-only, faster inference |
+| `eou` | End-of-Utterance | Streaming, low latency with utterance detection |
+| `sortformer` | Sortformer architecture | Speaker diarization (no WER/CER metrics) |
 
 ## Acknowledgments
 

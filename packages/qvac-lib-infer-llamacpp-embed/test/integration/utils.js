@@ -5,7 +5,6 @@ const path = require('bare-path')
 const https = require('bare-https')
 const os = require('bare-os')
 const GGMLBert = require('../../index.js')
-const FilesystemDL = require('@qvac/dl-filesystem')
 
 /**
  * Downloads a file from a URL to a destination path
@@ -15,39 +14,53 @@ const FilesystemDL = require('@qvac/dl-filesystem')
  */
 async function downloadFile (url, dest) {
   return new Promise((resolve, reject) => {
+    let resolved = false
+    const safeResolve = () => { if (!resolved) { resolved = true; resolve() } }
+    const safeReject = (err) => { if (!resolved) { resolved = true; reject(err) } }
+
     const file = fs.createWriteStream(dest)
+
+    file.on('error', (err) => {
+      file.destroy()
+      fs.unlink(dest, () => safeReject(err))
+    })
+
     const req = https.request(url, (response) => {
-      // Handle redirects (301, 302, 307, 308 for Windows model download)
       if ([301, 302, 307, 308].includes(response.statusCode)) {
         file.destroy()
-        fs.unlink(dest, () => {}) // Clean up partial file
+        fs.unlink(dest, (unlinkErr) => {
+          if (unlinkErr && unlinkErr.code !== 'ENOENT') {
+            return safeReject(unlinkErr)
+          }
 
-        let redirectUrl = response.headers.location
-        // Handle relative redirects
-        if (redirectUrl.startsWith('/')) {
-          const originalUrl = new URL(url)
-          redirectUrl = `${originalUrl.protocol}//${originalUrl.host}${redirectUrl}`
-        }
+          const redirectUrl = new URL(response.headers.location, url).href
 
-        return downloadFile(redirectUrl, dest).then(resolve).catch(reject)
+          downloadFile(redirectUrl, dest)
+            .then(safeResolve).catch(safeReject)
+        })
+        return
       }
 
       if (response.statusCode !== 200) {
         file.destroy()
-        fs.unlink(dest, () => {})
-        return reject(new Error(`Download failed: ${response.statusCode}`))
+        fs.unlink(dest, () => safeReject(new Error(`Download failed: ${response.statusCode}`)))
+        return
       }
 
-      response.pipe(file)
-      file.on('finish', () => {
+      response.on('error', (err) => {
         file.destroy()
-        resolve()
+        fs.unlink(dest, () => safeReject(err))
+      })
+
+      response.pipe(file)
+      file.on('close', () => {
+        safeResolve()
       })
     })
 
     req.on('error', (err) => {
       file.destroy()
-      fs.unlink(dest, () => reject(err))
+      fs.unlink(dest, () => safeReject(err))
     })
 
     req.end()
@@ -148,15 +161,14 @@ class TestLogger {
  * @param {string} device - Device to use: 'cpu' or 'gpu' (default: 'gpu')
  * @param {string} gpuLayers - Number of GPU layers (default: '999' for GPU, '0' for CPU)
  * @param {string} batchSize - Batch size (default: '1024')
- * @returns {Promise<{inference: GGMLBert, loader: FilesystemDL}>}
+ * @returns {Promise<{inference: GGMLBert}>}
  */
 async function createEmbeddingsTestInstance (t, modelName, device = 'gpu', gpuLayers = null, batchSize = '1024') {
   const [, modelDir] = await ensureModel(modelName)
-  const diskPath = modelDir
+  const modelPath = path.join(modelDir, modelName)
 
-  t.ok(fs.existsSync(path.join(diskPath, modelName)), 'Model file should exist')
+  t.ok(fs.existsSync(modelPath), 'Model file should exist')
 
-  const loader = new FilesystemDL({ dirPath: diskPath })
   const logger = new TestLogger()
 
   // Force CPU on darwin-x64
@@ -166,31 +178,36 @@ async function createEmbeddingsTestInstance (t, modelName, device = 'gpu', gpuLa
     console.log('Platform detected: darwin-x64, forcing device to CPU')
   }
 
-  // Determine gpu_layers based on device if not explicitly provided
   const actualGpuLayers = gpuLayers !== null ? gpuLayers : (device === 'cpu' ? '0' : '999')
 
-  // Build config object with device and gpu_layers parameters
   const config = {
     gpu_layers: actualGpuLayers,
     batch_size: batchSize
   }
 
-  // Add device preference if specified
   if (device === 'cpu' || device === 'gpu') {
     config.device = device
   }
 
-  // Disable flash attention on Android
   if (os.platform() === 'android') {
     config.flash_attn = 'off'
     console.log('Platform detected: Android, setting flash_attn to off')
   }
 
-  const inference = new GGMLBert({ modelName, loader, logger, diskPath }, config)
+  config.openclCacheDir = modelDir
 
+  const inference = new GGMLBert({
+    files: { model: [modelPath] },
+    config,
+    logger,
+    opts: { stats: true }
+  })
+
+  const t0 = Date.now()
   await inference.load()
+  console.log(`  model.load() took ${Date.now() - t0} ms`)
 
-  return { inference, loader }
+  return { inference }
 }
 
 /**
@@ -242,12 +259,10 @@ function removeErrorHandlers (response) {
 
 /**
  * Cleans up test resources
- * @param {Object} loader - The loader instance
  * @param {Object} inference - The inference instance
  * @returns {Promise<void>}
  */
-async function cleanupResources (loader, inference) {
-  await loader.close()
+async function cleanupResources (inference) {
   await inference.unload()
 }
 

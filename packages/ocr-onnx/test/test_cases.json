@@ -140,7 +140,7 @@
                     "LES ARTS DÉCORATIFS",
                     "Musée du LOUVRE",
                     "Théâtre",
-                    "du PALAIS-RoYAL"
+                    "du PALAIS-RoYal"
                 ]
             },
             {
@@ -153,7 +153,7 @@
                     "Palais du LOUVRE",
                     "LES ARTS DÉCORATIFS",
                     "Musée du LOUVRE",
-                    "Théâtre du PALAIS-RoYAL"
+                    "Théâtre du PALAIS-RoYal"
                 ]
             }
         ]
@@ -174,7 +174,7 @@
                     "평 양",
                     "Seoul",
                     "Pyeongyang",
-                    "G6Km",
+                    "56Km",
                     "2O5Km"
                 ]
             },
@@ -183,7 +183,7 @@
                     "paragraph": true
                 },
                 "expectedOutput": [
-                    "서울 평 양 Seoul Pyeongyang G6Km 2O5Km"
+                    "서울 평 양 Seoul Pyeongyang 56Km 2O5Km"
                 ]
             }
         ]
@@ -200,11 +200,11 @@
                     "paragraph": false
                 },
                 "expectedOutput": [
-                    "ポイ橋て禁止』",
-                    "NO LTTB",
-                    "清灘できれいな港区を",
-                    "園潜 区",
-                    "RNATo CTV"
+                    "ポイ橋て禁止]",
+                    "NO LITTBR",
+                    "清潔できれいな港区を",
+                    "国潜 区",
+                    "RINATO ClTY"
                 ]
             }
         ]
@@ -230,7 +230,7 @@
                     "Yuyuan",
                     "Rd",
                     "山",
-                    "JH "
+                    "J川 "
                 ]
             }
         ]
@@ -247,7 +247,7 @@
                     "paragraph": false
                 },
                 "expectedOutput": [
-                    ".",
+                    "ว",
                     " เส้นทางลัด",
                     "เพชรบุรี"
                 ]
@@ -257,7 +257,7 @@
                     "paragraph": true
                 },
                 "expectedOutput": [
-                    ".",
+                    "ว",
                     " เส้นทางลัด",
                     "เพชรบุรี"
                 ]

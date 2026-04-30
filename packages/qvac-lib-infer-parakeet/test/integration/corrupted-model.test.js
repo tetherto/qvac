@@ -4,9 +4,13 @@ const test = require('brittle')
 const path = require('bare-path')
 const fs = require('bare-fs')
 const os = require('bare-os')
-const binding = require('../../binding')
-const { ParakeetInterface } = require('../../parakeet')
-const { setupJsLogger, isMobile } = require('./helpers.js')
+const {
+  binding,
+  ParakeetInterface,
+  setupJsLogger,
+  getNamedPathsConfig,
+  isMobile
+} = require('./helpers.js')
 
 /**
  * Helper function to create a test directory with corrupted model files
@@ -50,7 +54,7 @@ function cleanupTestDir (dirPath) {
         const filePath = path.join(dirPath, file)
         fs.unlinkSync(filePath)
       }
-      fs.rmdirSync(dirPath)
+      fs.rmSync(dirPath, { recursive: true })
     } catch (e) {
       // Ignore cleanup errors
     }
@@ -99,30 +103,13 @@ test('Corrupted model files should emit Error event to JavaScript', { timeout: 6
       maxThreads: 4,
       useGPU: false,
       sampleRate: 16000,
-      channels: 1
+      channels: 1,
+      ...getNamedPathsConfig('tdt', modelDir)
     }
 
     parakeet = new ParakeetInterface(binding, config, outputCallback)
 
-    // Load corrupted files
-    const files = [
-      'encoder-model.onnx',
-      'encoder-model.onnx.data',
-      'decoder_joint-model.onnx',
-      'vocab.txt',
-      'preprocessor.onnx'
-    ]
-
-    for (const file of files) {
-      const filePath = path.join(modelDir, file)
-      if (fs.existsSync(filePath)) {
-        const content = fs.readFileSync(filePath)
-        const chunk = new Uint8Array(content.buffer, content.byteOffset, content.byteLength)
-        await parakeet.loadWeights({ filename: file, chunk, completed: true })
-      }
-    }
-
-    // Try to activate - this should trigger model loading and fail
+    // Try to activate - this should trigger model loading and fail on corrupted files
     await parakeet.activate()
 
     // Wait for error event with timeout
@@ -137,7 +124,7 @@ test('Corrupted model files should emit Error event to JavaScript', { timeout: 6
   } finally {
     if (parakeet) {
       try {
-        parakeet.destroyInstance()
+        await parakeet.destroyInstance()
         console.log('   Instance destroyed successfully')
       } catch (e) {
         console.log('   Instance destroy note:', e.message)
@@ -228,20 +215,13 @@ test('Empty model files should emit Error event to JavaScript', { timeout: 60000
       maxThreads: 4,
       useGPU: false,
       sampleRate: 16000,
-      channels: 1
+      channels: 1,
+      ...getNamedPathsConfig('tdt', modelDir)
     }
 
     parakeet = new ParakeetInterface(binding, config, outputCallback)
 
-    // Load empty files
-    for (const file of files) {
-      const filePath = path.join(modelDir, file)
-      const content = fs.readFileSync(filePath)
-      const chunk = new Uint8Array(content.buffer, content.byteOffset, content.byteLength)
-      await parakeet.loadWeights({ filename: file, chunk, completed: true })
-    }
-
-    // Try to activate
+    // Try to activate - C++ will load empty files from named paths and fail
     await parakeet.activate()
 
     // Wait for error event with timeout
@@ -255,7 +235,7 @@ test('Empty model files should emit Error event to JavaScript', { timeout: 60000
   } finally {
     if (parakeet) {
       try {
-        parakeet.destroyInstance()
+        await parakeet.destroyInstance()
         console.log('   Instance destroyed successfully')
       } catch (e) {
         console.log('   Instance destroy note:', e.message)
@@ -334,28 +314,13 @@ test('Truncated model files should emit Error event to JavaScript', { timeout: 6
       maxThreads: 4,
       useGPU: false,
       sampleRate: 16000,
-      channels: 1
+      channels: 1,
+      ...getNamedPathsConfig('tdt', modelDir)
     }
 
     parakeet = new ParakeetInterface(binding, config, outputCallback)
 
-    // Load truncated files
-    const files = [
-      'encoder-model.onnx',
-      'encoder-model.onnx.data',
-      'decoder_joint-model.onnx',
-      'vocab.txt',
-      'preprocessor.onnx'
-    ]
-
-    for (const file of files) {
-      const filePath = path.join(modelDir, file)
-      const content = fs.readFileSync(filePath)
-      const chunk = new Uint8Array(content.buffer, content.byteOffset, content.byteLength)
-      await parakeet.loadWeights({ filename: file, chunk, completed: true })
-    }
-
-    // Try to activate
+    // Try to activate - C++ will load truncated files from named paths and fail
     await parakeet.activate()
 
     // Wait for error event with timeout
@@ -369,7 +334,7 @@ test('Truncated model files should emit Error event to JavaScript', { timeout: 6
   } finally {
     if (parakeet) {
       try {
-        parakeet.destroyInstance()
+        await parakeet.destroyInstance()
         console.log('   Instance destroyed successfully')
       } catch (e) {
         console.log('   Instance destroy note:', e.message)

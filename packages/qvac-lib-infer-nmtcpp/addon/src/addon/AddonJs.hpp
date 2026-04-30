@@ -12,6 +12,7 @@
 #include <qvac-lib-inference-addon-cpp/handlers/OutputHandler.hpp>
 #include <qvac-lib-inference-addon-cpp/queue/OutputCallbackJs.hpp>
 
+#include "model-interface/PivotTranslationModel.hpp"
 #include "model-interface/TranslationModel.hpp"
 
 namespace {
@@ -36,6 +37,7 @@ getConfigMap(
   js::Array configKeysArray(env, configKeys);
   uint32_t configKeysSz = configKeysArray.size(env);
 
+  bool hasPivotModel = false;
   while (configKeysSz > 0) {
     configKeysSz--;
     js_value_t* key;
@@ -43,12 +45,23 @@ getConfigMap(
     auto value = config.getProperty(env, key);
 
     std::string keyString = js::String::fromValue(key).as<std::string>(env);
+
     std::transform(
         keyString.begin(),
         keyString.end(),
         keyString.begin(),
         [](unsigned char c) { return std::tolower(c); });
-    if (js::is<js::Int32>(env, value) || js::is<js::Uint32>(env, value) ||
+    if (keyString == "pivotmodel") {
+      hasPivotModel = true;
+      continue;
+    }
+    if (js::is<js::Boolean>(env, value)) {
+      // Map booleans to int64 {0,1} so downstream config readers can treat
+      // them uniformly (TranslationModel::setConfig reads "use_gpu" this way).
+      auto jsBool = js::Boolean{env, value};
+      configMap[keyString] = static_cast<int64_t>(jsBool.as<bool>(env) ? 1 : 0);
+    } else if (
+        js::is<js::Int32>(env, value) || js::is<js::Uint32>(env, value) ||
         js::is<js::BigInt>(env, value)) {
       auto jsNumber = js::Number{env, value};
       configMap[keyString] = jsNumber.as<int64_t>(env);
@@ -59,7 +72,8 @@ getConfigMap(
       auto jsString = js::String::fromValue(value);
       configMap[keyString] = jsString.as<std::string>(env);
     } else {
-      std::string msg = "Expected numeric or string value for config key '" +
+      std::string msg = "Expected boolean, numeric or string value for config "
+                        "key '" +
                         keyString + "' but got a different type";
       throw qvac_errors::StatusError(
           qvac_errors::general_error::InvalidArgument, msg);
@@ -70,7 +84,7 @@ getConfigMap(
 }
 
 } // namespace
-namespace qvac_lib_inference_addon_marian {
+namespace qvac_lib_inference_addon_nmt {
 
 inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
@@ -78,18 +92,44 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   JsArgsParser args(env, info);
 
   auto configurationParamsJs = args.getJsObject(1, "config");
-  auto config = getConfigMap(env, configurationParamsJs, "config");
+  auto modelConfig = getConfigMap(env, configurationParamsJs, "config");
+
+  auto modelConfigJs =
+      configurationParamsJs.getProperty<js::Object>(env, "config");
+  auto pivotModelConfigJs =
+      modelConfigJs.getOptionalProperty<js::Object>(env, "pivotModel");
+
+  std::unique_ptr<qvac_lib_inference_addon_cpp::model::IModel> model;
 
   auto modelPathJs =
       configurationParamsJs.getOptionalProperty<js::String>(env, "path");
+
   std::string modelPath =
       modelPathJs ? modelPathJs.value().as<std::string>(env) : "";
-  auto model =
-      std::make_unique<qvac_lib_inference_addon_marian::TranslationModel>(
-          modelPath);
+  // Checking for pivot translation
+  if (pivotModelConfigJs.has_value()) {
+    auto secondModelPathJs =
+        pivotModelConfigJs->getOptionalProperty<js::String>(env, "path");
+    std::string secondModelPath =
+        secondModelPathJs ? secondModelPathJs.value().as<std::string>(env) : "";
 
-  model->setConfig(config);
-  model->load();
+    auto pivotModelConfig =
+        getConfigMap(env, pivotModelConfigJs.value(), "config");
+
+    auto pivotTranslationModel = std::make_unique<PivotTranslationModel>(
+        modelPath, modelConfig, secondModelPath, pivotModelConfig);
+    model = std::move(pivotTranslationModel);
+  } else {
+    auto translationModel =
+        std::make_unique<qvac_lib_inference_addon_nmt::TranslationModel>(
+            modelPath);
+
+    translationModel->setConfig(modelConfig);
+    translationModel->load();
+
+    model = std::move(translationModel);
+  }
+
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
 
   outHandlers.add(make_shared<out_handl::JsStringOutputHandler>());
@@ -105,6 +145,33 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
       std::make_unique<AddonJs>(env, std::move(callback), std::move(model));
 
   return JsInterface::createInstance(env, std::move(addon));
+}
+JSCATCH
+
+inline js_value_t*
+getActiveBackendName(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+
+  // The shared AddonCpp stores the model as IModel& — getActiveBackendName()
+  // only lives on TranslationModel. A downcast failure means the active model
+  // is PivotTranslationModel (Bergamot), which is CPU-only by design.
+  auto& model = instance.addonCpp->model.get();
+  auto* translationModel =
+      dynamic_cast<qvac_lib_inference_addon_nmt::TranslationModel*>(&model);
+  if (translationModel != nullptr) {
+    return js::String::create(
+        env, translationModel->getActiveBackendName().c_str());
+  }
+  auto* pivotModel =
+      dynamic_cast<qvac_lib_inference_addon_nmt::PivotTranslationModel*>(
+          &model);
+  std::string name = (pivotModel != nullptr && pivotModel->isLoaded())
+                         ? std::string("Bergamot-CPU")
+                         : std::string("Unloaded");
+  return js::String::create(env, name.c_str());
 }
 JSCATCH
 
@@ -125,8 +192,9 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
     std::vector<std::string> inputSequence;
     inputSequence.reserve(vectorOfJsValues.size());
 
-    std::ranges::transform(
-        vectorOfJsValues,
+    std::transform(
+        vectorOfJsValues.begin(),
+        vectorOfJsValues.end(),
         std::back_inserter(inputSequence),
         [&env](js_value_t* const string_value) {
           return js::String(env, string_value).as<std::string>(env);
@@ -143,4 +211,4 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
 }
 JSCATCH
 
-} // namespace qvac_lib_inference_addon_marian
+} // namespace qvac_lib_inference_addon_nmt

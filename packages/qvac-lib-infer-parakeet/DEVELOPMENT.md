@@ -100,7 +100,7 @@ npx bare-make install
 ### Build Options
 
 - **Debug Build**: Use `-DCMAKE_BUILD_TYPE=Debug` for debugging
-- **GPU Support**: Install CUDA toolkit before building for GPU acceleration
+- **GPU Support**: GPU acceleration is provided via `@qvac/onnx` platform EPs (CoreML, DirectML, NNAPI) — no separate SDK install needed
 - **Tests**: Add `-DBUILD_TESTING=ON` to build tests
 
 ## Project Structure
@@ -268,9 +268,9 @@ npm run build
 ### Issue: GPU acceleration not working
 
 **Solution**: 
-1. Install CUDA toolkit (NVIDIA) or appropriate GPU SDK
-2. Rebuild with GPU support
-3. Set `useGPU: true` in configuration
+1. Verify your platform has a supported EP: CoreML (macOS/iOS), DirectML (Windows), NNAPI (Android). Linux prebuilds currently run CPU only.
+2. Set `useGPU: true` in configuration
+3. Check logs for EP registration messages — the addon falls back to CPU if the EP fails
 
 ## Performance Optimization
 

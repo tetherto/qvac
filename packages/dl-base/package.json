@@ -1,0 +1,42 @@
+{
+  "name": "@qvac/dl-base",
+  "version": "0.2.1",
+  "description": "Base dataloader class for QVAC",
+  "main": "index.js",
+  "scripts": {
+    "lint": "standard",
+    "lint:fix": "standard --fix",
+    "test:dts": "tsc index.d.ts --noEmit"
+  },
+  "author": "Tether",
+  "keywords": [
+    "tether",
+    "dataloader",
+    "qvac"
+  ],
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "brittle": "^3.15.0",
+    "standard": "17.1.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@qvac/logging": "^0.1.0",
+    "ready-resource": "^1.1.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/dl-base"
+  },
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/dl-base#readme",
+  "files": [
+    "src",
+    "index.d.ts",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "types": "index.d.ts"
+}

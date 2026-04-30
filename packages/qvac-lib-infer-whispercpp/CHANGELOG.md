@@ -5,7 +5,168 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.4.1] - 2026-02-18
+## [0.6.5]
+
+### Added
+- Added opt-in conversation streaming events to `runStreaming()`. Callers can pass `emitVadEvents`, `endOfTurnSilenceMs`, and `vadRunIntervalMs` to receive `{ type: "vad" }` state updates and `{ type: "endOfTurn" }` silence boundary events alongside transcript segments.
+- Added native `VadStateUpdate` and `EndOfTurnEvent` output handlers so VAD and end-of-turn events flow through the existing addon output queue without changing the default transcript-only streaming behavior.
+- Added `examples/example.mic-conversation.js`, a microphone streaming example that logs VAD state, end-of-turn signals, and transcript output from live audio.
+- Added C++ unit coverage for `StreamingProcessor` conversation events, JS unit coverage for event forwarding, and a live-stream integration variant that verifies VAD events are emitted with transcript output.
+
+### Changed
+- Extended `runStreaming(audioStream, opts?)` TypeScript declarations to include the new conversation streaming options and output event types.
+
+## [0.6.4]
+
+### Changed
+- Fixed bug that prevented Vulkan from being turned on by default on linux and windows
+
+## [0.6.3]
+
+### Added
+- Vulkan GPU acceleration enabled by default in CMakeLists.txt for Linux, Android, and Windows (macOS/iOS use Metal)
+- Dynamic ggml backend library installation in CMakeLists.txt for Android/Linux (matching the LLM addon pattern)
+- Vulkan SDK installation on Windows integration test runner so `vulkan-1.dll` is available at runtime
+- `atexit` cleanup handler in `binding.cpp` that clears streaming sessions before C++ static destructors run
+- Vulkan GPU smoke test in integration test workflow for Linux GPU runners
+- RTF performance benchmark workflow with multi-model/multi-audio matrix support
+
+### Changed
+- GPU usage is now opt-in: `use_gpu` defaults to `false` in `toWhisperContextParams` instead of inheriting the upstream default (`true`). Callers must explicitly set `use_gpu: true` to enable GPU acceleration.
+
+### Fixed
+- Fixed SIGSEGV (exit code 139) at process exit on Linux GPU runners caused by ggml Vulkan backend static destructor ordering (upstream whisper.cpp#2373)
+- Fixed "The specified module could not be found" error on Windows integration tests by installing the Vulkan runtime
+- Fixed `t.skip()` calls in GPU smoke test (brittle does not support `t.skip`, replaced with `t.pass`)
+
+## [0.6.2]
+
+### Changed
+- Fixed chunking issue re-introduced in 0.6.0 in which the inference output was not streamed but instead returned as a single batched result of the end.
+
+## [0.6.1]
+
+### Changed
+
+- Changed `@qvac/transcription-whispercpp` package visibility on NPM from private to public
+
+## [0.6.0]
+
+This release is a significant interface modernisation. The constructor switches to a local-files map, model download is removed from the load path, concurrent inference runs are serialised instead of rejected, and the class no longer extends `BaseInference`.
+
+## Breaking Changes
+
+### Constructor now takes a `files` map instead of loader + model name
+
+The old API accepted a `loader`, `modelName`, `vadModelName`, and `diskPath`. Those are all removed. Pass local file paths directly:
+
+```typescript
+// Before
+new TranscriptionWhispercpp({ loader, modelName: 'ggml-tiny.bin', diskPath: '/models' }, config)
+
+// After
+new TranscriptionWhispercpp({ files: { model: '/models/ggml-tiny.bin', vadModel: '/models/silero-vad.bin' } }, config)
+```
+
+`files.model` is required; `files.vadModel` is optional. No download step occurs — files must already exist on disk before calling `load()`.
+
+### `TranscriptionWhispercpp` no longer extends `BaseInference`
+
+The class is now standalone. `instanceof BaseInference` checks and any BaseInference-only APIs (`getApiDefinition`, `downloadWeights`, loader helpers) are no longer available on this class.
+
+### Weight download removed from `_load`
+
+`_load` previously triggered a `WeightsProvider` download when a loader was supplied. That path is gone. Load preparation is now the caller's responsibility.
+
+## New APIs
+
+### `runStreaming(audioStream)` is now part of the public API
+
+The VAD-based live streaming path was previously internal. It is now a documented public method with its own TypeScript declaration, accepting the same audio stream types as `run()`.
+
+```typescript
+const response = await model.runStreaming(audioStream)
+for await (const segment of response) { /* ... */ }
+```
+
+### Concurrent runs serialise instead of throwing
+
+When `exclusiveRun` is enabled (the default), a second call to `run()` or `runStreaming()` while a transcription is in progress will **wait** for the first to complete rather than throwing a `JOB_ALREADY_RUNNING` error. This makes it safe to call `run()` from concurrent contexts.
+
+### New typed exports
+
+`TranscriptionWhispercppFiles` and `InferenceClientState` are now exported from the `TranscriptionWhispercpp` namespace. Lifecycle methods (`load`, `unload`, `destroy`, `cancel`, `pause`, `unpause`, `stop`, `status`, `getState`) are now explicitly declared in `index.d.ts`.
+
+## [0.5.6]
+
+### Changed
+- Fixed chunking issue introduced in 0.5.0 in which the inference output was not streamed but instead returned as a single batched result of the end.
+
+## [0.5.5]
+
+### Changed
+- Bumped `qvac-lib-inference-addon-cpp` to `1.1.5`.
+- Restored JS-owned job ID routing after addon-cpp reverted the accidental `1.1.3` native callback `jobId` contract and `cancel(jobId)` API break.
+
+### Added
+- Regression coverage for JS-owned cancel handling of active, buffered, and stale wrapper job IDs.
+
+### Removed
+- References of s3 bucket throughout documentation and helper scripts
+
+## [0.5.4]
+
+### Changed
+
+- README: removed outdated npm Personal Access Token / `.npmrc` setup instructions for installing `@qvac/transcription-whispercpp`.
+
+## [0.5.3]
+
+### Changed
+- Bumped `qvac-lib-inference-addon-cpp` to `1.1.3`.
+- Updated the JS wrapper to consume the shared addon-cpp native job-id callback contract so late cancel/error events remain attached to the cancelled job instead of a newer accepted run.
+
+### Added
+- Regression coverage for rejected runs and stale cancel callbacks in the addon inference tests.
+
+## [0.5.2]
+
+Security hardening release from comprehensive security audit.
+
+### Fixed
+- Replace global streaming state with per-instance map to eliminate race condition and dangling pointer risk (#1079)
+- Add 500 MB buffer limit to audio accumulation to prevent OOM from unbounded buffering (#1080)
+- Add SHA-256 integrity verification to model download scripts using HuggingFace LFS checksums (#1081)
+- Validate `suppress_regex` parameter — ban grouping constructs (parentheses) and enforce 512-char length limit to prevent ReDoS (#1083)
+- Sanitize error messages to remove filesystem paths from thrown errors (#1084)
+- Wrap job ID counter at `Number.MAX_SAFE_INTEGER` to prevent precision loss (#1085)
+- Harden benchmark server: add library allowlist, restrict file paths to allowed directories, remove dynamic `npm install`, add body size limit, restrict CORS to localhost (#1086)
+
+## [0.5.1]
+
+This release documents runtime statistics and transcription output shapes in TypeScript so consumers can type `response.stats` and `run()` results against the native addon.
+
+## New APIs
+
+### `RuntimeStats` and related types in `index.d.ts`
+
+The `TranscriptionWhispercpp` namespace now exports **`RuntimeStats`**, aligned with `WhisperModel::runtimeStats()` (`totalTime`, `realTimeFactor`, `tokensPerSecond`, `audioDurationMs`, `totalSamples`, `totalTokens`, `totalSegments`, `processCalls`, and Whisper-internal timing fields through `totalWallMs`). **`WhisperTranscriptionSegment`** and **`WhisperRunOutput`** describe transcription payloads passed to `onUpdate`. **`run()`** is typed to return **`Promise<QvacResponse<WhisperRunOutput>>`**, with a note that **`response.stats`** matches **`RuntimeStats`** when stats collection is enabled via `opts.stats`.
+
+## [0.5.0]
+
+### Changed
+- Migrated the native addon implementation to `qvac-lib-inference-addon-cpp` 1.x (`IModel` + `AddonJs`/`AddonCpp`), replacing the removed legacy templated addon and jobs-handler path
+- Updated the JS/native execution path to `createInstance` + `runJob` with parity-focused cancel/output lifecycle handling
+
+### Added
+- Expanded C++/JS parity coverage for addon-cpp runtime behavior, including dedicated `AddonCpp` tests
+
+## [0.4.2]
+
+### Changed
+- Logger type in `TranscriptionWhispercppArgs` now uses `LoggerInterface` from `@qvac/logging` instead of a package-specific type, aligning with the shared logging interface used across all addons
+
+## [0.4.1]
 
 ### Added
 - HuggingFace model download support for standard Whisper and Silero VAD models
@@ -17,13 +178,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Legacy P2P data loader peer dependency and dev dependency
 - Legacy examples (`transcription.hd.js`, `exampleVad.hd.js`)
 
-## [0.4.0] - 2026-02-11
+## [0.4.0]
 
 ### Removed
 - `TranscriptionFfmpegAddon` module (`transcription-ffmpeg.js`, `transcription-ffmpeg.d.ts`, `examples/example.ffmpeg.js`)
 - `@qvac/util-transcription` dependency
 
-## [0.3.18] - 2026-02-11
+## [0.3.18]
 
 ### Added
 - Windows platform support with PowerShell-specific CI configurations
@@ -35,18 +196,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Integration tests now use `bare@1.26.0` for build consistency
 
-## [0.3.17] - 2026-02-01
+## [0.3.17]
 
 ### Fixed
 - Spurious linux-x64 prebuild compilation issue
 
-## [0.3.16] - 2026-02-01
+## [0.3.16]
 
 ### Changed
 - Audio decoder dependency updated to use FFmpeg (`@qvac/decoder-audio` v0.3.3) instead of GStreamer
 - `@qvac/util-transcription` updated to v0.1.4, replacing all GStreamer references with FFmpeg
 
-## [0.3.15] - 2026-02-01
+## [0.3.15]
 
 ### Changed
 - Linux x64 builds switched to Ubuntu 22.04 for wider glibc compatibility
@@ -57,7 +218,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Unnecessary Vulkan SDK installation from integration tests
 - Custom vcpkg installation step no longer needed with standard Ubuntu runners
 
-## [0.3.14] - 2026-02-01
+## [0.3.14]
 
 ### Changed
 - Debug symbols stripped from native addon binaries on Linux and macOS for smaller prebuilt artifacts
@@ -65,13 +226,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Redundant Android artifact replication step
 
-## [0.3.13] - 2026-01-15
+## [0.3.13]
 
 ### Fixed
 - Type declarations: `Loader` and `QvacResponse` now correctly imported from `@qvac/infer-base`
 - `test:dts` now passes
 
-## [0.3.12] - 2026-01-13
+## [0.3.12]
 
 ### Added
 - TypeScript type declarations for `addonLogging` subpath export
@@ -79,14 +240,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - `test:dts` script now references `transcription-ffmpeg.d.ts` instead of deleted `transcription-addon/index.d.ts`
 
-## [0.3.11] - 2026-01-07
+## [0.3.11]
 
 ### Added
 - Runtime statistics support for Whisper model performance tracking
   - New `runtimeStats()` method exposing detailed metrics (totalTime, realTimeFactor, tokensPerSecond, audioDurationMs, etc.)
   - Integration test validating stats are populated when `opts.stats=true`
 
-## [0.3.10] - 2026-01-06
+## [0.3.10]
 
 ### Added
 - Linux ARM64 prebuild support using `ubuntu-24.04-arm` runner (#386)
@@ -96,7 +257,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated CODEOWNERS (#380)
 - Updated PR description template with team practices (#391)
 
-## [0.3.9] - 2025-12-30
+## [0.3.9]
 
 ### Added
 - darwin-x64 (macOS Intel) prebuild support (#378)
@@ -112,7 +273,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Freeze vcpkg version on macOS for build reproducibility (#377)
 
-## [0.3.8] - 2025-12-15
+## [0.3.8]
 
 ### Added
 - AraDiaWER metric for Arabic dialect speech recognition benchmarking (#358)
@@ -120,23 +281,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - FFmpeg example to correctly pass audio format (#363)
 
-## [0.3.7] - 2025-12-09
+## [0.3.7]
 
 ### Changed
 - Updated util-transcription dependency version (#360)
 
-## [0.3.6] - 2025-12-09
+## [0.3.6]
 
 ### Changed
 - Updated decoder dependency version (#359)
 
-## [0.3.5] - 2025-12-04
+## [0.3.5]
 
 ### Added
 - Unit tests for Whisper model file validation (#352)
 - Model file and VAD path validation logic (#352)
 
-## [0.3.4] - 2025-12-03
+## [0.3.4]
 
 ### Fixed
 - Job ID return value (#353)
@@ -144,12 +305,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Reorganized examples and cleaned up unnecessary files (#356)
 
-## [0.3.3] - 2025-12-03
+## [0.3.3]
 
 ### Added
 - Addon logging JS interface export (#357)
 
-## [0.3.2] - 2025-12-02
+## [0.3.2]
 
 ### Added
 - Enhanced C++ logging for WhisperModel and job handlers (#349)

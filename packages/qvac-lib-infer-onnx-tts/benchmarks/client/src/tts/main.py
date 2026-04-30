@@ -7,6 +7,7 @@ and generates comparison reports.
 
 import argparse
 import logging
+import os
 import random
 import sys
 from pathlib import Path
@@ -16,8 +17,12 @@ import numpy as np
 from .config import Config
 from .client import TTSClient
 from .dataset import load_dataset_texts
-from .utils import save_single_result, save_comparison_report, round_trip_quality_test, round_trip_single_implementation
-from .whisper_transcriber import WhisperTranscriber
+from .utils import (
+    round_trip_single_implementation,
+    save_comparison_report,
+    save_single_result,
+    save_supertonic_perf_report,
+)
 
 # Mapping for TTS language codes to Whisper language codes (where they differ)
 # Whisper uses "no" for Norwegian, but TTS uses "nb" for Norwegian Bokmål
@@ -34,6 +39,223 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 logger = logging.getLogger(__name__)
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.lower() in {"1", "true", "yes", "on"}
+
+
+def _env_int(name: str, default: int) -> int:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        logger.warning("Invalid integer for %s: %s", name, value)
+        return default
+
+
+def apply_supertonic_env_overrides(cfg: Config) -> Config:
+    """Apply workflow-driven Supertonic benchmark overrides from env vars."""
+    dataset_updates = {}
+    comparison_updates = {}
+    model_updates = {}
+    server_updates = {}
+
+    if "QVAC_SUPERTONIC_BENCHMARK_MAX_SAMPLES" in os.environ:
+        dataset_updates["max_samples"] = _env_int(
+            "QVAC_SUPERTONIC_BENCHMARK_MAX_SAMPLES",
+            cfg.dataset.max_samples,
+        )
+
+    if "QVAC_SUPERTONIC_BENCHMARK_RUN_PYTHON" in os.environ:
+        comparison_updates["run_python"] = _env_bool(
+            "QVAC_SUPERTONIC_BENCHMARK_RUN_PYTHON",
+            cfg.comparison.run_python,
+        )
+
+    if "QVAC_SUPERTONIC_BENCHMARK_ROUND_TRIP_TEST" in os.environ:
+        comparison_updates["round_trip_test"] = _env_bool(
+            "QVAC_SUPERTONIC_BENCHMARK_ROUND_TRIP_TEST",
+            cfg.comparison.round_trip_test,
+        )
+
+    if "QVAC_SUPERTONIC_BENCHMARK_WHISPER_MODEL" in os.environ:
+        comparison_updates["whisper_model"] = os.environ["QVAC_SUPERTONIC_BENCHMARK_WHISPER_MODEL"]
+
+    if "QVAC_SUPERTONIC_BENCHMARK_NUM_RUNS" in os.environ:
+        comparison_updates["num_runs"] = _env_int(
+            "QVAC_SUPERTONIC_BENCHMARK_NUM_RUNS",
+            cfg.comparison.num_runs,
+        )
+
+    if "QVAC_SUPERTONIC_BENCHMARK_USE_GPU" in os.environ:
+        model_updates["useGPU"] = _env_bool(
+            "QVAC_SUPERTONIC_BENCHMARK_USE_GPU",
+            cfg.model.useGPU,
+        )
+
+    if "QVAC_SUPERTONIC_BENCHMARK_ADDON_URL" in os.environ:
+        server_updates["addon_url"] = os.environ["QVAC_SUPERTONIC_BENCHMARK_ADDON_URL"]
+
+    if "QVAC_SUPERTONIC_BENCHMARK_PYTHON_URL" in os.environ:
+        server_updates["python_url"] = os.environ["QVAC_SUPERTONIC_BENCHMARK_PYTHON_URL"]
+
+    if not dataset_updates and not comparison_updates and not model_updates and not server_updates:
+        return cfg
+
+    return cfg.model_copy(
+        update={
+            "server": cfg.server.model_copy(update=server_updates) if server_updates else cfg.server,
+            "dataset": cfg.dataset.model_copy(update=dataset_updates) if dataset_updates else cfg.dataset,
+            "comparison": cfg.comparison.model_copy(update=comparison_updates) if comparison_updates else cfg.comparison,
+            "model": cfg.model.model_copy(update=model_updates) if model_updates else cfg.model,
+        }
+    )
+
+
+def load_whisper_transcriber(model_size: str, language: str):
+    """Lazily import WhisperTranscriber only when round-trip checks are enabled."""
+    from .whisper_transcriber import WhisperTranscriber
+    return WhisperTranscriber(model_size=model_size, language=language)
+
+
+def run_supertonic_benchmark_suite(cfg: Config, config_path: str) -> None:
+    """English on HF supertonic, Spanish (or other) on multilingual (HF supertonic-2) — one result file per language."""
+    if not cfg.model.modelDirV1 or not cfg.model.modelDirMultilingual:
+        logger.error(
+            "Supertonic benchmark requires model.modelDirV1 and model.modelDirMultilingual "
+            "(see config-supertonic.yaml)."
+        )
+        sys.exit(1)
+
+    specs = [
+        {
+            "dataset_lang": "en",
+            "tts_lang": "en",
+            "model_dir": cfg.model.modelDirV1,
+            "supertonic_multilingual": False,
+        },
+        {
+            "dataset_lang": "es",
+            "tts_lang": "es",
+            "model_dir": cfg.model.modelDirMultilingual,
+            "supertonic_multilingual": True,
+        },
+    ]
+
+    for spec in specs:
+        lang = spec["tts_lang"]
+        logger.info("\n" + "=" * 60)
+        logger.info("  Supertonic benchmark run: language=%s", lang)
+        logger.info("=" * 60)
+
+        texts = load_dataset_texts(cfg.dataset, language=spec["dataset_lang"])
+        if not texts:
+            logger.error("No texts for dataset language %s", spec["dataset_lang"])
+            sys.exit(1)
+
+        logger.info("Loaded %s texts (%s)", len(texts), spec["dataset_lang"])
+        model_for_run = cfg.model.model_copy(
+            update={
+                "modelDir": spec["model_dir"],
+                "language": spec["tts_lang"],
+                "supertonicMultilingual": spec["supertonic_multilingual"],
+            }
+        )
+        cfg_eff = cfg.model_copy(update={"model": model_for_run})
+
+        whisper = None
+        if cfg.comparison.round_trip_test:
+            whisper_lang = (spec["tts_lang"][:2] if spec["tts_lang"] else "en")
+            wl = TTS_TO_WHISPER_LANG.get(whisper_lang, whisper_lang)
+            logger.info("Loading Whisper for round-trip (lang=%s)", wl)
+            try:
+                whisper = load_whisper_transcriber(cfg.comparison.whisper_model, wl)
+                whisper.load()
+            except Exception as e:
+                logger.error("Failed to load Whisper: %s", e, exc_info=True)
+                whisper = None
+
+        if cfg.comparison.run_addon:
+            logger.info("Running addon benchmark (%s)", lang)
+            addon_client = TTSClient(
+                cfg.server.addon_url,
+                cfg_eff.model,
+                timeout=cfg.server.timeout,
+                batch_size=cfg.server.batch_size,
+                include_samples=cfg.comparison.round_trip_test,
+                num_runs=cfg.comparison.num_runs,
+            )
+            try:
+                addon_runs = addon_client.synthesize_all(texts)
+                addon_round_trip = None
+                if cfg.comparison.round_trip_test and whisper:
+                    addon_round_trip = round_trip_single_implementation(
+                        texts, addon_runs, whisper, "Addon"
+                    )
+                save_single_result(
+                    cfg_eff,
+                    addon_runs[0],
+                    "addon",
+                    addon_round_trip,
+                    result_language=lang,
+                )
+                save_supertonic_perf_report(
+                    cfg_eff,
+                    addon_runs,
+                    "addon",
+                    addon_round_trip,
+                    result_language=lang,
+                )
+            finally:
+                addon_client.close()
+
+        if cfg.comparison.run_python:
+            logger.info("Running Python benchmark (%s)", lang)
+            python_client = TTSClient(
+                cfg.server.python_url,
+                cfg_eff.model,
+                timeout=cfg.server.timeout,
+                batch_size=cfg.server.batch_size,
+                include_samples=cfg.comparison.round_trip_test,
+                num_runs=cfg.comparison.num_runs,
+            )
+            try:
+                python_runs = python_client.synthesize_all(texts)
+                python_round_trip = None
+                if cfg.comparison.round_trip_test and whisper:
+                    python_round_trip = round_trip_single_implementation(
+                        texts, python_runs, whisper, "Python"
+                    )
+                save_single_result(
+                    cfg_eff,
+                    python_runs[0],
+                    "python-native",
+                    python_round_trip,
+                    result_language=lang,
+                )
+                save_supertonic_perf_report(
+                    cfg_eff,
+                    python_runs,
+                    "python-native",
+                    python_round_trip,
+                    result_language=lang,
+                )
+            finally:
+                python_client.close()
+
+        if whisper:
+            whisper.close()
+
+    logger.info(
+        "Supertonic suite done (per-language files; no cross-language comparison). Config=%s",
+        config_path,
+    )
 
 
 def main():
@@ -54,15 +276,18 @@ def main():
     except Exception as e:
         logger.error(f"Failed to load config: {e}")
         sys.exit(1)
+
+    if "supertonic" in args.config:
+        cfg = apply_supertonic_env_overrides(cfg)
     
     logger.info("Configuration loaded successfully")
-    
+
     # Set random seeds for reproducibility
     seed = cfg.comparison.seed
     logger.info(f"Setting random seed: {seed}")
     random.seed(seed)
     np.random.seed(seed)
-    
+
     # Set torch seed if torch is available (for Whisper if it uses torch backend)
     try:
         import torch
@@ -72,27 +297,17 @@ def main():
     except ImportError:
         pass  # torch not available, skip
 
-    is_supertonic = "supertonic" in args.config
-    dataset_spec = None
-    lang_per_result = None
+    if "supertonic" in args.config:
+        run_supertonic_benchmark_suite(cfg, args.config)
+        logger.info("\n" + "=" * 60)
+        logger.info("  Benchmark Complete!")
+        logger.info("=" * 60)
+        logger.info("Results saved to: benchmarks/results/ (per-language supertonic files)")
+        return
 
-    if is_supertonic:
-        # Supertonic benchmark: one run with both en and es (Harvard sentences from en.json and es.json)
-        logger.info("Loading dataset: harvard for en and es (Supertonic benchmark)")
-        en_texts = load_dataset_texts(cfg.dataset, language="en")
-        es_texts = load_dataset_texts(cfg.dataset, language="es")
-        if cfg.dataset.max_samples > 0:
-            en_texts = en_texts[: cfg.dataset.max_samples]
-            es_texts = es_texts[: cfg.dataset.max_samples]
-        texts = en_texts + es_texts
-        dataset_spec = [("en", en_texts), ("es", es_texts)]
-        lang_per_result = ["en"] * len(en_texts) + ["es"] * len(es_texts)
-        logger.info(f"Loaded {len(en_texts)} en + {len(es_texts)} es = {len(texts)} texts for benchmarking")
-    else:
-        # Single-language (e.g. Chatterbox)
-        logger.info(f"Loading dataset: {cfg.dataset.name} (language: {cfg.model.language})")
-        texts = load_dataset_texts(cfg.dataset, language=cfg.model.language)
-        logger.info(f"Loaded {len(texts)} texts for benchmarking")
+    logger.info(f"Loading dataset: {cfg.dataset.name} (language: {cfg.model.language})")
+    texts = load_dataset_texts(cfg.dataset, language=cfg.model.language)
+    logger.info(f"Loaded {len(texts)} texts for benchmarking")
 
     if not texts:
         logger.error("No texts loaded, exiting")
@@ -111,14 +326,11 @@ def main():
     if cfg.comparison.round_trip_test:
         logger.info("\n" + "=" * 60)
         whisper_lang = cfg.model.language[:2] if cfg.model.language else "en"
-        if is_supertonic:
-            logger.info(f"  Loading Whisper Model: {cfg.comparison.whisper_model} (multi-language: en, es)")
-        else:
-            logger.info(f"  Loading Whisper Model: {cfg.comparison.whisper_model} (language: {whisper_lang})")
+        logger.info(f"  Loading Whisper Model: {cfg.comparison.whisper_model} (language: {whisper_lang})")
         logger.info("=" * 60)
         try:
             whisper_language = TTS_TO_WHISPER_LANG.get(whisper_lang, whisper_lang)
-            whisper = WhisperTranscriber(model_size=cfg.comparison.whisper_model, language=whisper_language)
+            whisper = load_whisper_transcriber(cfg.comparison.whisper_model, whisper_language)
             whisper.load()
             logger.info("✅ Whisper model loaded successfully")
         except Exception as e:
@@ -142,10 +354,7 @@ def main():
                 num_runs=cfg.comparison.num_runs  # Number of times to run each text
             )
             
-            if is_supertonic and dataset_spec:
-                addon_runs = addon_client.synthesize_all_multi_language(dataset_spec)
-            else:
-                addon_runs = addon_client.synthesize_all(texts)
+            addon_runs = addon_client.synthesize_all(texts)
             results["addon"] = addon_runs
             
             # Log results for each run
@@ -174,7 +383,6 @@ def main():
                         addon_runs,
                         whisper,
                         "Addon",
-                        lang_per_result=lang_per_result,
                     )
                     if addon_round_trip:
                         round_trip_results["addon"] = addon_round_trip
@@ -209,10 +417,7 @@ def main():
                 num_runs=cfg.comparison.num_runs  # Number of times to run each text
             )
             
-            if is_supertonic and dataset_spec:
-                python_runs = python_client.synthesize_all_multi_language(dataset_spec)
-            else:
-                python_runs = python_client.synthesize_all(texts)
+            python_runs = python_client.synthesize_all(texts)
             results["python"] = python_runs
             
             # Log results for each run
@@ -241,7 +446,6 @@ def main():
                         python_runs,
                         whisper,
                         "Python",
-                        lang_per_result=lang_per_result,
                     )
                     if python_round_trip:
                         round_trip_results["python"] = python_round_trip

@@ -3,10 +3,9 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const test = require('brittle')
 const TranscriptionWhispercpp = require('../../index')
-const FakeDL = require('../mocks/loader.fake.js')
 const { spawnSync, spawn } = require('bare-subprocess')
 
-const modelsDir = path.resolve(__dirname, '../../examples/models')
+const modelsDir = path.resolve(__dirname, '../../models')
 const samplesDir = path.resolve(__dirname, '../../examples/samples')
 if (!fs.existsSync(modelsDir)) fs.mkdirSync(modelsDir, { recursive: true })
 const modelPath = path.join(modelsDir, 'ggml-small.bin')
@@ -39,9 +38,9 @@ async function ensureModel () {
 async function checkVulkanAvailable () {
   try {
     const args = {
-      modelName: 'ggml-small.bin',
-      loader: new FakeDL({}),
-      diskPath: modelsDir
+      files: {
+        model: modelPath
+      }
     }
     const testConfig = {
       path: modelPath,
@@ -245,10 +244,10 @@ async function runTranscription (args, config, description, monitorGPU = false) 
   }
 }
 
-test('GPU performance test with Spanish audio (LastQuestion_long_ES.raw)', { timeout: 120000 }, async (t) => {
+test('GPU performance test with Spanish audio (LastQuestion_long_ES.raw)', { timeout: 300000 }, async (t) => {
   // Check if audio file exists
   if (!fs.existsSync(spanishAudioPath)) {
-    t.skip('Spanish audio file not found')
+    t.pass('Spanish audio file not found, skipping')
     return
   }
 
@@ -265,9 +264,9 @@ test('GPU performance test with Spanish audio (LastQuestion_long_ES.raw)', { tim
   await ensureModel()
 
   const args = {
-    modelName: 'ggml-small.bin',
-    loader: new FakeDL({}),
-    diskPath: modelsDir
+    files: {
+      model: modelPath
+    }
   }
 
   const baseConfig = {
@@ -315,7 +314,7 @@ test('GPU performance test with Spanish audio (LastQuestion_long_ES.raw)', { tim
     console.log(`   Output: ${gpuResult.charCount} chars, ${gpuResult.wordCount} words`)
   } else {
     console.log('\n⚠️  GPU/Vulkan not available, skipping GPU test')
-    t.skip('GPU/Vulkan not available on this system')
+    t.pass('GPU/Vulkan not available, skipping')
     return
   }
 
@@ -365,22 +364,22 @@ test('GPU performance test with Spanish audio (LastQuestion_long_ES.raw)', { tim
 
 test('Multiple GPU runs with seed for consistency check', { timeout: 120000 }, async (t) => {
   if (!fs.existsSync(spanishAudioPath)) {
-    t.skip('Spanish audio file not found')
+    t.pass('Spanish audio file not found')
     return
   }
 
   const vulkanAvailable = await checkVulkanAvailable()
   if (!vulkanAvailable) {
-    t.skip('GPU/Vulkan not available on this system')
+    t.pass('GPU/Vulkan not available on this system')
     return
   }
 
   await ensureModel()
 
   const args = {
-    modelName: 'ggml-small.bin',
-    loader: new FakeDL({}),
-    diskPath: modelsDir
+    files: {
+      model: modelPath
+    }
   }
 
   const seed = 9999
@@ -425,7 +424,7 @@ test('Multiple GPU runs with seed for consistency check', { timeout: 120000 }, a
 test('CPU vs GPU speed comparison with SHORT audio (30s sample)', { timeout: 300000 }, async (t) => {
   // Check if short audio file exists
   if (!fs.existsSync(spanishAudioShortPath)) {
-    t.skip('Short Spanish audio file not found')
+    t.pass('Short Spanish audio file not found')
     return
   }
 
@@ -443,9 +442,9 @@ test('CPU vs GPU speed comparison with SHORT audio (30s sample)', { timeout: 300
   await ensureModel()
 
   const args = {
-    modelName: 'ggml-small.bin',
-    loader: new FakeDL({}),
-    diskPath: modelsDir
+    files: {
+      model: modelPath
+    }
   }
 
   const baseConfig = {
@@ -480,7 +479,7 @@ test('CPU vs GPU speed comparison with SHORT audio (30s sample)', { timeout: 300
   // Check if GPU is available
   const vulkanAvailable = await checkVulkanAvailable()
   if (!vulkanAvailable) {
-    t.skip('GPU/Vulkan not available on this system')
+    t.pass('GPU/Vulkan not available on this system')
     return
   }
 

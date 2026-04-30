@@ -8,14 +8,15 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running Large 
 - [Building from Source](#building-from-source)
 - [Usage](#usage)
   - [1. Import the Model Class](#1-import-the-model-class)
-  - [2. Create a Data Loader](#2-create-a-data-loader)
-  - [3. Create the `args` obj](#3-create-the-args-obj)
-  - [4. Create the `config` obj](#4-create-the-config-obj)
-  - [5. Create Model Instance](#5-create-model-instance)
-  - [6. Load Model](#6-load-model)
-  - [7. Run Inference](#7-run-inference)
-  - [8. Release Resources](#8-release-resources)
+  - [2. Create the `args` obj](#2-create-the-args-obj)
+    - [Sharded models](#sharded-models)
+  - [3. Create the `config` obj](#3-create-the-config-obj)
+  - [4. Create Model Instance](#4-create-model-instance)
+  - [5. Load Model](#5-load-model)
+  - [6. Run Inference](#6-run-inference)
+  - [7. Release Resources](#7-release-resources)
 - [API behavior by state](#api-behavior-by-state)
+- [Fine-tuning](#fine-tuning)
 - [Quickstart Example](#quickstart-example)
 - [Other Examples](#other-examples)
 - [Architecture](#architecture)
@@ -34,12 +35,18 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running Large 
 | Android | arm64 | 12+ | ✅ Tier 1 | Vulkan, OpenCL (Adreno 700+) |
 | Windows | x64 | 10+ | ✅ Tier 1 | Vulkan |
 
+
+**Note — BitNet models (TQ1_0 / TQ2_0 quantization):**
+BitNet models require special backend handling on Adreno GPUs. When a BitNet model is detected and no explicit `main-gpu` is set:
+- **Adreno 800+** (e.g. Adreno 830): Vulkan is used instead of OpenCL.
+- **Adreno < 800** (e.g. Adreno 740): Falls back to CPU, as TQ kernels are not yet optimized for older Adreno OpenCL/Vulkan.
+- **Non-Adreno GPUs**: Normal GPU selection applies (no special behavior).
+
 **Dependencies:**
 - qvac-lib-inference-addon-cpp (≥1.1.2): C++ addon framework (single-job runner)
-- qvac-fabric-llm.cpp (≥7248.1.2): Inference engine
+- qvac-fabric-llm.cpp (≥7248.2.3): Inference engine
 - Bare Runtime (≥1.24.0): JavaScript runtime
-- Ubuntu-22 requires g++-13 installed
-
+- Linux requires Clang/LLVM 19 with libc++
 ## Installation
 
 ### Prerequisites
@@ -49,21 +56,6 @@ Ensure that the Bare Runtime is installed globally on your system. If it's not a
 ```bash
 npm install -g bare@latest
 ```
-Before proceeding with the installation, please generate a **granular Personal Access Token (PAT)** with the `read-only` scope. Once generated, add the token to your environment variables using the name `NPM_TOKEN`.
-
-```bash
-export NPM_TOKEN=your_personal_access_token
-```
-
-Next, create a `.npmrc` file in the root of your project with the following content:
-
-```ini
-@qvac:registry=https://registry.npmjs.org/
-//registry.npmjs.org/:_authToken={NPM_TOKEN}
-```
-
-This configuration ensures secure access to NPM Packages when installing scoped packages.
-
 ### Installing the Package
 
 ```bash
@@ -80,47 +72,77 @@ See [build.md](./build.md) for detailed instructions on how to build the addon f
 
 ```js
 const LlmLlamacpp = require('@qvac/llm-llamacpp')
+const path = require('bare-path')
 ```
 
-### 2. Create a Data Loader
-
-Data Loaders abstract the way model files are accessed. Use a [`FileSystemDataLoader`](../qvac-lib-dl-filesystem) to load model files from your local file system. Models can be downloaded directly from HuggingFace.
+### 2. Create the `args` obj
 
 ```js
-const FilesystemDL = require('@qvac/dl-filesystem')
+const dirPath = path.resolve('./models')
+const modelName = 'Llama-3.2-1B-Instruct-Q4_0.gguf'
 
-// Download model from HuggingFace (see examples/utils.js for downloadModel helper)
-const [modelName, dirPath] = await downloadModel(
-  'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf',
-  'Llama-3.2-1B-Instruct-Q4_0.gguf'
-)
-
-const fsDL = new FilesystemDL({ dirPath })
-```
-
-### 3. Create the `args` obj
-
-```js
 const args = {
-  loader: fsDL,
+  files: {
+    model: [path.join(dirPath, modelName)]
+    // projectionModel: path.join(dirPath, 'mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf') // for multimodal support pass the projection model path
+  },
+  config,
   opts: { stats: true },
-  logger: console,
-  diskPath: dirPath,
-  modelName,
-  // projectionModel: 'mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf' // for multimodal support you need to pass the projection model name
+  logger: console
 }
 ```
 
 The `args` obj contains the following properties:
 
-* `loader`: The Data Loader instance from which the model file will be streamed.
-* `logger`: This property is used to create a [`QvacLogger`](../qvac-lib-logging) instance, which handles all logging functionality. 
+* `files.model`: Required. An array of absolute paths to the GGUF model file(s) to load. The caller is responsible for passing the complete set of files for the model, including every shard and the `.tensors.txt` companion for multi-shard models (see [Sharded models](#sharded-models) below).
+* `files.projectionModel`: Optional. Absolute path to the projection model file. This is required for multimodal support.
+* `config`: The model configuration object (see next section).
+* `logger`: This property is used to create a [`QvacLogger`](../logging) instance, which handles all logging functionality.
 * `opts.stats`: This flag determines whether to calculate inference stats.
-* `diskPath`: The local directory where the model file will be downloaded to.
-* `modelName`: The name of model file in the Data Loader.
-* `projectionModel`: The name of the projection model file in the Data Loader. This is required for multimodal support.
 
-### 4. Create the `config` obj
+#### Sharded models
+
+The addon no longer expands sharded models internally. If you are loading a multi-shard GGUF model, **the caller MUST pass every file** — including the `.tensors.txt` companion file that lives alongside the shards — in `files.model`. Anything missing will cause the addon to fail during weight streaming.
+
+**Required ordering for multi-shard models:**
+1. The `.tensors.txt` companion file **first**.
+2. Each `*-NNNNN-of-MMMMM.gguf` shard in **numerical order** (shard `00001` before `00002`, and so on).
+
+Example — loading a 5-shard model:
+
+```js
+const path = require('bare-path')
+const LlmLlamacpp = require('@qvac/llm-llamacpp')
+
+const dir = path.resolve('./models')
+const modelBase = 'my-big-model-Q4_K_M'
+
+const model = new LlmLlamacpp({
+  files: {
+    model: [
+      path.join(dir, `${modelBase}.tensors.txt`),
+      path.join(dir, `${modelBase}-00001-of-00005.gguf`),
+      path.join(dir, `${modelBase}-00002-of-00005.gguf`),
+      path.join(dir, `${modelBase}-00003-of-00005.gguf`),
+      path.join(dir, `${modelBase}-00004-of-00005.gguf`),
+      path.join(dir, `${modelBase}-00005-of-00005.gguf`)
+    ]
+  },
+  config,
+  logger: console,
+  opts: { stats: true }
+})
+
+await model.load()
+```
+
+For single-file GGUF models, pass a one-element array:
+
+```js
+files: { model: [path.join(dir, 'Llama-3.2-1B-Instruct-Q4_0.gguf')] }
+```
+
+### 3. Create the `config` obj
 
 The `config` obj consists of a set of hyper-parameters which can be used to tweak the behaviour of the model.  
 *All parameters must by strings.*
@@ -151,9 +173,12 @@ const config = {
 | presence_penalty  | float                                       | 0                            | Presence penalty for sampling                         |
 | frequency_penalty | float                                       | 0                            | Frequency penalty for sampling                        |
 | tools             | `"true"` or `"false"`                       | `"false"`                    | Enable tool calling with jinja templating             |
+| tools_compact      | `"true"` or `"false"`                       | `"false"`                    | Compact tool tokens from KV cache between turns ([details](./docs/tools-compact.md)) |
 | verbosity         | 0 – 3 (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | 0                            | Logging verbosity level                               |
 | n_discarded       | integer                                     | 0                            | Tokens to discard in sliding window context           |
 | main-gpu          | integer, `"integrated"`, or `"dedicated"`   | —                            | GPU selection for multi-GPU systems                   |
+| split-mode        | `"none"`, `"layer"`, or `"row"`             | `"none"`                     | How to split the model across GPUs ([details](./docs/multi-gpu.md)) |
+| tensor-split      | comma-separated proportions (e.g. `"1,1"`)  | —                            | GPU split ratios for layer/row parallelism ([details](./docs/multi-gpu.md)) |
 
 
 #### IGPU/GPU  selection logic:
@@ -165,44 +190,23 @@ const config = {
 | System with dedicated GPU only  | ✅ Uses dedicated GPU                 | ✅ Uses dedicated GPU               | ❌ Falls back to CPU                |
 | System with both                | ✅ Uses dedicated GPU (preferred)     | ✅ Uses dedicated GPU               | ✅ Uses integrated GPU              |
 
+For multi-GPU setups using `split-mode` and `tensor-split`, see the **[Multi-GPU Inference guide](./docs/multi-gpu.md)**.
 
-### 5. Create Model Instance
+### 4. Create Model Instance
 
 ```js
-const model = new LlmLlamacpp(args, config)
+const model = new LlmLlamacpp(args)
 ```
 
-### 6. Load Model
+### 5. Load Model
 
 ```js
 await model.load()
 ```
 
-_Optionally_ you can pass the following parameters to tweak the loading behaviour.
-* `close?`: This boolean value determines whether to close the Data Loader after loading. Defaults to `true`
-* `reportProgressCallback?`: A callback function which gets called periodically with progress updates. It can be used to display overall progress percentage.
+Loads the model file(s) passed in `files.model` and activates the native addon. If a projection model was provided (`files.projectionModel`), it is loaded as part of the same step.
 
-_For example:_
-
-```js
-await model.load(false, progress => process.stdout.write(`\rOverall Progress: ${progress.overallProgress}%`))
-```
-
-**Progress Callback Data**
-
-The progress callback receives an object with the following properties:
-
-| Property            | Type   | Description                             |
-|---------------------|--------|-----------------------------------------|
-| `action`            | string | Current operation being performed       |
-| `totalSize`         | number | Total bytes to be loaded                |
-| `totalFiles`        | number | Total number of files to process        |
-| `filesProcessed`    | number | Number of files completed so far        |
-| `currentFile`       | string | Name of file currently being processed  |
-| `currentFileProgress` | string | Percentage progress on current file     |
-| `overallProgress`   | string | Overall loading progress percentage     |
-
-### 7. Run Inference
+### 6. Run Inference
 
 Pass an array of messages (following the chat completion format) to the `run` method. Process the generated tokens asynchronously:
 
@@ -232,14 +236,15 @@ try {
 }
 ```
 
-### 8. Release Resources
+When `opts.stats` is enabled, `response.stats` includes runtime metrics such as `TTFT`, `TPS`, token counters, and `backendDevice` (`"cpu"` or `"gpu"`). `backendDevice` reflects the resolved device used at runtime after backend selection/fallback logic, not only the requested config.
+
+### 7. Release Resources
 
 Unload the model when finished:
 
 ```javascript
 try {
   await model.unload()
-  await fsDL.close()
 } catch (error) {
   console.error('Failed to unload model:', error)
 }
@@ -258,6 +263,31 @@ The following table describes the expected behavior of `run` and `cancel` depend
 
 When `run()` is called while another job is active, the implementation first waits briefly for the previous job to settle. This preserves single-job behavior while still failing fast when the instance is busy. If the second run cannot be accepted (timeout or addon busy rejection), it throws:
 - `"Cannot set new job: a job is already set or being processed"`
+
+
+## Fine-tuning
+
+The library supports **LoRA finetuning** of GGUF models: train small adapter weights on top of a base model, then save the adapter and load it at inference time via the `lora` config option. You can pause and resume training from checkpoints.
+
+For the full API, dataset format, parameters, and examples, see the **[Finetuning guide](docs/finetuning.md)**.
+
+### Smart Home Showcase
+
+A hands-on example that finetunes Qwen3-0.6B to act as a smart home tool-calling specialist. The base model tends to drift into conversational text or exhaust its token budget on reasoning — the finetuned adapter fixes both problems.
+
+1. **Train** — [`smart-home-finetune.js`](./examples/finetune/showcase/smart-home-finetune.js) runs a 1-epoch causal LoRA finetune on a [215-sample dataset](./examples/input/smart_home_specialist_train.jsonl) of user requests paired with `<tool_call>` responses.
+2. **Evaluate** — [`smart-home-finetuned-test.js`](./examples/finetune/showcase/smart-home-finetuned-test.js) runs the same prompts against the base model and the finetuned model, then prints a side-by-side comparison report (strictness, accuracy, thinking token usage, multi-turn stability).
+
+> **Note on dataset diversity:** The training dataset intentionally includes tool-calling samples from many domains (medical, irrigation, quantum, etc.), not just the 4 smart-home tools used in evaluation. The goal is to teach the model the general *behavioral pattern* — produce structured `<tool_call>` output instead of conversational text — rather than memorize specific tool names. The evaluation then tests whether that pattern transfers to smart-home prompts the model wasn't explicitly drilled on.
+
+```bash
+# Train the adapter
+bare examples/finetune/showcase/smart-home-finetune.js
+
+# Compare baseline vs finetuned
+bare examples/finetune/showcase/smart-home-finetuned-test.js
+```
+
 
 ## Quickstart Example
 
@@ -284,6 +314,86 @@ npm run quickstart
 -   [Multi-Cache](./examples/multiCache.js) – Demonstrates session handling and caching capabilities.
 -   [Native Logging](./examples/nativelog.js) – Demonstrates C++ addon logging integration.
 -   [Tool Calling](./examples/toolCalling.js) – Demonstrates tool calling capabilities.
+-   [LoRA Finetuning](./examples/finetune/simple-lora-finetune.js) – Basic LoRA finetuning.
+-   [LoRA Finetuning Pause/Resume](./examples/finetune/simple-lora-finetune-pause-resume.js) – Pause and resume finetuning.
+-   [LoRA Inference](./examples/simple-lora-inference.js) – Inference with a finetuned LoRA adapter.
+-   [Smart Home Finetune Showcase](./examples/finetune/showcase/smart-home-finetune.js) – Train a smart home tool-calling specialist, then [evaluate](./examples/finetune/showcase/smart-home-finetuned-test.js) baseline vs finetuned.
+-   [Multi-GPU Benchmark](./examples/multiGpuBenchmark.js) – Compares single-GPU, layer-parallel, and tensor-parallel split modes.
+-   [Bench Tools Placement](./examples/benchToolsPlacement.js) – Benchmarks standard vs `tools_compact` placement across multi-turn conversations.
+-   [Test Tool Removal](./examples/testToolRemoval.js) – Demonstrates dynamic tool addition and removal between turns.
+
+## OCR with Vision-Language Models
+
+In addition to ONNX-based OCR (`@qvac/ocr-onnx`), you can use vision-language models through `@qvac/llm-llamacpp` for OCR tasks. This is useful for structured document understanding (tables, forms, multi-column layouts) where traditional OCR pipelines struggle.
+
+### Supported OCR Models
+
+| Model | Params | Quantization | Description |
+|-------|--------|-------------|-------------|
+| LightON OCR-2 1B | 0.6B (LLM) + ~550M (vision) | Q4_K_M | OCR-specialized, full-page transcription, 11 languages |
+| SmolVLM2-500M | 500M | Q8_0 | General vision-language, can follow targeted extraction prompts |
+
+### LightON OCR-2
+
+[LightON OCR-2](https://huggingface.co/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF) is an OCR-specialized vision-language model (Apache 2.0) that produces detailed markdown/HTML output with tables. It supports 11 languages: English, French, German, Spanish, Italian, Dutch, Portuguese, Polish, Romanian, Czech, and Swedish.
+
+**Characteristics:**
+- Always does full-page transcription regardless of prompt
+- Produces detailed structured output (markdown tables, HTML)
+- Requires `--jinja` flag / jinja chat template in llama.cpp
+- Requires both LLM model and F16 mmproj (vision projector)
+
+**Performance (Pixel 10 Pro, CPU-only, Q4_K_M + F16 mmproj):**
+- Image encode: ~30s (768x1024 image)
+- Prompt eval: 26.6 t/s
+- Generation: 4.14 t/s
+
+**Usage Example:**
+
+```js
+const LlmLlamacpp = require('@qvac/llm-llamacpp')
+const fs = require('bare-fs')
+const path = require('bare-path')
+
+const dirPath = path.resolve('./models')
+
+const model = new LlmLlamacpp({
+  files: {
+    model: [path.join(dirPath, 'LightOnOCR-2-1B-ocr-soup-Q4_K_M.gguf')],
+    projectionModel: path.join(dirPath, 'mmproj-F16.gguf')
+  },
+  config: {
+    device: 'cpu',
+    gpu_layers: '0',
+    ctx_size: '4096',
+    temp: '0.1',
+    predict: '2048'
+  },
+  logger: console
+})
+
+await model.load()
+
+const imageBytes = new Uint8Array(fs.readFileSync('./document.png'))
+
+const messages = [
+  { role: 'user', type: 'media', content: imageBytes },
+  { role: 'user', content: 'Extract all text from this image and format it as markdown.' }
+]
+
+const response = await model.run(messages)
+const output = []
+
+response.onUpdate(token => {
+  output.push(token)
+})
+
+await response.await()
+
+console.log(output.join(''))
+
+await model.unload()
+```
 
 ## Architecture
 

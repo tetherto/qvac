@@ -1,0 +1,15 @@
+dist
+.DS_Store
+node_modules
+*.gguf
+.rag-*
+.npmrc
+package-lock.json
+tests-qvac/reports/*
+!tests-qvac/reports/.gitkeep
+.env
+.secrets
+.artifacts
+qvac/
+PR_DESCRIPTION.md
+examples/finetune/results/

@@ -11,30 +11,47 @@ endif()
 add_executable(
   addon-test
   test_llama_model.cpp
+  test_llama_finetuning_helpers.cpp
   test_cache_management.cpp
+  test_cache_management_qwen3.cpp
   test_text_llm_context.cpp
   test_addon_cpp.cpp
+  test_cancel_stale_flag.cpp
   test_backend_selection.cpp
+  test_tune_config_map.cpp
   # Placeholder tests (to be implemented)
   test_mtmd_llm_context.cpp
   test_llm_context_base.cpp
+  test_tools_compact_controller.cpp
+  test_context_slider.cpp
+  test_model_metadata.cpp
+  test_model_full_loading.cpp
   # Utility tests
   test_utf8_token_buffer.cpp
   test_chat_template_utils.cpp
   test_qwen3_reasoning_utils.cpp
   test_qwen_template.cpp
+  test_qwen3_tools_dynamic_template.cpp
   test_logging_macros.cpp
   test_llama_lazy_init_backend.cpp
+  test_borrow_tracked_shared_buffer.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ContextSlider.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/GenerationParamsApply.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuningHelpers.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/TextLlmContext.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ToolsCompactController.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/ChatTemplateUtils.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/Qwen3ReasoningUtils.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/QwenTemplate.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/utils/Qwen3ToolsDynamicTemplate.cpp
 )
 
 target_compile_options(
@@ -73,7 +90,8 @@ endif()
 
 # Define test binary directory path for runtime use
 get_filename_component(TEST_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}" ABSOLUTE)
-target_compile_definitions(addon-test PRIVATE 
+target_compile_definitions(addon-test PRIVATE
+  STANDALONE_TEST_BUILD
   TEST_BINARY_DIR="${TEST_BINARY_DIR}"
 )
 
@@ -95,6 +113,7 @@ target_link_libraries(
     llama::llama
     llama::common
     llama::mtmd
+    nlohmann_json::nlohmann_json
     GTest::gtest
     GTest::gtest_main
     GTest::gmock_main

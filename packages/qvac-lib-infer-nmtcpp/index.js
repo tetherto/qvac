@@ -1,14 +1,11 @@
 'use strict'
 
 const path = require('bare-path')
-const BaseInference = require('@qvac/infer-base/WeightsProvider/BaseInference')
-const WeightsProvider = require('@qvac/infer-base/WeightsProvider/WeightsProvider')
+const QvacLogger = require('@qvac/logging')
+const { QvacResponse, createJobHandler, exclusiveRunQueue } = require('@qvac/infer-base')
 
 const { TranslationInterface } = require('./marian')
-const QvacResponse = require('@qvac/response')
 const { IndicProcessor } = require('./third-party/indic-processor')
-
-const JOB_ID = 'job'
 
 class QvacIndicTransResponse extends QvacResponse {
   /**
@@ -60,18 +57,16 @@ class QvacIndicTransResponse extends QvacResponse {
 /**
  * TranslationNmtcpp implementation for Marian/IndicTrans/Bergamot translation models
  */
-class TranslationNmtcpp extends BaseInference {
+class TranslationNmtcpp {
   /**
    * Available model types for translation
    * @static
    * @type {Object}
    * @property {string} IndicTrans - IndicTrans translation model
-   * @property {string} Opus - Opus translation model
    * @property {string} Bergamot - Bergamot translation model with vocabulary support
    */
   static ModelTypes = {
     IndicTrans: 'IndicTrans',
-    Opus: 'Opus',
     Bergamot: 'Bergamot'
   }
 
@@ -79,40 +74,112 @@ class TranslationNmtcpp extends BaseInference {
    * Creates an instance of TranslationNmtcpp.
    * @constructor
    * @param {Object} args - Arguments for inference setup
-   * @param {Object} args.loader - Loader for downloading model files
-   * @param {string} args.diskPath - Local disk path for storing files
-   * @param {string} args.modelName - Name of the model file
+   * @param {Object} args.files - Resolved file paths
+   * @param {string} args.files.model - Path to the main model file
+   * @param {string} [args.files.srcVocab] - Path to source vocabulary file (Bergamot)
+   * @param {string} [args.files.dstVocab] - Path to destination vocabulary file (Bergamot)
+   * @param {string} [args.files.pivotModel] - Path to pivot model file (Bergamot pivot)
+   * @param {string} [args.files.pivotSrcVocab] - Path to pivot source vocabulary file
+   * @param {string} [args.files.pivotDstVocab] - Path to pivot destination vocabulary file
    * @param {Object} args.params - Translation parameters (srcLang, dstLang)
+   * @param {Object} [args.config={}] - Model configuration
+   * @param {string} args.config.modelType - Type of model (IndicTrans or Bergamot)
+   * @param {Object} [args.config.pivotConfig] - Non-path configuration for pivot model
    * @param {Object} [args.logger=null] - Optional logger instance
-   * @param {boolean} [args.exclusiveRun=true] - Whether to run exclusively
-   * @param {Object} config - Environment specific configuration
-   * @param {string} config.modelType - Type of model (IndicTrans, Opus, or Bergamot)
-   * @param {string} [config.srcVocabPath] - Path to source vocabulary file (Bergamot only)
-   * @param {string} [config.dstVocabPath] - Path to destination vocabulary file (Bergamot only)
-   * @param {string} [config.srcVocabName] - Name of source vocab file to download (Bergamot only)
-   * @param {string} [config.dstVocabName] - Name of destination vocab file to download (Bergamot only)
+   * @param {Object} [args.opts={}] - Options (e.g. { stats: true })
    */
-  constructor ({ loader, diskPath, modelName, params, logger = null, exclusiveRun = true, ...args }, config = {}) {
-    super({ logger, exclusiveRun, ...args })
-    this.loader = loader
-    this.weightsProvider = new WeightsProvider(loader, this.logger)
+  constructor ({ files, params, config = {}, logger = null, opts = {}, ...args }) {
+    this.opts = opts
+    this.logger = new QvacLogger(logger)
+    this.addon = null
 
-    // Extract and organize configuration
-    const { modelType, srcVocabPath, dstVocabPath, srcVocabName, dstVocabName, ...additionalConfig } = config
+    this.state = {
+      configLoaded: false,
+      weightsLoaded: false,
+      destroyed: false
+    }
+
+    const { modelType, pivotConfig, ...additionalConfig } = config
 
     this._modelType = modelType
-    this._config = additionalConfig
-    this._diskPath = diskPath
-    this._modelName = modelName
-    this._params = params
 
-    // Store Bergamot vocabulary configuration
-    this._vocabConfig = {
-      srcPath: srcVocabPath,
-      dstPath: dstVocabPath,
-      srcName: srcVocabName,
-      dstName: dstVocabName
+    if (this._modelType === 'Opus') {
+      throw new Error(
+        'ModelTypes.Opus has been deprecated. Use ModelTypes.Bergamot instead. ' +
+        'Bergamot covers European language pairs and supports pivot translation for non-English pairs via PivotTranslationModel.'
+      )
     }
+
+    this._files = files
+    this._config = additionalConfig
+    this._params = params
+    this._pivotConfig = pivotConfig || {}
+    this._job = createJobHandler({ cancel: () => this.addon.cancel() })
+    this._run = exclusiveRunQueue()
+  }
+
+  /**
+   * Returns the current state of the inference client.
+   * @returns {{configLoaded: boolean, weightsLoaded: boolean, destroyed: boolean}}
+   */
+  getState () {
+    return this.state
+  }
+
+  /**
+   * Loads the model. If already loaded, unloads first.
+   */
+  async load () {
+    if (this.state.configLoaded || this.state.weightsLoaded) {
+      this.logger.info('Reload requested - unloading existing model first')
+      await this.unload()
+    }
+
+    await this._load()
+  }
+
+  /**
+   * Runs inference on the given input. Serialized — only one job at a time.
+   * @param {string} input - Text to translate
+   * @returns {Promise<QvacResponse>}
+   */
+  async run (input) {
+    return this._run(() => this._runInternal(input))
+  }
+
+  /**
+   * Unloads the model and frees resources.
+   */
+  async unload () {
+    if (this.addon) {
+      await this.addon.destroy()
+      this.addon = null
+    }
+    this.state.configLoaded = false
+    this.state.weightsLoaded = false
+  }
+
+  /**
+   * Destroys the model permanently.
+   */
+  async destroy () {
+    await this.unload()
+    this.state.destroyed = true
+  }
+
+  /**
+   * Returns the name of the currently-loaded non-CPU backend (e.g. 'Vulkan0',
+   * 'OpenCL', 'Metal'), or a sentinel:
+   *   - 'Unloaded'     — model is not loaded
+   *   - 'Bergamot-CPU' — Bergamot model (CPU-only by design)
+   *   - 'CPU'          — GGML backend loaded, only CPU backend registered
+   * @returns {string}
+   */
+  getActiveBackendName () {
+    if (!this.addon) {
+      return 'Unloaded'
+    }
+    return this.addon.getActiveBackendName()
   }
 
   /**
@@ -125,48 +192,6 @@ class TranslationNmtcpp extends BaseInference {
   }
 
   /**
-   * Gets the vocabulary file paths for Bergamot models
-   * @private
-   * @returns {{srcVocab: string|null, dstVocab: string|null}}
-   */
-  _getVocabularyPaths () {
-    if (!this._isBergamotModel()) {
-      return { srcVocab: null, dstVocab: null }
-    }
-
-    const srcVocab = this._vocabConfig.srcPath ||
-        (this._vocabConfig.srcName ? path.join(this._diskPath, this._vocabConfig.srcName) : null)
-    const dstVocab = this._vocabConfig.dstPath ||
-        (this._vocabConfig.dstName ? path.join(this._diskPath, this._vocabConfig.dstName) : null)
-
-    return { srcVocab, dstVocab }
-  }
-
-  /**
-   * Gets the list of files that need to be downloaded from Hyperdrive
-   * @private
-   * @returns {string[]}
-   */
-  _getFilesToDownload () {
-    const files = []
-    if (this._modelName) {
-      files.push(this._modelName)
-    }
-
-    if (this._isBergamotModel()) {
-      // Add vocabulary files if they need to be downloaded from Hyperdrive
-      if (this._vocabConfig.srcName && !this._vocabConfig.srcPath) {
-        files.push(this._vocabConfig.srcName)
-      }
-      if (this._vocabConfig.dstName && !this._vocabConfig.dstPath) {
-        files.push(this._vocabConfig.dstName)
-      }
-    }
-
-    return files
-  }
-
-  /**
    * Configures Bergamot-specific parameters
    * @private
    * @param {Object} configurationParams - The configuration object to modify
@@ -174,16 +199,12 @@ class TranslationNmtcpp extends BaseInference {
   _configureBergamotModel (configurationParams) {
     if (!this._isBergamotModel()) return
 
-    const { srcVocab, dstVocab } = this._getVocabularyPaths()
-
-    // Add vocab paths to the config object if they exist
-    // Bergamot models may work with only one vocab or even none in some cases
     const vocabConfig = {}
-    if (srcVocab) {
-      vocabConfig.src_vocab = srcVocab
+    if (this._files.srcVocab) {
+      vocabConfig.src_vocab = this._files.srcVocab
     }
-    if (dstVocab) {
-      vocabConfig.dst_vocab = dstVocab
+    if (this._files.dstVocab) {
+      vocabConfig.dst_vocab = this._files.dstVocab
     }
 
     if (Object.keys(vocabConfig).length > 0) {
@@ -192,53 +213,66 @@ class TranslationNmtcpp extends BaseInference {
         ...vocabConfig
       }
     }
-  }
 
-  async _load (close = false, reportProgressCallback) {
-    if (this.loader) {
-      await this.loader.ready()
-    }
-    try {
-      await this.downloadWeights(reportProgressCallback)
-
-      // Extract use_gpu from config (if present) to pass at top level
-      const { use_gpu: useGpu, ...otherConfig } = this._config
-
-      const configurationParams = {
-        path: this._config.path || path.join(this._diskPath, this._modelName),
-        config: otherConfig
+    if (this._files.pivotModel) {
+      const pivotConfig = {
+        path: this._files.pivotModel,
+        config: { ...this._pivotConfig }
       }
 
-      // Add use_gpu at top level if it was specified
-      if (useGpu !== undefined) {
-        configurationParams.use_gpu = useGpu
+      if (this._files.pivotSrcVocab) {
+        pivotConfig.config.src_vocab = this._files.pivotSrcVocab
+      }
+      if (this._files.pivotDstVocab) {
+        pivotConfig.config.dst_vocab = this._files.pivotDstVocab
       }
 
-      // Configure Bergamot-specific parameters if needed
-      this._configureBergamotModel(configurationParams)
-
-      this.addon = this.createAddon(configurationParams)
-      await this.addon.activate()
-      this.state.configLoaded = true
-    } finally {
-      if (close && this.loader) {
-        await this.loader.close()
+      configurationParams.config = {
+        ...configurationParams.config,
+        pivotModel: pivotConfig
       }
     }
   }
 
-  /**
-   * Creates response handlers for translation jobs
-   * @private
-   * @param {number} jobId - The job identifier
-   * @returns {Object} Handler object with cancel, pause, and continue handlers
-   */
-  _createResponseHandlers (jobId) {
-    return {
-      cancelHandler: () => this.addon.cancel(),
-      pauseHandler: () => Promise.resolve(),
-      continueHandler: () => this.addon.activate()
+  async _load () {
+    const otherConfig = { ...this._config }
+
+    // Accept camelCase aliases for the GPU keys so the config object can
+    // stay consistent with backendsDir/openclCacheDir. The C++ binding
+    // expects snake_case (mirrors nmt_context_params field names), so we
+    // translate camelCase → snake_case here. snake_case takes precedence
+    // when both are present (explicit user choice wins over alias).
+    if (otherConfig.use_gpu === undefined && otherConfig.useGPU !== undefined) {
+      otherConfig.use_gpu = otherConfig.useGPU
     }
+    if (otherConfig.gpu_backend === undefined && otherConfig.gpuBackend !== undefined) {
+      otherConfig.gpu_backend = otherConfig.gpuBackend
+    }
+    if (otherConfig.gpu_device === undefined && otherConfig.gpuDevice !== undefined) {
+      otherConfig.gpu_device = otherConfig.gpuDevice
+    }
+    delete otherConfig.useGPU
+    delete otherConfig.gpuBackend
+    delete otherConfig.gpuDevice
+
+    if (otherConfig.backendsDir === undefined) {
+      otherConfig.backendsDir = path.join(__dirname, 'prebuilds')
+    }
+
+    const configurationParams = {
+      path: this._files.model,
+      config: otherConfig
+    }
+
+    this._configureBergamotModel(configurationParams)
+
+    this.addon = new TranslationInterface(
+      configurationParams,
+      this._addonOutputCallback.bind(this),
+      this.logger
+    )
+    await this.addon.activate()
+    this.state.configLoaded = true
   }
 
   /**
@@ -263,11 +297,10 @@ class TranslationNmtcpp extends BaseInference {
     const response = new QvacIndicTransResponse(
       processor,
       this._params.dstLang,
-      this._createResponseHandlers()
+      { cancelHandler: () => this.addon.cancel() }
     )
 
-    this._saveJobToResponseMapping(JOB_ID, response)
-    return response
+    return this._job.startWith(response)
   }
 
   /**
@@ -277,7 +310,6 @@ class TranslationNmtcpp extends BaseInference {
    * @returns {string} Processed input text
    */
   _prepareInputText (input) {
-    // Add language prefix for Portuguese target (Opus model convention)
     if (this._params.srcLang === 'en' && this._params.dstLang === 'pt') {
       return `>>por<< ${input}`
     }
@@ -287,17 +319,14 @@ class TranslationNmtcpp extends BaseInference {
   /**
    * Creates a response with output post-processing for language prefixes
    * @private
-   * @param {number} jobId - The job identifier
    * @returns {QvacResponse} Response object with configured handlers
    */
   _createStandardResponse () {
-    const response = new QvacResponse(this._createResponseHandlers())
+    const response = new QvacResponse({ cancelHandler: () => this.addon.cancel() })
 
-    // Override onUpdate to strip language prefixes from output
     const originalOnUpdate = response.onUpdate.bind(response)
     response.onUpdate = function (callback) {
       return originalOnUpdate((data) => {
-        // Remove language prefix like ">>por<< " from the beginning
         const cleanedData = data.replace(/^>>[a-z]+\s*<<\s*/i, '')
         return callback(cleanedData)
       })
@@ -307,7 +336,7 @@ class TranslationNmtcpp extends BaseInference {
   }
 
   /**
-   * Handles standard model translation (Opus, Bergamot)
+   * Handles standard model translation (Bergamot)
    * @private
    * @param {string} input - Input text to translate
    * @returns {Promise<QvacResponse>} Translation response
@@ -317,8 +346,7 @@ class TranslationNmtcpp extends BaseInference {
     await this.addon.runJob({ type: 'text', input: text })
     const response = this._createStandardResponse()
 
-    this._saveJobToResponseMapping(JOB_ID, response)
-    return response
+    return this._job.startWith(response)
   }
 
   async _runInternal (input) {
@@ -330,18 +358,9 @@ class TranslationNmtcpp extends BaseInference {
 
   /**
    * Translates multiple texts in a single batch for better performance.
-   * This is more efficient than calling run() multiple times as it processes
-   * all texts together in a single batch operation.
    *
    * @param {string[]} texts - Array of texts to translate
    * @returns {Promise<string[]>} - Array of translated texts (same order as input)
-   * @example
-   * const translations = await model.runBatch([
-   *   "Hello world",
-   *   "How are you?",
-   *   "Goodbye"
-   * ]);
-   * // translations = ["Ciao mondo", "Come stai?", "Arrivederci"]
    */
   async runBatch (texts) {
     if (!this.addon) {
@@ -352,7 +371,6 @@ class TranslationNmtcpp extends BaseInference {
       throw new Error('Input must be an array of strings')
     }
 
-    // Preprocess texts if needed (e.g., for IndicTrans)
     let processedTexts = texts
     let processor = null
 
@@ -364,24 +382,18 @@ class TranslationNmtcpp extends BaseInference {
         this._params.dstLang
       )
     } else {
-      // Apply language prefix for standard models if needed
       processedTexts = texts.map(text => this._prepareInputText(text))
     }
 
-    // Call batch translation
     await this.addon.runJob({ type: 'sequences', input: processedTexts })
 
-    const response = new QvacResponse(this._createResponseHandlers())
-    this._saveJobToResponseMapping(JOB_ID, response)
+    const response = this._job.start()
 
-    // Wait for batch results
     return new Promise((resolve, reject) => {
       response.onFinish(([batchResults]) => {
-        // Post-process results if needed
         if (this._modelType === TranslationNmtcpp.ModelTypes.IndicTrans && processor) {
           resolve(processor.postprocessBatch(batchResults, this._params.dstLang))
         } else {
-          // Remove language prefix from output for standard models
           const cleanedResults = batchResults.map(text =>
             text.replace(/^>>[a-z]+\s*<<\s*/i, '')
           )
@@ -393,51 +405,21 @@ class TranslationNmtcpp extends BaseInference {
     })
   }
 
-  createAddon (configurationParams) {
-    return new TranslationInterface(
-      configurationParams,
-      this._addonOutputCallback.bind(this),
-      this.logger
-    )
-  }
-
   _addonOutputCallback (addon, event, data, error) {
-    // Map C++ mangled type names to expected event names
-    // Check stats FIRST (before basic_string check, since stats event name also contains 'basic_string')
-    if (typeof data === 'object' && data !== null && 'TPS' in data) {
-      // Stats object received - this signals job completion
-      // Pass stats with JobEnded event (base class expects stats in JobEnded data)
-      return this._outputCallback(addon, 'JobEnded', JOB_ID, data, null)
+    const isStatsObject = typeof data === 'object' && data !== null && !Array.isArray(data) &&
+                         Object.keys(data).some(k => k.endsWith('TPS'))
+
+    if (isStatsObject) {
+      return this._job.end(this.opts?.stats ? data : null)
     }
 
-    let mappedEvent = event
     if (event.includes('Error')) {
-      mappedEvent = 'Error'
-    } else if (typeof data === 'string') {
-      mappedEvent = 'Output'
-    } else if (Array.isArray(data)) {
-      // Batch translation result - array of strings
-      mappedEvent = 'Output'
+      return this._job.fail(error)
     }
 
-    return this._outputCallback(addon, mappedEvent, JOB_ID, data, error)
-  }
-
-  async _downloadWeights (reportProgressCallback) {
-    const models = this._getFilesToDownload()
-    if (!models.length) {
-      this.logger.info('No model files supplued to be downlaoded')
-      return
+    if (typeof data === 'string' || Array.isArray(data)) {
+      return this._job.output(data)
     }
-
-    this.logger.info('Loading weight files:', models)
-
-    const result = await this.weightsProvider.downloadFiles(models, this._diskPath, {
-      closeLoader: true,
-      onDownloadProgress: reportProgressCallback
-    })
-    this.logger.info('Weight files downloaded successfully', { models })
-    return result
   }
 }
 

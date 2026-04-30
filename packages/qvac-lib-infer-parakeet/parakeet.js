@@ -1,13 +1,13 @@
 'use strict'
 
 // Try to load QVAC error module, fallback to simple Error class
-let QvacErrorAddonParakeet, ERR_CODES
+let QvacErrorAddonParakeet, ERR_CODES, END_OF_INPUT
 try {
   const errorModule = require('./lib/error')
   QvacErrorAddonParakeet = errorModule.QvacErrorAddonParakeet
   ERR_CODES = errorModule.ERR_CODES
+  END_OF_INPUT = errorModule.END_OF_INPUT
 } catch (e) {
-  // Fallback for standalone use without @qvac/error
   class SimpleParakeetError extends Error {
     constructor (code, message) {
       super(message)
@@ -31,7 +31,35 @@ try {
     VOCAB_NOT_FOUND: 7012,
     ENCODER_NOT_FOUND: 7013,
     DECODER_NOT_FOUND: 7014,
-    INVALID_CONFIG: 7015
+    INVALID_CONFIG: 7015,
+    BUFFER_LIMIT_EXCEEDED: 7016
+  }
+  END_OF_INPUT = 'end of job'
+}
+
+const state = Object.freeze({
+  LOADING: 'loading',
+  LISTENING: 'listening',
+  PROCESSING: 'processing',
+  IDLE: 'idle',
+  PAUSED: 'paused',
+  STOPPED: 'stopped'
+})
+
+function nextSafeId (current) {
+  return current >= Number.MAX_SAFE_INTEGER ? 1 : current + 1
+}
+
+// 500 MB — ~2.7 hours of 16 kHz f32le mono audio
+const MAX_BUFFERED_BYTES = 500 * 1024 * 1024
+
+function createParakeetError (code, message, cause = undefined) {
+  // @qvac/error expects an options object, while the local fallback class
+  // accepts positional args. Support both call shapes.
+  try {
+    return new QvacErrorAddonParakeet({ code, adds: message, cause })
+  } catch {
+    return new QvacErrorAddonParakeet(code, message)
   }
 }
 
@@ -61,14 +89,98 @@ class ParakeetInterface {
     this._outputCallback = outputCallback
     this._stateCallback = stateCallback
     this._handle = null
+    this._state = state.LOADING
+    this._nextJobId = 1
+    this._activeJobId = null
+    this._onCancelComplete = null
+    this._bufferedAudio = []
+    this._bufferedBytes = 0
 
-    // Create the native instance
+    this._createNativeInstance(this._config)
+  }
+
+  _setState (newState) {
+    this._state = newState
+    if (this._stateCallback) {
+      this._stateCallback(this, newState)
+    }
+  }
+
+  _createNativeInstance (configurationParams) {
+    this._config = configurationParams
+    // Wrapper job ids are owned in JS, so recreating the native instance only
+    // clears native state and buffered audio.
+    this._activeJobId = null
+    this._onCancelComplete = null
+    this._bufferedAudio = []
+    this._bufferedBytes = 0
     this._handle = this._binding.createInstance(
-      'parakeet',
+      this,
       this._config,
-      this._outputCallback,
+      this._addonOutputCallback.bind(this),
       this._stateCallback
     )
+  }
+
+  _addonOutputCallback (addon, event, data, error) {
+    const isError = typeof error === 'string' && error.length > 0
+    const isStats = data && typeof data === 'object' && (
+      'totalTime' in data ||
+      'audioDurationMs' in data ||
+      'totalSamples' in data
+    )
+    const isTranscriptOutput = (
+      Array.isArray(data) ||
+      (data && typeof data === 'object' && typeof data.text === 'string')
+    )
+
+    let mappedEvent = event
+    if (event === 'Error' || isError || String(event).includes('Error')) {
+      mappedEvent = 'Error'
+    } else if (event === 'JobEnded' || isStats || String(event).includes('RuntimeStats')) {
+      mappedEvent = 'JobEnded'
+    } else if (event === 'Output' || isTranscriptOutput || String(event).includes('Output')) {
+      mappedEvent = 'Output'
+    }
+
+    const isTerminal = mappedEvent === 'Error' || mappedEvent === 'JobEnded'
+
+    const jobId = this._activeJobId
+    if (jobId === null) {
+      if (isTerminal && this._onCancelComplete) {
+        const resolve = this._onCancelComplete
+        this._onCancelComplete = null
+        resolve()
+      }
+      return
+    }
+
+    if (isTerminal && this._onCancelComplete) {
+      const resolve = this._onCancelComplete
+      this._onCancelComplete = null
+      resolve()
+      return
+    }
+
+    if (mappedEvent === 'Output') {
+      this._setState(state.PROCESSING)
+    }
+
+    if (this._outputCallback) {
+      this._outputCallback(addon, mappedEvent, jobId, data, isError ? error : null)
+    }
+
+    if (mappedEvent === 'Error' || mappedEvent === 'JobEnded') {
+      this._activeJobId = null
+      this._setState(state.LISTENING)
+    }
+  }
+
+  _emitSyntheticError (jobId, error) {
+    if (!this._outputCallback) {
+      return
+    }
+    this._outputCallback(this, 'Error', jobId, undefined, error)
   }
 
   /**
@@ -85,7 +197,7 @@ class ParakeetInterface {
     try {
       return this._binding.loadWeights(this._handle, weightsData)
     } catch (error) {
-      throw new QvacErrorAddonParakeet(ERR_CODES.FAILED_TO_LOAD_WEIGHTS, error.message)
+      throw createParakeetError(ERR_CODES.FAILED_TO_LOAD_WEIGHTS, error.message, error)
     }
   }
 
@@ -95,9 +207,10 @@ class ParakeetInterface {
    */
   async activate () {
     try {
-      return this._binding.activate(this._handle)
+      this._binding.activate(this._handle)
+      this._setState(state.LISTENING)
     } catch (error) {
-      throw new QvacErrorAddonParakeet(ERR_CODES.FAILED_TO_ACTIVATE, error.message)
+      throw createParakeetError(ERR_CODES.FAILED_TO_ACTIVATE, error.message, error)
     }
   }
 
@@ -110,9 +223,46 @@ class ParakeetInterface {
    */
   async append (data) {
     try {
-      return this._binding.append(this._handle, data)
+      if (data?.type === END_OF_INPUT) {
+        const currentJobId = this._nextJobId
+        const input = this._concatBufferedAudio()
+        const previousState = this._state
+        let accepted = false
+        try {
+          accepted = this._binding.runJob(this._handle, {
+            type: 'audio',
+            input
+          })
+        } catch (error) {
+          this._setState(previousState)
+          throw error
+        }
+        if (!accepted) {
+          this._setState(previousState)
+          throw new Error('Cannot set new job: a job is already set or being processed')
+        }
+
+        this._activeJobId = currentJobId
+        this._nextJobId = nextSafeId(this._nextJobId)
+        this._bufferedAudio = []
+        this._bufferedBytes = 0
+        this._setState(state.PROCESSING)
+        return currentJobId
+      }
+
+      if (data?.type === 'audio') {
+        const normalized = this._normalizeAudioInput(data.data)
+        if (this._bufferedBytes + normalized.byteLength > MAX_BUFFERED_BYTES) {
+          throw createParakeetError(ERR_CODES.BUFFER_LIMIT_EXCEEDED, MAX_BUFFERED_BYTES + ' bytes')
+        }
+        this._bufferedAudio.push(normalized)
+        this._bufferedBytes += normalized.byteLength
+        return this._nextJobId
+      }
+
+      throw new Error(`Unknown append input type: ${data?.type}`)
     } catch (error) {
-      throw new QvacErrorAddonParakeet(ERR_CODES.FAILED_TO_APPEND, error.message)
+      throw createParakeetError(ERR_CODES.FAILED_TO_APPEND, error.message, error)
     }
   }
 
@@ -122,9 +272,9 @@ class ParakeetInterface {
    */
   async status () {
     try {
-      return this._binding.status(this._handle)
+      return this._state
     } catch (error) {
-      throw new QvacErrorAddonParakeet(ERR_CODES.FAILED_TO_GET_STATUS, error.message)
+      throw createParakeetError(ERR_CODES.FAILED_TO_GET_STATUS, error.message, error)
     }
   }
 
@@ -134,9 +284,9 @@ class ParakeetInterface {
    */
   async pause () {
     try {
-      return this._binding.pause(this._handle)
+      this._setState(state.PAUSED)
     } catch (error) {
-      throw new QvacErrorAddonParakeet(ERR_CODES.FAILED_TO_PAUSE, error.message)
+      throw createParakeetError(ERR_CODES.FAILED_TO_PAUSE, error.message, error)
     }
   }
 
@@ -146,9 +296,19 @@ class ParakeetInterface {
    */
   async stop () {
     try {
-      return this._binding.stop(this._handle)
+      this._bufferedAudio = []
+      this._bufferedBytes = 0
+      if (this._activeJobId !== null) {
+        const cancelComplete = new Promise(resolve => {
+          this._onCancelComplete = resolve
+        })
+        this._activeJobId = null
+        await this._binding.cancel(this._handle)
+        await cancelComplete
+      }
+      this._setState(state.STOPPED)
     } catch (error) {
-      throw new QvacErrorAddonParakeet(ERR_CODES.FAILED_TO_RESET, error.message)
+      throw createParakeetError(ERR_CODES.FAILED_TO_RESET, error.message, error)
     }
   }
 
@@ -159,9 +319,37 @@ class ParakeetInterface {
    */
   async cancel (jobId) {
     try {
-      return this._binding.cancel(this._handle, jobId)
+      const pendingJobId = this._bufferedAudio.length > 0 ? this._nextJobId : null
+      const targetJobId = jobId ?? this._activeJobId ?? pendingJobId
+
+      if (targetJobId === null) {
+        this._bufferedAudio = []
+        this._bufferedBytes = 0
+        this._setState(state.LISTENING)
+        return
+      }
+
+      if (this._activeJobId === targetJobId) {
+        const cancelComplete = new Promise(resolve => {
+          this._onCancelComplete = resolve
+        })
+        await this._binding.cancel(this._handle)
+        await cancelComplete
+        this._bufferedAudio = []
+        this._bufferedBytes = 0
+        this._activeJobId = null
+        this._setState(state.LISTENING)
+        return
+      }
+
+      if (this._activeJobId === null && pendingJobId === targetJobId) {
+        this._bufferedAudio = []
+        this._bufferedBytes = 0
+        this._setState(state.LISTENING)
+        this._emitSyntheticError(targetJobId, 'Job cancelled')
+      }
     } catch (error) {
-      throw new QvacErrorAddonParakeet(ERR_CODES.FAILED_TO_CANCEL, error.message)
+      throw createParakeetError(ERR_CODES.FAILED_TO_CANCEL, error.message, error)
     }
   }
 
@@ -172,9 +360,12 @@ class ParakeetInterface {
    */
   async reload (configurationParams) {
     try {
-      return this._binding.reload(this._handle, configurationParams)
+      await this.cancel()
+      await this.destroyInstance()
+      this._createNativeInstance(configurationParams)
+      this._setState(state.LOADING)
     } catch (error) {
-      throw new QvacErrorAddonParakeet(ERR_CODES.FAILED_TO_RESET, error.message)
+      throw createParakeetError(ERR_CODES.FAILED_TO_RESET, error.message, error)
     }
   }
 
@@ -183,11 +374,24 @@ class ParakeetInterface {
    * @returns {Promise<void>}
    */
   async unloadWeights () {
+    throw createParakeetError(
+      ERR_CODES.FAILED_TO_RESET,
+      'unloadWeights is not supported by this package. Use unload() or destroyInstance().'
+    )
+  }
+
+  async load (configurationParams) {
     try {
-      return this._binding.unloadWeights(this._handle)
+      await this.destroyInstance()
+      this._createNativeInstance(configurationParams)
+      this._setState(state.LOADING)
     } catch (error) {
-      throw new QvacErrorAddonParakeet(ERR_CODES.FAILED_TO_RESET, error.message)
+      throw createParakeetError(ERR_CODES.FAILED_TO_RESET, error.message, error)
     }
+  }
+
+  async unload () {
+    await this.destroyInstance()
   }
 
   /**
@@ -196,10 +400,85 @@ class ParakeetInterface {
    */
   async destroyInstance () {
     try {
-      return this._binding.destroyInstance(this._handle)
+      if (this._handle === null) {
+        return
+      }
+      if (this._activeJobId !== null) {
+        try {
+          await this._binding.cancel(this._handle)
+        } catch {}
+      }
+      this._binding.destroyInstance(this._handle)
+      this._handle = null
+      this._activeJobId = null
+      this._bufferedAudio = []
+      this._bufferedBytes = 0
+      this._setState(state.IDLE)
     } catch (error) {
-      throw new QvacErrorAddonParakeet(ERR_CODES.FAILED_TO_DESTROY, error.message)
+      throw createParakeetError(ERR_CODES.FAILED_TO_DESTROY, error.message, error)
     }
+  }
+
+  async runJob (data) {
+    const currentJobId = this._nextJobId
+    const previousJobId = this._activeJobId
+    const previousState = this._state
+    try {
+      const accepted = this._binding.runJob(this._handle, data)
+      if (!accepted) {
+        this._activeJobId = previousJobId
+        this._setState(previousState)
+        return false
+      }
+      this._activeJobId = currentJobId
+      this._nextJobId = nextSafeId(this._nextJobId)
+      this._setState(state.PROCESSING)
+      return accepted
+    } catch (error) {
+      this._activeJobId = previousJobId
+      this._setState(previousState)
+      throw createParakeetError(ERR_CODES.FAILED_TO_APPEND, error.message, error)
+    }
+  }
+
+  _normalizeAudioInput (data) {
+    if (!data) {
+      throw new Error('Audio input is required')
+    }
+    if (data instanceof Float32Array) {
+      return data
+    }
+    if (ArrayBuffer.isView(data)) {
+      if (data instanceof Int16Array) {
+        const audio = new Float32Array(data.length)
+        for (let i = 0; i < data.length; i++) {
+          audio[i] = data[i] / 32768.0
+        }
+        return audio
+      }
+      return new Float32Array(data.buffer, data.byteOffset, Math.floor(data.byteLength / 4))
+    }
+    if (data instanceof ArrayBuffer) {
+      return new Float32Array(data)
+    }
+    throw new Error('Unsupported audio input format')
+  }
+
+  _concatBufferedAudio () {
+    if (this._bufferedAudio.length === 0) {
+      return new Float32Array(0)
+    }
+    if (this._bufferedAudio.length === 1) {
+      return this._bufferedAudio[0]
+    }
+    const totalLength = this._bufferedAudio.reduce((sum, chunk) => sum + chunk.length, 0)
+    const merged = new Float32Array(totalLength)
+    let offset = 0
+    for (const chunk of this._bufferedAudio) {
+      merged.set(chunk, offset)
+      offset += chunk.length
+    }
+    return merged
   }
 }
 

@@ -2,7 +2,7 @@
 
 const test = require('brittle')
 const os = require('bare-os')
-const FilesystemDL = require('@qvac/dl-filesystem')
+const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
 const { ensureModel } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
@@ -35,20 +35,19 @@ const PROMPT = [
 
 test('llm addon can run MoE models [dolphin-mixtral-2x7b]', {
   timeout: 1_800_000,
-  skip: isDarwinX64 || isMobile ||
+  skip: isDarwinX64 || isMobile || isLinuxArm64 ||
     isWindowsX64 // TODO: unskip this once we have a new Windows runner with a GPU
 }, async t => {
   const [modelName, dirPath] = await ensureModel({ modelName: MODEL.name, downloadUrl: MODEL.url })
 
-  const loader = new FilesystemDL({ dirPath })
+  const modelPath = path.join(dirPath, modelName)
   const specLogger = attachSpecLogger({ forwardToConsole: true })
   const inference = new LlmLlamacpp({
-    modelName,
-    loader,
+    files: { model: [modelPath] },
+    config: CONFIG,
     logger: console,
-    diskPath: dirPath,
     opts: { stats: true }
-  }, CONFIG)
+  })
 
   try {
     await inference.load()
@@ -60,6 +59,5 @@ test('llm addon can run MoE models [dolphin-mixtral-2x7b]', {
   } finally {
     specLogger.release()
     await inference.unload().catch(() => {})
-    await loader.close().catch(() => {})
   }
 })

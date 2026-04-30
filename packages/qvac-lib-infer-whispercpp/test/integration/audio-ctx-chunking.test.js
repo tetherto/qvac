@@ -3,12 +3,7 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const test = require('brittle')
 const TranscriptionWhispercpp = require('../../index.js')
-const FakeDL = require('../mocks/loader.fake.js')
 const { ensureWhisperModel, getTestPaths, createAudioStream, isMobile } = require('./helpers.js')
-
-function createLoader () {
-  return new FakeDL({})
-}
 
 async function transcribeChunk (model, audioStream, offsetMs, durationMs, audioCtx) {
   await model.reload({
@@ -19,22 +14,24 @@ async function transcribeChunk (model, audioStream, offsetMs, durationMs, audioC
     }
   })
 
-  // audioStream is provided by caller to avoid reading the whole file inside this function
-
   const response = await model.run(audioStream)
 
   const results = []
+  let updateCallCount = 0
+  let maxBatchSize = 0
   response.onUpdate((outputArr) => {
+    updateCallCount++
     const items = Array.isArray(outputArr) ? outputArr : [outputArr]
+    if (items.length > maxBatchSize) maxBatchSize = items.length
     results.push(...items)
   })
 
   await response.await()
 
-  return results
+  return { results, updateCallCount, maxBatchSize }
 }
 
-const { modelsDir, modelPath } = getTestPaths()
+const { modelPath } = getTestPaths()
 
 // Skip on mobile - requires 10min audio file (~19MB) which is too large to bundle
 test('Audio context chunking - 10 minute audio file with 30s chunks', { skip: isMobile }, async (t) => {
@@ -77,12 +74,13 @@ test('Audio context chunking - 10 minute audio file with 30s chunks', { skip: is
   const totalChunks = Math.ceil(totalDurationSeconds / CHUNK_SIZE_SECONDS)
 
   const constructorArgs = {
-    modelName: path.basename(modelPath),
-    loader: createLoader(),
-    diskPath: modelsDir
+    files: {
+      model: modelPath
+    }
   }
 
   const config = {
+    path: modelPath,
     whisperConfig: {
       language: 'en',
       audio_format: 's16le',
@@ -103,6 +101,7 @@ test('Audio context chunking - 10 minute audio file with 30s chunks', { skip: is
     const allResults = []
     let errorCount = 0
     let chunksWithSegments = 0
+    let batchedDeliveryCount = 0
 
     // Process each chunk - always pass full audio, only change offset_ms, duration_ms, audio_ctx
     let currentOffsetSeconds = 0
@@ -114,9 +113,9 @@ test('Audio context chunking - 10 minute audio file with 30s chunks', { skip: is
 
       const fullAudioStream = createAudioStream(fullAudioBuffer)
 
-      let results = []
+      let chunk = { results: [], updateCallCount: 0, maxBatchSize: 0 }
       try {
-        results = await transcribeChunk(
+        chunk = await transcribeChunk(
           model,
           fullAudioStream,
           currentOffsetSeconds * 1000,
@@ -130,11 +129,16 @@ test('Audio context chunking - 10 minute audio file with 30s chunks', { skip: is
 
       currentOffsetSeconds += chunkDuration
 
-      if (results.length > 0) {
-        const text = results.map(s => s.text).join(' ').replace(/\s+/g, ' ').trim()
+      if (chunk.results.length > 0) {
+        const text = chunk.results.map(s => s.text).join(' ').replace(/\s+/g, ' ').trim()
+        console.log(`  → segments=${chunk.results.length} updates=${chunk.updateCallCount} maxBatch=${chunk.maxBatchSize}`)
         console.log(`  → ${text}\n`)
-        allResults.push(...results)
+        allResults.push(...chunk.results)
         chunksWithSegments++
+
+        if (chunk.results.length > 1 && chunk.updateCallCount === 1) {
+          batchedDeliveryCount++
+        }
       } else {
         console.log('  → [no output]\n')
       }
@@ -145,12 +149,18 @@ test('Audio context chunking - 10 minute audio file with 30s chunks', { skip: is
     console.log(`Total chunks processed: ${totalChunks}`)
     console.log(`Chunks with segments: ${chunksWithSegments}`)
     console.log(`Chunk errors: ${errorCount}`)
+    console.log(`Batched deliveries (regression): ${batchedDeliveryCount}`)
     console.log(`Duration processed: ${totalDurationSeconds.toFixed(1)}s`)
 
     // Assertions
     t.ok(allResults.length > 0, 'Should produce transcription segments')
     t.is(chunksWithSegments, totalChunks, 'Should transcribe exactly totalChunks chunks')
     t.is(errorCount, 0, 'No chunk errors or exceptions')
+
+    t.is(
+      batchedDeliveryCount, 0,
+      'Segments must be streamed incrementally (not all batched into a single onUpdate call)'
+    )
 
     // Verify segments have required properties
     if (allResults.length > 0) {

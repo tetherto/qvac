@@ -2,6 +2,7 @@
 
 const test = require('brittle')
 const BaseInference = require('../..')
+const WeightsProviderBaseInference = require('../../WeightsProvider/BaseInference')
 const { ERR_CODES } = require('../../src/error')
 
 const platformDefinitions = {
@@ -690,6 +691,74 @@ test('BaseInference - outputCallback without stats option does not call updateSt
   inference._outputCallback(null, 'JobEnded', 'test1', { duration: 100 })
 
   t.not(statsCalled, 'updateStats should not be called when stats option is false')
+})
+
+test('WeightsProvider BaseInference - FinetuneProgress forwards stats when enabled', t => {
+  const inference = new WeightsProviderBaseInference({ opts: { stats: true } })
+  const progressStats = { loss: 1.23, current_batch: 2, total_batches: 10 }
+  let updateStatsPayload = null
+
+  const mockResponse = {
+    updateStats: (stats) => { updateStatsPayload = stats }
+  }
+
+  inference._saveJobToResponseMapping('p1', mockResponse)
+  inference._outputCallback(null, 'FinetuneProgress', 'p1', { stats: progressStats })
+
+  t.is(updateStatsPayload, progressStats, 'progress stats should be forwarded as-is')
+  t.ok(inference._jobToResponse.has('p1'), 'mapping should be retained for progress events')
+})
+
+test('WeightsProvider BaseInference - FinetuneProgress does not forward stats when disabled', t => {
+  const inference = new WeightsProviderBaseInference({ opts: {} })
+  let statsCalled = false
+
+  const mockResponse = {
+    updateStats: () => { statsCalled = true }
+  }
+
+  inference._saveJobToResponseMapping('p2', mockResponse)
+  inference._outputCallback(null, 'FinetuneProgress', 'p2', { stats: { loss: 0.5 } })
+
+  t.not(statsCalled, 'updateStats should not be called when stats option is false')
+})
+
+test('WeightsProvider BaseInference - JobEnded finetune terminal ends with payload and skips stats update', t => {
+  const inference = new WeightsProviderBaseInference({ opts: { stats: true } })
+  const terminalPayload = { op: 'finetune', status: 'PAUSED', stats: { train_loss: 0.4 } }
+  let statsCalled = false
+  let endedArg
+
+  const mockResponse = {
+    updateStats: () => { statsCalled = true },
+    ended: (result) => { endedArg = result }
+  }
+
+  inference._saveJobToResponseMapping('f1', mockResponse)
+  inference._outputCallback(null, 'JobEnded', 'f1', terminalPayload)
+
+  t.not(statsCalled, 'terminal finetune payload should not be sent via updateStats')
+  t.is(endedArg, terminalPayload, 'ended() should receive terminal finetune payload')
+  t.not(inference._jobToResponse.has('f1'), 'mapping removed on JobEnded')
+})
+
+test('WeightsProvider BaseInference - JobEnded non-finetune still updates stats and ends normally', t => {
+  const inference = new WeightsProviderBaseInference({ opts: { stats: true } })
+  const normalPayload = { duration: 120 }
+  let statsPayload
+  let endedArg = 'not-called'
+
+  const mockResponse = {
+    updateStats: (stats) => { statsPayload = stats },
+    ended: (result) => { endedArg = result }
+  }
+
+  inference._saveJobToResponseMapping('f2', mockResponse)
+  inference._outputCallback(null, 'JobEnded', 'f2', normalPayload)
+
+  t.is(statsPayload, normalPayload, 'non-finetune payload should still be forwarded to updateStats')
+  t.is(endedArg, undefined, 'ended() should be called without terminal result for non-finetune jobs')
+  t.not(inference._jobToResponse.has('f2'), 'mapping removed on JobEnded')
 })
 
 test('BaseInference - multiple loadWeights calls handle state correctly', async t => {

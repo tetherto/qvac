@@ -1,28 +1,75 @@
 'use strict'
 
-const ONNXBase = require('@qvac/infer-base')
+const QvacLogger = require('@qvac/logging')
+const { createJobHandler } = require('@qvac/infer-base')
 const fs = require('bare-fs')
 const { platform } = require('bare-os')
 const { OcrFasttextInterface } = require('./ocr-fasttext')
 const languages = require('./supportedLanguages')
 const { QvacErrorAddonOcr, ERR_CODES } = require('./lib/error')
+const binding = require('./binding')
+const addonLogging = require('./addonLogging')
 const addon = require.addon.resolve('.')
 
 /**
  * ONNX client implementation for OCR model
  */
-class ONNXOcr extends ONNXBase {
-  // Only one job is supported at the moment, with a single job ID
-  static JOB_ID = 'job'
-
+class ONNXOcr {
   /**
-   * Creates an instance of ONNXBase.
+   * Creates an instance of ONNXOcr.
    * @constructor
    * @param {ONNXOcrArgs} args arguments for inference setup
    */
-  constructor ({ params, ...args }) {
-    super(args)
+  constructor ({ params, opts = {}, logger = null }) {
+    this.opts = opts
+    this.logger = new QvacLogger(logger)
+    this.addon = null
     this.params = params
+    this._packageName = '@qvac/ocr-onnx'
+    this._packageVersion = require('./package.json').version
+    this._job = createJobHandler({ cancel: () => this.addon.cancel() })
+
+    this.state = {
+      configLoaded: false,
+      weightsLoaded: false,
+      destroyed: false
+    }
+  }
+
+  /**
+   * Returns the current state of the inference client.
+   * @returns {{configLoaded: boolean, weightsLoaded: boolean, destroyed: boolean}}
+   */
+  getState () {
+    return this.state
+  }
+
+  /**
+   * Loads the model. If already loaded, unloads first.
+   */
+  async load () {
+    if (this.state.configLoaded || this.state.weightsLoaded) {
+      this.logger.info('Reload requested - unloading existing model first')
+      await this.unload()
+    }
+
+    await this._load()
+  }
+
+  /**
+   * Runs inference on the given input.
+   * @param {{ path: string, options?: Object }} input - Image input
+   * @returns {Promise<QvacResponse>}
+   */
+  async run (input) {
+    return this._runInternal(input)
+  }
+
+  _getDiagnosticsJSON () {
+    return JSON.stringify({
+      status: this.state.destroyed ? 'destroyed' : (this.state.configLoaded ? 'loaded' : 'not_loaded'),
+      params: this.params
+    })
   }
 
   /**
@@ -41,20 +88,30 @@ class ONNXOcr extends ONNXBase {
   }
 
   async _load () {
-    if (!this.params.langList) {
-      throw new QvacErrorAddonOcr({ code: ERR_CODES.MISSING_REQUIRED_PARAMETER, adds: 'langList' })
-    }
+    const isDoctr = this.params.pipelineMode === 'doctr'
 
-    // filter out unsupported languages
-    const supported = this.params.langList.filter(l => languages.onnxOcrAllSupportedLanguages.includes(l))
-    const removed = this.params.langList.filter(l => !supported.includes(l))
-    if (removed.length > 0) {
-      this.logger.warn(`Unsupported language(s) removed from langList: ${JSON.stringify(removed)}`)
+    if (!isDoctr) {
+      // EasyOCR mode: validate languages
+      if (!this.params.langList) {
+        throw new QvacErrorAddonOcr({ code: ERR_CODES.MISSING_REQUIRED_PARAMETER, adds: 'langList' })
+      }
+
+      // filter out unsupported languages
+      const supported = this.params.langList.filter(l => languages.onnxOcrAllSupportedLanguages.includes(l))
+      const removed = this.params.langList.filter(l => !supported.includes(l))
+      if (removed.length > 0) {
+        this.logger.warn(`Unsupported language(s) removed from langList: ${JSON.stringify(removed)}`)
+      }
+      if (supported.length === 0) {
+        throw new QvacErrorAddonOcr({ code: ERR_CODES.UNSUPPORTED_LANGUAGE, adds: JSON.stringify(this.params.langList) })
+      }
+      this.params.langList = supported
+    } else {
+      // DocTR mode: langList is not used for model selection but still passed
+      if (!this.params.langList) {
+        this.params.langList = ['en']
+      }
     }
-    if (supported.length === 0) {
-      throw new QvacErrorAddonOcr({ code: ERR_CODES.UNSUPPORTED_LANGUAGE, adds: JSON.stringify(this.params.langList) })
-    }
-    this.params.langList = supported
 
     if (!this.params.pathDetector) {
       throw new QvacErrorAddonOcr({ code: ERR_CODES.MISSING_REQUIRED_PARAMETER, adds: 'pathDetector' })
@@ -62,6 +119,9 @@ class ONNXOcr extends ONNXBase {
 
     // If pathRecognizer is not provided, use pathRecognizerPrefix and getRecognizerModelName to construct the path.
     if (!this.params.pathRecognizer) {
+      if (isDoctr) {
+        throw new QvacErrorAddonOcr({ code: ERR_CODES.MISSING_REQUIRED_PARAMETER, adds: 'pathRecognizer is required for doctr mode' })
+      }
       if (!this.params.pathRecognizerPrefix) {
         // If pathRecognizerPrefix is not provided, throw error.
         throw new QvacErrorAddonOcr({ code: ERR_CODES.MISSING_REQUIRED_PARAMETER, adds: 'either pathRecognizer or pathRecognizerPrefix must be provided' })
@@ -77,44 +137,38 @@ class ONNXOcr extends ONNXBase {
       timeout: this.params.timeout ?? 120
     }
 
-    // Add optional performance tuning parameters
-    if (this.params.magRatio !== undefined) {
-      onnxOcrParams.magRatio = this.params.magRatio
-    }
-    if (this.params.defaultRotationAngles !== undefined) {
-      onnxOcrParams.defaultRotationAngles = this.params.defaultRotationAngles
-    }
-    if (this.params.contrastRetry !== undefined) {
-      onnxOcrParams.contrastRetry = this.params.contrastRetry
-    }
-    if (this.params.lowConfidenceThreshold !== undefined) {
-      onnxOcrParams.lowConfidenceThreshold = this.params.lowConfidenceThreshold
-    }
-    if (this.params.recognizerBatchSize !== undefined) {
-      onnxOcrParams.recognizerBatchSize = this.params.recognizerBatchSize
+    // Add optional parameters if provided
+    const optionalFields = [
+      'pipelineMode', 'magRatio', 'defaultRotationAngles',
+      'contrastRetry', 'lowConfidenceThreshold',
+      'recognizerBatchSize', 'decodingMethod', 'straightenPages',
+      'graphOptimization', 'enableXnnpack', 'enableCpuMemArena',
+      'intraOpThreads'
+    ]
+    for (const field of optionalFields) {
+      if (this.params[field] !== undefined) {
+        onnxOcrParams[field] = this.params[field]
+      }
     }
 
-    this.addon = this._createAddon(OcrFasttextInterface, onnxOcrParams, this._addonOutputCallback.bind(this), console.log)
+    this.addon = new OcrFasttextInterface(onnxOcrParams, this._addonOutputCallback.bind(this), console.log)
     await this.addon.activate()
+    this.state.configLoaded = true
   }
 
   _addonOutputCallback (addon, event, data, error) {
-    // Map C++ mangled type names to expected event names
     // Check stats FIRST (before other checks, since stats event name may contain other type names)
     if (typeof data === 'object' && data !== null && 'totalTime' in data) {
-      // Stats object received - this signals job completion
-      // Pass stats with JobEnded event (base class expects stats in JobEnded data)
-      return this._outputCallback(addon, 'JobEnded', ONNXOcr.JOB_ID, data, null)
+      return this._job.end(this.opts?.stats ? data : null)
     }
 
-    let mappedEvent = event
     if (event.includes('Error')) {
-      mappedEvent = 'Error'
-    } else if (Array.isArray(data)) {
-      // Pipeline output is an array of InferredText
-      mappedEvent = 'Output'
+      return this._job.fail(error)
     }
-    return this._outputCallback(addon, mappedEvent, ONNXOcr.JOB_ID, data, error)
+
+    if (Array.isArray(data)) {
+      return this._job.output(data)
+    }
   }
 
   async unload () {
@@ -122,20 +176,28 @@ class ONNXOcr extends ONNXBase {
       await this.addon.destroy()
       this.addon = null
     }
+    this.state.configLoaded = false
+    this.state.weightsLoaded = false
+  }
+
+  async destroy () {
+    await this.unload()
+    this.state.destroyed = true
   }
 
   async _runInternal (input) {
-    const imageInput = this.getImage(input.path)
-    await this.addon.runJob({
-      type: 'image',
-      input: imageInput,
-      options: input.options
-    })
-
-    // Only one job is supported at the moment, with a single job ID
-    const response = this._createResponse(ONNXOcr.JOB_ID)
-
-    this._saveJobToResponseMapping(ONNXOcr.JOB_ID, response)
+    const response = this._job.start()
+    try {
+      const imageInput = this.getImage(input.path)
+      await this.addon.runJob({
+        type: 'image',
+        input: imageInput,
+        options: input.options
+      })
+    } catch (error) {
+      this._job.fail(error)
+      throw error
+    }
     return response
   }
 
@@ -303,12 +365,17 @@ class ONNXOcr extends ONNXBase {
 
   static getModelKey (params) {
     // Prevents loading same model multiple times
-    return 'onnx-ocr-fasttext'
+    const mode = (params && params.pipelineMode) || 'easyocr'
+    return `onnx-ocr-fasttext-${mode}`
   }
 }
 
 module.exports = {
   ONNXOcr,
   modelClass: ONNXOcr,
-  modelFile: addon
+  modelFile: addon,
+  QvacErrorAddonOcr,
+  ERR_CODES,
+  binding,
+  addonLogging
 }

@@ -28,7 +28,7 @@ def load_harvard_sentences_from_json(language: str) -> List[str]:
     Load Harvard sentences from JSON file for the specified language.
     
     Args:
-        language: Language code (e.g., 'en-us', 'es', 'de', 'it')
+        language: Language code (e.g., 'en-us')
         
     Returns:
         List of Harvard sentences
@@ -71,7 +71,7 @@ def load_harvard_sentences(cfg: DatasetConfig, language: str = "en-us") -> List[
     
     Args:
         cfg: Dataset configuration
-        language: Language code (e.g., 'en-us', 'es', 'de', 'it')
+        language: Language code (e.g., 'en-us')
         
     Returns:
         List of text strings to synthesize
@@ -154,7 +154,7 @@ def load_dataset_texts(cfg: DatasetConfig, language: str = "en-us") -> List[str]
     
     Args:
         cfg: Dataset configuration
-        language: Language code for multilingual datasets (e.g., 'en-us', 'es', 'de', 'it')
+        language: Language code for Harvard sentences (e.g., 'en-us')
         
     Returns:
         List of text strings

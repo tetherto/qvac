@@ -1,0 +1,21 @@
+{
+  "description": "Tag parsing scenarios",
+  "input": {
+    "tagList": [
+      "sdk-v1.0.0",
+      "sdk-v1.1.0",
+      "sdk-v1.2.0",
+      "sdk-v2.0.0",
+      "docs-v1.0.0"
+    ]
+  },
+  "expected": {
+    "latestForSdk": "sdk-v2.0.0",
+    "latestForDocs": "docs-v1.0.0",
+    "versionFromTag": {
+      "sdk-v2.0.0": "2.0.0",
+      "sdk-v1.0.0": "1.0.0",
+      "docs-v1.0.0": "1.0.0"
+    }
+  }
+}

@@ -1,12 +1,12 @@
 name: CLI - Rewrite SDK Scope for GPR
-description: Rewrites @qvac/sdk references to @tetherto/sdk-mono in qvac-cli source for GPR publishing
+description: Rewrites @qvac/sdk references to @tetherto/sdk-mono in @qvac/cli source for GPR publishing
 
 runs:
   using: composite
   steps:
     - name: Rewrite @qvac/sdk references for GPR
       shell: bash
-      working-directory: packages/qvac-cli
+      working-directory: packages/cli
       run: |
         # GPR SDK package name
         NEW_SDK_NAME="@tetherto/sdk-mono"

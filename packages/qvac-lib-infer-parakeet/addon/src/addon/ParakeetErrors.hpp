@@ -9,53 +9,51 @@ namespace qvac_lib_infer_parakeet::errors {
 
 constexpr const char* ADDON_ID = "Parakeet";
 
-enum ParakeetErrorCode : std::uint8_t {
-  UnableToLoadModel,
-  UnableToTranscribe,
-  MisalignedBuffer,
-  NonFiniteSample,
-  UnsupportedAudioFormat,
-  InvalidModelType,
-  SessionNotInitialized,
-};
-
-inline std::string toString(ParakeetErrorCode code) {
-  switch (code) {
-  case UnableToLoadModel:
-    return "UnableToLoadModel";
-  case UnableToTranscribe:
-    return "UnableToTranscribe";
-  case MisalignedBuffer:
-    return "MisalignedBuffer";
-  case NonFiniteSample:
-    return "NonFiniteSample";
-  case UnsupportedAudioFormat:
-    return "UnsupportedAudioFormat";
-  case InvalidModelType:
-    return "InvalidModelType";
-  case SessionNotInitialized:
-    return "SessionNotInitialized";
-  default:
-    return "UnknownError";
-  }
-}
-
-} // namespace qvac_lib_infer_parakeet::errors
-
-namespace qvac_errors {
-namespace parakeet_error {
-
 enum class Code : std::uint8_t {
-  MisalignedBuffer,
-  NonFiniteSample,
-  UnsupportedAudioFormat,
+  EncoderNotLoaded,
+  DecoderNotLoaded,
+  CTCModelNotLoaded,
+  SortformerNotLoaded,
+  EOUEncoderNotLoaded,
+  EOUDecoderNotLoaded,
+  SessionInitFailed,
+  VocabularyEmpty,
+  AudioTooShort,
+  InferenceFailed,
+  ModelNotReady,
 };
+
+inline std::string toString(Code code) {
+  switch (code) {
+  case Code::EncoderNotLoaded:
+    return "EncoderNotLoaded";
+  case Code::DecoderNotLoaded:
+    return "DecoderNotLoaded";
+  case Code::CTCModelNotLoaded:
+    return "CTCModelNotLoaded";
+  case Code::SortformerNotLoaded:
+    return "SortformerNotLoaded";
+  case Code::EOUEncoderNotLoaded:
+    return "EOUEncoderNotLoaded";
+  case Code::EOUDecoderNotLoaded:
+    return "EOUDecoderNotLoaded";
+  case Code::SessionInitFailed:
+    return "SessionInitFailed";
+  case Code::VocabularyEmpty:
+    return "VocabularyEmpty";
+  case Code::AudioTooShort:
+    return "AudioTooShort";
+  case Code::InferenceFailed:
+    return "InferenceFailed";
+  case Code::ModelNotReady:
+    return "ModelNotReady";
+  }
+  return "UnknownError";
+}
 
 inline qvac_errors::StatusError
 makeStatus(Code code, const std::string& message) {
-  return qvac_errors::StatusError("Parakeet", "ParakeetError", message);
+  return qvac_errors::StatusError(ADDON_ID, toString(code), message);
 }
 
-} // namespace parakeet_error
-} // namespace qvac_errors
-
+} // namespace qvac_lib_infer_parakeet::errors

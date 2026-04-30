@@ -1,10 +1,10 @@
 'use strict'
 
 const test = require('brittle')
+const path = require('bare-path')
 const { ensureModel } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
 const os = require('bare-os')
-const FilesystemDL = require('@qvac/dl-filesystem')
 const LlmLlamacpp = require('../../index.js')
 
 const isDarwinX64 = os.platform() === 'darwin' && os.arch() === 'x64'
@@ -23,7 +23,7 @@ async function setupReasoningModel (t, toolsEnabled) {
     downloadUrl: MODEL.url
   })
 
-  const loader = new FilesystemDL({ dirPath })
+  const modelPath = path.join(dirPath, modelName)
   const specLogger = attachSpecLogger({ forwardToConsole: true })
 
   const config = {
@@ -38,27 +38,24 @@ async function setupReasoningModel (t, toolsEnabled) {
   }
 
   const inference = new LlmLlamacpp({
-    loader,
-    modelName,
-    diskPath: dirPath,
+    files: { model: [modelPath] },
+    config,
     logger: console,
-    projectionPath: '',
     opts: { stats: true }
-  }, config)
+  })
 
   await inference.load()
 
   t.teardown(async () => {
     try {
       specLogger.release()
-      if (loader) await loader.close()
       if (inference) await inference.unload()
     } catch (err) {
       // Ignore cleanup errors
     }
   })
 
-  return { inference, loader }
+  return { inference }
 }
 
 // Shared helper: Run a completion and collect response

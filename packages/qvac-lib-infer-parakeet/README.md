@@ -57,8 +57,16 @@ This addon is built on [qvac-lib-inference-addon-cpp](https://github.com/tethert
 - **vcpkg**: For C++ dependency management (will be handled automatically by cmake-vcpkg)
 - **C++ Compiler**: C++20 support required
   - macOS: Xcode Command Line Tools
-  - Linux: GCC/G++ with C++20 support
+  - Linux: Clang/LLVM 19 with libc++
   - Windows: Visual Studio 2022 with C++ workload
+
+### Linux Build Prerequisites
+
+Before building on Linux, install Clang and the required C++ standard library headers:
+
+```bash
+sudo apt install clang libc++-dev libc++abi-dev build-essential pkg-config
+```
 
 ### Build from Source
 
@@ -114,6 +122,38 @@ bare examples/transcribe.js -f examples/samples/croatian.raw -m models/parakeet-
 bare examples/transcribe.js --file examples/samples/sample-16k.wav
 ```
 
+### CTC Transcription (English-only)
+
+**[quickstart-ctc.js](./examples/quickstart-ctc.js)** - Fast English-only transcription using the CTC model. Includes punctuation and capitalization. Best for single-language, high-throughput use cases.
+
+```bash
+bare examples/quickstart-ctc.js
+```
+
+### Streaming with End-of-Utterance Detection
+
+**[quickstart-eou.js](./examples/quickstart-eou.js)** - Real-time streaming transcription using the EOU model (120M params). Automatically detects utterance boundaries for turn-by-turn output. Note: the EOU model is optimized for low latency over accuracy — expect lower transcription quality compared to TDT/CTC.
+
+```bash
+bare examples/quickstart-eou.js
+```
+
+### Speaker Diarization
+
+**[quickstart-sortformer.js](./examples/quickstart-sortformer.js)** - Identifies who is speaking when using the Sortformer model (up to 4 speakers). Outputs speaker-labeled time segments.
+
+```bash
+bare examples/quickstart-sortformer.js
+```
+
+### Diarized Transcription
+
+**[quickstart-diarized.js](./examples/quickstart-diarized.js)** - Combines TDT transcription with Sortformer diarization to produce speaker-attributed text. Runs both models in parallel and merges the results. Diarization accuracy depends on audio quality and speaker overlap — some boundary imprecision is expected.
+
+```bash
+bare examples/quickstart-diarized.js
+```
+
 ### Audio Decoding
 
 **[example.decoder.js](./examples/example.decoder.js)** - Demonstrates using `@qvac/decoder-audio` to decode audio files before transcription. Useful when working with compressed audio formats.
@@ -122,20 +162,13 @@ bare examples/transcribe.js --file examples/samples/sample-16k.wav
 
 ### Downloading Models
 
-Download the TDT model from S3 using the provided script:
+Download models from HuggingFace using the provided script:
 
 ```bash
-# Download INT8 full model (default, recommended - ~650 MB)
-./scripts/download-models-s3.sh \
-  --access-key YOUR_AWS_ACCESS_KEY_ID \
-  --secret-key YOUR_AWS_SECRET_ACCESS_KEY
-
-# Or download FP32 full precision model (~2.4 GB)
-./scripts/download-models-s3.sh \
-  --access-key YOUR_AWS_ACCESS_KEY_ID \
-  --secret-key YOUR_AWS_SECRET_ACCESS_KEY \
-  --model fp32
+./scripts/download-models.sh
 ```
+
+The interactive script lets you choose which model variant to download (TDT, CTC, EOU, Sortformer, or all).
 
 **Model Variants:**
 | Variant | Size | Path | Notes |
@@ -278,7 +311,7 @@ The output callback receives these events:
   - **INT8 full (recommended):** ~650 MB - Conv+MatMul quantized, 73% smaller
   - **INT8 partial:** ~890 MB - MatMul-only quantized, 63% smaller
   - **FP32:** ~2.4 GB - Full precision weights
-- **Download:** Use `./scripts/download-models-s3.sh` or [Hugging Face](https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx)
+- **Download:** Use `./scripts/download-models.sh` or [Hugging Face](https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx)
 
 ### EOU Model
 - **Use case:** Real-time streaming with end-of-utterance detection
@@ -350,25 +383,25 @@ qvac-lib-infer-parakeet/
 |----------|-------------|-------------|--------|-------------|
 | macOS | arm64, x64 | 14.0+ | ✅ Tier 1 | CoreML |
 | iOS | arm64 | 17.0+ | ✅ Tier 1 | CoreML |
-| Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | CUDA, ROCm |
+| Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | CPU only |
 | Android | arm64 | 12+ | ✅ Tier 1 | NNAPI |
-| Windows | x64 | 10+ | ✅ Tier 1 | DirectML, CUDA |
+| Windows | x64 | 10+ | ✅ Tier 1 | DirectML |
 
 **Dependencies:**
 - qvac-lib-inference-addon-cpp: C++ addon framework
 - ONNX Runtime: Inference engine
 - Bare Runtime: JavaScript runtime
-- Ubuntu-22 requires g++-13 installed
+- Linux requires Clang/LLVM 19 with libc++
 
 ### Hardware Acceleration
 
-ONNX Runtime provides automatic hardware acceleration:
+ONNX Runtime provides automatic hardware acceleration when `useGPU: true` is set:
 - **macOS/iOS**: CoreML
-- **Windows**: DirectML or CUDA
-- **Linux**: CUDA, ROCm, or CPU
+- **Windows**: DirectML
+- **Linux**: CPU only (no GPU EP in current prebuilds)
 - **Android**: NNAPI
 
-Enable with `useGPU: true` in the config.
+If the selected GPU provider fails at session creation, inference falls back to CPU automatically.
 
 ## Resources
 

@@ -7,6 +7,10 @@ endif()
 
 option(BUILD_TESTING "Build tests" OFF)
 option(USE_BERGAMOT "Enable Bergamot backend support" ON)
+# Disabled by default until the Adreno 830 q4_0 transpose assertion
+# (GGML_ASSERT(M % 4 == 0) in ggml-opencl.cpp) is fixed upstream —
+# Bergamot/IndicTrans tensors trip it on NMT vocab dimensions. See QVAC-17790.
+option(USE_OPENCL "Prefer/allow OpenCL backend for GPU inference" OFF)
 
 if(BUILD_TESTING)
   list(APPEND VCPKG_MANIFEST_FEATURES "tests")
@@ -15,6 +19,7 @@ endif()
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
+set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 set(VCPKG_INSTALL_OPTIONS --clean-after-build)
 
 # Android STL configuration must be set before project()
@@ -24,6 +29,11 @@ endif()
 
 project(qvac-lib-infer-nmtcpp
   LANGUAGES C CXX)
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  add_compile_options(-stdlib=libc++)
+  add_link_options(-stdlib=libc++ -static-libstdc++)
+endif()
 
 find_path(VCPKG_INSTALLED_PATH share/qvac-lint-cpp/.clang-format REQUIRED)
 configure_file(${VCPKG_INSTALLED_PATH}/share/qvac-lint-cpp/.clang-format
@@ -128,13 +138,30 @@ if(USE_BERGAMOT)
   find_package(bergamot-translator CONFIG REQUIRED)
 endif()
 
-add_bare_module(qvac-lib-infer-nmtcpp EXPORTS)
+bare_target(bare_target_value)
+bare_module_target("." unused_target NAME module_name VERSION unused_version)
+set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/${module_name}")
+message("Building qvac-lib-infer-nmtcpp with BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VALUE}'")
+
+set(BACKEND_DL_LIBS "")
+if((ANDROID OR UNIX) AND NOT APPLE)
+  foreach(_backend ${GGML_AVAILABLE_BACKENDS})
+    list(APPEND BACKEND_DL_LIBS INSTALL TARGET ggml::${_backend})
+  endforeach()
+endif()
+
+add_bare_module(qvac-lib-infer-nmtcpp EXPORTS ${BACKEND_DL_LIBS})
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  target_link_options(${qvac-lib-infer-nmtcpp}_module PRIVATE -Wl,--exclude-libs,ALL)
+endif()
 
 target_sources(
   ${qvac-lib-infer-nmtcpp}
   PRIVATE
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TranslationModel.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/PivotTranslationModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/nmt.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/nmt_tokenization.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/nmt_state_backend.cpp
@@ -143,6 +170,7 @@ target_sources(
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/nmt_graph_encoder.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/nmt_beam_search.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/nmt_utils.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/NmtLazyInitializeBackend.cpp
 )
 
 # Add bergamot source files if enabled
@@ -174,12 +202,22 @@ target_compile_definitions(
     JS_LOGGER
 )
 
+target_compile_definitions(${qvac-lib-infer-nmtcpp} PRIVATE BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}")
+
 # Add bergamot compile definition if enabled
 if(USE_BERGAMOT)
   target_compile_definitions(
     ${qvac-lib-infer-nmtcpp}
     PRIVATE
       HAVE_BERGAMOT
+  )
+endif()
+
+if(USE_OPENCL)
+  target_compile_definitions(
+    ${qvac-lib-infer-nmtcpp}
+    PRIVATE
+      QVAC_NMTCPP_USE_OPENCL
   )
 endif()
 

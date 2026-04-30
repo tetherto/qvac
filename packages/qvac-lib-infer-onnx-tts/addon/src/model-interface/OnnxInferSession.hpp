@@ -1,48 +1,39 @@
 #pragma once
 
+#include "IOnnxInferSession.hpp"
+#include "OrtTypes.hpp"
 #include "onnxruntime_cxx_api.h"
+
+#include <unordered_map>
+#include <unordered_set>
 
 namespace qvac::ttslib::chatterbox {
 
-enum class OrtElementType {
-  Fp16 = 0,
-  Fp32 = 1,
-  Fp64 = 2,
-  Int4 = 3,
-  Int8 = 4,
-  Int16 = 5,
-  Int32 = 6,
-  Int64 = 7,
-  UInt4 = 8,
-  UInt8 = 9,
-  UInt16 = 10,
-  UInt32 = 11,
-  UInt64 = 12
-};
-
-struct OrtTensor {
-  void *data;
-  std::string name;
-  std::vector<int64_t> shape;
-  OrtElementType type;
-};
-
-class OnnxInferSession {
+class OnnxInferSession : public IOnnxInferSession {
 public:
-  OnnxInferSession(const std::string &modelPath);
-  ~OnnxInferSession() = default;
+  explicit OnnxInferSession(const std::string &modelPath, bool useGPU = false,
+                            int numThreads = 0);
+  ~OnnxInferSession() override = default;
 
-  void run();
+  void run() override;
 
-  std::vector<std::string> getInputNames() const;
-  std::vector<std::string> getOutputNames() const;
+  std::vector<std::string> getInputNames() const override;
+  std::vector<std::string> getOutputNames() const override;
 
-  OrtTensor getInput(const std::string &inputName);
-  OrtTensor getOutput(const std::string &outputName);
+  OrtTensor getInput(const std::string &inputName) override;
+  OrtTensor getOutput(const std::string &outputName) override;
 
-  void initInputTensors(const std::vector<std::vector<int64_t>> &inputShapes);
+  void initInputTensors(
+      const std::vector<std::vector<int64_t>> &inputShapes) override;
+
+  void setOutputToInputChain(
+      const std::vector<std::pair<std::string, std::string>> &mapping) override;
+  void clearChainedInputs() override;
+  bool isInputChained(const std::string &inputName) const override;
 
 private:
+  void moveChainedOutputsIntoInputs();
+
   std::unique_ptr<Ort::Session> session_;
 
   std::vector<OrtTensor> inputTensors_;
@@ -53,6 +44,13 @@ private:
 
   std::vector<std::string> inputNames_;
   std::vector<std::string> outputNames_;
+
+  std::unordered_map<std::string, size_t> inputIndexByName_;
+  std::unordered_map<std::string, size_t> outputIndexByName_;
+
+  // (outputName, inputName) pairs describing output->input chaining.
+  std::vector<std::pair<std::string, std::string>> outputToInputChain_;
+  std::unordered_set<std::string> chainedInputNames_;
 
   Ort::AllocatorWithDefaultOptions allocator_;
 };

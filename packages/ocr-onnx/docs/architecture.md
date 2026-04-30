@@ -95,7 +95,7 @@ graph TB
 
     subgraph "Core Libs"
         BASE["@qvac/infer-base"]
-        DL["@qvac/dl-hyperdrive"]
+        REG["@qvac/registry-client"]
     end
 
     subgraph "Native Framework"
@@ -579,7 +579,7 @@ Images can be BMP, JPEG, or PNG. Decoding can happen in JavaScript (using only B
 
 **Chose:** Applications provide pathDetector and pathRecognizer (or pathRecognizerPrefix + model name); no built-in distribution  
 **Why:** Keeps package size down and model evolution in app control  
-**Cost:** Apps must obtain and version models themselves; Hyperdrive or other distribution may be added later
+**Cost:** Apps must obtain and version models themselves; registry-based or other distribution may be added later
 
 </details>
 
@@ -589,19 +589,19 @@ Detector and recognizer models are large and vary by language/script. Shipping t
 
 ### Decision
 
-Require the application to supply pathDetector and either pathRecognizer or (pathRecognizerPrefix + recognizer model name derived from langList). No built-in download or Hyperdrive integration in the current package. If future constraints (package size, model evolution) demand it, Hyperdrive-based distribution could be added.
+Require the application to supply pathDetector and either pathRecognizer or (pathRecognizerPrefix + recognizer model name derived from langList). No built-in download or registry integration in the current package. If future constraints (package size, model evolution) demand it, registry-based distribution could be added.
 
 ### Rationale
 
 **Package size:** No model bytes in the npm package.
 
-**Flexibility:** Apps can use local files, their own CDN, or future P2P (e.g. Hyperdrive) without the addon dictating it.
+**Flexibility:** Apps can use local files, their own CDN, or the QVAC registry without the addon dictating it.
 
 **Versioning:** App controls which detector/recognizer versions to use.
 
 ### Trade-offs
 - ✅ Small package; clear ownership of model acquisition
-- ✅ Future option to add Hyperdrive or other distribution
+- ✅ Future option to add registry-based or other distribution
 - ❌ No out-of-the-box model distribution today
 
 ---

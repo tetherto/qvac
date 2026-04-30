@@ -29,7 +29,7 @@ async function main () {
     console.log(`[C++] [${timestamp}] [${logLevel}]: ${message}`)
   })
 
-  // Download models if not present (via Hyperdrive)
+  // Download models if not present (via registry)
   const { detectorPath, recognizerPath } = await ensureModels()
 
   const model = new ONNXOcr({

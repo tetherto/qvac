@@ -113,7 +113,30 @@ function checkConfig (configObject) {
       throw new Error(`${userParam} is not a valid parameter for contextParams`)
     }
   }
+
+  if (typeof configObject.whisperConfig.suppress_regex === 'string') {
+    _validateSuppressRegex(configObject.whisperConfig.suppress_regex)
+  }
 };
+
+const MAX_SUPPRESS_REGEX_LENGTH = 512
+
+// Only allow character classes, literals, simple quantifiers, alternation, and anchors.
+// Reject grouping constructs entirely to prevent nested quantifier patterns like (a+)+.
+const SAFE_SUPPRESS_REGEX = /^[^()]*$/
+
+function _validateSuppressRegex (pattern) {
+  if (pattern.length > MAX_SUPPRESS_REGEX_LENGTH) {
+    throw new Error(
+      'suppress_regex exceeds maximum length of ' + MAX_SUPPRESS_REGEX_LENGTH + ' characters'
+    )
+  }
+  if (!SAFE_SUPPRESS_REGEX.test(pattern)) {
+    throw new Error(
+      'suppress_regex must not contain grouping constructs (parentheses) to prevent catastrophic backtracking'
+    )
+  }
+}
 
 module.exports = {
   checkConfig

@@ -14,22 +14,38 @@ const fs = require('fs')
 
 const RegistryService = require('../lib/registry-service')
 const RegistryConfig = require('../lib/config')
+const MetricsServer = require('../lib/metrics-server')
+const QvacMetrics = require('../lib/metrics')
+const HypercoreStats = require('hypercore-stats')
+const HyperswarmStats = require('hyperswarm-stats')
+const promClient = require('prom-client')
 const { AUTOBASE_NAMESPACE } = require('@qvac/registry-schema')
+
+const DEFAULT_METRICS_PORT = 9210
+const DEFAULT_METRICS_HOST = '127.0.0.1'
 
 const DEFAULT_STORAGE = './corestore'
 const DEFAULT_WRITER_STORAGE = './writer-storage'
 
 const DEFAULT_COMPACTION_INTERVAL_MS = 60 * 60 * 1000 // 1 hour
 
+function toInt (val) {
+  const n = parseInt(val, 10)
+  return Number.isNaN(n) ? undefined : n
+}
+
 const runCmd = command('run',
   flag('--storage|-s [path]', `storage path (default ${DEFAULT_STORAGE})`),
   flag('--bootstrap|-b [key]', 'Autobase bootstrap key (hex)'),
-  flag('--ack-interval [ms]', 'Autobase ack interval in ms'),
+  flag('--ack-interval [ms]', 'Autobase ack interval in ms (default: 5000)'),
+  flag('--ack-threshold [n]', 'Autobase ack threshold, lower = less latency but more writes (default: 0)'),
   flag('--blind-peers [keys]', 'Comma-separated blind peer public keys (z-base-32 or hex)'),
   flag('--primary-key [key]', 'Primary key for deterministic key derivation (hex or z-base-32, testing/development only)'),
   flag('--clear-after-reseed', 'Clear blob blocks after successful replication to blind peers'),
   flag('--compaction-interval [ms]', `Periodic RocksDB compaction interval in ms (default: ${DEFAULT_COMPACTION_INTERVAL_MS}, 0 to disable)`),
   flag('--skip-storage-check', 'Skip storage/bootstrap key mismatch check (use when joining existing cluster with fresh storage)'),
+  flag('--metrics-port [port]', `Prometheus metrics HTTP port (default: ${DEFAULT_METRICS_PORT}, 0 to disable)`),
+  flag('--metrics-host [host]', `Prometheus metrics HTTP bind address (default: ${DEFAULT_METRICS_HOST}; use 0.0.0.0 to expose on all interfaces)`),
   async function ({ flags }) {
     const logger = createLogger()
 
@@ -65,7 +81,8 @@ const runCmd = command('run',
       config,
       {
         logger,
-        ackInterval: flags.ackInterval,
+        ackInterval: toInt(flags.ackInterval),
+        ackThreshold: toInt(flags.ackThreshold),
         autobaseBootstrap,
         blindPeerKeys,
         clearAfterReseed: flags.clearAfterReseed,
@@ -79,8 +96,30 @@ const runCmd = command('run',
     config.setAutobaseKey(IdEnc.normalize(service.base.key))
     config.setRegistryCoreKey(IdEnc.normalize(service.registryCoreKey))
 
+    const metricsPort = flags.metricsPort !== undefined
+      ? parseInt(flags.metricsPort, 10)
+      : DEFAULT_METRICS_PORT
+
+    if (Number.isNaN(metricsPort) || metricsPort < 0) {
+      throw new Error('--metrics-port must be a non-negative integer (0 to disable)')
+    }
+
+    const metricsHost = flags.metricsHost || DEFAULT_METRICS_HOST
+
+    let metricsServer = null
+    if (metricsPort > 0) {
+      const qvacMetrics = new QvacMetrics(service, { logger })
+      service.metrics = qvacMetrics
+
+      HypercoreStats.fromCorestore(store).registerPrometheusMetrics(promClient)
+      new HyperswarmStats(swarm).registerPrometheusMetrics(promClient) // eslint-disable-line no-new
+
+      metricsServer = new MetricsServer(promClient.register, { port: metricsPort, host: metricsHost, logger })
+      await metricsServer.ready()
+    }
+
     logServiceInfo(logger, service)
-    registerShutdown(logger, service, swarm, store)
+    registerShutdown(logger, service, swarm, store, metricsServer)
   }
 )
 
@@ -148,13 +187,14 @@ const cmd = command('registry', runCmd, initWriter, syncModelsCmd)
 
 cmd.parse()
 
-function registerShutdown (logger, service, swarm, store) {
+function registerShutdown (logger, service, swarm, store, metricsServer) {
   let closing = false
   const shutdown = async () => {
     if (closing) return
     closing = true
     logger.info('Shutting down gracefully…')
     try {
+      if (metricsServer) await metricsServer.close()
       await service.close()
       await swarm.destroy()
       await store.close()

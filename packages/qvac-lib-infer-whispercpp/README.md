@@ -37,7 +37,7 @@ This library simplifies running inference with the Whisper transcription model w
 - qvac-lib-inference-addon-cpp (=0.12.2): C++ addon framework
 - qvac-fabric-whisper.cpp (latest): Inference engine
 - Bare Runtime (≥1.24.2): JavaScript runtime
-- Ubuntu-22 requires g++-13 installed
+- Linux requires Clang/LLVM 19 with libc++
 
 ## Installation
 
@@ -53,21 +53,6 @@ Note : Make sure the Bare version is `>= 1.24.2`. Check this using :
 ```bash
 bare -v
 ```
-
-Before proceeding with the installation, please generate a **granular Personal Access Token (PAT)** with the `read-only` scope. Once generated, add the token to your environment variables using the name `NPM_TOKEN`.
-
-```bash
-export NPM_TOKEN=your_personal_access_token
-```
-
-Next, create a `.npmrc` file in the root of your project with the following content:
-
-```ini
-@qvac:registry=https://registry.npmjs.org/
-//registry.npmjs.org/:_authToken={NPM_TOKEN}
-```
-
-This configuration ensures secure access to NPM Packages when installing scoped packages.
 
 ### Installing the Package
 
@@ -143,16 +128,16 @@ $env:VCPKG_ROOT = "C:\path\to\vcpkg"
 
 **Linux:**
 ```bash
-# Ubuntu/Debian
+# Ubuntu/Debian — includes Clang and libc++ required by the native addon
 sudo apt update
-sudo apt install build-essential cmake git pkg-config
+sudo apt install clang libc++-dev libc++abi-dev build-essential cmake git pkg-config
 
 # CentOS/RHEL/Fedora
 sudo yum groupinstall "Development Tools"
-sudo yum install cmake git pkgconfig
+sudo yum install cmake git pkgconfig clang
 # or for newer versions:
 sudo dnf groupinstall "Development Tools"
-sudo dnf install cmake git pkgconfig
+sudo dnf install cmake git pkgconfig clang
 ```
 
 **macOS:**
@@ -221,6 +206,18 @@ This command runs the complete build sequence:
 2. `bare-make build` - Compiles the native C++ addon
 3. `bare-make install` - Installs the built addon
 
+#### Building with Vulkan GPU Acceleration
+
+On Linux, Android, and Windows, Vulkan support can be enabled at build time. Ensure the [Vulkan SDK](#gpu-acceleration-optional) is installed, then pass `-D ENABLE_VULKAN=ON` during the generate step:
+
+```bash
+bare-make generate -D ENABLE_VULKAN=ON
+bare-make build
+bare-make install
+```
+
+CI prebuilds for Linux, Android, and Windows include Vulkan by default. macOS and iOS use Metal instead.
+
 #### Running Tests
 
 After building, you can run the test suite:
@@ -252,7 +249,7 @@ The library provides a straightforward workflow for audio transcription:
 
 Data loaders abstract the way model files are accessed, whether from the filesystem, a network drive, or any other storage mechanism. More info about model registry and model builds in [resources](#resources).
 
-- [Filesystem Data Loader](https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-dl-filesystem)
+- [Filesystem Data Loader](https://github.com/tetherto/qvac/tree/main/packages/dl-filesystem)
 
 First, select and instantiate a data loader that provides access to model files:
 
@@ -275,6 +272,20 @@ Most users interact with the addon exclusively through `index.js`. From that ent
 | | | *(all other context keys keep their defaults because changing them forces a full reload, see below)* |
 | `whisperConfig` | *(any `whisper_full_params` key)* | Forwarded untouched. We surface convenience defaults in `index.js`, but every whisper.cpp flag is accepted—see [Advanced configuration](#advanced-configuration). |
 | `miscConfig` | `caption_enabled` | Formats segments with `<\|start\|>..<\|end\|>` markers |
+
+#### GPU acceleration is opt-in
+
+`use_gpu` defaults to `false`. To enable Vulkan (Linux/Windows/Android) or Metal (macOS/iOS) acceleration, set `use_gpu: true` explicitly in `contextParams`:
+
+```javascript
+const config = {
+  contextParams: {
+    model: './models/ggml-tiny.bin',
+    use_gpu: true,   // opt-in to GPU
+    gpu_device: 0
+  }
+}
+```
 
 #### Context keys that force a full reload
 
@@ -362,12 +373,6 @@ curl -L -o models/ggml-tiny.bin https://huggingface.co/ggerganov/whisper.cpp/res
 
 # VAD model
 curl -L -o models/ggml-silero-v5.1.2.bin https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin
-```
-
-For fine-tuned models maintained by the team, use the S3 download script:
-
-```bash
-MODEL_S3_BUCKET=<bucket> ./scripts/download-models-s3.sh --access-key <KEY> --secret-key <SECRET> --model <name>
 ```
 
 ### 4. Create Model Instance
@@ -500,7 +505,7 @@ try {
 
 ### 1. Clone the repo & Install the dependencies
 ```bash
-git clone git@github.com:tetherto/qvac-lib-infer-whispercpp.git
+git clone https://github.com/tetherto/qvac-lib-infer-whispercpp.git
 cd qvac-lib-infer-whispercpp
 npm install
 ```

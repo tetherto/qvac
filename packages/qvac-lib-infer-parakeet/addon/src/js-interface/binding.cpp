@@ -4,7 +4,7 @@
 #include <bare.h>
 #include <js.h>
 
-#include "qvac-lib-infer-parakeet.hpp"
+#include "addon/AddonJs.hpp"
 
 // NOLINTBEGIN(cppcoreguidelines-macro-usage,readability-function-cognitive-complexity,modernize-use-trailing-return-type,readability-identifier-naming)
 auto qvac_lib_infer_parakeet_exports(js_env_t* env, js_value_t* exports)
@@ -22,20 +22,13 @@ auto qvac_lib_infer_parakeet_exports(js_env_t* env, js_value_t* exports)
   }
 
   V("createInstance", qvac_lib_infer_parakeet::createInstance)
-  V("unload", qvac_lib_infer_parakeet::unload)
-  V("load", qvac_lib_infer_parakeet::load)
-  V("reload", qvac_lib_infer_parakeet::reload)
-  V("loadWeights", qvac_lib_infer_parakeet::loadWeights)
-  V("unloadWeights", qvac_lib_infer_parakeet::unloadWeights)
-  V("activate", qvac_lib_infer_parakeet::activate)
-  V("append", qvac_lib_infer_parakeet::append)
-  V("status", qvac_lib_infer_parakeet::status)
-  V("pause", qvac_lib_infer_parakeet::pause)
-  V("stop", qvac_lib_infer_parakeet::stop)
-  V("cancel", qvac_lib_infer_parakeet::cancel)
-  V("destroyInstance", qvac_lib_infer_parakeet::destroyInstance)
-  V("setLogger", qvac_lib_infer_parakeet::setLogger)
-  V("releaseLogger", qvac_lib_infer_parakeet::releaseLogger)
+  V("runJob", qvac_lib_infer_parakeet::runJob)
+  V("loadWeights", qvac_lib_inference_addon_cpp::JsInterface::loadWeights)
+  V("activate", qvac_lib_inference_addon_cpp::JsInterface::activate)
+  V("cancel", qvac_lib_inference_addon_cpp::JsInterface::cancel)
+  V("destroyInstance", qvac_lib_inference_addon_cpp::JsInterface::destroyInstance)
+  V("setLogger", qvac_lib_inference_addon_cpp::JsInterface::setLogger)
+  V("releaseLogger", qvac_lib_inference_addon_cpp::JsInterface::releaseLogger)
 #undef V
 
   return exports;

@@ -1,7 +1,8 @@
-#include <gtest/gtest.h>
-
 #include <filesystem>
 #include <fstream>
+#include <memory>
+
+#include <gtest/gtest.h>
 
 #include "model-interface/bergamot.hpp"
 
@@ -151,6 +152,70 @@ TEST_F(BergamotValidationTest, DirectoryInsteadOfFile) {
 
   auto ctx = bergamot_init("", params);
   EXPECT_EQ(ctx, nullptr);
+}
+
+TEST(BergamotValidation, DifferentDecodingParamsCanChangeOutput) {
+  constexpr int kCustomBeamSize = 6;
+  constexpr int kDisableNormalize = 0;
+  constexpr double kShortMaxLengthFactor = 0.1;
+
+  fs::path modelDir;
+  if (fs::exists(fs::path{"models/unit-test/berg-en-it"})) {
+    modelDir = fs::path{"models/unit-test/berg-en-it"};
+  } else if (fs::exists(fs::path{"../../../models/unit-test/berg-en-it"})) {
+    modelDir = fs::path{"../../../models/unit-test/berg-en-it"};
+  } else {
+    GTEST_SKIP() << "Bergamot unit-test model directory not found.";
+  }
+
+  const std::string modelPath =
+      (modelDir / "model.enit.intgemm.alphas.bin").string();
+  const std::string vocabPath = (modelDir / "vocab.enit.spm").string();
+  if (!fs::exists(modelPath) || !fs::exists(vocabPath)) {
+    GTEST_SKIP() << "Required Bergamot model files are missing in "
+                 << modelDir.string();
+  }
+
+  const auto freeCtx = [](bergamot_context* ctx) {
+    if (ctx != nullptr) {
+      bergamot_free(ctx);
+    }
+  };
+
+  bergamot_params defaultParams;
+  defaultParams.model_path = modelPath;
+  defaultParams.src_vocab_path = vocabPath;
+  defaultParams.dst_vocab_path = vocabPath;
+
+  bergamot_params customParams = defaultParams;
+  customParams.beam_size = kCustomBeamSize;
+  customParams.normalize = kDisableNormalize;
+  customParams.max_length_factor = kShortMaxLengthFactor;
+
+  std::unique_ptr<bergamot_context, decltype(freeCtx)> defaultCtx(
+      bergamot_init("", defaultParams), freeCtx);
+  ASSERT_NE(defaultCtx.get(), nullptr);
+  std::unique_ptr<bergamot_context, decltype(freeCtx)> customCtx(
+      bergamot_init("", customParams), freeCtx);
+  ASSERT_NE(customCtx.get(), nullptr);
+
+  const std::string input =
+      "When the heavy rain finally stopped, everyone came outside to inspect "
+      "the streets, help their neighbors, and share updates about the damage "
+      "reported across the town.";
+
+  const std::string defaultOutput =
+      bergamot_translate(defaultCtx.get(), input.c_str());
+  const std::string customOutput =
+      bergamot_translate(customCtx.get(), input.c_str());
+
+  EXPECT_FALSE(defaultOutput.empty());
+  EXPECT_FALSE(customOutput.empty());
+
+  // Compare outputs from different decode settings. With a stricter
+  // max-length-factor in custom params, output is expected to change or
+  // become shorter.
+  EXPECT_NE(customOutput, defaultOutput);
 }
 
 // Note: We cannot test valid file initialization here because that would require

@@ -12,15 +12,15 @@
 const test = require('brittle')
 const fs = require('bare-fs')
 const path = require('bare-path')
-const binding = require('../../binding')
-const { ParakeetInterface } = require('../../parakeet')
 const {
+  binding,
+  ParakeetInterface,
   detectPlatform,
   setupJsLogger,
   getTestPaths,
   validateAccuracy,
   ensureModel,
-  readFileChunked,
+  getNamedPathsConfig,
   isMobile
 } = require('./helpers.js')
 
@@ -106,13 +106,14 @@ async function runLanguageTest (t, langConfig, loggerBinding) {
     maxThreads: 4,
     useGPU: false,
     sampleRate: 16000,
-    channels: 1
+    channels: 1,
+    ...getNamedPathsConfig('tdt', modelPath)
   }
 
   // Track transcription
   const transcriptions = []
-  let outputResolve = null
-  const outputPromise = new Promise(resolve => { outputResolve = resolve })
+  let jobDoneResolve = null
+  const jobDonePromise = new Promise(resolve => { jobDoneResolve = resolve })
 
   function outputCallback (handle, event, id, output, error) {
     if (event === 'Output' && Array.isArray(output)) {
@@ -121,16 +122,18 @@ async function runLanguageTest (t, langConfig, loggerBinding) {
           transcriptions.push(segment)
         }
       }
-      if (transcriptions.length > 0 && outputResolve) {
-        outputResolve()
-        outputResolve = null
-      }
     }
     if (event === 'Error') {
       console.log(`   Error: ${error}`)
-      if (outputResolve) {
-        outputResolve()
-        outputResolve = null
+      if (jobDoneResolve) {
+        jobDoneResolve()
+        jobDoneResolve = null
+      }
+    }
+    if (event === 'JobEnded') {
+      if (jobDoneResolve) {
+        jobDoneResolve()
+        jobDoneResolve = null
       }
     }
   }
@@ -140,28 +143,6 @@ async function runLanguageTest (t, langConfig, loggerBinding) {
   try {
     parakeet = new ParakeetInterface(binding, config, outputCallback)
 
-    // Load model weights
-    const modelFiles = [
-      'encoder-model.onnx',
-      'encoder-model.onnx.data',
-      'decoder_joint-model.onnx',
-      'vocab.txt',
-      'preprocessor.onnx'
-    ]
-
-    for (const file of modelFiles) {
-      const filePath = path.join(modelPath, file)
-      if (fs.existsSync(filePath)) {
-        const chunks = []
-        for (const buffer of readFileChunked(filePath)) {
-          chunks.push(buffer)
-        }
-        const fullBuffer = Buffer.concat(chunks)
-        const chunk = new Uint8Array(fullBuffer.buffer, fullBuffer.byteOffset, fullBuffer.byteLength)
-        await parakeet.loadWeights({ filename: file, chunk, completed: true })
-      }
-    }
-
     await parakeet.activate()
 
     // Transcribe
@@ -169,8 +150,13 @@ async function runLanguageTest (t, langConfig, loggerBinding) {
     await parakeet.append({ type: 'end of job' })
 
     // Wait for output with timeout (10 min should be enough for truncated audio)
-    const timeout = setTimeout(() => { if (outputResolve) { outputResolve(); outputResolve = null } }, 600000)
-    await outputPromise
+    const timeout = setTimeout(() => {
+      if (jobDoneResolve) {
+        jobDoneResolve()
+        jobDoneResolve = null
+      }
+    }, 600000)
+    await jobDonePromise
     clearTimeout(timeout)
 
     // Get results
@@ -216,7 +202,7 @@ async function runLanguageTest (t, langConfig, loggerBinding) {
   } finally {
     if (parakeet) {
       try {
-        parakeet.destroyInstance()
+        await parakeet.destroyInstance()
       } catch (e) {
         // Ignore cleanup errors
       }
@@ -252,11 +238,7 @@ test('Accuracy test - English (primary language)', { timeout: 300000 }, async (t
       t.ok(result.segmentCount > 0, `Should produce segments (got ${result.segmentCount})`)
     }
   } finally {
-    try {
-      loggerBinding.releaseLogger()
-    } catch (e) {
-      // Ignore
-    }
+    // Logger is released once at the end of the summary test.
   }
 })
 
@@ -281,16 +263,13 @@ test('Transcription test - Spanish (non-primary language)', { timeout: 300000 },
     } else if (result.error) {
       t.fail(`Spanish test failed: ${result.error}`)
     } else {
-      // For non-English, we just verify the model doesn't crash and produces some output
-      t.ok(result.actualText.length >= 0, 'Should handle Spanish audio without crashing')
+      // For non-English, verify no crash and non-empty transcription payload.
+      t.ok(result.segmentCount > 0, `Should produce at least one segment for Spanish audio (got ${result.segmentCount})`)
+      t.ok(result.actualText.length > 0, `Should produce non-empty text for Spanish audio (got ${result.actualText.length} chars)`)
       console.log('\n✅ Spanish audio handled gracefully')
     }
   } finally {
-    try {
-      loggerBinding.releaseLogger()
-    } catch (e) {
-      // Ignore
-    }
+    // Logger is released once at the end of the summary test.
   }
 })
 
@@ -315,15 +294,12 @@ test('Transcription test - French (non-primary language)', { timeout: 300000 }, 
     } else if (result.error) {
       t.fail(`French test failed: ${result.error}`)
     } else {
-      t.ok(result.actualText.length >= 0, 'Should handle French audio without crashing')
+      t.ok(result.segmentCount > 0, `Should produce at least one segment for French audio (got ${result.segmentCount})`)
+      t.ok(result.actualText.length > 0, `Should produce non-empty text for French audio (got ${result.actualText.length} chars)`)
       console.log('\n✅ French audio handled gracefully')
     }
   } finally {
-    try {
-      loggerBinding.releaseLogger()
-    } catch (e) {
-      // Ignore
-    }
+    // Logger is released once at the end of the summary test.
   }
 })
 
@@ -348,15 +324,12 @@ test('Transcription test - Croatian (non-primary language)', { timeout: 300000 }
     } else if (result.error) {
       t.fail(`Croatian test failed: ${result.error}`)
     } else {
-      t.ok(result.actualText.length >= 0, 'Should handle Croatian audio without crashing')
+      t.ok(result.segmentCount > 0, `Should produce at least one segment for Croatian audio (got ${result.segmentCount})`)
+      t.ok(result.actualText.length > 0, `Should produce non-empty text for Croatian audio (got ${result.actualText.length} chars)`)
       console.log('\n✅ Croatian audio handled gracefully')
     }
   } finally {
-    try {
-      loggerBinding.releaseLogger()
-    } catch (e) {
-      // Ignore
-    }
+    // Logger is released once at the end of the summary test.
   }
 })
 

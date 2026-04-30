@@ -123,7 +123,8 @@ TEST_F(TTSModelTest, positiveProcess) {
       .WillOnce(::testing::Return(mockResult));
 
   TTSModel model(config_, referenceAudio_, engineMock_);
-  const TTSModel::Output output = model.process("Hello, world!");
+  const TTSModel::Output output =
+      model.process(TTSModel::Input{"Hello, world!"});
   EXPECT_GT(output.size(), 0);
 }
 

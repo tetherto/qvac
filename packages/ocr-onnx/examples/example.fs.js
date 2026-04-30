@@ -12,7 +12,7 @@ const basePath = process.cwd()
 const imagePath = path.join(basePath, inputImage)
 
 async function main () {
-  // Download models if not present (via Hyperdrive)
+  // Download models if not present (via registry)
   const { detectorPath, recognizerPath } = await ensureModels()
 
   const model = new ONNXOcr({

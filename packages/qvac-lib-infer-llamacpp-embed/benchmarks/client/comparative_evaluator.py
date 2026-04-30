@@ -323,8 +323,6 @@ class ComparativeEvaluator:
                     import traceback
                     traceback.print_exc()
             
-            logger.info("Comparative evaluation completed!")
-            
             # Save and print results
             self.save_and_print_results()
             

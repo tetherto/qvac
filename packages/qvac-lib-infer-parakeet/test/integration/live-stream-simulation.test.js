@@ -12,14 +12,14 @@
 const test = require('brittle')
 const fs = require('bare-fs')
 const path = require('bare-path')
-const binding = require('../../binding')
-const { ParakeetInterface } = require('../../parakeet')
 const {
+  binding,
+  ParakeetInterface,
   detectPlatform,
   setupJsLogger,
   getTestPaths,
   ensureModel,
-  readFileChunked,
+  getNamedPathsConfig,
   isMobile
 } = require('./helpers.js')
 
@@ -110,7 +110,8 @@ test('Live stream simulation: chunked audio feeding', { timeout: 300000 }, async
     maxThreads: 4,
     useGPU: false,
     sampleRate: 16000,
-    channels: 1
+    channels: 1,
+    ...getNamedPathsConfig('tdt', modelPath)
   }
 
   // Track results
@@ -132,17 +133,13 @@ test('Live stream simulation: chunked audio feeding', { timeout: 300000 }, async
           segments.push(segment)
         }
       }
-      if (segments.length > 0 && outputResolve) {
-        outputResolve()
-        outputResolve = null
-      }
     }
-    if (event === 'Error') {
-      console.log(`[error] ${error}`)
-      if (outputResolve) {
-        outputResolve()
-        outputResolve = null
+    if ((event === 'JobEnded' || event === 'Error') && outputResolve) {
+      if (event === 'Error') {
+        console.log(`[error] ${error}`)
       }
+      outputResolve()
+      outputResolve = null
     }
   }
 
@@ -150,28 +147,6 @@ test('Live stream simulation: chunked audio feeding', { timeout: 300000 }, async
 
   try {
     parakeet = new ParakeetInterface(binding, config, outputCallback)
-
-    // Load model weights
-    const modelFiles = [
-      'encoder-model.onnx',
-      'encoder-model.onnx.data',
-      'decoder_joint-model.onnx',
-      'vocab.txt',
-      'preprocessor.onnx'
-    ]
-
-    for (const file of modelFiles) {
-      const filePath = path.join(modelPath, file)
-      if (fs.existsSync(filePath)) {
-        const chunks = []
-        for (const buffer of readFileChunked(filePath)) {
-          chunks.push(buffer)
-        }
-        const fullBuffer = Buffer.concat(chunks)
-        const chunk = new Uint8Array(fullBuffer.buffer, fullBuffer.byteOffset, fullBuffer.byteLength)
-        await parakeet.loadWeights({ filename: file, chunk, completed: true })
-      }
-    }
 
     await parakeet.activate()
     console.log('Model activated, starting live stream simulation...\n')
@@ -236,7 +211,7 @@ test('Live stream simulation: chunked audio feeding', { timeout: 300000 }, async
   } finally {
     if (parakeet) {
       try {
-        parakeet.destroyInstance()
+        await parakeet.destroyInstance()
       } catch (e) {
         // Ignore
       }
@@ -286,7 +261,8 @@ test('Rapid chunk feeding: stress test with no delay', { timeout: 300000 }, asyn
     maxThreads: 4,
     useGPU: false,
     sampleRate: 16000,
-    channels: 1
+    channels: 1,
+    ...getNamedPathsConfig('tdt', modelPath)
   }
 
   // Track results
@@ -301,10 +277,10 @@ test('Rapid chunk feeding: stress test with no delay', { timeout: 300000 }, asyn
           segments.push(segment)
         }
       }
-      if (segments.length > 0 && outputResolve) {
-        outputResolve()
-        outputResolve = null
-      }
+    }
+    if ((event === 'JobEnded' || event === 'Error') && outputResolve) {
+      outputResolve()
+      outputResolve = null
     }
   }
 
@@ -312,28 +288,6 @@ test('Rapid chunk feeding: stress test with no delay', { timeout: 300000 }, asyn
 
   try {
     parakeet = new ParakeetInterface(binding, config, outputCallback)
-
-    // Load model weights
-    const modelFiles = [
-      'encoder-model.onnx',
-      'encoder-model.onnx.data',
-      'decoder_joint-model.onnx',
-      'vocab.txt',
-      'preprocessor.onnx'
-    ]
-
-    for (const file of modelFiles) {
-      const filePath = path.join(modelPath, file)
-      if (fs.existsSync(filePath)) {
-        const chunks = []
-        for (const buffer of readFileChunked(filePath)) {
-          chunks.push(buffer)
-        }
-        const fullBuffer = Buffer.concat(chunks)
-        const chunk = new Uint8Array(fullBuffer.buffer, fullBuffer.byteOffset, fullBuffer.byteLength)
-        await parakeet.loadWeights({ filename: file, chunk, completed: true })
-      }
-    }
 
     await parakeet.activate()
 
@@ -376,7 +330,7 @@ test('Rapid chunk feeding: stress test with no delay', { timeout: 300000 }, asyn
   } finally {
     if (parakeet) {
       try {
-        parakeet.destroyInstance()
+        await parakeet.destroyInstance()
       } catch (e) {
         // Ignore
       }
@@ -437,10 +391,10 @@ test('Variable chunk sizes: small to large chunks', { timeout: 300000 }, async (
             segments.push(segment)
           }
         }
-        if (segments.length > 0 && outputResolve) {
-          outputResolve()
-          outputResolve = null
-        }
+      }
+      if ((event === 'JobEnded' || event === 'Error') && outputResolve) {
+        outputResolve()
+        outputResolve = null
       }
     }
 
@@ -450,35 +404,14 @@ test('Variable chunk sizes: small to large chunks', { timeout: 300000 }, async (
       maxThreads: 4,
       useGPU: false,
       sampleRate: 16000,
-      channels: 1
+      channels: 1,
+      ...getNamedPathsConfig('tdt', modelPath)
     }
 
     let parakeet = null
 
     try {
       parakeet = new ParakeetInterface(binding, config, outputCallback)
-
-      // Load model weights
-      const modelFiles = [
-        'encoder-model.onnx',
-        'encoder-model.onnx.data',
-        'decoder_joint-model.onnx',
-        'vocab.txt',
-        'preprocessor.onnx'
-      ]
-
-      for (const file of modelFiles) {
-        const filePath = path.join(modelPath, file)
-        if (fs.existsSync(filePath)) {
-          const chunks = []
-          for (const buffer of readFileChunked(filePath)) {
-            chunks.push(buffer)
-          }
-          const fullBuffer = Buffer.concat(chunks)
-          const chunk = new Uint8Array(fullBuffer.buffer, fullBuffer.byteOffset, fullBuffer.byteLength)
-          await parakeet.loadWeights({ filename: file, chunk, completed: true })
-        }
-      }
 
       await parakeet.activate()
 
@@ -506,7 +439,7 @@ test('Variable chunk sizes: small to large chunks', { timeout: 300000 }, async (
     } finally {
       if (parakeet) {
         try {
-          parakeet.destroyInstance()
+          await parakeet.destroyInstance()
         } catch (e) {
           // Ignore
         }

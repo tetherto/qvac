@@ -1,9 +1,7 @@
 #include <filesystem>
 #include <memory>
 #include <string>
-#include <type_traits>
 #include <unordered_map>
-#include <variant>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -15,38 +13,12 @@
 #include "model-interface/MtmdLlmContext.hpp"
 #include "model-interface/TextLlmContext.hpp"
 #include "test_common.hpp"
+#include "test_prompt_helpers.hpp"
 
 namespace fs = std::filesystem;
 
-namespace {
-double getStatValue(
-    const qvac_lib_inference_addon_cpp::RuntimeStats& stats,
-    const std::string& key) {
-  for (const auto& stat : stats) {
-    if (stat.first == key) {
-      return std::visit(
-          [](const auto& value) -> double {
-            if constexpr (std::is_same_v<
-                              std::decay_t<decltype(value)>,
-                              double>) {
-              return value;
-            } else {
-              return static_cast<double>(value);
-            }
-          },
-          stat.second);
-    }
-  }
-  return 0.0;
-}
-
-std::string processPromptString(
-    const std::unique_ptr<LlamaModel>& model, const std::string& input) {
-  LlamaModel::Prompt prompt;
-  prompt.input = input;
-  return model->processPrompt(prompt);
-}
-} // namespace
+using test_common::getStatValue;
+using test_common::processPromptString;
 
 class LlmContextBaseTest : public ::testing::Test {
 protected:
@@ -56,57 +28,20 @@ protected:
     config_files["gpu_layers"] = test_common::getTestGpuLayers();
     config_files["n_predict"] = "10";
 
-    fs::path basePath;
-    if (fs::exists(fs::path{"../../../models/unit-test"})) {
-      basePath = fs::path{"../../../models/unit-test"};
-    } else {
-      basePath = fs::path{"models/unit-test"};
-    }
-
-    fs::path modelPath = basePath / "Llama-3.2-1B-Instruct-Q4_0.gguf";
-    if (fs::exists(modelPath)) {
-      test_model_path = modelPath.string();
-    } else {
-      modelPath = basePath / "test_model.gguf";
-      if (fs::exists(modelPath)) {
-        test_model_path = modelPath.string();
-      } else {
-        test_model_path = "Llama-3.2-1B-Instruct-Q4_0.gguf";
-      }
-    }
+    test_model_path = test_common::BaseTestModelPath::get();
     test_projection_path = "";
 
-    fs::path backendDir;
-#ifdef TEST_BINARY_DIR
-    backendDir = fs::path(TEST_BINARY_DIR);
-#else
-    backendDir = fs::current_path() / "build" / "test" / "unit";
-#endif
-
-    config_files["backendsDir"] = backendDir.string();
+    config_files["backendsDir"] = test_common::getTestBackendsDir().string();
   }
 
   bool hasValidModel() { return fs::exists(test_model_path); }
 
   bool hasValidMultimodalModel() {
-    fs::path basePath;
-    if (fs::exists(fs::path{"../../../models/unit-test"})) {
-      basePath = fs::path{"../../../models/unit-test"};
-    } else {
-      basePath = fs::path{"models/unit-test"};
-    }
-
-    fs::path modelPath = basePath / "SmolVLM-500M-Instruct-Q8_0.gguf";
-    if (!fs::exists(modelPath)) {
-      modelPath = basePath / "SmolVLM-500M-Instruct.gguf";
-    }
-
-    fs::path projectionPath =
-        basePath / "mmproj-SmolVLM-500M-Instruct-Q8_0.gguf";
-    if (!fs::exists(projectionPath)) {
-      projectionPath = basePath / "mmproj-SmolVLM-500M-Instruct.gguf";
-    }
-
+    std::string modelPath = test_common::BaseTestModelPath::get(
+        "SmolVLM-500M-Instruct-Q8_0.gguf", "SmolVLM-500M-Instruct.gguf");
+    std::string projectionPath = test_common::BaseTestModelPath::get(
+        "mmproj-SmolVLM-500M-Instruct-Q8_0.gguf",
+        "mmproj-SmolVLM-500M-Instruct.gguf");
     return fs::exists(modelPath) && fs::exists(projectionPath);
   }
 
@@ -133,26 +68,11 @@ protected:
       return nullptr;
     }
 
-    fs::path basePath;
-    if (fs::exists(fs::path{"../../../models/unit-test"})) {
-      basePath = fs::path{"../../../models/unit-test"};
-    } else {
-      basePath = fs::path{"models/unit-test"};
-    }
-
-    fs::path modelPath = basePath / "SmolVLM-500M-Instruct-Q8_0.gguf";
-    if (!fs::exists(modelPath)) {
-      modelPath = basePath / "SmolVLM-500M-Instruct.gguf";
-    }
-
-    fs::path projectionPath =
-        basePath / "mmproj-SmolVLM-500M-Instruct-Q8_0.gguf";
-    if (!fs::exists(projectionPath)) {
-      projectionPath = basePath / "mmproj-SmolVLM-500M-Instruct.gguf";
-    }
-
-    std::string modelPathStr = modelPath.string();
-    std::string projectionPathStr = projectionPath.string();
+    std::string modelPathStr = test_common::BaseTestModelPath::get(
+        "SmolVLM-500M-Instruct-Q8_0.gguf", "SmolVLM-500M-Instruct.gguf");
+    std::string projectionPathStr = test_common::BaseTestModelPath::get(
+        "mmproj-SmolVLM-500M-Instruct-Q8_0.gguf",
+        "mmproj-SmolVLM-500M-Instruct.gguf");
     auto configCopy = config_files;
     auto model = std::make_unique<LlamaModel>(
         std::move(modelPathStr),

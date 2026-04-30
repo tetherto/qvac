@@ -1,59 +1,90 @@
-#include "qvac-lib-inference-addon-cpp/ModelApiTest.hpp"
+#include <algorithm>
+
 #include "mocks/ChatterboxEngineMock.hpp"
 #include "src/model-interface/TTSModel.hpp"
 
 using namespace qvac::ttslib::addon_model;
 using namespace qvac::ttslib::chatterbox::testing;
 
-namespace qvac_model_api_tests {
+namespace {
 
-static std::shared_ptr<ChatterboxEngineMock> g_validMock;
-static std::shared_ptr<ChatterboxEngineMock> g_invalidMock;
-
-TTSModel make_valid_model() {
-  g_validMock = std::make_shared<ChatterboxEngineMock>();
-
-  EXPECT_CALL(*g_validMock, load(::testing::_)).Times(::testing::AnyNumber());
-  EXPECT_CALL(*g_validMock, unload()).Times(::testing::AnyNumber());
-  EXPECT_CALL(*g_validMock, isLoaded())
-      .WillRepeatedly(::testing::Return(true));
-
-  qvac::ttslib::AudioResult mockResult;
-  mockResult.pcm16 = {1, 2, 3, 4, 5};
-  mockResult.sampleRate = 24000;
-  mockResult.channels = 1;
-  mockResult.samples = 5;
-  mockResult.durationMs = 100.0;
-
-  EXPECT_CALL(*g_validMock, synthesize(::testing::_))
-      .Times(::testing::AnyNumber())
-      .WillRepeatedly(::testing::Return(mockResult));
-
-  const std::unordered_map<std::string, std::string> config{
-      {"language", "en"},
-      {"tokenizerPath", "dummy"},
-      {"speechEncoderPath", "dummy"},
-      {"embedTokensPath", "dummy"},
-      {"conditionalDecoderPath", "dummy"},
-      {"languageModelPath", "dummy"}};
-
-  std::vector<float> referenceAudio = {0.1f, 0.2f, 0.3f, 0.4f, 0.5f};
-
-  TTSModel model(config, referenceAudio, g_validMock);
-  g_validMock.reset(); // TTSModel now owns the mock; avoid leak at exit so mock is verified
-  return model;
+std::unordered_map<std::string, std::string> makeConfig() {
+  return {{"language", "en"},
+          {"tokenizerPath", "dummy"},
+          {"speechEncoderPath", "dummy"},
+          {"embedTokensPath", "dummy"},
+          {"conditionalDecoderPath", "dummy"},
+          {"languageModelPath", "dummy"}};
 }
 
-TTSModel make_invalid_model() {
-  const std::unordered_map<std::string, std::string> invalidConfig{};
-
-  return TTSModel(invalidConfig);
+qvac::ttslib::AudioResult makeAudioResult() {
+  qvac::ttslib::AudioResult result;
+  result.pcm16 = {1, 2, 3, 4, 5};
+  result.sampleRate = 24000;
+  result.channels = 1;
+  result.samples = 5;
+  result.durationMs = 100.0;
+  return result;
 }
 
-typename TTSModel::Input make_valid_input() { return "Hello, world!"; }
+TEST(TTSModelIModelTest, ProcessAnyInputAndGetName) {
+  auto mock = std::make_shared<ChatterboxEngineMock>();
+  EXPECT_CALL(*mock, load(::testing::_)).Times(1);
+  EXPECT_CALL(*mock, isLoaded()).WillRepeatedly(::testing::Return(true));
+  EXPECT_CALL(*mock, synthesize(::testing::_))
+      .Times(1)
+      .WillOnce(::testing::Return(makeAudioResult()));
 
-typename TTSModel::Input make_empty_input() { return ""; }
+  TTSModel model(makeConfig(), {0.1f, 0.2f, 0.3f}, mock);
+  EXPECT_EQ(model.getName(), "TTSModel");
 
-MODEL_API_INSTANTIATE_TESTS(TTSModel);
+  std::any output = model.process(std::any(TTSModel::AnyInput{
+      .text = "Hello world!", .config = {{"language", "en"}}}));
+  ASSERT_TRUE(output.has_value());
+  ASSERT_EQ(output.type(), typeid(TTSModel::Output));
+  EXPECT_EQ(std::any_cast<TTSModel::Output>(output).size(), 5);
+}
 
-} // namespace qvac_model_api_tests
+TEST(TTSModelIModelTest, InvalidAnyInputThrows) {
+  auto mock = std::make_shared<ChatterboxEngineMock>();
+  EXPECT_CALL(*mock, load(::testing::_)).Times(1);
+  EXPECT_CALL(*mock, isLoaded()).WillRepeatedly(::testing::Return(true));
+
+  TTSModel model(makeConfig(), {0.1f, 0.2f}, mock);
+  EXPECT_THROW(model.process(std::any(1234)), std::exception);
+}
+
+TEST(TTSModelIModelTest, CancelBeforeProcessThrows) {
+  auto mock = std::make_shared<ChatterboxEngineMock>();
+  EXPECT_CALL(*mock, load(::testing::_)).Times(1);
+  EXPECT_CALL(*mock, isLoaded()).WillRepeatedly(::testing::Return(true));
+  EXPECT_CALL(*mock, synthesize(::testing::_)).Times(0);
+
+  TTSModel model(makeConfig(), {0.1f, 0.2f}, mock);
+  model.cancel();
+  EXPECT_THROW(
+      model.process(std::any(TTSModel::AnyInput{.text = "Hello", .config = {}})),
+      std::runtime_error);
+}
+
+TEST(TTSModelIModelTest, RuntimeStatsHasExpectedMetrics) {
+  auto mock = std::make_shared<ChatterboxEngineMock>();
+  EXPECT_CALL(*mock, load(::testing::_)).Times(1);
+  EXPECT_CALL(*mock, isLoaded()).WillRepeatedly(::testing::Return(true));
+  EXPECT_CALL(*mock, synthesize(::testing::_))
+      .Times(1)
+      .WillOnce(::testing::Return(makeAudioResult()));
+
+  TTSModel model(makeConfig(), {0.1f, 0.2f, 0.3f}, mock);
+  (void)model.process(TTSModel::Input{"stats sample"});
+
+  auto stats = model.runtimeStats();
+  EXPECT_FALSE(stats.empty());
+  EXPECT_TRUE(std::any_of(
+      stats.begin(), stats.end(),
+      [](const auto &entry) { return entry.first == "totalTime"; }));
+  EXPECT_TRUE(std::any_of(
+      stats.begin(), stats.end(),
+      [](const auto &entry) { return entry.first == "totalSamples"; }));
+}
+} // namespace

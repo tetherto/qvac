@@ -8,7 +8,7 @@ package-lock.json
 .npmrc
 model/
 
-# Unit test models (download from S3)
+# Unit test models
 models/unit-test/*.bin
 
 .cache

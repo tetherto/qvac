@@ -53,21 +53,6 @@ const langs = langDetect.detectMultiple(text, 3);
 
 1. Install dependencies:
 
- Before proceeding with the installation, please generate a **granular Personal Access Token (PAT)** with the `read-only` scope. Once generated, add the token to your environment variables using the name `NPM_TOKEN`.
-
-  ```bash
-  export NPM_TOKEN=your_personal_access_token
-  ```
-
- Next, create a `.npmrc` file in the root of your project with the following content:
-
-  ```ini
-  @qvac:registry=https://registry.npmjs.org/
-  //registry.npmjs.org/:_authToken={NPM_TOKEN}
-  ```
-
- This configuration ensures secure access to NPM Packages when installing scoped packages.
-
 ```bash
 npm install
 ```

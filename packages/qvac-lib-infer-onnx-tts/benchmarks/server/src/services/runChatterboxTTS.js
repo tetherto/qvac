@@ -96,10 +96,11 @@ async function runChatterboxTTS (payload) {
 
   logger.info(`[Chatterbox] Processing ${texts.length} texts`)
 
-  // Resolve paths relative to benchmarks directory if not absolute
   let modelDir = config.modelDir || DEFAULT_MODEL_DIR
-  if (!path.isAbsolute(modelDir)) {
-    modelDir = path.join(BENCHMARKS_DIR, modelDir)
+  modelDir = path.isAbsolute(modelDir) ? modelDir : path.join(BENCHMARKS_DIR, modelDir)
+  modelDir = path.resolve(modelDir)
+  if (!modelDir.startsWith(BENCHMARKS_DIR) && !modelDir.startsWith(SHARED_DATA_DIR)) {
+    throw new Error('modelDir must be within the benchmarks or shared-data directory')
   }
 
   const tokenizerPath = path.join(modelDir, 'tokenizer.json')
@@ -135,22 +136,25 @@ async function runChatterboxTTS (payload) {
       logger.warn(`[Chatterbox] Reference audio not found, using synthetic audio (${referenceAudio.length} samples)`)
     }
 
-    const args = {
-      tokenizerPath,
-      speechEncoderPath,
-      embedTokensPath,
-      conditionalDecoderPath,
-      languageModelPath,
-      referenceAudio,
-      opts: { stats: true }
-    }
-
     const modelConfig = {
       language: 'en', // Chatterbox only supports English
       useGPU: config.useGPU !== undefined ? config.useGPU : false
     }
 
-    cachedModel = new ONNXTTS(args, modelConfig)
+    cachedModel = new ONNXTTS({
+      files: {
+        modelDir,
+        tokenizer: tokenizerPath,
+        speechEncoder: speechEncoderPath,
+        embedTokens: embedTokensPath,
+        conditionalDecoder: conditionalDecoderPath,
+        languageModel: languageModelPath
+      },
+      engine: 'chatterbox',
+      referenceAudio,
+      config: modelConfig,
+      opts: { stats: true }
+    })
     await cachedModel.load()
 
     const [loadSec, loadNano] = process.hrtime(loadStart)

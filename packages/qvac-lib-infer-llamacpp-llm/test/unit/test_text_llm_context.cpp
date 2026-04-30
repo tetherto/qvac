@@ -2,42 +2,18 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
-#include <type_traits>
 #include <unordered_map>
-#include <variant>
 #include <vector>
 
 #include <gtest/gtest.h>
 #include <qvac-lib-inference-addon-cpp/Errors.hpp>
-#include <qvac-lib-inference-addon-cpp/RuntimeStats.hpp>
 
 #include "common/chat.h"
 #include "model-interface/LlamaModel.hpp"
 #include "model-interface/TextLlmContext.hpp"
 #include "test_common.hpp"
 
-namespace {
-double getStatValue(
-    const qvac_lib_inference_addon_cpp::RuntimeStats& stats,
-    const std::string& key) {
-  for (const auto& stat : stats) {
-    if (stat.first == key) {
-      return std::visit(
-          [](const auto& value) -> double {
-            if constexpr (std::is_same_v<
-                              std::decay_t<decltype(value)>,
-                              double>) {
-              return value;
-            } else {
-              return static_cast<double>(value);
-            }
-          },
-          stat.second);
-    }
-  }
-  return 0.0;
-}
-} // namespace
+using test_common::getStatValue;
 
 namespace fs = std::filesystem;
 
@@ -49,34 +25,10 @@ protected:
     config_files["gpu_layers"] = test_common::getTestGpuLayers();
     config_files["n_predict"] = "10";
 
-    fs::path basePath;
-    if (fs::exists(fs::path{"../../../models/unit-test"})) {
-      basePath = fs::path{"../../../models/unit-test"};
-    } else {
-      basePath = fs::path{"models/unit-test"};
-    }
-
-    fs::path modelPath = basePath / "Llama-3.2-1B-Instruct-Q4_0.gguf";
-    if (fs::exists(modelPath)) {
-      test_model_path = modelPath.string();
-    } else {
-      modelPath = basePath / "test_model.gguf";
-      if (fs::exists(modelPath)) {
-        test_model_path = modelPath.string();
-      } else {
-        test_model_path = "Llama-3.2-1B-Instruct-Q4_0.gguf";
-      }
-    }
+    test_model_path = test_common::BaseTestModelPath::get();
     test_projection_path = "";
 
-    fs::path backendDir;
-#ifdef TEST_BINARY_DIR
-    backendDir = fs::path(TEST_BINARY_DIR);
-#else
-    backendDir = fs::current_path() / "build" / "test" / "unit";
-#endif
-
-    config_files["backendsDir"] = backendDir.string();
+    config_files["backendsDir"] = test_common::getTestBackendsDir().string();
   }
 
   std::unordered_map<std::string, std::string> config_files;
@@ -394,4 +346,125 @@ TEST_F(TextLlmContextTest, ProcessWithMultipleTools) {
     auto stats = model->runtimeStats();
     EXPECT_GE(stats.size(), 0);
   });
+}
+
+TEST_F(TextLlmContextTest, DoubleTokenizeWithoutToolsCompact) {
+  if (!hasValidModel()) {
+    FAIL() << "Test model not found";
+  }
+
+  config_files["tools_compact"] = "false";
+  config_files["tools"] = "true";
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([
+    {"role": "user", "content": "What is the weather in Tokyo?"},
+    {
+      "type": "function",
+      "name": "getWeather",
+      "description": "Get weather forecast for a city",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {"type": "string", "description": "City name"},
+          "date": {"type": "string", "description": "Date in YYYY-MM-DD"}
+        },
+        "required": ["city", "date"]
+      }
+    }
+  ])";
+
+  EXPECT_NO_THROW({ std::string output = model->processPrompt(prompt); });
+
+  auto stats = model->runtimeStats();
+  int cacheTokens = static_cast<int>(getStatValue(stats, "CacheTokens"));
+  int promptTokens = static_cast<int>(getStatValue(stats, "promptTokens"));
+  EXPECT_EQ(cacheTokens, 0);
+  // prompt tokens with tools
+  EXPECT_GT(promptTokens, 200);
+}
+
+TEST_F(TextLlmContextTest, DoubleTokenizeWithToolsCompactNoTools) {
+  if (!hasValidModel()) {
+    FAIL() << "Test model not found";
+  }
+
+  config_files["tools_compact"] = "true";
+  config_files["tools"] = "true";
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([{"role": "user", "content": "Hello, how are you?"}])";
+
+  EXPECT_NO_THROW({ std::string output = model->processPrompt(prompt); });
+
+  // Without tools, CacheTokens should equal promptTokens (no cached
+  // conversation tokens)
+  auto stats = model->runtimeStats();
+  int promptTokens = static_cast<int>(getStatValue(stats, "promptTokens"));
+  EXPECT_LT(promptTokens, 50);
+}
+
+TEST_F(TextLlmContextTest, NPastBeforeToolsMinusOneWithoutTools) {
+  if (!hasValidModel()) {
+    FAIL() << "Test model not found";
+  }
+
+  config_files["tools_compact"] = "true";
+  config_files["tools"] = "true";
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([{"role": "user", "content": "Hello, how are you?"}])";
+
+  EXPECT_NO_THROW({ std::string output = model->processPrompt(prompt); });
+
+  llama_pos nPastBeforeTools = model->getNPastBeforeTools();
+  EXPECT_EQ(nPastBeforeTools, -1);
+}
+
+TEST_F(TextLlmContextTest, NPastBeforeToolsMinusOneWhenToolsCompactFalse) {
+  if (!hasValidModel()) {
+    FAIL() << "Test model not found";
+  }
+
+  config_files["tools_compact"] = "false";
+  config_files["tools"] = "true";
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([
+    {"role": "user", "content": "What is the weather in Tokyo?"},
+    {
+      "type": "function",
+      "name": "getWeather",
+      "description": "Get weather forecast for a city",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {"type": "string", "description": "City name"},
+          "date": {"type": "string", "description": "Date in YYYY-MM-DD"}
+        },
+        "required": ["city", "date"]
+      }
+    }
+  ])";
+
+  EXPECT_NO_THROW({ std::string output = model->processPrompt(prompt); });
+
+  llama_pos nPastBeforeTools = model->getNPastBeforeTools();
+  EXPECT_EQ(nPastBeforeTools, -1);
 }

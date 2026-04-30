@@ -14,7 +14,7 @@
 
 namespace qvac_lib_inference_addon_nmt::test {
 
-using qvac_lib_inference_addon_marian::TranslationModel;
+using qvac_lib_inference_addon_nmt::TranslationModel;
 
 std::string getValidModelPath();
 

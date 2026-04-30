@@ -4,20 +4,26 @@
  * IndicTrans Example
  *
  * This example demonstrates translation using the IndicTrans2 model
- * for English to Hindi translation (eng_Latn → hin_Deva).
+ * for English to Hindi translation (eng_Latn -> hin_Deva).
  *
- * The model is downloaded via HyperdriveDL from the distributed network.
+ * The model file is downloaded automatically from the QVAC registry if not found locally.
  *
  * Usage:
  *   bare examples/indictrans.js
+ *   INDICTRANS_MODEL_PATH=/path/to/model.bin bare examples/indictrans.js
  *
  * Enable verbose C++ logging:
  *   VERBOSE=1 bare examples/indictrans.js
  */
 
-const HyperdriveDL = require('@qvac/dl-hyperdrive')
 const TranslationNmtcpp = require('../index')
+const path = require('bare-path')
 const process = require('bare-process')
+
+const {
+  ensureIndicTransModelFile,
+  getIndicTransFileName
+} = require('../lib/indictrans-model-fetcher')
 
 // ============================================================
 // LOGGING CONFIGURATION
@@ -37,20 +43,19 @@ const logger = VERBOSE
 const text = 'How are you'
 
 async function main () {
-  const hdDL = new HyperdriveDL({
-    // The hyperdrive key for en-hi translation model weights and config
-    key: 'hd://268c2e9b2a3420632e4b6649e32822f42d5dfbda4c7e96daec5b629ed20f99f7'
-  })
+  // Use local model path if provided, otherwise auto-download from QVAC registry
+  const defaultModelPath = path.join('./model/indictrans', getIndicTransFileName())
+  const modelPath = process.env.INDICTRANS_MODEL_PATH || defaultModelPath
 
-  const args = {
-    loader: hdDL,
+  // Ensure model file is present (downloads from QVAC registry if not)
+  await ensureIndicTransModelFile(modelPath)
+
+  const model = new TranslationNmtcpp({
+    files: { model: modelPath },
     params: { mode: 'full', srcLang: 'eng_Latn', dstLang: 'hin_Deva' },
-    diskPath: './models',
-    modelName: 'ggml-indictrans2-en-indic-dist-200M.bin',
-    logger // Pass logger to enable/disable C++ logs
-  }
-
-  const model = new TranslationNmtcpp(args, { modelType: TranslationNmtcpp.ModelTypes.IndicTrans })
+    config: { modelType: TranslationNmtcpp.ModelTypes.IndicTrans },
+    logger
+  })
 
   await model.load()
 

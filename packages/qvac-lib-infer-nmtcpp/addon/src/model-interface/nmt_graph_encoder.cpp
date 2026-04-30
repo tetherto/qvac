@@ -44,56 +44,37 @@ nmt_build_graph_encoder(nmt_context& ctx, nmt_state& state) {
   ggml_set_input(indices);
 
   cur = ggml_get_rows(ctx0, ctx.model.m_encoder_embeddings, indices);
-  if (model.type == MODEL_INDICTRANS) {
-    if (hparams.scale_embedding) {
-      cur = ggml_scale(ctx0, cur, embed_scaling);
-    }
-
-    if (hparams.layernorm_embedding) {
-      cur = ggml_norm(ctx0, cur, hparams.eps);
-      cur = ggml_add(
-          ctx0,
-          ggml_mul(ctx0, cur, model.m_enc_layer_norm_w),
-          model.m_enc_layer_norm_b);
-    }
-  } else {
+  if (hparams.scale_embedding) {
     cur = ggml_scale(ctx0, cur, embed_scaling);
+  }
+
+  if (hparams.layernorm_embedding) {
+    cur = ggml_norm(ctx0, cur, hparams.eps);
+    cur = ggml_add(
+        ctx0,
+        ggml_mul(ctx0, cur, model.m_enc_layer_norm_w),
+        model.m_enc_layer_norm_b);
   }
 
   const float KQscale = 1.0F / sqrtf(float(n_state_head));
 
-  static int iter = 0;
-  if (modelIsMarian(model.type)) {
+  if (model.m_encoder_pos_emb) {
+    // IndicTrans2 positions start at padding_idx + 1 = 2, not 0!
+    const int padding_idx = 1;
+    const int first_token_pos = padding_idx + 1;
     const size_t e_pe_stride = model.m_encoder_pos_emb->ne[0] *
                                ggml_element_size(model.m_encoder_pos_emb);
+    const size_t e_pe_offset = first_token_pos * e_pe_stride;
+
     struct ggml_tensor* encoder_pos_emb = ggml_view_2d(
         ctx0,
         model.m_encoder_pos_emb,
         model.m_encoder_pos_emb->ne[0],
         state.tokens_to_process,
         e_pe_stride,
-        0);
+        e_pe_offset);
     ggml_tensor* temp = ggml_cont(ctx0, encoder_pos_emb);
     cur = ggml_add(ctx0, cur, temp);
-  } else if (model.type == MODEL_INDICTRANS) {
-    if (model.m_encoder_pos_emb) {
-      // IndicTrans2 positions start at padding_idx + 1 = 2, not 0!
-      const int padding_idx = 1;
-      const int first_token_pos = padding_idx + 1;
-      const size_t e_pe_stride = model.m_encoder_pos_emb->ne[0] *
-                                 ggml_element_size(model.m_encoder_pos_emb);
-      const size_t e_pe_offset = first_token_pos * e_pe_stride;
-
-      struct ggml_tensor* encoder_pos_emb = ggml_view_2d(
-          ctx0,
-          model.m_encoder_pos_emb,
-          model.m_encoder_pos_emb->ne[0],
-          state.tokens_to_process,
-          e_pe_stride,
-          e_pe_offset);
-      ggml_tensor* temp = ggml_cont(ctx0, encoder_pos_emb);
-      cur = ggml_add(ctx0, cur, temp);
-    }
   }
 
   struct ggml_tensor* inpL = cur;
@@ -102,14 +83,12 @@ nmt_build_graph_encoder(nmt_context& ctx, nmt_state& state) {
     const auto& layer = model.layers_encoder[il];
 
     struct ggml_tensor* attn_residual = inpL;
-    if (model.type == MODEL_INDICTRANS) {
-      if (hparams.encoder_normalize_before) {
-        cur = ggml_norm(ctx0, inpL, hparams.eps);
-        cur = ggml_add(
-            ctx0, ggml_mul(ctx0, cur, layer.attn_ln_0_w), layer.attn_ln_0_b);
-      } else {
-        cur = inpL;
-      }
+    if (hparams.encoder_normalize_before) {
+      cur = ggml_norm(ctx0, inpL, hparams.eps);
+      cur = ggml_add(
+          ctx0, ggml_mul(ctx0, cur, layer.attn_ln_0_w), layer.attn_ln_0_b);
+    } else {
+      cur = inpL;
     }
 
     // self-attention
@@ -117,9 +96,7 @@ nmt_build_graph_encoder(nmt_context& ctx, nmt_state& state) {
       struct ggml_tensor* Qcur = ggml_mul_mat(ctx0, layer.attn_q_w, cur);
       Qcur = ggml_add(ctx0, Qcur, layer.attn_q_b);
 
-      if (model.type == MODEL_INDICTRANS) {
-        Qcur = ggml_scale(ctx0, Qcur, KQscale);
-      }
+      Qcur = ggml_scale(ctx0, Qcur, KQscale);
 
       struct ggml_tensor* Kcur = ggml_mul_mat(ctx0, layer.attn_k_w, cur);
       Kcur = ggml_add(ctx0, Kcur, layer.attn_k_b);
@@ -154,12 +131,8 @@ nmt_build_graph_encoder(nmt_context& ctx, nmt_state& state) {
         // K * Q
         struct ggml_tensor* KQ = ggml_mul_mat(ctx0, K, Q);
 
-        struct ggml_tensor* KQ_soft_max = nullptr;
-        if (model.type == MODEL_INDICTRANS) {
-          KQ_soft_max = ggml_soft_max_ext(ctx0, KQ, nullptr, 1.0F, 0.0F);
-        } else {
-          KQ_soft_max = ggml_soft_max_ext(ctx0, KQ, nullptr, KQscale, 0.0F);
-        }
+        struct ggml_tensor* KQ_soft_max =
+            ggml_soft_max_ext(ctx0, KQ, nullptr, 1.0F, 0.0F);
 
         struct ggml_tensor* V = nullptr;
         V = ggml_cast(
@@ -188,22 +161,17 @@ nmt_build_graph_encoder(nmt_context& ctx, nmt_state& state) {
       cur = ggml_add(ctx0, cur, layer.attn_ln_1_b);
     }
 
-    if (model.type == MODEL_INDICTRANS) {
-      cur = ggml_add(ctx0, cur, attn_residual);
+    cur = ggml_add(ctx0, cur, attn_residual);
 
-      if (!hparams.encoder_normalize_before) {
-        cur = ggml_norm(ctx0, cur, hparams.eps);
-        cur = ggml_add(
-            ctx0, ggml_mul(ctx0, cur, layer.attn_ln_0_w), layer.attn_ln_0_b);
-      }
-    } else {
-      cur = ggml_add(ctx0, cur, inpL);
+    if (!hparams.encoder_normalize_before) {
+      cur = ggml_norm(ctx0, cur, hparams.eps);
+      cur = ggml_add(
+          ctx0, ggml_mul(ctx0, cur, layer.attn_ln_0_w), layer.attn_ln_0_b);
     }
 
     struct ggml_tensor* inpFF = cur;
-    struct ggml_tensor* residual = nullptr;
     // feed-forward network
-    if (model.type == MODEL_INDICTRANS) {
+    {
       struct ggml_tensor* ffn_residual = inpFF;
 
       if (hparams.encoder_normalize_before) {
@@ -226,53 +194,13 @@ nmt_build_graph_encoder(nmt_context& ctx, nmt_state& state) {
         cur =
             ggml_add(ctx0, ggml_mul(ctx0, cur, layer.mlp_ln_w), layer.mlp_ln_b);
       }
-    } else {
-      // norm
-      {
-        cur = ggml_norm(ctx0, inpFF, hparams.eps);
-        cur = ggml_add(
-            ctx0, ggml_mul(ctx0, cur, layer.attn_ln_0_w), layer.attn_ln_0_b);
-        residual = cur;
-      }
-
-      // fully connected
-      cur = ggml_mul_mat(ctx0, layer.mlp_0_w, cur);
-
-      cur = ggml_add(ctx0, cur, layer.mlp_0_b);
-
-      if (model.type == MODEL_MARIAN_V2) {
-        switch (hparams.activation_func) {
-        case activation_function::RELU: {
-          cur = ggml_relu(ctx0, cur);
-          break;
-        }
-        case activation_function::SILU: {
-          cur = ggml_silu(ctx0, cur);
-          break;
-        }
-        }
-      } else {
-        cur = ggml_silu(ctx0, cur);
-      }
-      // projection
-      cur = ggml_mul_mat(ctx0, layer.mlp_1_w, cur);
-
-      cur = ggml_add(ctx0, cur, layer.mlp_1_b);
-
-      // residual connection
-      cur = ggml_add(ctx0, cur, residual);
-
-      // LayerNorm
-      cur = ggml_norm(ctx0, cur, hparams.eps);
-
-      cur = ggml_add(ctx0, ggml_mul(ctx0, cur, layer.mlp_ln_w), layer.mlp_ln_b);
     }
     inpL = cur;
   }
 
   cur = inpL;
 
-  if (model.type == MODEL_INDICTRANS && hparams.encoder_normalize_before) {
+  if (hparams.encoder_normalize_before) {
     cur = ggml_norm(ctx0, cur, hparams.eps);
     cur = ggml_add(
         ctx0,
@@ -380,9 +308,6 @@ struct ggml_cgraph* nmt_build_graph_cross(nmt_context& ctx, nmt_state& state) {
 
 bool nmt_encode_internal(nmt_context& ctx, nmt_state& state) {
   // Done for debug purposes to have a match with python input frame.
-  if (ctx.model.type == MODEL_MARIAN) {
-    state.text_tokens.push_back(0);
-  }
   auto& sched = state.sched_encode.sched;
   ggml_cgraph* gf = nmt_build_graph_encoder(ctx, state);
   if (!ggml_backend_sched_alloc_graph(sched, gf)) {

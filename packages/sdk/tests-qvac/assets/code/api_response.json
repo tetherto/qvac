@@ -1,0 +1,54 @@
+{
+  "status": "success",
+  "message": "User data retrieved successfully",
+  "timestamp": "2024-03-15T10:30:00Z",
+  "data": {
+    "users": [
+      {
+        "id": 1,
+        "username": "john_doe",
+        "email": "john@example.com",
+        "profile": {
+          "firstName": "John",
+          "lastName": "Doe",
+          "avatar": "https://example.com/avatars/john.jpg",
+          "location": "San Francisco, CA",
+          "joinDate": "2023-01-15"
+        },
+        "settings": {
+          "theme": "dark",
+          "notifications": true,
+          "privacy": "public"
+        }
+      },
+      {
+        "id": 2,
+        "username": "jane_smith",
+        "email": "jane@example.com",
+        "profile": {
+          "firstName": "Jane",
+          "lastName": "Smith",
+          "avatar": "https://example.com/avatars/jane.jpg",
+          "location": "New York, NY",
+          "joinDate": "2023-02-20"
+        },
+        "settings": {
+          "theme": "light",
+          "notifications": false,
+          "privacy": "private"
+        }
+      }
+    ],
+    "pagination": {
+      "currentPage": 1,
+      "totalPages": 5,
+      "totalUsers": 47,
+      "itemsPerPage": 10
+    }
+  },
+  "meta": {
+    "version": "1.2.3",
+    "requestId": "req_abc123def456",
+    "executionTime": "0.045s"
+  }
+}

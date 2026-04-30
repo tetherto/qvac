@@ -3,6 +3,7 @@
 
 const { command, flag, arg, summary, header, footer, description } = require('paparam')
 const { QVACRegistryClient } = require('../index')
+const { profileDownload } = require('../lib/profiler')
 const IdEnc = require('hypercore-id-encoding')
 const path = require('#path')
 
@@ -191,6 +192,44 @@ const downloadCmd = command('download',
   }
 )
 
+const profileCmd = command('profile',
+  summary('Profile download performance for a model'),
+  description('Downloads a model to a temp directory while collecting UDX network stats, connection info, and hypercore metrics. Similar to hyperdrive-profiler but for registry blobs.'),
+  arg('<path>', 'Model path'),
+  arg('[source]', 'Model source filter (e.g. hf, s3)'),
+  flag('--interval|-i [seconds]', 'Stats print interval in seconds (default: 5)'),
+  flag('--timeout|-t [ms]', 'Stream read timeout in ms (default: 120000)'),
+  async function (cmd) {
+    const rootFlags = getRootFlags(cmd)
+    const registryCoreKey = rootFlags.key || process.env.QVAC_REGISTRY_CORE_KEY
+
+    if (!registryCoreKey) {
+      console.error('Registry core key is required. Set QVAC_REGISTRY_CORE_KEY or use --key.')
+      process.exit(1)
+    }
+
+    const interval = cmd.flags.interval ? parseInt(cmd.flags.interval, 10) : 5
+    const timeout = cmd.flags.timeout ? parseInt(cmd.flags.timeout, 10) : 120000
+
+    if (Number.isNaN(interval) || interval <= 0) {
+      console.error('--interval must be a positive number')
+      process.exit(1)
+    }
+    if (Number.isNaN(timeout) || timeout <= 0) {
+      console.error('--timeout must be a positive number')
+      process.exit(1)
+    }
+
+    await profileDownload({
+      registryCoreKey,
+      modelPath: cmd.args.path,
+      source: cmd.args.source || undefined,
+      intervalSec: interval,
+      timeout
+    })
+  }
+)
+
 // --- Root command ---
 
 const cmd = command('qvac-registry',
@@ -202,7 +241,8 @@ const cmd = command('qvac-registry',
   flag('--verbose|-v', 'Enable verbose/debug logging'),
   listCmd,
   getCmd,
-  downloadCmd
+  downloadCmd,
+  profileCmd
 )
 
 cmd.parse()

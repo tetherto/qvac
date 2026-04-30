@@ -1,0 +1,13 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["../../packages/sdk/index.ts"],
+  "entryPointStrategy": "expand",
+  "out": ".typedoc-temp",
+  "readme": "none",
+  "excludePrivate": true,
+  "excludeProtected": true,
+  "excludeExternals": true,
+  "skipErrorChecking": true,
+  "plugin": [],
+  "tsconfig": "../../packages/sdk/tsconfig.json"
+}

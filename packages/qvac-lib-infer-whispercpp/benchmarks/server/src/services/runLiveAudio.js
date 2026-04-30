@@ -8,31 +8,6 @@ const path = require('bare-path')
 
 const loadedModels = new Map()
 
-class FakeLoader {
-  async start () {}
-  async stop () {}
-  async ready () {
-    return true
-  }
-
-  async getStream () {
-    throw new Error('FakeLoader.getStream should not be called when using diskPath')
-  }
-
-  async download (filepath, destPath) {
-    return {
-      await: async () => ({
-        success: false,
-        message: 'FakeLoader does not support downloading. Model files must exist on disk at the specified path.'
-      })
-    }
-  }
-
-  async list () {
-    return []
-  }
-}
-
 const runLiveAudio = async (payload) => {
   const { audio, config } = payload
 
@@ -69,14 +44,15 @@ const runLiveAudio = async (payload) => {
 
     const TranscriptionWhispercpp = require('@qvac/transcription-whispercpp')
 
+    const resolvedModelPath = path.resolve(modelPath)
     const constructorArgs = {
-      loader: new FakeLoader(),
-      modelName: path.basename(modelPath),
-      diskPath: path.dirname(modelPath)
+      files: {
+        model: resolvedModelPath
+      }
     }
 
     if (vadModelPath) {
-      constructorArgs.vadModelName = path.basename(vadModelPath)
+      constructorArgs.files.vadModel = path.resolve(vadModelPath)
     }
 
     const modelConfig = {

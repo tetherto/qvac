@@ -1,0 +1,313 @@
+---
+title: "@qvac/diffusion-cpp"
+titleStyle: code
+description: Text-to-image generation from text prompts.
+---
+
+## Overview
+
+[Bare module](https://bare.pears.com) that adds support for text-to-image generation in QVAC using [`qvac-ext-stable-diffusion.cpp`](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp) as the inference engine. 
+
+## Models
+
+Supports SD1.x, SD2.x, SDXL, SD3, and FLUX.2-klein model families.
+
+### FLUX.2-klein
+
+Three separate components are required:
+- **Diffusion model** (`flux-2-klein-4b-Q8_0.gguf`) — the main image transformer.
+- **Text encoder** (`Qwen3-4B-Q4_K_M.gguf`) — Qwen3 4B in standard GGML Q4_K_M format.
+- **VAE** (`flux2-vae.safetensors`) — standard safetensors format, compatible as-is.
+
+### Model file reference — FLUX.2-klein 4B
+
+| Role | File | Source |
+|------|------|--------|
+| Diffusion model | `flux-2-klein-4b-Q8_0.gguf` | [leejet/FLUX.2-klein-4B-GGUF](https://huggingface.co/leejet/FLUX.2-klein-4B-GGUF) |
+| Text encoder | `Qwen3-4B-Q4_K_M.gguf` | [unsloth/Qwen3-4B-GGUF](https://huggingface.co/unsloth/Qwen3-4B-GGUF) |
+| VAE | `flux2-vae.safetensors` | [black-forest-labs/FLUX.2-klein-4B](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B/blob/main/vae/diffusion_pytorch_model.safetensors) |
+
+### Stable Diffusion
+
+- **Stable Diffusion 1.x / 2.x** — all-in-one checkpoint as a single `*.gguf` file
+- **Stable Diffusion XL** — all-in-one `*.gguf` or split CLIP encoders
+- **Stable Diffusion 3** — safetensors with separate CLIP encoders
+
+## Requirements
+
+- Memory: 16 GB unified memory on Apple Silicon, or 8 GB VRAM on GPU.
+- Bare $\geq$ v1.24
+
+## Installation
+
+```bash
+npm i @qvac/diffusion-cpp
+```
+
+## Quickstart
+
+<Steps>
+
+<Step>
+If you don't have Bare runtime, install it:
+
+```bash
+npm i -g bare
+```
+</Step>
+
+<Step>
+Create a new project:
+
+```bash
+mkdir qvac-diffusion-quickstart
+cd qvac-diffusion-quickstart
+npm init -y
+```
+</Step>
+
+<Step>
+Install dependencies:
+
+```bash
+npm i @qvac/diffusion-cpp bare-path bare-process bare-fs
+```
+</Step>
+
+<Step>
+Download the FLUX.2 [klein] 4B model files (~6.8 GB total):
+
+```bash
+mkdir -p models
+
+curl -L -C - -o models/flux-2-klein-4b-Q8_0.gguf \
+  https://huggingface.co/leejet/FLUX.2-klein-4B-GGUF/resolve/main/flux-2-klein-4b-Q8_0.gguf
+
+curl -L -C - -o models/Qwen3-4B-Q4_K_M.gguf \
+  https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf
+
+curl -L -C - -o models/flux2-vae.safetensors \
+  https://huggingface.co/black-forest-labs/FLUX.2-klein-4B/blob/main/vae/diffusion_pytorch_model.safetensors
+```
+</Step>
+
+<Step>
+Create `index.js`:
+</Step>
+
+<WrapCode>
+
+```js title="index.js" lineNumbers
+'use strict'
+
+const path = require('bare-path')
+const fs = require('bare-fs')
+const process = require('bare-process')
+const ImgStableDiffusion = require('@qvac/diffusion-cpp')
+
+async function main () {
+  const MODELS_DIR = path.resolve(__dirname, './models')
+
+  const args = {
+    logger: console,
+    diskPath: MODELS_DIR,
+    modelName: 'flux-2-klein-4b-Q8_0.gguf',
+    llmModel: 'Qwen3-4B-Q4_K_M.gguf',
+    vaeModel: 'flux2-vae.safetensors'
+  }
+
+  const config = {
+    threads: 8
+  }
+
+  const model = new ImgStableDiffusion(args, config)
+  await model.load()
+
+  try {
+    const images = []
+
+    const response = await model.run({
+      prompt: 'a majestic red fox in a snowy forest, golden light, photorealistic',
+      steps: 20,
+      width: 512,
+      height: 512,
+      guidance: 3.5,
+      seed: 42
+    })
+
+    await response
+      .onUpdate(data => {
+        if (data instanceof Uint8Array) {
+          images.push(data)
+        } else if (typeof data === 'string') {
+          try {
+            const tick = JSON.parse(data)
+            if ('step' in tick) process.stdout.write(`\rStep ${tick.step}/${tick.total}`)
+          } catch (_) {}
+        }
+      })
+      .await()
+
+    console.log('\n')
+
+    if (images.length > 0) {
+      fs.writeFileSync('output.png', images[0])
+      console.log('Saved → output.png')
+    }
+  } catch (error) {
+    console.error('Error occurred:', error.message || error)
+  } finally {
+    await model.unload()
+  }
+}
+
+main().catch(error => {
+  console.error('Fatal error:', error.message)
+  process.exit(1)
+})
+```
+</WrapCode>
+
+<Step>
+Run `index.js`:
+
+```bash
+bare index.js
+```
+</Step>
+</Steps>
+
+## Usage
+
+### 1. Import the model class
+
+```js
+const ImgStableDiffusion = require('@qvac/diffusion-cpp')
+```
+
+### 2. Create the `args` object
+
+```js
+const path = require('bare-path')
+
+const MODELS_DIR = path.resolve(__dirname, './models')
+const args = {
+  logger: console,
+  diskPath: MODELS_DIR,
+  modelName: 'flux-2-klein-4b-Q8_0.gguf',
+  llmModel: 'Qwen3-4B-Q4_K_M.gguf',
+  vaeModel: 'flux2-vae.safetensors'
+}
+```
+
+| Property | Required | Description |
+|----------|----------|-------------|
+| `diskPath` | ✅ | Local directory where model files are already stored |
+| `modelName` | ✅ | Diffusion model file name (all-in-one for SD1.x/2.x; diffusion-only GGUF for FLUX.2) |
+| `logger` | — | Logger instance (e.g. `console`) |
+| `clipLModel` | — | Separate CLIP-L text encoder (SD3) |
+| `clipGModel` | — | Separate CLIP-G text encoder (SDXL / SD3) |
+| `t5XxlModel` | — | Separate T5-XXL text encoder (SD3) |
+| `llmModel` | — | Qwen3 LLM text encoder (FLUX.2 [klein]) |
+| `vaeModel` | — | Separate VAE file |
+
+### 3. Create the `config` object
+
+```js
+const config = {
+  threads: 8  // CPU threads for tensor operations (Metal handles GPU automatically)
+}
+```
+
+All config values are coerced to strings internally before being passed to the native layer.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `threads` | number | auto | Number of CPU threads for model loading and CPU ops |
+| `type` | `'f32'` \| `'f16'` \| `'q4_0'` \| `'q8_0'` \| … | auto | Override weight quantisation type |
+| `rng` | `'cpu'` \| `'cuda'` \| `'std_default'` | `'cuda'` | RNG backend (`'cuda'` = philox RNG — not GPU-specific despite the name; recommended) |
+| `clip_on_cpu` | `true` \| `false` | `false` | Force CLIP encoder to run on CPU |
+| `vae_on_cpu` | `true` \| `false` | `false` | Force VAE to run on CPU |
+| `flash_attn` | `true` \| `false` | `false` | Enable flash attention (reduces memory) |
+
+### 4. Create a model instance
+
+```js
+const model = new ImgStableDiffusion(args, config)
+```
+
+The constructor stores configuration only — no memory is allocated yet.
+
+### 5. Load the Model
+
+```js
+await model.load()
+```
+
+This creates the native `sd_ctx_t` and loads all weights into memory. It can take 10–30 seconds depending on disk speed and model size. All model files must already be present on disk at `diskPath`.
+
+### 6. Run Inference
+
+The primary API. Returns a `QvacResponse` that streams step-progress ticks and the final PNG:
+
+```js
+const images = []
+
+const response = await model.run({
+  prompt: 'a majestic red fox in a snowy forest, golden light, photorealistic',
+  steps: 20,
+  width: 512,
+  height: 512,
+  guidance: 3.5,
+  seed: 42
+})
+
+await response
+  .onUpdate(data => {
+    if (data instanceof Uint8Array) {
+      images.push(data)
+    } else if (typeof data === 'string') {
+      try {
+        const tick = JSON.parse(data)
+        if ('step' in tick) process.stdout.write(`\rStep ${tick.step}/${tick.total}`)
+      } catch (_) {}
+    }
+  })
+  .await()
+
+require('bare-fs').writeFileSync('output.png', images[0])
+```
+
+**Generation parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `prompt` | string | — | Text prompt |
+| `negative_prompt` | string | `''` | Things to avoid in the output |
+| `width` | number | `512` | Output width in pixels (multiple of 8) |
+| `height` | number | `512` | Output height in pixels (multiple of 8) |
+| `steps` | number | `20` | Number of diffusion steps |
+| `guidance` | number | `3.5` | Distilled guidance scale (FLUX.2) |
+| `cfg_scale` | number | `7.0` | Classifier-free guidance scale (SD1.x / SD2.x) |
+| `sampling_method` | string | auto | Sampler name; auto-selects `euler` for FLUX.2, `euler_a` for SD1.x |
+| `scheduler` | string | auto | Scheduler; auto-selected per model family |
+| `seed` | number | `-1` | Random seed (-1 for random) |
+| `batch_count` | number | `1` | Number of images to generate |
+| `vae_tiling` | boolean | `false` | Enable VAE tiling (required for large images on 16 GB) |
+| `cache_preset` | string | — | Step-caching preset: `slow`, `medium`, `fast`, `ultra` |
+
+<Callout type="info">
+Do not set `sampling_method: 'euler_a'` for FLUX.2 models — it will produce random noise. Leave the field unset to let the library auto-select `euler` for flow-matching models.
+</Callout>
+
+### 7. Release Resources
+
+```js
+await model.unload()
+```
+
+`unload()` calls `free_sd_ctx` which releases all GPU and CPU memory. The JS object can be safely garbage collected afterwards.
+
+## More resources
+
+[Package at npm](https://www.npmjs.com/package/@qvac/diffusion-cpp)

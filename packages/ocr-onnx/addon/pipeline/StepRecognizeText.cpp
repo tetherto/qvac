@@ -83,41 +83,27 @@ cv::Mat resizeImgForRecognizerInput(const cv::Mat &img, float width, float heigh
   cv::Mat resizedImg;
   if (ratioLocal < 1.0F) {
     ratioLocal = calculateRatio(width, height);
-    cv::resize(img, resizedImg, cv::Size(RECOGNIZER_MODEL_HEIGHT, static_cast<int>(RECOGNIZER_MODEL_HEIGHT * ratioLocal)), 0, 0, cv::INTER_LANCZOS4);
+    cv::resize(
+        img,
+        resizedImg,
+        cv::Size(
+            RECOGNIZER_MODEL_HEIGHT,
+            static_cast<int>(RECOGNIZER_MODEL_HEIGHT * ratioLocal)),
+        0,
+        0,
+        cv::INTER_LINEAR);
   } else {
-    cv::resize(img, resizedImg, cv::Size(static_cast<int>(RECOGNIZER_MODEL_HEIGHT * ratioLocal), RECOGNIZER_MODEL_HEIGHT), 0, 0, cv::INTER_LANCZOS4);
+    cv::resize(
+        img,
+        resizedImg,
+        cv::Size(
+            static_cast<int>(RECOGNIZER_MODEL_HEIGHT * ratioLocal),
+            RECOGNIZER_MODEL_HEIGHT),
+        0,
+        0,
+        cv::INTER_LINEAR);
   }
   return resizedImg;
-}
-
-/**
- * @brief : gets a horizontally/vertically aligned subimage from rectangle coordinates that are not aligned
- *
- * @param image : original image to extract the sub image from
- * @param rect : rectangle coordinates that may not be horizontally/vertically aligned
- * @return cv::Mat : the horizontally/vertically aligned subimage
- */
-cv::Mat fourPointTransform(const cv::Mat &image, const std::array<cv::Point2f, 4> &rect) {
-  cv::Point2f topLeft = rect[0];
-  cv::Point2f topRight = rect[1];
-  cv::Point2f bottomRight = rect[2];
-  cv::Point2f bottomLeft = rect[3];
-
-  const auto widthA = static_cast<float>(std::sqrt(std::pow(bottomRight.x - bottomLeft.x, 2) + std::pow(bottomRight.y - bottomLeft.y, 2)));
-  const auto widthB = static_cast<float>(std::sqrt(std::pow(topRight.x - topLeft.x, 2) + std::pow(topRight.y - topLeft.y, 2)));
-  const int maxWidth = std::max(static_cast<int>(widthA), static_cast<int>(widthB));
-
-  const auto heightA = static_cast<float>(std::sqrt(std::pow(topRight.x - bottomRight.x, 2) + std::pow(topRight.y - bottomRight.y, 2)));
-  const auto heightB = static_cast<float>(std::sqrt(std::pow(topLeft.x - bottomLeft.x, 2) + std::pow(topLeft.y - bottomLeft.y, 2)));
-  const int maxHeight = std::max(static_cast<int>(heightA), static_cast<int>(heightB));
-
-  std::array<cv::Point2f, 4> destination = {
-      {cv::Point2f(0.0F, 0.0F), cv::Point2f(static_cast<float>(maxWidth - 1), 0.0F), cv::Point2f(static_cast<float>(maxWidth - 1), static_cast<float>(maxHeight - 1)), cv::Point2f(0.0F, static_cast<float>(maxHeight - 1))}};
-
-  cv::Mat perspectiveTransform = cv::getPerspectiveTransform(rect.data(), destination.data());
-  cv::Mat warpedImg;
-  cv::warpPerspective(image, warpedImg, perspectiveTransform, cv::Size(maxWidth, maxHeight));
-  return warpedImg;
 }
 
 /**
@@ -189,17 +175,16 @@ cv::Mat adjustContrastGrey(const cv::Mat &img, double target = PARAGRAPH_Y_DELTA
   double low = 0.0;
   std::tie(contrast, high, low) = contrastGrey(img);
   if (contrast < target) {
-    cv::Mat imgInt;
-    img.convertTo(imgInt, CV_32S);
+    cv::Mat imgFloat;
+    img.convertTo(imgFloat, CV_32F);
     double diff = high - low;
     double ratio = ADJUST_RATIO_NUM / std::max(ADJUST_RATIO_MIN_DEN, diff);
-    cv::Mat adjusted = (imgInt - static_cast<int>(low) + ADJUST_SHIFT) * ratio;
-    cv::Mat clipped;
-    cv::min(cv::max(adjusted, 0), PIXEL_MAX_INT, clipped);
-    clipped.convertTo(clipped, CV_8U);
-    return clipped;
+    cv::Mat adjusted = (imgFloat - low + ADJUST_SHIFT) * ratio;
+    cv::Mat result;
+    adjusted.convertTo(result, CV_8U); // auto-saturates to [0,255]
+    return result;
   }
-  return img.clone();
+  return img; // shallow copy — caller resizes into a new Mat downstream
 }
 
 /**
@@ -219,7 +204,7 @@ cv::Mat normalizeAndPad(const cv::Mat &img, int channels, int height, int maxWid
     // Use RGB2GRAY since image is in RGB format (converted from BGR in Pipeline.cpp)
     cv::cvtColor(img, gray, cv::COLOR_RGB2GRAY);
   } else {
-    gray = img.clone();
+    gray = img;
   }
 
   cv::Mat imgFloat;
@@ -230,32 +215,19 @@ cv::Mat normalizeAndPad(const cv::Mat &img, int channels, int height, int maxWid
   }
 
   imgFloat = (imgFloat - HALF) / HALF;
-  cv::Mat padImg(height, maxWidth, CV_MAKETYPE(CV_32F, channels), cv::Scalar(0));
-
   int imgW = std::min(imgFloat.cols, maxWidth);
   int imgH = std::min(imgFloat.rows, height);
+  cv::Mat cropped = imgFloat(cv::Rect(0, 0, imgW, imgH));
 
-  // Copy the image to top-left of padImg
-  cv::Mat roi = padImg(cv::Rect(0, 0, imgW, imgH));
-  imgFloat(cv::Rect(0, 0, imgW, imgH)).copyTo(roi);
-
-  // Replicate the last column for width padding
-  if (imgW < maxWidth) {
-    for (int col = imgW; col < maxWidth; col++) {
-      for (int row = 0; row < imgH; row++) {
-        padImg.at<float>(row, col) = padImg.at<float>(row, imgW - 1);
-      }
-    }
-  }
-
-  // Replicate the last row for height padding
-  if (imgH < height) {
-    for (int row = imgH; row < height; row++) {
-      for (int col = 0; col < maxWidth; col++) {
-        padImg.at<float>(row, col) = padImg.at<float>(imgH - 1, col);
-      }
-    }
-  }
+  cv::Mat padImg;
+  cv::copyMakeBorder(
+      cropped,
+      padImg,
+      0,
+      height - imgH,
+      0,
+      maxWidth - imgW,
+      cv::BORDER_REPLICATE);
 
   return padImg;
 }
@@ -293,20 +265,27 @@ cv::Mat alignAndCollate(const SubImage &subImage, int targetWidth, double adjust
   cv::Mat image = subImage.image;
   int width = image.cols;
   int height = image.rows;
+
+  // Convert to grayscale once early to avoid redundant conversions downstream
+  if (image.channels() > 1) {
+    cv::cvtColor(image, image, cv::COLOR_RGB2GRAY);
+  }
+
   if (adjustContrast > 0) {
-    if (image.channels() > 1) {
-      // Use RGB2GRAY since image is in RGB format (converted from BGR in Pipeline.cpp)
-      cv::cvtColor(image, image, cv::COLOR_RGB2GRAY);
-    }
     image = adjustContrastGrey(image, adjustContrast);
   }
 
   // EasyOCR-style resize: always scale height to model height, width proportional
   int proportionalWidth = calculateProportionalWidth(width, height);
 
-  // Use LANCZOS interpolation like EasyOCR
   cv::Mat resizedImage;
-  cv::resize(image, resizedImage, cv::Size(proportionalWidth, RECOGNIZER_MODEL_HEIGHT), 0, 0, cv::INTER_LANCZOS4);
+  cv::resize(
+      image,
+      resizedImage,
+      cv::Size(proportionalWidth, RECOGNIZER_MODEL_HEIGHT),
+      0,
+      0,
+      cv::INTER_LINEAR);
 
   return normalizeAndPad(resizedImage, 1 /*grayscale*/, RECOGNIZER_MODEL_HEIGHT, targetWidth);
 }
@@ -521,11 +500,9 @@ std::array<cv::Point2f, 4> rotateBox(const std::array<cv::Point2f, 4> &box, int 
 } // end unnamed namespace
 
 StepRecognizeText::StepRecognizeText(
-    const ORTCHAR_T* pathRecognizer, std::span<const std::string> langList,
-    bool useGPU, const Config& config)
-    : config_(config),
-      ortEnv_(ORT_LOGGING_LEVEL_WARNING, "OnnxInferenceRecognizer"),
-      ortSession_(ortEnv_, pathRecognizer, getOrtSessionOptions(useGPU)),
+    const std::string& pathRecognizer, std::span<const std::string> langList,
+    const onnx_addon::SessionConfig& sessionConfig, const Config& config)
+    : config_(config), session_(pathRecognizer, sessionConfig),
       isLeftToRightScript_{true} {
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO, "[Recognition] Constructor: ONNX session created, validating languages...");
   ALOG_INFO(std::string("[Recognition] Constructor: ONNX session created, validating languages..."));
@@ -535,11 +512,12 @@ StepRecognizeText::StepRecognizeText(
   ALOG_INFO(std::string("[Recognition] Constructor: completed successfully"));
 }
 
-StepRecognizeText::Output StepRecognizeText::process(StepRecognizeText::Input input) {
+StepRecognizeText::Output StepRecognizeText::process(StepRecognizeText::Input input,
+                                                     const std::atomic<bool>* cancelFlag) {
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, "[Recognition] process() called - starting recognition");
   populateImageList(input);
   expandImgListWithRotatedImgs(input.context.rotationAngles);
-  std::vector<InferredText> inferenceResult = processImgList();
+  std::vector<InferredText> inferenceResult = processImgList(cancelFlag);
   imgListOfLists_.clear();
 
   if (input.context.paragraph) {
@@ -705,40 +683,48 @@ std::pair<std::string, float> StepRecognizeText::getTextAndConfidenceFromPreds(c
   const int charSpaceSize = preds.size[2];
   assert(batchIdx >= 0 && batchIdx < preds.size[0]);
 
-  std::vector<std::vector<float>> predsProb(
-      imgSubcolumnsSize, std::vector<float>(charSpaceSize, 0.0F));
+  // Use pointer arithmetic instead of .at<>() for performance
+  const size_t batchStride = preds.step[0] / sizeof(float);
+  const size_t subcolStride = preds.step[1] / sizeof(float);
+  const float* batchBase = preds.ptr<float>() + batchIdx * batchStride;
+
+  // Use flat vector instead of vector<vector<float>> to reduce allocations
+  std::vector<float> predsProb(imgSubcolumnsSize * charSpaceSize, 0.0F);
+
   for (int subcolumn = 0; subcolumn < imgSubcolumnsSize; subcolumn++) {
+    const float* subcolBase = batchBase + subcolumn * subcolStride;
+    float* probRow = predsProb.data() + subcolumn * charSpaceSize;
+
     float maxVal = -std::numeric_limits<float>::infinity();
     for (int charIndex = 0; charIndex < charSpaceSize; charIndex++) {
-      float val = preds.at<float>(batchIdx, subcolumn, charIndex);
-      maxVal = std::max(val, maxVal);
+      maxVal = std::max(subcolBase[charIndex], maxVal);
     }
 
     float subcolumnSumExp = 0.0F;
     for (int charIndex = 0; charIndex < charSpaceSize; charIndex++) {
-      float val = preds.at<float>(batchIdx, subcolumn, charIndex);
-      float expVal = std::exp(val - maxVal);
-      predsProb[subcolumn][charIndex] = expVal;
+      float expVal = std::exp(subcolBase[charIndex] - maxVal);
+      probRow[charIndex] = expVal;
       subcolumnSumExp += expVal;
     }
     for (int charIndex = 0; charIndex < charSpaceSize; charIndex++) {
-      predsProb[subcolumn][charIndex] /= subcolumnSumExp;
+      probRow[charIndex] /= subcolumnSumExp;
     }
   }
 
   for (int subcolumn = 0; subcolumn < imgSubcolumnsSize; subcolumn++) {
+    float* probRow = predsProb.data() + subcolumn * charSpaceSize;
     for (int charIndex = 0; charIndex < charSpaceSize; charIndex++) {
       if (ignoreChars_[charIndex]) {
-        predsProb[subcolumn][charIndex] = 0.0F;
+        probRow[charIndex] = 0.0F;
       }
     }
     float subcolumnSum = 0.0F;
     for (int charIndex = 0; charIndex < charSpaceSize; charIndex++) {
-      subcolumnSum += predsProb[subcolumn][charIndex];
+      subcolumnSum += probRow[charIndex];
     }
     if (subcolumnSum > 0.0F) {
       for (int charIndex = 0; charIndex < charSpaceSize; charIndex++) {
-        predsProb[subcolumn][charIndex] /= subcolumnSum;
+        probRow[charIndex] /= subcolumnSum;
       }
     }
   }
@@ -746,12 +732,13 @@ std::pair<std::string, float> StepRecognizeText::getTextAndConfidenceFromPreds(c
   std::vector<size_t> predsIndex(imgSubcolumnsSize, 0);
   std::vector<float> predsMaxProb(imgSubcolumnsSize, 0.0F);
   for (int subcolumn = 0; subcolumn < imgSubcolumnsSize; subcolumn++) {
+    const float* probRow = predsProb.data() + subcolumn * charSpaceSize;
     size_t charIndexMax = 0;
-    float maxProbVal = predsProb[subcolumn][0];
+    float maxProbVal = probRow[0];
     for (size_t charIndex = 1; charIndex < static_cast<size_t>(charSpaceSize);
          charIndex++) {
-      if (predsProb[subcolumn][charIndex] > maxProbVal) {
-        maxProbVal = predsProb[subcolumn][charIndex];
+      if (probRow[charIndex] > maxProbVal) {
+        maxProbVal = probRow[charIndex];
         charIndexMax = charIndex;
       }
     }
@@ -765,20 +752,30 @@ std::pair<std::string, float> StepRecognizeText::getTextAndConfidenceFromPreds(c
   return {predictedText, confidenceScore};
 }
 
-cv::Mat StepRecognizeText::runInferenceOnImg(const cv::Mat &img) {
-  std::vector<cv::Mat> channels;
-  cv::split(img, channels);
-
+std::pair<std::vector<Ort::Value>, cv::Mat>
+StepRecognizeText::runInferenceOnImg(const cv::Mat& img) {
   int height = img.rows;
   int width = img.cols;
-  int numChannels = static_cast<int>(channels.size());
-  cv::Mat chwBlob(numChannels, height * width, CV_32F);
-  for (int i = 0; i < numChannels; i++) {
-    CV_Assert(channels[i].isContinuous());
-    memcpy(chwBlob.ptr<float>(i), channels[i].data, sizeof(float) * height * width);
-  }
+  int numChannels = img.channels();
 
-  cv::Mat inputBlob = chwBlob.reshape(1, {1, numChannels, height, width});
+  cv::Mat inputBlob;
+  if (numChannels == 1) {
+    // Single channel - reshape directly (avoids unnecessary cv::split + copy)
+    CV_Assert(img.isContinuous());
+    inputBlob = img.reshape(1, {1, 1, height, width});
+  } else {
+    std::vector<cv::Mat> channels;
+    cv::split(img, channels);
+    cv::Mat chwBlob(numChannels, height * width, CV_32F);
+    for (int i = 0; i < numChannels; i++) {
+      CV_Assert(channels[i].isContinuous());
+      memcpy(
+          chwBlob.ptr<float>(i),
+          channels[i].data,
+          sizeof(float) * height * width);
+    }
+    inputBlob = chwBlob.reshape(1, {1, numChannels, height, width});
+  }
 
   int dims = inputBlob.dims;
   assert(dims == 4 && "the input blob dimension should be 4: [batchSize, 1, imgH, imgW]");
@@ -786,30 +783,22 @@ cv::Mat StepRecognizeText::runInferenceOnImg(const cv::Mat &img) {
   for (int i = 0; i < dims; i++) {
     imageShape[i] = inputBlob.size[i];
   }
-  size_t imageTensorSize = inputBlob.total();
   assert(sizeof(float) == inputBlob.elemSize());
-  auto *imageData = inputBlob.ptr<float>();
-  Ort::MemoryInfo memoryInfo = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
-  Ort::Value imageTensor = Ort::Value::CreateTensor<float>(memoryInfo, imageData, imageTensorSize, imageShape.data(), imageShape.size());
 
-  constexpr std::array<const char*, 1> inputNames = {"image"};
-  constexpr std::array<const char*, 1> outputNames = {"output"};
+  onnx_addon::InputTensor input;
+  input.name = "image";
+  input.shape = imageShape;
+  input.type = onnx_addon::TensorType::FLOAT32;
+  input.data = inputBlob.ptr<float>();
+  input.dataSize = inputBlob.total() * sizeof(float);
 
-  std::array<Ort::Value, 1> inputTensors = {std::move(imageTensor)};
+  auto ortOutputs = session_.runRaw(input);
 
-  auto outputTensors = ortSession_.Run(
-      Ort::RunOptions{nullptr},
-      inputNames.data(),
-      inputTensors.data(),
-      1,
-      outputNames.data(),
-      1);
-
-  Ort::Value &predsTensor = outputTensors[0];
-  auto *predsData = predsTensor.GetTensorMutableData<float>();
-  Ort::TypeInfo typeInfo = predsTensor.GetTypeInfo();
-  auto tensorInfo = typeInfo.GetTensorTypeAndShapeInfo();
-  std::vector<int64_t> predsShape = tensorInfo.GetShape();
+  // Zero-copy access to ORT buffer
+  auto& ortOutput = ortOutputs[0];
+  auto outTypeInfo = ortOutput.GetTypeInfo();
+  auto outTensorInfo = outTypeInfo.GetTensorTypeAndShapeInfo();
+  auto predsShape = outTensorInfo.GetShape();
 
   auto predsDims = static_cast<int>(predsShape.size());
   std::vector<int> cvSizes(predsDims);
@@ -817,15 +806,23 @@ cv::Mat StepRecognizeText::runInferenceOnImg(const cv::Mat &img) {
     cvSizes[i] = static_cast<int>(predsShape[i]);
   }
 
-  cv::Mat preds(predsDims, cvSizes.data(), CV_32F, predsData);
+  // Return ORT values alongside a cv::Mat view (no clone - caller keeps
+  // ortValues alive)
+  cv::Mat preds(
+      predsDims,
+      cvSizes.data(),
+      CV_32F,
+      const_cast<float*>(ortOutput.GetTensorData<float>()));
 
-  return preds.clone();
+  return std::make_pair(std::move(ortOutputs), preds);
 }
 
-cv::Mat StepRecognizeText::runBatchInference(const std::vector<cv::Mat> &images, int dynamicWidth) {
+std::pair<std::vector<Ort::Value>, cv::Mat>
+StepRecognizeText::runBatchInference(
+    const std::vector<cv::Mat>& images, int dynamicWidth) {
   auto t0 = std::chrono::high_resolution_clock::now();
   if (images.empty()) {
-    return cv::Mat();
+    return std::make_pair(std::vector<Ort::Value>{}, cv::Mat());
   }
 
   const int batchSize = static_cast<int>(images.size());
@@ -837,8 +834,8 @@ cv::Mat StepRecognizeText::runBatchInference(const std::vector<cv::Mat> &images,
        "[Recognition] runBatchInference called with batch_size=" + std::to_string(batchSize) +
        ", dynamic_width=" + std::to_string(width));
 
-  // Create batch tensor: [batch, channels, height, width]
-  std::vector<float> batchData(batchSize * numChannels * height * width);
+  // Reuse batch buffer to avoid per-batch allocation
+  batchBuffer_.resize(batchSize * numChannels * height * width);
 
   for (int b = 0; b < batchSize; b++) {
     const cv::Mat& img = images[b];
@@ -847,35 +844,26 @@ cv::Mat StepRecognizeText::runBatchInference(const std::vector<cv::Mat> &images,
 
     // Copy image data in CHW format
     const float* imgPtr = img.ptr<float>();
-    float* destPtr = batchData.data() + b * numChannels * height * width;
+    float* destPtr = batchBuffer_.data() + b * numChannels * height * width;
     std::memcpy(destPtr, imgPtr, sizeof(float) * height * width);
   }
 
   std::vector<int64_t> inputShape = {batchSize, numChannels, height, width};
-  size_t inputTensorSize = batchSize * numChannels * height * width;
 
-  Ort::MemoryInfo memoryInfo = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
-  Ort::Value inputTensor = Ort::Value::CreateTensor<float>(
-      memoryInfo, batchData.data(), inputTensorSize, inputShape.data(), inputShape.size());
+  onnx_addon::InputTensor input;
+  input.name = "image";
+  input.shape = inputShape;
+  input.type = onnx_addon::TensorType::FLOAT32;
+  input.data = batchBuffer_.data();
+  input.dataSize = batchBuffer_.size() * sizeof(float);
 
-  constexpr std::array<const char*, 1> inputNames = {"image"};
-  constexpr std::array<const char*, 1> outputNames = {"output"};
+  auto ortOutputs = session_.runRaw(input);
 
-  std::array<Ort::Value, 1> inputTensors = {std::move(inputTensor)};
-
-  auto outputTensors = ortSession_.Run(
-      Ort::RunOptions{nullptr},
-      inputNames.data(),
-      inputTensors.data(),
-      1,
-      outputNames.data(),
-      1);
-
-  Ort::Value &predsTensor = outputTensors[0];
-  auto *predsData = predsTensor.GetTensorMutableData<float>();
-  Ort::TypeInfo typeInfo = predsTensor.GetTypeInfo();
-  auto tensorInfo = typeInfo.GetTensorTypeAndShapeInfo();
-  std::vector<int64_t> predsShape = tensorInfo.GetShape();
+  // Zero-copy access to ORT buffer
+  auto& ortOutput = ortOutputs[0];
+  auto outTypeInfo = ortOutput.GetTypeInfo();
+  auto outTensorInfo = outTypeInfo.GetTensorTypeAndShapeInfo();
+  auto predsShape = outTensorInfo.GetShape();
 
   auto predsDims = static_cast<int>(predsShape.size());
   std::vector<int> cvSizes(predsDims);
@@ -883,22 +871,28 @@ cv::Mat StepRecognizeText::runBatchInference(const std::vector<cv::Mat> &images,
     cvSizes[i] = static_cast<int>(predsShape[i]);
   }
 
-  cv::Mat preds(predsDims, cvSizes.data(), CV_32F, predsData);
+  // Return ORT values alongside a cv::Mat view (no clone - caller keeps
+  // ortValues alive)
+  cv::Mat preds(
+      predsDims,
+      cvSizes.data(),
+      CV_32F,
+      const_cast<float*>(ortOutput.GetTensorData<float>()));
   auto t1 = std::chrono::high_resolution_clock::now();
   auto batchMs = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
        "[Recognition] runBatchInference took " + std::to_string(batchMs) + " ms for batch_size=" + std::to_string(batchSize));
-  return preds.clone();
+  return std::make_pair(std::move(ortOutputs), preds);
 }
 
 void StepRecognizeText::processImg(SubImage &subImage) {
   cv::Mat resizedImg = alignAndCollate(subImage, 0.0);
-  cv::Mat preds = runInferenceOnImg(resizedImg);
+  auto [ortValues, preds] = runInferenceOnImg(resizedImg);
   std::tie(subImage.text, subImage.confidenceScore) = getTextAndConfidenceFromPreds(preds);
 
   if (subImage.confidenceScore < LOW_CONF_THRESHOLD_FOR_INCREASED_CONTRAST) {
     cv::Mat resizedImg = alignAndCollate(subImage, TARGET_ADJUSTED_CONTRAST);
-    cv::Mat preds = runInferenceOnImg(resizedImg);
+    auto [ortValues2, preds] = runInferenceOnImg(resizedImg);
     auto [newText, newConfidenceScore] = getTextAndConfidenceFromPreds(preds);
     if (newConfidenceScore > subImage.confidenceScore) {
       subImage.text = newText;
@@ -912,7 +906,7 @@ void StepRecognizeText::processImg(SubImage &subImage) {
   }
 }
 
-std::vector<InferredText> StepRecognizeText::processImgList() {
+std::vector<InferredText> StepRecognizeText::processImgList(const std::atomic<bool>* cancelFlag) {
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
        "[Recognition] processImgList: starting with " + std::to_string(imgListOfLists_.size()) + " image lists");
   auto t0 = std::chrono::high_resolution_clock::now();
@@ -945,6 +939,13 @@ std::vector<InferredText> StepRecognizeText::processImgList() {
   ALOG_INFO(batchInfoMsg);
 
   for (size_t batchStart = 0; batchStart < allIndices.size(); batchStart += batchSize) {
+    // Check for cancellation between batches — break and return partial results
+    if (cancelFlag != nullptr && cancelFlag->load(std::memory_order_relaxed)) {
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+           "[Recognition] Cancelled between batches at batch offset " + std::to_string(batchStart));
+      break;
+    }
+
     size_t batchEnd = std::min(batchStart + static_cast<size_t>(batchSize), allIndices.size());
     size_t currentBatchSize = batchEnd - batchStart;
 
@@ -969,7 +970,8 @@ std::vector<InferredText> StepRecognizeText::processImgList() {
       preparedImages.push_back(preparedImg);
     }
 
-    cv::Mat batchPreds = runBatchInference(preparedImages, maxProportionalWidth);
+    auto [ortValues, batchPreds] =
+        runBatchInference(preparedImages, maxProportionalWidth);
 
     // Decode results and populate SubImages for this batch
     for (size_t i = 0; i < currentBatchSize; i++) {
@@ -1005,6 +1007,13 @@ std::vector<InferredText> StepRecognizeText::processImgList() {
 
       // Process contrast retries in batches too
       for (size_t batchStart = 0; batchStart < lowConfidenceIndices.size(); batchStart += batchSize) {
+        // Check for cancellation between contrast retry batches
+        if (cancelFlag != nullptr && cancelFlag->load(std::memory_order_relaxed)) {
+          QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+               "[Recognition] Cancelled during contrast retry at batch offset " + std::to_string(batchStart));
+          break;
+        }
+
         size_t batchEnd = std::min(batchStart + static_cast<size_t>(batchSize), lowConfidenceIndices.size());
 
         // Calculate max proportional width for contrast batch
@@ -1026,7 +1035,8 @@ std::vector<InferredText> StepRecognizeText::processImgList() {
           contrastImages.push_back(contrastImg);
         }
 
-        cv::Mat contrastPreds = runBatchInference(contrastImages, maxProportionalWidth);
+        auto [contrastOrtValues, contrastPreds] =
+            runBatchInference(contrastImages, maxProportionalWidth);
 
         for (size_t j = 0; j < contrastImages.size(); j++) {
           auto &idx = lowConfidenceIndices[batchStart + j];

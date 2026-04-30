@@ -7,12 +7,11 @@ alwaysApply: true
 
 The following packages belong to the SDK pod:
 
-- `packages/qvac-sdk`
-- `packages/qvac-cli`
-- `packages/docs`
-- `packages/qvac-lib-rag`
-- `packages/qvac-lib-logging`
-- `packages/qvac-lib-error-base`
+- `packages/sdk`
+- `packages/cli`
+- `packages/rag`
+- `packages/logging`
+- `packages/error`
 
 When any rule or skill references "SDK pod" or "SDK pod packages", these are the packages in scope.
 
@@ -22,12 +21,11 @@ For rules that need glob patterns:
 
 ```yaml
 globs:
-  - packages/qvac-sdk/**
-  - packages/qvac-cli/**
-  - packages/docs/**
-  - packages/qvac-lib-rag/**
-  - packages/qvac-lib-logging/**
-  - packages/qvac-lib-error-base/**
+  - packages/sdk/**
+  - packages/cli/**
+  - packages/rag/**
+  - packages/logging/**
+  - packages/error/**
 ```
 
 ## Skill Naming Convention

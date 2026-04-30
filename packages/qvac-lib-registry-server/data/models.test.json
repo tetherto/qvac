@@ -5,7 +5,7 @@
     "description": "",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "transcription",
       "tiny-silero",
@@ -19,7 +19,7 @@
     "description": "",
     "quantization": "",
     "params": "",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "transcription",
       "tiny-silero",
@@ -33,7 +33,7 @@
     "description": "",
     "quantization": "q4_0",
     "params": "300M",
-    "license": "Apache-2.0",
+    "licenseId": "Apache-2.0",
     "tags": [
       "embedding",
       "embed",
@@ -47,7 +47,7 @@
     "description": "",
     "quantization": "fp32",
     "params": "20M",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "onnx-medium",
@@ -65,7 +65,7 @@
     "description": "",
     "quantization": "fp32",
     "params": "20M",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "onnx-medium",
@@ -83,7 +83,7 @@
     "description": "",
     "quantization": "fp16",
     "params": "335M",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "embedding",
       "bert",
@@ -98,7 +98,7 @@
     "description": "",
     "quantization": "fp16",
     "params": "335M",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "embedding",
       "bert",
@@ -113,7 +113,7 @@
     "description": "",
     "quantization": "fp16",
     "params": "335M",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "embedding",
       "bert",
@@ -128,7 +128,7 @@
     "description": "",
     "quantization": "fp16",
     "params": "335M",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "embedding",
       "bert",
@@ -143,7 +143,7 @@
     "description": "",
     "quantization": "fp16",
     "params": "335M",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "embedding",
       "bert",
@@ -158,7 +158,7 @@
     "description": "Required for Llamacpp to create the model layers before the weights are loaded",
     "quantization": "fp16",
     "params": "335M",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "embedding",
       "bert",
@@ -173,7 +173,7 @@
     "description": "",
     "quantization": "fp32",
     "params": "20M",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "onnx-medium",
@@ -188,7 +188,7 @@
     "description": "",
     "quantization": "fp32",
     "params": "20M",
-    "license": "MIT",
+    "licenseId": "MIT",
     "tags": [
       "tts",
       "onnx-medium",

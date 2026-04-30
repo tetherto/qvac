@@ -1,0 +1,126 @@
+name: Authorize PR
+description: >
+  Security gate for pull_request_target workflows. Checks actor write
+  permission, author association, and label presence for external fork PRs.
+  Strips the gate label on synchronize events from non-writers to force
+  re-review after new commits.
+
+inputs:
+  label:
+    description: "Label name required for external fork PRs (default: verify)"
+    required: false
+    default: "verify"
+  github-token:
+    description: "GitHub token for permission check and label API calls"
+    required: true
+
+outputs:
+  allowed:
+    description: "true when the workflow is authorized to proceed"
+    value: ${{ steps.check.outputs.allowed }}
+  has_write:
+    description: "1 when the triggering actor has write-or-higher repo permission"
+    value: ${{ steps.perm.outputs.has-permission }}
+
+runs:
+  using: composite
+  steps:
+    # -----------------------------------------------------------------
+    # 1. Resolve actor permission level
+    # -----------------------------------------------------------------
+    - name: Check actor write permission
+      id: perm
+      uses: scherermichael-oss/action-has-permission@136e061bfe093832d87f090dd768e14e27a740d3 # 1.0.6
+      with:
+        required-permission: write
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+
+    # -----------------------------------------------------------------
+    # 2. Decide whether the run is authorized
+    # -----------------------------------------------------------------
+    - name: Check authorization
+      id: check
+      shell: bash
+      env:
+        EVENT: ${{ github.event_name }}
+        ACTION: ${{ github.event.action }}
+        HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        BASE_REPO: ${{ github.repository }}
+        AUTHOR_ASSOC: ${{ github.event.pull_request.author_association }}
+        HAS_WRITE: ${{ steps.perm.outputs.has-permission }}
+        LABEL_NAME: ${{ inputs.label }}
+        LABELS_JSON: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+      run: |
+        # Non-PR events (push, workflow_dispatch, workflow_call) are always trusted
+        if [ "$EVENT" != "pull_request_target" ] && [ "$EVENT" != "pull_request" ]; then
+          echo "::notice::Non-PR event ($EVENT) — authorized"
+          echo "allowed=true" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        # Same-repo PRs are always trusted
+        if [ "$HEAD_REPO" = "$BASE_REPO" ]; then
+          echo "::notice::Same-repo PR — authorized"
+          echo "allowed=true" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        echo "::notice::Actor '$GITHUB_ACTOR' write-or-higher: $HAS_WRITE"
+
+        # Actor with write (or higher) is trusted even from a fork
+        if [ "$HAS_WRITE" = "1" ]; then
+          echo "::notice::Actor has write-or-higher permission — authorized"
+          echo "allowed=true" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        # Org members / collaborators are trusted even from forks
+        if [[ "$AUTHOR_ASSOC" =~ ^(MEMBER|OWNER|COLLABORATOR)$ ]]; then
+          echo "::notice::Trusted author ($AUTHOR_ASSOC) — authorized"
+          echo "allowed=true" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        # External fork: require the gate label
+        HAS_LABEL=$(echo "$LABELS_JSON" | jq -r --arg l "$LABEL_NAME" \
+          'if . == null then "false" elif any(. == $l) then "true" else "false" end')
+
+        # On synchronize from a non-writer, reject even if the label is still
+        # present. The label was granted for the previous commit; new unreviewed
+        # code must not run with secrets. The strip step below removes the label
+        # so that a re-review + re-label is required for the next run.
+        if [ "$ACTION" = "synchronize" ]; then
+          echo "::warning::External fork synchronize from non-writer — blocking until re-review"
+          echo "allowed=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        if [ "$HAS_LABEL" = "true" ]; then
+          echo "::notice::Fork PR with '$LABEL_NAME' label — authorized"
+          echo "allowed=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "::warning::External fork PR without '$LABEL_NAME' label — skipping"
+          echo "::warning::A team member must review the code and apply the '$LABEL_NAME' label"
+          echo "allowed=false" >> "$GITHUB_OUTPUT"
+        fi
+
+    # -----------------------------------------------------------------
+    # 3. Strip the gate label on synchronize from non-writers
+    #    This forces a maintainer to re-review before the NEXT run.
+    # -----------------------------------------------------------------
+    - name: Strip label on new pushes from non-writers
+      if: |
+        steps.perm.outputs.has-permission != '1' &&
+        github.event.action == 'synchronize' &&
+        github.event.pull_request.head.repo.full_name != github.repository
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        LABEL: ${{ inputs.label }}
+      run: |
+        gh api -X DELETE \
+          "repos/${{ github.repository }}/issues/${PR_NUMBER}/labels/${LABEL}" \
+          2>/dev/null || true
+        echo "::warning::Removed '${LABEL}' label — new commits from non-writer. Re-review required."

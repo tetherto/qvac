@@ -1,16 +1,27 @@
-#include <iostream>
-#include <vector>
+#include <cstdlib>
 
 #include <bare.h>
-#include <js.h>
 
-#include "qvac-lib-infer-whispercpp.hpp"
+#include "src/addon/AddonJs.hpp"
+
+namespace {
+void atexitCleanup() {
+  std::lock_guard lock(qvac_lib_inference_addon_whisper::g_streamingMtx);
+  qvac_lib_inference_addon_whisper::g_streamingSessions.clear();
+}
+} // namespace
 
 // NOLINTBEGIN(cppcoreguidelines-macro-usage,readability-function-cognitive-complexity,modernize-use-trailing-return-type,readability-identifier-naming)
 auto qvac_lib_inference_addon_whisper_exports(
     js_env_t* env,
     js_value_t* exports)
     -> js_value_t* { // NOLINT(readability-identifier-naming)
+
+  static bool registered = false;
+  if (!registered) {
+    std::atexit(atexitCleanup);
+    registered = true;
+  }
 
 #define V(name, fn)                                                            \
   {                                                                            \
@@ -24,20 +35,19 @@ auto qvac_lib_inference_addon_whisper_exports(
   }
 
   V("createInstance", qvac_lib_inference_addon_whisper::createInstance)
-  V("unload", qvac_lib_inference_addon_whisper::unload)
-  V("load", qvac_lib_inference_addon_whisper::load)
+  V("runJob", qvac_lib_inference_addon_whisper::runJob)
   V("reload", qvac_lib_inference_addon_whisper::reload)
-  V("loadWeights", qvac_lib_inference_addon_whisper::loadWeights)
-  V("unloadWeights", qvac_lib_inference_addon_whisper::unloadWeights)
-  V("activate", qvac_lib_inference_addon_whisper::activate)
-  V("append", qvac_lib_inference_addon_whisper::append)
-  V("status", qvac_lib_inference_addon_whisper::status)
-  V("pause", qvac_lib_inference_addon_whisper::pause)
-  V("stop", qvac_lib_inference_addon_whisper::stop)
-  V("cancel", qvac_lib_inference_addon_whisper::cancel)
-  V("destroyInstance", qvac_lib_inference_addon_whisper::destroyInstance)
-  V("setLogger", qvac_lib_inference_addon_whisper::setLogger)
-  V("releaseLogger", qvac_lib_inference_addon_whisper::releaseLogger)
+  V("startStreaming", qvac_lib_inference_addon_whisper::startStreaming)
+  V("appendStreamingAudio",
+    qvac_lib_inference_addon_whisper::appendStreamingAudio)
+  V("endStreaming", qvac_lib_inference_addon_whisper::endStreaming)
+  V("loadWeights", qvac_lib_inference_addon_cpp::JsInterface::loadWeights)
+  V("activate", qvac_lib_inference_addon_cpp::JsInterface::activate)
+  V("cancel", qvac_lib_inference_addon_whisper::cancelWithStreaming)
+  V("destroyInstance",
+    qvac_lib_inference_addon_whisper::destroyInstanceWithStreaming)
+  V("setLogger", qvac_lib_inference_addon_cpp::JsInterface::setLogger)
+  V("releaseLogger", qvac_lib_inference_addon_cpp::JsInterface::releaseLogger)
 #undef V
 
   return exports;

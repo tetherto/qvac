@@ -1,0 +1,236 @@
+import { z } from "zod";
+import { modelSrcInputSchema } from "./model-src-utils";
+
+const BASE64_PATTERN =
+  /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+
+export const sdcppConfigSchema = z
+  .object({
+    threads: z.number().optional(),
+    device: z.enum(["gpu", "cpu"]).optional(),
+    prediction: z
+      .enum(["auto", "eps", "v", "edm_v", "flow", "flux_flow", "flux2_flow"])
+      .optional()
+      .describe("Prediction type; auto-detected from model when omitted"),
+    type: z
+      .enum([
+        "auto", "f32", "f16", "bf16",
+        "q2_k", "q3_k", "q4_0", "q4_1", "q4_k",
+        "q5_0", "q5_1", "q5_k", "q6_k", "q8_0",
+      ])
+      .optional()
+      .describe("Weight quantization type override; auto-detected when omitted"),
+    rng: z.enum(["cpu", "cuda", "std_default"]).optional(),
+    sampler_rng: z.enum(["cpu", "cuda", "std_default"]).optional(),
+    clip_on_cpu: z.boolean().optional().describe("Force CLIP text encoder to run on CPU"),
+    vae_on_cpu: z.boolean().optional().describe("Force VAE decoder to run on CPU"),
+    vae_tiling: z.boolean().optional().describe("Enable VAE tiling for large images on limited VRAM"),
+    flash_attn: z.boolean().optional().describe("Enable flash attention to reduce memory usage"),
+    verbosity: z.number().optional(),
+    clipLModelSrc: modelSrcInputSchema.optional()
+      .describe("CLIP-L text encoder model — required for SD3"),
+    clipGModelSrc: modelSrcInputSchema.optional()
+      .describe("CLIP-G text encoder model — required for SDXL and SD3"),
+    t5XxlModelSrc: modelSrcInputSchema.optional()
+      .describe("T5-XXL text encoder model — required for SD3"),
+    llmModelSrc: modelSrcInputSchema.optional()
+      .describe("LLM text encoder model (e.g. Qwen3) — required for FLUX.2 [klein]"),
+    vaeModelSrc: modelSrcInputSchema.optional()
+      .describe("VAE decoder model — required for FLUX.2 [klein], optional for SDXL"),
+  });
+
+export type SdcppConfig = z.infer<typeof sdcppConfigSchema>;
+
+export const diffusionStatsSchema = z.object({
+  modelLoadMs: z
+    .number()
+    .optional()
+    .describe("Time in milliseconds spent loading the diffusion model."),
+  generationMs: z
+    .number()
+    .optional()
+    .describe("Wall-clock time in milliseconds spent generating images."),
+  totalGenerationMs: z
+    .number()
+    .optional()
+    .describe(
+      "Total generation time in milliseconds across all images in the batch.",
+    ),
+  totalWallMs: z
+    .number()
+    .optional()
+    .describe(
+      "Total wall-clock time in milliseconds including model load and sampling.",
+    ),
+  totalSteps: z
+    .number()
+    .optional()
+    .describe("Total number of diffusion sampling steps executed."),
+  totalGenerations: z
+    .number()
+    .optional()
+    .describe("Total number of generation passes executed."),
+  totalImages: z
+    .number()
+    .optional()
+    .describe("Total number of images produced."),
+  totalPixels: z
+    .number()
+    .optional()
+    .describe("Total number of pixels generated across all images."),
+  width: z
+    .number()
+    .optional()
+    .describe("Width in pixels of each generated image."),
+  height: z
+    .number()
+    .optional()
+    .describe("Height in pixels of each generated image."),
+  seed: z
+    .number()
+    .optional()
+    .describe(
+      "Seed that produced these outputs (randomized when not supplied by the caller).",
+    ),
+});
+
+export type DiffusionStats = z.infer<typeof diffusionStatsSchema>;
+
+export const diffusionStreamResponseSchema = z.object({
+  type: z.literal("diffusionStream"),
+  step: z.number().optional(),
+  totalSteps: z.number().optional(),
+  elapsedMs: z.number().optional(),
+  data: z.string().optional(),
+  outputIndex: z.number().optional(),
+  done: z.boolean().optional(),
+  stats: diffusionStatsSchema.optional(),
+});
+
+export type DiffusionStreamResponse = z.infer<
+  typeof diffusionStreamResponseSchema
+>;
+
+export const diffusionRequestSchema = z.object({
+  modelId: z
+    .string()
+    .describe("The identifier of the diffusion model to use for generation."),
+  prompt: z.string().describe("Positive prompt describing the image to generate."),
+  negative_prompt: z
+    .string()
+    .optional()
+    .describe("Optional negative prompt describing what to avoid."),
+  width: z
+    .number()
+    .int()
+    .positive()
+    .multipleOf(8)
+    .optional()
+    .describe("Image width in pixels (must be a multiple of 8)."),
+  height: z
+    .number()
+    .int()
+    .positive()
+    .multipleOf(8)
+    .optional()
+    .describe("Image height in pixels (must be a multiple of 8)."),
+  steps: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe("Number of sampling steps to run."),
+  cfg_scale: z
+    .number()
+    .optional()
+    .describe(
+      "Classifier-free guidance scale for SD 1.x / 2.x / XL / SD3 models; typical range 1–20, default 7",
+    ),
+  img_cfg_scale: z
+    .number()
+    .default(-1)
+    .describe(
+      "Image CFG scale for img2img/inpaint workflows where the image and prompt should have different guidance weights; defaults to -1 which reuses cfg_scale",
+    ),
+  guidance: z
+    .number()
+    .optional()
+    .describe(
+      "Distilled guidance for FLUX models; typical range 1–10, default 3.5",
+    ),
+  sampling_method: z
+    .enum([
+      "euler",
+      "euler_a",
+      "heun",
+      "dpm2",
+      "dpm++2m",
+      "dpm++2mv2",
+      "dpm++2s_a",
+      "lcm",
+      "ipndm",
+      "ipndm_v",
+      "ddim_trailing",
+      "tcd",
+      "res_multistep",
+      "res_2s",
+    ])
+    .optional()
+    .describe("Sampling algorithm used by the diffusion scheduler."),
+  scheduler: z
+    .enum([
+      "discrete", "karras", "exponential", "ays", "gits",
+      "sgm_uniform", "simple", "lcm", "smoothstep", "kl_optimal", "bong_tangent",
+    ])
+    .optional()
+    .describe("Noise schedule to apply when sampling."),
+  seed: z
+    .number()
+    .int()
+    .optional()
+    .describe("Random seed; when omitted the SDK picks one and returns it in stats."),
+  batch_count: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe("Number of images to generate in this call."),
+  vae_tiling: z
+    .boolean()
+    .optional()
+    .describe(
+      "Enable VAE tiling for large images on constrained VRAM (overrides model config).",
+    ),
+  cache_preset: z
+    .string()
+    .optional()
+    .describe("Optional name of a cached sampler preset to reuse."),
+  init_image: z
+    .string()
+    .min(1)
+    .regex(BASE64_PATTERN)
+    .optional()
+    .describe("Base64-encoded image for img2img generation"),
+  strength: z
+    .number()
+    .min(0)
+    .max(1)
+    .optional()
+    .describe(
+      "img2img denoising strength (0.0 = keep source, 1.0 = ignore source); used by the SD/SDXL SDEdit path. No-op for FLUX.2, which uses in-context conditioning and ignores this field.",
+    ),
+});
+
+export type DiffusionRequest = z.input<typeof diffusionRequestSchema>;
+
+export const diffusionStreamRequestSchema = diffusionRequestSchema.extend({
+  type: z.literal("diffusionStream"),
+});
+
+export type DiffusionStreamRequest = z.input<
+  typeof diffusionStreamRequestSchema
+>;
+
+export type DiffusionClientParams = Omit<DiffusionRequest, "init_image"> & {
+  init_image?: Uint8Array;
+};

@@ -3,20 +3,202 @@
 const fs = require('bare-fs')
 const path = require('bare-path')
 const os = require('bare-os')
+const process = require('bare-process')
 const { Readable } = require('bare-stream')
-const { spawn } = require('bare-subprocess')
-const TranscriptionParakeet = require('../../index.js')
 
 const platform = os.platform()
 const arch = os.arch()
 const isMobile = platform === 'ios' || platform === 'android'
 
-let FakeDL = null
-if (!isMobile) {
-  try {
-    FakeDL = require('../mocks/loader.fake.js')
-  } catch (e) {}
+// ---------------------------------------------------------------------------
+// Performance reporter — captures Parakeet integration-test stats and emits
+// them through the shared QVAC perf-report pipeline (desktop) or via console
+// markers extractable from Device Farm logs (mobile).
+//
+// On desktop we require the shared scripts/test-utils/performance-reporter
+// directly. On mobile that path lives outside the addon package and bare-pack
+// can't bundle it, so we fall back to an inline lightweight reporter that
+// chunks JSON into [PERF_REPORT_START]/[PERF_CHUNK] markers — the exact
+// format scripts/perf-report/extract-from-log.js already understands.
+// ---------------------------------------------------------------------------
+let createPerformanceReporter
+const _scriptBase = path.join('..', '..', '..', '..', 'scripts', 'test-utils')
+try {
+  const perfReporterMod = require(path.join(_scriptBase, 'performance-reporter'))
+  perfReporterMod.configure({ fs, path, process, os })
+  createPerformanceReporter = perfReporterMod.createPerformanceReporter
+} catch (_) {
+  createPerformanceReporter = function (opts) {
+    const _results = []
+    const _startedAt = new Date().toISOString()
+    const _addon = (opts && opts.addon) || 'parakeet'
+    const _addonType = (opts && opts.addonType) || 'parakeet'
+    const _device = {
+      name: platform,
+      platform,
+      os_version: '',
+      arch: os.arch ? os.arch() : '',
+      runner: 'device-farm'
+    }
+
+    return {
+      record (testName, metrics, extra) {
+        const entry = {
+          test: testName,
+          execution_provider: (extra && extra.execution_provider) || null,
+          metrics: Object.assign({
+            real_time_factor: null,
+            wall_time_ms: null,
+            tps: null,
+            encoder_time_ms: null,
+            decoder_time_ms: null,
+            audio_duration_ms: null,
+            total_time_ms: null
+          }, metrics),
+          input: (extra && extra.input) || null,
+          output: (extra && extra.output) || null
+        }
+        _results.push(entry)
+      },
+      toJSON () {
+        return {
+          schema_version: '1.0',
+          addon: _addon,
+          addon_type: _addonType,
+          timestamp: _startedAt,
+          device: _device,
+          results: _results
+        }
+      },
+      writeReport () {
+        const json = JSON.stringify(this.toJSON())
+        const dirs = []
+        if (global.testDir) dirs.push(global.testDir)
+        if (platform === 'android') {
+          dirs.push('/sdcard/Android/data/io.tether.test.qvac/files')
+          dirs.push('/storage/emulated/0/Android/data/io.tether.test.qvac/files')
+          dirs.push('/data/local/tmp')
+        }
+        dirs.push('/tmp')
+        for (let di = 0; di < dirs.length; di++) {
+          try {
+            try { fs.mkdirSync(dirs[di], { recursive: true }) } catch (_) {}
+            const p = path.join(dirs[di], 'perf-report.json')
+            fs.writeFileSync(p, json)
+            console.log('[PERF_REPORT_PATH]' + p)
+          } catch (e) {
+            console.log('[perf-reporter] write to ' + dirs[di] + ' failed: ' + e.message)
+          }
+        }
+      },
+      writeStepSummary () {},
+      writeToConsole () {
+        try {
+          const json = JSON.stringify(this.toJSON())
+          const CHUNK = 800
+          if (json.length <= CHUNK) {
+            console.log('[PERF_REPORT_START]' + json + '[PERF_REPORT_END]')
+          } else {
+            const id = Date.now().toString(36)
+            const n = Math.ceil(json.length / CHUNK)
+            for (let i = 0; i < n; i++) {
+              console.log('[PERF_CHUNK:' + id + ':' + i + ':' + n + ']' + json.substring(i * CHUNK, (i + 1) * CHUNK))
+            }
+          }
+        } catch (err) {
+          console.log('[perf-reporter] mobile console write failed: ' + err.message)
+        }
+      },
+      get length () { return _results.length }
+    }
+  }
 }
+
+const _perfReporter = createPerformanceReporter({
+  addon: 'parakeet',
+  addonType: 'parakeet'
+})
+
+const _reportPath = path.resolve('.', 'test/results/performance-report.json')
+let _reportScheduled = false
+
+function _flushPerfReport () {
+  if (_perfReporter.length === 0) return
+  try { _perfReporter.writeReport(_reportPath) } catch (_) {}
+  try { _perfReporter.writeToConsole() } catch (_) {}
+}
+
+function _scheduleReportWrite () {
+  if (_reportScheduled) return
+  _reportScheduled = true
+  process.on('exit', _flushPerfReport)
+}
+
+/**
+ * Record a parakeet inference stats row through the shared perf reporter.
+ *
+ * @param {string} label - Test label, e.g. '[CPU] multiple-transcriptions run 1'.
+ *                         The execution-provider is auto-detected from the
+ *                         label when it contains [CPU] or [GPU].
+ * @param {Object} stats - Stats object from the JobEnded event:
+ *                         { realTimeFactor, totalTime, audioDurationMs,
+ *                           tokensPerSecond, encoderMs, decoderMs,
+ *                           totalWallMs, ... }
+ * @param {Object} [extra] - Optional { wallMs, output, executionProvider }
+ *                            overrides.
+ */
+function recordParakeetStats (label, stats, extra) {
+  if (!stats || typeof stats !== 'object') return
+  const epOverride = extra && extra.executionProvider
+  const ep = epOverride || (/\[gpu\]/i.test(label) ? 'gpu' : /\[cpu\]/i.test(label) ? 'cpu' : null)
+
+  const rtf = typeof stats.realTimeFactor === 'number' ? stats.realTimeFactor : null
+  const totalTimeSec = typeof stats.totalTime === 'number' ? stats.totalTime : null
+  const totalTimeMs = totalTimeSec !== null ? Math.round(totalTimeSec * 1000) : null
+  const wallMs = (extra && typeof extra.wallMs === 'number')
+    ? Math.round(extra.wallMs)
+    : (typeof stats.totalWallMs === 'number' ? Math.round(stats.totalWallMs) : totalTimeMs)
+  const tps = typeof stats.tokensPerSecond === 'number' ? stats.tokensPerSecond : null
+  const encoderMs = typeof stats.encoderMs === 'number' ? Math.round(stats.encoderMs) : null
+  const decoderMs = typeof stats.decoderMs === 'number' ? Math.round(stats.decoderMs) : null
+  const audioMs = typeof stats.audioDurationMs === 'number' ? Math.round(stats.audioDurationMs) : null
+
+  _perfReporter.record(label, {
+    real_time_factor: rtf,
+    wall_time_ms: wallMs,
+    tps,
+    encoder_time_ms: encoderMs,
+    decoder_time_ms: decoderMs,
+    audio_duration_ms: audioMs,
+    total_time_ms: totalTimeMs
+  }, {
+    execution_provider: ep,
+    output: extra && extra.output ? String(extra.output) : null
+  })
+  _scheduleReportWrite()
+
+  if (isMobile) {
+    try { _perfReporter.writeReport() } catch (_) {}
+    try { _perfReporter.writeToConsole() } catch (_) {}
+  }
+}
+
+// Mobile paths use static string literals so bare-pack can trace them into
+// the bundle.  Desktop paths use variables so bare-pack skips them — the
+// relative ../../ paths don't exist in the mobile test-framework layout.
+const _bindingDesktop = '../../binding'
+const _parakeetDesktop = '../../parakeet'
+const _indexDesktop = '../../index.js'
+
+const binding = isMobile
+  ? require('@qvac/transcription-parakeet/binding.js')
+  : require(_bindingDesktop)
+const { ParakeetInterface } = isMobile
+  ? require('@qvac/transcription-parakeet/parakeet.js')
+  : require(_parakeetDesktop)
+const TranscriptionParakeet = isMobile
+  ? require('@qvac/transcription-parakeet')
+  : require(_indexDesktop)
 
 /**
  * Detect current platform
@@ -140,13 +322,27 @@ function makePcmNoise (numSamples, amplitude = 0.3) {
  * @param {Object} [binding] - Optional binding instance (will require if not provided)
  * @returns {Object} The binding instance with logger configured
  */
-function setupJsLogger (binding = null) {
-  const actualBinding = binding || require('../../binding')
-  const LOG_PRIORITIES = ['ERROR', 'WARNING', 'INFO', 'DEBUG']
-  actualBinding.setLogger((priority, message) => {
-    const priorityName = LOG_PRIORITIES[priority] || `UNKNOWN(${priority})`
-    console.log(`[C++ ${priorityName}] ${message}`)
-  })
+function setupJsLogger (overrideBinding = null) {
+  const actualBinding = overrideBinding || binding
+  // Logger lifecycle in integration can crash or hang when repeatedly toggled.
+  // Keep release as a no-op and only enable native logging explicitly when requested.
+  if (!actualBinding.__qvacReleaseLoggerPatched) {
+    actualBinding.releaseLogger = () => {}
+    actualBinding.__qvacReleaseLoggerPatched = true
+  }
+
+  const shouldEnableNativeLogs = process.env &&
+    process.env.QVAC_TEST_NATIVE_LOGS === '1'
+
+  if (shouldEnableNativeLogs && !actualBinding.__qvacLoggerSet) {
+    const LOG_PRIORITIES = ['ERROR', 'WARNING', 'INFO', 'DEBUG']
+    actualBinding.setLogger((priority, message) => {
+      const priorityName = LOG_PRIORITIES[priority] || `UNKNOWN(${priority})`
+      console.log(`[C++ ${priorityName}] ${message}`)
+    })
+    actualBinding.__qvacLoggerSet = true
+  }
+
   return actualBinding
 }
 
@@ -219,7 +415,14 @@ function getTestPaths (modelsDir = null) {
 
   if (isMobile && writableRoot) {
     actualModelsDir = modelsDir || path.join(writableRoot, 'models')
-    samplesDir = path.join(writableRoot, 'samples')
+    // Bundled testAssets are extracted to the cache dir by React Native.
+    // Resolve the directory from the asset manifest so integration tests
+    // can find sample audio files without an extra download step.
+    const assetPaths = global.assetPaths || {}
+    const firstAsset = Object.values(assetPaths)[0]
+    samplesDir = firstAsset
+      ? path.dirname(firstAsset.replace('file://', ''))
+      : path.join(writableRoot, 'samples')
   } else {
     actualModelsDir = modelsDir || path.resolve(__dirname, '../../models')
     samplesDir = path.resolve(__dirname, '../../examples/samples')
@@ -242,12 +445,108 @@ function getTestPaths (modelsDir = null) {
 }
 
 /**
- * Downloads a file from URL using curl
+ * Mobile-friendly HTTPS download using bare-https.
+ * Handles redirects and streams directly to file.
+ * Mirrors the pattern used by TTS's downloadModel.js.
+ */
+async function downloadWithHttp (url, filepath, maxRedirects = 10) {
+  return new Promise((resolve, reject) => {
+    const https = require('bare-https')
+    const { URL } = require('bare-url')
+
+    const parsedUrl = new URL(url)
+
+    const options = {
+      hostname: parsedUrl.hostname,
+      port: parsedUrl.port || 443,
+      path: parsedUrl.pathname + parsedUrl.search,
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; bare-download/1.0)'
+      }
+    }
+
+    console.log(` [HTTPS] Requesting: ${parsedUrl.hostname}${parsedUrl.pathname}`)
+
+    const req = https.request(options, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        if (maxRedirects <= 0) {
+          reject(new Error('Too many redirects'))
+          return
+        }
+        const location = res.headers.location
+        let redirectUrl
+        if (location.startsWith('http://') || location.startsWith('https://')) {
+          redirectUrl = location
+        } else if (location.startsWith('/')) {
+          redirectUrl = `${parsedUrl.protocol}//${parsedUrl.host}${location}`
+        } else {
+          const basePath = parsedUrl.pathname.substring(0, parsedUrl.pathname.lastIndexOf('/') + 1)
+          redirectUrl = `${parsedUrl.protocol}//${parsedUrl.host}${basePath}${location}`
+        }
+        console.log(` [HTTPS] Redirecting to: ${redirectUrl}`)
+        downloadWithHttp(redirectUrl, filepath, maxRedirects - 1)
+          .then(resolve)
+          .catch(reject)
+        return
+      }
+
+      if (res.statusCode !== 200) {
+        reject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`))
+        return
+      }
+
+      const dir = path.dirname(filepath)
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true })
+      }
+
+      const writeStream = fs.createWriteStream(filepath)
+      let downloadedBytes = 0
+      const contentLength = parseInt(res.headers['content-length'] || '0', 10)
+
+      res.on('data', (chunk) => {
+        writeStream.write(chunk)
+        downloadedBytes += chunk.length
+        if (contentLength > 0 && downloadedBytes % (1024 * 1024) < chunk.length) {
+          const percent = ((downloadedBytes / contentLength) * 100).toFixed(1)
+          console.log(` [HTTPS] Progress: ${percent}% (${downloadedBytes} / ${contentLength} bytes)`)
+        }
+      })
+
+      res.on('end', () => {
+        writeStream.end(() => {
+          console.log(` [HTTPS] Download complete: ${downloadedBytes} bytes`)
+          resolve()
+        })
+      })
+
+      res.on('error', (err) => {
+        writeStream.end()
+        reject(err)
+      })
+    })
+
+    req.on('error', (err) => {
+      reject(err)
+    })
+
+    req.end()
+  })
+}
+
+/**
+ * Downloads a file from URL.
+ * Uses bare-https on mobile (no curl available), curl on desktop.
  * @param {string} url - URL to download from
  * @param {string} destPath - Destination file path
  * @returns {Promise<void>}
  */
 async function downloadFile (url, destPath) {
+  if (isMobile) {
+    return downloadWithHttp(url, destPath)
+  }
+  const { spawn } = require('bare-subprocess')
   return new Promise((resolve, reject) => {
     const curl = spawn('curl', ['-L', '-o', destPath, url])
     curl.on('exit', (code) => {
@@ -268,18 +567,19 @@ async function ensureModel (modelPath = null) {
   const { modelsDir } = getTestPaths()
   const targetPath = modelPath || path.join(modelsDir, 'parakeet-tdt-0.6b-v3-onnx')
 
-  // Check if model already exists with all required files
   const requiredFiles = [
-    'encoder-model.onnx',
-    'encoder-model.onnx.data',
-    'decoder_joint-model.onnx',
-    'vocab.txt',
-    'preprocessor.onnx'
+    { file: 'encoder-model.onnx', minSize: 1000 },
+    { file: 'encoder-model.onnx.data', minSize: 100000000 },
+    { file: 'decoder_joint-model.onnx', minSize: 1000000 },
+    { file: 'vocab.txt', minSize: 100 },
+    { file: 'preprocessor.onnx', minSize: 100000 }
   ]
 
-  const allFilesExist = requiredFiles.every(file =>
-    fs.existsSync(path.join(targetPath, file))
-  )
+  const allFilesExist = requiredFiles.every(({ file, minSize }) => {
+    const p = path.join(targetPath, file)
+    if (!fs.existsSync(p)) return false
+    return fs.statSync(p).size >= minSize
+  })
 
   if (allFilesExist) {
     console.log('Model already downloaded')
@@ -297,19 +597,23 @@ async function ensureModel (modelPath = null) {
   const preprocessorUrl = 'https://huggingface.co/ysdede/parakeet-tdt-0.6b-v2-onnx/resolve/main/nemo128.onnx'
 
   const downloads = [
-    { url: `${baseUrl}/encoder-model.onnx`, file: 'encoder-model.onnx' },
-    { url: `${baseUrl}/encoder-model.onnx.data`, file: 'encoder-model.onnx.data' },
-    { url: `${baseUrl}/decoder_joint-model.onnx`, file: 'decoder_joint-model.onnx' },
-    { url: `${baseUrl}/vocab.txt`, file: 'vocab.txt' },
-    { url: preprocessorUrl, file: 'preprocessor.onnx' }
+    { url: `${baseUrl}/encoder-model.onnx`, file: 'encoder-model.onnx', minSize: 1000 },
+    { url: `${baseUrl}/encoder-model.onnx.data`, file: 'encoder-model.onnx.data', minSize: 100000000 },
+    { url: `${baseUrl}/decoder_joint-model.onnx`, file: 'decoder_joint-model.onnx', minSize: 1000000 },
+    { url: `${baseUrl}/vocab.txt`, file: 'vocab.txt', minSize: 100 },
+    { url: preprocessorUrl, file: 'preprocessor.onnx', minSize: 100000 }
   ]
 
-  for (const { url, file } of downloads) {
+  for (const { url, file, minSize } of downloads) {
     const destPath = path.join(targetPath, file)
-    if (!fs.existsSync(destPath)) {
-      console.log(`  Downloading ${file}...`)
-      await downloadFile(url, destPath)
+    if (fs.existsSync(destPath)) {
+      const size = fs.statSync(destPath).size
+      if (size >= minSize) continue
+      console.log(`  Cached ${file} too small (${size} bytes), re-downloading...`)
+      fs.unlinkSync(destPath)
     }
+    console.log(`  Downloading ${file}...`)
+    await downloadFile(url, destPath)
   }
 
   console.log('Model download complete')
@@ -360,27 +664,10 @@ async function runTranscription (params, expectation = {}) {
   const defaultModelPath = path.join(modelsDir, 'parakeet-tdt-0.6b-v3-onnx')
 
   const modelPath = params.modelPath || defaultModelPath
-  const modelDir = path.dirname(modelPath)
-  const modelName = params.modelName || path.basename(modelPath)
-  const diskPath = params.diskPath || modelDir
-  const loader = params.loader || new FakeDL({})
   const parakeetConfig = params.parakeetConfig || {}
+  const modelType = parakeetConfig.modelType || 'tdt'
 
-  const config = {
-    path: modelPath,
-    parakeetConfig: {
-      modelType: parakeetConfig.modelType || 'tdt',
-      maxThreads: parakeetConfig.maxThreads || 4,
-      useGPU: parakeetConfig.useGPU || false,
-      ...parakeetConfig
-    }
-  }
-
-  const constructorArgs = {
-    modelName,
-    diskPath,
-    loader
-  }
+  const files = params.files || getNamedPathsConfig(modelType, modelPath)
 
   if (typeof modelPath === 'string' && !fs.existsSync(modelPath)) {
     return {
@@ -392,7 +679,17 @@ async function runTranscription (params, expectation = {}) {
 
   let model
   try {
-    model = new TranscriptionParakeet(constructorArgs, config)
+    model = new TranscriptionParakeet({
+      files,
+      config: {
+        parakeetConfig: {
+          modelType,
+          maxThreads: parakeetConfig.maxThreads || 4,
+          useGPU: parakeetConfig.useGPU || false,
+          ...parakeetConfig
+        }
+      }
+    })
     await model._load()
 
     if (!params.audioInput) {
@@ -492,7 +789,116 @@ async function runTranscription (params, expectation = {}) {
   }
 }
 
+const MODEL_CONFIGS = {
+  ctc: {
+    dirName: 'parakeet-ctc-0.6b-onnx',
+    files: [
+      { url: 'https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/main/onnx/model.onnx', file: 'model.onnx', minSize: 1000 },
+      { url: 'https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/main/onnx/model.onnx_data', file: 'model.onnx_data', minSize: 100000000 },
+      { url: 'https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX/resolve/main/tokenizer.json', file: 'tokenizer.json', minSize: 100 }
+    ]
+  },
+  eou: {
+    dirName: 'parakeet-eou-120m-v1-onnx',
+    files: [
+      { url: 'https://huggingface.co/altunenes/parakeet-rs/resolve/main/realtime_eou_120m-v1-onnx/encoder.onnx', file: 'encoder.onnx', minSize: 100000 },
+      { url: 'https://huggingface.co/altunenes/parakeet-rs/resolve/main/realtime_eou_120m-v1-onnx/decoder_joint.onnx', file: 'decoder_joint.onnx', minSize: 100000 },
+      { url: 'https://huggingface.co/altunenes/parakeet-rs/resolve/main/realtime_eou_120m-v1-onnx/tokenizer.json', file: 'tokenizer.json', minSize: 100 }
+    ]
+  },
+  sortformer: {
+    dirName: 'sortformer-4spk-v2-onnx',
+    files: [
+      { url: 'https://huggingface.co/cgus/diar_streaming_sortformer_4spk-v2-onnx/resolve/main/diar_streaming_sortformer_4spk-v2.onnx', file: 'sortformer.onnx', minSize: 1000000 }
+    ]
+  }
+}
+
+/**
+ * Ensures a non-TDT model is downloaded and available.
+ * @param {string} modelType - 'ctc', 'eou', or 'sortformer'
+ * @returns {Promise<string|null>} Path to model directory, or null if type unknown
+ */
+async function ensureModelForType (modelType) {
+  const cfg = MODEL_CONFIGS[modelType]
+  if (!cfg) return null
+
+  const { modelsDir } = getTestPaths()
+  const targetPath = path.join(modelsDir, cfg.dirName)
+
+  const allFilesValid = cfg.files.every(f => {
+    const p = path.join(targetPath, f.file)
+    if (!fs.existsSync(p)) return false
+    return fs.statSync(p).size >= (f.minSize || 0)
+  })
+
+  if (allFilesValid) {
+    console.log(`${modelType.toUpperCase()} model already downloaded`)
+    return targetPath
+  }
+
+  console.log(`Downloading ${modelType.toUpperCase()} model from HuggingFace...`)
+  if (!fs.existsSync(targetPath)) {
+    fs.mkdirSync(targetPath, { recursive: true })
+  }
+
+  for (const { url, file, minSize } of cfg.files) {
+    const destPath = path.join(targetPath, file)
+    if (fs.existsSync(destPath)) {
+      const size = fs.statSync(destPath).size
+      if (size >= (minSize || 0)) continue
+      console.log(`  Cached ${file} too small (${size} bytes), re-downloading...`)
+      fs.unlinkSync(destPath)
+    }
+    console.log(`  Downloading ${file}...`)
+    await downloadFile(url, destPath)
+  }
+
+  console.log(`${modelType.toUpperCase()} model download complete`)
+  return targetPath
+}
+
+/**
+ * Build the named-paths config properties for a given model type.
+ * C++ loads directly from these paths (no JS buffer loading needed).
+ * @param {string} modelType - 'tdt', 'ctc', 'eou', or 'sortformer'
+ * @param {string} modelDir - absolute path to the model directory
+ * @returns {Object} named path config properties to spread into ParakeetInterface config
+ */
+function getNamedPathsConfig (modelType, modelDir) {
+  switch (modelType) {
+    case 'ctc':
+      return {
+        ctcModelPath: path.join(modelDir, 'model.onnx'),
+        ctcModelDataPath: path.join(modelDir, 'model.onnx_data'),
+        tokenizerPath: path.join(modelDir, 'tokenizer.json')
+      }
+    case 'eou':
+      return {
+        eouEncoderPath: path.join(modelDir, 'encoder.onnx'),
+        eouDecoderPath: path.join(modelDir, 'decoder_joint.onnx'),
+        tokenizerPath: path.join(modelDir, 'tokenizer.json')
+      }
+    case 'sortformer':
+      return {
+        sortformerPath: path.join(modelDir, 'sortformer.onnx')
+      }
+    case 'tdt':
+    default:
+      return {
+        encoderPath: path.join(modelDir, 'encoder-model.onnx'),
+        encoderDataPath: path.join(modelDir, 'encoder-model.onnx.data'),
+        decoderPath: path.join(modelDir, 'decoder_joint-model.onnx'),
+        vocabPath: path.join(modelDir, 'vocab.txt'),
+        preprocessorPath: path.join(modelDir, 'preprocessor.onnx')
+      }
+  }
+}
+
 module.exports = {
+  binding,
+  ParakeetInterface,
+  TranscriptionParakeet,
   detectPlatform,
   waitUntilIdle,
   runTranscription,
@@ -505,8 +911,13 @@ module.exports = {
   wordErrorRate,
   validateAccuracy,
   ensureModel,
+  ensureModelForType,
   readFileChunked,
+  getNamedPathsConfig,
   isMobile,
   platform,
-  arch
+  arch,
+  MODEL_CONFIGS,
+  recordParakeetStats,
+  flushParakeetPerfReport: _flushPerfReport
 }

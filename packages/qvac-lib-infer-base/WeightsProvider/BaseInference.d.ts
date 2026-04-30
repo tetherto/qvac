@@ -106,14 +106,14 @@ declare class BaseInference {
   /**
    * Handles output callbacks from the inference process
    * @param addon The addon instance.
-   * @param event Event type ('Error' | 'Output' | 'JobEnded').
+   * @param event Event type ('Error' | 'Output' | 'FinetuneProgress' | 'JobEnded').
    * @param jobId Job identifier.
    * @param data Event data.
    * @param error Error if any.
    */
   protected _outputCallback(
     addon: any,
-    event: 'Error' | 'Output' | 'JobEnded',
+    event: 'Error' | 'Output' | 'FinetuneProgress' | 'JobEnded',
     jobId: string,
     data: any,
     error?: Error

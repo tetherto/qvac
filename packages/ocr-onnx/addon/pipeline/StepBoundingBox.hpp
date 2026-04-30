@@ -41,6 +41,8 @@ private:
   int nLabels_{0};
   cv::Mat labels_;
   cv::Mat stats_;
+  cv::Mat segmap_;
+  cv::Rect prevSegmapROI_;
 
   /**
    * @brief loads connected components information to private variables.

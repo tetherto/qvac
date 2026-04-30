@@ -8,6 +8,7 @@ prebuilds/
 
 test/unit/all.js
 test/integration/all.js
+test/model/
 .npmrc
 package-lock.json
 .cache/

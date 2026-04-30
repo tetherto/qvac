@@ -1,6 +1,7 @@
 'use strict'
 
 const { QvacErrorRegistryClient, ERR_CODES } = require('../utils/error')
+const { withRetry } = require('../utils/retry')
 const RegistryConfig = require('./config')
 const { RegistryDatabase } = require('@qvac/registry-schema')
 const ReadyResource = require('ready-resource')
@@ -12,6 +13,9 @@ const IdEnc = require('hypercore-id-encoding')
 const path = require('#path')
 const fs = require('#fs')
 
+const DEFAULT_DOWNLOAD_MAX_RETRIES = 3
+const RETRIABLE_DOWNLOAD_CODES = ['REQUEST_TIMEOUT']
+
 class QVACRegistryClient extends ReadyResource {
   constructor (opts = {}) {
     super()
@@ -20,13 +24,13 @@ class QVACRegistryClient extends ReadyResource {
     this.registryConfig = new RegistryConfig({ logger: this.logger })
 
     this.db = null
-    this.corestore = null
     this.hyperswarm = null
     this._connectionHandler = null
     this._metadataReady = null
 
     this.storage = this.registryConfig.getRegistryStorage(opts.storage)
     this.registryCoreKey = this.registryConfig.getRegistryCoreKey(opts.registryCoreKey)
+    this.corestore = new Corestore(this.storage, opts.corestoreOpts || {})
 
     this.logger.debug('Initializing QVAC Registry Client', {
       mode: 'read',
@@ -39,8 +43,7 @@ class QVACRegistryClient extends ReadyResource {
   async _open () {
     this.logger.debug('_open called')
 
-    this.logger.debug('Creating corestore for open')
-    this.corestore = new Corestore(this.storage)
+    this.logger.debug('Opening corestore')
     await this.corestore.ready()
 
     this.logger.debug('Creating Hyperswarm for open')
@@ -53,6 +56,7 @@ class QVACRegistryClient extends ReadyResource {
     this.hyperswarm.on('connection', this._connectionHandler)
 
     this._metadataReady = this._connectMetadataCore()
+    await this._metadataReady
   }
 
   async _connectMetadataCore () {
@@ -247,11 +251,29 @@ class QVACRegistryClient extends ReadyResource {
 
       const totalSize = model.blobBinding.byteLength
 
+      const rangeDownload = core.download({
+        start: model.blobBinding.blockOffset,
+        length: model.blobBinding.blockLength
+      })
+
+      const blockStart = model.blobBinding.blockOffset
+      const blockEnd = blockStart + model.blobBinding.blockLength
+
       let artifact
       if (options.outputFile) {
-        await this._streamBlobToFile(blobs, core, model.blobBinding, options.outputFile, options)
+        await withRetry(
+          () => this._streamBlobToFile(blobs, core, model.blobBinding, options.outputFile, options),
+          {
+            maxRetries: options.maxRetries != null ? options.maxRetries : DEFAULT_DOWNLOAD_MAX_RETRIES,
+            retryCodes: RETRIABLE_DOWNLOAD_CODES,
+            onRetry: () => fs.promises.unlink(options.outputFile).catch(() => {}),
+            logger: this.logger
+          }
+        )
         artifact = { path: options.outputFile, totalSize }
 
+        rangeDownload.destroy()
+        await this._clearBlobBlocks(core, blockStart, blockEnd)
         if (blobs) await blobs.close()
         if (core) await core.close()
       } else {
@@ -262,6 +284,8 @@ class QVACRegistryClient extends ReadyResource {
         artifact = { stream, totalSize }
 
         const cleanup = async () => {
+          rangeDownload.destroy()
+          await this._clearBlobBlocks(core, blockStart, blockEnd)
           if (blobs) {
             try {
               await blobs.close()
@@ -279,7 +303,7 @@ class QVACRegistryClient extends ReadyResource {
           this.logger.debug('Blob resources closed after stream end')
         }
 
-        stream.on('close', cleanup)
+        stream.once('end', cleanup)
       }
 
       this.logger.info('Model downloaded successfully')
@@ -359,11 +383,29 @@ class QVACRegistryClient extends ReadyResource {
       }
       const totalSize = blobBinding.byteLength
 
+      const blockStart = pointer.blockOffset
+      const blockEnd = blockStart + pointer.blockLength
+
+      const rangeDownload = core.download({
+        start: pointer.blockOffset,
+        length: pointer.blockLength
+      })
+
       let artifact
       if (options.outputFile) {
-        await this._streamBlobToFile(blobs, core, pointer, options.outputFile, options)
+        await withRetry(
+          () => this._streamBlobToFile(blobs, core, pointer, options.outputFile, options),
+          {
+            maxRetries: options.maxRetries != null ? options.maxRetries : DEFAULT_DOWNLOAD_MAX_RETRIES,
+            retryCodes: RETRIABLE_DOWNLOAD_CODES,
+            onRetry: () => fs.promises.unlink(options.outputFile).catch(() => {}),
+            logger: this.logger
+          }
+        )
         artifact = { path: options.outputFile, totalSize }
 
+        rangeDownload.destroy()
+        await this._clearBlobBlocks(core, blockStart, blockEnd)
         if (blobs) await blobs.close()
         if (core) await core.close()
       } else {
@@ -374,6 +416,8 @@ class QVACRegistryClient extends ReadyResource {
         artifact = { stream, totalSize }
 
         const cleanup = async () => {
+          rangeDownload.destroy()
+          await this._clearBlobBlocks(core, blockStart, blockEnd)
           if (blobs) {
             try { await blobs.close() } catch (e) {
               this.logger.warn('Error closing blob instance', { error: e.message })
@@ -387,7 +431,7 @@ class QVACRegistryClient extends ReadyResource {
           this.logger.debug('Blob resources closed after stream end')
         }
 
-        stream.on('close', cleanup)
+        stream.once('end', cleanup)
       }
 
       this.logger.info('Blob download complete (direct)')
@@ -408,6 +452,16 @@ class QVACRegistryClient extends ReadyResource {
       }
 
       throw error
+    }
+  }
+
+  async _clearBlobBlocks (core, start, end) {
+    try {
+      const cleared = await core.clear(start, end, { diff: true })
+      await core.compact()
+      this.logger.info('Cleared blob blocks from corestore', { start, end, blocks: cleared ? cleared.blocks : end - start })
+    } catch (err) {
+      this.logger.warn('Failed to clear blob blocks from corestore', { error: err.message })
     }
   }
 
@@ -450,6 +504,11 @@ class QVACRegistryClient extends ReadyResource {
 
     core.on('download', progressHandler)
 
+    const rangeDownload = core.download({
+      start: blobPointer.blockOffset,
+      length: blobPointer.blockLength
+    })
+
     const stream = blobs.createReadStream(blobPointer, {
       wait: true,
       timeout: options.timeout || 30000
@@ -482,8 +541,45 @@ class QVACRegistryClient extends ReadyResource {
         }
       })
     } finally {
+      rangeDownload.destroy()
       core.off('download', progressHandler)
     }
+  }
+
+  async suspend (opts = {}) {
+    this.logger.debug('suspend called')
+
+    if (!this.opened || this.closing) {
+      this.logger.debug('Skipping suspend while client is not open or is closing')
+      return
+    }
+
+    if (this.hyperswarm && !this.hyperswarm.suspended) {
+      await this.hyperswarm.suspend(opts)
+    }
+    if (this.corestore) {
+      await this.corestore.suspend(opts)
+    }
+
+    this.logger.debug('QVACRegistryClient suspended')
+  }
+
+  async resume (opts = {}) {
+    this.logger.debug('resume called')
+
+    if (!this.opened || this.closing) {
+      this.logger.debug('Skipping resume while client is not open or is closing')
+      return
+    }
+
+    if (this.corestore) {
+      await this.corestore.resume()
+    }
+    if (this.hyperswarm && this.hyperswarm.suspended) {
+      await this.hyperswarm.resume(opts)
+    }
+
+    this.logger.debug('QVACRegistryClient resumed')
   }
 
   async _close () {

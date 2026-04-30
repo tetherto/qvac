@@ -33,15 +33,13 @@ jobs:
   run-integration-tests:
     continue-on-error: true
     runs-on: ${{ matrix.os }}
+    environment: release
     name: test-${{ matrix.platform }}-${{ matrix.arch }}
-
-    env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
     permissions:
       contents: read
       packages: read
+      id-token: write
 
     strategy:
       fail-fast: false
@@ -68,7 +66,7 @@ jobs:
 
     steps:
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
 
@@ -78,39 +76,11 @@ jobs:
         run: git config --system core.longpaths true
 
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
-
-      - name: Configure scoped registry for @tetherto and @qvac packages
-        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
-        env:
-          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
-        shell: bash
-        run: |
-          echo "Configuring scoped registry for @tetherto and @qvac packages..."
-          set -eu
-          echo "Writing .npmrc for dual registry install…"
-          cat > .npmrc <<NPMRC
-          always-auth=true
-          registry=https://registry.npmjs.org/
-          @qvac:registry=https://registry.npmjs.org/
-          @tetherto:registry=https://npm.pkg.github.com/
-          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
-          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
-          NPMRC
-
-          if [ -n "${GIT_PAT:-}" ]; then
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
-          else
-            # Using the workflow's GITHUB_TOKEN for git clones when possible
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
-          fi
 
       - name: Install NPM dependencies
         working-directory: ${{ inputs.workdir || env.PKG_DIR }}
@@ -121,10 +91,18 @@ jobs:
 
       - name: Download prebuilds from artifact
         if: ${{ !inputs.prebuild_package }}
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          path: ${{ inputs.workdir || env.PKG_DIR }}/prebuilds
+          path: ${{ runner.temp }}/prebuilds-staging
           merge-multiple: true
+
+      - name: Move prebuilds from staging to workspace
+        if: ${{ !inputs.prebuild_package }}
+        run: |
+          mkdir -p ${{ inputs.workdir || env.PKG_DIR }}/prebuilds
+          cp -r ${{ runner.temp }}/prebuilds-staging/* ${{ inputs.workdir || env.PKG_DIR }}/prebuilds/ 2>/dev/null || true
+          echo "Prebuilds moved from staging area"
+        shell: bash
 
       - name: Download prebuilds from package
         if: ${{ inputs.prebuild_package }}
@@ -147,6 +125,14 @@ jobs:
           sudo apt update
           sudo apt install -y g++-13
 
+      # Required for all OCR integration tests (param-validation, lifecycle, image-formats,
+      # full-ocr-suite, etc.). Provides detector + all recognizers under rec_dyn.
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
       - name: Download onnx model files
         working-directory: ${{ inputs.workdir || env.PKG_DIR }}
         shell: bash
@@ -160,3 +146,33 @@ jobs:
         run: npm run test:integration
         env:
           QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
+
+      - name: Generate HTML performance report
+        if: always()
+        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        shell: bash
+        run: |
+          echo "Checking for performance report..."
+          ls -la test/results/ 2>/dev/null || echo "test/results/ directory not found"
+          if [ -f test/results/performance-report.json ]; then
+            echo "Found performance-report.json, generating HTML..."
+            node ../../scripts/perf-report/aggregate.js \
+              --dir test/results \
+              --output-html test/results/performance-report.html \
+              --output-json test/results/performance-summary.json \
+              --output test/results/performance-report.md
+          else
+            echo "performance-report.json not found — skipping HTML generation"
+          fi
+
+      - name: Upload performance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-report-ocr-${{ matrix.os }}-${{ matrix.arch }}-${{ github.run_number }}
+          path: |
+            ${{ inputs.workdir || env.PKG_DIR }}/test/results/performance-report.json
+            ${{ inputs.workdir || env.PKG_DIR }}/test/results/performance-report.html
+            ${{ inputs.workdir || env.PKG_DIR }}/test/results/performance-summary.json
+          retention-days: 90
+          if-no-files-found: ignore

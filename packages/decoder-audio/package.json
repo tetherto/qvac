@@ -1,0 +1,68 @@
+{
+  "name": "@qvac/decoder-audio",
+  "version": "0.3.8",
+  "description": "",
+  "license": "Apache-2.0",
+  "author": "Tether",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "test:dts": "tsc index.d.ts --noEmit --esModuleInterop --skipLibCheck",
+    "test:unit": "brittle-bare test/unit/*.test.js",
+    "test": "npm run test:unit && npm run test:integration",
+    "coverage:unit": "brittle-bare --coverage --cov-dir=coverage/unit test/unit/*.test.js && mkdir -p .nyc_output && cp coverage/unit/coverage-final.json .nyc_output/out.json && npx nyc report --reporter=html --report-dir=coverage/html",
+    "coverage": "brittle-bare --coverage --cov-dir=coverage/unit test/unit/*.test.js && mkdir -p .nyc_output && cp coverage/unit/coverage-final.json .nyc_output/out.json && npx nyc report --reporter=html --report-dir=coverage/html",
+    "lint": "standard \"test/**/*.js\" \"*.js\" \"scripts/**/*.js\"",
+    "lint:fix": "standard --fix \"test/**/*.js\" \"*.js\" \"scripts/**/*.js\"",
+    "test:integration": "npm run test:integration:generate && brittle-bare test/integration/*.test.js",
+    "test:integration:generate": "brittle -r test/integration/all.js test/integration/*.test.js && npm run test:mobile:generate",
+    "test:mobile:generate": "bare ./scripts/generate-mobile-integration-tests.js",
+    "test:mobile:validate": "node scripts/validate-mobile-tests.js"
+  },
+  "files": [
+    "index.js",
+    "constants.js",
+    "constants.d.ts",
+    "utils",
+    "index.d.ts",
+    "test/mobile",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "exports": {
+    "./package": "./package.json",
+    ".": "./index.js",
+    "./constants": "./constants.js",
+    "./constants.js": "./constants.js"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.1",
+    "bare-os": "^3.6.2",
+    "bare-url": "^2.1.6",
+    "brittle": "^3.13.1",
+    "nyc": "^17.1.0",
+    "standard": "^17.1.2",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "@qvac/error": "^0.1.0",
+    "@qvac/infer-base": "^0.4.0",
+    "@qvac/logging": "^0.1.0",
+    "@qvac/response": "^0.1.0",
+    "bare-assert": "^1.1.0",
+    "bare-channel": "^5.2.2",
+    "bare-ffmpeg": "^1.0.0-32",
+    "bare-fs": "^4.5.1",
+    "bare-path": "^3.0.0",
+    "bare-process": "^4.2.2",
+    "process": "npm:bare-process@^4.2.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/decoder-audio"
+  },
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/decoder-audio#readme",
+  "types": "index.d.ts"
+}

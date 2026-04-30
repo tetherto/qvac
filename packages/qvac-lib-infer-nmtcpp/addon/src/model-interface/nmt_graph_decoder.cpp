@@ -307,15 +307,7 @@ struct ggml_cgraph* nmt_build_graph_decoder(
 
   // token encoding + position encoding
   struct ggml_tensor* cur = nullptr;
-  if (modelIsMarian(model.type)) {
-    cur = ggml_get_rows(ctx0, model.m_decoder_embeddings, input_ids);
-
-    cur = ggml_scale(ctx0, cur, embed_scaling);
-    ggml_tensor* tmp = ggml_get_rows(ctx0, model.m_decoder_pos_emb, position);
-
-    cur = ggml_add(ctx0, cur, tmp);
-
-  } else if (model.type == MODEL_INDICTRANS) {
+  {
     cur = ggml_get_rows(ctx0, model.m_decoder_embeddings, input_ids);
 
     cur = ggml_scale(ctx0, cur, embed_scaling);
@@ -344,41 +336,29 @@ struct ggml_cgraph* nmt_build_graph_decoder(
   for (int il = 0; il < n_layer; ++il) {
     const auto& layer = model.layers_decoder[il];
 
-    struct ggml_tensor* residual = nullptr;
-    if (model.type == MODEL_INDICTRANS) {
-      residual = inpL;
-    }
+    struct ggml_tensor* residual = inpL;
 
     // norm
-    if (model.type == MODEL_INDICTRANS) {
-      cur = ggml_norm(ctx0, inpL, hparams.eps);
-      cur = ggml_add(
-          ctx0, ggml_mul(ctx0, cur, layer.attn_ln_0_w), layer.attn_ln_0_b);
-      ggml_set_name(cur, "self_attn_norm");
-    }
+    cur = ggml_norm(ctx0, inpL, hparams.eps);
+    cur = ggml_add(
+        ctx0, ggml_mul(ctx0, cur, layer.attn_ln_0_w), layer.attn_ln_0_b);
+    ggml_set_name(cur, "self_attn_norm");
 
     // self-attention
     {
-      struct ggml_tensor* attn_input =
-          (model.type == MODEL_INDICTRANS) ? cur : inpL;
-
-      struct ggml_tensor* Qcur = ggml_mul_mat(ctx0, layer.attn_q_w, attn_input);
+      struct ggml_tensor* Qcur = ggml_mul_mat(ctx0, layer.attn_q_w, cur);
 
       Qcur = ggml_add(ctx0, Qcur, layer.attn_q_b);
 
-      if (model.type == MODEL_INDICTRANS) {
-        // IndicTrans2 scaling: self.scaling = self.head_dim**-0.5
-        Qcur = ggml_scale(ctx0, Qcur, KQscale);
-      }
+      Qcur = ggml_scale(ctx0, Qcur, KQscale);
 
-      // note: no bias for Key
-      struct ggml_tensor* Kcur = ggml_mul_mat(ctx0, layer.attn_k_w, attn_input);
+      struct ggml_tensor* Kcur = ggml_mul_mat(ctx0, layer.attn_k_w, cur);
 
       Kcur = ggml_add(ctx0, Kcur, layer.attn_k_b);
 
       // store key and value to memory
 
-      struct ggml_tensor* Vcur = ggml_mul_mat(ctx0, layer.attn_v_w, attn_input);
+      struct ggml_tensor* Vcur = ggml_mul_mat(ctx0, layer.attn_v_w, cur);
       Vcur = ggml_add(ctx0, Vcur, layer.attn_v_b);
 
       struct ggml_tensor* k;
@@ -447,12 +427,8 @@ struct ggml_cgraph* nmt_build_graph_decoder(
       } else {
         // K * Q
         struct ggml_tensor* KQ = ggml_mul_mat(ctx0, K, Q);
-        struct ggml_tensor* KQ_soft_max = nullptr;
-        if (model.type == MODEL_INDICTRANS) {
-          KQ_soft_max = ggml_soft_max_ext(ctx0, KQ, nullptr, 1.0F, 0.0F);
-        } else {
-          KQ_soft_max = ggml_soft_max_ext(ctx0, KQ, nullptr, KQscale, 0.0F);
-        }
+        struct ggml_tensor* KQ_soft_max =
+            ggml_soft_max_ext(ctx0, KQ, nullptr, 1.0F, 0.0F);
 
         struct ggml_tensor* V = ggml_view_3d(
             ctx0,
@@ -482,32 +458,18 @@ struct ggml_cgraph* nmt_build_graph_decoder(
     }
 
     // add the input
-    struct ggml_tensor* inpCA = nullptr;
-    if (model.type == MODEL_INDICTRANS) {
-      inpCA = ggml_add(ctx0, cur, residual);
-    } else if (modelIsMarian(model.type)) {
-      inpCA = ggml_add(ctx0, cur, inpL);
-    }
+    struct ggml_tensor* inpCA = ggml_add(ctx0, cur, residual);
 
-    struct ggml_tensor* cross_residual = nullptr;
-    if (model.type == MODEL_INDICTRANS) {
-      cross_residual =
-          inpCA; // Store before normalization for pre-norm architecture
-    }
+    struct ggml_tensor* cross_residual = inpCA;
 
     // norm
     {
       cur = ggml_norm(ctx0, inpCA, hparams.eps); // note: we use inpCA here
 
-      if (model.type == MODEL_INDICTRANS) {
-        cur = ggml_add(
-            ctx0,
-            ggml_mul(ctx0, cur, layer.cross_attn_ln_0_w),
-            layer.cross_attn_ln_0_b);
-      } else if (modelIsMarian(model.type)) {
-        cur = ggml_add(
-            ctx0, ggml_mul(ctx0, cur, layer.attn_ln_0_w), layer.attn_ln_0_b);
-      }
+      cur = ggml_add(
+          ctx0,
+          ggml_mul(ctx0, cur, layer.cross_attn_ln_0_w),
+          layer.cross_attn_ln_0_b);
     }
 
     residual = cur;
@@ -597,18 +559,9 @@ struct ggml_cgraph* nmt_build_graph_decoder(
     }
 
     // add the input
-    if (model.type == MODEL_INDICTRANS) {
-      cur = ggml_add(ctx0, cur, cross_residual);
-    } else if (modelIsMarian(model.type)) {
-      cur = ggml_add(ctx0, cur, residual);
-    }
+    cur = ggml_add(ctx0, cur, cross_residual);
 
-    struct ggml_tensor* ffn_residual = nullptr;
-    if (model.type == MODEL_INDICTRANS) {
-      ffn_residual = cur;
-    }
-
-    struct ggml_tensor* inpFF = nullptr;
+    struct ggml_tensor* ffn_residual = cur;
 
     // feed-forward network
     {
@@ -616,42 +569,15 @@ struct ggml_cgraph* nmt_build_graph_decoder(
       {
         cur = ggml_norm(ctx0, cur, hparams.eps);
 
-        if (model.type == MODEL_INDICTRANS) {
-          cur = ggml_add(
-              ctx0, ggml_mul(ctx0, cur, layer.mlp_ln_w), layer.mlp_ln_b);
-        } else {
-          cur = ggml_add(
-              ctx0,
-              ggml_mul(ctx0, cur, layer.cross_attn_ln_0_w),
-              layer.cross_attn_ln_0_b);
-        }
-      }
-
-      // residual
-      if (model.type != MODEL_INDICTRANS) {
-        inpFF = cur;
+        cur =
+            ggml_add(ctx0, ggml_mul(ctx0, cur, layer.mlp_ln_w), layer.mlp_ln_b);
       }
 
       // fully connected
       cur = ggml_mul_mat(ctx0, layer.mlp_0_w, cur);
 
       cur = ggml_add(ctx0, cur, layer.mlp_0_b);
-      if (model.type == MODEL_INDICTRANS) {
-        cur = ggml_gelu(ctx0, cur);
-      } else if (model.type == MODEL_MARIAN) {
-        cur = ggml_silu(ctx0, cur);
-      } else {
-        switch (hparams.activation_func) {
-        case activation_function::RELU: {
-          cur = ggml_relu(ctx0, cur);
-          break;
-        }
-        case activation_function::SILU: {
-          cur = ggml_silu(ctx0, cur);
-          break;
-        }
-        }
-      }
+      cur = ggml_gelu(ctx0, cur);
 
       // projection
       cur = ggml_mul_mat(ctx0, layer.mlp_1_w, cur);
@@ -659,36 +585,24 @@ struct ggml_cgraph* nmt_build_graph_decoder(
       cur = ggml_add(ctx0, cur, layer.mlp_1_b);
     }
 
-    if (model.type == MODEL_INDICTRANS) {
-      cur = ggml_add(ctx0, cur, ffn_residual);
-      inpL = cur;
-    } else {
-      cur = ggml_add(ctx0, cur, inpFF);
-      cur = ggml_norm(ctx0, cur, hparams.eps);
-      inpL =
-          ggml_add(ctx0, ggml_mul(ctx0, cur, layer.mlp_ln_w), layer.mlp_ln_b);
-    }
+    cur = ggml_add(ctx0, cur, ffn_residual);
+    inpL = cur;
   }
 
   cur = inpL;
   struct ggml_tensor* logits = nullptr;
 
-  if (modelIsMarian(model.type)) {
+  if (model.m_decoder_norm_w != nullptr) {
+    cur = ggml_norm(ctx0, cur, hparams.eps);
+    cur = ggml_add(
+        ctx0,
+        ggml_mul(ctx0, cur, model.m_decoder_norm_w),
+        model.m_decoder_norm_b);
+  }
+  if (hparams.has_lm_head && model.m_lm_head_w != nullptr) {
     logits = ggml_mul_mat(ctx0, model.m_lm_head_w, cur);
-    logits = ggml_add(ctx0, logits, model.m_final_logits_bias);
-  } else if (model.type == MODEL_INDICTRANS) {
-    if (model.m_decoder_norm_w != nullptr) {
-      cur = ggml_norm(ctx0, cur, hparams.eps);
-      cur = ggml_add(
-          ctx0,
-          ggml_mul(ctx0, cur, model.m_decoder_norm_w),
-          model.m_decoder_norm_b);
-    }
-    if (hparams.has_lm_head && model.m_lm_head_w != nullptr) {
-      logits = ggml_mul_mat(ctx0, model.m_lm_head_w, cur);
-    } else {
-      logits = ggml_mul_mat(ctx0, model.m_decoder_embeddings, cur);
-    }
+  } else {
+    logits = ggml_mul_mat(ctx0, model.m_decoder_embeddings, cur);
   }
 
   ggml_build_forward_expand(gf, logits);
@@ -748,7 +662,7 @@ bool nmt_decode_internal(nmt_context& ctx, nmt_batch& batch, nmt_state& state) {
   }
 
   ggml_tensor* decoder_pos_emb = ggml_graph_get_tensor(gf, "decoder_pos_emb");
-  if (decoder_pos_emb != nullptr && ctx.model.type == MODEL_INDICTRANS) {
+  if (decoder_pos_emb != nullptr) {
     const int d_model = ctx.model.hparams.n_text_state;
     const int logical_pos = batch.pos[batch.n_tokens - 1];
     const int offset = 2;
@@ -779,9 +693,7 @@ bool nmt_decode_internal(nmt_context& ctx, nmt_batch& batch, nmt_state& state) {
 
   ggml_tensor* logits = ggml_graph_node(gf, -1);
 
-  int vocab_size = (ctx.model.type == MODEL_INDICTRANS)
-                       ? ctx.model.hparams.n_tgt_vocab
-                       : ctx.model.hparams.n_vocab;
+  int vocab_size = ctx.model.hparams.n_tgt_vocab;
   std::vector<float> next_token_logits_vec(vocab_size);
 
   const int number_of_tokens = ggml_nelements(logits) / vocab_size;

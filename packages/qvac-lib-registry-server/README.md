@@ -9,11 +9,11 @@ Distributed model registry for QVAC. Download AI models for local inference, or 
 Use the client library to query and download models:
 
 ```bash
-npm install @tetherto/qvac-lib-registry-client
+npm install @qvac/registry-client
 ```
 
 ```javascript
-const { QVACRegistryClient } = require('@tetherto/qvac-lib-registry-client')
+const { QVACRegistryClient } = require('@qvac/registry-client')
 
 const client = new QVACRegistryClient({
   registryCoreKey: process.env.QVAC_REGISTRY_CORE_KEY
@@ -302,7 +302,7 @@ Regenerate specs with `npm run build:spec` and restart the service.
 node scripts/check-peers.js [--key <hypercore-key>]
 ```
 
-**`ping-server.js`**: Pings a running registry server via RPC to check availability and retrieve server status (role, view key, lengths, connected peers).
+**`ping-server.js`**: Pings a running registry server via RPC to verify availability and confirm the connected peer is the indexer rather than a blind relay. Returns `role` and `timestamp` only — operational metrics (model count, view core lag, peer counts, etc.) are exposed via the Prometheus `/metrics` endpoint instead.
 
 ```bash
 node scripts/ping-server.js [--peer <peer-public-key>]

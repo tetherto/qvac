@@ -12,13 +12,6 @@ const isMobile = platform === 'ios' || platform === 'android'
 const HF_WHISPER_BASE = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main'
 const HF_VAD_BASE = 'https://huggingface.co/ggml-org/whisper-vad/resolve/main'
 
-let FakeDL = null
-if (!isMobile) {
-  try {
-    FakeDL = require('../mocks/loader.fake.js')
-  } catch (e) {}
-}
-
 function detectPlatform () {
   return `${platform}-${arch}`
 }
@@ -410,7 +403,7 @@ function getAssetPath (filename, options = {}) {
 /**
  * Gets standard test paths for models and audio files
  * Handles mobile vs desktop paths automatically
- * @param {string} [modelsDir] - Optional models directory (defaults to '../../examples/models')
+ * @param {string} [modelsDir] - Optional models directory (defaults to '../../models')
  * @returns {Object} Object with modelsDir, samplesDir, modelPath, vadModelPath, and audioPath
  */
 function getTestPaths (modelsDir = null) {
@@ -424,8 +417,8 @@ function getTestPaths (modelsDir = null) {
     actualModelsDir = modelsDir || path.join(writableRoot, 'models')
     samplesDir = path.join(writableRoot, 'samples')
   } else {
-    // Desktop: use relative paths
-    actualModelsDir = modelsDir || path.resolve(__dirname, '../../examples/models')
+    // Desktop: use package-root models/ and examples/samples/
+    actualModelsDir = modelsDir || path.resolve(__dirname, '../../models')
     samplesDir = path.resolve(__dirname, '../../examples/samples')
   }
 
@@ -452,11 +445,7 @@ function getTestPaths (modelsDir = null) {
  * @param {string|Buffer|Uint8Array|Array|Readable} [params.audioInput] - Audio input (optional - if omitted, only tests config validation)
  * @param {string} [params.modelPath] - Path to whisper model file
  * @param {string} [params.vadModelPath] - Path to VAD model file
- * @param {string} [params.diskPath] - Directory for model files
  * @param {Object} [params.whisperConfig] - Whisper configuration object
- * @param {Object} [params.loader] - Model loader instance
- * @param {string} [params.modelName] - Model filename
- * @param {string} [params.vadModelName] - VAD model filename
  * @param {Object} [expectation={}] - Expectations for validation
  * @param {number} [expectation.minSegments] - Minimum number of segments
  * @param {number} [expectation.maxSegments] - Maximum number of segments
@@ -479,18 +468,12 @@ async function runTranscription (params, expectation = {}) {
     }
   }
 
-  const modelsDir = path.resolve(__dirname, '../../examples/models')
-  const defaultModelPath = path.join(modelsDir, 'ggml-tiny.bin')
+  const defaultModelsDir = path.resolve(__dirname, '../../models')
+  const defaultModelPath = path.join(defaultModelsDir, 'ggml-tiny.bin')
 
   const modelPath = params.modelPath || defaultModelPath
   const vadModelPath = params.vadModelPath // VAD model is optional, no default
 
-  const modelDir = path.dirname(modelPath)
-  const modelName = params.modelName || path.basename(modelPath)
-  const diskPath = params.diskPath || modelDir
-
-  const vadModelName = params.vadModelName || (vadModelPath ? path.basename(vadModelPath) : undefined)
-  const loader = params.loader || new FakeDL({})
   const whisperConfig = params.whisperConfig || {}
 
   const config = {
@@ -508,10 +491,10 @@ async function runTranscription (params, expectation = {}) {
   }
 
   const constructorArgs = {
-    modelName,
-    vadModelName,
-    diskPath,
-    loader
+    files: {
+      model: modelPath,
+      ...(vadModelPath ? { vadModel: vadModelPath } : {})
+    }
   }
 
   if (typeof modelPath === 'string' && !fs.existsSync(modelPath)) {

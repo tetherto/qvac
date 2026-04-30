@@ -31,6 +31,7 @@ async function loadWhisper (params = {}) {
     whisperConfig: {
       audio_format: 's16le',
       language: params.language || 'en',
+      translate: false,
       temperature: 0.0
     }
   }

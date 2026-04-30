@@ -8,16 +8,20 @@
 #include "../utils/Qwen3ReasoningUtils.hpp"
 #include "../utils/UTF8TokenBuffer.hpp"
 #include "LlmContext.hpp"
+#include "ToolsCompactController.hpp"
+#include "common/common.h"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
-class TextLlmContext: public LlmContext {
+class TextLlmContext : public LlmContext {
 public:
   TextLlmContext(const TextLlmContext&) = delete;
   TextLlmContext& operator=(const TextLlmContext&) = delete;
   TextLlmContext(TextLlmContext&&) = delete;
   TextLlmContext& operator=(TextLlmContext&&) = delete;
   // Constructor
-  TextLlmContext(common_params& commonParams, common_init_result&& llamaInit);
+  TextLlmContext(
+      common_params& commonParams, common_init_result&& llamaInit,
+      ToolsCompactController& tools);
 
   // Destructor
   ~TextLlmContext() override = default;
@@ -27,11 +31,12 @@ public:
    *
    * @param chatMsgs - chat messages.
    * @param is_cache_loaded - whether the cache is loaded.
+   * @param prefill - whether to only prefill context without generation setup.
    * @return - true if successful, false if inference is stopped.
    */
   bool evalMessage(
-      const std::vector<common_chat_msg>& chatMsgs,
-      bool isCacheLoaded) override;
+      const std::vector<common_chat_msg>& chatMsgs, bool isCacheLoaded,
+      bool prefill) override;
 
   /**
    * The eval message with tools method. It evaluates the message with tools and
@@ -40,11 +45,13 @@ public:
    * @param chatMsgs - chat messages.
    * @param tools - tools.
    * @param isCacheLoaded - whether the cache is loaded.
+   * @param prefill - whether to only prefill context without generation setup.
    * @return - true if successful, false if inference is stopped.
    */
   bool evalMessageWithTools(
       const std::vector<common_chat_msg>& chatMsgs,
-      const std::vector<common_chat_tool>& tools, bool isCacheLoaded) override;
+      const std::vector<common_chat_tool>& tools, bool isCacheLoaded,
+      bool prefill) override;
 
   /**
    * The generate response method. It generates the response token by token.
@@ -54,6 +61,9 @@ public:
    */
   bool generateResponse(
       const std::function<void(const std::string&)>& outputCallback) override;
+
+  std::function<void()>
+  applyGenerationParams(const GenerationParams& overrides) override;
 
   /**
    * The stop method. It stops the model inference.
@@ -66,6 +76,16 @@ public:
    * @return - the context.
    */
   llama_context* getCtx() override;
+
+  /**
+   * Access the underlying llama model pointer.
+   */
+  llama_model* getModel() override { return model_; }
+
+  /**
+   * Access the mutable common parameters associated with this context.
+   */
+  common_params& getParams() override { return params_; }
 
   /**
    * The get n_past method. It returns the n_past.
@@ -100,6 +120,9 @@ public:
    * @param nDiscarded - the number of tokens to discard.
    */
   void setNDiscarded(llama_pos nDiscarded) override;
+
+  [[nodiscard]] int32_t getNSlides() const override;
+  void resetNSlides() override;
 
   /**
    * The reset state method. It resets the context.
@@ -148,6 +171,7 @@ private:
   void applyContextDiscard();
   void handleStopRequestAndAddEot(LlamaBatch& batch);
 
+  ToolsCompactController& tools_;
   common_init_result llamaInit_;
   llama_model* model_;
   llama_context* lctx_;
@@ -161,6 +185,7 @@ private:
   llama_pos nPast_ = 0;
   llama_pos nDiscarded_ = 0;
   llama_pos firstMsgTokens_ = 0;
+  int32_t nSlides_ = 0;
   ThreadPoolPtr threadpool_;
   ThreadPoolPtr threadpoolBatch_;
 
@@ -175,5 +200,3 @@ private:
 
   std::atomic<bool> stopGeneration_ = false;
 };
-
-

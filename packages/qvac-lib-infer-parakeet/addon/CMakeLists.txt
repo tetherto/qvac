@@ -15,8 +15,6 @@ set(LIB_SRCS
         ${LIB_SRCS_PATH}/parakeet/ParakeetConfig.cpp
         ${LIB_SRCS_PATH}/parakeet/ParakeetHandlers.hpp
         ${LIB_SRCS_PATH}/parakeet/ParakeetHandlers.cpp
-        ${PROJECT_SOURCE_DIR}/src/addon/ParakeetModelJobsHandler.hpp
-        ${PROJECT_SOURCE_DIR}/src/addon/ParakeetModelJobsHandler.cpp
         ${PROJECT_SOURCE_DIR}/src/js-interface/JSAdapter.hpp
         ${PROJECT_SOURCE_DIR}/src/js-interface/JSAdapter.cpp
 )
@@ -32,7 +30,7 @@ target_include_directories(${LIB_NAME} PRIVATE
 # Link ONNX Runtime
 find_package(onnxruntime CONFIG REQUIRED)
 target_link_libraries(${LIB_NAME} PRIVATE
-        onnxruntime::onnxruntime
+        onnxruntime::onnxruntime_static
 )
 
 # Include path for addon src

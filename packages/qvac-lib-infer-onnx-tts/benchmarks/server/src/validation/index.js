@@ -29,6 +29,8 @@ const SupertonicConfigSchema = z.object({
   sampleRate: z.number().int().positive().default(44100),
   speed: z.number().optional().default(1),
   numInferenceSteps: z.number().int().min(1).optional().default(5),
+  /** Supertone `<lang>…</lang>` preprocessing. Benchmark defaults false (English-only); set true for multilingual text. */
+  supertonicMultilingual: z.boolean().optional().default(false),
   useGPU: z.boolean().optional().default(false)
 })
 

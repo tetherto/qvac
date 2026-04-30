@@ -331,8 +331,8 @@ class MosesTokenizer {
 
     // Protected patterns
     this.BASIC_PROTECTED_PATTERN_1 = /<\/?\S+\/?>/
-    this.BASIC_PROTECTED_PATTERN_2 = /<\S+( [a-zA-Z0-9]+="?[^"]*")+ ?\/?>/
-    this.BASIC_PROTECTED_PATTERN_3 = /<\S+( [a-zA-Z0-9]+='?[^']*')+ ?\/?>/
+    this.BASIC_PROTECTED_PATTERN_2 = /<\S+(?: [a-zA-Z0-9]+="[^"]*")+ ?\/?>/
+    this.BASIC_PROTECTED_PATTERN_3 = /<\S+(?: [a-zA-Z0-9]+='[^']*')+ ?\/?>/
     this.BASIC_PROTECTED_PATTERN_4 = /[\w\-_.]+@([\w\-_]+\.)+[a-zA-Z]{2,}/
     this.BASIC_PROTECTED_PATTERN_5 =
       /(https?|ftp):\/\/[^:/\s]+(\/\w+)*\/[\w\-.]+/

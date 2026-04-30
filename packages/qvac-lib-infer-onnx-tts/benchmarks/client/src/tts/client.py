@@ -3,7 +3,7 @@
 import httpx
 import logging
 import time
-from typing import List, Dict, NamedTuple, Optional, Tuple
+from typing import List, Dict, NamedTuple, Optional
 from pathlib import Path
 
 from .config import ServerConfig, ModelConfig
@@ -77,6 +77,9 @@ class TTSClient:
                 "sampleRate": self.model_cfg.sampleRate,
                 "speed": getattr(self.model_cfg, "speed", None) or 1.0,
                 "numInferenceSteps": getattr(self.model_cfg, "numInferenceSteps", None) or 5,
+                "supertonicMultilingual": getattr(
+                    self.model_cfg, "supertonicMultilingual", False
+                ),
                 "useGPU": self.model_cfg.useGPU,
             }
         else:
@@ -96,7 +99,7 @@ class TTSClient:
 
         Args:
             texts: List of text strings to synthesize
-            config_override: Optional dict merged into config (e.g. {"language": "es"} for Supertonic)
+            config_override: Optional dict merged into request config
 
         Returns:
             TTSResults with timing and RTF metrics
@@ -202,69 +205,6 @@ class TTSClient:
             )
             all_runs.append(run_results)
         
-        return all_runs
-
-    def synthesize_all_multi_language(
-        self,
-        dataset_spec: List[Tuple[str, List[str]]],
-    ) -> List[TTSResults]:
-        """
-        Synthesize texts for multiple languages in one run (e.g. Supertonic en+es).
-        Each (language, texts) is sent with config_override={"language": language}.
-
-        Args:
-            dataset_spec: List of (language_code, list of texts), e.g. [("en", en_texts), ("es", es_texts)]
-
-        Returns:
-            List of TTSResults (one per num_runs)
-        """
-        all_runs = []
-        for run_idx in range(self.num_runs):
-            if self.num_runs > 1:
-                logger.info(f"\n--- Run {run_idx + 1}/{self.num_runs} ---")
-            all_results = []
-            total_load_time = 0
-            total_gen_time = 0
-            implementation = None
-            version = None
-            for lang, lang_texts in dataset_spec:
-                num_batches = (len(lang_texts) + self.batch_size - 1) // self.batch_size
-                if run_idx == 0:
-                    logger.info(f"Synthesizing {len(lang_texts)} {lang} texts in {num_batches} batches")
-                for batch_idx in range(num_batches):
-                    start = batch_idx * self.batch_size
-                    end = start + self.batch_size
-                    batch = lang_texts[start:end]
-                    logger.info(f"Processing batch {batch_idx + 1}/{num_batches} ({lang})")
-                    max_retries = 3
-                    retry_delay = 2
-                    for attempt in range(max_retries):
-                        try:
-                            batch_results = self.synthesize_batch(
-                                batch, config_override={"language": lang}
-                            )
-                            all_results.extend(batch_results.results)
-                            if total_load_time == 0:
-                                total_load_time = batch_results.load_time_ms
-                            total_gen_time += batch_results.total_generation_ms
-                            implementation = batch_results.implementation
-                            version = batch_results.version
-                            break
-                        except (httpx.RemoteProtocolError, httpx.ReadTimeout, httpx.ConnectError) as e:
-                            if attempt < max_retries - 1:
-                                logger.warning(f"  Error on attempt {attempt + 1}: {e}")
-                                time.sleep(retry_delay)
-                            else:
-                                raise
-            all_runs.append(
-                TTSResults(
-                    results=all_results,
-                    implementation=implementation or "unknown",
-                    version=version or "unknown",
-                    load_time_ms=total_load_time,
-                    total_generation_ms=total_gen_time,
-                )
-            )
         return all_runs
 
     def close(self):

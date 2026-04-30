@@ -63,9 +63,9 @@
 |----------|-------------|-------------|--------|-------------|
 | macOS | arm64, x64 | 14.0+ | ✅ Tier 1 | CoreML |
 | iOS | arm64 | 17.0+ | ✅ Tier 1 | CoreML |
-| Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | CUDA, ROCm |
+| Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | CPU only |
 | Android | arm64 | 12+ | ✅ Tier 1 | NNAPI |
-| Windows | x64 | 10+ | ✅ Tier 1 | DirectML, CUDA |
+| Windows | x64 | 10+ | ✅ Tier 1 | DirectML |
 
 **Dependencies:**
 - qvac-lib-inference-addon-cpp (=0.12.2): C++ addon framework

@@ -1,6 +1,6 @@
 {
   "name": "@qvac/infer-base",
-  "version": "0.2.2",
+  "version": "0.4.1",
   "description": "Base class for inference clients",
   "main": "index.js",
   "scripts": {
@@ -28,10 +28,16 @@
     "brittle": "^3.15.0",
     "standard": "^17.1.0"
   },
-  "peerDependencies": {
-    "@qvac/dl-hyperdrive": "^0.1.0"
+  "optionalDependencies": {
+    "@qvac/diagnostics": "^0.1.0"
   },
-  "bugs": "https://github.com/tetherto/qvac-lib-infer-base/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/qvac-lib-infer-base"
+  },
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-infer-base#readme",
   "files": [
     "src",
     "index.d.ts",

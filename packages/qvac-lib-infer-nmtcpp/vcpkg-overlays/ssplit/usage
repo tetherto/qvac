@@ -1,4 +1,0 @@
-marian-dev provides CMake targets:
-
-find_package(ssplit CONFIG REQUIRED)
-target_link_libraries(main PRIVATE ssplit::ssplit)

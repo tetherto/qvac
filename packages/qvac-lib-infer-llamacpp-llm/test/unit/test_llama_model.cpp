@@ -1,40 +1,22 @@
+#include <atomic>
+#include <chrono>
+#include <exception>
 #include <filesystem>
 #include <memory>
 #include <string>
+#include <thread>
 #include <unordered_map>
 
 #include <gtest/gtest.h>
 #include <llama.h>
 #include <qvac-lib-inference-addon-cpp/Errors.hpp>
-#include <qvac-lib-inference-addon-cpp/RuntimeStats.hpp>
 
 #include "model-interface/LlamaModel.hpp"
 #include "test_common.hpp"
 
 namespace fs = std::filesystem;
 
-namespace {
-double getStatValue(
-    const qvac_lib_inference_addon_cpp::RuntimeStats& stats,
-    const std::string& key) {
-  for (const auto& stat : stats) {
-    if (stat.first == key) {
-      return std::visit(
-          [](const auto& value) -> double {
-            if constexpr (std::is_same_v<
-                              std::decay_t<decltype(value)>,
-                              double>) {
-              return value;
-            } else {
-              return static_cast<double>(value);
-            }
-          },
-          stat.second);
-    }
-  }
-  return 0.0;
-}
-} // namespace
+using test_common::getStatValue;
 
 class LlamaModelTest : public ::testing::Test {
 protected:
@@ -44,25 +26,7 @@ protected:
     config_files["gpu_layers"] = test_common::getTestGpuLayers();
     config_files["n_predict"] = "10";
 
-    fs::path basePath;
-    if (fs::exists(fs::path{"../../../models/unit-test"})) {
-      basePath = fs::path{"../../../models/unit-test"};
-    } else {
-      basePath = fs::path{"models/unit-test"};
-    }
-
-    fs::path modelPath = basePath / "Llama-3.2-1B-Instruct-Q4_0.gguf";
-    if (fs::exists(modelPath)) {
-      test_model_path = modelPath.string();
-    } else {
-      modelPath = basePath / "test_model.gguf";
-      if (fs::exists(modelPath)) {
-        test_model_path = modelPath.string();
-      } else {
-        test_model_path = "Llama-3.2-1B-Instruct-Q4_0.gguf";
-      }
-    }
-
+    test_model_path = test_common::BaseTestModelPath::get();
     test_projection_path = "";
 
     fs::path backendDir;
@@ -119,13 +83,72 @@ TEST_F(LlamaModelTest, IsLoadedMethodBeforeInit) {
   EXPECT_FALSE(model.isLoaded());
 }
 
-TEST_F(LlamaModelTest, InitializeBackend) {
+TEST_F(LlamaModelTest, ReloadLoadsImmediatelyAndInferenceStillWorks) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   LlamaModel model = createModel();
-  EXPECT_NO_THROW(model.initializeBackend());
+  model.waitForLoadInitialization();
+  if (!model.isLoaded()) {
+    FAIL() << "Model failed to load before reload";
+  }
+
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([{"role": "user", "content": "Hello before reload"}])";
+  EXPECT_NO_THROW({
+    std::string output = model.processPrompt(prompt);
+    EXPECT_GE(output.length(), 0);
+  });
+
+  EXPECT_NO_THROW(model.reload());
+  EXPECT_TRUE(model.isLoaded());
+
+  prompt.input = R"([{"role": "user", "content": "Hello after reload"}])";
+  EXPECT_NO_THROW({
+    std::string output = model.processPrompt(prompt);
+    EXPECT_GE(output.length(), 0);
+  });
+}
+
+TEST_F(LlamaModelTest, ReloadWithoutArgsUsesStoredConstructionArgs) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  LlamaModel model = createModel();
+  model.waitForLoadInitialization();
+  if (!model.isLoaded()) {
+    FAIL() << "Model failed to load before reload";
+  }
+
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([{"role": "user", "content": "First pass"}])";
+  EXPECT_NO_THROW({
+    std::string output = model.processPrompt(prompt);
+    EXPECT_GE(output.length(), 0);
+  });
+
+  EXPECT_NO_THROW(model.reload());
+  EXPECT_TRUE(model.isLoaded());
+
+  prompt.input = R"([{"role": "user", "content": "Second pass"}])";
+  EXPECT_NO_THROW({
+    std::string output = model.processPrompt(prompt);
+    EXPECT_GE(output.length(), 0);
+  });
+}
+
+TEST_F(LlamaModelTest, ReloadThrowsForModelBuiltWithInvalidPath) {
+  std::string invalidPath = getInvalidModelPath();
+  std::string projectionPath = test_projection_path;
+  std::unordered_map<std::string, std::string> config = config_files;
+  LlamaModel model(
+      std::move(invalidPath), std::move(projectionPath), std::move(config));
+
+  // Constructor uses delayed init and does not throw immediately.
+  EXPECT_FALSE(model.isLoaded());
+  EXPECT_THROW(model.reload(), qvac_errors::StatusError);
 }
 
 TEST_F(LlamaModelTest, InvalidModelPath) {
@@ -362,6 +385,8 @@ TEST_F(LlamaModelTest, RuntimeStatsAfterProcessing) {
 
     auto stats = model.runtimeStats();
     EXPECT_GE(stats.size(), 0);
+    double backendDevice = getStatValue(stats, "backendDevice");
+    EXPECT_TRUE(backendDevice == 0.0 || backendDevice == 1.0);
   });
 }
 
@@ -714,30 +739,19 @@ TEST_F(LlamaModelTest, FormatPromptMediaWithoutUserMessage) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
-  fs::path basePath;
-  if (fs::exists(fs::path{"../../../models/unit-test"})) {
-    basePath = fs::path{"../../../models/unit-test"};
-  } else {
-    basePath = fs::path{"models/unit-test"};
-  }
-
-  fs::path multimodalModelPath = basePath / "SmolVLM-500M-Instruct-Q8_0.gguf";
-  if (!fs::exists(multimodalModelPath)) {
-    multimodalModelPath = basePath / "SmolVLM-500M-Instruct.gguf";
-  }
-
-  fs::path projectionPath = basePath / "mmproj-SmolVLM-500M-Instruct-Q8_0.gguf";
-  if (!fs::exists(projectionPath)) {
-    projectionPath = basePath / "mmproj-SmolVLM-500M-Instruct.gguf";
-  }
+  std::string multimodalModelPath = test_common::BaseTestModelPath::get(
+      "SmolVLM-500M-Instruct-Q8_0.gguf", "SmolVLM-500M-Instruct.gguf");
+  std::string projectionPath = test_common::BaseTestModelPath::get(
+      "mmproj-SmolVLM-500M-Instruct-Q8_0.gguf",
+      "mmproj-SmolVLM-500M-Instruct.gguf");
 
   if (!fs::exists(multimodalModelPath) || !fs::exists(projectionPath)) {
     FAIL() << "Multimodal model and projection required for this test";
   }
 
   LlamaModel model(
-      multimodalModelPath.string(),
-      projectionPath.string(),
+      std::move(multimodalModelPath),
+      std::move(projectionPath),
       std::unordered_map<std::string, std::string>(config_files));
   model.waitForLoadInitialization();
 
@@ -757,30 +771,19 @@ TEST_F(LlamaModelTest, FormatPromptMediaWithoutRequest) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
-  fs::path basePath;
-  if (fs::exists(fs::path{"../../../models/unit-test"})) {
-    basePath = fs::path{"../../../models/unit-test"};
-  } else {
-    basePath = fs::path{"models/unit-test"};
-  }
-
-  fs::path multimodalModelPath = basePath / "SmolVLM-500M-Instruct-Q8_0.gguf";
-  if (!fs::exists(multimodalModelPath)) {
-    multimodalModelPath = basePath / "SmolVLM-500M-Instruct.gguf";
-  }
-
-  fs::path projectionPath = basePath / "mmproj-SmolVLM-500M-Instruct-Q8_0.gguf";
-  if (!fs::exists(projectionPath)) {
-    projectionPath = basePath / "mmproj-SmolVLM-500M-Instruct.gguf";
-  }
+  std::string multimodalModelPath = test_common::BaseTestModelPath::get(
+      "SmolVLM-500M-Instruct-Q8_0.gguf", "SmolVLM-500M-Instruct.gguf");
+  std::string projectionPath = test_common::BaseTestModelPath::get(
+      "mmproj-SmolVLM-500M-Instruct-Q8_0.gguf",
+      "mmproj-SmolVLM-500M-Instruct.gguf");
 
   if (!fs::exists(multimodalModelPath) || !fs::exists(projectionPath)) {
     FAIL() << "Multimodal model and projection required for this test";
   }
 
   LlamaModel model(
-      multimodalModelPath.string(),
-      projectionPath.string(),
+      std::move(multimodalModelPath),
+      std::move(projectionPath),
       std::unordered_map<std::string, std::string>(config_files));
   model.waitForLoadInitialization();
 
@@ -892,12 +895,12 @@ TEST_F(LlamaModelTest, ProcessEmptyMessagesAfterSessionCommands) {
     FAIL() << "Model failed to load";
   }
 
-  LlamaModel::Prompt session_only_prompt;
-  session_only_prompt.input =
-      R"([{"role": "session", "content": "test_session.bin"}, {"role": "session", "content": "reset"}])";
+  LlamaModel::Prompt cache_prompt;
+  cache_prompt.input = R"([{"role": "user", "content": "Hello"}])";
+  cache_prompt.cacheKey = "test_session.bin";
   EXPECT_NO_THROW({
-    std::string output = model.processPrompt(session_only_prompt);
-    EXPECT_EQ(output.length(), 0);
+    std::string output = model.processPrompt(cache_prompt);
+    EXPECT_GE(output.length(), 0);
     auto stats = model.runtimeStats();
     EXPECT_GE(stats.size(), 0);
   });
@@ -915,6 +918,441 @@ TEST_F(LlamaModelTest, CommonParamsParseInvalidChatTemplate) {
   config["n_predict"] = "10";
   config["chat_template"] = "invalid_template_name_xyz123";
   config["use_jinja"] = "false";
+
+  fs::path backendDir;
+#ifdef TEST_BINARY_DIR
+  backendDir = fs::path(TEST_BINARY_DIR);
+#else
+  backendDir = fs::current_path() / "build" / "test" / "unit";
+#endif
+  config["backendsDir"] = backendDir.string();
+
+  EXPECT_THROW(
+      {
+        LlamaModel model(
+            getValidModelPath(),
+            std::string(test_projection_path),
+            std::unordered_map<std::string, std::string>(config));
+        model.waitForLoadInitialization();
+      },
+      qvac_errors::StatusError);
+}
+
+TEST_F(LlamaModelTest, ReloadThrowsForStreamedShardedModel) {
+  using MP = test_common::TestModelPath;
+  MP shardedModel(
+      "Qwen3-0.6B-UD-IQ1_S-00001-of-00003.gguf",
+      "SHARDED_MODEL_FIRST_SHARD_PATH",
+      MP::OnMissing::Fail,
+      "https://huggingface.co/jmb95/Qwen3-0.6B-UD-IQ1_S-sharded",
+      true /* isSharded */);
+  REQUIRE_MODEL(shardedModel);
+  LlamaModel::resolveShardPaths(shardedModel.shards, shardedModel.path);
+
+  std::string path = shardedModel.path;
+  std::string projection;
+  auto cfg = config_files;
+  LlamaModel model(std::move(path), std::move(projection), std::move(cfg));
+
+  {
+    std::string tensorsBasename =
+        fs::path(shardedModel.shards.tensors_file).filename().string();
+    auto tensorsBuf = test_common::readFileToStreambufBinary(
+        shardedModel.shards.tensors_file);
+    ASSERT_NE(tensorsBuf, nullptr);
+    model.setWeightsForFile(tensorsBasename, std::move(tensorsBuf));
+
+    for (const auto& shardPath : shardedModel.shards.gguf_files) {
+      auto streambuf = test_common::readFileToStreambufBinary(shardPath);
+      ASSERT_NE(streambuf, nullptr);
+      model.setWeightsForFile(
+          fs::path(shardPath).filename().string(), std::move(streambuf));
+    }
+  }
+
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+
+  EXPECT_THROW(model.reload(), qvac_errors::StatusError);
+}
+
+TEST_F(LlamaModelTest, ReloadDuringProcessingWaitsAndDoesNotCrash) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  config_files["n_predict"] = "64";
+  LlamaModel model = createModel();
+  model.waitForLoadInitialization();
+
+  if (!model.isLoaded()) {
+    FAIL() << "Model failed to load";
+  }
+
+  std::atomic<bool> generationStarted{false};
+  std::string inferenceOutput;
+  std::exception_ptr inferenceException;
+
+  std::thread inferenceThread([&]() {
+    try {
+      LlamaModel::Prompt prompt;
+      prompt.input = R"([{"role": "user", "content": "Tell me a long story"}])";
+      prompt.outputCallback = [&](const std::string& token) {
+        generationStarted.store(true, std::memory_order_release);
+        inferenceOutput += token;
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+      };
+      model.processPrompt(prompt);
+    } catch (...) {
+      inferenceException = std::current_exception();
+    }
+  });
+
+  while (!generationStarted.load(std::memory_order_acquire)) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+
+  EXPECT_NO_THROW(model.reload());
+  EXPECT_TRUE(model.isLoaded());
+
+  // Inference must have completed before reload() returned, because
+  // processPrompt holds a shared lock and reload needs an exclusive one.
+  EXPECT_FALSE(inferenceOutput.empty());
+
+  inferenceThread.join();
+
+  if (inferenceException) {
+    FAIL() << "Inference thread threw unexpectedly";
+  }
+
+  LlamaModel::Prompt postReload;
+  postReload.input = R"([{"role": "user", "content": "Hello after reload"}])";
+  EXPECT_NO_THROW({
+    std::string output = model.processPrompt(postReload);
+    EXPECT_GE(output.length(), 0);
+  });
+}
+
+TEST_F(LlamaModelTest, CommonParamsParseToolsCompactTrue) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["ctx_size"] = "2048";
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["n_predict"] = "10";
+  config["tools_compact"] = "true";
+
+  fs::path backendDir;
+#ifdef TEST_BINARY_DIR
+  backendDir = fs::path(TEST_BINARY_DIR);
+#else
+  backendDir = fs::current_path() / "build" / "test" / "unit";
+#endif
+  config["backendsDir"] = backendDir.string();
+
+  EXPECT_NO_THROW({
+    LlamaModel model(
+        getValidModelPath(),
+        std::string(test_projection_path),
+        std::unordered_map<std::string, std::string>(config));
+    model.waitForLoadInitialization();
+  });
+}
+
+TEST_F(LlamaModelTest, CommonParamsParseToolsCompactFalse) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["ctx_size"] = "2048";
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["n_predict"] = "10";
+  config["tools_compact"] = "false";
+
+  fs::path backendDir;
+#ifdef TEST_BINARY_DIR
+  backendDir = fs::path(TEST_BINARY_DIR);
+#else
+  backendDir = fs::current_path() / "build" / "test" / "unit";
+#endif
+  config["backendsDir"] = backendDir.string();
+
+  EXPECT_NO_THROW({
+    LlamaModel model(
+        getValidModelPath(),
+        std::string(test_projection_path),
+        std::unordered_map<std::string, std::string>(config));
+    model.waitForLoadInitialization();
+  });
+}
+
+TEST_F(LlamaModelTest, CommonParamsParseToolsCompactUppercase) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["ctx_size"] = "2048";
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["n_predict"] = "10";
+  config["tools_compact"] = "TRUE";
+
+  fs::path backendDir;
+#ifdef TEST_BINARY_DIR
+  backendDir = fs::path(TEST_BINARY_DIR);
+#else
+  backendDir = fs::current_path() / "build" / "test" / "unit";
+#endif
+  config["backendsDir"] = backendDir.string();
+
+  EXPECT_NO_THROW({
+    LlamaModel model(
+        getValidModelPath(),
+        std::string(test_projection_path),
+        std::unordered_map<std::string, std::string>(config));
+    model.waitForLoadInitialization();
+  });
+}
+
+TEST_F(LlamaModelTest, CommonParamsParseSplitModeNone) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["ctx_size"] = "2048";
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["n_predict"] = "10";
+  config["split-mode"] = "none";
+
+  fs::path backendDir;
+#ifdef TEST_BINARY_DIR
+  backendDir = fs::path(TEST_BINARY_DIR);
+#else
+  backendDir = fs::current_path() / "build" / "test" / "unit";
+#endif
+  config["backendsDir"] = backendDir.string();
+
+  LlamaModel model(
+      getValidModelPath(),
+      std::string(test_projection_path),
+      std::unordered_map<std::string, std::string>(config));
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+  EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_NONE);
+}
+
+TEST_F(LlamaModelTest, CommonParamsParseSplitModeLayer) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["ctx_size"] = "2048";
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["n_predict"] = "10";
+  config["split-mode"] = "layer";
+
+  fs::path backendDir;
+#ifdef TEST_BINARY_DIR
+  backendDir = fs::path(TEST_BINARY_DIR);
+#else
+  backendDir = fs::current_path() / "build" / "test" / "unit";
+#endif
+  config["backendsDir"] = backendDir.string();
+
+  LlamaModel model(
+      getValidModelPath(),
+      std::string(test_projection_path),
+      std::unordered_map<std::string, std::string>(config));
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+
+  double backendDevice = getStatValue(model.runtimeStats(), "backendDevice");
+  if (backendDevice == 0.0) {
+    EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_NONE);
+  } else {
+    EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_LAYER);
+  }
+}
+
+TEST_F(LlamaModelTest, CommonParamsParseSplitModeRow) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["ctx_size"] = "2048";
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["n_predict"] = "10";
+  config["split-mode"] = "row";
+
+  fs::path backendDir;
+#ifdef TEST_BINARY_DIR
+  backendDir = fs::path(TEST_BINARY_DIR);
+#else
+  backendDir = fs::current_path() / "build" / "test" / "unit";
+#endif
+  config["backendsDir"] = backendDir.string();
+
+  LlamaModel model(
+      getValidModelPath(),
+      std::string(test_projection_path),
+      std::unordered_map<std::string, std::string>(config));
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+
+  double backendDevice = getStatValue(model.runtimeStats(), "backendDevice");
+  if (backendDevice == 0.0) {
+    EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_NONE);
+  } else {
+    EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_ROW);
+  }
+}
+
+TEST_F(LlamaModelTest, CommonParamsParseSplitModeCaseInsensitive) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["ctx_size"] = "2048";
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["n_predict"] = "10";
+  config["split-mode"] = "LAYER";
+
+  fs::path backendDir;
+#ifdef TEST_BINARY_DIR
+  backendDir = fs::path(TEST_BINARY_DIR);
+#else
+  backendDir = fs::current_path() / "build" / "test" / "unit";
+#endif
+  config["backendsDir"] = backendDir.string();
+
+  EXPECT_NO_THROW({
+    LlamaModel model(
+        getValidModelPath(),
+        std::string(test_projection_path),
+        std::unordered_map<std::string, std::string>(config));
+    model.waitForLoadInitialization();
+  });
+}
+
+TEST_F(LlamaModelTest, CommonParamsParseSplitModeUnderscoreVariant) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["ctx_size"] = "2048";
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["n_predict"] = "10";
+  config["split_mode"] = "layer";
+
+  fs::path backendDir;
+#ifdef TEST_BINARY_DIR
+  backendDir = fs::path(TEST_BINARY_DIR);
+#else
+  backendDir = fs::current_path() / "build" / "test" / "unit";
+#endif
+  config["backendsDir"] = backendDir.string();
+
+  EXPECT_NO_THROW({
+    LlamaModel model(
+        getValidModelPath(),
+        std::string(test_projection_path),
+        std::unordered_map<std::string, std::string>(config));
+    model.waitForLoadInitialization();
+  });
+}
+
+TEST_F(LlamaModelTest, CpuFallbackClearsGpuSplitParams) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = "cpu";
+  config["ctx_size"] = "2048";
+  config["n_predict"] = "10";
+  config["split-mode"] = "layer";
+  config["tensor-split"] = "50,50";
+  config["main-gpu"] = "0";
+
+  fs::path backendDir;
+#ifdef TEST_BINARY_DIR
+  backendDir = fs::path(TEST_BINARY_DIR);
+#else
+  backendDir = fs::current_path() / "build" / "test" / "unit";
+#endif
+  config["backendsDir"] = backendDir.string();
+
+  LlamaModel model(
+      getValidModelPath(),
+      std::string(test_projection_path),
+      std::unordered_map<std::string, std::string>(config));
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+
+  EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_NONE);
+  double backendDevice = getStatValue(model.runtimeStats(), "backendDevice");
+  EXPECT_EQ(backendDevice, 0.0);
+}
+
+TEST_F(LlamaModelTest, CommonParamsParseSplitModeInvalid) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["ctx_size"] = "2048";
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["n_predict"] = "10";
+  config["split-mode"] = "invalid_value";
+
+  fs::path backendDir;
+#ifdef TEST_BINARY_DIR
+  backendDir = fs::path(TEST_BINARY_DIR);
+#else
+  backendDir = fs::current_path() / "build" / "test" / "unit";
+#endif
+  config["backendsDir"] = backendDir.string();
+
+  EXPECT_THROW(
+      {
+        LlamaModel model(
+            getValidModelPath(),
+            std::string(test_projection_path),
+            std::unordered_map<std::string, std::string>(config));
+        model.waitForLoadInitialization();
+      },
+      qvac_errors::StatusError);
+}
+
+TEST_F(LlamaModelTest, CommonParamsParseSplitModeBothKeysRejects) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["ctx_size"] = "2048";
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["n_predict"] = "10";
+  config["split-mode"] = "layer";
+  config["split_mode"] = "layer";
 
   fs::path backendDir;
 #ifdef TEST_BINARY_DIR

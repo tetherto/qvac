@@ -105,31 +105,14 @@ private:
 };
 
 namespace {
-auto getPath(js_env_t* env, qvac_lib_inference_addon_cpp::js::String path) {
-  if constexpr (std::is_same_v<ORTCHAR_T, char>) {
-    return path.as<std::string>(env);
-  } else if constexpr (
-      std::is_same_v<ORTCHAR_T, wchar_t> && sizeof(wchar_t) == 2) {
-    size_t length = 0;
-    JS(js_get_value_string_utf16le(env, path, nullptr, 0, &length));
-    std::wstring str(length, '\0');
-    JS(js_get_value_string_utf16le(
-        env,
-        path,
-        reinterpret_cast<uint16_t*>(
-            str.data()) /* NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-                         */
-        ,
-        length,
-        nullptr));
-    return str;
-  }
+std::string
+getPath(js_env_t* env, qvac_lib_inference_addon_cpp::js::String path) {
+  return path.as<std::string>(env);
 }
 } // namespace
 
 inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
-  using namespace std;
 
   auto args = js::getArguments(env, info);
   if (args.size() != 4) {
@@ -153,8 +136,6 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
       getPath(env, args1.getProperty<js::String>(env, "pathRecognizer"));
   auto langList = js::toVector<js::String, std::string>(
       env, args1.getProperty<js::Array>(env, "langList"));
-  auto optUseGPU = args1.getOptionalProperty<js::Boolean>(env, "useGPU");
-  bool useGPU = optUseGPU ? optUseGPU->as<bool>(env) : true;
   auto optTimeout = args1.getOptionalProperty<js::Number>(env, "timeout");
   int timeout = optTimeout ? static_cast<int>(optTimeout->as<double>(env))
                            : DEFAULT_PIPELINE_TIMEOUT_SECONDS;
@@ -194,20 +175,92 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
         static_cast<int>(optRecognizerBatchSize->as<double>(env));
   }
 
-  auto model = make_unique<Pipeline>(
-      pathDetector.c_str(),
-      pathRecognizer.c_str(),
+  auto optPipelineMode =
+      args1.getOptionalProperty<js::String>(env, "pipelineMode");
+  if (optPipelineMode) {
+    auto modeStr = optPipelineMode->as<std::string>(env);
+    if (modeStr == "doctr") {
+      config.mode = PipelineMode::DOCTR;
+    } else {
+      config.mode = PipelineMode::EASYOCR;
+    }
+  }
+
+  auto optDecoding =
+      args1.getOptionalProperty<js::String>(env, "decodingMethod");
+  if (optDecoding) {
+    auto str = optDecoding->as<std::string>(env);
+    if (str == "attention") {
+      config.decodingMethod = DecodingMethod::ATTENTION;
+    } else {
+      config.decodingMethod = DecodingMethod::CTC;
+    }
+  }
+
+  auto optStraighten =
+      args1.getOptionalProperty<js::Boolean>(env, "straightenPages");
+  if (optStraighten) {
+    config.straightenPages = optStraighten->as<bool>(env);
+  }
+
+  auto optUseGPU = args1.getOptionalProperty<js::Boolean>(env, "useGPU");
+  if (optUseGPU) {
+    config.sessionConfig.provider =
+        optUseGPU->as<bool>(env) ? onnx_addon::ExecutionProvider::AUTO_GPU
+                                 : onnx_addon::ExecutionProvider::CPU;
+  }
+
+  auto optGraphOptimization =
+      args1.getOptionalProperty<js::String>(env, "graphOptimization");
+  if (optGraphOptimization) {
+    auto str = optGraphOptimization->as<std::string>(env);
+    if (str == "basic") {
+      config.sessionConfig.optimization =
+          onnx_addon::GraphOptimizationLevel::BASIC;
+    } else if (str == "extended") {
+      config.sessionConfig.optimization =
+          onnx_addon::GraphOptimizationLevel::EXTENDED;
+    } else if (str == "all") {
+      config.sessionConfig.optimization =
+          onnx_addon::GraphOptimizationLevel::ALL;
+    } else if (str == "disable") {
+      config.sessionConfig.optimization =
+          onnx_addon::GraphOptimizationLevel::DISABLE;
+    }
+  }
+
+  auto optEnableXnnpack =
+      args1.getOptionalProperty<js::Boolean>(env, "enableXnnpack");
+  if (optEnableXnnpack)
+    config.sessionConfig.enableXnnpack = optEnableXnnpack->as<bool>(env);
+
+  auto optEnableCpuMemArena =
+      args1.getOptionalProperty<js::Boolean>(env, "enableCpuMemArena");
+  if (optEnableCpuMemArena)
+    config.sessionConfig.enableCpuMemArena =
+        optEnableCpuMemArena->as<bool>(env);
+
+  auto optIntraOpThreads =
+      args1.getOptionalProperty<js::Number>(env, "intraOpThreads");
+  if (optIntraOpThreads)
+    config.sessionConfig.intraOpThreads =
+        static_cast<int>(optIntraOpThreads->as<double>(env));
+
+  auto model = std::make_unique<Pipeline>(
+      pathDetector,
+      pathRecognizer,
       std::span<const std::string>(langList),
-      useGPU,
       timeout,
       config);
 
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
-  outHandlers.add(make_shared<PipelineOutputHandler>());
-  unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
-      env, args[0], args[2], std::move(outHandlers));
+  outHandlers.add(std::make_shared<PipelineOutputHandler>());
+  std::unique_ptr<OutputCallBackInterface> callback =
+      std::make_unique<OutputCallBackJs>(
+          env, args[0], args[2], std::move(outHandlers));
 
-  auto addon = make_unique<AddonJs>(env, std::move(callback), std::move(model));
+  auto addon =
+      std::make_unique<AddonJs>(env, std::move(callback), std::move(model));
 
   return JsInterface::createInstance(env, std::move(addon));
 }
@@ -215,7 +268,6 @@ JSCATCH
 
 inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
-  using namespace std;
 
   auto args = js::getArguments(env, info);
   if (args.size() != 2) {

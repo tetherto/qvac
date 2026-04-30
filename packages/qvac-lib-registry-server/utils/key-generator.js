@@ -2,12 +2,23 @@
 
 const crypto = require('crypto')
 
-function generatePrimaryKey (passphrase) {
-  const hash = crypto.createHash('sha256')
+// Fixed salt: deterministic test keys only; domain-separates this KDF from unrelated PBKDF2 uses.
+const PASSPHRASE_PBKDF2_SALT = Buffer.from('qvac-registry-server/passphrase-kdf-v1', 'utf8')
+const PASSPHRASE_PBKDF2_ITERATIONS = 310000
 
+function deriveKeyMaterialFromPassphrase (passphrase, byteLength) {
+  return crypto.pbkdf2Sync(
+    passphrase,
+    PASSPHRASE_PBKDF2_SALT,
+    PASSPHRASE_PBKDF2_ITERATIONS,
+    byteLength,
+    'sha256'
+  )
+}
+
+function generatePrimaryKey (passphrase) {
   if (passphrase) {
-    hash.update(passphrase)
-    return hash.digest()
+    return deriveKeyMaterialFromPassphrase(passphrase, 32)
   }
 
   return crypto.randomBytes(32)
@@ -28,8 +39,7 @@ function generateWriterKeyPair (passphrase) {
   const secretKey = Buffer.alloc(sodium.crypto_sign_SECRETKEYBYTES)
 
   if (passphrase) {
-    // Deterministic: derive seed from passphrase
-    const seed = crypto.createHash('sha256').update(passphrase).digest()
+    const seed = deriveKeyMaterialFromPassphrase(passphrase, 32)
     sodium.crypto_sign_seed_keypair(publicKey, secretKey, seed)
   } else {
     // Random keypair

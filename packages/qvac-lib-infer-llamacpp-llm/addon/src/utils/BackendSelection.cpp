@@ -1,18 +1,64 @@
 #include "BackendSelection.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <optional>
+#include <regex>
+#include <string_view>
 #include <variant>
 #include <vector>
 
+#include <common/log.h>
 #include <ggml-backend.h>
 
 #include "common/common.h"
+#include "model-interface/ModelMetadata.hpp"
 
 using namespace backend_selection;
 
 namespace {
+
+constexpr std::array<std::string_view, 3> kSupportedFinetuneArchitectures = {
+    "gemma3", "qwen3", "bitnet"};
+
+bool isSupportedFinetuneArchitecture(std::string_view arch) {
+  return std::ranges::find(kSupportedFinetuneArchitectures, arch) !=
+         kSupportedFinetuneArchitectures.end();
+}
+
+} // namespace
+
+std::optional<std::string> backend_selection::getUnknownFinetuneArchitecture(
+    const ModelMetaData* metadata) {
+  const auto arch = metadata != nullptr
+                        ? metadata->tryGetString("general.architecture")
+                        : std::nullopt;
+  if (arch.has_value() && isSupportedFinetuneArchitecture(arch.value())) {
+    return std::nullopt;
+  }
+  return arch.value_or("unknown");
+}
+
+namespace {
+
+std::optional<int> parseAdrenoVersion(const std::string& gpuDescription) {
+  static const std::regex adrenoRegex(R"(dreno.*?(\d+))");
+  std::smatch matches;
+  if (std::regex_search(gpuDescription, matches, adrenoRegex) &&
+      matches.size() > 1) {
+    try {
+      return std::stoi(matches[1].str());
+    } catch (const std::exception& e) {
+      LOG_WRN(
+          "parseAdrenoVersion: failed to parse version from '%s': %s\n",
+          gpuDescription.c_str(),
+          e.what());
+    }
+  }
+  return std::nullopt;
+}
+
 struct DeviceDescription {
   std::string gpuDescription;
   std::string gpuBackend;
@@ -62,7 +108,8 @@ struct DeviceDescription {
 void emplaceIfValidDevice(
     const BackendInterface& bckI, std::vector<std::string>& gpuBackends,
     std::vector<std::string>& igpuBackends,
-    std::vector<std::string>& openClBackends, const ggml_backend_reg_t reg,
+    std::vector<std::string>& openClBackends,
+    std::optional<int>& maxAdrenoVersion, const ggml_backend_reg_t reg,
     const DeviceDescription& devDescr,
     const enum ggml_backend_dev_type backendTypeEnum) {
   if (bckI.ggml_backend_reg_name(reg) != std::string("RPC")) {
@@ -77,7 +124,15 @@ void emplaceIfValidDevice(
     const bool isOpenCl =
         devDescr.gpuBackend.find("opencl") != std::string::npos;
     const bool isAdreno =
-        devDescr.gpuDescription.find("adreno") != std::string::npos;
+        devDescr.gpuDescription.find("dreno") != std::string::npos;
+    if (isAdreno) {
+      auto version = parseAdrenoVersion(devDescr.gpuDescription);
+      if (version.has_value() && (!maxAdrenoVersion.has_value() ||
+                                  version.value() > maxAdrenoVersion.value())) {
+        maxAdrenoVersion = version;
+      }
+    }
+
     if (isOpenCl && isAdreno) {
       logEmplaceGpuBackend(devDescr.gpuBackend);
       openClBackends.emplace_back(devDescr.gpuBackend);
@@ -114,7 +169,8 @@ void tryEmplaceDevice(
     std::optional<MainGpuType> mainGpuType,
     std::vector<std::string>& gpuBackends,
     std::vector<std::string>& igpuBackends,
-    std::vector<std::string>& openClBackends) {
+    std::vector<std::string>& openClBackends,
+    std::optional<int>& maxAdrenoVersion) {
   const ggml_backend_dev_t dev = bckI.ggml_backend_dev_get(deviceIndex);
   const ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
   const enum ggml_backend_dev_type backendTypeEnum =
@@ -129,6 +185,7 @@ void tryEmplaceDevice(
         gpuBackends,
         igpuBackends,
         openClBackends,
+        maxAdrenoVersion,
         reg,
         devDescr,
         backendTypeEnum);
@@ -185,22 +242,31 @@ backend_selection::parseMainGpu(const std::string& mainGpuStr) {
 
 std::optional<MainGpu> backend_selection::tryMainGpuFromMap(
     std::unordered_map<std::string, std::string>& configFilemap) {
-  std::optional<MainGpu> mainGpu = std::nullopt;
-  if (auto mainGpuIt = configFilemap.find("main-gpu");
-      mainGpuIt != configFilemap.end()) {
-    mainGpu = parseMainGpu(mainGpuIt->second);
-    configFilemap.erase(mainGpuIt);
+  auto hIt = configFilemap.find("main-gpu");
+  auto uIt = configFilemap.find("main_gpu");
+  if (hIt != configFilemap.end() && uIt != configFilemap.end()) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "both 'main-gpu' and 'main_gpu' are present; use one or the other.");
   }
+  auto it = (hIt != configFilemap.end()) ? hIt : uIt;
+  if (it == configFilemap.end()) {
+    return std::nullopt;
+  }
+  std::optional<MainGpu> mainGpu = parseMainGpu(it->second);
+  configFilemap.erase(it);
   return mainGpu;
 }
 
 std::pair<BackendType, std::string> backend_selection::chooseBackend(
     const BackendType preferredBackendType, const BackendInterface& bckI,
-    const std::optional<MainGpu>& mainGpu) {
+    const ModelMetaData* metadata, const std::optional<MainGpu>& mainGpu,
+    std::optional<int>* outAdrenoVersion, const bool isFinetuning) {
 
   std::vector<std::string> gpuBackends;
   std::vector<std::string> igpuBackends;
   std::vector<std::string> openClBackends;
+  std::optional<int> maxAdrenoVersion;
 
   if (preferredBackendType == BackendType::GPU) {
     bool loopAllDevices = true;
@@ -208,7 +274,6 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
     if (mainGpu.has_value()) {
       const MainGpu& mainGpuValue = mainGpu.value();
       if (std::holds_alternative<int>(mainGpuValue)) {
-        // Direct device index specified
         const int deviceIndex = std::get<int>(mainGpuValue);
         const size_t deviceCount = bckI.ggml_backend_dev_count();
         if (deviceIndex >= 0 &&
@@ -219,7 +284,8 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
               std::nullopt,
               gpuBackends,
               igpuBackends,
-              openClBackends);
+              openClBackends,
+              maxAdrenoVersion);
           loopAllDevices = false;
         } else {
           std::string errorMsg = string_format(
@@ -235,18 +301,76 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
     for (size_t i = 0; loopAllDevices && i < bckI.ggml_backend_dev_count();
          ++i) {
       ::tryEmplaceDevice(
-          bckI, i, gpuType, gpuBackends, igpuBackends, openClBackends);
+          bckI,
+          i,
+          gpuType,
+          gpuBackends,
+          igpuBackends,
+          openClBackends,
+          maxAdrenoVersion);
     }
   }
 
-  // check if Adreno GPU is present and force OpenCL backend, otherwise let
-  // llama.cpp choose Vulkan GPU backend
+  auto clearAllGpuBackends = [&]() {
+    openClBackends.clear();
+    gpuBackends.clear();
+    igpuBackends.clear();
+  };
+
+  constexpr int kAdreno800Threshold = 800;
+
+  const bool noMainGpuOverride = !mainGpu.has_value();
+  const bool isAdreno = maxAdrenoVersion.has_value();
+
+  if (auto unsupported = getUnknownFinetuneArchitecture(metadata);
+      isFinetuning && unsupported) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "Finetuning is not supported for architecture: " + unsupported.value());
+  }
+
+  const bool isBitnetOneBit =
+      metadata != nullptr && metadata->hasOneBitQuantization() &&
+      metadata->tryGetString("general.architecture") == "bitnet";
+
+  if (noMainGpuOverride && isAdreno && isFinetuning) {
+    if (maxAdrenoVersion.value() >= kAdreno800Threshold) {
+      bckI.llamaLogCallback(
+          GGML_LOG_LEVEL_INFO,
+          "Finetuning on Adreno 800+: preferring Vulkan",
+          nullptr);
+      openClBackends.clear();
+    } else {
+      bckI.llamaLogCallback(
+          GGML_LOG_LEVEL_INFO, "Finetuning on Adreno <800: CPU only", nullptr);
+      clearAllGpuBackends();
+    }
+  } else if (noMainGpuOverride && isAdreno) {
+    if (isBitnetOneBit && maxAdrenoVersion.value() < kAdreno800Threshold) {
+      bckI.llamaLogCallback(
+          GGML_LOG_LEVEL_INFO,
+          "BitNet TQ on Adreno <800: only CPU supported",
+          nullptr);
+      clearAllGpuBackends();
+    } else if (
+        isBitnetOneBit && maxAdrenoVersion.value() >= kAdreno800Threshold) {
+      bckI.llamaLogCallback(
+          GGML_LOG_LEVEL_INFO,
+          "BitNet TQ on Adreno 800+: preferring Vulkan over OpenCL",
+          nullptr);
+      openClBackends.clear();
+    }
+  }
+
+  if (outAdrenoVersion != nullptr) {
+    *outAdrenoVersion = maxAdrenoVersion;
+  }
+
   if (!openClBackends.empty()) {
     bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, "Chosen GPU OpenCL", nullptr);
     return {BackendType::GPU, openClBackends.front()};
   }
 
-  // Prefer GPU over iGPU when possible
   if (!gpuBackends.empty()) {
     bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, "Chosen GPU Backend", nullptr);
     return {BackendType::GPU, gpuBackends.front()};
@@ -263,7 +387,8 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
 
 std::pair<BackendType, std::string> backend_selection::chooseBackend(
     const BackendType preferredBackendType, llamaLogCallbackF llamaLogcallback,
-    const std::optional<MainGpu>& mainGpu) {
+    const std::optional<MainGpu>& mainGpu, const ModelMetaData* metadata,
+    std::optional<int>* outAdrenoVersion, const bool isFinetuning) {
   BackendInterface bckI{
       ggml_backend_dev_count,
       ggml_backend_dev_backend_reg,
@@ -273,5 +398,28 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
       ggml_backend_dev_name,
       ggml_backend_dev_type,
       llamaLogcallback};
-  return backend_selection::chooseBackend(preferredBackendType, bckI, mainGpu);
+  return backend_selection::chooseBackend(
+      preferredBackendType,
+      bckI,
+      metadata,
+      mainGpu,
+      outAdrenoVersion,
+      isFinetuning);
+}
+
+size_t
+backend_selection::getEffectiveGpuDeviceCount(const BackendInterface& bckI) {
+  size_t gpuCount = 0;
+  size_t igpuCount = 0;
+  const size_t totalDevices = bckI.ggml_backend_dev_count();
+  for (size_t i = 0; i < totalDevices; ++i) {
+    ggml_backend_dev_t dev = bckI.ggml_backend_dev_get(i);
+    enum ggml_backend_dev_type devType = bckI.ggml_backend_dev_type(dev);
+    if (devType == GGML_BACKEND_DEVICE_TYPE_GPU) {
+      ++gpuCount;
+    } else if (devType == GGML_BACKEND_DEVICE_TYPE_IGPU) {
+      ++igpuCount;
+    }
+  }
+  return gpuCount > 0 ? gpuCount : igpuCount;
 }

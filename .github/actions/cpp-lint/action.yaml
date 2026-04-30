@@ -28,7 +28,7 @@ runs:
   using: composite
   steps:
     - name: Checkout PR head and target
-      uses: actions/checkout@v6
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
       with:
         repository: ${{ inputs.repository }}
         ref: ${{ inputs.ref }}
@@ -40,13 +40,13 @@ runs:
       run: git config --global --add url."https://${{ inputs.pat-token }}:x-oauth-basic@github.com/".insteadOf "git@github.com:"
 
     - name: Setup Node.js
-      uses: actions/setup-node@v6
+      uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
       with:
         node-version: 18
 
     - name: Restore npm cache
       id: cache-npm
-      uses: actions/cache@v5
+      uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
       with:
         key: npm-${{ runner.os }}-${{ hashFiles('**/package.json') }}
         path: ~/.npm
@@ -81,7 +81,7 @@ runs:
       run: mkdir -p vcpkg/cache
  
     - name: Get vcpkg cache
-      uses: actions/cache@v5
+      uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
       with:
         key: linux-x64-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'vcpkg/ports/**' ) }}
         path: vcpkg/cache
@@ -114,7 +114,7 @@ runs:
           echo "bare-make not installed, skipping"
           exit 0
         fi
-        bare-make generate
+        bare-make generate -D BUILD_TESTING=ON
 
     - name: Check C++ files format
       continue-on-error: true

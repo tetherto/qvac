@@ -1,7 +1,7 @@
 'use strict'
 
 const EmbedLlamacpp = require('@qvac/embed-llamacpp')
-const FilesystemDL = require('@qvac/dl-filesystem')
+const path = require('bare-path')
 const logger = require('../utils/logger')
 
 /**
@@ -20,7 +20,7 @@ class ModelManager {
    * Includes all parameters that affect model behavior
    */
   _generateModelKey (modelPath, config) {
-    const device = config?.device || 'cpu'
+    const device = config?.device === 'cpu' ? 'cpu' : 'gpu'
     const gpuLayers = config?.gpu_layers || '0'
     const ctxSize = config?.ctx_size || '512'
     const batchSize = config?.batch_size || '2048'
@@ -78,14 +78,10 @@ class ModelManager {
    * Internal method to load a model
    */
   async _loadModel (modelPath, diskPath, localModelName, config) {
-    // Create FilesystemDL for local model loading
-    const loader = new FilesystemDL({
-      dirPath: diskPath
-    })
-
     // Build addon config map from parameters
     // Config is a map with string values: { gpu_layers: '25', ctx_size: '512', batch_size: '512' }
     const addonConfig = {}
+    addonConfig.device = config?.device === 'cpu' ? 'cpu' : 'gpu'
     if (config?.gpu_layers != null && config.gpu_layers !== '') {
       addonConfig.gpu_layers = config.gpu_layers
     } else {
@@ -108,16 +104,15 @@ class ModelManager {
     logger.info(`Loading model with config: ${JSON.stringify(addonConfig)}`)
 
     const model = new EmbedLlamacpp({
-      diskPath,
-      modelName: localModelName,
-      loader,
+      files: { model: [path.join(diskPath, localModelName)] },
+      config: addonConfig,
       logger: {
         info: logger.info.bind(logger),
         error: logger.error.bind(logger),
         warn: logger.warn.bind(logger),
         debug: logger.debug.bind(logger)
       }
-    }, addonConfig)
+    })
 
     logger.info('Loading model into VRAM...')
     await model.load()

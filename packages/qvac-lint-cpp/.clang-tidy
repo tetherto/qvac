@@ -125,7 +125,7 @@ CheckOptions:
     value: camelBack           # myParam
   - key: readability-identifier-naming.NamespaceCase
     value: lower_case          # my_namespace
-  - key: readability-identifier-naming.ConstantCase
+  - key: readability-identifier-naming.GlobalConstantCase
     value: UPPER_CASE          # MAX_SIZE
   - key: readability-identifier-naming.EnumConstantCase
     value: CamelCase           # EnumValue

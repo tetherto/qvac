@@ -1,0 +1,22 @@
+@startuml
+!include <C4/C4_Context>
+
+title QVAC SDK - System Context
+
+Person(dev, "Application Developer", "Integrates SDK into desktop (Node.js, Bun, Electron, Pear) or mobile (Expo) applications")
+System(sdk, "QVAC SDK", "TypeScript SDK providing local-first, P2P AI capabilities for desktop and mobile via a plugin architecture")
+
+System_Ext(dht, "Hyperswarm DHT", "Distributed hash table for P2P peer discovery")
+System_Ext(hyperdrive, "Hyperdrive Peers", "P2P nodes hosting model files")
+System_Ext(cdn, "HTTP Servers", "CDN/direct download sources for models")
+System_Ext(registry, "QVAC Model Registry", "Centralized model catalog with metadata, search, and HTTP download")
+System_Ext(providers, "Remote Providers", "P2P nodes offering delegated inference")
+
+Rel_D(dev, sdk, "Calls SDK API")
+Rel_R(sdk, dht, "Peer discovery")
+Rel_D(sdk, hyperdrive, "P2P model downloads")
+Rel_D(sdk, cdn, "HTTP model downloads")
+Rel_D(sdk, registry, "Model catalog queries & downloads")
+Rel_D(sdk, providers, "Delegated inference")
+
+@enduml

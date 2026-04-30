@@ -1,0 +1,57 @@
+{
+  "name": "@qvac/cli",
+  "version": "0.2.4",
+  "description": "Command-line interface for the QVAC ecosystem",
+  "author": "Tether",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "exports": "./dist/index.js",
+  "bin": {
+    "qvac": "./dist/index.js"
+  },
+  "files": [
+    "dist/**/*",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "tether",
+    "cli",
+    "qvac",
+    "bare",
+    "bundler"
+  ],
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/cli#readme",
+  "scripts": {
+    "build": "rm -rf dist && tsc",
+    "build:watch": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "test": "npx tsx --test test/*.test.ts",
+    "test:unit": "npx tsx --test test/*.test.ts",
+    "test:bats": "npm run build && bats test/cli.bats",
+    "test:e2e": "npm run build && bats test/cli.bats test/e2e.bats"
+  },
+  "dependencies": {
+    "bare-pack": "^2.0.0",
+    "commander": "^14.0.3",
+    "tsx": "^4.21.0"
+  },
+  "devDependencies": {
+    "@qvac/sdk": "^0.9.0",
+    "@types/node": "^25.3.3",
+    "bats": "^1.13.0",
+    "typescript": "^5.9.3"
+  }
+}

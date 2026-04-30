@@ -38,5 +38,10 @@
     "spdxId": "openrail",
     "name": "Open RAIL License",
     "url": "https://huggingface.co/spaces/bigscience/license"
+  },
+  {
+    "spdxId": "openrail++",
+    "name": "Open RAIL++-M License",
+    "url": "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/raw/main/LICENSE.md"
   }
 ]

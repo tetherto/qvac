@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.25)
 
 option(BUILD_TESTING "Build unit tests" OFF)
 option(ENABLE_COVERAGE "Enable coverage" OFF)
+option(MOBILE_DYNAMIC_LINK "Use dynamic linking for ONNX Runtime on mobile" ON)
 
 # Force Apple Clang instead of Homebrew LLVM
 if(APPLE)
@@ -105,48 +106,65 @@ endif()
 
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
+
+set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 if(APPLE)
-  message("VCPKG_OVERLAY_TRIPLETS will be override from this path for Apple vcpkg-override-triplets/triplets")
-  SET(VCPKG_OVERLAY_TRIPLETS "vcpkg-override-triplets/triplets")
-  message("VCPKG_OVERLAY_PORTS will be override from this path for Apple vcpkg-overlay-ports")
   SET(VCPKG_OVERLAY_PORTS "vcpkg-overlay-ports")
 endif()
 
 project(qvac-lib-inference-tts C CXX)
 
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  add_compile_options(-stdlib=libc++)
+  add_link_options(-stdlib=libc++ -static-libstdc++)
+endif()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-set(CMAKE_INCLUDE_DIRECTORIES_BEFORE ON)
-set(CMAKE_CXX_FLAGS "-I${CMAKE_BINARY_DIR}/_deps/flatbuffers-src/include ${CMAKE_CXX_FLAGS}")
-
 if(WIN32)
   add_definitions( -DWIN32_LEAN_AND_MEAN -DNOMINMAX -DNOGDI )
 endif()
 
-find_package(onnxruntime CONFIG REQUIRED)
-
-add_library(onnxruntime ALIAS onnxruntime::onnxruntime_static)
-
-include_directories(BEFORE ${CMAKE_BINARY_DIR}/_deps/flatbuffers-src/include)
+set(qvac-onnx_DIR "${CMAKE_CURRENT_SOURCE_DIR}/node_modules/@qvac/onnx/prebuilds/share/qvac-onnx/cmake")
+find_package(qvac-onnx CONFIG REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)
+find_package(unofficial-utf8proc CONFIG REQUIRED)
+if(TARGET utf8proc::utf8proc)
+  set(QVAC_UTF8PROC_TARGET utf8proc::utf8proc)
+elseif(TARGET utf8proc)
+  set(QVAC_UTF8PROC_TARGET utf8proc)
+else()
+  message(FATAL_ERROR "utf8proc CMake target missing (expected from unofficial-utf8proc)")
+endif()
 
 add_bare_module(qvac-lib-inference-tts EXPORTS)
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  target_link_options(${qvac-lib-inference-tts}_module PRIVATE -Wl,--exclude-libs,ALL)
+endif()
 
 target_sources(
   ${qvac-lib-inference-tts}
   PRIVATE
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/js-interface/qvac-lib-inference-addon-tts.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/addon/Addon.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TTSModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ChatterboxEngine.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ChatterboxTextPreprocessor.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/OnnxInferSession.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/SupertonicEngine.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/Fp16Utils.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TensorFloatHandler.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LavaSRDenoiser.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LavaSREnhancer.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/dsp/Resampler.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/dsp/StftProcessor.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/dsp/MelFilterbank.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/dsp/FastLRMerge.cpp
 )
 
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/RuntimeStats.hpp")
-find_package(onnxruntime CONFIG REQUIRED)
 find_package(tokenizers_cpp CONFIG REQUIRED)
 
 target_include_directories(
@@ -188,14 +206,39 @@ if(ANDROID)
   endif()
 endif()
 
-target_link_libraries(
-  ${qvac-lib-inference-tts}
-  PRIVATE
-    onnxruntime::onnxruntime_static
-    tokenizers::tokenizers_cpp
-)
+if((ANDROID OR (APPLE AND CMAKE_SYSTEM_NAME STREQUAL "iOS")) AND NOT MOBILE_DYNAMIC_LINK)
+  target_link_libraries(
+    ${qvac-lib-inference-tts}
+    PRIVATE
+      qvac-onnx::qvac-onnx-static
+      tokenizers::tokenizers_cpp
+      nlohmann_json::nlohmann_json
+      ${QVAC_UTF8PROC_TARGET}
+  )
+else()
+  include_bare_module("@qvac/onnx" qvac_onnx_target PREBUILD)
 
-# Ensure runtime libraries resolve relative to the addon location on macOS
+  target_link_libraries(
+    ${qvac-lib-inference-tts}
+    PRIVATE
+      qvac-onnx::headers
+      tokenizers::tokenizers_cpp
+      nlohmann_json::nlohmann_json
+      ${QVAC_UTF8PROC_TARGET}
+  )
+  target_link_libraries(
+    ${qvac-lib-inference-tts}_module
+    PRIVATE
+      ${qvac_onnx_target}_module
+  )
+
+  bare_target(host)
+  bare_module_target("." _unused NAME addon_name)
+  install(FILES $<TARGET_FILE:${qvac_onnx_target}_module>
+    DESTINATION ${host}/${addon_name}
+    RENAME qvac__onnx@0.bare)
+endif()
+
 if(APPLE)
   set_target_properties(
     ${qvac-lib-inference-tts}
@@ -204,7 +247,6 @@ if(APPLE)
       INSTALL_RPATH "@loader_path"
       MACOSX_RPATH ON
   )
-  # Also pass explicit rpath to the linker to ensure LC_RPATH is emitted
   target_link_options(
     ${qvac-lib-inference-tts}
     PRIVATE "-Wl,-rpath,@loader_path"
@@ -238,5 +280,8 @@ endif()
 target_compile_definitions(${qvac-lib-inference-tts} PUBLIC JS_LOGGER)
 
 if(BUILD_TESTING)
+  find_package(GTest CONFIG REQUIRED)
+  include(GoogleTest)
+  enable_testing()
   add_subdirectory(addon/test/unit)
 endif()

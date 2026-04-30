@@ -2,8 +2,7 @@
 
 #include "nmt.hpp"
 
-nmt_vocab::id find_bos_token(const nmt_vocab& vocab, e_model model_type);
-nmt_vocab::id find_eos_token(const nmt_vocab& vocab, e_model model_type);
+nmt_vocab::id find_bos_token(const nmt_vocab& vocab);
 
 int nmt_token_count(struct nmt_context* ctx, const char* text);
 

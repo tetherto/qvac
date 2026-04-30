@@ -1,0 +1,34 @@
+@startuml
+!include <C4/C4_Component>
+
+title QVAC SDK – Internal Components
+
+Container_Boundary(client_side, "Client (@qvac/sdk)") {
+    Component(api, "Public API", "TypeScript", "loadModel, completion, transcribe, embed, translate, textToSpeech, ocr, rag*, invokePlugin, loggingStream, etc.")
+    Component(rpc_client, "RPC Client", "TypeScript", "IPC socket (desktop) or native bridge (mobile)")
+    Component(config, "Config Loader", "TypeScript", "Load qvac.config.{json,js,ts}, validate with Zod, send to worker")
+}
+
+Container_Boundary(worker_side, "Worker (Bare Runtime)") {
+    Component(rpc_server, "RPC Server", "TypeScript", "Validate (Zod), route, stream responses, apply device defaults")
+    Component(plugin_registry, "Plugin Registry", "TypeScript", "Register plugins by modelType, resolve handlers, validate schemas")
+    Component(model_registry, "Model Registry", "TypeScript", "Track loaded models (local & delegated) with name/path matching")
+    Component(config_registry, "Config Registry", "TypeScript", "Immutable runtime config store (getSDKConfig / setSDKConfig)")
+    Component(download, "Download Manager", "TypeScript", "HTTP/Hyperdrive/Registry downloads with resume, progress, cancellation, checksum")
+    Component(p2p, "P2P Layer", "TypeScript", "Hyperswarm discovery, Hyperdrive sync, delegated inference")
+    Component(rag, "RAG", "TypeScript", "HyperDB vector storage with workspace isolation")
+    Component(plugins, "Built-in Plugins", "TypeScript/C++", "LLM, Embeddings, Whisper, NMT, TTS, OCR — each wrapping a native addon")
+    Component(logging, "Logging", "TypeScript", "Namespaced loggers (client/server/addon), configurable transports")
+}
+
+Rel_D(api, rpc_client, "Serializes calls")
+Rel_D(rpc_client, rpc_server, "JSON-RPC", "IPC / native bridge")
+Rel_D(rpc_server, plugin_registry, "Dispatches by modelType")
+Rel_D(plugin_registry, plugins, "Invokes handler")
+Rel_D(rpc_server, model_registry, "Registers/unregisters models")
+Rel_D(rpc_server, download, "Resolves and fetches models")
+Rel_D(rpc_server, p2p, "Peer discovery and sync")
+Rel_D(rpc_server, rag, "Vector search and persistence")
+Rel_U(logging, rpc_client, "Streams logs to client")
+
+@enduml

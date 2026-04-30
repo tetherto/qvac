@@ -6,21 +6,6 @@ This package also exports `QvacResponse`, the response class used by all QVAC in
 
 ## Installation
 
-Before proceeding with the installation, please generate a **granular Personal Access Token (PAT)** with the `read-only` scope. Once generated, add the token to your environment variables using the name `NPM_TOKEN`.
-
-```bash
-export NPM_TOKEN=your_personal_access_token
-```
-
-Next, create a `.npmrc` file in the root of your project with the following content:
-
-```ini
-@qvac:registry=https://registry.npmjs.org/
-//registry.npmjs.org/:_authToken={NPM_TOKEN}
-```
-
-This configuration ensures secure access to NPM Packages when installing scoped packages.
-
 ```bash
 npm install @qvac/infer-base
 ```
@@ -90,12 +75,12 @@ const finalOutputs = await response.await()
 For detailed QvacResponse documentation, see the response class implementation.
 
 The subclass must implement the following methods:
+
 - `getApiDefinition()`: Returns the API definition for the current environment.
 - `_load()`: Loads the model configuration to the addon.
 - `_loadNew(config, loader, close, reportProgressCallback)`: Loads new configuration and weights.
 - `_loadWeights(loader, close, reportProgressCallback)`: Loads model weights from the provided loader. (Optional)
 - `_unloadWeights()`: Unloads the model weights from memory. (Optional)
-
 
 ## API
 

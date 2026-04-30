@@ -13,7 +13,7 @@ follows.
 
 ```cmake
 # vcpkg/ports/qvac-lint-cpp/portfile.cmake
-set(QVAC_LINT_CPP "git@github.com:tetherto/qvac-lint-cpp.git")
+set(QVAC_LINT_CPP "https://github.com/tetherto/qvac-lint-cpp.git")
 
 find_package(Git REQUIRED)
 execute_process(

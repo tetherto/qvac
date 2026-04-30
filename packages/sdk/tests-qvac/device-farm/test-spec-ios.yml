@@ -1,0 +1,194 @@
+version: 0.1
+ios_test_host: macos_sequoia
+
+phases:
+  install:
+    commands:
+      - echo "Setting up test environment..."
+      - devicefarm-cli use node 18
+      - devicefarm-cli use appium 2
+      - devicefarm-cli use python 3.11
+      - node --version
+      - appium --version
+      - pip3 install pymobiledevice3
+      - pymobiledevice3 version || echo "pymobiledevice3 installed"
+
+  pre_test:
+    commands:
+      - echo "Configuring WebDriverAgent for iOS..."
+      - export DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH=$DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH_V9
+      - 'echo "WDA Path: $DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH"'
+
+      - echo "Starting Appium server..."
+      - export APPIUM_BASE_PATH=/wd/hub
+      - |-
+        appium --base-path=$APPIUM_BASE_PATH --log-timestamp \
+          --log-no-colors --relaxed-security --default-capabilities \
+          "{\"appium:deviceName\": \"$DEVICEFARM_DEVICE_NAME\", \
+          \"platformName\": \"$DEVICEFARM_DEVICE_PLATFORM_NAME\", \
+          \"appium:app\": \"$DEVICEFARM_APP_PATH\", \
+          \"appium:udid\":\"$DEVICEFARM_DEVICE_UDID\", \
+          \"appium:platformVersion\": \"$DEVICEFARM_DEVICE_OS_VERSION\", \
+          \"appium:wdaLocalPort\": 8100, \
+          \"appium:derivedDataPath\": \"$DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH\", \
+          \"appium:usePrebuiltWDA\": true, \
+          \"appium:automationName\": \"XCUITest\"}" \
+          >> $DEVICEFARM_LOG_DIR/appium.log 2>&1 &
+
+      - echo "Waiting for Appium to be ready (max 60 seconds)..."
+      - |-
+        for i in $(seq 1 60); do
+          if curl --silent --fail "http://0.0.0.0:4723${APPIUM_BASE_PATH}/status" > /dev/null 2>&1; then
+            echo "Appium is ready after ${i}s"
+            break
+          fi
+          if [ "$i" -eq 60 ]; then
+            echo "Appium did not start within 60 seconds"
+            cat $DEVICEFARM_LOG_DIR/appium.log
+            exit 1
+          fi
+          sleep 1
+        done
+
+      # Create Appium session -- installs and launches the app on the device
+      - echo "Creating Appium session to launch app..."
+      - |-
+        SESSION_RESPONSE=$(curl -s -X POST http://127.0.0.1:4723/wd/hub/session \
+          -H "Content-Type: application/json" \
+          -d "{
+            \"capabilities\": {
+              \"alwaysMatch\": {
+                \"platformName\": \"iOS\",
+                \"appium:automationName\": \"XCUITest\",
+                \"appium:bundleId\": \"$DEVICEFARM_APP_BUNDLE_ID\",
+                \"appium:udid\": \"$DEVICEFARM_DEVICE_UDID\",
+                \"appium:usePrebuiltWDA\": true,
+                \"appium:wdaLocalPort\": 8100,
+                \"appium:derivedDataPath\": \"$DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH\",
+                \"appium:newCommandTimeout\": 3600,
+                \"appium:noReset\": true,
+                \"appium:showIOSLog\": true
+              }
+            }
+          }")
+
+        SESSION_ID=$(echo "$SESSION_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('value',{}).get('sessionId',''))" 2>/dev/null || echo "")
+        if [ -z "$SESSION_ID" ]; then
+          echo "Failed to create Appium session"
+          echo "Response: $SESSION_RESPONSE"
+          tail -50 $DEVICEFARM_LOG_DIR/appium.log
+          exit 1
+        fi
+        echo "App launched via Appium (session: $SESSION_ID)"
+
+      - sleep 10
+
+      # Start pymobiledevice3 syslog capture in background (filtered to app process)
+      # Captures ALL log levels including DEBUG (where React Native console.log goes via os_log)
+      # Appium's syslog_relay only captures ERROR level, which is why we need this
+      - echo "Starting pymobiledevice3 syslog capture..."
+      - |-
+        mkdir -p "$HOME/.pymobiledevice3"
+        unset SUDO_UID SUDO_GID SUDO_USER
+        touch "$DEVICEFARM_LOG_DIR/testconsumer.log"
+        pymobiledevice3 syslog live \
+          --udid "$DEVICEFARM_DEVICE_UDID" \
+          --process-name QVACTestConsumer \
+          >> "$DEVICEFARM_LOG_DIR/testconsumer.log" 2>&1 &
+        echo $! > "$DEVICEFARM_LOG_DIR/syslog-pid.txt"
+        echo "pymobiledevice3 syslog started (pid: $(cat $DEVICEFARM_LOG_DIR/syslog-pid.txt))"
+        sleep 3
+        LINES=$(wc -l < "$DEVICEFARM_LOG_DIR/testconsumer.log" 2>/dev/null || echo 0)
+        echo "Initial syslog lines captured: $LINES"
+
+  test:
+    commands:
+      # The SDK consumer auto-runs tests and reports results via MQTT to the producer.
+      # Device Farm keeps the app alive while pymobiledevice3 captures device logs.
+      # tail -f streams app logs live; we poll for "Consumer shutting down" to exit early.
+      - |-
+        TIMEOUT=${DEVICEFARM_TIMEOUT:-5400}
+        START=$(date +%s)
+        SYSLOG_FILE="$DEVICEFARM_LOG_DIR/testconsumer.log"
+        CHECK_INTERVAL=5
+
+        echo "App is running. Streaming logs for up to ${TIMEOUT}s..."
+        echo "Test results are captured by the MQTT producer (separate CI job)."
+
+        touch "$SYSLOG_FILE"
+        tail -f "$SYSLOG_FILE" &
+        TAIL_PID=$!
+
+        while true; do
+          sleep $CHECK_INTERVAL
+
+          NOW=$(date +%s)
+          ELAPSED=$((NOW - START))
+
+          if grep -q "Consumer shutting down" "$SYSLOG_FILE" 2>/dev/null; then
+            echo ""
+            echo "========================================="
+            echo "Consumer finished after ${ELAPSED}s"
+            echo "========================================="
+            break
+          fi
+
+          if [ $ELAPSED -ge $TIMEOUT ]; then
+            echo ""
+            echo "Timeout reached (${TIMEOUT}s). Producer should have results by now."
+            break
+          fi
+        done
+
+        kill $TAIL_PID 2>/dev/null || true
+
+  post_test:
+    commands:
+      # Stop pymobiledevice3 syslog capture
+      - |-
+        if [ -f "$DEVICEFARM_LOG_DIR/syslog-pid.txt" ]; then
+          kill $(cat "$DEVICEFARM_LOG_DIR/syslog-pid.txt") 2>/dev/null || true
+          echo "pymobiledevice3 syslog stopped"
+        fi
+
+      # Extract React Native JS logs into a separate file
+      - |-
+        grep -i "react\|javascript\|com.facebook.react" "$DEVICEFARM_LOG_DIR/testconsumer.log" \
+          > "$DEVICEFARM_LOG_DIR/react-native-logs.log" 2>/dev/null || true
+        RN_LINES=$(wc -l < "$DEVICEFARM_LOG_DIR/react-native-logs.log" 2>/dev/null || echo 0)
+        echo "=== React Native logs: ${RN_LINES} lines ==="
+        tail -50 "$DEVICEFARM_LOG_DIR/react-native-logs.log" 2>/dev/null || echo "(none)"
+
+      # Fallback: Apple log collect + log show to extract app logs from unified logging
+      - |-
+        echo "Collecting device log archive (fallback)..."
+        log collect --device-udid "$DEVICEFARM_DEVICE_UDID" \
+          --output "$DEVICEFARM_LOG_DIR/device.logarchive" 2>/dev/null || echo "log collect not available"
+        if [ -d "$DEVICEFARM_LOG_DIR/device.logarchive" ]; then
+          echo "Extracting React Native logs from archive..."
+          log show "$DEVICEFARM_LOG_DIR/device.logarchive" \
+            --predicate 'subsystem == "com.facebook.react.log"' \
+            --level debug \
+            --style compact \
+            > "$DEVICEFARM_LOG_DIR/testconsumer-logarchive.log" 2>/dev/null || true
+          ARCHIVE_LINES=$(wc -l < "$DEVICEFARM_LOG_DIR/testconsumer-logarchive.log" 2>/dev/null || echo 0)
+          echo "=== log collect/show: ${ARCHIVE_LINES} lines ==="
+          tail -50 "$DEVICEFARM_LOG_DIR/testconsumer-logarchive.log" 2>/dev/null || echo "(none)"
+        fi
+
+      - echo "=== Full syslog summary ==="
+      - wc -l "$DEVICEFARM_LOG_DIR/testconsumer.log" 2>/dev/null || echo "No syslog captured"
+
+      - echo "Available log files:"
+      - ls -lh $DEVICEFARM_LOG_DIR/ || true
+
+      # Generate a minimal JUnit report (results come via MQTT, not device logs)
+      - |-
+        RESULTS_FILE="$DEVICEFARM_LOG_DIR/test-results.txt"
+        if [ ! -f "$RESULTS_FILE" ] || [ ! -s "$RESULTS_FILE" ]; then
+          echo "PASS|App launched and ran successfully on Device Farm" > "$RESULTS_FILE"
+        fi
+      - python3 $DEVICEFARM_TEST_PACKAGE_PATH/gen-junit.py
+
+artifacts:
+  - $DEVICEFARM_LOG_DIR

@@ -15,7 +15,14 @@ endif()
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
+set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+
 project(qvac-lib-inference-addon-llama C CXX)
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  add_compile_options(-stdlib=libc++)
+  add_link_options(-stdlib=libc++ -static-libstdc++)
+endif()
 
 find_path(VCPKG_INSTALLED_PATH share/qvac-lint-cpp/.clang-format REQUIRED)
 configure_file(${VCPKG_INSTALLED_PATH}/share/qvac-lint-cpp/.clang-format
@@ -26,6 +33,12 @@ configure_file(${VCPKG_INSTALLED_PATH}/share/qvac-lint-cpp/.clang-tidy
 find_path(PICOJSON_INCLUDE_DIRS "picojson/picojson.h")
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/JsInterface.hpp")
 find_package(llama CONFIG REQUIRED)
+# Required to call llama.cpp's `json_schema_to_grammar()` for per-request
+# JSON-Schema → GBNF conversion. The function signature lives in libcommon
+# (linked via `llama::common`) but takes a `nlohmann::ordered_json`, so we
+# need the full nlohmann headers, not just the forward decl shipped with
+# `llama/common/json-schema-to-grammar.h`.
+find_package(nlohmann_json CONFIG REQUIRED)
 
 if(WIN32)
   add_definitions( -DNOMINMAX -DWIN32_MEAN_AND_LEAN -DNOGDI )
@@ -45,20 +58,32 @@ if((ANDROID OR UNIX) AND NOT APPLE)
 endif()
 
 add_bare_module(qvac-lib-inference-addon-llama EXPORTS ${BACKEND_DL_LIBS})
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  target_link_options(${qvac-lib-inference-addon-llama}_module PRIVATE -Wl,--exclude-libs,ALL)
+endif()
+
   set(ADDON_SOURCES
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
   )
 
   list(APPEND ADDON_SOURCES
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ContextSlider.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/GenerationParamsApply.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuningHelpers.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TextLlmContext.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ToolsCompactController.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/ChatTemplateUtils.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/Qwen3ReasoningUtils.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/utils/Qwen3ToolsDynamicTemplate.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/QwenTemplate.cpp
   )
 
@@ -80,6 +105,7 @@ add_bare_module(qvac-lib-inference-addon-llama EXPORTS ${BACKEND_DL_LIBS})
       llama::llama
       llama::common
       llama::mtmd
+      nlohmann_json::nlohmann_json
   )
 
 
@@ -92,15 +118,21 @@ if(BUILD_CLI)
   # Cache management integration test with automatic model download
   add_executable(cli_tool
     ${PROJECT_SOURCE_DIR}/addon/src/cli/cli_tool.cc
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ContextSlider.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/GenerationParamsApply.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TextLlmContext.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ToolsCompactController.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/ChatTemplateUtils.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/Qwen3ReasoningUtils.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/utils/Qwen3ToolsDynamicTemplate.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/QwenTemplate.cpp
   )
 
@@ -111,16 +143,16 @@ if(BUILD_CLI)
           ${PICOJSON_INCLUDE_DIRS}
           ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
   )
-  
-  # Link required libraries  
+
+  # Link required libraries
   target_link_libraries(
     cli_tool
           PRIVATE
           llama::llama
           llama::common
           llama::mtmd
+          nlohmann_json::nlohmann_json
   )
-  
   find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/JsInterface.hpp")
   target_include_directories(cli_tool PRIVATE ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS})
   # Set C++20 standard for std::views support

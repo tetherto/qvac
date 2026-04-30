@@ -1,0 +1,46 @@
+@startuml
+!include <C4/C4_Deployment>
+
+title QVAC SDK - Deployment Diagram
+
+Deployment_Node(desktop, "Desktop", "Node.js / Bun / Electron") {
+    Deployment_Node(app_proc, "Application Process") {
+        Container(sdk_desktop, "@qvac/sdk Client", "TypeScript")
+    }
+    Deployment_Node(subprocess_proc, "Bare Subprocess", "Spawned on first API call") {
+        Container(subprocess_desktop, "Worker + Registered Plugins", "TypeScript/C++")
+    }
+    ContainerDb(desktop_store, "Local Storage", "Models cache + RAG DB")
+}
+
+Deployment_Node(pear, "Pear Desktop", "Bare Runtime") {
+    Deployment_Node(pear_app, "Pear Application", "Pre-hook generates worker entry; Pear manages lifecycle") {
+        Container(sdk_pear, "@qvac/sdk Client", "TypeScript")
+        Container(pear_worker, "Generated Worker", "TypeScript/C++")
+    }
+    ContainerDb(pear_store, "Local Storage", "Models cache + RAG DB")
+}
+
+Deployment_Node(mobile, "Mobile", "React Native / Expo") {
+    Deployment_Node(rn_app, "React Native App", "BareKit worklet embedded at app start") {
+        Container(sdk_mobile, "@qvac/sdk Client", "TypeScript")
+        Container(barekit, "BareKit (Embedded Bare)", "Native")
+    }
+    ContainerDb(mobile_store, "Local Storage", "Models cache + RAG DB")
+}
+
+Deployment_Node(bare_direct, "Bare Runtime", "Direct execution, in-process") {
+    Deployment_Node(bare_app, "Bare Application") {
+        Container(sdk_bare, "@qvac/sdk + Plugins (in-process)", "TypeScript/C++")
+    }
+    ContainerDb(bare_store, "Local Storage", "Models cache + RAG DB")
+}
+
+Rel(sdk_desktop, subprocess_desktop, "IPC Socket", "Unix/Named Pipe")
+Rel(sdk_mobile, barekit, "Native Bridge", "in-process")
+Rel(subprocess_desktop, desktop_store, "Reads/Writes")
+Rel(barekit, mobile_store, "Reads/Writes")
+Rel(sdk_bare, bare_store, "Reads/Writes")
+Rel(pear_worker, pear_store, "Reads/Writes")
+
+@enduml

@@ -9,8 +9,8 @@ option(ENABLE_COVERAGE "Enable coverage instrumentation for unit tests" OFF)
 set(TEST_SOURCES
   translation_tests.cpp
   nmt_model_wrapper_test_indic.cpp
-  nmt_model_wrapper_test_marian.cpp
   nmt_test.cpp
+  test_nmt_lazy_init_backend.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/TranslationModel.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/nmt.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/nmt_tokenization.cpp
@@ -20,6 +20,7 @@ set(TEST_SOURCES
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/nmt_graph_encoder.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/nmt_beam_search.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/nmt_utils.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/NmtLazyInitializeBackend.cpp
 )
 
 # Add Bergamot validation tests if Bergamot is enabled

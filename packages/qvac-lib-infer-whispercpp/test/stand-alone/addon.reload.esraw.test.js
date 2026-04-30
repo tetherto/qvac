@@ -6,7 +6,7 @@ const test = require('brittle')
 const { WhisperInterface } = require('../../whisper')
 const binding = require('../../binding')
 
-const modelsDir = path.resolve(__dirname, '../../examples/models')
+const modelsDir = path.resolve(__dirname, '../../models')
 const samplesDir = path.resolve(__dirname, '../../examples/samples')
 const modelPath = path.join(modelsDir, 'ggml-tiny.bin')
 const audioPath = path.join(samplesDir, 'LastQuestion_long_ES.raw')

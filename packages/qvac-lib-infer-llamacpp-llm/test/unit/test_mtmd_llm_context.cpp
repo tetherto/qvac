@@ -1,42 +1,18 @@
 #include <filesystem>
 #include <memory>
 #include <string>
-#include <type_traits>
 #include <unordered_map>
-#include <variant>
 #include <vector>
 
 #include <gtest/gtest.h>
 #include <qvac-lib-inference-addon-cpp/Errors.hpp>
-#include <qvac-lib-inference-addon-cpp/RuntimeStats.hpp>
 
 #include "common/chat.h"
 #include "model-interface/LlamaModel.hpp"
 #include "model-interface/MtmdLlmContext.hpp"
 #include "test_common.hpp"
 
-namespace {
-double getStatValue(
-    const qvac_lib_inference_addon_cpp::RuntimeStats& stats,
-    const std::string& key) {
-  for (const auto& stat : stats) {
-    if (stat.first == key) {
-      return std::visit(
-          [](const auto& value) -> double {
-            if constexpr (std::is_same_v<
-                              std::decay_t<decltype(value)>,
-                              double>) {
-              return value;
-            } else {
-              return static_cast<double>(value);
-            }
-          },
-          stat.second);
-    }
-  }
-  return 0.0;
-}
-} // namespace
+using test_common::getStatValue;
 
 namespace fs = std::filesystem;
 
@@ -48,37 +24,11 @@ protected:
     config_files["gpu_layers"] = test_common::getTestGpuLayers();
     config_files["n_predict"] = "10";
 
-    fs::path basePath;
-    if (fs::exists(fs::path{"../../../models/unit-test"})) {
-      basePath = fs::path{"../../../models/unit-test"};
-    } else {
-      basePath = fs::path{"models/unit-test"};
-    }
-
-    fs::path modelPath = basePath / "SmolVLM-500M-Instruct-Q8_0.gguf";
-    if (fs::exists(modelPath)) {
-      test_model_path = modelPath.string();
-    } else {
-      modelPath = basePath / "SmolVLM-500M-Instruct.gguf";
-      if (fs::exists(modelPath)) {
-        test_model_path = modelPath.string();
-      } else {
-        test_model_path = "SmolVLM-500M-Instruct-Q8_0.gguf";
-      }
-    }
-
-    fs::path projectionPath =
-        basePath / "mmproj-SmolVLM-500M-Instruct-Q8_0.gguf";
-    if (fs::exists(projectionPath)) {
-      test_projection_path = projectionPath.string();
-    } else {
-      projectionPath = basePath / "mmproj-SmolVLM-500M-Instruct.gguf";
-      if (fs::exists(projectionPath)) {
-        test_projection_path = projectionPath.string();
-      } else {
-        test_projection_path = "mmproj-SmolVLM-500M-Instruct-Q8_0.gguf";
-      }
-    }
+    test_model_path = test_common::BaseTestModelPath::get(
+        "SmolVLM-500M-Instruct-Q8_0.gguf", "SmolVLM-500M-Instruct.gguf");
+    test_projection_path = test_common::BaseTestModelPath::get(
+        "mmproj-SmolVLM-500M-Instruct-Q8_0.gguf",
+        "mmproj-SmolVLM-500M-Instruct.gguf");
 
     fs::path backendDir;
 #ifdef TEST_BINARY_DIR
@@ -318,8 +268,8 @@ TEST_F(MtmdLlmContextTest, ProcessWithSessionCache) {
   }
 
   LlamaModel::Prompt prompt1;
-  prompt1.input =
-      R"([{"role": "session", "content": "test_session.bin"}, {"role": "user", "content": "Hello"}])";
+  prompt1.input = R"([{"role": "user", "content": "Hello"}])";
+  prompt1.cacheKey = "test_session.bin";
   EXPECT_NO_THROW({
     std::string output1 = model->processPrompt(prompt1);
     EXPECT_GE(output1.length(), 0);
@@ -328,8 +278,8 @@ TEST_F(MtmdLlmContextTest, ProcessWithSessionCache) {
   });
 
   LlamaModel::Prompt prompt2;
-  prompt2.input =
-      R"([{"role": "session", "content": "test_session.bin"}, {"role": "user", "content": "Follow up message"}])";
+  prompt2.input = R"([{"role": "user", "content": "Follow up message"}])";
+  prompt2.cacheKey = "test_session.bin";
   EXPECT_NO_THROW({
     std::string output2 = model->processPrompt(prompt2);
     EXPECT_GE(output2.length(), 0);

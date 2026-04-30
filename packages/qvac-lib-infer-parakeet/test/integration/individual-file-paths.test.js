@@ -3,15 +3,15 @@
 const test = require('brittle')
 const path = require('bare-path')
 const fs = require('bare-fs')
-const binding = require('../../binding')
-const { ParakeetInterface } = require('../../parakeet')
 const {
+  binding,
+  ParakeetInterface,
   detectPlatform,
   setupJsLogger,
   getTestPaths,
   validateAccuracy,
   ensureModel,
-  readFileChunked
+  getNamedPathsConfig
 } = require('./helpers.js')
 
 const platform = detectPlatform()
@@ -64,9 +64,7 @@ test('Directory and individual file path loading both produce correct transcript
   let directoryText = ''
   let filePathText = ''
 
-  // ──────────────────────────────────────────────────────────
-  // Run 1 — Directory-based loading (buffer weight streaming)
-  // ──────────────────────────────────────────────────────────
+  // Run 1: directory-based loading
   console.log('=== Run 1: Directory-based loading ===')
   {
     const transcriptions = []
@@ -78,10 +76,10 @@ test('Directory and individual file path loading both produce correct transcript
         for (const segment of output) {
           if (segment && segment.text) transcriptions.push(segment)
         }
-        if (transcriptions.length > 0 && outputResolve) {
-          outputResolve()
-          outputResolve = null
-        }
+      }
+      if ((event === 'JobEnded' || event === 'Error') && outputResolve) {
+        outputResolve()
+        outputResolve = null
       }
     }
 
@@ -91,31 +89,11 @@ test('Directory and individual file path loading both produce correct transcript
       maxThreads: 4,
       useGPU: false,
       sampleRate: 16000,
-      channels: 1
+      channels: 1,
+      ...getNamedPathsConfig('tdt', modelPath)
     }
 
     const parakeet = new ParakeetInterface(binding, config, outputCallback)
-
-    const modelFiles = [
-      'encoder-model.onnx',
-      'encoder-model.onnx.data',
-      'decoder_joint-model.onnx',
-      'vocab.txt',
-      'preprocessor.onnx'
-    ]
-
-    for (const file of modelFiles) {
-      const filePath = path.join(modelPath, file)
-      if (fs.existsSync(filePath)) {
-        const chunks = []
-        for (const buffer of readFileChunked(filePath)) {
-          chunks.push(buffer)
-        }
-        const fullBuffer = Buffer.concat(chunks)
-        const chunk = new Uint8Array(fullBuffer.buffer, fullBuffer.byteOffset, fullBuffer.byteLength)
-        await parakeet.loadWeights({ filename: file, chunk, completed: true })
-      }
-    }
 
     await parakeet.activate()
     console.log('   Model activated (directory-based)')
@@ -137,16 +115,13 @@ test('Directory and individual file path loading both produce correct transcript
     console.log(`   WER: ${werResult.werPercent}`)
     t.ok(werResult.wer <= 0.3, `Directory: WER should be <= 30% (got ${werResult.werPercent})`)
 
-    try { parakeet.destroyInstance() } catch (e) {}
+    try { await parakeet.destroyInstance() } catch (e) {}
     console.log('   Instance destroyed\n')
   }
 
-  // Allow native resources to be fully released
   await new Promise(resolve => setTimeout(resolve, 1000))
 
-  // ──────────────────────────────────────────────────────────
-  // Run 2 — Individual file path loading (direct ONNX load)
-  // ──────────────────────────────────────────────────────────
+  // Run 2: individual file path loading
   console.log('=== Run 2: Individual file paths loading ===')
   console.log(`   encoderPath: ${encoderPath}`)
   console.log(`   encoderDataPath: ${encoderDataPath}`)
@@ -163,10 +138,10 @@ test('Directory and individual file path loading both produce correct transcript
         for (const segment of output) {
           if (segment && segment.text) transcriptions.push(segment)
         }
-        if (transcriptions.length > 0 && outputResolve) {
-          outputResolve()
-          outputResolve = null
-        }
+      }
+      if ((event === 'JobEnded' || event === 'Error') && outputResolve) {
+        outputResolve()
+        outputResolve = null
       }
     }
 
@@ -207,13 +182,10 @@ test('Directory and individual file path loading both produce correct transcript
     console.log(`   WER: ${werResult.werPercent}`)
     t.ok(werResult.wer <= 0.3, `File paths: WER should be <= 30% (got ${werResult.werPercent})`)
 
-    try { parakeet.destroyInstance() } catch (e) {}
+    try { await parakeet.destroyInstance() } catch (e) {}
     console.log('   Instance destroyed\n')
   }
 
-  // ──────────────────────────────────────────────────────────
-  // Compare results from both methods
-  // ──────────────────────────────────────────────────────────
   console.log('=== Comparison ===')
   const werBetween = validateAccuracy(directoryText, filePathText, 0.05)
   console.log(`   Directory:   "${directoryText.substring(0, 80)}..."`)

@@ -8,7 +8,14 @@
 #include <llama.h>
 
 #include "LlmContext.hpp"
+#include "ToolsCompactController.hpp"
 #include "common/chat.h"
+
+struct ParsedPromptPayload {
+  std::vector<common_chat_msg> chatMsgs;
+  std::vector<common_chat_tool> tools;
+  PromptLayout layout;
+};
 
 class CacheManager {
 public:
@@ -17,20 +24,19 @@ public:
       std::function<void(bool)> resetStateCallback);
 
   bool handleCache(
-      std::vector<common_chat_msg>& chatMsgs,
-      std::vector<common_chat_tool>& tools, const std::string& inputPrompt,
-      std::function<std::pair<
-          std::vector<common_chat_msg>, std::vector<common_chat_tool>>(
-          const std::string&)>
-          formatPrompt);
+      ParsedPromptPayload& parsedPrompt, const std::string& inputPrompt,
+      std::function<ParsedPromptPayload(const std::string&)> formatPrompt,
+      const std::string& cacheKey = "");
 
   bool loadCache();
   void saveCache();
+  void invalidate();
   bool isCacheDisabled() const;
   bool hasActiveCache() const;
   bool wasCacheUsedInLastPrompt() const;
 
 private:
+  void writeCacheFile(const std::string& path);
   static bool isFileInitialized(const std::filesystem::path& path);
 
   LlmContext* llmContext_;

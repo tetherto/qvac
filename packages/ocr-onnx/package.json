@@ -1,6 +1,6 @@
 {
   "name": "@qvac/ocr-onnx",
-  "version": "0.1.8",
+  "version": "0.4.4",
   "description": "OCR addon for qvac",
   "addon": true,
   "engines": {
@@ -13,13 +13,15 @@
     "lint": "standard",
     "lint:fix": "standard --fix",
     "lint-cpp": "clang-tidy -p build $(find addon -name '*.cpp')",
-    "test:unit": "bare test/unit/ocr.test.js",
+    "test:unit": "brittle-bare test/unit/*.test.js",
     "test:example": "bare examples/example.fs.js",
-    "test:integration": "npm run test:integration:generate && bare test/integration/all.js --exit",
+    "test:integration": "npm run test:integration:generate && bash test/integration/run-tests.sh",
     "test:integration:generate": "brittle -r test/integration/all.js test/integration/*.test.js && npm run test:mobile:generate",
     "test": "npm run test:unit && npm run test:integration",
     "test:mobile:generate": "bare ./scripts/generate-mobile-integration-tests.js",
     "test:mobile:validate": "node scripts/validate-mobile-tests.js",
+    "download-models": "node scripts/download-ocr-models.js",
+    "download-models:all": "node scripts/download-ocr-models.js all",
     "test:dts": "tsc -p tsconfig.dts.json"
   },
   "files": [
@@ -38,7 +40,8 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/tetherto/qvac-lib-inference-addon-onnx-ocr-fasttext.git"
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/ocr-onnx"
   },
   "author": "Tether",
   "keywords": [
@@ -48,8 +51,8 @@
     "ocr"
   ],
   "license": "Apache-2.0",
-  "bugs": "https://github.com/tetherto/qvac-lib-inference-addon-onnx-ocr-fasttext/issues",
-  "homepage": "https://github.com/tetherto/qvac-lib-inference-addon-onnx-ocr-fasttext#readme",
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "homepage": "https://github.com/tetherto/qvac/tree/main/packages/ocr-onnx#readme",
   "standard": {
     "ignore": [
       "benchmarks/**",
@@ -68,14 +71,17 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@qvac/dl-hyperdrive": "^0.1.0",
     "@qvac/error": "^0.1.0",
-    "@qvac/infer-base": "^0.1.0",
+    "@qvac/infer-base": "^0.4.0",
+    "@qvac/onnx": "^0.14.0",
     "@qvac/response": "^0.1.2",
     "bare-fetch": "^2.5.1",
     "bare-fs": "^4.5.1",
     "bare-path": "^3.0.0",
     "bare-process": "^4.2.1"
+  },
+  "optionalDependencies": {
+    "@qvac/diagnostics": "^0.1.0"
   },
   "exports": {
     "./package": "./package.json",

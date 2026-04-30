@@ -7,7 +7,6 @@
 #include <vector>
 
 #include "nmt.hpp"
-#include "nmt_utils.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
 using namespace std;
@@ -48,14 +47,8 @@ static std::vector<nmt_vocab::id> common_sentencepiece_tokenize(
   return tokens;
 }
 
-nmt_vocab::id find_bos_token(const nmt_vocab& vocab, e_model model_type) {
-  std::vector<std::string> bos_candidates = {
-      "<s>", "</s>", "<pad>", "[BOS]", "[CLS]", "[PAD]"};
-  if (modelIsMarian(model_type)) {
-    bos_candidates = {"<pad>"};
-  } else if (model_type == MODEL_INDICTRANS) {
-    bos_candidates = {"</s>"};
-  }
+nmt_vocab::id find_bos_token(const nmt_vocab& vocab) {
+  std::vector<std::string> bos_candidates = {"</s>"};
 
   for (const auto& candidate : bos_candidates) {
     auto it = vocab.src_token_to_id.find(candidate);
@@ -65,62 +58,6 @@ nmt_vocab::id find_bos_token(const nmt_vocab& vocab, e_model model_type) {
   }
 
   return 1;
-}
-
-nmt_vocab::id find_eos_token(const nmt_vocab& vocab, e_model model_type) {
-  auto candidate = "</s>";
-  auto it = vocab.src_token_to_id.find(candidate);
-  if (it != vocab.src_token_to_id.end()) {
-    return it->second;
-  }
-
-  return 1;
-}
-
-static std::vector<nmt_vocab::id>
-marian_tokenize(const nmt_vocab& vocab, const std::string& text) {
-  if (!vocab.src_processor || !vocab.has_sentencepiece_processors) {
-    return {};
-  }
-
-  std::vector<nmt_vocab::id> tokens;
-  std::string text_to_tokenize = text;
-
-  // Check if text starts with a language token (e.g., ">>por<<")
-  // These are multilingual model prefixes that need to be treated as single
-  // tokens
-  if (text.length() >= 7 && text[0] == '>' && text[1] == '>' &&
-      text.find("<<") != std::string::npos) {
-    size_t end_pos = text.find("<<");
-    if (end_pos != std::string::npos && end_pos >= 2) {
-      std::string lang_token =
-          text.substr(0, end_pos + 2); // Include the closing <<
-
-      // Try to find this token in the vocabulary
-      auto it = vocab.src_token_to_id.find(lang_token);
-      if (it != vocab.src_token_to_id.end()) {
-        tokens.push_back(it->second);
-        QLOG(
-            qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-            "[TOKENIZE] Found language token: " + lang_token + " with ID " +
-                std::to_string(it->second));
-
-        // Remove the language token from text to tokenize
-        text_to_tokenize = text.substr(end_pos + 2);
-        // Skip leading space after language token if present
-        if (!text_to_tokenize.empty() && text_to_tokenize[0] == ' ') {
-          text_to_tokenize = text_to_tokenize.substr(1);
-        }
-      }
-    }
-  }
-
-  // Tokenize the rest of the text with SentencePiece
-  std::vector<nmt_vocab::id> text_tokens = common_sentencepiece_tokenize(
-      vocab.src_processor.get(), text_to_tokenize, vocab);
-  tokens.insert(tokens.end(), text_tokens.begin(), text_tokens.end());
-
-  return tokens;
 }
 
 static std::vector<nmt_vocab::id>
@@ -169,10 +106,6 @@ indictrans_tokenize(const nmt_vocab& vocab, const std::string& text) {
 
 static std::vector<nmt_vocab::id>
 tokenize(const nmt_context* ctx, const std::string& text) {
-  if (modelIsMarian(ctx->model.type)) {
-    return marian_tokenize(ctx->vocab, text);
-  }
-
   if (ctx->model.type == e_model::MODEL_INDICTRANS) {
     return indictrans_tokenize(ctx->vocab, text);
   }
@@ -186,15 +119,11 @@ std::string detokenize_sentencepiece(const nmt_context* ctx) {
   const auto& token_ids = ctx->state->decoder_inputs;
 
   if (!vocab.tgt_processor || !vocab.has_sentencepiece_processors) {
-    // NMT_LOG_ERROR("SentencePiece processor not initialized for Marian
-    // model\n");
     return text;
   }
 
   std::vector<std::string> tokens;
-  const auto& src_id_to_token = ctx->model.type == MODEL_INDICTRANS
-                                    ? vocab.tgt_id_to_token
-                                    : vocab.src_id_to_token;
+  const auto& src_id_to_token = vocab.tgt_id_to_token;
   for (auto&& id : token_ids) {
     if (id != 0 && id != 1 && id != vocab.bos_token_id) {
       auto find_iter = src_id_to_token.find(id);

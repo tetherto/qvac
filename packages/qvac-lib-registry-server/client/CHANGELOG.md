@@ -1,5 +1,58 @@
 # Changelog
 
+## [0.4.1]
+
+Release Date: 2026-04-22
+
+### ✨ Features
+
+- Add `corestoreOpts` constructor option to `QVACRegistryClient` — forwarded to the underlying `Corestore` so consumers can opt into `{ wait: true }` (`waitForLock` semantics) and avoid `tryLock` collisions when multiple SDK instances on the same machine share `~/.qvac/registry-corestore/<key>` (#1480)
+
+## [0.4.0]
+
+Release Date: 2026-04-12
+
+### ✨ Features
+
+- Add `suspend()` and `resume()` lifecycle methods to `QVACRegistryClient` — coordinates `Hyperswarm` and `Corestore` shutdown/restart in the correct order with idempotency guards for safe repeated calls (#1469)
+- Expose `corestore` and `hyperswarm` as readonly typed lifecycle handles (`LifecycleStoreHandle`, `LifecycleSwarmHandle`) for orchestrators that coordinate resources directly (#1469)
+- `QVACRegistryClient` type definition now extends `ReadyResource`, with new `LifecycleLogOptions` interface exported for downstream consumers (#1469)
+
+### 🔧 Changed
+
+- Bumped `@qvac/registry-schema` from `^0.1.1` to `^0.1.2` (#1106)
+
+## [0.3.1]
+
+Release Date: 2026-03-30
+
+### 📚 Documentation
+
+- README: removed outdated npm Personal Access Token / `.npmrc` setup instructions for installing `@qvac/registry-client`.
+
+## [0.3.0]
+
+Release Date: 2026-03-24
+
+### ✨ Features
+
+- Add download profiler for registry blob performance diagnostics — measures per-peer throughput, block timing, and connection stats for troubleshooting slow downloads (#1040)
+
+### 🐛 Fixed
+
+- Lazy-load Node.js builtins (`perf_hooks`, `worker_threads`) in profiler module for Bare runtime compatibility (#1096)
+- Update package.json repository URLs to point to the monorepo (#1088)
+
+## [0.2.1]
+
+Release Date: 2026-03-16
+
+### 🐛 Fixed
+
+- Add bulk block prefetch (`core.download()`) before `blobs.createReadStream()` to restore download throughput lost in the migration from Hyperdrive to the registry — benchmarked at ~2.4x faster (#835)
+- Clear downloaded blob blocks from corestore after successful download using `core.clear()` + `core.compact()` to reclaim disk space — prevents the `registry-corestore` folder from growing indefinitely (#835)
+- Switch stream cleanup from `'close'` to `'end'` event so corestore cleanup triggers automatically when the consumer finishes reading, without requiring explicit `stream.destroy()` (#835)
+
 ## [0.2.0]
 
 Release Date: 2026-02-26

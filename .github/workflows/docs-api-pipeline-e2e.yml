@@ -1,0 +1,112 @@
+# End-to-end + determinism check for the API summary generation pipeline.
+#
+# Currently manual-only (workflow_dispatch) while we re-evaluate the right
+# automatic trigger after the single-page pipeline cutover. To re-enable on
+# PRs, restore a `pull_request:` block alongside `workflow_dispatch:`. The
+# job verifies:
+#   1. Pipeline executes cleanly from a fresh checkout (no manual setup).
+#   2. api-data.json + the single API-summary MDX page are produced.
+#   3. Output is deterministic: running twice with identical source produces
+#      byte-identical api-data.json and MDX.
+
+name: Docs API Pipeline End-to-End
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-api-e2e-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: End-to-end + determinism
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: docs/website
+    env:
+      # Reproducible timestamp so ApiData.generatedAt is identical on repeat
+      # runs. Also doubles as a check that SOURCE_DATE_EPOCH support works.
+      SOURCE_DATE_EPOCH: "1704067200" # 2024-01-01T00:00:00Z
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
+        with:
+          bun-version: latest
+
+      - name: Install docs website deps
+        run: bun install
+
+      - name: Install SDK deps
+        working-directory: packages/sdk
+        run: bun install
+
+      - name: Read SDK version
+        id: sdk
+        working-directory: packages/sdk
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: First generation run
+        env:
+          SDK_PATH: ${{ github.workspace }}/packages/sdk
+        run: >
+          bun run scripts/generate-api-docs.ts
+          ${{ steps.sdk.outputs.version }}
+          --latest
+          --force-extract
+          --no-ai
+
+      - name: Snapshot first run output
+        run: |
+          cp scripts/api-docs/api-data.json /tmp/api-data-run1.json
+          # Hash the generated index.mdx by content so the comparison
+          # ignores filesystem metadata like mtime; we only care about
+          # the bytes.
+          sha256sum content/docs/sdk/api/index.mdx > /tmp/run1-hashes.txt
+
+      - name: Second generation run (from scratch)
+        env:
+          SDK_PATH: ${{ github.workspace }}/packages/sdk
+        run: >
+          bun run scripts/generate-api-docs.ts
+          ${{ steps.sdk.outputs.version }}
+          --latest
+          --force-extract
+          --no-ai
+
+      - name: Assert api-data.json is byte-identical across runs
+        run: |
+          diff -u /tmp/api-data-run1.json scripts/api-docs/api-data.json || {
+            echo "::error::api-data.json differs across repeat runs (non-deterministic pipeline)"
+            exit 1
+          }
+          echo "api-data.json is byte-identical"
+
+      - name: Assert API summary MDX is byte-identical across runs
+        run: |
+          sha256sum content/docs/sdk/api/index.mdx > /tmp/run2-hashes.txt
+          diff -u /tmp/run1-hashes.txt /tmp/run2-hashes.txt || {
+            echo "::error::API summary MDX differs across repeat runs (non-deterministic rendering)"
+            exit 1
+          }
+          echo "MDX output is byte-identical"
+
+      - name: Assert required output files exist
+        run: |
+          test -f scripts/api-docs/api-data.json
+          test -f content/docs/sdk/api/index.mdx
+          # The summary must include at least the standard surfaces.
+          for marker in "## Functions" "## Errors"; do
+            grep -qF "$marker" content/docs/sdk/api/index.mdx || {
+              echo "::error::content/docs/sdk/api/index.mdx is missing '$marker'"
+              exit 1
+            }
+          done

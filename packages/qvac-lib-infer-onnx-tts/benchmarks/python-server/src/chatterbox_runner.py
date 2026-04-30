@@ -173,7 +173,6 @@ class PythonChatterboxRunner:
                 
             except Exception as e:
                 logger.error(f"Failed to synthesize text {i+1}: {e}")
-                # Add failed output with error info
                 outputs.append({
                     "text": text,
                     "sampleCount": 0,
@@ -181,7 +180,7 @@ class PythonChatterboxRunner:
                     "durationSec": 0,
                     "generationMs": 0,
                     "rtf": 0,
-                    "error": str(e)
+                    "error": "Synthesis failed for this input",
                 })
         
         total_gen_ms = (time.perf_counter() - gen_start) * 1000

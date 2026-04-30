@@ -1,4 +1,0 @@
-marian-dev provides CMake targets:
-
-find_package(bergamot-translator CONFIG REQUIRED)
-target_link_libraries(main PRIVATE bergamot-translator::bergamot-translator)

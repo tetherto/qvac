@@ -2,7 +2,7 @@
 
 const { ONNXOcr } = require('../..')
 const test = require('brittle')
-const { isMobile, platform, getImagePath, ensureModelPath, formatOCRPerformanceMetrics } = require('./utils')
+const { isMobile, platform, getImagePath, ensureModelPath, formatOCRPerformanceMetrics, windowsOrtParams } = require('./utils')
 
 const MOBILE_TIMEOUT = 600 * 1000 // 10 minutes for mobile
 const DESKTOP_TIMEOUT = 120 * 1000 // 2 minutes for desktop
@@ -39,7 +39,8 @@ for (const deviceConfig of DEVICE_CONFIGS) {
         pathDetector: detectorPath,
         pathRecognizer: recognizerPath,
         langList: ['en'],
-        useGPU: deviceConfig.useGpu
+        useGPU: deviceConfig.useGpu,
+        ...windowsOrtParams
       },
       opts: { stats: true }
     })
@@ -72,7 +73,7 @@ for (const deviceConfig of DEVICE_CONFIGS) {
       // Display stats
       const stats = response.stats || {}
       t.comment(`${label} Native addon stats: ` + JSON.stringify(stats))
-      t.comment(formatOCRPerformanceMetrics(`[OCR] ${label}`, stats, outputTexts))
+      t.comment(formatOCRPerformanceMetrics(`[OCR] ${label}`, stats, outputTexts, { skipReport: true }))
 
       t.pass(`${label} OCR basic test completed successfully`)
     } catch (e) {

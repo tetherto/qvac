@@ -85,7 +85,7 @@ async function addAllModels (flags) {
       const payload = {
         source: entry.source,
         engine: entry.engine,
-        licenseId: entry.license,
+        licenseId: entry.licenseId,
         description: entry.description || '',
         quantization: entry.quantization || '',
         params: entry.params || '',

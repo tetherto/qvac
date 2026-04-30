@@ -1,5 +1,5 @@
 ---
-globs: packages/qvac-sdk/examples/**/*.ts
+globs: packages/sdk/examples/**/*.ts
 description: Rules for example files
 alwaysApply: false
 ---

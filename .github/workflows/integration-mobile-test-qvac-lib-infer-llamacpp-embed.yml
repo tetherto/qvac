@@ -39,12 +39,14 @@ jobs:
   build-and-test:
     name: Build ${{ matrix.platform }} and Run E2E Tests
     runs-on: ${{ matrix.runner }}
+    environment: release
     timeout-minutes: 120
     continue-on-error: true  # Don't block PR merges if tests fail
     permissions:
       contents: read
       packages: read
-      pull-requests: write  # Allow commenting on PRs
+      pull-requests: write
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -78,7 +80,7 @@ jobs:
           df -h
 
       - name: Checkout monorepo
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
@@ -100,7 +102,7 @@ jobs:
           ls -la "${ADDON_DIR}" | head -50
 
       - name: Checkout mobile test framework
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: tetherto/qvac-test-addon-mobile
           ref: ${{ env.TEST_FRAMEWORK_REF }}
@@ -109,43 +111,9 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: ${{ env.NODE_VERSION }}
-
-      - name: Configure scoped registry for @qvac and @tetherto packages
-        env:
-          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
-        run: |
-          echo "Configuring scoped registry for @tetherto and @qvac packages..."
-
-          # Configure addon registry
-          cd "${GITHUB_WORKSPACE}/${ADDON_DIR}"
-          cat > .npmrc <<NPMRC
-          always-auth=true
-          registry=https://registry.npmjs.org/
-          @qvac:registry=https://registry.npmjs.org/
-          @tetherto:registry=https://npm.pkg.github.com/
-          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
-          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
-          NPMRC
-
-          # Configure test-framework registry
-          cd "${GITHUB_WORKSPACE}/test-framework"
-          cat > .npmrc <<NPMRC
-          always-auth=true
-          registry=https://registry.npmjs.org/
-          @qvac:registry=https://registry.npmjs.org/
-          @tetherto:registry=https://npm.pkg.github.com/
-          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
-          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
-          NPMRC
-
-          # Configure git for private repos
-          git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
-
       - name: Install global dependencies
         run: |
           echo "Installing global dependencies..."
@@ -153,20 +121,34 @@ jobs:
 
       - name: Download Android prebuilds (from artifacts)
         if: matrix.platform == 'Android' && !inputs.package
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          path: ${{ env.ADDON_DIR }}/prebuilds
+          path: ${{ runner.temp }}/prebuilds-android-staging
           pattern: ${{ env.PREBUILD_ARTIFACT_PREFIX }}android-*
           merge-multiple: true
+
+      - name: Move Android prebuilds from staging
+        if: matrix.platform == 'Android' && !inputs.package
+        run: |
+          mkdir -p ${{ env.ADDON_DIR }}/prebuilds
+          cp -r ${{ runner.temp }}/prebuilds-android-staging/* ${{ env.ADDON_DIR }}/prebuilds/ 2>/dev/null || true
+        shell: bash
         continue-on-error: true
 
       - name: Download iOS prebuilds (from artifacts)
         if: matrix.platform == 'iOS' && !inputs.package
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          path: ${{ env.ADDON_DIR }}/prebuilds
+          path: ${{ runner.temp }}/prebuilds-ios-staging
           pattern: ${{ env.PREBUILD_ARTIFACT_PREFIX }}ios-*
           merge-multiple: true
+
+      - name: Move iOS prebuilds from staging
+        if: matrix.platform == 'iOS' && !inputs.package
+        run: |
+          mkdir -p ${{ env.ADDON_DIR }}/prebuilds
+          cp -r ${{ runner.temp }}/prebuilds-ios-staging/* ${{ env.ADDON_DIR }}/prebuilds/ 2>/dev/null || true
+        shell: bash
         continue-on-error: true
 
       - name: Download prebuilds from package
@@ -396,14 +378,14 @@ jobs:
       # Android-specific steps
       - name: Set up JDK 17
         if: matrix.platform == 'Android'
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # 5.2.0
         with:
           java-version: 17
           distribution: temurin
 
       - name: Setup Android SDK
         if: matrix.platform == 'Android'
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # 3.2.2
 
       - name: Generate Android project
         if: matrix.platform == 'Android'
@@ -698,12 +680,12 @@ jobs:
             exit 1
           fi
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v6
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
+          role-duration-seconds: 7200 # 2hrs for device farm tests
 
       - name: Upload App to Device Farm
         id: upload_app
@@ -886,7 +868,7 @@ jobs:
             BUNDLE_ID="${{ env.APP_BUNDLE_ID }}"
             # Android wdio config with crash detection (bail:0 = continue on test failures, crash = process.exit)
             # Increased timeout to 30 minutes (1800000ms) for long-running embedding tests
-            WDIO_CONFIG='exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"Android","appium:automationName":"UiAutomator2","appium:appPackage":"'${{ env.APP_BUNDLE_ID }}'","appium:appActivity":"'${{ env.APP_BUNDLE_ID }}'.MainActivity","appium:newCommandTimeout":300,"appium:autoGrantPermissions":true,"appium:autoAcceptAlerts":true,"appium:noReset":true,"appium:dontStopAppOnReset":true,"appium:forceAppLaunch":false}],logLevel:"debug",waitforTimeout:120000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:1800000},before:async function(capabilities,specs,browser){const BUNDLE_ID="'${{ env.APP_BUNDLE_ID }}'";global.appCrashed=false;global.checkAppCrash=async(stage)=>{try{const state=await browser.queryAppState(BUNDLE_ID);console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\\n🛑 APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\\n");global.appCrashed=true;process.exit(1);}return state;}catch(e){console.log("["+stage+"] queryAppState error: "+e.message);return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("android=new UiSelector().textContains(\"INITIALIZED\")");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("android=new UiSelector().textContains(\"Run Automated Tests\")");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);}};'
+            WDIO_CONFIG='exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"Android","appium:automationName":"UiAutomator2","appium:appPackage":"'${{ env.APP_BUNDLE_ID }}'","appium:appActivity":"'${{ env.APP_BUNDLE_ID }}'.MainActivity","appium:newCommandTimeout":300,"appium:autoGrantPermissions":true,"appium:autoAcceptAlerts":true,"appium:noReset":true,"appium:dontStopAppOnReset":true,"appium:forceAppLaunch":false}],logLevel:"debug",waitforTimeout:120000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:1800000},before:async function(capabilities,specs,browser){const BUNDLE_ID="'${{ env.APP_BUNDLE_ID }}'";global.appCrashed=false;global.checkAppCrash=async(stage)=>{try{const state=await browser.queryAppState(BUNDLE_ID);console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\\n🛑 APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\\n");global.appCrashed=true;setTimeout(function(){process.exit(1);},5000);}return state;}catch(e){console.log("["+stage+"] queryAppState error: "+e.message);return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("android=new UiSelector().textContains(\"INITIALIZED\")");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("android=new UiSelector().textContains(\"Run Automated Tests\")");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);}};'
           else
             PLATFORM="iOS"
             AUTOMATION="XCUITest"
@@ -896,7 +878,7 @@ jobs:
             # iOS wdio config with crash detection (bail:0 = continue on test failures, crash = process.exit)
             # usePrebuiltWDA uses Device Farm's pre-built WebDriverAgent
             # Increased timeout to 30 minutes (1800000ms) for long-running embedding tests
-            WDIO_CONFIG='exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"iOS","appium:automationName":"XCUITest","appium:bundleId":"'${{ env.APP_BUNDLE_ID }}'","appium:newCommandTimeout":300,"appium:noReset":true,"appium:forceAppLaunch":false,"appium:usePrebuiltWDA":true,"appium:wdaLocalPort":8100,"appium:showIOSLog":true,"appium:realDeviceLogger":"/usr/local/lib/node_modules/appium/node_modules/deviceconsole/deviceconsole"}],logLevel:"debug",waitforTimeout:120000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:1800000},before:async function(capabilities,specs,browser){const BUNDLE_ID="'${{ env.APP_BUNDLE_ID }}'";global.appCrashed=false;global.checkAppCrash=async(stage)=>{try{const state=await browser.queryAppState(BUNDLE_ID);console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\\n🛑 APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\\n");global.appCrashed=true;process.exit(1);}return state;}catch(e){console.log("["+stage+"] queryAppState error: "+e.message);return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("-ios predicate string:label CONTAINS \"INITIALIZED\"");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("-ios predicate string:label CONTAINS \"Run Automated Tests\"");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);}};'
+            WDIO_CONFIG='exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"iOS","appium:automationName":"XCUITest","appium:bundleId":"'${{ env.APP_BUNDLE_ID }}'","appium:newCommandTimeout":300,"appium:noReset":true,"appium:forceAppLaunch":false,"appium:usePrebuiltWDA":true,"appium:wdaLocalPort":8100,"appium:showIOSLog":true,"appium:realDeviceLogger":"/usr/local/lib/node_modules/appium/node_modules/deviceconsole/deviceconsole"}],logLevel:"debug",waitforTimeout:120000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:1800000},before:async function(capabilities,specs,browser){const BUNDLE_ID="'${{ env.APP_BUNDLE_ID }}'";global.appCrashed=false;global.flushBareLog=async function(reason){try{var _h=require("http");var lb64=await new Promise(function(ok,fail){var bd=JSON.stringify({path:"@"+BUNDLE_ID+":documents/bare_console.log"});var rq=_h.request({hostname:"127.0.0.1",port:4723,path:"/wd/hub/session/"+browser.sessionId+"/appium/device/pull_file",method:"POST",headers:{"Content-Type":"application/json","Content-Length":Buffer.byteLength(bd)}},function(rs){var d="";rs.on("data",function(c){d+=c;});rs.on("end",function(){try{ok(JSON.parse(d).value);}catch(e){fail(e);}});});rq.on("error",fail);rq.write(bd);rq.end();});var logTxt=Buffer.from(lb64,"base64").toString();var logDir=process.env.DEVICEFARM_LOG_DIR||".";require("fs").writeFileSync(logDir+"/bare_console.log",logTxt);console.log("[bare-log] "+reason+" flush ok ("+logTxt.length+" bytes)");}catch(e){console.log("[bare-log] "+reason+" flush failed: "+e.message);}};global.checkAppCrash=async(stage)=>{try{const state=await browser.queryAppState(BUNDLE_ID);console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\\n🛑 APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\\n");global.appCrashed=true;setTimeout(function(){process.exit(1);},5000);try{await browser.pause(1500);await Promise.race([global.flushBareLog("crash-"+stage),new Promise(function(_,rj){setTimeout(function(){rj(new Error("bare-log flush timed out"));},3000);})]);}catch(_){}}return state;}catch(e){console.log("["+stage+"] queryAppState error: "+e.message);return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("-ios predicate string:label CONTAINS \"INITIALIZED\"");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("-ios predicate string:label CONTAINS \"Run Automated Tests\"");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");},after:async function(){console.log("[bare-log] Waiting for log flush...");await browser.pause(3000);if(global.flushBareLog)await global.flushBareLog("after");},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);}};'
           fi
           
           # Base64 encode the wdio config to safely embed in YAML
@@ -1265,3 +1247,188 @@ jobs:
           echo "✅ All Device Farm tests passed!"
           echo "   Your tests: $USER_PASSED passed (out of $USER_TEST_COUNT total)"
           echo "   Device Farm total: $TOTAL | Passed: $PASSED | Failed: $FAILED | Skipped: $SKIPPED"
+
+      - name: Refresh AWS credentials for log download
+        if: always() && steps.schedule_run.outputs.run_arn
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-west-2
+          role-session-name: device-farm-logs
+
+      - name: Download Device Farm Logs
+        if: always() && steps.schedule_run.outputs.run_arn
+        run: |
+          RUN_ARN="${{ steps.schedule_run.outputs.run_arn }}"
+          LOG_DIR="devicefarm-logs/${{ matrix.platform }}"
+          PLATFORM="${{ matrix.platform }}"
+          mkdir -p "$LOG_DIR"
+
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📥 DOWNLOADING DEVICE FARM LOGS"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "Logs are downloaded so anyone with repo access can view them"
+          echo "without needing AWS Device Farm credentials."
+          if [ "$PLATFORM" = "Android" ]; then
+            echo "ℹ️  Skipping video artifacts on Android to reduce artifact size."
+          fi
+          echo ""
+
+          RUN_DETAILS=$(aws devicefarm get-run --arn "$RUN_ARN" --output json 2>/dev/null || echo '{}')
+          RUN_LABEL=$(echo "$RUN_DETAILS" | jq -r '.run.name // "unknown"')
+          echo ""
+          echo "========================================"
+          echo "📦 Run: $RUN_LABEL"
+          echo "========================================"
+
+          SAFE_RUN=$(echo "$RUN_LABEL" | tr ' /' '__' | tr -cd '[:alnum:]_-')
+          JOBS=$(aws devicefarm list-jobs --arn "$RUN_ARN" --output json 2>/dev/null || echo '{"jobs":[]}')
+
+          for JOB_ARN in $(echo "$JOBS" | jq -r '.jobs[].arn'); do
+            DEVICE_NAME=$(echo "$JOBS" | jq -r --arg arn "$JOB_ARN" '.jobs[] | select(.arn == $arn) | .device.name // "unknown"')
+            JOB_RESULT=$(echo "$JOBS" | jq -r --arg arn "$JOB_ARN" '.jobs[] | select(.arn == $arn) | .result // "UNKNOWN"')
+            SAFE_NAME=$(echo "$DEVICE_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
+
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "📱 $DEVICE_NAME ($JOB_RESULT)"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+            SUITES=$(aws devicefarm list-suites --arn "$JOB_ARN" --output json 2>/dev/null || echo '{"suites":[]}')
+
+            for SUITE_ARN in $(echo "$SUITES" | jq -r '.suites[].arn'); do
+              SUITE_NAME=$(echo "$SUITES" | jq -r --arg arn "$SUITE_ARN" '.suites[] | select(.arn == $arn) | .name // "unknown"')
+              SAFE_SUITE=$(echo "$SUITE_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
+
+              ARTIFACTS=$(aws devicefarm list-artifacts --arn "$SUITE_ARN" --type FILE --output json 2>/dev/null || echo '{"artifacts":[]}')
+
+              echo "$ARTIFACTS" | jq -c '.artifacts[]' 2>/dev/null | while read -r ARTIFACT; do
+                ART_NAME=$(echo "$ARTIFACT" | jq -r '.name // "unknown"')
+                ART_URL=$(echo "$ARTIFACT" | jq -r '.url // empty')
+                ART_EXT=$(echo "$ARTIFACT" | jq -r '.extension // "txt"')
+                [ -z "$ART_URL" ] && continue
+
+                if [ "$PLATFORM" = "Android" ]; then
+                  if echo "$ART_NAME" | grep -qiE "^video$" || echo "$ART_EXT" | grep -qiE "^mp4$"; then
+                    echo "  Skipped (video): $SUITE_NAME / $ART_NAME"
+                    continue
+                  fi
+                fi
+
+                SAFE_ART=$(echo "$ART_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
+                DEST="$LOG_DIR/${SAFE_RUN}_${SAFE_NAME}_${SAFE_SUITE}_${SAFE_ART}.${ART_EXT}"
+
+                if curl -fsSL --max-time 300 -o "$DEST" "$ART_URL" 2>/dev/null; then
+                  echo "  Downloaded: $SUITE_NAME / $ART_NAME"
+
+                  if echo "$ART_NAME" | grep -qiE "test.spec|testspec"; then
+                    echo ""
+                    echo "::group::📋 [$DEVICE_NAME] $SUITE_NAME — $ART_NAME"
+                    cat "$DEST" 2>/dev/null || true
+                    echo "::endgroup::"
+                  fi
+                fi
+              done
+
+              LOG_ARTIFACTS=$(aws devicefarm list-artifacts --arn "$SUITE_ARN" --type LOG --output json 2>/dev/null || echo '{"artifacts":[]}')
+
+              echo "$LOG_ARTIFACTS" | jq -c '.artifacts[]' 2>/dev/null | while read -r ARTIFACT; do
+                ART_NAME=$(echo "$ARTIFACT" | jq -r '.name // "unknown"')
+                ART_URL=$(echo "$ARTIFACT" | jq -r '.url // empty')
+                ART_EXT=$(echo "$ARTIFACT" | jq -r '.extension // "txt"')
+                [ -z "$ART_URL" ] && continue
+
+                SAFE_ART=$(echo "$ART_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
+                DEST="$LOG_DIR/${SAFE_RUN}_${SAFE_NAME}_${SAFE_SUITE}_${SAFE_ART}.${ART_EXT}"
+
+                if curl -fsSL --max-time 300 -o "$DEST" "$ART_URL" 2>/dev/null; then
+                  echo "  Downloaded: $SUITE_NAME / $ART_NAME (LOG)"
+                fi
+              done
+            done
+
+            JOB_ARTIFACTS=$(aws devicefarm list-artifacts --arn "$JOB_ARN" --type FILE --output json 2>/dev/null || echo '{"artifacts":[]}')
+            echo "$JOB_ARTIFACTS" | jq -c '.artifacts[]' 2>/dev/null | while read -r ARTIFACT; do
+              ART_NAME=$(echo "$ARTIFACT" | jq -r '.name // "unknown"')
+              ART_URL=$(echo "$ARTIFACT" | jq -r '.url // empty')
+              ART_EXT=$(echo "$ARTIFACT" | jq -r '.extension // "txt"')
+              [ -z "$ART_URL" ] && continue
+
+              if [ "$PLATFORM" = "Android" ]; then
+                if echo "$ART_NAME" | grep -qiE "^video$" || echo "$ART_EXT" | grep -qiE "^mp4$"; then
+                  echo "  Skipped (video): job-level / $ART_NAME"
+                  continue
+                fi
+              fi
+
+              SAFE_ART=$(echo "$ART_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
+              DEST="$LOG_DIR/${SAFE_RUN}_${SAFE_NAME}_job_${SAFE_ART}.${ART_EXT}"
+
+              if curl -fsSL --max-time 300 -o "$DEST" "$ART_URL" 2>/dev/null; then
+                echo "  Downloaded (job-level): $ART_NAME"
+              fi
+            done
+          done
+
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📦 All downloaded logs:"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          find "$LOG_DIR" -type f -exec ls -lh {} \; 2>/dev/null || echo "  (no logs downloaded)"
+
+      - name: Extract Console Logs
+        if: always() && steps.schedule_run.outputs.run_arn
+        run: |
+          LOG_DIR="devicefarm-logs/${{ matrix.platform }}"
+          CONSOLE_DIR="console-logs/${{ matrix.platform }}"
+          mkdir -p "$CONSOLE_DIR"
+          for f in "$LOG_DIR"/*; do
+            [ -f "$f" ] || continue
+            fname=$(basename "$f")
+            if echo "$fname" | grep -qiE "Logcat\."; then
+              cp "$f" "$CONSOLE_DIR/"
+              echo "  Console log: $fname"
+            fi
+            if echo "$fname" | grep -qiE "Customer_Artifacts\.zip$"; then
+              prefix=$(echo "$fname" | sed 's/_Customer_Artifacts\.zip$//')
+              tmpdir=$(mktemp -d)
+              if unzip -qo "$f" -d "$tmpdir" 2>/dev/null; then
+                bare_log=$(find "$tmpdir" -name "bare_console.log" -type f 2>/dev/null | head -1)
+                if [ -n "$bare_log" ]; then
+                  cp "$bare_log" "$CONSOLE_DIR/${prefix}_bare_console.log"
+                  echo "  Extracted: ${prefix}_bare_console.log"
+                fi
+                appium_log=$(find "$tmpdir" -name "appium.log" -type f 2>/dev/null | head -1)
+                if [ -n "$appium_log" ]; then
+                  cp "$appium_log" "$CONSOLE_DIR/${prefix}_appium.log"
+                  echo "  Extracted: ${prefix}_appium.log"
+                fi
+              else
+                echo "  WARNING: Failed to unzip $fname"
+              fi
+              rm -rf "$tmpdir"
+            fi
+          done
+          echo ""
+          echo "📋 Console logs extracted:"
+          find "$CONSOLE_DIR" -type f -exec ls -lh {} \; 2>/dev/null || echo "  (no console logs found)"
+
+      - name: Upload Console Logs
+        if: always() && steps.schedule_run.outputs.run_arn
+        uses: actions/upload-artifact@v4
+        with:
+          name: console-logs-llamacpp-embed-${{ matrix.platform }}
+          path: console-logs/
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Upload Full Device Farm Logs
+        if: always() && steps.schedule_run.outputs.run_arn
+        uses: actions/upload-artifact@v4
+        with:
+          name: devicefarm-logs-llamacpp-embed-${{ matrix.platform }}
+          path: devicefarm-logs/
+          retention-days: 30
+          if-no-files-found: ignore

@@ -151,19 +151,19 @@ public:
   }
 
   void cancel() {
-    std::scoped_lock lock{mtx_};
+    std::unique_lock lock{mtx_};
     if (modelCancel_ == nullptr) {
       QLOG(logger::Priority::WARNING, "Model does not support cancellation");
       return;
     }
     if (job_.has_value()) {
-      modelCancel_->cancel();
-      processingSync_.waitInactive();
-      job_.reset();
       if (ready_.load()) {
-        // If the worker has not taken the job yet (ready_ == true, still in
-        // wait), it will never run queueJobEnded. Signal finished now.
+        job_.reset();
         outputQueue_->queueException(std::runtime_error("Job cancelled"));
+      } else {
+        modelCancel_->cancel();
+        lock.unlock();
+        processingSync_.waitInactive();
       }
     }
   }
