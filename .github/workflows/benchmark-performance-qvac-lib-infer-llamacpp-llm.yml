@@ -31,6 +31,11 @@ on:
         required: false
         type: boolean
         default: true
+      run_mobile:
+        description: "Run mobile matrix (Android / iOS via Device Farm)"
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -87,6 +92,7 @@ jobs:
 
   mobile-benchmarks:
     needs: [context, prebuild]
+    if: ${{ inputs.run_mobile }}
     permissions:
       contents: read
       packages: read
@@ -101,8 +107,11 @@ jobs:
       qvac_perf_warmup_runs: ${{ inputs.qvac_perf_warmup_runs }}
 
   summarize:
+    # `if: always()` lets summarize run even when one of the benchmark
+    # jobs was skipped via the run_desktop / run_mobile toggles or
+    # failed mid-run; we still want the partial report.
     needs: [context, desktop-benchmarks, mobile-benchmarks]
-    if: always()
+    if: ${{ always() && needs.context.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
