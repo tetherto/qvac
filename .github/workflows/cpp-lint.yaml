@@ -170,7 +170,11 @@ jobs:
           echo "Linting ${#SELECTED[@]} changed file(s):"
           printf '  %s\n' "${SELECTED[@]}"
 
-          if clang-tidy-19 -p "$BUILD_DIR" "${SELECTED[@]}" --header-filter="$HEADER_FILTER_VAL"; then
+          # `--warnings-as-errors='*'` promotes every enabled check (per
+          # `.clang-tidy`'s `Checks:`) into an error so the exit code reflects
+          # diagnostics; without it clang-tidy exits 0 even when it prints
+          # warnings, since `WarningsAsErrors:` is empty in the shared config.
+          if clang-tidy-19 -p "$BUILD_DIR" "${SELECTED[@]}" --header-filter="$HEADER_FILTER_VAL" --warnings-as-errors='*'; then
             echo "OK: clang-tidy passed without errors."
           else
             echo "::error title=Static analysis failed::clang-tidy found issues."
