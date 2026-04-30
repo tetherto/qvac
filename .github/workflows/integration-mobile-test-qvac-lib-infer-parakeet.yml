@@ -18,6 +18,17 @@ on:
         default: "packages/qvac-lib-infer-parakeet"
   workflow_dispatch:
     inputs:
+      # TODO(QVAC-17801): the `default: main` here is a footgun. `gh workflow
+      # run --ref=<branch>` only selects which branch's workflow YAML to run —
+      # it does NOT populate `inputs.ref`. So a developer dispatching against a
+      # feature branch silently gets `inputs.ref="main"`, the addon checkout
+      # pulls main, and the test bundle on the device runs main's source code
+      # instead of their branch (see run #49 — pulled main, no perf markers
+      # emitted; run #50 with explicit `-f ref=<branch>` worked as expected).
+      # Fix: change default to `''` so `${{ inputs.ref || github.ref }}` falls
+      # back to the dispatched branch, matching what every other Github Action
+      # in this repo expects. Apply the same change to the sibling
+      # integration-mobile-test-*.yml workflows that copy this same pattern.
       ref:
         description: "Git ref (branch/tag/SHA) to test"
         type: string
@@ -1496,6 +1507,119 @@ jobs:
           name: console-logs-parakeet-${{ matrix.platform }}
           path: console-logs/
           retention-days: 30
+          if-no-files-found: ignore
+
+      # ─── Mobile performance report (additive) ───
+      # Scrapes [PERF_REPORT_START]...[PERF_REPORT_END] markers (or chunked
+      # [PERF_CHUNK] sequences) from the downloaded Device Farm logs into a
+      # canonical perf-report.json that scripts/perf-report/aggregate.js
+      # already understands. Same shape as the OCR mobile pipeline so the
+      # weekly Performance Report workflow can pick parakeet up automatically.
+      - name: Extract performance report from mobile logs
+        if: always() && steps.schedule_run.outputs.run_arn_1
+        run: |
+          ARTIFACT_DIR="${GITHUB_WORKSPACE}/devicefarm-logs/${{ matrix.platform }}"
+          CONSOLE_DIR="${GITHUB_WORKSPACE}/console-logs/${{ matrix.platform }}"
+          OUTPUT_DIR="${GITHUB_WORKSPACE}/perf-results/${{ matrix.platform }}"
+          mkdir -p "$OUTPUT_DIR"
+
+          SEARCH_DIR=""
+          if [ -d "$CONSOLE_DIR" ] && [ -n "$(ls -A "$CONSOLE_DIR" 2>/dev/null)" ]; then
+            SEARCH_DIR="$CONSOLE_DIR"
+          elif [ -d "$ARTIFACT_DIR" ] && [ -n "$(ls -A "$ARTIFACT_DIR" 2>/dev/null)" ]; then
+            SEARCH_DIR="$ARTIFACT_DIR"
+          fi
+
+          if [ -z "$SEARCH_DIR" ]; then
+            echo "No console-logs/ or devicefarm-logs/ available — skipping perf extraction"
+            exit 0
+          fi
+
+          echo "Scanning $SEARCH_DIR for [PERF_REPORT_START] / [PERF_CHUNK] markers..."
+          node "${GITHUB_WORKSPACE}/addon/scripts/perf-report/extract-from-log.js" \
+            "$SEARCH_DIR" \
+            "$OUTPUT_DIR/performance-report.json" \
+            --run-number "${{ github.run_number }}" || true
+
+          if find "$OUTPUT_DIR" -name "performance-report.json" -type f -size +0 | head -1 | grep -q .; then
+            echo "Perf report extracted; rendering markdown + HTML..."
+            node "${GITHUB_WORKSPACE}/addon/scripts/perf-report/aggregate.js" \
+              --dir "$OUTPUT_DIR" \
+              --output "$OUTPUT_DIR/performance-report.md" \
+              --output-html "$OUTPUT_DIR/performance-report.html" \
+              --output-json "$OUTPUT_DIR/performance-summary.json" || true
+          else
+            echo "No perf-report.json produced — markers were not present in this run's logs."
+            echo "(This is expected on the first run if no integration test has been wired"
+            echo " yet to call recordParakeetStats(); failing soft so the job keeps green.)"
+          fi
+
+      # Render the rich Step Summary table (Test | EP | RTF | Wall | Tokens/sec
+      # | Encoder | Decoder | Audio) using render-step-summary.js, which honors
+      # METRIC_COLUMNS.parakeet from scripts/test-utils/performance-reporter.js.
+      # aggregate.js's Markdown renderer only emits a single "Mean Total Time"
+      # column and was producing an unhelpful summary even though the extracted
+      # performance-report.json contains every metric we need (run #50 proved
+      # this — RTF/Wall/Encoder/Decoder were all in the JSON artifact, just
+      # not in the rendered Markdown). This matches the NMT mobile pattern.
+      - name: Append performance summary to job step summary
+        if: always() && steps.schedule_run.outputs.run_arn_1
+        run: |
+          OUTPUT_DIR="${GITHUB_WORKSPACE}/perf-results/${{ matrix.platform }}"
+          RENDERER="${GITHUB_WORKSPACE}/addon/scripts/perf-report/render-step-summary.js"
+
+          if [ ! -f "$RENDERER" ]; then
+            echo "::warning::$RENDERER not found; falling back to aggregator markdown"
+            REPORT_MD="$OUTPUT_DIR/performance-report.md"
+            if [ -s "$REPORT_MD" ]; then
+              echo "## Mobile Performance — Parakeet (${{ matrix.platform }})" >> "$GITHUB_STEP_SUMMARY"
+              echo "" >> "$GITHUB_STEP_SUMMARY"
+              cat "$REPORT_MD" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "No mobile performance report rendered for parakeet on ${{ matrix.platform }}." >> "$GITHUB_STEP_SUMMARY"
+            fi
+            exit 0
+          fi
+
+          # Single-device layout: extract-from-log.js writes the JSON at the
+          # platform root when there's one device in the matrix.
+          if [ -f "$OUTPUT_DIR/performance-report.json" ]; then
+            node "$RENDERER" \
+              "$OUTPUT_DIR/performance-report.json" \
+              "$GITHUB_STEP_SUMMARY" \
+              --title "Mobile Performance: parakeet (${{ matrix.platform }})"
+            exit 0
+          fi
+
+          # Multi-device layout: per-device subdirectories. Render one block
+          # per device so each device's CPU vs GPU rows show up cleanly.
+          RENDERED=0
+          for DEV_DIR in "$OUTPUT_DIR"/*/; do
+            DEV_REPORT="$DEV_DIR/performance-report.json"
+            [ -f "$DEV_REPORT" ] || continue
+            DEV_NAME=$(basename "$DEV_DIR" | tr '_' ' ')
+            node "$RENDERER" \
+              "$DEV_REPORT" \
+              "$GITHUB_STEP_SUMMARY" \
+              --title "Mobile Performance: parakeet (${{ matrix.platform }} · ${DEV_NAME})"
+            RENDERED=$((RENDERED + 1))
+          done
+
+          if [ "$RENDERED" = "0" ]; then
+            echo "No mobile performance report rendered for parakeet on ${{ matrix.platform }}." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload mobile performance report
+        if: always() && steps.schedule_run.outputs.run_arn_1
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-report-parakeet-${{ matrix.platform }}-${{ github.run_number }}
+          path: |
+            perf-results/${{ matrix.platform }}/**/performance-report.json
+            perf-results/${{ matrix.platform }}/performance-report.html
+            perf-results/${{ matrix.platform }}/performance-report.md
+            perf-results/${{ matrix.platform }}/performance-summary.json
+          retention-days: 90
           if-no-files-found: ignore
 
       - name: Upload Full Device Farm Logs

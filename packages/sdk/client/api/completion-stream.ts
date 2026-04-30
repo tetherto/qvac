@@ -56,6 +56,21 @@ type CompletionParams = Omit<CompletionClientParams, "tools"> & {
  * @param params.emitRawDeltas - When true, every raw model token is also emitted as a `rawDelta` event
  * @param params.toolDialect - Override the SDK's name-based dialect detection. Use when your model emits a known format (`"hermes"`, `"pythonic"`, or `"json"`) the auto-router doesn't recognise. Drives both streaming frame detection and finalization parsing.
  * Common override case: Llama 3.x tool-calling fine-tunes that emit the native pythonic header (`<|start_header_id|>tool_call<|end_header_id|>...<|eot_id|>`).
+ * @param params.responseFormat - Optional structured-output constraint applied to the model's output:
+ *   - `{ type: "text" }` — no constraint (default behavior)
+ *   - `{ type: "json_object" }` — output must be a JSON object
+ *   - `{ type: "json_schema", json_schema: { name, schema, description?, strict? } }` — output must validate against `schema`
+ *
+ *   The schema is converted to GBNF natively by llama.cpp and applied for the
+ *   duration of the request only. `json_schema.name` and `json_schema.description`
+ *   are accepted for OpenAI compatibility but only used at the API boundary —
+ *   they do not affect generation. **`json_schema.strict` is currently accepted
+ *   for compatibility but does NOT trigger OpenAI's auto-tightening semantics**
+ *   (implicit `additionalProperties: false`, all properties required). The
+ *   schema is forwarded to the addon as-is, so callers who want strict
+ *   validation must encode it explicitly in `schema`.
+ *
+ *   Cannot be combined with `tools` (tools already constrain output via their parameter schema).
  * @param params.kvCache - Optional KV cache configuration. Cache files are organized hierarchically:
  *   - Structure: `{kvCacheKey}/{modelId}/{configHash}.bin`
  *   - The configHash includes model config + system prompt to ensure cache isolation
@@ -210,6 +225,7 @@ export function completion(params: CompletionParams): CompletionRun {
         captureThinking: params.captureThinking,
         emitRawDeltas: params.emitRawDeltas,
         toolDialect: params.toolDialect,
+        responseFormat: params.responseFormat,
       };
 
       const responses: AsyncGenerator<unknown> = streamRpc(
@@ -240,7 +256,10 @@ export function completion(params: CompletionParams): CompletionRun {
           notifyWaiters();
 
           if (streamResponse.done) {
-            const { final, error } = buildFinalFromEvents(allEvents, allHandlers);
+            const { final, error } = buildFinalFromEvents(
+              allEvents,
+              allHandlers,
+            );
             if (error) {
               const err = new CompletionFailedError(error.message, error);
               finalRejecter(err);
