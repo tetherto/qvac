@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.19.1] - 2026-04-30
+
+### Fixed
+
+#### GPT-OSS Harmony tool calling: `<|call|>` frame delimiter now surfaces to the SDK
+
+The `<|call|>` token (Harmony frame terminator) is in the model's EOG set. When sampled, it rendered as 0 bytes and silently stopped generation — tool call output was truncated with no visible frame boundary, resulting in the SDK parsing 0 tool calls.
+
+The generation loop now detects Harmony models and intercepts `<|call|>` before the generic EOG break: it renders the token as visible text (`special=true`) so the SDK can identify frame boundaries, then stops generation cleanly. GPT-OSS uses a turn-based tool protocol — one tool call per generation pass — and the SDK is expected to execute the tool, append results, and re-prompt for subsequent calls.
+
 ## [0.19.0] - 2026-04-29
 
 This release adds per-request structured-output support to the LLM addon: callers can now constrain a single completion to either a JSON Schema or a raw GBNF grammar without reloading the model.

@@ -57,7 +57,11 @@ const METRIC_LABELS = {
   sample_count: 'Samples',
   duration_ms: 'Duration',
   backend: 'Backend',
-  platform: 'Platform'
+  platform: 'Platform',
+  wall_time_ms: 'Wall time',
+  encoder_time_ms: 'Encoder time',
+  decoder_time_ms: 'Decoder time',
+  audio_duration_ms: 'Audio duration'
 }
 
 function metricLabel (key) {

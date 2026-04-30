@@ -9,25 +9,56 @@ import {
 } from "./model-types";
 
 const translateParamsNmtSchema = z.object({
-  modelId: z.string(),
-  text: z.union([
-    z.string().min(1, "Text cannot be empty"),
-    z
-      .array(z.string().min(1, "Text cannot be empty"))
-      .min(1, "Array cannot be empty"),
-  ]),
-  stream: z.boolean(),
-  modelType: nmtModelTypeSchema,
+  modelId: z
+    .string()
+    .describe("The identifier of the NMT translation model to use."),
+  text: z
+    .union([
+      z.string().min(1, "Text cannot be empty"),
+      z
+        .array(z.string().min(1, "Text cannot be empty"))
+        .min(1, "Array cannot be empty"),
+    ])
+    .describe(
+      "The input text(s) to translate. A single string returns a single translation; an array returns one translation per input.",
+    ),
+  stream: z
+    .boolean()
+    .describe(
+      "Whether to stream tokens (`true`) or resolve the complete translation once (`false`).",
+    ),
+  modelType: nmtModelTypeSchema.describe(
+    "NMT model-type variant identifier.",
+  ),
 });
 
 const translateParamsLlmSchema = z.object({
-  modelId: z.string(),
-  text: z.string().min(1, "Text cannot be empty"),
-  stream: z.boolean(),
-  modelType: llmModelTypeSchema,
-  from: z.string().optional(),
-  to: z.string(),
-  context: z.string().optional(),
+  modelId: z
+    .string()
+    .describe("The identifier of the LLM model used for translation."),
+  text: z
+    .string()
+    .min(1, "Text cannot be empty")
+    .describe("The input text to translate."),
+  stream: z
+    .boolean()
+    .describe(
+      "Whether to stream tokens (`true`) or resolve the complete translation once (`false`).",
+    ),
+  modelType: llmModelTypeSchema.describe(
+    "LLM model-type variant identifier.",
+  ),
+  from: z
+    .string()
+    .optional()
+    .describe(
+      "Source language code. When omitted, the SDK attempts to auto-detect the source language.",
+    ),
+  to: z.string().describe("Target language code."),
+  context: z
+    .string()
+    .optional()
+    .describe("Optional translation context passed to the LLM as a system hint."),
 });
 
 // Using z.union since each modelType accepts multiple values
@@ -38,15 +69,38 @@ const translateParamsSchema = z.union([
 
 export const translationStatsSchema = z.object({
   // Common stats
-  totalTime: z.number().optional(),
-  totalTokens: z.number().optional(),
-  tokensPerSecond: z.number().optional(),
-  timeToFirstToken: z.number().optional(),
+  totalTime: z
+    .number()
+    .optional()
+    .describe("Total translation time in milliseconds."),
+  totalTokens: z
+    .number()
+    .optional()
+    .describe("Total tokens produced by the translation."),
+  tokensPerSecond: z
+    .number()
+    .optional()
+    .describe("Tokens generated per second."),
+  timeToFirstToken: z
+    .number()
+    .optional()
+    .describe(
+      "Time to first token in milliseconds (LLM translation only).",
+    ),
   // NMT-specific
-  decodeTime: z.number().optional(),
-  encodeTime: z.number().optional(),
+  decodeTime: z
+    .number()
+    .optional()
+    .describe("Time spent in the NMT decoder in milliseconds."),
+  encodeTime: z
+    .number()
+    .optional()
+    .describe("Time spent in the NMT encoder in milliseconds."),
   // LLM-specific
-  cacheTokens: z.number().optional(),
+  cacheTokens: z
+    .number()
+    .optional()
+    .describe("Tokens served from the KV cache during LLM translation."),
 });
 
 export const translateRequestSchema = z.union([

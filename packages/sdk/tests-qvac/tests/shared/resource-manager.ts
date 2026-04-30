@@ -15,11 +15,36 @@ interface TrackedModel {
   lastUsedAtTest: number;
 }
 
+export interface ResourceManagerOptions {
+  /**
+   * Milliseconds to sleep after a successful unloadModel() call inside
+   * `evict()`. Lets the OS catch up on lazy page reclamation before the
+   * next load starts allocating on top.
+   *
+   * Mobile (iOS) needs this — kernel doesn't release pages instantly when
+   * a Bare worklet's V8 isolate destroys its handles, and the next test's
+   * load can crash with EXC_CRASH/SIGABRT inside the GGML allocator if it
+   * arrives at the still-resident-residue moment.
+   *
+   * Desktop doesn't need it — `unloadModel` over the IPC socket completes
+   * with the worker process already having freed the memory, and the
+   * kernel reclaims fast.
+   *
+   * Default 0 (off).
+   */
+  unloadSettleMs?: number;
+}
+
 export class ResourceManager {
   private definitions = new Map<string, ModelDefinition>();
   private models = new Map<string, TrackedModel>();
   private testCount = 0;
   private downloaded = false;
+  private readonly unloadSettleMs: number;
+
+  constructor(options: ResourceManagerOptions = {}) {
+    this.unloadSettleMs = options.unloadSettleMs ?? 0;
+  }
 
   define(dep: string, definition: ModelDefinition) {
     this.definitions.set(dep, definition);
@@ -183,10 +208,19 @@ export class ResourceManager {
       }
       try {
         await unloadModel({ modelId: entry.modelId });
+        // Optionally yield so the OS can reclaim pages before the next
+        // load starts allocating. See `unloadSettleMs` docs above. Only
+        // wait when the unload actually succeeded; on failure there's
+        // nothing to settle.
+        if (this.unloadSettleMs > 0) {
+          await new Promise<void>((resolve) =>
+            setTimeout(resolve, this.unloadSettleMs),
+          );
+        }
       } catch (error) {
         console.warn(`Error unloading model ${dep}: ${error}`);
       }
-      
+
       this.models.delete(dep);
     }
   }

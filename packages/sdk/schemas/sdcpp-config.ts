@@ -42,17 +42,56 @@ export const sdcppConfigSchema = z
 export type SdcppConfig = z.infer<typeof sdcppConfigSchema>;
 
 export const diffusionStatsSchema = z.object({
-  modelLoadMs: z.number().optional(),
-  generationMs: z.number().optional(),
-  totalGenerationMs: z.number().optional(),
-  totalWallMs: z.number().optional(),
-  totalSteps: z.number().optional(),
-  totalGenerations: z.number().optional(),
-  totalImages: z.number().optional(),
-  totalPixels: z.number().optional(),
-  width: z.number().optional(),
-  height: z.number().optional(),
-  seed: z.number().optional(),
+  modelLoadMs: z
+    .number()
+    .optional()
+    .describe("Time in milliseconds spent loading the diffusion model."),
+  generationMs: z
+    .number()
+    .optional()
+    .describe("Wall-clock time in milliseconds spent generating images."),
+  totalGenerationMs: z
+    .number()
+    .optional()
+    .describe(
+      "Total generation time in milliseconds across all images in the batch.",
+    ),
+  totalWallMs: z
+    .number()
+    .optional()
+    .describe(
+      "Total wall-clock time in milliseconds including model load and sampling.",
+    ),
+  totalSteps: z
+    .number()
+    .optional()
+    .describe("Total number of diffusion sampling steps executed."),
+  totalGenerations: z
+    .number()
+    .optional()
+    .describe("Total number of generation passes executed."),
+  totalImages: z
+    .number()
+    .optional()
+    .describe("Total number of images produced."),
+  totalPixels: z
+    .number()
+    .optional()
+    .describe("Total number of pixels generated across all images."),
+  width: z
+    .number()
+    .optional()
+    .describe("Width in pixels of each generated image."),
+  height: z
+    .number()
+    .optional()
+    .describe("Height in pixels of each generated image."),
+  seed: z
+    .number()
+    .optional()
+    .describe(
+      "Seed that produced these outputs (randomized when not supplied by the caller).",
+    ),
 });
 
 export type DiffusionStats = z.infer<typeof diffusionStatsSchema>;
@@ -73,18 +112,52 @@ export type DiffusionStreamResponse = z.infer<
 >;
 
 export const diffusionRequestSchema = z.object({
-  modelId: z.string(),
-  prompt: z.string(),
-  negative_prompt: z.string().optional(),
-  width: z.number().int().positive().multipleOf(8).optional(),
-  height: z.number().int().positive().multipleOf(8).optional(),
-  steps: z.number().int().positive().optional(),
-  cfg_scale: z.number().optional()
-    .describe("Classifier-free guidance scale for SD 1.x / 2.x / XL / SD3 models; typical range 1–20, default 7"),
-  img_cfg_scale: z.number().default(-1)
-    .describe("Image CFG scale for img2img/inpaint workflows where the image and prompt should have different guidance weights; defaults to -1 which reuses cfg_scale"),
-  guidance: z.number().optional()
-    .describe("Distilled guidance for FLUX models; typical range 1–10, default 3.5"),
+  modelId: z
+    .string()
+    .describe("The identifier of the diffusion model to use for generation."),
+  prompt: z.string().describe("Positive prompt describing the image to generate."),
+  negative_prompt: z
+    .string()
+    .optional()
+    .describe("Optional negative prompt describing what to avoid."),
+  width: z
+    .number()
+    .int()
+    .positive()
+    .multipleOf(8)
+    .optional()
+    .describe("Image width in pixels (must be a multiple of 8)."),
+  height: z
+    .number()
+    .int()
+    .positive()
+    .multipleOf(8)
+    .optional()
+    .describe("Image height in pixels (must be a multiple of 8)."),
+  steps: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe("Number of sampling steps to run."),
+  cfg_scale: z
+    .number()
+    .optional()
+    .describe(
+      "Classifier-free guidance scale for SD 1.x / 2.x / XL / SD3 models; typical range 1–20, default 7",
+    ),
+  img_cfg_scale: z
+    .number()
+    .default(-1)
+    .describe(
+      "Image CFG scale for img2img/inpaint workflows where the image and prompt should have different guidance weights; defaults to -1 which reuses cfg_scale",
+    ),
+  guidance: z
+    .number()
+    .optional()
+    .describe(
+      "Distilled guidance for FLUX models; typical range 1–10, default 3.5",
+    ),
   sampling_method: z
     .enum([
       "euler",
@@ -102,24 +175,50 @@ export const diffusionRequestSchema = z.object({
       "res_multistep",
       "res_2s",
     ])
-    .optional(),
+    .optional()
+    .describe("Sampling algorithm used by the diffusion scheduler."),
   scheduler: z
     .enum([
       "discrete", "karras", "exponential", "ays", "gits",
       "sgm_uniform", "simple", "lcm", "smoothstep", "kl_optimal", "bong_tangent",
     ])
-    .optional(),
-  seed: z.number().int().optional(),
-  batch_count: z.number().int().positive().optional(),
-  vae_tiling: z.boolean().optional(),
-  cache_preset: z.string().optional(),
-  init_image: z.string()
+    .optional()
+    .describe("Noise schedule to apply when sampling."),
+  seed: z
+    .number()
+    .int()
+    .optional()
+    .describe("Random seed; when omitted the SDK picks one and returns it in stats."),
+  batch_count: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe("Number of images to generate in this call."),
+  vae_tiling: z
+    .boolean()
+    .optional()
+    .describe(
+      "Enable VAE tiling for large images on constrained VRAM (overrides model config).",
+    ),
+  cache_preset: z
+    .string()
+    .optional()
+    .describe("Optional name of a cached sampler preset to reuse."),
+  init_image: z
+    .string()
     .min(1)
     .regex(BASE64_PATTERN)
     .optional()
     .describe("Base64-encoded image for img2img generation"),
-  strength: z.number().min(0).max(1).optional()
-    .describe("img2img denoising strength (0.0 = keep source, 1.0 = ignore source); used by the SD/SDXL SDEdit path. No-op for FLUX.2, which uses in-context conditioning and ignores this field."),
+  strength: z
+    .number()
+    .min(0)
+    .max(1)
+    .optional()
+    .describe(
+      "img2img denoising strength (0.0 = keep source, 1.0 = ignore source); used by the SD/SDXL SDEdit path. No-op for FLUX.2, which uses in-context conditioning and ignores this field.",
+    ),
 });
 
 export type DiffusionRequest = z.input<typeof diffusionRequestSchema>;
