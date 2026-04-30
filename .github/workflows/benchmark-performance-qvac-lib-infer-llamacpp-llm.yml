@@ -26,6 +26,11 @@ on:
         required: false
         type: string
         default: "1"
+      run_desktop:
+        description: "Run desktop matrix (Linux / macOS / Windows)"
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -67,6 +72,7 @@ jobs:
 
   desktop-benchmarks:
     needs: [context, prebuild]
+    if: ${{ inputs.run_desktop }}
     permissions:
       contents: read
       packages: read
