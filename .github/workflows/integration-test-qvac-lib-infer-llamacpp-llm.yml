@@ -216,10 +216,6 @@ jobs:
         shell: bash
         env:
           QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
-          # QVAC-18111: empty string => unset, so the perf tests honour
-          # their PR default (1 warmup + 1 counted). The `Benchmark
-          # Performance (LLM)` workflow_dispatch passes "3" / "1" here
-          # to opt into mean ± std reporting.
           QVAC_PERF_RUNS: ${{ inputs.qvac_perf_runs }}
           QVAC_PERF_WARMUP_RUNS: ${{ inputs.qvac_perf_warmup_runs }}
 
