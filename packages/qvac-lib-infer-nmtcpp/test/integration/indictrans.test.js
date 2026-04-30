@@ -71,7 +71,8 @@ const {
   platform,
   discoverGpuDevices,
   MAX_GPU_DEVICE_PROBES,
-  resolveExecutionProvider
+  resolveExecutionProvider,
+  CPU_SENTINEL_BACKENDS
 } = require('./utils')
 
 const INDICTRANS_FIXTURE = path.resolve(__dirname, 'fixtures/indictrans.quality.json')
@@ -242,13 +243,14 @@ for (let gpuIdx = 0; gpuIdx < MAX_GPU_DEVICE_PROBES; gpuIdx++) {
       const { metrics, backendName } = run
 
       // Soft check: the per-device test is intended to exercise a real GPU
-      // backend at this index, but if GGML silently falls back to CPU
-      // (loader-fix not available on this platform yet, transient backend
-      // init failure, etc.) we don't want CI to go red on a perf-only test.
-      // Surface it as a comment so it shows up in the test log without
-      // failing the build.
-      if (backendName === 'CPU') {
-        t.comment(`${label} WARN: backend resolved to CPU (silent GPU fallback)`)
+      // backend at this index, but if GGML silently falls back to a CPU
+      // sentinel (loader-fix not available on this platform yet, transient
+      // backend init failure, etc.) we don't want CI to go red on a
+      // perf-only test. Surface it as a comment so it shows up in the test
+      // log without failing the build. CPU_SENTINEL_BACKENDS keeps this in
+      // sync with resolveExecutionProvider's notion of "fallback".
+      if (CPU_SENTINEL_BACKENDS.has(backendName)) {
+        t.comment(`${label} WARN: backend resolved to ${backendName} (silent GPU fallback)`)
       }
 
       const executionProvider = resolveExecutionProvider(backendName, true)
@@ -335,13 +337,13 @@ test('IndicTrans backend [CPU] - English to Hindi translation', { timeout: TEST_
 })
 
 // --------------------------------------------------------------------------
-// Synthetic platform [GPU] row — always runs (QVAC-17837)
+// Synthetic platform [GPU] row — always runs on DESKTOP only (QVAC-17837)
 //
 // The per-device tests above self-skip when discoverGpuDevices() returns
 // empty, which is the desktop reality on the 4 hosted Linux runners today
 // (no GGML GPU loader bound). To make the on-PR Step Summary always show a
 // GPU lane next to the CPU lane on every desktop platform, this test:
-//   - always runs (no platform gate, no probe-based skip),
+//   - always runs on desktop (no probe-based skip),
 //   - requests use_gpu: true with no explicit gpu_device (lets GGML pick),
 //   - records perf regardless of the resolved backend,
 //   - never fails on silent CPU fallback,
@@ -351,10 +353,15 @@ test('IndicTrans backend [CPU] - English to Hindi translation', { timeout: TEST_
 // Once Ian's GPU loader fix lands per platform (QVAC-17640 / QVAC-17880),
 // the same row's EP automatically flips from 'cpu (fallback)' to the real
 // backend without further CI wiring.
+//
+// Mobile is intentionally excluded: the per-device probe loop above already
+// produces meaningful [GPU:0 Vulkan0] / [GPU:0 Metal] rows on mobile, and a
+// default-device synthetic row would just duplicate one of those.
 // --------------------------------------------------------------------------
 
-test('IndicTrans backend [GPU] - English to Hindi translation (fallback-aware)',
-  { timeout: TEST_TIMEOUT }, async function (t) {
+if (!isMobile) {
+  test('IndicTrans backend [GPU] - English to Hindi translation (fallback-aware)',
+    { timeout: TEST_TIMEOUT }, async function (t) {
     const modelPath = await ensureIndicTransModel()
     const label = '[GPU]'
     t.ok(modelPath, `${label} IndicTrans model path should be available`)
@@ -405,6 +412,7 @@ test('IndicTrans backend [GPU] - English to Hindi translation (fallback-aware)',
       }
     }
   })
+}
 
 // --------------------------------------------------------------------------
 // Phase 2.2 — CPU vs GPU output parity (one test per discovered GPU device)
