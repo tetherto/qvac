@@ -13,9 +13,10 @@ on:
       - feature-*
       - tmp-*
     paths:
-      - "packages/vla/**"
-      - ".github/workflows/*-vla.yml"
+      - "packages/ocr-onnx/**"
+      - ".github/workflows/*ocr*.yml"
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
@@ -40,139 +41,192 @@ jobs:
         with:
           github-token: ${{ github.token }}
 
-  verify-fabric-lockstep:
-    if: needs.authorize.outputs.allowed == 'true'
-    needs: [authorize]
+  # Gate the workflow so label events (and other PR_target quirks) don't trigger unrelated packages.
+  changes:
     runs-on: ubuntu-latest
+    outputs:
+      pkg: ${{ steps.filter.outputs.pkg }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-
-      - name: Verify qvac-fabric versions are lockstep
-        id: lockstep
-        uses: ./.github/actions/verify-qvac-fabric-lockstep
-
-      - name: Report verified version
-        run: 'echo "Verified qvac-fabric version: ${{ steps.lockstep.outputs.version }}"'
-
-  sanity-checks:
-    if: needs.authorize.outputs.allowed == 'true'
-    needs: [authorize, verify-fabric-lockstep]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           fetch-depth: 0
-      - name: Run Sanity checks
-        uses: ./.github/actions/sanity-checks
+
+      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # 4.0.1
+        id: filter
         with:
-          secret-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
-          run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
-          workdir: packages/vla
+          token: ${{ secrets.GITHUB_TOKEN }}
+          filters: |
+            pkg:
+              - "packages/ocr-onnx/**"
+              - ".github/workflows/*ocr*.yml"
 
-  cpp-lint:
-    # Only runs when we have a PR base SHA to diff against. Workflow_dispatch
-    # has no pull_request context, which would make the diff target empty.
-    if: needs.authorize.outputs.allowed == 'true' && github.event_name == 'pull_request_target'
-    needs: authorize
-    uses: ./.github/workflows/cpp-lint.yaml
-    secrets: inherit
-    with:
-      sha: ${{ github.event.pull_request.base.sha }}
-      pr_head_sha: ${{ github.event.pull_request.head.sha }}
-      workdir: packages/vla
-
-  cpp-tests:
-    permissions:
-      contents: read
-      packages: read
-      pull-requests: write
-    if: needs.authorize.outputs.allowed == 'true'
-    needs: [authorize, sanity-checks]
-    uses: ./.github/workflows/cpp-tests-vla.yml
-    secrets: inherit
-    with:
-      repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
-
-  ts-checks:
-    if: needs.authorize.outputs.allowed == 'true'
-    needs: authorize
-    runs-on: ubuntu-latest
-    environment: release
+  sanity-checks:
+    needs: [authorize, changes]
+    if: |
+      (needs.changes.outputs.pkg == 'true' &&
+       needs.authorize.outputs.allowed == 'true') ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-22.04
+    env:
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/ocr-onnx/vcpkg/cache,readwrite"
+      PKG_DIR: packages/ocr-onnx
     steps:
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-
-      - name: Set up Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          node-version: 20
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+          fetch-depth: 0
 
-      - name: Install dependencies
-        working-directory: packages/vla
-        run: npm install
+      - name: Fetch PR head and target branch
+        id: fetch_pr
+        if: github.event_name == 'pull_request_target' || github.event_name == 'pull_request'
+        continue-on-error: true
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git fetch origin "$BASE_REF:refs/remotes/origin/$BASE_REF"
+          git fetch origin "$HEAD_SHA:refs/pr/head"
 
-      - name: Type declaration check
-        working-directory: packages/vla
-        run: npm run test:dts
+      - name: Check PR Status with Target Branch
+        continue-on-error: true
+        id: target_branch_checks
+        if: github.event_name == 'pull_request_target' || github.event_name == 'pull_request'
+        env:
+          TARGET_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if ! git merge-base --is-ancestor "$TARGET_SHA" "$PR_HEAD_SHA"; then
+            echo "::error title=PR is not up to date::This PR is not up to date with target branch"
+          fi
 
-      - name: Run lint and unit tests
-        id: run_lint_and_unit_tests
+      - name: Verify that yaml files are formatted
+        id: yamlfmt
+        uses: ./.github/actions/yamlfmt
+        with:
+          workdir: ${{ env.PKG_DIR }}
+        continue-on-error: true
+
+      - name: Check for disallowed dependencies
+        id: check_dependencies
+        continue-on-error: true
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          deps=$(jq -r '.dependencies, .devDependencies // {} | to_entries[] | .value' package.json)
+          if echo "$deps" | grep -Eq '^(git\+https:\/\/github.com|[0-9]+\.[0-9]+\.[0-9]+-(dev|tmp)[^"]*)$'; then
+            echo "::error title=Disallowed dependency detected::Do not use git URLs or dev/tmp versions in dependencies"
+          fi
+
+      - name: Run JavaScript tests
+        id: run_js_tests
+        continue-on-error: true
         uses: ./.github/actions/run-lint-and-unit-tests
         with:
           gpr-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.GITHUB_TOKEN }}
           registry-type: gpr
-          workdir: packages/vla
+          workdir: ${{ env.PKG_DIR }}
+
+      - name: Check for errors
+        run: |
+          count=0
+          if [ "${{ steps.run_js_tests.outcome }}" = "failure" ]; then
+            echo "::error::Step - Lint or unit tests failed"
+            count=$((count + 1))
+          fi
+          if [ "${{ steps.yamlfmt.outcome }}" = "failure" ]; then
+            echo "::error::Step - Verify that yaml files are formatted failed"
+            count=$((count + 1))
+          fi
+          if [ "${{ steps.check_dependencies.outcome }}" = "failure" ]; then
+            echo "::error::Step - Check for disallowed dependencies failed"
+            count=$((count + 1))
+          fi
+          if [ "${{ steps.target_branch_checks.outcome }}" = "failure" ]; then
+            echo "::error::Step - Check PR Status with Target Branch failed"
+            count=$((count + 1))
+          fi
+          if [ "${{ steps.fetch_pr.outcome }}" = "failure" ]; then
+            echo "::error::Step - Fetch PR head and target branch failed"
+            count=$((count + 1))
+          fi
+          if [ $count -gt 0 ]; then
+            echo "::error::There were $count failed checks"
+            exit 1
+          fi
+
+  cpp-lint:
+    needs: [authorize, changes]
+    if: needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/cpp-lint.yaml
+    secrets: inherit
+    with:
+      sha: ${{ github.event.pull_request.base.sha || github.sha }}
+      pr_head_sha: ${{ github.event.pull_request.head.sha }}
+      workdir: packages/ocr-onnx
 
   prebuild:
     permissions:
       contents: write
-      packages: write
       pull-requests: write
+      packages: write
       id-token: write
-    if: needs.authorize.outputs.allowed == 'true'
-    needs: [authorize, sanity-checks]
-    uses: ./.github/workflows/prebuilds-vla.yml
+    needs: [authorize, changes]
+    if: |
+      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        needs.authorize.outputs.allowed == 'true'
+      )
+    uses: ./.github/workflows/prebuilds-ocr-onnx.yml
     secrets: inherit
     with:
-      repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
+      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
-  integration-tests:
-    needs: [authorize, prebuild]
-    if: needs.authorize.outputs.allowed == 'true'
+  run-integration-tests:
     permissions:
       contents: read
       packages: read
       id-token: write
-    uses: ./.github/workflows/integration-test-vla.yml
+    needs: [authorize, changes, prebuild]
+    if: |
+      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        needs.authorize.outputs.allowed == 'true'
+      )
+    uses: ./.github/workflows/integration-test-ocr-onnx.yml
     secrets: inherit
     with:
-      repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
+      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
   run-mobile-integration-tests:
     permissions:
       contents: read
       packages: read
-      pull-requests: write
+      pull-requests: write # Allow commenting on PRs
       id-token: write
-    if: needs.authorize.outputs.allowed == 'true'
-    needs: [authorize, prebuild]
-    uses: ./.github/workflows/integration-mobile-test-vla.yml
+    needs: [authorize, changes, prebuild]
+    if: |
+      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        needs.authorize.outputs.allowed == 'true'
+      )
+    uses: ./.github/workflows/integration-mobile-test-ocr-onnx.yml
     secrets: inherit
     with:
-      repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
+      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
   merge-guard:
-    needs: [authorize, verify-fabric-lockstep, sanity-checks, cpp-lint, cpp-tests, prebuild, integration-tests, run-mobile-integration-tests, ts-checks]
-    if: always()
+    needs: [authorize, changes, sanity-checks, prebuild, run-integration-tests, run-mobile-integration-tests]
+    if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/public-pr.yml
     with:
-      sanity-checks-status: ${{ needs.verify-fabric-lockstep.result == 'success' && needs.sanity-checks.result == 'success' }}
+      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
       build-status: ${{ needs.prebuild.result == 'success' }}
+      integration-tests-status: ${{ needs.run-integration-tests.result == 'success' }}
