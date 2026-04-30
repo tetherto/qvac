@@ -10,6 +10,7 @@ package-lock.json
 
 test/unit/all.js
 test/integration/all.js
+test/results/
 
 # Added by qvac-lint-cpp
 .clang-format
