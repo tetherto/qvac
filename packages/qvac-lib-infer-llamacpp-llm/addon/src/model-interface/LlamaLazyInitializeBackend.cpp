@@ -3,6 +3,17 @@
 #include <filesystem>
 #include <string>
 
+#if defined(__linux__) && !defined(__BIONIC__) && \
+    (defined(__GLIBC__) || defined(__UCLIBC__))
+#  include <malloc.h>
+#  define QVAC_HAS_MALLOC_TRIM 1
+#endif
+#if defined(__BIONIC__)
+// bionic ships malloc.h; mallopt(M_PURGE_ALL) is the equivalent knob.
+#  include <malloc.h>
+#  define QVAC_HAS_MALLOPT_PURGE 1
+#endif
+
 #include <llama.h>
 
 #include "LlamaModel.hpp"
@@ -83,6 +94,17 @@ void LlamaLazyInitializeBackend::decrementRefCount() {
       g_initialized = false;
       g_recordedBackendsDir.clear();
     }
+    // After unloading a model, give the allocator a chance to release
+    // arena pages back to the OS. llama_model destruction frees hundreds of
+    // MiB of host buffers, but glibc/jemalloc keep that memory in their
+    // freelists by default — visible as RSS that doesn't go down between
+    // tests. On memory-tight devices that retained RSS contributes to lmkd
+    // thrashing when the next test starts loading.
+#if defined(QVAC_HAS_MALLOC_TRIM)
+    malloc_trim(0);
+#elif defined(QVAC_HAS_MALLOPT_PURGE) && defined(M_PURGE_ALL)
+    mallopt(M_PURGE_ALL, 0);
+#endif
   }
 }
 

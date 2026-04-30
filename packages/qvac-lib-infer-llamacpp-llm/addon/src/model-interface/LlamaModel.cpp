@@ -140,8 +140,7 @@ void LlamaModel::tuneConfigMap(
   }
 
   constexpr int kAdrenoUbatchThreshold = 800;
-  const bool needsUbatch = (isBitnet || isFinetuning) &&
-                           adrenoVersion.has_value() &&
+  const bool needsUbatch = adrenoVersion.has_value() &&
                            adrenoVersion.value() >= kAdrenoUbatchThreshold;
   if (needsUbatch) {
     constexpr int64_t kAdrenoUbatchCap = 128;
@@ -149,7 +148,7 @@ void LlamaModel::tuneConfigMap(
       configFilemap["ubatch-size"] = std::to_string(kAdrenoUbatchCap);
       QLOG_IF(
           Priority::INFO,
-          "[LlamaModel] Adreno 800+ (Vulkan): defaulting ubatch-size=128\n");
+          "[LlamaModel] Adreno 800+: defaulting ubatch-size=128\n");
     } else {
       const std::string& key =
           configFilemap.count("ubatch-size") ? "ubatch-size" : "ubatch_size";
@@ -160,7 +159,7 @@ void LlamaModel::tuneConfigMap(
         QLOG_IF(
             Priority::ERROR,
             string_format(
-                "[LlamaModel] Adreno 800+ (Vulkan): invalid ubatch-size "
+                "[LlamaModel] Adreno 800+: invalid ubatch-size "
                 "\"%s\" (%s), falling back to %" PRId64 "\n",
                 configFilemap[key].c_str(),
                 e.what(),
@@ -172,7 +171,7 @@ void LlamaModel::tuneConfigMap(
         QLOG_IF(
             Priority::WARNING,
             string_format(
-                "[LlamaModel] Adreno 800+ (Vulkan): ubatch-size=%" PRId64
+                "[LlamaModel] Adreno 800+: ubatch-size=%" PRId64
                 " exceeds safe maximum %" PRId64 ", clamping to %" PRId64 "\n",
                 userVal,
                 kAdrenoUbatchCap,
