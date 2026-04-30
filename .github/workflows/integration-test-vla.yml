@@ -379,7 +379,7 @@ jobs:
         run: |
           echo "Downloading SmolVLA LIBERO model from S3..."
           mkdir -p model/vla
-          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/vla/smolvla-libero/2026-04-21/smolvla-libero-f32-fixed.gguf" model/vla/smolvla-libero-f32-fixed.gguf
+          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/vla/smolvla-libero/2026-04-30/smolvla-libero-vision-q8.gguf" model/vla/smolvla-libero-vision-q8.gguf
           echo "SmolVLA model files:"
           ls -la model/vla/
 
@@ -388,7 +388,7 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         env:
-          QVAC_VLA_MODEL: ${{ (matrix.platform == 'darwin' && matrix.arch == 'x64') && '' || format('{0}/{1}/model/vla/smolvla-libero-f32-fixed.gguf', github.workspace, env.WORKDIR) }}
+          QVAC_VLA_MODEL: ${{ (matrix.platform == 'darwin' && matrix.arch == 'x64') && '' || format('{0}/{1}/model/vla/smolvla-libero-vision-q8.gguf', github.workspace, env.WORKDIR) }}
         run: |
           set +e
           # Stream test output AND capture it so we can inspect the TAP summary

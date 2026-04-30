@@ -8,7 +8,7 @@ set -e
 REGION="${AWS_REGION:-eu-central-1}"
 BUCKET="${S3_BUCKET:-${MODEL_S3_BUCKET}}"
 BASE_PATH="qvac_models_compiled/vla/smolvla-libero"
-MODEL_NAME="smolvla-libero-f32-fixed.gguf"
+MODEL_NAME="smolvla-libero-vision-q8.gguf"
 
 echo "🔑 Generating presigned URL for SmolVLA LIBERO model..."
 echo "   Region: $REGION"
