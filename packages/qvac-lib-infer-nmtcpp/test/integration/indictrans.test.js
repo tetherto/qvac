@@ -362,56 +362,56 @@ test('IndicTrans backend [CPU] - English to Hindi translation', { timeout: TEST_
 if (!isMobile) {
   test('IndicTrans backend [GPU] - English to Hindi translation (fallback-aware)',
     { timeout: TEST_TIMEOUT }, async function (t) {
-    const modelPath = await ensureIndicTransModel()
-    const label = '[GPU]'
-    t.ok(modelPath, `${label} IndicTrans model path should be available`)
-    t.comment(`${label} Model path: ${modelPath}`)
-    t.comment(`Platform: ${platform}, isMobile: ${isMobile}`)
-    t.comment(`${label} Testing with use_gpu: true (default device — fallback-aware)`)
+      const modelPath = await ensureIndicTransModel()
+      const label = '[GPU]'
+      t.ok(modelPath, `${label} IndicTrans model path should be available`)
+      t.comment(`${label} Model path: ${modelPath}`)
+      t.comment(`Platform: ${platform}, isMobile: ${isMobile}`)
+      t.comment(`${label} Testing with use_gpu: true (default device — fallback-aware)`)
 
-    const logger = createLogger()
-    let model
+      const logger = createLogger()
+      let model
 
-    try {
-      const run = await runSingleTranslation(t, {
-        modelPath,
-        logger,
-        useGpu: true,
-        // No gpuDevice — let GGML pick its default. When the loader fix
-        // isn't available the addon will emit a CPU sentinel and we'll
-        // record it as fallback rather than failing.
-        label
-      })
-      model = run.model
-      const { metrics, backendName } = run
+      try {
+        const run = await runSingleTranslation(t, {
+          modelPath,
+          logger,
+          useGpu: true,
+          // No gpuDevice — let GGML pick its default. When the loader fix
+          // isn't available the addon will emit a CPU sentinel and we'll
+          // record it as fallback rather than failing.
+          label
+        })
+        model = run.model
+        const { metrics, backendName } = run
 
-      const executionProvider = resolveExecutionProvider(backendName, true)
-      t.comment(`${label} resolved EP: ${executionProvider} (backendName=${backendName})`)
+        const executionProvider = resolveExecutionProvider(backendName, true)
+        t.comment(`${label} resolved EP: ${executionProvider} (backendName=${backendName})`)
 
-      t.comment(formatPerformanceMetrics(`[IndicTrans] ${label}`, metrics, {
-        fixturePath: INDICTRANS_FIXTURE,
-        srcLang: 'eng_Latn',
-        dstLang: 'hin_Deva',
-        execution_provider: executionProvider
-      }))
+        t.comment(formatPerformanceMetrics(`[IndicTrans] ${label}`, metrics, {
+          fixturePath: INDICTRANS_FIXTURE,
+          srcLang: 'eng_Latn',
+          dstLang: 'hin_Deva',
+          execution_provider: executionProvider
+        }))
 
-      t.ok(metrics.fullOutput.length > 0, `${label} translation should not be empty`)
+        t.ok(metrics.fullOutput.length > 0, `${label} translation should not be empty`)
 
-      compareToBaseline(t, label, metrics,
-        pickBaseline(BASELINES, executionProvider))
+        compareToBaseline(t, label, metrics,
+          pickBaseline(BASELINES, executionProvider))
 
-      t.pass(`${label} IndicTrans translation completed (ep=${executionProvider})`)
-    } catch (e) {
-      t.fail(`${label} IndicTrans test failed: ${e.message}`)
-      throw e
-    } finally {
-      if (model) {
-        try { await model.unload() } catch (e) {
-          t.comment(`${label} unload() error: ${e.message}`)
+        t.pass(`${label} IndicTrans translation completed (ep=${executionProvider})`)
+      } catch (e) {
+        t.fail(`${label} IndicTrans test failed: ${e.message}`)
+        throw e
+      } finally {
+        if (model) {
+          try { await model.unload() } catch (e) {
+            t.comment(`${label} unload() error: ${e.message}`)
+          }
         }
       }
-    }
-  })
+    })
 }
 
 // --------------------------------------------------------------------------
