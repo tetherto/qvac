@@ -74,11 +74,21 @@ const TEST_CONSTANTS = {
 }
 
 // QVAC-17830: 1 warmup + N counted iterations per (image x backend).
-// Matches OCR's PERF_RUNS=3 convention in
-// packages/ocr-onnx/test/integration/doctr-*.test.js so aggregate.js
-// produces a meaningful `count=3, mean, std` per cell.
-const PERF_RUNS = 3
-const PERF_WARMUP_RUNS = 1
+//
+// Per the policy agreed on Slack with @Olya / @Gianfranco (2026-04-30):
+// PR runs default to 1 warmup + 1 counted (n=1, no averaging) so we
+// don't pay the full perf cost on every PR. The dedicated
+// "Benchmark Performance (LLM)" workflow_dispatch (QVAC-18111) is the
+// only place we crank these up to produce mean ± std numbers.
+//
+// Override via env when running the benchmark workflow:
+//   QVAC_PERF_RUNS=3        QVAC_PERF_WARMUP_RUNS=1
+const _envInt = (key, fallback) => {
+  const v = parseInt(process.env[key] || '', 10)
+  return Number.isFinite(v) && v > 0 ? v : fallback
+}
+const PERF_RUNS = _envInt('QVAC_PERF_RUNS', 1)
+const PERF_WARMUP_RUNS = _envInt('QVAC_PERF_WARMUP_RUNS', 1)
 const PERF_TEST_TIMEOUT = 25 * 60 * 1000 // 25 minutes
 
 const ALL_DEVICE_CONFIGS = [
@@ -318,16 +328,18 @@ function runImageRecognitionTest (testCase, deviceConfig) {
       )
     }
 
-    // QVAC-17830: iOS-only per-test counted-iteration override. Default is
-    // PERF_RUNS=3 everywhere, matching OCR's convention. But iPhone Device
-    // Farm nodes have a hard ~3.3 GB per-app Jetsam ceiling and the 10 MB
-    // fruit-plate PNG + VLM model + KV cache growth over 4 inferences
-    // (warmup + 3 counted) blows that even WITH the elephant pre-warmup.
-    // Opting an image into iosPerfRuns=1 — combined with the pre-warmup
-    // replacing the standard warmup pass above — drops the cold-path peak
-    // for iOS to exactly 2 inferences (1 small pre-warmup + 1 counted real
-    // image). Desktop + Android are untouched; every other iOS image still
-    // runs the full 1 warmup + 3 counted iterations.
+    // QVAC-17830: iOS-only per-test counted-iteration override. PR runs
+    // default to PERF_RUNS=1; the benchmark workflow_dispatch
+    // (QVAC-18111) bumps this to 3 (or more) via QVAC_PERF_RUNS. The
+    // iPhone Device Farm nodes have a hard ~3.3 GB per-app Jetsam
+    // ceiling, and a heavy image like the 10 MB fruit-plate PNG + VLM
+    // model + KV cache growth blows that under the benchmark workflow's
+    // n=3 plan even WITH the elephant pre-warmup. Opting an image into
+    // iosPerfRuns=1 caps that image at exactly 2 inferences on iOS
+    // (1 small pre-warmup + 1 counted real image) regardless of
+    // QVAC_PERF_RUNS, so the benchmark workflow doesn't OOM iPhone.
+    // Desktop + Android always honour PERF_RUNS; on PR runs (default
+    // PERF_RUNS=1) the override is a no-op.
     const countedRuns = (platform === 'ios' && Number.isFinite(testCase.iosPerfRuns))
       ? testCase.iosPerfRuns
       : PERF_RUNS

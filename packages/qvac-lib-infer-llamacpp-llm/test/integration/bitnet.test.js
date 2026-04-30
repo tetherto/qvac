@@ -19,13 +19,20 @@ const PROMPT = [
   { role: 'user', content: 'What is 2 + 2?' }
 ]
 
-// QVAC-17830: 1 warmup + 1 counted iteration. BitNet on Android
-// Device Farm is heavy enough that a single counted run already
-// gives a representative TTFT / TPS without ballooning the
-// integration suite. Scenario tag = 'bitnet' so the aggregator
-// puts the row under the bitnet section in the squashed summary.
-const PERF_RUNS = 1
-const PERF_WARMUP_RUNS = 1
+// QVAC-17830: 1 warmup + 1 counted iteration on PR runs, configurable
+// via QVAC_PERF_RUNS / QVAC_PERF_WARMUP_RUNS for the dedicated
+// benchmark workflow_dispatch (QVAC-18111). BitNet on Android Device
+// Farm is heavy enough that a single counted run already gives a
+// representative TTFT / TPS on PRs; the benchmark workflow can crank
+// it up if we want mean ± std numbers.
+// Scenario tag = 'bitnet' so the aggregator puts the row under the
+// bitnet section in the squashed summary.
+const _envInt = (key, fallback) => {
+  const v = parseInt(process.env[key] || '', 10)
+  return Number.isFinite(v) && v > 0 ? v : fallback
+}
+const PERF_RUNS = _envInt('QVAC_PERF_RUNS', 1)
+const PERF_WARMUP_RUNS = _envInt('QVAC_PERF_WARMUP_RUNS', 1)
 const PERF_LABEL = '[bitnet] [GPU]'
 
 async function runBitnetInference (addon, prompt) {

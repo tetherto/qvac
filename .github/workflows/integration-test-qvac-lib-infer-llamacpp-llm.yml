@@ -10,6 +10,22 @@ on:
         type: string
       model:
         type: string
+      # QVAC-18111: bench-mode iteration counts. The umbrella PR
+      # workflow leaves these unset → tests honour their PR default
+      # (1 warmup + 1 counted, see _image-common.js / bitnet.test.js).
+      # The dedicated `Benchmark Performance (LLM)` workflow_dispatch
+      # passes 3 + 1 here so we get mean ± std numbers when we
+      # actually want them.
+      qvac_perf_runs:
+        description: "Override QVAC_PERF_RUNS (number of counted iterations per perf test). Empty = test default."
+        type: string
+        required: false
+        default: ""
+      qvac_perf_warmup_runs:
+        description: "Override QVAC_PERF_WARMUP_RUNS (number of warmup iterations per perf test). Empty = test default."
+        type: string
+        required: false
+        default: ""
 
   workflow_dispatch:
     inputs:
@@ -22,6 +38,16 @@ on:
         description: "NPM package containing prebuilds (e.g. @qvac/llm-llamacpp@1.0.0)"
         type: string
         required: true
+      qvac_perf_runs:
+        description: "Override QVAC_PERF_RUNS (number of counted iterations per perf test). Empty = test default."
+        type: string
+        required: false
+        default: ""
+      qvac_perf_warmup_runs:
+        description: "Override QVAC_PERF_WARMUP_RUNS (number of warmup iterations per perf test). Empty = test default."
+        type: string
+        required: false
+        default: ""
 
 jobs:
   run-integration-tests:
@@ -210,6 +236,12 @@ jobs:
         shell: bash
         env:
           QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
+          # QVAC-18111: empty string ⇒ unset, so _envInt() in
+          # _image-common.js / bitnet.test.js falls through to the PR
+          # default (1+1). The benchmark workflow_dispatch sets these
+          # to "3" / "1" to opt into mean ± std reporting.
+          QVAC_PERF_RUNS: ${{ inputs.qvac_perf_runs }}
+          QVAC_PERF_WARMUP_RUNS: ${{ inputs.qvac_perf_warmup_runs }}
 
       - name: Run integration test (Windows)
         if: ${{ matrix.platform == 'win32' }}
@@ -220,6 +252,8 @@ jobs:
         shell: powershell
         env:
           QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
+          QVAC_PERF_RUNS: ${{ inputs.qvac_perf_runs }}
+          QVAC_PERF_WARMUP_RUNS: ${{ inputs.qvac_perf_warmup_runs }}
 
       - name: Generate HTML performance report
         if: ${{ always() }}

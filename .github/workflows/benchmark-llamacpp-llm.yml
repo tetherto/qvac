@@ -1,0 +1,184 @@
+name: Benchmark Performance (LLM)
+
+# QVAC-18111: dedicated benchmarking workflow for the LLM addon.
+#
+# Triggered manually only — kept off the PR critical path per the
+# new perf policy agreed on Slack (2026-04-30, @Olya / @Gianfranco):
+# PR runs default to 1 warmup + 1 counted iteration (cheap), and this
+# workflow is the only place we crank QVAC_PERF_RUNS up to produce
+# mean ± std numbers. The umbrella workflow `on-pr-qvac-lib-infer-
+# llamacpp-llm.yml` continues to call `integration-test-...yml`
+# without the iteration overrides, so the PR critical path keeps the
+# minimal profiling cost.
+#
+# Phase 1 scope (this file): desktop matrix only. Mobile env-var
+# injection (Android / iOS Device Farm) requires a build-time hook
+# in the test app — tracked in QVAC-18111 follow-up — so for now the
+# benchmark workflow asks the operator to also re-run the Mobile
+# workflow manually if mobile bench numbers are wanted.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref (branch/tag/SHA) to benchmark"
+        type: string
+        required: false
+        default: main
+      qvac_perf_runs:
+        description: "QVAC_PERF_RUNS — counted iterations per perf test"
+        type: string
+        required: false
+        default: "3"
+      qvac_perf_warmup_runs:
+        description: "QVAC_PERF_WARMUP_RUNS — warmup iterations per perf test"
+        type: string
+        required: false
+        default: "1"
+
+permissions:
+  contents: read
+  packages: read
+  id-token: write
+
+env:
+  PKG_DIR: packages/qvac-lib-infer-llamacpp-llm
+
+jobs:
+  prebuild:
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/prebuilds-qvac-lib-infer-llamacpp-llm.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.repository }}
+      ref: ${{ inputs.ref }}
+
+  run-integration-tests:
+    needs: [prebuild]
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    uses: ./.github/workflows/integration-test-qvac-lib-infer-llamacpp-llm.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.repository }}
+      ref: ${{ inputs.ref }}
+      qvac_perf_runs: ${{ inputs.qvac_perf_runs }}
+      qvac_perf_warmup_runs: ${{ inputs.qvac_perf_warmup_runs }}
+
+  combine-perf-reports:
+    name: Combined Benchmark Report
+    needs: [run-integration-tests]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout addon repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ inputs.ref }}
+          sparse-checkout: |
+            scripts/perf-report
+            packages/qvac-lib-infer-llamacpp-llm/media
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # 4.4.0
+        with:
+          node-version: lts/*
+
+      - name: Download all perf report artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: perf-report-llamacpp-llm-*-${{ github.run_number }}
+          path: combined-reports
+        continue-on-error: true
+
+      - name: Fix desktop device names
+        shell: bash
+        run: |
+          # See on-pr-qvac-lib-infer-llamacpp-llm.yml for the full
+          # rationale — the matrix runs sibling legs on the same
+          # physical platform, and we fold them under one device
+          # name so [CPU] and [GPU] rows live in one column.
+          for dir in combined-reports/perf-report-llamacpp-llm-*/; do
+            [ -d "$dir" ] || continue
+            base=$(basename "$dir")
+            platform=$(echo "$base" | sed "s/^perf-report-llamacpp-llm-//" | sed "s/-${{ github.run_number }}$//")
+
+            case "$platform" in Android|iOS) continue ;; esac
+
+            case "$platform" in
+              linux-x64-cpu|linux-x64-gpu) device_name="linux-x64" ;;
+              linux-arm64-u22|linux-arm64-u24) device_name="linux-arm64" ;;
+              *) device_name="$platform" ;;
+            esac
+
+            for json in $(find "$dir" -name "performance-report.json" 2>/dev/null); do
+              if command -v jq >/dev/null 2>&1; then
+                jq --arg name "$device_name" '.device.name = $name' "$json" > "${json}.tmp" && mv "${json}.tmp" "$json"
+                echo "Patched device name in $json -> $device_name (was matrix label $platform)"
+              fi
+            done
+          done
+
+      - name: Generate combined benchmark report
+        run: |
+          if ! find combined-reports -name "performance-report.json" -type f 2>/dev/null | grep -q .; then
+            echo "No performance reports found."
+            exit 0
+          fi
+
+          mkdir -p combined-output
+
+          node scripts/perf-report/aggregate.js \
+            --dir combined-reports \
+            --addon-type vision \
+            --device-details \
+            --output-html combined-output/benchmark-report-combined.html \
+            --output-json combined-output/benchmark-summary-combined.json \
+            --output combined-output/benchmark-report-combined.md
+
+      - name: Upload combined HTML benchmark report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Benchmark-Report-All-Platforms-${{ github.run_number }}
+          path: combined-output/benchmark-report-combined.html
+          retention-days: 90
+          if-no-files-found: ignore
+
+      - name: Write benchmark summary
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          MD_FILE="combined-output/benchmark-report-combined.md"
+          {
+            echo "## LLM / VLM Benchmark Report (Desktop)"
+            echo ""
+            echo "> Triggered manually via \`workflow_dispatch\` — \`QVAC_PERF_RUNS=${{ inputs.qvac_perf_runs }}\`, \`QVAC_PERF_WARMUP_RUNS=${{ inputs.qvac_perf_warmup_runs }}\`."
+            echo ""
+            echo "> Mobile (Android / iOS) is **not** covered by this workflow yet — bench-mode iteration counts need a build-time hook in the mobile test app (QVAC-18111 follow-up). Mobile rows shown in PR runs continue to use 1 + 1."
+            echo ""
+            if [ -f "$MD_FILE" ]; then
+              cat "$MD_FILE"
+            else
+              echo "No combined performance report available."
+            fi
+            echo ""
+            echo "---"
+            echo ""
+            echo "### Downloadable HTML Report"
+            echo ""
+            if [ -f "combined-output/benchmark-report-combined.html" ]; then
+              echo "> Download artifact \`Benchmark-Report-All-Platforms-${{ github.run_number }}\`."
+            fi
+          } >> $GITHUB_STEP_SUMMARY
