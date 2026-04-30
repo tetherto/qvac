@@ -15,6 +15,10 @@ let rpcPromise: Promise<RPC> | null = null;
 let workletInstance: Worklet | null = null;
 let workletInitialized = false;
 let cachedRuntimeContext: RuntimeContext | undefined;
+// Set while close() is in flight. Concurrent callers share the same
+// promise instead of double-sending __shutdown__ or re-entering the
+// terminate block on already-null state.
+let closingPromise: Promise<void> | null = null;
 
 logger.debug("EXPO RPC Client bundle");
 
@@ -121,10 +125,114 @@ export async function getRPC() {
   }
 }
 
-export function close() {
-  logger.info("🧹 Closing RPC client (Expo)");
-  rpcInstance = null;
-  rpcPromise = null;
+const SHUTDOWN_RPC_TIMEOUT_MS = 10_000;
+
+/**
+ * Pre-terminate cleanup roundtrip. Sends an internal `__shutdown__` message
+ * to the worker so it can clear addon plugin registries (calls each addon's
+ * `releaseLogger` → frees env-bound js_ref_t state) and unload all model
+ * instances BEFORE we kill the worklet.
+ *
+ * Without this, the worklet's V8 isolate dies while addon static state still
+ * holds js_ref_t handles into it; the next worklet's first `setLogger` call
+ * trips a V8 GlobalHandle assertion (brk 0 / SIGTRAP) and the iOS app dies.
+ *
+ * Best-effort: never throws. Falls through to terminate even on timeout.
+ */
+async function sendShutdownMessage(rpc: RPC): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      (async () => {
+        const req = rpc.request(1);
+        req.send(JSON.stringify({ type: "__shutdown__" }), "utf8");
+        const response = await req.reply("utf8");
+        const parsed = JSON.parse(String(response)) as {
+          success: boolean;
+          error?: string;
+        };
+        if (!parsed.success) {
+          throw new Error(parsed.error ?? "Worker reported cleanup failure");
+        }
+      })(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () =>
+            reject(
+              new Error(
+                `Worker did not ack __shutdown__ within ${SHUTDOWN_RPC_TIMEOUT_MS}ms`,
+              ),
+            ),
+          SHUTDOWN_RPC_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } catch (error) {
+    // Best-effort: log but don't block termination if cleanup fails.
+    logger.warn(
+      `⚠️ Pre-terminate worker cleanup failed: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+export async function close(): Promise<void> {
+  // Concurrent callers (or a getRPC retry that overlaps with a manual
+  // close) share the in-flight close promise instead of each sending
+  // their own __shutdown__ and racing on the terminate block.
+  if (closingPromise) return closingPromise;
+
+  closingPromise = (async () => {
+    logger.info("🧹 Closing RPC client (Expo)");
+
+    // terminate() crashes on Android (addon dlclose leaves pthread_key_t
+    // destructors dangling); iOS dyld no-ops dlclose so it's safe there.
+    // Non-iOS: drop refs only -- sending __shutdown__ without a follow-up
+    // terminate would clear the worker plugin registry.
+    let platform: string | undefined;
+    try {
+      platform = (await getRuntimeContext()).platform;
+    } catch (err) {
+      logger.debug("Failed to resolve runtime context for close()", { err });
+    }
+
+    if (platform !== "ios") {
+      rpcInstance = null;
+      rpcPromise = null;
+      return;
+    }
+
+    // iOS: existing pre-terminate cleanup + terminate.
+    if (rpcInstance) {
+      logger.info("🧹 Requesting worker pre-terminate cleanup");
+      await sendShutdownMessage(rpcInstance);
+    }
+
+    rpcInstance = null;
+    rpcPromise = null;
+    if (workletInstance) {
+      logger.info("🐻🔫 Terminating bare worklet");
+      try {
+        workletInstance.terminate();
+      } catch (error) {
+        logger.debug("Failed to terminate worklet", { error });
+      }
+      workletInstance = null;
+      workletInitialized = false;
+    }
+  })();
+
+  try {
+    await closingPromise;
+  } finally {
+    // Reset so a subsequent close() (e.g. after a fresh getRPC spawned
+    // a new worklet) can run again. Body guards on rpcInstance / workletInstance
+    // make a redundant call a no-op if state is already cleared.
+    closingPromise = null;
+  }
 }
 
 export async function createDuplexSession(payload: string, commandId: number) {
