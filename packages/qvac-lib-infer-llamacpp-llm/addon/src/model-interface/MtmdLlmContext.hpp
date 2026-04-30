@@ -220,5 +220,10 @@ private:
 
   // UTF-8 token buffer for handling incomplete emoji sequences
   qvac_lib_inference_addon_llama::UTF8TokenBuffer utf8Buffer_;
+
+  // GPT-OSS Harmony: <|call|> is a frame delimiter, not a stop signal
+  bool isHarmonyModel_ = false;
+  llama_token harmonyCallToken_ = LLAMA_TOKEN_NULL;
+
   std::atomic<bool> stopGeneration_ = false;
 };

@@ -1,4 +1,4 @@
-const MIN_SDK_VERSION = '0.9.0'
+const MIN_SDK_VERSION = '0.10.0'
 const SDK_SPECIFIER = '@qvac/sdk'
 const SDK_PACKAGE_SPECIFIER = '@qvac/sdk/package'
 
@@ -13,6 +13,19 @@ export interface SDKGenerationParams {
   repeat_penalty?: number
 }
 
+export type SDKResponseFormat =
+  | { type: 'text' }
+  | { type: 'json_object' }
+  | {
+      type: 'json_schema'
+      json_schema: {
+        name: string
+        description?: string
+        schema: Record<string, unknown>
+        strict?: boolean
+      }
+    }
+
 interface SDKModule {
   loadModel: (opts: { modelSrc: string; modelType: string; modelConfig: Record<string, unknown> }) => Promise<string>
   unloadModel: (opts: { modelId: string }) => Promise<void>
@@ -22,6 +35,7 @@ interface SDKModule {
     stream: boolean
     tools?: SDKTool[]
     generationParams?: SDKGenerationParams
+    responseFormat?: SDKResponseFormat
   }) => Promise<CompletionResult>
   embed: (opts: { modelId: string; text: string | string[] }) => Promise<{ embedding: number[] | number[][]; stats?: Record<string, unknown> }>
   transcribe: (opts: { modelId: string; audioChunk: string | Buffer; prompt?: string }) => Promise<string>
@@ -136,6 +150,7 @@ export async function sdkCompletion (opts: {
   stream: boolean
   tools?: SDKTool[] | undefined
   generationParams?: SDKGenerationParams | undefined
+  responseFormat?: SDKResponseFormat | undefined
 }): Promise<CompletionResult> {
   const { completion } = await getSDK()
   const params: Record<string, unknown> = {
@@ -148,6 +163,9 @@ export async function sdkCompletion (opts: {
   }
   if (opts.generationParams) {
     params['generationParams'] = opts.generationParams
+  }
+  if (opts.responseFormat) {
+    params['responseFormat'] = opts.responseFormat
   }
   return completion(params as Parameters<SDKModule['completion']>[0])
 }

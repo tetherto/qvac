@@ -25,6 +25,8 @@ Below are examples of `qvac.config.*` files. Values marked with `<placeholders>`
   "cacheDirectory": "</absolute/path/to/.qvac/models>",
   "httpDownloadConcurrency": 3,
   "httpConnectionTimeoutMs": 10000,
+  "registryDownloadMaxRetries": 3,
+  "registryStreamTimeoutMs": 60000,
   "deviceDefaults": [
     {
       "name": "Samsung Galaxy force CPU",
@@ -58,6 +60,8 @@ module.exports = {
   cacheDirectory: "</absolute/path/to/.qvac/models>",
   httpDownloadConcurrency: 3,
   httpConnectionTimeoutMs: 10000,
+  registryDownloadMaxRetries: 3,
+  registryStreamTimeoutMs: 60000,
   deviceDefaults: [
     {
       name: "Samsung Galaxy force CPU",
@@ -94,6 +98,8 @@ const config: QvacConfig = {
   cacheDirectory: "</absolute/path/to/.qvac/models>",
   httpDownloadConcurrency: 3,
   httpConnectionTimeoutMs: 10000,
+  registryDownloadMaxRetries: 3,
+  registryStreamTimeoutMs: 60000,
   deviceDefaults: [
     {
       name: "Samsung Galaxy force CPU",
@@ -132,6 +138,8 @@ The following table lists all supported configuration options for `qvac.config.*
 | `cacheDirectory` | Absolute path to the directory where models and other cached assets are stored. | `string` | No | `~/.qvac/models` |
 | `httpDownloadConcurrency` | Maximum number of concurrent HTTP downloads for sharded models. | `number` | No | `3` |
 | `httpConnectionTimeoutMs` | Timeout in milliseconds for HTTP connection establishment (applies to HEAD and GET requests). | `number` | No | `10000` |
+| `registryDownloadMaxRetries` | Maximum retry attempts for registry (P2P) downloads on timeout. | `number` | No | `3` |
+| `registryStreamTimeoutMs` | Timeout in milliseconds for stalled registry (P2P) download streams. Raise on slow or high-latency connections where the default triggers spurious retries. | `number` | No | `60000` |
 | `deviceDefaults` | Override loaded model config for specific devices. First matching pattern wins. Use it to optimize for different hardware. | [`DevicePattern[]`](#devicepattern) | No | — |
 | `serve` | Configuration for the [HTTP server](/http-server). | [`ServeConfig`](#serveconfig) | No | — |
 
