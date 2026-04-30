@@ -159,6 +159,7 @@ If you're running with headphones (mic cannot hear the speaker), you can loosen 
 
 ### Customizing
 
+- **Different ASR model:** swap `WHISPER_TINY` for a larger Whisper model for better transcription accuracy (e.g. `WHISPER_BASE_Q8_0`, `WHISPER_SMALL_Q8_0`, `WHISPER_LARGE_V3_TURBO`, etc.).
 - **Different LLM:** swap `LLAMA_3_2_1B_INST_Q4_0` for any LLM constant from `@qvac/sdk`. Larger models give better answers at the cost of latency.
 - **Different voice:** replace the Supertonic constants with another TTS model (e.g. Chatterbox — see [Text-to-Speech](/sdk/examples/ai-tasks/text-to-speech)).
 - **System prompt:** edit `SYSTEM_PROMPT` at the top of the script. The default instructs the LLM to be concise and avoid markdown so responses are pleasant to listen to.
