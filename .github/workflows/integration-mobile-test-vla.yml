@@ -382,6 +382,26 @@ jobs:
             exit 1
           fi
 
+          # Copy the PyTorch reference fixtures into testAssets/ so the
+          # mobile test app can load them via global.assetPaths and run the
+          # same quality assertion the desktop integration test runs (max|Δ|
+          # and cosine similarity vs PyTorch). Without this the mobile run
+          # silently skips the quality check.
+          echo ""
+          echo "📦 Bundling integration test fixtures..."
+          for f in pt_actions_libero_fixed.json \
+                   pt_actions_libero_real.json \
+                   libero_real_left.bin \
+                   libero_real_right.bin; do
+            src="test/integration/assets/$f"
+            if [ -f "$src" ]; then
+              cp "$src" "test/mobile/testAssets/$f"
+              echo "   ✅ $f ($(wc -c < test/mobile/testAssets/$f) bytes)"
+            else
+              echo "   ⚠️  $f missing — mobile will skip the corresponding fixture"
+            fi
+          done
+
           echo ""
           echo "📂 testAssets directory contents:"
           ls -la test/mobile/testAssets/
