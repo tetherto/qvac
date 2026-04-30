@@ -53,6 +53,17 @@ class SmolVLAQvacHTTPPolicy(SmolVLAPolicy):
             img = img * 2.0 - 1.0
             images_chw.append(img[0].cpu().numpy().astype(np.float32))
 
+        # SmolVLA needs at least one camera image (vision tokens form the
+        # prefix); without one the policy's prefix is empty and the C++
+        # side rejects n_images==0. Surface a clear error here instead of
+        # hitting an IndexError on the dummy-fill below.
+        if not images_chw:
+            raise RuntimeError(
+                'SmolVLAQvacHTTPPolicy: batch has no camera images; '
+                f'expected one of {list(self.config.image_features)}, '
+                f'got keys {list(batch.keys())}'
+            )
+
         missing = [k for k in self.config.image_features if k not in batch]
         for i, _ in enumerate(missing):
             if i >= getattr(self.config, 'empty_cameras', 0):

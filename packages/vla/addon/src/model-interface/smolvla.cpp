@@ -1045,6 +1045,11 @@ gguf_get_tensor_by_name(struct ggml_context* ctx, const char* name) {
 extern "C" smolvla_handle_t smolvla_create(const char* model_path) {
   auto* model = new smolvla_model();
   if (!smolvla_load_model(model_path, model, /*force_cpu=*/false)) {
+    // smolvla_load_model can fail after pushing into bufs_w / setting
+    // mmap_addr / allocating ctx_w / ggml_backend_dev_init. The struct has
+    // no destructor, so plain `delete` would leak those resources — we
+    // need smolvla_free_model to walk the partially-initialised state.
+    smolvla_free_model(model);
     delete model;
     return nullptr;
   }
@@ -2487,12 +2492,13 @@ bool smolvla_inference_with_timing(
     ggml_backend_tensor_set(
         g_te, te_expanded.data(), 0, te_expanded.size() * sizeof(float));
 
-    // Compute (reuses same graph and allocations)
-    if (sg3.sched) {
-      ggml_backend_sched_graph_compute(sg3.sched, sg3.gf);
-    } else {
-      ggml_backend_graph_compute(model.backend_cpu, sg3.gf);
-    }
+    // Compute (reuses same graph and allocations). compute_staged routes
+    // through sg3.sched when present and falls back to model.backend
+    // otherwise, matching the dispatch every other stage uses. Avoids the
+    // foot-gun of hardcoding backend_cpu — if alloc_staged_sched ever
+    // returned with sched==nullptr on a GPU build, the inline form would
+    // silently fire CPU compute on GPU-allocated tensors.
+    compute_staged(sg3, model.backend);
 
     // Read velocity and do Euler step
     ggml_backend_tensor_get(
