@@ -1,5 +1,5 @@
 import { QVACRegistryClient } from "@qvac/registry-client";
-import { getCacheDir } from "@/server/utils/cache";
+import { getCacheDir } from "@/server/utils/cache/paths";
 import {
   registerSwarm,
   unregisterSwarm,
@@ -32,12 +32,12 @@ async function initRegistryClient(): Promise<QVACRegistryClient> {
   let lastError: unknown;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      // TODO(QVAC-12232): pass corestoreOpts: { wait: true } once @qvac/registry-client is bumped
       const client = new QVACRegistryClient({
         registryCoreKey: DEFAULT_REGISTRY_CORE_KEY,
         storage: getCacheDir(
           `registry-corestore/${DEFAULT_REGISTRY_CORE_KEY}`,
         ),
+        corestoreOpts: { wait: true },
       });
 
       await client.ready();

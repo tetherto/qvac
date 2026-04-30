@@ -58,15 +58,18 @@ import { ConfigReloadExecutor } from "./executors/config-reload-executor.js";
 import { LoggingExecutor } from "../shared/executors/logging-executor.js";
 import { RegistryExecutor } from "../shared/executors/registry-executor.js";
 import { ModelInfoExecutor } from "../shared/executors/model-info-executor.js";
+import { WrongModelExecutor } from "../shared/executors/wrong-model-executor.js";
 import { ErrorExecutor } from "../shared/executors/error-executor.js";
 import { TtsExecutor } from "../shared/executors/tts-executor.js";
 import { ParakeetExecutor } from "./executors/parakeet-executor.js";
 import { VisionExecutor } from "./executors/vision-executor.js";
 import { DownloadExecutor } from "../shared/executors/download-executor.js";
 import { DelegatedInferenceExecutor } from "./executors/delegated-inference-executor.js";
-import { DiffusionExecutor } from "../shared/executors/diffusion-executor.js";
+import { DesktopDiffusionExecutor } from "./executors/diffusion-executor.js";
 import { FinetuneExecutor } from "./executors/finetune-executor.js";
 import { LifecycleExecutor } from "../shared/executors/lifecycle-executor.js";
+import { ConfigExecutor } from "../shared/executors/config-executor.js";
+import { NoLingeringBareExecutor } from "./executors/no-lingering-bare-executor.js";
 
 const resources = new ResourceManager();
 
@@ -116,6 +119,12 @@ resources.define("tools", {
   constant: QWEN3_1_7B_INST_Q4,
   type: "llm",
   config: { ctx_size: 4096, tools: true },
+});
+
+resources.define("tools-dynamic", {
+  constant: QWEN3_1_7B_INST_Q4,
+  type: "llm",
+  config: { ctx_size: 4096, tools: true, toolsMode: "dynamic" },
 });
 
 resources.define("ocr", {
@@ -318,12 +327,23 @@ resources.define("diffusion", {
   config: {
     device: "gpu",
     threads: 4,
+    prediction: "flux2_flow",
     llmModelSrc: QWEN3_4B_Q4_K_M,
     vaeModelSrc: FLUX_2_KLEIN_4B_VAE,
   },
 });
 
 export async function bootstrap() {
+  // Point the SDK at the committed e2e fixture unless the developer
+  // already provided their own qvac.config.json / QVAC_CONFIG_PATH.
+  // This exercises the registryDownloadMaxRetries + registryStreamTimeoutMs
+  // propagation end-to-end (see tests/config-tests.ts).
+  if (!process.env["QVAC_CONFIG_PATH"]) {
+    process.env["QVAC_CONFIG_PATH"] = path.resolve(
+      process.cwd(),
+      "fixtures/qvac.config.e2e.json",
+    );
+  }
   await resources.downloadAllOnce(console.log);
 };
 
@@ -335,6 +355,7 @@ export const executor = createExecutor({
     new EmbeddingExecutor(resources),
     new RagExecutor(resources),
     new ModelInfoExecutor(resources),
+    new WrongModelExecutor(resources),
     new ErrorExecutor(resources),
     new ToolsExecutor(resources),
 
@@ -351,9 +372,11 @@ export const executor = createExecutor({
     new VisionExecutor(resources),
     new DownloadExecutor(),
     new DelegatedInferenceExecutor(),
-    new DiffusionExecutor(resources),
+    new DesktopDiffusionExecutor(resources),
     new FinetuneExecutor(resources),
     new LifecycleExecutor(resources),
+    new ConfigExecutor(),
+    new NoLingeringBareExecutor(),
   ],
   profiling: {
     init: () => profiler.enable({ mode: "summary", includeServerBreakdown: true }),

@@ -1,0 +1,108 @@
+name: Benchmark Performance (Parakeet)
+
+on:
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: "Repository to benchmark"
+        required: false
+        type: string
+      ref:
+        description: "Git ref (branch/tag/SHA) to benchmark"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+  id-token: write
+
+jobs:
+  context:
+    runs-on: ubuntu-latest
+    outputs:
+      repository: ${{ steps.ctx.outputs.repository }}
+      ref: ${{ steps.ctx.outputs.ref }}
+    steps:
+      - id: ctx
+        shell: bash
+        env:
+          INPUT_REPO: ${{ inputs.repository }}
+          INPUT_REF: ${{ inputs.ref }}
+          REPO: ${{ github.repository }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          repo="${INPUT_REPO:-$REPO}"
+          ref="${INPUT_REF:-$REF_NAME}"
+          echo "repository=$repo" >> "$GITHUB_OUTPUT"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+  prebuild:
+    needs: context
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/prebuilds-qvac-lib-infer-parakeet.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+
+  desktop-benchmarks:
+    needs: [context, prebuild]
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    uses: ./.github/workflows/integration-test-qvac-lib-infer-parakeet.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+      run_integration_tests: false
+      run_rtf_benchmarks: true
+
+  summarize:
+    needs: [context, desktop-benchmarks]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ needs.context.outputs.repository }}
+          ref: ${{ needs.context.outputs.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Download desktop benchmark artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: rtf-results-*
+          path: benchmark-artifacts/desktop
+          merge-multiple: true
+
+      - name: Generate consolidated benchmark report
+        run: |
+          node scripts/perf-report/aggregate-parakeet-rtf.js \
+            --dir benchmark-artifacts \
+            --manual-dir packages/qvac-lib-infer-parakeet/benchmarks/manual-results \
+            --output benchmark-artifacts/parakeet-performance-findings.md \
+            --output-json benchmark-artifacts/parakeet-performance-findings.json \
+            --output-html benchmark-artifacts/parakeet-performance-findings.html
+
+      - name: Add summary
+        run: cat benchmark-artifacts/parakeet-performance-findings.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload consolidated benchmark report
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: parakeet-performance-findings
+          path: |
+            benchmark-artifacts/parakeet-performance-findings.md
+            benchmark-artifacts/parakeet-performance-findings.json
+            benchmark-artifacts/parakeet-performance-findings.html
+          retention-days: 30

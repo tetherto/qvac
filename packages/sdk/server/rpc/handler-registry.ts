@@ -18,7 +18,9 @@ import { stopProvideHandler } from "./handlers/stopProvideHandler";
 import { handleRag } from "@/server/rpc/handlers/rag";
 import { handleDeleteCache } from "@/server/rpc/handlers/delete-cache";
 import { handleTextToSpeech } from "@/server/rpc/handlers/text-to-speech";
+import { handleTextToSpeechStream } from "@/server/rpc/handlers/text-to-speech-stream";
 import { handleGetModelInfo } from "@/server/rpc/handlers/get-model-info";
+import { handleGetLoadedModelInfo } from "@/server/rpc/handlers/get-loaded-model-info";
 import { handleOCRStream } from "@/server/rpc/handlers/ocr-stream";
 import { handleHeartbeat } from "@/server/rpc/handlers/heartbeat";
 import { handleFinetune } from "@/server/rpc/handlers/finetune";
@@ -36,6 +38,7 @@ import {
 } from "@/server/rpc/handlers/registry";
 import { handleSuspend } from "@/server/rpc/handlers/suspend";
 import { handleResume } from "@/server/rpc/handlers/resume";
+import { handleState } from "@/server/rpc/handlers/state";
 import type { HandlerEntry } from "./handler-utils";
 
 function ragSupportsProgress(request: Request): boolean {
@@ -93,6 +96,7 @@ export const registry: Record<string, HandlerEntry> = {
   stopProvide: { type: "reply", handler: stopProvideHandler },
   deleteCache: { type: "reply", handler: handleDeleteCache },
   getModelInfo: { type: "reply", handler: handleGetModelInfo },
+  getLoadedModelInfo: { type: "reply", handler: handleGetLoadedModelInfo },
   pluginInvoke: { type: "reply", handler: handlePluginInvoke },
   modelRegistryList: { type: "reply", handler: handleModelRegistryList },
   modelRegistrySearch: { type: "reply", handler: handleModelRegistrySearch },
@@ -102,6 +106,7 @@ export const registry: Record<string, HandlerEntry> = {
   },
   suspend: { type: "reply", handler: handleSuspend },
   resume: { type: "reply", handler: handleResume },
+  state: { type: "reply", handler: handleState },
 
   // Simple Stream handlers
   transcribe: { type: "stream", handler: handleTranscribe },
@@ -109,6 +114,7 @@ export const registry: Record<string, HandlerEntry> = {
   loggingStream: { type: "stream", handler: handleLoggingStream },
   translate: { type: "stream", handler: handleTranslate },
   textToSpeech: { type: "stream", handler: handleTextToSpeech },
+  textToSpeechStream: { type: "duplex", handler: handleTextToSpeechStream },
   ocrStream: { type: "stream", handler: handleOCRStream },
   diffusionStream: { type: "stream", handler: handleDiffusionStream },
   pluginInvokeStream: { type: "stream", handler: handlePluginInvokeStream },

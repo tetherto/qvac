@@ -37,10 +37,51 @@ function normalizeRunOptions (runOptions) {
 
   return {
     prefill: runOptions.prefill === true,
-    generationParams: runOptions.generationParams,
+    generationParams: normalizeGenerationParams(runOptions.generationParams),
     cacheKey: runOptions.cacheKey,
     saveCacheToDisk: runOptions.saveCacheToDisk === true
   }
+}
+
+// Normalizes the per-request `generationParams.json_schema` field. The
+// addon binding expects a string; callers commonly pass a plain object
+// (a JSON Schema literal) for ergonomics, so we stringify it here. Also
+// validates the mutual exclusion with `grammar`, since enforcing it at
+// the JS boundary gives a clearer error than letting the C++ throw.
+function normalizeGenerationParams (generationParams) {
+  if (generationParams === undefined) return undefined
+
+  const hasGrammar = typeof generationParams.grammar === 'string' &&
+    generationParams.grammar.length > 0
+  const hasJsonSchema = generationParams.json_schema !== undefined &&
+    generationParams.json_schema !== null &&
+    !(typeof generationParams.json_schema === 'string' && generationParams.json_schema.length === 0)
+
+  if (hasGrammar && hasJsonSchema) {
+    throw new TypeError(
+      'generationParams.grammar and generationParams.json_schema are mutually exclusive'
+    )
+  }
+
+  if (!hasJsonSchema) return generationParams
+
+  let jsonSchemaString
+  if (typeof generationParams.json_schema === 'string') {
+    jsonSchemaString = generationParams.json_schema
+  } else if (typeof generationParams.json_schema === 'object' &&
+      !Array.isArray(generationParams.json_schema)) {
+    try {
+      jsonSchemaString = JSON.stringify(generationParams.json_schema)
+    } catch (err) {
+      throw new TypeError('generationParams.json_schema is not JSON-serializable: ' + err.message)
+    }
+  } else {
+    throw new TypeError(
+      'generationParams.json_schema must be a JSON Schema object or a JSON Schema string'
+    )
+  }
+
+  return { ...generationParams, json_schema: jsonSchemaString }
 }
 
 const VALIDATION_TYPES = ['none', 'split', 'dataset']

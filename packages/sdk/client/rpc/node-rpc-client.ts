@@ -13,7 +13,10 @@ import { fileURLToPath } from "node:url";
 import { initializeConfig } from "@/client/init-hooks";
 import { resolveConfig } from "@/client/config-loader/resolve-config.node";
 import { getClientLogger } from "@/logging";
+import { RPCInitTimeoutError } from "@/utils/errors-client";
 import type { RuntimeContext } from "@/schemas";
+
+const RPC_INIT_TIMEOUT_MS = 30_000;
 
 const logger = getClientLogger();
 
@@ -196,7 +199,23 @@ async function ensureRPC(): Promise<RPC> {
   currentSocketPath = socketPath;
 
   rpcPromise = new Promise((resolve, reject) => {
+    let settled = false;
+
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      rpcPromise = null;
+      rpcInstance = null;
+      bareWorkerProc = null;
+      ipcServer = null;
+      currentSocketPath = null;
+      reject(new RPCInitTimeoutError(RPC_INIT_TIMEOUT_MS));
+    }, RPC_INIT_TIMEOUT_MS);
+
     ipcServer = createServer((socket) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
       rpcInstance = new RPC(
         socket as unknown as Duplex<DuplexEvents>,
         () => {},
@@ -205,6 +224,9 @@ async function ensureRPC(): Promise<RPC> {
     });
 
     ipcServer.on("error", (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
       rpcPromise = null;
       rpcInstance = null;
       bareWorkerProc = null;
@@ -224,6 +246,27 @@ async function ensureRPC(): Promise<RPC> {
         ],
         stdio: ["inherit", "inherit", "inherit"],
       });
+
+      if (bareWorkerProc) {
+        bareWorkerProc.on("exit", (code: number | null) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          rpcPromise = null;
+          rpcInstance = null;
+          bareWorkerProc = null;
+          ipcServer = null;
+          currentSocketPath = null;
+          reject(
+            new RPCInitTimeoutError(
+              RPC_INIT_TIMEOUT_MS,
+              new Error(
+                `Worker process exited with code ${code} before IPC connection was established`,
+              ),
+            ),
+          );
+        });
+      }
     });
   });
 

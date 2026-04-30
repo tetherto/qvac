@@ -79,32 +79,34 @@ jobs:
           repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
           ref: ${{ github.event.pull_request.head.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
-          sparse-checkout: |
-            packages/qvac-lib-infer-onnx
           fetch-depth: 0
 
       - name: Fetch PR head and target branch
         id: fetch_pr
         if: github.event_name == 'pull_request_target' || github.event_name == 'pull_request'
         continue-on-error: true
+        env:
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          git fetch origin ${{ github.event.pull_request.base.ref }}:refs/remotes/origin/${{ github.event.pull_request.base.ref }}
-          git fetch origin ${{ github.event.pull_request.head.sha }}:refs/pr/head
+          git fetch origin "${PR_BASE_REF}:refs/remotes/origin/${PR_BASE_REF}"
+          git fetch origin "${PR_HEAD_SHA}:refs/pr/head"
 
       - name: Check PR Status with Target Branch
         continue-on-error: true
         id: target_branch_checks
         if: github.event_name == 'pull_request_target' || github.event_name == 'pull_request'
+        env:
+          TARGET_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          TARGET_SHA=${{ github.event.pull_request.base.sha }}
-          PR_HEAD_SHA=${{ github.event.pull_request.head.sha }}
           if ! git merge-base --is-ancestor "$TARGET_SHA" "$PR_HEAD_SHA"; then
             echo "::error title=PR is not up to date::This PR is not up to date with target branch"
           fi
 
       - name: Verify that yaml files are formatted
         id: yamlfmt
-        uses: ./.github/actions/yamlfmt
+        uses: tetherto/qvac/.github/actions/yamlfmt@0bbdca93da303a0b1634ba14a89cec085621078d
         continue-on-error: true
 
       - name: Check for disallowed dependencies
@@ -120,7 +122,7 @@ jobs:
       - name: Run JavaScript tests
         id: run_js_tests
         continue-on-error: true
-        uses: ./.github/actions/run-lint-and-unit-tests
+        uses: tetherto/qvac/.github/actions/run-lint-and-unit-tests@0bbdca93da303a0b1634ba14a89cec085621078d
         with:
           gpr-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.GITHUB_TOKEN }}

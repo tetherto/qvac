@@ -71,12 +71,13 @@ export async function auditTsDoc(
       (decl as any).sources?.[0]?.file?.fullFileName ??
       "") as string;
     const normalizedPath = sourcePath.replace(/\\/g, "/");
-    if (
-      normalizedPath &&
-      (normalizedPath.includes("/server/") ||
-        normalizedPath.includes("/examples/"))
-    )
-      continue;
+    // Audit scope mirrors the single-page API summary scope: only functions
+    // whose source lives under `packages/sdk/client/api/`. Helpers exported
+    // from `schemas/`, `models/`, etc. are intentionally out-of-scope and
+    // covered by their own .d.ts.
+    if (!normalizedPath.includes("/client/api/")) continue;
+    if (normalizedPath.endsWith("/client/api/index.ts")) continue;
+    if (normalizedPath.includes("/server/") || normalizedPath.includes("/examples/")) continue;
 
     const comment = decl.comment ?? (sig as any).comment;
     const blockTags =
@@ -109,7 +110,86 @@ export async function auditTsDoc(
     });
   }
 
-  diagnostics.sort((a, b) => a.functionName.localeCompare(b.functionName));
+  // Also audit methods on exported object singletons (e.g. `profiler.enable`,
+  // `profiler.exportJSON`). These bypass `ReflectionKind.Function`: the
+  // parent is a `Variable` whose type has callable properties. Mirror the
+  // extraction logic in `extract.ts > extractApiObjects` so parity is
+  // maintained. Each method is reported as `objectName.methodName` so the
+  // audit table keeps them distinct from top-level functions.
+  const allVariables = project.getReflectionsByKind(
+    ReflectionKind.Variable,
+  ) as DeclarationReflection[];
+
+  for (const decl of allVariables) {
+    const declType: any = (decl as any).type;
+    const children: any[] | undefined =
+      declType?.declaration?.children ?? (decl as any).children;
+    if (!children || children.length === 0) continue;
+
+    const methodProps = children.filter(
+      (p: any) =>
+        p.type?.type === "reflection" &&
+        p.type.declaration?.signatures?.length > 0,
+    );
+    if (methodProps.length === 0) continue;
+
+    const sourcePath = (decl.sources?.[0]?.fullFileName ??
+      (decl as any).sources?.[0]?.file?.fullFileName ??
+      "") as string;
+    const normalizedPath = sourcePath.replace(/\\/g, "/");
+    // Audit object methods only for the curated objects we render in the
+    // API summary. Currently that's just the `profiler` object under
+    // `packages/sdk/profiling/`; new public objects must opt in here.
+    if (!normalizedPath.includes("/profiling/")) continue;
+    if (normalizedPath.includes("/server/") || normalizedPath.includes("/examples/")) continue;
+
+    for (const m of methodProps) {
+      const sig = m.type.declaration.signatures[0] as SignatureReflection;
+      if (!sig) continue;
+
+      const comment = m.comment ?? (sig as any).comment;
+      const sigComment = (sig as any).comment;
+      // Aggregate block tags from both the property comment and the signature
+      // comment. TypeDoc sometimes attaches `@returns` / `@param` parse results
+      // to the signature's own comment rather than the property declaration's,
+      // especially for arrow-function members of an object literal (profiler.*).
+      const blockTags = [
+        ...(comment?.blockTags ?? []),
+        ...(sigComment?.blockTags ?? []),
+      ];
+
+      const params: any[] = (sig as any).parameters || [];
+      const missingParams: string[] = [];
+      for (const p of params) {
+        if (!commentText(p.comment?.summary)) missingParams.push(p.name);
+      }
+
+      const retType = (sig as any).type;
+      const hasReturnsDoc =
+        blockTags.some((t: any) => t.tag === "@returns") ||
+        !!commentText((comment as any)?.returns) ||
+        !!commentText((sigComment as any)?.returns);
+      const missingReturns = !isVoidReturn(retType) && !hasReturnsDoc;
+
+      // `@throws` detection requires a concrete function body; object method
+      // bodies are typically inline on the literal so this is tracked but
+      // left "n/a" when we can't find a named declaration to scan.
+      const hasThrowsDoc = blockTags.some((t: any) => t.tag === "@throws");
+      const bodyHasThrow = false;
+
+      diagnostics.push({
+        functionName: `${decl.name}.${m.name}`,
+        missingParams,
+        missingReturns,
+        missingThrows: bodyHasThrow && !hasThrowsDoc,
+        bodyHasThrow,
+      });
+    }
+  }
+
+  diagnostics.sort((a, b) =>
+    a.functionName.localeCompare(b.functionName, "en", { sensitivity: "base" }),
+  );
 
   const complete = diagnostics.filter(
     (d) =>

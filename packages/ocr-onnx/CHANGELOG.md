@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.4] - 2026-04-27
+
+### Fixed
+
+- `_runInternal` now calls `_job.start()` before awaiting `addon.runJob(...)`, matching the documented `createJobHandler` contract and the TTS reference implementation. Previously, native callbacks fired synchronously by the binding during `runJob` could land while the job handler had no active `QvacResponse`, silently dropping streaming output, stats, and early errors. Failures from `getImage()` and `runJob()` are now routed through `_job.fail(error)` to clear the active response. Fixes [#1756](https://github.com/tetherto/qvac/issues/1756).
+
 ## [0.4.3] - 2026-04-15
 
 ### Added

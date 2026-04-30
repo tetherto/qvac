@@ -1,14 +1,12 @@
+import { DocsLayout } from 'fumadocs-ui/layouts/docs';
 import { baseOptions } from '@/lib/layout.shared';
-import { source } from '@/lib/source';
 import type { LinkItemType } from 'fumadocs-ui/layouts/shared';
 import { FaGithub, FaDiscord, FaXTwitter } from 'react-icons/fa6';
 import { SiHuggingface } from '@icons-pack/react-simple-icons';
 import { KeetIcon } from '@/components/keet-icon';
-import { VersionedLayout } from '@/components/versioned-layout';
-import { getAllTrees } from '@/lib/trees';
+import { customTree } from '@/lib/custom-tree';
 
 export default function Layout({ children }: LayoutProps<'/'>) {
-
   const linkItems: LinkItemType[] = [
     {
       type: 'icon',
@@ -49,15 +47,13 @@ export default function Layout({ children }: LayoutProps<'/'>) {
     },
   ];
 
-  const versionedTrees = getAllTrees();
-
   return (
-    <VersionedLayout
+    <DocsLayout
       {...baseOptions()}
       links={linkItems}
-      versionedTrees={versionedTrees}
+      tree={{ name: 'docs', $id: 'latest', children: customTree }}
     >
       {children}
-    </VersionedLayout>
+    </DocsLayout>
   );
 }

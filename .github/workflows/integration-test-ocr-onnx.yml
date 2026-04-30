@@ -82,34 +82,6 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
 
-      - name: Configure scoped registry for @tetherto and @qvac packages
-        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
-        env:
-          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
-        shell: bash
-        run: |
-          echo "Configuring scoped registry for @tetherto and @qvac packages..."
-          set -eu
-          echo "Writing .npmrc for dual registry install…"
-          cat > .npmrc <<NPMRC
-          always-auth=true
-          registry=https://registry.npmjs.org/
-          @qvac:registry=https://registry.npmjs.org/
-          @tetherto:registry=https://npm.pkg.github.com/
-          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
-          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
-          NPMRC
-
-          if [ -n "${GIT_PAT:-}" ]; then
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
-          else
-            # Using the workflow's GITHUB_TOKEN for git clones when possible
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
-          fi
-
       - name: Install NPM dependencies
         working-directory: ${{ inputs.workdir || env.PKG_DIR }}
         shell: bash
@@ -121,8 +93,16 @@ jobs:
         if: ${{ !inputs.prebuild_package }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          path: ${{ inputs.workdir || env.PKG_DIR }}/prebuilds
+          path: ${{ runner.temp }}/prebuilds-staging
           merge-multiple: true
+
+      - name: Move prebuilds from staging to workspace
+        if: ${{ !inputs.prebuild_package }}
+        run: |
+          mkdir -p ${{ inputs.workdir || env.PKG_DIR }}/prebuilds
+          cp -r ${{ runner.temp }}/prebuilds-staging/* ${{ inputs.workdir || env.PKG_DIR }}/prebuilds/ 2>/dev/null || true
+          echo "Prebuilds moved from staging area"
+        shell: bash
 
       - name: Download prebuilds from package
         if: ${{ inputs.prebuild_package }}

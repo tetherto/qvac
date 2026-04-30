@@ -22,10 +22,10 @@ try {
     if (typeof global !== 'undefined' && global.crypto && global.crypto.createHash) {
       qvacCrypto = global.crypto
     } else {
-      throw new QvacErrorRAG(
-        ERR_CODES.DEPENDENCY_REQUIRED,
-        'No crypto implementation found. Please ensure a crypto module is available in your environment.'
-      )
+      throw new QvacErrorRAG({
+        code: ERR_CODES.DEPENDENCY_REQUIRED,
+        adds: 'No crypto implementation found. Please ensure a crypto module is available in your environment.'
+      })
     }
   }
 }

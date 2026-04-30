@@ -1,5 +1,13 @@
 'use strict'
 
+/**
+ * Chunked streaming **output** only: the full script is known up front; `run({ input, streamOutput: true })`
+ * splits it into sentences and emits PCM on `onUpdate` per chunk. Same path as `runStream(text, options)`
+ * (optional `locale`, `maxChunkScalars` on that object).
+ *
+ * For incremental text input (async yields) plus streamed PCM, see `supertonic-io-streaming-tts.js` (`runStreaming`).
+ */
+
 const fs = require('bare-fs')
 const path = require('bare-path')
 const ONNXTTS = require('../')
@@ -100,7 +108,10 @@ async function main () {
       }
     })()
 
-    const response = await model.runStream(textToSynthesize)
+    const response = await model.run({
+      input: textToSynthesize,
+      streamOutput: true
+    })
 
     let chunkCount = 0
 

@@ -15,29 +15,38 @@ const createToolsTest = (
       required?: string[];
     };
   }>,
-  expectation: {
-    validation: "type";
-    expectedType: "string" | "number" | "array";
-  } = {
-    validation: "type",
-    expectedType: "string",
-  },
-  suites?: string[],
-): TestDefinition => ({
-  testId,
-  params: {
-    history: [{ role: "user", content: userPrompt }],
-    tools,
-    stream: false,
-  },
-  expectation,
-  ...(suites && { suites }),
-  metadata: {
-    category: "tools",
-    dependency: "tools",
-    estimatedDurationMs: 15000,
-  },
-});
+  options: {
+    expectation?: {
+      validation: "type";
+      expectedType: "string" | "number" | "array";
+    };
+    toolsMode?: "static" | "dynamic";
+    suites?: string[];
+  } = {},
+): TestDefinition => {
+  const expectation = options.expectation ?? {
+    validation: "type" as const,
+    expectedType: "string" as const,
+  };
+  const dependency =
+    options.toolsMode === "dynamic" ? "tools-dynamic" : "tools";
+  return {
+    testId,
+    params: {
+      history: [{ role: "user", content: userPrompt }],
+      tools,
+      stream: false,
+      ...(options.toolsMode && { toolsMode: options.toolsMode }),
+    },
+    expectation,
+    ...(options.suites && { suites: options.suites }),
+    metadata: {
+      category: "tools",
+      dependency,
+      estimatedDurationMs: 15000,
+    },
+  };
+};
 
 // Simplified tools tests - just verify they don't crash
 // Full validation will happen during testing
@@ -68,8 +77,37 @@ export const toolsSimpleFunction = createToolsTest(
       },
     },
   ],
-  undefined,
-  ["smoke"],
+  { suites: ["smoke"] },
+);
+
+export const toolsSimpleFunctionDynamic = createToolsTest(
+  "tools-simple-function-dynamic",
+  "What's 25 degrees Celsius in Fahrenheit?",
+  [
+    {
+      type: "function",
+      name: "convert_temperature",
+      description: "Convert temperature between Celsius and Fahrenheit",
+      parameters: {
+        type: "object",
+        properties: {
+          value: { type: "number", description: "Temperature value" },
+          from_unit: {
+            type: "string",
+            enum: ["celsius", "fahrenheit"],
+            description: "Source unit",
+          },
+          to_unit: {
+            type: "string",
+            enum: ["celsius", "fahrenheit"],
+            description: "Target unit",
+          },
+        },
+        required: ["value", "from_unit", "to_unit"],
+      },
+    },
+  ],
+  { toolsMode: "dynamic" },
 );
 
 export const toolsMultipleFunctions = createToolsTest(
@@ -102,8 +140,7 @@ export const toolsMultipleFunctions = createToolsTest(
       },
     },
   ],
-  undefined,
-  ["smoke"],
+  { suites: ["smoke"] },
 );
 
 // Add remaining ~40 tools tests as simplified placeholders
@@ -187,6 +224,7 @@ const additionalToolsTests: TestDefinition[] = toolsTestIds.map((testId) => ({
 
 export const toolsTests = [
   toolsSimpleFunction,
+  toolsSimpleFunctionDynamic,
   toolsMultipleFunctions,
   ...additionalToolsTests,
 ];

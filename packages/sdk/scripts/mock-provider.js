@@ -7,26 +7,15 @@ import Hyperswarm from "hyperswarm";
 import RPC from "bare-rpc";
 import process from "bare-process";
 
-const topic = process.argv[2]
-  ? Buffer.from(process.argv[2], "hex")
-  : Buffer.alloc(32, "qvac-test-topic");
-console.log(`Joining topic: ${topic.toString("hex")}`);
-
 const seed = Buffer.alloc(32, "qvac-test-seed");
 
 const swarm = new Hyperswarm({ seed });
 
 console.log(`Swarm key pair: ${swarm.keyPair.publicKey.toString("hex")}`);
 
-// Join topic as server (provider)
-const discovery = swarm.join(topic, { server: true, client: false });
-
-// Wait for the topic to be fully announced on the DHT
-await discovery.flushed();
-console.log(`✅ Topic announced: ${topic.toString("hex")}`);
-
-// Wait for connections
-await swarm.flush();
+// Bind the DHT server on the keyPair — no topic needed, consumers reach us
+// directly via dht.connect(publicKey).
+await swarm.listen();
 console.log(`🎯 Ready to accept connections`);
 
 swarm.on("connection", (conn) => {
@@ -131,7 +120,6 @@ swarm.on("connection", (conn) => {
         // Mock completion response - use response stream like client expects
         const responseStream = req.createResponseStream();
 
-        // Send multiple token responses to test streaming
         const tokens = [
           "This is",
           " a test",
@@ -142,23 +130,32 @@ swarm.on("connection", (conn) => {
           " provider",
         ];
 
+        let seq = 0;
+        let rawText = "";
+
         for (const token of tokens) {
+          rawText += token;
+
           const response = {
             type: "completionStream",
-            token: token,
+            events: [{ type: "contentDelta", seq: seq++, text: token }],
           };
-          console.log("📤 Sending completion token via stream:", response);
+          console.log("📤 Sending completion event via stream:", response);
           responseStream.write(JSON.stringify(response) + "\n");
 
-          // Small delay between tokens to simulate real streaming
           await new Promise((resolve) => setTimeout(resolve, 50));
         }
 
-        // Send final completion response
         const finalResponse = {
           type: "completionStream",
-          token: "",
           done: true,
+          events: [
+            {
+              type: "completionDone",
+              seq: seq++,
+              raw: { fullText: rawText },
+            },
+          ],
         };
         responseStream.write(JSON.stringify(finalResponse) + "\n");
 

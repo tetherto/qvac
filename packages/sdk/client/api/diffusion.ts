@@ -5,7 +5,7 @@ import {
   type DiffusionStats,
 } from "@/schemas";
 import { stream as streamRpc } from "@/client/rpc/rpc-client";
-import { decodeBase64 } from "@/utils/encoding";
+import { decodeBase64, encodeBase64 } from "@/utils/encoding";
 
 export interface DiffusionProgressTick {
   step: number;
@@ -20,14 +20,29 @@ interface DiffusionResult {
 }
 
 /**
- * Generate images using a loaded diffusion model.
+ * Generates images using a loaded diffusion model.
+ *
+ * @param params - Diffusion request parameters (model, prompt, dimensions, sampler, seed, etc.).
+ * @returns A result object exposing `progressStream` (async iterator of `{ step, totalSteps, elapsedMs }`), `outputs` (promise of the generated image buffers), and `stats` (promise of generation statistics).
+ *
+ * Supports both txt2img (no `init_image`) and img2img (with `init_image`).
  *
  * @example
  * ```typescript
- * // Basic usage
+ * // txt2img
  * const { outputs, stats } = diffusion({ modelId, prompt: "a cat" });
  * const buffers = await outputs;
  * fs.writeFileSync("output.png", buffers[0]);
+ *
+ * // img2img (SD/SDXL — SDEdit)
+ * const initImage = fs.readFileSync("input.png");
+ * const { outputs } = diffusion({ modelId, prompt: "oil painting style", init_image: initImage, strength: 0.7 });
+ *
+ * // img2img (FLUX.2 — in-context conditioning)
+ * // IMPORTANT: FLUX img2img requires `prediction: "flux2_flow"` to be set on the
+ * // model config at loadModel time (e.g. `loadModel(src, { modelType: "diffusion",
+ * // modelConfig: { prediction: "flux2_flow" } })`).
+ * const { outputs } = diffusion({ modelId, prompt: "turn into watercolor", init_image: initImage });
  *
  * // With progress tracking
  * const { progressStream, outputs } = diffusion({ modelId, prompt: "a cat" });
@@ -38,9 +53,11 @@ interface DiffusionResult {
  * ```
  */
 export function diffusion(params: DiffusionClientParams): DiffusionResult {
+  const { init_image, ...rest } = params;
   const request: DiffusionStreamRequest = {
+    ...rest,
+    ...(init_image !== undefined && { init_image: encodeBase64(init_image) }),
     type: "diffusionStream",
-    ...params,
   };
 
   let statsResolver: (value: DiffusionStats | undefined) => void = () => {};

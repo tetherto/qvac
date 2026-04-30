@@ -60,6 +60,14 @@ This addon is built on [qvac-lib-inference-addon-cpp](https://github.com/tethert
   - Linux: Clang/LLVM 19 with libc++
   - Windows: Visual Studio 2022 with C++ workload
 
+### Linux Build Prerequisites
+
+Before building on Linux, install Clang and the required C++ standard library headers:
+
+```bash
+sudo apt install clang libc++-dev libc++abi-dev build-essential pkg-config
+```
+
 ### Build from Source
 
 1. **Clone the repository:**

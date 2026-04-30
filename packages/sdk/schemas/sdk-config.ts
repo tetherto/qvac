@@ -147,6 +147,16 @@ export const qvacConfigSchema = z.object({
   registryDownloadMaxRetries: z.number().int().min(0).optional(),
 
   /**
+   * Timeout in milliseconds for registry (P2P) download streams.
+   * Controls how long the SDK will wait on a stalled Hypercore block before
+   * triggering a REQUEST_TIMEOUT and (optionally) retrying. Raise this on
+   * slow or high-latency connections where the default triggers spurious
+   * retries / failures.
+   * Defaults to 60000 (60 seconds).
+   */
+  registryStreamTimeoutMs: z.number().int().positive().optional(),
+
+  /**
    * Device-specific config defaults.
    * Use this to override model config defaults for specific devices.
    * User-defined patterns are checked before SDK built-in patterns.

@@ -278,7 +278,7 @@ export const completionTemperature09 = createCompletionTest(
 export const completionStopSequences = createCompletionTest(
   "completion-stop-sequences",
   {
-    history: [{ role: "user", content: "List 10 fruits, one per line." }],
+    history: [{ role: "user", content: "Repeat exactly the following words separated by spaces: apple banana cherry" }],
     stream: false,
     stopSequences: ["banana"],
   },

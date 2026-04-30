@@ -32,4 +32,5 @@ benchmarks/server/models/
 benchmarks/performance/models/
 benchmarks/performance/resolved-models.json
 benchmarks/performance/results/
+benchmarks/document-throughput/results/
 *.log

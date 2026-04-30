@@ -24,6 +24,8 @@ async function addModel () {
       primaryKey = args[++i]
     } else if (args[i] === '--models-file' || args[i] === '-f') {
       modelsFile = args[++i]
+    } else if (args[i] === '--') {
+      continue
     } else if (!canonicalSource && args[i] !== '--skip-existing') {
       canonicalSource = args[i]
     }

@@ -1,7 +1,18 @@
 cmake_minimum_required(VERSION 3.25)
 
 option(BUILD_TESTING "Build tests" OFF)
-option(ENABLE_VULKAN "Enable Vulkan GPU acceleration" OFF)
+
+if(DEFINED CMAKE_SYSTEM_NAME)
+  set(_qvac_whispercpp_target_os "${CMAKE_SYSTEM_NAME}")
+else()
+  set(_qvac_whispercpp_target_os "${CMAKE_HOST_SYSTEM_NAME}")
+endif()
+
+if(_qvac_whispercpp_target_os STREQUAL "Linux" OR _qvac_whispercpp_target_os STREQUAL "Android" OR _qvac_whispercpp_target_os STREQUAL "Windows")
+  option(ENABLE_VULKAN "Enable Vulkan GPU acceleration" ON)
+else()
+  option(ENABLE_VULKAN "Enable Vulkan GPU acceleration" OFF)
+endif()
 
 if(BUILD_TESTING)
   list(APPEND VCPKG_MANIFEST_FEATURES "tests")
@@ -55,7 +66,14 @@ if(ANDROID)
   set(ANDROID_NATIVE_API_LEVEL "$ENV{ANDROID_NATIVE_API_LEVEL}")
 endif()
 
-add_bare_module(qvac-lib-infer-whispercpp EXPORTS)
+set(BACKEND_DL_LIBS "")
+if((ANDROID OR UNIX) AND NOT APPLE)
+  foreach(_backend ${GGML_AVAILABLE_BACKENDS})
+    list(APPEND BACKEND_DL_LIBS INSTALL TARGET ggml::${_backend})
+  endforeach()
+endif()
+
+add_bare_module(qvac-lib-infer-whispercpp EXPORTS ${BACKEND_DL_LIBS})
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   target_link_options(${qvac-lib-infer-whispercpp}_module PRIVATE -Wl,--exclude-libs,ALL)
