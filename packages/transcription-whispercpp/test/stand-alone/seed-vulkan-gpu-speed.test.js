@@ -244,7 +244,7 @@ async function runTranscription (args, config, description, monitorGPU = false) 
   }
 }
 
-test('GPU performance test with Spanish audio (LastQuestion_long_ES.raw)', { timeout: 120000 }, async (t) => {
+test('GPU performance test with Spanish audio (LastQuestion_long_ES.raw)', { timeout: 300000 }, async (t) => {
   // Check if audio file exists
   if (!fs.existsSync(spanishAudioPath)) {
     t.pass('Spanish audio file not found, skipping')

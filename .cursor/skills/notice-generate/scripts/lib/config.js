@@ -30,7 +30,7 @@ const ENGINE_MAP = {
   '@qvac/transcription-whispercpp': 'transcription-whispercpp',
   '@qvac/translation-llamacpp': 'llm-llamacpp',
   '@qvac/ocr-onnx': 'ocr-onnx',
-  '@qvac/diffusion-cpp': 'infer-diffusion'
+  '@qvac/diffusion-cpp': 'diffusion-cpp'
 }
 
 // Reverse map: package dir -> array of engines

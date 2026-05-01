@@ -83,7 +83,11 @@ function createSwarm(firewallConfig?: FirewallConfig) {
 
 let swarm: Hyperswarm | null = null;
 
-const activeProviderTopics = new Set<string>();
+// Delegation is always 1:1 (single provider service per SDK instance), but we
+// still use a counter to be resilient against duplicate provide/stopProvide
+// calls and to avoid ever reporting "no active providers" while one is still
+// running.
+let activeProviderCount = 0;
 
 export function getSwarm({
   firewallConfig,
@@ -98,16 +102,16 @@ export function getSwarm({
   return swarm;
 }
 
-export function registerProviderTopic(topic: string) {
-  activeProviderTopics.add(topic);
+export function registerProvider() {
+  activeProviderCount++;
 }
 
-export function unregisterProviderTopic(topic: string) {
-  activeProviderTopics.delete(topic);
+export function unregisterProvider() {
+  if (activeProviderCount > 0) activeProviderCount--;
 }
 
 export function hasActiveProviders(): boolean {
-  return activeProviderTopics.size > 0;
+  return activeProviderCount > 0;
 }
 
 export async function destroySwarm() {
@@ -119,7 +123,7 @@ export async function destroySwarm() {
   try {
     await ref.destroy();
     unregisterSwarm(ref);
-    activeProviderTopics.clear();
+    activeProviderCount = 0;
   } catch (error) {
     if (swarm === null) swarm = ref;
     throw error;

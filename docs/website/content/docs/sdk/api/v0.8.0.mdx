@@ -1,0 +1,701 @@
+---
+title: API Summary — v0.8.0
+description: One-page reference of all public functions and objects exported by @qvac/sdk
+---
+
+> Auto-generated from `.d.ts` declarations and TSDoc comments.
+>
+> For per-parameter and per-field details, hover symbols in your IDE or open
+> `node_modules/@qvac/sdk/dist`. This page is intentionally a high-level index.
+>
+> **Fields shown**: description, signature, throws, examples, deprecation.
+> **Fields intentionally omitted**: parameter descriptions, return field descriptions
+> (covered by IDE hover and `.d.ts` declarations).
+>
+> **Scope**: 31 functions in `packages/sdk/client/api/` plus the `profiler` object.
+
+---
+
+## Functions
+
+### `cancel`
+
+Cancels an ongoing operation.
+
+**Signature**:
+
+```ts
+function cancel(params): Promise<void>;
+```
+
+**Throws**:
+
+- `INVALID_RESPONSE_TYPE` — Response type does not match expected `"cancel"`
+- `CANCEL_FAILED` — The server reports cancellation failure
+
+---
+
+### `completion`
+
+Generates completion from a language model based on conversation history.
+
+**Signature**:
+
+```ts
+function completion(params): {
+  tokenStream: AsyncGenerator<string>;
+  toolCallStream: AsyncGenerator<ToolCallEvent>;
+  text: Promise<string>;
+  toolCalls: Promise<ToolCallWithCall[]>;
+  stats: Promise<CompletionStats | undefined>;
+};
+```
+
+**Throws**:
+
+- `INVALID_TOOLS_ARRAY` — Invalid tools array provided
+- `INVALID_TOOL_SCHEMA` — A tool has an invalid schema
+
+---
+
+### `deleteCache`
+
+Deletes KV cache files.
+
+**Signature**:
+
+```ts
+function deleteCache(params): Promise<{ success: boolean }>;
+```
+
+**Throws**:
+
+- `INVALID_DELETE_CACHE_PARAMS` — Neither `all` nor `kvCacheKey` was provided
+- `DELETE_CACHE_FAILED` — The server reports cache deletion failure
+
+---
+
+### `downloadAsset`
+
+Downloads an asset (model file) without loading it into memory.
+
+**Signature**:
+
+```ts
+function downloadAsset(options, rpcOptions?): Promise<string>;
+```
+
+**Throws**:
+
+- `DOWNLOAD_ASSET_FAILED` — The download operation fails
+- `STREAM_ENDED_WITHOUT_RESPONSE` — Streaming ends without a final response (when using `onProgress`)
+- `INVALID_RESPONSE_TYPE` — Response type does not match expected `"downloadAsset"`
+
+---
+
+### `embed`
+
+Generates embeddings for a single text using a specified model.
+
+**Signature**:
+
+```ts
+function embed(params: { modelId: string; text: string }): Promise<number[]>;
+function embed(params: { modelId: string; text: string[] }): Promise<number[][]>;
+```
+
+**Throws**:
+
+- `INVALID_RESPONSE_TYPE` — Response type does not match expected `"embed"`
+
+---
+
+### `getModelInfo`
+
+Retrieves detailed information about a model, including cache status and loaded instances.
+
+**Signature**:
+
+```ts
+function getModelInfo(params): Promise<ModelInfo>;
+```
+
+**Throws**:
+
+- `INVALID_RESPONSE_TYPE` — Response type does not match expected `"getModelInfo"`
+
+---
+
+### `invokePlugin`
+
+Invoke a non-streaming plugin handler.
+
+**Signature**:
+
+```ts
+function invokePlugin<TResponse = unknown, TParams = unknown>(
+  options: InvokePluginOptions<TParams>,
+  rpcOptions?: RPCOptions
+): Promise<TResponse>;
+```
+
+**Throws**:
+
+- `INVALID_RESPONSE_TYPE` — Response type does not match expected `"pluginInvoke"`
+
+---
+
+### `invokePluginStream`
+
+Invoke a streaming plugin handler.
+
+**Signature**:
+
+```ts
+function invokePluginStream<TResponse = unknown, TParams = unknown>(
+  options: InvokePluginOptions<TParams>,
+  rpcOptions?: RPCOptions
+): AsyncGenerator<TResponse>;
+```
+
+**Throws**:
+
+- `INVALID_RESPONSE_TYPE` — A chunk's type does not match expected `"pluginInvokeStream"`
+
+---
+
+### `loadModel`
+
+Loads a machine learning model from a local path, remote URL, or Hyperdrive key.
+
+**Signature**:
+
+```ts
+// Load new model
+function loadModel(options: LoadModelOptions, rpcOptions?: RPCOptions): Promise<string>;
+
+// Hot-reload config on an already-loaded model
+function loadModel(options: ReloadConfigOptions, rpcOptions?: RPCOptions): Promise<string>;
+```
+
+**Throws**:
+
+- `MODEL_LOAD_FAILED` — Model loading fails
+- `STREAM_ENDED_WITHOUT_RESPONSE` — Streaming ends without a final response (when using `onProgress`)
+- `INVALID_RESPONSE_TYPE` — Response type does not match expected `"loadModel"`
+
+---
+
+### `loggingStream`
+
+Opens a logging stream to receive real-time logs.
+
+**Signature**:
+
+```ts
+function loggingStream(params): AsyncGenerator<LoggingStreamResponse>;
+```
+
+**Throws**:
+
+- `INVALID_RESPONSE_TYPE` — A chunk's type does not match expected `"loggingStream"`
+
+---
+
+### `modelRegistryGetModel`
+
+Retrieves a single model entry from the QVAC model registry by path and source.
+
+**Signature**:
+
+```ts
+function modelRegistryGetModel(registryPath: string, registrySource: string): Promise<ModelRegistryEntry>;
+```
+
+**Throws**:
+
+- `QVAC_MODEL_REGISTRY_QUERY_FAILED` — The registry query fails or model is not found
+
+---
+
+### `modelRegistryList`
+
+Returns all available models from the QVAC distributed model registry.
+
+**Signature**:
+
+```ts
+function modelRegistryList(): Promise<ModelRegistryEntry[]>;
+```
+
+**Throws**:
+
+- `QVAC_MODEL_REGISTRY_QUERY_FAILED` — The registry query fails
+
+---
+
+### `modelRegistrySearch`
+
+Searches the QVAC model registry with optional filters.
+
+**Signature**:
+
+```ts
+function modelRegistrySearch(params?): Promise<ModelRegistryEntry[]>;
+```
+
+**Throws**:
+
+- `QVAC_MODEL_REGISTRY_QUERY_FAILED` — The registry query fails
+
+---
+
+### `ocr`
+
+Performs Optical Character Recognition (OCR) on an image to extract text.
+
+**Signature**:
+
+```ts
+function ocr(params): {
+  blockStream: AsyncGenerator<OCRTextBlock[]>;
+  blocks: Promise<OCRTextBlock[]>;
+  stats: Promise<OCRStats | undefined>;
+};
+```
+
+---
+
+### `ping`
+
+Sends a ping request to the server and returns the pong response.
+
+**Signature**:
+
+```ts
+function ping(): Promise<{ type: "pong"; number: number }>;
+```
+
+---
+
+### `ragChunk`
+
+Chunks documents into smaller pieces for embedding.
+
+**Signature**:
+
+```ts
+function ragChunk(params, options?): Promise<RagDoc[]>;
+```
+
+**Throws**:
+
+- `RAG_CHUNK_FAILED` — The chunking operation fails
+
+---
+
+### `ragCloseWorkspace`
+
+Closes a RAG workspace, releasing in-memory resources (Corestore, HyperDB adapter, RAG instance).
+
+**Signature**:
+
+```ts
+function ragCloseWorkspace(params?, options?): Promise<void>;
+```
+
+**Throws**:
+
+- `RAG_WORKSPACE_CLOSE_FAILED` — The close operation fails
+
+---
+
+### `ragDeleteEmbeddings`
+
+Deletes document embeddings from the RAG vector database.
+
+**Signature**:
+
+```ts
+function ragDeleteEmbeddings(params, options?): Promise<void>;
+```
+
+**Throws**:
+
+- `RAG_DELETE_FAILED` — The delete operation fails or workspace doesn't exist
+
+---
+
+### `ragDeleteWorkspace`
+
+Deletes a RAG workspace and all its data.
+
+**Signature**:
+
+```ts
+function ragDeleteWorkspace(params, options?): Promise<void>;
+```
+
+**Throws**:
+
+- `RAG_DELETE_FAILED` — The workspace doesn't exist or is currently loaded
+
+---
+
+### `ragIngest`
+
+Ingests documents into the RAG vector database.
+
+**Signature**:
+
+```ts
+function ragIngest(params, options?): Promise<{ processed: RagSaveEmbeddingsResult[]; droppedIndices: number[] }>;
+```
+
+**Throws**:
+
+- `RAG_SAVE_FAILED` — The ingestion operation fails
+- `STREAM_ENDED_WITHOUT_RESPONSE` — Streaming ends unexpectedly (when using `onProgress`)
+
+---
+
+### `ragListWorkspaces`
+
+Lists all RAG workspaces with their open status.
+
+**Signature**:
+
+```ts
+function ragListWorkspaces(options?): Promise<RagWorkspaceInfo[]>;
+```
+
+**Throws**:
+
+- `RAG_LIST_WORKSPACES_FAILED` — The operation fails
+
+---
+
+### `ragReindex`
+
+Reindexes the RAG database to optimize search performance.
+
+**Signature**:
+
+```ts
+function ragReindex(params, options?): Promise<RagReindexResult>;
+```
+
+**Throws**:
+
+- `RAG_SAVE_FAILED` — The reindex operation fails or workspace doesn't exist
+- `STREAM_ENDED_WITHOUT_RESPONSE` — Streaming ends unexpectedly (when using `onProgress`)
+
+---
+
+### `ragSaveEmbeddings`
+
+Saves pre-embedded documents to the RAG vector database.
+
+**Signature**:
+
+```ts
+function ragSaveEmbeddings(params, options?): Promise<RagSaveEmbeddingsResult[]>;
+```
+
+**Throws**:
+
+- `RAG_SAVE_FAILED` — The save operation fails
+- `STREAM_ENDED_WITHOUT_RESPONSE` — Streaming ends unexpectedly (when using `onProgress`)
+
+---
+
+### `ragSearch`
+
+Searches for similar documents in the RAG vector database.
+
+**Signature**:
+
+```ts
+function ragSearch(params, options?): Promise<RagSearchResult[]>;
+```
+
+**Throws**:
+
+- `RAG_SEARCH_FAILED` — The search operation fails
+
+---
+
+### `startQVACProvider`
+
+Starts a provider service that offers QVAC capabilities to remote peers.
+
+**Signature**:
+
+```ts
+function startQVACProvider(params): Promise<object>;
+```
+
+**Throws**:
+
+- `INVALID_RESPONSE_TYPE` — Response type does not match expected `"provide"`
+- `PROVIDER_START_FAILED` — The server reports provider start failure
+
+---
+
+### `stopQVACProvider`
+
+Stops a running provider service and leaves the specified topic.
+
+**Signature**:
+
+```ts
+function stopQVACProvider(params): Promise<object>;
+```
+
+**Throws**:
+
+- `INVALID_RESPONSE_TYPE` — Response type does not match expected `"stopProvide"`
+- `PROVIDER_STOP_FAILED` — The server reports provider stop failure
+
+---
+
+### `textToSpeech`
+
+Converts text to speech audio.
+
+**Signature**:
+
+```ts
+function textToSpeech(params, options?): {
+  bufferStream: AsyncGenerator<number>;
+  buffer: Promise<number[]>;
+  done: Promise<boolean>;
+};
+```
+
+---
+
+### `transcribe`
+
+Provides a simple interface for transcribing audio by collecting all streaming results into a single string response.
+
+**Signature**:
+
+```ts
+function transcribe(params, options?): Promise<string>;
+```
+
+**Throws**:
+
+- `TRANSCRIPTION_FAILED` — Transcription fails
+
+**Example**:
+
+```ts
+const text = await transcribe({
+  modelId: "whisper-model",
+  audioChunk: "/path/to/audio.wav",
+});
+console.log(text);
+```
+
+---
+
+### `transcribeStream`
+
+Streams audio transcription results in real-time, yielding text chunks as they become available from the model.
+
+**Signature**:
+
+```ts
+function transcribeStream(params, options?): AsyncGenerator<string>;
+```
+
+**Throws**:
+
+- `TRANSCRIPTION_FAILED` — Transcription fails
+
+**Example**:
+
+```ts
+const stream = transcribeStream({
+  modelId: "whisper-model",
+  audioChunk: "/path/to/audio.wav",
+});
+
+for await (const textChunk of stream) {
+  process.stdout.write(textChunk);
+}
+```
+
+---
+
+### `translate`
+
+Translates text from one language to another using a specified translation model.
+
+**Signature**:
+
+```ts
+function translate(params): {
+  tokenStream: AsyncGenerator<string>;
+  text: Promise<string>;
+  stats: Promise<TranslationStats | undefined>;
+};
+```
+
+**Throws**:
+
+- `TRANSLATION_FAILED` — Translation fails
+
+---
+
+### `unloadModel`
+
+Unloads a previously loaded model from the server.
+
+**Signature**:
+
+```ts
+function unloadModel(params): Promise<void>;
+```
+
+**Throws**:
+
+- `INVALID_RESPONSE_TYPE` — Response type does not match expected `"unloadModel"`
+- `MODEL_UNLOAD_FAILED` — The server reports unload failure
+
+---
+
+## Objects
+
+### `profiler`
+
+Singleton object that collects and exports profiling data for SDK operations.
+
+**Shape**:
+
+```ts
+const profiler: {
+  enable(options?: ProfilerRuntimeOptions): void;
+  disable(): void;
+  isEnabled(): boolean;
+  exportJSON(options?: { includeRecentEvents?: boolean }): ProfilerExport;
+  exportTable(): string;
+  exportSummary(): string;
+  onRecord(callback: (event: ProfilingEvent) => void): () => void;
+  getConfig(): ResolvedProfilerConfig;
+  getAggregates(): Record<string, AggregatedStats>;
+  clear(): void;
+};
+```
+
+**Methods**:
+
+- **`enable()`** — Enables profiling and resets aggregated data
+- **`disable()`** — Disables profiling
+- **`isEnabled()`** — Returns whether profiling is currently enabled
+- **`exportJSON()`** — Exports profiling data as a structured JSON object
+- **`exportTable()`** — Exports aggregated stats as a formatted ASCII table
+- **`exportSummary()`** — Exports a human-readable summary string
+- **`onRecord()`** — Registers a listener for profiling events; returns an unsubscribe function
+- **`getConfig()`** — Returns the current effective profiler configuration
+- **`getAggregates()`** — Returns all aggregated stats keyed by operation name
+- **`clear()`** — Clears all aggregated data and recent events
+
+---
+
+## Errors
+
+Public error codes thrown across the SDK. Catch via `instanceof QvacErrorBase`
+and read `error.code` / `error.cause`. Code ranges:
+50,001–52,000 (client) and 52,001–54,000 (server).
+
+### Client errors
+
+| Error | Code | Summary |
+| --- | --- | --- |
+| `INVALID_RESPONSE_TYPE` | 50001 | Invalid response type received. |
+| `INVALID_OPERATION_IN_RESPONSE` | 50002 | Response operation didn't match the expected RAG operation. |
+| `STREAM_ENDED_WITHOUT_RESPONSE` | 50003 | Streaming RPC ended without a final response. |
+| `INVALID_AUDIO_CHUNK_TYPE` | 50004 | Invalid audio chunk input type provided. |
+| `INVALID_TOOLS_ARRAY` | 50005 | Invalid tools array provided. |
+| `INVALID_TOOL_SCHEMA` | 50006 | Invalid tool schema provided. |
+| `OCR_FAILED` | 50007 | OCR operation failed. |
+| `RPC_NO_HANDLER` | 50200 | No handler registered for request type. |
+| `RPC_REQUEST_NOT_SENT` | 50201 | Request has not been sent yet. |
+| `RPC_RESPONSE_STREAM_NOT_CREATED` | 50202 | Response stream not created. |
+| `RPC_CONNECTION_FAILED` | 50203 | RPC connection failed. |
+| `PROVIDER_START_FAILED` | 50400 | Failed to start provider. |
+| `PROVIDER_STOP_FAILED` | 50401 | Failed to stop provider. |
+| `DELEGATE_NO_FINAL_RESPONSE` | 50402 | No final response received from delegated provider. |
+| `DELEGATE_PROVIDER_ERROR` | 50403 | Delegated provider returned an error. |
+| `DELEGATE_CONNECTION_FAILED` | 50404 | Failed to connect to delegated provider. |
+| `SDK_NOT_FOUND_IN_NODE_MODULES` | 50600 | QVAC SDK not found in node_modules. |
+
+### Server errors
+
+| Error | Code | Summary |
+| --- | --- | --- |
+| `MODEL_ALREADY_REGISTERED` | 52001 | Model with the same ID is already registered. |
+| `MODEL_NOT_FOUND` | 52002 | Model ID not found in the registry. |
+| `MODEL_NOT_LOADED` | 52003 | Model exists but is not loaded. |
+| `MODEL_IS_DELEGATED` | 52004 | Model is delegated and cannot be accessed as a local model. |
+| `UNKNOWN_MODEL_TYPE` | 52005 | Unknown `modelType` in `loadModel()`. |
+| `MODEL_LOAD_FAILED` | 52200 | Failed to load model (generic). |
+| `MODEL_FILE_NOT_FOUND` | 52201 | Model file not found at given path. |
+| `MODEL_FILE_NOT_FOUND_IN_DIR` | 52202 | Expected model file not found in directory (e.g., by type). |
+| `MODEL_FILE_LOCATE_FAILED` | 52203 | Failed to locate model file for the given `modelType`. |
+| `PROJECTION_MODEL_REQUIRED` | 52204 | Projection model source is required for multimodal LLM models. |
+| `VAD_MODEL_REQUIRED` | 52205 | VAD model source is required for this configuration. |
+| `TTS_ARTIFACTS_REQUIRED` | 52208 | TTS (Chatterbox) model artifacts are missing. |
+| `TTS_REFERENCE_AUDIO_REQUIRED` | 52209 | TTS (Chatterbox) reference audio is required for voice cloning. |
+| `PARAKEET_ARTIFACTS_REQUIRED` | 52210 | Parakeet model sources are missing. |
+| `MODEL_UNLOAD_FAILED` | 52400 | Failed to unload model. |
+| `EMBED_FAILED` | 52401 | Failed to generate embeddings. |
+| `EMBED_NO_EMBEDDINGS` | 52402 | No embeddings returned from model. |
+| `TRANSCRIPTION_FAILED` | 52403 | Transcription failed. |
+| `AUDIO_FILE_NOT_FOUND` | 52404 | Audio file not found or not accessible. |
+| `TRANSLATION_FAILED` | 52405 | Translation failed. |
+| `COMPLETION_FAILED` | 52406 | Completion failed. |
+| `ATTACHMENT_NOT_FOUND` | 52407 | Attachment file not found at path. |
+| `CANCEL_FAILED` | 52408 | Failed to cancel operation. |
+| `TEXT_TO_SPEECH_FAILED` | 52409 | Text-to-speech operation failed. |
+| `CONFIG_RELOAD_NOT_SUPPORTED` | 52410 | Model does not support hot config reload. |
+| `MODEL_TYPE_MISMATCH` | 52411 | Model type mismatch (expected vs provided). |
+| `OCR_FAILED` | 52412 | OCR operation failed. |
+| `IMAGE_FILE_NOT_FOUND` | 52413 | Image file not found or not accessible. |
+| `INVALID_IMAGE_INPUT` | 52414 | Invalid image input type provided. |
+| `RAG_SAVE_FAILED` | 52800 | Failed to save embeddings. |
+| `RAG_SEARCH_FAILED` | 52801 | Failed to search embeddings. |
+| `RAG_DELETE_FAILED` | 52802 | Failed to delete embeddings. |
+| `RAG_UNKNOWN_OPERATION` | 52803 | Unknown RAG operation. |
+| `RAG_HYPERDB_FAILED` | 52804 | HyperDB RAG operation failed. |
+| `RAG_WORKSPACE_MODEL_MISMATCH` | 52805 | Workspace is configured for a different embeddings model. |
+| `RAG_WORKSPACE_NOT_FOUND` | 52806 | RAG workspace not found. |
+| `RAG_WORKSPACE_IN_USE` | 52807 | RAG workspace is in use and can't be closed/deleted. |
+| `RAG_WORKSPACE_CLOSE_FAILED` | 52808 | Failed to close RAG workspace. |
+| `RAG_LIST_WORKSPACES_FAILED` | 52809 | Failed to list RAG workspaces. |
+| `RAG_CHUNK_FAILED` | 52810 | Failed to chunk input into embeddings. |
+| `RAG_WORKSPACE_NOT_OPEN` | 52811 | RAG workspace is not open. |
+| `FILE_NOT_FOUND` | 53000 | File not found. |
+| `DOWNLOAD_CANCELLED` | 53001 | Download cancelled. |
+| `CHECKSUM_VALIDATION_FAILED` | 53002 | Downloaded file checksum validation failed. |
+| `HTTP_ERROR` | 53003 | HTTP request failed with status code. |
+| `NO_RESPONSE_BODY` | 53004 | No response body received from HTTP request. |
+| `RESPONSE_BODY_NOT_READABLE` | 53005 | Response body is not readable. |
+| `NO_BLOB_FOUND` | 53006 | No blob found for the requested resource. |
+| `DOWNLOAD_ASSET_FAILED` | 53007 | Download failed. |
+| `SEEDING_NOT_SUPPORTED` | 53008 | Seeding is only supported for Hyperdrive models. |
+| `HYPERDRIVE_DOWNLOAD_FAILED` | 53009 | Hyperdrive download failed. |
+| `INVALID_SHARD_URL_PATTERN` | 53010 | Invalid shard URL pattern for sharded downloads. |
+| `ARCHIVE_EXTRACTION_FAILED` | 53011 | Failed to extract an archive. |
+| `ARCHIVE_UNSUPPORTED_TYPE` | 53012 | Unsupported archive type. |
+| `ARCHIVE_MISSING_SHARDS` | 53013 | Archive is missing required shards. |
+| `PARTIAL_DOWNLOAD_OFFLINE` | 53014 | Partial download exists but offline prevents resuming. |
+| `REGISTRY_DOWNLOAD_FAILED` | 53015 | Registry download failed. |
+| `DELETE_CACHE_FAILED` | 53200 | Failed to delete cache. |
+| `INVALID_DELETE_CACHE_PARAMS` | 53201 | Invalid parameters for `deleteCache()`. |
+| `CACHE_DIR_NOT_ABSOLUTE` | 53202 | Cache directory must be an absolute path. |
+| `CACHE_DIR_NOT_WRITABLE` | 53203 | Cache directory is not writable. |
+| `SET_CONFIG_FAILED` | 53350 | Failed to set config. |

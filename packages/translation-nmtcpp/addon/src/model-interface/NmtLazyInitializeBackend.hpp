@@ -29,14 +29,38 @@ public:
   static void incrementRefCount();
 
   /**
+   * Atomically initialize (if not already) and increment the reference
+   * count under a single g_initMutex acquisition. NmtBackendsHandle uses
+   * this to avoid the TOCTOU window where a racing decrement could land
+   * between the initialize() unlock and incrementRefCount() lock and
+   * incorrectly tear the backend down before the new handle takes its
+   * reference.
+   * @return true if initialization was performed by this call, false if
+   *         the backend was already initialized.
+   */
+  static bool initializeAndRef(
+      const std::string& backendsDir = "",
+      const std::string& openclCacheDir = "");
+
+  /**
    * Decrement the reference count and reset state if count reaches zero.
    */
   static void decrementRefCount();
 
 private:
+  /**
+   * Internal helper: performs initialization assuming g_initMutex is
+   * already held by the caller. Returns true if initialization was
+   * performed by this call, false if the backend was already initialized.
+   */
+  static bool initializeLocked(
+      const std::string& backendsDir, const std::string& openclCacheDir);
+
   static std::mutex g_initMutex;
   static bool g_initialized;
   static std::string g_recordedBackendsDir;
+  static std::string g_recordedOpenclCacheDir;
+  static std::string g_recordedOpenclCacheDirInput;
   static int g_refCount;
 };
 

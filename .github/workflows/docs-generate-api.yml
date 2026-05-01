@@ -35,11 +35,19 @@ jobs:
 
       - name: Resolve and validate version
         id: version
+        # Route attacker-controlled inputs through env rather than templating
+        # them into the shell. A payload like `$(curl evil)` in a dispatch
+        # version field would otherwise execute before the regex check below.
+        # See https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-an-intermediate-environment-variable
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_VERSION: ${{ github.event.client_payload.version }}
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
-            VERSION="${{ github.event.client_payload.version }}"
+          if [ "$EVENT_NAME" = "repository_dispatch" ]; then
+            VERSION="$DISPATCH_VERSION"
           else
-            VERSION="${{ inputs.version }}"
+            VERSION="$INPUT_VERSION"
           fi
           if [ -z "$VERSION" ]; then
             echo "❌ No version provided."
@@ -49,23 +57,28 @@ jobs:
             echo "❌ Invalid version format: $VERSION (expected X.Y.Z)"
             exit 1
           fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "✅ Version: $VERSION"
 
       - name: Clone SDK repository
         env:
           SDK_REPO: ${{ vars.SDK_REPOSITORY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # `VERSION` is the regex-validated output from the previous step;
+          # routing it through env keeps the run block free of `${{ }}`
+          # interpolation in shell context.
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           if [ -z "$SDK_REPO" ]; then
             echo "❌ SDK_REPOSITORY is not set. Add repository variable SDK_REPOSITORY (e.g. owner/qvac)."
             exit 1
           fi
-          git clone --depth 1 --branch "release-qvac-sdk-${{ steps.version.outputs.version }}" \
-            "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${SDK_REPO}.git" sdk-source \
-            || git clone --depth 1 --branch "v${{ steps.version.outputs.version }}" \
-            "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${SDK_REPO}.git" sdk-source \
+          git clone --depth 1 --branch "release-qvac-sdk-${VERSION}" \
+            "https://x-access-token:${GH_TOKEN}@github.com/${SDK_REPO}.git" sdk-source \
+            || git clone --depth 1 --branch "v${VERSION}" \
+            "https://x-access-token:${GH_TOKEN}@github.com/${SDK_REPO}.git" sdk-source \
             || git clone --depth 1 --branch "main" \
-            "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${SDK_REPO}.git" sdk-source
+            "https://x-access-token:${GH_TOKEN}@github.com/${SDK_REPO}.git" sdk-source
           echo "✅ Cloned $SDK_REPO into sdk-source"
 
       - name: Setup Bun
@@ -75,46 +88,67 @@ jobs:
         working-directory: ${{ env.DOCS_DIR }}
         run: bun install
 
-      - name: Generate API documentation
+      - name: Release new docs version
+        # release-version.ts orchestrates the full release flow:
+        #   1. Freezes the outgoing version's index.mdx into vX.Y.Z.mdx
+        #   2. Generates the new API summary into index.mdx
+        #   3. Generates the new release notes (aggregating minor)
+        #   4. Refreshes src/lib/versions.ts
+        # SDK_PATH points at the cloned SDK source; the script forwards it
+        # transparently to generate-api-docs.ts. `--no-commit --no-pr`
+        # defers git work to peter-evans/create-pull-request below.
         working-directory: ${{ env.DOCS_DIR }}
+        env:
+          SUB: ${{ env.SDK_SUBPATH }}
+          WORKSPACE: ${{ github.workspace }}
+          # `VERSION` is the regex-validated output from the version step;
+          # routing it (and other interpolated values) through env keeps the
+          # run block free of `${{ }}` shell injection vectors.
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          SUB="${{ env.SDK_SUBPATH }}"
           if [ -n "$SUB" ]; then
-            export SDK_PATH="${{ github.workspace }}/sdk-source/$SUB"
+            export SDK_PATH="$WORKSPACE/sdk-source/$SUB"
           else
-            export SDK_PATH="${{ github.workspace }}/sdk-source"
+            export SDK_PATH="$WORKSPACE/sdk-source"
           fi
           if [ ! -f "$SDK_PATH/index.ts" ]; then
             echo "❌ SDK entry not found at $SDK_PATH/index.ts (check SDK_REPOSITORY and SDK_SUBPATH)"
             exit 1
           fi
-          bun run docs:generate-api ${{ steps.version.outputs.version }}
+          bun run scripts/release-version.ts \
+            "$VERSION" \
+            --no-commit \
+            --no-pr \
+            --force-extract
 
-      - name: Update versions list
-        working-directory: ${{ env.DOCS_DIR }}
-        run: bun run docs:update-versions
-
-      - name: Stage generated API docs for PR
+      - name: Stage generated docs for PR
+        # `DOCS_DIR` is a constant set in the workflow `env:` block, but route
+        # it through a local var anyway so the run block has zero `${{ }}`
+        # interpolation in shell context (consistency with the security
+        # hardening guideline).
+        env:
+          DOCS_DIR: ${{ env.DOCS_DIR }}
         run: |
           git add -f \
-            "${{ env.DOCS_DIR }}/content/docs/(latest)/sdk/api" \
-            "${{ env.DOCS_DIR }}/content/docs/v${{ steps.version.outputs.version }}/sdk/api" \
-            "${{ env.DOCS_DIR }}/src/lib/versions.ts"
+            "${DOCS_DIR}/content/docs/sdk/api" \
+            "${DOCS_DIR}/content/docs/sdk/release-notes" \
+            "${DOCS_DIR}/src/lib/versions.ts"
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@c0f553fe549906ede9cf27b5156039d195d2ece0 # 8.1.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "doc[notask]: generate API docs for v${{ steps.version.outputs.version }}"
+          commit-message: "doc[notask]: generate API summary and release notes for v${{ steps.version.outputs.version }}"
           branch: "docs/api-v${{ steps.version.outputs.version }}"
-          title: "doc[notask]: generate API docs for v${{ steps.version.outputs.version }}"
+          title: "doc[notask]: generate API summary and release notes for v${{ steps.version.outputs.version }}"
           body: |
-            ## Auto-generated API Documentation
+            ## Auto-generated docs
 
-            This PR adds API documentation for **v${{ steps.version.outputs.version }}**.
+            Adds the **v${{ steps.version.outputs.version }}** API summary and release notes.
 
-            - Generated MDX in `docs/website/content/docs/v${{ steps.version.outputs.version }}/sdk/api/`
-            - Updated `(latest)/sdk/api/` and version switcher config
+            - `docs/website/content/docs/sdk/api/index.mdx` (latest summary)
+            - `docs/website/content/docs/sdk/release-notes/index.mdx` (latest release notes)
+            - `docs/website/src/lib/versions.ts` (refreshed dropdown manifest)
 
             Generated by the docs generation workflow.
           labels: documentation, auto-generated
