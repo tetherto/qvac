@@ -73,6 +73,7 @@ target_sources(
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/smolvla.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
 )
 
 target_include_directories(
@@ -83,6 +84,11 @@ target_include_directories(
 )
 
 target_link_libraries(${qvac-lib-infer-vla} PRIVATE ggml::ggml)
+
+# Route QLOG calls into the JS-side logger installed via setLogger() (matches
+# diffusion-cpp). Public so unit-test targets that link the same translation
+# units pick the same code path.
+target_compile_definitions(${qvac-lib-infer-vla} PUBLIC JS_LOGGER)
 
 target_compile_definitions(${qvac-lib-infer-vla}
   PRIVATE

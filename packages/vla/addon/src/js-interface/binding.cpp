@@ -1,5 +1,7 @@
 #include <bare.h>
 
+#include <qvac-lib-inference-addon-cpp/JsInterface.hpp>
+
 #include "../addon/AddonJs.hpp"
 
 js_value_t* qvacLibInferVlaExports(js_env_t* env, js_value_t* exports) {
@@ -21,6 +23,9 @@ js_value_t* qvacLibInferVlaExports(js_env_t* env, js_value_t* exports) {
   V("runVlaModel", qvac_lib_infer_vla::runVlaModel)
   V("getVlaHparams", qvac_lib_infer_vla::getVlaHparams)
   V("getVlaBackendName", qvac_lib_infer_vla::getVlaBackendName)
+  V("setLogger", qvac_lib_inference_addon_cpp::JsInterface::setLogger)
+  V("releaseLogger", qvac_lib_inference_addon_cpp::JsInterface::releaseLogger)
+  V("setVerbosity", qvac_lib_infer_vla::setVerbosity)
 #undef V
   // NOLINTEND(cppcoreguidelines-macro-usage)
 

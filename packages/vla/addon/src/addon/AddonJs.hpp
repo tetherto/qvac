@@ -8,7 +8,9 @@
 
 #include <qvac-lib-inference-addon-cpp/JsInterface.hpp>
 #include <qvac-lib-inference-addon-cpp/JsUtils.hpp>
+#include <qvac-lib-inference-addon-cpp/Logger.hpp>
 
+#include "../utils/LoggingMacros.hpp"
 #include "AddonCpp.hpp"
 
 namespace qvac_lib_infer_vla {
@@ -286,6 +288,31 @@ inline js_value_t* getVlaHparams(js_env_t* env, js_callback_info_t* info) try {
   setInt("tokenizerMaxLength", hp.tokenizer_max_length);
   setInt("visionImageSize", hp.vision_image_size);
   return obj;
+}
+JSCATCH
+
+// setVerbosity(level: 0..4) -> undefined
+//
+// 0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG, 4=OFF (matches @qvac/logging priorities
+// and qvac_lib_inference_addon_cpp::logger::Priority). Out-of-range values
+// clamp to ERROR. Affects what the QLOG_IF macros forward to the logger
+// installed by setLogger().
+inline js_value_t* setVerbosity(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+  using Priority = qvac_lib_inference_addon_cpp::logger::Priority;
+
+  JsArgsParser args(env, info);
+  const int32_t level =
+      js::Number(env, args.get(0, "level")).as<int32_t>(env);
+  Priority p = Priority::ERROR;
+  if (level >= 0 && level <= static_cast<int32_t>(Priority::OFF)) {
+    p = static_cast<Priority>(level);
+  }
+  qvac_lib_infer_vla::logging::g_verbosityLevel = p;
+
+  js_value_t* undef = nullptr;
+  js_get_undefined(env, &undef);
+  return undef;
 }
 JSCATCH
 

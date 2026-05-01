@@ -2,10 +2,11 @@
 
 #include <algorithm>
 #include <cctype>
-#include <cstdio>
 #include <string>
 
 #include <ggml-backend.h>
+
+#include "LoggingMacros.hpp"
 
 namespace vla_backend_selection {
 
@@ -33,6 +34,8 @@ int parseAdrenoModel(const std::string& description) {
 }
 
 ggml_backend_dev_t pickBestGpuDevice() {
+  using Priority = qvac_lib_inference_addon_cpp::logger::Priority;
+
   const size_t n = ggml_backend_dev_count();
   ggml_backend_dev_t fallbackGpu = nullptr;
 
@@ -57,18 +60,17 @@ ggml_backend_dev_t pickBestGpuDevice() {
     // model only with evidence that its driver round-trips ggml matmul
     // correctly (cos > 0.99 on the real-LIBERO fixture).
     if (adreno > 0) {
-      fprintf(
-          stderr,
-          "vla_backend_selection: skipping Adreno %d GPU (driver path "
-          "produces incorrect ggml output) — will fall back to CPU\n",
-          adreno);
+      QLOG_IF(
+          Priority::WARNING,
+          "vla_backend_selection: skipping Adreno " + std::to_string(adreno) +
+              " GPU (driver path produces incorrect ggml output) — will fall "
+              "back to CPU");
       continue;
     }
 
-    fprintf(
-        stderr,
-        "vla_backend_selection: non-Adreno GPU accepted: %s\n",
-        desc.c_str());
+    QLOG_IF(
+        Priority::INFO,
+        "vla_backend_selection: non-Adreno GPU accepted: " + desc);
 
     if (fallbackGpu == nullptr) {
       fallbackGpu = dev;

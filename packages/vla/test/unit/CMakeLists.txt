@@ -5,6 +5,7 @@ add_executable(
   test_hparams.cpp
   test_backend_selection.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
 )
 
 target_compile_options(

@@ -7,6 +7,7 @@
 #include "smolvla.hpp"
 
 #include "../utils/BackendSelection.hpp"
+#include "../utils/LoggingMacros.hpp"
 
 #include <algorithm>
 #include <cassert>
@@ -16,6 +17,7 @@
 #include <cstdlib>
 #include <numbers>
 #include <random>
+#include <string>
 
 #ifndef _WIN32
 #include <fcntl.h>
@@ -24,11 +26,7 @@
 #include <unistd.h>
 #endif
 
-// Debug: dump tensor data to a raw file (no-op; set VLA_DUMP_TENSORS=1 in
-// smolvla-ggml dev builds to enable file output for layer-by-layer comparisons
-// against PyTorch).
-static void
-dump_tensor(const char* /*name*/, const float* /*data*/, int /*n*/) {}
+using Priority = qvac_lib_inference_addon_cpp::logger::Priority;
 
 static double now_ms() {
   return std::chrono::duration<double, std::milli>(
@@ -545,12 +543,6 @@ struct ggml_tensor* build_denoise_step_graph(
       model.action_time_mlp_out_bias);
   // action_time: (chunk_size, 720)
 
-  // Mark suffix embedding as output for debugging
-  ggml_set_name(action_emb, "dbg_action_emb");
-  ggml_set_output(action_emb);
-  ggml_set_name(action_time, "dbg_suffix_emb");
-  ggml_set_output(action_time);
-
   // 3. Run through expert layers (interleaved self-attn / cross-attn)
   struct ggml_tensor* hidden = action_time;
   int chunk_size = hp.chunk_size;
@@ -563,14 +555,6 @@ struct ggml_tensor* build_denoise_step_graph(
     bool is_self_attn =
         (hp.self_attn_every_n > 0) && (i % hp.self_attn_every_n == 0);
     const auto& lw = ew.layers[i];
-
-    // Mark hidden state before each layer for debugging
-    {
-      char name[32];
-      snprintf(name, sizeof(name), "dbg_expert_pre_%02d", i);
-      ggml_set_name(hidden, name);
-      ggml_set_output(hidden);
-    }
 
     // Pre-attention RMSNorm
     struct ggml_tensor* residual = hidden;
@@ -815,7 +799,9 @@ static struct ggml_tensor*
 get_tensor(struct ggml_context* ctx, const char* name) {
   struct ggml_tensor* t = ggml_get_tensor(ctx, name);
   if (!t) {
-    fprintf(stderr, "WARNING: tensor '%s' not found in GGUF\n", name);
+    QLOG_IF(
+        Priority::WARNING,
+        std::string("tensor '") + name + "' not found in GGUF");
   }
   return t;
 }
@@ -834,7 +820,8 @@ static struct ggml_tensor*
 gguf_get_tensor_by_name(struct ggml_context* ctx, const char* name) {
   struct ggml_tensor* t = ggml_get_tensor(ctx, name);
   if (!t) {
-    fprintf(stderr, "  WARN: tensor '%s' not found\n", name);
+    QLOG_IF(
+        Priority::WARNING, std::string("tensor '") + name + "' not found");
   }
   return t;
 }
@@ -842,8 +829,10 @@ gguf_get_tensor_by_name(struct ggml_context* ctx, const char* name) {
 extern "C" bool smolvla_load_model(const char* path, smolvla_model* model_ptr,
                                    bool force_cpu) {
   smolvla_model& model = *model_ptr;
-  fprintf(stderr, "%s: loading model from '%s' (force_cpu=%d)\n", __func__,
-          path, force_cpu ? 1 : 0);
+  QLOG_IF(
+      Priority::INFO,
+      std::string("smolvla_load_model: loading model from '") + path +
+          "' (force_cpu=" + (force_cpu ? "true" : "false") + ")");
 
   // Load all backend plugins (Vulkan, Metal, CUDA, …) shipped next to the
   // addon. The qvac-fabric ggml port installs each backend as a shared library
@@ -871,7 +860,7 @@ extern "C" bool smolvla_load_model(const char* path, smolvla_model* model_ptr,
       ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
   model.backend_cpu = cpu_dev ? ggml_backend_dev_init(cpu_dev, nullptr) : nullptr;
   if (!model.backend_cpu) {
-    fprintf(stderr, "%s: failed to init CPU backend\n", __func__);
+    QLOG_IF(Priority::ERROR, "smolvla_load_model: failed to init CPU backend");
     return false;
   }
   model.backend = model.backend_cpu;
@@ -889,8 +878,9 @@ extern "C" bool smolvla_load_model(const char* path, smolvla_model* model_ptr,
   // speedup attributable to the accelerator without spinning up two CI jobs.
   {
     if (force_cpu) {
-      fprintf(stderr, "%s: force_cpu=true — skipping GPU selection\n",
-              __func__);
+      QLOG_IF(
+          Priority::INFO,
+          "smolvla_load_model: force_cpu=true — skipping GPU selection");
     }
     ggml_backend_dev_t gpu =
         force_cpu ? nullptr : vla_backend_selection::pickBestGpuDevice();
@@ -899,17 +889,17 @@ extern "C" bool smolvla_load_model(const char* path, smolvla_model* model_ptr,
       if (gpu_backend) {
         model.backend = gpu_backend;
         model.has_gpu = true;
-        fprintf(
-            stderr,
-            "%s: using GPU backend: %s (%s)\n",
-            __func__,
-            ggml_backend_name(gpu_backend),
-            ggml_backend_dev_description(gpu));
+        const char* bname = ggml_backend_name(gpu_backend);
+        const char* ddesc = ggml_backend_dev_description(gpu);
+        QLOG_IF(
+            Priority::INFO,
+            std::string("smolvla_load_model: using GPU backend: ") +
+                (bname ? bname : "?") + " (" + (ddesc ? ddesc : "?") + ")");
       }
     }
   }
   if (!model.has_gpu) {
-    fprintf(stderr, "%s: using CPU backend\n", __func__);
+    QLOG_IF(Priority::INFO, "smolvla_load_model: using CPU backend");
   }
 
   // 1. Open GGUF file with no_alloc=true — creates a ggml_context with
@@ -925,12 +915,14 @@ extern "C" bool smolvla_load_model(const char* path, smolvla_model* model_ptr,
 
   struct gguf_context* gguf = gguf_init_from_file(path, gguf_params);
   if (!gguf) {
-    fprintf(stderr, "%s: failed to open GGUF file\n", __func__);
+    QLOG_IF(Priority::ERROR, "smolvla_load_model: failed to open GGUF file");
     return false;
   }
 
   int64_t n_tensors = gguf_get_n_tensors(gguf);
-  fprintf(stderr, "%s: loaded %lld tensors\n", __func__, (long long)n_tensors);
+  QLOG_IF(
+      Priority::INFO,
+      "smolvla_load_model: loaded " + std::to_string(n_tensors) + " tensors");
 
   // 2. Read hyperparameters from metadata
   auto& hp = model.hparams;
@@ -982,22 +974,15 @@ extern "C" bool smolvla_load_model(const char* path, smolvla_model* model_ptr,
     }
   }
 
-  fprintf(stderr, "%s: hparams loaded\n", __func__);
-  fprintf(
-      stderr,
-      "  vision: %d layers, %d-dim\n",
-      hp.vision_num_layers,
-      hp.vision_hidden_size);
-  fprintf(
-      stderr,
-      "  text:   %d layers, %d-dim\n",
-      hp.text_num_layers,
-      hp.text_hidden_size);
-  fprintf(
-      stderr,
-      "  expert: %d layers, %d-dim\n",
-      hp.expert_num_layers,
-      hp.expert_hidden_size);
+  QLOG_IF(
+      Priority::INFO,
+      "smolvla_load_model: hparams loaded — vision=" +
+          std::to_string(hp.vision_num_layers) + "L/" +
+          std::to_string(hp.vision_hidden_size) + "d text=" +
+          std::to_string(hp.text_num_layers) + "L/" +
+          std::to_string(hp.text_hidden_size) + "d expert=" +
+          std::to_string(hp.expert_num_layers) + "L/" +
+          std::to_string(hp.expert_hidden_size) + "d");
 
   // 3. Map tensor names to model struct fields
   model.ctx_w = ctx_data;
@@ -1116,7 +1101,7 @@ extern "C" bool smolvla_load_model(const char* path, smolvla_model* model_ptr,
   model.action_time_mlp_out_bias =
       gguf_get_tensor_by_name(ctx_data, "proj.time_mlp_out.bias");
 
-  fprintf(stderr, "%s: all tensors mapped\n", __func__);
+  QLOG_IF(Priority::INFO, "smolvla_load_model: all tensors mapped");
 
   // ── Allocate backend storage for weights ──────────────────────────────────
   //
@@ -1188,15 +1173,14 @@ extern "C" bool smolvla_load_model(const char* path, smolvla_model* model_ptr,
             size_t off = gguf_get_tensor_offset(gguf, i);
             size_t nbytes = ggml_nbytes(t);
             if (off > tensor_data_size || nbytes > tensor_data_size - off) {
-              fprintf(
-                  stderr,
-                  "%s: tensor '%s' bounds exceed mapped region "
-                  "(off=%zu nbytes=%zu region=%zu) — falling back to alloc+copy\n",
-                  __func__,
-                  name,
-                  off,
-                  nbytes,
-                  tensor_data_size);
+              QLOG_IF(
+                  Priority::WARNING,
+                  std::string("smolvla_load_model: tensor '") + name +
+                      "' bounds exceed mapped region (off=" +
+                      std::to_string(off) +
+                      " nbytes=" + std::to_string(nbytes) +
+                      " region=" + std::to_string(tensor_data_size) +
+                      ") — falling back to alloc+copy");
               bounds_ok = false;
               break;
             }
@@ -1229,11 +1213,11 @@ extern "C" bool smolvla_load_model(const char* path, smolvla_model* model_ptr,
                   n_alloc_ok++;
                 } else {
                   n_alloc_fail++;
-                  fprintf(
-                      stderr,
-                      "%s: tensor_alloc failed for '%s'\n",
-                      __func__,
-                      name);
+                  QLOG_IF(
+                      Priority::WARNING,
+                      std::string(
+                          "smolvla_load_model: tensor_alloc failed for '") +
+                          name + "'");
                 }
               }
 
@@ -1241,11 +1225,11 @@ extern "C" bool smolvla_load_model(const char* path, smolvla_model* model_ptr,
                 // A partially-wired buffer would leave some tensors with
                 // unusable pointers; running inference against it is UB.
                 // Tear down and fall through to the alloc+copy path.
-                fprintf(
-                    stderr,
-                    "%s: %d tensor_alloc calls failed — falling back to alloc+copy\n",
-                    __func__,
-                    n_alloc_fail);
+                QLOG_IF(
+                    Priority::WARNING,
+                    "smolvla_load_model: " + std::to_string(n_alloc_fail) +
+                        " tensor_alloc calls failed — falling back to "
+                        "alloc+copy");
                 ggml_backend_buffer_free(buf);
                 munmap(addr, file_size);
               } else {
@@ -1255,39 +1239,39 @@ extern "C" bool smolvla_load_model(const char* path, smolvla_model* model_ptr,
                 model.mmap_addr = addr;
                 model.mmap_size = file_size;
                 used_mmap = true;
-                fprintf(
-                    stderr,
-                    "%s: mmap+host_ptr buffer: %.1f MB (max_tensor=%.1f MB), "
-                    "%d/%lld tensors wired\n",
-                    __func__,
-                    tensor_data_size / (1024.0 * 1024.0),
-                    max_tensor_size / (1024.0 * 1024.0),
-                    n_alloc_ok,
-                    (long long)n_tensors_in_gguf);
+                QLOG_IF(
+                    Priority::INFO,
+                    "smolvla_load_model: mmap+host_ptr buffer ready, " +
+                        std::to_string(n_alloc_ok) + "/" +
+                        std::to_string(n_tensors_in_gguf) + " tensors wired");
               }
             } else {
-              fprintf(
-                  stderr,
-                  "%s: buffer_from_host_ptr returned NULL — falling back to "
-                  "alloc+copy\n",
-                  __func__);
+              QLOG_IF(
+                  Priority::WARNING,
+                  "smolvla_load_model: buffer_from_host_ptr returned NULL — "
+                  "falling back to alloc+copy");
               munmap(addr, file_size);
             }
           }
         } else {
-          fprintf(stderr, "%s: mmap failed (errno=%d)\n", __func__, errno);
+          QLOG_IF(
+              Priority::WARNING,
+              "smolvla_load_model: mmap failed (errno=" +
+                  std::to_string(errno) + ")");
         }
       } else {
-        fprintf(
-            stderr,
-            "%s: skipping mmap fast path for '%s' "
-            "(fstat failed, file empty, data_offset >= file_size, or file > SIZE_MAX)\n",
-            __func__,
-            path);
+        QLOG_IF(
+            Priority::WARNING,
+            std::string("smolvla_load_model: skipping mmap fast path for '") +
+                path +
+                "' (fstat failed, file empty, data_offset >= file_size, or "
+                "file > SIZE_MAX)");
         close(fd);
       }
     } else {
-      fprintf(stderr, "%s: open() failed for '%s'\n", __func__, path);
+      QLOG_IF(
+          Priority::WARNING,
+          std::string("smolvla_load_model: open() failed for '") + path + "'");
     }
   }
 #endif
@@ -1299,22 +1283,22 @@ extern "C" bool smolvla_load_model(const char* path, smolvla_model* model_ptr,
          t = ggml_get_next_tensor(ctx_data, t)) {
       total_size += ggml_nbytes(t);
     }
-    fprintf(
-        stderr,
-        "%s: alloc+copy path: total weights %.1f MB\n",
-        __func__,
-        total_size / (1024.0 * 1024.0));
+    QLOG_IF(
+        Priority::INFO,
+        "smolvla_load_model: alloc+copy path, total weights " +
+            std::to_string((int)(total_size / (1024 * 1024))) + " MB");
 
     ggml_backend_buffer_t buf =
         ggml_backend_alloc_ctx_tensors_from_buft(ctx_data, buft);
     if (!buf) {
-      fprintf(
-          stderr,
-          "%s: ggml_backend_alloc_ctx_tensors_from_buft FAILED for %.1f MB "
-          "on backend '%s'\n",
-          __func__,
-          total_size / (1024.0 * 1024.0),
-          ggml_backend_name(model.backend));
+      const char* bname = ggml_backend_name(model.backend);
+      QLOG_IF(
+          Priority::ERROR,
+          std::string(
+              "smolvla_load_model: ggml_backend_alloc_ctx_tensors_from_buft "
+              "FAILED for ") +
+              std::to_string((int)(total_size / (1024 * 1024))) +
+              " MB on backend '" + (bname ? bname : "?") + "'");
       gguf_free(gguf);
       return false;
     }
@@ -1324,7 +1308,9 @@ extern "C" bool smolvla_load_model(const char* path, smolvla_model* model_ptr,
     // Read each tensor from disk and upload to the backend buffer.
     FILE* f = fopen(path, "rb");
     if (!f) {
-      fprintf(stderr, "%s: fopen failed for '%s'\n", __func__, path);
+      QLOG_IF(
+          Priority::ERROR,
+          std::string("smolvla_load_model: fopen failed for '") + path + "'");
       gguf_free(gguf);
       return false;
     }
@@ -1348,12 +1334,10 @@ extern "C" bool smolvla_load_model(const char* path, smolvla_model* model_ptr,
 #endif
       if (seek_err != 0 ||
           fread(read_buf.data(), 1, nbytes, f) != nbytes) {
-        fprintf(
-            stderr,
-            "%s: failed to read tensor '%s' at offset %zu\n",
-            __func__,
-            name,
-            off);
+        QLOG_IF(
+            Priority::ERROR,
+            std::string("smolvla_load_model: failed to read tensor '") + name +
+                "' at offset " + std::to_string(off));
         fclose(f);
         gguf_free(gguf);
         return false;
@@ -1362,12 +1346,14 @@ extern "C" bool smolvla_load_model(const char* path, smolvla_model* model_ptr,
       n_copied++;
     }
     fclose(f);
-    fprintf(
-        stderr,
-        "%s: alloc+copy buffer ready: %d tensors, backend='%s'\n",
-        __func__,
-        n_copied,
-        ggml_backend_name(model.backend));
+    {
+      const char* bname = ggml_backend_name(model.backend);
+      QLOG_IF(
+          Priority::INFO,
+          "smolvla_load_model: alloc+copy buffer ready, " +
+              std::to_string(n_copied) + " tensors, backend='" +
+              (bname ? bname : "?") + "'");
+    }
   }
 
   // Tensors keep the same ggml_tensor* pointers from ctx_data; no remapping
@@ -1376,7 +1362,7 @@ extern "C" bool smolvla_load_model(const char* path, smolvla_model* model_ptr,
   // Clean up GGUF context — backend buffer(s) own the actual storage now.
   gguf_free(gguf);
 
-  fprintf(stderr, "%s: model loaded successfully\n", __func__);
+  QLOG_IF(Priority::INFO, "smolvla_load_model: model loaded successfully");
   return true;
 }
 
@@ -1487,30 +1473,24 @@ bool smolvla_inference_with_timing(
   // and out-of-bounds writes during graph build.
   constexpr int kMaxImages = 16;
   if (n_images <= 0 || n_images > kMaxImages) {
-    fprintf(
-        stderr,
-        "%s: invalid n_images=%d (expected 1..%d)\n",
-        __func__,
-        n_images,
-        kMaxImages);
+    QLOG_IF(
+        Priority::ERROR,
+        "smolvla_inference: invalid n_images=" + std::to_string(n_images) +
+            " (expected 1.." + std::to_string(kMaxImages) + ")");
     return false;
   }
   if (lang_len < 0 || lang_len > hp.tokenizer_max_length) {
-    fprintf(
-        stderr,
-        "%s: invalid lang_len=%d (expected 0..%d)\n",
-        __func__,
-        lang_len,
-        hp.tokenizer_max_length);
+    QLOG_IF(
+        Priority::ERROR,
+        "smolvla_inference: invalid lang_len=" + std::to_string(lang_len) +
+            " (expected 0.." + std::to_string(hp.tokenizer_max_length) + ")");
     return false;
   }
   if (state_dim < 0 || state_dim > hp.max_state_dim) {
-    fprintf(
-        stderr,
-        "%s: invalid state_dim=%d (expected 0..%d)\n",
-        __func__,
-        state_dim,
-        hp.max_state_dim);
+    QLOG_IF(
+        Priority::ERROR,
+        "smolvla_inference: invalid state_dim=" + std::to_string(state_dim) +
+            " (expected 0.." + std::to_string(hp.max_state_dim) + ")");
     return false;
   }
 
@@ -1520,14 +1500,6 @@ bool smolvla_inference_with_timing(
   int action_dim = hp.action_dim;
   int kv_dim = hp.text_num_kv_heads * hp.text_head_dim;
 
-  fprintf(
-      stderr,
-      "%s: prefix_len=%d, chunk_size=%d, n_images=%d\n",
-      __func__,
-      prefix_len,
-      chunk_size,
-      n_images);
-
   // Count valid prefix tokens for attention mask
   int valid_prefix = n_visual_tokens; // all visual tokens are valid
   for (int i = 0; i < lang_len; i++) {
@@ -1535,8 +1507,11 @@ bool smolvla_inference_with_timing(
       valid_prefix++;
   }
   valid_prefix += 1; // state token
-  fprintf(
-      stderr, "%s: valid_prefix=%d / %d\n", __func__, valid_prefix, prefix_len);
+  QLOG_IF(
+      Priority::DEBUG,
+      "smolvla_inference: prefix_len=" + std::to_string(prefix_len) +
+          " valid_prefix=" + std::to_string(valid_prefix) + " chunk_size=" +
+          std::to_string(chunk_size) + " n_images=" + std::to_string(n_images));
 
   // ================================================================
   // STAGE 1: Vision encoding (per image) — SigLIP + Connector
@@ -1585,12 +1560,10 @@ bool smolvla_inference_with_timing(
         0,
         tokens_per_img * hidden * sizeof(float));
 
-    // Dump vision output for debugging
-    if (img_idx == 0) {
-      dump_tensor("vis0", all_visual.data(), tokens_per_img * hidden);
-    }
-    fprintf(
-        stderr, "%s: vision img %d/%d done\n", __func__, img_idx + 1, n_images);
+    QLOG_IF(
+        Priority::DEBUG,
+        "smolvla_inference: vision img " + std::to_string(img_idx + 1) + "/" +
+            std::to_string(n_images) + " done");
   }
   free_staged(sg_vis);
   double t_vision_end = now_ms();
@@ -1690,9 +1663,6 @@ bool smolvla_inference_with_timing(
     alloc_staged_simple(sg2, model.backend_cpu);
   }
 
-  // Dump visual tokens (already scaled by sqrt(hidden))
-  dump_tensor("all_visual", all_visual.data(), n_visual_tokens * hidden);
-
   // Set inputs
   ggml_backend_tensor_set(
       g_visual, all_visual.data(), 0, n_visual_tokens * hidden * sizeof(float));
@@ -1770,37 +1740,6 @@ bool smolvla_inference_with_timing(
 
   compute_staged(sg2, model.backend);
   double t_smollm2_compute = now_ms();
-
-  // Dump SmolLM2 output
-  {
-    std::vector<float> vlm_out(prefix_len * hidden);
-    ggml_backend_tensor_get(
-        smollm2_out, vlm_out.data(), 0, vlm_out.size() * sizeof(float));
-    dump_tensor("vlm_out", vlm_out.data(), prefix_len * hidden);
-  }
-
-  // Dump prefix embeddings
-  {
-    std::vector<float> prefix_data(prefix_len * hidden);
-    ggml_backend_tensor_get(
-        prefix, prefix_data.data(), 0, prefix_data.size() * sizeof(float));
-    dump_tensor("prefix_embs", prefix_data.data(), prefix_len * hidden);
-  }
-
-  // Dump per-layer hidden states
-  {
-    std::vector<float> layer_data(prefix_len * hidden);
-    for (int i = 0; i < hp.text_num_layers; i++) {
-      ggml_backend_tensor_get(
-          layer_outputs[i],
-          layer_data.data(),
-          0,
-          layer_data.size() * sizeof(float));
-      char name[64];
-      snprintf(name, sizeof(name), "smollm2_layer%02d", i);
-      dump_tensor(name, layer_data.data(), prefix_len * hidden);
-    }
-  }
 
   // Recompute KV cache from layer inputs
   // The graph allocator may reuse K/V buffers, so we recompute them in separate
@@ -1909,10 +1848,6 @@ bool smolvla_inference_with_timing(
       free_staged(sg_kv);
     }
   }
-
-  // Dump KV cache layer 0 for debugging
-  dump_tensor("kv_key_layer00", kv_keys_data[0].data(), kv_total);
-  dump_tensor("kv_val_layer00", kv_vals_data[0].data(), kv_total);
 
   // ----------------------------------------------------------------
   // Hoist cross-attention K/V projections out of the ODE loop.
@@ -2233,76 +2168,29 @@ bool smolvla_inference_with_timing(
     ggml_backend_tensor_get(
         v_t, vt_data.data(), 0, vt_data.size() * sizeof(float));
 
-    // Dump ODE intermediates
-    {
-      char name[64];
-      snprintf(name, sizeof(name), "ode_xt_pre_%02d", step);
-      dump_tensor(name, x_t.data(), chunk_size * hp.max_action_dim);
-      snprintf(name, sizeof(name), "ode_vt_%02d", step);
-      dump_tensor(name, vt_data.data(), chunk_size * hp.max_action_dim);
-      if (step == 0) {
-        dump_tensor(
-            "ode_time_emb_0",
-            te_expanded.data(),
-            chunk_size * hp.expert_hidden_size);
-        // Dump suffix embedding intermediates
-        struct ggml_tensor* dbg_ae = ggml_get_tensor(sg3.ctx, "dbg_action_emb");
-        struct ggml_tensor* dbg_se = ggml_get_tensor(sg3.ctx, "dbg_suffix_emb");
-        if (dbg_ae) {
-          std::vector<float> tmp(ggml_nelements(dbg_ae));
-          ggml_backend_tensor_get(
-              dbg_ae, tmp.data(), 0, tmp.size() * sizeof(float));
-          dump_tensor("ode_action_emb_0", tmp.data(), tmp.size());
-        }
-        if (dbg_se) {
-          std::vector<float> tmp(ggml_nelements(dbg_se));
-          ggml_backend_tensor_get(
-              dbg_se, tmp.data(), 0, tmp.size() * sizeof(float));
-          dump_tensor("ode_suffix_emb_0", tmp.data(), tmp.size());
-        }
-        // Dump per-expert-layer hidden states
-        for (int el = 0; el < hp.expert_num_layers; el++) {
-          char name[32];
-          snprintf(name, sizeof(name), "dbg_expert_pre_%02d", el);
-          struct ggml_tensor* dbg = ggml_get_tensor(sg3.ctx, name);
-          if (dbg) {
-            std::vector<float> tmp(ggml_nelements(dbg));
-            ggml_backend_tensor_get(
-                dbg, tmp.data(), 0, tmp.size() * sizeof(float));
-            char dname[64];
-            snprintf(dname, sizeof(dname), "ode0_expert_pre_%02d", el);
-            dump_tensor(dname, tmp.data(), tmp.size());
-          }
-        }
-      }
-    }
-
     for (int j = 0; j < chunk_size * hp.max_action_dim; j++) {
       x_t[j] += vt_data[j] * dt;
     }
 
-    fprintf(
-        stderr,
-        "%s: ODE step %d/%d (t=%.2f) done\n",
-        __func__,
-        step + 1,
-        hp.num_ode_steps,
-        t_val);
+    QLOG_IF(
+        Priority::DEBUG,
+        "smolvla_inference: ODE step " + std::to_string(step + 1) + "/" +
+            std::to_string(hp.num_ode_steps) + " done");
   }
 
   free_staged(sg3);
 
   double t_ode_end = now_ms();
 
-  fprintf(
-      stderr,
-      "%s: TIMING: vision=%.0fms smollm2_compute=%.0fms smollm2_total=%.0fms "
-      "ode=%.0fms\n",
-      __func__,
-      t_vision_end - t_vision_start,
-      t_smollm2_compute - t_smollm2_start,
-      t_smollm2_end - t_smollm2_start,
-      t_ode_end - t_ode_start);
+  QLOG_IF(
+      Priority::INFO,
+      "smolvla_inference: TIMING vision=" +
+          std::to_string((int)(t_vision_end - t_vision_start)) +
+          "ms smollm2_compute=" +
+          std::to_string((int)(t_smollm2_compute - t_smollm2_start)) +
+          "ms smollm2_total=" +
+          std::to_string((int)(t_smollm2_end - t_smollm2_start)) + "ms ode=" +
+          std::to_string((int)(t_ode_end - t_ode_start)) + "ms");
 
   // ================================================================
   // STAGE 4: Extract actions

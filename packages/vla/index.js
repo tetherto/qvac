@@ -8,6 +8,15 @@ const binding = require('./binding')
 const { preprocessImage, padState, DEFAULT_IMAGE_SIZE } = require('./addon.js')
 const { QvacErrorAddonVla, ERR_CODES } = require('./lib/error')
 
+// Maps the C++ Priority enum (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) to the
+// matching method on the JS QvacLogger instance. Mirrors diffusion-cpp.
+const LOG_METHODS = ['error', 'warn', 'info', 'debug']
+
+// Default verbosity sent to the C++ side when a logger is connected. Matches
+// the JS-side QvacLogger default — INFO and above are forwarded, DEBUG drops
+// unless explicitly raised.
+const DEFAULT_NATIVE_VERBOSITY = 2 // INFO
+
 function pickPrimaryGgufPath (files) {
   const FIRST_SHARD_REGEX = /-0*1-of-\d+\.gguf$/
   return files.find((p) => FIRST_SHARD_REGEX.test(p)) || files[0]
@@ -73,7 +82,33 @@ class VlaModel {
     this._hparams = null
     this._backendName = null
     this._hasActiveResponse = false
+    this._nativeLoggerActive = false
     this.state = { configLoaded: false }
+  }
+
+  _connectNativeLogger () {
+    if (this._nativeLoggerActive) return
+    try {
+      binding.setLogger((priority, message) => {
+        const method = LOG_METHODS[priority] || 'info'
+        if (typeof this.logger[method] === 'function') {
+          this.logger[method](`[C++] ${message}`)
+        }
+      })
+      const verbosity = (this._config && Number.isInteger(this._config.verbosity))
+        ? this._config.verbosity
+        : DEFAULT_NATIVE_VERBOSITY
+      try { binding.setVerbosity(verbosity) } catch (_) {}
+      this._nativeLoggerActive = true
+    } catch (err) {
+      this.logger.warn('Failed to connect native logger:', err && err.message)
+    }
+  }
+
+  _releaseNativeLogger () {
+    if (!this._nativeLoggerActive) return
+    try { binding.releaseLogger() } catch (_) {}
+    this._nativeLoggerActive = false
   }
 
   async load ({ backend = 'auto' } = {}) {
@@ -89,6 +124,7 @@ class VlaModel {
 
   async _load (backend) {
     this.logger.info('Starting model load')
+    this._connectNativeLogger()
     const ggufPath = pickPrimaryGgufPath(this._files)
     if (!fs.existsSync(ggufPath)) {
       throw new QvacErrorAddonVla({ code: ERR_CODES.MODEL_NOT_FOUND, adds: ggufPath })
@@ -171,10 +207,12 @@ class VlaModel {
           binding.destroyVlaModel(this._handle)
         } catch (destroyError) {
           this._handle = null
+          this._releaseNativeLogger()
           throw new QvacErrorAddonVla({ code: ERR_CODES.FAILED_TO_DESTROY, adds: destroyError.message, cause: destroyError })
         }
         this._handle = null
       }
+      this._releaseNativeLogger()
       this._hparams = null
       this._backendName = null
       this.state.configLoaded = false

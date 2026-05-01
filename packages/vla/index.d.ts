@@ -89,8 +89,10 @@ export function preprocessImage (
      * heuristic. Pass `1` if pixels are already in [0,1] (no rescale),
      * pass `1/255` if pixels are in [0,255] (rescale to [0,1]). Anything
      * else (including the literal `'auto'`) falls back to the heuristic.
+     * Typed as `number | 'auto'` because TS literal types can't represent
+     * `1/255` directly.
      */
-    scale?: 1 | (1 / 255) | 'auto'
+    scale?: number | 'auto'
   }
 ): Float32Array
 
