@@ -17,6 +17,7 @@
     ],
     "lightB": [
       "runGenerationParamsTest",
+      "runGrammarTest",
       "runModelLoadingTest",
       "runMoeTest",
       "runMultiGpuTest",
@@ -35,6 +36,7 @@
       "runToolsCompactTest",
       "runFinetuningPauseResumeTest",
       "runGenerationParamsTest",
+      "runGrammarTest",
       "runImageTest"
     ],
     "groupB": [

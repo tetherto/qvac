@@ -18,7 +18,7 @@ export async function handleUnloadModelDelegated(
     throw new ModelIsDelegatedError(request.modelId);
   }
 
-  const { topic, providerPublicKey, timeout, healthCheckTimeout } = entry.delegated;
+  const { providerPublicKey, timeout, healthCheckTimeout } = entry.delegated;
 
   unregisterModel(request.modelId);
 
@@ -27,7 +27,7 @@ export async function handleUnloadModelDelegated(
       `Sending delegated unload for model ${request.modelId} to provider: ${providerPublicKey}`,
     );
 
-    const rpc = await getRPC(topic, providerPublicKey, { timeout, healthCheckTimeout });
+    const rpc = await getRPC(providerPublicKey, { timeout, healthCheckTimeout });
     await send(
       { type: "unloadModel" as const, modelId: request.modelId, clearStorage: false },
       rpc,

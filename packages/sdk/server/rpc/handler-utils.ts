@@ -298,3 +298,39 @@ export function handleInitConfig(
     );
   }
 }
+
+// Internal pre-terminate cleanup signal. The SDK client sends this before
+// tearing down the bare runtime (e.g. Worklet.terminate() on mobile) so
+// addons can release env-bound state while their JS environment is still
+// alive. Reply success/failure, never throws to the dispatcher.
+type ShutdownMessage = {
+  type: "__shutdown__";
+};
+
+export function isShutdownMessage(data: unknown): data is ShutdownMessage {
+  return (
+    typeof data === "object" &&
+    data !== null &&
+    "type" in data &&
+    (data as { type?: unknown }).type === "__shutdown__"
+  );
+}
+
+export async function handleShutdown(req: RPC.IncomingRequest): Promise<void> {
+  try {
+    // Lazy import to avoid the import cycle:
+    //   handler-utils -> worker-core -> create-server -> handle-request
+    //   -> handler-utils. By the time this runs, all modules are loaded.
+    const { cleanupForTerminate } = await import("@/server/worker-core");
+    await cleanupForTerminate();
+    req.reply(JSON.stringify({ success: true }), "utf-8");
+  } catch (error) {
+    req.reply(
+      JSON.stringify({
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      }),
+      "utf-8",
+    );
+  }
+}

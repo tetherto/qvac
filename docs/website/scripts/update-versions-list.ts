@@ -1,24 +1,40 @@
 #!/usr/bin/env bun
 /**
- * Updates src/lib/versions.ts from content/docs/ version folders.
+ * Refresh `src/lib/versions.ts` from the contents of `content/docs/sdk/api/`
+ * and `content/docs/sdk/release-notes/`.
  *
- * Scans content/docs/ for top-level vX.Y.Z directories and the dev/ folder.
- * Supports deferred versioning: use --latest=X.Y.Z to specify the current
- * latest version when it has no vX.Y.Z folder yet.
+ * The site has two versioned sections (API summary, release notes), each
+ * served as a single MDX file per version:
+ *   - `<basePath>/index.mdx`            — current latest
+ *   - `<basePath>/v<X.Y.Z>.mdx`         — older versions
+ *
+ * This script discovers all `vX.Y.Z.mdx` siblings, sorts them descending,
+ * and rewrites `versions.ts` so the version selector dropdowns always
+ * reflect what's actually on disk.
  *
  * Usage:
- *   bun run scripts/update-versions-list.ts [version] [--latest=X.Y.Z]
+ *   bun run scripts/update-versions-list.ts [--latest=X.Y.Z]
  *
- * Arguments:
- *   version         Optional. After generating a new version, pass it to
- *                   verify it exists in the scan.
- *   --latest=X.Y.Z  Override which version is marked as latest.
- *                   Required when the current latest has no vX.Y.Z folder
- *                   (deferred versioning).
+ * The `--latest=X.Y.Z` flag controls the version label rendered as
+ * "vX.Y.Z (latest)" — both for the API summary and release notes. If
+ * omitted, the script reads the SDK's own `package.json` version.
  */
 
 import * as fs from "fs/promises";
 import * as path from "path";
+import { fileURLToPath } from "node:url";
+
+const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
+const DOCS_WEBSITE_DIR = path.resolve(SCRIPT_DIR, "..");
+const SDK_PKG_JSON = path.resolve(
+  SCRIPT_DIR,
+  "..",
+  "..",
+  "..",
+  "packages",
+  "sdk",
+  "package.json",
+);
 
 function compareSemverDesc(a: string, b: string): number {
   const aVer = a.replace(/^v/, "").split(".").map(Number);
@@ -29,161 +45,202 @@ function compareSemverDesc(a: string, b: string): number {
   return 0;
 }
 
-async function dirExists(dirPath: string): Promise<boolean> {
-  try {
-    const stat = await fs.stat(dirPath);
-    return stat.isDirectory();
-  } catch {
-    return false;
-  }
-}
-
-async function updateVersionsList(newVersion?: string, latestOverride?: string) {
-  console.log(`📋 Updating versions list...`);
-
-  const versionsFile = path.join(process.cwd(), "src", "lib", "versions.ts");
-  const docsDir = path.join(process.cwd(), "content", "docs");
-
+async function discoverSectionVersions(sectionDir: string): Promise<string[]> {
   let entries;
   try {
-    entries = await fs.readdir(docsDir, { withFileTypes: true });
-  } catch (err) {
-    throw new Error(
-      `Failed to read docs directory: ${docsDir}. Generate docs first.`
-    );
+    entries = await fs.readdir(sectionDir, { withFileTypes: true });
+  } catch {
+    return [];
   }
-
-  const versions = entries
-    .filter((e) => e.isDirectory())
-    .map((e) => e.name)
+  return entries
+    .filter((e) => e.isFile() && e.name.endsWith(".mdx") && e.name !== "index.mdx")
+    .map((e) => e.name.replace(/\.mdx$/, ""))
     .filter((name) => /^v\d+\.\d+\.\d+$/.test(name))
     .sort(compareSemverDesc);
+}
 
-  console.log(`✓ Found ${versions.length} versioned folders:`, versions.join(", ") || "(none)");
-
-  if (newVersion) {
-    const normalized = newVersion.startsWith("v") ? newVersion : `v${newVersion}`;
-    if (!versions.includes(normalized)) {
-      throw new Error(
-        `Version ${normalized} was not found in ${docsDir}. ` +
-        `Did docs:generate-api run successfully for this version?`
-      );
-    }
-    console.log(`✓ Confirmed ${normalized} is present`);
+async function readSdkVersion(): Promise<string> {
+  const raw = await fs.readFile(SDK_PKG_JSON, "utf-8");
+  const pkg = JSON.parse(raw) as { version?: string };
+  if (!pkg.version) {
+    throw new Error(`Could not read version from ${SDK_PKG_JSON}`);
   }
+  return `v${pkg.version}`;
+}
 
-  const hasDevApi = await dirExists(path.join(docsDir, "dev", "sdk", "api"));
-  if (hasDevApi) {
-    console.log(`✓ Found dev/sdk/api/`);
+function buildSectionLiteral(
+  basePath: string,
+  latest: string,
+  olderVersions: string[],
+): string {
+  const lines: string[] = [];
+  lines.push(`{`);
+  lines.push(`  basePath: '${basePath}',`);
+  lines.push(`  latest: '${latest}',`);
+  lines.push(`  versions: [`);
+  lines.push(
+    `    { label: '${latest} (latest)', value: '${latest}', isLatest: true },`,
+  );
+  for (const v of olderVersions) {
+    lines.push(`    { label: '${v}', value: '${v}' },`);
   }
+  lines.push(`  ],`);
+  lines.push(`}`);
+  return lines.join("\n");
+}
 
-  let latestVersion: string;
-  if (latestOverride) {
-    latestVersion = latestOverride.startsWith("v") ? latestOverride : `v${latestOverride}`;
-    console.log(`✓ Using --latest override: ${latestVersion}`);
-  } else if (versions.length > 0) {
-    latestVersion = versions[0];
-  } else {
-    throw new Error(
-      "No version directories found and no --latest override provided."
-    );
-  }
+async function updateVersionsList(latestOverride?: string) {
+  console.log(`📋 Updating versions list...`);
 
-  const versionEntries: string[] = [];
-
-  if (hasDevApi) {
-    versionEntries.push(`  { label: 'dev', value: 'dev', isDev: true },`);
-  }
-
-  versionEntries.push(
-    `  { label: 'latest (${latestVersion})', value: '${latestVersion}', isLatest: true },`
+  const apiDir = path.join(
+    DOCS_WEBSITE_DIR,
+    "content",
+    "docs",
+    "sdk",
+    "api",
+  );
+  const releaseNotesDir = path.join(
+    DOCS_WEBSITE_DIR,
+    "content",
+    "docs",
+    "sdk",
+    "release-notes",
   );
 
-  for (const v of versions) {
-    if (v === latestVersion) continue;
-    versionEntries.push(`  { label: '${v}', value: '${v}' },`);
-  }
+  const latest = latestOverride
+    ? latestOverride.startsWith("v")
+      ? latestOverride
+      : `v${latestOverride}`
+    : await readSdkVersion();
+  console.log(`   Latest: ${latest}`);
 
-  const content = `export interface Version {
+  const apiOlder = await discoverSectionVersions(apiDir);
+  const releaseNotesOlder = await discoverSectionVersions(releaseNotesDir);
+  console.log(
+    `   API older versions: ${apiOlder.join(", ") || "(none)"}`,
+  );
+  console.log(
+    `   Release notes older versions: ${releaseNotesOlder.join(", ") || "(none)"}`,
+  );
+
+  const apiSection = buildSectionLiteral("/sdk/api", latest, apiOlder);
+  const releaseNotesSection = buildSectionLiteral(
+    "/sdk/release-notes",
+    latest,
+    releaseNotesOlder,
+  );
+
+  const content = `/**
+ * Section-scoped version manifest. Only the API summary and the release
+ * notes are versioned in the docs site — everything else (about-qvac,
+ * getting-started, examples, tutorials, addons, cli, http-server) lives at
+ * a single bare path that always reflects the current SDK.
+ *
+ * Each section is a single content folder under \`content/docs/<basePath>/\`:
+ *   - The latest version is served from \`index.mdx\` at the bare basePath.
+ *   - Older versions are served from \`<basePath>/v<X.Y.Z>\` via a sibling
+ *     MDX file (\`v<X.Y.Z>.mdx\`).
+ *
+ * Auto-generated by \`scripts/update-versions-list.ts\` — do not edit by
+ * hand for routine releases.
+ */
+
+export interface VersionEntry {
   label: string;
   value: string;
   isLatest?: boolean;
-  isDev?: boolean;
 }
 
-export const VERSIONS: Version[] = [
-${versionEntries.join("\n")}
+export interface VersionedSection {
+  basePath: string;
+  latest: string;
+  versions: VersionEntry[];
+}
+
+export const API_SECTION: VersionedSection = ${apiSection};
+
+export const RELEASE_NOTES_SECTION: VersionedSection = ${releaseNotesSection};
+
+const VERSIONED_SECTIONS: VersionedSection[] = [
+  API_SECTION,
+  RELEASE_NOTES_SECTION,
 ];
 
-export const LATEST_VERSION = '${latestVersion}';
-
-const VERSION_PREFIX_RE = /^\\/(v\\d+\\.\\d+\\.\\d+|dev)(\\\/|$)/;
+/**
+ * Re-exported for backward compatibility with consumers that advertise the
+ * latest SDK version in plain text (e.g. the \`llms.txt\` route).
+ */
+export const LATEST_VERSION = API_SECTION.latest;
 
 /**
- * Extract the version prefix from a URL pathname.
- * Returns null when on the (latest) version (no prefix in the URL).
- * @example getVersionFromPath('/v0.6.1/sdk/quickstart') → 'v0.6.1'
- * @example getVersionFromPath('/dev/sdk/api')           → 'dev'
- * @example getVersionFromPath('/sdk/quickstart')         → null
+ * Return the versioned section the given pathname falls under, or \`null\`
+ * when the pathname is not within any versioned section.
  */
-export function getVersionFromPath(pathname: string): string | null {
-  return pathname.match(VERSION_PREFIX_RE)?.[1] ?? null;
+export function getVersionedSection(
+  pathname: string,
+): VersionedSection | null {
+  const normalized = pathname.replace(/\\/+$/, '') || '/';
+  return (
+    VERSIONED_SECTIONS.find(
+      (section) =>
+        normalized === section.basePath ||
+        normalized.startsWith(section.basePath + '/'),
+    ) ?? null
+  );
 }
 
 /**
- * Compute the equivalent URL for a different version.
- *
- * - latest → latest (no-op)
- * - latest → v0.6.1: prepend /v0.6.1
- * - v0.6.1 → latest: strip /v0.6.1
- * - v0.6.1 → v0.7.0: replace /v0.6.1 with /v0.7.0
- * - latest → dev: prepend /dev
- * - dev → latest: strip /dev
+ * Extract the current version slug from a versioned-section pathname.
+ * Returns \`section.latest\` when on the bare \`basePath\` (\`index.mdx\`).
  */
-export function computeVersionedUrl(
+export function getCurrentVersion(
   pathname: string,
+  section: VersionedSection,
+): string {
+  const tail = pathname
+    .slice(section.basePath.length)
+    .replace(/^\\/+|\\/+$/g, '');
+  if (!tail) return section.latest;
+  return tail.split('/')[0];
+}
+
+/**
+ * Build the URL to navigate to when the user picks a target version inside
+ * a section. The latest version maps to the bare \`basePath\`; any other
+ * version maps to \`basePath/<value>\`.
+ */
+export function computeSectionVersionUrl(
+  section: VersionedSection,
   targetVersion: string,
 ): string {
-  const currentVersion = getVersionFromPath(pathname);
-  const targetIsLatest = VERSIONS.find(
-    (v) => v.value === targetVersion,
-  )?.isLatest;
-
-  if (currentVersion) {
-    if (targetIsLatest) {
-      return pathname.replace(\`/\${currentVersion}\`, '') || '/';
-    }
-    return pathname.replace(\`/\${currentVersion}\`, \`/\${targetVersion}\`);
-  }
-
-  if (targetIsLatest) return pathname;
-  return \`/\${targetVersion}\${pathname}\`;
+  if (targetVersion === section.latest) return section.basePath;
+  return \`\${section.basePath}/\${targetVersion}\`;
 }
 `;
 
+  const versionsFile = path.join(DOCS_WEBSITE_DIR, "src", "lib", "versions.ts");
   await fs.writeFile(versionsFile, content, "utf-8");
   console.log(`✅ Updated ${versionsFile}`);
-  console.log(`   Latest: ${latestVersion}`);
-  console.log(`   Total entries: ${versionEntries.length}${hasDevApi ? " (including dev)" : ""}`);
 }
 
-// CLI
 const args = process.argv.slice(2);
 
 if (args.includes("--help") || args.includes("-h")) {
-  console.log("Usage: bun run scripts/update-versions-list.ts [version] [--latest=X.Y.Z]");
+  console.log("Usage: bun run scripts/update-versions-list.ts [--latest=X.Y.Z]");
   console.log("");
-  console.log("  version         Optional. Verify this version exists after scan.");
-  console.log("  --latest=X.Y.Z  Override which version is marked as latest");
-  console.log("                  (for deferred versioning where latest has no folder).");
+  console.log(
+    "  --latest=X.Y.Z  Override which version is marked as latest. Defaults",
+  );
+  console.log(
+    "                  to the SDK package.json version.",
+  );
   process.exit(0);
 }
 
 const latestFlag = args.find((a) => a.startsWith("--latest="));
 const latestOverride = latestFlag?.split("=")[1];
-const newVersion = args.find((a) => !a.startsWith("--"));
 
-updateVersionsList(newVersion, latestOverride).catch((error) => {
+updateVersionsList(latestOverride).catch((error) => {
   console.error("❌ Error updating versions list:", error.message);
   if (error.stack) console.error(error.stack);
   process.exit(1);
