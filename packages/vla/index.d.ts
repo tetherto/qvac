@@ -81,7 +81,17 @@ export function preprocessImage (
   pixels: Float32Array | Uint8Array | number[],
   width: number,
   height: number,
-  opts?: { size?: number, layout?: 'hwc' | 'chw' }
+  opts?: {
+    size?: number,
+    layout?: 'hwc' | 'chw',
+    /**
+     * Pixel-range hint that skips the [0,255] vs [0,1] auto-detection
+     * heuristic. Pass `1` if pixels are already in [0,1] (no rescale),
+     * pass `1/255` if pixels are in [0,255] (rescale to [0,1]). Anything
+     * else (including the literal `'auto'`) falls back to the heuristic.
+     */
+    scale?: 1 | (1 / 255) | 'auto'
+  }
 ): Float32Array
 
 export function padState (state: ArrayLike<number>, targetDim?: number): Float32Array
