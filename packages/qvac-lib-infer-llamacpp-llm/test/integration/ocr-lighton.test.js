@@ -25,7 +25,7 @@ const LIGHTON_OCR_CONFIG = {
     modelName: 'mmproj-LightOnOCR-2-F16.gguf',
     downloadUrl: 'https://huggingface.co/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF/resolve/main/mmproj-F16.gguf'
   },
-  ctx_size: '4096'
+  ctx_size: '5120'
 }
 
 const TEST_CONSTANTS = {

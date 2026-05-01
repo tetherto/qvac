@@ -31,6 +31,10 @@ public:
   MtmdLlmContext(MtmdLlmContext&&) = delete;
   MtmdLlmContext& operator=(MtmdLlmContext&&) = delete;
 
+  common_chat_format getLastChatFormat() const override {
+    return lastChatFormat_;
+  }
+
   /**
    * The eval message method. It evaluates the message.
    *
@@ -208,6 +212,8 @@ private:
   common_params params_;
   common_chat_templates_ptr tmpls_;
   std::vector<llama_token> antipromptTokens_;
+  // Last detected chat-template format (for tool_calls extraction).
+  common_chat_format lastChatFormat_ = COMMON_CHAT_FORMAT_CONTENT_ONLY;
 
   mtmd::bitmaps bitmaps_;
   llama_pos nPast_ = 0;

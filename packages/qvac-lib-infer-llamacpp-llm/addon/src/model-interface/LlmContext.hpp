@@ -186,6 +186,17 @@ public:
       const std::function<void(const std::string&)>& outputCallback) = 0;
 
   /**
+   * Returns the chat-template format detected on the most recent
+   * tokenizeChat() call. Used to pick the right common_chat_parse() syntax
+   * when extracting structured tool_calls from the assistant output.
+   * Returns COMMON_CHAT_FORMAT_CONTENT_ONLY if no chat-with-tools has been
+   * processed yet on this context.
+   */
+  virtual common_chat_format getLastChatFormat() const {
+    return COMMON_CHAT_FORMAT_CONTENT_ONLY;
+  }
+
+  /**
    * The stop method. It stops the model inference.
    */
   virtual void stop() = 0;

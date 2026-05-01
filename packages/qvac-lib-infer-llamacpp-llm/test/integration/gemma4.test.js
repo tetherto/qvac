@@ -50,6 +50,18 @@ async function collectResponse (response) {
   return chunks.join('').trim()
 }
 
+function extractToolCalls (response) {
+  const toolCalls = []
+  const toolCallRegex = /<tool_call>([\s\S]*?)<\/tool_call>/g
+  let match
+  while ((match = toolCallRegex.exec(response)) !== null) {
+    try {
+      toolCalls.push(JSON.parse(match[1].trim()))
+    } catch (e) {}
+  }
+  return toolCalls
+}
+
 test('Gemma 4 can run basic text inference', {
   timeout: 1_800_000
 }, async t => {
@@ -219,6 +231,75 @@ test('Gemma 4 can describe an image', {
     t.ok(/elephant/.test(lowerOutput), `output mentions elephant: "${output.slice(0, 100)}"`)
   } finally {
     await inference.unload().catch(() => {})
+    await loader.close().catch(() => {})
+  }
+})
+
+test('Gemma 4 supports tool calling', {
+  timeout: 600_000
+}, async t => {
+  const [modelName, dirPath] = await ensureModel({
+    modelName: GEMMA4_MODEL.llmModel.modelName,
+    downloadUrl: GEMMA4_MODEL.llmModel.downloadUrl
+  })
+
+  const loader = new FilesystemDL({ dirPath })
+  const config = {
+    device: useCpu ? 'cpu' : 'gpu',
+    gpu_layers: '999',
+    ctx_size: '4096',
+    n_predict: '512',
+    temp: '0.1',
+    seed: '42',
+    verbosity: '2',
+    tools: 'true'
+  }
+
+  const addon = new LlmLlamacpp({
+    loader,
+    modelName,
+    diskPath: dirPath,
+    logger: createLogger(),
+    opts: { stats: true }
+  }, config)
+
+  try {
+    await addon.load()
+
+    const prompt = [
+      { role: 'system', content: 'You are a helpful assistant that uses tools when appropriate.' },
+      {
+        type: 'function',
+        name: 'get_weather',
+        description: 'Get the current weather for a city',
+        parameters: {
+          type: 'object',
+          properties: {
+            city: { type: 'string', description: 'Name of the city' },
+            unit: { type: 'string', enum: ['celsius', 'fahrenheit'], description: 'Temperature unit' }
+          },
+          required: ['city']
+        }
+      },
+      { role: 'user', content: 'What is the weather in Paris in celsius?' }
+    ]
+
+    const response = await addon.run(prompt)
+    const output = await collectResponse(response)
+
+    t.ok(output.length > 0, `tool calling produced output (${output.length} chars)`)
+    console.log(`  output: "${output.slice(0, 300)}"`)
+
+    const toolCalls = extractToolCalls(output)
+    t.ok(toolCalls.length > 0, `extracted at least one tool call (got ${toolCalls.length})`)
+
+    const weatherCall = toolCalls.find(tc => tc.name === 'get_weather')
+    t.ok(weatherCall, 'model called get_weather tool')
+    t.ok(weatherCall?.arguments, 'tool call has arguments')
+    const city = weatherCall?.arguments?.city?.toLowerCase() || ''
+    t.ok(/paris/.test(city), `tool call city argument mentions Paris: "${city}"`)
+  } finally {
+    await addon.unload().catch(() => {})
     await loader.close().catch(() => {})
   }
 })
