@@ -259,13 +259,9 @@ struct ggml_tensor* build_denoise_step_graph(
     struct ggml_tensor* cross_pos_ids, struct ggml_tensor* cross_attn_mask,
     struct ggml_tensor* self_attn_mask);
 
-// Sinusoidal time embedding (exposed for testing)
-void compute_sinusoidal_time_embedding(
-    float timestep, int dimension, float min_period, float max_period,
-    float* out);
-
-// Fast variant that uses a precomputed `1/period` table (size = dimension/2).
-// `out` must be sized `dimension`. Used on the ODE hot path.
+// Sinusoidal time embedding using a precomputed `1/period` table
+// (size = dimension/2). `out` must be sized `dimension`. Used on the
+// ODE hot path.
 void compute_sinusoidal_time_embedding_cached(
     float timestep, const float* inv_periods, int dimension, float* out);
 
@@ -273,78 +269,19 @@ void compute_sinusoidal_time_embedding_cached(
 extern "C" {
 #endif
 
-// Opaque handle for use from C/Python
-typedef void* smolvla_handle_t;
-
-// Create and load model, return opaque handle
-smolvla_handle_t smolvla_create(const char* model_path);
-
-// Run inference using opaque handle
-bool smolvla_run(
-    smolvla_handle_t handle, const float** images, int n_images, int img_width,
-    int img_height, const float* state, int state_dim,
-    const int32_t* lang_tokens, const bool* lang_mask, int lang_len,
-    const float*
-        noise, // ODE initial noise (chunk_size*max_action_dim), NULL=random
-    float* actions_out, int* n_actions_out);
-
-// Free model using opaque handle
-void smolvla_destroy(smolvla_handle_t handle);
-
-// Load model from GGUF file (C++ API).
-// `force_cpu`: when true, skip GPU device selection and run on the CPU backend
-// only. Used by the integration test to compare CPU vs GPU on the same runner.
+// Load model from GGUF file. `force_cpu`: when true, skip GPU device
+// selection and run on the CPU backend only. Used by the integration
+// test to compare CPU vs GPU on the same runner.
 bool smolvla_load_model(const char* path, smolvla_model* model, bool force_cpu);
 
 // Free model resources
 void smolvla_free_model(smolvla_model* model);
 
-// Run SigLIP vision encoder on a single image
-// image_data: RGB float pixels [0,1], shape (3, H, W)
-// output: (tokens_per_image, text_hidden_size) = (64, 960)
-struct ggml_tensor* siglip_encode(
-    smolvla_model& model, const float* image_data, int width, int height,
-    struct ggml_context* ctx_compute);
-
-// Run SmolLM2 forward pass (first 16 layers)
-// Builds KV cache from visual + language + state tokens
-void smollm2_forward(
-    smolvla_model& model,
-    struct ggml_tensor* visual_tokens, // (B, n_visual, 960)
-    const int32_t* lang_token_ids,     // (B, seq_len)
-    const bool* lang_mask,             // (B, seq_len)
-    const float* state,                // (B, state_dim)
-    int batch_size, smolvla_kv_cache& kv_cache,
-    struct ggml_context* ctx_compute);
-
-// Run action expert with flow matching (10 ODE steps)
-// Returns action predictions
-// output: (B, chunk_size, action_dim) = (1, 50, 6)
-void action_expert_forward(
-    smolvla_model& model, smolvla_kv_cache& kv_cache, int prefix_len,
-    int batch_size,
-    float* actions_out, // output buffer (B * chunk_size * action_dim)
-    struct ggml_context* ctx_compute);
-
-// Full pipeline: image(s) + state + instruction -> actions
-// This is the main entry point
-bool smolvla_inference(
-    smolvla_model* model,
-    const float** images, // array of N_IMAGES pointers to RGB float data
-    int n_images, int img_width, int img_height,
-    const float* state, // state vector (state_dim,)
-    int state_dim,
-    const int32_t* lang_tokens, // tokenized instruction
-    const bool* lang_mask, int lang_len,
-    const float* noise,  // ODE initial noise, NULL=random
-    float* actions_out,  // output: (chunk_size * action_dim)
-    int* n_actions_out); // output: number of action steps
-
 #ifdef __cplusplus
 }
 
-// Per-stage wall-clock timing captured during a single `smolvla_inference`
-// call. All values are milliseconds.
+// Per-stage wall-clock timing captured during a single inference call.
+// All values are milliseconds.
 struct smolvla_timing {
   double vision_ms = 0.0;
   double smollm2_compute_ms = 0.0;
@@ -353,9 +290,8 @@ struct smolvla_timing {
   double total_ms = 0.0;
 };
 
-// Same as `smolvla_inference` but populates `timing_out` (if non-null) with
-// per-stage timings.  C++-only; keeps the extern "C" ABI stable for the
-// ctypes-based Python wrapper in smolvla-ggml.
+// Full pipeline: image(s) + state + instruction -> actions. If
+// `timing_out` is non-null, populates it with per-stage timings.
 bool smolvla_inference_with_timing(
     smolvla_model* model, const float** images, int n_images, int img_width,
     int img_height, const float* state, int state_dim,
