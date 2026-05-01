@@ -12,8 +12,8 @@
 #include "WhisperTypes.hpp"
 #include "addon/WhisperErrors.hpp"
 #include "model-interface/StreamingProcessor.hpp"
-#include "qvac-lib-inference-addon-cpp/queue/OutputCallbackInterface.hpp"
-#include "qvac-lib-inference-addon-cpp/queue/OutputQueue.hpp"
+#include "inference-addon-cpp/queue/OutputCallbackInterface.hpp"
+#include "inference-addon-cpp/queue/OutputQueue.hpp"
 #include "whisper.cpp/WhisperConfig.hpp"
 #include "whisper.cpp/WhisperModel.hpp"
 

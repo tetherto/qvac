@@ -5,7 +5,7 @@
 #include <utility>
 
 #include <nlohmann/json.hpp>
-#include <qvac-lib-inference-addon-cpp/Errors.hpp>
+#include <inference-addon-cpp/Errors.hpp>
 
 #include "addon/LlmErrors.hpp"
 #include "common/json-schema-to-grammar.h"

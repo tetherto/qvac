@@ -1,7 +1,7 @@
 #include <bare.h>
 #include <js.h>
 
-#include "qvac-lib-inference-addon-cpp/JsUtils.hpp"
+#include "inference-addon-cpp/JsUtils.hpp"
 
 namespace {
 

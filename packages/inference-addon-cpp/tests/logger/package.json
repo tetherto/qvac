@@ -39,5 +39,5 @@
     "cmake-bare": "^1.5.2",
     "standard": "^17.0.0"
   },
-  "bugs": "https://github.com/tetherto/qvac-lib-inference-addon-cpp/issues"
+  "bugs": "https://github.com/tetherto/inference-addon-cpp/issues"
 }

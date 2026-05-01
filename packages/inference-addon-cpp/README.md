@@ -25,7 +25,7 @@ This library sits between the Bare runtime and specific inference addons. Commun
 - [translation-nmtcpp](https://github.com/tetherto/translation-nmtcpp) - Neural translation
 - [tts-onnx](https://github.com/tetherto/tts-onnx) - Text-to-speech
 - [embed-llamacpp](https://github.com/tetherto/embed-llamacpp) - Embeddings
-- [qvac-lib-inference-addon-onnx-ocr-fasttext](https://github.com/tetherto/qvac-lib-inference-addon-onnx-ocr-fasttext) - OCR
+- [inference-addon-onnx-ocr-fasttext](https://github.com/tetherto/inference-addon-onnx-ocr-fasttext) - OCR
 
 ## Table of Contents
 
@@ -336,7 +336,7 @@ Production addons built on this library:
 - [translation-nmtcpp](https://github.com/tetherto/translation-nmtcpp) - Neural translation
 - [tts-onnx](https://github.com/tetherto/tts-onnx) - Text-to-speech
 - [embed-llamacpp](https://github.com/tetherto/embed-llamacpp) - Embeddings
-- [qvac-lib-inference-addon-onnx-ocr-fasttext](https://github.com/tetherto/qvac-lib-inference-addon-onnx-ocr-fasttext) - OCR
+- [inference-addon-onnx-ocr-fasttext](https://github.com/tetherto/inference-addon-onnx-ocr-fasttext) - OCR
 
 ### Dependencies
 

@@ -187,7 +187,7 @@ endif()
 ```cmake
 if((ANDROID OR (APPLE AND CMAKE_SYSTEM_NAME STREQUAL "iOS")) AND NOT MOBILE_DYNAMIC_LINK)
   target_link_libraries(
-    ${qvac-lib-inference-addon-onnx-ocr-fasttext}
+    ${inference-addon-onnx-ocr-fasttext}
     PRIVATE
       ${OpenCV_LIBS}
       qvac-onnx::qvac-onnx-static
@@ -196,13 +196,13 @@ else()
   include_bare_module("@qvac/onnx" qvac_onnx_target PREBUILD)
 
   target_link_libraries(
-    ${qvac-lib-inference-addon-onnx-ocr-fasttext}
+    ${inference-addon-onnx-ocr-fasttext}
     PRIVATE
       ${OpenCV_LIBS}
       qvac-onnx::headers
   )
   target_link_libraries(
-    ${qvac-lib-inference-addon-onnx-ocr-fasttext}_module
+    ${inference-addon-onnx-ocr-fasttext}_module
     PRIVATE
       ${qvac_onnx_target}_module
   )

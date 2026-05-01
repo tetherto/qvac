@@ -106,7 +106,7 @@ graph TB
         NMT[translation-nmtcpp]
         TTS[tts-onnx]
         EMBED[embed-llamacpp]
-        OCR[qvac-lib-inference-addon-onnx-ocr-fasttext]
+        OCR[inference-addon-onnx-ocr-fasttext]
     end
     
     subgraph "Native Compute"
@@ -149,7 +149,7 @@ graph TB
 | Addons | translation-nmtcpp | Neural machine translation |
 | Addons | tts-onnx | Text-to-speech using ONNX |
 | Addons | embed-llamacpp | Text embeddings using llama.cpp |
-| Addons | qvac-lib-inference-addon-onnx-ocr-fasttext | OCR using ONNX |
+| Addons | inference-addon-onnx-ocr-fasttext | OCR using ONNX |
 | Backend | CPU/GPU Inference Backends | Native ML computation |
 
 **Data Flow:** Application → Bare → addon-cpp → Specific Addon → CPU/GPU Backend
@@ -164,7 +164,7 @@ Production addons built on this library:
 - **translation-nmtcpp** - Neural machine translation
 - **tts-onnx** - Text-to-speech using ONNX
 - **embed-llamacpp** - Text embeddings using llama.cpp
-- **qvac-lib-inference-addon-onnx-ocr-fasttext** - OCR using ONNX and FastText
+- **inference-addon-onnx-ocr-fasttext** - OCR using ONNX and FastText
 
 ---
 

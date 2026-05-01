@@ -1,13 +1,13 @@
 find_package(GTest REQUIRED)
 
-add_executable(qvac-lib-inference-tts-unit-test)
+add_executable(inference-tts-unit-test)
 
 # collect all sources from src and mocks directories
 file(GLOB_RECURSE TEST_SOURCES "${CMAKE_SOURCE_DIR}/addon/test/unit/src/*")
 file(GLOB_RECURSE TEST_MOCKS "${CMAKE_SOURCE_DIR}/addon/test/unit/mocks/*")
 
 target_sources(
-  qvac-lib-inference-tts-unit-test
+  inference-tts-unit-test
   PRIVATE
     ${CMAKE_SOURCE_DIR}/addon/src/model-interface/TTSModel.cpp
     ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ChatterboxEngine.cpp
@@ -27,7 +27,7 @@ target_sources(
 )
 
 target_include_directories(
-  qvac-lib-inference-tts-unit-test
+  inference-tts-unit-test
   PRIVATE
     ${CMAKE_SOURCE_DIR}/addon
     ${CMAKE_SOURCE_DIR}/addon/test/unit/
@@ -52,7 +52,7 @@ else()
 endif()
 
 target_link_libraries(
-  qvac-lib-inference-tts-unit-test
+  inference-tts-unit-test
   PRIVATE
     qvac-onnx::headers
     ${QVAC_TTS_TEST_ORT_TARGET}
@@ -66,7 +66,7 @@ target_link_libraries(
 
 if(WIN32)
   target_link_libraries(
-    qvac-lib-inference-tts-unit-test
+    inference-tts-unit-test
     PRIVATE
       msvcrt.lib
   )
@@ -83,8 +83,8 @@ if(ENABLE_COVERAGE)
   if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
     message("Enabling coverage instrumentation")
 
-    target_compile_options(qvac-lib-inference-tts-unit-test PRIVATE -fprofile-instr-generate -fcoverage-mapping)
-    target_link_options(qvac-lib-inference-tts-unit-test PRIVATE -fprofile-instr-generate)
+    target_compile_options(inference-tts-unit-test PRIVATE -fprofile-instr-generate -fcoverage-mapping)
+    target_link_options(inference-tts-unit-test PRIVATE -fprofile-instr-generate)
 
   else()
     message(WARNING "ENABLE_COVERAGE is not supported.")

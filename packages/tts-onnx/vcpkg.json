@@ -1,5 +1,5 @@
 {
-  "name": "qvac-lib-inference-tts",
+  "name": "inference-tts",
   "version": "0.0.1",
   "dependencies": [
     {

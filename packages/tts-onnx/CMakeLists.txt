@@ -112,7 +112,7 @@ if(APPLE)
   SET(VCPKG_OVERLAY_PORTS "vcpkg-overlay-ports")
 endif()
 
-project(qvac-lib-inference-tts C CXX)
+project(inference-tts C CXX)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   add_compile_options(-stdlib=libc++)
@@ -139,14 +139,14 @@ else()
   message(FATAL_ERROR "utf8proc CMake target missing (expected from unofficial-utf8proc)")
 endif()
 
-add_bare_module(qvac-lib-inference-tts EXPORTS)
+add_bare_module(inference-tts EXPORTS)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  target_link_options(${qvac-lib-inference-tts}_module PRIVATE -Wl,--exclude-libs,ALL)
+  target_link_options(${inference-tts}_module PRIVATE -Wl,--exclude-libs,ALL)
 endif()
 
 target_sources(
-  ${qvac-lib-inference-tts}
+  ${inference-tts}
   PRIVATE
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TTSModel.cpp
@@ -168,7 +168,7 @@ find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/Runtime
 find_package(tokenizers_cpp CONFIG REQUIRED)
 
 target_include_directories(
-  ${qvac-lib-inference-tts}
+  ${inference-tts}
   PRIVATE
     ${PROJECT_SOURCE_DIR}/addon
     ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
@@ -188,7 +188,7 @@ endfunction()
 
 if(ANDROID)
   find_package(Vulkan REQUIRED)
-  target_link_libraries(${qvac-lib-inference-tts} PRIVATE ${Vulkan_LIBRARY})
+  target_link_libraries(${inference-tts} PRIVATE ${Vulkan_LIBRARY})
   
   # Strip vcpkg installed binaries for Android builds
   find_program(LLVM_STRIP llvm-strip)
@@ -208,7 +208,7 @@ endif()
 
 if((ANDROID OR (APPLE AND CMAKE_SYSTEM_NAME STREQUAL "iOS")) AND NOT MOBILE_DYNAMIC_LINK)
   target_link_libraries(
-    ${qvac-lib-inference-tts}
+    ${inference-tts}
     PRIVATE
       qvac-onnx::qvac-onnx-static
       tokenizers::tokenizers_cpp
@@ -219,7 +219,7 @@ else()
   include_bare_module("@qvac/onnx" qvac_onnx_target PREBUILD)
 
   target_link_libraries(
-    ${qvac-lib-inference-tts}
+    ${inference-tts}
     PRIVATE
       qvac-onnx::headers
       tokenizers::tokenizers_cpp
@@ -227,7 +227,7 @@ else()
       ${QVAC_UTF8PROC_TARGET}
   )
   target_link_libraries(
-    ${qvac-lib-inference-tts}_module
+    ${inference-tts}_module
     PRIVATE
       ${qvac_onnx_target}_module
   )
@@ -241,21 +241,21 @@ endif()
 
 if(APPLE)
   set_target_properties(
-    ${qvac-lib-inference-tts}
+    ${inference-tts}
     PROPERTIES
       BUILD_RPATH "@loader_path"
       INSTALL_RPATH "@loader_path"
       MACOSX_RPATH ON
   )
   target_link_options(
-    ${qvac-lib-inference-tts}
+    ${inference-tts}
     PRIVATE "-Wl,-rpath,@loader_path"
   )
 endif()
 
 if(WIN32)
   target_link_libraries(
-    ${qvac-lib-inference-tts}
+    ${inference-tts}
     PRIVATE
       msvcrt.lib
   )
@@ -263,21 +263,21 @@ endif()
 
 if(UNIX AND NOT APPLE)
   target_link_options(
-    ${qvac-lib-inference-tts}_module
+    ${inference-tts}_module
     PRIVATE
       -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/symbols.map
   )
 elseif(APPLE)
   # macOS uses -exported_symbols_list instead of version script
   target_link_options(
-    ${qvac-lib-inference-tts}_module
+    ${inference-tts}_module
     PRIVATE
       -Wl,-exported_symbol,_bare_get_module_name_v0
       -Wl,-exported_symbol,_bare_register_module_v0
   )
 endif()
 
-target_compile_definitions(${qvac-lib-inference-tts} PUBLIC JS_LOGGER)
+target_compile_definitions(${inference-tts} PUBLIC JS_LOGGER)
 
 if(BUILD_TESTING)
   find_package(GTest CONFIG REQUIRED)

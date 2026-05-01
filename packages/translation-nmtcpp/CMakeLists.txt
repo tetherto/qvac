@@ -215,7 +215,7 @@ endif()
 
 if(USE_OPENCL)
   target_compile_definitions(
-    ${qvac-lib-infer-nmtcpp}
+    ${infer-nmtcpp}
     PRIVATE
       QVAC_NMTCPP_USE_OPENCL
   )

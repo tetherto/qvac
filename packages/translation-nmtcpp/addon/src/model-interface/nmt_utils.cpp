@@ -14,7 +14,7 @@
 #endif
 
 #include "nmt.hpp"
-#include "qvac-lib-inference-addon-cpp/Logger.hpp"
+#include "inference-addon-cpp/Logger.hpp"
 
 // Get optimal number of threads for computation
 // Optimized for GitHub runners (typically 2 CPUs) and other environments

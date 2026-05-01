@@ -17,7 +17,7 @@ find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
 set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 
-project(qvac-lib-inference-addon-llama C CXX)
+project(inference-addon-llama C CXX)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   add_compile_options(-stdlib=libc++)
@@ -47,7 +47,7 @@ endif()
 bare_target(bare_target_value)
 bare_module_target("." unused_target NAME module_name VERSION unused_version)
 set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/${module_name}")
-message("Building qvac-lib-inference-addon-llama with BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VALUE}'")
+message("Building inference-addon-llama with BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VALUE}'")
 
 # Install dynamic libs to prebuild folder
 set(BACKEND_DL_LIBS "")
@@ -57,10 +57,10 @@ if((ANDROID OR UNIX) AND NOT APPLE)
   endforeach()
 endif()
 
-add_bare_module(qvac-lib-inference-addon-llama EXPORTS ${BACKEND_DL_LIBS})
+add_bare_module(inference-addon-llama EXPORTS ${BACKEND_DL_LIBS})
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  target_link_options(${qvac-lib-inference-addon-llama}_module PRIVATE -Wl,--exclude-libs,ALL)
+  target_link_options(${inference-addon-llama}_module PRIVATE -Wl,--exclude-libs,ALL)
 endif()
 
   set(ADDON_SOURCES
@@ -88,19 +88,19 @@ endif()
   )
 
   target_sources(
-    ${qvac-lib-inference-addon-llama}
+    ${inference-addon-llama}
     PRIVATE
       ${ADDON_SOURCES}
   )
   target_include_directories(
-    ${qvac-lib-inference-addon-llama}
+    ${inference-addon-llama}
     PRIVATE
       ${PICOJSON_INCLUDE_DIRS}
       ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
       ${PROJECT_SOURCE_DIR}/addon/src
   )
   target_link_libraries(
-    ${qvac-lib-inference-addon-llama}
+    ${inference-addon-llama}
     PRIVATE
       llama::llama
       llama::common
@@ -109,8 +109,8 @@ endif()
   )
 
 
-target_compile_definitions(${qvac-lib-inference-addon-llama} PUBLIC JS_LOGGER)
-target_compile_definitions(${qvac-lib-inference-addon-llama} PRIVATE BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}")
+target_compile_definitions(${inference-addon-llama} PUBLIC JS_LOGGER)
+target_compile_definitions(${inference-addon-llama} PRIVATE BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}")
 
 # Option to build CLI
 option(BUILD_CLI "Build CLI tool example" FALSE)
@@ -183,7 +183,7 @@ endif()
 
 if(WIN32)
   target_link_libraries(
-    ${qvac-lib-inference-addon-llama}
+    ${inference-addon-llama}
     PRIVATE
       msvcrt.lib
   )

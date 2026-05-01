@@ -37,7 +37,7 @@ MOCK_CONFIG = {
     },
     "vad": {
         "enabled": True,
-        "lib": "@tetherto/qvac-lib-inference-addon-onnx-silerovad",
+        "lib": "@tetherto/inference-addon-onnx-silerovad",
         "version": "0.4.3",
     },
 }
@@ -54,7 +54,7 @@ def test_loads_valid_config(tmp_path):
     assert cfg.wer.enabled is True
     assert cfg.cer.enabled is True
     assert cfg.vad.enabled is True
-    assert cfg.vad.lib == "@tetherto/qvac-lib-inference-addon-onnx-silerovad"
+    assert cfg.vad.lib == "@tetherto/inference-addon-onnx-silerovad"
     assert cfg.vad.version == "0.4.3"
 
 
@@ -123,7 +123,7 @@ def test_config_from_yaml():
     assert cfg.wer.enabled is True
     assert cfg.cer.enabled is True
     assert cfg.vad.enabled is False
-    assert cfg.vad.lib == "@tetherto/qvac-lib-inference-addon-onnx-silerovad"
+    assert cfg.vad.lib == "@tetherto/inference-addon-onnx-silerovad"
     assert cfg.vad.version == "0.4.3"
 
 

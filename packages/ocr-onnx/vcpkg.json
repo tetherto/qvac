@@ -1,5 +1,5 @@
 {
-  "name": "qvac-lib-inference-addon-onnx-ocr-fasttext",
+  "name": "inference-addon-onnx-ocr-fasttext",
   "version": "0.1.14",
   "dependencies": [
     {

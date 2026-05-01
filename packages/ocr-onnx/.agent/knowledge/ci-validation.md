@@ -31,7 +31,7 @@ Each addon has a full suite of per-package workflows:
 
 ### SDK Pod (TypeScript packages)
 
-Packages: `qvac-sdk`, `qvac-cli`, `qvac-lib-rag`, `qvac-lib-logging`, `qvac-lib-error-base`, `docs`
+Packages: `qvac-sdk`, `qvac-cli`, `rag`, `logging`, `error-base`, `docs`
 
 | Workflow | File | Purpose |
 |----------|------|---------|
@@ -44,7 +44,7 @@ Packages: `qvac-sdk`, `qvac-cli`, `qvac-lib-rag`, `qvac-lib-logging`, `qvac-lib-
 
 ### Simple Libraries with Unit Tests
 
-Packages: `qvac-lib-logging`, `qvac-lib-error-base`
+Packages: `logging`, `error-base`
 
 These have unit tests (`npm run test:unit`) but use simple publish workflows for CI.
 
