@@ -1,0 +1,32 @@
+name: Benchmark RTF (ONNX TTS)
+
+# Stub workflow registered on `main` so that `workflow_dispatch` shows up in
+# the GitHub Actions UI and `gh workflow run` can target this filename.
+#
+# The full orchestrator (context -> prebuild -> desktop-benchmarks -> summarize)
+# is being added under PR #1677 (QVAC-17092). Once that PR merges, this stub
+# is replaced by the real workflow. Until then, dispatching this workflow
+# with `--ref <branch>` runs the *branch's* version of the YAML, not this
+# stub — that is exactly what we need to validate the orchestrator on a
+# feature branch before it merges into main.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref (branch/tag/SHA) to benchmark"
+        required: false
+
+jobs:
+  noop:
+    name: Stub - real orchestrator lives on QVAC-17092 branch
+    runs-on: ubuntu-latest
+    steps:
+      - name: Explain
+        run: |
+          echo "This is a stub on main. The real benchmark orchestrator"
+          echo "is wired in PR #1677 (QVAC-17092)."
+          echo ""
+          echo "To run the real benchmark, dispatch this workflow with"
+          echo "  --ref QVAC-17092-Benchmark-performance-of-chatterbox-model"
+          echo "or pick that branch in the GitHub Actions 'Run workflow' UI."

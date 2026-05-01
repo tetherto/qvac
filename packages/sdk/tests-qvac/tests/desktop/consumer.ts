@@ -69,6 +69,7 @@ import { DesktopDiffusionExecutor } from "./executors/diffusion-executor.js";
 import { FinetuneExecutor } from "./executors/finetune-executor.js";
 import { LifecycleExecutor } from "../shared/executors/lifecycle-executor.js";
 import { ConfigExecutor } from "../shared/executors/config-executor.js";
+import { NoLingeringBareExecutor } from "./executors/no-lingering-bare-executor.js";
 
 const resources = new ResourceManager();
 
@@ -118,6 +119,12 @@ resources.define("tools", {
   constant: QWEN3_1_7B_INST_Q4,
   type: "llm",
   config: { ctx_size: 4096, tools: true },
+});
+
+resources.define("tools-dynamic", {
+  constant: QWEN3_1_7B_INST_Q4,
+  type: "llm",
+  config: { ctx_size: 4096, tools: true, toolsMode: "dynamic" },
 });
 
 resources.define("ocr", {
@@ -369,6 +376,7 @@ export const executor = createExecutor({
     new FinetuneExecutor(resources),
     new LifecycleExecutor(resources),
     new ConfigExecutor(),
+    new NoLingeringBareExecutor(),
   ],
   profiling: {
     init: () => profiler.enable({ mode: "summary", includeServerBreakdown: true }),

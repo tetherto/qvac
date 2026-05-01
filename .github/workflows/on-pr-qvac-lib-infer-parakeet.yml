@@ -202,11 +202,65 @@ jobs:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
 
+  combine-unified-performance-report:
+    needs: [context, run-integration-tests, run-mobile-integration-tests]
+    if: always() && (needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.event_name == 'pull_request_target' && needs.context.outputs.base_sha || github.sha }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Download desktop RTF artifacts
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: rtf-results-*
+          path: benchmark-artifacts/desktop
+          merge-multiple: true
+
+      - name: Download mobile performance artifacts
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: perf-report-parakeet-*
+          path: benchmark-artifacts/mobile
+          merge-multiple: false
+
+      - name: Generate unified Parakeet performance report
+        run: |
+          node scripts/perf-report/aggregate-parakeet-rtf.js \
+            --dir benchmark-artifacts \
+            --manual-dir packages/qvac-lib-infer-parakeet/benchmarks/manual-results \
+            --output benchmark-artifacts/parakeet-unified-performance-report.md \
+            --output-json benchmark-artifacts/parakeet-unified-performance-report.json \
+            --output-html benchmark-artifacts/parakeet-unified-performance-report.html
+
+      - name: Add unified performance summary
+        run: |
+          node -e "process.stdout.write(require('fs').readFileSync('benchmark-artifacts/parakeet-unified-performance-report.md', 'utf8'))" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload unified Parakeet performance report
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: parakeet-unified-performance-report
+          path: |
+            benchmark-artifacts/parakeet-unified-performance-report.md
+            benchmark-artifacts/parakeet-unified-performance-report.json
+            benchmark-artifacts/parakeet-unified-performance-report.html
+          retention-days: 30
+
   merge-guard:
-    needs: [authorize, sanity-checks, cpp-lint, cpp-tests-coverage, prebuild, run-integration-tests, run-mobile-integration-tests]
+    needs: [authorize, sanity-checks, cpp-lint, cpp-tests-coverage, prebuild, run-integration-tests, run-mobile-integration-tests, combine-unified-performance-report]
     if: always()
     uses: ./.github/workflows/public-pr.yml
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.cpp-tests-coverage.result == 'success' || needs.cpp-tests-coverage.result == 'skipped') }}
       build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' }}
-      integration-tests-status: ${{ (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') && (needs.run-mobile-integration-tests.result == 'success' || needs.run-mobile-integration-tests.result == 'skipped') }}
+      integration-tests-status: ${{ (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') && (needs.run-mobile-integration-tests.result == 'success' || needs.run-mobile-integration-tests.result == 'skipped') && (needs.combine-unified-performance-report.result == 'success' || needs.combine-unified-performance-report.result == 'skipped') }}

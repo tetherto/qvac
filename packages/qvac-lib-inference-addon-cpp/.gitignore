@@ -2,6 +2,15 @@
 .vs/
 build/
 package-lock.json
+node_modules/
+
+tests/integration_js/*/build/
+tests/integration_js/*/prebuilds/
+tests/integration_js/*/node_modules/
+tests/integration_js/*/package-lock.json
+tests/integration_js/*/.clang-format
+tests/integration_js/*/.clang-tidy
+tests/integration_js/*/.valgrind.supp
 
 # Added by qvac-lint-cpp
 .clang-format

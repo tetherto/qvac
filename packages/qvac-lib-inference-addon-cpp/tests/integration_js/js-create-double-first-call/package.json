@@ -1,0 +1,30 @@
+{
+  "name": "test-js-create-double-first-call",
+  "version": "0.1.0",
+  "addon": true,
+  "scripts": {
+    "build": "bare-make generate && bare-make build && bare-make install",
+    "lint": "standard",
+    "test": "bare test.js"
+  },
+  "files": [
+    "binding.js",
+    "index.js",
+    "prebuilds"
+  ],
+  "exports": {
+    "./package": "./package.json",
+    ".": "./index.js"
+  },
+  "repository": {
+    "type": "git"
+  },
+  "author": "Tether",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "brittle": "^3.16.3",
+    "cmake-bare": "^1.5.2",
+    "standard": "^17.0.0"
+  },
+  "bugs": "https://github.com/tetherto/qvac-lib-inference-addon-cpp/issues"
+}

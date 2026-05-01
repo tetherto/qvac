@@ -58,8 +58,8 @@ export const delegatedConnectionFailure = createDelegatedTest(
   15000, undefined, ["smoke"],
 );
 
-export const delegatedInvalidTopic = createDelegatedTest(
-  "delegated-invalid-topic", {}, { validation: "throws-error", errorContains: "" }, 5000,
+export const delegatedInvalidProviderKey = createDelegatedTest(
+  "delegated-invalid-provider-key", {}, { validation: "throws-error", errorContains: "" }, 5000,
 );
 
 export const delegatedProviderNotFound = createDelegatedTest(
@@ -103,7 +103,7 @@ export const delegatedInferenceTests = [
   delegatedHeartbeatProvider,
   delegatedCancelDownload,
   delegatedConnectionFailure,
-  delegatedInvalidTopic,
+  delegatedInvalidProviderKey,
   delegatedProviderNotFound,
   delegatedE2ECompletion,
   delegatedE2EStreaming,

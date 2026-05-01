@@ -21,6 +21,7 @@ import { TranslationFailedError } from "@/utils/errors-client";
  * @param params.from - Source language code (optional)
  * @param params.to - Target language code
  * @param params.stream - Whether to stream tokens (true) or return complete response (false). Defaults to true.
+ * @param options - Optional RPC options (timeout, profiling, force new connection, etc.).
  * @returns Object with tokenStream generator and text/stats properties
  * @throws {QvacErrorBase} When translation fails with an error message or when language detection fails
  * @example
@@ -80,7 +81,7 @@ export function translate(
     ...(isLlm && {
       from: sourceLanguage,
     }),
-  } as TranslateRequest;
+  };
 
   let stats: TranslationStats | undefined;
   let statsResolver: (value: TranslationStats | undefined) => void = () => {};
