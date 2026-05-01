@@ -18,14 +18,18 @@ Generate PR titles and descriptions for SDK pod packages, following the team's t
 
 ## Workflow
 
-1. Identify base (main) and current branch
-2. Collect commits/diff from `main...origin/<branch>`
-3. Infer ticket, prefix, and tags from changes (see Inference Strategy)
-4. Only ask user for input when inference confidence is low
-5. Generate title: `TICKET prefix[tags]: subject`
-6. Fill template sections based on changes
-7. Validate tag requirements ([bc]/[api]/[mod])
-8. Output complete PR description
+1. Identify base and current branch:
+   - **Normal PR** → base is `main`
+   - **Release PR** → base is `release-<package>-<version>` (PR is the release commit on the release branch)
+   - **Backmerge PR** → base is `main`, head is `release-<package>-<version>` (or a hand-crafted branch with the release-branch artifacts)
+2. Collect commits/diff from `<base>...origin/<branch>`
+3. Determine PR shape (normal / release / backmerge — see "Release & Backmerge PRs" below)
+4. Infer ticket, prefix, and tags from changes (see Inference Strategy)
+5. Only ask user for input when inference confidence is low
+6. Generate title using the right format for the PR shape
+7. Fill template sections based on changes
+8. Validate tag requirements ([bc]/[api]/[mod])
+9. Output complete PR description
 
 ## Inference Strategy
 
@@ -62,6 +66,61 @@ Infer first, ask only if uncertain:
 - **PR body template**: See `.github/PULL_REQUEST_TEMPLATE/sdk-pod.md`
 
 Fill template sections based on the diff analysis. Delete sections that don't apply.
+
+## Release & Backmerge PRs
+
+The standard format `TICKET prefix[tags]: subject` covers normal feature/fix PRs. The release flow has two additional PR shapes that follow established conventions in this repo. **Pick the shape first**, then fill in the template.
+
+### Release PR (fork → release branch)
+
+Cuts a new package version onto a `release-<package>-<version>` branch on `tetherto/qvac`. Bumps `package.json` version, adds the per-version changelog folder, and prepends an entry to the aggregated `CHANGELOG.md`. Merging this PR triggers GPR publish.
+
+**Title format:**
+
+- With ticket: `TICKET chore: release <package> <version>`
+  - Example: `QVAC-18184 chore: release sdk 0.9.2`
+- Without ticket: `chore[notask|skiplog]: release <package> <version>`
+  - Example: `chore[notask|skiplog]: release @qvac/infer-base v0.4.1` (#1781)
+
+**Notes:**
+- `[skiplog]` is **not** used when the release PR itself is what generates the changelog (it would be self-contradictory).
+- Use `[notask]` only when there is no ticket; combine with `[skiplog]` via `|` if both are needed.
+- Body should describe what's in the release at a high level, link to the per-version `CHANGELOG.md`, and call out any post-merge actions (npm publish via backmerge, etc.).
+
+### Backmerge PR (release branch → main)
+
+Brings the release artifacts (changelog folder, aggregated `CHANGELOG.md` entry, version bump in `package.json`) from the release branch back into `main` after the package is published. **Should usually be hand-crafted, not a literal `git merge`** — `main` often has progressed past the release branch on dependencies and other files, and a blind merge regresses them.
+
+**Title format:**
+
+- With ticket: `TICKET chore[skiplog]: backmerge release <package> <version>`
+  - Examples:
+    - `QVAC-18184 chore[skiplog]: backmerge release sdk 0.9.2` (#1857)
+    - `QVAC-16776 chore[skiplog]: backmerge release-sdk-0.9.0 — changelog, NOTICE, model registry, and tooling fixes` (#1645)
+    - `QVAC-16495 chore[skiplog]: backmerge sdk v0.8.1 release, changelog & NOTICE` (#1301)
+- Without ticket: `chore[notask|skiplog]: backmerge release <package> <version>`
+  - Examples:
+    - `chore[notask|skiplog]: backmerge release sdk v0.8.3` (#1552)
+    - `chore[notask]: backmerge release @qvac/cli v0.2.2` (#1076)
+
+**Tag rules:**
+- **`[skiplog]` is required** for backmerges — the changelog has already been written on the release branch; main shouldn't generate another entry from this PR.
+- `[notask]` is **only** used when there is no ticket. Do **not** combine `[notask]` with a ticket in the title (`QVAC-XXX chore[notask|skiplog]: ...` is wrong).
+- The two metadata tags `[notask]` and `[skiplog]` may be combined via `|` (e.g. `[notask|skiplog]`); this is distinct from the rule that content tags `[api]/[bc]/[mod]` cannot be combined.
+
+**Body content for backmerges:**
+- Brief summary linking to the corresponding release PR and noting the publish has already happened.
+- Explicit list of which files are touched (changelog folder, aggregated CHANGELOG.md, package.json version field).
+- If the PR is hand-crafted rather than a `git merge`, **explain why** — usually a table of dependencies that have moved ahead on `main` and would be regressed by a blind merge.
+- Reference the precedent backmerge PR for the previous version so reviewers can compare shape.
+
+### Decision rule (quick reference)
+
+| You are opening… | Base | Title format |
+|---|---|---|
+| A normal feature/fix/doc PR | `main` | `TICKET prefix[tags]: subject` |
+| A release PR for a new version | `release-<pkg>-<ver>` | `TICKET chore: release <pkg> <ver>` (or `chore[notask|skiplog]: release ...` if no ticket) |
+| A backmerge PR after publish | `main` | `TICKET chore[skiplog]: backmerge release <pkg> <ver>` (or `chore[notask|skiplog]: backmerge ...` if no ticket) |
 
 ## Output Format
 
@@ -117,7 +176,9 @@ gh pr view --repo UPSTREAM_ORG/REPO BRANCH --web
 
 Before outputting the PR description, verify:
 
-- [ ] Title follows format: `TICKET prefix[tags]: subject`
+- [ ] Title follows format: `TICKET prefix[tags]: subject` (or the release / backmerge variants above)
+- [ ] If the PR has a ticket, `[notask]` is **NOT** in the title
+- [ ] If the PR is a backmerge, `[skiplog]` is in the title
 - [ ] "What problem" describes user impact, not implementation
 - [ ] "How it solves" is high-level approach, not line-by-line
 - [ ] Unused sections are deleted
