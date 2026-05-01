@@ -112,8 +112,6 @@ jobs:
 
       - name: Configure scoped registry for @tetherto and @qvac packages
         env:
-          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           GIT_PAT: ${{ secrets.PAT_TOKEN }}
         shell: bash
         working-directory: ${{ env.WORKDIR }}
@@ -125,7 +123,6 @@ jobs:
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
           @tetherto:registry=https://npm.pkg.github.com/
-          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
           //npm.pkg.github.com/:_authToken=${GIT_PAT}
           NPMRC
 
@@ -144,7 +141,6 @@ jobs:
 
           [install.scopes]
           "@tetherto" = { token = "${{ env.READ_NPM_TOKEN }}", url = "https://npm.pkg.github.com" }
-          "@qvac" = { token = "${NPM_TOKEN}", url = "https://registry.npmjs.org" }
           EOF
 
       - name: Install dependencies
