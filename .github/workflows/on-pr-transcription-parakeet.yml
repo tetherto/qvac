@@ -237,7 +237,7 @@ jobs:
         run: |
           node scripts/perf-report/aggregate-parakeet-rtf.js \
             --dir benchmark-artifacts \
-            --manual-dir packages/qvac-lib-infer-parakeet/benchmarks/manual-results \
+            --manual-dir packages/transcription-parakeet/benchmarks/manual-results \
             --output benchmark-artifacts/parakeet-unified-performance-report.md \
             --output-json benchmark-artifacts/parakeet-unified-performance-report.json \
             --output-html benchmark-artifacts/parakeet-unified-performance-report.html

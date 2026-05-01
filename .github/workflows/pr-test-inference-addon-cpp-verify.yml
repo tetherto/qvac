@@ -7,10 +7,10 @@ on:
   pull_request_target:
     types: [synchronize]
     paths:
-      - "packages/qvac-lib-inference-addon-cpp/**"
-      - ".github/workflows/pr-test-qvac-lib-inference-addon-cpp-js.yml"
-      - ".github/workflows/pr-test-qvac-lib-inference-addon-cpp.yml"
-      - ".github/workflows/pr-test-qvac-lib-inference-addon-cpp-verify.yml"
+      - "packages/inference-addon-cpp/**"
+      - ".github/workflows/pr-test-inference-addon-cpp-js.yml"
+      - ".github/workflows/pr-test-inference-addon-cpp.yml"
+      - ".github/workflows/pr-test-inference-addon-cpp-verify.yml"
 
 jobs:
   clear-verify-label:

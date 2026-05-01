@@ -191,7 +191,7 @@ runs:
           qvac-ext-lib-mlc
           qvac-ext-lib-tokenizers-cpp
           decoder-audio
-          qvac-lib-inference-addon-mlc-ecog
+          inference-addon-mlc-ecog
           llm-llamacpp
           translation-nmtcpp
           transcription-whispercpp

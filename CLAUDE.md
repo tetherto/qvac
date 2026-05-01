@@ -119,13 +119,13 @@ qvac/
 │   ├── skills/                # Existing skills (addon-changelog, sdk-*, etc.)
 │   ├── commands/              # Existing commands
 │   └── rules/                 # .mdc files with Cursor-specific rules
-│   ├── qvac-sdk/              # Main SDK entry point
-│   ├── qvac-cli/              # CLI tool
-│   ├── qvac-lib-rag/          # RAG library
-│   ├── qvac-lib-infer-*/      # Inference addons (LLM, TTS, OCR, etc.)
-│   ├── qvac-lib-dl-*/         # Data loaders (filesystem, hyperdrive)
-│   ├── qvac-lib-logging/      # Logging
-│   ├── qvac-lib-error-base/   # Error handling base
+│   ├── sdk/              # Main SDK entry point
+│   ├── cli/              # CLI tool
+│   ├── rag/          # RAG library
+│   ├── infer-*/      # Inference addons (LLM, TTS, OCR, etc.)
+│   ├── dl-*/         # Data loaders (filesystem, hyperdrive)
+│   ├── logging/      # Logging
+│   ├── error-base/   # Error handling base
 │   ├── registry-server/ # Distributed model registry
 │   └── docs/                  # Documentation
 ├── scripts/                   # Build and validation scripts
