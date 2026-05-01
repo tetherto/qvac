@@ -1,0 +1,52 @@
+---
+title: Text embeddings
+description: Vector embedding generation for semantic search, clustering, and retrieval.
+---
+
+## Overview
+
+Text embeddings uses [`qvac-fabric-llm.cpp`](https://github.com/tetherto/qvac-fabric-llm.cpp) as inference engine. Load any supported model using `modelType: "embeddings"`. Then, provide text input as `text` where the value is either a single `string` or an array of strings.
+
+`embed()` returns a single embedding vector (`number[]`) for single text input, or an array of embedding vectors (`number[][]`) for batch input.
+
+## Functions
+
+Use the following sequence of function calls:
+1. [`loadModel()`](/sdk/api#loadmodel)
+2. [`embed()`](/sdk/api#embed)
+3. [`unloadModel()`](/sdk/api#unloadmodel)
+
+For how to use each function, see [SDK — API reference](/sdk/api/).
+
+## Models
+
+You can load any [`llama.cpp`](https://github.com/ggml-org/llama.cpp)-compatible embeddings model. Model file format: `*.gguf`.
+
+- If the model is sharded across multiple files (a multi-file bundle), see [Sharded models](/sdk/examples/utilities/sharded-models).
+- For models available as constants, see [SDK — Models](/sdk/getting-started#models).
+
+## Example
+
+The following script shows an example of embedding:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/embed-p2p.js title="text-embeddings.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/embed-p2p.ts title="text-embeddings.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/sdk/getting-started/quickstart).
+</Callout>

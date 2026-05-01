@@ -127,7 +127,6 @@ test("pluginInvoke: delegated models throw ModelIsDelegatedError", async functio
   const modelId = makeId("delegated-model");
 
   registerModel(modelId, {
-    topic: "test-topic",
     providerPublicKey: "test-provider-public-key",
   });
 

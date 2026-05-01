@@ -5,11 +5,13 @@ import {
   type Tool,
   type ToolCallWithCall,
 } from "./tools";
+import type { ToolDialect } from "./completion-stream";
 
 export const completionStatsSchema = z.object({
   timeToFirstToken: z.number().optional(),
   tokensPerSecond: z.number().optional(),
   cacheTokens: z.number().optional(),
+  generatedTokens: z.number().optional(),
   backendDevice: z.enum(["cpu", "gpu"]).optional(),
 });
 
@@ -113,7 +115,6 @@ export type CompletionFinal = {
   stats?: CompletionStats;
   raw: {
     fullText: string;
-    toolDialect?: string;
   };
   /**
    * Canonical assistant text to push back into `history` for the next turn
@@ -162,4 +163,7 @@ export type NormalizerConfig = {
   tools: Tool[];
   captureThinking: boolean;
   emitRawDeltas: boolean;
+  // Defaults to "hermes" (`<tool_call>...` framing + JSON-payload fallbacks)
+  // when omitted. "json" is the no-framing pure JSON-payload dialect.
+  toolDialect?: ToolDialect;
 };

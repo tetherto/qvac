@@ -9,6 +9,7 @@
 #include <qvac-lib-inference-addon-cpp/Errors.hpp>
 
 #include "ContextSlider.hpp"
+#include "GenerationParamsApply.hpp"
 #include "addon/LlmErrors.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 #include "utils/ChatTemplateUtils.hpp"
@@ -99,6 +100,22 @@ MtmdLlmContext::MtmdLlmContext(
     antipromptTokens_.insert(
         antipromptTokens_.end(), tempTokens.begin(), tempTokens.end());
   }
+
+  isHarmonyModel_ =
+      qvac_lib_inference_addon_llama::utils::isHarmonyModel(model_);
+  if (isHarmonyModel_) {
+    harmonyCallToken_ =
+        qvac_lib_inference_addon_llama::utils::getHarmonyCallToken(lctx_);
+    if (harmonyCallToken_ == LLAMA_TOKEN_NULL) {
+      isHarmonyModel_ = false;
+    }
+  }
+  QLOG_IF(
+      Priority::DEBUG,
+      string_format(
+          "[MtmdLlm] Harmony detection: isHarmony=%d callToken=%d\n",
+          isHarmonyModel_,
+          harmonyCallToken_));
 }
 
 void MtmdLlmContext::initVisionContext() {
@@ -452,7 +469,25 @@ bool MtmdLlmContext::generateResponse(
       }
     }
 
-    if (llama_vocab_is_eog(vocab_, tokenId) || checkAntiprompt()) {
+    bool isEos = llama_vocab_is_eog(vocab_, tokenId);
+
+    if (isEos && isHarmonyModel_ && params_.use_jinja &&
+        tokenId == harmonyCallToken_) {
+      QLOG_IF(
+          Priority::DEBUG,
+          string_format(
+              "[MtmdLlm] Harmony <|call|> stop: tokenId=%d\n", tokenId));
+      if (outputCallback) {
+        std::string callMarker = common_token_to_piece(lctx_, tokenId, true);
+        if (!callMarker.empty()) {
+          outputCallback(callMarker);
+        }
+      }
+      flushPendingUtf8ToCallback(outputCallback);
+      break;
+    }
+
+    if (isEos || checkAntiprompt()) {
       flushPendingUtf8ToCallback(outputCallback);
       break;
     }
@@ -480,38 +515,7 @@ bool MtmdLlmContext::generateResponse(
 
 std::function<void()>
 MtmdLlmContext::applyGenerationParams(const GenerationParams& overrides) {
-  if (!overrides.hasOverrides()) {
-    return []() {};
-  }
-
-  common_params_sampling savedSampling = params_.sampling;
-  int savedPredict = params_.n_predict;
-
-  auto setIf = [](const auto& src, auto& dst) {
-    if (src) {
-      dst = *src;
-    }
-  };
-  setIf(overrides.temp, params_.sampling.temp);
-  setIf(overrides.top_p, params_.sampling.top_p);
-  setIf(overrides.top_k, params_.sampling.top_k);
-  setIf(overrides.n_predict, params_.n_predict);
-  setIf(overrides.seed, params_.sampling.seed);
-  setIf(overrides.frequency_penalty, params_.sampling.penalty_freq);
-  setIf(overrides.presence_penalty, params_.sampling.penalty_present);
-  setIf(overrides.repeat_penalty, params_.sampling.penalty_repeat);
-
-  smpl_.reset(common_sampler_init(model_, params_.sampling));
-
-  bool restored = false;
-  return [this, savedSampling, savedPredict, restored]() mutable {
-    if (restored)
-      return;
-    restored = true;
-    params_.sampling = savedSampling;
-    params_.n_predict = savedPredict;
-    smpl_.reset(common_sampler_init(model_, params_.sampling));
-  };
+  return applyGenerationParamsToContext(params_, smpl_, model_, overrides);
 }
 
 void MtmdLlmContext::stop() { stopGeneration_.store(true); }

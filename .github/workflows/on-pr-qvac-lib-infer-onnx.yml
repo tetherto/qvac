@@ -85,17 +85,21 @@ jobs:
         id: fetch_pr
         if: github.event_name == 'pull_request_target' || github.event_name == 'pull_request'
         continue-on-error: true
+        env:
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          git fetch origin ${{ github.event.pull_request.base.ref }}:refs/remotes/origin/${{ github.event.pull_request.base.ref }}
-          git fetch origin ${{ github.event.pull_request.head.sha }}:refs/pr/head
+          git fetch origin "${PR_BASE_REF}:refs/remotes/origin/${PR_BASE_REF}"
+          git fetch origin "${PR_HEAD_SHA}:refs/pr/head"
 
       - name: Check PR Status with Target Branch
         continue-on-error: true
         id: target_branch_checks
         if: github.event_name == 'pull_request_target' || github.event_name == 'pull_request'
+        env:
+          TARGET_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          TARGET_SHA=${{ github.event.pull_request.base.sha }}
-          PR_HEAD_SHA=${{ github.event.pull_request.head.sha }}
           if ! git merge-base --is-ancestor "$TARGET_SHA" "$PR_HEAD_SHA"; then
             echo "::error title=PR is not up to date::This PR is not up to date with target branch"
           fi

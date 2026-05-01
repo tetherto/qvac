@@ -71,16 +71,35 @@ runs:
 
           const marker = (p) => `<!-- sdk-e2e-report:pr=${pr}:family=${family}:platform=${p} -->`;
 
-          const existing = await github.paginate(
-            github.rest.issues.listComments,
-            { owner: context.repo.owner, repo: context.repo.repo, issue_number: pr, per_page: 100 }
-          );
+          // Fetch all issue comments with their minimized state via GraphQL,
+          // since REST listComments does not return isMinimized.
+          const existing = [];
+          let cursor = null;
+          for (;;) {
+            const page = await github.graphql(
+              `query($owner: String!, $repo: String!, $number: Int!, $cursor: String) {
+                 repository(owner: $owner, name: $repo) {
+                   pullRequest(number: $number) {
+                     comments(first: 100, after: $cursor) {
+                       pageInfo { hasNextPage endCursor }
+                       nodes { id databaseId isMinimized body }
+                     }
+                   }
+                 }
+               }`,
+              { owner: context.repo.owner, repo: context.repo.repo, number: pr, cursor }
+            );
+            const conn = page.repository.pullRequest.comments;
+            existing.push(...conn.nodes);
+            if (!conn.pageInfo.hasNextPage) break;
+            cursor = conn.pageInfo.endCursor;
+          }
 
           const commentIds = {};
           for (const platform of platforms) {
             const mark = marker(platform);
-            const prior = existing.find((c) => (c.body || '').includes(mark));
-            if (prior) {
+            const priors = existing.filter((c) => (c.body || '').includes(mark) && !c.isMinimized);
+            for (const prior of priors) {
               try {
                 await github.graphql(
                   `mutation($id: ID!) {
@@ -88,11 +107,11 @@ runs:
                        minimizedComment { isMinimized }
                      }
                    }`,
-                  { id: prior.node_id }
+                  { id: prior.id }
                 );
-                core.info(`Minimized prior comment for ${platform} (id=${prior.id}).`);
+                core.info(`Minimized prior comment for ${platform} (id=${prior.databaseId}).`);
               } catch (err) {
-                core.warning(`Failed to minimize prior comment for ${platform}: ${err.message}`);
+                core.warning(`Failed to minimize prior comment for ${platform} (id=${prior.databaseId}): ${err.message}`);
               }
             }
 

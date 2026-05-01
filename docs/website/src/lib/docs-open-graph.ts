@@ -6,41 +6,15 @@
 
 export const DOCS_SITE_ORIGIN = 'https://docs.qvac.tether.io';
 
-const VERSION_SLUG_RE = /^v\d+\.\d+\.\d+$/;
-
-/**
- * Strip leading version segment from URL slugs (latest docs have no prefix; dev / vX.Y.Z do).
- */
-export function stripDocsVersionSlugPrefix(slugs: string[] | undefined): string[] {
-  if (!slugs?.length) return [];
-  const [first, ...rest] = slugs;
-  if (first === 'dev' || VERSION_SLUG_RE.test(first)) {
-    return rest;
-  }
-  return slugs;
-}
-
 export function canonicalDocsPathname(slugs: string[] | undefined): string {
-  const stripped = stripDocsVersionSlugPrefix(slugs);
-  if (!stripped.length) return '/';
-  return '/' + stripped.map((s) => encodeURIComponent(s)).join('/');
+  if (!slugs?.length) return '/';
+  return '/' + slugs.map((s) => encodeURIComponent(s)).join('/');
 }
 
 export function buildCanonicalDocsUrl(slugs: string[] | undefined): string {
   const path = canonicalDocsPathname(slugs);
   if (path === '/') return `${DOCS_SITE_ORIGIN}/`;
   return `${DOCS_SITE_ORIGIN}${path}`;
-}
-
-/**
- * Path relative to the bundled docs root (after `(latest)/`, `vX.Y.Z/`, or `dev/`).
- * Fumadocs virtual paths are relative to `content/docs`.
- */
-export function pathRelativeToDocsBundle(virtualPath: string): string {
-  return virtualPath
-    .replace(/^\(latest\)\//, '')
-    .replace(/^v\d+\.\d+\.\d+\//, '')
-    .replace(/^dev\//, '');
 }
 
 export interface DiataxisOpenGraph {
@@ -53,16 +27,27 @@ function referenceTags(extra: string[]): string[] {
 }
 
 /**
- * Map file layout to Diátaxis quadrants for `article:section` and refinement tags.
+ * Map a Fumadocs virtual path (relative to `content/docs/`) to Diátaxis
+ * quadrants for `article:section` and refinement tags.
+ *
+ * Versioned API summary and release-notes files (e.g. `sdk/api/v0.8.0.mdx`)
+ * are still classified as `Reference` — the version segment lives in the
+ * filename, not in a folder, so we match by directory only.
  */
 export function inferDiataxisOpenGraph(virtualPath: string): DiataxisOpenGraph {
-  const rel = pathRelativeToDocsBundle(virtualPath).toLowerCase();
-  const isLatestBundle = virtualPath.startsWith('(latest)/');
+  const rel = virtualPath.toLowerCase();
 
-  if (!isLatestBundle || rel.startsWith('sdk/api/')) {
+  if (rel.startsWith('sdk/api/') || rel === 'sdk/api/index.mdx') {
     return {
       section: 'Reference',
-      tags: referenceTags(rel.startsWith('sdk/api/') ? ['sdk', 'api'] : []),
+      tags: referenceTags(['sdk', 'api']),
+    };
+  }
+
+  if (rel.startsWith('sdk/release-notes/')) {
+    return {
+      section: 'Reference',
+      tags: referenceTags(['sdk', 'release-notes']),
     };
   }
 
@@ -120,4 +105,3 @@ export function inferDiataxisOpenGraph(virtualPath: string): DiataxisOpenGraph {
     tags: ['qvac', 'documentation'],
   };
 }
-

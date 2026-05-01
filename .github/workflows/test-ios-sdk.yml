@@ -698,6 +698,7 @@ jobs:
             --runId "${{ needs.build.outputs.runId }}" \
             --consumer-timeout "${{ inputs.consumer-timeout }}" \
             --config . \
+            --report-dir=./reports \
             $FILTER_ARG \
             $SUITE_ARG \
             $EXCLUDE_SUITE_ARG
