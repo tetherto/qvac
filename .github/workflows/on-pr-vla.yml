@@ -17,11 +17,16 @@ on:
       - ".github/workflows/*-vla.yml"
   workflow_dispatch:
 
+  workflow_call:
+
 permissions:
   contents: read
   pull-requests: read
   packages: read
   id-token: write
+
+env:
+  PKG_DIR: packages/vla
 
 jobs:
   authorize:

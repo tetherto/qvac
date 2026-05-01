@@ -21,7 +21,14 @@ on:
         options:
           - latest
           - dev
-          
+
+  workflow_call:
+    inputs:
+      tag:
+        description: "Tag to publish with"
+        required: false
+        type: string
+
 permissions:
   contents: read
   pull-requests: read
