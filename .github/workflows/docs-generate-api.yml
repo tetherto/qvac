@@ -73,7 +73,7 @@ jobs:
             echo "❌ SDK_REPOSITORY is not set. Add repository variable SDK_REPOSITORY (e.g. owner/qvac)."
             exit 1
           fi
-          git clone --depth 1 --branch "release-qvac-sdk-${VERSION}" \
+          git clone --depth 1 --branch "release-sdk-${VERSION}" \
             "https://x-access-token:${GH_TOKEN}@github.com/${SDK_REPO}.git" sdk-source \
             || git clone --depth 1 --branch "v${VERSION}" \
             "https://x-access-token:${GH_TOKEN}@github.com/${SDK_REPO}.git" sdk-source \

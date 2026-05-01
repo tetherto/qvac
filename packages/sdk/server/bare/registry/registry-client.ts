@@ -11,8 +11,22 @@ import { DEFAULT_REGISTRY_CORE_KEY } from "@/constants";
 
 const logger = getServerLogger();
 
-const MAX_RETRIES = 3;
-const BASE_DELAY_MS = 500;
+// fd-lock retry budget for the registry corestore.
+//
+// We pass `corestoreOpts: { wait: false }` (tryLock semantics) and provide a
+// JS-bounded retry budget here instead of letting Hypercore's underlying
+// fd-lock issue a blocking flock(LOCK_EX) on a libuv worker thread. The
+// blocking variant cannot be cancelled from JS, so if another SDK process
+// holds the lock indefinitely it leaves a pending native handle that
+// prevents process.exit() from terminating the worker — see QVAC-18197.
+//
+// With tryLock + bounded retries we get the same "tolerate transient locks
+// during another SDK's startup/shutdown" property #1480 wanted, but every
+// retry step is a fresh non-blocking syscall that surfaces failure to JS,
+// so shutdown always remains cancellable.
+const MAX_RETRIES = 8;
+const BASE_DELAY_MS = 250;
+const MAX_TOTAL_WAIT_MS = 10_000;
 
 let registryClient: QVACRegistryClient | null = null;
 let inflightInit: Promise<QVACRegistryClient> | null = null;
@@ -30,14 +44,13 @@ async function delay(ms: number): Promise<void> {
 
 async function initRegistryClient(): Promise<QVACRegistryClient> {
   let lastError: unknown;
+  const deadline = Date.now() + MAX_TOTAL_WAIT_MS;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       const client = new QVACRegistryClient({
         registryCoreKey: DEFAULT_REGISTRY_CORE_KEY,
-        storage: getCacheDir(
-          `registry-corestore/${DEFAULT_REGISTRY_CORE_KEY}`,
-        ),
-        corestoreOpts: { wait: true },
+        storage: getCacheDir(`registry-corestore/${DEFAULT_REGISTRY_CORE_KEY}`),
+        corestoreOpts: { wait: false },
       });
 
       await client.ready();
@@ -61,7 +74,17 @@ async function initRegistryClient(): Promise<QVACRegistryClient> {
     } catch (error) {
       lastError = error;
       if (isFdLockError(error) && attempt < MAX_RETRIES) {
-        const backoff = BASE_DELAY_MS * Math.pow(2, attempt - 1);
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) {
+          logger.warn(
+            `Registry client fd-lock failed after ${MAX_TOTAL_WAIT_MS}ms wait budget exhausted (attempt ${attempt}/${MAX_RETRIES})`,
+          );
+          throw error;
+        }
+        const backoff = Math.min(
+          BASE_DELAY_MS * Math.pow(2, attempt - 1),
+          remaining,
+        );
         logger.warn(
           `Registry client fd-lock failed (attempt ${attempt}/${MAX_RETRIES}), retrying in ${backoff}ms...`,
         );
