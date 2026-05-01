@@ -41,6 +41,8 @@ export interface VlaRunStats {
   smollm2_total_ms: number
   ode_ms: number
   total_ms: number
+  /** 0 = CPU backend, 1 = GPU backend (Vulkan / Metal / OpenCL). */
+  backendDevice: number
 }
 
 export interface VlaRunResult {

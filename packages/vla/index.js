@@ -76,13 +76,18 @@ class VlaModel {
     this._config = config
     this.logger = new QvacLogger(logger)
     this.opts = opts
-    this._job = createJobHandler({ cancel: () => {} })
+    // The cancel hook is wired to the framework's binding.cancel(handle)
+    // through the public cancel() method; the createJobHandler tear-down
+    // flows through that path.
+    this._job = createJobHandler({ cancel: () => this.cancel() })
     this._run = exclusiveRunQueue()
     this._handle = null
     this._hparams = null
     this._backendName = null
     this._hasActiveResponse = false
     this._nativeLoggerActive = false
+    // Per-run accumulator filled by _onAddonEvent; null between runs.
+    this._pending = null
     this.state = { configLoaded: false }
   }
 
@@ -102,6 +107,44 @@ class VlaModel {
       this._nativeLoggerActive = true
     } catch (err) {
       this.logger.warn('Failed to connect native logger:', err && err.message)
+    }
+  }
+
+  // Framework output callback: invoked from the JS event loop after each
+  // event the worker thread queues. The shape is:
+  //   (jsHandle, eventTypeName, outputData, errorData)
+  // For VLA we receive at most three event types per job:
+  //   - Output (Float32Array)        — the action chunk.
+  //   - JobEnded (RuntimeStats obj)  — finishing event with timing/stats.
+  //   - Error (string in errorData)  — eventTypeName contains "Error".
+  // The pair is accumulated in `_pending` and surfaced through the active
+  // _job response (`_job.output` / `_job.end` / `_job.fail`) so the public
+  // `model.run(input)` Promise resolves with `{ actions, stats }` once both
+  // halves have arrived — preserving the previous external API even though
+  // the underlying dispatch is now asynchronous.
+  _onAddonEvent (_jsHandle, eventTypeName, outputData, errorData) {
+    if (typeof eventTypeName === 'string' && eventTypeName.includes('Error')) {
+      const err = new QvacErrorAddonVla({
+        code: ERR_CODES.INVALID_INPUT,
+        adds: typeof errorData === 'string' ? errorData : 'native error'
+      })
+      if (this._pending) this._pending.actions = null
+      this._pending = null
+      if (this._job.active) this._job.fail(err)
+      this._hasActiveResponse = false
+      return
+    }
+    if (outputData instanceof Float32Array) {
+      if (this._pending) this._pending.actions = outputData
+      this._job.output(outputData)
+      return
+    }
+    if (outputData && typeof outputData === 'object') {
+      const stats = outputData
+      const actions = this._pending ? this._pending.actions : null
+      this._pending = null
+      this._hasActiveResponse = false
+      this._job.end(this.opts.stats ? stats : null, { actions, stats })
     }
   }
 
@@ -130,13 +173,25 @@ class VlaModel {
       throw new QvacErrorAddonVla({ code: ERR_CODES.MODEL_NOT_FOUND, adds: ggufPath })
     }
     try {
-      this._handle = binding.createVlaModel(ggufPath, backend)
+      // Canonical instance lifecycle (mirrors LLM/embed/NMT):
+      // createInstance(jsHandle, params, outputCb) — the framework's
+      // JobRunner thread consumes runJob() and feeds the outputCb.
+      this._handle = binding.createInstance(
+        this,
+        { ggufPath, backend },
+        (jsHandle, eventTypeName, outputData, errorData) => {
+          this._onAddonEvent(jsHandle, eventTypeName, outputData, errorData)
+        }
+      )
+      // No-op for VLA (no IModelAsyncLoad weights stream) but kept for
+      // symmetry with sibling addons.
+      binding.activate(this._handle)
       this._hparams = binding.getVlaHparams(this._handle)
       this._backendName = binding.getVlaBackendName(this._handle)
     } catch (loadError) {
       this.logger.error('Error during model load:', loadError)
       if (this._handle) {
-        try { binding.destroyVlaModel(this._handle) } catch (_) {}
+        try { binding.destroyInstance(this._handle) } catch (_) {}
         this._handle = null
       }
       throw new QvacErrorAddonVla({ code: ERR_CODES.FAILED_TO_LOAD_WEIGHTS, adds: loadError.message, cause: loadError })
@@ -166,45 +221,63 @@ class VlaModel {
 
     const response = this._job.start()
     this._hasActiveResponse = true
+    // Per-job accumulator. Two events flow through _onAddonEvent: the
+    // Float32Array action chunk lands first, then the RuntimeStats object —
+    // we resolve the response only when both have arrived.
+    this._pending = { actions: null }
 
-    let result
+    let accepted = false
     try {
-      result = binding.runVlaModel(this._handle, {
-        images: input.images,
-        imgWidth,
-        imgHeight,
-        state: input.state,
-        tokens: input.tokens,
-        mask: input.mask,
-        noise: input.noise ?? undefined
+      accepted = binding.runJob(this._handle, {
+        type: 'vla',
+        input: {
+          images: input.images,
+          imgWidth,
+          imgHeight,
+          state: input.state,
+          tokens: input.tokens,
+          mask: input.mask,
+          noise: input.noise ?? undefined
+        }
       })
     } catch (err) {
+      this._pending = null
       this._hasActiveResponse = false
       this._job.fail(err)
       throw err
     }
 
-    this._job.output(result)
-    this._job.end(this.opts.stats ? result.stats : null, result)
-    this._hasActiveResponse = false
+    if (!accepted) {
+      this._pending = null
+      this._hasActiveResponse = false
+      const err = new QvacErrorAddonVla({ code: ERR_CODES.JOB_ALREADY_RUNNING })
+      this._job.fail(err)
+      throw err
+    }
 
-    this.logger.info('Inference job completed')
+    this.logger.info('Inference job dispatched')
     return response
   }
 
-  async pause () { /* no-op: synchronous backend has no in-flight cancel point */ }
+  async pause () { /* no-op: SmolVLA inference has no per-step cancel point */ }
 
-  async cancel () { /* no-op: see pause() */ }
+  async cancel () {
+    if (this._handle) {
+      try { await binding.cancel(this._handle) } catch (_) {}
+    }
+  }
 
   async unload () {
     return this._run(async () => {
+      await this.cancel()
       if (this._job.active) {
         this._job.fail(new QvacErrorAddonVla({ code: ERR_CODES.MODEL_UNLOADED }))
       }
+      this._pending = null
       this._hasActiveResponse = false
       if (this._handle) {
         try {
-          binding.destroyVlaModel(this._handle)
+          binding.destroyInstance(this._handle)
         } catch (destroyError) {
           this._handle = null
           this._releaseNativeLogger()

@@ -1,37 +1,58 @@
 #pragma once
 
+#include <any>
 #include <cstdint>
 #include <memory>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
+#include <qvac-lib-inference-addon-cpp/ModelInterfaces.hpp>
+#include <qvac-lib-inference-addon-cpp/RuntimeStats.hpp>
+
 #include "model-interface/smolvla.hpp"
 
 namespace qvac_lib_infer_vla {
 
-// Owns a loaded SmolVLA model plus scratch buffers for an inference call.
-class VlaModel {
+// One inference call's worth of input. The framework's JobRunner runs
+// process() on a worker thread after the JS callback has already returned,
+// so input buffers must be owned copies — we cannot rely on JS-paused-during-
+// native-call semantics like the old sync `runVlaModel` did.
+struct VlaInput {
+  // images[i] is contiguous CHW float32 in [-1, 1], length 3*imgWidth*imgHeight.
+  std::vector<std::vector<float>> images;
+  int imgWidth = 0;
+  int imgHeight = 0;
+  std::vector<float> state;     // length = state_dim
+  std::vector<int32_t> tokens;  // length = nTokens
+  std::vector<uint8_t> mask;    // length = nTokens
+  std::vector<float> noise;     // empty if no noise was provided
+};
+
+// Owns a loaded SmolVLA model. Implements the canonical IModel interface so
+// it plugs into the framework's job runner / output dispatch (same as
+// LlamaModel, BertModel, TranslationModel).
+class VlaModel : public qvac_lib_inference_addon_cpp::model::IModel {
 public:
   // `forceCpu`: skip GPU device selection and run on the CPU backend only.
-  // Wired up so the integration test can compare CPU vs GPU on the same
-  // runner without spinning up a second CI job.
   explicit VlaModel(const std::string& ggufPath, bool forceCpu = false)
       : model_(new smolvla_model()) {
     if (!smolvla_load_model(ggufPath.c_str(), model_.get(), forceCpu)) {
       throw std::runtime_error(
           "failed to load SmolVLA model from: " + ggufPath);
     }
+    // Canonical `backendDevice` encoding used across the inference addons
+    // (LlamaModel, BertModel): 0 = CPU, 1 = GPU. Captured at load time so
+    // `runtimeStats()` can report it without re-querying ggml.
+    runtimeBackendDevice_ = model_->has_gpu ? 1 : 0;
   }
 
   VlaModel(const VlaModel&) = delete;
   VlaModel& operator=(const VlaModel&) = delete;
 
-  ~VlaModel() {
-    if (model_) {
-      smolvla_free_model(model_.get());
-    }
-  }
+  // smolvla_model has its own destructor that calls smolvla_free_model, so
+  // unique_ptr destruction releases backends/contexts/buffers automatically.
+  ~VlaModel() override = default;
 
   const smolvla_hparams& hparams() const { return model_->hparams; }
 
@@ -45,41 +66,61 @@ public:
     return n != nullptr ? std::string(n) : std::string("unknown");
   }
 
-  // Output of a single inference call.  Keeps the action chunk and the
-  // per-stage wall-clock timings together so the JS layer can surface them
-  // to the test harness / perf reporter.
-  struct RunResult {
-    std::vector<float> actions;
-    smolvla_timing timing;
-  };
+  // ─── IModel interface ─────────────────────────────────────────────────────
 
-  // Run one inference call. Image buffers must be contiguous CHW float32 in
-  // [-1, 1], already resized+padded to (imgWidth × imgHeight). Tokens + mask
-  // describe the instruction; noise is an optional (chunkSize × maxActionDim)
-  // float32 buffer (null -> model-internal random).
-  //
-  // Buffers are not copied: the caller owns each pointer for the duration of
-  // the call. The mask is copied once into a small `bool` buffer because
-  // `smolvla_inference_with_timing` expects `const bool*` — values >1 in
-  // `maskBytes` collapse to `true`.
-  //
-  // Returns a (chunkSize × actionDim) row-major float32 vector plus the
-  // per-stage timing captured during the call.
-  RunResult run(
-      const float* const* images, int nImages, int imgWidth, int imgHeight,
-      const float* state, int stateDim, const int32_t* tokens, int nTokens,
-      const uint8_t* maskBytes, int nMask, const float* noise, int noiseLen) {
-    if (nImages <= 0 || images == nullptr) {
+  [[nodiscard]] std::string getName() const final { return "VlaModel"; }
+
+  // Invoked on the JobRunner worker thread. The std::any is unwrapped to a
+  // VlaInput, the SmolVLA inference path runs synchronously, and the result
+  // is wrapped in a std::vector<float> (length = chunk_size * action_dim) so
+  // the framework's JsTypedArrayOutputHandler<float> can convert it to a JS
+  // Float32Array. Stats are emitted separately by OutputQueue::queueJobEnded
+  // calling our runtimeStats().
+  std::any process(const std::any& input) final {
+    const VlaInput* in = std::any_cast<VlaInput>(&input);
+    if (in == nullptr) {
+      throw std::invalid_argument(
+          "VlaModel::process: input is not a VlaInput");
+    }
+    return std::any{runInternal(*in)};
+  }
+
+  // Per-stage timings (vision_ms, smollm2_*_ms, ode_ms, total_ms) plus
+  // backendDevice (0=CPU, 1=GPU). Mirrors LlamaModel::runtimeStats() and
+  // BertModel::runtimeStats() so consumers can use a single read pattern
+  // across addons. The values reflect the most recent process() call;
+  // before any run they are zeroed out.
+  [[nodiscard]] qvac_lib_inference_addon_cpp::RuntimeStats
+  runtimeStats() const final {
+    return {
+        {"vision_ms", lastTiming_.vision_ms},
+        {"smollm2_compute_ms", lastTiming_.smollm2_compute_ms},
+        {"smollm2_total_ms", lastTiming_.smollm2_total_ms},
+        {"ode_ms", lastTiming_.ode_ms},
+        {"total_ms", lastTiming_.total_ms},
+        {"backendDevice", runtimeBackendDevice_}};
+  }
+
+private:
+  // std::vector<bool> is a bitset; keep a regular char buffer so we can
+  // hand a real C bool pointer to the inference code.
+  using bool_as_char = unsigned char;
+
+  // Real inference path. Validates input shape, builds the image-pointer
+  // vector, copies the bool mask, runs smolvla_inference_with_timing, and
+  // captures the timing into lastTiming_ for runtimeStats().
+  std::vector<float> runInternal(const VlaInput& in) {
+    if (in.images.empty()) {
       throw std::invalid_argument("VlaModel::run: images must not be empty");
     }
-    if (nTokens != nMask) {
+    if (in.tokens.size() != in.mask.size()) {
       throw std::invalid_argument(
           "VlaModel::run: tokens and mask must be the same length");
     }
-    if (noise != nullptr) {
+    if (!in.noise.empty()) {
       const auto required = static_cast<size_t>(model_->hparams.chunk_size) *
                             model_->hparams.max_action_dim;
-      if (noiseLen <= 0 || static_cast<size_t>(noiseLen) < required) {
+      if (in.noise.size() < required) {
         throw std::invalid_argument(
             "VlaModel::run: noise buffer is shorter than chunk_size * "
             "max_action_dim");
@@ -89,37 +130,47 @@ public:
     static_assert(
         sizeof(bool) == sizeof(unsigned char),
         "bool sizing assumption violated");
-    std::vector<bool_as_char> maskCopy(maskBytes, maskBytes + nMask);
+    std::vector<bool_as_char> maskCopy(in.mask.begin(), in.mask.end());
+
+    std::vector<const float*> imagePtrs(in.images.size());
+    for (size_t i = 0; i < in.images.size(); i++) {
+      imagePtrs[i] = in.images[i].data();
+    }
 
     const int chunkSize = model_->hparams.chunk_size;
     const int actionDim = model_->hparams.action_dim;
-    RunResult result;
-    result.actions.assign(static_cast<size_t>(chunkSize) * actionDim, 0.0f);
+    std::vector<float> actions(
+        static_cast<size_t>(chunkSize) * actionDim, 0.0f);
     int nActionsOut = 0;
 
+    smolvla_timing timing{};
+    const float* noisePtr = in.noise.empty() ? nullptr : in.noise.data();
     // const_cast: smolvla_inference_with_timing's `const float**` parameter
     // matches an extern "C" header that predates C++ const-correctness for
     // pointer-to-pointer args; the function only reads through these.
     const bool ok = smolvla_inference_with_timing(
-        model_.get(), const_cast<const float**>(images), nImages, imgWidth,
-        imgHeight, state, stateDim, tokens,
-        reinterpret_cast<const bool*>(maskCopy.data()), nTokens, noise,
-        result.actions.data(), &nActionsOut, &result.timing);
+        model_.get(), const_cast<const float**>(imagePtrs.data()),
+        static_cast<int>(in.images.size()), in.imgWidth, in.imgHeight,
+        in.state.data(), static_cast<int>(in.state.size()), in.tokens.data(),
+        reinterpret_cast<const bool*>(maskCopy.data()),
+        static_cast<int>(in.tokens.size()), noisePtr, actions.data(),
+        &nActionsOut, &timing);
 
     if (!ok) {
       throw std::runtime_error("SmolVLA inference failed");
     }
 
-    result.actions.resize(static_cast<size_t>(nActionsOut) * actionDim);
-    return result;
+    // Worker thread is the only writer to lastTiming_; runtimeStats() is
+    // called by OutputQueue::queueJobEnded immediately after process()
+    // returns on the same thread, so no synchronisation needed.
+    lastTiming_ = timing;
+    actions.resize(static_cast<size_t>(nActionsOut) * actionDim);
+    return actions;
   }
 
-private:
-  // std::vector<bool> is a bitset; keep a regular char buffer so we can
-  // hand a real C bool pointer to the inference code.
-  using bool_as_char = unsigned char;
-
   std::unique_ptr<smolvla_model> model_;
+  smolvla_timing lastTiming_{};
+  int64_t runtimeBackendDevice_ = 0;
 };
 
 } // namespace qvac_lib_infer_vla

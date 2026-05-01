@@ -1,14 +1,19 @@
 #pragma once
 
-#include <cstring>
+#include <cstdint>
 #include <memory>
-#include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <qvac-lib-inference-addon-cpp/JsInterface.hpp>
 #include <qvac-lib-inference-addon-cpp/JsUtils.hpp>
 #include <qvac-lib-inference-addon-cpp/Logger.hpp>
+#include <qvac-lib-inference-addon-cpp/ModelInterfaces.hpp>
+#include <qvac-lib-inference-addon-cpp/addon/AddonJs.hpp>
+#include <qvac-lib-inference-addon-cpp/handlers/JsOutputHandlerImplementations.hpp>
+#include <qvac-lib-inference-addon-cpp/handlers/OutputHandler.hpp>
+#include <qvac-lib-inference-addon-cpp/queue/OutputCallbackJs.hpp>
 
 #include "../utils/LoggingMacros.hpp"
 #include "AddonCpp.hpp"
@@ -17,239 +22,183 @@ namespace qvac_lib_infer_vla {
 
 namespace detail {
 
-// Indirection wrapper so an explicit `destroyVlaModel` can null out the inner
-// model pointer while leaving the heap object reachable for the GC finalizer.
-// Without this, `js_create_external` stores a pointer the C++ side cannot zero,
-// and a GC finalizer running after `destroyVlaModel` would re-`delete` a
-// dangling `VlaModel*`.
-struct VlaHandle {
-  VlaModel* model = nullptr;
-};
-
-inline void finalizeVlaModel(js_env_t* /*env*/, void* data, void* /*hint*/) {
-  auto* handle = static_cast<VlaHandle*>(data);
-  if (handle == nullptr) return;
-  delete handle->model;
-  handle->model = nullptr;
-  delete handle;
+// Resolve the AddonJs instance handle (arg 0) to the underlying VlaModel.
+// All VLA-specific accessors (hparams, backendName) need this because the
+// framework only stores the model behind an IModel reference.
+inline VlaModel& vlaFromInstance(js_env_t* env, js_value_t* instanceHandle) {
+  using namespace qvac_lib_inference_addon_cpp;
+  auto& instance = JsInterface::getInstance(env, instanceHandle);
+  auto* vla = dynamic_cast<VlaModel*>(&instance.addonCpp->model.get());
+  if (vla == nullptr) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "Instance handle does not refer to a VlaModel");
+  }
+  return *vla;
 }
 
-inline VlaModel* unwrap(js_env_t* env, js_value_t* external) {
-  void* data = nullptr;
-  if (js_get_value_external(env, external, &data) != 0 || data == nullptr) {
-    throw std::runtime_error("invalid VLA model handle");
-  }
-  auto* handle = static_cast<VlaHandle*>(data);
-  if (handle->model == nullptr) {
-    throw std::runtime_error("VLA model has been destroyed");
-  }
-  return handle->model;
-}
-
-// Zero-copy view into a JS TypedArray's underlying ArrayBuffer. The pointer is
-// only valid for the duration of the surrounding native call (no JS callbacks
-// in flight), which is the contract the inference path already relies on.
-template <typename T>
-inline std::pair<const T*, size_t>
-typedArrayPtr(js_env_t* env, js_value_t* value, const char* expectedKind) {
-  T* data = nullptr;
+// Copy a JS Float32Array into a std::vector<float>. The framework runs
+// process() on a worker thread after the JS callback returns, so input
+// buffers must be owned copies — we cannot keep raw JS-side pointers like
+// the old sync runVlaModel did.
+inline std::vector<float> copyFloat32(js_env_t* env, js_value_t* jsArr) {
+  float* data = nullptr;
   size_t len = 0;
   if (js_get_typedarray_info(
           env,
-          value,
+          jsArr,
           nullptr,
           reinterpret_cast<void**>(&data),
           &len,
           nullptr,
           nullptr) != 0) {
-    throw std::runtime_error(std::string("expected ") + expectedKind);
+    throw std::runtime_error("expected Float32Array");
   }
-  return {data, len};
+  return {data, data + len};
 }
 
-inline js_value_t*
-float32ArrayFromVector(js_env_t* env, const std::vector<float>& data) {
-  js_value_t* arrayBuffer = nullptr;
-  void* arrayBufferData = nullptr;
-  const size_t byteLen = data.size() * sizeof(float);
-  if (js_create_arraybuffer(env, byteLen, &arrayBufferData, &arrayBuffer) !=
-      0) {
-    throw std::runtime_error("js_create_arraybuffer failed");
+inline std::vector<int32_t> copyInt32(js_env_t* env, js_value_t* jsArr) {
+  int32_t* data = nullptr;
+  size_t len = 0;
+  if (js_get_typedarray_info(
+          env,
+          jsArr,
+          nullptr,
+          reinterpret_cast<void**>(&data),
+          &len,
+          nullptr,
+          nullptr) != 0) {
+    throw std::runtime_error("expected Int32Array");
   }
-  if (byteLen > 0) {
-    std::memcpy(arrayBufferData, data.data(), byteLen);
+  return {data, data + len};
+}
+
+inline std::vector<uint8_t> copyUint8(js_env_t* env, js_value_t* jsArr) {
+  uint8_t* data = nullptr;
+  size_t len = 0;
+  if (js_get_typedarray_info(
+          env,
+          jsArr,
+          nullptr,
+          reinterpret_cast<void**>(&data),
+          &len,
+          nullptr,
+          nullptr) != 0) {
+    throw std::runtime_error("expected Uint8Array");
   }
-  js_value_t* typedArray = nullptr;
-  if (js_create_typedarray(
-          env, js_float32array, data.size(), arrayBuffer, 0, &typedArray) !=
-      0) {
-    throw std::runtime_error("js_create_typedarray failed");
+  return {data, data + len};
+}
+
+// Parse the run input object emitted by index.js into the std::any payload
+// that gets handed to the worker thread. Mirrors the field layout of
+// VlaInput exactly.
+inline VlaInput parseRunInput(js_env_t* env, js_value_t* inputVal) {
+  using namespace qvac_lib_inference_addon_cpp;
+  js::Object obj(env, inputVal);
+
+  VlaInput in;
+
+  js::Array imagesArr = obj.getProperty<js::Array>(env, "images");
+  const uint32_t nImages = imagesArr.size(env);
+  in.images.reserve(nImages);
+  for (uint32_t i = 0; i < nImages; i++) {
+    js::TypedArray<float> elem = imagesArr.get<js::TypedArray<float>>(env, i);
+    in.images.push_back(copyFloat32(env, elem));
   }
-  return typedArray;
+
+  in.imgWidth = obj.getPropertyAs<js::Number, int32_t>(env, "imgWidth");
+  in.imgHeight = obj.getPropertyAs<js::Number, int32_t>(env, "imgHeight");
+
+  in.state = copyFloat32(
+      env, obj.getProperty<js::TypedArray<float>>(env, "state"));
+  in.tokens = copyInt32(
+      env, obj.getProperty<js::TypedArray<int32_t>>(env, "tokens"));
+  in.mask = copyUint8(
+      env, obj.getProperty<js::TypedArray<uint8_t>>(env, "mask"));
+
+  if (auto noiseOpt =
+          obj.getOptionalProperty<js::TypedArray<float>>(env, "noise")) {
+    in.noise = copyFloat32(env, *noiseOpt);
+  }
+
+  return in;
 }
 
 } // namespace detail
 
-// createVlaModel(ggufPath: string, backend: 'auto' | 'cpu') -> External<VlaHandle*>
+// createInstance(jsHandle, { ggufPath, backend }, outputCb) -> External
 //
-// `backend === 'cpu'` forces the CPU backend even on a runner that has a
-// usable GPU; any other value (including the canonical `'auto'`) lets the
-// addon pick the best device via `pickBestGpuDevice`.
-inline js_value_t* createVlaModel(js_env_t* env, js_callback_info_t* info) try {
+// Builds the VlaModel + the framework's output callback stack and registers
+// it as a managed instance. `jsHandle` is the JS-side wrapper object that
+// the framework passes back as the first argument of every outputCb call.
+// `backend === 'cpu'` forces the CPU backend even on a runner with a usable
+// GPU; any other value lets the addon pick the best device.
+inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
 
   JsArgsParser args(env, info);
-  const std::string ggufPath =
-      js::String(env, args.get(0, "ggufPath")).as<std::string>(env);
-  const std::string backend =
-      js::String(env, args.get(1, "backend")).as<std::string>(env);
+
+  const std::string ggufPath = args.getMapEntry(1, "ggufPath");
+  const std::string backend = args.getMapEntry(1, "backend");
   const bool forceCpu = (backend == "cpu");
 
   auto model = std::make_unique<VlaModel>(ggufPath, forceCpu);
-  auto handle = std::make_unique<detail::VlaHandle>();
-  handle->model = model.release();
 
-  js_value_t* external = nullptr;
-  if (js_create_external(
-          env, handle.get(), detail::finalizeVlaModel, nullptr, &external) !=
-      0) {
-    delete handle->model;
-    throw std::runtime_error("js_create_external failed");
-  }
-  handle.release(); // ownership transferred to the JS-side finalizer
-  return external;
+  // VLA emits a single Float32Array (the action chunk) per job; runtime
+  // stats and errors are added to the handler stack by OutputCallBackJs.
+  out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
+  outHandlers.add(
+      std::make_shared<out_handl::JsTypedArrayOutputHandler<float>>());
+  std::unique_ptr<OutputCallBackInterface> callback =
+      std::make_unique<OutputCallBackJs>(
+          env,
+          args.get(0, "jsHandle"),
+          args.getFunction(2, "outputCallback"),
+          std::move(outHandlers));
+
+  auto addon = std::make_unique<AddonJs>(
+      env, std::move(callback), std::move(model));
+  return JsInterface::createInstance(env, std::move(addon));
 }
 JSCATCH
 
-// destroyVlaModel(handle: External) -> undefined
+// runJob(instance, { type: 'vla', input: { images, imgWidth, imgHeight,
+//   state, tokens, mask, noise? } }) -> bool
 //
-// Eagerly frees the underlying VlaModel and zeroes the inner pointer in the
-// VlaHandle wrapper. The handle itself stays alive until the JS engine GCs the
-// external; finalizeVlaModel then frees the empty handle. Subsequent calls on
-// the same external throw via the unwrap() guard rather than UB on a freed
-// pointer.
-inline js_value_t*
-destroyVlaModel(js_env_t* env, js_callback_info_t* info) try {
+// Returns true if the job was accepted, false if a previous job is still
+// in flight. Output (Float32Array actions) and stats arrive asynchronously
+// on the outputCb registered at createInstance.
+inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
 
   JsArgsParser args(env, info);
-  void* data = nullptr;
-  if (js_get_value_external(env, args.get(0, "handle"), &data) == 0 &&
-      data != nullptr) {
-    auto* handle = static_cast<detail::VlaHandle*>(data);
-    delete handle->model;
-    handle->model = nullptr;
+  auto [type, jsInput] = JsInterface::getInput(args);
+  if (type != "vla") {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "Unknown input type: " + type);
   }
-  js_value_t* undef = nullptr;
-  js_get_undefined(env, &undef);
-  return undef;
+
+  std::any input{detail::parseRunInput(env, jsInput)};
+  return JsInterface::getInstance(env, args.get(0, "instance"))
+      .runJob(std::move(input));
 }
 JSCATCH
 
-// runVlaModel(handle, opts) -> Float32Array
-//   opts: {
-//     images: Float32Array[],        // each is contiguous CHW, length 3*H*W
-//     imgWidth: number,
-//     imgHeight: number,
-//     state: Float32Array,
-//     tokens: Int32Array,
-//     mask: Uint8Array,              // attention mask (0/1), same length as
-//     tokens noise?: Float32Array,          // optional (chunk_size ×
-//     max_action_dim)
-//   }
-inline js_value_t* runVlaModel(js_env_t* env, js_callback_info_t* info) try {
-  using namespace qvac_lib_inference_addon_cpp;
-
-  JsArgsParser args(env, info);
-  VlaModel* model = detail::unwrap(env, args.get(0, "handle"));
-  js::Object opts(env, args.get(1, "opts"));
-
-  // Zero-copy: walk the images array and capture each underlying ArrayBuffer
-  // pointer. Pointers stay valid for the duration of this synchronous call
-  // because the JS engine is paused in the native callback.
-  js::Array imagesArr = opts.getProperty<js::Array>(env, "images");
-  const uint32_t imagesLen = imagesArr.size(env);
-  std::vector<const float*> imagePtrs(imagesLen);
-  for (uint32_t i = 0; i < imagesLen; i++) {
-    js::TypedArray<float> elem = imagesArr.get<js::TypedArray<float>>(env, i);
-    auto [ptr, len] = detail::typedArrayPtr<float>(env, elem, "Float32Array");
-    (void)len;
-    imagePtrs[i] = ptr;
-  }
-
-  const int imgWidth = opts.getPropertyAs<js::Number, int32_t>(env, "imgWidth");
-  const int imgHeight =
-      opts.getPropertyAs<js::Number, int32_t>(env, "imgHeight");
-
-  auto [statePtr, stateLen] = detail::typedArrayPtr<float>(
-      env, opts.getProperty<js::TypedArray<float>>(env, "state"),
-      "Float32Array");
-  auto [tokensPtr, tokensLen] = detail::typedArrayPtr<int32_t>(
-      env, opts.getProperty<js::TypedArray<int32_t>>(env, "tokens"),
-      "Int32Array");
-  auto [maskPtr, maskLen] = detail::typedArrayPtr<uint8_t>(
-      env, opts.getProperty<js::TypedArray<uint8_t>>(env, "mask"),
-      "Uint8Array");
-
-  const float* noisePtr = nullptr;
-  size_t noiseLen = 0;
-  if (auto noiseOpt =
-          opts.getOptionalProperty<js::TypedArray<float>>(env, "noise")) {
-    std::tie(noisePtr, noiseLen) =
-        detail::typedArrayPtr<float>(env, *noiseOpt, "Float32Array");
-  }
-
-  VlaModel::RunResult result = model->run(
-      imagePtrs.data(), static_cast<int>(imagesLen), imgWidth, imgHeight,
-      statePtr, static_cast<int>(stateLen), tokensPtr,
-      static_cast<int>(tokensLen), maskPtr, static_cast<int>(maskLen), noisePtr,
-      static_cast<int>(noiseLen));
-
-  js_value_t* obj = nullptr;
-  if (js_create_object(env, &obj) != 0) {
-    throw std::runtime_error("js_create_object failed");
-  }
-
-  js_value_t* actionsArr = detail::float32ArrayFromVector(env, result.actions);
-  if (js_set_named_property(env, obj, "actions", actionsArr) != 0) {
-    throw std::runtime_error("js_set_named_property(actions) failed");
-  }
-
-  js_value_t* stats = nullptr;
-  if (js_create_object(env, &stats) != 0) {
-    throw std::runtime_error("js_create_object(stats) failed");
-  }
-  auto setDouble = [&](const char* name, double value) {
-    js_value_t* v = nullptr;
-    js_create_double(env, value, &v);
-    js_set_named_property(env, stats, name, v);
-  };
-  setDouble("vision_ms", result.timing.vision_ms);
-  setDouble("smollm2_compute_ms", result.timing.smollm2_compute_ms);
-  setDouble("smollm2_total_ms", result.timing.smollm2_total_ms);
-  setDouble("ode_ms", result.timing.ode_ms);
-  setDouble("total_ms", result.timing.total_ms);
-  if (js_set_named_property(env, obj, "stats", stats) != 0) {
-    throw std::runtime_error("js_set_named_property(stats) failed");
-  }
-
-  return obj;
-}
-JSCATCH
-
-// getVlaBackendName(handle) -> string
+// getVlaBackendName(instance) -> string
 //
 // Name of the ggml backend the loaded model is running on ("CPU", "Vulkan",
-// "OpenCL", "Metal", …). Used by the integration test to tag each perf-report
-// row with its execution provider so CPU vs GPU runs are distinguishable in
-// the Step Summary tables.
+// "OpenCL", "Metal", …). Used by the integration test to tag each perf-
+// report row with its execution provider so CPU vs GPU runs are
+// distinguishable in the Step Summary tables. RuntimeStats already exposes
+// the numeric `backendDevice` (0/1) — this returns the human-readable name.
 inline js_value_t*
 getVlaBackendName(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
 
   JsArgsParser args(env, info);
-  VlaModel* model = detail::unwrap(env, args.get(0, "handle"));
-  const std::string name = model->backendName();
+  VlaModel& model = detail::vlaFromInstance(env, args.get(0, "instance"));
+  const std::string name = model.backendName();
 
   js_value_t* str = nullptr;
   if (js_create_string_utf8(
@@ -263,14 +212,15 @@ getVlaBackendName(js_env_t* env, js_callback_info_t* info) try {
 }
 JSCATCH
 
-// getVlaHparams(handle) -> { chunkSize, actionDim, maxActionDim, maxStateDim,
-//                            tokenizerMaxLength, visionImageSize }
+// getVlaHparams(instance) -> { chunkSize, actionDim, maxActionDim,
+//                              maxStateDim, tokenizerMaxLength,
+//                              visionImageSize }
 inline js_value_t* getVlaHparams(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
 
   JsArgsParser args(env, info);
-  VlaModel* model = detail::unwrap(env, args.get(0, "handle"));
-  const smolvla_hparams& hp = model->hparams();
+  VlaModel& model = detail::vlaFromInstance(env, args.get(0, "instance"));
+  const smolvla_hparams& hp = model.hparams();
 
   js_value_t* obj = nullptr;
   if (js_create_object(env, &obj) != 0) {
