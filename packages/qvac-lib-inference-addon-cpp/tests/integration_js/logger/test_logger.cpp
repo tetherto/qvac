@@ -5,21 +5,13 @@
 #include "qvac-lib-inference-addon-cpp/JsInterface.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp" //For QLOG test only
 
-class TestLogger {
-};
-
-using JsIfTestLogger = qvac_lib_inference_addon_cpp::JsInterface<TestLogger>;
-
+namespace addon_cpp = qvac_lib_inference_addon_cpp;
 namespace js = qvac_lib_inference_addon_cpp::js;
 namespace logger = qvac_lib_inference_addon_cpp::logger;
 
-// Specialization of JsInterface methods
-namespace qvac_lib_inference_addon_cpp {
-}
-
 namespace test_logger {
   auto setLogger(js_env_t *env, js_callback_info_t *info) -> js_value_t* {
-    return JsIfTestLogger::setLogger(env, info);
+    return addon_cpp::JsInterface::setLogger(env, info);
   }
 
   auto cppLog(js_env_t* env, js_callback_info_t* info) -> js_value_t* try {
@@ -67,6 +59,6 @@ namespace test_logger {
   }
 
   auto releaseLogger(js_env_t *env, js_callback_info_t *info) -> js_value_t* {
-    return JsIfTestLogger::releaseLogger(env, info);
+    return addon_cpp::JsInterface::releaseLogger(env, info);
   }
 }
