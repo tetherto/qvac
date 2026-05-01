@@ -14,16 +14,18 @@ namespace vla_backend_selection {
 //   "Mali-G715"       -> 0
 int parseAdrenoModel(const std::string& description);
 
-// Pick the best GPU device available, applying the Adreno < 800 gate:
+// Pick the best GPU device available, applying the Adreno gate:
 //
-//   Adreno 800+      -> accept
-//   Adreno < 800     -> reject (driver bugs / unreliable on older Adreno;
-//                                caller falls back to CPU)
+//   Any Adreno       -> reject (driver-level matmul/dequant produces
+//                                numerically incorrect ggml output —
+//                                Samsung S25 Ultra Adreno 830 measured at
+//                                cos sim 0.73 vs PyTorch on LIBERO real
+//                                fixture, vs >0.999 on every other accepted
+//                                Vulkan target. Caller falls back to CPU.)
 //   Non-Adreno GPU   -> accept (Vulkan on desktop / Mali, Metal on Apple)
 //
-// Mirrors lib-infer-diffusion's `resolveBackendForDevice` and
-// qvac-lib-infer-llamacpp-llm's `BackendSelection`. Returns nullptr if no
-// acceptable GPU exists; the caller should then init the CPU backend.
+// Returns nullptr if no acceptable GPU exists; the caller should then init
+// the CPU backend.
 ggml_backend_dev_t pickBestGpuDevice();
 
 } // namespace vla_backend_selection
