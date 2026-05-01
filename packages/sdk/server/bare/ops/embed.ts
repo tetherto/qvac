@@ -54,14 +54,14 @@ export async function embed(params: EmbedParams): Promise<EmbedResult> {
       }
       return normalizeVector(embeddingVector);
     });
-    return buildUnaryResult({ embedding }, modelExecutionMs, stats) as EmbedResult;
+    return buildUnaryResult({ embedding }, modelExecutionMs, stats);
   } else {
     const embeddingVector = embeddingsArray?.[0];
     if (!embeddingVector || embeddingVector.length === 0) {
       throw new EmbedNoEmbeddingsError();
     }
 
-    return buildUnaryResult({ embedding: normalizeVector(embeddingVector) }, modelExecutionMs, stats) as EmbedResult;
+    return buildUnaryResult({ embedding: normalizeVector(embeddingVector) }, modelExecutionMs, stats);
   }
 }
 

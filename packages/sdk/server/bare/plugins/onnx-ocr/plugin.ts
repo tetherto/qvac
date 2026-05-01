@@ -78,8 +78,8 @@ function createOCRModel(
     opts: { stats: true },
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
-  const model = new ONNXOcr(args as any);
+   
+  const model = new ONNXOcr(args);
 
   return model;
 }

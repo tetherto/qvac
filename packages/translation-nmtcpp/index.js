@@ -168,6 +168,21 @@ class TranslationNmtcpp {
   }
 
   /**
+   * Returns the name of the currently-loaded non-CPU backend (e.g. 'Vulkan0',
+   * 'OpenCL', 'Metal'), or a sentinel:
+   *   - 'Unloaded'     — model is not loaded
+   *   - 'Bergamot-CPU' — Bergamot model (CPU-only by design)
+   *   - 'CPU'          — GGML backend loaded, only CPU backend registered
+   * @returns {string}
+   */
+  getActiveBackendName () {
+    if (!this.addon) {
+      return 'Unloaded'
+    }
+    return this.addon.getActiveBackendName()
+  }
+
+  /**
    * Checks if this is a Bergamot model
    * @private
    * @returns {boolean}
@@ -220,7 +235,25 @@ class TranslationNmtcpp {
   }
 
   async _load () {
-    const { use_gpu: useGpu, ...otherConfig } = this._config
+    const otherConfig = { ...this._config }
+
+    // Accept camelCase aliases for the GPU keys so the config object can
+    // stay consistent with backendsDir/openclCacheDir. The C++ binding
+    // expects snake_case (mirrors nmt_context_params field names), so we
+    // translate camelCase → snake_case here. snake_case takes precedence
+    // when both are present (explicit user choice wins over alias).
+    if (otherConfig.use_gpu === undefined && otherConfig.useGPU !== undefined) {
+      otherConfig.use_gpu = otherConfig.useGPU
+    }
+    if (otherConfig.gpu_backend === undefined && otherConfig.gpuBackend !== undefined) {
+      otherConfig.gpu_backend = otherConfig.gpuBackend
+    }
+    if (otherConfig.gpu_device === undefined && otherConfig.gpuDevice !== undefined) {
+      otherConfig.gpu_device = otherConfig.gpuDevice
+    }
+    delete otherConfig.useGPU
+    delete otherConfig.gpuBackend
+    delete otherConfig.gpuDevice
 
     if (otherConfig.backendsDir === undefined) {
       otherConfig.backendsDir = path.join(__dirname, 'prebuilds')
@@ -229,10 +262,6 @@ class TranslationNmtcpp {
     const configurationParams = {
       path: this._files.model,
       config: otherConfig
-    }
-
-    if (useGpu !== undefined) {
-      configurationParams.use_gpu = useGpu
     }
 
     this._configureBergamotModel(configurationParams)

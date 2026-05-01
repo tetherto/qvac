@@ -114,11 +114,32 @@ function createFinetuneReplyRequest(params: FinetuneReplyParams) {
  * console.log(pauseResult.status);
  * ```
  */
+/**
+ * Run / start / resume a finetune job. Returns a handle with a streaming
+ * `progressStream` and a terminal `result` promise.
+ *
+ * @overloadLabel "Run / start / resume"
+ * @param params - The finetuning run parameters (see the function-level
+ *   docs for the full breakdown of `params.options`).
+ * @param rpcOptions - Optional RPC transport options.
+ * @returns A `FinetuneHandle` with `progressStream` (yields per-step loss
+ *   metrics) and `result` (resolves once the run terminates).
+ */
 export function finetune(
   params: FinetuneRunParams,
   rpcOptions?: RPCOptions,
 ): FinetuneHandle;
 
+/**
+ * Stop / pause / cancel an in-flight finetune, or query its current state.
+ *
+ * @overloadLabel "Stop / getState / pause / cancel"
+ * @param params - Finetune control parameters; `params.operation` selects
+ *   `pause`, `cancel`, or `getState`.
+ * @param rpcOptions - Optional RPC transport options.
+ * @returns A promise that resolves to the current `FinetuneResult`
+ *   (status + last-known progress).
+ */
 export function finetune(
   params: FinetuneReplyParams,
   rpcOptions?: RPCOptions,

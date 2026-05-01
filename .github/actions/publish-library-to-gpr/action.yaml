@@ -120,9 +120,11 @@ runs:
       shell: bash
       working-directory: ${{ steps.resolve_dir.outputs.dir }}
       if: steps.determine_version.outputs.version != steps.determine_version.outputs.package_version
+      env:
+        PKG_VERSION: ${{ steps.determine_version.outputs.version }}
       run: |
-        echo "Updating version to ${{ steps.determine_version.outputs.version }}"
-        npm version ${{ steps.determine_version.outputs.version }} --no-git-tag-version --allow-same-version
+        echo "Updating version to ${PKG_VERSION}"
+        npm version "${PKG_VERSION}" --no-git-tag-version --allow-same-version
 
     - name: Check version exists in GitHub Packages
       continue-on-error: true

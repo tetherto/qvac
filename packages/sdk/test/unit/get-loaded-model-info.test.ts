@@ -15,10 +15,9 @@ function makeId(prefix: string) {
 
 test("getLoadedModelInfo: delegated entry returns providerInfo + empty handlers", function (t) {
   const modelId = makeId("delegated-loaded-info");
-  const topic = "test-topic-deadbeef";
   const providerPublicKey = "test-provider-public-key-deadbeef";
 
-  registerModel(modelId, { topic, providerPublicKey });
+  registerModel(modelId, { providerPublicKey });
 
   try {
     const response = handleGetLoadedModelInfo({
@@ -36,7 +35,6 @@ test("getLoadedModelInfo: delegated entry returns providerInfo + empty handlers"
     }
 
     t.alike(response.info.handlers, []);
-    t.is(response.info.providerInfo.topic, topic);
     t.is(response.info.providerInfo.providerPublicKey, providerPublicKey);
   } finally {
     unregisterModel(modelId);

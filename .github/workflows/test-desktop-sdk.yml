@@ -370,6 +370,7 @@ jobs:
               '--runId=${{ steps.runid.outputs.runId }}',
               '--consumer-timeout=${{ inputs.consumer-timeout }}',
               '--config=.',
+              '--report-dir=./reports',
               ...filterArgs,
               ...suiteArgs,
               ...excludeSuiteArgs
