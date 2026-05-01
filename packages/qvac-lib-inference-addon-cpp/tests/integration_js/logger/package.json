@@ -6,12 +6,7 @@
     "build": "bare-make generate && bare-make build && bare-make install",
     "lint": "standard",
     "lint:fix": "standard --fix",
-    "test": "npm run test:unit && npm run test:integration",
-    "test:dts": "tsc index.d.ts --noEmit",
-    "test:unit:generate": "brittle -r test/unit/all.js test/unit/*.test.js",
-    "test:unit": "npm run test:unit:generate && bare test/unit/all.js",
-    "test:integration:generate": "brittle -r test/integration/all.js test/integration/*.test.js",
-    "test:integration": "npm run test:integration:generate && bare test/integration/all.js"
+    "test": "bare test.js"
   },
   "files": [
     "binding.js",
@@ -40,14 +35,9 @@
   ],
   "license": "Apache-2.0",
   "devDependencies": {
-    "@qvac/dl-base": "0.2.1",
-    "bare-fs": "^3.0.2",
-    "bare-path": "^3.0.0",
-    "bare-stream": "^2.3.0",
     "brittle": "^3.16.3",
     "cmake-bare": "^1.5.2",
-    "cmake-vcpkg": "^1.0.2",
     "standard": "^17.0.0"
   },
-  "bugs": "https://github.com/tetherto/qvac/issues"
+  "bugs": "https://github.com/tetherto/qvac-lib-inference-addon-cpp/issues"
 }
