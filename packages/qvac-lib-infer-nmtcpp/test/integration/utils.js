@@ -763,6 +763,47 @@ function formatPerformanceMetrics (label, metrics, opts = {}) {
 // ============================================================================
 
 /**
+ * Backend names that indicate the addon did NOT bind a real GPU device at the
+ * requested index. Used both by `discoverGpuDevices()` to terminate probing
+ * and by `resolveExecutionProvider()` to mark a synthetic GPU test as a
+ * `cpu (fallback)` row when GGML couldn't load the requested backend.
+ *
+ * - `CPU` / `Unloaded` — addon-level sentinels emitted when no backend is
+ *   bound (e.g. before activate(), or when GGML loader fix isn't available
+ *   on the runner).
+ * - `Bergamot-CPU` — Bergamot models are intgemm-only and never expose a GPU
+ *   backend; this sentinel surfaces the architectural limitation.
+ * - `BLAS` — GGML's CPU-side matmul helper on macOS. Reports as a "device"
+ *   in enumeration but is conceptually CPU work, not a separate GPU.
+ */
+const CPU_SENTINEL_BACKENDS = new Set([
+  'CPU', 'Unloaded', 'Bergamot-CPU', 'BLAS'
+])
+
+/**
+ * Normalise an addon `getActiveBackendName()` result into the
+ * `execution_provider` tag recorded in perf-report.json.
+ *
+ * - Real GPU backend (e.g. `Metal`, `Vulkan0`, `OpenCL`) → lowercased,
+ *   trailing-digit-stripped tag (`metal`, `vulkan`, `opencl`) so per-EP
+ *   baselines stay stable across multi-GPU systems.
+ * - `useGpu === false` + any sentinel → `cpu` (so a `[CPU]` label never
+ *   reports `blas` in the EP column on macOS).
+ * - `useGpu === true` + sentinel → `cpu (fallback)` to make it obvious in
+ *   the Step Summary that the requested GPU backend wasn't available and
+ *   the test ran on CPU. Once Ian's loader fix lands per platform
+ *   (QVAC-17640 / QVAC-17880), the same row auto-flips to the real backend
+ *   tag without further CI work.
+ */
+function resolveExecutionProvider (backendName, useGpu) {
+  if (backendName && !CPU_SENTINEL_BACKENDS.has(backendName)) {
+    return backendName.toLowerCase().replace(/\s+/g, '-').replace(/\d+$/, '')
+  }
+  if (!useGpu) return 'cpu'
+  return 'cpu (fallback)'
+}
+
+/**
  * Maximum GPU device indices to probe.  Covers multi-GPU desktops (e.g.
  * Vulkan0 + Vulkan1) and mixed-backend mobile (Vulkan + OpenCL).  Probing
  * stops early when a device index falls back to CPU, so the actual cost is
@@ -797,6 +838,7 @@ const _logger = createLogger()
 
 async function _probeGpuDevices () {
   const devices = []
+  const seenBackends = new Set()
   const modelPath = await ensureIndicTransModel()
   // Lazy require: utils.js is imported by test files that may not need the
   // native addon (e.g. fixture-only helpers).  Loading it at module scope
@@ -827,9 +869,20 @@ async function _probeGpuDevices () {
       const name = model.getActiveBackendName()
       await model.unload()
 
-      if (name === 'CPU' || name === 'Unloaded' || name === 'Bergamot-CPU') {
+      // CPU sentinels — the addon couldn't bind a real GPU backend at this
+      // index. BLAS is GGML's CPU-side matmul accelerator on macOS and is
+      // not a meaningful "GPU device" for our perf reports. Stop probing
+      // here so callers don't get redundant rows.
+      if (CPU_SENTINEL_BACKENDS.has(name)) {
         break
       }
+      // Dedupe by backend name so a single physical GPU returned at multiple
+      // indices (observed on Android where Vulkan0 came back four times)
+      // doesn't pollute the table with identical rows.
+      if (seenBackends.has(name)) {
+        break
+      }
+      seenBackends.add(name)
       devices.push({ index: idx, name })
     } catch (err) {
       _logger.warn('[discoverGpuDevices] probe at gpu_device=' + idx +
@@ -865,5 +918,7 @@ module.exports = {
 
   // GPU discovery
   discoverGpuDevices,
-  MAX_GPU_DEVICE_PROBES
+  MAX_GPU_DEVICE_PROBES,
+  CPU_SENTINEL_BACKENDS,
+  resolveExecutionProvider
 }
