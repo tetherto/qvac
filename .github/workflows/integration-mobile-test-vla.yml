@@ -41,7 +41,37 @@ env:
 # secrets and rename here when VLA needs an isolated Device Farm budget.
 
 jobs:
+  # Defense-in-depth gate for workflow_dispatch. The repository's PR entry
+  # point (on-pr-vla.yml) already runs authorize-pr before invoking this
+  # workflow over workflow_call, so workflow_call runs are pre-authorized.
+  # workflow_dispatch, however, lets anyone with the dispatch permission
+  # supply an arbitrary `ref` — silence CodeQL's artifact-poisoning warning
+  # by making the trust check explicit: refuse to run unless the dispatching
+  # actor has write or higher on the repo.
+  authorize:
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "workflow_call run inherits authorize-pr from caller"
+
+  authorize-dispatch:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Verify dispatcher has write permission
+        uses: scherermichael-oss/action-has-permission@136e061bfe093832d87f090dd768e14e27a740d3 # 1.0.6
+        with:
+          required-permission: write
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   build-and-test:
+    needs: [authorize, authorize-dispatch]
+    if: |
+      always() &&
+      (needs.authorize.result == 'success' || needs.authorize-dispatch.result == 'success')
     name: Build ${{ matrix.platform }} and Run E2E Tests
     runs-on: ${{ matrix.runner }}
     environment: release
