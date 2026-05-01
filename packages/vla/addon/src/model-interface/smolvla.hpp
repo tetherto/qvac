@@ -75,12 +75,15 @@ struct smolvla_hparams {
   // Tokenizer
   int tokenizer_max_length = 48;
 
-  // Derived
+  // Derived. Guard against zero divisors so a malformed GGUF that slips a
+  // zero past the load-time hparam validation cannot trigger SIGFPE here.
   int patches_per_image() const {
+    if (vision_patch_size <= 0) return 0;
     int s = vision_image_size / vision_patch_size;
     return s * s; // 1024
   }
   int tokens_per_image() const {
+    if (connector_scale_factor <= 0) return 0;
     return patches_per_image() /
            (connector_scale_factor * connector_scale_factor); // 64
   }
@@ -206,9 +209,16 @@ struct smolvla_model {
   std::vector<float> time_embed_inv_periods;
 
   // Backends
-  ggml_backend_t backend;     // primary (Vulkan if available)
-  ggml_backend_t backend_cpu; // CPU fallback for unsupported ops
-  bool has_gpu;               // true if Vulkan/GPU backend is active
+  ggml_backend_t backend = nullptr;     // primary (Vulkan if available)
+  ggml_backend_t backend_cpu = nullptr; // CPU fallback for unsupported ops
+  bool has_gpu = false;                 // true if Vulkan/GPU backend is active
+
+  // Cleans up backends, mmap, weight context, and buffers via
+  // smolvla_free_model. Defined out-of-line in smolvla.cpp because
+  // smolvla_free_model is forward-declared below. Required so a partially
+  // initialised model is freed when smolvla_load_model fails and the
+  // owning unique_ptr unwinds (e.g. VlaModel constructor throws).
+  ~smolvla_model();
 };
 
 // ============================================================

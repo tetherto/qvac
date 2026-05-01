@@ -918,6 +918,11 @@ extern "C" bool smolvla_load_model(const char* path, smolvla_model* model_ptr,
     QLOG_IF(Priority::ERROR, "smolvla_load_model: failed to open GGUF file");
     return false;
   }
+  // Hand ownership of ctx_data to the model immediately so any subsequent
+  // failure path leaks neither the ggml context nor the backends — the
+  // smolvla_model destructor (called when the caller's unique_ptr unwinds)
+  // takes care of cleanup via smolvla_free_model.
+  model.ctx_w = ctx_data;
 
   int64_t n_tensors = gguf_get_n_tensors(gguf);
   QLOG_IF(
@@ -960,6 +965,63 @@ extern "C" bool smolvla_load_model(const char* path, smolvla_model* model_ptr,
   hp.max_state_dim = gguf_get_u32(gguf, "smolvla.flow.max_state_dim", 32);
   hp.action_dim = gguf_get_u32(gguf, "smolvla.flow.action_dim", 7);
 
+  // Sanity-check hparams loaded from GGUF before they feed any sizing
+  // arithmetic. gguf_get_u32 returns uint32; values >INT_MAX wrap to negative
+  // when assigned to int and would silently produce negative-sized vectors,
+  // huge tensor allocations, or division-by-zero in the derived helpers.
+  // Reject the file rather than allocate from a bad shape.
+  auto in_range = [](int v, int lo, int hi) { return v >= lo && v <= hi; };
+  const bool hparams_ok =
+      in_range(hp.vision_hidden_size, 1, 65536) &&
+      in_range(hp.vision_intermediate, 1, 1 << 20) &&
+      in_range(hp.vision_num_layers, 1, 256) &&
+      in_range(hp.vision_num_heads, 1, 1024) &&
+      in_range(hp.vision_image_size, 1, 16384) &&
+      in_range(hp.vision_patch_size, 1, 1024) &&
+      in_range(hp.connector_scale_factor, 1, 256) &&
+      in_range(hp.text_hidden_size, 1, 65536) &&
+      in_range(hp.text_intermediate, 1, 1 << 20) &&
+      in_range(hp.text_num_layers, 1, 256) &&
+      in_range(hp.text_num_heads, 1, 1024) &&
+      in_range(hp.text_num_kv_heads, 1, 1024) &&
+      in_range(hp.text_head_dim, 1, 1024) &&
+      // expert_hidden_size is divided by 2 for the time-embed half-dim
+      // table; require >=2 so the table is non-empty.
+      in_range(hp.expert_hidden_size, 2, 65536) &&
+      in_range(hp.expert_intermediate, 1, 1 << 20) &&
+      in_range(hp.expert_num_layers, 1, 256) &&
+      in_range(hp.expert_num_heads, 1, 1024) &&
+      in_range(hp.expert_num_kv_heads, 1, 1024) &&
+      in_range(hp.self_attn_every_n, 1, 256) &&
+      in_range(hp.num_ode_steps, 1, 1024) &&
+      in_range(hp.chunk_size, 1, 1024) &&
+      in_range(hp.max_action_dim, 1, 1024) &&
+      in_range(hp.max_state_dim, 1, 1024) &&
+      in_range(hp.action_dim, 1, hp.max_action_dim);
+  if (!hparams_ok) {
+    QLOG_IF(
+        Priority::ERROR,
+        "smolvla_load_model: hparams out of range — refusing to load");
+    gguf_free(gguf);
+    return false;
+  }
+
+  // The denoise step graph indexes VLM KV arrays (sized text_num_layers in
+  // smolvla_inference_with_timing) using the expert layer loop bound, so the
+  // two layer counts must match. With matching counts the indexing is in
+  // bounds; without them, every cross-attention layer reads past the array.
+  if (hp.text_num_layers != hp.expert_num_layers) {
+    QLOG_IF(
+        Priority::ERROR,
+        "smolvla_load_model: text_num_layers (" +
+            std::to_string(hp.text_num_layers) +
+            ") must equal expert_num_layers (" +
+            std::to_string(hp.expert_num_layers) +
+            ") — KV cache arrays are shared between text and expert");
+    gguf_free(gguf);
+    return false;
+  }
+
   // Precompute 1/period table for the sinusoidal time embedding. Constant
   // across all ODE steps so we pay the powf cost once instead of per-step.
   {
@@ -984,8 +1046,8 @@ extern "C" bool smolvla_load_model(const char* path, smolvla_model* model_ptr,
           std::to_string(hp.expert_num_layers) + "L/" +
           std::to_string(hp.expert_hidden_size) + "d");
 
-  // 3. Map tensor names to model struct fields
-  model.ctx_w = ctx_data;
+  // 3. Map tensor names to model struct fields. (model.ctx_w already wired
+  // to ctx_data above so failure paths can rely on the destructor.)
 
   // Vision encoder
   model.vision.patch_embed_weight =
@@ -1396,6 +1458,10 @@ extern "C" void smolvla_free_model(smolvla_model* model_ptr) {
     model.backend_cpu = nullptr;
   }
 }
+
+// Defined here so it can call the C-linkage smolvla_free_model declared in
+// the header. Idempotent — safe to chain with VlaModel's explicit free.
+smolvla_model::~smolvla_model() { smolvla_free_model(this); }
 
 // ============================================================
 // Full Inference Pipeline
