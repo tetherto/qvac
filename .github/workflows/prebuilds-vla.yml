@@ -2,18 +2,14 @@
 #
 # Routed through .github/workflows/reusable-prebuilds.yml after the
 # consolidation in QVAC-17422 (#1806). VLA-specific knobs (Vulkan SDK,
-# Linux X11/Xrandr packages, optional Vulkan profiling) are passed as
-# inputs to the reusable; everything else (matrix, checkout, vcpkg,
-# bare-make, strip, upload, merge) lives in the reusable workflow.
+# Linux X11/Xrandr packages) are passed as inputs to the reusable;
+# everything else (matrix, checkout, vcpkg, bare-make, strip, upload,
+# merge) lives in the reusable workflow.
 name: "Prebuilds (Vla)"
 
 on:
   workflow_dispatch:
     inputs:
-      vk-profiling:
-        description: "Enable Vulkan profiling (-D VK_PROFILING=ON)"
-        type: boolean
-        default: false
       workdir:
         description: "Working directory (optional)"
         required: false
@@ -30,11 +26,6 @@ on:
         type: string
         required: false
         default: "tetherto/qvac"
-      vk-profiling:
-        description: "Enable Vulkan profiling"
-        type: boolean
-        required: false
-        default: false
       workdir:
         description: "Working directory (optional)"
         required: false
@@ -58,5 +49,4 @@ jobs:
       artifact-name-prefix: vla-
       linux-extra-packages: libxi-dev libxtst-dev libxrandr-dev
       include-vulkan-sdk: true
-      extra-cmake-defines: ${{ inputs.vk-profiling && '-D VK_PROFILING=ON' || '' }}
     secrets: inherit

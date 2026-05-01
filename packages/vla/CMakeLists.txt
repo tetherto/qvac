@@ -7,11 +7,6 @@ if(BUILD_TESTING)
   list(APPEND VCPKG_MANIFEST_FEATURES "tests")
 endif()
 
-option(VK_PROFILING "Force vk performance logging in qvac-fabric" OFF)
-if(VK_PROFILING)
-  list(APPEND VCPKG_MANIFEST_FEATURES "vk-profiling")
-endif()
-
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 

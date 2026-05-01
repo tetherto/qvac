@@ -23,17 +23,6 @@
       "dependencies": [
         "gtest"
       ]
-    },
-    "vk-profiling": {
-      "description": "Force vk performance logging in qvac-fabric",
-      "dependencies": [
-        {
-          "name": "qvac-fabric",
-          "features": [
-            "force-profiler"
-          ]
-        }
-      ]
     }
   }
 }
