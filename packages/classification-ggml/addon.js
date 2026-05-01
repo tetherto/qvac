@@ -1,18 +1,15 @@
 'use strict'
 
-const binding = require('./binding')
-
 // The native JsLogger is a process-wide singleton with a static uv_async_t;
 // releasing it while another instance is still live races with the async
 // close and causes a crash across repeated load/unload cycles. We therefore
 // install the JS logger callback exactly once per process, point it at a
 // module-level dispatcher, and swap the active sink when classifiers come
-// and go. This mirrors how the underlying qvac-lib-inference-addon-cpp
-// expects the logger to be used.
+// and go.
 let _loggerInstalled = false
 let _activeLoggerSink = null
 
-function _ensureLoggerInstalled () {
+function _ensureLoggerInstalled (binding) {
   if (_loggerInstalled) return
   const levels = ['error', 'warn', 'info', 'debug']
   binding.setLogger((priority, message) => {
@@ -26,121 +23,113 @@ function _ensureLoggerInstalled () {
   _loggerInstalled = true
 }
 
+function _setActiveLoggerSink (sink) { _activeLoggerSink = sink }
+function _clearActiveLoggerSink (sink) {
+  if (_activeLoggerSink === sink) _activeLoggerSink = null
+}
+
 /**
- * Thin JS ↔ native bridge for the GGML classification addon. Keeps the
- * Bare-native handle alive for the lifetime of one `ImageClassifier` and
- * exposes a Promise-based `classify()` that resolves when the output
- * callback fires.
+ * Normalize a raw native event into the canonical
+ * `Output` / `Error` / `LogMsg` / `JobEnded` shape, or `null` to drop it.
+ *
+ * The native side emits events whose name is the demangled C++ RTTI of
+ * the payload type. For this addon the JobRunner queue produces, in
+ * order, exactly:
+ *   1. `struct qvac_lib_infer_ggml_classification::ClassifyOutput`
+ *      (payload: an Array of `{label, confidence}`)
+ *   2. `class std::vector<std::pair<std::string, std::variant<double,int64>>>`
+ *      (the RuntimeStats trailer marshalled by `JsRuntimeStatsOutputHandler`)
+ * plus, on failure paths, `Error` / `LogMsg` -named events.
+ *
+ * There is no separate `JobEnded` dispatch — the stats trailer is the
+ * terminal. We therefore key on payload shape: an array is an `Output`,
+ * a non-array non-null object is the stats terminal we promote to
+ * `JobEnded`. Name-based matching is kept as a defensive fallback for
+ * any future event the upstream addon-cpp might add.
+ *
+ * @param {string} rawEvent
+ * @param {*} rawData
+ * @param {*} rawError
+ * @returns {{ type: string, data: *, error: * } | null}
+ */
+function mapAddonEvent (rawEvent, rawData, rawError) {
+  if (typeof rawEvent === 'string') {
+    if (rawEvent.includes('Error')) {
+      return { type: 'Error', data: rawData, error: rawError }
+    }
+    if (rawEvent.includes('LogMsg')) {
+      return { type: 'LogMsg', data: rawData, error: null }
+    }
+    if (rawEvent.includes('JobEnded')) {
+      return { type: 'JobEnded', data: rawData, error: null }
+    }
+    if (rawEvent.includes('JobStarted')) {
+      return null
+    }
+  }
+  if (Array.isArray(rawData)) {
+    return { type: 'Output', data: rawData, error: null }
+  }
+  if (rawData && typeof rawData === 'object') {
+    return { type: 'JobEnded', data: rawData, error: null }
+  }
+  return { type: rawEvent, data: rawData, error: rawError }
+}
+
+/**
+ * Thin JS↔native bridge for the GGML classification addon. Owns the bare
+ * C++ instance handle for one `ImageClassifier` and forwards every output
+ * event to the supplied callback. Lifecycle (job orchestration, response
+ * fan-out, run-queue serialisation) lives in `index.js`, mirroring the
+ * `LlamaInterface` / `LlmLlamacpp` split used by the LLM addon.
  */
 class ClassificationInterface {
   /**
-   * @param {Object} configurationParams - native configuration
-   * @param {string} configurationParams.path - absolute path to the GGUF file
-   * @param {Object} [configurationParams.config] - optional tunables (e.g. `threads`)
-   * @param {Object} [logger] - @qvac/logging-compatible sink (optional)
+   * @param {Object} binding - native `./binding` module (or a stub for tests)
+   * @param {Object} configurationParams - `{ path, config?, __disableNativeLogger? }`
+   * @param {Function} outputCb - `(self, event, data, error) => void`
+   * @param {Object} [logger] - optional logger sink for the native bridge
    */
-  constructor (configurationParams, logger = null) {
+  constructor (binding, configurationParams, outputCb, logger = null) {
+    this._binding = binding
     this._handle = null
     this._logger = logger
-    this._pending = null
 
     if (logger && typeof logger === 'object' && !configurationParams.__disableNativeLogger) {
-      _ensureLoggerInstalled()
-      _activeLoggerSink = logger
+      _ensureLoggerInstalled(binding)
+      _setActiveLoggerSink(logger)
     }
 
-    this._handle = binding.createInstance(
-      this,
-      configurationParams,
-      this._outputCallback.bind(this)
-    )
+    this._handle = this._binding.createInstance(this, configurationParams, outputCb)
   }
 
-  _outputCallback (self, event, data, error) {
-    const pending = this._pending
-    if (!pending) return
-
-    if (typeof event === 'string' && event.includes('Error')) {
-      this._pending = null
-      const err = new Error(typeof error === 'string' ? error : 'Classification failed')
-      if (error && typeof error === 'object' && error.message) err.message = error.message
-      pending.reject(err)
-      return
-    }
-
-    if (Array.isArray(data)) {
-      this._pending = null
-      pending.resolve(data)
-    }
-  }
-
-  /**
-   * Puts the addon into the ready-for-inference state. Called after
-   * `createInstance` and any `loadWeights` streaming; a no-op for bundled
-   * weight files, but kept for parity with other QVAC addons.
-   */
   async activate () {
     if (!this._handle) throw new Error('Classification addon is not initialized')
-    binding.activate(this._handle)
+    this._binding.activate(this._handle)
   }
 
-  /**
-   * Runs one classification job. Rejects if a previous call is still in
-   * flight (the native JobRunner enforces this invariant as well).
-   * @param {Object} job - `{ type: 'image', content: Uint8Array, width?, height?, channels?, topK? }`
-   * @returns {Promise<Array<{label: string, confidence: number}>>}
-   */
-  async classify (job) {
+  async runJob (input) {
     if (!this._handle) throw new Error('Classification addon is not initialized')
-    if (this._pending) throw new Error('A classification is already in progress')
-
-    return new Promise((resolve, reject) => {
-      this._pending = { resolve, reject }
-      let accepted = false
-      try {
-        accepted = binding.runJob(this._handle, job)
-      } catch (err) {
-        this._pending = null
-        reject(err)
-        return
-      }
-      if (!accepted) {
-        this._pending = null
-        reject(new Error('Classification job was rejected by the native runner'))
-      }
-    })
+    return this._binding.runJob(this._handle, input)
   }
 
-  /**
-   * Tears down the native instance. Idempotent; safe to call repeatedly.
-   *
-   * Note: this no longer waits for an in-flight job's native callback to
-   * fire before calling `binding.destroyInstance`. The previous
-   * `await this._pendingSettled` was a workaround for a use-after-free
-   * race in upstream `qvac-lib-inference-addon-cpp::~OutputCallBackJs`
-   * (queued `uv_async_send` callbacks fire after the destructor has
-   * already deleted the JS refs). The race exists on every addon in
-   * this repo; the rest work around it by sleeping 1-20s after
-   * `unload()` in their tests. We have aligned with that pattern in
-   * `test/integration/error-cases.test.js` until upstream lands a real
-   * fix in `OutputCallBackJs`'s destructor.
-   */
+  async cancel () {
+    if (!this._handle) return
+    await this._binding.cancel(this._handle)
+  }
+
   async unload () {
     if (this._handle === null) return
-
-    // Intentionally do NOT call binding.releaseLogger() here: the logger is
-    // shared process-wide by design. We only detach the active sink, so any
-    // in-flight log messages from other live classifiers continue to work.
-    if (this._logger && _activeLoggerSink === this._logger) {
-      _activeLoggerSink = null
-    }
-
+    if (this._logger) _clearActiveLoggerSink(this._logger)
     try {
-      binding.destroyInstance(this._handle)
+      this._binding.destroyInstance(this._handle)
     } finally {
       this._handle = null
     }
   }
 }
 
-module.exports = { ClassificationInterface }
+module.exports = {
+  ClassificationInterface,
+  mapAddonEvent
+}
