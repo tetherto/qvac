@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <functional>
 #include <optional>
+#include <string>
 
 #include "addon/LlmErrors.hpp"
 #include "common/chat.h"
@@ -20,10 +21,20 @@ struct GenerationParams {
   std::optional<float> presence_penalty;
   std::optional<float> repeat_penalty;
   std::optional<uint32_t> seed;
+  // GBNF grammar applied per request to constrain sampling. When set, the
+  // sampler is re-initialized with this grammar for the duration of the
+  // request and the prior grammar is restored afterwards. Mirrors the
+  // load-time `--grammar` flag but scoped to a single completion call.
+  std::optional<std::string> grammar;
+  // JSON-Schema applied per request. Converted to GBNF via llama.cpp's
+  // `json_schema_to_grammar()` and applied identically to `grammar`.
+  // Mutually exclusive with `grammar` — the JS wrapper rejects requests
+  // that set both. Mirrors the load-time `--json-schema` flag.
+  std::optional<std::string> json_schema;
 
   [[nodiscard]] bool hasOverrides() const {
     return n_predict || temp || top_p || top_k || frequency_penalty ||
-           presence_penalty || repeat_penalty || seed;
+           presence_penalty || repeat_penalty || seed || grammar || json_schema;
   }
 };
 

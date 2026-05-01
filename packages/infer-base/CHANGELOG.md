@@ -1,3 +1,15 @@
+## [0.4.1] - 2026-04-28
+
+This release drops the vestigial `@qvac/dl-hyperdrive` peer dependency from `@qvac/infer-base`'s manifest. Since the `Loader` interface moved into this package and `ready()`/`close()` became optional in `0.4.0`, the peer-dep declaration was no longer required by anything in the runtime — consumers no longer carry an `@qvac/dl-hyperdrive` peer-dep through `@qvac/infer-base` when installing it.
+
+### Changed
+
+- Removed `peerDependencies."@qvac/dl-hyperdrive"` from `package.json`. No runtime behavior change — the `BaseInference` class, public methods, and standalone utilities (`createJobHandler`, `exclusiveRunQueue`, `getApiDefinition`) are all unchanged. Lint and the full `brittle-bare` unit suite (118/118) pass with the declaration removed.
+
+## Pull Requests
+
+- [#1761](https://github.com/tetherto/qvac/pull/1761) - QVAC-14392 chore: drop @qvac/dl-hyperdrive peer-dep chain in infer-base + decoder-audio
+
 ## [0.4.0] - 2026-03-31
 
 ### Added

@@ -1,0 +1,241 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/tetherto/qvac/docs/website/scripts/api-docs/api-data.schema.json",
+  "title": "QVAC SDK ApiData",
+  "description": "Intermediate representation of the QVAC SDK's public API summary. Produced by `scripts/generate-api-docs.ts` after TypeDoc extraction + Zod `.describe()` merging + (optional) AI augmentation. Consumed by `single-page.njk` to render `content/docs/sdk/api/index.mdx` (or sibling `vX.Y.Z.mdx`).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "generatedAt", "functions", "errors"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "SDK semver being documented (e.g. `0.9.1`)."
+    },
+    "generatedAt": {
+      "type": "string",
+      "description": "ISO-8601 timestamp when the data was generated, derived from SOURCE_DATE_EPOCH for reproducible builds, or the literal string `\"unspecified\"` when the env var isn't set."
+    },
+    "functions": {
+      "type": "array",
+      "description": "Public functions re-exported from `packages/sdk/client/api/index.ts`.",
+      "items": { "$ref": "#/$defs/ApiFunction" }
+    },
+    "objects": {
+      "type": "array",
+      "description": "Curated method-bundle singletons (today: just `profiler`).",
+      "items": { "$ref": "#/$defs/ApiObject" }
+    },
+    "errors": {
+      "type": "object",
+      "description": "Error code maps imported from `packages/sdk/schemas/sdk-errors-*.ts`. Rendered as the folded `## Errors` section at the bottom of the summary page.",
+      "additionalProperties": false,
+      "required": ["client", "server"],
+      "properties": {
+        "client": { "type": "array", "items": { "$ref": "#/$defs/ErrorEntry" } },
+        "server": { "type": "array", "items": { "$ref": "#/$defs/ErrorEntry" } }
+      }
+    }
+  },
+  "$defs": {
+    "ContentSource": {
+      "type": "string",
+      "enum": ["extracted", "ai"],
+      "description": "Provenance tag: `extracted` = from SDK source (JSDoc/Zod `.describe()`), `ai` = AI-augmented first draft."
+    },
+    "TypeField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "type", "required", "description"],
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "type": "string", "description": "TypeScript type expression as a string." },
+        "required": { "type": "boolean" },
+        "defaultValue": { "type": "string", "description": "Default value literal (from Zod `.default()` or JSDoc `@default`)." },
+        "description": { "type": "string" },
+        "typeStructure": { "$ref": "#/$defs/StructuredType" }
+      }
+    },
+    "StructuredType": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["kind", "name"],
+          "properties": {
+            "kind": { "const": "primitive" },
+            "name": { "type": "string" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["kind", "value"],
+          "properties": {
+            "kind": { "const": "literal" },
+            "value": { "type": ["string", "number", "boolean", "null"] }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["kind", "name"],
+          "properties": {
+            "kind": { "const": "reference" },
+            "name": { "type": "string" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["kind", "element"],
+          "properties": {
+            "kind": { "const": "array" },
+            "element": { "$ref": "#/$defs/StructuredType" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["kind", "variants"],
+          "properties": {
+            "kind": { "const": "union" },
+            "variants": { "type": "array", "items": { "$ref": "#/$defs/StructuredType" } }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["kind", "parts"],
+          "properties": {
+            "kind": { "const": "intersection" },
+            "parts": { "type": "array", "items": { "$ref": "#/$defs/StructuredType" } }
+          }
+        },
+        { "type": "object", "required": ["kind"], "properties": { "kind": { "const": "object" } } },
+        { "type": "object", "required": ["kind"], "properties": { "kind": { "const": "function" } } },
+        { "type": "object", "required": ["kind"], "properties": { "kind": { "const": "unknown" } } }
+      ]
+    },
+    "ExpandedType": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["typeName", "fields", "children"],
+      "properties": {
+        "typeName": { "type": "string" },
+        "fields": { "type": "array", "items": { "$ref": "#/$defs/TypeField" } },
+        "children": { "type": "array", "items": { "$ref": "#/$defs/ExpandedType" } }
+      }
+    },
+    "ApiFunction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "signature", "description", "parameters", "expandedParams", "returns", "returnFields", "expandedReturns"],
+      "properties": {
+        "name": { "type": "string" },
+        "signature": { "type": "string", "description": "Multi-line when the function declares overloads; one TypeScript `function …` line per overload." },
+        "description": { "type": "string" },
+        "descriptionSource": { "$ref": "#/$defs/ContentSource" },
+        "summary": { "type": "string" },
+        "leadParagraph": { "type": "string" },
+        "parameters": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "type", "required", "description"],
+            "properties": {
+              "name": { "type": "string" },
+              "type": { "type": "string" },
+              "required": { "type": "boolean" },
+              "defaultValue": { "type": "string" },
+              "description": { "type": "string" },
+              "typeStructure": { "$ref": "#/$defs/StructuredType" }
+            }
+          }
+        },
+        "expandedParams": { "type": "array", "items": { "$ref": "#/$defs/ExpandedType" } },
+        "returns": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "description"],
+          "properties": {
+            "type": { "type": "string" },
+            "description": { "type": "string" },
+            "typeStructure": { "$ref": "#/$defs/StructuredType" }
+          }
+        },
+        "returnFields": { "type": "array", "items": { "$ref": "#/$defs/TypeField" } },
+        "expandedReturns": { "type": "array", "items": { "$ref": "#/$defs/ExpandedType" } },
+        "throws": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["error", "description"],
+            "properties": {
+              "error": { "type": "string" },
+              "description": { "type": "string" }
+            }
+          }
+        },
+        "examples": { "type": "array", "items": { "type": "string" } },
+        "examplesSource": { "$ref": "#/$defs/ContentSource" },
+        "deprecated": { "type": "string" },
+        "overloads": {
+          "type": "array",
+          "description": "Per-overload breakdown for multi-signature functions. Each entry rendered as `#### Overload N` (with optional ` — Label` suffix) and its own description / signature / throws / examples.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["signature"],
+            "properties": {
+              "signature": { "type": "string" },
+              "description": { "type": "string" },
+              "throws": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["error", "description"],
+                  "properties": {
+                    "error": { "type": "string" },
+                    "description": { "type": "string" }
+                  }
+                }
+              },
+              "examples": { "type": "array", "items": { "type": "string" } },
+              "deprecated": { "type": "string" },
+              "label": { "type": "string", "description": "Author-provided short label, sourced from a `@overloadLabel \"...\"` JSDoc tag on the per-overload signature." }
+            }
+          }
+        }
+      }
+    },
+    "ApiObject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "description", "fields", "children"],
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "descriptionSource": { "$ref": "#/$defs/ContentSource" },
+        "summary": { "type": "string" },
+        "leadParagraph": { "type": "string" },
+        "objectSignature": { "type": "string", "description": "Pre-formatted `const name: { … }` declaration." },
+        "fields": { "type": "array", "items": { "$ref": "#/$defs/TypeField" } },
+        "children": { "type": "array", "items": { "$ref": "#/$defs/ExpandedType" } },
+        "methods": {
+          "type": "array",
+          "description": "Per-method ApiFunction records. The single-page renderer emits one bullet per method (`name(args?) — first-sentence summary`).",
+          "items": { "$ref": "#/$defs/ApiFunction" }
+        },
+        "examples": { "type": "array", "items": { "type": "string" } },
+        "examplesSource": { "$ref": "#/$defs/ContentSource" }
+      }
+    },
+    "ErrorEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "code", "summary"],
+      "properties": {
+        "name": { "type": "string" },
+        "code": { "type": "integer" },
+        "summary": { "type": "string" }
+      }
+    }
+  }
+}

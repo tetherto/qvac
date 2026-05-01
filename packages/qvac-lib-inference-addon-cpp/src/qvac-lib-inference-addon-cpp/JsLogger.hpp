@@ -129,7 +129,7 @@ namespace qvac_lib_inference_addon_cpp::logger {
           auto scopeCleanup = utils::onExit([env, innerScope]() { js_close_handle_scope(env, innerScope); });
           js_value_t *pri;
           js_value_t *msg;
-          JS(js_create_double(env, logEntry.priority, &pri));
+          pri = js::Number::create(env, logEntry.priority);
           JS(js_create_string_utf8(env,
             reinterpret_cast<const utf8_t*>(logEntry.message.data()),
             logEntry.message.size(),

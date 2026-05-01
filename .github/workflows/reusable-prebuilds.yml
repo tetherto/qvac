@@ -1,0 +1,353 @@
+# Reusable prebuild workflow.
+#
+# Encapsulates the canonical prebuild matrix and step sequence shared by most
+# qvac native packages. Callers wire it via `uses:` at the job level and
+# pass `secrets: inherit` so the reusable can read PAT_TOKEN, AWS_OIDC_ROLE_ARN
+# and MODEL_S3_BUCKET.
+#
+# Coverage today: parakeet, onnx, nmtcpp, diffusion-cpp,
+# qvac-lib-infer-llamacpp-llm, qvac-lib-infer-llamacpp-embed, whispercpp,
+# qvac-lib-infer-onnx-tts, ocr-onnx. All prebuild workflows in the monorepo
+# now route through this reusable.
+name: "Prebuilds (reusable)"
+
+on:
+  workflow_call:
+    inputs:
+      workdir:
+        description: "Package working directory under the monorepo"
+        type: string
+        required: true
+      ref:
+        description: "Git ref to checkout"
+        type: string
+        required: false
+      repository:
+        description: "Repository to checkout"
+        type: string
+        required: false
+        default: "tetherto/qvac"
+      artifact-name-prefix:
+        description: >-
+          Optional prefix for the per-matrix prebuild artifact name. The
+          merged artifact is always uploaded under the well-known name
+          `prebuilds`, but downstream mobile-integration test workflows
+          download per-matrix artifacts via glob patterns built from this
+          prefix (see PREBUILD_ARTIFACT_PREFIX in
+          integration-mobile-test-*.yml), so it must match the convention
+          expected by the consumer.
+        type: string
+        required: false
+        default: ""
+      linux-extra-packages:
+        description: "Extra apt packages to install on linux runners"
+        type: string
+        required: false
+        default: ""
+      mac-brew-packages:
+        description: "Extra brew packages to install on macos runners"
+        type: string
+        required: false
+        default: ""
+      include-vulkan-sdk:
+        description: "Run the setup-vulkan-sdk action before building"
+        type: boolean
+        required: false
+        default: false
+      extra-cmake-defines:
+        description: >-
+          Additional cmake defines appended verbatim to `bare-make generate`
+          on every matrix entry. Space-separated. Example:
+          "-D VK_PROFILING=ON" to enable Vulkan profiling on the llamacpp
+          packages.
+        type: string
+        required: false
+        default: ""
+      platform-cmake-defines:
+        description: >-
+          Platform-conditional cmake defines, one entry per line in
+          `<platform>: <defines>` form. The matched platform's defines are
+          appended after `extra-cmake-defines`, so they can override common
+          defines if needed. Platforms without an entry contribute nothing.
+          Example:
+
+            platform-cmake-defines: |
+              darwin: -D WHISPER_USE_METAL=ON
+              ios: -D WHISPER_USE_METAL=ON
+              linux: -D WHISPER_USE_METAL=OFF
+              android: -D WHISPER_USE_METAL=OFF
+              win32: -D WHISPER_USE_METAL=OFF
+        type: string
+        required: false
+        default: ""
+      setup-python-on-windows:
+        description: "Install Python 3.12 on Windows runners (some vcpkg ports need it)"
+        type: boolean
+        required: false
+        default: false
+      setup-rust-toolchain:
+        description: >-
+          Ensure a stable Rust toolchain plus the per-platform stdlib targets
+          required by native crates that ship Rust code (iOS / Android via
+          `rustup target add ...`). On Windows the action will bootstrap
+          rustup itself if it isn't already on PATH.
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  prebuild:
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
+          - os: ubuntu-22.04-arm
+            platform: linux
+            arch: arm64
+          - os: ubuntu-24.04
+            platform: android
+            arch: arm64
+          - os: macos-15
+            platform: ios
+            arch: arm64
+          - os: macos-15
+            platform: ios
+            arch: arm64
+            tags: -simulator
+            flags: --simulator
+          - os: macos-15
+            platform: ios
+            arch: x64
+            tags: -simulator
+            flags: --simulator
+          - os: macos-15
+            platform: darwin
+            arch: arm64
+          - os: macos-15-intel
+            platform: darwin
+            arch: x64
+          - os: windows-2022
+            platform: win32
+            arch: x64
+
+    runs-on: ${{ matrix.os }}
+    environment: release
+    name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
+
+    env:
+      WORKDIR: ${{ inputs.workdir }}
+
+    steps:
+      - name: Echo workflow inputs
+        shell: bash
+        env:
+          INPUT_REF: ${{ inputs.ref || github.ref }}
+          INPUT_REPO: ${{ inputs.repository || github.repository }}
+          INPUT_WORKDIR: ${{ inputs.workdir }}
+          MATRIX_PLATFORM: ${{ matrix.platform }}
+          MATRIX_ARCH: ${{ matrix.arch }}
+          MATRIX_TAGS: ${{ matrix.tags }}
+        run: |
+          echo "Workflow inputs:"
+          echo "Ref: $INPUT_REF"
+          echo "Repository: $INPUT_REPO"
+          echo "Workdir: $INPUT_WORKDIR"
+          echo "Matrix platform: $MATRIX_PLATFORM"
+          echo "Matrix arch: $MATRIX_ARCH"
+          echo "Matrix tags: $MATRIX_TAGS"
+
+      - name: Setup build host
+        uses: tetherto/qvac/.github/actions/setup-build-host@1d9b2165867d03c6edd675e402ee101a5d48a6d8
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+          linux-extra-packages: ${{ inputs.linux-extra-packages }}
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Setup AWS + Windows CLI
+        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@0bbdca93da303a0b1634ba14a89cec085621078d
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+
+      - name: Setup vcpkg
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@1d9b2165867d03c6edd675e402ee101a5d48a6d8
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+
+      - name: Setup Bare tooling
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@0bbdca93da303a0b1634ba14a89cec085621078d
+
+      - if: ${{ inputs.setup-python-on-windows && matrix.platform == 'win32' }}
+        name: Setup Python on self-hosted Windows runner
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Setup Apple Clang
+        uses: tetherto/qvac/.github/actions/setup-apple-clang@1d9b2165867d03c6edd675e402ee101a5d48a6d8
+
+      - if: ${{ inputs.include-vulkan-sdk }}
+        name: Setup Vulkan SDK
+        uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@0bbdca93da303a0b1634ba14a89cec085621078d
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - if: ${{ inputs.mac-brew-packages != '' && startsWith(matrix.os, 'macos') }}
+        name: Install extra brew packages on macOS
+        shell: bash
+        env:
+          BREW_PACKAGES: ${{ inputs.mac-brew-packages }}
+        run: |
+          brew install --quiet $BREW_PACKAGES
+
+      - name: Install npm dependencies
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: npm install
+
+      - if: ${{ inputs.setup-rust-toolchain }}
+        name: Setup Rust toolchain
+        uses: tetherto/qvac/.github/actions/setup-rust-prebuild@0d88d993e5e221bd8e9b3f8938f11e40417fcab7
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+
+      - name: Compute cmake defines
+        shell: bash
+        env:
+          MATRIX_PLATFORM: ${{ matrix.platform }}
+          EXTRA_DEFINES: ${{ inputs.extra-cmake-defines }}
+          PLATFORM_DEFINES_MAP: ${{ inputs.platform-cmake-defines }}
+        run: |
+          DEFINES="-D BUILD_TESTING=OFF"
+          if [ "$MATRIX_PLATFORM" = "android" ]; then
+            DEFINES="$DEFINES -D ANDROID_STL=c++_shared"
+          fi
+          if [ -n "$EXTRA_DEFINES" ]; then
+            DEFINES="$DEFINES $EXTRA_DEFINES"
+          fi
+          if [ -n "$PLATFORM_DEFINES_MAP" ]; then
+            LINE=$(echo "$PLATFORM_DEFINES_MAP" | grep -E "^[[:space:]]*${MATRIX_PLATFORM}[[:space:]]*:" || true)
+            if [ -n "$LINE" ]; then
+              VALUE="${LINE#*:}"
+              VALUE="${VALUE#"${VALUE%%[![:space:]]*}"}"
+              VALUE="${VALUE%"${VALUE##*[![:space:]]}"}"
+              if [ -n "$VALUE" ]; then
+                DEFINES="$DEFINES $VALUE"
+              fi
+            fi
+          fi
+          echo "DEFINES=$DEFINES" >> "$GITHUB_ENV"
+
+      - name: Run bare-make generate
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }} $DEFINES
+
+      - name: Dump vcpkg build logs on failure
+        if: failure()
+        shell: bash
+        run: |
+          LOG_DIR="${VCPKG_ROOT}/buildtrees"
+          if [ -d "$LOG_DIR" ]; then
+            for f in "$LOG_DIR"/*/{config,install,build}-*.log; do
+              [ -f "$f" ] || continue
+              echo "===== $f ====="
+              tail -200 "$f"
+              echo ""
+            done
+          else
+            echo "vcpkg buildtrees not found at $LOG_DIR"
+          fi
+
+      - name: Run bare-make build
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: bare-make build
+
+      - name: Run bare-make install
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: bare-make install
+
+      - name: Strip static libraries (.a) from prebuilds
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          if [ ! -d prebuilds ]; then
+            echo "prebuilds/ does not exist; skipping"
+            exit 0
+          fi
+          MATCHES=$(find prebuilds -type f -name '*.a')
+          if [ -z "$MATCHES" ]; then
+            echo "No .a files found under prebuilds/"
+            exit 0
+          fi
+          echo "Removing the following .a files:"
+          echo "$MATCHES"
+          find prebuilds -type f -name '*.a' -delete
+
+      - name: Smoke check (tmp-*) package name & prebuilds listing
+        if: ${{ startsWith(github.ref, 'refs/heads/tmp-')
+                || startsWith(github.ref_name, 'tmp-')
+                || (inputs.ref != '' && (startsWith(inputs.ref, 'refs/heads/tmp-') || startsWith(inputs.ref, 'tmp-'))) }}
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          echo "package.json name (post-build): $(node -e "console.log(JSON.parse(require('fs').readFileSync('package.json','utf8')).name)")"
+          echo "prebuilds directory:"
+          ls -la prebuilds || true
+          find prebuilds -maxdepth 1 -type d -print || true
+
+      - name: Strip debug symbols
+        uses: tetherto/qvac/.github/actions/strip-prebuilds@1d9b2165867d03c6edd675e402ee101a5d48a6d8
+        with:
+          platform: ${{ matrix.platform }}
+          workdir: ${{ env.WORKDIR }}
+
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: ${{ inputs.artifact-name-prefix }}${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
+          path: ${{ env.WORKDIR }}/prebuilds
+
+  merge:
+    runs-on: ubuntu-latest
+    needs: prebuild
+    permissions:
+      contents: write
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: prebuilds
+          merge-multiple: true
+
+      - name: Upload merged artifacts
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: prebuilds
+          path: prebuilds

@@ -14,7 +14,8 @@ const ERR_CODES = Object.freeze({
   FAILED_TO_DESTROY: 8005,
   FAILED_TO_ACTIVATE: 8006,
   FAILED_TO_RESET: 8007,
-  FAILED_TO_PAUSE: 8008
+  FAILED_TO_PAUSE: 8008,
+  FAILED_TO_GET_BACKEND_NAME: 8009
 })
 
 addCodes(
@@ -51,6 +52,10 @@ addCodes(
     [ERR_CODES.FAILED_TO_PAUSE]: {
       name: 'FAILED_TO_PAUSE',
       message: message => `Failed to pause inference, error: ${message}`
+    },
+    [ERR_CODES.FAILED_TO_GET_BACKEND_NAME]: {
+      name: 'FAILED_TO_GET_BACKEND_NAME',
+      message: message => `Failed to get active backend name, error: ${message}`
     }
   },
   {

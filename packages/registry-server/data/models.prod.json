@@ -2450,7 +2450,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enfr"
   },
   {
-    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enit/2025-12-18/lex.50.50.enit.s2t.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enit/2026-04-28/lex.50.50.enit.s2t.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot lexical shortlist en-it",
     "quantization": "",
@@ -2463,10 +2463,10 @@
       "enit"
     ],
     "notes": "",
-    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/enit"
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enit"
   },
   {
-    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enit/2025-12-18/metadata.json",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enit/2026-04-28/metadata.json",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot metadata en-it",
     "quantization": "",
@@ -2479,10 +2479,10 @@
       "enit"
     ],
     "notes": "",
-    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/enit"
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enit"
   },
   {
-    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enit/2025-12-18/model.enit.intgemm.alphas.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enit/2026-04-28/model.enit.intgemm.alphas.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot NMT model en-it",
     "quantization": "",
@@ -2495,10 +2495,10 @@
       "enit"
     ],
     "notes": "",
-    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/enit"
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enit"
   },
   {
-    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enit/2025-12-18/vocab.enit.spm",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enit/2026-04-28/vocab.enit.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary en-it",
     "quantization": "",
@@ -2511,7 +2511,7 @@
       "enit"
     ],
     "notes": "",
-    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/enit"
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enit"
   },
   {
     "source": "s3:///qvac_models_compiled/bergamot/bergamot-enja/2025-12-18/lex.50.50.enja.s2t.bin",
@@ -2802,7 +2802,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enzh"
   },
   {
-    "source": "s3:///qvac_models_compiled/bergamot/bergamot-esen/2025-12-18/lex.50.50.esen.s2t.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-esen/2026-04-28/lex.50.50.esen.s2t.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot lexical shortlist es-en",
     "quantization": "",
@@ -2815,10 +2815,10 @@
       "esen"
     ],
     "notes": "",
-    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/esen"
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/esen"
   },
   {
-    "source": "s3:///qvac_models_compiled/bergamot/bergamot-esen/2025-12-18/metadata.json",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-esen/2026-04-28/metadata.json",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot metadata es-en",
     "quantization": "",
@@ -2831,10 +2831,10 @@
       "esen"
     ],
     "notes": "",
-    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/esen"
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/esen"
   },
   {
-    "source": "s3:///qvac_models_compiled/bergamot/bergamot-esen/2025-12-18/model.esen.intgemm.alphas.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-esen/2026-04-28/model.esen.intgemm.alphas.bin",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot NMT model es-en",
     "quantization": "",
@@ -2847,10 +2847,10 @@
       "esen"
     ],
     "notes": "",
-    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/esen"
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/esen"
   },
   {
-    "source": "s3:///qvac_models_compiled/bergamot/bergamot-esen/2025-12-18/vocab.esen.spm",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-esen/2026-04-28/vocab.esen.spm",
     "engine": "@qvac/translation-nmtcpp",
     "description": "Bergamot vocabulary es-en",
     "quantization": "",
@@ -2863,7 +2863,7 @@
       "esen"
     ],
     "notes": "",
-    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/esen"
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/esen"
   },
   {
     "source": "s3:///qvac_models_compiled/bergamot/bergamot-fren/2025-12-18/lex.50.50.fren.s2t.bin",

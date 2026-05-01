@@ -36,6 +36,9 @@ runs:
         restore-keys: npm-${{ runner.os }}-
 
     - name: Configure .npmrc for both npmjs and GitHub Packages
+      env:
+        NPM_TOKEN: ${{ inputs.npm-token }}
+        PAT_TOKEN: ${{ inputs.pat-token }}
       run: |
         # Clean slate .npmrc in workspace
         : > .npmrc
@@ -45,15 +48,15 @@ runs:
 
         # @qvac/* from npmjs.org (public, auth optional)
         echo "@qvac:registry=https://registry.npmjs.org/" >> .npmrc
-        if [ -n "${{ inputs.npm-token }}" ]; then
-          echo "//registry.npmjs.org/:_authToken=${{ inputs.npm-token }}" >> .npmrc
+        if [ -n "${NPM_TOKEN}" ]; then
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" >> .npmrc
         fi
 
         # @tetherto/* from GitHub Packages (only when pat-token provided)
-        if [ -n "${{ inputs.pat-token }}" ]; then
+        if [ -n "${PAT_TOKEN}" ]; then
           echo "@tetherto:registry=https://npm.pkg.github.com/" >> .npmrc
-          echo "//npm.pkg.github.com/:_authToken=${{ inputs.pat-token }}" >> .npmrc
-          git config --global url."https://${{ inputs.pat-token }}:@github.com/".insteadOf "https://github.com/"
+          echo "//npm.pkg.github.com/:_authToken=${PAT_TOKEN}" >> .npmrc
+          git config --global url."https://${PAT_TOKEN}:@github.com/".insteadOf "https://github.com/"
         fi
       shell: bash
       working-directory: ${{ inputs.workdir }}

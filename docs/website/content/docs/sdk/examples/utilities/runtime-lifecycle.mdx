@@ -1,0 +1,74 @@
+---
+title: Runtime lifecycle
+description: Suspend and resume the SDK runtime (e.g., when the host app moves to background) and query lifecycle state.
+---
+
+## Overview
+
+While running, the SDK keeps live resources in the host process — Hyperswarm sockets, Corestore handles, RAG corestore, registered download streams, and a request gate above handler dispatch. When the host app moves to background (mobile suspend, desktop minimize, daemon hibernation), holding those resources open wastes battery and can break sockets that are torn down by the OS.
+
+`suspend()` pauses those resources and engages a lifecycle gate so non-lifecycle operations fail fast instead of hanging. `resume()` restores them when the app returns to foreground. `state()` is the source of truth for the current runtime state — useful for branching app logic without shadow-tracking suspend/resume locally.
+
+`suspend()`, `resume()`, and `state()` are themselves never blocked by the gate, and all three are idempotent.
+
+## Functions
+
+1. `suspend()` — call from the background handler
+2. `state()` — read `"active" | "suspending" | "suspended" | "resuming"`
+3. `resume()` — call from the foreground handler
+
+For how to use each function, see [SDK — API reference](/sdk/api/).
+
+## Lifecycle states
+
+`state()` returns one of:
+
+- `"active"` — all SDK operations are accepted normally
+- `"suspending"` — `suspend()` is in progress; non-lifecycle operations are already blocked
+- `"suspended"` — runtime is paused; only `suspend()`, `resume()`, `state()` are accepted
+- `"resuming"` — `resume()` is in progress; non-lifecycle operations are still blocked
+
+A partial `resume()` failure leaves the runtime in `"suspended"` (not `"active"`), so callers can retry `resume()` without leaking the failed state.
+
+## Behavior while suspended
+
+<Callout type="info">
+While runtime state is not `"active"`, only `suspend()`, `resume()`, and `state()` are accepted. Any other request fails fast with `LIFECYCLE_OPERATION_BLOCKED` instead of hanging.
+</Callout>
+
+In-flight operations started **before** `suspend()` follow the matrix below:
+
+| Operation | During suspend | After resume |
+| --- | --- | --- |
+| P2P / Hyperdrive download | Stalls cleanly | Continues automatically |
+| HTTP download | Bypass — bytes keep flowing | (Already flowing) |
+| Local native inference (e.g. `completion()`) | Runs to completion | n/a |
+| Delegated reply RPC | Stalls | Auto-recovers (subject to delegate `timeout`) |
+| Delegated stream RPC | Severed; consumer iterator hangs silently | Not recovered — re-issue after `resume()` |
+| New operation (e.g. `completion()`, `loadModel()`) | Throws `LIFECYCLE_OPERATION_BLOCKED` | Accepted |
+
+## Example
+
+The following script loads a model, runs a completion, suspends the runtime, demonstrates that a new `completion()` is blocked while suspended, then resumes and runs another completion. `state()` is sampled at each step:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/suspend-resume.js title="runtime-lifecycle.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/suspend-resume.ts title="runtime-lifecycle.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/sdk/getting-started/quickstart).
+</Callout>
