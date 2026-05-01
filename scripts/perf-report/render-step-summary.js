@@ -72,6 +72,14 @@ function fmtMetric (col, value) {
 }
 
 function fmtQuality (col, value) {
+  // Backward-compatible with the original `fmtQuality(value)` signature: if
+  // called with a single primitive argument, treat it as the value with no
+  // column metadata. New callers pass `(col, value)` to opt into raw / cos-sim
+  // formatting.
+  if (arguments.length < 2 && (col === null || typeof col !== 'object')) {
+    value = col
+    col = null
+  }
   if (value === null || value === undefined) return '-'
   if (typeof value === 'number') {
     if (col && col.unit === 'raw') return value.toFixed(4)
