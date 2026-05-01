@@ -8,8 +8,7 @@
 
 #include <qvac-lib-inference-addon-cpp/Errors.hpp>
 
-// Single-header implementations must only be emitted in exactly one TU.
-// ImagePreprocessor is the chosen owner for the whole addon.
+// stb single-header implementations live here for the whole addon.
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
 #include <stb_image.h>
@@ -62,14 +61,11 @@ std::vector<uint8_t> decodeToRgb(
     raise("Input image buffer too large for decoder");
   }
 
-  // Pre-decode header inspection: stbi_info_from_memory parses only the
-  // image header, so it lets us reject oversized / malformed images
-  // before stbi_load_from_memory allocates the full decoded RGB buffer
-  // (which for a 100 megapixel image would be ~300 MB). The same upper
-  // bound enforced post-decode is applied here too; we keep the
-  // post-decode check below as belt-and-braces in case stbi_info reports
-  // a different size than stbi_load eventually produces (e.g. for
-  // truncated streams that still parse a valid header).
+  // Header-only inspection so we can reject oversized images before
+  // stbi_load allocates the full RGB buffer (~300 MB for 100 MP).
+  // stbi_info returning 0 = header unparseable; defer to stbi_load
+  // below so the caller gets stbi_failure_reason() instead of a
+  // generic "header bad" from us.
   {
     int infoWidth = 0;
     int infoHeight = 0;
@@ -89,17 +85,12 @@ std::vector<uint8_t> decodeToRgb(
             std::to_string(infoHeight));
       }
     }
-    // stbi_info returning 0 means the header could not be parsed --
-    // fall through to stbi_load_from_memory so the caller receives the
-    // exact stbi_failure_reason() rather than a generic "header bad"
-    // message from us.
   }
 
   int width = 0;
   int height = 0;
   int channelsIgnored = 0;
-  // stb_image forces 3 output channels so downstream code never has to deal
-  // with alpha or grayscale.
+  // Force 3 output channels — downstream never deals with alpha/grayscale.
   uint8_t* pixels = stbi_load_from_memory(
       encodedBuffer.data(), static_cast<int>(encodedBuffer.size()), &width,
       &height, &channelsIgnored, static_cast<int>(kDecodedChannels));
@@ -188,9 +179,8 @@ std::vector<float> normalizeToWhcn(std::span<const uint8_t> rgb224) {
   }
   constexpr float kUnit = 1.0F / 255.0F;
 
-  // WHCN layout = ggml 4D order (width, height, channels, batch). For a
-  // contiguous 4D tensor, the fastest-varying axis is width. In index math:
-  //   offset(w, h, c) = c*H*W + h*W + w
+  // ggml WHCN: contiguous, fastest-varying axis = width.
+  // offset(w, h, c) = c*H*W + h*W + w
   std::vector<float> out(static_cast<size_t>(kInputSize) * kInputSize * kChannels);
   const size_t plane = static_cast<size_t>(kInputSize) * kInputSize;
 

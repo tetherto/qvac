@@ -39,8 +39,7 @@ ClassificationModel::ClassificationModel(std::string modelPath)
 
 ClassificationModel::~ClassificationModel() {
   // ggml requires buffers to be freed strictly before the backend they were
-  // allocated on. Explicitly reset the compute graph and weights bundle (both
-  // own backend-allocated buffers) before releasing the backend itself.
+  // allocated on; reset both before ggml_backend_free.
   compute_.reset();
   weights_.reset();
   if (backend_ != nullptr) {
@@ -69,21 +68,15 @@ void ClassificationModel::setNumThreads(int threads) {
 
 namespace {
 
-/// Numerically stable softmax over a short logits vector. Defensive
-/// against non-finite inputs: if every logit is NaN/Inf we return a
-/// uniform distribution rather than propagating the non-finite value;
-/// if the exponential sum degenerates to zero or non-finite we also
-/// fall back to uniform. The caller therefore always receives a
-/// well-formed probability vector that sums to 1 in exactly one of
-/// two ways (computed softmax, or uniform fallback).
+/// Numerically stable softmax. Falls back to a uniform distribution if
+/// every logit is non-finite or the exp sum overflows, so downstream
+/// code always sees a probability vector that sums to 1.
 std::vector<float> softmax(std::span<const float> logits) {
   if (logits.empty()) {
     return {};
   }
 
-  // max_element on a span containing NaN is unspecified; walk by hand
-  // and skip non-finite values so maxLogit stays finite whenever at
-  // least one input is finite.
+  // std::max_element on a span containing NaN is unspecified.
   float maxLogit = -std::numeric_limits<float>::infinity();
   for (const float logit : logits) {
     if (std::isfinite(logit) && logit > maxLogit) {
@@ -110,21 +103,12 @@ std::vector<float> softmax(std::span<const float> logits) {
       p *= inv;
     }
   } else {
-    // Every diff saturated to -inf or the sum itself overflowed;
-    // fall back to a uniform distribution so downstream code always
-    // sees a valid probability vector.
     const float uniform = 1.0F / static_cast<float>(logits.size());
     std::fill(probs.begin(), probs.end(), uniform);
   }
   return probs;
 }
 
-/// Environment-variable-gated trace printer for per-inference
-/// diagnostics. Off by default (no output). Turn on with
-/// `QVAC_CLASSIFICATION_TRACE=1` to print raw logits, computed
-/// probabilities, and sorted results to stderr. Invaluable for
-/// debugging platform-specific numerical issues (e.g. the win32 CI
-/// meal_1 anomaly) without changing the public logger wiring.
 bool traceEnabled() {
   const char* v = std::getenv("QVAC_CLASSIFICATION_TRACE");
   return v != nullptr && v[0] == '1';
@@ -155,26 +139,13 @@ void ClassificationModel::load() {
   }
   compute_ = graph::buildGraph(weights_, backend_);
 
-  // Cold-inference warmup. The first user-visible classify() can observe
-  // non-finite logits on some platforms (notably win32-x64 in CI:
-  // meal_1.jpg -> NaN in result[0].confidence) because:
-  //   - ggml's backend graph allocator leaves intermediate buffers
-  //     uninitialised after buildGraph().
-  //   - Some CPU backends lazily JIT or page in SIMD kernels on the
-  //     first non-trivial input, and the cold path can interact badly
-  //     with FP state (FTZ/denormals) left from earlier process work.
-  //
-  // To eliminate this deterministically, run one full forward pass
-  // through the EXACT same pipeline classify() uses: synthesise a small
-  // raw-RGB buffer with a deterministic non-zero gradient, push it
-  // through preprocess::preprocessToTensor (resize + ImageNet
-  // normalise), set the input tensor, compute the graph, and read the
-  // output back. The warmup output is discarded; the goal is to leave
-  // every backend buffer in a fully-written, deterministic state and to
-  // exercise every lazy-init code path before any caller sees the
-  // model. Cost: one synthetic inference at load() time.
+  // One full forward pass at load() time. Without it, the first
+  // user-visible classify() can return NaN logits on win32-x64 CI
+  // because some backend allocator buffers are uninitialised after
+  // buildGraph() and CPU backends can JIT SIMD kernels on cold input.
+  // Symmetric with process(): set, compute, read back, discard.
   {
-    constexpr uint32_t kWarmupSide = 32;  // resized to kInputSize
+    constexpr uint32_t kWarmupSide = 32;
     std::vector<uint8_t> warmupRgb(
         static_cast<size_t>(kWarmupSide) * kWarmupSide * preprocess::kChannels);
     for (size_t i = 0; i < warmupRgb.size(); ++i) {
@@ -190,9 +161,6 @@ void ClassificationModel::load() {
       ggml_backend_cpu_set_n_threads(backend_, numThreads_);
     }
     (void)ggml_backend_graph_compute(backend_, compute_.graph);
-    // Read the output back so the warmup is observably symmetric with
-    // process(): on some backends the result of compute() only fully
-    // materialises after the first tensor_get on the output buffer.
     float warmupLogits[graph::kNumClasses] = {0.0F};
     ggml_backend_tensor_get(
         compute_.output, warmupLogits, 0, sizeof(warmupLogits));
@@ -222,11 +190,8 @@ std::any ClassificationModel::process(const std::any& input) {
 
   const auto t0 = std::chrono::steady_clock::now();
 
-  // Preprocess: image buffer -> FP32 WHCN tensor (224x224x3). The
-  // preprocessor still uses uint32_t = 0 internally as its
-  // "encoded path" indicator, but the JS-facing ClassifyInput now
-  // carries an explicit std::optional<RawRgbDims>; translate at the
-  // boundary so the preprocessor signature stays cheap.
+  // The preprocessor's legacy encoded-path sentinel is `uint32_t == 0`;
+  // collapse the optional<RawRgbDims> to that triplet at this boundary.
   const uint32_t rawW = inPtr->rawRgb.has_value() ? inPtr->rawRgb->width : 0;
   const uint32_t rawH = inPtr->rawRgb.has_value() ? inPtr->rawRgb->height : 0;
   const uint32_t rawC =
@@ -246,8 +211,6 @@ std::any ClassificationModel::process(const std::any& input) {
       compute_.input, inputTensor.data(), 0,
       inputTensor.size() * sizeof(float));
 
-  // Configure CPU threads if requested; otherwise libggml picks a sensible
-  // default based on hardware concurrency.
   if (numThreads_ > 0) {
     ggml_backend_cpu_set_n_threads(backend_, numThreads_);
   }
@@ -260,15 +223,12 @@ std::any ClassificationModel::process(const std::any& input) {
                            std::to_string(static_cast<int>(status)));
   }
 
-  // Retrieve logits.
   float logits[graph::kNumClasses] = {0.0F};
   ggml_backend_tensor_get(
       compute_.output, logits, 0, sizeof(logits));
 
   std::vector<float> probs = softmax(std::span<const float>(logits, graph::kNumClasses));
 
-  // Build sorted result list. Use labels parsed from GGUF metadata (or the
-  // hardcoded fallback) so caller receives human-readable names.
   ClassifyOutput output;
   output.results.reserve(probs.size());
   for (size_t i = 0; i < probs.size(); ++i) {
@@ -278,13 +238,9 @@ std::any ClassificationModel::process(const std::any& input) {
     output.results.push_back({label, probs[i]});
   }
 
-  // Sort descending by confidence, with explicit handling of non-finite
-  // values (NaN/Inf): treat them as smaller than any finite value so
-  // the ordering remains strict-weak even with degenerate inputs.
-  // The defensive softmax above should never produce non-finite
-  // probabilities, but we keep the guard so a future upstream bug or
-  // numerical edge case in the ggml CPU backend cannot break sort and
-  // silently land a non-maximum-confidence class at index 0.
+  // Treat NaN/Inf as smaller than any finite value so the ordering
+  // stays strict-weak even if a future ggml regression slips a
+  // non-finite past the defensive softmax above.
   std::sort(
       output.results.begin(),
       output.results.end(),
@@ -300,11 +256,6 @@ std::any ClassificationModel::process(const std::any& input) {
         return a.confidence > b.confidence;
       });
 
-  // Optional per-inference trace. Off unless QVAC_CLASSIFICATION_TRACE=1
-  // in the environment. Designed to give us actionable data for
-  // platform-specific numerical issues (e.g. win32 CI meal_1 anomaly)
-  // without requiring any rebuild or workflow change -- a test job
-  // can simply set the env var to get the full picture.
   if (traceEnabled()) {
     std::fprintf(
         stderr,
@@ -332,7 +283,6 @@ std::any ClassificationModel::process(const std::any& input) {
     std::fflush(stderr);
   }
 
-  // Apply topK filter if requested and within bounds.
   if (inPtr->topK > 0 && inPtr->topK < output.results.size()) {
     output.results.resize(inPtr->topK);
   }

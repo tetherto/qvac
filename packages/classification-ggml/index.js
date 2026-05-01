@@ -42,10 +42,8 @@ class ImageClassifier {
     this._modelPath = modelPath ?? resolveDefaultModelPath()
     this.logger = new QvacLogger(logger)
     this._threads = threads
-    // The underlying C++ JsLogger (in @qvac/qvac-lib-inference-addon-cpp) is
-    // a process-wide singleton backed by a static uv_async_t. Enabling it
-    // and then rapidly creating/destroying classifier instances can race
-    // that handle's lifecycle. Keep the bridge off by default.
+    // Off by default: see `addon.js::_ensureLoggerInstalled` for the
+    // process-wide JsLogger lifecycle that opt-in unlocks.
     this._nativeLogger = nativeLogger === true
     this._addon = null
     this._job = createJobHandler({ cancel: () => this._addon?.cancel() })
@@ -86,8 +84,6 @@ class ImageClassifier {
       await this._addon.activate()
     } catch (loadError) {
       this.logger.error('Error during model load:', loadError)
-      // Best-effort cleanup so a subsequent load() does not leak a zombie
-      // native instance (T6 in PR review).
       try { await this._addon?.unload?.() } catch (_) {}
       this._addon = null
       throw loadError
@@ -157,9 +153,8 @@ class ImageClassifier {
     const collected = await response.await().finally(() => {
       this._hasActiveResponse = false
     })
-    // Classify emits exactly one Output event whose payload is already the
-    // sorted result array; QvacResponse collects outputs into an array, so
-    // unwrap one level to preserve the documented public shape.
+    // QvacResponse collects each Output event into an array; classify
+    // emits exactly one, so unwrap to preserve the public shape.
     return Array.isArray(collected) && Array.isArray(collected[0])
       ? collected[0]
       : collected
@@ -189,12 +184,7 @@ class ImageClassifier {
     this._handleAddonOutputEvent(mapped.type, mapped.data, mapped.error)
   }
 
-  /**
-   * Releases native resources. Mirrors the LLM addon lifecycle: serialised
-   * through the same run queue, cancels in-flight work, fails the active
-   * JS request with `Model was unloaded`, then destroys the native handle.
-   * Safe to call more than once.
-   */
+  /** Idempotent. Cancels any in-flight job before destroying the handle. */
   async unload () {
     return this._run(async () => {
       try { if (this._addon?.cancel) await this._addon.cancel() } catch (_) {}

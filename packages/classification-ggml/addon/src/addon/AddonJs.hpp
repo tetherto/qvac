@@ -28,10 +28,7 @@ namespace jsu = qvac_lib_inference_addon_cpp::js;
 using qvac_errors::StatusError;
 using qvac_errors::general_error::InvalidArgument;
 
-/// Handler mapping ClassifyOutput → JS array of { label, confidence }.
-///
-/// Set `QVAC_CLASSIFICATION_TRACE=1` to dump each marshalled entry to
-/// stderr; useful when diagnosing numerical issues end-to-end.
+/// `QVAC_CLASSIFICATION_TRACE=1` dumps each marshalled entry to stderr.
 struct JsClassifyOutputHandler
     : addon_cpp::out_handl::JsBaseOutputHandler<ClassifyOutput> {
   JsClassifyOutputHandler()
@@ -78,11 +75,6 @@ inline js_value_t* createInstance(
     js_env_t* env, js_callback_info_t* info) try {
   addon_cpp::JsArgsParser args(env, info);
 
-  // Single-place parsing & validation of the JS-side configuration
-  // object. The JS wrapper passes config straight through; this is
-  // where every "is it a string / positive integer / present" rule
-  // lives, so there is one source of truth for what counts as a
-  // valid construction argument.
   auto configObj = args.getJsObject(1, "config");
   auto modelPath =
       configObj.getProperty<jsu::String>(env, "path").as<std::string>(env);
@@ -95,16 +87,14 @@ inline js_value_t* createInstance(
 
   auto model = std::make_unique<ClassificationModel>(modelPath);
 
-  // Optional threads hint nested under `config`. When provided it
-  // must be a positive integer; bare-runtime's `as<int32_t>` truncates
-  // floats and accepts negatives without complaint, so we range-check
-  // explicitly.
   auto innerConfig =
       configObj.getOptionalProperty<jsu::Object>(env, "config");
   if (innerConfig.has_value()) {
     auto threadsOpt =
         innerConfig->getOptionalProperty<jsu::Number>(env, "threads");
     if (threadsOpt.has_value()) {
+      // bare-runtime's `as<int32_t>` accepts negatives and truncates floats,
+      // so range-check explicitly.
       const int32_t threads = threadsOpt->as<int32_t>(env);
       if (threads < 1) {
         throw StatusError(
@@ -139,11 +129,6 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   addon_cpp::AddonJs& instance =
       addon_cpp::JsInterface::getInstance(env, args.get(0, "instance"));
 
-  // Single-place parsing & validation of the JS-side per-call payload.
-  // Every "is the argument the right type / range / shape" rule for
-  // a classify() call lives here, so the JS wrapper can be a thin
-  // pass-through and the model + preprocessor only ever operate on
-  // an already-validated `ClassifyInput`.
   auto inputObj = args.getJsObject(1, "inputObj");
   auto type =
       inputObj.getProperty<jsu::String>(env, "type").as<std::string>(env);
@@ -156,10 +141,8 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
 
   ClassifyInput cppInput;
 
-  // Image buffer: accept Uint8Array / Buffer (stored as TypedArray on the
-  // JS side). The "is required" wording in the message is the contract
-  // surface; existing JS-side tests assert against the substring
-  // "required" / "null" / "undefined" for the null-input path.
+  // Error wording is a test contract: integration suite asserts on the
+  // substrings "required" / "null" / "undefined" for the null-input case.
   auto bufferVal = inputObj.getProperty(env, "content");
   if (!jsu::is<jsu::TypedArray<uint8_t>>(env, bufferVal)) {
     throw StatusError(
@@ -175,12 +158,8 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   }
   cppInput.data.assign(span.begin(), span.end());
 
-  // Optional dimension metadata for the raw-RGB path. Either:
-  //   - none of {width, height, channels} are provided  -> encoded JPEG/PNG
-  //   - all three are provided and validated            -> raw RGB
-  // Anything in between is a programming error in the caller; reject
-  // explicitly rather than letting validateRawRgb produce a confusing
-  // size-mismatch error downstream.
+  // {width, height, channels} are an all-or-nothing trio: zero present
+  // means encoded JPEG/PNG, three present means raw RGB.
   auto widthOpt = inputObj.getOptionalProperty<jsu::Number>(env, "width");
   auto heightOpt = inputObj.getOptionalProperty<jsu::Number>(env, "height");
   auto channelsOpt =
@@ -196,10 +175,8 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
         " of 3");
   }
   if (provided == 3) {
-    // bare-runtime's `as<uint32_t>` does a static_cast on a possibly-
-    // negative or fractional JS Number; range-check the int32_t view
-    // first so a negative width does not silently wrap to ~4 billion
-    // and tunnel into validateRawRgb as a buffer-size mismatch.
+    // bare-runtime's `as<uint32_t>` static_casts negatives to ~4 billion;
+    // pull the int32_t view first to range-check meaningfully.
     const int32_t w = widthOpt->as<int32_t>(env);
     const int32_t h = heightOpt->as<int32_t>(env);
     const int32_t c = channelsOpt->as<int32_t>(env);

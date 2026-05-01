@@ -88,11 +88,6 @@ test('classify before load() rejects', async function (t) {
       /not loaded|load\(\)/i
     )
   } finally {
-    // Even though we never called `load()`, `makeClassifier()` did
-    // construct the native instance (createInstance allocates the
-    // worker thread + OutputCallBackJs). Tear it down through the
-    // standard cleanup so the next test does not race against any
-    // residual native resources still in flight.
     await cleanupClassifier(classifier)
   }
 })

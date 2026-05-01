@@ -12,25 +12,19 @@
 
 namespace qvac_lib_infer_ggml_classification::graph {
 
-/// Per-block hyperparameters for one torchvision MobileNetV3-Small
-/// `InvertedResidual` layer, reconstructed from the bundled GGUF weights so
-/// the C++ graph matches the ONNX reference line-for-line.
+/// One torchvision MobileNetV3-Small `InvertedResidual` block.
 struct BlockConfig {
-  int featuresIndex;   // 1..11 (matches `features.N` in the GGUF)
+  int featuresIndex;   // 1..11, matches `features.N` in the GGUF
   int inputChannels;
   int expandedChannels;
   int outputChannels;
   int depthwiseKernel; // 3 or 5
   int stride;          // 1 or 2
-  bool useHardswish;   // false = ReLU, true = HardSwish
-  bool useSe;          // squeeze-and-excite after the depthwise conv
+  bool useHardswish;   // false = ReLU
+  bool useSe;
   int seReducedChannels;
 };
 
-/// Static MobileNetV3-Small configuration. Matches `torchvision.models
-/// .mobilenet_v3_small` with the 3-class classifier head used by the bundled
-/// GGUF weights. Kept here as a named constant table so reviewers can check
-/// it against the published architecture without chasing magic numbers.
 inline constexpr int kNumBlocks = 11;
 inline constexpr std::array<BlockConfig, kNumBlocks> kBlocks = {{
     // idx  inC  expC  outC  k  s  hs     se     seR
@@ -54,9 +48,8 @@ inline constexpr int kNumClasses = 3;
 inline constexpr float kBatchNormEpsilon = 0.001F;
 inline constexpr int kInputHw = 224;
 
-/// Owned bundle: a ggml context holding every weight tensor, plus a map from
-/// GGUF tensor name to the live tensor handle. Created once at model load and
-/// kept alive for the entire lifetime of the model.
+/// ggml context + name→tensor map for every weight, plus the backing
+/// backend buffer. Lives for the entire model lifetime.
 struct WeightsBundle {
   std::unique_ptr<struct ggml_context, decltype(&ggml_free)> ctx{
       nullptr, ggml_free};
@@ -73,9 +66,8 @@ struct WeightsBundle {
   void reset();
 };
 
-/// Owned compute graph + its ggml context. Input / output tensors are
-/// re-used across `classify()` calls; only the input pixel data is rewritten
-/// per inference.
+/// Compute graph + its ggml context. Input/output tensors are reused
+/// across classify() calls; only input pixel data is rewritten per call.
 struct ComputeGraph {
   std::unique_ptr<struct ggml_context, decltype(&ggml_free)> ctx{
       nullptr, ggml_free};
@@ -94,22 +86,14 @@ struct ComputeGraph {
   void reset();
 };
 
-/// Loads every tensor from a GGUF file into a single ggml context attached to
-/// the given backend. Throws StatusError on any I/O, parsing, or schema
-/// mismatch. The returned bundle owns all memory. Additionally populates
-/// `outLabels` with class names read from the `mobilenet.class_N` metadata
-/// keys (or an empty vector if not present).
+/// Loads every tensor + the `mobilenet.class_N` labels from a GGUF file.
+/// `outLabels` is left empty if the metadata keys are not present.
 WeightsBundle loadWeights(
     const std::string& ggufPath, ggml_backend_t backend,
     std::vector<std::string>& outLabels);
 
-/// Builds the forward compute graph for MobileNetV3-Small using the weights
-/// bundle. The returned ComputeGraph holds its own ggml_context (graph only,
-/// not weights) and a pre-allocated input/output buffer on `backend`.
-///
-/// The graph expects the input tensor to be set via
-/// `ggml_backend_tensor_set(graph.input, fp32WhcnBuffer, ...)` before each
-/// `ggml_backend_graph_compute` call.
+/// Build the MobileNetV3-Small forward graph. Caller writes pixels into
+/// `graph.input` via `ggml_backend_tensor_set` before each compute.
 ComputeGraph buildGraph(const WeightsBundle& weights, ggml_backend_t backend);
 
 } // namespace qvac_lib_infer_ggml_classification::graph
