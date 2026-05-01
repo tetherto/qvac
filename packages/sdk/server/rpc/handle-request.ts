@@ -24,6 +24,8 @@ import {
   executeDuplexHandler,
   handleInitConfig,
   isInitConfigMessage,
+  handleShutdown,
+  isShutdownMessage,
 } from "./handler-utils";
 import { createServerProfiler, type ServerProfiler } from "./profiling";
 import { assertLifecycleAllowed } from "@/server/bare/runtime-lifecycle";
@@ -54,6 +56,14 @@ export async function handleRequest(req: RPC.IncomingRequest): Promise<void> {
     // Handle internal config initialization (bypasses schema)
     if (isInitConfigMessage(jsonData)) {
       handleInitConfig(req, jsonData);
+      return;
+    }
+
+    // Handle internal pre-terminate cleanup signal (bypasses schema). Lets
+    // the client tear addons down while the JS env is still alive so static
+    // js_ref_t state doesn't survive into the next worklet's isolate.
+    if (isShutdownMessage(jsonData)) {
+      await handleShutdown(req);
       return;
     }
 
@@ -104,7 +114,7 @@ function attachProfilingMetaToRequest(
 ): void {
   if (!profilingMeta) return;
 
-  Object.defineProperty(request as Record<string, unknown>, PROFILING_KEY, {
+  Object.defineProperty(request, PROFILING_KEY, {
     value: profilingMeta,
     enumerable: false,
     configurable: true,

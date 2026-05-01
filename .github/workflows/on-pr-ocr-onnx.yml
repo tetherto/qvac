@@ -105,6 +105,8 @@ jobs:
       - name: Verify that yaml files are formatted
         id: yamlfmt
         uses: ./.github/actions/yamlfmt
+        with:
+          workdir: ${{ env.PKG_DIR }}
         continue-on-error: true
 
       - name: Check for disallowed dependencies

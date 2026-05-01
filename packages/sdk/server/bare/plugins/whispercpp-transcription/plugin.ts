@@ -16,6 +16,7 @@ import {
   type CreateModelParams,
   type PluginModelResult,
   type ResolveContext,
+  type TranscribeSegment,
   type WhisperConfig,
 } from "@/schemas";
 import { createStreamLogger, registerAddonLogger } from "@/logging";
@@ -95,19 +96,32 @@ export const whisperPlugin = definePlugin({
       streaming: true,
 
       handler: async function* (request) {
-        const stream = transcribe({
-          modelId: request.modelId,
-          audioChunk: request.audioChunk,
-          prompt: request.prompt,
-        });
+        const metadata = request.metadata === true;
+        const stream = metadata
+          ? transcribe({
+              modelId: request.modelId,
+              audioChunk: request.audioChunk,
+              prompt: request.prompt,
+              metadata: true,
+            })
+          : transcribe({
+              modelId: request.modelId,
+              audioChunk: request.audioChunk,
+              prompt: request.prompt,
+            });
 
         try {
           let result = await stream.next();
           while (!result.done) {
-            yield {
-              type: "transcribe" as const,
-              text: result.value,
-            };
+            yield metadata
+              ? {
+                  type: "transcribe" as const,
+                  segment: result.value as TranscribeSegment,
+                }
+              : {
+                  type: "transcribe" as const,
+                  text: result.value as string,
+                };
             result = await stream.next();
           }
 
@@ -131,15 +145,29 @@ export const whisperPlugin = definePlugin({
       duplex: true,
 
       handler: async function* (request, inputStream) {
-        for await (const text of transcribeStream(
-          request.modelId,
-          inputStream,
-          request.prompt,
-        )) {
-          yield {
-            type: "transcribeStream" as const,
-            text,
-          };
+        if (request.metadata === true) {
+          for await (const segment of transcribeStream(
+            request.modelId,
+            inputStream,
+            request.prompt,
+            true,
+          )) {
+            yield {
+              type: "transcribeStream" as const,
+              segment,
+            };
+          }
+        } else {
+          for await (const text of transcribeStream(
+            request.modelId,
+            inputStream,
+            request.prompt,
+          )) {
+            yield {
+              type: "transcribeStream" as const,
+              text,
+            };
+          }
         }
 
         yield {

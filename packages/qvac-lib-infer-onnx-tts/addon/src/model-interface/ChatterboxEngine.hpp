@@ -6,9 +6,12 @@
 #include "OrtTypes.hpp"
 #include "tokenizers_c.h"
 
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <random>
+#include <stdexcept>
+#include <vector>
 
 namespace qvac::ttslib::chatterbox {
 
@@ -20,10 +23,24 @@ template <typename T> struct TensorData {
 namespace tensor_ops {
 
 // Concatenate two tensors along the batch dimension (axis 0).
-// Requires a.shape[i] == b.shape[i] for i > 0.
+// Requires a.shape[i] == b.shape[i] for i > 0 and both shapes to be non-empty
+// with equal rank.
 // Result shape: [a.shape[0] + b.shape[0], ...rest].
 template <typename T>
 TensorData<T> concatBatch(const TensorData<T> &a, const TensorData<T> &b) {
+  if (a.shape.empty() || b.shape.empty()) {
+    throw std::invalid_argument("concatBatch: both tensors must have a shape");
+  }
+  if (a.shape.size() != b.shape.size()) {
+    throw std::invalid_argument("concatBatch: tensor ranks must match");
+  }
+  for (size_t i = 1; i < a.shape.size(); ++i) {
+    if (a.shape[i] != b.shape[i]) {
+      throw std::invalid_argument(
+          "concatBatch: non-batch dims must match (mismatch at dim " +
+          std::to_string(i) + ")");
+    }
+  }
   TensorData<T> out;
   out.shape = a.shape;
   out.shape[0] = a.shape[0] + b.shape[0];
@@ -37,6 +54,9 @@ TensorData<T> concatBatch(const TensorData<T> &a, const TensorData<T> &b) {
 // Input [N, ...] produces output [2N, ...] by concatenating the input with
 // itself.
 template <typename T> TensorData<T> duplicateBatch(const TensorData<T> &a) {
+  if (a.shape.empty()) {
+    throw std::invalid_argument("duplicateBatch: tensor must have a shape");
+  }
   TensorData<T> out;
   out.shape = a.shape;
   out.shape[0] = a.shape[0] * 2;
@@ -45,6 +65,13 @@ template <typename T> TensorData<T> duplicateBatch(const TensorData<T> &a) {
   out.data.insert(out.data.end(), a.data.begin(), a.data.end());
   return out;
 }
+
+// Reads the last-step logits for a specific batch index from a logits tensor
+// shaped [batch, seq, vocab]. The returned vector has length `vocab`.
+// Throws std::runtime_error if the tensor is not 3D, and std::out_of_range
+// if `batchIdx` is not in [0, batch).
+std::vector<float> readLastStepLogitsForBatch(const OrtTensor &logitsTensor,
+                                              int64_t batchIdx);
 
 } // namespace tensor_ops
 
@@ -94,6 +121,13 @@ protected:
 
   bool hasSpeechEncoderCache() const;
   void clearSpeechEncoderCache();
+  void runSpeechEncoderAndCache();
+
+  void processSpeechEncoderOutputs(
+      TensorData<float> &inputsEmbs, TensorData<int64_t> &promptToken,
+      TensorData<float> &speakerEmbeddings, TensorData<float> &speakerFeatures,
+      TensorData<int64_t> &positionIds, TensorData<int64_t> &attentionMask,
+      std::unordered_map<std::string, TensorData<float>> &pastKeyValues);
 
   void cachePastKeyValues(
       std::unordered_map<std::string, TensorData<float>> &pastKeyValues);
@@ -112,12 +146,6 @@ private:
 
   TensorData<float> extractEmbeddings(const std::vector<int64_t> &inputIds,
                                       const std::vector<int64_t> &positionIds);
-
-  void processSpeechEncoderOutputs(
-      TensorData<float> &inputsEmbs, TensorData<int64_t> &promptToken,
-      TensorData<float> &speakerEmbeddings, TensorData<float> &speakerFeatures,
-      TensorData<int64_t> &positionIds, TensorData<int64_t> &attentionMask,
-      std::unordered_map<std::string, TensorData<float>> &pastKeyValues);
 
   std::vector<int64_t> generateSpeechTokens(
       std::vector<int64_t> &inputIds, TensorData<int64_t> &positionIds,
@@ -144,7 +172,6 @@ private:
   void ensureSession(std::unique_ptr<IOnnxInferSession> &session,
                      const std::string &modelPath);
   void releaseSession(std::unique_ptr<IOnnxInferSession> &session);
-  void runSpeechEncoderAndCache();
 
   void loadCangjieTableIfNeeded(const std::string &tokenizerPath);
   void loadTextEmbWeight(const std::string &embedTokensPath);
@@ -161,7 +188,7 @@ private:
                             TensorData<float> &speakerEmbeddings,
                             TensorData<float> &speakerFeatures);
 
-  int64_t runInitialCfgStep(
+  void runInitialCfgStep(
       const TensorData<float> &condEmbs, const TensorData<float> &uncondEmbs,
       TensorData<int64_t> &positionIds, TensorData<int64_t> &attentionMask,
       std::unordered_map<std::string, TensorData<float>> &batchedKv,
@@ -196,7 +223,6 @@ private:
 
   TokenizerHandle tokenizerHandle_;
   SessionFactory sessionFactory_;
-  std::unique_ptr<IOnnxInferSession> speechEncoderSession_;
   std::unique_ptr<IOnnxInferSession> embedTokensSession_;
   std::unique_ptr<IOnnxInferSession> conditionalDecoderSession_;
 
@@ -213,6 +239,7 @@ private:
 
 protected:
   bool isEnglish_ = true;
+  std::unique_ptr<IOnnxInferSession> speechEncoderSession_;
   std::unique_ptr<IOnnxInferSession> languageModelSession_;
   int keyValueOffset_ = 0;
   SpeechEncoderCache speechEncoderCache_;

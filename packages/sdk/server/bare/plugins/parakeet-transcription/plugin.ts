@@ -22,6 +22,7 @@ import { createStreamLogger, registerAddonLogger } from "@/logging";
 import {
   ModelLoadFailedError,
   ParakeetArtifactsRequiredError,
+  TranscriptionFailedError,
 } from "@/utils/errors-server";
 import { transcribe } from "@/server/bare/ops/transcribe";
 import { attachModelExecutionMs } from "@/profiling/model-execution";
@@ -232,6 +233,12 @@ export const parakeetPlugin = definePlugin({
       streaming: true,
 
       handler: async function* (request) {
+        if (request.metadata === true) {
+          throw new TranscriptionFailedError(
+            `Parakeet transcription does not support metadata: true; only the whisper engine emits per-segment metadata. Use a whisper model to receive segments.`,
+          );
+        }
+
         const stream = transcribe({
           modelId: request.modelId,
           audioChunk: request.audioChunk,

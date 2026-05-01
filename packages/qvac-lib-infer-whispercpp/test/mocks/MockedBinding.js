@@ -21,6 +21,7 @@ class MockedBinding {
     this._streaming = false
     this._streamingChunks = []
     this._streamingErrorOnSegment = -1
+    this.lastStreamingConfig = null
   }
 
   enableVadTestMode () {
@@ -186,6 +187,7 @@ class MockedBinding {
   startStreaming (handle, config) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     if (this._streaming) throw new Error('Streaming session already active')
+    this.lastStreamingConfig = config
     // Match WhisperInterface.startStreaming: reserve the logical job slot before
     // native work begins so JS-owned ids stay aligned in tests.
     const jobId = this._nextJobId

@@ -114,8 +114,8 @@ export function buildOperationEvent(
     if (extracted) Object.assign(gauges, extracted);
   }
 
-  const requestTags = config.getTags?.(request as never);
-  const resultTags = config.getTagsFromResult?.(finalResponse as never);
+  const requestTags = config.getTags?.(request);
+  const resultTags = config.getTagsFromResult?.(finalResponse);
   const tags = { ...requestTags, ...resultTags };
 
   const hasGauges = Object.keys(gauges).length > 0;

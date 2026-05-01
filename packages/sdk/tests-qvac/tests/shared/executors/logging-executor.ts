@@ -5,6 +5,34 @@ import { loggingTests } from "../../logging-tests.js";
 
 type LogEntry = { timestamp: number; level: string; namespace: string; message: string };
 
+// Wait out the documented "run while previous job is settling" busy throw
+// from qvac-lib-infer-llamacpp-llm.
+const ADDON_BUSY_MARKER = "a job is already set or being processed";
+
+class AddonBusyTimeoutError extends Error {
+  constructor(timeoutMs: number, cause: unknown) {
+    super(`Addon stayed busy: waited ${timeoutMs}ms`, { cause });
+    this.name = "AddonBusyTimeoutError";
+  }
+}
+
+async function callWhenAddonIdle<T>(fn: () => Promise<T>, timeoutMs = 30_000, intervalMs = 250): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  while (true) {
+    try {
+      return await fn();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes(ADDON_BUSY_MARKER)) {
+        if (Date.now() >= deadline) throw new AddonBusyTimeoutError(timeoutMs, err);
+        await new Promise((r) => setTimeout(r, intervalMs));
+        continue;
+      }
+      throw err;
+    }
+  }
+}
+
 export class LoggingExecutor extends AbstractModelExecutor<typeof loggingTests> {
   pattern = /^(addon-logging-|logging-)/;
 
@@ -50,8 +78,10 @@ export class LoggingExecutor extends AbstractModelExecutor<typeof loggingTests> 
         const triggerPromise = (async () => {
           await new Promise((r) => setTimeout(r, 100));
           if (modelType === "llm") {
-            const r = completion({ modelId: targetId, history: [{ role: "user", content: "Hi" }], stream: false });
-            await r.text;
+            await callWhenAddonIdle(async () => {
+              const r = completion({ modelId: targetId, history: [{ role: "user", content: "Hi" }], stream: false });
+              await r.text;
+            });
           } else if (modelType === "embeddings") {
             await embed({ modelId: targetId, text: "test" });
           }
@@ -113,12 +143,14 @@ export class LoggingExecutor extends AbstractModelExecutor<typeof loggingTests> 
 
       await new Promise((r) => setTimeout(r, 200));
 
-      const result = completion({
-        modelId,
-        history: [{ role: "user", content: "Say hello in one word." }],
-        stream: true,
+      await callWhenAddonIdle(async () => {
+        const result = completion({
+          modelId,
+          history: [{ role: "user", content: "Say hello in one word." }],
+          stream: true,
+        });
+        for await (const _token of result.tokenStream) { /* drain */ }
       });
-      for await (const _token of result.tokenStream) { /* drain */ }
 
       await Promise.race([logPromise, new Promise((r) => setTimeout(r, 1000))]);
 
@@ -151,8 +183,10 @@ export class LoggingExecutor extends AbstractModelExecutor<typeof loggingTests> 
 
       const operations: Promise<unknown>[] = [];
       if (p.operations.includes("completion")) {
-        const r = completion({ modelId: llmModelId, history: [{ role: "user", content: "Test concurrent logging" }], stream: false });
-        operations.push(r.text);
+        operations.push(callWhenAddonIdle(async () => {
+          const r = completion({ modelId: llmModelId, history: [{ role: "user", content: "Test concurrent logging" }], stream: false });
+          await r.text;
+        }));
       }
       if (p.operations.includes("embedding")) {
         const embeddingModelId = await this.resources.ensureLoaded("embeddings");
@@ -194,8 +228,10 @@ export class LoggingExecutor extends AbstractModelExecutor<typeof loggingTests> 
 
       await new Promise((r) => setTimeout(r, 100));
 
-      const r = completion({ modelId: reloadedModelId, history: [{ role: "user", content: "Post-reload test" }], stream: false });
-      await r.text;
+      await callWhenAddonIdle(async () => {
+        const r = completion({ modelId: reloadedModelId, history: [{ role: "user", content: "Post-reload test" }], stream: false });
+        await r.text;
+      });
 
       await Promise.race([collectPromise, new Promise((r) => setTimeout(r, 5000))]);
 
@@ -228,8 +264,10 @@ export class LoggingExecutor extends AbstractModelExecutor<typeof loggingTests> 
       await new Promise((r) => setTimeout(r, 100));
 
       for (let i = 0; i < operationCount; i++) {
-        const r = completion({ modelId, history: [{ role: "user", content: `Logging test ${i + 1}` }], stream: false });
-        await r.text;
+        await callWhenAddonIdle(async () => {
+          const r = completion({ modelId, history: [{ role: "user", content: `Logging test ${i + 1}` }], stream: false });
+          await r.text;
+        });
       }
 
       await Promise.race([collectPromise, new Promise((r) => setTimeout(r, 5000))]);
