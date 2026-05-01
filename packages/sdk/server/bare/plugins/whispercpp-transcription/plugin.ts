@@ -145,27 +145,75 @@ export const whisperPlugin = definePlugin({
       duplex: true,
 
       handler: async function* (request, inputStream) {
+        const streamOpts = {
+          ...(request.emitVadEvents !== undefined && {
+            emitVadEvents: request.emitVadEvents,
+          }),
+          ...(request.endOfTurnSilenceMs !== undefined && {
+            endOfTurnSilenceMs: request.endOfTurnSilenceMs,
+          }),
+          ...(request.vadRunIntervalMs !== undefined && {
+            vadRunIntervalMs: request.vadRunIntervalMs,
+          }),
+        };
+
         if (request.metadata === true) {
-          for await (const segment of transcribeStream(
+          for await (const value of transcribeStream(
             request.modelId,
             inputStream,
             request.prompt,
             true,
+            streamOpts,
           )) {
+            if (typeof value === "object" && "type" in value) {
+              if (value.type === "vad") {
+                yield {
+                  type: "transcribeStream" as const,
+                  vad: { speaking: value.speaking, probability: value.probability },
+                };
+                continue;
+              }
+              if (value.type === "endOfTurn") {
+                yield {
+                  type: "transcribeStream" as const,
+                  endOfTurn: { silenceDurationMs: value.silenceDurationMs },
+                };
+                continue;
+              }
+            }
             yield {
               type: "transcribeStream" as const,
-              segment,
+              segment: value as TranscribeSegment,
             };
           }
         } else {
-          for await (const text of transcribeStream(
+          for await (const value of transcribeStream(
             request.modelId,
             inputStream,
             request.prompt,
+            false,
+            streamOpts,
           )) {
+            if (typeof value === "object") {
+              if (value.type === "vad") {
+                yield {
+                  type: "transcribeStream" as const,
+                  vad: { speaking: value.speaking, probability: value.probability },
+                };
+                continue;
+              }
+              if (value.type === "endOfTurn") {
+                yield {
+                  type: "transcribeStream" as const,
+                  endOfTurn: { silenceDurationMs: value.silenceDurationMs },
+                };
+                continue;
+              }
+              continue;
+            }
             yield {
               type: "transcribeStream" as const,
-              text,
+              text: value,
             };
           }
         }
