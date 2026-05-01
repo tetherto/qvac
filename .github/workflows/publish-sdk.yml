@@ -30,6 +30,11 @@ on:
         description: "Tag for publishing (optional override for GPR)"
         required: false
         default: "dev"
+      npm_tag:
+        description: "NPM dist-tag (default: latest). e.g. release-1.x"
+        required: false
+        default: ""
+        type: string
 
 env:
   WORKDIR: packages/sdk
@@ -57,7 +62,7 @@ jobs:
   release-merge-guard:
     name: Release Merge Guard
     if: >-
-      github.event_name == 'push' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       startsWith(github.ref_name, 'release-')
     runs-on: ubuntu-latest
     steps:
@@ -107,8 +112,6 @@ jobs:
 
       - name: Configure scoped registry for @tetherto and @qvac packages
         env:
-          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           GIT_PAT: ${{ secrets.PAT_TOKEN }}
         shell: bash
         working-directory: ${{ env.WORKDIR }}
@@ -120,7 +123,6 @@ jobs:
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
           @tetherto:registry=https://npm.pkg.github.com/
-          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
           //npm.pkg.github.com/:_authToken=${GIT_PAT}
           NPMRC
 
@@ -139,7 +141,6 @@ jobs:
 
           [install.scopes]
           "@tetherto" = { token = "${{ env.READ_NPM_TOKEN }}", url = "https://npm.pkg.github.com" }
-          "@qvac" = { token = "${NPM_TOKEN}", url = "https://registry.npmjs.org" }
           EOF
 
       - name: Install dependencies
@@ -367,6 +368,16 @@ jobs:
       packages: write
       id-token: write
     steps:
+      - name: Validate npm_tag input
+        if: inputs.npm_tag != ''
+        shell: bash
+        run: |
+          tag="${{ inputs.npm_tag }}"
+          if ! echo "$tag" | grep -qE '^[a-zA-Z0-9][a-zA-Z0-9._-]*$'; then
+            echo "::error::Invalid npm dist-tag '$tag'. Must match ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ (e.g. release-1.x)"
+            exit 1
+          fi
+
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
 
@@ -380,7 +391,7 @@ jobs:
         id: publish
         uses: ./.github/actions/publish-library-to-npm
         with:
-          tag: "latest"
+          tag: ${{ inputs.npm_tag || 'latest' }}
           workdir: ${{ env.WORKDIR }}
 
   # Create GitHub release only for actual releases (after NPM publish)

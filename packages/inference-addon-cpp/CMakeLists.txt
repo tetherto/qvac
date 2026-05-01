@@ -5,9 +5,7 @@ if(BUILD_TESTING)
   list(APPEND VCPKG_MANIFEST_FEATURES "tests")
 endif()
 
-project(inference-addon-cpp
-  VERSION 1.1.4
-  LANGUAGES CXX)
+project(inference-addon-cpp LANGUAGES CXX)
 
 find_path(VCPKG_INSTALLED_PATH share/lint-cpp/.clang-format REQUIRED)
 configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.clang-format
@@ -39,9 +37,6 @@ install(TARGETS inference-addon-cpp
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 include(CMakePackageConfigHelpers)
-write_basic_package_version_file("inference-addon-cppConfigVersion.cmake"
-                                 VERSION ${PROJECT_VERSION}
-                                 COMPATIBILITY SameMajorVersion)
 
 configure_package_config_file(
   "${PROJECT_SOURCE_DIR}/cmake/inference-addon-cppConfig.cmake.in"
@@ -55,7 +50,6 @@ install(EXPORT inference-addon-cpp_Targets
         DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/inference-addon-cpp/cmake)
 
 install(FILES "${PROJECT_BINARY_DIR}/inference-addon-cppConfig.cmake"
-              "${PROJECT_BINARY_DIR}/inference-addon-cppConfigVersion.cmake"
         DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/inference-addon-cpp/cmake)
 
 install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/inference-addon-cpp DESTINATION include)
