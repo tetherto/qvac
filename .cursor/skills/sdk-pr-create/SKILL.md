@@ -71,6 +71,17 @@ Fill template sections based on the diff analysis. Delete sections that don't ap
 
 The standard format `TICKET prefix[tags]: subject` covers normal feature/fix PRs. The release flow has two additional PR shapes that follow established conventions in this repo. **Pick the shape first**, then fill in the template.
 
+**Body always uses the same headings.** Regardless of PR shape (normal / release / backmerge), the body MUST use the standard section headings from `.github/PULL_REQUEST_TEMPLATE/sdk-pod.md`:
+
+- `## 🎯 What problem does this PR solve?` (always)
+- `## 📝 How does it solve it?` (always)
+- `## 🧪 How was it tested?` (delete if not applicable)
+- `## 💥 Breaking Changes` (only if `[bc]`)
+- `## 🔌 API Changes` (only if `[api]`)
+- `## 📦 Models` (only if `[mod]`)
+
+Do NOT invent custom headings like `## Summary`, `## Changes`, `## Why`, or `## Test plan` — they break tooling and reviewer expectations. Map the content of every PR shape onto these standard sections (see "Mapping release/backmerge content onto the template" below).
+
 ### Release PR (fork → release branch)
 
 Cuts a new package version onto a `release-<package>-<version>` branch on `tetherto/qvac`. Bumps `package.json` version, adds the per-version changelog folder, and prepends an entry to the aggregated `CHANGELOG.md`. Merging this PR triggers GPR publish.
@@ -108,19 +119,27 @@ Brings the release artifacts (changelog folder, aggregated `CHANGELOG.md` entry,
 - `[notask]` is **only** used when there is no ticket. Do **not** combine `[notask]` with a ticket in the title (`QVAC-XXX chore[notask|skiplog]: ...` is wrong).
 - The two metadata tags `[notask]` and `[skiplog]` may be combined via `|` (e.g. `[notask|skiplog]`); this is distinct from the rule that content tags `[api]/[bc]/[mod]` cannot be combined.
 
-**Body content for backmerges:**
-- Brief summary linking to the corresponding release PR and noting the publish has already happened.
-- Explicit list of which files are touched (changelog folder, aggregated CHANGELOG.md, package.json version field).
-- If the PR is hand-crafted rather than a `git merge`, **explain why** — usually a table of dependencies that have moved ahead on `main` and would be regressed by a blind merge.
-- Reference the precedent backmerge PR for the previous version so reviewers can compare shape.
+### Mapping release/backmerge content onto the template
+
+Use the standard sdk-pod headings for every shape. Suggested mapping:
+
+**Release PR:**
+- `## 🎯 What problem does this PR solve?` — what's in the release at a high level (single hotfix? feature batch? security patch?), and which downstream consumer has been waiting on it.
+- `## 📝 How does it solve it?` — what files change (`packages/<pkg>/package.json` version bump, the new `changelog/<ver>/` folder, the prepended aggregated `CHANGELOG.md` entry), what the merge triggers (GPR publish), and the post-merge follow-up (open the backmerge PR to publish to npm).
+- `## 🧪 How was it tested?` — `bun lint`, `bun run build`, `bun test` results; any release-scripts that were run (`generate-changelog-sdk-pod.cjs`, `generate-notice.cjs` for SDK).
+
+**Backmerge PR:**
+- `## 🎯 What problem does this PR solve?` — name the published version, link the release PR, state that `main` is currently behind and would otherwise have a hole in its changelog history.
+- `## 📝 How does it solve it?` — list the artifacts brought back (changelog folder, aggregated `CHANGELOG.md` entry, `package.json` version), reference the precedent backmerge PR for the previous version so reviewers can compare shape.
+- `## 🧪 How was it tested?` — **if hand-crafted, this is where you justify it.** Explain why a literal `git merge` would regress something on `main` (usually a table of `package.json` dependencies that have advanced past the release branch). Confirm the diff touches only the four expected files. Note any post-merge automation (NOTICE regeneration, etc.) that's expected to follow.
 
 ### Decision rule (quick reference)
 
-| You are opening… | Base | Title format |
-|---|---|---|
-| A normal feature/fix/doc PR | `main` | `TICKET prefix[tags]: subject` |
-| A release PR for a new version | `release-<pkg>-<ver>` | `TICKET chore: release <pkg> <ver>` (or `chore[notask|skiplog]: release ...` if no ticket) |
-| A backmerge PR after publish | `main` | `TICKET chore[skiplog]: backmerge release <pkg> <ver>` (or `chore[notask|skiplog]: backmerge ...` if no ticket) |
+| You are opening… | Base | Title format | Body |
+|---|---|---|---|
+| A normal feature/fix/doc PR | `main` | `TICKET prefix[tags]: subject` | sdk-pod template |
+| A release PR for a new version | `release-<pkg>-<ver>` | `TICKET chore: release <pkg> <ver>` (or `chore[notask|skiplog]: release ...` if no ticket) | sdk-pod template |
+| A backmerge PR after publish | `main` | `TICKET chore[skiplog]: backmerge release <pkg> <ver>` (or `chore[notask|skiplog]: backmerge ...` if no ticket) | sdk-pod template |
 
 ## Output Format
 
@@ -179,6 +198,7 @@ Before outputting the PR description, verify:
 - [ ] Title follows format: `TICKET prefix[tags]: subject` (or the release / backmerge variants above)
 - [ ] If the PR has a ticket, `[notask]` is **NOT** in the title
 - [ ] If the PR is a backmerge, `[skiplog]` is in the title
+- [ ] Body uses the standard sdk-pod headings (`## 🎯 What problem...`, `## 📝 How does it solve...`, `## 🧪 How was it tested?`) — no custom headings like `## Summary` / `## Changes` / `## Test plan`
 - [ ] "What problem" describes user impact, not implementation
 - [ ] "How it solves" is high-level approach, not line-by-line
 - [ ] Unused sections are deleted
