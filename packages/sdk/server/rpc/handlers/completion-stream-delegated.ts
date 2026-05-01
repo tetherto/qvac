@@ -26,15 +26,14 @@ export async function* handleCompletionStreamDelegated(
     throw new ModelIsDelegatedError(request.modelId);
   }
 
-  const { topic, providerPublicKey, timeout, healthCheckTimeout } = entry.delegated;
+  const { providerPublicKey, timeout, healthCheckTimeout } = entry.delegated;
 
   try {
     logger.debug(
       `📤 Sending delegated completionStream request to provider: ${providerPublicKey}${timeout ? `, timeout: ${timeout}ms` : ""}`,
     );
 
-    // Create RPC instance for this HyperSwarm peer
-    const rpc = await getRPC(topic, providerPublicKey, { timeout, healthCheckTimeout });
+    const rpc = await getRPC(providerPublicKey, { timeout, healthCheckTimeout });
 
     // Build delegate options with profiling metadata
     const delegateOpts: DelegateOptions = { peerKey: providerPublicKey };

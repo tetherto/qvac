@@ -8,7 +8,7 @@ import { InvalidResponseError } from "@/utils/errors-client";
  * Can also be used to check if the local SDK worker is responsive.
  *
  * @param params - Delegation target to check
- * @param params.delegate - The provider to check (topic + publicKey + optional timeout)
+ * @param params.delegate - The provider to check (providerPublicKey + optional timeout)
  * @returns A promise that resolves to a heartbeat response if the provider is reachable.
  * @throws {QvacErrorBase} When the provider is unreachable or the response is invalid.
  *
@@ -16,7 +16,7 @@ import { InvalidResponseError } from "@/utils/errors-client";
  * // Check if a delegated provider is online
  * try {
  *   await heartbeat({
- *     delegate: { topic: "topicHex", providerPublicKey: "peerHex", timeout: 3000 },
+ *     delegate: { providerPublicKey: "peerHex", timeout: 3000 },
  *   });
  *   console.log("Provider is online");
  * } catch {

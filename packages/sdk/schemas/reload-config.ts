@@ -25,7 +25,7 @@ export const reloadConfigOptionsToRequestSchema = z.union([
       type: "loadModel" as const,
       modelId: data.modelId,
       modelType: data.modelType,
-      modelConfig: data.modelConfig as z.infer<typeof whisperConfigSchema>,
+      modelConfig: data.modelConfig,
     })),
 ]);
 

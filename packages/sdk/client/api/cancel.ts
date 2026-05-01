@@ -31,7 +31,7 @@ import { InvalidResponseError, CancelFailedError } from "@/utils/errors-client";
  * await cancel({
  *   operation: "downloadAsset",
  *   downloadKey: "download-key",
- *   delegate: { topic: "topicHex", providerPublicKey: "peerHex" },
+ *   delegate: { providerPublicKey: "peerHex" },
  * });
  *
  * @example

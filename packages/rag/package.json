@@ -28,9 +28,9 @@
   ],
   "types": "index.d.ts",
   "devDependencies": {
-    "@qvac/dl-hyperdrive": "^0.1.1",
-    "@qvac/embed-llamacpp": "^0.7.6",
-    "@qvac/llm-llamacpp": "^0.5.7",
+    "@qvac/embed-llamacpp": "^0.14.0",
+    "@qvac/llm-llamacpp": "^0.16.0",
+    "@qvac/registry-client": "^0.4.1",
     "bare-crypto": "^1.13.4",
     "bare-fs": "^4.1.6",
     "bare-path": "^3.0.0",

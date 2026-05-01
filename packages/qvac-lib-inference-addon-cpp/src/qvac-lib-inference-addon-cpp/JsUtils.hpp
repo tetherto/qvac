@@ -283,7 +283,7 @@ protected:
   explicit Number(js_value_t* value) : Value<Number>{value} {}
 
   static int create_(js_env_t* env, double value, js_value_t** result) {
-    return js_create_double(env, value, result);
+    return createDouble(env, value, result);
   }
   static int create_(js_env_t* env, int32_t value, js_value_t** result) {
     return js_create_int32(env, value, result);
@@ -295,7 +295,23 @@ protected:
     return js_create_int64(env, value, result);
   }
   static int create_(js_env_t* env, uint64_t value, js_value_t** result) {
-    return js_create_double(env, static_cast<double>(value), result);
+    return createDouble(env, static_cast<double>(value), result);
+  }
+
+  static int createDouble(js_env_t* env, double value, js_value_t** result) {
+#if defined(_WIN32)
+    // Work around a Bare/libjs issue observed on GitHub Azure win32-x64
+    // runners where the first js_create_double() in the process can produce
+    // an invalid JS value even though it returns success.
+    // TODO: Remove this burn-once workaround once Bare/libjs ships a fix.
+    static bool hasBurnedDouble = [](js_env_t* env) {
+      js_value_t* burned = nullptr;
+      (void)js_create_double(env, 0, &burned);
+      return true;
+    }(env);
+    (void)hasBurnedDouble;
+#endif
+    return js_create_double(env, value, result);
   }
 
   static int as_(js_env_t* env, js_value_t* value, double* result) {

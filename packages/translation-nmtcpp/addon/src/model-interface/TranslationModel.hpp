@@ -48,6 +48,10 @@ public:
 
   void setUseGpu(bool useGpu);
 
+  void setGpuBackend(const std::string& gpuBackend);
+
+  void setGpuDevice(int gpuDevice);
+
   std::unordered_map<std::string, std::variant<double, int64_t, std::string>>
   getConfig() const;
 
@@ -60,6 +64,21 @@ public:
   void saveLoadParams(const std::string& modelPath);
 
   std::vector<std::string> processBatch(const std::vector<std::string>& texts);
+
+  /**
+   * Returns the name of the currently-loaded non-CPU backend (e.g. "Vulkan0",
+   * "OpenCL", "Metal"), or a sentinel string when no GPU backend is active.
+   *
+   * Sentinels:
+   *   - "Unloaded"     — model is not loaded
+   *   - "Bergamot-CPU" — non-GGML backend (Bergamot); CPU-only by design
+   *   - "CPU"          — GGML backend loaded but only the CPU backend
+   * registered
+   *
+   * Otherwise returns the device name of the first non-CPU backend in
+   * nmtCtx_->state->backends (GPU is always pushed first per nmt_backend_init).
+   */
+  std::string getActiveBackendName() const;
 
 public: // overrides
   std::string getName() const override;
@@ -102,6 +121,19 @@ private:
   mutable bool isFirstSentence_ = true;
 
   bool useGpu_ = false;
+
+  // Case-insensitive substring filter over ggml device names (e.g. "vulkan",
+  // "vulkan0", "opencl", "metal"). Populated from the "gpu_backend" config
+  // key by setConfig(). Empty → default gated selection in
+  // nmt_backend_init_gpu.
+  std::string gpuBackend_;
+
+  int gpuDevice_ = 0;
+
+  // Cached at load() time; cleared on unload(). Avoids mutex + ggml traversal
+  // on every getActiveBackendName() call since the active backend is immutable
+  // after load().
+  std::string activeBackendName_;
 
   std::unordered_map<std::string, std::variant<double, int64_t, std::string>>
       config_;
