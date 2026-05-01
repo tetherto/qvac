@@ -38,12 +38,12 @@ const sdkPath =
 console.log(`SDK version: ${version}`);
 console.log(`SDK path:    ${sdkPath}`);
 
-execSync(`bun run scripts/generate-api-docs.ts ${version}`, {
+execSync(`bun run scripts/generate-api-docs.ts ${version} --latest`, {
   stdio: "inherit",
   env: { ...process.env, SDK_PATH: sdkPath },
 });
 
-execSync(`bun run scripts/update-versions-list.ts ${version}`, {
+execSync(`bun run scripts/update-versions-list.ts --latest=${version}`, {
   stdio: "inherit",
 });
 

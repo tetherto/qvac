@@ -20,7 +20,10 @@ interface DiffusionResult {
 }
 
 /**
- * Generate images using a loaded diffusion model.
+ * Generates images using a loaded diffusion model.
+ *
+ * @param params - Diffusion request parameters (model, prompt, dimensions, sampler, seed, etc.).
+ * @returns A result object exposing `progressStream` (async iterator of `{ step, totalSteps, elapsedMs }`), `outputs` (promise of the generated image buffers), and `stats` (promise of generation statistics).
  *
  * Supports both txt2img (no `init_image`) and img2img (with `init_image`).
  *

@@ -10,6 +10,179 @@ const platform = os.platform()
 const arch = os.arch()
 const isMobile = platform === 'ios' || platform === 'android'
 
+// ---------------------------------------------------------------------------
+// Performance reporter — captures Parakeet integration-test stats and emits
+// them through the shared QVAC perf-report pipeline (desktop) or via console
+// markers extractable from Device Farm logs (mobile).
+//
+// On desktop we require the shared scripts/test-utils/performance-reporter
+// directly. On mobile that path lives outside the addon package and bare-pack
+// can't bundle it, so we fall back to an inline lightweight reporter that
+// chunks JSON into [PERF_REPORT_START]/[PERF_CHUNK] markers — the exact
+// format scripts/perf-report/extract-from-log.js already understands.
+// ---------------------------------------------------------------------------
+let createPerformanceReporter
+const _scriptBase = path.join('..', '..', '..', '..', 'scripts', 'test-utils')
+try {
+  const perfReporterMod = require(path.join(_scriptBase, 'performance-reporter'))
+  perfReporterMod.configure({ fs, path, process, os })
+  createPerformanceReporter = perfReporterMod.createPerformanceReporter
+} catch (_) {
+  createPerformanceReporter = function (opts) {
+    const _results = []
+    const _startedAt = new Date().toISOString()
+    const _addon = (opts && opts.addon) || 'parakeet'
+    const _addonType = (opts && opts.addonType) || 'parakeet'
+    const _device = {
+      name: platform,
+      platform,
+      os_version: '',
+      arch: os.arch ? os.arch() : '',
+      runner: 'device-farm'
+    }
+
+    return {
+      record (testName, metrics, extra) {
+        const entry = {
+          test: testName,
+          execution_provider: (extra && extra.execution_provider) || null,
+          metrics: Object.assign({
+            real_time_factor: null,
+            wall_time_ms: null,
+            tps: null,
+            encoder_time_ms: null,
+            decoder_time_ms: null,
+            audio_duration_ms: null,
+            total_time_ms: null
+          }, metrics),
+          input: (extra && extra.input) || null,
+          output: (extra && extra.output) || null
+        }
+        _results.push(entry)
+      },
+      toJSON () {
+        return {
+          schema_version: '1.0',
+          addon: _addon,
+          addon_type: _addonType,
+          timestamp: _startedAt,
+          device: _device,
+          results: _results
+        }
+      },
+      writeReport () {
+        const json = JSON.stringify(this.toJSON())
+        const dirs = []
+        if (global.testDir) dirs.push(global.testDir)
+        if (platform === 'android') {
+          dirs.push('/sdcard/Android/data/io.tether.test.qvac/files')
+          dirs.push('/storage/emulated/0/Android/data/io.tether.test.qvac/files')
+          dirs.push('/data/local/tmp')
+        }
+        dirs.push('/tmp')
+        for (let di = 0; di < dirs.length; di++) {
+          try {
+            try { fs.mkdirSync(dirs[di], { recursive: true }) } catch (_) {}
+            const p = path.join(dirs[di], 'perf-report.json')
+            fs.writeFileSync(p, json)
+            console.log('[PERF_REPORT_PATH]' + p)
+          } catch (e) {
+            console.log('[perf-reporter] write to ' + dirs[di] + ' failed: ' + e.message)
+          }
+        }
+      },
+      writeStepSummary () {},
+      writeToConsole () {
+        try {
+          const json = JSON.stringify(this.toJSON())
+          const CHUNK = 800
+          if (json.length <= CHUNK) {
+            console.log('[PERF_REPORT_START]' + json + '[PERF_REPORT_END]')
+          } else {
+            const id = Date.now().toString(36)
+            const n = Math.ceil(json.length / CHUNK)
+            for (let i = 0; i < n; i++) {
+              console.log('[PERF_CHUNK:' + id + ':' + i + ':' + n + ']' + json.substring(i * CHUNK, (i + 1) * CHUNK))
+            }
+          }
+        } catch (err) {
+          console.log('[perf-reporter] mobile console write failed: ' + err.message)
+        }
+      },
+      get length () { return _results.length }
+    }
+  }
+}
+
+const _perfReporter = createPerformanceReporter({
+  addon: 'parakeet',
+  addonType: 'parakeet'
+})
+
+const _reportPath = path.resolve('.', 'test/results/performance-report.json')
+let _reportScheduled = false
+
+function _flushPerfReport () {
+  if (_perfReporter.length === 0) return
+  try { _perfReporter.writeReport(_reportPath) } catch (_) {}
+  try { _perfReporter.writeToConsole() } catch (_) {}
+}
+
+function _scheduleReportWrite () {
+  if (_reportScheduled) return
+  _reportScheduled = true
+  process.on('exit', _flushPerfReport)
+}
+
+/**
+ * Record a parakeet inference stats row through the shared perf reporter.
+ *
+ * @param {string} label - Test label, e.g. '[CPU] multiple-transcriptions run 1'.
+ *                         The execution-provider is auto-detected from the
+ *                         label when it contains [CPU] or [GPU].
+ * @param {Object} stats - Stats object from the JobEnded event:
+ *                         { realTimeFactor, totalTime, audioDurationMs,
+ *                           tokensPerSecond, encoderMs, decoderMs,
+ *                           totalWallMs, ... }
+ * @param {Object} [extra] - Optional { wallMs, output, executionProvider }
+ *                            overrides.
+ */
+function recordParakeetStats (label, stats, extra) {
+  if (!stats || typeof stats !== 'object') return
+  const epOverride = extra && extra.executionProvider
+  const ep = epOverride || (/\[gpu\]/i.test(label) ? 'gpu' : /\[cpu\]/i.test(label) ? 'cpu' : null)
+
+  const rtf = typeof stats.realTimeFactor === 'number' ? stats.realTimeFactor : null
+  const totalTimeSec = typeof stats.totalTime === 'number' ? stats.totalTime : null
+  const totalTimeMs = totalTimeSec !== null ? Math.round(totalTimeSec * 1000) : null
+  const wallMs = (extra && typeof extra.wallMs === 'number')
+    ? Math.round(extra.wallMs)
+    : (typeof stats.totalWallMs === 'number' ? Math.round(stats.totalWallMs) : totalTimeMs)
+  const tps = typeof stats.tokensPerSecond === 'number' ? stats.tokensPerSecond : null
+  const encoderMs = typeof stats.encoderMs === 'number' ? Math.round(stats.encoderMs) : null
+  const decoderMs = typeof stats.decoderMs === 'number' ? Math.round(stats.decoderMs) : null
+  const audioMs = typeof stats.audioDurationMs === 'number' ? Math.round(stats.audioDurationMs) : null
+
+  _perfReporter.record(label, {
+    real_time_factor: rtf,
+    wall_time_ms: wallMs,
+    tps,
+    encoder_time_ms: encoderMs,
+    decoder_time_ms: decoderMs,
+    audio_duration_ms: audioMs,
+    total_time_ms: totalTimeMs
+  }, {
+    execution_provider: ep,
+    output: extra && extra.output ? String(extra.output) : null
+  })
+  _scheduleReportWrite()
+
+  if (isMobile) {
+    try { _perfReporter.writeReport() } catch (_) {}
+    try { _perfReporter.writeToConsole() } catch (_) {}
+  }
+}
+
 // Mobile paths use static string literals so bare-pack can trace them into
 // the bundle.  Desktop paths use variables so bare-pack skips them — the
 // relative ../../ paths don't exist in the mobile test-framework layout.
@@ -744,5 +917,7 @@ module.exports = {
   isMobile,
   platform,
   arch,
-  MODEL_CONFIGS
+  MODEL_CONFIGS,
+  recordParakeetStats,
+  flushParakeetPerfReport: _flushPerfReport
 }

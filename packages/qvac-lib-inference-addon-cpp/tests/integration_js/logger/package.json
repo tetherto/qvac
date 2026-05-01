@@ -1,0 +1,43 @@
+{
+  "name": "test-logger",
+  "version": "0.1.0",
+  "addon": true,
+  "scripts": {
+    "build": "bare-make generate && bare-make build && bare-make install",
+    "lint": "standard",
+    "lint:fix": "standard --fix",
+    "test": "bare test.js"
+  },
+  "files": [
+    "binding.js",
+    "index.js",
+    "silerovad.js",
+    "prebuilds",
+    "index.d.ts",
+    "utils",
+    "prebuilds",
+    "model",
+    "lib"
+  ],
+  "exports": {
+    "./package": "./package.json",
+    ".": "./index.js"
+  },
+  "repository": {
+    "type": "git"
+  },
+  "author": "Tether",
+  "keywords": [
+    "tether",
+    "addon",
+    "silero",
+    "qvac"
+  ],
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "brittle": "^3.16.3",
+    "cmake-bare": "^1.5.2",
+    "standard": "^17.0.0"
+  },
+  "bugs": "https://github.com/tetherto/qvac-lib-inference-addon-cpp/issues"
+}

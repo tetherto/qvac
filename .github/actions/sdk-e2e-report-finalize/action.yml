@@ -120,26 +120,43 @@ runs:
             `**Config:** suite=${fmt(suite)} · filter=${fmt(filter)} · exclude=${fmt(excludeSuite)}`;
           const linksLine = `[View run](${runUrl}) · [Artifacts](${artifactsUrl})`;
 
+          // actions/download-artifact@v8 extracts a single matched artifact directly
+          // into `path` instead of `path/<artifact-name>/` (the per-artifact subdir is
+          // only created when the pattern matches >=2 artifacts). For families with one
+          // platform (android, ios) we therefore probe both layouts. Desktop always has
+          // multiple platforms so the per-artifact subdir is created and is preferred.
           function findResultsJson(platform) {
-            const dir = path.join(resultsRoot, artifactDir(platform));
-            if (!fs.existsSync(dir)) return null;
-            const files = fs.readdirSync(dir).filter((f) => f.endsWith('.json'));
-            if (files.length === 0) return null;
-            // Pick the first results-*.json; there is normally only one per platform per run.
-            const target = files.find((f) => f.startsWith('results-')) || files[0];
-            return path.join(dir, target);
+            const candidates = [
+              path.join(resultsRoot, artifactDir(platform)),
+              resultsRoot,
+            ];
+            for (const dir of candidates) {
+              if (!fs.existsSync(dir)) continue;
+              const files = fs.readdirSync(dir)
+                .filter((f) => f.endsWith('.json') && f.startsWith('results-'));
+              if (files.length === 0) continue;
+              return path.join(dir, files[0]);
+            }
+            return null;
           }
 
           function findSectionFiles(platform) {
-            const dir = path.join(sectionsRoot, sectionArtifactDir(platform));
-            if (!fs.existsSync(dir)) return { md: null, comparison: null };
-            const entries = fs.readdirSync(dir);
-            const md = entries.find((f) => f.endsWith('.md'));
-            const comparison = entries.find((f) => f.startsWith('comparison-') && f.endsWith('.json'));
-            return {
-              md: md ? path.join(dir, md) : null,
-              comparison: comparison ? path.join(dir, comparison) : null,
-            };
+            const candidates = [
+              path.join(sectionsRoot, sectionArtifactDir(platform)),
+              sectionsRoot,
+            ];
+            for (const dir of candidates) {
+              if (!fs.existsSync(dir)) continue;
+              const entries = fs.readdirSync(dir);
+              const md = entries.find((f) => f.endsWith('.md'));
+              const comparison = entries.find((f) => f.startsWith('comparison-') && f.endsWith('.json'));
+              if (!md && !comparison) continue;
+              return {
+                md: md ? path.join(dir, md) : null,
+                comparison: comparison ? path.join(dir, comparison) : null,
+              };
+            }
+            return { md: null, comparison: null };
           }
 
           function truncate(s, n) {
