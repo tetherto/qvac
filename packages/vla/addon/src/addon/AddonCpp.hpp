@@ -50,8 +50,7 @@ public:
   VlaModel(const VlaModel&) = delete;
   VlaModel& operator=(const VlaModel&) = delete;
 
-  // smolvla_model has its own destructor that calls smolvla_free_model, so
-  // unique_ptr destruction releases backends/contexts/buffers automatically.
+  // smolvla_model has its own destructor that calls smolvla_free_model
   ~VlaModel() override = default;
 
   const smolvla_hparams& hparams() const { return model_->hparams; }
