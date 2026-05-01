@@ -68,14 +68,22 @@ public:
   RunResult run(
       const float* const* images, int nImages, int imgWidth, int imgHeight,
       const float* state, int stateDim, const int32_t* tokens, int nTokens,
-      const uint8_t* maskBytes, int nMask, const float* noise,
-      int /*noiseLen*/) {
+      const uint8_t* maskBytes, int nMask, const float* noise, int noiseLen) {
     if (nImages <= 0 || images == nullptr) {
       throw std::invalid_argument("VlaModel::run: images must not be empty");
     }
     if (nTokens != nMask) {
       throw std::invalid_argument(
           "VlaModel::run: tokens and mask must be the same length");
+    }
+    if (noise != nullptr) {
+      const auto required = static_cast<size_t>(model_->hparams.chunk_size) *
+                            model_->hparams.max_action_dim;
+      if (noiseLen <= 0 || static_cast<size_t>(noiseLen) < required) {
+        throw std::invalid_argument(
+            "VlaModel::run: noise buffer is shorter than chunk_size * "
+            "max_action_dim");
+      }
     }
 
     static_assert(
