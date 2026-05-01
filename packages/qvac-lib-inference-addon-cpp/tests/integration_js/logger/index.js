@@ -5,4 +5,3 @@ exports.cppLog = binding.cppLog
 exports.dummyCppLogWork = binding.dummyCppLogWork
 exports.dummyMultiThreadedCppLogWork = binding.dummyMultiThreadedCppLogWork
 exports.releaseLogger = binding.releaseLogger
-

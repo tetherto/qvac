@@ -1,8 +1,0 @@
-{
-  "name": "test-logger",
-  "version": "0.1.0",
-  "dependencies": [
-     { "name": "qvac-lint-cpp", "version>=": "1.4.4#2" }
-  ],
-  "overrides": []
-}
