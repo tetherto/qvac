@@ -52,6 +52,8 @@ public:
 
   void setGpuDevice(int gpuDevice);
 
+  void setOpOffloadMinBatch(int opOffloadMinBatch);
+
   std::unordered_map<std::string, std::variant<double, int64_t, std::string>>
   getConfig() const;
 
@@ -79,6 +81,13 @@ public:
    * nmtCtx_->state->backends (GPU is always pushed first per nmt_backend_init).
    */
   std::string getActiveBackendName() const;
+
+  /**
+   * Returns the human-readable device description (e.g. "NVIDIA GeForce RTX
+   * 5070", "Intel(R) UHD Graphics") for the active GPU backend, or an empty
+   * string when no GPU backend is loaded.
+   */
+  std::string getActiveBackendDescription() const;
 
 public: // overrides
   std::string getName() const override;
@@ -130,10 +139,13 @@ private:
 
   int gpuDevice_ = 0;
 
+  int opOffloadMinBatch_ = -1;
+
   // Cached at load() time; cleared on unload(). Avoids mutex + ggml traversal
   // on every getActiveBackendName() call since the active backend is immutable
   // after load().
   std::string activeBackendName_;
+  std::string activeBackendDescription_;
 
   std::unordered_map<std::string, std::variant<double, int64_t, std::string>>
       config_;

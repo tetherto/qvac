@@ -16,22 +16,28 @@
 #include "nmt.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
-// Get optimal number of threads for computation
-// Optimized for GitHub runners (typically 2 CPUs) and other environments
 int get_optimal_thread_count() {
   unsigned int hw_threads = std::thread::hardware_concurrency();
   if (hw_threads == 0) {
-    // Fallback if hardware_concurrency() fails
     return 2;
   }
-  // For GitHub runners (typically 2 CPUs), use both cores
-  // For machines with more cores, use most but leave 1-2 for system
+
+#ifdef __ANDROID__
+  // Mobile SoCs use big.LITTLE with heterogeneous cores.  Spreading work
+  // across all cores (e.g. 8 on Snapdragon 8 Elite) forces the scheduler
+  // onto slow efficiency cores.  Cap at 4 to stay on performance cores;
+  // empirically this matches the 2 prime + 2-3 big core layout of recent
+  // Snapdragon / Exynos / Dimensity SoCs.
+  const unsigned int android_max = 4;
+  return static_cast<int>(std::min(hw_threads, android_max));
+#endif
+
   if (hw_threads <= 2) {
-    return hw_threads; // Use all available cores
+    return hw_threads;
   } else if (hw_threads <= 16) {
-    return hw_threads - 1; // Leave 1 core
+    return hw_threads - 1;
   } else {
-    return hw_threads - 2; // Leave 2 cores for system on high-core machines
+    return hw_threads - 2;
   }
 }
 
@@ -61,8 +67,9 @@ bool ggml_graph_compute_helper(
     ggml_backend_reg_t reg = dev ? ggml_backend_dev_backend_reg(dev) : nullptr;
 
     auto* fn_set_n_threads =
-        (ggml_backend_set_n_threads_t)ggml_backend_reg_get_proc_address(
-            reg, "ggml_backend_set_n_threads");
+        reg ? (ggml_backend_set_n_threads_t)ggml_backend_reg_get_proc_address(
+                  reg, "ggml_backend_set_n_threads")
+            : nullptr;
     if (fn_set_n_threads) {
       fn_set_n_threads(backend, n_threads);
     }
@@ -239,27 +246,22 @@ ggml_backend_dev_t nmt_select_gpu_device(
   }
 #endif
 
-  // Mode 2b: fallback to any non-CPU compute device (skipping OpenCL when
-  // the build-time guard is off — Adreno 830 mitigation).
-  // When falling through from Mode 2a (OpenCL preference didn't find enough
-  // devices), reset the ordinal to 0 — the caller's gpu_device referred to
-  // the OpenCL device namespace, not the full device list.
+  // Mode 2b: fallback to any non-CPU, non-OpenCL compute device.
+  // OpenCL is always skipped here because Mode 2a already handles it when
+  // QVAC_NMTCPP_USE_OPENCL is defined, and it's unwanted when the guard is
+  // off. This ensures gpu_device ordinals map to distinct physical GPUs
+  // (Vulkan/CUDA/Metal) without OpenCL duplicates occupying slots.
   if (dev == nullptr) {
 #ifdef QVAC_NMTCPP_USE_OPENCL
     if (oclDeviceFoundButBuftNull) {
       std::ostringstream oss;
       oss << "[" << log_prefix
           << "] Mode 2a OpenCL device found but buffer type was null — "
-             "falling through to Mode 2b with ordinal 0";
+             "falling through to Mode 2b";
       QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING, oss.str());
     }
 #endif
-    const int fallback_ordinal =
-#ifdef QVAC_NMTCPP_USE_OPENCL
-        0;
-#else
-        gpu_device;
-#endif
+    const int fallback_ordinal = gpu_device;
     int cnt2 = 0;
     for (size_t i = 0; i < devCount; ++i) {
       ggml_backend_dev_t dev_cur = ggml_backend_dev_get(i);
@@ -271,11 +273,9 @@ ggml_backend_dev_t nmt_select_gpu_device(
       if (dev_type == GGML_BACKEND_DEVICE_TYPE_CPU) {
         continue;
       }
-#ifndef QVAC_NMTCPP_USE_OPENCL
       if (nmt_name_contains_ci(name, "opencl")) {
         continue;
       }
-#endif
       if (cnt2 == fallback_ordinal) {
         ggml_backend_buffer_type_t buft = ggml_backend_dev_buffer_type(dev_cur);
         if (buft != nullptr) {

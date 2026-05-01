@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
+#include <cstdlib>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -90,18 +91,17 @@ uint32_t nmt_kv_cache_get_padding(const struct nmt_context& ctx) {
   }
 
 #ifdef GGML_USE_METAL
-  if (ctx.params.use_gpu) {
-    return 32U;
-  }
+  return 32U;
 #endif
 
 #ifdef GGML_USE_CUDA
-  if (ctx.params.use_gpu) {
-    return 256U;
-  }
+  return 256U;
 #endif
 
-  return 1u;
+  // Vulkan (including Adreno): align to 32 for flash attention.
+  // Adreno 830 uses warp size 64 but 32 is the safe minimum that
+  // satisfies both desktop and mobile Vulkan implementations.
+  return 32U;
 }
 
 int32_t nmt_kv_cache_cell_max(const struct nmt_kv_cache& cache) {
@@ -315,6 +315,36 @@ struct nmt_global {
 
 static nmt_global g_state;
 
+// Extract trailing numeric ordinal from an ggml device name.
+// E.g. "Vulkan0" → 0, "OpenCL1" → 1, "Metal" → -1.
+// GGML assigns the same ordinal to different API surfaces that wrap the
+// same physical GPU (e.g. Vulkan0 and OpenCL0 both map to GPU #0).
+static int nmt_extract_device_ordinal(const char* name) {
+  if (name == nullptr) {
+    return -1;
+  }
+  size_t len = 0;
+  while (name[len] != '\0') {
+    ++len;
+  }
+  if (len == 0) {
+    return -1;
+  }
+  size_t digit_start = len;
+  while (digit_start > 0 &&
+         std::isdigit(static_cast<unsigned char>(name[digit_start - 1]))) {
+    --digit_start;
+  }
+  if (digit_start == len) {
+    return -1;
+  }
+  int ordinal = 0;
+  for (size_t j = digit_start; j < len; ++j) {
+    ordinal = ordinal * 10 + (name[j] - '0');
+  }
+  return ordinal;
+}
+
 static ggml_backend_t nmt_backend_init_gpu(const nmt_context_params& params) {
   ggml_log_set(g_state.log_callback, g_state.log_callback_user_data);
 
@@ -365,7 +395,14 @@ static ggml_backend_t nmt_backend_init_gpu(const nmt_context_params& params) {
     return nullptr;
   }
 
+  const char* devName = ggml_backend_dev_name(dev);
+  QLOG(
+      qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+      std::string("[nmt_backend_init_gpu] About to init device: ") +
+          (devName ? devName : "(null)"));
+
   ggml_backend_t result = ggml_backend_dev_init(dev, nullptr);
+
   if (!result) {
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
@@ -388,6 +425,21 @@ nmt_backend_init(const nmt_context_params& params) {
       qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
       oss_backend_init.str());
 
+  if (params.op_offload_min_batch >= 0) {
+    std::string val = std::to_string(params.op_offload_min_batch);
+#ifdef _WIN32
+    _putenv_s("GGML_VK_OFFLOAD_MIN_BATCH", val.c_str());
+#else
+    setenv("GGML_VK_OFFLOAD_MIN_BATCH", val.c_str(), 1);
+#endif
+    std::ostringstream oss_offload;
+    oss_offload << "Set GGML_VK_OFFLOAD_MIN_BATCH="
+                << params.op_offload_min_batch;
+    QLOG(
+        qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+        oss_offload.str());
+  }
+
   std::vector<ggml_backend_t> result;
 
   ggml_backend_t backend_gpu = nmt_backend_init_gpu(params);
@@ -403,9 +455,27 @@ nmt_backend_init(const nmt_context_params& params) {
   }
 
   // ACCEL backends (in addition to the primary if it was an ACCEL device).
-  // Skip dedup when primary_dev is null (ggml_backend_get_device returned
-  // null for a valid backend) to avoid false-positive skips where both
-  // sides compare as nullptr.
+  //
+  // On Android (and other mobile SoCs with a single physical GPU), multiple
+  // GGML backends (Vulkan, OpenCL) may register as separate ACCEL devices
+  // for the same hardware.  Initialising all of them adds synchronisation
+  // overhead in ggml_backend_sched without any parallel-compute benefit
+  // because the scheduler executes splits sequentially.
+  //
+  // Filter strategy:
+  //   1. Skip the device pointer already selected as primary (same as before).
+  //   2. Skip OpenCL devices when the build-time USE_OPENCL guard is off
+  //      (consistent with Mode 2b in nmt_select_gpu_device).
+  //   3. Skip any ACCEL device whose trailing ordinal matches the primary's.
+  //      GGML names devices as "<API><ordinal>" (e.g. Vulkan0, OpenCL0).
+  //      Same ordinal + different API prefix = same physical GPU exposed
+  //      through a different backend.  This is immune to driver-level
+  //      description string variation and consistent with the JS-side
+  //      dedup in _extractPhysicalGpuKey.
+  const char* primary_name =
+      primary_dev ? ggml_backend_dev_name(primary_dev) : nullptr;
+  int primary_ordinal = nmt_extract_device_ordinal(primary_name);
+
   for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
     ggml_backend_dev_t dev = ggml_backend_dev_get(i);
     if (dev == nullptr) {
@@ -414,13 +484,37 @@ nmt_backend_init(const nmt_context_params& params) {
     if (primary_dev != nullptr && dev == primary_dev) {
       continue;
     }
-    if (ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_ACCEL) {
-      ggml_backend_t backend = ggml_backend_dev_init(dev, nullptr);
-      if (!backend) {
-        continue;
-      }
-      result.push_back(backend);
+    if (ggml_backend_dev_type(dev) != GGML_BACKEND_DEVICE_TYPE_ACCEL) {
+      continue;
     }
+    const char* dev_name = ggml_backend_dev_name(dev);
+
+#ifndef QVAC_NMTCPP_USE_OPENCL
+    if (nmt_name_contains_ci(dev_name, "opencl")) {
+      std::ostringstream oss;
+      oss << "Skipping ACCEL device '" << (dev_name ? dev_name : "(null)")
+          << "' — OpenCL guard is off (QVAC-17790)";
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, oss.str());
+      continue;
+    }
+#endif
+
+    int dev_ordinal = nmt_extract_device_ordinal(dev_name);
+    if (primary_ordinal >= 0 && dev_ordinal >= 0 &&
+        primary_ordinal == dev_ordinal) {
+      std::ostringstream oss;
+      oss << "Skipping ACCEL device '" << (dev_name ? dev_name : "(null)")
+          << "' — same GPU ordinal (" << dev_ordinal << ") as primary '"
+          << (primary_name ? primary_name : "(null)") << "'";
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, oss.str());
+      continue;
+    }
+
+    ggml_backend_t backend = ggml_backend_dev_init(dev, nullptr);
+    if (!backend) {
+      continue;
+    }
+    result.push_back(backend);
   }
 
   ggml_backend_t backend_cpu =

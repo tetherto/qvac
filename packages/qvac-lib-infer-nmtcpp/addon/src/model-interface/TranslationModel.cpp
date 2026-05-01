@@ -90,6 +90,7 @@ BackendType TranslationModel::detectBackendType(const std::string& modelPath) {
 void TranslationModel::unload() {
   std::scoped_lock<std::mutex> lock(mtx_);
   activeBackendName_.clear();
+  activeBackendDescription_.clear();
   nmtCtx_ = nullptr;
 #ifdef HAVE_BERGAMOT
   bergamotCtx_ = nullptr;
@@ -252,12 +253,16 @@ void TranslationModel::load() {
   params.use_gpu = useGpu_;
   params.gpu_backend = gpuBackend_;
   params.gpu_device = gpuDevice_;
+  params.op_offload_min_batch = opOffloadMinBatch_;
 
   std::ostringstream oss;
   oss << "[TRANSLATION MODEL] use_gpu=" << (useGpu_ ? "true" : "false")
       << ", gpu_device=" << gpuDevice_;
   if (!gpuBackend_.empty()) {
     oss << ", gpu_backend='" << gpuBackend_ << "'";
+  }
+  if (opOffloadMinBatch_ >= 0) {
+    oss << ", op_offload_min_batch=" << opOffloadMinBatch_;
   }
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO, oss.str());
 
@@ -282,6 +287,7 @@ void TranslationModel::load() {
   }
 
   std::string cachedName = "CPU";
+  std::string cachedDescription;
   if (freshCtx->state) {
     for (ggml_backend_t backend : freshCtx->state->backends) {
       if (backend == nullptr) {
@@ -298,6 +304,10 @@ void TranslationModel::load() {
       if (name != nullptr) {
         cachedName = std::string(name);
       }
+      const char* desc = ggml_backend_dev_description(dev);
+      if (desc != nullptr) {
+        cachedDescription = std::string(desc);
+      }
       break;
     }
   }
@@ -306,10 +316,13 @@ void TranslationModel::load() {
     std::scoped_lock<std::mutex> lock(mtx_);
     nmtCtx_ = std::move(freshCtx);
     activeBackendName_ = std::move(cachedName);
+    activeBackendDescription_ = std::move(cachedDescription);
     isFirstSentence_ = true;
     srcLang_.clear();
     tgtLang_.clear();
   }
+
+  updateConfig();
 
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::INFO,
@@ -711,6 +724,21 @@ void TranslationModel::setConfig(
     }
   }
 
+  if (auto it = config_.find("op_offload_min_batch"); it != config_.end()) {
+    if (const auto* asInt = std::get_if<int64_t>(&it->second)) {
+      setOpOffloadMinBatch(static_cast<int>(*asInt));
+    } else if (const auto* asDouble = std::get_if<double>(&it->second)) {
+      if (std::isfinite(*asDouble)) {
+        setOpOffloadMinBatch(static_cast<int>(*asDouble));
+      }
+    } else {
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+          "[TRANSLATION MODEL] 'op_offload_min_batch' config value is not a "
+          "number; ignoring");
+    }
+  }
+
   updateConfig();
 }
 
@@ -750,6 +778,10 @@ void TranslationModel::setGpuDevice(int gpuDevice) {
   } else {
     gpuDevice_ = gpuDevice;
   }
+}
+
+void TranslationModel::setOpOffloadMinBatch(int opOffloadMinBatch) {
+  opOffloadMinBatch_ = opOffloadMinBatch;
 }
 
 void TranslationModel::updateConfig() {
@@ -822,6 +854,22 @@ std::string TranslationModel::getActiveBackendName() const {
   }
 
   return activeBackendName_;
+}
+
+std::string TranslationModel::getActiveBackendDescription() const {
+  std::scoped_lock<std::mutex> scoped_lock(mtx_);
+
+#ifdef HAVE_BERGAMOT
+  if (backendType_ == BackendType::BERGAMOT) {
+    return "";
+  }
+#endif
+
+  if (!nmtCtx_) {
+    return "";
+  }
+
+  return activeBackendDescription_;
 }
 
 } // namespace qvac_lib_inference_addon_nmt

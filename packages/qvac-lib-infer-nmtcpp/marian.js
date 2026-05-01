@@ -122,6 +122,23 @@ class TranslationInterface {
   }
 
   /**
+   * Returns the human-readable device description for the active GPU backend
+   * (e.g. 'NVIDIA GeForce RTX 5070', 'Intel(R) UHD Graphics').
+   * Returns '' when no GPU backend is loaded or model is unloaded.
+   * @returns {string}
+   */
+  getActiveBackendDescription () {
+    if (this._handle === null) {
+      return ''
+    }
+    try {
+      return binding.getActiveBackendDescription(this._handle)
+    } catch (err) {
+      return ''
+    }
+  }
+
+  /**
    * Submits a job to the processing pipeline
    * @param {Object} data
    * @param {String} data.type - 'text' for single input, 'sequences' for batch

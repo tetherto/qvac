@@ -423,6 +423,12 @@ struct nmt_context_params {
   // still acts as an ordinal among matching devices, so
   // {gpu_backend="vulkan", gpu_device=1} picks the second Vulkan adapter.
   std::string gpu_backend;
+  // Minimum ne[1] (batch size) for Vulkan op offloading. Vulkan's default
+  // is 32, which means single-token decoder steps (ne[1]=1) stay on CPU.
+  // Set to 1 to force all ops to GPU; set to 0 to offload everything.
+  // Negative values are ignored (uses default). Propagated via the
+  // GGML_VK_OFFLOAD_MIN_BATCH env var.
+  int op_offload_min_batch;
 };
 
 struct nmt_context {

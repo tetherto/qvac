@@ -52,7 +52,7 @@ bool beam_kv_pool::init(nmt_context& ctx, int pool_size) {
   for (int i = 0; i < pool_size; ++i) {
     if (!nmt_kv_cache_init(
             kv_caches[i],
-            ctx.state->backends[0],
+            ctx.state->backends.back(),
             ctx.itype,
             ctx.model.hparams.n_text_state,
             ctx.model.hparams.n_decoder_layers,

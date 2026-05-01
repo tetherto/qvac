@@ -175,6 +175,24 @@ getActiveBackendName(js_env_t* env, js_callback_info_t* info) try {
 }
 JSCATCH
 
+inline js_value_t*
+getActiveBackendDescription(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+
+  auto& model = instance.addonCpp->model.get();
+  auto* translationModel =
+      dynamic_cast<qvac_lib_inference_addon_nmt::TranslationModel*>(&model);
+  if (translationModel != nullptr) {
+    return js::String::create(
+        env, translationModel->getActiveBackendDescription().c_str());
+  }
+  return js::String::create(env, "");
+}
+JSCATCH
+
 inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
 

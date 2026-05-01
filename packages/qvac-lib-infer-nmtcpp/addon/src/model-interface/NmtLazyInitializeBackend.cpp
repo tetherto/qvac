@@ -22,6 +22,7 @@ std::string NmtLazyInitializeBackend::g_recordedBackendsDir;
 std::string NmtLazyInitializeBackend::g_recordedOpenclCacheDir;
 std::string NmtLazyInitializeBackend::g_recordedOpenclCacheDirInput;
 int NmtLazyInitializeBackend::g_refCount = 0;
+bool NmtLazyInitializeBackend::g_backendsLoaded = false;
 
 // Forward ggml's internal log stream to QLOG so diagnostic lines
 // (Adreno detection, CL_CHECK errors, OpenCL driver info, etc.) reach
@@ -283,76 +284,80 @@ bool NmtLazyInitializeBackend::initializeLocked(
   }
 #endif
 
-  if (!backendsDir.empty()) {
-    std::filesystem::path requested(backendsDir);
-    bool validBackendsDir = requested.is_absolute();
-    if (validBackendsDir) {
-      for (const auto& seg : requested) {
-        if (seg == "..") {
-          validBackendsDir = false;
-          break;
+  if (!g_backendsLoaded) {
+    if (!backendsDir.empty()) {
+      std::filesystem::path requested(backendsDir);
+      bool validBackendsDir = requested.is_absolute();
+      if (validBackendsDir) {
+        for (const auto& seg : requested) {
+          if (seg == "..") {
+            validBackendsDir = false;
+            break;
+          }
         }
       }
-    }
-    if (!validBackendsDir) {
-      QLOG(
-          Priority::WARNING,
-          "Rejecting suspicious backendsDir (must be absolute and free of "
-          "'..' segments): " +
-              sanitizePrintableAscii(backendsDir) +
-              " — falling back to default backend loading");
-      ggml_backend_load_all();
-    } else {
-      std::error_code ec;
-      std::filesystem::path backendsDirPath =
-          std::filesystem::canonical(requested, ec);
-      if (ec) {
+      if (!validBackendsDir) {
         QLOG(
             Priority::WARNING,
-            "backendsDir canonical() failed (" + ec.message() +
-                "): " + sanitizePrintableAscii(backendsDir) +
+            "Rejecting suspicious backendsDir (must be absolute and free of "
+            "'..' segments): " +
+                sanitizePrintableAscii(backendsDir) +
                 " — falling back to default backend loading");
         ggml_backend_load_all();
       } else {
-        auto resolvedStr = backendsDirPath.string();
-#ifdef __ANDROID__
-        if (resolvedStr.rfind("/data/", 0) != 0) {
+        std::error_code ec;
+        std::filesystem::path backendsDirPath =
+            std::filesystem::canonical(requested, ec);
+        if (ec) {
           QLOG(
               Priority::WARNING,
-              "Rejecting backendsDir — resolved path outside /data/ prefix: " +
-                  sanitizePrintableAscii(resolvedStr) +
+              "backendsDir canonical() failed (" + ec.message() +
+                  "): " + sanitizePrintableAscii(backendsDir) +
                   " — falling back to default backend loading");
           ggml_backend_load_all();
         } else {
-#endif
-#ifdef BACKENDS_SUBDIR
-          std::filesystem::path subdirPath(BACKENDS_SUBDIR);
-          backendsDirPath = backendsDirPath / subdirPath;
-          backendsDirPath = std::filesystem::canonical(backendsDirPath, ec);
-          if (ec) {
+          auto resolvedStr = backendsDirPath.string();
+#ifdef __ANDROID__
+          if (resolvedStr.rfind("/data/", 0) != 0) {
             QLOG(
                 Priority::WARNING,
-                "backendsDir+subdir canonical() failed (" + ec.message() +
-                    ") — falling back to default backend loading");
+                "Rejecting backendsDir — resolved path outside /data/ "
+                "prefix: " +
+                    sanitizePrintableAscii(resolvedStr) +
+                    " — falling back to default backend loading");
             ggml_backend_load_all();
           } else {
 #endif
-            QLOG(
-                Priority::INFO,
-                "Loading backends from directory: " +
-                    sanitizePrintableAscii(backendsDirPath.string()));
-            ggml_backend_load_all_from_path(backendsDirPath.string().c_str());
 #ifdef BACKENDS_SUBDIR
-          }
+            std::filesystem::path subdirPath(BACKENDS_SUBDIR);
+            backendsDirPath = backendsDirPath / subdirPath;
+            backendsDirPath = std::filesystem::canonical(backendsDirPath, ec);
+            if (ec) {
+              QLOG(
+                  Priority::WARNING,
+                  "backendsDir+subdir canonical() failed (" + ec.message() +
+                      ") — falling back to default backend loading");
+              ggml_backend_load_all();
+            } else {
+#endif
+              QLOG(
+                  Priority::INFO,
+                  "Loading backends from directory: " +
+                      sanitizePrintableAscii(backendsDirPath.string()));
+              ggml_backend_load_all_from_path(backendsDirPath.string().c_str());
+#ifdef BACKENDS_SUBDIR
+            }
 #endif
 #ifdef __ANDROID__
-        }
+          }
 #endif
+        }
       }
+    } else {
+      QLOG(Priority::DEBUG, "Loading backends using default path");
+      ggml_backend_load_all();
     }
-  } else {
-    QLOG(Priority::DEBUG, "Loading backends using default path");
-    ggml_backend_load_all();
+    g_backendsLoaded = true;
   }
 #ifdef __ANDROID__
   // Must run after backend loading (the backend .sos are only mapped into
