@@ -792,9 +792,6 @@ jobs:
           </plist>
           EOF
 
-          echo "📋 Export options:"
-          cat $EXPORT_OPTS_PATH
-
           xcodebuild -exportArchive \
             -archivePath $RUNNER_TEMP/$SCHEME_NAME.xcarchive \
             -exportOptionsPlist $EXPORT_OPTS_PATH \

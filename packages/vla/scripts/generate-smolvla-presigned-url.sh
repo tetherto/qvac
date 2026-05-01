@@ -10,17 +10,24 @@ BUCKET="${S3_BUCKET:-${MODEL_S3_BUCKET}}"
 BASE_PATH="qvac_models_compiled/vla/smolvla-libero"
 MODEL_NAME="smolvla-libero-vision-q8.gguf"
 
+# Mask the bucket name in workflow logs before any command can echo it.
+# When run outside GitHub Actions ($GITHUB_ACTIONS unset) this is a no-op
+# echo that the runner ignores.
+if [ -n "${GITHUB_ACTIONS:-}" ] && [ -n "$BUCKET" ]; then
+    echo "::add-mask::${BUCKET}"
+fi
+
 echo "🔑 Generating presigned URL for SmolVLA LIBERO model..."
 echo "   Region: $REGION"
-echo "   Bucket: $BUCKET"
 
 # Find the latest date directory so we track new uploads without editing this
-# script each time a new model drops.
+# script each time a new model drops. Bucket name and full s3:// paths are
+# kept out of the log so they don't leak via public CI output.
 echo "🔍 Looking for date directories..."
 DATE_DIRS=$(aws s3 ls "s3://${BUCKET}/${BASE_PATH}/" --region "$REGION" 2>/dev/null | grep "PRE" | awk '{print $2}' | sed 's/\///')
 
 if [ -z "$DATE_DIRS" ]; then
-    echo "❌ No date directories found in s3://${BUCKET}/${BASE_PATH}/"
+    echo "❌ No date directories found under base path"
     exit 1
 fi
 
@@ -28,12 +35,11 @@ LATEST_DATE=$(echo "$DATE_DIRS" | sort | tail -1)
 echo "   Using date: $LATEST_DATE"
 
 MODEL_KEY="${BASE_PATH}/${LATEST_DATE}/${MODEL_NAME}"
-echo "   Model: s3://${BUCKET}/${MODEL_KEY}"
 
 # Verify model exists
 echo "🔍 Verifying model exists..."
 if ! aws s3 ls "s3://${BUCKET}/${MODEL_KEY}" --region "$REGION" > /dev/null 2>&1; then
-    echo "❌ Model not found: s3://${BUCKET}/${MODEL_KEY}"
+    echo "❌ Model not found at expected key"
     exit 1
 fi
 
