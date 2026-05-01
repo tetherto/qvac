@@ -114,5 +114,5 @@ export function summarizeRequest(request: Request): Record<string, unknown> {
   }
 
   // All other requests - return full request (no large payloads)
-  return request as unknown as Record<string, unknown>;
+  return request;
 }

@@ -12,6 +12,7 @@ import {
   ModelType,
   llmConfigBaseSchema,
   ADDON_LLM,
+  TOOLS_MODE,
   type CompletionEvent,
   type CreateModelParams,
   type PluginCapabilities,
@@ -28,6 +29,7 @@ import { translate } from "@/server/bare/ops/translate";
 import { attachModelExecutionMs } from "@/profiling/model-execution";
 import { getModelConfig } from "@/server/bare/registry/model-registry";
 import { createCompletionNormalizer } from "@/server/utils/completion-normalizer";
+import { detectToolDialect } from "@/server/utils/tool-integration";
 
 function transformLlmConfig(llmConfig: LlmConfig) {
   const transformed = JSON.parse(
@@ -56,6 +58,13 @@ function transformLlmConfig(llmConfig: LlmConfig) {
   if ("opencl_cache_dir" in transformed) {
     transformed["openclCacheDir"] = transformed["opencl_cache_dir"];
     delete transformed["opencl_cache_dir"];
+  }
+
+  if ("tools_mode" in transformed) {
+    if (transformed["tools_mode"] === TOOLS_MODE.dynamic) {
+      transformed["tools_compact"] = "true";
+    }
+    delete transformed["tools_mode"];
   }
 
   return transformed;
@@ -143,11 +152,16 @@ export const llmPlugin = definePlugin({
           thinkingFraming: request.captureThinking ? "thinkTags" : "none",
         };
 
+        const dialect = toolsActive
+          ? (request.toolDialect ?? detectToolDialect(request.modelId))
+          : "hermes";
+
         const normalizer = createCompletionNormalizer({
           capabilities,
           tools: request.tools ?? [],
           captureThinking: request.captureThinking ?? false,
           emitRawDeltas: request.emitRawDeltas ?? false,
+          toolDialect: dialect,
         });
 
         const stream = completion({
@@ -156,6 +170,8 @@ export const llmPlugin = definePlugin({
           kvCache: request.kvCache,
           ...(toolsActive && request.tools && { tools: request.tools }),
           ...(request.generationParams && { generationParams: request.generationParams }),
+          ...(toolsActive && { toolDialect: dialect }),
+          ...(request.responseFormat && { responseFormat: request.responseFormat }),
         });
 
         try {
@@ -188,11 +204,14 @@ export const llmPlugin = definePlugin({
 
           const finalEvents = request.stream ? terminalEvents : batchedEvents;
 
-          yield attachModelExecutionMs({
-            type: "completionStream" as const,
-            done: true,
-            events: finalEvents,
-          }, modelExecutionMs);
+          yield attachModelExecutionMs(
+            {
+              type: "completionStream" as const,
+              done: true,
+              events: finalEvents,
+            },
+            modelExecutionMs,
+          );
         } finally {
           await stream.return?.(undefined as never);
         }
@@ -228,12 +247,15 @@ export const llmPlugin = definePlugin({
           }
 
           const { modelExecutionMs, stats } = result.value;
-          yield attachModelExecutionMs({
-            type: "translate" as const,
-            token: "",
-            done: true,
-            ...(stats && { stats }),
-          }, modelExecutionMs);
+          yield attachModelExecutionMs(
+            {
+              type: "translate" as const,
+              token: "",
+              done: true,
+              ...(stats && { stats }),
+            },
+            modelExecutionMs,
+          );
         } finally {
           await stream.return?.(undefined as never);
         }

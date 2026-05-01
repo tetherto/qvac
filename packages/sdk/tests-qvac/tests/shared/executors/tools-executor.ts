@@ -23,9 +23,11 @@ export class ToolsExecutor extends AbstractModelExecutor<typeof toolsTests> {
         description: string;
         parameters: Record<string, unknown>;
       }>;
+      toolsMode?: "static" | "dynamic";
       stream?: boolean;
     };
-    const toolsModelId = await this.resources.ensureLoaded("tools");
+    const resourceKey = p.toolsMode === "dynamic" ? "tools-dynamic" : "tools";
+    const toolsModelId = await this.resources.ensureLoaded(resourceKey);
 
     try {
       const result = completion({

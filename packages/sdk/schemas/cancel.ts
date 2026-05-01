@@ -6,27 +6,30 @@ const cancelBaseSchema = z.object({
 });
 
 export const cancelInferenceBaseSchema = z.object({
-  modelId: z.string(),
+  modelId: z.string().describe("The model ID to cancel inference for"),
 });
 
 const cancelInferenceParamsSchema = cancelInferenceBaseSchema.extend({
-  operation: z.literal("inference"),
+  operation: z.literal("inference").describe("Operation type"),
 });
 
 const cancelDownloadParamsSchema = z.object({
-  operation: z.literal("downloadAsset"),
-  downloadKey: z.string(),
-  clearCache: z.boolean().optional(),
+  operation: z.literal("downloadAsset").describe("Operation type"),
+  downloadKey: z.string().describe("The download key to cancel"),
+  clearCache: z
+    .boolean()
+    .optional()
+    .describe("If true, deletes the partial download file"),
   delegate: delegateBaseSchema.optional(),
 });
 
 const cancelRagParamsSchema = z.object({
-  operation: z.literal("rag"),
-  workspace: z.string().optional(),
+  operation: z.literal("rag").describe("Operation type"),
+  workspace: z.string().optional().describe("The RAG workspace to cancel"),
 });
 
 const cancelEmbeddingsParamsSchema = cancelInferenceBaseSchema.extend({
-  operation: z.literal("embeddings"),
+  operation: z.literal("embeddings").describe("Operation type"),
 });
 
 const cancelParamsSchema = z.discriminatedUnion("operation", [

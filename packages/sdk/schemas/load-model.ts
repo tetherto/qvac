@@ -8,7 +8,6 @@ import {
 import {
   whisperConfigSchema,
   parakeetConfigSchema,
-  type WhisperConfig,
 } from "./transcription-config";
 import { delegateSchema } from "./delegate";
 import { nmtConfigSchema } from "./translation-config";
@@ -167,7 +166,7 @@ const loadModelOptionsToRequestBaseSchema = z.union([
       modelType: ModelType.whispercppTranscription,
       modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
       modelName: modelInputToNameSchema.parse(data.modelSrc),
-      modelConfig: (data.modelConfig ?? {}) as WhisperConfig,
+      modelConfig: (data.modelConfig ?? {}),
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,
@@ -263,7 +262,7 @@ const loadModelOptionsToRequestBaseSchema = z.union([
       modelType: ModelType.onnxOcr,
       modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
       modelName: modelInputToNameSchema.parse(data.modelSrc),
-      modelConfig: (data.modelConfig ?? {}) as z.infer<typeof ocrConfigSchema>,
+      modelConfig: (data.modelConfig ?? {}),
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,

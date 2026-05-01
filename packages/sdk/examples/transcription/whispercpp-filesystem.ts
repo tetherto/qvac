@@ -62,12 +62,25 @@ try {
 
   console.log(`✅ Whisper model loaded with ID: ${modelId}`);
 
-  // Perform transcription
+  // Perform transcription with per-segment metadata
   console.log("🎧 Transcribing audio...");
-  const text = await transcribe({ modelId, audioChunk: audioFilePath });
+  const segments = await transcribe({
+    modelId,
+    audioChunk: audioFilePath,
+    metadata: true,
+  });
 
   console.log("📝 Transcription result:");
-  console.log(text);
+  for (const segment of segments) {
+    const start = (segment.startMs / 1000).toFixed(2);
+    const end = (segment.endMs / 1000).toFixed(2);
+    console.log(
+      `  [${start}s → ${end}s] (id=${segment.id}, append=${segment.append}) ${segment.text}`,
+    );
+  }
+  console.log(
+    `\nFull transcript: ${segments.map((s) => s.text).join("").trim()}`,
+  );
 
   // Unload the model when done
   console.log("🧹 Unloading Whisper model...");

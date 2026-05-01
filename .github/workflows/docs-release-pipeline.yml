@@ -1,0 +1,206 @@
+# Release-driven docs pipeline: generates API docs, release notes, validates,
+# and pushes to main when an SDK release branch is pushed or a GitHub release
+# is published. The push to main triggers the hosting provider's staging deploy.
+#
+# Exists alongside docs-generate-api.yml (which handles manual/cross-repo use).
+name: Docs Release Pipeline
+
+on:
+  push:
+    branches:
+      - 'release-qvac-sdk-*'
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'SDK version (semver, e.g. 0.8.1)'
+        required: true
+        type: string
+      skip_ai:
+        description: 'Skip AI augmentation step'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: docs-release-pipeline-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DOCS_DIR: docs/website
+
+jobs:
+  generate-and-publish:
+    runs-on: ubuntu-latest
+    if: ${{ !vars.DOCS_SYNC_BOT_USER || github.actor != vars.DOCS_SYNC_BOT_USER }}
+
+    steps:
+      # Dual checkout to close the race window where a PR landing on `main`
+      # mid-pipeline could smuggle a not-yet-released function into the SDK
+      # source the renderer reads — silently shipping wrong content under a
+      # stale version label.
+      #
+      # - `main-tree`  → docs scripts, content target, commit/push target.
+      #                  Always main HEAD so the workflow benefits from any
+      #                  fixes to the pipeline itself.
+      # - `release-tree` → SDK source + CHANGELOGs frozen at the trigger
+      #                    commit. SDK_PATH and CHANGELOG_REPO_ROOT point
+      #                    here so TypeDoc + the changelog parser can't
+      #                    pick up unrelated commits that landed on main
+      #                    after the trigger.
+      - name: Checkout main (docs scripts + commit target)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: main
+          path: main-tree
+          fetch-depth: 0
+          token: ${{ secrets.DOCS_SYNC_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Checkout release commit (SDK source + CHANGELOGs)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.sha }}
+          path: release-tree
+          fetch-depth: 1
+          sparse-checkout: |
+            packages
+
+      - name: Extract version
+        id: version
+        # All attacker-controlled inputs (workflow_dispatch input, release tag,
+        # branch ref) are passed through `env:` rather than templated into the
+        # shell. Templating them would let a payload like
+        # `$(curl evil)`/backticks in a tag or branch name execute before the
+        # semver regex below can reject it. See:
+        # https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-an-intermediate-environment-variable
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            VERSION="$INPUT_VERSION"
+          elif [ "$EVENT_NAME" = "release" ]; then
+            TAG="$RELEASE_TAG"
+            VERSION="${TAG#v}"
+            VERSION="${VERSION#release-qvac-sdk-}"
+          else
+            BRANCH="$REF_NAME"
+            VERSION="${BRANCH#release-qvac-sdk-}"
+          fi
+          if [ -z "$VERSION" ]; then
+            echo "::error::Could not extract version"
+            exit 1
+          fi
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Invalid version format: $VERSION (expected X.Y.Z)"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Version: $VERSION"
+
+      - name: Determine AI flag
+        id: ai
+        # Default off (CI is reproducible). Opt in only when the workflow_dispatch
+        # input explicitly disables `skip_ai` AND an AI augment key is configured.
+        # `INPUT_SKIP_AI` goes through env so it can't smuggle shell syntax.
+        env:
+          INPUT_SKIP_AI: ${{ inputs.skip_ai }}
+          AI_AUGMENT_API_KEY: ${{ secrets.AI_AUGMENT_API_KEY }}
+        run: |
+          if [ "$INPUT_SKIP_AI" != "true" ] && [ -n "$AI_AUGMENT_API_KEY" ]; then
+            echo "ai_flag=--ai" >> "$GITHUB_OUTPUT"
+          else
+            echo "ai_flag=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
+
+      - name: Install docs dependencies
+        working-directory: main-tree/${{ env.DOCS_DIR }}
+        run: bun install
+
+      - name: Install SDK dependencies (release commit)
+        working-directory: release-tree/packages/sdk
+        run: bun install
+
+      - name: Release new docs version
+        # release-version.ts orchestrates the full release flow:
+        #   1. Freezes the outgoing version's index.mdx into vX.Y.Z.mdx
+        #   2. Generates the new API summary into index.mdx
+        #   3. Generates the new release notes (aggregating minor)
+        #   4. Refreshes src/lib/versions.ts
+        # `--no-commit --no-pr` defers git work to the workflow's bot identity.
+        # Both SDK_PATH and CHANGELOG_REPO_ROOT pin to release-tree so a PR
+        # that lands on main after the trigger can't influence what gets
+        # rendered for this version.
+        # `VERSION` and `AI_FLAG` are routed through env (rather than templated
+        # into the shell command) so we keep zero `${{ }}` interpolation in
+        # any run block — the security-hardening guideline.
+        working-directory: main-tree/${{ env.DOCS_DIR }}
+        env:
+          SDK_PATH: ${{ github.workspace }}/release-tree/packages/sdk
+          CHANGELOG_REPO_ROOT: ${{ github.workspace }}/release-tree
+          AI_AUGMENT_BASE_URL: ${{ secrets.AI_AUGMENT_BASE_URL }}
+          AI_AUGMENT_API_KEY: ${{ secrets.AI_AUGMENT_API_KEY }}
+          AI_AUGMENT_MODEL: ${{ vars.AI_AUGMENT_MODEL || '' }}
+          VERSION: ${{ steps.version.outputs.version }}
+          AI_FLAG: ${{ steps.ai.outputs.ai_flag }}
+        run: |
+          bun run scripts/release-version.ts \
+            "$VERSION" \
+            --no-commit \
+            --no-pr \
+            --force-extract \
+            $AI_FLAG
+
+      - name: Run TSDoc audit (warning mode)
+        working-directory: main-tree/${{ env.DOCS_DIR }}
+        env:
+          SDK_PATH: ${{ github.workspace }}/release-tree/packages/sdk
+        continue-on-error: true
+        run: bun run scripts/api-docs/audit-tsdoc.ts
+
+      - name: Run link validation tests
+        working-directory: main-tree/${{ env.DOCS_DIR }}
+        run: bun run vitest run tests/link-integrity.test.ts
+
+      - name: Check for changes
+        id: changes
+        working-directory: main-tree
+        env:
+          DOCS_DIR: ${{ env.DOCS_DIR }}
+        run: |
+          git add \
+            "${DOCS_DIR}/content/docs/sdk/api/" \
+            "${DOCS_DIR}/content/docs/sdk/release-notes/" \
+            "${DOCS_DIR}/src/lib/versions.ts" \
+            "${DOCS_DIR}/scripts/api-docs/api-data.json" \
+            2>/dev/null || true
+          if git diff --staged --quiet; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit and push to main
+        if: steps.changes.outputs.has_changes == 'true'
+        working-directory: main-tree
+        env:
+          BOT_NAME: ${{ vars.DOCS_SYNC_BOT_NAME || 'docs-sync-bot' }}
+          BOT_EMAIL: ${{ vars.DOCS_SYNC_BOT_EMAIL || 'docs-sync-bot@users.noreply.github.com' }}
+          # `VERSION` is the regex-validated output from the `version` step,
+          # but we route it through env anyway so the run block has zero
+          # `${{ }}` interpolation in shell context.
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git config user.name "$BOT_NAME"
+          git config user.email "$BOT_EMAIL"
+          git commit -m "chore(docs): release v${VERSION} (API summary + release notes) [skip ci]"
+          git push origin main
