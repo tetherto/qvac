@@ -808,6 +808,11 @@ std::any SdModel::process(const std::any& input) {
   const bool wasCancelled = cancelRequested_.load();
 
   int outputCount = 0;
+  // RuntimeStats describe emitted PNGs. Keep generation dimensions as the
+  // fallback so a failed encode/callback does not report an upscaled size.
+  int64_t outputPixels = 0;
+  int64_t statsWidth = static_cast<int64_t>(gen.width);
+  int64_t statsHeight = static_cast<int64_t>(gen.height);
   for (int i = 0; i < results.count(); ++i) {
     if (results[i].data && !wasCancelled) {
       sd_image_t imageForOutput = results[i];
@@ -821,8 +826,14 @@ std::any SdModel::process(const std::any& input) {
 
       auto png = encodeToPng(imageForOutput);
       if (!png.empty() && job.outputCallback) {
+        const int64_t outputWidth = static_cast<int64_t>(imageForOutput.width);
+        const int64_t outputHeight =
+            static_cast<int64_t>(imageForOutput.height);
         job.outputCallback(png);
         ++outputCount;
+        outputPixels += outputWidth * outputHeight;
+        statsWidth = outputWidth;
+        statsHeight = outputHeight;
       }
     }
     results.release(
@@ -850,8 +861,7 @@ std::any SdModel::process(const std::any& input) {
   stats_.totalSteps += gen.steps;
   stats_.totalGenerations++;
   stats_.totalImages += outputCount;
-  stats_.totalPixels +=
-      static_cast<int64_t>(gen.width) * gen.height * outputCount;
+  stats_.totalPixels += outputPixels;
 
   // -- Build stats for runtimeStats() -----------------------------------------
   // Stats are stored and emitted via queueJobEnded() -> runtimeStats().
@@ -872,8 +882,8 @@ std::any SdModel::process(const std::any& input) {
   lastStats_.emplace_back("totalImages", stats_.totalImages);
   lastStats_.emplace_back("totalPixels", stats_.totalPixels);
 
-  lastStats_.emplace_back("width", static_cast<int64_t>(gen.width));
-  lastStats_.emplace_back("height", static_cast<int64_t>(gen.height));
+  lastStats_.emplace_back("width", statsWidth);
+  lastStats_.emplace_back("height", statsHeight);
   lastStats_.emplace_back("seed", gen.seed);
 
   // Return empty -- images are already delivered via outputCallback,
@@ -902,8 +912,8 @@ upscaler_ctx_t* SdModel::ensureUpscaler() {
     return upscalerCtx_.get();
   }
 
-  int threads = config_.upscalerThreads > 0 ? config_.upscalerThreads
-                                            : config_.nThreads;
+  int threads =
+      config_.upscalerThreads > 0 ? config_.upscalerThreads : config_.nThreads;
   if (threads <= 0) {
     threads = sd_get_num_physical_cores();
   }
@@ -957,8 +967,7 @@ sd_image_t SdModel::upscaleImage(const sd_image_t& inputImage, int repeats) {
       if (currentOwned) {
         free(current.data);
       }
-      throw StatusError(
-          general_error::InternalError, "ESRGAN upscale failed");
+      throw StatusError(general_error::InternalError, "ESRGAN upscale failed");
     }
 
     if (currentOwned) {
