@@ -30,25 +30,8 @@ using qvac_errors::general_error::InvalidArgument;
 
 /// Handler mapping ClassifyOutput → JS array of { label, confidence }.
 ///
-/// Implementation notes:
-///   - The label string and the confidence float are read into named
-///     local variables before being handed to the JS-side helpers.
-///     This is defensive against compiler code-gen quirks (notably
-///     observed on win32-x64 / clang-cl, where an inline
-///     `static_cast<double>(cppOut.results[i].confidence)` fed
-///     directly into `Number::create(...)` lost the value at index
-///     0 of the result array, while indices 1..N marshalled
-///     correctly). Reading into named locals forces the compiler
-///     to materialise the values before the call sequence and
-///     gives us a stable point to instrument when diagnosing
-///     marshalling issues.
-///   - When `QVAC_CLASSIFICATION_TRACE=1` is set in the
-///     environment, every entry is printed to stderr with both
-///     the C++ float view and the C++ double view of the value.
-///     Combined with the per-inference trace in
-///     `ClassificationModel::process()`, this lets us pinpoint
-///     exactly which step (sort / marshal / JS-side conversion)
-///     loses a value when one ever does.
+/// Set `QVAC_CLASSIFICATION_TRACE=1` to dump each marshalled entry to
+/// stderr; useful when diagnosing numerical issues end-to-end.
 struct JsClassifyOutputHandler
     : addon_cpp::out_handl::JsBaseOutputHandler<ClassifyOutput> {
   JsClassifyOutputHandler()
@@ -60,30 +43,19 @@ struct JsClassifyOutputHandler
                 return v != nullptr && v[0] == '1';
               }();
 
-              // Win32-x64 burn-one workaround: the first `js_create_double` of the
-              // process returns 0.0 on Azure CI runners only.
-              {
-                js_value_t* dummy = nullptr;
-                (void)js_create_double(this->env_, 0.0, &dummy);
-                (void)dummy;
-              }
-
               for (size_t i = 0; i < cppOut.results.size(); ++i) {
-                // Read into named locals BEFORE creating any JS values.
-                const std::string& labelString = cppOut.results[i].label;
-                const float confidenceFloat = cppOut.results[i].confidence;
-                const double confidenceDouble =
-                    static_cast<double>(confidenceFloat);
+                const std::string& label = cppOut.results[i].label;
+                const double confidence =
+                    static_cast<double>(cppOut.results[i].confidence);
 
                 if (trace) {
                   std::fprintf(
                       stderr,
                       "[qvac-classify-marshal] i=%zu label='%s' "
-                      "confidence_float=%.9f confidence_double=%.9f\n",
+                      "confidence=%.9f\n",
                       i,
-                      labelString.c_str(),
-                      static_cast<double>(confidenceFloat),
-                      confidenceDouble);
+                      label.c_str(),
+                      confidence);
                   std::fflush(stderr);
                 }
 
@@ -91,11 +63,11 @@ struct JsClassifyOutputHandler
                 entry.setProperty(
                     this->env_,
                     "label",
-                    jsu::String::create(this->env_, labelString));
+                    jsu::String::create(this->env_, label));
                 entry.setProperty(
                     this->env_,
                     "confidence",
-                    jsu::Number::create(this->env_, confidenceDouble));
+                    jsu::Number::create(this->env_, confidence));
                 array.set(this->env_, i, entry);
               }
               return array;
