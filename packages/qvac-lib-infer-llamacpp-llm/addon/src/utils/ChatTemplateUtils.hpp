@@ -34,11 +34,12 @@ std::string getChatTemplate(
 
 /**
  * @brief Applies chat templates to generate a prompt, with fallback handling
- * for models that don't support tools
+ * for models that don't support tools.
  */
 std::string getPrompt(
     const struct common_chat_templates* tmpls,
-    struct common_chat_templates_inputs& inputs);
+    struct common_chat_templates_inputs& inputs,
+    common_chat_format* outFormat = nullptr);
 
 } // namespace utils
 } // namespace qvac_lib_inference_addon_llama

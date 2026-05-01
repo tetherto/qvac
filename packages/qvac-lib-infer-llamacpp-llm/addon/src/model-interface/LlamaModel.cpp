@@ -13,6 +13,7 @@
 #include <iostream>
 #include <mutex>
 #include <numeric>
+#include <regex>
 #include <shared_mutex>
 #include <sstream>
 #include <stdexcept>
@@ -179,62 +180,6 @@ void LlamaModel::tuneConfigMap(
       }
       configFilemap.erase("ubatch_size");
       configFilemap["ubatch-size"] = std::to_string(clamped);
-    }
-  }
-
-  // Adreno 800+: cap GPU layer offload.
-  const bool needsGpuLayerCap = adrenoVersion.has_value() &&
-                                adrenoVersion.value() >= kAdrenoUbatchThreshold;
-  if (needsGpuLayerCap) {
-    constexpr int64_t kAdrenoGpuLayersCap = 6;
-    if (notUserSet("gpu-layers", "gpu_layers") &&
-        notUserSet("n-gpu-layers", "n_gpu_layers")) {
-      configFilemap["gpu-layers"] = std::to_string(kAdrenoGpuLayersCap);
-      QLOG_IF(
-          Priority::INFO,
-          "[LlamaModel] Adreno 800+: defaulting gpu-layers=6\n");
-    } else {
-      std::string key;
-      if (configFilemap.count("gpu-layers")) {
-        key = "gpu-layers";
-      } else if (configFilemap.count("gpu_layers")) {
-        key = "gpu_layers";
-      } else if (configFilemap.count("n-gpu-layers")) {
-        key = "n-gpu-layers";
-      } else {
-        key = "n_gpu_layers";
-      }
-      int64_t userVal;
-      try {
-        userVal = std::stoll(configFilemap[key]);
-      } catch (const std::exception& e) {
-        QLOG_IF(
-            Priority::ERROR,
-            string_format(
-                "[LlamaModel] Adreno 800+: invalid %s "
-                "\"%s\" (%s), falling back to %" PRId64 "\n",
-                key.c_str(),
-                configFilemap[key].c_str(),
-                e.what(),
-                kAdrenoGpuLayersCap));
-        userVal = kAdrenoGpuLayersCap;
-      }
-      const int64_t clamped = std::min(userVal, kAdrenoGpuLayersCap);
-      if (clamped < userVal) {
-        QLOG_IF(
-            Priority::WARNING,
-            string_format(
-                "[LlamaModel] Adreno 800+: %s=%" PRId64
-                " exceeds safe maximum %" PRId64 ", clamping to %" PRId64 "\n",
-                key.c_str(),
-                userVal,
-                kAdrenoGpuLayersCap,
-                clamped));
-      }
-      configFilemap.erase("gpu_layers");
-      configFilemap.erase("n-gpu-layers");
-      configFilemap.erase("n_gpu_layers");
-      configFilemap["gpu-layers"] = std::to_string(clamped);
     }
   }
 
@@ -613,10 +558,17 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   }
 
   std::ostringstream oss;
-  auto callback = prompt.outputCallback;
-  if (!prompt.outputCallback) {
-    callback = [&](const std::string& token) { oss << token; };
-  }
+  std::string assistantText;
+  std::function<void(const std::string&)> callback =
+      [&assistantText, userCb = prompt.outputCallback,
+       &oss](const std::string& token) {
+        assistantText.append(token);
+        if (userCb) {
+          userCb(token);
+        } else {
+          oss << token;
+        }
+      };
 
   if (!state_->llmContext_->generateResponse(callback)) {
     resetState();
@@ -627,6 +579,54 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
 
   if (!prompt.outputCallback) {
     out = oss.str();
+  }
+
+  if (!resolved.tools.empty()) {
+    common_chat_parser_params syntax;
+    syntax.format = state_->llmContext_->getLastChatFormat();
+    syntax.parse_tool_calls = true;
+    try {
+      common_chat_msg parsed = common_chat_parse(
+          assistantText, /*is_partial=*/false, syntax);
+      if (!parsed.tool_calls.empty()) {
+        const auto normalizeArgsJson =
+            [](const std::string& src) -> std::string {
+          static const std::regex unquotedKeyRe(
+              R"(([{,])(\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*):)",
+              std::regex::ECMAScript);
+          return std::regex_replace(src, unquotedKeyRe, R"($1$2"$3"$4:)");
+        };
+        std::string envelopes;
+        envelopes.reserve(parsed.tool_calls.size() * 64);
+        for (const auto& tc : parsed.tool_calls) {
+          std::string args = tc.arguments.empty()
+                                 ? std::string("{}")
+                                 : normalizeArgsJson(tc.arguments);
+          envelopes.append("<tool_call>{\"name\":\"");
+          envelopes.append(tc.name);
+          envelopes.append("\",\"arguments\":");
+          envelopes.append(args);
+          envelopes.append("}</tool_call>");
+        }
+        if (prompt.outputCallback) {
+          prompt.outputCallback(envelopes);
+        } else {
+          out.append(envelopes);
+        }
+      }
+    } catch (const std::exception& e) {
+      QLOG_IF(
+          Priority::WARNING,
+          string_format(
+              "[LlamaModel] common_chat_parse failed for tool extraction: "
+              "%s\n",
+              e.what()));
+    } catch (...) {
+      QLOG_IF(
+          Priority::WARNING,
+          "[LlamaModel] common_chat_parse threw an unknown exception during "
+          "tool extraction\n");
+    }
   }
   auto& dts = state_->llmContext_->dynamicToolsState();
   if (dts.toolsAtEnd() && !resolved.tools.empty() &&
