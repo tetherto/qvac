@@ -7,10 +7,12 @@ export {
   toolSchema,
   toolCallSchema,
   toolCallErrorSchema,
+  TOOLS_MODE,
   type Tool,
   type ToolCall,
   type ToolCallError,
   type ToolCallWithCall,
+  type ToolsMode,
 } from "./tools";
 export * from "./delegate";
 export * from "./delete-cache";

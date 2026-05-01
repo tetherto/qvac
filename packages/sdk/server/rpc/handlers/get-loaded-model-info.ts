@@ -26,7 +26,6 @@ export function handleGetLoadedModelInfo(
       isDelegated: true,
       handlers: [],
       providerInfo: {
-        topic: entry.delegated.topic,
         providerPublicKey: entry.delegated.providerPublicKey,
       },
     };

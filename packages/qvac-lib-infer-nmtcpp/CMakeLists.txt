@@ -7,6 +7,10 @@ endif()
 
 option(BUILD_TESTING "Build tests" OFF)
 option(USE_BERGAMOT "Enable Bergamot backend support" ON)
+# Disabled by default until the Adreno 830 q4_0 transpose assertion
+# (GGML_ASSERT(M % 4 == 0) in ggml-opencl.cpp) is fixed upstream —
+# Bergamot/IndicTrans tensors trip it on NMT vocab dimensions. See QVAC-17790.
+option(USE_OPENCL "Prefer/allow OpenCL backend for GPU inference" OFF)
 
 if(BUILD_TESTING)
   list(APPEND VCPKG_MANIFEST_FEATURES "tests")
@@ -206,6 +210,14 @@ if(USE_BERGAMOT)
     ${qvac-lib-infer-nmtcpp}
     PRIVATE
       HAVE_BERGAMOT
+  )
+endif()
+
+if(USE_OPENCL)
+  target_compile_definitions(
+    ${qvac-lib-infer-nmtcpp}
+    PRIVATE
+      QVAC_NMTCPP_USE_OPENCL
   )
 endif()
 

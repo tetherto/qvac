@@ -1,469 +1,177 @@
 #!/usr/bin/env bun
 /**
- * Generate API documentation from TypeScript source (TypeDoc → MDX).
- * Production implementation per API-DOCS-AUTOMATION-COMPLETE-GUIDE Appendix E.
+ * Generate the API summary MDX for one SDK version.
+ *
+ * Output target:
+ *   - latest:  content/docs/sdk/api/index.mdx
+ *   - older:   content/docs/sdk/api/v<X.Y.Z>.mdx
+ *
+ * The pipeline is:
+ *   1. Phase 1 — Extract: TypeDoc walks the SDK and writes api-data.json
+ *      (signatures, top-level descriptions, throws, examples, deprecated,
+ *      errors). Scope is restricted to functions re-exported from
+ *      `packages/sdk/client/api/index.ts` plus the `profiler` object.
+ *   2. Phase 1.5 — AI augmentation (optional): fills in missing prose. Skipped
+ *      with `--no-ai` and disabled by default in CI to keep output reproducible.
+ *   3. Phase 2 — Render: writes a single MDX through `single-page.njk`.
  *
  * Usage:
- *   bun run scripts/generate-api-docs.ts <version> [--no-update-latest] [--force-extract]
- *   bun run scripts/generate-api-docs.ts --dev [--force-extract]
- *   bun run scripts/generate-api-docs.ts --rollback
+ *   bun run scripts/generate-api-docs.ts <version> [--no-ai] [--force-extract]
+ *   bun run scripts/generate-api-docs.ts <version> --latest
  *
- * --dev writes to content/docs/dev/sdk/api/ without creating a versioned folder
- * or updating (latest). Use during day-to-day development of the next version.
+ * Flags:
+ *   --latest          Mark this version as the latest. Writes to index.mdx
+ *                     instead of v<X.Y.Z>.mdx.
+ *   --no-ai           Skip the AI augmentation phase (CI default).
+ *   --force-extract   Bypass mtime-based extraction cache.
  *
- * --force-extract bypasses the mtime-based extraction cache and always re-runs
- * TypeDoc. Without it, extraction is skipped when api-data.json is newer than
- * all .ts files under the SDK source tree.
+ * SDK_PATH env: override the SDK source root (default: ../../../packages/sdk
+ * relative to this script).
  *
- * Path format: content/docs/v{X.Y.Z}/sdk/api/ and content/docs/(latest)/sdk/api/
- * SDK path: Set SDK_PATH env to point to sdk package (default: ../../packages/sdk from cwd).
+ * SOURCE_DATE_EPOCH env: when set, ApiData.generatedAt becomes a deterministic
+ * ISO timestamp (reproducible-builds convention). When unset it falls back to
+ * the literal string "unspecified" so byte-identity tests pass without env.
  */
 
 import * as fs from "fs/promises";
 import * as path from "path";
+import { fileURLToPath } from "node:url";
 import { extractApiData } from "./api-docs/extract.js";
-import type { ApiFunction, ExpandedType, ErrorEntry, GenerateOptions } from "./api-docs/types.js";
+import { renderApiDocs } from "./api-docs/render.js";
 
+const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
+const API_DATA_PATH = path.join(SCRIPT_DIR, "api-docs", "api-data.json");
+
+// Resolve paths relative to this script's location (docs/website/scripts/)
+// rather than process.cwd() so the generator works whether invoked from the
+// repo root, from docs/website, or via `npm run` proxies.
+const DOCS_WEBSITE_DIR = path.resolve(SCRIPT_DIR, "..");
 const SDK_PATH =
   process.env.SDK_PATH ||
-  path.join(process.cwd(), "..", "..", "packages", "sdk");
+  path.resolve(SCRIPT_DIR, "..", "..", "..", "packages", "sdk");
 
-async function generateApiDocs(
-  version: string,
-  options: GenerateOptions = { updateLatest: true }
-) {
-  if (!options.devMode && !/^\d+\.\d+\.\d+$/.test(version)) {
+interface GenerateOptions {
+  isLatest: boolean;
+  forceExtract: boolean;
+  noAi: boolean;
+}
+
+async function generateApiDocs(version: string, options: GenerateOptions) {
+  if (!/^\d+\.\d+\.\d+$/.test(version)) {
     throw new Error(
-      `Invalid version format: "${version}"\nExpected semver: X.Y.Z (e.g., 0.6.1)`
+      `Invalid version format: "${version}"\nExpected semver: X.Y.Z (e.g., 0.9.1)`,
     );
   }
 
-  const label = options.devMode ? "dev" : `v${version}`;
-  console.log(`📚 Generating API docs for ${label}...`);
-  if (!options.devMode) {
-    console.log(
-      `   Update latest: ${options.updateLatest ? "yes" : "no (backfill mode)"}`
-    );
-  }
+  const versionLabel = options.isLatest ? `v${version} (latest)` : `v${version}`;
+  console.log(`📚 Generating API summary for ${versionLabel}...`);
   console.log(`   SDK path: ${SDK_PATH}`);
 
-  const apiData = await extractApiData(SDK_PATH, version, {
+  // Phase 1: Extract
+  await extractApiData(SDK_PATH, version, {
     forceExtract: options.forceExtract,
   });
 
-  const outputFolder = options.devMode ? "dev" : `v${version}`;
-  const outputDir = path.join(
-    process.cwd(),
-    "content",
-    "docs",
-    outputFolder,
-    "sdk",
-    "api"
-  );
-  await fs.mkdir(outputDir, { recursive: true });
-
-  await Promise.all(
-    apiData.functions.map(async (fn) => {
-      const mdx = generateMDXForFunction(fn);
-      const sanitized = mdx.replace(/\bundefined\b/g, "—").trim();
-      if (!sanitized.startsWith("---")) {
-        throw new Error(`Generated invalid MDX for ${fn.name} (missing frontmatter)`);
+  // Phase 1.5: AI augmentation (optional, non-fatal on failure)
+  if (!options.noAi) {
+    try {
+      const { isAugmentConfigured, augmentApiData } = await import(
+        "./api-docs/ai-augment.js"
+      );
+      if (isAugmentConfigured()) {
+        console.log("🤖 Running AI augmentation...");
+        const result = await augmentApiData(API_DATA_PATH);
+        console.log(
+          `✓ AI augmentation: ${result.augmented} augmented, ${result.skipped} skipped`,
+        );
+      } else {
+        console.log("⏭️  Skipping AI augmentation (env vars not configured)");
       }
-      await fs.writeFile(
-        path.join(outputDir, `${fn.name}.mdx`),
-        sanitized,
-        "utf-8"
-      );
-    })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.log(`⚠️  AI augmentation failed (non-fatal): ${msg}`);
+    }
+  }
+
+  // Phase 2: Render to a single MDX file.
+  const apiDir = path.join(DOCS_WEBSITE_DIR, "content", "docs", "sdk", "api");
+  const outputFile = path.join(
+    apiDir,
+    options.isLatest ? "index.mdx" : `v${version}.mdx`,
   );
 
-  console.log(`✓ Generated ${apiData.functions.length} MDX files`);
+  await renderApiDocs(API_DATA_PATH, {
+    versionLabel,
+    outputFile,
+  });
 
-  const indexMDX = generateIndexMDX(apiData.functions, label);
-  await fs.writeFile(path.join(outputDir, "index.mdx"), indexMDX, "utf-8");
-  console.log(`✓ Generated index.mdx`);
+  await smokeTest(outputFile);
 
-  await writeErrorsPage(apiData.errors, outputDir);
-
-  if (!options.devMode && options.updateLatest) {
-    await updateLatestSafely(version);
-  } else if (!options.devMode) {
-    console.log(`⏭️  Skipping latest update (--no-update-latest flag)`);
-  }
-
-  await smokeTestDir(outputDir);
-
-  console.log(`✅ API docs generation complete for ${label}`);
-  console.log(`   Location: ${outputDir}`);
-  console.log(
-    `   Files: ${apiData.functions.length + 2} (${apiData.functions.length} functions + index + errors)`
-  );
+  console.log(`✅ API docs generation complete for ${versionLabel}`);
+  console.log(`   Location: ${outputFile}`);
 }
 
-// ---------------------------------------------------------------------------
-// MDX rendering
-// ---------------------------------------------------------------------------
-
-function renderExpandedTypes(types: ExpandedType[], baseDepth: number): string {
-  const sections: string[] = [];
-
-  for (const expanded of types) {
-    const heading = "#".repeat(Math.min(baseDepth, 5));
-
-    sections.push(`${heading} \`${expanded.typeName}\`
-
-| Field | Type | Required? | Description |
-| --- | --- | :---: | --- |
-${expanded.fields
-  .map((f) => {
-    const typeStr = f.type.replace(/\{/g, "\\{").replace(/\}/g, "\\}").replace(/\|/g, "\\|");
-    return `| \`${f.name}\` | \`${typeStr}\` | ${f.required ? "✓" : "✗"} | ${(f.description || "—").replace(/\{/g, "\\{").replace(/\}/g, "\\}").replace(/\|/g, "\\|")} |`;
-  })
-  .join("\n")}`);
-
-    if (expanded.children.length > 0) {
-      sections.push(renderExpandedTypes(expanded.children, baseDepth + 1));
-    }
-  }
-
-  return sections.join("\n\n");
-}
-
-function generateMDXForFunction(fn: ApiFunction): string {
-  const expandedParamsSection = fn.expandedParams.length > 0
-    ? "\n\n" + renderExpandedTypes(fn.expandedParams, 3)
-    : "";
-
-  const parametersTable =
-    fn.parameters.length > 0
-      ? `## Parameters
-
-| Name | Type | Required? | Description |
-| --- | --- | :---: | --- |
-${fn.parameters
-  .map(
-    (p) => {
-      const typeStr = p.type.replace(/\{/g, "\\{").replace(/\}/g, "\\}");
-      const anchor = p.type.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-      const hasExpansion = fn.expandedParams.some(
-        (e) => e.typeName.toLowerCase() === p.type.toLowerCase()
-      );
-      const typeCell = hasExpansion ? `[\`${typeStr}\`](#${anchor})` : `\`${typeStr}\``;
-      return `| \`${p.name}\` | ${typeCell} | ${p.required ? "✓" : "✗"} | ${(p.description || "No description").replace(/\{/g, "\\{").replace(/\}/g, "\\}")} |`;
-    }
-  )
-  .join("\n")}${expandedParamsSection}`
-      : "";
-
-  const examplesSection = fn.examples?.length
-    ? `## Example
-
-${fn.examples
-  .map(
-    (ex) => {
-      const stripped = ex.replace(/^```\w*\n?/, "").replace(/\n?```\s*$/, "");
-      return `\`\`\`typescript\n${stripped}\n\`\`\``;
-    }
-  )
-  .join("\n\n")}`
-    : "";
-
-  const desc = String(fn.description ?? "No description available").replace(/"/g, '\\"').replace(/\bundefined\b/g, "—");
-  const returnsDesc = String(fn.returns?.description ?? "No description available").replace(/\bundefined\b/g, "—");
-
-  const deprecationCallout = fn.deprecated
-    ? `<Callout type="warn" title="Deprecated">\n${fn.deprecated}\n</Callout>\n\n`
-    : "";
-
-  const throwsSection = fn.throws?.length
-    ? `## Throws
-
-| Error | When |
-| --- | --- |
-${fn.throws.map((t) => `| \`${t.error}\` | ${t.description} |`).join("\n")}`
-    : "";
-
-  const returnFieldsTable = fn.returnFields.length > 0
-    ? `\n\n| Field | Type | Description |
-| --- | --- | --- |
-${fn.returnFields
-  .map((f) => {
-    const typeStr = f.type.replace(/\{/g, "\\{").replace(/\}/g, "\\}").replace(/\|/g, "\\|");
-    return `| \`${f.name}\` | \`${typeStr}\` | ${(f.description || "—").replace(/\{/g, "\\{").replace(/\}/g, "\\}").replace(/\|/g, "\\|")} |`;
-  })
-  .join("\n")}`
-    : "";
-
-  const expandedReturnsSection = fn.expandedReturns.length > 0
-    ? "\n\n" + renderExpandedTypes(fn.expandedReturns, 3)
-    : "";
-
-  return `---
-title: "${fn.name}( )"
-titleStyle: code
-description: "${desc}"
----
-
-${deprecationCallout}\`\`\`typescript
-${fn.signature}
-\`\`\`
-
-${parametersTable}
-
-## Returns
-
-\`\`\`typescript
-${fn.returns?.type ?? "unknown"}
-\`\`\`
-
-${returnsDesc}${returnFieldsTable}${expandedReturnsSection}
-
-${throwsSection}
-
-${examplesSection}
-`.trim();
-}
-
-function formatShortSignature(fn: ApiFunction): string {
-  const sig = fn.signature.replace(/^function\s+/, "");
-  return sig.replace(/\|/g, "\\|");
-}
-
-function generateIndexMDX(functions: ApiFunction[], versionLabel: string): string {
-  const firstSentence = (text: string) => {
-    const match = text.match(/^[^.!?]+[.!?]/);
-    return match ? match[0] : text;
-  };
-
-  return `---
-title: "@qvac/sdk"
-titleStyle: code
-description: API reference — ${versionLabel}
----
-
-## Overview
-
-\`@qvac/sdk\` npm package exposes a function-centric, typed JS API.
-
-## Functions
-
-| Function | Summary | Signature |
-| --- | --- | --- |
-${functions
-  .map((fn) => {
-    const summary = firstSentence(fn.description).replace(/\|/g, "\\|");
-    const sig = formatShortSignature(fn);
-    return `| [\`${fn.name}()\`](./${fn.name}) | ${summary} | \`${sig}\` |`;
-  })
-  .join("\n")}
-
-## Errors
-
-See [Errors](./errors) for the full list of SDK error codes.
-`;
-}
-
-// ---------------------------------------------------------------------------
-// Errors page (rendering only — extraction handled by extract.ts)
-// ---------------------------------------------------------------------------
-
-async function writeErrorsPage(
-  errors: { client: ErrorEntry[]; server: ErrorEntry[] },
-  outputDir: string,
-): Promise<void> {
-  if (errors.client.length === 0 && errors.server.length === 0) {
-    console.log("⚠️  No error codes found, skipping errors.mdx");
-    return;
-  }
-
-  function renderTable(entries: ErrorEntry[]): string {
-    return `| Error | Code | Summary |
-| --- | --- | --- |
-${entries.map((e) => `| \`${e.name}\` | ${e.code} | ${e.summary.replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/[{}]/g, "\\$&")} |`).join("\n")}`;
-  }
-
-  const sections: string[] = [];
-
-  sections.push(`---
-title: Errors
-description: SDK error codes reference
----
-
-## Example
-
-\`\`\`typescript
-import { SDK_CLIENT_ERROR_CODES, SDK_SERVER_ERROR_CODES } from "@qvac/sdk";
-
-try {
-  await loadModel({ modelSrc: "/path/to/model.gguf", modelType: "llm" });
-} catch (error) {
-  if (error.code === SDK_SERVER_ERROR_CODES.MODEL_LOAD_FAILED) {
-    // handle model load failure
-  }
-}
-\`\`\``);
-
-  if (errors.client.length > 0) {
-    sections.push(`## Client errors
-
-Thrown on the client side (response validation, RPC, provider). Access via \`SDK_CLIENT_ERROR_CODES.{ERROR_NAME}\`.
-
-${renderTable(errors.client)}`);
-  }
-
-  if (errors.server.length > 0) {
-    sections.push(`## Server errors
-
-Thrown by the server (model operations, downloads, cache, RAG). Access via \`SDK_SERVER_ERROR_CODES.{ERROR_NAME}\`.
-
-${renderTable(errors.server)}`);
-  }
-
-  await fs.writeFile(
-    path.join(outputDir, "errors.mdx"),
-    sections.join("\n\n") + "\n",
-    "utf-8"
-  );
-  console.log(`✓ Generated errors.mdx (${errors.client.length} client + ${errors.server.length} server errors)`);
-}
-
-// ---------------------------------------------------------------------------
-// Latest management & smoke test
-// ---------------------------------------------------------------------------
-
-async function updateLatestSafely(version: string) {
-  const docsBase = path.join(process.cwd(), "content", "docs");
-  const latestApiDir = path.join(docsBase, "(latest)", "sdk", "api");
-  const versionApiDir = path.join(docsBase, `v${version}`, "sdk", "api");
-  const backupDir = path.join(docsBase, ".latest-api-backup");
-
-  console.log(`📌 Updating (latest)/sdk/api/ to match v${version}...`);
-
-  try {
-    const stat = await fs.stat(latestApiDir);
-    if (stat.isDirectory()) {
-      await fs.rm(backupDir, { recursive: true, force: true });
-      await fs.cp(latestApiDir, backupDir, { recursive: true });
-      console.log("✓ Backed up current (latest)/sdk/api/ → .latest-api-backup");
-    }
-  } catch {
-    console.log("✓ No previous (latest)/sdk/api/ to backup (first generation)");
-  }
-
-  await fs.rm(latestApiDir, { recursive: true, force: true });
-  await fs.cp(versionApiDir, latestApiDir, { recursive: true });
-  console.log(`✓ Updated (latest)/sdk/api/ → v${version}`);
-}
-
-async function smokeTestDir(apiDir: string): Promise<void> {
+/**
+ * Verify the generated file is well-formed MDX with the structural markers
+ * the website depends on. Catches accidental template breakage in CI before
+ * a broken doc reaches production.
+ */
+async function smokeTest(filePath: string): Promise<void> {
   console.log(`🧪 Running smoke test...`);
 
-  const indexPath = path.join(apiDir, "index.mdx");
-  await fs.stat(indexPath);
-
-  const files = await fs.readdir(apiDir);
-  const mdxFiles = files.filter(
-    (f) => f.endsWith(".mdx") && f !== "index.mdx"
-  );
-  if (mdxFiles.length === 0) {
-    throw new Error("Smoke test failed: No function docs generated");
-  }
-
-  for (const file of mdxFiles) {
-    const content = await fs.readFile(
-      path.join(apiDir, file),
-      "utf-8"
+  const content = await fs.readFile(filePath, "utf-8");
+  if (!content.startsWith("---\n")) {
+    throw new Error(
+      `Smoke test failed: ${path.basename(filePath)} is missing frontmatter`,
     );
-    if (!content.startsWith("---\n")) {
+  }
+  for (const required of ["title:", "description:"]) {
+    if (!content.includes(required)) {
       throw new Error(
-        `Smoke test failed: Invalid MDX in ${file} (missing frontmatter)`
+        `Smoke test failed: ${path.basename(filePath)} is missing ${required}`,
       );
     }
-    if (!content.includes("title:") || !content.includes("description:")) {
+  }
+  for (const heading of ["## Functions", "## Errors"]) {
+    if (!content.includes(heading)) {
       throw new Error(
-        `Smoke test failed: Invalid MDX in ${file} (missing required fields)`
+        `Smoke test failed: ${path.basename(filePath)} is missing ${heading} section`,
       );
     }
   }
 
-  console.log(`✅ Smoke test passed (${mdxFiles.length} files verified)`);
-}
-
-async function rollbackLatest(): Promise<void> {
-  const docsBase = path.join(process.cwd(), "content", "docs");
-  const latestApiDir = path.join(docsBase, "(latest)", "sdk", "api");
-  const backupDir = path.join(docsBase, ".latest-api-backup");
-
-  const backupExists = await fs
-    .stat(backupDir)
-    .then(() => true)
-    .catch(() => false);
-  if (!backupExists) {
-    console.log("⚠️  No backup available to rollback to");
-    return;
-  }
-
-  await fs.rm(latestApiDir, { recursive: true, force: true });
-  await fs.cp(backupDir, latestApiDir, { recursive: true });
-  await fs.rm(backupDir, { recursive: true, force: true });
-  console.log("✅ Rolled back (latest)/sdk/api/ to previous version");
+  console.log(`✅ Smoke test passed`);
 }
 
 // CLI
 const args = process.argv.slice(2);
 const versionArg = args.find((arg) => !arg.startsWith("--"));
-const updateLatest = !args.includes("--no-update-latest");
-const rollback = args.includes("--rollback");
-const devMode = args.includes("--dev");
+const isLatest = args.includes("--latest");
 const forceExtract = args.includes("--force-extract");
+const noAi = args.includes("--no-ai");
 
-if (rollback) {
-  rollbackLatest()
-    .then(() => process.exit(0))
-    .catch((err) => {
-      console.error("❌ Rollback failed:", err);
-      process.exit(1);
-    });
-} else if (devMode) {
-  generateApiDocs("dev", { updateLatest: false, devMode: true, forceExtract }).catch((error) => {
-    console.error("❌ Error generating dev API docs:", error.message);
-    if (error.stack) console.error("\nStack trace:", error.stack);
-    process.exit(1);
-  });
-} else if (!versionArg) {
-  console.error("❌ Error: Version argument required (or use --dev)\n");
+if (!versionArg) {
+  console.error("❌ Error: Version argument required\n");
   console.error("Usage:");
-  console.error("  bun run scripts/generate-api-docs.ts <version> [flags]");
-  console.error("  bun run scripts/generate-api-docs.ts --dev\n");
+  console.error("  bun run scripts/generate-api-docs.ts <version> [flags]\n");
   console.error("Flags:");
   console.error(
-    "  --dev                 Generate into dev/sdk/api/ (no versioned folder)"
+    "  --latest          Write to index.mdx instead of v<version>.mdx",
   );
+  console.error("  --no-ai           Skip AI augmentation (CI default)");
   console.error(
-    "  --no-update-latest    Skip updating latest/ (use for backfills)"
-  );
-  console.error("  --rollback            Restore previous version of latest/");
-  console.error(
-    "  --force-extract       Bypass mtime cache and re-run TypeDoc extraction\n"
+    "  --force-extract   Bypass mtime cache and re-run TypeDoc extraction\n",
   );
   console.error("Examples:");
-  console.error("  bun run scripts/generate-api-docs.ts --dev");
-  console.error("  bun run scripts/generate-api-docs.ts 0.6.1");
-  console.error(
-    "  bun run scripts/generate-api-docs.ts 0.5.0 --no-update-latest"
-  );
-  console.error("  bun run scripts/generate-api-docs.ts --rollback");
+  console.error("  bun run scripts/generate-api-docs.ts 0.9.1 --latest");
+  console.error("  bun run scripts/generate-api-docs.ts 0.8.0 --no-ai");
   process.exit(1);
 } else {
-  generateApiDocs(versionArg, { updateLatest, forceExtract }).catch((error) => {
-    console.error("❌ Error generating API docs:", error.message);
-    if (error.stack) console.error("\nStack trace:", error.stack);
-    if (updateLatest) {
-      console.log("\n🔄 Attempting rollback...");
-      rollbackLatest().catch((e) =>
-        console.error("❌ Rollback also failed:", e)
-      );
-    }
-    process.exit(1);
-  });
+  generateApiDocs(versionArg, { isLatest, forceExtract, noAi }).catch(
+    (error) => {
+      console.error("❌ Error generating API docs:", error.message);
+      if (error.stack) console.error("\nStack trace:", error.stack);
+      process.exit(1);
+    },
+  );
 }
