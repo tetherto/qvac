@@ -8,17 +8,24 @@ import type { ResourceManager } from "../../shared/resource-manager.js";
 import { ModelAssetExecutor } from "./model-asset-executor.js";
 import { ttsTests } from "../../tts-tests.js";
 
+type TtsParams = { text: string; stream?: boolean; sentenceStream?: boolean };
+type TtsResult = ReturnType<typeof textToSpeech>;
+
 export class MobileTtsExecutor extends ModelAssetExecutor<typeof ttsTests> {
   pattern = /^tts-/;
 
   protected handlers = Object.fromEntries(
     ttsTests.map((test) => {
-      const params = test.params as { stream?: boolean };
+      const params = test.params as TtsParams;
       const dep = test.testId.startsWith("tts-supertonic-") ? "tts-supertonic" : "tts-chatterbox";
+      if (params.stream && params.sentenceStream) {
+        return [test.testId, this.makeSentenceStream(dep)];
+      }
       if (params.stream) {
         return [test.testId, this.makeStreaming(dep)];
       }
-      return [test.testId, this.makeNonStreaming(dep, !test.params.text || (test.params.text as string).trim().length === 0)];
+      const isEmptyTest = !params.text || params.text.trim().length === 0;
+      return [test.testId, this.makeNonStreaming(dep, isEmptyTest)];
     }),
   ) as never;
   protected defaultHandler = undefined;
@@ -69,30 +76,29 @@ export class MobileTtsExecutor extends ModelAssetExecutor<typeof ttsTests> {
   }
 
   private makeNonStreaming(dep: string, isEmptyTest: boolean) {
-    return async (params: unknown, expectation: unknown): Promise<TestResult> => {
-      const p = params as { text: string };
+    return async (params: TtsParams, expectation: Expectation): Promise<TestResult> => {
       const modelId = await this.resources.ensureLoaded(dep);
 
       try {
-        const result = textToSpeech({
+        const result: TtsResult = textToSpeech({
           modelId,
-          text: p.text,
+          text: params.text,
           inputType: "text",
           stream: false,
         });
 
-        const audioBuffer = await (result as unknown as { buffer: Promise<Buffer> }).buffer;
+        const audioBuffer = await result.buffer;
         const sampleCount = audioBuffer?.length ?? 0;
 
         return ValidationHelpers.validate(
           isEmptyTest
             ? (sampleCount === 0 ? "handled gracefully - empty buffer" : `generated ${sampleCount} samples`)
             : `generated ${sampleCount} samples`,
-          expectation as Expectation,
+          expectation,
         );
       } catch (error) {
         if (isEmptyTest) {
-          return ValidationHelpers.validate(`handled gracefully: ${error}`, expectation as Expectation);
+          return ValidationHelpers.validate(`handled gracefully: ${error}`, expectation);
         }
         const errorMsg = error instanceof Error ? error.message : String(error);
         return { passed: false, output: `TTS error: ${errorMsg}` };
@@ -100,32 +106,76 @@ export class MobileTtsExecutor extends ModelAssetExecutor<typeof ttsTests> {
     };
   }
 
-  private makeStreaming(dep: string) {
-    return async (params: unknown, expectation: unknown): Promise<TestResult> => {
-      const p = params as { text: string };
+  private makeSentenceStream(dep: string) {
+    return async (params: TtsParams, expectation: Expectation): Promise<TestResult> => {
       const modelId = await this.resources.ensureLoaded(dep);
 
       try {
-        const result = textToSpeech({
+        const result: TtsResult = textToSpeech({
           modelId,
-          text: p.text,
+          text: params.text,
+          inputType: "text",
+          stream: true,
+          sentenceStream: true,
+        });
+
+        if (!result.chunkUpdates) {
+          return {
+            passed: false,
+            output: "TTS sentence-stream did not return chunkUpdates iterator",
+          };
+        }
+
+        let totalChunks = 0;
+        let totalSamples = 0;
+        for await (const chunk of result.chunkUpdates) {
+          totalChunks++;
+          totalSamples += chunk.buffer.length;
+        }
+
+        await result.done;
+
+        if (totalChunks === 0 || totalSamples === 0) {
+          return {
+            passed: false,
+            output: `TTS sentence-stream produced no audio (chunks=${totalChunks}, samples=${totalSamples})`,
+          };
+        }
+
+        return ValidationHelpers.validate(
+          `sentence-streamed ${totalChunks} chunks (${totalSamples} samples)`,
+          expectation,
+        );
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        return { passed: false, output: `TTS sentence-stream error: ${errorMsg}` };
+      }
+    };
+  }
+
+  private makeStreaming(dep: string) {
+    return async (params: TtsParams, expectation: Expectation): Promise<TestResult> => {
+      const modelId = await this.resources.ensureLoaded(dep);
+
+      try {
+        const result: TtsResult = textToSpeech({
+          modelId,
+          text: params.text,
           inputType: "text",
           stream: true,
         });
 
         let totalSamples = 0;
-        const rs = result as unknown as { bufferStream: AsyncIterable<unknown>; buffer?: Promise<Buffer> };
-
-        if (rs.bufferStream && typeof (rs.bufferStream as never)[Symbol.asyncIterator] === "function") {
-          for await (const _sample of rs.bufferStream) {
+        if (result.bufferStream && typeof result.bufferStream[Symbol.asyncIterator] === "function") {
+          for await (const _sample of result.bufferStream) {
             totalSamples++;
           }
-        } else if (rs.buffer) {
-          const buf = await rs.buffer;
+        } else if (result.buffer) {
+          const buf = await result.buffer;
           totalSamples = buf?.length ?? 0;
         }
 
-        return ValidationHelpers.validate(`streamed ${totalSamples} samples`, expectation as Expectation);
+        return ValidationHelpers.validate(`streamed ${totalSamples} samples`, expectation);
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
         return { passed: false, output: `TTS streaming error: ${errorMsg}` };

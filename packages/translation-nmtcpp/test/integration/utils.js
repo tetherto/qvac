@@ -664,13 +664,17 @@ function createPerformanceCollector () {
  *
  * @param {string} label - Test label prefix (e.g., '[Bergamot]')
  * @param {Object} metrics - Metrics object from createPerformanceCollector().getMetrics()
- * @param {Object} [qualityOpts] - Optional translation-quality context
- * @param {string} [qualityOpts.fixturePath] - Path to the ground-truth fixture JSON
- * @param {string} [qualityOpts.srcLang]     - Source language code (matches fixture entry)
- * @param {string} [qualityOpts.dstLang]     - Destination language code (matches fixture entry)
+ * @param {Object} [opts] - Optional reporter extras
+ * @param {string} [opts.fixturePath] - Path to the ground-truth fixture JSON (enables chrF++ scoring)
+ * @param {string} [opts.srcLang]     - Source language code (matches fixture entry)
+ * @param {string} [opts.dstLang]     - Destination language code (matches fixture entry)
+ * @param {string} [opts.execution_provider] - Runtime backend tag (e.g. 'Vulkan0', 'OpenCL', 'Metal').
+ *                                             If omitted, falls back to regex-parsing the label for
+ *                                             '[GPU]' / '[CPU]' so call sites that don't know the
+ *                                             actual runtime backend still tag records sensibly.
  * @returns {string} Formatted performance metrics string
  */
-function formatPerformanceMetrics (label, metrics, qualityOpts) {
+function formatPerformanceMetrics (label, metrics, opts = {}) {
   const {
     totalTime,
     generatedTokens,
@@ -686,9 +690,9 @@ function formatPerformanceMetrics (label, metrics, qualityOpts) {
   const decodeTimeMs = typeof decodeTime === 'number' ? decodeTime : 0
 
   let quality = null
-  if (qualityOpts && qualityOpts.fixturePath && prompt && qualityOpts.srcLang && qualityOpts.dstLang) {
+  if (opts && opts.fixturePath && prompt && opts.srcLang && opts.dstLang) {
     try {
-      const gt = findTranslationGroundTruth(qualityOpts.fixturePath, prompt, qualityOpts.srcLang, qualityOpts.dstLang)
+      const gt = findTranslationGroundTruth(opts.fixturePath, prompt, opts.srcLang, opts.dstLang)
       if (gt) {
         quality = evaluateTranslationQuality(fullOutput || '', gt)
       }
@@ -697,7 +701,13 @@ function formatPerformanceMetrics (label, metrics, qualityOpts) {
     }
   }
 
-  const ep = /\[gpu\]/i.test(label) ? 'gpu' : /\[cpu\]/i.test(label) ? 'cpu' : null
+  // Prefer a caller-supplied execution_provider (the true runtime backend
+  // name, e.g. 'Vulkan0' / 'OpenCL') so perf-baselines keyed by EP stay
+  // accurate even when the test label says '[GPU]' but a silent CPU
+  // fallback happened. Fall back to regex-parsing the label so call sites
+  // that don't know the runtime backend still tag records sensibly.
+  const ep = opts.execution_provider ||
+    (/\[gpu\]/i.test(label) ? 'gpu' : /\[cpu\]/i.test(label) ? 'cpu' : null)
 
   _perfReporter.record(label, {
     total_time_ms: Math.round(totalTimeMs),
@@ -749,6 +759,90 @@ function formatPerformanceMetrics (label, metrics, qualityOpts) {
 }
 
 // ============================================================================
+// GPU Device Discovery
+// ============================================================================
+
+/**
+ * Maximum GPU device indices to probe.  Covers multi-GPU desktops (e.g.
+ * Vulkan0 + Vulkan1) and mixed-backend mobile (Vulkan + OpenCL).  Probing
+ * stops early when a device index falls back to CPU, so the actual cost is
+ * O(N_real_devices + 1).
+ */
+const MAX_GPU_DEVICE_PROBES = 4
+
+/** @type {Promise<{ index: number, name: string }[]> | null} */
+let _gpuDevicePromise = null
+
+/**
+ * Discovers available GPU devices by probe-loading an IndicTrans model with
+ * increasing gpu_device indices.  Returns an array of { index, name } for
+ * each device that resolved to a non-CPU backend.
+ *
+ * Uses IndicTrans regardless of which test file calls it — ggml device
+ * enumeration is device-dependent, not model-dependent, so a single probe
+ * model suffices for all backends (Bergamot, pivot, etc.).
+ *
+ * Results are cached as a Promise so concurrent callers await the same probe
+ * run (avoids the race where a second caller sees an in-progress empty array).
+ *
+ * @returns {Promise<{ index: number, name: string }[]>}
+ */
+function discoverGpuDevices () {
+  if (_gpuDevicePromise !== null) return _gpuDevicePromise
+  _gpuDevicePromise = _probeGpuDevices()
+  return _gpuDevicePromise
+}
+
+const _logger = createLogger()
+
+async function _probeGpuDevices () {
+  const devices = []
+  const modelPath = await ensureIndicTransModel()
+  // Lazy require: utils.js is imported by test files that may not need the
+  // native addon (e.g. fixture-only helpers).  Loading it at module scope
+  // would force every consumer to load the addon unconditionally.
+  const TranslationNmtcpp = require('@qvac/translation-nmtcpp') // eslint-disable-line
+
+  for (let idx = 0; idx < MAX_GPU_DEVICE_PROBES; idx++) {
+    let model
+    try {
+      const config = {
+        modelType: TranslationNmtcpp.ModelTypes.IndicTrans,
+        use_gpu: true,
+        gpu_device: idx,
+        beamsize: 1
+      }
+      if (platform === 'android') {
+        const writableRoot = (typeof global !== 'undefined' && global.testDir) || '/tmp'
+        config.openclCacheDir = path.join(writableRoot, 'opencl-cache-discover')
+        try { fs.mkdirSync(config.openclCacheDir, { recursive: true }) } catch (_) {}
+      }
+      model = new TranslationNmtcpp({
+        files: { model: modelPath },
+        params: { mode: 'full', srcLang: 'eng_Latn', dstLang: 'hin_Deva' },
+        config,
+        logger: createLogger()
+      })
+      await model.load()
+      const name = model.getActiveBackendName()
+      await model.unload()
+
+      if (name === 'CPU' || name === 'Unloaded' || name === 'Bergamot-CPU') {
+        break
+      }
+      devices.push({ index: idx, name })
+    } catch (err) {
+      _logger.warn('[discoverGpuDevices] probe at gpu_device=' + idx +
+        ' failed: ' + (err && err.message ? err.message : String(err)))
+      if (model) { try { await model.unload() } catch (__) { /* noop */ } }
+      break
+    }
+  }
+
+  return devices
+}
+
+// ============================================================================
 // Module Exports
 // ============================================================================
 
@@ -767,5 +861,9 @@ module.exports = {
 
   // Performance metrics
   createPerformanceCollector,
-  formatPerformanceMetrics
+  formatPerformanceMetrics,
+
+  // GPU discovery
+  discoverGpuDevices,
+  MAX_GPU_DEVICE_PROBES
 }

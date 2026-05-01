@@ -218,20 +218,20 @@ class TranscriptionWhispercpp {
     return await this._runInternal(input)
   }
 
-  async runStreaming (audioStream) {
+  async runStreaming (audioStream, opts = {}) {
     if (this.exclusiveRun) {
       return await this._enqueueExclusiveRunResponse(() =>
-        this._runInternal(audioStream, { streaming: true })
+        this._runInternal(audioStream, { ...opts, streaming: true })
       )
     }
-    return await this._runInternal(audioStream, { streaming: true })
+    return await this._runInternal(audioStream, { ...opts, streaming: true })
   }
 
   async _runInternal (audioStream, opts = {}) {
     const normalizedAudioStream = this._normalizeAudioStream(audioStream)
 
     if (opts.streaming) {
-      return this._runStreaming(normalizedAudioStream)
+      return this._runStreaming(normalizedAudioStream, opts)
     }
 
     return this._runBatchTranscription(normalizedAudioStream)
@@ -256,7 +256,7 @@ class TranscriptionWhispercpp {
     return response
   }
 
-  async _runStreaming (audioStream) {
+  async _runStreaming (audioStream, streamingOpts = {}) {
     const vadModelPath = this._resolveVadModelPath()
     if (!vadModelPath) {
       throw new QvacErrorAddonWhisper({
@@ -266,15 +266,22 @@ class TranscriptionWhispercpp {
 
     const vadParams = this.params?.vad_params || {}
 
-    this.addon.startStreaming({
+    const streamingConfig = {
       vadModelPath,
       vadThreshold: vadParams.threshold || 0.5,
       minSilenceDurationMs: vadParams.min_silence_duration_ms || 500,
       minSpeechDurationMs: vadParams.min_speech_duration_ms || 250,
       maxSpeechDurationS: vadParams.max_speech_duration_s || 30,
       speechPadMs: vadParams.speech_pad_ms || 30,
-      samplesOverlap: vadParams.samples_overlap || 0.1
-    })
+      samplesOverlap: vadParams.samples_overlap || 0.1,
+      emitVadEvents: Boolean(streamingOpts.emitVadEvents || streamingOpts.conversationMode),
+      endOfTurnSilenceMs: streamingOpts.endOfTurnSilenceMs || 0
+    }
+    if (streamingOpts.vadRunIntervalMs !== undefined) {
+      streamingConfig.vadRunIntervalMs = streamingOpts.vadRunIntervalMs
+    }
+
+    this.addon.startStreaming(streamingConfig)
 
     this._pendingWhisperJobId = null
     const response = this._job.start()
@@ -448,6 +455,11 @@ class TranscriptionWhispercpp {
         this.logger.error(`Failed to serialize output for logging: ${err.message}`)
         this.logger.debug('Job produced output: [non-serializable data]')
       }
+      this._job.output(data)
+      return
+    }
+    if (event === 'VadState' || event === 'EndOfTurn') {
+      this.logger.debug(`Job produced conversation event: ${dataAsStringWhisper(data)}`)
       this._job.output(data)
       return
     }

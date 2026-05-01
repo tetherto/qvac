@@ -3,10 +3,12 @@ import type {
   CompletionParams,
   CompletionStats,
   GenerationParams,
+  ResponseFormat,
   Tool,
   ToolCall,
+  ToolDialect,
 } from "@/schemas";
-import type { ToolCallEvent } from "@/schemas/tools";
+import { TOOLS_MODE } from "@/schemas/tools";
 import {
   logCacheDisabled,
   logCacheInit,
@@ -16,6 +18,7 @@ import {
   logMessagesToAddon,
 } from "@/server/bare/plugins/llamacpp-completion/ops/cache-logger";
 import {
+  clearCacheRegistry,
   customCacheExists,
   extractSystemPrompt,
   findMatchingCache,
@@ -31,11 +34,20 @@ import {
   type AnyModel,
 } from "@/server/bare/registry/model-registry";
 import {
-  checkForToolEvents,
-  insertToolsIntoHistory,
-  setupToolGrammar,
+  cachedMessageCounts,
+  clearCachedMessageCounts as clearCachedMessageCountsFromState,
+  decideCachedHistorySlice,
+  noteCancelRequested as noteCancelRequestedFromState,
+  shouldRecordSavedCount,
+  snapshotCancelCount,
+} from "@/server/bare/plugins/llamacpp-completion/ops/kv-cache-state";
+import {
+  appendToolsToHistory,
+  detectToolDialect,
+  prependToolsToHistory,
 } from "@/server/utils/tool-integration";
-import { parseToolCalls } from "@/server/utils/tool-parser";
+import { parseToolCalls } from "@/server/utils/tools";
+import { getResponseFormatJsonSchema } from "@/server/utils/response-format";
 import { buildAutoCacheSaveHistory, type CacheMessage } from "@/server/utils";
 import { getServerLogger } from "@/logging";
 import { AttachmentNotFoundError } from "@/utils/errors-server";
@@ -62,6 +74,15 @@ interface CompletionResult {
 
 interface ProcessModelResponseResult extends CompletionResult {
   responseText: string;
+  /**
+   * True if the model emitted at least one non-empty text token. Used by
+   * `completion()` to decide whether to record a `savedCount` for the
+   * kv-cache: a turn that produced nothing (legit early EOS or cancel
+   * before any decode) must not leave a `history.length + 1` entry
+   * behind, because that count will make the next turn slice its history
+   * to an empty payload.
+   */
+  producedTokens: boolean;
 }
 
 interface ChatHistory {
@@ -73,26 +94,27 @@ interface ChatHistory {
   parameters?: unknown;
 }
 
-const cachedMessageCounts = new Map<string, number>();
+// Internal generation-params shape forwarded to the addon. Extends the
+// public `GenerationParams` with `json_schema` (a JSON-Schema string the
+// addon will convert to GBNF) so structured-output requests can constrain
+// sampling per request without mutating the shared `modelConfig`. The
+// addon types in `@qvac/llm-llamacpp@0.17.1`+ already include this field;
+// the explicit `&` here keeps typing correct against `^0.16.0` until the
+// dep bump propagates and is harmless once it has.
+type CompletionGenerationParams = GenerationParams & { json_schema?: string };
 
 type CompletionRunOptions = Pick<RunOptions, "cacheKey" | "saveCacheToDisk"> & {
-  generationParams?: GenerationParams;
+  generationParams?: CompletionGenerationParams;
 };
 
+// Re-export so existing callers keep their import surface intact. The pure
+// state module has no `bare-*` imports, so we inject the platform path
+// separator here — without this, prefix-based clears would miss entries
+// under directory keys on Windows.
 export function clearCachedMessageCounts(prefix?: string): void {
-  if (!prefix) {
-    cachedMessageCounts.clear();
-    return;
-  }
-  for (const key of cachedMessageCounts.keys()) {
-    if (key === prefix) {
-      cachedMessageCounts.delete(key);
-      continue;
-    }
-    if (!key.startsWith(prefix + path.sep)) continue;
-    cachedMessageCounts.delete(key);
-  }
+  clearCachedMessageCountsFromState(prefix, path.sep);
 }
+export const noteCancelRequested = noteCancelRequestedFromState;
 
 // Verify the addon actually persisted the cache file before recording its
 // message count. The addon currently swallows write errors silently, so a
@@ -136,7 +158,7 @@ function transformMessage(
       name: message.name,
       description: message.description,
       parameters: message.parameters,
-    } as ChatHistory);
+    });
     return transformed;
   }
 
@@ -231,31 +253,97 @@ async function initSystemPromptCache(
   await primeResponse.await();
 }
 
+type HistoryMsg = {
+  role: string;
+  content: string;
+  attachments?: { path: string }[] | undefined;
+};
+
+/**
+ * Pick the messages that need to reach the model for the next turn.
+ *
+ * Static mode (no `tools` argument):
+ *   - Cache miss: send the whole history minus the system message (which
+ *     was primed during cache init).
+ *   - Cache hit with a recorded `savedCount`: send only the unsaved tail
+ *     (`history.slice(savedCount)`), so a multi-message turn (e.g. a
+ *     consumer pushing both an assistant transcript and a follow-up user
+ *     message between completions) all reaches the model.
+ *   - Cache hit with a stale/missing `savedCount`: fall back to the full
+ *     non-system history.
+ *
+ * Dynamic mode (`tools` argument set):
+ *   - The addon anchors the tool block after the last user message and
+ *     trims tools + the assistant's tool-call output from the cache once
+ *     the chain resolves. After that trim, the cache only holds messages
+ *     up to the last user turn, so the SDK has to ship the right slice
+ *     plus the (possibly new) tool set:
+ *       * tool-chain continuation (last role is "tool"): send the trailing
+ *         consecutive tool messages, no tool block — tools are still
+ *         anchored in the cache from the previous round.
+ *       * new user turn after a chain (prev role is "assistant"): send
+ *         [assistant, user] so the model sees its own final reply before
+ *         the new prompt, then re-anchor the tool block.
+ *       * otherwise: send just the last message + tool block.
+ */
 function prepareMessagesForCache(
   cachePathToUse: string,
   cacheExists: boolean,
-  history: {
-    role: string;
-    content: string;
-    attachments?: { path: string }[] | undefined;
-  }[],
+  history: HistoryMsg[],
+  tools?: Tool[],
 ): ChatHistory[] {
-  if (cacheExists && history.length > 0) {
-    const savedCount = cachedMessageCounts.get(cachePathToUse) ?? 0;
-    const canSlice = savedCount > 0 && savedCount <= history.length;
-    const newMessages = canSlice
-      ? history.slice(savedCount)
-      : history.filter((msg) => msg.role !== "system");
+  const addTools = tools?.length ? transformMessages(tools) : [];
+  const dynamic = addTools.length > 0;
 
-    if (!canSlice && savedCount > 0) {
+  if (!(cacheExists && history.length > 0)) {
+    const historyWithoutSystem = history.filter((msg) => msg.role !== "system");
+    return [...transformMessages(historyWithoutSystem), ...addTools];
+  }
+
+  if (!dynamic) {
+    // Static path — slice from the recorded `savedCount` so callers can
+    // stage multiple messages between completions. `decideCachedHistorySlice`
+    // also guards against the QVAC-17780 stale-count regression: if the
+    // saved boundary would slice the history down to an empty payload
+    // (e.g. after a cancelled mid-decode), it falls back to the full
+    // non-system history and signals the caller to drop the bad entry.
+    const savedCount = cachedMessageCounts.get(cachePathToUse) ?? 0;
+    const { messages, clearStaleCount } = decideCachedHistorySlice(
+      savedCount,
+      cacheExists,
+      history,
+    );
+
+    if (clearStaleCount) {
       cachedMessageCounts.delete(cachePathToUse);
     }
 
-    return transformMessages(newMessages);
+    return transformMessages(messages);
   }
 
-  const historyWithoutSystem = history.filter((msg) => msg.role !== "system");
-  return transformMessages(historyWithoutSystem);
+  // Dynamic path. The addon trimmed tools after the previous round, so the
+  // cache no longer holds the saved-count we'd rely on for slicing — pick
+  // the right fragment based on the role of the last history message.
+  const lastMsg = history[history.length - 1]!;
+
+  if (lastMsg.role === "tool") {
+    const trailingTools: HistoryMsg[] = [];
+    for (let i = history.length - 1; i >= 0; i--) {
+      const msg = history[i]!;
+      if (msg.role !== "tool") break;
+      trailingTools.unshift(msg);
+    }
+    return transformMessages(trailingTools);
+  }
+
+  if (lastMsg.role === "user") {
+    const prevMsg = history[history.length - 2];
+    const tail =
+      prevMsg?.role === "assistant" ? [prevMsg, lastMsg] : [lastMsg];
+    return [...transformMessages(tail), ...addTools];
+  }
+
+  return [...transformMessages([lastMsg]), ...addTools];
 }
 
 type CacheRunOptions = Pick<RunOptions, "cacheKey" | "saveCacheToDisk">;
@@ -264,23 +352,21 @@ async function* processModelResponse(
   model: AnyModel,
   messagesToSend: ChatHistory[],
   tools?: Tool[],
-  generationParams?: GenerationParams,
+  generationParams?: CompletionGenerationParams,
   cacheOptions?: CacheRunOptions,
-): AsyncGenerator<
-  { token: string; toolCallEvent?: ToolCallEvent },
-  ProcessModelResponseResult,
-  unknown
-> {
-  const runOptions: CacheRunOptions & { generationParams?: GenerationParams } =
-    {
-      ...(generationParams && { generationParams }),
-      ...(cacheOptions?.cacheKey !== undefined && {
-        cacheKey: cacheOptions.cacheKey,
-      }),
-      ...(cacheOptions?.saveCacheToDisk !== undefined && {
-        saveCacheToDisk: cacheOptions.saveCacheToDisk,
-      }),
-    };
+  dialect?: ToolDialect,
+): AsyncGenerator<{ token: string }, ProcessModelResponseResult, unknown> {
+  const runOptions: CacheRunOptions & {
+    generationParams?: CompletionGenerationParams;
+  } = {
+    ...(generationParams && { generationParams }),
+    ...(cacheOptions?.cacheKey !== undefined && {
+      cacheKey: cacheOptions.cacheKey,
+    }),
+    ...(cacheOptions?.saveCacheToDisk !== undefined && {
+      saveCacheToDisk: cacheOptions.saveCacheToDisk,
+    }),
+  };
   const hasRunOptions = Object.keys(runOptions).length > 0;
 
   const modelStart = nowMs();
@@ -291,27 +377,14 @@ async function* processModelResponse(
   );
 
   let accumulatedText = "";
-  const emittedToolCallPositions = new Set<number>();
+  let producedTokens = false;
   let toolCallsResult: ToolCall[] = [];
 
   for await (const token of response.iterate()) {
     const tokenStr = token as string;
+    if (tokenStr.length > 0) producedTokens = true;
     accumulatedText += tokenStr;
-
     yield { token: tokenStr };
-
-    if (tools && tools.length > 0) {
-      const toolEvents = checkForToolEvents(
-        accumulatedText,
-        tokenStr,
-        tools,
-        emittedToolCallPositions,
-      );
-
-      for (const toolEvent of toolEvents) {
-        yield { token: "", toolCallEvent: toolEvent };
-      }
-    }
   }
   const modelExecutionMs = nowMs() - modelStart;
 
@@ -320,7 +393,7 @@ async function* processModelResponse(
   }
 
   if (tools && tools.length > 0) {
-    const { toolCalls } = parseToolCalls(accumulatedText, tools);
+    const { toolCalls } = parseToolCalls(accumulatedText, tools, dialect);
     toolCallsResult = toolCalls;
   }
 
@@ -335,6 +408,9 @@ async function* processModelResponse(
     ...(responseWithStats.stats?.CacheTokens !== undefined && {
       cacheTokens: responseWithStats.stats.CacheTokens,
     }),
+    ...(responseWithStats.stats?.generatedTokens !== undefined && {
+      generatedTokens: responseWithStats.stats.generatedTokens,
+    }),
     ...(responseWithStats.stats?.backendDevice !== undefined && {
       backendDevice: responseWithStats.stats.backendDevice,
     }),
@@ -347,6 +423,7 @@ async function* processModelResponse(
     ),
     toolCalls: toolCallsResult,
     responseText: accumulatedText,
+    producedTokens,
   };
 }
 
@@ -354,38 +431,55 @@ export async function* completion(
   params: CompletionParams & {
     tools?: Tool[];
     generationParams?: GenerationParams;
+    toolDialect?: ToolDialect;
+    responseFormat?: ResponseFormat;
   },
-): AsyncGenerator<
-  { token: string; toolCallEvent?: ToolCallEvent },
-  CompletionResult,
-  unknown
-> {
-  const { history, modelId, kvCache, tools, generationParams } = params;
+): AsyncGenerator<{ token: string }, CompletionResult, unknown> {
+  const { history, modelId, kvCache, tools, generationParams, responseFormat } =
+    params;
 
   const modelConfig = getModelConfig(modelId);
   const toolsEnabled = (modelConfig as { tools?: boolean }).tools === true;
+  const toolsMode = (modelConfig as { toolsMode?: string }).toolsMode;
+  const dynamicTools =
+    !!tools?.length && toolsEnabled && toolsMode === TOOLS_MODE.dynamic;
+  const staticTools = !!tools?.length && toolsEnabled && !dynamicTools;
 
-  let historyWithTools: Array<
-    | {
-        role: string;
-        content: string;
-        attachments?: { path: string }[] | undefined;
-      }
-    | Tool
-  > = history;
+  const dialect =
+    tools && tools.length > 0
+      ? (params.toolDialect ?? detectToolDialect(modelId))
+      : undefined;
 
-  if (tools && tools.length > 0 && toolsEnabled) {
-    historyWithTools = insertToolsIntoHistory(history, tools);
-    setupToolGrammar(modelConfig as Record<string, unknown>, tools);
+  // `responseFormat` is forwarded to the addon as a per-request
+  // `generationParams.json_schema`, which the addon converts to GBNF and
+  // applies for the duration of the request only. This avoids mutating
+  // the shared `modelConfig` and is therefore safe under concurrent
+  // completions on the same model. `tools` still constrain output through
+  // their parameter schema and the dialect-specific parser chain (mutually
+  // exclusive with a non-text `responseFormat` at the schema layer).
+  let mergedGenerationParams: CompletionGenerationParams | undefined =
+    generationParams;
+  if (responseFormat && !(tools && tools.length > 0)) {
+    const jsonSchema = getResponseFormatJsonSchema(responseFormat);
+    if (jsonSchema !== undefined) {
+      mergedGenerationParams = {
+        ...(generationParams ?? {}),
+        json_schema: jsonSchema,
+      };
+    }
   }
 
-  const transformedHistory = transformMessages(historyWithTools);
   const model = getModel(modelId);
 
   if (kvCache) {
-    const modelConfig = getModelConfig(modelId);
     const systemPromptFromHistory = extractSystemPrompt(history);
-    const configHash = generateConfigHash(systemPromptFromHistory, tools);
+    // Dynamic mode lets each turn carry its own tool set, so the cache
+    // hash must not depend on the tool list — otherwise a tool change
+    // would force a fresh cache file and defeat the whole optimisation.
+    const configHash = generateConfigHash(
+      systemPromptFromHistory,
+      dynamicTools ? undefined : tools,
+    );
 
     const systemPromptToUse =
       systemPromptFromHistory ||
@@ -405,7 +499,10 @@ export async function* completion(
           cachePathToUse,
           systemPromptToUse,
           kvCache,
-          tools && toolsEnabled ? tools : undefined,
+          // Static-mode tools are baked into the system-prompt cache so
+          // they're shared across the session. Dynamic-mode tools belong
+          // to a per-turn anchor and must not enter the system cache.
+          staticTools ? tools : undefined,
         );
         markCacheInitialized(modelId, configHash, kvCache);
         cacheExists = true;
@@ -415,17 +512,45 @@ export async function* completion(
         cachePathToUse,
         cacheExists,
         history,
+        dynamicTools ? tools : undefined,
       );
       logMessagesToAddon(messagesToSend, "PROMPT_SEND");
 
+      const cancelCountBefore = snapshotCancelCount(modelId);
       const result = yield* processModelResponse(
         model,
         messagesToSend,
         tools,
-        generationParams,
+        mergedGenerationParams,
         { cacheKey: cachePathToUse, saveCacheToDisk: true },
+        dialect,
       );
-      await recordCacheSaveCount(cachePathToUse, history.length + 1);
+      const wasCancelled = snapshotCancelCount(modelId) > cancelCountBefore;
+
+      if (shouldRecordSavedCount(wasCancelled, result.producedTokens)) {
+        // Turn ran to completion and produced content — record the new
+        // boundary so the next turn can slice its history.
+        await recordCacheSaveCount(cachePathToUse, history.length + 1);
+      } else {
+        // The addon writes the cache file unconditionally on
+        // `saveCacheToDisk` turns, including cancellations and zero-token
+        // exits, so what's left on disk holds partial decode state that
+        // does not correspond to a clean turn boundary. Mirror the
+        // auto-key handling: drop the file, clear the in-memory init
+        // flag (otherwise `customCacheExists` would still report true),
+        // and forget the saved count. Next turn re-primes the system
+        // prompt cleanly — a one-turn perf hit, but no risk of the
+        // addon loading the stale KV state.
+        try {
+          await fsPromises.unlink(cachePathToUse);
+        } catch (unlinkError) {
+          logger.warn(
+            `[kv-cache] Failed to remove cache file after cancelled or empty custom-key turn; next turn may load stale KV state. path=${cachePathToUse} error=${unlinkError instanceof Error ? unlinkError.message : String(unlinkError)}`,
+          );
+        }
+        clearCacheRegistry({ cacheKey: kvCache, modelId });
+        cachedMessageCounts.delete(cachePathToUse);
+      }
       return result;
     } else {
       // Auto-generate cache key based on conversation history
@@ -460,9 +585,13 @@ export async function* completion(
           cachePathToUse,
           systemPromptToUse,
           "auto",
-          tools && toolsEnabled ? tools : undefined,
+          staticTools ? tools : undefined,
         );
-        markCacheInitialized(modelId, configHash, preResponseCacheInfo.cacheKey);
+        markCacheInitialized(
+          modelId,
+          configHash,
+          preResponseCacheInfo.cacheKey,
+        );
         cacheExists = true;
       }
 
@@ -470,16 +599,20 @@ export async function* completion(
         cachePathToUse,
         cacheExists,
         history,
+        dynamicTools ? tools : undefined,
       );
       logMessagesToAddon(messagesToSend, "PROMPT_SEND");
 
+      const cancelCountBefore = snapshotCancelCount(modelId);
       const result = yield* processModelResponse(
         model,
         messagesToSend,
         tools,
-        generationParams,
+        mergedGenerationParams,
         { cacheKey: cachePathToUse, saveCacheToDisk: true },
+        dialect,
       );
+      const wasCancelled = snapshotCancelCount(modelId) > cancelCountBefore;
 
       // TODO: support auto-cache for tool-call turns by keying off the
       // structured assistant/tool messages callers push into history,
@@ -496,6 +629,23 @@ export async function* completion(
         } catch (unlinkError) {
           logger.warn(
             `[kv-cache] Failed to remove orphaned tool-turn cache file; disk leak likely. path=${cachePathToUse} error=${unlinkError instanceof Error ? unlinkError.message : String(unlinkError)}`,
+          );
+        }
+        cachedMessageCounts.delete(cachePathToUse);
+        return result;
+      }
+
+      // A cancelled or zero-token turn cannot be promoted to a post-response
+      // cache: the post-response key is derived from `result.responseText`,
+      // which is empty/partial in those cases, and the on-disk cache the
+      // addon wrote is not aligned with the current-history hash. Treat it
+      // like the tool-call branch — drop the cache file and clear the count.
+      if (!shouldRecordSavedCount(wasCancelled, result.producedTokens)) {
+        try {
+          await fsPromises.unlink(cachePathToUse);
+        } catch (unlinkError) {
+          logger.warn(
+            `[kv-cache] Failed to remove cache file after cancelled or empty turn; disk leak possible. path=${cachePathToUse} error=${unlinkError instanceof Error ? unlinkError.message : String(unlinkError)}`,
           );
         }
         cachedMessageCounts.delete(cachePathToUse);
@@ -541,13 +691,23 @@ export async function* completion(
       return result;
     }
   } else {
+    let historyWithTools: Array<HistoryMsg | Tool> = history;
+    if (staticTools && tools) {
+      historyWithTools = prependToolsToHistory(history, tools);
+    } else if (dynamicTools && tools) {
+      historyWithTools = appendToolsToHistory(history, tools);
+    }
+
+    const transformedHistory = transformMessages(historyWithTools);
     logCacheDisabled();
     logMessagesToAddon(transformedHistory, "NO_CACHE");
     return yield* processModelResponse(
       model,
       transformedHistory,
       tools,
-      generationParams,
+      mergedGenerationParams,
+      undefined,
+      dialect,
     );
   }
 }

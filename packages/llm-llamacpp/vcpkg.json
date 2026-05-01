@@ -5,6 +5,7 @@
       "platform": "android"
     },
     "picojson",
+    "nlohmann-json",
     {
       "name": "qvac-fabric",
       "version>=": "7248.2.3"

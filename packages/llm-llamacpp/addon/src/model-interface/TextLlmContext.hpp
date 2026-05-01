@@ -198,5 +198,9 @@ private:
   // Cache whether this is a Qwen3 model (checked once at load time)
   bool isQwen3Model_ = false;
 
+  // GPT-OSS Harmony: <|call|> is a frame delimiter, not a stop signal
+  bool isHarmonyModel_ = false;
+  llama_token harmonyCallToken_ = LLAMA_TOKEN_NULL;
+
   std::atomic<bool> stopGeneration_ = false;
 };

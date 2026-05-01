@@ -339,6 +339,27 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
       readNum("frequency_penalty", ov.frequency_penalty);
       readNum("presence_penalty", ov.presence_penalty);
       readNum("repeat_penalty", ov.repeat_penalty);
+
+      auto grammarStr =
+          configObj->getOptionalPropertyAs<js::String, std::string>(
+              env, "grammar");
+      if (grammarStr.has_value() && !grammarStr->empty()) {
+        ov.grammar = std::move(*grammarStr);
+      }
+
+      auto jsonSchemaStr =
+          configObj->getOptionalPropertyAs<js::String, std::string>(
+              env, "json_schema");
+      if (jsonSchemaStr.has_value() && !jsonSchemaStr->empty()) {
+        ov.json_schema = std::move(*jsonSchemaStr);
+      }
+
+      if (ov.grammar && ov.json_schema) {
+        throw StatusError(
+            general_error::InvalidArgument,
+            "generationParams.grammar and generationParams.json_schema are "
+            "mutually exclusive");
+      }
     }
 
     prompt.cacheKey =

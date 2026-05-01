@@ -1,10 +1,30 @@
 import type { ProvideRequest, ProvideResponse } from "@/schemas/provide";
-import { getSwarm, registerProviderTopic } from "@/server/bare/hyperswarm";
+import {
+  getSwarm,
+  hasActiveProviders,
+  registerProvider,
+} from "@/server/bare/hyperswarm";
 import { setupConnectionHandlers } from "./connection";
 import { getServerLogger } from "@/logging";
 
 const logger = getServerLogger();
 
+// Tracks whether the connection listener has been attached on this swarm
+// instance. `swarm.listen()` and `swarm.on("connection", ...)` cannot be
+// undone without destroying the swarm (which is shared with consumers), so
+// we only ever set them up once per process and gate inbound RPC mounting
+// inside the listener on `hasActiveProviders()`.
+let listenerAttached = false;
+
+// Consumers reach the provider by calling `dht.connect(publicKey)` directly,
+// so the provider only needs its DHT server bound on its keyPair — no topic
+// announce required. `swarm.listen()` is the minimal operation that makes
+// the keyPair reachable on the DHT.
+//
+// This handler is idempotent: a second `startQVACProvider()` call returns
+// success without re-listening, re-attaching listeners, or double-counting
+// the active-provider counter (which would prevent a single `stopQVACProvider`
+// from cleanly shutting things down).
 export async function provideHandler(
   request: ProvideRequest,
 ): Promise<ProvideResponse> {
@@ -13,62 +33,53 @@ export async function provideHandler(
   });
 
   logger.debug("🚀 Provide request received:", request);
-  logger.debug("🔍 Swarm keyPair exists:", !!swarm.keyPair);
-  logger.debug(
-    "🔍 Swarm publicKey:",
-    swarm.keyPair?.publicKey?.toString("hex")?.substring(0, 16),
-  );
 
   try {
-    logger.debug("⚡ Starting provide handler execution");
     const pubKey = swarm.keyPair.publicKey;
-    logger.debug("🔑 Got public key:", pubKey.toString("hex"));
+    logger.debug("🔑 Provider public key:", pubKey.toString("hex"));
 
-    // Use provided topic from hex string
-    const topic = Buffer.from(request.topic, "hex");
+    if (hasActiveProviders()) {
+      logger.info("ℹ️ Provider already running, returning existing identity");
+      return {
+        type: "provide" as const,
+        success: true,
+        publicKey: pubKey.toString("hex"),
+      };
+    }
 
-    // Join topic as server (provider)
-    logger.info("🌐 Joining topic as server...");
-    const discovery = swarm.join(topic, { server: true, client: false });
-    logger.debug("📡 Discovery object created:", !!discovery);
+    // We must wait for the DHT routing table to populate BEFORE announcing.
+    // `swarm.listen()` only does a single initial announce using whatever
+    // peers are in the routing table at that moment — if the DHT isn't
+    // bootstrapped yet, that announce reaches very few nodes and consumers
+    // won't be able to find us via dht.connect(publicKey).
+    logger.info("🌐 Waiting for DHT to fully bootstrap...");
+    await swarm.dht.fullyBootstrapped();
 
-    // Wait for the topic to be fully announced on the DHT
-    logger.debug("⏳ Waiting for topic announcement...");
-    await discovery.flushed();
-    logger.info(`✅ Topic announced: ${topic.toString("hex")}`);
+    logger.info("🌐 Announcing provider on DHT (binding keyPair)...");
+    await swarm.listen();
+    logger.info("🎯 Provider is listening and ready to accept connections");
 
-    // Wait for connections
-    logger.debug("⏳ Waiting for swarm flush...");
-    await swarm.flush();
-    logger.info(
-      `🎯 Ready to accept connections on topic: ${topic.toString("hex").substring(0, 16)}...`,
-    );
+    if (!listenerAttached) {
+      setupConnectionHandlers(swarm);
+      listenerAttached = true;
+    }
+    registerProvider();
 
-    // Handle incoming connections
-    setupConnectionHandlers(swarm);
-
-    registerProviderTopic(topic.toString("hex"));
-
-    logger.debug("🏁 About to return success response...");
-    const response = {
+    return {
       type: "provide" as const,
       success: true,
       publicKey: pubKey.toString("hex"),
     };
-    logger.debug("📤 Returning response:", response);
-    return response;
   } catch (error) {
     logger.error("❌ Error in provide handler:", error);
     logger.error(
       "❌ Error stack:",
       error instanceof Error ? error.stack : "No stack trace",
     );
-    const errorResponse = {
+    return {
       type: "provide" as const,
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",
     };
-    logger.debug("📤 Returning error response:", errorResponse);
-    return errorResponse;
   }
 }

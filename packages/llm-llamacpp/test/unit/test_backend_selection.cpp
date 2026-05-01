@@ -451,6 +451,28 @@ TEST_F(BackendSelectionTest, TryMainGpuFromMapWithEmptyMap) {
   EXPECT_TRUE(configFilemap.empty());
 }
 
+// Test tryMainGpuFromMap with underscore variant "main_gpu"
+TEST_F(BackendSelectionTest, TryMainGpuFromMapAcceptsUnderscoreVariant) {
+  std::unordered_map<std::string, std::string> configFilemap;
+  configFilemap["main_gpu"] = "0";
+
+  auto result = tryMainGpuFromMap(configFilemap);
+
+  ASSERT_TRUE(result.has_value());
+  ASSERT_TRUE(std::holds_alternative<int>(result.value()));
+  EXPECT_EQ(std::get<int>(result.value()), 0);
+  EXPECT_TRUE(configFilemap.empty());
+}
+
+// Test tryMainGpuFromMap rejects both "main-gpu" and "main_gpu" present
+TEST_F(BackendSelectionTest, TryMainGpuFromMapRejectsBothVariants) {
+  std::unordered_map<std::string, std::string> configFilemap;
+  configFilemap["main-gpu"] = "1";
+  configFilemap["main_gpu"] = "0";
+
+  EXPECT_THROW(tryMainGpuFromMap(configFilemap), qvac_errors::StatusError);
+}
+
 // Integration test: chooseBackend with main-gpu integer index
 TEST_F(BackendSelectionTest, ChooseBackendWithMainGpuIntegerIndex) {
   mockBackend.addDevice(createIGPUDevice(MALI_DESC, VULKAN0_BACK));

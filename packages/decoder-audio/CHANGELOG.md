@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.8] - 2026-04-28
+
+This release bumps `@qvac/infer-base` from `^0.1.0` to `^0.4.0`. Together with `@qvac/infer-base@0.4.1` (which drops the legacy `@qvac/dl-hyperdrive` peer-dep), this stops `@qvac/dl-*` packages from being pulled into consumers' install trees through `@qvac/decoder-audio`. Public behavior of `FFmpegDecoder` is unchanged.
+
+### Changed
+
+- Bumped `@qvac/infer-base` direct dependency from `^0.1.0` to `^0.4.0`. Consumers using `decoder-audio` no longer carry the legacy `@qvac/infer-base@0.1.x` line — and therefore no longer inherit its `@qvac/dl-hyperdrive` peer-dep — in their dependency tree.
+
+### Notes
+
+The `BaseInference` public surface (constructor signature, lifecycle methods) is identical between `@qvac/infer-base` 0.1.1 and 0.4.x, so `class FFmpegDecoder extends BaseInference` continues to work unchanged. Lint clean + 9/9 brittle-bare unit tests pass against the new range.
+
+## Pull Requests
+
+- [#1761](https://github.com/tetherto/qvac/pull/1761) - QVAC-14392 chore: drop @qvac/dl-hyperdrive peer-dep chain in infer-base + decoder-audio
+
 ## [0.3.6]
 
 ### Changed
