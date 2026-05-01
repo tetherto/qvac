@@ -18,9 +18,6 @@ compile_commands.json
 # Auto-generated performance report from local test runs (CI uploads its own).
 test/results/
 
-# Local ad-hoc scripts used during development; not shipped, not committed.
-scripts/check-js-validation.js
-
 # Internal validation set (confidential, must never be committed).
 test/images/internal/
 proposal/dataset_val/
