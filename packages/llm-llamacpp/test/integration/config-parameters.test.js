@@ -218,6 +218,22 @@ const scenarios = [
     skipInferenceAfterLoad: true
   },
   {
+    name: 'main_gpu underscore variant must load identically to main-gpu hyphen',
+    overrides: {
+      main_gpu: '1',
+      n_predict: '16'
+    },
+    skipInferenceAfterLoad: true
+  },
+  {
+    name: 'main-gpu hyphen variant loads successfully',
+    overrides: {
+      'main-gpu': '1',
+      n_predict: '16'
+    },
+    skipInferenceAfterLoad: true
+  },
+  {
     name: 'Seed -1 accepted',
     overrides: {
       seed: '-1',
@@ -402,6 +418,8 @@ async function executeScenario (t, scenario) {
         )
       }
     }
+  } catch (err) {
+    t.fail(`${scenario.name}: unexpected error: ${err.message || err}`)
   } finally {
     if (scenario.cleanupDelayMs) {
       await new Promise(resolve => setTimeout(resolve, scenario.cleanupDelayMs))

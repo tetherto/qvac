@@ -16,7 +16,7 @@ function isModelDescriptor(value: unknown): value is { src: string } {
     typeof value === "object" &&
     value !== null &&
     "src" in value &&
-    typeof (value as { src: unknown }).src === "string"
+    typeof (value).src === "string"
   );
 }
 

@@ -2,13 +2,15 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { readBody, sendJson, sendError, initSSE, sendSSE, endSSE } from '../../../http.js'
 import { resolveModelAlias } from '../../../config.js'
 import { sdkCompletion } from '../../../core/sdk.js'
-import type { SDKTool, SDKGenerationParams } from '../../../core/sdk.js'
+import type { SDKTool, SDKGenerationParams, SDKResponseFormat } from '../../../core/sdk.js'
 import {
   openaiMessagesToHistory,
   openaiToolsToSdk,
   sdkToolCallsToOpenai,
   sdkToolCallsToOpenaiDeltas,
   extractGenerationParams,
+  extractResponseFormat,
+  InvalidResponseFormatError,
   logUnsupportedParams
 } from '../translate.js'
 import type { RouteContext } from '../../types.js'
@@ -64,17 +66,39 @@ export async function handleChatCompletions (req: IncomingMessage, res: ServerRe
   }>)
   const tools = openaiToolsToSdk(body['tools'] as Array<{ type: string; function?: { name: string; description?: string; parameters?: Record<string, unknown> } }> | undefined)
   const generationParams = extractGenerationParams(body)
+
+  let responseFormat: SDKResponseFormat | undefined
+  try {
+    responseFormat = extractResponseFormat(body)
+  } catch (err) {
+    if (err instanceof InvalidResponseFormatError) {
+      sendError(res, 400, 'invalid_response_format', err.message)
+      return
+    }
+    throw err
+  }
+
+  if (responseFormat && responseFormat.type !== 'text' && tools && tools.length > 0) {
+    sendError(
+      res,
+      400,
+      'invalid_response_format',
+      '"response_format" (json_object/json_schema) cannot be combined with "tools".'
+    )
+    return
+  }
+
   const modelAlias = alias
   const streaming = Boolean(body['stream'])
   const msgCount = (body['messages'] as unknown[]).length
 
-  ctx.logger.info(`  chat model=${modelAlias} messages=${msgCount} stream=${streaming}${tools ? ` tools=${tools.length}` : ''}${generationParams ? ` genParams=${JSON.stringify(generationParams)}` : ''}`)
+  ctx.logger.info(`  chat model=${modelAlias} messages=${msgCount} stream=${streaming}${tools ? ` tools=${tools.length}` : ''}${generationParams ? ` genParams=${JSON.stringify(generationParams)}` : ''}${responseFormat ? ` responseFormat=${responseFormat.type}` : ''}`)
 
   try {
     if (streaming) {
-      await handleStreamingCompletion(res, { sdkModelId, history, tools, generationParams, modelAlias, logger: ctx.logger })
+      await handleStreamingCompletion(res, { sdkModelId, history, tools, generationParams, responseFormat, modelAlias, logger: ctx.logger })
     } else {
-      await handleBlockingCompletion(res, { sdkModelId, history, tools, generationParams, modelAlias, logger: ctx.logger })
+      await handleBlockingCompletion(res, { sdkModelId, history, tools, generationParams, responseFormat, modelAlias, logger: ctx.logger })
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
@@ -88,6 +112,7 @@ interface CompletionParams {
   history: Array<{ role: string; content: string }>
   tools?: SDKTool[] | undefined
   generationParams?: SDKGenerationParams | undefined
+  responseFormat?: SDKResponseFormat | undefined
   modelAlias: string
   logger: import('../../../../logger.js').Logger
 }
@@ -98,7 +123,8 @@ async function handleBlockingCompletion (res: ServerResponse, params: Completion
     history: params.history,
     stream: false,
     tools: params.tools,
-    generationParams: params.generationParams
+    generationParams: params.generationParams,
+    responseFormat: params.responseFormat
   })
 
   const text = await result.text
@@ -143,7 +169,8 @@ async function handleStreamingCompletion (res: ServerResponse, params: Completio
     history: params.history,
     stream: true,
     tools: params.tools,
-    generationParams: params.generationParams
+    generationParams: params.generationParams,
+    responseFormat: params.responseFormat
   })
 
   initSSE(res)

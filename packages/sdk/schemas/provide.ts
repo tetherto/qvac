@@ -7,15 +7,12 @@ export const firewallConfigSchema = z.object({
 
 export const provideParamsSchema = z
   .object({
-    topic: z.string(),
     firewall: firewallConfigSchema.optional(),
   })
   .strict();
 
 export const provideRequestSchema = provideParamsSchema.extend({
   type: z.literal("provide"),
-  topic: z.string(),
-  firewall: firewallConfigSchema.optional(),
 });
 
 export const provideResponseSchema = z.object({

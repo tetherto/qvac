@@ -1,13 +1,17 @@
 import { z } from "zod";
 
 export const embedParamsSchema = z.object({
-  modelId: z.string(),
-  text: z.union([
-    z.string().min(1, "Text cannot be empty"),
-    z
-      .array(z.string().min(1, "Text cannot be empty"))
-      .min(1, "Text array cannot be empty"),
-  ]),
+  modelId: z.string().describe("The identifier of the embedding model to use"),
+  text: z
+    .union([
+      z.string().min(1, "Text cannot be empty"),
+      z
+        .array(z.string().min(1, "Text cannot be empty"))
+        .min(1, "Text array cannot be empty"),
+    ])
+    .describe(
+      "The input text(s) to embed. A single string returns `number[]`; an array returns `number[][]`.",
+    ),
 });
 
 export const embedRequestSchema = embedParamsSchema.extend({
@@ -15,10 +19,19 @@ export const embedRequestSchema = embedParamsSchema.extend({
 });
 
 export const embedStatsSchema = z.object({
-  totalTime: z.number().optional(),
-  tokensPerSecond: z.number().optional(),
-  totalTokens: z.number().optional(),
-  backendDevice: z.enum(["cpu", "gpu"]).optional(),
+  totalTime: z
+    .number()
+    .optional()
+    .describe("Total embedding time in milliseconds"),
+  tokensPerSecond: z
+    .number()
+    .optional()
+    .describe("Tokens processed per second"),
+  totalTokens: z.number().optional().describe("Total tokens processed"),
+  backendDevice: z
+    .enum(["cpu", "gpu"])
+    .optional()
+    .describe("Compute backend used for inference"),
 });
 
 export const embedResponseSchema = z.object({
@@ -26,8 +39,11 @@ export const embedResponseSchema = z.object({
   success: z.boolean(),
   embedding: z
     .union([z.array(z.number()), z.array(z.array(z.number()))])
-    .default([]),
-  stats: embedStatsSchema.optional(),
+    .default([])
+    .describe(
+      "The embedding vector(s). Single `number[]` when `text` is a string; `number[][]` when `text` is an array.",
+    ),
+  stats: embedStatsSchema.optional().describe("Performance statistics"),
   error: z.string().optional(),
 });
 

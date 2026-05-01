@@ -181,6 +181,32 @@ function buildTextToSpeechStreamRequest(
   };
 }
 
+/**
+ * Converts text to speech audio using a loaded TTS model.
+ *
+ * Three modes selected by `params.stream` and `params.sentenceStream`:
+ *
+ * - `stream: false` (default) — collect all PCM samples and resolve once via
+ *   `result.buffer` (`Promise<number[]>`). `bufferStream` is empty.
+ * - `stream: true` — yield PCM samples through `result.bufferStream`
+ *   (`AsyncGenerator<number>`) as they arrive. `buffer` resolves to an empty
+ *   array.
+ * - `stream: true, sentenceStream: true` — also exposes `result.chunkUpdates`
+ *   (`AsyncGenerator<TtsSentenceChunkUpdate>`) so callers can mux per-sentence
+ *   metadata with the audio. Multiple consumers can iterate the response
+ *   independently via the underlying `TtsMulticast`.
+ *
+ * `result.done` resolves to `true` when synthesis completes cleanly, `false`
+ * if the consumer breaks out before the terminal frame, or rejects on a
+ * pipeline error. Awaiting `done` is safe even when no stream is iterated.
+ *
+ * @param params - TTS request parameters (see `TtsClientParamsInput`).
+ * @param options - Optional RPC options (timeout, profiling, force new connection).
+ * @returns A `TextToSpeechStreamResult` with `bufferStream`, `buffer`, `done`,
+ *          and (when `sentenceStream: true`) `chunkUpdates`.
+ * @throws {TextToSpeechStreamFailedError} When `sentenceStream: true` is paired
+ *         with `stream: false`, or when the underlying RPC stream errors.
+ */
 export function textToSpeech(
   params: TtsClientParamsInput,
   options?: RPCOptions,

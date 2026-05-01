@@ -38,6 +38,7 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ContextSlider.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/GenerationParamsApply.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuningHelpers.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
@@ -112,6 +113,7 @@ target_link_libraries(
     llama::llama
     llama::common
     llama::mtmd
+    nlohmann_json::nlohmann_json
     GTest::gtest
     GTest::gtest_main
     GTest::gmock_main

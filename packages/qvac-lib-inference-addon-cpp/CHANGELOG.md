@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.1.5] - 2026-04-30
+
+### Fixed
+- Keep JS output callback state alive until pending libuv async delivery is closed, avoiding teardown races.
+- Work around a Bare/libjs first `js_create_double()` issue on GitHub Azure win32-x64 runners by routing addon double creation through `js::Number`.
+
+### Added
+- Add JS integration CI coverage for callback lifetime and number creation across desktop platforms.
+
 ## [1.1.4] - 2026-03-30
 
 ### Breaking
