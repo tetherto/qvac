@@ -28,9 +28,15 @@ const PADDLE_OCR_CONFIG = {
   ctx_size: '4096'
 }
 
+const isIos = platform === 'ios'
+
 const TEST_CONSTANTS = {
   timeout: 1_800_000,
-  maxTokens: '2048'
+  // iOS runs both clip-vision and the LLM on CPU (Metal isn't wired for the
+  // multimodal projector path), so OCR generation is much slower than on
+  // Android (Adreno OpenCL) or Linux (Vulkan). Cap to 768 on
+  // iOS to reduce runtime.
+  maxTokens: isIos ? '768' : '2048'
 }
 
 const DEVICE_CONFIGS = (isMobile || useCpu)
