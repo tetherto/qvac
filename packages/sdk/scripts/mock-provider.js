@@ -7,26 +7,15 @@ import Hyperswarm from "hyperswarm";
 import RPC from "bare-rpc";
 import process from "bare-process";
 
-const topic = process.argv[2]
-  ? Buffer.from(process.argv[2], "hex")
-  : Buffer.alloc(32, "qvac-test-topic");
-console.log(`Joining topic: ${topic.toString("hex")}`);
-
 const seed = Buffer.alloc(32, "qvac-test-seed");
 
 const swarm = new Hyperswarm({ seed });
 
 console.log(`Swarm key pair: ${swarm.keyPair.publicKey.toString("hex")}`);
 
-// Join topic as server (provider)
-const discovery = swarm.join(topic, { server: true, client: false });
-
-// Wait for the topic to be fully announced on the DHT
-await discovery.flushed();
-console.log(`✅ Topic announced: ${topic.toString("hex")}`);
-
-// Wait for connections
-await swarm.flush();
+// Bind the DHT server on the keyPair — no topic needed, consumers reach us
+// directly via dht.connect(publicKey).
+await swarm.listen();
 console.log(`🎯 Ready to accept connections`);
 
 swarm.on("connection", (conn) => {

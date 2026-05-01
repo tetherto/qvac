@@ -10,6 +10,6 @@ export function isTerminalChunk(value: unknown): value is { done: true } {
     typeof value === "object" &&
     value !== null &&
     "done" in value &&
-    (value as { done: unknown }).done === true
+    (value).done === true
   );
 }
