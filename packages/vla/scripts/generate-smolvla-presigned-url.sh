@@ -38,9 +38,28 @@ MODEL_KEY="${BASE_PATH}/${LATEST_DATE}/${MODEL_NAME}"
 
 # Verify model exists
 echo "🔍 Verifying model exists..."
-if ! aws s3 ls "s3://${BUCKET}/${MODEL_KEY}" --region "$REGION" > /dev/null 2>&1; then
+HEAD_JSON=$(aws s3api head-object --bucket "$BUCKET" --key "$MODEL_KEY" --region "$REGION" 2>/dev/null || true)
+if [ -z "$HEAD_JSON" ]; then
     echo "❌ Model not found at expected key"
     exit 1
+fi
+
+# Capture ContentLength so the test runner can verify the cached download
+# matches the publisher's expected size exactly (instead of a >= 100MB
+# floor that lets a partial download masquerade as a complete one).
+MODEL_SIZE=$(echo "$HEAD_JSON" | jq -r '.ContentLength // empty')
+
+# Look for a sibling .sha256 sidecar (single-line: "<hex>  filename" or
+# just "<hex>"). When present it lets the test harness do a full content
+# check; when absent we fall back to size-only verification.
+MODEL_SHA256=""
+SHA256_KEY="${MODEL_KEY}.sha256"
+if aws s3api head-object --bucket "$BUCKET" --key "$SHA256_KEY" --region "$REGION" > /dev/null 2>&1; then
+    SHA_TMP=$(mktemp)
+    if aws s3 cp "s3://${BUCKET}/${SHA256_KEY}" "$SHA_TMP" --region "$REGION" --quiet; then
+        MODEL_SHA256=$(awk '{print $1}' "$SHA_TMP" | head -1 | tr -d '[:space:]')
+    fi
+    rm -f "$SHA_TMP"
 fi
 
 # The model is ~1-4GB, the mobile build+upload+schedule window can easily
@@ -54,14 +73,20 @@ if [ -z "$MODEL_URL" ]; then
 fi
 
 echo "   ✅ ${MODEL_NAME}"
+if [ -n "$MODEL_SIZE" ]; then echo "   size=${MODEL_SIZE} bytes"; fi
+if [ -n "$MODEL_SHA256" ]; then echo "   sha256 sidecar found"; fi
 
 if [ -n "$GITHUB_ENV" ]; then
     echo "SMOLVLA_MODEL_URL=${MODEL_URL}" >> "$GITHUB_ENV"
+    echo "SMOLVLA_MODEL_SIZE=${MODEL_SIZE}" >> "$GITHUB_ENV"
+    echo "SMOLVLA_MODEL_SHA256=${MODEL_SHA256}" >> "$GITHUB_ENV"
     echo "✅ URL exported to GITHUB_ENV"
 else
     echo ""
-    echo "📋 Export this environment variable:"
+    echo "📋 Export these environment variables:"
     echo "export SMOLVLA_MODEL_URL=\"${MODEL_URL}\""
+    echo "export SMOLVLA_MODEL_SIZE=\"${MODEL_SIZE}\""
+    echo "export SMOLVLA_MODEL_SHA256=\"${MODEL_SHA256}\""
 fi
 
 echo ""

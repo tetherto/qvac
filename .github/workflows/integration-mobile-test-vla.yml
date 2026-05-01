@@ -366,15 +366,25 @@ jobs:
         working-directory: ${{ env.ADDON_DIR }}
         env:
           SMOLVLA_MODEL_URL: ${{ env.SMOLVLA_MODEL_URL }}
+          SMOLVLA_MODEL_SIZE: ${{ env.SMOLVLA_MODEL_SIZE }}
+          SMOLVLA_MODEL_SHA256: ${{ env.SMOLVLA_MODEL_SHA256 }}
         run: |
           echo "📝 Creating model URL config files for mobile app bundling..."
           echo "   SMOLVLA_MODEL_URL: ${SMOLVLA_MODEL_URL:+SET}${SMOLVLA_MODEL_URL:-NOTSET}"
+          echo "   SMOLVLA_MODEL_SIZE: ${SMOLVLA_MODEL_SIZE:-unknown}"
+          echo "   SMOLVLA_MODEL_SHA256: ${SMOLVLA_MODEL_SHA256:+SET}${SMOLVLA_MODEL_SHA256:-NOTSET}"
 
           mkdir -p test/mobile/testAssets
 
           if [ -n "${SMOLVLA_MODEL_URL:-}" ]; then
-            jq -n --arg url "$SMOLVLA_MODEL_URL" \
-              '{modelUrl: $url}' > test/mobile/testAssets/smolvla-urls.json
+            jq -n \
+              --arg url "$SMOLVLA_MODEL_URL" \
+              --arg size "${SMOLVLA_MODEL_SIZE:-}" \
+              --arg sha256 "${SMOLVLA_MODEL_SHA256:-}" \
+              '{modelUrl: $url}
+                + (if $size   != "" then {sizeBytes: ($size | tonumber)} else {} end)
+                + (if $sha256 != "" then {sha256: $sha256}              else {} end)' \
+              > test/mobile/testAssets/smolvla-urls.json
             echo "   ✅ SmolVLA URL bundled ($(wc -c < test/mobile/testAssets/smolvla-urls.json) bytes)"
             # Do not echo the URL itself (it's a presigned URL with creds).
           else

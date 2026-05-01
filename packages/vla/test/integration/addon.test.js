@@ -229,6 +229,48 @@ async function _downloadFile (url, destPath, maxRedirects = 5, maxRetries = 3) {
   throw new Error(`[vla-model] download failed after ${maxRetries} attempts: ${lastErr && lastErr.message}`)
 }
 
+// Streaming SHA-256 over a local file. Used to validate the downloaded GGUF
+// against the publisher-supplied digest in smolvla-urls.json. Returns lower-
+// case hex; resolves to null if the bare-crypto stream isn't available so
+// the caller can fall back to size-only validation.
+async function _sha256File (filePath) {
+  let crypto
+  try { crypto = require('bare-crypto') } catch (_) { return null }
+  return await new Promise((resolve, reject) => {
+    let hash
+    try { hash = crypto.createHash('sha256') } catch (_) { return resolve(null) }
+    const stream = fs.createReadStream(filePath)
+    stream.on('data', (chunk) => hash.update(chunk))
+    stream.on('error', reject)
+    stream.on('end', () => resolve(hash.digest('hex').toLowerCase()))
+  })
+}
+
+// Verify a cached GGUF against publisher metadata. Strictest check first:
+// exact byte size, then sha256 if both publisher and runtime can compute it.
+// Returns { ok: true } on match, { ok: false, reason } otherwise.
+async function _verifyCachedModel (filePath, urlConfig) {
+  const stat = fs.statSync(filePath)
+  if (urlConfig && Number.isInteger(urlConfig.sizeBytes)) {
+    if (stat.size !== urlConfig.sizeBytes) {
+      return { ok: false, reason: `size ${stat.size} != expected ${urlConfig.sizeBytes}` }
+    }
+  } else {
+    const cachedMB = stat.size / (1024 * 1024)
+    if (cachedMB < 100) {
+      return { ok: false, reason: `size ${cachedMB.toFixed(2)}MB < 100MB floor` }
+    }
+  }
+  if (urlConfig && typeof urlConfig.sha256 === 'string' && urlConfig.sha256.length === 64) {
+    const got = await _sha256File(filePath)
+    if (got && got !== urlConfig.sha256.toLowerCase()) {
+      return { ok: false, reason: `sha256 ${got} != expected ${urlConfig.sha256}` }
+    }
+    if (got) console.log(`[vla-model] sha256 verified: ${got.slice(0, 12)}…`)
+  }
+  return { ok: true }
+}
+
 async function _ensureMobileModel () {
   const modelFilename = 'smolvla-libero-vision-q8.gguf'
   const writableRoot = global.testDir || '/tmp'
@@ -236,26 +278,28 @@ async function _ensureMobileModel () {
   try { fs.mkdirSync(modelsDir, { recursive: true }) } catch (_) {}
   const destPath = path.join(modelsDir, modelFilename)
 
-  // Cache hit: SmolVLA f32 is large (>800MB); re-downloading for every test
-  // variant wastes bandwidth and flakes on Device Farm's mobile network.
-  if (fs.existsSync(destPath)) {
-    const cachedMB = fs.statSync(destPath).size / (1024 * 1024)
-    if (cachedMB >= 100) {
-      console.log(`[vla-model] reusing cached GGUF: ${destPath} (${cachedMB.toFixed(1)}MB)`)
-      return destPath
-    }
-    console.log(`[vla-model] cached GGUF undersized (${cachedMB.toFixed(2)}MB) — re-downloading`)
-  }
-
   const urlConfig = _loadUrlsConfig()
   if (!urlConfig || !urlConfig.modelUrl) {
     throw new Error('smolvla-urls.json not found in testAssets — cannot download GGUF on mobile')
   }
 
+  // Cache hit: SmolVLA is large (>800MB); re-downloading for every test
+  // variant wastes bandwidth and flakes on Device Farm's mobile network.
+  if (fs.existsSync(destPath)) {
+    const verdict = await _verifyCachedModel(destPath, urlConfig)
+    if (verdict.ok) {
+      const mb = fs.statSync(destPath).size / (1024 * 1024)
+      console.log(`[vla-model] reusing cached GGUF: ${destPath} (${mb.toFixed(1)}MB)`)
+      return destPath
+    }
+    console.log(`[vla-model] cached GGUF rejected (${verdict.reason}) — re-downloading`)
+    try { fs.unlinkSync(destPath) } catch (_) {}
+  }
+
   await _downloadFile(urlConfig.modelUrl, destPath)
-  const sizeMB = fs.statSync(destPath).size / (1024 * 1024)
-  if (sizeMB < 100) {
-    throw new Error(`downloaded SmolVLA GGUF looks corrupted (${sizeMB.toFixed(2)}MB)`)
+  const verdict = await _verifyCachedModel(destPath, urlConfig)
+  if (!verdict.ok) {
+    throw new Error(`downloaded SmolVLA GGUF failed verification: ${verdict.reason}`)
   }
   return destPath
 }
@@ -547,29 +591,29 @@ async function _runEndToEnd (t, modelPath, backend, fixtureName) {
         `mean|Δ|=${cmp.action_mean_abs_diff.toFixed(4)} cos=${cmp.action_cos_sim.toFixed(4)} ` +
         `(${cmp.compared} values)`
       )
-      // Tolerances: the vision encoder is Q8_0-quantized on its linear
-      // weights, which on the synthetic gray-image fixture occasionally
-      // flips the gripper dim (action[6], near-binary in [-1, 1]) at
-      // decision boundaries. Position / rotation dims stay tight
-      // (mean |Δ| ≈ 0.01). LIBERO closed-loop eval shows equivalent task
-      // success vs the F32 GGUF and the PyTorch reference (within the n=30
-      // statistical-noise band). The bound below is therefore set to
-      // tolerate gripper-flip on the synthetic fixture without masking
-      // real regressions; the real-LIBERO fixture and Vulkan path stay
-      // tight on every platform.
+      // Tolerances differ per fixture so the synthetic gripper-flip noise
+      // doesn't drag the bound on the real-LIBERO fixture down with it:
       //
-      // Measured max |Δ| / cos by platform:
-      //   real fixture (any backend / any platform):  <0.16 / >0.999
-      //   fixed fixture / Vulkan (any platform):       <0.6  / >0.997
-      //   fixed fixture / CPU / linux gcc:             ~1.13 / 0.989
-      //   fixed fixture / CPU / windows MSVC:          ~1.82 / 0.939
-      //   fixed fixture / CPU / darwin clang:          ~1.13 / 0.989
-      // Windows MSVC's CPU dequant has noticeably wider variance on the
-      // synthetic fixture; bumping the cap to 2.5 / 0.90 absorbs that
-      // without losing real-failure coverage (any actual regression would
-      // fail the real-LIBERO fixture too, which is on every platform).
-      const maxAbsBound = 2.5
-      const cosBound = 0.90
+      //   real fixture (any backend / any platform):     <0.16 / >0.999
+      //   fixed fixture / Vulkan (any platform):         <0.6  / >0.997
+      //   fixed fixture / CPU / linux gcc:               ~1.13 / 0.989
+      //   fixed fixture / CPU / windows MSVC:            ~1.82 / 0.939
+      //   fixed fixture / CPU / darwin clang:            ~1.13 / 0.989
+      //
+      // The vision encoder is Q8_0-quantized on its linear weights, which
+      // on the synthetic gray-image fixture occasionally flips the gripper
+      // dim (action[6], near-binary in [-1, 1]) at decision boundaries.
+      // Position / rotation dims stay tight (mean |Δ| ≈ 0.01). LIBERO
+      // closed-loop eval shows equivalent task success vs the F32 GGUF and
+      // the PyTorch reference within the n=30 statistical-noise band.
+      //
+      // Real fixture: tight bounds — any regression here is real.
+      // Fixed fixture: bounds with headroom over the worst measured
+      // platform (Windows MSVC), tight enough to catch gross regressions
+      // without flaking on Q8 dequant variance.
+      const isReal = fixtureName === 'real'
+      const maxAbsBound = isReal ? 0.3 : 2.2
+      const cosBound = isReal ? 0.995 : 0.92
       t.ok(
         cmp.action_max_abs_diff < maxAbsBound,
         `[${tag}] max |Δ| ${cmp.action_max_abs_diff.toFixed(4)} < ${maxAbsBound} vs PyTorch`
