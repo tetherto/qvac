@@ -12,7 +12,11 @@ const platform = os.platform()
 const arch = os.arch()
 const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
+const isDarwin = platform === 'darwin'
+const isMobile = platform === 'ios' || platform === 'android'
 const useCpu = isDarwinX64 || isLinuxArm64
+
+const useCpuForVision = useCpu || isDarwin || isMobile
 
 const GEMMA4_MODEL = {
   llmModel: {
@@ -180,7 +184,7 @@ test('Gemma 4 can describe an image', {
 
   const loader = new FilesystemDL({ dirPath })
   const config = {
-    device: useCpu ? 'cpu' : 'gpu',
+    device: useCpuForVision ? 'cpu' : 'gpu',
     gpu_layers: '98',
     ctx_size: '2048',
     temp: '0',

@@ -28,8 +28,6 @@ const PADDLE_OCR_CONFIG = {
   ctx_size: '4096'
 }
 
-const isIos = platform === 'ios'
-
 const TEST_CONSTANTS = {
   timeout: 1_800_000,
   // Mobile (iOS Metal + Android Mali Vulkan / Adreno OpenCL) runs the
