@@ -39,13 +39,15 @@ runs:
         github.event_name == 'pull_request_target' ||
         github.event_name == 'pull_request'
       continue-on-error: true
+      env:
+        PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+        PR_FORK_URL: ${{ github.event.pull_request.head.repo.clone_url }}
+        PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
       run: |
         git remote set-url origin https://github.com/${{ github.repository }}.git
         git fetch origin +refs/heads/*:refs/remotes/origin/*
-        git fetch origin ${{ github.event.pull_request.base.ref }}:refs/remotes/origin/${{ github.event.pull_request.base.ref }}
-        PR_FORK_URL=${{ github.event.pull_request.head.repo.clone_url }}
-        PR_HEAD_REF=${{ github.event.pull_request.head.ref }}
-        git fetch origin $PR_HEAD_REF:refs/pr/head || git fetch $PR_FORK_URL $PR_HEAD_REF:refs/pr/head
+        git fetch origin "$PR_BASE_REF:refs/remotes/origin/$PR_BASE_REF"
+        git fetch origin "$PR_HEAD_REF:refs/pr/head" || git fetch "$PR_FORK_URL" "$PR_HEAD_REF:refs/pr/head"
 
     - name: Check PR status vs. target branch
       shell: bash
