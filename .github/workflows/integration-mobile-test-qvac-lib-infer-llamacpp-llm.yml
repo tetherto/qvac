@@ -1157,13 +1157,14 @@ jobs:
             local pool_arn="$1"
             local name="$2"
             local spec_arn="$3"
+            local job_timeout="${4:-60}"
             aws devicefarm schedule-run \
               --project-arn "$PROJECT_ARN" \
               --device-pool-arn "$pool_arn" \
               --app-arn "$APP_ARN" \
               --name "$name" \
               --test "type=APPIUM_NODE,testPackageArn=$TEST_PACKAGE_ARN,testSpecArn=$spec_arn" \
-              --execution-configuration jobTimeoutMinutes=60 \
+              --execution-configuration jobTimeoutMinutes=$job_timeout \
               --query 'run.arn' --output text
           }
 
@@ -1178,7 +1179,7 @@ jobs:
             RUN_ARN_1=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-Android-GroupA" "$TEST_SPEC_ARN_A")
             echo "✅ Android Group A scheduled: $RUN_ARN_1"
 
-            RUN_ARN_2=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-Android-GroupB" "$TEST_SPEC_ARN_B")
+            RUN_ARN_2=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-Android-GroupB" "$TEST_SPEC_ARN_B" 90)
             echo "✅ Android Group B scheduled: $RUN_ARN_2"
 
             echo "run_arn_1=$RUN_ARN_1" >> $GITHUB_OUTPUT

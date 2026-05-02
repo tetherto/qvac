@@ -30,7 +30,10 @@ const PADDLE_OCR_CONFIG = {
 
 const TEST_CONSTANTS = {
   timeout: 1_800_000,
-  maxTokens: '2048'
+  // Mobile (iOS Metal + Android Mali Vulkan / Adreno OpenCL) runs the
+  // multimodal projector + LLM decode path much slower than desktop GPU.
+  // Cap to 768 on mobile to keep runtime within the WDIO spec window.
+  maxTokens: isMobile ? '768' : '2048'
 }
 
 const DEVICE_CONFIGS = (isMobile || useCpu)
