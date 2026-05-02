@@ -211,6 +211,7 @@ export const diffusionFusionFlux2Basic = createDiffusionTest(
     steps: 4,
     seed: 42,
   },
+  // Required by TestDefinition but effectively ignored - DiffusionExecutor.fusionFlux2Basic gates the result.
   { validation: "type", expectedType: "array" },
   600000,
 );

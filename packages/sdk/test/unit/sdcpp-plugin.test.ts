@@ -470,6 +470,24 @@ test("diffusionStreamRequestSchema: accepts a valid stream request with type lit
   t.is(result.success, true);
 });
 
+test("diffusionStreamRequestSchema: rejects when init_image and init_images are both set", (t) => {
+  const result = diffusionStreamRequestSchema.safeParse({
+    type: "diffusionStream",
+    modelId: "model-1",
+    prompt: "a cat",
+    init_image: "iVBORw0KGgoAAAANSUhEUg==",
+    init_images: ["iVBORw0KGgoAAAANSUhEUg=="],
+  });
+  t.is(result.success, false);
+  if (!result.success) {
+    const messages = result.error.issues.map((i) => i.message).join(" | ");
+    t.ok(
+      messages.includes("mutually exclusive"),
+      `expected mutual-exclusion message, got: ${messages}`,
+    );
+  }
+});
+
 // ---- sdcppConfigSchema: lora_apply_mode ----
 
 test("sdcppConfigSchema: accepts lora_apply_mode", (t) => {
