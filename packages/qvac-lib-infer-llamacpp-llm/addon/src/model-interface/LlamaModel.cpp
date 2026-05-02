@@ -141,7 +141,8 @@ void LlamaModel::tuneConfigMap(
   }
 
   constexpr int kAdrenoUbatchThreshold = 800;
-  const bool needsUbatch = adrenoVersion.has_value() &&
+  const bool needsUbatch = (isBitnet || isFinetuning) &&
+                           adrenoVersion.has_value() &&
                            adrenoVersion.value() >= kAdrenoUbatchThreshold;
   if (needsUbatch) {
     constexpr int64_t kAdrenoUbatchCap = 128;

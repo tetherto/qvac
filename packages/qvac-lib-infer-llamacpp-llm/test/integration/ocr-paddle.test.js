@@ -32,11 +32,10 @@ const isIos = platform === 'ios'
 
 const TEST_CONSTANTS = {
   timeout: 1_800_000,
-  // iOS runs both clip-vision and the LLM on CPU (Metal isn't wired for the
-  // multimodal projector path), so OCR generation is much slower than on
-  // Android (Adreno OpenCL) or Linux (Vulkan). Cap to 768 on
-  // iOS to reduce runtime.
-  maxTokens: isIos ? '768' : '2048'
+  // Mobile (iOS Metal + Android Mali Vulkan / Adreno OpenCL) runs the
+  // multimodal projector + LLM decode path much slower than desktop GPU.
+  // Cap to 768 on mobile to keep runtime within the WDIO spec window.
+  maxTokens: isMobile ? '768' : '2048'
 }
 
 const DEVICE_CONFIGS = (isMobile || useCpu)
