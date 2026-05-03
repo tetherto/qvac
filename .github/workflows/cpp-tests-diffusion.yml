@@ -135,6 +135,14 @@ jobs:
       #       echo "VCPKG_ROOT=/tmp/vcpkg" >> "$GITHUB_ENV"
       #     fi
 
+      - if: ${{ matrix.os == 'ubuntu-24.04' }}
+        name: Configure vcpkg in linux
+        shell: bash
+        run: |
+          git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git /tmp/vcpkg
+          /tmp/vcpkg/bootstrap-vcpkg.sh -disableMetrics
+          echo "VCPKG_ROOT=/tmp/vcpkg" >> "$GITHUB_ENV"
+
       - if: ${{ matrix.os == 'windows-11' }}
         name: Configure CMake generator on Windows
         shell: powershell
@@ -210,7 +218,6 @@ jobs:
         env:
           CC: clang-19
           CXX: clang++-19
-          VCPKG_ROOT: "/opt/vcpkg"
         run: |
           bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} -D BUILD_TESTING=ON -D ENABLE_COVERAGE=ON
           bare-make build --target addon-test
