@@ -210,6 +210,7 @@ jobs:
         env:
           CC: clang-19
           CXX: clang++-19
+          VCPKG_ROOT: "/opt/vcpkg"
         run: |
           bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} -D BUILD_TESTING=ON -D ENABLE_COVERAGE=ON
           bare-make build --target addon-test
