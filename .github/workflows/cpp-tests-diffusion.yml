@@ -139,6 +139,7 @@ jobs:
         name: Configure vcpkg in linux
         shell: bash
         run: |
+          rm -rf /tmp/vcpkg
           git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git /tmp/vcpkg
           /tmp/vcpkg/bootstrap-vcpkg.sh -disableMetrics
           echo "VCPKG_ROOT=/tmp/vcpkg" >> "$GITHUB_ENV"
