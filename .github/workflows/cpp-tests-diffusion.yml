@@ -40,7 +40,7 @@ jobs:
           - os: ubuntu-24.04
             platform: linux
             arch: x64
-            runner: ubuntu2204-x64-rtx4000
+            runner: qvac-ubuntu2204-x64-gpu
           - os: windows-11
             platform: windows
             runner: ai-run-windows11-gpu
