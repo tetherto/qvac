@@ -1,19 +1,5 @@
 name: On PR Close (BCI Whispercpp)
 
-<<<<<<< Updated upstream
-# Stub workflow on main so it can be dispatched from feature branches.
-# The real implementation lives on the bci-whispercpp feature branch.
-
-on:
-  workflow_dispatch:
-
-jobs:
-  noop:
-    runs-on: ubuntu-latest
-    steps:
-      - name: No-op stub
-        run: echo "Stub workflow on main; real implementation lives on the bci-whispercpp feature branch."
-=======
 on:
   pull_request:
     types:
@@ -78,4 +64,3 @@ jobs:
       pattern: ${{ inputs.pattern }}
       packages: ${{ inputs.packages || 'bci-whispercpp' }}
       dry-run: ${{ github.event_name == 'pull_request' && true || inputs.dry-run }}
->>>>>>> Stashed changes

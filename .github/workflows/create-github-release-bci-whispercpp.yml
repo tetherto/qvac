@@ -1,19 +1,5 @@
 name: Create GitHub Release (BCI Whispercpp)
 
-<<<<<<< Updated upstream
-# Stub workflow on main so it can be dispatched from feature branches.
-# The real implementation lives on the bci-whispercpp feature branch.
-
-on:
-  workflow_dispatch:
-
-jobs:
-  noop:
-    runs-on: ubuntu-latest
-    steps:
-      - name: No-op stub
-        run: echo "Stub workflow on main; real implementation lives on the bci-whispercpp feature branch."
-=======
 on:
   workflow_call:
     inputs:
@@ -74,4 +60,3 @@ jobs:
           body_path: ${{ inputs.workdir }}/release-notes/v${{ steps.version.outputs.current }}.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
->>>>>>> Stashed changes
