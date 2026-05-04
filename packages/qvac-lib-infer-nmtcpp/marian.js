@@ -127,6 +127,11 @@ class TranslationInterface {
    * Returns '' when no GPU backend is loaded or model is unloaded.
    * @returns {string}
    */
+  /**
+   * Returns the active backend description, or '' if unavailable.
+   * Silently catches native errors — the description is informational and
+   * callers should not fail when the backend cannot provide one.
+   */
   getActiveBackendDescription () {
     if (this._handle === null) {
       return ''

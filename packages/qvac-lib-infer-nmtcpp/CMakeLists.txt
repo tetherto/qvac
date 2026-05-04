@@ -7,6 +7,7 @@ endif()
 
 option(BUILD_TESTING "Build tests" OFF)
 option(USE_BERGAMOT "Enable Bergamot backend support" ON)
+# Off by default: Adreno 830 ggml-opencl M%4 assertion (QVAC-17790)
 option(USE_OPENCL "Prefer/allow OpenCL backend for GPU inference" OFF)
 
 if(BUILD_TESTING)

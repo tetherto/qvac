@@ -865,11 +865,11 @@ const _logger = createLogger()
  * on a single-SoC mobile device both address the same Adreno/Mali chip).
  *
  * @param {string} name - ggml backend device name
- * @returns {string} ordinal string used as deduplication key
+ * @returns {string|null} ordinal string used as deduplication key, or null if no trailing digit
  */
 function _extractPhysicalGpuKey (name) {
   const match = name.match(/(\d+)$/)
-  return match ? match[1] : '0'
+  return match ? match[1] : null
 }
 
 async function _probeGpuDevices () {
@@ -938,13 +938,13 @@ async function _probeGpuDevices () {
   const unique = []
   for (const device of devices) {
     const physKey = _extractPhysicalGpuKey(device.name)
-    if (seen.has(physKey)) {
+    if (physKey !== null && seen.has(physKey)) {
       _logger.info('[discoverGpuDevices] Skipping ' + device.name +
         ' (gpu_device=' + device.index + ') — same physical GPU as ' +
         seen.get(physKey).name + ' (ordinal ' + physKey + ')')
       continue
     }
-    seen.set(physKey, device)
+    if (physKey !== null) seen.set(physKey, device)
     unique.push(device)
   }
 

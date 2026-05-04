@@ -141,7 +141,6 @@ static buft_list_t make_buft_list(const nmt_context_params& params) {
   ggml_backend_dev_t selected_dev = nmtSelectGpuDevice(
       params.use_gpu, params.gpu_backend, params.gpu_device, "make_buft_list");
   if (selected_dev != nullptr) {
-    const char* selDevName = ggml_backend_dev_name(selected_dev);
     ggml_backend_buffer_type_t buft =
         ggml_backend_dev_buffer_type(selected_dev);
     if (buft != nullptr) {

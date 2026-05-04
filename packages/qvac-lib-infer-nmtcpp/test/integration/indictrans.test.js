@@ -517,6 +517,7 @@ test('IndicTrans CPU vs GPU output parity (EN->Hindi, beam=1)', { timeout: TEST_
 // ggml-opencl.cpp:3758 on Adreno 830 (Samsung S25 Ultra), causing SIGABRT.
 // Disabled until the upstream ggml-opencl kernel supports non-aligned matrix
 // dimensions for this model architecture.
-test('IndicTrans backend comparison [Vulkan vs OpenCL]', { timeout: TEST_TIMEOUT * 4 }, async function (t) {
-  t.pass('Skipped — OpenCL crashes on IndicTrans (ggml-opencl M%4 assertion)')
+test('IndicTrans backend comparison [Vulkan vs OpenCL]', { timeout: TEST_TIMEOUT * 4, skip: true }, async function (t) {
+  // OpenCL crashes on IndicTrans (ggml-opencl M%4 assertion on Adreno 830)
+  t.pass()
 })

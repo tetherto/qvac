@@ -22,7 +22,7 @@ std::string NmtLazyInitializeBackend::g_recordedBackendsDir;
 std::string NmtLazyInitializeBackend::g_recordedOpenclCacheDir;
 std::string NmtLazyInitializeBackend::g_recordedOpenclCacheDirInput;
 int NmtLazyInitializeBackend::g_refCount = 0;
-bool NmtLazyInitializeBackend::g_backendsLoaded = false;
+std::atomic<bool> NmtLazyInitializeBackend::g_backendsLoaded{false};
 
 // Forward ggml's internal log stream to QLOG so diagnostic lines
 // (Adreno detection, CL_CHECK errors, OpenCL driver info, etc.) reach
@@ -384,6 +384,7 @@ void NmtLazyInitializeBackend::decrementRefCount() {
           Priority::DEBUG,
           "Resetting backend state (reference count reached zero)");
       g_initialized = false;
+      g_backendsLoaded = false;
       g_recordedBackendsDir.clear();
 #ifdef __ANDROID__
       // Clear the process-global GGML_OPENCL_CACHE_DIR set during

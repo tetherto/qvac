@@ -5,6 +5,8 @@
 #include <cctype>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
+#include <mutex>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -319,14 +321,12 @@ static nmt_global g_state;
 // E.g. "Vulkan0" → 0, "OpenCL1" → 1, "Metal" → -1.
 // GGML assigns the same ordinal to different API surfaces that wrap the
 // same physical GPU (e.g. Vulkan0 and OpenCL0 both map to GPU #0).
-static int nmt_extract_device_ordinal(const char* name) {
+static int nmtExtractDeviceOrdinal(const char* name) {
   if (name == nullptr) {
     return -1;
   }
-  size_t len = 0;
-  while (name[len] != '\0') {
-    ++len;
-  }
+  static constexpr size_t kMaxNameLen = 256;
+  size_t len = strnlen(name, kMaxNameLen);
   if (len == 0) {
     return -1;
   }
@@ -426,18 +426,34 @@ nmt_backend_init(const nmt_context_params& params) {
       oss_backend_init.str());
 
   if (params.op_offload_min_batch >= 0) {
-    std::string val = std::to_string(params.op_offload_min_batch);
+    static std::mutex s_offloadMtx;
+    static int s_offloadFirstVal = -1;
+
+    std::lock_guard<std::mutex> lk(s_offloadMtx);
+    if (s_offloadFirstVal < 0) {
+      s_offloadFirstVal = params.op_offload_min_batch;
+      std::string val = std::to_string(params.op_offload_min_batch);
 #ifdef _WIN32
-    _putenv_s("GGML_VK_OFFLOAD_MIN_BATCH", val.c_str());
+      _putenv_s("GGML_VK_OFFLOAD_MIN_BATCH", val.c_str());
 #else
-    setenv("GGML_VK_OFFLOAD_MIN_BATCH", val.c_str(), 1);
+      setenv("GGML_VK_OFFLOAD_MIN_BATCH", val.c_str(), 1);
 #endif
-    std::ostringstream oss_offload;
-    oss_offload << "Set GGML_VK_OFFLOAD_MIN_BATCH="
-                << params.op_offload_min_batch;
-    QLOG(
-        qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-        oss_offload.str());
+      std::ostringstream oss_offload;
+      oss_offload << "Set GGML_VK_OFFLOAD_MIN_BATCH="
+                  << params.op_offload_min_batch;
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+          oss_offload.str());
+    } else if (s_offloadFirstVal != params.op_offload_min_batch) {
+      std::ostringstream oss_offload;
+      oss_offload << "op_offload_min_batch="
+                  << params.op_offload_min_batch
+                  << " requested but process-wide value already set to "
+                  << s_offloadFirstVal << " by first instance — ignoring";
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+          oss_offload.str());
+    }
   }
 
   std::vector<ggml_backend_t> result;
@@ -474,7 +490,7 @@ nmt_backend_init(const nmt_context_params& params) {
   //      dedup in _extractPhysicalGpuKey.
   const char* primary_name =
       primary_dev ? ggml_backend_dev_name(primary_dev) : nullptr;
-  int primary_ordinal = nmt_extract_device_ordinal(primary_name);
+  int primary_ordinal = nmtExtractDeviceOrdinal(primary_name);
 
   for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
     ggml_backend_dev_t dev = ggml_backend_dev_get(i);
@@ -499,7 +515,7 @@ nmt_backend_init(const nmt_context_params& params) {
     }
 #endif
 
-    int dev_ordinal = nmt_extract_device_ordinal(dev_name);
+    int dev_ordinal = nmtExtractDeviceOrdinal(dev_name);
     if (primary_ordinal >= 0 && dev_ordinal >= 0 &&
         primary_ordinal == dev_ordinal) {
       std::ostringstream oss;

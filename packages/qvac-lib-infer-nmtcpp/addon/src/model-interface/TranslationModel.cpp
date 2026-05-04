@@ -14,6 +14,20 @@
 #include "nmt_utils.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
+namespace {
+
+std::string sanitizePrintableAscii(const std::string& input) {
+  std::string out;
+  out.reserve(input.size());
+  for (char raw : input) {
+    unsigned char c = static_cast<unsigned char>(raw);
+    out.push_back((c >= 0x20 && c < 0x7F) ? static_cast<char>(c) : '?');
+  }
+  return out;
+}
+
+} // namespace
+
 namespace qvac_lib_inference_addon_nmt {
 
 std::string TranslationModel::getName() const {
@@ -306,7 +320,7 @@ void TranslationModel::load() {
       }
       const char* desc = ggml_backend_dev_description(dev);
       if (desc != nullptr) {
-        cachedDescription = std::string(desc);
+        cachedDescription = sanitizePrintableAscii(std::string(desc));
       }
       break;
     }
@@ -726,10 +740,15 @@ void TranslationModel::setConfig(
 
   if (auto it = config_.find("op_offload_min_batch"); it != config_.end()) {
     if (const auto* asInt = std::get_if<int64_t>(&it->second)) {
-      setOpOffloadMinBatch(static_cast<int>(*asInt));
+      auto clamped = std::clamp(*asInt, static_cast<int64_t>(0),
+                                static_cast<int64_t>(INT_MAX));
+      setOpOffloadMinBatch(static_cast<int>(clamped));
     } else if (const auto* asDouble = std::get_if<double>(&it->second)) {
       if (std::isfinite(*asDouble)) {
-        setOpOffloadMinBatch(static_cast<int>(*asDouble));
+        auto clamped = std::clamp(static_cast<int64_t>(*asDouble),
+                                  static_cast<int64_t>(0),
+                                  static_cast<int64_t>(INT_MAX));
+        setOpOffloadMinBatch(static_cast<int>(clamped));
       }
     } else {
       QLOG(

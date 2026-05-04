@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <mutex>
 #include <string>
 
@@ -62,7 +63,7 @@ private:
   static std::string g_recordedOpenclCacheDir;
   static std::string g_recordedOpenclCacheDirInput;
   static int g_refCount;
-  static bool g_backendsLoaded;
+  static std::atomic<bool> g_backendsLoaded;
 };
 
 /**
