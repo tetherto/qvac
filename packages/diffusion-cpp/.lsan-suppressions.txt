@@ -6,3 +6,4 @@ leak:SdModel::load
 leak:dbus_bus_register
 leak:dbus_pending_call_block
 leak:_dbus_message_loader_queue_messages
+leak:libdbus-1.so
