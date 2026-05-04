@@ -167,10 +167,10 @@ jobs:
 
               console.log(`Repo owner team: ${repoOwnerTeams}`);
 
-              const teamLeads = ["ai-runtime-merge"];
+              const teamLeads = ["qvac-internal-merge"];
               const management = ["ai-runtime-merge-mgmt"];
 
-              const teamsToCheck = ["ai-runtime-merge", "ai-runtime-merge-mgmt", ...repoOwnerTeams]
+              const teamsToCheck = ["qvac-internal-merge", "ai-runtime-merge", "ai-runtime-merge-mgmt", ...repoOwnerTeams]
 
               let teamMemberApprovals = 0;
               let teamLeadApprovals = 0;
