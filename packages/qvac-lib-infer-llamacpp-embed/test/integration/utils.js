@@ -161,9 +161,10 @@ class TestLogger {
  * @param {string} device - Device to use: 'cpu' or 'gpu' (default: 'gpu')
  * @param {string} gpuLayers - Number of GPU layers (default: '999' for GPU, '0' for CPU)
  * @param {string} batchSize - Batch size (default: '1024')
+ * @param {string} ctxSize - Optional explicit ctx_size override
  * @returns {Promise<{inference: GGMLBert}>}
  */
-async function createEmbeddingsTestInstance (t, modelName, device = 'gpu', gpuLayers = null, batchSize = '1024') {
+async function createEmbeddingsTestInstance (t, modelName, device = 'gpu', gpuLayers = null, batchSize = '1024', ctxSize = null) {
   const [, modelDir] = await ensureModel(modelName)
   const modelPath = path.join(modelDir, modelName)
 
@@ -183,6 +184,10 @@ async function createEmbeddingsTestInstance (t, modelName, device = 'gpu', gpuLa
   const config = {
     gpu_layers: actualGpuLayers,
     batch_size: batchSize
+  }
+
+  if (ctxSize !== null) {
+    config.ctx_size = ctxSize
   }
 
   if (device === 'cpu' || device === 'gpu') {

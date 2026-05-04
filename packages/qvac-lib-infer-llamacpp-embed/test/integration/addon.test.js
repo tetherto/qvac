@@ -259,8 +259,15 @@ createDeviceModelTest('Model inference works correctly with batching - 5 sequenc
   const embeddingDimension = modelConfig.embeddingDimension
   const maxContextSize = modelConfig.maxContextSize
 
+  // Mali Vulkan on Pixel 9 Pro returns ErrorDeviceLost on the first submit when
+  // batch_size=1024 with ctx_size defaulting to the model's training context (512).
+  // For gte-large only, halve batch_size and pin ctx_size to 75% of the training.
+  const isGteLarge = modelName === 'gte-large_fp16.gguf'
+  const batchingBatchSize = isGteLarge ? '512' : DEFAULT_BATCH_SIZE
+  const batchingCtxSize = isGteLarge ? '384' : null
+
   console.log(`Creating new GGMLBert instance for batching test [${modelName}] on ${device.toUpperCase()}`)
-  const { inference } = await createEmbeddingsTestInstance(t, modelName, device, null, DEFAULT_BATCH_SIZE)
+  const { inference } = await createEmbeddingsTestInstance(t, modelName, device, null, batchingBatchSize, batchingCtxSize)
 
   // Create 5 sequences of roughly similar length.
   // The goal is to have enough total tokens so that:
