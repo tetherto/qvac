@@ -253,7 +253,11 @@ const scenarios = [
   {
     name: 'Reverse prompt stops generation',
     overrides: {
-      reverse_prompt: 'network, pizza, bitcoin, blockchain',
+      // No spaces around commas: addon splits on ',' without trimming, so leading
+      // spaces become part of each antiprompt and would never match a sentence-
+      // initial "Pizza". Both cases listed because the addon does substring
+      // matching case-sensitively.
+      reverse_prompt: 'network,pizza,Pizza,bitcoin,blockchain',
       temp: '0',
       top_p: '0.7',
       n_predict: '128'
@@ -270,8 +274,8 @@ const scenarios = [
     ],
     expectSuccess: true,
     assertOutput: (t, output, stats) => {
-      t.ok(output.includes('pizza'), 'reverse prompt output contains keyword')
-      t.ok(output.split('').slice(-5).join('') === 'pizza', 'reverse prompt output ends with keyword')
+      t.ok(output.toLowerCase().includes('pizza'), 'reverse prompt output contains keyword')
+      t.ok(output.toLowerCase().split('').slice(-5).join('') === 'pizza', 'reverse prompt output ends with keyword')
     }
   }
 ]
