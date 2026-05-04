@@ -327,7 +327,7 @@ Six GitHub Actions workflows automate the docs lifecycle:
 1. Checks out the repo
 2. Installs dependencies for both docs and SDK
 3. Runs `bun run docs:generate` (full orchestrated generation)
-4. If generated files changed, commits and pushes to `main` with `[skip ci]`
+4. If generated files changed, opens a PR `docs/post-merge-sync-<run_id>` against `main` (labels: `documentation, auto-generated, tier1`). Direct pushes to `main` are blocked by the branch ruleset, so a PR is required; `[skip ci]` is intentionally omitted so the `Tier-based Approval Check` runs on the PR.
 
 **Purpose:** Keeps generated API docs and release notes on `main` in sync whenever the SDK source or generation scripts change.
 
@@ -337,7 +337,7 @@ Six GitHub Actions workflows automate the docs lifecycle:
 | `DOCS_SYNC_BOT_USER` | Variable (optional) | Bot username to prevent infinite loops |
 | `DOCS_SYNC_BOT_NAME` | Variable (optional) | Git commit author name (default: `docs-sync-bot`) |
 | `DOCS_SYNC_BOT_EMAIL` | Variable (optional) | Git commit author email |
-| `DOCS_SYNC_PAT` | Secret (optional) | PAT for pushing (falls back to `GITHUB_TOKEN`) |
+| `DOCS_SYNC_PAT` | Secret (optional) | PAT for opening the PR (falls back to `GITHUB_TOKEN`; a PAT is preferred so the PR fires `pull_request` events that activate downstream checks) |
 
 ### 3. Generate API Documentation
 
@@ -410,7 +410,7 @@ GH_TOKEN=ghp_... bash .github/scripts/docs-ci-doctor.sh
 
 **What it does:**
 1. **Dual checkout** to close a race window where a PR landing on `main` mid-pipeline could smuggle a not-yet-released function into the rendered API summary:
-   - `main-tree/` — `main` HEAD: docs scripts + commit/push target.
+   - `main-tree/` — `main` HEAD: docs scripts + PR target.
    - `release-tree/` — frozen at `github.sha` (the trigger commit): SDK source + package CHANGELOGs.
    `SDK_PATH` and `CHANGELOG_REPO_ROOT` both point at `release-tree/`, so TypeDoc and `generate-release-notes.ts` only ever see the released state.
 2. Extracts the version from the branch name, release tag, or manual input
@@ -421,9 +421,9 @@ GH_TOKEN=ghp_... bash .github/scripts/docs-ci-doctor.sh
    - Refreshes `src/lib/versions.ts`
 4. Runs TSDoc audit in warning mode (non-fatal)
 5. Runs link validation tests
-6. Commits generated content and pushes to `main` with `[skip ci]`
+6. Opens a PR `docs/release-v<X.Y.Z>` against `main` (labels: `documentation, auto-generated, tier1`). Direct pushes to `main` are blocked by the branch ruleset, so a PR is required; `[skip ci]` is intentionally omitted so the `Tier-based Approval Check` runs on the PR. Re-runs of the same release update the same branch.
 
-The push to `main` triggers the hosting provider to rebuild staging automatically.
+Merging the PR to `main` triggers the hosting provider to rebuild staging automatically.
 
 **AI augmentation:** Controlled by the `skip_ai` input (default: `true`). When `skip_ai` is `false` AND `AI_AUGMENT_API_KEY` is configured, the workflow forwards `--ai` to `release-version.ts`.
 
@@ -436,7 +436,7 @@ The push to `main` triggers the hosting provider to rebuild staging automaticall
 | `DOCS_SYNC_BOT_USER` | Variable (optional) | Bot username to prevent infinite loops |
 | `DOCS_SYNC_BOT_NAME` | Variable (optional) | Git commit author name |
 | `DOCS_SYNC_BOT_EMAIL` | Variable (optional) | Git commit author email |
-| `DOCS_SYNC_PAT` | Secret (optional) | PAT for pushing to main |
+| `DOCS_SYNC_PAT` | Secret (optional) | PAT for opening the PR against `main` (falls back to `GITHUB_TOKEN`; a PAT is preferred so the PR fires `pull_request` events that activate downstream checks) |
 | `AI_AUGMENT_BASE_URL` | Secret (optional) | OpenAI-compatible API endpoint |
 | `AI_AUGMENT_API_KEY` | Secret (optional) | API key for AI augmentation |
 | `AI_AUGMENT_MODEL` | Variable (optional) | Model identifier (e.g. `gpt-4o`) |

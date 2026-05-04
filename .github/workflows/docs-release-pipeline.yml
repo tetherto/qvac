@@ -1,6 +1,8 @@
 # Release-driven docs pipeline: generates API docs, release notes, validates,
-# and pushes to main when an SDK release branch is pushed or a GitHub release
-# is published. The push to main triggers the hosting provider's staging deploy.
+# and opens a PR against main when an SDK release branch is pushed or a
+# GitHub release is published. Direct pushes to main are blocked by the
+# branch ruleset; merging the PR triggers the hosting provider's staging
+# deploy.
 #
 # Exists alongside docs-generate-api.yml (which handles manual/cross-repo use).
 name: Docs Release Pipeline
@@ -25,6 +27,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 concurrency:
   group: docs-release-pipeline-${{ github.ref }}
@@ -44,7 +47,7 @@ jobs:
       # source the renderer reads — silently shipping wrong content under a
       # stale version label.
       #
-      # - `main-tree`  → docs scripts, content target, commit/push target.
+      # - `main-tree`  → docs scripts, content target, PR base.
       #                  Always main HEAD so the workflow benefits from any
       #                  fixes to the pipeline itself.
       # - `release-tree` → SDK source + CHANGELOGs frozen at the trigger
@@ -52,7 +55,7 @@ jobs:
       #                    here so TypeDoc + the changelog parser can't
       #                    pick up unrelated commits that landed on main
       #                    after the trigger.
-      - name: Checkout main (docs scripts + commit target)
+      - name: Checkout main (docs scripts + PR base)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: main
@@ -188,18 +191,39 @@ jobs:
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Commit and push to main
+      # Open a PR against `main` rather than pushing directly: the `main`
+      # ruleset rejects direct/force pushes ("Changes must be made through a
+      # pull request") and requires the `Tier-based Approval Check` status
+      # check, which is dispatched by `approval-check-worker.yml` on PR
+      # events. We also drop `[skip ci]` from the commit message — it would
+      # suppress the approval worker and leave the PR permanently un-mergeable.
+      #
+      # Mirrors the existing pattern in `docs-generate-api.yml`. `path:
+      # main-tree` keeps the action confined to the tree the preceding
+      # `Check for changes` step already staged.
+      - name: Open docs release PR
         if: steps.changes.outputs.has_changes == 'true'
-        working-directory: main-tree
-        env:
-          BOT_NAME: ${{ vars.DOCS_SYNC_BOT_NAME || 'docs-sync-bot' }}
-          BOT_EMAIL: ${{ vars.DOCS_SYNC_BOT_EMAIL || 'docs-sync-bot@users.noreply.github.com' }}
-          # `VERSION` is the regex-validated output from the `version` step,
-          # but we route it through env anyway so the run block has zero
-          # `${{ }}` interpolation in shell context.
-          VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          git config user.name "$BOT_NAME"
-          git config user.email "$BOT_EMAIL"
-          git commit -m "chore(docs): release v${VERSION} (API summary + release notes) [skip ci]"
-          git push origin main
+        uses: peter-evans/create-pull-request@c0f553fe549906ede9cf27b5156039d195d2ece0 # 8.1.0
+        with:
+          path: main-tree
+          token: ${{ secrets.DOCS_SYNC_PAT || secrets.GITHUB_TOKEN }}
+          base: main
+          branch: docs/release-v${{ steps.version.outputs.version }}
+          delete-branch: true
+          commit-message: "chore(docs): release v${{ steps.version.outputs.version }} (API summary + release notes)"
+          title: "chore(docs): release v${{ steps.version.outputs.version }} (API summary + release notes)"
+          body: |
+            ## Auto-generated SDK docs for v${{ steps.version.outputs.version }}
+
+            Triggered by `${{ github.event_name }}` on `${{ github.ref }}` (commit `${{ github.sha }}`).
+
+            Updates:
+            - `docs/website/content/docs/sdk/api/index.mdx` (latest summary)
+            - `docs/website/content/docs/sdk/api/v${{ steps.version.outputs.version }}.mdx` (frozen prior version)
+            - `docs/website/content/docs/sdk/release-notes/index.mdx`
+            - `docs/website/src/lib/versions.ts`
+
+            Merging this PR triggers the hosting provider's staging deploy.
+          labels: documentation, auto-generated, tier1
+          author: ${{ vars.DOCS_SYNC_BOT_NAME || 'docs-sync-bot' }} <${{ vars.DOCS_SYNC_BOT_EMAIL || 'docs-sync-bot@users.noreply.github.com' }}>
+          committer: ${{ vars.DOCS_SYNC_BOT_NAME || 'docs-sync-bot' }} <${{ vars.DOCS_SYNC_BOT_EMAIL || 'docs-sync-bot@users.noreply.github.com' }}>

@@ -20,6 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
 
     steps:
       - name: Checkout repository
@@ -58,15 +59,37 @@ jobs:
             echo "has_doc_changes=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Commit and push generated docs
+      # Open a PR against `main` rather than pushing directly: the `main`
+      # ruleset rejects direct pushes ("Changes must be made through a pull
+      # request") and requires the `Tier-based Approval Check` status check
+      # dispatched by `approval-check-worker.yml` on PR events. We also drop
+      # `[skip ci]` from the commit message — it would suppress the approval
+      # worker and leave the PR permanently un-mergeable.
+      #
+      # Mirrors the existing pattern in `docs-generate-api.yml` and
+      # `docs-release-pipeline.yml`. Branch is namespaced by `github.run_id`
+      # so concurrent dispatches don't collide.
+      - name: Open docs sync PR
         if: steps.changes.outputs.has_doc_changes == 'true'
-        env:
-          BOT_NAME: ${{ vars.DOCS_SYNC_BOT_NAME || 'docs-sync-bot' }}
-          BOT_EMAIL: ${{ vars.DOCS_SYNC_BOT_EMAIL || 'docs-sync-bot@users.noreply.github.com' }}
-          TOKEN: ${{ secrets.DOCS_SYNC_PAT || secrets.GITHUB_TOKEN }}
-        run: |
-          git config user.name "$BOT_NAME"
-          git config user.email "$BOT_EMAIL"
-          git commit -m "chore(docs): regenerate SDK API docs [skip ci]"
-          git remote set-url origin "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git"
-          git push origin main
+        uses: peter-evans/create-pull-request@c0f553fe549906ede9cf27b5156039d195d2ece0 # 8.1.0
+        with:
+          token: ${{ secrets.DOCS_SYNC_PAT || secrets.GITHUB_TOKEN }}
+          base: main
+          branch: docs/post-merge-sync-${{ github.run_id }}
+          delete-branch: true
+          commit-message: "chore(docs): regenerate SDK API docs"
+          title: "chore(docs): regenerate SDK API docs"
+          body: |
+            ## Auto-generated SDK docs sync
+
+            Triggered by `${{ github.event_name }}` on `${{ github.ref }}` (commit `${{ github.sha }}`).
+
+            Regenerates SDK API summary and release notes from the current `packages/sdk` source.
+
+            Updates:
+            - `docs/website/content/docs/sdk/api/`
+            - `docs/website/content/docs/sdk/release-notes/`
+            - `docs/website/src/lib/versions.ts`
+          labels: documentation, auto-generated, tier1
+          author: ${{ vars.DOCS_SYNC_BOT_NAME || 'docs-sync-bot' }} <${{ vars.DOCS_SYNC_BOT_EMAIL || 'docs-sync-bot@users.noreply.github.com' }}>
+          committer: ${{ vars.DOCS_SYNC_BOT_NAME || 'docs-sync-bot' }} <${{ vars.DOCS_SYNC_BOT_EMAIL || 'docs-sync-bot@users.noreply.github.com' }}>
