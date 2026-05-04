@@ -207,7 +207,6 @@ jobs:
 
       - name: Download prebuilds from package (Windows)
         if: ${{ inputs.prebuild_package && matrix.platform == 'win32' }}
-        working-directory: ${{ runner.temp }}/qvac-diffusion-cpp
         shell: powershell
         run: |
           $PACKAGE = "${{ inputs.prebuild_package }}"
