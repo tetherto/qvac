@@ -5,17 +5,15 @@
 #include <vector>
 
 // Forward declare bergamot types
-namespace marian {
-namespace bergamot {
+namespace marian::bergamot {
 class BlockingService;
 class TranslationModel;
 class Response;
 struct ResponseOptions;
-} // namespace bergamot
-} // namespace marian
+} // namespace marian::bergamot
 
 // Wrapper for bergamot translator
-struct bergamot_context {
+struct bergamot_context { // NOLINT(readability-identifier-naming)
   std::shared_ptr<marian::bergamot::BlockingService> service;
   std::shared_ptr<marian::bergamot::TranslationModel> model;
 
@@ -25,19 +23,20 @@ struct bergamot_context {
   int total_tokens = 0;
 };
 
-struct bergamot_params {
+struct bergamot_params { // NOLINT(readability-identifier-naming)
   bool use_gpu = false;
   int num_workers = 1;
   int cache_size = 0;
   int beam_size = 1;
   int normalize = 1; // 1 for true, 0 for false
-  double max_length_factor = 2.5;
+  double max_length_factor =
+      2.5; // NOLINT(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
   std::string model_path;
   std::string src_vocab_path;
   std::string dst_vocab_path;
 };
 
-struct bergamot_batch_result {
+struct bergamot_batch_result { // NOLINT(readability-identifier-naming)
   std::vector<std::string> translations;
   std::vector<bool>
       success;       // true if particular index is translated successfully.
@@ -45,24 +44,23 @@ struct bergamot_batch_result {
 };
 
 // Initialize bergamot context from model path
-bergamot_context* bergamot_init(const char* model_path, const bergamot_params& params);
+bergamot_context*
+bergamotInit(const char* modelPath, const bergamot_params& params);
 
 // Translate text
-std::string bergamot_translate(bergamot_context* ctx, const char* input);
+std::string bergamotTranslate(bergamot_context* ctx, const char* input);
 
 // Translate batch of Text
-bergamot_batch_result bergamot_translate_batch(
+bergamot_batch_result bergamotTranslateBatch(
     bergamot_context* ctx, const std::vector<std::string>& texts);
 
 // Get runtime statistics
-int bergamot_get_runtime_stats(
-    bergamot_context* ctx,
-    double* encode_time,
-    double* decode_time,
-    int* total_tokens);
+int bergamotGetRuntimeStats(
+    bergamot_context* ctx, double* encodeTime, double* decodeTime,
+    int* totalTokens);
 
 // Reset runtime statistics
-void bergamot_reset_runtime_stats(bergamot_context* ctx);
+void bergamotResetRuntimeStats(bergamot_context* ctx);
 
 // Free bergamot context
-void bergamot_free(bergamot_context* ctx);
+void bergamotFree(bergamot_context* ctx);

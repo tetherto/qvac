@@ -183,6 +183,19 @@ class TranslationNmtcpp {
   }
 
   /**
+   * Returns the human-readable device description for the active GPU backend
+   * (e.g. 'NVIDIA GeForce RTX 5070', 'Intel(R) UHD Graphics').
+   * Returns '' when no GPU backend is loaded or model is unloaded.
+   * @returns {string}
+   */
+  getActiveBackendDescription () {
+    if (!this.addon) {
+      return ''
+    }
+    return this.addon.getActiveBackendDescription()
+  }
+
+  /**
    * Checks if this is a Bergamot model
    * @private
    * @returns {boolean}
@@ -251,9 +264,13 @@ class TranslationNmtcpp {
     if (otherConfig.gpu_device === undefined && otherConfig.gpuDevice !== undefined) {
       otherConfig.gpu_device = otherConfig.gpuDevice
     }
+    if (otherConfig.op_offload_min_batch === undefined && otherConfig.opOffloadMinBatch !== undefined) {
+      otherConfig.op_offload_min_batch = otherConfig.opOffloadMinBatch
+    }
     delete otherConfig.useGPU
     delete otherConfig.gpuBackend
     delete otherConfig.gpuDevice
+    delete otherConfig.opOffloadMinBatch
 
     if (otherConfig.backendsDir === undefined) {
       otherConfig.backendsDir = path.join(__dirname, 'prebuilds')

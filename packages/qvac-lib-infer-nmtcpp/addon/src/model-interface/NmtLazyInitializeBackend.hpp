@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <mutex>
 #include <string>
 
@@ -62,6 +63,7 @@ private:
   static std::string g_recordedOpenclCacheDir;
   static std::string g_recordedOpenclCacheDirInput;
   static int g_refCount;
+  static std::atomic<bool> g_backendsLoaded;
 };
 
 /**
@@ -95,8 +97,8 @@ public:
   NmtBackendsHandle& operator=(const NmtBackendsHandle&) = delete;
 
   // Movable
-  NmtBackendsHandle(NmtBackendsHandle&&) noexcept;
-  NmtBackendsHandle& operator=(NmtBackendsHandle&&) noexcept;
+  NmtBackendsHandle(NmtBackendsHandle&& other) noexcept;
+  NmtBackendsHandle& operator=(NmtBackendsHandle&& other) noexcept;
 
 private:
   bool ownsHandle_;
