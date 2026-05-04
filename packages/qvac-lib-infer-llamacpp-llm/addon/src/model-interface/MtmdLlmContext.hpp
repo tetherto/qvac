@@ -21,7 +21,7 @@ public:
    * @param tools - reference to the tools compact controller
    */
   MtmdLlmContext(
-      common_params& commonParams, common_init_result&& llamaInit,
+      common_params& commonParams, common_init_result_ptr llamaInit,
       ToolsCompactController& tools);
 
   /**
@@ -168,6 +168,10 @@ public:
    */
   void resetMedia() override;
 
+  [[nodiscard]] common_chat_format getLastChatFormat() const override {
+    return lastChatFormat_;
+  }
+
 private:
   /**
    * The check antiprompt method. It checks the antiprompt.
@@ -201,7 +205,8 @@ private:
   void handleStopRequestAndAddEot(LlamaBatch& batchPtr);
 
   ToolsCompactController& tools_;
-  common_init_result llamaInit_;
+  common_init_result_ptr llamaInit_;
+  common_chat_format lastChatFormat_ = COMMON_CHAT_FORMAT_CONTENT_ONLY;
   mtmd::context_ptr ctxVision_;
   llama_model* model_;
   llama_context* lctx_;

@@ -13,6 +13,7 @@
 #include <iostream>
 #include <mutex>
 #include <numeric>
+#include <regex>
 #include <shared_mutex>
 #include <sstream>
 #include <stdexcept>
@@ -336,7 +337,7 @@ void LlamaModel::init(bool acquireLock) {
 
   snap.demoteToRead();
 
-  common_init_result llamaInit = initFromConfig(
+  common_init_result_ptr llamaInit = initFromConfig(
       params,
       modelPath,
       streamedFiles,
@@ -587,7 +588,11 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   }
 
   std::ostringstream oss;
-  bool needsOutputCapture = state_->toolsCompact_->enabled();
+  // Capture output for the toolsCompact controller's trim logic AND for
+  // post-generation tool-call extraction (Gemma 4 etc. emit dialect-specific
+  // tool call markers that need re-wrapping as <tool_call>{...}</tool_call>).
+  bool needsOutputCapture =
+      state_->toolsCompact_->enabled() || !resolved.tools.empty();
   auto callback = prompt.outputCallback;
   if (!prompt.outputCallback) {
     callback = [&](const std::string& token) { oss << token; };
@@ -607,6 +612,61 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
 
   if (!prompt.outputCallback) {
     out = oss.str();
+  }
+
+  // Some models (e.g. Gemma 4) don't emit <tool_call> XML envelopes — they
+  // produce structured tool calls in their own dialect. Use common_chat_parse
+  // with the format that was used for templating, then re-wrap any extracted
+  // tool calls as <tool_call>{...}</tool_call> envelopes so JS-side tests and
+  // SDK consumers see a uniform shape.
+  if (!resolved.tools.empty()) {
+    const std::string assistantText =
+        prompt.outputCallback ? oss.str() : out;
+    common_chat_parser_params syntax;
+    syntax.format = state_->llmContext_->getLastChatFormat();
+    syntax.parse_tool_calls = true;
+    try {
+      common_chat_msg parsed = common_chat_parse(
+          assistantText, /*is_partial=*/false, syntax);
+      if (!parsed.tool_calls.empty()) {
+        const auto normalizeArgsJson =
+            [](const std::string& src) -> std::string {
+          static const std::regex unquotedKeyRe(
+              R"(([{,])(\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*):)",
+              std::regex::ECMAScript);
+          return std::regex_replace(src, unquotedKeyRe, R"($1$2"$3"$4:)");
+        };
+        std::string envelopes;
+        envelopes.reserve(parsed.tool_calls.size() * 64);
+        for (const auto& tc : parsed.tool_calls) {
+          std::string args = tc.arguments.empty()
+                                 ? std::string("{}")
+                                 : normalizeArgsJson(tc.arguments);
+          envelopes.append("<tool_call>{\"name\":\"");
+          envelopes.append(tc.name);
+          envelopes.append("\",\"arguments\":");
+          envelopes.append(args);
+          envelopes.append("}</tool_call>");
+        }
+        if (prompt.outputCallback) {
+          prompt.outputCallback(envelopes);
+        } else {
+          out.append(envelopes);
+        }
+      }
+    } catch (const std::exception& e) {
+      QLOG_IF(
+          Priority::WARNING,
+          string_format(
+              "[LlamaModel] common_chat_parse failed for tool extraction: "
+              "%s\n",
+              e.what()));
+    } catch (...) {
+      QLOG_IF(
+          Priority::WARNING,
+          "[LlamaModel] common_chat_parse threw an unknown exception during "
+          "tool extraction\n");
+    }
   }
 
   // Post-generation tools trim decision via controller
@@ -905,7 +965,7 @@ void LlamaModel::commonParamsParse(
   }
 
   auto ctxArg =
-      common_params_parser_init(params, LLAMA_EXAMPLE_MAIN, [](int, char**) {});
+      common_params_parser_init(params, LLAMA_EXAMPLE_COMMON, [](int, char**) {});
 
   // disable warmup run
   params.warmup = false;
@@ -1193,7 +1253,7 @@ void LlamaModel::resetState(bool resetStats) {
 
 std::unique_ptr<LlmContext> LlamaModel::createContext(
     std::string&& projectionPath, common_params& params,
-    common_init_result&& llamaInit, ToolsCompactController& tools) {
+    common_init_result_ptr llamaInit, ToolsCompactController& tools) {
   if (!projectionPath.empty()) {
     params.mmproj.path = std::move(projectionPath);
     return std::make_unique<MtmdLlmContext>(
@@ -1464,11 +1524,16 @@ std::string LlamaModel::finetune(
         throw std::runtime_error(
             "Failed to load LoRA adapter from checkpoint: " + adapterPath);
       }
-      llama_clear_adapter_lora(ctx);
-      if (llama_set_adapter_lora(ctx, adapter, 1.0f) < 0) {
-        llama_adapter_lora_free(adapter);
-        throw std::runtime_error(
-            "Failed to attach resumed LoRA adapter to context");
+      {
+        struct llama_adapter_lora* adapters[1] = {adapter};
+        float scales[1] = {1.0f};
+        // llama_set_adapters_lora replaces the active adapter list, so no
+        // separate clear is needed in 78db8bf4 (no llama_clear_adapter_lora).
+        if (llama_set_adapters_lora(ctx, adapters, 1, scales) < 0) {
+          llama_adapter_lora_free(adapter);
+          throw std::runtime_error(
+              "Failed to attach resumed LoRA adapter to context");
+        }
       }
     } else {
       uint32_t targetModules = parseLoraModules(params.loraModules);

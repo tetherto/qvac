@@ -481,7 +481,7 @@ void BertModel::init(common_params& params) {
   llama_numa_init(params.numa);
 
   const std::string errorWhenFailed = toString(UnableToLoadModel);
-  common_init_result llamaInit = initFromConfig(
+  common_init_result_ptr llamaInit = initFromConfig(
       params,
       params.model.path,
       singleGgufStreamedFiles_,
@@ -493,8 +493,8 @@ void BertModel::init(common_params& params) {
 
   init_.params = params;
   init_.result = std::move(llamaInit);
-  model_ = init_.result.model.get();
-  ctx_ = init_.result.context.get();
+  model_ = init_.result->model();
+  ctx_ = init_.result->context();
   vocab_ = llama_model_get_vocab(model_);
   batch_ = llama_batch_init(init_.params.n_batch, 0, 1);
   pooling_type = llama_pooling_type(ctx_);

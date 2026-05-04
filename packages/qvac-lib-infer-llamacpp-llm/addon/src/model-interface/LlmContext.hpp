@@ -288,4 +288,14 @@ public:
    *
    */
   virtual void resetMedia() {};
+
+  /**
+   * Returns the chat format selected by the most recent prompt template
+   * application (e.g. COMMON_CHAT_FORMAT_GEMMA4). Used by post-generation
+   * tool-call extraction to tell common_chat_parse which dialect the
+   * assistant text is in.
+   */
+  [[nodiscard]] virtual common_chat_format getLastChatFormat() const {
+    return COMMON_CHAT_FORMAT_CONTENT_ONLY;
+  }
 };

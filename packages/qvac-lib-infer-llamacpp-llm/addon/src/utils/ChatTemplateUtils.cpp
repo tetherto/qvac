@@ -171,9 +171,14 @@ std::string getChatTemplate(
 
 std::string getPrompt(
     const struct common_chat_templates* tmpls,
-    struct common_chat_templates_inputs& inputs) {
+    struct common_chat_templates_inputs& inputs,
+    common_chat_format* outFormat) {
   try {
-    return common_chat_templates_apply(tmpls, inputs).prompt;
+    auto params = common_chat_templates_apply(tmpls, inputs);
+    if (outFormat) {
+      *outFormat = params.format;
+    }
+    return params.prompt;
   } catch (const std::exception& e) {
     // Catching known issue when a model does not support tools
     QLOG_IF(
@@ -184,7 +189,11 @@ std::string getPrompt(
             "be ignored.\n",
             e.what()));
     inputs.use_jinja = false;
-    return common_chat_templates_apply(tmpls, inputs).prompt;
+    auto params = common_chat_templates_apply(tmpls, inputs);
+    if (outFormat) {
+      *outFormat = params.format;
+    }
+    return params.prompt;
   } catch (...) {
     // Catching any other exception type
     QLOG_IF(
@@ -193,7 +202,11 @@ std::string getPrompt(
         "Tools "
         "will be ignored.\n");
     inputs.use_jinja = false;
-    return common_chat_templates_apply(tmpls, inputs).prompt;
+    auto params = common_chat_templates_apply(tmpls, inputs);
+    if (outFormat) {
+      *outFormat = params.format;
+    }
+    return params.prompt;
   }
 }
 

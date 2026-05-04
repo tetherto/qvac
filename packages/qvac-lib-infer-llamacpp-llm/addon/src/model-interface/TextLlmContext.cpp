@@ -26,13 +26,13 @@ using namespace qvac_lib_inference_addon_llama::utils;
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TextLlmContext::TextLlmContext(
-    common_params& commonParams, common_init_result&& llamaInit,
+    common_params& commonParams, common_init_result_ptr llamaInit,
     ToolsCompactController& tools)
     : tools_(tools), llamaInit_(std::move(llamaInit)), params_(commonParams) {
   {
 
-    model_ = llamaInit_.model.get();
-    lctx_ = llamaInit_.context.get();
+    model_ = llamaInit_->model();
+    lctx_ = llamaInit_->context();
     if (model_ == nullptr) {
       throw qvac_errors::StatusError(
           ADDON_ID, toString(UnableToLoadModel), "Failed to initialize model");
@@ -236,7 +236,7 @@ void TextLlmContext::tokenizeChat(
   if (!tools.empty()) {
     inputs.tools = tools;
   }
-  prompt = getPrompt(tmpls_.get(), inputs);
+  prompt = getPrompt(tmpls_.get(), inputs, &lastChatFormat_);
 
   QLOG_IF(
       Priority::DEBUG,

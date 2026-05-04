@@ -20,7 +20,7 @@ public:
   TextLlmContext& operator=(TextLlmContext&&) = delete;
   // Constructor
   TextLlmContext(
-      common_params& commonParams, common_init_result&& llamaInit,
+      common_params& commonParams, common_init_result_ptr llamaInit,
       ToolsCompactController& tools);
 
   // Destructor
@@ -141,6 +141,10 @@ public:
    */
   llama_pos removeLastNTokens(llama_pos count) override;
 
+  [[nodiscard]] common_chat_format getLastChatFormat() const override {
+    return lastChatFormat_;
+  }
+
 private:
   /**
    * The check antiprompt method. It checks the antiprompt.
@@ -172,7 +176,7 @@ private:
   void handleStopRequestAndAddEot(LlamaBatch& batch);
 
   ToolsCompactController& tools_;
-  common_init_result llamaInit_;
+  common_init_result_ptr llamaInit_;
   llama_model* model_;
   llama_context* lctx_;
   const llama_vocab* vocab_;
@@ -188,6 +192,8 @@ private:
   int32_t nSlides_ = 0;
   ThreadPoolPtr threadpool_;
   ThreadPoolPtr threadpoolBatch_;
+
+  common_chat_format lastChatFormat_ = COMMON_CHAT_FORMAT_CONTENT_ONLY;
 
   // UTF-8 token buffer for handling incomplete emoji sequences
   qvac_lib_inference_addon_llama::UTF8TokenBuffer utf8Buffer_;

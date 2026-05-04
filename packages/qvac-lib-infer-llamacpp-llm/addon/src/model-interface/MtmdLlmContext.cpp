@@ -23,10 +23,10 @@ using namespace qvac_lib_inference_addon_llama::utils;
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 MtmdLlmContext::MtmdLlmContext(
-    common_params& commonParams, common_init_result&& llamaInit,
+    common_params& commonParams, common_init_result_ptr llamaInit,
     ToolsCompactController& tools)
     : tools_(tools), llamaInit_(std::move(llamaInit)), params_(commonParams),
-      model_(llamaInit_.model.get()), lctx_(llamaInit_.context.get()) {
+      model_(llamaInit_->model()), lctx_(llamaInit_->context()) {
 
   if (model_ == nullptr) {
     throw qvac_errors::StatusError(
@@ -197,7 +197,7 @@ void MtmdLlmContext::tokenizeChat(
   if (!tools.empty()) {
     inputs.tools = tools;
   }
-  formattedChat = getPrompt(tmpls_.get(), inputs);
+  formattedChat = getPrompt(tmpls_.get(), inputs, &lastChatFormat_);
 
   if (formattedChat.empty()) {
     std::string errorMsg = string_format(

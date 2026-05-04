@@ -51,7 +51,8 @@ std::string getChatTemplate(
  */
 std::string getPrompt(
     const struct common_chat_templates* tmpls,
-    struct common_chat_templates_inputs& inputs);
+    struct common_chat_templates_inputs& inputs,
+    common_chat_format* outFormat = nullptr);
 
 } // namespace utils
 } // namespace qvac_lib_inference_addon_llama
