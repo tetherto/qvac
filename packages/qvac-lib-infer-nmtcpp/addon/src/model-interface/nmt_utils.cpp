@@ -16,6 +16,16 @@
 #include "nmt.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
+std::string sanitizePrintableAscii(const std::string& input) {
+  std::string out;
+  out.reserve(input.size());
+  for (char raw : input) {
+    unsigned char c = static_cast<unsigned char>(raw);
+    out.push_back((c >= 0x20 && c < 0x7F) ? static_cast<char>(c) : '?');
+  }
+  return out;
+}
+
 int get_optimal_thread_count() {
   unsigned int hw_threads = std::thread::hardware_concurrency();
   if (hw_threads == 0) {

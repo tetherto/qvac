@@ -15,6 +15,10 @@ bool ggml_graph_compute_helper(
     bool sched_reset = true);
 // NOLINTEND(readability-identifier-naming)
 
+// Replace non-printable and non-ASCII bytes with '?' so driver-provided
+// strings are safe for logging and JS consumption.
+std::string sanitizePrintableAscii(const std::string& input);
+
 // Case-insensitive substring check: returns true if the lowercased form of
 // `name` contains `needleLower` (which must already be lowercased).
 // Used by nmt_backend_init_gpu and make_buft_list to keep device selection

@@ -6,6 +6,7 @@
 #include <ggml-backend.h>
 #include <ggml.h>
 
+#include "nmt_utils.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
 #ifdef __ANDROID__
@@ -29,16 +30,6 @@ std::atomic<bool> NmtLazyInitializeBackend::g_backendsLoaded{false};
 // logcat on Android instead of silently going to stderr. Mirrors what
 // llama_log_set does in the llamacpp-llm addon. See QVAC-17790.
 namespace {
-
-std::string sanitizePrintableAscii(const std::string& input) {
-  std::string out;
-  out.reserve(input.size());
-  for (char raw : input) {
-    unsigned char c = static_cast<unsigned char>(raw);
-    out.push_back((c >= 0x20 && c < 0x7F) ? static_cast<char>(c) : '?');
-  }
-  return out;
-}
 
 void nmtGgmlLogCallback(
     enum ggml_log_level level, const char* text, void* /*user_data*/) {
