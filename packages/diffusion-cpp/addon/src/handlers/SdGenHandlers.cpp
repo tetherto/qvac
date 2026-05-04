@@ -34,8 +34,7 @@ static int parseUpscaleRepeats(const picojson::value& v) {
   const double raw = requireNum(v, "upscale.repeats");
   // No policy cap: repeated x4 upscales are memory-bound, so only guard the
   // native int storage used for the loop count.
-  if (raw < 1.0 ||
-      raw > static_cast<double>(std::numeric_limits<int>::max())) {
+  if (raw < 1.0 || raw > static_cast<double>(std::numeric_limits<int>::max())) {
     throw StatusError(
         general_error::InvalidArgument,
         "upscale.repeats must be a positive integer");

@@ -47,8 +47,8 @@ struct SdCtxConfig {
   std::string
       vaePath; // vae_path              -- standalone VAE decoder weights
   std::string esrganPath; // ESRGAN upscaler model for post-generation upscale
-  std::string taesdPath; // taesd_path            -- Tiny AutoEncoder (optional
-                         // fast preview)
+  std::string taesdPath;  // taesd_path            -- Tiny AutoEncoder (optional
+                          // fast preview)
 
   // -- Compute ---------------------------------------------------------------
   int nThreads = -1; // n_threads:            -1 = auto-detect physical cores
