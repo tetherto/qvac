@@ -5,14 +5,12 @@
 #include <vector>
 
 // Forward declare bergamot types
-namespace marian {
-namespace bergamot {
+namespace marian::bergamot {
 class BlockingService;
 class TranslationModel;
 class Response;
 struct ResponseOptions;
-} // namespace bergamot
-} // namespace marian
+} // namespace marian::bergamot
 
 // Wrapper for bergamot translator
 struct bergamot_context { // NOLINT(readability-identifier-naming)
@@ -31,7 +29,8 @@ struct bergamot_params { // NOLINT(readability-identifier-naming)
   int cache_size = 0;
   int beam_size = 1;
   int normalize = 1; // 1 for true, 0 for false
-  double max_length_factor = 2.5;
+  double max_length_factor =
+      2.5; // NOLINT(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
   std::string model_path;
   std::string src_vocab_path;
   std::string dst_vocab_path;

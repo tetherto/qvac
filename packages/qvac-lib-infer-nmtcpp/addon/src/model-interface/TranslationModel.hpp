@@ -24,15 +24,15 @@ enum class BackendType { // NOLINT(performance-enum-size)
 #endif
 };
 
-class TranslationModel
+class TranslationModel // NOLINT(cppcoreguidelines-special-member-functions)
     : public qvac_lib_inference_addon_cpp::model::IModel,
       public qvac_lib_inference_addon_cpp::model::IModelCancel {
 public:
-  TranslationModel() {};
+  TranslationModel() = default;
 
-  TranslationModel(const std::string& modelPath);
+  explicit TranslationModel(const std::string& modelPath);
 
-  virtual ~TranslationModel();
+  ~TranslationModel() override;
 
   TranslationModel(const TranslationModel&) = delete;
 
@@ -89,7 +89,6 @@ public:
    */
   std::string getActiveBackendDescription() const;
 
-public: // overrides
   std::string getName() const override;
 
   std::any process(const std::any& input) override;
@@ -106,9 +105,8 @@ private:
 
   void updateConfig();
 
-  std::string processString(const std::string& input);
+  std::string processString(const std::string& text);
 
-private:
   mutable std::mutex mtx_;
 
   std::string srcLang_;

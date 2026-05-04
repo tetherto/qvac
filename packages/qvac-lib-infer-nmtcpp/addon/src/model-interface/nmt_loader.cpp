@@ -960,23 +960,23 @@ struct nmt_context* nmtInitWithParamsNoState(
 }
 
 struct nmt_context* nmtInitFromFileWithParamsNoState(
-    const char* path_model, struct nmt_context_params params) {
+    const char* pathModel, struct nmt_context_params params) {
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-      std::string("=== nmtInitFromFileWithParamsNoState: path=") + path_model);
+      std::string("=== nmtInitFromFileWithParamsNoState: path=") + pathModel);
 #ifdef _MSC_VER
   // Convert UTF-8 path to wide string (UTF-16) for Windows, resolving character
   // encoding issues.
   std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
-  std::wstring path_model_wide = converter.from_bytes(path_model);
-  auto fin = std::ifstream(path_model_wide, std::ios::binary);
+  std::wstring pathModelWide = converter.from_bytes(pathModel);
+  auto fin = std::ifstream(pathModelWide, std::ios::binary);
 #else
-  auto fin = std::ifstream(path_model, std::ios::binary);
+  auto fin = std::ifstream(pathModel, std::ios::binary);
 #endif
   if (!fin) {
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
-        std::string("ERROR: Failed to open file: ") + path_model);
+        std::string("ERROR: Failed to open file: ") + pathModel);
     return nullptr;
   }
   QLOG(
@@ -1006,18 +1006,18 @@ struct nmt_context* nmtInitFromFileWithParamsNoState(
   auto ctx = nmtInitWithParamsNoState(&loader, params);
 
   if (ctx) {
-    ctx->path_model = path_model;
+    ctx->path_model = pathModel;
   }
 
   return ctx;
 }
 
 struct nmt_context* nmtInitFromFileWithParams(
-    const char* path_model, struct nmt_context_params params) {
+    const char* pathModel, struct nmt_context_params params) {
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
       "=== nmtInitFromFileWithParams called ===\n");
-  nmt_context* ctx = nmtInitFromFileWithParamsNoState(path_model, params);
+  nmt_context* ctx = nmtInitFromFileWithParamsNoState(pathModel, params);
   if (ctx == nullptr) {
     return nullptr;
   }

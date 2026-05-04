@@ -42,11 +42,13 @@ getConfigMap( // NOLINT(readability-static-definition-in-anonymous-namespace)
     configKeysSz--;
     js_value_t* key; // NOLINT(cppcoreguidelines-init-variables)
     JS(js_get_element(env, configKeys, configKeysSz, &key));
-    auto value =
-        config.getProperty(env, key); // NOLINT(readability-qualified-auto)
+    auto value = // NOLINT(readability-qualified-auto)
+        config.getProperty(env, key);
 
-    std::string keyString = js::String::fromValue(key).as<std::string>(
-        env); // NOLINT(hicpp-use-auto,modernize-use-auto)
+    std::string keyString =
+        js::String::fromValue(key)
+            .as<std::string>( // NOLINT(hicpp-use-auto,modernize-use-auto)
+                env);
 
     std::transform( // NOLINT(modernize-use-ranges)
         keyString.begin(),

@@ -34,8 +34,8 @@ namespace {
 void nmtGgmlLogCallback(
     enum ggml_log_level level, const char* text, void* /*user_data*/) {
   if (text == nullptr ||
-      text[0] ==
-          '\0') { // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+      text[0] == // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+          '\0') {
     return;
   }
 
@@ -62,9 +62,12 @@ void nmtGgmlLogCallback(
   size_t len = std::strlen(text);
   while (
       len > 0 &&
-      (text[len - 1] == '\n' ||
-       text[len - 1] ==
-           '\r')) { // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+      (text[len - 1] ==
+           '\n' || // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+       text
+               [len -
+                1] == // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+           '\r')) {
     --len;
   }
   if (len == 0) {
@@ -84,8 +87,8 @@ void nmtGgmlLogCallback(
 
   std::string message;
   message.reserve(
-      7 +
-      len); // NOLINT(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
+      7 + // NOLINT(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
+      len);
   message.append("[ggml] ");
   message.append(text, len);
   QLOG(priority, message);
@@ -195,9 +198,9 @@ bool NmtLazyInitializeBackend::initializeAndRef(
 
 bool NmtLazyInitializeBackend::
     initializeLocked( // NOLINT(readability-function-cognitive-complexity)
-        const std::string& backendsDir,
         const std::string&
-            openclCacheDir) { // NOLINT(bugprone-easily-swappable-parameters,misc-unused-parameters)
+            backendsDir, // NOLINT(bugprone-easily-swappable-parameters,misc-unused-parameters)
+        const std::string& openclCacheDir) {
   if (g_initialized) {
     if (!backendsDir.empty() && !g_recordedBackendsDir.empty() &&
         backendsDir != g_recordedBackendsDir) {
@@ -318,9 +321,9 @@ bool NmtLazyInitializeBackend::
                   " — falling back to default backend loading");
           ggml_backend_load_all();
         } else {
-          auto resolvedStr =
-              backendsDirPath
-                  .string(); // NOLINT(bugprone-unused-local-non-trivial-variable)
+          auto
+              resolvedStr = // NOLINT(bugprone-unused-local-non-trivial-variable)
+              backendsDirPath.string();
 #ifdef __ANDROID__
           if (resolvedStr.rfind("/data/", 0) != 0) {
             QLOG(
@@ -426,8 +429,9 @@ NmtBackendsHandle::NmtBackendsHandle(NmtBackendsHandle&& other) noexcept
   other.ownsHandle_ = false;
 }
 
-NmtBackendsHandle& NmtBackendsHandle::operator=(
-    NmtBackendsHandle&& other) noexcept { // NOLINT(bugprone-exception-escape)
+NmtBackendsHandle&
+NmtBackendsHandle::operator=( // NOLINT(bugprone-exception-escape)
+    NmtBackendsHandle&& other) noexcept {
   if (this != &other) {
     if (ownsHandle_) {
       NmtLazyInitializeBackend::decrementRefCount();

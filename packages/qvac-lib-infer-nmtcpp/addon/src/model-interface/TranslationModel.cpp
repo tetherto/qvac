@@ -38,9 +38,9 @@ TranslationModel::TranslationModel(const std::string& modelPath) {
   }
 }
 
-BackendType TranslationModel::detectBackendType(
-    const std::string&
-        modelPath) { // NOLINT(readability-convert-member-functions-to-static)
+BackendType TranslationModel::
+    detectBackendType( // NOLINT(readability-convert-member-functions-to-static)
+        const std::string& modelPath) {
 #ifdef HAVE_BERGAMOT
   // Check for bergamot model indicators
   // Bergamot models typically have .intgemm in the filename or vocab.spm files
@@ -450,12 +450,10 @@ std::string TranslationModel::processString(const std::string& text) {
         "[PROCESS] Processing with Bergamot backend, text length: " +
             std::to_string(text.length()));
 
-    bool allAreSpace = std::all_of(
+    bool allAreSpace = std::all_of( // NOLINT(modernize-use-ranges)
         text.begin(),
         text.end(),
-        [](unsigned char chr) { // NOLINT(modernize-use-ranges)
-          return std::isspace(chr);
-        });
+        [](unsigned char chr) { return std::isspace(chr); });
     if (allAreSpace) {
       QLOG(
           qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
@@ -481,12 +479,10 @@ std::string TranslationModel::processString(const std::string& text) {
       "[PROCESS] Processing with GGML backend, text length: " +
           std::to_string(text.length()));
 
-  bool allAreSpace = std::all_of(
+  bool allAreSpace = std::all_of( // NOLINT(modernize-use-ranges)
       text.begin(),
       text.end(),
-      [](unsigned char chr) { // NOLINT(modernize-use-ranges)
-        return std::isspace(chr);
-      });
+      [](unsigned char chr) { return std::isspace(chr); });
   if (allAreSpace) {
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
@@ -537,12 +533,10 @@ TranslationModel::processBatch(const std::vector<std::string>& texts) {
           "length: " +
               std::to_string(text.length()));
       // check if text is just spaces
-      allAreSpace = std::all_of(
+      allAreSpace = std::all_of( // NOLINT(modernize-use-ranges)
           text.begin(),
           text.end(),
-          [](unsigned char chr) { // NOLINT(modernize-use-ranges)
-            return std::isspace(chr);
-          });
+          [](unsigned char chr) { return std::isspace(chr); });
       if (allAreSpace) {
         break;
       }
