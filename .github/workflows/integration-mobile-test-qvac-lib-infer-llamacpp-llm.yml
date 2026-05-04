@@ -1110,16 +1110,20 @@ jobs:
             IOS_GREP_HEAVY_4=$(jq -r '.ios.heavy4 | join("|")' "$GROUPS_JSON")
             IOS_GREP_HEAVY_5=$(jq -r '.ios.heavy5 | join("|")' "$GROUPS_JSON")
             IOS_GREP_HEAVY_6=$(jq -r '.ios.heavy6 | join("|")' "$GROUPS_JSON")
+            IOS_GREP_HEAVY_7=$(jq -r '.ios.heavy7 | join("|")' "$GROUPS_JSON")
+            IOS_GREP_HEAVY_8=$(jq -r '.ios.heavy8 | join("|")' "$GROUPS_JSON")
             IOS_GREP_LIGHT_A=$(jq -r '.ios.lightA | join("|")' "$GROUPS_JSON")
             IOS_GREP_LIGHT_B=$(jq -r '.ios.lightB | join("|")' "$GROUPS_JSON")
 
-            echo "iOS test split (6 heavy + 2 light = 8 groups):"
+            echo "iOS test split (8 heavy + 2 light = 10 groups):"
             echo "  Heavy 1 (iPhone 16 Pro Max): $IOS_GREP_HEAVY_1"
             echo "  Heavy 2 (iPhone 16 Pro Max): $IOS_GREP_HEAVY_2"
             echo "  Heavy 3 (iPhone 17):         $IOS_GREP_HEAVY_3"
-            echo "  Heavy 4 (iPhone 17):         $IOS_GREP_HEAVY_4"
-            echo "  Heavy 5 (iPhone 17):         $IOS_GREP_HEAVY_5"
-            echo "  Heavy 6 (SlidingContext):     $IOS_GREP_HEAVY_6"
+            echo "  Heavy 4 (OcrLighton):        $IOS_GREP_HEAVY_4"
+            echo "  Heavy 5 (Reasoning):         $IOS_GREP_HEAVY_5"
+            echo "  Heavy 6 (SlidingContext):    $IOS_GREP_HEAVY_6"
+            echo "  Heavy 7 (Gemma4):            $IOS_GREP_HEAVY_7"
+            echo "  Heavy 8 (OcrPaddle):         $IOS_GREP_HEAVY_8"
             echo "  Light A (iPhone 16 Pro):     $IOS_GREP_LIGHT_A"
             echo "  Light B (iPhone 16 Pro):     $IOS_GREP_LIGHT_B"
 
@@ -1129,6 +1133,8 @@ jobs:
             make_split "$IOS_GREP_HEAVY_4" testspec-heavy-4.yml
             make_split "$IOS_GREP_HEAVY_5" testspec-heavy-5.yml
             make_split "$IOS_GREP_HEAVY_6" testspec-heavy-6.yml
+            make_split "$IOS_GREP_HEAVY_7" testspec-heavy-7.yml
+            make_split "$IOS_GREP_HEAVY_8" testspec-heavy-8.yml
             make_split "$IOS_GREP_LIGHT_A" testspec-light-a.yml
             make_split "$IOS_GREP_LIGHT_B" testspec-light-b.yml
 
@@ -1148,6 +1154,10 @@ jobs:
             echo "test_spec_arn_7=$SPEC_ARN_LA" >> $GITHUB_OUTPUT
             SPEC_ARN_LB=$(upload_spec testspec-light-b.yml "iOS-LightB")
             echo "test_spec_arn_8=$SPEC_ARN_LB" >> $GITHUB_OUTPUT
+            SPEC_ARN_H7=$(upload_spec testspec-heavy-7.yml "iOS-Heavy7")
+            echo "test_spec_arn_9=$SPEC_ARN_H7" >> $GITHUB_OUTPUT
+            SPEC_ARN_H8=$(upload_spec testspec-heavy-8.yml "iOS-Heavy8")
+            echo "test_spec_arn_10=$SPEC_ARN_H8" >> $GITHUB_OUTPUT
           fi
 
       - name: Schedule Device Farm Test Run
@@ -1204,8 +1214,10 @@ jobs:
             TEST_SPEC_ARN_6="${{ steps.upload_test_spec.outputs.test_spec_arn_6 }}"
             TEST_SPEC_ARN_7="${{ steps.upload_test_spec.outputs.test_spec_arn_7 }}"
             TEST_SPEC_ARN_8="${{ steps.upload_test_spec.outputs.test_spec_arn_8 }}"
+            TEST_SPEC_ARN_9="${{ steps.upload_test_spec.outputs.test_spec_arn_9 }}"
+            TEST_SPEC_ARN_10="${{ steps.upload_test_spec.outputs.test_spec_arn_10 }}"
 
-            echo "🚀 Scheduling 8 iOS runs (each runs on ALL devices in pool)..."
+            echo "🚀 Scheduling 10 iOS runs (each runs on ALL devices in pool)..."
             echo "Device Pool ARN: $POOL_ARN"
 
             RUN_ARN_1=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy1-Finetuning" "$TEST_SPEC_ARN_1")
@@ -1232,6 +1244,12 @@ jobs:
             RUN_ARN_8=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-LightB" "$TEST_SPEC_ARN_8")
             echo "✅ LightB scheduled: $RUN_ARN_8"
 
+            RUN_ARN_9=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy7-Gemma4" "$TEST_SPEC_ARN_9")
+            echo "✅ Heavy7 (Gemma4) scheduled: $RUN_ARN_9"
+
+            RUN_ARN_10=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy8-OcrPaddle" "$TEST_SPEC_ARN_10")
+            echo "✅ Heavy8 (OcrPaddle) scheduled: $RUN_ARN_10"
+
             echo "run_arn_1=$RUN_ARN_1" >> $GITHUB_OUTPUT
             echo "run_arn_2=$RUN_ARN_2" >> $GITHUB_OUTPUT
             echo "run_arn_3=$RUN_ARN_3" >> $GITHUB_OUTPUT
@@ -1240,7 +1258,9 @@ jobs:
             echo "run_arn_6=$RUN_ARN_6" >> $GITHUB_OUTPUT
             echo "run_arn_7=$RUN_ARN_7" >> $GITHUB_OUTPUT
             echo "run_arn_8=$RUN_ARN_8" >> $GITHUB_OUTPUT
-            echo "run_count=8" >> $GITHUB_OUTPUT
+            echo "run_arn_9=$RUN_ARN_9" >> $GITHUB_OUTPUT
+            echo "run_arn_10=$RUN_ARN_10" >> $GITHUB_OUTPUT
+            echo "run_count=10" >> $GITHUB_OUTPUT
           fi
 
           echo "All runs scheduled."
@@ -1277,6 +1297,8 @@ jobs:
           RUN_ARN_6="${{ steps.schedule_run.outputs.run_arn_6 }}"
           RUN_ARN_7="${{ steps.schedule_run.outputs.run_arn_7 }}"
           RUN_ARN_8="${{ steps.schedule_run.outputs.run_arn_8 }}"
+          RUN_ARN_9="${{ steps.schedule_run.outputs.run_arn_9 }}"
+          RUN_ARN_10="${{ steps.schedule_run.outputs.run_arn_10 }}"
           RUN_COUNT="${{ steps.schedule_run.outputs.run_count }}"
 
           echo "📊 Monitoring $RUN_COUNT Device Farm run(s)..."
@@ -1327,9 +1349,9 @@ jobs:
           done
 
           RUN_ARNS=("$RUN_ARN_1")
-          for i in 2 3 4 5 6 7 8; do
+          for i in $(seq 2 "$RUN_COUNT"); do
             eval "arn=\$RUN_ARN_$i"
-            if [ "$RUN_COUNT" -ge "$i" ] && [ -n "$arn" ]; then
+            if [ -n "$arn" ]; then
               RUN_ARNS+=("$arn")
             fi
           done
@@ -1479,15 +1501,17 @@ jobs:
           RUN_ARN_6="${{ steps.schedule_run.outputs.run_arn_6 }}"
           RUN_ARN_7="${{ steps.schedule_run.outputs.run_arn_7 }}"
           RUN_ARN_8="${{ steps.schedule_run.outputs.run_arn_8 }}"
+          RUN_ARN_9="${{ steps.schedule_run.outputs.run_arn_9 }}"
+          RUN_ARN_10="${{ steps.schedule_run.outputs.run_arn_10 }}"
           RUN_COUNT="${{ steps.schedule_run.outputs.run_count }}"
           LOG_DIR="devicefarm-logs/${{ matrix.platform }}"
           PLATFORM="${{ matrix.platform }}"
           mkdir -p "$LOG_DIR"
 
           RUN_ARNS=("$RUN_ARN_1")
-          for i in 2 3 4 5 6 7 8; do
+          for i in $(seq 2 "$RUN_COUNT"); do
             eval "arn=\$RUN_ARN_$i"
-            if [ "$RUN_COUNT" -ge "$i" ] && [ -n "$arn" ]; then
+            if [ -n "$arn" ]; then
               RUN_ARNS+=("$arn")
             fi
           done
