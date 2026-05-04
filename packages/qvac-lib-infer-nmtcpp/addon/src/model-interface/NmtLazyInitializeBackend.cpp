@@ -60,14 +60,9 @@ void nmtGgmlLogCallback(
 
   // Compute the trimmed length without heap allocation.
   size_t len = std::strlen(text);
-  while (
-      len > 0 &&
-      (text[len - 1] ==
-           '\n' || // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-       text
-               [len -
-                1] == // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-           '\r')) {
+  // NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+  while (len > 0 && (text[len - 1] == '\n' || text[len - 1] == '\r')) {
+    // NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic)
     --len;
   }
   if (len == 0) {
@@ -196,11 +191,11 @@ bool NmtLazyInitializeBackend::initializeAndRef(
   return didInit;
 }
 
-bool NmtLazyInitializeBackend::
-    initializeLocked( // NOLINT(readability-function-cognitive-complexity)
-        const std::string&
-            backendsDir, // NOLINT(bugprone-easily-swappable-parameters,misc-unused-parameters)
-        const std::string& openclCacheDir) {
+// NOLINTBEGIN(readability-function-cognitive-complexity,bugprone-easily-swappable-parameters)
+bool NmtLazyInitializeBackend::initializeLocked(
+    const std::string& backendsDir,
+    const std::string& openclCacheDir [[maybe_unused]]) {
+  // NOLINTEND(readability-function-cognitive-complexity,bugprone-easily-swappable-parameters)
   if (g_initialized) {
     if (!backendsDir.empty() && !g_recordedBackendsDir.empty() &&
         backendsDir != g_recordedBackendsDir) {

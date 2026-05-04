@@ -44,8 +44,8 @@ static std::string validateBergamotFile(
 
   // u8path interprets the string as UTF-8, avoiding ANSI
   // code-page corruption on Windows for non-ASCII paths.
-  auto pathObj = std::filesystem::u8path(
-      path); // NOLINT(clang-diagnostic-deprecated-declarations)
+  // NOLINTNEXTLINE(clang-diagnostic-deprecated-declarations)
+  auto pathObj = std::filesystem::u8path(path);
 
   if (!std::filesystem::exists(pathObj)) {
     return fileType + " file not found: " + path;
@@ -133,8 +133,8 @@ bergamotInit(const char* modelPath, const bergamot_params& params) {
         qvac_lib_inference_addon_cpp::logger::Priority::INFO,
         "[BERGAMOT_INIT] Creating context");
 
-    auto* ctx =
-        new bergamot_context(); // NOLINT(cppcoreguidelines-owning-memory)
+    // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
+    auto* ctx = new bergamot_context();
 
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::INFO,
@@ -282,9 +282,8 @@ std::string bergamotTranslate(bergamot_context* ctx, const char* input) {
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
 
     // Update statistics (approximate - bergamot doesn't separate encode/decode)
-    ctx->total_decode_time +=
-        duration.count() /
-        1000000.0; // NOLINT(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions,cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
+    // NOLINTNEXTLINE(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions,cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
+    ctx->total_decode_time += duration.count() / 1000000.0;
 
     if (!responses.empty()) {
       // Count total tokens across all sentences in the response
@@ -341,9 +340,8 @@ bergamot_batch_result bergamotTranslateBatch(
 
     // Update timing statistics (total time = decode time for Bergamot, no
     // separate encode)
-    ctx->total_decode_time +=
-        duration.count() /
-        1000000.0; // NOLINT(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions,cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
+    // NOLINTNEXTLINE(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions,cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
+    ctx->total_decode_time += duration.count() / 1000000.0;
 
     // Extract Results and count tokens
     for (size_t i = 0; i < responses.size(); ++i) {
@@ -366,9 +364,10 @@ bergamot_batch_result bergamotTranslateBatch(
 }
 
 // Get runtime statistics
-int bergamotGetRuntimeStats( // NOLINT(bugprone-easily-swappable-parameters)
-    bergamot_context* ctx, double* encodeTime, double* decodeTime,
-    int* totalTokens) {
+int bergamotGetRuntimeStats(
+    bergamot_context* ctx,
+    double* encodeTime, // NOLINT(bugprone-easily-swappable-parameters)
+    double* decodeTime, int* totalTokens) {
   if (ctx == nullptr) {
     return -1;
   }
@@ -397,5 +396,5 @@ void bergamotResetRuntimeStats(bergamot_context* ctx) {
 
 // Free bergamot context
 void bergamotFree(bergamot_context* ctx) {
-  delete ctx;
-} // NOLINT(cppcoreguidelines-owning-memory)
+  delete ctx; // NOLINT(cppcoreguidelines-owning-memory)
+}

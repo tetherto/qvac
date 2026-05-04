@@ -45,10 +45,8 @@ getConfigMap( // NOLINT(readability-static-definition-in-anonymous-namespace)
     auto value = // NOLINT(readability-qualified-auto)
         config.getProperty(env, key);
 
-    std::string keyString =
-        js::String::fromValue(key)
-            .as<std::string>( // NOLINT(hicpp-use-auto,modernize-use-auto)
-                env);
+    std::string keyString = // NOLINT(hicpp-use-auto,modernize-use-auto)
+        js::String::fromValue(key).as<std::string>(env);
 
     std::transform( // NOLINT(modernize-use-ranges)
         keyString.begin(),
