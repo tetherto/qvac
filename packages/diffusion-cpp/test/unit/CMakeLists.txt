@@ -21,6 +21,8 @@ add_executable(
   test_img2img.cpp
   test_sd_gen_handlers.cpp
   test_sd_vid_gen_handlers.cpp
+  test_sd_video_frames.cpp
+  test_wan_video.cpp
   test_avi_writer.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/ImageUtils.cpp

@@ -17,9 +17,11 @@
 #include <qvac-lib-inference-addon-cpp/Logger.hpp>
 #include <stb_image_write.h>
 
+#include "utils/AviWriter.hpp"
 #include "utils/BackendSelection.hpp"
 #include "utils/ImageUtils.hpp"
 #include "utils/LoggingMacros.hpp"
+#include "utils/SdVideoFrames.hpp"
 
 using namespace qvac_lib_inference_addon_cpp;
 using namespace qvac_errors;
@@ -454,7 +456,8 @@ void SdModel::load() {
 }
 
 // ---------------------------------------------------------------------------
-// process() -- applies SdGenHandlers to JSON params, then calls generate_image
+// process() -- parses mode, sets up callbacks + guard, dispatches to
+// processImage() (generate_image) or processVideo() (generate_video).
 // ---------------------------------------------------------------------------
 
 std::any SdModel::process(const std::any& input) {
@@ -497,6 +500,34 @@ std::any SdModel::process(const std::any& input) {
     throw StatusError(
         general_error::InvalidArgument, "Params must be a JSON object");
 
+  // -- Peek top-level mode to choose dispatch branch -------------------------
+  // Default is "txt2img" for backwards compatibility: a JSON payload that
+  // omits "mode" keeps behaving as an image generation job.
+  std::string mode = "txt2img";
+  const auto& obj = v.get<picojson::object>();
+  if (auto it = obj.find("mode"); it != obj.end()) {
+    if (!it->second.is<std::string>())
+      throw StatusError(
+          general_error::InvalidArgument, "mode must be a string");
+    mode = it->second.get<std::string>();
+  }
+
+  const bool isVideo =
+      (mode == "txt2vid" || mode == "img2vid" || mode == "flf2vid");
+  if (isVideo) {
+    return processVideo(job, v);
+  }
+  return processImage(job, v);
+}
+
+// ---------------------------------------------------------------------------
+// processImage() -- applies SdGenHandlers, fills sd_img_gen_params_t, runs
+// generate_image(). Assumes callbacks + guard are already set up by
+// process().
+// ---------------------------------------------------------------------------
+
+std::any SdModel::processImage(
+    const GenerationJob& job, const picojson::value& v) {
   // -- Build SdGenConfig from handlers ---------------------------------------
   qvac_lib_inference_addon_sd::SdGenConfig gen{};
   qvac_lib_inference_addon_sd::applySdGenHandlers(
@@ -859,6 +890,262 @@ std::any SdModel::process(const std::any& input) {
 
   // Return empty -- images are already delivered via outputCallback,
   // and stats are emitted by queueJobEnded() -> runtimeStats().
+  return std::any{};
+}
+
+// ---------------------------------------------------------------------------
+// processVideo() -- applies SdVidGenHandlers, fills sd_vid_gen_params_t,
+// runs generate_video(), encodes the returned sd_image_t* frames as an
+// in-memory MJPG AVI via encodeFramesToAvi() and fires the outputCallback
+// once. Optionally fan out per-frame PNGs to frameCallback.
+//
+// Assumes callbacks + guard are already set up by process().
+// ---------------------------------------------------------------------------
+
+std::any SdModel::processVideo(
+    const GenerationJob& job, const picojson::value& v) {
+  // -- Build SdVidGenConfig from handlers ------------------------------------
+  qvac_lib_inference_addon_sd::SdVidGenConfig vid{};
+  qvac_lib_inference_addon_sd::applySdVidGenHandlers(
+      vid, v.get<picojson::object>());
+
+  if (vid.mode != "txt2vid" && vid.mode != "img2vid" && vid.mode != "flf2vid")
+    throw StatusError(
+        general_error::InvalidArgument,
+        "processVideo: unsupported mode '" + vid.mode +
+            "' (expected txt2vid, img2vid, or flf2vid)");
+
+  // -- Mode-vs-inputs invariants --------------------------------------------
+  // These checks mirror the JS-layer validation but are duplicated here so
+  // the C++ API stays safe when called directly from unit tests or bindings
+  // that bypass the JS shim.
+  if (vid.mode == "img2vid" && job.initImageBytes.empty())
+    throw StatusError(
+        general_error::InvalidArgument,
+        "img2vid: init_image is required (the first frame to animate)");
+
+  if (vid.mode == "flf2vid") {
+    if (job.initImageBytes.empty())
+      throw StatusError(
+          general_error::InvalidArgument,
+          "flf2vid: init_image (first frame) is required");
+    if (job.endImageBytes.empty())
+      throw StatusError(
+          general_error::InvalidArgument,
+          "flf2vid: end_image (last frame) is required");
+  }
+
+  if (!job.endImageBytes.empty() && vid.mode != "flf2vid")
+    throw StatusError(
+        general_error::InvalidArgument,
+        "end_image is only valid for mode='flf2vid', got mode='" + vid.mode +
+            "'");
+
+  if (vid.mode == "txt2vid" && !job.initImageBytes.empty())
+    throw StatusError(
+        general_error::InvalidArgument,
+        "txt2vid does not accept init_image; use img2vid or flf2vid instead");
+
+  // -- Decode init / end / control-frame images -----------------------------
+  // All decoded pixel buffers are owned here and freed at scope exit (even
+  // if generate_video throws or the AVI muxer fails). sd_image_t::data is
+  // allocated by stb_image via malloc(), so free() is correct.
+  sd_image_t initImg{};
+  sd_image_t endImg{};
+  std::vector<sd_image_t> controlFrames;
+
+  struct FrameBuffersGuard {
+    sd_image_t* init;
+    sd_image_t* end;
+    std::vector<sd_image_t>* controls;
+    ~FrameBuffersGuard() {
+      if (init && init->data) {
+        free(init->data);
+        init->data = nullptr;
+      }
+      if (end && end->data) {
+        free(end->data);
+        end->data = nullptr;
+      }
+      if (controls) {
+        for (auto& f : *controls) {
+          if (f.data) {
+            free(f.data);
+            f.data = nullptr;
+          }
+        }
+      }
+    }
+  } frameGuard{&initImg, &endImg, &controlFrames};
+
+  if (!job.initImageBytes.empty()) {
+    initImg = decodePng(job.initImageBytes);
+    if (!initImg.data)
+      throw StatusError(
+          general_error::InvalidArgument,
+          "processVideo: failed to decode init_image (corrupt or "
+          "unsupported format; supported: PNG, JPEG)");
+  }
+
+  if (!job.endImageBytes.empty()) {
+    endImg = decodePng(job.endImageBytes);
+    if (!endImg.data)
+      throw StatusError(
+          general_error::InvalidArgument,
+          "processVideo: failed to decode end_image (corrupt or unsupported "
+          "format; supported: PNG, JPEG)");
+  }
+
+  if (!job.controlFramesBytes.empty()) {
+    controlFrames.reserve(job.controlFramesBytes.size());
+    for (size_t i = 0; i < job.controlFramesBytes.size(); ++i) {
+      sd_image_t decoded = decodePng(job.controlFramesBytes[i]);
+      if (!decoded.data)
+        throw StatusError(
+            general_error::InvalidArgument,
+            "processVideo: failed to decode control_frames[" +
+                std::to_string(i) +
+                "] (corrupt or unsupported format; supported: PNG, JPEG)");
+      controlFrames.push_back(decoded);
+    }
+  }
+
+  // -- Build sd_vid_gen_params_t --------------------------------------------
+  sd_vid_gen_params_t vidParams{};
+  sd_vid_gen_params_init(&vidParams);
+
+  vidParams.prompt = vid.prompt.c_str();
+  vidParams.negative_prompt = vid.negativePrompt.c_str();
+  vidParams.width = vid.width;
+  vidParams.height = vid.height;
+  vidParams.seed = vid.seed;
+  vidParams.video_frames = vid.videoFrames;
+  vidParams.strength = vid.strength;
+  vidParams.vace_strength = vid.vaceStrength;
+  vidParams.moe_boundary = vid.moeBoundary;
+
+  if (initImg.data) vidParams.init_image = initImg;
+  if (endImg.data) vidParams.end_image = endImg;
+  if (!controlFrames.empty()) {
+    vidParams.control_frames = controlFrames.data();
+    vidParams.control_frames_size = static_cast<int>(controlFrames.size());
+  }
+
+  // Low-noise / only-expert sample params
+  vidParams.sample_params.sample_method = vid.sampleMethod;
+  vidParams.sample_params.scheduler = vid.scheduler;
+  vidParams.sample_params.sample_steps = vid.sampleSteps;
+  vidParams.sample_params.guidance.txt_cfg = vid.cfgScale;
+  // Per-job flow_shift overrides ctx-level flowShift; 0.0 falls through to
+  // the ctx default (SdCtxConfig::flowShift, which is infinity / embedded).
+  if (vid.flowShift > 0.0f) {
+    vidParams.sample_params.flow_shift = vid.flowShift;
+  } else {
+    vidParams.sample_params.flow_shift = config_.flowShift;
+  }
+
+  // High-noise expert sample params (Wan 2.2 only; ignored by the library
+  // when highNoiseDiffusionModelPath is empty)
+  vidParams.high_noise_sample_params.sample_method = vid.highNoiseSampleMethod;
+  vidParams.high_noise_sample_params.scheduler = vid.highNoiseScheduler;
+  vidParams.high_noise_sample_params.sample_steps = vid.highNoiseSteps;
+  vidParams.high_noise_sample_params.guidance.txt_cfg = vid.highNoiseCfgScale;
+  if (vid.highNoiseFlowShift > 0.0f) {
+    vidParams.high_noise_sample_params.flow_shift = vid.highNoiseFlowShift;
+  } else {
+    vidParams.high_noise_sample_params.flow_shift = config_.flowShift;
+  }
+
+  // VAE tiling (strongly recommended for Wan)
+  vidParams.vae_tiling_params.enabled = vid.vaeTiling;
+  vidParams.vae_tiling_params.tile_size_x = vid.vaeTileSizeX;
+  vidParams.vae_tiling_params.tile_size_y = vid.vaeTileSizeY;
+  vidParams.vae_tiling_params.target_overlap = vid.vaeTileOverlap;
+
+  // Step-caching
+  sd_cache_params_init(&vidParams.cache);
+  vidParams.cache.mode = vid.cacheMode;
+  if (vid.cacheThreshold > 0.0f)
+    vidParams.cache.reuse_threshold = vid.cacheThreshold;
+
+  // -- Generate -------------------------------------------------------------
+  const auto t0 = std::chrono::steady_clock::now();
+
+  int numFramesOut = 0;
+  qvac_lib_inference_addon_sd::SdVideoFrames frames(
+      generate_video(sdCtx_.get(), &vidParams, &numFramesOut), numFramesOut);
+
+  const bool wasCancelled = cancelRequested_.load();
+
+  // If cancelled, surface as an exception for the same reason as the image
+  // path: a "successful" completion with zero frames would be misleading.
+  if (wasCancelled) {
+    throw std::runtime_error("Job cancelled");
+  }
+
+  if (frames.empty())
+    throw StatusError(
+        general_error::InternalError,
+        "processVideo: generate_video() returned no frames");
+
+  // -- Fan out per-frame PNGs (opt-in) --------------------------------------
+  if (job.frameCallback) {
+    for (int i = 0; i < frames.count(); ++i) {
+      if (!frames[i].data) continue;
+      auto png = encodeToPng(frames[i]);
+      if (!png.empty()) {
+        job.frameCallback(png, i, frames.count());
+      }
+    }
+  }
+
+  // -- Encode AVI and deliver ----------------------------------------------
+  auto avi = qvac_lib_inference_addon_sd::encodeFramesToAvi(
+      frames.data(), frames.count(), vid.fps);
+
+  if (!avi.empty() && job.outputCallback) {
+    job.outputCallback(avi);
+  }
+
+  const auto t1 = std::chrono::steady_clock::now();
+
+  // -- Accumulate cumulative counters ---------------------------------------
+  const int64_t genMsI = static_cast<int64_t>(
+      std::chrono::duration<double, std::milli>(t1 - t0).count());
+  stats_.totalGenerationMs += genMsI;
+  stats_.totalWallMs += genMsI;
+  // totalSteps accumulates both experts for Wan 2.2 runs; for Wan 2.1 the
+  // high-noise expert isn't loaded, so highNoiseSteps goes to waste counting
+  // here but isn't actually consumed. Keep it simple and sum both.
+  stats_.totalSteps += vid.sampleSteps;
+  if (!config_.highNoiseDiffusionModelPath.empty())
+    stats_.totalSteps += vid.highNoiseSteps;
+  stats_.totalGenerations++;
+  stats_.totalVideos++;
+  stats_.totalVideoFrames += frames.count();
+  // Count pixels over all frames -- useful for megapixel/s rate derivation.
+  stats_.totalPixels += static_cast<int64_t>(vid.width) *
+                        static_cast<int64_t>(vid.height) * frames.count();
+
+  // -- Build runtime stats --------------------------------------------------
+  lastStats_.clear();
+  lastStats_.emplace_back("modelLoadMs", stats_.modelLoadMs);
+  lastStats_.emplace_back("generationMs", genMsI);
+  lastStats_.emplace_back("totalGenerationMs", stats_.totalGenerationMs);
+  lastStats_.emplace_back("totalWallMs", stats_.totalWallMs);
+  lastStats_.emplace_back("totalSteps", stats_.totalSteps);
+  lastStats_.emplace_back("totalGenerations", stats_.totalGenerations);
+  lastStats_.emplace_back("totalImages", stats_.totalImages);
+  lastStats_.emplace_back("totalPixels", stats_.totalPixels);
+  lastStats_.emplace_back("totalVideos", stats_.totalVideos);
+  lastStats_.emplace_back("totalVideoFrames", stats_.totalVideoFrames);
+  lastStats_.emplace_back("width", static_cast<int64_t>(vid.width));
+  lastStats_.emplace_back("height", static_cast<int64_t>(vid.height));
+  lastStats_.emplace_back("seed", vid.seed);
+  lastStats_.emplace_back(
+      "videoFrames", static_cast<int64_t>(frames.count()));
+  lastStats_.emplace_back("fps", static_cast<int64_t>(vid.fps));
+
   return std::any{};
 }
 
