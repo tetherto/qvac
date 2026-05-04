@@ -177,7 +177,7 @@ jobs:
           merge-multiple: true
 
       - if: ${{ !inputs.prebuild_package }}
-        run: cp -r ${{ runner.temp }}/qvac-diffusion-cpp/* ${{ env.WORKDIR }}/prebuilds
+        run: cp -r ${{ runner.temp }}/qvac-diffusion-cpp/* ${{ env.WORKDIR }}/prebuilds/
 
       - name: Download prebuilds from package (Linux/macOS)
         if: ${{ inputs.prebuild_package && matrix.platform != 'win32' }}
@@ -201,7 +201,7 @@ jobs:
             exit 1
           fi
 
-          cp -r ./package/prebuilds/* ${{ env.WORKDIR }}/prebuilds
+          cp -r ./package/prebuilds/* ${{ env.WORKDIR }}/prebuilds/
 
           echo "Prebuilds downloaded from npm successfully"
           ls -la ${{ env.WORKDIR }}/prebuilds/
