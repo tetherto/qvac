@@ -93,6 +93,31 @@ export interface InferenceClientState {
   destroyed: boolean
 }
 
+/**
+ * Stats returned via `response.stats` when the addon is constructed with
+ * `opts.stats = true`. Field set differs by backend:
+ *
+ * - Bergamot emits: `totalTokens`, `totalTime`, `decodeTime`, `TPS`.
+ * - GGML/IndicTrans emits the above plus `encodeTime` and `TTFT`.
+ *
+ * Units:
+ * - `totalTime`, `encodeTime`, `decodeTime` — seconds (double).
+ * - `TTFT` (Time-To-First-Token) — milliseconds (double).
+ * - `TPS` (Tokens-Per-Second) — tokens / second (double).
+ * - `totalTokens` — integer count.
+ *
+ * Note: pivot translations may emit keys prefixed with the model name
+ * (e.g. `"BERGAMOT : ->TPS"`). This interface models the non-pivot shape.
+ */
+export interface RuntimeStats {
+  totalTokens: number
+  totalTime: number
+  decodeTime: number
+  TPS: number
+  encodeTime?: number
+  TTFT?: number
+}
+
 export default class TranslationNmtcpp {
   static readonly ModelTypes: TranslationNmtcppModelTypes
   constructor(args: TranslationNmtcppArgs)
