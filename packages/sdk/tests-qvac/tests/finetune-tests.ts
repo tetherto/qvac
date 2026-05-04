@@ -62,10 +62,22 @@ export const finetuneProgressZeroDrop = createFinetuneTest(
   120000,
 );
 
+export const finetuneProgressLossSchema: TestDefinition = {
+  testId: "finetune-progress-loss-schema",
+  params: { numberOfEpochs: 1 },
+  expectation: { validation: "function", fn: () => true },
+  metadata: {
+    category: "finetune",
+    dependency: "finetune-llm",
+    estimatedDurationMs: 60000,
+  },
+};
+
 export const finetuneTests = [
   finetuneStartComplete,
   finetunePauseResume,
   finetuneProgressStreaming,
   finetuneErrorCases,
   finetuneProgressZeroDrop,
+  finetuneProgressLossSchema,
 ];

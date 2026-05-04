@@ -53,6 +53,7 @@ export class FinetuneExecutor extends AbstractModelExecutor<typeof finetuneTests
     "finetune-progress-streaming": this.progressStreaming.bind(this),
     "finetune-error-cases": this.errorCases.bind(this),
     "finetune-progress-zero-drop": this.progressZeroDrop.bind(this),
+    "finetune-progress-loss-schema": this.progressLossSchema.bind(this),
   } as never;
 
   async teardown(testId: string, context: unknown) {
@@ -294,6 +295,62 @@ export class FinetuneExecutor extends AbstractModelExecutor<typeof finetuneTests
       );
     } catch (error) {
       return this.failWithError("finetune error cases", error);
+    }
+  }
+
+  async progressLossSchema(
+    params: BaseParams,
+    expectation: Expectation,
+  ): Promise<TestResult> {
+    const modelId = await this.resources.ensureLoaded(FINETUNE_DEPENDENCY);
+    const paths = await this.createDatasets();
+
+    try {
+      const handle = finetune({
+        modelId,
+        options: this.buildOptions(paths, params.numberOfEpochs ?? 1),
+      });
+      const progress = await this.collectProgress(handle.progressStream);
+      const result = await handle.result;
+
+      if (result.status !== "COMPLETED") {
+        return {
+          passed: false,
+          output: `Expected COMPLETED status, got ${result.status}`,
+        };
+      }
+      if (progress.length === 0) {
+        return { passed: false, output: "Expected at least one progress event" };
+      }
+
+      let nanCount = 0;
+      let numberCount = 0;
+      let nullCount = 0;
+      for (const p of progress) {
+        const loss: unknown = p.loss;
+        if (loss === null) {
+          nullCount++;
+        } else if (typeof loss === "number") {
+          if (Number.isNaN(loss)) nanCount++;
+          else numberCount++;
+        } else {
+          return {
+            passed: false,
+            output: `Unexpected loss type at step ${p.global_steps}: ${typeof loss} (${String(loss)})`,
+          };
+        }
+      }
+
+      const summary =
+        `Schema parse OK across ${progress.length} progress events ` +
+        `(loss: number=${numberCount}, NaN=${nanCount}, null=${nullCount})`;
+
+      if (expectation.validation === "function") {
+        return { passed: true, output: summary };
+      }
+      return ValidationHelpers.validate(summary, expectation);
+    } catch (error) {
+      return this.failWithError("finetune progress loss-schema", error);
     }
   }
 
