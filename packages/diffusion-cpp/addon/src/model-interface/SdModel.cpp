@@ -330,6 +330,8 @@ void SdModel::load() {
   };
   params.model_path = optPath(config_.modelPath);
   params.diffusion_model_path = optPath(config_.diffusionModelPath);
+  params.high_noise_diffusion_model_path =
+      optPath(config_.highNoiseDiffusionModelPath);
   params.clip_l_path = optPath(config_.clipLPath);
   params.clip_g_path = optPath(config_.clipGPath);
   params.t5xxl_path = optPath(config_.t5XxlPath);

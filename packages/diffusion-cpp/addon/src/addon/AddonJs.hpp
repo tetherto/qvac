@@ -26,13 +26,18 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   // index.js selects which field to populate based on model family:
   //   "path"               -> model_path          (SD1.x / SDXL all-in-one
   //   checkpoint) "diffusionModelPath" -> diffusion_model_path (FLUX.2 [klein]
-  //   standalone GGUF)
-  // Exactly one of the two will be non-empty; SdModel::load() passes both to
-  // sd_ctx_params_t and the library uses whichever is set.
+  //   standalone GGUF; Wan 2.1 single expert; Wan 2.2 low-noise expert)
+  //   "highNoiseDiffusionModelPath" -> high_noise_diffusion_model_path (Wan
+  //   2.2 high-noise expert; empty for Wan 2.1 and all non-Wan models)
+  // Exactly one of model_path / diffusion_model_path must be non-empty;
+  // SdModel::load() passes all paths to sd_ctx_params_t and the library
+  // uses whichever are set.
   SdCtxConfig config{};
 
   config.modelPath = args.getMapEntry(1, "path");
   config.diffusionModelPath = args.getMapEntry(1, "diffusionModelPath");
+  config.highNoiseDiffusionModelPath =
+      args.getMapEntry(1, "highNoiseDiffusionModelPath");
   config.clipLPath = args.getMapEntry(1, "clipLPath");
   config.clipGPath = args.getMapEntry(1, "clipGPath");
   config.t5XxlPath = args.getMapEntry(1, "t5XxlPath");
