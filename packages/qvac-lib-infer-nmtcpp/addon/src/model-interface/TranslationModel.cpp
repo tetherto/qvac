@@ -267,16 +267,15 @@ void TranslationModel::load() {
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO, oss.str());
 
   // Build the freshly-loaded context outside the lock so the heavy
-  // nmt_init_from_file_with_params call doesn't serialize against
+  // nmtInitFromFileWithParams call doesn't serialize against
   // getActiveBackendName(). Then commit nmtCtx_ + activeBackendName_ together
   // under mtx_ so any concurrent reader sees a consistent (ctx, name) pair.
   std::unique_ptr<nmt_context, decltype(&nmt_free)> freshCtx(
-      nmt_init_from_file_with_params(modelPath_.c_str(), params), &nmt_free);
+      nmtInitFromFileWithParams(modelPath_.c_str(), params), &nmt_free);
 
   std::ostringstream ctxMsg;
-  ctxMsg
-      << "[TRANSLATION MODEL] nmt_init_from_file_with_params() returned, ctx="
-      << (void*)freshCtx.get();
+  ctxMsg << "[TRANSLATION MODEL] nmtInitFromFileWithParams() returned, ctx="
+         << (void *)freshCtx.get();
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO, ctxMsg.str());
 
   if (freshCtx == nullptr) {
@@ -304,7 +303,7 @@ void TranslationModel::load() {
       if (name != nullptr) {
         cachedName = std::string(name);
       }
-      const char* desc = ggml_backend_dev_description(dev);
+      const char *desc = ggml_backend_dev_description(dev);
       if (desc != nullptr) {
         cachedDescription = sanitizePrintableAscii(std::string(desc));
       }
@@ -348,8 +347,8 @@ void TranslationModel::reset() const {
 #endif
 
   if (nmtCtx_) {
-    nmt_reset_runtime_stats(nmtCtx_.get());
-    nmt_reset_state(nmtCtx_.get());
+    nmtResetRuntimeStats(nmtCtx_.get());
+    nmtResetState(nmtCtx_.get());
   }
   isFirstSentence_ = true;
 }
@@ -489,7 +488,7 @@ std::string TranslationModel::processString(const std::string& text) {
     return "";
   }
 
-  nmt_reset_state(nmtCtx_.get());
+  nmtResetState(nmtCtx_.get());
 
   std::string input = text;
   if (nmt_model_is_indictrans(nmtCtx_.get())) {
@@ -609,8 +608,8 @@ qvac_lib_inference_addon_cpp::RuntimeStats TranslationModel::runtimeStats()
   double decodeTime = 0.0;
   int totalTokens = 0;
 
-  if (nmt_get_runtime_stats(
-          nmtCtx_.get(), &encodeTime, &decodeTime, &totalTokens) == 0) {
+  if (nmtGetRuntimeStats(nmtCtx_.get(), &encodeTime, &decodeTime,
+                         &totalTokens) == 0) {
     // TTFT = encodeTime in milliseconds (time before first output token)
     double ttft = encodeTime * 1000.0;
     // TPS = tokens per second (total tokens / total time)
@@ -725,22 +724,21 @@ void TranslationModel::setConfig(
   }
 
   if (auto it = config_.find("op_offload_min_batch"); it != config_.end()) {
-    if (const auto* asInt = std::get_if<int64_t>(&it->second)) {
+    if (const auto *asInt = std::get_if<int64_t>(&it->second)) {
       auto clamped = std::clamp(*asInt, static_cast<int64_t>(0),
                                 static_cast<int64_t>(INT_MAX));
       setOpOffloadMinBatch(static_cast<int>(clamped));
-    } else if (const auto* asDouble = std::get_if<double>(&it->second)) {
+    } else if (const auto *asDouble = std::get_if<double>(&it->second)) {
       if (std::isfinite(*asDouble)) {
-        auto clamped = std::clamp(static_cast<int64_t>(*asDouble),
-                                  static_cast<int64_t>(0),
-                                  static_cast<int64_t>(INT_MAX));
+        auto clamped =
+            std::clamp(static_cast<int64_t>(*asDouble), static_cast<int64_t>(0),
+                       static_cast<int64_t>(INT_MAX));
         setOpOffloadMinBatch(static_cast<int>(clamped));
       }
     } else {
-      QLOG(
-          qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-          "[TRANSLATION MODEL] 'op_offload_min_batch' config value is not a "
-          "number; ignoring");
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+           "[TRANSLATION MODEL] 'op_offload_min_batch' config value is not a "
+           "number; ignoring");
     }
   }
 

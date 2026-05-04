@@ -50,13 +50,10 @@ bool beam_kv_pool::init(nmt_context& ctx, int pool_size) {
   in_use.resize(pool_size, false);
 
   for (int i = 0; i < pool_size; ++i) {
-    if (!nmt_kv_cache_init(
-            kv_caches[i],
-            ctx.state->backends.back(),
-            ctx.itype,
-            ctx.model.hparams.n_text_state,
-            ctx.model.hparams.n_decoder_layers,
-            GGML_PAD(ctx.model.hparams.n_decoder_ctx, 256))) {
+    if (!nmtKvCacheInit(kv_caches[i], ctx.state->backends.back(), ctx.itype,
+                        ctx.model.hparams.n_text_state,
+                        ctx.model.hparams.n_decoder_layers,
+                        GGML_PAD(ctx.model.hparams.n_decoder_ctx, 256))) {
       return false;
     }
   }
@@ -81,7 +78,7 @@ void beam_kv_pool::release(int idx) {
 
 void beam_kv_pool::cleanup() {
   for (auto& cache : kv_caches) {
-    nmt_kv_cache_free(cache);
+    nmtKvCacheFree(cache);
   }
 }
 
@@ -150,15 +147,12 @@ int nmt_decode_beam_search(
 
       ctx->state->decoder_inputs = beam.tokens;
 
-      nmt_batch_prep_legacy(
-          ctx->state->batch,
-          ctx->state->decoder_inputs.data() +
-              ctx->state->decoder_inputs.size() - 1,
-          1,
-          ctx->state->decoder_inputs.size() - 1,
-          0);
+      nmtBatchPrepLegacy(ctx->state->batch,
+                         ctx->state->decoder_inputs.data() +
+                             ctx->state->decoder_inputs.size() - 1,
+                         1, ctx->state->decoder_inputs.size() - 1, 0);
 
-      if (!nmt_decode_internal(*ctx, ctx->state->batch, *ctx->state)) {
+      if (!nmtDecodeInternal(*ctx, ctx->state->batch, *ctx->state)) {
         ctx->state->kv_self = original_kv;
         continue;
       }
@@ -179,17 +173,14 @@ int nmt_decode_beam_search(
 
       // Apply penalties and filters
       if (ctx->model.config.repetition_penalty > 0.0) {
-        apply_repetition_penalty(
-            next_token_logits_vec,
-            beam.tokens,
-            ctx->model.config.repetition_penalty);
+        applyRepetitionPenalty(next_token_logits_vec, beam.tokens,
+                               ctx->model.config.repetition_penalty);
       }
 
       if (ctx->model.config.top_k > 0) {
-        apply_top_k_filter(
-            next_token_logits_vec,
-            ctx->state->decoders[0].logits_id,
-            ctx->model.config.top_k);
+        applyTopKFilter(next_token_logits_vec,
+                        ctx->state->decoders[0].logits_id,
+                        ctx->model.config.top_k);
       }
 
       std::for_each(
@@ -199,13 +190,11 @@ int nmt_decode_beam_search(
             next_token_logits_vec[bad_word_index] = -INFINITY;
           });
 
-      apply_no_repeat_ngram_filter(
-          next_token_logits_vec,
-          beam.tokens,
-          ctx->model.config.no_repeat_ngram_size);
+      applyNoRepeatNgramFilter(next_token_logits_vec, beam.tokens,
+                               ctx->model.config.no_repeat_ngram_size);
 
       std::vector<float> logprobs(vocab_size);
-      nmt_compute_logprobs(next_token_logits_vec, vocab_size, logprobs);
+      nmtComputeLogprobs(next_token_logits_vec, vocab_size, logprobs);
 
       // OPTIMIZATION: Maintain fixed-size min-heap during iteration (avoids
       // large allocations) Using priority_queue with greater<> creates a

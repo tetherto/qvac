@@ -149,11 +149,10 @@ static buft_list_t make_buft_list(const nmt_context_params& params) {
           qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
           "  -> Added GPU buft to buft_list");
     } else {
-      QLOG(
-          qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-          "[make_buft_list] nmtSelectGpuDevice returned a device but "
-          "ggml_backend_dev_buffer_type returned null on re-query — "
-          "falling back to CPU");
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+           "[make_buft_list] nmtSelectGpuDevice returned a device but "
+           "ggml_backend_dev_buffer_type returned null on re-query — "
+           "falling back to CPU");
     }
   }
 
@@ -396,7 +395,7 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
       vocab.src_id_to_token[i] = word;
     }
 
-    vocab.bos_token_id = find_bos_token(vocab);
+    vocab.bos_token_id = findBosToken(vocab);
 
     vocab.bad_word_ids.clear();
 
@@ -923,7 +922,7 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
       const int max_pos = model.m_encoder_pos_emb->ne[1]; // 1024
 
       std::vector<float> pos_emb_data(d_model * max_pos);
-      indictrans_compute_sinusoidal_positional_embeddings_to_buffer(
+      indictransComputeSinusoidalPositionalEmbeddingsToBuffer(
           pos_emb_data.data(), d_model, max_pos);
       size_t bytes_to_copy = pos_emb_data.size() * sizeof(float);
 
@@ -943,8 +942,8 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
   return true;
 }
 
-struct nmt_context* nmt_init_with_params_no_state(
-    struct nmt_model_loader* loader, struct nmt_context_params params) {
+struct nmt_context *nmtInitWithParamsNoState(struct nmt_model_loader *loader,
+                                             struct nmt_context_params params) {
   nmt_context* ctx = new nmt_context;
   ctx->params = params;
 
@@ -959,12 +958,11 @@ struct nmt_context* nmt_init_with_params_no_state(
   return ctx;
 }
 
-struct nmt_context* nmt_init_from_file_with_params_no_state(
-    const char* path_model, struct nmt_context_params params) {
-  QLOG(
-      qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-      std::string("=== nmt_init_from_file_with_params_no_state: path=") +
-          path_model);
+struct nmt_context *
+nmtInitFromFileWithParamsNoState(const char *path_model,
+                                 struct nmt_context_params params) {
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+       std::string("=== nmtInitFromFileWithParamsNoState: path=") + path_model);
 #ifdef _MSC_VER
   // Convert UTF-8 path to wide string (UTF-16) for Windows, resolving character
   // encoding issues.
@@ -1004,7 +1002,7 @@ struct nmt_context* nmt_init_from_file_with_params_no_state(
     fin->close();
   };
 
-  auto ctx = nmt_init_with_params_no_state(&loader, params);
+  auto ctx = nmtInitWithParamsNoState(&loader, params);
 
   if (ctx) {
     ctx->path_model = path_model;
@@ -1013,28 +1011,25 @@ struct nmt_context* nmt_init_from_file_with_params_no_state(
   return ctx;
 }
 
-struct nmt_context* nmt_init_from_file_with_params(
-    const char* path_model, struct nmt_context_params params) {
-  QLOG(
-      qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-      "=== nmt_init_from_file_with_params called ===\n");
-  nmt_context* ctx =
-      nmt_init_from_file_with_params_no_state(path_model, params);
+struct nmt_context *
+nmtInitFromFileWithParams(const char *path_model,
+                          struct nmt_context_params params) {
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+       "=== nmtInitFromFileWithParams called ===\n");
+  nmt_context *ctx = nmtInitFromFileWithParamsNoState(path_model, params);
   if (ctx == nullptr) {
     return nullptr;
   }
 
-  QLOG(
-      qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-      "About to call nmt_init_state");
-  ctx->state = nmt_init_state(ctx);
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+       "About to call nmtInitState");
+  ctx->state = nmtInitState(ctx);
   if (!ctx->state) {
     nmt_free(ctx);
     return nullptr;
   }
-  QLOG(
-      qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-      "nmt_init_state returned successfully");
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+       "nmtInitState returned successfully");
 
   return ctx;
 }

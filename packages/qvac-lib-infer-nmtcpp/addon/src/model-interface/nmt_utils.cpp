@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstring>
+#include <ranges>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -16,7 +17,7 @@
 #include "nmt.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
-std::string sanitizePrintableAscii(const std::string& input) {
+std::string sanitizePrintableAscii(const std::string &input) {
   std::string out;
   out.reserve(input.size());
   for (char raw : input) {
@@ -76,7 +77,7 @@ bool ggml_graph_compute_helper(
     ggml_backend_dev_t dev = ggml_backend_get_device(backend);
     ggml_backend_reg_t reg = dev ? ggml_backend_dev_backend_reg(dev) : nullptr;
 
-    auto* fn_set_n_threads =
+    auto *fn_set_n_threads =
         reg ? (ggml_backend_set_n_threads_t)ggml_backend_reg_get_proc_address(
                   reg, "ggml_backend_set_n_threads")
             : nullptr;
@@ -96,45 +97,29 @@ bool ggml_graph_compute_helper(
 }
 // NOLINTEND
 
-bool nmtNameContainsCi(const char* name, const std::string& needleLower) {
+bool nmtNameContainsCi(const char *name, const std::string &needleLower) {
   if (name == nullptr || needleLower.empty()) {
     return false;
   }
-  // Defensive bound: ggml device names should be NUL-terminated, but a
-  // misbehaving / adversarial backend .so could violate that. Cap the scan
-  // length so the inner loop can't read past the end of a malformed buffer.
   static constexpr size_t kMaxNameLen = 256;
-  const size_t nameLen = strnlen(name, kMaxNameLen);
-  const char* const nameEnd = name + nameLen;
-  const char* const needle = needleLower.c_str();
-  for (const char* p = name; p < nameEnd; ++p) {
-    const char* s = p;
-    const char* n = needle;
-    while (s < nameEnd && *n != '\0' &&
-           static_cast<char>(std::tolower(static_cast<unsigned char>(*s))) ==
-               *n) {
-      ++s;
-      ++n;
-    }
-    if (*n == '\0') {
-      return true;
-    }
-  }
-  return false;
+  std::string nameLower(name, strnlen(name, kMaxNameLen));
+  std::ranges::transform(nameLower, nameLower.begin(), [](unsigned char ch) {
+    return static_cast<char>(std::tolower(ch));
+  });
+  return nameLower.find(needleLower) != std::string::npos;
 }
 
-ggml_backend_dev_t nmtSelectGpuDevice(
-    bool useGpu, const std::string& gpuBackend, int gpuDevice,
-    const char* logPrefix) {
+ggml_backend_dev_t
+nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
+    bool useGpu, const std::string &gpuBackend, int gpuDevice,
+    const char *logPrefix) {
   if (!useGpu) {
     return nullptr;
   }
   std::string gpuBackendLower = gpuBackend;
-  std::transform(
-      gpuBackendLower.begin(),
-      gpuBackendLower.end(),
-      gpuBackendLower.begin(),
-      [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  std::ranges::transform(
+      gpuBackendLower, gpuBackendLower.begin(),
+      [](unsigned char chr) { return static_cast<char>(std::tolower(chr)); });
 
   ggml_backend_dev_t dev = nullptr;
   const size_t devCount = ggml_backend_dev_count();
@@ -164,7 +149,7 @@ ggml_backend_dev_t nmtSelectGpuDevice(
         continue;
       }
       enum ggml_backend_dev_type devType = ggml_backend_dev_type(devCur);
-      const char* name = ggml_backend_dev_name(devCur);
+      const char *name = ggml_backend_dev_name(devCur);
       if (devType == GGML_BACKEND_DEVICE_TYPE_CPU) {
         continue;
       }
@@ -177,8 +162,7 @@ ggml_backend_dev_t nmtSelectGpuDevice(
           dev = devCur;
           std::ostringstream oss;
           oss << "[" << logPrefix << "] SELECTED explicit gpu_backend='"
-              << gpuBackend << "': "
-              << (name != nullptr ? name : "(null)");
+              << gpuBackend << "': " << (name != nullptr ? name : "(null)");
           QLOG(
               qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, oss.str());
         } else {
@@ -223,7 +207,7 @@ ggml_backend_dev_t nmtSelectGpuDevice(
         continue;
       }
       enum ggml_backend_dev_type devType = ggml_backend_dev_type(devCur);
-      const char* name = ggml_backend_dev_name(devCur);
+      const char *name = ggml_backend_dev_name(devCur);
       if (devType == GGML_BACKEND_DEVICE_TYPE_CPU) {
         continue;
       }
@@ -235,8 +219,7 @@ ggml_backend_dev_t nmtSelectGpuDevice(
         if (buft != nullptr) {
           dev = devCur;
           std::ostringstream oss;
-          oss << "[" << logPrefix
-              << "] SELECTED OpenCL backend: "
+          oss << "[" << logPrefix << "] SELECTED OpenCL backend: "
               << (name != nullptr ? name : "(null)");
           QLOG(
               qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, oss.str());
@@ -281,7 +264,7 @@ ggml_backend_dev_t nmtSelectGpuDevice(
         continue;
       }
       enum ggml_backend_dev_type devType = ggml_backend_dev_type(devCur);
-      const char* name = ggml_backend_dev_name(devCur);
+      const char *name = ggml_backend_dev_name(devCur);
       if (devType == GGML_BACKEND_DEVICE_TYPE_CPU) {
         continue;
       }
@@ -293,8 +276,7 @@ ggml_backend_dev_t nmtSelectGpuDevice(
         if (buft != nullptr) {
           dev = devCur;
           std::ostringstream oss;
-          oss << "[" << logPrefix
-              << "] SELECTED compute backend: "
+          oss << "[" << logPrefix << "] SELECTED compute backend: "
               << (name != nullptr ? name : "(null)");
           QLOG(
               qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, oss.str());
