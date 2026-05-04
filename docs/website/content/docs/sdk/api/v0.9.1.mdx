@@ -1,6 +1,7 @@
 ---
-title: API Summary — v0.10.0 (latest)
+title: API Summary — v0.9.1 (latest)
 description: One-page reference of all public functions and objects exported by @qvac/sdk
+schemaType: APIReference
 ---
 
 > Auto-generated from `.d.ts` declarations and TSDoc comments.
@@ -53,7 +54,7 @@ await cancel({ operation: "downloadAsset", downloadKey: "download-key", clearCac
 await cancel({
   operation: "downloadAsset",
   downloadKey: "download-key",
-  delegate: { providerPublicKey: "peerHex" },
+  delegate: { topic: "topicHex", providerPublicKey: "peerHex" },
 });
 ```
 
@@ -343,7 +344,7 @@ Can also be used to check if the local SDK worker is responsive.
 **Signature**:
 
 ```ts
-function heartbeat(params?: { delegate?: { healthCheckTimeout?: number; providerPublicKey: string; timeout?: number } }): Promise<HeartbeatResponse>;
+function heartbeat(params?: { delegate?: { healthCheckTimeout?: number; providerPublicKey: string; timeout?: number; topic: string } }): Promise<HeartbeatResponse>;
 ```
 
 **Throws**:
@@ -355,7 +356,7 @@ function heartbeat(params?: { delegate?: { healthCheckTimeout?: number; provider
 // Check if a delegated provider is online
 try {
   await heartbeat({
-    delegate: { providerPublicKey: "peerHex", timeout: 3000 },
+    delegate: { topic: "topicHex", providerPublicKey: "peerHex", timeout: 3000 },
   });
   console.log("Provider is online");
 } catch {
@@ -990,14 +991,7 @@ console.log(await state()); // "active"
 ### `startQVACProvider`
 
 Starts a provider service that offers QVAC capabilities to remote peers.
-
-Consumers connect directly to the provider via its public key using
-`dht.connect(publicKey)`, so no topic or discovery configuration is needed.
-The provider's keypair (and therefore its public key) can be controlled via
-the `QVAC_HYPERSWARM_SEED` environment variable.
-
-Idempotent: calling more than once while a provider is already running
-returns the same public key without re-listening on the DHT.
+The provider's keypair can be controlled via the seed option or QVAC_HYPERSWARM_SEED environment variable.
 
 **Signature**:
 
@@ -1007,7 +1001,7 @@ function startQVACProvider(params: ProvideParams): Promise<{ error?: string; pub
 
 **Throws**:
 
-- `QvacErrorBase` — When the response type is not "provide" or the request fails
+- `QvacErrorBase` — When the response type is not "provide" or the request fails.
 
 ---
 
@@ -1041,26 +1035,17 @@ if (current !== "active") {
 
 ### `stopQVACProvider`
 
-Stops the running provider service.
-
-After this call returns, incoming peer connections are dropped at the RPC
-layer and remote `loadModel`/`completion`/etc. requests will no longer be
-served. The keyPair stays bound on the DHT (a `swarm.listen()` cannot be
-undone without tearing down the shared swarm), so peers may still open a
-raw socket — but those sockets are immediately destroyed and no RPC server
-is mounted on them.
-
-Idempotent: calling more than once with no provider running is a no-op.
+Stops a running provider service and leaves the specified topic.
 
 **Signature**:
 
 ```ts
-function stopQVACProvider(): Promise<{ error?: string; success: boolean; type: "stopProvide" }>;
+function stopQVACProvider(params: StopProvideParams): Promise<{ error?: string; success: boolean; type: "stopProvide" }>;
 ```
 
 **Throws**:
 
-- `QvacErrorBase` — When the response type is not "stopProvide" or the request fails
+- `QvacErrorBase` — When the response type is not "stopProvide" or the request fails.
 
 ---
 
@@ -1156,19 +1141,6 @@ function textToSpeechStream(params: TextToSpeechStreamClientParams, options?: RP
 
 ### `transcribe`
 
-Has 2 overloads.
-
-#### Overload 1
-Transcribe audio and return the complete text. Accepts either a file
-path or an audio buffer.
-
-**Signature**:
-
-```ts
-function transcribe(params: TranscribeClientParams & { metadata: true }, options?: RPCOptions): Promise<TranscribeSegment[]>;
-```
-
-#### Overload 2
 Transcribe audio and return the complete text. Accepts either a file
 path or an audio buffer.
 
@@ -1188,22 +1160,9 @@ removed in the next major version.
 Streaming transcription with upfront audio: sends full audio, yields text
 chunks as they arrive.
 
-Has 4 overloads.
+Has 2 overloads.
 
 #### Overload 1 — Upfront audio (deprecated)
-> ⚠️ **Deprecated**: Pass audio via `transcribe()` instead. This overload will be
-removed in the next major version.
-
-Streaming transcription with upfront audio: sends full audio, yields text
-chunks as they arrive.
-
-**Signature**:
-
-```ts
-function transcribeStream(params: TranscribeClientParams & { metadata: true }, options?: RPCOptions): AsyncGenerator<TranscribeSegment>;
-```
-
-#### Overload 2 — Upfront audio (deprecated)
 > ⚠️ **Deprecated**: Pass audio via `transcribe()` instead. This overload will be
 removed in the next major version.
 
@@ -1216,26 +1175,13 @@ chunks as they arrive.
 function transcribeStream(params: TranscribeClientParams, options?: RPCOptions): AsyncGenerator<string>;
 ```
 
-#### Overload 3 — Bidirectional session
+#### Overload 2 — Bidirectional session
 Opens a bidirectional streaming transcription session. Audio is streamed
 in via `write()`, and transcription text is yielded as the model's VAD
 detects complete speech segments.
 
 The returned session is single-use. Attempting to iterate a second
 time will throw a `TranscriptionFailedError`.
-
-**Signature**:
-
-```ts
-function transcribeStream(params: TranscribeStreamClientParams & { metadata: true }, options?: RPCOptions): Promise<TranscribeStreamMetadataSession>;
-```
-
-#### Overload 4 — Upfront audio (deprecated)
-> ⚠️ **Deprecated**: Pass audio via `transcribe()` instead. This overload will be
-removed in the next major version.
-
-Streaming transcription with upfront audio: sends full audio, yields text
-chunks as they arrive.
 
 **Signature**:
 
