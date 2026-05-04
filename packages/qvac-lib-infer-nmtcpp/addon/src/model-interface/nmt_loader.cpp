@@ -138,7 +138,7 @@ static buft_list_t make_buft_list(const nmt_context_params& params) {
   // Repeated drift between this path and nmt_backend_init_gpu has been a
   // recurring source of scheduler crashes (R2-C1, R4-C2); the shared helper
   // is the structural fix per QVAC-17790 round-8 R8-D1.
-  ggml_backend_dev_t selected_dev = nmt_select_gpu_device(
+  ggml_backend_dev_t selected_dev = nmtSelectGpuDevice(
       params.use_gpu, params.gpu_backend, params.gpu_device, "make_buft_list");
   if (selected_dev != nullptr) {
     const char* selDevName = ggml_backend_dev_name(selected_dev);
@@ -152,7 +152,7 @@ static buft_list_t make_buft_list(const nmt_context_params& params) {
     } else {
       QLOG(
           qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-          "[make_buft_list] nmt_select_gpu_device returned a device but "
+          "[make_buft_list] nmtSelectGpuDevice returned a device but "
           "ggml_backend_dev_buffer_type returned null on re-query — "
           "falling back to CPU");
     }

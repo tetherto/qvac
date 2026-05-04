@@ -382,7 +382,7 @@ static ggml_backend_t nmt_backend_init_gpu(const nmt_context_params& params) {
   // and this function agree on the same physical device — historical
   // drift between the two has caused scheduler crashes (R2-C1, R4-C2).
   // See nmt_utils.hpp for the contract.
-  dev = nmt_select_gpu_device(
+  dev = nmtSelectGpuDevice(
       params.use_gpu,
       params.gpu_backend,
       params.gpu_device,
@@ -465,7 +465,7 @@ nmt_backend_init(const nmt_context_params& params) {
   // Filter strategy:
   //   1. Skip the device pointer already selected as primary (same as before).
   //   2. Skip OpenCL devices when the build-time USE_OPENCL guard is off
-  //      (consistent with Mode 2b in nmt_select_gpu_device).
+  //      (consistent with Mode 2b in nmtSelectGpuDevice).
   //   3. Skip any ACCEL device whose trailing ordinal matches the primary's.
   //      GGML names devices as "<API><ordinal>" (e.g. Vulkan0, OpenCL0).
   //      Same ordinal + different API prefix = same physical GPU exposed
@@ -490,7 +490,7 @@ nmt_backend_init(const nmt_context_params& params) {
     const char* dev_name = ggml_backend_dev_name(dev);
 
 #ifndef QVAC_NMTCPP_USE_OPENCL
-    if (nmt_name_contains_ci(dev_name, "opencl")) {
+    if (nmtNameContainsCi(dev_name, "opencl")) {
       std::ostringstream oss;
       oss << "Skipping ACCEL device '" << (dev_name ? dev_name : "(null)")
           << "' — OpenCL guard is off (QVAC-17790)";
