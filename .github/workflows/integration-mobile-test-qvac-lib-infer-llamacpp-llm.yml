@@ -1057,11 +1057,6 @@ jobs:
             echo "$label spec upload timed out after $MAX attempts" >&2; exit 1
           }
 
-          # For each split: inject mocha grep AND replace __TEST_FILTER__ so
-          # the before-hook pushes a testFilter.txt the app reads at runtime.
-          # This ensures the app only executes matching tests (real splitting).
-          # When set, the perf inputs also get substituted so the before-hook
-          # pushes a qvacPerfConfig.txt with the iteration overrides.
           QVAC_PERF_RUNS_INPUT="${{ inputs.qvac_perf_runs }}"
           QVAC_PERF_WARMUP_RUNS_INPUT="${{ inputs.qvac_perf_warmup_runs }}"
           make_split() {
