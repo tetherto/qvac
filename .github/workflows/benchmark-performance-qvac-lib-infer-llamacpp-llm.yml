@@ -1,26 +1,9 @@
 name: Benchmark Performance (LLM)
 
-# QVAC-18111: dedicated benchmarking workflow for the LLM addon —
-# manually triggered only.
-#
-# Per the perf policy agreed on Slack (2026-04-30, @Olya / @Gianfranco):
-# the umbrella PR workflow runs perf tests at the cheap default
-# (1 warmup + 1 counted, no averaging) so we don't pay full perf
-# cost on every PR. This workflow is the only place we crank
-# QVAC_PERF_RUNS up to produce mean ± std numbers.
-#
-# Phase-1 scope: desktop matrix only. Mobile (Android / iOS Device
-# Farm) needs a build-time hook in the test app to pass env vars
-# through to bare — tracked as a QVAC-18111 follow-up. Mobile rows
-# in PR runs continue to use the cheap 1+1 default.
-#
-# Mirrors the structure of the existing `Benchmark Performance
-# (Parakeet)` and `Benchmark Performance (Whispercpp)` workflows on
-# main: a `context` job derives repo/ref from optional inputs, then
-# dispatches `prebuilds-...yml` followed by `integration-test-...yml`
-# with the bench-mode iteration counts, and a `summarize` job
-# aggregates the artifacts into a single combined HTML + GitHub
-# step summary.
+# Manually-triggered benchmark workflow. The umbrella on-pr workflow
+# runs perf tests at the cheap default; this is where iteration
+# counts are cranked up to get mean ± std numbers. Covers desktop +
+# mobile (Android / iOS via Device Farm).
 
 on:
   workflow_dispatch:
@@ -43,6 +26,16 @@ on:
         required: false
         type: string
         default: "1"
+      run_desktop:
+        description: "Run desktop matrix (Linux / macOS / Windows)"
+        required: false
+        type: boolean
+        default: true
+      run_mobile:
+        description: "Run mobile matrix (Android / iOS via Device Farm)"
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -84,6 +77,7 @@ jobs:
 
   desktop-benchmarks:
     needs: [context, prebuild]
+    if: ${{ inputs.run_desktop }}
     permissions:
       contents: read
       packages: read
@@ -96,9 +90,28 @@ jobs:
       qvac_perf_runs: ${{ inputs.qvac_perf_runs }}
       qvac_perf_warmup_runs: ${{ inputs.qvac_perf_warmup_runs }}
 
+  mobile-benchmarks:
+    needs: [context, prebuild]
+    if: ${{ inputs.run_mobile }}
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-llamacpp-llm.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+      qvac_perf_runs: ${{ inputs.qvac_perf_runs }}
+      qvac_perf_warmup_runs: ${{ inputs.qvac_perf_warmup_runs }}
+
   summarize:
-    needs: [context, desktop-benchmarks]
-    if: always()
+    # `if: always()` lets summarize run even when one of the benchmark
+    # jobs was skipped via the run_desktop / run_mobile toggles or
+    # failed mid-run; we still want the partial report.
+    needs: [context, desktop-benchmarks, mobile-benchmarks]
+    if: ${{ always() && needs.context.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -129,10 +142,9 @@ jobs:
       - name: Fix desktop device names
         shell: bash
         run: |
-          # Same fold as the umbrella combine-perf-reports step:
-          # sibling matrix legs (linux-x64-cpu+linux-x64-gpu,
-          # linux-arm64-u22+linux-arm64-u24) collapse onto one device
-          # name so [CPU]/[GPU] rows sit in the same column.
+          # Collapse sibling matrix legs (linux-x64-cpu/gpu,
+          # linux-arm64-u22/u24) onto one device name so [CPU]/[GPU]
+          # rows sit in the same column.
           for dir in combined-reports/perf-report-llamacpp-llm-*/; do
             [ -d "$dir" ] || continue
             base=$(basename "$dir")
@@ -178,11 +190,9 @@ jobs:
           set +e
           MD_FILE="benchmark-artifacts/llamacpp-llm-performance-findings.md"
           {
-            echo "## LLM / VLM Benchmark Report (Desktop)"
+            echo "## LLM / VLM Benchmark Report"
             echo ""
-            echo "> Triggered manually via \`workflow_dispatch\` — \`QVAC_PERF_RUNS=${{ inputs.qvac_perf_runs }}\`, \`QVAC_PERF_WARMUP_RUNS=${{ inputs.qvac_perf_warmup_runs }}\`."
-            echo ""
-            echo "> Mobile (Android / iOS) is **not** covered by this workflow yet — bench-mode iteration counts need a build-time hook in the mobile test app (QVAC-18111 follow-up). Mobile rows shown in PR runs continue to use 1 + 1."
+            echo "> \`QVAC_PERF_RUNS=${{ inputs.qvac_perf_runs }}\`, \`QVAC_PERF_WARMUP_RUNS=${{ inputs.qvac_perf_warmup_runs }}\`."
             echo ""
             if [ -f "$MD_FILE" ]; then
               cat "$MD_FILE"

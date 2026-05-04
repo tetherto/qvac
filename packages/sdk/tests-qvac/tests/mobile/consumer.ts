@@ -68,11 +68,13 @@ import { LifecycleExecutor } from "../shared/executors/lifecycle-executor.js";
 import { ConfigExecutor } from "../shared/executors/config-executor.js";
 
 const resources = new ResourceManager({
-  // Mobile (iOS) needs a tick after each unloadModel for the kernel to
-  // actually release pages — without it, the next test's load arrives
-  // while the previous model's RSS is still resident and crashes the
-  // GGML allocator. Empirically 200ms is enough; desktop doesn't need it.
-  unloadSettleMs: 100,
+  // Mobile (iOS + Android) needs a tick after each unloadModel for the
+  // kernel to actually release pages / reclaim mmap regions — without
+  // it, the next test's load arrives while the previous model's RSS is
+  // still resident and either the GGML allocator crashes (iOS) or
+  // Scudo's mmap fails with "internal map failure" (Android). Empirically
+  // 200ms is enough; desktop doesn't need it.
+  unloadSettleMs: 200,
 });
 
 resources.define("llm", {

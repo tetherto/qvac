@@ -34,6 +34,54 @@ const SECTIONS = [
 ];
 
 /**
+ * Maximum number of model entries to inline per section (Added/Updated/Removed)
+ * in the main CHANGELOG.md. Anything beyond is collapsed to "(and N more)" and
+ * the reader is expected to follow the link to models.md for the full list.
+ */
+const MAX_INLINE_MODELS = 5;
+
+/**
+ * Maximum number of bullets to include per section in the Slack announcement
+ * post. Anything beyond is collapsed to "... And much more, see full list in
+ * changelog :memo:". Sections with 10 or fewer entries are emitted verbatim;
+ * the "And much more" suffix only appears when a section has *more than 10*
+ * entries.
+ */
+const MAX_ANNOUNCEMENT_BULLETS = 10;
+
+/**
+ * Map of section keys to Slack-style emoji headings used in the
+ * announcement-post.txt template. Slack does not render the unicode emojis
+ * we use in CHANGELOG.md, so we translate to shortcodes here.
+ */
+const SLACK_SECTION_HEADINGS = {
+  feat: ":sparkles: Features",
+  api: ":electric_plug: API",
+  fix: ":ladybug: Fixes",
+  mod: ":package: Models",
+  doc: ":blue_book: Docs",
+  test: ":test_tube: Tests",
+  chore: ":broom: Chores",
+  infra: ":gear: Infrastructure",
+};
+
+/**
+ * Map from the unicode emoji used in CHANGELOG.md headings back to the
+ * internal section key, so the announcement generator can parse a freshly
+ * written CHANGELOG.md without re-running the upstream PR fetch.
+ */
+const CHANGELOG_HEADING_TO_KEY = {
+  "✨": "feat",
+  "🔌": "api",
+  "🐞": "fix",
+  "📦": "mod",
+  "📘": "doc",
+  "🧪": "test",
+  "🧹": "chore",
+  "⚙️": "infra",
+};
+
+/**
  * Extract code blocks from markdown
  * @param {string} text
  * @returns {string[]}
@@ -303,6 +351,105 @@ function capitalize(str) {
 }
 
 /**
+ * Detect a companion entry in a Models section line. Companions (vocab files,
+ * lexicons, raw data shards, metadata blobs, etc.) ship alongside a primary
+ * model but aren't independently usable models, so we exclude them from the
+ * changelog and announcement post — only first-class models should be
+ * surfaced to readers.
+ *
+ * Recognises both:
+ *   - Constant-name suffixes: `*_LEX`, `*_VOCAB`, `*_DATA`, `*_METADATA`
+ *   - Free-form descriptions containing the word "companion"
+ *
+ * @param {string} entry - One Added/Updated/Removed list line
+ * @returns {boolean}
+ */
+function isCompanionEntry(entry) {
+  if (!entry) return false;
+  if (/companion/i.test(entry)) return true;
+  if (/_lex\b/i.test(entry)) return true;
+  if (/_vocab\b/i.test(entry)) return true;
+  if (/_data\b/i.test(entry)) return true;
+  if (/_metadata\b/i.test(entry)) return true;
+  return false;
+}
+
+/**
+ * Strip "(N entries …)" / "(N entries — …)" suffixes commonly used in
+ * free-form Models sections (e.g. PR #1700-style summaries). The reader can
+ * find exact counts in models.md if they need them; the changelog should
+ * stay focused on the model identities themselves.
+ *
+ * @param {string} entry
+ * @returns {string}
+ */
+function stripEntryCount(entry) {
+  if (!entry) return entry;
+  return entry
+    .replace(/\s*\(\s*\d+\s*entries?(?:\s*[—–-][^)]*)?\)\s*/gi, "")
+    .trim();
+}
+
+/**
+ * Apply changelog model-section policy to a raw list of entries: drop
+ * companions, strip entry-count suffixes, drop empty results.
+ *
+ * @param {string[]} entries
+ * @returns {string[]}
+ */
+function cleanModelEntries(entries) {
+  if (!entries || entries.length === 0) return [];
+  return entries
+    .filter((e) => !isCompanionEntry(e))
+    .map((e) => stripEntryCount(e))
+    .filter((e) => e && e.length > 0);
+}
+
+/**
+ * Format a single model section (Added / Updated / Removed) for inline display
+ * in the main CHANGELOG.md. Trims to MAX_INLINE_MODELS entries with a
+ * "(and N more)" suffix. Returns null if the section is empty.
+ *
+ * Companions and entry counts are filtered upstream by `cleanModelEntries`.
+ *
+ * @param {string} label - e.g. "Added", "Updated", "Removed"
+ * @param {string[]} names
+ * @returns {string|null}
+ */
+function summarizeModelList(label, names) {
+  const cleaned = cleanModelEntries(names);
+  if (cleaned.length === 0) return null;
+  const shown = cleaned.slice(0, MAX_INLINE_MODELS);
+  const extra = cleaned.length - shown.length;
+  let summary = `${label}: ${shown.join(", ")}`;
+  if (extra > 0) summary += ` (and ${extra} more)`;
+  return summary;
+}
+
+/**
+ * Build a per-section summary (Added / Updated / Removed) of the model lists
+ * from a PR body, suitable for use as indented continuation lines under a
+ * CHANGELOG.md bullet. Returns null if the PR has no Models section or all
+ * sections are empty after companion/entry-count filtering.
+ *
+ * Returns an array of lines (one per non-empty section). The caller is
+ * responsible for indenting them appropriately under the bullet.
+ *
+ * @param {string} prBody
+ * @returns {string[]|null}
+ */
+function buildInlineModelSummary(prBody) {
+  const models = extractModelsSection(prBody);
+  if (!models) return null;
+  const parts = [
+    summarizeModelList("Added", models.added),
+    summarizeModelList("Updated", models.updated),
+    summarizeModelList("Removed", models.removed),
+  ].filter(Boolean);
+  return parts.length > 0 ? parts : null;
+}
+
+/**
  * Generate changelog entry
  * @param {object} pr
  * @param {boolean} hasBreakingMd
@@ -335,6 +482,20 @@ function generateChangelogEntry(
 
   if (links.length > 0) {
     entry += ` - See ${links.join(", ")}`;
+  }
+
+  // For [mod] PRs, append the trimmed Added/Updated/Removed model lists as
+  // indented continuation lines under the bullet. Companions and entry-count
+  // suffixes are filtered out by `buildInlineModelSummary`, so what shows up
+  // here are first-class model identities only — the full list (including
+  // companions, if the PR author chose to keep them) lives in models.md.
+  if (parsed.tags.includes("mod")) {
+    const modelLines = buildInlineModelSummary(pr.body);
+    if (modelLines) {
+      for (const line of modelLines) {
+        entry += `\n  ${line}`;
+      }
+    }
   }
 
   return entry;
@@ -486,10 +647,12 @@ function generateChangelogFiles(packageName, version, prs, outputDir, baseRef) {
       }
     }
 
-    // Sort alphabetically
-    const addedList = [...allAdded].sort();
-    const updatedList = [...allUpdated].sort();
-    const removedList = [...allRemoved].sort();
+    // Apply the changelog model-section policy: drop companions, strip
+    // entry-count suffixes. Keeps models.md aligned with what the main
+    // CHANGELOG.md surfaces — only first-class model identities.
+    const addedList = cleanModelEntries([...allAdded].sort());
+    const updatedList = cleanModelEntries([...allUpdated].sort());
+    const removedList = cleanModelEntries([...allRemoved].sort());
 
     let modelsMd = `# 📦 Model Changes v${version}\n\n`;
 
@@ -606,6 +769,25 @@ function groupModelsByPrefix(names) {
 }
 
 /**
+ * Detect a backmerge PR subject.
+ *
+ * Backmerges merge a release branch back into main; their content is already
+ * documented in the release branch's own changelog, so listing them here is
+ * noise. Recognises the QVAC convention (`Backmerge release sdk 0.9.1`) plus
+ * common variants like `Merge release-sdk-0.9.1 into main`.
+ *
+ * @param {string} subject - PR subject (after prefix/tags)
+ * @returns {boolean}
+ */
+function isBackmergeSubject(subject) {
+  if (!subject) return false;
+  const s = subject.trim().toLowerCase();
+  if (s.startsWith("backmerge")) return true;
+  if (/^merge\s+release[\s-]/.test(s)) return true;
+  return false;
+}
+
+/**
  * Process raw PRs with SDK-specific validation and filtering
  * @param {Array<{number: number, title: string, body: string, url: string}>} rawPRs
  * @returns {Array} Validated PRs with parsed metadata
@@ -627,6 +809,13 @@ function processSDKPRs(rawPRs) {
     if (validation.parsed.tags.includes("skiplog")) {
       console.log(
         `  ⏭️  PR #${pr.number} has [skiplog] tag, excluding from changelog`,
+      );
+      continue;
+    }
+
+    if (isBackmergeSubject(validation.parsed.subject)) {
+      console.log(
+        `  ⏭️  PR #${pr.number} is a backmerge, excluding from changelog`,
       );
       continue;
     }
@@ -727,6 +916,252 @@ function rebuildRootChangelog(packageName) {
 }
 
 /**
+ * Parse a generated CHANGELOG.md into structured sections with bullet entries.
+ * Used by the announcement-post generator so it can transform the canonical
+ * release changelog without re-fetching PRs from GitHub.
+ *
+ * @param {string} markdown - Contents of CHANGELOG.md
+ * @returns {{
+ *   version: string|null,
+ *   releaseDate: string|null,
+ *   sections: Array<{ key: string, heading: string, bullets: Array<{
+ *     text: string,
+ *     prNumber: string|null,
+ *     prUrl: string|null,
+ *     isBreaking: boolean,
+ *     isApi: boolean,
+ *     isModels: boolean,
+ *   }> }>,
+ * }}
+ */
+function parseChangelogMarkdown(markdown) {
+  const out = { version: null, releaseDate: null, sections: [] };
+
+  const versionMatch = markdown.match(/^# Changelog v(\d+\.\d+\.\d+)/m);
+  if (versionMatch) out.version = versionMatch[1];
+
+  const dateMatch = markdown.match(/^Release Date:\s*(\S+)/m);
+  if (dateMatch) out.releaseDate = dateMatch[1];
+
+  const lines = markdown.split("\n");
+  let current = null;
+  let currentBullet = null;
+
+  for (const rawLine of lines) {
+    const line = rawLine.replace(/\r$/, "");
+
+    // ## <emoji> <Title>
+    const headingMatch = line.match(/^##\s+(\S+)\s+(.+?)\s*$/);
+    if (headingMatch) {
+      const [, emoji, title] = headingMatch;
+      const key = CHANGELOG_HEADING_TO_KEY[emoji];
+      if (key) {
+        current = { key, heading: `${emoji} ${title}`, bullets: [] };
+        out.sections.push(current);
+        currentBullet = null;
+        continue;
+      }
+      // Unknown heading — close the current section so stray bullets don't
+      // get attached to a previous, unrelated section.
+      current = null;
+      currentBullet = null;
+      continue;
+    }
+
+    if (!current) continue;
+
+    if (line.startsWith("- ")) {
+      // New bullet; flush the running bullet reference.
+      const prMatch = line.match(/\(see PR \[#(\d+)\]\(([^)]+)\)\)/);
+      const prNumber = prMatch ? prMatch[1] : null;
+      const prUrl = prMatch ? prMatch[2] : null;
+
+      let text = line.slice(2);
+      if (prMatch) {
+        text = text.slice(0, prMatch.index - 2).trim();
+      }
+      text = text.replace(/\s*-\s*See\s+\[.*$/, "").trim();
+      text = text.replace(/\.+$/, "").trim();
+
+      const linkSuffix = line.slice(
+        prMatch ? prMatch.index + prMatch[0].length : 0,
+      );
+      const isBreaking = /\[breaking changes\]/i.test(linkSuffix);
+      const isApi = /\[API changes\]/i.test(linkSuffix);
+      const isModels = /\[model changes\]/i.test(linkSuffix);
+
+      currentBullet = {
+        text,
+        prNumber,
+        prUrl,
+        isBreaking,
+        isApi,
+        isModels,
+        continuation: [],
+      };
+      current.bullets.push(currentBullet);
+      continue;
+    }
+
+    // Indented continuation line (markdown convention: 2+ leading spaces or
+    // tab under the bullet). Preserve trimmed content so the announcement
+    // formatter can re-indent for Slack.
+    if (currentBullet && /^(\s{2,}|\t)/.test(line) && line.trim().length > 0) {
+      currentBullet.continuation.push(line.trim());
+      continue;
+    }
+
+    // Blank line or other content — close the running bullet so subsequent
+    // indented text doesn't accidentally attach to an unrelated bullet.
+    if (line.trim().length === 0) {
+      currentBullet = null;
+    }
+  }
+
+  return out;
+}
+
+/**
+ * Format a single bullet for the Slack announcement post.
+ *
+ * Continuation lines (e.g. `Added: …` / `Removed: …` for [mod] PRs) are
+ * preserved as separate lines indented by two spaces under the bullet.
+ *
+ * @param {{
+ *   text: string,
+ *   prUrl: string|null,
+ *   isBreaking: boolean,
+ *   continuation?: string[],
+ * }} bullet
+ * @returns {string}
+ */
+function formatAnnouncementBullet(bullet) {
+  let line = `• ${bullet.text}`;
+  if (bullet.prUrl) line += ` (<${bullet.prUrl}>)`;
+  if (bullet.isBreaking) line += ` :boom: breaking`;
+
+  if (bullet.continuation && bullet.continuation.length > 0) {
+    for (const cont of bullet.continuation) {
+      line += `\n  ${cont}`;
+    }
+  }
+
+  return line;
+}
+
+/**
+ * Generate `announcement-post.txt` from a per-version CHANGELOG.md.
+ *
+ * The output is plaintext sized to be copy-pasted into Slack: shortcode
+ * emojis, `<url>` link wrapping (suppresses Slack unfurl), bullet rows kept
+ * on a single line, sections capped at MAX_ANNOUNCEMENT_BULLETS with an
+ * "...And much more" suffix when truncated.
+ *
+ * @param {string} packageName
+ * @param {string} version
+ * @returns {string|null} The output path on success, or null if CHANGELOG.md
+ *   for the requested version wasn't found.
+ */
+function generateAnnouncementPost(packageName, version) {
+  const repoRoot = getRepoRoot();
+  const versionDir = path.join(
+    repoRoot,
+    "packages",
+    packageName,
+    "changelog",
+    version,
+  );
+  const changelogPath = path.join(versionDir, "CHANGELOG.md");
+
+  if (!fs.existsSync(changelogPath)) {
+    console.warn(`⚠️ No CHANGELOG.md found at ${changelogPath}`);
+    return null;
+  }
+
+  const markdown = fs.readFileSync(changelogPath, "utf8");
+  const parsed = parseChangelogMarkdown(markdown);
+  const releaseDate =
+    parsed.releaseDate || new Date().toISOString().split("T")[0];
+
+  const repoUrl = "https://github.com/tetherto/qvac";
+  const npmName = `@qvac/${packageName}`;
+  const tagName = `${packageName}-v${version}`;
+  const changelogTreeUrl = `${repoUrl}/tree/main/packages/${packageName}/changelog/${version}`;
+  const breakingMdUrl = `${repoUrl}/blob/main/packages/${packageName}/changelog/${version}/breaking.md`;
+  const releaseTagUrl = `${repoUrl}/releases/tag/${tagName}`;
+  const npmUrl = `https://www.npmjs.com/package/${npmName}/v/${version}`;
+
+  const hasBreaking = parsed.sections.some((s) =>
+    s.bullets.some((b) => b.isBreaking),
+  );
+
+  let post = "";
+
+  // Header
+  post += `:qvac: SDK ${version} :rocket: NPM Public release\n\n`;
+
+  // Links
+  post += `:package: NPM: ${npmUrl}\n`;
+  post += `:technologist: Github release: ${releaseTagUrl}\n`;
+  post += `:page_facing_up: Full Changelog: ${changelogTreeUrl}\n\n`;
+
+  // Breaking
+  if (hasBreaking) {
+    post += `:warning: Breaking Changes\n`;
+    post += `See full migration guide: ${breakingMdUrl}\n\n`;
+  }
+
+  post += `Release Date: ${releaseDate}\n\n`;
+
+  // Sections — preserve the canonical order from SECTIONS, render only the
+  // ones that have bullets in the parsed changelog.
+  for (const section of SECTIONS) {
+    const heading = SLACK_SECTION_HEADINGS[section.key];
+    if (!heading) continue;
+
+    const matched = parsed.sections.find((s) => s.key === section.key);
+    if (!matched || matched.bullets.length === 0) continue;
+
+    post += `${heading}\n`;
+
+    const shown = matched.bullets.slice(0, MAX_ANNOUNCEMENT_BULLETS);
+    for (const bullet of shown) {
+      post += formatAnnouncementBullet(bullet) + "\n";
+    }
+
+    if (matched.bullets.length > MAX_ANNOUNCEMENT_BULLETS) {
+      post += `... And much more, see full list in changelog :memo:\n`;
+    }
+
+    post += "\n";
+  }
+
+  post += `Thanks to everyone on QVAC team :green_heart: :qvac: :green_heart:\n`;
+
+  const outPath = path.join(versionDir, "announcement-post.txt");
+  fs.writeFileSync(outPath, post);
+  console.log(`✅ Generated ${outPath}`);
+  return outPath;
+}
+
+/**
+ * Resolve the current package version from package.json.
+ *
+ * @param {string} packageName
+ * @returns {string}
+ */
+function readPackageVersion(packageName) {
+  const pkgPath = path.join(
+    getRepoRoot(),
+    "packages",
+    packageName,
+    "package.json",
+  );
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+  return pkg.version;
+}
+
+/**
  * Main function
  */
 async function main() {
@@ -742,6 +1177,17 @@ async function main() {
     process.exit(0);
   }
 
+  if ("generate-announcement-post" in params) {
+    if (!params.package) {
+      console.error("--package is required with --generate-announcement-post");
+      process.exit(1);
+    }
+
+    const version = params.version || readPackageVersion(params.package);
+    const out = generateAnnouncementPost(params.package, version);
+    process.exit(out ? 0 : 1);
+  }
+
   if (!params.package) {
     console.error("Usage:");
     console.error(
@@ -755,7 +1201,13 @@ async function main() {
     );
     console.error("  --base-version   Version label for base commit");
     console.error("  --release-type   minor or patch (auto-detected from package.json version)");
-    console.error("  --update-root-changelog  Update root CHANGELOG.md");
+    console.error("  --update-root-changelog       Update root CHANGELOG.md");
+    console.error(
+      "  --generate-announcement-post  Generate announcement-post.txt for the package's current version",
+    );
+    console.error(
+      "  --version                     Override version when used with --generate-announcement-post",
+    );
     process.exit(1);
   }
 
@@ -821,5 +1273,7 @@ module.exports = {
   generateChangelogEntry,
   generateChangelogFiles,
   processSDKPRs,
+  parseChangelogMarkdown,
+  generateAnnouncementPost,
   SECTIONS,
 };

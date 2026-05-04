@@ -22,6 +22,8 @@ export interface GGMLConfig {
   embd_normalize?: NumericLike
   flash_attn?: 'on' | 'off' | 'auto'
   'main-gpu'?: NumericLike | 'integrated' | 'dedicated'
+  'split-mode'?: 'none' | 'layer' | 'row'
+  'tensor-split'?: string
   verbosity?: NumericLike
   /** Writable directory for OpenCL kernel binary cache. Required on Android for fast GPU startup. */
   openclCacheDir?: string
