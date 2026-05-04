@@ -157,65 +157,53 @@ export const whisperPlugin = definePlugin({
           }),
         };
 
-        if (request.metadata === true) {
-          for await (const value of transcribeStream(
-            request.modelId,
-            inputStream,
-            request.prompt,
-            true,
-            streamOpts,
-          )) {
-            if (typeof value === "object" && "type" in value) {
-              if (value.type === "vad") {
-                yield {
-                  type: "transcribeStream" as const,
-                  vad: { speaking: value.speaking, probability: value.probability },
-                };
-                continue;
-              }
-              if (value.type === "endOfTurn") {
-                yield {
-                  type: "transcribeStream" as const,
-                  endOfTurn: { silenceDurationMs: value.silenceDurationMs },
-                };
-                continue;
-              }
-            }
-            yield {
-              type: "transcribeStream" as const,
-              segment: value as TranscribeSegment,
-            };
-          }
-        } else {
-          for await (const value of transcribeStream(
-            request.modelId,
-            inputStream,
-            request.prompt,
-            false,
-            streamOpts,
-          )) {
-            if (typeof value === "object") {
-              if (value.type === "vad") {
-                yield {
-                  type: "transcribeStream" as const,
-                  vad: { speaking: value.speaking, probability: value.probability },
-                };
-                continue;
-              }
-              if (value.type === "endOfTurn") {
-                yield {
-                  type: "transcribeStream" as const,
-                  endOfTurn: { silenceDurationMs: value.silenceDurationMs },
-                };
-                continue;
-              }
+        const metadata = request.metadata === true;
+        const iterator = metadata
+          ? transcribeStream(
+              request.modelId,
+              inputStream,
+              request.prompt,
+              true,
+              streamOpts,
+            )
+          : transcribeStream(
+              request.modelId,
+              inputStream,
+              request.prompt,
+              false,
+              streamOpts,
+            );
+
+        for await (const value of iterator) {
+          if (typeof value === "object" && value !== null && "type" in value) {
+            if (value.type === "vad") {
+              yield {
+                type: "transcribeStream" as const,
+                vad: {
+                  speaking: value.speaking,
+                  probability: value.probability,
+                },
+              };
               continue;
             }
-            yield {
-              type: "transcribeStream" as const,
-              text: value,
-            };
+            if (value.type === "endOfTurn") {
+              yield {
+                type: "transcribeStream" as const,
+                endOfTurn: { silenceDurationMs: value.silenceDurationMs },
+              };
+              continue;
+            }
+            continue;
           }
+          yield metadata
+            ? {
+                type: "transcribeStream" as const,
+                segment: value as TranscribeSegment,
+              }
+            : {
+                type: "transcribeStream" as const,
+                text: value as string,
+              };
         }
 
         yield {
