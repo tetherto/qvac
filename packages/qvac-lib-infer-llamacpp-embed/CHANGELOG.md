@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.15.0] - 2026-04-30
+
+### Added
+
+#### Multi-GPU pipeline parallelism via `split-mode` config
+
+- New `split-mode` (`'none'` | `'layer'` | `'row'`) and `tensor-split` config options enable distributing an embedding model across multiple GPUs via pipeline or tensor parallelism.
+- When `split-mode` is `'layer'` or `'row'` and a GPU backend is available, the `--device` flag is omitted so llama.cpp distributes layers/rows across all available GPUs rather than pinning to a single device.
+- When no GPU backend is available the addon falls back to CPU and silently drops `split-mode`, `tensor-split`, and `main-gpu`.
+- `main_gpu` underscore variant is now accepted alongside `main-gpu`; providing both simultaneously throws `InvalidArgument`.
+- `split_mode` underscore variant is accepted alongside `split-mode`; providing both simultaneously throws `InvalidArgument`.
+
 ## [0.14.0] - 2026-04-10
 
 This release migrates the embed addon off `BaseInference` inheritance and the `WeightsProvider` download layer onto the composable `createJobHandler` + `exclusiveRunQueue` utilities from `@qvac/infer-base@^0.4.0`. The constructor signature is replaced with a single object whose `files.model` field is an ordered array of absolute paths, mirroring the parallel LLM and diffusion addon refactors. This is a breaking change — every caller must update.
