@@ -1,4 +1,5 @@
-import { transcribe } from "@qvac/sdk";
+import { transcribe, transcribeStream } from "@qvac/sdk";
+import type { TranscribeSegment } from "@qvac/sdk";
 import * as path from "node:path";
 import {
   ValidationHelpers,
@@ -7,6 +8,7 @@ import {
 } from "@tetherto/qvac-test-suite";
 import { AbstractModelExecutor } from "../../shared/executors/abstract-model-executor.js";
 import { transcriptionTests } from "../../transcription-tests.js";
+import { validateSegments } from "../../shared/transcription-segments.js";
 
 export class TranscriptionExecutor extends AbstractModelExecutor<
   typeof transcriptionTests
@@ -14,7 +16,15 @@ export class TranscriptionExecutor extends AbstractModelExecutor<
   pattern = /^transcription-/;
 
   protected handlers = Object.fromEntries(
-    transcriptionTests.map((test) => [test.testId, this.generic.bind(this)]),
+    transcriptionTests.map((test) => {
+      if (test.testId === "transcription-metadata-batch") {
+        return [test.testId, this.metadataBatch.bind(this)];
+      }
+      if (test.testId === "transcription-metadata-streaming") {
+        return [test.testId, this.metadataStreaming.bind(this)];
+      }
+      return [test.testId, this.generic.bind(this)];
+    }),
   ) as never;
 
   async generic(params: unknown, expectation: unknown): Promise<TestResult> {
@@ -50,6 +60,46 @@ export class TranscriptionExecutor extends AbstractModelExecutor<
         return ValidationHelpers.validate(errorMsg, exp);
       }
       return { passed: false, output: `Transcription failed: ${errorMsg}` };
+    }
+  }
+
+  async metadataBatch(params: unknown): Promise<TestResult> {
+    const p = params as { audioFileName: string };
+    const whisperModelId = await this.resources.ensureLoaded("whisper");
+    const audioPath = path.resolve(process.cwd(), "assets/audio", p.audioFileName);
+
+    try {
+      const segments = await transcribe({
+        modelId: whisperModelId,
+        audioChunk: audioPath,
+        metadata: true,
+      });
+      return validateSegments(segments);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      return { passed: false, output: `Metadata batch failed: ${errorMsg}` };
+    }
+  }
+
+  async metadataStreaming(params: unknown): Promise<TestResult> {
+    const p = params as { audioFileName: string };
+    const whisperModelId = await this.resources.ensureLoaded("whisper");
+    const audioPath = path.resolve(process.cwd(), "assets/audio", p.audioFileName);
+
+    try {
+      const stream = transcribeStream({
+        modelId: whisperModelId,
+        audioChunk: audioPath,
+        metadata: true,
+      });
+      const segments: TranscribeSegment[] = [];
+      for await (const segment of stream) {
+        segments.push(segment);
+      }
+      return validateSegments(segments);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      return { passed: false, output: `Metadata streaming failed: ${errorMsg}` };
     }
   }
 }
