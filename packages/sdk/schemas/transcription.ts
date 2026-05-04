@@ -84,7 +84,14 @@ export type TranscribeResponse = z.infer<typeof transcribeResponseSchema>;
 export const transcribeStreamRequestSchema = transcribeBaseSchema.extend({
   type: z.literal("transcribeStream"),
   emitVadEvents: z.boolean().optional(),
-  endOfTurnSilenceMs: z.number().int().nonnegative().optional(),
+  endOfTurnSilenceMs: z
+    .number()
+    .int()
+    .nonnegative()
+    .optional()
+    .describe(
+      "Silence (ms) before an endOfTurn event fires. 0 or unset disables end-of-turn detection entirely.",
+    ),
   vadRunIntervalMs: z.number().int().positive().optional(),
 });
 
@@ -104,6 +111,12 @@ export type TranscribeStreamClientParams = {
   prompt?: string;
   metadata?: boolean;
   emitVadEvents?: boolean;
+  /**
+   * Silence (ms) before an `endOfTurn` event fires. `0` or unset disables
+   * end-of-turn detection entirely — no `endOfTurn` events will be emitted
+   * even when `emitVadEvents` is `true`. Pass a positive value (e.g. `800`)
+   * to enable.
+   */
   endOfTurnSilenceMs?: number;
   vadRunIntervalMs?: number;
 };
