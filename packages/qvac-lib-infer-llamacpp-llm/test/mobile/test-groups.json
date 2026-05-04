@@ -3,9 +3,11 @@
     "heavy1": ["runFinetuningPauseResumeTest"],
     "heavy2": ["runToolCallingTest"],
     "heavy3": ["runImageTest"],
-    "heavy4": ["runGemma4Test", "runOcrLightonTest", "runOcrPaddleTest"],
+    "heavy4": ["runOcrLightonTest"],
     "heavy5": ["runReasoningTest"],
     "heavy6": ["runSlidingContextTest"],
+    "heavy7": ["runGemma4Test"],
+    "heavy8": ["runOcrPaddleTest"],
     "lightA": [
       "runAfriquegemmaEdgeCasesTest",
       "runAfriquegemmaTranslationTest",
