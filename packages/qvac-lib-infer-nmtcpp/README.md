@@ -368,7 +368,7 @@ try {
 
   // Access performance statistics (if enabled with opts.stats)
   if (response.stats) {
-    console.log('Translation completed in:', response.stats.totalTime, 'ms')
+    console.log('Translation completed in:', response.stats.totalTime, 's')
   }
 } catch (error) {
   console.error('Translation failed:', error)
