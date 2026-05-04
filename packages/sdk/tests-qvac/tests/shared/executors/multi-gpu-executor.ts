@@ -1,20 +1,32 @@
-import { loadModel, unloadModel, completion, LLAMA_3_2_1B_INST_Q4_0 } from "@qvac/sdk";
+import {
+  loadModel,
+  unloadModel,
+  completion,
+  embed,
+  LLAMA_3_2_1B_INST_Q4_0,
+  EMBEDDINGGEMMA_300M_Q8_0,
+} from "@qvac/sdk";
 import {
   BaseExecutor,
   ValidationHelpers,
   type TestResult,
   type Expectation,
 } from "@tetherto/qvac-test-suite";
-import { multiGpuConfigSmoke, multiGpuTests } from "../../multi-gpu-tests.js";
+import {
+  multiGpuConfigSmoke,
+  multiGpuEmbedConfigSmoke,
+  multiGpuTests,
+} from "../../multi-gpu-tests.js";
 
 export class MultiGpuExecutor extends BaseExecutor<typeof multiGpuTests> {
   pattern = /^multi-gpu-/;
 
   protected handlers = {
-    [multiGpuConfigSmoke.testId]: this.layerSplit.bind(this),
+    [multiGpuConfigSmoke.testId]: this.llmLayerSplit.bind(this),
+    [multiGpuEmbedConfigSmoke.testId]: this.embedLayerSplit.bind(this),
   };
 
-  private async layerSplit(
+  private async llmLayerSplit(
     params: unknown,
     expectation: unknown,
   ): Promise<TestResult> {
@@ -39,6 +51,32 @@ export class MultiGpuExecutor extends BaseExecutor<typeof multiGpuTests> {
       const result = completion({ modelId, history: p.history, stream: false });
       const text = await result.text;
       return ValidationHelpers.validate(text, expectation as Expectation);
+    } finally {
+      await unloadModel({ modelId, clearStorage: false });
+    }
+  }
+
+  private async embedLayerSplit(
+    params: unknown,
+    expectation: unknown,
+  ): Promise<TestResult> {
+    const p = params as { text: string };
+
+    const modelId = await loadModel({
+      modelSrc: EMBEDDINGGEMMA_300M_Q8_0,
+      modelType: "llamacpp-embedding",
+      modelConfig: {
+        gpuLayers: 99,
+        verbosity: 0,
+        splitMode: "layer",
+        tensorSplit: "1,1",
+        mainGpu: 0,
+      },
+    });
+
+    try {
+      const { embedding } = await embed({ modelId, text: p.text });
+      return ValidationHelpers.validate(embedding, expectation as Expectation);
     } finally {
       await unloadModel({ modelId, clearStorage: false });
     }

@@ -16,4 +16,18 @@ export const multiGpuConfigSmoke: TestDefinition = {
   },
 };
 
-export const multiGpuTests = [multiGpuConfigSmoke];
+export const multiGpuEmbedConfigSmoke: TestDefinition = {
+  testId: "multi-gpu-embed-config-smoke",
+  params: {
+    text: "Multi-GPU embedding splits layers across all available GPUs.",
+  },
+  expectation: { validation: "type", expectedType: "array" },
+  suites: ["smoke"],
+  metadata: {
+    category: "multi-gpu",
+    dependency: "embeddings",
+    estimatedDurationMs: 30000,
+  },
+};
+
+export const multiGpuTests = [multiGpuConfigSmoke, multiGpuEmbedConfigSmoke];

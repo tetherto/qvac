@@ -93,6 +93,8 @@ export const embedConfigBaseSchema = z.object({
   mainGpu: z
     .union([z.number().int().min(0), z.enum(["integrated", "dedicated"])])
     .optional(),
+  splitMode: z.enum(["none", "layer", "row"]).optional(),
+  tensorSplit: z.string().optional(),
   verbosity: verbositySchema.optional(),
   /**
    * Writable directory for OpenCL kernel binary cache. Required on Android
