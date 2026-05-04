@@ -35,6 +35,7 @@ add_executable(
   test_logging_macros.cpp
   test_llama_lazy_init_backend.cpp
   test_borrow_tracked_shared_buffer.cpp
+  test_continuous_batching_default.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ContextSlider.cpp
