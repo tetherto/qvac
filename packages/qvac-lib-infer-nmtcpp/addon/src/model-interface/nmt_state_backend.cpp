@@ -20,22 +20,23 @@
 #include "nmt_utils.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
-void nmtBatchPrepLegacy(nmt_batch &batch, const nmt_token *tokens, int n_tokens,
-                        int n_past, int seq_id) {
-  batch.n_tokens = n_tokens;
-  for (int i = 0; i < n_tokens; ++i) {
+void nmtBatchPrepLegacy(
+    nmt_batch& batch, const nmt_token* tokens, int nTokens, int nPast,
+    int seqId) {
+  batch.n_tokens = nTokens;
+  for (int i = 0; i < nTokens; ++i) {
     if (tokens) {
       batch.token[i] = tokens[i];
     }
-    batch.pos[i] = n_past + i;
+    batch.pos[i] = nPast + i;
     batch.n_seq_id[i] = 1;
-    batch.seq_id[i][0] = seq_id;
+    batch.seq_id[i][0] = seqId;
     batch.logits[i] = 0;
   }
-  batch.logits[n_tokens - 1] = 1;
+  batch.logits[nTokens - 1] = 1;
 }
 
-struct nmt_batch nmtBatchInit(int32_t n_tokens, int32_t n_seq_max) {
+struct nmt_batch nmtBatchInit(int32_t nTokens, int32_t nSeqMax) {
   nmt_batch batch = {
       0,
       nullptr,
@@ -45,15 +46,15 @@ struct nmt_batch nmtBatchInit(int32_t n_tokens, int32_t n_seq_max) {
       nullptr,
   };
 
-  batch.token = (nmt_token*)malloc(sizeof(nmt_token) * (n_tokens));
-  batch.pos = (nmt_pos*)malloc(sizeof(nmt_pos) * (n_tokens));
-  batch.n_seq_id = (int32_t*)malloc(sizeof(int32_t) * (n_tokens));
-  batch.seq_id = (nmt_seq_id**)malloc(sizeof(nmt_seq_id*) * (n_tokens + 1));
-  for (int i = 0; i < n_tokens; ++i) {
-    batch.seq_id[i] = (nmt_seq_id*)malloc(sizeof(nmt_seq_id) * n_seq_max);
+  batch.token = (nmt_token*)malloc(sizeof(nmt_token) * (nTokens));
+  batch.pos = (nmt_pos*)malloc(sizeof(nmt_pos) * (nTokens));
+  batch.n_seq_id = (int32_t*)malloc(sizeof(int32_t) * (nTokens));
+  batch.seq_id = (nmt_seq_id**)malloc(sizeof(nmt_seq_id*) * (nTokens + 1));
+  for (int i = 0; i < nTokens; ++i) {
+    batch.seq_id[i] = (nmt_seq_id*)malloc(sizeof(nmt_seq_id) * nSeqMax);
   }
-  batch.seq_id[n_tokens] = nullptr;
-  batch.logits = (int8_t*)malloc(sizeof(int8_t) * n_tokens);
+  batch.seq_id[nTokens] = nullptr;
+  batch.logits = (int8_t*)malloc(sizeof(int8_t) * nTokens);
 
   return batch;
 }
@@ -82,11 +83,11 @@ static bool nmt_sched_graph_init(
   return true;
 }
 
-void nmtKvCacheFree(struct nmt_kv_cache &cache) {
+void nmtKvCacheFree(struct nmt_kv_cache& cache) {
   ggml_backend_buffer_free(cache.buffer);
 }
 
-uint32_t nmtKvCacheGetPadding(const struct nmt_context &ctx) {
+uint32_t nmtKvCacheGetPadding(const struct nmt_context& ctx) {
   if (!ctx.params.flash_attn || !ctx.params.use_gpu) {
     return 1u;
   }
@@ -105,7 +106,7 @@ uint32_t nmtKvCacheGetPadding(const struct nmt_context &ctx) {
   return 32U;
 }
 
-int32_t nmtKvCacheCellMax(const struct nmt_kv_cache &cache) {
+int32_t nmtKvCacheCellMax(const struct nmt_kv_cache& cache) {
   for (uint32_t i = cache.size - 1; i > 0; --i) {
     if (cache.cells[i].pos >= 0 && !cache.cells[i].seq_id.empty()) {
       return i + 1;
@@ -115,8 +116,8 @@ int32_t nmtKvCacheCellMax(const struct nmt_kv_cache &cache) {
   return 1;
 }
 
-bool nmtKvCacheFindSlot(struct nmt_kv_cache &cache,
-                        const struct nmt_batch &batch) {
+bool nmtKvCacheFindSlot(
+    struct nmt_kv_cache& cache, const struct nmt_batch& batch) {
   const uint32_t n_ctx = cache.size;
   const uint32_t n_tokens = batch.n_tokens;
 
@@ -164,11 +165,11 @@ bool nmtKvCacheFindSlot(struct nmt_kv_cache &cache,
   return true;
 }
 
-bool nmtKvCacheInit(struct nmt_kv_cache &cache, ggml_backend_t backend,
-                    ggml_type wtype, int64_t d_model, int64_t n_decoder_layers,
-                    int n_ctx) {
-  const int64_t n_mem = n_decoder_layers * n_ctx;
-  const int64_t n_elements = d_model * n_mem;
+bool nmtKvCacheInit(
+    struct nmt_kv_cache& cache, ggml_backend_t backend, ggml_type wtype,
+    int64_t dModel, int64_t nDecoderLayers, int nCtx) {
+  const int64_t n_mem = nDecoderLayers * nCtx;
+  const int64_t n_elements = dModel * n_mem;
 
   cache.ctx_buf.resize(2 * ggml_tensor_overhead());
 
@@ -179,10 +180,10 @@ bool nmtKvCacheInit(struct nmt_kv_cache &cache, ggml_backend_t backend,
   };
 
   cache.head = 0;
-  cache.size = n_ctx;
+  cache.size = nCtx;
 
   cache.cells.clear();
-  cache.cells.resize(n_ctx);
+  cache.cells.resize(nCtx);
 
   struct ggml_context* ctx = ggml_init(params);
 
@@ -230,7 +231,7 @@ void nmtBatchFree(struct nmt_batch batch) {
   }
 }
 
-void nmtFreeState(struct nmt_state *state) {
+void nmtFreeState(struct nmt_state* state) {
   if (state) {
     nmtKvCacheFree(state->kv_self);
     nmtKvCacheFree(state->kv_cross);
@@ -250,7 +251,7 @@ void nmtFreeState(struct nmt_state *state) {
   }
 }
 
-void nmtResetRuntimeStats(struct nmt_context *ctx) {
+void nmtResetRuntimeStats(struct nmt_context* ctx) {
   if (!ctx || !ctx->state) {
     return;
   }
@@ -271,8 +272,9 @@ void nmtResetRuntimeStats(struct nmt_context *ctx) {
   state->n_fail_h = 0;
 }
 
-int nmtGetRuntimeStats(struct nmt_context *ctx, double *encode_time,
-                       double *decode_time, int *total_tokens) {
+int nmtGetRuntimeStats(
+    struct nmt_context* ctx, double* encode_time, double* decode_time,
+    int* total_tokens) {
   if (!ctx || !ctx->state) {
     return -1;
   }
@@ -292,7 +294,7 @@ int nmtGetRuntimeStats(struct nmt_context *ctx, double *encode_time,
   return 0;
 }
 
-void nmtKvCacheClear(struct nmt_kv_cache &cache) {
+void nmtKvCacheClear(struct nmt_kv_cache& cache) {
   if (cache.buffer) {
     ggml_backend_buffer_clear(cache.buffer, 0);
   }
@@ -319,7 +321,7 @@ static nmt_global g_state;
 // E.g. "Vulkan0" → 0, "OpenCL1" → 1, "Metal" → -1.
 // GGML assigns the same ordinal to different API surfaces that wrap the
 // same physical GPU (e.g. Vulkan0 and OpenCL0 both map to GPU #0).
-static int nmtExtractDeviceOrdinal(const char *name) {
+static int nmtExtractDeviceOrdinal(const char* name) {
   if (name == nullptr) {
     return -1;
   }
@@ -380,8 +382,11 @@ static ggml_backend_t nmt_backend_init_gpu(const nmt_context_params& params) {
   // and this function agree on the same physical device — historical
   // drift between the two has caused scheduler crashes (R2-C1, R4-C2).
   // See nmt_utils.hpp for the contract.
-  dev = nmtSelectGpuDevice(params.use_gpu, params.gpu_backend,
-                           params.gpu_device, "nmt_backend_init_gpu");
+  dev = nmtSelectGpuDevice(
+      params.use_gpu,
+      params.gpu_backend,
+      params.gpu_device,
+      "nmt_backend_init_gpu");
 
   if (dev == nullptr) {
     QLOG(
@@ -390,10 +395,11 @@ static ggml_backend_t nmt_backend_init_gpu(const nmt_context_params& params) {
     return nullptr;
   }
 
-  const char *devName = ggml_backend_dev_name(dev);
-  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-       std::string("[nmt_backend_init_gpu] About to init device: ") +
-           (devName ? devName : "(null)"));
+  const char* devName = ggml_backend_dev_name(dev);
+  QLOG(
+      qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+      std::string("[nmt_backend_init_gpu] About to init device: ") +
+          (devName ? devName : "(null)"));
 
   ggml_backend_t result = ggml_backend_dev_init(dev, nullptr);
 
@@ -435,15 +441,17 @@ nmt_backend_init(const nmt_context_params& params) {
       std::ostringstream oss_offload;
       oss_offload << "Set GGML_VK_OFFLOAD_MIN_BATCH="
                   << params.op_offload_min_batch;
-      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-           oss_offload.str());
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+          oss_offload.str());
     } else if (s_offloadFirstVal != params.op_offload_min_batch) {
       std::ostringstream oss_offload;
       oss_offload << "op_offload_min_batch=" << params.op_offload_min_batch
                   << " requested but process-wide value already set to "
                   << s_offloadFirstVal << " by first instance — ignoring";
-      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-           oss_offload.str());
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+          oss_offload.str());
     }
   }
 
@@ -479,7 +487,7 @@ nmt_backend_init(const nmt_context_params& params) {
   //      through a different backend.  This is immune to driver-level
   //      description string variation and consistent with the JS-side
   //      dedup in _extractPhysicalGpuKey.
-  const char *primary_name =
+  const char* primary_name =
       primary_dev ? ggml_backend_dev_name(primary_dev) : nullptr;
   int primary_ordinal = nmtExtractDeviceOrdinal(primary_name);
 
@@ -494,7 +502,7 @@ nmt_backend_init(const nmt_context_params& params) {
     if (ggml_backend_dev_type(dev) != GGML_BACKEND_DEVICE_TYPE_ACCEL) {
       continue;
     }
-    const char *dev_name = ggml_backend_dev_name(dev);
+    const char* dev_name = ggml_backend_dev_name(dev);
 
 #ifndef QVAC_NMTCPP_USE_OPENCL
     if (nmtNameContainsCi(dev_name, "opencl")) {
@@ -534,7 +542,7 @@ nmt_backend_init(const nmt_context_params& params) {
   return result;
 }
 
-void nmtResetState(struct nmt_context *ctx) {
+void nmtResetState(struct nmt_context* ctx) {
   if (!ctx || !ctx->state) {
     return;
   }
@@ -582,7 +590,7 @@ void nmtResetState(struct nmt_context *ctx) {
   }
   state->decoders[0].rng.seed(0);
 }
-struct nmt_state *nmtInitState(nmt_context *ctx) {
+struct nmt_state* nmtInitState(nmt_context* ctx) {
   nmt_state* state = new nmt_state;
 
   state->backends = nmt_backend_init(ctx->params);
@@ -596,10 +604,13 @@ struct nmt_state *nmtInitState(nmt_context *ctx) {
   // later during decoding, if more decoders are used, we will recreate the KV
   // cache respectively
   state->kv_self_n_dec = 1;
-  if (!nmtKvCacheInit(state->kv_self, state->backends[0], ctx->itype,
-                      ctx->model.hparams.n_text_state,
-                      ctx->model.hparams.n_decoder_layers,
-                      GGML_PAD(ctx->model.hparams.n_decoder_ctx, 256))) {
+  if (!nmtKvCacheInit(
+          state->kv_self,
+          state->backends[0],
+          ctx->itype,
+          ctx->model.hparams.n_text_state,
+          ctx->model.hparams.n_decoder_layers,
+          GGML_PAD(ctx->model.hparams.n_decoder_ctx, 256))) {
     // NMT_LOG_ERROR("%s: nmtKvCacheInit() failed for self-attention
     // cache\n", __func__);
     nmtFreeState(state);
@@ -613,10 +624,13 @@ struct nmt_state *nmtInitState(nmt_context *ctx) {
     // 1e6);
   }
 
-  if (!nmtKvCacheInit(state->kv_cross, state->backends[0], ctx->itype,
-                      ctx->model.hparams.n_text_state,
-                      ctx->model.hparams.n_decoder_layers,
-                      GGML_PAD(ctx->model.hparams.n_encoder_ctx, 256))) {
+  if (!nmtKvCacheInit(
+          state->kv_cross,
+          state->backends[0],
+          ctx->itype,
+          ctx->model.hparams.n_text_state,
+          ctx->model.hparams.n_decoder_layers,
+          GGML_PAD(ctx->model.hparams.n_encoder_ctx, 256))) {
     // NMT_LOG_ERROR("%s: nmtKvCacheInit() failed for cross-attention
     // cache\n", __func__);
     nmtFreeState(state);

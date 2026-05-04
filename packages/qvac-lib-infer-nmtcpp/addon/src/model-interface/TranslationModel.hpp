@@ -17,7 +17,7 @@
 
 namespace qvac_lib_inference_addon_nmt {
 
-enum class BackendType {
+enum class BackendType { // NOLINT(performance-enum-size)
   GGML,
 #ifdef HAVE_BERGAMOT
   BERGAMOT
@@ -123,8 +123,8 @@ private:
       nullptr, nmt_free};
 
 #ifdef HAVE_BERGAMOT
-  std::unique_ptr<bergamot_context, decltype(&bergamot_free)> bergamotCtx_{
-      nullptr, bergamot_free};
+  std::unique_ptr<bergamot_context, decltype(&bergamotFree)> bergamotCtx_{
+      nullptr, bergamotFree};
 #endif
 
   mutable bool isFirstSentence_ = true;

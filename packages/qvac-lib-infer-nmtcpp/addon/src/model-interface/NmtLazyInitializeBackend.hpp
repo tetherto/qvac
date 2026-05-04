@@ -97,8 +97,8 @@ public:
   NmtBackendsHandle& operator=(const NmtBackendsHandle&) = delete;
 
   // Movable
-  NmtBackendsHandle(NmtBackendsHandle&&) noexcept;
-  NmtBackendsHandle& operator=(NmtBackendsHandle&&) noexcept;
+  NmtBackendsHandle(NmtBackendsHandle&& other) noexcept;
+  NmtBackendsHandle& operator=(NmtBackendsHandle&& other) noexcept;
 
 private:
   bool ownsHandle_;

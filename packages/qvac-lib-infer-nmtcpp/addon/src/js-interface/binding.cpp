@@ -2,9 +2,9 @@
 
 #include "../addon/AddonJs.hpp"
 
-js_value_t* qvac_lib_infer_nmtcpp_exports(
-    js_env_t* env,
-    js_value_t* exports) { // NOLINT(readability-identifier-naming)
+js_value_t*
+qvac_lib_infer_nmtcpp_exports( // NOLINT(readability-identifier-naming)
+    js_env_t* env, js_value_t* exports) {
 
 // NOLINTBEGIN(cppcoreguidelines-macro-usage)
 #define V(name, fn)                                                            \

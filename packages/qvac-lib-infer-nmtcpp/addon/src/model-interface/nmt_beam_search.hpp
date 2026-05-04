@@ -1,4 +1,5 @@
 #pragma once
 
-int nmt_decode_beam_search(
-    struct nmt_context* ctx, int beam_size, int max_tokens);
+int nmtDecodeBeamSearch(
+    struct nmt_context* ctx, int beamSize,
+    int maxTokens); // NOLINT(readability-identifier-naming)

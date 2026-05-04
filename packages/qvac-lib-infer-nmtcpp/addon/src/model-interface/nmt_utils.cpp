@@ -17,7 +17,7 @@
 #include "nmt.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
-std::string sanitizePrintableAscii(const std::string &input) {
+std::string sanitizePrintableAscii(const std::string& input) {
   std::string out;
   out.reserve(input.size());
   for (char raw : input) {
@@ -77,7 +77,7 @@ bool ggml_graph_compute_helper(
     ggml_backend_dev_t dev = ggml_backend_get_device(backend);
     ggml_backend_reg_t reg = dev ? ggml_backend_dev_backend_reg(dev) : nullptr;
 
-    auto *fn_set_n_threads =
+    auto* fn_set_n_threads =
         reg ? (ggml_backend_set_n_threads_t)ggml_backend_reg_get_proc_address(
                   reg, "ggml_backend_set_n_threads")
             : nullptr;
@@ -97,29 +97,30 @@ bool ggml_graph_compute_helper(
 }
 // NOLINTEND
 
-bool nmtNameContainsCi(const char *name, const std::string &needleLower) {
+bool nmtNameContainsCi(const char* name, const std::string& needleLower) {
   if (name == nullptr || needleLower.empty()) {
     return false;
   }
   static constexpr size_t kMaxNameLen = 256;
   std::string nameLower(name, strnlen(name, kMaxNameLen));
-  std::ranges::transform(nameLower, nameLower.begin(), [](unsigned char ch) {
-    return static_cast<char>(std::tolower(ch));
+  std::ranges::transform(nameLower, nameLower.begin(), [](unsigned char chr) {
+    return static_cast<char>(std::tolower(chr));
   });
   return nameLower.find(needleLower) != std::string::npos;
 }
 
 ggml_backend_dev_t
 nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
-    bool useGpu, const std::string &gpuBackend, int gpuDevice,
-    const char *logPrefix) {
+    bool useGpu, const std::string& gpuBackend, int gpuDevice,
+    const char* logPrefix) {
   if (!useGpu) {
     return nullptr;
   }
   std::string gpuBackendLower = gpuBackend;
   std::ranges::transform(
-      gpuBackendLower, gpuBackendLower.begin(),
-      [](unsigned char chr) { return static_cast<char>(std::tolower(chr)); });
+      gpuBackendLower, gpuBackendLower.begin(), [](unsigned char chr) {
+        return static_cast<char>(std::tolower(chr));
+      });
 
   ggml_backend_dev_t dev = nullptr;
   const size_t devCount = ggml_backend_dev_count();
@@ -149,7 +150,7 @@ nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
         continue;
       }
       enum ggml_backend_dev_type devType = ggml_backend_dev_type(devCur);
-      const char *name = ggml_backend_dev_name(devCur);
+      const char* name = ggml_backend_dev_name(devCur);
       if (devType == GGML_BACKEND_DEVICE_TYPE_CPU) {
         continue;
       }
@@ -207,7 +208,7 @@ nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
         continue;
       }
       enum ggml_backend_dev_type devType = ggml_backend_dev_type(devCur);
-      const char *name = ggml_backend_dev_name(devCur);
+      const char* name = ggml_backend_dev_name(devCur);
       if (devType == GGML_BACKEND_DEVICE_TYPE_CPU) {
         continue;
       }
@@ -264,7 +265,7 @@ nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
         continue;
       }
       enum ggml_backend_dev_type devType = ggml_backend_dev_type(devCur);
-      const char *name = ggml_backend_dev_name(devCur);
+      const char* name = ggml_backend_dev_name(devCur);
       if (devType == GGML_BACKEND_DEVICE_TYPE_CPU) {
         continue;
       }

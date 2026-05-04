@@ -8,7 +8,7 @@
 #include "nmt_utils.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
-struct ggml_cgraph *nmtBuildGraphEncoder(nmt_context &ctx, nmt_state &state) {
+struct ggml_cgraph* nmtBuildGraphEncoder(nmt_context& ctx, nmt_state& state) {
   const auto& model = ctx.model;
   const auto& hparams = model.hparams;
 
@@ -216,7 +216,7 @@ struct ggml_cgraph *nmtBuildGraphEncoder(nmt_context &ctx, nmt_state &state) {
 }
 
 // pre-compute cross-attention memory
-struct ggml_cgraph *nmtBuildGraphCross(nmt_context &ctx, nmt_state &state) {
+struct ggml_cgraph* nmtBuildGraphCross(nmt_context& ctx, nmt_state& state) {
   const auto& model = ctx.model;
   const auto& hparams = model.hparams;
 
@@ -305,10 +305,10 @@ struct ggml_cgraph *nmtBuildGraphCross(nmt_context &ctx, nmt_state &state) {
   return gf;
 }
 
-bool nmtEncodeInternal(nmt_context &ctx, nmt_state &state) {
+bool nmtEncodeInternal(nmt_context& ctx, nmt_state& state) {
   // Done for debug purposes to have a match with python input frame.
   auto& sched = state.sched_encode.sched;
-  ggml_cgraph *gf = nmtBuildGraphEncoder(ctx, state);
+  ggml_cgraph* gf = nmtBuildGraphEncoder(ctx, state);
   if (!ggml_backend_sched_alloc_graph(sched, gf)) {
     // should never happen as we pre-allocate the memory
     return false;
@@ -345,7 +345,7 @@ bool nmtEncodeInternal(nmt_context &ctx, nmt_state &state) {
   {
     auto& sched = state.sched_cross.sched;
 
-    ggml_cgraph *gf = nmtBuildGraphCross(ctx, state);
+    ggml_cgraph* gf = nmtBuildGraphCross(ctx, state);
 
     if (!ggml_backend_sched_alloc_graph(sched, gf)) {
       // should never happen as we pre-allocate the memory

@@ -517,19 +517,20 @@ int nmt_encode(struct nmt_context* ctx);
 
 int nmt_full(struct nmt_context* ctx, const char* inputText);
 
-int nmtTokenCount(struct nmt_context *ctx, const char *text);
+int nmtTokenCount(struct nmt_context* ctx, const char* text);
 
 const char* nmt_get_output(struct nmt_context* ctx);
 
-int nmtGetRuntimeStats(struct nmt_context *ctx, double *encodeTime,
-                       double *decodeTime, int *totalTokens);
+int nmtGetRuntimeStats(
+    struct nmt_context* ctx, double* encodeTime, double* decodeTime,
+    int* totalTokens);
 
-void nmtResetRuntimeStats(struct nmt_context *ctx);
+void nmtResetRuntimeStats(struct nmt_context* ctx);
 
-void nmtResetState(struct nmt_context *ctx);
+void nmtResetState(struct nmt_context* ctx);
 
-struct nmt_context *nmtInitFromFileWithParams(const char *pathModel,
-                                              struct nmt_context_params params);
+struct nmt_context* nmtInitFromFileWithParams(
+    const char* pathModel, struct nmt_context_params params);
 
 struct nmt_context_params nmt_context_default_params();
 

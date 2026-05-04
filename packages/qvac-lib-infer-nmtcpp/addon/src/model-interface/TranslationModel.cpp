@@ -38,7 +38,9 @@ TranslationModel::TranslationModel(const std::string& modelPath) {
   }
 }
 
-BackendType TranslationModel::detectBackendType(const std::string& modelPath) {
+BackendType TranslationModel::detectBackendType(
+    const std::string&
+        modelPath) { // NOLINT(readability-convert-member-functions-to-static)
 #ifdef HAVE_BERGAMOT
   // Check for bergamot model indicators
   // Bergamot models typically have .intgemm in the filename or vocab.spm files
@@ -97,13 +99,14 @@ void TranslationModel::unload() {
 #endif
 }
 
-void TranslationModel::load() {
+void TranslationModel::
+    load() { // NOLINT(readability-function-cognitive-complexity)
   // Read backend loading config and initialize backends before any model
   // loading. Keys are preserved in config_ so reload() can re-initialize with
   // the same backends directory.
   std::string backendsDir;
-  if (auto it = config_.find("backendsdir"); it != config_.end()) {
-    if (const auto* value = std::get_if<std::string>(&it->second)) {
+  if (auto iter = config_.find("backendsdir"); iter != config_.end()) {
+    if (const auto* value = std::get_if<std::string>(&iter->second)) {
       backendsDir = *value;
     } else {
       QLOG(
@@ -113,8 +116,8 @@ void TranslationModel::load() {
     }
   }
   std::string openclCacheDir;
-  if (auto it = config_.find("openclcachedir"); it != config_.end()) {
-    if (const auto* value = std::get_if<std::string>(&it->second)) {
+  if (auto iter = config_.find("openclcachedir"); iter != config_.end()) {
+    if (const auto* value = std::get_if<std::string>(&iter->second)) {
       openclCacheDir = *value;
     } else {
       QLOG(
@@ -182,30 +185,30 @@ void TranslationModel::load() {
       params.max_length_factor = value;
     });
     // Extract vocab paths from config
-    auto src_vocab_iter = config_.find("src_vocab");
-    auto dst_vocab_iter = config_.find("dst_vocab");
+    auto srcVocabIter = config_.find("src_vocab");
+    auto dstVocabIter = config_.find("dst_vocab");
 
     // Check vocab paths are provided
-    if (src_vocab_iter == config_.end() ||
-        !std::holds_alternative<std::string>(src_vocab_iter->second) ||
-        std::get<std::string>(src_vocab_iter->second).empty()) {
+    if (srcVocabIter == config_.end() ||
+        !std::holds_alternative<std::string>(srcVocabIter->second) ||
+        std::get<std::string>(srcVocabIter->second).empty()) {
       QLOG(
           qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
           "[TRANSLATION MODEL] ERROR: Source vocab path not provided");
       throw std::runtime_error("Source vocab path required for Bergamot");
     }
 
-    if (dst_vocab_iter == config_.end() ||
-        !std::holds_alternative<std::string>(dst_vocab_iter->second) ||
-        std::get<std::string>(dst_vocab_iter->second).empty()) {
+    if (dstVocabIter == config_.end() ||
+        !std::holds_alternative<std::string>(dstVocabIter->second) ||
+        std::get<std::string>(dstVocabIter->second).empty()) {
       QLOG(
           qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
           "[TRANSLATION MODEL] ERROR: Destination vocab path not provided");
       throw std::runtime_error("Destination vocab path required for Bergamot");
     }
 
-    params.src_vocab_path = std::get<std::string>(src_vocab_iter->second);
-    params.dst_vocab_path = std::get<std::string>(dst_vocab_iter->second);
+    params.src_vocab_path = std::get<std::string>(srcVocabIter->second);
+    params.dst_vocab_path = std::get<std::string>(dstVocabIter->second);
 
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::INFO,
@@ -218,12 +221,11 @@ void TranslationModel::load() {
         "[TRANSLATION MODEL] Dst vocab: " + params.dst_vocab_path);
 
     // Build the freshly-loaded Bergamot context outside the lock so the
-    // heavy bergamot_init call doesn't serialize against
+    // heavy bergamotInit call doesn't serialize against
     // getActiveBackendName(); commit it under mtx_ so any concurrent reader
     // sees a consistent context state. Mirrors the GGML path below.
-    std::unique_ptr<bergamot_context, decltype(&bergamot_free)>
-        freshBergamotCtx(
-            bergamot_init(modelPath_.c_str(), params), &bergamot_free);
+    std::unique_ptr<bergamot_context, decltype(&bergamotFree)> freshBergamotCtx(
+        bergamotInit(modelPath_.c_str(), params), &bergamotFree);
 
     if (freshBergamotCtx == nullptr) {
       QLOG(
@@ -275,7 +277,7 @@ void TranslationModel::load() {
 
   std::ostringstream ctxMsg;
   ctxMsg << "[TRANSLATION MODEL] nmtInitFromFileWithParams() returned, ctx="
-         << (void *)freshCtx.get();
+         << (void*)freshCtx.get();
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO, ctxMsg.str());
 
   if (freshCtx == nullptr) {
@@ -287,7 +289,7 @@ void TranslationModel::load() {
 
   std::string cachedName = "CPU";
   std::string cachedDescription;
-  if (freshCtx->state) {
+  if (freshCtx->state != nullptr) {
     for (ggml_backend_t backend : freshCtx->state->backends) {
       if (backend == nullptr) {
         continue;
@@ -303,7 +305,7 @@ void TranslationModel::load() {
       if (name != nullptr) {
         cachedName = std::string(name);
       }
-      const char *desc = ggml_backend_dev_description(dev);
+      const char* desc = ggml_backend_dev_description(dev);
       if (desc != nullptr) {
         cachedDescription = sanitizePrintableAscii(std::string(desc));
       }
@@ -338,10 +340,10 @@ void TranslationModel::saveLoadParams(const std::string& modelPath) {
 }
 
 void TranslationModel::reset() const {
-  std::scoped_lock<std::mutex> scoped_lock(mtx_);
+  std::scoped_lock<std::mutex> scopedLock(mtx_);
 #ifdef HAVE_BERGAMOT
   if (backendType_ == BackendType::BERGAMOT && bergamotCtx_) {
-    bergamot_reset_runtime_stats(bergamotCtx_.get());
+    bergamotResetRuntimeStats(bergamotCtx_.get());
     return;
   }
 #endif
@@ -364,7 +366,7 @@ bool TranslationModel::isLoaded() const {
 
 std::string TranslationModel::indictransPreProcess(const std::string& text) {
   std::string input = text;
-  const std::string DELIMITER = " ";
+  const std::string kDelimiter = " ";
 
   if (isFirstSentence_) {
     std::string word1;
@@ -373,15 +375,15 @@ std::string TranslationModel::indictransPreProcess(const std::string& text) {
     std::string::size_type end = 0;
     int counter = 0;
 
-    start = input.find_first_not_of(DELIMITER, end);
+    start = input.find_first_not_of(kDelimiter, end);
     if (start != std::string::npos) {
-      end = input.find(DELIMITER, start);
+      end = input.find(kDelimiter, start);
       word1 = input.substr(start, end - start);
       counter++;
 
-      start = input.find_first_not_of(DELIMITER, end);
+      start = input.find_first_not_of(kDelimiter, end);
       if (start != std::string::npos) {
-        end = input.find(DELIMITER, start);
+        end = input.find(kDelimiter, start);
         word2 = input.substr(start, end - start);
         counter++;
       }
@@ -396,7 +398,7 @@ std::string TranslationModel::indictransPreProcess(const std::string& text) {
     }
   } else {
     std::string::size_type end = 0;
-    end = input.find(DELIMITER, 0);
+    end = input.find(kDelimiter, 0);
     std::string temp = input.substr(0, end);
 
     if (temp == srcLang_) {
@@ -417,19 +419,19 @@ std::string TranslationModel::indictransPreProcess(const std::string& text) {
 }
 
 std::any TranslationModel::process(const std::any& input) {
-  std::scoped_lock<std::mutex> scoped_lock(mtx_);
+  std::scoped_lock<std::mutex> scopedLock(mtx_);
 
-  if (auto* inputString = std::any_cast<std::string>(&input)) {
+  if (const auto* inputString = std::any_cast<std::string>(&input)) {
     return processString(*inputString);
-  } else if (
-      auto* inputBatch = std::any_cast<std::vector<std::string>>(&input)) {
-    return processBatch(*inputBatch);
-  } else {
-    QLOG(
-        qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
-        "[TRANSLATION MODEL] ERROR: Invalid input type!");
-    throw std::runtime_error("Invalid Input type");
   }
+  if (const auto* inputBatch =
+          std::any_cast<std::vector<std::string>>(&input)) {
+    return processBatch(*inputBatch);
+  }
+  QLOG(
+      qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
+      "[TRANSLATION MODEL] ERROR: Invalid input type!");
+  throw std::runtime_error("Invalid Input type");
 }
 
 void TranslationModel::cancel() const { reset(); }
@@ -448,8 +450,10 @@ std::string TranslationModel::processString(const std::string& text) {
         "[PROCESS] Processing with Bergamot backend, text length: " +
             std::to_string(text.length()));
 
-    bool allAreSpace =
-        std::all_of(text.begin(), text.end(), [](unsigned char chr) {
+    bool allAreSpace = std::all_of(
+        text.begin(),
+        text.end(),
+        [](unsigned char chr) { // NOLINT(modernize-use-ranges)
           return std::isspace(chr);
         });
     if (allAreSpace) {
@@ -459,7 +463,7 @@ std::string TranslationModel::processString(const std::string& text) {
       return "";
     }
 
-    std::string output = bergamot_translate(bergamotCtx_.get(), text.c_str());
+    std::string output = bergamotTranslate(bergamotCtx_.get(), text.c_str());
     return output;
   }
 #endif
@@ -477,8 +481,10 @@ std::string TranslationModel::processString(const std::string& text) {
       "[PROCESS] Processing with GGML backend, text length: " +
           std::to_string(text.length()));
 
-  bool allAreSpace =
-      std::all_of(text.begin(), text.end(), [](unsigned char chr) {
+  bool allAreSpace = std::all_of(
+      text.begin(),
+      text.end(),
+      [](unsigned char chr) { // NOLINT(modernize-use-ranges)
         return std::isspace(chr);
       });
   if (allAreSpace) {
@@ -531,8 +537,10 @@ TranslationModel::processBatch(const std::vector<std::string>& texts) {
           "length: " +
               std::to_string(text.length()));
       // check if text is just spaces
-      allAreSpace =
-          std::all_of(text.begin(), text.end(), [](unsigned char chr) {
+      allAreSpace = std::all_of(
+          text.begin(),
+          text.end(),
+          [](unsigned char chr) { // NOLINT(modernize-use-ranges)
             return std::isspace(chr);
           });
       if (allAreSpace) {
@@ -548,7 +556,7 @@ TranslationModel::processBatch(const std::vector<std::string>& texts) {
       return {};
     }
 
-    auto result = bergamot_translate_batch(bergamotCtx_.get(), texts);
+    auto result = bergamotTranslateBatch(bergamotCtx_.get(), texts);
     if (!result.error.empty()) {
       QLOG(
           qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
@@ -578,7 +586,7 @@ qvac_lib_inference_addon_cpp::RuntimeStats TranslationModel::runtimeStats()
     double decodeTime = 0.0;
     int totalTokens = 0;
 
-    if (bergamot_get_runtime_stats(
+    if (bergamotGetRuntimeStats(
             bergamotCtx_.get(), &encodeTime, &decodeTime, &totalTokens) == 0) {
       // For Bergamot: totalTime = decodeTime (no separate encode phase)
       double totalTime = decodeTime;
@@ -608,10 +616,12 @@ qvac_lib_inference_addon_cpp::RuntimeStats TranslationModel::runtimeStats()
   double decodeTime = 0.0;
   int totalTokens = 0;
 
-  if (nmtGetRuntimeStats(nmtCtx_.get(), &encodeTime, &decodeTime,
-                         &totalTokens) == 0) {
+  if (nmtGetRuntimeStats(
+          nmtCtx_.get(), &encodeTime, &decodeTime, &totalTokens) == 0) {
     // TTFT = encodeTime in milliseconds (time before first output token)
-    double ttft = encodeTime * 1000.0;
+    double ttft =
+        encodeTime *
+        1000.0; // NOLINT(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
     // TPS = tokens per second (total tokens / total time)
     double totalTime = encodeTime + decodeTime;
     double tps = (totalTime > 0) ? totalTokens / totalTime : 0.0;
@@ -639,9 +649,11 @@ TranslationModel::getConfig() const {
   return config_;
 }
 
-void TranslationModel::setConfig(
-    std::unordered_map<std::string, std::variant<double, int64_t, std::string>>
-        config) {
+void TranslationModel::
+    setConfig( // NOLINT(readability-function-cognitive-complexity)
+        std::unordered_map<
+            std::string, std::variant<double, int64_t, std::string>>
+            config) {
   config_ = std::move(config);
 
   // use_gpu is lifted out of the generic map because it must be applied
@@ -649,13 +661,13 @@ void TranslationModel::setConfig(
   // init time, and updateConfig() below is a no-op until nmtCtx_ exists.
   // getConfigMap() stores booleans as int64 {0,1}, so accept either int64
   // or double (0.0/1.0) for defensiveness.
-  if (auto it = config_.find("use_gpu"); it != config_.end()) {
+  if (auto iter = config_.find("use_gpu"); iter != config_.end()) {
     bool value = false;
     bool parsed = false;
-    if (const auto* asInt = std::get_if<int64_t>(&it->second)) {
+    if (const auto* asInt = std::get_if<int64_t>(&iter->second)) {
       value = (*asInt != 0);
       parsed = true;
-    } else if (const auto* asDouble = std::get_if<double>(&it->second)) {
+    } else if (const auto* asDouble = std::get_if<double>(&iter->second)) {
       value = (*asDouble != 0.0);
       parsed = true;
     } else {
@@ -672,8 +684,8 @@ void TranslationModel::setConfig(
   // Same pre-load lift for gpu_backend — the ggml device selector in
   // nmt_backend_init_gpu reads it at init time. Accepts strings like
   // "vulkan", "vulkan0", "opencl", "metal" (case-insensitive substring).
-  if (auto it = config_.find("gpu_backend"); it != config_.end()) {
-    if (const auto* asString = std::get_if<std::string>(&it->second)) {
+  if (auto iter = config_.find("gpu_backend"); iter != config_.end()) {
+    if (const auto* asString = std::get_if<std::string>(&iter->second)) {
       setGpuBackend(*asString);
     } else {
       QLOG(
@@ -687,28 +699,28 @@ void TranslationModel::setConfig(
   // Cap to a small upper bound to keep the per-device-loop counter (`int`)
   // safely away from overflow and to reject obviously-bogus inputs.
   static constexpr int64_t kMaxGpuDevice = 64;
-  if (auto it = config_.find("gpu_device"); it != config_.end()) {
-    if (const auto* asInt = std::get_if<int64_t>(&it->second)) {
-      const int64_t v = *asInt;
-      if (v < 0 || v > kMaxGpuDevice) {
+  if (auto iter = config_.find("gpu_device"); iter != config_.end()) {
+    if (const auto* asInt = std::get_if<int64_t>(&iter->second)) {
+      const int64_t val = *asInt;
+      if (val < 0 || val > kMaxGpuDevice) {
         QLOG(
             qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
             "[TRANSLATION MODEL] 'gpu_device' int value out of range "
             "[0, 64]; ignoring");
       } else {
-        setGpuDevice(static_cast<int>(v));
+        setGpuDevice(static_cast<int>(val));
       }
-    } else if (const auto* asDouble = std::get_if<double>(&it->second)) {
-      double v = *asDouble;
-      if (std::isfinite(v) && v >= 0.0 &&
-          v <= static_cast<double>(kMaxGpuDevice)) {
-        if (v != std::floor(v)) {
+    } else if (const auto* asDouble = std::get_if<double>(&iter->second)) {
+      double val = *asDouble;
+      if (std::isfinite(val) && val >= 0.0 &&
+          val <= static_cast<double>(kMaxGpuDevice)) {
+        if (val != std::floor(val)) {
           QLOG(
               qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
               "[TRANSLATION MODEL] 'gpu_device' double has fractional part; "
               "truncating toward zero");
         }
-        setGpuDevice(static_cast<int>(v));
+        setGpuDevice(static_cast<int>(val));
       } else {
         QLOG(
             qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
@@ -723,22 +735,24 @@ void TranslationModel::setConfig(
     }
   }
 
-  if (auto it = config_.find("op_offload_min_batch"); it != config_.end()) {
-    if (const auto *asInt = std::get_if<int64_t>(&it->second)) {
-      auto clamped = std::clamp(*asInt, static_cast<int64_t>(0),
-                                static_cast<int64_t>(INT_MAX));
+  if (auto iter = config_.find("op_offload_min_batch"); iter != config_.end()) {
+    if (const auto* asInt = std::get_if<int64_t>(&iter->second)) {
+      auto clamped = std::clamp(
+          *asInt, static_cast<int64_t>(0), static_cast<int64_t>(INT_MAX));
       setOpOffloadMinBatch(static_cast<int>(clamped));
-    } else if (const auto *asDouble = std::get_if<double>(&it->second)) {
+    } else if (const auto* asDouble = std::get_if<double>(&iter->second)) {
       if (std::isfinite(*asDouble)) {
-        auto clamped =
-            std::clamp(static_cast<int64_t>(*asDouble), static_cast<int64_t>(0),
-                       static_cast<int64_t>(INT_MAX));
+        auto clamped = std::clamp(
+            static_cast<int64_t>(*asDouble),
+            static_cast<int64_t>(0),
+            static_cast<int64_t>(INT_MAX));
         setOpOffloadMinBatch(static_cast<int>(clamped));
       }
     } else {
-      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-           "[TRANSLATION MODEL] 'op_offload_min_batch' config value is not a "
-           "number; ignoring");
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+          "[TRANSLATION MODEL] 'op_offload_min_batch' config value is not a "
+          "number; ignoring");
     }
   }
 
@@ -755,11 +769,12 @@ void TranslationModel::setGpuBackend(const std::string& gpuBackend) {
   std::string sanitized;
   sanitized.reserve(std::min(gpuBackend.size(), kMaxGpuBackendLen));
   for (size_t i = 0; i < gpuBackend.size() && i < kMaxGpuBackendLen; ++i) {
-    unsigned char c = static_cast<unsigned char>(gpuBackend[i]);
-    const bool allowed = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-                         (c >= '0' && c <= '9') || c == '_' || c == '-';
+    auto chr = static_cast<unsigned char>(gpuBackend[i]);
+    const bool allowed = (chr >= 'a' && chr <= 'z') ||
+                         (chr >= 'A' && chr <= 'Z') ||
+                         (chr >= '0' && chr <= '9') || chr == '_' || chr == '-';
     if (allowed) {
-      sanitized.push_back(static_cast<char>(c));
+      sanitized.push_back(static_cast<char>(chr));
     }
   }
   if (sanitized.size() != gpuBackend.size()) {
@@ -844,7 +859,7 @@ void TranslationModel::updateConfig() {
 }
 
 std::string TranslationModel::getActiveBackendName() const {
-  std::scoped_lock<std::mutex> scoped_lock(mtx_);
+  std::scoped_lock<std::mutex> scopedLock(mtx_);
 
 #ifdef HAVE_BERGAMOT
   if (backendType_ == BackendType::BERGAMOT) {
@@ -860,7 +875,7 @@ std::string TranslationModel::getActiveBackendName() const {
 }
 
 std::string TranslationModel::getActiveBackendDescription() const {
-  std::scoped_lock<std::mutex> scoped_lock(mtx_);
+  std::scoped_lock<std::mutex> scopedLock(mtx_);
 
 #ifdef HAVE_BERGAMOT
   if (backendType_ == BackendType::BERGAMOT) {

@@ -33,7 +33,9 @@ namespace {
 
 void nmtGgmlLogCallback(
     enum ggml_log_level level, const char* text, void* /*user_data*/) {
-  if (text == nullptr || text[0] == '\0') {
+  if (text == nullptr ||
+      text[0] ==
+          '\0') { // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
     return;
   }
 
@@ -58,7 +60,11 @@ void nmtGgmlLogCallback(
 
   // Compute the trimmed length without heap allocation.
   size_t len = std::strlen(text);
-  while (len > 0 && (text[len - 1] == '\n' || text[len - 1] == '\r')) {
+  while (
+      len > 0 &&
+      (text[len - 1] == '\n' ||
+       text[len - 1] ==
+           '\r')) { // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
     --len;
   }
   if (len == 0) {
@@ -77,7 +83,9 @@ void nmtGgmlLogCallback(
 #endif
 
   std::string message;
-  message.reserve(7 + len);
+  message.reserve(
+      7 +
+      len); // NOLINT(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
   message.append("[ggml] ");
   message.append(text, len);
   QLOG(priority, message);
@@ -185,8 +193,11 @@ bool NmtLazyInitializeBackend::initializeAndRef(
   return didInit;
 }
 
-bool NmtLazyInitializeBackend::initializeLocked(
-    const std::string& backendsDir, const std::string& openclCacheDir) {
+bool NmtLazyInitializeBackend::
+    initializeLocked( // NOLINT(readability-function-cognitive-complexity)
+        const std::string& backendsDir,
+        const std::string&
+            openclCacheDir) { // NOLINT(bugprone-easily-swappable-parameters,misc-unused-parameters)
   if (g_initialized) {
     if (!backendsDir.empty() && !g_recordedBackendsDir.empty() &&
         backendsDir != g_recordedBackendsDir) {
@@ -280,7 +291,7 @@ bool NmtLazyInitializeBackend::initializeLocked(
       std::filesystem::path requested(backendsDir);
       bool validBackendsDir = requested.is_absolute();
       if (validBackendsDir) {
-        for (const auto &seg : requested) {
+        for (const auto& seg : requested) {
           if (seg == "..") {
             validBackendsDir = false;
             break;
@@ -288,48 +299,57 @@ bool NmtLazyInitializeBackend::initializeLocked(
         }
       }
       if (!validBackendsDir) {
-        QLOG(Priority::WARNING,
-             "Rejecting suspicious backendsDir (must be absolute and free of "
-             "'..' segments): " +
-                 sanitizePrintableAscii(backendsDir) +
-                 " — falling back to default backend loading");
+        QLOG(
+            Priority::WARNING,
+            "Rejecting suspicious backendsDir (must be absolute and free of "
+            "'..' segments): " +
+                sanitizePrintableAscii(backendsDir) +
+                " — falling back to default backend loading");
         ggml_backend_load_all();
       } else {
-        std::error_code ec;
+        std::error_code errCode;
         std::filesystem::path backendsDirPath =
-            std::filesystem::canonical(requested, ec);
-        if (ec) {
-          QLOG(Priority::WARNING,
-               "backendsDir canonical() failed (" + ec.message() +
-                   "): " + sanitizePrintableAscii(backendsDir) +
-                   " — falling back to default backend loading");
+            std::filesystem::canonical(requested, errCode);
+        if (errCode) {
+          QLOG(
+              Priority::WARNING,
+              "backendsDir canonical() failed (" + errCode.message() +
+                  "): " + sanitizePrintableAscii(backendsDir) +
+                  " — falling back to default backend loading");
           ggml_backend_load_all();
         } else {
-          auto resolvedStr = backendsDirPath.string();
+          auto resolvedStr =
+              backendsDirPath
+                  .string(); // NOLINT(bugprone-unused-local-non-trivial-variable)
 #ifdef __ANDROID__
           if (resolvedStr.rfind("/data/", 0) != 0) {
-            QLOG(Priority::WARNING,
-                 "Rejecting backendsDir — resolved path outside /data/ "
-                 "prefix: " +
-                     sanitizePrintableAscii(resolvedStr) +
-                     " — falling back to default backend loading");
+            QLOG(
+                Priority::WARNING,
+                "Rejecting backendsDir — resolved path outside /data/ "
+                "prefix: " +
+                    sanitizePrintableAscii(resolvedStr) +
+                    " — falling back to default backend loading");
             ggml_backend_load_all();
           } else {
 #endif
 #ifdef BACKENDS_SUBDIR
             std::filesystem::path subdirPath(BACKENDS_SUBDIR);
             backendsDirPath = backendsDirPath / subdirPath;
-            backendsDirPath = std::filesystem::canonical(backendsDirPath, ec);
-            if (ec) {
-              QLOG(Priority::WARNING,
-                   "backendsDir+subdir canonical() failed (" + ec.message() +
-                       ") — falling back to default backend loading");
+            backendsDirPath =
+                std::filesystem::canonical(backendsDirPath, errCode);
+            if (errCode) {
+              QLOG(
+                  Priority::WARNING,
+                  "backendsDir+subdir canonical() failed (" +
+                      errCode.message() +
+                      ") — falling back to default backend loading");
               ggml_backend_load_all();
             } else {
 #endif
-              QLOG(Priority::INFO,
-                   "Loading backends from directory: " +
-                       sanitizePrintableAscii(backendsDirPath.string()));
+              QLOG(
+                  Priority::INFO,
+                  "Loading backends from directory: " +
+                      sanitizePrintableAscii(backendsDirPath.string()));
               ggml_backend_load_all_from_path(backendsDirPath.string().c_str());
 #ifdef BACKENDS_SUBDIR
             }
@@ -395,7 +415,7 @@ NmtBackendsHandle::NmtBackendsHandle(
   NmtLazyInitializeBackend::initializeAndRef(backendsDir, openclCacheDir);
 }
 
-NmtBackendsHandle::~NmtBackendsHandle() {
+NmtBackendsHandle::~NmtBackendsHandle() { // NOLINT(bugprone-exception-escape)
   if (ownsHandle_) {
     NmtLazyInitializeBackend::decrementRefCount();
   }
@@ -406,8 +426,8 @@ NmtBackendsHandle::NmtBackendsHandle(NmtBackendsHandle&& other) noexcept
   other.ownsHandle_ = false;
 }
 
-NmtBackendsHandle&
-NmtBackendsHandle::operator=(NmtBackendsHandle&& other) noexcept {
+NmtBackendsHandle& NmtBackendsHandle::operator=(
+    NmtBackendsHandle&& other) noexcept { // NOLINT(bugprone-exception-escape)
   if (this != &other) {
     if (ownsHandle_) {
       NmtLazyInitializeBackend::decrementRefCount();

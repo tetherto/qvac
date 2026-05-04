@@ -19,20 +19,21 @@
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
 // Helpers moved from nmt.cpp
-void nmtComputeLogprobs(const std::vector<float> &logits, const int n_logits,
-                        std::vector<float> &logprobs) {
+void nmtComputeLogprobs(
+    const std::vector<float>& logits, int nLogits,
+    std::vector<float>& logprobs) {
   // Use double precision for accumulation to match PyTorch's behavior
   const double logit_max =
       static_cast<double>(*std::max_element(logits.begin(), logits.end()));
   double logsumexp = 0.0;
-  for (int i = 0; i < n_logits; ++i) {
+  for (int i = 0; i < nLogits; ++i) {
     if (logits[i] > -INFINITY) {
       logsumexp += exp(static_cast<double>(logits[i]) - logit_max);
     }
   }
   logsumexp = log(logsumexp) + logit_max;
 
-  for (int i = 0; i < n_logits; ++i) {
+  for (int i = 0; i < nLogits; ++i) {
     if (logits[i] > -INFINITY) {
       logprobs[i] =
           static_cast<float>(static_cast<double>(logits[i]) - logsumexp);
@@ -42,20 +43,19 @@ void nmtComputeLogprobs(const std::vector<float> &logits, const int n_logits,
   }
 }
 
-void indictransComputeSinusoidalPositionalEmbeddingsToBuffer(float *data,
-                                                             int d_model,
-                                                             int max_len) {
+void indictransComputeSinusoidalPositionalEmbeddingsToBuffer(
+    float* data, int dModel, int maxLen) {
   // IMPORTANT: IndicTrans2 uses an offset - positions don't start at 0, but at
   // 2
 
-  const int half_dim = d_model / 2;
+  const int half_dim = dModel / 2;
 
-  for (int table_pos = 0; table_pos < max_len; table_pos++) {
+  for (int table_pos = 0; table_pos < maxLen; table_pos++) {
     for (int i = 0; i < half_dim; i++) {
       float freq = powf(10000.0F, -((float)i / (half_dim - 1)));
       float angle = table_pos * freq;
-      data[table_pos * d_model + i] = sinf(angle);
-      data[table_pos * d_model + (i + half_dim)] = cosf(angle);
+      data[table_pos * dModel + i] = sinf(angle);
+      data[table_pos * dModel + (i + half_dim)] = cosf(angle);
     }
   }
 }
@@ -143,16 +143,16 @@ void apply_top_p_filter(
  *
  * @param[in,out] logits            Logits for the next-token distribution;
  * entries for previously generated token ids are adjusted in place.
- * @param[in]     generated_tokens  Sequence of token ids already generated (may
+ * @param[in]     generatedTokens   Sequence of token ids already generated (may
  * contain duplicates).
  * @param[in]     penalty           Repetition penalty factor (> 1.0 to
  * penalize; 1.0 is no-op).
  */
-void applyRepetitionPenalty(std::vector<float> &logits,
-                            const std::vector<int32_t> &generated_tokens,
-                            const float penalty) {
+void applyRepetitionPenalty(
+    std::vector<float>& logits, const std::vector<int32_t>& generatedTokens,
+    float penalty) {
   std::unordered_set<int32_t> unique_logits(
-      generated_tokens.begin(), generated_tokens.end());
+      generatedTokens.begin(), generatedTokens.end());
   std::for_each(
       unique_logits.begin(),
       unique_logits.end(),
@@ -181,24 +181,24 @@ void applyRepetitionPenalty(std::vector<float> &logits,
  * {logit, id}. It is filled in this function and used to map back ids.
  * @param[in]     top_k     Number of highest logits to retain.
  */
-void applyTopKFilter(std::vector<float> &logits,
-                     std::vector<nmt_pair<float, nmt_vocab::id>> &logits_id,
-                     const int top_k) {
-  assert(logits_id.size() == logits.size());
+void applyTopKFilter(
+    std::vector<float>& logits,
+    std::vector<nmt_pair<float, nmt_vocab::id>>& logitsId, int topK) {
+  assert(logitsId.size() == logits.size());
   for (size_t i = 0; i < logits.size(); ++i) {
-    logits_id[i].first = logits[i];
-    logits_id[i].second = i;
+    logitsId[i].first = logits[i];
+    logitsId[i].second = i;
   }
 
   std::nth_element(
-      logits_id.begin(),
-      logits_id.begin() + top_k,
-      logits_id.end(),
+      logitsId.begin(),
+      logitsId.begin() + topK,
+      logitsId.end(),
       [](auto& a, auto& b) { return a.first > b.first; });
 
   std::fill(logits.begin(), logits.end(), -INFINITY);
-  for (size_t i = 0; i < top_k; ++i) {
-    logits[logits_id[i].second] = logits_id[i].first;
+  for (size_t i = 0; i < topK; ++i) {
+    logits[logitsId[i].second] = logitsId[i].first;
   }
 }
 
@@ -218,19 +218,19 @@ void applyTopKFilter(std::vector<float> &logits,
  * @param[in]     no_repeat_ngram_size  Size of the n-gram to forbid (n). If n
  * <= 0, nothing is applied.
  */
-void applyNoRepeatNgramFilter(std::vector<float> &logits,
-                              const std::vector<nmt_vocab::id> &tokens,
-                              int no_repeat_ngram_size) {
-  if (no_repeat_ngram_size <= 0 || tokens.size() < no_repeat_ngram_size) {
+void applyNoRepeatNgramFilter(
+    std::vector<float>& logits, const std::vector<nmt_vocab::id>& tokens,
+    int noRepeatNgramSize) {
+  if (noRepeatNgramSize <= 0 || tokens.size() < noRepeatNgramSize) {
     return;
   }
 
   const int tokens_size = tokens.size();
-  const int ngram_start = tokens_size - no_repeat_ngram_size + 1;
+  const int ngram_start = tokens_size - noRepeatNgramSize + 1;
 
-  for (int i = 0; i <= tokens_size - no_repeat_ngram_size; ++i) {
+  for (int i = 0; i <= tokens_size - noRepeatNgramSize; ++i) {
     bool match = true;
-    for (int j = 0; j < no_repeat_ngram_size - 1; ++j) {
+    for (int j = 0; j < noRepeatNgramSize - 1; ++j) {
       if (tokens[i + j] != tokens[ngram_start + j]) {
         match = false;
         break;
@@ -238,7 +238,7 @@ void applyNoRepeatNgramFilter(std::vector<float> &logits,
     }
 
     if (match) {
-      const nmt_vocab::id blocked_token = tokens[i + no_repeat_ngram_size - 1];
+      const nmt_vocab::id blocked_token = tokens[i + noRepeatNgramSize - 1];
       if (blocked_token >= 0 && blocked_token < logits.size()) {
         logits[blocked_token] = -INFINITY;
       }
@@ -246,9 +246,9 @@ void applyNoRepeatNgramFilter(std::vector<float> &logits,
   }
 }
 
-struct ggml_cgraph *nmtBuildGraphDecoder(nmt_context &ctx, nmt_state &state,
-                                         const nmt_batch &batch,
-                                         bool worst_case) {
+struct ggml_cgraph* nmtBuildGraphDecoder(
+    nmt_context& ctx, nmt_state& state, const nmt_batch& batch,
+    bool worstCase) {
   const auto& model = ctx.model;
   const auto& hparams = model.hparams;
 
@@ -269,8 +269,8 @@ struct ggml_cgraph *nmtBuildGraphDecoder(nmt_context &ctx, nmt_state &state,
 
   const int n_encoder_ctx_pad = GGML_PAD(n_encoder_ctx, 256);
 
-  const int32_t n_kv = worst_case ? n_ctx : kv_self.n;
-  const int32_t kv_head = worst_case ? n_ctx - seq : kv_self.head;
+  const int32_t n_kv = worstCase ? n_ctx : kv_self.n;
+  const int32_t kv_head = worstCase ? n_ctx - seq : kv_self.head;
 
   struct ggml_init_params params = {
       /*.mem_size   =*/state.sched_decode.meta.size(),
@@ -612,7 +612,7 @@ struct ggml_cgraph *nmtBuildGraphDecoder(nmt_context &ctx, nmt_state &state,
   return gf;
 }
 
-bool nmtDecodeInternal(nmt_context &ctx, nmt_batch &batch, nmt_state &state) {
+bool nmtDecodeInternal(nmt_context& ctx, nmt_batch& batch, nmt_state& state) {
   const auto n_tokens = batch.n_tokens;
 
   auto& kv_self = state.kv_self;
@@ -625,7 +625,7 @@ bool nmtDecodeInternal(nmt_context &ctx, nmt_batch &batch, nmt_state &state) {
       kv_self.size, std::max(pad, GGML_PAD(nmtKvCacheCellMax(kv_self), pad)));
 
   auto& sched = state.sched_decode.sched;
-  ggml_cgraph *gf = nmtBuildGraphDecoder(ctx, state, batch, false);
+  ggml_cgraph* gf = nmtBuildGraphDecoder(ctx, state, batch, false);
 
   if (!ggml_backend_sched_alloc_graph(sched, gf)) {
     // should never happen as we pre-allocate the memory
@@ -704,8 +704,10 @@ bool nmtDecodeInternal(nmt_context &ctx, nmt_batch &batch, nmt_state &state) {
       sizeof(float) * next_token_logits_vec.size());
 
   if (ctx.model.config.repetition_penalty > 0.0) {
-    applyRepetitionPenalty(next_token_logits_vec, state.decoder_inputs,
-                           ctx.model.config.repetition_penalty);
+    applyRepetitionPenalty(
+        next_token_logits_vec,
+        state.decoder_inputs,
+        ctx.model.config.repetition_penalty);
   }
 
   if (ctx.model.config.temperature > 0.0) {
@@ -716,8 +718,10 @@ bool nmtDecodeInternal(nmt_context &ctx, nmt_batch &batch, nmt_state &state) {
   }
 
   if (ctx.model.config.top_k > 0) {
-    applyTopKFilter(next_token_logits_vec, state.decoders[0].logits_id,
-                    ctx.model.config.top_k);
+    applyTopKFilter(
+        next_token_logits_vec,
+        state.decoders[0].logits_id,
+        ctx.model.config.top_k);
   }
 
   std::for_each(
@@ -727,8 +731,10 @@ bool nmtDecodeInternal(nmt_context &ctx, nmt_batch &batch, nmt_state &state) {
         next_token_logits_vec[bad_word_index] = -INFINITY;
       });
 
-  applyNoRepeatNgramFilter(next_token_logits_vec, state.decoder_inputs,
-                           ctx.model.config.no_repeat_ngram_size);
+  applyNoRepeatNgramFilter(
+      next_token_logits_vec,
+      state.decoder_inputs,
+      ctx.model.config.no_repeat_ngram_size);
 
   int next_token_id = -1;
   // Sampling (only if temperature != 1.0 or top_p != 1.0 or top_k > 0)
@@ -756,8 +762,8 @@ bool nmtDecodeInternal(nmt_context &ctx, nmt_batch &batch, nmt_state &state) {
   // Greedy
   else {
     std::vector<float> logprobs(next_token_logits_vec.size());
-    nmtComputeLogprobs(next_token_logits_vec, next_token_logits_vec.size(),
-                       logprobs);
+    nmtComputeLogprobs(
+        next_token_logits_vec, next_token_logits_vec.size(), logprobs);
 
     auto next_token = std::max_element(logprobs.begin(), logprobs.end());
     next_token_id = next_token - logprobs.begin();

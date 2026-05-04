@@ -71,10 +71,11 @@ static std::string validateBergamotFile(
 }
 
 // Initialize bergamot context from model path
-bergamot_context* bergamot_init(const char* model_path, const bergamot_params& params) {
+bergamot_context*
+bergamotInit(const char* modelPath, const bergamot_params& params) {
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-      std::string("[BERGAMOT_INIT] Entry, model_path=") + model_path);
+      std::string("[BERGAMOT_INIT] Entry, model_path=") + modelPath);
 
   // Enable throwing exceptions instead of abort() to get meaningful error messages
   marian::setThrowExceptionOnAbort(true);
@@ -223,7 +224,7 @@ bergamot_context* bergamot_init(const char* model_path, const bergamot_params& p
 }
 
 // Translate text
-std::string bergamot_translate(bergamot_context* ctx, const char* input) {
+std::string bergamotTranslate(bergamot_context* ctx, const char* input) {
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::INFO,
       "[BERGAMOT_TRANSLATE] Starting translation");
@@ -298,7 +299,7 @@ std::string bergamot_translate(bergamot_context* ctx, const char* input) {
   }
 }
 
-bergamot_batch_result bergamot_translate_batch(
+bergamot_batch_result bergamotTranslateBatch(
     bergamot_context* ctx, const std::vector<std::string>& texts) {
   bergamot_batch_result result;
   result.translations.resize(texts.size());
@@ -358,30 +359,28 @@ bergamot_batch_result bergamot_translate_batch(
 }
 
 // Get runtime statistics
-int bergamot_get_runtime_stats(
-    bergamot_context* ctx,
-    double* encode_time,
-    double* decode_time,
-    int* total_tokens) {
+int bergamotGetRuntimeStats(
+    bergamot_context* ctx, double* encodeTime, double* decodeTime,
+    int* totalTokens) {
   if (!ctx) {
     return -1;
   }
 
-  if (encode_time) {
-    *encode_time = ctx->total_encode_time;
+  if (encodeTime) {
+    *encodeTime = ctx->total_encode_time;
   }
-  if (decode_time) {
-    *decode_time = ctx->total_decode_time;
+  if (decodeTime) {
+    *decodeTime = ctx->total_decode_time;
   }
-  if (total_tokens) {
-    *total_tokens = ctx->total_tokens;
+  if (totalTokens) {
+    *totalTokens = ctx->total_tokens;
   }
 
   return 0;
 }
 
 // Reset runtime statistics
-void bergamot_reset_runtime_stats(bergamot_context* ctx) {
+void bergamotResetRuntimeStats(bergamot_context* ctx) {
   if (ctx) {
     ctx->total_encode_time = 0.0;
     ctx->total_decode_time = 0.0;
@@ -390,4 +389,4 @@ void bergamot_reset_runtime_stats(bergamot_context* ctx) {
 }
 
 // Free bergamot context
-void bergamot_free(bergamot_context* ctx) { delete ctx; }
+void bergamotFree(bergamot_context* ctx) { delete ctx; }

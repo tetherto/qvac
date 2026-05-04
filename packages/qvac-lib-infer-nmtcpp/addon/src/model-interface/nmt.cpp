@@ -99,10 +99,13 @@ static int nmt_decode_sample(struct nmt_context* ctx, int max_tokens) {
   bool should_stop = false;
 
   while (!should_stop && ctx->state->decoder_inputs.size() < max_tokens) {
-    nmtBatchPrepLegacy(ctx->state->batch,
-                       ctx->state->decoder_inputs.data() +
-                           ctx->state->decoder_inputs.size() - 1,
-                       1, ctx->state->decoder_inputs.size() - 1, 0);
+    nmtBatchPrepLegacy(
+        ctx->state->batch,
+        ctx->state->decoder_inputs.data() + ctx->state->decoder_inputs.size() -
+            1,
+        1,
+        ctx->state->decoder_inputs.size() - 1,
+        0);
 
     if (!nmtDecodeInternal(*ctx, ctx->state->batch, *ctx->state)) {
       QLOG(
@@ -152,7 +155,7 @@ static int nmt_process_chunk(struct nmt_context* ctx) {
   if (beam_size <= 1) {
     result = nmt_decode_sample(ctx, max_tokens);
   } else {
-    result = nmt_decode_beam_search(ctx, beam_size, max_tokens);
+    result = nmtDecodeBeamSearch(ctx, beam_size, max_tokens);
   }
 
   if (result != 0) {
