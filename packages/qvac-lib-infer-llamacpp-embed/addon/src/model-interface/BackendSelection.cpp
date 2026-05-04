@@ -23,13 +23,8 @@ struct DeviceDescription {
       const BackendInterface& bckI)
       : gpuDescription(bckI.ggml_backend_dev_description(dev)),
         gpuBackend(bckI.ggml_backend_dev_name(dev)) {
-    std::transform(
-        gpuDescription.begin(),
-        gpuDescription.end(),
-        gpuDescription.begin(),
-        tolower);
-    std::transform(
-        gpuBackend.begin(), gpuBackend.end(), gpuBackend.begin(), tolower);
+    std::ranges::transform(gpuDescription, gpuDescription.begin(), tolower);
+    std::ranges::transform(gpuBackend, gpuBackend.begin(), tolower);
     {
       std::string backendTypeStr;
       switch (backendTypeEnum) {
@@ -168,29 +163,36 @@ backend_selection::parseMainGpu(const std::string& mainGpuStr) {
   } catch (const std::exception&) {
     // Not an integer, try enum values
     std::string lowerStr = mainGpuStr;
-    std::transform(lowerStr.begin(), lowerStr.end(), lowerStr.begin(), tolower);
+    std::ranges::transform(lowerStr, lowerStr.begin(), tolower);
 
     if (lowerStr == "integrated") {
       return MainGpu(MainGpuType::Integrated);
-    } else if (lowerStr == "dedicated") {
-      return MainGpu(MainGpuType::Dedicated);
-    } else {
-      throw qvac_errors::StatusError(
-          qvac_errors::general_error::InvalidArgument,
-          "main-gpu must be an integer device index, 'integrated', or "
-          "'dedicated'");
     }
+    if (lowerStr == "dedicated") {
+      return MainGpu(MainGpuType::Dedicated);
+    }
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "main-gpu must be an integer device index, 'integrated', or "
+        "'dedicated'");
   }
 }
 
 std::optional<MainGpu> backend_selection::tryMainGpuFromMap(
     std::unordered_map<std::string, std::string>& configFilemap) {
-  std::optional<MainGpu> mainGpu = std::nullopt;
-  if (auto mainGpuIt = configFilemap.find("main-gpu");
-      mainGpuIt != configFilemap.end()) {
-    mainGpu = parseMainGpu(mainGpuIt->second);
-    configFilemap.erase(mainGpuIt);
+  auto hIt = configFilemap.find("main-gpu");
+  auto uIt = configFilemap.find("main_gpu");
+  if (hIt != configFilemap.end() && uIt != configFilemap.end()) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "both 'main-gpu' and 'main_gpu' are present; use one or the other.");
   }
+  auto foundIt = (hIt != configFilemap.end()) ? hIt : uIt;
+  if (foundIt == configFilemap.end()) {
+    return std::nullopt;
+  }
+  std::optional<MainGpu> mainGpu = parseMainGpu(foundIt->second);
+  configFilemap.erase(foundIt);
   return mainGpu;
 }
 
@@ -265,13 +267,30 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
     const BackendType preferredBackendType, llamaLogCallbackF llamaLogcallback,
     const std::optional<MainGpu>& mainGpu) {
   BackendInterface bckI{
-      ggml_backend_dev_count,
-      ggml_backend_dev_backend_reg,
-      ggml_backend_dev_get,
-      ggml_backend_reg_name,
-      ggml_backend_dev_description,
-      ggml_backend_dev_name,
-      ggml_backend_dev_type,
-      llamaLogcallback};
+      .ggml_backend_dev_count = ggml_backend_dev_count,
+      .ggml_backend_dev_backend_reg = ggml_backend_dev_backend_reg,
+      .ggml_backend_dev_get = ggml_backend_dev_get,
+      .ggml_backend_reg_name = ggml_backend_reg_name,
+      .ggml_backend_dev_description = ggml_backend_dev_description,
+      .ggml_backend_dev_name = ggml_backend_dev_name,
+      .ggml_backend_dev_type = ggml_backend_dev_type,
+      .llamaLogCallback = llamaLogcallback};
   return backend_selection::chooseBackend(preferredBackendType, bckI, mainGpu);
+}
+
+size_t
+backend_selection::getEffectiveGpuDeviceCount(const BackendInterface& bckI) {
+  size_t gpuCount = 0;
+  size_t igpuCount = 0;
+  const size_t totalDevices = bckI.ggml_backend_dev_count();
+  for (size_t i = 0; i < totalDevices; ++i) {
+    ggml_backend_dev_t dev = bckI.ggml_backend_dev_get(i);
+    enum ggml_backend_dev_type devType = bckI.ggml_backend_dev_type(dev);
+    if (devType == GGML_BACKEND_DEVICE_TYPE_GPU) {
+      ++gpuCount;
+    } else if (devType == GGML_BACKEND_DEVICE_TYPE_IGPU) {
+      ++igpuCount;
+    }
+  }
+  return gpuCount > 0 ? gpuCount : igpuCount;
 }

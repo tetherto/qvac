@@ -8,7 +8,7 @@ name: Docs Release Pipeline
 on:
   push:
     branches:
-      - 'release-qvac-sdk-*'
+      - 'release-sdk-*'
   release:
     types: [published]
   workflow_dispatch:
@@ -87,11 +87,10 @@ jobs:
             VERSION="$INPUT_VERSION"
           elif [ "$EVENT_NAME" = "release" ]; then
             TAG="$RELEASE_TAG"
-            VERSION="${TAG#v}"
-            VERSION="${VERSION#release-qvac-sdk-}"
+            VERSION="${TAG#sdk-v}"
           else
             BRANCH="$REF_NAME"
-            VERSION="${BRANCH#release-qvac-sdk-}"
+            VERSION="${BRANCH#release-sdk-}"
           fi
           if [ -z "$VERSION" ]; then
             echo "::error::Could not extract version"
