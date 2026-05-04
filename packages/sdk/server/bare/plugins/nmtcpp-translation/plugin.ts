@@ -194,6 +194,19 @@ async function resolveBergamotVocab(
   }
 
   if (!pivotModel) {
+    // When the model comes from the registry and the user did not override
+    // `srcVocabSrc`/`dstVocabSrc`, the companion-set download already places
+    // the vocabs next to the primary model under `sets/<setKey>/`. Letting
+    // `createModel` derive the colocated paths avoids a redundant flat-cache
+    // copy of the same bytes and sidesteps cases where the shared vocab has
+    // no standalone `RegistryItem` because two directions ship the same
+    // vocab blob under distinct paths (QVAC-18420).
+    const modelIsRegistry = ctx.modelSrc.startsWith("registry://");
+    const vocabsAreDerived = !srcVocabSrc && !dstVocabSrc;
+    if (modelIsRegistry && vocabsAreDerived) {
+      return { config: nmtConfig };
+    }
+
     const [srcVocabPath, dstVocabPath] = await Promise.all([
       ctx.resolveModelPath(srcSrc),
       ctx.resolveModelPath(dstSrc),
@@ -223,6 +236,25 @@ async function resolveBergamotVocab(
     throw new ModelLoadFailedError(
       "Bergamot pivot model requires srcVocabSrc and dstVocabSrc. Provide them in modelConfig or use a pear:// or registry:// model source for auto-derivation.",
     );
+  }
+
+  // Mirror the non-pivot optimization: if both primary and pivot models are
+  // registry:// sources with auto-derived vocabs, skip the four vocab
+  // resolutions — both companion-set downloads colocate vocabs next to their
+  // primary files and `createModel` derives the paths.
+  const modelIsRegistry = ctx.modelSrc.startsWith("registry://");
+  const pivotIsRegistry = pivotModel.modelSrc.startsWith("registry://");
+  const primaryVocabsAreDerived = !srcVocabSrc && !dstVocabSrc;
+  const pivotVocabsAreDerived =
+    !pivotModel.srcVocabSrc && !pivotModel.dstVocabSrc;
+  if (
+    modelIsRegistry &&
+    pivotIsRegistry &&
+    primaryVocabsAreDerived &&
+    pivotVocabsAreDerived
+  ) {
+    const pivotModelPath = await ctx.resolveModelPath(pivotModel.modelSrc);
+    return { config: nmtConfig, artifacts: { pivotModelPath } };
   }
 
   const [srcVocabPath, dstVocabPath, pivotSrcVocabPath, pivotDstVocabPath, pivotModelPath] = await Promise.all([
