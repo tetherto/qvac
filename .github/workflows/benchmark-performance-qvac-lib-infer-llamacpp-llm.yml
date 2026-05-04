@@ -2,8 +2,8 @@ name: Benchmark Performance (LLM)
 
 # Manually-triggered benchmark workflow. The umbrella on-pr workflow
 # runs perf tests at the cheap default; this is where iteration
-# counts are cranked up to get mean ± std numbers. Desktop matrix
-# only; mobile is a follow-up.
+# counts are cranked up to get mean ± std numbers. Covers desktop +
+# mobile (Android / iOS via Device Farm).
 
 on:
   workflow_dispatch:
@@ -28,6 +28,11 @@ on:
         default: "1"
       run_desktop:
         description: "Run desktop matrix (Linux / macOS / Windows)"
+        required: false
+        type: boolean
+        default: true
+      run_mobile:
+        description: "Run mobile matrix (Android / iOS via Device Farm)"
         required: false
         type: boolean
         default: true
@@ -85,9 +90,28 @@ jobs:
       qvac_perf_runs: ${{ inputs.qvac_perf_runs }}
       qvac_perf_warmup_runs: ${{ inputs.qvac_perf_warmup_runs }}
 
+  mobile-benchmarks:
+    needs: [context, prebuild]
+    if: ${{ inputs.run_mobile }}
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-llamacpp-llm.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+      qvac_perf_runs: ${{ inputs.qvac_perf_runs }}
+      qvac_perf_warmup_runs: ${{ inputs.qvac_perf_warmup_runs }}
+
   summarize:
-    needs: [context, desktop-benchmarks]
-    if: always()
+    # `if: always()` lets summarize run even when one of the benchmark
+    # jobs was skipped via the run_desktop / run_mobile toggles or
+    # failed mid-run; we still want the partial report.
+    needs: [context, desktop-benchmarks, mobile-benchmarks]
+    if: ${{ always() && needs.context.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -166,9 +190,9 @@ jobs:
           set +e
           MD_FILE="benchmark-artifacts/llamacpp-llm-performance-findings.md"
           {
-            echo "## LLM / VLM Benchmark Report (Desktop)"
+            echo "## LLM / VLM Benchmark Report"
             echo ""
-            echo "> \`QVAC_PERF_RUNS=${{ inputs.qvac_perf_runs }}\`, \`QVAC_PERF_WARMUP_RUNS=${{ inputs.qvac_perf_warmup_runs }}\`. Mobile is not covered by this workflow yet."
+            echo "> \`QVAC_PERF_RUNS=${{ inputs.qvac_perf_runs }}\`, \`QVAC_PERF_WARMUP_RUNS=${{ inputs.qvac_perf_warmup_runs }}\`."
             echo ""
             if [ -f "$MD_FILE" ]; then
               cat "$MD_FILE"
