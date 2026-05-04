@@ -35,46 +35,47 @@ static const char* cpuTypeToString(intgemm::CPUType type) {
 // Helper function to validate file paths and extensions
 // Returns empty string on success, error message on failure
 static std::string validateBergamotFile(
-    const std::string& path,
-    const std::string& expected_ext,
-    const std::string& file_type) {
+    const std::string& path, const std::string& expectedExt,
+    const std::string& fileType) {
 
   if (path.empty()) {
-    return file_type + " path is empty";
+    return fileType + " path is empty";
   }
 
   // u8path interprets the string as UTF-8, avoiding ANSI
   // code-page corruption on Windows for non-ASCII paths.
+  // NOLINTNEXTLINE(clang-diagnostic-deprecated-declarations)
   auto pathObj = std::filesystem::u8path(path);
 
   if (!std::filesystem::exists(pathObj)) {
-    return file_type + " file not found: " + path;
+    return fileType + " file not found: " + path;
   }
 
   if (!std::filesystem::is_regular_file(pathObj)) {
-    return file_type + " path is not a regular file: " + path;
+    return fileType + " path is not a regular file: " + path;
   }
 
   std::string ext = pathObj.extension().string();
 
-  if (ext != expected_ext) {
-    return file_type + " file must have " + expected_ext +
+  if (ext != expectedExt) {
+    return fileType + " file must have " + expectedExt +
            " extension, got: " + ext + " (path: " + path + ")";
   }
 
   std::ifstream test(pathObj);
   if (!test.good()) {
-    return file_type + " file is not readable: " + path;
+    return fileType + " file is not readable: " + path;
   }
 
   return ""; // Success
 }
 
 // Initialize bergamot context from model path
-bergamot_context* bergamot_init(const char* model_path, const bergamot_params& params) {
+bergamot_context*
+bergamotInit(const char* modelPath, const bergamot_params& params) {
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-      std::string("[BERGAMOT_INIT] Entry, model_path=") + model_path);
+      std::string("[BERGAMOT_INIT] Entry, model_path=") + modelPath);
 
   // Enable throwing exceptions instead of abort() to get meaningful error messages
   marian::setThrowExceptionOnAbort(true);
@@ -132,6 +133,7 @@ bergamot_context* bergamot_init(const char* model_path, const bergamot_params& p
         qvac_lib_inference_addon_cpp::logger::Priority::INFO,
         "[BERGAMOT_INIT] Creating context");
 
+    // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
     auto* ctx = new bergamot_context();
 
     QLOG(
@@ -139,15 +141,16 @@ bergamot_context* bergamot_init(const char* model_path, const bergamot_params& p
         "[BERGAMOT_INIT] Creating service configuration");
 
     // Create service configuration
-    marian::bergamot::BlockingService::Config service_config;
-    service_config.cacheSize = params.cache_size;
+    marian::bergamot::BlockingService::Config serviceConfig;
+    serviceConfig.cacheSize = params.cache_size;
 
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::INFO,
         "[BERGAMOT_INIT] Creating blocking service");
 
     // Create the blocking service
-    ctx->service = std::make_shared<marian::bergamot::BlockingService>(service_config);
+    ctx->service =
+        std::make_shared<marian::bergamot::BlockingService>(serviceConfig);
 
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::INFO,
@@ -158,49 +161,50 @@ bergamot_context* bergamot_init(const char* model_path, const bergamot_params& p
         "[BERGAMOT_INIT] Using explicit model and vocab paths");
 
     // Use explicit paths from params
-    std::string model_path_full = params.model_path;
-    std::string srcvocab_path_full = params.src_vocab_path;
-    std::string dstvocab_path_full = params.dst_vocab_path;
+    std::string modelPathFull = params.model_path;
+    std::string srcvocabPathFull = params.src_vocab_path;
+    std::string dstvocabPathFull = params.dst_vocab_path;
 
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-        "[BERGAMOT_INIT] Model path: " + model_path_full);
+        "[BERGAMOT_INIT] Model path: " + modelPathFull);
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-        "[BERGAMOT_INIT] Source vocab: " + srcvocab_path_full);
+        "[BERGAMOT_INIT] Source vocab: " + srcvocabPathFull);
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-        "[BERGAMOT_INIT] Dest vocab: " + dstvocab_path_full);
+        "[BERGAMOT_INIT] Dest vocab: " + dstvocabPathFull);
 
     // Build a YAML/JSON config string matching Firefox translations config
-    std::ostringstream config_str;
-    config_str << "models:\n"
-               << "  - " << model_path_full << "\n"
-               << "vocabs:\n"
-               << "  - " << srcvocab_path_full << "\n"
-               << "  - " << dstvocab_path_full << "\n";
+    std::ostringstream configStr;
+    configStr << "models:\n"
+              << "  - " << modelPathFull << "\n"
+              << "vocabs:\n"
+              << "  - " << srcvocabPathFull << "\n"
+              << "  - " << dstvocabPathFull << "\n";
 
-    config_str << "beam-size: " << params.beam_size << "\n"
-               << "normalize: " << params.normalize << "\n"
-               << "word-penalty: 0\n"
-               << "max-length-break: 128\n"
-               << "mini-batch-words: 1024\n"
-               << "mini-batch: 64\n"
-               << "workspace: 128\n"
-               << "alignment: soft\n"
-               << "max-length-factor: " << params.max_length_factor << "\n"
-               << "gemm-precision: int8shiftAlphaAll\n"
-               << "skip-cost: true\n"
-               << "cpu-threads: " << params.num_workers << "\n"
-               << "quiet: true\n"
-               << "quiet-translation: true\n";
+    configStr << "beam-size: " << params.beam_size << "\n"
+              << "normalize: " << params.normalize << "\n"
+              << "word-penalty: 0\n"
+              << "max-length-break: 128\n"
+              << "mini-batch-words: 1024\n"
+              << "mini-batch: 64\n"
+              << "workspace: 128\n"
+              << "alignment: soft\n"
+              << "max-length-factor: " << params.max_length_factor << "\n"
+              << "gemm-precision: int8shiftAlphaAll\n"
+              << "skip-cost: true\n"
+              << "cpu-threads: " << params.num_workers << "\n"
+              << "quiet: true\n"
+              << "quiet-translation: true\n";
 
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::INFO,
         "[BERGAMOT_INIT] Parsing options from config string");
 
     // Parse configuration from string
-    auto options = marian::bergamot::parseOptionsFromString(config_str.str(), /*validate=*/false);
+    auto options = marian::bergamot::parseOptionsFromString(
+        configStr.str(), /*validate=*/false);
 
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::INFO,
@@ -223,12 +227,12 @@ bergamot_context* bergamot_init(const char* model_path, const bergamot_params& p
 }
 
 // Translate text
-std::string bergamot_translate(bergamot_context* ctx, const char* input) {
+std::string bergamotTranslate(bergamot_context* ctx, const char* input) {
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::INFO,
       "[BERGAMOT_TRANSLATE] Starting translation");
 
-  if (!ctx || !ctx->service || !ctx->model) {
+  if (ctx == nullptr || !ctx->service || !ctx->model) {
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
         "[BERGAMOT_TRANSLATE] Invalid context");
@@ -278,6 +282,7 @@ std::string bergamot_translate(bergamot_context* ctx, const char* input) {
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
 
     // Update statistics (approximate - bergamot doesn't separate encode/decode)
+    // NOLINTNEXTLINE(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions,cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
     ctx->total_decode_time += duration.count() / 1000000.0;
 
     if (!responses.empty()) {
@@ -298,13 +303,13 @@ std::string bergamot_translate(bergamot_context* ctx, const char* input) {
   }
 }
 
-bergamot_batch_result bergamot_translate_batch(
+bergamot_batch_result bergamotTranslateBatch(
     bergamot_context* ctx, const std::vector<std::string>& texts) {
   bergamot_batch_result result;
   result.translations.resize(texts.size());
   result.success.resize(texts.size());
 
-  if (!ctx || !ctx->service || !ctx->model) {
+  if (ctx == nullptr || !ctx->service || !ctx->model) {
     result.error = "invalid context";
     return result;
   }
@@ -335,6 +340,7 @@ bergamot_batch_result bergamot_translate_batch(
 
     // Update timing statistics (total time = decode time for Bergamot, no
     // separate encode)
+    // NOLINTNEXTLINE(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions,cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
     ctx->total_decode_time += duration.count() / 1000000.0;
 
     // Extract Results and count tokens
@@ -344,8 +350,8 @@ bergamot_batch_result bergamot_translate_batch(
 
       // Count tokens for this response (all sentences in the target)
       size_t numSentences = responses[i].target.numSentences();
-      for (size_t s = 0; s < numSentences; ++s) {
-        ctx->total_tokens += static_cast<int>(responses[i].target.numWords(s));
+      for (size_t si = 0; si < numSentences; ++si) {
+        ctx->total_tokens += static_cast<int>(responses[i].target.numWords(si));
       }
     }
   } catch (const std::exception& e) {
@@ -358,31 +364,30 @@ bergamot_batch_result bergamot_translate_batch(
 }
 
 // Get runtime statistics
-int bergamot_get_runtime_stats(
+int bergamotGetRuntimeStats(
     bergamot_context* ctx,
-    double* encode_time,
-    double* decode_time,
-    int* total_tokens) {
-  if (!ctx) {
+    double* encodeTime, // NOLINT(bugprone-easily-swappable-parameters)
+    double* decodeTime, int* totalTokens) {
+  if (ctx == nullptr) {
     return -1;
   }
 
-  if (encode_time) {
-    *encode_time = ctx->total_encode_time;
+  if (encodeTime != nullptr) {
+    *encodeTime = ctx->total_encode_time;
   }
-  if (decode_time) {
-    *decode_time = ctx->total_decode_time;
+  if (decodeTime != nullptr) {
+    *decodeTime = ctx->total_decode_time;
   }
-  if (total_tokens) {
-    *total_tokens = ctx->total_tokens;
+  if (totalTokens != nullptr) {
+    *totalTokens = ctx->total_tokens;
   }
 
   return 0;
 }
 
 // Reset runtime statistics
-void bergamot_reset_runtime_stats(bergamot_context* ctx) {
-  if (ctx) {
+void bergamotResetRuntimeStats(bergamot_context* ctx) {
+  if (ctx != nullptr) {
     ctx->total_encode_time = 0.0;
     ctx->total_decode_time = 0.0;
     ctx->total_tokens = 0;
@@ -390,4 +395,6 @@ void bergamot_reset_runtime_stats(bergamot_context* ctx) {
 }
 
 // Free bergamot context
-void bergamot_free(bergamot_context* ctx) { delete ctx; }
+void bergamotFree(bergamot_context* ctx) {
+  delete ctx; // NOLINT(cppcoreguidelines-owning-memory)
+}

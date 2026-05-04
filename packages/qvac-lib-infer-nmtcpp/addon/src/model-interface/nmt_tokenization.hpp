@@ -2,14 +2,12 @@
 
 #include "nmt.hpp"
 
-nmt_vocab::id find_bos_token(const nmt_vocab& vocab);
+nmt_vocab::id findBosToken(const nmt_vocab& vocab);
 
-int nmt_token_count(struct nmt_context* ctx, const char* text);
+int nmtTokenizeInput(struct nmt_context* ctx, const char* inputText);
 
-int nmt_tokenize_input(struct nmt_context* ctx, const char* input_text);
-
-int nmt_tokenize(
+int nmtTokenize(
     struct nmt_context* ctx, const char* text, nmt_token* tokens,
-    int n_max_tokens);
+    int nMaxTokens);
 
-std::string detokenize_sentencepiece(const nmt_context* ctx);
+std::string detokenizeSentencepiece(const nmt_context* ctx);
