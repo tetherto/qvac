@@ -28,7 +28,7 @@ std::string normalizeArchitecture(const std::string& architecture) {
 
 bool isQwen3Architecture(const std::string& architecture) {
   const std::string archStr = normalizeArchitecture(architecture);
-  return archStr == "qwen3";
+  return archStr == "qwen3" || archStr == "qwen35";
 }
 
 bool isHarmonyArchitecture(const std::string& architecture) {
