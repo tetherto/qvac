@@ -305,6 +305,80 @@ TEST(SdGenHandlers_Strength, AboveOneThrows) {
       applySdGenHandlers(cfg, makeObj("strength", num(1.1))), StatusError);
 }
 
+TEST(SdGenHandlers_Upscale, DefaultsToDisabled) {
+  SdGenConfig cfg;
+  EXPECT_FALSE(cfg.upscale);
+  EXPECT_EQ(cfg.upscaleRepeats, 1);
+}
+
+TEST(SdGenHandlers_Upscale, BooleanTrueEnablesSinglePass) {
+  auto cfg = applyOne("upscale", boolean(true));
+  EXPECT_TRUE(cfg.upscale);
+  EXPECT_EQ(cfg.upscaleRepeats, 1);
+}
+
+TEST(SdGenHandlers_Upscale, BooleanFalseDisablesAndResetsRepeats) {
+  auto cfg = applyOne("upscale", boolean(false));
+  EXPECT_FALSE(cfg.upscale);
+  EXPECT_EQ(cfg.upscaleRepeats, 1);
+}
+
+TEST(SdGenHandlers_Upscale, EmptyObjectEnablesSinglePass) {
+  picojson::object upscale;
+
+  auto cfg = applyOne("upscale", picojson::value(upscale));
+  EXPECT_TRUE(cfg.upscale);
+  EXPECT_EQ(cfg.upscaleRepeats, 1);
+}
+
+TEST(SdGenHandlers_Upscale, ObjectRepeatsEnablesMultiplePasses) {
+  picojson::object upscale;
+  upscale["repeats"] = num(2.0);
+
+  auto cfg = applyOne("upscale", picojson::value(upscale));
+  EXPECT_TRUE(cfg.upscale);
+  EXPECT_EQ(cfg.upscaleRepeats, 2);
+}
+
+TEST(SdGenHandlers_Upscale, HigherRepeatsAreAllowed) {
+  picojson::object upscale;
+  upscale["repeats"] = num(5.0);
+
+  auto cfg = applyOne("upscale", picojson::value(upscale));
+  EXPECT_TRUE(cfg.upscale);
+  EXPECT_EQ(cfg.upscaleRepeats, 5);
+}
+
+TEST(SdGenHandlers_Upscale, InvalidRepeatsThrow) {
+  const double invalids[] = {0.0, -1.0, 1.5};
+  for (double invalid : invalids) {
+    picojson::object upscale;
+    upscale["repeats"] = num(invalid);
+
+    SdGenConfig cfg;
+    EXPECT_THROW(
+        applySdGenHandlers(cfg, makeObj("upscale", picojson::value(upscale))),
+        StatusError)
+        << "invalid repeats: " << invalid;
+  }
+}
+
+TEST(SdGenHandlers_Upscale, NonNumberRepeatsThrow) {
+  picojson::object upscale;
+  upscale["repeats"] = str("2");
+
+  SdGenConfig cfg;
+  EXPECT_THROW(
+      applySdGenHandlers(cfg, makeObj("upscale", picojson::value(upscale))),
+      StatusError);
+}
+
+TEST(SdGenHandlers_Upscale, WrongTypeThrows) {
+  SdGenConfig cfg;
+  EXPECT_THROW(
+      applySdGenHandlers(cfg, makeObj("upscale", str("true"))), StatusError);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 6. SdImageBatch – RAII memory management
 //
