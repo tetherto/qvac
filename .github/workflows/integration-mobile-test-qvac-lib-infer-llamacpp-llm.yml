@@ -21,6 +21,11 @@ on:
         type: string
         required: false
         default: ""
+      qvac_perf_only:
+        description: "If true, restrict each test group to its perf-emitting tests only and skip groups that have none. Used by Benchmark Performance (LLM)."
+        type: boolean
+        required: false
+        default: false
   workflow_dispatch:
     inputs:
       ref:
@@ -43,6 +48,11 @@ on:
         type: string
         required: false
         default: ""
+      qvac_perf_only:
+        description: "If true, restrict each test group to its perf-emitting tests only and skip groups that have none."
+        type: boolean
+        required: false
+        default: false
 
 env:
   NODE_VERSION: "lts/*"
@@ -1068,68 +1078,64 @@ jobs:
 
           GROUPS_JSON="${{ github.workspace }}/${{ env.ADDON_WORKDIR }}/test/mobile/test-groups.json"
 
+          # Perf-only mode: keep only run*Test wrappers that emit perf
+          # data. Groups whose intersection with this set is empty are
+          # skipped entirely (no spec uploaded → empty test_spec_arn_X
+          # → schedule step won't book a Device Farm run for them).
+          PERF_ONLY="${{ inputs.qvac_perf_only }}"
+          PERF_REGEX='^(runImageElephantTest|runImageFruitPlateTest|runImageHighResAuroraTest|runBitnetTest|runToolCallingTest)$'
+          filter_perf () {
+            if [ "$PERF_ONLY" != "true" ]; then echo "$1"; return; fi
+            [ -z "$1" ] && return
+            echo "$1" | tr '|' '\n' | grep -E "$PERF_REGEX" | tr '\n' '|' | sed 's/|$//'
+          }
+
+          maybe_make_and_upload () {
+            local pattern="$1" spec_file="$2" name="$3" output_key="$4"
+            if [ -z "$pattern" ]; then
+              echo "[$name] skipped (no perf-emitting tests in this group)"
+              return
+            fi
+            make_split "$pattern" "$spec_file"
+            local arn
+            arn=$(upload_spec "$spec_file" "$name")
+            echo "$output_key=$arn" >> "$GITHUB_OUTPUT"
+          }
+
           if [ "${{ matrix.platform }}" == "Android" ]; then
-            ANDROID_GROUP_A=$(jq -r '.android.groupA | join("|")' "$GROUPS_JSON")
-            ANDROID_GROUP_B=$(jq -r '.android.groupB | join("|")' "$GROUPS_JSON")
-            ANDROID_GROUP_IMG_PERF=$(jq -r '.android.groupImagesPerf | join("|")' "$GROUPS_JSON")
+            ANDROID_GROUP_A=$(filter_perf "$(jq -r '.android.groupA | join("|")' "$GROUPS_JSON")")
+            ANDROID_GROUP_B=$(filter_perf "$(jq -r '.android.groupB | join("|")' "$GROUPS_JSON")")
+            ANDROID_GROUP_IMG_PERF=$(filter_perf "$(jq -r '.android.groupImagesPerf | join("|")' "$GROUPS_JSON")")
 
-            echo "Android split: A=$ANDROID_GROUP_A B=$ANDROID_GROUP_B IMG=$ANDROID_GROUP_IMG_PERF"
+            echo "Android split (perf_only=$PERF_ONLY): A=$ANDROID_GROUP_A B=$ANDROID_GROUP_B IMG=$ANDROID_GROUP_IMG_PERF"
 
-            make_split "$ANDROID_GROUP_A" testspec-android-a.yml
-            make_split "$ANDROID_GROUP_B" testspec-android-b.yml
-            make_split "$ANDROID_GROUP_IMG_PERF" testspec-android-img-perf.yml
-
-            SPEC_ARN_A=$(upload_spec testspec-android-a.yml "Android-A")
-            echo "test_spec_arn=$SPEC_ARN_A" >> $GITHUB_OUTPUT
-            SPEC_ARN_B=$(upload_spec testspec-android-b.yml "Android-B")
-            echo "test_spec_arn_2=$SPEC_ARN_B" >> $GITHUB_OUTPUT
-            SPEC_ARN_IMG_PERF=$(upload_spec testspec-android-img-perf.yml "Android-ImagesPerf")
-            echo "test_spec_arn_3=$SPEC_ARN_IMG_PERF" >> $GITHUB_OUTPUT
+            maybe_make_and_upload "$ANDROID_GROUP_A"        testspec-android-a.yml         "Android-A"           "test_spec_arn"
+            maybe_make_and_upload "$ANDROID_GROUP_B"        testspec-android-b.yml         "Android-B"           "test_spec_arn_2"
+            maybe_make_and_upload "$ANDROID_GROUP_IMG_PERF" testspec-android-img-perf.yml  "Android-ImagesPerf"  "test_spec_arn_3"
           else
-            IOS_GREP_HEAVY_1=$(jq -r '.ios.heavy1 | join("|")' "$GROUPS_JSON")
-            IOS_GREP_HEAVY_2=$(jq -r '.ios.heavy2 | join("|")' "$GROUPS_JSON")
-            IOS_GREP_HEAVY_3=$(jq -r '.ios.heavy3 | join("|")' "$GROUPS_JSON")
-            IOS_GREP_HEAVY_4=$(jq -r '.ios.heavy4 | join("|")' "$GROUPS_JSON")
-            IOS_GREP_HEAVY_5=$(jq -r '.ios.heavy5 | join("|")' "$GROUPS_JSON")
-            IOS_GREP_HEAVY_6=$(jq -r '.ios.heavy6 | join("|")' "$GROUPS_JSON")
-            IOS_GREP_HEAVY_7=$(jq -r '.ios.heavy7 | join("|")' "$GROUPS_JSON")
-            IOS_GREP_HEAVY_8=$(jq -r '.ios.heavy8 | join("|")' "$GROUPS_JSON")
-            IOS_GREP_LIGHT_A=$(jq -r '.ios.lightA | join("|")' "$GROUPS_JSON")
-            IOS_GREP_LIGHT_B=$(jq -r '.ios.lightB | join("|")' "$GROUPS_JSON")
+            IOS_GREP_HEAVY_1=$(filter_perf "$(jq -r '.ios.heavy1 | join("|")' "$GROUPS_JSON")")
+            IOS_GREP_HEAVY_2=$(filter_perf "$(jq -r '.ios.heavy2 | join("|")' "$GROUPS_JSON")")
+            IOS_GREP_HEAVY_3=$(filter_perf "$(jq -r '.ios.heavy3 | join("|")' "$GROUPS_JSON")")
+            IOS_GREP_HEAVY_4=$(filter_perf "$(jq -r '.ios.heavy4 | join("|")' "$GROUPS_JSON")")
+            IOS_GREP_HEAVY_5=$(filter_perf "$(jq -r '.ios.heavy5 | join("|")' "$GROUPS_JSON")")
+            IOS_GREP_HEAVY_6=$(filter_perf "$(jq -r '.ios.heavy6 | join("|")' "$GROUPS_JSON")")
+            IOS_GREP_HEAVY_7=$(filter_perf "$(jq -r '.ios.heavy7 | join("|")' "$GROUPS_JSON")")
+            IOS_GREP_HEAVY_8=$(filter_perf "$(jq -r '.ios.heavy8 | join("|")' "$GROUPS_JSON")")
+            IOS_GREP_LIGHT_A=$(filter_perf "$(jq -r '.ios.lightA | join("|")' "$GROUPS_JSON")")
+            IOS_GREP_LIGHT_B=$(filter_perf "$(jq -r '.ios.lightB | join("|")' "$GROUPS_JSON")")
 
-            echo "iOS split (8H+2L): H1=$IOS_GREP_HEAVY_1 H2=$IOS_GREP_HEAVY_2 H3=$IOS_GREP_HEAVY_3 H4=$IOS_GREP_HEAVY_4 H5=$IOS_GREP_HEAVY_5 H6=$IOS_GREP_HEAVY_6 H7=$IOS_GREP_HEAVY_7 H8=$IOS_GREP_HEAVY_8 LA=$IOS_GREP_LIGHT_A LB=$IOS_GREP_LIGHT_B"
+            echo "iOS split (perf_only=$PERF_ONLY): H1=$IOS_GREP_HEAVY_1 H2=$IOS_GREP_HEAVY_2 H3=$IOS_GREP_HEAVY_3 H4=$IOS_GREP_HEAVY_4 H5=$IOS_GREP_HEAVY_5 H6=$IOS_GREP_HEAVY_6 H7=$IOS_GREP_HEAVY_7 H8=$IOS_GREP_HEAVY_8 LA=$IOS_GREP_LIGHT_A LB=$IOS_GREP_LIGHT_B"
 
-            make_split "$IOS_GREP_HEAVY_1" testspec-heavy-1.yml
-            make_split "$IOS_GREP_HEAVY_2" testspec-heavy-2.yml
-            make_split "$IOS_GREP_HEAVY_3" testspec-heavy-3.yml
-            make_split "$IOS_GREP_HEAVY_4" testspec-heavy-4.yml
-            make_split "$IOS_GREP_HEAVY_5" testspec-heavy-5.yml
-            make_split "$IOS_GREP_HEAVY_6" testspec-heavy-6.yml
-            make_split "$IOS_GREP_HEAVY_7" testspec-heavy-7.yml
-            make_split "$IOS_GREP_HEAVY_8" testspec-heavy-8.yml
-            make_split "$IOS_GREP_LIGHT_A" testspec-light-a.yml
-            make_split "$IOS_GREP_LIGHT_B" testspec-light-b.yml
-
-            SPEC_ARN_H1=$(upload_spec testspec-heavy-1.yml "iOS-Heavy1")
-            echo "test_spec_arn=$SPEC_ARN_H1" >> $GITHUB_OUTPUT
-            SPEC_ARN_H2=$(upload_spec testspec-heavy-2.yml "iOS-Heavy2")
-            echo "test_spec_arn_2=$SPEC_ARN_H2" >> $GITHUB_OUTPUT
-            SPEC_ARN_H3=$(upload_spec testspec-heavy-3.yml "iOS-Heavy3")
-            echo "test_spec_arn_3=$SPEC_ARN_H3" >> $GITHUB_OUTPUT
-            SPEC_ARN_H4=$(upload_spec testspec-heavy-4.yml "iOS-Heavy4")
-            echo "test_spec_arn_4=$SPEC_ARN_H4" >> $GITHUB_OUTPUT
-            SPEC_ARN_H5=$(upload_spec testspec-heavy-5.yml "iOS-Heavy5")
-            echo "test_spec_arn_5=$SPEC_ARN_H5" >> $GITHUB_OUTPUT
-            SPEC_ARN_H6=$(upload_spec testspec-heavy-6.yml "iOS-Heavy6")
-            echo "test_spec_arn_6=$SPEC_ARN_H6" >> $GITHUB_OUTPUT
-            SPEC_ARN_H7=$(upload_spec testspec-heavy-7.yml "iOS-Heavy7")
-            echo "test_spec_arn_7=$SPEC_ARN_H7" >> $GITHUB_OUTPUT
-            SPEC_ARN_H8=$(upload_spec testspec-heavy-8.yml "iOS-Heavy8")
-            echo "test_spec_arn_8=$SPEC_ARN_H8" >> $GITHUB_OUTPUT
-            SPEC_ARN_LA=$(upload_spec testspec-light-a.yml "iOS-LightA")
-            echo "test_spec_arn_9=$SPEC_ARN_LA" >> $GITHUB_OUTPUT
-            SPEC_ARN_LB=$(upload_spec testspec-light-b.yml "iOS-LightB")
-            echo "test_spec_arn_10=$SPEC_ARN_LB" >> $GITHUB_OUTPUT
+            maybe_make_and_upload "$IOS_GREP_HEAVY_1" testspec-heavy-1.yml "iOS-Heavy1" "test_spec_arn"
+            maybe_make_and_upload "$IOS_GREP_HEAVY_2" testspec-heavy-2.yml "iOS-Heavy2" "test_spec_arn_2"
+            maybe_make_and_upload "$IOS_GREP_HEAVY_3" testspec-heavy-3.yml "iOS-Heavy3" "test_spec_arn_3"
+            maybe_make_and_upload "$IOS_GREP_HEAVY_4" testspec-heavy-4.yml "iOS-Heavy4" "test_spec_arn_4"
+            maybe_make_and_upload "$IOS_GREP_HEAVY_5" testspec-heavy-5.yml "iOS-Heavy5" "test_spec_arn_5"
+            maybe_make_and_upload "$IOS_GREP_HEAVY_6" testspec-heavy-6.yml "iOS-Heavy6" "test_spec_arn_6"
+            maybe_make_and_upload "$IOS_GREP_HEAVY_7" testspec-heavy-7.yml "iOS-Heavy7" "test_spec_arn_7"
+            maybe_make_and_upload "$IOS_GREP_HEAVY_8" testspec-heavy-8.yml "iOS-Heavy8" "test_spec_arn_8"
+            maybe_make_and_upload "$IOS_GREP_LIGHT_A" testspec-light-a.yml "iOS-LightA" "test_spec_arn_9"
+            maybe_make_and_upload "$IOS_GREP_LIGHT_B" testspec-light-b.yml "iOS-LightB" "test_spec_arn_10"
           fi
 
       - name: Schedule Device Farm Test Run
@@ -1159,28 +1165,42 @@ jobs:
               --query 'run.arn' --output text
           }
 
+          # When the upstream test-spec step skips a group (perf-only
+          # mode, no perf-emitting tests in that group), its
+          # test_spec_arn_* output is empty. Don't book Device Farm
+          # time for an empty spec — leaves the matching RUN_ARN_*
+          # variable empty, which the existing 1..10 iterator in the
+          # subsequent steps already tolerates.
+          maybe_schedule () {
+            local idx="$1" pool_arn="$2" name="$3" spec_arn="$4" label="$5"
+            if [ -z "$spec_arn" ]; then
+              echo "[$label] skipped (no test spec — group has no perf-emitting tests in perf-only mode)"
+              return
+            fi
+            local arn
+            arn=$(schedule_run_with_pool "$pool_arn" "$name" "$spec_arn")
+            echo "✅ $label scheduled: $arn"
+            eval "RUN_ARN_$idx=$arn"
+            echo "run_arn_$idx=$arn" >> "$GITHUB_OUTPUT"
+            SCHEDULED_COUNT=$((SCHEDULED_COUNT + 1))
+            HIGHEST_IDX=$idx
+          }
+
+          SCHEDULED_COUNT=0
+          HIGHEST_IDX=0
+
           if [ "${{ matrix.platform }}" == "Android" ]; then
             POOL_ARN="${{ secrets.LLM_ANDROID_DEVICE_POOL_ARN }}"
             TEST_SPEC_ARN_A="${{ steps.upload_test_spec.outputs.test_spec_arn }}"
             TEST_SPEC_ARN_B="${{ steps.upload_test_spec.outputs.test_spec_arn_2 }}"
             TEST_SPEC_ARN_IMG_PERF="${{ steps.upload_test_spec.outputs.test_spec_arn_3 }}"
 
-            echo "🚀 Scheduling 3 Android runs (each runs on all devices in pool)..."
+            echo "🚀 Scheduling Android runs (each runs on all devices in pool)..."
             echo "Device Pool ARN: $POOL_ARN"
 
-            RUN_ARN_1=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-Android-GroupA" "$TEST_SPEC_ARN_A")
-            echo "✅ Android Group A scheduled: $RUN_ARN_1"
-
-            RUN_ARN_2=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-Android-GroupB" "$TEST_SPEC_ARN_B")
-            echo "✅ Android Group B scheduled: $RUN_ARN_2"
-
-            RUN_ARN_3=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-Android-ImagesPerf" "$TEST_SPEC_ARN_IMG_PERF")
-            echo "✅ Android Images-Perf (all 3 images) scheduled: $RUN_ARN_3"
-
-            echo "run_arn_1=$RUN_ARN_1" >> $GITHUB_OUTPUT
-            echo "run_arn_2=$RUN_ARN_2" >> $GITHUB_OUTPUT
-            echo "run_arn_3=$RUN_ARN_3" >> $GITHUB_OUTPUT
-            echo "run_count=3" >> $GITHUB_OUTPUT
+            maybe_schedule 1 "$POOL_ARN" "$RUN_NAME-Android-GroupA"      "$TEST_SPEC_ARN_A"        "Android-GroupA"
+            maybe_schedule 2 "$POOL_ARN" "$RUN_NAME-Android-GroupB"      "$TEST_SPEC_ARN_B"        "Android-GroupB"
+            maybe_schedule 3 "$POOL_ARN" "$RUN_NAME-Android-ImagesPerf"  "$TEST_SPEC_ARN_IMG_PERF" "Android-ImagesPerf"
           else
             POOL_ARN="${{ secrets.LLM_IOS_DEVICE_POOL_ARN }}"
             TEST_SPEC_ARN_1="${{ steps.upload_test_spec.outputs.test_spec_arn }}"
@@ -1194,66 +1214,26 @@ jobs:
             TEST_SPEC_ARN_9="${{ steps.upload_test_spec.outputs.test_spec_arn_9 }}"
             TEST_SPEC_ARN_10="${{ steps.upload_test_spec.outputs.test_spec_arn_10 }}"
 
-            echo "🚀 Scheduling 11 iOS runs (each runs on ALL devices in pool)..."
+            echo "🚀 Scheduling iOS runs (each runs on ALL devices in pool)..."
             echo "Device Pool ARN: $POOL_ARN"
 
-            RUN_ARN_1=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy1-Finetuning" "$TEST_SPEC_ARN_1")
-            echo "✅ Heavy1 (Finetuning) scheduled: $RUN_ARN_1"
-
-            RUN_ARN_2=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy2-ToolCalling" "$TEST_SPEC_ARN_2")
-            echo "✅ Heavy2 (ToolCalling) scheduled: $RUN_ARN_2"
-
-            RUN_ARN_3=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy3-ImgElephant" "$TEST_SPEC_ARN_3")
-            echo "✅ Heavy3 (Image-Elephant) scheduled: $RUN_ARN_3"
-
-            RUN_ARN_4=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy4-OcrLighton" "$TEST_SPEC_ARN_4")
-            echo "✅ Heavy4 (OcrLighton) scheduled: $RUN_ARN_4"
-
-            RUN_ARN_5=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy5-Reasoning" "$TEST_SPEC_ARN_5")
-            echo "✅ Heavy5 (Reasoning) scheduled: $RUN_ARN_5"
-
-            RUN_ARN_6=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy6-SlidingContext" "$TEST_SPEC_ARN_6")
-            echo "✅ Heavy6 (SlidingContext) scheduled: $RUN_ARN_6"
-
-            RUN_ARN_7=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy7-ImgFruitPlate" "$TEST_SPEC_ARN_7")
-            echo "✅ Heavy7 (Image-FruitPlate) scheduled: $RUN_ARN_7"
-
-            RUN_ARN_8=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy8-ImgHighResAurora" "$TEST_SPEC_ARN_8")
-            echo "✅ Heavy8 (Image-HighResAurora) scheduled: $RUN_ARN_8"
-
-            RUN_ARN_9=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-LightA" "$TEST_SPEC_ARN_9")
-            echo "✅ LightA scheduled: $RUN_ARN_9"
-
-            RUN_ARN_10=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-LightB" "$TEST_SPEC_ARN_10")
-            echo "✅ LightB scheduled: $RUN_ARN_10"
-
-            # QVAC-17830: a one-shot Heavy7 retry used to live here
-            # so we got a second chance at fruit-plate perf data when
-            # the first attempt SIGABRT'd. Removed at user's request.
-            # Heavy7 = ["runImageFruitPlateTest"] only (cold process).
-            # Memory pressure is now bounded inside the test itself:
-            # iosWarmupImage='elephant.jpg' performs ONE small VLM
-            # inference before the 10 MB fruit-plate PNG, the standard
-            # warmup loop is skipped on iOS because the pre-warmup
-            # already exercised the multimodal pipeline, and
-            # iosPerfRuns=1 caps counted iterations at one — so iOS
-            # fruit-plate runs exactly 2 inferences cold. See
-            # _image-common.js + image-fruit-plate.test.js.
-
-            echo "run_arn_1=$RUN_ARN_1" >> $GITHUB_OUTPUT
-            echo "run_arn_2=$RUN_ARN_2" >> $GITHUB_OUTPUT
-            echo "run_arn_3=$RUN_ARN_3" >> $GITHUB_OUTPUT
-            echo "run_arn_4=$RUN_ARN_4" >> $GITHUB_OUTPUT
-            echo "run_arn_5=$RUN_ARN_5" >> $GITHUB_OUTPUT
-            echo "run_arn_6=$RUN_ARN_6" >> $GITHUB_OUTPUT
-            echo "run_arn_7=$RUN_ARN_7" >> $GITHUB_OUTPUT
-            echo "run_arn_8=$RUN_ARN_8" >> $GITHUB_OUTPUT
-            echo "run_arn_9=$RUN_ARN_9" >> $GITHUB_OUTPUT
-            echo "run_arn_10=$RUN_ARN_10" >> $GITHUB_OUTPUT
-            echo "run_count=10" >> $GITHUB_OUTPUT
+            maybe_schedule  1 "$POOL_ARN" "$RUN_NAME-iOS-Heavy1-Finetuning"        "$TEST_SPEC_ARN_1"  "Heavy1 (Finetuning)"
+            maybe_schedule  2 "$POOL_ARN" "$RUN_NAME-iOS-Heavy2-ToolCalling"       "$TEST_SPEC_ARN_2"  "Heavy2 (ToolCalling)"
+            maybe_schedule  3 "$POOL_ARN" "$RUN_NAME-iOS-Heavy3-ImgElephant"       "$TEST_SPEC_ARN_3"  "Heavy3 (Image-Elephant)"
+            maybe_schedule  4 "$POOL_ARN" "$RUN_NAME-iOS-Heavy4-OcrLighton"        "$TEST_SPEC_ARN_4"  "Heavy4 (OcrLighton)"
+            maybe_schedule  5 "$POOL_ARN" "$RUN_NAME-iOS-Heavy5-Reasoning"         "$TEST_SPEC_ARN_5"  "Heavy5 (Reasoning)"
+            maybe_schedule  6 "$POOL_ARN" "$RUN_NAME-iOS-Heavy6-SlidingContext"    "$TEST_SPEC_ARN_6"  "Heavy6 (SlidingContext)"
+            maybe_schedule  7 "$POOL_ARN" "$RUN_NAME-iOS-Heavy7-ImgFruitPlate"     "$TEST_SPEC_ARN_7"  "Heavy7 (Image-FruitPlate)"
+            maybe_schedule  8 "$POOL_ARN" "$RUN_NAME-iOS-Heavy8-ImgHighResAurora"  "$TEST_SPEC_ARN_8"  "Heavy8 (Image-HighResAurora)"
+            maybe_schedule  9 "$POOL_ARN" "$RUN_NAME-iOS-LightA"                   "$TEST_SPEC_ARN_9"  "LightA"
+            maybe_schedule 10 "$POOL_ARN" "$RUN_NAME-iOS-LightB"                   "$TEST_SPEC_ARN_10" "LightB"
           fi
 
-          echo "All runs scheduled."
+          # run_count is treated as the highest scheduled slot, since
+          # the wait/download iterators walk from RUN_ARN_1 .. run_count
+          # checking each slot for emptiness.
+          echo "run_count=$HIGHEST_IDX" >> "$GITHUB_OUTPUT"
+          echo "$SCHEDULED_COUNT run(s) scheduled (highest slot $HIGHEST_IDX)."
 
       - name: Refresh AWS credentials for monitoring
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
@@ -1299,7 +1279,19 @@ jobs:
 
           MAX_WAIT_TIME=7200
           ELAPSED=0
-          for i in $(seq 1 "$RUN_COUNT"); do eval "DONE_$i=false"; done
+          # Pre-mark empty slots as DONE so perf-only mode (where some
+          # slots are intentionally not scheduled) doesn't try to
+          # poll them with an empty ARN.
+          for i in $(seq 1 "$RUN_COUNT"); do
+            eval "arn=\$RUN_ARN_$i"
+            if [ -z "$arn" ]; then
+              eval "DONE_$i=true"
+              eval "STATUS_$i=\"SKIPPED\""
+              eval "RESULT_$i=\"-\""
+            else
+              eval "DONE_$i=false"
+            fi
+          done
 
           while true; do
             STATUS_LINE="⏳"
@@ -1338,7 +1330,8 @@ jobs:
             ELAPSED=$((ELAPSED + 30))
           done
 
-          RUN_ARNS=("$RUN_ARN_1")
+          RUN_ARNS=()
+          [ -n "$RUN_ARN_1" ] && RUN_ARNS+=("$RUN_ARN_1")
           for i in 2 3 4 5 6 7 8 9 10 11; do
             eval "arn=\$RUN_ARN_$i"
             if [ "$RUN_COUNT" -ge "$i" ] && [ -n "$arn" ]; then
@@ -1473,7 +1466,7 @@ jobs:
           echo "   Totals: $TOTAL_TOTAL | Passed: $TOTAL_PASSED | Failed: $TOTAL_FAILED | Skipped: $TOTAL_SKIPPED"
 
       - name: Refresh AWS credentials for log download
-        if: always() && steps.schedule_run.outputs.run_arn_1
+        if: always() && steps.schedule_run.outputs.run_count != '0' && steps.schedule_run.outputs.run_count != ''
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
@@ -1481,7 +1474,7 @@ jobs:
           role-session-name: device-farm-logs
 
       - name: Download Device Farm Logs
-        if: always() && steps.schedule_run.outputs.run_arn_1
+        if: always() && steps.schedule_run.outputs.run_count != '0' && steps.schedule_run.outputs.run_count != ''
         run: |
           RUN_ARN_1="${{ steps.schedule_run.outputs.run_arn_1 }}"
           RUN_ARN_2="${{ steps.schedule_run.outputs.run_arn_2 }}"
@@ -1498,7 +1491,8 @@ jobs:
           PLATFORM="${{ matrix.platform }}"
           mkdir -p "$LOG_DIR"
 
-          RUN_ARNS=("$RUN_ARN_1")
+          RUN_ARNS=()
+          [ -n "$RUN_ARN_1" ] && RUN_ARNS+=("$RUN_ARN_1")
           for i in 2 3 4 5 6 7 8 9 10; do
             eval "arn=\$RUN_ARN_$i"
             if [ "$RUN_COUNT" -ge "$i" ] && [ -n "$arn" ]; then
@@ -1608,7 +1602,7 @@ jobs:
           find "$LOG_DIR" -type f -exec ls -lh {} \; 2>/dev/null || echo "  (no logs downloaded)"
 
       - name: Extract Console Logs
-        if: always() && steps.schedule_run.outputs.run_arn_1
+        if: always() && steps.schedule_run.outputs.run_count != '0' && steps.schedule_run.outputs.run_count != ''
         run: |
           LOG_DIR="devicefarm-logs/${{ matrix.platform }}"
           CONSOLE_DIR="console-logs/${{ matrix.platform }}"
@@ -1650,7 +1644,7 @@ jobs:
           find "$CONSOLE_DIR" -type f -exec ls -lh {} \; 2>/dev/null || echo "  (no console logs found)"
 
       - name: Upload Console Logs
-        if: always() && steps.schedule_run.outputs.run_arn_1
+        if: always() && steps.schedule_run.outputs.run_count != '0' && steps.schedule_run.outputs.run_count != ''
         uses: actions/upload-artifact@v4
         with:
           name: console-logs-${{ matrix.platform }}
@@ -1659,7 +1653,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Upload Full Device Farm Logs
-        if: always() && steps.schedule_run.outputs.run_arn_1
+        if: always() && steps.schedule_run.outputs.run_count != '0' && steps.schedule_run.outputs.run_count != ''
         uses: actions/upload-artifact@v4
         with:
           name: devicefarm-logs-${{ matrix.platform }}
@@ -1683,7 +1677,7 @@ jobs:
       # comes from the <LOG_DIR>/<device>/ subdir structure created
       # by the Download Device Farm Logs step.
       - name: Extract performance report from logs
-        if: always() && steps.schedule_run.outputs.run_arn_1
+        if: always() && steps.schedule_run.outputs.run_count != '0' && steps.schedule_run.outputs.run_count != ''
         shell: bash
         run: |
           set +e
@@ -1743,7 +1737,7 @@ jobs:
           fi
 
       - name: Upload performance report
-        if: always() && steps.schedule_run.outputs.run_arn_1
+        if: always() && steps.schedule_run.outputs.run_count != '0' && steps.schedule_run.outputs.run_count != ''
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: perf-report-llamacpp-llm-${{ matrix.platform }}-${{ github.run_number }}

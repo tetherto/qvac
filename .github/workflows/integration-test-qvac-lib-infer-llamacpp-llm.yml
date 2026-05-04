@@ -20,6 +20,11 @@ on:
         type: string
         required: false
         default: ""
+      qvac_perf_only:
+        description: "If true, run only the perf-emitting tests (image-elephant, image-fruit-plate, image-high-res-aurora, bitnet, tool-calling)."
+        type: boolean
+        required: false
+        default: false
 
   workflow_dispatch:
     inputs:
@@ -42,6 +47,11 @@ on:
         type: string
         required: false
         default: ""
+      qvac_perf_only:
+        description: "If true, run only the perf-emitting tests."
+        type: boolean
+        required: false
+        default: false
 
 jobs:
   run-integration-tests:
@@ -225,6 +235,17 @@ jobs:
         if: ${{ matrix.platform != 'win32' }}
         working-directory: ${{ env.WORKDIR }}
         run: |
+          if [ "${{ inputs.qvac_perf_only }}" = "true" ]; then
+            echo "qvac_perf_only=true: regenerating test/integration/all.js with perf-emitting tests only"
+            npx brittle -r test/integration/all.js \
+              test/integration/bitnet.test.js \
+              test/integration/tool-calling.test.js \
+              test/integration/image-elephant.test.js \
+              test/integration/image-fruit-plate.test.js \
+              test/integration/image-high-res-aurora.test.js
+            bare test/integration/all.js --exit 2>&1 | tee test-output.log
+            exit ${PIPESTATUS[0]}
+          fi
           npm run test:integration 2>&1 | tee test-output.log
           exit ${PIPESTATUS[0]}
         shell: bash
@@ -237,7 +258,17 @@ jobs:
         if: ${{ matrix.platform == 'win32' }}
         working-directory: ${{ env.WORKDIR }}
         run: |
-          npm run test:integration:generate
+          if ("${{ inputs.qvac_perf_only }}" -eq "true") {
+            Write-Host "qvac_perf_only=true: regenerating test/integration/all.js with perf-emitting tests only"
+            npx brittle -r test/integration/all.js `
+              test/integration/bitnet.test.js `
+              test/integration/tool-calling.test.js `
+              test/integration/image-elephant.test.js `
+              test/integration/image-fruit-plate.test.js `
+              test/integration/image-high-res-aurora.test.js
+          } else {
+            npm run test:integration:generate
+          }
           bare test/integration/all.js --exit | Tee-Object test-output.log
         shell: powershell
         env:

@@ -89,6 +89,7 @@ jobs:
       ref: ${{ needs.context.outputs.ref }}
       qvac_perf_runs: ${{ inputs.qvac_perf_runs }}
       qvac_perf_warmup_runs: ${{ inputs.qvac_perf_warmup_runs }}
+      qvac_perf_only: true
 
   mobile-benchmarks:
     needs: [context, prebuild]
@@ -105,6 +106,7 @@ jobs:
       ref: ${{ needs.context.outputs.ref }}
       qvac_perf_runs: ${{ inputs.qvac_perf_runs }}
       qvac_perf_warmup_runs: ${{ inputs.qvac_perf_warmup_runs }}
+      qvac_perf_only: true
 
   summarize:
     # `if: always()` lets summarize run even when one of the benchmark
