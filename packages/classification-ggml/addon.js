@@ -58,14 +58,18 @@ function mapAddonEvent (rawEvent, rawData, rawError) {
 /**
  * Thin JS↔native bridge owning one bare C++ instance handle. Lifecycle
  * lives in `index.js`, mirroring `LlamaInterface` / `LlmLlamacpp`.
+ *
+ * `opts.disableNativeLogger` controls whether the native LogMsg bridge is
+ * armed for this instance; kept on a sibling arg so `configurationParams`
+ * stays 1:1 with the C++ schema (no JS-only `__`-prefixed flags).
  */
 class ClassificationInterface {
-  constructor (binding, configurationParams, outputCb, logger = null) {
+  constructor (binding, configurationParams, outputCb, logger = null, opts = {}) {
     this._binding = binding
     this._handle = null
     this._logger = logger
 
-    if (logger && typeof logger === 'object' && !configurationParams.__disableNativeLogger) {
+    if (logger && typeof logger === 'object' && !opts.disableNativeLogger) {
       _ensureLoggerInstalled(binding)
       _setActiveLoggerSink(logger)
     }

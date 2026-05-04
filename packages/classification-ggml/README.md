@@ -81,7 +81,7 @@ All constructor options are optional.
 | Option         | Type                | Default                                               | Description                                                                                                                                                                                                                                                                                                                            |
 | -------------- | ------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `modelPath`    | `string`            | Bundled `weights/mobilenetv3_3class_v3_fp16.gguf`     | Absolute path to an FP16 GGUF file. Override only when pointing at a custom fine-tune produced by the ONNX→GGUF conversion guide. Also overridable via the `QVAC_CLASSIFICATION_MODEL_PATH` env variable.                                                                                                                              |
-| `logger`       | `QvacLogger`-shaped | `null`                                                | A sink with optional `error / warn / info / debug(msg)` methods (compatible with `@qvac/logging`). Receives JS-level `info` lines from `load()` and `classify()`. Always honoured, regardless of `nativeLogger`.                                                                                                                       |
+| `logger`       | `QvacLogger`-shaped | `null`                                                | A sink with optional `error / warn / info / debug(msg)` methods (compatible with `@qvac/logging`). Receives JS-side `info` from a successful `load()` and `error` from a failed `load()`. With `nativeLogger: true`, also receives forwarded native `LogMsg` events at `info` level. Always honoured, regardless of `nativeLogger`. |
 | `threads`      | `number`            | libggml default (`std::thread::hardware_concurrency`) | Upper bound on CPU worker threads the GGML compute graph may use. Set lower (e.g. `2`) on battery-constrained mobile devices; set higher on servers. Must be a positive integer.                                                                                                                                                       |
 | `nativeLogger` | `boolean`           | `false`                                               | When `true`, native C++ `QLOG(...)` lines from inside the addon's model-loading and graph code are forwarded to `logger`. Disabled by default because the underlying `qvac-lib-inference-addon-cpp` logger is a process-wide singleton with a static `uv_async_t` that is not safe across rapid create/destroy cycles (e.g. in tests). |
 
@@ -151,16 +151,22 @@ to populate `test/mobile/testAssets/` (driven by `scripts/copy-mobile-test-asset
 ## Platform support
 
 
-| Platform      | CPU | Notes            |
-| ------------- | --- | ---------------- |
-| Linux x64     | ✅   |                  |
-| macOS arm64   | ✅   |                  |
-| Windows x64   | ✅   |                  |
-| Android arm64 | ✅   | `c++_shared` STL |
-| iOS arm64     | ✅   |                  |
+| Platform                | CPU | Notes                                            |
+| ----------------------- | --- | ------------------------------------------------ |
+| Linux x64               | ✅   |                                                  |
+| Linux arm64             | ✅   |                                                  |
+| macOS arm64 (Apple)     | ✅   |                                                  |
+| macOS x64 (Intel)       | ✅   |                                                  |
+| Windows x64             | ✅   |                                                  |
+| Android arm64           | ✅   | `c++_shared` STL                                 |
+| iOS arm64 (device)      | ✅   |                                                  |
+| iOS arm64 (simulator)   | ✅   | Apple-Silicon dev workflow                       |
+| iOS x64 (simulator)     | ✅   | Intel-Mac dev workflow                           |
 
 
-GPU (Vulkan / Metal / CUDA) is not currently supported.
+All 9 platforms are produced by the shared `reusable-prebuilds.yml`
+matrix and merged into a single `prebuilds` artifact for downstream
+consumption. GPU (Vulkan / Metal / CUDA) is not currently supported.
 
 ## Performance
 
@@ -168,7 +174,7 @@ Depending on the platform, one call to `classifier.classify(buffer)` takes from 
 
 ### What affects `classify()` latency
 
-- **`threads`** — capped at `hardware_concurrency` by default. Lowering it trades latency for battery or contention with other addons (LLM, whisper) running on the same device.
+- `**threads**` — capped at `hardware_concurrency` by default. Lowering it trades latency for battery or contention with other addons (LLM, whisper) running on the same device.
 - **Input size** — the JPEG/PNG decode and the `stb_image_resize2` bilinear pass scale with source pixel count. The 224×224 tensor pass is fixed-cost; a 12 MP phone photo adds real overhead vs. a 640×480 webcam frame.
 - **First-call overhead** — `load()` already runs a full-pipeline warmup (synthetic-gradient pass through preprocess + GGML compute + output read) before returning, so the GGML compute buffers, weight buffer, and worker thread are fully materialised when the first `classify()` is dispatched. Even so, the first user-supplied call is typically a few tens of milliseconds slower than the steady-state average.
 - **Re-use** — `load()` once, `classify()` many times. Tearing down and rebuilding the model for each image is roughly 4–6× slower end-to-end and is never necessary outside of tests.
@@ -184,7 +190,7 @@ Depending on the platform, one call to `classifier.classify(buffer)` takes from 
 | **Total resident** during inference                        | **~8–10 MB**    |
 
 
-No heap allocation happens in the hot path: the input tensor is pre-allocated at `load()` time and every call reuses it, only the raw pixels are copied in. Multiple `ImageClassifier` instances each keep their own compute buffer and worker thread — you pay the ~8 MB once per instance.
+All GGML compute buffers (input tensor, intermediate activations, output) are allocated **once** at `load()` time and reused on every `classify()` call — `ggml_backend_tensor_set` / `_get` are the only operations that touch them per request. Per-call C++ allocations are bounded: one input-buffer copy across the bare-runtime boundary, the decoded RGB buffer (`width × height × 3` bytes), the resized 224×224 RGB buffer (~150 KB), the WHCN F32 tensor (~600 KB), and the 3-element softmax + result vectors. Multiple `ImageClassifier` instances each keep their own compute buffer and worker thread — you pay the ~8 MB once per instance.
 
 ### Why FP16 weights?
 

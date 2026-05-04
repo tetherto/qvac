@@ -9,18 +9,27 @@ rationale for the key implementation choices.
 ```
 +----------------------------------------------+
 |  JS: ImageClassifier (index.js)              |
-|   - input validation + format detection      |
-|   - delegates to ClassificationInterface     |
+|   - lifecycle (load / classify / unload)     |
+|     all serialised via exclusiveRunQueue     |
+|   - threads validation fail-fast in ctor     |
+|   - createJobHandler + QvacResponse plumbing |
+|   - thin pass-through to native validation   |
 +----------------------------------------------+
 |  JS: ClassificationInterface (addon.js)      |
-|   - Promise-based wrapper around binding.js  |
-|   - holds native handle, resolves on output  |
+|   - thin native bridge: createInstance,      |
+|     activate, runJob, cancel, unload         |
+|   - exports mapAddonEvent for index.js       |
+|     (shape-keyed Output / JobEnded routing)  |
 +----------------------------------------------+
 |  Native: BARE_MODULE (binding.cpp)           |
 |   - exports createInstance/runJob/activate… |
 +----------------------------------------------+
 |  Native: AddonJs (addon/AddonJs.hpp)         |
-|   - js <-> C++ bridge (packs ClassifyInput)  |
+|   - js <-> C++ bridge                        |
+|   - single source of truth for argument      |
+|     validation (type / range / shape)        |
+|   - packs ClassifyInput (vector<uint8_t> +   |
+|     optional<RawRgbDims> + topK)             |
 |   - JsClassifyOutputHandler → JS array       |
 +----------------------------------------------+
 |  Native: AddonCpp  (from @qvac/…-addon-cpp)  |
@@ -29,12 +38,16 @@ rationale for the key implementation choices.
 +----------------------------------------------+
 |  Native: ClassificationModel (IModel)        |
 |   - load(): backend init + weights + graph   |
+|     + full-pipeline warmup pass              |
 |   - process(): preprocess → compute → softmax|
 +----------------------------------------------+
 |  Native: MobileNetGraph                      |
 |   - loadWeights(): GGUF → folded BN + FC F32 |
+|     (validates mobilenet.num_classes)        |
 |   - buildGraph(): static forward compute     |
 |     graph wired to pre-allocated buffers     |
+|     (asserts ggml_nelements(output) ==       |
+|     kNumClasses before allocation)           |
 +----------------------------------------------+
 |  libggml (CPU backend only)                  |
 +----------------------------------------------+
@@ -138,10 +151,17 @@ pixel copy, the compute itself, the 3-element softmax, and label lookup.
   thread (inherited from `qvac-lib-inference-addon-cpp`), so concurrent
   `classify()` calls are serialized per instance but independent across
   instances — supporting acceptance criterion N6.
+- The JS-side `exclusiveRunQueue()` (mirroring `LlmLlamacpp`) further
+  serialises `load`, `classify`, and `unload` per `ImageClassifier`
+  instance, so a `unload()` racing an in-flight `classify()` queues
+  cleanly behind it (and explicitly cancels then fails the in-flight
+  request with `Model was unloaded`).
 - Per-inference mutex (`ClassificationModel::mutex_`) guards against a
   torn state if a future user bypasses `JobRunner`.
 - `ggml_backend_cpu_set_n_threads()` lets the caller tune the CPU compute
   threads; default is libggml's `std::thread::hardware_concurrency`.
+  Invalid `threads` values (non-positive integers, NaN, wrong type) are
+  rejected fail-fast at `new ImageClassifier(...)` construction.
 
 ## Memory footprint
 

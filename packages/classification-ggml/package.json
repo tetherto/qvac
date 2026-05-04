@@ -11,6 +11,8 @@
     "lint:fix": "standard --ignore \"addon/**\" --fix",
     "lint-cpp": "clang-tidy -p build addon/src/js-interface/binding.cpp addon/src/model-interface/ClassificationModel.cpp addon/src/model-interface/ImagePreprocessor.cpp addon/src/model-interface/MobileNetGraph.cpp",
     "test": "npm run test:integration",
+    "test:unit:generate": "brittle -r test/unit/all.js test/unit/*.test.js",
+    "test:unit": "npm run test:unit:generate && bare test/unit/all.js --exit",
     "test:integration": "npm run test:integration:generate && bare test/integration/all.js --exit",
     "test:integration:generate": "brittle -r test/integration/all.js test/integration/*.test.js && npm run test:mobile:generate",
     "test:mobile:generate": "bare ./scripts/generate-mobile-integration-tests.js",
@@ -19,7 +21,7 @@
     "test:cpp:run": "node scripts/run-cpp-tests.js",
     "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
     "test:dts": "tsc -p tsconfig.dts.json",
-    "test:all": "npm run test:integration && npm run test:cpp"
+    "test:all": "npm run test:unit && npm run test:integration && npm run test:cpp"
   },
   "standard": {
     "ignore": [

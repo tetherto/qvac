@@ -18,6 +18,22 @@ function resolveDefaultModelPath () {
   return path.join(__dirname, 'weights', DEFAULT_WEIGHTS_FILENAME)
 }
 
+// Fail-fast validation matching the README contract ("Must be a positive
+// integer"). The C++ AddonJs::createInstance keeps an equivalent guard as
+// defence-in-depth for any caller that bypasses this constructor.
+function _validateThreads (threads) {
+  if (threads === undefined) return undefined
+  if (typeof threads !== 'number' ||
+      !Number.isInteger(threads) ||
+      threads < 1) {
+    const got = typeof threads === 'number' ? threads : typeof threads
+    throw new TypeError(
+      `'threads' must be a positive integer when provided; got ${got}`
+    )
+  }
+  return threads
+}
+
 /**
  * High-level classifier for MobileNetV3-Small 3-class image triage.
  *
@@ -41,7 +57,7 @@ class ImageClassifier {
     const { modelPath, logger = null, threads, nativeLogger = false } = opts
     this._modelPath = modelPath ?? resolveDefaultModelPath()
     this.logger = new QvacLogger(logger)
-    this._threads = threads
+    this._threads = _validateThreads(threads)
     // Off by default: see `addon.js::_ensureLoggerInstalled` for the
     // process-wide JsLogger lifecycle that opt-in unlocks.
     this._nativeLogger = nativeLogger === true
@@ -68,19 +84,18 @@ class ImageClassifier {
       throw new Error(`MobileNet GGUF weights not found at: ${this._modelPath}`)
     }
 
+    // configurationParams is the C++ schema 1:1 — keep it free of any
+    // JS-only flags. The native-logger gate lives in the JS-side opts arg.
     const configurationParams = { path: this._modelPath, config: {} }
-    if (typeof this._threads === 'number' && this._threads > 0) {
+    if (this._threads !== undefined) {
       configurationParams.config.threads = this._threads
     }
-    if (!this._nativeLogger) {
-      configurationParams.__disableNativeLogger = true
-    }
-    if (process.env && process.env.QVAC_CLASSIFICATION_DISABLE_NATIVE_LOGGER === '1') {
-      configurationParams.__disableNativeLogger = true
-    }
+
+    const disableNativeLogger = !this._nativeLogger ||
+      (process.env && process.env.QVAC_CLASSIFICATION_DISABLE_NATIVE_LOGGER === '1')
 
     try {
-      this._addon = this._createAddon(configurationParams)
+      this._addon = this._createAddon(configurationParams, { disableNativeLogger })
       await this._addon.activate()
     } catch (loadError) {
       this.logger.error('Error during model load:', loadError)
@@ -90,13 +105,14 @@ class ImageClassifier {
     }
   }
 
-  _createAddon (configurationParams) {
+  _createAddon (configurationParams, opts) {
     const binding = require('./binding')
     return new ClassificationInterface(
       binding,
       configurationParams,
       this._addonOutputCallback.bind(this),
-      this.logger
+      this.logger,
+      opts
     )
   }
 
