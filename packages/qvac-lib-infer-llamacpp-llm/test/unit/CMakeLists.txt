@@ -71,6 +71,8 @@ endif()
 
 target_include_directories(
   addon-test
+  BEFORE PRIVATE
+  ${CMAKE_SOURCE_DIR}/addon/src/patches
   PRIVATE
   ${CMAKE_SOURCE_DIR}/addon/src
   ${PICOJSON_INCLUDE_DIRS}
