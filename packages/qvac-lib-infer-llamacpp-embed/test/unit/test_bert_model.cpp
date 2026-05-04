@@ -12,6 +12,7 @@
 #include "addon/AddonCpp.hpp"
 #include "addon/BertErrors.hpp"
 #include "model-interface/BertModel.hpp"
+#include "test_common.hpp"
 
 namespace fs = std::filesystem;
 
@@ -757,4 +758,154 @@ TEST_F(BertModelTest, PreprocessPrompt) {
   EXPECT_GT(preprocessed.size(), 0);
   // Preprocessing should split by newlines
   EXPECT_GE(preprocessed.size(), 1);
+}
+
+TEST_F(BertModelTest, CommonParamsParseSplitModeNone) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["split-mode"] = "none";
+
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+  EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_NONE);
+}
+
+TEST_F(BertModelTest, CommonParamsParseSplitModeLayer) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["split-mode"] = "layer";
+
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+
+  double backendDevice = getStatValue(model.runtimeStats(), "backendDevice");
+  if (backendDevice == 0.0) {
+    EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_NONE);
+  } else {
+    EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_LAYER);
+  }
+}
+
+TEST_F(BertModelTest, CommonParamsParseSplitModeRow) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["split-mode"] = "row";
+
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+
+  double backendDevice = getStatValue(model.runtimeStats(), "backendDevice");
+  if (backendDevice == 0.0) {
+    EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_NONE);
+  } else {
+    EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_ROW);
+  }
+}
+
+TEST_F(BertModelTest, CommonParamsParseSplitModeCaseInsensitive) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["split-mode"] = "LAYER";
+
+  EXPECT_NO_THROW({
+    BertModel model(getValidModelPath(), config);
+    model.initializeBackend(test_backends_dir);
+    model.waitForLoadInitialization();
+  });
+}
+
+TEST_F(BertModelTest, CommonParamsParseSplitModeUnderscoreVariant) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["split_mode"] = "layer";
+
+  EXPECT_NO_THROW({
+    BertModel model(getValidModelPath(), config);
+    model.initializeBackend(test_backends_dir);
+    model.waitForLoadInitialization();
+  });
+}
+
+TEST_F(BertModelTest, CpuFallbackClearsGpuSplitParams) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = "cpu";
+  config["split-mode"] = "layer";
+  config["tensor-split"] = "50,50";
+  config["main-gpu"] = "0";
+
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+
+  EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_NONE);
+  double backendDevice = getStatValue(model.runtimeStats(), "backendDevice");
+  EXPECT_EQ(backendDevice, 0.0);
+}
+
+TEST_F(BertModelTest, CommonParamsParseSplitModeInvalid) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["split-mode"] = "invalid_value";
+
+  EXPECT_THROW(
+      {
+        BertModel model(getValidModelPath(), config);
+        model.initializeBackend(test_backends_dir);
+        model.waitForLoadInitialization();
+      },
+      qvac_errors::StatusError);
+}
+
+TEST_F(BertModelTest, CommonParamsParseSplitModeBothKeysRejects) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["split-mode"] = "layer";
+  config["split_mode"] = "layer";
+
+  EXPECT_THROW(
+      {
+        BertModel model(getValidModelPath(), config);
+        model.initializeBackend(test_backends_dir);
+        model.waitForLoadInitialization();
+      },
+      qvac_errors::StatusError);
 }

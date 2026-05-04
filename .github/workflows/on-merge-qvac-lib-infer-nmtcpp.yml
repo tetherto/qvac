@@ -23,6 +23,11 @@ on:
           - feature
           - temp
           - latest
+      npm_tag:
+        description: "NPM dist-tag (default: latest). e.g. release-1.x"
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
@@ -177,6 +182,16 @@ jobs:
     env:
       PKG_DIR: packages/qvac-lib-infer-nmtcpp
     steps:
+      - name: Validate npm_tag input
+        if: inputs.npm_tag != ''
+        shell: bash
+        run: |
+          tag="${{ inputs.npm_tag }}"
+          if ! echo "$tag" | grep -qE '^[a-zA-Z0-9][a-zA-Z0-9._-]*$'; then
+            echo "::error::Invalid npm dist-tag '$tag'. Must match ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ (e.g. release-1.x)"
+            exit 1
+          fi
+
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -192,7 +207,7 @@ jobs:
         id: publish
         uses: ./.github/actions/publish-library-to-npm
         with:
-          tag: "latest"
+          tag: ${{ inputs.npm_tag || 'latest' }}
           workdir: ${{ env.PKG_DIR }}
 
   publish-release:

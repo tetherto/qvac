@@ -4,33 +4,61 @@ permissions:
   contents: read
 
 on:
-  pull_request_target:
+  pull_request:
     types: [opened, synchronize, reopened, labeled]
     paths:
       - "packages/qvac-lib-inference-addon-cpp/**"
+      - ".github/workflows/pr-test-qvac-lib-inference-addon-cpp-js.yml"
+      - ".github/workflows/pr-test-qvac-lib-inference-addon-cpp.yml"
+      - ".github/workflows/pr-test-qvac-lib-inference-addon-cpp-verify.yml"
   workflow_dispatch:
 
 env:
   PKG_DIR: packages/qvac-lib-inference-addon-cpp
   VCPKG_CACHE_DIR: ${{ github.workspace }}/packages/qvac-lib-inference-addon-cpp/vcpkg/cache
-  VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/qvac-lib-inference-addon-cpp/vcpkg/cache,readwrite"
+  VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/qvac-lib-inference-addon-cpp/vcpkg/cache,read"
 
 jobs:
   authorize:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: write
     outputs:
       allowed: ${{ steps.auth.outputs.allowed }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-      - name: Authorize
+      - name: Authorize native tests
         id: auth
-        uses: ./.github/actions/authorize-pr
-        with:
-          github-token: ${{ github.token }}
+        env:
+          EVENT: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
+          LABEL_NAME: ${{ github.event.label.name }}
+          HAS_VERIFY_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'verify') }}
+        run: |
+          if [ "$EVENT" != "pull_request" ]; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "$ACTION" = "synchronize" ]; then
+            echo "::notice::New commits pushed; re-apply the verify label after review to run native tests."
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "$ACTION" != "labeled" ] || [ "$LABEL_NAME" != "verify" ]; then
+            echo "::notice::Native tests run only when the verify label is freshly applied."
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "$HAS_VERIFY_LABEL" = "true" ]; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "::error::Native tests require the verify label."
+          echo "allowed=false" >> "$GITHUB_OUTPUT"
+          exit 1
 
   run-unit-tests:
     if: needs.authorize.outputs.allowed == 'true'
@@ -62,28 +90,18 @@ jobs:
             arch: x64
 
     runs-on: ${{ matrix.os }}
-    environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
     steps:
-      - name: Checkout PR head
+      - name: Checkout source
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
-          ref: ${{ github.event.pull_request.head.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          persist-credentials: false
 
       - name: yamlfmt
         uses: ./.github/actions/yamlfmt
         with:
           workdir: ${{ env.PKG_DIR }}
-        
-      - name: Export GitHub Actions cache environment variables
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
-        with:
-          script: |
-            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
-            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
 
       - if: ${{ matrix.os == 'ubuntu-22.04' }}
         name: Maximize build space
@@ -123,11 +141,6 @@ jobs:
       - if: ${{ matrix.os == 'windows-2022' }}
         name: Longpaths on windows
         run: git config --system core.longpaths true
-
-      - name: Configure git
-        run: |
-          git config --global --add url."https://${{ secrets.PAT_TOKEN }}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
-          git config --global --add url."https://${{ secrets.PAT_TOKEN }}:x-oauth-basic@github.com/".insteadOf "git@github.com:"
 
       - if: ${{ matrix.os == 'macos-14' }}
         name: Install vcpkg in macos
@@ -171,7 +184,7 @@ jobs:
 
       - name: Get vcpkg cache
         id: cache-vcpkg
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           key: ${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles('packages/qvac-lib-inference-addon-cpp/vcpkg.json', 'packages/qvac-lib-inference-addon-cpp/vcpkg-configuration.json', 'packages/qvac-lib-inference-addon-cpp/vcpkg/ports/**') }}
           path: ${{ env.PKG_DIR }}/vcpkg/cache
@@ -191,3 +204,4 @@ jobs:
       - name: Debug build
         working-directory: ${{ env.PKG_DIR }}
         run: cmake --preset default -D BUILD_TESTING=ON -D CMAKE_BUILD_TYPE=Debug -S . -B build && cmake --build build
+
