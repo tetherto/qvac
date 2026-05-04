@@ -3,7 +3,6 @@
 const fs = require('bare-fs')
 const path = require('bare-path')
 const process = require('bare-process')
-const FilesystemDL = require('@qvac/dl-filesystem')
 const Llm = require('../../index')
 const {
   PROMPT_CTX_SIZES,
@@ -53,24 +52,20 @@ async function main () {
 
   if (!byId.has('long')) failures.push('Missing base prompt: long')
 
-  if (!fs.existsSync(path.join(MODEL_DIR, MODEL_NAME))) {
-    throw new Error(`Missing tokenizer model at ${path.join(MODEL_DIR, MODEL_NAME)}`)
+  const modelPath = path.join(MODEL_DIR, MODEL_NAME)
+  if (!fs.existsSync(modelPath)) {
+    throw new Error(`Missing tokenizer model at ${modelPath}`)
   }
 
-  const loader = new FilesystemDL({ dirPath: MODEL_DIR })
   let model = null
 
   try {
     try {
-      model = new Llm(
-        {
-          modelName: MODEL_NAME,
-          loader,
-          diskPath: MODEL_DIR,
-          opts: { stats: true }
-        },
-        FAST_PROBE_RUNTIME
-      )
+      model = new Llm({
+        files: { model: [modelPath] },
+        config: FAST_PROBE_RUNTIME,
+        opts: { stats: true }
+      })
       await model.load()
       console.log('Prompt verification runtime: gpu (fast path)')
     } catch (gpuErr) {
@@ -80,15 +75,11 @@ async function main () {
       }
       console.warn(`GPU probe init failed; falling back to CPU: ${msg}`)
       if (model) await model.unload().catch(() => {})
-      model = new Llm(
-        {
-          modelName: MODEL_NAME,
-          loader,
-          diskPath: MODEL_DIR,
-          opts: { stats: true }
-        },
-        SAFE_FALLBACK_RUNTIME
-      )
+      model = new Llm({
+        files: { model: [modelPath] },
+        config: SAFE_FALLBACK_RUNTIME,
+        opts: { stats: true }
+      })
       await model.load()
       console.log('Prompt verification runtime: cpu (fallback)')
     }
@@ -140,7 +131,6 @@ async function main () {
     }
   } finally {
     if (model) await model.unload().catch(() => {})
-    await loader.close().catch(() => {})
   }
 
   if (failures.length) {

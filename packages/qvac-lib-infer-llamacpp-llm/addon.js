@@ -1,6 +1,70 @@
 const path = require('bare-path')
 
 /**
+ * Normalize a raw native event into `Output` / `Error` / `JobEnded` /
+ * `FinetuneProgress`, or `null` to drop it. `state.skipNextRuntimeStats`
+ * is used to swallow the TPS trailer that follows a finetune terminal.
+ *
+ * @param {string} rawEvent
+ * @param {*} rawData
+ * @param {*} rawError
+ * @param {{ skipNextRuntimeStats: boolean }} state
+ * @returns {{ type: string, data: *, error: * } | null}
+ */
+function mapAddonEvent (rawEvent, rawData, rawError, state) {
+  // TPS-shaped runtime stats — either a real inference terminal or the stale
+  // trailer that follows a finetune terminal.
+  if (rawData && typeof rawData === 'object' && 'TPS' in rawData) {
+    if (state.skipNextRuntimeStats) {
+      state.skipNextRuntimeStats = false
+      return null
+    }
+    const stats = { ...rawData }
+    if (stats.backendDevice === 0) {
+      stats.backendDevice = 'cpu'
+    } else if (stats.backendDevice === 1) {
+      stats.backendDevice = 'gpu'
+    }
+    return { type: 'JobEnded', data: stats, error: null }
+  }
+
+  // Finetune terminal: dispatch JobEnded carrying the finetune payload and arm
+  // the skip flag so the TPS the C++ addon emits right after is not mistaken
+  // for an inference result that would clobber `_hasActiveResponse`.
+  if (
+    rawData &&
+    typeof rawData === 'object' &&
+    rawData.op === 'finetune' &&
+    typeof rawData.status === 'string'
+  ) {
+    state.skipNextRuntimeStats = true
+    return { type: 'JobEnded', data: rawData, error: null }
+  }
+
+  // Per-iteration finetune metrics.
+  if (
+    rawData &&
+    typeof rawData === 'object' &&
+    rawData.type === 'finetune_progress'
+  ) {
+    return { type: 'FinetuneProgress', data: rawData, error: null }
+  }
+
+  // Name-based mapping. LogMsg must be checked before the string-to-Output
+  // fallback: `JsLogMsgOutputHandler` delivers the log as a plain string,
+  // so without this branch it would be misrouted into the job output.
+  let type = rawEvent
+  if (typeof rawEvent === 'string' && rawEvent.includes('Error')) {
+    type = 'Error'
+  } else if (typeof rawEvent === 'string' && rawEvent.includes('LogMsg')) {
+    type = 'LogMsg'
+  } else if (typeof rawData === 'string') {
+    type = 'Output'
+  }
+  return { type, data: rawData, error: rawError }
+}
+
+/**
  * An interface between Bare addon in C++ and JS runtime.
  */
 class LlamaInterface {
@@ -29,10 +93,9 @@ class LlamaInterface {
   }
 
   /**
-   *
    * @param {Object} weightsData
    * @param {String} weightsData.filename
-   * @param {Uint8Array} weightsData.contents
+   * @param {Uint8Array|null} weightsData.chunk
    * @param {Boolean} weightsData.completed
    */
   async loadWeights (weightsData) {
@@ -86,5 +149,6 @@ class LlamaInterface {
 }
 
 module.exports = {
-  LlamaInterface
+  LlamaInterface,
+  mapAddonEvent
 }

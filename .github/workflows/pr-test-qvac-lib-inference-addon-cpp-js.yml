@@ -1,0 +1,237 @@
+name: JS Test pipeline for PRs (Inference-addon-cpp)
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+    paths:
+      - "packages/qvac-lib-inference-addon-cpp/**"
+      - ".github/workflows/pr-test-qvac-lib-inference-addon-cpp-js.yml"
+  workflow_dispatch:
+
+env:
+  PKG_DIR: packages/qvac-lib-inference-addon-cpp
+
+jobs:
+  authorize-js-tests:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      allowed: ${{ steps.auth.outputs.allowed }}
+    steps:
+      - name: Authorize JS tests
+        id: auth
+        env:
+          EVENT: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
+          LABEL_NAME: ${{ github.event.label.name }}
+          HAS_VERIFY_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'verify') }}
+        run: |
+          if [ "$EVENT" != "pull_request" ]; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "$ACTION" = "synchronize" ]; then
+            echo "::notice::New commits pushed; re-apply the verify label after review to run JS tests."
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "$ACTION" != "labeled" ] || [ "$LABEL_NAME" != "verify" ]; then
+            echo "::notice::JS tests run only when the verify label is freshly applied."
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "$HAS_VERIFY_LABEL" = "true" ]; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "::error::JS tests require the verify label."
+          echo "allowed=false" >> "$GITHUB_OUTPUT"
+          exit 1
+
+  run-js-tests:
+    needs: authorize-js-tests
+    if: needs.authorize-js-tests.outputs.allowed == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            platform: linux
+            arch: x64
+            name: linux-x64-asan
+            asan: true
+            run_tests: true
+          - runner: macos-15-xlarge
+            platform: darwin
+            arch: arm64
+            name: darwin-arm64
+            asan: false
+            run_tests: true
+          - runner: macos-15-large
+            platform: darwin
+            arch: x64
+            name: darwin-x64
+            asan: false
+            run_tests: true
+          - runner: windows-2022
+            platform: win32
+            arch: x64
+            name: win32-x64
+            asan: false
+            run_tests: true
+          # Android/iOS entries are build-only here.
+          # Disable for now to save CI time.
+          # - runner: ubuntu-24.04
+          #   platform: android
+          #   arch: arm64
+          #   name: android-arm64
+          #   flags: -D ANDROID_STL=c++_shared
+          #   asan: false
+          #   run_tests: false
+          # - runner: macos-15
+          #   platform: ios
+          #   arch: arm64
+          #   name: ios-arm64
+          #   asan: false
+          #   run_tests: false
+    runs-on: ${{ matrix.runner }}
+    name: js-${{ matrix.name }}
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
+
+      - name: yamlfmt
+        uses: ./.github/actions/yamlfmt
+        with:
+          workdir: ${{ env.PKG_DIR }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # 4.4.0
+        with:
+          node-version: 22
+
+      - name: Install Bare tooling
+        run: npm install -g bare bare-make
+
+      - if: ${{ matrix.platform == 'win32' }}
+        name: Enable git long paths
+        run: git config --system core.longpaths true
+
+      - if: ${{ matrix.platform == 'win32' }}
+        name: Setup CMake on Windows
+        run: |
+          cd ..
+          curl -L https://github.com/Kitware/CMake/releases/download/v3.31.6/cmake-3.31.6-windows-x86_64.zip -o cmake-3.31.6-windows-x86_64.zip
+          unzip cmake-3.31.6-windows-x86_64.zip
+          echo "$PWD/cmake-3.31.6-windows-x86_64/bin" >> "$GITHUB_PATH"
+
+      - if: ${{ matrix.platform == 'darwin' || matrix.platform == 'ios' }}
+        name: Setup CMake on macOS
+        run: |
+          cd ..
+          curl -L https://github.com/Kitware/CMake/releases/download/v3.31.6/cmake-3.31.6-macos-universal.tar.gz -o cmake-3.31.6-macos-universal.tar.gz
+          tar -xzf cmake-3.31.6-macos-universal.tar.gz
+          echo "$PWD/cmake-3.31.6-macos-universal/bin" >> "$GITHUB_PATH"
+
+      - if: ${{ matrix.platform == 'android' }}
+        name: Configure runner for cross compilation - Android
+        run: |
+          echo "ANDROID_TOOLCHAIN_ROOT=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64" >> "$GITHUB_ENV"
+          echo "ANDROID_NATIVE_API_LEVEL=34" >> "$GITHUB_ENV"
+
+      - if: ${{ matrix.platform == 'win32' }}
+        name: Configure CMake generator on Windows
+        run: |
+          echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> "$GITHUB_ENV"
+          echo "CMAKE_GENERATOR_PLATFORM=x64" >> "$GITHUB_ENV"
+
+      - if: ${{ !matrix.asan }}
+        name: Run JS integration packages
+        run: |
+          failures=0
+          failed_packages=""
+          for package_dir in "${{ env.PKG_DIR }}"/tests/integration_js/*; do
+            if [ ! -f "$package_dir/package.json" ]; then
+              continue
+            fi
+            package_name="${package_dir##*/}"
+            echo "::group::$package_name"
+            if (
+              cd "$package_dir"
+              npm install --package-lock=false --ignore-scripts
+              npm exec -- standard
+              bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }}
+              bare-make build
+              bare-make install
+              if [ "${{ matrix.run_tests }}" = "true" ]; then
+                bare test.js
+              fi
+            ); then
+              echo "$package_name passed"
+            else
+              echo "::error::$package_name failed"
+              failures=1
+              failed_packages="$failed_packages $package_name"
+            fi
+            echo "::endgroup::"
+          done
+          if [ "$failures" -ne 0 ]; then
+            echo "::error::Failed JS integration packages:$failed_packages"
+            exit 1
+          fi
+
+      - if: ${{ matrix.asan }}
+        name: Run JS integration packages with ASAN
+        run: |
+          failures=0
+          failed_packages=""
+          for package_dir in "${{ env.PKG_DIR }}"/tests/integration_js/*; do
+            if [ ! -f "$package_dir/package.json" ]; then
+              continue
+            fi
+            package_name="${package_dir##*/}"
+            echo "::group::$package_name ASAN"
+            if (
+              cd "$package_dir"
+              npm install --package-lock=false --ignore-scripts
+              npm exec -- standard
+              rm -rf build prebuilds
+              CXXFLAGS="-fsanitize=address -fno-omit-frame-pointer" \
+              LDFLAGS="-fsanitize=address" \
+              bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }}
+              bare-make build
+              bare-make install
+              if [ "${{ matrix.run_tests }}" = "true" ]; then
+                LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libasan.so.8 \
+                ASAN_OPTIONS=detect_leaks=0:abort_on_error=1:alloc_dealloc_mismatch=0 \
+                bare test.js
+              fi
+            ); then
+              echo "$package_name ASAN passed"
+            else
+              echo "::error::$package_name ASAN failed"
+              failures=1
+              failed_packages="$failed_packages $package_name"
+            fi
+            echo "::endgroup::"
+          done
+          if [ "$failures" -ne 0 ]; then
+            echo "::error::Failed JS integration packages:$failed_packages"
+            exit 1
+          fi

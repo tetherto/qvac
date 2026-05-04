@@ -186,14 +186,18 @@ class ONNXOcr {
   }
 
   async _runInternal (input) {
-    const imageInput = this.getImage(input.path)
-    await this.addon.runJob({
-      type: 'image',
-      input: imageInput,
-      options: input.options
-    })
-
     const response = this._job.start()
+    try {
+      const imageInput = this.getImage(input.path)
+      await this.addon.runJob({
+        type: 'image',
+        input: imageInput,
+        options: input.options
+      })
+    } catch (error) {
+      this._job.fail(error)
+      throw error
+    }
     return response
   }
 

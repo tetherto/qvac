@@ -14,12 +14,24 @@ async function runDoctrBasicTest (options = {}) { // eslint-disable-line no-unus
   return runIntegrationModule('../integration/doctr-basic.test.js', options)
 }
 
+async function runDoctrClinicalChemistryTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/doctr-clinical-chemistry.test.js', options)
+}
+
+async function runDoctrCtScanTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/doctr-ct-scan.test.js', options)
+}
+
 async function runDoctrFrenchTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/doctr-french.test.js', options)
 }
 
 async function runDoctrLabResultsTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/doctr-lab-results.test.js', options)
+}
+
+async function runDoctrLiverFunctionTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/doctr-liver-function.test.js', options)
 }
 
 async function runDoctrModelsTest (options = {}) { // eslint-disable-line no-unused-vars

@@ -1,6 +1,6 @@
 # Architecture Documentation
 
-**Package:** `@qvac/embed-llamacpp` v0.11.0  
+**Package:** `@qvac/embed-llamacpp` v0.14.0  
 **Stack:** JavaScript, C++20, llama.cpp, Bare Runtime, CMake, vcpkg  
 **License:** Apache-2.0  
 **Addon-cpp:** ≥1.1.2 (single job per run, `runJob(input)`, `cancel()` waits until job stopped, no transition callback)
@@ -24,7 +24,7 @@
 ### Architecture Decisions
 - [Decision 1: llama.cpp as Inference Backend](#decision-1-llamacpp-as-inference-backend)
 - [Decision 2: Bare Runtime over Node.js](#decision-2-bare-runtime-over-nodejs)
-- [Decision 3: Pluggable Data Loader Architecture](#decision-3-pluggable-data-loader-architecture)
+- [Decision 3: Caller-Provided File Paths](#decision-3-caller-provided-file-paths)
 - [Decision 4: Incremental Buffer-Based Weight Loading](#decision-4-incremental-buffer-based-weight-loading)
 - [Decision 5: Batch Processing as Primary Use Case](#decision-5-batch-processing-as-primary-use-case)
 - [Decision 6: Exclusive Run Queue](#decision-6-exclusive-run-queue)
@@ -43,19 +43,18 @@
 
 **Core value:**
 - High-level JavaScript API for embedding generation
-- Peer-to-peer model distribution via Hyperdrive
+- Direct file streaming from disk via `bare-fs` (no download/loader layer)
 - Batch processing for high-throughput use cases
-- Pluggable model weight loaders
 - Vector embeddings for semantic search and similarity
 
 ## Key Features
 
 - **Cross-platform**: macOS, Linux, Windows, iOS, Android
-- **Multiple loaders**: Hyperdrive (P2P), filesystem, custom
+- **Caller-supplied paths**: Application passes absolute file paths; addon streams them from disk
 - **Batch processing**: Process multiple texts in a single forward pass
 - **GPU acceleration**: Metal, Vulkan, OpenCL
 - **Quantized models**: GGUF format (Q2-Q8, 1-bit variants)
-- **Sharded loading**: Automatic split GGUF handling
+- **Sharded loading**: Caller passes every shard + `.tensors.txt` companion; addon streams them in order
 - **Encoder-only models**: Optimized for embedding generation
 
 ## Target Platforms
@@ -72,8 +71,9 @@ Tier 1: Platform targets for which prebuilds are provided as defined by the .git
 
 **Dependencies:**
 - qvac-lib-inference-addon-cpp (≥1.1.2): C++ addon framework
+- @qvac/infer-base: Provides `createJobHandler` and `exclusiveRunQueue` helpers (composition, no base class)
 - qvac-fabric-llm.cpp (≥7248.2.3): Inference engine
-- Bare Runtime (≥1.24.0): JavaScript runtime
+- Bare Runtime (≥1.24.0): JavaScript runtime (provides `bare-fs` for direct file streaming)
 
 ---
 
@@ -95,28 +95,27 @@ graph TB
         WHISPER[whispercpp<br/>STT]
         NMT[nmtcpp<br/>Translation]
     end
-    
+
     subgraph "core libs"
-        BASE["@qvac/infer-base"]
-        DL["@qvac/dl-hyperdrive"]
+        BASE["@qvac/infer-base<br/>(createJobHandler,<br/>exclusiveRunQueue)"]
     end
-    
+
     subgraph "Native Framework"
         ADDON[addon-cpp]
     end
-    
+
     subgraph "Backend"
-        BARE[Bare Runtime]
+        BARE["Bare Runtime<br/>(bare-fs)"]
         LLAMA[llama.cpp]
     end
-    
+
     APP --> EMBED
     EMBED --> BASE
-    EMBED --> DL
     EMBED --> ADDON
+    EMBED --> BARE
     ADDON --> BARE
     ADDON --> LLAMA
-    
+
     style EMBED fill:#e1f5ff,stroke:#0066cc,stroke-width:3px
 ```
 
@@ -127,21 +126,20 @@ graph TB
 
 | Package | Type | Version | Purpose |
 |---------|------|---------|---------|
-| @qvac/infer-base | Framework | ^0.2.2 | Base classes, WeightsProvider, QvacResponse |
-| @qvac/dl-hyperdrive | Peer | ^0.1.0 | P2P model loading |
-| qvac-lib-inference-addon-cpp | Native | ≥1.1.1 | C++ addon framework |
-| llama.cpp | Native | ≥7248.1.0 | Inference engine |
-| Bare Runtime | Runtime | ≥1.24.0 | JavaScript execution |
+| @qvac/infer-base | Framework | ^0.4.0 | `createJobHandler`, `exclusiveRunQueue`, `QvacResponse` helpers (composition, no base class) |
+| qvac-lib-inference-addon-cpp | Native | ≥1.1.2 | C++ addon framework |
+| llama.cpp | Native | ≥7248.2.1 | Inference engine |
+| Bare Runtime | Runtime | ≥1.24.0 | JavaScript execution, `bare-fs`, `bare-path` |
 
 **Integration Points:**
 
 | From | To | Mechanism | Data Format |
 |------|-----|-----------|-------------|
-| JavaScript | GGMLBert | Constructor | args, config objects |
-| GGMLBert | BaseInference | Inheritance | Template method pattern |
+| JavaScript | GGMLBert | Constructor | `{ files, config, logger, opts }` (single object) |
+| GGMLBert | createJobHandler / exclusiveRunQueue | Composition | Function calls |
 | GGMLBert | BertInterface | Composition | Method calls |
+| GGMLBert | bare-fs | `fs.createReadStream(path)` | Raw chunks per shard |
 | BertInterface | C++ Addon | require.addon() | Native binding |
-| WeightsProvider | Data Loader | Interface | Stream protocol |
 
 </details>
 
@@ -151,37 +149,50 @@ graph TB
 
 ### Main Class: GGMLBert
 
+`GGMLBert` is a standalone class (no base class). It composes helpers from `@qvac/infer-base` and talks to the native addon via `BertInterface`. The caller passes all file paths explicitly; there is no downloader, loader, or weights provider.
+
 ```mermaid
 classDiagram
     class GGMLBert {
-        +constructor(args, config)
-        +load(closeLoader, onProgress) Promise~void~
-        +run(text) Promise~QvacResponse~
-        +unload() Promise~void~
-        +downloadWeights(onProgress, opts) Promise~string~
-    }
-    
-    class BaseInference {
-        <<abstract>>
+        +constructor(args: GGMLBertArgs)
         +load() Promise~void~
-        +run() Promise~QvacResponse~
+        +run(text) Promise~QvacResponse~
+        +cancel() Promise~void~
         +unload() Promise~void~
+        +getState() object
     }
-    
+
+    class createJobHandler {
+        <<factory>>
+        +start() QvacResponse
+        +output(data)
+        +end(stats)
+        +fail(error)
+    }
+
+    class exclusiveRunQueue {
+        <<factory>>
+        +run(fn) Promise
+    }
+
     class QvacResponse {
         +await() Promise~Array~
         +cancel() Promise~void~
         +stats object
     }
-    
-    class WeightsProvider {
-        +downloadFiles(files, path, opts) Promise~void~
-        +streamFiles(shards, onChunk, onProgress) Promise~void~
+
+    class BertInterface {
+        +runJob(input) Promise~boolean~
+        +loadWeights(data) Promise
+        +activate() Promise
+        +cancel() Promise
+        +unload() Promise
     }
-    
-    GGMLBert --|> BaseInference
-    GGMLBert *-- WeightsProvider
-    GGMLBert ..> QvacResponse : creates
+
+    GGMLBert *-- createJobHandler : composes
+    GGMLBert *-- exclusiveRunQueue : composes
+    GGMLBert *-- BertInterface : composes
+    createJobHandler ..> QvacResponse : creates
 ```
 
 <details>
@@ -189,20 +200,22 @@ classDiagram
 
 **Component Roles:**
 
-| Class | Responsibility | Lifecycle | Dependencies |
-|-------|----------------|-----------|--------------|
-| GGMLBert | Orchestrate model lifecycle, manage loading/inference | Created by user, persistent | WeightsProvider, BertInterface |
-| BaseInference | Define standard inference API | Abstract base class | None |
-| QvacResponse | Return embedding results | Created per run() call, short-lived | None |
-| WeightsProvider | Abstract model weight loading | Created by GGMLBert | DataLoader |
+| Class / Helper | Responsibility | Lifecycle | Dependencies |
+|----------------|----------------|-----------|--------------|
+| GGMLBert | Standalone class. Orchestrate model lifecycle, stream files from disk, dispatch inference | Created by user, persistent | `createJobHandler`, `exclusiveRunQueue`, `BertInterface`, `bare-fs` |
+| createJobHandler | Factory producing a job handler with `start/output/end/fail` semantics; returns a `QvacResponse` | Created once per GGMLBert | None |
+| exclusiveRunQueue | Factory producing a promise queue that serialises `load()` / `run()` / `unload()` calls | Created once per GGMLBert | None |
+| QvacResponse | Return embedding results and expose `await()`/`cancel()`/`stats` | Created per `run()` call, short-lived | None |
+| BertInterface | JS wrapper around the native addon (`require.addon`) | Created in `_load()`, lives for model lifetime | Native addon |
 
 **Key Relationships:**
 
 | From | To | Type | Purpose |
 |------|-----|------|---------|
-| GGMLBert | BaseInference | Inheritance | Standard QVAC inference API |
-| GGMLBert | WeightsProvider | Composition | Model weight acquisition |
-| GGMLBert | QvacResponse | Creates | Embedding output per inference |
+| GGMLBert | createJobHandler | Composition | Job state machine + response emission |
+| GGMLBert | exclusiveRunQueue | Composition | Serialise concurrent callers |
+| GGMLBert | BertInterface | Composition | Native addon calls |
+| GGMLBert | bare-fs | Direct use | Stream each caller-supplied path into the addon |
 
 </details>
 
@@ -219,53 +232,55 @@ graph TB
     subgraph "Layer 1: JavaScript API"
         APP["Application Code"]
         BERTCLASS["GGMLBert<br/>(index.js)"]
-        BASEINF["BaseInference<br/>(@qvac/infer-base)"]
-        WEIGHTSPR["WeightsProvider<br/>(@qvac/infer-base)"]
+        JOB["createJobHandler<br/>(@qvac/infer-base)"]
+        QUEUE["exclusiveRunQueue<br/>(@qvac/infer-base)"]
         RESPONSE["QvacResponse<br/>(@qvac/infer-base)"]
+        BAREFS["bare-fs<br/>createReadStream"]
     end
-    
+
     subgraph "Layer 2: Bridge"
         BERTIF["BertInterface<br/>(addon.js)"]
         BINDING["require.addon<br/>(binding.js)"]
     end
-    
+
     subgraph "Layer 3: C++ Addon"
         JSINTERFACE["JsInterface<br/>(js-interface/binding.cpp)"]
         ADDON["Addon<BertModel><br/>(addon/Addon.cpp)"]
         WEIGHTSLOAD["WeightsLoader<br/>(addon-cpp)"]
     end
-    
+
     subgraph "Layer 4: Model"
         BERTMODEL["BertModel<br/>(model-interface/BertModel.cpp)"]
         ENCODE["encode_host_f32<br/>encode_host_f32_sequences"]
     end
-    
+
     subgraph "Layer 5: Backend"
         LLAMACPP["llama.cpp"]
         GGML["GGML"]
         GPU["GPU Backends"]
     end
-    
+
     APP --> BERTCLASS
-    BERTCLASS --> BASEINF
-    BERTCLASS --> WEIGHTSPR
+    BERTCLASS --> JOB
+    BERTCLASS --> QUEUE
     BERTCLASS --> BERTIF
-    BERTCLASS -.-> RESPONSE
-    
+    BERTCLASS --> BAREFS
+    JOB -.-> RESPONSE
+
     BERTIF --> BINDING
     BINDING --> JSINTERFACE
-    WEIGHTSPR --> WEIGHTSLOAD
-    
+    BAREFS -. chunks .-> BERTIF
+
     JSINTERFACE --> ADDON
     ADDON --> WEIGHTSLOAD
     ADDON --> BERTMODEL
-    
+
     BERTMODEL --> ENCODE
     ENCODE --> LLAMACPP
-    
+
     LLAMACPP --> GGML
     GGML --> GPU
-    
+
     style BERTCLASS fill:#e1f5ff
     style ADDON fill:#ffe1e1
     style BERTMODEL fill:#ffe1e1
@@ -279,7 +294,7 @@ graph TB
 
 | Layer | Components | Responsibility | Language | Why This Layer |
 |-------|------------|----------------|----------|----------------|
-| 1. JavaScript API | GGMLBert, BaseInference | High-level API, error handling | JS | Ergonomic API for npm consumers |
+| 1. JavaScript API | GGMLBert (standalone class), `createJobHandler`, `exclusiveRunQueue`, `bare-fs` | High-level API, file streaming, job/queue composition | JS | Ergonomic API for npm consumers |
 | 2. Bridge | BertInterface, binding.js | JS↔C++ communication | JS wrapper | Lifecycle management, handle safety |
 | 3. C++ Addon | JsInterface, Addon<T> | Job queue, threading, callbacks | C++ | Performance, native integration |
 | 4. Model | BertModel, encode methods | Inference logic, batch processing | C++ | Direct llama.cpp integration |
@@ -307,7 +322,15 @@ graph TB
 
 #### **GGMLBert (index.js)**
 
-**Responsibility:** Main API class, orchestrates model lifecycle, manages data loaders
+**Responsibility:** Main API class. Standalone (no base class) — uses composition with `createJobHandler` and `exclusiveRunQueue` from `@qvac/infer-base`. Orchestrates the model lifecycle, streams each caller-supplied file path directly from disk via `bare-fs`, and dispatches inference jobs.
+
+**Constructor:** `new GGMLBert({ files, config, logger, opts })` — a single options object.
+- `files.model` — ordered array of absolute paths. Caller is responsible for passing every file the model needs (for sharded GGUF: the `.tensors.txt` companion first, then all `.gguf` shards in numerical order).
+- `config` — llama.cpp hyper-parameters (all string values).
+- `logger` — wrapped in a `QvacLogger`.
+- `opts.stats` — emit runtime stats on the response.
+
+**`load()`** takes no arguments. For single-file models it just activates the addon using the provided path. For sharded models it opens `bare-fs.createReadStream(path)` on each file in order, pipes chunks into `addon.loadWeights({ filename, chunk, completed: false })`, and sends a final `completed: true` marker for each file before calling `addon.activate()`.
 
 **Why JavaScript:**
 - High-level API ergonomics for npm consumers
@@ -355,15 +378,15 @@ graph TB
 
 **Specialization:** Handles variant input (string or vector<string>), merges batch inputs
 
-#### **WeightsProvider (@qvac/infer-base)**
+#### **@qvac/infer-base helpers**
 
-**Responsibility:** Abstracts model weight acquisition
+**Responsibility:** Provide composition primitives used by `GGMLBert`.
 
-**Why JavaScript:**
-- Integrates with data loaders (Hyperdrive, filesystem)
-- Progress tracking and reporting
-- Handles sharded GGUF expansion
-- Streaming chunk delivery
+- `createJobHandler({ cancel })` — returns a job handler exposing `start()` (creates a `QvacResponse`), `output(data)`, `end(stats)`, and `fail(error)`. `GGMLBert` wires the addon's output callback into it.
+- `exclusiveRunQueue()` — returns a function that serialises async callers so at most one `load()` / `run()` / `unload()` body is in flight at a time.
+- `QvacResponse` — the response object returned by `start()`; exposes `await()`, `cancel()`, and `stats`.
+
+There is no `BaseInference` class, no `WeightsProvider`, and no `downloadWeights` method. `GGMLBert` composes these helpers directly; it does not inherit from anything.
 
 #### **BackendSelection (model-interface/BackendSelection.cpp)**
 
@@ -516,53 +539,58 @@ See [qvac-lib-inference-addon-cpp Decision 4: Why Bare Runtime](https://github.c
 
 ---
 
-## Decision 3: Pluggable Data Loader Architecture
+## Decision 3: Caller-Provided File Paths
 
 <details>
 <summary>⚡ TL;DR</summary>
 
-**Chose:** Abstract data loading via WeightsProvider interface  
-**Why:** Support multiple distribution methods (P2P, HTTP, local files, S3)  
-**Cost:** Additional abstraction layer, must implement loader interface
+**Chose:** Caller passes absolute paths to every required file; addon streams them from disk via `bare-fs`
+**Why:** Remove the download/loader abstraction, push distribution concerns up to the application
+**Cost:** Callers must discover and order shard files themselves; no built-in P2P or HTTP loader
 
 </details>
 
 ### Context
 
-Need to load multi-GB model files from various sources:
-- Local filesystem (for offline/development)
-- P2P networks (for privacy/decentralization)
-- HTTP/CDN (for enterprise deployments)
-- Cloud storage (S3, Azure Blob, etc.)
+Earlier versions of this package bundled a `WeightsProvider` abstraction and a `downloadWeights()` entry point that delegated to pluggable data loaders (Hyperdrive, filesystem, etc.). In practice this added an extra abstraction layer, coupled the addon to a specific loader ecosystem, and made sharded model handling implicit.
 
-Different use cases have different distribution requirements. No single distribution method fits all scenarios.
+The SDK and higher-level applications already have their own download, cache, and catalog pipelines. Embedding the loader into the addon was redundant and obscured the real contract between the addon and the model files on disk.
 
 ### Decision
 
-Create a pluggable data loader abstraction (WeightsProvider interface) that decouples model loading from the inference engine, allowing applications to choose their distribution strategy.
+Remove the data loader / `WeightsProvider` / `downloadWeights` surface entirely. The addon now takes an explicit list of absolute file paths at construction time and streams them from disk via `bare-fs.createReadStream` when `load()` is called. Distribution (P2P, HTTP, bundled asset, cache, etc.) is entirely the caller's responsibility.
+
+```js
+const model = new GGMLBert({
+  files: { model: [tensorsTxtPath, shard1, shard2, ...] },
+  config,
+  logger,
+  opts: { stats: true }
+})
+await model.load()
+```
 
 ### Rationale
 
-**Flexibility:**
-- Different users have different distribution needs (privacy vs speed vs simplicity)
-- Enterprises may require HTTP/CDN, privacy users may prefer P2P
-- Development/testing needs local filesystem access
-- No single distribution method fits all use cases
+**Simplicity:**
+- One less abstraction layer inside the addon
+- No runtime dependency on any specific data loader
+- The contract is explicit: "give me the exact file list, in order"
 
 **Separation of Concerns:**
-- Inference engine doesn't need to know about distribution details
-- Model loading is orthogonal to inference logic
-- Easier to test inference separately from data loading
+- Inference engine only cares about bytes on disk
+- Distribution strategy lives where it belongs (SDK / application)
+- Easier to test and reason about model loading
 
-**Extensibility:**
-- Applications can implement custom loaders (S3, IPFS, Torrent, etc.)
-- Can optimize loaders for specific platforms (mobile vs desktop)
-- Future-proof: new distribution methods don't require engine changes
+**Predictability:**
+- Sharded models require the caller to pass every shard and the `.tensors.txt` companion file in numerical order — no hidden discovery
+- No partial loading states caused by implicit shard expansion
 
 ### Trade-offs
-- ✅ Can mock loaders for unit testing inference logic
-- ❌ Additional abstraction complexity vs hardcoding a single method
-- ❌ Applications must choose/implement their loader (no batteries-included default)
+- ✅ Smaller, more focused addon surface
+- ✅ No loader coupling — works with any distribution mechanism
+- ❌ Caller must discover and order sharded files themselves
+- ❌ No built-in progress reporting during the disk-stream phase
 
 ---
 
@@ -571,8 +599,8 @@ Create a pluggable data loader abstraction (WeightsProvider interface) that deco
 <details>
 <summary>⚡ TL;DR</summary>
 
-**Chose:** Buffer-based weight loader using custom std::streambuf over JavaScript ArrayBuffers  
-**Why:** Avoid storage duplication, zero-copy, supports incremental shard-by-shard loading  
+**Chose:** Buffer-based weight loader using custom std::streambuf over JavaScript ArrayBuffers
+**Why:** Zero-copy bridge between `bare-fs` chunks and llama.cpp, supports incremental shard-by-shard loading
 **Cost:** Complex streambuf implementation, JavaScript reference lifecycle management
 
 </details>
@@ -583,37 +611,30 @@ ML models can be gigabytes in size. llama.cpp expects either:
 1. A file descriptor (simple but requires file on disk)
 2. A buffer (via `std::streambuf` interface)
 
-**Problem:** We need to load directly from Hyperdrive (P2P storage) without duplicating storage by saving to disk first.
-
-Alternative approach would be: download from Hyperdrive → save to temp file → pass file descriptor to llama.cpp. But this doubles storage requirements (Hyperdrive cache + temp file).
+**Problem:** JavaScript reads files chunk-by-chunk via `bare-fs.createReadStream`. We want to feed those chunks into llama.cpp without first materialising the entire model in a single contiguous buffer (which would double RAM usage for multi-GB models).
 
 ### Decision
 
-Implement custom `std::streambuf` over JavaScript-owned ArrayBuffers with incremental shard-by-shard loading, as provided by `qvac-lib-inference-addon-cpp` framework. This allows feeding buffer chunks from any source (Hyperdrive, HTTP, local files) directly to llama.cpp without intermediate file storage.
-
-JavaScript sends model data as buffer chunks, C++ wraps them in a `std::streambuf`, enabling llama.cpp to load sharded models incrementally with zero-copy access to JavaScript memory.
+Use the custom `std::streambuf` over JavaScript-owned ArrayBuffers provided by `qvac-lib-inference-addon-cpp`. `GGMLBert._streamShards()` opens `bare-fs.createReadStream(path)` on each caller-supplied file, forwards each chunk into `addon.loadWeights({ filename, chunk, completed: false })`, and sends a final `{ completed: true }` marker per file. The addon appends each chunk as a blob in the streambuf; llama.cpp then reads across blobs without allocating a contiguous buffer.
 
 ### Rationale
 
-**Avoid Storage Duplication:**
-- Load directly from Hyperdrive streams without saving to disk first
-- No temporary files consuming additional storage
-- Critical for mobile devices with limited storage
-- Hyperdrive data stays in its cache, not duplicated
+**Memory Efficiency:**
+- No need to buffer the entire model in JS before handing it to llama.cpp
+- C++ reads directly from JavaScript ArrayBuffer memory — no memcpy of multi-GB model files
+- Works naturally with the chunked output of `bare-fs.createReadStream`
 
-**Zero-Copy:**
-- C++ reads directly from JavaScript ArrayBuffer memory
-- No memcpy of multi-GB model files
-- Further reduces memory footprint
+**Sharded Loading:**
+- Each file is delivered as a sequence of `{ filename, chunk, completed }` messages
+- llama.cpp parses the GGUF index and loads tensors lazily across all shards
 
-**Source Flexibility:**
-- Works with any data source (Hyperdrive, HTTP, filesystem)
-- Data loader provides buffer chunks, streambuf wrapper handles delivery to llama.cpp
-- Same incremental loading path for all distribution methods
-- Supports sharded GGUF files with incremental tensor loading
+**Uniform Path:**
+- The same streambuf path is used whether the caller has one file or many
+- The addon does not care where the bytes came from — it only sees chunks and filenames
 
 ### Trade-offs
-- ✅ Can report loading progress per chunk
+- ✅ No contiguous multi-GB buffers in JS or C++
+- ✅ Same path for single-file and sharded models
 - ❌ Complex streambuf implementation with seeking across blobs
 - ❌ Must keep JS buffers alive during load, defer cleanup to correct thread
 - ❌ Seeking overhead O(N) across N blobs (acceptable, rarely needed)
@@ -687,8 +708,8 @@ Support batch processing natively by accepting both single strings and arrays of
 <details>
 <summary>⚡ TL;DR</summary>
 
-**Chose:** Promise-based exclusive run queue using `_withExclusiveRun()` wrapper  
-**Why:** Ensure atomic multi-step operations complete without interruption  
+**Chose:** Compose `exclusiveRunQueue()` from `@qvac/infer-base` to serialize public API entrypoints
+**Why:** Ensure atomic multi-step operations complete without interruption
 **Cost:** One inference request at a time per model instance
 
 </details>
@@ -699,9 +720,9 @@ With addon-cpp ≥1.1.2, a single inference request is one `runJob({ type, input
 
 ### Decision
 
-Implement JavaScript-level promise queue using `_withExclusiveRun()` helper so that only one `run()` (and thus one `runJob()`) is in progress at a time. This avoids races and ensures the addon’s single-job contract is respected.
+Use the `exclusiveRunQueue()` helper from `@qvac/infer-base@^0.4.0`. The constructor stores the queue as `this._run`, and `load()`, `run()`, and `unload()` wrap their bodies with `this._run(() => …)`. This replaces the previous `BaseInference._withExclusiveRun()` template-method approach with a small composable utility, in line with the loader-removal refactor that dropped `BaseInference` inheritance.
 
-**Note:** C++ level thread safety (mutex-protected job queue) and single-job semantics (runJob, cancel waits until stopped) are handled by the addon-cpp (≥1.1.1) framework.
+**Note:** C++ level thread safety (mutex-protected job queue) and single-job semantics (runJob, cancel waits until stopped) are handled by the addon-cpp (≥1.1.2) framework.
 
 ### Rationale
 
@@ -779,4 +800,4 @@ Provide hand-written TypeScript definitions in `index.d.ts` alongside JavaScript
 **Related Document:**
 - [data-flows-detailed.md](data-flows-detailed.md) - Detailed data flow diagrams and sequences
 
-**Last Updated:** 2026-02-17
+**Last Updated:** 2026-04-16

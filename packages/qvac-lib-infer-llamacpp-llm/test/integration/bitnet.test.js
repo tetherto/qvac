@@ -1,7 +1,7 @@
 'use strict'
 
 const test = require('brittle')
-const FilesystemDL = require('@qvac/dl-filesystem')
+const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
 const { ensureModel } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
@@ -32,7 +32,7 @@ test('bitnet model can run simple inference', { timeout: 600_000, skip: !isAndro
     downloadUrl: BITNET_MODEL.url
   })
 
-  const loader = new FilesystemDL({ dirPath })
+  const modelPath = path.join(dirPath, modelName)
   const specLogger = attachSpecLogger({ forwardToConsole: true })
 
   const config = {
@@ -44,12 +44,11 @@ test('bitnet model can run simple inference', { timeout: 600_000, skip: !isAndro
   }
 
   const addon = new LlmLlamacpp({
-    loader,
-    modelName,
-    diskPath: dirPath,
+    files: { model: [modelPath] },
+    config,
     logger: console,
     opts: { stats: true }
-  }, config)
+  })
 
   try {
     await addon.load()
@@ -60,7 +59,6 @@ test('bitnet model can run simple inference', { timeout: 600_000, skip: !isAndro
     t.comment(`BitNet output: "${output}"`)
   } finally {
     await addon.unload().catch(() => { })
-    await loader.close().catch(() => { })
     specLogger.release()
   }
 })

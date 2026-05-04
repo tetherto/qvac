@@ -28,6 +28,14 @@ on:
         required: false
         type: string
         default: "packages/qvac-lib-infer-onnx-tts"
+      tts_integration_profile:
+        description: "TTS integration profile (PR runs always use short)."
+        required: false
+        type: choice
+        default: "short"
+        options:
+          - short
+          - long
 
   workflow_call:
     inputs:
@@ -45,6 +53,10 @@ on:
         required: false
         type: string
         default: "packages/qvac-lib-infer-onnx-tts"
+      tts_integration_profile:
+        required: false
+        type: string
+        default: "short"
 
 permissions:
   contents: read
@@ -82,6 +94,7 @@ jobs:
       head_sha: ${{ steps.ctx.outputs.head_sha }}
       run_verify: ${{ steps.ctx.outputs.run_verify }}
       workdir: ${{ steps.ctx.outputs.workdir }}
+      tts_integration_profile: ${{ steps.ctx.outputs.tts_integration_profile }}
     steps:
       - id: ctx
         shell: bash
@@ -91,6 +104,7 @@ jobs:
           INPUT_REPO: ${{ inputs.repository }}
           INPUT_REF: ${{ inputs.ref }}
           INPUT_VERIFY: ${{ inputs.run_verify }}
+          INPUT_TTS_INTEGRATION_PROFILE: ${{ inputs.tts_integration_profile || 'short' }}
           REPO: ${{ github.repository }}
           REF_NAME: ${{ github.ref_name }}
           SHA: ${{ github.sha }}
@@ -117,12 +131,19 @@ jobs:
             head_sha="$HEAD_SHA"
           fi
 
+          if [[ "$EVENT_NAME" == "pull_request_target" ]]; then
+            tts_integration_profile="short"
+          else
+            tts_integration_profile="${INPUT_TTS_INTEGRATION_PROFILE:-short}"
+          fi
+
           echo "repository=$repo" >> "$GITHUB_OUTPUT"
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
           echo "base_sha=$base_sha" >> "$GITHUB_OUTPUT"
           echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
           echo "run_verify=$run_verify" >> "$GITHUB_OUTPUT"
           echo "workdir=$workdir" >> "$GITHUB_OUTPUT"
+          echo "tts_integration_profile=$tts_integration_profile" >> "$GITHUB_OUTPUT"
 
           echo "Resolved:"
           echo "  repo=$repo"
@@ -131,14 +152,20 @@ jobs:
           echo "  head_sha=$head_sha"
           echo "  run_verify=$run_verify"
           echo "  workdir=$workdir"
+          echo "  tts_integration_profile=$tts_integration_profile"
 
   sanity-checks:
     if: needs.authorize.outputs.allowed == 'true'
     needs: [authorize, context]
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+
       - name: Run Sanity checks
-        uses: tetherto/oss-actions/.github/actions/sanity-checks@4c64bed91fc8eba3a201adb1495e61b4c1a2246d
+        uses: ./.github/actions/sanity-checks
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
@@ -148,7 +175,7 @@ jobs:
   cpp-lint:
     needs: [authorize, context]
     if: needs.authorize.outputs.allowed == 'true'
-    uses: tetherto/oss-actions/.github/workflows/cpp-lint.yaml@v1.1.0
+    uses: ./.github/workflows/cpp-lint.yaml
     secrets: inherit
     with:
       sha: ${{ needs.context.outputs.base_sha }}
@@ -200,6 +227,7 @@ jobs:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
       workdir: ${{ needs.context.outputs.workdir }}
+      tts_integration_profile: ${{ needs.context.outputs.tts_integration_profile }}
 
   run-mobile-integration-tests:
     permissions:
@@ -228,7 +256,7 @@ jobs:
         run-mobile-integration-tests,
       ]
     if: always()
-    uses: tetherto/oss-actions/.github/workflows/public-pr.yml@v1.1.0
+    uses: ./.github/workflows/public-pr.yml
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.cpp-tests-coverage.result == 'success' || needs.cpp-tests-coverage.result == 'skipped') }}
       build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' }}

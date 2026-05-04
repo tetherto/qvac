@@ -59,11 +59,36 @@ function hasBergamotModelFiles (dir) {
 // Download via Firefox Remote Settings CDN
 // ============================================================================
 
+// Minimum plausible size (bytes) for a completed Bergamot artifact.
+// Real files are 800KB+ (vocab) to 30MB+ (intgemm). Anything under 1KB is
+// either a stub or a truncated/failed download and should be re-fetched.
+const MIN_VALID_FILE_BYTES = 1024
+
+/**
+ * Returns true if `destPath` already exists as a non-trivially-sized file.
+ * Used to skip re-downloads across invocations (per pivot sub-test) and
+ * across duplicate records within a single invocation (Firefox's records
+ * collection has production + dev variants sharing the same filename).
+ */
+function _isDownloadedFile (destPath) {
+  try {
+    const stat = fs.statSync(destPath)
+    return stat.isFile() && stat.size >= MIN_VALID_FILE_BYTES
+  } catch {
+    return false
+  }
+}
+
 /**
  * Downloads a single file from a URL to a local path.
  * Follows redirects via bare-fetch.
+ * Skips the fetch entirely if the file already exists with non-trivial size.
  */
 async function downloadFile (url, destPath) {
+  if (_isDownloadedFile(destPath)) {
+    return fs.statSync(destPath).size
+  }
+
   const fetch = require('bare-fetch')
 
   const response = await fetch(url, { redirect: 'follow', follow: 5 })
@@ -102,13 +127,30 @@ async function downloadBergamotFromFirefox (srcLang, dstLang, destDir) {
 
   fs.mkdirSync(destDir, { recursive: true })
 
+  // Firefox's translations-models collection exposes multiple variants per
+  // language pair (production + dev/beta), several of which share the same
+  // `filename`. Without dedup we'd download (and overwrite) the same file
+  // 2–3× per invocation — a real case observed on Samsung Device Farm: a
+  // `runPivotBergamot` test spent 20 min redundantly re-fetching ~30MB
+  // .intgemm variants and timed out. Process one filename per invocation,
+  // taking the first matching record.
+  const seenFilenames = new Set()
   for (const record of pairRecords) {
     const att = record.attachment
     if (!att || !att.location) continue
 
     const filename = record.name || att.filename || path.basename(att.location)
+    if (seenFilenames.has(filename)) continue
+    seenFilenames.add(filename)
+
     const url = `${FIREFOX_ATTACHMENT_BASE}/${att.location}`
     const dest = path.join(destDir, filename)
+
+    if (_isDownloadedFile(dest)) {
+      const existingMB = fs.statSync(dest).size / 1024 / 1024
+      console.log(`[bergamot-fetcher]   ✓ ${filename} (${existingMB.toFixed(1)}MB, cached)`)
+      continue
+    }
 
     console.log(`[bergamot-fetcher]   Downloading ${filename}...`)
     const bytes = await downloadFile(url, dest)

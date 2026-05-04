@@ -57,7 +57,7 @@ jobs:
   delete-npm-versions-trigger:
     permissions:
       packages: write
-    uses: tetherto/oss-actions/.github/workflows/public-delete-npm-versions.yml@v1.1.0
+    uses: ./.github/workflows/public-delete-npm-versions.yml
     with:
       version: ${{ inputs.version }}
       pr-number: ${{ github.event_name == 'pull_request' && github.event.pull_request.number || inputs.pr-number }}

@@ -1,0 +1,58 @@
+---
+description: E2E test suite policy for packages/sdk — impact checks on SDK changes, executor placement, smoke-suite policy, rebuild-on-change
+globs: packages/sdk/**
+alwaysApply: false
+---
+
+# SDK e2e test suite (`packages/sdk/tests-qvac`)
+
+## When editing SDK source (`packages/sdk/**` outside `tests-qvac/`)
+
+- **Evaluate e2e impact before finishing.** Check whether existing definitions or executors under `packages/sdk/tests-qvac/tests/` need updates: new params, changed expectations, new `testId`s, suite tagging. Call it out in the PR description.
+- **On SDK API surface or model constant changes:** rebuild the tests package to catch type breaks and
+  import failures early. If you've already rebuilt the SDK, run `npm run install:build`; otherwise run
+  `npm run install:build:full` (rebuilds SDK and tests-qvac). Adapt existing tests or add new ones as
+  needed. See [tests-qvac/README.md](../../../packages/sdk/tests-qvac/README.md) "Rebuilding after changes"
+  for the full decision table including mobile app rebuild rules.
+
+## Adding new e2e tests
+
+### Definitions
+
+- Live in `packages/sdk/tests-qvac/tests/<feature>-tests.ts`.
+- MUST be aggregated in `packages/sdk/tests-qvac/tests/test-definitions.ts`.
+
+### Executor placement decision tree
+
+1. Pure SDK API usage (no Node stdlib, no RN APIs) → `tests/shared/executors/`. Runs on desktop and mobile.
+2. Needs `node:fs`, `node:path`, `process.cwd()`, or other Node stdlib → `tests/desktop/executors/`.
+3. Needs React Native platform APIs or bundled mobile assets → `tests/mobile/executors/`.
+
+**Never import `node:*` modules from `tests/shared/` or `tests/mobile/`** — it will break the mobile/Bare bundler.
+
+Register new executors in the relevant consumer entry: `tests/desktop/consumer.ts` and/or `tests/mobile/consumer.ts`.
+
+### Mobile platform skips
+
+`SkipExecutor` entries at the top of `tests/mobile/consumer.ts`, before real executors (first match wins).
+
+### Assets
+
+New assets go under `tests-qvac/assets/`. Update `tests-qvac/qvac-test.config.js` `consumers.mobile.assets.patterns` if the new files aren't covered by existing globs.
+
+## Smoke suite policy
+
+- Only tag a new test with `suites: ["smoke"]` when the feature has **no existing smoke coverage**.
+- Cap at **1-2** smoke tests per feature. Pick the most representative, fastest, least-flaky one.
+- Before tagging, verify the test is stable — predictable pass, not flaky, reasonably performant — on **both desktop and mobile**.
+- Do not inflate smoke for features already covered. Smoke must stay focused and fast.
+
+## Local iteration before pushing
+
+```bash
+cd packages/sdk/tests-qvac
+npm run install:build
+npx qvac-test run:local:desktop --filter <prefix>
+```
+
+See [tests-qvac/README.md](../../../packages/sdk/tests-qvac/README.md) for full local-run instructions and CI trigger labels.

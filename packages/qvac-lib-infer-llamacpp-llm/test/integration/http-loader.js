@@ -1,31 +1,32 @@
 'use strict'
 
 const https = require('bare-https')
-const BaseDL = require('@qvac/dl-base')
 
 /**
- * A minimal HTTP/HTTPS loader that implements the BaseDL interface.
- * Fetches model files from a remote base URL, following redirects.
+ * Minimal HTTP/HTTPS streamer used by the sharded-model integration test
+ * to download a small public sharded GGUF before constructing the addon.
+ *
+ * Standalone — does not extend any base loader class. The package no
+ * longer depends on `@qvac/dl-base` after the loader-removal refactor;
+ * this helper exists solely so the sharded model-loading test can fetch
+ * shard files without pulling a heavyweight loader implementation back
+ * into devDependencies.
+ *
+ * Only the surface used by `model-loading.test.js` is implemented:
+ *   - `new HttpDL({ baseUrl })`
+ *   - `getStream(filename)` — returns a Bare-https response stream that
+ *     can be piped into `fs.createWriteStream`.
+ *   - `close()` — destroys any in-flight streams the caller did not
+ *     consume to completion.
  */
-class HttpDL extends BaseDL {
+class HttpDL {
   constructor (opts) {
-    super(opts)
-
     if (!opts || !opts.baseUrl) {
       throw new Error('HttpDL requires a baseUrl option')
     }
 
     this.baseUrl = opts.baseUrl.endsWith('/') ? opts.baseUrl : opts.baseUrl + '/'
     this._activeStreams = new Set()
-  }
-
-  /**
-   * Return the Content-Length of a remote file via an HTTP HEAD request.
-   * @param {string} filename
-   * @returns {Promise<number>} byte size
-   */
-  async getFileSize (filename) {
-    return this._request('HEAD', this.baseUrl + filename)
   }
 
   /**
@@ -44,7 +45,10 @@ class HttpDL extends BaseDL {
     return response
   }
 
-  async _close () {
+  /**
+   * Destroy any tracked streams that have not finished on their own.
+   */
+  async close () {
     for (const stream of this._activeStreams) {
       stream.destroy()
     }
@@ -73,21 +77,12 @@ class HttpDL extends BaseDL {
           return
         }
 
-        if (method === 'HEAD') {
-          response.resume()
-          resolve(parseInt(response.headers['content-length'] || '0', 10))
-        } else {
-          resolve(response)
-        }
+        resolve(response)
       })
 
       req.on('error', reject)
       req.end()
     })
-  }
-
-  async list () {
-    throw new Error('HttpDL does not support list()')
   }
 }
 

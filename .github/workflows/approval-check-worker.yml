@@ -1,0 +1,420 @@
+name: Tier-based Approval Check
+
+on:
+  workflow_call:
+    inputs:
+      pr_number:
+        required: true
+        type: number
+        description: 'PR number from dispatch payload'
+      pr_sha:
+        required: true
+        type: string
+        description: 'PR SHA from dispatch payload'
+      trigger_event:
+        required: false
+        type: string
+        default: 'repository_dispatch'
+        description: 'Original trigger event'
+    secrets:
+      pat_token:
+        required: true
+
+jobs:
+  check-approvals:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      statuses: write
+      issues: write
+    steps:
+      - name: Checkout calling repository
+        uses: actions/checkout@v4
+        with:
+          path: 'calling-repo'
+
+      - name: Check PR approval requirements
+        uses: actions/github-script@v7
+        env:
+          PAT_TOKEN: ${{ secrets.pat_token }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            console.log('triggered')
+            const prNumber = ${{ inputs.pr_number }};
+            const prSha = '${{ inputs.pr_sha }}';
+            // const triggerEvent = '${{ inputs.trigger_event }}';
+
+            // console.log(`Checking approvals for PR #${prNumber} (triggered by: ${triggerEvent})`);
+            console.log(`Checking approvals for PR #${prNumber}`);
+            const mySecret = process.env.PAT_TOKEN;
+            // const core = require('@actions/core');
+            const teamClient = new github.constructor({ auth: process.env.PAT_TOKEN });
+
+            const fs = require('fs');
+            const path = require('path');
+
+            function parseMultipleTeams(content) {
+              try {
+                // Find the line starting with * (global pattern)
+                const lines = content.split("\n");
+                const globalLine = lines.find((line) => line.trim().startsWith("* @"));
+
+                if (!globalLine) {
+                  return null;
+                }
+
+                console.log("Global line found:", globalLine);
+
+                // Extract all team mentions from the line
+                // Regex to match @org/team-name pattern
+                const teamMatches = globalLine.match(/@[\w-]+\/([\w-]+)/g);
+
+                if (!teamMatches) {
+                  return null;
+                }
+
+                // Extract just the team names (without @org/ prefix)
+                const teamNames = teamMatches.map((match) => {
+                  const parts = match.split("/");
+                  return parts[1]; // Return just the team name part
+                });
+
+                console.log("Extracted team names:", teamNames);
+                return teamNames;
+              } catch (error) {
+                console.log("Error parsing teams:", error);
+                return null;
+              }
+            }
+
+            async function getRepoOwningTeam(github, context) {
+              console.log("Fetching owner name");
+              try {
+                // Read CODEOWNERS file directly from checkout
+                const codeownersPath = path.join(process.cwd(), 'calling-repo', '.github', 'CODEOWNERS');
+                console.log('CODEOWNERS path:', codeownersPath);
+
+                // Check if file exists
+                if (!fs.existsSync(codeownersPath)) {
+                  return null;
+                }
+
+                // Read file content
+                const content = fs.readFileSync(codeownersPath, 'utf8');
+                console.log(content);
+                const teams = parseMultipleTeams(content);
+                console.log("Parsed teams:", teams);
+
+                return teams;
+              } catch (error) {
+                console.log("Could not read CODEOWNERS file");
+                console.log(`error: ${error}`);
+                return null;
+              }
+            }
+
+            async function getUserTeams(github, context, username, teamsToCheck = []) {
+              const userTeams = [];
+
+              // If no specific teams provided, get all org teams first
+              if (teamsToCheck.length === 0) {
+                return [];
+              }
+
+              // Check membership in each team
+              for (const teamSlug of teamsToCheck) {
+                try {
+                  const { data: membership } = await teamClient.rest.teams.getMembershipForUserInOrg({
+                    org: context.repo.owner,
+                    team_slug: teamSlug,
+                    username: username
+                  });
+
+                  if (membership.state === 'active') {
+                    userTeams.push(teamSlug);
+                  }
+                } catch (error) {
+                  // User is not a member or team doesn't exist
+                  console.log(error)
+                  continue;
+                }
+              }
+
+              return userTeams;
+            }
+
+            async function checkApprovals(github, context, prNumber) {
+              const { data: pr } = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: prNumber,
+              });
+
+              const { data: reviews } = await github.rest.pulls.listReviews({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: prNumber,
+                per_page: 100,
+              });
+
+              const repoOwningTeam = await getRepoOwningTeam(github, context);
+
+              const repoOwnerTeams = typeof repoOwningTeam === "string"
+              ? repoOwningTeam.split(",").map(s => s.trim()).filter(Boolean)
+              : (Array.isArray(repoOwningTeam) ? repoOwningTeam : []);
+
+              console.log(`Repo owner team: ${repoOwnerTeams}`);
+
+              const teamLeads = ["ai-runtime-merge"];
+              const management = ["ai-runtime-merge-mgmt"];
+
+              const teamsToCheck = ["ai-runtime-merge", "ai-runtime-merge-mgmt", ...repoOwnerTeams]
+
+              let teamMemberApprovals = 0;
+              let teamLeadApprovals = 0;
+              let managementApprovals = 0;
+
+              const latestReviews = {};
+
+              reviews.forEach((review) => {
+                console.log(`Reviewer info: ${review}`)
+                const reviewer = review.user.login;
+                console.log(`reviewer: ${reviewer}`);
+                if (
+                  !latestReviews[reviewer] ||
+                  review.submitted_at > latestReviews[reviewer].submitted_at
+                ) {
+                  latestReviews[reviewer] = review;
+                }
+              });
+
+              const filteredReviews = Object.values(latestReviews).filter(
+                (review) => review.state === "APPROVED"
+              );
+
+              const teamResults = await Promise.all(
+                filteredReviews.map(async (review) => {
+                  const reviewer = review.user.login;
+                  const userTeams = await getUserTeams(github, context, reviewer, teamsToCheck);
+
+                  console.log(`${reviewer}: ${userTeams}`);
+
+                  let isManagement = false;
+                  let isTeamLead = false;
+                  let isRepoOwner = false;
+
+                  isManagement = userTeams.some((team) => management.includes(team));
+                  if (!isManagement) {
+                    isTeamLead = userTeams.some((team) => teamLeads.includes(team));
+                  }
+
+                  return {
+                    isManagement: userTeams.some((team) => management.includes(team)),
+                    isTeamLead: userTeams.some((team) => teamLeads.includes(team)),
+                    isRepoOwner: repoOwnerTeams.length > 0 && userTeams.some(t => repoOwnerTeams.includes(t)),
+                  };
+                })
+              );
+
+              // Process results
+              teamResults.forEach((result) => {
+                if (result.isManagement) {
+                  managementApprovals++;
+                } else if (result.isTeamLead) {
+                  teamLeadApprovals++;
+                } else if (result.isRepoOwner) {
+                  teamMemberApprovals++;
+                }
+              });
+
+              return {
+                repoOwningTeam,
+                teamMemberApprovals,
+                teamLeadApprovals,
+                managementApprovals,
+                pr,
+              };
+            }
+
+            function checkTierRequirements(
+              github,
+              context,
+              approvals,
+              tier,
+              prNumber
+            ) {
+              const { teamMemberApprovals, teamLeadApprovals, managementApprovals } = approvals;
+
+              const bypassMgmt = managementApprovals >= 2;                       // global bypass
+              // Tier 2 bypass if 2+ TL AND 1+ Mgmt
+              const bypassTL =
+                (tier === "tier1"  && teamLeadApprovals >= 2) ||
+                (tier === "tier2"  && teamLeadApprovals >= 2 && managementApprovals >= 1);
+              const bypass = bypassMgmt || bypassTL;
+
+              const bypassReason = bypassMgmt
+                ? "2+ Management approvals"
+                : (bypassTL
+                    ? (tier === "tier1"
+                        ? "2+ Team Lead approvals (Tier 1 exception)"
+                        : "2+ Team Lead approvals + 1+ Management (Tier 2 exception)")
+                    : "");
+
+              let requirementsMet = false;
+              let statusMessage = "";
+
+              if (bypass) {
+                requirementsMet = true;
+                statusMessage = `✅ Bypass: ${bypassReason} — PR is ready to merge regardless of tier.`;
+              } else if (tier === "tier1") {
+                const tlOrMgmtApprovals = teamLeadApprovals + managementApprovals;
+                requirementsMet = (teamMemberApprovals >= 1) && (tlOrMgmtApprovals >= 1);
+                statusMessage = requirementsMet
+                  ? `✅ Tier 1 requirements met`
+                  : `❌ Tier 1 requirements not met. Need: 1 Team Member (${teamMemberApprovals}/1) + 1 TL/Management (${tlOrMgmtApprovals}/1)`;
+              } else if (tier === "tier2") {
+                requirementsMet = (teamMemberApprovals >= 1) && (teamLeadApprovals >= 1) && (managementApprovals >= 1);
+                statusMessage = requirementsMet
+                  ? `✅ Tier 2 requirements met`
+                  : `❌ Tier 2 requirements not met. Need: 1 Team Member (${teamMemberApprovals}/1) + 1 TL (${teamLeadApprovals}/1) + 1 Management (${managementApprovals}/1)`;
+              }
+
+              comment(
+                github,
+                context,
+                requirementsMet,
+                statusMessage,
+                approvals,
+                tier,
+                prNumber,
+                bypass ? bypassReason : null
+              );
+              return { requirementsMet, statusMessage };
+            }
+
+            async function comment(
+              github,
+              context,
+              requirementsMet,
+              statusMessage,
+              approvals,
+              tier,
+              prNumber,
+              bypassReason
+            ) {
+              console.log(`\nStatus: ${statusMessage}`);
+
+              const { teamMemberApprovals, teamLeadApprovals, managementApprovals } = approvals;
+
+              const tlOrMgmtApprovals = teamLeadApprovals + managementApprovals;
+
+              console.log(`teamMemberApprovals: ${teamMemberApprovals}`);
+              console.log(`teamLeadApprovals: ${teamLeadApprovals}`);
+              console.log(`managementApprovals: ${managementApprovals}`);
+
+              // not sure what impact this is bringing
+              // Create or update status check
+              const state = requirementsMet ? "success" : "failure";
+
+              console.log(`\n=== DEBUGGING COMMENT FUNCTION ===`);
+              console.log(`PR Number: ${prNumber} (type: ${typeof prNumber})`);
+              console.log(`Repository: ${context.repo.owner}/${context.repo.repo}`);
+
+              // Add a comment explaining the requirements if not met
+              if (1) {
+                const existingComments = await github.rest.issues.listComments({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                });
+
+                console.log(existingComments.data);
+
+                const botComment = existingComments.data.find(
+                  (comment) =>
+                    comment.user.login === "github-actions[bot]" &&
+                    comment.body.includes("Tier-based Approval Status")
+                );
+
+                const baseRequirements =
+                    tier === "tier1"
+                      ? `- 1 Team Member approval ${teamMemberApprovals >= 1 ? "✅" : "❌"} (${teamMemberApprovals}/1)
+                - 1 Team Lead OR Management approval ${tlOrMgmtApprovals >= 1 ? "✅" : "❌"} (${teamLeadApprovals + managementApprovals}/1)`
+                      : `- 1 Team Member approval ${teamMemberApprovals >= 1 ? "✅" : "❌"} (${teamMemberApprovals}/1)
+                - 1 Team Lead approval ${teamLeadApprovals >= 1 ? "✅" : "❌"} (${teamLeadApprovals}/1)
+                - 1 Management approval ${managementApprovals >= 1 ? "✅" : "❌"} (${managementApprovals}/1)`;
+
+                const bypassSection = bypassReason
+                  ? `**Bypass rule:** Triggered (${bypassReason}). This PR is approved regardless of tier.`
+                  : "";
+
+                const commentBody = `## Tier-based Approval Status
+                            
+                **PR Tier:** ${tier.toUpperCase()}
+
+                **Current Status:** ${requirementsMet ? "✅ APPROVED" : "❌ PENDING"}
+
+                **Requirements:**
+                ${baseRequirements}
+
+                ${bypassSection}
+
+                ---
+                *This comment is automatically updated when reviews change.*`;
+
+                console.log(`${commentBody}`);
+                console.log(`botComment: ${botComment}`);
+
+                if (botComment) {
+                  await github.rest.issues.updateComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    comment_id: botComment.id,
+                    body: commentBody,
+                  });
+                } else {
+                  await github.rest.issues.createComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: prNumber,
+                    body: commentBody,
+                  });
+                }
+              }
+            }
+            
+            const approvals = await checkApprovals(github, context, prNumber);
+
+            // Get PR labels
+            const labels = approvals.pr.labels.map(label => label.name);
+
+            // Determine tier - default to tier1 if no label
+            let tier = 'tier1';
+            if (labels.includes('tier2')) {
+              tier = 'tier2';
+            }
+
+            console.log(`PR #${prNumber} is classified as: ${tier}`);
+            console.log(`PR Labels: ${labels.join(', ')}`);
+
+            // Check requirements
+            const result = checkTierRequirements(github, context, approvals, tier, prNumber);
+            
+            console.log(`Repository: ${approvals.repoOwningTeam}`);
+            console.log(result.statusMessage);
+
+            // Create status check on the correct commit
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: prSha,
+              state: result.requirementsMet ? 'success' : 'failure',
+              description: result.statusMessage,
+              context: 'Tier-based Approval Check'
+            });
+            
+            if (!result.requirementsMet) {
+              core.setFailed(result.statusMessage);
+            }

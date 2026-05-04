@@ -40,7 +40,6 @@ async function run () {
   const lavasrDir = path.join(modelsDir, 'lavasr')
   const rLavasr = await ensureLavaSRModels({ targetDir: lavasrDir })
   if (!rLavasr.success) errors.push('LavaSR')
-  }
 
   if (errors.length) {
     const e = new Error(`Model download failed: ${errors.join(', ')}`)

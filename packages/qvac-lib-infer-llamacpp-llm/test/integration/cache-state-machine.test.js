@@ -3,7 +3,6 @@
 const test = require('brittle')
 const path = require('bare-path')
 const fs = require('bare-fs')
-const FilesystemDL = require('@qvac/dl-filesystem')
 const LlmLlamacpp = require('../../index.js')
 const { ensureModel } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
@@ -92,7 +91,7 @@ async function setupModel (t, overrides = {}) {
     downloadUrl: DEFAULT_MODEL.url
   })
 
-  const loader = new FilesystemDL({ dirPath })
+  const modelPath = path.join(dirPath, modelName)
   const config = { ...BASE_CONFIG, ...overrides }
   const specLogger = attachSpecLogger({ forwardToConsole: true })
   let loggerReleased = false
@@ -103,24 +102,21 @@ async function setupModel (t, overrides = {}) {
   }
 
   const model = new LlmLlamacpp({
-    loader,
-    modelName,
-    diskPath: dirPath,
+    files: { model: [modelPath] },
+    config,
     logger: console,
     opts: { stats: true }
-  }, config)
+  })
 
   try {
     await model.load()
   } catch (err) {
     releaseLogger()
-    await loader.close().catch(() => { })
     throw err
   }
 
   t.teardown(async () => {
     await model.unload().catch(() => { })
-    await loader.close().catch(() => { })
     releaseLogger()
   })
 
@@ -477,4 +473,51 @@ test('Options: saveCacheToDisk true with no cacheKey is a no-op', { timeout: 600
   const { model } = await setupModel(t)
   const stats = await runAndCollectStats(model, [...BASE_PROMPT], { saveCacheToDisk: true })
   t.is(stats.CacheTokens, 0, 'no cacheKey means no cache even with saveCacheToDisk: true')
+})
+
+test('Options: prefill with saveCacheToDisk persists cache file', { timeout: 600_000 }, async t => {
+  const { model, dirPath } = await setupModel(t, { n_predict: '256', ctx_size: '4096' })
+  const sessionName = path.join(dirPath, 'opts-prefill-save.bin')
+
+  const stats = await runAndCollectStats(model, [SYSTEM_MESSAGE], {
+    cacheKey: sessionName,
+    saveCacheToDisk: true,
+    prefill: true
+  })
+
+  t.is(stats.generatedTokens, 0, 'prefill reports zero generated tokens')
+  t.ok(stats.CacheTokens > 0, 'prefill ingests prompt into cache')
+  t.ok(fs.existsSync(sessionName), 'prefill + saveCacheToDisk writes cache file to disk')
+  t.ok(fs.statSync(sessionName).size > 0, 'persisted prefill cache file is non-empty')
+})
+
+test('Options: prefilled cache primes a follow-up conversation', { timeout: 600_000 }, async t => {
+  const { model, dirPath } = await setupModel(t, { n_predict: '256', ctx_size: '4096' })
+  const sessionName = path.join(dirPath, 'opts-prefill-followup.bin')
+
+  // Prime the cache once with the system prompt — the typical "warm-up"
+  // performed once per session before any user turns.
+  const primeStats = await runAndCollectStats(model, [SYSTEM_MESSAGE], {
+    cacheKey: sessionName,
+    saveCacheToDisk: true,
+    prefill: true
+  })
+
+  // Real-world turn: send the full conversation, system prompt included.
+  // The addon should prefix-match against the primed cache and only evaluate
+  // the new user message.
+  const turnStats = await runAndCollectStats(model, [...BASE_PROMPT], {
+    cacheKey: sessionName,
+    saveCacheToDisk: true
+  })
+
+  const delta = toNumber(turnStats.CacheTokens) - toNumber(primeStats.CacheTokens)
+  const expectedDelta = turnStats.promptTokens + turnStats.generatedTokens
+
+  t.ok(primeStats.CacheTokens > 0, 'prime stored prefilled tokens in cache')
+  t.ok(turnStats.generatedTokens > 0, 'follow-up turn generated output')
+  t.ok(
+    Math.abs(delta - expectedDelta) <= 1,
+    `cache grew by exactly the new tokens (delta=${delta}, expected=${expectedDelta}); system prompt was reused from cache`
+  )
 })

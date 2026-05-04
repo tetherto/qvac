@@ -1,7 +1,6 @@
 'use strict'
 
 const LlamaClient = require('../index')
-const FilesystemDL = require('@qvac/dl-filesystem')
 const process = require('bare-process')
 const path = require('bare-path')
 const fs = require('bare-fs')
@@ -112,15 +111,7 @@ async function main () {
 
   const loraAdapterPath = './lora_checkpoints/checkpoint_step_00000006/model.gguf'
 
-  const loader = new FilesystemDL({ dirPath: modelDir })
-
-  const args = {
-    loader,
-    opts: { stats: true },
-    logger: console,
-    diskPath: modelDir,
-    modelName
-  }
+  const modelPath = path.join(modelDir, modelName)
 
   const config = {
     device: 'gpu',
@@ -133,7 +124,12 @@ async function main () {
 
   let client
   try {
-    client = new LlamaClient(args, config)
+    client = new LlamaClient({
+      files: { model: [modelPath] },
+      config,
+      logger: console,
+      opts: { stats: true }
+    })
     await client.load()
 
     const messages = [

@@ -1,5 +1,282 @@
 # Changelog
 
+## [0.19.1] - 2026-04-30
+
+### Fixed
+
+#### GPT-OSS Harmony tool calling: `<|call|>` frame delimiter now surfaces to the SDK
+
+The `<|call|>` token (Harmony frame terminator) is in the model's EOG set. When sampled, it rendered as 0 bytes and silently stopped generation — tool call output was truncated with no visible frame boundary, resulting in the SDK parsing 0 tool calls.
+
+The generation loop now detects Harmony models and intercepts `<|call|>` before the generic EOG break: it renders the token as visible text (`special=true`) so the SDK can identify frame boundaries, then stops generation cleanly. GPT-OSS uses a turn-based tool protocol — one tool call per generation pass — and the SDK is expected to execute the tool, append results, and re-prompt for subsequent calls.
+
+## [0.19.0] - 2026-04-29
+
+This release adds per-request structured-output support to the LLM addon: callers can now constrain a single completion to either a JSON Schema or a raw GBNF grammar without reloading the model.
+
+### Added
+
+#### Per-request `json_schema` and `grammar` in `generationParams`
+
+`RunOptions.generationParams` accepts two new optional fields:
+
+- **`json_schema`** — JSON Schema applied to a single `run()` call. Accepts either a JSON Schema object literal or a pre-stringified JSON Schema. Internally converted to GBNF via llama.cpp's `json_schema_to_grammar()`, the same converter used by the load-time `--json-schema` config key.
+- **`grammar`** — raw GBNF string applied to a single `run()` call. Useful for non-JSON outputs (regex-like DSLs, CSV, custom syntaxes). Mirrors the load-time `--grammar` config key.
+
+The two are mutually exclusive — passing both throws a `TypeError` at the JS boundary.
+
+When either is set, the sampler is re-initialized for that request and the prior (typically load-time) grammar is restored automatically afterwards. This unblocks structured output for SDK consumers without forcing a model reload per request.
+
+```js
+// JSON Schema (recommended for structured output)
+await model.run(prompt, {
+  generationParams: {
+    json_schema: {
+      type: 'object',
+      properties: { name: { type: 'string' }, age: { type: 'integer' } },
+      required: ['name', 'age']
+    }
+  }
+})
+
+// GBNF (non-JSON outputs)
+await model.run(prompt, {
+  generationParams: {
+    grammar: 'root ::= ("yes" | "no")'
+  }
+})
+```
+
+A new `nlohmann-json` vcpkg dependency is pulled in (header-only) so the addon can call `json_schema_to_grammar()` directly without shipping a JSON-Schema-to-GBNF converter on the JS side.
+
+## Pull Requests
+
+- [#1787](https://github.com/tetherto/qvac/pull/1787) - feat[api]: per-request grammar / json_schema in llm-llamacpp generationParams
+
+## [0.18.1] - 2026-04-29
+
+### Fixed
+
+#### `saveCacheToDisk` is now honoured on prefill-only runs
+
+When `processPromptImpl` ran with `prompt.prefill === true`, it returned early and skipped the post-inference branch that persists the KV cache. As a result, a prefill warm-up call with `saveCacheToDisk: true` and a valid `cacheKey` would build the cache in memory but never write it to disk, defeating the purpose of priming the cache for a follow-up turn.
+
+The save logic has been extracted into a new static helper `maybeSaveCacheToDisk(...)` that preserves the original guard (`saveCacheToDisk && cacheManager has value && hasActiveCache()`). Both the `prompt.prefill` early-return branch and the post-generation path now go through this helper, so prefill and full inference persist the cache identically.
+
+A subsequent normal turn that reuses the same `cacheKey` will now correctly load the prefilled tokens from disk and only tokenize/process the incremental delta.
+
+#### `main_gpu` underscore variant is now accepted
+
+The `main_gpu` configuration key was silently ignored - only `main-gpu` (hyphen) was recognised by `tryMainGpuFromMap`, even though every other config parameter accepts both hyphen and underscore forms. This inconsistency could cause GPU selection to quietly not apply, leaving inference on an unintended device.
+
+`main_gpu` is now treated as an alias for `main-gpu` in `BackendSelection`, matching the behaviour of `split-mode`/`split_mode` and `tensor-split`/`tensor_split`. Providing both forms simultaneously still throws an error, as with the other dual-form parameters.
+
+### Documentation
+
+#### New multi-GPU inference guide
+
+A new document at `docs/multi-gpu.md` explains how to distribute a model across multiple GPUs using the four interacting parameters: `device`, `split-mode`, `tensor-split`, and `main-gpu`. It covers:
+
+- The three `split-mode` values (`'none'`, `'layer'`, `'row'`) and what pipeline vs tensor parallelism means in practice.
+- Backend-specific behaviour for tensor parallelism - only CUDA and SYCL implement true split-buffer tensor parallelism; Vulkan and Metal fall back to layer parallelism even when `'row'` is requested.
+- How `tensor-split` proportions are normalised and applied per GPU.
+- How `main-gpu` behaves differently between integrated and dedicated GPUs and across split modes.
+- Worked examples for common hardware configurations.
+
+## [0.18.0] - 2026-04-22
+
+### Added
+
+#### Multi-GPU pipeline parallelism via `split-mode` config
+
+- New `split-mode` (`'none'` | `'layer'` | `'row'`) and `tensor-split` config options enable distributing a model across multiple GPUs via pipeline or tensor parallelism.
+
+## [0.17.0] - 2026-04-21
+
+### Changed
+
+#### `tools_at_end` renamed to `tools_compact`
+
+**Breaking**: The `tools_at_end` configuration option has been renamed to `tools_compact`. The old key is no longer recognized.
+
+#### Anchored tool placement for multi-round tool chains
+
+Tools are now anchored after the **last user message** (via a two-pass Jinja2 template that tracks `last_user_idx`) instead of being appended at the very end of the prompt. The tool boundary is set once on the first round and preserved across chain rounds, so tools stay in the KV cache while the model is still calling tools. Trimming now only happens when the chain completes (output contains no `<tool_call>` tag), instead of after every turn.
+
+This eliminates redundant tokenize → eval → trim cycles during multi-round tool chains and matches the model's expected prompt layout more closely.
+
+#### `<think>` blocks stripped from assistant history
+
+The Qwen3 tools-dynamic template no longer re-injects `<think>…</think>` reasoning blocks into assistant history. Prior assistant messages are replayed with the thinking content stripped, which reduces token waste and avoids the model treating stale reasoning as context.
+
+#### `tools_compact` prompt-shape validation tightened
+
+`tools_compact` now validates prompt layout before inference and fails fast with `InvalidArgument` for malformed inputs (for example: required tools omitted, non-contiguous tool block, tools not attached to the last user/tool anchor, or tools not placed at the end).
+
+### Fixed
+
+#### Context sliding with `tools_compact` could corrupt tool boundary tracking
+
+When context sliding (token discard) occurred during generation or prefill with `tools_compact` enabled, the `nPastBeforeTools` boundary could become stale. This caused post-generation trim to remove the wrong tail region and could leave tool tokens in the KV cache across turns.
+
+Sliding is now centralized through `ContextSlider` + `ToolsCompactController`:
+- `clampDiscard()` caps discard so sliding never crosses into protected tool tokens
+- `onSlide()` keeps `nPastBeforeTools` aligned after each slide
+- Fallback full-wipe paths reset controller state to avoid stale boundaries
+- Applied consistently in both `TextLlmContext` and `MtmdLlmContext`
+
+#### Output duplication in streaming mode with `tools_compact`
+
+In streaming mode the captured output buffer was being returned as the final result, causing the SDK to see every token twice (once streamed, once in the result). The captured buffer is now used only for internal `<tool_call>` detection.
+
+#### Generation prompt added on system-only prefill
+
+When `nPast=0` and the only message was a system prompt, `add_generation_prompt` was hardcoded to `true`, injecting a stale `<|im_start|>assistant` token into the cache. Now checks the actual last message role.
+
+#### `"tool"` role not treated as turn-ending for generation prompt
+
+Messages with role `"tool"` (tool call results) were not triggering `add_generation_prompt`, causing empty responses on tool chain continuation. Now treated the same as `"user"` for generation prompt purposes.
+
+#### Empty chat message array now fails with `EmptyPrompt`
+
+`tokenizeChat()` now throws `StatusError(EmptyPrompt)` when called with no chat messages, making empty prompt handling explicit and consistent for both text and multimodal contexts.
+
+### Added
+
+- `runtimeDebugStats()` internal method on `LlamaModel` exposing `nPastBeforeTools`, `firstMsgTokens`, and `toolsTrimmed`
+- Comprehensive C++ unit tests for Qwen3 tools-dynamic template and cache management with tools_compact
+- Regression tests for context sliding with anchored tools: clamped discard, anchor updates after slide, unclamped sliding with long conversations, and sliding during generation
+
+## [0.16.0] - 2026-04-14
+
+This release migrates the LLM addon off `BaseInference` inheritance and the `WeightsProvider` download layer onto the composable `createJobHandler` + `exclusiveRunQueue` utilities from `@qvac/infer-base@^0.4.0`. The constructor signature is replaced with a single object whose `files.model` field is an ordered array of absolute paths and `files.projectionModel` is an optional absolute path for multimodal models. This is a breaking change — every caller must update.
+
+## Breaking Changes
+
+### Constructor signature: single object with `files`, no `Loader`
+
+`LlmLlamacpp` now takes a single `{ files, config, logger?, opts? }` object. The old `Loader` + `diskPath` + `modelName` + two-arg `(args, config)` shape is gone — callers pre-resolve absolute paths and supply them as `files.model`.
+
+```js
+// BEFORE (≤ 0.15.x)
+const FilesystemDL = require('@qvac/dl-filesystem')
+const loader = new FilesystemDL({ dirPath: '/models' })
+const model = new LlmLlamacpp({
+  loader,
+  modelName: 'Qwen3-1.7B-Q4_0.gguf',
+  diskPath: '/models',
+  logger: console,
+  opts: { stats: true }
+}, { ctx_size: '4096', gpu_layers: '99' })
+
+// AFTER (0.16.0)
+const model = new LlmLlamacpp({
+  files: {
+    model: ['/models/Qwen3-1.7B-Q4_0.gguf']
+  },
+  config: { ctx_size: '4096', gpu_layers: '99' },
+  logger: console,
+  opts: { stats: true }
+})
+```
+
+For sharded models the caller passes the full ordered list — the `<basename>.tensors.txt` companion first, followed by every `<basename>-NNNNN-of-MMMMM.gguf` shard in ascending order. For multimodal models, `files.projectionModel` carries the absolute path to the mmproj file:
+
+```js
+const model = new LlmLlamacpp({
+  files: {
+    model: [
+      '/models/medgemma-4b-it-Q4_1.tensors.txt',
+      '/models/medgemma-4b-it-Q4_1-00001-of-00005.gguf',
+      '/models/medgemma-4b-it-Q4_1-00002-of-00005.gguf',
+      '/models/medgemma-4b-it-Q4_1-00003-of-00005.gguf',
+      '/models/medgemma-4b-it-Q4_1-00004-of-00005.gguf',
+      '/models/medgemma-4b-it-Q4_1-00005-of-00005.gguf'
+    ],
+    projectionModel: '/models/mmproj-model-f16.gguf'
+  },
+  config: { gpu_layers: '99' }
+})
+```
+
+### `BaseInference` inheritance and `WeightsProvider` removed
+
+`LlmLlamacpp` no longer extends `BaseInference` and no longer touches the `WeightsProvider` download layer. The class composes `createJobHandler` and `exclusiveRunQueue` from `@qvac/infer-base@^0.4.0` directly. Public lifecycle methods (`load` / `run` / `finetune` / `pause` / `cancel` / `unload` / `getState`) are unchanged in shape, but `downloadWeights` and the loader-based progress callbacks are gone — the caller is responsible for placing files on disk before constructing the model.
+
+In-memory streaming from network sources (URLs, Hyperdrive) is no longer supported in the current API. The SDK does not currently use it (models are stored to disk first); this can be re-added when/if the SDK plans to support that feature. Before, it was possible through the `Loader` abstraction.
+
+### Dependency changes
+
+- `@qvac/infer-base` bumped from `^0.3.0` to `^0.4.0`.
+- `bare-fs` is now a runtime dependency (used to stream shards from disk).
+- `@qvac/dl-base` and `@qvac/dl-filesystem` are no longer used by this package and have been removed from `devDependencies`.
+
+### `getState()` returns a narrower shape
+
+`getState()` previously returned `{ configLoaded, weightsLoaded, destroyed }` (the three-field shape inherited from `BaseInference`). It now returns `{ configLoaded }` only. The `weightsLoaded` and `destroyed` fields are gone — `weightsLoaded` collapsed into `configLoaded` because the refactored `load()` does both in one step, and `destroyed` is no longer tracked since `unload()` resets `configLoaded` and nulls the addon handle instead. Callers reading `state.weightsLoaded` or `state.destroyed` must switch to `state.configLoaded`.
+
+### Public methods removed from `LlmLlamacpp`
+
+`LlmLlamacpp` previously exposed these methods via `BaseInference` inheritance, all of which are now gone:
+
+- `downloadWeights(onDownloadProgress, opts)` — the download layer is removed; the caller places files on disk and passes absolute paths in `files.model` / `files.projectionModel`.
+- `unpause()` / `stop()` — BaseInference job-lifecycle helpers. The refactor still exposes `pause()` and `cancel()`; `unpause` is superseded by issuing a new `run()` after `cancel()`.
+- `status()` — replaced by `getState()` for the static readiness flag; per-job state is observed via the `QvacResponse` returned by `run()`.
+- `destroy()` — folded into `unload()`, which now both releases native resources and nulls `this.addon`.
+- `getApiDefinition()` — no longer exposed; consumers should import types from `index.d.ts`.
+
+### `load()` takes no arguments
+
+`load()` previously forwarded `...args` through `BaseInference.load` into LLM's `_load(closeLoader, onDownloadProgress)`. Both arguments are gone — `closeLoader` is meaningless without a `Loader`, and `onDownloadProgress` is superseded by the caller owning download-and-placement before construction. Call `await model.load()` with no arguments.
+
+### Type exports removed from `index.d.ts`
+
+The following exports are no longer part of the package's public type surface because the loader/download layer they described is gone: `ReportProgressCallback`, `Loader`, `DownloadWeightsOptions`, `DownloadResult`. TypeScript consumers importing any of these must update to the new `LlmLlamacppArgs` / `files` shape.
+
+## Features
+
+### Constructor input validation
+
+The constructor now throws `TypeError('files.model must be a non-empty array of absolute paths')` when `files` or `files.model` is missing or empty. This produces a clear error for callers porting old code instead of a confusing `Cannot read properties of undefined`.
+
+### `run()`-before-`load()` guard
+
+Calling `run()` before `load()` now throws `Error('Addon not initialized. Call load() first.')` instead of dereferencing `null` and crashing. `finetune()` already had this guard since the previous release.
+
+### `load()` is now idempotent when already loaded
+
+A second `load()` call on an already-loaded instance is now a silent no-op instead of unloading and reloading. This aligns with the ReadyResource pattern used elsewhere in QVAC and prevents accidental double-loads from triggering expensive work. Callers that intentionally want to swap weights must call `unload()` first (which clears `configLoaded`) and then `load()` again.
+
+### Crash-safe shard streaming
+
+If `_streamShards()` or `addon.activate()` throws mid-load (for example a corrupted shard file or a native init failure), the partially-initialized addon is now best-effort-unloaded and `this.addon` is reset to `null`. A subsequent `load()` call starts cleanly instead of leaking a zombie native instance.
+
+### Restored JSDoc on `FinetuneOptions`
+
+Every `FinetuneOptions` field carries a `/** … */` doc comment again, including the default values (`numberOfEpochs = 1`, `learningRate = 1e-4`, `batchSize = 128`, …) so IDE tooltips show them without needing to read `docs/finetuning.md`.
+
+## Bug Fixes
+
+### `unload()` clears the addon reference
+
+`unload()` now sets `this.addon = null` after `await this.addon.unload()`, so post-unload `cancel()` / `pause()` / `run()` calls hit the explicit guards rather than dereferencing a disposed native handle. `pause()`, `cancel()`, and the job-handler cancel closure all use optional chaining for the same reason.
+
+### Removed dead `_isSuppressedNoResponseLog` filter
+
+The `_createFilteredLogger` infrastructure that wrapped the user-supplied logger to swallow `'No response found for job'` warnings was tied to the old `BaseInference` `_jobToResponse` Map. The new architecture cannot emit that message at all, so the filter, the wrapped logger, and the `_originalLogger` indirection are all removed. The user-supplied logger is now used directly.
+
+### `load()` is serialized through the exclusive run queue
+
+`load()` is now routed through the same `exclusiveRunQueue` used by `run()`, `finetune()`, and `unload()`. Previously two overlapping `load()` calls on the same instance could both pass the `configLoaded` guard before it flipped to `true`, both stream shards into and activate the native addon, and clobber `this.addon` — leaking one native handle. Concurrent `load()` on a single instance is now safe.
+
+### Constructor rejects non-absolute path entries
+
+Each entry in `files.model` is now validated with `path.isAbsolute()` (matching the existing error-message contract), and the same check now applies to the optional `files.projectionModel` — previously it had no validation at all. Relative paths are rejected at construction time instead of bubbling up from `bare-fs` or the native load.
+
+## Pull Requests
+
+- [#1494](https://github.com/tetherto/qvac/pull/1494) - chore[bc]: LLM addon interface refactor — remove BaseInference and WeightsProvider
+
 ## [0.15.0] - 2026-04-09
 
 ### Breaking Changes

@@ -4,15 +4,49 @@ const test = require('brittle')
 const fs = require('bare-fs')
 const path = require('bare-path')
 const { ensureModel, getMediaPath } = require('./utils')
-const FilesystemDL = require('@qvac/dl-filesystem')
 const LlmLlamacpp = require('../../index.js')
 const os = require('bare-os')
+const process = require('bare-process')
+
+// Dynamic require via path.join prevents bare-pack from statically resolving
+// the path during mobile bundling (the script lives outside the addon package).
+let createPerformanceReporter
+const _scriptBase = path.join('..', '..', '..', '..', 'scripts', 'test-utils')
+try {
+  const perfReporterMod = require(path.join(_scriptBase, 'performance-reporter'))
+  perfReporterMod.configure({ fs, path, process, os })
+  createPerformanceReporter = perfReporterMod.createPerformanceReporter
+} catch (_) {
+  createPerformanceReporter = function (opts) {
+    return {
+      record () {},
+      toJSON () { return { schema_version: '1.0', addon: opts.addon, results: [] } },
+      writeReport () {},
+      writeStepSummary () {},
+      get length () { return 0 }
+    }
+  }
+}
 
 const platform = os.platform()
 const arch = os.arch()
 const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
 const isMobile = platform === 'ios' || platform === 'android'
+
+const _perfReporter = createPerformanceReporter({
+  addon: 'llamacpp-llm',
+  addonType: 'vision'
+})
+
+const _reportPath = path.resolve('.', 'test/results/performance-report.json')
+
+process.on('exit', () => {
+  if (_perfReporter.length > 0) {
+    _perfReporter.writeReport(_reportPath)
+    _perfReporter.writeStepSummary()
+  }
+})
 
 // CPU is used for: Intel Macs (DarwinX64), and ARM64 Linux
 const useCpu = isDarwinX64 || isLinuxArm64
@@ -84,7 +118,7 @@ function getConfig (device, modelConfig) {
  * Sets up a multimodal LlmLlamacpp instance with LLM and projection models
  * @param {Object} t - Test instance
  * @param {string} device - Device to use ('cpu' or 'gpu')
- * @returns {Promise<{inference: LlmLlamacpp, loader: FilesystemDL}>}
+ * @returns {Promise<{inference: LlmLlamacpp}>}
  */
 async function setupMultimodalInference (t, device = 'gpu', modelConfig = MULTIMODAL_MODEL_CONFIG) {
   const [modelName, dirPath] = await ensureModel(modelConfig.llmModel)
@@ -93,23 +127,20 @@ async function setupMultimodalInference (t, device = 'gpu', modelConfig = MULTIM
   const [projModelName] = await ensureModel(modelConfig.projModel)
   t.ok(fs.existsSync(path.join(dirPath, projModelName)), 'Projection model file should exist')
 
-  const loader = new FilesystemDL({ dirPath })
+  const modelPath = path.join(dirPath, modelName)
   const inference = new LlmLlamacpp({
-    modelName,
-    loader,
-    logger: console,
-    diskPath: dirPath,
-    projectionModel: projModelName
-  }, getConfig(device, modelConfig))
+    files: { model: [modelPath], projectionModel: path.join(dirPath, projModelName) },
+    config: getConfig(device, modelConfig),
+    logger: console
+  })
 
   t.teardown(async () => {
-    await loader.close()
     await inference.unload()
   })
 
   await inference.load()
 
-  return { inference, loader }
+  return { inference }
 }
 
 /**
@@ -219,8 +250,17 @@ function checkKeywordsInText (text, keywords) {
  * @param {number} totalTime - Total execution time in milliseconds
  * @returns {string} Formatted performance metrics string
  */
-function formatPerformanceMetrics (label, totalTime) {
+function formatPerformanceMetrics (label, totalTime, extra) {
   const totalSeconds = (totalTime / 1000).toFixed(2)
+
+  const ep = /\[gpu\]/i.test(label) ? 'gpu' : /\[cpu\]/i.test(label) ? 'cpu' : null
+  _perfReporter.record(label, {
+    total_time_ms: Math.round(totalTime),
+    ...(extra || {})
+  }, {
+    execution_provider: ep,
+    output: (extra && extra._output) || null
+  })
 
   return `${label} Performance Metrics:
     - Total time: ${totalTime}ms (${totalSeconds}s)`
@@ -256,6 +296,32 @@ const imageTestCases = [
   }
 ]
 
+async function describeImageByPath (inference, imageFilePath, prompt = TEST_CONSTANTS.defaultPrompt) {
+  const messages = [
+    { role: 'system', content: 'You are a helpful assistant.' },
+    { role: 'user', type: 'media', content: imageFilePath },
+    { role: 'user', content: prompt }
+  ]
+
+  const response = await inference.run(messages)
+  const generatedText = []
+  let error = null
+
+  response.onUpdate(data => {
+    generatedText.push(data)
+  }).onError(err => {
+    error = err
+  })
+
+  await response.await()
+
+  if (error) {
+    throw new Error('Inference error: ' + error)
+  }
+
+  return generatedText.join('')
+}
+
 for (const testCase of imageTestCases) {
   test(`llama addon can recognize ${testCase.name} in an image`, { timeout: TEST_CONSTANTS.timeout }, async t => {
     for (const deviceConfig of DEVICE_CONFIGS) {
@@ -274,7 +340,7 @@ for (const testCase of imageTestCases) {
 
       // Log output and statistics
       t.comment(`${label} Generated text: ${generatedText}`)
-      t.comment(formatPerformanceMetrics(label, totalTime))
+      t.comment(formatPerformanceMetrics(label, totalTime, { _output: generatedText }))
 
       // Assertions: Content recognition
       t.ok(generatedText.length > 0, `${label} Should generate some text output for the image`)
@@ -286,6 +352,26 @@ for (const testCase of imageTestCases) {
     }
   })
 }
+
+test('llama addon accepts a file path string as media content', { timeout: TEST_CONSTANTS.timeout }, async t => {
+  const deviceConfig = DEVICE_CONFIGS[0]
+  const label = `[${deviceConfig.id.toUpperCase()}]`
+
+  const { inference } = await setupMultimodalInference(t, deviceConfig.device)
+
+  const imageFilePath = getMediaPath('elephant.jpg')
+  t.ok(fs.existsSync(imageFilePath), `${label} elephant.jpg image file should exist`)
+
+  const generatedText = await describeImageByPath(inference, imageFilePath)
+  t.comment(`${label} Generated text: ${generatedText}`)
+
+  t.ok(generatedText.length > 0, `${label} Should generate text output when media content is a file path`)
+  const { hasMatch, foundKeywords } = checkKeywordsInText(generatedText, ['elephant', 'elephants'])
+  t.ok(hasMatch,
+    `${label} Output should describe the elephant when image is passed as a path string. ` +
+    `Found keywords: ${foundKeywords.join(', ') || 'none'}. ` +
+    `Full output: "${generatedText}"`)
+})
 
 // TODO: Fix multi-image for smaller models? Seems like an image per separate message works
 // TODO: on smaller models, rather than all images on same message.
@@ -312,7 +398,7 @@ test('llama addon can handle multiple images in one prompt', { timeout: TEST_CON
     const totalTime = endTime - startTime
 
     t.comment(`${label} Generated text: ${generatedText}`)
-    t.comment(formatPerformanceMetrics(label, totalTime))
+    t.comment(formatPerformanceMetrics(label, totalTime, { _output: generatedText }))
 
     t.ok(generatedText.length > 0, `${label} Should generate some text for multiple images`)
 

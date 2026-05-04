@@ -1,7 +1,7 @@
 'use strict'
 
 const test = require('brittle')
-const FilesystemDL = require('@qvac/dl-filesystem')
+const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
 const { ensureModel } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
@@ -218,6 +218,22 @@ const scenarios = [
     skipInferenceAfterLoad: true
   },
   {
+    name: 'main_gpu underscore variant must load identically to main-gpu hyphen',
+    overrides: {
+      main_gpu: '1',
+      n_predict: '16'
+    },
+    skipInferenceAfterLoad: true
+  },
+  {
+    name: 'main-gpu hyphen variant loads successfully',
+    overrides: {
+      'main-gpu': '1',
+      n_predict: '16'
+    },
+    skipInferenceAfterLoad: true
+  },
+  {
     name: 'Seed -1 accepted',
     overrides: {
       seed: '-1',
@@ -343,7 +359,7 @@ async function executeScenario (t, scenario) {
     downloadUrl: 'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf'
   })
 
-  const loader = new FilesystemDL({ dirPath })
+  const modelPath = path.join(dirPath, modelName)
 
   const baseConfig = {
     device: useCpu ? 'cpu' : 'gpu',
@@ -362,12 +378,11 @@ async function executeScenario (t, scenario) {
   const logs = specLogger.logs
 
   const addon = new LlmLlamacpp({
-    loader,
-    modelName,
-    diskPath: dirPath,
+    files: { model: [modelPath] },
+    config: { ...baseConfig, ...scenario.overrides },
     logger: createTestLogger(),
     opts: { stats: true }
-  }, { ...baseConfig, ...scenario.overrides })
+  })
 
   let loadSucceeded = false
 
@@ -403,6 +418,8 @@ async function executeScenario (t, scenario) {
         )
       }
     }
+  } catch (err) {
+    t.fail(`${scenario.name}: unexpected error: ${err.message || err}`)
   } finally {
     if (scenario.cleanupDelayMs) {
       await new Promise(resolve => setTimeout(resolve, scenario.cleanupDelayMs))
@@ -410,7 +427,6 @@ async function executeScenario (t, scenario) {
     if (loadSucceeded) {
       await addon.unload().catch(() => {})
     }
-    await loader.close().catch(() => {})
     specLogger.release()
   }
 }

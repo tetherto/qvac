@@ -242,12 +242,19 @@ backend_selection::parseMainGpu(const std::string& mainGpuStr) {
 
 std::optional<MainGpu> backend_selection::tryMainGpuFromMap(
     std::unordered_map<std::string, std::string>& configFilemap) {
-  std::optional<MainGpu> mainGpu = std::nullopt;
-  if (auto mainGpuIt = configFilemap.find("main-gpu");
-      mainGpuIt != configFilemap.end()) {
-    mainGpu = parseMainGpu(mainGpuIt->second);
-    configFilemap.erase(mainGpuIt);
+  auto hIt = configFilemap.find("main-gpu");
+  auto uIt = configFilemap.find("main_gpu");
+  if (hIt != configFilemap.end() && uIt != configFilemap.end()) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "both 'main-gpu' and 'main_gpu' are present; use one or the other.");
   }
+  auto it = (hIt != configFilemap.end()) ? hIt : uIt;
+  if (it == configFilemap.end()) {
+    return std::nullopt;
+  }
+  std::optional<MainGpu> mainGpu = parseMainGpu(it->second);
+  configFilemap.erase(it);
   return mainGpu;
 }
 
@@ -398,4 +405,21 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
       mainGpu,
       outAdrenoVersion,
       isFinetuning);
+}
+
+size_t
+backend_selection::getEffectiveGpuDeviceCount(const BackendInterface& bckI) {
+  size_t gpuCount = 0;
+  size_t igpuCount = 0;
+  const size_t totalDevices = bckI.ggml_backend_dev_count();
+  for (size_t i = 0; i < totalDevices; ++i) {
+    ggml_backend_dev_t dev = bckI.ggml_backend_dev_get(i);
+    enum ggml_backend_dev_type devType = bckI.ggml_backend_dev_type(dev);
+    if (devType == GGML_BACKEND_DEVICE_TYPE_GPU) {
+      ++gpuCount;
+    } else if (devType == GGML_BACKEND_DEVICE_TYPE_IGPU) {
+      ++igpuCount;
+    }
+  }
+  return gpuCount > 0 ? gpuCount : igpuCount;
 }

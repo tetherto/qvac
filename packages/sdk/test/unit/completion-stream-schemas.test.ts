@@ -29,20 +29,30 @@ test("completionStatsSchema: backendDevice is optional", (t) => {
   t.is(result.success, true);
 });
 
-test("completionStreamResponseSchema: round-trips backendDevice through stats", (t) => {
+test("completionStreamResponseSchema: round-trips backendDevice through completionStats event", (t) => {
   const result = completionStreamResponseSchema.safeParse({
     type: "completionStream",
-    token: "",
     done: true,
-    stats: {
-      timeToFirstToken: 80,
-      tokensPerSecond: 75,
-      cacheTokens: 12,
-      backendDevice: "cpu",
-    },
+    events: [
+      {
+        type: "completionStats",
+        seq: 0,
+        stats: {
+          timeToFirstToken: 80,
+          tokensPerSecond: 75,
+          cacheTokens: 12,
+          backendDevice: "cpu",
+        },
+      },
+      { type: "completionDone", seq: 1 },
+    ],
   });
   t.is(result.success, true);
   if (result.success) {
-    t.is(result.data.stats?.backendDevice, "cpu");
+    const statsEvent = result.data.events.find((e) => e.type === "completionStats");
+    t.ok(statsEvent);
+    if (statsEvent && "stats" in statsEvent) {
+      t.is(statsEvent.stats.backendDevice, "cpu");
+    }
   }
 });

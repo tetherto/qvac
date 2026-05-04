@@ -42,6 +42,13 @@ export interface OCRStats {
   totalTime?: number;
 }
 
+export interface RuntimeStats {
+  totalTime: number;
+  detectionTime: number;
+  recognitionTime: number;
+  textRegionsCount: number;
+}
+
 export interface InferenceClientState {
   configLoaded: boolean;
   weightsLoaded: boolean;

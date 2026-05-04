@@ -1,0 +1,32 @@
+.vs/
+build/
+dist/
+models/
+store/
+node_modules/
+prebuilds/
+
+.npmrc
+package-lock.json
+.cache/
+.idea/
+**/store/
+.DS_Store
+logs/
+*.gguf
+*.safetensors
+*.ckpt
+*.log
+.clang-tidy
+# Added by qvac-lint-cpp
+.clang-format
+output/
+temp/
+*.deb
+*.zip
+# Ignore generated PNGs but keep test/example images in assets/
+!assets/**
+*.png
+test/model/
+test/integration/all.js
+test/unit/all.js

@@ -1,7 +1,6 @@
 'use strict'
 
 const test = require('brittle')
-const FilesystemDL = require('@qvac/dl-filesystem')
 const LlmLlamacpp = require('../../index.js')
 const { ensureModel } = require('./utils')
 const os = require('bare-os')
@@ -133,16 +132,14 @@ async function resolveModel () {
 }
 
 async function createAddon (dirPath, modelName, configOverrides = {}) {
-  const loader = new FilesystemDL({ dirPath })
   const config = { ...AFRIQUEGEMMA_CONFIG, ...configOverrides }
   const addon = new LlmLlamacpp({
-    loader,
-    modelName,
-    diskPath: dirPath,
+    files: { model: [path.join(dirPath, modelName)] },
+    config,
     logger: console,
     opts: { stats: true }
-  }, config)
-  return { addon, loader }
+  })
+  return { addon }
 }
 
 const TIMEOUT = 1_800_000
@@ -158,7 +155,7 @@ const TIMEOUT = 1_800_000
 // ---------------------------------------------------------------------------
 test('AfriqueGemma: core EN↔African language pairs', { timeout: TIMEOUT }, async t => {
   const [modelName, dirPath] = await resolveModel()
-  const { addon, loader } = await createAddon(dirPath, modelName)
+  const { addon } = await createAddon(dirPath, modelName)
   try {
     await addon.load()
     t.pass('model loaded (Gemma 3 4B base, Q4_K_M via llama.cpp)')
@@ -188,7 +185,6 @@ test('AfriqueGemma: core EN↔African language pairs', { timeout: TIMEOUT }, asy
     t.is(out1, out2, `deterministic: "${out1}"`)
   } finally {
     await addon.unload().catch(() => {})
-    await loader.close().catch(() => {})
   }
 })
 
@@ -203,7 +199,7 @@ test('AfriqueGemma: core EN↔African language pairs', { timeout: TIMEOUT }, asy
 // ---------------------------------------------------------------------------
 test('AfriqueGemma: African-to-African via English pivot', { timeout: TIMEOUT }, async t => {
   const [modelName, dirPath] = await resolveModel()
-  const { addon, loader } = await createAddon(dirPath, modelName)
+  const { addon } = await createAddon(dirPath, modelName)
   try {
     await addon.load()
 
@@ -220,7 +216,6 @@ test('AfriqueGemma: African-to-African via English pivot', { timeout: TIMEOUT },
     t.ok(!yorubaOutput.includes('English:'), 'final output is not English echo')
   } finally {
     await addon.unload().catch(() => {})
-    await loader.close().catch(() => {})
   }
 })
 
@@ -236,7 +231,7 @@ test('AfriqueGemma: African-to-African via English pivot', { timeout: TIMEOUT },
 // ---------------------------------------------------------------------------
 test('AfriqueGemma: bridge languages (French, Portuguese, Arabic)', { timeout: TIMEOUT }, async t => {
   const [modelName, dirPath] = await resolveModel()
-  const { addon, loader } = await createAddon(dirPath, modelName)
+  const { addon } = await createAddon(dirPath, modelName)
   try {
     await addon.load()
 
@@ -253,7 +248,6 @@ test('AfriqueGemma: bridge languages (French, Portuguese, Arabic)', { timeout: T
     }
   } finally {
     await addon.unload().catch(() => {})
-    await loader.close().catch(() => {})
   }
 })
 
@@ -265,7 +259,7 @@ test('AfriqueGemma: bridge languages (French, Portuguese, Arabic)', { timeout: T
 // ---------------------------------------------------------------------------
 test('AfriqueGemma: longer content, mixed content, sequential calls', { timeout: TIMEOUT }, async t => {
   const [modelName, dirPath] = await resolveModel()
-  const { addon, loader } = await createAddon(dirPath, modelName)
+  const { addon } = await createAddon(dirPath, modelName)
   try {
     await addon.load()
 
@@ -287,7 +281,6 @@ test('AfriqueGemma: longer content, mixed content, sequential calls', { timeout:
     }
   } finally {
     await addon.unload().catch(() => {})
-    await loader.close().catch(() => {})
   }
 })
 
@@ -302,7 +295,7 @@ test('AfriqueGemma: longer content, mixed content, sequential calls', { timeout:
 // ---------------------------------------------------------------------------
 test('AfriqueGemma: African-language Unicode input (African → English)', { timeout: TIMEOUT }, async t => {
   const [modelName, dirPath] = await resolveModel()
-  const { addon, loader } = await createAddon(dirPath, modelName)
+  const { addon } = await createAddon(dirPath, modelName)
   try {
     await addon.load()
 
@@ -327,7 +320,6 @@ test('AfriqueGemma: African-language Unicode input (African → English)', { tim
     t.comment('All non-Latin/diacritic inputs produced valid English output')
   } finally {
     await addon.unload().catch(() => {})
-    await loader.close().catch(() => {})
   }
 })
 
@@ -341,7 +333,7 @@ test('AfriqueGemma: African-language Unicode input (African → English)', { tim
 // ---------------------------------------------------------------------------
 test('AfriqueGemma: streaming tokens arrive incrementally with stats', { timeout: TIMEOUT }, async t => {
   const [modelName, dirPath] = await resolveModel()
-  const { addon, loader } = await createAddon(dirPath, modelName)
+  const { addon } = await createAddon(dirPath, modelName)
   try {
     await addon.load()
 
@@ -375,6 +367,5 @@ test('AfriqueGemma: streaming tokens arrive incrementally with stats', { timeout
     }
   } finally {
     await addon.unload().catch(() => {})
-    await loader.close().catch(() => {})
   }
 })

@@ -8,9 +8,6 @@ import {
   VAD_SILERO_5_1_2,
   QWEN3_1_7B_INST_Q4,
   OCR_LATIN_RECOGNIZER_1,
-  MARIAN_OPUS_DE_EN_Q4_0,
-  MARIAN_OPUS_EN_ES_Q4_0,
-  MARIAN_OPUS_ES_EN_Q4_0,
   BERGAMOT_EN_FR,
   BERGAMOT_EN_ES,
   BERGAMOT_ES_EN,
@@ -61,14 +58,18 @@ import { ConfigReloadExecutor } from "./executors/config-reload-executor.js";
 import { LoggingExecutor } from "../shared/executors/logging-executor.js";
 import { RegistryExecutor } from "../shared/executors/registry-executor.js";
 import { ModelInfoExecutor } from "../shared/executors/model-info-executor.js";
+import { WrongModelExecutor } from "../shared/executors/wrong-model-executor.js";
 import { ErrorExecutor } from "../shared/executors/error-executor.js";
 import { TtsExecutor } from "../shared/executors/tts-executor.js";
 import { ParakeetExecutor } from "./executors/parakeet-executor.js";
 import { VisionExecutor } from "./executors/vision-executor.js";
 import { DownloadExecutor } from "../shared/executors/download-executor.js";
 import { DelegatedInferenceExecutor } from "./executors/delegated-inference-executor.js";
-import { DiffusionExecutor } from "../shared/executors/diffusion-executor.js";
+import { DesktopDiffusionExecutor } from "./executors/diffusion-executor.js";
 import { FinetuneExecutor } from "./executors/finetune-executor.js";
+import { LifecycleExecutor } from "../shared/executors/lifecycle-executor.js";
+import { ConfigExecutor } from "../shared/executors/config-executor.js";
+import { NoLingeringBareExecutor } from "./executors/no-lingering-bare-executor.js";
 
 const resources = new ResourceManager();
 
@@ -120,6 +121,12 @@ resources.define("tools", {
   config: { ctx_size: 4096, tools: true },
 });
 
+resources.define("tools-dynamic", {
+  constant: QWEN3_1_7B_INST_Q4,
+  type: "llm",
+  config: { ctx_size: 4096, tools: true, toolsMode: "dynamic" },
+});
+
 resources.define("ocr", {
   constant: OCR_LATIN_RECOGNIZER_1,
   type: "ocr",
@@ -130,51 +137,6 @@ resources.define("sharded-embeddings", {
   constant: GTE_LARGE_335M_FP16_SHARD,
   type: "embeddings",
   skipPreDownload: true,
-});
-
-resources.define("marian-de-en", {
-  constant: MARIAN_OPUS_DE_EN_Q4_0,
-  type: "nmt",
-  config: {
-    engine: "Opus",
-    from: "de",
-    to: "en",
-    beamsize: 4,
-    lengthpenalty: 1.0,
-    maxlength: 512,
-    temperature: 0.3,
-    norepeatngramsize: 3,
-  },
-});
-
-resources.define("marian-en-es", {
-  constant: MARIAN_OPUS_EN_ES_Q4_0,
-  type: "nmt",
-  config: {
-    engine: "Opus",
-    from: "en",
-    to: "es",
-    beamsize: 4,
-    lengthpenalty: 1.0,
-    maxlength: 512,
-    temperature: 0.3,
-    norepeatngramsize: 3,
-  },
-});
-
-resources.define("marian-es-en", {
-  constant: MARIAN_OPUS_ES_EN_Q4_0,
-  type: "nmt",
-  config: {
-    engine: "Opus",
-    from: "es",
-    to: "en",
-    beamsize: 4,
-    lengthpenalty: 1.0,
-    maxlength: 512,
-    temperature: 0.3,
-    norepeatngramsize: 3,
-  },
 });
 
 resources.define("indictrans-en-hi", {
@@ -365,12 +327,23 @@ resources.define("diffusion", {
   config: {
     device: "gpu",
     threads: 4,
+    prediction: "flux2_flow",
     llmModelSrc: QWEN3_4B_Q4_K_M,
     vaeModelSrc: FLUX_2_KLEIN_4B_VAE,
   },
 });
 
 export async function bootstrap() {
+  // Point the SDK at the committed e2e fixture unless the developer
+  // already provided their own qvac.config.json / QVAC_CONFIG_PATH.
+  // This exercises the registryDownloadMaxRetries + registryStreamTimeoutMs
+  // propagation end-to-end (see tests/config-tests.ts).
+  if (!process.env["QVAC_CONFIG_PATH"]) {
+    process.env["QVAC_CONFIG_PATH"] = path.resolve(
+      process.cwd(),
+      "fixtures/qvac.config.e2e.json",
+    );
+  }
   await resources.downloadAllOnce(console.log);
 };
 
@@ -382,6 +355,7 @@ export const executor = createExecutor({
     new EmbeddingExecutor(resources),
     new RagExecutor(resources),
     new ModelInfoExecutor(resources),
+    new WrongModelExecutor(resources),
     new ErrorExecutor(resources),
     new ToolsExecutor(resources),
 
@@ -398,8 +372,11 @@ export const executor = createExecutor({
     new VisionExecutor(resources),
     new DownloadExecutor(),
     new DelegatedInferenceExecutor(),
-    new DiffusionExecutor(resources),
+    new DesktopDiffusionExecutor(resources),
     new FinetuneExecutor(resources),
+    new LifecycleExecutor(resources),
+    new ConfigExecutor(),
+    new NoLingeringBareExecutor(),
   ],
   profiling: {
     init: () => profiler.enable({ mode: "summary", includeServerBreakdown: true }),

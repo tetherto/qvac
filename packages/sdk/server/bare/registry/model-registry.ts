@@ -3,7 +3,6 @@ import {
   ModelNotFoundError,
   ModelIsDelegatedError,
 } from "@/utils/errors-server";
-import type FilesystemDL from "@qvac/dl-filesystem";
 import type { CanonicalModelType } from "@/schemas";
 import { getServerLogger } from "@/logging";
 import type BaseInference from "@qvac/infer-base";
@@ -21,7 +20,6 @@ export type AnyModel = Omit<BaseInference, "addon"> & {
 };
 
 interface DelegateOptions {
-  topic: string;
   providerPublicKey: string;
   timeout?: number | undefined;
   healthCheckTimeout?: number | undefined;
@@ -34,15 +32,11 @@ interface LocalOptions {
   config: unknown;
   modelType: CanonicalModelType;
   name?: string | undefined;
-  loader?: FilesystemDL;
 }
 
-export interface ModelEntry {
-  id: string;
-  isDelegated: boolean;
-  local?: LocalOptions;
-  delegated?: DelegateOptions;
-}
+export type ModelEntry =
+  | { id: string; isDelegated: true; delegated: DelegateOptions }
+  | { id: string; isDelegated: false; local: LocalOptions };
 
 // Global registry state - using stateless functions to manage it
 const modelRegistry = new Map<string, ModelEntry>();
@@ -55,24 +49,26 @@ export function registerModel(
         path: string;
         config: unknown;
         modelType: CanonicalModelType;
-        loader?: FilesystemDL;
         name?: string | undefined;
       }
-    | { topic: string; providerPublicKey: string; timeout?: number; healthCheckTimeout?: number },
+    | {
+        providerPublicKey: string;
+        timeout?: number;
+        healthCheckTimeout?: number;
+      },
 ): void {
   if (modelRegistry.has(id)) {
     throw new ModelAlreadyRegisteredError(id);
   }
 
-  const isDelegated = "topic" in options && "providerPublicKey" in options;
+  const isDelegated = "providerPublicKey" in options;
 
   if (isDelegated) {
-    const { topic, providerPublicKey, timeout, healthCheckTimeout } = options;
+    const { providerPublicKey, timeout, healthCheckTimeout } = options;
     modelRegistry.set(id, {
       id,
       isDelegated: true,
       delegated: {
-        topic,
         providerPublicKey,
         timeout,
         healthCheckTimeout,
@@ -80,7 +76,7 @@ export function registerModel(
     });
 
     logger.info(
-      `Delegated model registered: ${id} -> topic: ${topic}, provider: ${providerPublicKey}, timeout: ${timeout}ms`,
+      `Delegated model registered: ${id} -> provider: ${providerPublicKey}, timeout: ${timeout}ms`,
     );
   } else {
     modelRegistry.set(id, {
@@ -92,7 +88,6 @@ export function registerModel(
         loadedAt: new Date(),
         config: options.config,
         modelType: options.modelType,
-        ...(options.loader && { loader: options.loader }),
         name: options.name,
       },
     });
@@ -111,11 +106,9 @@ export function getModel(id: string): AnyModel {
   if (!entry) {
     throw new ModelNotFoundError(id);
   }
-
-  if (!entry.local) {
+  if (entry.isDelegated) {
     throw new ModelIsDelegatedError(id);
   }
-
   return entry.local.model;
 }
 
@@ -145,7 +138,7 @@ export function getModelInfo(id: string): {
   name?: string;
 } | null {
   const entry = modelRegistry.get(id);
-  if (!entry || !entry.local) {
+  if (!entry || entry.isDelegated) {
     return null;
   }
 
@@ -171,7 +164,7 @@ export function getModelInfo(id: string): {
 
 export function getModelConfig(id: string): unknown {
   const entry = modelRegistry.get(id);
-  if (!entry || !entry.local) {
+  if (!entry || entry.isDelegated) {
     throw new ModelNotFoundError(id);
   }
   return entry.local.config;
@@ -182,7 +175,7 @@ export function updateModelConfig(id: string, config: unknown): void {
   if (!entry) {
     throw new ModelNotFoundError(id);
   }
-  if (!entry.local) {
+  if (entry.isDelegated) {
     throw new ModelIsDelegatedError(id);
   }
   entry.local.config = config;
@@ -208,9 +201,18 @@ export async function unloadAllModels(): Promise<void> {
 
   for (const modelId of modelIds) {
     const entry = modelRegistry.get(modelId);
-    if (entry?.local?.model && entry.local.model.unload) {
-      await entry.local.model.unload();
-      logger.debug(`Model unloaded: ${modelId}`);
+    try {
+      if (entry && !entry.isDelegated) {
+        if (entry.local.model.unload) {
+          await entry.local.model.unload();
+        }
+        logger.debug(`Model unloaded: ${modelId}`);
+      }
+    } catch (error) {
+      logger.error(
+        `Error unloading model ${modelId}:`,
+        error instanceof Error ? error.message : String(error),
+      );
     }
     modelRegistry.delete(modelId);
   }

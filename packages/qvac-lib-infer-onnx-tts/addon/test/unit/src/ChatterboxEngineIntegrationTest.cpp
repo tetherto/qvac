@@ -59,15 +59,25 @@ static fs::path getPackageRoot() {
   return fs::canonical(root, ec);
 }
 
+static std::string getChatterboxVariant() {
+  const char *env = std::getenv("CHATTERBOX_VARIANT");
+  return (env && std::string(env).size() > 0) ? std::string(env) : "q4";
+}
+
+static std::string variantSuffix(const std::string &variant) {
+  return (variant == "fp32") ? "" : ("_" + variant);
+}
+
 static bool chatterboxModelDirReady(const fs::path &dir) {
   if (!fs::exists(dir) || !fs::is_directory(dir)) {
     return false;
   }
+  const std::string sfx = variantSuffix(getChatterboxVariant());
   const fs::path tokenizer = dir / "tokenizer.json";
-  const fs::path speech = dir / "speech_encoder.onnx";
-  const fs::path embed = dir / "embed_tokens.onnx";
-  const fs::path cond = dir / "conditional_decoder.onnx";
-  const fs::path lm = dir / "language_model.onnx";
+  const fs::path speech = dir / ("speech_encoder" + sfx + ".onnx");
+  const fs::path embed = dir / ("embed_tokens" + sfx + ".onnx");
+  const fs::path cond = dir / ("conditional_decoder" + sfx + ".onnx");
+  const fs::path lm = dir / ("language_model" + sfx + ".onnx");
   return fs::exists(tokenizer) && fs::exists(speech) && fs::exists(embed) &&
          fs::exists(cond) && fs::exists(lm);
 }
@@ -108,14 +118,16 @@ TEST(ChatterboxEngineIntegrationTest,
   ASSERT_TRUE(chatterboxModelDirReady(fs::path(modelDir)))
       << "Chatterbox models not ready after download";
 
+  const std::string sfx = variantSuffix(getChatterboxVariant());
+
   ChatterboxConfig config;
   config.language = "en";
   config.referenceAudio = makeMinimalReferenceAudio();
   config.tokenizerPath = modelDir + "/tokenizer.json";
-  config.speechEncoderPath = modelDir + "/speech_encoder.onnx";
-  config.embedTokensPath = modelDir + "/embed_tokens.onnx";
-  config.conditionalDecoderPath = modelDir + "/conditional_decoder.onnx";
-  config.languageModelPath = modelDir + "/language_model.onnx";
+  config.speechEncoderPath = modelDir + "/speech_encoder" + sfx + ".onnx";
+  config.embedTokensPath = modelDir + "/embed_tokens" + sfx + ".onnx";
+  config.conditionalDecoderPath = modelDir + "/conditional_decoder" + sfx + ".onnx";
+  config.languageModelPath = modelDir + "/language_model" + sfx + ".onnx";
   config.lazySessionLoading = false;
 
   ChatterboxEngine engine(config);

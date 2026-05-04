@@ -11,10 +11,12 @@ const createRagTest = (
     chunkOverlap: number;
     chunkStrategy?: string;
   },
+  suites?: string[],
 ): TestDefinition => ({
   testId,
   params,
   expectation: { validation: "type", expectedType: "string" }, // Returns success message or result object
+  ...(suites && { suites }),
   metadata: {
     category: "rag",
     dependency: "embeddings",
@@ -29,7 +31,7 @@ export const ragEmbeddingsSmall = createRagTest("rag-embeddings-small-chunks", {
   chunkSize: 50,
   chunkOverlap: 10,
   chunkStrategy: "paragraph",
-});
+}, ["smoke"]);
 
 export const ragEmbeddingsMedium = createRagTest(
   "rag-embeddings-medium-chunks",
@@ -107,6 +109,7 @@ export const ragLargeDocument: TestDefinition = {
     chunkStrategy: "paragraph",
   },
   expectation: { validation: "throws-error", errorContains: "context overflow" },
+  suites: ["smoke"],
   metadata: { category: "rag", dependency: "embeddings", estimatedDurationMs: 120000 },
 };
 
@@ -116,7 +119,7 @@ export const ragMediumDocument = createRagTest("rag-medium-document-10kb", {
   chunkSize: 350,
   chunkOverlap: 70,
   chunkStrategy: "paragraph",
-});
+}, ["smoke"]);
 
 export const ragTests = [
   ragEmbeddingsSmall,

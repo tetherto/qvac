@@ -1,7 +1,7 @@
 'use strict'
 
 const test = require('brittle')
-const FilesystemDL = require('@qvac/dl-filesystem')
+const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
 const { ensureModel } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
@@ -141,7 +141,7 @@ async function createToolModel (modelVariant) {
     downloadUrl: modelVariant.downloadUrl
   })
 
-  const loader = new FilesystemDL({ dirPath })
+  const modelPath = path.join(dirPath, modelName)
   const specLogger = attachSpecLogger({ forwardToConsole: true })
   let loggerReleased = false
   const releaseLogger = () => {
@@ -151,18 +151,16 @@ async function createToolModel (modelVariant) {
   }
 
   const model = new LlmLlamacpp({
-    loader,
-    modelName,
-    diskPath: dirPath,
+    files: { model: [modelPath] },
+    config: BASE_CONFIG,
     logger: console,
     opts: { stats: true }
-  }, BASE_CONFIG)
+  })
 
   try {
     await model.load()
   } catch (err) {
     releaseLogger()
-    await loader.close().catch(() => {})
     throw err
   }
 
@@ -170,7 +168,6 @@ async function createToolModel (modelVariant) {
     model,
     async release () {
       await model.unload().catch(() => {})
-      await loader.close().catch(() => {})
       releaseLogger()
     }
   }

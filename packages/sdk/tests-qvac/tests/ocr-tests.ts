@@ -8,10 +8,12 @@ const createOcrTest = (
     | { validation: "type"; expectedType: "array" },
   options?: { streaming?: boolean; paragraph?: boolean },
   estimatedDurationMs: number = 30000,
+  suites?: string[],
 ): TestDefinition => ({
   testId,
   params: { imageFileName, timeout: 300000, ...options },
   expectation,
+  ...(suites && { suites }),
   metadata: { category: "ocr", dependency: "ocr", estimatedDurationMs },
 });
 
@@ -19,6 +21,7 @@ export const ocrBasicPng = createOcrTest(
   "ocr-basic-png", "ocr-simple-test-png.png",
   { validation: "contains-any", contains: ["OCR", "text", "testing", "implementation", "recognize", "Type", "enter"] },
   undefined, 60000,
+  ["smoke"],
 );
 
 export const ocrBasicJpg = createOcrTest(
@@ -31,6 +34,7 @@ export const ocrStreaming = createOcrTest(
   "ocr-streaming", "ocr-simple-test-png.png",
   { validation: "contains-any", contains: ["OCR", "text", "testing", "Type", "enter"] },
   { streaming: true }, 60000,
+  ["smoke"],
 );
 
 export const ocrParagraphMode = createOcrTest(
@@ -119,6 +123,7 @@ export const ocrStats = createOcrTest(
   "ocr-stats", "ocr-simple-test-png.png",
   { validation: "type", expectedType: "array" },
   undefined, 60000,
+  ["smoke"],
 );
 
 export const ocrStreamingStats = createOcrTest(
@@ -131,6 +136,7 @@ export const ocrBlockStructure = createOcrTest(
   "ocr-block-structure", "ocr-simple-test-png.png",
   { validation: "type", expectedType: "array" },
   undefined, 60000,
+  ["smoke"],
 );
 
 export const ocrStreamingBlockStructure = createOcrTest(

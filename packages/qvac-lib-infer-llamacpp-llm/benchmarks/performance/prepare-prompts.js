@@ -3,7 +3,6 @@
 const fs = require('bare-fs')
 const path = require('bare-path')
 const process = require('bare-process')
-const FilesystemDL = require('@qvac/dl-filesystem')
 const Llm = require('../../index')
 const {
   PROMPT_CTX_SIZES,
@@ -200,24 +199,20 @@ function batchTemplateMessages () {
 }
 
 async function main () {
-  if (!fs.existsSync(path.join(MODEL_DIR, MODEL_NAME))) {
-    throw new Error(`Missing tokenizer model at ${path.join(MODEL_DIR, MODEL_NAME)}. Run model prep first.`)
+  const modelPath = path.join(MODEL_DIR, MODEL_NAME)
+  if (!fs.existsSync(modelPath)) {
+    throw new Error(`Missing tokenizer model at ${modelPath}. Run model prep first.`)
   }
 
-  const loader = new FilesystemDL({ dirPath: MODEL_DIR })
   let model = null
 
   try {
     try {
-      model = new Llm(
-        {
-          modelName: MODEL_NAME,
-          loader,
-          diskPath: MODEL_DIR,
-          opts: { stats: true }
-        },
-        FAST_PROBE_RUNTIME
-      )
+      model = new Llm({
+        files: { model: [modelPath] },
+        config: FAST_PROBE_RUNTIME,
+        opts: { stats: true }
+      })
       await model.load()
       console.log('Prompt calibration runtime: gpu (fast path)')
     } catch (gpuErr) {
@@ -227,15 +222,11 @@ async function main () {
       }
       console.warn(`GPU probe init failed; falling back to CPU: ${msg}`)
       if (model) await model.unload().catch(() => {})
-      model = new Llm(
-        {
-          modelName: MODEL_NAME,
-          loader,
-          diskPath: MODEL_DIR,
-          opts: { stats: true }
-        },
-        SAFE_FALLBACK_RUNTIME
-      )
+      model = new Llm({
+        files: { model: [modelPath] },
+        config: SAFE_FALLBACK_RUNTIME,
+        opts: { stats: true }
+      })
       await model.load()
       console.log('Prompt calibration runtime: cpu (fallback)')
     }
@@ -282,7 +273,6 @@ async function main () {
     console.log(`Wrote ${prompts.length} prompts to ${OUTPUT_PATH}`)
   } finally {
     if (model) await model.unload().catch(() => {})
-    await loader.close().catch(() => {})
   }
 }
 

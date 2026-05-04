@@ -8,10 +8,12 @@ const createDiffusionTest = (
     | { validation: "type"; expectedType: "string" | "number" | "array" }
     | { validation: "throws-error"; errorContains: string },
   estimatedDurationMs: number = 300000,
+  suites?: string[],
 ): TestDefinition => ({
   testId,
   params,
   expectation,
+  ...(suites && { suites }),
   metadata: {
     category: "diffusion",
     dependency: "diffusion",
@@ -31,6 +33,8 @@ export const diffusionBasicTxt2img = createDiffusionTest(
     seed: 42,
   },
   { validation: "type", expectedType: "array" },
+  300000,
+  ["smoke"],
 );
 
 export const diffusionDefaultSize = createDiffusionTest(
@@ -137,6 +141,22 @@ export const diffusionBatchCount = createDiffusionTest(
   600000,
 );
 
+// ---- img2img ----
+
+export const diffusionBasicImg2img = createDiffusionTest(
+  "diffusion-basic-img2img",
+  {
+    prompt: "oil painting style, vibrant colors",
+    init_image: "elephant.jpg",
+    strength: 0.5,
+    width: 256,
+    height: 256,
+    steps: 4,
+    seed: 42,
+  },
+  { validation: "type", expectedType: "array" },
+);
+
 // ---- streaming ----
 
 export const diffusionStreaming = createDiffusionTest(
@@ -161,6 +181,8 @@ export const diffusionStreamingProgress = createDiffusionTest(
     seed: 42,
   },
   { validation: "type", expectedType: "string" },
+  300000,
+  ["smoke"],
 );
 
 // ---- stats ----
@@ -201,6 +223,7 @@ export const diffusionTests = [
   diffusionSchedulerKarras,
   diffusionSeedReproducibility,
   diffusionBatchCount,
+  diffusionBasicImg2img,
   diffusionStreaming,
   diffusionStreamingProgress,
   diffusionStatsPresent,

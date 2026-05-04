@@ -3,7 +3,6 @@
 const fs = require('bare-fs')
 const path = require('bare-path')
 const process = require('bare-process')
-const FilesystemDL = require('@qvac/dl-filesystem')
 const {
   parseAddonSource,
   resolveAddonCtor,
@@ -249,7 +248,6 @@ async function main () {
           continue
         }
       }
-      let loader = null
       let model = null
       let modelLoaded = false
       let caseRepeatsAttempted = 0
@@ -269,18 +267,16 @@ async function main () {
 
         debugLogger.log(`Running: ${testCase.caseId}`)
 
-        loader = new FilesystemDL({ dirPath: modelDef.modelDir })
         const config = buildConfigObject(testCase.runtimeConfig)
         const addonRuntimeLogger = createAddonRuntimeLogger(debugEnabled)
 
         // Load model once for this case
         model = new AddonCtor({
-          modelName: testCase.modelName,
-          loader,
+          files: { model: [path.join(modelDef.modelDir, testCase.modelName)] },
+          config,
           logger: addonRuntimeLogger,
-          diskPath: modelDef.modelDir,
           opts: { stats: true }
-        }, config)
+        })
 
         const loadStart = process.hrtime()
         let loadMs = null
@@ -326,12 +322,6 @@ async function main () {
             })
             completedCases.add(caseKey)
             saveProgress()
-            // Clean up loader before continuing
-            try {
-              await loader.close().catch(() => {})
-            } catch {
-              // Ignore cleanup errors
-            }
             continue // Skip to next case
           }
           throw loadError
@@ -529,13 +519,6 @@ async function main () {
           }
         }
 
-        // Close loader after all prompts
-        try {
-          await loader.close().catch(() => {})
-        } catch (closeError) {
-          debugLogger.warn(`Failed to close loader: ${closeError.message || String(closeError)}`)
-        }
-
         // Add delay after case completion to allow cleanup
         await new Promise(resolve => setTimeout(resolve, 200))
 
@@ -602,13 +585,6 @@ async function main () {
         try {
           if (model && modelLoaded) {
             await model.unload().catch(() => {})
-          }
-        } catch {
-          // Ignore cleanup errors
-        }
-        try {
-          if (loader) {
-            await loader.close().catch(() => {})
           }
         } catch {
           // Ignore cleanup errors

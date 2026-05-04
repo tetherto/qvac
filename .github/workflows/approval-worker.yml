@@ -48,7 +48,7 @@ jobs:
       pull-requests: write
       statuses: write
       issues: write
-    uses: tetherto/oss-actions/.github/workflows/approval-check-worker.yml@v1.1.0
+    uses: ./.github/workflows/approval-check-worker.yml
     secrets:
       pat_token: ${{ secrets.PAT_TOKEN }}
     with:

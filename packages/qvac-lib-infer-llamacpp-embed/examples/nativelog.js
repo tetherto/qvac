@@ -1,6 +1,6 @@
 'use strict'
 
-const FilesystemDL = require('@qvac/dl-filesystem')
+const path = require('bare-path')
 const GGMLBert = require('../index.js')
 const { setLogger, releaseLogger } = require('../addonLogging.js')
 const { downloadModel } = require('./utils')
@@ -36,25 +36,19 @@ async function main () {
     'gte-large_fp16.gguf'
   )
 
-  // 3. Initializing data loader
-  const fsDL = new FilesystemDL({ dirPath })
-
-  // 4. Configuring model settings
-  const args = {
-    loader: fsDL,
+  // 3. Configuring model settings
+  const model = new GGMLBert({
+    files: { model: [path.join(dirPath, modelName)] },
+    config: { device: 'gpu', gpu_layers: '25', verbosity: '2' },
     logger: console,
-    opts: { stats: true },
-    diskPath: dirPath,
-    modelName
-  }
-  const config = { device: 'gpu', gpu_layers: '25', verbosity: '2' }
+    opts: { stats: true }
+  })
 
-  // 5. Loading model
-  const model = new GGMLBert(args, config)
+  // 4. Loading model
   await model.load()
 
   try {
-    // 6. Generating embeddings
+    // 5. Generating embeddings
     const query = 'Hello, can you suggest a game I can play with my 1 year old daughter?'
     const response = await model.run(query)
     const embeddings = await response.await()
@@ -67,9 +61,8 @@ async function main () {
     console.error('Error occurred:', errorMessage)
     console.error('Error details:', error)
   } finally {
-    // 7. Cleaning up resources
+    // 6. Cleaning up resources
     await model.unload()
-    await fsDL.close()
     releaseLogger()
   }
 }

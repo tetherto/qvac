@@ -5,10 +5,12 @@ const createEmbeddingTest = (
   testId: string,
   params: { text?: string; codeFile?: string },
   minDimensions: number = 128,
+  suites?: string[],
 ): TestDefinition => ({
   testId,
   params,
   expectation: { validation: "type", expectedType: "array" },
+  ...(suites && { suites }),
   metadata: {
     category: "embedding",
     dependency: "embeddings",
@@ -20,6 +22,7 @@ export const embedSimpleText = createEmbeddingTest(
   "embed-simple-text",
   { text: "Hello world, this is a test of text embedding." },
   100,
+  ["smoke"],
 );
 
 export const embedLongText = createEmbeddingTest(
@@ -75,6 +78,7 @@ export const embedBatch: TestDefinition = {
     ],
   },
   expectation: { validation: "type", expectedType: "array" },
+  suites: ["smoke"],
   metadata: {
     category: "embedding",
     dependency: "embeddings",

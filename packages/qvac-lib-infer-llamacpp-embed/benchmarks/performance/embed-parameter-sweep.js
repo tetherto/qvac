@@ -84,7 +84,7 @@ async function main () {
   const debugEnabled = Boolean(args.debug)
   const debugLogger = createDebugLogger(debugEnabled)
   const addonSource = parseAddonSource(args['addon-source'])
-  const addonCtor = resolveAddonCtor(addonSource)
+  const AddonCtor = resolveAddonCtor(addonSource)
   const repeats = parseRepeats(args.repeats)
   const resultsDir = DEFAULT_RESULTS_DIR
   const inputsFilePath = DEFAULT_INPUTS_FILE
@@ -120,7 +120,7 @@ async function main () {
 
   for (const plan of plannedRunsByModel) {
     const modelResult = await runModelCases({
-      addonCtor,
+      AddonCtor,
       repeats,
       debugEnabled,
       debugLogger,

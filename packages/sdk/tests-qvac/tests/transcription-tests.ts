@@ -12,10 +12,12 @@ const createTranscriptionTest = (
       }
     | { validation: "regex"; pattern: string },
   estimatedDurationMs: number = 30000,
+  suites?: string[],
 ): TestDefinition => ({
   testId,
   params: { audioFileName, timeout: 300000 },
   expectation,
+  ...(suites && { suites }),
   metadata: {
     category: "transcription",
     dependency: "whisper",
@@ -30,6 +32,8 @@ export const transcriptionShortWav = createTranscriptionTest(
     validation: "contains-all",
     contains: ["test", "automation"],
   },
+  30000,
+  ["smoke"],
 );
 
 export const transcriptionShortMp3 = createTranscriptionTest(
@@ -39,6 +43,8 @@ export const transcriptionShortMp3 = createTranscriptionTest(
     validation: "contains-all",
     contains: ["test", "automation"],
   },
+  30000,
+  ["smoke"],
 );
 
 export const transcriptionShortAac = createTranscriptionTest(
@@ -79,6 +85,7 @@ export const transcriptionStreaming = createTranscriptionTest(
   "transcription-short-wav.wav",
   { validation: "type", expectedType: "string" },
   10000,
+  ["smoke"],
 );
 
 export const transcriptionVeryShort = createTranscriptionTest(
@@ -92,6 +99,7 @@ export const transcriptionCorruptedMp3: TestDefinition = {
   testId: "transcription-corrupted-mp3",
   params: { audioFileName: "corrupted-mp3.mp3" },
   expectation: { validation: "throws-error", errorContains: "" },
+  suites: ["smoke"],
   metadata: { category: "transcription", dependency: "whisper", estimatedDurationMs: 30000 },
 };
 
@@ -109,6 +117,7 @@ export const transcriptionWithPrompt: TestDefinition = {
     prompt: "This is a test recording about QVAC SDK automation testing.",
   },
   expectation: { validation: "contains-any", contains: ["test", "QVAC"] },
+  suites: ["smoke"],
   metadata: { category: "transcription", dependency: "whisper", estimatedDurationMs: 30000 },
 };
 

@@ -192,24 +192,25 @@ wget -O ~/.qvac/models/AfriqueGemma-4B-Q4_K_M.gguf \
 
 ```javascript
 const LlmLlamacpp = require('@qvac/llm-llamacpp')
-const FilesystemDL = require('@qvac/dl-filesystem')
+const path = require('bare-path')
 
-const loader = new FilesystemDL({ dirPath: '/path/to/models' })
+const modelDir = '/path/to/models'
 
 const model = new LlmLlamacpp({
-  loader,
-  modelName: 'AfriqueGemma-4B-Q4_K_M.gguf',
-  diskPath: '/path/to/models',
+  files: {
+    model: [path.join(modelDir, 'AfriqueGemma-4B-Q4_K_M.gguf')]
+  },
+  config: {
+    device: 'cpu',
+    ctx_size: '2048',
+    temp: '0',
+    top_k: '1',
+    top_p: '1',
+    n_predict: '64',
+    seed: '42',
+    tools: 'true'
+  },
   logger: console
-}, {
-  device: 'cpu',
-  ctx_size: '2048',
-  temp: '0',
-  top_k: '1',
-  top_p: '1',
-  n_predict: '64',
-  seed: '42',
-  tools: 'true'
 })
 
 await model.load()
@@ -230,7 +231,6 @@ translation = translation.split('\n')[0].trim()
 console.log(translation)
 
 await model.unload()
-await loader.close()
 ```
 
 ### Python Validation (Transformers)
@@ -320,7 +320,7 @@ The model generates text beyond the first translation line. Use one of:
 
 ### Production Considerations
 
-1. **Model path:** Store GGUF in a persistent volume. Use `FilesystemDL` or `HyperdriveDL` for loading.
+1. **Model path:** Store GGUF in a persistent volume. Models are passed to `LlmLlamacpp` as absolute paths via `files.model` (an array of one or more GGUF file paths).
 2. **Warm-up:** First inference after load is slower due to KV cache initialization. Run a dummy prompt after `model.load()`.
 3. **Concurrency:** `LlmLlamacpp` supports one active inference at a time. Queue requests at the application layer.
 4. **Error handling:** Wrap `model.run()` in try/catch. The addon throws on context overflow or busy state.

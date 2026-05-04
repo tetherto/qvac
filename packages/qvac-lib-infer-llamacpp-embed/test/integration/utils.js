@@ -5,7 +5,6 @@ const path = require('bare-path')
 const https = require('bare-https')
 const os = require('bare-os')
 const GGMLBert = require('../../index.js')
-const FilesystemDL = require('@qvac/dl-filesystem')
 
 /**
  * Downloads a file from a URL to a destination path
@@ -162,15 +161,14 @@ class TestLogger {
  * @param {string} device - Device to use: 'cpu' or 'gpu' (default: 'gpu')
  * @param {string} gpuLayers - Number of GPU layers (default: '999' for GPU, '0' for CPU)
  * @param {string} batchSize - Batch size (default: '1024')
- * @returns {Promise<{inference: GGMLBert, loader: FilesystemDL}>}
+ * @returns {Promise<{inference: GGMLBert}>}
  */
 async function createEmbeddingsTestInstance (t, modelName, device = 'gpu', gpuLayers = null, batchSize = '1024') {
   const [, modelDir] = await ensureModel(modelName)
-  const diskPath = modelDir
+  const modelPath = path.join(modelDir, modelName)
 
-  t.ok(fs.existsSync(path.join(diskPath, modelName)), 'Model file should exist')
+  t.ok(fs.existsSync(modelPath), 'Model file should exist')
 
-  const loader = new FilesystemDL({ dirPath: diskPath })
   const logger = new TestLogger()
 
   // Force CPU on darwin-x64
@@ -180,35 +178,36 @@ async function createEmbeddingsTestInstance (t, modelName, device = 'gpu', gpuLa
     console.log('Platform detected: darwin-x64, forcing device to CPU')
   }
 
-  // Determine gpu_layers based on device if not explicitly provided
   const actualGpuLayers = gpuLayers !== null ? gpuLayers : (device === 'cpu' ? '0' : '999')
 
-  // Build config object with device and gpu_layers parameters
   const config = {
     gpu_layers: actualGpuLayers,
     batch_size: batchSize
   }
 
-  // Add device preference if specified
   if (device === 'cpu' || device === 'gpu') {
     config.device = device
   }
 
-  // Disable flash attention on Android
   if (os.platform() === 'android') {
     config.flash_attn = 'off'
     console.log('Platform detected: Android, setting flash_attn to off')
   }
 
-  config.openclCacheDir = diskPath
+  config.openclCacheDir = modelDir
 
-  const inference = new GGMLBert({ modelName, loader, logger, diskPath, opts: { stats: true } }, config)
+  const inference = new GGMLBert({
+    files: { model: [modelPath] },
+    config,
+    logger,
+    opts: { stats: true }
+  })
 
   const t0 = Date.now()
   await inference.load()
   console.log(`  model.load() took ${Date.now() - t0} ms`)
 
-  return { inference, loader }
+  return { inference }
 }
 
 /**
@@ -260,12 +259,10 @@ function removeErrorHandlers (response) {
 
 /**
  * Cleans up test resources
- * @param {Object} loader - The loader instance
  * @param {Object} inference - The inference instance
  * @returns {Promise<void>}
  */
-async function cleanupResources (loader, inference) {
-  await loader.close()
+async function cleanupResources (inference) {
   await inference.unload()
 }
 

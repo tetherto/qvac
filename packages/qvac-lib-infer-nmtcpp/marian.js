@@ -97,6 +97,31 @@ class TranslationInterface {
   }
 
   /**
+   * Returns the name of the currently-loaded non-CPU backend (e.g. 'Vulkan0',
+   * 'OpenCL', 'Metal'), or a sentinel string:
+   *   - 'Unloaded'     — model is not loaded
+   *   - 'Bergamot-CPU' — Bergamot model (CPU-only by design)
+   *   - 'CPU'          — GGML backend loaded, only CPU backend registered
+   *
+   * Synchronous by design: reads cached state populated at load() time.
+   * @returns {string}
+   */
+  getActiveBackendName () {
+    if (this._handle === null) {
+      return 'Unloaded'
+    }
+    try {
+      return binding.getActiveBackendName(this._handle)
+    } catch (err) {
+      throw new QvacErrorAddonMarian({
+        code: ERR_CODES.FAILED_TO_GET_BACKEND_NAME,
+        adds: err.message,
+        cause: err
+      })
+    }
+  }
+
+  /**
    * Submits a job to the processing pipeline
    * @param {Object} data
    * @param {String} data.type - 'text' for single input, 'sequences' for batch

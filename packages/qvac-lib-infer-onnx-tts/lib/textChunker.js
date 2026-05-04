@@ -219,5 +219,6 @@ module.exports = {
   splitTtsText,
   intlSentenceSegmentationAvailable,
   splitByIntlSentences,
-  splitByAsciiAndCjkPunctuation
+  splitByAsciiAndCjkPunctuation,
+  countScalars
 }

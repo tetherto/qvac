@@ -4,11 +4,13 @@ function createFinetuneTest(
   testId: string,
   params: Record<string, unknown>,
   estimatedDurationMs: number,
+  suites?: string[],
 ): TestDefinition {
   return {
     testId,
     params,
     expectation: { validation: "type", expectedType: "string" },
+    ...(suites && { suites }),
     metadata: {
       category: "finetune",
       dependency: "finetune-llm",
@@ -23,6 +25,7 @@ export const finetuneStartComplete = createFinetuneTest(
     numberOfEpochs: 1,
   },
   60000,
+  ["smoke"],
 );
 
 export const finetunePauseResume = createFinetuneTest(
@@ -51,9 +54,18 @@ export const finetuneErrorCases = createFinetuneTest(
   30000,
 );
 
+export const finetuneProgressZeroDrop = createFinetuneTest(
+  "finetune-progress-zero-drop",
+  {
+    numberOfEpochs: 2,
+  },
+  120000,
+);
+
 export const finetuneTests = [
   finetuneStartComplete,
   finetunePauseResume,
   finetuneProgressStreaming,
   finetuneErrorCases,
+  finetuneProgressZeroDrop,
 ];

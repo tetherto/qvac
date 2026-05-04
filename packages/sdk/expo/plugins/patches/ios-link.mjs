@@ -54,7 +54,7 @@ if (fs.existsSync(manifestPath)) {
 for await (const resource of link(
   projectRoot,
   {
-    target: ["ios-arm64", "ios-arm64-simulator", "ios-x64-simulator"],
+    hosts: ["ios-arm64", "ios-arm64-simulator", "ios-x64-simulator"],
     out: addonsDir,
   },
   pkg,

@@ -75,7 +75,7 @@ export function InkeepScript() {
     },
     aiChatSettings: {
       // optional settings
-      aiAssistantAvatar: "/qvac-favicon.ico", // use your own AI assistant avatar
+      aiAssistantAvatar: "/favicon.ico", // use your own AI assistant avatar
       exampleQuestions: [
         "What is QVAC?",
         "How to get started with QVAC?",

@@ -128,16 +128,16 @@ $env:VCPKG_ROOT = "C:\path\to\vcpkg"
 
 **Linux:**
 ```bash
-# Ubuntu/Debian
+# Ubuntu/Debian — includes Clang and libc++ required by the native addon
 sudo apt update
-sudo apt install build-essential cmake git pkg-config
+sudo apt install clang libc++-dev libc++abi-dev build-essential cmake git pkg-config
 
 # CentOS/RHEL/Fedora
 sudo yum groupinstall "Development Tools"
-sudo yum install cmake git pkgconfig
+sudo yum install cmake git pkgconfig clang
 # or for newer versions:
 sudo dnf groupinstall "Development Tools"
-sudo dnf install cmake git pkgconfig
+sudo dnf install cmake git pkgconfig clang
 ```
 
 **macOS:**
@@ -206,6 +206,18 @@ This command runs the complete build sequence:
 2. `bare-make build` - Compiles the native C++ addon
 3. `bare-make install` - Installs the built addon
 
+#### Building with Vulkan GPU Acceleration
+
+On Linux, Android, and Windows, Vulkan support can be enabled at build time. Ensure the [Vulkan SDK](#gpu-acceleration-optional) is installed, then pass `-D ENABLE_VULKAN=ON` during the generate step:
+
+```bash
+bare-make generate -D ENABLE_VULKAN=ON
+bare-make build
+bare-make install
+```
+
+CI prebuilds for Linux, Android, and Windows include Vulkan by default. macOS and iOS use Metal instead.
+
 #### Running Tests
 
 After building, you can run the test suite:
@@ -260,6 +272,20 @@ Most users interact with the addon exclusively through `index.js`. From that ent
 | | | *(all other context keys keep their defaults because changing them forces a full reload, see below)* |
 | `whisperConfig` | *(any `whisper_full_params` key)* | Forwarded untouched. We surface convenience defaults in `index.js`, but every whisper.cpp flag is accepted—see [Advanced configuration](#advanced-configuration). |
 | `miscConfig` | `caption_enabled` | Formats segments with `<\|start\|>..<\|end\|>` markers |
+
+#### GPU acceleration is opt-in
+
+`use_gpu` defaults to `false`. To enable Vulkan (Linux/Windows/Android) or Metal (macOS/iOS) acceleration, set `use_gpu: true` explicitly in `contextParams`:
+
+```javascript
+const config = {
+  contextParams: {
+    model: './models/ggml-tiny.bin',
+    use_gpu: true,   // opt-in to GPU
+    gpu_device: 0
+  }
+}
+```
 
 #### Context keys that force a full reload
 

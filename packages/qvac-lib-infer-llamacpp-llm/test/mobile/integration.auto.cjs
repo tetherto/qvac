@@ -6,6 +6,7 @@ require('./integration-runtime.cjs')
 // Functions are invoked dynamically by the mobile test runner framework.
 
 /* global runIntegrationModule */
+
 /* global __shouldRunTest */
 
 const __FILTERED = { modulePath: 'filtered', summary: { total: 0, passed: 0, failed: 0 } }
@@ -40,11 +41,6 @@ async function runConfigParametersTest (options = {}) { // eslint-disable-line n
   return runIntegrationModule('../integration/config-parameters.test.js', options)
 }
 
-async function runDynamicToolsTest (options = {}) { // eslint-disable-line no-unused-vars
-  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runDynamicToolsTest')) return __FILTERED
-  return runIntegrationModule('../integration/dynamic-tools.test.js', options)
-}
-
 async function runFinetuningPauseResumeTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runFinetuningPauseResumeTest')) return __FILTERED
   return runIntegrationModule('../integration/finetuning-pause-resume.test.js', options)
@@ -53,6 +49,11 @@ async function runFinetuningPauseResumeTest (options = {}) { // eslint-disable-l
 async function runGenerationParamsTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runGenerationParamsTest')) return __FILTERED
   return runIntegrationModule('../integration/generation-params.test.js', options)
+}
+
+async function runGrammarTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runGrammarTest')) return __FILTERED
+  return runIntegrationModule('../integration/grammar.test.js', options)
 }
 
 async function runImageTest (options = {}) { // eslint-disable-line no-unused-vars
@@ -68,6 +69,11 @@ async function runModelLoadingTest (options = {}) { // eslint-disable-line no-un
 async function runMoeTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runMoeTest')) return __FILTERED
   return runIntegrationModule('../integration/moe.test.js', options)
+}
+
+async function runMultiGpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runMultiGpuTest')) return __FILTERED
+  return runIntegrationModule('../integration/multi-gpu.test.js', options)
 }
 
 async function runMultiInstanceTest (options = {}) { // eslint-disable-line no-unused-vars
@@ -93,6 +99,11 @@ async function runSlidingContextTest (options = {}) { // eslint-disable-line no-
 async function runToolCallingTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runToolCallingTest')) return __FILTERED
   return runIntegrationModule('../integration/tool-calling.test.js', options)
+}
+
+async function runToolsCompactTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runToolsCompactTest')) return __FILTERED
+  return runIntegrationModule('../integration/tools-compact.test.js', options)
 }
 
 async function runUtf8OutputTest (options = {}) { // eslint-disable-line no-unused-vars

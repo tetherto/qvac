@@ -1,7 +1,6 @@
 import type {
   Request,
   Response,
-  QvacConfig,
   RuntimeContext,
   CanonicalModelType,
 } from "@/schemas";
@@ -26,7 +25,9 @@ import { getAllPlugins } from "@/server/plugins";
 import {
   initializeWorkerCore,
   shutdownBareDirectWorker,
+  cleanupForTerminate,
 } from "@/server/worker-core";
+import { assertLifecycleAllowed } from "@/server/bare/runtime-lifecycle";
 
 const logger = getClientLogger();
 
@@ -97,7 +98,7 @@ function applyDeviceDefaultsToLoadModel<T extends Request>(request: T): T {
   const rawConfig = (request.modelConfig as Record<string, unknown>) ?? {};
   const configWithDefaults = resolveModelConfig(canonicalType, rawConfig);
 
-  return { ...request, modelConfig: configWithDefaults } as T;
+  return { ...request, modelConfig: configWithDefaults };
 }
 
 function supportsProgressStreaming(request: Request) {
@@ -144,6 +145,8 @@ async function* streamWithProgress(
 }
 
 export async function send<T extends Request>(request: T): Promise<Response> {
+  assertLifecycleAllowed(request);
+
   const handler = getHandler(request.type);
   if (!handler) throw new RPCNoHandlerError(request.type);
 
@@ -152,6 +155,8 @@ export async function send<T extends Request>(request: T): Promise<Response> {
 }
 
 async function* stream<T extends Request>(request: T) {
+  assertLifecycleAllowed(request);
+
   const handler = getHandler(request.type);
   if (!handler) throw new RPCNoHandlerError(request.type);
 
@@ -207,11 +212,32 @@ function createMockRPCRequest() {
             runtimeContext?: RuntimeContext;
           };
           if (initData.config) {
-            setSDKConfig(initData.config as QvacConfig);
+            setSDKConfig(initData.config);
           }
           if (initData.runtimeContext) {
             setRuntimeContext(initData.runtimeContext);
           }
+          return Buffer.from(JSON.stringify({ success: true }));
+        } catch (error) {
+          return Buffer.from(
+            JSON.stringify({
+              success: false,
+              error: error instanceof Error ? error.message : String(error),
+            }),
+          );
+        }
+      }
+
+      // Handle special pre-terminate cleanup signal. In direct mode the
+      // bare runtime is the host JS context, so we run cleanup but never
+      // exit the process here.
+      if (
+        typeof requestData === "object" &&
+        "type" in requestData &&
+        requestData.type === "__shutdown__"
+      ) {
+        try {
+          await cleanupForTerminate();
           return Buffer.from(JSON.stringify({ success: true }));
         } catch (error) {
           return Buffer.from(
@@ -257,7 +283,7 @@ export async function getRPC() {
   if (!configInitialized) {
     const runtimeContext: RuntimeContext = {
       runtime: "bare",
-      platform: os.platform() as "darwin" | "linux" | "win32",
+      platform: os.platform(),
     };
     await initializeConfig(mockRPC, resolveConfig, runtimeContext);
     configInitialized = true;
@@ -276,6 +302,8 @@ export async function createDuplexSession(payload: string, _commandId: number) {
 
   const { PassThrough } = await import("bare-stream");
   const request = JSON.parse(payload) as Request;
+
+  assertLifecycleAllowed(request);
 
   const entry = registry[request.type];
   if (!entry || entry.type !== "duplex") {

@@ -1,6 +1,6 @@
 import fs from "bare-fs";
 import path from "bare-path";
-import { getEnv } from "@/server/env";
+import { getQvacPath } from "@/server/utils/qvac-paths";
 import {
   CacheDirNotAbsoluteError,
   CacheDirNotWritableError,
@@ -22,6 +22,7 @@ const configRegistry: QvacConfig = {
   loggerConsoleOutput: undefined,
   httpDownloadConcurrency: undefined,
   registryDownloadMaxRetries: undefined,
+  registryStreamTimeoutMs: undefined,
   deviceDefaults: undefined,
 };
 
@@ -109,6 +110,16 @@ export function setSDKConfig(config: QvacConfig) {
     );
   }
 
+  if (
+    config.registryStreamTimeoutMs !== undefined &&
+    config.registryStreamTimeoutMs !== null
+  ) {
+    configRegistry.registryStreamTimeoutMs = config.registryStreamTimeoutMs;
+    logger.info(
+      `✅ Registry stream timeout set to: ${config.registryStreamTimeoutMs}ms`,
+    );
+  }
+
   if (config.deviceDefaults !== undefined && config.deviceDefaults !== null) {
     configRegistry.deviceDefaults = config.deviceDefaults;
     logger.info(
@@ -125,8 +136,7 @@ export function getSDKConfig(): QvacConfig {
 }
 
 function getDefaultCacheDir() {
-  const homeDir = getEnv().HOME_DIR;
-  return path.join(homeDir, ".qvac", "models");
+  return getQvacPath("models");
 }
 
 export function getConfiguredCacheDir(): string {
