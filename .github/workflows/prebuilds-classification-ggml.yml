@@ -1,19 +1,30 @@
-# Build-only workflow. Publishing lives in the merge/release pipelines.
+# Build-only workflow. Publishing lives in on-merge-classification-ggml.yml.
 name: Prebuilds (GGML Classification)
 
 on:
+  workflow_dispatch:
+    inputs:
+      workdir:
+        description: "Working directory (optional)"
+        required: false
+        type: string
+        default: "packages/classification-ggml"
+
   workflow_call:
     inputs:
       ref:
         description: "ref"
         type: string
+        required: false
       repository:
         type: string
+        required: false
         default: "tetherto/qvac"
-  workflow_dispatch:
-
-env:
-  PKG_DIR: packages/classification-ggml
+      workdir:
+        description: "Working directory (optional)"
+        required: false
+        type: string
+        default: "packages/classification-ggml"
 
 permissions:
   contents: read
@@ -24,208 +35,10 @@ jobs:
       contents: write
       pull-requests: write
       id-token: write
-      packages: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-22.04
-            platform: linux
-            arch: x64
-          - os: ubuntu-22.04-arm
-            platform: linux
-            arch: arm64
-          - os: ubuntu-24.04
-            platform: android
-            arch: arm64
-            flags: -D ANDROID_STL=c++_shared -D BUILD_TESTING=OFF
-          - os: macos-14
-            platform: darwin
-            arch: arm64
-          - os: macos-14
-            platform: ios
-            arch: arm64
-            flags: -D BUILD_TESTING=OFF
-          - os: windows-2022
-            platform: win32
-            arch: x64
-
-    runs-on: ${{ matrix.os }}
-    environment: release
-    name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
-
-    steps:
-      - name: Echo workflow inputs
-        shell: bash
-        env:
-          INPUT_REF: ${{ inputs.ref || github.ref }}
-          INPUT_REPO: ${{ inputs.repository || github.repository }}
-          MATRIX_PLATFORM: ${{ matrix.platform }}
-          MATRIX_ARCH: ${{ matrix.arch }}
-          PKG_DIR_VAR: ${{ env.PKG_DIR }}
-        run: |
-          echo "Workflow inputs:"
-          echo "Ref: $INPUT_REF"
-          echo "Repository: $INPUT_REPO"
-          echo "Matrix platform: $MATRIX_PLATFORM"
-          echo "Matrix arch: $MATRIX_ARCH"
-          echo "PKG_DIR: $PKG_DIR_VAR"
-
-      - if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'ubuntu-24.04' }}
-        name: Update C++ tools
-        run: |
-          wget https://apt.llvm.org/llvm.sh
-          chmod +x llvm.sh
-          sudo ./llvm.sh 19 all
-
-      - if: ${{ matrix.os == 'windows-2022' }}
-        name: Configure Windows runner
-        run: |
-          git config --system core.longpaths true
-
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
-          submodules: recursive
-
-      - name: Setup AWS + Windows CLI
-        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@0bbdca93da303a0b1634ba14a89cec085621078d
-        with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-
-      - name: Setup vcpkg cache
-        uses: tetherto/qvac/.github/actions/setup-vcpkg-cache@0bbdca93da303a0b1634ba14a89cec085621078d
-        env:
-          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
-        with:
-          platform: ${{ matrix.platform }}
-          arch: ${{ matrix.arch }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
-        with:
-          node-version: 20
-
-      - name: Setup Bare + bare-make
-        uses: tetherto/qvac/.github/actions/setup-bare-tooling@0bbdca93da303a0b1634ba14a89cec085621078d
-
-      - if: ${{ startsWith(matrix.os, 'macos-') }}
-        name: Install vcpkg on macOS
-        shell: bash
-        run: |
-          cd ..
-          git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git
-          cd vcpkg && ./bootstrap-vcpkg.sh -disableMetrics
-          VCPKG_ROOT=$(pwd)
-          echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
-          echo "$VCPKG_ROOT" >> $GITHUB_PATH
-
-      - if: ${{ startsWith(matrix.os, 'ubuntu-') }}
-        name: Configure vcpkg on Linux / Android
-        shell: bash
-        run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
-
-      - if: ${{ matrix.os == 'windows-2022' }}
-        name: Configure vcpkg on Windows
-        shell: powershell
-        run: echo ("VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" -replace '\\', '/') >> $env:GITHUB_ENV
-
-      - if: ${{ matrix.os == 'windows-2022' }}
-        name: Configure CMake generator on Windows
-        shell: powershell
-        run: echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> $env:GITHUB_ENV
-
-      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'x64' }}
-        name: Configure CMake generator platform on Windows x64
-        shell: powershell
-        run: echo "CMAKE_GENERATOR_PLATFORM=x64" >> $env:GITHUB_ENV
-
-      - if: ${{ matrix.platform == 'android' }}
-        name: Select Android NDK
-        shell: bash
-        run: |
-          echo "ANDROID_NDK=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
-          echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
-          echo "ANDROID_NDK_ROOT=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
-          echo "ANDROID_TOOLCHAIN_ROOT=$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64" >> $GITHUB_ENV
-          echo "ANDROID_NATIVE_API_LEVEL=24" >> $GITHUB_ENV
-
-      - if: ${{ matrix.platform == 'ios' || matrix.platform == 'darwin' }}
-        name: Use Apple clang for Apple platform builds
-        shell: bash
-        run: |
-          sudo mv /opt/homebrew/opt/llvm@18 /opt/homebrew/opt/llvm@18.bak 2>/dev/null || true
-          sudo mv /opt/homebrew/opt/llvm /opt/homebrew/opt/llvm.bak 2>/dev/null || true
-          sudo rm -f /opt/homebrew/bin/clang /opt/homebrew/bin/clang++ 2>/dev/null || true
-
-      - name: Install npm dependencies
-        working-directory: ${{ env.PKG_DIR }}
-        run: npm install
-
-      - name: Generate build
-        working-directory: ${{ env.PKG_DIR }}
-        env:
-          CMAKE_FLAGS: ${{ matrix.flags }}
-        run: bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }}
-
-      - name: Build addon
-        working-directory: ${{ env.PKG_DIR }}
-        run: bare-make build
-
-      - name: Dump build context on failure
-        if: failure()
-        shell: bash
-        working-directory: ${{ env.PKG_DIR }}
-        run: |
-          # Diagnostic-only: never fail the step itself.
-          set +e
-          set +o pipefail
-          echo "===== Toolchain identity ====="
-          echo "uname:    $(uname -a 2>/dev/null || true)"
-          echo "cmake:    $(cmake --version 2>/dev/null | head -1 || true)"
-          echo "cc:       $(${CC:-cc} --version 2>/dev/null | head -1 || true)"
-          echo "cxx:      $(${CXX:-c++} --version 2>/dev/null | head -1 || true)"
-          echo "VCPKG_ROOT=${VCPKG_ROOT:-<unset>}"
-          echo ""
-          echo "===== build/ tree (top 2 levels) ====="
-          find build -maxdepth 2 -mindepth 1 -print 2>/dev/null | head -100 || true
-          echo ""
-          echo "===== CMake configure logs ====="
-          for f in build/CMakeFiles/CMakeOutput.log build/CMakeFiles/CMakeError.log build/CMakeFiles/CMakeConfigureLog.yaml; do
-            if [ -f "$f" ]; then
-              echo "----- $f (tail 200) -----"
-              tail -200 "$f"
-              echo ""
-            fi
-          done
-          echo ""
-          echo "===== Any *.log under build/ ====="
-          find build -name "*.log" -print 2>/dev/null | while read -r logf; do
-            echo "----- $logf (tail 100) -----"
-            tail -100 "$logf"
-            echo ""
-          done
-          echo ""
-          echo "===== vcpkg buildtrees logs (if any) ====="
-          if [ -n "${VCPKG_ROOT:-}" ] && [ -d "${VCPKG_ROOT}/buildtrees" ]; then
-            find "${VCPKG_ROOT}/buildtrees" -maxdepth 3 -name "*.log" -print 2>/dev/null | head -20 | while read -r logf; do
-              echo "----- $logf (tail 100) -----"
-              tail -100 "$logf"
-              echo ""
-            done
-          else
-            echo "No vcpkg buildtrees directory under VCPKG_ROOT"
-          fi
-
-      - name: Install prebuild
-        working-directory: ${{ env.PKG_DIR }}
-        run: bare-make install
-
-      - name: Upload prebuild artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # 4.6.2
-        with:
-          name: prebuild-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
-          path: ${{ env.PKG_DIR }}/prebuilds
-          retention-days: 7
+    uses: ./.github/workflows/reusable-prebuilds.yml
+    with:
+      workdir: ${{ inputs.workdir }}
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+      artifact-name-prefix: classification-ggml-
+    secrets: inherit

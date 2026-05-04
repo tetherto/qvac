@@ -27,7 +27,7 @@ on:
 env:
   NODE_VERSION: "lts/*"
   ADDON_NAME: "@qvac/classification-ggml"
-  PREBUILD_ARTIFACT_PREFIX: "prebuild-" # Matches `prebuild-${platform}-${arch}` artifact names produced by prebuilds-classification-ggml.yml
+  PREBUILD_ARTIFACT_PREFIX: "classification-ggml-" # Matches `classification-ggml-${platform}-${arch}` artifact names produced by prebuilds-classification-ggml.yml (via reusable-prebuilds.yml)
   TEST_FRAMEWORK_REF: "main" # Branch/tag of qvac-test-addon-mobile framework
   APP_BUNDLE_ID: "io.tether.test.qvac" # Bundle ID for the test app (same for all addons)
   ADDON_WORKDIR: "addon/packages/classification-ggml"
@@ -56,6 +56,14 @@ jobs:
             runner: macos-14
 
     steps:
+      - name: Validate Dispatch Inputs
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.package
+        run: |
+          if [[ ! "${{ github.event.inputs.package }}" =~ ^@qvac/ ]]; then
+            echo "::error::Invalid package scope. Only @qvac/* is allowed."
+            exit 1
+          fi
+
       # Free up disk space on Ubuntu runner to prevent "No space left on device" errors
       - name: Free up disk space
         if: matrix.platform == 'Android'
@@ -104,7 +112,7 @@ jobs:
       - name: Install global dependencies
         run: |
           echo "Installing global dependencies..."
-          npm install -g @expo/cli@latest
+          npm install -g @expo/cli@latest --ignore-scripts
 
       - name: Download Android prebuilds (from artifacts)
         if: matrix.platform == 'Android' && !inputs.package
@@ -133,7 +141,7 @@ jobs:
 
           PACKAGE_NAME="${PACKAGE_SPEC%@*}"
 
-          if ! npm pack "$PACKAGE_SPEC"; then
+          if ! npm pack "$PACKAGE_SPEC" --ignore-scripts; then
             echo "ERROR: Failed to download $PACKAGE_SPEC from npm"
             echo "Please check that the package exists at https://www.npmjs.com/package/$PACKAGE_NAME"
             exit 1
@@ -249,7 +257,7 @@ jobs:
         working-directory: ./${{ env.ADDON_WORKDIR }}
         run: |
           echo "Installing addon dependencies..."
-          npm install
+          npm install --ignore-scripts
 
       - name: Validate mobile tests are up-to-date
         working-directory: ./${{ env.ADDON_WORKDIR }}
@@ -264,7 +272,7 @@ jobs:
           else
             echo "📦 Using npm pack directly..."
             mkdir -p dist
-            npm pack --pack-destination dist
+            npm pack --pack-destination dist --ignore-scripts
           fi
 
           # Verify pack file exists
@@ -281,7 +289,7 @@ jobs:
         working-directory: ./test-framework
         run: |
           echo "Setting up mobile test framework..."
-          npm install
+          npm install --ignore-scripts
           echo "✅ Test framework dependencies installed"
 
       - name: Build test app with addon
@@ -799,10 +807,10 @@ jobs:
           cd e2e
 
           # Install dependencies before packing
-          npm install
+          npm install --ignore-scripts
 
           # Create tarball
-          npm pack
+          npm pack --ignore-scripts
 
           # Create zip with test files only (no node_modules - will be installed on Device Farm)
           ZIP_NAME="e2e-tests-${{ matrix.platform }}.zip"
