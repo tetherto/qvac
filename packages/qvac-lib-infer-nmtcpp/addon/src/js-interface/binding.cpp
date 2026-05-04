@@ -2,9 +2,9 @@
 
 #include "../addon/AddonJs.hpp"
 
-js_value_t* qvac_lib_infer_nmtcpp_exports(
-    js_env_t* env,
-    js_value_t* exports) { // NOLINT(readability-identifier-naming)
+js_value_t*
+qvac_lib_infer_nmtcpp_exports( // NOLINT(readability-identifier-naming)
+    js_env_t* env, js_value_t* exports) {
 
 // NOLINTBEGIN(cppcoreguidelines-macro-usage)
 #define V(name, fn)                                                            \
@@ -21,6 +21,8 @@ js_value_t* qvac_lib_infer_nmtcpp_exports(
   V("createInstance", qvac_lib_inference_addon_nmt::createInstance)
   V("runJob", qvac_lib_inference_addon_nmt::runJob)
   V("getActiveBackendName", qvac_lib_inference_addon_nmt::getActiveBackendName)
+  V("getActiveBackendDescription",
+    qvac_lib_inference_addon_nmt::getActiveBackendDescription)
 
   V("loadWeights", qvac_lib_inference_addon_cpp::JsInterface::loadWeights)
   V("activate", qvac_lib_inference_addon_cpp::JsInterface::activate)

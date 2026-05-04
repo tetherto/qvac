@@ -1,6 +1,6 @@
 {
   "name": "@qvac/diffusion-cpp",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "stable-diffusion.cpp addon for qvac image/video generation",
   "addon": true,
   "scripts": {
@@ -10,6 +10,7 @@
     "example": "bare examples/load-model.js",
     "generate": "bare examples/generate-image.js",
     "generate:sd2": "bare examples/generate-image-sd2.js",
+    "generate:esrgan": "bare examples/generate-image-esrgan-upscale.js",
     "generate:sdxl": "bare examples/generate-image-sdxl.js",
     "generate:sd3": "bare examples/generate-image-sd3.js",
     "build:pack": "mkdir -p dist && npm pack --pack-destination dist",
