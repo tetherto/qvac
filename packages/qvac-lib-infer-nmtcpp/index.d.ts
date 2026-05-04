@@ -141,4 +141,11 @@ export default class TranslationNmtcpp {
    * preserves both the open enum and the named members.
    */
   getActiveBackendName(): 'Unloaded' | 'Bergamot-CPU' | 'CPU' | (string & {})
+
+  /**
+   * Returns the human-readable device description for the active GPU backend
+   * (e.g. 'NVIDIA GeForce RTX 5070', 'Intel(R) UHD Graphics').
+   * Returns '' when no GPU backend is loaded or model is unloaded.
+   */
+  getActiveBackendDescription(): string
 }
