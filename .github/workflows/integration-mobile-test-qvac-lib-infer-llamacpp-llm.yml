@@ -1332,9 +1332,9 @@ jobs:
 
           RUN_ARNS=()
           [ -n "$RUN_ARN_1" ] && RUN_ARNS+=("$RUN_ARN_1")
-          for i in 2 3 4 5 6 7 8 9 10 11; do
+          for i in $(seq 2 "$RUN_COUNT"); do
             eval "arn=\$RUN_ARN_$i"
-            if [ "$RUN_COUNT" -ge "$i" ] && [ -n "$arn" ]; then
+            if [ -n "$arn" ]; then
               RUN_ARNS+=("$arn")
             fi
           done
@@ -1493,9 +1493,9 @@ jobs:
 
           RUN_ARNS=()
           [ -n "$RUN_ARN_1" ] && RUN_ARNS+=("$RUN_ARN_1")
-          for i in 2 3 4 5 6 7 8 9 10; do
+          for i in $(seq 2 "$RUN_COUNT"); do
             eval "arn=\$RUN_ARN_$i"
-            if [ "$RUN_COUNT" -ge "$i" ] && [ -n "$arn" ]; then
+            if [ -n "$arn" ]; then
               RUN_ARNS+=("$arn")
             fi
           done

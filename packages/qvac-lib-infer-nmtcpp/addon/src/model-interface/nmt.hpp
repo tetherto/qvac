@@ -385,7 +385,7 @@ struct nmt_state {
 
   int lang_id = 0; // english by default
 
-  std::string path_model; // populated by nmt_init_from_file_with_params()
+  std::string path_model; // populated by nmtInitFromFileWithParams()
 
   // [EXPERIMENTAL] token-level timestamps data
   int64_t t_beg = 0;
@@ -423,6 +423,12 @@ struct nmt_context_params {
   // still acts as an ordinal among matching devices, so
   // {gpu_backend="vulkan", gpu_device=1} picks the second Vulkan adapter.
   std::string gpu_backend;
+  // Minimum ne[1] (batch size) for Vulkan op offloading. Vulkan's default
+  // is 32, which means single-token decoder steps (ne[1]=1) stay on CPU.
+  // Set to 1 to force all ops to GPU; set to 0 to offload everything.
+  // Negative values are ignored (uses default). Propagated via the
+  // GGML_VK_OFFLOAD_MIN_BATCH env var.
+  int op_offload_min_batch;
 };
 
 struct nmt_context {
@@ -440,7 +446,7 @@ struct nmt_context {
 
   nmt_state* state = nullptr;
 
-  std::string path_model; // populated by nmt_init_from_file_with_params()
+  std::string path_model; // populated by nmtInitFromFileWithParams()
 
   void setBeamSize(int64_t beam_size) {
     if (beam_size < 0) {
@@ -511,19 +517,19 @@ int nmt_encode(struct nmt_context* ctx);
 
 int nmt_full(struct nmt_context* ctx, const char* inputText);
 
-int nmt_token_count(struct nmt_context* ctx, const char* text);
+int nmtTokenCount(struct nmt_context* ctx, const char* text);
 
 const char* nmt_get_output(struct nmt_context* ctx);
 
-int nmt_get_runtime_stats(
+int nmtGetRuntimeStats(
     struct nmt_context* ctx, double* encodeTime, double* decodeTime,
     int* totalTokens);
 
-void nmt_reset_runtime_stats(struct nmt_context* ctx);
+void nmtResetRuntimeStats(struct nmt_context* ctx);
 
-void nmt_reset_state(struct nmt_context* ctx);
+void nmtResetState(struct nmt_context* ctx);
 
-struct nmt_context* nmt_init_from_file_with_params(
+struct nmt_context* nmtInitFromFileWithParams(
     const char* pathModel, struct nmt_context_params params);
 
 struct nmt_context_params nmt_context_default_params();
