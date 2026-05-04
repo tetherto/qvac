@@ -132,7 +132,7 @@ function compareToBaseline (t, label, metrics, baseline) {
  * The caller owns lifecycle assertions (backend presence, parity, etc.) —
  * this helper is deliberately focused on "run one sentence and collect".
  */
-async function runSingleTranslation (t, { modelPath, logger, useGpu, gpuDevice, label }) {
+async function runSingleTranslation (t, { modelPath, logger, useGpu, gpuDevice, gpuBackend, label }) {
   const perfCollector = createPerformanceCollector()
 
   // OpenCL on Android needs a writable cache directory. If GGML_OPENCL_CACHE_DIR
@@ -148,6 +148,9 @@ async function runSingleTranslation (t, { modelPath, logger, useGpu, gpuDevice, 
   }
   if (typeof gpuDevice === 'number') {
     config.gpu_device = gpuDevice
+  }
+  if (gpuBackend) {
+    config.gpu_backend = gpuBackend
   }
   if (useGpu && platform === 'android') {
     const writableRoot = global.testDir || '/tmp'
@@ -214,19 +217,20 @@ for (let gpuIdx = 0; gpuIdx < MAX_GPU_DEVICE_PROBES; gpuIdx++) {
   test(`IndicTrans backend [GPU device ${gpuIdx}] - English to Hindi translation`, { timeout: TEST_TIMEOUT }, async function (t) {
     const modelPath = await ensureIndicTransModel()
     const devices = await discoverGpuDevices()
-    const device = devices.find(d => d.index === gpuIdx)
+    const device = devices[gpuIdx]
 
     if (!device) {
-      t.comment(`[GPU:${gpuIdx}] No GPU device at index ${gpuIdx} — skipping`)
+      t.comment(`[GPU:${gpuIdx}] No unique physical GPU at slot ${gpuIdx} — skipping`)
       t.pass(`[GPU:${gpuIdx}] Skipped (device not present)`)
       return
     }
 
-    const label = `[GPU:${gpuIdx} ${device.name}]`
+    const descTag = device.description ? ' ' + device.description : ''
+    const label = `[GPU:${device.index} ${device.name}${descTag}]`
     t.ok(modelPath, `${label} IndicTrans model path should be available`)
     t.comment(`${label} Model path: ` + modelPath)
     t.comment('Platform: ' + platform + ', isMobile: ' + isMobile)
-    t.comment(`${label} Testing with use_gpu: true, gpu_device: ${gpuIdx}`)
+    t.comment(`${label} Testing with use_gpu: true, gpu_device: ${device.index}`)
 
     const logger = createLogger()
     let model
@@ -236,7 +240,7 @@ for (let gpuIdx = 0; gpuIdx < MAX_GPU_DEVICE_PROBES; gpuIdx++) {
         modelPath,
         logger,
         useGpu: true,
-        gpuDevice: gpuIdx,
+        gpuDevice: device.index,
         label
       })
       model = run.model
@@ -433,7 +437,7 @@ test('IndicTrans CPU vs GPU output parity (EN->Hindi, beam=1)', { timeout: TEST_
   }
 
   t.comment('Discovered GPU devices: ' +
-    devices.map(d => `${d.name} (index ${d.index})`).join(', '))
+    devices.map(d => `${d.name}${d.description ? ' (' + d.description + ')' : ''} [index ${d.index}]`).join(', '))
 
   const logger = createLogger()
 
@@ -457,7 +461,8 @@ test('IndicTrans CPU vs GPU output parity (EN->Hindi, beam=1)', { timeout: TEST_
   t.comment(`[PARITY] CPU -> "${cpuOut}"`)
 
   for (const device of devices) {
-    const parityLabel = `[PARITY:${device.index} ${device.name}]`
+    const parityDesc = device.description ? ' ' + device.description : ''
+    const parityLabel = `[PARITY:${device.index} ${device.name}${parityDesc}]`
     let gpuRun
     try {
       gpuRun = await runSingleTranslation(t, {
@@ -499,4 +504,20 @@ test('IndicTrans CPU vs GPU output parity (EN->Hindi, beam=1)', { timeout: TEST_
       }
     }
   }
+})
+
+// --------------------------------------------------------------------------
+// Vulkan vs OpenCL backend comparison.
+// When USE_OPENCL is enabled at build time (assuming upstream ggml fix for
+// the Adreno 830 q4_0 transpose assertion), this test exercises both
+// backends on the same physical GPU and compares performance.
+// --------------------------------------------------------------------------
+
+// SKIP: IndicTrans on OpenCL triggers GGML_ASSERT(M % 4 == 0) in
+// ggml-opencl.cpp:3758 on Adreno 830 (Samsung S25 Ultra), causing SIGABRT.
+// Disabled until the upstream ggml-opencl kernel supports non-aligned matrix
+// dimensions for this model architecture.
+test('IndicTrans backend comparison [Vulkan vs OpenCL]', { timeout: TEST_TIMEOUT * 4, skip: true }, async function (t) {
+  // OpenCL crashes on IndicTrans (ggml-opencl M%4 assertion on Adreno 830)
+  t.pass()
 })
