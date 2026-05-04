@@ -1,0 +1,190 @@
+name: Benchmark Performance (LLM)
+
+# Manually-triggered benchmark workflow. The umbrella on-pr workflow
+# runs perf tests at the cheap default; this is where iteration
+# counts are cranked up to get mean ± std numbers. Desktop matrix
+# only; mobile is a follow-up.
+
+on:
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: "Repository to benchmark"
+        required: false
+        type: string
+      ref:
+        description: "Git ref (branch/tag/SHA) to benchmark"
+        required: false
+        type: string
+      qvac_perf_runs:
+        description: "QVAC_PERF_RUNS — counted iterations per perf test"
+        required: false
+        type: string
+        default: "3"
+      qvac_perf_warmup_runs:
+        description: "QVAC_PERF_WARMUP_RUNS — warmup iterations per perf test"
+        required: false
+        type: string
+        default: "1"
+      run_desktop:
+        description: "Run desktop matrix (Linux / macOS / Windows)"
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  packages: read
+  id-token: write
+
+jobs:
+  context:
+    runs-on: ubuntu-latest
+    outputs:
+      repository: ${{ steps.ctx.outputs.repository }}
+      ref: ${{ steps.ctx.outputs.ref }}
+    steps:
+      - id: ctx
+        shell: bash
+        env:
+          INPUT_REPO: ${{ inputs.repository }}
+          INPUT_REF: ${{ inputs.ref }}
+          REPO: ${{ github.repository }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          repo="${INPUT_REPO:-$REPO}"
+          ref="${INPUT_REF:-$REF_NAME}"
+          echo "repository=$repo" >> "$GITHUB_OUTPUT"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+  prebuild:
+    needs: context
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/prebuilds-qvac-lib-infer-llamacpp-llm.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+
+  desktop-benchmarks:
+    needs: [context, prebuild]
+    if: ${{ inputs.run_desktop }}
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    uses: ./.github/workflows/integration-test-qvac-lib-infer-llamacpp-llm.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+      qvac_perf_runs: ${{ inputs.qvac_perf_runs }}
+      qvac_perf_warmup_runs: ${{ inputs.qvac_perf_warmup_runs }}
+
+  summarize:
+    needs: [context, desktop-benchmarks]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ needs.context.outputs.repository }}
+          ref: ${{ needs.context.outputs.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+          sparse-checkout: |
+            scripts/perf-report
+            packages/qvac-lib-infer-llamacpp-llm/media
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # 4.4.0
+        with:
+          node-version: lts/*
+
+      - name: Download all perf report artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: perf-report-llamacpp-llm-*-${{ github.run_number }}
+          path: combined-reports
+        continue-on-error: true
+
+      - name: Fix desktop device names
+        shell: bash
+        run: |
+          # Collapse sibling matrix legs (linux-x64-cpu/gpu,
+          # linux-arm64-u22/u24) onto one device name so [CPU]/[GPU]
+          # rows sit in the same column.
+          for dir in combined-reports/perf-report-llamacpp-llm-*/; do
+            [ -d "$dir" ] || continue
+            base=$(basename "$dir")
+            platform=$(echo "$base" | sed "s/^perf-report-llamacpp-llm-//" | sed "s/-${{ github.run_number }}$//")
+
+            case "$platform" in Android|iOS) continue ;; esac
+
+            case "$platform" in
+              linux-x64-cpu|linux-x64-gpu) device_name="linux-x64" ;;
+              linux-arm64-u22|linux-arm64-u24) device_name="linux-arm64" ;;
+              *) device_name="$platform" ;;
+            esac
+
+            for json in $(find "$dir" -name "performance-report.json" 2>/dev/null); do
+              if command -v jq >/dev/null 2>&1; then
+                jq --arg name "$device_name" '.device.name = $name' "$json" > "${json}.tmp" && mv "${json}.tmp" "$json"
+                echo "Patched device name in $json -> $device_name (was matrix label $platform)"
+              fi
+            done
+          done
+
+      - name: Generate consolidated benchmark report
+        run: |
+          if ! find combined-reports -name "performance-report.json" -type f 2>/dev/null | grep -q .; then
+            echo "No performance reports found."
+            exit 0
+          fi
+
+          mkdir -p benchmark-artifacts
+
+          node scripts/perf-report/aggregate.js \
+            --dir combined-reports \
+            --addon-type vision \
+            --device-details \
+            --output-html benchmark-artifacts/llamacpp-llm-performance-findings.html \
+            --output-json benchmark-artifacts/llamacpp-llm-performance-findings.json \
+            --output benchmark-artifacts/llamacpp-llm-performance-findings.md
+
+      - name: Add summary
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          MD_FILE="benchmark-artifacts/llamacpp-llm-performance-findings.md"
+          {
+            echo "## LLM / VLM Benchmark Report (Desktop)"
+            echo ""
+            echo "> \`QVAC_PERF_RUNS=${{ inputs.qvac_perf_runs }}\`, \`QVAC_PERF_WARMUP_RUNS=${{ inputs.qvac_perf_warmup_runs }}\`. Mobile is not covered by this workflow yet."
+            echo ""
+            if [ -f "$MD_FILE" ]; then
+              cat "$MD_FILE"
+            else
+              echo "No combined performance report available."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload consolidated benchmark report
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: llamacpp-llm-performance-findings
+          path: |
+            benchmark-artifacts/llamacpp-llm-performance-findings.md
+            benchmark-artifacts/llamacpp-llm-performance-findings.json
+            benchmark-artifacts/llamacpp-llm-performance-findings.html
+          retention-days: 30
+          if-no-files-found: ignore
