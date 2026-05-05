@@ -1,6 +1,6 @@
 # @qvac/classification-ggml
 
-GGML-powered image classification addon for QVAC. Runs a fine-tuned MobileNetV3-Small 3-class triage CNN on the CPU backend of `libggml` and exposes a small, stable JavaScript API. Now intended for a specific applied image triage task, but can be easily adapted for other classification tasks.
+GGML-powered image classification addon for QVAC. Runs a fine-tuned MobileNetV3-Small 3-class triage CNN on the CPU backend of `libggml` and exposes a small, stable JavaScript API. Now intended for a specific image triage, but can be easily adapted for other classification tasks.
 
 
 | Property      | Value                                           |
@@ -81,7 +81,7 @@ All constructor options are optional.
 | Option         | Type                | Default                                               | Description                                                                                                                                                                                                                                                                                                                            |
 | -------------- | ------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `modelPath`    | `string`            | Bundled `weights/mobilenetv3_3class_v3_fp16.gguf`     | Absolute path to an FP16 GGUF file. Override only when pointing at a custom fine-tune produced by the ONNX→GGUF conversion guide. Also overridable via the `QVAC_CLASSIFICATION_MODEL_PATH` env variable.                                                                                                                              |
-| `logger`       | `QvacLogger`-shaped | `null`                                                | A sink with optional `error / warn / info / debug(msg)` methods (compatible with `@qvac/logging`). Receives JS-side `info` from a successful `load()` and `error` from a failed `load()`. With `nativeLogger: true`, also receives forwarded native `LogMsg` events at `info` level. Always honoured, regardless of `nativeLogger`. |
+| `logger`       | `QvacLogger`-shaped | `null`                                                | A sink with optional `error / warn / info / debug(msg)` methods (compatible with `@qvac/logging`). Receives JS-side `info` from a successful `load()` and `error` from a failed `load()`. With `nativeLogger: true`, also receives forwarded native `LogMsg` events at `info` level. Always honoured, regardless of `nativeLogger`.    |
 | `threads`      | `number`            | libggml default (`std::thread::hardware_concurrency`) | Upper bound on CPU worker threads the GGML compute graph may use. Set lower (e.g. `2`) on battery-constrained mobile devices; set higher on servers. Must be a positive integer.                                                                                                                                                       |
 | `nativeLogger` | `boolean`           | `false`                                               | When `true`, native C++ `QLOG(...)` lines from inside the addon's model-loading and graph code are forwarded to `logger`. Disabled by default because the underlying `qvac-lib-inference-addon-cpp` logger is a process-wide singleton with a static `uv_async_t` that is not safe across rapid create/destroy cycles (e.g. in tests). |
 
@@ -151,20 +151,18 @@ to populate `test/mobile/testAssets/` (driven by `scripts/copy-mobile-test-asset
 ## Platform support
 
 
-| Platform                | CPU | Notes                                            |
-| ----------------------- | --- | ------------------------------------------------ |
-| Linux x64               | ✅   |                                                  |
-| Linux arm64             | ✅   |                                                  |
-| macOS arm64 (Apple)     | ✅   |                                                  |
-| macOS x64 (Intel)       | ✅   |                                                  |
-| Windows x64             | ✅   |                                                  |
-| Android arm64           | ✅   | `c++_shared` STL                                 |
-| iOS arm64 (device)      | ✅   |                                                  |
-| iOS arm64 (simulator)   | ✅   | Apple-Silicon dev workflow                       |
-| iOS x64 (simulator)     | ✅   | Intel-Mac dev workflow                           |
+| Platform            | CPU | Notes            |
+| ------------------- | --- | ---------------- |
+| Linux x64           | ✅   |                  |
+| Linux arm64         | ✅   |                  |
+| macOS arm64 (Apple) | ✅   |                  |
+| macOS x64 (Intel)   | ✅   |                  |
+| Windows x64         | ✅   |                  |
+| Android arm64       | ✅   | `c++_shared` STL |
+| iOS arm64           | ✅   |                  |
 
 
-All 9 platforms are produced by the shared `reusable-prebuilds.yml`
+All platforms are produced by the shared `reusable-prebuilds.yml`
 matrix and merged into a single `prebuilds` artifact for downstream
 consumption. GPU (Vulkan / Metal / CUDA) is not currently supported.
 
@@ -174,9 +172,9 @@ Depending on the platform, one call to `classifier.classify(buffer)` takes from 
 
 ### What affects `classify()` latency
 
-- `**threads**` — capped at `hardware_concurrency` by default. Lowering it trades latency for battery or contention with other addons (LLM, whisper) running on the same device.
+- **threads** — capped at `hardware_concurrency` by default. Lowering it trades latency for battery or contention with other addons (LLM, whisper) running on the same device.
 - **Input size** — the JPEG/PNG decode and the `stb_image_resize2` bilinear pass scale with source pixel count. The 224×224 tensor pass is fixed-cost; a 12 MP phone photo adds real overhead vs. a 640×480 webcam frame.
-- **First-call overhead** — `load()` already runs a full-pipeline warmup (synthetic-gradient pass through preprocess + GGML compute + output read) before returning, so the GGML compute buffers, weight buffer, and worker thread are fully materialised when the first `classify()` is dispatched. Even so, the first user-supplied call is typically a few tens of milliseconds slower than the steady-state average.
+- **First-call overhead** — `load()` already runs a full-pipeline warmup (synthetic-pattern pass through preprocess + GGML compute + output read) before returning, so the GGML compute buffers, weight buffer, and worker thread are fully materialised when the first `classify()` is dispatched. Even so, the first user-supplied call is typically a few tens of milliseconds slower than the steady-state average.
 - **Re-use** — `load()` once, `classify()` many times. Tearing down and rebuilding the model for each image is roughly 4–6× slower end-to-end and is never necessary outside of tests.
 
 ### Memory footprint
