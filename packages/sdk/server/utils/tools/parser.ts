@@ -10,6 +10,7 @@ import {
 } from "@/server/utils/tools/parsers/json";
 import { parseHermesFormat } from "@/server/utils/tools/parsers/hermes";
 import { parsePythonicFormat } from "@/server/utils/tools/parsers/pythonic";
+import { parseHarmonyFormat } from "@/server/utils/tools/parsers/harmony";
 
 function pickFormatParsers(
   dialect: ToolDialect | undefined,
@@ -23,10 +24,15 @@ function pickFormatParsers(
       return [parseHermesFormat, parseGemmaFormat, parseLlamacppFormat];
     case "json":
       return [parseGemmaFormat, parseLlamacppFormat];
+    case "harmony":
+      return [parseHarmonyFormat];
     default:
+      // Harmony first: `to=functions.` is uniquely Harmony and can't
+      // false-match other dialects.
       // Pythonic last: its bare `[name(...)]` form can match payloads that
       // look like other dialects.
       return [
+        parseHarmonyFormat,
         parseHermesFormat,
         parseGemmaFormat,
         parseLlamacppFormat,
