@@ -256,18 +256,46 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
       });
 
       let receivedTokens = 0;
-      let cancelled = false;
+      let cancelInvoked = false;
+      let cancelSucceeded = false;
+      let cancelError: Error | null = null;
+
       try {
         for await (const _ of firstRun.tokenStream) {
           receivedTokens++;
-          if (!cancelled && receivedTokens >= cancelAfterTokens) {
-            cancelled = true;
-            await cancel({ operation: "inference", modelId });
+          if (!cancelInvoked && receivedTokens >= cancelAfterTokens) {
+            cancelInvoked = true;
+            try {
+              await cancel({ operation: "inference", modelId });
+              cancelSucceeded = true;
+            } catch (err) {
+              cancelError = err instanceof Error ? err : new Error(String(err));
+              break;
+            }
           }
         }
-      } catch {}
+      } catch (streamErr) {
+        if (!cancelInvoked) {
+          const msg = streamErr instanceof Error ? streamErr.message : String(streamErr);
+          return {
+            passed: false,
+            output:
+              `First completion stream rejected before cancel could be issued ` +
+              `(received ${receivedTokens} tokens): ${msg}`,
+          };
+        }
+      }
 
-      if (!cancelled) {
+      if (cancelError !== null) {
+        return {
+          passed: false,
+          output:
+            `cancel() rejected mid-stream after ${receivedTokens} tokens, so the ` +
+            `kv-cache regression scenario was never exercised: ${cancelError.message}`,
+        };
+      }
+
+      if (!cancelSucceeded) {
         return {
           passed: false,
           output: `First completion ended before cancel (received ${receivedTokens} tokens, expected >=${cancelAfterTokens})`,
