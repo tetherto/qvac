@@ -34,6 +34,33 @@ let isShuttingDown = false;
 
 const logger = getServerLogger();
 
+// Defense-in-depth grace period for the SIGKILL safety net armed before
+// process.exit() in shutdownBareDirectWorker. If process.exit cannot
+// terminate the worker within this window — typically because some path
+// holds a non-cancellable native handle (e.g. a libuv worker thread
+// blocked on flock; see QVAC-18197) — we force-kill the OS process to
+// guarantee bounded shutdown time.
+const FORCE_EXIT_GRACE_MS = 3_000;
+
+function scheduleForceExit(): void {
+  const timer: unknown = setTimeout(() => {
+    logger.error(
+      `process.exit did not terminate the worker within ${FORCE_EXIT_GRACE_MS}ms — ` +
+        `force-killing self (likely blocked native handle)`,
+    );
+    try {
+      process.kill(process.pid, "SIGKILL");
+    } catch {
+      // best-effort — if SIGKILL itself fails, there's nothing more to do
+    }
+  }, FORCE_EXIT_GRACE_MS);
+  // Don't let the safety-net timer keep the process alive on the happy
+  // path. Bare returns an object (not a number) from setTimeout.
+  if (timer && typeof timer === "object" && "unref" in timer) {
+    (timer as { unref: () => void }).unref();
+  }
+}
+
 export function initializeWorkerCore(): { hasRPCConfig: boolean } {
   if (coreInitialized) {
     const validatedEnv = getValidatedEnv();
@@ -183,6 +210,8 @@ export async function shutdownBareDirectWorker(
   }
 
   releaseWorkerLock();
+
+  scheduleForceExit();
 
   const isGraceful = reason === "signal" || reason === "rpc-close";
   process.exit(isGraceful ? 0 : 1);

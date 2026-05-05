@@ -24,7 +24,7 @@ protected:
 // NULL BERGAMOT CTX CHECK
 TEST_F(BergamotBatchTest, BatchTranslateWithNullContext) {
   auto texts = createTestInput(3);
-  auto result = bergamot_translate_batch(nullptr, texts); // Flag Error
+  auto result = bergamotTranslateBatch(nullptr, texts); // Flag Error
 
   EXPECT_FALSE(result.error.empty());
   EXPECT_EQ(result.error, "invalid context");
@@ -42,7 +42,7 @@ TEST_F(BergamotBatchTest, BatchTranslateWithNullContext) {
 // EMPTY INPUT CHECK
 TEST_F(BergamotBatchTest, BatchTranslateEmptyInput) {
   std::vector<std::string> emptyInput;
-  auto result = bergamot_translate_batch(nullptr, emptyInput);
+  auto result = bergamotTranslateBatch(nullptr, emptyInput);
 
   EXPECT_TRUE(result.translations.empty());
   EXPECT_TRUE(result.success.empty());
@@ -60,7 +60,7 @@ TEST_F(BergamotBatchTest, BatchResultStructDefault) {
 // Single Translate Check with BATCH-BERGAMOT
 TEST_F(BergamotBatchTest, BatchTranslateSingleText) {
   auto text = createTestInput(1);
-  auto result = bergamot_translate_batch(nullptr, text);
+  auto result = bergamotTranslateBatch(nullptr, text);
   // Should handle single text batch
   EXPECT_EQ(result.translations.size(), 1);
   EXPECT_EQ(result.success.size(), 1);
@@ -71,7 +71,7 @@ TEST_F(BergamotBatchTest, BatchTranslateSingleText) {
 // Five texts Translate CHECK with BATCH-BERGAMOT API
 TEST_F(BergamotBatchTest, BatchTranslateFiveText) {
   auto texts = createTestInput(5);
-  auto result = bergamot_translate_batch(nullptr, texts);
+  auto result = bergamotTranslateBatch(nullptr, texts);
   // Should handle five text as batch
   EXPECT_EQ(result.translations.size(), 5);
   EXPECT_EQ(result.success.size(), 5);
@@ -84,7 +84,7 @@ TEST_F(BergamotBatchTest, BatchTranslateFiveText) {
 // Ten texts Translate CHECK with BATCH-BERGAMOT API
 TEST_F(BergamotBatchTest, BatchTranslateTenText) {
   auto texts = createTestInput(10);
-  auto result = bergamot_translate_batch(nullptr, texts);
+  auto result = bergamotTranslateBatch(nullptr, texts);
   // Should handle five text as batch
   EXPECT_EQ(result.translations.size(), 10);
   EXPECT_EQ(result.success.size(), 10);
@@ -97,7 +97,7 @@ TEST_F(BergamotBatchTest, BatchTranslateTenText) {
 // Check Mixed Input as BATCH with BATCH-BERGAMOT API
 TEST_F(BergamotBatchTest, BatchTranslateMixedEmptyInputs) {
   std::vector<std::string> texts{"hello", "", "world", ""};
-  auto result = bergamot_translate_batch(nullptr, texts);
+  auto result = bergamotTranslateBatch(nullptr, texts);
 
   // Should handle mix of empty and non-empty strings
   EXPECT_EQ(result.translations.size(), 4);

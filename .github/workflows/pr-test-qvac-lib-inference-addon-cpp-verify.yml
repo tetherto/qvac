@@ -1,0 +1,27 @@
+name: Verify gate for addon-cpp PR tests
+
+permissions:
+  contents: read
+
+on:
+  pull_request_target:
+    types: [synchronize]
+    paths:
+      - "packages/qvac-lib-inference-addon-cpp/**"
+      - ".github/workflows/pr-test-qvac-lib-inference-addon-cpp-js.yml"
+      - ".github/workflows/pr-test-qvac-lib-inference-addon-cpp.yml"
+      - ".github/workflows/pr-test-qvac-lib-inference-addon-cpp-verify.yml"
+
+jobs:
+  clear-verify-label:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Remove verify label after new commits
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          gh api -X DELETE "repos/${{ github.repository }}/issues/${PR_NUMBER}/labels/verify" || true

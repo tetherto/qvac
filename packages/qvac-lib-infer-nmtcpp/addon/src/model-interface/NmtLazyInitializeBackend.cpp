@@ -6,6 +6,7 @@
 #include <ggml-backend.h>
 #include <ggml.h>
 
+#include "nmt_utils.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
 #ifdef __ANDROID__
@@ -22,6 +23,7 @@ std::string NmtLazyInitializeBackend::g_recordedBackendsDir;
 std::string NmtLazyInitializeBackend::g_recordedOpenclCacheDir;
 std::string NmtLazyInitializeBackend::g_recordedOpenclCacheDirInput;
 int NmtLazyInitializeBackend::g_refCount = 0;
+std::atomic<bool> NmtLazyInitializeBackend::g_backendsLoaded{false};
 
 // Forward ggml's internal log stream to QLOG so diagnostic lines
 // (Adreno detection, CL_CHECK errors, OpenCL driver info, etc.) reach
@@ -29,19 +31,11 @@ int NmtLazyInitializeBackend::g_refCount = 0;
 // llama_log_set does in the llamacpp-llm addon. See QVAC-17790.
 namespace {
 
-std::string sanitizePrintableAscii(const std::string& input) {
-  std::string out;
-  out.reserve(input.size());
-  for (char raw : input) {
-    unsigned char c = static_cast<unsigned char>(raw);
-    out.push_back((c >= 0x20 && c < 0x7F) ? static_cast<char>(c) : '?');
-  }
-  return out;
-}
-
 void nmtGgmlLogCallback(
     enum ggml_log_level level, const char* text, void* /*user_data*/) {
-  if (text == nullptr || text[0] == '\0') {
+  if (text == nullptr ||
+      text[0] == // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+          '\0') {
     return;
   }
 
@@ -66,7 +60,9 @@ void nmtGgmlLogCallback(
 
   // Compute the trimmed length without heap allocation.
   size_t len = std::strlen(text);
+  // NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic)
   while (len > 0 && (text[len - 1] == '\n' || text[len - 1] == '\r')) {
+    // NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic)
     --len;
   }
   if (len == 0) {
@@ -85,7 +81,9 @@ void nmtGgmlLogCallback(
 #endif
 
   std::string message;
-  message.reserve(7 + len);
+  message.reserve(
+      7 + // NOLINT(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
+      len);
   message.append("[ggml] ");
   message.append(text, len);
   QLOG(priority, message);
@@ -193,8 +191,11 @@ bool NmtLazyInitializeBackend::initializeAndRef(
   return didInit;
 }
 
+// NOLINTBEGIN(readability-function-cognitive-complexity,bugprone-easily-swappable-parameters)
 bool NmtLazyInitializeBackend::initializeLocked(
-    const std::string& backendsDir, const std::string& openclCacheDir) {
+    const std::string& backendsDir,
+    const std::string& openclCacheDir [[maybe_unused]]) {
+  // NOLINTEND(readability-function-cognitive-complexity,bugprone-easily-swappable-parameters)
   if (g_initialized) {
     if (!backendsDir.empty() && !g_recordedBackendsDir.empty() &&
         backendsDir != g_recordedBackendsDir) {
@@ -283,76 +284,84 @@ bool NmtLazyInitializeBackend::initializeLocked(
   }
 #endif
 
-  if (!backendsDir.empty()) {
-    std::filesystem::path requested(backendsDir);
-    bool validBackendsDir = requested.is_absolute();
-    if (validBackendsDir) {
-      for (const auto& seg : requested) {
-        if (seg == "..") {
-          validBackendsDir = false;
-          break;
+  if (!g_backendsLoaded) {
+    if (!backendsDir.empty()) {
+      std::filesystem::path requested(backendsDir);
+      bool validBackendsDir = requested.is_absolute();
+      if (validBackendsDir) {
+        for (const auto& seg : requested) {
+          if (seg == "..") {
+            validBackendsDir = false;
+            break;
+          }
         }
       }
-    }
-    if (!validBackendsDir) {
-      QLOG(
-          Priority::WARNING,
-          "Rejecting suspicious backendsDir (must be absolute and free of "
-          "'..' segments): " +
-              sanitizePrintableAscii(backendsDir) +
-              " — falling back to default backend loading");
-      ggml_backend_load_all();
-    } else {
-      std::error_code ec;
-      std::filesystem::path backendsDirPath =
-          std::filesystem::canonical(requested, ec);
-      if (ec) {
+      if (!validBackendsDir) {
         QLOG(
             Priority::WARNING,
-            "backendsDir canonical() failed (" + ec.message() +
-                "): " + sanitizePrintableAscii(backendsDir) +
+            "Rejecting suspicious backendsDir (must be absolute and free of "
+            "'..' segments): " +
+                sanitizePrintableAscii(backendsDir) +
                 " — falling back to default backend loading");
         ggml_backend_load_all();
       } else {
-        auto resolvedStr = backendsDirPath.string();
-#ifdef __ANDROID__
-        if (resolvedStr.rfind("/data/", 0) != 0) {
+        std::error_code errCode;
+        std::filesystem::path backendsDirPath =
+            std::filesystem::canonical(requested, errCode);
+        if (errCode) {
           QLOG(
               Priority::WARNING,
-              "Rejecting backendsDir — resolved path outside /data/ prefix: " +
-                  sanitizePrintableAscii(resolvedStr) +
+              "backendsDir canonical() failed (" + errCode.message() +
+                  "): " + sanitizePrintableAscii(backendsDir) +
                   " — falling back to default backend loading");
           ggml_backend_load_all();
         } else {
-#endif
-#ifdef BACKENDS_SUBDIR
-          std::filesystem::path subdirPath(BACKENDS_SUBDIR);
-          backendsDirPath = backendsDirPath / subdirPath;
-          backendsDirPath = std::filesystem::canonical(backendsDirPath, ec);
-          if (ec) {
+          auto
+              resolvedStr = // NOLINT(bugprone-unused-local-non-trivial-variable)
+              backendsDirPath.string();
+#ifdef __ANDROID__
+          if (resolvedStr.rfind("/data/", 0) != 0) {
             QLOG(
                 Priority::WARNING,
-                "backendsDir+subdir canonical() failed (" + ec.message() +
-                    ") — falling back to default backend loading");
+                "Rejecting backendsDir — resolved path outside /data/ "
+                "prefix: " +
+                    sanitizePrintableAscii(resolvedStr) +
+                    " — falling back to default backend loading");
             ggml_backend_load_all();
           } else {
 #endif
-            QLOG(
-                Priority::INFO,
-                "Loading backends from directory: " +
-                    sanitizePrintableAscii(backendsDirPath.string()));
-            ggml_backend_load_all_from_path(backendsDirPath.string().c_str());
 #ifdef BACKENDS_SUBDIR
-          }
+            std::filesystem::path subdirPath(BACKENDS_SUBDIR);
+            backendsDirPath = backendsDirPath / subdirPath;
+            backendsDirPath =
+                std::filesystem::canonical(backendsDirPath, errCode);
+            if (errCode) {
+              QLOG(
+                  Priority::WARNING,
+                  "backendsDir+subdir canonical() failed (" +
+                      errCode.message() +
+                      ") — falling back to default backend loading");
+              ggml_backend_load_all();
+            } else {
+#endif
+              QLOG(
+                  Priority::INFO,
+                  "Loading backends from directory: " +
+                      sanitizePrintableAscii(backendsDirPath.string()));
+              ggml_backend_load_all_from_path(backendsDirPath.string().c_str());
+#ifdef BACKENDS_SUBDIR
+            }
 #endif
 #ifdef __ANDROID__
-        }
+          }
 #endif
+        }
       }
+    } else {
+      QLOG(Priority::DEBUG, "Loading backends using default path");
+      ggml_backend_load_all();
     }
-  } else {
-    QLOG(Priority::DEBUG, "Loading backends using default path");
-    ggml_backend_load_all();
+    g_backendsLoaded = true;
   }
 #ifdef __ANDROID__
   // Must run after backend loading (the backend .sos are only mapped into
@@ -379,6 +388,7 @@ void NmtLazyInitializeBackend::decrementRefCount() {
           Priority::DEBUG,
           "Resetting backend state (reference count reached zero)");
       g_initialized = false;
+      g_backendsLoaded = false;
       g_recordedBackendsDir.clear();
 #ifdef __ANDROID__
       // Clear the process-global GGML_OPENCL_CACHE_DIR set during
@@ -403,7 +413,7 @@ NmtBackendsHandle::NmtBackendsHandle(
   NmtLazyInitializeBackend::initializeAndRef(backendsDir, openclCacheDir);
 }
 
-NmtBackendsHandle::~NmtBackendsHandle() {
+NmtBackendsHandle::~NmtBackendsHandle() { // NOLINT(bugprone-exception-escape)
   if (ownsHandle_) {
     NmtLazyInitializeBackend::decrementRefCount();
   }
@@ -415,7 +425,8 @@ NmtBackendsHandle::NmtBackendsHandle(NmtBackendsHandle&& other) noexcept
 }
 
 NmtBackendsHandle&
-NmtBackendsHandle::operator=(NmtBackendsHandle&& other) noexcept {
+NmtBackendsHandle::operator=( // NOLINT(bugprone-exception-escape)
+    NmtBackendsHandle&& other) noexcept {
   if (this != &other) {
     if (ownsHandle_) {
       NmtLazyInitializeBackend::decrementRefCount();

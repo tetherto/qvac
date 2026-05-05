@@ -13,4 +13,3 @@ auto releaseLogger(js_env_t* env, js_callback_info_t* info) -> js_value_t*;
     //#TODO test0: add my methods from JsInterface
 
 }
-

@@ -10,6 +10,7 @@
 namespace qvac_lib_infer_llamacpp_embed::logging {
 
 // Global verbosity level - same for all instances
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 extern qvac_lib_inference_addon_cpp::logger::Priority g_verbosityLevel;
 
 // Parse verbosity from config map and set global level
@@ -23,6 +24,7 @@ void llamaLogCallback(ggml_log_level level, const char* text, void* userData);
 //
 // Simple logging macro that uses global verbosity level
 // Usage: QLOG_IF(Priority::DEBUG, "Debug message");
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
 #define QLOG_IF(priority, message)                                             \
   do {                                                                         \
     if (static_cast<int>(priority) <=                                          \
