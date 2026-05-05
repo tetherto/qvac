@@ -216,9 +216,9 @@ test('Cancelling after first token keeps cache growth bounded', { timeout: 600_0
   t.ok(stats.generatedTokens > 0, `at least one token generated before cancellation (generatedTokens=${stats.generatedTokens} > 0)`)
   t.ok(stats.generatedTokens < threshold, `generatedTokens (${stats.generatedTokens}) should be less than threshold (${threshold})`)
   t.ok(stats.TTFT > 0, 'TTFT recorded before cancellation')
-  // TPS/ppTPS may be 0 when only 1 token is generated due to timing precision
+  // TPS may be 0 when only 1 token is generated due to timing precision
   t.ok(stats.TPS >= 0, 'TPS is non-negative')
-  t.ok(stats.ppTPS >= 0, 'ppTPS is non-negative')
+  t.ok(stats.ppTPS > 0, 'ppTPS is positive (prompt processing completes before first token)')
 })
 
 test('Cancelling after first token only stores one generation chunk', { timeout: 600_000 }, async t => {
@@ -228,9 +228,9 @@ test('Cancelling after first token only stores one generation chunk', { timeout:
   const stopStats = await runAndCancelAfterFirstToken(model, noCachePrompt)
   t.is(stopStats._chunkCount, 1, 'cancelled immediately after first chunk')
   t.ok(stopStats.TTFT > 0, 'TTFT recorded before cancellation')
-  // TPS/ppTPS may be 0 when only 1 token is generated due to timing precision
+  // TPS may be 0 when only 1 token is generated due to timing precision
   t.ok(stopStats.TPS >= 0, 'TPS is non-negative')
-  t.ok(stopStats.ppTPS >= 0, 'ppTPS is non-negative')
+  t.ok(stopStats.ppTPS > 0, 'ppTPS is positive (prompt processing completes before first token)')
   const threshold = 2048
   t.ok(stopStats.generatedTokens > 0, `at least one token generated before cancellation (generatedTokens=${stopStats.generatedTokens} > 0)`)
   t.ok(stopStats.generatedTokens < threshold, `generatedTokens (${stopStats.generatedTokens}) should be less than threshold (${threshold})`)

@@ -410,7 +410,7 @@ TEST_F(LlamaModelTest, RuntimeStatsPpTPSAfterProcessing) {
 
     auto stats = model.runtimeStats();
     double ppTPS = getStatValue(stats, "ppTPS");
-    EXPECT_GE(ppTPS, 0.0);
+    EXPECT_GT(ppTPS, 0.0);
   });
 }
 
