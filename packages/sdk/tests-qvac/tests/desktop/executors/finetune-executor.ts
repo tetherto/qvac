@@ -1,5 +1,5 @@
 import { finetune } from "@qvac/sdk";
-import type { FinetuneProgress, FinetuneResult } from "@qvac/sdk";
+import type { FinetuneProgress, FinetuneResult, FinetuneStats } from "@qvac/sdk";
 import {
   ValidationHelpers,
   type TestResult,
@@ -17,6 +17,32 @@ import { AbstractModelExecutor } from "../../shared/executors/abstract-model-exe
 import { finetuneTests } from "../../finetune-tests.js";
 
 const FINETUNE_DEPENDENCY = "finetune-llm";
+
+const STATS_UNCERTAINTY_FIELDS = [
+  "train_loss_uncertainty",
+  "val_loss_uncertainty",
+  "train_accuracy_uncertainty",
+  "val_accuracy_uncertainty",
+] as const satisfies readonly (keyof FinetuneStats)[];
+
+function summarizeStatsUncertaintyShape(stats: FinetuneStats | undefined) {
+  if (!stats) {
+    return "stats absent";
+  }
+
+  const parts: string[] = [];
+  for (const field of STATS_UNCERTAINTY_FIELDS) {
+    const value = stats[field];
+    if (value === undefined) {
+      parts.push(`${field}=absent`);
+    } else if (value === null) {
+      parts.push(`${field}=null`);
+    } else {
+      parts.push(`${field}=${Number.isNaN(value) ? "NaN" : "number"}`);
+    }
+  }
+  return parts.join(", ");
+}
 
 interface DatasetPaths {
   tempRoot: string;
@@ -327,27 +353,21 @@ export class FinetuneExecutor extends AbstractModelExecutor<typeof finetuneTests
       let numberCount = 0;
       let nullCount = 0;
       for (const p of progress) {
-        const loss: unknown = p.loss;
+        const loss = p.loss;
         if (loss === null) {
           nullCount++;
-        } else if (typeof loss === "number") {
-          if (Number.isNaN(loss)) nanCount++;
-          else numberCount++;
+        } else if (Number.isNaN(loss)) {
+          nanCount++;
         } else {
-          return {
-            passed: false,
-            output: `Unexpected loss type at step ${p.global_steps}: ${typeof loss} (${String(loss)})`,
-          };
+          numberCount++;
         }
       }
 
       const summary =
         `Schema parse OK across ${progress.length} progress events ` +
-        `(loss: number=${numberCount}, NaN=${nanCount}, null=${nullCount})`;
+        `(loss: number=${numberCount}, NaN=${nanCount}, null=${nullCount}); ` +
+        `stats uncertainty fields: ${summarizeStatsUncertaintyShape(result.stats)}`;
 
-      if (expectation.validation === "function") {
-        return { passed: true, output: summary };
-      }
       return ValidationHelpers.validate(summary, expectation);
     } catch (error) {
       return this.failWithError("finetune progress loss-schema", error);
