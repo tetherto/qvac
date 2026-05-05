@@ -68,10 +68,10 @@ jobs:
             arch: x64
             runner: macos-15-large
             no_gpu: 'true'
-          - os: windows-11
+          - os: windows-2025
             platform: win32
             arch: x64
-            runner: ai-run-windows11-gpu
+            runner: qvac-win25-x64-gpu
             timeout: 1800
 
     steps:
@@ -80,10 +80,17 @@ jobs:
         with:
           node-version: lts/*
 
-      - name: Windows - enable git long paths
+      # - name: Windows - enable git long paths
+      #   if: ${{ matrix.platform == 'win32' }}
+      #   run: |
+      #     git config --system core.longpaths true
+      #     git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "https://github.com/"
+      #     git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "git@github.com:"
+      #   shell: powershell
+
+      - name: Windows - configure git credentials
         if: ${{ matrix.platform == 'win32' }}
         run: |
-          git config --system core.longpaths true
           git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "https://github.com/"
           git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "git@github.com:"
         shell: powershell

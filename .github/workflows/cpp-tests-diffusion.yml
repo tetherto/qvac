@@ -41,9 +41,9 @@ jobs:
             platform: linux
             arch: x64
             runner: qvac-ubuntu2204-x64-gpu
-          - os: windows-11
+          - os: windows-2025
             platform: windows
-            runner: ai-run-windows11-gpu
+            runner: qvac-win25-x64-gpu
 
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
@@ -86,23 +86,28 @@ jobs:
       #     sudo apt-get update
       #     sudo apt-get install -y vulkan-sdk
 
-      - if: ${{ matrix.os == 'windows-11' }}
-        name: Configure Windows runner
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          git config --system core.longpaths true
-          choco upgrade llvm -y
+      # - if: ${{ matrix.os == 'windows-2025' }}
+      #   name: Configure Windows runner
+      #   working-directory: ${{ env.WORKDIR }}
+      #   run: |
+      #     git config --system core.longpaths true
+      #     choco upgrade llvm -y
 
-      - if: ${{ matrix.os == 'windows-11' }}
-        name: Install Vulkan SDK on Windows
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          $ProgressPreference = 'SilentlyContinue'
-          Invoke-WebRequest -Uri https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe -OutFile vulkan-sdk.exe
-          ./vulkan-sdk.exe --root C:\VulkanSDK --accept-licenses --default-answer --confirm-command install
-          echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
+      # - if: ${{ matrix.os == 'windows-2025' }}
+      #   name: Install Vulkan SDK on Windows
+      #   working-directory: ${{ env.WORKDIR }}
+      #   run: |
+      #     $ProgressPreference = 'SilentlyContinue'
+      #     Invoke-WebRequest -Uri https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe -OutFile vulkan-sdk.exe
+      #     ./vulkan-sdk.exe --root C:\VulkanSDK --accept-licenses --default-answer --confirm-command install
+      #     echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
 
-      - if: ${{ matrix.os == 'windows-11' }}
+      - if: ${{ matrix.os == 'windows-2025' }}
+        name: Set Vulkan SDK Path on Windows
+        working-directory: ${{ env.WORKDIR }}
+        run: echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
+
+      - if: ${{ matrix.os == 'windows-2025' }}
         name: Clone and bootstrap vcpkg (Windows)
         run: |
           git clone https://github.com/microsoft/vcpkg.git
@@ -144,7 +149,7 @@ jobs:
           /tmp/vcpkg/bootstrap-vcpkg.sh -disableMetrics
           echo "VCPKG_ROOT=/tmp/vcpkg" >> "$GITHUB_ENV"
 
-      - if: ${{ matrix.os == 'windows-11' }}
+      - if: ${{ matrix.os == 'windows-2025' }}
         name: Configure CMake generator on Windows
         shell: powershell
         working-directory: ${{ env.WORKDIR }}
@@ -153,12 +158,12 @@ jobs:
           echo "CMAKE_GENERATOR_PLATFORM=x64" >> $env:GITHUB_ENV
 
       - name: Create vcpkg cache location (non-Windows)
-        if: ${{ matrix.os != 'windows-11' }}
+        if: ${{ matrix.os != 'windows-2025' }}
         working-directory: ${{ env.WORKDIR }}
         run: mkdir -p vcpkg/cache
 
       - name: Create vcpkg cache location (Windows)
-        if: ${{ matrix.os == 'windows-11' }}
+        if: ${{ matrix.os == 'windows-2025' }}
         shell: powershell
         working-directory: ${{ env.WORKDIR }}
         run: |
@@ -194,7 +199,7 @@ jobs:
           cp "$MODEL_PATH" ./test/model/stable-diffusion-v2-1-Q8_0.gguf
           test -f ./test/model/stable-diffusion-v2-1-Q8_0.gguf
 
-      - if: ${{ matrix.os == 'windows-11' }}
+      - if: ${{ matrix.os == 'windows-2025' }}
         name: Download SD2 model for C++ tests (Windows)
         working-directory: ${{ env.WORKDIR }}
         shell: powershell
