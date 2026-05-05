@@ -93,7 +93,8 @@
     "./bci.js": "./bci.js",
     "./binding": "./binding.js",
     "./binding.js": "./binding.js",
-    "./util": "./lib/util.js"
+    "./util": "./lib/util.js",
+    "./wer": "./lib/wer.js"
   },
   "types": "index.d.ts"
 }

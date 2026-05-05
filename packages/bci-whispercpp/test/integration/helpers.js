@@ -3,7 +3,7 @@
 const fs = require('bare-fs')
 const path = require('bare-path')
 const os = require('bare-os')
-const { computeWER } = require('../../lib/wer')
+const { computeWER } = require('@qvac/bci-whispercpp/wer')
 
 const isMobile = os.platform() === 'ios' || os.platform() === 'android'
 
