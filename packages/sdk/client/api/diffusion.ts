@@ -44,6 +44,30 @@ interface DiffusionResult {
  * // modelConfig: { prediction: "flux2_flow" } })`).
  * const { outputs } = diffusion({ modelId, prompt: "turn into watercolor", init_image: initImage });
  *
+ * // FLUX.2 multi-reference fusion
+ * // IMPORTANT: requires the model loaded with `modelConfig: { prediction: "flux2_flow" }`
+ * // and a Qwen3 text encoder via `llmModelSrc` (same loadModel requirements as the
+ * // FLUX.2 img2img example above). `init_image` and `init_images` are mutually
+ * // exclusive — pass one or the other, not both.
+ * const refA = fs.readFileSync("scientist-a.jpg");
+ * const refB = fs.readFileSync("scientist-b.jpg");
+ * const { outputs } = diffusion({
+ *   modelId,
+ *   prompt: "a portrait using most visual traits from @image1 and the eyes from @image2",
+ *   init_images: [refA, refB],
+ *   width: 768,
+ *   height: 768,
+ * });
+ *
+ * // LoRA adapter for this generation (absolute path required).
+ * // Persistence across subsequent diffusion() calls is controlled at
+ * // loadModel time via `modelConfig.lora_apply_mode`.
+ * const { outputs } = diffusion({
+ *   modelId,
+ *   prompt: "a watercolor cat",
+ *   lora: "/home/user/loras/watercolor.safetensors",
+ * });
+ *
  * // With progress tracking
  * const { progressStream, outputs } = diffusion({ modelId, prompt: "a cat" });
  * for await (const { step, totalSteps } of progressStream) {
@@ -53,10 +77,14 @@ interface DiffusionResult {
  * ```
  */
 export function diffusion(params: DiffusionClientParams): DiffusionResult {
-  const { init_image, ...rest } = params;
+  const { init_image, init_images, ...rest } = params;
+
   const request: DiffusionStreamRequest = {
     ...rest,
     ...(init_image !== undefined && { init_image: encodeBase64(init_image) }),
+    ...(init_images !== undefined && {
+      init_images: init_images.map(encodeBase64),
+    }),
     type: "diffusionStream",
   };
 
