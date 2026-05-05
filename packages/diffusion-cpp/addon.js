@@ -223,4 +223,65 @@ class SdInterface {
   }
 }
 
-module.exports = { SdInterface, mapAddonEvent, readImageDimensions }
+class EsrganUpscalerInterface {
+  /**
+   * @param {object} binding - The native addon binding (from require.addon())
+   * @param {object} configurationParams - Configuration for the ESRGAN context
+   * @param {string} configurationParams.esrganPath - Local file path to ESRGAN weights
+   * @param {object} [configurationParams.config] - ESRGAN-specific configuration options
+   * @param {Function} outputCb - Called on any upscale event
+   */
+  constructor (binding, configurationParams, outputCb) {
+    this._binding = binding
+
+    if (!configurationParams.config) {
+      configurationParams.config = {}
+    }
+
+    if (!configurationParams.config.backendsDir) {
+      configurationParams.config.backendsDir = path.join(__dirname, 'prebuilds')
+    }
+
+    configurationParams.config = Object.fromEntries(
+      Object.entries(configurationParams.config)
+        .filter(([, v]) => v !== undefined)
+        .map(([k, v]) => [k, String(v)])
+    )
+
+    this._handle = this._binding.createUpscalerInstance(
+      this,
+      configurationParams,
+      outputCb
+    )
+  }
+
+  async activate () {
+    this._binding.activateUpscaler(this._handle)
+  }
+
+  async cancel () {
+    if (!this._handle) return
+    await this._binding.cancel(this._handle)
+  }
+
+  async runJob (imageBytes, params) {
+    return this._binding.runUpscaleJob(this._handle, {
+      type: 'image',
+      input: imageBytes,
+      params: JSON.stringify(params || {})
+    })
+  }
+
+  async unload () {
+    if (!this._handle) return
+    this._binding.destroyInstance(this._handle)
+    this._handle = null
+  }
+}
+
+module.exports = {
+  SdInterface,
+  EsrganUpscalerInterface,
+  mapAddonEvent,
+  readImageDimensions
+}

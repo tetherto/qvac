@@ -3,7 +3,7 @@
 const path = require('bare-path')
 const QvacLogger = require('@qvac/logging')
 const { createJobHandler, exclusiveRunQueue } = require('@qvac/infer-base')
-const { SdInterface, mapAddonEvent } = require('./addon')
+const { SdInterface, EsrganUpscalerInterface, mapAddonEvent } = require('./addon')
 
 const COMPANION_FILE_KEYS = ['clipL', 'clipG', 't5Xxl', 'llm', 'vae', 'esrgan']
 
@@ -19,6 +19,22 @@ function assertAbsolute (key, value) {
 const LOG_METHODS = ['error', 'warn', 'info', 'debug']
 
 const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed'
+
+function normalizeUpscaleRepeats (options) {
+  if (options == null) return 1
+  if (typeof options !== 'object' || Array.isArray(options)) {
+    throw new TypeError('upscale options must be an object')
+  }
+
+  const repeats = options.repeats == null ? 1 : options.repeats
+  if (!Number.isInteger(repeats) || repeats <= 0) {
+    throw new TypeError('upscale.repeats must be a positive integer')
+  }
+  if (repeats > 2147483647) {
+    throw new RangeError('upscale.repeats must be a positive integer within the native int range')
+  }
+  return repeats
+}
 
 /**
  * Text-to-image and image-to-image generation using stable-diffusion.cpp.
@@ -494,4 +510,209 @@ class ImgStableDiffusion {
   getState () { return this.state }
 }
 
+/**
+ * Standalone ESRGAN image upscaling using stable-diffusion.cpp.
+ * Accepts encoded PNG/JPEG bytes and emits PNG bytes.
+ */
+class EsrganUpscaler {
+  /**
+   * @param {object} args
+   * @param {object} args.files - Absolute file paths for ESRGAN components
+   * @param {string} args.files.esrgan - ESRGAN upscaler model (absolute path)
+   * @param {object} [args.config] - ESRGAN context configuration
+   * @param {object} [args.logger] - Structured logger
+   * @param {object} [args.opts] - Optional inference options
+   */
+  constructor ({ files, config, logger = null, opts = {} }) {
+    if (!files || typeof files !== 'object') {
+      throw new TypeError('files must be an object containing { esrgan }')
+    }
+    assertAbsolute('esrgan', files.esrgan)
+
+    this._files = files
+    this._config = config || {}
+    this.logger = new QvacLogger(logger)
+    this.opts = opts
+    this._job = createJobHandler({ cancel: () => this.addon?.cancel() })
+    this._run = exclusiveRunQueue()
+    this.addon = null
+    this._hasActiveResponse = false
+    this._binding = null
+    this._nativeLoggerActive = false
+    this.state = { configLoaded: false }
+  }
+
+  async load () {
+    return this._run(async () => {
+      if (this.state.configLoaded) return
+      await this._load()
+      this.state.configLoaded = true
+    })
+  }
+
+  async _load () {
+    this.logger.info('Starting ESRGAN upscaler load')
+
+    const configurationParams = {
+      esrganPath: this._files.esrgan,
+      config: this._config
+    }
+
+    this.logger.info('Creating ESRGAN upscaler addon with configuration:', configurationParams)
+
+    try {
+      this.addon = this._createAddon(configurationParams)
+      this.logger.info('Activating ESRGAN upscaler addon')
+      await this.addon.activate()
+    } catch (loadError) {
+      this.logger.error('Error during ESRGAN upscaler load:', loadError)
+      try { await this.addon?.unload?.() } catch (_) {}
+      this.addon = null
+      this._releaseNativeLogger()
+      throw loadError
+    }
+
+    this.logger.info('ESRGAN upscaler load completed successfully')
+  }
+
+  /**
+   * @param {object} configurationParams
+   * @returns {EsrganUpscalerInterface}
+   */
+  _createAddon (configurationParams) {
+    this._binding = require('./binding')
+    this._connectNativeLogger()
+    return new EsrganUpscalerInterface(
+      this._binding,
+      configurationParams,
+      this._addonOutputCallback.bind(this)
+    )
+  }
+
+  _connectNativeLogger () {
+    if (!this._binding || !this.logger) return
+    try {
+      this._binding.setLogger((priority, message) => {
+        const method = LOG_METHODS[priority] || 'info'
+        if (typeof this.logger[method] === 'function') {
+          this.logger[method](`[C++] ${message}`)
+        }
+      })
+      this._nativeLoggerActive = true
+    } catch (err) {
+      this.logger.warn('Failed to connect native logger:', err.message)
+    }
+  }
+
+  _releaseNativeLogger () {
+    if (!this._nativeLoggerActive || !this._binding) return
+    try {
+      this._binding.releaseLogger()
+    } catch (_) {}
+    this._nativeLoggerActive = false
+  }
+
+  _addonOutputCallback (addon, event, data, error) {
+    const mapped = mapAddonEvent(event, data, error)
+    if (mapped === null) {
+      this.logger.debug(`Unhandled addon event: ${event} (data type: ${typeof data})`)
+      return
+    }
+
+    if (mapped.type === 'Error') {
+      this.logger.error('ESRGAN upscale failed with error:', mapped.error)
+      this._job.fail(mapped.error)
+      return
+    }
+
+    if (mapped.type === 'JobEnded') {
+      this._job.end(this.opts.stats ? mapped.data : null)
+      return
+    }
+
+    if (mapped.type === 'Output') {
+      this._job.output(mapped.data)
+    }
+  }
+
+  /**
+   * Upscale an existing encoded PNG/JPEG image and emit PNG bytes.
+   *
+   * @param {Uint8Array} imageBytes - Encoded PNG/JPEG input image bytes
+   * @param {object} [options]
+   * @param {number} [options.repeats=1] - Number of ESRGAN passes
+   * @returns {Promise<QvacResponse>}
+   */
+  async upscale (imageBytes, options) {
+    return this._run(() => this._upscaleInternal(imageBytes, options))
+  }
+
+  async _upscaleInternal (imageBytes, options) {
+    if (!(imageBytes instanceof Uint8Array)) {
+      throw new TypeError('input image must be a Uint8Array')
+    }
+
+    const repeats = normalizeUpscaleRepeats(options)
+
+    if (!this.addon) {
+      throw new Error('Addon not initialized. Call load() first.')
+    }
+
+    if (this._hasActiveResponse) {
+      throw new Error(RUN_BUSY_ERROR_MESSAGE)
+    }
+
+    const response = this._job.start()
+
+    let accepted
+    try {
+      accepted = await this.addon.runJob(imageBytes, { repeats })
+    } catch (error) {
+      this._job.fail(error)
+      throw error
+    }
+
+    if (!accepted) {
+      this._job.fail(new Error(RUN_BUSY_ERROR_MESSAGE))
+      throw new Error(RUN_BUSY_ERROR_MESSAGE)
+    }
+
+    this._hasActiveResponse = true
+    const finalized = response.await().finally(() => { this._hasActiveResponse = false })
+    finalized.catch((err) => {
+      this.logger?.warn?.('ESRGAN upscale response rejected:', err?.message || err)
+    })
+    response.await = () => finalized
+
+    this.logger.info('ESRGAN upscale job started successfully')
+    return response
+  }
+
+  async cancel () {
+    if (this.addon?.cancel) {
+      await this.addon.cancel()
+    }
+  }
+
+  async unload () {
+    return this._run(async () => {
+      await this.cancel()
+      if (this._job.active) {
+        this._job.fail(new Error('Upscaler was unloaded'))
+      }
+      this._hasActiveResponse = false
+      if (this.addon) {
+        await this.addon.unload()
+        this.addon = null
+      }
+      this._releaseNativeLogger()
+      this.state.configLoaded = false
+    })
+  }
+
+  getState () { return this.state }
+}
+
 module.exports = ImgStableDiffusion
+module.exports.ImgStableDiffusion = ImgStableDiffusion
+module.exports.EsrganUpscaler = EsrganUpscaler

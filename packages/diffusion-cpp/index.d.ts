@@ -146,6 +146,29 @@ export interface DiffusionFiles {
   esrgan?: string
 }
 
+export interface EsrganFiles {
+  /** Absolute path to ESRGAN upscaler model */
+  esrgan: string
+}
+
+export interface EsrganUpscalerConfig {
+  /** Custom backends directory path (defaults to prebuilds/) */
+  backendsDir?: string
+  /** Number of CPU threads (-1 = auto) */
+  threads?: NumericLike
+  /** ESRGAN upscaler tile size */
+  upscaler_tile_size?: NumericLike
+  /** Use direct convolution in ESRGAN upscaler */
+  upscaler_direct?: boolean
+  /** Keep ESRGAN upscaler weights on CPU and offload during compute */
+  upscaler_offload_params_to_cpu?: boolean
+  /** Number of CPU threads for ESRGAN upscaler (-1 = auto) */
+  upscaler_threads?: NumericLike
+  /** Logging verbosity: 0=error, 1=warn, 2=info, 3=debug */
+  verbosity?: NumericLike
+  [key: string]: string | number | boolean | undefined
+}
+
 export interface ImgStableDiffusionArgs {
   files: DiffusionFiles
   /**
@@ -156,6 +179,17 @@ export interface ImgStableDiffusionArgs {
   config?: SdConfig
   logger?: QvacLogger | Console | null
   opts?: { stats?: boolean }
+}
+
+export interface EsrganUpscalerArgs {
+  files: EsrganFiles
+  config?: EsrganUpscalerConfig
+  logger?: QvacLogger | Console | null
+  opts?: { stats?: boolean }
+}
+
+export interface EsrganUpscaleOptions {
+  repeats?: number
 }
 
 export interface GenerationParams {
@@ -289,6 +323,29 @@ export interface RuntimeStats {
   seed: number
 }
 
+export interface EsrganRuntimeStats {
+  /** Wall time to load the ESRGAN model weights (ms) */
+  modelLoadMs: number
+  /** Wall time for the most recent upscale job (ms) */
+  upscaleMs: number
+  /** Cumulative upscale time across all jobs (ms) */
+  totalUpscaleMs: number
+  /** Cumulative wall time across all jobs (ms) */
+  totalWallMs: number
+  /** Cumulative number of upscale calls */
+  totalUpscales: number
+  /** Cumulative number of images produced */
+  totalImages: number
+  /** Cumulative number of pixels produced */
+  totalPixels: number
+  /** Width of the most recent emitted PNG (px) */
+  width: number
+  /** Height of the most recent emitted PNG (px) */
+  height: number
+  /** Number of ESRGAN passes used by the most recent upscale job */
+  repeats: number
+}
+
 export default class ImgStableDiffusion {
   protected addon: Addon | null
   opts: { stats?: boolean }
@@ -308,4 +365,22 @@ export default class ImgStableDiffusion {
   getState(): { configLoaded: boolean }
 }
 
-export { QvacResponse, RuntimeStats }
+export class EsrganUpscaler {
+  opts: { stats?: boolean }
+  logger: QvacLogger
+  state: { configLoaded: boolean }
+
+  constructor(args: EsrganUpscalerArgs)
+
+  load(): Promise<void>
+
+  upscale(imageBytes: Uint8Array, options?: EsrganUpscaleOptions): Promise<QvacResponse>
+
+  unload(): Promise<void>
+
+  cancel(): Promise<void>
+
+  getState(): { configLoaded: boolean }
+}
+
+export { QvacResponse, RuntimeStats, EsrganRuntimeStats }

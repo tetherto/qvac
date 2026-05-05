@@ -1,24 +1,21 @@
 #include "SdModel.hpp"
 
-#include <algorithm>
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <sstream>
 #include <system_error>
+#include <utility>
 #include <vector>
 
-#define STB_IMAGE_IMPLEMENTATION
-#include <stb_image.h>
-#define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <ggml-backend.h>
 #include <picojson/picojson.h>
 #include <qvac-lib-inference-addon-cpp/Errors.hpp>
 #include <qvac-lib-inference-addon-cpp/Logger.hpp>
-#include <stb_image_write.h>
 
 #include "utils/BackendSelection.hpp"
+#include "utils/ImageCodec.hpp"
 #include "utils/ImageUtils.hpp"
 #include "utils/LoggingMacros.hpp"
 
@@ -220,7 +217,7 @@ bool sdAbortCallback(void* /*data*/) {
 
 // RAII wrapper for the sd_image_t* array returned by generate_image().
 // Frees each image's pixel buffer and the array itself on destruction,
-// even if an exception is thrown mid-iteration (e.g. in encodeToPng or
+// even if an exception is thrown mid-iteration (e.g. in PNG encoding or
 // outputCallback).  Call release(i) after processing image i to free
 // its pixel buffer immediately rather than waiting until destruction.
 class SdImageBatch {
@@ -265,10 +262,6 @@ struct PreparedLoras {
   std::vector<sd_lora_t> items;
 };
 
-struct FreeDeleter {
-  void operator()(uint8_t* ptr) const noexcept { free(ptr); }
-};
-
 // Mirrors the pinned fork's CLI flow in examples/common/common.hpp:
 // build owned path storage first, then build sd_lora_t entries that point
 // at that stable storage for the lifetime of generate_image().
@@ -289,6 +282,17 @@ PreparedLoras prepareLoras(const std::string& loraPath) {
   return prepared;
 }
 
+qvac_lib_inference_addon_sd::EsrganUpscalerConfig
+makeUpscalerConfig(const qvac_lib_inference_addon_sd::SdCtxConfig& config) {
+  return {
+      config.esrganPath,
+      config.nThreads,
+      config.upscalerThreads,
+      config.upscalerTileSize,
+      config.upscalerDirect,
+      config.upscalerOffloadParamsToCpu};
+}
+
 } // namespace
 
 // ---------------------------------------------------------------------------
@@ -297,7 +301,7 @@ PreparedLoras prepareLoras(const std::string& loraPath) {
 
 SdModel::SdModel(qvac_lib_inference_addon_sd::SdCtxConfig config)
     : config_(std::move(config)), sdCtx_(nullptr, &free_sd_ctx),
-      upscalerCtx_(nullptr, &free_upscaler_ctx) {
+      upscaler_(makeUpscalerConfig(config_)) {
 
   sd_set_log_callback(SdModel::sdLogCallback, nullptr);
 }
@@ -639,7 +643,7 @@ std::any SdModel::process(const std::any& input) {
                   "] is empty -- every reference must be a non-empty "
                   "PNG/JPEG buffer.");
 
-        sd_image_t decoded = decodePng(job.initImagesBytes[i]);
+        sd_image_t decoded = image_codec::decodeImage(job.initImagesBytes[i]);
         if (!decoded.data)
           throw StatusError(
               general_error::InvalidArgument,
@@ -694,7 +698,7 @@ std::any SdModel::process(const std::any& input) {
           initPng.push_back(static_cast<uint8_t>(el.get<double>()));
       }
       if (!initPng.empty())
-        initImg = decodePng(initPng);
+        initImg = image_codec::decodeImage(initPng);
 
       if (!initImg.data)
         throw StatusError(
@@ -816,7 +820,7 @@ std::any SdModel::process(const std::any& input) {
   for (int i = 0; i < results.count(); ++i) {
     if (results[i].data && !wasCancelled) {
       sd_image_t imageForOutput = results[i];
-      std::unique_ptr<uint8_t, FreeDeleter> upscaledData(nullptr);
+      std::unique_ptr<uint8_t, image_codec::FreeDeleter> upscaledData(nullptr);
 
       if (gen.upscale) {
         sd_image_t upscaled = upscaleImage(results[i], gen.upscaleRepeats);
@@ -824,7 +828,7 @@ std::any SdModel::process(const std::any& input) {
         upscaledData.reset(upscaled.data);
       }
 
-      auto png = encodeToPng(imageForOutput);
+      auto png = image_codec::encodeToPng(imageForOutput);
       if (!png.empty() && job.outputCallback) {
         const int64_t outputWidth = static_cast<int64_t>(imageForOutput.width);
         const int64_t outputHeight =
@@ -901,119 +905,8 @@ qvac_lib_inference_addon_cpp::RuntimeStats SdModel::runtimeStats() const {
   return lastStats_;
 }
 
-upscaler_ctx_t* SdModel::ensureUpscaler() {
-  if (config_.esrganPath.empty()) {
-    throw StatusError(
-        general_error::InvalidArgument,
-        "ESRGAN upscale requested but files.esrgan was not provided");
-  }
-
-  if (upscalerCtx_) {
-    return upscalerCtx_.get();
-  }
-
-  int threads =
-      config_.upscalerThreads > 0 ? config_.upscalerThreads : config_.nThreads;
-  if (threads <= 0) {
-    threads = sd_get_num_physical_cores();
-  }
-  if (threads <= 0) {
-    threads = 1;
-  }
-
-  const int tileSize = std::max(1, config_.upscalerTileSize);
-  upscaler_ctx_t* raw = new_upscaler_ctx(
-      config_.esrganPath.c_str(),
-      config_.upscalerOffloadParamsToCpu,
-      config_.upscalerDirect,
-      threads,
-      tileSize);
-
-  if (!raw) {
-    throw StatusError(
-        general_error::InternalError,
-        "Failed to create ESRGAN upscaler context from files.esrgan: " +
-            config_.esrganPath);
-  }
-
-  upscalerCtx_.reset(raw);
-  return upscalerCtx_.get();
-}
-
 sd_image_t SdModel::upscaleImage(const sd_image_t& inputImage, int repeats) {
-  if (repeats <= 0) {
-    throw StatusError(
-        general_error::InvalidArgument,
-        "upscale.repeats must be a positive integer");
-  }
-
-  std::lock_guard<std::mutex> lock(upscalerMutex_);
-
-  upscaler_ctx_t* ctx = ensureUpscaler();
-  const int scale = get_upscale_factor(ctx);
-  if (scale <= 0) {
-    throw StatusError(
-        general_error::InternalError,
-        "ESRGAN upscaler reported an invalid scale factor");
-  }
-  const uint32_t factor = static_cast<uint32_t>(scale);
-
-  sd_image_t current = inputImage;
-  bool currentOwned = false;
-
-  for (int repeat = 0; repeat < repeats; ++repeat) {
-    sd_image_t next = upscale(ctx, current, factor);
-    if (!next.data) {
-      if (currentOwned) {
-        free(current.data);
-      }
-      throw StatusError(general_error::InternalError, "ESRGAN upscale failed");
-    }
-
-    if (currentOwned) {
-      free(current.data);
-    }
-    current = next;
-    currentOwned = true;
-  }
-
-  return current;
-}
-
-// ---------------------------------------------------------------------------
-// PNG encode / decode (stb_image / stb_image_write)
-// ---------------------------------------------------------------------------
-
-std::vector<uint8_t> SdModel::encodeToPng(const sd_image_t& img) {
-  std::vector<uint8_t> out;
-  auto writeCallback = [](void* ctx, void* data, int size) {
-    auto* vec = static_cast<std::vector<uint8_t>*>(ctx);
-    vec->insert(
-        vec->end(),
-        static_cast<const uint8_t*>(data),
-        static_cast<const uint8_t*>(data) + size);
-  };
-  stbi_write_png_to_func(
-      writeCallback,
-      &out,
-      static_cast<int>(img.width),
-      static_cast<int>(img.height),
-      static_cast<int>(img.channel),
-      img.data,
-      static_cast<int>(img.width * img.channel));
-  return out;
-}
-
-sd_image_t SdModel::decodePng(const std::vector<uint8_t>& pngBytes) {
-  if (pngBytes.empty())
-    return sd_image_t{};
-  int w = 0, h = 0, c = 0;
-  uint8_t* data = stbi_load_from_memory(
-      pngBytes.data(), static_cast<int>(pngBytes.size()), &w, &h, &c, 3);
-  if (!data)
-    return sd_image_t{};
-  return sd_image_t{
-      static_cast<uint32_t>(w), static_cast<uint32_t>(h), 3, data};
+  return upscaler_.upscaleImage(inputImage, repeats);
 }
 
 // ---------------------------------------------------------------------------
