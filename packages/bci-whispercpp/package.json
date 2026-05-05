@@ -16,7 +16,7 @@
     "test:unit": "brittle-bare test/unit/*.test.js",
     "test:integration": "brittle-bare test/integration/addon.test.js",
     "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target test-bci-core && bare-make install",
-    "test:cpp:run": "./build/addon/tests/test-bci-core --gtest_output=xml:cpp-test-results.xml",
+    "test:cpp:run": "cd build/addon/tests/ && LLVM_PROFILE_FILE=default.profraw ./test-bci-core --gtest_output=xml:cpp-test-results.xml",
     "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
     "coverage:cpp:build": "bare-make generate -D BUILD_TESTING=ON -D ENABLE_COVERAGE=ON && bare-make build --target test-bci-core",
     "coverage:cpp:summary": "cd build/addon/tests && llvm-cov-19 report ./test-bci-core --instr-profile=coverage.profdata -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > coverage-summary.txt",
