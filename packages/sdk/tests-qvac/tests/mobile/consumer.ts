@@ -214,12 +214,32 @@ resources.define("afriquegemma", {
   },
 });
 
+/** Resolve a bundled RN asset to a real file URI (chatterbox needs it at loadModel time). */
+async function resolveBundledAudioUri(filename: string): Promise<string | undefined> {
+  // @ts-ignore - assets.ts generated at consumer build time (consumer root, 3 levels up from dist/tests/mobile/)
+  const assets = await import("../../../assets");
+  const assetModule = assets.audio?.[filename];
+  if (!assetModule) {
+    console.warn(`[tts-chatterbox] reference audio not found in asset registry: ${filename}`);
+    return undefined;
+  }
+
+  // @ts-ignore - expo-asset is a peer dependency
+  const { Asset } = await import("expo-asset");
+  const asset = Asset.fromModule(assetModule);
+  asset.downloaded = false;
+  await asset.downloadAsync();
+  let uri: string = asset.localUri || asset.uri;
+  if (!uri) return undefined;
+  if (uri.startsWith("file://")) uri = uri.substring(7);
+  return decodeURIComponent(uri);
+}
 
 resources.define("tts-chatterbox", {
   constant: TTS_TOKENIZER_EN_CHATTERBOX,
   type: "tts",
-  skipPreDownload: true,
-  config: {
+  preLoadUnload: true,
+  config: async () => ({
     ttsEngine: "chatterbox",
     language: "en",
     ttsTokenizerSrc: TTS_TOKENIZER_EN_CHATTERBOX,
@@ -227,7 +247,8 @@ resources.define("tts-chatterbox", {
     ttsEmbedTokensSrc: TTS_EMBED_TOKENS_EN_CHATTERBOX_FP32,
     ttsConditionalDecoderSrc: TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP32,
     ttsLanguageModelSrc: TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP32,
-  },
+    referenceAudioSrc: await resolveBundledAudioUri("transcription-short-wav.wav"),
+  }),
 });
 
 const ttsSupertonicBaseConfig = {
@@ -244,7 +265,7 @@ const ttsSupertonicBaseConfig = {
 resources.define("tts-supertonic", {
   constant: TTS_SUPERTONIC2_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32,
   type: "onnx-tts",
-  skipPreDownload: true,
+  preLoadUnload: true,
   config: {
     ...ttsSupertonicBaseConfig,
     language: "en",
@@ -254,7 +275,7 @@ resources.define("tts-supertonic", {
 resources.define("tts-supertonic-multilingual", {
   constant: TTS_SUPERTONIC2_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32,
   type: "onnx-tts",
-  skipPreDownload: true,
+  preLoadUnload: true,
   config: {
     ...ttsSupertonicBaseConfig,
     language: "es",
@@ -266,7 +287,7 @@ resources.define("tts-supertonic-multilingual", {
 resources.define("parakeet-tdt", {
   constant: PARAKEET_TDT_ENCODER_INT8,
   type: "parakeet",
-  skipPreDownload: true,
+  preLoadUnload: true,
   config: {
     parakeetEncoderSrc: PARAKEET_TDT_ENCODER_INT8,
     parakeetDecoderSrc: PARAKEET_TDT_DECODER_INT8,
@@ -279,7 +300,7 @@ resources.define("parakeet-tdt", {
 resources.define("parakeet-ctc", {
   constant: PARAKEET_CTC_FP32,
   type: "parakeet",
-  skipPreDownload: true,
+  preLoadUnload: true,
   config: {
     modelType: "ctc",
     parakeetCtcModelSrc: PARAKEET_CTC_FP32,
@@ -291,7 +312,7 @@ resources.define("parakeet-ctc", {
 resources.define("parakeet-sortformer", {
   constant: PARAKEET_SORTFORMER_FP32,
   type: "parakeet",
-  skipPreDownload: true,
+  preLoadUnload: true,
   config: {
     modelType: "sortformer",
     parakeetSortformerSrc: PARAKEET_SORTFORMER_FP32,
@@ -301,7 +322,7 @@ resources.define("parakeet-sortformer", {
 resources.define("vision", {
   constant: SMOLVLM2_500M_MULTIMODAL_Q8_0,
   type: "llm",
-  skipPreDownload: true,
+  preLoadUnload: true,
   config: {
     ctx_size: 1024,
     projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
@@ -369,6 +390,10 @@ export const executor = createExecutor({
       new SkipExecutor(/^translation-afriquegemma-/, "AfriqueGemma 4B (~2.7 GB) exceeds iOS memory budget"),
       // TODO(QVAC-18460): re-enable once iOS transcribe() crash is fixed.
       new SkipExecutor(/^transcription-/, "TODO(QVAC-18460): transcription disabled on iOS — transcribe() hard-crashes consumer after FFmpegDecoder unload"),
+      skipTests([
+        "config-reload-then-transcribe",
+        "error-transcription-failed",
+      ], "TODO(QVAC-18460): transcribe() hard-crashes consumer on iOS"),
     ] : []),
 
     // Real executors

@@ -222,7 +222,6 @@ const referenceAudioPath = path.resolve(process.cwd(), "assets/audio/transcripti
 resources.define("tts-chatterbox", {
   constant: TTS_TOKENIZER_EN_CHATTERBOX,
   type: "tts",
-  skipPreDownload: true,
   preLoadUnload: true,
   config: {
     ttsEngine: "chatterbox",
@@ -250,7 +249,6 @@ const ttsSupertonicBaseConfig = {
 resources.define("tts-supertonic", {
   constant: TTS_SUPERTONIC2_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32,
   type: "onnx-tts",
-  skipPreDownload: true,
   preLoadUnload: true,
   config: {
     ...ttsSupertonicBaseConfig,
@@ -261,7 +259,6 @@ resources.define("tts-supertonic", {
 resources.define("tts-supertonic-multilingual", {
   constant: TTS_SUPERTONIC2_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32,
   type: "onnx-tts",
-  skipPreDownload: true,
   preLoadUnload: true,
   config: {
     ...ttsSupertonicBaseConfig,
@@ -274,7 +271,6 @@ resources.define("tts-supertonic-multilingual", {
 resources.define("parakeet-tdt", {
   constant: PARAKEET_TDT_ENCODER_INT8,
   type: "parakeet",
-  skipPreDownload: true,
   preLoadUnload: true,
   config: {
     parakeetEncoderSrc: PARAKEET_TDT_ENCODER_INT8,
@@ -288,7 +284,6 @@ resources.define("parakeet-tdt", {
 resources.define("parakeet-ctc", {
   constant: PARAKEET_CTC_FP32,
   type: "parakeet",
-  skipPreDownload: true,
   preLoadUnload: true,
   config: {
     modelType: "ctc",
@@ -301,7 +296,6 @@ resources.define("parakeet-ctc", {
 resources.define("parakeet-sortformer", {
   constant: PARAKEET_SORTFORMER_FP32,
   type: "parakeet",
-  skipPreDownload: true,
   preLoadUnload: true,
   config: {
     modelType: "sortformer",
@@ -312,7 +306,6 @@ resources.define("parakeet-sortformer", {
 resources.define("vision", {
   constant: SMOLVLM2_500M_MULTIMODAL_Q8_0,
   type: "llm",
-  skipPreDownload: true,
   preLoadUnload: true,
   config: {
     ctx_size: 1024,
@@ -323,7 +316,6 @@ resources.define("vision", {
 resources.define("diffusion", {
   constant: FLUX_2_KLEIN_4B_Q4_0,
   type: "diffusion",
-  skipPreDownload: true,
   preLoadUnload: true,
   config: {
     device: "gpu",
