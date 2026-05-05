@@ -188,7 +188,7 @@ Depending on the platform, one call to `classifier.classify(buffer)` takes from 
 | **Total resident** during inference                        | **~8–10 MB**    |
 
 
-All GGML compute buffers (input tensor, intermediate activations, output) are allocated **once** at `load()` time and reused on every `classify()` call — `ggml_backend_tensor_set` / `_get` are the only operations that touch them per request. Per-call C++ allocations are bounded: one input-buffer copy across the bare-runtime boundary, the decoded RGB buffer (`width × height × 3` bytes), the resized 224×224 RGB buffer (~150 KB), the WHCN F32 tensor (~600 KB), and the 3-element softmax + result vectors. Multiple `ImageClassifier` instances each keep their own compute buffer and worker thread — you pay the ~8 MB once per instance.
+All GGML compute buffers (input tensor, intermediate activations, output) are allocated **once** at `load()` time and reused on every `classify()` call — `ggml_backend_tensor_set` / `_get` are the only operations that touch them per request. Per-call C++ allocations are bounded: one input-buffer copy across the bare-runtime boundary, the decoded RGB buffer, the resized 224×224 RGB buffer, the WHCN F32 tensor, and the 3-element softmax + result vectors. Multiple `ImageClassifier` instances each keep their own compute buffer and worker thread — you pay the ~8 MB once per instance.
 
 ### Why FP16 weights?
 
