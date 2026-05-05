@@ -70,6 +70,7 @@ Rules:
 - Prefer diary entries as the source of truth for Cursor work.
 - Deduplicate by ticket ID, PR number, issue number, and URL.
 - Present the final message as rendered Markdown in chat, not a fenced code block.
+- Prefix every output item with escaped dash syntax (`\- `). This renders as a literal dash in chat and keeps the dash when copied into Slack.
 - Use Markdown link syntax for links so the chat renders clickable links: `[label](url)`.
 - PR labels should be short, e.g. `[#123](https://github.com/org/repo/pull/123)`.
 - Asana ticket labels should include ticket and task name when known, e.g. `[QVAC-12345 Task title](https://app.asana.com/...)`.

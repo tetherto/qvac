@@ -193,9 +193,9 @@ function renderReviewSummary(reviews) {
     else other.push(refs);
   }
   const lines = [];
-  if (approved.length > 0) lines.push(`- Approved: ${approved.join(", ")}`);
+  if (approved.length > 0) lines.push(formatOutputBullet(`Approved: ${approved.join(", ")}`));
   if (other.length > 0) {
-    lines.push(`- Commented / Requested changes: ${other.join(", ")}`);
+    lines.push(formatOutputBullet(`Commented / Requested changes: ${other.join(", ")}`));
   }
   return lines;
 }
@@ -212,27 +212,51 @@ function reviewRef(group) {
 }
 
 function normalizeManualLines(value, fallback) {
-  if (!value) return [fallback];
+  if (!value) return [formatOutputBullet(fallback.replace(/^- /, ""))];
   const lines = String(value)
     .replace(/\\n/g, "\n")
     .split(/\n+|;\s+/)
     .map((line) => line.trim())
     .filter(Boolean);
-  if (lines.length === 0) return [fallback];
-  return lines.map((line) => (line.startsWith("- ") ? line : `- ${line}`));
+  if (lines.length === 0) return [formatOutputBullet(fallback.replace(/^- /, ""))];
+  return lines.map((line) => formatOutputBullet(line.replace(/^- /, "")));
 }
 
 function renderBullet(group) {
-  const refs = group.refs.length > 0 ? `${group.refs.join(", ")} - ` : "";
   const text = cleanupSummary(group.summary, group);
-  return `- ${group.verb} ${refs}${text}`.slice(0, 300);
+  const refs = group.refs.length > 0 ? formatRefs(group.refs) : "";
+  const body = [group.verb, refs, text].filter(Boolean).join(" ");
+  return formatOutputBullet(body.slice(0, 298));
+}
+
+function formatRefs(refs) {
+  return refs
+    .map((ref) => (isPrRef(ref) ? `PR: ${ref}` : ref))
+    .join(" - ");
+}
+
+function isPrRef(ref) {
+  return /^\[#\d+\]\(/.test(ref);
+}
+
+function formatOutputBullet(text) {
+  // Escape the dash so rendered Markdown preserves a literal "-" on copy.
+  // Two trailing spaces force a Markdown hard break; without them, escaped
+  // dash lines render as one paragraph and copy as "- item one - item two".
+  return `\\- ${text}  `;
 }
 
 function cleanupSummary(summary, group) {
   let text = String(summary || group.title || "").replace(/\s+/g, " ").trim();
+  const hasTicketRef = group.refs.some((ref) => !isPrRef(ref));
+  const hasPrRef = group.refs.some((ref) => isPrRef(ref));
+  if (hasTicketRef && hasPrRef) return "";
   for (const item of group.items) {
     if (item.ticket) {
       text = text.replace(new RegExp(`^${escapeRegExp(item.ticket)}\\s*[-:–—]?\\s*`, "i"), "");
+    }
+    if (item.pr && item.ticket) {
+      text = "";
     }
   }
   return text || group.title || "work item";
