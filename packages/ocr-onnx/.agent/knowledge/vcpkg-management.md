@@ -203,12 +203,15 @@ Packages can override standard triplets for specific build requirements. Overrid
 set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 ```
 
-#### LLM / Embed — Clang-19 Toolchain
+#### LLM / Embed — Clang Toolchain
 
 Location: `packages/qvac-lib-infer-llamacpp-llm/vcpkg/triplets/`
 
 Custom `x64-linux.cmake` and `arm64-linux.cmake` that enforce:
-- clang-19 compiler via custom toolchain file
+- Unversioned `clang` / `clang++` compiler via custom toolchain file
+  (the LLVM major is pinned globally by `.github/actions/setup-llvm` in CI;
+  on dev machines, `update-alternatives` should point `clang`/`clang++` at
+  the matching major — currently 22)
 - Static linking (`VCPKG_LIBRARY_LINKAGE static`)
 - libc++ stdlib (`-stdlib=libc++`)
 - Position-independent code (`-fPIC`)
@@ -513,8 +516,8 @@ If a package can't be resolved:
 
 | Addon Package | vcpkg Dependencies | Overlay Ports | Custom Triplets |
 |--------------|-------------------|---------------|-----------------|
-| `qvac-lib-infer-llamacpp-llm` | qvac-fabric, qvac-lib-inference-addon-cpp, qvac-lint-cpp, picojson, opencl (Android) | qvac-fabric (local dev) | Linux clang-19 |
-| `qvac-lib-infer-llamacpp-embed` | qvac-fabric, qvac-lib-inference-addon-cpp, qvac-lint-cpp, opencl (Android) | qvac-fabric (local dev) | Linux clang-19 |
+| `qvac-lib-infer-llamacpp-llm` | qvac-fabric, qvac-lib-inference-addon-cpp, qvac-lint-cpp, picojson, opencl (Android) | qvac-fabric (local dev) | Linux clang (unversioned, pinned via setup-llvm) |
+| `qvac-lib-infer-llamacpp-embed` | qvac-fabric, qvac-lib-inference-addon-cpp, qvac-lint-cpp, opencl (Android) | qvac-fabric (local dev) | Linux clang (unversioned, pinned via setup-llvm) |
 | `ocr-onnx` | onnxruntime (platform EPs), opencv4, qvac-lib-inference-addon-cpp, qvac-lint-cpp | None | Release-only |
 | `qvac-lib-infer-onnx-tts` | onnxruntime (platform EPs), fmt, spdlog, tokenizers-cpp, qvac-lib-inference-addon-cpp, qvac-lint-cpp | None | Release-only (macOS/iOS) |
 | `qvac-lib-infer-parakeet` | onnxruntime, qvac-lib-inference-addon-cpp | None | Release-only |
