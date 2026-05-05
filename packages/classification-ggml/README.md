@@ -113,7 +113,7 @@ None take arguments. `load()` is idempotent — calling it twice is a no-op (che
 
 ## Build (from source, monorepo)
 
-Prerequisites: clang-19, libc++-19-dev, vcpkg, bare ≥ 1.24, bare-make.
+Prerequisites: clang (LLVM ≥ 19) with matching `libc++-dev`, vcpkg, bare ≥ 1.24, bare-make. CI pins the exact LLVM major via the shared `setup-llvm` action; locally any recent clang works.
 
 ```bash
 cd packages/classification-ggml
