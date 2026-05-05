@@ -24,7 +24,7 @@ Each addon has a full suite of per-package workflows:
 | Prebuilds | `prebuilds-<pkg>.yml` | Build native bindings for 9 platform targets |
 | On merge | `on-merge-<pkg>.yml` | Publish to GPR (main/feature/tmp) or npm (release) |
 | C++ tests | `cpp-tests-<pkg>.yml` or `reusable-cpp-tests-<pkg>.yml` | GoogleTest unit tests |
-| C++ coverage | `cpp-test-coverage-<pkg>.yml` | llvm-cov-19 coverage reports |
+| C++ coverage | `cpp-test-coverage-<pkg>.yml` | llvm-cov coverage reports |
 | Benchmarks | `benchmark-<pkg>.yml` | Performance benchmarks |
 | Release notes | `release-notes-check-<pkg>.yml` | Verify CHANGELOG matches version bumps |
 | GitHub release | `create-github-release-<pkg>.yml` | Create GitHub release on npm publish |

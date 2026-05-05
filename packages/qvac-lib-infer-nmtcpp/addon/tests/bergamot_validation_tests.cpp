@@ -48,7 +48,7 @@ TEST_F(BergamotValidationTest, ModelFileNotFound) {
   params.src_vocab_path = validVocabPath;
   params.dst_vocab_path = validVocabPath;
 
-  auto ctx = bergamot_init("", params);
+  auto ctx = bergamotInit("", params);
   EXPECT_EQ(ctx, nullptr);
 }
 
@@ -58,7 +58,7 @@ TEST_F(BergamotValidationTest, ModelWrongExtension) {
   params.src_vocab_path = validVocabPath;
   params.dst_vocab_path = validVocabPath;
 
-  auto ctx = bergamot_init("", params);
+  auto ctx = bergamotInit("", params);
   EXPECT_EQ(ctx, nullptr);
 }
 
@@ -68,7 +68,7 @@ TEST_F(BergamotValidationTest, SrcVocabFileNotFound) {
   params.src_vocab_path = "/nonexistent/vocab.spm";
   params.dst_vocab_path = validVocabPath;
 
-  auto ctx = bergamot_init("", params);
+  auto ctx = bergamotInit("", params);
   EXPECT_EQ(ctx, nullptr);
 }
 
@@ -78,7 +78,7 @@ TEST_F(BergamotValidationTest, SrcVocabWrongExtension) {
   params.src_vocab_path = wrongExtVocabPath;
   params.dst_vocab_path = validVocabPath;
 
-  auto ctx = bergamot_init("", params);
+  auto ctx = bergamotInit("", params);
   EXPECT_EQ(ctx, nullptr);
 }
 
@@ -88,7 +88,7 @@ TEST_F(BergamotValidationTest, DstVocabFileNotFound) {
   params.src_vocab_path = validVocabPath;
   params.dst_vocab_path = "/nonexistent/vocab.spm";
 
-  auto ctx = bergamot_init("", params);
+  auto ctx = bergamotInit("", params);
   EXPECT_EQ(ctx, nullptr);
 }
 
@@ -98,7 +98,7 @@ TEST_F(BergamotValidationTest, DstVocabWrongExtension) {
   params.src_vocab_path = validVocabPath;
   params.dst_vocab_path = wrongExtVocabPath;
 
-  auto ctx = bergamot_init("", params);
+  auto ctx = bergamotInit("", params);
   EXPECT_EQ(ctx, nullptr);
 }
 
@@ -108,7 +108,7 @@ TEST_F(BergamotValidationTest, EmptyModelPath) {
   params.src_vocab_path = validVocabPath;
   params.dst_vocab_path = validVocabPath;
 
-  auto ctx = bergamot_init("", params);
+  auto ctx = bergamotInit("", params);
   EXPECT_EQ(ctx, nullptr);
 }
 
@@ -118,7 +118,7 @@ TEST_F(BergamotValidationTest, EmptyVocabPaths) {
   params.src_vocab_path = "";
   params.dst_vocab_path = "";
 
-  auto ctx = bergamot_init("", params);
+  auto ctx = bergamotInit("", params);
   EXPECT_EQ(ctx, nullptr);
 }
 
@@ -133,7 +133,7 @@ TEST_F(BergamotValidationTest, FilePermissionDenied) {
   params.src_vocab_path = validVocabPath;
   params.dst_vocab_path = validVocabPath;
 
-  auto ctx = bergamot_init("", params);
+  auto ctx = bergamotInit("", params);
   EXPECT_EQ(ctx, nullptr);
 
   // Restore permissions for cleanup
@@ -150,7 +150,7 @@ TEST_F(BergamotValidationTest, DirectoryInsteadOfFile) {
   params.src_vocab_path = validVocabPath;
   params.dst_vocab_path = validVocabPath;
 
-  auto ctx = bergamot_init("", params);
+  auto ctx = bergamotInit("", params);
   EXPECT_EQ(ctx, nullptr);
 }
 
@@ -178,7 +178,7 @@ TEST(BergamotValidation, DifferentDecodingParamsCanChangeOutput) {
 
   const auto freeCtx = [](bergamot_context* ctx) {
     if (ctx != nullptr) {
-      bergamot_free(ctx);
+      bergamotFree(ctx);
     }
   };
 
@@ -193,10 +193,10 @@ TEST(BergamotValidation, DifferentDecodingParamsCanChangeOutput) {
   customParams.max_length_factor = kShortMaxLengthFactor;
 
   std::unique_ptr<bergamot_context, decltype(freeCtx)> defaultCtx(
-      bergamot_init("", defaultParams), freeCtx);
+      bergamotInit("", defaultParams), freeCtx);
   ASSERT_NE(defaultCtx.get(), nullptr);
   std::unique_ptr<bergamot_context, decltype(freeCtx)> customCtx(
-      bergamot_init("", customParams), freeCtx);
+      bergamotInit("", customParams), freeCtx);
   ASSERT_NE(customCtx.get(), nullptr);
 
   const std::string input =
@@ -205,9 +205,9 @@ TEST(BergamotValidation, DifferentDecodingParamsCanChangeOutput) {
       "reported across the town.";
 
   const std::string defaultOutput =
-      bergamot_translate(defaultCtx.get(), input.c_str());
+      bergamotTranslate(defaultCtx.get(), input.c_str());
   const std::string customOutput =
-      bergamot_translate(customCtx.get(), input.c_str());
+      bergamotTranslate(customCtx.get(), input.c_str());
 
   EXPECT_FALSE(defaultOutput.empty());
   EXPECT_FALSE(customOutput.empty());

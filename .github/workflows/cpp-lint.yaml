@@ -24,9 +24,6 @@ on:
         required: false
         default: true
 
-env:
-  LLVM_VERSION: "19"
-
 jobs:
   cpp-lint:
     runs-on: ubuntu-22.04
@@ -66,10 +63,13 @@ jobs:
           echo "  HEAD_REF=$HEAD_REF"
 
       - name: Setup build host
-        uses: tetherto/qvac/.github/actions/setup-build-host@1d9b2165867d03c6edd675e402ee101a5d48a6d8
+        uses: tetherto/qvac/.github/actions/setup-build-host@df55c85d7b8004961e430557e85b6ec1b15cf170
         with:
           platform: linux
           arch: x64
+
+      - name: Setup LLVM
+        uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
 
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -121,8 +121,8 @@ jobs:
         id: cpp_files_fmt
         continue-on-error: true
         run: |
-          if ! git-clang-format-${{ env.LLVM_VERSION }} --binary clang-format-${{ env.LLVM_VERSION }} --extensions c,cc,cpp,cxx,h,hh,hpp,hxx --diff "$BASE_SHA" -- "${{ inputs.workdir }}"; then
-            echo "::error title=Unformatted C++ files::Please format your C++ files with 'git-clang-format-${{ env.LLVM_VERSION }} --binary clang-format-${{ env.LLVM_VERSION }} --extensions c,cc,cpp,cxx,h,hh,hpp,hxx $BASE_SHA -- ${{ inputs.workdir }}'"
+          if ! git-clang-format --binary clang-format --extensions c,cc,cpp,cxx,h,hh,hpp,hxx --diff "$BASE_SHA" -- "${{ inputs.workdir }}"; then
+            echo "::error title=Unformatted C++ files::Please format your C++ files with 'git-clang-format --binary clang-format --extensions c,cc,cpp,cxx,h,hh,hpp,hxx $BASE_SHA -- ${{ inputs.workdir }}'"
             exit 1
           fi
 
@@ -164,7 +164,7 @@ jobs:
           fi
 
           BASE_CMD=$("$helper" build/compile_commands.json --clang-tidy-cmd)
-          BUILD_DIR=$(echo "$BASE_CMD" | sed -nE 's/^clang-tidy-19 -p ([^ ]+).*/\1/p')
+          BUILD_DIR=$(echo "$BASE_CMD" | sed -nE 's/^clang-tidy -p ([^ ]+).*/\1/p')
           HEADER_FILTER_VAL=$(echo "$BASE_CMD" | sed -nE "s/.*--header-filter='([^']+)'.*/\1/p")
 
           echo "Linting ${#SELECTED[@]} changed file(s):"
@@ -174,7 +174,7 @@ jobs:
           # `.clang-tidy`'s `Checks:`) into an error so the exit code reflects
           # diagnostics; without it clang-tidy exits 0 even when it prints
           # warnings, since `WarningsAsErrors:` is empty in the shared config.
-          if clang-tidy-19 -p "$BUILD_DIR" "${SELECTED[@]}" --header-filter="$HEADER_FILTER_VAL" --warnings-as-errors='*'; then
+          if clang-tidy -p "$BUILD_DIR" "${SELECTED[@]}" --header-filter="$HEADER_FILTER_VAL" --warnings-as-errors='*'; then
             echo "OK: clang-tidy passed without errors."
           else
             echo "::error title=Static analysis failed::clang-tidy found issues."
