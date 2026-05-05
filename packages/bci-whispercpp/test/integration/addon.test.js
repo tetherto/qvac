@@ -14,7 +14,7 @@ const {
   buildSignal,
   chunkify
 } = require('./helpers')
-const { flattenSegments } = require('../../lib/util')
+const { flattenSegments } = require('@qvac/bci-whispercpp/util')
 
 const platform = detectPlatform()
 const { manifest, getSamplePath } = getTestPaths()
