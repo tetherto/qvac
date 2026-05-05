@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstring>
+#include <ranges>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -16,22 +17,38 @@
 #include "nmt.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
-// Get optimal number of threads for computation
-// Optimized for GitHub runners (typically 2 CPUs) and other environments
+std::string sanitizePrintableAscii(const std::string& input) {
+  std::string out;
+  out.reserve(input.size());
+  for (char raw : input) {
+    unsigned char c = static_cast<unsigned char>(raw);
+    out.push_back((c >= 0x20 && c < 0x7F) ? static_cast<char>(c) : '?');
+  }
+  return out;
+}
+
 int get_optimal_thread_count() {
   unsigned int hw_threads = std::thread::hardware_concurrency();
   if (hw_threads == 0) {
-    // Fallback if hardware_concurrency() fails
     return 2;
   }
-  // For GitHub runners (typically 2 CPUs), use both cores
-  // For machines with more cores, use most but leave 1-2 for system
+
+#ifdef __ANDROID__
+  // Mobile SoCs use big.LITTLE with heterogeneous cores.  Spreading work
+  // across all cores (e.g. 8 on Snapdragon 8 Elite) forces the scheduler
+  // onto slow efficiency cores.  Cap at 4 to stay on performance cores;
+  // empirically this matches the 2 prime + 2-3 big core layout of recent
+  // Snapdragon / Exynos / Dimensity SoCs.
+  const unsigned int android_max = 4;
+  return static_cast<int>(std::min(hw_threads, android_max));
+#endif
+
   if (hw_threads <= 2) {
-    return hw_threads; // Use all available cores
+    return hw_threads;
   } else if (hw_threads <= 16) {
-    return hw_threads - 1; // Leave 1 core
+    return hw_threads - 1;
   } else {
-    return hw_threads - 2; // Leave 2 cores for system on high-core machines
+    return hw_threads - 2;
   }
 }
 
@@ -61,8 +78,9 @@ bool ggml_graph_compute_helper(
     ggml_backend_reg_t reg = dev ? ggml_backend_dev_backend_reg(dev) : nullptr;
 
     auto* fn_set_n_threads =
-        (ggml_backend_set_n_threads_t)ggml_backend_reg_get_proc_address(
-            reg, "ggml_backend_set_n_threads");
+        reg ? (ggml_backend_set_n_threads_t)ggml_backend_reg_get_proc_address(
+                  reg, "ggml_backend_set_n_threads")
+            : nullptr;
     if (fn_set_n_threads) {
       fn_set_n_threads(backend, n_threads);
     }
@@ -79,45 +97,30 @@ bool ggml_graph_compute_helper(
 }
 // NOLINTEND
 
-bool nmt_name_contains_ci(const char* name, const std::string& needle_lower) {
-  if (name == nullptr || needle_lower.empty()) {
+bool nmtNameContainsCi(const char* name, const std::string& needleLower) {
+  if (name == nullptr || needleLower.empty()) {
     return false;
   }
-  // Defensive bound: ggml device names should be NUL-terminated, but a
-  // misbehaving / adversarial backend .so could violate that. Cap the scan
-  // length so the inner loop can't read past the end of a malformed buffer.
   static constexpr size_t kMaxNameLen = 256;
-  const size_t name_len = strnlen(name, kMaxNameLen);
-  const char* const name_end = name + name_len;
-  const char* const needle = needle_lower.c_str();
-  for (const char* p = name; p < name_end; ++p) {
-    const char* s = p;
-    const char* n = needle;
-    while (s < name_end && *n != '\0' &&
-           static_cast<char>(std::tolower(static_cast<unsigned char>(*s))) ==
-               *n) {
-      ++s;
-      ++n;
-    }
-    if (*n == '\0') {
-      return true;
-    }
-  }
-  return false;
+  std::string nameLower(name, strnlen(name, kMaxNameLen));
+  std::ranges::transform(nameLower, nameLower.begin(), [](unsigned char chr) {
+    return static_cast<char>(std::tolower(chr));
+  });
+  return nameLower.find(needleLower) != std::string::npos;
 }
 
-ggml_backend_dev_t nmt_select_gpu_device(
-    bool use_gpu, const std::string& gpu_backend, int gpu_device,
-    const char* log_prefix) {
-  if (!use_gpu) {
+ggml_backend_dev_t
+nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
+    bool useGpu, const std::string& gpuBackend, int gpuDevice,
+    const char* logPrefix) {
+  if (!useGpu) {
     return nullptr;
   }
-  std::string gpuBackendLower = gpu_backend;
-  std::transform(
-      gpuBackendLower.begin(),
-      gpuBackendLower.end(),
-      gpuBackendLower.begin(),
-      [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  std::string gpuBackendLower = gpuBackend;
+  std::ranges::transform(
+      gpuBackendLower, gpuBackendLower.begin(), [](unsigned char chr) {
+        return static_cast<char>(std::tolower(chr));
+      });
 
   ggml_backend_dev_t dev = nullptr;
   const size_t devCount = ggml_backend_dev_count();
@@ -130,43 +133,43 @@ ggml_backend_dev_t nmt_select_gpu_device(
     // bypassing it must accept the risk.
     if (gpuBackendLower.find("opencl") != std::string::npos) {
       std::ostringstream oss;
-      oss << "[" << log_prefix
+      oss << "[" << logPrefix
           << "] Explicit gpu_backend='opencl' bypasses the "
              "QVAC_NMTCPP_USE_OPENCL=OFF guard — Adreno 830 devices may still "
              "abort with GGML_ASSERT(M % 4 == 0). Caller assumes risk.";
       QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING, oss.str());
     }
 #endif
-    // Mode 1: explicit gpu_backend filter — pick the gpu_device-th matching
+    // Mode 1: explicit gpu_backend filter — pick the gpuDevice-th matching
     // non-CPU device whose name contains the substring.
     bool deviceFoundButBuftNull = false;
     int cnt = 0;
     for (size_t i = 0; i < devCount; ++i) {
-      ggml_backend_dev_t dev_cur = ggml_backend_dev_get(i);
-      if (dev_cur == nullptr) {
+      ggml_backend_dev_t devCur = ggml_backend_dev_get(i);
+      if (devCur == nullptr) {
         continue;
       }
-      enum ggml_backend_dev_type dev_type = ggml_backend_dev_type(dev_cur);
-      const char* name = ggml_backend_dev_name(dev_cur);
-      if (dev_type == GGML_BACKEND_DEVICE_TYPE_CPU) {
+      enum ggml_backend_dev_type devType = ggml_backend_dev_type(devCur);
+      const char* name = ggml_backend_dev_name(devCur);
+      if (devType == GGML_BACKEND_DEVICE_TYPE_CPU) {
         continue;
       }
-      if (!nmt_name_contains_ci(name, gpuBackendLower)) {
+      if (!nmtNameContainsCi(name, gpuBackendLower)) {
         continue;
       }
-      if (cnt == gpu_device) {
-        ggml_backend_buffer_type_t buft = ggml_backend_dev_buffer_type(dev_cur);
+      if (cnt == gpuDevice) {
+        ggml_backend_buffer_type_t buft = ggml_backend_dev_buffer_type(devCur);
         if (buft != nullptr) {
-          dev = dev_cur;
+          dev = devCur;
           std::ostringstream oss;
-          oss << "[" << log_prefix << "] SELECTED explicit gpu_backend='"
-              << gpu_backend << "': " << (name ? name : "(null)");
+          oss << "[" << logPrefix << "] SELECTED explicit gpu_backend='"
+              << gpuBackend << "': " << (name != nullptr ? name : "(null)");
           QLOG(
               qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, oss.str());
         } else {
           deviceFoundButBuftNull = true;
           std::ostringstream oss;
-          oss << "[" << log_prefix
+          oss << "[" << logPrefix
               << "] gpu_backend matched device but buffer type is null — "
                  "skipping";
           QLOG(
@@ -174,18 +177,18 @@ ggml_backend_dev_t nmt_select_gpu_device(
               oss.str());
         }
       }
-      if (++cnt > gpu_device) {
+      if (++cnt > gpuDevice) {
         break;
       }
     }
     if (dev == nullptr) {
       std::ostringstream oss;
       if (deviceFoundButBuftNull) {
-        oss << "[" << log_prefix << "] Explicit gpu_backend='" << gpu_backend
+        oss << "[" << logPrefix << "] Explicit gpu_backend='" << gpuBackend
             << "' matched a device but its buffer type was null (unusable) "
                "— falling back to CPU";
       } else {
-        oss << "[" << log_prefix << "] Explicit gpu_backend='" << gpu_backend
+        oss << "[" << logPrefix << "] Explicit gpu_backend='" << gpuBackend
             << "' matched no registered device — falling back to CPU";
       }
       QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING, oss.str());
@@ -200,31 +203,31 @@ ggml_backend_dev_t nmt_select_gpu_device(
   {
     int cnt = 0;
     for (size_t i = 0; i < devCount; ++i) {
-      ggml_backend_dev_t dev_cur = ggml_backend_dev_get(i);
-      if (dev_cur == nullptr) {
+      ggml_backend_dev_t devCur = ggml_backend_dev_get(i);
+      if (devCur == nullptr) {
         continue;
       }
-      enum ggml_backend_dev_type dev_type = ggml_backend_dev_type(dev_cur);
-      const char* name = ggml_backend_dev_name(dev_cur);
-      if (dev_type == GGML_BACKEND_DEVICE_TYPE_CPU) {
+      enum ggml_backend_dev_type devType = ggml_backend_dev_type(devCur);
+      const char* name = ggml_backend_dev_name(devCur);
+      if (devType == GGML_BACKEND_DEVICE_TYPE_CPU) {
         continue;
       }
-      if (!nmt_name_contains_ci(name, "opencl")) {
+      if (!nmtNameContainsCi(name, "opencl")) {
         continue;
       }
-      if (cnt == gpu_device) {
-        ggml_backend_buffer_type_t buft = ggml_backend_dev_buffer_type(dev_cur);
+      if (cnt == gpuDevice) {
+        ggml_backend_buffer_type_t buft = ggml_backend_dev_buffer_type(devCur);
         if (buft != nullptr) {
-          dev = dev_cur;
+          dev = devCur;
           std::ostringstream oss;
-          oss << "[" << log_prefix
-              << "] SELECTED OpenCL backend: " << (name ? name : "(null)");
+          oss << "[" << logPrefix << "] SELECTED OpenCL backend: "
+              << (name != nullptr ? name : "(null)");
           QLOG(
               qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, oss.str());
         } else {
           oclDeviceFoundButBuftNull = true;
           std::ostringstream oss;
-          oss << "[" << log_prefix
+          oss << "[" << logPrefix
               << "] OpenCL device matched but buffer type is null — "
                  "skipping to Mode 2b fallback";
           QLOG(
@@ -232,62 +235,55 @@ ggml_backend_dev_t nmt_select_gpu_device(
               oss.str());
         }
       }
-      if (++cnt > gpu_device) {
+      if (++cnt > gpuDevice) {
         break;
       }
     }
   }
 #endif
 
-  // Mode 2b: fallback to any non-CPU compute device (skipping OpenCL when
-  // the build-time guard is off — Adreno 830 mitigation).
-  // When falling through from Mode 2a (OpenCL preference didn't find enough
-  // devices), reset the ordinal to 0 — the caller's gpu_device referred to
-  // the OpenCL device namespace, not the full device list.
+  // Mode 2b: fallback to any non-CPU, non-OpenCL compute device.
+  // OpenCL is always skipped here because Mode 2a already handles it when
+  // QVAC_NMTCPP_USE_OPENCL is defined, and it's unwanted when the guard is
+  // off. This ensures gpuDevice ordinals map to distinct physical GPUs
+  // (Vulkan/CUDA/Metal) without OpenCL duplicates occupying slots.
   if (dev == nullptr) {
 #ifdef QVAC_NMTCPP_USE_OPENCL
     if (oclDeviceFoundButBuftNull) {
       std::ostringstream oss;
-      oss << "[" << log_prefix
+      oss << "[" << logPrefix
           << "] Mode 2a OpenCL device found but buffer type was null — "
-             "falling through to Mode 2b with ordinal 0";
+             "falling through to Mode 2b";
       QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING, oss.str());
     }
 #endif
-    const int fallback_ordinal =
-#ifdef QVAC_NMTCPP_USE_OPENCL
-        0;
-#else
-        gpu_device;
-#endif
+    const int fallbackOrdinal = gpuDevice;
     int cnt2 = 0;
     for (size_t i = 0; i < devCount; ++i) {
-      ggml_backend_dev_t dev_cur = ggml_backend_dev_get(i);
-      if (dev_cur == nullptr) {
+      ggml_backend_dev_t devCur = ggml_backend_dev_get(i);
+      if (devCur == nullptr) {
         continue;
       }
-      enum ggml_backend_dev_type dev_type = ggml_backend_dev_type(dev_cur);
-      const char* name = ggml_backend_dev_name(dev_cur);
-      if (dev_type == GGML_BACKEND_DEVICE_TYPE_CPU) {
+      enum ggml_backend_dev_type devType = ggml_backend_dev_type(devCur);
+      const char* name = ggml_backend_dev_name(devCur);
+      if (devType == GGML_BACKEND_DEVICE_TYPE_CPU) {
         continue;
       }
-#ifndef QVAC_NMTCPP_USE_OPENCL
-      if (nmt_name_contains_ci(name, "opencl")) {
+      if (nmtNameContainsCi(name, "opencl")) {
         continue;
       }
-#endif
-      if (cnt2 == fallback_ordinal) {
-        ggml_backend_buffer_type_t buft = ggml_backend_dev_buffer_type(dev_cur);
+      if (cnt2 == fallbackOrdinal) {
+        ggml_backend_buffer_type_t buft = ggml_backend_dev_buffer_type(devCur);
         if (buft != nullptr) {
-          dev = dev_cur;
+          dev = devCur;
           std::ostringstream oss;
-          oss << "[" << log_prefix
-              << "] SELECTED compute backend: " << (name ? name : "(null)");
+          oss << "[" << logPrefix << "] SELECTED compute backend: "
+              << (name != nullptr ? name : "(null)");
           QLOG(
               qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, oss.str());
         } else {
           std::ostringstream oss;
-          oss << "[" << log_prefix
+          oss << "[" << logPrefix
               << "] Compute device matched but buffer type is null — "
                  "skipping";
           QLOG(
@@ -295,7 +291,7 @@ ggml_backend_dev_t nmt_select_gpu_device(
               oss.str());
         }
       }
-      if (++cnt2 > fallback_ordinal) {
+      if (++cnt2 > fallbackOrdinal) {
         break;
       }
     }
