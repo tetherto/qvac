@@ -10,17 +10,9 @@ import { completion, loadModel, unloadModel, VERBOSITY, LLAMA_3_2_1B_INST_Q4_0 }
 // tensor-split controls the proportion of work assigned to each GPU.
 // "1,1" distributes evenly across two GPUs; "3,1" assigns 75% to GPU 0.
 //
-// main-gpu selects which GPU is used for the entire model when split-mode is
-// "none", and pins the primary device in multi-GPU mode.
-// Accepts an integer device index (0, 1, ...) or "integrated" / "dedicated".
-//
 // Usage:
 //   bun run bare:example dist/examples/llamacpp-multi-gpu.js
-//     — uses the default 1B model (works on any GPU, including single-GPU)
-//
-//   bun run bare:example dist/examples/llamacpp-multi-gpu.js \
-//     'https://huggingface.co/Qwen/Qwen2.5-32B-Instruct-GGUF/resolve/main/qwen2.5-32b-instruct-q4_k_m-00001-of-00005.gguf'
-//     — uses a 32B sharded model (~19 GB); requires two GPUs with sufficient VRAM
+//   bun run bare:example dist/examples/llamacpp-multi-gpu.js '<model-url>'
 
 const modelSrc = process.argv[2] ?? LLAMA_3_2_1B_INST_Q4_0;
 
