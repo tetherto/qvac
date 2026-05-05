@@ -7,19 +7,24 @@ import {
   EMBEDDINGGEMMA_300M_Q8_0,
 } from "@qvac/sdk";
 import {
-  BaseExecutor,
   ValidationHelpers,
   type TestResult,
   type Expectation,
 } from "@tetherto/qvac-test-suite";
+import { AbstractModelExecutor } from "./abstract-model-executor.js";
+import type { ResourceManager } from "../resource-manager.js";
 import {
   multiGpuConfigSmoke,
   multiGpuEmbedConfigSmoke,
   multiGpuTests,
 } from "../../multi-gpu-tests.js";
 
-export class MultiGpuExecutor extends BaseExecutor<typeof multiGpuTests> {
+export class MultiGpuExecutor extends AbstractModelExecutor<typeof multiGpuTests> {
   pattern = /^multi-gpu-/;
+
+  constructor(resources: ResourceManager) {
+    super(resources);
+  }
 
   protected handlers = {
     [multiGpuConfigSmoke.testId]: this.llmLayerSplit.bind(this),
@@ -49,7 +54,10 @@ export class MultiGpuExecutor extends BaseExecutor<typeof multiGpuTests> {
 
     try {
       const result = completion({ modelId, history: p.history, stream: false });
-      const text = await result.text;
+      const [text, stats] = await Promise.all([result.text, result.stats]);
+      if (stats?.backendDevice !== "gpu") {
+        return { passed: false, output: `Expected backendDevice=gpu, got ${stats?.backendDevice}` };
+      }
       return ValidationHelpers.validate(text, expectation as Expectation);
     } finally {
       await unloadModel({ modelId, clearStorage: false });
@@ -75,7 +83,10 @@ export class MultiGpuExecutor extends BaseExecutor<typeof multiGpuTests> {
     });
 
     try {
-      const { embedding } = await embed({ modelId, text: p.text });
+      const { embedding, stats } = await embed({ modelId, text: p.text });
+      if (stats?.backendDevice !== "gpu") {
+        return { passed: false, output: `Expected backendDevice=gpu, got ${stats?.backendDevice}` };
+      }
       return ValidationHelpers.validate(embedding, expectation as Expectation);
     } finally {
       await unloadModel({ modelId, clearStorage: false });

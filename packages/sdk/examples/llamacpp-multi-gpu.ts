@@ -15,10 +15,10 @@ import { completion, loadModel, unloadModel, VERBOSITY, LLAMA_3_2_1B_INST_Q4_0 }
 // Accepts an integer device index (0, 1, ...) or "integrated" / "dedicated".
 //
 // Usage:
-//   bare ./dist/examples/llamacpp-multi-gpu.js
+//   bun run bare:example dist/examples/llamacpp-multi-gpu.js
 //     — uses the default 1B model (works on any GPU, including single-GPU)
 //
-//   bare ./dist/examples/llamacpp-multi-gpu.js \
+//   bun run bare:example dist/examples/llamacpp-multi-gpu.js \
 //     'https://huggingface.co/Qwen/Qwen2.5-32B-Instruct-GGUF/resolve/main/qwen2.5-32b-instruct-q4_k_m-00001-of-00005.gguf'
 //     — uses a 32B sharded model (~19 GB); requires two GPUs with sufficient VRAM
 

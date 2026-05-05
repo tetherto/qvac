@@ -380,7 +380,7 @@ export const executor = createExecutor({
     new LifecycleExecutor(resources),
     new ConfigExecutor(),
     new NoLingeringBareExecutor(),
-    new MultiGpuExecutor(),
+    new MultiGpuExecutor(resources),
   ],
   profiling: {
     init: () => profiler.enable({ mode: "summary", includeServerBreakdown: true }),
