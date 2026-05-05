@@ -190,7 +190,9 @@ void MtmdLlmContext::tokenizeChat(
     addSpecial = false;
   }
 
-  inputs.use_jinja = params_.use_jinja;
+  const bool isQwen3 =
+      qvac_lib_inference_addon_llama::utils::isQwen3Model(model_);
+  inputs.use_jinja = params_.use_jinja || isQwen3;
   inputs.messages = chatMsgs;
   inputs.add_generation_prompt = isLastMessageFromUser;
 
@@ -231,7 +233,7 @@ void MtmdLlmContext::tokenizeChat(
   if (tools_.enabled() && !tools.empty()) {
     inputs.tools = {};
     inputs.add_generation_prompt = false;
-    inputs.use_jinja = params_.use_jinja;
+    inputs.use_jinja = params_.use_jinja || isQwen3;
     auto promptNoTools = getPrompt(tmpls_.get(), inputs);
 
     if (!promptNoTools.empty()) {

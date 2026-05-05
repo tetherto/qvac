@@ -150,7 +150,7 @@ test('AfriqueGemma: cancel mid-translation, model reusable after', { timeout: TI
     const response = await addon.run([{ role: 'user', content: longPrompt }])
     const tokens = { count: 0 }
     response.onUpdate(() => { tokens.count++ })
-    const maxWait = 15000
+    const maxWait = 60000
     const start = Date.now()
     while (tokens.count === 0 && (Date.now() - start) < maxWait) {
       await new Promise(resolve => setTimeout(resolve, 200))

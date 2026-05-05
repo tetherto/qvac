@@ -28,10 +28,11 @@ async function setupReasoningModel (t, toolsEnabled) {
 
   const config = {
     ctx_size: '4096',
+    n_predict: '1024',
     seed: '50',
     gpu_layers: '999',
-    temp: '0.8',
-    top_p: '0.9',
+    temp: '0',
+    top_p: '1',
     device: useCpu ? 'cpu' : 'gpu',
     verbosity: '2',
     tools: toolsEnabled ? 'true' : 'false'
@@ -134,17 +135,18 @@ test('reasoning tag EOS replacement works with tools=false', {
   // First completion - should work correctly
   const messages1 = createInitialMessages()
   const response1 = await runCompletion(inference, messages1)
+  t.comment(`First completion (tools=false, len=${response1.length}):\n${response1}`)
   verifyReasoningTags(t, response1, 'First completion')
 
   // Second completion - this is where the fix should activate
   const messages2 = createFollowUpMessages(messages1, response1)
   const response2 = await runCompletion(inference, messages2)
+  t.comment(`Second completion (tools=false, len=${response2.length}):\n${response2}`)
 
   verifyReasoningTags(t, response2, 'Second completion')
 
   // Verify the fix worked: generation continued after reasoning
   verifyContinuedAfterReasoning(t, response2, 'tools=false')
-  t.comment(`Second completion output length: ${response2.length}`)
 })
 
 test('reasoning tag EOS replacement works with tools=true', {
@@ -156,15 +158,16 @@ test('reasoning tag EOS replacement works with tools=true', {
   // First completion - should work correctly
   const messages1 = createInitialMessages()
   const response1 = await runCompletion(inference, messages1)
+  t.comment(`First completion (tools=true, len=${response1.length}):\n${response1}`)
   verifyReasoningTags(t, response1, 'First completion (tools=true)')
 
   // Second completion - this is where the fix should activate
   const messages2 = createFollowUpMessages(messages1, response1)
   const response2 = await runCompletion(inference, messages2)
+  t.comment(`Second completion (tools=true, len=${response2.length}):\n${response2}`)
 
   verifyReasoningTags(t, response2, 'Second completion (tools=true)')
 
   // Verify the fix worked: generation continued after reasoning
   verifyContinuedAfterReasoning(t, response2, 'tools=true')
-  t.comment(`Second completion output length: ${response2.length}`)
 })

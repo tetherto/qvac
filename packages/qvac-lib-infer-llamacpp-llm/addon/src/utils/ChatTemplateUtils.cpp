@@ -156,9 +156,9 @@ std::string getChatTemplateForModel(
 std::string getChatTemplate(
     const ::llama_model* model, const common_params& params,
     bool toolsCompact) {
-  // Use fixed Qwen3 template if model is Qwen3 and Jinja is enabled
+  // Apply the fixed Qwen3 template whenever the model is Qwen3-family,
   std::string chatTemplate = params.chat_template;
-  if (params.use_jinja) {
+  if (params.use_jinja || isQwen3Model(model)) {
     chatTemplate =
         getChatTemplateForModel(model, params.chat_template, toolsCompact);
     if (!chatTemplate.empty() && chatTemplate != params.chat_template) {

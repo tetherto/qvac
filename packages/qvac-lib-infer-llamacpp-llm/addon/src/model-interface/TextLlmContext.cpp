@@ -229,7 +229,7 @@ void TextLlmContext::tokenizeChat(
     addSpecial = false;
   }
 
-  inputs.use_jinja = params_.use_jinja;
+  inputs.use_jinja = params_.use_jinja || isQwen3Model_;
   inputs.messages = chatMsgs;
   inputs.add_generation_prompt = isLastMessageFromUser;
 
@@ -258,7 +258,7 @@ void TextLlmContext::tokenizeChat(
     if (tools_.enabled() && !tools.empty()) {
       inputs.tools = {};
       inputs.add_generation_prompt = false;
-      inputs.use_jinja = params_.use_jinja;
+      inputs.use_jinja = params_.use_jinja || isQwen3Model_;
       auto promptNoTools = getPrompt(tmpls_.get(), inputs);
       auto tokensNoTools =
           common_tokenize(lctx_, promptNoTools, addSpecial, true);
