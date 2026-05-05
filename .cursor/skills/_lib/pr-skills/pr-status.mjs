@@ -518,6 +518,48 @@ function isFullyApprovedInPod(pr, podRoles) {
   );
 }
 
+// Compute every team person whose action is required to clear a missing
+// approval gate on `pr`. A person needs to act if:
+//   - the gate they cover (member or lead) is currently unsatisfied, AND
+//   - their review state is DISMISSED (re-request) or PENDING (first request).
+//
+// Returns an ordered array of { login, role, state }. Order: members
+// first, leads second; within each, dismissed before pending.
+function pingTargetsForPod(pr, podRoles) {
+  const targets = [];
+  if (!hasMemberApprovalInPod(pr, podRoles)) {
+    for (const m of podRoles.members) {
+      const s = memberState(pr, m);
+      if (s === "DISMISSED") targets.push({ login: m, role: "member", state: s });
+    }
+    for (const m of podRoles.members) {
+      const s = memberState(pr, m);
+      if (s === "PENDING") targets.push({ login: m, role: "member", state: s });
+    }
+  }
+  if (!hasLeadApprovalInPod(pr, podRoles)) {
+    for (const m of podRoles.leads) {
+      const s = memberState(pr, m);
+      if (s === "DISMISSED") targets.push({ login: m, role: "lead", state: s });
+    }
+    for (const m of podRoles.leads) {
+      const s = memberState(pr, m);
+      if (s === "PENDING") targets.push({ login: m, role: "lead", state: s });
+    }
+  }
+  return targets;
+}
+
+// Format a ping target for the chat ping line, e.g. "@Dima (lead, re-request)".
+function formatTarget(t) {
+  const tags = [];
+  if (t.role === "lead") tags.push("lead");
+  if (t.state === "DISMISSED") tags.push("re-request");
+  return tags.length
+    ? `${slackHandle(t.login)} (${tags.join(", ")})`
+    : slackHandle(t.login);
+}
+
 // Render a PR line scoped to a specific pod's team — overrides the
 // "Reviews:" / "Other:" partition so cross-pod runs show the OWNING pod's
 // team-vs-outside split rather than the global single-pod roles.
@@ -614,14 +656,17 @@ function modeMy() {
       readyToMerge.push(entry);
       continue;
     }
-    const dismissedReviewers = entry.podRoles.allTeam.filter(
-      (m) => memberState(entry.pr, m) === "DISMISSED",
-    );
-    if (dismissedReviewers.length > 0) {
-      needsReReview.push({ ...entry, dismissedReviewers });
-      continue;
+    // Full ping target list for missing approval gates. Includes dismissed
+    // (re-request) AND pending (never-reviewed) team members and leads, so
+    // a PR whose lead never reviewed still surfaces a ping for them.
+    const targets = pingTargetsForPod(entry.pr, entry.podRoles);
+    const hasDismissed = targets.some((t) => t.state === "DISMISSED");
+    const enrichedEntry = { ...entry, targets };
+    if (hasDismissed) {
+      needsReReview.push(enrichedEntry);
+    } else {
+      awaitingReview.push(enrichedEntry);
     }
-    awaitingReview.push(entry);
   }
 
   console.log(
@@ -650,57 +695,10 @@ function modeMy() {
     console.log("🔄 NEEDS RE-REVIEW");
     console.log("─".repeat(60));
     for (const entry of needsReReview) {
-      const { pr, podRoles, dismissedReviewers } = entry;
+      const { pr, podRoles, targets } = entry;
       console.log("");
-      const whoToPing = dismissedReviewers
-        .map((m) => {
-          const role = podRoles.leads.includes(m) ? " (lead)" : "";
-          return `${slackHandle(m)}${role}`;
-        })
-        .join(", ");
-      console.log(
-        renderPRLineForPod(pr, podRoles, [
-          homeNote(entry),
-          `Re-request: ${whoToPing}`,
-        ]),
-      );
-    }
-    console.log("");
-
-    console.log("Slack messages (copy-paste ready):");
-    console.log("─".repeat(60));
-    for (const { pr, dismissedReviewers } of needsReReview) {
-      const tags = dismissedReviewers.map(slackHandle).join(" ");
-      console.log(
-        `Re-review needed: PR #${pr.number} "${pr.title}" — ${tags} ${pr.url}`,
-      );
-    }
-    console.log("");
-  }
-
-  if (awaitingReview.length > 0) {
-    console.log("⏳ AWAITING REVIEW");
-    console.log("─".repeat(60));
-    for (const entry of awaitingReview) {
-      const { pr, podRoles } = entry;
-      console.log("");
-      const missingPeople = [];
-      if (!hasMemberApprovalInPod(pr, podRoles)) {
-        const pendingMembers = podRoles.members.filter(
-          (m) => memberState(pr, m) === "PENDING",
-        );
-        missingPeople.push(...pendingMembers.map(slackHandle));
-      }
-      if (!hasLeadApprovalInPod(pr, podRoles)) {
-        const pendingLeads = podRoles.leads.filter(
-          (m) => memberState(pr, m) === "PENDING",
-        );
-        missingPeople.push(
-          ...pendingLeads.map((m) => `${slackHandle(m)} (lead)`),
-        );
-      }
-      const pingLine = missingPeople.length
-        ? `Ping: ${missingPeople.join(", ")}`
+      const pingLine = targets.length
+        ? `Ping: ${targets.map(formatTarget).join(", ")}`
         : null;
       console.log(
         renderPRLineForPod(pr, podRoles, [homeNote(entry), pingLine]),
@@ -710,22 +708,36 @@ function modeMy() {
 
     console.log("Slack messages (copy-paste ready):");
     console.log("─".repeat(60));
-    for (const { pr, podRoles } of awaitingReview) {
-      const missing = [];
-      if (!hasMemberApprovalInPod(pr, podRoles)) {
-        const pendingMembers = podRoles.members.filter(
-          (m) => memberState(pr, m) === "PENDING",
-        );
-        missing.push(...pendingMembers.map(slackHandle));
-      }
-      if (!hasLeadApprovalInPod(pr, podRoles)) {
-        const pendingLeads = podRoles.leads.filter(
-          (m) => memberState(pr, m) === "PENDING",
-        );
-        missing.push(...pendingLeads.map(slackHandle));
-      }
+    for (const { pr, targets } of needsReReview) {
+      const handles = targets.map((t) => slackHandle(t.login)).join(" ");
       console.log(
-        `Review needed: PR #${pr.number} "${pr.title}" — ${missing.join(" ")} ${pr.url}`,
+        `Re-review needed: PR #${pr.number} "${pr.title}" — ${handles} ${pr.url}`,
+      );
+    }
+    console.log("");
+  }
+
+  if (awaitingReview.length > 0) {
+    console.log("⏳ AWAITING REVIEW");
+    console.log("─".repeat(60));
+    for (const entry of awaitingReview) {
+      const { pr, podRoles, targets } = entry;
+      console.log("");
+      const pingLine = targets.length
+        ? `Ping: ${targets.map(formatTarget).join(", ")}`
+        : null;
+      console.log(
+        renderPRLineForPod(pr, podRoles, [homeNote(entry), pingLine]),
+      );
+    }
+    console.log("");
+
+    console.log("Slack messages (copy-paste ready):");
+    console.log("─".repeat(60));
+    for (const { pr, targets } of awaitingReview) {
+      const handles = targets.map((t) => slackHandle(t.login)).join(" ");
+      console.log(
+        `Review needed: PR #${pr.number} "${pr.title}" — ${handles} ${pr.url}`,
       );
     }
     console.log("");
