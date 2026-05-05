@@ -164,6 +164,9 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     events.push({ type: "contentDelta", seq: nextSeq(), text });
   }
 
+  // Capture-gated: thinking frames may register even when `captureThinking`
+  // is false (e.g. harmony's analysis channel, to strip markers from
+  // `contentDelta`) — drop the inner here instead of buffering it.
   function emitThinking(events: CompletionEvent[], text: string) {
     if (!text) return;
     if (config.captureThinking) {
