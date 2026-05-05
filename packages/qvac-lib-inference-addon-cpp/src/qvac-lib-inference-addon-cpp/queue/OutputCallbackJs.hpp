@@ -109,6 +109,13 @@ public:
           qvac_errors::general_error::InternalError,
           "Could not initialize uv async handle");
     }
+    // The async handle must NOT keep the libuv loop alive on its own. Pending
+    // JS work (unresolved promises returned from runJob) is what keeps the
+    // process alive while inference is running. Without uv_unref the handle
+    // would prevent the loop from exiting after all JS work is done, blocking
+    // brittle's `beforeExit` hook and preventing process shutdown until libuv
+    // gives up (~65s observed). uv_async_send still wakes the loop after this.
+    uv_unref(reinterpret_cast<uv_handle_t*>(state_->asyncHandle));
     // jsOutputCallbackAsyncHandle_ has been correctly initialized, so if thread
     // fails it needs to be closed
     auto e3 = utils::onError([this]() {

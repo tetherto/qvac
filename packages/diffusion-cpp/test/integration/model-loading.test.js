@@ -54,10 +54,3 @@ test('model loading - load and unload', { timeout: testTimeout }, async t => {
   await addon.unload().catch(() => {})
   t.pass('second unload is idempotent')
 })
-
-// Keep event loop alive briefly to let pending async operations complete
-// This prevents C++ destructors from running while async cleanup is still happening
-// which can cause segfaults (exit code 139)
-setImmediate(() => {
-  setTimeout(() => {}, 500)
-})

@@ -221,9 +221,3 @@ test('run() before load() throws clear initialization error', { timeout: 60000 }
   t.ok(caught, 'run() before load() throws')
   t.ok(/load\(\) first/i.test(caught?.message || ''), 'error message instructs to call load() first')
 })
-
-// Keep event loop alive briefly to let pending async operations complete.
-// Prevents C++ destructors from running while async cleanup is still happening.
-setImmediate(() => {
-  setTimeout(() => {}, 500)
-})

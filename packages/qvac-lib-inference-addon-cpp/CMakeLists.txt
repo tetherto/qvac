@@ -72,6 +72,7 @@ if(BUILD_TESTING)
         tests/batched_addon_test.cpp
         tests/job_runner_test.cpp
         tests/addon_js_test.cpp
+        tests/exit_lifecycle_test.cpp
     )
     target_include_directories(unit_tests PRIVATE src tests/helpers_header)
     target_link_libraries(unit_tests PRIVATE GTest::gmock_main)

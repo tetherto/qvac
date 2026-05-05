@@ -178,10 +178,3 @@ test('sharded model can run inference end-to-end', { timeout: 4 * 60 * 1000, ski
     await addon.unload().catch(() => {})
   }
 })
-
-// Keep event loop alive briefly to let pending async operations complete
-// This prevents C++ destructors from running while async cleanup is still happening
-// which can cause segfaults (exit code 139)
-setImmediate(() => {
-  setTimeout(() => {}, 500)
-})

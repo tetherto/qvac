@@ -166,7 +166,3 @@ test('Multiple embed load/unload cycles on one instance while another processes'
 
   t.ok(cyclesCompleted === NUM_CYCLES, `completed ${cyclesCompleted} load/unload cycles during processing`)
 })
-
-setImmediate(() => {
-  setTimeout(() => {}, 500)
-})

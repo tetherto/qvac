@@ -6,6 +6,10 @@
 #include <cstddef>
 #include <cstdint>
 #include <stdexcept>
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
+#include <vector>
 
 // Forward declarations for opaque types
 struct js_env_t {};
@@ -14,11 +18,89 @@ struct js_ref_t {};
 struct js_callback_info_t {};
 struct js_handle_scope_t {};
 struct js_deferred_t {};
-struct uv_async_t {
+// uv_async_t MUST contain a `data` field and live at the same offset as it
+// would in a real uv_handle_t cast. The simplest mock is to make uv_handle_t
+// be a base with a `data` pointer, and uv_async_t derive from it. Code in
+// OutputCallbackJs.hpp / JsLogger.hpp reinterpret_casts uv_async_t* to
+// uv_handle_t*, so the layout must allow that.
+struct uv_handle_t {
+  void* data{nullptr};
+};
+struct uv_async_t : uv_handle_t {};
+struct uv_loop_t {};
+
+// ============================================================================
+// Mock libuv refcount + teardown callback registry. These are intentionally
+// minimal — they exist so unit tests can verify that:
+//   * uv_unref was called on the OutputCallBackJs async handle
+//   * js_add_teardown_callback was registered for an env on createInstance
+//   * onEnvTeardown synchronously frees the AddonJs instances bound to an env
+// ============================================================================
+
+namespace js_test_mocks {
+
+// Set of uv handles that are currently considered "ref'd" (live and keeping
+// the loop alive). uv_async_init adds; uv_unref / uv_close removes.
+inline std::unordered_set<uv_handle_t*>& refdHandles() {
+  static std::unordered_set<uv_handle_t*> s;
+  return s;
+}
+
+// Registered teardown callbacks per env, in registration order.
+struct TeardownCallback {
+  void (*cb)(void* data);
   void* data;
 };
-struct uv_handle_t {};
-struct uv_loop_t {};
+
+inline std::unordered_map<js_env_t*, std::vector<TeardownCallback>>&
+teardownCallbacks() {
+  static std::unordered_map<js_env_t*, std::vector<TeardownCallback>> m;
+  return m;
+}
+
+// Test helper: invoke all registered teardown callbacks for an env, then
+// remove them. Mirrors what bare's libjs does at env destruction.
+inline void triggerEnvTeardown(js_env_t* env) {
+  auto it = teardownCallbacks().find(env);
+  if (it == teardownCallbacks().end()) {
+    return;
+  }
+  // Copy then erase first so callbacks that re-register during teardown don't
+  // observe themselves in the list.
+  auto callbacks = std::move(it->second);
+  teardownCallbacks().erase(it);
+  for (auto& tcb : callbacks) {
+    tcb.cb(tcb.data);
+  }
+}
+
+// Test helper: fire ALL registered teardown callbacks across every env, then
+// clear remaining state. Call from a test fixture's TearDown so JsInterface's
+// per-env state (which the mock alone cannot reach) is also cleaned up
+// between tests. Without this, a stack-allocated `js_env_t env;` from a prior
+// test that registered an instance leaves a dangling EnvState in
+// JsInterface::envs_ keyed by that stack address; the next test may reuse the
+// same address and observe stale state.
+inline void triggerAllTeardowns() {
+  while (!teardownCallbacks().empty()) {
+    auto it = teardownCallbacks().begin();
+    auto callbacks = std::move(it->second);
+    teardownCallbacks().erase(it);
+    for (auto& tcb : callbacks) {
+      tcb.cb(tcb.data);
+    }
+  }
+}
+
+// Test helper: clear all mock state between tests. Call from test SetUp /
+// TearDown so leftover handles or callbacks from a previous test don't leak.
+inline void resetAll() {
+  triggerAllTeardowns();
+  refdHandles().clear();
+  teardownCallbacks().clear();
+}
+
+} // namespace js_test_mocks
 
 // js_loop_t is an alias for uv_loop_t in the real implementation
 typedef uv_loop_t js_loop_t;
@@ -220,6 +302,8 @@ inline int js_create_external(
     js_env_t* env, void* data,
     void (*finalize_cb)(js_env_t* env, void* data, void* hint),
     void* finalize_hint, js_value_t** result) {
+  static js_value_t sentinel;
+  *result = &sentinel;
   return 0;
 }
 
@@ -290,6 +374,14 @@ inline int js_get_named_property(
 
 inline int js_get_property(
     js_env_t* env, js_value_t* object, js_value_t* key, js_value_t** result) {
+  return -1;
+}
+
+inline int js_has_property(
+    js_env_t* env, js_value_t* object, js_value_t* key, bool* result) {
+  if (result != nullptr) {
+    *result = false;
+  }
   return -1;
 }
 
@@ -443,13 +535,60 @@ inline int js_create_error(
 // UV/libuv functions (minimal stubs for compilation)
 inline int
 uv_async_init(uv_loop_t* loop, uv_async_t* handle, void (*cb)(uv_async_t*)) {
+  js_test_mocks::refdHandles().insert(reinterpret_cast<uv_handle_t*>(handle));
   return 0;
 }
 
 inline int uv_async_send(uv_async_t* handle) { return 0; }
 
-inline void* uv_handle_get_data(uv_handle_t* handle) { return nullptr; }
+inline void* uv_handle_get_data(uv_handle_t* handle) {
+  return handle != nullptr ? handle->data : nullptr;
+}
 
-inline void uv_handle_set_data(uv_handle_t* handle, void* data) {}
+inline void uv_handle_set_data(uv_handle_t* handle, void* data) {
+  if (handle != nullptr) {
+    handle->data = data;
+  }
+}
 
-inline void uv_close(uv_handle_t* handle, void (*cb)(uv_handle_t*)) {}
+inline void uv_close(uv_handle_t* handle, void (*cb)(uv_handle_t*)) {
+  js_test_mocks::refdHandles().erase(handle);
+  if (cb != nullptr) {
+    cb(handle);
+  }
+}
+
+inline void uv_unref(uv_handle_t* handle) {
+  js_test_mocks::refdHandles().erase(handle);
+}
+
+inline void uv_ref(uv_handle_t* handle) {
+  js_test_mocks::refdHandles().insert(handle);
+}
+
+// Teardown callback API (mirrors libjs's js_add_teardown_callback /
+// js_remove_teardown_callback). Use js_test_mocks::triggerEnvTeardown(env) in
+// tests to simulate env shutdown.
+typedef void (*js_teardown_cb)(void* data);
+
+inline int
+js_add_teardown_callback(js_env_t* env, js_teardown_cb cb, void* data) {
+  js_test_mocks::teardownCallbacks()[env].push_back({cb, data});
+  return 0;
+}
+
+inline int
+js_remove_teardown_callback(js_env_t* env, js_teardown_cb cb, void* data) {
+  auto it = js_test_mocks::teardownCallbacks().find(env);
+  if (it == js_test_mocks::teardownCallbacks().end()) {
+    return 0;
+  }
+  auto& vec = it->second;
+  for (auto vit = vec.begin(); vit != vec.end(); ++vit) {
+    if (vit->cb == cb && vit->data == data) {
+      vec.erase(vit);
+      return 0;
+    }
+  }
+  return 0;
+}
