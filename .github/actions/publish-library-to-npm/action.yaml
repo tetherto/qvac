@@ -90,9 +90,9 @@ runs:
           RELEASE="tmp"
         fi
 
-        # Track whether the caller supplied an explicit tag. If not, fall back to
-        # the legacy release-branch heuristic so existing callers without inputs.tag
-        # keep working.
+        # Track whether the caller supplied an explicit tag. Empty input means
+        # "auto-decide" on release branches (handled below); for non-release
+        # branches it falls through to the dev/tmp short-circuit.
         EXPLICIT_TAG="true"
         if [ -z "$TAG" ]; then
           EXPLICIT_TAG="false"
@@ -102,16 +102,67 @@ runs:
         echo "Base branch: ${GIT_REF}"
         echo "Event name: ${EVENT_NAME}"
 
-        # Only force the legacy "latest" override when the caller did NOT pass an
-        # explicit tag. With the explicit tag, the caller is in control (e.g. an
-        # old release line publishing under a different dist-tag like release-1.x
-        # so it doesn't clobber `latest`).
-        if [ "$EXPLICIT_TAG" = "false" ]; then
-          if [[ "${EVENT_NAME}" == "push" || "${EVENT_NAME}" == "workflow_dispatch" ]]; then
-            if [[ "${GIT_REF}" == refs/heads/release-* ]]; then
-              TAG="latest"
+        # Hoist package metadata for both the auto-decide step and downstream logic.
+        SHORT_SHA=$(git -C "$ROOT" rev-parse --short HEAD || echo "unknown")
+        PACKAGE_VERSION=$(node -p "require('./package.json').version")
+        PACKAGE_NAME=$(node -p "require('./package.json').name")
+        VERSION="${PACKAGE_VERSION}"
+
+        # Auto-decide the dist-tag on release branches when the caller did not
+        # pass an explicit non-"latest" tag. Backports to older release-* lines
+        # (where package.json version is lower than the current published
+        # `latest`) are published under v<major>.<minor> so they never clobber
+        # the homepage pointer. The newest release line auto-promotes `latest`.
+        #
+        # Triggered when:
+        #   - caller passed empty input  (EXPLICIT_TAG=false), OR
+        #   - caller passed literal "latest"
+        # AND we are on a push/workflow_dispatch on a release-* branch.
+        #
+        # Any other explicit tag (e.g. "release-1.x") is respected verbatim as
+        # an operator override.
+        AUTO_DECIDE="false"
+        if [[ "${EVENT_NAME}" == "push" || "${EVENT_NAME}" == "workflow_dispatch" ]]; then
+          if [[ "${GIT_REF}" == refs/heads/release-* ]]; then
+            if [ "$EXPLICIT_TAG" = "false" ] || [ "$TAG" = "latest" ]; then
+              AUTO_DECIDE="true"
             fi
           fi
+        fi
+
+        if [ "$AUTO_DECIDE" = "true" ]; then
+          CURRENT_LATEST=$(npm view "$PACKAGE_NAME" dist-tags.latest 2>/dev/null || echo "")
+          if [ -z "$CURRENT_LATEST" ]; then
+            CURRENT_LATEST="0.0.0"
+          fi
+
+          HIGHER=$(node -e '
+            const s = v => v.replace(/^v/, "").split(".").map(Number);
+            const [a,b,c] = s(process.argv[1]);
+            const [x,y,z] = s(process.argv[2]);
+            console.log((a-x || b-y || c-z) >= 0 ? "yes" : "no");
+          ' "$PACKAGE_VERSION" "$CURRENT_LATEST")
+
+          if [ "$HIGHER" = "yes" ]; then
+            TAG="latest"
+            REASON="package.json version $PACKAGE_VERSION >= current latest $CURRENT_LATEST"
+          else
+            MAJOR_MINOR=$(echo "$PACKAGE_VERSION" | awk -F. '{print $1"."$2}')
+            TAG="v${MAJOR_MINOR}"
+            REASON="package.json version $PACKAGE_VERSION < current latest $CURRENT_LATEST (backport)"
+          fi
+
+          echo "Auto-decided npm dist-tag for $PACKAGE_NAME: $TAG"
+          echo "  Reason: $REASON"
+          {
+            echo "## NPM dist-tag decision"
+            echo ""
+            echo "- Package: \`$PACKAGE_NAME\`"
+            echo "- New version: \`$PACKAGE_VERSION\`"
+            echo "- Current \`latest\` on npm: \`$CURRENT_LATEST\`"
+            echo "- Chosen dist-tag: \`$TAG\`"
+            echo "- Reason: $REASON"
+          } >> "$GITHUB_STEP_SUMMARY"
         fi
 
         if [ "$TAG" = "dev" ] || [ "$TAG" = "tmp" ]; then
@@ -121,11 +172,6 @@ runs:
           echo "npm_published_version=" >> "$GITHUB_OUTPUT"
           exit 0
         fi
-
-        SHORT_SHA=$(git -C "$ROOT" rev-parse --short HEAD || echo "unknown")
-        PACKAGE_VERSION=$(node -p "require('./package.json').version")
-        PACKAGE_NAME=$(node -p "require('./package.json').name")
-        VERSION="${PACKAGE_VERSION}"
 
         echo "Publishing package: $PACKAGE_NAME"
         echo "Publishing with tag: $TAG"

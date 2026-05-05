@@ -198,7 +198,7 @@ jobs:
         id: publish
         uses: ./.github/actions/publish-library-to-npm
         with:
-          tag: ${{ inputs.npm_tag || 'latest' }}
+          tag: ${{ inputs.npm_tag }}
           path: ${{ env.WORKDIR }}
 
       - name: Capture published version
