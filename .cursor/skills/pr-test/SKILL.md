@@ -309,5 +309,6 @@ Logs: `<path>`
 - Shared worktree prep: `.cursor/skills/_lib/pr-skills/worktree-prepare.mjs`
 - Discovery helper: `.cursor/skills/_lib/pr-skills/pr-test-discover.mjs`
 - Shared worktree library: `.cursor/skills/_lib/pr-skills/worktree.mjs`
+- SDK e2e rules: `.cursor/rules/sdk/tests-qvac.mdc`
 - SDK e2e scripts: `packages/sdk/tests-qvac/package.json`
 - SDK e2e docs: `packages/sdk/tests-qvac/README.md`
