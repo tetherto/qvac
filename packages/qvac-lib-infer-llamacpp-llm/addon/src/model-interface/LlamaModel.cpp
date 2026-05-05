@@ -648,6 +648,10 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::runtimeStats() const {
       (!state_->lastRunWasPrefill_ && perfData.t_eval_ms > 0)
           ? kMillisInSecond / perfData.t_eval_ms * perfData.n_eval
           : 0.0;
+  double promptProcessingTPS =
+      (!state_->lastRunWasPrefill_ && perfData.t_p_eval_ms > 0)
+          ? kMillisInSecond / perfData.t_p_eval_ms * perfData.n_p_eval
+          : 0.0;
 
   int32_t generatedTokens = state_->lastRunWasPrefill_ ? 0 : perfData.n_eval;
   int32_t promptTokens = state_->lastRunWasPrefill_ ? 0 : perfData.n_p_eval;
@@ -658,6 +662,7 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::runtimeStats() const {
   return {
       {"TTFT", timeToFirstToken},
       {"TPS", tokensPerSecond},
+      {"ppTPS", promptProcessingTPS},
       {"CacheTokens", state_->llmContext_->getNPast()},
       {"generatedTokens", generatedTokens},
       {"promptTokens", promptTokens},

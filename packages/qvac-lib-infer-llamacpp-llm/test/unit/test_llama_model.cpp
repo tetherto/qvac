@@ -390,6 +390,30 @@ TEST_F(LlamaModelTest, RuntimeStatsAfterProcessing) {
   });
 }
 
+TEST_F(LlamaModelTest, RuntimeStatsPpTPSAfterProcessing) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  LlamaModel model = createModel();
+  model.waitForLoadInitialization();
+
+  if (!model.isLoaded()) {
+    FAIL() << "Model failed to load";
+  }
+
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([{"role": "user", "content": "Hello, world!"}])";
+  EXPECT_NO_THROW({
+    std::string output = model.processPrompt(prompt);
+    EXPECT_GE(output.length(), 0);
+
+    auto stats = model.runtimeStats();
+    double ppTPS = getStatValue(stats, "ppTPS");
+    EXPECT_GE(ppTPS, 0.0);
+  });
+}
+
 TEST_F(LlamaModelTest, RuntimeStatsAfterReset) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();
