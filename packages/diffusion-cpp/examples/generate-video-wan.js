@@ -16,27 +16,51 @@ const VAE_MODEL = 'wan_2.1_vae.safetensors'
 const T5XXL_MODEL = 'umt5_xxl_fp16.safetensors'
 
 // ---------------------------------------------------------------------------
-// Generation params — edit freely
+// Generation params — edit freely (or override via env vars).
+//
+// Prompt tip: Wan 1.3B is small and has weak temporal priors. Use motion-
+// explicit verbs and avoid static framing words. Upstream demos use
+// "a dancing robot", "dynamic motion", "a lovely cat" — short and verb-led.
+// Avoid words like "standing", "still", "portrait" in the positive prompt.
 // ---------------------------------------------------------------------------
-const PROMPT = [
-  'a majestic red fox standing in a snowy forest at dusk,',
-  'soft golden light through the pine trees,',
-  'photorealistic, 8k, detailed fur, smooth motion'
-].join(' ')
+const PROMPT = process.env.PROMPT ||
+  'a colorful bird flapping its wings'
 
-const NEG_PROMPT = 'blurry, low quality, static, jittery, watermark'
+const NEG_PROMPT = process.env.NEG_PROMPT ||
+  'blurry, low quality, static, jittery, watermark'
 
-const WIDTH = 832
-const HEIGHT = 480
-const VIDEO_FRAMES = 33 // (4*k+1); ~1.4s at 24 fps, ~2.0s at 16 fps
-const FPS = 16
-const STEPS = 30 // Wan recommended for 1.3B
-const CFG_SCALE = 6.0
-const FLOW_SHIFT = 5.0 // Wan T2V 1.3B recommended range: 5.0–8.0
-const SEED = 42
+const WIDTH = parseInt(process.env.WIDTH || '480', 10)
+const HEIGHT = parseInt(process.env.HEIGHT || '832', 10)
+// Frame count must satisfy (4*k + 1), k >= 1. Common values @ 16 fps:
+//   17 frames  → 1.06 s   (very fast,  ~6 min  on M3 Ultra Metal)
+//   33 frames  → 2.06 s   (~11 min)
+//   49 frames  → 3.06 s   (~17 min)
+//   65 frames  → 4.06 s   (~22 min)
+//   81 frames  → 5.06 s   (Wan 1.3B native training length — best motion
+//                          quality, ~28 min, needs ~12 GB unified RAM)
+// Going beyond 81 is unsupported by the model's positional embeddings and
+// will produce visible quality breakdown / repetition.
+const VIDEO_FRAMES = parseInt(process.env.FRAMES || '81', 10)
+const FPS = parseInt(process.env.FPS || '16', 10)
+const STEPS = parseInt(process.env.STEPS || '30', 10) // Wan recommended for 1.3B
+const CFG_SCALE = parseFloat(process.env.CFG_SCALE || '6.0')
+// Wan 2.1 T2V (1.3B and 14B) needs flow_shift = 3.0 for actual motion. Higher
+// values (5+) compress the rectified-flow trajectory so consecutive frames end
+// up near-identical (visible as a "frozen" video). The reference
+// qvac-ext-stable-diffusion.cpp test-wan/ scripts all use 3.0; some upstream
+// docs misleadingly mention 5–8.
+const FLOW_SHIFT = parseFloat(process.env.FLOW_SHIFT || '3.0')
+const SEED = parseInt(process.env.SEED || '42', 10)
 
 async function main () {
   fs.mkdirSync(OUTPUT_DIR, { recursive: true })
+
+  // Sanity-check the (4*k + 1) rule before loading 8 GB of weights.
+  if (VIDEO_FRAMES < 5 || (VIDEO_FRAMES - 1) % 4 !== 0) {
+    console.error(`FRAMES must be (4*k + 1), k >= 1 (got ${VIDEO_FRAMES}).`)
+    console.error('Valid: 5, 9, 13, 17, 21, 25, 29, 33, ..., 77, 81.')
+    process.exit(1)
+  }
 
   console.log('Wan 2.1 T2V 1.3B — text-to-video inference')
   console.log('==========================================')

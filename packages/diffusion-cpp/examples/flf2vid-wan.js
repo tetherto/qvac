@@ -35,7 +35,10 @@ const VIDEO_FRAMES = 33
 const FPS = 16
 const STEPS = 30
 const CFG_SCALE = 6.0
-const FLOW_SHIFT = 5.0
+// Wan 2.1 needs flow_shift = 3.0 for actual frame-to-frame motion; higher
+// values flatten the trajectory and produce near-static output. See the
+// long comment in generate-video-wan.js.
+const FLOW_SHIFT = 3.0
 const STRENGTH = 0.85
 const SEED = 42
 

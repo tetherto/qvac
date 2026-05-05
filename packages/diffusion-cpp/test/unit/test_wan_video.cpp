@@ -368,10 +368,11 @@ protected:
   static std::unique_ptr<SdModel> model;
 
   static void SetUpTestSuite() {
-    // Opt-in: the Metal backend currently lacks IM2COL_3D required by Wan's
-    // 3D convolutions and ggml_abort()s the whole process mid-generation
-    // (there's no recoverable error path for this). Keep the smoke test
-    // behind an explicit env var so default test runs stay clean.
+    // Opt-in: a full Wan 2.1 T2V generation takes ~55s on M3 Ultra Metal and
+    // requires several GB of model weights, so we keep the smoke test behind
+    // an explicit env var. Metal IM2COL_3D / PAD-left ops are provided by the
+    // tetherto/qvac-ext-ggml fork pinned in vcpkg/ports/ggml/ -- see
+    // vcpkg/ports/ggml/portfile.cmake for details. CPU and Vulkan also work.
     if (!std::getenv("SD_RUN_WAN_SMOKE"))
       return;
 
@@ -407,11 +408,9 @@ protected:
 
   void SetUp() override {
     if (!model)
-      GTEST_SKIP() << "Wan smoke test skipped. To enable: "
+      GTEST_SKIP() << "Wan smoke test skipped. To enable: set "
                       "SD_RUN_WAN_SMOKE=1 (requires Wan 2.1 files under "
-                      "models/ -- run ./scripts/download-model-wan.sh). "
-                      "On Apple Metal you also need SD_CPU_ONLY=1 until "
-                      "ggml-metal supports IM2COL_3D.";
+                      "models/ -- run ./scripts/download-model-wan.sh).";
   }
 };
 
