@@ -82,14 +82,14 @@ Parse stdout:
 ```text
 WORKTREE_PATH=<absolute path>
 HEAD_SHA=<sha>
-PATCH_PATH=/tmp/pr-<num>.patch
+PATCH_PATH=<absolute path to patch>
 BASE_REF=<remote>/<baseRefName>
 ```
 
 If stderr contains `WORKTREE_FALLBACK=<reason>`, use fallback mode:
 
 - Fetch/read files via GitHub API if needed.
-- Let `pr-test-discover.mjs` fetch `/tmp/pr-<num>.patch` with `gh pr diff --patch`.
+- Let `pr-test-discover.mjs` fetch the patch with `gh pr diff --patch` into the platform temp directory when `PATCH_PATH` is unavailable.
 - Tell the user that worktree preparation failed and local command execution is unavailable unless they want to retry.
 
 ### 0b. Discover test options
@@ -194,6 +194,13 @@ Do not separately run `bun install` or `bun run build` in `packages/sdk` before 
 
 For SDK e2e tiers, print the `tests-qvac` setup command and e2e command for the user to run manually. The agent must not run `npm run install:build`, `npm run install:build:full`, or `npx qvac-test run:local:*` from `packages/sdk/tests-qvac`.
 
+Generate commands for the user's shell/OS. Do not assume POSIX-only utilities or paths. In particular:
+
+- Use paths emitted by the discovery manifest; they are platform-specific.
+- Use `mkdir -p` only for POSIX shells. For PowerShell, use `New-Item -ItemType Directory -Force`.
+- Prefer environment variable syntax for the user's shell (`export NAME=...` for POSIX, `$env:NAME = "..."` for PowerShell).
+- If unsure which shell the user will run manually, provide both POSIX and PowerShell variants.
+
 Run ID format:
 
 ```text
@@ -206,9 +213,9 @@ Report directory:
 <WORKTREE_PATH>/packages/sdk/tests-qvac/reports/<runId>/
 ```
 
-Manual command block shape:
+Manual command block shape for POSIX shells:
 
-```bash
+```sh
 export QVAC_PR_TEST_RUN_ID=pr-1234-abcdef0-t3-android
 export QVAC_PR_TEST_REPORT_DIR=<WORKTREE_PATH>/packages/sdk/tests-qvac/reports/$QVAC_PR_TEST_RUN_ID
 mkdir -p $QVAC_PR_TEST_REPORT_DIR/logs
@@ -220,10 +227,33 @@ npx qvac-test run:local:desktop --filter vision- --runId $QVAC_PR_TEST_RUN_ID --
 npx qvac-test run:local:android --filter vision- --runId $QVAC_PR_TEST_RUN_ID --report-dir $QVAC_PR_TEST_REPORT_DIR
 ```
 
-Agent-owned SDK setup and changed-example command shape:
+Manual command block shape for PowerShell:
 
-```bash
+```powershell
+$env:QVAC_PR_TEST_RUN_ID = "pr-1234-abcdef0-t3-android"
+$env:QVAC_PR_TEST_REPORT_DIR = "<WORKTREE_PATH>/packages/sdk/tests-qvac/reports/$env:QVAC_PR_TEST_RUN_ID"
+New-Item -ItemType Directory -Force "$env:QVAC_PR_TEST_REPORT_DIR/logs"
+
+Set-Location "<WORKTREE_PATH>/packages/sdk/tests-qvac"
+npm run install:build:full
+
+npx qvac-test run:local:desktop --filter vision- --runId $env:QVAC_PR_TEST_RUN_ID --report-dir $env:QVAC_PR_TEST_REPORT_DIR
+npx qvac-test run:local:android --filter vision- --runId $env:QVAC_PR_TEST_RUN_ID --report-dir $env:QVAC_PR_TEST_REPORT_DIR
+```
+
+Agent-owned SDK setup and changed-example command shape for POSIX shells:
+
+```sh
 cd <WORKTREE_PATH>/packages/sdk
+bun install
+bun run build
+bun run examples/<changed-example>.ts
+```
+
+Agent-owned SDK setup and changed-example command shape for PowerShell:
+
+```powershell
+Set-Location "<WORKTREE_PATH>/packages/sdk"
 bun install
 bun run build
 bun run examples/<changed-example>.ts
@@ -253,7 +283,7 @@ Each step must show:
 Run commands one at a time inside the worktree. Capture logs to:
 
 ```text
-/tmp/qvac-pr-test/pr-<num>/<package-name-or-path>/<step>.log
+<platform temp dir>/qvac-pr-test/pr-<num>/<package-name-or-path>/<step>.log
 ```
 
 Abort on first non-zero exit unless the user explicitly opted into continuing after failures.
@@ -308,6 +338,8 @@ Logs: `<path>`
 
 - Shared worktree prep: `.cursor/skills/_lib/pr-skills/worktree-prepare.mjs`
 - Discovery helper: `.cursor/skills/_lib/pr-skills/pr-test-discover.mjs`
+- Generic discovery helpers: `.cursor/skills/_lib/pr-skills/pr-test-generic.mjs`
+- SDK-specific discovery heuristics: `.cursor/skills/_lib/pr-skills/pr-test-sdk.mjs`
 - Shared worktree library: `.cursor/skills/_lib/pr-skills/worktree.mjs`
 - SDK e2e rules: `.cursor/rules/sdk/tests-qvac.mdc`
 - SDK e2e scripts: `packages/sdk/tests-qvac/package.json`
