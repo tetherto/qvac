@@ -8,6 +8,8 @@
 // On success prints (stdout):
 //   WORKTREE_PATH=<absolute path>
 //   HEAD_SHA=<sha>
+//   PATCH_PATH=<absolute path to /tmp/pr-<num>.patch, computed via 3-dot diff>
+//   BASE_REF=<remote>/<baseRefName>
 //
 // On failure (any reason) prints (stderr) and exits 0:
 //   WORKTREE_FALLBACK=<one-line reason>
@@ -19,8 +21,10 @@
 import {
   parsePRUrl,
   lockPR,
-  fetchPRHead,
+  resolvePR,
+  fetchPRRefs,
   ensureWorktreeSynced,
+  computePatch,
   cleanupCache,
 } from "./worktree.mjs";
 
@@ -46,11 +50,20 @@ try {
 let release = null;
 try {
   release = lockPR(parsed.num);
-  const sha = fetchPRHead(parsed);
+  const { remote, baseRefName } = resolvePR(parsed);
+  const sha = fetchPRRefs({ remote, baseRefName, num: parsed.num });
   const { path } = ensureWorktreeSynced({ num: parsed.num, sha });
+  const patchPath = computePatch({
+    worktreePath: path,
+    num: parsed.num,
+    remote,
+    baseRefName,
+  });
   cleanupCache();
   process.stdout.write(`WORKTREE_PATH=${path}\n`);
   process.stdout.write(`HEAD_SHA=${sha}\n`);
+  process.stdout.write(`PATCH_PATH=${patchPath}\n`);
+  process.stdout.write(`BASE_REF=${remote}/${baseRefName}\n`);
   process.exit(0);
 } catch (e) {
   fallback(`${e.message || e}`);

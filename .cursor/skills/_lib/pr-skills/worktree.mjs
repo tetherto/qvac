@@ -22,6 +22,7 @@ import {
   statSync,
   unlinkSync,
   utimesSync,
+  writeFileSync,
   writeSync,
 } from "node:fs";
 import { homedir } from "node:os";
@@ -204,9 +205,65 @@ export function lockPR(num) {
 const PR_REF = (num) => `refs/pr/${num}/head`;
 const PULL_REFSPEC = (num) => `pull/${num}/head:refs/pr/${num}/head`;
 
-// Fetch refs/pull/<num>/head into refs/pr/<num>/head and return the SHA.
+// Resolve the PR's base ref name. Uses `gh pr view`; falls back to "main"
+// if gh isn't available or the call fails (most PRs target main).
+function resolveBaseRefName({ owner, repo, num }) {
+  try {
+    const out = execFileSync(
+      "gh",
+      [
+        "pr",
+        "view",
+        String(num),
+        "--repo",
+        `${owner}/${repo}`,
+        "--json",
+        "baseRefName",
+        "--jq",
+        ".baseRefName",
+      ],
+      { encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] },
+    ).trim();
+    if (out) return out;
+  } catch {
+    // fall through to default
+  }
+  return "main";
+}
+
+// Resolve remote + base for a PR. Returned values are pure metadata; no
+// network calls beyond the gh PR-metadata lookup happen here.
+export function resolvePR({ owner, repo, num }) {
+  const remote = resolveRemote(owner, repo);
+  const baseRefName = resolveBaseRefName({ owner, repo, num });
+  return { remote, baseRefName };
+}
+
+// Fetch BOTH the PR head ref and the base branch in a single `git fetch`,
+// updating refs/pr/<num>/head and refs/remotes/<remote>/<baseRefName>.
+// Returns the head SHA.
+//
 // `git fetch` writes progress to stderr; we silence it via 2>/dev/null
 // equivalent so the script's stderr stays clean for our own markers.
+export function fetchPRRefs({ remote, baseRefName, num }) {
+  execFileSync(
+    "git",
+    [
+      "fetch",
+      remote,
+      PULL_REFSPEC(num),
+      `${baseRefName}:refs/remotes/${remote}/${baseRefName}`,
+    ],
+    {
+      encoding: "utf-8",
+      stdio: ["ignore", "ignore", "ignore"],
+    },
+  );
+  return git(["rev-parse", PR_REF(num)]);
+}
+
+// Backward-compatible single-fetch helper (kept for any callers that don't
+// need the base ref). New code should use resolvePR + fetchPRRefs.
 export function fetchPRHead({ owner, repo, num }) {
   const remote = resolveRemote(owner, repo);
   execFileSync("git", ["fetch", remote, PULL_REFSPEC(num)], {
@@ -297,6 +354,37 @@ export function ensureWorktreeSynced({ num, sha }) {
   }
   touchPath(path);
   return { path, sha };
+}
+
+// --- Patch computation ---
+
+// Compute the PR diff locally using a 3-dot diff against the base ref:
+//
+//   git -C <worktree> diff <remote>/<baseRefName>...HEAD
+//
+// 3-dot semantics matter: it diffs from merge-base(HEAD, base) to HEAD,
+// which is exactly what the GitHub PR view shows. 2-dot would include
+// every commit base has gained since the PR forked as `-` deletions,
+// which is nonsense for a code review.
+//
+// Writes the patch to /tmp/pr-<num>.patch and returns the path.
+//
+// Hardcoded /tmp/ rather than os.tmpdir() because the SKILL workflow
+// references /tmp/pr-<num>.patch directly and macOS's tmpdir is
+// $TMPDIR (/var/folders/...), not /tmp.
+export function computePatch({ worktreePath, num, remote, baseRefName }) {
+  const patchPath = `/tmp/pr-${num}.patch`;
+  const out = execFileSync(
+    "git",
+    ["-C", worktreePath, "diff", `${remote}/${baseRefName}...HEAD`],
+    {
+      encoding: "utf-8",
+      maxBuffer: 50 * 1024 * 1024,
+      stdio: ["ignore", "pipe", "ignore"],
+    },
+  );
+  writeFileSync(patchPath, out);
+  return patchPath;
 }
 
 // --- LRU cleanup ---

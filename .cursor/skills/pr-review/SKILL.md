@@ -120,7 +120,7 @@ Copy this checklist and track progress:
 
 ### 0a. Prepare worktree (default-on)
 
-Worktree mode is the default — full local Read/Grep/Glob context at the PR head SHA, isolated under `~/.cache/qvac-pr-review/`, never touches the user's working tree. Skip this step only if the user invoked `/pr-review URL --no-worktree`.
+Worktree mode is the default — full local Read/Grep/Glob context at the PR head SHA, isolated under `~/.cache/qvac-pr-review/`, never touches the user's working tree. The same script also fetches the PR's base ref and writes the canonical PR diff to `/tmp/`. Skip this step only if the user invoked `/pr-review URL --no-worktree`.
 
 ```bash
 node .cursor/skills/_lib/pr-skills/worktree-prepare.mjs <PR-URL>
@@ -128,18 +128,22 @@ node .cursor/skills/_lib/pr-skills/worktree-prepare.mjs <PR-URL>
 
 Parse the script's output:
 
-- **stdout** has two lines on success:
+- **stdout** on success has four lines:
   ```
   WORKTREE_PATH=<absolute path>
   HEAD_SHA=<sha>
+  PATCH_PATH=/tmp/pr-<num>.patch
+  BASE_REF=<remote>/<baseRefName>
   ```
-  Remember `WORKTREE_PATH`. All file Reads/Greps/Globs in steps 6 and 7a must use this path as the working root for files at the PR head.
+  - `WORKTREE_PATH`: the working root for files at the PR head SHA. Use this for all Read/Grep/Glob in steps 6 and 7a.
+  - `PATCH_PATH`: a unified diff computed locally with `git diff <BASE_REF>...HEAD` (3-dot). 3-dot semantics match GitHub's PR view exactly — only what the PR introduces, regardless of how far behind the base the PR is. Use this anywhere the workflow refers to the patch; do NOT use 2-dot.
+  - `BASE_REF`: the local tracking ref the diff was computed against (e.g. `upstream/main`). Useful if you need to re-run a custom diff inside the worktree.
 
-- **stderr** has a single line on failure:
+- **stderr** on failure has a single line:
   ```
   WORKTREE_FALLBACK=<one-line reason>
   ```
-  The script's exit code is 0 even on failure. If you observe `WORKTREE_FALLBACK`, fall back to fetching file contents via `gh api repos/{owner}/{repo}/contents/{path}?ref={headRefOid}` and writing to `/tmp/` (the original API-only flow). Surface the fallback reason once in the chat overview's `### Verified (no action)` section so the user knows local context is missing — e.g. "Worktree prep failed (`<reason>`); excerpts come from `gh api`."
+  The script's exit code is 0 even on failure. If you observe `WORKTREE_FALLBACK`, fall back to the API-only flow: fetch file contents via `gh api repos/{owner}/{repo}/contents/{path}?ref={headRefOid}` and the patch via `gh pr diff <num> --patch > /tmp/pr-<num>.patch`. Surface the fallback reason once in the chat overview's `### Verified (no action)` section so the user knows local context is missing — e.g. "Worktree prep failed (`<reason>`); excerpts come from `gh api`."
 
 When the user passes `--no-worktree`, skip this step entirely and use the API-only flow without surfacing any fallback note.
 
@@ -147,13 +151,19 @@ When the user passes `--no-worktree`, skip this step entirely and use the API-on
 
 Extract owner, repo, pr_number from the URL. Verify repo matches `tetherto/qvac`.
 
-### 2. Fetch PR data (exactly 2 shell calls)
+### 2. Fetch PR metadata
 
 ```bash
 gh pr view <num> --repo tetherto/qvac \
   --json number,title,state,mergeable,baseRefName,headRefName,headRefOid,isCrossRepository,headRepositoryOwner,files,author,body,statusCheckRollup \
   > /tmp/pr-<num>.json
+```
 
+In **worktree mode** (default), the patch is already at `/tmp/pr-<num>.patch` from step 0a — do NOT re-fetch it via `gh pr diff`.
+
+In **`--no-worktree` mode** (or after a `WORKTREE_FALLBACK`), additionally:
+
+```bash
 gh pr diff <num> --repo tetherto/qvac --patch > /tmp/pr-<num>.patch
 ```
 
