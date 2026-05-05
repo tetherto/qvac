@@ -1,19 +1,24 @@
 #!/usr/bin/env node
 //
-// Cross-pod PR status / review-queue / my-PRs dashboard for tetherto/qvac.
+// PR status / review-queue / my-PRs dashboard for tetherto/qvac.
 //
 // Usage:
-//   node .../pr-status.mjs --pod <pod> --mode team
-//   node .../pr-status.mjs --pod <pod> --mode review
-//   node .../pr-status.mjs --pod <pod> --mode my
+//   node .../pr-status.mjs --pod <pod> --mode team       # pod-scoped dashboard
+//   node .../pr-status.mjs --pod <pod> --mode review     # pod-scoped review queue
+//   node .../pr-status.mjs --mode my                     # cross-pod my PRs
 //
-// `<pod>` selects the team metadata file at .github/teams/<pod>.json
-// (see team.mjs). Slack handles for `--mode my` are loaded from
+// `team` and `review` modes are pod-scoped: they require `--pod <name>` and
+// load `.github/teams/<pod>.json`. `my` mode is cross-pod: it discovers
+// every pod under `.github/teams/`, finds which pod owns each of the
+// caller's PRs by file paths, and uses that pod's team for the per-PR
+// ping/approval logic.
+//
+// Slack handles for `--mode my` are loaded from
 // ~/.config/qvac-pr-skills/slack.json (see slack.mjs).
 
 import { execFileSync } from "node:child_process";
 
-import { loadTeam } from "./team.mjs";
+import { loadTeam, discoverPods, findPodForFiles } from "./team.mjs";
 import { loadSlackMap, bootstrapMissing, saveSlackMap } from "./slack.mjs";
 
 // --- Constants ---
@@ -40,19 +45,20 @@ function readArg(name) {
   return process.argv[idx + 1];
 }
 
-const pod = (function () {
-  const val = readArg("--pod");
-  if (!val) {
-    console.error("--pod <name> is required (e.g. --pod sdk)");
+const mode = (function () {
+  const val = readArg("--mode") ?? "team";
+  if (!["team", "review", "my"].includes(val)) {
+    console.error(`Unknown mode: ${val}. Use --mode team|review|my`);
     process.exit(1);
   }
   return val;
 })();
 
-const mode = (function () {
-  const val = readArg("--mode") ?? "team";
-  if (!["team", "review", "my"].includes(val)) {
-    console.error(`Unknown mode: ${val}. Use --mode team|review|my`);
+const pod = (function () {
+  const val = readArg("--pod");
+  if (mode === "my") return val ?? null; // optional in cross-pod mode
+  if (!val) {
+    console.error(`--pod <name> is required for --mode ${mode}`);
     process.exit(1);
   }
   return val;
@@ -79,27 +85,50 @@ function ghGraphQL(query, jq, vars = {}) {
 
 // --- Team / role detection ---
 
-console.error(`Loading ${pod} team roster...`);
-const team = loadTeam(pod);
-const OWNED_PATHS = team.ownedPaths;
-
-function detectRoles() {
-  const currentUser = gh(["api", "user", "--jq", ".login"]);
+// Compute the leads/members/allTeam shape for a single pod, with overlap
+// resolution (a person who is both lead and member counts as lead only).
+function rolesForPod(team) {
   const leadSet = new Set(team.leads);
-  // Members minus anyone who is also a lead, in case of overlap
   const memberLogins = team.members.filter((l) => !leadSet.has(l));
   const allTeam = [...new Set([...team.leads, ...memberLogins])];
-  const currentUserRole = leadSet.has(currentUser) ? "lead" : "member";
-  return {
-    currentUser,
-    currentUserRole,
-    leads: team.leads,
-    members: memberLogins,
-    allTeam,
-  };
+  return { leads: team.leads, members: memberLogins, allTeam };
 }
 
-const roles = detectRoles();
+const currentUser = gh(["api", "user", "--jq", ".login"]);
+
+// `pods` is the set of pods this run cares about. Pod-scoped modes have
+// exactly one entry; cross-pod `my` mode has every pod.
+const pods =
+  mode === "my"
+    ? (pod ? [loadTeam(pod)] : discoverPods())
+    : [loadTeam(pod)];
+
+if (pods.length === 0) {
+  console.error("No pods discovered under .github/teams/.");
+  process.exit(1);
+}
+
+const OWNED_PATHS = [...new Set(pods.flatMap((p) => p.ownedPaths))];
+
+if (pods.length === 1) {
+  console.error(`Loading ${pods[0].pod} team roster...`);
+} else {
+  console.error(
+    `Loading ${pods.length} pod rosters: ${pods.map((p) => p.pod).join(", ")}`,
+  );
+}
+
+// Pod-scoped modes use a single global `roles` (the only pod). Cross-pod
+// `my` mode resolves roles per-PR; `roles` stays defined for the single-
+// pod case so existing helpers (hasMemberApproval, etc.) keep working.
+const globalPodRoles = pods.length === 1 ? rolesForPod(pods[0]) : null;
+const currentUserRole =
+  globalPodRoles && globalPodRoles.leads.includes(currentUser)
+    ? "lead"
+    : "member";
+const roles = globalPodRoles
+  ? { currentUser, currentUserRole, ...globalPodRoles }
+  : { currentUser, currentUserRole, leads: [], members: [], allTeam: [] };
 
 // --- Slack handle map (only consulted in --mode my) ---
 
@@ -107,7 +136,11 @@ let slackState = { map: {}, pendingReview: [] };
 
 if (mode === "my") {
   const { state } = loadSlackMap();
-  const allLogins = roles.allTeam;
+  // Union of every discovered pod's leads + members. In cross-pod `my`
+  // a single user's PRs may need pings to anyone in any pod.
+  const allLogins = [
+    ...new Set(pods.flatMap((p) => [...p.leads, ...p.members])),
+  ];
   const { state: bootstrapped, addedLogins } = bootstrapMissing(state, allLogins);
   slackState = bootstrapped;
   if (addedLogins.length > 0) {
@@ -450,123 +483,217 @@ function modeReview() {
 // MODE: my (my unmerged PRs)
 // ============================================================
 
+// Cross-pod-aware approval/state helpers used only by modeMy. They mirror
+// hasMemberApproval / hasLeadApproval / isFullyApproved but read from the
+// PR's owning pod's roles instead of the global single-pod `roles`.
+function hasMemberApprovalInPod(pr, podRoles) {
+  return podRoles.members.some((m) => memberState(pr, m) === "APPROVED");
+}
+function hasLeadApprovalInPod(pr, podRoles) {
+  return podRoles.leads.some((m) => memberState(pr, m) === "APPROVED");
+}
+function isFullyApprovedInPod(pr, podRoles) {
+  return (
+    hasMemberApprovalInPod(pr, podRoles) && hasLeadApprovalInPod(pr, podRoles)
+  );
+}
+
+// Render a PR line scoped to a specific pod's team — overrides the
+// "Reviews:" / "Other:" partition so cross-pod runs show the OWNING pod's
+// team-vs-outside split rather than the global single-pod roles.
+function renderPRLineForPod(pr, podRoles, extra) {
+  const lines = [];
+  lines.push(`#${pr.number} ${pr.title}`);
+  lines.push(pr.url);
+  const author = pr.author.name || pr.author.login;
+  lines.push(`by ${author} · ${formatAge(pr.ready)} old`);
+  if (pr.mergeable === "CONFLICTING") lines.push("⚠️ MERGE CONFLICTS!");
+  if (extra) lines.push(extra);
+
+  const missing = [];
+  if (!hasMemberApprovalInPod(pr, podRoles)) missing.push("team member approval");
+  if (!hasLeadApprovalInPod(pr, podRoles)) missing.push("team lead approval");
+  if (missing.length) lines.push(`Needs: ${missing.join(", ")}`);
+
+  const acted = [];
+  for (const m of podRoles.allTeam) {
+    const s = memberState(pr, m);
+    if (s === "PENDING" || s === "AUTHOR") continue;
+    const icon = STATE_ICONS[s] || "?";
+    const role = podRoles.leads.includes(m) ? "(lead)" : "";
+    acted.push(`${icon} ${m} ${role}`.trim());
+  }
+  if (acted.length) lines.push(`Reviews: ${acted.join(" · ")}`);
+
+  const outside = [...pr.reviewState.entries()]
+    .filter(
+      ([login, state]) =>
+        !podRoles.allTeam.includes(login) && state !== "COMMENTED",
+    )
+    .map(([login, state]) => `${STATE_ICONS[state] || "?"} ${login}`);
+  if (outside.length) lines.push(`Other: ${outside.join(" · ")}`);
+
+  return lines.map((l) => `  ${l}`).join("\n");
+}
+
 function modeMy() {
   const me = roles.currentUser;
   const myPRs = relevantPRs.filter((pr) => pr.author.login === me);
 
+  // Resolve owning pod per PR. PRs with no owning pod are rare but
+  // possible (e.g. a PR that touches files outside any pod's
+  // ownedPaths slipping through the OWNED_PATHS filter due to the
+  // union; in practice the relevantPRs filter excludes them).
+  const podRolesCache = new Map(); // pod -> rolesForPod
+  function rolesForPodCached(pod) {
+    if (!pod) return null;
+    let cached = podRolesCache.get(pod);
+    if (!cached) {
+      cached = rolesForPod(pod);
+      podRolesCache.set(pod, cached);
+    }
+    return cached;
+  }
+
+  const enriched = myPRs.map((pr) => {
+    const owningPod = findPodForFiles(pr.files, pods);
+    return { pr, pod: owningPod, podRoles: rolesForPodCached(owningPod) };
+  });
+
   const readyToMerge = [];
   const needsReReview = [];
   const awaitingReview = [];
+  const noPod = [];
 
-  for (const pr of myPRs) {
-    if (isFullyApproved(pr)) {
-      readyToMerge.push(pr);
+  for (const entry of enriched) {
+    if (!entry.podRoles) {
+      noPod.push(entry);
       continue;
     }
-
-    // Check if any team reviewer's approval was dismissed
-    const dismissedReviewers = roles.allTeam.filter(
-      (m) => memberState(pr, m) === "DISMISSED"
+    if (isFullyApprovedInPod(entry.pr, entry.podRoles)) {
+      readyToMerge.push(entry);
+      continue;
+    }
+    const dismissedReviewers = entry.podRoles.allTeam.filter(
+      (m) => memberState(entry.pr, m) === "DISMISSED",
     );
     if (dismissedReviewers.length > 0) {
-      needsReReview.push({ pr, dismissedReviewers });
+      needsReReview.push({ ...entry, dismissedReviewers });
       continue;
     }
-
-    awaitingReview.push(pr);
+    awaitingReview.push(entry);
   }
 
   console.log(
-    `My PRs (${me}) · ${readyToMerge.length} ready · ${needsReReview.length} re-review · ${awaitingReview.length} awaiting\n`
+    `My PRs (${me}) · ${readyToMerge.length} ready · ${needsReReview.length} re-review · ${awaitingReview.length} awaiting${noPod.length ? ` · ${noPod.length} no pod` : ""}\n`,
   );
 
-  printSection(
-    "✅ READY TO MERGE",
-    readyToMerge,
-    { showNeeds: false }
-  );
+  if (readyToMerge.length > 0) {
+    console.log("✅ READY TO MERGE");
+    console.log("─".repeat(60));
+    for (const { pr, podRoles } of readyToMerge) {
+      console.log("");
+      console.log(renderPRLineForPod(pr, podRoles, null));
+    }
+    console.log("");
+  }
 
   if (needsReReview.length > 0) {
     console.log("🔄 NEEDS RE-REVIEW");
     console.log("─".repeat(60));
-    for (const { pr, dismissedReviewers } of needsReReview) {
+    for (const { pr, podRoles, dismissedReviewers } of needsReReview) {
       console.log("");
       const whoToPing = dismissedReviewers
         .map((m) => {
-          const role = roles.leads.includes(m) ? " (lead)" : "";
+          const role = podRoles.leads.includes(m) ? " (lead)" : "";
           return `${slackHandle(m)}${role}`;
         })
         .join(", ");
-      console.log(renderPRLine(pr, { extra: `Re-request: ${whoToPing}` }));
+      console.log(renderPRLineForPod(pr, podRoles, `Re-request: ${whoToPing}`));
     }
     console.log("");
 
-    // Slack messages
     console.log("Slack messages (copy-paste ready):");
     console.log("─".repeat(60));
     for (const { pr, dismissedReviewers } of needsReReview) {
       const tags = dismissedReviewers.map(slackHandle).join(" ");
       console.log(
-        `Re-review needed: PR #${pr.number} "${pr.title}" — ${tags} ${pr.url}`
+        `Re-review needed: PR #${pr.number} "${pr.title}" — ${tags} ${pr.url}`,
       );
     }
     console.log("");
   }
 
   if (awaitingReview.length > 0) {
-    // Figure out who to ping for each PR
     console.log("⏳ AWAITING REVIEW");
     console.log("─".repeat(60));
-    for (const pr of awaitingReview) {
+    for (const { pr, podRoles } of awaitingReview) {
       console.log("");
       const missingPeople = [];
-      if (!hasMemberApproval(pr)) {
-        const pendingMembers = roles.members.filter(
-          (m) => memberState(pr, m) === "PENDING"
+      if (!hasMemberApprovalInPod(pr, podRoles)) {
+        const pendingMembers = podRoles.members.filter(
+          (m) => memberState(pr, m) === "PENDING",
         );
         missingPeople.push(...pendingMembers.map(slackHandle));
       }
-      if (!hasLeadApproval(pr)) {
-        const pendingLeads = roles.leads.filter(
-          (m) => memberState(pr, m) === "PENDING"
+      if (!hasLeadApprovalInPod(pr, podRoles)) {
+        const pendingLeads = podRoles.leads.filter(
+          (m) => memberState(pr, m) === "PENDING",
         );
         missingPeople.push(
-          ...pendingLeads.map((m) => `${slackHandle(m)} (lead)`)
+          ...pendingLeads.map((m) => `${slackHandle(m)} (lead)`),
         );
       }
       const pingLine = missingPeople.length
         ? `Ping: ${missingPeople.join(", ")}`
         : null;
-      console.log(renderPRLine(pr, { extra: pingLine }));
+      console.log(renderPRLineForPod(pr, podRoles, pingLine));
     }
     console.log("");
 
-    // Slack messages
     console.log("Slack messages (copy-paste ready):");
     console.log("─".repeat(60));
-    for (const pr of awaitingReview) {
+    for (const { pr, podRoles } of awaitingReview) {
       const missing = [];
-      if (!hasMemberApproval(pr)) {
-        const pendingMembers = roles.members.filter(
-          (m) => memberState(pr, m) === "PENDING"
+      if (!hasMemberApprovalInPod(pr, podRoles)) {
+        const pendingMembers = podRoles.members.filter(
+          (m) => memberState(pr, m) === "PENDING",
         );
         missing.push(...pendingMembers.map(slackHandle));
       }
-      if (!hasLeadApproval(pr)) {
-        const pendingLeads = roles.leads.filter(
-          (m) => memberState(pr, m) === "PENDING"
+      if (!hasLeadApprovalInPod(pr, podRoles)) {
+        const pendingLeads = podRoles.leads.filter(
+          (m) => memberState(pr, m) === "PENDING",
         );
         missing.push(...pendingLeads.map(slackHandle));
       }
       console.log(
-        `Review needed: PR #${pr.number} "${pr.title}" — ${missing.join(" ")} ${pr.url}`
+        `Review needed: PR #${pr.number} "${pr.title}" — ${missing.join(" ")} ${pr.url}`,
+      );
+    }
+    console.log("");
+  }
+
+  if (noPod.length > 0) {
+    console.log("❓ NO POD MATCHED");
+    console.log("─".repeat(60));
+    for (const { pr } of noPod) {
+      console.log("");
+      console.log(`  #${pr.number} ${pr.title}`);
+      console.log(`  ${pr.url}`);
+      console.log(
+        `  No .github/teams/<pod>.json owns the touched files; ping logic skipped.`,
       );
     }
     console.log("");
   }
 
   if (myPRs.length === 0) {
-    console.log(`You have no open PRs touching ${pod} pod paths.`);
+    const scope =
+      pods.length === 1
+        ? `${pods[0].pod} pod paths`
+        : `paths owned by any pod in .github/teams/`;
+    console.log(`You have no open PRs touching ${scope}.`);
   }
 }
 

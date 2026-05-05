@@ -4,7 +4,7 @@
 // resolved by walking up from this file's location until a directory
 // containing .git/ is found.
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -22,6 +22,12 @@ function findRepoRoot(startDir) {
   }
 }
 
+function teamsDir() {
+  const scriptDir = dirname(fileURLToPath(import.meta.url));
+  const root = findRepoRoot(scriptDir);
+  return join(root, ".github", "teams");
+}
+
 function assertStringArray(value, fieldName, file) {
   if (!Array.isArray(value) || !value.every((v) => typeof v === "string")) {
     throw new Error(`${file}: ${fieldName} must be an array of strings`);
@@ -32,9 +38,8 @@ export function loadTeam(pod) {
   if (!pod || typeof pod !== "string") {
     throw new Error("loadTeam(pod): pod must be a non-empty string");
   }
-  const scriptDir = dirname(fileURLToPath(import.meta.url));
-  const root = findRepoRoot(scriptDir);
-  const teamFile = join(root, ".github", "teams", `${pod}.json`);
+  const dir = teamsDir();
+  const teamFile = join(dir, `${pod}.json`);
   if (!existsSync(teamFile)) {
     throw new Error(
       `Team file not found: ${teamFile}\n` +
@@ -49,11 +54,44 @@ export function loadTeam(pod) {
     console.error(`Warning: ${teamFile} has no leads or members`);
   }
   return {
+    pod,
     name: typeof parsed.name === "string" ? parsed.name : pod,
     leads: parsed.leads,
     members: parsed.members,
     ownedPaths: parsed.ownedPaths,
-    repoRoot: root,
     teamFile,
   };
+}
+
+// Discover every pod registered under .github/teams/. Used by cross-pod
+// modes (e.g. /pr-mine) where the user's PRs may span multiple pods.
+// Returns an array of team objects (same shape as loadTeam(pod)).
+export function discoverPods() {
+  const dir = teamsDir();
+  if (!existsSync(dir)) return [];
+  const files = readdirSync(dir).filter((f) => f.endsWith(".json"));
+  const pods = [];
+  for (const f of files) {
+    const podName = f.replace(/\.json$/, "");
+    try {
+      pods.push(loadTeam(podName));
+    } catch (e) {
+      console.error(`Skipping malformed ${f}: ${e.message}`);
+    }
+  }
+  return pods;
+}
+
+// Find the pod that owns a PR based on its touched files. Returns the
+// first pod whose ownedPaths overlap with the PR's files, or null. Order
+// is the readdir order of .github/teams/ — for a PR that touches paths
+// in multiple pods, the first match wins.
+export function findPodForFiles(files, pods) {
+  if (!files || !pods) return null;
+  for (const pod of pods) {
+    if (files.some((f) => pod.ownedPaths.some((p) => f.path.startsWith(p)))) {
+      return pod;
+    }
+  }
+  return null;
 }
