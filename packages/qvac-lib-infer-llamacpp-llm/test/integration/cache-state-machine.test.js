@@ -195,6 +195,7 @@ test('cacheKey stores tokens but stays under n_predict', { timeout: 600_000 }, a
   const delta = toNumber(secondStats.CacheTokens) - toNumber(firstStats.CacheTokens)
   t.ok(firstStats.CacheTokens > 0, 'session usage records cache tokens')
   assertCacheMatchesTokens(t, firstStats, 'session run caches prompt + generated tokens')
+  t.ok(firstStats.ppTPS > 0, 'ppTPS reported on completed run')
   const expectedDelta = secondStats.promptTokens + secondStats.generatedTokens
   t.is(delta, expectedDelta, 'cache delta equals follow-up prompt + generations')
   t.ok(

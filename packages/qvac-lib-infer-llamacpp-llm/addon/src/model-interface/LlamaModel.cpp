@@ -582,6 +582,10 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   }
 
   if (prompt.prefill) {
+    // On prefill, no logits are accessed so llama.cpp's synchronize() is never
+    // triggered. Force it here so t_p_eval_ms is committed to the perf context
+    // before the caller reads runtimeStats().
+    llama_synchronize(state_->llmContext_->getCtx());
     maybeSaveCacheToDisk(prompt.saveCacheToDisk, state_->cacheManager_);
     return out;
   }
@@ -649,7 +653,7 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::runtimeStats() const {
           ? kMillisInSecond / perfData.t_eval_ms * perfData.n_eval
           : 0.0;
   double promptProcessingTPS =
-      (!state_->lastRunWasPrefill_ && perfData.t_p_eval_ms > 0)
+      perfData.t_p_eval_ms > 0
           ? kMillisInSecond / perfData.t_p_eval_ms * perfData.n_p_eval
           : 0.0;
 

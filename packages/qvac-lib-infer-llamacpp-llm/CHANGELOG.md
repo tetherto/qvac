@@ -7,7 +7,7 @@
 #### `ppTPS` runtime stat
 - `runtimeStats()` now includes `ppTPS` (prompt processing tokens per second), reporting the throughput of the prompt evaluation phase.
 - Calculated as `(1000 / t_p_eval_ms) * n_p_eval` using llama.cpp's `llama_perf_context()` data, matching the "prompt eval time" line in llama-cli output.
-- Returns `0.0` when no prompt was evaluated (prefill-only runs or zero prompt eval time).
+- Returns `0.0` only when no prompt was actually evaluated (e.g. full cache hit). Prefill-only runs report `ppTPS` normally — the perf context is explicitly flushed before returning so the counter is populated.
 - Exposed on `RuntimeStats` in `index.d.ts` alongside the existing `TPS` (generation throughput) field.
 
 ## [0.19.1] - 2026-04-30
