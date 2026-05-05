@@ -366,6 +366,8 @@ export const executor = createExecutor({
         "ocr-multiple-fonts",
       ], "OCR disabled on iOS (ONNX/CoreML OOM)"),
       new SkipExecutor(/^translation-afriquegemma-/, "AfriqueGemma 4B (~2.7 GB) exceeds iOS memory budget"),
+      // TODO(QVAC-18460): re-enable once iOS transcribe() crash is fixed.
+      new SkipExecutor(/^transcription-/, "TODO(QVAC-18460): transcription disabled on iOS — transcribe() hard-crashes consumer after FFmpegDecoder unload"),
     ] : []),
 
     // Real executors
