@@ -11,6 +11,16 @@ on:
         description: "Repository to checkout"
         type: string
         required: false
+      qvac_perf_runs:
+        description: "Override QVAC_PERF_RUNS (number of counted iterations per perf test). Empty = test default."
+        type: string
+        required: false
+        default: ""
+      qvac_perf_warmup_runs:
+        description: "Override QVAC_PERF_WARMUP_RUNS (number of warmup iterations per perf test). Empty = test default."
+        type: string
+        required: false
+        default: ""
   workflow_dispatch:
     inputs:
       ref:
@@ -23,6 +33,16 @@ on:
         type: string
         required: true
         default: "@qvac/llm-llamacpp@latest"
+      qvac_perf_runs:
+        description: "Override QVAC_PERF_RUNS (number of counted iterations per perf test). Empty = test default."
+        type: string
+        required: false
+        default: ""
+      qvac_perf_warmup_runs:
+        description: "Override QVAC_PERF_WARMUP_RUNS (number of warmup iterations per perf test). Empty = test default."
+        type: string
+        required: false
+        default: ""
 
 env:
   NODE_VERSION: "lts/*"
@@ -895,44 +915,18 @@ jobs:
           echo "📝 Creating test spec for custom environment mode..."
           echo "Platform: ${{ matrix.platform }}"
           
-          # Create platform-specific test spec using printf for precise control
-          # NOTE: Both platforms use a 'before' hook in the wdio config to click the button
-          # This ensures a single Appium session for reliability (no session handoff issues)
-          # The before hook includes crash detection using queryAppState
           if [ "${{ matrix.platform }}" == "Android" ]; then
             PLATFORM="Android"
             AUTOMATION="UiAutomator2"
             HOST_LINE="android_test_host: amazon_linux_2"
             BUNDLE_ID="${{ env.APP_BUNDLE_ID }}"
-            # Android wdio config with crash detection and test filter support.
-            # On crash, checkAppCrash/crashMonitor setTimeout-exit with a 5s
-            # delay so logcat has time to drain bare stdout / native logs that
-            # would otherwise be lost when process.exit(1) tears down Appium
-            # before Device Farm finalises the artifact bundle.
-            # __TEST_FILTER__ placeholder is replaced per-split by make_split()
-            WDIO_CONFIG='exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"Android","appium:automationName":"UiAutomator2","appium:appPackage":"'${{ env.APP_BUNDLE_ID }}'","appium:appActivity":"'${{ env.APP_BUNDLE_ID }}'.MainActivity","appium:newCommandTimeout":300,"appium:autoGrantPermissions":true,"appium:autoAcceptAlerts":true,"appium:noReset":true,"appium:dontStopAppOnReset":true,"appium:forceAppLaunch":false}],logLevel:"debug",waitforTimeout:120000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:1800000,grep:"__MOCHA_GREP__"},before:async function(capabilities,specs,browser){const BUNDLE_ID="'${{ env.APP_BUNDLE_ID }}'";const TEST_FILTER="__TEST_FILTER__";global.appCrashed=false;global.checkAppCrash=async(stage)=>{try{const state=await browser.queryAppState(BUNDLE_ID);console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\\n🛑 APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\\n");global.appCrashed=true;setTimeout(function(){process.exit(1);},5000);}return state;}catch(e){console.log("["+stage+"] queryAppState error: "+e.message);return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("android=new UiSelector().textContains(\"INITIALIZED\")");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");if(TEST_FILTER!=="__TEST_FILTER__"){try{const b64=Buffer.from(TEST_FILTER).toString("base64");await browser.pushFile("/data/local/tmp/testFilter.txt",b64);console.log("Pushed test filter: "+TEST_FILTER);}catch(e){console.log("pushFile failed: "+e.message);}}console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("android=new UiSelector().textContains(\"Run Automated Tests\")");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");global.crashMonitor=setInterval(async()=>{if(global.appCrashed)return;try{const s=await browser.queryAppState(BUNDLE_ID);if(s<3){console.error("\\n🛑 BACKGROUND CRASH DETECTED! App state="+s);global.appCrashed=true;setTimeout(function(){process.exit(1);},5000);}}catch(e){}},15000);},after:async function(){if(global.crashMonitor)clearInterval(global.crashMonitor);},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);}};'
+            WDIO_CONFIG='exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"Android","appium:automationName":"UiAutomator2","appium:appPackage":"'${{ env.APP_BUNDLE_ID }}'","appium:appActivity":"'${{ env.APP_BUNDLE_ID }}'.MainActivity","appium:newCommandTimeout":300,"appium:autoGrantPermissions":true,"appium:autoAcceptAlerts":true,"appium:noReset":true,"appium:dontStopAppOnReset":true,"appium:forceAppLaunch":false}],logLevel:"debug",waitforTimeout:120000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:1800000,grep:"__MOCHA_GREP__"},before:async function(capabilities,specs,browser){const BUNDLE_ID="'${{ env.APP_BUNDLE_ID }}'";const TEST_FILTER="__TEST_FILTER__";const QVAC_PERF_RUNS_VALUE="__QVAC_PERF_RUNS__";const QVAC_PERF_WARMUP_RUNS_VALUE="__QVAC_PERF_WARMUP_RUNS__";global.appCrashed=false;global.checkAppCrash=async(stage)=>{try{const state=await browser.queryAppState(BUNDLE_ID);console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\\n🛑 APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\\n");global.appCrashed=true;setTimeout(function(){process.exit(1);},5000);}return state;}catch(e){console.log("["+stage+"] queryAppState error: "+e.message);return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("android=new UiSelector().textContains(\"INITIALIZED\")");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");if(TEST_FILTER!=="__TEST_FILTER__"){try{const b64=Buffer.from(TEST_FILTER).toString("base64");await browser.pushFile("/data/local/tmp/testFilter.txt",b64);console.log("Pushed test filter: "+TEST_FILTER);}catch(e){console.log("pushFile failed: "+e.message);}}if(QVAC_PERF_RUNS_VALUE.length>0||QVAC_PERF_WARMUP_RUNS_VALUE.length>0){try{var perfCfg="QVAC_PERF_RUNS="+QVAC_PERF_RUNS_VALUE+"\\nQVAC_PERF_WARMUP_RUNS="+QVAC_PERF_WARMUP_RUNS_VALUE+"\\n";var pcb64=Buffer.from(perfCfg).toString("base64");await browser.pushFile("/data/local/tmp/qvacPerfConfig.txt",pcb64);console.log("Pushed perf config: "+perfCfg.replace(/\\n/g," "));}catch(e){console.log("perfConfig pushFile failed: "+e.message);}}console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("android=new UiSelector().textContains(\"Run Automated Tests\")");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");global.crashMonitor=setInterval(async()=>{if(global.appCrashed)return;try{const s=await browser.queryAppState(BUNDLE_ID);if(s<3){console.error("\\n🛑 BACKGROUND CRASH DETECTED! App state="+s);global.appCrashed=true;setTimeout(function(){process.exit(1);},5000);}}catch(e){}},15000);},after:async function(){if(global.crashMonitor)clearInterval(global.crashMonitor);},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);}};'
           else
             PLATFORM="iOS"
             AUTOMATION="XCUITest"
-            # iOS 18+ requires macos_sequoia test host (supports iOS 15-26)
             HOST_LINE="ios_test_host: macos_sequoia"
             BUNDLE_ID="${{ env.APP_BUNDLE_ID }}"
-            # iOS wdio config with crash detection (bail:0 = continue on test
-            # failures). On crash we (a) pre-register a 5 s setTimeout
-            # process.exit BEFORE attempting any flush — this is the hard
-            # upper bound on the crash path so a wedged Appium/WDA cannot
-            # turn a crash into a long CI timeout — then (b) best-effort
-            # attempt an Appium pull_file of bare_console.log via
-            # global.flushBareLog so the C++ side log ends up in
-            # $DEVICEFARM_LOG_DIR (and therefore in Customer_Artifacts.zip)
-            # even when the test crashes before the after-hook would have
-            # run. The flush is wrapped in Promise.race against a 3 s
-            # timeout so a hung pull_file cannot extend the crash exit
-            # past the 5 s budget. The after hook reuses the same helper
-            # on the normal completion path.
-            # usePrebuiltWDA uses Device Farm's pre-built WebDriverAgent
-            # Increased timeout to 30 minutes (1800000ms) for long-running LLM tests
-            WDIO_CONFIG='exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"iOS","appium:automationName":"XCUITest","appium:bundleId":"'${{ env.APP_BUNDLE_ID }}'","appium:newCommandTimeout":300,"appium:noReset":true,"appium:forceAppLaunch":false,"appium:usePrebuiltWDA":true,"appium:wdaLocalPort":8100,"appium:showIOSLog":true,"appium:realDeviceLogger":"/usr/local/lib/node_modules/appium/node_modules/deviceconsole/deviceconsole"}],logLevel:"debug",waitforTimeout:120000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:1800000,grep:"__MOCHA_GREP__"},before:async function(capabilities,specs,browser){const BUNDLE_ID="'${{ env.APP_BUNDLE_ID }}'";const TEST_FILTER="__TEST_FILTER__";global.appCrashed=false;global.flushBareLog=async function(reason){try{var _h=require("http");var lb64=await new Promise(function(ok,fail){var bd=JSON.stringify({path:"@"+BUNDLE_ID+":documents/bare_console.log"});var rq=_h.request({hostname:"127.0.0.1",port:4723,path:"/wd/hub/session/"+browser.sessionId+"/appium/device/pull_file",method:"POST",headers:{"Content-Type":"application/json","Content-Length":Buffer.byteLength(bd)}},function(rs){var d="";rs.on("data",function(c){d+=c;});rs.on("end",function(){try{ok(JSON.parse(d).value);}catch(e){fail(e);}});});rq.on("error",fail);rq.write(bd);rq.end();});var logTxt=Buffer.from(lb64,"base64").toString();var logDir=process.env.DEVICEFARM_LOG_DIR||".";require("fs").writeFileSync(logDir+"/bare_console.log",logTxt);console.log("[bare-log] "+reason+" flush ok ("+logTxt.length+" bytes)");}catch(e){console.log("[bare-log] "+reason+" flush failed: "+e.message);}};global.checkAppCrash=async(stage)=>{try{const state=await browser.queryAppState(BUNDLE_ID);console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\\n🛑 APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\\n");global.appCrashed=true;setTimeout(function(){process.exit(1);},5000);try{await browser.pause(1500);await Promise.race([global.flushBareLog("crash-"+stage),new Promise(function(_,rj){setTimeout(function(){rj(new Error("bare-log flush timed out"));},3000);})]);}catch(_){}}return state;}catch(e){console.log("["+stage+"] queryAppState error: "+e.message);return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("-ios predicate string:label CONTAINS \"INITIALIZED\"");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");if(TEST_FILTER!=="__TEST_FILTER__"){try{const b64=Buffer.from(TEST_FILTER).toString("base64");await browser.pushFile("@"+BUNDLE_ID+":documents/testFilter.txt",b64);console.log("Pushed test filter: "+TEST_FILTER);}catch(e){console.log("pushFile failed: "+e.message);}}console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("-ios predicate string:label CONTAINS \"Run Automated Tests\"");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");global.crashMonitor=setInterval(async()=>{if(global.appCrashed)return;try{const s=await browser.queryAppState(BUNDLE_ID);if(s<3){console.error("\\n🛑 BACKGROUND CRASH DETECTED! App state="+s);global.appCrashed=true;setTimeout(function(){process.exit(1);},5000);try{await browser.pause(1500);await Promise.race([global.flushBareLog("crash-bg"),new Promise(function(_,rj){setTimeout(function(){rj(new Error("bare-log flush timed out"));},3000);})]);}catch(_){}}}catch(e){}},15000);},after:async function(){if(global.crashMonitor)clearInterval(global.crashMonitor);console.log("[bare-log] Waiting for log flush...");await browser.pause(3000);if(global.flushBareLog)await global.flushBareLog("after");},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);}};'
+            WDIO_CONFIG='exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"iOS","appium:automationName":"XCUITest","appium:bundleId":"'${{ env.APP_BUNDLE_ID }}'","appium:newCommandTimeout":300,"appium:noReset":true,"appium:forceAppLaunch":false,"appium:usePrebuiltWDA":true,"appium:wdaLocalPort":8100,"appium:showIOSLog":true,"appium:realDeviceLogger":"/usr/local/lib/node_modules/appium/node_modules/deviceconsole/deviceconsole"}],logLevel:"debug",waitforTimeout:120000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:1800000,grep:"__MOCHA_GREP__"},before:async function(capabilities,specs,browser){const BUNDLE_ID="'${{ env.APP_BUNDLE_ID }}'";const TEST_FILTER="__TEST_FILTER__";const QVAC_PERF_RUNS_VALUE="__QVAC_PERF_RUNS__";const QVAC_PERF_WARMUP_RUNS_VALUE="__QVAC_PERF_WARMUP_RUNS__";global.appCrashed=false;global.flushBareLog=async function(reason){try{var _h=require("http");var lb64=await new Promise(function(ok,fail){var bd=JSON.stringify({path:"@"+BUNDLE_ID+":documents/bare_console.log"});var rq=_h.request({hostname:"127.0.0.1",port:4723,path:"/wd/hub/session/"+browser.sessionId+"/appium/device/pull_file",method:"POST",headers:{"Content-Type":"application/json","Content-Length":Buffer.byteLength(bd)}},function(rs){var d="";rs.on("data",function(c){d+=c;});rs.on("end",function(){try{ok(JSON.parse(d).value);}catch(e){fail(e);}});});rq.on("error",fail);rq.write(bd);rq.end();});var logTxt=Buffer.from(lb64,"base64").toString();var logDir=process.env.DEVICEFARM_LOG_DIR||".";require("fs").writeFileSync(logDir+"/bare_console.log",logTxt);console.log("[bare-log] "+reason+" flush ok ("+logTxt.length+" bytes)");}catch(e){console.log("[bare-log] "+reason+" flush failed: "+e.message);}};global.checkAppCrash=async(stage)=>{try{const state=await browser.queryAppState(BUNDLE_ID);console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\\n🛑 APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\\n");global.appCrashed=true;setTimeout(function(){process.exit(1);},5000);try{await browser.pause(1500);await Promise.race([global.flushBareLog("crash-"+stage),new Promise(function(_,rj){setTimeout(function(){rj(new Error("bare-log flush timed out"));},3000);})]);}catch(_){}}return state;}catch(e){console.log("["+stage+"] queryAppState error: "+e.message);return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("-ios predicate string:label CONTAINS \"INITIALIZED\"");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");if(TEST_FILTER!=="__TEST_FILTER__"){try{const b64=Buffer.from(TEST_FILTER).toString("base64");await browser.pushFile("@"+BUNDLE_ID+":documents/testFilter.txt",b64);console.log("Pushed test filter: "+TEST_FILTER);}catch(e){console.log("pushFile failed: "+e.message);}}if(QVAC_PERF_RUNS_VALUE.length>0||QVAC_PERF_WARMUP_RUNS_VALUE.length>0){try{var perfCfg="QVAC_PERF_RUNS="+QVAC_PERF_RUNS_VALUE+"\\nQVAC_PERF_WARMUP_RUNS="+QVAC_PERF_WARMUP_RUNS_VALUE+"\\n";var pcb64=Buffer.from(perfCfg).toString("base64");await browser.pushFile("@"+BUNDLE_ID+":documents/qvacPerfConfig.txt",pcb64);console.log("Pushed perf config: "+perfCfg.replace(/\\n/g," "));}catch(e){console.log("perfConfig pushFile failed: "+e.message);}}console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("-ios predicate string:label CONTAINS \"Run Automated Tests\"");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");global.crashMonitor=setInterval(async()=>{if(global.appCrashed)return;try{const s=await browser.queryAppState(BUNDLE_ID);if(s<3){console.error("\\n🛑 BACKGROUND CRASH DETECTED! App state="+s);global.appCrashed=true;setTimeout(function(){process.exit(1);},5000);try{await browser.pause(1500);await Promise.race([global.flushBareLog("crash-bg"),new Promise(function(_,rj){setTimeout(function(){rj(new Error("bare-log flush timed out"));},3000);})]);}catch(_){}}}catch(e){}},15000);},after:async function(){if(global.crashMonitor)clearInterval(global.crashMonitor);console.log("[bare-log] Waiting for log flush...");await browser.pause(3000);if(global.flushBareLog)await global.flushBareLog("after");},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);}};'
           fi
           
           WDIO_B64=$(echo "$WDIO_CONFIG" | base64 | tr -d '\n')
@@ -1046,14 +1040,15 @@ jobs:
             echo "$label spec upload timed out after $MAX attempts" >&2; exit 1
           }
 
-          # For each split: inject mocha grep AND replace __TEST_FILTER__ so
-          # the before-hook pushes a testFilter.txt the app reads at runtime.
-          # This ensures the app only executes matching tests (real splitting).
+          QVAC_PERF_RUNS_INPUT="${{ inputs.qvac_perf_runs }}"
+          QVAC_PERF_WARMUP_RUNS_INPUT="${{ inputs.qvac_perf_warmup_runs }}"
           make_split() {
             local pattern="$1" output="$2"
             local cfg
             cfg=$(echo "$WDIO_CONFIG" | sed "s#__MOCHA_GREP__#$pattern#")
             cfg=$(echo "$cfg" | sed "s#__TEST_FILTER__#$pattern#")
+            cfg=$(echo "$cfg" | sed "s#__QVAC_PERF_RUNS__#$QVAC_PERF_RUNS_INPUT#")
+            cfg=$(echo "$cfg" | sed "s#__QVAC_PERF_WARMUP_RUNS__#$QVAC_PERF_WARMUP_RUNS_INPUT#")
             local b64
             b64=$(echo "$cfg" | base64 | tr -d '\n')
             generate_spec "$output" "$b64"
@@ -1083,16 +1078,20 @@ jobs:
             IOS_GREP_HEAVY_4=$(jq -r '.ios.heavy4 | join("|")' "$GROUPS_JSON")
             IOS_GREP_HEAVY_5=$(jq -r '.ios.heavy5 | join("|")' "$GROUPS_JSON")
             IOS_GREP_HEAVY_6=$(jq -r '.ios.heavy6 | join("|")' "$GROUPS_JSON")
+            IOS_GREP_HEAVY_7=$(jq -r '.ios.heavy7 | join("|")' "$GROUPS_JSON")
+            IOS_GREP_HEAVY_8=$(jq -r '.ios.heavy8 | join("|")' "$GROUPS_JSON")
             IOS_GREP_LIGHT_A=$(jq -r '.ios.lightA | join("|")' "$GROUPS_JSON")
             IOS_GREP_LIGHT_B=$(jq -r '.ios.lightB | join("|")' "$GROUPS_JSON")
 
-            echo "iOS test split (6 heavy + 2 light = 8 groups):"
+            echo "iOS test split (8 heavy + 2 light = 10 groups):"
             echo "  Heavy 1 (iPhone 16 Pro Max): $IOS_GREP_HEAVY_1"
             echo "  Heavy 2 (iPhone 16 Pro Max): $IOS_GREP_HEAVY_2"
             echo "  Heavy 3 (iPhone 17):         $IOS_GREP_HEAVY_3"
-            echo "  Heavy 4 (iPhone 17):         $IOS_GREP_HEAVY_4"
-            echo "  Heavy 5 (iPhone 17):         $IOS_GREP_HEAVY_5"
-            echo "  Heavy 6 (SlidingContext):     $IOS_GREP_HEAVY_6"
+            echo "  Heavy 4 (OcrLighton):        $IOS_GREP_HEAVY_4"
+            echo "  Heavy 5 (Reasoning):         $IOS_GREP_HEAVY_5"
+            echo "  Heavy 6 (SlidingContext):    $IOS_GREP_HEAVY_6"
+            echo "  Heavy 7 (Gemma4):            $IOS_GREP_HEAVY_7"
+            echo "  Heavy 8 (OcrPaddle):         $IOS_GREP_HEAVY_8"
             echo "  Light A (iPhone 16 Pro):     $IOS_GREP_LIGHT_A"
             echo "  Light B (iPhone 16 Pro):     $IOS_GREP_LIGHT_B"
 
@@ -1102,6 +1101,8 @@ jobs:
             make_split "$IOS_GREP_HEAVY_4" testspec-heavy-4.yml
             make_split "$IOS_GREP_HEAVY_5" testspec-heavy-5.yml
             make_split "$IOS_GREP_HEAVY_6" testspec-heavy-6.yml
+            make_split "$IOS_GREP_HEAVY_7" testspec-heavy-7.yml
+            make_split "$IOS_GREP_HEAVY_8" testspec-heavy-8.yml
             make_split "$IOS_GREP_LIGHT_A" testspec-light-a.yml
             make_split "$IOS_GREP_LIGHT_B" testspec-light-b.yml
 
@@ -1121,6 +1122,10 @@ jobs:
             echo "test_spec_arn_7=$SPEC_ARN_LA" >> $GITHUB_OUTPUT
             SPEC_ARN_LB=$(upload_spec testspec-light-b.yml "iOS-LightB")
             echo "test_spec_arn_8=$SPEC_ARN_LB" >> $GITHUB_OUTPUT
+            SPEC_ARN_H7=$(upload_spec testspec-heavy-7.yml "iOS-Heavy7")
+            echo "test_spec_arn_9=$SPEC_ARN_H7" >> $GITHUB_OUTPUT
+            SPEC_ARN_H8=$(upload_spec testspec-heavy-8.yml "iOS-Heavy8")
+            echo "test_spec_arn_10=$SPEC_ARN_H8" >> $GITHUB_OUTPUT
           fi
 
       - name: Schedule Device Farm Test Run
@@ -1177,8 +1182,10 @@ jobs:
             TEST_SPEC_ARN_6="${{ steps.upload_test_spec.outputs.test_spec_arn_6 }}"
             TEST_SPEC_ARN_7="${{ steps.upload_test_spec.outputs.test_spec_arn_7 }}"
             TEST_SPEC_ARN_8="${{ steps.upload_test_spec.outputs.test_spec_arn_8 }}"
+            TEST_SPEC_ARN_9="${{ steps.upload_test_spec.outputs.test_spec_arn_9 }}"
+            TEST_SPEC_ARN_10="${{ steps.upload_test_spec.outputs.test_spec_arn_10 }}"
 
-            echo "🚀 Scheduling 8 iOS runs (each runs on ALL devices in pool)..."
+            echo "🚀 Scheduling 10 iOS runs (each runs on ALL devices in pool)..."
             echo "Device Pool ARN: $POOL_ARN"
 
             RUN_ARN_1=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy1-Finetuning" "$TEST_SPEC_ARN_1")
@@ -1205,6 +1212,12 @@ jobs:
             RUN_ARN_8=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-LightB" "$TEST_SPEC_ARN_8")
             echo "✅ LightB scheduled: $RUN_ARN_8"
 
+            RUN_ARN_9=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy7-Gemma4" "$TEST_SPEC_ARN_9")
+            echo "✅ Heavy7 (Gemma4) scheduled: $RUN_ARN_9"
+
+            RUN_ARN_10=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy8-OcrPaddle" "$TEST_SPEC_ARN_10")
+            echo "✅ Heavy8 (OcrPaddle) scheduled: $RUN_ARN_10"
+
             echo "run_arn_1=$RUN_ARN_1" >> $GITHUB_OUTPUT
             echo "run_arn_2=$RUN_ARN_2" >> $GITHUB_OUTPUT
             echo "run_arn_3=$RUN_ARN_3" >> $GITHUB_OUTPUT
@@ -1213,7 +1226,9 @@ jobs:
             echo "run_arn_6=$RUN_ARN_6" >> $GITHUB_OUTPUT
             echo "run_arn_7=$RUN_ARN_7" >> $GITHUB_OUTPUT
             echo "run_arn_8=$RUN_ARN_8" >> $GITHUB_OUTPUT
-            echo "run_count=8" >> $GITHUB_OUTPUT
+            echo "run_arn_9=$RUN_ARN_9" >> $GITHUB_OUTPUT
+            echo "run_arn_10=$RUN_ARN_10" >> $GITHUB_OUTPUT
+            echo "run_count=10" >> $GITHUB_OUTPUT
           fi
 
           echo "All runs scheduled."
@@ -1250,6 +1265,8 @@ jobs:
           RUN_ARN_6="${{ steps.schedule_run.outputs.run_arn_6 }}"
           RUN_ARN_7="${{ steps.schedule_run.outputs.run_arn_7 }}"
           RUN_ARN_8="${{ steps.schedule_run.outputs.run_arn_8 }}"
+          RUN_ARN_9="${{ steps.schedule_run.outputs.run_arn_9 }}"
+          RUN_ARN_10="${{ steps.schedule_run.outputs.run_arn_10 }}"
           RUN_COUNT="${{ steps.schedule_run.outputs.run_count }}"
 
           echo "📊 Monitoring $RUN_COUNT Device Farm run(s)..."
@@ -1300,9 +1317,9 @@ jobs:
           done
 
           RUN_ARNS=("$RUN_ARN_1")
-          for i in 2 3 4 5 6 7 8; do
+          for i in $(seq 2 "$RUN_COUNT"); do
             eval "arn=\$RUN_ARN_$i"
-            if [ "$RUN_COUNT" -ge "$i" ] && [ -n "$arn" ]; then
+            if [ -n "$arn" ]; then
               RUN_ARNS+=("$arn")
             fi
           done
@@ -1452,15 +1469,17 @@ jobs:
           RUN_ARN_6="${{ steps.schedule_run.outputs.run_arn_6 }}"
           RUN_ARN_7="${{ steps.schedule_run.outputs.run_arn_7 }}"
           RUN_ARN_8="${{ steps.schedule_run.outputs.run_arn_8 }}"
+          RUN_ARN_9="${{ steps.schedule_run.outputs.run_arn_9 }}"
+          RUN_ARN_10="${{ steps.schedule_run.outputs.run_arn_10 }}"
           RUN_COUNT="${{ steps.schedule_run.outputs.run_count }}"
           LOG_DIR="devicefarm-logs/${{ matrix.platform }}"
           PLATFORM="${{ matrix.platform }}"
           mkdir -p "$LOG_DIR"
 
           RUN_ARNS=("$RUN_ARN_1")
-          for i in 2 3 4 5 6 7 8; do
+          for i in $(seq 2 "$RUN_COUNT"); do
             eval "arn=\$RUN_ARN_$i"
-            if [ "$RUN_COUNT" -ge "$i" ] && [ -n "$arn" ]; then
+            if [ -n "$arn" ]; then
               RUN_ARNS+=("$arn")
             fi
           done

@@ -1,8 +1,12 @@
 ---
-title: SDK Release Notes — v0.9.0
+title: SDK Release Notes — v0.9.1
 description: QVAC SDK release notes
 schemaType: TechArticle
 ---
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.9.1
+
+Patch release with a minor documentation fix to the SDK README quickstart example — no API, behavioral, or model changes.
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.9.0
 
@@ -10,7 +14,7 @@ This release significantly expands the SDK's capabilities with finetuning suppor
 
 ## Breaking Changes
 
-### @qvac/sdk
+### @qvac/sdk (v0.9.0)
 
 ### `ping()` Replaced by `heartbeat()`
 
@@ -39,7 +43,7 @@ await heartbeat({
 
 ## Features
 
-### @qvac/sdk
+### @qvac/sdk (v0.9.0)
 
 ### Finetuning
 
@@ -165,7 +169,7 @@ const { embedding, stats } = await embed({ modelId, text: "hello" });
 console.log(stats?.backendDevice); // "cpu" | "gpu"
 ```
 
-### @qvac/sdk
+### @qvac/sdk (v0.9.0)
 
 - **CLD2 language detection** is now integrated into the SDK for automatic language identification.
 - **OCR plugin updated** to work with `@qvac/ocr-onnx@0.4.0`.
@@ -173,7 +177,7 @@ console.log(stats?.backendDevice); // "cpu" | "gpu"
 
 ## Bug Fixes
 
-### @qvac/sdk
+### @qvac/sdk (v0.9.0)
 
 - **KV cache preserved across tool-call round-trips** — multi-turn tool-calling completions no longer lose context between rounds.
 - **KV cache save race condition** fixed in tool-calling completions — concurrent saves no longer corrupt the cache.
@@ -209,3 +213,9 @@ Model registry updated: 312 → 653 (+341). See [model changes](./changelog/0.9.
 - Bumped `bare-crypto` and `@qvac/rag` for runtime stability.
 - Renamed `@tetherto` npm references to `@qvac` namespace across READMEs.
 - Improved test infrastructure with SDK test bootstrap and CI model caching.
+
+## Documentation
+
+### @qvac/sdk (v0.9.1)
+
+- Remove trailing comma in quickstart import example.

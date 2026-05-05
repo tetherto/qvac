@@ -213,16 +213,16 @@ if (isMobile) {
   for (let gpuIdx = 0; gpuIdx < MAX_GPU_DEVICE_PROBES; gpuIdx++) {
     test(`Pivot translation [GPU device ${gpuIdx}] - Spanish → English → Italian`, { timeout: PIVOT_TIMEOUT }, async function (t) {
       const devices = await discoverGpuDevices()
-      const device = devices.find(d => d.index === gpuIdx)
+      const device = devices[gpuIdx]
 
       if (!device) {
-        t.comment(`[GPU:${gpuIdx}] No GPU device at index ${gpuIdx} — skipping`)
+        t.comment(`[GPU:${gpuIdx}] No unique physical GPU at slot ${gpuIdx} — skipping`)
         t.pass(`[GPU:${gpuIdx}] Skipped (device not present)`)
         return
       }
 
-      const label = `[GPU:${gpuIdx} ${device.name}]`
-      await runEsEnItPivotTest(t, label, true, gpuIdx)
+      const label = `[GPU:${device.index} ${device.name}]`
+      await runEsEnItPivotTest(t, label, true, device.index)
     })
   }
 }
@@ -582,16 +582,16 @@ if (isMobile) {
   for (let gpuIdx = 0; gpuIdx < MAX_GPU_DEVICE_PROBES; gpuIdx++) {
     test(`Pivot translation [GPU device ${gpuIdx}] - French → English → Spanish`, { timeout: PIVOT_TIMEOUT }, async function (t) {
       const devices = await discoverGpuDevices()
-      const device = devices.find(d => d.index === gpuIdx)
+      const device = devices[gpuIdx]
 
       if (!device) {
-        t.comment(`[GPU:${gpuIdx}] No GPU device at index ${gpuIdx} — skipping`)
+        t.comment(`[GPU:${gpuIdx}] No unique physical GPU at slot ${gpuIdx} — skipping`)
         t.pass(`[GPU:${gpuIdx}] Skipped (device not present)`)
         return
       }
 
-      const label = `[GPU:${gpuIdx} ${device.name}]`
-      await runFrEnEsPivotTest(t, label, true, gpuIdx)
+      const label = `[GPU:${device.index} ${device.name}]`
+      await runFrEnEsPivotTest(t, label, true, device.index)
     })
   }
 }
