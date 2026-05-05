@@ -12,8 +12,13 @@
 // worktree, which may contain untracked build artifacts from /pr-test.
 
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, relative } from "node:path";
+import {
+  existsSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+} from "node:fs";
+import { basename, dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { parsePRUrl } from "./worktree.mjs";
@@ -36,6 +41,50 @@ const SDK_POD_PACKAGE_PATHS = new Set([
 ]);
 
 const TEST_STATUS = new Set(["A", "M", "R"]);
+
+const TOKEN_STOP_WORDS = new Set([
+  "packages",
+  "package",
+  "src",
+  "lib",
+  "server",
+  "client",
+  "tests",
+  "test",
+  "shared",
+  "executor",
+  "executors",
+  "index",
+  "types",
+  "utils",
+]);
+
+const TOPIC_ALIASES = new Map([
+  ["whisper", "transcription"],
+  ["parakeet", "transcription"],
+  ["transcribe", "transcription"],
+  ["transcription", "transcription"],
+  ["tool", "tools"],
+  ["tools", "tools"],
+  ["harmony", "tools"],
+  ["function", "tools"],
+  ["completion", "completion"],
+  ["translate", "translation"],
+  ["translation", "translation"],
+  ["bergamot", "bergamot"],
+  ["embedding", "embedding"],
+  ["embed", "embedding"],
+  ["diffusion", "diffusion"],
+  ["tts", "tts"],
+  ["ocr", "ocr"],
+  ["rag", "rag"],
+  ["cache", "cache"],
+  ["config", "config"],
+  ["registry", "registry"],
+  ["download", "download"],
+  ["logging", "logging"],
+  ["finetune", "finetune"],
+]);
 
 function usage() {
   throw new Error(
@@ -98,7 +147,14 @@ function ensurePatch({ owner, repo, num, patchPath }) {
   if (existsSync(path)) {
     return { path, fetched: false };
   }
-  const raw = gh(["pr", "diff", String(num), "--repo", `${owner}/${repo}`, "--patch"]);
+  const raw = gh([
+    "pr",
+    "diff",
+    String(num),
+    "--repo",
+    `${owner}/${repo}`,
+    "--patch",
+  ]);
   writeFileSync(path, raw.endsWith("\n") ? raw : `${raw}\n`);
   return { path, fetched: true };
 }
@@ -188,9 +244,17 @@ function readPackageJson(root, packagePath) {
   return readJsonFile(path);
 }
 
-function packageManager(root, packagePath) {
-  const dir = join(root, packagePath);
-  if (existsSync(join(dir, "bun.lock")) || existsSync(join(dir, "bun.lockb"))) {
+function packageManager(packagePath, packageJson) {
+  if (packagePath === "packages/sdk") return "bun";
+  if (typeof packageJson.packageManager === "string") {
+    if (packageJson.packageManager.startsWith("bun")) return "bun";
+    if (packageJson.packageManager.startsWith("npm")) return "npm";
+  }
+  const scripts = packageJson.scripts || {};
+  if (
+    typeof scripts.build === "string" &&
+    /\bbun\s+run\b/.test(scripts.build)
+  ) {
     return "bun";
   }
   return "npm";
@@ -201,8 +265,8 @@ function commandForScript(manager, script) {
   return `npm run ${script}`;
 }
 
-function discoverCommands(root, packagePath, packageJson) {
-  const manager = packageManager(root, packagePath);
+function discoverCommands(packagePath, packageJson) {
+  const manager = packageManager(packagePath, packageJson);
   const scripts = packageJson.scripts || {};
   const commands = {
     install: manager === "bun" ? "bun install" : "npm install",
@@ -248,7 +312,10 @@ function scoreTestScript(name) {
 
 function classifyPackage(packagePath, packageJson) {
   if (packagePath === "packages/sdk") return "sdk-pod";
-  if (packageJson.addon === true || packagePath.startsWith("packages/qvac-lib-infer-")) {
+  if (
+    packageJson.addon === true ||
+    packagePath.startsWith("packages/qvac-lib-infer-")
+  ) {
     return "addon";
   }
   if (SDK_POD_PACKAGE_PATHS.has(packagePath)) return "sdk-pod";
@@ -257,6 +324,13 @@ function classifyPackage(packagePath, packageJson) {
 
 function isExamplePath(packagePath, filePath) {
   return filePath.startsWith(`${packagePath}/examples/`);
+}
+
+function isRunnableExamplePath(filePath) {
+  const name = basename(filePath);
+  if (name === "shared.ts" || name === "shared.js") return false;
+  if (name === "utils.ts" || name === "utils.js") return false;
+  return filePath.endsWith(".ts") || filePath.endsWith(".js");
 }
 
 function isSdkE2eTestPath(filePath) {
@@ -271,6 +345,203 @@ function isGenericTestPath(packagePath, filePath) {
     filePath.startsWith(`${packagePath}/test/`) ||
     filePath.startsWith(`${packagePath}/tests/`)
   );
+}
+
+function exampleCommand(packagePath, filePath) {
+  const localPath = filePath.slice(`${packagePath}/`.length);
+  if (packagePath === "packages/sdk") {
+    return {
+      cwd: packagePath,
+      command: `bun run ${localPath}`,
+      reason: "Changed SDK example",
+    };
+  }
+  if (filePath.endsWith(".js")) {
+    return {
+      cwd: packagePath,
+      command: `bare ${localPath}`,
+      reason: "Changed Bare/Node example",
+    };
+  }
+  return {
+    cwd: packagePath,
+    command: `node ${localPath}`,
+    reason: "Changed example",
+  };
+}
+
+function walkFiles(root, prefix = "") {
+  if (!existsSync(root)) return [];
+  const out = [];
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    if (
+      entry.name === "node_modules" ||
+      entry.name === "dist" ||
+      entry.name === "build"
+    ) {
+      continue;
+    }
+    const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+    const abs = join(root, entry.name);
+    if (entry.isDirectory()) {
+      out.push(...walkFiles(abs, rel));
+    } else if (entry.isFile()) {
+      out.push(rel);
+    }
+  }
+  return out;
+}
+
+function tokenize(value) {
+  return String(value)
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(
+      (token) => token && token.length > 1 && !TOKEN_STOP_WORDS.has(token),
+    )
+    .map((token) => TOPIC_ALIASES.get(token) || token);
+}
+
+function topicTokens(changedPaths) {
+  const tokens = new Set();
+  for (const path of changedPaths) {
+    for (const token of tokenize(path)) {
+      tokens.add(token);
+    }
+  }
+  return tokens;
+}
+
+function scoreRelatedPath(path, topics) {
+  const tokens = new Set(tokenize(path));
+  let score = 0;
+  for (const token of topics) {
+    if (tokens.has(token)) score += 2;
+  }
+  return score;
+}
+
+function exampleTraits(absPath) {
+  let text = "";
+  try {
+    text = readFileSync(absPath, "utf-8");
+  } catch {
+    // Unknown content should not block discovery; mark it as lower confidence.
+  }
+  const requiresInput =
+    /\bprocess\.argv\b|\breadline\b|\bprompt\b|\bstdin\b|\bmic(rophone)?\b/i.test(
+      text,
+    );
+  const outputPattern = new RegExp(
+    [
+      "\\bwriteFile(Sync)?\\b",
+      "\\bcreateWriteStream\\b",
+      "\\bappendFile(Sync)?\\b",
+      "\\boutput(_\\d+)?\\.(png|jpg|jpeg|wav|json|txt)\\b",
+      "\\bsave[A-Z]?\\w*\\(",
+    ].join("|"),
+    "i",
+  );
+  const writesOutput = outputPattern.test(text);
+  const notes = [];
+  if (requiresInput) notes.push("may require input/device");
+  if (writesOutput) notes.push("may write output files");
+  return {
+    safeToRun: !requiresInput && !writesOutput,
+    requiresInput,
+    writesOutput,
+    notes,
+  };
+}
+
+function relatedSdkExamples({
+  root,
+  packagePath,
+  changedPaths,
+  changedExamples,
+  worktreePath,
+}) {
+  const examplesRoot = join(root, packagePath, "examples");
+  const topics = topicTokens(changedPaths);
+  const changed = new Set(changedExamples);
+  const changedExampleGroups = new Set(
+    changedExamples
+      .map((path) => path.slice(`${packagePath}/examples/`.length).split("/")[0])
+      .filter(Boolean),
+  );
+  const candidates = walkFiles(examplesRoot)
+    .map((rel) => `${packagePath}/examples/${rel}`)
+    .filter(isRunnableExamplePath)
+    .filter((path) => !changed.has(path))
+    .filter((path) => {
+      if (changedExampleGroups.size === 0) return true;
+      const group = path.slice(`${packagePath}/examples/`.length).split("/")[0];
+      return changedExampleGroups.has(group);
+    })
+    .map((path) => {
+      const score = scoreRelatedPath(path, topics);
+      const traits = exampleTraits(join(root, path));
+      const example = exampleCommand(packagePath, path);
+      return {
+        path,
+        ...example,
+        cwd: commandCwd(worktreePath, example.cwd),
+        reason: `Related SDK example (score ${score})`,
+        score,
+        ...traits,
+      };
+    })
+    .filter((entry) => entry.score > 0)
+    .sort(
+      (a, b) =>
+        Number(b.safeToRun) - Number(a.safeToRun) ||
+        b.score - a.score ||
+        a.path.localeCompare(b.path),
+    );
+  return candidates.slice(0, 5);
+}
+
+function changedExampleGroups(packagePath, changedExamples) {
+  return new Set(
+    changedExamples
+      .map((path) => path.slice(`${packagePath}/examples/`.length).split("/")[0])
+      .filter(Boolean),
+  );
+}
+
+function relatedSdkTests({
+  root,
+  packagePath,
+  changedPaths,
+  changedTests,
+  changedExamples,
+}) {
+  const testsRoot = join(root, packagePath, "tests-qvac", "tests");
+  const topics = topicTokens(changedPaths);
+  const changed = new Set(changedTests);
+  const exampleGroups = changedExampleGroups(packagePath, changedExamples);
+  const candidates = walkFiles(testsRoot)
+    .filter((rel) => rel.endsWith("-tests.ts"))
+    .map((rel) => `${packagePath}/tests-qvac/tests/${rel}`)
+    .filter((path) => !changed.has(path))
+    .map((path) => {
+      const filter = basename(path).replace(/-tests\.ts$/, "");
+      let score = scoreRelatedPath(path, topics);
+      for (const group of exampleGroups) {
+        if (filter === group || filter.includes(group)) score += 10;
+      }
+      return {
+        path,
+        filter,
+        reason: `Related SDK e2e filter (score ${score})`,
+        score,
+      };
+    })
+    .filter((entry) => entry.score > 0)
+    .sort(
+      (a, b) => b.score - a.score || a.path.localeCompare(b.path),
+    );
+  return candidates.slice(0, 5);
 }
 
 function sdkE2eSetup(touchedPaths) {
@@ -353,7 +624,9 @@ function buildManifest({
     const packageJson = readPackageJson(worktreePath || root, packagePath);
     if (!packageJson) continue;
 
-    const packageFiles = fileStatuses.filter((f) => f.path.startsWith(`${packagePath}/`));
+    const packageFiles = fileStatuses.filter((f) =>
+      f.path.startsWith(`${packagePath}/`),
+    );
     const changedPaths = packageFiles
       .filter((f) => TEST_STATUS.has(f.status))
       .map((f) => f.path)
@@ -361,6 +634,18 @@ function buildManifest({
     const addedOrModifiedExamples = changedPaths
       .filter((path) => isExamplePath(packagePath, path))
       .sort();
+    const exampleCommands = addedOrModifiedExamples
+      .filter(isRunnableExamplePath)
+      .map((path) => {
+        const example = exampleCommand(packagePath, path);
+        const traits = exampleTraits(join(worktreePath || root, path));
+        return {
+          path,
+          ...example,
+          cwd: commandCwd(worktreePath, example.cwd),
+          ...traits,
+        };
+      });
 
     let addedOrModifiedTests = [];
     if (packagePath === "packages/sdk") {
@@ -371,9 +656,29 @@ function buildManifest({
         .sort();
     }
 
-    const commands = discoverCommands(worktreePath || root, packagePath, packageJson);
+    const commands = discoverCommands(packagePath, packageJson);
     const kind = classifyPackage(packagePath, packageJson);
     const recommendation = recommendPackage({ packagePath, commands });
+    const relatedExampleCommands =
+      packagePath === "packages/sdk"
+        ? relatedSdkExamples({
+            root: worktreePath || root,
+            packagePath,
+            changedPaths,
+            changedExamples: addedOrModifiedExamples,
+            worktreePath,
+          })
+        : [];
+    const relatedTests =
+      packagePath === "packages/sdk"
+        ? relatedSdkTests({
+            root: worktreePath || root,
+            packagePath,
+            changedPaths,
+            changedTests: addedOrModifiedTests,
+            changedExamples: addedOrModifiedExamples,
+          })
+        : [];
     const packageInfo = {
       path: packagePath,
       cwd: commandCwd(worktreePath, packagePath),
@@ -384,9 +689,16 @@ function buildManifest({
       scripts: packageJson.scripts || {},
       commands,
       addedOrModifiedExamples,
+      exampleCommands,
+      relatedExampleCommands,
       addedOrModifiedTests,
+      relatedTests,
       hasExamples: addedOrModifiedExamples.length > 0,
-      hasTests: addedOrModifiedTests.length > 0 || commands.testCandidates.length > 0,
+      hasRelatedExamples: relatedExampleCommands.length > 0,
+      hasTests:
+        addedOrModifiedTests.length > 0 ||
+        relatedTests.length > 0 ||
+        commands.testCandidates.length > 0,
     };
 
     if (packagePath === "packages/sdk") {
