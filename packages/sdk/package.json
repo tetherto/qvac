@@ -173,7 +173,7 @@
   },
   "dependencies": {
     "@qvac/decoder-audio": "^0.3.7",
-    "@qvac/diffusion-cpp": "^0.3.0",
+    "@qvac/diffusion-cpp": "^0.5.0",
     "@qvac/embed-llamacpp": "^0.14.0",
     "@qvac/error": "^0.1.1",
     "@qvac/langdetect-text": "^0.1.2",
