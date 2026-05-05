@@ -41,6 +41,7 @@ import {
   SD_V2_1_1B_Q8_0,
 } from "@qvac/sdk";
 import { ResourceManager } from "../shared/resource-manager.js";
+import { resolveBundledAssetUri } from "./asset-uri.js";
 import { ModelLoadingExecutor } from "../shared/executors/model-loading-executor.js";
 import { CompletionExecutor } from "../shared/executors/completion-executor.js";
 import { EmbeddingExecutor } from "../shared/executors/embedding-executor.js";
@@ -214,25 +215,21 @@ resources.define("afriquegemma", {
   },
 });
 
-/** Resolve a bundled RN asset to a real file URI (chatterbox needs it at loadModel time). */
+/** Look up a bundled audio file by name and resolve it to a POSIX path. */
 async function resolveBundledAudioUri(filename: string): Promise<string | undefined> {
   // @ts-ignore - assets.ts generated at consumer build time (consumer root, 3 levels up from dist/tests/mobile/)
   const assets = await import("../../../assets");
   const assetModule = assets.audio?.[filename];
   if (!assetModule) {
-    console.warn(`[tts-chatterbox] reference audio not found in asset registry: ${filename}`);
+    console.warn(`[tts-chatterbox] reference audio not in registry: ${filename}`);
     return undefined;
   }
-
-  // @ts-ignore - expo-asset is a peer dependency
-  const { Asset } = await import("expo-asset");
-  const asset = Asset.fromModule(assetModule);
-  asset.downloaded = false;
-  await asset.downloadAsync();
-  let uri: string = asset.localUri || asset.uri;
-  if (!uri) return undefined;
-  if (uri.startsWith("file://")) uri = uri.substring(7);
-  return decodeURIComponent(uri);
+  try {
+    return await resolveBundledAssetUri(assetModule);
+  } catch (err) {
+    console.warn(`[tts-chatterbox] failed to resolve ${filename}:`, err);
+    return undefined;
+  }
 }
 
 resources.define("tts-chatterbox", {
