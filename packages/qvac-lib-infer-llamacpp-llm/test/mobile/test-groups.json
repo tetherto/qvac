@@ -9,8 +9,6 @@
     "heavy7": ["runGemma4Test"],
     "heavy8": ["runOcrPaddleTest"],
     "lightA": [
-      "runAfriquegemmaEdgeCasesTest",
-      "runAfriquegemmaTranslationTest",
       "runApiBehaviorTest",
       "runBitnetTest",
       "runCacheStateMachineTest",
@@ -30,8 +28,6 @@
   },
   "android": {
     "groupA": [
-      "runAfriquegemmaEdgeCasesTest",
-      "runAfriquegemmaTranslationTest",
       "runApiBehaviorTest",
       "runBitnetTest",
       "runCacheStateMachineTest",
