@@ -162,6 +162,12 @@ TEST(SdCtxHandlers_Upscaler, DefaultsAndConfigValuesMapCorrectly) {
   EXPECT_TRUE(cfg.upscalerDirect);
   EXPECT_TRUE(cfg.upscalerOffloadParamsToCpu);
   EXPECT_EQ(cfg.upscalerThreads, 6);
+
+  SdCtxConfig autoThreads;
+  applySdCtxHandlers(
+      autoThreads,
+      std::unordered_map<std::string, std::string>{{"upscaler_threads", "-1"}});
+  EXPECT_EQ(autoThreads.upscalerThreads, -1);
 }
 
 TEST(SdCtxHandlers_Upscaler, InvalidTileSizeThrows) {
@@ -172,6 +178,18 @@ TEST(SdCtxHandlers_Upscaler, InvalidTileSizeThrows) {
           std::unordered_map<std::string, std::string>{
               {"upscaler_tile_size", "0"}}),
       StatusError);
+}
+
+TEST(SdCtxHandlers_Upscaler, InvalidThreadCountsThrow) {
+  for (const auto* value : {"0", "-2", "1.5", "abc"}) {
+    SdCtxConfig cfg;
+    EXPECT_THROW(
+        applySdCtxHandlers(
+            cfg,
+            std::unordered_map<std::string, std::string>{
+                {"upscaler_threads", value}}),
+        StatusError);
+  }
 }
 
 TEST(

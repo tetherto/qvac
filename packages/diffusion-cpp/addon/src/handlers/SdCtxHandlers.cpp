@@ -1,5 +1,7 @@
 #include "SdCtxHandlers.hpp"
 
+#include <cstddef>
+
 #include <qvac-lib-inference-addon-cpp/Errors.hpp>
 
 #include "utils/LoggingMacros.hpp"
@@ -39,6 +41,25 @@ static int parsePositiveInt(const std::string& v, const std::string& key) {
         key + " must be a positive integer, got: '" + v + "'");
   }
   return parsed;
+}
+
+static int
+parseAutoOrPositiveInt(const std::string& v, const std::string& key) {
+  int parsed;
+  std::size_t parsedChars = 0;
+  try {
+    parsed = std::stoi(v, &parsedChars);
+  } catch (...) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        key + " must be -1 (auto) or a positive integer, got: '" + v + "'");
+  }
+  if (parsedChars == v.size() && (parsed == -1 || parsed > 0)) {
+    return parsed;
+  }
+  throw StatusError(
+      general_error::InvalidArgument,
+      key + " must be -1 (auto) or a positive integer, got: '" + v + "'");
 }
 
 static float parseFloat(const std::string& v, const std::string& key) {
@@ -273,7 +294,7 @@ const SdCtxHandlersMap SD_CTX_HANDLERS = {
 
     {"upscaler_threads",
      [](SdCtxConfig& c, const std::string& v) {
-       c.upscalerThreads = parseInt(v, "upscaler_threads");
+       c.upscalerThreads = parseAutoOrPositiveInt(v, "upscaler_threads");
      }},
 
     // -- Backend loading

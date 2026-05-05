@@ -24,6 +24,12 @@ void EsrganUpscaler::load() {
 }
 
 int EsrganUpscaler::resolveThreads() const {
+  if (config_.upscalerThreads == 0 || config_.upscalerThreads < -1) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "upscaler_threads must be -1 (auto) or a positive integer");
+  }
+
   int threads =
       config_.upscalerThreads > 0 ? config_.upscalerThreads : config_.nThreads;
   if (threads <= 0) {

@@ -14,17 +14,17 @@ void FreeDeleter::operator()(uint8_t* ptr) const noexcept { free(ptr); }
 
 std::vector<uint8_t> encodeToPng(const sd_image_t& img) {
   std::vector<uint8_t> out;
-  if (!img.data || img.width == 0 || img.height == 0 || img.channel == 0 ||
-      img.channel > 4) {
+  const auto [width, height, channel, data] = img;
+  if (!data || width == 0 || height == 0 || channel == 0 || channel > 4) {
     return out;
   }
-  if (img.width > static_cast<uint32_t>(std::numeric_limits<int>::max()) ||
-      img.height > static_cast<uint32_t>(std::numeric_limits<int>::max())) {
+  if (width > static_cast<uint32_t>(std::numeric_limits<int>::max()) ||
+      height > static_cast<uint32_t>(std::numeric_limits<int>::max())) {
     return out;
   }
 
   const uint64_t stride =
-      static_cast<uint64_t>(img.width) * static_cast<uint64_t>(img.channel);
+      static_cast<uint64_t>(width) * static_cast<uint64_t>(channel);
   if (stride > static_cast<uint64_t>(std::numeric_limits<int>::max())) {
     return out;
   }
@@ -39,10 +39,10 @@ std::vector<uint8_t> encodeToPng(const sd_image_t& img) {
   const int ok = stbi_write_png_to_func(
       writeCallback,
       &out,
-      static_cast<int>(img.width),
-      static_cast<int>(img.height),
-      static_cast<int>(img.channel),
-      img.data,
+      static_cast<int>(width),
+      static_cast<int>(height),
+      static_cast<int>(channel),
+      data,
       static_cast<int>(stride));
   if (ok == 0) {
     out.clear();

@@ -19,6 +19,8 @@ function assertAbsolute (key, value) {
 const LOG_METHODS = ['error', 'warn', 'info', 'debug']
 
 const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed'
+// Matches C++ int max: repeats are stored as int and used in native loop counters.
+const NATIVE_UPSCALE_REPEATS_MAX = 2147483647
 
 function normalizeUpscaleRepeats (options) {
   if (options == null) return 1
@@ -30,7 +32,7 @@ function normalizeUpscaleRepeats (options) {
   if (!Number.isInteger(repeats) || repeats <= 0) {
     throw new TypeError('upscale.repeats must be a positive integer')
   }
-  if (repeats > 2147483647) {
+  if (repeats > NATIVE_UPSCALE_REPEATS_MAX) {
     throw new RangeError('upscale.repeats must be a positive integer within the native int range')
   }
   return repeats
