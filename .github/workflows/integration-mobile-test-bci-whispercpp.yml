@@ -11,6 +11,11 @@ on:
         description: "Repository to checkout"
         type: string
         required: false
+      prebuild_package:
+        description: "NPM package to fetch prebuilds from (e.g. @qvac/bci-whispercpp@0.1.0). Leave empty to use artifacts from the current workflow run."
+        type: string
+        required: false
+        default: ""
       workdir:
         description: "Working directory (optional)"
         required: false
@@ -22,11 +27,11 @@ on:
         description: "Git ref (branch/tag/SHA) to test - defaults to current branch"
         type: string
         required: false
-      version:
-        description: "NPM package version to test (default: latest)"
+      prebuild_package:
+        description: "NPM package to fetch prebuilds from (e.g. @qvac/bci-whispercpp@0.1.0). Leave empty to fall back to @qvac/bci-whispercpp@latest."
         type: string
         required: false
-        default: latest
+        default: ""
       workdir:
         description: "Working directory (optional)"
         required: false
@@ -82,6 +87,36 @@ jobs:
           echo "Disk space after cleanup:"
           df -h
 
+      - name: Resolve prebuild source
+        id: resolve_prebuild
+        shell: bash
+        env:
+          INPUT_PREBUILD_PACKAGE: ${{ inputs.prebuild_package }}
+          EVENT_NAME: ${{ github.event_name }}
+          ADDON_NAME: ${{ env.ADDON_NAME }}
+        run: |
+          set -euo pipefail
+          # Decide whether to fetch prebuilds from the current workflow run's
+          # artifacts or from a published npm package.
+          # - If the caller (workflow_call from on-pr/on-merge, or a manual
+          #   dispatch with an empty value) didn't pass prebuild_package, AND
+          #   this run was reached via a parent event (push, pull_request*,
+          #   etc.), use artifacts.
+          # - If the user directly dispatched this workflow without a value,
+          #   default to ${ADDON_NAME}@latest from npm so a manual run still
+          #   has something to test.
+          # - Otherwise, honor whatever the caller passed.
+          resolved="$INPUT_PREBUILD_PACKAGE"
+          if [ -z "$resolved" ] && [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            resolved="${ADDON_NAME}@latest"
+          fi
+          echo "prebuild_package=$resolved" >> "$GITHUB_OUTPUT"
+          if [ -n "$resolved" ]; then
+            echo "Prebuild source: npm package '$resolved'"
+          else
+            echo "Prebuild source: workflow artifacts"
+          fi
+
       - name: Checkout addon repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -111,7 +146,7 @@ jobs:
           npm install -g @expo/cli@latest
 
       - name: Download Android prebuilds (from artifacts)
-        if: matrix.platform == 'Android' && github.event_name != 'workflow_dispatch'
+        if: matrix.platform == 'Android' && steps.resolve_prebuild.outputs.prebuild_package == ''
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           path: ${{ runner.temp }}/prebuilds-android-staging
@@ -119,7 +154,7 @@ jobs:
           merge-multiple: true
 
       - name: Move Android prebuilds from staging
-        if: matrix.platform == 'Android' && !inputs.package
+        if: matrix.platform == 'Android' && steps.resolve_prebuild.outputs.prebuild_package == ''
         run: |
           mkdir -p addon/${{ inputs.workdir }}/prebuilds
           cp -r ${{ runner.temp }}/prebuilds-android-staging/* addon/${{ inputs.workdir }}/prebuilds/ 2>/dev/null || true
@@ -127,7 +162,7 @@ jobs:
         continue-on-error: true
 
       - name: Download iOS prebuilds (from artifacts)
-        if: matrix.platform == 'iOS' && github.event_name != 'workflow_dispatch'
+        if: matrix.platform == 'iOS' && steps.resolve_prebuild.outputs.prebuild_package == ''
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           path: ${{ runner.temp }}/prebuilds-ios-staging
@@ -135,22 +170,23 @@ jobs:
           merge-multiple: true
 
       - name: Move iOS prebuilds from staging
-        if: matrix.platform == 'iOS' && !inputs.package
+        if: matrix.platform == 'iOS' && steps.resolve_prebuild.outputs.prebuild_package == ''
         run: |
           mkdir -p addon/${{ inputs.workdir }}/prebuilds
           cp -r ${{ runner.temp }}/prebuilds-ios-staging/* addon/${{ inputs.workdir }}/prebuilds/ 2>/dev/null || true
         shell: bash
         continue-on-error: true
 
-      - name: Download prebuilds (from npm - workflow_dispatch)
-        if: github.event_name == 'workflow_dispatch'
+      - name: Download prebuilds (from npm package)
+        if: steps.resolve_prebuild.outputs.prebuild_package != ''
         working-directory: addon/${{ inputs.workdir }}
+        env:
+          PREBUILD_PACKAGE: ${{ steps.resolve_prebuild.outputs.prebuild_package }}
         run: |
-          VERSION="${{ inputs.version || 'latest' }}"
-          echo "📦 Downloading ${{ env.ADDON_NAME }}@$VERSION from npm for manual trigger..."
+          echo "📦 Downloading $PREBUILD_PACKAGE from npm..."
 
-          if ! npm pack ${{ env.ADDON_NAME }}@$VERSION; then
-            echo "ERROR: Failed to download version $VERSION from npm"
+          if ! npm pack "$PREBUILD_PACKAGE"; then
+            echo "ERROR: Failed to download $PREBUILD_PACKAGE from npm"
             echo "Please check that the version exists at https://www.npmjs.com/package/${{ env.ADDON_NAME }}"
             exit 1
           fi
