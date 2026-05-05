@@ -1,6 +1,6 @@
 ---
 name: pr-test
-description: Plan and run local PR validation for tetherto/qvac PRs. Reuses the shared PR worktree, discovers touched packages and package.json scripts, recommends a test tier, prints manual SDK e2e commands with fixed runId/report-dir, and analyzes results. Use when testing a PR or invoking /pr-test.
+description: Plan and run local PR validation for tetherto/qvac PRs. Reuses the shared PR worktree, discovers touched packages and package.json scripts, recommends a test tier, and analyzes results. Use when testing a PR or invoking /pr-test.
 disable-model-invocation: true
 ---
 
@@ -8,11 +8,14 @@ disable-model-invocation: true
 
 Manual-trigger local PR validation for any GitHub PR in `tetherto/qvac`.
 
-The skill prepares an isolated PR worktree, discovers changed packages and test options, recommends a tier, and then:
+The skill prepares an isolated PR worktree, discovers changed packages and test options, recommends a tier, and then runs or proposes the selected validation steps according to package type.
 
-1. Executes safe non-`tests-qvac` setup and changed examples inside the PR worktree.
-2. Executes non-SDK-e2e commands after user approval.
-3. Prints SDK `tests-qvac` setup and e2e commands for the user to run manually with a fixed `runId` and `--report-dir`, then analyzes reports/logs after the user reports completion.
+High-level flow:
+
+1. Discover package-local setup, examples, tests, and related validation targets from committed PR state.
+2. Present a recommended tier plus any related examples/tests as part of the same proposal.
+3. Execute agent-owned steps inside the isolated PR worktree when safe.
+4. For validation that must be user-run, print exact commands and inspect reports/logs afterward.
 
 ## When to use this skill
 
@@ -48,14 +51,6 @@ The shared script `worktree-prepare.mjs` is allowed to operate only inside `~/.c
 The agent may run non-e2e package manager/build/test commands only inside the prepared worktree path printed by `worktree-prepare.mjs`.
 
 For every selected tier, agent-owned package validation must prepare the touched package root before examples or non-e2e tests run. If discovery reports `commands.install` or `commands.build`, include those setup commands first in the proposed command plan and execute them first from the package `cwd`.
-
-SDK changed examples may be agent-run inside the prepared worktree after the SDK package root has been installed and built. SDK `tests-qvac` setup and e2e commands are manual/user-run:
-
-- `npm run install:build`
-- `npm run install:build:full`
-- `npx qvac-test run:local:*`
-
-Do not execute those agentically. `tests-qvac` setup needs npm/GitHub Packages auth that is not available in the agent context, and SDK e2e commands are device/broker-dependent and may run for a long time.
 
 ## Workflow
 
@@ -162,6 +157,18 @@ Use `AskQuestion` for tier selection. Ask for `android` or `ios` only when the r
 The tier prompt MUST include `T1` whenever `exampleCommands` or `relatedExampleCommands` is non-empty, even when the recommended tier is higher. Do not hide lower additive tiers. If examples are absent, show T1 as `not applicable` or omit it with an explicit "no changed or related examples" note in the plan.
 
 Before executing examples, show both changed and related example commands. Related examples are proposed, not mandatory; use `AskQuestion` to let the user choose which related examples to include when any are present.
+
+## SDK-specific handling
+
+SDK changed examples may be agent-run inside the prepared worktree after the SDK package root has been installed and built.
+
+SDK `tests-qvac` setup and e2e commands are manual/user-run:
+
+- `npm run install:build`
+- `npm run install:build:full`
+- `npx qvac-test run:local:*`
+
+Do not execute those agentically. `tests-qvac` setup needs npm/GitHub Packages auth that is not available in the agent context, and SDK e2e commands are device/broker-dependent and may run for a long time.
 
 ## SDK e2e setup
 
