@@ -1,7 +1,6 @@
 'use strict'
 
 const fs = require('bare-fs')
-const path = require('bare-path')
 const test = require('brittle')
 const os = require('bare-os')
 const BCIWhispercpp = require('../../index')
