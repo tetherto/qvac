@@ -538,8 +538,7 @@ export const completionResponseFormatText: TestDefinition = {
     history: [{ role: "user", content: "Reply with only the word APPLE." }],
     stream: false,
     responseFormat: { type: "text" },
-    temperature: 0,
-    seed: 42,
+    generationParams: { temp: 0, seed: 42 },
   },
   expectation: { validation: "contains-any", contains: ["APPLE", "apple"] },
   metadata: { category: "completion", dependency: "llm", estimatedDurationMs: 10000 },
@@ -554,11 +553,24 @@ export const completionResponseFormatJsonObject: TestDefinition = {
     ],
     stream: false,
     responseFormat: { type: "json_object" },
-    temperature: 0,
-    maxTokens: 64,
-    seed: 42,
+    generationParams: { temp: 0, seed: 42, predict: 64 },
   },
-  expectation: { validation: "function", fn: () => true },
+  expectation: { validation: "type", expectedType: "string" },
+  metadata: { category: "completion", dependency: "llm", estimatedDurationMs: 15000 },
+};
+
+export const completionResponseFormatJsonObjectStreaming: TestDefinition = {
+  testId: "completion-response-format-json-object-streaming",
+  params: {
+    history: [
+      { role: "system", content: "Reply with a single valid JSON object only. No markdown, no prose." },
+      { role: "user", content: "Return an object with a single key 'ok' set to the boolean true." },
+    ],
+    stream: true,
+    responseFormat: { type: "json_object" },
+    generationParams: { temp: 0, seed: 42, predict: 64 },
+  },
+  expectation: { validation: "type", expectedType: "string" },
   metadata: { category: "completion", dependency: "llm", estimatedDurationMs: 15000 },
 };
 
@@ -589,11 +601,9 @@ export const completionResponseFormatJsonSchema: TestDefinition = {
         },
       },
     },
-    temperature: 0,
-    maxTokens: 128,
-    seed: 42,
+    generationParams: { temp: 0, seed: 42, predict: 128 },
   },
-  expectation: { validation: "function", fn: () => true },
+  expectation: { validation: "type", expectedType: "string" },
   metadata: { category: "completion", dependency: "llm", estimatedDurationMs: 20000 },
 };
 
@@ -615,9 +625,10 @@ export const completionResponseFormatWithToolsRejected: TestDefinition = {
         },
       },
     ],
+    generationParams: { temp: 0, seed: 42, predict: 64 },
   },
   expectation: { validation: "throws-error", errorContains: "responseFormat" },
-  metadata: { category: "completion", dependency: "llm", estimatedDurationMs: 5000 },
+  metadata: { category: "completion", dependency: "none", estimatedDurationMs: 5000 },
 };
 
 export const completionTests = [
@@ -663,6 +674,7 @@ export const completionTests = [
   completionSentenceCompletion,
   completionResponseFormatText,
   completionResponseFormatJsonObject,
+  completionResponseFormatJsonObjectStreaming,
   completionResponseFormatJsonSchema,
   completionResponseFormatWithToolsRejected,
 ];

@@ -20,11 +20,23 @@ type ResponseFormat =
       };
     };
 
+interface GenerationParams {
+  temp?: number;
+  top_p?: number;
+  top_k?: number;
+  predict?: number;
+  seed?: number;
+  frequency_penalty?: number;
+  presence_penalty?: number;
+  repeat_penalty?: number;
+}
+
 interface CompletionTestParams {
   history: ReadonlyArray<{ role: string; content: string }>;
   stream?: boolean;
   responseFormat?: ResponseFormat;
   tools?: ReadonlyArray<Record<string, unknown>>;
+  generationParams?: GenerationParams;
   temperature?: number;
   topP?: number;
   maxTokens?: number;
@@ -43,7 +55,10 @@ export class CompletionExecutor extends AbstractModelExecutor<
 
   protected handlers = Object.fromEntries(
     completionTests.map((test) => {
-      if (test.testId === "completion-response-format-json-object") {
+      if (
+        test.testId === "completion-response-format-json-object" ||
+        test.testId === "completion-response-format-json-object-streaming"
+      ) {
         return [test.testId, this.responseFormatJsonObject.bind(this)];
       }
       if (test.testId === "completion-response-format-json-schema") {
@@ -114,7 +129,12 @@ export class CompletionExecutor extends AbstractModelExecutor<
     expectation: Expectation,
   ): Promise<TestResult> {
     try {
-      await this.runCompletion(params);
+      const run = completion({
+        modelId: "schema-refinement-placeholder",
+        ...params,
+        stream: params.stream ?? false,
+      } as CompletionFnParams);
+      await run.text;
       return {
         passed: false,
         output:
