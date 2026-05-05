@@ -53,7 +53,11 @@ export class MultiGpuExecutor extends AbstractModelExecutor<typeof multiGpuTests
     });
 
     try {
-      const text = await completion({ modelId, history: p.history, stream: false }).text;
+      const result = completion({ modelId, history: p.history, stream: false });
+      const [text, stats] = await Promise.all([result.text, result.stats]);
+      if (stats?.backendDevice !== "gpu") {
+        return { passed: false, output: `Expected backendDevice=gpu, got ${stats?.backendDevice}` };
+      }
       return ValidationHelpers.validate(text, expectation as Expectation);
     } finally {
       await unloadModel({ modelId, clearStorage: false });
@@ -79,7 +83,10 @@ export class MultiGpuExecutor extends AbstractModelExecutor<typeof multiGpuTests
     });
 
     try {
-      const { embedding } = await embed({ modelId, text: p.text });
+      const { embedding, stats } = await embed({ modelId, text: p.text });
+      if (stats?.backendDevice !== "gpu") {
+        return { passed: false, output: `Expected backendDevice=gpu, got ${stats?.backendDevice}` };
+      }
       return ValidationHelpers.validate(embedding, expectation as Expectation);
     } finally {
       await unloadModel({ modelId, clearStorage: false });
