@@ -5,6 +5,7 @@ import {
   parseToolCalls,
   detectToolDialectFromName,
 } from "@/server/utils/tools";
+import { parseHarmonyFormat } from "@/server/utils/tools/parsers/harmony";
 const weatherTool: Tool = {
   type: "function",
   name: "weather",
@@ -482,4 +483,121 @@ test("parseToolCalls(dialect=hermes): Hermes wrap and bare JSON both parse, Pyth
   const pythonicText = `[get_weather(city="Lima")]`;
   const pythonicResult = parseToolCalls(pythonicText, pythonicTools, "hermes");
   t.is(pythonicResult.toolCalls.length, 0, "hermes chain does not pick up pythonic shape");
+});
+
+// Harmony dialect — GPT-OSS native tool-call frame format.
+test("parseToolCalls(dialect=harmony): single Harmony frame parses", (t) => {
+  const text = `<|channel|>commentary to=functions.get_weather <|constrain|>json<|message|>{"city":"Tokyo","country":"JP"}<|call|>`;
+  const { toolCalls, errors } = parseToolCalls(text, pythonicTools, "harmony");
+  t.is(errors.length, 0);
+  t.is(toolCalls.length, 1);
+  t.is(toolCalls[0]?.name, "get_weather");
+  t.alike(toolCalls[0]?.arguments, { city: "Tokyo", country: "JP" });
+});
+
+test("parseToolCalls(dialect=harmony): with surrounding analysis frame", (t) => {
+  const text =
+    `<|channel|>analysis<|message|>The user wants weather. I'll call get_weather.<|end|>` +
+    `<|channel|>commentary to=functions.get_weather <|constrain|>json<|message|>{"city":"Lima"}<|call|>`;
+  const { toolCalls, errors } = parseToolCalls(text, pythonicTools, "harmony");
+  t.is(errors.length, 0);
+  t.is(toolCalls.length, 1);
+  t.is(toolCalls[0]?.name, "get_weather");
+  t.alike(toolCalls[0]?.arguments, { city: "Lima" });
+});
+
+// `<|channel|>` alone (analysis/final frames) must not promote the parser
+// to `matched: true` — only `to=functions.` is uniquely Harmony.
+test("parseHarmonyFormat: <|channel|> alone (no to=functions.) returns matched: false", (t) => {
+  const text = `<|channel|>analysis<|message|>thinking only<|end|>`;
+  const result = parseHarmonyFormat(text, pythonicTools);
+  t.is(result.matched, false, "no to=functions. → matched=false");
+  t.is(result.toolCalls.length, 0);
+  t.is(result.errors.length, 0);
+});
+
+test("parseHarmonyFormat: to=functions. without <|channel|> still matches and parses", (t) => {
+  const text = `to=functions.get_weather <|constrain|>json<|message|>{"city":"Paris"}<|call|>`;
+  const result = parseHarmonyFormat(text, pythonicTools);
+  t.is(result.matched, true);
+  t.is(result.toolCalls.length, 1);
+  t.is(result.toolCalls[0]?.name, "get_weather");
+});
+
+test("parseToolCalls(default): analysis-only buffer falls through to fallbacks (no Harmony short-circuit)", (t) => {
+  const text = `<|channel|>analysis<|message|>I should think about this.<|end|>`;
+  const { toolCalls, errors } = parseToolCalls(text, pythonicTools);
+  t.is(toolCalls.length, 0);
+  t.is(errors.length, 0);
+});
+
+// `to=functions.X` without the full `<|constrain|>json<|message|>...<|call|>`
+// shape must fall through, not short-circuit the chain.
+test("parseHarmonyFormat: to=functions. without complete frame returns matched: false", (t) => {
+  const text = `Some preamble mentioning to=functions.get_weather without the constrain marker.`;
+  const result = parseHarmonyFormat(text, pythonicTools);
+  t.is(result.matched, false, "no extracted frames → matched=false");
+  t.is(result.toolCalls.length, 0);
+  t.is(result.errors.length, 0);
+});
+
+// Hyphenated names are valid per OpenAI's `[a-zA-Z0-9_-]{1,64}` and pass
+// the SDK's `name: z.string()` schema — must not silently drop.
+test("parseHarmonyFormat: hyphenated function names parse", (t) => {
+  const hyphenTool: Tool = {
+    type: "function",
+    name: "get-weather",
+    description: "Get current weather",
+    parameters: {
+      type: "object",
+      properties: { city: { type: "string" } },
+      required: ["city"],
+    },
+  };
+  const text = `<|channel|>commentary to=functions.get-weather <|constrain|>json<|message|>{"city":"Tokyo"}<|call|>`;
+  const result = parseHarmonyFormat(text, [hyphenTool]);
+  t.is(result.matched, true);
+  t.is(result.toolCalls.length, 1);
+  t.is(result.toolCalls[0]?.name, "get-weather");
+  t.alike(result.toolCalls[0]?.arguments, { city: "Tokyo" });
+  t.is(result.errors.length, 0);
+});
+
+// Complete frame whose payload fails JSON.parse: matched=true (the parser
+// recognised its format) but the call surfaces as a PARSE_ERROR rather than
+// a silently dropped frame.
+test("parseHarmonyFormat: complete frame with malformed JSON surfaces PARSE_ERROR", (t) => {
+  const text = `<|channel|>commentary to=functions.get_weather <|constrain|>json<|message|>{"city":"Tokyo",}<|call|>`;
+  const result = parseHarmonyFormat(text, pythonicTools);
+  t.is(result.matched, true);
+  t.is(result.toolCalls.length, 0);
+  t.is(result.errors.length, 1);
+  t.is(result.errors[0]?.code, "PARSE_ERROR");
+});
+
+test("parseToolCalls(default): Harmony frame in default chain still parses", (t) => {
+  // Default chain (with parseHarmonyFormat first) must still pick up Harmony
+  // frames so unrouted models that emit them are recovered.
+  const text = `<|channel|>commentary to=functions.get_weather <|constrain|>json<|message|>{"city":"Paris"}<|call|>`;
+  const { toolCalls } = parseToolCalls(text, pythonicTools);
+  t.is(toolCalls.length, 1);
+  t.is(toolCalls[0]?.name, "get_weather");
+  t.alike(toolCalls[0]?.arguments, { city: "Paris" });
+});
+
+test("detectToolDialectFromName: GPT-OSS variants → harmony", (t) => {
+  const cases: Array<[string | undefined, string]> = [
+    ["gpt-oss-20b", "/cache/gpt-oss-20b-Q4_K_M.gguf"],
+    [
+      "GPT_OSS_120B_INST_Q4_K_M",
+      "/Users/x/.qvac/models/abc_gpt-oss-120b-Q4_K_M.gguf",
+    ],
+    [undefined, "/cache/abc_gpt_oss_20b_q4.gguf"],
+    [undefined, "/cache/abc_gpt-oss-20b.gguf"],
+    ["GPTOSS-20B", "/cache/gptoss-20b.gguf"],
+  ];
+
+  for (const [name, path] of cases) {
+    t.is(detectToolDialectFromName(name, path), "harmony", `name=${name} path=${path}`);
+  }
 });
