@@ -4,6 +4,8 @@ import { modelSrcInputSchema } from "./model-src-utils";
 const BASE64_PATTERN =
   /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
 
+const ABSOLUTE_PATH_PATTERN = /^(\/|[A-Za-z]:[\\/]|\\\\)/;
+
 export const sdcppConfigSchema = z
   .object({
     threads: z.number().optional(),
@@ -26,6 +28,16 @@ export const sdcppConfigSchema = z
     vae_on_cpu: z.boolean().optional().describe("Force VAE decoder to run on CPU"),
     vae_tiling: z.boolean().optional().describe("Enable VAE tiling for large images on limited VRAM"),
     flash_attn: z.boolean().optional().describe("Enable flash attention to reduce memory usage"),
+    lora_apply_mode: z.enum(["auto", "immediately", "at_runtime"]).optional()
+      .describe(
+        "How LoRA adapters passed via diffusion({ lora }) are applied. " +
+        "'auto' (default): picked based on weight type — 'at_runtime' for " +
+        "quantized weights, 'immediately' for full-precision. " +
+        "'immediately': adapter is fused into the model on first use and " +
+        "persists across subsequent diffusion() calls until the model is " +
+        "unloaded. " +
+        "'at_runtime': adapter is applied per-call and not persisted.",
+      ),
     verbosity: z.number().optional(),
     clipLModelSrc: modelSrcInputSchema.optional()
       .describe("CLIP-L text encoder model — required for SD3"),
@@ -210,7 +222,45 @@ export const diffusionRequestSchema = z.object({
     .min(1)
     .regex(BASE64_PATTERN)
     .optional()
-    .describe("Base64-encoded image for img2img generation"),
+    .describe("Base64-encoded image for img2img generation. Mutually exclusive with init_images."),
+  init_images: z.array(
+    z.string().min(1).regex(BASE64_PATTERN),
+  )
+    .min(1)
+    .optional()
+    .describe(
+      "FLUX.2-only multi-reference fusion: array of base64-encoded PNG/JPEG buffers. " +
+      "Each buffer becomes a separate reference image that the FLUX.2 transformer attends to. " +
+      "Mutually exclusive with init_image; requires the model to be loaded with " +
+      "config.prediction='flux2_flow' and a Qwen3 text encoder via llmModelSrc.",
+    ),
+  increase_ref_index: z.boolean().optional()
+    .describe(
+      "FLUX.2 fusion only. When omitted, the addon default (false) is used. When false, all " +
+      "reference latents share one RoPE index slot and blend via attention (recommended for " +
+      "FLUX.2-klein). When true, each reference gets its own RoPE index slot — use only with " +
+      "text encoders that receive per-image vision tokens.",
+    ),
+  auto_resize_ref_image: z.boolean().optional()
+    .describe(
+      "FLUX.2 only. When omitted, the addon default (true) is used. When true, every reference " +
+      "image (single or fusion) is auto-resized to the target width/height before VAE-encoding. " +
+      "Disable only if the buffers are already at the exact target dimensions.",
+    ),
+  lora: z
+    .string()
+    .min(1)
+    .regex(ABSOLUTE_PATH_PATTERN, {
+      message:
+        "lora must be an absolute path",
+    })
+    .optional()
+    .describe(
+      "Optional local LoRA adapter path to apply for this generation. " +
+      "Must be an absolute filesystem path. " +
+      "Whether the adapter persists across subsequent diffusion() calls is controlled " +
+      "by sdcppConfigSchema.lora_apply_mode (set at loadModel time).",
+    ),
   strength: z
     .number()
     .min(0)
@@ -219,7 +269,13 @@ export const diffusionRequestSchema = z.object({
     .describe(
       "img2img denoising strength (0.0 = keep source, 1.0 = ignore source); used by the SD/SDXL SDEdit path. No-op for FLUX.2, which uses in-context conditioning and ignores this field.",
     ),
-});
+}).refine(
+  (d) => d.init_image === undefined || d.init_images === undefined,
+  {
+    message:
+      "init_image and init_images are mutually exclusive — pass one or the other, not both.",
+  },
+);
 
 export type DiffusionRequest = z.input<typeof diffusionRequestSchema>;
 
@@ -231,6 +287,13 @@ export type DiffusionStreamRequest = z.input<
   typeof diffusionStreamRequestSchema
 >;
 
-export type DiffusionClientParams = Omit<DiffusionRequest, "init_image"> & {
-  init_image?: Uint8Array;
-};
+type DiffusionClientParamsBase = Omit<
+  DiffusionRequest,
+  "init_image" | "init_images"
+>;
+
+export type DiffusionClientParams = DiffusionClientParamsBase &
+  (
+    | { init_image?: Uint8Array; init_images?: never }
+    | { init_image?: never; init_images?: Uint8Array[] }
+  );
