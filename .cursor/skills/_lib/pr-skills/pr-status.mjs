@@ -295,8 +295,22 @@ while (true) {
 
 console.error(`Fetched ${allPRs.length} open PRs in ${pageNum} request(s)\n`);
 
-// --- Filter to PRs touching owned paths ---
+// --- Filter to relevant PRs ---
+//
+// `team` and `review` modes are pod-scoped: only PRs touching the pod's
+// ownedPaths are relevant.
+//
+// Cross-pod `my` mode (pods.length > 1, OR --pod omitted) shows EVERY
+// open PR by the current user, regardless of whether the PR touches any
+// pod's ownedPaths. Otherwise PRs that the user opens against
+// repo-tooling paths (.cursor/skills/, .github/, docs/, …) silently
+// disappear, which defeats the point of "my PRs".
+//
+// Pod-scoped my mode (--mode my --pod <name>, single pod selected
+// explicitly) keeps the path filter so it matches the historical
+// `/<pod>-pr-my` semantic.
 
+const isCrossPodMy = mode === "my" && pod === null;
 const relevantPRs = [];
 
 for (const pr of allPRs) {
@@ -304,8 +318,14 @@ for (const pr of allPRs) {
   // Skip PRs whose author has been deleted (ghost user) -- the script's
   // self-author and ping logic both require pr.author.login.
   if (!pr.author?.login) continue;
+
+  // In `my` mode, narrow to the caller's PRs as early as possible.
+  if (mode === "my" && pr.author.login !== currentUser) continue;
+
   const files = pr.files?.nodes || [];
-  if (!touchesOwnedPaths(files)) continue;
+
+  // Skip the path filter only in cross-pod my mode.
+  if (!isCrossPodMy && !touchesOwnedPaths(files)) continue;
 
   const reviews = pr.reviews?.nodes || [];
   const reviewState = getReviewState(reviews);
@@ -501,14 +521,21 @@ function isFullyApprovedInPod(pr, podRoles) {
 // Render a PR line scoped to a specific pod's team — overrides the
 // "Reviews:" / "Other:" partition so cross-pod runs show the OWNING pod's
 // team-vs-outside split rather than the global single-pod roles.
-function renderPRLineForPod(pr, podRoles, extra) {
+//
+// `extras` may be a string, an array of strings, or null. Each non-null
+// string is rendered as its own indented line below the by-line.
+function renderPRLineForPod(pr, podRoles, extras) {
   const lines = [];
   lines.push(`#${pr.number} ${pr.title}`);
   lines.push(pr.url);
   const author = pr.author.name || pr.author.login;
   lines.push(`by ${author} · ${formatAge(pr.ready)} old`);
   if (pr.mergeable === "CONFLICTING") lines.push("⚠️ MERGE CONFLICTS!");
-  if (extra) lines.push(extra);
+
+  const extraList = Array.isArray(extras) ? extras : extras ? [extras] : [];
+  for (const e of extraList) {
+    if (e) lines.push(e);
+  }
 
   const missing = [];
   if (!hasMemberApprovalInPod(pr, podRoles)) missing.push("team member approval");
@@ -540,10 +567,16 @@ function modeMy() {
   const me = roles.currentUser;
   const myPRs = relevantPRs.filter((pr) => pr.author.login === me);
 
-  // Resolve owning pod per PR. PRs with no owning pod are rare but
-  // possible (e.g. a PR that touches files outside any pod's
-  // ownedPaths slipping through the OWNED_PATHS filter due to the
-  // union; in practice the relevantPRs filter excludes them).
+  // The user's "home" pods — pods that list them as a lead or member.
+  // Used as the fallback team for pings when a PR doesn't path-match any
+  // pod (e.g. a PR that only touches .cursor/skills/, .github/, or docs/).
+  // First-match wins for users in multiple pods; this matches the
+  // existing first-match rule for path-resolved PRs.
+  const homePods = pods.filter(
+    (p) => p.leads.includes(me) || p.members.includes(me),
+  );
+  const homePod = homePods[0] ?? null;
+
   const podRolesCache = new Map(); // pod -> rolesForPod
   function rolesForPodCached(pod) {
     if (!pod) return null;
@@ -556,8 +589,15 @@ function modeMy() {
   }
 
   const enriched = myPRs.map((pr) => {
-    const owningPod = findPodForFiles(pr.files, pods);
-    return { pr, pod: owningPod, podRoles: rolesForPodCached(owningPod) };
+    const pathPod = findPodForFiles(pr.files, pods);
+    const resolvedPod = pathPod ?? homePod;
+    const source = pathPod ? "path" : pathPod === null && homePod ? "home" : null;
+    return {
+      pr,
+      pod: resolvedPod,
+      podRoles: rolesForPodCached(resolvedPod),
+      podSource: source, // "path" | "home" | null
+    };
   });
 
   const readyToMerge = [];
@@ -588,12 +628,20 @@ function modeMy() {
     `My PRs (${me}) · ${readyToMerge.length} ready · ${needsReReview.length} re-review · ${awaitingReview.length} awaiting${noPod.length ? ` · ${noPod.length} no pod` : ""}\n`,
   );
 
+  // Annotation injected when ping logic falls back to the user's home
+  // pod because the PR's touched files don't path-match any pod.
+  function homeNote(entry) {
+    return entry.podSource === "home"
+      ? `(via your home team: ${entry.pod.pod})`
+      : null;
+  }
+
   if (readyToMerge.length > 0) {
     console.log("✅ READY TO MERGE");
     console.log("─".repeat(60));
-    for (const { pr, podRoles } of readyToMerge) {
+    for (const entry of readyToMerge) {
       console.log("");
-      console.log(renderPRLineForPod(pr, podRoles, null));
+      console.log(renderPRLineForPod(entry.pr, entry.podRoles, [homeNote(entry)]));
     }
     console.log("");
   }
@@ -601,7 +649,8 @@ function modeMy() {
   if (needsReReview.length > 0) {
     console.log("🔄 NEEDS RE-REVIEW");
     console.log("─".repeat(60));
-    for (const { pr, podRoles, dismissedReviewers } of needsReReview) {
+    for (const entry of needsReReview) {
+      const { pr, podRoles, dismissedReviewers } = entry;
       console.log("");
       const whoToPing = dismissedReviewers
         .map((m) => {
@@ -609,7 +658,12 @@ function modeMy() {
           return `${slackHandle(m)}${role}`;
         })
         .join(", ");
-      console.log(renderPRLineForPod(pr, podRoles, `Re-request: ${whoToPing}`));
+      console.log(
+        renderPRLineForPod(pr, podRoles, [
+          homeNote(entry),
+          `Re-request: ${whoToPing}`,
+        ]),
+      );
     }
     console.log("");
 
@@ -627,7 +681,8 @@ function modeMy() {
   if (awaitingReview.length > 0) {
     console.log("⏳ AWAITING REVIEW");
     console.log("─".repeat(60));
-    for (const { pr, podRoles } of awaitingReview) {
+    for (const entry of awaitingReview) {
+      const { pr, podRoles } = entry;
       console.log("");
       const missingPeople = [];
       if (!hasMemberApprovalInPod(pr, podRoles)) {
@@ -647,7 +702,9 @@ function modeMy() {
       const pingLine = missingPeople.length
         ? `Ping: ${missingPeople.join(", ")}`
         : null;
-      console.log(renderPRLineForPod(pr, podRoles, pingLine));
+      console.log(
+        renderPRLineForPod(pr, podRoles, [homeNote(entry), pingLine]),
+      );
     }
     console.log("");
 
@@ -675,25 +732,35 @@ function modeMy() {
   }
 
   if (noPod.length > 0) {
-    console.log("❓ NO POD MATCHED");
+    // True no-pod (no path match AND user has no home team). Show
+    // metadata + raw review status so the PR is still actionable via
+    // the GitHub UI; ping logic isn't possible without a team.
+    console.log("❓ NO POD / NO HOME TEAM");
     console.log("─".repeat(60));
     for (const { pr } of noPod) {
       console.log("");
       console.log(`  #${pr.number} ${pr.title}`);
       console.log(`  ${pr.url}`);
+      const author = pr.author.name || pr.author.login;
+      console.log(`  by ${author} · ${formatAge(pr.ready)} old`);
+      if (pr.mergeable === "CONFLICTING") console.log("  ⚠️ MERGE CONFLICTS!");
+      const reviewers = [...pr.reviewState.entries()]
+        .filter(([, state]) => state !== "COMMENTED")
+        .map(([login, state]) => `${STATE_ICONS[state] || "?"} ${login}`);
+      if (reviewers.length) console.log(`  Reviews: ${reviewers.join(" · ")}`);
       console.log(
-        `  No .github/teams/<pod>.json owns the touched files; ping logic skipped.`,
+        `  No .github/teams/<pod>.json owns the touched files and you are not in any pod's team.`,
       );
     }
     console.log("");
   }
 
   if (myPRs.length === 0) {
-    const scope =
-      pods.length === 1
-        ? `${pods[0].pod} pod paths`
-        : `paths owned by any pod in .github/teams/`;
-    console.log(`You have no open PRs touching ${scope}.`);
+    if (isCrossPodMy) {
+      console.log("You have no open PRs in tetherto/qvac.");
+    } else {
+      console.log(`You have no open PRs touching ${pods[0].pod} pod paths.`);
+    }
   }
 }
 
