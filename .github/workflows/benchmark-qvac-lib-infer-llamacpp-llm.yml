@@ -283,6 +283,10 @@ jobs:
           path: ${{ inputs.workdir }}/vcpkg/cache
           restore-keys: linux-x64-
 
+      - name: Setup LLVM
+        if: inputs.addon_version == ''
+        uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
+
       - name: Build addon from source
         if: inputs.addon_version == ''
         working-directory: ${{ inputs.workdir }}
@@ -293,13 +297,6 @@ jobs:
           sudo docker image prune --all --force
           sudo rm -rf /opt/hostedtoolcache/CodeQL /opt/ghc /usr/share/dotnet /usr/local/lib/android
           df -h
-
-          echo "Installing LLVM 19..."
-          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
-          sudo chmod 644 /etc/apt/trusted.gpg.d/apt.llvm.org.asc
-          wget -q https://apt.llvm.org/llvm.sh
-          chmod +x llvm.sh
-          sudo ./llvm.sh 19 all
 
           npm install -g bare-make
 

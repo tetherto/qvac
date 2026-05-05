@@ -52,7 +52,7 @@ def make_clang_tidy_cmd(build_dir, project_root_abs, files, dirs_regex):
         header_filter = f"'^{root_esc}/{dirs_regex}/.*'"
     else:
         header_filter = f"'^{root_esc}/.*'"
-    return f"clang-tidy-19 -p {build_dir} {files_str} --header-filter={header_filter}"
+    return f"clang-tidy -p {build_dir} {files_str} --header-filter={header_filter}"
 
 
 def main():
