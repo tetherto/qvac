@@ -1,0 +1,98 @@
+name: Setup LLVM
+description: >-
+  Install (or upgrade) LLVM/Clang to a pinned version on Linux and Windows
+  runners and wire the unversioned `clang`, `clang++`, `clang-format`,
+  `clang-tidy`, `lld`, and friends to point at it. macOS uses Apple Clang
+  and is a no-op here.
+
+  This action is the single source of truth for the LLVM major used across
+  every prebuild / cpp-test / coverage / benchmark workflow in the repo.
+  Bump the `version` (Linux + Windows major) and `windows-version` (Windows
+  full pin) defaults below to roll the whole monorepo forward.
+
+inputs:
+  version:
+    description: >-
+      LLVM major version installed via apt.llvm.org on Linux. Also used as
+      the major component when computing the Windows chocolatey pin if
+      `windows-version` is left at its default. Must match the major of
+      `windows-version`.
+    required: false
+    default: "22"
+  windows-version:
+    description: >-
+      Exact chocolatey LLVM package version to pin on Windows runners (e.g.
+      "22.1.0"). Pinning avoids silent drift when chocolatey ships a new
+      patch release. Must share its major with `version`.
+    required: false
+    default: "22.1.0"
+
+runs:
+  using: composite
+  steps:
+    - if: ${{ runner.os == 'Linux' }}
+      name: Install LLVM ${{ inputs.version }} on Linux
+      shell: bash
+      env:
+        LLVM_VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key \
+          | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc > /dev/null
+        sudo chmod 644 /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+        wget -q https://apt.llvm.org/llvm.sh
+        chmod +x llvm.sh
+        sudo ./llvm.sh "$LLVM_VERSION" all
+
+    - if: ${{ runner.os == 'Linux' }}
+      name: Expose unversioned LLVM ${{ inputs.version }} on PATH
+      shell: bash
+      env:
+        LLVM_VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        # The apt.llvm.org `llvm-N` package ships unversioned binaries under
+        # /usr/lib/llvm-N/bin (clang, clang++, clang-format, clang-tidy,
+        # git-clang-format, lld, llvm-cov, llvm-profdata, ...). Prepending
+        # that directory to PATH makes the chosen major the default `clang`
+        # for the whole job without touching update-alternatives, while the
+        # versioned binaries in /usr/bin (clang-N, clang++-N, ...) remain
+        # available for anything that still hard-codes them.
+        LLVM_BIN="/usr/lib/llvm-${LLVM_VERSION}/bin"
+        if [ ! -d "$LLVM_BIN" ]; then
+          echo "::error::Expected LLVM bin dir $LLVM_BIN does not exist after install"
+          exit 1
+        fi
+        echo "$LLVM_BIN" >> "$GITHUB_PATH"
+        echo "--- LLVM ${LLVM_VERSION} binaries resolved via $LLVM_BIN: ---"
+        for tool in clang clang++ clang-format clang-tidy git-clang-format lld llvm-cov llvm-profdata; do
+          if [ -x "$LLVM_BIN/$tool" ]; then
+            "$LLVM_BIN/$tool" --version 2>/dev/null | head -n1 || echo "$tool: present"
+          else
+            echo "$tool: missing under $LLVM_BIN"
+          fi
+        done
+
+    - if: ${{ runner.os == 'Windows' }}
+      name: Install LLVM ${{ inputs.windows-version }} on Windows
+      # Use Windows PowerShell (5.1) rather than `pwsh` (PowerShell 7+),
+      # since the self-hosted windows-11 runners only ship the former.
+      shell: powershell
+      env:
+        LLVM_WINDOWS_VERSION: ${{ inputs.windows-version }}
+      run: |
+        $ErrorActionPreference = 'Stop'
+        Write-Host "Pinning chocolatey llvm to $env:LLVM_WINDOWS_VERSION"
+        choco upgrade llvm --version="$env:LLVM_WINDOWS_VERSION" -y --allow-downgrade
+        $llvmBin = "C:\Program Files\LLVM\bin"
+        if (Test-Path $llvmBin) {
+          Add-Content -Path $env:GITHUB_PATH -Value $llvmBin
+          Write-Host "Added $llvmBin to PATH"
+        } else {
+          Write-Warning "$llvmBin does not exist after install; skipping PATH update"
+        }
+
+    - if: ${{ runner.os == 'macOS' }}
+      name: Skip LLVM setup on macOS
+      shell: bash
+      run: echo "macOS uses Apple Clang via setup-apple-clang; setup-llvm is a no-op here."

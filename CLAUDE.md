@@ -34,7 +34,16 @@ QVAC (Quantum Versatile AI Compute) is a monorepo for building local-first, P2P 
 
 ### Native Addons (C++ packages, e.g. qvac-lib-infer-llamacpp-llm)
 
-**Prerequisites:** clang-19, libc++-19-dev, libc++abi-19-dev, vcpkg, bare >=1.24, bare-make
+**Prerequisites:** clang-22, libc++-22-dev, libc++abi-22-dev, vcpkg, bare >=1.24, bare-make
+
+> The CI workflows install LLVM via `.github/actions/setup-llvm`, which is the
+> single source of truth for the LLVM major used across the monorepo. To bump
+> the LLVM version everywhere, change `version` (and `windows-version` for the
+> chocolatey pin) in that one action file. Local dev environments should match
+> the CI default (`clang-22` today); if you're temporarily blocked on an older
+> system clang you can override the vcpkg toolchain locally — every package's
+> `linux-clang.cmake` now uses unversioned `clang`/`clang++`, so pointing them
+> at a different version only requires `update-alternatives` on your machine.
 
 ```bash
 cd packages/<addon-package>
@@ -51,7 +60,7 @@ Full one-liner: `npm install && bare-make generate && bare-make build && bare-ma
 npm run test               # run all integration tests (brittle framework)
 npm run test:integration   # same as above (generates all.js then runs bare test/integration/all.js)
 npm run test:cpp           # C++ unit tests (GoogleTest)
-npm run coverage:cpp       # C++ code coverage (llvm-cov-19)
+npm run coverage:cpp       # C++ code coverage (llvm-cov)
 bare test/integration/<name>.test.js  # run a single integration test
 ```
 

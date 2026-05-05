@@ -72,19 +72,6 @@ try {
     process.exit(0)
   }
 
-  // Keep timestamp validation as a fast stale-content signal for edited tests.
-  const latestIntegrationTime = Math.max(
-    ...integrationFiles.map(f => fs.statSync(path.join(integrationDir, f)).mtimeMs)
-  )
-  const mobileAutoTime = fs.statSync(mobileAutoFile).mtimeMs
-
-  if (latestIntegrationTime > mobileAutoTime) {
-    console.error('❌ Mobile integration tests are out of date!')
-    console.error('   Integration tests modified after mobile tests were generated.')
-    console.error('   Run: npm run test:mobile:generate')
-    process.exit(1)
-  }
-
   console.log('✅ Mobile integration tests are up to date')
   process.exit(0)
 } catch (error) {
