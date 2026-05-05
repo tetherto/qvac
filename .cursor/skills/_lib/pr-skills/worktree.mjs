@@ -205,11 +205,17 @@ export function lockPR(num) {
 const PR_REF = (num) => `refs/pr/${num}/head`;
 const PULL_REFSPEC = (num) => `pull/${num}/head:refs/pr/${num}/head`;
 
-// Resolve the PR's base ref name. Uses `gh pr view`; falls back to "main"
-// if gh isn't available or the call fails (most PRs target main).
+// Resolve the PR's base ref name via `gh pr view`. Throws if the metadata
+// cannot be obtained — defaulting to "main" would compute the wrong patch
+// for PRs that target release-* or feature/tmp branches (the worktree
+// would be diffed against the wrong base, producing a patch that does
+// not match what GitHub shows on the PR). The caller (worktree-prepare)
+// turns the throw into a WORKTREE_FALLBACK so the skill drops back to
+// the API path (`gh pr diff`) which always uses the correct base.
 function resolveBaseRefName({ owner, repo, num }) {
+  let out;
   try {
-    const out = execFileSync(
+    out = execFileSync(
       "gh",
       [
         "pr",
@@ -224,11 +230,17 @@ function resolveBaseRefName({ owner, repo, num }) {
       ],
       { encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] },
     ).trim();
-    if (out) return out;
-  } catch {
-    // fall through to default
+  } catch (e) {
+    throw new Error(
+      `gh pr view failed while resolving base ref for ${owner}/${repo}#${num}: ${e.message || e}`,
+    );
   }
-  return "main";
+  if (!out) {
+    throw new Error(
+      `gh pr view returned empty baseRefName for ${owner}/${repo}#${num}`,
+    );
+  }
+  return out;
 }
 
 // Resolve remote + base for a PR. Returned values are pure metadata; no
