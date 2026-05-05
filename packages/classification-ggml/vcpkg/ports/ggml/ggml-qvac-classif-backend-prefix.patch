@@ -1,0 +1,63 @@
+Addon-specific backend filename prefix and dlopen guard for
+@qvac/classification-ggml.
+
+Upstream qvac-ext-ggml @ e16bdae already hardcodes the
+"qvac-diffusion-" prefix for the diffusion-cpp addon. This overlay
+patch retargets that prefix to "qvac-classif-" so this addon's
+runtime backend lookup uses an addon-specific namespace, preventing
+collisions with @qvac/llm-llamacpp's "qvac-" prefix or any
+system-installed "ggml-" backend libraries on Android dual-addon
+processes.
+
+Also wraps ggml_backend_load_all_from_path() with #ifdef
+GGML_BACKEND_DL so static-backends builds never attempt dlopen of
+backend modules. Mirrors the guard introduced for the LLM addon in
+tetherto/qvac-fabric-llm.cpp#95.
+
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -283,7 +283,7 @@ function(ggml_add_backend_library backend)
+         add_library(${backend} MODULE ${ARGN})
+         # write the shared library to the output directory
+         set_target_properties(${backend} PROPERTIES
+             LIBRARY_OUTPUT_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+-            OUTPUT_NAME "qvac-diffusion-${backend}")
++            OUTPUT_NAME "qvac-classif-${backend}")
+         target_compile_definitions(${backend} PRIVATE GGML_BACKEND_DL)
+         add_dependencies(ggml ${backend})
+         if (GGML_BACKEND_DIR)
+diff --git a/src/ggml-backend-reg.cpp b/src/ggml-backend-reg.cpp
+--- a/src/ggml-backend-reg.cpp
++++ b/src/ggml-backend-reg.cpp
+@@ -460,9 +460,9 @@ static fs::path get_executable_path() {
+ 
+ static fs::path backend_filename_prefix() {
+ #ifdef _WIN32
+-    return fs::u8path("qvac-diffusion-ggml-");
++    return fs::u8path("qvac-classif-ggml-");
+ #else
+-    return fs::u8path("libqvac-diffusion-ggml-");
++    return fs::u8path("libqvac-classif-ggml-");
+ #endif
+ }
+ 
+@@ -578,6 +578,9 @@ void ggml_backend_load_all() {
+ }
+ 
+ void ggml_backend_load_all_from_path(const char * dir_path) {
++#ifdef GGML_BACKEND_DL
++    // Only attempt to dlopen backends when built with dynamic backend
++    // support; addon-specific guard mirroring qvac-fabric-llm.cpp#95.
+ #ifdef NDEBUG
+     bool silent = true;
+ #else
+@@ -603,4 +606,8 @@ void ggml_backend_load_all_from_path(const char * dir_path) {
+     if (backend_path) {
+         ggml_backend_load(backend_path);
+     }
++#else
++    // Static-backends build: no dynamic loading, no dlopen of system libs.
++    GGML_UNUSED(dir_path);
++#endif
+ }
