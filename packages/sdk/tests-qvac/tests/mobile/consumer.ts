@@ -55,6 +55,7 @@ import { ModelInfoExecutor } from "../shared/executors/model-info-executor.js";
 import { WrongModelExecutor } from "../shared/executors/wrong-model-executor.js";
 import { ErrorExecutor } from "../shared/executors/error-executor.js";
 import { MobileTranscriptionExecutor } from "./executors/transcription-executor.js";
+import { MobileTranscribeStreamEventsExecutor } from "./executors/transcribe-stream-events-executor.js";
 import { MobileParakeetExecutor } from "./executors/parakeet-executor.js";
 import { MobileVisionExecutor } from "./executors/vision-executor.js";
 import { MobileOcrExecutor } from "./executors/ocr-executor.js";
@@ -374,6 +375,7 @@ export const executor = createExecutor({
     new ModelLoadingExecutor(resources),
     new CompletionExecutor(resources),
     new MobileTranscriptionExecutor(resources),
+    new MobileTranscribeStreamEventsExecutor(resources),
     new EmbeddingExecutor(resources),
     new MobileRagExecutor(resources),
     new ModelInfoExecutor(resources),
