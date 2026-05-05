@@ -1,12 +1,18 @@
 name: Setup build host
 description: >-
   Install and configure the OS-level prerequisites needed by prebuild
-  workflows. Runs a fixed set of steps per runner/platform/arch: on ubuntu we
-  maximize disk space and install llvm-19; on windows we enable long paths,
-  configure the CMake generator, and (on arm64) rename the Windows 10 SDK; on
-  linux we install the base X11 dev headers plus any caller-supplied extras;
-  on android we export the NDK / toolchain env and install the ubuntu cross
+  workflows. Runs a fixed set of steps per runner/platform/arch: on ubuntu
+  we maximize disk space; on windows we enable long paths, configure the
+  CMake generator, and (on arm64) rename the Windows 10 SDK; on linux we
+  install the base X11 dev headers plus any caller-supplied extras; on
+  android we export the NDK / toolchain env and install the ubuntu cross
   toolchain.
+
+  LLVM/Clang installation has been split out into the dedicated
+  `setup-llvm` composite action. Callers that need a versioned LLVM
+  toolchain (every C++ workflow today) MUST invoke `setup-llvm` themselves
+  on linux/windows runners; it is the single source of truth for the LLVM
+  major used across the monorepo.
 
 inputs:
   platform:
@@ -52,17 +58,6 @@ runs:
         fi
         echo "=== Disk space after cleanup ==="
         df -h /
-
-    - if: ${{ runner.os == 'Linux' }}
-      name: Install llvm-19
-      shell: bash
-      run: |
-        set -euo pipefail
-        wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc > /dev/null
-        sudo chmod 644 /etc/apt/trusted.gpg.d/apt.llvm.org.asc
-        wget -q https://apt.llvm.org/llvm.sh
-        chmod +x llvm.sh
-        sudo ./llvm.sh 19 all
 
     - if: ${{ runner.os == 'Windows' }}
       name: Configure Windows long paths

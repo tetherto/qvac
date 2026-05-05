@@ -103,7 +103,10 @@ interface ChatHistory {
 // dep bump propagates and is harmless once it has.
 type CompletionGenerationParams = GenerationParams & { json_schema?: string };
 
-type CompletionRunOptions = Pick<RunOptions, "cacheKey" | "saveCacheToDisk"> & {
+type CompletionRunOptions = Pick<
+  RunOptions,
+  "cacheKey" | "saveCacheToDisk" | "prefill"
+> & {
   generationParams?: CompletionGenerationParams;
 };
 
@@ -244,10 +247,7 @@ async function initSystemPromptCache(
   const primeResponse = await runModel(model, primeMessages, {
     cacheKey: cachePathToUse,
     saveCacheToDisk: true,
-  });
-
-  primeResponse.once("output", () => {
-    void primeResponse.cancel();
+    prefill: true,
   });
 
   await primeResponse.await();
