@@ -18,6 +18,10 @@ export async function* diffusion(
     ? Buffer.from(request.init_image, "base64")
     : undefined;
 
+  const init_images = request.init_images
+    ? request.init_images.map((b64) => Buffer.from(b64, "base64"))
+    : undefined;
+
   const response = await model.run({
     prompt: request.prompt,
     negative_prompt: request.negative_prompt,
@@ -34,7 +38,11 @@ export async function* diffusion(
     vae_tiling: request.vae_tiling,
     cache_preset: request.cache_preset,
     init_image,
+    init_images,
+    increase_ref_index: request.increase_ref_index,
+    auto_resize_ref_image: request.auto_resize_ref_image,
     strength: request.strength,
+    lora: request.lora,
   });
 
   let outputIndex = 0;

@@ -28,18 +28,44 @@ export class MobileDiffusionExecutor extends SharedDiffusionExecutor {
     return await new File(fileUri).bytes();
   }
 
-  protected override async resolveParams(
-    p: Record<string, unknown>,
-  ): Promise<Record<string, unknown>> {
-    if (typeof p.init_image !== "string") return p;
-
-    const fileName = p.init_image.split("/").pop()!;
+  private async resolveImageByName(name: string): Promise<Uint8Array> {
+    const fileName = name.split("/").pop()!;
     const images = await this.loadImageAssets();
     const assetModule = images[fileName];
     if (!assetModule) {
       throw new Error(`Image file not found in assets: ${fileName}`);
     }
-    const bytes = await this.resolveAssetBytes(assetModule);
-    return { ...p, init_image: bytes };
+    return await this.resolveAssetBytes(assetModule);
+  }
+
+  protected override async resolveParams(
+    p: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    const out: Record<string, unknown> = { ...p };
+
+    if (p.init_image !== undefined) {
+      if (typeof p.init_image !== "string") {
+        throw new Error(
+          `init_image in test params must be a string filename, got: ${typeof p.init_image}`,
+        );
+      }
+      out.init_image = await this.resolveImageByName(p.init_image);
+    }
+
+    if (p.init_images !== undefined) {
+      if (
+        !Array.isArray(p.init_images) ||
+        !p.init_images.every((v) => typeof v === "string")
+      ) {
+        throw new Error(
+          "init_images in test params must be a string[] of image filenames",
+        );
+      }
+      out.init_images = await Promise.all(
+        (p.init_images as string[]).map((n) => this.resolveImageByName(n)),
+      );
+    }
+
+    return out;
   }
 }
