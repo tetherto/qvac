@@ -58,13 +58,10 @@ else()
 endif()
 
 if (VCPKG_TARGET_IS_ANDROID)
-  # Keep VK_KHR_cooperative_matrix and VK_NV_cooperative_matrix2 enabled so the
-  # Mali NaN workaround (qvac-fabric c79a8851 — dequant-to-F16 + F32 accumulation
-  # for TQ1/TQ2 on ARM) can take effect. With coopmat disabled, ctx->device->
-  # coopmat_support is false and the fix's branches are skipped, leaving Qwen3
-  # finetune NaN on Pixel 9 Pro Mali.
-  # OpenCL stays enabled for Adreno (which doesn't depend on these toggles).
-  list(APPEND PLATFORM_OPTIONS -DGGML_OPENCL=ON)
+  list(APPEND PLATFORM_OPTIONS
+    -DGGML_VULKAN_DISABLE_COOPMAT=ON
+    -DGGML_VULKAN_DISABLE_COOPMAT2=ON
+    -DGGML_OPENCL=ON)
 endif()
 
 vcpkg_cmake_configure(
