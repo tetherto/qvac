@@ -91,7 +91,7 @@ All constructor options are optional.
 
 | Parameter                 | Type     | Default                   | Description                                                                                                                                                     |
 | ------------------------- | -------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `imageInput` *(required)* | `Buffer  | Uint8Array`               | —                                                                                                                                                               |
+| `imageInput` *(required)* | `Buffer` | `Uint8Array`              | —                                                                                                                                                               |
 | `options.topK`            | `number` | `undefined` (all classes) | If set, the returned array is truncated to this many entries (top-K highest confidences). Must be a positive integer. Passing a value ≥ class count is a no-op. |
 | `options.width`           | `number` | —                         | **Required** for raw RGB input. Integer > 0. The underlying buffer must be exactly `width × height × channels` bytes; any mismatch throws a structured error.   |
 | `options.height`          | `number` | —                         | **Required** for raw RGB input. Integer > 0.                                                                                                                    |
