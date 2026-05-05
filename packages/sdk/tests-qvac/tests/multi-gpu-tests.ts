@@ -11,7 +11,7 @@ export const multiGpuConfigSmoke: TestDefinition = {
   suites: ["smoke"],
   metadata: {
     category: "multi-gpu",
-    dependency: "llm",
+    dependency: "none",
     estimatedDurationMs: 30000,
   },
 };
@@ -25,7 +25,7 @@ export const multiGpuEmbedConfigSmoke: TestDefinition = {
   suites: ["smoke"],
   metadata: {
     category: "multi-gpu",
-    dependency: "embeddings",
+    dependency: "none",
     estimatedDurationMs: 30000,
   },
 };
