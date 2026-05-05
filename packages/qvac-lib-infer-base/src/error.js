@@ -10,10 +10,7 @@ const ERR_CODES = Object.freeze({
   ADDON_METHOD_NOT_IMPLEMENTED: 3103,
   LOADER_NOT_FOUND: 3104,
   ADDON_INTERFACE_REQUIRED: 3105,
-  ADDON_NOT_INITIALIZED: 3106,
-
-  // WeightsProvider
-  DOWNLOAD_FAILED: 4001
+  ADDON_NOT_INITIALIZED: 3106
 })
 
 // Register error definitions
@@ -48,11 +45,6 @@ addCodes({
   {
     name: 'ADDON_NOT_INITIALIZED',
     message: 'Addon has not been initialized'
-  },
-  [ERR_CODES.DOWNLOAD_FAILED]:
-  {
-    name: 'DOWNLOAD_FAILED',
-    message: (error) => `Error while downloading file with message: ${error.message}`
   }
 }, {
   name,
