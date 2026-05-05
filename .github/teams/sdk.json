@@ -1,0 +1,17 @@
+{
+  "name": "SDK Pod",
+  "leads": ["NamelsKing"],
+  "members": [
+    "lauripiisang",
+    "opaninakuffo",
+    "simon-iribarren",
+    "Victor-Rodzko"
+  ],
+  "ownedPaths": [
+    "packages/sdk/",
+    "packages/cli/",
+    "packages/rag/",
+    "packages/logging/",
+    "packages/error/"
+  ]
+}

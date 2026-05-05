@@ -58,10 +58,9 @@ If you want to build the addon from source instead of using pre-built packages, 
    - **macOS**:
      - Xcode Command Line Tools (`xcode-select --install`)
      - Apple clang (LLVM compiler is not supported at the moment)
-   - **Linux**: LLVM/Clang 19 (with libc++), CMake 3.25+, Vulkan SDK
+   - **Linux**: LLVM/Clang 22 (with libc++), CMake 3.25+, Vulkan SDK
      ```bash
-     # Install LLVM 19
-     wget -q https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo ./llvm.sh 19 all
+     wget -q https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo ./llvm.sh 22 all
 
      # Install Vulkan SDK
      sudo apt install -y xz-utils
