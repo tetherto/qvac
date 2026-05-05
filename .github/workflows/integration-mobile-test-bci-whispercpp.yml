@@ -28,7 +28,7 @@ on:
         type: string
         required: false
       prebuild_package:
-        description: "NPM package to fetch prebuilds from (e.g. @qvac/bci-whispercpp@0.1.0). Leave empty to fall back to @qvac/bci-whispercpp@latest."
+        description: "NPM package to fetch prebuilds from (e.g. @qvac/bci-whispercpp@0.1.0). Required for direct manual dispatch; leave empty when this workflow is invoked from on-pr/on-merge so it picks up artifacts from the current run."
         type: string
         required: false
         default: ""
@@ -92,29 +92,28 @@ jobs:
         shell: bash
         env:
           INPUT_PREBUILD_PACKAGE: ${{ inputs.prebuild_package }}
-          EVENT_NAME: ${{ github.event_name }}
-          ADDON_NAME: ${{ env.ADDON_NAME }}
         run: |
           set -euo pipefail
-          # Decide whether to fetch prebuilds from the current workflow run's
-          # artifacts or from a published npm package.
-          # - If the caller (workflow_call from on-pr/on-merge, or a manual
-          #   dispatch with an empty value) didn't pass prebuild_package, AND
-          #   this run was reached via a parent event (push, pull_request*,
-          #   etc.), use artifacts.
-          # - If the user directly dispatched this workflow without a value,
-          #   default to ${ADDON_NAME}@latest from npm so a manual run still
-          #   has something to test.
-          # - Otherwise, honor whatever the caller passed.
+          # The mobile workflow can fetch prebuilds either from the current
+          # workflow run's artifacts (default) or from a published npm
+          # package. We can't safely auto-fallback to a published "latest"
+          # tag based on github.event_name, because reusable workflows
+          # inherit the parent's event_name — a manual dispatch on on-pr or
+          # on-merge would be misread as a "direct dispatch on mobile" and
+          # incorrectly skip artifacts.
+          #
+          # Rule (simple + safe):
+          #   - prebuild_package empty  → use workflow-run artifacts
+          #   - prebuild_package set    → npm pack that exact value
+          #
+          # To manually run this workflow against a published version, pass
+          # prebuild_package explicitly (e.g. @qvac/bci-whispercpp@0.1.2).
           resolved="$INPUT_PREBUILD_PACKAGE"
-          if [ -z "$resolved" ] && [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            resolved="${ADDON_NAME}@latest"
-          fi
           echo "prebuild_package=$resolved" >> "$GITHUB_OUTPUT"
           if [ -n "$resolved" ]; then
             echo "Prebuild source: npm package '$resolved'"
           else
-            echo "Prebuild source: workflow artifacts"
+            echo "Prebuild source: workflow artifacts (current run)"
           fi
 
       - name: Checkout addon repository
