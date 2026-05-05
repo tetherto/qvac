@@ -2,6 +2,7 @@
 import type { TestDefinition } from "@tetherto/qvac-test-suite";
 import { completionTests } from "./completion-tests.js";
 import { transcriptionTests } from "./transcription-tests.js";
+import { transcribeStreamEventsTests } from "./transcribe-stream-events-tests.js";
 import { embeddingTests } from "./embedding-tests.js";
 import { ragTests } from "./rag-tests.js";
 import { translationIndicTransTests } from "./translation-indictrans-tests.js";
@@ -192,6 +193,9 @@ export const tests = [
 
   // Transcription tests
   ...transcriptionTests,
+
+  // transcribeStream VAD + endOfTurn event tests
+  ...transcribeStreamEventsTests,
 
   // Embedding tests
   ...embeddingTests,
