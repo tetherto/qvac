@@ -7,6 +7,7 @@ const os = require('bare-os')
 const BCIWhispercpp = require('../../index')
 const {
   getTestPaths,
+  getModelPath,
   computeWER,
   detectPlatform,
   readSignal,
@@ -20,7 +21,7 @@ const platform = detectPlatform()
 const { manifest, getSamplePath } = getTestPaths()
 
 const MODEL_PATH = (os.hasEnv('WHISPER_MODEL_PATH') ? os.getEnv('WHISPER_MODEL_PATH') : null) ||
-  path.join(__dirname, '..', '..', 'models', 'ggml-bci-windowed.bin')
+  getModelPath('ggml-bci-windowed.bin')
 
 const hasModel = fs.existsSync(MODEL_PATH)
 
