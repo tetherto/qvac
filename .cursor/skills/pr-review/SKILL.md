@@ -53,7 +53,7 @@ Selection rule: never silently include a Low finding in the inline payload. The 
 
 ## Safety rules — DO NOT TOUCH THE USER'S LOCAL REPO
 
-This skill is **read-only with respect to the local working tree**. The user may have uncommitted changes, be on a feature branch, or have pending work — never disturb it.
+This skill is **read-only with respect to the user's local working tree**. The user may have uncommitted changes, be on a feature branch, or have pending work — never disturb it.
 
 **Forbidden commands** (no matter the circumstance):
 
@@ -61,20 +61,38 @@ This skill is **read-only with respect to the local working tree**. The user may
 - `git reset` (any mode), `git restore`
 - `git stash` (push, pop, drop, anything)
 - `git pull`, `git merge`, `git rebase`, `git cherry-pick`
-- `git fetch` (not needed — all data comes from the GitHub API)
 - `git clean`
 - `gh pr checkout`
-- Any write to working tree files outside `/tmp/`
+- Any write to files inside the user's working tree
 
-If you need PR file contents at a specific ref, use `gh api repos/{owner}/{repo}/contents/{path}?ref={sha}` and write to `/tmp/`. Read cursor rules and repo conventions from the user's current workspace as-is — do not switch branches to "get the latest" version.
+### Worktree mode carve-out
+
+`/pr-review` runs by default in worktree mode (see step 0a). The dedicated cache directory at `~/.cache/qvac-pr-review/` is fully isolated from the user's working tree — it lives outside the repo entirely. Inside that cache directory only, the **shared script** (`worktree-prepare.mjs`) is allowed to:
+
+- `git fetch <remote> "pull/<n>/head:refs/pr/<n>/head"`
+- `git worktree add --detach <cache-path> refs/pr/<n>/head`
+- `git -C <cache-path> reset --hard refs/pr/<n>/head` (only when SHA drifted; only after verifying the worktree is clean)
+- `git worktree remove --force <cache-path>` and `git worktree prune`
+- Read-only diagnostics: `git -C <cache-path> rev-parse|log|show|diff|status`
+
+These run from the script, not from the agent. The agent itself MUST NOT run any of the forbidden commands above — including inside the cache path. The agent only Reads/Greps/Globs files in the cache path and never writes to them. A dirty worktree (any local mutation by the agent) will be wiped by the next invocation's `reset --hard`, so writing inside is both forbidden and wasted.
+
+### File access rules
+
+If you need PR file contents:
+
+- **Worktree mode (default)**: Read/Grep/Glob files at the path printed by step 0a (`<cache-path>/...`). The path is at the PR head SHA.
+- **Fallback (or `--no-worktree`)**: `gh api repos/{owner}/{repo}/contents/{path}?ref={sha}` and write to `/tmp/`.
+
+Read cursor rules and repo conventions from the user's current workspace as-is — do not switch branches to "get the latest" version.
 
 ## Efficiency rules
 
 Every shell call costs a user approval. Keep the total small (~5-8 calls).
 
 - **Use dedicated tools, not shell.** Read instead of `cat`/`head`/`tail`, Grep instead of `grep`/`rg`, Glob instead of `find`, Write instead of `echo >` / heredoc.
-- **Do not `gh pr checkout`.** The diff is enough; if more file context is needed, fetch via `gh api .../contents/...?ref=<sha>` into `/tmp/`.
-- **Fetch each piece of data ONCE.** Save to `/tmp/pr-<num>.json` and `/tmp/pr-<num>.patch`, reuse via Read/Grep.
+- **Do not `gh pr checkout`.** Use worktree mode (default, see step 0a) for full local context at the PR head SHA. The cache lives under `~/.cache/qvac-pr-review/` and never touches the user's working tree.
+- **Fetch each piece of data ONCE.** Save PR JSON / patch to `/tmp/pr-<num>.json` and `/tmp/pr-<num>.patch`, reuse via Read/Grep. The worktree path is reused across step calls; don't re-prepare it.
 - **Skip `gh pr checks`** — `statusCheckRollup` in `gh pr view --json` already has every check.
 - **Fetch CI logs only for failing jobs**, not every job. One `gh run view --log-failed --job <id>` per failing job.
 - **Never run encoding forensics** (`file`, `od`, `wc -c`, `cat -A`) unless a CI log explicitly names an encoding issue.
@@ -84,6 +102,7 @@ Every shell call costs a user approval. Keep the total small (~5-8 calls).
 Copy this checklist and track progress:
 
 ```
+- [ ] 0a. Prepare worktree (default-on; skip if user passed --no-worktree)
 - [ ] 1. Parse PR URL
 - [ ] 2. Fetch PR data (2 shell calls)
 - [ ] 3. Validate gitflow
@@ -98,6 +117,31 @@ Copy this checklist and track progress:
 - [ ] 11. POST the PENDING review
 - [ ] 12. Output link to pending review
 ```
+
+### 0a. Prepare worktree (default-on)
+
+Worktree mode is the default — full local Read/Grep/Glob context at the PR head SHA, isolated under `~/.cache/qvac-pr-review/`, never touches the user's working tree. Skip this step only if the user invoked `/pr-review URL --no-worktree`.
+
+```bash
+node .cursor/skills/_lib/pr-skills/worktree-prepare.mjs <PR-URL>
+```
+
+Parse the script's output:
+
+- **stdout** has two lines on success:
+  ```
+  WORKTREE_PATH=<absolute path>
+  HEAD_SHA=<sha>
+  ```
+  Remember `WORKTREE_PATH`. All file Reads/Greps/Globs in steps 6 and 7a must use this path as the working root for files at the PR head.
+
+- **stderr** has a single line on failure:
+  ```
+  WORKTREE_FALLBACK=<one-line reason>
+  ```
+  The script's exit code is 0 even on failure. If you observe `WORKTREE_FALLBACK`, fall back to fetching file contents via `gh api repos/{owner}/{repo}/contents/{path}?ref={headRefOid}` and writing to `/tmp/` (the original API-only flow). Surface the fallback reason once in the chat overview's `### Verified (no action)` section so the user knows local context is missing — e.g. "Worktree prep failed (`<reason>`); excerpts come from `gh api`."
+
+When the user passes `--no-worktree`, skip this step entirely and use the API-only flow without surfacing any fallback note.
 
 ### 1. Parse PR URL
 
@@ -267,7 +311,12 @@ Rules for what goes in each section:
 - **Low (informational)**: include only when the finding is genuinely useful to the reviewer (e.g. a doc gap, an ergonomic improvement, an addon-contract drift worth knowing). Skip the excerpt for lows — a one-sentence note + link is enough. Trivial nits (whitespace, opinion-based naming) should be dropped, not demoted to Low.
 - **Verified**: only when the reviewer might reasonably wonder whether you checked something.
 
-The excerpts MUST come from files at the PR head SHA, never from the user's working tree. Fetch any file you need with `gh api repos/{owner}/{repo}/contents/{path}?ref=<headRefOid>` (decode `.content` from base64) and Read it from `/tmp/`. The excerpt's line numbers must match the line you're calling out.
+The excerpts MUST come from files at the PR head SHA, never from the user's working tree.
+
+- **Worktree mode (default)**: Read the file at `<WORKTREE_PATH>/<path>` (the worktree is checked out at the PR head SHA). Glob/Grep with the worktree path as the search root.
+- **Fallback / `--no-worktree`**: fetch with `gh api repos/{owner}/{repo}/contents/{path}?ref=<headRefOid>` (decode `.content` from base64) and Read from `/tmp/`.
+
+The excerpt's line numbers must match the line you're calling out.
 
 ### 7b. Ask the user which findings to include as inline comments
 
