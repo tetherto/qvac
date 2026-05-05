@@ -102,7 +102,7 @@ When a new cache key is used for the first time:
 
 ### Cache Initialization (initSystemPromptCache)
 
-Primes a new cache by sending system prompt + tools to the model with `{ cacheKey: cachePath }` in `runOptions`, then cancels generation after the first output token — it only needs to process the cache priming, not produce a response.
+Primes a new cache by sending system prompt + tools through `runModel` with `{ cacheKey: cachePath, saveCacheToDisk: true, prefill: true }`. The prompt is ingested into the KV cache and persisted to disk without producing any output tokens, so the call resolves as soon as priming finishes.
 
 ### Message Preparation (prepareMessagesForCache)
 
