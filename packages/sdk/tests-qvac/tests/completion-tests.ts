@@ -532,6 +532,105 @@ export const completionSentenceCompletion = createCompletionTest(
   { validation: "type", expectedType: "string" },
 );
 
+export const completionResponseFormatText: TestDefinition = {
+  testId: "completion-response-format-text",
+  params: {
+    history: [{ role: "user", content: "Reply with only the word APPLE." }],
+    stream: false,
+    responseFormat: { type: "text" },
+    generationParams: { temp: 0, seed: 42 },
+  },
+  expectation: { validation: "contains-any", contains: ["APPLE", "apple"] },
+  metadata: { category: "completion", dependency: "llm", estimatedDurationMs: 10000 },
+};
+
+export const completionResponseFormatJsonObject: TestDefinition = {
+  testId: "completion-response-format-json-object",
+  params: {
+    history: [
+      { role: "system", content: "Reply with a single valid JSON object only. No markdown, no prose." },
+      { role: "user", content: "Return an object with a single key 'ok' set to the boolean true." },
+    ],
+    stream: false,
+    responseFormat: { type: "json_object" },
+    generationParams: { temp: 0, seed: 42, predict: 64 },
+  },
+  expectation: { validation: "type", expectedType: "string" },
+  metadata: { category: "completion", dependency: "llm", estimatedDurationMs: 15000 },
+};
+
+export const completionResponseFormatJsonObjectStreaming: TestDefinition = {
+  testId: "completion-response-format-json-object-streaming",
+  params: {
+    history: [
+      { role: "system", content: "Reply with a single valid JSON object only. No markdown, no prose." },
+      { role: "user", content: "Return an object with a single key 'ok' set to the boolean true." },
+    ],
+    stream: true,
+    responseFormat: { type: "json_object" },
+    generationParams: { temp: 0, seed: 42, predict: 64 },
+  },
+  expectation: { validation: "type", expectedType: "string" },
+  metadata: { category: "completion", dependency: "llm", estimatedDurationMs: 15000 },
+};
+
+export const completionResponseFormatJsonSchema: TestDefinition = {
+  testId: "completion-response-format-json-schema",
+  params: {
+    history: [
+      {
+        role: "user",
+        content:
+          "Extract the person info as JSON. Person: Alice, age 30, occupation data engineer.",
+      },
+    ],
+    stream: false,
+    responseFormat: {
+      type: "json_schema",
+      json_schema: {
+        name: "Person",
+        schema: {
+          type: "object",
+          properties: {
+            name: { type: "string" },
+            age: { type: "integer" },
+            occupation: { type: "string" },
+          },
+          required: ["name", "age", "occupation"],
+          additionalProperties: false,
+        },
+      },
+    },
+    generationParams: { temp: 0, seed: 42, predict: 128 },
+  },
+  expectation: { validation: "type", expectedType: "string" },
+  metadata: { category: "completion", dependency: "llm", estimatedDurationMs: 20000 },
+};
+
+export const completionResponseFormatWithToolsRejected: TestDefinition = {
+  testId: "completion-response-format-with-tools-rejected",
+  params: {
+    history: [{ role: "user", content: "irrelevant" }],
+    stream: false,
+    responseFormat: { type: "json_object" },
+    tools: [
+      {
+        type: "function",
+        name: "get_weather",
+        description: "Get weather for a city",
+        parameters: {
+          type: "object",
+          properties: { city: { type: "string" } },
+          required: ["city"],
+        },
+      },
+    ],
+    generationParams: { temp: 0, seed: 42, predict: 64 },
+  },
+  expectation: { validation: "throws-error", errorContains: "responseFormat" },
+  metadata: { category: "completion", dependency: "none", estimatedDurationMs: 5000 },
+};
+
 export const completionTests = [
   completionStreaming,
   completionContextSize512,
@@ -573,4 +672,9 @@ export const completionTests = [
   completionQaFromContext,
   completionSimpleYesNo,
   completionSentenceCompletion,
+  completionResponseFormatText,
+  completionResponseFormatJsonObject,
+  completionResponseFormatJsonObjectStreaming,
+  completionResponseFormatJsonSchema,
+  completionResponseFormatWithToolsRejected,
 ];
