@@ -391,7 +391,9 @@ TEST_F(LlamaModelTest, RuntimeStatsAfterProcessing) {
   });
 }
 
-TEST_F(LlamaModelTest, RuntimeStatsPpTPSAfterProcessing) { // NOLINT(readability-function-cognitive-complexity)
+TEST_F(
+    LlamaModelTest,
+    RuntimeStatsPpTPSAfterProcessing) { // NOLINT(readability-function-cognitive-complexity)
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
@@ -418,7 +420,9 @@ TEST_F(LlamaModelTest, RuntimeStatsPpTPSAfterProcessing) { // NOLINT(readability
   });
 }
 
-TEST_F(LlamaModelTest, RuntimeStatsPpTPSOnPrefillRun) { // NOLINT(readability-function-cognitive-complexity)
+TEST_F(
+    LlamaModelTest,
+    RuntimeStatsPpTPSOnPrefillRun) { // NOLINT(readability-function-cognitive-complexity)
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
