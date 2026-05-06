@@ -217,3 +217,54 @@ TEST_F(
   std::string result = getChatTemplate(nullptr, params, false);
   EXPECT_EQ(result, "my_custom_template");
 }
+
+// useModelChatTemplate=true makes getChatTemplate return params.chat_template
+// verbatim (including empty), bypassing the Qwen3 fixed-template path. The
+// nullptr-model variants exercise just the bypass logic; the integration with
+// real Qwen3 metadata is covered by GetChatTemplateUseModelChatTemplate* tests.
+TEST_F(
+    ChatTemplateUtilsTest, GetChatTemplateUseModelChatTemplateEmptyOverride) {
+  common_params params;
+  params.chat_template = "";
+  params.use_jinja = true;
+
+  std::string result = getChatTemplate(
+      nullptr, params, /*toolsCompact=*/false, /*useModelChatTemplate=*/true);
+  EXPECT_EQ(result, "");
+}
+
+TEST_F(
+    ChatTemplateUtilsTest,
+    GetChatTemplateUseModelChatTemplateRespectsManualOverride) {
+  common_params params;
+  params.chat_template = "user-supplied";
+  params.use_jinja = true;
+
+  std::string result = getChatTemplate(
+      nullptr, params, /*toolsCompact=*/false, /*useModelChatTemplate=*/true);
+  EXPECT_EQ(result, "user-supplied");
+}
+
+TEST_F(
+    ChatTemplateUtilsTest,
+    GetChatTemplateUseModelChatTemplateIgnoresToolsCompact) {
+  common_params params;
+  params.chat_template = "";
+  params.use_jinja = true;
+
+  std::string result = getChatTemplate(
+      nullptr, params, /*toolsCompact=*/true, /*useModelChatTemplate=*/true);
+  EXPECT_EQ(result, "");
+}
+
+TEST_F(
+    ChatTemplateUtilsTest,
+    GetChatTemplateDefaultsToOldBehaviourWhenFlagOmitted) {
+  common_params params;
+  params.chat_template = "explicit";
+  params.use_jinja = false;
+
+  // Default value of useModelChatTemplate (false) preserves prior behaviour.
+  std::string result = getChatTemplate(nullptr, params, false);
+  EXPECT_EQ(result, "explicit");
+}

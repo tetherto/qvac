@@ -21,7 +21,7 @@ public:
   // Constructor
   TextLlmContext(
       common_params& commonParams, common_init_result&& llamaInit,
-      ToolsCompactController& tools);
+      ToolsCompactController& tools, bool useModelChatTemplate = false);
 
   // Destructor
   ~TextLlmContext() override = default;
@@ -197,6 +197,10 @@ private:
 
   // Cache whether this is a Qwen3 model (checked once at load time)
   bool isQwen3Model_ = false;
+
+  // When true, do not swap in the bundled fixed Qwen3 template; honour the
+  // user's manual override (or the GGUF embedded template if no override).
+  bool useModelChatTemplate_ = false;
 
   // GPT-OSS Harmony: <|call|> is a frame delimiter, not a stop signal
   bool isHarmonyModel_ = false;

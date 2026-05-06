@@ -24,9 +24,10 @@ using namespace qvac_lib_inference_addon_llama::utils;
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 MtmdLlmContext::MtmdLlmContext(
     common_params& commonParams, common_init_result&& llamaInit,
-    ToolsCompactController& tools)
+    ToolsCompactController& tools, bool useModelChatTemplate)
     : tools_(tools), llamaInit_(std::move(llamaInit)), params_(commonParams),
-      model_(llamaInit_.model.get()), lctx_(llamaInit_.context.get()) {
+      model_(llamaInit_.model.get()), lctx_(llamaInit_.context.get()),
+      useModelChatTemplate_(useModelChatTemplate) {
 
   if (model_ == nullptr) {
     throw qvac_errors::StatusError(
@@ -44,7 +45,8 @@ MtmdLlmContext::MtmdLlmContext(
 
   vocab_ = llama_model_get_vocab(model_);
 
-  std::string chatTemplate = getChatTemplate(model_, params_, tools_.enabled());
+  std::string chatTemplate = getChatTemplate(
+      model_, params_, tools_.enabled(), useModelChatTemplate_);
   tmpls_ = common_chat_templates_init(model_, chatTemplate);
 
   smpl_.reset(common_sampler_init(model_, params_.sampling));

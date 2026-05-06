@@ -327,8 +327,14 @@ void LlamaModel::init(bool acquireLock) {
   common_params params;
   std::optional<int> adrenoVersion;
   ResolvedToolsCompactConfig toolsCompactConfig;
+  bool useModelChatTemplate = false;
   commonParamsParse(
-      modelPath, configFilemap, params, adrenoVersion, toolsCompactConfig);
+      modelPath,
+      configFilemap,
+      params,
+      adrenoVersion,
+      toolsCompactConfig,
+      useModelChatTemplate);
 
   const std::string errorWhenFailed = toString(UnableToLoadModel);
   auto streamedFiles =
@@ -359,7 +365,8 @@ void LlamaModel::init(bool acquireLock) {
       std::string(constructionArgs_.projectionPath),
       params,
       std::move(llamaInit),
-      *snap->toolsCompact_);
+      *snap->toolsCompact_,
+      useModelChatTemplate);
 
   if (snap->configuredNDiscarded_ > 0 && snap->llmContext_) {
     snap->llmContext_->setNDiscarded(snap->configuredNDiscarded_);
@@ -711,10 +718,12 @@ void LlamaModel::commonParamsParse(
     const std::string& modelPath,
     std::unordered_map<std::string, std::string>& configFilemap,
     common_params& params, std::optional<int>& outAdrenoVersion,
-    ResolvedToolsCompactConfig& outToolsCompactConfig) {
+    ResolvedToolsCompactConfig& outToolsCompactConfig,
+    bool& outUseModelChatTemplate) {
 
   std::vector<std::string> configVector;
   outToolsCompactConfig = ResolvedToolsCompactConfig{};
+  outUseModelChatTemplate = false;
 
   // Check if tools are enabled and exclude it with jinja from the config file
   if (auto iter = configFilemap.find("tools"); iter != configFilemap.end()) {
@@ -772,6 +781,22 @@ void LlamaModel::commonParamsParse(
         Priority::WARNING,
         "[LlamaModel] tools_compact is not supported for this model "
         "architecture, ignoring\n");
+  }
+
+  // parse use_model_chat_template flag from config: when true, the addon does
+  // NOT swap in the bundled fixed Qwen3 template and instead lets llama.cpp
+  // use the chat template embedded in the GGUF (or whatever the user passed
+  // explicitly via chat_template). Accept both snake_case and kebab-case to
+  // match the conventions used by other config keys.
+  for (const std::string& key :
+       {"use_model_chat_template", "use-model-chat-template"}) {
+    if (auto iter = configFilemap.find(key); iter != configFilemap.end()) {
+      std::string val = iter->second;
+      std::transform(val.begin(), val.end(), val.begin(), ::tolower);
+      outUseModelChatTemplate =
+          outUseModelChatTemplate || (val == "true" || val == "1");
+      configFilemap.erase(iter);
+    }
   }
 
   llama_split_mode splitMode = LLAMA_SPLIT_MODE_NONE;
@@ -1193,13 +1218,15 @@ void LlamaModel::resetState(bool resetStats) {
 
 std::unique_ptr<LlmContext> LlamaModel::createContext(
     std::string&& projectionPath, common_params& params,
-    common_init_result&& llamaInit, ToolsCompactController& tools) {
+    common_init_result&& llamaInit, ToolsCompactController& tools,
+    bool useModelChatTemplate) {
   if (!projectionPath.empty()) {
     params.mmproj.path = std::move(projectionPath);
     return std::make_unique<MtmdLlmContext>(
-        params, std::move(llamaInit), tools);
+        params, std::move(llamaInit), tools, useModelChatTemplate);
   }
-  return std::make_unique<TextLlmContext>(params, std::move(llamaInit), tools);
+  return std::make_unique<TextLlmContext>(
+      params, std::move(llamaInit), tools, useModelChatTemplate);
 }
 
 bool LlamaModel::loadMedia(const std::vector<uint8_t>& input) {

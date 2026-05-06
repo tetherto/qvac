@@ -22,7 +22,7 @@ public:
    */
   MtmdLlmContext(
       common_params& commonParams, common_init_result&& llamaInit,
-      ToolsCompactController& tools);
+      ToolsCompactController& tools, bool useModelChatTemplate = false);
 
   /**
    * The destructor.
@@ -220,6 +220,10 @@ private:
 
   // UTF-8 token buffer for handling incomplete emoji sequences
   qvac_lib_inference_addon_llama::UTF8TokenBuffer utf8Buffer_;
+
+  // When true, do not swap in the bundled fixed Qwen3 template; honour the
+  // user's manual override (or the GGUF embedded template if no override).
+  bool useModelChatTemplate_ = false;
 
   // GPT-OSS Harmony: <|call|> is a frame delimiter, not a stop signal
   bool isHarmonyModel_ = false;

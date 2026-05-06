@@ -49,6 +49,20 @@ export interface LlamaConfig {
   presence_penalty?: NumericLike
   frequency_penalty?: NumericLike
   tools?: boolean | string
+  /**
+   * When true, bypass the bundled fixed Qwen3 chat template and use the
+   * template embedded in the GGUF (`tokenizer.chat_template`). Has no effect
+   * on non-Qwen3 models, and is ignored if you also pass an explicit
+   * `chat_template` string (the explicit string always wins).
+   *
+   * Note: the bundled fixed template patches around minja Jinja-runtime
+   * incompatibilities in the upstream Qwen3 template. Opting into the
+   * embedded template can produce broken prompts if it relies on those
+   * unsupported features.
+   */
+  use_model_chat_template?: boolean | string
+  /** Kebab-case alias for `use_model_chat_template`. */
+  'use-model-chat-template'?: boolean | string
   verbosity?: NumericLike
   n_discarded?: NumericLike
   'main-gpu'?: NumericLike | string

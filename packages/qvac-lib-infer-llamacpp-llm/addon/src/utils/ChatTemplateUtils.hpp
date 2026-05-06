@@ -40,10 +40,22 @@ std::string getChatTemplateForModel(
 
 /**
  * @brief Gets the chat template for a model, applying Qwen3 fixes if Jinja is
- * enabled
+ * enabled.
+ *
+ * When @p useModelChatTemplate is true, the Qwen3 forced-template path is
+ * bypassed and the user's manual override (`params.chat_template`) is returned
+ * verbatim — including the empty string, in which case llama.cpp falls back
+ * to the template embedded in the GGUF (`tokenizer.chat_template`).
+ *
+ * Note: the bundled fixed Qwen3 template patches around minja
+ * incompatibilities in the upstream Qwen3 Jinja template (Python-only filters
+ * such as `.strip()` etc.). Opting into the model's embedded template can
+ * therefore produce broken prompts if that template relies on those
+ * unsupported features.
  */
 std::string getChatTemplate(
-    const ::llama_model* model, const common_params& params, bool toolsCompact);
+    const ::llama_model* model, const common_params& params, bool toolsCompact,
+    bool useModelChatTemplate = false);
 
 /**
  * @brief Applies chat templates to generate a prompt, with fallback handling

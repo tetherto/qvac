@@ -27,8 +27,9 @@ using namespace qvac_lib_inference_addon_llama::utils;
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TextLlmContext::TextLlmContext(
     common_params& commonParams, common_init_result&& llamaInit,
-    ToolsCompactController& tools)
-    : tools_(tools), llamaInit_(std::move(llamaInit)), params_(commonParams) {
+    ToolsCompactController& tools, bool useModelChatTemplate)
+    : tools_(tools), llamaInit_(std::move(llamaInit)), params_(commonParams),
+      useModelChatTemplate_(useModelChatTemplate) {
   {
 
     model_ = llamaInit_.model.get();
@@ -71,8 +72,8 @@ TextLlmContext::TextLlmContext(
             harmonyCallToken_,
             params_.use_jinja));
 
-    std::string chatTemplate =
-        getChatTemplate(model_, params_, tools_.enabled());
+    std::string chatTemplate = getChatTemplate(
+        model_, params_, tools_.enabled(), useModelChatTemplate_);
     tmpls_ = common_chat_templates_init(model_, chatTemplate);
 
     smpl_.reset(common_sampler_init(model_, params_.sampling));

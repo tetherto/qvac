@@ -154,8 +154,20 @@ std::string getChatTemplateForModel(
 }
 
 std::string getChatTemplate(
-    const ::llama_model* model, const common_params& params,
-    bool toolsCompact) {
+    const ::llama_model* model, const common_params& params, bool toolsCompact,
+    bool useModelChatTemplate) {
+  // Opt-out of the Qwen3 fixed-template override: return the manual override
+  // verbatim (empty string lets llama.cpp pick up the GGUF embedded template).
+  if (useModelChatTemplate) {
+    if (isQwen3Model(model)) {
+      QLOG_IF(
+          Priority::INFO,
+          "[ChatTemplateUtils] use_model_chat_template=true: bypassing fixed "
+          "Qwen3 template and using the model's embedded chat template\n");
+    }
+    return params.chat_template;
+  }
+
   // Use fixed Qwen3 template if model is Qwen3 and Jinja is enabled
   std::string chatTemplate = params.chat_template;
   if (params.use_jinja) {

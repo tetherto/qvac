@@ -174,6 +174,7 @@ const config = {
 | frequency_penalty | float                                       | 0                            | Frequency penalty for sampling                        |
 | tools             | `"true"` or `"false"`                       | `"false"`                    | Enable tool calling with jinja templating             |
 | tools_compact      | `"true"` or `"false"`                       | `"false"`                    | Compact tool tokens from KV cache between turns ([details](./docs/tools-compact.md)) |
+| use_model_chat_template | `"true"` or `"false"`                  | `"false"`                    | Bypass the bundled fixed Qwen3 chat template and use the GGUF embedded `tokenizer.chat_template` instead. No effect on non-Qwen3 models. An explicit `chat_template` string still wins over both. |
 | verbosity         | 0 – 3 (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | 0                            | Logging verbosity level                               |
 | n_discarded       | integer                                     | 0                            | Tokens to discard in sliding window context           |
 | main-gpu          | integer, `"integrated"`, or `"dedicated"`   | —                            | GPU selection for multi-GPU systems                   |
