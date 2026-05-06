@@ -1,5 +1,5 @@
 import { finetune } from "@qvac/sdk";
-import type { FinetuneProgress, FinetuneResult } from "@qvac/sdk";
+import type { FinetuneProgress, FinetuneResult, FinetuneStats } from "@qvac/sdk";
 import {
   ValidationHelpers,
   type TestResult,
@@ -17,6 +17,32 @@ import { AbstractModelExecutor } from "../../shared/executors/abstract-model-exe
 import { finetuneTests } from "../../finetune-tests.js";
 
 const FINETUNE_DEPENDENCY = "finetune-llm";
+
+const STATS_UNCERTAINTY_FIELDS = [
+  "train_loss_uncertainty",
+  "val_loss_uncertainty",
+  "train_accuracy_uncertainty",
+  "val_accuracy_uncertainty",
+] as const satisfies readonly (keyof FinetuneStats)[];
+
+function summarizeStatsUncertaintyShape(stats: FinetuneStats | undefined) {
+  if (!stats) {
+    return "stats absent";
+  }
+
+  const parts: string[] = [];
+  for (const field of STATS_UNCERTAINTY_FIELDS) {
+    const value = stats[field];
+    if (value === undefined) {
+      parts.push(`${field}=absent`);
+    } else if (value === null) {
+      parts.push(`${field}=null`);
+    } else {
+      parts.push(`${field}=${Number.isNaN(value) ? "NaN" : "number"}`);
+    }
+  }
+  return parts.join(", ");
+}
 
 interface DatasetPaths {
   tempRoot: string;
@@ -53,6 +79,7 @@ export class FinetuneExecutor extends AbstractModelExecutor<typeof finetuneTests
     "finetune-progress-streaming": this.progressStreaming.bind(this),
     "finetune-error-cases": this.errorCases.bind(this),
     "finetune-progress-zero-drop": this.progressZeroDrop.bind(this),
+    "finetune-progress-loss-schema": this.progressLossSchema.bind(this),
   } as never;
 
   async teardown(testId: string, context: unknown) {
@@ -294,6 +321,56 @@ export class FinetuneExecutor extends AbstractModelExecutor<typeof finetuneTests
       );
     } catch (error) {
       return this.failWithError("finetune error cases", error);
+    }
+  }
+
+  async progressLossSchema(
+    params: BaseParams,
+    expectation: Expectation,
+  ): Promise<TestResult> {
+    const modelId = await this.resources.ensureLoaded(FINETUNE_DEPENDENCY);
+    const paths = await this.createDatasets();
+
+    try {
+      const handle = finetune({
+        modelId,
+        options: this.buildOptions(paths, params.numberOfEpochs ?? 1),
+      });
+      const progress = await this.collectProgress(handle.progressStream);
+      const result = await handle.result;
+
+      if (result.status !== "COMPLETED") {
+        return {
+          passed: false,
+          output: `Expected COMPLETED status, got ${result.status}`,
+        };
+      }
+      if (progress.length === 0) {
+        return { passed: false, output: "Expected at least one progress event" };
+      }
+
+      let nanCount = 0;
+      let numberCount = 0;
+      let nullCount = 0;
+      for (const p of progress) {
+        const loss = p.loss;
+        if (loss === null) {
+          nullCount++;
+        } else if (Number.isNaN(loss)) {
+          nanCount++;
+        } else {
+          numberCount++;
+        }
+      }
+
+      const summary =
+        `Schema parse OK across ${progress.length} progress events ` +
+        `(loss: number=${numberCount}, NaN=${nanCount}, null=${nullCount}); ` +
+        `stats uncertainty fields: ${summarizeStatsUncertaintyShape(result.stats)}`;
+
+      return ValidationHelpers.validate(summary, expectation);
+    } catch (error) {
+      return this.failWithError("finetune progress loss-schema", error);
     }
   }
 
