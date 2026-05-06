@@ -100,6 +100,11 @@ jobs:
       #     echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
 
       - if: ${{ matrix.os == 'windows-2025' }}
+        name: Set Vulkan SDK Path on Windows Server 2025
+        working-directory: ${{ env.WORKDIR }}
+        run: echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
+
+      - if: ${{ matrix.os == 'windows-2025' }}
         name: Clone and bootstrap vcpkg (Windows)
         run: |
           git clone https://github.com/microsoft/vcpkg.git
