@@ -71,11 +71,15 @@ This skill is **read-only with respect to the user's local working tree**. The u
 
 - `git fetch <remote> "pull/<n>/head:refs/pr/<n>/head"`
 - `git worktree add --detach <cache-path> refs/pr/<n>/head`
-- `git -C <cache-path> reset --hard refs/pr/<n>/head` (only when SHA drifted; only after verifying the worktree is clean)
+- `git -C <cache-path> reset --hard refs/pr/<n>/head` (when SHA drifted)
+- `git -C <cache-path> reset --hard HEAD` (when the cached worktree is dirty at the same SHA)
+- `git -C <cache-path> clean -fdx` (only after SHA drift, to evict stale untracked build/test artifacts)
 - `git worktree remove --force <cache-path>` and `git worktree prune`
 - Read-only diagnostics: `git -C <cache-path> rev-parse|log|show|diff|status`
 
-These run from the script, not from the agent. The agent itself MUST NOT run any of the forbidden commands above — including inside the cache path. The agent only Reads/Greps/Globs files in the cache path and never writes to them. A dirty worktree (any local mutation by the agent) will be wiped by the next invocation's `reset --hard`, so writing inside is both forbidden and wasted.
+These run from the script, not from the agent. The agent itself MUST NOT run any of the forbidden commands above — including inside the cache path. The agent only Reads/Greps/Globs source files in the cache path and never writes to them during `/pr-review`.
+
+The same cache path is also used by `/pr-test`, so it may contain untracked build/test artifacts such as `node_modules`, `dist`, native `build/` directories, or logs. Those artifacts are ignored by `/pr-review`; the patch is computed from committed refs (`<BASE_REF>...HEAD`), not from the worktree's unstaged or untracked state.
 
 ### File access rules
 
