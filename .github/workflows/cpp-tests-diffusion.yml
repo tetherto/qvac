@@ -142,8 +142,9 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: |
-          git clone https://github.com/microsoft/vcpkg.git vcpkg_microsoft
-          cd vcpkg_microsoft && ./bootstrap-vcpkg.sh -disableMetrics
+          git clone https://github.com/microsoft/vcpkg.git/ vcpkg_microsoft
+          cd vcpkg_microsoft
+          ./bootstrap-vcpkg.sh -disableMetrics
           VCPKG_ROOT="$(pwd)"
           echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
           echo "$VCPKG_ROOT" >> $GITHUB_PATH
