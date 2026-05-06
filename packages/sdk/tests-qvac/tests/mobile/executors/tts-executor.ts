@@ -17,7 +17,7 @@ export class MobileTtsExecutor extends ModelAssetExecutor<typeof ttsTests> {
   protected handlers = Object.fromEntries(
     ttsTests.map((test) => {
       const params = test.params as TtsParams;
-      const dep = test.testId.startsWith("tts-supertonic-") ? "tts-supertonic" : "tts-chatterbox";
+      const dep = test.metadata?.dependency || "tts-chatterbox";
       if (params.stream && params.sentenceStream) {
         return [test.testId, this.makeSentenceStream(dep)];
       }
