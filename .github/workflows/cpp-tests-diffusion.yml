@@ -62,15 +62,13 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
 
+      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'windows-11' }}
+        name: Setup LLVM
+        uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
+
       - if: ${{ matrix.os == 'ubuntu-24.04' }}
-        name: Install llvm-19 on Linux
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor | sudo tee /usr/share/keyrings/llvm-archive-keyring.gpg > /dev/null
-          sudo chmod 644 /usr/share/keyrings/llvm-archive-keyring.gpg
-          echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg] http://apt.llvm.org/noble/ llvm-toolchain-noble-19 main" | sudo tee /etc/apt/sources.list.d/llvm-toolchain-noble-19.list > /dev/null
-          sudo apt-get update
-          sudo apt-get install -y llvm-19 llvm-19-tools llvm-19-dev clang-19 clang-tidy-19 clang-format-19 lld-19 llvm-19-runtime libc++-19-dev libc++abi-19-dev pkg-config
+        name: Install pkg-config on Linux
+        run: sudo apt-get install -y pkg-config
 
       - if: ${{ matrix.os == 'ubuntu-24.04' }}
         name: Install Vulkan SDK on Linux
@@ -91,7 +89,6 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: |
           git config --system core.longpaths true
-          choco upgrade llvm -y
 
       - if: ${{ matrix.os == 'windows-11' }}
         name: Install Vulkan SDK on Windows
@@ -208,8 +205,8 @@ jobs:
         if: ${{ matrix.os == 'ubuntu-24.04' }}
         working-directory: ${{ env.WORKDIR }}
         env:
-          CC: clang-19
-          CXX: clang++-19
+          CC: clang
+          CXX: clang++
         run: |
           bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} -D BUILD_TESTING=ON -D ENABLE_COVERAGE=ON
           bare-make build --target addon-test

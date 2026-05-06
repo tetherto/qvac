@@ -42,6 +42,15 @@ export const transcribeSegmentSchema = z.object({
   id: z.number(),
 });
 
+export const vadStateEventSchema = z.object({
+  speaking: z.boolean(),
+  probability: z.number(),
+});
+
+export const endOfTurnEventSchema = z.object({
+  silenceDurationMs: z.number(),
+});
+
 export const transcribeRequestSchema = transcribeParamsSchema.extend({
   type: z.literal("transcribe"),
 });
@@ -52,6 +61,8 @@ const transcriptionResultBase = z.object({
   stats: transcribeStatsSchema.optional(),
   error: z.string().optional(),
   segment: transcribeSegmentSchema.optional(),
+  vad: vadStateEventSchema.optional(),
+  endOfTurn: endOfTurnEventSchema.optional(),
 });
 
 export const transcribeResponseSchema = transcriptionResultBase.extend({
@@ -72,6 +83,16 @@ export type TranscribeResponse = z.infer<typeof transcribeResponseSchema>;
 
 export const transcribeStreamRequestSchema = transcribeBaseSchema.extend({
   type: z.literal("transcribeStream"),
+  emitVadEvents: z.boolean().optional(),
+  endOfTurnSilenceMs: z
+    .number()
+    .int()
+    .nonnegative()
+    .optional()
+    .describe(
+      "Silence (ms) before an endOfTurn event fires. 0 or unset disables end-of-turn detection entirely.",
+    ),
+  vadRunIntervalMs: z.number().int().positive().optional(),
 });
 
 export const transcribeStreamResponseSchema = transcriptionResultBase.extend({
@@ -89,6 +110,15 @@ export type TranscribeStreamClientParams = {
   modelId: string;
   prompt?: string;
   metadata?: boolean;
+  emitVadEvents?: boolean;
+  /**
+   * Silence (ms) before an `endOfTurn` event fires. `0` or unset disables
+   * end-of-turn detection entirely — no `endOfTurn` events will be emitted
+   * even when `emitVadEvents` is `true`. Pass a positive value (e.g. `800`)
+   * to enable.
+   */
+  endOfTurnSilenceMs?: number;
+  vadRunIntervalMs?: number;
 };
 
 export interface TranscribeStreamSession {
@@ -103,6 +133,22 @@ export interface TranscribeStreamMetadataSession {
   end(): void;
   destroy(): void;
   [Symbol.asyncIterator](): AsyncIterator<TranscribeSegment>;
+}
+
+export type VadStateEvent = z.infer<typeof vadStateEventSchema>;
+export type EndOfTurnEvent = z.infer<typeof endOfTurnEventSchema>;
+
+export type TranscribeStreamEvent =
+  | { type: "text"; text: string }
+  | { type: "segment"; segment: TranscribeSegment }
+  | ({ type: "vad" } & VadStateEvent)
+  | ({ type: "endOfTurn" } & EndOfTurnEvent);
+
+export interface TranscribeStreamConversationSession {
+  write(audioChunk: Buffer): void;
+  end(): void;
+  destroy(): void;
+  [Symbol.asyncIterator](): AsyncIterator<TranscribeStreamEvent>;
 }
 
 export type TranscribeStats = z.infer<typeof transcribeStatsSchema>;
