@@ -1,14 +1,53 @@
-name: Prebuilds (BCI Whispercpp)
-
-# Stub workflow on main so it can be dispatched from feature branches.
-# The real implementation lives on the bci-whispercpp feature branch.
+# Build-only workflow. Publishing is handled by on-merge-bci-whispercpp.yml
+name: "Prebuilds (BCI Whispercpp)"
 
 on:
   workflow_dispatch:
+    inputs:
+      workdir:
+        description: "Working directory"
+        required: false
+        default: "packages/bci-whispercpp"
+        type: string
+
+  workflow_call:
+    inputs:
+      ref:
+        description: "ref"
+        type: string
+      repository:
+        type: string
+        required: false
+        default: "tetherto/qvac"
+      workdir:
+        description: "Working directory"
+        type: string
+        required: false
+        default: "packages/bci-whispercpp"
+
+permissions:
+  contents: read
 
 jobs:
-  noop:
-    runs-on: ubuntu-latest
-    steps:
-      - name: No-op stub
-        run: echo "Stub workflow on main; real implementation lives on the bci-whispercpp feature branch."
+  prebuild:
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/reusable-prebuilds.yml
+    with:
+      workdir: ${{ inputs.workdir }}
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+      artifact-name-prefix: bci-whispercpp-
+      linux-extra-packages: libopenblas-dev liblapack-dev libfftw3-dev
+      mac-brew-packages: openblas lapack fftw
+      include-vulkan-sdk: true
+      extra-cmake-defines: -D WHISPER_USE_CUDA=OFF -D WHISPER_USE_OPENVINO=OFF
+      platform-cmake-defines: |
+        darwin: -D WHISPER_USE_METAL=ON
+        ios: -D WHISPER_USE_METAL=ON
+        linux: -D WHISPER_USE_METAL=OFF
+        android: -D WHISPER_USE_METAL=OFF
+        win32: -D WHISPER_USE_METAL=OFF
+    secrets: inherit
