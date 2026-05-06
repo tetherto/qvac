@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <any>
 #include <cstdint>
 #include <memory>
@@ -101,10 +102,6 @@ public:
   }
 
 private:
-  // std::vector<bool> is a bitset; keep a regular char buffer so we can
-  // hand a real C bool pointer to the inference code.
-  using bool_as_char = unsigned char;
-
   // Real inference path. Validates input shape, builds the image-pointer
   // vector, copies the bool mask, runs smolvla_inference_with_timing, and
   // captures the timing into lastTiming_ for runtimeStats().
@@ -126,10 +123,8 @@ private:
       }
     }
 
-    static_assert(
-        sizeof(bool) == sizeof(unsigned char),
-        "bool sizing assumption violated");
-    std::vector<bool_as_char> maskCopy(in.mask.begin(), in.mask.end());
+    auto maskCopy = std::make_unique<bool[]>(in.mask.size());
+    std::copy(in.mask.begin(), in.mask.end(), maskCopy.get());
 
     std::vector<const float*> imagePtrs(in.images.size());
     for (size_t i = 0; i < in.images.size(); i++) {
@@ -151,9 +146,8 @@ private:
         model_.get(), const_cast<const float**>(imagePtrs.data()),
         static_cast<int>(in.images.size()), in.imgWidth, in.imgHeight,
         in.state.data(), static_cast<int>(in.state.size()), in.tokens.data(),
-        reinterpret_cast<const bool*>(maskCopy.data()),
-        static_cast<int>(in.tokens.size()), noisePtr, actions.data(),
-        &nActionsOut, &timing);
+        maskCopy.get(), static_cast<int>(in.tokens.size()), noisePtr,
+        actions.data(), &nActionsOut, &timing);
 
     if (!ok) {
       throw std::runtime_error("SmolVLA inference failed");
