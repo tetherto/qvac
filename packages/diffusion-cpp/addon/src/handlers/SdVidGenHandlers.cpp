@@ -107,23 +107,28 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
     // smallest legal value is 5. 1 is tolerated only if the user wants a
     // single-frame still (some upstream paths accept it); we gate it below 5
     // explicitly to catch accidental single-frame video configs. Common
-    // values: 17 (~0.7s @24fps), 33 (~1.3s), 49 (~2s), 81 (~3.4s).
+    // values @ default fps=16: 17 (~1.06s), 33 (~2.06s), 49 (~3.06s),
+    // 81 (~5.06s, Wan 1.3B native training length).
 
     {"video_frames",
      [](SdVidGenConfig& c, const picojson::value& v) {
        const int n = static_cast<int>(requireNum(v, "video_frames"));
+       // Mirror the JS-side message in video.js -- both layers list the
+       // same valid set up to 81 (Wan 1.3B native cap) so callers see a
+       // consistent error regardless of which validator fires first.
+       constexpr const char* kFrameRuleHint =
+           "video_frames must be an integer >= 5 of the form (4*k + 1). "
+           "Valid values: 5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49, "
+           "53, 57, 61, 65, 69, 73, 77, 81 (Wan 1.3B native training "
+           "length). Got: ";
        if (n < 5)
          throw StatusError(
              general_error::InvalidArgument,
-             "video_frames must be >= 5 (and of the form 4*k+1), got: " +
-                 std::to_string(n));
+             std::string(kFrameRuleHint) + std::to_string(n));
        if ((n - 1) % 4 != 0)
          throw StatusError(
              general_error::InvalidArgument,
-             "video_frames must satisfy n = 4*k+1 (valid: 5, 9, 13, 17, 21, "
-             "25, 29, 33, 37, 41, 45, 49, 53, 57, 61, 65, 69, 73, 77, 81, "
-             "...), got: " +
-                 std::to_string(n));
+             std::string(kFrameRuleHint) + std::to_string(n));
        c.videoFrames = n;
      }},
 
@@ -176,8 +181,9 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
      }},
 
     // flow_shift per-job override. 0 = fall through to SdCtxConfig::flowShift
-    // (which defaults to infinity / model-embedded). Wan T2V 1.3B recommended
-    // range is 5.0 - 8.0.
+    // (which defaults to infinity / model-embedded). Wan T2V 1.3B sweet spot:
+    // 3.0 (see examples/generate-video-wan.js). Higher values (5+) tend to
+    // produce visibly "frozen" video.
     {"flow_shift",
      [](SdVidGenConfig& c, const picojson::value& v) {
        c.flowShift = static_cast<float>(requireNum(v, "flow_shift"));

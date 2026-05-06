@@ -221,7 +221,11 @@ class SdInterface {
 
     // ── Prompt-only path (txt2img / txt2vid) ──────────────────────────────
     // txt2vid may still ship control_frames for VACE-guided generation even
-    // without an init_image, so forward those too.
+    // without an init_image, so forward those too. Both keys are stripped
+    // from the JSON payload above and re-attached as raw typed arrays on
+    // jobArgs below -- this is the *only* supported transport for these
+    // buffers; passing them inside the JSON would JSON.stringify each byte
+    // into a decimal number (~3-4x bloat) and break native deserialization.
     const serializable = { ...params }
     delete serializable.end_image
     delete serializable.control_frames

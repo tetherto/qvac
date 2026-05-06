@@ -423,8 +423,10 @@ TEST(SdVidGenHandlers_CacheThreshold, DirectOverrideAccepted) {
 TEST(SdVidGenHandlers_Defaults, MatchWan21T2vRecommendedConfig) {
   SdVidGenConfig cfg;
   EXPECT_EQ(cfg.mode, "txt2vid");
-  EXPECT_EQ(cfg.width, 832);
-  EXPECT_EQ(cfg.height, 480);
+  // Portrait default (phone-screen friendly); Wan 2.1 T2V 1.3B handles
+  // both orientations and the upstream training res is 832x480 landscape.
+  EXPECT_EQ(cfg.width, 480);
+  EXPECT_EQ(cfg.height, 832);
   EXPECT_EQ(cfg.videoFrames, 33);
   EXPECT_EQ(cfg.fps, 16);
   EXPECT_EQ(cfg.seed, -1);
@@ -453,7 +455,7 @@ TEST(SdVidGenHandlers_UnknownKeys, AreSilentlyIgnored) {
       cfg, makeObj("some_future_field", str("value"))));
   // Defaults must be preserved -- handler silently ignored the unknown key.
   EXPECT_EQ(cfg.mode, "txt2vid");
-  EXPECT_EQ(cfg.width, 832);
+  EXPECT_EQ(cfg.width, 480);
 }
 
 // -----------------------------------------------------------------------------

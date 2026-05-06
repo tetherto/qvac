@@ -38,13 +38,17 @@ struct SdVidGenConfig {
   std::string negativePrompt;
 
   // -- Video dimensions ------------------------------------------------------
-  // Wan 2.1 T2V 1.3B sweet spot: 832 x 480. Must be multiples of 8.
-  int width = 832;
-  int height = 480;
+  // Default 480 x 832 (portrait, phone-screen friendly). Wan 2.1 T2V 1.3B is
+  // trained on 832 x 480 landscape; the model handles both orientations
+  // equally well, so we default to portrait for mobile-first display.
+  // Override via params.width / params.height. Must be multiples of 8.
+  int width = 480;
+  int height = 832;
 
   // -- Frame count -----------------------------------------------------------
   // Wan latent temporal packing requires (4 * k + 1) total frames where
-  // k >= 1. Validated in the handler; default 33 == ~1.3s at 24 fps.
+  // k >= 1. Validated in the handler; default 33 == ~2 s at the default
+  // fps of 16 (33 / 16 ~= 2.06 s).
   int videoFrames = 33;
 
   // -- Frames per second ----------------------------------------------------
@@ -62,10 +66,16 @@ struct SdVidGenConfig {
   sample_method_t sampleMethod = EULER_SAMPLE_METHOD; // Wan recommended
   scheduler_t scheduler = SIMPLE_SCHEDULER;           // Wan recommended
   float cfgScale = 6.0f;                              // guidance.txt_cfg
-  // Flow-matching noise schedule shift. Wan T2V 1.3B: 5.0-8.0. Leave at 0
-  // to fall through to the context-level SdCtxConfig::flowShift, which in
-  // turn defaults to infinity (model embedded). Use > 0 for a per-job
-  // override.
+  // Flow-matching noise schedule shift. Convention:
+  //   - 0.0f (default sentinel): fall through to SdCtxConfig::flowShift,
+  //     which itself defaults to infinity (model-embedded value).
+  //   - > 0.0f: per-job override.
+  // Wan T2V 1.3B sweet spot: 3.0. Higher values (5+) compress the
+  // rectified-flow trajectory and can produce visibly "frozen" video
+  // (consecutive frames near-identical); some upstream docs misleadingly
+  // mention 5-8 -- see examples/generate-video-wan.js for the rationale.
+  // To literally disable flow-shifting, set the ctx-level flow_shift,
+  // not this one (0.0f here is reserved as the fall-through sentinel).
   float flowShift = 0.0f;
 
   // -- High-noise expert (Wan 2.2 only) -------------------------------------
@@ -94,7 +104,7 @@ struct SdVidGenConfig {
   float vaceStrength = 1.0f;
 
   // -- VAE tiling -- strongly recommended ON for Wan (VAE peaks ~4-6 GB
-  //                  at 832x480 without tiling). Mapped to
+  //                  at 832x480 / 480x832 without tiling). Mapped to
   //                  sd_vid_gen_params_t::vae_tiling_params.
   bool vaeTiling = true;
   int vaeTileSizeX = 512;      // tile width  in pixels

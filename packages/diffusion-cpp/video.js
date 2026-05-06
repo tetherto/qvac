@@ -25,11 +25,19 @@ const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or bein
 // Wan 2.1 / 2.2 latent temporal packing requires a (4 * k + 1) frame count
 // where k >= 1. The native SdVidGenHandlers enforce the same rule — we check
 // here too so the caller sees the error before any native work runs.
+//
+// Wan 1.3B's positional embeddings cap meaningful generation at 81 frames
+// (its native training length, ~5.06 s @ 16 fps); going beyond produces
+// visible quality breakdown / repetition. We don't reject above 81 because
+// larger Wan variants (14B, future checkpoints) may extend that range, but
+// the error message points users to the recommended set.
 function validateVideoFrames (n) {
   if (!Number.isFinite(n) || n < 5 || (n - 1) % 4 !== 0) {
     throw new Error(
       'video_frames must be an integer >= 5 of the form (4*k + 1). ' +
-      `Valid values: 5, 9, 13, 17, 21, 25, 29, 33, 37, 41, ... Got: ${n}`
+      'Valid values: 5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49, 53, ' +
+      `57, 61, 65, 69, 73, 77, 81 (Wan 1.3B native training length). ` +
+      `Got: ${n}`
     )
   }
 }
@@ -81,6 +89,20 @@ class VideoStableDiffusion {
     this._config = config || {}
     this.logger = new QvacLogger(logger)
     this.opts = opts
+
+    // Friendly warning: ESRGAN upscale is image-only (post-generation).
+    // The native ctx accepts these keys for forward-compatibility, but the
+    // video pipeline never wires them in, so they're silent no-ops here.
+    // Surface that early so callers don't waste time tuning a tile size
+    // that has no effect.
+    const upscalerKeys = Object.keys(this._config).filter((k) =>
+      k.startsWith('upscaler_'))
+    if (upscalerKeys.length > 0) {
+      this.logger.warn(
+        `${upscalerKeys.join(', ')} provided in config but ESRGAN upscale ` +
+        'is image-only -- VideoStableDiffusion will ignore these keys.'
+      )
+    }
     // Lazy deref + optional chain: safe before `_load()` and after `unload()`.
     this._job = createJobHandler({ cancel: () => this.addon?.cancel() })
     this._run = exclusiveRunQueue()
@@ -218,16 +240,16 @@ class VideoStableDiffusion {
    * @param {'txt2vid'|'img2vid'|'flf2vid'} params.mode - Required.
    * @param {string} params.prompt                      - Required.
    * @param {string} [params.negative_prompt]
-   * @param {number} [params.width=832]                 - Wan 2.1 T2V 1.3B sweet spot.
-   * @param {number} [params.height=480]
-   * @param {number} [params.video_frames=33]           - Must be (4*k+1); >= 5.
+   * @param {number} [params.width=480]                 - Default portrait (phone-screen friendly).
+   * @param {number} [params.height=832]                - Override either field for landscape (832x480 is Wan 1.3B's training res).
+   * @param {number} [params.video_frames=33]           - Must be (4*k+1); 5..81 recommended for Wan 1.3B.
    * @param {number} [params.fps=16]                    - AVI framerate (presentational).
    * @param {number} [params.seed=-1]                   - -1 = random.
    * @param {number} [params.steps=30]                  - Low-noise / only expert.
    * @param {string} [params.sampling_method='euler']
    * @param {string} [params.scheduler='simple']
    * @param {number} [params.cfg_scale=6.0]
-   * @param {number} [params.flow_shift]                - Per-job override of ctx flow_shift.
+   * @param {number} [params.flow_shift]                - Per-job override; > 0 wins, 0/omitted falls through to ctx flow_shift. Wan T2V 1.3B sweet spot: 3.0.
    * @param {number} [params.high_noise_steps]          - Wan 2.2 only.
    * @param {string} [params.high_noise_sampler]        - Wan 2.2 only.
    * @param {string} [params.high_noise_scheduler]      - Wan 2.2 only.
@@ -266,15 +288,17 @@ class VideoStableDiffusion {
     const { mode } = params
 
     // ── Dimension alignment (multiples of 8) ─────────────────────────────
-    // Only validate provided dims; C++ falls back to 832x480 when omitted.
+    // Only validate provided dims; C++ falls back to 480x832 (portrait,
+    // phone-screen friendly) when omitted. Override either field for
+    // landscape (832x480 is Wan 1.3B's training res).
     const alignTo = 8
     const w = params.width
     const h = params.height
     const wBad = w != null && (!Number.isFinite(w) || w % alignTo !== 0)
     const hBad = h != null && (!Number.isFinite(h) || h % alignTo !== 0)
     if (wBad || hBad) {
-      const suggestW = Number.isFinite(w) ? Math.round(w / alignTo) * alignTo : 832
-      const suggestH = Number.isFinite(h) ? Math.round(h / alignTo) * alignTo : 480
+      const suggestW = Number.isFinite(w) ? Math.round(w / alignTo) * alignTo : 480
+      const suggestH = Number.isFinite(h) ? Math.round(h / alignTo) * alignTo : 832
       throw new Error(
         `width and height must be multiples of ${alignTo}. ` +
         `Got: ${w}x${h}. Use ${suggestW}x${suggestH} instead.`
@@ -432,6 +456,15 @@ class VideoStableDiffusion {
 
     this.logger.info(`Starting video generation with mode: ${mode}`)
 
+    // Two-level concurrency model:
+    //  1. `_run` (exclusiveRunQueue) serializes the *synchronous body* of
+    //     `_runInternal` -- one validate-and-dispatch at a time.
+    //  2. `_hasActiveResponse` guards against overlap of the *asynchronous
+    //     generation* itself: `_runInternal` returns the QvacResponse
+    //     before generation completes, which releases the queue lock, so a
+    //     second `model.run(...)` could otherwise enter while the previous
+    //     response is still streaming. This flag rejects that case
+    //     explicitly instead of letting both jobs fight over the addon.
     if (this._hasActiveResponse) {
       throw new Error(RUN_BUSY_ERROR_MESSAGE)
     }

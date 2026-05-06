@@ -53,13 +53,19 @@ export interface VideoGenerationParams {
   prompt: string
   negative_prompt?: string
 
-  /** Video dimensions (multiples of 8). Wan 2.1 T2V 1.3B sweet spot: 832x480. */
+  /**
+   * Video dimensions (multiples of 8). Default `480 x 832` portrait
+   * (phone-screen friendly). Wan 2.1 T2V 1.3B is trained on `832 x 480`
+   * landscape and handles both orientations equally well -- override
+   * either field to switch.
+   */
   width?: number
   height?: number
 
   /**
    * Total frame count. Must be of the form `(4 * k + 1)` with `k >= 1`
-   * (5, 9, 13, 17, 21, 25, 29, 33, ...). Default: 33 (~1.4s at 24 fps).
+   * (5, 9, 13, 17, 21, 25, 29, 33, ...). Default: 33 (~2 s at the default
+   * fps of 16; 33 / 16 ~= 2.06 s).
    */
   video_frames?: number
 
@@ -74,7 +80,17 @@ export interface VideoGenerationParams {
   sampling_method?: SamplerMethod
   scheduler?: ScheduleType
   cfg_scale?: number
-  /** Flow-matching noise schedule shift. Per-job override of `SdConfig.flow_shift`. */
+  /**
+   * Per-job override of `SdConfig.flow_shift` (flow-matching noise schedule
+   * shift). **Convention:** any value `> 0` overrides; the sentinel value
+   * `0` (the default when omitted) falls through to the context-level
+   * `SdConfig.flow_shift`, which itself defaults to the model's embedded
+   * value. Do not pass `0` to "disable" flow shifting -- omit the field or
+   * use the ctx-level setting instead.
+   *
+   * Wan T2V 1.3B sweet spot: `3.0` (lower values produce visibly more
+   * motion; higher values flatten the trajectory).
+   */
   flow_shift?: number
 
   // ── Wan 2.2 high-noise expert knobs (ignored when single expert) ──────

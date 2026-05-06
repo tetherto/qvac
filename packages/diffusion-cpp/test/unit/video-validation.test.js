@@ -213,7 +213,7 @@ test('run | suggests a nearby valid pair in the error message', async (t) => {
   )
 })
 
-test('run | width/height omitted is allowed (C++ defaults to 832x480)', async (t) => {
+test('run | width/height omitted is allowed (C++ defaults to 480x832)', async (t) => {
   const m = makeWanModel()
   // Validation passes; addon-not-loaded throws afterwards.
   await t.exception.all(
