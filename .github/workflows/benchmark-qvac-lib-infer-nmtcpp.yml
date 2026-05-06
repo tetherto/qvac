@@ -159,11 +159,8 @@ jobs:
       VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/qvac-lib-infer-nmtcpp/vcpkg/cache,readwrite"
 
     steps:
-      - name: Update C++ tools
-        run: |
-          wget https://apt.llvm.org/llvm.sh
-          chmod +x llvm.sh
-          sudo ./llvm.sh 19 all
+      - name: Setup LLVM
+        uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
 
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -194,30 +191,6 @@ jobs:
           sudo ln -s /usr/local/bin/cmake "$BARE_MAKE_CMAKE"
           echo "Verifying cmake version used by bare-make:"
           "$BARE_MAKE_CMAKE" --version
-
-      - name: Configure scoped registry for @tetherto and @qvac packages
-        working-directory: ${{ env.PKG_DIR }}
-        env:
-          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
-        shell: bash
-        run: |
-          set -eu
-          cat > .npmrc <<NPMRC
-          registry=https://registry.npmjs.org/
-          @qvac:registry=https://registry.npmjs.org/
-          @tetherto:registry=https://npm.pkg.github.com/
-          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
-          //npm.pkg.github.com/:_authToken=${GIT_PAT}
-          NPMRC
-          if [ -n "${GIT_PAT:-}" ]; then
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
-          else
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
-          fi
 
       - name: Configure vcpkg
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV

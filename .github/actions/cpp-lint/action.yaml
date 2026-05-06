@@ -103,6 +103,9 @@ runs:
         sudo apt update
         sudo apt install vulkan-sdk
 
+    - name: Setup LLVM
+      uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
+
     - name: Generate build system
       continue-on-error: true
       shell: bash
@@ -119,19 +122,16 @@ runs:
     - name: Check C++ files format
       continue-on-error: true
       shell: bash
+      env:
+        TARGET_SHA: ${{ inputs.target_sha }}
+        PR_HEAD_SHA: ${{ inputs.pr_head_sha }}
       run: |
-        TARGET_SHA=${{ inputs.target_sha }}
-        PR_HEAD_SHA=${{ inputs.pr_head_sha }}
         if [ -z "$TARGET_SHA" ] || [ -z "$PR_HEAD_SHA" ]; then
           echo "No target or head SHA specified, skipping format check."
           exit 0
         fi
-    
-        wget https://apt.llvm.org/llvm.sh
-        chmod +x llvm.sh
-        sudo ./llvm.sh 19 all
-    
-        OUTPUT=$(git-clang-format-19 --binary clang-format-19 --diff $TARGET_SHA $PR_HEAD_SHA 2>&1)
+
+        OUTPUT=$(git-clang-format --binary clang-format --diff "$TARGET_SHA" "$PR_HEAD_SHA" 2>&1)
         EXIT_CODE=$?
         if [ $EXIT_CODE -ne 0 ]; then
           if echo "$OUTPUT" | grep -q "no modified files to format"; then

@@ -1,0 +1,136 @@
+name: SDK E2E Report Start
+description: >
+  Posts a per-platform "running" comment on the PR for an SDK e2e run and
+  minimizes any prior comment from an earlier run (matched by a hidden marker).
+  No-op outside PR context. Emits comment-ids JSON keyed by platform for
+  sdk-e2e-report-finalize to edit in place once results are available.
+
+inputs:
+  family:
+    description: "SDK e2e family: desktop | android | ios"
+    required: true
+  platforms:
+    description: >
+      JSON array of platform keys targeted by this run, e.g.
+      ["linux","windows","macos"] for desktop or ["android"] / ["ios"].
+    required: true
+  suite:
+    description: "Suite filter passed to the run (empty = full)"
+    required: false
+    default: ""
+  filter:
+    description: "Test filter passed to the run (empty = all)"
+    required: false
+    default: ""
+  exclude-suite:
+    description: "Exclude-suite filter passed to the run"
+    required: false
+    default: ""
+
+outputs:
+  comment-ids:
+    description: >
+      JSON object mapping platform key -> PR comment id. Empty object when
+      not running in PR context (no comments posted).
+    value: ${{ steps.post.outputs.comment-ids }}
+
+runs:
+  using: composite
+  steps:
+    - name: Post/refresh running comments
+      id: post
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
+      env:
+        FAMILY: ${{ inputs.family }}
+        PLATFORMS: ${{ inputs.platforms }}
+        SUITE: ${{ inputs.suite }}
+        FILTER: ${{ inputs.filter }}
+        EXCLUDE_SUITE: ${{ inputs.exclude-suite }}
+      with:
+        script: |
+          const family = process.env.FAMILY;
+          const platforms = JSON.parse(process.env.PLATFORMS || '[]');
+          const suite = process.env.SUITE || '';
+          const filter = process.env.FILTER || '';
+          const excludeSuite = process.env.EXCLUDE_SUITE || '';
+
+          const pr = context.payload.pull_request?.number;
+          if (!pr) {
+            core.info('No pull_request context; skipping comment posting.');
+            core.setOutput('comment-ids', '{}');
+            return;
+          }
+
+          const runUrl =
+            `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}` +
+            `/actions/runs/${context.runId}`;
+
+          const fmt = (v) => (v && v.length > 0 ? `\`${v}\`` : '`(none)`');
+          const configLine =
+            `**Config:** suite=${fmt(suite)} · filter=${fmt(filter)} · exclude=${fmt(excludeSuite)}`;
+
+          const marker = (p) => `<!-- sdk-e2e-report:pr=${pr}:family=${family}:platform=${p} -->`;
+
+          // Fetch all issue comments with their minimized state via GraphQL,
+          // since REST listComments does not return isMinimized.
+          const existing = [];
+          let cursor = null;
+          for (;;) {
+            const page = await github.graphql(
+              `query($owner: String!, $repo: String!, $number: Int!, $cursor: String) {
+                 repository(owner: $owner, name: $repo) {
+                   pullRequest(number: $number) {
+                     comments(first: 100, after: $cursor) {
+                       pageInfo { hasNextPage endCursor }
+                       nodes { id databaseId isMinimized body }
+                     }
+                   }
+                 }
+               }`,
+              { owner: context.repo.owner, repo: context.repo.repo, number: pr, cursor }
+            );
+            const conn = page.repository.pullRequest.comments;
+            existing.push(...conn.nodes);
+            if (!conn.pageInfo.hasNextPage) break;
+            cursor = conn.pageInfo.endCursor;
+          }
+
+          const commentIds = {};
+          for (const platform of platforms) {
+            const mark = marker(platform);
+            const priors = existing.filter((c) => (c.body || '').includes(mark) && !c.isMinimized);
+            for (const prior of priors) {
+              try {
+                await github.graphql(
+                  `mutation($id: ID!) {
+                     minimizeComment(input: { subjectId: $id, classifier: OUTDATED }) {
+                       minimizedComment { isMinimized }
+                     }
+                   }`,
+                  { id: prior.id }
+                );
+                core.info(`Minimized prior comment for ${platform} (id=${prior.databaseId}).`);
+              } catch (err) {
+                core.warning(`Failed to minimize prior comment for ${platform} (id=${prior.databaseId}): ${err.message}`);
+              }
+            }
+
+            const body = [
+              mark,
+              `### QVAC E2E — \`${platform}\` — running`,
+              `[View run](${runUrl})`,
+              configLine,
+            ].join('\n');
+
+            const created = await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr,
+              body,
+            });
+
+            commentIds[platform] = created.data.id;
+            core.info(`Posted running comment for ${platform} (id=${created.data.id}).`);
+          }
+
+          core.setOutput('comment-ids', JSON.stringify(commentIds));

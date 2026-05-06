@@ -220,38 +220,6 @@ jobs:
           cache: pip
           cache-dependency-path: ${{ env.WORKDIR }}/benchmarks/client/requirements.txt
 
-      - name: Configure scoped registry for @tetherto and @qvac packages
-        env:
-          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
-          WORKDIR: ${{ env.WORKDIR }}
-        shell: bash
-        run: |
-          echo "Configuring scoped registry for @tetherto and @qvac packages..."
-          set -eu
-
-          {
-            echo "registry=https://registry.npmjs.org/"
-            echo "@qvac:registry=https://registry.npmjs.org/"
-            echo "@tetherto:registry=https://npm.pkg.github.com/"
-            echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}"
-            echo "//npm.pkg.github.com/:_authToken=${GIT_PAT}"
-          } > .npmrc
-
-          # Also write .npmrc into the package workdir (monorepo-safe)
-          if [ -d "$WORKDIR" ]; then
-            cp .npmrc "$WORKDIR/.npmrc"
-          fi
-
-          if [ -n "${GIT_PAT:-}" ]; then
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
-          else
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
-          fi
-
       - name: Install bare runtime
         run: npm install -g bare
 
@@ -264,6 +232,10 @@ jobs:
           path: ${{ env.WORKDIR }}/vcpkg/cache
           restore-keys: linux-x64-
 
+      - name: Setup LLVM
+        if: inputs.addon_version == ''
+        uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
+
       - name: Build addon from source (monorepo workdir)
         if: inputs.addon_version == ''
         working-directory: ${{ env.WORKDIR }}
@@ -271,24 +243,13 @@ jobs:
           echo "=== Building addon from source in WORKDIR ==="
           echo "WORKDIR: $PWD"
 
-          # Ensure vcpkg cache folder exists (monorepo-local)
           mkdir -p vcpkg/cache
 
-          # Maximize build space
           echo "Cleaning up disk space..."
           sudo docker image prune --all --force
           sudo rm -rf /opt/hostedtoolcache/CodeQL /opt/ghc /usr/share/dotnet /usr/local/lib/android || true
           df -h
 
-          # Install LLVM 19
-          echo "Installing LLVM 19..."
-          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
-          sudo chmod 644 /etc/apt/trusted.gpg.d/apt.llvm.org.asc
-          wget -q https://apt.llvm.org/llvm.sh
-          chmod +x llvm.sh
-          sudo ./llvm.sh 19 all
-
-          # Install bare-make
           npm install -g bare-make
 
           # Configure vcpkg
@@ -348,7 +309,6 @@ jobs:
         working-directory: ${{ env.WORKDIR }}/benchmarks/server
         run: |
           echo "Installing server dependencies..."
-          cp "$GITHUB_WORKSPACE/.npmrc" .npmrc
           npm install
 
       - name: Setup Python virtual environment
