@@ -2,11 +2,16 @@
 
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <cstdint>
+#include <deque>
+#include <exception>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <common/sampling.h>
@@ -55,21 +60,19 @@ struct RuntimeStatsSnapshot {
   double elapsedMs = 0.0;
 };
 
+struct BatchResult {
+  std::vector<std::string> outputs;
+  RuntimeStatsSnapshot stats;
+};
+
 /// Continuous-batching driver: owns the underlying `MultiRequestBatcher`,
 /// per-slot `common_sampler` + UTF-8 buffers, and the production wiring
 /// to `llama_decode`, `common_sampler_*`, `common_token_to_piece`,
 /// `llama_vocab_is_eog` and `llama_memory_seq_rm`.
 ///
-/// Step protocol (caller invokes `step()` in a loop while `hasWork()`):
-///   1. fill batch from active slots
-///   2. llama_decode
-///   3. advance slot positions
-///   4. sample for every just-idle slot, fire onToken
-///   5. mark EOG / limit-reached slots finished
-///   6. extract finished slots, fire onDone, KV-clear
-///
-/// Single-threaded by contract: callers must not invoke `submit`,
-/// `step`, `cancel`, or `clear` concurrently.
+/// Callers enqueue request groups and wait for their result. A scheduler-owned
+/// worker thread admits queued requests into free slots, runs decode chunks,
+/// and refills slots as soon as completed requests are drained.
 class ContinuousBatchScheduler {
 public:
   /// @param ctx                Live llama_context. Must outlive `*this`.
@@ -98,6 +101,10 @@ public:
   operator=(ContinuousBatchScheduler&&) = delete;
 
   ~ContinuousBatchScheduler();
+
+  /// Queue a group of requests and block until every request in the group has
+  /// completed, failed, or been cancelled. Outputs are returned in input order.
+  [[nodiscard]] BatchResult processBatch(std::vector<SubmitRequest>&& requests);
 
   /// Admit one request and return the assigned slot id (`seqId`).
   ///
@@ -142,15 +149,48 @@ public:
   void clear();
 
 private:
+  struct BatchGroup {
+    explicit BatchGroup(size_t requestCount) : outputs(requestCount) {}
+
+    std::vector<std::string> outputs;
+    RuntimeStatsSnapshot stats;
+    size_t completedCount = 0;
+    size_t totalCount = 0;
+    bool done = false;
+    std::exception_ptr error;
+  };
+
+  struct QueuedRequest {
+    SubmitRequest request;
+    std::shared_ptr<BatchGroup> group;
+    size_t outputIndex = 0;
+  };
+
   struct SlotState {
     StreamCallbacks streams;
     std::unique_ptr<ToolsCompactController> tools;
     std::unique_ptr<TextLlmContext> policy;
     std::string cacheKey;
+    std::shared_ptr<BatchGroup> group;
+    size_t outputIndex = 0;
     bool saveCacheToDisk = false;
     bool prefillOnly = false;
   };
 
+  void ensureWorkerStartedLocked();
+  void workerLoop();
+  void admitPendingIntoFreeSlotsLocked();
+  [[nodiscard]] uint32_t submitLocked(QueuedRequest&& queued);
+  [[nodiscard]] bool stepLocked(std::unique_lock<std::mutex>* lock = nullptr);
+  [[nodiscard]] bool hasWorkLocked() const;
+  [[nodiscard]] unsigned numActiveLocked() const;
+  void resetRuntimeStatsLocked();
+  [[nodiscard]] RuntimeStatsSnapshot runtimeStatsLocked() const;
+  void completeGroupRequestLocked(const std::shared_ptr<BatchGroup>& group);
+  void failGroupLocked(
+      const std::shared_ptr<BatchGroup>& group, std::exception_ptr error);
+  void cancelPendingLocked();
+  void clearLocked();
   void notifyDone(uint32_t seqId);
   void freeSlot(uint32_t seqId);
   void saveCacheForSlot(uint32_t seqId, const SlotState& slot);
@@ -175,6 +215,12 @@ private:
   LlamaBatch batch_;
   std::vector<std::optional<SlotState>> slots_;
   std::atomic<bool> cancelRequested_ = false;
+  mutable std::mutex mutex_;
+  std::condition_variable workCv_;
+  std::deque<QueuedRequest> pending_;
+  std::thread worker_;
+  bool workerStarted_ = false;
+  bool stopping_ = false;
   uint64_t decodeStepCount_ = 0;
   uint64_t concurrentSeqSum_ = 0;
   int64_t completedCacheTokens_ = 0;

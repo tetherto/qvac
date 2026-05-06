@@ -2,8 +2,10 @@
 
 #include <algorithm>
 #include <chrono>
+#include <exception>
 #include <optional>
 #include <stdexcept>
+#include <thread>
 #include <utility>
 
 #include <common/common.h>
@@ -71,13 +73,128 @@ ContinuousBatchScheduler::ContinuousBatchScheduler(
 }
 
 ContinuousBatchScheduler::~ContinuousBatchScheduler() {
-  // Drain in-flight slots so onDone fires and KV is cleared before any
-  // per-slot override samplers (and the pre-built base samplers) are
-  // destroyed by the vector teardowns.
-  clear();
+  {
+    std::scoped_lock lock(mutex_);
+    stopping_ = true;
+    cancelRequested_.store(true);
+  }
+  workCv_.notify_all();
+  if (worker_.joinable()) {
+    worker_.join();
+  }
+  std::scoped_lock lock(mutex_);
+  clearLocked();
+}
+
+BatchResult
+ContinuousBatchScheduler::processBatch(std::vector<SubmitRequest>&& requests) {
+  auto group = std::make_shared<BatchGroup>(requests.size());
+  group->totalCount = requests.size();
+  if (requests.empty()) {
+    return {.outputs = {}, .stats = runtimeStats()};
+  }
+
+  std::unique_lock lock(mutex_);
+  if (pending_.empty() && !hasWorkLocked()) {
+    resetRuntimeStatsLocked();
+  }
+  ensureWorkerStartedLocked();
+  for (size_t i = 0; i < requests.size(); i++) {
+    pending_.push_back(QueuedRequest{
+        .request = std::move(requests[i]), .group = group, .outputIndex = i});
+  }
+  workCv_.notify_all();
+  workCv_.wait(lock, [&group] { return group->done; });
+  if (group->error) {
+    std::rethrow_exception(group->error);
+  }
+  return {.outputs = std::move(group->outputs), .stats = group->stats};
 }
 
 uint32_t ContinuousBatchScheduler::submit(SubmitRequest&& request) {
+  std::scoped_lock lock(mutex_);
+  return submitLocked(
+      QueuedRequest{.request = std::move(request), .group = nullptr});
+}
+
+void ContinuousBatchScheduler::ensureWorkerStartedLocked() {
+  if (!workerStarted_) {
+    workerStarted_ = true;
+    worker_ = std::thread([this] { workerLoop(); });
+  }
+}
+
+void ContinuousBatchScheduler::workerLoop() {
+  std::unique_lock lock(mutex_);
+  while (true) {
+    workCv_.wait(lock, [this] {
+      return stopping_ || cancelRequested_.load() || !pending_.empty() ||
+             hasWorkLocked();
+    });
+    if (stopping_) {
+      break;
+    }
+    if (cancelRequested_.load() && !hasWorkLocked()) {
+      cancelPendingLocked();
+      cancelRequested_.store(false);
+      continue;
+    }
+    admitPendingIntoFreeSlotsLocked();
+    if (!hasWorkLocked()) {
+      continue;
+    }
+    try {
+      const bool stepOk = stepLocked(&lock);
+      (void)stepOk;
+    } catch (...) {
+      const std::exception_ptr error = std::current_exception();
+      std::vector<std::shared_ptr<BatchGroup>> activeGroups;
+      for (const auto& slot : slots_) {
+        if (slot.has_value() && slot->group) {
+          activeGroups.push_back(slot->group);
+        }
+      }
+      for (const auto& group : activeGroups) {
+        failGroupLocked(group, error);
+      }
+      std::vector<std::shared_ptr<BatchGroup>> pendingGroups;
+      for (const auto& queued : pending_) {
+        if (queued.group) {
+          pendingGroups.push_back(queued.group);
+        }
+      }
+      for (const auto& group : pendingGroups) {
+        failGroupLocked(group, error);
+      }
+      pending_.clear();
+      clearLocked();
+      cancelRequested_.store(false);
+    }
+    admitPendingIntoFreeSlotsLocked();
+  }
+  cancelPendingLocked();
+  clearLocked();
+}
+
+void ContinuousBatchScheduler::admitPendingIntoFreeSlotsLocked() {
+  while (!pending_.empty() && batcher_.firstFreeSeqId().has_value()) {
+    QueuedRequest queued = std::move(pending_.front());
+    const std::shared_ptr<BatchGroup> group = queued.group;
+    pending_.pop_front();
+    if (group && group->done) {
+      continue;
+    }
+    try {
+      const uint32_t seqId = submitLocked(std::move(queued));
+      (void)seqId;
+    } catch (...) {
+      failGroupLocked(group, std::current_exception());
+    }
+  }
+}
+
+uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
+  SubmitRequest& request = queued.request;
   // Resolve per-request sampling/cap from base + overrides without
   // touching context state. Drive a *local* `common_params` and an
   // empty `CommonSamplerPtr` through `applyGenerationParamsToContext`
@@ -193,18 +310,33 @@ uint32_t ContinuousBatchScheduler::submit(SubmitRequest&& request) {
       .tools = std::move(tools),
       .policy = std::move(policy),
       .cacheKey = std::move(request.cacheKey),
+      .group = std::move(queued.group),
+      .outputIndex = queued.outputIndex,
       .saveCacheToDisk = request.saveCacheToDisk,
       .prefillOnly = request.prefill});
   return seqId;
 }
 
 bool ContinuousBatchScheduler::step() {
+  std::unique_lock lock(mutex_);
+  return stepLocked(&lock);
+}
+
+bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
   const auto fillResult = batcher_.fillBatch(batch_);
   if (fillResult.chunkSize == 0) {
     return true;
   }
 
-  if (const int decodeRc = llama_decode(ctx_, *batch_); decodeRc != 0) {
+  if (lock != nullptr) {
+    lock->unlock();
+  }
+  const int decodeRc = llama_decode(ctx_, *batch_);
+  if (lock != nullptr) {
+    lock->lock();
+  }
+
+  if (decodeRc != 0) {
     batcher_.markAllFinished(StopReason::DecodeError);
     auto kvClear = [this](uint32_t seqId) {
       llama_memory_t mem = llama_get_memory(ctx_);
@@ -262,6 +394,9 @@ bool ContinuousBatchScheduler::step() {
       const unsigned generatedAfterAccept =
           static_cast<unsigned>(req->generatedTokens.size()) + 1u;
       auto outputCallback = [&slot, seqId](const std::string& text) {
+        if (slot->group) {
+          slot->group->outputs[slot->outputIndex] += text;
+        }
         if (slot->streams.onToken) {
           slot->streams.onToken(seqId, text);
         }
@@ -299,6 +434,9 @@ bool ContinuousBatchScheduler::step() {
     if (slots_[req.seqId].has_value() && slots_[req.seqId]->policy) {
       auto& slot = *slots_[req.seqId];
       auto outputCallback = [&slot, seqId = req.seqId](const std::string& text) {
+        if (slot.group) {
+          slot.group->outputs[slot.outputIndex] += text;
+        }
         if (slot.streams.onToken) {
           slot.streams.onToken(seqId, text);
         }
@@ -321,9 +459,21 @@ bool ContinuousBatchScheduler::step() {
   return true;
 }
 
-bool ContinuousBatchScheduler::hasWork() const { return numActive() > 0; }
+bool ContinuousBatchScheduler::hasWork() const {
+  std::scoped_lock lock(mutex_);
+  return hasWorkLocked();
+}
+
+bool ContinuousBatchScheduler::hasWorkLocked() const {
+  return numActiveLocked() > 0;
+}
 
 unsigned ContinuousBatchScheduler::numActive() const {
+  std::scoped_lock lock(mutex_);
+  return numActiveLocked();
+}
+
+unsigned ContinuousBatchScheduler::numActiveLocked() const {
   unsigned count = 0;
   for (const auto& s : slots_) {
     if (s.has_value()) {
@@ -334,6 +484,11 @@ unsigned ContinuousBatchScheduler::numActive() const {
 }
 
 void ContinuousBatchScheduler::resetRuntimeStats() {
+  std::scoped_lock lock(mutex_);
+  resetRuntimeStatsLocked();
+}
+
+void ContinuousBatchScheduler::resetRuntimeStatsLocked() {
   decodeStepCount_ = 0;
   concurrentSeqSum_ = 0;
   completedCacheTokens_ = 0;
@@ -344,6 +499,11 @@ void ContinuousBatchScheduler::resetRuntimeStats() {
 }
 
 RuntimeStatsSnapshot ContinuousBatchScheduler::runtimeStats() const {
+  std::scoped_lock lock(mutex_);
+  return runtimeStatsLocked();
+}
+
+RuntimeStatsSnapshot ContinuousBatchScheduler::runtimeStatsLocked() const {
   const double avgConcurrentSeq =
       decodeStepCount_ > 0
           ? static_cast<double>(concurrentSeqSum_) /
@@ -362,6 +522,7 @@ RuntimeStatsSnapshot ContinuousBatchScheduler::runtimeStats() const {
 }
 
 bool ContinuousBatchScheduler::cancel(uint32_t seqId) {
+  std::scoped_lock lock(mutex_);
   bool occupied = seqId < slots_.size() && slots_[seqId].has_value();
   if (occupied) {
     const Request* req = batcher_.requestAt(seqId);
@@ -387,9 +548,15 @@ bool ContinuousBatchScheduler::cancel(uint32_t seqId) {
 
 void ContinuousBatchScheduler::requestCancelAll() {
   cancelRequested_.store(true);
+  workCv_.notify_all();
 }
 
 void ContinuousBatchScheduler::clear() {
+  std::scoped_lock lock(mutex_);
+  clearLocked();
+}
+
+void ContinuousBatchScheduler::clearLocked() {
   for (uint32_t seqId = 0; seqId < slots_.size(); seqId++) {
     if (slots_[seqId].has_value()) {
       if (slots_[seqId]->policy) {
@@ -408,10 +575,74 @@ void ContinuousBatchScheduler::clear() {
   batcher_.clear(kvClear);
 }
 
+void ContinuousBatchScheduler::completeGroupRequestLocked(
+    const std::shared_ptr<BatchGroup>& group) {
+  if (!group || group->done) {
+    return;
+  }
+  group->completedCount++;
+  if (group->completedCount >= group->totalCount) {
+    group->stats = runtimeStatsLocked();
+    group->done = true;
+    workCv_.notify_all();
+  }
+}
+
+void ContinuousBatchScheduler::failGroupLocked(
+    const std::shared_ptr<BatchGroup>& group, std::exception_ptr error) {
+  if (!group || group->done) {
+    return;
+  }
+  group->error = error;
+  group->stats = runtimeStatsLocked();
+  group->done = true;
+  pending_.erase(
+      std::remove_if(
+          pending_.begin(),
+          pending_.end(),
+          [&group](const QueuedRequest& queued) {
+            return queued.group == group;
+          }),
+      pending_.end());
+
+  auto kvClear = [this](uint32_t seqId) {
+    auto* mem = llama_get_memory(ctx_);
+    if (mem != nullptr) {
+      llama_memory_seq_rm(mem, static_cast<llama_seq_id>(seqId), -1, -1);
+    }
+  };
+  for (uint32_t seqId = 0; seqId < slots_.size(); seqId++) {
+    if (slots_[seqId].has_value() && slots_[seqId]->group == group) {
+      if (slots_[seqId]->policy) {
+        slots_[seqId]->policy->onCancelPolicy({});
+        if (const Request* req = batcher_.requestAt(seqId); req != nullptr) {
+          accumulateSlotRuntimeStats(*slots_[seqId], *req);
+        }
+        saveCacheForSlot(seqId, *slots_[seqId]);
+      }
+      notifyDone(seqId);
+      batcher_.cancel(seqId, kvClear);
+      freeSlot(seqId);
+    }
+  }
+  workCv_.notify_all();
+}
+
+void ContinuousBatchScheduler::cancelPendingLocked() {
+  while (!pending_.empty()) {
+    QueuedRequest queued = std::move(pending_.front());
+    pending_.pop_front();
+    completeGroupRequestLocked(queued.group);
+  }
+}
+
 void ContinuousBatchScheduler::notifyDone(uint32_t seqId) {
   auto& slot = slots_[seqId];
   if (slot.has_value() && slot->streams.onDone) {
     slot->streams.onDone(seqId);
+  }
+  if (slot.has_value() && slot->group) {
+    completeGroupRequestLocked(slot->group);
   }
 }
 

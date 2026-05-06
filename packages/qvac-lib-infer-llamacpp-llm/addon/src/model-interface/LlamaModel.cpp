@@ -689,23 +689,9 @@ LlamaModel::processPromptBatchImpl(const std::vector<Prompt>& prompts) {
         "text-only model with n_seq_max > 1");
   }
   auto& scheduler = *state_->batchScheduler_;
-  scheduler.resetRuntimeStats();
 
-  std::vector<std::string> outputs(prompts.size());
-  std::vector<bool> done(prompts.size(), false);
-  std::vector<uint32_t> seqIds(prompts.size(), 0);
-
-  // Any exit from this function — exception or unexpected early return —
-  // must drain occupied slots while the locals captured by `sr.streams`
-  // (`outputs`, `done`, `userCb`) are still alive. After unwinding past
-  // this frame those references would dangle, and the eventual
-  // `~ContinuousBatchScheduler` -> `clear()` would fire onDone/onToken on
-  // freed memory.
-  ScopeGuard slotDrainGuard([&] { scheduler.clear(); });
-
-  // Submit every prompt up-front. Slot capacity is enforced by the
-  // session; oversubscription is reported as an error so callers stay
-  // responsible for chunking large batches into model-sized waves.
+  std::vector<batching::SubmitRequest> requests;
+  requests.reserve(prompts.size());
   for (size_t i = 0; i < prompts.size(); i++) {
     const Prompt& prompt = prompts[i];
     if (!prompt.media.empty()) {
@@ -735,38 +721,19 @@ LlamaModel::processPromptBatchImpl(const std::vector<Prompt>& prompts) {
     sr.cacheKey = prompt.cacheKey;
     sr.saveCacheToDisk = prompt.saveCacheToDisk;
     sr.overrides = prompt.generationParams;
-
-    auto userCb = prompt.outputCallback;
-    sr.streams.onToken = [&outputs, i, userCb](
+    sr.streams.onToken = [userCb = prompt.outputCallback](
                              [[maybe_unused]] uint32_t seqId,
                              const std::string& piece) {
-      outputs[i] += piece;
       if (userCb) {
         userCb(piece);
       }
     };
-    sr.streams.onDone = [&done, i]([[maybe_unused]] uint32_t seqId) {
-      done[i] = true;
-    };
 
-    uint32_t seqId = scheduler.submit(std::move(sr));
-    seqIds[i] = seqId;
+    requests.push_back(std::move(sr));
   }
 
-  // Drive scheduler until every submitted prompt has finished. A decode
-  // error fans out as `DecodeError` to all active sinks and `step()`
-  // returns false; the loop exits with `done[i]` left untouched for
-  // any in-flight prompt, which the post-loop assert below catches.
-  while (scheduler.hasWork() && scheduler.step()) {
-  }
-
-  if (!std::ranges::all_of(done, std::identity{})) {
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(qvac_errors::general_error::InternalError),
-        "processPromptBatch: scheduler exited with prompts still pending");
-  }
-  const batching::RuntimeStatsSnapshot batchStats = scheduler.runtimeStats();
+  batching::BatchResult result = scheduler.processBatch(std::move(requests));
+  const batching::RuntimeStatsSnapshot& batchStats = result.stats;
   state_->lastAvgConcurrentSeq_ = batchStats.avgConcurrentSeq;
   state_->lastBatchCacheTokens_ = batchStats.cacheTokens;
   state_->lastBatchContextSlides_ = batchStats.contextSlides;
@@ -774,7 +741,7 @@ LlamaModel::processPromptBatchImpl(const std::vector<Prompt>& prompts) {
   state_->lastBatchPromptTokens_ = batchStats.promptTokens;
   state_->lastBatchElapsedMs_ = batchStats.elapsedMs;
 
-  return outputs;
+  return result.outputs;
 }
 
 qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::runtimeStats() const {

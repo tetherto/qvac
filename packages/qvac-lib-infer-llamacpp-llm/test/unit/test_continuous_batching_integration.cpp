@@ -3,8 +3,10 @@
 #include <chrono>
 #include <cctype>
 #include <filesystem>
+#include <future>
 #include <iostream>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -199,7 +201,7 @@ TEST_F(ContinuousBatchingIntegrationTest, TwoPromptsReturnExpectedAnswers) {
 
 TEST_F(ContinuousBatchingIntegrationTest, TwoPromptBatchReportsAvgConcurrency) {
   REQUIRE_MODEL(model_);
-  config_["n_predict"] = "64";
+  config_["n_predict"] = "128";
   auto model = loadModel();
 
   std::vector<LlamaModel::Prompt> prompts{
@@ -222,6 +224,86 @@ TEST_F(ContinuousBatchingIntegrationTest, TwoPromptBatchReportsAvgConcurrency) {
   EXPECT_GE(contextSlides, 0.0);
 }
 
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    OneAndThreeOverlappingBatchCallsShareTwoSlots) {
+  REQUIRE_MODEL(model_);
+  config_["parallel"] = "2";
+  config_["n_predict"] = "64";
+  auto model = loadModel();
+
+  std::atomic<bool> firstCallEntered = false;
+  std::atomic<bool> firstBatchDone = false;
+  std::atomic<bool> secondBatchEmittedBeforeFirstDone = false;
+  auto firstPrompt = makePrompt("List facts about redwood forests.");
+
+  auto firstFuture = std::async(
+      std::launch::async,
+      [&model, firstPrompt, &firstCallEntered, &firstBatchDone] {
+    std::vector<LlamaModel::Prompt> prompts{firstPrompt};
+    firstCallEntered.store(true);
+    auto outputs = model->processPromptBatch(prompts);
+    firstBatchDone.store(true);
+    return outputs;
+  });
+
+  const auto deadline = std::chrono::steady_clock::now() +
+                        std::chrono::seconds(30);
+  while (!firstCallEntered.load() &&
+         std::chrono::steady_clock::now() < deadline) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+  ASSERT_TRUE(firstCallEntered.load());
+
+  auto secondFuture = std::async(
+      std::launch::async,
+      [&model, &firstBatchDone, &secondBatchEmittedBeforeFirstDone] {
+    auto secondPrompt = makePrompt("List facts about coral reefs.");
+    secondPrompt.outputCallback =
+        [&firstBatchDone, &secondBatchEmittedBeforeFirstDone](
+            const std::string&) {
+          if (!firstBatchDone.load()) {
+            secondBatchEmittedBeforeFirstDone.store(true);
+          }
+        };
+    std::vector<LlamaModel::Prompt> prompts{
+        std::move(secondPrompt),
+        makePrompt("List facts about alpine glaciers."),
+        makePrompt("List facts about desert wildflowers.")};
+    return model->processPromptBatch(prompts);
+  });
+
+  ASSERT_EQ(
+      firstFuture.wait_for(std::chrono::seconds(60)),
+      std::future_status::ready);
+  ASSERT_EQ(
+      secondFuture.wait_for(std::chrono::seconds(60)),
+      std::future_status::ready);
+  auto firstOutputs = firstFuture.get();
+  auto secondOutputs = secondFuture.get();
+
+  ASSERT_EQ(firstOutputs.size(), 1u);
+  ASSERT_EQ(secondOutputs.size(), 3u);
+  EXPECT_FALSE(firstOutputs[0].empty());
+  EXPECT_FALSE(secondOutputs[0].empty());
+  EXPECT_FALSE(secondOutputs[1].empty());
+  EXPECT_FALSE(secondOutputs[2].empty());
+  EXPECT_TRUE(secondBatchEmittedBeforeFirstDone.load());
+
+  const auto stats = model->runtimeStats();
+  const double avgConcurrentSeq =
+      test_common::getStatValue(stats, "avgConcurrentSeq");
+  std::cout
+      << "OneAndThreeOverlappingBatchCallsShareTwoSlots: avgConcurrentSeq="
+      << avgConcurrentSeq
+      << ", secondGroupEmittedBeforeFirstDone="
+      << secondBatchEmittedBeforeFirstDone.load() << '\n';
+  // If the scheduler ran separate waves (1 -> 2 -> 1), equal-length requests
+  // would average about 1.33 occupied slots. This higher threshold, plus the
+  // coexistence flag above, confirms the second group joined the first.
+  EXPECT_GT(avgConcurrentSeq, 1.6);
+}
+
 TEST_F(ContinuousBatchingIntegrationTest, FourPromptBatchReportsHigherTps) {
   REQUIRE_MODEL(model_);
   config_["n_predict"] = "128";
@@ -235,10 +317,29 @@ TEST_F(ContinuousBatchingIntegrationTest, FourPromptBatchReportsHigherTps) {
         << "requires hardware GPU backend for throughput comparison";
   }
 
+  struct TimedOutputs {
+    std::vector<std::string> outputs;
+    double elapsedMsPerPrompt;
+  };
+
+  const auto measurePrompts = [](size_t promptCount, auto&& runPrompts) {
+    const auto startedAt = std::chrono::steady_clock::now();
+    std::vector<std::string> outputs = runPrompts();
+    const auto finishedAt = std::chrono::steady_clock::now();
+    const auto elapsedMs =
+        std::chrono::duration<double, std::milli>(finishedAt - startedAt)
+            .count();
+    return TimedOutputs{
+        .outputs = std::move(outputs),
+        .elapsedMsPerPrompt = elapsedMs / static_cast<double>(promptCount)};
+  };
+
   auto singleModel = loadModel();
-  std::vector<LlamaModel::Prompt> singlePrompt{
-      makePrompt("Write a long paragraph about redwood forests.")};
-  auto singleOutputs = singleModel->processPromptBatch(singlePrompt);
+  const auto singlePrompt =
+      makePrompt("Write a long paragraph about redwood forests.");
+  auto singleRun = measurePrompts(1u, [&singleModel, &singlePrompt] {
+    return std::vector<std::string>{singleModel->processPrompt(singlePrompt)};
+  });
   const auto singleStats = singleModel->runtimeStats();
   const double singleTps = test_common::getStatValue(singleStats, "TPS");
   const double singleAvgConcurrentSeq =
@@ -250,7 +351,9 @@ TEST_F(ContinuousBatchingIntegrationTest, FourPromptBatchReportsHigherTps) {
   std::vector<LlamaModel::Prompt> twoPrompts{
       makePrompt("Write a long paragraph about redwood forests."),
       makePrompt("Write a long paragraph about coral reefs.")};
-  auto twoOutputs = twoModel->processPromptBatch(twoPrompts);
+  auto twoRun = measurePrompts(twoPrompts.size(), [&twoModel, &twoPrompts] {
+    return twoModel->processPromptBatch(twoPrompts);
+  });
   const auto twoStats = twoModel->runtimeStats();
   const double twoTps = test_common::getStatValue(twoStats, "TPS");
   const double twoAvgConcurrentSeq =
@@ -264,7 +367,9 @@ TEST_F(ContinuousBatchingIntegrationTest, FourPromptBatchReportsHigherTps) {
       makePrompt("Write a long paragraph about coral reefs."),
       makePrompt("Write a long paragraph about alpine glaciers."),
       makePrompt("Write a long paragraph about desert wildflowers.")};
-  auto fourOutputs = fourModel->processPromptBatch(fourPrompts);
+  auto fourRun = measurePrompts(fourPrompts.size(), [&fourModel, &fourPrompts] {
+    return fourModel->processPromptBatch(fourPrompts);
+  });
   const auto fourStats = fourModel->runtimeStats();
   const double fourTps = test_common::getStatValue(fourStats, "TPS");
   const double fourAvgConcurrentSeq =
@@ -272,16 +377,16 @@ TEST_F(ContinuousBatchingIntegrationTest, FourPromptBatchReportsHigherTps) {
   const double fourGeneratedTokens =
       test_common::getStatValue(fourStats, "generatedTokens");
 
-  ASSERT_EQ(singleOutputs.size(), 1u);
-  ASSERT_EQ(twoOutputs.size(), 2u);
-  ASSERT_EQ(fourOutputs.size(), 4u);
-  EXPECT_FALSE(singleOutputs[0].empty());
-  EXPECT_FALSE(twoOutputs[0].empty());
-  EXPECT_FALSE(twoOutputs[1].empty());
-  EXPECT_FALSE(fourOutputs[0].empty());
-  EXPECT_FALSE(fourOutputs[1].empty());
-  EXPECT_FALSE(fourOutputs[2].empty());
-  EXPECT_FALSE(fourOutputs[3].empty());
+  ASSERT_EQ(singleRun.outputs.size(), 1u);
+  ASSERT_EQ(twoRun.outputs.size(), 2u);
+  ASSERT_EQ(fourRun.outputs.size(), 4u);
+  EXPECT_FALSE(singleRun.outputs[0].empty());
+  EXPECT_FALSE(twoRun.outputs[0].empty());
+  EXPECT_FALSE(twoRun.outputs[1].empty());
+  EXPECT_FALSE(fourRun.outputs[0].empty());
+  EXPECT_FALSE(fourRun.outputs[1].empty());
+  EXPECT_FALSE(fourRun.outputs[2].empty());
+  EXPECT_FALSE(fourRun.outputs[3].empty());
   EXPECT_GT(singleTps, 0.0);
   EXPECT_GT(twoTps, 0.0);
   EXPECT_GT(fourTps, 0.0);
@@ -293,10 +398,19 @@ TEST_F(ContinuousBatchingIntegrationTest, FourPromptBatchReportsHigherTps) {
             << ", four avgConcurrentSeq=" << fourAvgConcurrentSeq
             << ", single generatedTokens=" << singleGeneratedTokens
             << ", two generatedTokens=" << twoGeneratedTokens
-            << ", four generatedTokens=" << fourGeneratedTokens << '\n';
+            << ", four generatedTokens=" << fourGeneratedTokens
+            << ", single elapsedMsPerPrompt="
+            << singleRun.elapsedMsPerPrompt
+            << ", two elapsedMsPerPrompt=" << twoRun.elapsedMsPerPrompt
+            << ", four elapsedMsPerPrompt=" << fourRun.elapsedMsPerPrompt
+            << '\n';
   EXPECT_NEAR(singleAvgConcurrentSeq, 1.0, 0.001);
   EXPECT_GT(twoAvgConcurrentSeq, singleAvgConcurrentSeq);
   EXPECT_GT(fourAvgConcurrentSeq, twoAvgConcurrentSeq);
+  EXPECT_GT(singleRun.elapsedMsPerPrompt, fourRun.elapsedMsPerPrompt)
+      << "single elapsedMsPerPrompt=" << singleRun.elapsedMsPerPrompt
+      << ", two elapsedMsPerPrompt=" << twoRun.elapsedMsPerPrompt
+      << ", four elapsedMsPerPrompt=" << fourRun.elapsedMsPerPrompt;
   EXPECT_GT(fourTps, singleTps)
       << "single TPS=" << singleTps << ", two-prompt TPS=" << twoTps
       << ", four-prompt TPS=" << fourTps
