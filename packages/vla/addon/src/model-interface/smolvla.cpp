@@ -1587,7 +1587,8 @@ bool smolvla_inference_with_timing(
   int hidden = hp.text_hidden_size;
 
   // Store visual tokens in a flat buffer
-  std::vector<float> all_visual(n_visual_tokens * hidden);
+  std::vector<float> all_visual(
+      static_cast<size_t>(n_visual_tokens) * hidden);
 
   double t_vision_start = now_ms();
 
@@ -1771,7 +1772,8 @@ bool smolvla_inference_with_timing(
     for (int i = 1; i < prefix_len; i++)
       cumsum[i] = cumsum[i - 1] + att[i];
 
-    std::vector<float> mask_data(prefix_len * prefix_len);
+    std::vector<float> mask_data(
+        static_cast<size_t>(prefix_len) * prefix_len);
     for (int qi = 0; qi < prefix_len; qi++) {
       for (int ki = 0; ki < prefix_len; ki++) {
         bool att_ok = cumsum[ki] <= cumsum[qi]; // attention mask
@@ -1816,7 +1818,7 @@ bool smolvla_inference_with_timing(
   int kv_total = kv_dim * prefix_len;
 
   {
-    std::vector<float> prev_hidden(prefix_len * hidden);
+    std::vector<float> prev_hidden(static_cast<size_t>(prefix_len) * hidden);
     ggml_backend_tensor_get(
         prefix, prev_hidden.data(), 0, prev_hidden.size() * sizeof(float));
 
@@ -2001,9 +2003,13 @@ bool smolvla_inference_with_timing(
   double t_ode_start = now_ms();
 
   // Initial noise
-  std::vector<float> x_t(chunk_size * hp.max_action_dim);
+  std::vector<float> x_t(
+      static_cast<size_t>(chunk_size) * hp.max_action_dim);
   if (noise) {
-    memcpy(x_t.data(), noise, chunk_size * hp.max_action_dim * sizeof(float));
+    memcpy(
+        x_t.data(),
+        noise,
+        static_cast<size_t>(chunk_size) * hp.max_action_dim * sizeof(float));
   } else {
     std::mt19937 rng(42);
     std::normal_distribution<float> normal(0.0f, 1.0f);
@@ -2014,7 +2020,7 @@ bool smolvla_inference_with_timing(
   // Build self-attention mask: (full_len, chunk_size)
   // Prefix part: attend to all valid tokens; suffix part: causal
   int full_len = prefix_len + chunk_size;
-  std::vector<float> sa_mask(full_len * chunk_size);
+  std::vector<float> sa_mask(static_cast<size_t>(full_len) * chunk_size);
   for (int qi = 0; qi < chunk_size; qi++) {
     // Prefix columns: attend to valid prefix tokens
     for (int ki = 0; ki < prefix_len; ki++) {
@@ -2139,7 +2145,8 @@ bool smolvla_inference_with_timing(
 
   // Cross-attention mask: mask out padding tokens in VLM prefix
   {
-    std::vector<float> ca_mask(prefix_len * chunk_size);
+    std::vector<float> ca_mask(
+        static_cast<size_t>(prefix_len) * chunk_size);
     for (int qi = 0; qi < chunk_size; qi++) {
       for (int ki = 0; ki < prefix_len; ki++) {
         bool valid =
@@ -2165,8 +2172,10 @@ bool smolvla_inference_with_timing(
     }
   }
 
-  std::vector<float> vt_data(chunk_size * hp.max_action_dim);
-  std::vector<float> te_expanded(chunk_size * hp.expert_hidden_size);
+  std::vector<float> vt_data(
+      static_cast<size_t>(chunk_size) * hp.max_action_dim);
+  std::vector<float> te_expanded(
+      static_cast<size_t>(chunk_size) * hp.expert_hidden_size);
   // Hoist time-embedding scratch out of the ODE loop — one allocation reused
   // across 10 steps instead of `num_ode_steps` per-iteration heap churns.
   std::vector<float> te_single(hp.expert_hidden_size);

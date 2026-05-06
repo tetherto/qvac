@@ -51,6 +51,7 @@ jobs:
   authorize:
     if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
       - run: echo "workflow_call run inherits authorize-pr from caller"
 
