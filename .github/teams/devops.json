@@ -1,0 +1,13 @@
+{
+  "name": "DevOps Pod",
+  "leads": ["Proletter"],
+  "members": [
+    "Proletter"
+  ],
+  "ownedPaths": [
+    ".github/workflows/",
+    ".github/actions/",
+    ".github/scripts/",
+    "scripts/"
+  ]
+}
