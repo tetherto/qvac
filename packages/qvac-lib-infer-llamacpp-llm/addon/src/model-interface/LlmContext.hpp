@@ -50,18 +50,21 @@ using CommonSamplerPtr = std::unique_ptr<common_sampler, CommonSamplerDeleter>;
 class LlamaBatch {
   llama_batch batch_;
   bool initialized_ = false;
+  int32_t capacity_ = 0;
 
 public:
   LlamaBatch() noexcept : batch_{}, initialized_(false) {}
 
   LlamaBatch(int32_t n_tokens, int32_t embd, int32_t n_seq_max)
-      : batch_(llama_batch_init(n_tokens, embd, n_seq_max)),
-        initialized_(true) {}
+      : batch_(llama_batch_init(n_tokens, embd, n_seq_max)), initialized_(true),
+        capacity_(n_tokens) {}
 
   LlamaBatch(LlamaBatch&& other) noexcept
-      : batch_(other.batch_), initialized_(other.initialized_) {
+      : batch_(other.batch_), initialized_(other.initialized_),
+        capacity_(other.capacity_) {
     other.batch_ = llama_batch{};
     other.initialized_ = false;
+    other.capacity_ = 0;
   }
 
   LlamaBatch& operator=(LlamaBatch&& other) noexcept {
@@ -71,8 +74,10 @@ public:
       }
       batch_ = other.batch_;
       initialized_ = other.initialized_;
+      capacity_ = other.capacity_;
       other.batch_ = llama_batch{};
       other.initialized_ = false;
+      other.capacity_ = 0;
     }
     return *this;
   }
@@ -94,6 +99,8 @@ public:
 
   llama_batch* operator->() noexcept { return &batch_; }
   const llama_batch* operator->() const noexcept { return &batch_; }
+
+  [[nodiscard]] int32_t capacity() const noexcept { return capacity_; }
 };
 
 struct ThreadPoolDeleter {

@@ -371,6 +371,29 @@ void LlamaModel::init(bool acquireLock) {
         snap->configuredNDiscarded_,
         [this](bool resetStats) { this->resetState(resetStats); });
   }
+
+  if (isMultiBatchActivated(*snap)) {
+    snap->batchScheduler_ = initBatchScheduler(*snap);
+  }
+}
+
+bool LlamaModel::isMultiBatchActivated(ReloadableState& state) {
+  return state.llmContext_ && state.isTextLlm_ &&
+         llama_n_seq_max(state.llmContext_->getCtx()) > 1;
+}
+
+std::unique_ptr<batching::ContinuousBatchScheduler>
+LlamaModel::initBatchScheduler(ReloadableState& state) {
+  llama_context* ctx = state.llmContext_->getCtx();
+  llama_model* mdl = state.llmContext_->getModel();
+  const common_params& cparams = state.llmContext_->getParams();
+  const auto batchSize = static_cast<size_t>(llama_n_seq_max(ctx));
+  const auto ctxTotalTokens = static_cast<unsigned>(llama_n_ctx(ctx));
+  const auto batchCapacity = static_cast<int32_t>(cparams.n_batch);
+  const auto maxChunkSize = static_cast<unsigned>(cparams.n_ubatch);
+  return std::make_unique<batching::ContinuousBatchScheduler>(
+      ctx, mdl, maxChunkSize, ctxTotalTokens, batchSize, batchCapacity,
+      cparams.special, cparams.sampling, cparams.n_predict);
 }
 
 void LlamaModel::setWeightsForFile(
@@ -462,11 +485,16 @@ void LlamaModel::cancelImpl() const {
 
 std::any LlamaModel::process(const std::any& input) {
   std::shared_lock lock(stateMtx_);
-  if (input.type() != typeid(Prompt)) {
+  if (input.type() != typeid(Prompt) &&
+      input.type() != typeid(std::vector<Prompt>)) {
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(qvac_errors::general_error::InvalidArgument),
         "Invalid input type");
+  }
+  if (input.type() == typeid(std::vector<Prompt>)) {
+    const auto& prompts = std::any_cast<const std::vector<Prompt>&>(input);
+    return {processPromptBatchImpl(prompts)};
   }
   validateBitnetQuantization();
   const auto& prompt = std::any_cast<const Prompt&>(input);
@@ -493,7 +521,7 @@ std::any LlamaModel::process(const std::any& input) {
         "Finetuning not available in standalone test build");
   }
 #endif
-  return processPrompt(prompt);
+  return {processPromptImpl(prompt)};
 }
 
 LlamaModel::ResolvedPrompt
@@ -635,6 +663,127 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
     resetState(false);
   }
   return out;
+}
+
+std::vector<std::string>
+LlamaModel::processPromptBatch(const std::vector<Prompt>& prompts) {
+  std::shared_lock lock(stateMtx_);
+  return processPromptBatchImpl(prompts);
+}
+
+std::vector<std::string>
+LlamaModel::processPromptBatchImpl(const std::vector<Prompt>& prompts) {
+  validateBitnetQuantization();
+
+  if (prompts.empty()) {
+    return {};
+  }
+
+  if (!state_->batchScheduler_) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(qvac_errors::general_error::InvalidArgument),
+        "Model is not configured for continuous batching: requires a "
+        "text-only model with n_seq_max > 1");
+  }
+  auto& scheduler = *state_->batchScheduler_;
+  llama_context* ctx = state_->llmContext_->getCtx();
+  const common_params& baseParams = state_->llmContext_->getParams();
+
+  std::vector<std::string> outputs(prompts.size());
+  std::vector<bool> done(prompts.size(), false);
+  std::vector<uint32_t> seqIds(prompts.size(), 0);
+
+  // Any exit from this function — exception or unexpected early return —
+  // must drain occupied slots while the locals captured by `sr.streams`
+  // (`outputs`, `done`, `userCb`) are still alive. After unwinding past
+  // this frame those references would dangle, and the eventual
+  // `~ContinuousBatchScheduler` -> `clear()` would fire onDone/onToken on
+  // freed memory.
+  ScopeGuard slotDrainGuard([&] { scheduler.clear(); });
+
+  // Submit every prompt up-front. Slot capacity is enforced by the
+  // session; oversubscription is reported as an error so callers stay
+  // responsible for chunking large batches into model-sized waves.
+  for (size_t i = 0; i < prompts.size(); i++) {
+    const Prompt& prompt = prompts[i];
+    if (!prompt.media.empty()) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(qvac_errors::general_error::InvalidArgument),
+          "processPromptBatch: media is not supported in batch mode");
+    }
+    if (prompt.finetuningParams.has_value()) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(qvac_errors::general_error::InvalidArgument),
+          "processPromptBatch: finetuning is not a batch processing operation");
+    }
+
+    // Tokenize via the normal chat-template path. v1 batching skips KV
+    // cache reuse and tools so the prompt-format step stays purely
+    // functional (no nPast_ side effects on the shared context).
+    ParsedPromptPayload parsed = formatPrompt(prompt.input);
+    if (parsed.chatMsgs.empty()) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(EmptyPrompt),
+          "processPromptBatch: prompt produced no chat messages");
+    }
+    common_chat_templates_inputs inputs;
+    inputs.messages = parsed.chatMsgs;
+    inputs.add_generation_prompt = true;
+    inputs.use_jinja = baseParams.use_jinja;
+    auto tmplsPtr = common_chat_templates_init(
+        state_->llmContext_->getModel(), baseParams.chat_template);
+    auto formatted = common_chat_templates_apply(tmplsPtr.get(), inputs);
+    constexpr bool addSpecial = true;
+    constexpr bool parseSpecial = true;
+    auto tokens =
+        common_tokenize(ctx, formatted.prompt, addSpecial, parseSpecial);
+    if (tokens.empty()) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(EmptyTokenizedInput),
+          "processPromptBatch: tokenized prompt is empty");
+    }
+
+    batching::SubmitRequest sr;
+    sr.tokens = std::move(tokens);
+    sr.overrides = prompt.generationParams;
+
+    auto userCb = prompt.outputCallback;
+    sr.streams.onToken = [&outputs, i, userCb](
+                             [[maybe_unused]] uint32_t seqId,
+                             const std::string& piece) {
+      outputs[i] += piece;
+      if (userCb) {
+        userCb(piece);
+      }
+    };
+    sr.streams.onDone = [&done, i]([[maybe_unused]] uint32_t seqId) {
+      done[i] = true;
+    };
+
+    uint32_t seqId = scheduler.submit(std::move(sr));
+    seqIds[i] = seqId;
+  }
+
+  // Drive scheduler until every submitted prompt has finished. A decode
+  // error fans out as `DecodeError` to all active sinks and `step()`
+  // returns false; the loop exits with `done[i]` left untouched for
+  // any in-flight prompt, which the post-loop assert below catches.
+  while (scheduler.hasWork() && scheduler.step()) {
+  }
+
+  if (!std::ranges::all_of(done, std::identity{})) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(qvac_errors::general_error::InternalError),
+        "processPromptBatch: scheduler exited with prompts still pending");
+  }
+
+  return outputs;
 }
 
 qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::runtimeStats() const {

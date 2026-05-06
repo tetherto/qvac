@@ -17,6 +17,7 @@
 
 #include "AsyncWeightsLoader.hpp"
 #include "CacheManager.hpp"
+#include "ContinuousBatchScheduler.hpp"
 #include "LlamaFinetuningHelpers.hpp"
 #include "LlamaFinetuningParams.hpp"
 #include "LlamaLazyInitializeBackend.hpp"
@@ -32,6 +33,8 @@
 #include "qvac-lib-inference-addon-cpp/RuntimeStats.hpp"
 
 using namespace qvac_lib_inference_addon_cpp::model;
+
+namespace batching = qvac_lib_inference_addon_llama::batching;
 
 struct FinetuneTerminalResult {
   struct Stats {
@@ -138,6 +141,16 @@ public:
   std::any process(const std::any& input) final;
   std::string processPrompt(const Prompt& prompt);
 
+  /// Run several prompts in parallel via the continuous-batching session
+  /// and return their generated texts in input order. Each output entry
+  /// matches the prompt at the same index. Throws when batching is
+  /// unsupported (multimodal context) or any prompt is rejected by the
+  /// session (oversize, empty, or capacity exhausted with no room to
+  /// queue). Output streaming via `Prompt::outputCallback` is honoured
+  /// per-slot.
+  std::vector<std::string>
+  processPromptBatch(const std::vector<Prompt>& prompts);
+
   /**
    * The Reset method.
    */
@@ -203,6 +216,8 @@ public:
 private:
   // Impl without mutexes
   std::string processPromptImpl(const Prompt& prompt);
+  std::vector<std::string>
+  processPromptBatchImpl(const std::vector<Prompt>& prompts);
   void cancelImpl() const;
 
   struct ReloadableState {
@@ -233,12 +248,23 @@ private:
     // Destroyed before backendsHandle_ to avoid use-after-free
     std::unique_ptr<LlmContext> llmContext_;
 
+    /// Set when llama_n_seq_max > 1, null otherwise.
+    std::unique_ptr<batching::ContinuousBatchScheduler> batchScheduler_;
+
     // configuration values parsed from configFilemap
     llama_pos configuredNDiscarded_ = 0;
     std::optional<CacheManager> cacheManager_;
 
     bool lastRunWasPrefill_ = false;
   };
+
+  /// Continuous-batching gate. Active when the model is text-only and the
+  /// user opted into multi-sequence decoding via `n_parallel >= 2`
+  /// (which llama.cpp maps directly to `n_seq_max`).
+  static bool isMultiBatchActivated(ReloadableState& state);
+
+  static std::unique_ptr<batching::ContinuousBatchScheduler>
+  initBatchScheduler(ReloadableState& state);
 
   struct ResolvedPrompt {
     std::vector<common_chat_msg> chatMsgs;
