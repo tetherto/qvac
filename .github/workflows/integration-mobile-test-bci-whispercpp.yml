@@ -714,7 +714,7 @@ jobs:
 
           echo "📤 Uploading app to AWS Device Farm..."
           UPLOAD_RESPONSE=$(aws devicefarm create-upload \
-            --project-arn "${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_BCI_WHISPERCPP }}" \
+            --project-arn "${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_WHISPERCPP }}" \
             --name "$APP_NAME" \
             --type "$APP_TYPE" \
             --output json)
@@ -810,7 +810,7 @@ jobs:
 
           echo "📤 Uploading test package to AWS Device Farm..."
           UPLOAD_RESPONSE=$(aws devicefarm create-upload \
-            --project-arn "${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_BCI_WHISPERCPP }}" \
+            --project-arn "${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_WHISPERCPP }}" \
             --name "$ZIP_NAME" \
             --type "APPIUM_NODE_TEST_PACKAGE" \
             --output json)
@@ -993,7 +993,7 @@ jobs:
 
           echo "📤 Uploading test spec to Device Farm..."
           SPEC_RESPONSE=$(aws devicefarm create-upload \
-            --project-arn "${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_BCI_WHISPERCPP }}" \
+            --project-arn "${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_WHISPERCPP }}" \
             --name "testspec.yml" \
             --type "APPIUM_NODE_TEST_SPEC" \
             --output json)
@@ -1035,7 +1035,7 @@ jobs:
             RUN_NAME="PR-${{ github.event.pull_request.number || github.run_number }}-${{ matrix.platform }}"
           fi
 
-          PROJECT_ARN="${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_BCI_WHISPERCPP }}"
+          PROJECT_ARN="${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_WHISPERCPP }}"
           APP_ARN="${{ steps.upload_app.outputs.app_upload_arn }}"
           TEST_PACKAGE_ARN="${{ steps.upload_test_package.outputs.test_package_upload_arn }}"
           TEST_SPEC_ARN="${{ steps.upload_test_spec.outputs.test_spec_arn }}"
@@ -1102,7 +1102,7 @@ jobs:
               --filters '[{"attribute":"MANUFACTURER","operator":"EQUALS","values":["Apple"]},{"attribute":"MODEL","operator":"CONTAINS","values":["iPhone 17"]},{"attribute":"PLATFORM","operator":"EQUALS","values":["IOS"]}]' \
               --query 'devices[].{name:name,model:model,os:os,availability:availability}' --output table || true
 
-            POOL_ARN="${{ secrets.IOS_DEVICE_POOL_ARN_BCI_WHISPERCPP }}"
+            POOL_ARN="${{ secrets.IOS_DEVICE_POOL_ARN_WHISPERCPP }}"
             RUN_ARN_1=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME" "$TEST_SPEC_ARN")
             echo "✅ iOS pool run scheduled: $RUN_ARN_1"
 
