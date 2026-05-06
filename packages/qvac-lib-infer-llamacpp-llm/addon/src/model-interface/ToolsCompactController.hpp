@@ -42,6 +42,7 @@ public:
 
   [[nodiscard]] bool enabled() const noexcept;
   [[nodiscard]] llama_pos anchor() const noexcept;
+  [[nodiscard]] std::optional<ToolsCompactProfile> profile() const;
 
   // ── Prompt-level (called once per inference, before tokenization) ─────
 

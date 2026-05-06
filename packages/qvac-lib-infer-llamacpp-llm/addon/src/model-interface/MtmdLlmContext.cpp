@@ -291,6 +291,7 @@ bool MtmdLlmContext::evalMessageWithTools(
   if (nPast_ + nTokens >= llama_n_ctx(lctx_)) {
     auto outcome = trySlidePrefill(
         lctx_,
+        seqId_,
         nPast_,
         firstMsgTokens_,
         static_cast<llama_pos>(nTokens),
@@ -392,7 +393,8 @@ void MtmdLlmContext::flushPendingUtf8ToCallback(
 
 void MtmdLlmContext::applyContextDiscard() {
   auto outcome =
-      trySlideGeneration(lctx_, nPast_, firstMsgTokens_, nDiscarded_, tools_);
+      trySlideGeneration(
+          lctx_, seqId_, nPast_, firstMsgTokens_, nDiscarded_, tools_);
   if (outcome.kind == ContextSlideOutcome::Kind::Slid) {
     nPast_ = outcome.newNPast;
     ++nSlides_;
@@ -411,7 +413,7 @@ void MtmdLlmContext::handleStopRequestAndAddEot(LlamaBatch& batch) {
       *batch,
       eot == LLAMA_TOKEN_NULL ? llama_vocab_eos(vocab_) : eot,
       nPast_++,
-      {0},
+      {seqId_},
       true);
   if (llama_decode(lctx_, *batch) != 0) {
     const char* errorMsg = "[MtmdLlm] failed to decode EOT token\n";
@@ -497,7 +499,7 @@ bool MtmdLlmContext::generateResponse(
       handleStopRequestAndAddEot(batch);
       break;
     }
-    common_batch_add(*batch, tokenId, nPast_++, {0}, true);
+    common_batch_add(*batch, tokenId, nPast_++, {seqId_}, true);
 
     // eval the token
     if (llama_decode(lctx_, *batch) != 0) {
@@ -624,8 +626,7 @@ void MtmdLlmContext::resetState(bool resetStats) {
   // Clear UTF-8 buffer when resetting state
   utf8Buffer_.clear();
 
-  // Reset the KV cache
-  llama_memory_clear(llama_get_memory(lctx_), true);
+  clearSequenceMemory(lctx_);
 
   // Reset the performance metrics
   if (resetStats) {
@@ -654,15 +655,7 @@ llama_pos MtmdLlmContext::removeLastNTokens(llama_pos count) {
     return 0;
   }
 
-  // Get the memory for KV cache manipulation
-  auto* mem = llama_get_memory(lctx_);
-
-  // Remove the last N tokens from the KV cache
-  // llama_memory_seq_rm(memory, seq_id, start_pos, end_pos)
-  // seq_id = -1 means all sequences
-  // start_pos = n_past - tokensToRemove (the position to start removing from)
-  // end_pos = -1 means remove to the end
-  llama_memory_seq_rm(mem, -1, nPast_ - tokensToRemove, -1);
+  clearSequenceMemory(lctx_, nPast_ - tokensToRemove, -1);
 
   // Decrement the token count by the number of tokens removed
   nPast_ -= tokensToRemove;

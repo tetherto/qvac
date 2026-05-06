@@ -1,5 +1,7 @@
 #pragma once
 
+#include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -12,7 +14,8 @@
 
 #include "LlmContext.hpp"
 #include "MultiRequestBatcher.hpp"
-#include "utils/UTF8TokenBuffer.hpp"
+#include "TextLlmContext.hpp"
+#include "ToolsCompactController.hpp"
 
 namespace qvac_lib_inference_addon_llama::batching {
 
@@ -25,8 +28,12 @@ struct StreamCallbacks {
 
 /// One request admitted into the scheduler.
 struct SubmitRequest {
-  /// Prompt as raw token ids; caller does tokenisation + chat template.
-  std::vector<llama_token> tokens;
+  std::vector<common_chat_msg> chatMsgs;
+  std::vector<common_chat_tool> tools;
+  PromptLayout layout;
+  bool prefill = false;
+  std::string cacheKey;
+  bool saveCacheToDisk = false;
   /// Per-request sampling/generation overrides on top of the scheduler's
   /// baseline `common_params_sampling` + `n_predict`. When empty the
   /// slot reuses its pre-built base sampler; otherwise the scheduler
@@ -37,6 +44,15 @@ struct SubmitRequest {
   /// are rejected at admission rather than silently truncated.
   GenerationParams overrides;
   StreamCallbacks streams;
+};
+
+struct RuntimeStatsSnapshot {
+  double avgConcurrentSeq = 0.0;
+  int64_t cacheTokens = 0;
+  int64_t contextSlides = 0;
+  int64_t generatedTokens = 0;
+  int64_t promptTokens = 0;
+  double elapsedMs = 0.0;
 };
 
 /// Continuous-batching driver: owns the underlying `MultiRequestBatcher`,
@@ -65,22 +81,14 @@ public:
   ///                            `ctxTotalTokens / batchSize`.
   /// @param batchSize          Concurrent slots (== llama_n_seq_max).
   /// @param batchCapacity      Underlying llama_batch token capacity.
-  /// @param renderSpecialTokens Forwarded to common_token_to_piece.
-  /// @param baseSampling        Baseline sampling config. One
-  ///                            `common_sampler` is pre-built per slot
-  ///                            from this; requests without overrides
-  ///                            reuse the slot's pre-built sampler
-  ///                            (after `common_sampler_reset`) instead
-  ///                            of paying for `common_sampler_init`.
-  /// @param baseNPredict        Baseline per-request token cap
-  ///                            (`common_params::n_predict`). Used when
-  ///                            a request supplies no `n_predict`
-  ///                            override.
+  /// @param baseParams          Baseline llama/common params copied into each
+  ///                            admitted slot policy before request overrides
+  ///                            are applied.
   ContinuousBatchScheduler(
       llama_context* ctx, llama_model* model, unsigned maxChunkSize,
       unsigned ctxTotalTokens, size_t batchSize, int32_t batchCapacity,
-      bool renderSpecialTokens,
-      const common_params_sampling& baseSampling, int baseNPredict);
+      const common_params& baseParams, llama_pos configuredNDiscarded,
+      std::optional<ToolsCompactProfile> toolsCompactProfile);
 
   ContinuousBatchScheduler(const ContinuousBatchScheduler&) = delete;
   ContinuousBatchScheduler&
@@ -122,66 +130,58 @@ public:
   /// Number of currently occupied slots.
   [[nodiscard]] unsigned numActive() const;
 
+  void resetRuntimeStats();
+  [[nodiscard]] RuntimeStatsSnapshot runtimeStats() const;
+
   /// Cancel one slot. Frees the per-slot sampler and KV-cache entries
   /// and fires onDone with `Cancelled`.
   bool cancel(uint32_t seqId);
+  void requestCancelAll();
 
   /// Cancel every active request.
   void clear();
 
 private:
-  void emitToken(uint32_t seqId, llama_token tok);
-  void flushUtf8(uint32_t seqId);
-  void notifyDone(uint32_t seqId);
-  void freeSlot(uint32_t seqId);
-
   struct SlotState {
     StreamCallbacks streams;
-    UTF8TokenBuffer utf8;
-    /// Per-request override sampler. Null while the slot is using its
-    /// pre-built base sampler at `baseSamplers_[seqId]`.
-    CommonSamplerPtr overrideSampler;
-    /// Per-request generation cap, mirroring `common_params::n_predict`
-    /// 1:1 (same type, same convention): max tokens this slot is allowed
-    /// to *generate*, excluding prompt. Resolved at admission from
-    /// `GenerationParams.n_predict` (falling back to `baseNPredict_`)
-    /// after `submit` has *already* validated `prompt + n_predict <=
-    /// perSeqMaxTokens_`, so this is the user-requested value as-is —
-    /// no scheduler-level clamping. Non-positive (default `-1`, or `0`)
-    /// means unlimited at the scheduler level; the underlying
-    /// `MultiRequestBatcher`'s ctor-level `maxTokensPerSequence`
-    /// ceiling still applies.
-    ///
-    /// The matching counter is *not* stored here: the batcher already
-    /// owns `Request::generatedTokens` (see
-    /// `MultiRequestBatcher::requestAt`), so we read its `.size()`
-    /// instead of duplicating state on the slot.
-    int nPredict = -1;
+    std::unique_ptr<ToolsCompactController> tools;
+    std::unique_ptr<TextLlmContext> policy;
+    std::string cacheKey;
+    bool saveCacheToDisk = false;
+    bool prefillOnly = false;
   };
 
-  /// Pick the active sampler for a slot (override if set, else base).
-  [[nodiscard]] common_sampler* activeSampler(uint32_t seqId) const;
+  void notifyDone(uint32_t seqId);
+  void freeSlot(uint32_t seqId);
+  void saveCacheForSlot(uint32_t seqId, const SlotState& slot);
+  void accumulateSlotRuntimeStats(const SlotState& slot, const Request& req);
 
   llama_context* ctx_;
   llama_model* model_;
   const llama_vocab* vocab_;
-  bool renderSpecialTokens_;
 
   /// Baseline sampling block + n_predict, used when admitting requests
   /// to derive per-request sampling and cap.
   common_params_sampling baseSampling_;
   int baseNPredict_;
+  common_params baseParams_;
+  llama_pos configuredNDiscarded_;
+  std::optional<ToolsCompactProfile> toolsCompactProfile_;
 
-  /// Per-seq hard ceiling = ctxTotalTokens / batchSize. Drives both the
-  /// underlying batcher's prompt-size guard and per-request cap clamping.
+  /// Per-seq hard ceiling = ctxTotalTokens / batchSize. Drives prompt-size
+  /// admission and per-request `prompt + n_predict` validation.
   unsigned perSeqMaxTokens_;
   MultiRequestBatcher batcher_;
   LlamaBatch batch_;
-  /// One pre-built `common_sampler` per slot, built from `baseSampling_`
-  /// at construction. Reused (with `common_sampler_reset`) by every
-  /// override-free request landing in that slot.
-  std::vector<CommonSamplerPtr> baseSamplers_;
   std::vector<std::optional<SlotState>> slots_;
+  std::atomic<bool> cancelRequested_ = false;
+  uint64_t decodeStepCount_ = 0;
+  uint64_t concurrentSeqSum_ = 0;
+  int64_t completedCacheTokens_ = 0;
+  int64_t completedContextSlides_ = 0;
+  int64_t completedGeneratedTokens_ = 0;
+  int64_t completedPromptTokens_ = 0;
+  std::chrono::steady_clock::time_point statsStart_;
 };
 
 } // namespace qvac_lib_inference_addon_llama::batching

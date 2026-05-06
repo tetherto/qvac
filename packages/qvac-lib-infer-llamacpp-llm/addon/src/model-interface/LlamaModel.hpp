@@ -256,6 +256,13 @@ private:
     std::optional<CacheManager> cacheManager_;
 
     bool lastRunWasPrefill_ = false;
+    bool lastRunWasBatch_ = false;
+    double lastAvgConcurrentSeq_ = 1.0;
+    int64_t lastBatchCacheTokens_ = 0;
+    int64_t lastBatchContextSlides_ = 0;
+    int64_t lastBatchGeneratedTokens_ = 0;
+    int64_t lastBatchPromptTokens_ = 0;
+    double lastBatchElapsedMs_ = 0.0;
   };
 
   /// Continuous-batching gate. Active when the model is text-only and the

@@ -1,15 +1,28 @@
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <cctype>
+#include <filesystem>
+#include <iostream>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
+#include <ggml-backend.h>
 #include <gtest/gtest.h>
+#include <qvac-lib-inference-addon-cpp/Errors.hpp>
 
 #include "model-interface/LlamaModel.hpp"
 #include "test_common.hpp"
 
 namespace {
+
+namespace fs = std::filesystem;
+
+std::string uniqueTestId() {
+  return std::to_string(
+      std::chrono::high_resolution_clock::now().time_since_epoch().count());
+}
 
 /// Case-insensitive substring check. Used to assert generated text
 /// contains an expected token (e.g. "Paris", "Moon") regardless of
@@ -26,6 +39,54 @@ bool containsCaseInsensitive(
   return hay_str.find(needle_str) != std::string::npos;
 }
 
+bool hasUnclosedThinkBlock(const std::string& text) {
+  const auto openPos = text.rfind("<think>");
+  if (openPos == std::string::npos) {
+    return false;
+  }
+  const auto closePos = text.rfind("</think>");
+  return closePos == std::string::npos || closePos < openPos;
+}
+
+std::string lowerCopy(std::string text) {
+  std::transform(text.begin(), text.end(), text.begin(), [](unsigned char c) {
+    return static_cast<char>(std::tolower(c));
+  });
+  return text;
+}
+
+bool containsAny(
+    const std::string& haystack, const std::vector<std::string>& needles) {
+  return std::ranges::any_of(needles, [&](const std::string& needle) {
+    return haystack.find(needle) != std::string::npos;
+  });
+}
+
+bool hasRealGpuBackendDevice() {
+  static const std::vector<std::string> kSoftwareGpuMarkers{
+      "llvmpipe", "lavapipe", "softpipe", "swiftshader", "software"};
+  const size_t deviceCount = ggml_backend_dev_count();
+  for (size_t i = 0; i < deviceCount; ++i) {
+    ggml_backend_dev_t dev = ggml_backend_dev_get(i);
+    const auto devType = ggml_backend_dev_type(dev);
+    if (devType != GGML_BACKEND_DEVICE_TYPE_GPU &&
+        devType != GGML_BACKEND_DEVICE_TYPE_IGPU) {
+      continue;
+    }
+    const ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(dev);
+    const std::string regName = ggml_backend_reg_name(reg);
+    if (regName == "RPC") {
+      continue;
+    }
+    const std::string description =
+        lowerCopy(ggml_backend_dev_description(dev));
+    const std::string name = lowerCopy(ggml_backend_dev_name(dev));
+    if (!containsAny(description + " " + name, kSoftwareGpuMarkers)) {
+      return true;
+    }
+  }
+  return false;
+}
 
 class ContinuousBatchingIntegrationTest : public ::testing::Test {
 protected:
@@ -44,12 +105,28 @@ protected:
     model_ =
         MP("Llama-3.2-1B-Instruct-Q4_0.gguf", nullptr, MP::OnMissing::Skip,
            "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF");
+    qwen3Model_ = MP(
+        "Qwen3-0.6B.Q4_0.gguf",
+        "QWEN3_BATCH_MODEL_PATH",
+        MP::OnMissing::Skip,
+        "https://huggingface.co/QuantFactory/Qwen3-0.6B-GGUF");
+    harmonyModel_ = MP(
+        "gpt-oss-20b-Q2_K.gguf",
+        "HARMONY_BATCH_MODEL_PATH",
+        MP::OnMissing::Skip,
+        "https://huggingface.co/mradermacher/gpt-oss-20b-GGUF");
   }
 
   std::unique_ptr<LlamaModel> loadModel() {
+    return loadModel(model_);
+  }
+
+  std::unique_ptr<LlamaModel> loadModel(
+      const test_common::TestModelPath& modelPath) {
     std::string path = model_.path;
     std::string projection;
     auto cfg = config_;
+    path = modelPath.path;
     auto m = std::make_unique<LlamaModel>(
         std::move(path), std::move(projection), std::move(cfg));
     m->waitForLoadInitialization();
@@ -63,8 +140,24 @@ protected:
     return p;
   }
 
+  static LlamaModel::Prompt makeToolPrompt() {
+    LlamaModel::Prompt p;
+    p.input = R"([
+      {"role":"user","content":"Use the weather tool for Paris."},
+      {
+        "type":"function",
+        "name":"get_weather",
+        "description":"Get weather for a city",
+        "parameters":{"type":"object","properties":{"city":{"type":"string"}}}
+      }
+    ])";
+    return p;
+  }
+
   std::unordered_map<std::string, std::string> config_;
   test_common::TestModelPath model_;
+  test_common::TestModelPath qwen3Model_;
+  test_common::TestModelPath harmonyModel_;
 };
 
 } // namespace
@@ -102,6 +195,112 @@ TEST_F(ContinuousBatchingIntegrationTest, TwoPromptsReturnExpectedAnswers) {
   EXPECT_TRUE(containsCaseInsensitive(outputs[1], "Moon"))
       << "expected 'Moon' in: " << outputs[1];
   EXPECT_NE(outputs[0], outputs[1]);
+}
+
+TEST_F(ContinuousBatchingIntegrationTest, TwoPromptBatchReportsAvgConcurrency) {
+  REQUIRE_MODEL(model_);
+  config_["n_predict"] = "64";
+  auto model = loadModel();
+
+  std::vector<LlamaModel::Prompt> prompts{
+      makePrompt("Write a short paragraph about redwood forests."),
+      makePrompt("Write a short paragraph about coral reefs.")};
+  auto outputs = model->processPromptBatch(prompts);
+  const auto stats = model->runtimeStats();
+  const double avgConcurrentSeq =
+      test_common::getStatValue(stats, "avgConcurrentSeq");
+  const double cacheTokens = test_common::getStatValue(stats, "CacheTokens");
+  const double contextSlides =
+      test_common::getStatValue(stats, "contextSlides");
+
+  ASSERT_EQ(outputs.size(), 2u);
+  EXPECT_FALSE(outputs[0].empty());
+  EXPECT_FALSE(outputs[1].empty());
+  EXPECT_GT(avgConcurrentSeq, 1.0);
+  EXPECT_LE(avgConcurrentSeq, 2.0);
+  EXPECT_GT(cacheTokens, 0.0);
+  EXPECT_GE(contextSlides, 0.0);
+}
+
+TEST_F(ContinuousBatchingIntegrationTest, FourPromptBatchReportsHigherTps) {
+  REQUIRE_MODEL(model_);
+  config_["n_predict"] = "128";
+  auto model = loadModel();
+  const auto initialStats = model->runtimeStats();
+  if (test_common::getStatValue(initialStats, "backendDevice") != 1.0) {
+    GTEST_SKIP() << "requires GPU backend for throughput comparison";
+  }
+  if (!hasRealGpuBackendDevice()) {
+    GTEST_SKIP()
+        << "requires hardware GPU backend for throughput comparison";
+  }
+
+  auto singleModel = loadModel();
+  std::vector<LlamaModel::Prompt> singlePrompt{
+      makePrompt("Write a long paragraph about redwood forests.")};
+  auto singleOutputs = singleModel->processPromptBatch(singlePrompt);
+  const auto singleStats = singleModel->runtimeStats();
+  const double singleTps = test_common::getStatValue(singleStats, "TPS");
+  const double singleAvgConcurrentSeq =
+      test_common::getStatValue(singleStats, "avgConcurrentSeq");
+  const double singleGeneratedTokens =
+      test_common::getStatValue(singleStats, "generatedTokens");
+
+  auto twoModel = loadModel();
+  std::vector<LlamaModel::Prompt> twoPrompts{
+      makePrompt("Write a long paragraph about redwood forests."),
+      makePrompt("Write a long paragraph about coral reefs.")};
+  auto twoOutputs = twoModel->processPromptBatch(twoPrompts);
+  const auto twoStats = twoModel->runtimeStats();
+  const double twoTps = test_common::getStatValue(twoStats, "TPS");
+  const double twoAvgConcurrentSeq =
+      test_common::getStatValue(twoStats, "avgConcurrentSeq");
+  const double twoGeneratedTokens =
+      test_common::getStatValue(twoStats, "generatedTokens");
+
+  auto fourModel = loadModel();
+  std::vector<LlamaModel::Prompt> fourPrompts{
+      makePrompt("Write a long paragraph about redwood forests."),
+      makePrompt("Write a long paragraph about coral reefs."),
+      makePrompt("Write a long paragraph about alpine glaciers."),
+      makePrompt("Write a long paragraph about desert wildflowers.")};
+  auto fourOutputs = fourModel->processPromptBatch(fourPrompts);
+  const auto fourStats = fourModel->runtimeStats();
+  const double fourTps = test_common::getStatValue(fourStats, "TPS");
+  const double fourAvgConcurrentSeq =
+      test_common::getStatValue(fourStats, "avgConcurrentSeq");
+  const double fourGeneratedTokens =
+      test_common::getStatValue(fourStats, "generatedTokens");
+
+  ASSERT_EQ(singleOutputs.size(), 1u);
+  ASSERT_EQ(twoOutputs.size(), 2u);
+  ASSERT_EQ(fourOutputs.size(), 4u);
+  EXPECT_FALSE(singleOutputs[0].empty());
+  EXPECT_FALSE(twoOutputs[0].empty());
+  EXPECT_FALSE(twoOutputs[1].empty());
+  EXPECT_FALSE(fourOutputs[0].empty());
+  EXPECT_FALSE(fourOutputs[1].empty());
+  EXPECT_FALSE(fourOutputs[2].empty());
+  EXPECT_FALSE(fourOutputs[3].empty());
+  EXPECT_GT(singleTps, 0.0);
+  EXPECT_GT(twoTps, 0.0);
+  EXPECT_GT(fourTps, 0.0);
+  std::cout << "FourPromptBatchReportsHigherTps: single TPS=" << singleTps
+            << ", two-prompt TPS=" << twoTps
+            << ", four-prompt TPS=" << fourTps
+            << ", single avgConcurrentSeq=" << singleAvgConcurrentSeq
+            << ", two avgConcurrentSeq=" << twoAvgConcurrentSeq
+            << ", four avgConcurrentSeq=" << fourAvgConcurrentSeq
+            << ", single generatedTokens=" << singleGeneratedTokens
+            << ", two generatedTokens=" << twoGeneratedTokens
+            << ", four generatedTokens=" << fourGeneratedTokens << '\n';
+  EXPECT_NEAR(singleAvgConcurrentSeq, 1.0, 0.001);
+  EXPECT_GT(twoAvgConcurrentSeq, singleAvgConcurrentSeq);
+  EXPECT_GT(fourAvgConcurrentSeq, twoAvgConcurrentSeq);
+  EXPECT_GT(fourTps, singleTps)
+      << "single TPS=" << singleTps << ", two-prompt TPS=" << twoTps
+      << ", four-prompt TPS=" << fourTps
+      << ", four avgConcurrentSeq=" << fourAvgConcurrentSeq;
 }
 
 /// `process(std::any)` dispatches on `vector<Prompt>` and round-trips
@@ -205,4 +404,183 @@ TEST_F(ContinuousBatchingIntegrationTest, OutputCallbackStreamsPieces) {
 
   ASSERT_EQ(outputs.size(), 1u);
   EXPECT_EQ(streamed, outputs[0]);
+}
+
+/// Two prompts in the same batch must stream to their own callbacks without
+/// mixing pieces between sequences.
+TEST_F(ContinuousBatchingIntegrationTest, TwoPromptCallbacksStreamIndependently) {
+  REQUIRE_MODEL(model_);
+  auto model = loadModel();
+
+  std::string streamedA;
+  std::string streamedB;
+  auto promptA = makePrompt("Say alpha.");
+  promptA.outputCallback = [&streamedA](const std::string& piece) {
+    streamedA += piece;
+  };
+  auto promptB = makePrompt("Say beta.");
+  promptB.outputCallback = [&streamedB](const std::string& piece) {
+    streamedB += piece;
+  };
+
+  std::vector<LlamaModel::Prompt> prompts{
+      std::move(promptA), std::move(promptB)};
+  auto outputs = model->processPromptBatch(prompts);
+
+  ASSERT_EQ(outputs.size(), 2u);
+  EXPECT_EQ(streamedA, outputs[0]);
+  EXPECT_EQ(streamedB, outputs[1]);
+}
+
+/// Tool definitions are per-request prompt inputs. A two-text batch must
+/// preserve them in the formatted prompt instead of silently dropping them or
+/// rejecting the whole batch.
+TEST_F(ContinuousBatchingIntegrationTest, TwoPromptBatchAcceptsToolDefinitions) {
+  REQUIRE_MODEL(model_);
+  config_["tools"] = "true";
+  auto model = loadModel();
+
+  std::vector<LlamaModel::Prompt> prompts{
+      makePrompt("Say plain text."), makeToolPrompt()};
+  auto outputs = model->processPromptBatch(prompts);
+
+  ASSERT_EQ(outputs.size(), 2u);
+  EXPECT_FALSE(outputs[0].empty());
+  EXPECT_FALSE(outputs[1].empty());
+}
+
+TEST_F(ContinuousBatchingIntegrationTest, TwoPromptBatchQwen3ClosesThinkBlocks) {
+  REQUIRE_MODEL(qwen3Model_);
+  config_["ctx_size"] = "4096";
+  config_["n_predict"] = "512";
+  auto model = loadModel(qwen3Model_);
+
+  std::vector<LlamaModel::Prompt> prompts{
+      makePrompt(
+          "Think briefly, then answer exactly with the final word: BLUE."),
+      makePrompt(
+          "Think briefly, then answer exactly with the final word: GREEN.")};
+  auto outputs = model->processPromptBatch(prompts);
+
+  ASSERT_EQ(outputs.size(), 2u);
+  EXPECT_FALSE(hasUnclosedThinkBlock(outputs[0])) << outputs[0];
+  EXPECT_FALSE(hasUnclosedThinkBlock(outputs[1])) << outputs[1];
+  EXPECT_TRUE(containsCaseInsensitive(outputs[0], "BLUE")) << outputs[0];
+  EXPECT_TRUE(containsCaseInsensitive(outputs[1], "GREEN")) << outputs[1];
+}
+
+TEST_F(ContinuousBatchingIntegrationTest, TwoPromptBatchHarmonyToolCalls) {
+  REQUIRE_MODEL(harmonyModel_);
+  config_["ctx_size"] = "4096";
+  config_["n_predict"] = "128";
+  config_["tools"] = "true";
+  auto model = loadModel(harmonyModel_);
+
+  std::vector<LlamaModel::Prompt> prompts{
+      makeToolPrompt(), makeToolPrompt()};
+  auto outputs = model->processPromptBatch(prompts);
+
+  ASSERT_EQ(outputs.size(), 2u);
+  EXPECT_FALSE(outputs[0].empty());
+  EXPECT_FALSE(outputs[1].empty());
+  EXPECT_TRUE(
+      containsCaseInsensitive(outputs[0], "get_weather") ||
+      outputs[0].find("<|call|>") != std::string::npos)
+      << outputs[0];
+  EXPECT_TRUE(
+      containsCaseInsensitive(outputs[1], "get_weather") ||
+      outputs[1].find("<|call|>") != std::string::npos)
+      << outputs[1];
+}
+
+TEST_F(ContinuousBatchingIntegrationTest, TwoPromptBatchSavesAndLoadsCache) {
+  REQUIRE_MODEL(model_);
+  auto model = loadModel();
+  const fs::path cachePath =
+      fs::temp_directory_path() / ("batch-cache-" + uniqueTestId() + ".bin");
+
+  auto cachedPrompt = makePrompt("Remember this setup.");
+  cachedPrompt.prefill = true;
+  cachedPrompt.cacheKey = cachePath.string();
+  cachedPrompt.saveCacheToDisk = true;
+  std::vector<LlamaModel::Prompt> prompts{
+      makePrompt("Say plain text."), std::move(cachedPrompt)};
+
+  auto outputs = model->processPromptBatch(prompts);
+
+  ASSERT_EQ(outputs.size(), 2u);
+  EXPECT_FALSE(outputs[0].empty());
+  EXPECT_TRUE(outputs[1].empty());
+  ASSERT_TRUE(fs::exists(cachePath));
+  EXPECT_GT(fs::file_size(cachePath), 0u);
+
+  auto cachedFollowup = makePrompt("Say cached follow up.");
+  cachedFollowup.cacheKey = cachePath.string();
+  std::vector<LlamaModel::Prompt> followupPrompts{
+      makePrompt("Say plain text again."), std::move(cachedFollowup)};
+  auto followupOutputs = model->processPromptBatch(followupPrompts);
+
+  ASSERT_EQ(followupOutputs.size(), 2u);
+  EXPECT_FALSE(followupOutputs[0].empty());
+  EXPECT_FALSE(followupOutputs[1].empty());
+
+  fs::remove(cachePath);
+}
+
+TEST_F(ContinuousBatchingIntegrationTest, BatchCancelUsesPolicyAndSavesCache) {
+  REQUIRE_MODEL(model_);
+  config_["n_predict"] = "128";
+  auto model = loadModel();
+  const fs::path cachePath =
+      fs::temp_directory_path() /
+      ("batch-cancel-cache-" + uniqueTestId() + ".bin");
+
+  std::atomic<bool> cancelOnce = false;
+  auto cachedPrompt = makePrompt(
+      "Write several sentences about astronomy so cancellation happens during "
+      "generation.");
+  cachedPrompt.cacheKey = cachePath.string();
+  cachedPrompt.saveCacheToDisk = true;
+  cachedPrompt.outputCallback = [&model, &cancelOnce](const std::string&) {
+    bool expected = false;
+    if (cancelOnce.compare_exchange_strong(expected, true)) {
+      model->cancel();
+    }
+  };
+
+  std::vector<LlamaModel::Prompt> prompts{
+      std::move(cachedPrompt),
+      makePrompt("Write several sentences about ocean currents.")};
+  auto outputs = model->processPromptBatch(prompts);
+
+  ASSERT_EQ(outputs.size(), 2u);
+  EXPECT_TRUE(cancelOnce.load());
+  ASSERT_TRUE(fs::exists(cachePath));
+  EXPECT_GT(fs::file_size(cachePath), 0u);
+
+  auto followup = makePrompt("Continue after the cancelled turn.");
+  followup.cacheKey = cachePath.string();
+  std::vector<LlamaModel::Prompt> followupPrompts{std::move(followup)};
+  auto followupOutputs = model->processPromptBatch(followupPrompts);
+
+  ASSERT_EQ(followupOutputs.size(), 1u);
+  EXPECT_FALSE(followupOutputs[0].empty());
+
+  fs::remove(cachePath);
+}
+
+TEST_F(ContinuousBatchingIntegrationTest, TwoPromptBatchAcceptsPrefillOnly) {
+  REQUIRE_MODEL(model_);
+  auto model = loadModel();
+
+  auto prefillPrompt = makePrompt("Remember this setup.");
+  prefillPrompt.prefill = true;
+  std::vector<LlamaModel::Prompt> prompts{
+      makePrompt("Say plain text."), std::move(prefillPrompt)};
+
+  auto outputs = model->processPromptBatch(prompts);
+
+  ASSERT_EQ(outputs.size(), 2u);
+  EXPECT_FALSE(outputs[0].empty());
+  EXPECT_TRUE(outputs[1].empty());
 }

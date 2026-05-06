@@ -22,6 +22,9 @@ public:
   TextLlmContext(
       common_params& commonParams, common_init_result&& llamaInit,
       ToolsCompactController& tools);
+  TextLlmContext(
+      const common_params& commonParams, const LlmContextShared& shared,
+      ToolsCompactController& tools, llama_seq_id seqId);
 
   // Destructor
   ~TextLlmContext() override = default;
@@ -141,6 +144,39 @@ public:
    */
   llama_pos removeLastNTokens(llama_pos count) override;
 
+  std::vector<llama_token> prepareBatchPrefill(
+      const std::vector<common_chat_msg>& chatMsgs,
+      const std::vector<common_chat_tool>& tools, bool isCacheLoaded,
+      bool prefill);
+
+  void onBatchPrefillComplete(
+      llama_pos currentPos, size_t prefillTokenCount);
+
+  SlotPolicyStepResult onLogitsReady(
+      int logitIdx, unsigned generatedAfterAccept,
+      const std::function<void(const std::string&)>& outputCallback,
+      LlamaBatch* inlineDecodeBatch = nullptr) override;
+
+  void onSlotEnd(
+      const std::function<void(const std::string&)>& outputCallback) override;
+
+  void onGenerationFinished(
+      const std::function<void(const std::string&)>& outputCallback) override;
+
+  void onCancelPolicy(
+      const std::function<void(const std::string&)>& outputCallback) override;
+
+  void validatePromptPolicy(
+      const std::vector<common_chat_msg>& chatMsgs,
+      const std::vector<common_chat_tool>& tools, const PromptLayout& layout,
+      bool hasKvCacheContext) const override;
+
+  void onGenerationCompletePolicy(std::string_view assistantOutput) override;
+
+  [[nodiscard]] bool loadSequenceCache(
+      const std::string& cacheKey, llama_pos configuredNDiscarded);
+  void saveSequenceCache(const std::string& cacheKey) const;
+
 private:
   /**
    * The check antiprompt method. It checks the antiprompt.
@@ -168,24 +204,33 @@ private:
 
   void flushPendingUtf8ToCallback(
       const std::function<void(const std::string&)>& outputCallback);
+  void emitOutputPiece(
+      const std::function<void(const std::string&)>& outputCallback,
+      const std::string& text);
+  void initializeCommonState();
+  void initializeOwnedThreadpools();
   void applyContextDiscard();
   void handleStopRequestAndAddEot(LlamaBatch& batch);
 
   ToolsCompactController& tools_;
   common_init_result llamaInit_;
-  llama_model* model_;
-  llama_context* lctx_;
-  const llama_vocab* vocab_;
+  llama_model* model_ = nullptr;
+  llama_context* lctx_ = nullptr;
+  const llama_vocab* vocab_ = nullptr;
   CommonSamplerPtr smpl_;
 
   common_params params_;
   common_chat_templates_ptr tmpls_;
   std::vector<llama_token> antipromptTokens_;
+  std::vector<llama_token> forcedTokens_;
 
   llama_pos nPast_ = 0;
   llama_pos nDiscarded_ = 0;
   llama_pos firstMsgTokens_ = 0;
   int32_t nSlides_ = 0;
+  bool pendingBatchFirstMsg_ = false;
+  bool generationStarted_ = false;
+  std::string assistantOutput_;
   ThreadPoolPtr threadpool_;
   ThreadPoolPtr threadpoolBatch_;
 

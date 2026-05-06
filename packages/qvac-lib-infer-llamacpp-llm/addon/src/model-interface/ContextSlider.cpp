@@ -38,8 +38,8 @@ const IContextSliderOps& defaultContextSliderOps() {
 }
 
 ContextSlideOutcome trySlidePrefill(
-    llama_context* lctx, llama_pos nPast, llama_pos firstMsgTokens,
-    llama_pos nTokensToAppend, llama_pos nDiscarded,
+    llama_context* lctx, llama_seq_id seqId, llama_pos nPast,
+    llama_pos firstMsgTokens, llama_pos nTokensToAppend, llama_pos nDiscarded,
     ToolsCompactController& tools, const IContextSliderOps& ops) {
 
   const auto nCtx = ops.nCtx(lctx);
@@ -57,8 +57,8 @@ ContextSlideOutcome trySlidePrefill(
   if (leftTokens >= 0 && discard > 0 &&
       nPast + nTokensToAppend - discard < nCtx) {
     auto mem = ops.memory(lctx);
-    ops.seqRm(mem, 0, firstMsgTokens, firstMsgTokens + discard);
-    ops.seqAdd(mem, 0, firstMsgTokens + discard, nPast, -discard);
+    ops.seqRm(mem, seqId, firstMsgTokens, firstMsgTokens + discard);
+    ops.seqAdd(mem, seqId, firstMsgTokens + discard, nPast, -discard);
     llama_pos newNPast = nPast - discard;
     tools.onSlide(discard, firstMsgTokens);
     return {ContextSlideOutcome::Kind::Slid, newNPast, discard};
@@ -68,7 +68,7 @@ ContextSlideOutcome trySlidePrefill(
   if (leftTokens < 0 && firstMsgTokens + nTokensToAppend < nCtx &&
       nDiscarded > 0) {
     auto mem = ops.memory(lctx);
-    ops.seqRm(mem, 0, firstMsgTokens, nPast);
+    ops.seqRm(mem, seqId, firstMsgTokens, nPast);
     llama_pos wiped = nPast - firstMsgTokens;
     if (tools.enabled()) {
       tools.reset();
@@ -81,8 +81,9 @@ ContextSlideOutcome trySlidePrefill(
 }
 
 ContextSlideOutcome trySlideGeneration(
-    llama_context* lctx, llama_pos nPast, llama_pos firstMsgTokens,
-    llama_pos nDiscarded, ToolsCompactController& tools,
+    llama_context* lctx, llama_seq_id seqId, llama_pos nPast,
+    llama_pos firstMsgTokens, llama_pos nDiscarded,
+    ToolsCompactController& tools,
     const IContextSliderOps& ops) {
 
   const auto nCtx = ops.nCtx(lctx);
@@ -129,8 +130,8 @@ ContextSlideOutcome trySlideGeneration(
 
   // Perform the slide
   auto mem = ops.memory(lctx);
-  ops.seqRm(mem, 0, firstMsgTokens, firstMsgTokens + discard);
-  ops.seqAdd(mem, 0, firstMsgTokens + discard, nPast, -discard);
+  ops.seqRm(mem, seqId, firstMsgTokens, firstMsgTokens + discard);
+  ops.seqAdd(mem, seqId, firstMsgTokens + discard, nPast, -discard);
   llama_pos newNPast = nPast - discard;
   tools.onSlide(discard, firstMsgTokens);
   return {ContextSlideOutcome::Kind::Slid, newNPast, discard};

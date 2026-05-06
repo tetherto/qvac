@@ -392,8 +392,15 @@ LlamaModel::initBatchScheduler(ReloadableState& state) {
   const auto batchCapacity = static_cast<int32_t>(cparams.n_batch);
   const auto maxChunkSize = static_cast<unsigned>(cparams.n_ubatch);
   return std::make_unique<batching::ContinuousBatchScheduler>(
-      ctx, mdl, maxChunkSize, ctxTotalTokens, batchSize, batchCapacity,
-      cparams.special, cparams.sampling, cparams.n_predict);
+      ctx,
+      mdl,
+      maxChunkSize,
+      ctxTotalTokens,
+      batchSize,
+      batchCapacity,
+      cparams,
+      state.configuredNDiscarded_,
+      state.toolsCompact_ ? state.toolsCompact_->profile() : std::nullopt);
 }
 
 void LlamaModel::setWeightsForFile(
@@ -478,6 +485,9 @@ void LlamaModel::cancel() const {
 }
 
 void LlamaModel::cancelImpl() const {
+  if (state_ && state_->batchScheduler_ && state_->batchScheduler_->hasWork()) {
+    state_->batchScheduler_->requestCancelAll();
+  }
   if (state_ && state_->llmContext_) {
     state_->llmContext_->stop();
   }
@@ -559,6 +569,16 @@ std::string LlamaModel::processPrompt(const Prompt& prompt) {
 
 std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   state_->lastRunWasPrefill_ = prompt.prefill;
+  state_->lastRunWasBatch_ = false;
+  state_->lastAvgConcurrentSeq_ = 1.0;
+  state_->lastBatchCacheTokens_ = 0;
+  state_->lastBatchContextSlides_ = 0;
+  state_->lastBatchGeneratedTokens_ = 0;
+  state_->lastBatchPromptTokens_ = 0;
+  state_->lastBatchElapsedMs_ = 0.0;
+  if (state_->batchScheduler_) {
+    state_->batchScheduler_->resetRuntimeStats();
+  }
 
   // Reset per-inference slide counter so it doesn't leak across runs
   state_->llmContext_->resetNSlides();
@@ -580,7 +600,7 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
     hasKvCacheContext = true;
   }
 
-  state_->toolsCompact_->validatePrompt(
+  state_->llmContext_->validatePromptPolicy(
       resolved.chatMsgs, resolved.tools, resolved.layout, hasKvCacheContext);
 
   if (resolved.chatMsgs.empty() && resolved.tools.empty()) {
@@ -615,15 +635,9 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   }
 
   std::ostringstream oss;
-  bool needsOutputCapture = state_->toolsCompact_->enabled();
   auto callback = prompt.outputCallback;
   if (!prompt.outputCallback) {
     callback = [&](const std::string& token) { oss << token; };
-  } else if (needsOutputCapture) {
-    callback = [&](const std::string& token) {
-      oss << token;
-      prompt.outputCallback(token);
-    };
   }
 
   if (!state_->llmContext_->generateResponse(callback)) {
@@ -637,26 +651,6 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
     out = oss.str();
   }
 
-  // Post-generation tools trim decision via controller
-  std::string ossStr;
-  if (needsOutputCapture && prompt.outputCallback) {
-    // Only materialize a second copy when output streamed via callback.
-    ossStr = oss.str();
-  }
-  const std::string& outputToCheck =
-      needsOutputCapture ? (prompt.outputCallback ? ossStr : out) : out;
-  auto decision = state_->toolsCompact_->onGenerationComplete(
-      outputToCheck,
-      state_->llmContext_->getNPast(),
-      state_->llmContext_->getFirstMsgTokens());
-  if (decision.trim) {
-    state_->llmContext_->removeLastNTokens(decision.tokensToRemoveFromTail);
-    if (decision.clampFirstMsgTokensToNPast &&
-        state_->llmContext_->getFirstMsgTokens() >
-            state_->llmContext_->getNPast()) {
-      state_->llmContext_->setFirstMsgTokens(state_->llmContext_->getNPast());
-    }
-  }
   maybeSaveCacheToDisk(prompt.saveCacheToDisk, state_->cacheManager_);
 
   if (resolved.shouldResetAfterInference) {
@@ -674,6 +668,14 @@ LlamaModel::processPromptBatch(const std::vector<Prompt>& prompts) {
 std::vector<std::string>
 LlamaModel::processPromptBatchImpl(const std::vector<Prompt>& prompts) {
   validateBitnetQuantization();
+  state_->lastRunWasPrefill_ = false;
+  state_->lastRunWasBatch_ = true;
+  state_->lastAvgConcurrentSeq_ = 0.0;
+  state_->lastBatchCacheTokens_ = 0;
+  state_->lastBatchContextSlides_ = 0;
+  state_->lastBatchGeneratedTokens_ = 0;
+  state_->lastBatchPromptTokens_ = 0;
+  state_->lastBatchElapsedMs_ = 0.0;
 
   if (prompts.empty()) {
     return {};
@@ -687,8 +689,7 @@ LlamaModel::processPromptBatchImpl(const std::vector<Prompt>& prompts) {
         "text-only model with n_seq_max > 1");
   }
   auto& scheduler = *state_->batchScheduler_;
-  llama_context* ctx = state_->llmContext_->getCtx();
-  const common_params& baseParams = state_->llmContext_->getParams();
+  scheduler.resetRuntimeStats();
 
   std::vector<std::string> outputs(prompts.size());
   std::vector<bool> done(prompts.size(), false);
@@ -719,10 +720,6 @@ LlamaModel::processPromptBatchImpl(const std::vector<Prompt>& prompts) {
           toString(qvac_errors::general_error::InvalidArgument),
           "processPromptBatch: finetuning is not a batch processing operation");
     }
-
-    // Tokenize via the normal chat-template path. v1 batching skips KV
-    // cache reuse and tools so the prompt-format step stays purely
-    // functional (no nPast_ side effects on the shared context).
     ParsedPromptPayload parsed = formatPrompt(prompt.input);
     if (parsed.chatMsgs.empty()) {
       throw qvac_errors::StatusError(
@@ -730,26 +727,13 @@ LlamaModel::processPromptBatchImpl(const std::vector<Prompt>& prompts) {
           toString(EmptyPrompt),
           "processPromptBatch: prompt produced no chat messages");
     }
-    common_chat_templates_inputs inputs;
-    inputs.messages = parsed.chatMsgs;
-    inputs.add_generation_prompt = true;
-    inputs.use_jinja = baseParams.use_jinja;
-    auto tmplsPtr = common_chat_templates_init(
-        state_->llmContext_->getModel(), baseParams.chat_template);
-    auto formatted = common_chat_templates_apply(tmplsPtr.get(), inputs);
-    constexpr bool addSpecial = true;
-    constexpr bool parseSpecial = true;
-    auto tokens =
-        common_tokenize(ctx, formatted.prompt, addSpecial, parseSpecial);
-    if (tokens.empty()) {
-      throw qvac_errors::StatusError(
-          ADDON_ID,
-          toString(EmptyTokenizedInput),
-          "processPromptBatch: tokenized prompt is empty");
-    }
-
     batching::SubmitRequest sr;
-    sr.tokens = std::move(tokens);
+    sr.chatMsgs = std::move(parsed.chatMsgs);
+    sr.tools = std::move(parsed.tools);
+    sr.layout = std::move(parsed.layout);
+    sr.prefill = prompt.prefill;
+    sr.cacheKey = prompt.cacheKey;
+    sr.saveCacheToDisk = prompt.saveCacheToDisk;
     sr.overrides = prompt.generationParams;
 
     auto userCb = prompt.outputCallback;
@@ -782,6 +766,13 @@ LlamaModel::processPromptBatchImpl(const std::vector<Prompt>& prompts) {
         toString(qvac_errors::general_error::InternalError),
         "processPromptBatch: scheduler exited with prompts still pending");
   }
+  const batching::RuntimeStatsSnapshot batchStats = scheduler.runtimeStats();
+  state_->lastAvgConcurrentSeq_ = batchStats.avgConcurrentSeq;
+  state_->lastBatchCacheTokens_ = batchStats.cacheTokens;
+  state_->lastBatchContextSlides_ = batchStats.contextSlides;
+  state_->lastBatchGeneratedTokens_ = batchStats.generatedTokens;
+  state_->lastBatchPromptTokens_ = batchStats.promptTokens;
+  state_->lastBatchElapsedMs_ = batchStats.elapsedMs;
 
   return outputs;
 }
@@ -791,26 +782,46 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::runtimeStats() const {
   auto perfData = llama_perf_context(state_->llmContext_->getCtx());
   constexpr double kMillisInSecond = 1000.0;
 
-  double timeToFirstToken =
+  const double timeToFirstToken =
       state_->lastRunWasPrefill_ ? 0.0 : perfData.t_p_eval_ms;
-  double tokensPerSecond =
-      (!state_->lastRunWasPrefill_ && perfData.t_eval_ms > 0)
-          ? kMillisInSecond / perfData.t_eval_ms * perfData.n_eval
-          : 0.0;
-
-  int32_t generatedTokens = state_->lastRunWasPrefill_ ? 0 : perfData.n_eval;
-  int32_t promptTokens = state_->lastRunWasPrefill_ ? 0 : perfData.n_p_eval;
+  const int64_t generatedTokens =
+      state_->lastRunWasBatch_
+          ? state_->lastBatchGeneratedTokens_
+          : static_cast<int64_t>(
+                state_->lastRunWasPrefill_ ? 0 : perfData.n_eval);
+  const int64_t promptTokens =
+      state_->lastRunWasBatch_
+          ? state_->lastBatchPromptTokens_
+          : static_cast<int64_t>(
+                state_->lastRunWasPrefill_ ? 0 : perfData.n_p_eval);
+  const double tokensPerSecond =
+      state_->lastRunWasBatch_
+          ? (state_->lastBatchElapsedMs_ > 0.0
+                 ? kMillisInSecond / state_->lastBatchElapsedMs_ *
+                       static_cast<double>(generatedTokens)
+                 : 0.0)
+          : ((!state_->lastRunWasPrefill_ && perfData.t_eval_ms > 0)
+                 ? kMillisInSecond / perfData.t_eval_ms * perfData.n_eval
+                 : 0.0);
   llama_perf_context_reset(state_->llmContext_->getCtx());
 
-  int32_t contextSlides = state_->llmContext_->getNSlides();
+  const int64_t cacheTokens =
+      state_->lastRunWasBatch_
+          ? state_->lastBatchCacheTokens_
+          : static_cast<int64_t>(state_->llmContext_->getNPast());
+  const int64_t contextSlides =
+      state_->lastRunWasBatch_
+          ? state_->lastBatchContextSlides_
+          : static_cast<int64_t>(state_->llmContext_->getNSlides());
 
   return {
       {"TTFT", timeToFirstToken},
       {"TPS", tokensPerSecond},
-      {"CacheTokens", state_->llmContext_->getNPast()},
+      {"CacheTokens", cacheTokens},
       {"generatedTokens", generatedTokens},
       {"promptTokens", promptTokens},
-      {"contextSlides", static_cast<int64_t>(contextSlides)},
+      {"contextSlides", contextSlides},
+      {"avgConcurrentSeq", state_->lastAvgConcurrentSeq_},
       {"backendDevice", runtimeBackendDevice_}};
 }
 

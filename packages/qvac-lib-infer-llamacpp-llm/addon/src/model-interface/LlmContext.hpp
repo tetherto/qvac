@@ -4,6 +4,7 @@
 #include <functional>
 #include <optional>
 #include <string>
+#include <string_view>
 
 #include "addon/LlmErrors.hpp"
 #include "common/chat.h"
@@ -11,6 +12,8 @@
 #include "llama.h"
 
 using namespace qvac_lib_inference_addon_llama::errors;
+
+struct PromptLayout;
 
 struct GenerationParams {
   std::optional<int> n_predict;
@@ -128,6 +131,35 @@ struct ThreadPoolDeleter {
   }
 };
 using ThreadPoolPtr = std::unique_ptr<ggml_threadpool, ThreadPoolDeleter>;
+
+/// Non-owning bundle of the resources that survive across slot
+/// boundaries when an `LlmContext` is used as a per-slot policy under
+/// the `ContinuousBatchScheduler`. The owner (the scheduler / the
+/// outer `LlamaModel`) keeps `model`, `lctx`, and the threadpools
+/// alive for the entire lifetime of every slot policy that borrows
+/// them; per-slot `LlmContext` instances populated through this
+/// bundle MUST NOT call `llama_*_free` on any of these handles.
+///
+/// In the legacy single-prompt path the same `LlmContext` instance
+/// owns its bundle directly (via `common_init_result llamaInit_` +
+/// the threadpools it builds in its ctor); this struct is only used
+/// by the new shared-ctx ctor path.
+struct LlmContextShared {
+  llama_model* model = nullptr;
+  llama_context* lctx = nullptr;
+  const llama_vocab* vocab = nullptr;
+  /// Threadpools attached to `lctx` via `llama_attach_threadpool`.
+  /// One pair per `lctx`, shared across every borrowing slot policy.
+  ggml_threadpool* threadpool = nullptr;
+  ggml_threadpool* threadpoolBatch = nullptr;
+};
+
+struct SlotPolicyStepResult {
+  llama_token token = LLAMA_TOKEN_NULL;
+  bool finished = false;
+  bool decodedInline = false;
+  bool contextOverflow = false;
+};
 
 class LlmContext { // NOLINT(cppcoreguidelines-special-member-functions)
 public:
@@ -295,4 +327,76 @@ public:
    *
    */
   virtual void resetMedia() {};
+
+  virtual SlotPolicyStepResult onLogitsReady(
+      int logitIdx, unsigned generatedAfterAccept,
+      const std::function<void(const std::string&)>& outputCallback,
+      LlamaBatch* inlineDecodeBatch = nullptr) {
+    (void)logitIdx;
+    (void)generatedAfterAccept;
+    (void)outputCallback;
+    (void)inlineDecodeBatch;
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InternalError),
+        "LlmContext: slot policy is not implemented for this context");
+  }
+
+  virtual void onSlotEnd(
+      const std::function<void(const std::string&)>& outputCallback) {
+    (void)outputCallback;
+  }
+
+  virtual void onGenerationFinished(
+      const std::function<void(const std::string&)>& outputCallback) {
+    onSlotEnd(outputCallback);
+  }
+
+  virtual void onCancelPolicy(
+      const std::function<void(const std::string&)>& outputCallback) {
+    onSlotEnd(outputCallback);
+  }
+
+  virtual void validatePromptPolicy(
+      const std::vector<common_chat_msg>& chatMsgs,
+      const std::vector<common_chat_tool>& tools, const PromptLayout& layout,
+      bool hasKvCacheContext) const {
+    (void)chatMsgs;
+    (void)tools;
+    (void)layout;
+    (void)hasKvCacheContext;
+  }
+
+  virtual void onGenerationCompletePolicy(std::string_view assistantOutput) {
+    (void)assistantOutput;
+  }
+
+protected:
+  void clearSequenceMemory(
+      llama_context* lctx, llama_pos startPos = -1, llama_pos endPos = -1)
+      const {
+    if (auto* mem = llama_get_memory(lctx); mem == nullptr) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          qvac_errors::general_error::toString(
+              qvac_errors::general_error::InternalError),
+          "LlmContext: llama memory is null while clearing sequence");
+    } else if (!llama_memory_seq_rm(mem, seqId_, startPos, endPos)) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          qvac_errors::general_error::toString(
+              qvac_errors::general_error::InternalError),
+          "LlmContext: failed to clear sequence from KV memory");
+    }
+  }
+
+  /// llama-side sequence id this context owns. Stamped onto every
+  /// token added to a `llama_batch` and used as the `seq_id` argument
+  /// to `llama_memory_seq_*` calls. Defaults to 0 so the legacy
+  /// single-prompt path (one `LlmContext` per `llama_context`) keeps
+  /// its old "always seq 0" behaviour byte-for-byte. Per-slot
+  /// instances under `ContinuousBatchScheduler` set this to their
+  /// scheduler-assigned slot id at construction.
+  llama_seq_id seqId_ = 0;
 };

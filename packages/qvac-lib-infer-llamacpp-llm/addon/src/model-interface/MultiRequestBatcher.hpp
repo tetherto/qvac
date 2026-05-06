@@ -17,11 +17,13 @@ enum class StopReason : uint8_t {
   Finished,     // Explicitly marked finished (e.g., EOG sampled)
   LimitReached, // Reached maxTokensPerSequence
   DecodeError,  // llama_decode returned a non-zero rc
+  Cancelled,
 };
 
 struct Request {
   uint32_t seqId;
   std::vector<llama_token> pendingPrefillTokens;
+  size_t prefillTokenCount = 0;
   size_t prefillFedCount = 0;
   std::vector<llama_token> generatedTokens;
   llama_pos currentPos = 0;
@@ -29,7 +31,9 @@ struct Request {
   StopReason stopReason = StopReason::None;
   unsigned maxTokensPerSequence;
 
-  Request(uint32_t rid, std::vector<llama_token>&& toks, unsigned maxTokens);
+  Request(
+      uint32_t rid, std::vector<llama_token>&& toks, unsigned maxTokens,
+      llama_pos initialPos = 0);
 
   // True once every prompt token has been fed.
   [[nodiscard]] bool isPrefillComplete() const;
@@ -79,6 +83,11 @@ public:
   /// Add a request to a free slot.
   [[nodiscard]] AddStatus
   addRequest(std::vector<llama_token>&& tokens, uint32_t& seqId);
+  [[nodiscard]] AddStatus addRequestAt(
+      uint32_t seqId, std::vector<llama_token>&& tokens,
+      llama_pos initialPos = 0);
+
+  [[nodiscard]] std::optional<uint32_t> firstFreeSeqId() const;
 
   /// Per-slot sampler callback.
   /// @param seqId    sequence whose logits are ready to sample
@@ -113,6 +122,8 @@ public:
   /// Tests may pass a recording lambda. An empty std::function skips the
   /// call entirely.
   using KvClearFn = std::function<void(uint32_t seqId)>;
+  using PrefillCompleteFn = std::function<void(
+      uint32_t seqId, llama_pos currentPos, size_t prefillTokenCount)>;
 
   struct FillResult {
     unsigned chunkSize;
@@ -127,7 +138,7 @@ public:
   [[nodiscard]] FillResult fillBatch(LlamaBatch& batch);
 
   /// Advance currentPos for active sequences.
-  void advance(unsigned chunkSize);
+  void advance(unsigned chunkSize, const PrefillCompleteFn& onPrefillComplete = {});
 
   /// Extract finished requests and free their slots. For every freed slot
   /// `kvClear` (when non-empty) is invoked with the slot's seqId before the

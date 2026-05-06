@@ -1,6 +1,8 @@
 #include "ContinuousBatchScheduler.hpp"
 
 #include <algorithm>
+#include <chrono>
+#include <optional>
 #include <stdexcept>
 #include <utility>
 
@@ -35,17 +37,19 @@ unsigned perSeqCeiling(unsigned ctxTotalTokens, size_t batchSize) {
 ContinuousBatchScheduler::ContinuousBatchScheduler(
     llama_context* ctx, llama_model* model, unsigned maxChunkSize,
     unsigned ctxTotalTokens, size_t batchSize, int32_t batchCapacity,
-    bool renderSpecialTokens,
-    const common_params_sampling& baseSampling, int baseNPredict)
+    const common_params& baseParams, llama_pos configuredNDiscarded,
+    std::optional<ToolsCompactProfile> toolsCompactProfile)
     : ctx_(ctx), model_(model),
       vocab_(model != nullptr ? llama_model_get_vocab(model) : nullptr),
-      renderSpecialTokens_(renderSpecialTokens),
-      baseSampling_(baseSampling),
-      baseNPredict_(baseNPredict),
+      baseSampling_(baseParams.sampling),
+      baseNPredict_(baseParams.n_predict),
+      baseParams_(baseParams),
+      configuredNDiscarded_(configuredNDiscarded),
+      toolsCompactProfile_(std::move(toolsCompactProfile)),
       perSeqMaxTokens_(perSeqCeiling(ctxTotalTokens, batchSize)),
       batcher_(maxChunkSize, perSeqMaxTokens_, batchSize),
       batch_(batchCapacity, 0, static_cast<int32_t>(batchSize)),
-      slots_(batchSize) {
+      slots_(batchSize), statsStart_(std::chrono::steady_clock::now()) {
 
   const bool ctxValid =
       ctx_ != nullptr && model_ != nullptr && vocab_ != nullptr;
@@ -53,7 +57,7 @@ ContinuousBatchScheduler::ContinuousBatchScheduler(
     throw std::invalid_argument(
         "ContinuousBatchScheduler: ctx, model, and vocab must be non-null");
   }
-  if (!batchCapacity >= static_cast<int32_t>(batchSize)) {
+  if (batchCapacity < static_cast<int32_t>(batchSize)) {
     throw std::invalid_argument(
         "ContinuousBatchScheduler: batchCapacity must be >= batchSize so "
         "every active slot can feed at least one token per step");
@@ -63,20 +67,6 @@ ContinuousBatchScheduler::ContinuousBatchScheduler(
     throw std::invalid_argument(
         "ContinuousBatchScheduler: ctxTotalTokens / batchSize underflowed "
         "to 0; reduce batchSize or grow n_ctx");
-  }
-
-  // Pre-build one base sampler per slot. Validates `baseSampling_` once
-  // up-front; override-free requests later just `common_sampler_reset`
-  // their slot's sampler instead of allocating a new one per request.
-  baseSamplers_.reserve(batchSize);
-  for (size_t i = 0; i < batchSize; ++i) {
-    CommonSamplerPtr sampler(common_sampler_init(model_, baseSampling_));
-    if (!sampler) {
-      throw std::invalid_argument(
-          "ContinuousBatchScheduler: failed to initialise base sampler "
-          "from baseline sampling (invalid grammar or json_schema?)");
-    }
-    baseSamplers_.push_back(std::move(sampler));
   }
 }
 
@@ -99,7 +89,7 @@ uint32_t ContinuousBatchScheduler::submit(SubmitRequest&& request) {
   // destruction *does not* invoke the body, only destroys captures —
   // so dropping the lambda is safe. It must NOT be called outside this
   // block: the references it captures would dangle.
-  common_params tmpParams;
+  common_params tmpParams = baseParams_;
   tmpParams.sampling = baseSampling_;
   tmpParams.n_predict = baseNPredict_;
   CommonSamplerPtr overrideSampler;
@@ -122,9 +112,36 @@ uint32_t ContinuousBatchScheduler::submit(SubmitRequest&& request) {
   // a hint: silently clamping would let callers ask for 10k tokens and
   // get 50, which is a footgun. Same policy as the prompt-size check
   // below — overrun is an admit-time error, not a soft truncation.
-  const unsigned promptSize =
-      static_cast<unsigned>(request.tokens.size());
-  if (promptSize >= perSeqMaxTokens_) {
+  const auto maybeSeqId = batcher_.firstFreeSeqId();
+  if (!maybeSeqId.has_value()) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        "ContinuousBatchScheduler::submit: failed to add to batch "
+        "(MultiRequestBatcher::AddStatus=" +
+            std::to_string(
+                static_cast<int>(MultiRequestBatcher::AddStatus::ErrNoFreeSlot)) +
+            ")");
+  }
+  const uint32_t seqId = *maybeSeqId;
+  LlmContextShared shared{
+      .model = model_, .lctx = ctx_, .vocab = vocab_};
+  auto tools = std::make_unique<ToolsCompactController>(toolsCompactProfile_);
+  auto policy =
+      std::make_unique<TextLlmContext>(tmpParams, shared, *tools, seqId);
+  const bool isCacheLoaded =
+      policy->loadSequenceCache(request.cacheKey, configuredNDiscarded_);
+  const bool hasKvCacheContext = isCacheLoaded || policy->getNPast() > 0;
+  policy->validatePromptPolicy(
+      request.chatMsgs, request.tools, request.layout, hasKvCacheContext);
+  auto tokens = policy->prepareBatchPrefill(
+      request.chatMsgs, request.tools, isCacheLoaded, request.prefill);
+
+  const auto promptSize =
+      static_cast<unsigned>(policy->getNPast()) +
+      static_cast<unsigned>(tokens.size());
+  if (!request.prefill && promptSize >= perSeqMaxTokens_) {
     throw qvac_errors::StatusError(
         ADDON_ID,
         qvac_errors::general_error::toString(
@@ -134,7 +151,17 @@ uint32_t ContinuousBatchScheduler::submit(SubmitRequest&& request) {
             "per-sequence cap " + std::to_string(perSeqMaxTokens_) +
             " (ctxTotalTokens / n_parallel)");
   }
-  if (tmpParams.n_predict > 0 &&
+  if (request.prefill && promptSize > perSeqMaxTokens_) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        "ContinuousBatchScheduler::submit: prefill prompt of " +
+            std::to_string(promptSize) + " tokens exceeds per-sequence cap " +
+            std::to_string(perSeqMaxTokens_) +
+            " (ctxTotalTokens / n_parallel)");
+  }
+  if (!request.prefill && tmpParams.n_predict > 0 &&
       promptSize + static_cast<unsigned>(tmpParams.n_predict) >
           perSeqMaxTokens_) {
     throw qvac_errors::StatusError(
@@ -150,10 +177,8 @@ uint32_t ContinuousBatchScheduler::submit(SubmitRequest&& request) {
   }
 
   StreamCallbacks streamsLocal = std::move(request.streams);
-  uint32_t seqId = 0;
-  // TODO, the scheduler should take care of doing multiple passes
-  // if there are not enough slots...
-  if (auto status = batcher_.addRequest(std::move(request.tokens), seqId);
+  if (auto status =
+          batcher_.addRequestAt(seqId, std::move(tokens), policy->getNPast());
       status != MultiRequestBatcher::AddStatus::Ok) {
     throw qvac_errors::StatusError(
         ADDON_ID,
@@ -163,26 +188,14 @@ uint32_t ContinuousBatchScheduler::submit(SubmitRequest&& request) {
         "(MultiRequestBatcher::AddStatus=" +
             std::to_string(static_cast<int>(status)) + ")");
   }
-  if (!hasOverrides) {
-    // Reusing the slot's pre-built base sampler — wipe per-sequence
-    // state (rep penalty window, RNG, grammar parse position) so it
-    // never leaks from the previous request that occupied this slot.
-    common_sampler_reset(baseSamplers_[seqId].get());
-  }
   slots_[seqId].emplace(SlotState{
       .streams = std::move(streamsLocal),
-      .utf8 = {},
-      .overrideSampler = std::move(overrideSampler),
-      .nPredict = tmpParams.n_predict});
+      .tools = std::move(tools),
+      .policy = std::move(policy),
+      .cacheKey = std::move(request.cacheKey),
+      .saveCacheToDisk = request.saveCacheToDisk,
+      .prefillOnly = request.prefill});
   return seqId;
-}
-
-common_sampler* ContinuousBatchScheduler::activeSampler(uint32_t seqId) const {
-  const auto& slot = slots_[seqId];
-  if (slot.has_value() && slot->overrideSampler) {
-    return slot->overrideSampler.get();
-  }
-  return baseSamplers_[seqId].get();
 }
 
 bool ContinuousBatchScheduler::step() {
@@ -201,46 +214,79 @@ bool ContinuousBatchScheduler::step() {
     };
     auto finished = batcher_.extractFinished(kvClear);
     for (const auto& req : finished) {
-      flushUtf8(req.seqId);
+      if (slots_[req.seqId].has_value() && slots_[req.seqId]->policy) {
+        slots_[req.seqId]->policy->onSlotEnd({});
+      }
       notifyDone(req.seqId);
       freeSlot(req.seqId);
     }
     return false;
   }
+  decodeStepCount_++;
+  concurrentSeqSum_ += fillResult.numActiveSequences;
 
-  batcher_.advance(fillResult.chunkSize);
+  batcher_.advance(
+      fillResult.chunkSize,
+      [this](
+          uint32_t seqId, llama_pos currentPos, size_t prefillTokenCount) {
+        auto& slot = slots_[seqId];
+        if (!slot.has_value() || !slot->policy) {
+          throw qvac_errors::StatusError(
+              ADDON_ID,
+              qvac_errors::general_error::toString(
+                  qvac_errors::general_error::InternalError),
+              "ContinuousBatchScheduler::step: missing slot policy for "
+              "prefill-complete seqId " +
+                  std::to_string(seqId));
+        }
+        slot->policy->onBatchPrefillComplete(
+            currentPos, prefillTokenCount);
+        if (slot->prefillOnly) {
+          batcher_.markFinished(seqId);
+        }
+      });
 
-  batcher_.sampleAndAppendIdle([this](uint32_t seqId, int logitIdx) {
-    common_sampler* sampler = activeSampler(seqId);
-    const llama_token tok = common_sampler_sample(sampler, ctx_, logitIdx);
-    common_sampler_accept(sampler, tok, true);
-    emitToken(seqId, tok);
-    // The batcher only invokes this callback for active slots, so by
-    // construction both the slot and the underlying `Request` are
-    // populated here. Treat anything else as a class invariant break.
-    const auto& slot = slots_[seqId];
-    const Request* req = batcher_.requestAt(seqId);
-    if (!slot.has_value() || req == nullptr) {
-      throw qvac_errors::StatusError(
-          ADDON_ID,
-          qvac_errors::general_error::toString(
-              qvac_errors::general_error::InternalError),
-          "ContinuousBatchScheduler::step: missing slot or request "
-          "state for active seqId " +
-              std::to_string(seqId));
-    }
-    // `Request::generatedTokens` is the batcher's own counter; the
-    // batcher pushes `tok` onto it *after* this callback returns, so
-    // the post-accept count is `size() + 1`.
-    const unsigned generatedAfterAccept =
-        static_cast<unsigned>(req->generatedTokens.size()) + 1u;
-    const bool reachedBudget = slot->nPredict > 0 &&
-        generatedAfterAccept >= static_cast<unsigned>(slot->nPredict);
-    if (reachedBudget || llama_vocab_is_eog(vocab_, tok)) {
-      batcher_.markFinished(seqId);
-    }
-    return tok;
-  });
+  if (!cancelRequested_.load()) {
+    batcher_.sampleAndAppendIdle([this](uint32_t seqId, int logitIdx) {
+      auto& slot = slots_[seqId];
+      const Request* req = batcher_.requestAt(seqId);
+      if (!slot.has_value() || !slot->policy || req == nullptr) {
+        throw qvac_errors::StatusError(
+            ADDON_ID,
+            qvac_errors::general_error::toString(
+                qvac_errors::general_error::InternalError),
+            "ContinuousBatchScheduler::step: missing slot or request "
+            "state for active seqId " +
+                std::to_string(seqId));
+      }
+      const unsigned generatedAfterAccept =
+          static_cast<unsigned>(req->generatedTokens.size()) + 1u;
+      auto outputCallback = [&slot, seqId](const std::string& text) {
+        if (slot->streams.onToken) {
+          slot->streams.onToken(seqId, text);
+        }
+      };
+      const SlotPolicyStepResult result =
+          slot->policy->onLogitsReady(
+              logitIdx, generatedAfterAccept, outputCallback);
+      if (result.contextOverflow) {
+        throw qvac_errors::StatusError(
+            ADDON_ID,
+            qvac_lib_inference_addon_llama::errors::toString(
+                qvac_lib_inference_addon_llama::errors::ContextOverflow),
+            "ContinuousBatchScheduler::step: context overflow for seqId " +
+                std::to_string(seqId));
+      }
+      if (result.finished) {
+        batcher_.markFinished(seqId);
+      }
+      return result.token;
+    });
+  }
+
+  if (cancelRequested_.exchange(false)) {
+    batcher_.markAllFinished(StopReason::Cancelled);
+  }
 
   auto kvClear = [this](uint32_t seqId) {
     auto* mem = llama_get_memory(ctx_);
@@ -248,9 +294,26 @@ bool ContinuousBatchScheduler::step() {
       llama_memory_seq_rm(mem, static_cast<llama_seq_id>(seqId), -1, -1);
     }
   };
-  auto finished = batcher_.extractFinished(kvClear);
+  auto finished = batcher_.extractFinished();
   for (const auto& req : finished) {
-    flushUtf8(req.seqId);
+    if (slots_[req.seqId].has_value() && slots_[req.seqId]->policy) {
+      auto& slot = *slots_[req.seqId];
+      auto outputCallback = [&slot, seqId = req.seqId](const std::string& text) {
+        if (slot.streams.onToken) {
+          slot.streams.onToken(seqId, text);
+        }
+      };
+      if (req.stopReason == StopReason::Cancelled) {
+        slot.policy->onCancelPolicy(outputCallback);
+      } else if (slot.prefillOnly) {
+        slot.policy->onSlotEnd(outputCallback);
+      } else {
+        slot.policy->onGenerationFinished(outputCallback);
+      }
+      accumulateSlotRuntimeStats(slot, req);
+      saveCacheForSlot(req.seqId, *slots_[req.seqId]);
+    }
+    kvClear(req.seqId);
     notifyDone(req.seqId);
     freeSlot(req.seqId);
   }
@@ -270,10 +333,45 @@ unsigned ContinuousBatchScheduler::numActive() const {
   return count;
 }
 
+void ContinuousBatchScheduler::resetRuntimeStats() {
+  decodeStepCount_ = 0;
+  concurrentSeqSum_ = 0;
+  completedCacheTokens_ = 0;
+  completedContextSlides_ = 0;
+  completedGeneratedTokens_ = 0;
+  completedPromptTokens_ = 0;
+  statsStart_ = std::chrono::steady_clock::now();
+}
+
+RuntimeStatsSnapshot ContinuousBatchScheduler::runtimeStats() const {
+  const double avgConcurrentSeq =
+      decodeStepCount_ > 0
+          ? static_cast<double>(concurrentSeqSum_) /
+                static_cast<double>(decodeStepCount_)
+          : 0.0;
+  const auto elapsed = std::chrono::steady_clock::now() - statsStart_;
+  const double elapsedMs =
+      std::chrono::duration<double, std::milli>(elapsed).count();
+  return {
+      .avgConcurrentSeq = avgConcurrentSeq,
+      .cacheTokens = completedCacheTokens_,
+      .contextSlides = completedContextSlides_,
+      .generatedTokens = completedGeneratedTokens_,
+      .promptTokens = completedPromptTokens_,
+      .elapsedMs = elapsedMs};
+}
+
 bool ContinuousBatchScheduler::cancel(uint32_t seqId) {
   bool occupied = seqId < slots_.size() && slots_[seqId].has_value();
   if (occupied) {
-    flushUtf8(seqId);
+    const Request* req = batcher_.requestAt(seqId);
+    if (slots_[seqId]->policy) {
+      slots_[seqId]->policy->onCancelPolicy({});
+      if (req != nullptr) {
+        accumulateSlotRuntimeStats(*slots_[seqId], *req);
+      }
+      saveCacheForSlot(seqId, *slots_[seqId]);
+    }
     notifyDone(seqId);
     auto kvClear = [this](uint32_t s) {
       auto* mem = llama_get_memory(ctx_);
@@ -287,10 +385,16 @@ bool ContinuousBatchScheduler::cancel(uint32_t seqId) {
   return occupied;
 }
 
+void ContinuousBatchScheduler::requestCancelAll() {
+  cancelRequested_.store(true);
+}
+
 void ContinuousBatchScheduler::clear() {
   for (uint32_t seqId = 0; seqId < slots_.size(); seqId++) {
     if (slots_[seqId].has_value()) {
-      flushUtf8(seqId);
+      if (slots_[seqId]->policy) {
+        slots_[seqId]->policy->onSlotEnd({});
+      }
       notifyDone(seqId);
       freeSlot(seqId);
     }
@@ -304,33 +408,6 @@ void ContinuousBatchScheduler::clear() {
   batcher_.clear(kvClear);
 }
 
-void ContinuousBatchScheduler::emitToken(uint32_t seqId, llama_token tok) {
-  auto& slot = slots_[seqId];
-  bool hasSink = slot.has_value() && slot->streams.onToken;
-  if (!hasSink) {
-    return;
-  }
-  std::string piece = common_token_to_piece(ctx_, tok, renderSpecialTokens_);
-  std::string complete = slot->utf8.addToken(piece);
-  if (!complete.empty()) {
-    slot->streams.onToken(seqId, complete);
-  }
-}
-
-void ContinuousBatchScheduler::flushUtf8(uint32_t seqId) {
-  auto& slot = slots_[seqId];
-  bool hasSink = slot.has_value() && slot->streams.onToken;
-  if (!hasSink) {
-    return;
-  }
-  if (slot->utf8.hasPendingBytes()) {
-    std::string remaining = slot->utf8.flush();
-    if (!remaining.empty()) {
-      slot->streams.onToken(seqId, remaining);
-    }
-  }
-}
-
 void ContinuousBatchScheduler::notifyDone(uint32_t seqId) {
   auto& slot = slots_[seqId];
   if (slot.has_value() && slot->streams.onDone) {
@@ -342,6 +419,27 @@ void ContinuousBatchScheduler::freeSlot(uint32_t seqId) {
   if (seqId < slots_.size()) {
     slots_[seqId].reset();
   }
+}
+
+void ContinuousBatchScheduler::saveCacheForSlot(
+    uint32_t seqId, const SlotState& slot) {
+  if (!slot.saveCacheToDisk || slot.cacheKey.empty() || !slot.policy) {
+    return;
+  }
+  (void)seqId;
+  slot.policy->saveSequenceCache(slot.cacheKey);
+}
+
+void ContinuousBatchScheduler::accumulateSlotRuntimeStats(
+    const SlotState& slot, const Request& req) {
+  if (slot.policy) {
+    completedCacheTokens_ += static_cast<int64_t>(slot.policy->getNPast());
+    completedContextSlides_ +=
+        static_cast<int64_t>(slot.policy->getNSlides());
+  }
+  completedGeneratedTokens_ +=
+      static_cast<int64_t>(req.generatedTokens.size());
+  completedPromptTokens_ += static_cast<int64_t>(req.prefillTokenCount);
 }
 
 } // namespace qvac_lib_inference_addon_llama::batching

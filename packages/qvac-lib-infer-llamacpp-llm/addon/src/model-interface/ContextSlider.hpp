@@ -50,6 +50,7 @@ struct ContextSlideOutcome {
 /// the caller should throw a context overflow error.
 ///
 /// @param lctx           The llama context for KV cache operations
+/// @param seqId          The llama sequence to slide
 /// @param nPast          Current token position in the context
 /// @param firstMsgTokens Number of tokens in the first message (protected)
 /// @param nTokensToAppend Number of tokens about to be appended
@@ -57,8 +58,8 @@ struct ContextSlideOutcome {
 /// @param tools          Controller for tools_compact anchor management
 /// @return ContextSlideOutcome describing what happened and the new state
 ContextSlideOutcome trySlidePrefill(
-    llama_context* lctx, llama_pos nPast, llama_pos firstMsgTokens,
-    llama_pos nTokensToAppend, llama_pos nDiscarded,
+    llama_context* lctx, llama_seq_id seqId, llama_pos nPast,
+    llama_pos firstMsgTokens, llama_pos nTokensToAppend, llama_pos nDiscarded,
     ToolsCompactController& tools,
     const IContextSliderOps& ops = defaultContextSliderOps());
 
@@ -69,12 +70,14 @@ ContextSlideOutcome trySlidePrefill(
 /// If sliding cannot free space, returns NotNeeded with no action.
 ///
 /// @param lctx           The llama context for KV cache operations
+/// @param seqId          The llama sequence to slide
 /// @param nPast          Current token position in the context
 /// @param firstMsgTokens Number of tokens in the first message (protected)
 /// @param nDiscarded     Maximum tokens the caller allows to discard
 /// @param tools          Controller for tools_compact anchor management
 /// @return ContextSlideOutcome describing what happened and the new state
 ContextSlideOutcome trySlideGeneration(
-    llama_context* lctx, llama_pos nPast, llama_pos firstMsgTokens,
-    llama_pos nDiscarded, ToolsCompactController& tools,
+    llama_context* lctx, llama_seq_id seqId, llama_pos nPast,
+    llama_pos firstMsgTokens, llama_pos nDiscarded,
+    ToolsCompactController& tools,
     const IContextSliderOps& ops = defaultContextSliderOps());

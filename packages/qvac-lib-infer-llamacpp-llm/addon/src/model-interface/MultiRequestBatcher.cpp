@@ -8,8 +8,11 @@ namespace qvac_lib_inference_addon_llama::batching {
 namespace views = std::views;
 
 Request::Request(
-    uint32_t rid, std::vector<llama_token>&& toks, unsigned maxTokens)
+    uint32_t rid, std::vector<llama_token>&& toks, unsigned maxTokens,
+    llama_pos initialPos)
     : seqId(rid), pendingPrefillTokens(std::move(toks)),
+      prefillTokenCount(pendingPrefillTokens.size()),
+      currentPos(initialPos),
       maxTokensPerSequence(maxTokens) {}
 
 bool Request::isPrefillComplete() const {
@@ -84,20 +87,39 @@ bool Request::chunkConsumesAllUnfed(unsigned chunkSize) const {
 
 MultiRequestBatcher::AddStatus MultiRequestBatcher::addRequest(
     std::vector<llama_token>&& tokens, uint32_t& seqId) {
-  if (tokens.empty()) {
-    return AddStatus::ErrEmptyTokens;
-  }
-  if (tokens.size() > maxTokensPerSequence_) {
-    return AddStatus::ErrTokensTooLarge;
-  }
   for (size_t i = 0; i < slots_.size(); i++) {
     if (!slots_[i].has_value()) {
       seqId = static_cast<uint32_t>(i);
-      slots_[i].emplace(seqId, std::move(tokens), maxTokensPerSequence_);
-      return AddStatus::Ok;
+      return addRequestAt(seqId, std::move(tokens));
     }
   }
   return AddStatus::ErrNoFreeSlot;
+}
+
+MultiRequestBatcher::AddStatus MultiRequestBatcher::addRequestAt(
+    uint32_t seqId, std::vector<llama_token>&& tokens, llama_pos initialPos) {
+  if (tokens.empty()) {
+    return AddStatus::ErrEmptyTokens;
+  }
+  const auto totalTokens = static_cast<size_t>(initialPos) + tokens.size();
+  if (totalTokens > maxTokensPerSequence_) {
+    return AddStatus::ErrTokensTooLarge;
+  }
+  if (seqId >= slots_.size() || slots_[seqId].has_value()) {
+    return AddStatus::ErrNoFreeSlot;
+  }
+  slots_[seqId].emplace(
+      seqId, std::move(tokens), maxTokensPerSequence_, initialPos);
+  return AddStatus::Ok;
+}
+
+std::optional<uint32_t> MultiRequestBatcher::firstFreeSeqId() const {
+  for (size_t i = 0; i < slots_.size(); i++) {
+    if (!slots_[i].has_value()) {
+      return static_cast<uint32_t>(i);
+    }
+  }
+  return std::nullopt;
 }
 
 MultiRequestBatcher::FillResult
@@ -165,7 +187,8 @@ MultiRequestBatcher::fillBatch(LlamaBatch& batch) {
   return bState;
 }
 
-void MultiRequestBatcher::advance(unsigned chunkSize) {
+void MultiRequestBatcher::advance(
+    unsigned chunkSize, const PrefillCompleteFn& onPrefillComplete) {
   const llama_pos chunk = static_cast<llama_pos>(chunkSize);
   for (auto& slot : slots_ | views::filter(Request::isOptHasTokensToFeed)) {
     Request& req = *slot;
@@ -176,6 +199,10 @@ void MultiRequestBatcher::advance(unsigned chunkSize) {
     if (!req.isPrefillComplete()) {
       req.prefillFedCount += static_cast<size_t>(chunk);
       if (req.isPrefillComplete()) {
+        if (onPrefillComplete) {
+          onPrefillComplete(
+              req.seqId, req.currentPos, req.prefillTokenCount);
+        }
         req.pendingPrefillTokens.clear();
         req.pendingPrefillTokens.shrink_to_fit();
         req.prefillFedCount = 0;

@@ -144,10 +144,17 @@ export interface RunOptions {
 export interface RuntimeStats {
   TTFT: number
   TPS: number
+  /** Final cache tokens for single requests, or the sum across completed batch slots. */
   CacheTokens: number
   generatedTokens: number
   promptTokens: number
+  /** Context-window slides for single requests, or the sum across completed batch slots. */
   contextSlides: number
+  /**
+   * Average active sequences decoded together during the last request,
+   * including overlapping requests from other callers.
+   */
+  avgConcurrentSeq: number
   backendDevice: 'cpu' | 'gpu'
 }
 
