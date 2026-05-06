@@ -115,7 +115,7 @@ jobs:
         name: Install vcpkg on macOS
         working-directory: ${{ env.WORKDIR }}
         run: |
-          git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git vcpkg_microsoft
+          git clone https://github.com/microsoft/vcpkg.git vcpkg_microsoft
           cd vcpkg_microsoft && ./bootstrap-vcpkg.sh -disableMetrics
           VCPKG_ROOT="$(pwd)"
           echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
@@ -142,8 +142,7 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: |
-          rm -rf vcpkg_microsoft
-          git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git vcpkg_microsoft
+          git clone https://github.com/microsoft/vcpkg.git vcpkg_microsoft
           cd vcpkg_microsoft && ./bootstrap-vcpkg.sh -disableMetrics
           VCPKG_ROOT="$(pwd)"
           echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
