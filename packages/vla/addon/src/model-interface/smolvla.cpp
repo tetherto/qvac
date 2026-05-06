@@ -15,6 +15,8 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <memory>
+#include <mutex>
 #include <numbers>
 #include <random>
 #include <string>
@@ -826,36 +828,70 @@ gguf_get_tensor_by_name(struct ggml_context* ctx, const char* name) {
   return t;
 }
 
-extern "C" bool smolvla_load_model(const char* path, smolvla_model* model_ptr,
-                                   bool force_cpu) {
-  smolvla_model& model = *model_ptr;
-  QLOG_IF(
-      Priority::INFO,
-      std::string("smolvla_load_model: loading model from '") + path +
-          "' (force_cpu=" + (force_cpu ? "true" : "false") + ")");
+// RAII helpers used only inside smolvla_load_model. File-scope, not part of
+// the public API: keeps the load function readable across its many error
+// paths without leaking fds or gguf contexts when something goes wrong.
 
-  // Load all backend plugins (Vulkan, Metal, CUDA, …) shipped next to the
-  // addon. The qvac-fabric ggml port installs each backend as a shared library
-  // and exposes them via GGML_AVAILABLE_BACKENDS; at runtime we discover them
-  // via ggml_backend_load_all_from_path(BACKENDS_SUBDIR) and pick the best
-  // available device.
-  {
-    static bool backends_loaded = false;
-    if (!backends_loaded) {
-#ifdef BACKENDS_SUBDIR
-      ggml_backend_load_all_from_path(BACKENDS_SUBDIR);
-#else
-      ggml_backend_load_all();
-#endif
-      backends_loaded = true;
+#ifndef _WIN32
+namespace {
+// Minimal close-on-scope-exit guard for a POSIX file descriptor. Used by the
+// mmap fast path so every early-return branch releases `fd` automatically.
+class FdGuard {
+public:
+  explicit FdGuard(int fd) : fd_(fd) {}
+  ~FdGuard() {
+    if (fd_ >= 0) {
+      ::close(fd_);
     }
   }
+  FdGuard(const FdGuard&) = delete;
+  FdGuard& operator=(const FdGuard&) = delete;
+  int get() const { return fd_; }
+  // mmap(2) keeps a ref to the file as long as the mapping lives, so fast-path
+  // callers want to close the fd as soon as the mapping is established. After
+  // a manual close the destructor must not double-close.
+  void release() { fd_ = -1; }
 
-  // Always init CPU backend (fallback for unsupported ops, and primary on
-  // platforms with no GPU). Use the device API so we work with DL-loaded
-  // backends (Android builds ggml with GGML_BACKEND_DL=ON which puts the
-  // CPU backend in a separate .so — `ggml_backend_cpu_init` is not in the
-  // addon's own link graph in that case).
+private:
+  int fd_;
+};
+} // namespace
+#endif
+
+namespace {
+struct gguf_deleter {
+  void operator()(gguf_context* g) const {
+    if (g) {
+      gguf_free(g);
+    }
+  }
+};
+using gguf_unique_ptr = std::unique_ptr<gguf_context, gguf_deleter>;
+} // namespace
+
+// Discover ggml backend plugins (Vulkan / Metal / OpenCL / …) shipped next to
+// the addon. Both `ggml_backend_load_all*` registrations are global state
+// inside the ggml plugin loader; running them more than once is wasteful and,
+// on some platforms (qvac-fabric Android OpenCL build), races the .so init.
+// Wrapping the registration in std::call_once gives an explicit one-thread
+// init contract instead of the previous read-act-update on a plain bool.
+static void load_backends_once() {
+  static std::once_flag s_backends_once;
+  std::call_once(s_backends_once, []() {
+#ifdef BACKENDS_SUBDIR
+    ggml_backend_load_all_from_path(BACKENDS_SUBDIR);
+#else
+    ggml_backend_load_all();
+#endif
+  });
+}
+
+// Initialise the CPU backend — always required, both as a primary on
+// CPU-only platforms and as a fallback target for ops the GPU backend
+// rejects. Uses the device API so it works under Android's
+// GGML_BACKEND_DL=ON build, where `ggml_backend_cpu_init` lives in a
+// separately-loaded .so.
+static bool init_cpu_backend(smolvla_model& model) {
   ggml_backend_dev_t cpu_dev =
       ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
   model.backend_cpu = cpu_dev ? ggml_backend_dev_init(cpu_dev, nullptr) : nullptr;
@@ -865,72 +901,45 @@ extern "C" bool smolvla_load_model(const char* path, smolvla_model* model_ptr,
   }
   model.backend = model.backend_cpu;
   model.has_gpu = false;
+  return true;
+}
 
-  // Prefer a GPU device if the plugin loader registered one
-  // (Vulkan on Linux/Windows/Android, Metal on macOS/iOS). Adreno < 800 is
-  // rejected by `vla_backend_selection::pickBestGpuDevice` so older
-  // Snapdragon devices (where ggml's OpenCL/Vulkan paths are unreliable)
-  // fall through to the CPU backend rather than crashing on
-  // `ggml_backend_dev_init`.
-  //
-  // `force_cpu` skips GPU selection so the integration test can run the same
-  // hardware twice — once on the GPU backend and once on CPU — surfacing the
-  // speedup attributable to the accelerator without spinning up two CI jobs.
-  {
-    if (force_cpu) {
-      QLOG_IF(
-          Priority::INFO,
-          "smolvla_load_model: force_cpu=true — skipping GPU selection");
-    }
-    ggml_backend_dev_t gpu =
-        force_cpu ? nullptr : vla_backend_selection::pickBestGpuDevice();
-    if (gpu) {
-      ggml_backend_t gpu_backend = ggml_backend_dev_init(gpu, nullptr);
-      if (gpu_backend) {
-        model.backend = gpu_backend;
-        model.has_gpu = true;
-        const char* bname = ggml_backend_name(gpu_backend);
-        const char* ddesc = ggml_backend_dev_description(gpu);
-        QLOG_IF(
-            Priority::INFO,
-            std::string("smolvla_load_model: using GPU backend: ") +
-                (bname ? bname : "?") + " (" + (ddesc ? ddesc : "?") + ")");
-      }
-    }
+// Try to upgrade `model.backend` to a GPU device. Failures here are
+// non-fatal: we keep the CPU backend already wired by `init_cpu_backend`.
+// Adreno GPUs are filtered out by `vla_backend_selection::pickBestGpuDevice`
+// so older Snapdragon devices fall through to CPU rather than crash on
+// `ggml_backend_dev_init`. `force_cpu=true` skips selection entirely so the
+// integration test can run the same hardware both ways.
+static void try_init_gpu_backend(smolvla_model& model, bool force_cpu) {
+  if (force_cpu) {
+    QLOG_IF(
+        Priority::INFO,
+        "smolvla_load_model: force_cpu=true — skipping GPU selection");
   }
-  if (!model.has_gpu) {
-    QLOG_IF(Priority::INFO, "smolvla_load_model: using CPU backend");
+  ggml_backend_dev_t gpu =
+      force_cpu ? nullptr : vla_backend_selection::pickBestGpuDevice();
+  if (!gpu) {
+    return;
   }
-
-  // 1. Open GGUF file with no_alloc=true — creates a ggml_context with
-  // tensor metadata only (data pointers stay NULL). Tensor data is wired
-  // up later either by mmap+buffer_from_host_ptr (Apple Metal / CPU) or
-  // by alloc+copy from disk (Vulkan / Android). This mirrors llama.cpp's
-  // model-loader pattern (qvac-fabric src/llama-model.cpp:6648).
-  struct ggml_context* ctx_data = nullptr;
-  struct gguf_init_params gguf_params = {
-      /*.no_alloc =*/true,
-      /*.ctx      =*/&ctx_data,
-  };
-
-  struct gguf_context* gguf = gguf_init_from_file(path, gguf_params);
-  if (!gguf) {
-    QLOG_IF(Priority::ERROR, "smolvla_load_model: failed to open GGUF file");
-    return false;
+  ggml_backend_t gpu_backend = ggml_backend_dev_init(gpu, nullptr);
+  if (!gpu_backend) {
+    return;
   }
-  // Hand ownership of ctx_data to the model immediately so any subsequent
-  // failure path leaks neither the ggml context nor the backends — the
-  // smolvla_model destructor (called when the caller's unique_ptr unwinds)
-  // takes care of cleanup via smolvla_free_model.
-  model.ctx_w = ctx_data;
-
-  int64_t n_tensors = gguf_get_n_tensors(gguf);
+  model.backend = gpu_backend;
+  model.has_gpu = true;
+  const char* bname = ggml_backend_name(gpu_backend);
+  const char* ddesc = ggml_backend_dev_description(gpu);
   QLOG_IF(
       Priority::INFO,
-      "smolvla_load_model: loaded " + std::to_string(n_tensors) + " tensors");
+      std::string("smolvla_load_model: using GPU backend: ") +
+          (bname ? bname : "?") + " (" + (ddesc ? ddesc : "?") + ")");
+}
 
-  // 2. Read hyperparameters from metadata
-  auto& hp = model.hparams;
+// Read SmolVLA hyperparameters from GGUF metadata. All keys have defaults
+// matching the production `smolvla_libero` shape so older fixtures missing
+// a key still load. Caller is expected to validate the resulting hparams
+// before any sizing arithmetic.
+static void read_hparams_from_gguf(gguf_context* gguf, smolvla_hparams& hp) {
   hp.vision_hidden_size = gguf_get_u32(gguf, "smolvla.vision.hidden_size", 768);
   hp.vision_intermediate =
       gguf_get_u32(gguf, "smolvla.vision.intermediate_size", 3072);
@@ -964,90 +973,71 @@ extern "C" bool smolvla_load_model(const char* path, smolvla_model* model_ptr,
   hp.max_action_dim = gguf_get_u32(gguf, "smolvla.flow.max_action_dim", 32);
   hp.max_state_dim = gguf_get_u32(gguf, "smolvla.flow.max_state_dim", 32);
   hp.action_dim = gguf_get_u32(gguf, "smolvla.flow.action_dim", 7);
+}
 
-  // Sanity-check hparams loaded from GGUF before they feed any sizing
-  // arithmetic. gguf_get_u32 returns uint32; values >INT_MAX wrap to negative
-  // when assigned to int and would silently produce negative-sized vectors,
-  // huge tensor allocations, or division-by-zero in the derived helpers.
-  // Reject the file rather than allocate from a bad shape.
+// Sanity-check hparams loaded from GGUF before they feed any sizing
+// arithmetic. gguf_get_u32 returns uint32; values >INT_MAX wrap to negative
+// when assigned to int and would silently produce negative-sized vectors,
+// huge tensor allocations, or division-by-zero in the derived helpers.
+// Reject the file rather than allocate from a bad shape.
+static bool validate_hparams(const smolvla_hparams& hp) {
   auto in_range = [](int v, int lo, int hi) { return v >= lo && v <= hi; };
-  const bool hparams_ok =
-      in_range(hp.vision_hidden_size, 1, 65536) &&
-      in_range(hp.vision_intermediate, 1, 1 << 20) &&
-      in_range(hp.vision_num_layers, 1, 256) &&
-      in_range(hp.vision_num_heads, 1, 1024) &&
-      in_range(hp.vision_image_size, 1, 16384) &&
-      in_range(hp.vision_patch_size, 1, 1024) &&
-      in_range(hp.connector_scale_factor, 1, 256) &&
-      in_range(hp.text_hidden_size, 1, 65536) &&
-      in_range(hp.text_intermediate, 1, 1 << 20) &&
-      in_range(hp.text_num_layers, 1, 256) &&
-      in_range(hp.text_num_heads, 1, 1024) &&
-      in_range(hp.text_num_kv_heads, 1, 1024) &&
-      in_range(hp.text_head_dim, 1, 1024) &&
-      // expert_hidden_size is divided by 2 for the time-embed half-dim
-      // table; require >=2 so the table is non-empty.
-      in_range(hp.expert_hidden_size, 2, 65536) &&
-      in_range(hp.expert_intermediate, 1, 1 << 20) &&
-      in_range(hp.expert_num_layers, 1, 256) &&
-      in_range(hp.expert_num_heads, 1, 1024) &&
-      in_range(hp.expert_num_kv_heads, 1, 1024) &&
-      in_range(hp.self_attn_every_n, 1, 256) &&
-      in_range(hp.num_ode_steps, 1, 1024) &&
-      in_range(hp.chunk_size, 1, 1024) &&
-      in_range(hp.max_action_dim, 1, 1024) &&
-      in_range(hp.max_state_dim, 1, 1024) &&
-      in_range(hp.action_dim, 1, hp.max_action_dim);
-  if (!hparams_ok) {
-    QLOG_IF(
-        Priority::ERROR,
-        "smolvla_load_model: hparams out of range — refusing to load");
-    gguf_free(gguf);
-    return false;
+  return in_range(hp.vision_hidden_size, 1, 65536) &&
+         in_range(hp.vision_intermediate, 1, 1 << 20) &&
+         in_range(hp.vision_num_layers, 1, 256) &&
+         in_range(hp.vision_num_heads, 1, 1024) &&
+         in_range(hp.vision_image_size, 1, 16384) &&
+         in_range(hp.vision_patch_size, 1, 1024) &&
+         in_range(hp.connector_scale_factor, 1, 256) &&
+         in_range(hp.text_hidden_size, 1, 65536) &&
+         in_range(hp.text_intermediate, 1, 1 << 20) &&
+         in_range(hp.text_num_layers, 1, 256) &&
+         in_range(hp.text_num_heads, 1, 1024) &&
+         in_range(hp.text_num_kv_heads, 1, 1024) &&
+         in_range(hp.text_head_dim, 1, 1024) &&
+         // expert_hidden_size is divided by 2 for the time-embed half-dim
+         // table; require >=2 so the table is non-empty.
+         in_range(hp.expert_hidden_size, 2, 65536) &&
+         in_range(hp.expert_intermediate, 1, 1 << 20) &&
+         in_range(hp.expert_num_layers, 1, 256) &&
+         in_range(hp.expert_num_heads, 1, 1024) &&
+         in_range(hp.expert_num_kv_heads, 1, 1024) &&
+         in_range(hp.self_attn_every_n, 1, 256) &&
+         in_range(hp.num_ode_steps, 1, 1024) &&
+         in_range(hp.chunk_size, 1, 1024) &&
+         in_range(hp.max_action_dim, 1, 1024) &&
+         in_range(hp.max_state_dim, 1, 1024) &&
+         in_range(hp.action_dim, 1, hp.max_action_dim);
+}
+
+// Precompute the per-frequency `1/period` table used by the sinusoidal time
+// embedding. Constant across all ODE steps so we pay the powf cost once at
+// load instead of per-step on the inference hot path.
+static void precompute_time_embedding(smolvla_model& model) {
+  const auto& hp = model.hparams;
+  const int half_dim = hp.expert_hidden_size / 2;
+  model.time_embed_inv_periods.resize(half_dim);
+  const float ratio = hp.max_period / hp.min_period;
+  for (int i = 0; i < half_dim; i++) {
+    const float fraction =
+        (half_dim > 1) ? (float)i / (float)(half_dim - 1) : 0.0f;
+    const float period = hp.min_period * powf(ratio, fraction);
+    model.time_embed_inv_periods[i] = 1.0f / period;
   }
+}
 
-  // The denoise step graph indexes VLM KV arrays (sized text_num_layers in
-  // smolvla_inference_with_timing) using the expert layer loop bound, so the
-  // two layer counts must match. With matching counts the indexing is in
-  // bounds; without them, every cross-attention layer reads past the array.
-  if (hp.text_num_layers != hp.expert_num_layers) {
-    QLOG_IF(
-        Priority::ERROR,
-        "smolvla_load_model: text_num_layers (" +
-            std::to_string(hp.text_num_layers) +
-            ") must equal expert_num_layers (" +
-            std::to_string(hp.expert_num_layers) +
-            ") — KV cache arrays are shared between text and expert");
-    gguf_free(gguf);
-    return false;
-  }
+// Map every weight tensor referenced by the inference graph to its entry in
+// the GGUF context. Missing tensors are left as nullptr — call
+// `validate_required_tensors` afterwards to reject GGUFs whose required
+// pointers didn't get filled in.
+static void map_weight_tensors(struct ggml_context* ctx_data, smolvla_model& model) {
+  const auto& hp = model.hparams;
 
-  // Precompute 1/period table for the sinusoidal time embedding. Constant
-  // across all ODE steps so we pay the powf cost once instead of per-step.
-  {
-    const int half_dim = hp.expert_hidden_size / 2;
-    model.time_embed_inv_periods.resize(half_dim);
-    const float ratio = hp.max_period / hp.min_period;
-    for (int i = 0; i < half_dim; i++) {
-      const float fraction =
-          (half_dim > 1) ? (float)i / (float)(half_dim - 1) : 0.0f;
-      const float period = hp.min_period * powf(ratio, fraction);
-      model.time_embed_inv_periods[i] = 1.0f / period;
-    }
-  }
-
-  QLOG_IF(
-      Priority::INFO,
-      "smolvla_load_model: hparams loaded — vision=" +
-          std::to_string(hp.vision_num_layers) + "L/" +
-          std::to_string(hp.vision_hidden_size) + "d text=" +
-          std::to_string(hp.text_num_layers) + "L/" +
-          std::to_string(hp.text_hidden_size) + "d expert=" +
-          std::to_string(hp.expert_num_layers) + "L/" +
-          std::to_string(hp.expert_hidden_size) + "d");
-
-  // 3. Map tensor names to model struct fields. (model.ctx_w already wired
-  // to ctx_data above so failure paths can rely on the destructor.)
+  // Helper: probe-only lookup, no warning if missing (used for the fused/
+  // unfused sibling pairs where one of the two is expected to be absent).
+  auto try_tensor = [&](const char* name) -> struct ggml_tensor* {
+    return ggml_get_tensor(ctx_data, name);
+  };
 
   // Vision encoder
   model.vision.patch_embed_weight =
@@ -1060,11 +1050,6 @@ extern "C" bool smolvla_load_model(const char* path, smolvla_model* model_ptr,
       gguf_get_tensor_by_name(ctx_data, "v.enc.post_ln.weight");
   model.vision.post_ln_bias =
       gguf_get_tensor_by_name(ctx_data, "v.enc.post_ln.bias");
-
-  // Helper: try to get tensor, return nullptr if not found (no warning)
-  auto try_tensor = [&](const char* name) -> struct ggml_tensor* {
-    return ggml_get_tensor(ctx_data, name);
-  };
 
   model.vision.layers.resize(hp.vision_num_layers);
   for (int i = 0; i < hp.vision_num_layers; i++) {
@@ -1162,27 +1147,458 @@ extern "C" bool smolvla_load_model(const char* path, smolvla_model* model_ptr,
       gguf_get_tensor_by_name(ctx_data, "proj.time_mlp_out.weight");
   model.action_time_mlp_out_bias =
       gguf_get_tensor_by_name(ctx_data, "proj.time_mlp_out.bias");
+}
+
+// After `map_weight_tensors`, walk every tensor pointer the inference graph
+// will read through and reject GGUFs that left a required slot at nullptr.
+// Without this, `gguf_get_tensor_by_name` would log a warning and return
+// nullptr, the load function would return true, and the first inference would
+// dereference nullptr inside ggml.
+static bool validate_required_tensors(const smolvla_model& model) {
+  // First-failure-wins logger so the GGUF author sees the missing name list,
+  // not just the first miss.
+  bool ok = true;
+  auto require = [&](const ggml_tensor* t, const char* name) {
+    if (t == nullptr) {
+      QLOG_IF(
+          Priority::ERROR,
+          std::string("smolvla_load_model: required tensor missing: '") +
+              name + "'");
+      ok = false;
+    }
+  };
+
+  // Vision encoder — non-layer
+  require(model.vision.patch_embed_weight, "v.enc.patch_embd.weight");
+  require(model.vision.patch_embed_bias, "v.enc.patch_embd.bias");
+  require(model.vision.pos_embed, "v.enc.pos_embd.weight");
+  require(model.vision.post_ln_weight, "v.enc.post_ln.weight");
+  require(model.vision.post_ln_bias, "v.enc.post_ln.bias");
+
+  // Vision encoder — per layer. Each block needs ln1/ln2 norm pair, attn
+  // out_proj, and feed-forward fc1/fc2; the QKV slot accepts either the fused
+  // `attn_qkv.*` weight+bias or the three unfused `attn_{q,k,v}.*` triples.
+  for (size_t i = 0; i < model.vision.layers.size(); i++) {
+    const auto& l = model.vision.layers[i];
+    auto idx = std::to_string(i);
+    require(l.ln1_weight, ("v.enc.blk." + idx + ".ln1.weight").c_str());
+    require(l.ln1_bias, ("v.enc.blk." + idx + ".ln1.bias").c_str());
+    require(l.ln2_weight, ("v.enc.blk." + idx + ".ln2.weight").c_str());
+    require(l.ln2_bias, ("v.enc.blk." + idx + ".ln2.bias").c_str());
+    require(l.out_proj_w, ("v.enc.blk." + idx + ".attn_out.weight").c_str());
+    require(l.out_proj_b, ("v.enc.blk." + idx + ".attn_out.bias").c_str());
+    require(l.fc1_weight, ("v.enc.blk." + idx + ".ffn_up.weight").c_str());
+    require(l.fc1_bias, ("v.enc.blk." + idx + ".ffn_up.bias").c_str());
+    require(l.fc2_weight, ("v.enc.blk." + idx + ".ffn_down.weight").c_str());
+    require(l.fc2_bias, ("v.enc.blk." + idx + ".ffn_down.bias").c_str());
+    const bool has_fused_qkv = l.qkv_proj_w != nullptr && l.qkv_proj_b != nullptr;
+    const bool has_unfused_qkv = l.q_proj_w != nullptr && l.q_proj_b != nullptr &&
+                                 l.k_proj_w != nullptr && l.k_proj_b != nullptr &&
+                                 l.v_proj_w != nullptr && l.v_proj_b != nullptr;
+    if (!has_fused_qkv && !has_unfused_qkv) {
+      QLOG_IF(
+          Priority::ERROR,
+          std::string("smolvla_load_model: vision layer ") + idx +
+              " has neither fused 'attn_qkv.*' nor unfused 'attn_{q,k,v}.*' weights/biases");
+      ok = false;
+    }
+  }
+
+  // Connector
+  require(model.connector.proj_weight, "v.connector.proj.weight");
+
+  // Text + expert backbones share the transformer-layer schema. Each layer
+  // requires its norms, the attention output projection, and the FFN down
+  // projection. Attention QKV admits fused `attn_qkv.weight` or the three
+  // unfused `attn_{q,k,v}.weight` slots; FFN gate/up admits fused
+  // `ffn_gate_up.weight` or the unfused `ffn_gate.weight` + `ffn_up.weight`
+  // pair.
+  auto require_transformer_layers = [&](
+      const char* prefix,
+      const std::vector<transformer_layer_weights>& layers) {
+    for (size_t i = 0; i < layers.size(); i++) {
+      const auto& l = layers[i];
+      const std::string base = std::string(prefix) + "." + std::to_string(i);
+      require(l.attn_norm_weight, (base + ".attn_norm.weight").c_str());
+      require(l.o_proj_weight, (base + ".attn_out.weight").c_str());
+      require(l.ffn_norm_weight, (base + ".ffn_norm.weight").c_str());
+      require(l.down_proj_weight, (base + ".ffn_down.weight").c_str());
+      const bool has_fused_qkv = l.qkv_proj_weight != nullptr;
+      const bool has_unfused_qkv = l.q_proj_weight != nullptr &&
+                                   l.k_proj_weight != nullptr &&
+                                   l.v_proj_weight != nullptr;
+      if (!has_fused_qkv && !has_unfused_qkv) {
+        QLOG_IF(
+            Priority::ERROR,
+            base +
+                ": neither fused 'attn_qkv.weight' nor unfused 'attn_{q,k,v}.weight'");
+        ok = false;
+      }
+      const bool has_fused_gu = l.gate_up_weight != nullptr;
+      const bool has_unfused_gu =
+          l.gate_proj_weight != nullptr && l.up_proj_weight != nullptr;
+      if (!has_fused_gu && !has_unfused_gu) {
+        QLOG_IF(
+            Priority::ERROR,
+            base +
+                ": neither fused 'ffn_gate_up.weight' nor unfused 'ffn_gate.weight'+'ffn_up.weight'");
+        ok = false;
+      }
+    }
+  };
+  require(model.text.embed_tokens, "t.embed.weight");
+  require(model.text.final_norm_weight, "t.final_norm.weight");
+  require_transformer_layers("t.blk", model.text.layers);
+
+  require(model.expert.final_norm_weight, "e.final_norm.weight");
+  require_transformer_layers("e.blk", model.expert.layers);
+
+  // Projections (state, action_in, action_out, action_time_mlp_in/out)
+  require(model.state_proj_weight, "proj.state.weight");
+  require(model.state_proj_bias, "proj.state.bias");
+  require(model.action_in_proj_weight, "proj.action_in.weight");
+  require(model.action_in_proj_bias, "proj.action_in.bias");
+  require(model.action_out_proj_weight, "proj.action_out.weight");
+  require(model.action_out_proj_bias, "proj.action_out.bias");
+  require(model.action_time_mlp_in_weight, "proj.time_mlp_in.weight");
+  require(model.action_time_mlp_in_bias, "proj.time_mlp_in.bias");
+  require(model.action_time_mlp_out_weight, "proj.time_mlp_out.weight");
+  require(model.action_time_mlp_out_bias, "proj.time_mlp_out.bias");
+
+  return ok;
+}
+
+// FAST PATH (Apple Metal, CPU): the device reports
+// caps.buffer_from_host_ptr=true. mmap the GGUF file, wrap the tensor-data
+// region in a backend buffer with `ggml_backend_dev_buffer_from_host_ptr()`,
+// and wire each tensor to its position inside the mapping. The Metal backend
+// internally slices that range into per-tensor sub-buffers each ≤
+// max_tensor_size, so a 2.2 GB f32 model becomes many small Metal sub-buffers
+// instead of one shared-mode allocation that iOS Metal cannot service.
+//
+// Returns true on success (model.bufs_w, model.mmap_addr, model.mmap_size all
+// populated). Returns false if any step bailed; caller should fall back to the
+// alloc+copy path. Never throws; cleans up any partial state itself.
+#ifndef _WIN32
+static bool try_load_weights_mmap(
+    smolvla_model& model, const char* path, gguf_context* gguf,
+    struct ggml_context* ctx_data, ggml_backend_dev_t dev,
+    size_t data_offset, int64_t n_tensors_in_gguf) {
+  FdGuard fd(open(path, O_RDONLY));
+  if (fd.get() < 0) {
+    QLOG_IF(
+        Priority::WARNING,
+        std::string("smolvla_load_model: open() failed for '") + path + "'");
+    return false;
+  }
+  struct stat st {};
+  if (fstat(fd.get(), &st) != 0 || st.st_size <= 0 ||
+      // Reject malformed/truncated GGUF (data_offset past EOF) before the
+      // unsigned subtraction below would wrap to a huge size.
+      (uint64_t)data_offset >= (uint64_t)st.st_size ||
+      // Guard against off_t→size_t truncation on 32-bit targets where the
+      // 2 GB+ GGUF would otherwise alias to a smaller mapping.
+      (uint64_t)st.st_size > (uint64_t)SIZE_MAX) {
+    QLOG_IF(
+        Priority::WARNING,
+        std::string("smolvla_load_model: skipping mmap fast path for '") +
+            path +
+            "' (fstat failed, file empty, data_offset >= file_size, or "
+            "file > SIZE_MAX)");
+    return false;
+  }
+  size_t file_size = (size_t)st.st_size;
+  void* addr = mmap(nullptr, file_size, PROT_READ, MAP_PRIVATE, fd.get(), 0);
+  if (addr == MAP_FAILED) {
+    QLOG_IF(
+        Priority::WARNING,
+        "smolvla_load_model: mmap failed (errno=" +
+            std::to_string(errno) + ")");
+    return false;
+  }
+  // The mapping holds a ref to the file, so the fd is no longer needed.
+  // Close it explicitly and dismiss the guard so it doesn't double-close.
+  ::close(fd.get());
+  fd.release();
+
+  void* tensor_data_base = (char*)addr + data_offset;
+  size_t tensor_data_size = file_size - data_offset;
+  size_t max_tensor_size = ggml_get_max_tensor_size(ctx_data);
+
+  // Reject crafted GGUFs whose per-tensor (offset, nbytes) would point
+  // outside the mapped region — a later read through such a tensor
+  // would be an out-of-bounds memory access.
+  for (int64_t i = 0; i < n_tensors_in_gguf; i++) {
+    const char* name = gguf_get_tensor_name(gguf, i);
+    struct ggml_tensor* t = ggml_get_tensor(ctx_data, name);
+    if (!t) {
+      continue;
+    }
+    size_t off = gguf_get_tensor_offset(gguf, i);
+    size_t nbytes = ggml_nbytes(t);
+    if (off > tensor_data_size || nbytes > tensor_data_size - off) {
+      QLOG_IF(
+          Priority::WARNING,
+          std::string("smolvla_load_model: tensor '") + name +
+              "' bounds exceed mapped region (off=" +
+              std::to_string(off) +
+              " nbytes=" + std::to_string(nbytes) +
+              " region=" + std::to_string(tensor_data_size) +
+              ") — falling back to alloc+copy");
+      munmap(addr, file_size);
+      return false;
+    }
+  }
+
+  // Hint the OS to prefetch the file so the first inference doesn't
+  // demand-page its way through 2+ GB of weights.
+  madvise(addr, file_size, MADV_WILLNEED);
+
+  ggml_backend_buffer_t buf = ggml_backend_dev_buffer_from_host_ptr(
+      dev, tensor_data_base, tensor_data_size, max_tensor_size);
+
+  if (!buf) {
+    QLOG_IF(
+        Priority::WARNING,
+        "smolvla_load_model: buffer_from_host_ptr returned NULL — "
+        "falling back to alloc+copy");
+    munmap(addr, file_size);
+    return false;
+  }
+
+  // Wire each tensor to its position inside the mmap'd region.
+  int n_alloc_ok = 0;
+  int n_alloc_fail = 0;
+  for (int64_t i = 0; i < n_tensors_in_gguf; i++) {
+    const char* name = gguf_get_tensor_name(gguf, i);
+    struct ggml_tensor* t = ggml_get_tensor(ctx_data, name);
+    if (!t) {
+      continue;
+    }
+    size_t off = gguf_get_tensor_offset(gguf, i);
+    void* tensor_addr = (char*)tensor_data_base + off;
+    if (ggml_backend_tensor_alloc(buf, t, tensor_addr) ==
+        GGML_STATUS_SUCCESS) {
+      n_alloc_ok++;
+    } else {
+      n_alloc_fail++;
+      QLOG_IF(
+          Priority::WARNING,
+          std::string("smolvla_load_model: tensor_alloc failed for '") +
+              name + "'");
+    }
+  }
+
+  if (n_alloc_fail > 0) {
+    // A partially-wired buffer would leave some tensors with
+    // unusable pointers; running inference against it is UB.
+    // Tear down and fall through to the alloc+copy path.
+    QLOG_IF(
+        Priority::WARNING,
+        "smolvla_load_model: " + std::to_string(n_alloc_fail) +
+            " tensor_alloc calls failed — falling back to alloc+copy");
+    ggml_backend_buffer_free(buf);
+    munmap(addr, file_size);
+    return false;
+  }
+
+  ggml_backend_buffer_set_usage(buf, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
+  model.bufs_w.push_back(buf);
+  model.mmap_addr = addr;
+  model.mmap_size = file_size;
+  QLOG_IF(
+      Priority::INFO,
+      "smolvla_load_model: mmap+host_ptr buffer ready, " +
+          std::to_string(n_alloc_ok) + "/" +
+          std::to_string(n_tensors_in_gguf) + " tensors wired");
+  return true;
+}
+#endif
+
+// FALLBACK (Vulkan / Android, Windows, or any device without
+// buffer_from_host_ptr): allocate the buffer with
+// `ggml_backend_alloc_ctx_tensors_from_buft()`, then read tensor data from
+// the file and copy via `ggml_backend_tensor_set()`. Same path llama.cpp's
+// `else` branch takes.
+static bool load_weights_alloc_copy(
+    smolvla_model& model, const char* path, gguf_context* gguf,
+    struct ggml_context* ctx_data, ggml_backend_buffer_type_t buft,
+    size_t data_offset, int64_t n_tensors_in_gguf) {
+  size_t total_size = 0;
+  for (struct ggml_tensor* t = ggml_get_first_tensor(ctx_data); t;
+       t = ggml_get_next_tensor(ctx_data, t)) {
+    total_size += ggml_nbytes(t);
+  }
+  QLOG_IF(
+      Priority::INFO,
+      "smolvla_load_model: alloc+copy path, total weights " +
+          std::to_string((int)(total_size / (1024 * 1024))) + " MB");
+
+  ggml_backend_buffer_t buf =
+      ggml_backend_alloc_ctx_tensors_from_buft(ctx_data, buft);
+  if (!buf) {
+    const char* bname = ggml_backend_name(model.backend);
+    QLOG_IF(
+        Priority::ERROR,
+        std::string(
+            "smolvla_load_model: ggml_backend_alloc_ctx_tensors_from_buft "
+            "FAILED for ") +
+            std::to_string((int)(total_size / (1024 * 1024))) +
+            " MB on backend '" + (bname ? bname : "?") + "'");
+    return false;
+  }
+  ggml_backend_buffer_set_usage(buf, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
+  model.bufs_w.push_back(buf);
+
+  FILE* f = fopen(path, "rb");
+  if (!f) {
+    QLOG_IF(
+        Priority::ERROR,
+        std::string("smolvla_load_model: fopen failed for '") + path + "'");
+    return false;
+  }
+  std::vector<uint8_t> read_buf;
+  int n_copied = 0;
+  for (int64_t i = 0; i < n_tensors_in_gguf; i++) {
+    const char* name = gguf_get_tensor_name(gguf, i);
+    struct ggml_tensor* t = ggml_get_tensor(ctx_data, name);
+    if (!t) {
+      continue;
+    }
+    size_t off = data_offset + gguf_get_tensor_offset(gguf, i);
+    size_t nbytes = ggml_nbytes(t);
+    if (read_buf.size() < nbytes) {
+      read_buf.resize(nbytes);
+    }
+#ifdef _WIN32
+    int seek_err = _fseeki64(f, (int64_t)off, SEEK_SET);
+#else
+    int seek_err = fseeko(f, (off_t)off, SEEK_SET);
+#endif
+    if (seek_err != 0 || fread(read_buf.data(), 1, nbytes, f) != nbytes) {
+      QLOG_IF(
+          Priority::ERROR,
+          std::string("smolvla_load_model: failed to read tensor '") + name +
+              "' at offset " + std::to_string(off));
+      fclose(f);
+      return false;
+    }
+    ggml_backend_tensor_set(t, read_buf.data(), 0, nbytes);
+    n_copied++;
+  }
+  fclose(f);
+  {
+    const char* bname = ggml_backend_name(model.backend);
+    QLOG_IF(
+        Priority::INFO,
+        "smolvla_load_model: alloc+copy buffer ready, " +
+            std::to_string(n_copied) + " tensors, backend='" +
+            (bname ? bname : "?") + "'");
+  }
+  return true;
+}
+
+// Load a SmolVLA model from a GGUF file.
+//
+// Orchestrator only: every phase lives in a helper above so the flow and
+// error-handling stays readable. Failure paths leave `model` in a partially-
+// initialised state; the caller's `unique_ptr<smolvla_model>` (see
+// VlaModel's ctor in `addon/AddonCpp.hpp`) unwinds to `~smolvla_model()`,
+// which calls `smolvla_free_model` to release whatever was wired up before
+// the bail-out.
+//
+// `model.ctx_w` is handed off to the model immediately after
+// `gguf_init_from_file` succeeds so the destructor cleans it up on every
+// later failure. The `gguf_context` itself is owned by an RAII
+// `gguf_unique_ptr` for the duration of the load.
+bool smolvla_load_model(const char* path, smolvla_model& model, bool force_cpu) {
+  QLOG_IF(
+      Priority::INFO,
+      std::string("smolvla_load_model: loading model from '") + path +
+          "' (force_cpu=" + (force_cpu ? "true" : "false") + ")");
+
+  load_backends_once();
+  if (!init_cpu_backend(model)) {
+    return false;
+  }
+  try_init_gpu_backend(model, force_cpu);
+  if (!model.has_gpu) {
+    QLOG_IF(Priority::INFO, "smolvla_load_model: using CPU backend");
+  }
+
+  // Open GGUF with no_alloc=true — creates a ggml_context with tensor metadata
+  // only (data pointers stay NULL). Tensor data is wired up later either by
+  // mmap+buffer_from_host_ptr (Apple Metal / CPU) or by alloc+copy from disk
+  // (Vulkan / Android). Mirrors llama.cpp's model-loader pattern in
+  // qvac-fabric src/llama-model.cpp:6648.
+  struct ggml_context* ctx_data = nullptr;
+  struct gguf_init_params gguf_params = {
+      /*.no_alloc =*/true,
+      /*.ctx      =*/&ctx_data,
+  };
+  gguf_unique_ptr gguf(gguf_init_from_file(path, gguf_params));
+  if (!gguf) {
+    QLOG_IF(Priority::ERROR, "smolvla_load_model: failed to open GGUF file");
+    return false;
+  }
+  // Hand ownership of ctx_data to the model immediately so any subsequent
+  // failure path leaks neither the ggml context nor the backends.
+  model.ctx_w = ctx_data;
+
+  const int64_t n_tensors = gguf_get_n_tensors(gguf.get());
+  QLOG_IF(
+      Priority::INFO,
+      "smolvla_load_model: loaded " + std::to_string(n_tensors) + " tensors");
+
+  read_hparams_from_gguf(gguf.get(), model.hparams);
+  if (!validate_hparams(model.hparams)) {
+    QLOG_IF(
+        Priority::ERROR,
+        "smolvla_load_model: hparams out of range — refusing to load");
+    return false;
+  }
+
+  // The denoise step graph indexes VLM KV arrays (sized text_num_layers in
+  // smolvla_inference_with_timing) using the expert layer loop bound, so the
+  // two layer counts must match.
+  if (model.hparams.text_num_layers != model.hparams.expert_num_layers) {
+    QLOG_IF(
+        Priority::ERROR,
+        "smolvla_load_model: text_num_layers (" +
+            std::to_string(model.hparams.text_num_layers) +
+            ") must equal expert_num_layers (" +
+            std::to_string(model.hparams.expert_num_layers) +
+            ") — KV cache arrays are shared between text and expert");
+    return false;
+  }
+
+  precompute_time_embedding(model);
+
+  const auto& hp = model.hparams;
+  QLOG_IF(
+      Priority::INFO,
+      "smolvla_load_model: hparams loaded — vision=" +
+          std::to_string(hp.vision_num_layers) + "L/" +
+          std::to_string(hp.vision_hidden_size) + "d text=" +
+          std::to_string(hp.text_num_layers) + "L/" +
+          std::to_string(hp.text_hidden_size) + "d expert=" +
+          std::to_string(hp.expert_num_layers) + "L/" +
+          std::to_string(hp.expert_hidden_size) + "d");
+
+  map_weight_tensors(ctx_data, model);
+  if (!validate_required_tensors(model)) {
+    QLOG_IF(
+        Priority::ERROR,
+        "smolvla_load_model: GGUF is missing required tensors — refusing to load");
+    return false;
+  }
 
   QLOG_IF(Priority::INFO, "smolvla_load_model: all tensors mapped");
 
-  // ── Allocate backend storage for weights ──────────────────────────────────
-  //
-  // Two paths, mirroring qvac-fabric src/llama-model.cpp:6648 (create_backend_buffers):
-  //
-  //   FAST PATH (Apple Metal, CPU): the device reports
-  //     caps.buffer_from_host_ptr=true. We mmap the GGUF file and wrap the
-  //     tensor-data region in a backend buffer with
-  //     ggml_backend_dev_buffer_from_host_ptr(). The Metal backend internally
-  //     slices that range into per-tensor sub-buffers each ≤ max_tensor_size,
-  //     so a 2.2 GB f32 model becomes many small Metal sub-buffers instead of
-  //     one shared-mode allocation that iOS Metal cannot service (root cause
-  //     of EXC_BAD_ACCESS in ggml_metal_buffer_is_shared at NULL+0x10).
-  //
-  //   FALLBACK (Vulkan / Android, Windows, or any device without
-  //     buffer_from_host_ptr): allocate the buffer with
-  //     ggml_backend_alloc_ctx_tensors_from_buft() then read tensor data
-  //     from the file and copy via ggml_backend_tensor_set(). This is the
-  //     same path llama.cpp's else branch takes.
+  // Allocate backend storage for weights. Two paths, mirroring qvac-fabric
+  // src/llama-model.cpp:6648 (create_backend_buffers): mmap+host_ptr fast path
+  // first when the device supports it, falling through to alloc+copy
+  // otherwise.
   ggml_backend_buffer_type_t buft =
       ggml_backend_get_default_buffer_type(model.backend);
   ggml_backend_dev_t dev = ggml_backend_buft_get_device(buft);
@@ -1195,241 +1611,35 @@ extern "C" bool smolvla_load_model(const char* path, smolvla_model* model_ptr,
     is_default_buft = (buft == ggml_backend_dev_buffer_type(dev));
   }
 
-  size_t data_offset = gguf_get_data_offset(gguf);
-  int64_t n_tensors_in_gguf = gguf_get_n_tensors(gguf);
+  const size_t data_offset = gguf_get_data_offset(gguf.get());
+  const int64_t n_tensors_in_gguf = gguf_get_n_tensors(gguf.get());
 
   bool used_mmap = false;
-
 #ifndef _WIN32
   if (host_ptr_supported && is_default_buft) {
-    // FAST PATH: mmap the GGUF and wrap the tensor-data region.
-    int fd = open(path, O_RDONLY);
-    if (fd >= 0) {
-      struct stat st {};
-      if (fstat(fd, &st) == 0 && st.st_size > 0 &&
-          // Reject malformed/truncated GGUF (data_offset past EOF) before the
-          // unsigned subtraction below would wrap to a huge size.
-          (uint64_t)data_offset < (uint64_t)st.st_size &&
-          // Guard against off_t→size_t truncation on 32-bit targets where the
-          // 2 GB+ GGUF would otherwise alias to a smaller mapping.
-          (uint64_t)st.st_size <= (uint64_t)SIZE_MAX) {
-        size_t file_size = (size_t)st.st_size;
-        void* addr = mmap(nullptr, file_size, PROT_READ, MAP_PRIVATE, fd, 0);
-        // The fd may be closed once mmap succeeds; the mapping holds a ref.
-        close(fd);
-        if (addr != MAP_FAILED) {
-          void* tensor_data_base = (char*)addr + data_offset;
-          size_t tensor_data_size = file_size - data_offset;
-          size_t max_tensor_size = ggml_get_max_tensor_size(ctx_data);
-
-          // Reject crafted GGUFs whose per-tensor (offset, nbytes) would point
-          // outside the mapped region — a later read through such a tensor
-          // would be an out-of-bounds memory access.
-          bool bounds_ok = true;
-          for (int64_t i = 0; i < n_tensors_in_gguf; i++) {
-            const char* name = gguf_get_tensor_name(gguf, i);
-            struct ggml_tensor* t = ggml_get_tensor(ctx_data, name);
-            if (!t) {
-              continue;
-            }
-            size_t off = gguf_get_tensor_offset(gguf, i);
-            size_t nbytes = ggml_nbytes(t);
-            if (off > tensor_data_size || nbytes > tensor_data_size - off) {
-              QLOG_IF(
-                  Priority::WARNING,
-                  std::string("smolvla_load_model: tensor '") + name +
-                      "' bounds exceed mapped region (off=" +
-                      std::to_string(off) +
-                      " nbytes=" + std::to_string(nbytes) +
-                      " region=" + std::to_string(tensor_data_size) +
-                      ") — falling back to alloc+copy");
-              bounds_ok = false;
-              break;
-            }
-          }
-
-          if (!bounds_ok) {
-            munmap(addr, file_size);
-          } else {
-            // Hint the OS to prefetch the file so the first inference doesn't
-            // demand-page its way through 2+ GB of weights.
-            madvise(addr, file_size, MADV_WILLNEED);
-
-            ggml_backend_buffer_t buf = ggml_backend_dev_buffer_from_host_ptr(
-                dev, tensor_data_base, tensor_data_size, max_tensor_size);
-
-            if (buf) {
-              // Wire each tensor to its position inside the mmap'd region.
-              int n_alloc_ok = 0;
-              int n_alloc_fail = 0;
-              for (int64_t i = 0; i < n_tensors_in_gguf; i++) {
-                const char* name = gguf_get_tensor_name(gguf, i);
-                struct ggml_tensor* t = ggml_get_tensor(ctx_data, name);
-                if (!t) {
-                  continue;
-                }
-                size_t off = gguf_get_tensor_offset(gguf, i);
-                void* tensor_addr = (char*)tensor_data_base + off;
-                if (ggml_backend_tensor_alloc(buf, t, tensor_addr) ==
-                    GGML_STATUS_SUCCESS) {
-                  n_alloc_ok++;
-                } else {
-                  n_alloc_fail++;
-                  QLOG_IF(
-                      Priority::WARNING,
-                      std::string(
-                          "smolvla_load_model: tensor_alloc failed for '") +
-                          name + "'");
-                }
-              }
-
-              if (n_alloc_fail > 0) {
-                // A partially-wired buffer would leave some tensors with
-                // unusable pointers; running inference against it is UB.
-                // Tear down and fall through to the alloc+copy path.
-                QLOG_IF(
-                    Priority::WARNING,
-                    "smolvla_load_model: " + std::to_string(n_alloc_fail) +
-                        " tensor_alloc calls failed — falling back to "
-                        "alloc+copy");
-                ggml_backend_buffer_free(buf);
-                munmap(addr, file_size);
-              } else {
-                ggml_backend_buffer_set_usage(
-                    buf, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
-                model.bufs_w.push_back(buf);
-                model.mmap_addr = addr;
-                model.mmap_size = file_size;
-                used_mmap = true;
-                QLOG_IF(
-                    Priority::INFO,
-                    "smolvla_load_model: mmap+host_ptr buffer ready, " +
-                        std::to_string(n_alloc_ok) + "/" +
-                        std::to_string(n_tensors_in_gguf) + " tensors wired");
-              }
-            } else {
-              QLOG_IF(
-                  Priority::WARNING,
-                  "smolvla_load_model: buffer_from_host_ptr returned NULL — "
-                  "falling back to alloc+copy");
-              munmap(addr, file_size);
-            }
-          }
-        } else {
-          QLOG_IF(
-              Priority::WARNING,
-              "smolvla_load_model: mmap failed (errno=" +
-                  std::to_string(errno) + ")");
-        }
-      } else {
-        QLOG_IF(
-            Priority::WARNING,
-            std::string("smolvla_load_model: skipping mmap fast path for '") +
-                path +
-                "' (fstat failed, file empty, data_offset >= file_size, or "
-                "file > SIZE_MAX)");
-        close(fd);
-      }
-    } else {
-      QLOG_IF(
-          Priority::WARNING,
-          std::string("smolvla_load_model: open() failed for '") + path + "'");
-    }
+    used_mmap = try_load_weights_mmap(
+        model, path, gguf.get(), ctx_data, dev, data_offset,
+        n_tensors_in_gguf);
   }
 #endif
-
   if (!used_mmap) {
-    // FALLBACK: allocate backend buffer then read+copy from file.
-    size_t total_size = 0;
-    for (struct ggml_tensor* t = ggml_get_first_tensor(ctx_data); t;
-         t = ggml_get_next_tensor(ctx_data, t)) {
-      total_size += ggml_nbytes(t);
-    }
-    QLOG_IF(
-        Priority::INFO,
-        "smolvla_load_model: alloc+copy path, total weights " +
-            std::to_string((int)(total_size / (1024 * 1024))) + " MB");
-
-    ggml_backend_buffer_t buf =
-        ggml_backend_alloc_ctx_tensors_from_buft(ctx_data, buft);
-    if (!buf) {
-      const char* bname = ggml_backend_name(model.backend);
-      QLOG_IF(
-          Priority::ERROR,
-          std::string(
-              "smolvla_load_model: ggml_backend_alloc_ctx_tensors_from_buft "
-              "FAILED for ") +
-              std::to_string((int)(total_size / (1024 * 1024))) +
-              " MB on backend '" + (bname ? bname : "?") + "'");
-      gguf_free(gguf);
+    if (!load_weights_alloc_copy(
+            model, path, gguf.get(), ctx_data, buft, data_offset,
+            n_tensors_in_gguf)) {
       return false;
-    }
-    ggml_backend_buffer_set_usage(buf, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
-    model.bufs_w.push_back(buf);
-
-    // Read each tensor from disk and upload to the backend buffer.
-    FILE* f = fopen(path, "rb");
-    if (!f) {
-      QLOG_IF(
-          Priority::ERROR,
-          std::string("smolvla_load_model: fopen failed for '") + path + "'");
-      gguf_free(gguf);
-      return false;
-    }
-    std::vector<uint8_t> read_buf;
-    int n_copied = 0;
-    for (int64_t i = 0; i < n_tensors_in_gguf; i++) {
-      const char* name = gguf_get_tensor_name(gguf, i);
-      struct ggml_tensor* t = ggml_get_tensor(ctx_data, name);
-      if (!t) {
-        continue;
-      }
-      size_t off = data_offset + gguf_get_tensor_offset(gguf, i);
-      size_t nbytes = ggml_nbytes(t);
-      if (read_buf.size() < nbytes) {
-        read_buf.resize(nbytes);
-      }
-#ifdef _WIN32
-      int seek_err = _fseeki64(f, (int64_t)off, SEEK_SET);
-#else
-      int seek_err = fseeko(f, (off_t)off, SEEK_SET);
-#endif
-      if (seek_err != 0 ||
-          fread(read_buf.data(), 1, nbytes, f) != nbytes) {
-        QLOG_IF(
-            Priority::ERROR,
-            std::string("smolvla_load_model: failed to read tensor '") + name +
-                "' at offset " + std::to_string(off));
-        fclose(f);
-        gguf_free(gguf);
-        return false;
-      }
-      ggml_backend_tensor_set(t, read_buf.data(), 0, nbytes);
-      n_copied++;
-    }
-    fclose(f);
-    {
-      const char* bname = ggml_backend_name(model.backend);
-      QLOG_IF(
-          Priority::INFO,
-          "smolvla_load_model: alloc+copy buffer ready, " +
-              std::to_string(n_copied) + " tensors, backend='" +
-              (bname ? bname : "?") + "'");
     }
   }
 
   // Tensors keep the same ggml_tensor* pointers from ctx_data; no remapping
   // needed because we never created a duplicate context.
-
-  // Clean up GGUF context — backend buffer(s) own the actual storage now.
-  gguf_free(gguf);
+  // (The gguf_context itself is released by gguf_unique_ptr at scope exit;
+  // backend buffer(s) own the actual storage now.)
 
   QLOG_IF(Priority::INFO, "smolvla_load_model: model loaded successfully");
   return true;
 }
 
-extern "C" void smolvla_free_model(smolvla_model* model_ptr) {
-  smolvla_model& model = *model_ptr;
+void smolvla_free_model(smolvla_model& model) {
   // Free backend buffers BEFORE the underlying mmap so any tensor pointers
   // they hold remain valid through the free callback.
   for (ggml_backend_buffer_t buf : model.bufs_w) {
@@ -1459,9 +1669,8 @@ extern "C" void smolvla_free_model(smolvla_model* model_ptr) {
   }
 }
 
-// Defined here so it can call the C-linkage smolvla_free_model declared in
-// the header. Idempotent — safe to chain with VlaModel's explicit free.
-smolvla_model::~smolvla_model() { smolvla_free_model(this); }
+// Idempotent — safe to chain with VlaModel's explicit free.
+smolvla_model::~smolvla_model() { smolvla_free_model(*this); }
 
 // ============================================================
 // Full Inference Pipeline

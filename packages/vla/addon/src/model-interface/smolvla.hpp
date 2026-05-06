@@ -275,20 +275,13 @@ struct ggml_tensor* build_denoise_step_graph(
 void compute_sinusoidal_time_embedding_cached(
     float timestep, const float* inv_periods, int dimension, float* out);
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 // Load model from GGUF file. `force_cpu`: when true, skip GPU device
 // selection and run on the CPU backend only. Used by the integration
 // test to compare CPU vs GPU on the same runner.
-bool smolvla_load_model(const char* path, smolvla_model* model, bool force_cpu);
+bool smolvla_load_model(const char* path, smolvla_model& model, bool force_cpu);
 
-// Free model resources
-void smolvla_free_model(smolvla_model* model);
-
-#ifdef __cplusplus
-}
+// Free model resources. Idempotent — also called from `smolvla_model::~smolvla_model`.
+void smolvla_free_model(smolvla_model& model);
 
 // Per-stage wall-clock timing captured during a single inference call.
 // All values are milliseconds.
@@ -308,4 +301,3 @@ bool smolvla_inference_with_timing(
     const int32_t* lang_tokens, const bool* lang_mask, int lang_len,
     const float* noise, float* actions_out, int* n_actions_out,
     smolvla_timing* timing_out);
-#endif

@@ -38,7 +38,7 @@ public:
   // `forceCpu`: skip GPU device selection and run on the CPU backend only.
   explicit VlaModel(const std::string& ggufPath, bool forceCpu = false)
       : model_(new smolvla_model()) {
-    if (!smolvla_load_model(ggufPath.c_str(), model_.get(), forceCpu)) {
+    if (!smolvla_load_model(ggufPath.c_str(), *model_, forceCpu)) {
       throw std::runtime_error(
           "failed to load SmolVLA model from: " + ggufPath);
     }
