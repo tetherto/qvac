@@ -89,16 +89,28 @@ runs:
         if [ -z "$RELEASE" ]; then
           RELEASE="tmp"
         fi
+
+        # Track whether the caller supplied an explicit tag. If not, fall back to
+        # the legacy release-branch heuristic so existing callers without inputs.tag
+        # keep working.
+        EXPLICIT_TAG="true"
         if [ -z "$TAG" ]; then
+          EXPLICIT_TAG="false"
           TAG=$RELEASE
         fi
 
         echo "Base branch: ${GIT_REF}"
         echo "Event name: ${EVENT_NAME}"
 
-        if [[ "${EVENT_NAME}" == "push" || "${EVENT_NAME}" == "workflow_dispatch" ]]; then
-          if [[ "${GIT_REF}" == refs/heads/release-* ]]; then
-            TAG="latest"
+        # Only force the legacy "latest" override when the caller did NOT pass an
+        # explicit tag. With the explicit tag, the caller is in control (e.g. an
+        # old release line publishing under a different dist-tag like release-1.x
+        # so it doesn't clobber `latest`).
+        if [ "$EXPLICIT_TAG" = "false" ]; then
+          if [[ "${EVENT_NAME}" == "push" || "${EVENT_NAME}" == "workflow_dispatch" ]]; then
+            if [[ "${GIT_REF}" == refs/heads/release-* ]]; then
+              TAG="latest"
+            fi
           fi
         fi
 
