@@ -36,6 +36,8 @@ const SD21_MODEL = {
 
 const ESRGAN_MODEL = {
   name: 'RealESRGAN_x4plus_anime_6B.pth',
+  repo: 'https://github.com/xinntao/Real-ESRGAN',
+  // The .pth model is downloaded on demand for tests; it is not bundled.
   url: 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth'
 }
 
