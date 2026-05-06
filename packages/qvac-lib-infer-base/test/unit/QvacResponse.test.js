@@ -4,8 +4,6 @@ const test = require('brittle')
 const QvacResponse = require('../../src/QvacResponse')
 
 const dummyCancelHandler = async () => {}
-const dummyPauseHandler = async () => {}
-const dummyContinueHandler = async () => {}
 
 // ------------------------------
 // Test hooks and iterator (onUpdate, onFinish, onError, getLatest, iterate)
@@ -13,9 +11,7 @@ const dummyContinueHandler = async () => {}
 
 test('onUpdate should trigger callback on updateOutput', async t => {
   const response = new QvacResponse({
-    cancelHandler: dummyCancelHandler,
-    pauseHandler: dummyPauseHandler,
-    continueHandler: dummyContinueHandler
+    cancelHandler: dummyCancelHandler
   })
   let received = null
   response.onUpdate(data => {
@@ -31,9 +27,7 @@ test('onUpdate should trigger callback on updateOutput', async t => {
 
 test('onFinish resolves with final outputs on ended via await()', async t => {
   const response = new QvacResponse({
-    cancelHandler: dummyCancelHandler,
-    pauseHandler: dummyPauseHandler,
-    continueHandler: dummyContinueHandler
+    cancelHandler: dummyCancelHandler
   })
   let finishCallbackOutput = null
 
@@ -60,9 +54,7 @@ test('onFinish resolves with final outputs on ended via await()', async t => {
 
 test('onFinish and await resolve with custom terminal result', async t => {
   const response = new QvacResponse({
-    cancelHandler: dummyCancelHandler,
-    pauseHandler: dummyPauseHandler,
-    continueHandler: dummyContinueHandler
+    cancelHandler: dummyCancelHandler
   })
 
   const terminalResult = {
@@ -90,9 +82,7 @@ test('onFinish and await resolve with custom terminal result', async t => {
 
 test('failed should trigger error and reject await()', async t => {
   const response = new QvacResponse({
-    cancelHandler: dummyCancelHandler,
-    pauseHandler: dummyPauseHandler,
-    continueHandler: dummyContinueHandler
+    cancelHandler: dummyCancelHandler
   })
   let errorCallbackCalled = false
 
@@ -115,9 +105,7 @@ test('failed should trigger error and reject await()', async t => {
 
 test('getLatest returns the most recent output', t => {
   const response = new QvacResponse({
-    cancelHandler: dummyCancelHandler,
-    pauseHandler: dummyPauseHandler,
-    continueHandler: dummyContinueHandler
+    cancelHandler: dummyCancelHandler
   })
   t.is(
     response.getLatest(),
@@ -138,9 +126,7 @@ test('getLatest returns the most recent output', t => {
 test('iterate yields outputs until ended', async t => {
   const response = new QvacResponse(
     {
-      cancelHandler: dummyCancelHandler,
-      pauseHandler: dummyPauseHandler,
-      continueHandler: dummyContinueHandler
+      cancelHandler: dummyCancelHandler
     },
     10
   )
@@ -158,16 +144,12 @@ test('iterate yields outputs until ended', async t => {
 
 test('chaining should return the same instance', t => {
   const response = new QvacResponse({
-    cancelHandler: dummyCancelHandler,
-    pauseHandler: dummyPauseHandler,
-    continueHandler: dummyContinueHandler
+    cancelHandler: dummyCancelHandler
   })
   const chainedInstance = response
     .onUpdate(() => {})
     .onError(() => {})
     .onCancel(() => {})
-    .onPause(() => {})
-    .onContinue(() => {})
     .onFinish(() => {})
   t.is(
     chainedInstance,
@@ -187,9 +169,7 @@ test('cancel calls cancelHandler and emits cancel', async t => {
     cancelHandlerCalled = true
   }
   const response = new QvacResponse({
-    cancelHandler,
-    pauseHandler: dummyPauseHandler,
-    continueHandler: dummyContinueHandler
+    cancelHandler
   })
 
   let cancelEventCalled = false
@@ -205,9 +185,7 @@ test('cancel calls cancelHandler and emits cancel', async t => {
 test('cancel is a no-op if response is already finished', async t => {
   let cancelHandlerCalled = false
   const response = new QvacResponse({
-    cancelHandler: async () => { cancelHandlerCalled = true },
-    pauseHandler: dummyPauseHandler,
-    continueHandler: dummyContinueHandler
+    cancelHandler: async () => { cancelHandlerCalled = true }
   })
   response.ended()
 
@@ -216,102 +194,12 @@ test('cancel is a no-op if response is already finished', async t => {
 })
 
 // ------------------------------
-// Pause / Continue Tests
-// ------------------------------
-
-test('pause triggers pauseHandler and changes state to PAUSED', async t => {
-  let pauseHandlerCalled = false
-  const pauseHandler = async () => {
-    pauseHandlerCalled = true
-  }
-  const response = new QvacResponse({
-    cancelHandler: dummyCancelHandler,
-    pauseHandler,
-    continueHandler: dummyContinueHandler
-  })
-
-  let pauseEventCalled = false
-  response.onPause(() => {
-    pauseEventCalled = true
-  })
-
-  await response.pause()
-  t.ok(pauseHandlerCalled, 'pauseHandler was called')
-  t.ok(pauseEventCalled, 'pause event was emitted')
-  t.is(response.getStatus(), 'paused', 'response state is PAUSED')
-})
-
-test('continue triggers continueHandler and changes state to RUNNING', async t => {
-  let continueHandlerCalled = false
-  const continueHandler = async () => {
-    continueHandlerCalled = true
-  }
-  const response = new QvacResponse({
-    cancelHandler: dummyCancelHandler,
-    pauseHandler: dummyPauseHandler,
-    continueHandler
-  })
-
-  await response.pause()
-
-  let continueEventCalled = false
-  response.onContinue(() => {
-    continueEventCalled = true
-  })
-  await response.continue()
-  t.ok(continueHandlerCalled, 'continueHandler was called')
-  t.ok(continueEventCalled, 'continue event was emitted')
-  t.is(response.getStatus(), 'running', 'response state is RUNNING')
-})
-
-test('pause should throw error if not in RUNNING state', async t => {
-  const response = new QvacResponse({
-    cancelHandler: dummyCancelHandler,
-    pauseHandler: dummyPauseHandler,
-    continueHandler: dummyContinueHandler
-  })
-
-  response._status = 'ended'
-  try {
-    await response.pause()
-    t.fail('pause should throw error when state is not RUNNING')
-  } catch (err) {
-    t.is(
-      err.message,
-      'ERR_NOT_RUNNING',
-      'pause threw the correct error message'
-    )
-  }
-})
-
-test('continue should throw error if not in PAUSED state', async t => {
-  const response = new QvacResponse({
-    cancelHandler: dummyCancelHandler,
-    pauseHandler: dummyPauseHandler,
-    continueHandler: dummyContinueHandler
-  })
-
-  try {
-    await response.continue()
-    t.fail('continue should throw error when state is not PAUSED')
-  } catch (err) {
-    t.is(
-      err.message,
-      'ERR_NOT_PAUSED',
-      'continue threw the correct error message'
-    )
-  }
-})
-
-// ------------------------------
 // Chaining onFinish and await Test
 // ------------------------------
 
 test('onFinish chaining and await returns final outputs', async t => {
   const response = new QvacResponse({
-    cancelHandler: dummyCancelHandler,
-    pauseHandler: dummyPauseHandler,
-    continueHandler: dummyContinueHandler
+    cancelHandler: dummyCancelHandler
   })
 
   response
