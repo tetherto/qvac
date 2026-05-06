@@ -36,7 +36,10 @@ int EsrganUpscaler::resolveThreads() const {
     threads = sd_get_num_physical_cores();
   }
   if (threads <= 0) {
-    threads = 1;
+    throw StatusError(
+        general_error::InternalError,
+        "Failed to auto-detect upscaler thread count; set upscaler_threads to "
+        "a positive integer");
   }
   return threads;
 }
