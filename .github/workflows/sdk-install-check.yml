@@ -8,6 +8,11 @@ name: SDK Install Check (public npm)
 #
 # The list of packages and ranges lives in `scripts/install-check/packages.json`
 # so it can be diffed mechanically against `packages/sdk/package.json`.
+#
+# Optional secret: `SLACK_WEBHOOK_URL_CI_ALERTS` — incoming webhook for the CI
+# alerts channel. When set, failures (scheduled or manual `workflow_dispatch`)
+# additionally post a structured Slack message via `notify-slack-on-failure`.
+# When unset, that job is a no-op; the workflow does not fail.
 
 on:
   schedule:
@@ -177,3 +182,134 @@ jobs:
               });
               core.info(`Opened new issue #${created.data.number}`);
             }
+
+  notify-slack-on-failure:
+    name: Post Slack alert
+    needs: install-check
+    # Pages on-call faster than the issue tracker. Unlike `notify-on-failure`,
+    # this job DOES fire on manual `workflow_dispatch` so the channel can be
+    # smoke-tested end-to-end (forced failure -> Slack message) without waiting
+    # for the next scheduled tick. Issue tracking stays schedule-only.
+    if: failure() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Post Slack alert
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
+        env:
+          # The webhook URL is consumed only via `process.env` (no `${{ }}`
+          # interpolation inside the script body) so it stays redacted in logs
+          # and cannot be smuggled in via workflow-expression injection.
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL_CI_ALERTS }}
+        with:
+          script: |
+            const fs = require('fs');
+
+            const webhook = process.env.SLACK_WEBHOOK_URL;
+            if (!webhook) {
+              core.info('SLACK_WEBHOOK_URL_CI_ALERTS not set, skipping Slack notification');
+              return;
+            }
+
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            const { data: jobsData } = await github.rest.actions.listJobsForWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId,
+              per_page: 100,
+            });
+
+            const nonMatrixJobNames = new Set([
+              'Build matrix',
+              'Open or update tracking issue',
+              'Post Slack alert',
+            ]);
+            const failedLegs = jobsData.jobs
+              .filter((j) => j.conclusion === 'failure' && !nonMatrixJobNames.has(j.name))
+              .map((j) => {
+                const at = j.name.lastIndexOf('@');
+                return at > 0
+                  ? { name: j.name, pkg: j.name.slice(0, at), legRange: j.name.slice(at + 1) }
+                  : { name: j.name, pkg: j.name, legRange: '' };
+              });
+
+            let pkgDeps = {};
+            try {
+              const pkg = JSON.parse(fs.readFileSync('packages/sdk/package.json', 'utf8'));
+              pkgDeps = pkg.dependencies || {};
+            } catch (err) {
+              core.warning(`Could not read packages/sdk/package.json: ${err.message}`);
+            }
+
+            const enriched = failedLegs.map((leg) => ({
+              ...leg,
+              pinnedRange: pkgDeps[leg.pkg] || leg.legRange || '(unknown)',
+            }));
+
+            const MAX_LISTED = 25;
+            const visible = enriched.slice(0, MAX_LISTED);
+            const overflow = enriched.length - visible.length;
+
+            const failedListLines = visible.map(
+              (leg) => `• \`${leg.pkg}\` (range from \`packages/sdk/package.json\`: \`${leg.pinnedRange}\`)`
+            );
+            if (overflow > 0) {
+              failedListLines.push(`… and ${overflow} more — see run for full list`);
+            }
+            const failedListMd = failedListLines.length > 0
+              ? failedListLines.join('\n')
+              : '_(could not enumerate failed legs — see run for details)_';
+
+            const fallback = `SDK install-check failed: ${enriched.length} package(s) — ${runUrl}`;
+
+            const payload = {
+              text: fallback,
+              blocks: [
+                {
+                  type: 'header',
+                  text: { type: 'plain_text', text: 'SDK install-check failed' },
+                },
+                {
+                  type: 'section',
+                  fields: [
+                    { type: 'mrkdwn', text: `*Run:*\n<${runUrl}|View workflow run>` },
+                    { type: 'mrkdwn', text: `*Trigger:*\n\`${context.eventName}\`` },
+                    { type: 'mrkdwn', text: `*Repo:*\n\`${context.repo.owner}/${context.repo.repo}\`` },
+                    { type: 'mrkdwn', text: `*Commit:*\n\`${context.sha.slice(0, 7)}\`` },
+                  ],
+                },
+                {
+                  type: 'section',
+                  text: {
+                    type: 'mrkdwn',
+                    text: `*Failed packages (${enriched.length}):*\n${failedListMd}`,
+                  },
+                },
+                {
+                  type: 'section',
+                  text: {
+                    type: 'mrkdwn',
+                    text: '*Runbook:* re-publish from the appropriate `release-*` branch with public access (`publish-library-to-npm` action, see `docs/gitflow.md`), or check the `@qvac` npm package access settings.',
+                  },
+                },
+              ],
+            };
+
+            const res = await fetch(webhook, {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify(payload),
+            });
+
+            if (!res.ok) {
+              const detail = await res.text().catch(() => '');
+              core.setFailed(`Slack webhook returned ${res.status} ${res.statusText}${detail ? `: ${detail}` : ''}`);
+              return;
+            }
+
+            core.info(`Posted Slack alert for ${enriched.length} failed package(s)`);
