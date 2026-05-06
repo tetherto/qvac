@@ -1577,7 +1577,7 @@ jobs:
 
       - name: Upload Device Farm Logs
         if: always() && steps.schedule_run.outputs.run_arn_1
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: devicefarm-logs-${{ matrix.platform }}
           path: devicefarm-logs/
