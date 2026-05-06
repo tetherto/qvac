@@ -77,3 +77,7 @@ async function runParamValidationTest (options = {}) { // eslint-disable-line no
 async function runPipelineTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/pipeline.test.js', options)
 }
+
+async function runRunInternalOrderingTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/run-internal-ordering.test.js', options)
+}

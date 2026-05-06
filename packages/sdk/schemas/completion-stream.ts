@@ -12,8 +12,9 @@ export { completionStatsSchema, type CompletionStats } from "./completion-event"
  * - `"hermes"`:   `<tool_call>{"name":"get_weather","arguments":{"city":"Tokyo"}}</tool_call>`
  * - `"pythonic"`: `[get_weather(city="Tokyo")]` (optionally `<|tool_call_start|>...<|tool_call_end|>`-wrapped)
  * - `"json"`:     `{"name":"get_weather","arguments":{"city":"Tokyo"}}` or `{"tool_calls":[{"name":"...","arguments":{...}}]}`
+ * - `"harmony"`:  `<|channel|>commentary to=functions.get_weather <|constrain|>json<|message|>{"city":"Tokyo"}<|call|>`
  */
-export const toolDialectSchema = z.enum(["hermes", "pythonic", "json"]);
+export const toolDialectSchema = z.enum(["hermes", "pythonic", "json", "harmony"]);
 
 export const attachmentSchema = z.object({
   path: z

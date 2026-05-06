@@ -149,6 +149,60 @@ test('run | throws when lora is a relative path', async (t) => {
   }
 })
 
+// ---------- ESRGAN upscale validation ----------
+
+test('run | throws when ESRGAN upscale is requested without files.esrgan', async (t) => {
+  const model = new ImgStableDiffusion({
+    files: {
+      model: '/tmp/stable-diffusion-v2-1-Q4_0.gguf'
+    },
+    config: { threads: 1 },
+    logger: console
+  })
+
+  try {
+    await model.run({ prompt: 'test', upscale: true })
+    t.fail('should have thrown')
+  } catch (err) {
+    t.ok(
+      /ESRGAN upscale requested but files\.esrgan was not provided/.test(err.message),
+      'error message explains files.esrgan is required'
+    )
+  }
+})
+
+test('run | forwards ESRGAN upscale params when files.esrgan is provided', async (t) => {
+  const model = new ImgStableDiffusion({
+    files: {
+      model: '/tmp/stable-diffusion-v2-1-Q4_0.gguf',
+      esrgan: '/tmp/RealESRGAN_x4plus_anime_6B.pth'
+    },
+    config: { threads: 1 },
+    logger: console
+  })
+
+  const sentinel = new Error('fake addon stop')
+  let captured = null
+  model.addon = {
+    runJob: async (params) => {
+      captured = params
+      throw sentinel
+    },
+    cancel: async () => {}
+  }
+
+  try {
+    await model.run({ prompt: 'test', upscale: { repeats: 2 } })
+    t.fail('should have thrown')
+  } catch (err) {
+    t.is(err, sentinel, 'fake addon receives the run request')
+  }
+
+  t.ok(captured, 'captured params passed to addon')
+  t.is(captured.upscale.repeats, 2, 'upscale.repeats is forwarded')
+  t.is(captured.mode, 'txt2img', 'txt2img mode is selected')
+})
+
 // ---------- FLUX img2img prediction guard ----------
 
 test('FLUX img2img | throws when prediction is omitted', async (t) => {

@@ -14,8 +14,9 @@ import { cloneElement, isValidElement } from "react";
 import { LLMCopyButton, ViewOptions, VersionSelector } from '@/components/page-actions';
 import {
   buildCanonicalDocsUrl,
-  inferDiataxisOpenGraph,
+  isArchivedVersionSlug,
 } from '@/lib/docs-open-graph';
+import { buildDocsJsonLd } from '@/lib/docs-json-ld';
 import { QVAC_DOC_OG_HEIGHT, QVAC_DOC_OG_WIDTH } from '@/lib/qvac-doc-og';
 
 function TitleText({
@@ -57,9 +58,20 @@ export default async function Page(props: PageProps<'/[[...slug]]'>) {
 
   // Filter ToC to include H2 through H5 (depth 2, 3, 4, and 5)
   const filteredToc = page.data.toc?.filter(item => item.depth >= 2 && item.depth <= 5) || [];
-  
+
+  const isHomePage = !params.slug || params.slug.length === 0;
+  const jsonLdBlocks = buildDocsJsonLd(page, params.slug ?? [], isHomePage);
+
   return (
-    <DocsPage toc={filteredToc} tableOfContent={{ style: "clerk" }} tableOfContentPopover={{ style: "clerk" }} full={page.data.full}>
+    <>
+      {jsonLdBlocks?.map((block, i) => (
+        <script
+          key={i}
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(block) }}
+        />
+      ))}
+      <DocsPage toc={filteredToc} tableOfContent={{ style: "clerk" }} tableOfContentPopover={{ style: "clerk" }} full={page.data.full}>
       <DocsTitle>
         <span className="inline-flex items-center gap-2 leading-none">
           {titleIcon ? (
@@ -91,6 +103,7 @@ export default async function Page(props: PageProps<'/[[...slug]]'>) {
         />
       </DocsBody>
     </DocsPage>
+    </>
   );
 }
 
@@ -108,12 +121,18 @@ export async function generateMetadata(
 
   const { title, description } = page.data;
   const canonicalUrl = buildCanonicalDocsUrl(params.slug);
-  const { section, tags } = inferDiataxisOpenGraph(page.path);
   const ogImage = getPageImage(page);
+  // Non-canonical bundles (dev + vX.Y.Z) are hidden from search engines and
+  // LLM training channels via per-page noindex. Canonical/OG/Twitter stay
+  // intact so shared links still render a rich social card; `noindex` makes
+  // the canonical pointer inert for Google even when its target was removed
+  // in latest (e.g., `ping` existed in v0.7.0 but not in v0.8.0+).
+  const isArchived = isArchivedVersionSlug(params.slug);
 
   return {
     title: isHomePage ? { absolute: title } : title,
     description,
+    ...(isArchived && { robots: { index: false, follow: true } }),
     alternates: {
       canonical: canonicalUrl,
     },
@@ -123,9 +142,7 @@ export async function generateMetadata(
       url: canonicalUrl,
       siteName: 'QVAC',
       locale: 'en_US',
-      type: 'article',
-      section,
-      tags,
+      type: isHomePage ? 'website' : 'article',
       images: [
         {
           url: ogImage.url,

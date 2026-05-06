@@ -10,6 +10,10 @@ async function runAddonTest (options = {}) { // eslint-disable-line no-unused-va
   return runIntegrationModule('../integration/addon.test.js', options)
 }
 
+async function runMultiGpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/multi-gpu.test.js', options)
+}
+
 async function runMultiInstanceTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/multi-instance.test.js', options)
 }
