@@ -564,6 +564,57 @@ TEST_F(BackendSelectionTest, BitnetTQ_Mali_ChoosesVulkanNormally) {
       mockBackend, BackendType::GPU, BackendType::GPU, "vulkan0", bitnetMeta);
 }
 
+// Mali Vulkan + Qwen3.5: forced to CPU regardless of preferred backend.
+TEST_F(BackendSelectionTest, Qwen35_Mali_ForcesCPU) {
+  mockBackend.addDevice(createGPUDevice(MALI_DESC, VULKAN0_BACK));
+  MockModelMetaData qwen35Meta(false, "qwen35");
+  expectChosenWithMetadata(
+      mockBackend, BackendType::GPU, BackendType::CPU, "none", qwen35Meta);
+}
+
+// Mali iGPU + Qwen3.5MoE: also forced to CPU (covers the moe arch string).
+TEST_F(BackendSelectionTest, Qwen35Moe_Mali_ForcesCPU) {
+  mockBackend.addDevice(createIGPUDevice(MALI_DESC, VULKAN0_BACK));
+  MockModelMetaData qwen35MoeMeta(false, "qwen35moe");
+  expectChosenWithMetadata(
+      mockBackend, BackendType::GPU, BackendType::CPU, "none", qwen35MoeMeta);
+}
+
+// Qwen3 (3.0, not 3.5) on Mali: GPU still chosen (override is qwen35-specific).
+TEST_F(BackendSelectionTest, Qwen3_Mali_KeepsVulkan) {
+  mockBackend.addDevice(createGPUDevice(MALI_DESC, VULKAN0_BACK));
+  MockModelMetaData qwen3Meta(false, "qwen3");
+  expectChosenWithMetadata(
+      mockBackend, BackendType::GPU, BackendType::GPU, "vulkan0", qwen3Meta);
+}
+
+// Qwen3.5 on Adreno: GPU still chosen (override is Mali-specific).
+TEST_F(BackendSelectionTest, Qwen35_Adreno_KeepsGPU) {
+  mockBackend.addDevice(createGPUDevice(ADRENO_830_DESC, OPENCL_BACK));
+  MockModelMetaData qwen35Meta(false, "qwen35");
+  expectChosenWithMetadata(
+      mockBackend,
+      BackendType::GPU,
+      BackendType::GPU,
+      "gpuopencl",
+      qwen35Meta);
+}
+
+// Mali Vulkan + Qwen3.5 with explicit main_gpu: still forced to CPU
+// (override is intentional; user said "always on the CPU").
+TEST_F(BackendSelectionTest, Qwen35_Mali_ExplicitMainGpu_StillForcesCPU) {
+  mockBackend.addDevice(createGPUDevice(MALI_DESC, VULKAN0_BACK));
+  MockModelMetaData qwen35Meta(false, "qwen35");
+  MainGpu mainGpu = 0;
+  expectChosenWithMetadata(
+      mockBackend,
+      BackendType::GPU,
+      BackendType::CPU,
+      "none",
+      qwen35Meta,
+      mainGpu);
+}
+
 // Adreno 800+ with bitnet TQ, only OpenCL available (no Vulkan): falls to CPU
 TEST_F(BackendSelectionTest, BitnetTQ_Adreno830_OnlyOpenCL_FallsToCPU) {
   mockBackend.addDevice(createGPUDevice(ADRENO_830_DESC, OPENCL_BACK));
@@ -777,13 +828,42 @@ TEST_F(BackendSelectionTest, Finetuning_UnknownArch_Adreno650_Throws) {
   expectFinetuningThrows(mockBackend, BackendType::GPU, &meta);
 }
 
-// -- Finetuning on non-Adreno GPU: no special backend behavior for known arch
-// --
+// -- Finetuning on Mali: ALL supported architectures forced to CPU --
+// (Mali Vulkan coopmat path is unstable for training; see chooseBackend)
 
-TEST_F(BackendSelectionTest, Finetuning_Gemma3_Mali_ChoosesVulkanNormally) {
+TEST_F(BackendSelectionTest, Finetuning_Gemma3_Mali_ForcesCPU) {
   mockBackend.addDevice(createGPUDevice(MALI_DESC, VULKAN0_BACK));
   MockModelMetaData meta(false, "gemma3");
   expectChosenFinetuning(
+      mockBackend, BackendType::GPU, BackendType::CPU, "none", meta);
+}
+
+TEST_F(BackendSelectionTest, Finetuning_Qwen3_Mali_ForcesCPU) {
+  mockBackend.addDevice(createGPUDevice(MALI_DESC, VULKAN0_BACK));
+  MockModelMetaData meta(false, "qwen3");
+  expectChosenFinetuning(
+      mockBackend, BackendType::GPU, BackendType::CPU, "none", meta);
+}
+
+TEST_F(BackendSelectionTest, Finetuning_Bitnet_Mali_ForcesCPU) {
+  mockBackend.addDevice(createGPUDevice(MALI_DESC, VULKAN0_BACK));
+  MockModelMetaData meta(true, "bitnet");
+  expectChosenFinetuning(
+      mockBackend, BackendType::GPU, BackendType::CPU, "none", meta);
+}
+
+TEST_F(BackendSelectionTest, Finetuning_Gemma3_MaliIGPU_ForcesCPU) {
+  mockBackend.addDevice(createIGPUDevice(MALI_DESC, VULKAN0_BACK));
+  MockModelMetaData meta(false, "gemma3");
+  expectChosenFinetuning(
+      mockBackend, BackendType::GPU, BackendType::CPU, "none", meta);
+}
+
+// Inference (non-finetuning) on Mali with a non-Qwen3.5 arch keeps the GPU.
+TEST_F(BackendSelectionTest, Inference_Gemma3_Mali_KeepsVulkan) {
+  mockBackend.addDevice(createGPUDevice(MALI_DESC, VULKAN0_BACK));
+  MockModelMetaData meta(false, "gemma3");
+  expectChosenWithMetadata(
       mockBackend, BackendType::GPU, BackendType::GPU, "vulkan0", meta);
 }
 

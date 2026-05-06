@@ -26,7 +26,7 @@ const useCpu = isDarwinX64 || isLinuxArm64
 const forceCpuDevice = useCpu || noGpu
 const skipFinetuning = useCpu || (noGpu && !isWindows)
 
-const PAUSE_RESUME_TIMEOUT_MS = 1800_000
+const PAUSE_RESUME_TIMEOUT_MS = 3600_000
 
 const FINETUNE_MODELS = [
   {
@@ -47,7 +47,7 @@ const FINETUNE_MODELS = [
   }
 ]
 
-function waitForProgress (handle, minSteps = 2, timeoutMs = 300_000) {
+function waitForProgress (handle, minSteps = 2, timeoutMs = 600_000) {
   return new Promise((resolve, reject) => {
     let count = 0
     const timer = setTimeout(() => {
@@ -133,7 +133,7 @@ test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: sk
 
     const finetuneConfig = setupParams(modelDir, {
       checkpointSaveSteps: 10,
-      datasetSize: isMobile ? 8 : 16
+      datasetSize: isMobile ? 4 : 16
     })
     const checkpointDir = finetuneConfig.checkpointSaveDir
 
@@ -176,7 +176,7 @@ test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: sk
       if (pauseResult?.status === 'COMPLETED') {
         t.comment(`[${modelVariant.id}] Finetune result: ${JSON.stringify(pauseResult)}`)
 
-        const expectedGlobalSteps = isMobile ? 6 : 12
+        const expectedGlobalSteps = isMobile ? 3 : 12
         t.is(
           pauseResult.stats?.global_steps, expectedGlobalSteps,
           `[${modelVariant.id}] global_steps should be ${expectedGlobalSteps}, got ${pauseResult.stats?.global_steps}`
@@ -238,7 +238,7 @@ test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: sk
         'number',
         `[${modelVariant.id}] Finetune stats.epochs_completed should be a number`
       )
-      const expectedGlobalSteps = isMobile ? 6 : 12
+      const expectedGlobalSteps = isMobile ? 3 : 12
       t.is(
         result.stats?.global_steps, expectedGlobalSteps,
         `[${modelVariant.id}] global_steps should be ${expectedGlobalSteps}, got ${result.stats?.global_steps}`
@@ -283,7 +283,7 @@ test('cancel() stops finetuning and removes pause checkpoint', { timeout: PAUSE_
     downloadUrl: modelVariant.url
   })
 
-  const finetuneConfig = setupParams(modelDir, { checkpointSaveSteps: 5, datasetSize: isMobile ? 8 : 16, testId: 'cancel-test' })
+  const finetuneConfig = setupParams(modelDir, { checkpointSaveSteps: 5, datasetSize: isMobile ? 4 : 16, testId: 'cancel-test' })
   const checkpointDir = finetuneConfig.checkpointSaveDir
 
   const cancelModelPath = path.join(modelDir, modelName)
@@ -320,7 +320,7 @@ test('cancel() stops finetuning and removes pause checkpoint', { timeout: PAUSE_
     )
 
     if (result.status === 'COMPLETED') {
-      const expectedGlobalSteps = isMobile ? 6 : 12
+      const expectedGlobalSteps = isMobile ? 3 : 12
       t.is(
         result.stats?.global_steps, expectedGlobalSteps,
         `global_steps should be ${expectedGlobalSteps}, got ${result.stats?.global_steps}`
@@ -346,7 +346,7 @@ test('inference with session cache works after finetuning', { timeout: PAUSE_RES
     downloadUrl: modelVariant.url
   })
 
-  const finetuneConfig = setupParams(modelDir, { checkpointSaveSteps: 5, datasetSize: isMobile ? 8 : 16 })
+  const finetuneConfig = setupParams(modelDir, { checkpointSaveSteps: 5, datasetSize: isMobile ? 4 : 16 })
   const checkpointDir = finetuneConfig.checkpointSaveDir
   const sessionFile = path.join(modelDir, 'test-session-finetune.bin')
 
@@ -388,7 +388,7 @@ test('inference with session cache works after finetuning', { timeout: PAUSE_RES
     t.ok(result, 'Finetune should return a result')
     t.comment(`Finetune result: ${JSON.stringify(result)}`)
 
-    const expectedGlobalSteps = isMobile ? 6 : 12
+    const expectedGlobalSteps = isMobile ? 3 : 12
     t.is(
       result.stats?.global_steps, expectedGlobalSteps,
       `global_steps should be ${expectedGlobalSteps}, got ${result.stats?.global_steps}`

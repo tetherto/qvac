@@ -105,12 +105,16 @@ struct DeviceDescription {
   }
 };
 
+bool isMaliDevice(const DeviceDescription& devDescr) {
+  return devDescr.gpuDescription.find("mali") != std::string::npos;
+}
+
 void emplaceIfValidDevice(
     const BackendInterface& bckI, std::vector<std::string>& gpuBackends,
     std::vector<std::string>& igpuBackends,
     std::vector<std::string>& openClBackends,
-    std::optional<int>& maxAdrenoVersion, const ggml_backend_reg_t reg,
-    const DeviceDescription& devDescr,
+    std::optional<int>& maxAdrenoVersion, bool& sawMali,
+    const ggml_backend_reg_t reg, const DeviceDescription& devDescr,
     const enum ggml_backend_dev_type backendTypeEnum) {
   if (bckI.ggml_backend_reg_name(reg) != std::string("RPC")) {
     auto logEmplaceGpuBackend = [&](const std::string& gpuBackend) {
@@ -131,6 +135,9 @@ void emplaceIfValidDevice(
                                   version.value() > maxAdrenoVersion.value())) {
         maxAdrenoVersion = version;
       }
+    }
+    if (isMaliDevice(devDescr)) {
+      sawMali = true;
     }
 
     if (isOpenCl && isAdreno) {
@@ -170,7 +177,7 @@ void tryEmplaceDevice(
     std::vector<std::string>& gpuBackends,
     std::vector<std::string>& igpuBackends,
     std::vector<std::string>& openClBackends,
-    std::optional<int>& maxAdrenoVersion) {
+    std::optional<int>& maxAdrenoVersion, bool& sawMali) {
   const ggml_backend_dev_t dev = bckI.ggml_backend_dev_get(deviceIndex);
   const ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
   const enum ggml_backend_dev_type backendTypeEnum =
@@ -186,6 +193,7 @@ void tryEmplaceDevice(
         igpuBackends,
         openClBackends,
         maxAdrenoVersion,
+        sawMali,
         reg,
         devDescr,
         backendTypeEnum);
@@ -267,6 +275,7 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
   std::vector<std::string> igpuBackends;
   std::vector<std::string> openClBackends;
   std::optional<int> maxAdrenoVersion;
+  bool sawMali = false;
 
   if (preferredBackendType == BackendType::GPU) {
     bool loopAllDevices = true;
@@ -285,7 +294,8 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
               gpuBackends,
               igpuBackends,
               openClBackends,
-              maxAdrenoVersion);
+              maxAdrenoVersion,
+              sawMali);
           loopAllDevices = false;
         } else {
           std::string errorMsg = string_format(
@@ -307,7 +317,8 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
           gpuBackends,
           igpuBackends,
           openClBackends,
-          maxAdrenoVersion);
+          maxAdrenoVersion,
+          sawMali);
     }
   }
 
@@ -360,6 +371,30 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
           nullptr);
       openClBackends.clear();
     }
+  }
+
+  if (sawMali && metadata != nullptr) {
+    const auto arch = metadata->tryGetString("general.architecture");
+    if (arch.has_value() &&
+        (arch.value() == "qwen35" || arch.value() == "qwen35moe")) {
+      bckI.llamaLogCallback(
+          GGML_LOG_LEVEL_WARN,
+          "Qwen3.5 on Mali: forcing CPU backend (Mali Vulkan coopmat path is "
+          "unstable for Qwen3.5; falling back to CPU regardless of requested "
+          "device)",
+          nullptr);
+      clearAllGpuBackends();
+    }
+  }
+
+  if (sawMali && isFinetuning) {
+    bckI.llamaLogCallback(
+        GGML_LOG_LEVEL_WARN,
+        "Finetuning on Mali: forcing CPU backend (Mali Vulkan coopmat path is "
+        "unstable for training; falling back to CPU regardless of requested "
+        "device)",
+        nullptr);
+    clearAllGpuBackends();
   }
 
   if (outAdrenoVersion != nullptr) {
