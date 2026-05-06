@@ -1,12 +1,12 @@
 'use strict'
 
 const fs = require('bare-fs')
-const path = require('bare-path')
 const test = require('brittle')
 const os = require('bare-os')
 const BCIWhispercpp = require('../../index')
 const {
   getTestPaths,
+  getModelPath,
   computeWER,
   detectPlatform,
   readSignal,
@@ -14,13 +14,13 @@ const {
   buildSignal,
   chunkify
 } = require('./helpers')
-const { flattenSegments } = require('../../lib/util')
+const { flattenSegments } = require('@qvac/bci-whispercpp/util')
 
 const platform = detectPlatform()
 const { manifest, getSamplePath } = getTestPaths()
 
 const MODEL_PATH = (os.hasEnv('WHISPER_MODEL_PATH') ? os.getEnv('WHISPER_MODEL_PATH') : null) ||
-  path.join(__dirname, '..', '..', 'models', 'ggml-bci-windowed.bin')
+  getModelPath('ggml-bci-windowed.bin')
 
 const hasModel = fs.existsSync(MODEL_PATH)
 
