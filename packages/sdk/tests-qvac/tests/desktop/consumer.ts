@@ -52,6 +52,7 @@ import { HttpEmbeddingExecutor } from "../shared/executors/http-embedding-execut
 import { KvCacheExecutor } from "../shared/executors/kv-cache-executor.js";
 import { EmbeddingExecutor } from "../shared/executors/embedding-executor.js";
 import { TranscriptionExecutor } from "./executors/transcription-executor.js";
+import { TranscribeStreamEventsExecutor } from "./executors/transcribe-stream-events-executor.js";
 import { RagExecutor } from "./executors/rag-executor.js";
 import { OcrExecutor } from "./executors/ocr-executor.js";
 import { ConfigReloadExecutor } from "./executors/config-reload-executor.js";
@@ -352,6 +353,7 @@ export const executor = createExecutor({
     new ModelLoadingExecutor(resources),
     new CompletionExecutor(resources),
     new TranscriptionExecutor(resources),
+    new TranscribeStreamEventsExecutor(resources),
     new EmbeddingExecutor(resources),
     new RagExecutor(resources),
     new ModelInfoExecutor(resources),

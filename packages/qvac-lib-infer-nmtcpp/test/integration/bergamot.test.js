@@ -70,19 +70,19 @@ if (isMobile) {
       const vocabFile = allFiles.find(f => f.includes('.spm'))
 
       const devices = await discoverGpuDevices()
-      const device = devices.find(d => d.index === gpuIdx)
+      const device = devices[gpuIdx]
 
       if (!device) {
-        t.comment(`[GPU:${gpuIdx}] No GPU device at index ${gpuIdx} — skipping`)
+        t.comment(`[GPU:${gpuIdx}] No unique physical GPU at slot ${gpuIdx} — skipping`)
         t.pass(`[GPU:${gpuIdx}] Skipped (device not present)`)
         return
       }
 
-      const label = `[GPU:${gpuIdx} ${device.name}]`
+      const label = `[GPU:${device.index} ${device.name}]`
       t.ok(modelDir, `${label} Bergamot model path should be available`)
       t.comment(`${label} Model directory: ` + modelDir)
       t.comment('Platform: ' + platform + ', isMobile: ' + isMobile)
-      t.comment(`${label} Testing with use_gpu: true, gpu_device: ${gpuIdx}`)
+      t.comment(`${label} Testing with use_gpu: true, gpu_device: ${device.index}`)
 
       const fullVocabPath = path.join(modelDir, vocabFile)
       const logger = createLogger()
@@ -102,7 +102,7 @@ if (isMobile) {
             beamsize: 1,
             normalize: 1,
             use_gpu: true,
-            gpu_device: gpuIdx
+            gpu_device: device.index
           },
           logger,
           opts: { stats: true }

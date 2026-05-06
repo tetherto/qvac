@@ -1,35 +1,13 @@
-import { z } from "zod";
 import {
   completion,
   loadModel,
   unloadModel,
   type ToolCall,
 } from "@qvac/sdk";
+import { tools } from "./shared";
 
-// LFM2-1.2B-Tool emits Pythonic-style calls: [get_weather(city="Tokyo")].
 const LFM_TOOL_HF =
   "https://huggingface.co/LiquidAI/LFM2-1.2B-Tool-GGUF/resolve/main/LFM2-1.2B-Tool-Q4_K_M.gguf";
-
-const weatherSchema = z.object({
-  city: z.string().describe("City name"),
-});
-
-const horoscopeSchema = z.object({
-  sign: z.string().describe("An astrological sign like Taurus or Aquarius"),
-});
-
-const tools = [
-  {
-    name: "get_weather",
-    description: "Get current weather for a city",
-    parameters: weatherSchema,
-  },
-  {
-    name: "get_horoscope",
-    description: "Get today's horoscope for an astrological sign",
-    parameters: horoscopeSchema,
-  },
-];
 
 try {
   const modelId = await loadModel({

@@ -834,7 +834,43 @@ function discoverGpuDevices () {
   return _gpuDevicePromise
 }
 
+/** @type {Promise<{ index: number, name: string, backend: string }[]> | null} */
+let _gpuBackendPromise = null
+
+/**
+ * Discovers GPU devices including alternative backend types (Vulkan + OpenCL)
+ * for the same physical GPU.  Unlike discoverGpuDevices() which deduplicates
+ * by ordinal, this returns one entry per usable backend so that callers can
+ * benchmark Vulkan vs OpenCL on the same hardware.
+ *
+ * Each entry has { index, name, backend } where backend is the gpu_backend
+ * config value used to select it (e.g. 'vulkan', 'opencl').
+ *
+ * @returns {Promise<{ index: number, name: string, backend: string }[]>}
+ */
+function discoverGpuBackends () {
+  if (_gpuBackendPromise !== null) return _gpuBackendPromise
+  _gpuBackendPromise = _probeGpuBackends()
+  return _gpuBackendPromise
+}
+
 const _logger = createLogger()
+
+/**
+ * Extracts a physical GPU ordinal from a ggml backend device name.
+ *
+ * ggml names follow the convention `<ApiType><Ordinal>` — e.g. "Vulkan0",
+ * "OpenCL0", "CUDA1", "Metal".  Different API backends sharing the same
+ * trailing ordinal refer to the same physical GPU (e.g. Vulkan0 and OpenCL0
+ * on a single-SoC mobile device both address the same Adreno/Mali chip).
+ *
+ * @param {string} name - ggml backend device name
+ * @returns {string|null} ordinal string used as deduplication key, or null if no trailing digit
+ */
+function _extractPhysicalGpuKey (name) {
+  const match = name.match(/(\d+)$/)
+  return match ? match[1] : null
+}
 
 async function _probeGpuDevices () {
   const devices = []
@@ -867,6 +903,7 @@ async function _probeGpuDevices () {
       })
       await model.load()
       const name = model.getActiveBackendName()
+      const description = model.getActiveBackendDescription()
       await model.unload()
 
       // CPU sentinels — the addon couldn't bind a real GPU backend at this
@@ -883,7 +920,7 @@ async function _probeGpuDevices () {
         break
       }
       seenBackends.add(name)
-      devices.push({ index: idx, name })
+      devices.push({ index: idx, name, description })
     } catch (err) {
       _logger.warn('[discoverGpuDevices] probe at gpu_device=' + idx +
         ' failed: ' + (err && err.message ? err.message : String(err)))
@@ -892,7 +929,95 @@ async function _probeGpuDevices () {
     }
   }
 
-  return devices
+  // Deduplicate backends that map to the same physical GPU.
+  // ggml names like "Vulkan0" and "OpenCL0" are different API surfaces for
+  // the same hardware — the trailing ordinal identifies the physical device.
+  // Keep only the first backend discovered per ordinal so tests don't
+  // redundantly initialise and run against the same chip twice.
+  const seen = new Map()
+  const unique = []
+  for (const device of devices) {
+    const physKey = _extractPhysicalGpuKey(device.name)
+    if (physKey !== null && seen.has(physKey)) {
+      _logger.info('[discoverGpuDevices] Skipping ' + device.name +
+        ' (gpu_device=' + device.index + ') — same physical GPU as ' +
+        seen.get(physKey).name + ' (ordinal ' + physKey + ')')
+      continue
+    }
+    if (physKey !== null) seen.set(physKey, device)
+    unique.push(device)
+  }
+
+  if (unique.length < devices.length) {
+    _logger.info('[discoverGpuDevices] Deduplicated ' + devices.length +
+      ' backends → ' + unique.length + ' unique physical GPU(s)')
+  }
+
+  if (unique.length > 0) {
+    _logger.info('[discoverGpuDevices] Discovered GPUs: ' +
+      unique.map(d => d.name + (d.description ? ' (' + d.description + ')' : '')).join(', '))
+  }
+
+  return unique
+}
+
+/**
+ * Backend types to probe when comparing Vulkan vs OpenCL on the same GPU.
+ * Each entry is { name, gpuBackend } where gpuBackend is the config value.
+ */
+const BACKEND_TYPES_TO_PROBE = [
+  { label: 'vulkan', gpuBackend: 'vulkan' },
+  { label: 'opencl', gpuBackend: 'opencl' }
+]
+
+async function _probeGpuBackends () {
+  const backends = []
+  const modelPath = await ensureIndicTransModel()
+  const TranslationNmtcpp = require('@qvac/translation-nmtcpp') // eslint-disable-line
+
+  for (const backendType of BACKEND_TYPES_TO_PROBE) {
+    let model
+    try {
+      const config = {
+        modelType: TranslationNmtcpp.ModelTypes.IndicTrans,
+        use_gpu: true,
+        gpu_backend: backendType.gpuBackend,
+        gpu_device: 0,
+        beamsize: 1
+      }
+      if (platform === 'android') {
+        const writableRoot = (typeof global !== 'undefined' && global.testDir) || '/tmp'
+        config.openclCacheDir = path.join(writableRoot, 'opencl-cache-discover-' + backendType.label)
+        try { fs.mkdirSync(config.openclCacheDir, { recursive: true }) } catch (_) {}
+      }
+      model = new TranslationNmtcpp({
+        files: { model: modelPath },
+        params: { mode: 'full', srcLang: 'eng_Latn', dstLang: 'hin_Deva' },
+        config,
+        logger: createLogger()
+      })
+      await model.load()
+      const name = model.getActiveBackendName()
+      const description = model.getActiveBackendDescription()
+      await model.unload()
+
+      if (name === 'CPU' || name === 'Unloaded' || name === 'Bergamot-CPU') {
+        _logger.info('[discoverGpuBackends] gpu_backend=' + backendType.gpuBackend +
+          ' resolved to CPU — skipping')
+        continue
+      }
+      backends.push({ index: 0, name, description, backend: backendType.label })
+      _logger.info('[discoverGpuBackends] Found: ' + name +
+        (description ? ' (' + description + ')' : '') +
+        ' via gpu_backend=' + backendType.gpuBackend)
+    } catch (err) {
+      _logger.warn('[discoverGpuBackends] gpu_backend=' + backendType.gpuBackend +
+        ' failed: ' + (err && err.message ? err.message : String(err)))
+      if (model) { try { await model.unload() } catch (__) { /* noop */ } }
+    }
+  }
+
+  return backends
 }
 
 // ============================================================================
@@ -918,6 +1043,7 @@ module.exports = {
 
   // GPU discovery
   discoverGpuDevices,
+  discoverGpuBackends,
   MAX_GPU_DEVICE_PROBES,
   CPU_SENTINEL_BACKENDS,
   resolveExecutionProvider
