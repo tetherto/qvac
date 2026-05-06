@@ -155,7 +155,7 @@ private:
       int64_t& encodedLength, bool alreadyTransposed = false);
   std::vector<float> runEncoderChunked(
       const std::vector<float>& melFeatures, int64_t numFrames,
-      int64_t& encodedLength, bool alreadyTransposed);
+      int64_t& encodedLength, bool alreadyTransposed = false);
   std::string
   greedyDecode(const std::vector<float>& encoderOutput, int64_t encodedLength);
 
@@ -261,6 +261,10 @@ private:
   static constexpr int64_t TDT_ENCODER_MAX_MEL_FRAMES =
       TDT_ENCODER_CHUNK_MEL_FRAMES; // chunk anything beyond one window
   static constexpr int64_t TDT_ENCODER_MIN_TAIL_MEL_FRAMES = 80;  // ~0.8s
+
+  static_assert(TDT_ENCODER_CHUNK_MEL_FRAMES / TDT_ENCODER_SUBSAMPLING
+                    < TDT_ENCODER_MAX_OUTPUT_FRAMES,
+                "Chunk mel frames exceed encoder positional-encoding ceiling");
 
   // ── EOU (FastConformer-RNNT 120M) ─────────────────────────────────────
   static constexpr int EOU_ENCODER_DIM = 512;
