@@ -36,7 +36,7 @@ const SD21_MODEL = {
 
 const ESRGAN_MODEL = {
   name: 'RealESRGAN_x4plus_anime_6B.pth',
-  repo: 'https://github.com/xinntao/Real-ESRGAN',
+  // Real-ESRGAN: https://github.com/xinntao/Real-ESRGAN
   // The .pth model is downloaded on demand for tests; it is not bundled.
   url: 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth'
 }
@@ -274,6 +274,92 @@ test('ESRGAN standalone upscale — emits expected PNG dimensions', { timeout: t
     }
   } finally {
     await upscaler.unload().catch(() => {})
+    try {
+      binding.releaseLogger()
+    } catch (_) {}
+  }
+})
+
+test('ESRGAN standalone upscaler and diffusion model can coexist', { timeout: testTimeout, skip }, async t => {
+  setupJsLogger(binding)
+
+  const [modelName, modelDir] = await ensureModel({
+    modelName: SD21_MODEL.name,
+    downloadUrl: SD21_MODEL.url
+  })
+  const { esrganPath } = await ensureEsrganModelPath()
+
+  const modelPath = path.join(modelDir, modelName)
+  t.ok(fs.existsSync(modelPath), 'SD model file exists on disk')
+  t.ok(fs.existsSync(esrganPath), 'ESRGAN model file exists on disk')
+
+  const model = new ImgStableDiffusion({
+    files: {
+      model: modelPath,
+      esrgan: esrganPath
+    },
+    config: {
+      device: useCpu ? 'cpu' : 'gpu',
+      threads: 4,
+      prediction: 'v',
+      upscaler_tile_size: 128
+    },
+    logger: console
+  })
+
+  const upscaler = new EsrganUpscaler({
+    files: {
+      esrgan: esrganPath
+    },
+    config: {
+      upscaler_tile_size: 128
+    },
+    logger: console
+  })
+
+  try {
+    await Promise.all([
+      model.load(),
+      upscaler.load()
+    ])
+
+    const [generationImages, standaloneImages] = await Promise.all([
+      model.run(BASE_PARAMS).then(collectImages),
+      upscaler.upscale(TINY_PNG_16X16, { repeats: 1 }).then(collectImages)
+    ])
+
+    t.is(generationImages.length, 1, 'coexistence generation: received exactly one image')
+    assertPngDimensions(
+      t,
+      generationImages[0],
+      SOURCE_WIDTH,
+      SOURCE_HEIGHT,
+      'coexistence generation'
+    )
+    saveImage(
+      modelDir,
+      'generate-image--coexistence-sd2.png',
+      generationImages[0]
+    )
+
+    t.is(standaloneImages.length, 1, 'coexistence standalone: received exactly one image')
+    assertPngDimensions(
+      t,
+      standaloneImages[0],
+      expectedSize(16, 1),
+      expectedSize(16, 1),
+      'coexistence standalone'
+    )
+    saveImage(
+      modelDir,
+      'generate-image--coexistence-standalone-esrgan.png',
+      standaloneImages[0]
+    )
+  } finally {
+    await Promise.all([
+      model.unload().catch(() => {}),
+      upscaler.unload().catch(() => {})
+    ])
     try {
       binding.releaseLogger()
     } catch (_) {}
