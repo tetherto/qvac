@@ -174,12 +174,19 @@ jobs:
   # before scanning for perf-report artifacts. Fixes the race where
   # test-darwin-x64 (or any slow desktop job) finished AFTER the old
   # mobile-local combine-reports had already shipped the summary.
-  # SECURITY (CodeQL js/cache-poisoning, alerts 733/734):
+  # SECURITY (CodeQL js/cache-poisoning, alerts 735/736):
   # This job runs in the privileged `pull_request_target` context (see
   # `on:` at the top of this file). The integration matrix it depends
   # on already runs PR-author code on real hardware, so this aggregator
-  # by definition consumes attacker-controllable artifacts. The
-  # mitigations are:
+  # by definition consumes attacker-controllable artifacts (the per-leg
+  # `performance-report.json` files). The mitigations are:
+  #   - The checkout below has NO `repository:` / `ref:` override, so
+  #     in `pull_request_target` context `actions/checkout` falls back
+  #     to the base-branch SHA. `aggregate.js` therefore runs from the
+  #     trusted default branch, not from PR-author code. On
+  #     `workflow_dispatch` runs, `github.ref` resolves to the dispatch
+  #     branch, so manual verification still uses the latest
+  #     `aggregate.js` from that branch.
   #   - `permissions: contents: read` only — no write access, no
   #     packages / id-token / pull-requests permissions.
   #   - No use of `actions/cache` here, so there is no shared cache
@@ -199,10 +206,12 @@ jobs:
       contents: read
     steps:
       - name: Checkout addon repository
+        # No explicit `repository:` / `ref:` — see SECURITY block above.
+        # In `pull_request_target` context this resolves to the base
+        # branch SHA (trusted code); on `workflow_dispatch` it resolves
+        # to the dispatch branch.
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-          ref: ${{ github.event.pull_request.head.ref || github.ref }}
           sparse-checkout: |
             scripts/perf-report
             packages/qvac-lib-infer-llamacpp-llm/media
@@ -264,16 +273,17 @@ jobs:
       - name: Generate combined report
         shell: bash
         run: |
-          # SECURITY (CodeQL alert 733, actions/cache-poisoning/poisonable-step):
-          # `aggregate.js` is checked out from PR head and runs in the
-          # umbrella's pull_request_target context. The job-level
+          # SECURITY (CodeQL alerts 735/736, actions/cache-poisoning/poisonable-step):
+          # `aggregate.js` is checked out from the base branch (no
+          # `repository:` / `ref:` override on the checkout above), so
+          # this step does not execute PR-author code. The job-level
           # `permissions: contents: read` (no actions/cache, no secrets,
-          # no GITHUB_TOKEN write usage) bounds the blast radius — see
-          # the block comment on the `combine-perf-reports` job above.
-          # The script's only side effect is writing artifact files to
-          # `combined-output/`; the artifacts themselves are uploaded
-          # via SHA-pinned `actions/upload-artifact` and consumed only
-          # by reviewers from the run page.
+          # no GITHUB_TOKEN write usage) bounds the blast radius further
+          # — see the block comment on the `combine-perf-reports` job
+          # above. The script's only side effect is writing artifact
+          # files to `combined-output/`; the artifacts themselves are
+          # uploaded via SHA-pinned `actions/upload-artifact` and
+          # consumed only by reviewers from the run page.
           if ! find combined-reports -name "performance-report.json" -type f 2>/dev/null | grep -q .; then
             echo "No performance reports found."
             exit 0
@@ -302,11 +312,13 @@ jobs:
         if: always()
         shell: bash
         run: |
-          # SECURITY: this job runs in pull_request_target context and the
-          # `performance-report.json` files are produced by PR-author code.
-          # `device.name` is therefore attacker-controlled. We do not
-          # interpolate it into shell or pass it as code; we sanitise it to
-          # an alphanumeric+hyphen filename slug capped at 64 chars before
+          # SECURITY: `aggregate.js` runs from the base branch (see
+          # SECURITY block on the job above), but the
+          # `performance-report.json` files it consumes are still
+          # produced by PR-author code in the matrix legs, so
+          # `device.name` is attacker-controlled. We do not interpolate
+          # it into shell or pass it as code; we sanitise it to an
+          # alphanumeric+hyphen filename slug capped at 64 chars before
           # using it as a path suffix, which prevents path traversal and
           # any kind of shell-meta exposure even if the JSON were crafted.
           mkdir -p per-device-reports
