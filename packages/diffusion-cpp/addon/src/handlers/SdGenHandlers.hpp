@@ -101,6 +101,10 @@ struct SdGenConfig {
   float cacheThreshold = 0.0f; // reuse_threshold; 0 = use library default
   float cacheStart = 0.0f;     // start_percent;   0 = use library default
   float cacheEnd = 0.0f;       // end_percent;     0 = use library default
+
+  // ── Post-generation ESRGAN upscale ────────────────────────────────────────
+  bool upscale = false;
+  int upscaleRepeats = 1;
 };
 
 // -----------------------------------------------------------------------------

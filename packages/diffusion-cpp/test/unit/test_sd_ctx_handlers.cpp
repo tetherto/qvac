@@ -142,6 +142,38 @@ TEST(SdCtxHandlers_MemoryFlags, BoolKeysMapAndInvalidThrow) {
       StatusError);
 }
 
+TEST(SdCtxHandlers_Upscaler, DefaultsAndConfigValuesMapCorrectly) {
+  SdCtxConfig defaults;
+  EXPECT_EQ(defaults.upscalerTileSize, 128);
+  EXPECT_FALSE(defaults.upscalerDirect);
+  EXPECT_FALSE(defaults.upscalerOffloadParamsToCpu);
+  EXPECT_EQ(defaults.upscalerThreads, -1);
+
+  SdCtxConfig cfg;
+  applySdCtxHandlers(
+      cfg,
+      std::unordered_map<std::string, std::string>{
+          {"upscaler_tile_size", "256"},
+          {"upscaler_direct", "true"},
+          {"upscaler_offload_params_to_cpu", "1"},
+          {"upscaler_threads", "6"}});
+
+  EXPECT_EQ(cfg.upscalerTileSize, 256);
+  EXPECT_TRUE(cfg.upscalerDirect);
+  EXPECT_TRUE(cfg.upscalerOffloadParamsToCpu);
+  EXPECT_EQ(cfg.upscalerThreads, 6);
+}
+
+TEST(SdCtxHandlers_Upscaler, InvalidTileSizeThrows) {
+  SdCtxConfig cfg;
+  EXPECT_THROW(
+      applySdCtxHandlers(
+          cfg,
+          std::unordered_map<std::string, std::string>{
+              {"upscaler_tile_size", "0"}}),
+      StatusError);
+}
+
 TEST(
     SdCtxHandlers_ComputeAndCompatFlags,
     DiffusionFaConvAndSdxlFlagsMapAndInvalidThrow) {

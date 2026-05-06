@@ -4,6 +4,7 @@
 #include <atomic>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -148,6 +149,8 @@ public:
 private:
   static std::vector<uint8_t> encodeToPng(const sd_image_t& img);
   static sd_image_t decodePng(const std::vector<uint8_t>& pngBytes);
+  upscaler_ctx_t* ensureUpscaler();
+  sd_image_t upscaleImage(const sd_image_t& inputImage, int repeats);
 
   // Per-mode handlers split from the unified process() entry point. Both
   // run under the progress/abort guard owned by process(); return value is
@@ -160,6 +163,8 @@ private:
   const qvac_lib_inference_addon_sd::SdCtxConfig config_;
 
   std::unique_ptr<sd_ctx_t, decltype(&free_sd_ctx)> sdCtx_;
+  std::unique_ptr<upscaler_ctx_t, decltype(&free_upscaler_ctx)> upscalerCtx_;
+  std::mutex upscalerMutex_;
   mutable std::atomic<bool> cancelRequested_{false};
   mutable qvac_lib_inference_addon_cpp::RuntimeStats lastStats_{};
 

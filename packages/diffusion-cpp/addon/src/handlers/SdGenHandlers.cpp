@@ -1,5 +1,6 @@
 #include "SdGenHandlers.hpp"
 
+#include <limits>
 #include <unordered_map>
 #include <utility>
 
@@ -18,6 +19,27 @@ using parsers::parseVaeTileSize;
 using parsers::requireBool;
 using parsers::requireNum;
 using parsers::requireStr;
+
+// -- Local image-gen helpers --------------------------------------------------
+
+static int parseUpscaleRepeats(const picojson::value& v) {
+  const double raw = requireNum(v, "upscale.repeats");
+  // No policy cap: repeated x4 upscales are memory-bound, so only guard the
+  // native int storage used for the loop count.
+  if (raw < 1.0 || raw > static_cast<double>(std::numeric_limits<int>::max())) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "upscale.repeats must be a positive integer");
+  }
+
+  const int repeats = static_cast<int>(raw);
+  if (raw != static_cast<double>(repeats)) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "upscale.repeats must be a positive integer");
+  }
+  return repeats;
+}
 
 // -- Handler map
 // ---------------------------------------------------------------
@@ -244,6 +266,32 @@ const SdGenHandlersMap SD_GEN_HANDLERS = {
     {"cache_threshold",
      [](SdGenConfig& c, const picojson::value& v) {
        c.cacheThreshold = static_cast<float>(requireNum(v, "cache_threshold"));
+     }},
+
+    // ── Post-generation ESRGAN upscale
+    // ──────────────────────────────────────
+
+    {"upscale",
+     [](SdGenConfig& c, const picojson::value& v) {
+       if (v.is<bool>()) {
+         c.upscale = v.get<bool>();
+         c.upscaleRepeats = 1;
+         return;
+       }
+
+       if (!v.is<picojson::object>()) {
+         throw StatusError(
+             general_error::InvalidArgument,
+             "upscale must be a boolean or an object");
+       }
+
+       c.upscale = true;
+       c.upscaleRepeats = 1;
+
+       const auto& obj = v.get<picojson::object>();
+       if (auto it = obj.find("repeats"); it != obj.end()) {
+         c.upscaleRepeats = parseUpscaleRepeats(it->second);
+       }
      }},
 
 };

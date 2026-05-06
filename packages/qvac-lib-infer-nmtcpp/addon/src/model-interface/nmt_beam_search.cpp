@@ -50,9 +50,9 @@ bool beam_kv_pool::init(nmt_context& ctx, int pool_size) {
   in_use.resize(pool_size, false);
 
   for (int i = 0; i < pool_size; ++i) {
-    if (!nmt_kv_cache_init(
+    if (!nmtKvCacheInit(
             kv_caches[i],
-            ctx.state->backends[0],
+            ctx.state->backends.back(),
             ctx.itype,
             ctx.model.hparams.n_text_state,
             ctx.model.hparams.n_decoder_layers,
@@ -81,7 +81,7 @@ void beam_kv_pool::release(int idx) {
 
 void beam_kv_pool::cleanup() {
   for (auto& cache : kv_caches) {
-    nmt_kv_cache_free(cache);
+    nmtKvCacheFree(cache);
   }
 }
 
@@ -92,12 +92,13 @@ void nmt_set_beam_size(struct nmt_context* ctx, int beam_size) {
   ctx->model.config.beam_size = beam_size;
 }
 
-int nmt_decode_beam_search(
-    struct nmt_context* ctx, int beam_size, int max_tokens) {
+int nmtDecodeBeamSearch(
+    struct nmt_context* ctx, int beamSize,
+    int maxTokens) { // NOLINT(readability-identifier-naming)
   const int vocab_size = ctx->model.hparams.n_tgt_vocab;
 
   beam_kv_pool kv_pool;
-  if (!kv_pool.init(*ctx, beam_size * 2)) {
+  if (!kv_pool.init(*ctx, beamSize * 2)) {
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
         "Failed to initialize KV cache pool");
@@ -121,9 +122,9 @@ int nmt_decode_beam_search(
 
   // Keep 2*beam_size candidates at each step, following HuggingFace's beam
   // search
-  const size_t num_candidates_to_keep = 2 * beam_size;
+  const size_t num_candidates_to_keep = 2 * beamSize;
 
-  for (int step = 0; step < max_tokens - 1; ++step) {
+  for (int step = 0; step < maxTokens - 1; ++step) {
     // Store: normalized_score (for comparison), cumulative_score, beam_idx,
     // token_id
     std::priority_queue<
@@ -150,7 +151,7 @@ int nmt_decode_beam_search(
 
       ctx->state->decoder_inputs = beam.tokens;
 
-      nmt_batch_prep_legacy(
+      nmtBatchPrepLegacy(
           ctx->state->batch,
           ctx->state->decoder_inputs.data() +
               ctx->state->decoder_inputs.size() - 1,
@@ -158,7 +159,7 @@ int nmt_decode_beam_search(
           ctx->state->decoder_inputs.size() - 1,
           0);
 
-      if (!nmt_decode_internal(*ctx, ctx->state->batch, *ctx->state)) {
+      if (!nmtDecodeInternal(*ctx, ctx->state->batch, *ctx->state)) {
         ctx->state->kv_self = original_kv;
         continue;
       }
@@ -179,14 +180,14 @@ int nmt_decode_beam_search(
 
       // Apply penalties and filters
       if (ctx->model.config.repetition_penalty > 0.0) {
-        apply_repetition_penalty(
+        applyRepetitionPenalty(
             next_token_logits_vec,
             beam.tokens,
             ctx->model.config.repetition_penalty);
       }
 
       if (ctx->model.config.top_k > 0) {
-        apply_top_k_filter(
+        applyTopKFilter(
             next_token_logits_vec,
             ctx->state->decoders[0].logits_id,
             ctx->model.config.top_k);
@@ -199,13 +200,13 @@ int nmt_decode_beam_search(
             next_token_logits_vec[bad_word_index] = -INFINITY;
           });
 
-      apply_no_repeat_ngram_filter(
+      applyNoRepeatNgramFilter(
           next_token_logits_vec,
           beam.tokens,
           ctx->model.config.no_repeat_ngram_size);
 
       std::vector<float> logprobs(vocab_size);
-      nmt_compute_logprobs(next_token_logits_vec, vocab_size, logprobs);
+      nmtComputeLogprobs(next_token_logits_vec, vocab_size, logprobs);
 
       // OPTIMIZATION: Maintain fixed-size min-heap during iteration (avoids
       // large allocations) Using priority_queue with greater<> creates a
@@ -270,7 +271,7 @@ int nmt_decode_beam_search(
     int selected = 0;
 
     for (const auto& candidate : all_candidates) {
-      if (selected >= beam_size)
+      if (selected >= beamSize)
         break;
 
       float normalized_score = std::get<0>(candidate);
