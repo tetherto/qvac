@@ -73,12 +73,12 @@ gh search prs \
   --repo tetherto/qvac \
   --author "@me" \
   --merged-at ">=$SINCE" \
-  --json number,title,url,mergedAt,additions,deletions \
+  --json number,title,url,closedAt \
   --limit 30 \
   > /tmp/devops-daily-update-merged.json
 ```
 
-These feed `🔨 Done today`.
+These feed `🔨 Done today`. `gh search prs --json` does not expose `mergedAt`, `additions`, or `deletions` — only `closedAt` is available, and the `--merged-at ">=$SINCE"` filter already guarantees the result set is merged-in-window. If size signal is needed for the bullet wording, fetch it per-PR via `gh pr view <num> --json additions,deletions` (one extra call per PR — only do this when the user asks for it).
 
 ### 4. Pull my open PRs and reviews owed
 
@@ -100,7 +100,7 @@ Output routing:
 
 - Open PRs I authored that received commits since `$SINCE` (i.e., I pushed work on them today) → `🔨 Done today` with the action `addressed comments on the PR` (when the recent commits follow a review event) or `pushed updates on <topic>` (otherwise).
 - Open PRs I authored without recent commits → `📅 Planned for tomorrow` with the action `continue / wrap up <topic>`.
-- Reviews owed (`--review-requested "@me"`) → `📅 Planned for tomorrow` as `review #<num> — <title> by <author>`.
+- Reviews owed (`--review-requested "@me"`) → `📅 Planned for tomorrow` as `review #<num> — <title> by <author>`. **Cap surfaced reviews at 5** (sorted by `updatedAt` desc — most recent first); if the queue is longer, append a single line `(+N more review requests in queue — run /devops-pr-status for the full list)`. A standup with 30 review-bullets is unreadable.
 - Open PRs I authored with `mergeable: CONFLICTING` → `🚧 Blockers / risks` as `conflicts on #<num> — needs rebase`.
 - Open PRs I authored with stale review requests (no review activity in >3 days) → `🚧 Blockers / risks` as `stale review on #<num> — pinged <reviewer> on <date>`.
 

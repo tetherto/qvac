@@ -1,5 +1,3 @@
-**Note**: be concise and prefer bullet points.
-
 ## 🎯 What problem does this PR solve?
 
 - 

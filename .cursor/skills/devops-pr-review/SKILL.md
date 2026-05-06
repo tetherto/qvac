@@ -60,7 +60,7 @@ For every `.github/workflows/*.yml` and `.github/actions/**/action.yml` in the p
 | # | Check | Source rule | Finding tier |
 |---|---|---|---|
 | A1 | Every `uses: <vendor>/<action>@<ref>` is pinned to a 40-char SHA (regex `@[0-9a-f]{40}\b`) with a trailing `# v<ver>` comment. Tag pins (`@v3`, `@main`, branch refs) fail. First-party `./.github/actions/<name>` references are exempt. | github-actions.mdc § Action references | High |
-| A2 | Top-level `permissions:` block is present. Implicit defaults are not acceptable for new/edited workflows. | github-actions.mdc § Permissions | High |
+| A2 | Permissions are declared explicitly — either a top-level `permissions:` block, OR every job has its own `permissions:` block. Relying on repo-default permissions fails. | github-actions.mdc § Permissions | High |
 | A3 | No occurrence of `permissions: write-all` anywhere in the workflow. | github-actions.mdc § Permissions | High |
 | A4 | If the workflow uses `pull_request_target`, none of its jobs check out PR HEAD via `actions/checkout@... ref: ${{ github.event.pull_request.head.sha }}` or `${{ github.head_ref }}`. | github-actions.mdc § Triggers and untrusted input | High |
 | A5 | No direct interpolation of `${{ github.event.pull_request.title }}`, `body`, `head_ref`, `commits[*].message`, or any `github.event.*` user-controlled field inside `run:` blocks. They MUST be piped via `env:`. | github-actions.mdc § Triggers and untrusted input | High |
@@ -73,7 +73,7 @@ For every `.github/workflows/*.yml` and `.github/actions/**/action.yml` in the p
 | A12 | `continue-on-error: true` is NOT set on Tier-1 checks (lint, format, type-check, security scans, tests). | github-actions.mdc § Failure handling | Medium |
 | A13 | Outputs use `$GITHUB_OUTPUT`, never the deprecated `::set-output::`. | github-actions.mdc § Outputs and step IDs | Low |
 | A14 | When `actions/cache` is used, cache writes are gated on non-fork triggers (`push` / `workflow_dispatch` / `merge_group`) — not blanket on `pull_request`. | github-actions.mdc § Caching | Medium |
-| A15 | Workflow filename matches the existing repo conventions (`on-pr-*.yml`, `on-merge-*.yml`, `release-*.yml`, `prebuilds-*.yml`, `pr-test-*.yml`, `pr-validation-*.yml`, `pr-checks-*.yml`, `reusable-*.yml`, `trigger-reusable-*.yml`, `public-reusable-*.yml`). New file with a divergent name → finding. | github-actions.mdc § File layout and naming | Low |
+| A15 | Workflow filename matches the existing repo conventions (`on-pr-*.yml`, `on-merge-*.yml`, `on-pr-close-*.yml`, `release-*.yml`, `create-github-release-*.yml`, `prebuilds-*.yml`, `pr-test-*.yml`, `pr-validation-*.yml`, `pr-checks-*.yml`, `integration-*-*.yml`, `reusable-*.yml`, `trigger-reusable-*.yml`). New file with a divergent name → finding. Pre-existing files keep their name unless the PR renames them. | github-actions.mdc § File layout and naming | Low |
 
 For each finding, capture: file, line, the offending excerpt (3-8 lines), the tier, and a one-line "why" pulled from the rule. Write findings into the same chat overview structure that `/pr-review` step 7a uses, under a new sub-heading `### GHA security audit`.
 
