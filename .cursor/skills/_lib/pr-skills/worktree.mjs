@@ -2,13 +2,13 @@
 //
 // One worktree per PR num at ~/.cache/qvac-pr-review/pr-<num>, kept in sync
 // with refs/pr/<num>/head via fetch + reset --hard. Concurrency safety via
-// per-PR file locks. LRU cleanup capped at 5 worktrees.
+// per-PR file locks. LRU cleanup capped at 3 worktrees.
 //
-// All `git worktree`, `git fetch refs/pull/<n>/head:...`, and `git -C
-// <worktree> reset --hard` calls in this module are intentionally scoped to
-// the cache directory and to fork-PR-head refs. The agent itself never runs
-// reset / switch / checkout / stash etc. — see pr-review/SKILL.md "Safety
-// rules".
+// All `git worktree`, `git fetch refs/pull/<n>/head:...`, `git -C
+// <worktree> reset --hard`, and `git -C <worktree> clean -fdx` calls in this
+// module are intentionally scoped to the cache directory and to fork-PR-head
+// refs. The agent itself never runs reset / switch / checkout / stash etc. —
+// see pr-review/SKILL.md "Safety rules".
 
 import { execFileSync } from "node:child_process";
 import {
@@ -351,18 +351,16 @@ export function ensureWorktreeSynced({ num, sha }) {
     return { path, sha };
   }
 
-  // Refuse to mess with a dirty worktree (an external mutation would
-  // otherwise be wiped by reset --hard).
-  if (!isWorktreeClean(path)) {
-    removeWorktree(path);
-    wtAdd(path);
-    touchPath(path);
-    return { path, sha };
-  }
-
   const headNow = git(["-C", path, "rev-parse", "HEAD"]);
   if (headNow !== sha) {
     git(["-C", path, "reset", "--hard", PR_REF(num)]);
+    // Drop build/test artifacts from the old PR head so the next /pr-test
+    // setup starts from a clean artifact state for the new commit.
+    git(["-C", path, "clean", "-fdx"]);
+  } else if (!isWorktreeClean(path)) {
+    // Preserve untracked artifacts (node_modules, dist, native build dirs)
+    // while discarding tracked-file edits before exposing the PR head again.
+    git(["-C", path, "reset", "--hard", "HEAD"]);
   }
   touchPath(path);
   return { path, sha };
@@ -401,7 +399,7 @@ export function computePatch({ worktreePath, num, remote, baseRefName }) {
 
 // --- LRU cleanup ---
 
-const LRU_KEEP = 5;
+const LRU_KEEP = 3;
 
 export function cleanupCache({ keep = LRU_KEEP } = {}) {
   if (!existsSync(CACHE_ROOT)) return;
