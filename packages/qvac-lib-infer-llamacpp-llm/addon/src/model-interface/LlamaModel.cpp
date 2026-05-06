@@ -749,9 +749,8 @@ LlamaModel::resolveToolsCompactConfig(bool toolsCompactRequested) const {
   }
 
   auto arch = metadata_.tryGetString("general.architecture");
-  auto modelName = metadata_.tryGetString("general.name");
   auto marker = qvac_lib_inference_addon_llama::utils::
-      selectToolsCompactMarkerForModelMetadata(arch, modelName);
+      selectToolsCompactMarkerForModelMetadata(arch);
 
   if (!marker.has_value()) {
     return {

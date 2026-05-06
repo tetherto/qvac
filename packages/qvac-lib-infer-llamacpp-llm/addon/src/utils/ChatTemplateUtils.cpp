@@ -36,32 +36,6 @@ bool isHarmonyArchitecture(const std::string& architecture) {
   return archStr == "gpt-oss";
 }
 
-bool modelNameLooksLikeQwen3(const std::string& modelName) {
-  std::string normalizedName = modelName;
-  std::transform(
-      normalizedName.begin(),
-      normalizedName.end(),
-      normalizedName.begin(),
-      [](unsigned char c) { return std::tolower(c); });
-  return normalizedName.find("qwen3") != std::string::npos ||
-         normalizedName.find("qwen-3") != std::string::npos;
-}
-
-std::optional<std::string> getModelName(const ::llama_model* model) {
-  if (model == nullptr) {
-    return std::nullopt;
-  }
-
-  char modelName[256] = {0};
-  int32_t len = llama_model_meta_val_str(
-      model, "general.name", modelName, sizeof(modelName));
-  if (len > 0 && len < sizeof(modelName)) {
-    modelName[len] = '\0';
-    return std::string(modelName);
-  }
-  return std::nullopt;
-}
-
 } // namespace
 
 std::optional<std::string> getModelArchitecture(const ::llama_model* model) {
@@ -86,8 +60,7 @@ bool isQwen3Model(const ::llama_model* model) {
     return false;
   }
 
-  return supportsToolsCompactForModelMetadata(
-      getModelArchitecture(model), getModelName(model));
+  return supportsToolsCompactForModelMetadata(getModelArchitecture(model));
 }
 
 bool isHarmonyModel(const ::llama_model* model) {
@@ -108,15 +81,8 @@ llama_token getHarmonyCallToken(::llama_context* lctx) {
 }
 
 bool supportsToolsCompactForModelMetadata(
-    const std::optional<std::string>& architecture,
-    const std::optional<std::string>& modelName) {
-  if (architecture.has_value() && isQwen3Architecture(architecture.value())) {
-    return true;
-  }
-  if (modelName.has_value() && modelNameLooksLikeQwen3(modelName.value())) {
-    return true;
-  }
-  return false;
+    const std::optional<std::string>& architecture) {
+  return architecture.has_value() && isQwen3Architecture(architecture.value());
 }
 
 std::optional<std::string>
@@ -128,9 +94,8 @@ selectToolsCompactMarker(const std::string& architecture) {
 }
 
 std::optional<std::string> selectToolsCompactMarkerForModelMetadata(
-    const std::optional<std::string>& architecture,
-    const std::optional<std::string>& modelName) {
-  if (!supportsToolsCompactForModelMetadata(architecture, modelName)) {
+    const std::optional<std::string>& architecture) {
+  if (!supportsToolsCompactForModelMetadata(architecture)) {
     return std::nullopt;
   }
   return std::string("<tool_call>");
@@ -143,8 +108,6 @@ std::string getChatTemplateForModel(
     return manualOverride;
   }
 
-  // Keep a single source of truth for Qwen3 detection so architecture-only and
-  // metadata-name fallback behave consistently across marker/template paths.
   if (isQwen3Model(model)) {
     return toolsCompact ? getToolsDynamicQwen3Template()
                         : getFixedQwen3Template();
