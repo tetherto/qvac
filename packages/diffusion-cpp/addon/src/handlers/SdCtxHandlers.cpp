@@ -82,7 +82,7 @@ const SdCtxHandlersMap SD_CTX_HANDLERS = {
 
     {"threads",
      [](SdCtxConfig& c, const std::string& v) {
-       c.nThreads = parseInt(v, "threads");
+       c.nThreads = parseAutoOrPositiveInt(v, "threads");
      }},
 
     // "fa" is the CLI short-form; "flash_attn" is the long-form -- both

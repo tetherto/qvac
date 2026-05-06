@@ -120,13 +120,16 @@ TEST(SdCtxHandlers_LoraApplyMode, SupportedValuesAndUnknownThrows) {
 
 TEST(SdCtxHandlers_Threads, ValidIntegerAndInvalidThrows) {
   EXPECT_EQ(applyOne("threads", "8").nThreads, 8);
+  EXPECT_EQ(applyOne("threads", "-1").nThreads, -1);
 
-  SdCtxConfig cfg;
-  EXPECT_THROW(
-      applySdCtxHandlers(
-          cfg,
-          std::unordered_map<std::string, std::string>{{"threads", "abc"}}),
-      StatusError);
+  for (const auto* value : {"0", "-2", "1.5", "abc"}) {
+    SdCtxConfig cfg;
+    EXPECT_THROW(
+        applySdCtxHandlers(
+            cfg,
+            std::unordered_map<std::string, std::string>{{"threads", value}}),
+        StatusError);
+  }
 }
 
 TEST(SdCtxHandlers_MemoryFlags, BoolKeysMapAndInvalidThrow) {

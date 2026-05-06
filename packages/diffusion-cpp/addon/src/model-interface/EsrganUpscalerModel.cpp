@@ -73,12 +73,6 @@ std::any EsrganUpscalerModel::process(const std::any& input) {
   const auto& job = std::any_cast<const UpscaleJob&>(input);
   cancelRequested_.store(false);
 
-  if (job.repeats <= 0) {
-    throw StatusError(
-        general_error::InvalidArgument,
-        "upscale.repeats must be a positive integer");
-  }
-
   const auto t0 = std::chrono::steady_clock::now();
 
   sd_image_t decoded = image_codec::decodeImage(job.imageBytes);
