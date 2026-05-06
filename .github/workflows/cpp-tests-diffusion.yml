@@ -148,7 +148,7 @@ jobs:
           VCPKG_ROOT="$(pwd)"
           echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
           echo "$VCPKG_ROOT" >> $GITHUB_PATH
-          vcpkg update
+          ./vcpkg update
 
       - if: ${{ matrix.os == 'windows-2025' }}
         name: Configure CMake generator on Windows
