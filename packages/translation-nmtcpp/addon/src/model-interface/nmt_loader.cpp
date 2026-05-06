@@ -138,7 +138,7 @@ static buft_list_t make_buft_list(const nmt_context_params& params) {
   // Repeated drift between this path and nmt_backend_init_gpu has been a
   // recurring source of scheduler crashes (R2-C1, R4-C2); the shared helper
   // is the structural fix per QVAC-17790 round-8 R8-D1.
-  ggml_backend_dev_t selected_dev = nmt_select_gpu_device(
+  ggml_backend_dev_t selected_dev = nmtSelectGpuDevice(
       params.use_gpu, params.gpu_backend, params.gpu_device, "make_buft_list");
   if (selected_dev != nullptr) {
     ggml_backend_buffer_type_t buft =
@@ -151,7 +151,7 @@ static buft_list_t make_buft_list(const nmt_context_params& params) {
     } else {
       QLOG(
           qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-          "[make_buft_list] nmt_select_gpu_device returned a device but "
+          "[make_buft_list] nmtSelectGpuDevice returned a device but "
           "ggml_backend_dev_buffer_type returned null on re-query — "
           "falling back to CPU");
     }
@@ -396,7 +396,7 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
       vocab.src_id_to_token[i] = word;
     }
 
-    vocab.bos_token_id = find_bos_token(vocab);
+    vocab.bos_token_id = findBosToken(vocab);
 
     vocab.bad_word_ids.clear();
 
@@ -923,7 +923,7 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
       const int max_pos = model.m_encoder_pos_emb->ne[1]; // 1024
 
       std::vector<float> pos_emb_data(d_model * max_pos);
-      indictrans_compute_sinusoidal_positional_embeddings_to_buffer(
+      indictransComputeSinusoidalPositionalEmbeddingsToBuffer(
           pos_emb_data.data(), d_model, max_pos);
       size_t bytes_to_copy = pos_emb_data.size() * sizeof(float);
 
@@ -943,7 +943,7 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
   return true;
 }
 
-struct nmt_context* nmt_init_with_params_no_state(
+struct nmt_context* nmtInitWithParamsNoState(
     struct nmt_model_loader* loader, struct nmt_context_params params) {
   nmt_context* ctx = new nmt_context;
   ctx->params = params;
@@ -959,25 +959,24 @@ struct nmt_context* nmt_init_with_params_no_state(
   return ctx;
 }
 
-struct nmt_context* nmt_init_from_file_with_params_no_state(
-    const char* path_model, struct nmt_context_params params) {
+struct nmt_context* nmtInitFromFileWithParamsNoState(
+    const char* pathModel, struct nmt_context_params params) {
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-      std::string("=== nmt_init_from_file_with_params_no_state: path=") +
-          path_model);
+      std::string("=== nmtInitFromFileWithParamsNoState: path=") + pathModel);
 #ifdef _MSC_VER
   // Convert UTF-8 path to wide string (UTF-16) for Windows, resolving character
   // encoding issues.
   std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
-  std::wstring path_model_wide = converter.from_bytes(path_model);
-  auto fin = std::ifstream(path_model_wide, std::ios::binary);
+  std::wstring pathModelWide = converter.from_bytes(pathModel);
+  auto fin = std::ifstream(pathModelWide, std::ios::binary);
 #else
-  auto fin = std::ifstream(path_model, std::ios::binary);
+  auto fin = std::ifstream(pathModel, std::ios::binary);
 #endif
   if (!fin) {
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
-        std::string("ERROR: Failed to open file: ") + path_model);
+        std::string("ERROR: Failed to open file: ") + pathModel);
     return nullptr;
   }
   QLOG(
@@ -1004,37 +1003,36 @@ struct nmt_context* nmt_init_from_file_with_params_no_state(
     fin->close();
   };
 
-  auto ctx = nmt_init_with_params_no_state(&loader, params);
+  auto ctx = nmtInitWithParamsNoState(&loader, params);
 
   if (ctx) {
-    ctx->path_model = path_model;
+    ctx->path_model = pathModel;
   }
 
   return ctx;
 }
 
-struct nmt_context* nmt_init_from_file_with_params(
-    const char* path_model, struct nmt_context_params params) {
+struct nmt_context* nmtInitFromFileWithParams(
+    const char* pathModel, struct nmt_context_params params) {
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-      "=== nmt_init_from_file_with_params called ===\n");
-  nmt_context* ctx =
-      nmt_init_from_file_with_params_no_state(path_model, params);
+      "=== nmtInitFromFileWithParams called ===\n");
+  nmt_context* ctx = nmtInitFromFileWithParamsNoState(pathModel, params);
   if (ctx == nullptr) {
     return nullptr;
   }
 
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-      "About to call nmt_init_state");
-  ctx->state = nmt_init_state(ctx);
+      "About to call nmtInitState");
+  ctx->state = nmtInitState(ctx);
   if (!ctx->state) {
     nmt_free(ctx);
     return nullptr;
   }
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-      "nmt_init_state returned successfully");
+      "nmtInitState returned successfully");
 
   return ctx;
 }

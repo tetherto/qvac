@@ -47,7 +47,7 @@ void nmt_free(struct nmt_context* ctx) {
       ggml_backend_buffer_free(buf);
     }
 
-    nmt_free_state(ctx->state);
+    nmtFreeState(ctx->state);
 
     delete ctx;
   }
@@ -59,6 +59,7 @@ struct nmt_context_params nmt_context_default_params() {
       /*.flash_attn           =*/false,
       /*.gpu_device           =*/0,
       /*.gpu_backend          =*/{},
+      /*.op_offload_min_batch =*/-1,
   };
   return result;
 }
@@ -98,7 +99,7 @@ static int nmt_decode_sample(struct nmt_context* ctx, int max_tokens) {
   bool should_stop = false;
 
   while (!should_stop && ctx->state->decoder_inputs.size() < max_tokens) {
-    nmt_batch_prep_legacy(
+    nmtBatchPrepLegacy(
         ctx->state->batch,
         ctx->state->decoder_inputs.data() + ctx->state->decoder_inputs.size() -
             1,
@@ -106,7 +107,7 @@ static int nmt_decode_sample(struct nmt_context* ctx, int max_tokens) {
         ctx->state->decoder_inputs.size() - 1,
         0);
 
-    if (!nmt_decode_internal(*ctx, ctx->state->batch, *ctx->state)) {
+    if (!nmtDecodeInternal(*ctx, ctx->state->batch, *ctx->state)) {
       QLOG(
           qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
           "Failed to run decoder");
@@ -130,7 +131,7 @@ static int nmt_process_chunk(struct nmt_context* ctx) {
   int64_t t_chunk_start = get_time_us();
 
   int64_t t_start_us = get_time_us();
-  if (!nmt_encode_internal(*ctx, *ctx->state)) {
+  if (!nmtEncodeInternal(*ctx, *ctx->state)) {
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
         "Failed to run encoder.");
@@ -140,8 +141,8 @@ static int nmt_process_chunk(struct nmt_context* ctx) {
   ctx->state->t_encode_us += t_encode_us;
   ctx->state->n_encode += 1;
 
-  nmt_batch_free(ctx->state->batch);
-  ctx->state->batch = nmt_batch_init(ctx->model.hparams.n_decoder_ctx, 1);
+  nmtBatchFree(ctx->state->batch);
+  ctx->state->batch = nmtBatchInit(ctx->model.hparams.n_decoder_ctx, 1);
 
   const int beam_size = ctx->model.config.beam_size;
   int max_tokens = 50;
@@ -154,7 +155,7 @@ static int nmt_process_chunk(struct nmt_context* ctx) {
   if (beam_size <= 1) {
     result = nmt_decode_sample(ctx, max_tokens);
   } else {
-    result = nmt_decode_beam_search(ctx, beam_size, max_tokens);
+    result = nmtDecodeBeamSearch(ctx, beam_size, max_tokens);
   }
 
   if (result != 0) {
@@ -163,10 +164,10 @@ static int nmt_process_chunk(struct nmt_context* ctx) {
 
   ctx->state->t_decode_us += get_time_us() - t_start_us;
 
-  nmt_kv_cache_clear(state->kv_cross);
-  nmt_kv_cache_clear(state->kv_self);
+  nmtKvCacheClear(state->kv_cross);
+  nmtKvCacheClear(state->kv_self);
 
-  state->result_all += detokenize_sentencepiece(ctx);
+  state->result_all += detokenizeSentencepiece(ctx);
 
   return 0;
 }
@@ -175,7 +176,7 @@ int nmt_full(struct nmt_context* ctx, const char* input_text) {
   struct nmt_state* state = ctx->state;
   ctx->state->result_all.clear();
 
-  if (nmt_tokenize_input(ctx, input_text) < 0) {
+  if (nmtTokenizeInput(ctx, input_text) < 0) {
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
         "Failed to tokenize input");

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <filesystem>
 #include <iostream>
 #include <ranges>
 #include <streambuf>
@@ -11,14 +12,13 @@
 #include "common/common.h"
 
 /// @note async version
-inline common_init_result initFromShards(
+inline common_init_result_ptr initFromShards(
     const GGUFShards& shards, common_params& params,
     const std::string& loadingContext) {
   LOG_INF(
       "%s: load the model from async shards and apply lora adapter, if any.\n",
       __func__);
   llama_model_params mparams = common_model_params_to_llama(params);
-  common_init_result iparams;
   auto pathsView =
       shards.gguf_files |
       std::views::transform([](const std::string& str) { return str.c_str(); });
@@ -29,31 +29,30 @@ inline common_init_result initFromShards(
       loadingContext.c_str(),
       shards.tensors_file.c_str(),
       mparams);
-  return common_init_from_model_and_params(model, std::move(iparams), params);
+  return common_init_from_model_and_params(model, params);
 }
 
 /// @note from disk
-inline common_init_result
+inline common_init_result_ptr
 initFromShards(const GGUFShards& shards, common_params& params) {
   LOG_INF(
       "%s: load the model from disk shards and apply lora adapter, if any.\n",
       __func__);
   llama_model_params mparams = common_model_params_to_llama(params);
-  common_init_result iparams;
   auto pathsView =
       shards.gguf_files |
       std::views::transform([](const std::string& str) { return str.c_str(); });
   std::vector<const char*> pathsVec(pathsView.begin(), pathsView.end());
   llama_model* model =
       llama_model_load_from_splits(pathsVec.data(), pathsVec.size(), mparams);
-  return common_init_from_model_and_params(model, std::move(iparams), params);
+  return common_init_from_model_and_params(model, params);
 }
 
 /// @brief Initializes a model from a single gguf stream stored in memory
 /// @note For performance reasons `initFromShards` should be preferably used
 /// with streams. However, this function is still offered to unify the Js
 /// interface of the addon and separate concerns.
-inline common_init_result initFromMemory(
+inline common_init_result_ptr initFromMemory(
     std::unique_ptr<std::basic_streambuf<char>>&& streambuf,
     common_params& params) {
   LOG_INF(
@@ -61,7 +60,6 @@ inline common_init_result initFromMemory(
       "any.\n",
       __func__);
   llama_model_params mparams = common_model_params_to_llama(params);
-  common_init_result iparams;
 
   // Transfer the (Js) blobs to a contiguous memory block
   // Potential for optimization here. However for performance reasons,
@@ -83,7 +81,7 @@ inline common_init_result initFromMemory(
 
   llama_model* model =
       llama_model_load_from_buffer(std::move(contiguousData), mparams);
-  return common_init_from_model_and_params(model, std::move(iparams), params);
+  return common_init_from_model_and_params(model, params);
 }
 
 /// @brief Initialize a model handling streaming, not-streaming, sharded or
@@ -97,13 +95,13 @@ inline common_init_result initFromMemory(
 /// @param isStreaming Should be set to true when `setWeightsForFile` is
 /// being used to populate `singleGgufStreamedFiles` or call
 /// `llama_model_load_fulfill_split_future`
-inline common_init_result initFromConfig(
+inline common_init_result_ptr initFromConfig(
     common_params& params, const std::string& modelPath,
     std::map<std::string, std::unique_ptr<std::basic_streambuf<char>>>&
         singleGgufStreamedFiles,
     const GGUFShards& shards, const std::string loading_context,
     const bool isStreaming, const char* AddonID, const std::string& error) {
-  common_init_result llamaInit;
+  common_init_result_ptr llamaInit;
   // Stream should have been awaited by the time activate is called from JS
   // and init is triggered. isStreaming should be (thread) safe to use at this
   // point because `setWeightsForFile` has already finished.
@@ -153,6 +151,13 @@ inline common_init_result initFromConfig(
       LOG_INF(
           "%s: load the model from disk file and apply lora adapter, if any.\n",
           __func__);
+      if (!std::filesystem::exists(modelPath)) {
+        throw qvac_errors::StatusError(
+            AddonID,
+            error,
+            string_format(
+                "%s: model file not found: %s\n", __func__, modelPath.c_str()));
+      }
       llamaInit = std::move(common_init_from_params(params));
     } else {
       LOG_INF(

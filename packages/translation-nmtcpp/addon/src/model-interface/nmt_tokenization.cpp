@@ -47,7 +47,7 @@ static std::vector<nmt_vocab::id> common_sentencepiece_tokenize(
   return tokens;
 }
 
-nmt_vocab::id find_bos_token(const nmt_vocab& vocab) {
+nmt_vocab::id findBosToken(const nmt_vocab& vocab) {
   std::vector<std::string> bos_candidates = {"</s>"};
 
   for (const auto& candidate : bos_candidates) {
@@ -113,7 +113,7 @@ tokenize(const nmt_context* ctx, const std::string& text) {
   return {};
 }
 
-std::string detokenize_sentencepiece(const nmt_context* ctx) {
+std::string detokenizeSentencepiece(const nmt_context* ctx) {
   std::string text;
   const auto& vocab = ctx->vocab;
   const auto& token_ids = ctx->state->decoder_inputs;
@@ -151,12 +151,12 @@ std::string detokenize_sentencepiece(const nmt_context* ctx) {
   return text;
 }
 
-int nmt_tokenize_input(struct nmt_context* ctx, const char* input_text) {
+int nmtTokenizeInput(struct nmt_context* ctx, const char* inputText) {
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-      "[TOKENIZE] Input text: \"" + std::string(input_text) + "\"");
+      "[TOKENIZE] Input text: \"" + std::string(inputText) + "\"");
 
-  int n_tokens = nmt_token_count(ctx, input_text);
+  int n_tokens = nmtTokenCount(ctx, inputText);
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::INFO,
       "[TOKENIZE] Token count: " + std::to_string(n_tokens));
@@ -164,7 +164,7 @@ int nmt_tokenize_input(struct nmt_context* ctx, const char* input_text) {
   ctx->state->text_tokens.resize(n_tokens);
 
   int actual_tokens =
-      nmt_tokenize(ctx, input_text, ctx->state->text_tokens.data(), n_tokens);
+      nmtTokenize(ctx, inputText, ctx->state->text_tokens.data(), n_tokens);
   if (actual_tokens < 0) {
     throw std::runtime_error("Tokenization failed!");
   }
@@ -172,14 +172,14 @@ int nmt_tokenize_input(struct nmt_context* ctx, const char* input_text) {
   return actual_tokens;
 }
 
-int nmt_tokenize(
+int nmtTokenize(
     struct nmt_context* ctx, const char* text, nmt_token* tokens,
-    int n_max_tokens) {
+    int nMaxTokens) {
   const auto res = tokenize(ctx, text);
 
-  if (n_max_tokens < (int)res.size()) {
+  if (nMaxTokens < (int)res.size()) {
     // NMT_LOG_ERROR("%s: too many resulting tokens: %d (max %d)\n", __func__,
-    // (int) res.size(), n_max_tokens);
+    // (int) res.size(), nMaxTokens);
     return -(int)res.size();
   }
 
@@ -190,7 +190,7 @@ int nmt_tokenize(
   return res.size();
 }
 
-int nmt_token_count(struct nmt_context* ctx, const char* text) {
-  return -nmt_tokenize(ctx, text, NULL, 0);
+int nmtTokenCount(struct nmt_context* ctx, const char* text) {
+  return -nmtTokenize(ctx, text, NULL, 0);
 }
 // NOLINTEND

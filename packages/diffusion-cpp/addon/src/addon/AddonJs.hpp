@@ -38,6 +38,7 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   config.t5XxlPath = args.getMapEntry(1, "t5XxlPath");
   config.llmPath = args.getMapEntry(1, "llmPath");
   config.vaePath = args.getMapEntry(1, "vaePath");
+  config.esrganPath = args.getMapEntry(1, "esrganPath");
 
   // -- Step 2: Apply SD_CTX_HANDLERS to the "config" sub-object -------------
   // configMap holds the flat key/value pairs from the second constructor arg

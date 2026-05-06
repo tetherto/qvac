@@ -10,6 +10,16 @@ on:
         type: string
       model:
         type: string
+      qvac_perf_runs:
+        description: "Override QVAC_PERF_RUNS (number of counted iterations per perf test). Empty = test default."
+        type: string
+        required: false
+        default: ""
+      qvac_perf_warmup_runs:
+        description: "Override QVAC_PERF_WARMUP_RUNS (number of warmup iterations per perf test). Empty = test default."
+        type: string
+        required: false
+        default: ""
 
   workflow_dispatch:
     inputs:
@@ -22,6 +32,16 @@ on:
         description: "NPM package containing prebuilds (e.g. @qvac/llm-llamacpp@1.0.0)"
         type: string
         required: true
+      qvac_perf_runs:
+        description: "Override QVAC_PERF_RUNS (number of counted iterations per perf test). Empty = test default."
+        type: string
+        required: false
+        default: ""
+      qvac_perf_warmup_runs:
+        description: "Override QVAC_PERF_WARMUP_RUNS (number of warmup iterations per perf test). Empty = test default."
+        type: string
+        required: false
+        default: ""
 
 jobs:
   run-integration-tests:
@@ -196,6 +216,8 @@ jobs:
         shell: bash
         env:
           QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
+          QVAC_PERF_RUNS: ${{ inputs.qvac_perf_runs }}
+          QVAC_PERF_WARMUP_RUNS: ${{ inputs.qvac_perf_warmup_runs }}
 
       - name: Run integration test (Windows)
         if: ${{ matrix.platform == 'win32' }}
@@ -206,3 +228,5 @@ jobs:
         shell: powershell
         env:
           QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
+          QVAC_PERF_RUNS: ${{ inputs.qvac_perf_runs }}
+          QVAC_PERF_WARMUP_RUNS: ${{ inputs.qvac_perf_warmup_runs }}

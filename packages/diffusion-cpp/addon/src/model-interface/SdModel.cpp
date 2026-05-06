@@ -1,5 +1,6 @@
 #include "SdModel.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
@@ -264,6 +265,10 @@ struct PreparedLoras {
   std::vector<sd_lora_t> items;
 };
 
+struct FreeDeleter {
+  void operator()(uint8_t* ptr) const noexcept { free(ptr); }
+};
+
 // Mirrors the pinned fork's CLI flow in examples/common/common.hpp:
 // build owned path storage first, then build sd_lora_t entries that point
 // at that stable storage for the lifetime of generate_image().
@@ -291,7 +296,8 @@ PreparedLoras prepareLoras(const std::string& loraPath) {
 // ---------------------------------------------------------------------------
 
 SdModel::SdModel(qvac_lib_inference_addon_sd::SdCtxConfig config)
-    : config_(std::move(config)), sdCtx_(nullptr, &free_sd_ctx) {
+    : config_(std::move(config)), sdCtx_(nullptr, &free_sd_ctx),
+      upscalerCtx_(nullptr, &free_upscaler_ctx) {
 
   sd_set_log_callback(SdModel::sdLogCallback, nullptr);
 }
@@ -504,6 +510,12 @@ std::any SdModel::process(const std::any& input) {
     throw StatusError(
         general_error::InvalidArgument,
         "Unsupported mode: '" + gen.mode + "'. Supported: txt2img, img2img.");
+
+  if (gen.upscale && config_.esrganPath.empty()) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "ESRGAN upscale requested but files.esrgan was not provided");
+  }
 
   // -- Build sd_img_gen_params_t ---------------------------------------------
   sd_img_gen_params_t genParams{};
@@ -796,12 +808,32 @@ std::any SdModel::process(const std::any& input) {
   const bool wasCancelled = cancelRequested_.load();
 
   int outputCount = 0;
+  // RuntimeStats describe emitted PNGs. Keep generation dimensions as the
+  // fallback so a failed encode/callback does not report an upscaled size.
+  int64_t outputPixels = 0;
+  int64_t statsWidth = static_cast<int64_t>(gen.width);
+  int64_t statsHeight = static_cast<int64_t>(gen.height);
   for (int i = 0; i < results.count(); ++i) {
     if (results[i].data && !wasCancelled) {
-      auto png = encodeToPng(results[i]);
+      sd_image_t imageForOutput = results[i];
+      std::unique_ptr<uint8_t, FreeDeleter> upscaledData(nullptr);
+
+      if (gen.upscale) {
+        sd_image_t upscaled = upscaleImage(results[i], gen.upscaleRepeats);
+        imageForOutput = upscaled;
+        upscaledData.reset(upscaled.data);
+      }
+
+      auto png = encodeToPng(imageForOutput);
       if (!png.empty() && job.outputCallback) {
+        const int64_t outputWidth = static_cast<int64_t>(imageForOutput.width);
+        const int64_t outputHeight =
+            static_cast<int64_t>(imageForOutput.height);
         job.outputCallback(png);
         ++outputCount;
+        outputPixels += outputWidth * outputHeight;
+        statsWidth = outputWidth;
+        statsHeight = outputHeight;
       }
     }
     results.release(
@@ -829,8 +861,7 @@ std::any SdModel::process(const std::any& input) {
   stats_.totalSteps += gen.steps;
   stats_.totalGenerations++;
   stats_.totalImages += outputCount;
-  stats_.totalPixels +=
-      static_cast<int64_t>(gen.width) * gen.height * outputCount;
+  stats_.totalPixels += outputPixels;
 
   // -- Build stats for runtimeStats() -----------------------------------------
   // Stats are stored and emitted via queueJobEnded() -> runtimeStats().
@@ -851,8 +882,8 @@ std::any SdModel::process(const std::any& input) {
   lastStats_.emplace_back("totalImages", stats_.totalImages);
   lastStats_.emplace_back("totalPixels", stats_.totalPixels);
 
-  lastStats_.emplace_back("width", static_cast<int64_t>(gen.width));
-  lastStats_.emplace_back("height", static_cast<int64_t>(gen.height));
+  lastStats_.emplace_back("width", statsWidth);
+  lastStats_.emplace_back("height", statsHeight);
   lastStats_.emplace_back("seed", gen.seed);
 
   // Return empty -- images are already delivered via outputCallback,
@@ -868,6 +899,85 @@ void SdModel::cancel() const { cancelRequested_.store(true); }
 
 qvac_lib_inference_addon_cpp::RuntimeStats SdModel::runtimeStats() const {
   return lastStats_;
+}
+
+upscaler_ctx_t* SdModel::ensureUpscaler() {
+  if (config_.esrganPath.empty()) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "ESRGAN upscale requested but files.esrgan was not provided");
+  }
+
+  if (upscalerCtx_) {
+    return upscalerCtx_.get();
+  }
+
+  int threads =
+      config_.upscalerThreads > 0 ? config_.upscalerThreads : config_.nThreads;
+  if (threads <= 0) {
+    threads = sd_get_num_physical_cores();
+  }
+  if (threads <= 0) {
+    threads = 1;
+  }
+
+  const int tileSize = std::max(1, config_.upscalerTileSize);
+  upscaler_ctx_t* raw = new_upscaler_ctx(
+      config_.esrganPath.c_str(),
+      config_.upscalerOffloadParamsToCpu,
+      config_.upscalerDirect,
+      threads,
+      tileSize);
+
+  if (!raw) {
+    throw StatusError(
+        general_error::InternalError,
+        "Failed to create ESRGAN upscaler context from files.esrgan: " +
+            config_.esrganPath);
+  }
+
+  upscalerCtx_.reset(raw);
+  return upscalerCtx_.get();
+}
+
+sd_image_t SdModel::upscaleImage(const sd_image_t& inputImage, int repeats) {
+  if (repeats <= 0) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "upscale.repeats must be a positive integer");
+  }
+
+  std::lock_guard<std::mutex> lock(upscalerMutex_);
+
+  upscaler_ctx_t* ctx = ensureUpscaler();
+  const int scale = get_upscale_factor(ctx);
+  if (scale <= 0) {
+    throw StatusError(
+        general_error::InternalError,
+        "ESRGAN upscaler reported an invalid scale factor");
+  }
+  const uint32_t factor = static_cast<uint32_t>(scale);
+
+  sd_image_t current = inputImage;
+  bool currentOwned = false;
+
+  for (int repeat = 0; repeat < repeats; ++repeat) {
+    sd_image_t next = upscale(ctx, current, factor);
+    if (!next.data) {
+      if (currentOwned) {
+        free(current.data);
+      }
+      throw StatusError(general_error::InternalError, "ESRGAN upscale failed");
+    }
+
+    if (currentOwned) {
+      free(current.data);
+    }
+    current = next;
+    currentOwned = true;
+  }
+
+  return current;
 }
 
 // ---------------------------------------------------------------------------

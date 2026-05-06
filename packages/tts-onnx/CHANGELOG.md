@@ -5,10 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.8.6]
 
 ### Changed
 
+- Bumped `qvac-lib-inference-addon-cpp` to `1.1.6`.
 - **Eager release of `speechEncoderSession_`** in `ChatterboxEngine::runSpeechEncoderAndCache()`. The previous `releaseSession(...)` call was a no-op in the default non-lazy loading path, so the encoder weights stayed resident even though they're never used after `load()` populates the cache. Replaced with an unconditional `speechEncoderSession_.reset()` that drops the weights in both lazy and non-lazy modes.
 - **`runInitialCfgStep` is now `void`.** The first sampled token is appended to the by-reference `generatedTokens` vector inside the function; the only caller (`generateSpeechTokensWithCfg`) did not read the previously-`int64_t` return value.
 - **`numThreads` parse error handling.** `TTSModel::createChatterboxConfig` now logs a `WARNING` with the offending value and `std::exception::what()` when `numThreads` cannot be parsed, instead of silently swallowing via `catch(...)`. The catch block also resets `config.numThreads = 0` so the fallback to the engine default (1 intra-op thread) is honored even on reload / per-request config updates that carried over a previously parsed valid value via `chatterboxConfig_` (otherwise the warning would lie and the prior thread count would silently persist).

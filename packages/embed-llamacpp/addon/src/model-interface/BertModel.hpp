@@ -182,6 +182,8 @@ public:
 
   bool isLoaded() const;
 
+  const common_params& getCommonParams() const;
+
   void setWeightsForFile(
       const std::string& filename,
       std::unique_ptr<std::basic_streambuf<char>>&& shard) final;

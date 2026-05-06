@@ -116,6 +116,14 @@ export interface SdConfig {
   tensor_type_rules?: string
   /** LoRA application mode */
   lora_apply_mode?: LoraApplyMode
+  /** ESRGAN upscaler tile size */
+  upscaler_tile_size?: NumericLike
+  /** Use direct convolution in ESRGAN upscaler */
+  upscaler_direct?: boolean
+  /** Keep ESRGAN upscaler weights on CPU and offload during compute */
+  upscaler_offload_params_to_cpu?: boolean
+  /** Number of CPU threads for ESRGAN upscaler (-1 = auto) */
+  upscaler_threads?: NumericLike
   /** Logging verbosity: 0=error, 1=warn, 2=info, 3=debug */
   verbosity?: NumericLike
   [key: string]: string | number | boolean | undefined
@@ -134,6 +142,8 @@ export interface DiffusionFiles {
   llm?: string
   /** Absolute path to VAE file */
   vae?: string
+  /** Absolute path to ESRGAN upscaler model */
+  esrgan?: string
 }
 
 export interface ImgStableDiffusionArgs {
@@ -153,6 +163,8 @@ export interface GenerationParams {
   negative_prompt?: string
   /** Non-empty absolute path to a LoRA adapter (.safetensors, etc.) */
   lora?: string
+  /** Post-generation ESRGAN upscale. Requires files.esrgan. */
+  upscale?: boolean | { repeats?: number }
   width?: number
   height?: number
   steps?: number

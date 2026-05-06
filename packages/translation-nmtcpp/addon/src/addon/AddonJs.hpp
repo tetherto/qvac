@@ -19,7 +19,7 @@ namespace {
 using namespace qvac_lib_inference_addon_cpp;
 static std::unordered_map<
     std::string, std::variant<double, int64_t, std::string>>
-getConfigMap(
+getConfigMap( // NOLINT(readability-static-definition-in-anonymous-namespace)
     js_env_t* env, js::Object configurationParams, const char* propertyName) {
   auto configOpt =
       configurationParams.getOptionalProperty<js::Object>(env, propertyName);
@@ -31,7 +31,7 @@ getConfigMap(
   }
 
   auto config = configOpt.value();
-  js_value_t* configKeys;
+  js_value_t* configKeys; // NOLINT(cppcoreguidelines-init-variables)
   JS(js_get_property_names(env, config, &configKeys));
 
   js::Array configKeysArray(env, configKeys);
@@ -40,19 +40,21 @@ getConfigMap(
   bool hasPivotModel = false;
   while (configKeysSz > 0) {
     configKeysSz--;
-    js_value_t* key;
+    js_value_t* key; // NOLINT(cppcoreguidelines-init-variables)
     JS(js_get_element(env, configKeys, configKeysSz, &key));
-    auto value = config.getProperty(env, key);
+    auto value = // NOLINT(readability-qualified-auto)
+        config.getProperty(env, key);
 
-    std::string keyString = js::String::fromValue(key).as<std::string>(env);
+    std::string keyString = // NOLINT(hicpp-use-auto,modernize-use-auto)
+        js::String::fromValue(key).as<std::string>(env);
 
-    std::transform(
+    std::transform( // NOLINT(modernize-use-ranges)
         keyString.begin(),
         keyString.end(),
         keyString.begin(),
-        [](unsigned char c) { return std::tolower(c); });
+        [](unsigned char chr) { return std::tolower(chr); });
     if (keyString == "pivotmodel") {
-      hasPivotModel = true;
+      hasPivotModel = true; // NOLINT(clang-analyzer-deadcode.DeadStores)
       continue;
     }
     if (js::is<js::Boolean>(env, value)) {
@@ -175,6 +177,24 @@ getActiveBackendName(js_env_t* env, js_callback_info_t* info) try {
 }
 JSCATCH
 
+inline js_value_t*
+getActiveBackendDescription(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+
+  auto& model = instance.addonCpp->model.get();
+  auto* translationModel =
+      dynamic_cast<qvac_lib_inference_addon_nmt::TranslationModel*>(&model);
+  if (translationModel != nullptr) {
+    return js::String::create(
+        env, translationModel->getActiveBackendDescription().c_str());
+  }
+  return js::String::create(env, "");
+}
+JSCATCH
+
 inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
 
@@ -192,12 +212,12 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
     std::vector<std::string> inputSequence;
     inputSequence.reserve(vectorOfJsValues.size());
 
-    std::transform(
+    std::transform( // NOLINT(modernize-use-ranges)
         vectorOfJsValues.begin(),
         vectorOfJsValues.end(),
         std::back_inserter(inputSequence),
-        [&env](js_value_t* const string_value) {
-          return js::String(env, string_value).as<std::string>(env);
+        [&env](js_value_t* const stringValue) {
+          return js::String(env, stringValue).as<std::string>(env);
         });
 
     anyInput = inputSequence;

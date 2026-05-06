@@ -85,8 +85,8 @@ void batchDecode(
       // not NONE
       embd = llama_get_embeddings_seq(
           ctx,
-          *batch.seq_id
-               [i]); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+          // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+          *batch.seq_id[i]);
       // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
       embeddingPos = *batch.seq_id[i];
       if (embd == nullptr) {
@@ -248,6 +248,42 @@ std::size_t BertEmbeddings::size() const { return embeddingCount_; }
 std::size_t BertEmbeddings::embeddingSize() const { return embeddingSize_; }
 
 namespace {
+llama_split_mode
+parseSplitMode(std::unordered_map<std::string, std::string>& configFilemap) {
+  auto hIt = configFilemap.find("split-mode");
+  auto uIt = configFilemap.find("split_mode");
+  if (hIt != configFilemap.end() && uIt != configFilemap.end()) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        string_format(
+            "%s: both 'split-mode' and 'split_mode' are present; "
+            "use one or the other.\n",
+            __func__));
+  }
+  auto splitModeIt = (hIt != configFilemap.end()) ? hIt : uIt;
+  if (splitModeIt == configFilemap.end()) {
+    return LLAMA_SPLIT_MODE_NONE;
+  }
+  std::string val = splitModeIt->second;
+  std::ranges::transform(val, val.begin(), ::tolower);
+  llama_split_mode splitMode = LLAMA_SPLIT_MODE_NONE;
+  if (val == "layer") {
+    splitMode = LLAMA_SPLIT_MODE_LAYER;
+  } else if (val == "row") {
+    splitMode = LLAMA_SPLIT_MODE_ROW;
+  } else if (val != "none") {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        string_format(
+            "%s: invalid split-mode '%s', must be 'none', 'layer', or "
+            "'row'.\n",
+            __func__,
+            splitModeIt->second.c_str()));
+  }
+  configFilemap.erase(splitModeIt);
+  return splitMode;
+}
+
 common_params setupParams(
     const std::string& modelGgufPath,
     std::unordered_map<std::string, std::string> configFilemap,
@@ -261,6 +297,8 @@ common_params setupParams(
   configVector.emplace_back("llama");
   configVector.emplace_back("--model");
   configVector.emplace_back(modelGgufPath);
+
+  llama_split_mode splitMode = parseSplitMode(configFilemap);
 
   auto deviceIt = configFilemap.find("device");
   if (deviceIt == configFilemap.end()) {
@@ -281,20 +319,48 @@ common_params setupParams(
     const std::pair<BackendType, std::string> chosenBackend =
         chooseBackend(preferredBackend, llamaLogCallback, mainGpu);
 
-    if (chosenBackend.first != BackendType::GPU &&
-        chosenBackend.first != BackendType::CPU) {
+    if (chosenBackend.first == BackendType::GPU) {
+      resolvedBackendDevice = 1;
+      params.split_mode = splitMode;
+
+      if (splitMode != LLAMA_SPLIT_MODE_NONE && mainGpu.has_value()) {
+        if (std::holds_alternative<int>(mainGpu.value())) {
+          configFilemap["main-gpu"] =
+              std::to_string(std::get<int>(mainGpu.value()));
+        } else {
+          qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
+              GGML_LOG_LEVEL_WARN,
+              "[BertModel] main-gpu 'dedicated'/'integrated' ignored in "
+              "multi-GPU split-mode; use an integer device index instead\n",
+              nullptr);
+        }
+      }
+    } else if (chosenBackend.first == BackendType::CPU) {
+      resolvedBackendDevice = 0;
+      params.split_mode = LLAMA_SPLIT_MODE_NONE;
+      params.main_gpu = -1;
+      if (splitMode != LLAMA_SPLIT_MODE_NONE) {
+        qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
+            GGML_LOG_LEVEL_WARN,
+            "[BertModel] split-mode, tensor-split and main-gpu ignored: "
+            "no GPU backend available, falling back to CPU\n",
+            nullptr);
+        splitMode = LLAMA_SPLIT_MODE_NONE;
+        configFilemap.erase("tensor-split");
+      }
+    } else {
       throw qvac_errors::StatusError(
           qvac_errors::general_error::InternalError,
           "preferredDeviceFromString: wrong deduced device, must be 'gpu' or "
           "'cpu'.\n");
     }
-    if (chosenBackend.first == BackendType::GPU) {
-      resolvedBackendDevice = 1;
-    } else {
-      resolvedBackendDevice = 0;
+    // In multi-GPU split mode we intentionally omit --device so llama.cpp
+    // distributes layers/rows across all available GPUs rather than pinning
+    // to the single backend that chooseBackend selected.
+    if (splitMode == LLAMA_SPLIT_MODE_NONE) {
+      configVector.emplace_back("--device");
+      configVector.emplace_back(chosenBackend.second);
     }
-    configVector.emplace_back("--device");
-    configVector.emplace_back(chosenBackend.second);
     configFilemap.erase(deviceIt);
   }
 
@@ -374,9 +440,10 @@ void BertModel::init(
   setVerbosityLevel(configCopy);
 
   std::string openclCacheDir;
-  if (auto it = configCopy.find("openclCacheDir"); it != configCopy.end()) {
-    openclCacheDir = it->second;
-    configCopy.erase(it);
+  if (auto configIt = configCopy.find("openclCacheDir");
+      configIt != configCopy.end()) {
+    openclCacheDir = configIt->second;
+    configCopy.erase(configIt);
   }
 
   lazyCommonInit();
@@ -489,6 +556,8 @@ std::vector<std::string>
 BertModel::preprocessPrompt(const std::string& prompt) const {
   return splitLines(prompt, init_.params.embd_sep);
 }
+
+const common_params& BertModel::getCommonParams() const { return init_.params; }
 
 bool BertModel::isLoaded() const {
   return is_loaded_ && model_ != nullptr && ctx_ != nullptr;
@@ -623,7 +692,8 @@ BertEmbeddings BertModel::processBatched(
     return BertEmbeddings(
         std::move(embeddings),
         BertEmbeddings::Layout{
-            numStoredEmbeddings, static_cast<std::size_t>(n_embd)});
+            .embeddingCount = numStoredEmbeddings,
+            .embeddingSize = static_cast<std::size_t>(n_embd)});
   };
 
   for (std::size_t k = 0; k < nPrompts && !stopCancelled_.load(); k++) {
@@ -676,7 +746,9 @@ BertEmbeddings BertModel::processBatched(
       init_.params.embd_normalize);
   return BertEmbeddings(
       std::move(embeddings),
-      BertEmbeddings::Layout{embeddingCount, static_cast<std::size_t>(n_embd)});
+      BertEmbeddings::Layout{
+          .embeddingCount = embeddingCount,
+          .embeddingSize = static_cast<std::size_t>(n_embd)});
 }
 
 BertEmbeddings
@@ -701,7 +773,9 @@ BertEmbeddings BertModel::encodeHostF32Sequences(
   if (sequenceArray.empty()) {
     return BertEmbeddings(
         std::vector<float>{},
-        BertEmbeddings::Layout{0, static_cast<std::size_t>(n_embd)});
+        BertEmbeddings::Layout{
+            .embeddingCount = 0,
+            .embeddingSize = static_cast<std::size_t>(n_embd)});
   }
 
   // Tokenize all sequences once and validate context size

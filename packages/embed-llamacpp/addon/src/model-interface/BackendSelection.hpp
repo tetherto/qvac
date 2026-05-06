@@ -28,7 +28,7 @@ using llamaLogCallbackF =
     void (*)(ggml_log_level level, const char* text, void* userData);
 
 struct BackendInterface {
-  size_t (*ggml_backend_dev_count)(void);
+  size_t (*ggml_backend_dev_count)();
   ggml_backend_reg_t (*ggml_backend_dev_backend_reg)(ggml_backend_dev_t device);
   ggml_backend_dev_t (*ggml_backend_dev_get)(size_t index);
   const char* (*ggml_backend_reg_name)(ggml_backend_reg_t reg);
@@ -49,4 +49,10 @@ std::pair<BackendType, std::string> chooseBackend(
 std::pair<BackendType, std::string> chooseBackend(
     BackendType preferredBackendType, llamaLogCallbackF llamaLogcallback,
     const std::optional<MainGpu>& mainGpu = std::nullopt);
+
+/// @brief Count GPU devices available for multi-GPU split mode.
+/// Returns the number of discrete GPUs when any are present; otherwise
+/// falls back to the iGPU count. This mirrors backends like Vulkan which
+/// exclude iGPUs by default when discrete GPUs exist.
+size_t getEffectiveGpuDeviceCount(const BackendInterface& bckI);
 } // namespace backend_selection

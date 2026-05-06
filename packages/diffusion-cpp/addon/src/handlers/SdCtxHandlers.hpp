@@ -46,8 +46,9 @@ struct SdCtxConfig {
       llmPath; // llm_path              -- LLM text encoder (FLUX.2 -> Qwen3)
   std::string
       vaePath; // vae_path              -- standalone VAE decoder weights
-  std::string taesdPath; // taesd_path            -- Tiny AutoEncoder (optional
-                         // fast preview)
+  std::string esrganPath; // ESRGAN upscaler model for post-generation upscale
+  std::string taesdPath;  // taesd_path            -- Tiny AutoEncoder (optional
+                          // fast preview)
 
   // -- Compute ---------------------------------------------------------------
   int nThreads = -1; // n_threads:            -1 = auto-detect physical cores
@@ -99,6 +100,12 @@ struct SdCtxConfig {
 
   // -- SDXL compatibility ----------------------------------------------------
   bool forceSDXLVaeConvScale = false; // force SDXL VAE conv scale (compat fix)
+
+  // -- ESRGAN upscaler -------------------------------------------------------
+  int upscalerTileSize = 128;
+  bool upscalerDirect = false;
+  bool upscalerOffloadParamsToCpu = false;
+  int upscalerThreads = -1;
 
   // -- Backend loading --------------------------------------------------------
   std::string backendsDir; // directory containing DL backend .so modules

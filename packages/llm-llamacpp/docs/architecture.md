@@ -72,7 +72,7 @@
 - @qvac/infer-base: `createJobHandler` and `exclusiveRunQueue` helpers (job/response lifecycle + single-job serialization)
 - @qvac/logging: `QvacLogger` wrapper
 - Bare Runtime (≥1.24.0): JavaScript runtime
-- Linux requires Clang/LLVM 19 with libc++
+- Linux requires Clang/LLVM 22 with libc++
 
 ---
 
