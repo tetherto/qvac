@@ -1,18 +1,12 @@
 'use strict'
 
 const { QvacErrorRAG, ERR_CODES } = require('../errors')
-// Set up crypto polyfill for uuid-random
-try {
-  const crypto = require('bare-crypto')
+const crypto = require('#crypto')
+
+if (typeof global !== 'undefined' && !global.crypto) {
   global.crypto = crypto
-} catch (e2) {
-  if (typeof global === 'undefined' || (typeof global !== 'undefined' && !global.crypto)) {
-    throw new QvacErrorRAG({
-      code: ERR_CODES.DEPENDENCY_REQUIRED,
-      adds: 'No crypto implementation found. Please ensure a crypto module is available in your environment.'
-    })
-  }
 }
+
 const uuid = require('uuid-random')
 
 /**

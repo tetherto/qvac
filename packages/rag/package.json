@@ -27,6 +27,20 @@
     "NOTICE"
   ],
   "types": "index.d.ts",
+  "imports": {
+    "#crypto": {
+      "bare": "bare-crypto",
+      "node": "node:crypto",
+      "react-native": "./src/shims/crypto.js",
+      "default": "./src/shims/crypto.js"
+    },
+    "#fetch": {
+      "bare": "bare-fetch",
+      "node": "./src/shims/fetch.js",
+      "react-native": "./src/shims/fetch.js",
+      "default": "./src/shims/fetch.js"
+    }
+  },
   "devDependencies": {
     "@qvac/embed-llamacpp": "^0.14.0",
     "@qvac/llm-llamacpp": "^0.16.0",
