@@ -7465,7 +7465,23 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enko"
   },
   {
-    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enko/2025-12-18/vocab.enko.spm",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enko/2025-12-18/srcvocab.enko.spm",
+    "description": "Bergamot vocabulary en-ko",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "enko"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enko"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enko/2025-12-18/trgvocab.enko.spm",
     "description": "Bergamot vocabulary en-ko",
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
