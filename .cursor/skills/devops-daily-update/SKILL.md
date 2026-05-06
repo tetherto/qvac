@@ -1,14 +1,40 @@
 ---
 name: devops-daily-update
-description: Compose a daily standup / EOD update for a DevOps engineer in tetherto/qvac. Aggregates yesterday's merged PRs and commits, today's open PRs and CI, reviews owed, and blockers, and emits a copy-paste Slack/Asana message. Use when the user asks for a "daily update", "standup", or invokes /devops-daily-update.
+description: Compose a daily standup / EOD update in the team's standard Slack format (🔨 Done today / 📅 Planned for tomorrow / 🚧 Blockers / risks), with ticket-led bullets and optional sub-bullets for context. Aggregates the user's recent PRs, reviews, and CI in tetherto/qvac, and emits a copy-paste Slack message. Use when the user asks for a "daily update", "standup", "EOD", or invokes /devops-daily-update.
 disable-model-invocation: true
 ---
 
 # DevOps Daily Update
 
-Composes a structured daily update message ready to paste into Slack or Asana, sourced from the user's GitHub activity in `tetherto/qvac`.
+Composes a standup / EOD update in the team's standard Slack format and writes it to a temp file ready to paste. Sourced from the user's GitHub activity in `tetherto/qvac` plus optional Asana context.
 
 The skill is read-only with respect to GitHub state and the local working tree. It NEVER posts the message — the user copies it manually.
+
+## Canonical template
+
+This is the team's daily-update format on Slack. The skill MUST match it exactly: same section order, same emoji, same bullet shape (`TICKET: action`), same `N/A` placeholder when a section is empty.
+
+```
+🔨 *Done today*
+- QVAC-XXXXX: <past-tense action>
+- QVAC-YYYYY: <past-tense action>
+    - <optional sub-bullet for additional context>
+
+📅 *Planned for tomorrow*
+- QVAC-XXXXX: <forward-looking action>
+- QVAC-ZZZZZ
+
+🚧 *Blockers / risks*
+- N/A
+```
+
+Notes on the format:
+
+- Section headings use literal Unicode emoji (🔨 / 📅 / 🚧) followed by the section name in Slack-bold (`*…*`). Do NOT use Markdown headings (`##`); the renderer is Slack, not GitHub.
+- Bullets lead with the ticket number (`QVAC-\d+`) followed by `:` and a terse action. The Asana/Slack integration in this workspace auto-links ticket numbers, so leave them as plain text.
+- Sub-bullets sit one indent level deeper (4 spaces in Slack mrkdwn) and add context to a parent ticket. Use sparingly.
+- A bare ticket (`- QVAC-13860`) is allowed when the work is self-evident from the ticket title.
+- An empty section uses literal `N/A` as the only bullet — never `_(none)_`, never an empty list, never a removed section.
 
 ## When to use this skill
 
@@ -26,11 +52,11 @@ The skill is read-only with respect to GitHub state and the local working tree. 
 
 ## Inputs
 
-- **Optional**: `--since <ISO date>` — defaults to yesterday 00:00 in the user's local timezone. Use to extend the lookback (e.g. covering a Monday update of Friday's work: `--since 3d`).
-- **Optional**: `--format slack | asana | markdown` — defaults to `markdown`. Slack uses `*bold*` and `<URL|text>`; Asana uses standard Markdown; `markdown` (default) uses GitHub-flavored Markdown.
-- **Optional**: `--no-asana` — skip the Asana section even if the MCP is available.
+- **Optional**: `--since <ISO date | Nd | Nw>` — defaults to yesterday 00:00 in the user's local timezone. The default 24-hour lookback works for both EOD posts (late evening) and morning standups; extend it for Monday-after-weekend (`--since 3d`) or post-holiday (`--since 1w`).
+- **Optional**: `--format slack | markdown` — defaults to `slack`. The Slack form is what gets pasted; Markdown is the chat preview form (`**bold**`, `[text](URL)`) and is also accepted by Asana rich-text comments.
+- **Optional**: `--no-asana` — skip the Asana lookup even if the MCP is available.
 
-If the user did not specify, default to yesterday 00:00 / `markdown`.
+If the user did not specify, default to yesterday 00:00 / `slack`.
 
 ## Safety rules
 
@@ -38,20 +64,21 @@ This skill is read-only. It does NOT:
 
 - Modify the user's working tree, branch, or any file under `~/.cache/`
 - Post to Slack, Asana, or GitHub
-- Write secrets to any output (the assembler must skip any string that matches a secret-pattern allowlist; see step 5)
+- Write secrets to any output (the assembler runs a regex scrub before file write; see step 7)
 
-The skill MAY write its assembled output to `/tmp/devops-daily-update-<YYYY-MM-DD>.md` so the user can `pbcopy < <path>`.
+The skill MAY write its assembled output to `/tmp/devops-daily-update-<YYYY-MM-DD>.txt` so the user can `pbcopy < <path>`. The extension is `.txt` (not `.md`) because the canonical form is Slack mrkdwn, not GitHub-flavored Markdown.
 
 ## Efficiency rules
 
-Total shell calls per run: **≤ 6** (one per data source + one for the timestamp + one to write the temp file). Cache `gh api user` and reuse across calls in the same session. If a data source errors (e.g. Asana MCP not configured), continue with a "Asana: not configured" placeholder rather than failing the whole skill.
+Total shell calls per run: **≤ 6** (one per data source + one for the timestamp + one to write the temp file). Cache `gh api user` and reuse via Read for the rest of the session. If a data source errors (e.g., Asana MCP not configured), continue with that section's items missing from the aggregate rather than failing the whole skill — the canonical form does not have an "Asana" section, so missing Asana data only thins out the bullet pools, not the layout.
 
 ## Workflow
 
 ### 1. Resolve the lookback window
 
 ```bash
-SINCE="$(date -u -v-1d -j -f "%Y-%m-%d" "$(date -u +%Y-%m-%d)" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d 'yesterday 00:00' +%Y-%m-%dT%H:%M:%SZ)"
+SINCE="$(date -u -v-1d -j -f "%Y-%m-%d" "$(date -u +%Y-%m-%d)" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null \
+  || date -u -d 'yesterday 00:00' +%Y-%m-%dT%H:%M:%SZ)"
 echo "$SINCE"
 ```
 
@@ -65,7 +92,7 @@ gh api user --jq '.login' > /tmp/devops-daily-update-user.txt
 
 Reuse via `Read` for the rest of the run.
 
-### 3. Pull yesterday's merged PRs (mine)
+### 3. Pull recently-merged PRs (mine)
 
 ```bash
 gh search prs \
@@ -77,10 +104,13 @@ gh search prs \
   > /tmp/devops-daily-update-merged.json
 ```
 
+These feed `🔨 Done today`.
+
 ### 4. Pull my open PRs and reviews owed
 
 ```bash
-node .cursor/skills/_lib/pr-skills/pr-status.mjs --mode my > /tmp/devops-daily-update-my.txt 2> /tmp/devops-daily-update-my.stderr
+node .cursor/skills/_lib/pr-skills/pr-status.mjs --mode my \
+  > /tmp/devops-daily-update-my.txt 2> /tmp/devops-daily-update-my.stderr
 gh search prs \
   --repo tetherto/qvac \
   --review-requested "@me" \
@@ -90,11 +120,19 @@ gh search prs \
   > /tmp/devops-daily-update-reviews-owed.json
 ```
 
-If `pr-status.mjs` stderr contains `SLACK_VALIDATION_REQUIRED`, follow the validation gate documented in [`pr-mine`'s workflow](../pr-mine/SKILL.md) (step 2). Do not present the daily update until the gate clears.
+If `pr-status.mjs` stderr contains `SLACK_VALIDATION_REQUIRED`, follow the validation gate in [`pr-mine`'s workflow](../pr-mine/SKILL.md) (step 2). Do not present the daily update until the gate clears.
 
-### 5. Pull recent CI runs (mine)
+Output routing:
 
-`gh run list` does not have an author filter. Approximate the user's runs by scoping to PRs/branches authored by them:
+- Open PRs I authored that received commits since `$SINCE` (i.e., I pushed work on them today) → `🔨 Done today` with the action `addressed comments on the PR` (when the recent commits follow a review event) or `pushed updates on <topic>` (otherwise).
+- Open PRs I authored without recent commits → `📅 Planned for tomorrow` with the action `continue / wrap up <topic>`.
+- Reviews owed (`--review-requested "@me"`) → `📅 Planned for tomorrow` as `review #<num> — <title> by <author>`.
+- Open PRs I authored with `mergeable: CONFLICTING` → `🚧 Blockers / risks` as `conflicts on #<num> — needs rebase`.
+- Open PRs I authored with stale review requests (no review activity in >3 days) → `🚧 Blockers / risks` as `stale review on #<num> — pinged <reviewer> on <date>`.
+
+### 5. Pull recent CI runs (filter to mine)
+
+`gh run list` does not have an author filter. Approximate the user's runs by scoping to recent PR head branches:
 
 ```bash
 gh run list \
@@ -105,93 +143,121 @@ gh run list \
   > /tmp/devops-daily-update-runs.json
 ```
 
-Filter client-side: keep runs where `headBranch` is the head of one of the user's PRs from steps 3 or 4. Surface failed runs in **Blockers**, surface in-progress runs in **Today**.
+Filter client-side: keep runs where `headBranch` matches one of the user's PRs from steps 3 or 4. Failed runs feed `🚧 Blockers / risks` as `CI failing on #<num> — <workflowName>`. In-progress / queued runs are NOT surfaced (too noisy for a daily update).
 
 ### 6. (Optional) Pull today's Asana tasks
 
-If the Asana MCP is available, call `user-asana-get_my_tasks` (or equivalent — read the descriptor first per the rules) and filter for tasks due today / in-progress. If the MCP is unavailable, write `Asana: not configured` into that section.
+If the Asana MCP is available and `--no-asana` was not passed, call the appropriate tool (read the descriptor first per the agentic-automation rule) to fetch the user's tasks. Filter to:
+
+- Status = in-progress or due today/tomorrow → feed `📅 Planned for tomorrow` as `<TICKET>: <task title>`
+- Status = blocked → feed `🚧 Blockers / risks` as `<TICKET>: blocked — <reason from notes>`
+
+Asana tickets in the QVAC project follow the `QVAC-\d+` format and slot directly into the bullet shape.
+
+If Asana is unavailable or `--no-asana` is set, skip this step. The output will rely on GitHub-derived items only.
 
 ### 7. Run a secret-pattern scrub on every assembled string
 
-Before writing `/tmp/devops-daily-update-<YYYY-MM-DD>.md`, run a regex check on every PR title, branch name, and run name:
+Before writing `/tmp/devops-daily-update-<YYYY-MM-DD>.txt`, run a regex check on every PR title, branch name, run name, Asana task title, and any user-provided extras:
 
 ```
 (sk_live_|AIza[0-9A-Za-z\-_]{35}|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36}|gho_|github_pat_|xoxb-|-----BEGIN [A-Z ]+ KEY-----)
 ```
 
-If any string matches, redact the matching span (`[REDACTED]`) and add a chat-only note: "Daily update redacted N suspicious tokens — review the source PRs/runs manually." Never include the raw matched string anywhere.
+If any string matches, redact the matching span (`[REDACTED]`) and add a chat-only note: "Daily update redacted N suspicious tokens — review the source PRs/runs manually." Never include the raw matched string anywhere in the output, the chat preview, or the temp file.
 
 ### 8. Assemble the output
 
-Render to `/tmp/devops-daily-update-<YYYY-MM-DD>.md` using the template below. Empty sections are kept with `_(none)_` so the structure is consistent across days.
+Build the message in two forms:
 
-````markdown
-# Daily update — <YYYY-MM-DD> (DevOps)
+- **Slack form** (the canonical, matches the team template), saved to `/tmp/devops-daily-update-<YYYY-MM-DD>.txt`.
+- **Markdown form** (for chat preview only), printed in chat.
 
-## Yesterday
+Each item from steps 3–6 must be normalized to a `TICKET: action` bullet. Ticket extraction rules:
 
-**Shipped:**
-- #<num> — <title> ([link](<url>)) (+<add>/-<del>)
+1. Extract `QVAC-\d+` (or `[A-Z]+-\d+`) from the PR title; that's the ticket.
+2. If the PR title has no ticket, extract from the head branch name (e.g., `feat/QVAC-12345-thing`).
+3. If still no ticket, fall back to `#<pr-number>` as the leading label.
+4. The action is the PR-title subject (the part after `prefix[tags]:`), past tense for `Done today`, action-verb-leading for `Planned for tomorrow`. Drop the `prefix[tags]:` from the rendered action.
+5. Sub-bullets are added when (a) the user provided extra context for that item, or (b) more than one PR shares the same ticket — the parent line is the ticket, sub-bullets are each PR.
+
+#### Slack form (canonical)
+
+```
+🔨 *Done today*
+- <TICKET-or-#num>: <past-tense action>
+- ...
+    - <optional sub-bullet>
+
+📅 *Planned for tomorrow*
+- <TICKET-or-#num>: <forward-looking action>
 - ...
 
-**No-PR work** _(only include if the user explicitly mentioned offline work)_:
+🚧 *Blockers / risks*
+- N/A
+```
+
+Empty section → single bullet `- N/A`. Three sections always rendered, in this order, separated by a single blank line.
+
+#### Markdown form (chat preview only)
+
+```
+**🔨 Done today**
+- <TICKET-or-#num>: <past-tense action>
 - ...
 
-## Today
-
-**In flight (my open PRs):**
-- #<num> — <title> ([link](<url>)) — <ready-to-merge | needs-review | needs-re-review | conflicts>
+**📅 Planned for tomorrow**
+- <TICKET-or-#num>: <forward-looking action>
 - ...
 
-**Reviews owed:**
-- #<num> — <title> by <author> ([link](<url>))
-- ...
+**🚧 Blockers / risks**
+- N/A
+```
 
-**Asana:** _(omit section if Asana not configured)_
-- <task title> — due <date>
-- ...
+(Same content, GitHub-flavored Markdown rendering for the chat preview only.)
 
-## Blockers
+#### Format-conversion cheatsheet
 
-- **CI failing on #<num>** — <workflow name> ([run](<url>))
-- **Stale (>3d) review on #<num>** — pinged <reviewer> on <date>
-- **Conflicts on #<num>** — needs rebase
-- ...
+If the user requested `--format markdown`, save the Markdown form to the temp file too. Conversion rules between the two forms:
 
----
+| Markdown | Slack |
+|---|---|
+| `**X**` | `*X*` |
+| `*X*` (italic) | `_X_` |
+| `[text](URL)` | `<URL\|text>` |
+| `# H1` / `## H2` | not used (use Slack-bold instead) |
+| Plain `QVAC-\d+` | Plain `QVAC-\d+` (the workspace's Slack/Asana integration auto-links) |
+| 4-space-indented `- sub` | 4-space-indented `- sub` (Slack respects 4-space indent for sub-bullets) |
 
-_Sources: gh search prs, gh run list, pr-status.mjs --mode my, Asana MCP. Generated: <ISO timestamp>._
-````
-
-If `--format slack` was requested, post-process the markdown to:
-
-- Replace `**X**` with `*X*`
-- Replace `[text](URL)` with `<URL|text>`
-- Drop horizontal rules (`---`)
-- Keep emoji and bullet structure
-
-If `--format asana` was requested, leave the markdown as-is (Asana renders standard Markdown in rich-text comments).
+Do NOT pre-link ticket numbers via `<URL|TICKET>` — the workspace's Asana app handles auto-linking. Pre-linking conflicts with that and renders awkwardly.
 
 ### 9. Print the result
 
-Print the assembled message in a fenced code block in chat, then print the temp-file path so the user can pipe it to clipboard:
+1. Print the Markdown form in a fenced code block in chat for the user to scan.
+2. Print the path to the Slack-form temp file with copy commands:
 
-```bash
-pbcopy < /tmp/devops-daily-update-<YYYY-MM-DD>.md   # macOS
-xclip -selection clipboard < /tmp/devops-daily-update-<YYYY-MM-DD>.md   # Linux
-```
+   ```bash
+   pbcopy < /tmp/devops-daily-update-<YYYY-MM-DD>.txt   # macOS
+   xclip -selection clipboard < /tmp/devops-daily-update-<YYYY-MM-DD>.txt   # Linux
+   ```
+
+3. Offer: "Edit any line before posting? Tell me which ticket and the new action wording, and I'll regenerate."
 
 ## Quality gates
 
 Before printing the output, verify:
 
-- [ ] Every PR/run referenced has a clickable URL
-- [ ] Each "Yesterday → Shipped" item is genuinely merged (`mergedAt >= SINCE`), not just closed
-- [ ] Each "Reviews owed" item is open and the user is in `requestedReviewers` (not a stale assignment)
-- [ ] Each "Blockers → CI failing" item is on a PR the user authored or a branch they own
+- [ ] Three sections rendered, in order: 🔨 Done today / 📅 Planned for tomorrow / 🚧 Blockers / risks
+- [ ] Section headings use the exact emoji and the exact section names from the canonical template
+- [ ] Empty sections render as a single `- N/A` bullet (never `_(none)_`, never empty, never removed)
+- [ ] Every bullet leads with `TICKET:` (or `#<pr-num>:` only when no ticket could be extracted)
+- [ ] No bullet prefixes, no severity tags, no PR-state tags (`[needs-review]`, `[ready]`, etc.) — that meta is folded into prose actions
+- [ ] Each `Done today` item is genuinely activity since `$SINCE` (merged PR, pushed commits, etc. — not stale)
+- [ ] Each `Planned for tomorrow → review` item is open and the user is in `requestedReviewers`
+- [ ] Each `Blockers / risks → CI failing` item is on a PR the user authored or a branch they own
 - [ ] No raw secret-shaped strings made it through the scrub
-- [ ] Each section has either entries or `_(none)_`
-- [ ] The temp-file path matches the day's ISO date
+- [ ] Slack form has no Markdown headings, no `**bold**` (uses `*bold*`), no GitHub-style links
+- [ ] Temp-file path matches the day's local-tz ISO date
 
 ## References
 
