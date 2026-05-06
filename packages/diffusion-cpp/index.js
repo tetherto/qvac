@@ -481,6 +481,7 @@ class ImgStableDiffusion {
 
   /**
    * Cancel the current generation job.
+   * During ESRGAN upscale, cancellation is honored between repeat passes.
    */
   async cancel () {
     if (this.addon?.cancel) {
@@ -690,6 +691,10 @@ class EsrganUpscaler {
     return response
   }
 
+  /**
+   * Cancel the current upscale job.
+   * Cancellation is honored between ESRGAN repeat passes.
+   */
   async cancel () {
     if (this.addon?.cancel) {
       await this.addon.cancel()

@@ -646,16 +646,20 @@ std::any SdModel::process(const std::any& input) {
     free(genParams.mask_image.data);
   }
 
-  const bool wasCancelled = cancelRequested_.load();
-
   int outputCount = 0;
   // RuntimeStats describe emitted PNGs. Keep generation dimensions as the
   // fallback so a failed encode/callback does not report an upscaled size.
   int64_t outputPixels = 0;
   int64_t statsWidth = static_cast<int64_t>(gen.width);
   int64_t statsHeight = static_cast<int64_t>(gen.height);
+  bool wasCancelled = false;
   for (int i = 0; i < results.count(); ++i) {
-    if (results[i].data && !wasCancelled) {
+    if (cancelRequested_.load()) {
+      wasCancelled = true;
+      break;
+    }
+
+    if (results[i].data) {
       sd_image_t imageForOutput = results[i];
       std::unique_ptr<uint8_t, image_codec::FreeDeleter> upscaledData(nullptr);
 
@@ -665,20 +669,31 @@ std::any SdModel::process(const std::any& input) {
         upscaledData.reset(upscaled.data);
       }
 
-      auto png = image_codec::encodeToPng(imageForOutput);
-      if (!png.empty() && job.outputCallback) {
-        const int64_t outputWidth = static_cast<int64_t>(imageForOutput.width);
-        const int64_t outputHeight =
-            static_cast<int64_t>(imageForOutput.height);
-        job.outputCallback(png);
-        ++outputCount;
-        outputPixels += outputWidth * outputHeight;
-        statsWidth = outputWidth;
-        statsHeight = outputHeight;
+      if (cancelRequested_.load()) {
+        wasCancelled = true;
+      } else {
+        auto png = image_codec::encodeToPng(imageForOutput);
+        if (!png.empty() && job.outputCallback) {
+          const int64_t outputWidth =
+              static_cast<int64_t>(imageForOutput.width);
+          const int64_t outputHeight =
+              static_cast<int64_t>(imageForOutput.height);
+          job.outputCallback(png);
+          ++outputCount;
+          outputPixels += outputWidth * outputHeight;
+          statsWidth = outputWidth;
+          statsHeight = outputHeight;
+        }
       }
     }
     results.release(
         i); // free pixel buffer immediately; destructor handles the rest
+    if (cancelRequested_.load()) {
+      wasCancelled = true;
+    }
+    if (wasCancelled) {
+      break;
+    }
   }
 
   // If cancelled, propagate as an exception so JobRunner emits
@@ -743,7 +758,8 @@ qvac_lib_inference_addon_cpp::RuntimeStats SdModel::runtimeStats() const {
 }
 
 sd_image_t SdModel::upscaleImage(const sd_image_t& inputImage, int repeats) {
-  return upscaler_.upscaleImage(inputImage, repeats);
+  return upscaler_.upscaleImage(
+      inputImage, repeats, [this]() { return cancelRequested_.load(); });
 }
 
 // ---------------------------------------------------------------------------

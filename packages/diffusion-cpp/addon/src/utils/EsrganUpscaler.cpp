@@ -97,6 +97,9 @@ sd_image_t EsrganUpscaler::upscaleImage(
   sd_image_t current = inputImage;
   bool currentOwned = false;
 
+  // NOTE: cancellation is checked between ESRGAN repeat passes. A single
+  // stable-diffusion.cpp upscale() pass cannot be interrupted mid-pass/tile
+  // without upstream support.
   for (int repeat = 0; repeat < repeats; ++repeat) {
     if (shouldCancel && shouldCancel()) {
       if (currentOwned) {
