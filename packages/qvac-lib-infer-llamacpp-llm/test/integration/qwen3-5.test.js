@@ -92,7 +92,7 @@ test('Qwen3.5-0.8B can run basic inference', {
     device: useCpu ? 'cpu' : 'gpu',
     gpu_layers: '999',
     ctx_size: '1024',
-    n_predict: '64',
+    n_predict: '256',
     temp: '0',
     seed: '42',
     verbosity: '2'
@@ -141,7 +141,7 @@ test('Qwen3.5-0.8B supports multi-turn conversation with KV cache', {
     device: useCpu ? 'cpu' : 'gpu',
     gpu_layers: '999',
     ctx_size: '2048',
-    n_predict: '128',
+    n_predict: '512',
     temp: '0',
     seed: '42',
     verbosity: '2'
