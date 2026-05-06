@@ -142,7 +142,7 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: |
-          rm -r vcpkg_microsoft
+          rm -rf vcpkg_microsoft
           git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git vcpkg_microsoft
           cd vcpkg_microsoft && ./bootstrap-vcpkg.sh -disableMetrics
           VCPKG_ROOT="$(pwd)"
