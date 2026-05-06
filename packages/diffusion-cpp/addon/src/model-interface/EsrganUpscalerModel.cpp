@@ -1,16 +1,14 @@
 #include "EsrganUpscalerModel.hpp"
 
 #include <chrono>
-#include <filesystem>
 #include <memory>
-#include <mutex>
 #include <stdexcept>
 #include <utility>
 
-#include <ggml-backend.h>
 #include <qvac-lib-inference-addon-cpp/Errors.hpp>
 #include <qvac-lib-inference-addon-cpp/Logger.hpp>
 
+#include "utils/BackendLoader.hpp"
 #include "utils/ImageCodec.hpp"
 #include "utils/LoggingMacros.hpp"
 
@@ -28,31 +26,6 @@ makeUpscalerConfig(const qvac_lib_inference_addon_sd::SdCtxConfig& config) {
       config.upscalerTileSize,
       config.upscalerDirect,
       config.upscalerOffloadParamsToCpu};
-}
-
-void loadBackendModulesOnce(const std::string& backendsDir) {
-#ifdef GGML_BACKEND_DL
-  static std::once_flag backendsLoaded;
-  std::call_once(backendsLoaded, [&backendsDir]() {
-    using Priority = qvac_lib_inference_addon_cpp::logger::Priority;
-    if (!backendsDir.empty()) {
-      std::filesystem::path backendsDirPath(backendsDir);
-#ifdef BACKENDS_SUBDIR
-      backendsDirPath = backendsDirPath / BACKENDS_SUBDIR;
-      backendsDirPath = backendsDirPath.lexically_normal();
-#endif
-      QLOG_IF(
-          Priority::INFO,
-          "Loading GPU backends from: " + backendsDirPath.string());
-      ggml_backend_load_all_from_path(backendsDirPath.string().c_str());
-    } else {
-      QLOG_IF(Priority::INFO, "Loading GPU backends from default path");
-      ggml_backend_load_all();
-    }
-  });
-#else
-  (void)backendsDir;
-#endif
 }
 
 void throwIfCancelled(const std::atomic<bool>& cancelRequested) {
@@ -82,7 +55,7 @@ void EsrganUpscalerModel::load() {
 
   const auto tLoadStart = std::chrono::steady_clock::now();
 
-  loadBackendModulesOnce(config_.backendsDir);
+  qvac_lib_inference_addon_sd::loadBackendModulesOnce(config_.backendsDir);
   upscaler_.load();
 
   stats_.modelLoadMs = std::chrono::duration_cast<std::chrono::milliseconds>(

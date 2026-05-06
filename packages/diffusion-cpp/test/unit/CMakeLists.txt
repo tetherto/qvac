@@ -21,6 +21,7 @@ add_executable(
   test_img2img.cpp
   test_sd_gen_handlers.cpp
   test_stb_image_security.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/utils/BackendLoader.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/EsrganUpscaler.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/ImageCodec.cpp

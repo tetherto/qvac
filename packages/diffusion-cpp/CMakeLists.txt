@@ -96,6 +96,7 @@ add_bare_module(qvac-lib-inference-addon-sd EXPORTS ${BACKEND_DL_EXPORTS})
     ${PROJECT_SOURCE_DIR}/addon/src/handlers/SdGenHandlers.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/EsrganUpscalerModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/SdModel.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/utils/BackendLoader.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/EsrganUpscaler.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/ImageCodec.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/ImageUtils.cpp
