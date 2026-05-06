@@ -125,6 +125,7 @@ class FFmpegDecoder {
 
     this.isLoaded = false
     this._cancelCurrent()
+    this._job.fail(new QvacErrorDecoderAudio({ code: ERR_CODES.DECODER_NOT_LOADED }))
     this.logger.info('FFmpegDecoder unloaded')
   }
 
@@ -149,6 +150,7 @@ class FFmpegDecoder {
       })
       .catch(err => {
         this.logger.error('Error processing audio stream:', err)
+        this._job.active?.updateStats(this.runtimeStats())
         this._job.fail(err)
       })
 
@@ -216,6 +218,10 @@ class FFmpegDecoder {
 
   _processPacket (format, packet, raw, decoder, resampler) {
     while (format.readFrame(packet)) {
+      if (this._cancelled) {
+        packet.unref()
+        throw new QvacErrorDecoderAudio({ code: ERR_CODES.JOB_CANCELLED })
+      }
       decoder.sendPacket(packet)
       this._processFrame(decoder, raw, resampler)
       packet.unref()
@@ -302,7 +308,7 @@ class FFmpegDecoder {
     for await (const chunk of audioStream) {
       if (this._cancelled) {
         this.logger.info('[FFmpegDecoder] Job cancelled, stopping stream collection')
-        break
+        throw new QvacErrorDecoderAudio({ code: ERR_CODES.JOB_CANCELLED })
       }
 
       chunks.push(chunk)
@@ -330,7 +336,7 @@ class FFmpegDecoder {
     if (this._cancelled) {
       this.logger.info('[FFmpegDecoder] Job cancelled after data collection')
       this._runtimeStats.decodeTimeMs = Date.now() - startTime
-      return
+      throw new QvacErrorDecoderAudio({ code: ERR_CODES.JOB_CANCELLED })
     }
 
     // Create FFmpeg IO context with the buffer

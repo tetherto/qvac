@@ -53,4 +53,4 @@ declare class FFmpegDecoder {
   runtimeStats(): RuntimeStats
 }
 
-export { FFmpegDecoder, RuntimeStats }
+export { FFmpegDecoder, RuntimeStats, DecoderOutput }
