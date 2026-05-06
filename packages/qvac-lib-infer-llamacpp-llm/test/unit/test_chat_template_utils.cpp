@@ -39,6 +39,35 @@ TEST_F(ChatTemplateUtilsTest, IsQwen3ModelWithNullptr) {
   EXPECT_FALSE(isQwen3Model(nullptr));
 }
 
+TEST_F(ChatTemplateUtilsTest, IsMedPsyModelWithNullptr) {
+  EXPECT_FALSE(isMedPsyModel(nullptr));
+}
+
+TEST_F(ChatTemplateUtilsTest, IsMedPsyBasenameNullopt) {
+  EXPECT_FALSE(isMedPsyBasename(std::nullopt));
+}
+
+TEST_F(ChatTemplateUtilsTest, IsMedPsyBasenameEmpty) {
+  EXPECT_FALSE(isMedPsyBasename(std::string("")));
+}
+
+TEST_F(ChatTemplateUtilsTest, IsMedPsyBasenameExactMatch) {
+  EXPECT_TRUE(isMedPsyBasename(std::string("MedPsy")));
+}
+
+TEST_F(ChatTemplateUtilsTest, IsMedPsyBasenameCaseInsensitive) {
+  EXPECT_TRUE(isMedPsyBasename(std::string("medpsy")));
+  EXPECT_TRUE(isMedPsyBasename(std::string("MEDPSY")));
+  EXPECT_TRUE(isMedPsyBasename(std::string("MedPSY")));
+}
+
+TEST_F(ChatTemplateUtilsTest, IsMedPsyBasenameRejectsOtherNames) {
+  EXPECT_FALSE(isMedPsyBasename(std::string("Qwen3")));
+  EXPECT_FALSE(isMedPsyBasename(std::string("Llama-3.1")));
+  EXPECT_FALSE(isMedPsyBasename(std::string("MedPsy-7B")));
+  EXPECT_FALSE(isMedPsyBasename(std::string("NotMedPsy")));
+}
+
 TEST_F(ChatTemplateUtilsTest, SelectToolsCompactMarkerForQwen3) {
   auto marker = selectToolsCompactMarker("qwen3");
   ASSERT_TRUE(marker.has_value());
