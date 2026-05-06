@@ -26,17 +26,28 @@ Thin wrapper over the shared pr-skills library, pinned to the DevOps pod.
 ## Usage
 
 ```bash
-node .cursor/skills/_lib/pr-skills/pr-status.mjs --pod devops --mode team
+DATE="$(date -u +%Y-%m-%d)"
+node .cursor/skills/_lib/pr-skills/pr-status.mjs --pod devops --mode team \
+  2> /tmp/devops-pr-status-${DATE}.stderr \
+  | tee "/tmp/devops-pr-status-${DATE}.txt"
 ```
 
 For the personal review queue scoped to DevOps PRs, use `--mode review`. The script and its output format are documented in [.cursor/skills/_lib/pr-skills/README.md](.cursor/skills/_lib/pr-skills/README.md).
 
 ## Workflow
 
-1. Run the script with `--pod devops --mode team`.
-2. Present the grouped output to the user (stderr contains progress info — ignore it).
+1. Run the script with `--pod devops --mode team`, **teeing stdout to `/tmp/devops-pr-status-<YYYY-MM-DD>.txt`** so the dashboard is available for paste afterwards. Redirect stderr to a sibling `.stderr` file (it contains progress / `SLACK_VALIDATION_REQUIRED` notices, not dashboard content).
+2. Present the grouped output to the user.
 3. Surface the summary header counts (need your re-review / stale / merge conflicts) prominently.
-4. After showing results, offer: "Want me to review any of these? Provide the PR URL and I'll run `/devops-pr-review` (or `/pr-review` for the generic flow)."
+4. **Print the paste-ready copy commands.** The dashboard is plain text with two-space indent — when pasted into a Slack thread, Slack auto-renders the indented lines as nested bullets and turns `#<num>` into PR auto-links (with the em-dash separator). No re-formatting is needed.
+
+   ```bash
+   pbcopy < /tmp/devops-pr-status-${DATE}.txt   # macOS
+   xclip -selection clipboard < /tmp/devops-pr-status-${DATE}.txt   # Linux
+   wl-copy < /tmp/devops-pr-status-${DATE}.txt   # Wayland
+   ```
+
+5. After showing results, offer: "Want me to review any of these? Provide the PR URL and I'll run `/devops-pr-review` (or `/pr-review` for the generic flow)."
 
 ## References
 

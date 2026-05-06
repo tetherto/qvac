@@ -35,8 +35,16 @@ If the touched paths are dominated by a non-DevOps pod (e.g., `packages/sdk/**`)
 5. Generate title: `TICKET prefix[tag]?: subject`.
 6. Fill template sections based on changes and detected triggers.
 7. Validate tag requirements (`[bc]`).
-8. Output complete PR description.
-9. Optionally create the PR via `gh` (see "gh CLI Integration" below).
+8. **Save the assembled PR body to `/tmp/pr-body.md`** so subsequent steps and any `gh pr create` invocation can read it back without re-rendering. Print the body in chat for inspection AND keep the file canonical (the gh-CLI step below reads from it).
+9. Print the paste-ready commands alongside the in-chat preview — both for direct paste into the GitHub PR-create form and for clipboard tools:
+
+   ```bash
+   pbcopy < /tmp/pr-body.md   # macOS
+   xclip -selection clipboard < /tmp/pr-body.md   # Linux
+   wl-copy < /tmp/pr-body.md   # Wayland
+   ```
+
+10. Optionally create the PR via `gh` (see "gh CLI Integration" below).
 
 ## Inference Strategy
 
