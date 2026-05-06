@@ -1,0 +1,179 @@
+name: SDK Install Check (public npm)
+
+# Verifies that `@qvac/sdk` and each of its `@qvac/*` runtime dependencies
+# are reachable on the public npm registry under the version range pinned in
+# `packages/sdk/package.json`. Catches visibility regressions (e.g. a package
+# accidentally re-published as private) before end users hit "404 Not Found"
+# during `npm install @qvac/sdk`.
+#
+# The list of packages and ranges lives in `scripts/install-check/packages.json`
+# so it can be diffed mechanically against `packages/sdk/package.json`.
+
+on:
+  schedule:
+    - cron: "0 6 * * *" # daily 06:00 UTC, after EU mornings
+  workflow_dispatch:
+    inputs:
+      package-filter:
+        description: "Run only one package (e.g. @qvac/translation-nmtcpp). Empty = all."
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  build-matrix:
+    name: Build matrix
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      packages: ${{ steps.derive.outputs.packages }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Derive package matrix
+        id: derive
+        shell: node {0}
+        env:
+          # Even though `package-filter` is a free-form string, it is consumed
+          # only via `process.env` (no `${{ }}` interpolation inside `run:`)
+          # so workflow-expression injection is not possible here.
+          FILTER: ${{ inputs.package-filter }}
+        run: |
+          const fs = require('fs');
+          const list = JSON.parse(
+            fs.readFileSync('scripts/install-check/packages.json', 'utf8')
+          ).packages;
+          const filter = (process.env.FILTER || '').trim();
+          const filtered = filter ? list.filter((p) => p.name === filter) : list;
+          if (filtered.length === 0) {
+            console.log(`No packages match filter "${filter}". Available: ${list.map((p) => p.name).join(', ')}`);
+            process.exit(1);
+          }
+          fs.appendFileSync(
+            process.env.GITHUB_OUTPUT,
+            `packages=${JSON.stringify(filtered)}\n`
+          );
+          console.log(`Matrix size: ${filtered.length}`);
+          for (const p of filtered) console.log(`  ${p.name}@${p.range}`);
+
+  install-check:
+    name: ${{ matrix.package.name }}@${{ matrix.package.range }}
+    needs: build-matrix
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      # Surface every failing package, not just the first one — when nmtcpp
+      # goes 404 we want to know whether anything else regressed in the same
+      # window.
+      fail-fast: false
+      matrix:
+        package: ${{ fromJson(needs.build-matrix.outputs.packages) }}
+    steps:
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Configure public npm registry
+        run: |
+          # Deliberately no NPM_TOKEN: every `@qvac/*` runtime dep is supposed
+          # to be reachable to anonymous end users, which is exactly the
+          # failure mode of the original `@qvac/translation-nmtcpp` 404 bug.
+          mkdir -p /tmp/install-check
+          printf '%s\n' \
+            'registry=https://registry.npmjs.org/' \
+            '@qvac:registry=https://registry.npmjs.org/' \
+            > /tmp/install-check/.npmrc
+
+      - name: Probe registry visibility
+        env:
+          PKG_NAME: ${{ matrix.package.name }}
+          PKG_RANGE: ${{ matrix.package.range }}
+        working-directory: /tmp/install-check
+        run: |
+          set -eo pipefail
+          echo "::group::npm view $PKG_NAME@$PKG_RANGE"
+          npm view "$PKG_NAME@$PKG_RANGE" version dist-tags
+          echo "::endgroup::"
+
+      - name: Install in fresh dir
+        env:
+          PKG_NAME: ${{ matrix.package.name }}
+          PKG_RANGE: ${{ matrix.package.range }}
+        working-directory: /tmp/install-check
+        run: |
+          set -eo pipefail
+          npm init -y > /dev/null
+          # `--ignore-scripts` keeps this check focused on registry visibility
+          # and tarball download. Many @qvac/* packages have native postinstall
+          # steps (vcpkg/CMake) that we explicitly do NOT want to exercise here
+          # — those are covered by per-addon prebuild + integration workflows.
+          npm install --no-fund --no-audit --ignore-scripts "$PKG_NAME@$PKG_RANGE"
+
+      - name: Smoke require (SDK only)
+        if: matrix.package.name == '@qvac/sdk'
+        working-directory: /tmp/install-check
+        run: |
+          # Pure-JS load of the SDK entry point. Catches "installs but fails
+          # to load" regressions (bad `exports`, broken transpile output) on
+          # top of the registry-visibility check.
+          node -e "require('@qvac/sdk'); console.log('require ok')"
+
+  notify-on-failure:
+    name: Open or update tracking issue
+    needs: install-check
+    # Only the scheduled trigger should spam the issue tracker. Manual
+    # `workflow_dispatch` runs (used for testing) intentionally stay silent.
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Open or update tracking issue
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
+        with:
+          script: |
+            const title = 'SDK install-check failing on public npm';
+            const label = 'npm-visibility';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              `Scheduled SDK install-check failed.`,
+              ``,
+              `- Run: ${runUrl}`,
+              `- Triage: open the failed matrix leg(s); the failing package is the matrix label.`,
+              `- Likely cause: package was re-published as private, or a release PR to \`release-*\` did not land, leaving \`packages/sdk/package.json\` pinned to a range that npm cannot resolve.`,
+              `- Fix: re-publish from the appropriate \`release-*\` branch with public access (\`publish-library-to-npm\` action, see \`docs/gitflow.md\`).`,
+            ].join('\n');
+
+            const { data: existing } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: label,
+              per_page: 5,
+            });
+
+            if (existing.length > 0) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing[0].number,
+                body,
+              });
+              core.info(`Appended comment to existing issue #${existing[0].number}`);
+            } else {
+              const created = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: [label],
+              });
+              core.info(`Opened new issue #${created.data.number}`);
+            }

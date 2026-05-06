@@ -1,0 +1,19 @@
+{
+  "packages": [
+    { "name": "@qvac/sdk", "range": "latest" },
+    { "name": "@qvac/decoder-audio", "range": "^0.3.7" },
+    { "name": "@qvac/diffusion-cpp", "range": "^0.5.0" },
+    { "name": "@qvac/embed-llamacpp", "range": "^0.14.0" },
+    { "name": "@qvac/error", "range": "^0.1.1" },
+    { "name": "@qvac/langdetect-text", "range": "^0.1.2" },
+    { "name": "@qvac/llm-llamacpp", "range": "^0.17.3" },
+    { "name": "@qvac/logging", "range": "^0.1.0" },
+    { "name": "@qvac/ocr-onnx", "range": "^0.4.2" },
+    { "name": "@qvac/rag", "range": "^0.4.4" },
+    { "name": "@qvac/registry-client", "range": "^0.4.1" },
+    { "name": "@qvac/transcription-parakeet", "range": "^0.3.1" },
+    { "name": "@qvac/transcription-whispercpp", "range": "^0.6.5" },
+    { "name": "@qvac/translation-nmtcpp", "range": "^2.0.1" },
+    { "name": "@qvac/tts-onnx", "range": "^0.8.4" }
+  ]
+}
