@@ -21,7 +21,11 @@ const {
 
 #### `WeightsProvider` removed
 
-The class is no longer exported and the `WeightsProvider/` directory is no longer published. The `DOWNLOAD_FAILED` (4001) error code is removed alongside it; the remaining error codes are unchanged.
+The class is no longer exported and the `WeightsProvider/` directory is no longer published. The `DOWNLOAD_FAILED` (4001) error code is removed alongside it.
+
+#### `QvacInferenceBaseError` / `ERR_CODES` no longer shipped
+
+`src/error.js` is removed. The codes it registered (`NOT_IMPLEMENTED` `3101`, `LOAD_NOT_IMPLEMENTED` `3102`, `ADDON_METHOD_NOT_IMPLEMENTED` `3103`, `LOADER_NOT_FOUND` `3104`, `ADDON_INTERFACE_REQUIRED` `3105`, `ADDON_NOT_INITIALIZED` `3106`) were only thrown from `BaseInference` / `WeightsProvider` and were never re-exported from the package entry, so consumers cannot have been throwing them through `@qvac/infer-base`.
 
 #### `QvacResponse` pause / continue / status removed
 
@@ -37,8 +41,8 @@ Previously the entry was `module.exports = BaseInference` (the class, with the n
 
 ### Other changes
 
-- Internal `src/utils/progressReport` module removed (only used by `WeightsProvider`).
-- Dropped runtime dependencies on `@qvac/logging` and `bare-path`, and the optional dependency on `@qvac/diagnostics`. None were re-exported, so consumers should only see a smaller install footprint.
+- Internal `src/utils/progressReport` module removed. The only in-package consumer was `WeightsProvider`; `@qvac/dl-hyperdrive` still deep-imports `@qvac/infer-base/src/utils/progressReport` from its own runtime and tests and is pinned to `^0.1.0`, so it is unaffected by this release and will migrate (vendor or replace `progressReport`) before bumping its `infer-base` pin to `^0.5.0`.
+- Dropped runtime dependencies on `@qvac/error`, `@qvac/logging`, and `bare-path`, and the optional dependency on `@qvac/diagnostics`. None were re-exported, so consumers should only see a smaller install footprint.
 
 ## [0.4.1] - 2026-04-28
 
