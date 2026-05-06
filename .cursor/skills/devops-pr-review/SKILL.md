@@ -1,6 +1,6 @@
 ---
 name: devops-pr-review
-description: PR review for DevOps changes — runs the generic /pr-review flow then adds a structured GitHub Actions security audit (action pinning, permissions, untrusted input, OIDC, hardened runner, secrets in run blocks, concurrency, timeouts, fork-PR isolation). Use when reviewing a PR that touches .github/workflows/, .github/actions/, .github/scripts/, scripts/, or invoking /devops-pr-review.
+description: PR review for DevOps changes — runs the generic /pr-review flow then layers a structured GitHub Actions security audit (action pinning, permissions, OIDC, hardened runner, secrets handling). Use when reviewing a PR that touches DevOps paths or invoking /devops-pr-review.
 disable-model-invocation: true
 ---
 
@@ -120,7 +120,7 @@ run: |
 
 The cite makes the audit finding auditable: the reviewer can verify the rule still says what the comment claims.
 
-## Quality gates
+## Quality Checklist
 
 Before posting the pending review, verify:
 

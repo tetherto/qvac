@@ -1,14 +1,12 @@
 ---
 name: devops-pr-status
-description: Team-wide PR dashboard for the DevOps pod. Shows open PRs touching DevOps-owned paths (.github/workflows/, .github/actions/, .github/scripts/, scripts/), grouped into needs-your-re-review / stale (>3d) / needs-review with merge-conflict warnings. Use when checking DevOps pod PR status, asking "what's stale?", or invoking /devops-pr-status.
+description: Team-wide PR dashboard for the DevOps pod. Shows open PRs touching DevOps-owned paths, grouped into needs-your-re-review / stale (>3d) / needs-review, with merge-conflict warnings. Use when checking DevOps pod PR status, asking about stale PRs, or invoking /devops-pr-status.
 disable-model-invocation: true
 ---
 
 # DevOps Pod PR Status
 
 Thin wrapper over the shared pr-skills library, pinned to the DevOps pod.
-
-Resolves the "Stale-Prs" subtask of QVAC-18394: the shared script already segregates open PRs into `needs-your-re-review`, `stale (>3d)`, and `needs-review` and flags `mergeable: CONFLICTING` PRs — there is no separate stale-only mode to build.
 
 ## When to use this skill
 

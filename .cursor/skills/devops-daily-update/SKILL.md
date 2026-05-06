@@ -1,6 +1,6 @@
 ---
 name: devops-daily-update
-description: Compose a daily standup / EOD update in the team's standard Slack format (🔨 Done today / 📅 Planned for tomorrow / 🚧 Blockers / risks), with ticket-led bullets and optional sub-bullets for context. Aggregates the user's recent PRs, reviews, and CI in tetherto/qvac, and emits a copy-paste Slack message. Use when the user asks for a "daily update", "standup", "EOD", or invokes /devops-daily-update.
+description: Compose a daily standup in the team's Slack format (🔨 Done today / 📅 Planned for tomorrow / 🚧 Blockers / risks), aggregating recent PRs, reviews, and CI from tetherto/qvac. Use when asked for a daily update, standup, EOD, or invoking /devops-daily-update.
 disable-model-invocation: true
 ---
 
@@ -8,33 +8,7 @@ disable-model-invocation: true
 
 Composes a standup / EOD update in the team's standard Slack format and writes it to a temp file ready to paste. Sourced from the user's GitHub activity in `tetherto/qvac` plus optional Asana context.
 
-The skill is read-only with respect to GitHub state and the local working tree. It NEVER posts the message — the user copies it manually.
-
-## Canonical template
-
-This is the team's daily-update format on Slack. The skill MUST match it exactly: same section order, same emoji, same bullet shape (`TICKET: action`), same `N/A` placeholder when a section is empty.
-
-```
-🔨 *Done today*
-- QVAC-XXXXX: <past-tense action>
-- QVAC-YYYYY: <past-tense action>
-    - <optional sub-bullet for additional context>
-
-📅 *Planned for tomorrow*
-- QVAC-XXXXX: <forward-looking action>
-- QVAC-ZZZZZ
-
-🚧 *Blockers / risks*
-- N/A
-```
-
-Notes on the format:
-
-- Section headings use literal Unicode emoji (🔨 / 📅 / 🚧) followed by the section name in Slack-bold (`*…*`). Do NOT use Markdown headings (`##`); the renderer is Slack, not GitHub.
-- Bullets lead with the ticket number (`QVAC-\d+`) followed by `:` and a terse action. The Asana/Slack integration in this workspace auto-links ticket numbers, so leave them as plain text.
-- Sub-bullets sit one indent level deeper (4 spaces in Slack mrkdwn) and add context to a parent ticket. Use sparingly.
-- A bare ticket (`- QVAC-13860`) is allowed when the work is self-evident from the ticket title.
-- An empty section uses literal `N/A` as the only bullet — never `_(none)_`, never an empty list, never a removed section.
+The skill is read-only with respect to GitHub state and the local working tree. It NEVER posts the message — the user copies it manually. The canonical Slack form is documented in [Step 8](#8-assemble-the-output).
 
 ## When to use this skill
 
@@ -197,7 +171,7 @@ Each item from steps 3–6 must be normalized to a `TICKET: action` bullet. Tick
 - N/A
 ```
 
-Empty section → single bullet `- N/A`. Three sections always rendered, in this order, separated by a single blank line.
+Empty section → single bullet `- N/A` (literal). Three sections always rendered, in this order, separated by a single blank line. Bare ticket bullets (`- QVAC-13860` with no `:` and no action) are allowed when the work is self-evident from the ticket title.
 
 #### Markdown form (chat preview only)
 
@@ -243,7 +217,7 @@ Do NOT pre-link ticket numbers via `<URL|TICKET>` — the workspace's Asana app 
 
 3. Offer: "Edit any line before posting? Tell me which ticket and the new action wording, and I'll regenerate."
 
-## Quality gates
+## Quality Checklist
 
 Before printing the output, verify:
 

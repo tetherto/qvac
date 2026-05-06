@@ -1,6 +1,6 @@
 ---
 name: devops-pr-create
-description: Generate PR titles and descriptions for DevOps surfaces (.github/workflows/, .github/actions/, .github/scripts/, scripts/). Applies the DevOps commit/PR format rule and the devops.md PR template. Use when creating a PR for a DevOps change or invoking /devops-pr-create.
+description: Generate PR titles and descriptions for DevOps surfaces (CI/CD, composite actions, automation scripts, IaC) following the devops.md PR template and commit/PR format rule. Use when creating a DevOps PR or invoking /devops-pr-create.
 disable-model-invocation: true
 ---
 
@@ -115,9 +115,9 @@ TICKET prefix[tag]?: subject
 ```
 ~~~
 
-## Validation gate (CLIENT-SIDE)
+## Validation
 
-There is no `pr-validation-devops.yml` workflow yet (see [.cursor/rules/devops/commit-and-pr-format.mdc](.cursor/rules/devops/commit-and-pr-format.mdc) "Validation" section). This skill MUST validate the title before pushing or invoking `gh pr create`. Refuse and ask for correction if any of these fail:
+No `pr-validation-devops.yml` workflow exists yet (see [.cursor/rules/devops/commit-and-pr-format.mdc](.cursor/rules/devops/commit-and-pr-format.mdc) "Validation" section). This skill MUST validate the title client-side before pushing or invoking `gh pr create`. Refuse and ask for correction if any of these fail:
 
 - Title regex: `^([A-Z]+-\d+ )?(infra|feat|fix|chore|doc|test)(\[(bc|notask|skiplog)\])?: \S.+$`
 - Lowercase prefix and lowercase subject (sentence case allowed; the first word may be capitalized for proper nouns)
