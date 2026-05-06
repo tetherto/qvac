@@ -12,13 +12,8 @@ JavaScript Dependencies
 
 --- apache-2.0 (Apache License 2.0) ---
 
-  @qvac/diagnostics@0.1.1
-  @qvac/error@0.1.1
-  @qvac/logging@0.1.0
   bare-events@2.4.2
     https://github.com/holepunchto/bare-events
   bare-os@3.9.0
     https://github.com/holepunchto/bare-os
-  bare-path@3.0.0
-    https://github.com/holepunchto/bare-path
 
