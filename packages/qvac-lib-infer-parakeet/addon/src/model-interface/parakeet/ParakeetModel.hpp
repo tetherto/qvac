@@ -246,16 +246,20 @@ private:
   static constexpr int EOU_DECODER_LSTM_LAYERS = 1;
 
   // ── TDT encoder long-form chunking ─────────────────────────────────────
-  // The exported TDT encoder graph has a positional-encoding tensor whose
-  // time axis is hard-coded to TDT_ENCODER_MAX_OUTPUT_FRAMES. Audio whose
-  // post-subsampling length exceeds this limit is processed via a sliding
-  // window over the mel features (see runEncoderChunked).
-  static constexpr int64_t TDT_ENCODER_MAX_OUTPUT_FRAMES = 9999;
+  // The exported TDT encoder graph has positional-encoding tensors that
+  // impose two static length ceilings on the encoder time axis:
+  //   - a long-range bucket of 9999 frames
+  //   - a tighter (relative/local) bucket of 3000 frames
+  // The tighter bucket is the binding constraint, so chunks fed to the
+  // encoder must stay under 3000 encoder frames (= 24000 mel frames).
+  // Audio whose post-subsampling length exceeds the chunk size is processed
+  // via a sliding window over the mel features (see runEncoderChunked).
+  static constexpr int64_t TDT_ENCODER_MAX_OUTPUT_FRAMES = 3000;
   static constexpr int64_t TDT_ENCODER_SUBSAMPLING = 8;
+  static constexpr int64_t TDT_ENCODER_CHUNK_MEL_FRAMES = 20000;  // ~200s, 2500 enc frames
+  static constexpr int64_t TDT_ENCODER_OVERLAP_MEL_FRAMES = 2000; // ~20s
   static constexpr int64_t TDT_ENCODER_MAX_MEL_FRAMES =
-      TDT_ENCODER_MAX_OUTPUT_FRAMES * TDT_ENCODER_SUBSAMPLING; // 79992 (~800s)
-  static constexpr int64_t TDT_ENCODER_CHUNK_MEL_FRAMES = 64000;  // ~640s
-  static constexpr int64_t TDT_ENCODER_OVERLAP_MEL_FRAMES = 6400; // ~64s
+      TDT_ENCODER_CHUNK_MEL_FRAMES; // chunk anything beyond one window
   static constexpr int64_t TDT_ENCODER_MIN_TAIL_MEL_FRAMES = 80;  // ~0.8s
 
   // ── EOU (FastConformer-RNNT 120M) ─────────────────────────────────────
