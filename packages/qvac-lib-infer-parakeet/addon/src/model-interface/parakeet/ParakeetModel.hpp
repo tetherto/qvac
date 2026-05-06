@@ -153,6 +153,9 @@ private:
   std::vector<float> runEncoder(
       const std::vector<float>& melFeatures, int64_t numFrames,
       int64_t& encodedLength, bool alreadyTransposed = false);
+  std::vector<float> runEncoderChunked(
+      const std::vector<float>& melFeatures, int64_t numFrames,
+      int64_t& encodedLength, bool alreadyTransposed);
   std::string
   greedyDecode(const std::vector<float>& encoderOutput, int64_t encodedLength);
 
@@ -241,6 +244,19 @@ private:
   static constexpr int DECODER_STATE_DIM = 640;
   static constexpr int TDT_DECODER_LSTM_LAYERS = 2;
   static constexpr int EOU_DECODER_LSTM_LAYERS = 1;
+
+  // ── TDT encoder long-form chunking ─────────────────────────────────────
+  // The exported TDT encoder graph has a positional-encoding tensor whose
+  // time axis is hard-coded to TDT_ENCODER_MAX_OUTPUT_FRAMES. Audio whose
+  // post-subsampling length exceeds this limit is processed via a sliding
+  // window over the mel features (see runEncoderChunked).
+  static constexpr int64_t TDT_ENCODER_MAX_OUTPUT_FRAMES = 9999;
+  static constexpr int64_t TDT_ENCODER_SUBSAMPLING = 8;
+  static constexpr int64_t TDT_ENCODER_MAX_MEL_FRAMES =
+      TDT_ENCODER_MAX_OUTPUT_FRAMES * TDT_ENCODER_SUBSAMPLING; // 79992 (~800s)
+  static constexpr int64_t TDT_ENCODER_CHUNK_MEL_FRAMES = 64000;  // ~640s
+  static constexpr int64_t TDT_ENCODER_OVERLAP_MEL_FRAMES = 6400; // ~64s
+  static constexpr int64_t TDT_ENCODER_MIN_TAIL_MEL_FRAMES = 80;  // ~0.8s
 
   // ── EOU (FastConformer-RNNT 120M) ─────────────────────────────────────
   static constexpr int EOU_ENCODER_DIM = 512;
