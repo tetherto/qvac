@@ -298,3 +298,21 @@ export { QvacResponse, FinetuneHandle, FinetuneProgressStats, FinetuneOptions, F
 
 /** Returns the first shard (matching `-NNNNN-of-MMMMM.gguf`) or the sole entry for single-file models. */
 export function pickPrimaryGgufPath(files: string[]): string
+
+/**
+ * Validate and normalize the `use_model_chat_template` config key (and its
+ * `use-model-chat-template` kebab-case alias) into the canonical
+ * `'true'` / `'false'` string the native addon understands.
+ *
+ * - Accepts native booleans and case-insensitive `"true"` / `"false"` /
+ *   `"1"` / `"0"` strings.
+ * - Throws `TypeError` on any other type or unrecognized string.
+ * - Throws `TypeError` when both keys are present with conflicting values.
+ * - Returns the input unchanged if neither key is present (or both are
+ *   `undefined` / `null`); otherwise returns a clone with the kebab-case
+ *   alias removed and `use_model_chat_template` set to the canonical string.
+ *
+ * Called automatically by `LlmLlamacpp.load()`. Exported so callers can
+ * pre-validate user-supplied configs before instantiating the model.
+ */
+export function normalizeChatTemplateConfig<T extends Record<string, any>>(config: T): T

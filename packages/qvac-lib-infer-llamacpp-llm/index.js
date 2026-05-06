@@ -149,6 +149,70 @@ function pickPrimaryGgufPath (files) {
   return files.find((p) => SHARD_REGEX.test(p)) || files[0]
 }
 
+const USE_MODEL_CHAT_TEMPLATE_KEYS = ['use_model_chat_template', 'use-model-chat-template']
+
+/**
+ * Validates and normalizes the `use_model_chat_template` config key (or its
+ * kebab-case alias) into a single canonical `'true'` / `'false'` string the
+ * native addon can read. Accepts native booleans and case-insensitive
+ * `"true"` / `"false"` / `"1"` / `"0"` strings; throws TypeError on anything
+ * else so users get an immediate JS-side error instead of the option being
+ * silently dropped or mis-parsed by the C++ side.
+ *
+ * Returns a (possibly cloned) config; never mutates the input.
+ *
+ * @param {Record<string, any>} config - The raw user-supplied config.
+ * @returns {Record<string, any>} The same `config` if neither key is present,
+ *   otherwise a clone with `use_model_chat_template` set to the normalized
+ *   string and the kebab-case alias removed.
+ */
+function normalizeChatTemplateConfig (config) {
+  if (!config || typeof config !== 'object') return config
+
+  let resolved = null
+  let firstKey = null
+  for (const key of USE_MODEL_CHAT_TEMPLATE_KEYS) {
+    if (!Object.prototype.hasOwnProperty.call(config, key)) continue
+    const raw = config[key]
+    if (raw === undefined || raw === null) continue
+
+    let asBool
+    if (typeof raw === 'boolean') {
+      asBool = raw
+    } else if (typeof raw === 'string') {
+      const v = raw.trim().toLowerCase()
+      if (v === 'true' || v === '1') {
+        asBool = true
+      } else if (v === 'false' || v === '0' || v === '') {
+        asBool = false
+      } else {
+        throw new TypeError(
+          `${key} must be a boolean or one of "true"/"false"/"1"/"0" (got: ${JSON.stringify(raw)})`
+        )
+      }
+    } else {
+      throw new TypeError(
+        `${key} must be a boolean or string (got: ${typeof raw})`
+      )
+    }
+
+    if (resolved !== null && resolved !== asBool) {
+      throw new TypeError(
+        `Conflicting values for ${firstKey}=${resolved} and ${key}=${asBool}; pass only one or use the same value`
+      )
+    }
+    resolved = asBool
+    if (firstKey === null) firstKey = key
+  }
+
+  if (resolved === null) return config
+
+  const out = { ...config }
+  delete out['use-model-chat-template']
+  out.use_model_chat_template = String(resolved)
+  return out
+}
+
 /** LLM client wrapping the native LlamaInterface for inference, finetuning, and pause/resume. */
 class LlmLlamacpp {
   constructor ({ files, config, logger = null, opts = {} }) {
@@ -201,7 +265,7 @@ class LlmLlamacpp {
     const configurationParams = {
       path: primaryGgufPath,
       projectionPath: this._projectionModelPath,
-      config: { ...this._config }
+      config: normalizeChatTemplateConfig({ ...this._config })
     }
 
     this.logger.info('Creating addon with configuration:', configurationParams)
@@ -477,3 +541,4 @@ class LlmLlamacpp {
 
 module.exports = LlmLlamacpp
 module.exports.pickPrimaryGgufPath = pickPrimaryGgufPath
+module.exports.normalizeChatTemplateConfig = normalizeChatTemplateConfig
