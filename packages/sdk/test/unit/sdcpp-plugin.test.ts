@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
   sdcppConfigSchema,
   diffusionRequestSchema,
+  diffusionStreamRequestSchema,
   diffusionStreamResponseSchema,
   diffusionStatsSchema,
   modelInfoSchema,
@@ -318,6 +319,180 @@ test("diffusionRequestSchema: accepts strength at boundaries (0 and 1)", (t) => 
     strength: 1,
   });
   t.is(resultOne.success, true);
+});
+
+// ---- LoRA + multi-reference fusion (FLUX.2) ----
+
+test("diffusionRequestSchema: accepts lora as POSIX absolute path", (t) => {
+  const result = diffusionRequestSchema.safeParse({
+    modelId: "model-1",
+    prompt: "a cat",
+    lora: "/home/user/loras/watercolor.safetensors",
+  });
+  t.is(result.success, true);
+});
+
+test("diffusionRequestSchema: accepts lora as Windows drive-letter path", (t) => {
+  const resultBackslash = diffusionRequestSchema.safeParse({
+    modelId: "model-1",
+    prompt: "a cat",
+    lora: "C:\\models\\loras\\watercolor.safetensors",
+  });
+  t.is(resultBackslash.success, true);
+
+  const resultForwardSlash = diffusionRequestSchema.safeParse({
+    modelId: "model-1",
+    prompt: "a cat",
+    lora: "C:/models/loras/watercolor.safetensors",
+  });
+  t.is(resultForwardSlash.success, true);
+});
+
+test("diffusionRequestSchema: accepts lora as Windows UNC path", (t) => {
+  const result = diffusionRequestSchema.safeParse({
+    modelId: "model-1",
+    prompt: "a cat",
+    lora: "\\\\server\\share\\loras\\watercolor.safetensors",
+  });
+  t.is(result.success, true);
+});
+
+test("diffusionRequestSchema: rejects lora as bare filename", (t) => {
+  const result = diffusionRequestSchema.safeParse({
+    modelId: "model-1",
+    prompt: "a cat",
+    lora: "my-lora.safetensors",
+  });
+  t.is(result.success, false);
+  if (!result.success) {
+    t.ok(
+      /must be an absolute path/.test(result.error.issues[0]!.message),
+      "error message explains lora must be absolute",
+    );
+  }
+});
+
+test("diffusionRequestSchema: rejects lora as relative path", (t) => {
+  const resultDot = diffusionRequestSchema.safeParse({
+    modelId: "model-1",
+    prompt: "a cat",
+    lora: "./loras/watercolor.safetensors",
+  });
+  t.is(resultDot.success, false);
+
+  const resultParent = diffusionRequestSchema.safeParse({
+    modelId: "model-1",
+    prompt: "a cat",
+    lora: "../loras/watercolor.safetensors",
+  });
+  t.is(resultParent.success, false);
+
+  const resultSubdir = diffusionRequestSchema.safeParse({
+    modelId: "model-1",
+    prompt: "a cat",
+    lora: "loras/watercolor.safetensors",
+  });
+  t.is(resultSubdir.success, false);
+});
+
+test("diffusionRequestSchema: accepts init_images with multiple base64 buffers", (t) => {
+  const result = diffusionRequestSchema.safeParse({
+    modelId: "model-1",
+    prompt: "blend @image1 and @image2",
+    init_images: ["iVBORw0KGgoAAAANSUhEUg==", "/9j/4AAQSkZJRgABAQEASABIAAA="],
+  });
+  t.is(result.success, true);
+});
+
+test("diffusionRequestSchema: accepts increase_ref_index boolean", (t) => {
+  const result = diffusionRequestSchema.safeParse({
+    modelId: "model-1",
+    prompt: "a cat",
+    init_images: ["iVBORw0KGgoAAAANSUhEUg=="],
+    increase_ref_index: true,
+  });
+  t.is(result.success, true);
+});
+
+test("diffusionRequestSchema: accepts auto_resize_ref_image boolean", (t) => {
+  const result = diffusionRequestSchema.safeParse({
+    modelId: "model-1",
+    prompt: "a cat",
+    init_image: "iVBORw0KGgoAAAANSUhEUg==",
+    auto_resize_ref_image: false,
+  });
+  t.is(result.success, true);
+});
+
+test("diffusionRequestSchema: rejects when init_image and init_images are both set", (t) => {
+  const result = diffusionRequestSchema.safeParse({
+    modelId: "model-1",
+    prompt: "blend two refs",
+    init_image: "iVBORw0KGgoAAAANSUhEUg==",
+    init_images: ["iVBORw0KGgoAAAANSUhEUg==", "/9j/4AAQSkZJRgABAQEASABIAAA="],
+  });
+  t.is(result.success, false);
+  if (!result.success) {
+    const messages = result.error.issues.map((i) => i.message).join(" | ");
+    t.ok(
+      messages.includes("mutually exclusive"),
+      `expected mutual-exclusion message, got: ${messages}`,
+    );
+  }
+});
+
+test("diffusionRequestSchema: accepts init_image alone (mutual exclusion not triggered)", (t) => {
+  const result = diffusionRequestSchema.safeParse({
+    modelId: "model-1",
+    prompt: "img2img",
+    init_image: "iVBORw0KGgoAAAANSUhEUg==",
+  });
+  t.is(result.success, true);
+});
+
+test("diffusionRequestSchema: accepts init_images alone (mutual exclusion not triggered)", (t) => {
+  const result = diffusionRequestSchema.safeParse({
+    modelId: "model-1",
+    prompt: "fusion",
+    init_images: ["iVBORw0KGgoAAAANSUhEUg=="],
+  });
+  t.is(result.success, true);
+});
+
+// ---- diffusionStreamRequestSchema ----
+
+test("diffusionStreamRequestSchema: accepts a valid stream request with type literal", (t) => {
+  const result = diffusionStreamRequestSchema.safeParse({
+    type: "diffusionStream",
+    modelId: "model-1",
+    prompt: "a cat",
+  });
+  t.is(result.success, true);
+});
+
+test("diffusionStreamRequestSchema: rejects when init_image and init_images are both set", (t) => {
+  const result = diffusionStreamRequestSchema.safeParse({
+    type: "diffusionStream",
+    modelId: "model-1",
+    prompt: "a cat",
+    init_image: "iVBORw0KGgoAAAANSUhEUg==",
+    init_images: ["iVBORw0KGgoAAAANSUhEUg=="],
+  });
+  t.is(result.success, false);
+  if (!result.success) {
+    const messages = result.error.issues.map((i) => i.message).join(" | ");
+    t.ok(
+      messages.includes("mutually exclusive"),
+      `expected mutual-exclusion message, got: ${messages}`,
+    );
+  }
+});
+
+// ---- sdcppConfigSchema: lora_apply_mode ----
+
+test("sdcppConfigSchema: accepts lora_apply_mode", (t) => {
+  const result = sdcppConfigSchema.safeParse({ lora_apply_mode: "auto" });
+  t.is(result.success, true);
 });
 
 // ============================================

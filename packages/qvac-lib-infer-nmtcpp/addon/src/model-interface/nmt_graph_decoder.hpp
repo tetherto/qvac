@@ -7,27 +7,26 @@
 #include "ggml.h"
 #include "nmt.hpp"
 
-void apply_repetition_penalty(
-    std::vector<float>& logits, const std::vector<int32_t>& generated_tokens,
+void applyRepetitionPenalty(
+    std::vector<float>& logits, const std::vector<int32_t>& generatedTokens,
     float penalty);
 
-struct ggml_cgraph* nmt_build_graph_decoder(
-    nmt_context& ctx, nmt_state& state, const nmt_batch& batch,
-    bool worst_case);
+struct ggml_cgraph* nmtBuildGraphDecoder(
+    nmt_context& ctx, nmt_state& state, const nmt_batch& batch, bool worstCase);
 
-bool nmt_decode_internal(nmt_context& ctx, nmt_batch& batch, nmt_state& state);
+bool nmtDecodeInternal(nmt_context& ctx, nmt_batch& batch, nmt_state& state);
 
-void indictrans_compute_sinusoidal_positional_embeddings_to_buffer(
-    float* data, int d_model, int max_len);
+void indictransComputeSinusoidalPositionalEmbeddingsToBuffer(
+    float* data, int dModel, int maxLen);
 
-void apply_top_k_filter(
+void applyTopKFilter(
     std::vector<float>& logits,
-    std::vector<nmt_pair<float, nmt_vocab::id>>& logits_id, const int top_k);
+    std::vector<nmt_pair<float, nmt_vocab::id>>& logitsId, int topK);
 
-void apply_no_repeat_ngram_filter(
+void applyNoRepeatNgramFilter(
     std::vector<float>& logits, const std::vector<nmt_vocab::id>& tokens,
-    int no_repeat_ngram_size);
+    int noRepeatNgramSize);
 
-void nmt_compute_logprobs(
-    const std::vector<float>& logits, const int n_logits,
+void nmtComputeLogprobs(
+    const std::vector<float>& logits, int nLogits,
     std::vector<float>& logprobs);

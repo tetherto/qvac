@@ -12,6 +12,7 @@ export function detectToolDialectFromName(
   const basename = path.toLowerCase().split(/[/\\]/).pop() ?? "";
   const tag = `${(name ?? "").toLowerCase()}|${basename}`;
 
+  if (/gpt[_-]?oss/.test(tag)) return "harmony";
   if (/lfm[_-]?\d/.test(tag)) return "pythonic";
   return "hermes";
 }

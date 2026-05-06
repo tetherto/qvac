@@ -41,11 +41,8 @@ jobs:
         with:
           node-version: lts/*
 
-      - name: Install system dependencies
-        run: |
-          wget https://apt.llvm.org/llvm.sh
-          chmod +x llvm.sh
-          sudo ./llvm.sh 19 all
+      - name: Setup LLVM
+        uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
 
       - name: Install Vulkan SDK
         run: |

@@ -199,6 +199,23 @@ export const diffusionStatsPresent = createDiffusionTest(
   { validation: "type", expectedType: "string" },
 );
 
+// ---- FLUX.2 multi-reference fusion ----
+
+export const diffusionFusionFlux2Basic = createDiffusionTest(
+  "diffusion-fusion-flux2-basic",
+  {
+    prompt: "a portrait using most visual traits from @image1 and the eyes from @image2",
+    init_images: ["cat.jpg", "elephant.jpg"],
+    width: 256,
+    height: 256,
+    steps: 4,
+    seed: 42,
+  },
+  // Required by TestDefinition but effectively ignored - DiffusionExecutor.fusionFlux2Basic gates the result.
+  { validation: "type", expectedType: "array" },
+  600000,
+);
+
 // ---- error cases ----
 
 export const diffusionEmptyPrompt = createDiffusionTest(
@@ -227,5 +244,6 @@ export const diffusionTests = [
   diffusionStreaming,
   diffusionStreamingProgress,
   diffusionStatsPresent,
+  diffusionFusionFlux2Basic,
   diffusionEmptyPrompt,
 ];

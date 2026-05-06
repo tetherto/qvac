@@ -171,6 +171,7 @@ Source: [`examples/generate-image.js`](./examples/generate-image.js)
 -   [Generate Image (SD2.1)](./examples/generate-image-sd2.js) – Text-to-image with an SD2.1 all-in-one GGUF model.
 -   [Generate Image (SD3)](./examples/generate-image-sd3.js) – Text-to-image with SD3 Medium (safetensors, diffusion + CLIP encoders).
 -   [Generate Image (SDXL)](./examples/generate-image-sdxl.js) – Text-to-image with an SDXL base all-in-one GGUF model.
+-   [Post-generation ESRGAN Upscale](./examples/generate-image-esrgan-upscale.js) – Text-to-image with SD2.1 followed by one or two ESRGAN upscale passes.
 -   [Runtime Stats](./examples/runtime-stats-sd2.js) – Run SD2.1 inference and report runtime statistics.
 -   [img2img FLUX2](./examples/img2img-flux2.js) – Transform an image with FLUX2-klein (Q8_0, in-context conditioning).
 -   [img2img FLUX2 F16](./examples/img2img-flux2-f16.js) – Transform an image with FLUX2-klein (F16 full precision).
@@ -213,6 +214,7 @@ const args = {
 | `files.t5Xxl` | — | Absolute path to separate T5-XXL text encoder (SD3) |
 | `files.llm` | — | Absolute path to Qwen3 LLM text encoder (FLUX.2 [klein]) |
 | `files.vae` | — | Absolute path to separate VAE file |
+| `files.esrgan` | — | Absolute path to ESRGAN upscaler model for post-generation upscale |
 | `config` | — | Native backend configuration object (see next section) |
 | `logger` | — | Logger instance (e.g. `console`) |
 | `opts` | — | Additional options (e.g. `{ stats: true }`) |
@@ -237,6 +239,7 @@ Config values are coerced to strings internally. Generation parameters (prompt, 
 | `clip_on_cpu` | `true` \| `false` | `false` | Force CLIP encoder to run on CPU |
 | `vae_on_cpu` | `true` \| `false` | `false` | Force VAE to run on CPU |
 | `flash_attn` | `true` \| `false` | `false` | Enable flash attention (reduces memory) |
+| `upscaler_tile_size` | number | `128` | ESRGAN upscaler tile size |
 
 ### 4. Create a Model Instance
 
@@ -305,6 +308,7 @@ require('bare-fs').writeFileSync('output.png', images[0])
 | `batch_count` | number | `1` | Number of images to generate |
 | `vae_tiling` | boolean | `false` | Enable VAE tiling (required for large images on 16 GB) |
 | `cache_preset` | string | — | Step-caching preset: `slow`, `medium`, `fast`, `ultra` |
+| `upscale` | boolean \| `{ repeats?: number }` | `false` | Post-generation ESRGAN upscale. Requires `files.esrgan`; `repeats` defaults to `1` |
 
 > **Sampler note:** Do not set `sampling_method: 'euler_a'` for FLUX.2 models — it will produce random noise. Leave the field unset to let the library auto-select `euler` for flow-matching models.
 
