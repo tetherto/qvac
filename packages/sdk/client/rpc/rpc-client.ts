@@ -368,7 +368,7 @@ async function* streamProfiled<T extends Request>(
 }
 
 export interface DuplexWritable {
-  write(chunk: Buffer | Uint8Array): void;
+  write(chunk: Uint8Array): void;
   end(): void;
   destroy(): void;
 }
