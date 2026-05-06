@@ -42,14 +42,39 @@ async function collectResponse (response) {
   return chunks.join('').trim()
 }
 
+function parseJsonToolCall (inner) {
+  try {
+    return JSON.parse(inner)
+  } catch (e) {
+    return null
+  }
+}
+
+// Parses HuggingFace function-call XML emitted by Qwen3.5's embedded template:
+//   <function=NAME>
+//     <parameter=KEY>VALUE</parameter>
+//     ...
+//   </function>
+function parseXmlToolCall (inner) {
+  const fnMatch = /<function=([^>\s]+)\s*>([\s\S]*?)<\/function>/.exec(inner)
+  if (!fnMatch) return null
+  const args = {}
+  const paramRegex = /<parameter=([^>\s]+)\s*>([\s\S]*?)<\/parameter>/g
+  let pm
+  while ((pm = paramRegex.exec(fnMatch[2])) !== null) {
+    args[pm[1].trim()] = pm[2].trim()
+  }
+  return { name: fnMatch[1].trim(), arguments: args }
+}
+
 function extractToolCalls (response) {
   const toolCalls = []
   const toolCallRegex = /<tool_call>([\s\S]*?)<\/tool_call>/g
   let match
   while ((match = toolCallRegex.exec(response)) !== null) {
-    try {
-      toolCalls.push(JSON.parse(match[1].trim()))
-    } catch (e) {}
+    const inner = match[1].trim()
+    const parsed = parseJsonToolCall(inner) || parseXmlToolCall(inner)
+    if (parsed) toolCalls.push(parsed)
   }
   return toolCalls
 }
