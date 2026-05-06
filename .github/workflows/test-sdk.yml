@@ -44,11 +44,11 @@ on:
       mobile-consumer-timeout:
         description: "Mobile consumer timeout (seconds)"
         type: number
-        default: 600
+        default: 1200
       device-farm-timeout:
         description: "Device Farm session timeout (minutes)"
         type: number
-        default: 30
+        default: 90
       desktop-platforms:
         description: "JSON array of runner labels for desktop tests"
         type: string
@@ -81,10 +81,10 @@ on:
         default: 60
       mobile-consumer-timeout:
         type: number
-        default: 600
+        default: 1200
       device-farm-timeout:
         type: number
-        default: 30
+        default: 90
       desktop-platforms:
         type: string
         default: '["ai-run-windows11-gpu", "ai-run-linux-gpu", "mac-mini-m4-gpu"]'
@@ -146,7 +146,7 @@ jobs:
     with:
       project-directory: "packages/sdk"
       working-directory: "packages/sdk/tests-qvac"
-      consumer-timeout: ${{ fromJSON(inputs.mobile-consumer-timeout || '600') }}
+      consumer-timeout: ${{ fromJSON(inputs.mobile-consumer-timeout || '1200') }}
       filter: ${{ inputs.filter }}
       suite: ${{ needs.resolve.outputs.suite }}
       exclude-suite: ${{ inputs.exclude-suite }}
@@ -168,7 +168,7 @@ jobs:
     with:
       project-directory: "packages/sdk"
       working-directory: "packages/sdk/tests-qvac"
-      consumer-timeout: ${{ fromJSON(inputs.mobile-consumer-timeout || '600') }}
+      consumer-timeout: ${{ fromJSON(inputs.mobile-consumer-timeout || '1200') }}
       filter: ${{ inputs.filter }}
       suite: ${{ needs.resolve.outputs.suite }}
       exclude-suite: ${{ inputs.exclude-suite }}

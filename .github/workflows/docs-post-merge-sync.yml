@@ -1,15 +1,15 @@
 # Post-merge: regenerate docs on main when SDK changes, commit back to main.
 # Keeps monorepo main in sync with generated docs.
-# Only triggered by SDK or docs-script changes (other libs not automated yet).
+#
+# Currently manual-only (workflow_dispatch). The original `push:` trigger to
+# `main` is intentionally not wired up while production tracks `main` (not
+# `docs-production`) — auto-committing regenerated docs back to `main` would
+# loop the workflow back into itself on every push. Restore the `push:`
+# trigger once production moves to `docs-production`.
 name: Docs Post-Merge Sync
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'packages/sdk/**'
-      - 'docs/website/scripts/**'
+  workflow_dispatch:
 
 concurrency:
   group: docs-post-merge-sync-${{ github.ref }}
@@ -20,7 +20,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    if: ${{ !vars.DOCS_SYNC_BOT_USER || github.actor != vars.DOCS_SYNC_BOT_USER }}
 
     steps:
       - name: Checkout repository
@@ -49,7 +48,10 @@ jobs:
       - name: Check for doc changes
         id: changes
         run: |
-          git add "docs/website/content/docs/(latest)/sdk/api/" "docs/website/content/docs/v"*/sdk/api/ docs/website/src/lib/versions.ts 2>/dev/null || true
+          git add \
+            "docs/website/content/docs/sdk/api/" \
+            "docs/website/content/docs/sdk/release-notes/" \
+            "docs/website/src/lib/versions.ts" 2>/dev/null || true
           if git diff --staged --quiet; then
             echo "has_doc_changes=false" >> "$GITHUB_OUTPUT"
           else
