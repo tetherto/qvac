@@ -391,7 +391,7 @@ TEST_F(LlamaModelTest, RuntimeStatsAfterProcessing) {
   });
 }
 
-TEST_F(LlamaModelTest, RuntimeStatsPpTPSAfterProcessing) {
+TEST_F(LlamaModelTest, RuntimeStatsPpTPSAfterProcessing) { // NOLINT(readability-function-cognitive-complexity)
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
@@ -410,16 +410,15 @@ TEST_F(LlamaModelTest, RuntimeStatsPpTPSAfterProcessing) {
     EXPECT_GT(output.length(), 0);
 
     auto stats = model.runtimeStats();
-    auto it = std::find_if(
-        stats.begin(), stats.end(),
-        [](const auto& kv) { return kv.first == "ppTPS"; });
-    ASSERT_NE(it, stats.end()) << "ppTPS missing from runtimeStats";
+    auto found = std::ranges::find_if(
+        stats, [](const auto& entry) { return entry.first == "ppTPS"; });
+    ASSERT_NE(found, stats.end()) << "ppTPS missing from runtimeStats";
     double ppTPS = getStatValue(stats, "ppTPS");
     EXPECT_GT(ppTPS, 0.0);
   });
 }
 
-TEST_F(LlamaModelTest, RuntimeStatsPpTPSOnPrefillRun) {
+TEST_F(LlamaModelTest, RuntimeStatsPpTPSOnPrefillRun) { // NOLINT(readability-function-cognitive-complexity)
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
@@ -439,10 +438,9 @@ TEST_F(LlamaModelTest, RuntimeStatsPpTPSOnPrefillRun) {
     EXPECT_EQ(output.length(), 0);
 
     auto stats = model.runtimeStats();
-    auto it = std::find_if(
-        stats.begin(), stats.end(),
-        [](const auto& kv) { return kv.first == "ppTPS"; });
-    ASSERT_NE(it, stats.end()) << "ppTPS missing from runtimeStats";
+    auto found = std::ranges::find_if(
+        stats, [](const auto& entry) { return entry.first == "ppTPS"; });
+    ASSERT_NE(found, stats.end()) << "ppTPS missing from runtimeStats";
     double ppTPS = getStatValue(stats, "ppTPS");
     EXPECT_GT(ppTPS, 0.0);
   });
