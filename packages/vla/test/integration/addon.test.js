@@ -658,6 +658,66 @@ async function _runEndToEnd (t, modelPath, backend, fixtureName) {
   }
 }
 
+// Reject mismatched img dims at the JS validation layer and confirm the
+// model instance is reusable afterwards. The C++ side (smolvla.cpp) has the
+// same guard as a last line of defense; this test exercises the JS check
+// because it surfaces as a thrown QvacError before the worker is dispatched
+// — and importantly, a successful run() right after a rejected run() proves
+// `_hasActiveResponse` was cleared, addressing PR #1784 review threads
+// gianni-cor:3197537469 (img-shape) and gianni-cor:3197537587 (wedge).
+test('integration: img-shape mismatch rejects cleanly and leaves model usable (needs GGUF)', { timeout: 600000 }, async (t) => {
+  const modelPath = process.env.QVAC_VLA_MODEL
+  if (!modelPath || !fs.existsSync(modelPath)) {
+    t.comment(`skipping: set QVAC_VLA_MODEL to a valid GGUF (got "${modelPath ?? ''}")`)
+    t.pass()
+    return
+  }
+
+  const model = new VlaModel({ files: { model: [path.resolve(modelPath)] } })
+  try {
+    await model.load({ backend: 'cpu' })
+    const hp = model.hparams
+    const size = hp.visionImageSize
+    const wrongSize = size === 256 ? 512 : 256
+
+    // Build inputs whose pixel buffers ARE consistent with the (wrong) imgWidth/Height
+    // so we don't trip the earlier "pixel.length === 3*imgW*imgH" check.
+    // The only thing wrong is imgWidth != hp.visionImageSize.
+    const dummyPixels = new Float32Array(3 * wrongSize * wrongSize)
+    const tokens = new Int32Array(hp.tokenizerMaxLength)
+    const mask = new Uint8Array(hp.tokenizerMaxLength)
+    tokens[0] = 1
+    mask[0] = 1
+    const badInput = {
+      images: [dummyPixels, dummyPixels],
+      imgWidth: wrongSize,
+      imgHeight: wrongSize,
+      state: padState([0, 0, 0, 0, 0, 0], hp.maxStateDim),
+      tokens,
+      mask
+    }
+
+    let rejectErr = null
+    try { await model.run(badInput) } catch (e) { rejectErr = e }
+    t.ok(rejectErr, 'expected run() to reject on img-shape mismatch')
+    t.ok(
+      rejectErr && /imgWidth.*imgHeight|visionImageSize/i.test(rejectErr.message || ''),
+      `error mentions imgWidth/imgHeight/visionImageSize (got: ${rejectErr && rejectErr.message})`
+    )
+
+    // After the rejection, a fresh canonical-shape run() must succeed.
+    // If `_hasActiveResponse` had been left set (the wedge bug), this would
+    // throw JOB_ALREADY_RUNNING immediately.
+    const goodInputs = _buildFixtureInputs('fixed', hp)
+    const response = await model.run(goodInputs)
+    const { actions } = await response.await()
+    t.ok(actions instanceof Float32Array, 'follow-up run produced actions')
+    t.is(actions.length, hp.chunkSize * hp.actionDim, 'follow-up run actions length matches chunk_size*action_dim')
+  } finally {
+    await model.unload().catch(() => {})
+  }
+})
+
 test('integration: end-to-end inference runs (needs GGUF)', { timeout: 1800000 }, async (t) => {
   let modelPath = process.env.QVAC_VLA_MODEL
   if (_isMobile) {

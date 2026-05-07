@@ -1696,22 +1696,31 @@ build_staged(ggml_backend_t backend, size_t ctx_bytes, int max_nodes) {
   return sg;
 }
 
-// Allocate graph for single-backend (CPU only)
+// Allocate graph for single-backend (CPU only). Returns false on
+// allocator/reserve/alloc failure so the caller can bail before
+// `compute_staged()` dereferences a partially-initialised graph.
 static bool alloc_staged_simple(staged_graph& sg, ggml_backend_t backend) {
   sg.allocr = ggml_gallocr_new(ggml_backend_get_default_buffer_type(backend));
-  ggml_gallocr_reserve(sg.allocr, sg.gf);
-  ggml_gallocr_alloc_graph(sg.allocr, sg.gf);
-  return true;
+  if (!sg.allocr) {
+    return false;
+  }
+  if (!ggml_gallocr_reserve(sg.allocr, sg.gf)) {
+    return false;
+  }
+  return ggml_gallocr_alloc_graph(sg.allocr, sg.gf);
 }
 
-// Allocate graph for multi-backend (GPU + CPU with auto-fallback)
+// Allocate graph for multi-backend (GPU + CPU with auto-fallback). Same
+// failure semantics as `alloc_staged_simple`.
 static bool
 alloc_staged_sched(staged_graph& sg, ggml_backend_t gpu, ggml_backend_t cpu) {
   ggml_backend_t backends[] = {gpu, cpu};
   sg.sched = ggml_backend_sched_new(
       backends, nullptr, 2, GGML_DEFAULT_GRAPH_SIZE, false, true);
-  ggml_backend_sched_alloc_graph(sg.sched, sg.gf);
-  return true;
+  if (!sg.sched) {
+    return false;
+  }
+  return ggml_backend_sched_alloc_graph(sg.sched, sg.gf);
 }
 
 static void compute_staged(staged_graph& sg, ggml_backend_t backend) {
@@ -1768,6 +1777,21 @@ bool smolvla_inference_with_timing(
             " (expected 0.." + std::to_string(hp.max_state_dim) + ")");
     return false;
   }
+  // SigLIP's conv2d output sizes from runtime img_width/img_height, but the
+  // downstream reshape to (n_patches, vision_hidden_size) sizes from
+  // hp.vision_image_size — so a mismatch trips GGML_ASSERT inside ggml.c
+  // (hard abort, not a thrown exception, so the JSCATCH layer can't recover
+  // and the worker process dies). Reject mismatches up front so a buggy
+  // caller gets a clean false return instead.
+  if (img_width != hp.vision_image_size || img_height != hp.vision_image_size) {
+    QLOG_IF(
+        Priority::ERROR,
+        "smolvla_inference: img dims (" + std::to_string(img_width) + "x" +
+            std::to_string(img_height) + ") must equal vision_image_size (" +
+            std::to_string(hp.vision_image_size) + "x" +
+            std::to_string(hp.vision_image_size) + ")");
+    return false;
+  }
 
   int n_visual_tokens = n_images * hp.tokens_per_image();
   int prefix_len = n_visual_tokens + lang_len + 1; // +1 for state token
@@ -1817,10 +1841,17 @@ bool smolvla_inference_with_timing(
   ggml_set_output(conn);
 
   ggml_build_forward_expand(sg_vis.gf, conn);
-  if (model.has_gpu) {
-    alloc_staged_sched(sg_vis, model.backend, model.backend_cpu);
-  } else {
-    alloc_staged_simple(sg_vis, model.backend_cpu);
+  {
+    const bool ok = model.has_gpu
+                        ? alloc_staged_sched(sg_vis, model.backend, model.backend_cpu)
+                        : alloc_staged_simple(sg_vis, model.backend_cpu);
+    if (!ok) {
+      QLOG_IF(
+          Priority::ERROR,
+          "smolvla_inference: failed to allocate vision graph");
+      free_staged(sg_vis);
+      return false;
+    }
   }
 
   for (int img_idx = 0; img_idx < n_images; img_idx++) {
@@ -1933,10 +1964,17 @@ bool smolvla_inference_with_timing(
     }
   }
 
-  if (model.has_gpu) {
-    alloc_staged_sched(sg2, model.backend, model.backend_cpu);
-  } else {
-    alloc_staged_simple(sg2, model.backend_cpu);
+  {
+    const bool ok = model.has_gpu
+                        ? alloc_staged_sched(sg2, model.backend, model.backend_cpu)
+                        : alloc_staged_simple(sg2, model.backend_cpu);
+    if (!ok) {
+      QLOG_IF(
+          Priority::ERROR,
+          "smolvla_inference: failed to allocate prefix graph");
+      free_staged(sg2);
+      return false;
+    }
   }
 
   // Set inputs
@@ -2095,10 +2133,19 @@ bool smolvla_inference_with_timing(
       ggml_set_output(v_out);
       ggml_build_forward_expand(sg_kv.gf, k_out);
       ggml_build_forward_expand(sg_kv.gf, v_out);
-      if (model.has_gpu) {
-        alloc_staged_sched(sg_kv, model.backend, model.backend_cpu);
-      } else {
-        alloc_staged_simple(sg_kv, model.backend_cpu);
+      {
+        const bool ok = model.has_gpu
+                            ? alloc_staged_sched(sg_kv, model.backend, model.backend_cpu)
+                            : alloc_staged_simple(sg_kv, model.backend_cpu);
+        if (!ok) {
+          QLOG_IF(
+              Priority::ERROR,
+              "smolvla_inference: failed to allocate KV mini-graph at layer " +
+                  std::to_string(i));
+          free_staged(sg_kv);
+          free_staged(sg2);
+          return false;
+        }
       }
 
       ggml_backend_tensor_set(
@@ -2182,10 +2229,19 @@ bool smolvla_inference_with_timing(
       ggml_build_forward_expand(sg_xp.gf, k_proj);
       ggml_build_forward_expand(sg_xp.gf, v_proj);
 
-      if (model.has_gpu) {
-        alloc_staged_sched(sg_xp, model.backend, model.backend_cpu);
-      } else {
-        alloc_staged_simple(sg_xp, model.backend_cpu);
+      {
+        const bool ok = model.has_gpu
+                            ? alloc_staged_sched(sg_xp, model.backend, model.backend_cpu)
+                            : alloc_staged_simple(sg_xp, model.backend_cpu);
+        if (!ok) {
+          QLOG_IF(
+              Priority::ERROR,
+              "smolvla_inference: failed to allocate expert KV-projection graph at layer " +
+                  std::to_string(i));
+          free_staged(sg_xp);
+          free_staged(sg2);
+          return false;
+        }
       }
 
       ggml_backend_tensor_set(
@@ -2333,10 +2389,17 @@ bool smolvla_inference_with_timing(
 
   ggml_build_forward_expand(sg3.gf, v_t);
 
-  if (model.has_gpu) {
-    alloc_staged_sched(sg3, model.backend, model.backend_cpu);
-  } else {
-    alloc_staged_simple(sg3, model.backend_cpu);
+  {
+    const bool ok = model.has_gpu
+                        ? alloc_staged_sched(sg3, model.backend, model.backend_cpu)
+                        : alloc_staged_simple(sg3, model.backend_cpu);
+    if (!ok) {
+      QLOG_IF(
+          Priority::ERROR,
+          "smolvla_inference: failed to allocate ODE graph");
+      free_staged(sg3);
+      return false;
+    }
   }
 
   // Set static inputs (don't change between steps)

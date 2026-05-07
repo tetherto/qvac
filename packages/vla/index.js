@@ -31,6 +31,21 @@ function validateRunInput (input, hparams) {
   }
   const imgWidth = input.imgWidth ?? DEFAULT_IMAGE_SIZE
   const imgHeight = input.imgHeight ?? DEFAULT_IMAGE_SIZE
+  // The C++ inference path requires img_width == img_height == hparams.visionImageSize
+  // (SigLIP's conv2d output is sized from runtime args, but the downstream
+  // patch-embedding reshape uses hp.vision_image_size — a mismatch trips
+  // GGML_ASSERT in ggml.c, which is a hard abort that kills the worker).
+  // Throw a clean QvacError here so the failure surfaces as a rejected
+  // run() promise instead of a process crash.
+  if (hparams && Number.isInteger(hparams.visionImageSize)) {
+    const expected = hparams.visionImageSize
+    if (imgWidth !== expected || imgHeight !== expected) {
+      throw new QvacErrorAddonVla({
+        code: ERR_CODES.INVALID_INPUT,
+        adds: `imgWidth/imgHeight (${imgWidth}x${imgHeight}) must equal hparams.visionImageSize (${expected})`
+      })
+    }
+  }
   const expectedPerImage = 3 * imgWidth * imgHeight
   for (let i = 0; i < input.images.length; i++) {
     const img = input.images[i]
@@ -123,6 +138,10 @@ class VlaModel {
   // halves have arrived — preserving the previous external API even though
   // the underlying dispatch is now asynchronous.
   _onAddonEvent (_jsHandle, eventTypeName, outputData, errorData) {
+    // `_hasActiveResponse` is cleared by the response promise's .finally() in
+    // _runInternal, NOT here — see the rationale block there. Doing it from
+    // this callback would mean the flag stays set forever if the worker
+    // aborts before delivering JobEnded/Error.
     if (typeof eventTypeName === 'string' && eventTypeName.includes('Error')) {
       const err = new QvacErrorAddonVla({
         code: ERR_CODES.INVALID_INPUT,
@@ -131,7 +150,6 @@ class VlaModel {
       if (this._pending) this._pending.actions = null
       this._pending = null
       if (this._job.active) this._job.fail(err)
-      this._hasActiveResponse = false
       return
     }
     if (outputData instanceof Float32Array) {
@@ -143,7 +161,6 @@ class VlaModel {
       const stats = outputData
       const actions = this._pending ? this._pending.actions : null
       this._pending = null
-      this._hasActiveResponse = false
       this._job.end(this.opts.stats ? stats : null, { actions, stats })
     }
   }
@@ -220,7 +237,6 @@ class VlaModel {
     this.logger.info('Starting inference')
 
     const response = this._job.start()
-    this._hasActiveResponse = true
     // Per-job accumulator. Two events flow through _onAddonEvent: the
     // Float32Array action chunk lands first, then the RuntimeStats object —
     // we resolve the response only when both have arrived.
@@ -242,18 +258,37 @@ class VlaModel {
       })
     } catch (err) {
       this._pending = null
-      this._hasActiveResponse = false
       this._job.fail(err)
       throw err
     }
 
     if (!accepted) {
       this._pending = null
-      this._hasActiveResponse = false
       const err = new QvacErrorAddonVla({ code: ERR_CODES.JOB_ALREADY_RUNNING })
       this._job.fail(err)
       throw err
     }
+
+    // Only mark the model busy once the worker has actually accepted the job.
+    // Clear via `.finally()` on the response promise, not from inside the
+    // native event callback — if the worker thread aborts mid-inference
+    // (e.g. an unrecoverable GGML_ASSERT in smolvla.cpp) no JobEnded/Error
+    // event is delivered and the previous "clear from _onAddonEvent" pattern
+    // would leave the flag set forever, wedging every subsequent run() with
+    // JOB_ALREADY_RUNNING. Mirrors qvac-lib-infer-llamacpp-llm/index.js.
+    this._hasActiveResponse = true
+    const finalized = response.await().finally(() => {
+      this._hasActiveResponse = false
+    })
+    // Swallow rejections at the unobserved-promise level so an awaiter who
+    // catches still sees the rejection through their own await; without
+    // this the runtime logs an "unhandled promise rejection" warning.
+    finalized.catch((err) => {
+      this.logger?.warn?.('Inference response rejected:', err?.message || err)
+    })
+    // Make response.await() idempotent: subsequent calls return the same
+    // chained promise so .finally() fires exactly once.
+    response.await = () => finalized
 
     this.logger.info('Inference job dispatched')
     return response
