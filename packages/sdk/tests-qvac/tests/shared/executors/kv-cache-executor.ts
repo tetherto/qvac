@@ -1,4 +1,4 @@
-import { completion, deleteCache } from "@qvac/sdk";
+import { cancel, completion, deleteCache } from "@qvac/sdk";
 import {
   ValidationHelpers,
   type TestResult,
@@ -22,6 +22,7 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
       if (test.testId === "kv-cache-different-system-prompts") return [test.testId, this.differentSystemPrompts.bind(this)];
       if (test.testId === "kv-cache-stats-verification") return [test.testId, this.statsVerification.bind(this)];
       if (test.testId === "kv-cache-tools-sequential-save") return [test.testId, this.toolsSequentialSave.bind(this)];
+      if (test.testId === "kv-cache-cancel-then-new-prompt") return [test.testId, this.cancelThenNewPrompt.bind(this)];
       if (test.testId.startsWith("kv-cache-delete-") || test.testId === "kv-cache-hypercore-deletion") {
         return [test.testId, this.deleteCacheOp.bind(this)];
       }
@@ -225,6 +226,128 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       return { passed: false, output: `Stats verification failed: ${errorMsg}` };
+    }
+  }
+
+  async cancelThenNewPrompt(
+    params: {
+      cacheKey: string;
+      firstUserMessage: string;
+      secondUserMessage: string;
+      expectedAnswerContains: string;
+      cancelAfterTokens?: number;
+    },
+    _expectation: Expectation,
+  ): Promise<TestResult> {
+    const modelId = await this.resources.ensureLoaded("llm");
+    const cancelAfterTokens = params.cancelAfterTokens ?? 3;
+
+    try {
+      try { await deleteCache({ kvCacheKey: params.cacheKey }); } catch {}
+
+      const firstRun = completion({
+        modelId,
+        history: [
+          { role: "system", content: "You are a helpful assistant." },
+          { role: "user", content: params.firstUserMessage },
+        ],
+        stream: true,
+        kvCache: params.cacheKey,
+      });
+
+      let receivedTokens = 0;
+      let cancelInvoked = false;
+      let cancelSucceeded = false;
+      let cancelError: Error | null = null;
+
+      try {
+        for await (const _ of firstRun.tokenStream) {
+          receivedTokens++;
+          if (!cancelInvoked && receivedTokens >= cancelAfterTokens) {
+            cancelInvoked = true;
+            try {
+              await cancel({ operation: "inference", modelId });
+              cancelSucceeded = true;
+            } catch (err) {
+              cancelError = err instanceof Error ? err : new Error(String(err));
+              break;
+            }
+          }
+        }
+      } catch (streamErr) {
+        if (!cancelInvoked) {
+          const msg = streamErr instanceof Error ? streamErr.message : String(streamErr);
+          return {
+            passed: false,
+            output:
+              `First completion stream rejected before cancel could be issued ` +
+              `(received ${receivedTokens} tokens): ${msg}`,
+          };
+        }
+      }
+
+      if (cancelError !== null) {
+        return {
+          passed: false,
+          output:
+            `cancel() rejected mid-stream after ${receivedTokens} tokens, so the ` +
+            `kv-cache regression scenario was never exercised: ${cancelError.message}`,
+        };
+      }
+
+      if (!cancelSucceeded) {
+        return {
+          passed: false,
+          output: `First completion ended before cancel (received ${receivedTokens} tokens, expected >=${cancelAfterTokens})`,
+        };
+      }
+
+      const secondRun = completion({
+        modelId,
+        history: [
+          { role: "system", content: "You are a helpful assistant." },
+          { role: "user", content: params.secondUserMessage },
+        ],
+        stream: true,
+        kvCache: params.cacheKey,
+      });
+
+      let secondText = "";
+      for await (const token of secondRun.tokenStream) {
+        secondText += token;
+      }
+
+      const trimmed = secondText.trim();
+      if (trimmed.length === 0) {
+        return {
+          passed: false,
+          output:
+            "Second completion on the same kvCache key returned an empty response " +
+            "after cancelling the previous streaming turn. Expected the new prompt " +
+            "to produce output independent of the cancelled turn.",
+        };
+      }
+      const expected = params.expectedAnswerContains;
+      if (!trimmed.toLowerCase().includes(expected.toLowerCase())) {
+        return {
+          passed: false,
+          output:
+            `Second completion on the same kvCache key did not include the expected ` +
+            `token ${JSON.stringify(expected)} after cancelling the previous ` +
+            `streaming turn. Got ${secondText.length} chars: ` +
+            `${JSON.stringify(secondText.slice(0, 200))}`,
+        };
+      }
+
+      return {
+        passed: true,
+        output:
+          `Cancel-then-new-prompt OK: cancelled after ${receivedTokens} tokens, ` +
+          `second turn produced ${secondText.length} chars containing ${JSON.stringify(expected)}`,
+      };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      return { passed: false, output: `Cancel-then-new-prompt failed: ${errorMsg}` };
     }
   }
 
