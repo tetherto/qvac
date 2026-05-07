@@ -10,6 +10,8 @@ vcpkg/ports/
 !vcpkg/toolchains/
 
 test/fixtures/*.bin
+test/mobile/testAssets/*.bin
+test/mobile/testAssets/manifest.json
 test/unit/all.js
 test/integration/all.js
 

@@ -25,7 +25,11 @@ const ERR_CODES = Object.freeze({
   BUFFER_LIMIT_EXCEEDED: 26010,
   FAILED_TO_START_JOB: 26011,
   INVALID_CONFIG: 26012,
-  EMBEDDER_WEIGHTS_INVALID: 26013
+  EMBEDDER_WEIGHTS_INVALID: 26013,
+  STREAM_ALREADY_ACTIVE: 26014,
+  INVALID_STREAM_INPUT: 26015,
+  INVALID_STREAM_HEADER: 26016,
+  WINDOW_TOO_LARGE: 26017
 })
 
 addCodes({
@@ -80,6 +84,22 @@ addCodes({
   [ERR_CODES.EMBEDDER_WEIGHTS_INVALID]: {
     name: 'EMBEDDER_WEIGHTS_INVALID',
     message: (message) => `BCI embedder weights are invalid: ${message}`
+  },
+  [ERR_CODES.STREAM_ALREADY_ACTIVE]: {
+    name: 'STREAM_ALREADY_ACTIVE',
+    message: () => 'A streaming transcription is already in progress'
+  },
+  [ERR_CODES.INVALID_STREAM_INPUT]: {
+    name: 'INVALID_STREAM_INPUT',
+    message: (message) => `Invalid neural signal stream input: ${message}`
+  },
+  [ERR_CODES.INVALID_STREAM_HEADER]: {
+    name: 'INVALID_STREAM_HEADER',
+    message: (message) => `Invalid neural signal stream header: ${message}`
+  },
+  [ERR_CODES.WINDOW_TOO_LARGE]: {
+    name: 'WINDOW_TOO_LARGE',
+    message: (limit) => `Stream window size exceeds encoder capacity of ${limit} timesteps`
   }
 }, {
   name,

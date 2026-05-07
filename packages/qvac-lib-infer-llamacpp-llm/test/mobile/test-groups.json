@@ -13,12 +13,14 @@
       "runBitnetTest",
       "runCacheStateMachineTest",
       "runConfigParametersTest",
-      "runDynamicToolsTest"
+      "runToolsCompactTest"
     ],
     "lightB": [
       "runGenerationParamsTest",
+      "runGrammarTest",
       "runModelLoadingTest",
       "runMoeTest",
+      "runMultiGpuTest",
       "runMultiInstanceTest",
       "runUtf8OutputTest"
     ]
@@ -31,14 +33,16 @@
       "runBitnetTest",
       "runCacheStateMachineTest",
       "runConfigParametersTest",
-      "runDynamicToolsTest",
+      "runToolsCompactTest",
       "runFinetuningPauseResumeTest",
       "runGenerationParamsTest",
+      "runGrammarTest",
       "runImageTest"
     ],
     "groupB": [
       "runModelLoadingTest",
       "runMoeTest",
+      "runMultiGpuTest",
       "runMultiInstanceTest",
       "runOcrLightonTest",
       "runReasoningTest",

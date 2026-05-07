@@ -26,10 +26,7 @@ async function main () {
     await decoder.load()
     console.log('✓ Decoder loaded successfully')
 
-    // Check decoder status
-    console.log('\n2. Decoder status:', decoder.status())
-
-    console.log('\n3. Processing audio file...')
+    console.log('\n2. Processing audio file...')
     const audioFilePath = path.join(__dirname, 'samples/LastQuestion_long_EN.mp3')
     const outputFilePath = path.join(__dirname, 'samples/LastQuestion_long_EN.out.s16le')
 

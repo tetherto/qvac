@@ -1,4 +1,4 @@
-import LlmLlamacpp, { type Loader as LlmLoader } from "@qvac/llm-llamacpp";
+import LlmLlamacpp from "@qvac/llm-llamacpp";
 import llmAddonLogging from "@qvac/llm-llamacpp/addonLogging";
 import {
   definePlugin,
@@ -12,6 +12,7 @@ import {
   ModelType,
   llmConfigBaseSchema,
   ADDON_LLM,
+  TOOLS_MODE,
   type CompletionEvent,
   type CreateModelParams,
   type PluginCapabilities,
@@ -21,15 +22,14 @@ import {
   type LlmConfigInput,
 } from "@/schemas";
 import { createStreamLogger, registerAddonLogger } from "@/logging";
-import { parseModelPath } from "@/server/utils";
-import FilesystemDL from "@qvac/dl-filesystem";
-import { asLoader } from "@/server/bare/utils/loader-adapter";
+import { expandGGUFIntoShards } from "@/server/utils";
 import { completion } from "@/server/bare/plugins/llamacpp-completion/ops/completion-stream";
 import { finetune } from "@/server/bare/plugins/llamacpp-completion/ops/finetune";
 import { translate } from "@/server/bare/ops/translate";
 import { attachModelExecutionMs } from "@/profiling/model-execution";
 import { getModelConfig } from "@/server/bare/registry/model-registry";
 import { createCompletionNormalizer } from "@/server/utils/completion-normalizer";
+import { detectToolDialect } from "@/server/utils/tool-integration";
 
 function transformLlmConfig(llmConfig: LlmConfig) {
   const transformed = JSON.parse(
@@ -60,6 +60,13 @@ function transformLlmConfig(llmConfig: LlmConfig) {
     delete transformed["opencl_cache_dir"];
   }
 
+  if ("tools_mode" in transformed) {
+    if (transformed["tools_mode"] === TOOLS_MODE.dynamic) {
+      transformed["tools_compact"] = "true";
+    }
+    delete transformed["tools_mode"];
+  }
+
   return transformed;
 }
 
@@ -69,28 +76,22 @@ function createLlmModel(
   llmConfig: LlmConfig,
   projectionModelPath?: string,
 ) {
-  const { dirPath, basePath } = parseModelPath(modelPath);
-  const loader = new FilesystemDL({ dirPath });
   const logger = createStreamLogger(modelId, ModelType.llamacppCompletion);
   registerAddonLogger(modelId, ModelType.llamacppCompletion, logger);
   const llmConfigStrings = transformLlmConfig(llmConfig);
+  const modelFiles = expandGGUFIntoShards(modelPath);
 
-  const args = {
-    loader: asLoader<LlmLoader>(loader),
-    opts: { stats: true },
+  const model = new LlmLlamacpp({
+    files: {
+      model: modelFiles,
+      ...(projectionModelPath && { projectionModel: projectionModelPath }),
+    },
+    config: llmConfigStrings,
     logger,
-    diskPath: dirPath,
-    modelName: basePath,
-    projectionModel: projectionModelPath
-      ? parseModelPath(projectionModelPath).basePath
-      : "",
-    modelPath,
-    modelConfig: llmConfigStrings,
-  };
+    opts: { stats: true },
+  });
 
-  const model = new LlmLlamacpp(args, llmConfigStrings);
-
-  return { model, loader };
+  return { model };
 }
 
 export const llmPlugin = definePlugin({
@@ -116,14 +117,14 @@ export const llmPlugin = definePlugin({
   createModel(params: CreateModelParams): PluginModelResult {
     const llmConfig = (params.modelConfig ?? {}) as LlmConfig;
 
-    const { model, loader } = createLlmModel(
+    const { model } = createLlmModel(
       params.modelId,
       params.modelPath,
       llmConfig,
       params.artifacts?.["projectionModelPath"],
     );
 
-    return { model, loader };
+    return { model };
   },
 
   handlers: {
@@ -151,11 +152,17 @@ export const llmPlugin = definePlugin({
           thinkingFraming: request.captureThinking ? "thinkTags" : "none",
         };
 
+        // Dialect runs regardless of tool availability — thinking/content
+        // stripping is needed even on plain completions.
+        const dialect =
+          request.toolDialect ?? detectToolDialect(request.modelId);
+
         const normalizer = createCompletionNormalizer({
           capabilities,
           tools: request.tools ?? [],
           captureThinking: request.captureThinking ?? false,
           emitRawDeltas: request.emitRawDeltas ?? false,
+          toolDialect: dialect,
         });
 
         const stream = completion({
@@ -164,6 +171,8 @@ export const llmPlugin = definePlugin({
           kvCache: request.kvCache,
           ...(toolsActive && request.tools && { tools: request.tools }),
           ...(request.generationParams && { generationParams: request.generationParams }),
+          ...(toolsActive && { toolDialect: dialect }),
+          ...(request.responseFormat && { responseFormat: request.responseFormat }),
         });
 
         try {
@@ -196,11 +205,14 @@ export const llmPlugin = definePlugin({
 
           const finalEvents = request.stream ? terminalEvents : batchedEvents;
 
-          yield attachModelExecutionMs({
-            type: "completionStream" as const,
-            done: true,
-            events: finalEvents,
-          }, modelExecutionMs);
+          yield attachModelExecutionMs(
+            {
+              type: "completionStream" as const,
+              done: true,
+              events: finalEvents,
+            },
+            modelExecutionMs,
+          );
         } finally {
           await stream.return?.(undefined as never);
         }
@@ -236,12 +248,15 @@ export const llmPlugin = definePlugin({
           }
 
           const { modelExecutionMs, stats } = result.value;
-          yield attachModelExecutionMs({
-            type: "translate" as const,
-            token: "",
-            done: true,
-            ...(stats && { stats }),
-          }, modelExecutionMs);
+          yield attachModelExecutionMs(
+            {
+              type: "translate" as const,
+              token: "",
+              done: true,
+              ...(stats && { stats }),
+            },
+            modelExecutionMs,
+          );
         } finally {
           await stream.return?.(undefined as never);
         }

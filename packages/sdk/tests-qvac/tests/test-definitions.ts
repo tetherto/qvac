@@ -2,6 +2,7 @@
 import type { TestDefinition } from "@tetherto/qvac-test-suite";
 import { completionTests } from "./completion-tests.js";
 import { transcriptionTests } from "./transcription-tests.js";
+import { transcribeStreamEventsTests } from "./transcribe-stream-events-tests.js";
 import { embeddingTests } from "./embedding-tests.js";
 import { ragTests } from "./rag-tests.js";
 import { translationIndicTransTests } from "./translation-indictrans-tests.js";
@@ -27,6 +28,10 @@ import { delegatedInferenceTests } from "./delegated-inference-tests.js";
 import { diffusionTests } from "./diffusion-tests.js";
 import { finetuneTests } from "./finetune-tests.js";
 import { lifecycleTests } from "./lifecycle-tests.js";
+import { configTests } from "./config-tests.js";
+import { noLingeringBareTests } from "./no-lingering-bare-tests.js";
+import { wrongModelTests } from "./wrong-model-tests.js";
+import { multiGpuTests } from "./multi-gpu-tests.js";
 
 // Model loading tests
 export const modelLoadLlm: TestDefinition = {
@@ -142,6 +147,33 @@ export const modelReloadAfterError: TestDefinition = {
   },
 };
 
+export const modelLoadInferredType: TestDefinition = {
+  testId: "model-load-inferred-type",
+  params: {},
+  expectation: { validation: "type", expectedType: "string" },
+  suites: ["smoke"],
+  metadata: {
+    category: "model",
+    dependency: "none",
+    estimatedDurationMs: 60000,
+  },
+};
+
+export const modelLoadMissingTypeStringSrc: TestDefinition = {
+  testId: "model-load-missing-type-string-src",
+  params: { modelPath: "/invalid/path/nonexistent-model.gguf" },
+  expectation: {
+    validation: "throws-error",
+    errorContains: "modelType is required",
+  },
+  suites: ["smoke"],
+  metadata: {
+    category: "model",
+    dependency: "none",
+    estimatedDurationMs: 2000,
+  },
+};
+
 
 // Export all tests as array
 export const tests = [
@@ -162,6 +194,9 @@ export const tests = [
 
   // Transcription tests
   ...transcriptionTests,
+
+  // transcribeStream VAD + endOfTurn event tests
+  ...transcribeStreamEventsTests,
 
   // Embedding tests
   ...embeddingTests,
@@ -190,7 +225,7 @@ export const tests = [
   // HTTP embedding tests
   ...httpEmbeddingTests,
 
-  // Model info tests
+  // Model info tests (includes both registry-side and loaded-model introspection)
   ...modelInfoTests,
 
   // KV cache tests
@@ -235,7 +270,21 @@ export const tests = [
   // Lifecycle tests (suspend/resume)
   ...lifecycleTests,
 
+  // Registry-download config tests (retries + stream timeout)
+  ...configTests,
+
+  // Wrong-model error tests
+  ...wrongModelTests,
+
+  // No-lingering-bare regression tests
+  ...noLingeringBareTests,
+
+  // Multi-GPU config smoke (verifies split-mode and main-gpu flow through stack)
+  ...multiGpuTests,
+
   // Additional model tests
   modelSwitchLlm,
   modelReloadAfterError,
+  modelLoadInferredType,
+  modelLoadMissingTypeStringSrc,
 ];

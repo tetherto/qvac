@@ -62,6 +62,9 @@ try {
           output: (extra && extra.output) || null,
           reference: (extra && extra.reference) || null
         }
+        // Store quality separately so aggregate.js's Quality Summary
+        // section can render chrF++ in the mobile HTML / MD report.
+        if (extra && extra.quality) entry.quality = extra.quality
         _results.push(entry)
       },
       toJSON () {
@@ -78,6 +81,12 @@ try {
         const json = JSON.stringify(this.toJSON())
         // Write JSON to best-effort device paths so Device Farm artifact
         // collection can grab it. Mirrors OCR's inline reporter.
+        //
+        // On iOS, `global.testDir` (set by qvac-test-addon-mobile) maps
+        // to the app's Documents directory, which Appium's `pullFile`
+        // can reach as `@<bundle>:documents/perf-report.json`. We also
+        // try `os.tmpdir()` (the app's tmp container) which is reachable
+        // as `@<bundle>:tmp/perf-report.json`.
         const dirs = []
         if (typeof global !== 'undefined' && global.testDir) dirs.push(global.testDir)
         if (_platform === 'android') {
@@ -85,6 +94,9 @@ try {
           dirs.push('/storage/emulated/0/Android/data/io.tether.test.qvac/files')
           dirs.push('/data/local/tmp')
         }
+        try {
+          if (os && typeof os.tmpdir === 'function') dirs.push(os.tmpdir())
+        } catch (_) {}
         dirs.push('/tmp')
         for (const d of dirs) {
           try {
@@ -143,14 +155,14 @@ try {
   // files. Keep them in sync if the on-disk fixtures change.
   const _inlineFixtures = {
     'bergamot.quality.json': [
-      { source: 'Hello, how are you?', src_lang: 'en', dst_lang: 'it', reference: 'Ciao, come stai?', notes: 'placeholder baseline — verify with native speaker' }
+      { source: 'Hello, how are you?', src_lang: 'en', dst_lang: 'it', reference: 'Ciao, come stai?', notes: 'validated 2026-04-23 (informal register)' }
     ],
     'indictrans.quality.json': [
-      { source: 'Hello, how are you?', src_lang: 'eng_Latn', dst_lang: 'hin_Deva', reference: 'नमस्ते, आप कैसे हैं?', notes: 'placeholder baseline — verify with native speaker' }
+      { source: 'Hello, how are you?', src_lang: 'eng_Latn', dst_lang: 'hin_Deva', reference: 'नमस्ते, आप कैसे हैं?', notes: 'validated 2026-04-23 (formal register, आप)' }
     ],
     'pivot-bergamot.quality.json': [
-      { source: 'Buenos días, ¿cómo estás hoy?', src_lang: 'es', dst_lang: 'it', reference: 'Buongiorno, come stai oggi?', notes: 'placeholder baseline — verify with native speaker' },
-      { source: "Bonjour, comment allez-vous aujourd'hui?", src_lang: 'fr', dst_lang: 'es', reference: 'Hola, ¿cómo está usted hoy?', notes: 'placeholder baseline — verify with native speaker' }
+      { source: 'Buenos días, ¿cómo estás hoy?', src_lang: 'es', dst_lang: 'it', reference: 'Buongiorno, come stai oggi?', notes: 'validated 2026-04-23 (informal register)' },
+      { source: "Bonjour, comment allez-vous aujourd'hui?", src_lang: 'fr', dst_lang: 'es', reference: 'Hola, ¿cómo está usted hoy?', notes: 'validated 2026-04-23 (formal register, usted)' }
     ]
   }
 
@@ -306,33 +318,49 @@ const TEST_TIMEOUT = isMobile ? MOBILE_TIMEOUT : DESKTOP_TIMEOUT
  * @returns {Promise<void>}
  * @throws {Error} If download fails or redirects exceed limit
  */
-async function downloadFile (url, destPath, maxRedirects = 5) {
+async function downloadFile (url, destPath, maxRedirects = 5, maxRetries = 3) {
   const fetch = require('bare-fetch')
-  console.log(`Downloading: ${url.substring(0, 60)}...`)
 
-  // Fetch with redirect following enabled
-  const response = await fetch(url, {
-    redirect: 'follow',
-    follow: maxRedirects
-  })
-
-  // Check for redirect status codes that weren't followed
-  if ([301, 302, 307, 308].includes(response.status)) {
-    const location = response.headers.get('location')
-    if (location && maxRedirects > 0) {
-      console.log(`   Following redirect to: ${location.substring(0, 60)}...`)
-      return downloadFile(location, destPath, maxRedirects - 1)
+  // Retry loop for transient network errors (CONNECTION_LOST, socket hang up).
+  // Without this an unhandled rejection from bare-fetch on Device Farm's
+  // flaky mobile network can abort the whole Bare process — which surfaced
+  // on Samsung Galaxy S25 Ultra as a SIGABRT inside libbare-kit.so::
+  // js_callback_s::on_call during the second IndicTrans re-download.
+  let lastErr = null
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    if (attempt > 0) {
+      const backoffMs = 500 * (2 ** (attempt - 1))
+      console.log(`   Retry ${attempt}/${maxRetries - 1} after ${backoffMs}ms (last error: ${lastErr && lastErr.message})`)
+      await new Promise(resolve => setTimeout(resolve, backoffMs))
     }
-    throw new Error(`HTTP ${response.status}: Redirect not followed (no location header or max redirects exceeded)`)
-  }
+    try {
+      console.log(`Downloading: ${url.substring(0, 60)}...`)
+      const response = await fetch(url, { redirect: 'follow', follow: maxRedirects })
 
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-  }
+      if ([301, 302, 307, 308].includes(response.status)) {
+        const location = response.headers.get('location')
+        if (location && maxRedirects > 0) {
+          console.log(`   Following redirect to: ${location.substring(0, 60)}...`)
+          return downloadFile(location, destPath, maxRedirects - 1, maxRetries)
+        }
+        throw new Error(`HTTP ${response.status}: Redirect not followed (no location header or max redirects exceeded)`)
+      }
 
-  const buffer = await response.arrayBuffer()
-  fs.writeFileSync(destPath, Buffer.from(buffer))
-  console.log(`Downloaded: ${path.basename(destPath)} (${(buffer.byteLength / 1024 / 1024).toFixed(1)}MB)`)
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const buffer = await response.arrayBuffer()
+      fs.writeFileSync(destPath, Buffer.from(buffer))
+      console.log(`Downloaded: ${path.basename(destPath)} (${(buffer.byteLength / 1024 / 1024).toFixed(1)}MB)`)
+      return
+    } catch (err) {
+      lastErr = err
+      // Only retry on network errors; HTTP status errors are deterministic.
+      if (err && /HTTP \d{3}/.test(err.message || '')) throw err
+    }
+  }
+  throw new Error(`downloadFile failed after ${maxRetries} attempts: ${lastErr && lastErr.message}`)
 }
 
 // ============================================================================
@@ -441,6 +469,21 @@ async function ensureIndicTransModel () {
   fs.mkdirSync(modelsDir, { recursive: true })
 
   const destPath = path.join(modelsDir, modelFilename)
+
+  // Cache hit: IndicTrans is 200MB+, so re-downloading for every test
+  // variant (GPU/CPU) wastes bandwidth and exposes each run to transient
+  // S3/Device-Farm network failures — the root cause of the Samsung
+  // Galaxy S25 Ultra CONNECTION_LOST → SIGABRT seen in CI run 1212.
+  if (fs.existsSync(destPath)) {
+    const cachedStats = fs.statSync(destPath)
+    const cachedMB = cachedStats.size / (1024 * 1024)
+    if (cachedMB >= 100) {
+      console.log(`Reusing cached IndicTrans model: ${destPath} (${cachedMB.toFixed(1)}MB)`)
+      return destPath
+    }
+    console.log(`Cached IndicTrans model is undersized (${cachedMB.toFixed(2)}MB) — re-downloading`)
+  }
+
   await downloadFile(urlConfig.modelUrl, destPath)
 
   // Validate downloaded model size
@@ -621,13 +664,17 @@ function createPerformanceCollector () {
  *
  * @param {string} label - Test label prefix (e.g., '[Bergamot]')
  * @param {Object} metrics - Metrics object from createPerformanceCollector().getMetrics()
- * @param {Object} [qualityOpts] - Optional translation-quality context
- * @param {string} [qualityOpts.fixturePath] - Path to the ground-truth fixture JSON
- * @param {string} [qualityOpts.srcLang]     - Source language code (matches fixture entry)
- * @param {string} [qualityOpts.dstLang]     - Destination language code (matches fixture entry)
+ * @param {Object} [opts] - Optional reporter extras
+ * @param {string} [opts.fixturePath] - Path to the ground-truth fixture JSON (enables chrF++ scoring)
+ * @param {string} [opts.srcLang]     - Source language code (matches fixture entry)
+ * @param {string} [opts.dstLang]     - Destination language code (matches fixture entry)
+ * @param {string} [opts.execution_provider] - Runtime backend tag (e.g. 'Vulkan0', 'OpenCL', 'Metal').
+ *                                             If omitted, falls back to regex-parsing the label for
+ *                                             '[GPU]' / '[CPU]' so call sites that don't know the
+ *                                             actual runtime backend still tag records sensibly.
  * @returns {string} Formatted performance metrics string
  */
-function formatPerformanceMetrics (label, metrics, qualityOpts) {
+function formatPerformanceMetrics (label, metrics, opts = {}) {
   const {
     totalTime,
     generatedTokens,
@@ -643,9 +690,9 @@ function formatPerformanceMetrics (label, metrics, qualityOpts) {
   const decodeTimeMs = typeof decodeTime === 'number' ? decodeTime : 0
 
   let quality = null
-  if (qualityOpts && qualityOpts.fixturePath && prompt && qualityOpts.srcLang && qualityOpts.dstLang) {
+  if (opts && opts.fixturePath && prompt && opts.srcLang && opts.dstLang) {
     try {
-      const gt = findTranslationGroundTruth(qualityOpts.fixturePath, prompt, qualityOpts.srcLang, qualityOpts.dstLang)
+      const gt = findTranslationGroundTruth(opts.fixturePath, prompt, opts.srcLang, opts.dstLang)
       if (gt) {
         quality = evaluateTranslationQuality(fullOutput || '', gt)
       }
@@ -654,7 +701,13 @@ function formatPerformanceMetrics (label, metrics, qualityOpts) {
     }
   }
 
-  const ep = /\[gpu\]/i.test(label) ? 'gpu' : /\[cpu\]/i.test(label) ? 'cpu' : null
+  // Prefer a caller-supplied execution_provider (the true runtime backend
+  // name, e.g. 'Vulkan0' / 'OpenCL') so perf-baselines keyed by EP stay
+  // accurate even when the test label says '[GPU]' but a silent CPU
+  // fallback happened. Fall back to regex-parsing the label so call sites
+  // that don't know the runtime backend still tag records sensibly.
+  const ep = opts.execution_provider ||
+    (/\[gpu\]/i.test(label) ? 'gpu' : /\[cpu\]/i.test(label) ? 'cpu' : null)
 
   _perfReporter.record(label, {
     total_time_ms: Math.round(totalTimeMs),
@@ -666,9 +719,29 @@ function formatPerformanceMetrics (label, metrics, qualityOpts) {
     execution_provider: ep,
     input: prompt || null,
     output: fullOutput || null,
+    // `quality` is duplicated from metrics.chrfpp so that aggregate.js's
+    // Quality Summary section (which reads `result.quality.*`) renders a
+    // chrF++ column in the HTML/MD mobile + desktop perf-reports. The
+    // Step Summary table keeps reading metrics.chrfpp — no behaviour
+    // change there.
+    quality: quality ? { chrfpp: quality.chrfpp, reference: quality.reference } : null,
     reference: quality ? quality.reference : null
   })
   _scheduleReportWrite()
+
+  // On mobile, the Bare process is hosted inside the native app and
+  // typically does not exit between test runs, so `process.on('exit')`
+  // never fires. Flush the perf report after every record() so that
+  // WDIO's after: hook finds a ready-to-pull perf-report.json in the
+  // app's Documents/ (iOS) or /sdcard/.../files/ (Android) directory.
+  // Also emit markers to stdout so Device Farm log collection can
+  // recover the report via extract-from-log.js if pullFile fails.
+  if (isMobile && typeof _perfReporter.writeReport === 'function') {
+    try { _perfReporter.writeReport(_reportPath) } catch (_) {}
+    if (typeof _perfReporter.writeToConsole === 'function') {
+      try { _perfReporter.writeToConsole() } catch (_) {}
+    }
+  }
 
   let out = `${label} Performance Metrics:
     - Total time: ${totalTimeMs.toFixed(0)}ms (${totalSeconds}s)
@@ -683,6 +756,268 @@ function formatPerformanceMetrics (label, metrics, qualityOpts) {
   }
 
   return out
+}
+
+// ============================================================================
+// GPU Device Discovery
+// ============================================================================
+
+/**
+ * Backend names that indicate the addon did NOT bind a real GPU device at the
+ * requested index. Used both by `discoverGpuDevices()` to terminate probing
+ * and by `resolveExecutionProvider()` to mark a synthetic GPU test as a
+ * `cpu (fallback)` row when GGML couldn't load the requested backend.
+ *
+ * - `CPU` / `Unloaded` — addon-level sentinels emitted when no backend is
+ *   bound (e.g. before activate(), or when GGML loader fix isn't available
+ *   on the runner).
+ * - `Bergamot-CPU` — Bergamot models are intgemm-only and never expose a GPU
+ *   backend; this sentinel surfaces the architectural limitation.
+ * - `BLAS` — GGML's CPU-side matmul helper on macOS. Reports as a "device"
+ *   in enumeration but is conceptually CPU work, not a separate GPU.
+ */
+const CPU_SENTINEL_BACKENDS = new Set([
+  'CPU', 'Unloaded', 'Bergamot-CPU', 'BLAS'
+])
+
+/**
+ * Normalise an addon `getActiveBackendName()` result into the
+ * `execution_provider` tag recorded in perf-report.json.
+ *
+ * - Real GPU backend (e.g. `Metal`, `Vulkan0`, `OpenCL`) → lowercased,
+ *   trailing-digit-stripped tag (`metal`, `vulkan`, `opencl`) so per-EP
+ *   baselines stay stable across multi-GPU systems.
+ * - `useGpu === false` + any sentinel → `cpu` (so a `[CPU]` label never
+ *   reports `blas` in the EP column on macOS).
+ * - `useGpu === true` + sentinel → `cpu (fallback)` to make it obvious in
+ *   the Step Summary that the requested GPU backend wasn't available and
+ *   the test ran on CPU. Once Ian's loader fix lands per platform
+ *   (QVAC-17640 / QVAC-17880), the same row auto-flips to the real backend
+ *   tag without further CI work.
+ */
+function resolveExecutionProvider (backendName, useGpu) {
+  if (backendName && !CPU_SENTINEL_BACKENDS.has(backendName)) {
+    return backendName.toLowerCase().replace(/\s+/g, '-').replace(/\d+$/, '')
+  }
+  if (!useGpu) return 'cpu'
+  return 'cpu (fallback)'
+}
+
+/**
+ * Maximum GPU device indices to probe.  Covers multi-GPU desktops (e.g.
+ * Vulkan0 + Vulkan1) and mixed-backend mobile (Vulkan + OpenCL).  Probing
+ * stops early when a device index falls back to CPU, so the actual cost is
+ * O(N_real_devices + 1).
+ */
+const MAX_GPU_DEVICE_PROBES = 4
+
+/** @type {Promise<{ index: number, name: string }[]> | null} */
+let _gpuDevicePromise = null
+
+/**
+ * Discovers available GPU devices by probe-loading an IndicTrans model with
+ * increasing gpu_device indices.  Returns an array of { index, name } for
+ * each device that resolved to a non-CPU backend.
+ *
+ * Uses IndicTrans regardless of which test file calls it — ggml device
+ * enumeration is device-dependent, not model-dependent, so a single probe
+ * model suffices for all backends (Bergamot, pivot, etc.).
+ *
+ * Results are cached as a Promise so concurrent callers await the same probe
+ * run (avoids the race where a second caller sees an in-progress empty array).
+ *
+ * @returns {Promise<{ index: number, name: string }[]>}
+ */
+function discoverGpuDevices () {
+  if (_gpuDevicePromise !== null) return _gpuDevicePromise
+  _gpuDevicePromise = _probeGpuDevices()
+  return _gpuDevicePromise
+}
+
+/** @type {Promise<{ index: number, name: string, backend: string }[]> | null} */
+let _gpuBackendPromise = null
+
+/**
+ * Discovers GPU devices including alternative backend types (Vulkan + OpenCL)
+ * for the same physical GPU.  Unlike discoverGpuDevices() which deduplicates
+ * by ordinal, this returns one entry per usable backend so that callers can
+ * benchmark Vulkan vs OpenCL on the same hardware.
+ *
+ * Each entry has { index, name, backend } where backend is the gpu_backend
+ * config value used to select it (e.g. 'vulkan', 'opencl').
+ *
+ * @returns {Promise<{ index: number, name: string, backend: string }[]>}
+ */
+function discoverGpuBackends () {
+  if (_gpuBackendPromise !== null) return _gpuBackendPromise
+  _gpuBackendPromise = _probeGpuBackends()
+  return _gpuBackendPromise
+}
+
+const _logger = createLogger()
+
+/**
+ * Extracts a physical GPU ordinal from a ggml backend device name.
+ *
+ * ggml names follow the convention `<ApiType><Ordinal>` — e.g. "Vulkan0",
+ * "OpenCL0", "CUDA1", "Metal".  Different API backends sharing the same
+ * trailing ordinal refer to the same physical GPU (e.g. Vulkan0 and OpenCL0
+ * on a single-SoC mobile device both address the same Adreno/Mali chip).
+ *
+ * @param {string} name - ggml backend device name
+ * @returns {string|null} ordinal string used as deduplication key, or null if no trailing digit
+ */
+function _extractPhysicalGpuKey (name) {
+  const match = name.match(/(\d+)$/)
+  return match ? match[1] : null
+}
+
+async function _probeGpuDevices () {
+  const devices = []
+  const seenBackends = new Set()
+  const modelPath = await ensureIndicTransModel()
+  // Lazy require: utils.js is imported by test files that may not need the
+  // native addon (e.g. fixture-only helpers).  Loading it at module scope
+  // would force every consumer to load the addon unconditionally.
+  const TranslationNmtcpp = require('@qvac/translation-nmtcpp') // eslint-disable-line
+
+  for (let idx = 0; idx < MAX_GPU_DEVICE_PROBES; idx++) {
+    let model
+    try {
+      const config = {
+        modelType: TranslationNmtcpp.ModelTypes.IndicTrans,
+        use_gpu: true,
+        gpu_device: idx,
+        beamsize: 1
+      }
+      if (platform === 'android') {
+        const writableRoot = (typeof global !== 'undefined' && global.testDir) || '/tmp'
+        config.openclCacheDir = path.join(writableRoot, 'opencl-cache-discover')
+        try { fs.mkdirSync(config.openclCacheDir, { recursive: true }) } catch (_) {}
+      }
+      model = new TranslationNmtcpp({
+        files: { model: modelPath },
+        params: { mode: 'full', srcLang: 'eng_Latn', dstLang: 'hin_Deva' },
+        config,
+        logger: createLogger()
+      })
+      await model.load()
+      const name = model.getActiveBackendName()
+      const description = model.getActiveBackendDescription()
+      await model.unload()
+
+      // CPU sentinels — the addon couldn't bind a real GPU backend at this
+      // index. BLAS is GGML's CPU-side matmul accelerator on macOS and is
+      // not a meaningful "GPU device" for our perf reports. Stop probing
+      // here so callers don't get redundant rows.
+      if (CPU_SENTINEL_BACKENDS.has(name)) {
+        break
+      }
+      // Dedupe by backend name so a single physical GPU returned at multiple
+      // indices (observed on Android where Vulkan0 came back four times)
+      // doesn't pollute the table with identical rows.
+      if (seenBackends.has(name)) {
+        break
+      }
+      seenBackends.add(name)
+      devices.push({ index: idx, name, description })
+    } catch (err) {
+      _logger.warn('[discoverGpuDevices] probe at gpu_device=' + idx +
+        ' failed: ' + (err && err.message ? err.message : String(err)))
+      if (model) { try { await model.unload() } catch (__) { /* noop */ } }
+      break
+    }
+  }
+
+  // Deduplicate backends that map to the same physical GPU.
+  // ggml names like "Vulkan0" and "OpenCL0" are different API surfaces for
+  // the same hardware — the trailing ordinal identifies the physical device.
+  // Keep only the first backend discovered per ordinal so tests don't
+  // redundantly initialise and run against the same chip twice.
+  const seen = new Map()
+  const unique = []
+  for (const device of devices) {
+    const physKey = _extractPhysicalGpuKey(device.name)
+    if (physKey !== null && seen.has(physKey)) {
+      _logger.info('[discoverGpuDevices] Skipping ' + device.name +
+        ' (gpu_device=' + device.index + ') — same physical GPU as ' +
+        seen.get(physKey).name + ' (ordinal ' + physKey + ')')
+      continue
+    }
+    if (physKey !== null) seen.set(physKey, device)
+    unique.push(device)
+  }
+
+  if (unique.length < devices.length) {
+    _logger.info('[discoverGpuDevices] Deduplicated ' + devices.length +
+      ' backends → ' + unique.length + ' unique physical GPU(s)')
+  }
+
+  if (unique.length > 0) {
+    _logger.info('[discoverGpuDevices] Discovered GPUs: ' +
+      unique.map(d => d.name + (d.description ? ' (' + d.description + ')' : '')).join(', '))
+  }
+
+  return unique
+}
+
+/**
+ * Backend types to probe when comparing Vulkan vs OpenCL on the same GPU.
+ * Each entry is { name, gpuBackend } where gpuBackend is the config value.
+ */
+const BACKEND_TYPES_TO_PROBE = [
+  { label: 'vulkan', gpuBackend: 'vulkan' },
+  { label: 'opencl', gpuBackend: 'opencl' }
+]
+
+async function _probeGpuBackends () {
+  const backends = []
+  const modelPath = await ensureIndicTransModel()
+  const TranslationNmtcpp = require('@qvac/translation-nmtcpp') // eslint-disable-line
+
+  for (const backendType of BACKEND_TYPES_TO_PROBE) {
+    let model
+    try {
+      const config = {
+        modelType: TranslationNmtcpp.ModelTypes.IndicTrans,
+        use_gpu: true,
+        gpu_backend: backendType.gpuBackend,
+        gpu_device: 0,
+        beamsize: 1
+      }
+      if (platform === 'android') {
+        const writableRoot = (typeof global !== 'undefined' && global.testDir) || '/tmp'
+        config.openclCacheDir = path.join(writableRoot, 'opencl-cache-discover-' + backendType.label)
+        try { fs.mkdirSync(config.openclCacheDir, { recursive: true }) } catch (_) {}
+      }
+      model = new TranslationNmtcpp({
+        files: { model: modelPath },
+        params: { mode: 'full', srcLang: 'eng_Latn', dstLang: 'hin_Deva' },
+        config,
+        logger: createLogger()
+      })
+      await model.load()
+      const name = model.getActiveBackendName()
+      const description = model.getActiveBackendDescription()
+      await model.unload()
+
+      if (name === 'CPU' || name === 'Unloaded' || name === 'Bergamot-CPU') {
+        _logger.info('[discoverGpuBackends] gpu_backend=' + backendType.gpuBackend +
+          ' resolved to CPU — skipping')
+        continue
+      }
+      backends.push({ index: 0, name, description, backend: backendType.label })
+      _logger.info('[discoverGpuBackends] Found: ' + name +
+        (description ? ' (' + description + ')' : '') +
+        ' via gpu_backend=' + backendType.gpuBackend)
+    } catch (err) {
+      _logger.warn('[discoverGpuBackends] gpu_backend=' + backendType.gpuBackend +
+        ' failed: ' + (err && err.message ? err.message : String(err)))
+      if (model) { try { await model.unload() } catch (__) { /* noop */ } }
+    }
+  }
+
+  return backends
 }
 
 // ============================================================================
@@ -704,5 +1039,12 @@ module.exports = {
 
   // Performance metrics
   createPerformanceCollector,
-  formatPerformanceMetrics
+  formatPerformanceMetrics,
+
+  // GPU discovery
+  discoverGpuDevices,
+  discoverGpuBackends,
+  MAX_GPU_DEVICE_PROBES,
+  CPU_SENTINEL_BACKENDS,
+  resolveExecutionProvider
 }

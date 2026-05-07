@@ -1,6 +1,6 @@
 import fs, { promises as fsp } from 'node:fs'
 import path from 'node:path'
-import type { Logger } from '../logger.js'
+import type { Logger } from '@/logger'
 
 interface BarePackHeader {
   id?: string
@@ -137,6 +137,47 @@ export function extractBarePackHeader (packed: string): BarePackHeader {
   return JSON.parse(packed.slice(jsonStart, i)) as BarePackHeader
 }
 
+// Global flag: capture all node_modules segments including nested ones
+const NODE_MODULES_RE = /\/node_modules\/(@[^/]+\/[^/]+|[^/]+)(?=\/)/g
+
+export function extractPackageNamesFromResolutions (resolutions: Record<string, unknown>): Set<string> {
+  const names = new Set<string>()
+  for (const key of Object.keys(resolutions)) {
+    for (const match of key.matchAll(NODE_MODULES_RE)) {
+      if (match[1]) names.add(match[1])
+    }
+  }
+  return names
+}
+
+function buildNestedPathIndex (
+  resolutions: Record<string, unknown>,
+  projectRoot: string
+): Map<string, Set<string>> {
+  const index = new Map<string, Set<string>>()
+  for (const key of Object.keys(resolutions)) {
+    for (const match of key.matchAll(NODE_MODULES_RE)) {
+      const pkgName = match[1]
+      if (!pkgName) continue
+      const marker = `/node_modules/${pkgName}/`
+      const idx = key.indexOf(marker)
+      if (idx === -1) continue
+      const candidate = path.join(
+        projectRoot,
+        key.slice(1, idx + marker.length),
+        'package.json'
+      )
+      let set = index.get(pkgName)
+      if (!set) {
+        set = new Set()
+        index.set(pkgName, set)
+      }
+      set.add(candidate)
+    }
+  }
+  return index
+}
+
 export async function generateAddonsManifest (options: GenerateAddonsManifestOptions): Promise<GenerateAddonsManifestResult> {
   const { bundlePath, outputDir, projectRoot, logger } = options
 
@@ -147,33 +188,29 @@ export async function generateAddonsManifest (options: GenerateAddonsManifestOpt
   const header = extractBarePackHeader(packed)
   const resolutions = header.resolutions ?? {}
 
-  const packageNames = new Set<string>()
-  const nodeModulesRegex = /\/node_modules\/(@[^/]+\/[^/]+|[^/]+)\//
-
-  for (const key of Object.keys(resolutions)) {
-    const match = key.match(nodeModulesRegex)
-    if (match?.[1]) {
-      packageNames.add(match[1])
-    }
-  }
+  const packageNames = extractPackageNamesFromResolutions(resolutions)
+  const nestedPaths = buildNestedPathIndex(resolutions, projectRoot)
 
   const addons: string[] = []
   for (const pkgName of packageNames) {
-    const pkgJsonPath = path.join(
-      projectRoot,
-      'node_modules',
-      pkgName,
-      'package.json'
-    )
-    try {
-      if (fs.existsSync(pkgJsonPath)) {
-        const pkgJson = JSON.parse(await fsp.readFile(pkgJsonPath, 'utf8')) as { addon?: boolean }
-        if (pkgJson.addon === true) {
-          addons.push(pkgName)
+    const candidates = [
+      path.join(projectRoot, 'node_modules', pkgName, 'package.json'),
+      ...(nestedPaths.get(pkgName) ?? [])
+    ]
+
+    let pkgJson: { addon?: boolean } | null = null
+    for (const candidate of candidates) {
+      try {
+        if (fs.existsSync(candidate)) {
+          pkgJson = JSON.parse(await fsp.readFile(candidate, 'utf8')) as { addon?: boolean }
+          break
         }
+      } catch (err) {
+        logger.warn(`   Could not read ${candidate}: ${(err as Error).message}`)
       }
-    } catch (err) {
-      logger.warn(`   Could not read ${pkgName}/package.json: ${(err as Error).message}`)
+    }
+    if (pkgJson?.addon === true) {
+      addons.push(pkgName)
     }
   }
 

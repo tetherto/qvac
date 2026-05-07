@@ -70,26 +70,6 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
           submodules: recursive
 
-      - name: Configure scoped registry for @tetherto and @qvac packages
-        env:
-          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
-        shell: bash
-        run: |
-          set -eu
-          cat > .npmrc <<NPMRC
-          always-auth=true
-          registry=https://registry.npmjs.org/
-          @qvac:registry=https://registry.npmjs.org/
-          @tetherto:registry=https://npm.pkg.github.com/
-          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
-          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
-          NPMRC
-          [ -n "${GIT_PAT:-}" ] && git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/" || true
-          mkdir -p packages/qvac-lib-infer-onnx-tts/benchmarks/server
-          cp .npmrc packages/qvac-lib-infer-onnx-tts/benchmarks/server/.npmrc
-
       - name: Install system dependencies
         run: |
           brew install ffmpeg cmake

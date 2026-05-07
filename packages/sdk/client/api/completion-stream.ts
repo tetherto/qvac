@@ -54,6 +54,23 @@ type CompletionParams = Omit<CompletionClientParams, "tools"> & {
  * @param params.mcp - Optional array of MCP client inputs for tool integration
  * @param params.captureThinking - Best-effort parsing of `<think>` blocks into `thinkingDelta` events; `final.raw.fullText` always preserves the original output
  * @param params.emitRawDeltas - When true, every raw model token is also emitted as a `rawDelta` event
+ * @param params.toolDialect - Override the SDK's name-based dialect detection. Use when your model emits a known format (`"hermes"`, `"pythonic"`, or `"json"`) the auto-router doesn't recognise. Drives both streaming frame detection and finalization parsing.
+ * Common override case: Llama 3.x tool-calling fine-tunes that emit the native pythonic header (`<|start_header_id|>tool_call<|end_header_id|>...<|eot_id|>`).
+ * @param params.responseFormat - Optional structured-output constraint applied to the model's output:
+ *   - `{ type: "text" }` — no constraint (default behavior)
+ *   - `{ type: "json_object" }` — output must be a JSON object
+ *   - `{ type: "json_schema", json_schema: { name, schema, description?, strict? } }` — output must validate against `schema`
+ *
+ *   The schema is converted to GBNF natively by llama.cpp and applied for the
+ *   duration of the request only. `json_schema.name` and `json_schema.description`
+ *   are accepted for OpenAI compatibility but only used at the API boundary —
+ *   they do not affect generation. **`json_schema.strict` is currently accepted
+ *   for compatibility but does NOT trigger OpenAI's auto-tightening semantics**
+ *   (implicit `additionalProperties: false`, all properties required). The
+ *   schema is forwarded to the addon as-is, so callers who want strict
+ *   validation must encode it explicitly in `schema`.
+ *
+ *   Cannot be combined with `tools` (tools already constrain output via their parameter schema).
  * @param params.kvCache - Optional KV cache configuration. Cache files are organized hierarchically:
  *   - Structure: `{kvCacheKey}/{modelId}/{configHash}.bin`
  *   - The configHash includes model config + system prompt to ensure cache isolation
@@ -62,6 +79,17 @@ type CompletionParams = Omit<CompletionClientParams, "tools"> & {
  *   - `false` or `undefined`: No caching
  *   - ⚡ Performance: When cache exists, only the last message is sent to the model (includes multimodal attachments)
  *   - 🗑️ Cleanup: Use `deleteCache({ kvCacheKey })` to remove cached sessions
+ *
+ *   **Auto-cache (`kvCache: true`) — assistant turn contract.** When
+ *   pushing the assistant turn back into `history` for the next call,
+ *   use `(await run.final).cacheableAssistantContent`. That's the exact
+ *   string the SDK persisted to the cache key on this turn, so re-using
+ *   it verbatim guarantees the next-turn lookup hits.
+ *   - Any post-processing of the assistant text (rewriting, summarizing,
+ *     stripping model stop tokens like `<|im_end|>`) before pushing it
+ *     back will miss the cache. Push the canonical string unchanged.
+ *   - `cacheableAssistantContent` is omitted on tool-call turns - those
+ *     can't be auto-cached today.
  * @returns A CompletionRun — consume via `events` / `final`.
  * @example
  * ```typescript
@@ -196,6 +224,8 @@ export function completion(params: CompletionParams): CompletionRun {
         generationParams: params.generationParams,
         captureThinking: params.captureThinking,
         emitRawDeltas: params.emitRawDeltas,
+        toolDialect: params.toolDialect,
+        responseFormat: params.responseFormat,
       };
 
       const responses: AsyncGenerator<unknown> = streamRpc(
@@ -226,7 +256,10 @@ export function completion(params: CompletionParams): CompletionRun {
           notifyWaiters();
 
           if (streamResponse.done) {
-            const { final, error } = buildFinalFromEvents(allEvents, allHandlers);
+            const { final, error } = buildFinalFromEvents(
+              allEvents,
+              allHandlers,
+            );
             if (error) {
               const err = new CompletionFailedError(error.message, error);
               finalRejecter(err);

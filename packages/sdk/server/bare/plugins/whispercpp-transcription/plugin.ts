@@ -16,6 +16,7 @@ import {
   type CreateModelParams,
   type PluginModelResult,
   type ResolveContext,
+  type TranscribeSegment,
   type WhisperConfig,
 } from "@/schemas";
 import { createStreamLogger, registerAddonLogger } from "@/logging";
@@ -52,7 +53,7 @@ function createWhisperModel(
 
   const model = new TranscriptionWhispercpp(args, config);
 
-  return { model, loader: null };
+  return { model };
 }
 
 export const whisperPlugin = definePlugin({
@@ -78,14 +79,14 @@ export const whisperPlugin = definePlugin({
   createModel(params: CreateModelParams): PluginModelResult {
     const whisperConfig = (params.modelConfig ?? {}) as WhisperConfig;
 
-    const { model, loader } = createWhisperModel(
+    const { model } = createWhisperModel(
       params.modelId,
       params.modelPath,
       whisperConfig,
       params.artifacts?.["vadModelPath"],
     );
 
-    return { model, loader };
+    return { model };
   },
 
   handlers: {
@@ -95,19 +96,32 @@ export const whisperPlugin = definePlugin({
       streaming: true,
 
       handler: async function* (request) {
-        const stream = transcribe({
-          modelId: request.modelId,
-          audioChunk: request.audioChunk,
-          prompt: request.prompt,
-        });
+        const metadata = request.metadata === true;
+        const stream = metadata
+          ? transcribe({
+              modelId: request.modelId,
+              audioChunk: request.audioChunk,
+              prompt: request.prompt,
+              metadata: true,
+            })
+          : transcribe({
+              modelId: request.modelId,
+              audioChunk: request.audioChunk,
+              prompt: request.prompt,
+            });
 
         try {
           let result = await stream.next();
           while (!result.done) {
-            yield {
-              type: "transcribe" as const,
-              text: result.value,
-            };
+            yield metadata
+              ? {
+                  type: "transcribe" as const,
+                  segment: result.value as TranscribeSegment,
+                }
+              : {
+                  type: "transcribe" as const,
+                  text: result.value as string,
+                };
             result = await stream.next();
           }
 
@@ -131,15 +145,65 @@ export const whisperPlugin = definePlugin({
       duplex: true,
 
       handler: async function* (request, inputStream) {
-        for await (const text of transcribeStream(
-          request.modelId,
-          inputStream,
-          request.prompt,
-        )) {
-          yield {
-            type: "transcribeStream" as const,
-            text,
-          };
+        const streamOpts = {
+          ...(request.emitVadEvents !== undefined && {
+            emitVadEvents: request.emitVadEvents,
+          }),
+          ...(request.endOfTurnSilenceMs !== undefined && {
+            endOfTurnSilenceMs: request.endOfTurnSilenceMs,
+          }),
+          ...(request.vadRunIntervalMs !== undefined && {
+            vadRunIntervalMs: request.vadRunIntervalMs,
+          }),
+        };
+
+        const metadata = request.metadata === true;
+        const iterator = metadata
+          ? transcribeStream(
+              request.modelId,
+              inputStream,
+              request.prompt,
+              true,
+              streamOpts,
+            )
+          : transcribeStream(
+              request.modelId,
+              inputStream,
+              request.prompt,
+              false,
+              streamOpts,
+            );
+
+        for await (const value of iterator) {
+          if (typeof value === "object" && value !== null && "type" in value) {
+            if (value.type === "vad") {
+              yield {
+                type: "transcribeStream" as const,
+                vad: {
+                  speaking: value.speaking,
+                  probability: value.probability,
+                },
+              };
+              continue;
+            }
+            if (value.type === "endOfTurn") {
+              yield {
+                type: "transcribeStream" as const,
+                endOfTurn: { silenceDurationMs: value.silenceDurationMs },
+              };
+              continue;
+            }
+            continue;
+          }
+          yield metadata
+            ? {
+                type: "transcribeStream" as const,
+                segment: value as TranscribeSegment,
+              }
+            : {
+                type: "transcribeStream" as const,
+                text: value as string,
+              };
         }
 
         yield {

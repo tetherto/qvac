@@ -1,4 +1,7 @@
-import ImgStableDiffusion, { type ImgStableDiffusionArgs, type SdConfig } from "@qvac/diffusion-cpp";
+import ImgStableDiffusion, {
+  type DiffusionFiles,
+  type SdConfig,
+} from "@qvac/diffusion-cpp";
 import addonLogging from "@qvac/diffusion-cpp/addonLogging";
 import {
   definePlugin,
@@ -15,7 +18,6 @@ import {
   type SdcppConfig,
 } from "@/schemas";
 import { createStreamLogger, registerAddonLogger } from "@/logging";
-import { parseModelPath } from "@/server/utils";
 import { diffusion } from "./ops/diffusion";
 
 type DiffusionArtifactKey =
@@ -72,25 +74,26 @@ export const diffusionPlugin = definePlugin({
   createModel(params: CreateModelParams): PluginModelResult {
     const { modelId, modelPath, modelConfig, artifacts } = params;
     const config = (modelConfig ?? {}) as SdcppConfig;
-    const { dirPath, basePath } = parseModelPath(modelPath);
     const logger = createStreamLogger(modelId, ModelType.sdcppGeneration);
     registerAddonLogger(modelId, ModelType.sdcppGeneration, logger);
 
-    const addonArgs: ImgStableDiffusionArgs = {
-      diskPath: dirPath,
-      modelName: basePath,
-      logger,
-      opts: { stats: true },
-      ...(artifacts?.["clipLModelPath"] && { clipLModel: artifacts["clipLModelPath"] }),
-      ...(artifacts?.["clipGModelPath"] && { clipGModel: artifacts["clipGModelPath"] }),
-      ...(artifacts?.["t5XxlModelPath"] && { t5XxlModel: artifacts["t5XxlModelPath"] }),
-      ...(artifacts?.["llmModelPath"] && { llmModel: artifacts["llmModelPath"] }),
-      ...(artifacts?.["vaeModelPath"] && { vaeModel: artifacts["vaeModelPath"] }),
+    const files: DiffusionFiles = {
+      model: modelPath,
+      ...(artifacts?.["clipLModelPath"] && { clipL: artifacts["clipLModelPath"] }),
+      ...(artifacts?.["clipGModelPath"] && { clipG: artifacts["clipGModelPath"] }),
+      ...(artifacts?.["t5XxlModelPath"] && { t5Xxl: artifacts["t5XxlModelPath"] }),
+      ...(artifacts?.["llmModelPath"] && { llm: artifacts["llmModelPath"] }),
+      ...(artifacts?.["vaeModelPath"] && { vae: artifacts["vaeModelPath"] }),
     };
 
-    const model = new ImgStableDiffusion(addonArgs, config as SdConfig);
+    const model = new ImgStableDiffusion({
+      files,
+      config: config as SdConfig,
+      logger,
+      opts: { stats: true },
+    });
 
-    return { model, loader: undefined };
+    return { model };
   },
 
   handlers: {

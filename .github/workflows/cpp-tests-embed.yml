@@ -82,7 +82,6 @@ jobs:
         name: Configure Windows runner
         run: |
           git config --system core.longpaths true
-          choco upgrade llvm -y
 
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -91,32 +90,6 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
 
-      - name: Configure scoped registry for @tetherto and @qvac packages
-        working-directory: ${{ env.WORKDIR }}
-        env:
-          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
-        shell: bash
-        run: |
-          echo "Configuring scoped registry for @tetherto and @qvac packages..."
-          set -eu
-          cat > .npmrc <<NPMRC
-          registry=https://registry.npmjs.org/
-          @qvac:registry=https://registry.npmjs.org/
-          @tetherto:registry=https://npm.pkg.github.com/
-          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
-          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
-          NPMRC
-
-          if [ -n "${GIT_PAT:-}" ]; then
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
-          else
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
-          fi
-
       - name: Install NPM dependencies
         working-directory: ${{ env.WORKDIR }}
         shell: bash
@@ -124,13 +97,9 @@ jobs:
           npm install
           npm install -g bare bare-make
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' }}
-        name: Install llvm-19 on Linux
-        shell: bash
-        run: |
-          wget -q https://apt.llvm.org/llvm.sh
-          chmod +x llvm.sh
-          sudo ./llvm.sh 19 all
+      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'windows-11' }}
+        name: Setup LLVM
+        uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
 
       - if: ${{ matrix.os == 'ubuntu-24.04' }}
         name: Install Vulkan SDK on Linux

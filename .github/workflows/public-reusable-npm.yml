@@ -16,14 +16,6 @@ on:
         required: false
         type: string
         default: "."
-      repo_name:
-        description: "repo suffix name appended to created git tag"
-        required: false
-        type: string
-      git-token:
-        description: "PAT with contents:write to create and push git tags"
-        required: false
-        type: string
     outputs:
       published_version:
         description: "The version published to npm (empty if skipped)"
@@ -40,6 +32,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
     steps:
       - name: Echo Step
         run: |
@@ -116,11 +109,8 @@ jobs:
       - name: Call Publish NPM Action
         uses: ./.github/actions/publish-library-to-npm
         with:
-          secret-token: ${{ secrets.NPM_TOKEN }}
           tag: "dev"
           workdir: ${{ inputs.workdir }}
-          repo_name: ${{ inputs.repo_name }}
-          git-token: ${{ secrets.GITHUB_TOKEN }}
 
   push-event:
     runs-on: ubuntu-latest
@@ -148,7 +138,4 @@ jobs:
         id: publish-npm
         uses: ./.github/actions/publish-library-to-npm
         with:
-          secret-token: ${{ secrets.NPM_TOKEN }}
           workdir: ${{ inputs.workdir }}
-          repo_name: ${{ inputs.repo_name }}
-          git-token: ${{ secrets.GITHUB_TOKEN }}

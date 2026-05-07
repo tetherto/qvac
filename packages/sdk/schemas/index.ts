@@ -7,10 +7,12 @@ export {
   toolSchema,
   toolCallSchema,
   toolCallErrorSchema,
+  TOOLS_MODE,
   type Tool,
   type ToolCall,
   type ToolCallError,
   type ToolCallWithCall,
+  type ToolsMode,
 } from "./tools";
 export * from "./delegate";
 export * from "./delete-cache";
@@ -38,6 +40,7 @@ export * from "./sdcpp-config";
 export * from "./shard";
 export * from "./suspend";
 export * from "./resume";
+export * from "./state";
 export { SDK_CLIENT_ERROR_CODES } from "./sdk-errors-client";
 export { SDK_SERVER_ERROR_CODES } from "./sdk-errors-server";
 export { REGISTRY_ERROR_CODES } from "./sdk-errors-registry";
@@ -74,6 +77,7 @@ export {
 } from "./profiling";
 export { runtimeContextSchema, type RuntimeContext } from "./runtime-context";
 export * from "./get-model-info";
+export * from "./get-loaded-model-info";
 export * from "./model-src-utils";
 export * from "./json-schema";
 export { type McpClient, type McpClientInput } from "./mcp-adapter";

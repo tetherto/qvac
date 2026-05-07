@@ -60,7 +60,31 @@ export interface TranscribeStats {
   melSpecMs?: number;
 }
 
+export interface TranscribeAddonSegment {
+  text: string;
+  start?: number;
+  end?: number;
+  toAppend?: boolean;
+  id?: number;
+}
+
+export interface TranscribeAddonVadEvent {
+  type: "vad";
+  speaking: boolean;
+  probability: number;
+}
+
+export interface TranscribeAddonEndOfTurnEvent {
+  type: "endOfTurn";
+  silenceDurationMs: number;
+}
+
+export type TranscribeAddonOutput =
+  | Array<TranscribeAddonSegment>
+  | TranscribeAddonVadEvent
+  | TranscribeAddonEndOfTurnEvent;
+
 export interface TranscribeResponse {
   stats?: TranscribeStats;
-  iterate(): AsyncIterable<Array<{ text: string }>>;
+  iterate(): AsyncIterable<TranscribeAddonOutput>;
 }

@@ -8,6 +8,7 @@
 #include "../utils/Qwen3ReasoningUtils.hpp"
 #include "../utils/UTF8TokenBuffer.hpp"
 #include "LlmContext.hpp"
+#include "ToolsCompactController.hpp"
 #include "common/common.h"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
@@ -20,7 +21,7 @@ public:
   // Constructor
   TextLlmContext(
       common_params& commonParams, common_init_result&& llamaInit,
-      bool toolsAtEnd = false);
+      ToolsCompactController& tools);
 
   // Destructor
   ~TextLlmContext() override = default;
@@ -170,6 +171,7 @@ private:
   void applyContextDiscard();
   void handleStopRequestAndAddEot(LlamaBatch& batch);
 
+  ToolsCompactController& tools_;
   common_init_result llamaInit_;
   llama_model* model_;
   llama_context* lctx_;
@@ -195,6 +197,10 @@ private:
 
   // Cache whether this is a Qwen3 model (checked once at load time)
   bool isQwen3Model_ = false;
+
+  // GPT-OSS Harmony: <|call|> is a frame delimiter, not a stop signal
+  bool isHarmonyModel_ = false;
+  llama_token harmonyCallToken_ = LLAMA_TOKEN_NULL;
 
   std::atomic<bool> stopGeneration_ = false;
 };

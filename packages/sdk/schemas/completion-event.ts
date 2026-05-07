@@ -5,11 +5,13 @@ import {
   type Tool,
   type ToolCallWithCall,
 } from "./tools";
+import type { ToolDialect } from "./completion-stream";
 
 export const completionStatsSchema = z.object({
   timeToFirstToken: z.number().optional(),
   tokensPerSecond: z.number().optional(),
   cacheTokens: z.number().optional(),
+  generatedTokens: z.number().optional(),
   backendDevice: z.enum(["cpu", "gpu"]).optional(),
 });
 
@@ -113,8 +115,21 @@ export type CompletionFinal = {
   stats?: CompletionStats;
   raw: {
     fullText: string;
-    toolDialect?: string;
   };
+  /**
+   * Canonical assistant text to push back into `history` for the next turn
+   * when using `kvCache: true` (auto-cache). Equals the assistant content
+   * the SDK persisted to the cache key on this turn, so re-using it
+   * verbatim guarantees a cache hit on the next call.
+   *
+   * Derived from `raw.fullText` (or `contentText` if the addon didn't
+   * emit raw text) by stripping `<think>` reasoning blocks and trimming
+   * surrounding whitespace — see `normalizeAssistantCacheContent`.
+   *
+   * Tool-call turns currently can't be auto-cached, so this
+   * field is omitted when `toolCalls.length > 0`.
+   */
+  cacheableAssistantContent?: string;
 };
 
 export type CompletionRun = {
@@ -148,4 +163,7 @@ export type NormalizerConfig = {
   tools: Tool[];
   captureThinking: boolean;
   emitRawDeltas: boolean;
+  // Defaults to "hermes" (`<tool_call>...` framing + JSON-payload fallbacks)
+  // when omitted. "json" is the no-framing pure JSON-payload dialect.
+  toolDialect?: ToolDialect;
 };

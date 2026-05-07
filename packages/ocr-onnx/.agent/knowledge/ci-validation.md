@@ -12,7 +12,7 @@ Workflow files live in `.github/workflows/` and fall into distinct categories by
 
 ### Native Addons (C++ packages)
 
-Packages: `qvac-lib-infer-llamacpp-llm`, `qvac-lib-infer-llamacpp-embed`, `qvac-lib-infer-onnx-tts`, `qvac-lib-infer-whispercpp`, `qvac-lib-infer-parakeet`, `qvac-lib-infer-nmtcpp`, `qvac-lib-decoder-audio`, `ocr-onnx`
+Packages: `qvac-lib-infer-llamacpp-llm`, `qvac-lib-infer-llamacpp-embed`, `qvac-lib-infer-onnx-tts`, `qvac-lib-infer-whispercpp`, `qvac-lib-infer-parakeet`, `qvac-lib-infer-nmtcpp`, `decoder-audio`, `ocr-onnx`
 
 Each addon has a full suite of per-package workflows:
 
@@ -24,7 +24,7 @@ Each addon has a full suite of per-package workflows:
 | Prebuilds | `prebuilds-<pkg>.yml` | Build native bindings for 9 platform targets |
 | On merge | `on-merge-<pkg>.yml` | Publish to GPR (main/feature/tmp) or npm (release) |
 | C++ tests | `cpp-tests-<pkg>.yml` or `reusable-cpp-tests-<pkg>.yml` | GoogleTest unit tests |
-| C++ coverage | `cpp-test-coverage-<pkg>.yml` | llvm-cov-19 coverage reports |
+| C++ coverage | `cpp-test-coverage-<pkg>.yml` | llvm-cov coverage reports |
 | Benchmarks | `benchmark-<pkg>.yml` | Performance benchmarks |
 | Release notes | `release-notes-check-<pkg>.yml` | Verify CHANGELOG matches version bumps |
 | GitHub release | `create-github-release-<pkg>.yml` | Create GitHub release on npm publish |
@@ -88,7 +88,7 @@ These are the native addon packages that have full CI workflows. The **short nam
 | `Whispercpp` | `packages/qvac-lib-infer-whispercpp` | `On PR Trigger (Whispercpp)` |
 | `Parakeet` | `packages/qvac-lib-infer-parakeet` | `On PR Trigger (Parakeet)` |
 | `NMTCPP` | `packages/qvac-lib-infer-nmtcpp` | `On PR Trigger (NMTCPP)` |
-| `Decoder-audio` | `packages/qvac-lib-decoder-audio` | `On PR Trigger (Decoder-audio)` |
+| `Decoder-audio` | `packages/decoder-audio` | `On PR Trigger (Decoder-audio)` |
 
 ### How to trigger manually
 

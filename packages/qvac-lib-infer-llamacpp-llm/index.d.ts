@@ -52,6 +52,10 @@ export interface LlamaConfig {
   verbosity?: NumericLike
   n_discarded?: NumericLike
   'main-gpu'?: NumericLike | string
+  /** How to split the model across GPUs: 'none' (default, single GPU), 'layer' (pipeline parallelism), 'row' (tensor parallelism). */
+  'split-mode'?: 'none' | 'layer' | 'row'
+  /** Proportions for distributing layers/rows across GPUs (e.g. '1,1' for equal split, '3,1' for 75/25). */
+  'tensor-split'?: string
   'cache-type-k'?: string
   'cache-type-v'?: string
   /** Writable directory for OpenCL kernel binary cache. Required on Android for fast GPU startup. */
@@ -105,6 +109,29 @@ export interface GenerationParams {
   frequency_penalty?: number
   presence_penalty?: number
   repeat_penalty?: number
+  /**
+   * GBNF grammar applied per request to constrain sampling. Equivalent to
+   * the load-time `--grammar` config but scoped to a single `run()` call;
+   * the sampler is re-initialized with this grammar for the request and
+   * the prior grammar is restored afterwards.
+   *
+   * `undefined` or an empty string is treated as "no override" and falls
+   * through to whatever grammar was set at load time (typically none).
+   *
+   * Mutually exclusive with `json_schema` — passing both throws.
+   */
+  grammar?: string
+  /**
+   * JSON Schema applied per request to constrain sampling to valid JSON
+   * matching the schema. Equivalent to the load-time `--json-schema`
+   * config but scoped to a single `run()` call; the schema is converted
+   * to GBNF natively (via llama.cpp's `json_schema_to_grammar()`) and
+   * applied identically to `grammar`.
+   *
+   * Accepts either a JSON Schema object literal or a pre-stringified
+   * JSON Schema. Mutually exclusive with `grammar` — passing both throws.
+   */
+  json_schema?: string | Record<string, unknown>
 }
 
 export interface RunOptions {
@@ -117,6 +144,7 @@ export interface RunOptions {
 export interface RuntimeStats {
   TTFT: number
   TPS: number
+  ppTPS: number
   CacheTokens: number
   generatedTokens: number
   promptTokens: number

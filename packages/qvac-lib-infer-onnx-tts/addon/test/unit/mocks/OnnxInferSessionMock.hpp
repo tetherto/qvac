@@ -22,6 +22,14 @@ public:
   MOCK_METHOD(void, initInputTensors,
               (const std::vector<std::vector<int64_t>> &inputShapes),
               (override));
+
+  MOCK_METHOD(
+      void, setOutputToInputChain,
+      ((const std::vector<std::pair<std::string, std::string>> &mapping)),
+      (override));
+  MOCK_METHOD(void, clearChainedInputs, (), (override));
+  MOCK_METHOD(bool, isInputChained, (const std::string &inputName),
+              (const, override));
 };
 
 } // namespace qvac::ttslib::chatterbox::testing

@@ -5,9 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.8.6]
-
-This release combines two parallel efforts: (1) Japanese (ja) language support via MeCab and a refactored text preprocessing layer, and (2) Chatterbox TTS performance improvements where reference-audio encoding is done once during `load()` and cached for every `synthesize()` call, the CFG multilingual path runs with a single batched KV cache instead of two separate sessions, and the ONNX Runtime intra-op thread count is now configurable at construction time. On a 4-core CPU the English q4 model drops from RTF ≈ 20.9 to ≈ 15.7 (~25% faster), and every `synthesize()` call sees the same per-call cost — no more first-call penalty.
+## [0.8.7]
 
 ### Added
 
@@ -18,25 +16,28 @@ This release combines two parallel efforts: (1) Japanese (ja) language support v
 - New `mecabDictPath` field on the native `ChatterboxConfig`, propagated end-to-end (JS `ONNXTTS` -> `AddonJs` -> `TTSModel` -> `ChatterboxEngine`). The Cangjie table for `zh` keeps being resolved next to the tokenizer.
 - Public `files.mecabDictPath?: string` option on `ONNXTTS` (declared in `index.d.ts`) to override the bundled MeCab dictionary location for Japanese; defaults to `<package>/dict` when omitted.
 - Japanese (kanji + MeCab) integration test added to `test/integration/addon.test.js` (`Chatterbox Multilingual TTS: Japanese ...`), validating end-to-end synthesis and asserting Whisper CER (`ggml-medium.bin`) `<= 50%`.
-- **`numThreads` option** on the `ONNXTTS` constructor. Configures `intraOpThreads` for all Chatterbox ONNX sessions (speech encoder, embed tokens, conditional decoder, language model). Defaults to `0` which preserves the previous behavior (1 intra-op thread). Setting e.g. `4` on a 4-core machine yields ~25% total RTF reduction (LM generation −22%, conditional decoder −30%, speech encoder −25%). Threaded through JS options → `AddonJs` (as string) → `TTSModel::createChatterboxConfig` → `ChatterboxConfig.numThreads` → `OnnxInferSession` constructor.
-- **Speech encoder output caching** in `ChatterboxEngine`. New `SpeechEncoderCache` struct stores audio features, prompt tokens, speaker embeddings, and speaker features produced from the reference audio. The encoder runs once during `load()` and every subsequent `synthesize()` call reuses the cached outputs, so per-call latency is uniform instead of spiking by ~2.7s on the first call. Cache is cleared on `unload()`.
-- **Per-phase timing instrumentation** for Chatterbox. `synthesize()` now emits `QLOG(INFO)` lines with measured durations for speech encoder, LM generation, conditional decoder, and total, so RTF breakdowns can be read straight from logs.
-- **`tensor_ops::concatBatch` / `tensor_ops::duplicateBatch`** tensor helpers in `ChatterboxEngine.hpp`, plus unit tests in `ChatterboxEngineMethodsTest.cpp`.
 
 ### Changed
 
-- **Chatterbox CFG multilingual path** now runs conditional and unconditional branches as a single batched ONNX session call (`[2N, ...]` batch) with one shared KV cache, replacing the previous pair of separate session calls and two KV caches. `generateSpeechTokensWithCfg`, `runInitialCfgStep`, `runCfgGenerationLoop`, and `initEmptyKvCache` were refactored accordingly. Pure performance change — math and output are bit-identical to the pre-batched path.
-- **`prepareCfgEmbeddings`** now prepends audio features via `reserve` + single-pass build instead of `std::vector::insert(begin, ...)`, eliminating O(n) element shifting for every embedding vector built per CFG step.
-- **`trimPromptFromWaveform`** uses `std::move` + `resize` instead of `std::vector::erase(begin, begin + N)`, avoiding an unnecessary copy of the full waveform on every `synthesize()`.
-- Fixed bug when using multilingual model for English inference, bypassing model configuration and allowing input tokens to leak into the output
 - Refactor: text preprocessing moved from free functions in the `text_preprocess` namespace into a new `class ChatterboxTextPreprocessor` with RAII (`std::unique_ptr<mecab_t, MeCabDeleter>` for the MeCab tagger).
 - `ChatterboxEngine` now owns a single `ChatterboxTextPreprocessor` instead of separate Cangjie/MeCab members; `loadTextPreprocessor(tokenizerPath, mecabDictPath)` replaces the previous loader.
 - `decodeUtf8`/`encodeCodepoint` are now `static` utility methods; long loops split into focused helpers (`detectSequenceLength`, `extractLeadingBits`, `decodeCodepointAt`, `isContentNode`, `hasReading`, `appendNodeReading`, `buildHiraganaFromNodes`).
 - `package.json` ships the new `dict/` folder and exposes the `build:mecab-dict` npm script.
 
+## [0.8.6]
+
+### Changed
+
+- Bumped `qvac-lib-inference-addon-cpp` to `1.1.6`.
+- **Eager release of `speechEncoderSession_`** in `ChatterboxEngine::runSpeechEncoderAndCache()`. The previous `releaseSession(...)` call was a no-op in the default non-lazy loading path, so the encoder weights stayed resident even though they're never used after `load()` populates the cache. Replaced with an unconditional `speechEncoderSession_.reset()` that drops the weights in both lazy and non-lazy modes.
+- **`runInitialCfgStep` is now `void`.** The first sampled token is appended to the by-reference `generatedTokens` vector inside the function; the only caller (`generateSpeechTokensWithCfg`) did not read the previously-`int64_t` return value.
+- **`numThreads` parse error handling.** `TTSModel::createChatterboxConfig` now logs a `WARNING` with the offending value and `std::exception::what()` when `numThreads` cannot be parsed, instead of silently swallowing via `catch(...)`. The catch block also resets `config.numThreads = 0` so the fallback to the engine default (1 intra-op thread) is honored even on reload / per-request config updates that carried over a previously parsed valid value via `chatterboxConfig_` (otherwise the warning would lie and the prior thread count would silently persist).
+
 ### Fixed
 
-- Preserve UTF-8 text correctly at the Chatterbox addon boundary so Portuguese diacritics like `á`, `ã`, `ç`, `é`, and `í` reach tokenization intact.
+- **Fail-loud validation in Chatterbox tensor and cache helpers.** `tensor_ops::concatBatch` / `duplicateBatch` now reject empty shapes and rank / non-batch-dim mismatches with `std::invalid_argument`. `tensor_ops::readLastStepLogitsForBatch` (promoted out of an anonymous namespace into `tensor_ops` so it's testable) validates that the logits tensor is 3D and that `batchIdx` is in range. `processSpeechEncoderOutputs` and `prepareCfgEmbeddings` throw `std::runtime_error` if the speech-encoder cache is not populated. These guard paths that were previously reachable as silent UB on a malformed ONNX export or an out-of-order call.
+- **`runSpeechEncoderAndCache()` invalidates `speechEncoderCache_` at entry.** Previously, a partial/failed re-run after a successful prior `load()` would leave the cache marked valid (the throw would interrupt the function before the cache contents were rewritten), which meant the new `processSpeechEncoderOutputs` / `prepareCfgEmbeddings` guards never tripped and the next `synthesize()` would silently run with stale reference-audio features. The function now resets `speechEncoderCache_ = {}` as its first statement so the post-throw state is always invalid.
+- **0.8.5 changelog corrections (carried forward).** The 0.8.5 entry listed a `trimPromptFromWaveform` (`std::move` + `resize`) optimization that was never actually shipped — the function does not exist in the merged code. The 0.8.5 entry also did not state explicitly that the speech-encoder caching change shifts ~2.7s of work from the first `synthesize()` call to `load()`. The 0.8.5 section is left as originally cut for historical accuracy; this entry records the corrections so they roll forward into the next release.
 
 ## [0.8.5]
 

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { modelSrcInputSchema } from "./model-src-utils";
+import { TOOLS_MODE } from "./tools";
 
 export const VERBOSITY = {
   ERROR: 0,
@@ -41,8 +42,19 @@ export const llmConfigBaseSchema = z.object({
   stop_sequences: z.array(z.string()).optional(),
   n_discarded: z.number().optional(),
   tools: z.boolean().optional(),
+  toolsMode: z
+    .enum([TOOLS_MODE.static, TOOLS_MODE.dynamic])
+    .describe(
+      'Controls tool placement in the prompt. "static" (default) prepends the tool set once and reuses it across the session. "dynamic" anchors tools after the last user message and trims them from the kv-cache after the chain resolves so each user prompt can carry its own tools.',
+    )
+    .optional(),
   "cache-type-k": z.string().optional(),
   "cache-type-v": z.string().optional(),
+  "main-gpu": z
+    .union([z.number().int().min(0), z.enum(["integrated", "dedicated"])])
+    .optional(),
+  "split-mode": z.enum(["none", "layer", "row"]).optional(),
+  "tensor-split": z.string().optional(),
   /**
    * Writable directory for OpenCL kernel binary cache. Required on Android
    * for fast GPU startup.
@@ -81,6 +93,8 @@ export const embedConfigBaseSchema = z.object({
   mainGpu: z
     .union([z.number().int().min(0), z.enum(["integrated", "dedicated"])])
     .optional(),
+  splitMode: z.enum(["none", "layer", "row"]).optional(),
+  tensorSplit: z.string().optional(),
   verbosity: verbositySchema.optional(),
   /**
    * Writable directory for OpenCL kernel binary cache. Required on Android

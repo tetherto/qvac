@@ -1,12 +1,27 @@
+#include <cstdlib>
+
 #include <bare.h>
 
 #include "src/addon/AddonJs.hpp"
+
+namespace {
+void atexitCleanup() {
+  std::lock_guard lock(qvac_lib_inference_addon_whisper::g_streamingMtx);
+  qvac_lib_inference_addon_whisper::g_streamingSessions.clear();
+}
+} // namespace
 
 // NOLINTBEGIN(cppcoreguidelines-macro-usage,readability-function-cognitive-complexity,modernize-use-trailing-return-type,readability-identifier-naming)
 auto qvac_lib_inference_addon_whisper_exports(
     js_env_t* env,
     js_value_t* exports)
     -> js_value_t* { // NOLINT(readability-identifier-naming)
+
+  static bool registered = false;
+  if (!registered) {
+    std::atexit(atexitCleanup);
+    registered = true;
+  }
 
 #define V(name, fn)                                                            \
   {                                                                            \

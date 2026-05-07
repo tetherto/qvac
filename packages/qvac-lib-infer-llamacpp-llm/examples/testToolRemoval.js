@@ -83,7 +83,7 @@ async function runAndCollect (model, prompt, runOptions) {
 }
 
 async function main () {
-  console.log('Test: tool removal correctness with tools_at_end')
+  console.log('Test: tool removal correctness with tools_compact')
   console.log('='.repeat(70))
   console.log('')
 
@@ -97,7 +97,7 @@ async function main () {
     seed: '1',
     verbosity: '0',
     tools: 'true',
-    tools_at_end: 'true'
+    tools_compact: 'true'
   }
 
   const { model } = await loadModel(dirPath, modelName, config)
@@ -215,7 +215,7 @@ async function mainInSystem () {
     seed: '1',
     verbosity: '0',
     tools: 'true',
-    tools_at_end: 'false'
+    tools_compact: 'false'
   }
 
   const { model } = await loadModel(dirPath, modelName, config)

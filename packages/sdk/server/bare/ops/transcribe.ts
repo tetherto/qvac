@@ -7,7 +7,9 @@ import {
 import {
   ModelType,
   type TranscribeParams,
+  type TranscribeSegment,
   type TranscribeStats,
+  type TranscribeStreamEvent,
   type WhisperConfig,
   type AudioFormat,
 } from "@/schemas";
@@ -17,16 +19,41 @@ import { TranscriptionFailedError } from "@/utils/errors-server";
 import type { TranscribeResponse } from "@/server/bare/types/addon-responses";
 import { nowMs } from "@/profiling";
 import { buildStreamResult } from "@/profiling/model-execution";
+import {
+  assertMetadataSupported,
+  toTranscribeSegment,
+  type WhisperAddonSegment,
+} from "@/server/bare/utils/transcribe-metadata";
+
+export {
+  assertMetadataSupported,
+  toTranscribeSegment,
+  type WhisperAddonSegment,
+};
 
 const logger = getServerLogger();
 
+type StreamingModelOutput =
+  | { text: string }[]
+  | { type: "vad"; speaking: boolean; probability: number }
+  | { type: "endOfTurn"; silenceDurationMs: number };
+
 interface StreamingModelResponse {
-  iterate(): AsyncIterable<{ text: string }[]>;
-  await(): Promise<{ text: string }[]>;
+  iterate(): AsyncIterable<StreamingModelOutput>;
+  await(): Promise<unknown>;
+}
+
+interface WhisperRunStreamingOpts {
+  emitVadEvents?: boolean;
+  endOfTurnSilenceMs?: number;
+  vadRunIntervalMs?: number;
 }
 
 interface StreamableModel {
-  runStreaming(audioStream: AsyncIterable<Buffer>): Promise<StreamingModelResponse>;
+  runStreaming(
+    audioStream: AsyncIterable<Buffer>,
+    opts?: WhisperRunStreamingOpts,
+  ): Promise<StreamingModelResponse>;
 }
 
 function hasRunStreaming(model: AnyModel): model is AnyModel & StreamableModel {
@@ -40,7 +67,8 @@ const SILENCE_MARKERS: Record<string, string> = {
 
 function getEngineModelType(modelId: string): string {
   const entry = getModelEntry(modelId);
-  return entry?.local?.modelType ?? "";
+  if (!entry || entry.isDelegated) return "";
+  return entry.local.modelType;
 }
 
 function getAudioFormat(modelId: string, engineType: string): AudioFormat {
@@ -93,11 +121,20 @@ async function restorePrompt(
   });
 }
 
+type TranscribeReturn = { modelExecutionMs: number; stats?: TranscribeStats };
+
+export function transcribe(
+  params: TranscribeParams & { metadata: true },
+): AsyncGenerator<TranscribeSegment, TranscribeReturn, void>;
+export function transcribe(
+  params: TranscribeParams,
+): AsyncGenerator<string, TranscribeReturn, void>;
 export async function* transcribe(
   params: TranscribeParams,
-): AsyncGenerator<string, { modelExecutionMs: number; stats?: TranscribeStats }, void> {
-  const { modelId } = params;
+): AsyncGenerator<string | TranscribeSegment, TranscribeReturn, void> {
+  const { modelId, metadata } = params;
   const engineType = getEngineModelType(modelId);
+  assertMetadataSupported(modelId, engineType, metadata);
   const silenceMarker = SILENCE_MARKERS[engineType] ?? "";
   const audioFormat = getAudioFormat(modelId, engineType);
 
@@ -115,7 +152,18 @@ export async function* transcribe(
     for await (const output of response.iterate()) {
       logger.debug("Streaming Transcription Update:", output);
 
-      const text = (output as { text: string }[])
+      const chunks = output as WhisperAddonSegment[];
+
+      if (metadata) {
+        for (const chunk of chunks) {
+          if (!chunk.text) continue;
+          if (silenceMarker && chunk.text.includes(silenceMarker)) continue;
+          yield toTranscribeSegment(chunk);
+        }
+        continue;
+      }
+
+      const text = chunks
         .filter(
           (chunk) => !silenceMarker || !chunk.text.includes(silenceMarker),
         )
@@ -149,12 +197,35 @@ export async function* transcribe(
   return buildStreamResult(modelExecutionMs, stats);
 }
 
+export interface TranscribeStreamOpts {
+  emitVadEvents?: boolean;
+  endOfTurnSilenceMs?: number;
+  vadRunIntervalMs?: number;
+}
+
+export function transcribeStream(
+  modelId: string,
+  audioInputStream: AsyncIterable<Buffer>,
+  prompt: string | undefined,
+  metadata: true,
+  opts?: TranscribeStreamOpts,
+): AsyncGenerator<TranscribeSegment | TranscribeStreamEvent, void, void>;
+export function transcribeStream(
+  modelId: string,
+  audioInputStream: AsyncIterable<Buffer>,
+  prompt?: string,
+  metadata?: boolean,
+  opts?: TranscribeStreamOpts,
+): AsyncGenerator<string | TranscribeStreamEvent, void, void>;
 export async function* transcribeStream(
   modelId: string,
   audioInputStream: AsyncIterable<Buffer>,
   prompt?: string,
-): AsyncGenerator<string, void, void> {
+  metadata?: boolean,
+  opts?: TranscribeStreamOpts,
+): AsyncGenerator<string | TranscribeSegment | TranscribeStreamEvent, void, void> {
   const engineType = getEngineModelType(modelId);
+  assertMetadataSupported(modelId, engineType, metadata);
   const silenceMarker = SILENCE_MARKERS[engineType] ?? "";
 
   const originalConfig = await applyPrompt(modelId, prompt, engineType);
@@ -168,14 +239,46 @@ export async function* transcribeStream(
       );
     }
 
-    const response = await model.runStreaming(audioInputStream);
+    const runOpts: WhisperRunStreamingOpts = {};
+    if (opts?.emitVadEvents) runOpts.emitVadEvents = true;
+    if (opts?.endOfTurnSilenceMs !== undefined) {
+      runOpts.endOfTurnSilenceMs = opts.endOfTurnSilenceMs;
+    }
+    if (opts?.vadRunIntervalMs !== undefined) {
+      runOpts.vadRunIntervalMs = opts.vadRunIntervalMs;
+    }
 
-    for await (const segments of response.iterate()) {
-      logger.debug("Live Transcription Update:", segments);
+    const response = await model.runStreaming(audioInputStream, runOpts);
 
-      for (const segment of segments) {
+    for await (const output of response.iterate()) {
+      logger.debug("Live Transcription Update:", output);
+
+      if (!Array.isArray(output)) {
+        if (output.type === "vad") {
+          yield {
+            type: "vad",
+            speaking: output.speaking,
+            probability: output.probability,
+          };
+          continue;
+        }
+        if (output.type === "endOfTurn") {
+          yield {
+            type: "endOfTurn",
+            silenceDurationMs: output.silenceDurationMs,
+          };
+          continue;
+        }
+        continue;
+      }
+
+      for (const segment of output as WhisperAddonSegment[]) {
         if (!segment.text) continue;
         if (silenceMarker && segment.text.includes(silenceMarker)) continue;
+        if (metadata) {
+          yield toTranscribeSegment(segment);
+          continue;
+        }
         if (segment.text.trim()) {
           yield segment.text;
         }

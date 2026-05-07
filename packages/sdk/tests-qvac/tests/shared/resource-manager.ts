@@ -1,10 +1,14 @@
 import { loadModel, downloadAsset, unloadModel, cancel } from "@qvac/sdk";
 import type { ModelConstant } from "@qvac/sdk";
 
+type ModelConfig = Record<string, unknown>;
+type ModelConfigResolver = () => Promise<ModelConfig>;
+
 interface ModelDefinition {
   constant: ModelConstant;
   type: string;
-  config?: Record<string, unknown>;
+  /** Static config or async resolver (cached per-dep) for runtime-only fields like RN asset URIs. */
+  config?: ModelConfig | ModelConfigResolver;
   skipPreDownload?: boolean;
   preLoadUnload?: true;
 }
@@ -15,11 +19,46 @@ interface TrackedModel {
   lastUsedAtTest: number;
 }
 
+export interface ResourceManagerOptions {
+  /**
+   * Milliseconds to sleep after a successful unloadModel() call inside
+   * `evict()`. Lets the OS catch up on lazy page reclamation before the
+   * next load starts allocating on top.
+   *
+   * Mobile (iOS) needs this — kernel doesn't release pages instantly when
+   * a Bare worklet's V8 isolate destroys its handles, and the next test's
+   * load can crash with EXC_CRASH/SIGABRT inside the GGML allocator if it
+   * arrives at the still-resident-residue moment.
+   *
+   * Desktop doesn't need it — `unloadModel` over the IPC socket completes
+   * with the worker process already having freed the memory, and the
+   * kernel reclaims fast.
+   *
+   * Default 0 (off).
+   */
+  unloadSettleMs?: number;
+}
+
 export class ResourceManager {
   private definitions = new Map<string, ModelDefinition>();
+  private resolvedConfigs = new Map<string, ModelConfig>();
   private models = new Map<string, TrackedModel>();
   private testCount = 0;
   private downloaded = false;
+  private readonly unloadSettleMs: number;
+
+  constructor(options: ResourceManagerOptions = {}) {
+    this.unloadSettleMs = options.unloadSettleMs ?? 0;
+  }
+
+  private async resolveConfig(dep: string, def: ModelDefinition): Promise<ModelConfig | undefined> {
+    if (typeof def.config !== "function") return def.config;
+    const cached = this.resolvedConfigs.get(dep);
+    if (cached) return cached;
+    const resolved = await def.config();
+    this.resolvedConfigs.set(dep, resolved);
+    return resolved;
+  }
 
   define(dep: string, definition: ModelDefinition) {
     this.definitions.set(dep, definition);
@@ -81,7 +120,7 @@ export class ResourceManager {
       const modelId = await loadModel({
         modelSrc: def.constant as never,
         modelType: def.type,
-        modelConfig: def.config,
+        modelConfig: await this.resolveConfig(dep, def),
       });
       log?.(`✅ pre-loaded ${dep}: ${def.constant.name} - unloading...`);
       await unloadModel({ modelId });
@@ -115,7 +154,7 @@ export class ResourceManager {
     const modelId = await loadModel({
       modelSrc: def.constant as never,
       modelType: def.type as "llm" | "whisper" | "embeddings",
-      modelConfig: def.config,
+      modelConfig: await this.resolveConfig(dep, def),
     });
 
     this.models.set(dep, {
@@ -183,10 +222,19 @@ export class ResourceManager {
       }
       try {
         await unloadModel({ modelId: entry.modelId });
+        // Optionally yield so the OS can reclaim pages before the next
+        // load starts allocating. See `unloadSettleMs` docs above. Only
+        // wait when the unload actually succeeded; on failure there's
+        // nothing to settle.
+        if (this.unloadSettleMs > 0) {
+          await new Promise<void>((resolve) =>
+            setTimeout(resolve, this.unloadSettleMs),
+          );
+        }
       } catch (error) {
         console.warn(`Error unloading model ${dep}: ${error}`);
       }
-      
+
       this.models.delete(dep);
     }
   }

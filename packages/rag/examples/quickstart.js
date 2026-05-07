@@ -1,37 +1,29 @@
+'use strict'
+
+const Corestore = require('corestore')
 const EmbedderPlugin = require('@qvac/embed-llamacpp')
 const LlmPlugin = require('@qvac/llm-llamacpp')
-const HyperDriveDL = require('@qvac/dl-hyperdrive')
-const knowledgeBase = require('./knowledge-base.json')
-const { RAG, HyperDBAdapter, QvacLlmAdapter } = require('../index')
-const Corestore = require('corestore')
 const QvacLogger = require('@qvac/logging')
 
-const llamaDriveKey = 'afa79ee07c0a138bb9f11bfaee771fb1bdfca8c82d961cff0474e49827bd1de3'
-const gteDriveKey = 'd1896d9259692818df95bd2480e90c2d057688a4f7c9b1ae13ac7f5ee379d03e'
+const { RAG, HyperDBAdapter, QvacLlmAdapter } = require('../index')
+const knowledgeBase = require('./knowledge-base.json')
+const { ensureModels } = require('./utils')
 
-const modelName = 'gte-large_fp16.gguf'
 const store = new Corestore('./store')
-
-const modelDir = './models'
-
 const query = 'Who won the individual title in LIV Golf UK by JCB in 2025?'
 
 async function main () {
-  // Load the embedder using HyperDriveDL
-  const gteHdDL = new HyperDriveDL({
-    key: `hd://${gteDriveKey}`,
-    store
-  })
+  // 1. Fetch embedder + LLM model files from the QVAC registry (cached on disk after first run).
+  const models = await ensureModels(['embedder', 'llm'])
 
-  const embedderArgs = {
-    loader: gteHdDL,
-    opts: { stats: true },
+  // 2. Construct embedder with the new files-based addon shape.
+  const embedder = new EmbedderPlugin({
+    files: { model: [models.embedder.fullPath] },
+    config: { device: 'gpu', gpu_layers: '99' },
     logger: console,
-    diskPath: modelDir,
-    modelName
-  }
-  const embedder = new EmbedderPlugin(embedderArgs, '-ngl\t99\n-dev\tgpu')
-  await embedder.load(false)
+    opts: { stats: true }
+  })
+  await embedder.load()
 
   const embeddingFunction = async (text) => {
     const response = await embedder.run(text)
@@ -44,39 +36,26 @@ async function main () {
     }
   }
 
-  // Load the LLM using HyperDriveDL
-  const llamaHdDL = new HyperDriveDL({
-    key: `hd://${llamaDriveKey}`,
-    store
-  })
-
-  const llmArgs = {
-    loader: llamaHdDL,
-    opts: { stats: true },
+  // 3. Construct LLM with the new files-based addon shape.
+  const llm = new LlmPlugin({
+    files: { model: [models.llm.fullPath] },
+    config: { device: 'gpu', gpu_layers: '99', ctx_size: '1024' },
     logger: console,
-    diskPath: modelDir,
-    modelName: 'Llama-3.2-1B-Instruct-Q4_0.gguf'
-  }
-  const llm = new LlmPlugin(llmArgs, { ctx_size: '1024', gpu_layers: '99', device: 'gpu' })
-  await llm.load(false)
+    opts: { stats: true }
+  })
+  await llm.load()
   const llmAdapter = new QvacLlmAdapter(llm)
 
-  // Initialize the database adapter
   const dbAdapter = new HyperDBAdapter({ store })
-
-  // Create logger for visibility
   const logger = new QvacLogger(console)
 
-  // Initialize the RAG pipeline
   const rag = new RAG({ embeddingFunction, dbAdapter, llm: llmAdapter, logger })
   await rag.ready()
 
   const knowledgeBaseMapped = knowledgeBase.map(kb => kb.text)
 
-  // Generate embeddings for the knowledge base and save them to the vector database
-  const docs = await rag.ingest(knowledgeBaseMapped, modelName)
+  const docs = await rag.ingest(knowledgeBaseMapped, models.embedder.filename)
 
-  // Generate a response to the user query
   const response = await rag.infer(query)
 
   let fullResponse = ''
@@ -88,17 +67,11 @@ async function main () {
 
   console.log(fullResponse)
 
-  // Delete the embeddings for the knowledge base
   await rag.deleteEmbeddings(docs.processed.map(doc => doc.id))
 
-  // Close the RAG pipeline
   await rag.close()
-
-  // Close HyperDriveDL instances
-  await llamaHdDL.close()
-  await gteHdDL.close()
-
-  // Close the store
+  await llm.unload()
+  await embedder.unload()
   await store.close()
 }
 

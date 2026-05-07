@@ -105,6 +105,48 @@ struct JsTranscriptArrayOutputHandler
             }) {}
 };
 
+struct JsVadStateOutputHandler
+    : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
+          VadStateUpdate> {
+  JsVadStateOutputHandler()
+      : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
+            VadStateUpdate>(
+            [this](const VadStateUpdate& output) -> js_value_t* {
+              auto jsOutput = js::Object::create(this->env_);
+              jsOutput.setProperty(
+                  this->env_, "type", js::String::create(this->env_, "vad"));
+              jsOutput.setProperty(
+                  this->env_,
+                  "speaking",
+                  js::Boolean::create(this->env_, output.speaking));
+              jsOutput.setProperty(
+                  this->env_,
+                  "probability",
+                  js::Number::create(this->env_, output.probability));
+              return jsOutput;
+            }) {}
+};
+
+struct JsEndOfTurnOutputHandler
+    : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
+          EndOfTurnEvent> {
+  JsEndOfTurnOutputHandler()
+      : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
+            EndOfTurnEvent>(
+            [this](const EndOfTurnEvent& output) -> js_value_t* {
+              auto jsOutput = js::Object::create(this->env_);
+              jsOutput.setProperty(
+                  this->env_,
+                  "type",
+                  js::String::create(this->env_, "endOfTurn"));
+              jsOutput.setProperty(
+                  this->env_,
+                  "silenceDurationMs",
+                  js::Number::create(this->env_, output.silenceDurationMs));
+              return jsOutput;
+            }) {}
+};
+
 inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
   using namespace std;
@@ -119,6 +161,8 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outputHandlers;
   outputHandlers.add(make_shared<JsTranscriptOutputHandler>());
   outputHandlers.add(make_shared<JsTranscriptArrayOutputHandler>());
+  outputHandlers.add(make_shared<JsVadStateOutputHandler>());
+  outputHandlers.add(make_shared<JsEndOfTurnOutputHandler>());
   unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
       env,
       args.get(0, "jsHandle"),
@@ -259,6 +303,32 @@ startStreaming(js_env_t* env, js_callback_info_t* info) try {
   if (maybeSamplesOverlap.has_value()) {
     config.samplesOverlap =
         static_cast<float>(maybeSamplesOverlap.value().as<double>(env));
+  }
+
+  auto maybeEmitVadEvents =
+      configObj.getOptionalProperty<js::Boolean>(env, "emitVadEvents");
+  if (maybeEmitVadEvents.has_value()) {
+    config.emitVadEvents = maybeEmitVadEvents.value().as<bool>(env);
+  }
+
+  auto maybeEndOfTurnSilence =
+      configObj.getOptionalProperty<js::Number>(env, "endOfTurnSilenceMs");
+  if (maybeEndOfTurnSilence.has_value()) {
+    config.endOfTurnSilenceMs =
+        static_cast<int>(maybeEndOfTurnSilence.value().as<double>(env));
+  }
+
+  auto maybeVadRunInterval =
+      configObj.getOptionalProperty<js::Number>(env, "vadRunIntervalMs");
+  if (maybeVadRunInterval.has_value()) {
+    const double vadRunIntervalMs = maybeVadRunInterval.value().as<double>(env);
+    if (vadRunIntervalMs > 0.0) {
+      config.vadRunIntervalSamples = static_cast<int>(
+          vadRunIntervalMs * static_cast<double>(config.sampleRate) / 1000.0);
+      if (config.vadRunIntervalSamples <= 0) {
+        config.vadRunIntervalSamples = 1;
+      }
+    }
   }
 
   {

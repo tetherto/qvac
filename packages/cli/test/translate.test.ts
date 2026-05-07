@@ -6,6 +6,8 @@ import {
   sdkToolCallsToOpenai,
   sdkToolCallsToOpenaiDeltas,
   extractGenerationParams,
+  extractResponseFormat,
+  InvalidResponseFormatError,
   logUnsupportedParams
 } from '../src/serve/adapters/openai/translate.js'
 
@@ -364,10 +366,124 @@ describe('logUnsupportedParams', () => {
   it('logs warnings for unsupported params', () => {
     const warnings: string[] = []
     const logger = { warn: (msg: string) => warnings.push(msg) } as Parameters<typeof logUnsupportedParams>[1]
-    logUnsupportedParams({ n: 2, logprobs: true, response_format: { type: 'json' } }, logger)
+    logUnsupportedParams({ n: 2, logprobs: true, stop: ['END'] }, logger)
     assert.equal(warnings.length, 3)
     assert.ok(warnings.some(w => w.includes('n=')))
     assert.ok(warnings.some(w => w.includes('logprobs=')))
-    assert.ok(warnings.some(w => w.includes('response_format=')))
+    assert.ok(warnings.some(w => w.includes('stop=')))
+  })
+
+  it('does not warn on response_format (now supported)', () => {
+    const warnings: string[] = []
+    const logger = { warn: (msg: string) => warnings.push(msg) } as Parameters<typeof logUnsupportedParams>[1]
+    logUnsupportedParams({ response_format: { type: 'json_object' } }, logger)
+    assert.equal(warnings.length, 0)
+  })
+})
+
+describe('extractResponseFormat', () => {
+  it('returns undefined when response_format is absent', () => {
+    assert.equal(extractResponseFormat({}), undefined)
+  })
+
+  it('returns undefined when response_format is null', () => {
+    assert.equal(extractResponseFormat({ response_format: null }), undefined)
+  })
+
+  it('parses { type: "text" }', () => {
+    const result = extractResponseFormat({ response_format: { type: 'text' } })
+    assert.deepEqual(result, { type: 'text' })
+  })
+
+  it('parses { type: "json_object" }', () => {
+    const result = extractResponseFormat({ response_format: { type: 'json_object' } })
+    assert.deepEqual(result, { type: 'json_object' })
+  })
+
+  it('parses a json_schema with required fields', () => {
+    const result = extractResponseFormat({
+      response_format: {
+        type: 'json_schema',
+        json_schema: {
+          name: 'Person',
+          schema: { type: 'object', properties: { name: { type: 'string' } } }
+        }
+      }
+    })
+    assert.deepEqual(result, {
+      type: 'json_schema',
+      json_schema: {
+        name: 'Person',
+        schema: { type: 'object', properties: { name: { type: 'string' } } }
+      }
+    })
+  })
+
+  it('forwards optional description and strict on json_schema', () => {
+    const result = extractResponseFormat({
+      response_format: {
+        type: 'json_schema',
+        json_schema: {
+          name: 'P',
+          description: 'a person',
+          strict: true,
+          schema: { type: 'object' }
+        }
+      }
+    })
+    assert.ok(result && result.type === 'json_schema')
+    assert.equal(result.json_schema.description, 'a person')
+    assert.equal(result.json_schema.strict, true)
+  })
+
+  it('throws on a non-object response_format', () => {
+    assert.throws(
+      () => extractResponseFormat({ response_format: 'json' }),
+      InvalidResponseFormatError
+    )
+  })
+
+  it('throws on an unknown type', () => {
+    assert.throws(
+      () => extractResponseFormat({ response_format: { type: 'yaml' } }),
+      InvalidResponseFormatError
+    )
+  })
+
+  it('throws when json_schema is missing', () => {
+    assert.throws(
+      () => extractResponseFormat({ response_format: { type: 'json_schema' } }),
+      InvalidResponseFormatError
+    )
+  })
+
+  it('throws when json_schema.name is missing or empty', () => {
+    assert.throws(
+      () => extractResponseFormat({
+        response_format: { type: 'json_schema', json_schema: { schema: { type: 'object' } } }
+      }),
+      InvalidResponseFormatError
+    )
+    assert.throws(
+      () => extractResponseFormat({
+        response_format: { type: 'json_schema', json_schema: { name: '', schema: { type: 'object' } } }
+      }),
+      InvalidResponseFormatError
+    )
+  })
+
+  it('throws when json_schema.schema is missing or not an object', () => {
+    assert.throws(
+      () => extractResponseFormat({
+        response_format: { type: 'json_schema', json_schema: { name: 'P' } }
+      }),
+      InvalidResponseFormatError
+    )
+    assert.throws(
+      () => extractResponseFormat({
+        response_format: { type: 'json_schema', json_schema: { name: 'P', schema: 'oops' } }
+      }),
+      InvalidResponseFormatError
+    )
   })
 })

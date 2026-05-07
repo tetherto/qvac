@@ -46,6 +46,8 @@ const DISPATCH_DELETE_MODEL = `@${QVAC_MAIN_REGISTRY}/delete-model`
 
 const BLOB_CORE_NAME = 'models'
 
+const MODEL_TOTALS_REFRESH_INTERVAL_MS = 5 * 60 * 1000
+
 class RegistryService extends ReadyResource {
   constructor (store, swarm, config, opts = {}) {
     super()
@@ -74,6 +76,12 @@ class RegistryService extends ReadyResource {
     this._mirroredCoreIds = new Set()
     this.blindPeering = null
     this.reseedTracker = null
+    this.metrics = null
+
+    this._totalModelBytes = 0
+    this._modelCount = 0
+    this._totalModelBytesRefreshedAt = 0
+    this._totalsRefreshTimer = null
 
     this._registerApplyHandlers()
 
@@ -143,15 +151,13 @@ class RegistryService extends ReadyResource {
     this.view = this.base.view
     await this.view.ready()
 
-    this._logAvailableModels().catch(err => {
-      this.logger.error({ err }, 'RegistryService: Failed to log available models')
-    })
-
     this.swarm.on('connection', (conn, peerInfo) => {
-      const peerKey = peerInfo?.publicKey ? IdEnc.normalize(peerInfo.publicKey) : 'unknown'
+      const peerKey = peerInfo?.publicKey ? IdEnc.normalize(peerInfo.publicKey) : null
 
-      this.logger.info({ peer: peerKey }, 'Swarm connection opened')
-      conn.on('close', () => this.logger.info({ peer: peerKey }, 'Swarm connection closed'))
+      this.logger.info({ peer: peerKey || 'unknown' }, 'Swarm connection opened')
+      conn.on('close', () => {
+        this.logger.info({ peer: peerKey || 'unknown' }, 'Swarm connection closed')
+      })
 
       this._setupRpc(conn)
 
@@ -248,15 +254,41 @@ class RegistryService extends ReadyResource {
       await this._setupBlindPeering()
     }
 
+    // Eagerly open the blob core on writer/indexer nodes so that per-core
+    // metrics (peers, seeders, byte length) and on-disk replication health
+    // are observable immediately, without waiting for the first addModel RPC
+    // or for blind-peering setup to run. On reader-only nodes we skip this,
+    // because `writable: true` would create a local core with the wrong key.
+    if (this.base.isIndexer || this.base.localWriter) {
+      try {
+        await this._getOrCreateBlobsCore(BLOB_CORE_NAME)
+      } catch (err) {
+        this.logger.warn({ err: err.message }, 'RegistryService: failed to open blob core at startup')
+      }
+    }
+
     if (this.compactionIntervalMs > 0) {
       this._startCompactionInterval()
     }
+
+    await this._refreshTotals()
+    this._totalsRefreshTimer = setInterval(() => {
+      this._refreshTotals().catch(err => {
+        this.logger.warn({ err: err.message }, 'RegistryService: failed to refresh model totals')
+      })
+    }, MODEL_TOTALS_REFRESH_INTERVAL_MS)
+    if (this._totalsRefreshTimer.unref) this._totalsRefreshTimer.unref()
 
     this.logger.info('RegistryService: swarm joined and flushed')
   }
 
   async _close () {
     this.logger.info('RegistryService: closing')
+
+    if (this._totalsRefreshTimer) {
+      clearInterval(this._totalsRefreshTimer)
+      this._totalsRefreshTimer = null
+    }
 
     if (this._compactionInterval) {
       clearInterval(this._compactionInterval)
@@ -468,28 +500,34 @@ class RegistryService extends ReadyResource {
     rpc.respond(
       'add-model',
       async (entry) => {
-        ensureWriterAccess()
+        if (this.metrics) this.metrics.recordRpcRequest('add-model')
+        try {
+          ensureWriterAccess()
 
-        if (!this.opened) await this.ready()
-        await this._ensureIndexer()
+          if (!this.opened) await this.ready()
+          await this._ensureIndexer()
 
-        const skipExisting = entry.skipExisting || false
-        const modelEntry = { ...entry }
-        delete modelEntry.skipExisting
+          const skipExisting = entry.skipExisting || false
+          const modelEntry = { ...entry }
+          delete modelEntry.skipExisting
 
-        const result = await this.addModel(modelEntry, { skipExisting })
+          const result = await this.addModel(modelEntry, { skipExisting })
 
-        this.logger.info({
-          path: result.path,
-          source: result.source
-        }, 'RPC: add-model completed')
-
-        return {
-          success: true,
-          model: {
+          this.logger.info({
             path: result.path,
             source: result.source
+          }, 'RPC: add-model completed')
+
+          return {
+            success: true,
+            model: {
+              path: result.path,
+              source: result.source
+            }
           }
+        } catch (err) {
+          if (this.metrics) this.metrics.recordRpcError('add-model')
+          throw err
         }
       }
     )
@@ -497,19 +535,25 @@ class RegistryService extends ReadyResource {
     rpc.respond(
       'put-license',
       async (licenseRecord) => {
-        ensureWriterAccess()
+        if (this.metrics) this.metrics.recordRpcRequest('put-license')
+        try {
+          ensureWriterAccess()
 
-        if (!this.opened) await this.ready()
-        await this._ensureIndexer()
-        await this.putLicense(licenseRecord)
+          if (!this.opened) await this.ready()
+          await this._ensureIndexer()
+          await this.putLicense(licenseRecord)
 
-        this.logger.info({
-          spdxId: licenseRecord.spdxId
-        }, 'RPC: put-license completed')
+          this.logger.info({
+            spdxId: licenseRecord.spdxId
+          }, 'RPC: put-license completed')
 
-        return {
-          success: true,
-          message: 'License operation appended'
+          return {
+            success: true,
+            message: 'License operation appended'
+          }
+        } catch (err) {
+          if (this.metrics) this.metrics.recordRpcError('put-license')
+          throw err
         }
       }
     )
@@ -517,45 +561,51 @@ class RegistryService extends ReadyResource {
     rpc.respond(
       'update-model-metadata',
       async (data) => {
-        ensureWriterAccess()
+        if (this.metrics) this.metrics.recordRpcRequest('update-model-metadata')
+        try {
+          ensureWriterAccess()
 
-        if (!data.path) throw new TypeError('path is required')
-        if (!data.source) throw new TypeError('source is required')
+          if (!data.path) throw new TypeError('path is required')
+          if (!data.source) throw new TypeError('source is required')
 
-        if (!this.opened) await this.ready()
-        await this._ensureIndexer()
+          if (!this.opened) await this.ready()
+          await this._ensureIndexer()
 
-        const existing = await this.getModelByKey({ path: data.path, source: data.source })
-        if (!existing) throw new Error(`Model not found: ${data.path}`)
+          const existing = await this.getModelByKey({ path: data.path, source: data.source })
+          if (!existing) throw new Error(`Model not found: ${data.path}`)
 
-        // If explicitly undeprecating, clear deprecation fields
-        const isUndeprecating = data.deprecated === false
+          // If explicitly undeprecating, clear deprecation fields
+          const isUndeprecating = data.deprecated === false
 
-        const updated = {
-          ...existing,
-          engine: data.engine ?? existing.engine,
-          licenseId: data.licenseId ?? existing.licenseId,
-          description: data.description ?? existing.description,
-          quantization: data.quantization ?? existing.quantization,
-          params: data.params ?? existing.params,
-          notes: data.notes ?? existing.notes,
-          tags: data.tags ?? existing.tags,
-          deprecated: data.deprecated !== undefined ? data.deprecated : existing.deprecated,
-          deprecatedAt: isUndeprecating ? '' : (data.deprecatedAt ?? existing.deprecatedAt),
-          replacedBy: isUndeprecating ? '' : (data.replacedBy ?? existing.replacedBy),
-          deprecationReason: isUndeprecating ? '' : (data.deprecationReason ?? existing.deprecationReason)
-        }
+          const updated = {
+            ...existing,
+            engine: data.engine ?? existing.engine,
+            licenseId: data.licenseId ?? existing.licenseId,
+            description: data.description ?? existing.description,
+            quantization: data.quantization ?? existing.quantization,
+            params: data.params ?? existing.params,
+            notes: data.notes ?? existing.notes,
+            tags: data.tags ?? existing.tags,
+            deprecated: data.deprecated !== undefined ? data.deprecated : existing.deprecated,
+            deprecatedAt: isUndeprecating ? '' : (data.deprecatedAt ?? existing.deprecatedAt),
+            replacedBy: isUndeprecating ? '' : (data.replacedBy ?? existing.replacedBy),
+            deprecationReason: isUndeprecating ? '' : (data.deprecationReason ?? existing.deprecationReason)
+          }
 
-        await this._appendOperation(DISPATCH_PUT_MODEL, updated)
+          await this._appendOperation(DISPATCH_PUT_MODEL, updated)
 
-        const viewLength = this.view?.core?.length ?? 0
-        const viewContiguous = this.view?.core?.contiguousLength ?? 0
-        const viewSigned = this.view?.core?.signedLength ?? 0
-        this.logger.info({ path: data.path, viewLength, viewContiguous, viewSigned }, 'RPC: update-model-metadata completed')
+          const viewLength = this.view?.core?.length ?? 0
+          const viewContiguous = this.view?.core?.contiguousLength ?? 0
+          const viewSigned = this.view?.core?.signedLength ?? 0
+          this.logger.info({ path: data.path, viewLength, viewContiguous, viewSigned }, 'RPC: update-model-metadata completed')
 
-        return {
-          success: true,
-          model: updated
+          return {
+            success: true,
+            model: updated
+          }
+        } catch (err) {
+          if (this.metrics) this.metrics.recordRpcError('update-model-metadata')
+          throw err
         }
       }
     )
@@ -563,28 +613,33 @@ class RegistryService extends ReadyResource {
     rpc.respond(
       'delete-model',
       async (data) => {
-        ensureWriterAccess()
+        if (this.metrics) this.metrics.recordRpcRequest('delete-model')
+        try {
+          ensureWriterAccess()
 
-        if (!data.path) throw new TypeError('path is required')
-        if (!data.source) throw new TypeError('source is required')
+          if (!data.path) throw new TypeError('path is required')
+          if (!data.source) throw new TypeError('source is required')
 
-        if (!this.opened) await this.ready()
-        await this._ensureIndexer()
+          if (!this.opened) await this.ready()
+          await this._ensureIndexer()
 
-        const result = await this.deleteModel({ path: data.path, source: data.source })
+          const result = await this.deleteModel({ path: data.path, source: data.source })
 
-        this.logger.info({
-          path: data.path,
-          source: data.source
-        }, 'RPC: delete-model completed')
+          this.logger.info({
+            path: data.path,
+            source: data.source
+          }, 'RPC: delete-model completed')
 
-        return result
+          return result
+        } catch (err) {
+          if (this.metrics) this.metrics.recordRpcError('delete-model')
+          throw err
+        }
       }
     )
 
-    // Server identification endpoint - allows RPC clients to verify they connected
-    // to the actual server and not a blind peer (which won't have RPC responders)
     rpc.respond('ping', async () => {
+      if (this.metrics) this.metrics.recordRpcRequest('ping')
       return {
         role: 'registry-server',
         timestamp: Date.now()
@@ -672,6 +727,8 @@ class RegistryService extends ReadyResource {
       const modelData = this._buildModelEntry(modelEntry, sourceInfo, metadata, pointer, core.key, ggufMetadata)
 
       await this._appendOperation(DISPATCH_PUT_MODEL, modelData)
+
+      this._scheduleTotalsRefresh()
 
       if (this.reseedTracker) {
         await this.reseedTracker.waitForComplete()
@@ -969,7 +1026,6 @@ class RegistryService extends ReadyResource {
       discoveryKey: core.discoveryKey.toString('hex')
     }, 'Hyperblobs core ready')
 
-    // Caller is responsible for mirroring after data is added
     return entry
   }
 
@@ -1074,6 +1130,8 @@ class RegistryService extends ReadyResource {
 
     await this._appendOperation(DISPATCH_DELETE_MODEL, { path, source })
 
+    this._scheduleTotalsRefresh()
+
     this.logger.info({ path, source }, 'deleteModel: completed')
 
     return { success: true, path, source }
@@ -1154,26 +1212,45 @@ class RegistryService extends ReadyResource {
     }
   }
 
-  async _logAvailableModels () {
-    if (!this.view) return
+  async _refreshTotals () {
+    if (!this.view || !this.view.opened) return
 
-    try {
-      if (!this.view.opened) await this.view.ready()
-      const models = await this.view.findModelsByPath({}).toArray()
+    const startedAt = Date.now()
+    let total = 0
+    let count = 0
 
-      if (models.length === 0) {
-        this.logger.info('RegistryService: No models in registry yet')
-      } else {
-        const modelsToLog = models.length > 5 ? models.slice(-5) : models
-        this.logger.info({
-          count: models.length,
-          showing: modelsToLog.length,
-          models: modelsToLog.map(m => `${m.path} [${m.engine}]`)
-        }, 'RegistryService: models available')
-      }
-    } catch (err) {
-      this.logger.error({ err }, 'RegistryService: Failed to log models')
+    for await (const model of this.view.findModelsByPath({})) {
+      total += model.blobBinding?.byteLength || 0
+      count++
     }
+
+    this._totalModelBytes = total
+    this._modelCount = count
+    this._totalModelBytesRefreshedAt = Date.now()
+
+    this.logger.debug({
+      totalBytes: total,
+      models: count,
+      durationMs: Date.now() - startedAt
+    }, 'RegistryService: refreshed model totals')
+  }
+
+  _scheduleTotalsRefresh () {
+    this._refreshTotals().catch(err => {
+      this.logger.warn({ err: err.message }, 'RegistryService: failed to refresh model totals')
+    })
+  }
+
+  get totalModelBytes () {
+    return this._totalModelBytes
+  }
+
+  get modelCount () {
+    return this._modelCount
+  }
+
+  get totalsRefreshedAt () {
+    return this._totalModelBytesRefreshedAt
   }
 
   _normalizeKey (key) {

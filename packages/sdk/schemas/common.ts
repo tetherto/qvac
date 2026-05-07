@@ -36,7 +36,12 @@ import {
   loggingStreamRequestSchema,
   loggingStreamResponseSchema,
 } from "./logging-stream";
-import { ttsRequestSchema, ttsResponseSchema } from "./text-to-speech";
+import {
+  ttsRequestSchema,
+  ttsResponseSchema,
+  textToSpeechStreamRequestSchema,
+  textToSpeechStreamResponseSchema,
+} from "./text-to-speech";
 import { errorResponseSchema } from "./error";
 import {
   ragRequestSchema,
@@ -51,6 +56,10 @@ import {
   getModelInfoRequestSchema,
   getModelInfoResponseSchema,
 } from "./get-model-info";
+import {
+  getLoadedModelInfoRequestSchema,
+  getLoadedModelInfoResponseSchema,
+} from "./get-loaded-model-info";
 import { ocrStreamRequestSchema, ocrStreamResponseSchema } from "./ocr";
 import {
   diffusionStreamRequestSchema,
@@ -77,6 +86,7 @@ import {
 } from "./registry";
 import { suspendRequestSchema, suspendResponseSchema } from "./suspend";
 import { resumeRequestSchema, resumeResponseSchema } from "./resume";
+import { stateRequestSchema, stateResponseSchema } from "./state";
 
 export const requestSchema = z.union([
   heartbeatRequestSchema,
@@ -90,12 +100,14 @@ export const requestSchema = z.union([
   embedRequestSchema,
   translateRequestSchema,
   ttsRequestSchema,
+  textToSpeechStreamRequestSchema,
   cancelRequestSchema,
   provideRequestSchema,
   stopProvideRequestSchema,
   ragRequestSchema,
   deleteCacheRequestSchema,
   getModelInfoRequestSchema,
+  getLoadedModelInfoRequestSchema,
   ocrStreamRequestSchema,
   diffusionStreamRequestSchema,
   finetuneRequestSchema,
@@ -106,6 +118,7 @@ export const requestSchema = z.union([
   modelRegistryGetModelRequestSchema,
   suspendRequestSchema,
   resumeRequestSchema,
+  stateRequestSchema,
 ]);
 
 export const responseSchema = z.discriminatedUnion("type", [
@@ -121,6 +134,7 @@ export const responseSchema = z.discriminatedUnion("type", [
   embedResponseSchema,
   translateResponseSchema,
   ttsResponseSchema,
+  textToSpeechStreamResponseSchema,
   cancelResponseSchema,
   provideResponseSchema,
   stopProvideResponseSchema,
@@ -129,6 +143,7 @@ export const responseSchema = z.discriminatedUnion("type", [
   ragProgressUpdateSchema,
   deleteCacheResponseSchema,
   getModelInfoResponseSchema,
+  getLoadedModelInfoResponseSchema,
   ocrStreamResponseSchema,
   diffusionStreamResponseSchema,
   finetuneResponseSchema,
@@ -140,13 +155,35 @@ export const responseSchema = z.discriminatedUnion("type", [
   modelRegistryGetModelResponseSchema,
   suspendResponseSchema,
   resumeResponseSchema,
+  stateResponseSchema,
 ]);
 
 export const rpcOptionsSchema = z.object({
-  timeout: z.number().min(100).optional(),
-  healthCheckTimeout: z.number().min(100).optional(),
-  forceNewConnection: z.boolean().optional(),
-  profiling: perCallProfilingSchema.optional(),
+  timeout: z
+    .number()
+    .min(100)
+    .optional()
+    .describe(
+      "Per-call RPC timeout in milliseconds; overrides the SDK-level default for this request only.",
+    ),
+  healthCheckTimeout: z
+    .number()
+    .min(100)
+    .optional()
+    .describe(
+      "Timeout in milliseconds for the health-check probe that precedes the RPC call.",
+    ),
+  forceNewConnection: z
+    .boolean()
+    .optional()
+    .describe(
+      "When `true`, skip any cached RPC connection and open a fresh one for this call.",
+    ),
+  profiling: perCallProfilingSchema
+    .optional()
+    .describe(
+      "Per-call profiler configuration; when present, overrides the SDK's global profiler settings for this request.",
+    ),
 });
 
 export type Request = z.input<typeof requestSchema>;
