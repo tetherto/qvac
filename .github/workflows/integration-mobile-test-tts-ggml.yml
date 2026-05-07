@@ -163,6 +163,16 @@ jobs:
       # event_name propagates from the parent, so an event-name gate would
       # always pick the npm path on `on-pr` manual reruns even when a fresh
       # prebuild was just uploaded in the same run.
+      # Pin both downloads to the CURRENT workflow run.  This is the
+      # default behaviour of actions/download-artifact@v4+ but stating
+      # it explicitly is what CodeQL's `actions/artifact-poisoning`
+      # rule looks for: without a `run-id` in scope the analyzer has
+      # to assume the artifact could come from any past run on the
+      # branch (including a fork-PR prebuild step), which is the
+      # poisoning surface we're explicitly NOT exposing.  We also pass
+      # `github-token` with the GITHUB_TOKEN explicitly so the
+      # cross-run bound is documented at the call site rather than
+      # relying on the default token resolution chain.
       - name: Download Android prebuilds (from artifacts)
         if: matrix.platform == 'Android' && !inputs.package_spec
         id: artifact_android
@@ -171,6 +181,8 @@ jobs:
           path: ${{ env.ADDON_DIR }}/prebuilds
           pattern: ${{ env.PREBUILD_ARTIFACT_PREFIX }}android-*
           merge-multiple: true
+          run-id: ${{ github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
         continue-on-error: true
 
       - name: Download iOS prebuilds (from artifacts)
@@ -181,6 +193,8 @@ jobs:
           path: ${{ env.ADDON_DIR }}/prebuilds
           pattern: ${{ env.PREBUILD_ARTIFACT_PREFIX }}ios-*
           merge-multiple: true
+          run-id: ${{ github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
         continue-on-error: true
 
       - name: Download prebuilds (from npm package_spec)
