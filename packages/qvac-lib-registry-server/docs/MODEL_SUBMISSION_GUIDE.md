@@ -129,7 +129,7 @@ Each license used in `models.prod.json` must have:
 1. An entry in `data/licenses.json` with `spdxId`, `name`, and `url`.
 2. A full license text at `data/licenses/<spdxId>/LICENSE.txt`.
 
-Existing licenses: `Apache-2.0`, `MIT`, `llama3.2`, `gemma`, `health-ai-developer-foundations`, `MPL-2.0`, `CC-BY-4.0`, `openrail`.
+Existing licenses: `Apache-2.0`, `MIT`, `llama3.2`, `gemma`, `health-ai-developer-foundations`, `MPL-2.0`, `CC-BY-4.0`, `openrail`, `openrail++`, `BSD-3-Clause`.
 
 When adding a model with a new license, include the license file in the same PR.
 
