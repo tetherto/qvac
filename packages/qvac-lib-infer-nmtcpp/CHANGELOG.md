@@ -12,7 +12,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### qvac-fabric: bump to 8189.0.0, switch from overlay to upstream registry
 
 - Bumps the `qvac-fabric` dependency to `>= 8189.0.0`.
-- Drops the per-package vcpkg overlay (`vcpkg/ports/qvac-fabric/`) and the matching `overlay-ports` entry in `vcpkg-configuration.json`. The port is now resolved directly from the upstream registry; the existing `default-registry.baseline` is unchanged.
 - The upstream registry port (post `qvac-registry-vcpkg#133`) splits build features into `gpu-backends` (Metal/Vulkan/CUDA/OpenCL) and `llama`. nmtcpp's `vcpkg.json` opts into `"features": ["gpu-backends"]` while keeping `"default-features": false`, so the build ships ggml with the same Vulkan/Metal/OpenCL backends as before but without llama (which nmtcpp does not use).
 
 ## [2.1.1] - 2026-05-04

@@ -7,7 +7,6 @@
 #### qvac-fabric: bump to 8189.0.0
 
 - Bumps the `qvac-fabric` dependency to `>= 8189.0.0`, picking up the new fabric release (Mali/Adreno F16 coopmat1 fix, Qwen3.5/DeltaNet OpenCL backend, Gemma 4 vision/audio support, and the Vulkan VMA migration from earlier in the cycle).
-- Drops the per-package vcpkg overlay (`vcpkg/ports/qvac-fabric/`) and the matching `overlay-ports` entry in `vcpkg-configuration.json`. The port is now resolved directly from the upstream registry; the existing `default-registry.baseline` is unchanged because vcpkg looks up explicit `version>=` constraints from the registry mirror's HEAD, not from the baseline commit.
 - Verified end-to-end on macOS-arm64: `bare-make generate && bare-make build && bare-make install` produces a working `prebuilds/darwin-arm64/qvac__llm-llamacpp.bare` against fabric `8189.0.0[core,gpu-backends,llama]`.
 
 ### Deprecated

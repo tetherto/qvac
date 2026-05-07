@@ -7,7 +7,6 @@
 #### qvac-fabric: bump to 8189.0.0
 
 - Bumps the `qvac-fabric` dependency to `>= 8189.0.0`, picking up the new fabric release (Mali/Adreno F16 coopmat1 fix, Vulkan VMA migration, and the wider stack of upstream fixes accumulated since `7248.x`).
-- Drops the per-package vcpkg overlay (`vcpkg/ports/qvac-fabric/`) and the matching `overlay-ports` entry in `vcpkg-configuration.json`. The port is now resolved directly from the upstream registry; the existing `default-registry.baseline` is unchanged.
 
 ## [0.15.0] - 2026-04-30
 
