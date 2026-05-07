@@ -17,7 +17,7 @@ const useCpu = isDarwinX64 || isLinuxArm64
 // specifically and routes vision-with-projector to CPU on that chip; we don't
 // need a blanket Darwin carve-out here. Mobile GPU backends still need the
 // CPU-fallback at this layer.
-const useCpuForVision = useCpu || isMobile
+const useCpuForVision = useCpu
 
 const QWEN3_5_MODEL = {
   name: 'Qwen3.5-0.8B-Q8_0.gguf',
