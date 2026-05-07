@@ -12,12 +12,15 @@ and this project adheres to
 ### Added
 
 - Initial release of the GGML image classification addon.
-- `ImageClassifier` public API (`load`, `classify`, `unload`) implemented on
-  top of `@qvac/infer-base`'s `BaseInference`.
+- `ImageClassifier` public API (`load`, `classify`, `unload`) orchestrated
+  via `@qvac/infer-base`'s `createJobHandler` + `exclusiveRunQueue`,
+  mirroring the lifecycle pattern used by `@qvac/llm-llamacpp`.
 - C++ `ClassificationModel` implementing the MobileNetV3-Small architecture
   directly against `libggml` (34 conv + 2 linear layers, with depthwise
   separable convolutions, HardSwish activations, and squeeze-and-excite
-  blocks). BatchNorm is applied at runtime with `eps = 0.001`.
+  blocks). BatchNorm is folded into the preceding convolution at load time
+  via `foldBn()` (`eps = 0.001`); the runtime graph evaluates only the
+  resulting scale/shift, with no per-inference BN op.
 - FP16 GGUF weights (2.94 MB) bundled in `weights/` and loaded with
   `gguf_init_from_file()` + `ggml_backend_tensor_set()`.
 - Image preprocessing pipeline: JPEG / PNG decode via `stb_image`, bilinear
@@ -26,11 +29,14 @@ and this project adheres to
   edge cases, and lifecycle errors.
 - C++ unit tests (GoogleTest) covering graph construction, BN epsilon,
   softmax normalization, and FP16 weight loading.
-- SDK integration: new canonical model type `ggml-classification` with
-  `classification` alias.
 - ONNX-to-GGUF conversion guide in `docs/onnx-to-gguf-conversion.md`.
 - `nativeLogger` constructor option (default `false`) that gates the shared
   native C++→JS logger bridge; off by default because the underlying
   `qvac-lib-inference-addon-cpp` `JsLogger` singleton's static `uv_async_t`
   lifecycle is not safe across rapid create/destroy cycles. JS-level
   logging always routes through the caller's `logger`.
+
+> **Note.** SDK plugin / schema integration (canonical model type
+> `ggml-classification` with `classification` alias) is **out of scope** for
+> 0.1.0 and will land in a follow-up PR; see the PR description for the
+> rationale.
