@@ -11,15 +11,14 @@ const platform = os.platform()
 const arch = os.arch()
 const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
-const isDarwin = platform === 'darwin'
 const isMobile = platform === 'ios' || platform === 'android'
 const useCpu = isDarwinX64 || isLinuxArm64
 
-// gemma4v vision projector is broken on Metal (SIGSEGV in image encoding) and
-// on Android GPU backends (Adreno OpenCL SIGABRT in mtmd_helper_decode_image_chunk,
-// Mali Vulkan unstable). Force the image-describe test to CPU on those
-// platforms — text + tool-calling stay on GPU.
-const useCpuForVision = useCpu || isDarwin || isMobile
+// Vision projector is unstable on Apple M1 Metal (SIGSEGV in image encoding)
+// and on Android GPU backends (Adreno OpenCL SIGABRT in
+// mtmd_helper_decode_image_chunk, Mali Vulkan unstable). The addon now
+// detects M1 specifically and routes vision-with-projector to CPU.
+const useCpuForVision = useCpu || isMobile
 
 const GEMMA4_MODEL = {
   llmModel: {

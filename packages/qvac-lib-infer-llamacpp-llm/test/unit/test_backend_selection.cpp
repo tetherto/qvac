@@ -176,6 +176,10 @@ constexpr const char* ADRENO_DESC = "Adreno (TM) 740";
 constexpr const char* ADRENO_830_DESC = "Adreno (TM) 830";
 constexpr const char* ADRENO_650_DESC = "Adreno (TM) 650";
 constexpr const char* MALI_DESC = "Mali-G715";
+constexpr const char* APPLE_M1_DESC = "Apple M1 Pro";
+constexpr const char* APPLE_M2_DESC = "Apple M2 Max";
+constexpr const char* APPLE_M3_DESC = "Apple M3 Ultra";
+constexpr const char* APPLE_M4_DESC = "Apple M4";
 
 // GPU Backend
 constexpr const char* VULKAN0_BACK = "Vulkan0";
@@ -219,6 +223,16 @@ void expectChosenWithMetadata(
     const std::optional<MainGpu>& mainGpu = std::nullopt) {
   BackendInterface bckI = mockBackend.toBackendInterface();
   auto result = chooseBackend(preferredBackend, bckI, &metadata, mainGpu);
+  expectChosen(result, expectedBackend, expectedBackendName);
+}
+
+void expectChosenVision(
+    MockBackendInterface& mockBackend, BackendType preferredBackend,
+    BackendType expectedBackend, const std::string& expectedBackendName,
+    const ModelMetaData* metadata = nullptr) {
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  auto result = chooseBackend(
+      preferredBackend, bckI, metadata, std::nullopt, nullptr, false, true);
   expectChosen(result, expectedBackend, expectedBackendName);
 }
 
@@ -833,6 +847,34 @@ TEST_F(BackendSelectionTest, Inference_Gemma3_Mali_KeepsVulkan) {
   MockModelMetaData meta(false, "gemma3");
   expectChosenWithMetadata(
       mockBackend, BackendType::GPU, BackendType::GPU, "vulkan0", meta);
+}
+
+// -- Apple M1 + vision: forced to CPU; M2/M3/M4 keep Metal --
+
+TEST_F(BackendSelectionTest, Vision_AppleM1_ForcesCPU) {
+  mockBackend.addDevice(createGPUDevice(APPLE_M1_DESC, "metal"));
+  expectChosenVision(mockBackend, BackendType::GPU, BackendType::CPU, "none");
+}
+
+TEST_F(BackendSelectionTest, Vision_AppleM2_KeepsMetal) {
+  mockBackend.addDevice(createGPUDevice(APPLE_M2_DESC, "metal"));
+  expectChosenVision(mockBackend, BackendType::GPU, BackendType::GPU, "metal");
+}
+
+TEST_F(BackendSelectionTest, Vision_AppleM3_KeepsMetal) {
+  mockBackend.addDevice(createGPUDevice(APPLE_M3_DESC, "metal"));
+  expectChosenVision(mockBackend, BackendType::GPU, BackendType::GPU, "metal");
+}
+
+TEST_F(BackendSelectionTest, Vision_AppleM4_KeepsMetal) {
+  mockBackend.addDevice(createGPUDevice(APPLE_M4_DESC, "metal"));
+  expectChosenVision(mockBackend, BackendType::GPU, BackendType::GPU, "metal");
+}
+
+// Non-vision (text-only) inference on M1 keeps Metal — override is vision-only.
+TEST_F(BackendSelectionTest, TextOnly_AppleM1_KeepsMetal) {
+  mockBackend.addDevice(createGPUDevice(APPLE_M1_DESC, "metal"));
+  expectChosen(mockBackend, BackendType::GPU, "metal");
 }
 
 // -- Finetuning on non-Adreno GPU with unsupported arch: throws --

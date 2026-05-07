@@ -11,10 +11,13 @@ const platform = os.platform()
 const arch = os.arch()
 const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
-const isDarwin = platform === 'darwin'
 const isMobile = platform === 'ios' || platform === 'android'
 const useCpu = isDarwinX64 || isLinuxArm64
-const useCpuForVision = useCpu || isDarwin || isMobile
+// Apple Silicon Metal is fine for vision on M2/M3/M4. The addon detects M1
+// specifically and routes vision-with-projector to CPU on that chip; we don't
+// need a blanket Darwin carve-out here. Mobile GPU backends still need the
+// CPU-fallback at this layer.
+const useCpuForVision = useCpu || isMobile
 
 const QWEN3_5_MODEL = {
   name: 'Qwen3.5-0.8B-Q8_0.gguf',

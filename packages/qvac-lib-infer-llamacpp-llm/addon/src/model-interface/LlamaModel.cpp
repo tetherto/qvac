@@ -896,13 +896,15 @@ void LlamaModel::commonParamsParse(
 
     const std::optional<MainGpu> mainGpu = tryMainGpuFromMap(configFilemap);
 
+    const bool isVision = !constructionArgs_.projectionPath.empty();
     const std::pair<BackendType, std::string> chosenBackend = chooseBackend(
         preferredBackend,
         LlamaModel::llamaLogCallback,
         mainGpu,
         &metadata_,
         &outAdrenoVersion,
-        pendingFinetuneOverrides_.active);
+        pendingFinetuneOverrides_.active,
+        isVision);
 
     if (chosenBackend.first == BackendType::GPU) {
       params.mmproj_backend = chosenBackend.second;
