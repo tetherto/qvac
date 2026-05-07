@@ -109,13 +109,30 @@ TEST(ChatterboxValidate, VoiceDirPointingAtFileRejected) {
   EXPECT_THROW(ChatterboxModel{cfg}, StatusError);
 }
 
-TEST(ChatterboxValidate, ValidStubPathsReachLoadStep) {
+TEST(ChatterboxValidate, ValidStubPathsConstructAndDeferLoad) {
   auto cfg = minimallyValidStubConfig();
-  // Stub files pass `std::filesystem::exists()` so validation succeeds,
-  // but they aren't real GGUFs — load() then throws InitializationFailed
-  // (still a StatusError, just from the next step).  This proves validation
-  // on its own does not reject the configuration.
-  EXPECT_THROW(ChatterboxModel{cfg}, StatusError);
+  // Stub files pass `std::filesystem::exists()` so validation succeeds.
+  // Construction now defers GGUF parsing to waitForLoadInitialization()
+  // (called by AddonCpp::activate() on a JsAsyncTask worker thread), so
+  // the stub-file InitializationFailed throw happens on load(), not in
+  // the constructor.  This proves validation passes AND that load is
+  // truly deferred (otherwise this would still throw at construction).
+  std::unique_ptr<ChatterboxModel> m;
+  EXPECT_NO_THROW(m = std::make_unique<ChatterboxModel>(cfg));
+  ASSERT_NE(m, nullptr);
+  EXPECT_FALSE(m->isLoaded());
+  EXPECT_THROW(m->load(), StatusError);
+  EXPECT_FALSE(m->isLoaded());
+}
+
+TEST(ChatterboxValidate, WaitForLoadInitializationDelegatesToLoad) {
+  auto cfg = minimallyValidStubConfig();
+  ChatterboxModel m(cfg);
+  EXPECT_FALSE(m.isLoaded());
+  // waitForLoadInitialization() is the IModelAsyncLoad entry point
+  // AddonCpp::activate() ultimately calls; it should propagate the same
+  // load-failure as load() itself.
+  EXPECT_THROW(m.waitForLoadInitialization(), StatusError);
 }
 
 TEST(ChatterboxValidate, ConfigDefaultLanguageIsEnglish) {
@@ -153,8 +170,10 @@ TEST(ChatterboxRealGguf, ConstructAndUnloadIfAvailable) {
   cfg.useGpu = false;
 
   ChatterboxModel m(cfg);
-  EXPECT_TRUE(m.isLoaded());
+  EXPECT_FALSE(m.isLoaded()) << "load is now deferred until activate()/load()";
   EXPECT_EQ(m.getName(), "ChatterboxModel");
+  EXPECT_NO_THROW(m.load());
+  EXPECT_TRUE(m.isLoaded());
   EXPECT_NO_THROW(m.unload());
   EXPECT_FALSE(m.isLoaded());
 }
@@ -176,6 +195,7 @@ TEST(ChatterboxRealGguf, ProcessRejectsWrongAnyInputType) {
   cfg.useGpu = false;
 
   ChatterboxModel m(cfg);
+  m.load();  // load is deferred since the constructor refactor; trigger it here
   EXPECT_THROW(m.process(std::any{std::string{"raw string instead of AnyInput"}}),
                StatusError);
   EXPECT_THROW(m.process(std::any{int64_t{42}}), StatusError);

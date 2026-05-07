@@ -58,7 +58,9 @@ std::vector<int16_t> pcmFloatToInt16(const float* pcm, size_t samples) {
 SupertonicModel::SupertonicModel(SupertonicConfig config)
     : cfg_(std::move(config)) {
   validateConfig(cfg_);
-  load();
+  // See ChatterboxModel ctor: load() is deferred to
+  // waitForLoadInitialization() so the GGUF parse runs off the JS event
+  // loop via JsAsyncTask::run-driven addon.activate().
 }
 
 SupertonicModel::~SupertonicModel() noexcept = default;
@@ -136,6 +138,7 @@ void SupertonicModel::unloadLocked() {
 }
 
 void SupertonicModel::cancel() const {
+  cancelRequested_.store(true, std::memory_order_relaxed);
   std::shared_ptr<tts_cpp::supertonic::Engine> e;
   {
     std::lock_guard lk(engineMu_);
@@ -153,6 +156,10 @@ SupertonicModel::Output SupertonicModel::synthesize(const std::string& text) {
   if (!engine) {
     throw createTTSError(TTSErrorCode::InitializationFailed,
                          "SupertonicModel::synthesize: engine not loaded");
+  }
+  if (cancelRequested_.load(std::memory_order_relaxed)) {
+    throw createTTSError(TTSErrorCode::SynthesisFailed,
+                         "synthesis cancelled before it started");
   }
 
   textLength_ = text.size();
@@ -203,6 +210,7 @@ std::any SupertonicModel::process(const std::any& input) {
     ~InProgressGuard() { flag.store(false, std::memory_order_release); }
   } guard{jobInProgress_};
 
+  cancelRequested_.store(false, std::memory_order_relaxed);
   return std::any(synthesize(anyInput->text));
 }
 

@@ -1,3 +1,5 @@
+'use strict'
+
 const binding = require('./binding')
 
 module.exports = {

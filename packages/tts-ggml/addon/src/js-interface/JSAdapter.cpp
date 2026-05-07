@@ -118,6 +118,15 @@ chatterbox::ChatterboxConfig JSAdapter::buildChatterboxConfig(
   cfg.streamChunkTokens       = readOptionalInt(configurationParams, env, "streamChunkTokens");
   cfg.streamFirstChunkTokens  = readOptionalInt(configurationParams, env, "streamFirstChunkTokens");
   cfg.streamCfmSteps          = readOptionalInt(configurationParams, env, "cfmSteps");
+  // The JS layer is the source of truth for useGPU: index.js only sets
+  // params.useGPU when _config.useGPU is non-null, so absence here means
+  // "not specified".  readOptionalBool collapses that to `false`, which
+  // is harmless today because nGpuLayers (also forwarded above) takes
+  // precedence in toEngineOptions when both are set.  If a future caller
+  // ever needs to distinguish "explicitly false" from "unset" on the C++
+  // side, switch this to std::optional<bool> + a readOptionalBoolOpt
+  // helper; today the explicit nGpuLayers always wins, so leave the
+  // implicit-false default in place.
   cfg.useGpu                  = readOptionalBool(configurationParams, env, "useGPU");
   return cfg;
 }

@@ -52,11 +52,14 @@
     "test/reference-audio",
     "test/utils/runTTS.js",
     "test/utils/runChatterboxTTS.js",
+    "test/utils/runSupertonicTTS.js",
     "test/utils/downloadModel.js",
     "test/utils/wav-helper.js",
     "test/utils/loader.fake.js",
     "test/utils/pcmConcatenator.js",
     "test/utils/runWhisper.js",
+    "test/data/sentences-medium.js",
+    "test/data/sentences-long.js",
     "LICENSE"
   ],
   "exports": {
@@ -79,6 +82,7 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://github.com/tetherto/qvac/tree/main/packages/tts-ggml#readme",
   "devDependencies": {
+    "@qvac/langdetect-text": "^0.1.2",
     "@qvac/transcription-whispercpp": "^0.5.5",
     "bare-buffer": "^3.4.2",
     "bare-node-stream": "^1.0.0",
@@ -103,7 +107,6 @@
   "dependencies": {
     "@qvac/error": "^0.1.0",
     "@qvac/infer-base": "^0.4.0",
-    "@qvac/langdetect-text": "^0.1.2",
     "@qvac/logging": "^0.1.0",
     "bare-fs": "^4.5.6",
     "bare-os": "^3.8.0",

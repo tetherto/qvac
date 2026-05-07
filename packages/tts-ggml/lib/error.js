@@ -10,6 +10,14 @@ const { name, version } = require('../package.json')
 // (7001-7999 is owned by @qvac/tts-onnx; a separate range keeps
 // the global addCodes() registry conflict-free when both packages
 // coexist in the same Bare process.)
+//
+// Reserved-but-not-thrown today (kept for stable code numbering and
+// covered by tts.error.test.js so accidental renumbering breaks loudly):
+//   - FAILED_TO_PAUSE / FAILED_TO_STOP — pause/stop intentionally not
+//     implemented in addon-cpp 1.x; cancel() is the only path.
+//   - JOB_ALREADY_RUNNING — JobRunner already serialises on the C++ side
+//     and rejects via runJob() returning false; no JS code path throws
+//     this today.  Will be wired in once JS surfaces busy state.
 const ERR_CODES = Object.freeze({
   FAILED_TO_ACTIVATE: 13001,
   FAILED_TO_APPEND: 13002,

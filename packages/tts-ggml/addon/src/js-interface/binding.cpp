@@ -19,9 +19,12 @@ auto qvac_tts_ggml_exports(js_env_t* env, js_value_t* exports) -> js_value_t* {
   V("createInstance", qvac::ttsggml::addon_js::createInstance)
   V("runJob", qvac::ttsggml::addon_js::runJob)
   V("reload", qvac::ttsggml::addon_js::reload)
+  // Override the framework's sync JsInterface::activate with our
+  // JsAsyncTask::run-wrapped version so the deferred GGUF parse
+  // (IModelAsyncLoad::waitForLoadInitialization) runs on a worker thread.
+  V("activate", qvac::ttsggml::addon_js::activate)
 
   V("loadWeights", qvac_lib_inference_addon_cpp::JsInterface::loadWeights)
-  V("activate", qvac_lib_inference_addon_cpp::JsInterface::activate)
   V("cancel", qvac_lib_inference_addon_cpp::JsInterface::cancel)
   V("destroyInstance",
     qvac_lib_inference_addon_cpp::JsInterface::destroyInstance)

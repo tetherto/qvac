@@ -64,7 +64,16 @@ std::vector<int16_t> pcmFloatToInt16(const std::vector<float>& pcm) {
 ChatterboxModel::ChatterboxModel(ChatterboxConfig config)
     : cfg_(std::move(config)) {
   validateConfig(cfg_);
-  load();
+  // Constructor deliberately does NOT call load(): GGUF parsing is the
+  // multi-hundred-MB step (ggml_backend_alloc_ctx_tensors + voice-
+  // conditioning bake) and used to stall the Bare event loop because
+  // qvac_lib_inference_addon_cpp::JsInterface::createInstance is
+  // synchronous.  AddonCpp::activate() (driven by the JsAsyncTask::run
+  // wrapper in addon_js::activate) now calls
+  // waitForLoadInitialization() on a worker thread, which delegates to
+  // load() lazily.  Direct C++ callers (and the unit-test suite in
+  // addon/tests/) can still invoke load() explicitly when they want
+  // synchronous semantics.
 }
 
 ChatterboxModel::~ChatterboxModel() noexcept = default;
@@ -156,7 +165,7 @@ void ChatterboxModel::cancel() const {
   if (e) e->cancel();
 }
 
-ChatterboxModel::Output ChatterboxModel::synthesize(
+ChatterboxModel::SynthesizeResult ChatterboxModel::synthesize(
     const std::string& text, const ChunkCallback& chunkCallback) {
   // Capture the engine under the lock; keep it alive for the duration
   // of synthesize() via the local `engine` shared_ptr even if reload()
@@ -176,11 +185,21 @@ ChatterboxModel::Output ChatterboxModel::synthesize(
                          "synthesis cancelled before it started");
   }
 
+  // Snapshot the streaming decision against the engine we're actually
+  // about to call, BEFORE process() needs it.  Reading engine_ /
+  // engine->options() outside the lock from process() would race with
+  // reload() swapping a new engine in; pinning the decision here keeps
+  // the read tied to the local `engine` shared_ptr for the call's
+  // lifetime.
+  const bool wasStreaming =
+      static_cast<bool>(chunkCallback) &&
+      engine->options().stream_chunk_tokens > 0;
+
   const auto tStart = std::chrono::steady_clock::now();
 
   tts_cpp::chatterbox::SynthesisResult result;
   try {
-    if (chunkCallback && engine->options().stream_chunk_tokens > 0) {
+    if (wasStreaming) {
       result = engine->synthesize(
           text,
           [&chunkCallback](const float* pcm, std::size_t samples,
@@ -213,7 +232,7 @@ ChatterboxModel::Output ChatterboxModel::synthesize(
   tokensPerSecond_ =
       elapsedSec > 0 ? static_cast<double>(textLength_) / elapsedSec : 0.0;
 
-  return pcm;
+  return {std::move(pcm), wasStreaming};
 }
 
 std::any ChatterboxModel::process(const std::any& input) {
@@ -245,18 +264,17 @@ std::any ChatterboxModel::process(const std::any& input) {
   } guard{jobInProgress_};
 
   cancelRequested_.store(false, std::memory_order_relaxed);
-  auto pcm = synthesize(anyInput->text, anyInput->chunkCallback);
+  auto result = synthesize(anyInput->text, anyInput->chunkCallback);
   // Streaming mode: chunks have already been published via chunkCallback
   // → OutputQueue.  Returning the concatenated PCM here would cause a
   // duplicate final `outputArray` event after all the chunks.  Return an
   // empty std::any so no output handler matches — JobRunner still emits
-  // JobEnded with runtimeStats on its own.
-  const bool streaming =
-      anyInput->chunkCallback &&
-      engine_ &&
-      engine_->options().stream_chunk_tokens > 0;
-  if (streaming) return {};
-  return std::any(std::move(pcm));
+  // JobEnded with runtimeStats on its own.  We trust the wasStreaming
+  // bit captured under the engine lock inside synthesize() rather than
+  // re-reading engine_ here (which would race with a concurrent
+  // reload()).
+  if (result.wasStreaming) return {};
+  return std::any(std::move(result.pcm));
 }
 
 qvac_lib_inference_addon_cpp::RuntimeStats ChatterboxModel::runtimeStats() const {

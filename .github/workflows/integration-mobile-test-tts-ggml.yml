@@ -77,6 +77,13 @@ permissions:
   contents: read
 
 jobs:
+  # NOTE: continue-on-error: true mirrors integration-test-tts-ggml.yml
+  # and parakeet's matching workflow.  on-pr-tts-ggml.yml's merge-guard
+  # treats `success || skipped` as a pass, so a hard Device Farm failure
+  # does NOT block a merge today — only sanity-checks + cpp-lint +
+  # cpp-tests-coverage + prebuild really gate.  Tighten this once the
+  # mobile pipeline (Device Farm provisioning, signing, runner pool
+  # availability) is stable enough to make a hard gate cheap.
   build-and-test:
     name: Build ${{ matrix.platform }} and Run E2E Tests
     runs-on: ${{ matrix.runner }}

@@ -158,10 +158,21 @@ function defaultAccumulateSentencesForStreamInput (textStream) {
 
 function ttsOutputDebugString (data) {
   if (!data) return ''
-  if (typeof data === 'object') {
-    return JSON.stringify(data)
+  if (typeof data !== 'object') return data.toString()
+  // Skip the heavy fields (outputArray = Int16Array of 24 kHz PCM
+  // samples; for native chunk streaming each event carries thousands of
+  // samples and JSON.stringify becomes the dominant cost on the
+  // outputCallback fast path). Surface only the summary fields so
+  // logger.debug stays useful.
+  const summary = {}
+  if (data.sampleRate != null) summary.sampleRate = data.sampleRate
+  if (data.chunkIndex != null) summary.chunkIndex = data.chunkIndex
+  if (data.isLast != null) summary.isLast = data.isLast
+  if (data.sentenceChunk != null) summary.sentenceChunk = data.sentenceChunk
+  if (data.outputArray && typeof data.outputArray.length === 'number') {
+    summary.outputArrayLen = data.outputArray.length
   }
-  return data.toString()
+  return JSON.stringify(summary)
 }
 
 /**
@@ -740,14 +751,6 @@ class TTSGgml {
   _createAddon (configurationParams, outputCb) {
     const binding = require('./binding')
     return new TTSInterface(binding, configurationParams, outputCb)
-  }
-
-  _resolvePath (filePath) {
-    if (!filePath) return ''
-    if (platform() === 'win32') {
-      return '\\\\?\\' + path.resolve(filePath)
-    }
-    return path.resolve(filePath)
   }
 
   async unload () {

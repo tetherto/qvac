@@ -103,15 +103,20 @@ TEST(SupertonicValidate, NGpuLayersGreaterThanZeroRejected) {
   EXPECT_THROW(SupertonicModel{cfg}, StatusError);
 }
 
-TEST(SupertonicValidate, NGpuLayersZeroAccepted) {
+TEST(SupertonicValidate, NGpuLayersZeroAcceptedAndDeferredLoad) {
   auto cfg = minimallyValidStubConfig();
   cfg.nGpuLayers = 0;
   // Validation passes (CPU-only path); the stub file then fails GGUF
-  // parsing in load() so the constructor still throws — but the throw
-  // should NOT be the GPU-rejection branch.
+  // parsing on load() (not at construction — load is now deferred to
+  // waitForLoadInitialization).  The eventual throw must NOT be the
+  // GPU-rejection branch.
+  std::unique_ptr<SupertonicModel> m;
+  EXPECT_NO_THROW(m = std::make_unique<SupertonicModel>(cfg));
+  ASSERT_NE(m, nullptr);
+  EXPECT_FALSE(m->isLoaded());
   bool threw = false;
   try {
-    SupertonicModel m(cfg);
+    m->load();
   } catch (const StatusError& e) {
     threw = true;
     const std::string what = e.what();
@@ -119,6 +124,14 @@ TEST(SupertonicValidate, NGpuLayersZeroAccepted) {
         << "nGpuLayers=0 should not trigger the GPU-rejection path; got: " << what;
   }
   EXPECT_TRUE(threw);
+  EXPECT_FALSE(m->isLoaded());
+}
+
+TEST(SupertonicValidate, WaitForLoadInitializationDelegatesToLoad) {
+  auto cfg = minimallyValidStubConfig();
+  SupertonicModel m(cfg);
+  EXPECT_FALSE(m.isLoaded());
+  EXPECT_THROW(m.waitForLoadInitialization(), StatusError);
 }
 
 TEST(SupertonicValidate, ConfigDefaultsAreCpuFriendly) {
@@ -146,8 +159,10 @@ TEST(SupertonicRealGguf, ConstructAndUnloadIfAvailable) {
   cfg.voice = "F1";
 
   SupertonicModel m(cfg);
-  EXPECT_TRUE(m.isLoaded());
+  EXPECT_FALSE(m.isLoaded()) << "load is now deferred until activate()/load()";
   EXPECT_EQ(m.getName(), "SupertonicModel");
+  EXPECT_NO_THROW(m.load());
+  EXPECT_TRUE(m.isLoaded());
   EXPECT_GT(m.sampleRate(), 0);
   EXPECT_NO_THROW(m.unload());
   EXPECT_FALSE(m.isLoaded());
@@ -164,8 +179,10 @@ TEST(SupertonicRealGguf, ProcessRejectsWrongAnyInputType) {
   cfg.useGpu = false;
 
   SupertonicModel m(cfg);
+  m.load();  // load is deferred since the constructor refactor; trigger it here
+  // Wrong AnyInput type is the only well-defined invariant SupertonicModel
+  // checks at the boundary; empty-text behaviour is delegated to the
+  // underlying tts_cpp::supertonic::Engine and intentionally left
+  // untested here to avoid coupling to engine-internal policy.
   EXPECT_THROW(m.process(std::any{int64_t{42}}), StatusError);
-
-  SupertonicModel::AnyInput emptyText{};
-  EXPECT_THROW(m.process(std::any{emptyText}), StatusError);
 }

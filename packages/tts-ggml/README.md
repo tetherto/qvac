@@ -11,8 +11,7 @@ loaded once and reused across every synthesis call.  GPU acceleration
 (Metal on macOS/iOS, Vulkan on Linux/Windows/Android, CUDA when built)
 is enabled by default; falls back to CPU if no GPU backend is available.
 
-[qvac-tts-cpp]: https://github.com/GustavoA1604/chatterbox.cpp
-<!-- NOTE: the upstream repo will be renamed to qvac-tts.cpp; link will follow. -->
+[qvac-tts-cpp]: https://github.com/tetherto/qvac-ext-lib-whisper.cpp/tree/master/tts-cpp
 
 ## Features
 

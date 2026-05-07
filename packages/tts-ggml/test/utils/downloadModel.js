@@ -389,10 +389,10 @@ async function ensureChatterboxModels (options = {}) {
     console.log('(or copy into the app-internal dir that testDir maps to).')
   } else {
     console.log('Chatterbox GGUFs are not published on HuggingFace yet.  Generate them')
-    console.log('locally from the qvac-tts.cpp (née chatterbox.cpp) conversion scripts:')
+    console.log('locally from the upstream tts-cpp conversion scripts:')
     console.log('')
-    console.log('  git clone git@github.com:GustavoA1604/chatterbox.cpp.git chatterbox.cpp')
-    console.log('  cd chatterbox.cpp')
+    console.log('  git clone git@github.com:tetherto/qvac-ext-lib-whisper.cpp.git')
+    console.log('  cd qvac-ext-lib-whisper.cpp/tts-cpp')
     console.log('  python -m venv .venv && . .venv/bin/activate')
     console.log('  pip install torch numpy gguf safetensors scipy librosa resampy')
     console.log('  python scripts/convert-t3-turbo-to-gguf.py --out chatterbox-t3-turbo.gguf')

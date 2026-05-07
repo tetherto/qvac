@@ -28,10 +28,19 @@ namespace qvac::ttsggml::chatterbox {
  * the T3 autoregressive decode + S3Gen + HiFT synthesis cost.  The T3 GGUF,
  * S3Gen GGUF, and voice-conditioning tensors are loaded once in {@link load}
  * and reused until {@link unload} / destruction.
+ *
+ * Constructor only validates the config + records the deferred load
+ * closure; the actual GGUF parse runs lazily on the first
+ * {@link waitForLoadInitialization} or {@link load} call.  The JS
+ * binding wraps `addon.activate()` (which calls
+ * `waitForLoadInitialization`) inside `JsAsyncTask::run` so the
+ * multi-hundred-MB ggml parse happens on a worker thread instead of
+ * stalling the JS event loop.
  */
 class ChatterboxModel
     : public qvac_lib_inference_addon_cpp::model::IModel,
-      public qvac_lib_inference_addon_cpp::model::IModelCancel {
+      public qvac_lib_inference_addon_cpp::model::IModelCancel,
+      public qvac_lib_inference_addon_cpp::model::IModelAsyncLoad {
 public:
   using Input = std::string;
   using InputView = std::string_view;
@@ -76,12 +85,32 @@ public:
     return static_cast<bool>(engine_);
   }
 
+  // IModelAsyncLoad — invoked by AddonCpp::activate() (which the JS
+  // binding wraps in JsAsyncTask::run, see addon_js::activate in
+  // AddonJs.hpp).  Calls load() lazily on the worker thread; idempotent
+  // because loadLocked() returns early if engine_ is already set.
+  void waitForLoadInitialization() override { load(); }
+  // Not supported: tts-ggml loads GGUFs from on-disk paths configured at
+  // construction time, not from incremental byte streams.
+  void setWeightsForFile(
+      const std::string&,
+      std::unique_ptr<std::basic_streambuf<char>>&&) override {}
+
   void setConfig(ChatterboxConfig config) { cfg_ = std::move(config); }
   const ChatterboxConfig& config() const { return cfg_; }
 
 private:
-  Output synthesize(const std::string& text,
-                    const ChunkCallback& chunkCallback);
+  struct SynthesizeResult {
+    Output pcm;
+    /** True iff synthesize() routed through the chunk-streaming path
+     *  (chunks already published via chunkCallback / OutputQueue).
+     *  Captured under the engine lock so process() doesn't have to
+     *  re-read engine_ state outside the lock to make the streaming
+     *  decision. */
+    bool wasStreaming = false;
+  };
+  SynthesizeResult synthesize(const std::string& text,
+                              const ChunkCallback& chunkCallback);
   static void validateConfig(const ChatterboxConfig& cfg);
 
   // Called under `engineMu_`.

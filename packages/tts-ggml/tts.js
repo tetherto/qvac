@@ -17,11 +17,18 @@ class TTSInterface {
   }
 
   /**
-   * Moves addon to the LISTENING state after all the initialization is done
+   * Moves addon to the LISTENING state after all the initialization is done.
+   *
+   * The C++ binding (addon_js::activate, registered in binding.cpp)
+   * wraps `AddonCpp::activate()` in a JsAsyncTask::run worker thread so
+   * the deferred GGUF parse (driven by
+   * `IModelAsyncLoad::waitForLoadInitialization`) does not stall the JS
+   * event loop.  The native call therefore returns a JS promise; awaiting
+   * it here is what blocks `model.load()` until the worker finishes.
    */
   async activate () {
     try {
-      this._binding.activate(this._handle)
+      await this._binding.activate(this._handle)
     } catch (err) {
       throw new QvacErrorAddonTTSGgml({
         code: ERR_CODES.FAILED_TO_ACTIVATE,

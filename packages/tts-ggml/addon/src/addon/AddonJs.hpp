@@ -121,15 +121,12 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   JsArgsParser args(env, info);
   AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
   auto [type, jsInput] = JsInterface::getInput(args);
-  auto inputObj = args.getJsObject(1, "inputObj");
 
   if (type != "text") {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument,
         "Unknown input type: " + type);
   }
-
-  (void)inputObj;
 
   if (auto* st = dynamic_cast<SupertonicModel*>(&instance.addonCpp->model.get())) {
     SupertonicModel::AnyInput modelInput;
@@ -148,6 +145,23 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   };
 
   return instance.runJob(std::any(std::move(modelInput)));
+}
+JSCATCH
+
+// Async wrapper around AddonCpp::activate() so the deferred GGUF parse
+// (ChatterboxModel / SupertonicModel construct without loading; the
+// real load happens in waitForLoadInitialization() via IModelAsyncLoad)
+// runs on a JsAsyncTask worker thread instead of stalling the JS event
+// loop.  Replaces the default sync JsInterface::activate registration in
+// binding.cpp.
+inline js_value_t* activate(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+
+  return js::JsAsyncTask::run(
+      env, [addonCpp = instance.addonCpp]() { addonCpp->activate(); });
 }
 JSCATCH
 

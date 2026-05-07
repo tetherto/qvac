@@ -1,6 +1,11 @@
 #!/usr/bin/env node
 'use strict'
 
+// Run with `node`, not `bare`: this script is a build-time helper that uses
+// node's built-in `fs` / `path` (same convention as the sibling
+// validate-mobile-tests.js).  Everything inside the addon itself runs under
+// `bare` and uses bare-fs / bare-path instead.
+
 const fs = require('fs')
 const path = require('path')
 
