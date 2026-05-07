@@ -1,20 +1,29 @@
 'use strict'
 
 const test = require('brittle')
+const fs = require('bare-fs')
 const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
-const { ensureModel } = require('./utils')
+const { ensureModel, getMediaPath } = require('./utils')
 const os = require('bare-os')
 
 const platform = os.platform()
 const arch = os.arch()
 const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
+const isDarwin = platform === 'darwin'
+const isMobile = platform === 'ios' || platform === 'android'
 const useCpu = isDarwinX64 || isLinuxArm64
+const useCpuForVision = useCpu || isDarwin || isMobile
 
 const QWEN3_5_MODEL = {
   name: 'Qwen3.5-0.8B-Q8_0.gguf',
   url: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q8_0.gguf'
+}
+
+const QWEN3_5_PROJ_MODEL = {
+  name: 'mmproj-Qwen3.5-0.8B-F16.gguf',
+  url: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/mmproj-F16.gguf'
 }
 
 const BASE_PROMPT = [
@@ -254,6 +263,73 @@ test('Qwen3.5-0.8B supports tool calling', {
     t.ok(/paris/.test(city), `tool call city argument mentions Paris: "${city}"`)
   } finally {
     await addon.unload().catch(() => {})
+  }
+})
+
+test('Qwen3.5-0.8B can describe an image', {
+  timeout: 1_800_000
+}, async t => {
+  const [modelName, dirPath] = await ensureModel({
+    modelName: QWEN3_5_MODEL.name,
+    downloadUrl: QWEN3_5_MODEL.url
+  })
+  const [projModelName] = await ensureModel({
+    modelName: QWEN3_5_PROJ_MODEL.name,
+    downloadUrl: QWEN3_5_PROJ_MODEL.url
+  })
+  const modelPath = path.join(dirPath, modelName)
+  const projectionModelPath = path.join(dirPath, projModelName)
+
+  const config = {
+    device: useCpuForVision ? 'cpu' : 'gpu',
+    gpu_layers: '98',
+    ctx_size: '4096',
+    temp: '0',
+    seed: '42',
+    verbosity: '2'
+  }
+
+  const inference = new LlmLlamacpp({
+    files: { model: [modelPath], projectionModel: projectionModelPath },
+    config,
+    logger: createLogger()
+  })
+
+  try {
+    const t0 = Date.now()
+    await inference.load()
+    console.log(`  model.load() took ${Date.now() - t0} ms`)
+
+    const imageFilePath = getMediaPath('elephant.jpg')
+    t.ok(fs.existsSync(imageFilePath), 'elephant.jpg image file should exist')
+
+    const imageBytes = new Uint8Array(fs.readFileSync(imageFilePath))
+    const messages = [
+      { role: 'user', type: 'media', content: imageBytes },
+      { role: 'user', content: 'What animal is in this image? Answer in one word.' }
+    ]
+
+    const response = await inference.run(messages)
+    const generatedText = []
+    let error = null
+
+    response.onUpdate(data => { generatedText.push(data) })
+      .onError(err => { error = err })
+
+    await response.await()
+
+    if (error) {
+      throw new Error('Inference error: ' + error)
+    }
+
+    const output = generatedText.join('')
+    t.ok(output.length > 0, `image inference produced output (${output.length} chars)`)
+    console.log(`  output: "${output.slice(0, 200)}"`)
+
+    const lowerOutput = output.toLowerCase()
+    t.ok(/elephant/.test(lowerOutput), `output mentions elephant: "${output.slice(0, 100)}"`)
+  } finally {
+    await inference.unload().catch(() => {})
   }
 })
 
