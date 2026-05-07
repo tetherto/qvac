@@ -42,21 +42,42 @@ platform has no prebuild the package falls back to a local build via
 
 ## Model files
 
-The Chatterbox pipeline needs two GGUFs:
+Two engines are wrapped, each with its own GGUF layout under `models/`:
 
 ```
+# Chatterbox turbo (English)
 chatterbox-t3-turbo.gguf   (~742 MB) — T3 GPT-2 Medium + BPE + VoiceEncoder
 chatterbox-s3gen.gguf      (~1.0 GB) — S3Gen encoder/CFM + HiFT + CAMPPlus + S3TokenizerV2
+
+# Chatterbox multilingual (en/es/fr/de/pt/it/zh/ja/ko/...)
+chatterbox-t3-mtl.gguf     (~1.0 GB)
+chatterbox-s3gen-mtl.gguf  (~1.0 GB)
+
+# Supertonic English (Supertone/supertonic; 44.1 kHz, voice baked in)
+supertonic.gguf            (~263 MB)
+
+# Supertonic multilingual (Supertone/supertonic-2; en/ko/es/pt/fr)
+supertonic2.gguf           (~263 MB)
 ```
 
-Download them into `models/` with the bundled script:
+The package converts these from upstream Resemble Chatterbox / Supertone
+checkpoints via a Python venv pipeline:
 
 ```bash
-npm run models:ensure:chatterbox
+npm run setup-models   # creates ./venv, installs requirements.txt, runs convert-models.sh
 ```
 
-Or point the addon at a custom location via `files.modelDir` /
-`files.t3Model` + `files.s3genModel`.
+Or step-by-step:
+
+```bash
+npm run setup:venv
+npm run convert-models
+```
+
+Point the addon at a custom location via `files.modelDir` (engine
+auto-detected from the gguf filenames present), or pass explicit
+`files.t3Model` + `files.s3genModel` (Chatterbox) /
+`files.supertonicModel` (Supertonic).
 
 ## Quick start
 
@@ -258,25 +279,27 @@ npm run test:integration   # spins up the real engine; needs models
 npm run test               # both
 ```
 
-Integration tests download `models/chatterbox-{t3-turbo,s3gen}.gguf`
-and `models/whisper/ggml-small.bin` on first run (via
-`scripts/ensure-*`), then exercise batch + sentence streaming + native
-chunk streaming paths.  On darwin the batch path is verified for WER
-against the synthesized audio.
+Integration tests scan a few candidate `models/` directories for the
+required GGUFs (see `test/utils/downloadModel.js`) and skip cleanly when
+files are absent.  They cover, across both engines:
 
-Longer sentence sets for perf sweeps:
+* batch synthesis with full RuntimeStats,
+* sentence-level streaming (`runStream` / `run({ streamOutput: true })`
+  / `runStreaming` over async iterators),
+* native sub-sentence chunk streaming (Chatterbox-only via
+  `streamChunkTokens`),
+* sequential-run / fresh-instance / reload-stability behaviour,
+* strict GPU-backend assertion via `response.stats.backendDevice` +
+  `backendId` (set `NO_GPU=true` to skip on CPU-only runners,
+  `QVAC_TTS_GPU_SMOKE_RELAX=1` to downgrade the strict gate to a
+  warning),
+* multilingual Chatterbox sweep (es/fr/de/pt) via `chatterbox-mtl.test.js`,
+* on darwin the Chatterbox English batch path is additionally verified
+  for WER against the synthesized audio (whisper-small).
 
-```bash
-npm run test:integration:medium
-npm run test:integration:long
-```
-
-C++ unit tests (GoogleTest) — off by default, built via the
-`BUILD_TESTING=ON` feature in `vcpkg.json`:
-
-```bash
-npm run test:cpp
-```
+To stress-test long inputs, set `INPUT_SENTENCES=medium` (or `long`)
+and re-run the integration suite — `addon.test.js` reads the env var to
+pick its sentence corpus from `test/data/sentences-{medium,long}.js`.
 
 ## Build from source
 
@@ -304,8 +327,10 @@ CUDA is opt-in at port-build time.
 
 ## Troubleshooting
 
-**`t3 model not found`** — the paths in `files` are wrong or the GGUFs
-weren't downloaded.  Run `npm run models:ensure:chatterbox`.
+**`t3 model not found` / `supertonic model not found`** — the paths in
+`files` are wrong or the GGUFs weren't generated.  Run
+`npm run setup-models` (creates the Python venv and converts the
+upstream checkpoints into the four / five expected GGUF files).
 
 **`VoiceEncoder forward failed`** when passing `referenceAudio`** —
 the reference wav is likely < 5 s of clean speech.  Make it longer

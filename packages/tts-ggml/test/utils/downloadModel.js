@@ -3,6 +3,7 @@
 const fs = require('bare-fs')
 const path = require('bare-path')
 const os = require('bare-os')
+const process = require('bare-process')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
@@ -264,6 +265,19 @@ const CHATTERBOX_GGUFS = [
   { name: 'chatterbox-s3gen.gguf', minSize: 500_000_000 }
 ]
 
+const CHATTERBOX_MTL_GGUFS = [
+  { name: 'chatterbox-t3-mtl.gguf', minSize: 500_000_000 },
+  { name: 'chatterbox-s3gen-mtl.gguf', minSize: 500_000_000 }
+]
+
+const SUPERTONIC_GGUFS = [
+  { name: 'supertonic.gguf', minSize: 100_000_000 }
+]
+
+const SUPERTONIC_MTL_GGUFS = [
+  { name: 'supertonic2.gguf', minSize: 100_000_000 }
+]
+
 /** Directories searched on Android (in order) when the caller-supplied
  *  `targetDir` doesn't already have both GGUFs.  All of these are
  *  `adb push`-friendly locations on a standard (non-rooted) device. */
@@ -273,9 +287,22 @@ const ANDROID_CANDIDATE_DIRS = [
   '/data/local/tmp/qvac-tts-ggml/models'
 ]
 
-/** Returns true if `dir` contains every Chatterbox GGUF at the expected size. */
-function hasAllGgufs (dir) {
-  for (const f of CHATTERBOX_GGUFS) {
+/** Optional `TTS_GGML_LOCAL_MODELS_DIR` env override + a desktop dev
+ *  fallback that points at chatterbox.cpp's converter output dir.
+ *  Both are appended to the candidate list AFTER the caller-supplied
+ *  `targetDir` so production runs remain deterministic. */
+function desktopFallbackDirs () {
+  const out = []
+  const env = (process && process.env) ? process.env.TTS_GGML_LOCAL_MODELS_DIR : null
+  if (env) out.push(env)
+  out.push('./models')
+  out.push('../../../chatterbox.cpp/models')
+  return out
+}
+
+/** Returns true if `dir` contains every file in `ggufs` at the expected size. */
+function hasAllGgufsIn (dir, ggufs) {
+  for (const f of ggufs) {
     const p = path.join(dir, f.name)
     if (!fs.existsSync(p)) return false
     try {
@@ -286,6 +313,10 @@ function hasAllGgufs (dir) {
     }
   }
   return true
+}
+
+function hasAllGgufs (dir) {
+  return hasAllGgufsIn(dir, CHATTERBOX_GGUFS)
 }
 
 /**
@@ -314,6 +345,10 @@ async function ensureChatterboxModels (options = {}) {
   const candidateDirs = [requestedDir]
   if (isMobile && platform === 'android') {
     for (const d of ANDROID_CANDIDATE_DIRS) {
+      if (!candidateDirs.includes(d)) candidateDirs.push(d)
+    }
+  } else {
+    for (const d of desktopFallbackDirs()) {
       if (!candidateDirs.includes(d)) candidateDirs.push(d)
     }
   }
@@ -369,8 +404,126 @@ async function ensureChatterboxModels (options = {}) {
   return { success: false, results, targetDir: requestedDir }
 }
 
+async function ensureChatterboxMtlModels (options = {}) {
+  const requestedDir = options.targetDir || path.join(getBaseDir(), 'models')
+  console.log(`Ensuring Chatterbox MTL GGUFs (requested dir: ${requestedDir})...`)
+
+  const candidateDirs = [requestedDir]
+  if (isMobile && platform === 'android') {
+    for (const d of ANDROID_CANDIDATE_DIRS) {
+      if (!candidateDirs.includes(d)) candidateDirs.push(d)
+    }
+  } else {
+    for (const d of desktopFallbackDirs()) {
+      if (!candidateDirs.includes(d)) candidateDirs.push(d)
+    }
+  }
+
+  let resolvedDir = null
+  for (const dir of candidateDirs) {
+    if (hasAllGgufsIn(dir, CHATTERBOX_MTL_GGUFS)) {
+      resolvedDir = dir
+      break
+    }
+  }
+
+  if (resolvedDir) {
+    console.log(` ✓ using Chatterbox MTL GGUFs at ${resolvedDir}`)
+    const results = {}
+    for (const f of CHATTERBOX_MTL_GGUFS) {
+      results[f.name] = { success: true, path: path.join(resolvedDir, f.name), cached: true }
+    }
+    return { success: true, results, targetDir: resolvedDir }
+  }
+
+  console.log(` Chatterbox MTL GGUFs not found.  Convert with:`)
+  console.log(`   python scripts/convert-t3-mtl-to-gguf.py --out chatterbox-t3-mtl.gguf`)
+  console.log(`   python scripts/convert-s3gen-to-gguf.py --variant mtl --out chatterbox-s3gen-mtl.gguf`)
+  console.log(` and place under one of: ${candidateDirs.join(', ')}`)
+  return { success: false, results: {}, targetDir: requestedDir }
+}
+
+async function ensureSupertonicModel (options = {}) {
+  const requestedDir = options.targetDir || path.join(getBaseDir(), 'models')
+  console.log(`Ensuring Supertonic GGUF (requested dir: ${requestedDir})...`)
+
+  const candidateDirs = [requestedDir]
+  if (isMobile && platform === 'android') {
+    for (const d of ANDROID_CANDIDATE_DIRS) {
+      if (!candidateDirs.includes(d)) candidateDirs.push(d)
+    }
+  } else {
+    for (const d of desktopFallbackDirs()) {
+      if (!candidateDirs.includes(d)) candidateDirs.push(d)
+    }
+  }
+
+  let resolvedDir = null
+  for (const dir of candidateDirs) {
+    if (hasAllGgufsIn(dir, SUPERTONIC_GGUFS)) {
+      resolvedDir = dir
+      break
+    }
+  }
+
+  if (resolvedDir) {
+    console.log(` ✓ using Supertonic GGUF at ${resolvedDir}`)
+    return {
+      success: true,
+      path: path.join(resolvedDir, 'supertonic.gguf'),
+      targetDir: resolvedDir
+    }
+  }
+
+  console.log(` Supertonic GGUF not found.  Convert with:`)
+  console.log(`   python scripts/convert-supertonic2-to-gguf.py --arch supertonic --out supertonic.gguf`)
+  console.log(` and place under one of: ${candidateDirs.join(', ')}`)
+  return { success: false, path: null, targetDir: requestedDir }
+}
+
+async function ensureSupertonicMtlModel (options = {}) {
+  const requestedDir = options.targetDir || path.join(getBaseDir(), 'models')
+  console.log(`Ensuring Supertonic MTL GGUF (requested dir: ${requestedDir})...`)
+
+  const candidateDirs = [requestedDir]
+  if (isMobile && platform === 'android') {
+    for (const d of ANDROID_CANDIDATE_DIRS) {
+      if (!candidateDirs.includes(d)) candidateDirs.push(d)
+    }
+  } else {
+    for (const d of desktopFallbackDirs()) {
+      if (!candidateDirs.includes(d)) candidateDirs.push(d)
+    }
+  }
+
+  let resolvedDir = null
+  for (const dir of candidateDirs) {
+    if (hasAllGgufsIn(dir, SUPERTONIC_MTL_GGUFS)) {
+      resolvedDir = dir
+      break
+    }
+  }
+
+  if (resolvedDir) {
+    console.log(` ✓ using Supertonic MTL GGUF at ${resolvedDir}`)
+    return {
+      success: true,
+      path: path.join(resolvedDir, 'supertonic2.gguf'),
+      targetDir: resolvedDir
+    }
+  }
+
+  console.log(` Supertonic MTL GGUF not found.  Convert with:`)
+  console.log(`   python scripts/convert-supertonic2-to-gguf.py --arch supertonic2 --out supertonic2.gguf`)
+  console.log(` and place under one of: ${candidateDirs.join(', ')}`)
+  return { success: false, path: null, targetDir: requestedDir }
+}
+
 module.exports = {
   ensureFileDownloaded,
   ensureWhisperModel,
-  ensureChatterboxModels
+  ensureChatterboxModels,
+  ensureChatterboxMtlModels,
+  ensureSupertonicModel,
+  ensureSupertonicMtlModel
 }

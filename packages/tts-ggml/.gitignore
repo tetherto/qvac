@@ -118,3 +118,5 @@ benchmarks/python-server/__pycache__
 benchmarks/python-server/src/__pycache__
 benchmarks/server/node_modules
 benchmarks/server/package-lock.json
+
+__pycache__/

@@ -139,6 +139,55 @@ test('Chatterbox TTS (ggml): English synthesis + optional WER verification', { t
   console.log('='.repeat(60))
 })
 
+test('Chatterbox TTS (ggml): synthesizes without referenceAudio using the built-in voice baked into the S3Gen GGUF', { timeout: 600000 }, async (t) => {
+  const baseDir = getBaseDir()
+  const modelsDir = path.join(baseDir, 'models')
+
+  const download = await ensureChatterboxModels({ targetDir: modelsDir })
+  if (!download.success) {
+    t.pass('Skipped: Chatterbox GGUFs not available locally')
+    return
+  }
+
+  // referenceAudio omitted on purpose: chatterbox::Engine falls back to
+  // the voice profile baked into the S3Gen GGUF (see qvac-tts.cpp's
+  // built-in voice condition).  ChatterboxModel::validateConfig only
+  // rejects referenceAudio when it's set AND the file is missing; an
+  // empty/undefined value flows through to the engine cleanly.
+  const TTSGgml = require('@qvac/tts-ggml')
+  const model = new TTSGgml({
+    files: { modelDir: download.targetDir },
+    config: { language: 'en' },
+    opts: { stats: true }
+  })
+
+  try {
+    await model.load()
+
+    const response = await model.run({
+      type: 'text',
+      input: 'Hello from the built-in voice.'
+    })
+    let samples = 0
+    let reportedSampleRate = null
+    await response
+      .onUpdate(data => {
+        if (data && data.outputArray) samples += data.outputArray.length
+        if (data && data.sampleRate) reportedSampleRate = data.sampleRate
+      })
+      .await()
+
+    t.ok(samples > 5000, `built-in voice should produce > 5000 samples (got ${samples})`)
+    t.is(reportedSampleRate, 24000, 'built-in voice still emits at 24 kHz native rate')
+    if (response.stats) {
+      t.ok(response.stats.totalSamples > 0, 'built-in voice run reports stats')
+      t.ok(typeof response.stats.realTimeFactor === 'number', 'built-in voice run reports RTF')
+    }
+  } finally {
+    try { await model.unload() } catch (_e) {}
+  }
+})
+
 test('Chatterbox TTS (ggml): outputSampleRate option is accepted (pass-through for now)', { timeout: 300000 }, async (t) => {
   const baseDir = getBaseDir()
   const modelsDir = path.join(baseDir, 'models')

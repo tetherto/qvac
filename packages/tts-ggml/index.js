@@ -2,6 +2,7 @@
 
 const { platform } = require('bare-os')
 const path = require('bare-path')
+const fs = require('bare-fs')
 const QvacLogger = require('@qvac/logging')
 const {
   createJobHandler,
@@ -13,6 +14,16 @@ const { QvacErrorAddonTTSGgml, ERR_CODES } = require('./lib/error')
 const { splitTtsText } = require('./lib/textChunker')
 const { accumulateTextStream } = require('./lib/textStreamAccumulator')
 
+const ENGINE_CHATTERBOX = 'chatterbox'
+const ENGINE_SUPERTONIC = 'supertonic'
+
+const CHATTERBOX_T3_TURBO = 'chatterbox-t3-turbo.gguf'
+const CHATTERBOX_T3_MTL = 'chatterbox-t3-mtl.gguf'
+const CHATTERBOX_S3GEN_DEFAULT = 'chatterbox-s3gen.gguf'
+const CHATTERBOX_S3GEN_MTL = 'chatterbox-s3gen-mtl.gguf'
+const SUPERTONIC_DEFAULT = 'supertonic.gguf'
+const SUPERTONIC_MTL = 'supertonic2.gguf'
+
 function firstNonEmpty (...candidates) {
   for (let i = 0; i < candidates.length; i++) {
     const v = candidates[i]
@@ -21,12 +32,24 @@ function firstNonEmpty (...candidates) {
   return undefined
 }
 
+function fileExistsSafe (p) {
+  if (!p) return false
+  try {
+    return fs.existsSync(p)
+  } catch (_e) {
+    return false
+  }
+}
+
 /**
- * Normalize the `files` map into the two GGUF paths the GGML backend needs
- * (T3 for text → speech tokens, S3Gen for speech tokens → wav).  Accepts
- * either explicit `t3Model`/`s3genModel` or a single `modelDir` that is
- * expected to contain `chatterbox-t3-turbo.gguf` + `chatterbox-s3gen.gguf`
- * side-by-side (the layout produced by `scripts/ensure-chatterbox.js`).
+ * Normalize the `files` map into the GGUF paths each engine variant needs.
+ * Accepts:
+ *   - Chatterbox: explicit `t3Model`/`s3genModel`, or a `modelDir` that
+ *     contains either the turbo (`chatterbox-t3-turbo.gguf` +
+ *     `chatterbox-s3gen.gguf`) or multilingual
+ *     (`chatterbox-t3-mtl.gguf` + `chatterbox-s3gen-mtl.gguf`) GGUFs.
+ *   - Supertonic: explicit `supertonicModel`, or a `modelDir` that
+ *     contains `supertonic.gguf`.
  *
  * @param {Record<string, unknown>} files
  */
@@ -39,8 +62,84 @@ function normalizeGgmlFiles (files) {
     modelDir: firstNonEmpty(f.modelDir),
     t3Model: firstNonEmpty(f.t3Model, f.t3ModelPath, f.t3),
     s3genModel: firstNonEmpty(f.s3genModel, f.s3genModelPath, f.s3gen),
+    supertonicModel: firstNonEmpty(
+      f.supertonicModel,
+      f.supertonicModelPath,
+      f.supertonic
+    ),
     voicesDir: firstNonEmpty(f.voicesDir)
   }
+}
+
+/**
+ * Decide which engine the constructor should drive.  Order of precedence:
+ *   1. Explicit `engine` option (caller-asserted: 'chatterbox' | 'supertonic').
+ *   2. An explicit Supertonic file path.
+ *   3. A `modelDir` that contains `supertonic.gguf` on disk.
+ *   4. Default → Chatterbox (turbo or MTL is decided later inside the
+ *      Chatterbox path resolver based on which T3 file is present).
+ */
+function detectEngineType (engine, normalizedFiles) {
+  if (engine === ENGINE_CHATTERBOX || engine === ENGINE_SUPERTONIC) {
+    return engine
+  }
+  if (engine != null && engine !== '') {
+    throw new Error(
+      "tts-ggml: 'engine' option must be 'chatterbox' or 'supertonic' " +
+        "(got '" + engine + "')"
+    )
+  }
+  if (normalizedFiles.t3Model || normalizedFiles.s3genModel) return ENGINE_CHATTERBOX
+  if (normalizedFiles.supertonicModel) return ENGINE_SUPERTONIC
+  if (normalizedFiles.modelDir) {
+    const turboT3 = path.join(normalizedFiles.modelDir, CHATTERBOX_T3_TURBO)
+    const mtlT3 = path.join(normalizedFiles.modelDir, CHATTERBOX_T3_MTL)
+    const supertonicEn = path.join(normalizedFiles.modelDir, SUPERTONIC_DEFAULT)
+    const supertonicMtl = path.join(normalizedFiles.modelDir, SUPERTONIC_MTL)
+    const hasChatterbox = fileExistsSafe(turboT3) || fileExistsSafe(mtlT3)
+    const hasSupertonic = fileExistsSafe(supertonicEn) || fileExistsSafe(supertonicMtl)
+    if (hasChatterbox) return ENGINE_CHATTERBOX
+    if (hasSupertonic) return ENGINE_SUPERTONIC
+  }
+  return ENGINE_CHATTERBOX
+}
+
+/**
+ * Pick the right Supertonic GGUF inside `modelDir`.
+ * Mirrors the chatterbox resolver: prefer the English-only build when
+ * present (smaller, single-language), only fall back to the multilingual
+ * build when English isn't on disk.  Callers that explicitly want the
+ * multilingual variant should pass `files.supertonicModel` directly.
+ */
+function resolveSupertonicModelDirPath (modelDir) {
+  const supertonicEn = path.join(modelDir, SUPERTONIC_DEFAULT)
+  const supertonicMtl = path.join(modelDir, SUPERTONIC_MTL)
+  if (fileExistsSafe(supertonicEn)) return supertonicEn
+  if (fileExistsSafe(supertonicMtl)) return supertonicMtl
+  return supertonicEn
+}
+
+/**
+ * Pick the right Chatterbox T3 + S3Gen file names inside `modelDir`.
+ * Multilingual GGUFs win when both variants are present (only-mtl is
+ * the only state where mtl beats turbo at the file-detection layer).
+ * Otherwise fall back to the turbo English layout.
+ */
+function resolveChatterboxModelDirPaths (modelDir) {
+  const turboT3 = path.join(modelDir, CHATTERBOX_T3_TURBO)
+  const mtlT3 = path.join(modelDir, CHATTERBOX_T3_MTL)
+  const defaultS3 = path.join(modelDir, CHATTERBOX_S3GEN_DEFAULT)
+  const mtlS3 = path.join(modelDir, CHATTERBOX_S3GEN_MTL)
+
+  const hasTurbo = fileExistsSafe(turboT3)
+  const hasMtl = fileExistsSafe(mtlT3)
+  if (hasMtl && !hasTurbo) {
+    return {
+      t3: mtlT3,
+      s3: fileExistsSafe(mtlS3) ? mtlS3 : defaultS3
+    }
+  }
+  return { t3: turboT3, s3: defaultS3 }
 }
 
 /**
@@ -83,6 +182,7 @@ class TTSGgml {
       config = {},
       logger,
       lazySessionLoading,
+      engine,
       referenceAudio,
       voiceDir,
       seed,
@@ -91,6 +191,12 @@ class TTSGgml {
       streamChunkTokens,
       streamFirstChunkTokens,
       cfmSteps,
+      voice,
+      voiceName,
+      steps,
+      numInferenceSteps,
+      speed,
+      noiseNpyPath,
       opts,
       exclusiveRun
     } = options
@@ -132,21 +238,35 @@ class TTSGgml {
     }
     this._outputSampleRate = outputSampleRate || null
 
-    const root = normalizedFiles.modelDir
-    if (root) {
-      this._t3ModelPath = firstNonEmpty(
-        normalizedFiles.t3Model,
-        path.join(root, 'chatterbox-t3-turbo.gguf')
-      )
-      this._s3genModelPath = firstNonEmpty(
-        normalizedFiles.s3genModel,
-        path.join(root, 'chatterbox-s3gen.gguf')
-      )
-    } else {
-      this._t3ModelPath = normalizedFiles.t3Model
-      this._s3genModelPath = normalizedFiles.s3genModel
-    }
+    this._engineType = detectEngineType(engine, normalizedFiles)
     this._voicesDir = normalizedFiles.voicesDir
+
+    if (this._engineType === ENGINE_SUPERTONIC) {
+      const root = normalizedFiles.modelDir
+      this._supertonicModelPath = firstNonEmpty(
+        normalizedFiles.supertonicModel,
+        root ? resolveSupertonicModelDirPath(root) : undefined
+      )
+      this._t3ModelPath = undefined
+      this._s3genModelPath = undefined
+    } else {
+      const root = normalizedFiles.modelDir
+      if (root) {
+        const resolved = resolveChatterboxModelDirPaths(root)
+        this._t3ModelPath = firstNonEmpty(
+          normalizedFiles.t3Model,
+          resolved.t3
+        )
+        this._s3genModelPath = firstNonEmpty(
+          normalizedFiles.s3genModel,
+          resolved.s3
+        )
+      } else {
+        this._t3ModelPath = normalizedFiles.t3Model
+        this._s3genModelPath = normalizedFiles.s3genModel
+      }
+      this._supertonicModelPath = undefined
+    }
 
     this._referenceAudio = referenceAudio
     this._voiceDir = voiceDir
@@ -156,10 +276,45 @@ class TTSGgml {
     this._streamChunkTokens = streamChunkTokens
     this._streamFirstChunkTokens = streamFirstChunkTokens
     this._cfmSteps = cfmSteps
+    this._voice = firstNonEmpty(voice, voiceName)
+    this._steps = firstNonEmpty(steps, numInferenceSteps)
+    this._speed = speed
+    this._noiseNpyPath = noiseNpyPath
 
-    if (this._config.useGPU === undefined && this._nGpuLayers == null) {
+    if (this._engineType === ENGINE_SUPERTONIC) {
+      if (this._streamChunkTokens != null || this._streamFirstChunkTokens != null) {
+        throw new Error(
+          'tts-ggml: streamChunkTokens / streamFirstChunkTokens are Chatterbox-only ' +
+          'options (sub-sentence native streaming via the chatterbox::Engine ' +
+          'streaming chunked S3Gen+HiFT loop). Supertonic does not support sub-' +
+          "sentence native streaming; use sentence-level streaming via the engine-" +
+          'agnostic runStream() / runStreaming() / run({ streamOutput: true }) APIs.'
+        )
+      }
+      const wantsGpu =
+        this._config.useGPU === true ||
+        (this._nGpuLayers != null && this._nGpuLayers > 0)
+      if (wantsGpu) {
+        throw new Error(
+          'tts-ggml: GPU execution is not supported by the Supertonic engine yet ' +
+          '(see tts-cpp include/tts-cpp/supertonic/engine.h: "CPU only today"). ' +
+          'GPU output is currently silently wrong (~4x quieter, slightly truncated) ' +
+          'because the Vulkan path of the supertonic vector-estimator + vocoder is ' +
+          'not yet validated.  Pass config: { useGPU: false } (and leave nGpuLayers ' +
+          'unset, or set it to 0) when constructing a Supertonic model. ' +
+          'Chatterbox engine remains GPU-enabled by default.'
+        )
+      }
+      if (this._config.useGPU === undefined) {
+        this._config.useGPU = false
+      }
+    } else if (this._config.useGPU === undefined && this._nGpuLayers == null) {
       this._config.useGPU = true
     }
+  }
+
+  getEngineType () {
+    return this._engineType
   }
 
   getApiDefinition () {
@@ -518,7 +673,15 @@ class TTSGgml {
   }
 
   _buildTtsParams () {
+    if (this._engineType === ENGINE_SUPERTONIC) {
+      return this._buildSupertonicParams()
+    }
+    return this._buildChatterboxParams()
+  }
+
+  _buildChatterboxParams () {
     const params = {
+      engineType: ENGINE_CHATTERBOX,
       t3ModelPath: this._t3ModelPath || '',
       s3genModelPath: this._s3genModelPath || '',
       language: this._config?.language || 'en'
@@ -543,6 +706,28 @@ class TTSGgml {
     if (this._config?.useGPU != null) {
       params.useGPU = !!this._config.useGPU
     }
+    return params
+  }
+
+  _buildSupertonicParams () {
+    const params = {
+      engineType: ENGINE_SUPERTONIC,
+      supertonicModelPath: this._supertonicModelPath || '',
+      language: this._config?.language || 'en'
+    }
+    if (this._voice) params.voice = this._voice
+    if (this._steps != null) params.steps = this._steps | 0
+    if (this._speed != null) params.speed = Number(this._speed)
+    if (this._seed != null) params.seed = this._seed | 0
+    if (this._threads != null) params.threads = this._threads | 0
+    if (this._nGpuLayers != null) params.nGpuLayers = this._nGpuLayers | 0
+    if (this._outputSampleRate != null) {
+      params.outputSampleRate = this._outputSampleRate | 0
+    }
+    if (this._config?.useGPU != null) {
+      params.useGPU = !!this._config.useGPU
+    }
+    if (this._noiseNpyPath) params.noiseNpyPath = this._noiseNpyPath
     return params
   }
 
@@ -636,11 +821,16 @@ class TTSGgml {
         const ctx = this._sentenceStreamCtx
         const idx = ctx.chunkIdx
         const sentenceChunk = ctx.chunks[idx] || ''
-        this._job.output({
+        const enriched = {
           outputArray: data.outputArray,
           chunkIndex: idx,
           sentenceChunk
-        })
+        }
+        if (data.sampleRate != null) enriched.sampleRate = data.sampleRate
+        if (!ctx.textStreamMode) {
+          enriched.isLast = idx >= ctx.chunks.length - 1
+        }
+        this._job.output(enriched)
       } else {
         this._job.output(data)
       }
@@ -742,6 +932,11 @@ class TTSGgml {
   static getModelKey (params) {
     return 'tts-ggml'
   }
+
+  static ENGINE_CHATTERBOX = ENGINE_CHATTERBOX
+  static ENGINE_SUPERTONIC = ENGINE_SUPERTONIC
 }
 
 module.exports = TTSGgml
+module.exports.ENGINE_CHATTERBOX = ENGINE_CHATTERBOX
+module.exports.ENGINE_SUPERTONIC = ENGINE_SUPERTONIC

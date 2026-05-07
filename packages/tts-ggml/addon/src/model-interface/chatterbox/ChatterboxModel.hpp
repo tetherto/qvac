@@ -110,6 +110,10 @@ private:
   double tokensPerSecond_ = 0.0;
   size_t textLength_ = 0;
 
+  int backendDevice_ = 0;
+  int backendId_ = 0;
+  std::string backendName_ = "CPU";
+
   mutable std::atomic_bool cancelRequested_{false};
 };
 

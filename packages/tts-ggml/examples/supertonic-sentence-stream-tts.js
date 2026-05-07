@@ -1,26 +1,28 @@
 'use strict'
 
 /**
- * Chatterbox (ggml) — sentence-granularity streaming.
+ * Supertonic — sentence-granularity streaming.
  *
- * Streams *sentences in* and emits *one audio chunk per sentence out*.
- * The chunking lives in the JS layer (TTSGgml.runStreaming): each
- * yielded sentence triggers a full batch synthesize on the C++ side and
- * the resulting PCM is published as a single `onUpdate` event.
+ * Streams *sentences in* (async iterator) and emits *one audio chunk
+ * per sentence out* via `runStreaming`.  Same engine-agnostic JS-layer
+ * orchestrator that chatterbox-sentence-stream-tts.js uses; the addon
+ * dispatches each `runJob` call to whichever engine the model was
+ * constructed with.
  *
- * For sub-sentence native chunk streaming (one utterance split into
- * many PCM events as the C++ engine produces them), see
- * `chatterbox-chunk-stream-tts.js`.
+ * Sub-sentence native streaming (`streamChunkTokens`) is Chatterbox-
+ * only at the C++ engine level; the constructor rejects those knobs
+ * for Supertonic with a clear error.  Use this sentence-level path
+ * for low-latency Supertonic streaming.
  *
  * Usage:
- *   bare examples/chatterbox-sentence-stream-tts.js [path/to/reference.wav]
+ *   bare examples/supertonic-sentence-stream-tts.js [voice]
  *
- * Expects the two Chatterbox GGUF files at:
- *   models/chatterbox-t3-turbo.gguf
- *   models/chatterbox-s3gen.gguf
+ * Expects the Supertonic GGUF at:
+ *   models/supertonic.gguf
  *
- * Reference audio is optional; when omitted the built-in voice embedded
- * in the S3Gen GGUF is used.
+ * NOTE: Supertonic is CPU-only in tts-cpp today; this example sets
+ * useGPU=false explicitly.  See supertonic-tts.js for the full
+ * limitation context.
  */
 
 const fs = require('bare-fs')
@@ -30,7 +32,7 @@ const { createWav } = require('./wav-helper')
 const { setLogger, releaseLogger } = require('../addonLogging')
 const { canPlayPcmChunks, createStreamingPlayer } = require('./pcm-chunk-player')
 
-const CHATTERBOX_SAMPLE_RATE = 24000
+const SUPERTONIC_SAMPLE_RATE = 44100
 const BETWEEN_SENTENCE_MS = 200
 
 function delay (ms) {
@@ -38,30 +40,17 @@ function delay (ms) {
 }
 
 const argv = global.Bare ? global.Bare.argv : process.argv
-const refAudioArg = argv[2]
+const voiceArg = argv[2]
 
 const pkgRoot = path.join(__dirname, '..')
 const modelDir = path.join(pkgRoot, 'models')
-const t3Model = path.join(modelDir, 'chatterbox-t3-turbo.gguf')
-const s3genModel = path.join(modelDir, 'chatterbox-s3gen.gguf')
+const supertonicModel = path.join(modelDir, 'supertonic.gguf')
 
-for (const f of [t3Model, s3genModel]) {
-  if (!fs.existsSync(f)) {
-    console.error(`Missing model file: ${f}`)
-    console.error('Run "npm run setup-models" to set up the venv + convert the Resemble Chatterbox checkpoint to GGUF.')
-    if (global.Bare) global.Bare.exit(1)
-    else process.exit(1)
-  }
-}
-
-if (refAudioArg && !fs.existsSync(refAudioArg)) {
-  console.error(`Reference audio not found: ${refAudioArg}`)
+if (!fs.existsSync(supertonicModel)) {
+  console.error(`Missing model file: ${supertonicModel}`)
+  console.error('Run "npm run setup-models" to set up the venv and convert the Supertone Supertonic-2 ONNX bundle to GGUF.')
   if (global.Bare) global.Bare.exit(1)
   else process.exit(1)
-}
-
-if (!refAudioArg) {
-  console.log('No reference audio provided, using the voice baked into the S3Gen GGUF.')
 }
 
 async function main () {
@@ -73,30 +62,31 @@ async function main () {
   })
 
   const sentences = [
-    'First sentence of the script.',
+    'First sentence of the supertonic stream.',
     'The second arrives after a short pause.',
-    'Audio output still streams in chunks on each update.'
+    'Audio output streams in chunks on each update, one chunk per sentence.'
   ]
 
   console.log(`Sentence-by-sentence input (${sentences.length} sentences), streaming PCM output.\n`)
 
   const model = new TTSGgml({
-    files: { modelDir },
-    ...(refAudioArg ? { referenceAudio: refAudioArg } : {}),
-    config: { language: 'en' },
+    engine: TTSGgml.ENGINE_SUPERTONIC,
+    files: { supertonicModel },
+    voice: voiceArg || 'F1',
+    config: { language: 'en', useGPU: false },
     logger: console,
     opts: { stats: true }
   })
 
-  const outputFile = path.join(__dirname, 'chatterbox-sentence-stream-output.wav')
+  const outputFile = path.join(__dirname, 'supertonic-sentence-stream-output.wav')
 
   try {
-    console.log('Loading Chatterbox TTS model...')
+    console.log('Loading Supertonic TTS model...')
     await model.load()
     console.log('Model loaded.')
 
     const player = canPlayPcmChunks()
-      ? createStreamingPlayer({ sampleRate: CHATTERBOX_SAMPLE_RATE })
+      ? createStreamingPlayer({ sampleRate: SUPERTONIC_SAMPLE_RATE })
       : null
     if (player) {
       console.log(`Streaming playback via ${player.backend}: chunks flow to stdin as they arrive.`)
@@ -139,7 +129,7 @@ async function main () {
               : ''
           if (idx !== undefined) {
             console.log(
-              `[stream out] synthesis ${idx}: ${samples.length} samples; accumulated text: "${preview}${preview.length >= 80 ? '…' : ''}"`
+              `[stream out] synthesis ${idx}: ${samples.length} samples; sentence: "${preview}${preview.length >= 80 ? '…' : ''}"`
             )
           } else {
             console.log(`Audio update: ${samples.length} samples (no chunk metadata)`)
@@ -159,12 +149,12 @@ async function main () {
 
     if (response.stats) {
       const s = response.stats
-      console.log(`Inference stats: totalTime=${s.totalTime?.toFixed(2)}s, tokensPerSecond=${s.tokensPerSecond?.toFixed(2)}, realTimeFactor=${s.realTimeFactor?.toFixed(2)}, audioDuration=${s.audioDurationMs}ms, totalSamples=${s.totalSamples}`)
+      console.log(`Inference stats: totalTime=${s.totalTime?.toFixed(2)}s, tokensPerSecond=${s.tokensPerSecond?.toFixed(2)}, realTimeFactor=${s.realTimeFactor?.toFixed(3)}, audioDuration=${s.audioDurationMs}ms, totalSamples=${s.totalSamples}`)
     }
 
     if (pcmConcat.length > 0) {
       console.log(`\nWriting concatenated PCM to ${outputFile}`)
-      createWav(pcmConcat, CHATTERBOX_SAMPLE_RATE, outputFile)
+      createWav(pcmConcat, SUPERTONIC_SAMPLE_RATE, outputFile)
       console.log('Done.')
     }
   } catch (err) {

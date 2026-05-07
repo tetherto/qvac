@@ -1,33 +1,41 @@
 import type QvacResponse from '@qvac/infer-base/src/QvacResponse'
 
 /**
- * Model file paths for the GGML Chatterbox backend.  Either provide both
- * `t3Model` + `s3genModel` directly, or a single `modelDir` that contains
- * `chatterbox-t3-turbo.gguf` + `chatterbox-s3gen.gguf` side-by-side (the
- * layout produced by `scripts/ensure-chatterbox.js`).  All paths must be
- * absolute (passed through to the native layer as-is).
+ * Model file paths for the GGML TTS backend.  Engine is auto-detected
+ * from these fields (chatterbox vs supertonic) unless overridden via
+ * `TTSGgmlOptions.engine`.  All paths must be absolute (passed through
+ * to the native layer as-is).
  */
 declare interface TTSGgmlFiles {
-  /** Bundle root containing both `chatterbox-t3-turbo.gguf` and `chatterbox-s3gen.gguf`. */
+  /**
+   * Bundle root.  For Chatterbox, expected to contain
+   * `chatterbox-t3-turbo.gguf` + `chatterbox-s3gen.gguf` (turbo) or
+   * `chatterbox-t3-mtl.gguf` + `chatterbox-s3gen-mtl.gguf` (multilingual).
+   * For Supertonic, expected to contain `supertonic.gguf`.
+   */
   modelDir?: string
-  /** T3 (text → speech tokens) GGUF path. Overrides `modelDir` when both are set. */
+  /** Chatterbox T3 (text -> speech tokens) GGUF path. Overrides `modelDir`. */
   t3Model?: string
   t3ModelPath?: string
   t3?: string
-  /** S3Gen + HiFT (speech tokens → 24 kHz wav) GGUF path. Overrides `modelDir` when both are set. */
+  /** Chatterbox S3Gen + HiFT (speech tokens -> 24 kHz wav) GGUF path. Overrides `modelDir`. */
   s3genModel?: string
   s3genModelPath?: string
   s3gen?: string
-  /** Optional directory containing baked voice profiles (`--save-voice` output from the CLI). */
+  /** Supertonic single-file GGUF path. Overrides `modelDir`. */
+  supertonicModel?: string
+  supertonicModelPath?: string
+  supertonic?: string
+  /** Optional directory containing baked Chatterbox voice profiles. */
   voicesDir?: string
 }
 
 declare interface TTSGgmlRuntimeConfig {
-  /** Language code — default "en". Only English is supported by the current Chatterbox GGUF. */
+  /** Language code; default "en". Chatterbox MTL accepts es/fr/de/pt/it/zh/ja/ko/... */
   language?: string
-  /** Route inference through a GPU backend (Metal / Vulkan / CUDA) if available. */
+  /** Route inference through a GPU backend (Metal / Vulkan / CUDA) if available.  Chatterbox: defaults true.  Supertonic: rejected at construction time (engine is CPU-only today). */
   useGPU?: boolean
-  /** Resample the 24 kHz native output to this rate before emitting (8000–192000 Hz). */
+  /** Resample the engine's native rate (24 kHz Chatterbox, 44.1 kHz Supertonic) to this rate before emitting (8000-192000 Hz). */
   outputSampleRate?: number
 }
 
@@ -36,34 +44,56 @@ declare interface TTSGgmlOptions {
   config?: TTSGgmlRuntimeConfig
   logger?: object
   lazySessionLoading?: boolean
-  /** Voice-cloning reference audio path (wav).  See `qvac-tts.cpp --reference-audio`. */
+  /** Explicit engine selection ('chatterbox' | 'supertonic').  Auto-detected from `files` when omitted. */
+  engine?: 'chatterbox' | 'supertonic'
+  /** Chatterbox: voice-cloning reference audio path (wav). */
   referenceAudio?: string
-  /** Directory of baked voice-conditioning tensors (`qvac-tts.cpp --ref-dir`). */
+  /** Chatterbox: directory of baked voice-conditioning tensors. */
   voiceDir?: string
-  /** RNG seed for the CFM initial noise + SineGen excitation (same text, different take). */
+  /** RNG seed for CFM initial noise + SineGen excitation (Chatterbox) / vector-estimator latent (Supertonic). */
   seed?: number
-  /** Move N layers to the GPU backend.  Pass 99 (or any large number) to move everything. */
+  /** Move N layers to the GPU backend.  Chatterbox: pass 99 to move everything.  Supertonic: must be 0 / unset (engine is CPU-only today). */
   nGpuLayers?: number
   /** Override `std::thread::hardware_concurrency()`. */
   threads?: number
-  /** Streaming: speech tokens per chunk (25 ≈ 1 s of audio).  0 disables streaming. */
+  /** Chatterbox-only: speech tokens per native streaming chunk (25 ~= 1 s of audio).  0 disables. */
   streamChunkTokens?: number
-  /** Streaming: override size of the first chunk so first-audio-out lands early. */
+  /** Chatterbox-only: smaller first chunk for low first-audio-out latency. */
   streamFirstChunkTokens?: number
-  /** Streaming: CFM Euler step count (1 halves CFM cost at small quality penalty, 2 matches Python meanflow). */
+  /** Chatterbox-only: CFM Euler step count (1 halves cost; 2 matches Python meanflow). */
   cfmSteps?: number
+  /** Supertonic: voice id baked into the GGUF (e.g. 'F1', 'F2', 'M1', 'M2'). */
+  voice?: string
+  /** Alias for `voice` (cross-compat with `@qvac/tts-onnx`). */
+  voiceName?: string
+  /** Supertonic: number of vector-estimator (CFM) steps.  0 -> GGUF default. */
+  steps?: number
+  /** Alias for `steps` (cross-compat with `@qvac/tts-onnx`). */
+  numInferenceSteps?: number
+  /** Supertonic: speech-rate factor.  0 -> GGUF default. */
+  speed?: number
+  /** Supertonic: optional path to a .npy initial-noise tensor (byte-exact reference reproduction). */
+  noiseNpyPath?: string
   opts?: object
   exclusiveRun?: boolean
 }
 
 /**
- * GGML-backed Chatterbox TTS (via the `tts-cpp` / qvac-tts.cpp library).
- * Owns a persistent native Engine: the T3 GGUF, the S3Gen preload, and any
- * voice-conditioning tensors are loaded once at `load()` and reused across
+ * GGML-backed TTS via the `tts-cpp` library.  Wraps both
+ * `tts_cpp::chatterbox::Engine` and `tts_cpp::supertonic::Engine` behind
+ * a single engine-agnostic JS surface.  Engine type is auto-detected
+ * from `files` (chatterbox-* gguf vs supertonic.gguf) or set explicitly
+ * via the `engine` option.
+ *
+ * Owns a persistent native Engine: model weights and any voice-
+ * conditioning tensors are loaded once at `load()` and reused across
  * every `run()` / `runStream()` / `runStreaming()` call.
  */
 declare class TTSGgml {
   constructor(options?: TTSGgmlOptions)
+
+  static readonly ENGINE_CHATTERBOX: 'chatterbox'
+  static readonly ENGINE_SUPERTONIC: 'supertonic'
 
   load(...args: unknown[]): Promise<void>
   unload(): Promise<void>
@@ -72,6 +102,7 @@ declare class TTSGgml {
   cancel(): Promise<void>
   getApiDefinition(): string
   getState(): { configLoaded: boolean; weightsLoaded: boolean; destroyed: boolean }
+  getEngineType(): 'chatterbox' | 'supertonic'
 
   opts: object
   exclusiveRun: boolean
@@ -113,15 +144,23 @@ declare namespace TTSGgml {
     realTimeFactor: number
     audioDurationMs: number
     totalSamples: number
+    /** Active compute device after the load-time backend cascade.  0 = CPU, 1 = GPU. */
+    backendDevice?: number
+    /** Stable numeric code for the active backend.  0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 99=other-GPU. */
+    backendId?: number
   }
 
   export interface TTSOutputChunk {
     outputArray: ArrayBuffer
+    /** Native engine sample rate (24000 for Chatterbox, 44100 for Supertonic). */
+    sampleRate?: number
   }
 
   export interface SentenceStreamChunkMeta {
     chunkIndex?: number
     sentenceChunk?: string
+    /** True on the final chunk of a pre-chunked synthesis (`runStream` / `run({ streamOutput: true })`).  Undefined for async-iterator streaming where the count isn't known up-front. */
+    isLast?: boolean
   }
 
   export interface SentenceStreamOptions {

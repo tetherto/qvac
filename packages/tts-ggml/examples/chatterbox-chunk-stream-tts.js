@@ -41,22 +41,19 @@ const s3genModel = path.join(modelDir, 'chatterbox-s3gen.gguf')
 for (const f of [t3Model, s3genModel]) {
   if (!fs.existsSync(f)) {
     console.error(`Missing model file: ${f}`)
-    console.error('Run "npm run models:ensure:chatterbox" to download the required GGUFs.')
+    console.error('Run "npm run setup-models" to set up the venv + convert the Resemble Chatterbox checkpoint to GGUF.')
     if (global.Bare) global.Bare.exit(1)
     else process.exit(1)
   }
 }
 
-const defaultRefWav = path.join(pkgRoot, 'test', 'reference-audio', 'jfk.wav')
-const refAudio = refAudioArg || defaultRefWav
-
-if (!fs.existsSync(refAudio)) {
-  console.error(`Reference audio not found: ${refAudio}`)
+if (refAudioArg && !fs.existsSync(refAudioArg)) {
+  console.error(`Reference audio not found: ${refAudioArg}`)
   if (global.Bare) global.Bare.exit(1)
   else process.exit(1)
 }
 if (!refAudioArg) {
-  console.warn(`\x1b[33mNo reference audio provided, using default: ${path.relative(pkgRoot, defaultRefWav)}\x1b[0m`)
+  console.log('No reference audio provided, using the voice baked into the S3Gen GGUF.')
 }
 
 async function main () {
@@ -77,7 +74,7 @@ async function main () {
   //                           2 matches Python's meanflow default.
   const model = new TTSGgml({
     files: { modelDir },
-    referenceAudio: refAudio,
+    ...(refAudioArg ? { referenceAudio: refAudioArg } : {}),
     streamChunkTokens: 25,
     streamFirstChunkTokens: 10,
     cfmSteps: 1,

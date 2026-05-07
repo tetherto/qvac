@@ -1,7 +1,7 @@
 {
   "name": "@qvac/tts-ggml",
   "version": "0.1.0",
-  "description": "Text to Speech (TTS) addon for qvac (ggml backend, currently wrapping Chatterbox English)",
+  "description": "Text to Speech (TTS) addon for qvac (ggml backend, wrapping the chatterbox + supertonic engines from tts-cpp)",
   "addon": true,
   "engines": {
     "bare": ">=1.19.0"
@@ -10,15 +10,23 @@
     "build": "bare-make generate && bare-make build && bare-make install",
     "build:pack": "mkdir -p dist && npm pack --pack-destination dist",
     "example": "bare examples/chatterbox-tts.js \"Hello from qvac tts ggml.\"",
+    "example:chatterbox": "bare examples/chatterbox-tts.js \"Hello from qvac tts ggml.\"",
+    "example:chatterbox-mtl": "bare examples/chatterbox-mtl-tts.js \"Hello from the multilingual Chatterbox engine.\"",
+    "example:chatterbox-mtl-sweep": "bare examples/chatterbox-mtl-sweep-tts.js",
+    "example:chatterbox-sentence-stream": "bare examples/chatterbox-sentence-stream-tts.js",
+    "example:chatterbox-chunk-stream": "bare examples/chatterbox-chunk-stream-tts.js",
+    "example:supertonic": "bare examples/supertonic-tts.js \"Hello from supertonic.\"",
+    "example:supertonic-mtl": "bare examples/supertonic-mtl-tts.js \"Hello from the multilingual Supertonic engine.\"",
+    "example:supertonic-mtl-sweep": "bare examples/supertonic-mtl-sweep-tts.js",
+    "example:supertonic-sentence-stream": "bare examples/supertonic-sentence-stream-tts.js",
     "lint": "standard \"test/**/*.js\" \"*.js\" \"lib/*.js\"",
     "lint:fix": "standard --fix \"test/**/*.js\" \"*.js\" \"lib/*.js\"",
     "test:unit": "brittle-bare test/unit/**/*.test.js",
     "test": "npm run test:unit && npm run test:integration",
-    "test:integration": "brittle-bare test/integration/addon.test.js",
-    "test:integration:medium": "INPUT_SENTENCES=medium brittle-bare test/integration/addon.test.js",
-    "test:integration:long": "INPUT_SENTENCES=long brittle-bare test/integration/addon.test.js",
-    "models:ensure": "bare scripts/ensure-models.js",
-    "models:ensure:chatterbox": "bare scripts/ensure-chatterbox.js"
+    "test:integration": "brittle-bare test/integration/**/*.test.js",
+    "setup:venv": "bash scripts/setup-venv.sh",
+    "convert-models": "bash scripts/convert-models.sh",
+    "setup-models": "bash scripts/setup-venv.sh && bash scripts/convert-models.sh"
   },
   "files": [
     "addonLogging.js",
@@ -84,6 +92,7 @@
   "dependencies": {
     "@qvac/error": "^0.1.0",
     "@qvac/infer-base": "^0.4.0",
+    "@qvac/langdetect-text": "^0.1.2",
     "@qvac/logging": "^0.1.0",
     "bare-fs": "^4.5.6",
     "bare-os": "^3.8.0",

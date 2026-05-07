@@ -12,12 +12,6 @@ namespace general_error = qvac_errors::general_error;
 
 namespace {
 
-// Numeric properties arrive from JS as a JS Number (current) or JS
-// String (legacy callers who stringify ints before crossing the
-// boundary).  Accept both; missing / null / undefined → nullopt; any
-// other type or a non-parseable numeric string throws
-// StatusError(InvalidArgument) — the previous string-map path
-// silently dropped malformed values via a catch-all, which hid bugs.
 std::optional<int> readOptionalInt(
     js::Object obj, js_env_t* env, const char* key) {
   js_value_t* raw = obj.getProperty(env, key);
@@ -43,6 +37,31 @@ std::optional<int> readOptionalInt(
       std::string("Property '") + key + "' must be a number or numeric string");
 }
 
+std::optional<float> readOptionalFloat(
+    js::Object obj, js_env_t* env, const char* key) {
+  js_value_t* raw = obj.getProperty(env, key);
+  if (js::is<js::Undefined>(env, raw) || js::is<js::Null>(env, raw)) {
+    return std::nullopt;
+  }
+  if (js::is<js::Number>(env, raw)) {
+    return static_cast<float>(js::Number::fromValue(raw).as<double>(env));
+  }
+  if (js::is<js::String>(env, raw)) {
+    const std::string str = js::String::fromValue(raw).as<std::string>(env);
+    try {
+      return std::stof(str);
+    } catch (const std::exception&) {
+      throw qvac_errors::StatusError(
+          general_error::InvalidArgument,
+          std::string("Property '") + key +
+              "' must be a number (got non-numeric string \"" + str + "\")");
+    }
+  }
+  throw qvac_errors::StatusError(
+      general_error::InvalidArgument,
+      std::string("Property '") + key + "' must be a number or numeric string");
+}
+
 std::string readOptionalString(
     js::Object obj, js_env_t* env, const char* key) {
   auto v = obj.getOptionalPropertyAs<js::String, std::string>(env, key);
@@ -55,9 +74,33 @@ bool readOptionalBool(
   return b.value_or(fallback);
 }
 
-} // namespace
+}
 
-chatterbox::ChatterboxConfig JSAdapter::buildConfig(
+EngineType JSAdapter::readEngineType(
+    js::Object configurationParams, js_env_t* env) {
+  const std::string explicitType =
+      readOptionalString(configurationParams, env, "engineType");
+  if (explicitType == "chatterbox") return EngineType::Chatterbox;
+  if (explicitType == "supertonic") return EngineType::Supertonic;
+  if (!explicitType.empty()) {
+    throw qvac_errors::StatusError(
+        general_error::InvalidArgument,
+        "engineType must be 'chatterbox' or 'supertonic' (got '" +
+            explicitType + "')");
+  }
+
+  const std::string supertonicPath =
+      readOptionalString(configurationParams, env, "supertonicModelPath");
+  if (!supertonicPath.empty()) return EngineType::Supertonic;
+
+  const std::string t3Path =
+      readOptionalString(configurationParams, env, "t3ModelPath");
+  if (!t3Path.empty()) return EngineType::Chatterbox;
+
+  return EngineType::Chatterbox;
+}
+
+chatterbox::ChatterboxConfig JSAdapter::buildChatterboxConfig(
     js::Object configurationParams, js_env_t* env) {
   chatterbox::ChatterboxConfig cfg;
   cfg.t3ModelPath    = readOptionalString(configurationParams, env, "t3ModelPath");
@@ -76,13 +119,27 @@ chatterbox::ChatterboxConfig JSAdapter::buildConfig(
   cfg.streamFirstChunkTokens  = readOptionalInt(configurationParams, env, "streamFirstChunkTokens");
   cfg.streamCfmSteps          = readOptionalInt(configurationParams, env, "cfmSteps");
   cfg.useGpu                  = readOptionalBool(configurationParams, env, "useGPU");
-
-  // Note on `outputSampleRate`: accepted and stored on ChatterboxConfig
-  // but currently a no-op at the engine level (native output is always
-  // 24 kHz).  Retained for forward-compat so callers can set it today;
-  // wiring lands when qvac-tts.cpp exposes a resampler.
-
   return cfg;
 }
 
-} // namespace qvac::ttsggml
+supertonic::SupertonicConfig JSAdapter::buildSupertonicConfig(
+    js::Object configurationParams, js_env_t* env) {
+  supertonic::SupertonicConfig cfg;
+  cfg.modelGgufPath = readOptionalString(configurationParams, env, "supertonicModelPath");
+  cfg.voice         = readOptionalString(configurationParams, env, "voice");
+  {
+    auto lang = readOptionalString(configurationParams, env, "language");
+    if (!lang.empty()) cfg.language = std::move(lang);
+  }
+  cfg.steps             = readOptionalInt(configurationParams, env, "steps");
+  cfg.speed             = readOptionalFloat(configurationParams, env, "speed");
+  cfg.seed              = readOptionalInt(configurationParams, env, "seed");
+  cfg.threads           = readOptionalInt(configurationParams, env, "threads");
+  cfg.nGpuLayers        = readOptionalInt(configurationParams, env, "nGpuLayers");
+  cfg.outputSampleRate  = readOptionalInt(configurationParams, env, "outputSampleRate");
+  cfg.useGpu            = readOptionalBool(configurationParams, env, "useGPU");
+  cfg.noiseNpyPath      = readOptionalString(configurationParams, env, "noiseNpyPath");
+  return cfg;
+}
+
+}

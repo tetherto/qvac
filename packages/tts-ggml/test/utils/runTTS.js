@@ -226,7 +226,9 @@ async function runTTS (model, params, expectation = {}, options = {}) {
           tokensPerSecond: stats.tokensPerSecond ? Number(stats.tokensPerSecond.toFixed(2)) : stats.tokensPerSecond,
           realTimeFactor: stats.realTimeFactor ? Number(stats.realTimeFactor.toFixed(5)) : stats.realTimeFactor,
           audioDurationMs: stats.audioDurationMs,
-          totalSamples: stats.totalSamples
+          totalSamples: stats.totalSamples,
+          backendDevice: stats.backendDevice,
+          backendId: stats.backendId
         }
       : null
 

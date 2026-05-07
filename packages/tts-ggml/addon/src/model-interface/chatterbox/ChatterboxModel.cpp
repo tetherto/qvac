@@ -13,6 +13,7 @@
 #include <tts-cpp/chatterbox/engine.h>
 
 #include "addon/TTSErrors.hpp"
+#include "model-interface/BackendUtils.hpp"
 #include "qvac-lib-inference-addon-cpp/Errors.hpp"
 
 namespace qvac::ttsggml::chatterbox {
@@ -30,6 +31,7 @@ tts_cpp::chatterbox::EngineOptions toEngineOptions(const ChatterboxConfig& cfg) 
   opts.s3gen_gguf_path = cfg.s3genModelPath;
   opts.reference_audio = cfg.referenceAudio;
   opts.voice_dir       = cfg.voiceDir;
+  if (!cfg.language.empty()) opts.language = cfg.language;
   if (cfg.seed.has_value())    opts.seed         = *cfg.seed;
   if (cfg.threads.has_value()) opts.n_threads    = *cfg.threads;
   if (cfg.nGpuLayers.has_value()) {
@@ -94,16 +96,14 @@ void ChatterboxModel::validateConfig(const ChatterboxConfig& cfg) {
           "voiceDir path exists but is not a directory: " + cfg.voiceDir);
     }
   }
-  // The current Chatterbox GGUF only supports English.  Reject anything
-  // else at construction time instead of silently running in English —
-  // this makes the mismatch loud for callers who pass a non-"en" locale
-  // expecting multilingual behaviour (landing with a later port).
-  if (!cfg.language.empty() && cfg.language != "en") {
-    throw StatusError(
-        general_error::InvalidArgument,
-        "language '" + cfg.language + "' is not supported by the current "
-        "Chatterbox GGUF; only 'en' is available today");
-  }
+  // No JS-side allow-list of language codes: the active GGUF variant
+  // (turbo English vs multilingual) determines what's supported, and
+  // tts_cpp::chatterbox::Engine throws a clear runtime error when the
+  // requested language doesn't match the loaded variant.  Forcing a
+  // hard-coded "en"-only check here would leak the turbo-variant
+  // assumption into the addon and silently reject the multilingual
+  // GGUFs (chatterbox-t3-mtl + chatterbox-s3gen-mtl) the converter
+  // pipeline already produces.
 }
 
 void ChatterboxModel::load() {
@@ -132,6 +132,10 @@ void ChatterboxModel::loadLocked() {
         TTSErrorCode::InitializationFailed,
         std::string("ChatterboxModel::load: ") + e.what());
   }
+
+  backendName_   = engine_->backend_name();
+  backendDevice_ = backendDeviceCode(engine_->backend_device());
+  backendId_     = backendIdFromName(backendName_);
 }
 
 void ChatterboxModel::unloadLocked() {
@@ -262,6 +266,8 @@ qvac_lib_inference_addon_cpp::RuntimeStats ChatterboxModel::runtimeStats() const
   stats.emplace_back("realTimeFactor", realTimeFactor_);
   stats.emplace_back("audioDurationMs", audioDurationMs_);
   stats.emplace_back("totalSamples", totalSamples_);
+  stats.emplace_back("backendDevice", static_cast<int64_t>(backendDevice_));
+  stats.emplace_back("backendId",     static_cast<int64_t>(backendId_));
   return stats;
 }
 

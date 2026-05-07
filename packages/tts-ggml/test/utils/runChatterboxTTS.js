@@ -33,9 +33,10 @@ function resolveRefWavPath (params) {
 async function loadChatterboxTTS (params = {}) {
   const baseDir = getBaseDir()
   const defaultModelDir = path.resolve(path.join(baseDir, 'models'))
+  const modelDir = params.modelDir || defaultModelDir
 
-  const t3ModelPath = params.t3ModelPath || path.join(defaultModelDir, 'chatterbox-t3-turbo.gguf')
-  const s3genModelPath = params.s3genModelPath || path.join(defaultModelDir, 'chatterbox-s3gen.gguf')
+  const t3ModelPath = params.t3ModelPath || path.join(modelDir, 'chatterbox-t3-turbo.gguf')
+  const s3genModelPath = params.s3genModelPath || path.join(modelDir, 'chatterbox-s3gen.gguf')
 
   const refWavPath = resolveRefWavPath(params)
   if (!fs.existsSync(refWavPath)) {
@@ -48,7 +49,7 @@ async function loadChatterboxTTS (params = {}) {
 
   const model = new TTSGgml({
     files: {
-      modelDir: params.modelDir || defaultModelDir,
+      modelDir,
       t3Model: t3ModelPath,
       s3genModel: s3genModelPath
     },
