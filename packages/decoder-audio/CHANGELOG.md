@@ -16,6 +16,11 @@ This is a `[bc]` release that aligns `@qvac/decoder-audio` with the new addon sh
 - `QvacResponse` is now sourced from `@qvac/infer-base` (re-export) instead of the standalone `@qvac/response` package, matching the migration NMT did in earlier releases.
 - `run()` is now synchronous (returns `QvacResponse<DecoderOutput>` directly instead of `Promise<QvacResponse<DecoderOutput>>`); decoding still happens asynchronously and is observed through the returned response.
 
+### Added
+
+- New `JOB_CANCELLED` (11012) error code in `@qvac/decoder-audio`'s error table. `response.await()` on a cancelled `run()` now rejects with `QvacErrorDecoderAudio({ code: 11012 })` instead of resolving with a partial buffer; cancellation is also honored once FFmpeg has started decoding (`_processPacket` checks `_cancelled` between packets).
+- `unload()` now actively fails an in-flight `run()` with `QvacErrorDecoderAudio({ code: DECODER_NOT_LOADED })` instead of silently leaving the response to resolve after teardown.
+
 ### Removed
 
 - Removed the `pause()` and `unpause()` public methods. The new shared `QvacResponse` no longer carries `pauseHandler` / `continueHandler` semantics, and no SDK consumer was using them.
