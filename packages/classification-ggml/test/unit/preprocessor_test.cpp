@@ -7,7 +7,7 @@
 
 #include "model-interface/ImagePreprocessor.hpp"
 
-using namespace qvac_lib_infer_ggml_classification::preprocess;
+using namespace classification_ggml::preprocess;
 
 namespace {
 

@@ -20,7 +20,7 @@
 
 #include "model-interface/ClassificationModel.hpp"
 
-namespace qvac_lib_infer_ggml_classification::bindings {
+namespace classification_ggml::bindings {
 
 namespace addon_cpp = qvac_lib_inference_addon_cpp;
 namespace jsu = qvac_lib_inference_addon_cpp::js;
@@ -225,4 +225,4 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
 }
 JSCATCH
 
-} // namespace qvac_lib_infer_ggml_classification::bindings
+} // namespace classification_ggml::bindings

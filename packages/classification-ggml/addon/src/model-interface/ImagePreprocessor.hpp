@@ -5,7 +5,7 @@
 #include <span>
 #include <vector>
 
-namespace qvac_lib_infer_ggml_classification::preprocess {
+namespace classification_ggml::preprocess {
 
 constexpr uint32_t kInputSize = 224;
 constexpr uint32_t kChannels = 3;
@@ -42,4 +42,4 @@ std::vector<float> preprocessToTensor(
     std::span<const uint8_t> input, uint32_t declaredWidth,
     uint32_t declaredHeight, uint32_t declaredChannels);
 
-} // namespace qvac_lib_infer_ggml_classification::preprocess
+} // namespace classification_ggml::preprocess

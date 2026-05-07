@@ -15,7 +15,7 @@
 
 #include "MobileNetGraph.hpp"
 
-namespace qvac_lib_infer_ggml_classification {
+namespace classification_ggml {
 
 struct RawRgbDims {
   uint32_t width;
@@ -81,4 +81,4 @@ private:
   mutable std::mutex mutex_;
 };
 
-} // namespace qvac_lib_infer_ggml_classification
+} // namespace classification_ggml

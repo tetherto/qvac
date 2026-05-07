@@ -7,9 +7,9 @@
 #include "model-interface/ImagePreprocessor.hpp"
 #include "model-interface/MobileNetGraph.hpp"
 
-namespace qcc = qvac_lib_infer_ggml_classification;
-namespace qpp = qvac_lib_infer_ggml_classification::preprocess;
-namespace qgraph = qvac_lib_infer_ggml_classification::graph;
+namespace qcc = classification_ggml;
+namespace qpp = classification_ggml::preprocess;
+namespace qgraph = classification_ggml::graph;
 
 namespace {
 

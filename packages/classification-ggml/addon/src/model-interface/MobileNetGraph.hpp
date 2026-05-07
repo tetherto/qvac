@@ -10,7 +10,7 @@
 #include <ggml-backend.h>
 #include <ggml.h>
 
-namespace qvac_lib_infer_ggml_classification::graph {
+namespace classification_ggml::graph {
 
 /// One torchvision MobileNetV3-Small `InvertedResidual` block.
 struct BlockConfig {
@@ -96,4 +96,4 @@ WeightsBundle loadWeights(
 /// `graph.input` via `ggml_backend_tensor_set` before each compute.
 ComputeGraph buildGraph(const WeightsBundle& weights, ggml_backend_t backend);
 
-} // namespace qvac_lib_infer_ggml_classification::graph
+} // namespace classification_ggml::graph

@@ -17,7 +17,7 @@
 
 #include <qvac-lib-inference-addon-cpp/Errors.hpp>
 
-namespace qvac_lib_infer_ggml_classification::graph {
+namespace classification_ggml::graph {
 
 namespace {
 
@@ -641,4 +641,4 @@ ComputeGraph buildGraph(const WeightsBundle& weights, ggml_backend_t backend) {
   return cg;
 }
 
-} // namespace qvac_lib_infer_ggml_classification::graph
+} // namespace classification_ggml::graph

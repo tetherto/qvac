@@ -28,7 +28,7 @@
 #include "ImagePreprocessor.hpp"
 #include "MobileNetGraph.hpp"
 
-namespace qvac_lib_infer_ggml_classification {
+namespace classification_ggml {
 
 using qvac_errors::StatusError;
 using qvac_errors::general_error::InternalError;
@@ -345,5 +345,5 @@ std::any ClassificationModel::process(const std::any& input) {
   return std::any(std::move(output));
 }
 
-} // namespace qvac_lib_infer_ggml_classification
+} // namespace classification_ggml
 

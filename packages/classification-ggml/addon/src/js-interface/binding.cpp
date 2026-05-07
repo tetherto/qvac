@@ -2,7 +2,7 @@
 
 #include "addon/AddonJs.hpp"
 
-js_value_t* qvac_lib_infer_ggml_classification_exports(
+js_value_t* classification_ggml_exports(
     js_env_t* env,
     js_value_t* exports) { // NOLINT(readability-identifier-naming)
 
@@ -18,9 +18,8 @@ js_value_t* qvac_lib_infer_ggml_classification_exports(
     }                                                                          \
   }
 
-  V("createInstance",
-    qvac_lib_infer_ggml_classification::bindings::createInstance)
-  V("runJob", qvac_lib_infer_ggml_classification::bindings::runJob)
+  V("createInstance", classification_ggml::bindings::createInstance)
+  V("runJob", classification_ggml::bindings::runJob)
 
   V("loadWeights", qvac_lib_inference_addon_cpp::JsInterface::loadWeights)
   V("activate", qvac_lib_inference_addon_cpp::JsInterface::activate)
@@ -36,6 +35,4 @@ js_value_t* qvac_lib_infer_ggml_classification_exports(
   return exports;
 }
 
-BARE_MODULE(
-    qvac - lib - infer - ggml - classification,
-    qvac_lib_infer_ggml_classification_exports)
+BARE_MODULE(classification_ggml, classification_ggml_exports)

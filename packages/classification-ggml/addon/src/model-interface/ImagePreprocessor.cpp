@@ -14,7 +14,7 @@
 #include <stb_image.h>
 #include <stb_image_resize2.h>
 
-namespace qvac_lib_infer_ggml_classification::preprocess {
+namespace classification_ggml::preprocess {
 
 namespace {
 using qvac_errors::general_error::InvalidArgument;
@@ -228,4 +228,4 @@ std::vector<float> preprocessToTensor(
   return normalizeToWhcn(resized);
 }
 
-} // namespace qvac_lib_infer_ggml_classification::preprocess
+} // namespace classification_ggml::preprocess
