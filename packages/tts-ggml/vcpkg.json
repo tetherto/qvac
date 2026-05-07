@@ -11,10 +11,15 @@
     {
       "name": "tts-cpp",
       "version>=": "2026-05-07#2"
-    },
-    "gtest"
+    }
   ],
   "features": {
+    "tests": {
+      "description": "Build C++ unit tests",
+      "dependencies": [
+        "gtest"
+      ]
+    },
     "vulkan": {
       "description": "Enable Vulkan GPU acceleration",
       "dependencies": [

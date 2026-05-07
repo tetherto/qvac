@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 
 option(BUILD_TESTING "Build tests" OFF)
+option(ENABLE_COVERAGE "Enable coverage" OFF)
 option(ENABLE_VULKAN "Enable Vulkan GPU acceleration" OFF)
 
 if(BUILD_TESTING)
@@ -88,13 +89,57 @@ if(WIN32)
   )
 endif()
 
-# BUILD_TESTING currently has no C++ tests wired up.  The previous
-# skeleton (a `tts-ggml-core` static library with no gtest executable
-# consuming it) was removed so `cmake --build -D BUILD_TESTING=ON` stops
-# producing an orphan artefact.  When the C++ unit-test suite lands
-# (tracked as a follow-up to the persistent-engine milestone), restore
-# the static library plus the `add_executable` + `gtest_discover_tests`
-# wiring under this option.
 if(BUILD_TESTING)
-  find_package(GTest REQUIRED)
+  enable_testing()
+  find_package(GTest CONFIG REQUIRED)
+  include(GoogleTest)
+
+  # Test exec recompiles ChatterboxModel.cpp + SupertonicModel.cpp from
+  # source (rather than linking the bare-module artefact) so coverage
+  # instrumentation lands on those translation units.  JSAdapter.cpp is
+  # excluded because it depends on Bare's <js.h>, which isn't available
+  # outside the bare module link.
+  add_executable(
+    tts_ggml_tests
+      addon/tests/test_backend_utils.cpp
+      addon/tests/test_chatterbox_config.cpp
+      addon/tests/test_supertonic_config.cpp
+      addon/tests/AddonCppTest.cpp
+      addon/src/model-interface/chatterbox/ChatterboxModel.cpp
+      addon/src/model-interface/supertonic/SupertonicModel.cpp
+  )
+
+  target_include_directories(tts_ggml_tests
+    PRIVATE
+      ${PROJECT_SOURCE_DIR}/addon
+      ${PROJECT_SOURCE_DIR}/addon/src
+      ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
+  )
+
+  target_link_libraries(tts_ggml_tests
+    PRIVATE
+      GTest::gmock_main
+      tts-cpp::tts-cpp
+  )
+
+  if(WIN32)
+    target_link_libraries(tts_ggml_tests PRIVATE msvcrt.lib)
+  endif()
+
+  if(ENABLE_COVERAGE)
+    # LLVM source-based coverage (clang).  Same flag set parakeet uses.
+    target_compile_options(tts_ggml_tests PRIVATE
+      -fprofile-instr-generate
+      -fcoverage-mapping
+    )
+    target_link_options(tts_ggml_tests PRIVATE
+      -fprofile-instr-generate
+    )
+    message(STATUS "LLVM Coverage enabled for tts-ggml tests")
+  endif()
+
+  # CI invokes the test binary directly via npm scripts (so it can pass
+  # gtest_output= and capture results.xml); avoid running the binary
+  # during configure-time discovery to keep configure cheap.
+  add_test(NAME tts_ggml_tests COMMAND tts_ggml_tests)
 endif()
