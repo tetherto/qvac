@@ -71,6 +71,7 @@ import { FinetuneExecutor } from "./executors/finetune-executor.js";
 import { LifecycleExecutor } from "../shared/executors/lifecycle-executor.js";
 import { ConfigExecutor } from "../shared/executors/config-executor.js";
 import { NoLingeringBareExecutor } from "./executors/no-lingering-bare-executor.js";
+import { MultiGpuExecutor } from "../shared/executors/multi-gpu-executor.js";
 
 const resources = new ResourceManager();
 
@@ -379,6 +380,7 @@ export const executor = createExecutor({
     new LifecycleExecutor(resources),
     new ConfigExecutor(),
     new NoLingeringBareExecutor(),
+    new MultiGpuExecutor(resources),
   ],
   profiling: {
     init: () => profiler.enable({ mode: "summary", includeServerBreakdown: true }),

@@ -1,6 +1,6 @@
 {
   "name": "@qvac/decoder-audio",
-  "version": "0.3.9",
+  "version": "0.4.0",
   "description": "",
   "license": "Apache-2.0",
   "author": "Tether",
@@ -48,7 +48,6 @@
     "@qvac/error": "^0.1.0",
     "@qvac/infer-base": "^0.4.0",
     "@qvac/logging": "^0.1.0",
-    "@qvac/response": "^0.1.0",
     "bare-assert": "^1.1.0",
     "bare-channel": "^5.2.2",
     "bare-ffmpeg": "^1.0.0-32",
