@@ -265,6 +265,44 @@ Run-2 (2026-05-07):
 | CPU decode (t/s) | 1.97 | 1.02 | **1.93x** |
 | Output coherence | garbled | coherent | — |
 
+## Profiling: Metal System Trace (iPhone 16e)
+
+**Date**: 2026-05-07
+**Tool**: Xcode Instruments — Metal System Trace
+**Device**: iPhone 16e (Apple A18, 8 GB)
+**Parameters**: `--ctx-size 4096 --predict 128 --gpu-layers 99 --threads 4 --temp 0 --seed 42 --jinja -fit off`
+**Image**: elephant.jpg (612 x 408)
+
+Instruments traces were captured with Metal System Trace template to profile GPU shader execution, command buffer scheduling, and memory allocation during multimodal inference.
+
+### Trace Files
+
+| Trace | Model | Size | Runs | Path |
+|-------|-------|------|------|------|
+| iPhone16e-gemma4-e2b-q4km.trace | Gemma 4 E2B Q4_K_M | 371 MB | 3 | `vlm-benchmark/results/traces/` |
+| iPhone16e-qwen3.5-2b-q4km.trace | Qwen3.5-2B Q4_K_M | 101 MB | 1 | `vlm-benchmark/results/traces/` |
+
+> The Gemma 4 trace contains 3 recording runs: Trace0 (`--predict 128`, successful), Trace1 (`--predict 256`, killed by signal 9 during decode — OOM), and Trace2 (second recording). The Qwen3.5 trace contains 1 successful run.
+
+### Profiling Run Results
+
+| Model | Vision Encode (ms) | Image Decode (ms) | Prefill (t/s) | Decode (t/s) | Total (ms) | Exit |
+|-------|-------------------|-------------------|---------------|-------------|-----------|------|
+| Gemma 4 E2B Q4_K_M | 1,272 | 36 | 121.92 (284 tok) | 23.19 (127 tok) | 9,885 | 0 |
+| Qwen3.5-2B Q4_K_M | 829 | 183 | 133.66 (265 tok) | 24.33 (127 tok) | 8,086 | 0 |
+
+### Profiling Observations
+
+1. **Qwen3.5-2B produces coherent output on iPhone 16e Metal** — unlike Pixel 9 Pro where all backends generated garbled text. This narrows the garbled text issue to the ARM64 Android/Tensor G4 runtime, not the Qwen3.5 architecture itself.
+
+2. **Qwen3.5-2B is faster across all phases** due to its smaller size (1.2 GB vs 2.9 GB model, 637 MB vs 940 MB mmproj). Vision encoding is 34% faster (829 ms vs 1,272 ms), prefill is 10% faster, and decode is 5% faster.
+
+3. **Gemma 4 `--predict 256` triggers OOM on Metal** — the first profiling attempt with 256 predicted tokens was killed by signal 9 during the decode phase. Reducing to `--predict 128` eliminated the crash. This is consistent with the benchmark finding that iPhone 16e CPU runs also required 128 tokens. The Metal compute buffer (518 MB) plus KV cache growth during extended generation pushes memory past the ~5.7 GB app limit.
+
+4. **Model load time differs dramatically**: Gemma 4 loads in 6,646 ms vs Qwen3.5 in 561 ms (12x faster), reflecting the model size difference and memory mapping overhead.
+
+5. **Image decode phase differs between architectures**: Gemma 4's attention-based projector decodes the image batch in 36 ms, while Qwen3.5's `qwen3vl_merger` projector takes 183 ms (5x slower) despite handling fewer tokens (247 vs 260). This suggests the merger architecture has higher per-token overhead.
+
 ## Key Observations
 
 ### 1. iPhone 16e delivers the fastest decode throughput
@@ -319,17 +357,21 @@ The Adreno 830 crashes when `libggml-vulkan.so` is loaded, even with `-ngl 0`. T
 
 CPU-only decode on Pixel 9 Pro ranges from 0.70 to 1.36 t/s, requiring 3–6 minutes for a 256-token response. GPU acceleration is essential on this device.
 
-### 9. Qwen3.5-2B produces garbled output on Pixel 9 Pro (all backends)
+### 9. Qwen3.5-2B produces garbled output on Pixel 9 Pro but works on iPhone 16e
 
-Qwen3.5-2B-Q4_K_M generates nonsensical output on Pixel 9 Pro across both CPU and Vulkan backends: Vulkan produces 255 `@` characters, CPU produces 255 empty newlines. This is not a GPU-specific issue (as originally suspected in QVAC-17129) but a model/architecture-level compatibility problem with llama.cpp `b9025` on this device. Gemma 4 models produce coherent output on the same device with the same binary, confirming the issue is Qwen3.5-specific.
+Qwen3.5-2B-Q4_K_M generates nonsensical output on Pixel 9 Pro across both CPU and Vulkan backends: Vulkan produces 255 `@` characters, CPU produces 255 empty newlines. However, the same model produces **coherent output on iPhone 16e Metal** (confirmed during profiling). This rules out a model/architecture-level issue and points to a device-specific problem with the Tensor G4 / ARM64 Android runtime in llama.cpp `b9025`.
 
-The Qwen3.5-2B architecture combines attention with SSM (Mamba/Gated Delta Net), which may not be fully supported in the llama.cpp `b9025` ARM64 backend. Performance metrics remain valid for comparison purposes despite garbled output.
+The Qwen3.5-2B architecture combines attention with SSM (Mamba/Gated Delta Net). The SSM kernels work correctly on Apple Silicon but may have issues with the Tensor G4's CPU microarchitecture or Android NDK compilation. Performance metrics on Pixel 9 Pro remain valid for throughput comparison despite garbled output.
 
-### 10. iPhone 16e benchmarks are highly reproducible
+### 10. Qwen3.5-2B works correctly on iPhone 16e Metal
+
+During profiling, Qwen3.5-2B Q4_K_M produced coherent output on iPhone 16e Metal (24.33 t/s decode, 133.66 t/s prefill). This contradicts the initial hypothesis from QVAC-17129 that the garbled text was a model-architecture issue — it is instead specific to the Pixel 9 Pro / Tensor G4 / ARM64 Android runtime. The SSM (Gated Delta Net) + attention hybrid architecture works correctly on Apple Silicon with Metal.
+
+### 11. iPhone 16e benchmarks are highly reproducible
 
 Run-2 of the Gemma 4 E2B Q4_K_M benchmark on iPhone 16e validates the run-1 results: vision encode times differ by <2%, Metal decode by 0.6 t/s (2%), CPU decode by 2.2 t/s (10% — likely thermal variance). All three larger model OOM failures (E2B Q8, E4B Q4, E4B Q8) were also confirmed in run-2 with consistent error messages.
 
-### 11. iPhone 16e memory is a hard constraint
+### 12. iPhone 16e memory is a hard constraint
 
 With only ~5.7 GB available to apps (out of 8 GB total), the iPhone 16e cannot load any model+mmproj combination exceeding ~4 GB. This rules out E2B Q8_0 (5.0+0.9 GB), E4B Q4_K_M (5.0+0.9 GB), and E4B Q8_0 (7.6+0.9 GB). Devices with 12+ GB RAM (iPhone 16 Pro, S25, P9P) are required for larger models.
 
@@ -343,17 +385,18 @@ With only ~5.7 GB available to apps (out of 8 GB total), the iPhone 16e cannot l
 
 4. **Pixel 9 Pro CPU decode (~1 t/s)**: The Tensor G4's CPU is 10–12x slower than the Snapdragon 8 Elite for LLM decode. Without GPU offloading, the Pixel 9 Pro is impractical for VLM inference.
 
-5. **Qwen3.5-2B garbled output on Pixel 9 Pro**: The Qwen3.5 SSM+attention hybrid architecture produces nonsensical output on all P9P backends. Root cause may be ARM64 NEON/SVE kernel issues or incomplete Qwen3.5 Mamba support in `b9025`. Needs investigation with a newer llama.cpp build or different device.
+5. **Qwen3.5-2B garbled output on Pixel 9 Pro**: The Qwen3.5 SSM+attention hybrid architecture produces nonsensical output on all P9P backends, but works correctly on iPhone 16e Metal. Root cause is specific to Tensor G4 / ARM64 Android runtime — likely NEON/SVE kernel issues or Mamba state corruption in `b9025`. Needs investigation with a newer llama.cpp build.
 
 ## Deferred to Phase 2
 
 - Android GPU profiler traces (Perfetto, Snapdragon Profiler, Streamline) — requires local devices
-- iOS Metal Instruments traces — requires local devices
+- iOS Metal Instruments trace analysis (shader profiling, memory timeline, phase breakdown) — traces captured, analysis pending
 - iPhone 16 Pro benchmarks — Firebase Test Lab device unavailability
 - iPhone 16 Pro / iPhone 16 local benchmarks — 12 GB RAM devices needed for E4B models
 - iPhone 17 benchmarks — not available on Firebase Test Lab
 - Samsung S25 Vulkan root-cause analysis — requires driver debugging
 - iPhone 16e larger-model strategies (e.g., partial layer offload, reduced context) — may unlock E4B Q4 on 8 GB devices
+- Qwen3.5-2B garbled output on Pixel 9 Pro — investigate with newer llama.cpp build, compare with working iPhone 16e Metal output
 
 ## Methodology Notes
 
@@ -385,9 +428,11 @@ where prefill time = (prompt_tokens / prefill t/s) * 1000 ms. Prompt token count
 - iOS Firebase tests submitted but did not execute due to `DEVICE_CAPACITY_NONE`
 - iPhone 16e run-2 (2026-05-07): full Gemma 4 matrix re-run to validate run-1 results and confirm OOM status
 - Qwen3.5-2B supplementary tests (2026-05-07): Pixel 9 Pro only, split into 2 Firebase invocations (Vulkan, CPU+OpenCL)
+- Metal profiling runs (2026-05-07): iPhone 16e with Xcode Instruments Metal System Trace, single run each for Gemma 4 E2B Q4_K_M and Qwen3.5-2B Q4_K_M, `--predict 128`, elephant.jpg only
 
 ### Not Captured (Deferred to Phase 2)
 
 - **Peak RSS**: `VmHWM` from `/proc/<pid>/status` was not read in the test harness
 - **Thermal data**: raw thermal readings exist in logcat files but are not analyzed in this report
-- **Profiler traces**: Perfetto, Snapdragon Profiler, Streamline, and Metal Instruments traces require local device access
+- **Android profiler traces**: Perfetto, Snapdragon Profiler, and Streamline traces require local device access
+- **Metal trace analysis**: iPhone 16e Metal System Traces captured for Gemma 4 E2B Q4_K_M (371 MB, 3 runs) and Qwen3.5-2B Q4_K_M (101 MB, 1 run) — stored in `vlm-benchmark/results/traces/`, detailed shader/memory analysis pending
