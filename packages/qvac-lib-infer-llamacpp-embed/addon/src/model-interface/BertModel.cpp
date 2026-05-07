@@ -362,6 +362,24 @@ common_params setupParams(
       configVector.emplace_back(chosenBackend.second);
     }
     configFilemap.erase(deviceIt);
+
+    // Disable flash attention by default when the chosen GPU backend is
+    // OpenCL: it is not reliably supported there. Users who pass an
+    // explicit "flash-attn"/"flash_attn" override are respected.
+    const bool isOpenCl =
+        chosenBackend.first == BackendType::GPU &&
+        chosenBackend.second.find("opencl") != std::string::npos;
+    const bool userSetFlashAttn =
+        configFilemap.find("flash-attn") != configFilemap.end() ||
+        configFilemap.find("flash_attn") != configFilemap.end();
+    if (isOpenCl && !userSetFlashAttn) {
+      configFilemap["flash-attn"] = "off";
+      qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
+          GGML_LOG_LEVEL_INFO,
+          "[BertModel] OpenCL backend selected: disabling flash attention by "
+          "default (not reliably supported on OpenCL)\n",
+          nullptr);
+    }
   }
 
   for (const auto& [key, value] : configFilemap) {

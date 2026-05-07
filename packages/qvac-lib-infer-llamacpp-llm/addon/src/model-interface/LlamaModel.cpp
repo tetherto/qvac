@@ -105,7 +105,7 @@ void LlamaModel::resolveShardPaths(
 void LlamaModel::tuneConfigMap(
     std::unordered_map<std::string, std::string>& configFilemap,
     const ModelMetaData& metadata, const std::optional<int>& adrenoVersion,
-    const FinetuneConfigOverrides& finetuneOverrides) {
+    bool isOpenCl, const FinetuneConfigOverrides& finetuneOverrides) {
 
   const bool isFinetuning = finetuneOverrides.active;
 
@@ -150,6 +150,13 @@ void LlamaModel::tuneConfigMap(
     QLOG_IF(
         Priority::INFO,
         "[LlamaModel] BitNet model detected: disabling flash attention\n");
+  } else if (isOpenCl && notUserSet("flash-attn", "flash_attn")) {
+    configFilemap.erase("flash_attn");
+    configFilemap["flash-attn"] = "off";
+    QLOG_IF(
+        Priority::INFO,
+        "[LlamaModel] OpenCL backend selected: disabling flash attention by "
+        "default (not reliably supported on OpenCL)\n");
   }
 
   constexpr int kAdrenoUbatchThreshold = 800;
@@ -881,6 +888,7 @@ void LlamaModel::commonParamsParse(
         qvac_errors::general_error::InvalidArgument, errorMsg);
   }
 
+  bool isOpenCl = false;
   {
     using namespace backend_selection;
     const BackendType preferredBackend =
@@ -944,10 +952,17 @@ void LlamaModel::commonParamsParse(
       configVector.emplace_back(chosenBackend.second);
     }
     configFilemap.erase("device");
+
+    isOpenCl = chosenBackend.first == BackendType::GPU &&
+               chosenBackend.second.find("opencl") != std::string::npos;
   }
 
   tuneConfigMap(
-      configFilemap, metadata_, outAdrenoVersion, pendingFinetuneOverrides_);
+      configFilemap,
+      metadata_,
+      outAdrenoVersion,
+      isOpenCl,
+      pendingFinetuneOverrides_);
 
   // Handle both reverse-prompt variants
   for (const std::string& key : {"reverse-prompt", "reverse_prompt"}) {
