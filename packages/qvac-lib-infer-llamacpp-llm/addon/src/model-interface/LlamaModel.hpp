@@ -220,6 +220,14 @@ private:
   processPromptBatchImpl(const std::vector<Prompt>& prompts);
   void cancelImpl() const;
 
+  /// Build the JS-facing `RuntimeStats` from the scheduler's live stats
+  /// (single source of truth across all in-flight / queued batch work).
+  /// Caller must hold `stateMtx_` shared.
+  qvac_lib_inference_addon_cpp::RuntimeStats batchRuntimeStatsLocked() const;
+  /// Build the JS-facing `RuntimeStats` from `llama_perf_context` for
+  /// single-prompt runs. Caller must hold `stateMtx_` shared.
+  qvac_lib_inference_addon_cpp::RuntimeStats singleRuntimeStatsLocked() const;
+
   struct ReloadableState {
     ReloadableState(
         const ConstructionArgs& args, const std::string& loadingContext,
@@ -255,14 +263,19 @@ private:
     llama_pos configuredNDiscarded_ = 0;
     std::optional<CacheManager> cacheManager_;
 
-    bool lastRunWasPrefill_ = false;
-    bool lastRunWasBatch_ = false;
-    double lastAvgConcurrentSeq_ = 1.0;
-    int64_t lastBatchCacheTokens_ = 0;
-    int64_t lastBatchContextSlides_ = 0;
-    int64_t lastBatchGeneratedTokens_ = 0;
-    int64_t lastBatchPromptTokens_ = 0;
-    double lastBatchElapsedMs_ = 0.0;
+    /// Mode flags for the most recent `processPrompt*` call, used by
+    /// `runtimeStats()` to dispatch between the single-prompt and batch
+    /// stat sources. The numbers themselves are NOT cached here: the
+    /// scheduler is the single source of truth for batch stats (it
+    /// already accumulates across every concurrent `processBatch` caller
+    /// in the same idle epoch), and `llama_perf_context` is the source
+    /// for single-prompt stats. Per-run reset is a single value-assign
+    /// (`lastRun_ = {}`).
+    struct LastRunInfo {
+      bool wasPrefill = false;
+      bool wasBatch = false;
+    };
+    LastRunInfo lastRun_;
   };
 
   /// Continuous-batching gate. Active when the model is text-only and the

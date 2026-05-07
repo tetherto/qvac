@@ -568,14 +568,8 @@ std::string LlamaModel::processPrompt(const Prompt& prompt) {
 }
 
 std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
-  state_->lastRunWasPrefill_ = prompt.prefill;
-  state_->lastRunWasBatch_ = false;
-  state_->lastAvgConcurrentSeq_ = 1.0;
-  state_->lastBatchCacheTokens_ = 0;
-  state_->lastBatchContextSlides_ = 0;
-  state_->lastBatchGeneratedTokens_ = 0;
-  state_->lastBatchPromptTokens_ = 0;
-  state_->lastBatchElapsedMs_ = 0.0;
+  state_->lastRun_ = {};
+  state_->lastRun_.wasPrefill = prompt.prefill;
   if (state_->batchScheduler_) {
     state_->batchScheduler_->resetRuntimeStats();
   }
@@ -668,14 +662,8 @@ LlamaModel::processPromptBatch(const std::vector<Prompt>& prompts) {
 std::vector<std::string>
 LlamaModel::processPromptBatchImpl(const std::vector<Prompt>& prompts) {
   validateBitnetQuantization();
-  state_->lastRunWasPrefill_ = false;
-  state_->lastRunWasBatch_ = true;
-  state_->lastAvgConcurrentSeq_ = 0.0;
-  state_->lastBatchCacheTokens_ = 0;
-  state_->lastBatchContextSlides_ = 0;
-  state_->lastBatchGeneratedTokens_ = 0;
-  state_->lastBatchPromptTokens_ = 0;
-  state_->lastBatchElapsedMs_ = 0.0;
+  state_->lastRun_ = {};
+  state_->lastRun_.wasBatch = true;
 
   if (prompts.empty()) {
     return {};
@@ -733,62 +721,73 @@ LlamaModel::processPromptBatchImpl(const std::vector<Prompt>& prompts) {
   }
 
   batching::BatchResult result = scheduler.processBatch(std::move(requests));
-  const batching::RuntimeStatsSnapshot& batchStats = result.stats;
-  state_->lastAvgConcurrentSeq_ = batchStats.avgConcurrentSeq;
-  state_->lastBatchCacheTokens_ = batchStats.cacheTokens;
-  state_->lastBatchContextSlides_ = batchStats.contextSlides;
-  state_->lastBatchGeneratedTokens_ = batchStats.generatedTokens;
-  state_->lastBatchPromptTokens_ = batchStats.promptTokens;
-  state_->lastBatchElapsedMs_ = batchStats.elapsedMs;
 
   return result.outputs;
 }
 
 qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::runtimeStats() const {
   std::shared_lock lock(stateMtx_);
+  if (state_->lastRun_.wasBatch && state_->batchScheduler_) {
+    return batchRuntimeStatsLocked();
+  }
+  return singleRuntimeStatsLocked();
+}
+
+qvac_lib_inference_addon_cpp::RuntimeStats
+LlamaModel::batchRuntimeStatsLocked() const {
+  // Pull the live snapshot from the scheduler. It already aggregates
+  // across every `processBatch` caller in the current idle epoch
+  // (`resetRuntimeStatsLocked` only fires when the queue is both empty
+  // and has no in-flight work), so this composes correctly with multiple
+  // queued / in-flight batches without LlamaModel having to cache state.
+  const batching::RuntimeStatsSnapshot stats =
+      state_->batchScheduler_->runtimeStats();
+  constexpr double kMillisInSecond = 1000.0;
+  const double tokensPerSecond =
+      stats.elapsedMs > 0.0
+          ? kMillisInSecond / stats.elapsedMs *
+                static_cast<double>(stats.generatedTokens)
+          : 0.0;
+  // TTFT comes from `llama_perf_context` to match legacy single-prompt
+  // semantics; the scheduler does not yet expose a batch-aware TTFT.
+  // Reset the perf counters so the next single-prompt run sees a clean
+  // slate.
+  auto perfData = llama_perf_context(state_->llmContext_->getCtx());
+  llama_perf_context_reset(state_->llmContext_->getCtx());
+  return {
+      {"TTFT", perfData.t_p_eval_ms},
+      {"TPS", tokensPerSecond},
+      {"CacheTokens", stats.cacheTokens},
+      {"generatedTokens", stats.generatedTokens},
+      {"promptTokens", stats.promptTokens},
+      {"contextSlides", stats.contextSlides},
+      {"avgConcurrentSeq", stats.avgConcurrentSeq},
+      {"backendDevice", runtimeBackendDevice_}};
+}
+
+qvac_lib_inference_addon_cpp::RuntimeStats
+LlamaModel::singleRuntimeStatsLocked() const {
   auto perfData = llama_perf_context(state_->llmContext_->getCtx());
   constexpr double kMillisInSecond = 1000.0;
-
-  const double timeToFirstToken =
-      state_->lastRunWasPrefill_ ? 0.0 : perfData.t_p_eval_ms;
+  const bool wasPrefill = state_->lastRun_.wasPrefill;
+  const double timeToFirstToken = wasPrefill ? 0.0 : perfData.t_p_eval_ms;
   const int64_t generatedTokens =
-      state_->lastRunWasBatch_
-          ? state_->lastBatchGeneratedTokens_
-          : static_cast<int64_t>(
-                state_->lastRunWasPrefill_ ? 0 : perfData.n_eval);
+      static_cast<int64_t>(wasPrefill ? 0 : perfData.n_eval);
   const int64_t promptTokens =
-      state_->lastRunWasBatch_
-          ? state_->lastBatchPromptTokens_
-          : static_cast<int64_t>(
-                state_->lastRunWasPrefill_ ? 0 : perfData.n_p_eval);
+      static_cast<int64_t>(wasPrefill ? 0 : perfData.n_p_eval);
   const double tokensPerSecond =
-      state_->lastRunWasBatch_
-          ? (state_->lastBatchElapsedMs_ > 0.0
-                 ? kMillisInSecond / state_->lastBatchElapsedMs_ *
-                       static_cast<double>(generatedTokens)
-                 : 0.0)
-          : ((!state_->lastRunWasPrefill_ && perfData.t_eval_ms > 0)
-                 ? kMillisInSecond / perfData.t_eval_ms * perfData.n_eval
-                 : 0.0);
+      (!wasPrefill && perfData.t_eval_ms > 0)
+          ? kMillisInSecond / perfData.t_eval_ms * perfData.n_eval
+          : 0.0;
   llama_perf_context_reset(state_->llmContext_->getCtx());
-
-  const int64_t cacheTokens =
-      state_->lastRunWasBatch_
-          ? state_->lastBatchCacheTokens_
-          : static_cast<int64_t>(state_->llmContext_->getNPast());
-  const int64_t contextSlides =
-      state_->lastRunWasBatch_
-          ? state_->lastBatchContextSlides_
-          : static_cast<int64_t>(state_->llmContext_->getNSlides());
-
   return {
       {"TTFT", timeToFirstToken},
       {"TPS", tokensPerSecond},
-      {"CacheTokens", cacheTokens},
+      {"CacheTokens", static_cast<int64_t>(state_->llmContext_->getNPast())},
       {"generatedTokens", generatedTokens},
       {"promptTokens", promptTokens},
-      {"contextSlides", contextSlides},
-      {"avgConcurrentSeq", state_->lastAvgConcurrentSeq_},
+      {"contextSlides", static_cast<int64_t>(state_->llmContext_->getNSlides())},
+      {"avgConcurrentSeq", 1.0},
       {"backendDevice", runtimeBackendDevice_}};
 }
 
