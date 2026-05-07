@@ -6,6 +6,10 @@ Target platforms:
 - Android Adreno (primary) — Samsung S25, Snapdragon 8 Elite, Adreno 830
 - Android Mali (primary) — Pixel 9 Pro, Tensor G4, Mali-G715 MC7
 - iOS Metal (secondary) — iPhone 16e, A18
+- Mac Metal (reference ceiling) — Mac M4, 8 GPU cores, 16 GB unified memory
+
+Phase 1 cross-device decode hierarchy (E2B Q4_K_M, best backend per device):
+Mac M4 51.3 t/s → iPhone 16e 27.2 → S25 15.0 → P9P 10.6 t/s (Mac/iPhone 1.88x, Mac/S25 3.43x, Mac/P9P 4.83x)
 
 ---
 
@@ -240,7 +244,24 @@ The vision encoder (mmproj) is currently **always F16** in llama.cpp. This is th
 | Conv2d patch embedding | Generic im2col + GEMM | Not a bottleneck currently but adds dispatch overhead on GPU path | Direct conv kernel optimized for 14x14 stride=14 (non-overlapping) — essentially a reshape + matmul | 1.1x | S |
 | KV cache memory layout (Adreno) | Row-major contiguous | Phase 1 shows Adreno OpenCL minimal speedup over CPU (1.1-1.3x) — memory access pattern suboptimal | Tile-major KV cache layout optimized for GPU texture cache on Adreno | 1.2-1.5x decode | M |
 
-**Key kernel insight:** The Mali-G715 vision encoding bottleneck (25-41s) is almost certainly due to the generic Vulkan GEMM kernel performing poorly without cooperative matrix support. A Mali-specific tiled GEMM using subgroup operations could yield 2-4x improvement, bringing vision encode from 25-41s down to 8-15s.
+### Metal Phase 1 Evidence (Mac M4 + iPhone 16e)
+
+Metal System Traces (4 trace files, ~1.55 GB total) provide per-phase timing that validates the kernel-level bottleneck analysis:
+
+| Phase | Mac M4 Metal | iPhone 16e Metal | Mac speedup |
+|-------|-------------|-----------------|-------------|
+| Vision encode (CLIP) | 611 ms | 1,272 ms | 2.08x |
+| Image projection | 19 ms | 36 ms | 1.89x |
+| Prefill (284 tok) | 1,094 ms (260 t/s) | 2,330 ms (122 t/s) | 2.13x |
+| Decode (255/127 tok) | 4,973 ms (51.3 t/s) | 5,478 ms (23.2 t/s) | 2.21x |
+
+Metal GPU memory footprint (Gemma 4 E2B Q4_K_M, Mac M4):
+- Model buffer (GPU): 2,948 MiB | Compute buffer (LLM): 519 MiB
+- CLIP compute buffer: 101 MiB | KV cache: 36 MiB
+- **Total GPU resident: ~3,758 MiB** (30% of 12,713 MiB recommended limit)
+- Graph nodes: 1,500 (LLM) + 940 (CLIP); graph splits: 2
+
+**Key kernel insight:** The Mali-G715 vision encoding bottleneck (25-41s) is almost certainly due to the generic Vulkan GEMM kernel performing poorly without cooperative matrix support. A Mali-specific tiled GEMM using subgroup operations could yield 2-4x improvement, bringing vision encode from 25-41s down to 8-15s. Metal profiling confirms vision encode is 2.8–5.7x faster on Metal than CPU (Mac M4), demonstrating that GPU-accelerated vision encoding is viable — the Mali bottleneck is backend-specific, not inherent to GPU vision processing.
 
 ---
 
@@ -258,7 +279,7 @@ The vision encoder (mmproj) is currently **always F16** in llama.cpp. This is th
 
 **High-value portable optimizations:**
 
-1. **Vision prefix caching** — Directly applicable. On Pixel 9 Pro, saves 25-41s on follow-up queries about the same image. No GPU-specific code needed. This is the single highest-impact optimization from MLX's playbook.
+1. **Vision prefix caching** — Directly applicable. Saves 25–41s on Pixel 9 Pro, 2.2–2.9s on S25, 1.2s on iPhone 16e, and 630ms on Mac M4 per follow-up query about the same image. No GPU-specific code needed. This is the single highest-impact optimization from MLX's playbook.
 
 2. **Static op fusion patterns** — The specific fusions MLX applies (norm+linear, gate+up projection) can be implemented as pre-compiled Vulkan/OpenCL compute pipelines. Unlike MLX's dynamic fusion, these must be identified statically and written as custom kernels. The patterns from Section 4 (RMSNorm+QKV, gate+up GEMM, projection MLP fusion) are all statically deterministic.
 
@@ -270,6 +291,18 @@ The vision encoder (mmproj) is currently **always F16** in llama.cpp. This is th
 
 2. **Runtime graph optimization** — MLX's JIT-like graph optimization has no direct equivalent in Vulkan/OpenCL static pipeline model. Must be done at compile time through manual kernel design.
 
+### Phase 1 Validation: CPU Prefill > GPU on Apple Silicon (Gemma 4)
+
+The MLX cross-reference predicted that Apple's Accelerate BLAS would compete with GPU for batch operations. Phase 1 confirms this on both Apple Silicon platforms:
+
+| Device | CPU Prefill (t/s) | Metal Prefill (t/s) | CPU advantage |
+|--------|------------------|---------------------|---------------|
+| Mac M4 (E2B Q4_K_M) | 424 | 260 | **1.63x** |
+| Mac M4 (E4B Q4_K_M) | 353 | 136 | **2.60x** |
+| iPhone 16e (E2B Q4_K_M) | 161 | 126 | **1.28x** |
+
+The CPU advantage increases with model size (E4B: 2.6x vs E2B: 1.6x on Mac), confirming GPU dispatch overhead is proportionally worse for larger batch operations. Samsung S25 shows the same pattern: CPU prefill (91 t/s) beats OpenCL prefill (56–73 t/s) by 1.25–1.6x. A hybrid dispatch strategy (CPU for prefill, GPU for decode) should be the default on all platforms except Mali-G715 where CPU is too slow for both phases.
+
 ---
 
 ## 7. Top-5 Ranked Recommendations for Phase 3
@@ -280,7 +313,7 @@ Ranked by **expected speed-up / implementation cost**, prioritizing the primary 
 
 | Metric | Value |
 |--------|-------|
-| Expected speed-up | 25-41s saved on Pixel 9 Pro, 2.2-2.9s on S25 (eliminates vision encode on cache hit) |
+| Expected speed-up | 25–41s saved on P9P, 2.2–2.9s on S25, 1.2s on iPhone 16e, 630ms on Mac M4 (eliminates vision encode on cache hit) |
 | Implementation cost | **S** (software-only, ~1-2 days) |
 | Score (speed-up/cost) | Extremely high — eliminates the #1 bottleneck entirely for multi-turn conversations |
 | Platforms benefited | All, but transformative on Mali |
@@ -304,7 +337,7 @@ Ranked by **expected speed-up / implementation cost**, prioritizing the primary 
 | Implementation cost | **M** (~1 week) |
 | Score (speed-up/cost) | High — moderate effort, compounds with Rank 2 |
 | Platforms benefited | All GPU backends (Vulkan, OpenCL, Metal) |
-| Approach | Currently Pan & Scan tiles are processed sequentially through the vision encoder. Batch all tiles into a single forward pass (batch dim on the GEMM), processing 4x256=1024 tokens simultaneously. This better saturates GPU compute units, especially on Mali where dispatch overhead is high. Requires modifying `clip_image_batch_encode()` in llama.cpp. |
+| Approach | Currently Pan & Scan tiles are processed sequentially through the vision encoder. Batch all tiles into a single forward pass (batch dim on the GEMM), processing 4x256=1024 tokens simultaneously. This better saturates GPU compute units, especially on Mali where dispatch overhead is high. Mac M4 Metal single-tile vision encode (630ms) is already efficient — batching gain will be largest on Mali where per-tile dispatch overhead dominates (25–41s). Requires modifying `clip_image_batch_encode()` in llama.cpp. |
 
 ### Rank 4: mmproj Quantization (F16 -> Q8_0)
 
@@ -313,7 +346,7 @@ Ranked by **expected speed-up / implementation cost**, prioritizing the primary 
 | Expected speed-up | 1.3-1.5x vision encode speed, 50% memory reduction (940MB -> 470MB) |
 | Implementation cost | **M** (~1 week: quantization tooling + validation) |
 | Score (speed-up/cost) | Moderate-High — enables E4B on iPhone 16e, speeds vision on all platforms |
-| Platforms benefited | All, especially memory-constrained (iPhone 16e) |
+| Platforms benefited | All, especially memory-constrained (iPhone 16e). Mac M4 Metal profiling shows F16 mmproj occupies 101 MiB CLIP compute + 154 MiB mmproj buffer; Q8_0 would halve this to ~128 MiB total |
 | Approach | Add Q8_0 quantization support to mmproj GGUF conversion. Validate on VQA/OCR benchmarks (must maintain >98% of F16 accuracy). The 50% memory reduction also frees headroom for larger LLM quants or longer contexts. Provide both F16 and Q8_0 mmproj variants. |
 
 ### Rank 5: Static Op Fusion (QKV + Gate/Up GEMM Fusion)
@@ -334,11 +367,12 @@ If all 5 recommendations are implemented, projected performance on primary targe
 
 | Platform | Current TTFT | Projected TTFT | Current Decode | Projected Decode |
 |----------|-------------|----------------|----------------|------------------|
-| Pixel 9 Pro (E2B Q4_K_M, Vulkan) | 59.7s | ~8-12s (cache miss) / <1s (cache hit) | 10.6 t/s | 12-14 t/s |
+| Mac M4 (E2B Q4_K_M, Metal) | 1.7s | ~1.5s (cache miss) / <0.5s (cache hit) | 51.3 t/s | 53-55 t/s |
+| iPhone 16e (E2B Q4_K_M, Metal) | ~3.5s | ~2.5s (cache miss) / <1s (cache hit) | 27.2 t/s | 29-31 t/s |
 | Samsung S25 (E2B Q4_K_M, OpenCL) | 4.8s | ~3-4s (cache miss) / <1s (cache hit) | 15.0 t/s | 17-20 t/s |
-| iPhone 16e (E2B Q4_K_M, Metal) | ~2.4s | ~2s (cache miss) / <1s (cache hit) | 26.7 t/s | 28-30 t/s |
+| Pixel 9 Pro (E2B Q4_K_M, Vulkan) | 59.7s | ~8-12s (cache miss) / <1s (cache hit) | 10.6 t/s | 12-14 t/s |
 
-The largest gains come from vision prefix caching (multi-turn) and the Mali-optimized kernel (single-turn on Pixel 9 Pro). Together these transform the Pixel 9 Pro from unusable (60s TTFT) to responsive (<12s first query, <1s follow-up).
+The largest gains come from vision prefix caching (multi-turn) and the Mali-optimized kernel (single-turn on Pixel 9 Pro). Together these transform the Pixel 9 Pro from unusable (60s TTFT) to responsive (<12s first query, <1s follow-up). Mac M4 establishes the memory-bandwidth-saturated ceiling: even with all optimizations, mobile devices will not exceed ~55 t/s decode. The primary optimization opportunity on Mac is vision prefix caching (saving 630ms) and mmproj quantization (freeing memory for larger models/contexts).
 
 ---
 
@@ -346,7 +380,14 @@ The largest gains come from vision prefix caching (multi-turn) and the Mali-opti
 
 - FLOP counts use the standard formula: 2*M*N*K for matrix multiplication (multiply-accumulate counted as 2 ops)
 - "Expected speed-up" estimates are based on: memory bandwidth reduction (quantization), kernel dispatch reduction (fusion), and compute utilization improvement (custom kernels)
-- Phase 1 evidence referenced throughout from baseline profiling (llama.cpp b9025)
+- Phase 1 evidence referenced throughout from three QVAC-18293 baseline profiling reports (llama.cpp b9025):
+  1. `gemma4-vl-baseline.md` — Mobile benchmarks: Samsung S25 (Adreno 830), Pixel 9 Pro (Mali-G715), iPhone 16e (A18). CPU, Vulkan, OpenCL, Metal backends. Run-1 + Run-2 validation.
+  2. `metal-baseline.md` — Apple Metal GPU benchmarks: Mac M4 + iPhone 16e cross-device Metal comparison, Metal System Traces (4 trace files, ~1.55 GB), GPU memory allocation breakdown, per-phase timing.
+  3. `vlm-mac-baseline.md` — Mac M4 full CPU+Metal benchmark matrix: all Gemma 4 variants (E2B/E4B, Q4_K_M/Q8_0) plus Qwen3.5-2B comparison.
+- Metal System Trace files available for GPU shader and memory analysis:
+  - `mac-m4-gemma4-e2b-q4km.trace` (597 MB), `mac-m4-qwen3.5-2b-q4km.trace` (480 MB)
+  - `iPhone16e-gemma4-e2b-q4km.trace` (371 MB), `iPhone16e-qwen3.5-2b-q4km.trace` (101 MB)
+- iPhone 16e Run-2 (2026-05-07) validates Run-1 within ±2% for vision encode and Metal decode, confirming benchmark reproducibility
 - Architecture details derived from: SigLIP paper (Zhai et al. 2023), Gemma 2 technical report (Google 2024), llama.cpp source (ggml-model-gemma.cpp, clip.cpp), and GGUF model inspection
 
 ## Appendix B: Out of Scope
