@@ -5,7 +5,6 @@ const path = require('bare-path')
 const fs = require('bare-fs')
 const { loadDecoder, runDecoder } = require('../helpers/ffmpeg-decoder-helper')
 const { isMobile, getAssetPath } = require('./utils')
-const { ERR_CODES } = require('../../utils/error')
 
 test('FFmpegDecoder - lifecycle and decoding', async (t) => {
   const decoder = await loadDecoder({
@@ -196,7 +195,7 @@ test('FFmpegDecoder - cancel rejects response and decoder is reusable', async (t
       await response.await()
       t.fail('cancelled response should reject')
     } catch (err) {
-      t.is(err.code, ERR_CODES.JOB_CANCELLED, 'rejected with JOB_CANCELLED')
+      t.is(err.name, 'JOB_CANCELLED', 'rejected with JOB_CANCELLED')
     }
 
     const audioStream2 = fs.createReadStream(sampleFile)
