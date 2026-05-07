@@ -24,6 +24,7 @@ export const docs = defineDocs({
       version: z.string().optional(),
       ogImage: z.string().optional(),
       schemaType: z.enum(SCHEMA_TYPES).optional(),
+      tocMaxDepth: z.number().int().min(2).max(5).optional(),
     }),
     postprocess: {
       includeProcessedMarkdown: true,
