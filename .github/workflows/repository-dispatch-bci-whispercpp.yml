@@ -1,14 +1,69 @@
-name: Repository Dispatch (BCI Whispercpp)
-
-# Stub workflow on main so it can be dispatched from feature branches.
-# The real implementation lives on the bci-whispercpp feature branch.
+name: Dispatch on README (BCI Whispercpp)
 
 on:
-  workflow_dispatch:
+  pull_request:
+    types: [closed]
+    paths:
+      - "packages/bci-whispercpp/**"
+
+env:
+  WORKDIR: packages/bci-whispercpp
+
+permissions:
+  contents: read
 
 jobs:
-  noop:
+  dispatch:
+    if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main'
     runs-on: ubuntu-latest
+    environment: release
     steps:
-      - name: No-op stub
-        run: echo "Stub workflow on main; real implementation lives on the bci-whispercpp feature branch."
+      - name: Checkout merge commit
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          fetch-depth: 0
+
+      - name: Detect README change
+        id: changed
+        shell: bash
+        env:
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+          WORKDIR: ${{ env.WORKDIR }}
+        run: |
+          set -euo pipefail
+
+          git fetch --no-tags origin "${MERGE_SHA}" --depth=2 || true
+
+          README_ROOT="README.md"
+          README_WORKDIR="${WORKDIR%/}/README.md"
+
+          echo "Checking README changes in:"
+          echo " - ${README_ROOT}"
+          echo " - ${README_WORKDIR}"
+
+          CHANGED_FILES="$(git diff --name-only "${MERGE_SHA}^1" "${MERGE_SHA}" || true)"
+          echo "Changed files:"
+          echo "${CHANGED_FILES}"
+
+          if echo "${CHANGED_FILES}" | grep -xq "${README_ROOT}"; then
+            echo "readme_changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if echo "${CHANGED_FILES}" | grep -xq "${README_WORKDIR}"; then
+            echo "readme_changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "readme_changed=false" >> "$GITHUB_OUTPUT"
+
+      - name: Repository Dispatch
+        if: steps.changed.outputs.readme_changed == 'true'
+        uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697 # 4.0.1
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+          repository: tetherto/qvac-docs
+          event-type: readme-changed
+          client-payload: >
+            {"repo_url":"https://github.com/${{ github.repository }}","workdir":"${{ env.WORKDIR }}"}
