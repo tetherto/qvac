@@ -11,7 +11,6 @@ const platform = os.platform()
 const arch = os.arch()
 const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
-const isMobile = platform === 'ios' || platform === 'android'
 const useCpu = isDarwinX64 || isLinuxArm64
 // Apple Silicon Metal is fine for vision on M2/M3/M4. The addon detects M1
 // specifically and routes vision-with-projector to CPU on that chip; we don't
