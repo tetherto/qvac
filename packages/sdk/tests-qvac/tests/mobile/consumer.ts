@@ -52,8 +52,10 @@ import { KvCacheExecutor } from "../shared/executors/kv-cache-executor.js";
 import { LoggingExecutor } from "../shared/executors/logging-executor.js";
 import { RegistryExecutor } from "../shared/executors/registry-executor.js";
 import { ModelInfoExecutor } from "../shared/executors/model-info-executor.js";
+import { WrongModelExecutor } from "../shared/executors/wrong-model-executor.js";
 import { ErrorExecutor } from "../shared/executors/error-executor.js";
 import { MobileTranscriptionExecutor } from "./executors/transcription-executor.js";
+import { MobileTranscribeStreamEventsExecutor } from "./executors/transcribe-stream-events-executor.js";
 import { MobileParakeetExecutor } from "./executors/parakeet-executor.js";
 import { MobileVisionExecutor } from "./executors/vision-executor.js";
 import { MobileOcrExecutor } from "./executors/ocr-executor.js";
@@ -62,10 +64,19 @@ import { MobileConfigReloadExecutor } from "./executors/config-reload-executor.j
 import { MobileTtsExecutor } from "./executors/tts-executor.js";
 import { DownloadExecutor } from "../shared/executors/download-executor.js";
 import { DelegatedInferenceExecutor } from "../shared/executors/delegated-inference-executor.js";
-import { DiffusionExecutor } from "../shared/executors/diffusion-executor.js";
+import { MobileDiffusionExecutor } from "./executors/diffusion-executor.js";
 import { LifecycleExecutor } from "../shared/executors/lifecycle-executor.js";
+import { ConfigExecutor } from "../shared/executors/config-executor.js";
 
-const resources = new ResourceManager();
+const resources = new ResourceManager({
+  // Mobile (iOS + Android) needs a tick after each unloadModel for the
+  // kernel to actually release pages / reclaim mmap regions — without
+  // it, the next test's load arrives while the previous model's RSS is
+  // still resident and either the GGML allocator crashes (iOS) or
+  // Scudo's mmap fails with "internal map failure" (Android). Empirically
+  // 200ms is enough; desktop doesn't need it.
+  unloadSettleMs: 200,
+});
 
 resources.define("llm", {
   constant: LLAMA_3_2_1B_INST_Q4_0,
@@ -107,6 +118,12 @@ resources.define("tools", {
   constant: QWEN3_1_7B_INST_Q4,
   type: "llm",
   config: { ctx_size: 4096, tools: true },
+});
+
+resources.define("tools-dynamic", {
+  constant: QWEN3_1_7B_INST_Q4,
+  type: "llm",
+  config: { ctx_size: 4096, tools: true, toolsMode: "dynamic" },
 });
 
 resources.define("ocr", {
@@ -322,6 +339,17 @@ export const executor = createExecutor({
     ], "HTTP test disabled on mobile (OOM)"),
     new SkipExecutor(/^finetune-/, "Finetune tests disabled on mobile"),
     new SkipExecutor(/^tools-(?!simple-function$|no-function-match$)/, "Tools test disabled on mobile"),
+    new SkipExecutor(/^diffusion-/, "SD v2.1 1B Q8_0 cold-load is too heavy for Device Farm devices (iOS variable 5–15min, Android blocks JS thread >300s and trips heartbeat)"),
+    // suspend() hangs the test runner on mobile (the lifecycle coordinator
+    // pauses MQTT/network ops and never resumes within the test timeout).
+    // Only resume-idempotent is safe -- it does not call suspend().
+    skipTests([
+      "lifecycle-suspend-resume-basic",
+      "lifecycle-suspend-idempotent",
+      "lifecycle-suspend-resume-inference",
+      "lifecycle-rapid-toggle",
+      "lifecycle-suspend-during-inference",
+    ], "suspend() hangs the runner on mobile"),
     ...(Platform.OS === "ios" ? [
       skipTests([
         "ocr-sign-image",
@@ -338,15 +366,20 @@ export const executor = createExecutor({
         "ocr-multi-sized-text",
         "ocr-multiple-fonts",
       ], "OCR disabled on iOS (ONNX/CoreML OOM)"),
+      new SkipExecutor(/^translation-afriquegemma-/, "AfriqueGemma 4B (~2.7 GB) exceeds iOS memory budget"),
+      // TODO(QVAC-18460): re-enable once iOS transcribe() crash is fixed.
+      new SkipExecutor(/^transcription-/, "TODO(QVAC-18460): transcription disabled on iOS — transcribe() hard-crashes consumer after FFmpegDecoder unload"),
     ] : []),
 
     // Real executors
     new ModelLoadingExecutor(resources),
     new CompletionExecutor(resources),
     new MobileTranscriptionExecutor(resources),
+    new MobileTranscribeStreamEventsExecutor(resources),
     new EmbeddingExecutor(resources),
     new MobileRagExecutor(resources),
     new ModelInfoExecutor(resources),
+    new WrongModelExecutor(resources),
     new ErrorExecutor(resources),
     new ToolsExecutor(resources),
     new TranslationExecutor(resources),
@@ -362,8 +395,9 @@ export const executor = createExecutor({
     new MobileVisionExecutor(resources),
     new DownloadExecutor(),
     new DelegatedInferenceExecutor(),
-    new DiffusionExecutor(resources),
+    new MobileDiffusionExecutor(resources),
     new LifecycleExecutor(resources),
+    new ConfigExecutor(),
   ],
   profiling: {
     init: () => profiler.enable({ mode: "summary", includeServerBreakdown: true }),

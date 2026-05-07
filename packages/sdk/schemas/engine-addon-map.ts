@@ -15,12 +15,9 @@ import {
   type ModelRegistryEntryAddon,
 } from "./registry";
 
-// Canonical engine → addon mapping (exhaustive).
-// TypeScript enforces that every ModelRegistryEngine has an entry.
-export const ENGINE_TO_ADDON: Record<
-  ModelRegistryEngine,
-  ModelRegistryEntryAddon
-> = {
+// Canonical engine → addon mapping (exhaustive). `as const` preserves
+// per-key literals so the addon can be derived from the engine at the type level.
+export const ENGINE_TO_ADDON = {
   [ModelType.llamacppCompletion]: "llm",
   [ModelType.whispercppTranscription]: "whisper",
   [ModelType.llamacppEmbedding]: "embeddings",
@@ -30,7 +27,7 @@ export const ENGINE_TO_ADDON: Record<
   [ModelType.parakeetTranscription]: "parakeet",
   [ModelType.sdcppGeneration]: "diffusion",
   "onnx-vad": "vad",
-};
+} as const satisfies Record<ModelRegistryEngine, ModelRegistryEntryAddon>;
 
 // Legacy engine names → canonical engine.
 // Used for backward compatibility with old registry data that uses @qvac/* package names.

@@ -1,8 +1,6 @@
-import type { Tool, ToolCallEvent } from "@/schemas";
-import {
-  parseToolCalls,
-  convertToolsToGrammar,
-} from "@/server/utils/tool-parser";
+import type { Tool, ToolDialect } from "@/schemas";
+import { detectToolDialectFromName } from "@/server/utils/tools";
+import { getModelInfo } from "@/server/bare/registry/model-registry";
 
 interface HistoryMessage {
   role: string;
@@ -10,7 +8,12 @@ interface HistoryMessage {
   attachments?: { path: string }[] | undefined;
 }
 
-export function insertToolsIntoHistory(
+/**
+ * Static tools mode: prepend tools right after the system message (or at the
+ * very start when no system message is present). The tool block stays in the
+ * kv-cache for the whole chat session.
+ */
+export function prependToolsToHistory(
   history: HistoryMessage[],
   tools: Tool[],
 ): Array<HistoryMessage | Tool> {
@@ -27,58 +30,21 @@ export function insertToolsIntoHistory(
   return [...tools, ...history];
 }
 
-export function setupToolGrammar(
-  modelConfig: Record<string, unknown>,
+/**
+ * Dynamic tools mode: append tools after the last history message. The
+ * addon's compact-tools mode anchors the block after the last user message
+ * and trims it from the kv-cache once the tool-call chain resolves, so a
+ * subsequent turn can ship a different tool set without poisoning the cache.
+ */
+export function appendToolsToHistory(
+  history: HistoryMessage[],
   tools: Tool[],
-) {
-  const grammar = convertToolsToGrammar(tools);
-  modelConfig["grammar"] = grammar;
+): Array<HistoryMessage | Tool> {
+  return [...history, ...tools];
 }
 
-function isInsideThinkBlock(text: string): boolean {
-  const lastOpen = text.lastIndexOf("<think>");
-  if (lastOpen === -1) return false;
-  const lastClose = text.lastIndexOf("</think>");
-  return lastClose < lastOpen;
-}
-
-export function checkForToolEvents(
-  accumulatedText: string,
-  currentToken: string,
-  tools: Tool[],
-  emittedToolCallPositions: Set<number>,
-): ToolCallEvent[] {
-  const events: ToolCallEvent[] = [];
-
-  if (isInsideThinkBlock(accumulatedText)) {
-    return events;
-  }
-
-  if (currentToken.includes("</tool_call>") || currentToken.includes("}")) {
-    const { toolCalls, errors } = parseToolCalls(accumulatedText, tools);
-
-    for (const call of toolCalls) {
-      const callPosition = accumulatedText.indexOf(call.raw || "");
-      if (callPosition >= 0 && !emittedToolCallPositions.has(callPosition)) {
-        emittedToolCallPositions.add(callPosition);
-        events.push({
-          type: "toolCall",
-          call,
-        });
-      }
-    }
-
-    for (const error of errors) {
-      const errorPosition = accumulatedText.indexOf(error.raw || "");
-      if (errorPosition >= 0 && !emittedToolCallPositions.has(errorPosition)) {
-        emittedToolCallPositions.add(errorPosition);
-        events.push({
-          type: "toolCallError",
-          error,
-        });
-      }
-    }
-  }
-
-  return events;
+export function detectToolDialect(modelId: string): ToolDialect {
+  const info = getModelInfo(modelId);
+  if (!info) return "hermes";
+  return detectToolDialectFromName(info.name, info.path);
 }

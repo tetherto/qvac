@@ -1,5 +1,5 @@
 import type { Logger } from '../../../logger.js'
-import type { SDKTool, SDKToolCall, SDKGenerationParams } from '../../core/sdk.js'
+import type { SDKTool, SDKToolCall, SDKGenerationParams, SDKResponseFormat } from '../../core/sdk.js'
 
 interface OpenAIMessage {
   role: string
@@ -149,8 +149,64 @@ export function extractGenerationParams (body: Record<string, unknown>): SDKGene
   return Object.keys(params).length > 0 ? params : undefined
 }
 
+export class InvalidResponseFormatError extends Error {
+  constructor (message: string) {
+    super(message)
+    this.name = 'InvalidResponseFormatError'
+  }
+}
+
+export function extractResponseFormat (body: Record<string, unknown>): SDKResponseFormat | undefined {
+  const raw = body['response_format']
+  if (raw === undefined || raw === null) return undefined
+
+  if (typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new InvalidResponseFormatError('"response_format" must be an object.')
+  }
+
+  const obj = raw as Record<string, unknown>
+  const type = obj['type']
+
+  if (type === 'text') return { type: 'text' }
+  if (type === 'json_object') return { type: 'json_object' }
+
+  if (type === 'json_schema') {
+    const schemaWrapper = obj['json_schema']
+    if (typeof schemaWrapper !== 'object' || schemaWrapper === null || Array.isArray(schemaWrapper)) {
+      throw new InvalidResponseFormatError('"response_format.json_schema" must be an object.')
+    }
+    const wrapper = schemaWrapper as Record<string, unknown>
+    const name = wrapper['name']
+    const schema = wrapper['schema']
+    if (typeof name !== 'string' || name.length === 0) {
+      throw new InvalidResponseFormatError('"response_format.json_schema.name" must be a non-empty string.')
+    }
+    if (typeof schema !== 'object' || schema === null || Array.isArray(schema)) {
+      throw new InvalidResponseFormatError('"response_format.json_schema.schema" must be an object.')
+    }
+    const result: SDKResponseFormat = {
+      type: 'json_schema',
+      json_schema: {
+        name,
+        schema: schema as Record<string, unknown>
+      }
+    }
+    if (typeof wrapper['description'] === 'string') {
+      result.json_schema.description = wrapper['description']
+    }
+    if (typeof wrapper['strict'] === 'boolean') {
+      result.json_schema.strict = wrapper['strict']
+    }
+    return result
+  }
+
+  throw new InvalidResponseFormatError(
+    `"response_format.type" must be one of "text", "json_object", "json_schema" (got ${JSON.stringify(type)}).`
+  )
+}
+
 const UNSUPPORTED_PARAMS = [
-  'n', 'logprobs', 'response_format', 'stop', 'top_logprobs',
+  'n', 'logprobs', 'stop', 'top_logprobs',
   'logit_bias', 'parallel_tool_calls', 'stream_options'
 ] as const
 

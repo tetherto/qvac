@@ -1,5 +1,6 @@
 import { QVACRegistryClient } from "@qvac/registry-client";
 import { groupShardedModels } from "./shards";
+import { groupCompanionSets } from "./companions";
 import { processRegistryModel } from "./processing";
 import type { CollectOptions, ProcessedModel } from "./types";
 import { DEFAULT_REGISTRY_CORE_KEY } from "@/constants";
@@ -38,19 +39,33 @@ export async function collectModels(
   }
 
   const groupedModels = groupShardedModels(models);
+  const withCompanions = groupCompanionSets(groupedModels);
 
   if (noDedup) {
     console.log(`\n⏭️  Skipping deduplication (--no-dedup flag set)`);
-    return groupedModels;
+    return withCompanions;
   }
 
-  return deduplicateModels(groupedModels, showDuplicates);
+  return deduplicateModels(withCompanions, showDuplicates);
 }
 
-function deduplicateModels(
+export function deduplicateModels(
   models: ProcessedModel[],
   showDuplicates: boolean,
 ): ProcessedModel[] {
+  // Paths referenced as companion files in any companion set. Dropping one of
+  // these on sha256 collision would leave its companion set without a
+  // standalone RegistryItem that `getModelByPath()` can resolve, causing
+  // recursive registry resolutions (e.g. the Bergamot shared vocab) to fall
+  // into the metadata-less fallback where `expectedSize` is `0`.
+  const companionReferencedPaths = new Set<string>();
+  for (const m of models) {
+    if (!m.companionSet) continue;
+    for (const f of m.companionSet.files) {
+      companionReferencedPaths.add(`${f.registrySource}:${f.registryPath}`);
+    }
+  }
+
   const seenChecksums = new Map<string, string>();
   const dedupedModels: ProcessedModel[] = [];
   const skipped: { name: string; checksum: string; reason: string }[] = [];
@@ -62,6 +77,11 @@ function deduplicateModels(
     }
 
     if (seenChecksums.has(model.sha256Checksum)) {
+      const pathKey = `${model.registrySource}:${model.registryPath}`;
+      if (companionReferencedPaths.has(pathKey)) {
+        dedupedModels.push(model);
+        continue;
+      }
       skipped.push({
         name: model.registryPath,
         checksum: model.sha256Checksum,

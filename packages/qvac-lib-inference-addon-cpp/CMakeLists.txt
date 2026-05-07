@@ -6,7 +6,6 @@ if(BUILD_TESTING)
 endif()
 
 project(qvac-lib-inference-addon-cpp
-  VERSION 1.1.4
   LANGUAGES CXX)
 
 find_path(VCPKG_INSTALLED_PATH share/qvac-lint-cpp/.clang-format REQUIRED)
@@ -39,9 +38,6 @@ install(TARGETS qvac-lib-inference-addon-cpp
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 include(CMakePackageConfigHelpers)
-write_basic_package_version_file("qvac-lib-inference-addon-cppConfigVersion.cmake"
-                                 VERSION ${PROJECT_VERSION}
-                                 COMPATIBILITY SameMajorVersion)
 
 configure_package_config_file(
   "${PROJECT_SOURCE_DIR}/cmake/qvac-lib-inference-addon-cppConfig.cmake.in"
@@ -55,7 +51,6 @@ install(EXPORT qvac-lib-inference-addon-cpp_Targets
         DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/qvac-lib-inference-addon-cpp/cmake)
 
 install(FILES "${PROJECT_BINARY_DIR}/qvac-lib-inference-addon-cppConfig.cmake"
-              "${PROJECT_BINARY_DIR}/qvac-lib-inference-addon-cppConfigVersion.cmake"
         DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/qvac-lib-inference-addon-cpp/cmake)
 
 install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/qvac-lib-inference-addon-cpp DESTINATION include)

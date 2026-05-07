@@ -193,4 +193,107 @@ TEST_F(TTSModelChatterboxTestMock, positiveSetReferenceAudio) {
   EXPECT_NO_THROW(model.setReferenceAudio(newReferenceAudio));
 }
 
+TEST_F(TTSModelChatterboxTestMock, numThreadsParsedWhenValid) {
+  qvac::ttslib::chatterbox::ChatterboxConfig captured;
+  EXPECT_CALL(*engineMock_, load(::testing::_))
+      .Times(1)
+      .WillOnce(::testing::SaveArg<0>(&captured));
+  EXPECT_CALL(*engineMock_, isLoaded()).WillRepeatedly(::testing::Return(true));
+
+  auto cfg = config_;
+  cfg["numThreads"] = "4";
+  TTSModel model(cfg, referenceAudio_, engineMock_);
+  EXPECT_EQ(captured.numThreads, 4);
+}
+
+TEST_F(TTSModelChatterboxTestMock, numThreadsDefaultsToZeroWhenKeyAbsent) {
+  qvac::ttslib::chatterbox::ChatterboxConfig captured;
+  EXPECT_CALL(*engineMock_, load(::testing::_))
+      .Times(1)
+      .WillOnce(::testing::SaveArg<0>(&captured));
+  EXPECT_CALL(*engineMock_, isLoaded()).WillRepeatedly(::testing::Return(true));
+
+  TTSModel model(config_, referenceAudio_, engineMock_);
+  EXPECT_EQ(captured.numThreads, 0);
+}
+
+TEST_F(TTSModelChatterboxTestMock, numThreadsResetsToDefaultOnParseFailure) {
+  qvac::ttslib::chatterbox::ChatterboxConfig captured;
+  EXPECT_CALL(*engineMock_, load(::testing::_))
+      .Times(1)
+      .WillOnce(::testing::SaveArg<0>(&captured));
+  EXPECT_CALL(*engineMock_, isLoaded()).WillRepeatedly(::testing::Return(true));
+
+  auto cfg = config_;
+  cfg["numThreads"] = "not-an-int";
+  TTSModel model(cfg, referenceAudio_, engineMock_);
+  EXPECT_EQ(captured.numThreads, 0);
+}
+
+TEST_F(TTSModelChatterboxTestMock, numThreadsResetsToDefaultOnOutOfRange) {
+  qvac::ttslib::chatterbox::ChatterboxConfig captured;
+  EXPECT_CALL(*engineMock_, load(::testing::_))
+      .Times(1)
+      .WillOnce(::testing::SaveArg<0>(&captured));
+  EXPECT_CALL(*engineMock_, isLoaded()).WillRepeatedly(::testing::Return(true));
+
+  auto cfg = config_;
+  cfg["numThreads"] = "999999999999999999999";
+  TTSModel model(cfg, referenceAudio_, engineMock_);
+  EXPECT_EQ(captured.numThreads, 0);
+}
+
+// Regression test for the bug Omar flagged on PR #1745 (r3155500220):
+// after a successful prior parse, a subsequent reload with an unparseable
+// numThreads value used to silently keep the previous thread count. The
+// warning text claimed "falling back to default (1 intra-op thread)", which
+// was a lie. The catch block now resets numThreads to 0 so the warning
+// matches reality.
+TEST_F(TTSModelChatterboxTestMock,
+       numThreadsResetsToDefaultOnReloadAfterPriorValidValue) {
+  qvac::ttslib::chatterbox::ChatterboxConfig firstLoad;
+  qvac::ttslib::chatterbox::ChatterboxConfig secondLoad;
+  EXPECT_CALL(*engineMock_, load(::testing::_))
+      .Times(2)
+      .WillOnce(::testing::SaveArg<0>(&firstLoad))
+      .WillOnce(::testing::SaveArg<0>(&secondLoad));
+  EXPECT_CALL(*engineMock_, unload()).Times(1);
+  EXPECT_CALL(*engineMock_, isLoaded()).WillRepeatedly(::testing::Return(true));
+
+  auto goodCfg = config_;
+  goodCfg["numThreads"] = "4";
+  TTSModel model(goodCfg, referenceAudio_, engineMock_);
+  EXPECT_EQ(firstLoad.numThreads, 4);
+
+  auto badCfg = config_;
+  badCfg["numThreads"] = "not-an-int";
+  model.saveLoadParams(badCfg);
+  model.reload();
+  EXPECT_EQ(secondLoad.numThreads, 0);
+}
+
+TEST_F(TTSModelChatterboxTestMock,
+       numThreadsCarriesOverWhenKeyAbsentOnReload) {
+  qvac::ttslib::chatterbox::ChatterboxConfig firstLoad;
+  qvac::ttslib::chatterbox::ChatterboxConfig secondLoad;
+  EXPECT_CALL(*engineMock_, load(::testing::_))
+      .Times(2)
+      .WillOnce(::testing::SaveArg<0>(&firstLoad))
+      .WillOnce(::testing::SaveArg<0>(&secondLoad));
+  EXPECT_CALL(*engineMock_, unload()).Times(1);
+  EXPECT_CALL(*engineMock_, isLoaded()).WillRepeatedly(::testing::Return(true));
+
+  auto goodCfg = config_;
+  goodCfg["numThreads"] = "4";
+  TTSModel model(goodCfg, referenceAudio_, engineMock_);
+  EXPECT_EQ(firstLoad.numThreads, 4);
+
+  // Same map without numThreads key: createChatterboxConfig should keep
+  // the previously parsed value, since the field is only overwritten when
+  // the key is present and non-empty.
+  model.saveLoadParams(config_);
+  model.reload();
+  EXPECT_EQ(secondLoad.numThreads, 4);
+}
+
 } // namespace qvac::ttslib::addon_model::chatterbox_testing

@@ -57,8 +57,16 @@ This addon is built on [qvac-lib-inference-addon-cpp](https://github.com/tethert
 - **vcpkg**: For C++ dependency management (will be handled automatically by cmake-vcpkg)
 - **C++ Compiler**: C++20 support required
   - macOS: Xcode Command Line Tools
-  - Linux: Clang/LLVM 19 with libc++
+  - Linux: Clang/LLVM 22 with libc++
   - Windows: Visual Studio 2022 with C++ workload
+
+### Linux Build Prerequisites
+
+Before building on Linux, install Clang and the required C++ standard library headers:
+
+```bash
+sudo apt install clang libc++-dev libc++abi-dev build-essential pkg-config
+```
 
 ### Build from Source
 
@@ -383,7 +391,7 @@ qvac-lib-infer-parakeet/
 - qvac-lib-inference-addon-cpp: C++ addon framework
 - ONNX Runtime: Inference engine
 - Bare Runtime: JavaScript runtime
-- Linux requires Clang/LLVM 19 with libc++
+- Linux requires Clang/LLVM 22 with libc++
 
 ### Hardware Acceleration
 

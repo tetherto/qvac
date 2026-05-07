@@ -7,6 +7,7 @@
 
 #include "../utils/UTF8TokenBuffer.hpp"
 #include "LlmContext.hpp"
+#include "ToolsCompactController.hpp"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
 class MtmdLlmContext : public LlmContext {
@@ -17,10 +18,11 @@ public:
    * @param params - the parameters.
    * @param _llama_init - The result of initializing/loading the model using
    * .gguf file(s)
+   * @param tools - reference to the tools compact controller
    */
   MtmdLlmContext(
       common_params& commonParams, common_init_result&& llamaInit,
-      bool toolsAtEnd = false);
+      ToolsCompactController& tools);
 
   /**
    * The destructor.
@@ -198,6 +200,7 @@ private:
   void applyContextDiscard();
   void handleStopRequestAndAddEot(LlamaBatch& batchPtr);
 
+  ToolsCompactController& tools_;
   common_init_result llamaInit_;
   mtmd::context_ptr ctxVision_;
   llama_model* model_;
@@ -217,5 +220,10 @@ private:
 
   // UTF-8 token buffer for handling incomplete emoji sequences
   qvac_lib_inference_addon_llama::UTF8TokenBuffer utf8Buffer_;
+
+  // GPT-OSS Harmony: <|call|> is a frame delimiter, not a stop signal
+  bool isHarmonyModel_ = false;
+  llama_token harmonyCallToken_ = LLAMA_TOKEN_NULL;
+
   std::atomic<bool> stopGeneration_ = false;
 };

@@ -141,6 +141,22 @@ export const diffusionBatchCount = createDiffusionTest(
   600000,
 );
 
+// ---- img2img ----
+
+export const diffusionBasicImg2img = createDiffusionTest(
+  "diffusion-basic-img2img",
+  {
+    prompt: "oil painting style, vibrant colors",
+    init_image: "elephant.jpg",
+    strength: 0.5,
+    width: 256,
+    height: 256,
+    steps: 4,
+    seed: 42,
+  },
+  { validation: "type", expectedType: "array" },
+);
+
 // ---- streaming ----
 
 export const diffusionStreaming = createDiffusionTest(
@@ -183,6 +199,23 @@ export const diffusionStatsPresent = createDiffusionTest(
   { validation: "type", expectedType: "string" },
 );
 
+// ---- FLUX.2 multi-reference fusion ----
+
+export const diffusionFusionFlux2Basic = createDiffusionTest(
+  "diffusion-fusion-flux2-basic",
+  {
+    prompt: "a portrait using most visual traits from @image1 and the eyes from @image2",
+    init_images: ["cat.jpg", "elephant.jpg"],
+    width: 256,
+    height: 256,
+    steps: 4,
+    seed: 42,
+  },
+  // Required by TestDefinition but effectively ignored - DiffusionExecutor.fusionFlux2Basic gates the result.
+  { validation: "type", expectedType: "array" },
+  600000,
+);
+
 // ---- error cases ----
 
 export const diffusionEmptyPrompt = createDiffusionTest(
@@ -207,8 +240,10 @@ export const diffusionTests = [
   diffusionSchedulerKarras,
   diffusionSeedReproducibility,
   diffusionBatchCount,
+  diffusionBasicImg2img,
   diffusionStreaming,
   diffusionStreamingProgress,
   diffusionStatsPresent,
+  diffusionFusionFlux2Basic,
   diffusionEmptyPrompt,
 ];

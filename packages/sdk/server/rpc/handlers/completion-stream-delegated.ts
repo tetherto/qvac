@@ -22,19 +22,18 @@ export async function* handleCompletionStreamDelegated(
   // Get delegation info from model registry
   const entry = getModelEntry(request.modelId);
 
-  if (!entry?.isDelegated || !entry.delegated) {
+  if (!entry?.isDelegated) {
     throw new ModelIsDelegatedError(request.modelId);
   }
 
-  const { topic, providerPublicKey, timeout, healthCheckTimeout } = entry.delegated;
+  const { providerPublicKey, timeout, healthCheckTimeout } = entry.delegated;
 
   try {
     logger.debug(
       `📤 Sending delegated completionStream request to provider: ${providerPublicKey}${timeout ? `, timeout: ${timeout}ms` : ""}`,
     );
 
-    // Create RPC instance for this HyperSwarm peer
-    const rpc = await getRPC(topic, providerPublicKey, { timeout, healthCheckTimeout });
+    const rpc = await getRPC(providerPublicKey, { timeout, healthCheckTimeout });
 
     // Build delegate options with profiling metadata
     const delegateOpts: DelegateOptions = { peerKey: providerPublicKey };
@@ -54,10 +53,20 @@ export async function* handleCompletionStreamDelegated(
     }
   } catch (error) {
     logger.error("Error in delegated completion stream:", error);
+    const message = error instanceof Error ? error.message : String(error);
     yield {
       type: "completionStream",
-      token: `Error communicating with provider: ${error instanceof Error ? error.message : String(error)}`,
       done: true,
+      events: [
+        {
+          type: "completionDone" as const,
+          seq: 0,
+          stopReason: "error" as const,
+          error: {
+            message: `Error communicating with provider: ${message}`,
+          },
+        },
+      ],
     };
   }
 }

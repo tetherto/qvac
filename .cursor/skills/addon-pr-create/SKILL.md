@@ -43,9 +43,7 @@ The goal is a single combined change set: all commits on the remote tracked bran
 
 ### Step 2: Generate the PR description
 
-Look for a `PULL_REQUEST_TEMPLATE.md` **in the addon's package directory** (e.g., `packages/<addon-package>/PULL_REQUEST_TEMPLATE.md`). Use it as the template. If there are additional instructions in the template file, follow them too.
-
-If no `PULL_REQUEST_TEMPLATE.md` exists in the package directory, use a standard PR format with these sections: Summary, Changes, Test Plan.
+Use `.github/PULL_REQUEST_TEMPLATE/addon.md` as the template. If there are additional instructions in the template file, follow them too.
 
 Fill in the template based on the combined change set. Return the completed PR description to the user as a message.
 

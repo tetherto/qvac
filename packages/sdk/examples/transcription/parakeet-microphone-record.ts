@@ -17,31 +17,13 @@ import {
   PARAKEET_TDT_VOCAB,
   PARAKEET_TDT_PREPROCESSOR_FP32,
 } from "@qvac/sdk";
-import { spawn, spawnSync } from "child_process";
-import { platform } from "os";
+import { spawnSync } from "child_process";
+import { startMicrophone } from "../audio/mic-input";
 
 const SAMPLE_RATE = 16000;
 const BYTES_PER_SAMPLE = 2; // s16le
 const CHUNK_DURATION_S = 3;
 const CHUNK_SIZE = SAMPLE_RATE * BYTES_PER_SAMPLE * CHUNK_DURATION_S;
-
-function getAudioInputArgs(): string[] {
-  switch (platform()) {
-    case "darwin":
-      return ["-f", "avfoundation", "-i", ":0"];
-    case "win32":
-      return [
-        "-f",
-        "dshow",
-        "-i",
-        "audio=@device_cm_{33D9A762-90C8-11D0-BD43-00A0C911CE86}\\wave_{58C07110-A4FD-4FF8-BA10-5A3C14389F71}",
-      ];
-    case "linux":
-      return ["-f", "pulse", "-i", "default"];
-    default:
-      throw new Error(`Unsupported platform: ${platform()}`);
-  }
-}
 
 // ── Main ──
 
@@ -67,23 +49,10 @@ const modelId = await loadModel({
 });
 console.log("Model loaded.\n");
 
-const ffmpeg = spawn(
-  "ffmpeg",
-  [
-    ...getAudioInputArgs(),
-    "-ar",
-    String(SAMPLE_RATE),
-    "-ac",
-    "1",
-    "-sample_fmt",
-    "s16",
-    "-f",
-    "s16le",
-    "pipe:1",
-  ],
-  { stdio: ["ignore", "pipe", "ignore"] },
-);
-if (!ffmpeg.stdout) throw new Error("Failed to open microphone");
+const ffmpeg = startMicrophone({
+  sampleRate: SAMPLE_RATE,
+  format: "s16le",
+});
 
 let buffer = Buffer.alloc(0);
 let processing = false;

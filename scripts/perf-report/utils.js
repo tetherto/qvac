@@ -53,7 +53,11 @@ const METRIC_LABELS = {
   text_regions: 'Text regions',
   real_time_factor: 'RTF',
   sample_count: 'Samples',
-  duration_ms: 'Duration'
+  duration_ms: 'Duration',
+  wall_time_ms: 'Wall time',
+  encoder_time_ms: 'Encoder time',
+  decoder_time_ms: 'Decoder time',
+  audio_duration_ms: 'Audio duration'
 }
 
 function metricLabel (key) {
@@ -82,7 +86,7 @@ function formatMetricValue (key, value) {
 
 function formatQualityValue (key, value) {
   if (value === null || value === undefined) return '-'
-  if (['cer', 'wer', 'word_recognition_rate', 'keyword_detection_rate', 'key_value_accuracy'].includes(key)) {
+  if (['cer', 'wer', 'word_recognition_rate', 'keyword_detection_rate', 'key_value_accuracy', 'chrfpp'].includes(key)) {
     return (value * 100).toFixed(1) + '%'
   }
   if (Number.isInteger(value)) return String(value)
@@ -168,8 +172,8 @@ function generateMarkdownReport (aggregated) {
       lines.push('### Quality Summary')
       lines.push('')
 
-      const qKeys = ['cer', 'wer', 'keyword_detection_rate', 'key_value_accuracy']
-      const qShort = { cer: 'CER', wer: 'WER', keyword_detection_rate: 'KW', key_value_accuracy: 'KV' }
+      const qKeys = ['cer', 'wer', 'keyword_detection_rate', 'key_value_accuracy', 'chrfpp']
+      const qShort = { cer: 'CER', wer: 'WER', keyword_detection_rate: 'KW', key_value_accuracy: 'KV', chrfpp: 'chrF++' }
 
       const qHeader = hasEp ? ['Test', 'EP'] : ['Test']
       for (const sn of shortNames) {

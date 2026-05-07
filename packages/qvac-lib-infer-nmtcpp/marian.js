@@ -97,6 +97,53 @@ class TranslationInterface {
   }
 
   /**
+   * Returns the name of the currently-loaded non-CPU backend (e.g. 'Vulkan0',
+   * 'OpenCL', 'Metal'), or a sentinel string:
+   *   - 'Unloaded'     — model is not loaded
+   *   - 'Bergamot-CPU' — Bergamot model (CPU-only by design)
+   *   - 'CPU'          — GGML backend loaded, only CPU backend registered
+   *
+   * Synchronous by design: reads cached state populated at load() time.
+   * @returns {string}
+   */
+  getActiveBackendName () {
+    if (this._handle === null) {
+      return 'Unloaded'
+    }
+    try {
+      return binding.getActiveBackendName(this._handle)
+    } catch (err) {
+      throw new QvacErrorAddonMarian({
+        code: ERR_CODES.FAILED_TO_GET_BACKEND_NAME,
+        adds: err.message,
+        cause: err
+      })
+    }
+  }
+
+  /**
+   * Returns the human-readable device description for the active GPU backend
+   * (e.g. 'NVIDIA GeForce RTX 5070', 'Intel(R) UHD Graphics').
+   * Returns '' when no GPU backend is loaded or model is unloaded.
+   *
+   * Silently catches native errors — the description is informational and
+   * callers should not fail when the backend cannot provide one. This
+   * intentionally diverges from the error-throwing pattern used by other
+   * binding wrappers in this class.
+   * @returns {string}
+   */
+  getActiveBackendDescription () {
+    if (this._handle === null) {
+      return ''
+    }
+    try {
+      return binding.getActiveBackendDescription(this._handle)
+    } catch (err) {
+      return ''
+    }
+  }
+
+  /**
    * Submits a job to the processing pipeline
    * @param {Object} data
    * @param {String} data.type - 'text' for single input, 'sequences' for batch

@@ -30,7 +30,7 @@ const ENGINE_MAP = {
   '@qvac/transcription-whispercpp': 'qvac-lib-infer-whispercpp',
   '@qvac/translation-llamacpp': 'qvac-lib-infer-llamacpp-llm',
   '@qvac/ocr-onnx': 'ocr-onnx',
-  '@qvac/diffusion-cpp': 'lib-infer-diffusion'
+  '@qvac/diffusion-cpp': 'diffusion-cpp'
 }
 
 // Reverse map: package dir -> array of engines
@@ -74,8 +74,7 @@ const PYTHON_DEP_PATHS = {
   ],
   'qvac-lib-infer-nmtcpp': [
     'scripts/conversion_scripts/requirements.txt',
-    'benchmarks/quality_eval/requirements.txt',
-    'benchmarks/client/pyproject.toml'
+    'benchmarks/quality_eval/requirements.txt'
   ],
   'qvac-lib-infer-onnx-tts': [
     'benchmarks/python-server/requirements-supertonic.txt',

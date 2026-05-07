@@ -54,6 +54,24 @@ declare interface WhisperTranscriptionSegment {
   [key: string]: unknown
 }
 
+declare interface WhisperStreamingOptions {
+  emitVadEvents?: boolean;
+  conversationMode?: boolean;
+  endOfTurnSilenceMs?: number;
+  vadRunIntervalMs?: number;
+}
+
+declare interface VadStateEvent {
+  type: "vad";
+  speaking: boolean;
+  probability: number;
+}
+
+declare interface EndOfTurnEvent {
+  type: "endOfTurn";
+  silenceDurationMs: number;
+}
+
 /**
  * GGML client implementation for the Whisper transcription model
  */
@@ -107,7 +125,8 @@ declare class TranscriptionWhispercpp {
   ): Promise<QvacResponse<TranscriptionWhispercpp.WhisperRunOutput>>;
 
   runStreaming(
-    audioStream: Readable
+    audioStream: Readable,
+    opts?: WhisperStreamingOptions
   ): Promise<QvacResponse<TranscriptionWhispercpp.WhisperRunOutput>>;
 }
 
@@ -139,6 +158,8 @@ declare namespace TranscriptionWhispercpp {
   export type WhisperRunOutput =
     | WhisperTranscriptionSegment[]
     | WhisperTranscriptionSegment
+    | VadStateEvent
+    | EndOfTurnEvent
 
   export {
     TranscriptionWhispercpp as default,
@@ -149,6 +170,9 @@ declare namespace TranscriptionWhispercpp {
     TranscriptionWhispercppFiles,
     TranscriptionWhispercppConfig,
     WhisperTranscriptionSegment,
+    WhisperStreamingOptions,
+    VadStateEvent,
+    EndOfTurnEvent,
     InferenceClientState,
   };
 }

@@ -119,7 +119,8 @@ const METRIC_COLUMNS = {
     { key: 'total_time_ms', label: 'Total Time (ms)' },
     { key: 'decode_time_ms', label: 'Decode (ms)' },
     { key: 'generated_tokens', label: 'Tokens' },
-    { key: 'tps', label: 'TPS' }
+    { key: 'tps', label: 'TPS' },
+    { key: 'chrfpp', label: 'chrF++', format: 'percent' }
   ],
   vision: [
     { key: 'total_time_ms', label: 'Total Time (ms)' },
@@ -133,6 +134,14 @@ const METRIC_COLUMNS = {
     { key: 'tps', label: 'Tokens/sec' },
     { key: 'real_time_factor', label: 'RTF' },
     { key: 'sample_count', label: 'Samples' }
+  ],
+  parakeet: [
+    { key: 'real_time_factor', label: 'RTF' },
+    { key: 'wall_time_ms', label: 'Wall (ms)' },
+    { key: 'tps', label: 'Tokens/sec' },
+    { key: 'encoder_time_ms', label: 'Encoder (ms)' },
+    { key: 'decoder_time_ms', label: 'Decoder (ms)' },
+    { key: 'audio_duration_ms', label: 'Audio (ms)' }
   ],
   generic: [
     { key: 'total_time_ms', label: 'Total Time (ms)' },
@@ -266,6 +275,7 @@ function createPerformanceReporter (opts) {
         const vals = cols.map(c => {
           const v = r.metrics[c.key]
           if (v === null || v === undefined) return '-'
+          if (c.format === 'percent' && typeof v === 'number') return (v * 100).toFixed(1) + '%'
           if (typeof v === 'number') return Number.isInteger(v) ? String(v) : v.toFixed(2)
           return String(v)
         })
