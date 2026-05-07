@@ -133,4 +133,19 @@ if(BUILD_TESTING)
   set_target_properties(test-bci-core PROPERTIES
       RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/addon/tests
   )
+
+  if(ENABLE_COVERAGE)
+      target_compile_options(test-bci-core PRIVATE
+          -fprofile-instr-generate
+          -fcoverage-mapping
+      )
+      target_compile_options(bci-core PRIVATE
+          -fprofile-instr-generate
+          -fcoverage-mapping
+      )
+      target_link_options(test-bci-core PRIVATE
+          -fprofile-instr-generate
+      )
+      message(STATUS "LLVM Coverage enabled for bci-core tests")
+  endif()
 endif()

@@ -56,6 +56,7 @@ test('llm addon can run MoE models [dolphin-mixtral-2x7b]', {
 
     t.ok(text.length > 0, 'should generate text output')
     t.ok(response.stats.TPS > 0, 'should have TPS stats')
+    t.ok(response.stats.ppTPS > 0, 'should have ppTPS stats')
   } finally {
     specLogger.release()
     await inference.unload().catch(() => {})
