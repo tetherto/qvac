@@ -1,8 +1,8 @@
 {
   "name": "ggml",
   "version-date": "2026-01-30",
-  "port-version": 100,
-  "description": "Tensor library for machine learning (tetherto/qvac-ext-ggml fork @ feature/metal-pr-16669-clean — adds Metal IM2COL_3D + PAD left-padding required by Wan video). Local overlay; bumped port-version forces this over the registry.",
+  "port-version": 104,
+  "description": "Tensor library for machine learning (tetherto/qvac-ext-ggml @ 2026-01-30, pinned at 05afdc59 — merge of PR #6). Carries on top of upstream ggml master: the Wan-required Metal ops (IM2COL_3D, PAD left-padding) with a tightened IM2COL_3D supports_op, plus the hybrid static-CPU / dynamic-GPU backend packaging (GGML_CPU_STATIC, GGML_MAX_NAME prop, graceful no-OpenCL-device fallback, public ggml-opencl.h install). Local overlay; bumped port-version forces this over the registry. Drop once the registry baseline catches up to a ggml-org/ggml ref containing this work.",
   "homepage": "https://github.com/tetherto/qvac-ext-ggml",
   "license": "MIT",
   "dependencies": [

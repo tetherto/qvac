@@ -7,15 +7,25 @@
 #   stable-diffusion.cpp WanModel; under the registry build, Metal aborts
 #   mid-generation with `unsupported op 'IM2COL_3D'` (hard ggml_abort()).
 #
-#   The fork commit `bc053644 metal: add IM2COL_3D op and PAD left-padding
-#   support for Wan video` adds those two op implementations to the Metal
-#   backend. This overlay swaps the registry port for the diffusion-cpp
-#   addon's build only -- other monorepo packages keep using the
-#   upstream-pinned ggml from the registry.
+#   tetherto/qvac-ext-ggml's `2026-01-30` branch carries the qvac fork's
+#   accumulated changes on top of upstream ggml master, including:
+#     - bc053644  metal: IM2COL_3D op + PAD left-padding for Wan video (#5)
+#     - 512e1773  cmake: support qvac hybrid backend packaging
+#                 (static CPU + dynamic GPU backends, GGML_MAX_NAME prop,
+#                  graceful no-OpenCL-device fallback, public ggml-opencl.h
+#                  install -- previously six local overlay patches here)
+#     - 6d2d24bb / b1923e29 / 05afdc59  metal: tighten IM2COL_3D supports_op
+#                 to match CPU-reference invariants (#6)
+#
+#   This overlay swaps the registry port for the diffusion-cpp addon's
+#   build only -- other monorepo packages keep using the upstream-pinned
+#   ggml from the registry. Once the registry baseline catches up to a
+#   ggml-org/ggml ref containing the equivalent of this work, the overlay
+#   can be dropped entirely.
 #
 #   Source:  https://github.com/tetherto/qvac-ext-ggml
-#   Branch:  feature/metal-pr-16669-clean
-#   Pinned:  bc05364491048ff92e4c28778b5a5ed9e38e530f
+#   Branch:  2026-01-30
+#   Pinned:  05afdc5981031b8dcfd5f9cc979442b707b8486c   (merge of PR #6)
 #
 # Installed artefacts (same as registry port):
 #   include/ggml.h  (+ other ggml public headers)
@@ -31,16 +41,9 @@
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO tetherto/qvac-ext-ggml
-    REF bc05364491048ff92e4c28778b5a5ed9e38e530f
-    SHA512 c4c8375b88a6b358a9b5385cdc8cf2ad740c53498c1180cbae7640ce7ad97f2b1c48a15f013de087649619a2a0b112ad204adf40184b829a21d6c9c3c2cc6e24
-    HEAD_REF feature/metal-pr-16669-clean
-    PATCHES
-        ggml-max-name.patch
-        ggml-opencl-public-header.patch
-        ggml-opencl-graceful-no-devices.patch
-        ggml-config-include-dir.patch
-        ggml-static-core-dl-backends.patch
-        ggml-cpu-static-hybrid.patch
+    REF 05afdc5981031b8dcfd5f9cc979442b707b8486c
+    SHA512 a0caf41c6ba65474ad80e42f13dc20df0f28a876cc9e05b110bfaf745a8277f0904988bc9bef2cb2693f751fcc01cdeaf3af5463028532c74a83e676435cbeda
+    HEAD_REF 2026-01-30
 )
 
 # --- GPU feature flags ---
