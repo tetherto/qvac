@@ -564,23 +564,27 @@ TEST_F(BackendSelectionTest, BitnetTQ_Mali_ChoosesVulkanNormally) {
       mockBackend, BackendType::GPU, BackendType::GPU, "vulkan0", bitnetMeta);
 }
 
-// Mali Vulkan + Qwen3.5: forced to CPU regardless of preferred backend.
-TEST_F(BackendSelectionTest, Qwen35_Mali_ForcesCPU) {
+// Mali Vulkan + Qwen3.5: keeps GPU (the Mali-CPU override is disabled
+// for now; see chooseBackend).
+TEST_F(BackendSelectionTest, Qwen35_Mali_KeepsVulkan) {
   mockBackend.addDevice(createGPUDevice(MALI_DESC, VULKAN0_BACK));
   MockModelMetaData qwen35Meta(false, "qwen35");
   expectChosenWithMetadata(
-      mockBackend, BackendType::GPU, BackendType::CPU, "none", qwen35Meta);
+      mockBackend, BackendType::GPU, BackendType::GPU, "vulkan0", qwen35Meta);
 }
 
-// Mali iGPU + Qwen3.5MoE: also forced to CPU (covers the moe arch string).
-TEST_F(BackendSelectionTest, Qwen35Moe_Mali_ForcesCPU) {
+TEST_F(BackendSelectionTest, Qwen35Moe_Mali_KeepsVulkan) {
   mockBackend.addDevice(createIGPUDevice(MALI_DESC, VULKAN0_BACK));
   MockModelMetaData qwen35MoeMeta(false, "qwen35moe");
   expectChosenWithMetadata(
-      mockBackend, BackendType::GPU, BackendType::CPU, "none", qwen35MoeMeta);
+      mockBackend,
+      BackendType::GPU,
+      BackendType::GPU,
+      "vulkan0",
+      qwen35MoeMeta);
 }
 
-// Qwen3 (3.0, not 3.5) on Mali: GPU still chosen (override is qwen35-specific).
+// Qwen3 (3.0) on Mali: keeps GPU (unchanged).
 TEST_F(BackendSelectionTest, Qwen3_Mali_KeepsVulkan) {
   mockBackend.addDevice(createGPUDevice(MALI_DESC, VULKAN0_BACK));
   MockModelMetaData qwen3Meta(false, "qwen3");
@@ -588,7 +592,7 @@ TEST_F(BackendSelectionTest, Qwen3_Mali_KeepsVulkan) {
       mockBackend, BackendType::GPU, BackendType::GPU, "vulkan0", qwen3Meta);
 }
 
-// Qwen3.5 on Adreno: GPU still chosen (override is Mali-specific).
+// Qwen3.5 on Adreno: keeps GPU (unchanged).
 TEST_F(BackendSelectionTest, Qwen35_Adreno_KeepsGPU) {
   mockBackend.addDevice(createGPUDevice(ADRENO_830_DESC, OPENCL_BACK));
   MockModelMetaData qwen35Meta(false, "qwen35");
@@ -598,21 +602,6 @@ TEST_F(BackendSelectionTest, Qwen35_Adreno_KeepsGPU) {
       BackendType::GPU,
       "gpuopencl",
       qwen35Meta);
-}
-
-// Mali Vulkan + Qwen3.5 with explicit main_gpu: still forced to CPU
-// (override is intentional; user said "always on the CPU").
-TEST_F(BackendSelectionTest, Qwen35_Mali_ExplicitMainGpu_StillForcesCPU) {
-  mockBackend.addDevice(createGPUDevice(MALI_DESC, VULKAN0_BACK));
-  MockModelMetaData qwen35Meta(false, "qwen35");
-  MainGpu mainGpu = 0;
-  expectChosenWithMetadata(
-      mockBackend,
-      BackendType::GPU,
-      BackendType::CPU,
-      "none",
-      qwen35Meta,
-      mainGpu);
 }
 
 // Adreno 800+ with bitnet TQ, only OpenCL available (no Vulkan): falls to CPU

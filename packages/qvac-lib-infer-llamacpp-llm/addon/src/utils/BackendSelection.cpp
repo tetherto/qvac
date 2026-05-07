@@ -373,20 +373,6 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
     }
   }
 
-  if (sawMali && metadata != nullptr) {
-    const auto arch = metadata->tryGetString("general.architecture");
-    if (arch.has_value() &&
-        (arch.value() == "qwen35" || arch.value() == "qwen35moe")) {
-      bckI.llamaLogCallback(
-          GGML_LOG_LEVEL_WARN,
-          "Qwen3.5 on Mali: forcing CPU backend (Mali Vulkan coopmat path is "
-          "unstable for Qwen3.5; falling back to CPU regardless of requested "
-          "device)",
-          nullptr);
-      clearAllGpuBackends();
-    }
-  }
-
   if (outAdrenoVersion != nullptr) {
     *outAdrenoVersion = maxAdrenoVersion;
   }
