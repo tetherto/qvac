@@ -39,3 +39,5 @@ safetensors
 huggingface_hub
 onnx
 librosa
+numba<0.60; sys_platform == "darwin" and platform_machine == "x86_64"
+llvmlite<0.43; sys_platform == "darwin" and platform_machine == "x86_64"

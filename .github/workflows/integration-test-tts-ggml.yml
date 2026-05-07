@@ -161,13 +161,15 @@ jobs:
           #              and links against libomp at -fopenmp time, so
           #              load fails with `libomp.so.5: cannot open shared
           #              object file` without this package.
+          # libblas3   - runtime BLAS soname (libblas.so.3) required by
+          #              the Linux prebuilds on x64.
           # mesa-vulkan-drivers - software / Mesa Vulkan ICD so the
           #              Vulkan-enabled prebuild's runtime backend probe
           #              has at least one Vulkan device to enumerate
           #              (works for the no_gpu matrix entries too,
           #              because the test runners explicitly force
           #              useGPU=false when NO_GPU=true).
-          sudo apt-get install -y libgomp1 libomp5 mesa-vulkan-drivers
+          sudo apt-get install -y libgomp1 libomp5 libblas3 mesa-vulkan-drivers
 
       - name: Windows - install Vulkan runtime
         if: matrix.platform == 'win32'

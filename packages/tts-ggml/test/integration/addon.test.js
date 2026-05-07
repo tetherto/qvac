@@ -12,6 +12,7 @@ const { loadWhisper, runWhisper } = require('../utils/runWhisper')
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
 const isDarwin = platform === 'darwin'
+const forceNoGpu = os.getEnv('NO_GPU') === 'true'
 
 const INPUT_SENTENCES = (isMobile ? 'short' : os.getEnv('INPUT_SENTENCES')) || 'short'
 const useSplit = INPUT_SENTENCES !== 'short'
@@ -157,7 +158,7 @@ test('Chatterbox TTS (ggml): synthesizes without referenceAudio using the built-
   const TTSGgml = require('@qvac/tts-ggml')
   const model = new TTSGgml({
     files: { modelDir: download.targetDir },
-    config: { language: 'en' },
+    config: { language: 'en', ...(forceNoGpu ? { useGPU: false } : {}) },
     opts: { stats: true }
   })
 
@@ -205,7 +206,7 @@ test('Chatterbox TTS (ggml): outputSampleRate option is accepted (pass-through f
   const model = new TTSGgml({
     files: { modelDir: download.targetDir },
     referenceAudio: path.join(__dirname, '..', 'reference-audio', 'jfk.wav'),
-    config: { language: 'en', outputSampleRate: 16000 },
+    config: { language: 'en', outputSampleRate: 16000, ...(forceNoGpu ? { useGPU: false } : {}) },
     opts: { stats: true }
   })
   await model.load()
