@@ -13,6 +13,10 @@
 #include <string>
 #include <vector>
 
+#if defined(__ANDROID__)
+#include <filesystem>
+#endif
+
 #include <ggml-alloc.h>
 #include <ggml-backend.h>
 #include <ggml-cpu.h>
@@ -32,7 +36,7 @@ using qvac_errors::general_error::InvalidArgument;
 
 namespace {
 constexpr const char* kModelName = "mobilenetv3-small-ggml-classification";
-}
+} // namespace
 
 ClassificationModel::ClassificationModel(std::string modelPath)
     : modelPath_(std::move(modelPath)) {}
@@ -64,6 +68,11 @@ ClassificationModel::runtimeStats() const {
 void ClassificationModel::setNumThreads(int threads) {
   std::scoped_lock lock(mutex_);
   numThreads_ = threads;
+}
+
+void ClassificationModel::setBackendsDir(std::string backendsDir) {
+  std::scoped_lock lock(mutex_);
+  backendsDir_ = std::move(backendsDir);
 }
 
 namespace {
@@ -127,7 +136,37 @@ void ClassificationModel::load() {
         "ClassificationModel requires a path to mobilenetv3 FP16 GGUF weights");
   }
 
+#if defined(__ANDROID__)
+  // qvac-fabric on Android ships per-microarch CPU variants as MODULE
+  // .so files loaded at runtime via dlopen. ggml_backend_cpu_init() is
+  // not statically linkable here (symbol lives inside the variant .so),
+  // so we open the variants from <backendsDir>/<BACKENDS_SUBDIR>/ and
+  // pick a CPU device through the generic registry API.
+  //
+  // backendsDir comes from JS (`path.join(__dirname, 'prebuilds')`,
+  // mirroring the llamacpp-llm addon) and BACKENDS_SUBDIR is the
+  // compile-time `<bare_target>/<module_name>` relative path.
+  if (backendsDir_.empty()) {
+    throw StatusError(
+        InvalidArgument,
+        "Configuration 'config.backendsDir' is required on Android");
+  }
+  std::filesystem::path variantsDir =
+      std::filesystem::path(backendsDir_) / BACKENDS_SUBDIR;
+  ggml_backend_load_all_from_path(variantsDir.string().c_str());
+
+  ggml_backend_dev_t cpuDev =
+      ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+  if (cpuDev == nullptr) {
+    throw StatusError(
+        InternalError,
+        "No CPU backend device registered after loading variants from " +
+            variantsDir.string());
+  }
+  backend_ = ggml_backend_dev_init(cpuDev, /*params=*/nullptr);
+#else
   backend_ = ggml_backend_cpu_init();
+#endif
   if (backend_ == nullptr) {
     throw StatusError(InternalError, "Failed to initialize ggml CPU backend");
   }
@@ -157,9 +196,18 @@ void ClassificationModel::load() {
     ggml_backend_tensor_set(
         compute_.input, warmupTensor.data(), 0,
         warmupTensor.size() * sizeof(float));
+#if !defined(__ANDROID__)
+    // ggml_backend_cpu_set_n_threads is only statically linkable when the
+    // CPU backend is in libggml-cpu.a (Apple/Linux/Windows desktop). On
+    // Android, qvac-fabric ships per-microarch CPU variants as MODULE .so
+    // files; the symbol lives inside the loaded variant and isn't
+    // resolvable from the addon's .bare. ggml's default thread pool sizes
+    // to std::thread::hardware_concurrency(), which is sensible for a
+    // tiny CPU-only model.
     if (numThreads_ > 0) {
       ggml_backend_cpu_set_n_threads(backend_, numThreads_);
     }
+#endif
     (void)ggml_backend_graph_compute(backend_, compute_.graph);
     float warmupLogits[graph::kNumClasses] = {0.0F};
     ggml_backend_tensor_get(
@@ -211,9 +259,12 @@ std::any ClassificationModel::process(const std::any& input) {
       compute_.input, inputTensor.data(), 0,
       inputTensor.size() * sizeof(float));
 
+#if !defined(__ANDROID__)
+  // See comment in load() above for why this is desktop-only.
   if (numThreads_ > 0) {
     ggml_backend_cpu_set_n_threads(backend_, numThreads_);
   }
+#endif
 
   ggml_status status =
       ggml_backend_graph_compute(backend_, compute_.graph);

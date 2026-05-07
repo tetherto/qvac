@@ -104,6 +104,12 @@ inline js_value_t* createInstance(
       }
       model->setNumThreads(threads);
     }
+
+    auto backendsDirOpt =
+        innerConfig->getOptionalProperty<jsu::String>(env, "backendsDir");
+    if (backendsDirOpt.has_value()) {
+      model->setBackendsDir(backendsDirOpt->as<std::string>(env));
+    }
   }
 
   model->load();

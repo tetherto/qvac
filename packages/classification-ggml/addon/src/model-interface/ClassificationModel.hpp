@@ -62,8 +62,15 @@ public:
   /// 0 keeps libggml's default (hardware_concurrency).
   void setNumThreads(int threads);
 
+  /// Optional addon-prebuilds root (e.g. `<addon>/prebuilds`). On Android
+  /// it's combined with the BACKENDS_SUBDIR compile-time relative path to
+  /// locate the per-microarch CPU variant .so files for ggml's runtime
+  /// backend loader. No-op on platforms where the CPU backend is static.
+  void setBackendsDir(std::string backendsDir);
+
 private:
   std::string modelPath_;
+  std::string backendsDir_;
   ggml_backend_t backend_ = nullptr;
   graph::WeightsBundle weights_;
   graph::ComputeGraph compute_;

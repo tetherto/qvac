@@ -86,7 +86,10 @@ class ImageClassifier {
 
     // configurationParams is the C++ schema 1:1 — keep it free of any
     // JS-only flags. The native-logger gate lives in the JS-side opts arg.
-    const configurationParams = { path: this._modelPath, config: {} }
+    const configurationParams = {
+      path: this._modelPath,
+      config: { backendsDir: path.join(__dirname, 'prebuilds') }
+    }
     if (this._threads !== undefined) {
       configurationParams.config.threads = this._threads
     }
