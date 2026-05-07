@@ -83,7 +83,7 @@ jobs:
 
       - name: Install npm dependencies
         working-directory: ${{ env.PKG_DIR }}
-        run: npm install
+        run: npm install --ignore-scripts
 
       - name: Download prebuild artifacts
         if: ${{ !inputs.prebuild_package }}
