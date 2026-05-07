@@ -387,16 +387,6 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
     }
   }
 
-  if (sawMali && isFinetuning) {
-    bckI.llamaLogCallback(
-        GGML_LOG_LEVEL_WARN,
-        "Finetuning on Mali: forcing CPU backend (Mali Vulkan coopmat path is "
-        "unstable for training; falling back to CPU regardless of requested "
-        "device)",
-        nullptr);
-    clearAllGpuBackends();
-  }
-
   if (outAdrenoVersion != nullptr) {
     *outAdrenoVersion = maxAdrenoVersion;
   }

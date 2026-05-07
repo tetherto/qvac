@@ -828,35 +828,14 @@ TEST_F(BackendSelectionTest, Finetuning_UnknownArch_Adreno650_Throws) {
   expectFinetuningThrows(mockBackend, BackendType::GPU, &meta);
 }
 
-// -- Finetuning on Mali: ALL supported architectures forced to CPU --
-// (Mali Vulkan coopmat path is unstable for training; see chooseBackend)
+// -- Finetuning on Mali: keeps GPU (the Mali finetune-CPU override is
+// disabled for now; only the Qwen3.5 inference override is active) --
 
-TEST_F(BackendSelectionTest, Finetuning_Gemma3_Mali_ForcesCPU) {
+TEST_F(BackendSelectionTest, Finetuning_Gemma3_Mali_KeepsVulkan) {
   mockBackend.addDevice(createGPUDevice(MALI_DESC, VULKAN0_BACK));
   MockModelMetaData meta(false, "gemma3");
   expectChosenFinetuning(
-      mockBackend, BackendType::GPU, BackendType::CPU, "none", meta);
-}
-
-TEST_F(BackendSelectionTest, Finetuning_Qwen3_Mali_ForcesCPU) {
-  mockBackend.addDevice(createGPUDevice(MALI_DESC, VULKAN0_BACK));
-  MockModelMetaData meta(false, "qwen3");
-  expectChosenFinetuning(
-      mockBackend, BackendType::GPU, BackendType::CPU, "none", meta);
-}
-
-TEST_F(BackendSelectionTest, Finetuning_Bitnet_Mali_ForcesCPU) {
-  mockBackend.addDevice(createGPUDevice(MALI_DESC, VULKAN0_BACK));
-  MockModelMetaData meta(true, "bitnet");
-  expectChosenFinetuning(
-      mockBackend, BackendType::GPU, BackendType::CPU, "none", meta);
-}
-
-TEST_F(BackendSelectionTest, Finetuning_Gemma3_MaliIGPU_ForcesCPU) {
-  mockBackend.addDevice(createIGPUDevice(MALI_DESC, VULKAN0_BACK));
-  MockModelMetaData meta(false, "gemma3");
-  expectChosenFinetuning(
-      mockBackend, BackendType::GPU, BackendType::CPU, "none", meta);
+      mockBackend, BackendType::GPU, BackendType::GPU, "vulkan0", meta);
 }
 
 // Inference (non-finetuning) on Mali with a non-Qwen3.5 arch keeps the GPU.
