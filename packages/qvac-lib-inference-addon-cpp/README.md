@@ -52,7 +52,7 @@ This library sits between the Bare runtime and specific inference addons. Commun
 - **C++ Standard:** C++20
 - **Compilers:** 
   - macOS: Xcode Command Line Tools
-  - Linux: Clang/LLVM 19 with libc++
+  - Linux: Clang/LLVM 22 with libc++
   - Windows: Visual Studio 2022 with C++ workload
 - **vcpkg:** For C++ dependency management
 
