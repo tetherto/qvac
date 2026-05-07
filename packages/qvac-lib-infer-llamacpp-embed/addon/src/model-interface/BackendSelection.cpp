@@ -54,11 +54,16 @@ struct DeviceDescription {
   }
 };
 
+bool isMaliDevice(const DeviceDescription& devDescr) {
+  // DeviceDescription fields are already lowercased in the constructor.
+  return devDescr.gpuDescription.find("mali") != std::string::npos;
+}
+
 void emplaceIfValidDevice(
     const BackendInterface& bckI, std::vector<std::string>& gpuBackends,
     std::vector<std::string>& igpuBackends,
-    std::vector<std::string>& openClBackends, const ggml_backend_reg_t reg,
-    const DeviceDescription& devDescr,
+    std::vector<std::string>& openClBackends, bool& sawMali,
+    const ggml_backend_reg_t reg, const DeviceDescription& devDescr,
     const enum ggml_backend_dev_type backendTypeEnum) {
   if (bckI.ggml_backend_reg_name(reg) != std::string("RPC")) {
     auto logEmplaceGpuBackend = [&](const std::string& gpuBackend) {
@@ -73,6 +78,9 @@ void emplaceIfValidDevice(
         devDescr.gpuBackend.find("opencl") != std::string::npos;
     const bool isAdreno =
         devDescr.gpuDescription.find("adreno") != std::string::npos;
+    if (isMaliDevice(devDescr)) {
+      sawMali = true;
+    }
     if (isOpenCl && isAdreno) {
       logEmplaceGpuBackend(devDescr.gpuBackend);
       openClBackends.emplace_back(devDescr.gpuBackend);
@@ -109,7 +117,7 @@ void tryEmplaceDevice(
     std::optional<MainGpuType> mainGpuType,
     std::vector<std::string>& gpuBackends,
     std::vector<std::string>& igpuBackends,
-    std::vector<std::string>& openClBackends) {
+    std::vector<std::string>& openClBackends, bool& sawMali) {
   const ggml_backend_dev_t dev = bckI.ggml_backend_dev_get(deviceIndex);
   const ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
   const enum ggml_backend_dev_type backendTypeEnum =
@@ -124,6 +132,7 @@ void tryEmplaceDevice(
         gpuBackends,
         igpuBackends,
         openClBackends,
+        sawMali,
         reg,
         devDescr,
         backendTypeEnum);
@@ -203,6 +212,7 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
   std::vector<std::string> gpuBackends;
   std::vector<std::string> igpuBackends;
   std::vector<std::string> openClBackends;
+  bool sawMali = false;
 
   if (preferredBackendType == BackendType::GPU) {
     bool loopAllDevices = true;
@@ -221,7 +231,8 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
               std::nullopt,
               gpuBackends,
               igpuBackends,
-              openClBackends);
+              openClBackends,
+              sawMali);
           loopAllDevices = false;
         } else {
           std::string errorMsg = string_format(
@@ -237,8 +248,26 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
     for (size_t i = 0; loopAllDevices && i < bckI.ggml_backend_dev_count();
          ++i) {
       ::tryEmplaceDevice(
-          bckI, i, gpuType, gpuBackends, igpuBackends, openClBackends);
+          bckI,
+          i,
+          gpuType,
+          gpuBackends,
+          igpuBackends,
+          openClBackends,
+          sawMali);
     }
+  }
+
+  if (sawMali) {
+    bckI.llamaLogCallback(
+        GGML_LOG_LEVEL_WARN,
+        "BERT on Mali: forcing CPU backend (Mali Vulkan coopmat path is "
+        "unstable for wide BERT encoder graphs; falling back to CPU "
+        "regardless of requested device)",
+        nullptr);
+    openClBackends.clear();
+    gpuBackends.clear();
+    igpuBackends.clear();
   }
 
   // check if Adreno GPU is present and force OpenCL backend, otherwise let
