@@ -1,0 +1,40 @@
+name: CPP Tests (TTS GGML)
+
+# Stub workflow.  packages/tts-ggml's CMakeLists.txt currently has no C++
+# test executables wired up (BUILD_TESTING block is documented as a
+# placeholder for the future qvac::ttsggml::* unit suite).  Until those
+# tests land, this workflow exposes a workflow_call entry point so
+# on-pr-tts-ggml.yml can reference it without 404'ing, and prints a clear
+# "no tests yet" notice instead of silently passing.
+#
+# When the C++ suite is added, replace the body of `cpp-tests` with the
+# real ccache + vcpkg + npm run coverage:cpp:build/run/report sequence
+# (mirror cpp-test-coverage-qvac-lib-infer-parakeet.yml).
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "ref"
+        type: string
+      repository:
+        type: string
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cpp-tests:
+    name: tts-ggml C++ tests (stub)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Explain
+        run: |
+          echo "packages/tts-ggml has no C++ unit tests today."
+          echo "CMakeLists.txt's BUILD_TESTING block is reserved for a future"
+          echo "qvac::ttsggml::* suite; this workflow will be expanded into"
+          echo "the real ccache + vcpkg + coverage pipeline at that point"
+          echo "(mirror cpp-test-coverage-qvac-lib-infer-parakeet.yml)."
