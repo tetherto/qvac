@@ -190,6 +190,17 @@ run_converter() {
   fi
 }
 
+# NOTE on `${hf_args[@]+"${hf_args[@]}"}` below:
+# Bash 3.2 (the system bash on macOS runners) treats `"${arr[@]}"` as
+# unset-variable access when the array is empty AND `set -u` (nounset)
+# is in effect, which `set -euo pipefail` at the top of this script
+# enables.  CI on darwin-arm64 hits this with HF_TOKEN unset:
+#   scripts/convert-models.sh: line 200: hf_args[@]: unbound variable
+# The `${arr[@]+"${arr[@]}"}` idiom expands to the array if it's
+# defined and to nothing otherwise — works under nounset on bash 3.2+.
+# Don't simplify this back to `"${hf_args[@]}"` without testing on
+# macOS bash 3.2 with HF_TOKEN unset.
+
 convert_turbo() {
   local t3_out="$OUTPUT_DIR/chatterbox-t3-turbo.gguf"
   local s3_out="$OUTPUT_DIR/chatterbox-s3gen.gguf"
@@ -198,11 +209,11 @@ convert_turbo() {
 
   if ! is_skip "$t3_out"; then
     run_converter "Turbo T3"    convert-t3-turbo-to-gguf.py \
-      --out "$t3_out" --quant "$QUANT" "${hf_args[@]}" || return 1
+      --out "$t3_out" --quant "$QUANT" ${hf_args[@]+"${hf_args[@]}"} || return 1
   fi
   if ! is_skip "$s3_out"; then
     run_converter "Turbo S3Gen" convert-s3gen-to-gguf.py \
-      --variant turbo --out "$s3_out" --quant "$QUANT" "${hf_args[@]}" || return 1
+      --variant turbo --out "$s3_out" --quant "$QUANT" ${hf_args[@]+"${hf_args[@]}"} || return 1
   fi
 }
 
@@ -214,11 +225,11 @@ convert_multilingual() {
 
   if ! is_skip "$t3_out"; then
     run_converter "MTL T3"    convert-t3-mtl-to-gguf.py \
-      --out "$t3_out" --quant "$QUANT" "${hf_args[@]}" || return 1
+      --out "$t3_out" --quant "$QUANT" ${hf_args[@]+"${hf_args[@]}"} || return 1
   fi
   if ! is_skip "$s3_out"; then
     run_converter "MTL S3Gen" convert-s3gen-to-gguf.py \
-      --variant mtl --out "$s3_out" --quant "$QUANT" "${hf_args[@]}" || return 1
+      --variant mtl --out "$s3_out" --quant "$QUANT" ${hf_args[@]+"${hf_args[@]}"} || return 1
   fi
 }
 
@@ -233,7 +244,7 @@ convert_supertonic_en() {
 
   if ! is_skip "$out"; then
     run_converter "Supertonic (English)" convert-supertonic2-to-gguf.py \
-      --arch supertonic --out "$out" --ftype "$ftype" "${hf_args[@]}" || return 1
+      --arch supertonic --out "$out" --ftype "$ftype" ${hf_args[@]+"${hf_args[@]}"} || return 1
   fi
 }
 
@@ -248,7 +259,7 @@ convert_supertonic_mtl() {
 
   if ! is_skip "$out"; then
     run_converter "Supertonic (multilingual)" convert-supertonic2-to-gguf.py \
-      --arch supertonic2 --out "$out" --ftype "$ftype" "${hf_args[@]}" || return 1
+      --arch supertonic2 --out "$out" --ftype "$ftype" ${hf_args[@]+"${hf_args[@]}"} || return 1
   fi
 }
 

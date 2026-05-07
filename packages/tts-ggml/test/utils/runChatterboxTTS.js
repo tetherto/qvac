@@ -2,6 +2,7 @@
 
 const fs = require('bare-fs')
 const path = require('bare-path')
+const proc = require('bare-process')
 const TTSGgml = require('@qvac/tts-ggml')
 const { getBaseDir, isMobile, runTTS, runTTSWithSplit } = require('./runTTS')
 const { concatenatePcmChunks } = require('./pcmConcatenator')
@@ -45,7 +46,20 @@ async function loadChatterboxTTS (params = {}) {
   console.log(`[Chatterbox] using reference audio: ${refWavPath}`)
 
   const config = { language: params.language || 'en' }
-  if (params.useGPU !== undefined) config.useGPU = params.useGPU
+  if (params.useGPU !== undefined) {
+    config.useGPU = params.useGPU
+  } else if (proc.env && proc.env.NO_GPU === 'true') {
+    // Honour the workflow matrix's `no_gpu: 'true'` flag (which sets the
+    // NO_GPU env var on the job).  Without this the addon's
+    // index.js::_validateConfig defaults Chatterbox to `useGPU = true`,
+    // which on runners without a Vulkan-capable driver (e.g. windows-2022,
+    // ubuntu-22.04 without a discrete GPU) crashes during the addon's
+    // ggml_backend_vk_init probe with `vk::createInstance:
+    // ErrorIncompatibleDriver`.  Forcing CPU here keeps the no-GPU
+    // matrix entries on the CPU code path that load_model_gguf actually
+    // exercises with n_gpu_layers=0.
+    config.useGPU = false
+  }
 
   const model = new TTSGgml({
     files: {
