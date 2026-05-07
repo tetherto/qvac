@@ -36,7 +36,7 @@ function validateVideoFrames (n) {
     throw new Error(
       'video_frames must be an integer >= 5 of the form (4*k + 1). ' +
       'Valid values: 5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49, 53, ' +
-      `57, 61, 65, 69, 73, 77, 81 (Wan 1.3B native training length). ` +
+      '57, 61, 65, 69, 73, 77, 81 (Wan 1.3B native training length). ' +
       `Got: ${n}`
     )
   }
