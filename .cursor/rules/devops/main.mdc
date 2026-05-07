@@ -28,7 +28,8 @@ Owns CI/CD pipelines (GitHub Actions workflows + composite actions), repo-wide a
 | `.cursor/rules/devops/github-actions.mdc` | `.github/workflows/**`, `.github/actions/**` | Authoring or modifying any workflow or composite action |
 | `.cursor/rules/devops/secrets-and-credentials.mdc` | `.github/**`, `scripts/**` | Anything that can read, derive, or transmit a secret |
 | `.cursor/rules/devops/agentic-automation.mdc` | `.cursor/skills/**`, `.cursor/rules/**`, `.cursor/hooks/**`, `.github/workflows/**`, `.github/scripts/**`, `scripts/**` | Authoring skills, hooks, MCP integrations, or any AI-driven DevOps workflow |
-| `.cursor/rules/devops/commit-and-pr-format.mdc` | `.github/**`, `scripts/**` | Commit message and PR title format on devops surfaces (auto-loads where `sdk/commit-and-pr-format.mdc` does not) |
+
+Commit message and PR title format guidance lives in the [`devops-pr-create`](../../skills/devops-pr-create/SKILL.md) skill — invoke it explicitly rather than autoloading a rule for it (skill-only on purpose, to keep the format spec out of the always-on context window).
 
 ## Quick rules — surface-level reminders
 
@@ -81,15 +82,4 @@ These are the bar; the deep-dive lives in the topic files above.
 
 ## Commit messages and PR titles
 
-See `.cursor/rules/devops/commit-and-pr-format.mdc` for the canonical devops format. Same shape as the SDK pod's:
-
-- Commits: `prefix[tags]?: subject`
-- PRs: `TICKET prefix[tags]?: subject`
-
-The dominant prefix for DevOps changes is `infra` (CI/CD, tooling, automation). Use `chore` for maintenance, `fix` for bug fixes, `feat` for new automation surfaces.
-
-Examples:
-
-- `infra: pin actions/checkout to v4.1.1 SHA`
-- `QVAC-18394 infra: add devops team file and pod conventions rule`
-- `fix[notask]: correct workflow_dispatch caller event for release guard`
+The full format spec, allowed prefixes, allowed tags, validation regex, and quality guidelines live in the [`devops-pr-create`](../../skills/devops-pr-create/SKILL.md) skill. Invoke `/devops-pr-create` rather than relying on this rule — kept out of the auto-load context window on purpose.
