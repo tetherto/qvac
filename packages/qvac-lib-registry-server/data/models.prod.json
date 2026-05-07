@@ -10503,5 +10503,35 @@
     ],
     "notes": "",
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/vien"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bci-whispercpp/2026-05-07/bci-embedder.bin",
+    "description": "BCI Whispercpp embedder",
+    "engine": "@qvac/bci-whispercpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "bci",
+      "whispercpp",
+      "embedder"
+    ],
+    "notes": "",
+    "link": "https://github.com/tetherto/qvac/releases/download/bci-test-assets-v0.1.0/bci-embedder.bin"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bci-whispercpp/2026-05-07/ggml-bci-windowed.bin",
+    "description": "BCI Whispercpp model",
+    "engine": "@qvac/bci-whispercpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "bci",
+      "whispercpp",
+      "windowed"
+    ],
+    "notes": "",
+    "link": "https://github.com/tetherto/qvac/releases/download/bci-test-assets-v0.1.0/ggml-bci-windowed.bin"
   }
 ]
