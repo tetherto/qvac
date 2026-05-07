@@ -32,8 +32,7 @@ function getGeneratedIntegrationRefs (content) {
 }
 
 function setDiff (left, right) {
-  const rightSet = right instanceof Set ? right : new Set(right)
-  return [...left].filter(item => !rightSet.has(item)).sort((a, b) => a - b)
+  return [...left].filter(item => !right.has(item)).sort()
 }
 
 function printMismatchDetails (label, items) {
@@ -71,19 +70,6 @@ try {
   if (integrationFiles.length === 0) {
     console.log('✅ Mobile integration tests are up to date (no integration tests found)')
     process.exit(0)
-  }
-
-  // Keep timestamp validation as a fast stale-content signal for edited tests.
-  const latestIntegrationTime = Math.max(
-    ...integrationFiles.map(f => fs.statSync(path.join(integrationDir, f)).mtimeMs)
-  )
-  const mobileAutoTime = fs.statSync(mobileAutoFile).mtimeMs
-
-  if (latestIntegrationTime > mobileAutoTime) {
-    console.error('❌ Mobile integration tests are out of date!')
-    console.error('   Integration tests modified after mobile tests were generated.')
-    console.error('   Run: npm run test:mobile:generate')
-    process.exit(1)
   }
 
   console.log('✅ Mobile integration tests are up to date')

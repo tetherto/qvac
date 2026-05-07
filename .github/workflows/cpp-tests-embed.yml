@@ -82,7 +82,6 @@ jobs:
         name: Configure Windows runner
         run: |
           git config --system core.longpaths true
-          choco upgrade llvm -y
 
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -98,13 +97,9 @@ jobs:
           npm install
           npm install -g bare bare-make
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' }}
-        name: Install llvm-19 on Linux
-        shell: bash
-        run: |
-          wget -q https://apt.llvm.org/llvm.sh
-          chmod +x llvm.sh
-          sudo ./llvm.sh 19 all
+      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'windows-11' }}
+        name: Setup LLVM
+        uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
 
       - if: ${{ matrix.os == 'ubuntu-24.04' }}
         name: Install Vulkan SDK on Linux

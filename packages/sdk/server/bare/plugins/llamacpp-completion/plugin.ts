@@ -152,9 +152,10 @@ export const llmPlugin = definePlugin({
           thinkingFraming: request.captureThinking ? "thinkTags" : "none",
         };
 
-        const dialect = toolsActive
-          ? (request.toolDialect ?? detectToolDialect(request.modelId))
-          : "hermes";
+        // Dialect runs regardless of tool availability — thinking/content
+        // stripping is needed even on plain completions.
+        const dialect =
+          request.toolDialect ?? detectToolDialect(request.modelId);
 
         const normalizer = createCompletionNormalizer({
           capabilities,
