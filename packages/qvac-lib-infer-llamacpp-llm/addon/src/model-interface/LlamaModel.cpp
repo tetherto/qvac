@@ -105,7 +105,7 @@ void LlamaModel::resolveShardPaths(
 void LlamaModel::tuneConfigMap(
     std::unordered_map<std::string, std::string>& configFilemap,
     const ModelMetaData& metadata, const std::optional<int>& adrenoVersion,
-    bool isOpenCl, const FinetuneConfigOverrides& finetuneOverrides) {
+    const FinetuneConfigOverrides& finetuneOverrides, bool isOpenCl) {
 
   const bool isFinetuning = finetuneOverrides.active;
 
@@ -961,8 +961,8 @@ void LlamaModel::commonParamsParse(
       configFilemap,
       metadata_,
       outAdrenoVersion,
-      isOpenCl,
-      pendingFinetuneOverrides_);
+      pendingFinetuneOverrides_,
+      isOpenCl);
 
   // Handle both reverse-prompt variants
   for (const std::string& key : {"reverse-prompt", "reverse_prompt"}) {

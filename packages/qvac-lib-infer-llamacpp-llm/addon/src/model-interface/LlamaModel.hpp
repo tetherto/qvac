@@ -81,16 +81,16 @@ public:
   /// @param configFilemap The user-supplied config map (will be written to).
   /// @param metadata Model metadata (architecture, quantization info).
   /// @param adrenoVersion Detected Adreno GPU version, if any.
+  /// @param finetuneOverrides If set, finetuning mode is active with these
+  /// context/batch params and GPU caps.
   /// @param isOpenCl True when the chosen GPU backend is OpenCL; used to
   /// disable flash-attn by default since it is not reliably supported on
   /// the OpenCL backend.
-  /// @param finetuneOverrides If set, finetuning mode is active with these
-  /// context/batch params and GPU caps.
   static void tuneConfigMap(
       std::unordered_map<std::string, std::string>& configFilemap,
       const ModelMetaData& metadata, const std::optional<int>& adrenoVersion,
-      bool isOpenCl = false,
-      const FinetuneConfigOverrides& finetuneOverrides = {});
+      const FinetuneConfigOverrides& finetuneOverrides = {},
+      bool isOpenCl = false);
 
   /**
    * The Constructor for llama model.
