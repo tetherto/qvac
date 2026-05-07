@@ -63,13 +63,13 @@ jobs:
           echo "  HEAD_REF=$HEAD_REF"
 
       - name: Setup build host
-        uses: tetherto/qvac/.github/actions/setup-build-host@df55c85d7b8004961e430557e85b6ec1b15cf170
+        uses: tetherto/qvac/.github/actions/setup-build-host@6fe261a83703fe13de1ef7eb5e7470c3e61b3308
         with:
           platform: linux
           arch: x64
 
       - name: Setup LLVM
-        uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
+        uses: tetherto/qvac/.github/actions/setup-llvm@6fe261a83703fe13de1ef7eb5e7470c3e61b3308
 
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -81,12 +81,12 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
 
       - name: Setup AWS + Windows CLI
-        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@0bbdca93da303a0b1634ba14a89cec085621078d
+        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@6fe261a83703fe13de1ef7eb5e7470c3e61b3308
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
       - name: Setup vcpkg
-        uses: tetherto/qvac/.github/actions/setup-vcpkg@1d9b2165867d03c6edd675e402ee101a5d48a6d8
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@6fe261a83703fe13de1ef7eb5e7470c3e61b3308
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
@@ -94,11 +94,11 @@ jobs:
           arch: x64
 
       - name: Setup Bare tooling
-        uses: tetherto/qvac/.github/actions/setup-bare-tooling@0bbdca93da303a0b1634ba14a89cec085621078d
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@6fe261a83703fe13de1ef7eb5e7470c3e61b3308
 
       - if: ${{ inputs.include-vulkan-sdk }}
         name: Setup Vulkan SDK
-        uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@0bbdca93da303a0b1634ba14a89cec085621078d
+        uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@6fe261a83703fe13de1ef7eb5e7470c3e61b3308
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:

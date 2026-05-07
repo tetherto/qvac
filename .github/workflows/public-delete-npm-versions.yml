@@ -43,7 +43,7 @@ jobs:
       packages: write
     steps:
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: lts/*
           registry-url: "https://npm.pkg.github.com/"
@@ -154,7 +154,7 @@ jobs:
           done
 
       - name: Upload version artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: package-versions
           path: |

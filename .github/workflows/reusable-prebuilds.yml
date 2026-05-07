@@ -167,14 +167,14 @@ jobs:
           echo "Matrix tags: $MATRIX_TAGS"
 
       - name: Setup build host
-        uses: tetherto/qvac/.github/actions/setup-build-host@df55c85d7b8004961e430557e85b6ec1b15cf170
+        uses: tetherto/qvac/.github/actions/setup-build-host@6fe261a83703fe13de1ef7eb5e7470c3e61b3308
         with:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
           linux-extra-packages: ${{ inputs.linux-extra-packages }}
 
       - name: Setup LLVM
-        uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
+        uses: tetherto/qvac/.github/actions/setup-llvm@6fe261a83703fe13de1ef7eb5e7470c3e61b3308
 
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -184,12 +184,12 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
 
       - name: Setup AWS + Windows CLI
-        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@0bbdca93da303a0b1634ba14a89cec085621078d
+        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@6fe261a83703fe13de1ef7eb5e7470c3e61b3308
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
       - name: Setup vcpkg
-        uses: tetherto/qvac/.github/actions/setup-vcpkg@1d9b2165867d03c6edd675e402ee101a5d48a6d8
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@6fe261a83703fe13de1ef7eb5e7470c3e61b3308
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
@@ -197,7 +197,7 @@ jobs:
           arch: ${{ matrix.arch }}
 
       - name: Setup Bare tooling
-        uses: tetherto/qvac/.github/actions/setup-bare-tooling@0bbdca93da303a0b1634ba14a89cec085621078d
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@6fe261a83703fe13de1ef7eb5e7470c3e61b3308
 
       - if: ${{ inputs.setup-python-on-windows && matrix.platform == 'win32' }}
         name: Setup Python on self-hosted Windows runner
@@ -206,11 +206,11 @@ jobs:
           python-version: "3.12"
 
       - name: Setup Apple Clang
-        uses: tetherto/qvac/.github/actions/setup-apple-clang@1d9b2165867d03c6edd675e402ee101a5d48a6d8
+        uses: tetherto/qvac/.github/actions/setup-apple-clang@6fe261a83703fe13de1ef7eb5e7470c3e61b3308
 
       - if: ${{ inputs.include-vulkan-sdk }}
         name: Setup Vulkan SDK
-        uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@0bbdca93da303a0b1634ba14a89cec085621078d
+        uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@6fe261a83703fe13de1ef7eb5e7470c3e61b3308
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
@@ -234,7 +234,7 @@ jobs:
 
       - if: ${{ inputs.setup-rust-toolchain }}
         name: Setup Rust toolchain
-        uses: tetherto/qvac/.github/actions/setup-rust-prebuild@0d88d993e5e221bd8e9b3f8938f11e40417fcab7
+        uses: tetherto/qvac/.github/actions/setup-rust-prebuild@6fe261a83703fe13de1ef7eb5e7470c3e61b3308
         with:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
@@ -327,12 +327,12 @@ jobs:
           find prebuilds -maxdepth 1 -type d -print || true
 
       - name: Strip debug symbols
-        uses: tetherto/qvac/.github/actions/strip-prebuilds@1d9b2165867d03c6edd675e402ee101a5d48a6d8
+        uses: tetherto/qvac/.github/actions/strip-prebuilds@6fe261a83703fe13de1ef7eb5e7470c3e61b3308
         with:
           platform: ${{ matrix.platform }}
           workdir: ${{ env.WORKDIR }}
 
-      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: ${{ inputs.artifact-name-prefix }}${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
           path: ${{ env.WORKDIR }}/prebuilds
@@ -350,7 +350,7 @@ jobs:
           merge-multiple: true
 
       - name: Upload merged artifacts
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: prebuilds
           path: prebuilds

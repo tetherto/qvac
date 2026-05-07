@@ -45,13 +45,13 @@ jobs:
           lfs: true
 
       - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # 6.4.0
         with:
           node-version: lts/*
 
       - name: Setup LLVM
         if: matrix.platform == 'linux'
-        uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
+        uses: tetherto/qvac/.github/actions/setup-llvm@6fe261a83703fe13de1ef7eb5e7470c3e61b3308
 
       - name: Setup ccache
         if: matrix.platform == 'linux'
@@ -63,7 +63,7 @@ jobs:
 
       - name: Get ccache cache
         if: matrix.platform == 'linux'
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # 5.0.5
         with:
           key: ccache-cpp-coverage-parakeet-${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles(format('{0}/vcpkg.json', env.PKG_DIR)) }}
           path: ~/.cache/ccache
@@ -145,7 +145,7 @@ jobs:
 
       - name: Archive Coverage Results
         if: matrix.coverage
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: coverage-report-${{ matrix.platform }}-${{ matrix.arch }}
           path: |
