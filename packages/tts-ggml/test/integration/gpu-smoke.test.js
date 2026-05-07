@@ -29,11 +29,7 @@ const proc = require('bare-process')
 const test = require('brittle')
 
 const { loadChatterboxTTS, runChatterboxTTS } = require('../utils/runChatterboxTTS')
-const { loadSupertonicTTS, runSupertonicTTS } = require('../utils/runSupertonicTTS')
-const {
-  ensureChatterboxModels,
-  ensureSupertonicModel
-} = require('../utils/downloadModel')
+const { ensureChatterboxModels } = require('../utils/downloadModel')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'

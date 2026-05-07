@@ -24,6 +24,9 @@
     "test:unit": "brittle-bare test/unit/**/*.test.js",
     "test": "npm run test:unit && npm run test:integration",
     "test:integration": "brittle-bare test/integration/**/*.test.js",
+    "test:mobile:generate": "node scripts/generate-mobile-integration-tests.js",
+    "test:mobile:validate": "node scripts/validate-mobile-tests.js",
+    "test:dts": "tsc index.d.ts addonLogging.d.ts --noEmit --lib es2018 --esModuleInterop --skipLibCheck",
     "setup:venv": "bash scripts/setup-venv.sh",
     "convert-models": "bash scripts/convert-models.sh",
     "setup-models": "bash scripts/setup-venv.sh && bash scripts/convert-models.sh"
@@ -87,6 +90,7 @@
     "standard": "^17.0.0",
     "stream": "npm:bare-node-stream",
     "tty": "npm:bare-node-tty",
+    "typescript": "^6.0.3",
     "util": "npm:bare-utils@^1.5.1"
   },
   "dependencies": {

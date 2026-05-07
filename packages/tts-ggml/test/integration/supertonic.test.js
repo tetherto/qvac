@@ -5,10 +5,8 @@
 // qvac-lib-infer-onnx-tts/test/unit/supertonic.inference.test.js but
 // runs against the real native ggml backend instead of the JS mock.
 
-const fs = require('bare-fs')
 const os = require('bare-os')
 const path = require('bare-path')
-const proc = require('bare-process')
 const test = require('brittle')
 
 const { loadSupertonicTTS, runSupertonicTTS } = require('../utils/runSupertonicTTS')
@@ -16,7 +14,6 @@ const { ensureSupertonicModel } = require('../utils/downloadModel')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
-const NO_GPU = proc.env && proc.env.NO_GPU === 'true'
 
 function getBaseDir () {
   return isMobile && global.testDir ? global.testDir : '.'

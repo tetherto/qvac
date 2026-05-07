@@ -8,7 +8,6 @@
 
 const os = require('bare-os')
 const path = require('bare-path')
-const proc = require('bare-process')
 const test = require('brittle')
 
 const TTSGgml = require('@qvac/tts-ggml')

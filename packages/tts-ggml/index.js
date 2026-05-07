@@ -287,7 +287,7 @@ class TTSGgml {
           'tts-ggml: streamChunkTokens / streamFirstChunkTokens are Chatterbox-only ' +
           'options (sub-sentence native streaming via the chatterbox::Engine ' +
           'streaming chunked S3Gen+HiFT loop). Supertonic does not support sub-' +
-          "sentence native streaming; use sentence-level streaming via the engine-" +
+          'sentence native streaming; use sentence-level streaming via the engine-' +
           'agnostic runStream() / runStreaming() / run({ streamOutput: true }) APIs.'
         )
       }

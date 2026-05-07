@@ -23,7 +23,6 @@ const path = require('bare-path')
 const proc = require('bare-process')
 const test = require('brittle')
 
-const TTSGgml = require('@qvac/tts-ggml')
 const { loadChatterboxTTS, runChatterboxTTS } = require('../utils/runChatterboxTTS')
 const { loadSupertonicTTS, runSupertonicTTS } = require('../utils/runSupertonicTTS')
 const {

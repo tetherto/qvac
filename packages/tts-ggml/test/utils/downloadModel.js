@@ -436,9 +436,9 @@ async function ensureChatterboxMtlModels (options = {}) {
     return { success: true, results, targetDir: resolvedDir }
   }
 
-  console.log(` Chatterbox MTL GGUFs not found.  Convert with:`)
-  console.log(`   python scripts/convert-t3-mtl-to-gguf.py --out chatterbox-t3-mtl.gguf`)
-  console.log(`   python scripts/convert-s3gen-to-gguf.py --variant mtl --out chatterbox-s3gen-mtl.gguf`)
+  console.log(' Chatterbox MTL GGUFs not found.  Convert with:')
+  console.log('   python scripts/convert-t3-mtl-to-gguf.py --out chatterbox-t3-mtl.gguf')
+  console.log('   python scripts/convert-s3gen-to-gguf.py --variant mtl --out chatterbox-s3gen-mtl.gguf')
   console.log(` and place under one of: ${candidateDirs.join(', ')}`)
   return { success: false, results: {}, targetDir: requestedDir }
 }
@@ -475,8 +475,8 @@ async function ensureSupertonicModel (options = {}) {
     }
   }
 
-  console.log(` Supertonic GGUF not found.  Convert with:`)
-  console.log(`   python scripts/convert-supertonic2-to-gguf.py --arch supertonic --out supertonic.gguf`)
+  console.log(' Supertonic GGUF not found.  Convert with:')
+  console.log('   python scripts/convert-supertonic2-to-gguf.py --arch supertonic --out supertonic.gguf')
   console.log(` and place under one of: ${candidateDirs.join(', ')}`)
   return { success: false, path: null, targetDir: requestedDir }
 }
@@ -513,8 +513,8 @@ async function ensureSupertonicMtlModel (options = {}) {
     }
   }
 
-  console.log(` Supertonic MTL GGUF not found.  Convert with:`)
-  console.log(`   python scripts/convert-supertonic2-to-gguf.py --arch supertonic2 --out supertonic2.gguf`)
+  console.log(' Supertonic MTL GGUF not found.  Convert with:')
+  console.log('   python scripts/convert-supertonic2-to-gguf.py --arch supertonic2 --out supertonic2.gguf')
   console.log(` and place under one of: ${candidateDirs.join(', ')}`)
   return { success: false, path: null, targetDir: requestedDir }
 }
