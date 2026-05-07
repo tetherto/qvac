@@ -34,10 +34,18 @@ jobs:
           # Deliberately no NPM_TOKEN: every `@qvac/*` runtime dep is supposed
           # to be reachable to anonymous end users, which is exactly the
           # failure mode of the original `@qvac/translation-nmtcpp` 404 bug.
+          #
+          # `foreground-scripts=true` ensures any lifecycle script output is
+          # captured and visible in the runner log (rather than buffered or
+          # dropped behind npm's default background-runner). It is a no-op
+          # for the install step below thanks to `--ignore-scripts`, but
+          # protects any future debugging step that disables `--ignore-scripts`
+          # to inspect a real failure.
           mkdir -p /tmp/install-check
           printf '%s\n' \
             'registry=https://registry.npmjs.org/' \
             '@qvac:registry=https://registry.npmjs.org/' \
+            'foreground-scripts=true' \
             > /tmp/install-check/.npmrc
 
       - name: Install @qvac/sdk@latest in fresh dir
