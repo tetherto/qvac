@@ -2,6 +2,7 @@
 
 const fs = require('bare-fs')
 const path = require('bare-path')
+const proc = require('bare-process')
 const TTSGgml = require('@qvac/tts-ggml')
 const { getBaseDir, isMobile } = require('./runTTS')
 const { createWavBuffer } = require('./wav-helper')
@@ -15,6 +16,13 @@ async function loadSupertonicTTS (params = {}) {
   const supertonicPath =
     params.supertonicModelPath || path.join(defaultModelDir, 'supertonic.gguf')
 
+  const config = { language: params.language || 'en' }
+  if (params.useGPU !== undefined) {
+    config.useGPU = params.useGPU
+  } else if (proc.env && proc.env.NO_GPU === 'true') {
+    config.useGPU = false
+  }
+
   const model = new TTSGgml({
     engine: TTSGgml.ENGINE_SUPERTONIC,
     files: { supertonicModel: supertonicPath },
@@ -24,10 +32,7 @@ async function loadSupertonicTTS (params = {}) {
     seed: params.seed,
     threads: params.threads,
     nGpuLayers: params.nGpuLayers,
-    config: {
-      language: params.language || 'en',
-      ...(params.useGPU !== undefined ? { useGPU: params.useGPU } : {})
-    },
+    config,
     opts: { stats: true }
   })
   await model.load()

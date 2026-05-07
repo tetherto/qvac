@@ -249,7 +249,7 @@ test('Chatterbox TTS (ggml): native C++ chunk streaming via streamChunkTokens', 
     streamChunkTokens: 25,
     streamFirstChunkTokens: 10,
     cfmSteps: 1,
-    config: { language: 'en' },
+    config: { language: 'en', ...(forceNoGpu ? { useGPU: false } : {}) },
     opts: { stats: true }
   })
   await model.load()

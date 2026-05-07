@@ -65,6 +65,7 @@ env:
   TEST_FRAMEWORK_REF: "main"
   APP_BUNDLE_ID: "io.tether.test.qvac"
   AWS_DEVICE_FARM_PROJECT_ARN: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_TTS_GGML || secrets.AWS_DEVICE_FARM_PROJECT_ARN_ONNX_TTS }}
+  IOS_DEVICE_POOL_ARN: ${{ secrets.IOS_DEVICE_POOL_ARN_TTS_GGML || secrets.IOS_DEVICE_POOL_ARN_ONNX_TTS }}
   WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/tts-ggml' }}
   ADDON_DIR: addon/${{ inputs.workdir || github.event.inputs.workdir || 'packages/tts-ggml' }}
   TEST_FRAMEWORK_DIR: test-framework
@@ -1293,7 +1294,7 @@ jobs:
               --filters '[{"attribute":"MANUFACTURER","operator":"EQUALS","values":["Apple"]},{"attribute":"MODEL","operator":"CONTAINS","values":["iPhone 17"]},{"attribute":"PLATFORM","operator":"EQUALS","values":["IOS"]}]' \
               --query 'devices[].{name:name,model:model,os:os,availability:availability}' --output table || true
 
-            POOL_ARN="${{ secrets.IOS_DEVICE_POOL_ARN_TTS_GGML }}"
+            POOL_ARN="${{ env.IOS_DEVICE_POOL_ARN }}"
             RUN_ARN_1=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME" "$TEST_SPEC_ARN")
             echo "✅ iOS pool run scheduled: $RUN_ARN_1"
 
