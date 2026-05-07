@@ -68,6 +68,14 @@ env:
   ADDON_DIR: addon/${{ inputs.workdir || github.event.inputs.workdir || 'packages/tts-ggml' }}
   TEST_FRAMEWORK_DIR: test-framework
 
+# Least-privilege default scoped to the whole file (CodeQL
+# actions/missing-workflow-permissions).  The build-and-test job widens
+# this to packages:read + pull-requests:write + id-token:write so it can
+# pull prebuild artifacts and post Device Farm summary comments; any
+# future job in this file inherits read-only by default.
+permissions:
+  contents: read
+
 jobs:
   build-and-test:
     name: Build ${{ matrix.platform }} and Run E2E Tests

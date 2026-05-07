@@ -31,6 +31,14 @@ on:
         required: false
         default: true
 
+# Least-privilege default scoped to the whole file (CodeQL
+# actions/missing-workflow-permissions).  Individual jobs widen this as
+# needed; today the only job (run-integration-tests) explicitly requests
+# contents:read + packages:read, both already covered here.
+permissions:
+  contents: read
+  packages: read
+
 jobs:
   run-integration-tests:
     timeout-minutes: 60

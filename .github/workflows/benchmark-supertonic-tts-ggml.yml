@@ -20,10 +20,18 @@ on:
         required: false
         type: string
 
+# Least-privilege default scoped to the file: the noop body only writes
+# to stdout, so contents:read is enough.  Re-tighten/expand per job when
+# the real orchestrator lands.
+permissions:
+  contents: read
+
 jobs:
   noop:
     name: Stub - real Supertonic benchmark orchestrator pending
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Explain
         run: |
