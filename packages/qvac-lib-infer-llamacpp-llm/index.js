@@ -3,7 +3,7 @@
 const fs = require('bare-fs')
 const path = require('bare-path')
 const QvacLogger = require('@qvac/logging')
-const { createJobHandler, exclusiveRunQueue } = require('@qvac/infer-base')
+const { QvacResponse, createJobHandler, exclusiveRunQueue } = require('@qvac/infer-base')
 const { LlamaInterface, mapAddonEvent } = require('./addon')
 
 const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed'
@@ -41,6 +41,45 @@ function normalizeRunOptions (runOptions) {
     cacheKey: runOptions.cacheKey,
     saveCacheToDisk: runOptions.saveCacheToDisk === true
   }
+}
+
+function promptToAddonMessages (prompt, runOptions) {
+  if (!Array.isArray(prompt)) {
+    throw new TypeError('Prompt input must be Message[]')
+  }
+
+  const { prefill, generationParams, cacheKey, saveCacheToDisk } = normalizeRunOptions(runOptions)
+
+  const textMessages = []
+  const mediaItems = []
+
+  for (const message of prompt) {
+    if (message.role === 'user' &&
+        message.type === 'media' &&
+        message.content instanceof Uint8Array) {
+      mediaItems.push(message.content)
+      textMessages.push({ ...message, content: '' })
+    } else {
+      textMessages.push(message)
+    }
+  }
+
+  const promptMessages = []
+
+  for (const mediaData of mediaItems) {
+    promptMessages.push({ type: 'media', content: mediaData })
+  }
+
+  promptMessages.push({
+    type: 'text',
+    input: JSON.stringify(textMessages),
+    prefill,
+    generationParams,
+    cacheKey,
+    saveCacheToDisk
+  })
+
+  return promptMessages
 }
 
 // Normalizes the per-request `generationParams.json_schema` field. The
@@ -182,6 +221,9 @@ class LlmLlamacpp {
     this.addon = null
     this._checkpointSaveDir = null
     this._hasActiveResponse = false
+    this._nextBatchId = 0
+    this._activeBatchIds = null
+    this._pendingBatchResult = null
     // Carried across mapAddonEvent calls to drop the post-finetune TPS trailer.
     this._addonEventState = { skipNextRuntimeStats: false }
     this.state = { configLoaded: false }
@@ -242,8 +284,105 @@ class LlmLlamacpp {
    * @param {RunOptions} [runOptions] - Optional run settings (prefill, generationParams, cacheKey, saveCacheToDisk)
    * @returns {Promise<QvacResponse>}
    */
-  async run (prompt, runOptions = {}) {
-    return this._run(() => this._runInternal(prompt, runOptions))
+  async run (prompt, runOptions) {
+    if (this._isBatchInput(prompt)) {
+      if (runOptions !== undefined) {
+        throw new TypeError('Batch run options must be set per BatchPrompt item')
+      }
+      return this._run(() => this._runBatchInternal(prompt))
+    }
+    return this._run(() => this._runInternal(prompt, runOptions || {}))
+  }
+
+  _isBatchInput (prompt) {
+    if (!Array.isArray(prompt) || prompt.length === 0) {
+      return false
+    }
+    const firstItem = prompt[0]
+    return Array.isArray(firstItem) ||
+      (
+        firstItem &&
+        typeof firstItem === 'object' &&
+        !Array.isArray(firstItem) &&
+        Array.isArray(firstItem.prompt)
+      )
+  }
+
+  _createBatchId () {
+    this._nextBatchId += 1
+    return `batch-${this._nextBatchId}`
+  }
+
+  _normalizeBatchItems (batchInput) {
+    if (!Array.isArray(batchInput) || batchInput.length === 0) {
+      throw new TypeError('Batch input must be a non-empty array')
+    }
+
+    const seenIds = new Set()
+    return batchInput.map((item) => {
+      const isWrapped = item &&
+        typeof item === 'object' &&
+        !Array.isArray(item) &&
+        Array.isArray(item.prompt)
+      const id = isWrapped && item.id !== undefined ? item.id : this._createBatchId()
+      if (typeof id !== 'string' || id.length === 0) {
+        throw new TypeError('Batch prompt id must be a non-empty string when provided')
+      }
+      if (seenIds.has(id)) {
+        throw new TypeError(`Duplicate batch prompt id: ${id}`)
+      }
+      seenIds.add(id)
+
+      const prompt = isWrapped ? item.prompt : item
+      const itemRunOptions = isWrapped && item.runOptions ? item.runOptions : {}
+
+      return {
+        id,
+        messages: promptToAddonMessages(prompt, itemRunOptions)
+      }
+    })
+  }
+
+  async _runBatchInternal (batchInput) {
+    if (!this.addon) {
+      throw new Error('Addon not initialized. Call load() first.')
+    }
+    if (this._hasActiveResponse) {
+      throw new Error(RUN_BUSY_ERROR_MESSAGE)
+    }
+
+    const batchItems = this._normalizeBatchItems(batchInput)
+    const ids = batchItems.map(item => item.id)
+    const response = new QvacResponse({ cancelHandler: () => this.addon?.cancel() })
+    response.ids = ids
+    this._job.startWith(response)
+
+    let accepted
+    try {
+      accepted = await this.addon.runJob(batchItems)
+    } catch (error) {
+      this._job.fail(error)
+      throw error
+    }
+    if (!accepted) {
+      this._job.fail(new Error(RUN_BUSY_ERROR_MESSAGE))
+      throw new Error(RUN_BUSY_ERROR_MESSAGE)
+    }
+
+    this._activeBatchIds = ids
+    this._pendingBatchResult = null
+    this._hasActiveResponse = true
+    const finalized = response.await().finally(() => {
+      this._hasActiveResponse = false
+      this._activeBatchIds = null
+      this._pendingBatchResult = null
+    })
+    finalized.catch((err) => {
+      this.logger?.warn?.('Batch inference response rejected:', err?.message || err)
+    })
+    response.await = () => finalized
+
+    return response
   }
 
   async _runInternal (prompt, runOptions = {}) {
@@ -254,43 +393,8 @@ class LlmLlamacpp {
       throw new Error(RUN_BUSY_ERROR_MESSAGE)
     }
 
-    if (!Array.isArray(prompt)) {
-      throw new TypeError('Prompt input must be Message[]')
-    }
-    const { prefill, generationParams, cacheKey, saveCacheToDisk } = normalizeRunOptions(runOptions)
-
     this.logger.info('Starting inference with prompt:', prompt)
-
-    // Separate media messages from text messages
-    const textMessages = []
-    const mediaItems = []
-
-    for (const message of prompt) {
-      if (message.role === 'user' &&
-          message.type === 'media' &&
-          message.content instanceof Uint8Array) {
-        mediaItems.push(message.content)
-        textMessages.push({ ...message, content: '' })
-      } else {
-        textMessages.push(message)
-      }
-    }
-
-    const promptMessages = []
-
-    // Send media first (in order), then the stringified text messages.
-    for (const mediaData of mediaItems) {
-      promptMessages.push({ type: 'media', content: mediaData })
-    }
-
-    promptMessages.push({
-      type: 'text',
-      input: JSON.stringify(textMessages),
-      prefill,
-      generationParams,
-      cacheKey,
-      saveCacheToDisk
-    })
+    const promptMessages = promptToAddonMessages(prompt, runOptions)
 
     const response = this._job.start()
 
@@ -370,6 +474,10 @@ class LlmLlamacpp {
     if (eventType === 'Error') {
       this.logger.error('Job failed with error:', error)
       this._job.fail(error)
+    } else if (eventType === 'BatchOutput') {
+      this._job.output({ id: data.id, chunk: data.output })
+    } else if (eventType === 'BatchResult') {
+      this._pendingBatchResult = data
     } else if (eventType === 'Output') {
       this._job.output(data)
     } else if (eventType === 'FinetuneProgress') {
@@ -381,6 +489,13 @@ class LlmLlamacpp {
       const isFinetuneTerminal = data && typeof data === 'object' && data.op === 'finetune' && typeof data.status === 'string'
       if (isFinetuneTerminal) {
         this._job.end(null, data)
+      } else if (this._activeBatchIds) {
+        const outputs = Array.isArray(this._pendingBatchResult) ? this._pendingBatchResult : []
+        const result = this._activeBatchIds.map((id, index) => ({
+          id,
+          output: outputs[index] || ''
+        }))
+        this._job.end(this.opts.stats ? data : null, result)
       } else {
         this._job.end(this.opts.stats ? data : null)
       }
