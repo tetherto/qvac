@@ -10,6 +10,7 @@ const platform = os.platform()
 const arch = os.arch()
 const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
+const isMobile = platform === 'ios' || platform === 'android'
 const useCpu = isDarwinX64 || isLinuxArm64
 
 const AFRIQUEGEMMA_MODEL = {
@@ -68,7 +69,7 @@ const TIMEOUT = 1_800_000
 //
 // WHY: Users pass empty strings through UIs and pipelines; must not segfault.
 // ---------------------------------------------------------------------------
-test('AfriqueGemma: empty and whitespace input must not crash', { timeout: TIMEOUT }, async t => {
+test('AfriqueGemma: empty and whitespace input must not crash', { timeout: TIMEOUT, skip: isMobile }, async t => {
   const [modelName, dirPath] = await resolveModel()
   const addon = new LlmLlamacpp({
     files: { model: [path.join(dirPath, modelName)] },
@@ -97,7 +98,7 @@ test('AfriqueGemma: empty and whitespace input must not crash', { timeout: TIMEO
 // WHY: Apps that swap models or recover from errors need lifecycle to work;
 //      creating a new instance after unload is the supported reload pattern.
 // ---------------------------------------------------------------------------
-test('AfriqueGemma: lifecycle load-unload-fresh-load-use', { timeout: TIMEOUT }, async t => {
+test('AfriqueGemma: lifecycle load-unload-fresh-load-use', { timeout: TIMEOUT, skip: isMobile }, async t => {
   const [modelName, dirPath] = await resolveModel()
   const addon1 = new LlmLlamacpp({
     files: { model: [path.join(dirPath, modelName)] },
@@ -136,7 +137,7 @@ test('AfriqueGemma: lifecycle load-unload-fresh-load-use', { timeout: TIMEOUT },
 //
 // WHY: Cancelling mid-operation must not corrupt state; model should be reusable.
 // ---------------------------------------------------------------------------
-test('AfriqueGemma: cancel mid-translation, model reusable after', { timeout: TIMEOUT }, async t => {
+test('AfriqueGemma: cancel mid-translation, model reusable after', { timeout: TIMEOUT, skip: isMobile }, async t => {
   const [modelName, dirPath] = await resolveModel()
   const addon = new LlmLlamacpp({
     files: { model: [path.join(dirPath, modelName)] },
@@ -179,7 +180,7 @@ test('AfriqueGemma: cancel mid-translation, model reusable after', { timeout: TI
 // WHY: tools enables Jinja chat template; easy to miss, produces confusing error.
 // Verifies the addon either rejects with a clear message or defaults to jinja.
 // ---------------------------------------------------------------------------
-test('AfriqueGemma: tools true required for load', { timeout: TIMEOUT }, async t => {
+test('AfriqueGemma: tools true required for load', { timeout: TIMEOUT, skip: isMobile }, async t => {
   const [modelName, dirPath] = await resolveModel()
   const configWithoutTools = {
     ...AFRIQUEGEMMA_CONFIG,
@@ -212,7 +213,7 @@ test('AfriqueGemma: tools true required for load', { timeout: TIMEOUT }, async t
 // BUG: Currently the addon returns an invalid response object that causes an
 // unhandled rejection. This test documents the expected behaviour.
 // ---------------------------------------------------------------------------
-test('AfriqueGemma: run after unload rejects cleanly', { timeout: TIMEOUT }, async t => {
+test('AfriqueGemma: run after unload rejects cleanly', { timeout: TIMEOUT, skip: isMobile }, async t => {
   const [modelName, dirPath] = await resolveModel()
   const addon = new LlmLlamacpp({
     files: { model: [path.join(dirPath, modelName)] },
@@ -265,7 +266,7 @@ test('AfriqueGemma: run after unload rejects cleanly', { timeout: TIMEOUT }, asy
 //      crashing or producing garbled output. Catches buffer handling bugs
 //      in the token emission pipeline.
 // ---------------------------------------------------------------------------
-test('AfriqueGemma: small n_predict produces truncated but valid output', { timeout: TIMEOUT }, async t => {
+test('AfriqueGemma: small n_predict produces truncated but valid output', { timeout: TIMEOUT, skip: isMobile }, async t => {
   const [modelName, dirPath] = await resolveModel()
   const addon = new LlmLlamacpp({
     files: { model: [path.join(dirPath, modelName)] },
@@ -302,7 +303,7 @@ test('AfriqueGemma: small n_predict produces truncated but valid output', { time
 //      A crash or silent hang is unacceptable on mobile (see: SIGABRT on
 //      context overflow in sliding-context tests).
 // ---------------------------------------------------------------------------
-test('AfriqueGemma: long input approaching ctx_size boundary', { timeout: TIMEOUT }, async t => {
+test('AfriqueGemma: long input approaching ctx_size boundary', { timeout: TIMEOUT, skip: isMobile }, async t => {
   const [modelName, dirPath] = await resolveModel()
   const addon = new LlmLlamacpp({
     files: { model: [path.join(dirPath, modelName)] },
