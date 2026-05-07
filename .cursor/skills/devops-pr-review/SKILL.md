@@ -48,8 +48,8 @@ Read [`.cursor/skills/pr-review/SKILL.md`](../pr-review/SKILL.md) and follow ste
 - 1. Parse PR URL
 - 2. Fetch PR metadata
 - 3. Gitflow validation
-- 4. Read applicable cursor rules — the touched DevOps paths will auto-load `.cursor/rules/devops/main.mdc`, `.cursor/rules/devops/github-actions.mdc`, `.cursor/rules/devops/secrets-and-credentials.mdc`, and `.cursor/rules/devops/commit-and-pr-format.mdc`
-- 5. Validate PR title + body against the loaded format rule (DevOps allowed prefixes: `infra`/`feat`/`fix`/`chore`/`doc`/`test`; tags: `[bc]`/`[notask]`/`[skiplog]`)
+- 4. Read applicable cursor rules — the touched DevOps paths will auto-load `.cursor/rules/devops/main.mdc`, `.cursor/rules/devops/github-actions.mdc`, and `.cursor/rules/devops/secrets-and-credentials.mdc`. (The PR-format spec is intentionally NOT a rule — it lives in the [`devops-pr-create`](../devops-pr-create/SKILL.md) skill, invoked explicitly.)
+- 5. Validate PR title + body against the format spec inlined below (DevOps allowed prefixes: `infra`/`feat`/`fix`/`chore`/`doc`/`test`; tags: `[bc]`/`[notask]`/`[skiplog]`; title regex: `^([A-Z]+-\d+ )?(infra|feat|fix|chore|doc|test)(\[(bc|notask|skiplog)\])?: \S.+$`)
 - 6. Review dimensions
 - 7a. Print risk overview in chat — but **do not yet run step 7b** (the inline-comment selection prompt). The DevOps audit pass in step 2 below contributes additional findings.
 
@@ -135,6 +135,6 @@ Before posting the pending review, verify:
 - Generic PR review skill (parent flow): [.cursor/skills/pr-review/SKILL.md](../pr-review/SKILL.md)
 - DevOps GHA conventions (audit source): [.cursor/rules/devops/github-actions.mdc](../../rules/devops/github-actions.mdc)
 - DevOps secrets handling (audit source): [.cursor/rules/devops/secrets-and-credentials.mdc](../../rules/devops/secrets-and-credentials.mdc)
-- DevOps commit/PR format: [.cursor/rules/devops/commit-and-pr-format.mdc](../../rules/devops/commit-and-pr-format.mdc)
+- DevOps PR-create skill (canonical home for commit / PR-title format): [`devops-pr-create`](../devops-pr-create/SKILL.md)
 - Pod metadata: [.github/teams/devops.json](../../../.github/teams/devops.json)
 - Worktree manager: [.cursor/skills/_lib/pr-skills/worktree-prepare.mjs](../_lib/pr-skills/worktree-prepare.mjs)

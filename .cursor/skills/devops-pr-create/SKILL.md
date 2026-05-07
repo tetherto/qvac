@@ -97,7 +97,7 @@ Sections that are NOT triggered MUST be deleted (per the template's "Delete this
 
 ## Format References
 
-- **PR title format**: [.cursor/rules/devops/commit-and-pr-format.mdc](.cursor/rules/devops/commit-and-pr-format.mdc)
+- **PR title format**: see the Validation regex below — `^([A-Z]+-\d+ )?(infra|feat|fix|chore|doc|test)(\[(bc|notask|skiplog)\])?: \S.+$`
 - **PR body template**: [.github/PULL_REQUEST_TEMPLATE/devops.md](.github/PULL_REQUEST_TEMPLATE/devops.md)
 - **Pod conventions**: [.cursor/rules/devops/main.mdc](.cursor/rules/devops/main.mdc)
 - **GHA conventions** (drives "How was it tested?" content): [.cursor/rules/devops/github-actions.mdc](.cursor/rules/devops/github-actions.mdc)
@@ -123,7 +123,7 @@ TICKET prefix[tag]?: subject
 
 ## Validation
 
-No `pr-validation-devops.yml` workflow exists yet (see [.cursor/rules/devops/commit-and-pr-format.mdc](.cursor/rules/devops/commit-and-pr-format.mdc) "Validation" section). This skill MUST validate the title client-side before pushing or invoking `gh pr create`. Refuse and ask for correction if any of these fail:
+No `pr-validation-devops.yml` workflow exists yet (the SDK-pod validator is paths-scoped to `packages/<pkg>/`). This skill MUST validate the title client-side before pushing or invoking `gh pr create`. Refuse and ask for correction if any of these fail:
 
 - Title regex: `^([A-Z]+-\d+ )?(infra|feat|fix|chore|doc|test)(\[(bc|notask|skiplog)\])?: \S.+$`
 - Lowercase prefix and lowercase subject (sentence case allowed; the first word may be capitalized for proper nouns)
@@ -182,7 +182,6 @@ Before outputting, verify:
 ## References
 
 - DevOps pod main rule: [.cursor/rules/devops/main.mdc](.cursor/rules/devops/main.mdc)
-- DevOps commit/PR format: [.cursor/rules/devops/commit-and-pr-format.mdc](.cursor/rules/devops/commit-and-pr-format.mdc)
 - GitHub Actions conventions: [.cursor/rules/devops/github-actions.mdc](.cursor/rules/devops/github-actions.mdc)
 - Secrets handling: [.cursor/rules/devops/secrets-and-credentials.mdc](.cursor/rules/devops/secrets-and-credentials.mdc)
 - PR template: [.github/PULL_REQUEST_TEMPLATE/devops.md](.github/PULL_REQUEST_TEMPLATE/devops.md)
