@@ -9,6 +9,10 @@
 - Bumps the `qvac-fabric` dependency to `>= 8189.0.0`, picking up the new fabric release (Mali/Adreno F16 coopmat1 fix, Qwen3.5/DeltaNet OpenCL backend, Gemma 4 vision/audio support, and the Vulkan VMA migration from earlier in the cycle).
 - Verified end-to-end on macOS-arm64: `bare-make generate && bare-make build && bare-make install` produces a working `prebuilds/darwin-arm64/qvac__llm-llamacpp.bare` against fabric `8189.0.0[core,gpu-backends,llama]`.
 
+### Tests
+
+- Restored the `afriquegemma-edge-cases` and `afriquegemma-translation` integration tests. They run as part of the desktop integration suite (`npm run test:integration`) and are explicitly skipped on mobile via a new `desktopOnly` field in `test/mobile/test-groups.json`. The mobile generator/validator now honour that field — tests listed there are emitted into `integration.auto.cjs` for completeness but excluded from every platform group.
+
 ### Deprecated
 
 - `llama_adapter_lora_free` is now deprecated by upstream ("adapters are now freed together with the associated model"). The current LoRA-resume path in `LlamaModel.cpp` still calls it explicitly and produces three `-Wdeprecated-declarations` warnings; functional behaviour is unchanged. A targeted ownership refactor will be done in a follow-up.

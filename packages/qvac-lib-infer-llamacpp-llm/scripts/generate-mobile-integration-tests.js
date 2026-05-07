@@ -65,15 +65,27 @@ function validateGroups (functionNames) {
     return
   }
   const groups = JSON.parse(fs.readFileSync(groupsFile, 'utf-8'))
-  const nameSet = new Set(functionNames)
-  for (const [platform, splits] of Object.entries(groups)) {
+  const desktopOnly = new Set(groups.desktopOnly || [])
+  const platforms = Object.entries(groups).filter(([k]) => k !== 'desktopOnly')
+  const expectedNames = functionNames.filter(n => !desktopOnly.has(n))
+  const nameSet = new Set(expectedNames)
+
+  const unknownDesktopOnly = [...desktopOnly].filter(n => !functionNames.includes(n))
+  if (unknownDesktopOnly.length) {
+    throw new Error(
+      "test-groups.json 'desktopOnly' references non-existent tests:\n  " +
+      unknownDesktopOnly.join('\n  ') + '\nRemove them or check for typos.'
+    )
+  }
+
+  for (const [platform, splits] of platforms) {
     const covered = new Set(Object.values(splits).flat())
-    const missing = functionNames.filter(n => !covered.has(n))
+    const missing = expectedNames.filter(n => !covered.has(n))
     const extra = [...covered].filter(n => !nameSet.has(n))
     if (missing.length) {
       throw new Error(
         '[' + platform + '] Tests not assigned to any group in test-groups.json:\n  ' +
-        missing.join('\n  ') + '\nAdd them to a group in test/mobile/test-groups.json.'
+        missing.join('\n  ') + "\nAdd them to a group in test/mobile/test-groups.json, or to 'desktopOnly' to skip mobile."
       )
     }
     if (extra.length) {
@@ -83,7 +95,11 @@ function validateGroups (functionNames) {
       )
     }
   }
-  console.log('Group coverage validated — all tests assigned for every platform.')
+  if (desktopOnly.size) {
+    console.log(`Group coverage validated — ${desktopOnly.size} desktop-only test(s) skipped on mobile, all others assigned for every platform.`)
+  } else {
+    console.log('Group coverage validated — all tests assigned for every platform.')
+  }
 }
 
 function main () {

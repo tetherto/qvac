@@ -1,4 +1,8 @@
 {
+  "desktopOnly": [
+    "runAfriquegemmaEdgeCasesTest",
+    "runAfriquegemmaTranslationTest"
+  ],
   "ios": {
     "heavy1": ["runFinetuningPauseResumeTest"],
     "heavy2": ["runToolCallingTest"],
