@@ -67,7 +67,8 @@ function normalizeStats (rawStats = {}, extra = {}) {
     promptTokens: toNumber(rawStats?.promptTokens),
     generatedTokens: toNumber(rawStats?.generatedTokens),
     TTFT: toNumber(rawStats?.TTFT),
-    TPS: toNumber(rawStats?.TPS)
+    TPS: toNumber(rawStats?.TPS),
+    ppTPS: toNumber(rawStats?.ppTPS)
   }
 }
 
@@ -194,6 +195,7 @@ test('cacheKey stores tokens but stays under n_predict', { timeout: 600_000 }, a
   const delta = toNumber(secondStats.CacheTokens) - toNumber(firstStats.CacheTokens)
   t.ok(firstStats.CacheTokens > 0, 'session usage records cache tokens')
   assertCacheMatchesTokens(t, firstStats, 'session run caches prompt + generated tokens')
+  t.ok(firstStats.ppTPS > 0, 'ppTPS reported on completed run')
   const expectedDelta = secondStats.promptTokens + secondStats.generatedTokens
   t.is(delta, expectedDelta, 'cache delta equals follow-up prompt + generations')
   t.ok(
@@ -217,6 +219,7 @@ test('Cancelling after first token keeps cache growth bounded', { timeout: 600_0
   t.ok(stats.TTFT > 0, 'TTFT recorded before cancellation')
   // TPS may be 0 when only 1 token is generated due to timing precision
   t.ok(stats.TPS >= 0, 'TPS is non-negative')
+  t.ok(stats.ppTPS > 0, 'ppTPS is positive (prompt processing completes before first token)')
 })
 
 test('Cancelling after first token only stores one generation chunk', { timeout: 600_000 }, async t => {
@@ -228,6 +231,7 @@ test('Cancelling after first token only stores one generation chunk', { timeout:
   t.ok(stopStats.TTFT > 0, 'TTFT recorded before cancellation')
   // TPS may be 0 when only 1 token is generated due to timing precision
   t.ok(stopStats.TPS >= 0, 'TPS is non-negative')
+  t.ok(stopStats.ppTPS > 0, 'ppTPS is positive (prompt processing completes before first token)')
   const threshold = 2048
   t.ok(stopStats.generatedTokens > 0, `at least one token generated before cancellation (generatedTokens=${stopStats.generatedTokens} > 0)`)
   t.ok(stopStats.generatedTokens < threshold, `generatedTokens (${stopStats.generatedTokens}) should be less than threshold (${threshold})`)

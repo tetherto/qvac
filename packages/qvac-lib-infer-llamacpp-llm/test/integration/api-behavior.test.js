@@ -106,6 +106,10 @@ test('idle | run with prefill: evaluates prompt without token generation', { tim
     toNumber(prefillResponse?.stats?.CacheTokens) > 0,
     'prefill stores prompt in model context'
   )
+  t.ok(
+    toNumber(prefillResponse?.stats?.ppTPS) > 0,
+    'prefill reports prompt processing throughput'
+  )
 
   const normalResponse = await model.run(BASE_PROMPT)
   const normalOutput = await collectResponse(normalResponse)
