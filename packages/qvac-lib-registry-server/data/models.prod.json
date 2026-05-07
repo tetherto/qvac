@@ -5568,6 +5568,44 @@
     ]
   },
   {
+    "source": "s3:///qvac_models_compiled/esrgan/2026-05-07/RealESRGAN_x4plus.pth",
+    "engine": "@qvac/diffusion-cpp",
+    "link": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth",
+    "description": "Real-ESRGAN x4 upscaler trained on general real-world images",
+    "licenseId": "BSD-3-Clause",
+    "tags": [
+      "upscale",
+      "esrgan",
+      "x4"
+    ]
+  },
+  {
+    "source": "s3:///qvac_models_compiled/esrgan/2026-05-07/RealESRNet_x4plus.pth",
+    "engine": "@qvac/diffusion-cpp",
+    "link": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.1/RealESRNet_x4plus.pth",
+    "description": "Real-ESRNet x4 upscaler trained on general real-world images (non-GAN variant)",
+    "licenseId": "BSD-3-Clause",
+    "tags": [
+      "upscale",
+      "esrgan",
+      "x4",
+      "non-gan"
+    ]
+  },
+  {
+    "source": "s3:///qvac_models_compiled/esrgan/2026-05-07/RealESRGAN_x4plus_anime_6B.pth",
+    "engine": "@qvac/diffusion-cpp",
+    "link": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth",
+    "description": "Real-ESRGAN x4 upscaler optimized for anime illustrations (6 RRDB blocks)",
+    "licenseId": "BSD-3-Clause",
+    "tags": [
+      "upscale",
+      "esrgan",
+      "x4",
+      "anime"
+    ]
+  },
+  {
     "source": "s3:///qvac_models_compiled/ggml/gpt-oss120b/2026-03-17/gpt-oss-120b-Q4_K_M-00001-of-00002.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/unsloth/gpt-oss-120b-GGUF/blob/main/Q4_K_M/gpt-oss-120b-Q4_K_M-00001-of-00002.gguf",

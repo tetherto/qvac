@@ -43,5 +43,10 @@
     "spdxId": "openrail++",
     "name": "Open RAIL++-M License",
     "url": "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/raw/main/LICENSE.md"
+  },
+  {
+    "spdxId": "BSD-3-Clause",
+    "name": "BSD 3-Clause License",
+    "url": "https://opensource.org/licenses/BSD-3-Clause"
   }
 ]
