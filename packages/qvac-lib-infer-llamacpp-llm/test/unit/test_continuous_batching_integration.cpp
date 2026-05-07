@@ -698,3 +698,71 @@ TEST_F(ContinuousBatchingIntegrationTest, TwoPromptBatchAcceptsPrefillOnly) {
   EXPECT_FALSE(outputs[0].empty());
   EXPECT_TRUE(outputs[1].empty());
 }
+
+/// Two-stage batch test for prefill-only + cache lifecycle.
+/// Stage 1: a 2-prompt batch where both slots are `prefill=true` with
+/// distinct `saveCacheToDisk` cache keys. Asserts both outputs are
+/// empty and both cache files are written, exercising the
+/// `onSequenceEnd` -> `saveCache` path on prefill-only slots
+/// concurrently. Stage 2: a follow-up 2-prompt batch with generation
+/// slots keyed by those same cache files. Asserts both follow-ups
+/// produce the expected concrete answers ("Paris", "Moon"), proving
+/// the persisted KV-cache is loadable and usable per-slot.
+TEST_F(ContinuousBatchingIntegrationTest, PrefillOnlyBatchSavesAndLoadsCache) {
+  REQUIRE_MODEL(model_);
+  auto model = loadModel();
+  const std::string testId = uniqueTestId();
+  const fs::path cachePathA =
+      fs::temp_directory_path() / ("batch-prefill-A-" + testId + ".bin");
+  const fs::path cachePathB =
+      fs::temp_directory_path() / ("batch-prefill-B-" + testId + ".bin");
+
+  auto prefillA = makePrompt(
+      "The capital of France is Paris. Remember this fact for later use.");
+  prefillA.prefill = true;
+  prefillA.cacheKey = cachePathA.string();
+  prefillA.saveCacheToDisk = true;
+
+  auto prefillB = makePrompt(
+      "Earth's natural satellite is the Moon. Remember this fact for later "
+      "use.");
+  prefillB.prefill = true;
+  prefillB.cacheKey = cachePathB.string();
+  prefillB.saveCacheToDisk = true;
+
+  std::vector<LlamaModel::Prompt> prefillBatch;
+  prefillBatch.push_back(std::move(prefillA));
+  prefillBatch.push_back(std::move(prefillB));
+  auto prefillOutputs = model->processPromptBatch(prefillBatch);
+
+  ASSERT_EQ(prefillOutputs.size(), 2u);
+  EXPECT_TRUE(prefillOutputs[0].empty()) << prefillOutputs[0];
+  EXPECT_TRUE(prefillOutputs[1].empty()) << prefillOutputs[1];
+  ASSERT_TRUE(fs::exists(cachePathA));
+  ASSERT_TRUE(fs::exists(cachePathB));
+  EXPECT_GT(fs::file_size(cachePathA), 0u);
+  EXPECT_GT(fs::file_size(cachePathB), 0u);
+
+  auto followupA = makePrompt(
+      "Given what you remember, what is the capital of France? Answer in one "
+      "word.");
+  followupA.cacheKey = cachePathA.string();
+  auto followupB = makePrompt(
+      "Given what you remember, what is Earth's natural satellite? Answer in "
+      "one word.");
+  followupB.cacheKey = cachePathB.string();
+
+  std::vector<LlamaModel::Prompt> followupBatch;
+  followupBatch.push_back(std::move(followupA));
+  followupBatch.push_back(std::move(followupB));
+  auto followupOutputs = model->processPromptBatch(followupBatch);
+
+  ASSERT_EQ(followupOutputs.size(), 2u);
+  EXPECT_TRUE(containsCaseInsensitive(followupOutputs[0], "Paris"))
+      << "expected 'Paris' from cache A in: " << followupOutputs[0];
+  EXPECT_TRUE(containsCaseInsensitive(followupOutputs[1], "Moon"))
+      << "expected 'Moon' from cache B in: " << followupOutputs[1];
+
+  fs::remove(cachePathA);
+  fs::remove(cachePathB);
+}

@@ -8,11 +8,18 @@
 #include "../utils/Qwen3ReasoningUtils.hpp"
 #include "../utils/UTF8TokenBuffer.hpp"
 #include "LlmContext.hpp"
+#include "SequenceDriver.hpp"
 #include "ToolsCompactController.hpp"
 #include "common/common.h"
 #include "qvac-lib-inference-addon-cpp/Logger.hpp"
 
-class TextLlmContext : public LlmContext {
+/// Concrete text-only LLM context. Implements both the legacy
+/// `LlmContext` API (driven by the single-prompt path in `LlamaModel`)
+/// and the per-sequence `SequenceDriver` API (driven by the
+/// `ContinuousBatchScheduler`). The overlapping state-query methods
+/// (`getNPast`, `getNSlides`, `validatePromptPolicy`) appear on both
+/// bases; a single override below satisfies both vtables.
+class TextLlmContext : public LlmContext, public SequenceDriver {
 public:
   TextLlmContext(const TextLlmContext&) = delete;
   TextLlmContext& operator=(const TextLlmContext&) = delete;
@@ -144,26 +151,26 @@ public:
    */
   llama_pos removeLastNTokens(llama_pos count) override;
 
-  std::vector<llama_token> prepareBatchPrefill(
+  std::vector<llama_token> preparePrefill(
       const std::vector<common_chat_msg>& chatMsgs,
       const std::vector<common_chat_tool>& tools, bool isCacheLoaded,
-      bool prefill);
+      bool prefill) override;
 
-  void onBatchPrefillComplete(
-      llama_pos currentPos, size_t prefillTokenCount);
+  void onPrefillComplete(
+      llama_pos currentPos, size_t prefillTokenCount) override;
 
-  SlotPolicyStepResult onLogitsReady(
+  SequenceStepResult onLogitsReady(
       int logitIdx, unsigned generatedAfterAccept,
       const std::function<void(const std::string&)>& outputCallback,
       LlamaBatch* inlineDecodeBatch = nullptr) override;
 
-  void onSlotEnd(
+  void onSequenceEnd(
       const std::function<void(const std::string&)>& outputCallback) override;
 
   void onGenerationFinished(
       const std::function<void(const std::string&)>& outputCallback) override;
 
-  void onCancelPolicy(
+  void onCancel(
       const std::function<void(const std::string&)>& outputCallback) override;
 
   void validatePromptPolicy(
@@ -171,13 +178,16 @@ public:
       const std::vector<common_chat_tool>& tools, const PromptLayout& layout,
       bool hasKvCacheContext) const override;
 
-  void onGenerationCompletePolicy(std::string_view assistantOutput) override;
-
-  [[nodiscard]] bool loadSequenceCache(
-      const std::string& cacheKey, llama_pos configuredNDiscarded);
-  void saveSequenceCache(const std::string& cacheKey) const;
+  [[nodiscard]] bool loadCache(
+      const std::string& cacheKey, llama_pos configuredNDiscarded) override;
+  void saveCache(const std::string& cacheKey) const override;
 
 private:
+  /// Hook fired exactly once per slot, immediately before the policy
+  /// flushes its UTF-8 buffer at end-of-generation. Internal helper for
+  /// `onGenerationFinished`.
+  void onGenerationCompletePolicy(std::string_view assistantOutput);
+
   /**
    * The check antiprompt method. It checks the antiprompt.
    *

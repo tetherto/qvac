@@ -1,4 +1,5 @@
 #pragma once
+#include <any>
 #include <functional>
 #include <memory>
 #include <string>
@@ -13,12 +14,19 @@
 #include <qvac-lib-inference-addon-cpp/handlers/OutputHandler.hpp>
 #include <qvac-lib-inference-addon-cpp/queue/OutputCallbackJs.hpp>
 
+#include "addon/PayloadHandler.hpp"
 #include "model-interface/LlamaFinetuningParams.hpp"
 #include "model-interface/LlamaModel.hpp"
 
 namespace qvac_lib_inference_addon_llama {
 
 namespace js = qvac_lib_inference_addon_cpp::js;
+
+/// JS event-name baked into batch streaming payloads. Mirrors the
+/// JS-side dispatcher in `addon.js` (`rawData.type === 'batch_output'`).
+/// Must live at namespace scope with linkage to be a valid
+/// `const char*` non-type template parameter for `PayloadHandler::allocate`.
+inline constexpr char kBatchOutputTypeName[] = "batch_output";
 
 inline LlamaModel*
 getLlamaModel(qvac_lib_inference_addon_cpp::AddonJs& instance) {
@@ -183,28 +191,32 @@ struct JsFinetuneTerminalOutputHandler
             }) {}
 };
 
-struct BatchTokenOutput {
-  std::string id, output;
-};
-
+/// Handler for streamed batch tokens. Reuses one persistent JS object
+/// per sequence (see `PayloadHandler`) and only allocates a fresh
+/// `output` JS string per token. On the `finished` signal the handler
+/// releases the payload, freeing the underlying JS reference.
 struct JsBatchTokenOutputHandler
     : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
           BatchTokenOutput> {
   JsBatchTokenOutputHandler()
       : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
             BatchTokenOutput>(
-            [this](const BatchTokenOutput& output) -> js_value_t* {
-              js::Object payload = js::Object::create(this->env_);
-              payload.setProperty(
-                  this->env_,
-                  "type",
-                  js::String::create(this->env_, "batch_output"));
-              payload.setProperty(
-                  this->env_, "id", js::String::create(this->env_, output.id));
+            [this](const BatchTokenOutput& evt) -> js_value_t* {
+              if (evt.payloadHandle == nullptr) {
+                return js::Undefined::create(this->env_);
+              }
+              if (evt.finished) {
+                PayloadHandler::release(this->env_, evt.payloadHandle);
+                return js::Undefined::create(this->env_);
+              }
+              // Resolve pre-allocated js::Object payload.
+              // Just need to write the output property.
+              js::Object payload =
+                  PayloadHandler::resolve(this->env_, evt.payloadHandle);
               payload.setProperty(
                   this->env_,
                   "output",
-                  js::String::create(this->env_, output.output));
+                  js::String::create(this->env_, evt.output));
               return payload;
             }) {}
 };
@@ -436,12 +448,30 @@ parseBatchInputs(js_env_t* env, qvac_lib_inference_addon_cpp::AddonJs& instance,
         item.getProperty<js::String>(env, "id").as<std::string>(env);
     auto messages = item.getProperty<js::Array>(env, "messages");
     auto inputs = parseInputArray(env, messages);
-    auto outputCallback = [id, queue = instance.addonCpp->outputQueue](
-                              const string& tokenOut) {
-      queue->queueResult(any(BatchTokenOutput{id, tokenOut}));
+
+    auto queue = instance.addonCpp->outputQueue;
+    // Owning handle: when every copy of `outputCallback` is dropped (slot
+    // finished, cancelled, errored or scheduler torn down), the deleter
+    // fires and enqueues a `finished` event so the JS handler runs
+    // `PayloadHandler::release` on the JS thread.
+    shared_ptr<js_ref_t> handle(
+        PayloadHandler::allocate<kBatchOutputTypeName>(env, id),
+        [queue](js_ref_t* h) {
+          BatchTokenOutput evt;
+          evt.payloadHandle = h;
+          evt.finished = true;
+          queue->queueResult(any(std::move(evt)));
+        });
+    auto outputCallback = [handle = std::move(handle),
+                           queue](const string& tokenOut) {
+      BatchTokenOutput evt;
+      evt.payloadHandle = handle.get();
+      evt.output = tokenOut;
+      queue->queueResult(any(std::move(evt)));
     };
-    prompts.push_back(
-        parsePromptInputs(env, inputs, std::move(outputCallback)));
+    LlamaModel::Prompt prompt =
+        parsePromptInputs(env, inputs, std::move(outputCallback));
+    prompts.push_back(std::move(prompt));
   }
 
   return prompts;

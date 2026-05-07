@@ -13,6 +13,7 @@
 #include <qvac-lib-inference-addon-cpp/Errors.hpp>
 
 #include "GenerationParamsApply.hpp"
+#include "TextLlmContext.hpp"
 #include "addon/LlmErrors.hpp"
 
 namespace qvac_lib_inference_addon_llama::batching {
@@ -245,18 +246,18 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
   LlmContextShared shared{
       .model = model_, .lctx = ctx_, .vocab = vocab_};
   auto tools = std::make_unique<ToolsCompactController>(toolsCompactProfile_);
-  auto policy =
+  std::unique_ptr<SequenceDriver> driver =
       std::make_unique<TextLlmContext>(tmpParams, shared, *tools, seqId);
   const bool isCacheLoaded =
-      policy->loadSequenceCache(request.cacheKey, configuredNDiscarded_);
-  const bool hasKvCacheContext = isCacheLoaded || policy->getNPast() > 0;
-  policy->validatePromptPolicy(
+      driver->loadCache(request.cacheKey, configuredNDiscarded_);
+  const bool hasKvCacheContext = isCacheLoaded || driver->getNPast() > 0;
+  driver->validatePromptPolicy(
       request.chatMsgs, request.tools, request.layout, hasKvCacheContext);
-  auto tokens = policy->prepareBatchPrefill(
+  auto tokens = driver->preparePrefill(
       request.chatMsgs, request.tools, isCacheLoaded, request.prefill);
 
   const auto promptSize =
-      static_cast<unsigned>(policy->getNPast()) +
+      static_cast<unsigned>(driver->getNPast()) +
       static_cast<unsigned>(tokens.size());
   if (!request.prefill && promptSize >= perSeqMaxTokens_) {
     throw qvac_errors::StatusError(
@@ -295,7 +296,7 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
 
   StreamCallbacks streamsLocal = std::move(request.streams);
   if (auto status =
-          batcher_.addRequestAt(seqId, std::move(tokens), policy->getNPast());
+          batcher_.addRequestAt(seqId, std::move(tokens), driver->getNPast());
       status != MultiRequestBatcher::AddStatus::Ok) {
     throw qvac_errors::StatusError(
         ADDON_ID,
@@ -308,7 +309,7 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
   slots_[seqId].emplace(SlotState{
       .streams = std::move(streamsLocal),
       .tools = std::move(tools),
-      .policy = std::move(policy),
+      .driver = std::move(driver),
       .cacheKey = std::move(request.cacheKey),
       .group = std::move(queued.group),
       .outputIndex = queued.outputIndex,
@@ -346,8 +347,8 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
     };
     auto finished = batcher_.extractFinished(kvClear);
     for (const auto& req : finished) {
-      if (slots_[req.seqId].has_value() && slots_[req.seqId]->policy) {
-        slots_[req.seqId]->policy->onSlotEnd({});
+      if (slots_[req.seqId].has_value() && slots_[req.seqId]->driver) {
+        slots_[req.seqId]->driver->onSequenceEnd({});
       }
       notifyDone(req.seqId);
       freeSlot(req.seqId);
@@ -362,17 +363,16 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
       [this](
           uint32_t seqId, llama_pos currentPos, size_t prefillTokenCount) {
         auto& slot = slots_[seqId];
-        if (!slot.has_value() || !slot->policy) {
+        if (!slot.has_value() || !slot->driver) {
           throw qvac_errors::StatusError(
               ADDON_ID,
               qvac_errors::general_error::toString(
                   qvac_errors::general_error::InternalError),
-              "ContinuousBatchScheduler::step: missing slot policy for "
+              "ContinuousBatchScheduler::step: missing sequence driver for "
               "prefill-complete seqId " +
                   std::to_string(seqId));
         }
-        slot->policy->onBatchPrefillComplete(
-            currentPos, prefillTokenCount);
+        slot->driver->onPrefillComplete(currentPos, prefillTokenCount);
         if (slot->prefillOnly) {
           batcher_.markFinished(seqId);
         }
@@ -382,7 +382,7 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
     batcher_.sampleAndAppendIdle([this](uint32_t seqId, int logitIdx) {
       auto& slot = slots_[seqId];
       const Request* req = batcher_.requestAt(seqId);
-      if (!slot.has_value() || !slot->policy || req == nullptr) {
+      if (!slot.has_value() || !slot->driver || req == nullptr) {
         throw qvac_errors::StatusError(
             ADDON_ID,
             qvac_errors::general_error::toString(
@@ -401,8 +401,8 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
           slot->streams.onToken(seqId, text);
         }
       };
-      const SlotPolicyStepResult result =
-          slot->policy->onLogitsReady(
+      const SequenceStepResult result =
+          slot->driver->onLogitsReady(
               logitIdx, generatedAfterAccept, outputCallback);
       if (result.contextOverflow) {
         throw qvac_errors::StatusError(
@@ -431,7 +431,7 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
   };
   auto finished = batcher_.extractFinished();
   for (const auto& req : finished) {
-    if (slots_[req.seqId].has_value() && slots_[req.seqId]->policy) {
+    if (slots_[req.seqId].has_value() && slots_[req.seqId]->driver) {
       auto& slot = *slots_[req.seqId];
       auto outputCallback = [&slot, seqId = req.seqId](const std::string& text) {
         if (slot.group) {
@@ -442,11 +442,11 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
         }
       };
       if (req.stopReason == StopReason::Cancelled) {
-        slot.policy->onCancelPolicy(outputCallback);
+        slot.driver->onCancel(outputCallback);
       } else if (slot.prefillOnly) {
-        slot.policy->onSlotEnd(outputCallback);
+        slot.driver->onSequenceEnd(outputCallback);
       } else {
-        slot.policy->onGenerationFinished(outputCallback);
+        slot.driver->onGenerationFinished(outputCallback);
       }
       accumulateSlotRuntimeStats(slot, req);
       saveCacheForSlot(req.seqId, *slots_[req.seqId]);
@@ -526,8 +526,8 @@ bool ContinuousBatchScheduler::cancel(uint32_t seqId) {
   bool occupied = seqId < slots_.size() && slots_[seqId].has_value();
   if (occupied) {
     const Request* req = batcher_.requestAt(seqId);
-    if (slots_[seqId]->policy) {
-      slots_[seqId]->policy->onCancelPolicy({});
+    if (slots_[seqId]->driver) {
+      slots_[seqId]->driver->onCancel({});
       if (req != nullptr) {
         accumulateSlotRuntimeStats(*slots_[seqId], *req);
       }
@@ -559,8 +559,8 @@ void ContinuousBatchScheduler::clear() {
 void ContinuousBatchScheduler::clearLocked() {
   for (uint32_t seqId = 0; seqId < slots_.size(); seqId++) {
     if (slots_[seqId].has_value()) {
-      if (slots_[seqId]->policy) {
-        slots_[seqId]->policy->onSlotEnd({});
+      if (slots_[seqId]->driver) {
+        slots_[seqId]->driver->onSequenceEnd({});
       }
       notifyDone(seqId);
       freeSlot(seqId);
@@ -613,8 +613,8 @@ void ContinuousBatchScheduler::failGroupLocked(
   };
   for (uint32_t seqId = 0; seqId < slots_.size(); seqId++) {
     if (slots_[seqId].has_value() && slots_[seqId]->group == group) {
-      if (slots_[seqId]->policy) {
-        slots_[seqId]->policy->onCancelPolicy({});
+      if (slots_[seqId]->driver) {
+        slots_[seqId]->driver->onCancel({});
         if (const Request* req = batcher_.requestAt(seqId); req != nullptr) {
           accumulateSlotRuntimeStats(*slots_[seqId], *req);
         }
@@ -654,19 +654,19 @@ void ContinuousBatchScheduler::freeSlot(uint32_t seqId) {
 
 void ContinuousBatchScheduler::saveCacheForSlot(
     uint32_t seqId, const SlotState& slot) {
-  if (!slot.saveCacheToDisk || slot.cacheKey.empty() || !slot.policy) {
+  if (!slot.saveCacheToDisk || slot.cacheKey.empty() || !slot.driver) {
     return;
   }
   (void)seqId;
-  slot.policy->saveSequenceCache(slot.cacheKey);
+  slot.driver->saveCache(slot.cacheKey);
 }
 
 void ContinuousBatchScheduler::accumulateSlotRuntimeStats(
     const SlotState& slot, const Request& req) {
-  if (slot.policy) {
-    completedCacheTokens_ += static_cast<int64_t>(slot.policy->getNPast());
+  if (slot.driver) {
+    completedCacheTokens_ += static_cast<int64_t>(slot.driver->getNPast());
     completedContextSlides_ +=
-        static_cast<int64_t>(slot.policy->getNSlides());
+        static_cast<int64_t>(slot.driver->getNSlides());
   }
   completedGeneratedTokens_ +=
       static_cast<int64_t>(req.generatedTokens.size());

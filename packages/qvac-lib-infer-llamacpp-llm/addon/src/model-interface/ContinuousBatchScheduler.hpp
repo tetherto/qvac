@@ -19,7 +19,7 @@
 
 #include "LlmContext.hpp"
 #include "MultiRequestBatcher.hpp"
-#include "TextLlmContext.hpp"
+#include "SequenceDriver.hpp"
 #include "ToolsCompactController.hpp"
 
 namespace qvac_lib_inference_addon_llama::batching {
@@ -169,7 +169,7 @@ private:
   struct SlotState {
     StreamCallbacks streams;
     std::unique_ptr<ToolsCompactController> tools;
-    std::unique_ptr<TextLlmContext> policy;
+    std::unique_ptr<SequenceDriver> driver;
     std::string cacheKey;
     std::shared_ptr<BatchGroup> group;
     size_t outputIndex = 0;

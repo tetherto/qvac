@@ -3,10 +3,11 @@
 const fs = require('bare-fs')
 const path = require('bare-path')
 const QvacLogger = require('@qvac/logging')
-const { QvacResponse, createJobHandler, exclusiveRunQueue } = require('@qvac/infer-base')
+const { createJobHandler, exclusiveRunQueue } = require('@qvac/infer-base')
 const { LlamaInterface, mapAddonEvent } = require('./addon')
+const BatchHandler = require('./batchHandler')
 
-const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed'
+const { RUN_BUSY_ERROR_MESSAGE } = BatchHandler
 
 function normalizeRunOptions (runOptions) {
   if (runOptions === undefined) {
@@ -221,9 +222,12 @@ class LlmLlamacpp {
     this.addon = null
     this._checkpointSaveDir = null
     this._hasActiveResponse = false
-    this._nextBatchId = 0
-    this._activeBatchIds = null
-    this._pendingBatchResult = null
+    this._batchHandler = new BatchHandler({
+      job: this._job,
+      parsePrompt: promptToAddonMessages,
+      cancelHandler: () => this.addon?.cancel(),
+      runJob: (items) => this.addon.runJob(items)
+    })
     // Carried across mapAddonEvent calls to drop the post-finetune TPS trailer.
     this._addonEventState = { skipNextRuntimeStats: false }
     this.state = { configLoaded: false }
@@ -285,62 +289,13 @@ class LlmLlamacpp {
    * @returns {Promise<QvacResponse>}
    */
   async run (prompt, runOptions) {
-    if (this._isBatchInput(prompt)) {
+    if (BatchHandler.isBatchInput(prompt)) {
       if (runOptions !== undefined) {
         throw new TypeError('Batch run options must be set per BatchPrompt item')
       }
       return this._run(() => this._runBatchInternal(prompt))
     }
     return this._run(() => this._runInternal(prompt, runOptions || {}))
-  }
-
-  _isBatchInput (prompt) {
-    if (!Array.isArray(prompt) || prompt.length === 0) {
-      return false
-    }
-    const firstItem = prompt[0]
-    return Array.isArray(firstItem) ||
-      (
-        firstItem &&
-        typeof firstItem === 'object' &&
-        !Array.isArray(firstItem) &&
-        Array.isArray(firstItem.prompt)
-      )
-  }
-
-  _createBatchId () {
-    this._nextBatchId += 1
-    return `batch-${this._nextBatchId}`
-  }
-
-  _normalizeBatchItems (batchInput) {
-    if (!Array.isArray(batchInput) || batchInput.length === 0) {
-      throw new TypeError('Batch input must be a non-empty array')
-    }
-
-    const seenIds = new Set()
-    return batchInput.map((item) => {
-      const isWrapped = item &&
-        typeof item === 'object' &&
-        !Array.isArray(item) &&
-        Array.isArray(item.prompt)
-      const id = isWrapped && item.id !== undefined ? item.id : this._createBatchId()
-      if (typeof id !== 'string' || id.length === 0) {
-        throw new TypeError('Batch prompt id must be a non-empty string when provided')
-      }
-      if (seenIds.has(id)) {
-        throw new TypeError(`Duplicate batch prompt id: ${id}`)
-      }
-      seenIds.add(id)
-
-      const prompt = isWrapped ? item.prompt : item
-      const itemRunOptions = isWrapped && item.runOptions ? item.runOptions : {}
-
-      return {
-        id,
-        messages: promptToAddonMessages(prompt, itemRunOptions)
-      }
-    })
   }
 
   async _runBatchInternal (batchInput) {
@@ -351,31 +306,12 @@ class LlmLlamacpp {
       throw new Error(RUN_BUSY_ERROR_MESSAGE)
     }
 
-    const batchItems = this._normalizeBatchItems(batchInput)
-    const ids = batchItems.map(item => item.id)
-    const response = new QvacResponse({ cancelHandler: () => this.addon?.cancel() })
-    response.ids = ids
-    this._job.startWith(response)
+    const response = await this._batchHandler.run(batchInput)
 
-    let accepted
-    try {
-      accepted = await this.addon.runJob(batchItems)
-    } catch (error) {
-      this._job.fail(error)
-      throw error
-    }
-    if (!accepted) {
-      this._job.fail(new Error(RUN_BUSY_ERROR_MESSAGE))
-      throw new Error(RUN_BUSY_ERROR_MESSAGE)
-    }
-
-    this._activeBatchIds = ids
-    this._pendingBatchResult = null
     this._hasActiveResponse = true
     const finalized = response.await().finally(() => {
       this._hasActiveResponse = false
-      this._activeBatchIds = null
-      this._pendingBatchResult = null
+      this._batchHandler.clear()
     })
     finalized.catch((err) => {
       this.logger?.warn?.('Batch inference response rejected:', err?.message || err)
@@ -475,9 +411,9 @@ class LlmLlamacpp {
       this.logger.error('Job failed with error:', error)
       this._job.fail(error)
     } else if (eventType === 'BatchOutput') {
-      this._job.output({ id: data.id, chunk: data.output })
+      this._batchHandler.onOutput(data)
     } else if (eventType === 'BatchResult') {
-      this._pendingBatchResult = data
+      this._batchHandler.onResult(data)
     } else if (eventType === 'Output') {
       this._job.output(data)
     } else if (eventType === 'FinetuneProgress') {
@@ -489,15 +425,13 @@ class LlmLlamacpp {
       const isFinetuneTerminal = data && typeof data === 'object' && data.op === 'finetune' && typeof data.status === 'string'
       if (isFinetuneTerminal) {
         this._job.end(null, data)
-      } else if (this._activeBatchIds) {
-        const outputs = Array.isArray(this._pendingBatchResult) ? this._pendingBatchResult : []
-        const result = this._activeBatchIds.map((id, index) => ({
-          id,
-          output: outputs[index] || ''
-        }))
-        this._job.end(this.opts.stats ? data : null, result)
       } else {
-        this._job.end(this.opts.stats ? data : null)
+        const batchResult = this._batchHandler.buildFinalResultIfActive()
+        if (batchResult !== null) {
+          this._job.end(this.opts.stats ? data : null, batchResult)
+        } else {
+          this._job.end(this.opts.stats ? data : null)
+        }
       }
     }
   }

@@ -335,7 +335,7 @@ bool TextLlmContext::evalMessageWithTools(
     const std::vector<common_chat_tool>& tools, bool isCacheLoaded,
     bool prefill) {
   const std::vector<llama_token> inputTokens =
-      prepareBatchPrefill(chatMsgs, tools, isCacheLoaded, prefill);
+      preparePrefill(chatMsgs, tools, isCacheLoaded, prefill);
   const auto nTokens = static_cast<llama_pos>(inputTokens.size());
   LlamaBatch textBatch(params_.n_batch, 0, 1);
 
@@ -380,11 +380,11 @@ bool TextLlmContext::evalMessageWithTools(
     // NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic,bugprone-narrowing-conversions,readability-implicit-bool-conversion,readability-identifier-naming)
   }
 
-  onBatchPrefillComplete(nPast_, inputTokens.size());
+  onPrefillComplete(nPast_, inputTokens.size());
   return true;
 }
 
-std::vector<llama_token> TextLlmContext::prepareBatchPrefill(
+std::vector<llama_token> TextLlmContext::preparePrefill(
     const std::vector<common_chat_msg>& chatMsgs,
     const std::vector<common_chat_tool>& tools, bool isCacheLoaded,
     bool prefill) {
@@ -452,7 +452,7 @@ std::vector<llama_token> TextLlmContext::prepareBatchPrefill(
   return inputTokens;
 }
 
-void TextLlmContext::onBatchPrefillComplete(
+void TextLlmContext::onPrefillComplete(
     llama_pos currentPos, size_t prefillTokenCount) {
   nPast_ = currentPos;
   if (pendingBatchFirstMsg_) {
@@ -535,7 +535,7 @@ bool TextLlmContext::generateResponse(
 
   if (stopGeneration_.load()) {
     stopGeneration_.store(false);
-    onCancelPolicy(outputCallback);
+    onCancel(outputCallback);
     return true;
   }
 
@@ -543,12 +543,12 @@ bool TextLlmContext::generateResponse(
          generatedAfterAccept < static_cast<unsigned>(params_.n_predict)) {
     if (stopGeneration_.load()) {
       stopGeneration_.store(false);
-      onCancelPolicy(outputCallback);
+      onCancel(outputCallback);
       return true;
     }
 
     ++generatedAfterAccept;
-    const SlotPolicyStepResult step =
+    const SequenceStepResult step =
         onLogitsReady(-1, generatedAfterAccept, outputCallback, &batch);
     if (step.contextOverflow) {
       return false;
@@ -579,7 +579,7 @@ bool TextLlmContext::generateResponse(
   return true;
 }
 
-SlotPolicyStepResult TextLlmContext::onLogitsReady(
+SequenceStepResult TextLlmContext::onLogitsReady(
     int logitIdx, unsigned generatedAfterAccept,
     const std::function<void(const std::string&)>& outputCallback,
     LlamaBatch* inlineDecodeBatch) {
@@ -676,14 +676,14 @@ SlotPolicyStepResult TextLlmContext::onLogitsReady(
   return {.token = tokenId, .finished = finished};
 }
 
-void TextLlmContext::onSlotEnd(
+void TextLlmContext::onSequenceEnd(
     const std::function<void(const std::string&)>& outputCallback) {
   flushPendingUtf8ToCallback(outputCallback);
 }
 
 void TextLlmContext::onGenerationFinished(
     const std::function<void(const std::string&)>& outputCallback) {
-  onSlotEnd(outputCallback);
+  onSequenceEnd(outputCallback);
   if (generationStarted_) {
     onGenerationCompletePolicy(assistantOutput_);
     assistantOutput_.clear();
@@ -691,7 +691,7 @@ void TextLlmContext::onGenerationFinished(
   }
 }
 
-void TextLlmContext::onCancelPolicy(
+void TextLlmContext::onCancel(
     const std::function<void(const std::string&)>& outputCallback) {
   onGenerationFinished(outputCallback);
 }
@@ -715,7 +715,7 @@ void TextLlmContext::onGenerationCompletePolicy(
   }
 }
 
-bool TextLlmContext::loadSequenceCache(
+bool TextLlmContext::loadCache(
     const std::string& cacheKey, llama_pos configuredNDiscarded) {
   if (cacheKey.empty() || !isFileInitialized(cacheKey)) {
     return false;
@@ -734,7 +734,7 @@ bool TextLlmContext::loadSequenceCache(
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(UnableToLoadSessionFile),
-        "TextLlmContext::loadSequenceCache: failed to load cache '" +
+        "TextLlmContext::loadCache: failed to load cache '" +
             cacheKey + "'");
   }
 
@@ -745,7 +745,7 @@ bool TextLlmContext::loadSequenceCache(
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(ContextLengthExeeded),
-        "TextLlmContext::loadSequenceCache: cache '" + cacheKey +
+        "TextLlmContext::loadCache: cache '" + cacheKey +
             "' exceeds current context size");
   }
 
@@ -763,7 +763,7 @@ bool TextLlmContext::loadSequenceCache(
   return true;
 }
 
-void TextLlmContext::saveSequenceCache(const std::string& cacheKey) const {
+void TextLlmContext::saveCache(const std::string& cacheKey) const {
   if (cacheKey.empty()) {
     return;
   }
@@ -777,7 +777,7 @@ void TextLlmContext::saveSequenceCache(const std::string& cacheKey) const {
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(InvalidInputFormat),
-        "TextLlmContext::saveSequenceCache: failed to save cache '" +
+        "TextLlmContext::saveCache: failed to save cache '" +
             cacheKey + "'");
   }
 }

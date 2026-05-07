@@ -154,13 +154,6 @@ struct LlmContextShared {
   ggml_threadpool* threadpoolBatch = nullptr;
 };
 
-struct SlotPolicyStepResult {
-  llama_token token = LLAMA_TOKEN_NULL;
-  bool finished = false;
-  bool decodedInline = false;
-  bool contextOverflow = false;
-};
-
 class LlmContext { // NOLINT(cppcoreguidelines-special-member-functions)
 public:
   LlmContext() = default;
@@ -328,36 +321,11 @@ public:
    */
   virtual void resetMedia() {};
 
-  virtual SlotPolicyStepResult onLogitsReady(
-      int logitIdx, unsigned generatedAfterAccept,
-      const std::function<void(const std::string&)>& outputCallback,
-      LlamaBatch* inlineDecodeBatch = nullptr) {
-    (void)logitIdx;
-    (void)generatedAfterAccept;
-    (void)outputCallback;
-    (void)inlineDecodeBatch;
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        qvac_errors::general_error::toString(
-            qvac_errors::general_error::InternalError),
-        "LlmContext: slot policy is not implemented for this context");
-  }
-
-  virtual void onSlotEnd(
-      const std::function<void(const std::string&)>& outputCallback) {
-    (void)outputCallback;
-  }
-
-  virtual void onGenerationFinished(
-      const std::function<void(const std::string&)>& outputCallback) {
-    onSlotEnd(outputCallback);
-  }
-
-  virtual void onCancelPolicy(
-      const std::function<void(const std::string&)>& outputCallback) {
-    onSlotEnd(outputCallback);
-  }
-
+  /// Validates an incoming prompt against any policy-level constraints
+  /// (size, layout, KV-cache state). Default is a no-op; concrete
+  /// contexts (`TextLlmContext`, `MtmdLlmContext`) override as needed.
+  /// Used by both the legacy single-prompt path and the per-slot
+  /// continuous-batching path before admission.
   virtual void validatePromptPolicy(
       const std::vector<common_chat_msg>& chatMsgs,
       const std::vector<common_chat_tool>& tools, const PromptLayout& layout,
@@ -366,10 +334,6 @@ public:
     (void)tools;
     (void)layout;
     (void)hasKvCacheContext;
-  }
-
-  virtual void onGenerationCompletePolicy(std::string_view assistantOutput) {
-    (void)assistantOutput;
   }
 
 protected:
