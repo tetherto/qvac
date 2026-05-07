@@ -56,6 +56,10 @@
             "required": ["gid"]
           }
         },
+        "statusOptions": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
         "sections": {
           "type": "object",
           "additionalProperties": { "$ref": "#/$defs/namedGid" }

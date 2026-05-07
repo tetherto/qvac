@@ -16,7 +16,7 @@ Ask for the missing input:
 
 - Ticket ID or task GID
 - Desired action: `find`, `status`, `move`, `comment`, or `complete`
-- Target section for `move`
+- Target status for `move`
 - Comment text for `comment`
 
 ## Prerequisites
@@ -59,11 +59,11 @@ Show these options when no action is provided:
 - `status` - validate local Asana config and token access
 - `find <ticket>` - find an Asana task by ticket
 - `task <task-gid>` - read a task by Asana GID
-- `move <ticket-or-task-gid> <section>` - move task to configured section
+- `move <ticket-or-task-gid> <status>` - move task to configured status
 - `comment <ticket-or-task-gid> <text>` - add task comment
 - `complete <ticket-or-task-gid>` - mark task complete and move to completed
 
-Available sections: `inProgress`, `inReview`, `blocked`, `completed`, `backlog`, `todo`, `bugs`, `closed`.
+Available statuses: `todo`, `inProgress`, `blocked`, `inReview`, `readyForQa`, `qaPassed`, `staging`, `storeReview`, `readyForProd`, `completed`, `closed`.
 
 Status / config validation:
 
@@ -83,7 +83,7 @@ Read a task by Asana task GID:
 node .cursor/skills/_lib/developer-workflow/asana-cli.mjs task <task-gid>
 ```
 
-Move a ticket/task to a configured section:
+Move a ticket/task to a configured status. If `asana.statusOptions` is configured, this uses Asana's `custom_type_status_option`. Otherwise it falls back to old section movement:
 
 ```bash
 node .cursor/skills/_lib/developer-workflow/asana-cli.mjs move QVAC-12345 inProgress
@@ -98,7 +98,7 @@ Add a comment, for example a PR URL:
 node .cursor/skills/_lib/developer-workflow/asana-cli.mjs comment QVAC-12345 "PR opened: https://github.com/owner/repo/pull/123"
 ```
 
-Complete a task and move it to configured `completed` section:
+Complete a task and move it to configured `completed` status:
 
 ```bash
 node .cursor/skills/_lib/developer-workflow/asana-cli.mjs complete QVAC-12345

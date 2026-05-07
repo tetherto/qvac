@@ -6,6 +6,7 @@ import {
   findTaskByTicket,
   getTask,
   moveTaskToSection,
+  setTaskStatus,
   validateAsanaConfig,
 } from "./asana.mjs";
 import { loadConfig } from "./config.mjs";
@@ -63,10 +64,18 @@ async function main() {
     }
     case "move": {
       const task = await resolveTask(config, args[0]);
-      const section = config.asana?.sections?.[args[1]];
-      if (!section?.gid) throw new Error(`Unknown configured section: ${args[1]}`);
-      const result = await moveTaskToSection(task.gid, section.gid);
-      printJson({ moved: true, task: task.gid, section: args[1], result });
+      let result;
+      let mode;
+      if (config.asana?.statusOptions?.[args[1]]) {
+        result = await setTaskStatus(task.gid, args[1], config);
+        mode = "statusField";
+      } else {
+        const section = config.asana?.sections?.[args[1]];
+        if (!section?.gid) throw new Error(`Unknown configured section/status: ${args[1]}`);
+        result = await moveTaskToSection(task.gid, section.gid);
+        mode = "section";
+      }
+      printJson({ moved: true, task: task.gid, target: args[1], mode, result });
       return;
     }
     case "comment": {
@@ -80,10 +89,21 @@ async function main() {
     case "complete": {
       const task = await resolveTask(config, args[0]);
       const completed = await completeTask(task.gid, true);
-      const section = config.asana?.sections?.completed;
+      const statusOption = config.asana?.statusOptions?.completed;
+      let statusResult = null;
+      if (statusOption?.gid) {
+        statusResult = await setTaskStatus(task.gid, "completed", config);
+      }
+      const section = statusResult ? null : config.asana?.sections?.completed;
       let moved = null;
       if (section?.gid) moved = await moveTaskToSection(task.gid, section.gid);
-      printJson({ completed: true, task: task.gid, completedResult: completed, movedResult: moved });
+      printJson({
+        completed: true,
+        task: task.gid,
+        completedResult: completed,
+        statusResult,
+        movedResult: moved,
+      });
       return;
     }
     default:

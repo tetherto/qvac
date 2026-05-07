@@ -124,7 +124,7 @@ export async function getCustomField(gid, token = null) {
 
 export async function getTask(gid, token = null) {
   const result = await request(
-    `/tasks/${enc(gid)}?opt_fields=gid,name,completed,permalink_url,assignee.gid,assignee.name,memberships.section.name,custom_fields.name,custom_fields.display_value,modified_at,completed_at`,
+    `/tasks/${enc(gid)}?opt_fields=gid,name,completed,permalink_url,assignee.gid,assignee.name,memberships.section.name,custom_fields.name,custom_fields.display_value,custom_type_status_option.gid,custom_type_status_option.name,modified_at,completed_at`,
     { token },
   );
   return result.data;
@@ -197,6 +197,24 @@ export async function completeTask(taskGid, completed = true, token = null) {
     token,
   });
   return result.data;
+}
+
+export async function updateTask(taskGid, data, token = null) {
+  const result = await request(`/tasks/${enc(taskGid)}`, {
+    method: "PUT",
+    body: data,
+    token,
+  });
+  return result.data;
+}
+
+export async function setTaskStatus(taskGid, statusKey, config = loadConfig(), token = null) {
+  const optionGid =
+    config.asana?.statusOptions?.[statusKey];
+  if (!optionGid) {
+    throw new Error(`No Asana status option configured for ${statusKey}`);
+  }
+  return updateTask(taskGid, { custom_type_status_option: optionGid }, token);
 }
 
 export async function addTaskComment(taskGid, text, token = null) {

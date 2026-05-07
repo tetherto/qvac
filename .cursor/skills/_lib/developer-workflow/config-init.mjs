@@ -24,6 +24,7 @@ const ALLOWED_ASANA_IMPORT_KEYS = new Set([
   "workspace",
   "project",
   "customFields",
+  "statusOptions",
   "sections",
 ]);
 
