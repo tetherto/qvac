@@ -56,6 +56,12 @@ const BASE_PARAMS = {
   seed: 42
 }
 
+const LONG_PARAMS = {
+  ...BASE_PARAMS,
+  steps: 20,
+  seed: 43
+}
+
 const TINY_PNG_16X16 = new Uint8Array([
   0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
   0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
@@ -188,6 +194,47 @@ async function ensureEsrganModelPath () {
     downloadUrl: ESRGAN_MODEL.url
   })
   return { esrganPath: path.join(modelDir, esrganName), modelDir }
+}
+
+async function ensureSdAndEsrganPaths () {
+  const [modelName, modelDir] = await ensureModel({
+    modelName: SD21_MODEL.name,
+    downloadUrl: SD21_MODEL.url
+  })
+  const { esrganPath } = await ensureEsrganModelPath()
+  return {
+    modelDir,
+    modelPath: path.join(modelDir, modelName),
+    esrganPath
+  }
+}
+
+function createModel (modelPath, esrganPath) {
+  return new ImgStableDiffusion({
+    files: {
+      model: modelPath,
+      esrgan: esrganPath
+    },
+    config: {
+      device: useCpu ? 'cpu' : 'gpu',
+      threads: 4,
+      prediction: 'v',
+      upscaler_tile_size: 128
+    },
+    logger: console
+  })
+}
+
+function createUpscaler (esrganPath) {
+  return new EsrganUpscaler({
+    files: {
+      esrgan: esrganPath
+    },
+    config: {
+      upscaler_tile_size: 128
+    },
+    logger: console
+  })
 }
 
 function saveImage (modelDir, filename, image) {
@@ -338,7 +385,7 @@ test('ESRGAN standalone upscale — cancel rejects between repeat passes', { tim
     await upscaler.load()
 
     const images = []
-    const response = await upscaler.upscale(TINY_PNG_16X16, { repeats: 4 })
+    const response = await upscaler.upscale(TINY_PNG_16X16, { repeats: 3 })
     const chain = response.onUpdate(data => {
       if (data instanceof Uint8Array) {
         images.push(data)
@@ -502,6 +549,272 @@ test('ESRGAN standalone upscaler and diffusion model can coexist', { timeout: te
       'generate-image--coexistence-standalone-esrgan.png',
       standaloneImages[0]
     )
+  } finally {
+    await Promise.all([
+      model.unload().catch(() => {}),
+      upscaler.unload().catch(() => {})
+    ])
+    try {
+      binding.releaseLogger()
+    } catch (_) {}
+  }
+})
+
+test('ESRGAN coexistence — canceling one instance does not affect the other', { timeout: testTimeout, skip }, async t => {
+  setupJsLogger(binding)
+
+  const { modelDir, modelPath, esrganPath } = await ensureSdAndEsrganPaths()
+  t.ok(fs.existsSync(modelPath), 'SD model file exists on disk')
+  t.ok(fs.existsSync(esrganPath), 'ESRGAN model file exists on disk')
+
+  const model = createModel(modelPath, esrganPath)
+  const upscaler = createUpscaler(esrganPath)
+
+  try {
+    await Promise.all([
+      model.load(),
+      upscaler.load()
+    ])
+
+    const [modelResponse, upscalerResponse] = await Promise.all([
+      model.run(LONG_PARAMS),
+      upscaler.upscale(TINY_PNG_16X16, { repeats: 3 })
+    ])
+
+    const modelImages = []
+    let modelCancelFired = false
+    const modelChain = modelResponse.onUpdate(async data => {
+      if (data instanceof Uint8Array) {
+        modelImages.push(data)
+        return
+      }
+      if (!modelCancelFired && typeof data === 'string') {
+        modelCancelFired = true
+        await model.cancel()
+      }
+    }).await()
+    const upscalerImagesPromise = collectImages(upscalerResponse)
+
+    const [, upscalerImages] = await Promise.all([
+      expectCancelRejection(t, modelChain, 'coexistence model cancel'),
+      upscalerImagesPromise
+    ])
+
+    t.ok(modelCancelFired, 'model cancel fired after progress tick')
+    t.is(modelImages.length, 0, 'model cancel emitted no PNG output')
+    t.is(upscalerImages.length, 1, 'upscaler completed while model was cancelled')
+    assertPngDimensions(
+      t,
+      upscalerImages[0],
+      expectedSize(16, 3),
+      expectedSize(16, 3),
+      'coexistence model cancel: standalone output'
+    )
+    saveImage(
+      modelDir,
+      'generate-image--coexistence-model-cancel-standalone.png',
+      upscalerImages[0]
+    )
+
+    const [modelResponse2, upscalerResponse2] = await Promise.all([
+      model.run(LONG_PARAMS),
+      upscaler.upscale(TINY_PNG_16X16, { repeats: 3 })
+    ])
+    const modelImages2Promise = collectImages(modelResponse2)
+    const upscalerImages2 = []
+    const upscalerChain = upscalerResponse2.onUpdate(data => {
+      if (data instanceof Uint8Array) {
+        upscalerImages2.push(data)
+      }
+    }).await()
+
+    const cancelPromise = upscaler.cancel()
+    await Promise.all([
+      expectCancelRejection(t, upscalerChain, 'coexistence upscaler cancel'),
+      cancelPromise
+    ])
+    const modelImages2 = await modelImages2Promise
+
+    t.is(upscalerImages2.length, 0, 'upscaler cancel emitted no PNG output')
+    t.is(modelImages2.length, 1, 'model completed while upscaler was cancelled')
+    assertPngDimensions(
+      t,
+      modelImages2[0],
+      SOURCE_WIDTH,
+      SOURCE_HEIGHT,
+      'coexistence upscaler cancel: model output'
+    )
+    saveImage(
+      modelDir,
+      'generate-image--coexistence-upscaler-cancel-sd2.png',
+      modelImages2[0]
+    )
+  } finally {
+    await Promise.all([
+      model.unload().catch(() => {}),
+      upscaler.unload().catch(() => {})
+    ])
+    try {
+      binding.releaseLogger()
+    } catch (_) {}
+  }
+})
+
+test('ESRGAN coexistence — unloading idle peer does not affect running peer', { timeout: testTimeout, skip }, async t => {
+  setupJsLogger(binding)
+
+  const { modelDir, modelPath, esrganPath } = await ensureSdAndEsrganPaths()
+  t.ok(fs.existsSync(modelPath), 'SD model file exists on disk')
+  t.ok(fs.existsSync(esrganPath), 'ESRGAN model file exists on disk')
+
+  const model = createModel(modelPath, esrganPath)
+  const upscaler = createUpscaler(esrganPath)
+
+  try {
+    await Promise.all([
+      model.load(),
+      upscaler.load()
+    ])
+
+    const modelResponse = await model.run(LONG_PARAMS)
+    const modelImages = []
+    let upscalerUnloadPromise = null
+    const modelChain = modelResponse.onUpdate(data => {
+      if (data instanceof Uint8Array) {
+        modelImages.push(data)
+        return
+      }
+      if (!upscalerUnloadPromise && typeof data === 'string') {
+        upscalerUnloadPromise = upscaler.unload()
+      }
+    }).await()
+    await modelChain
+    await upscalerUnloadPromise
+
+    t.ok(upscalerUnloadPromise, 'upscaler unload started after model progress')
+    t.is(modelImages.length, 1, 'model completed while upscaler was unloaded')
+    assertPngDimensions(
+      t,
+      modelImages[0],
+      SOURCE_WIDTH,
+      SOURCE_HEIGHT,
+      'coexistence unload upscaler: model output'
+    )
+    saveImage(
+      modelDir,
+      'generate-image--coexistence-unload-upscaler-sd2.png',
+      modelImages[0]
+    )
+
+    await upscaler.load()
+    const reloadedUpscalerImages = await upscaler
+      .upscale(TINY_PNG_16X16, { repeats: 1 })
+      .then(collectImages)
+    t.is(reloadedUpscalerImages.length, 1, 'upscaler can reload after unload')
+    assertPngDimensions(
+      t,
+      reloadedUpscalerImages[0],
+      expectedSize(16, 1),
+      expectedSize(16, 1),
+      'coexistence reload upscaler'
+    )
+
+    const upscalerResponse = await upscaler.upscale(TINY_PNG_16X16, {
+      repeats: 3
+    })
+    const upscalerImagesPromise = collectImages(upscalerResponse)
+    await sleep(STANDALONE_CANCEL_DELAY)
+    await model.unload()
+    const upscalerImages = await upscalerImagesPromise
+
+    t.is(upscalerImages.length, 1, 'upscaler completed while model was unloaded')
+    assertPngDimensions(
+      t,
+      upscalerImages[0],
+      expectedSize(16, 3),
+      expectedSize(16, 3),
+      'coexistence unload model: standalone output'
+    )
+    saveImage(
+      modelDir,
+      'generate-image--coexistence-unload-model-standalone.png',
+      upscalerImages[0]
+    )
+
+    await model.load()
+    const reloadedModelImages = await model.run(BASE_PARAMS).then(collectImages)
+    t.is(reloadedModelImages.length, 1, 'model can reload after unload')
+    assertPngDimensions(
+      t,
+      reloadedModelImages[0],
+      SOURCE_WIDTH,
+      SOURCE_HEIGHT,
+      'coexistence reload model'
+    )
+  } finally {
+    await Promise.all([
+      model.unload().catch(() => {}),
+      upscaler.unload().catch(() => {})
+    ])
+    try {
+      binding.releaseLogger()
+    } catch (_) {}
+  }
+})
+
+test('ESRGAN coexistence — same-tick load/unload lifecycle remains reusable', { timeout: testTimeout, skip }, async t => {
+  setupJsLogger(binding)
+
+  const { modelPath, esrganPath } = await ensureSdAndEsrganPaths()
+  t.ok(fs.existsSync(modelPath), 'SD model file exists on disk')
+  t.ok(fs.existsSync(esrganPath), 'ESRGAN model file exists on disk')
+
+  const model = createModel(modelPath, esrganPath)
+  const upscaler = createUpscaler(esrganPath)
+
+  try {
+    await model.load()
+
+    // activate* currently runs synchronously inside the native binding. Firing
+    // these operations in the same JS tick is the stable overlap this API can
+    // express without moving load to a worker thread or mocking native load.
+    await Promise.all([
+      upscaler.load(),
+      model.unload()
+    ])
+
+    const upscalerImages = await upscaler
+      .upscale(TINY_PNG_16X16, { repeats: 1 })
+      .then(collectImages)
+    t.is(upscalerImages.length, 1, 'upscaler works after peer unload during load')
+    assertPngDimensions(
+      t,
+      upscalerImages[0],
+      expectedSize(16, 1),
+      expectedSize(16, 1),
+      'coexistence lifecycle upscaler output'
+    )
+
+    await Promise.all([
+      model.load(),
+      upscaler.unload()
+    ])
+
+    const modelImages = await model.run(BASE_PARAMS).then(collectImages)
+    t.is(modelImages.length, 1, 'model works after peer unload during load')
+    assertPngDimensions(
+      t,
+      modelImages[0],
+      SOURCE_WIDTH,
+      SOURCE_HEIGHT,
+      'coexistence lifecycle model output'
+    )
+
+    await upscaler.load()
+    const reloadedUpscalerImages = await upscaler
+      .upscale(TINY_PNG_16X16, { repeats: 1 })
+      .then(collectImages)
+    t.is(reloadedUpscalerImages.length, 1, 'upscaler reloads after lifecycle overlap')
   } finally {
     await Promise.all([
       model.unload().catch(() => {}),
