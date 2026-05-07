@@ -1,8 +1,8 @@
 {
   "dependencies": [
     {
-      "name": "ggml",
-      "version>=": "2026-01-30#7",
+      "name": "qvac-fabric",
+      "version>=": "7248.2.3#1",
       "default-features": false
     },
     {

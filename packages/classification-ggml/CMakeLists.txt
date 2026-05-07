@@ -95,8 +95,17 @@ target_link_libraries(
   PRIVATE
     ggml::ggml
     ggml::ggml-base
-    ggml::ggml-cpu
 )
+
+# CPU backend: with GGML_CPU_ALL_VARIANTS=ON (Android via qvac-fabric),
+# the single ggml::ggml-cpu target doesn't exist — it's replaced by
+# per-microarch variants (ggml::ggml-cpu-android_armv8.0_1, ...armv8.2_1,
+# ...armv8.2_2, ...armv8.6_1) loaded as MODULE .so files at runtime via
+# dlopen. On Apple/Linux/Windows desktop where variants are off,
+# ggml::ggml-cpu exists as a single static target.
+if(TARGET ggml::ggml-cpu)
+  target_link_libraries(${classification-ggml} PRIVATE ggml::ggml-cpu)
+endif()
 
 target_compile_definitions(
   ${classification-ggml}
