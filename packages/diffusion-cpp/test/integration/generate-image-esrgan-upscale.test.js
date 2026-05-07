@@ -28,6 +28,9 @@ const skip = isMobile || noGpu
 
 const BASE_TIMEOUT = 600000
 const testTimeout = isWindows ? BASE_TIMEOUT * 2 : BASE_TIMEOUT
+const CANCEL_SETTLE_TIMEOUT = isWindows ? 240000 : 120000
+const STANDALONE_CANCEL_DELAY = 250
+const CANCEL_ERROR_RE = /cancel|aborted|stopp?ed/i
 
 const SD21_MODEL = {
   name: 'stable-diffusion-v2-1-Q4_0.gguf',
@@ -123,6 +126,10 @@ function expectedSize (sourceSize, repeats) {
   return sourceSize * Math.pow(4, repeats)
 }
 
+function sleep (ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
 function assertPngDimensions (t, image, width, height, label) {
   t.ok(image instanceof Uint8Array, `${label}: output is a Uint8Array`)
   t.ok(image.length > 0, `${label}: output is non-empty`)
@@ -142,6 +149,37 @@ async function collectImages (response) {
     }
   }).await()
   return images
+}
+
+async function expectCancelRejection (t, promise, label) {
+  let timeout
+  const result = await Promise.race([
+    promise.then(
+      () => ({ status: 'resolved' }),
+      err => ({ status: 'rejected', err })
+    ),
+    new Promise(resolve => {
+      timeout = setTimeout(
+        () => resolve({ status: 'timeout' }),
+        CANCEL_SETTLE_TIMEOUT
+      )
+    })
+  ])
+  clearTimeout(timeout)
+
+  if (result.status === 'timeout') {
+    t.fail(`${label}: did not settle within ${CANCEL_SETTLE_TIMEOUT}ms`)
+    return
+  }
+  if (result.status === 'resolved') {
+    t.fail(`${label}: completed successfully instead of cancelling`)
+    return
+  }
+
+  t.ok(
+    CANCEL_ERROR_RE.test(result.err?.message || ''),
+    `${label}: rejected with a cancel error`
+  )
 }
 
 async function ensureEsrganModelPath () {
@@ -274,6 +312,115 @@ test('ESRGAN standalone upscale — emits expected PNG dimensions', { timeout: t
     }
   } finally {
     await upscaler.unload().catch(() => {})
+    try {
+      binding.releaseLogger()
+    } catch (_) {}
+  }
+})
+
+test('ESRGAN standalone upscale — cancel rejects between repeat passes', { timeout: testTimeout, skip }, async t => {
+  setupJsLogger(binding)
+
+  const { esrganPath } = await ensureEsrganModelPath()
+  t.ok(fs.existsSync(esrganPath), 'ESRGAN model file exists on disk')
+
+  const upscaler = new EsrganUpscaler({
+    files: {
+      esrgan: esrganPath
+    },
+    config: {
+      upscaler_tile_size: 128
+    },
+    logger: console
+  })
+
+  try {
+    await upscaler.load()
+
+    const images = []
+    const response = await upscaler.upscale(TINY_PNG_16X16, { repeats: 4 })
+    const chain = response.onUpdate(data => {
+      if (data instanceof Uint8Array) {
+        images.push(data)
+      }
+    }).await()
+
+    // Standalone upscale does not emit progress ticks. Use enough repeats to
+    // keep the job alive, then cancel shortly after acceptance so cancellation
+    // is observed at the next ESRGAN repeat boundary.
+    await sleep(STANDALONE_CANCEL_DELAY)
+    const cancelStarted = Date.now()
+    const cancelPromise = upscaler.cancel()
+
+    await expectCancelRejection(t, chain, 'standalone cancel')
+    await cancelPromise
+
+    t.ok(
+      Date.now() - cancelStarted < CANCEL_SETTLE_TIMEOUT,
+      'standalone cancel settled within timeout'
+    )
+    t.is(images.length, 0, 'standalone cancel emitted no PNG output')
+  } finally {
+    await upscaler.unload().catch(() => {})
+    try {
+      binding.releaseLogger()
+    } catch (_) {}
+  }
+})
+
+test('ESRGAN post-generation upscale — cancel rejects without emitted image', { timeout: testTimeout, skip }, async t => {
+  setupJsLogger(binding)
+
+  const [modelName, modelDir] = await ensureModel({
+    modelName: SD21_MODEL.name,
+    downloadUrl: SD21_MODEL.url
+  })
+  const { esrganPath } = await ensureEsrganModelPath()
+
+  const modelPath = path.join(modelDir, modelName)
+  t.ok(fs.existsSync(modelPath), 'SD model file exists on disk')
+  t.ok(fs.existsSync(esrganPath), 'ESRGAN model file exists on disk')
+
+  const model = new ImgStableDiffusion({
+    files: {
+      model: modelPath,
+      esrgan: esrganPath
+    },
+    config: {
+      device: useCpu ? 'cpu' : 'gpu',
+      threads: 4,
+      prediction: 'v',
+      upscaler_tile_size: 128
+    },
+    logger: console
+  })
+
+  try {
+    await model.load()
+
+    const response = await model.run({
+      ...BASE_PARAMS,
+      upscale: { repeats: 2 }
+    })
+
+    const images = []
+    let cancelFired = false
+    const chain = response.onUpdate(async data => {
+      if (data instanceof Uint8Array) {
+        images.push(data)
+        return
+      }
+      if (!cancelFired && typeof data === 'string') {
+        cancelFired = true
+        await model.cancel()
+      }
+    }).await()
+
+    await expectCancelRejection(t, chain, 'post-generation cancel')
+    t.ok(cancelFired, 'post-generation cancel fired after first progress tick')
+    t.is(images.length, 0, 'post-generation cancel emitted no PNG output')
+  } finally {
+    await model.unload().catch(() => {})
     try {
       binding.releaseLogger()
     } catch (_) {}
