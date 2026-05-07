@@ -146,8 +146,11 @@ export function appendDiaryEntry(entry, { force = false } = {}) {
     "",
     `- **type**: ${normalized.type}`,
   ];
+  if (normalized.verb) lines.push(`- **verb**: ${normalized.verb}`);
   if (normalized.ticket) lines.push(`- **ticket**: ${normalized.ticket}`);
   if (normalized.pr) lines.push(`- **pr**: ${normalized.pr}`);
+  if (normalized.url) lines.push(`- **url**: ${normalized.url}`);
+  if (normalized.urlLabel) lines.push(`- **urlLabel**: ${normalized.urlLabel}`);
   lines.push(`- **status**: ${normalized.status}`);
   if (normalized.blocker) lines.push(`- **blocker**: ${normalized.blocker}`);
   lines.push("");

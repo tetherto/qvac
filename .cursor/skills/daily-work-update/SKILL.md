@@ -64,13 +64,14 @@ Then render all three Slack sections every time:
 
 Rules:
 
-- Run `daily-work-update.mjs` and use its stdout as the source of truth.
-- Return the generated message verbatim as rendered Markdown. Do not manually rewrite, summarize, "clean up", split, expand, or reformat the generator output.
+- Run `daily-work-update.mjs` and use stdout as the source of truth.
+- Return the generated message verbatim as rendered Markdown in chat.
+- Do not manually rewrite, summarize, "clean up", split, expand, or reformat the generated output.
 - In particular, do not expand the `Approved:` review summary into one bullet per PR. If the generator emits `Approved: ...; ...`, preserve that one summary bullet.
 - Prefer diary entries as the source of truth for Cursor work.
 - Deduplicate by ticket ID, PR number, issue number, and URL.
-- Present the final message as rendered Markdown in chat, not a fenced code block.
-- Prefix every output item with escaped dash syntax (`\- `). This renders as a literal dash in chat and keeps the dash when copied into Slack.
+- Present the final message directly in chat, not as a fenced code block.
+- Use normal Markdown bullets (`- `). Do not escape bullets.
 - Use Markdown link syntax for links so the chat renders clickable links: `[label](url)`.
 - PR labels should be short, e.g. `[#123](https://github.com/org/repo/pull/123)`.
 - Asana ticket labels should include ticket and task name when known, e.g. `[QVAC-12345 Task title](https://app.asana.com/...)`.

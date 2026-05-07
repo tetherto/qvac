@@ -73,12 +73,18 @@ function prStateDetails(repo, number) {
       "--repo",
       repo,
       "--json",
-      "number,title,url,state,mergedAt",
+      "number,title,url,state,mergedAt,closedAt",
     ]);
     return JSON.parse(raw);
   } catch {
     return null;
   }
+}
+
+function verbForPRState(state) {
+  if (state === "MERGED") return "merged";
+  if (state === "CLOSED") return "closed";
+  return "created";
 }
 
 function reviewVerbFromEventState(state) {
@@ -175,10 +181,11 @@ async function githubActivityForDay(date, config, prState = null) {
       const repo = pr.repository?.nameWithOwner;
       const details = repo ? prStateDetails(repo, pr.number) : null;
       const state = details?.state || pr.state;
+      if (state === "CLOSED") continue;
       out.push({
         source: "github",
         kind: "pr",
-        verb: state === "MERGED" ? "merged" : "opened",
+        verb: verbForPRState(state),
         ticket: extractTicket(details?.title || pr.title, config),
         pr: pr.number,
         repo,
@@ -192,6 +199,18 @@ async function githubActivityForDay(date, config, prState = null) {
   }
   out.push(...reviewEventsForDay(date, config));
   return out;
+}
+
+function preferLinkedDiaryActivity(items) {
+  const linkedUrls = new Set(
+    items
+      .filter((item) => item.source === "diary" && item.ticket && item.url)
+      .map((item) => item.url),
+  );
+  if (linkedUrls.size === 0) return items;
+  return items.filter((item) =>
+    !(item.source === "github" && !item.ticket && item.url && linkedUrls.has(item.url)),
+  );
 }
 
 async function asanaActivityForDay(date) {
@@ -279,6 +298,7 @@ async function main() {
   const date = readArg("--date") || todayKey();
   const tomorrow = readArg("--tomorrow");
   const blockers = readArg("--blockers");
+  const skipUnlinked = process.argv.includes("--skip-unlinked");
   const config = loadConfig();
   const prState = collectPRState();
   const diaries = readDiaryRange({ from: date, to: date });
@@ -286,31 +306,32 @@ async function main() {
   const githubActivities = await githubActivityForDay(date, config, prState);
   const asanaActivities = await asanaActivityForDay(date);
   const queueActivities = prQueueActivity(prState);
-  const allActivities = await enrichTickets([
+  const allActivities = preferLinkedDiaryActivity(await enrichTickets([
     ...diaryActivities,
     ...githubActivities,
     ...asanaActivities,
     ...queueActivities,
-  ], config);
+  ], config));
   const unlinked = allActivities.filter(
     (item) => !item.ticket && !item.pr && !item.issue && !item.url,
   );
-  if (unlinked.length > 0) {
+  if (unlinked.length > 0 && !skipUnlinked) {
     console.error("Unlinked activity needs ticket/PR mapping before finalizing:");
     for (const item of unlinked.slice(0, 10)) {
       console.error(`- ${item.title || item.summary}`);
     }
   }
   const groups = groupActivities([
-    ...allActivities,
+    ...(skipUnlinked
+      ? allActivities.filter((item) => item.ticket || item.pr || item.issue || item.url)
+      : allActivities),
   ]);
-  console.log(
-    renderDailyUpdate(groups, {
-      dateLabel: dateLabel(new Date(`${date}T12:00:00`)),
-      tomorrow,
-      blockers,
-    }),
-  );
+  const output = renderDailyUpdate(groups, {
+    dateLabel: dateLabel(new Date(`${date}T12:00:00`)),
+    tomorrow,
+    blockers,
+  });
+  console.log(output);
 }
 
 main().catch((e) => {

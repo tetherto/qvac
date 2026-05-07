@@ -1,13 +1,16 @@
 const VERB_RANK = {
   updated: 1,
-  commented: 2,
-  reviewed: 3,
+  investigated: 2,
+  commented: 3,
+  reviewed: 4,
   opened: 4,
-  merged: 5,
-  completed: 6,
-  released: 7,
-  "requested changes": 8,
-  approved: 9,
+  created: 4,
+  closed: 5,
+  merged: 6,
+  completed: 7,
+  released: 8,
+  "requested changes": 9,
+  approved: 10,
 };
 
 function strongestVerb(actions) {
@@ -27,6 +30,11 @@ export function keyForActivity(item) {
   return `title:${item.title || item.summary || "unknown"}`;
 }
 
+function diaryVerbForType(type) {
+  if (type === "investigation") return "investigated";
+  return null;
+}
+
 export function normalizeDiaryEntries(diaries) {
   const out = [];
   for (const diary of diaries) {
@@ -35,14 +43,18 @@ export function normalizeDiaryEntries(diaries) {
       const title = block.match(/^## \d{2}:\d{2} - (.+)$/m)?.[1];
       if (!title) continue;
       if (title === "Diary initialized") continue;
+      const type = block.match(/- \*\*type\*\*: (.+)$/m)?.[1] || "other";
       out.push({
         source: "diary",
         date: diary.date,
         title,
         summary: block.split("\n\n")[1]?.trim() || title,
-        type: block.match(/- \*\*type\*\*: (.+)$/m)?.[1] || "other",
+        type,
+        verb: block.match(/- \*\*verb\*\*: (.+)$/m)?.[1] || diaryVerbForType(type),
         ticket: block.match(/- \*\*ticket\*\*: (.+)$/m)?.[1],
         pr: block.match(/- \*\*pr\*\*: #?(\d+)/m)?.[1],
+        url: block.match(/- \*\*url\*\*: (.+)$/m)?.[1],
+        urlLabel: block.match(/- \*\*urlLabel\*\*: (.+)$/m)?.[1],
         status: block.match(/- \*\*status\*\*: (.+)$/m)?.[1] || "done",
       });
     }
@@ -93,6 +105,16 @@ function refsForGroup(items) {
       refs.push(linkRef(`#${item.issue}`, item.url));
       seen.add(`issue:${item.issue}`);
     }
+    if (
+      item.url &&
+      !item.pr &&
+      !item.issue &&
+      item.url !== ticketItem?.ticketUrl &&
+      !seen.has(`url:${item.url}`)
+    ) {
+      refs.push(linkRef(item.urlLabel || labelForUrl(item.url), item.url));
+      seen.add(`url:${item.url}`);
+    }
   }
   return refs;
 }
@@ -100,6 +122,16 @@ function refsForGroup(items) {
 function linkRef(label, url) {
   if (!url) return label;
   return `[${label}](${url})`;
+}
+
+function labelForUrl(url) {
+  const githubMatch = String(url).match(/github\.com\/[^/]+\/[^/]+\/(?:pull|issues)\/(\d+)/);
+  if (githubMatch) return `#${githubMatch[1]}`;
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return "link";
+  }
 }
 
 function sectionForGroup(items, verb) {
@@ -223,9 +255,27 @@ function normalizeManualLines(value, fallback) {
 }
 
 function renderBullet(group) {
+  if (isCreatedPRForOpenTicket(group)) {
+    return renderCreatedPRBullet(group);
+  }
+
   const text = cleanupSummary(group.summary, group);
   const refs = group.refs.length > 0 ? formatRefs(group.refs) : "";
   const body = [group.verb, refs, text].filter(Boolean).join(" ");
+  return formatOutputBullet(body.slice(0, 298));
+}
+
+function isCreatedPRForOpenTicket(group) {
+  return ["created", "opened"].includes(group.verb) &&
+    group.items.some((item) => item.ticket) &&
+    group.refs.some((ref) => !isPrRef(ref)) &&
+    group.refs.some(isPrRef);
+}
+
+function renderCreatedPRBullet(group) {
+  const ticketRef = group.refs.find((ref) => !isPrRef(ref));
+  const prRefs = group.refs.filter(isPrRef);
+  const body = [ticketRef, `created ${prRefs.join(", ")}`].filter(Boolean).join(" - ");
   return formatOutputBullet(body.slice(0, 298));
 }
 
@@ -236,14 +286,11 @@ function formatRefs(refs) {
 }
 
 function isPrRef(ref) {
-  return /^\[#\d+\]\(/.test(ref);
+  return /^#\d+$/.test(ref) || /^\[#\d+\]\(/.test(ref);
 }
 
 function formatOutputBullet(text) {
-  // Escape the dash so rendered Markdown preserves a literal "-" on copy.
-  // Two trailing spaces force a Markdown hard break; without them, escaped
-  // dash lines render as one paragraph and copy as "- item one - item two".
-  return `\\- ${text}  `;
+  return `- ${text}`;
 }
 
 function cleanupSummary(summary, group) {
