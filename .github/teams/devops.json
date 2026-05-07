@@ -2,7 +2,11 @@
   "name": "DevOps Pod",
   "leads": ["Proletter"],
   "members": [
-    "Proletter"
+    "darkynt",
+    "GiacomoSorbiWork",
+    "sidj-thr",
+    "tamer-hassan-tether",
+    "yauhenipankratovich-web"
   ],
   "ownedPaths": [
     ".github/workflows/",
