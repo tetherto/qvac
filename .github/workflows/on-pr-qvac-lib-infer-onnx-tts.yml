@@ -255,7 +255,7 @@ jobs:
         run-integration-tests,
         run-mobile-integration-tests,
       ]
-    if: always() && needs.authorize.outputs.allowed == 'true'
+    if: always() && needs.authorize.outputs.allowed == 'true' && github.event_name != 'pull_request_target'
     runs-on: ubuntu-latest
     permissions:
       contents: read
