@@ -5,15 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.0.0] - 2026-05-07
+## [2.2.0] - 2026-05-07
 
-### Changed (BREAKING)
+### Changed
 
 #### qvac-fabric: bump to 8189.0.0, switch from overlay to upstream registry
 
 - Bumps the `qvac-fabric` dependency to `>= 8189.0.0`.
 - Drops the per-package vcpkg overlay (`vcpkg/ports/qvac-fabric/`) and the matching `overlay-ports` entry in `vcpkg-configuration.json`. The port is now resolved directly from the upstream registry; the existing `default-registry.baseline` is unchanged.
-- **Breaking — GPU backends no longer included by default.** The previous overlay built ggml unconditionally with every GPU backend the platform supported (Vulkan on Linux/Windows/Android, Metal on Apple, OpenCL on Android). The upstream registry port (post `qvac-registry-vcpkg#133`) splits build features into `gpu-backends` (Metal/Vulkan/CUDA/OpenCL) and `llama`. nmtcpp's `vcpkg.json` keeps `"default-features": false`, which under the new schema also disables `gpu-backends` — so out-of-the-box `find_package(ggml)` exposes only the CPU backend. To restore the previous Vulkan/Metal/OpenCL acceleration, add `"features": ["gpu-backends"]` to the `qvac-fabric` dependency block in `vcpkg.json`.
+- The upstream registry port (post `qvac-registry-vcpkg#133`) splits build features into `gpu-backends` (Metal/Vulkan/CUDA/OpenCL) and `llama`. nmtcpp's `vcpkg.json` opts into `"features": ["gpu-backends"]` while keeping `"default-features": false`, so the build ships ggml with the same Vulkan/Metal/OpenCL backends as before but without llama (which nmtcpp does not use).
 
 ## [2.1.1] - 2026-05-04
 
