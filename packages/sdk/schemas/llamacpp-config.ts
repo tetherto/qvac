@@ -50,6 +50,11 @@ export const llmConfigBaseSchema = z.object({
     .optional(),
   "cache-type-k": z.string().optional(),
   "cache-type-v": z.string().optional(),
+  "main-gpu": z
+    .union([z.number().int().min(0), z.enum(["integrated", "dedicated"])])
+    .optional(),
+  "split-mode": z.enum(["none", "layer", "row"]).optional(),
+  "tensor-split": z.string().optional(),
   /**
    * Writable directory for OpenCL kernel binary cache. Required on Android
    * for fast GPU startup.
@@ -88,6 +93,8 @@ export const embedConfigBaseSchema = z.object({
   mainGpu: z
     .union([z.number().int().min(0), z.enum(["integrated", "dedicated"])])
     .optional(),
+  splitMode: z.enum(["none", "layer", "row"]).optional(),
+  tensorSplit: z.string().optional(),
   verbosity: verbositySchema.optional(),
   /**
    * Writable directory for OpenCL kernel binary cache. Required on Android
