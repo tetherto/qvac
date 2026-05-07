@@ -284,7 +284,7 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
     const BackendType preferredBackendType, const BackendInterface& bckI,
     const ModelMetaData* metadata, const std::optional<MainGpu>& mainGpu,
     std::optional<int>* outAdrenoVersion, const bool isFinetuning,
-    const bool isVision) {
+    bool* outSawAppleM1) {
 
   std::vector<std::string> gpuBackends;
   std::vector<std::string> igpuBackends;
@@ -391,18 +391,11 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
     }
   }
 
-  if (sawAppleM1 && isVision) {
-    bckI.llamaLogCallback(
-        GGML_LOG_LEVEL_WARN,
-        "Vision model on Apple M1: forcing CPU backend (Metal vision "
-        "projector unstable on first-gen Apple Silicon; falling back to CPU "
-        "regardless of requested device). M2/M3/M4 keep Metal.",
-        nullptr);
-    clearAllGpuBackends();
-  }
-
   if (outAdrenoVersion != nullptr) {
     *outAdrenoVersion = maxAdrenoVersion;
+  }
+  if (outSawAppleM1 != nullptr) {
+    *outSawAppleM1 = sawAppleM1;
   }
 
   if (!openClBackends.empty()) {
@@ -428,7 +421,7 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
     const BackendType preferredBackendType, llamaLogCallbackF llamaLogcallback,
     const std::optional<MainGpu>& mainGpu, const ModelMetaData* metadata,
     std::optional<int>* outAdrenoVersion, const bool isFinetuning,
-    const bool isVision) {
+    bool* outSawAppleM1) {
   BackendInterface bckI{
       ggml_backend_dev_count,
       ggml_backend_dev_backend_reg,
@@ -445,7 +438,7 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
       mainGpu,
       outAdrenoVersion,
       isFinetuning,
-      isVision);
+      outSawAppleM1);
 }
 
 size_t

@@ -896,7 +896,7 @@ void LlamaModel::commonParamsParse(
 
     const std::optional<MainGpu> mainGpu = tryMainGpuFromMap(configFilemap);
 
-    const bool isVision = !constructionArgs_.projectionPath.empty();
+    bool sawAppleM1 = false;
     const std::pair<BackendType, std::string> chosenBackend = chooseBackend(
         preferredBackend,
         LlamaModel::llamaLogCallback,
@@ -904,14 +904,20 @@ void LlamaModel::commonParamsParse(
         &metadata_,
         &outAdrenoVersion,
         pendingFinetuneOverrides_.active,
-        isVision);
+        &sawAppleM1);
 
     if (chosenBackend.first == BackendType::GPU) {
       params.mmproj_backend = chosenBackend.second;
 #ifdef __ANDROID__
       params.mmproj_use_gpu = false;
 #else
-      params.mmproj_use_gpu = true;
+      params.mmproj_use_gpu = !sawAppleM1;
+      if (sawAppleM1) {
+        QLOG_IF(
+            Priority::WARNING,
+            "[LlamaModel] Apple M1: forcing projector to CPU; LLM body stays "
+            "on Metal\n");
+      }
 #endif
       params.split_mode = splitMode;
       runtimeBackendDevice_ = 1;
