@@ -4,9 +4,27 @@ import {
   cancelInferenceBaseSchema,
 } from "@/schemas";
 import { ModelNotLoadedError } from "@/utils/errors-server";
-import { noteCancelRequested } from "@/server/bare/plugins/llamacpp-completion/ops/kv-cache-state";
+import { getRequestRegistry } from "@/server/bare/runtime";
+import type { RequestKind } from "@/server/bare/runtime";
+import { getServerLogger } from "@/logging";
 
-export async function cancel(params: CancelInferenceBaseParams) {
+const logger = getServerLogger();
+
+/**
+ * Broad cancel: abort every in-flight request matching `modelId` (and
+ * optionally a `kind`). Maps onto `RequestRegistry.cancel({ modelId })`
+ * — the registry walks active contexts and aborts each one's signal,
+ * which the inference handler has wired to the addon's `cancel()`.
+ *
+ * Kept as a stable surface alongside the new `cancel({ requestId })`
+ * path: the caller may not have a `requestId` to hand (model unload,
+ * app shutdown, admin sweeps), and the escape hatch is cheap because
+ * the registry already does the matching.
+ */
+export function cancel(
+  params: CancelInferenceBaseParams,
+  opts?: { kind?: RequestKind },
+) {
   const { modelId } = cancelInferenceBaseSchema.parse(params);
   const model = getModel(modelId);
 
@@ -14,14 +32,18 @@ export async function cancel(params: CancelInferenceBaseParams) {
     throw new ModelNotLoadedError(modelId);
   }
 
-  // Must be recorded *before* `addon.cancel()` so the in-flight
-  // `completion()` for this model sees the bumped counter when it
-  // snapshots after `processModelResponse` returns. This is the signal
-  // that tells `completion()` not to record a `savedCount` for the
-  // kv-cache on a cancelled turn.
-  noteCancelRequested(modelId);
+  const registry = getRequestRegistry();
+  const target = opts?.kind
+    ? { modelId, kind: opts.kind }
+    : { modelId };
+  const cancelled = registry.cancel(target);
 
-  if (model.addon && model.addon.cancel) {
-    await model.addon.cancel();
+  // No active request to cancel is not a hard error — callers (workbench
+  // "Stop" button, app shutdown sweeps) often fire-and-forget. Log so
+  // operators can see when a cancel landed against an empty registry.
+  if (cancelled === 0) {
+    logger.debug(
+      `[cancel] no in-flight request matched modelId=${modelId}${opts?.kind ? ` kind=${opts.kind}` : ""}`,
+    );
   }
 }

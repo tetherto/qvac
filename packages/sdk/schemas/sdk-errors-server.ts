@@ -38,6 +38,8 @@ export const SDK_SERVER_ERROR_CODES = {
   INVALID_IMAGE_INPUT: 52414,
   TEXT_TO_SPEECH_STREAM_FAILED: 52415,
   MODEL_OPERATION_NOT_SUPPORTED: 52416,
+  REQUEST_ID_CONFLICT: 52417,
+  REQUEST_NOT_FOUND: 52418,
 
   // RAG Operations (52,800-52,999)
   RAG_SAVE_FAILED: 52800,
@@ -283,6 +285,16 @@ const serverErrorDefinitions: ErrorCodesMap = {
         : ` No model registered in this worker bundle exposes ${operation}.`;
       return `Model "${modelId}" (type: ${modelType}) does not support ${operation}.${supportedClause}${suggestionClause}`;
     },
+  },
+  [SDK_SERVER_ERROR_CODES.REQUEST_ID_CONFLICT]: {
+    name: "REQUEST_ID_CONFLICT",
+    message: (requestId: string) =>
+      `Request id "${requestId}" is already in flight; refusing to overwrite the existing context`,
+  },
+  [SDK_SERVER_ERROR_CODES.REQUEST_NOT_FOUND]: {
+    name: "REQUEST_NOT_FOUND",
+    message: (requestId: string) =>
+      `No in-flight request with id "${requestId}"`,
   },
 
   // RAG Operations (52,800-52,999)

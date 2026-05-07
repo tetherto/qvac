@@ -30,6 +30,8 @@ import { attachModelExecutionMs } from "@/profiling/model-execution";
 import { getModelConfig } from "@/server/bare/registry/model-registry";
 import { createCompletionNormalizer } from "@/server/utils/completion-normalizer";
 import { detectToolDialect } from "@/server/utils/tool-integration";
+import { getRequestRegistry } from "@/server/bare/runtime";
+import { generateServerRequestId } from "@/server/bare/runtime/request-id";
 
 function transformLlmConfig(llmConfig: LlmConfig) {
   const transformed = JSON.parse(
@@ -165,15 +167,30 @@ export const llmPlugin = definePlugin({
           toolDialect: dialect,
         });
 
-        const stream = completion({
-          history: filteredHistory,
+        // Open a request-scoped lifecycle. The registry is the single
+        // source of truth for "is this turn cancelled?" — we plumb the
+        // signal into `completion()` and expose `requestId` so the
+        // client can target this run with `cancel({ requestId })`.
+        // Falls back to a server-generated id if the client (e.g. an
+        // older release) didn't send one.
+        await using ctx = getRequestRegistry().begin({
+          requestId: request.requestId ?? generateServerRequestId(),
+          kind: "completion",
           modelId: request.modelId,
-          kvCache: request.kvCache,
-          ...(toolsActive && request.tools && { tools: request.tools }),
-          ...(request.generationParams && { generationParams: request.generationParams }),
-          ...(toolsActive && { toolDialect: dialect }),
-          ...(request.responseFormat && { responseFormat: request.responseFormat }),
         });
+
+        const stream = completion(
+          {
+            history: filteredHistory,
+            modelId: request.modelId,
+            kvCache: request.kvCache,
+            ...(toolsActive && request.tools && { tools: request.tools }),
+            ...(request.generationParams && { generationParams: request.generationParams }),
+            ...(toolsActive && { toolDialect: dialect }),
+            ...(request.responseFormat && { responseFormat: request.responseFormat }),
+          },
+          { signal: ctx.signal },
+        );
 
         try {
           const batchedEvents: CompletionEvent[] = [];

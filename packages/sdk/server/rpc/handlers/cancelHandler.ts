@@ -5,19 +5,33 @@ import {
   cancelRagOperation,
   DEFAULT_WORKSPACE,
 } from "@/server/bare/rag-hyperdb";
+import { getRequestRegistry } from "@/server/bare/runtime";
 import { getServerLogger } from "@/logging";
 
 const logger = getServerLogger();
 
-export async function cancelHandler(
+export function cancelHandler(
   request: CancelRequest,
 ): Promise<CancelResponse> {
   try {
     switch (request.operation) {
       case "inference":
-      case "embeddings":
-        await cancel({ modelId: request.modelId });
+        cancel({ modelId: request.modelId }, { kind: "completion" });
         break;
+      case "embeddings":
+        cancel({ modelId: request.modelId }, { kind: "embeddings" });
+        break;
+      case "request": {
+        const cancelled = getRequestRegistry().cancel({
+          requestId: request.requestId,
+        });
+        if (cancelled === 0) {
+          logger.debug(
+            `[cancel] no in-flight request matched requestId=${request.requestId}`,
+          );
+        }
+        break;
+      }
       case "downloadAsset":
         cancelTransfer(request.downloadKey, request.clearCache);
         break;
@@ -32,16 +46,16 @@ export async function cancelHandler(
       }
     }
 
-    return {
+    return Promise.resolve({
       type: "cancel",
       success: true,
-    };
+    });
   } catch (error) {
     logger.error("Error during cancellation:", error);
-    return {
+    return Promise.resolve({
       type: "cancel",
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",
-    };
+    });
   }
 }

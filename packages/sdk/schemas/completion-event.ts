@@ -133,6 +133,14 @@ export type CompletionFinal = {
 };
 
 export type CompletionRun = {
+  /**
+   * Stable identifier for this run, generated client-side at call time
+   * (UUIDv4) and available synchronously the moment `completion(...)`
+   * returns — before the first network round-trip. Pass it to
+   * `cancel({ requestId })` to target this specific request without
+   * affecting any other inference running on the same model.
+   */
+  requestId: string;
   /** Ordered stream of typed completion events — the canonical consumption API. */
   events: AsyncIterable<CompletionEvent>;
   /** Resolves when the stream ends with aggregated content, thinking, tool calls, stats, and raw output. */

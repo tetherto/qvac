@@ -7,6 +7,14 @@
  * in the Bare runtime (which is not available in that environment).
  * The file-system-dependent pieces (e.g. `recordCacheSaveCount`) live in
  * `completion-stream.ts` and consume the state exported here.
+ *
+ * History note (QVAC-18181, SDK 0.11.0): this module previously also
+ * carried a per-model cancel counter (`modelCancelCounters` /
+ * `noteCancelRequested` / `snapshotCancelCount`) used by `completion()`
+ * to detect mid-decode cancellation. That side channel was retired
+ * alongside the introduction of `RequestRegistry` — the in-flight
+ * `RequestContext.signal` is now the single source of truth and
+ * `completion-stream.ts` reads `signal.aborted` directly.
  */
 
 /**
@@ -38,15 +46,6 @@
 export const cachedMessageCounts = new Map<string, number>();
 
 /**
- * Monotonic counter of cancel requests per model. `completion()` snapshots
- * the value before running the model and compares afterward to decide
- * whether the turn was cancelled mid-decode. A counter (not a boolean) is
- * used deliberately: a cancel that lands near a turn boundary cannot bleed
- * into the next turn because we always compare snapshots, not values.
- */
-const modelCancelCounters = new Map<string, number>();
-
-/**
  * Clear bookkeeping entries. With no argument, clears the whole map. With a
  * `prefix`, removes any entry whose path is equal to it OR sits beneath it
  * as a directory (i.e. `key.startsWith(prefix + sep)`).
@@ -71,44 +70,6 @@ export function clearCachedMessageCounts(prefix?: string, sep = "/"): void {
     if (!key.startsWith(prefix + sep)) continue;
     cachedMessageCounts.delete(key);
   }
-}
-
-/**
- * Called from `server/bare/ops/cancel.ts` right before `addon.cancel()` so
- * that the in-flight `completion()` for this model can detect that its
- * current turn is being cancelled and skip poisoning `cachedMessageCounts`
- * with a `history.length + 1` entry that does not correspond to a real
- * assistant reply.
- */
-export function noteCancelRequested(modelId: string): void {
-  modelCancelCounters.set(
-    modelId,
-    (modelCancelCounters.get(modelId) ?? 0) + 1,
-  );
-}
-
-export function snapshotCancelCount(modelId: string): number {
-  return modelCancelCounters.get(modelId) ?? 0;
-}
-
-/** Test-only. */
-export function _resetCancelCountersForTest(): void {
-  modelCancelCounters.clear();
-}
-
-/**
- * A completion's `savedCount` should only be recorded when the turn ran to
- * completion AND produced at least one token. Any other outcome —
- * cancelled mid-decode, legitimate zero-token reply, or an early EOS — must
- * clear the entry instead, because there is no guarantee that the kv-cache
- * file on disk matches the `history.length + 1` boundary the SDK would
- * otherwise record.
- */
-export function shouldRecordSavedCount(
-  wasCancelled: boolean,
-  producedTokens: boolean,
-): boolean {
-  return !wasCancelled && producedTokens;
 }
 
 export interface HistoryMessage {

@@ -37,9 +37,6 @@ import {
   cachedMessageCounts,
   clearCachedMessageCounts as clearCachedMessageCountsFromState,
   decideCachedHistorySlice,
-  noteCancelRequested as noteCancelRequestedFromState,
-  shouldRecordSavedCount,
-  snapshotCancelCount,
 } from "@/server/bare/plugins/llamacpp-completion/ops/kv-cache-state";
 import {
   appendToolsToHistory,
@@ -117,7 +114,26 @@ type CompletionRunOptions = Pick<
 export function clearCachedMessageCounts(prefix?: string): void {
   clearCachedMessageCountsFromState(prefix, path.sep);
 }
-export const noteCancelRequested = noteCancelRequestedFromState;
+
+/**
+ * Decide whether a completed turn earned the right to record its kv-cache
+ * boundary. A `savedCount` is only safe to write when the turn ran to
+ * completion AND produced at least one token — anything else (cancelled
+ * mid-decode, zero-token reply, early EOS) leaves the on-disk cache file
+ * in an unknown state relative to `history.length + 1`, and a stale entry
+ * would slice the next turn's history down to an empty payload.
+ *
+ * Replaces the pre-0.11.0 `shouldRecordSavedCount(wasCancelled, ...)` with
+ * a signal-driven check that reads directly from the request's
+ * `AbortSignal`. The local helper keeps both call sites in
+ * `completion-stream.ts` honest without importing the registry every time.
+ */
+function shouldRecordSavedCount(
+  signal: AbortSignal,
+  producedTokens: boolean,
+): boolean {
+  return !signal.aborted && producedTokens;
+}
 
 // Verify the addon actually persisted the cache file before recording its
 // message count. The addon currently swallows write errors silently, so a
@@ -434,9 +450,11 @@ export async function* completion(
     toolDialect?: ToolDialect;
     responseFormat?: ResponseFormat;
   },
+  opts: { signal: AbortSignal },
 ): AsyncGenerator<{ token: string }, CompletionResult, unknown> {
   const { history, modelId, kvCache, tools, generationParams, responseFormat } =
     params;
+  const { signal } = opts;
 
   const modelConfig = getModelConfig(modelId);
   const toolsEnabled = (modelConfig as { tools?: boolean }).tools === true;
@@ -470,6 +488,22 @@ export async function* completion(
   }
 
   const model = getModel(modelId);
+
+  // Hard-cancel wiring: when the registry aborts the request's signal,
+  // forward to the addon so the C++ work stops as soon as it can. The
+  // SDK still treats `signal.aborted` as the truth for cancel detection
+  // (post-completion bookkeeping below) — this listener only shortens
+  // the latency between "user clicked stop" and "addon stops decoding".
+  // Best-effort fire-and-forget: the addon's cancel resolves quickly and
+  // we can't await it from inside an event listener; the iterator below
+  // will see EOF/empty tokens once the C++ side returns.
+  const onAbort = () => {
+    const addon = model.addon;
+    if (addon?.cancel) {
+      void addon.cancel.call(addon);
+    }
+  };
+  signal.addEventListener("abort", onAbort, { once: true });
 
   if (kvCache) {
     const systemPromptFromHistory = extractSystemPrompt(history);
@@ -516,7 +550,6 @@ export async function* completion(
       );
       logMessagesToAddon(messagesToSend, "PROMPT_SEND");
 
-      const cancelCountBefore = snapshotCancelCount(modelId);
       const result = yield* processModelResponse(
         model,
         messagesToSend,
@@ -525,9 +558,8 @@ export async function* completion(
         { cacheKey: cachePathToUse, saveCacheToDisk: true },
         dialect,
       );
-      const wasCancelled = snapshotCancelCount(modelId) > cancelCountBefore;
 
-      if (shouldRecordSavedCount(wasCancelled, result.producedTokens)) {
+      if (shouldRecordSavedCount(signal, result.producedTokens)) {
         // Turn ran to completion and produced content — record the new
         // boundary so the next turn can slice its history.
         await recordCacheSaveCount(cachePathToUse, history.length + 1);
@@ -603,7 +635,6 @@ export async function* completion(
       );
       logMessagesToAddon(messagesToSend, "PROMPT_SEND");
 
-      const cancelCountBefore = snapshotCancelCount(modelId);
       const result = yield* processModelResponse(
         model,
         messagesToSend,
@@ -612,7 +643,6 @@ export async function* completion(
         { cacheKey: cachePathToUse, saveCacheToDisk: true },
         dialect,
       );
-      const wasCancelled = snapshotCancelCount(modelId) > cancelCountBefore;
 
       // TODO: support auto-cache for tool-call turns by keying off the
       // structured assistant/tool messages callers push into history,
@@ -640,7 +670,7 @@ export async function* completion(
       // which is empty/partial in those cases, and the on-disk cache the
       // addon wrote is not aligned with the current-history hash. Treat it
       // like the tool-call branch — drop the cache file and clear the count.
-      if (!shouldRecordSavedCount(wasCancelled, result.producedTokens)) {
+      if (!shouldRecordSavedCount(signal, result.producedTokens)) {
         try {
           await fsPromises.unlink(cachePathToUse);
         } catch (unlinkError) {

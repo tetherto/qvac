@@ -279,6 +279,30 @@ export class CancelFailedError extends QvacErrorBase {
   }
 }
 
+export class RequestIdConflictError extends QvacErrorBase {
+  constructor(requestId: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.REQUEST_ID_CONFLICT,
+        [requestId],
+        cause,
+      ),
+    );
+  }
+}
+
+export class RequestNotFoundError extends QvacErrorBase {
+  constructor(requestId: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.REQUEST_NOT_FOUND,
+        [requestId],
+        cause,
+      ),
+    );
+  }
+}
+
 export class TextToSpeechFailedError extends QvacErrorBase {
   constructor(details?: string, cause?: unknown) {
     super(
