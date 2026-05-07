@@ -39,6 +39,9 @@ rationale for the key implementation choices.
 |  Native: ClassificationModel (IModel)        |
 |   - load(): backend init + weights + graph   |
 |     + full-pipeline warmup pass              |
+|     desktop/iOS: ggml_backend_cpu_init()     |
+|     android   : load_all_from_path(<dir>) +  |
+|                 dev_by_type(CPU) + dev_init  |
 |   - process(): preprocess → compute → softmax|
 +----------------------------------------------+
 |  Native: MobileNetGraph                      |
@@ -49,7 +52,12 @@ rationale for the key implementation choices.
 |     (asserts ggml_nelements(output) ==       |
 |     kNumClasses before allocation)           |
 +----------------------------------------------+
-|  libggml (CPU backend only)                  |
+|  libggml (CPU backend only, via qvac-fabric) |
+|   - desktop/iOS: CPU statically linked into  |
+|     the .bare                                |
+|   - android: per-microarch CPU MODULE .so    |
+|     ships next to the .bare under            |
+|     prebuilds/android-arm64/qvac__…/         |
 +----------------------------------------------+
 ```
 
@@ -159,9 +167,16 @@ pixel copy, the compute itself, the 3-element softmax, and label lookup.
 - Per-inference mutex (`ClassificationModel::mutex_`) guards against a
   torn state if a future user bypasses `JobRunner`.
 - `ggml_backend_cpu_set_n_threads()` lets the caller tune the CPU compute
-  threads; default is libggml's `std::thread::hardware_concurrency`.
-  Invalid `threads` values (non-positive integers, NaN, wrong type) are
-  rejected fail-fast at `new ImageClassifier(...)` construction.
+  threads on desktop / iOS; default is libggml's
+  `std::thread::hardware_concurrency`. **On Android the call is
+  `#if !defined(__ANDROID__)`-gated** — the symbol lives inside the
+  per-microarch CPU variant `.so` (loaded via `dlopen` per
+  `GGML_CPU_ALL_VARIANTS=ON`) rather than in `libggml-base.a`, so the
+  `.bare` cannot statically link it. Android falls back to libggml's
+  default thread pool. Invalid `threads` values (non-positive integers,
+  NaN, wrong type) are still rejected fail-fast at
+  `new ImageClassifier(...)` construction on every platform; on Android
+  the value is simply ignored at runtime.
 
 ## Memory footprint
 

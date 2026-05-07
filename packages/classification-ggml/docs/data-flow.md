@@ -143,6 +143,8 @@ End-to-end trace of a single `classifier.classify(buffer)` call.
 | Buffer size mismatch (raw input)            | `ImagePreprocessor::validateRawRgb` (C++)     | `StatusError(InvalidArgument)` |
 | `topK ≤ 0` when provided                    | `AddonJs::runJob` (C++)                       | `StatusError(InvalidArgument)` — "must be a positive integer when provided" |
 | Constructor `threads` not a positive int    | `ImageClassifier` constructor (JS)            | `TypeError("'threads' must be a positive integer when provided …")` |
+| Missing `config.backendsDir` on Android     | `ClassificationModel::load` (C++, Android)    | `StatusError(InvalidArgument)` — "Configuration 'config.backendsDir' is required on Android"; `index.js` defaults it to `path.join(__dirname, 'prebuilds')` so this only fires when the addon is wired up by hand |
+| GGML CPU backend variant init failure       | `ClassificationModel::load` (C++, Android)    | `StatusError(InternalError)` — "Failed to find/init CPU backend device"; raised when `ggml_backend_load_all_from_path` couldn't enumerate any per-microarch variant under `<backendsDir>/<BACKENDS_SUBDIR>/` |
 | `classify` before `load`                    | `ImageClassifier._classifyInternal` (JS)      | `Error("Classifier not loaded. Call load() first.")` |
 | `classify` after `unload`                   | `ImageClassifier._classifyInternal` (JS)      | same |
 | `unload` mid-classify                       | `ImageClassifier.unload` (JS)                 | the in-flight `classify()` promise rejects with `Error("Model was unloaded")` |
@@ -164,13 +166,18 @@ new ImageClassifier()
         │
         │ .load()
         ▼
-┌───────────────────────┐
-│ ClassificationModel   │
-│   backend = cpu_init()│
-│   weights = loadWeights(gguf, backend)
-│   graph   = buildGraph(weights, backend)
-│   loaded  = true      │
-└────────┬──────────────┘
+┌──────────────────────────────────────────────┐
+│ ClassificationModel::load                    │
+│   backend init:                              │
+│     desktop  : ggml_backend_cpu_init()       │
+│     android  : ggml_backend_load_all_from_   │
+│                  path(<backendsDir>/<sub>) → │
+│                ggml_backend_dev_by_type(CPU) │
+│                  → ggml_backend_dev_init     │
+│   weights = loadWeights(gguf, backend)       │
+│   graph   = buildGraph(weights, backend)     │
+│   loaded  = true                             │
+└────────┬─────────────────────────────────────┘
          │  many .classify(…) calls — pixel data only per-call
          │
          │ .unload()
