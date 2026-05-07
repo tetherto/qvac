@@ -485,7 +485,16 @@ void LlamaModel::cancel() const {
 }
 
 void LlamaModel::cancelImpl() const {
-  if (state_ && state_->batchScheduler_ && state_->batchScheduler_->hasWork()) {
+  if (state_ && state_->batchScheduler_) {
+    // No `hasWork()` guard here: the user's per-token streaming
+    // callback (`SubmitRequest::streams.onToken`) is invoked from the
+    // scheduler's worker thread WHILE that thread holds the scheduler's
+    // `mutex_` (only released around `llama_decode`). Re-entering any
+    // method that takes `mutex_` from inside the callback — including
+    // `hasWork()` — self-deadlocks the non-recursive `std::mutex`.
+    // `requestCancelAll()` is lock-free (atomic store + `notify_all`),
+    // idempotent, and a no-op when there is nothing to cancel, so the
+    // guard was both unsafe and unnecessary.
     state_->batchScheduler_->requestCancelAll();
   }
   if (state_ && state_->llmContext_) {
