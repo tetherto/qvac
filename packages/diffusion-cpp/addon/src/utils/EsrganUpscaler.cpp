@@ -6,10 +6,46 @@
 #include <utility>
 
 #include <qvac-lib-inference-addon-cpp/Errors.hpp>
+#include <qvac-lib-inference-addon-cpp/Logger.hpp>
+
+#include "LoggingMacros.hpp"
 
 using namespace qvac_errors;
 
 namespace qvac_lib_inference_addon_sd {
+
+EsrganUpscalerConfig makeUpscalerConfig(const SdCtxConfig& config) {
+  return {
+      config.esrganPath,
+      config.nThreads,
+      config.upscalerThreads,
+      config.upscalerTileSize,
+      config.upscalerDirect,
+      config.upscalerOffloadParamsToCpu};
+}
+
+void sdLogCallback(sd_log_level_t level, const char* text, void* /*userData*/) {
+  namespace lg = qvac_lib_inference_addon_cpp::logger;
+  lg::Priority priority;
+  switch (level) {
+  case SD_LOG_DEBUG:
+    priority = lg::Priority::DEBUG;
+    break;
+  case SD_LOG_INFO:
+    priority = lg::Priority::INFO;
+    break;
+  case SD_LOG_WARN:
+    priority = lg::Priority::WARNING;
+    break;
+  case SD_LOG_ERROR:
+    priority = lg::Priority::ERROR;
+    break;
+  default:
+    priority = lg::Priority::ERROR;
+    break;
+  }
+  QLOG_IF(priority, std::string(text ? text : ""));
+}
 
 EsrganUpscaler::EsrganUpscaler(EsrganUpscalerConfig config)
     : config_(std::move(config)), ctx_(nullptr, &free_upscaler_ctx) {}

@@ -143,17 +143,6 @@ PreparedLoras prepareLoras(const std::string& loraPath) {
   return prepared;
 }
 
-qvac_lib_inference_addon_sd::EsrganUpscalerConfig
-makeUpscalerConfig(const qvac_lib_inference_addon_sd::SdCtxConfig& config) {
-  return {
-      config.esrganPath,
-      config.nThreads,
-      config.upscalerThreads,
-      config.upscalerTileSize,
-      config.upscalerDirect,
-      config.upscalerOffloadParamsToCpu};
-}
-
 } // namespace
 
 // ---------------------------------------------------------------------------
@@ -162,9 +151,9 @@ makeUpscalerConfig(const qvac_lib_inference_addon_sd::SdCtxConfig& config) {
 
 SdModel::SdModel(qvac_lib_inference_addon_sd::SdCtxConfig config)
     : config_(std::move(config)), sdCtx_(nullptr, &free_sd_ctx),
-      upscaler_(makeUpscalerConfig(config_)) {
+      upscaler_(qvac_lib_inference_addon_sd::makeUpscalerConfig(config_)) {
 
-  sd_set_log_callback(SdModel::sdLogCallback, nullptr);
+  sd_set_log_callback(qvac_lib_inference_addon_sd::sdLogCallback, nullptr);
 }
 
 // ---------------------------------------------------------------------------
@@ -760,32 +749,4 @@ qvac_lib_inference_addon_cpp::RuntimeStats SdModel::runtimeStats() const {
 sd_image_t SdModel::upscaleImage(const sd_image_t& inputImage, int repeats) {
   return upscaler_.upscaleImage(
       inputImage, repeats, [this]() { return cancelRequested_.load(); });
-}
-
-// ---------------------------------------------------------------------------
-// Log callback
-// ---------------------------------------------------------------------------
-
-void SdModel::sdLogCallback(
-    sd_log_level_t level, const char* text, void* /*userData*/) {
-  namespace lg = qvac_lib_inference_addon_cpp::logger;
-  lg::Priority priority;
-  switch (level) {
-  case SD_LOG_DEBUG:
-    priority = lg::Priority::DEBUG;
-    break;
-  case SD_LOG_INFO:
-    priority = lg::Priority::INFO;
-    break;
-  case SD_LOG_WARN:
-    priority = lg::Priority::WARNING;
-    break;
-  case SD_LOG_ERROR:
-    priority = lg::Priority::ERROR;
-    break;
-  default:
-    priority = lg::Priority::ERROR;
-    break;
-  }
-  QLOG_IF(priority, std::string(text ? text : ""));
 }

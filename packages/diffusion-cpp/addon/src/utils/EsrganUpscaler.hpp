@@ -8,6 +8,8 @@
 
 #include <stable-diffusion.h>
 
+#include "handlers/SdCtxHandlers.hpp"
+
 namespace qvac_lib_inference_addon_sd {
 
 struct EsrganUpscalerConfig {
@@ -18,6 +20,10 @@ struct EsrganUpscalerConfig {
   bool upscalerDirect{false};
   bool upscalerOffloadParamsToCpu{false};
 };
+
+EsrganUpscalerConfig makeUpscalerConfig(const SdCtxConfig& config);
+
+void sdLogCallback(sd_log_level_t level, const char* text, void* userData);
 
 class EsrganUpscaler {
 public:

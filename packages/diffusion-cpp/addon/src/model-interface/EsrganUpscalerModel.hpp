@@ -39,9 +39,6 @@ public:
   [[nodiscard]] qvac_lib_inference_addon_cpp::RuntimeStats
   runtimeStats() const final;
 
-  static void
-  sdLogCallback(sd_log_level_t level, const char* text, void* userData);
-
   struct UpscaleJob {
     std::vector<uint8_t> imageBytes;
     int repeats{1};

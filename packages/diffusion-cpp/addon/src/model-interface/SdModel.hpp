@@ -92,11 +92,6 @@ public:
   [[nodiscard]] qvac_lib_inference_addon_cpp::RuntimeStats
   runtimeStats() const final;
 
-  // -- Log callback -----------------------------------------------------------
-
-  static void
-  sdLogCallback(sd_log_level_t level, const char* text, void* userData);
-
   // -- Generation job input type ---------------------------------------------
 
   struct GenerationJob {

@@ -6,7 +6,6 @@
 #include <utility>
 
 #include <qvac-lib-inference-addon-cpp/Errors.hpp>
-#include <qvac-lib-inference-addon-cpp/Logger.hpp>
 
 #include "utils/BackendLoader.hpp"
 #include "utils/ImageCodec.hpp"
@@ -16,17 +15,6 @@ using namespace qvac_lib_inference_addon_cpp;
 using namespace qvac_errors;
 
 namespace {
-
-qvac_lib_inference_addon_sd::EsrganUpscalerConfig
-makeUpscalerConfig(const qvac_lib_inference_addon_sd::SdCtxConfig& config) {
-  return {
-      config.esrganPath,
-      config.nThreads,
-      config.upscalerThreads,
-      config.upscalerTileSize,
-      config.upscalerDirect,
-      config.upscalerOffloadParamsToCpu};
-}
 
 void throwIfCancelled(const std::atomic<bool>& cancelRequested) {
   if (cancelRequested.load()) {
@@ -38,8 +26,9 @@ void throwIfCancelled(const std::atomic<bool>& cancelRequested) {
 
 EsrganUpscalerModel::EsrganUpscalerModel(
     qvac_lib_inference_addon_sd::SdCtxConfig config)
-    : config_(std::move(config)), upscaler_(makeUpscalerConfig(config_)) {
-  sd_set_log_callback(EsrganUpscalerModel::sdLogCallback, nullptr);
+    : config_(std::move(config)),
+      upscaler_(qvac_lib_inference_addon_sd::makeUpscalerConfig(config_)) {
+  sd_set_log_callback(qvac_lib_inference_addon_sd::sdLogCallback, nullptr);
 }
 
 EsrganUpscalerModel::~EsrganUpscalerModel() = default;
@@ -112,6 +101,11 @@ std::any EsrganUpscalerModel::process(const std::any& input) {
     outputPixels = outputWidth * outputHeight;
     statsWidth = outputWidth;
     statsHeight = outputHeight;
+  } else {
+    QLOG_IF(
+        qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+        "ESRGAN upscale produced an output but no callback was registered; "
+        "result discarded.");
   }
 
   const auto t1 = std::chrono::steady_clock::now();
@@ -144,28 +138,4 @@ void EsrganUpscalerModel::cancel() const { cancelRequested_.store(true); }
 qvac_lib_inference_addon_cpp::RuntimeStats
 EsrganUpscalerModel::runtimeStats() const {
   return lastStats_;
-}
-
-void EsrganUpscalerModel::sdLogCallback(
-    sd_log_level_t level, const char* text, void* /*userData*/) {
-  namespace lg = qvac_lib_inference_addon_cpp::logger;
-  lg::Priority priority;
-  switch (level) {
-  case SD_LOG_DEBUG:
-    priority = lg::Priority::DEBUG;
-    break;
-  case SD_LOG_INFO:
-    priority = lg::Priority::INFO;
-    break;
-  case SD_LOG_WARN:
-    priority = lg::Priority::WARNING;
-    break;
-  case SD_LOG_ERROR:
-    priority = lg::Priority::ERROR;
-    break;
-  default:
-    priority = lg::Priority::ERROR;
-    break;
-  }
-  QLOG_IF(priority, std::string(text ? text : ""));
 }
