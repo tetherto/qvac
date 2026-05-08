@@ -88,6 +88,7 @@ class ONNXOcr {
   }
 
   async _load () {
+    this.logger.info('Starting OCR model load')
     const isDoctr = this.params.pipelineMode === 'doctr'
 
     if (!isDoctr) {
@@ -154,11 +155,13 @@ class ONNXOcr {
     this.addon = new OcrFasttextInterface(onnxOcrParams, this._addonOutputCallback.bind(this), console.log)
     await this.addon.activate()
     this.state.configLoaded = true
+    this.logger.info('OCR model load completed successfully')
   }
 
   _addonOutputCallback (addon, event, data, error) {
     // Check stats FIRST (before other checks, since stats event name may contain other type names)
     if (typeof data === 'object' && data !== null && 'totalTime' in data) {
+      this.logger.info('OCR inference completed')
       return this._job.end(this.opts?.stats ? data : null)
     }
 
@@ -186,6 +189,7 @@ class ONNXOcr {
   }
 
   async _runInternal (input) {
+    this.logger.info('Starting OCR inference')
     const response = this._job.start()
     try {
       const imageInput = this.getImage(input.path)
