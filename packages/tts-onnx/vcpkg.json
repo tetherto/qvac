@@ -1,13 +1,13 @@
 {
-  "name": "inference-tts",
+  "name": "qvac-lib-inference-tts",
   "version": "0.0.1",
   "dependencies": [
     {
-      "name": "inference-addon-cpp",
+      "name": "qvac-lib-inference-addon-cpp",
       "version>=": "1.1.6"
     },
     {
-      "name": "lint-cpp",
+      "name": "qvac-lint-cpp",
       "version>=": "1.4.4#2"
     },
     {

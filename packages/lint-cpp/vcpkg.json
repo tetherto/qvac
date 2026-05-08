@@ -1,5 +1,5 @@
 {
-  "name": "lint-cpp",
+  "name": "qvac-lint-cpp",
   "version": "1.4.4",
   "license": "Apache-2.0",
   "dependencies": [
