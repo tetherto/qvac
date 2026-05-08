@@ -152,6 +152,7 @@ class ONNXOcr {
       }
     }
 
+    this.logger.info('Creating OCR addon with configuration:', onnxOcrParams)
     this.addon = new OcrFasttextInterface(onnxOcrParams, this._addonOutputCallback.bind(this), console.log)
     await this.addon.activate()
     this.state.configLoaded = true
@@ -161,7 +162,7 @@ class ONNXOcr {
   _addonOutputCallback (addon, event, data, error) {
     // Check stats FIRST (before other checks, since stats event name may contain other type names)
     if (typeof data === 'object' && data !== null && 'totalTime' in data) {
-      this.logger.info('OCR inference completed')
+      this.logger.info('OCR inference completed. Stats:', JSON.stringify(data))
       return this._job.end(this.opts?.stats ? data : null)
     }
 
