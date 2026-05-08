@@ -171,3 +171,59 @@ test('reasoning tag EOS replacement works with tools=true', {
   // Verify the fix worked: generation continued after reasoning
   verifyContinuedAfterReasoning(t, response2, 'tools=true')
 })
+
+test('Qwen3 reasoning-budget=0 disables thinking', {
+  skip: isDarwinX64 || isWindowsX64,
+  timeout: 600_000
+}, async t => {
+  const [modelName, dirPath] = await ensureModel({
+    modelName: MODEL.name,
+    downloadUrl: MODEL.url
+  })
+  const modelPath = path.join(dirPath, modelName)
+
+  const baseConfig = {
+    ctx_size: '4096',
+    n_predict: '1024',
+    seed: '50',
+    gpu_layers: '999',
+    temp: '0',
+    top_p: '1',
+    device: useCpu ? 'cpu' : 'gpu',
+    verbosity: '0'
+  }
+
+  async function runOnce (extra) {
+    const inference = new LlmLlamacpp({
+      files: { model: [modelPath] },
+      config: { ...baseConfig, ...extra },
+      logger: console
+    })
+    try {
+      await inference.load()
+      const messages = [
+        { role: 'system', content: 'You are a helpful assistant.' },
+        { role: 'user', content: 'What is the capital of France? Answer in one word.' }
+      ]
+      return await runCompletion(inference, messages)
+    } finally {
+      await inference.unload().catch(() => {})
+    }
+  }
+
+  const baseline = await runOnce({})
+  const disabled = await runOnce({ 'reasoning-budget': '0' })
+  const disabledUnderscore = await runOnce({ reasoning_budget: '0' })
+
+  t.comment(`baseline (${baseline.length} chars): ${baseline.slice(0, 200)}`)
+  t.comment(`disabled (${disabled.length} chars): ${disabled.slice(0, 200)}`)
+
+  t.ok(/paris/i.test(baseline), 'baseline mentions Paris')
+  t.ok(/paris/i.test(disabled), 'disabled mentions Paris')
+  t.ok(/paris/i.test(disabledUnderscore), 'underscore variant also accepted and mentions Paris')
+
+  t.ok(baseline.includes('<think>'),
+    `baseline should contain <think> tag: "${baseline.slice(0, 100)}"`)
+  t.ok(disabled.length < baseline.length / 4,
+    `disabled (${disabled.length}) should be substantially shorter than baseline (${baseline.length})`)
+})

@@ -191,6 +191,7 @@ void MtmdLlmContext::tokenizeChat(
   }
 
   inputs.use_jinja = params_.use_jinja;
+  inputs.enable_thinking = params_.reasoning_budget != 0;
   inputs.messages = chatMsgs;
   inputs.add_generation_prompt = isLastMessageFromUser;
 
@@ -232,6 +233,7 @@ void MtmdLlmContext::tokenizeChat(
     inputs.tools = {};
     inputs.add_generation_prompt = false;
     inputs.use_jinja = params_.use_jinja;
+    inputs.enable_thinking = params_.reasoning_budget != 0;
     auto promptNoTools = getPrompt(tmpls_.get(), inputs);
 
     if (!promptNoTools.empty()) {

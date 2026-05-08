@@ -299,6 +299,59 @@ test('Gemma 4 supports tool calling', {
   }
 })
 
+test('Gemma 4 reasoning-budget=0 disables thinking', {
+  timeout: 1_800_000
+}, async t => {
+  const [modelName, dirPath] = await ensureModel(GEMMA4_MODEL.llmModel)
+  const modelPath = path.join(dirPath, modelName)
+
+  const baseConfig = {
+    device: useCpu ? 'cpu' : 'gpu',
+    gpu_layers: '999',
+    ctx_size: '2048',
+    n_predict: '256',
+    temp: '0',
+    seed: '42',
+    verbosity: '0'
+  }
+
+  async function runOnce (extra) {
+    const addon = new LlmLlamacpp({
+      files: { model: [modelPath] },
+      config: { ...baseConfig, ...extra },
+      logger: createLogger()
+    })
+    try {
+      await addon.load()
+      const response = await addon.run([
+        { role: 'system', content: 'You are a helpful assistant.' },
+        { role: 'user', content: 'What is the capital of France? Answer in one word.' }
+      ])
+      return await collectResponse(response)
+    } finally {
+      await addon.unload().catch(() => {})
+    }
+  }
+
+  const baseline = await runOnce({})
+  const disabled = await runOnce({ 'reasoning-budget': '0' })
+  const disabledUnderscore = await runOnce({ reasoning_budget: '0' })
+
+  t.comment(`baseline (${baseline.length} chars): "${baseline.slice(0, 200)}"`)
+  t.comment(`disabled (${disabled.length} chars): "${disabled.slice(0, 200)}"`)
+
+  t.ok(/paris/i.test(baseline), `baseline mentions Paris: "${baseline.slice(0, 80)}"`)
+  t.ok(/paris/i.test(disabled), `disabled mentions Paris: "${disabled.slice(0, 80)}"`)
+  t.ok(/paris/i.test(disabledUnderscore), 'underscore variant also accepted and mentions Paris')
+
+  t.absent(/<\|channel>thought/i.test(disabled),
+    `disabled output should not contain channel-thought marker: "${disabled.slice(0, 200)}"`)
+  t.absent(/Thinking Process/i.test(disabled),
+    `disabled output should not contain "Thinking Process": "${disabled.slice(0, 200)}"`)
+  t.ok(disabled.length < baseline.length / 4,
+    `disabled (${disabled.length}) should be substantially shorter than baseline (${baseline.length})`)
+})
+
 setImmediate(() => {
   setTimeout(() => {}, 500)
 })

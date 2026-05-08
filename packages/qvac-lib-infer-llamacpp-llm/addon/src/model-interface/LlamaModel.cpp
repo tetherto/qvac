@@ -808,6 +808,31 @@ void LlamaModel::commonParamsParse(
     configFilemap.erase(jit);
   }
 
+  // reasoning-budget controls whether the model emits a <think> reasoning
+  // channel. -1 (default) leaves it on; 0 disables.
+  for (const std::string& key : {"reasoning-budget", "reasoning_budget"}) {
+    if (auto it = configFilemap.find(key); it != configFilemap.end()) {
+      try {
+        int value = std::stoi(it->second);
+        if (value != 0 && value != -1) {
+          throw qvac_errors::StatusError(
+              ADDON_ID,
+              qvac_errors::general_error::toString(
+                  qvac_errors::general_error::InvalidArgument),
+              "reasoning-budget must be -1 (unrestricted) or 0 (disabled)");
+        }
+        params.reasoning_budget = value;
+      } catch (const std::invalid_argument&) {
+        throw qvac_errors::StatusError(
+            ADDON_ID,
+            qvac_errors::general_error::toString(
+                qvac_errors::general_error::InvalidArgument),
+            "reasoning-budget must be an integer (-1 or 0)");
+      }
+      configFilemap.erase(it);
+    }
+  }
+
   // parse custom nDiscarded from config (apply only if > 0)
   if (auto iter = configFilemap.find("n_discarded");
       iter != configFilemap.end()) {
