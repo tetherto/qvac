@@ -1,14 +1,193 @@
-name: C++ Test Coverage (BCI Whispercpp)
-
-# Stub workflow on main so it can be dispatched from feature branches.
-# The real implementation lives on the bci-whispercpp feature branch.
+name: CPP Tests (BCI Whispercpp)
 
 on:
+  workflow_call:
+    inputs:
+      ref:
+        description: 'ref'
+        type: string
+      repository:
+        type: string
+      workdir:
+        description: 'Package working directory in monorepo (e.g., packages/bci-whispercpp)'
+        required: false
+        default: 'packages/bci-whispercpp'
+        type: string
   workflow_dispatch:
+    inputs:
+      workdir:
+        description: 'Package working directory in monorepo (e.g., packages/bci-whispercpp)'
+        required: false
+        default: 'packages/bci-whispercpp'
+        type: string
+
+env:
+  BUILD_TYPE: Debug
+  ENABLE_COVERAGE: ON
+  WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir }}
 
 jobs:
-  noop:
-    runs-on: ubuntu-latest
+  cpp-tests:
+    permissions:
+      contents: read
+      id-token: write
+      checks: write
+    runs-on: ${{ matrix.os }}
+    environment: release
+    name: ${{ matrix.platform }}-${{ matrix.arch }}-cpp-tests
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
+            coverage: true
+    env:
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg/cache,readwrite"
+
     steps:
-      - name: No-op stub
-        run: echo "Stub workflow on main; real implementation lives on the bci-whispercpp feature branch."
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+          lfs: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Install system dependencies (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 19 all
+
+      - name: Verify llvm-profdata and llvm-cov installation
+        if: matrix.platform == 'linux'
+        run: |
+          ls -l /usr/bin/llvm-profdata* || echo "llvm-profdata not found"
+          ls -l /usr/bin/llvm-cov* || echo "llvm-cov not found"
+          which llvm-profdata || echo "llvm-profdata not in PATH"
+          which llvm-profdata-19 || echo "llvm-profdata-19 not in PATH"
+          dpkg -l | grep llvm || echo "No LLVM packages found"
+
+      - name: Install NPM dependencies
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          npm install
+          npm install -g bare bare-make
+
+      - if: ${{ matrix.os == 'ubuntu-22.04' }}
+        name: Configure vcpkg in linux
+        run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
+
+      - name: Generate and build unit tests
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          npm run coverage:cpp:build
+
+      - name: Run C++ Unit Tests
+        id: cpp-tests
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          echo "=== Running tests from: $(pwd) ==="
+          npm run test:cpp:run
+        continue-on-error: true
+
+      - name: Debug - List test output files
+        if: always()
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          echo "Contents of build/addon/tests/:"
+          ls -la build/addon/tests/ || echo "Directory not found"
+
+      - name: Generate Coverage Report
+        if: matrix.coverage
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          npm run coverage:cpp:report
+          COVERAGE=$(grep 'TOTAL' build/addon/tests/coverage-summary.txt | awk '{print $10}')
+          echo "LINE_COVERAGE_PERCENTAGE=${COVERAGE}" >> $GITHUB_ENV
+          echo "Line Coverage: ${COVERAGE}" > coverage-badge.txt
+
+      - name: Archive Coverage Results
+        if: matrix.coverage
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: coverage-report-${{ matrix.platform }}-${{ matrix.arch }}
+          path: |
+            ${{ env.WORKDIR }}/build/addon/tests/coverage-html/
+            ${{ env.WORKDIR }}/build/addon/tests/lcov.info
+            ${{ env.WORKDIR }}/build/addon/tests/coverage-summary.txt
+            ${{ env.WORKDIR }}/build/addon/tests/cpp-test-results.xml
+          retention-days: 30
+
+      - name: Check if test results exist
+        id: check-test-results
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          if [ -f build/addon/tests/cpp-test-results.xml ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+        continue-on-error: true
+
+      - name: Publish Test Results
+        uses: EnricoMi/publish-unit-test-result-action@c950f6fb443cb5af20a377fd0dfaa78838901040 # 2.23.0
+        if: always() && steps.check-test-results.outputs.exists == 'true'
+        with:
+          files: ${{ env.WORKDIR }}/build/addon/tests/cpp-test-results.xml
+          comment_mode: off
+          check_name: "C++ Comprehensive Test Results (${{ matrix.platform }}-${{ matrix.arch }})"
+
+      - name: Coverage Summary
+        if: matrix.coverage
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          echo "## 🎯 Coverage Summary (Comprehensive)" >> $GITHUB_STEP_SUMMARY
+          echo "**Platform:** ${{ matrix.platform }}-${{ matrix.arch }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Coverage:** ${{ env.LINE_COVERAGE_PERCENTAGE }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Foundation:** Professional clean test structure" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f build/addon/tests/coverage-summary.txt ]; then
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            cat build/addon/tests/coverage-summary.txt >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  coverage-report:
+    permissions:
+      contents: read
+      actions: read
+    needs: cpp-tests
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Download all coverage reports
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: coverage-reports
+
+      - name: Combine Coverage Reports
+        run: |
+          echo "## 📊 C++ Comprehensive Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Built on:** Professional test foundation" >> $GITHUB_STEP_SUMMARY
+          echo "**Test Suite:** BCI core comprehensive test cases" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          for report in coverage-reports/*/coverage-summary.txt; do
+            if [ -f "$report" ]; then
+              platform=$(basename $(dirname "$report"))
+              echo "### $platform" >> $GITHUB_STEP_SUMMARY
+              echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+              cat "$report" >> $GITHUB_STEP_SUMMARY
+              echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+            fi
+          done

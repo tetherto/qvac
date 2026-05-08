@@ -122,14 +122,14 @@ export type TranscribeStreamClientParams = {
 };
 
 export interface TranscribeStreamSession {
-  write(audioChunk: Buffer): void;
+  write(audioChunk: Uint8Array): void;
   end(): void;
   destroy(): void;
   [Symbol.asyncIterator](): AsyncIterator<string>;
 }
 
 export interface TranscribeStreamMetadataSession {
-  write(audioChunk: Buffer): void;
+  write(audioChunk: Uint8Array): void;
   end(): void;
   destroy(): void;
   [Symbol.asyncIterator](): AsyncIterator<TranscribeSegment>;
@@ -145,7 +145,7 @@ export type TranscribeStreamEvent =
   | ({ type: "endOfTurn" } & EndOfTurnEvent);
 
 export interface TranscribeStreamConversationSession {
-  write(audioChunk: Buffer): void;
+  write(audioChunk: Uint8Array): void;
   end(): void;
   destroy(): void;
   [Symbol.asyncIterator](): AsyncIterator<TranscribeStreamEvent>;

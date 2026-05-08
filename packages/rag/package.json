@@ -43,7 +43,6 @@
   },
   "dependencies": {
     "@qvac/error": "^0.1.1",
-    "hyperdht": "^6.23.0",
     "ready-resource": "^1.1.2",
     "uuid-random": "^1.3.2",
     "zod": "^4.1.13"
@@ -52,6 +51,7 @@
     "bare-crypto": "^1.13.4",
     "bare-fetch": "^2.5.0",
     "hyperdb": "^4.19.0",
+    "hyperdht": "^6.23.0",
     "hyperschema": "^1.13.0",
     "llm-splitter": "^0.2.0"
   },
@@ -63,6 +63,9 @@
       "optional": true
     },
     "hyperdb": {
+      "optional": true
+    },
+    "hyperdht": {
       "optional": true
     },
     "hyperschema": {

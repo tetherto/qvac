@@ -144,6 +144,7 @@ export interface RunOptions {
 export interface RuntimeStats {
   TTFT: number
   TPS: number
+  ppTPS: number
   CacheTokens: number
   generatedTokens: number
   promptTokens: number

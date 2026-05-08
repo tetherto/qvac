@@ -233,6 +233,23 @@ export const kvCacheToolsSequentialSave: TestDefinition = {
   metadata: { category: "kv-cache", dependency: "tools", estimatedDurationMs: 90000 },
 };
 
+export const kvCacheCancelThenNewPrompt: TestDefinition = {
+  testId: "kv-cache-cancel-then-new-prompt",
+  params: {
+    cacheKey: "qvac-17780-cancel-regression",
+    firstUserMessage: "Tell me a long story about dragons.",
+    secondUserMessage: "What is 2+2? Answer with just the number.",
+    expectedAnswerContains: "4",
+    cancelAfterTokens: 3,
+  },
+  expectation: { validation: "function", fn: () => true },
+  metadata: {
+    category: "kv-cache",
+    dependency: "llm",
+    estimatedDurationMs: 30000,
+  },
+};
+
 export const kvCacheTests = [
   kvCacheDeleteAll,
   kvCacheDeleteByKey,
@@ -250,4 +267,5 @@ export const kvCacheTests = [
   kvCacheStatsVerification,
   kvCacheNoSystemPrompt,
   kvCacheToolsSequentialSave,
+  kvCacheCancelThenNewPrompt,
 ];

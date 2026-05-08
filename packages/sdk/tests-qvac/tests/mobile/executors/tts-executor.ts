@@ -17,7 +17,7 @@ export class MobileTtsExecutor extends ModelAssetExecutor<typeof ttsTests> {
   protected handlers = Object.fromEntries(
     ttsTests.map((test) => {
       const params = test.params as TtsParams;
-      const dep = test.testId.startsWith("tts-supertonic-") ? "tts-supertonic" : "tts-chatterbox";
+      const dep = test.metadata?.dependency || "tts-chatterbox";
       if (params.stream && params.sentenceStream) {
         return [test.testId, this.makeSentenceStream(dep)];
       }
@@ -30,49 +30,8 @@ export class MobileTtsExecutor extends ModelAssetExecutor<typeof ttsTests> {
   ) as never;
   protected defaultHandler = undefined;
 
-  private audioAssets: Record<string, number> | null = null;
-  private referenceAudioPatched = false;
-
   constructor(resources: ResourceManager) {
     super(resources);
-  }
-
-  async setup(testId: string, context: unknown) {
-    if (!this.referenceAudioPatched) {
-      await this.patchChatterboxReferenceAudio();
-      this.referenceAudioPatched = true;
-    }
-    await super.setup(testId, context);
-  }
-
-  private async loadAudioAssets() {
-    if (!this.audioAssets) {
-      // @ts-ignore - assets.ts is generated at consumer build time
-      const assets = await import("../../../../assets");
-      this.audioAssets = assets.audio;
-    }
-    return this.audioAssets!;
-  }
-
-  /**
-   * Resolve the reference audio asset URI and patch the tts-chatterbox
-   * resource definition config. Must run before the first ensureLoaded()
-   * call so loadModel() receives the referenceAudioSrc.
-   */
-  private async patchChatterboxReferenceAudio() {
-    try {
-      const audio = await this.loadAudioAssets();
-      const assetModule = audio["transcription-short-wav.wav"];
-      if (!assetModule) return;
-
-      const audioUri = await this.resolveAsset(assetModule);
-      const def = (this.resources as unknown as { definitions: Map<string, { config?: Record<string, unknown> }> }).definitions.get("tts-chatterbox");
-      if (def?.config) {
-        def.config.referenceAudioSrc = audioUri;
-      }
-    } catch (e) {
-      console.warn("Failed to resolve chatterbox reference audio:", e);
-    }
   }
 
   private makeNonStreaming(dep: string, isEmptyTest: boolean) {
