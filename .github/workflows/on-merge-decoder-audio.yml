@@ -199,7 +199,7 @@ jobs:
         id: publish
         uses: ./.github/actions/publish-library-to-npm
         with:
-          tag: ${{ inputs.npm_tag || 'latest' }}
+          tag: ${{ inputs.npm_tag }}
           workdir: "packages/decoder-audio"
 
   publish-release:
