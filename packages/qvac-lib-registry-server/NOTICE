@@ -121,6 +121,15 @@ one of these identifiers.
     distribution, and downstream users must be notified of these
     restrictions.
 
+--- BSD-3-Clause (BSD 3-Clause License) ---
+
+  Original repositories:
+    xinntao/Real-ESRGAN
+      Copyright (c) 2021, Xintao Wang. All rights reserved.
+
+  Distributed weights:
+    RealESRGAN_x4plus, RealESRNet_x4plus, RealESRGAN_x4plus_anime_6B
+
 =========================================================================
 Modification Notice
 =========================================================================

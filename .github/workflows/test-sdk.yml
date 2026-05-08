@@ -95,6 +95,7 @@ on:
         default: true
 
 permissions:
+  actions: read
   contents: read
   pull-requests: write
   packages: read
@@ -137,6 +138,7 @@ jobs:
   android-tests:
     needs: resolve
     permissions:
+      actions: read
       id-token: write
       contents: read
       pull-requests: write
@@ -159,6 +161,7 @@ jobs:
   ios-tests:
     needs: resolve
     permissions:
+      actions: read
       id-token: write
       contents: read
       pull-requests: write
