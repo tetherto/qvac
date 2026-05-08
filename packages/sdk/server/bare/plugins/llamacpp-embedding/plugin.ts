@@ -47,6 +47,14 @@ function transformEmbedConfig(embedConfig: EmbedConfig): GGMLConfig {
         : embedConfig.mainGpu;
   }
 
+  if (embedConfig.splitMode) {
+    config["split-mode"] = embedConfig.splitMode;
+  }
+
+  if (embedConfig.tensorSplit) {
+    config["tensor-split"] = embedConfig.tensorSplit;
+  }
+
   if (typeof embedConfig.verbosity === "number") {
     config.verbosity = `${embedConfig.verbosity}`;
   }

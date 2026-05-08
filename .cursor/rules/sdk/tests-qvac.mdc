@@ -30,6 +30,8 @@ alwaysApply: false
 
 **Never import `node:*` modules from `tests/shared/` or `tests/mobile/`** — it will break the mobile/Bare bundler.
 
+**No Node-only globals (`Buffer`, `process`, `global`) in `tests/shared/` or `tests/mobile/`** — RN/Hermes lacks them. Use `Uint8Array` for binary.
+
 Register new executors in the relevant consumer entry: `tests/desktop/consumer.ts` and/or `tests/mobile/consumer.ts`.
 
 ### Mobile platform skips

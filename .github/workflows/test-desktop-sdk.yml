@@ -72,6 +72,7 @@ on:
         required: true
 
 permissions:
+  actions: read
   contents: read
 
 jobs:
@@ -289,6 +290,11 @@ jobs:
       - name: Generate runId
         id: runid
         shell: node {0}
+        env:
+          EXPECTED_JOB_NAME: "[desktop] test (${{ matrix.os }})"
+          PR_NUMBER: ${{ github.event.pull_request.number || '' }}
+          CHECKOUT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           const fs = require('fs');
           const platform = "${{ matrix.os }}";
@@ -297,15 +303,53 @@ jobs:
           else if (/win/i.test(platform)) platformShort = 'windows';
           else if (/linux|ubuntu/i.test(platform)) platformShort = 'linux';
 
-          const repoName = process.env.GITHUB_REPOSITORY.split('/').pop();
-          const refName = process.env.GITHUB_REF_NAME.replace(/\//g, '-');
-          const sha = process.env.GITHUB_SHA.substring(0, 7);
-          const timestamp = Math.floor(Date.now() / 1000);
-          const runId = `${repoName}-${refName}-${sha}-${timestamp}-${platformShort}`;
+          (async () => {
+          async function fetchJobs(page) {
+            const url =
+              `https://api.github.com/repos/${process.env.GITHUB_REPOSITORY}` +
+              `/actions/runs/${process.env.GITHUB_RUN_ID}` +
+              `/attempts/${process.env.GITHUB_RUN_ATTEMPT}/jobs?per_page=100&page=${page}`;
+            const res = await fetch(url, {
+              headers: {
+                Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+                Accept: 'application/vnd.github+json',
+                'X-GitHub-Api-Version': '2022-11-28',
+              },
+            });
+            if (!res.ok) {
+              throw new Error(`Failed to list workflow jobs: ${res.status} ${await res.text()}`);
+            }
+            return res.json();
+          }
+
+          const jobs = [];
+          for (let page = 1; ; page++) {
+            const data = await fetchJobs(page);
+            jobs.push(...(data.jobs || []));
+            if (!data.jobs || data.jobs.length < 100) break;
+          }
+
+          const matches = jobs.filter(
+            (job) => job.name === process.env.EXPECTED_JOB_NAME ||
+              job.name.endsWith(` / ${process.env.EXPECTED_JOB_NAME}`),
+          );
+          const runnerMatches = matches.filter((job) => job.runner_name === process.env.RUNNER_NAME);
+          const job = runnerMatches.length === 1 ? runnerMatches[0] : matches[0];
+          if (!job) {
+            throw new Error(`Could not resolve current job id for ${process.env.EXPECTED_JOB_NAME}`);
+          }
+
+          const sha = (process.env.CHECKOUT_SHA || process.env.GITHUB_SHA).substring(0, 7);
+          const refPart = process.env.PR_NUMBER ? `pr${process.env.PR_NUMBER}-${sha}` : sha;
+          const runId = `${platformShort}-${refPart}-${job.id}`;
 
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `runId=${runId}\n`, 'utf8');
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `platform=${platformShort}\n`, 'utf8');
           console.log(`Generated runId: ${runId}`);
+          })().catch((err) => {
+            console.error(err);
+            process.exit(1);
+          });
 
       - name: Run tests (consumer + producer)
         working-directory: ${{ inputs.working-directory }}
@@ -570,6 +614,7 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: read
       pull-requests: write
     steps:

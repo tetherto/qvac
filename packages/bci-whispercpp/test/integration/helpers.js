@@ -2,10 +2,30 @@
 
 const fs = require('bare-fs')
 const path = require('bare-path')
-const { computeWER } = require('../../lib/wer')
+const os = require('bare-os')
+const { computeWER } = require('@qvac/bci-whispercpp/wer')
+
+const isMobile = os.platform() === 'ios' || os.platform() === 'android'
+
+// On mobile, the test framework copies test/mobile/testAssets/ into the
+// app bundle and exposes the on-device asset root via global.testDir
+// (writable scratch). Fall back to test/mobile/testAssets/ on disk so
+// the same code paths work when these tests are exercised from the
+// repo root (e.g. during local mobile dry-runs).
+function getMobileAssetsDir () {
+  if (typeof global !== 'undefined' && global.testDir) return global.testDir
+  return path.join(__dirname, '..', 'mobile', 'testAssets')
+}
+
+function getModelPath (filename) {
+  if (isMobile) return path.join(getMobileAssetsDir(), filename)
+  return path.join(__dirname, '..', '..', 'models', filename)
+}
 
 function getTestPaths () {
-  const fixturesDir = path.join(__dirname, '..', 'fixtures')
+  const fixturesDir = isMobile
+    ? getMobileAssetsDir()
+    : path.join(__dirname, '..', 'fixtures')
   const manifestPath = path.join(fixturesDir, 'manifest.json')
 
   let manifest = { samples: [] }
@@ -79,6 +99,9 @@ async function * chunkify (bytes, chunkSize) {
 }
 
 module.exports = {
+  isMobile,
+  getMobileAssetsDir,
+  getModelPath,
   getTestPaths,
   detectPlatform,
   computeWER,

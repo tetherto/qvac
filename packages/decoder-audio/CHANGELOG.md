@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0]
+
+This is a `[bc]` release that aligns `@qvac/decoder-audio` with the new addon shape used by the rest of the inference packages (NMT, Whisper, OCR, etc.). `FFmpegDecoder` no longer extends `BaseInference`, and the run lifecycle is now driven by `createJobHandler` from `@qvac/infer-base`.
+
+### Changed
+
+- `FFmpegDecoder` is now a standalone class — `extends BaseInference` (`@qvac/infer-base/WeightsProvider/BaseInference`) has been dropped.
+- `run()` now uses `createJobHandler({ cancel })` from `@qvac/infer-base` to create and drive the active `QvacResponse`. The legacy `currentJob = { response, audioChunks, isActive, isPaused }` plumbing and the manual `new QvacResponse({ cancelHandler, pauseHandler, continueHandler })` instantiation have been removed.
+- `QvacResponse` is now sourced from `@qvac/infer-base` (re-export) instead of the standalone `@qvac/response` package, matching the migration NMT did in earlier releases.
+- `run()` is now synchronous (returns `QvacResponse<DecoderOutput>` directly instead of `Promise<QvacResponse<DecoderOutput>>`); decoding still happens asynchronously and is observed through the returned response.
+
+### Added
+
+- New `JOB_CANCELLED` (11012) error code in `@qvac/decoder-audio`'s error table. `response.await()` on a cancelled `run()` now rejects with `QvacErrorDecoderAudio({ code: 11012 })` instead of resolving with a partial buffer; cancellation is also honored once FFmpeg has started decoding (`_processPacket` checks `_cancelled` between packets).
+- `unload()` now actively fails an in-flight `run()` with `QvacErrorDecoderAudio({ code: DECODER_NOT_LOADED })` instead of silently leaving the response to resolve after teardown.
+
+### Removed
+
+- Removed the `pause()` and `unpause()` public methods. The new shared `QvacResponse` no longer carries `pauseHandler` / `continueHandler` semantics, and no SDK consumer was using them.
+- Removed the `stop()` public method. The standard `QvacResponse.cancel()` path (wired through `createJobHandler`'s `cancel` callback) is the only supported way to abort an in-flight decode. The SDK already calls `decoder.unload()` for teardown.
+- Removed the `status()` and `getState()` public methods — neither was called by any consumer.
+- Removed the `@qvac/response` runtime dependency from `package.json`. The runtime `require('@qvac/response')` in `index.js` and the type-only import in `index.d.ts` are gone.
+- Removed `BaseInference` and `@qvac/response` imports from `index.d.ts`. The class declaration no longer extends `BaseInference`, and `pause`, `unpause`, `stop`, `status`, and `DecoderStatus` have been dropped from the public type surface.
+
+### Notes
+
+This is a `[bc]` release because the public class shape changes (removed methods, removed inheritance, removed dependency, `run()` no longer returns a `Promise`). No current SDK code path breaks — the SDK only calls `load()`, `run()`, and `unload()` and consumes the returned `QvacResponse` via its own `cancel()` / iteration APIs.
+
 ## [0.3.9]
 
 ### Changed
