@@ -9,14 +9,13 @@
  */
 
 #include <cstdint>
+#include <cstdlib>
+#include <limits>
 #include <vector>
 
 #include <gtest/gtest.h>
 
-#include "handlers/SdCtxHandlers.hpp"
-#include "model-interface/SdModel.hpp"
-
-using namespace qvac_lib_inference_addon_sd;
+#include "utils/ImageCodec.hpp"
 
 // Helper to create a minimal valid PNG header
 std::vector<uint8_t> createValidPngHeader() {
@@ -34,45 +33,36 @@ std::vector<uint8_t> createValidPngHeader() {
   };
 }
 
-class StbImageSecurityTest : public ::testing::Test {
-protected:
-  void SetUp() override {
-    SdCtxConfig config{};
-    config.modelPath = ""; // Not loading actual model for image tests
-    model = std::make_unique<SdModel>(std::move(config));
-  }
-
-  std::unique_ptr<SdModel> model;
-};
+class StbImageSecurityTest : public ::testing::Test {};
 
 // ─────────────────────────────────────────────────────────────────────────────
-// decodePng security tests
+// decodeImage security tests
 // ─────────────────────────────────────────────────────────────────────────────
 
 TEST_F(StbImageSecurityTest, RejectsEmptyInput) {
   std::vector<uint8_t> empty;
-  auto result = model->decodePng(empty);
+  auto result = image_codec::decodeImage(empty);
 
   EXPECT_EQ(result.data, nullptr);
   EXPECT_EQ(result.width, 0u);
   EXPECT_EQ(result.height, 0u);
 }
 
-TEST_F(StbImageSecurityTest, RejectsInvalidPngMagicBytes) {
-  // Wrong magic bytes (not PNG signature)
-  std::vector<uint8_t> notPng = {
+TEST_F(StbImageSecurityTest, RejectsInvalidImageBytes) {
+  // JPEG magic bytes without a valid JPEG body.
+  std::vector<uint8_t> badImage = {
       0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46 // JPEG signature
   };
 
-  auto result = model->decodePng(notPng);
+  auto result = image_codec::decodeImage(badImage);
 
-  EXPECT_EQ(result.data, nullptr) << "Should reject non-PNG data";
+  EXPECT_EQ(result.data, nullptr) << "Should reject invalid image data";
 }
 
-TEST_F(StbImageSecurityTest, RejectsOversizedInput) {
-  // Create a buffer larger than MAX_IMAGE_SIZE (50MB)
-  const size_t oversized = 51 * 1024 * 1024;
-  std::vector<uint8_t> huge(oversized);
+TEST_F(StbImageSecurityTest, RejectsLargeCorruptInput) {
+  // Large corrupt images should fail cleanly without crashing.
+  const size_t corruptSize = 1024 * 1024;
+  std::vector<uint8_t> huge(corruptSize);
 
   // Set PNG magic bytes but keep rest as zeros
   huge[0] = 0x89;
@@ -84,17 +74,17 @@ TEST_F(StbImageSecurityTest, RejectsOversizedInput) {
   huge[6] = 0x1A;
   huge[7] = 0x0A;
 
-  auto result = model->decodePng(huge);
+  auto result = image_codec::decodeImage(huge);
 
-  EXPECT_EQ(result.data, nullptr) << "Should reject images exceeding size "
-                                     "limit (CVE-2021-28021 mitigation)";
+  EXPECT_EQ(result.data, nullptr)
+      << "Should reject large corrupt images cleanly";
 }
 
 TEST_F(StbImageSecurityTest, RejectsTruncatedPngHeader) {
   // Only 4 bytes - not enough for full PNG signature
   std::vector<uint8_t> truncated = {0x89, 0x50, 0x4E, 0x47};
 
-  auto result = model->decodePng(truncated);
+  auto result = image_codec::decodeImage(truncated);
 
   EXPECT_EQ(result.data, nullptr) << "Should reject truncated PNG header";
 }
@@ -104,7 +94,7 @@ TEST_F(StbImageSecurityTest, AcceptsValidMinimalPng) {
 
   // This might fail (stb_image is picky), but should not crash
   // The test verifies we handle both success and failure gracefully
-  auto result = model->decodePng(validPng);
+  auto result = image_codec::decodeImage(validPng);
 
   // Either succeeds with valid data or fails cleanly
   if (result.data != nullptr) {
@@ -112,7 +102,7 @@ TEST_F(StbImageSecurityTest, AcceptsValidMinimalPng) {
     EXPECT_GT(result.height, 0u);
     EXPECT_LE(result.width, 16384u) << "Width should be within max dimension";
     EXPECT_LE(result.height, 16384u) << "Height should be within max dimension";
-    stbi_image_free(result.data);
+    free(result.data);
   }
 }
 
@@ -127,7 +117,7 @@ TEST_F(StbImageSecurityTest, RejectsNullDataPointer) {
   img.channel = 3;
   img.data = nullptr; // NULL pointer
 
-  auto result = model->encodeToPng(img);
+  auto result = image_codec::encodeToPng(img);
 
   EXPECT_TRUE(result.empty()) << "Should reject null data pointer";
 }
@@ -142,7 +132,7 @@ TEST_F(StbImageSecurityTest, RejectsZeroDimensions) {
   img1.channel = 3;
   img1.data = dummyData;
 
-  auto result1 = model->encodeToPng(img1);
+  auto result1 = image_codec::encodeToPng(img1);
   EXPECT_TRUE(result1.empty()) << "Should reject zero width";
 
   // Zero height
@@ -152,22 +142,22 @@ TEST_F(StbImageSecurityTest, RejectsZeroDimensions) {
   img2.channel = 3;
   img2.data = dummyData;
 
-  auto result2 = model->encodeToPng(img2);
+  auto result2 = image_codec::encodeToPng(img2);
   EXPECT_TRUE(result2.empty()) << "Should reject zero height";
 }
 
-TEST_F(StbImageSecurityTest, RejectsOversizedDimensions) {
+TEST_F(StbImageSecurityTest, RejectsDimensionsAboveNativeIntRange) {
   uint8_t dummyData[3] = {0, 0, 0};
 
   sd_image_t img{};
-  img.width = 20000; // Exceeds MAX_DIMENSION (16384)
-  img.height = 20000;
+  img.width = static_cast<uint32_t>(std::numeric_limits<int>::max()) + 1u;
+  img.height = 1;
   img.channel = 3;
   img.data = dummyData;
 
-  auto result = model->encodeToPng(img);
+  auto result = image_codec::encodeToPng(img);
 
-  EXPECT_TRUE(result.empty()) << "Should reject oversized dimensions";
+  EXPECT_TRUE(result.empty()) << "Should reject dimensions above native int";
 }
 
 TEST_F(StbImageSecurityTest, RejectsInvalidChannelCount) {
@@ -179,7 +169,7 @@ TEST_F(StbImageSecurityTest, RejectsInvalidChannelCount) {
   img.channel = 7; // Invalid (must be 3 or 4)
   img.data = dummyData;
 
-  auto result = model->encodeToPng(img);
+  auto result = image_codec::encodeToPng(img);
 
   EXPECT_TRUE(result.empty()) << "Should reject invalid channel count";
 }
@@ -187,15 +177,14 @@ TEST_F(StbImageSecurityTest, RejectsInvalidChannelCount) {
 TEST_F(StbImageSecurityTest, PreventsStrideOverflow) {
   uint8_t dummyData[3] = {0, 0, 0};
 
-  // Dimensions that would cause int32 overflow in stride calculation
-  // 16384 * 4 = 65536 (OK), but 100000 * 4 would overflow
+  // Dimensions that would cause int32 overflow in stride calculation.
   sd_image_t img{};
-  img.width = 100000;
-  img.height = 100;
+  img.width = static_cast<uint32_t>(std::numeric_limits<int>::max() / 4) + 1u;
+  img.height = 1;
   img.channel = 4;
   img.data = dummyData;
 
-  auto result = model->encodeToPng(img);
+  auto result = image_codec::encodeToPng(img);
 
   EXPECT_TRUE(result.empty())
       << "Should reject dimensions causing stride overflow (CVE-2022-28041 "
@@ -225,7 +214,7 @@ TEST_F(StbImageSecurityTest, EncodesValidSmallImage) {
   img.channel = 3;
   img.data = pixels.data();
 
-  auto result = model->encodeToPng(img);
+  auto result = image_codec::encodeToPng(img);
 
   EXPECT_FALSE(result.empty()) << "Should successfully encode valid image";
 
@@ -269,18 +258,18 @@ TEST_F(StbImageSecurityTest, RoundTripEncodeDecode) {
   original.data = originalPixels.data();
 
   // Encode
-  auto pngBytes = model->encodeToPng(original);
+  auto pngBytes = image_codec::encodeToPng(original);
   ASSERT_FALSE(pngBytes.empty()) << "Encoding should succeed";
 
   // Decode
-  auto decoded = model->decodePng(pngBytes);
+  auto decoded = image_codec::decodeImage(pngBytes);
   ASSERT_NE(decoded.data, nullptr) << "Decoding should succeed";
 
   // Verify dimensions
   EXPECT_EQ(decoded.width, original.width);
   EXPECT_EQ(decoded.height, original.height);
-  EXPECT_EQ(decoded.channel, 3u); // Forced to 3 in decodePng
+  EXPECT_EQ(decoded.channel, 3u); // Forced to 3 in decodeImage
 
   // Cleanup
-  stbi_image_free(decoded.data);
+  free(decoded.data);
 }

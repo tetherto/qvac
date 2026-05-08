@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.7.0] - 2026-05-06
+
+### Added
+
+- Standalone ESRGAN upscaler API via named export `EsrganUpscaler` for upscaling existing PNG/JPEG images without loading a diffusion model
+- End-to-end ESRGAN integration coverage for both post-generation upscale and standalone upscale output dimensions
+
+### Changed
+
+- Native log routing is no longer connected/released per instance; configure process-global native C++ logs through `addonLogging.setLogger()` for coexistence safety
+
 ## [0.6.0] - 2026-05-01
 
 ### Added
