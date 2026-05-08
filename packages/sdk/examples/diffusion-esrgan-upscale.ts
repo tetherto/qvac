@@ -1,30 +1,25 @@
 import {
-  downloadAsset,
   loadModel,
   unloadModel,
   diffusion,
   SD_V2_1_1B_Q8_0,
+  REALESRGAN_X4PLUS_ANIME_6B,
 } from "@qvac/sdk";
 import fs from "fs";
 import path from "path";
 
-// ESRGAN upscale example. Downloads the RealESRGAN_x4plus_anime_6B weights via
-// the SDK download cache, then passes the same source through `esrganModelSrc`.
+// ESRGAN upscale example.
 //
 // Usage:
 //   bun run examples/diffusion-esrgan-upscale.ts [esrganSrc] [prompt] [outputDir]
-//   ESRGAN_MODEL_PATH=/path/to/weights.pth bun run examples/diffusion-esrgan-upscale.ts
-const ESRGAN_DOWNLOAD_URL =
-  "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth";
 
 const esrganArg: string | undefined = process.argv[2];
 const promptArg: string | undefined = process.argv[3];
 const outputDirArg: string | undefined = process.argv[4];
 
-const esrganModelSrc: string =
+const esrganModelSrc =
   esrganArg ??
-  (process.env["ESRGAN_MODEL_PATH"] as string | undefined) ??
-  ESRGAN_DOWNLOAD_URL;
+  REALESRGAN_X4PLUS_ANIME_6B;
 
 const prompt =
   promptArg ??
@@ -33,26 +28,7 @@ const negative_prompt = "blurry, low quality, watermark, text";
 const outputDir = outputDirArg ?? ".";
 const seed = 42;
 
-function formatMB(bytes: number) {
-  return (bytes / 1024 / 1024).toFixed(2);
-}
-
 try {
-  console.log("Downloading ESRGAN upscaler weights...");
-  await downloadAsset({
-    assetSrc: esrganModelSrc,
-    onProgress: (progress) => {
-      const downloadedMB = formatMB(progress.downloaded);
-      const totalMB = formatMB(progress.total);
-      const percentage = progress.percentage.toFixed(1);
-
-      console.log(
-        `Progress: ${percentage}% (${downloadedMB}MB / ${totalMB}MB)`,
-      );
-    },
-  });
-  console.log("ESRGAN weights ready.");
-
   console.log("Loading SD 2.1 + ESRGAN upscaler...");
   const modelId = await loadModel({
     modelSrc: SD_V2_1_1B_Q8_0,

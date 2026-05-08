@@ -41,6 +41,7 @@ import {
   FLUX_2_KLEIN_4B_VAE,
   QWEN3_4B_Q4_K_M,
   SD_V2_1_1B_Q8_0,
+  REALESRGAN_X4PLUS_ANIME_6B
 } from "@qvac/sdk";
 import * as path from "node:path";
 import { ResourceManager } from "../shared/resource-manager.js";
@@ -339,8 +340,7 @@ resources.define("diffusion-esrgan", {
     threads: 4,
     prediction: "v",
     vae_on_cpu: true,
-    esrganModelSrc:
-      "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth",
+    esrganModelSrc: REALESRGAN_X4PLUS_ANIME_6B,
     upscaler_tile_size: 128,
   },
 });
