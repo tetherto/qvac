@@ -5,8 +5,8 @@
 #include <stdexcept>
 #include <utility>
 
-#include <qvac-lib-inference-addon-cpp/Errors.hpp>
-#include <qvac-lib-inference-addon-cpp/Logger.hpp>
+#include <inference-addon-cpp/Errors.hpp>
+#include <inference-addon-cpp/Logger.hpp>
 
 #include "LoggingMacros.hpp"
 

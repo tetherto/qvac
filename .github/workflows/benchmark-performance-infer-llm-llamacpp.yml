@@ -69,7 +69,7 @@ jobs:
       packages: write
       pull-requests: write
       id-token: write
-    uses: ./.github/workflows/prebuilds-qvac-lib-infer-llamacpp-llm.yml
+    uses: ./.github/workflows/prebuilds-llm-llamacpp.yml
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}
@@ -82,7 +82,7 @@ jobs:
       contents: read
       packages: read
       id-token: write
-    uses: ./.github/workflows/integration-test-qvac-lib-infer-llamacpp-llm.yml
+    uses: ./.github/workflows/integration-test-llm-llamacpp.yml
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}
@@ -98,7 +98,7 @@ jobs:
       packages: read
       pull-requests: write
       id-token: write
-    uses: ./.github/workflows/integration-mobile-test-qvac-lib-infer-llamacpp-llm.yml
+    uses: ./.github/workflows/integration-mobile-test-llm-llamacpp.yml
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}
@@ -125,7 +125,7 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
           sparse-checkout: |
             scripts/perf-report
-            packages/qvac-lib-infer-llamacpp-llm/media
+            packages/llm-llamacpp/media
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # 4.4.0

@@ -79,7 +79,7 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
 
       - name: Install NPM dependencies
-        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        working-directory: packages/translation-nmtcpp
         run: |
           npm install
           npm install -g bare bare-make
@@ -88,12 +88,12 @@ jobs:
         if: ${{ !inputs.prebuild_package }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          path: ${{ inputs.workdir || env.PKG_DIR }}/prebuilds
+          path: packages/translation-nmtcpp/prebuilds
           merge-multiple: true
 
       - name: Download prebuilds from package
         if: ${{ inputs.prebuild_package }}
-        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        working-directory: packages/translation-nmtcpp
         shell: bash
         run: |
           mkdir -p prebuilds
@@ -102,7 +102,7 @@ jobs:
           cp -r /tmp/package/prebuilds/* prebuilds/
 
       - name: Print run state
-        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        working-directory: packages/translation-nmtcpp
         shell: bash
         run: |
           echo "node version: $(node -v)"
@@ -114,7 +114,7 @@ jobs:
         continue-on-error: true
 
       - name: Print run state (model and prebuilds)
-        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        working-directory: packages/translation-nmtcpp
         shell: bash
         run: |
           echo "node version: $(node -v)"
@@ -155,7 +155,7 @@ jobs:
           aws-region: eu-central-1
 
       - name: Download Bergamot models from S3
-        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        working-directory: packages/translation-nmtcpp
         shell: bash
         run: |
           echo "Downloading Bergamot models from S3..."
@@ -169,7 +169,7 @@ jobs:
           ls -la model/bergamot/
 
       - name: Download IndicTrans model from S3
-        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        working-directory: packages/translation-nmtcpp
         shell: bash
         run: |
           echo "Downloading IndicTrans en-indic model from S3..."
@@ -180,7 +180,7 @@ jobs:
 
       - name: Run integration test (Linux/macOS)
         if: ${{ matrix.platform != 'win32' }}
-        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        working-directory: packages/translation-nmtcpp
         run: |
           npm run test:integration ${{ matrix.platform }}-${{ matrix.arch }} 2>&1 | tee test-output.log
           exit ${PIPESTATUS[0]}
@@ -190,7 +190,7 @@ jobs:
 
       - name: Run integration test (Windows)
         if: ${{ matrix.platform == 'win32' }}
-        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        working-directory: packages/translation-nmtcpp
         run: |
           npm run test:integration ${{ matrix.platform }}-${{ matrix.arch }} | Tee-Object test-output.log
         shell: powershell
@@ -199,7 +199,7 @@ jobs:
 
       - name: Generate test report (Linux/macOS)
         if: ${{ always() && matrix.platform != 'win32' }}
-        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        working-directory: packages/translation-nmtcpp
         shell: bash
         run: |
           REPORT="test-report.txt"
@@ -298,7 +298,7 @@ jobs:
 
       - name: Generate test report (Windows)
         if: ${{ always() && matrix.platform == 'win32' }}
-        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        working-directory: packages/translation-nmtcpp
         shell: powershell
         run: |
           $report = "test-report.txt"
@@ -395,7 +395,7 @@ jobs:
 
       - name: Generate HTML performance report
         if: ${{ always() }}
-        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        working-directory: packages/translation-nmtcpp
         shell: bash
         run: |
           if [ -f test/results/performance-report.json ]; then
@@ -415,10 +415,10 @@ jobs:
         with:
           name: perf-report-nmtcpp-${{ matrix.os }}-${{ matrix.arch }}-${{ github.run_number }}
           path: |
-            ${{ inputs.workdir || env.PKG_DIR }}/test/results/performance-report.json
-            ${{ inputs.workdir || env.PKG_DIR }}/test/results/performance-report.html
-            ${{ inputs.workdir || env.PKG_DIR }}/test/results/performance-summary.json
-            ${{ inputs.workdir || env.PKG_DIR }}/test/results/performance-report.md
+            packages/translation-nmtcpp/test/results/performance-report.json
+            packages/translation-nmtcpp/test/results/performance-report.html
+            packages/translation-nmtcpp/test/results/performance-summary.json
+            packages/translation-nmtcpp/test/results/performance-report.md
           retention-days: 90
           if-no-files-found: ignore
 
@@ -428,12 +428,12 @@ jobs:
         with:
           name: test-logs-${{ matrix.os }}-${{ matrix.arch }}
           path: |
-            ${{ inputs.workdir || env.PKG_DIR }}/test-report.txt
-            ${{ inputs.workdir || env.PKG_DIR }}/test-output.log
+            packages/translation-nmtcpp/test-report.txt
+            packages/translation-nmtcpp/test-output.log
           retention-days: 14
 
       - name: Run quickstart example with deps installed
-        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        working-directory: packages/translation-nmtcpp
         shell: bash
         run: |
           npm install "@qvac/translation-nmtcpp"
