@@ -15,7 +15,7 @@ struct SupertonicConfig {
   std::optional<int> threads;
   std::optional<int> nGpuLayers;
   std::optional<int> outputSampleRate;
-  bool useGpu = false;
+  std::optional<bool> useGpu;
   std::string noiseNpyPath;
 };
 

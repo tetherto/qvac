@@ -36,8 +36,8 @@ tts_cpp::supertonic::EngineOptions toEngineOptions(const SupertonicConfig& cfg) 
   if (cfg.threads.has_value()) opts.n_threads = *cfg.threads;
   if (cfg.nGpuLayers.has_value()) {
     opts.n_gpu_layers = *cfg.nGpuLayers;
-  } else if (cfg.useGpu) {
-    opts.n_gpu_layers = 99;
+  } else if (cfg.useGpu.has_value()) {
+    opts.n_gpu_layers = *cfg.useGpu ? 99 : 0;
   }
   opts.noise_npy_path = cfg.noiseNpyPath;
   return opts;
@@ -87,8 +87,22 @@ void SupertonicModel::validateConfig(const SupertonicConfig& cfg) {
     throw createTTSError(TTSErrorCode::ModelFileNotFound,
                          "noise npy not found: " + cfg.noiseNpyPath);
   }
+  if (cfg.useGpu.has_value() && cfg.nGpuLayers.has_value()) {
+    const bool wantsGpuFlag   = *cfg.useGpu;
+    const int  layers         = *cfg.nGpuLayers;
+    const bool layersWantGpu  = layers > 0;
+    if (wantsGpuFlag != layersWantGpu) {
+      throw StatusError(
+          general_error::InvalidArgument,
+          std::string("SupertonicModel: useGPU=") +
+              (wantsGpuFlag ? "true" : "false") +
+              " conflicts with nGpuLayers=" + std::to_string(layers) +
+              ". Either drop one of the two, or make them agree.");
+    }
+  }
   const bool wantsGpu =
-      cfg.useGpu || (cfg.nGpuLayers.has_value() && *cfg.nGpuLayers > 0);
+      cfg.useGpu.value_or(false) ||
+      (cfg.nGpuLayers.has_value() && *cfg.nGpuLayers > 0);
   if (wantsGpu) {
     throw StatusError(
         general_error::InvalidArgument,

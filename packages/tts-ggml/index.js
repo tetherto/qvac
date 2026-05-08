@@ -319,8 +319,24 @@ class TTSGgml {
       if (this._config.useGPU === undefined) {
         this._config.useGPU = false
       }
-    } else if (this._config.useGPU === undefined && this._nGpuLayers == null) {
-      this._config.useGPU = true
+    } else {
+      if (
+        typeof this._config.useGPU === 'boolean' &&
+        this._nGpuLayers != null
+      ) {
+        const layersWantGpu = this._nGpuLayers > 0
+        if (this._config.useGPU !== layersWantGpu) {
+          throw new Error(
+            'tts-ggml: useGPU=' + this._config.useGPU +
+            ' conflicts with nGpuLayers=' + this._nGpuLayers + '. ' +
+            'Either drop one of the two, or make them agree ' +
+            '(useGPU:true + nGpuLayers>0, or useGPU:false + nGpuLayers=0).'
+          )
+        }
+      }
+      if (this._config.useGPU === undefined && this._nGpuLayers == null) {
+        this._config.useGPU = true
+      }
     }
   }
 
