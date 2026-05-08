@@ -41,6 +41,7 @@ import {
   SD_V2_1_1B_Q8_0,
 } from "@qvac/sdk";
 import { ResourceManager } from "../shared/resource-manager.js";
+import { resolveBundledAssetUri } from "./asset-uri.js";
 import { ModelLoadingExecutor } from "../shared/executors/model-loading-executor.js";
 import { CompletionExecutor } from "../shared/executors/completion-executor.js";
 import { EmbeddingExecutor } from "../shared/executors/embedding-executor.js";
@@ -215,12 +216,28 @@ resources.define("afriquegemma", {
   },
 });
 
+/** Look up a bundled audio file by name and resolve it to a POSIX path. */
+async function resolveBundledAudioUri(filename: string): Promise<string | undefined> {
+  // @ts-ignore - assets.ts generated at consumer build time (consumer root, 3 levels up from dist/tests/mobile/)
+  const assets = await import("../../../assets");
+  const assetModule = assets.audio?.[filename];
+  if (!assetModule) {
+    console.warn(`[tts-chatterbox] reference audio not in registry: ${filename}`);
+    return undefined;
+  }
+  try {
+    return await resolveBundledAssetUri(assetModule);
+  } catch (err) {
+    console.warn(`[tts-chatterbox] failed to resolve ${filename}:`, err);
+    return undefined;
+  }
+}
 
 resources.define("tts-chatterbox", {
   constant: TTS_TOKENIZER_EN_CHATTERBOX,
   type: "tts",
-  skipPreDownload: true,
-  config: {
+  preLoadUnload: true,
+  config: async () => ({
     ttsEngine: "chatterbox",
     language: "en",
     ttsTokenizerSrc: TTS_TOKENIZER_EN_CHATTERBOX,
@@ -228,7 +245,8 @@ resources.define("tts-chatterbox", {
     ttsEmbedTokensSrc: TTS_EMBED_TOKENS_EN_CHATTERBOX_FP32,
     ttsConditionalDecoderSrc: TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP32,
     ttsLanguageModelSrc: TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP32,
-  },
+    referenceAudioSrc: await resolveBundledAudioUri("transcription-short-wav.wav"),
+  }),
 });
 
 const ttsSupertonicBaseConfig = {
@@ -245,7 +263,7 @@ const ttsSupertonicBaseConfig = {
 resources.define("tts-supertonic", {
   constant: TTS_SUPERTONIC2_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32,
   type: "onnx-tts",
-  skipPreDownload: true,
+  preLoadUnload: true,
   config: {
     ...ttsSupertonicBaseConfig,
     language: "en",
@@ -255,7 +273,7 @@ resources.define("tts-supertonic", {
 resources.define("tts-supertonic-multilingual", {
   constant: TTS_SUPERTONIC2_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32,
   type: "onnx-tts",
-  skipPreDownload: true,
+  preLoadUnload: true,
   config: {
     ...ttsSupertonicBaseConfig,
     language: "es",
@@ -267,7 +285,7 @@ resources.define("tts-supertonic-multilingual", {
 resources.define("parakeet-tdt", {
   constant: PARAKEET_TDT_ENCODER_INT8,
   type: "parakeet",
-  skipPreDownload: true,
+  preLoadUnload: true,
   config: {
     parakeetEncoderSrc: PARAKEET_TDT_ENCODER_INT8,
     parakeetDecoderSrc: PARAKEET_TDT_DECODER_INT8,
@@ -280,7 +298,7 @@ resources.define("parakeet-tdt", {
 resources.define("parakeet-ctc", {
   constant: PARAKEET_CTC_FP32,
   type: "parakeet",
-  skipPreDownload: true,
+  preLoadUnload: true,
   config: {
     modelType: "ctc",
     parakeetCtcModelSrc: PARAKEET_CTC_FP32,
@@ -292,7 +310,7 @@ resources.define("parakeet-ctc", {
 resources.define("parakeet-sortformer", {
   constant: PARAKEET_SORTFORMER_FP32,
   type: "parakeet",
-  skipPreDownload: true,
+  preLoadUnload: true,
   config: {
     modelType: "sortformer",
     parakeetSortformerSrc: PARAKEET_SORTFORMER_FP32,
@@ -302,7 +320,7 @@ resources.define("parakeet-sortformer", {
 resources.define("vision", {
   constant: SMOLVLM2_500M_MULTIMODAL_Q8_0,
   type: "llm",
-  skipPreDownload: true,
+  preLoadUnload: true,
   config: {
     ctx_size: 1024,
     projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
@@ -370,6 +388,11 @@ export const executor = createExecutor({
       new SkipExecutor(/^translation-afriquegemma-/, "AfriqueGemma 4B (~2.7 GB) exceeds iOS memory budget"),
       // TODO(QVAC-18460): re-enable once iOS transcribe() crash is fixed.
       new SkipExecutor(/^transcription-/, "TODO(QVAC-18460): transcription disabled on iOS — transcribe() hard-crashes consumer after FFmpegDecoder unload"),
+      new SkipExecutor(/^transcribe-stream-events-/, "TODO(QVAC-18460): transcribeStream disabled on iOS — same native crash path as transcription-* (Silero VAD + whisper_full)"),
+      skipTests([
+        "config-reload-then-transcribe",
+        "error-transcription-failed",
+      ], "TODO(QVAC-18460): transcribe() hard-crashes consumer on iOS"),
     ] : []),
 
     // Real executors
