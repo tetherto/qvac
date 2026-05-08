@@ -35,8 +35,11 @@ try {
     modelType: "diffusion",
     modelConfig: {
       prediction: "v",
-      esrganModelSrc,
-      upscaler_tile_size: 128,
+      upscaler: {
+        type: "esrgan",
+        model_src: esrganModelSrc,
+        tile_size: 128,
+      },
     },
     onProgress: (p) => console.log(`Loading: ${p.percentage.toFixed(1)}%`),
   });

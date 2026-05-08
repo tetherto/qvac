@@ -40,8 +40,13 @@ export const diffusionPlugin = definePlugin({
   ): Promise<ResolveResult<SdcppConfig, DiffusionArtifactKey>> {
     const {
       clipLModelSrc, clipGModelSrc, t5XxlModelSrc,
-      llmModelSrc, vaeModelSrc, esrganModelSrc, ...runtimeConfig
+      llmModelSrc, vaeModelSrc, upscaler, ...rest
     } = cfg;
+    const { model_src: esrganModelSrc, ...upscalerRuntime } = upscaler ?? {};
+    const runtimeConfig = {
+      ...rest,
+      ...(upscaler && { upscaler: upscalerRuntime }),
+    } as SdcppConfig;
 
     const sources = {
       clipLModelSrc, clipGModelSrc, t5XxlModelSrc,
@@ -95,9 +100,20 @@ export const diffusionPlugin = definePlugin({
       ...(artifacts?.["esrganModelPath"] && { esrgan: artifacts["esrganModelPath"] }),
     };
 
+    const { upscaler, ...rest } = config;
+    const addonConfig = {
+      ...rest,
+      ...(upscaler?.tile_size !== undefined && { upscaler_tile_size: upscaler.tile_size }),
+      ...(upscaler?.direct !== undefined && { upscaler_direct: upscaler.direct }),
+      ...(upscaler?.offload_params_to_cpu !== undefined && {
+        upscaler_offload_params_to_cpu: upscaler.offload_params_to_cpu,
+      }),
+      ...(upscaler?.threads !== undefined && { upscaler_threads: upscaler.threads }),
+    } as SdConfig;
+
     const model = new ImgStableDiffusion({
       files,
-      config: config as SdConfig,
+      config: addonConfig,
       logger,
       opts: { stats: true },
     });

@@ -340,8 +340,11 @@ resources.define("diffusion-esrgan", {
     threads: 4,
     prediction: "v",
     vae_on_cpu: true,
-    esrganModelSrc: REALESRGAN_X4PLUS_ANIME_6B,
-    upscaler_tile_size: 128,
+    upscaler: {
+      type: "esrgan",
+      model_src: REALESRGAN_X4PLUS_ANIME_6B,
+      tile_size: 128,
+    },
   },
 });
 

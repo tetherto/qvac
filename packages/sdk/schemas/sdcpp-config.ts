@@ -38,30 +38,6 @@ export const sdcppConfigSchema = z
         "unloaded. " +
         "'at_runtime': adapter is applied per-call and not persisted.",
       ),
-    upscaler_tile_size: z.number().int().positive().optional()
-      .describe(
-        "ESRGAN upscaler tile size in pixels. Smaller tiles use less VRAM " +
-        "at the cost of more passes. Only used when an esrganModelSrc is " +
-        "configured and diffusion({ upscale }) is requested.",
-      ),
-    upscaler_direct: z.boolean().optional()
-      .describe(
-        "Use direct convolution in the ESRGAN upscaler instead of im2col + " +
-        "GEMM. Faster on some backends, slower on others.",
-      ),
-    upscaler_offload_params_to_cpu: z.boolean().optional()
-      .describe(
-        "Keep ESRGAN upscaler weights on CPU and offload them during compute. " +
-        "Trades latency for VRAM headroom on memory-constrained GPUs.",
-      ),
-    upscaler_threads: z.union([
-      z.literal(-1),
-      z.number().int().positive(),
-    ])
-      .optional()
-      .describe(
-        "Number of CPU threads dedicated to the ESRGAN upscaler. -1 = auto.",
-      ),
     verbosity: z.number().optional(),
     clipLModelSrc: modelSrcInputSchema.optional()
       .describe("CLIP-L text encoder model — required for SD3"),
@@ -73,12 +49,41 @@ export const sdcppConfigSchema = z
       .describe("LLM text encoder model (e.g. Qwen3) — required for FLUX.2 [klein]"),
     vaeModelSrc: modelSrcInputSchema.optional()
       .describe("VAE decoder model — required for FLUX.2 [klein], optional for SDXL"),
-    esrganModelSrc: modelSrcInputSchema.optional()
-      .describe(
-        "ESRGAN upscaler model (e.g. RealESRGAN_x4plus_anime_6B.pth). When " +
-        "provided, generation requests can opt into post-generation upscale " +
-        "via diffusion({ upscale: true }) or diffusion({ upscale: { repeats } }).",
-      ),
+    upscaler: z.object({
+      type: z.literal("esrgan").optional()
+        .describe("Type of upscaler to use for post-generation upscaling when requested in diffusion({ upscale })."),
+      model_src: modelSrcInputSchema
+        .describe(
+          "ESRGAN upscaler model (e.g. RealESRGAN_x4plus_anime_6B.pth). When " +
+          "provided, generation requests can opt into post-generation upscale " +
+          "via diffusion({ upscale: true }) or diffusion({ upscale: { repeats } }).",
+        ),
+      tile_size: z.number().int().positive().optional()
+        .describe(
+          "ESRGAN upscaler tile size in pixels. Smaller tiles use less VRAM " +
+          "at the cost of more passes. Only used when upscaler.model_src is " +
+          "configured and diffusion({ upscale }) is requested.",
+        ),
+      direct: z.boolean().optional()
+        .describe(
+          "Use direct convolution in the ESRGAN upscaler instead of im2col + " +
+          "GEMM. Faster on some backends, slower on others.",
+        ),
+      offload_params_to_cpu: z.boolean().optional()
+        .describe(
+          "Keep ESRGAN upscaler weights on CPU and offload them during compute. " +
+          "Trades latency for VRAM headroom on memory-constrained GPUs.",
+        ),
+      threads: z.union([
+        z.literal(-1),
+        z.number().int().positive(),
+      ])
+        .optional()
+        .describe(
+          "Number of CPU threads dedicated to the ESRGAN upscaler. -1 = auto.",
+        ),
+    }).strict().optional()
+      .describe("Configuration for an optional upscaler that can be applied after diffusion generation when requested in diffusion({ upscale })."),
   });
 
 export type SdcppConfig = z.infer<typeof sdcppConfigSchema>;
@@ -315,7 +320,7 @@ export const diffusionRequestSchema = z.object({
       "`{ repeats: N }` runs the upscaler N times sequentially — each pass " +
       "multiplies the output dimensions by the model's scale factor. When " +
       "`batch_count > 1`, every output image is upscaled independently. " +
-      "Requires the model to be loaded with `esrganModelSrc` in modelConfig.",
+      "Requires the model to be loaded with `upscaler.model_src` set in modelConfig.",
     ),
 }).refine(
   (d) => d.init_image === undefined || d.init_images === undefined,

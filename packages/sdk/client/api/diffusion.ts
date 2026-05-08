@@ -68,7 +68,7 @@ interface DiffusionResult {
  *   lora: "/home/user/loras/watercolor.safetensors",
  * });
  *
- * // ESRGAN upscale; requires `modelConfig.esrganModelSrc`.
+ * // ESRGAN upscale; requires the model to be loaded with `modelConfig.upscaler.model_src` set.
  * const { outputs: singleOutputs } = diffusion({
  *   modelId,
  *   prompt: "a fox portrait",

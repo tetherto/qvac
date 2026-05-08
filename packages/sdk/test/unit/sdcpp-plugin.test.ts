@@ -51,17 +51,20 @@ test("sdcppConfigSchema: accepts valid full config", (t) => {
     vae_on_cpu: false,
     vae_tiling: true,
     flash_attn: true,
-    upscaler_tile_size: 128,
-    upscaler_direct: false,
-    upscaler_offload_params_to_cpu: true,
-    upscaler_threads: -1,
+    upscaler: {
+      type: "esrgan",
+      tile_size: 128,
+      direct: false,
+      offload_params_to_cpu: true,
+      threads: -1,
+      model_src: "RealESRGAN_x4plus_anime_6B.pth",
+    },
     verbosity: 2,
     clipLModelSrc: "clip-l.safetensors",
     clipGModelSrc: "clip-g.safetensors",
     t5XxlModelSrc: "t5xxl.safetensors",
     llmModelSrc: "qwen3.gguf",
     vaeModelSrc: "vae.safetensors",
-    esrganModelSrc: "RealESRGAN_x4plus_anime_6B.pth",
   });
   t.is(result.success, true);
 });
@@ -503,39 +506,86 @@ test("sdcppConfigSchema: accepts lora_apply_mode", (t) => {
 
 // ---- sdcppConfigSchema: ESRGAN upscaler ----
 
-test("sdcppConfigSchema: accepts esrganModelSrc and upscaler tuning fields", (t) => {
+test("sdcppConfigSchema: accepts upscaler config with all tuning fields", (t) => {
   const result = sdcppConfigSchema.safeParse({
-    esrganModelSrc: "RealESRGAN_x4plus_anime_6B.pth",
-    upscaler_tile_size: 128,
-    upscaler_direct: true,
-    upscaler_offload_params_to_cpu: false,
-    upscaler_threads: -1,
+    upscaler: {
+      type: "esrgan",
+      model_src: "RealESRGAN_x4plus_anime_6B.pth",
+      tile_size: 128,
+      direct: true,
+      offload_params_to_cpu: false,
+      threads: -1,
+    },
   });
   t.is(result.success, true);
 });
 
-test("sdcppConfigSchema: rejects non-positive upscaler_tile_size", (t) => {
-  const result = sdcppConfigSchema.safeParse({ upscaler_tile_size: 0 });
+test("sdcppConfigSchema: rejects upscaler without model_src", (t) => {
+  const result = sdcppConfigSchema.safeParse({
+    upscaler: { tile_size: 128 },
+  });
   t.is(result.success, false);
 });
 
-test("sdcppConfigSchema: rejects non-integer upscaler_tile_size", (t) => {
-  const result = sdcppConfigSchema.safeParse({ upscaler_tile_size: 64.5 });
+test("sdcppConfigSchema: rejects upscaler.type other than 'esrgan'", (t) => {
+  const result = sdcppConfigSchema.safeParse({
+    upscaler: {
+      type: "swinir",
+      model_src: "RealESRGAN_x4plus_anime_6B.pth",
+    },
+  });
   t.is(result.success, false);
 });
 
-test("sdcppConfigSchema: accepts upscaler_threads = -1 (auto) and positive integers", (t) => {
-  t.is(sdcppConfigSchema.safeParse({ upscaler_threads: -1 }).success, true);
-  t.is(sdcppConfigSchema.safeParse({ upscaler_threads: 4 }).success, true);
+test("sdcppConfigSchema: rejects upscaler with unknown keys (strict)", (t) => {
+  const result = sdcppConfigSchema.safeParse({
+    upscaler: {
+      model_src: "RealESRGAN_x4plus_anime_6B.pth",
+      tileSize: 128,
+    },
+  });
+  t.is(result.success, false);
 });
 
-test("sdcppConfigSchema: rejects upscaler_threads = 0 and negative values other than -1", (t) => {
-  t.is(sdcppConfigSchema.safeParse({ upscaler_threads: 0 }).success, false);
-  t.is(sdcppConfigSchema.safeParse({ upscaler_threads: -2 }).success, false);
+test("sdcppConfigSchema: rejects non-positive upscaler.tile_size", (t) => {
+  const result = sdcppConfigSchema.safeParse({
+    upscaler: {
+      model_src: "RealESRGAN_x4plus_anime_6B.pth",
+      tile_size: 0,
+    },
+  });
+  t.is(result.success, false);
 });
 
-test("sdcppConfigSchema: rejects non-integer upscaler_threads", (t) => {
-  const result = sdcppConfigSchema.safeParse({ upscaler_threads: 2.5 });
+test("sdcppConfigSchema: rejects non-integer upscaler.tile_size", (t) => {
+  const result = sdcppConfigSchema.safeParse({
+    upscaler: {
+      model_src: "RealESRGAN_x4plus_anime_6B.pth",
+      tile_size: 64.5,
+    },
+  });
+  t.is(result.success, false);
+});
+
+test("sdcppConfigSchema: accepts upscaler.threads = -1 (auto) and positive integers", (t) => {
+  const ms = "RealESRGAN_x4plus_anime_6B.pth";
+  t.is(sdcppConfigSchema.safeParse({ upscaler: { model_src: ms, threads: -1 } }).success, true);
+  t.is(sdcppConfigSchema.safeParse({ upscaler: { model_src: ms, threads: 4 } }).success, true);
+});
+
+test("sdcppConfigSchema: rejects upscaler.threads = 0 and negative values other than -1", (t) => {
+  const ms = "RealESRGAN_x4plus_anime_6B.pth";
+  t.is(sdcppConfigSchema.safeParse({ upscaler: { model_src: ms, threads: 0 } }).success, false);
+  t.is(sdcppConfigSchema.safeParse({ upscaler: { model_src: ms, threads: -2 } }).success, false);
+});
+
+test("sdcppConfigSchema: rejects non-integer upscaler.threads", (t) => {
+  const result = sdcppConfigSchema.safeParse({
+    upscaler: {
+      model_src: "RealESRGAN_x4plus_anime_6B.pth",
+      threads: 2.5,
+    },
+  });
   t.is(result.success, false);
 });
 
@@ -720,16 +770,19 @@ test("loadModelSrcRequestSchema: accepts diffusion config with companion sources
   t.is(result.success, true);
 });
 
-test("loadModelSrcRequestSchema: accepts diffusion config with esrganModelSrc and upscaler tuning", (t) => {
+test("loadModelSrcRequestSchema: accepts diffusion config with upscaler and upscaler tuning", (t) => {
   const result = loadModelSrcRequestSchema.safeParse({
     type: "loadModel",
     modelType: ModelType.sdcppGeneration,
     modelSrc: "stable-diffusion-v2-1-Q8_0.gguf",
     modelConfig: {
       prediction: "v",
-      esrganModelSrc: "RealESRGAN_x4plus_anime_6B.pth",
-      upscaler_tile_size: 128,
-      upscaler_threads: 4,
+      upscaler: {
+        type: "esrgan",
+        model_src: "RealESRGAN_x4plus_anime_6B.pth",
+        tile_size: 128,
+        threads: 4,
+      },
     },
   });
   t.is(result.success, true);
@@ -1176,14 +1229,14 @@ test("sdcppConfigSchema: companion source fields are valid modelSrcInput", (t) =
     { t5XxlModelSrc: "t5xxl.gguf" },
     { llmModelSrc: "qwen3-8b.gguf" },
     { vaeModelSrc: "vae.safetensors" },
-    { esrganModelSrc: "RealESRGAN_x4plus_anime_6B.pth" },
+    { upscaler: { model_src: "RealESRGAN_x4plus_anime_6B.pth" } },
     {
       clipLModelSrc: "clip-l.safetensors",
       clipGModelSrc: "clip-g.safetensors",
       t5XxlModelSrc: "t5xxl.gguf",
       llmModelSrc: "qwen3.gguf",
       vaeModelSrc: "vae.safetensors",
-      esrganModelSrc: "RealESRGAN_x4plus_anime_6B.pth",
+      upscaler: { model_src: "RealESRGAN_x4plus_anime_6B.pth" },
     },
   ];
 
