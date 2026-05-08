@@ -30,6 +30,9 @@ Each pluggable adapter has specific dependency requirements. Choose the adapters
 
 ```bash
 npm install corestore hyperdb hyperschema
+
+# Browser/RN environments without Node-style crypto.createHash
+npm install crypto-browserify
 ```
 
 **`BaseDBAdapter`** - Custom database interface
@@ -143,7 +146,7 @@ npm install @qvac/rag
 
 **Installation Strategy:**
 
-- **Minimal production bundle**: Only 3 core dependencies (`@qvac/error`, `ready-resource`, `uuid-random`)
+- **Minimal production bundle**: Small core dependency set; adapter dependencies are loaded only when their code paths are used
 - **Tests work out of the box**: Adapter deps included in `devDependencies` for seamless testing
 - **Production efficiency**: Use `npm install --omit=dev` to exclude testing dependencies
 - **Pick and choose**: Install only the adapter dependencies you actually need
