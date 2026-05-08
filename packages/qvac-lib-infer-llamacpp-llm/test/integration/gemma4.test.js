@@ -78,7 +78,7 @@ test('Gemma 4 can run basic text inference', {
     device: useCpu ? 'cpu' : 'gpu',
     gpu_layers: '999',
     ctx_size: '2048',
-    n_predict: '64',
+    n_predict: '256',
     temp: '0',
     seed: '42',
     verbosity: '2'
