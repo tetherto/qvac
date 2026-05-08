@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.3]
+
+This release adds long-form audio support to the Parakeet TDT pipeline. Audio inputs that previously failed against the encoder's static positional-encoding ceilings are now transcribed by streaming the mel-spectrogram through the encoder in overlapping windows.
+
+### Added
+
+- **Long-form audio support for the TDT encoder.** The exported encoder graph has hard-coded positional-encoding length ceilings (a long-range bucket of 9999 frames and a tighter relative bucket of 3000 frames). Inputs longer than ~240s of audio (~24000 mel frames, the binding 3000-frame bucket × 8× subsampling) previously could not be transcribed in a single TDT call. A new `runEncoderChunked` path slides over the mel-spectrogram in ~200s windows with ~20s of shared context, runs the existing encoder per window, trims half of the overlap from each interior boundary so the concatenated output is gap-free and duplicate-free along the time axis, and feeds a single merged `[ENCODER_DIM, T]` buffer to `greedyDecode`. Short audio (≤ one window) keeps the original single-pass path with zero overhead. Cancellation is honored between windows. The chunk/overlap constants are guarded by a compile-time `static_assert` against the encoder's positional-encoding ceiling so future tuning fails to build rather than silently producing invalid windows.
+
 ## [0.3.2]
 
 ### Fixed

@@ -134,9 +134,10 @@ export function transcribeStream(
  *                          objects (`{ text, startMs, endMs, append, id }`)
  *                          instead of plain text. Whisper engine only.
  * @param options - Optional RPC options including per-call profiling.
- * @returns A session object: call `write(buffer)` to feed audio,
- *          iterate with `for await (...)` to receive transcription,
- *          and `end()` to signal end of audio.
+ * @returns A session object: call `write(audioChunk)` with a `Uint8Array`
+ *          (Node `Buffer` is a `Uint8Array` subtype) to feed audio,
+ *          iterate with `for await (...)` to receive transcription, and
+ *          `end()` to signal end of audio.
  */
 export function transcribeStream(
   params: TranscribeStreamClientParams & { emitVadEvents: true },
@@ -245,7 +246,7 @@ async function createTranscribeStreamSession<T>(
   process: (line: string) => T | undefined | null,
   sessionName: string,
 ): Promise<{
-  write(audioChunk: Buffer): void;
+  write(audioChunk: Uint8Array): void;
   end(): void;
   destroy(): void;
   [Symbol.asyncIterator](): AsyncIterator<T>;
@@ -258,7 +259,7 @@ async function createTranscribeStreamSession<T>(
   let consumed = false;
 
   return {
-    write(audioChunk: Buffer) {
+    write(audioChunk: Uint8Array) {
       requestStream.write(audioChunk);
     },
     end() {

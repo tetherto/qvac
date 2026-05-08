@@ -17,7 +17,8 @@ const ERR_CODES = Object.freeze({
   BUFFER_SIZE_TOO_SMALL: 11008,
   UNSUPPORTED_AUDIO_FORMAT: 11009,
   DECODER_NOT_LOADED: 11010,
-  STREAM_INDEX_OUT_OF_BOUNDS: 11011
+  STREAM_INDEX_OUT_OF_BOUNDS: 11011,
+  JOB_CANCELLED: 11012
 })
 
 addCodes({
@@ -64,6 +65,10 @@ addCodes({
   [ERR_CODES.STREAM_INDEX_OUT_OF_BOUNDS]: {
     name: 'STREAM_INDEX_OUT_OF_BOUNDS',
     message: (index) => `Stream index out of bounds: ${index}`
+  },
+  [ERR_CODES.JOB_CANCELLED]: {
+    name: 'JOB_CANCELLED',
+    message: 'Decoder job cancelled'
   }
 }, {
   name,

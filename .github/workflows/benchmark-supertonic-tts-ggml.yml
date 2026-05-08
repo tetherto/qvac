@@ -1,0 +1,43 @@
+name: Benchmark Supertonic (TTS GGML)
+
+# Stub workflow registered on `main` so that `workflow_dispatch` shows up in
+# the GitHub Actions UI and `gh workflow run` can target this filename.
+#
+# The full Supertonic benchmark orchestrator (context -> prebuild -> desktop
+# matrix with WER + RTF + Python baseline -> aggregate report) will land in
+# a follow-up PR.  Until then this stub keeps the workflow filename valid so
+# feature branches can iterate on the real implementation without the
+# dispatcher refusing to find the workflow on `main`.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref (branch/tag/SHA) to benchmark"
+        required: false
+      repository:
+        description: "Repository to benchmark"
+        required: false
+        type: string
+
+# Least-privilege default scoped to the file: the noop body only writes
+# to stdout, so contents:read is enough.  Re-tighten/expand per job when
+# the real orchestrator lands.
+permissions:
+  contents: read
+
+jobs:
+  noop:
+    name: Stub - real Supertonic benchmark orchestrator pending
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Explain
+        run: |
+          echo "This is a stub on main. The real Supertonic benchmark orchestrator"
+          echo "(prebuild + desktop matrix + aggregate report) is planned for a"
+          echo "follow-up PR."
+          echo ""
+          echo "To exercise the future implementation on a feature branch,"
+          echo "dispatch this workflow with --ref <branch>."

@@ -1,14 +1,14 @@
 {
   "name": "@qvac/infer-base",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "Base class for inference clients",
   "main": "index.js",
   "scripts": {
     "lint": "standard",
     "lint:fix": "standard --fix",
-    "test:dts": "tsc index.d.ts --noEmit",
+    "test:dts": "tsc index.d.ts --noEmit --esModuleInterop --target es2018 --moduleResolution node",
     "test:unit": "brittle-bare test/unit/**/*.test.js",
-    "test": "npm run test:unit"
+    "test": "npm run test:unit && npm run test:dts"
   },
   "author": "Tether",
   "keywords": [
@@ -18,18 +18,13 @@
   ],
   "license": "Apache-2.0",
   "dependencies": {
-    "@qvac/error": "^0.1.0",
-    "@qvac/logging": "^0.1.0",
     "bare-events": "2.4.2",
-    "bare-os": "^3.2.0",
-    "bare-path": "^3.0.0"
+    "bare-os": "^3.2.0"
   },
   "devDependencies": {
     "brittle": "^3.15.0",
-    "standard": "^17.1.0"
-  },
-  "optionalDependencies": {
-    "@qvac/diagnostics": "^0.1.0"
+    "standard": "^17.1.0",
+    "typescript": "^5.9.3"
   },
   "repository": {
     "type": "git",
@@ -41,7 +36,6 @@
   "files": [
     "src",
     "index.d.ts",
-    "WeightsProvider",
     "LICENSE",
     "NOTICE"
   ],
