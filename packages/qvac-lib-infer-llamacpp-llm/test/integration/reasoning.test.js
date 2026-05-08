@@ -222,8 +222,22 @@ test('Qwen3 reasoning-budget=0 disables thinking', {
   t.ok(/paris/i.test(disabled), 'disabled mentions Paris')
   t.ok(/paris/i.test(disabledUnderscore), 'underscore variant also accepted and mentions Paris')
 
+  // Baseline must show balanced reasoning markers in the stream. The Qwen3
+  // template force-opens <think> in the prompt suffix; the addon prepends
+  // the opener so streaming consumers see a matched <think>...</think> pair.
   t.ok(baseline.includes('<think>'),
-    `baseline should contain <think> tag: "${baseline.slice(0, 100)}"`)
+    `baseline should contain <think> opening tag: "${baseline.slice(0, 100)}"`)
+  t.ok(baseline.includes('</think>'),
+    `baseline should contain </think> closing tag: "${baseline.slice(-100)}"`)
+  t.ok(baseline.indexOf('<think>') < baseline.indexOf('</think>'),
+    'baseline opening tag must precede closing tag')
+
+  // With thinking disabled the visible stream skips the reasoning preamble
+  // entirely, so neither marker should appear.
+  t.absent(/<think>/.test(disabled),
+    `disabled output should not contain <think>: "${disabled.slice(0, 200)}"`)
+  t.absent(/<\/think>/.test(disabled),
+    `disabled output should not contain </think>: "${disabled.slice(0, 200)}"`)
   t.ok(disabled.length < baseline.length / 4,
     `disabled (${disabled.length}) should be substantially shorter than baseline (${baseline.length})`)
 })

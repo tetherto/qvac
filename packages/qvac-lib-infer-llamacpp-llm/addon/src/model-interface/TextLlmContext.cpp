@@ -237,7 +237,8 @@ void TextLlmContext::tokenizeChat(
   if (!tools.empty()) {
     inputs.tools = tools;
   }
-  prompt = getPrompt(tmpls_.get(), inputs, &lastChatFormat_);
+  prompt = getPrompt(
+      tmpls_.get(), inputs, &lastChatFormat_, &thinkingForcedOpen_);
 
   QLOG_IF(
       Priority::DEBUG,
@@ -473,6 +474,15 @@ bool TextLlmContext::generateResponse(
 
   reasoningState_.inside_reasoning = false;
   reasoningState_.recent_output_buffer.clear();
+
+  // The chat template force-opened the reasoning channel in the prompt (e.g.
+  // Qwen3.5/Qwen3-coder/gemma4 templates end with "<think>\n" or
+  // "<|channel>thought\n"), so the model resumes generation INSIDE the
+  // reasoning block.
+  if (thinkingForcedOpen_ && outputCallback) {
+    outputCallback("<think>\n");
+    reasoningState_.inside_reasoning = true;
+  }
 
   if (stopGeneration_.load()) {
     stopGeneration_.store(false);

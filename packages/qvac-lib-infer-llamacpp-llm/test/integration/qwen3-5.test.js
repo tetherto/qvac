@@ -383,8 +383,19 @@ test('Qwen3.5-0.8B reasoning-budget=0 disables thinking', {
   t.ok(/paris/i.test(disabled), `disabled mentions Paris: "${disabled.slice(0, 80)}"`)
   t.ok(/paris/i.test(disabledUnderscore), 'underscore variant also accepted and mentions Paris')
 
+  t.ok(baseline.includes('<think>'),
+    `baseline should contain <think> opening tag: "${baseline.slice(0, 100)}"`)
+  t.ok(baseline.includes('</think>'),
+    `baseline should contain </think> closing tag: "${baseline.slice(-100)}"`)
+  t.ok(baseline.indexOf('<think>') < baseline.indexOf('</think>'),
+    'baseline opening tag must precede closing tag')
+
   t.absent(/Thinking Process/i.test(disabled),
     `disabled output should not contain "Thinking Process": "${disabled.slice(0, 200)}"`)
+  t.absent(/<think>/.test(disabled),
+    `disabled output should not contain <think>: "${disabled.slice(0, 200)}"`)
+  t.absent(/<\/think>/.test(disabled),
+    `disabled output should not contain </think>: "${disabled.slice(0, 200)}"`)
   t.ok(disabled.length < baseline.length / 4,
     `disabled (${disabled.length}) should be substantially shorter than baseline (${baseline.length})`)
 })

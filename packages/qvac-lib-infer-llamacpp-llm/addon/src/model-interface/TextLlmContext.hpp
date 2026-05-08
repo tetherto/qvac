@@ -208,5 +208,10 @@ private:
   bool isHarmonyModel_ = false;
   llama_token harmonyCallToken_ = LLAMA_TOKEN_NULL;
 
+  // Force-opens the reasoning channel in the prompt suffix to prepend the
+  // matching "<think>\n" opener to the visible stream so consumers see balanced
+  // tags.
+  bool thinkingForcedOpen_ = false;
+
   std::atomic<bool> stopGeneration_ = false;
 };

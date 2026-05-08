@@ -133,13 +133,19 @@ std::string getChatTemplate(
 
 std::string getPrompt(
     const struct common_chat_templates* tmpls,
-    struct common_chat_templates_inputs& inputs,
-    common_chat_format* outFormat) {
-  try {
-    auto params = common_chat_templates_apply(tmpls, inputs);
+    struct common_chat_templates_inputs& inputs, common_chat_format* outFormat,
+    bool* outThinkingForcedOpen) {
+  auto exportParams = [&](const common_chat_params& params) {
     if (outFormat) {
       *outFormat = params.format;
     }
+    if (outThinkingForcedOpen) {
+      *outThinkingForcedOpen = params.thinking_forced_open;
+    }
+  };
+  try {
+    auto params = common_chat_templates_apply(tmpls, inputs);
+    exportParams(params);
     return params.prompt;
   } catch (const std::exception& e) {
     // Catching known issue when a model does not support tools
@@ -152,9 +158,7 @@ std::string getPrompt(
             e.what()));
     inputs.use_jinja = false;
     auto params = common_chat_templates_apply(tmpls, inputs);
-    if (outFormat) {
-      *outFormat = params.format;
-    }
+    exportParams(params);
     return params.prompt;
   } catch (...) {
     // Catching any other exception type
@@ -165,9 +169,7 @@ std::string getPrompt(
         "will be ignored.\n");
     inputs.use_jinja = false;
     auto params = common_chat_templates_apply(tmpls, inputs);
-    if (outFormat) {
-      *outFormat = params.format;
-    }
+    exportParams(params);
     return params.prompt;
   }
 }

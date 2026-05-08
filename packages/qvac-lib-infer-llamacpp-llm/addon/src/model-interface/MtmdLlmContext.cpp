@@ -198,7 +198,8 @@ void MtmdLlmContext::tokenizeChat(
   if (!tools.empty()) {
     inputs.tools = tools;
   }
-  formattedChat = getPrompt(tmpls_.get(), inputs, &lastChatFormat_);
+  formattedChat = getPrompt(
+      tmpls_.get(), inputs, &lastChatFormat_, &thinkingForcedOpen_);
 
   if (formattedChat.empty()) {
     std::string errorMsg = string_format(
@@ -427,6 +428,10 @@ bool MtmdLlmContext::generateResponse(
 
   int nRemain = params_.n_predict;
   LlamaBatch batch(1, 0, 1); // batch for next token generation
+
+  if (thinkingForcedOpen_ && outputCallback) {
+    outputCallback("<think>\n");
+  }
 
   if (stopGeneration_.load()) {
     stopGeneration_.store(false);
