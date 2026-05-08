@@ -388,6 +388,7 @@ export const executor = createExecutor({
       new SkipExecutor(/^translation-afriquegemma-/, "AfriqueGemma 4B (~2.7 GB) exceeds iOS memory budget"),
       // TODO(QVAC-18460): re-enable once iOS transcribe() crash is fixed.
       new SkipExecutor(/^transcription-/, "TODO(QVAC-18460): transcription disabled on iOS — transcribe() hard-crashes consumer after FFmpegDecoder unload"),
+      new SkipExecutor(/^transcribe-stream-events-/, "TODO(QVAC-18460): transcribeStream disabled on iOS — same native crash path as transcription-* (Silero VAD + whisper_full)"),
       skipTests([
         "config-reload-then-transcribe",
         "error-transcription-failed",
