@@ -258,18 +258,6 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
     }
   }
 
-  if (sawMali) {
-    bckI.llamaLogCallback(
-        GGML_LOG_LEVEL_WARN,
-        "BERT on Mali: forcing CPU backend (Mali Vulkan coopmat path is "
-        "unstable for wide BERT encoder graphs; falling back to CPU "
-        "regardless of requested device)",
-        nullptr);
-    openClBackends.clear();
-    gpuBackends.clear();
-    igpuBackends.clear();
-  }
-
   // check if Adreno GPU is present and force OpenCL backend, otherwise let
   // llama.cpp choose Vulkan GPU backend
   if (!openClBackends.empty()) {

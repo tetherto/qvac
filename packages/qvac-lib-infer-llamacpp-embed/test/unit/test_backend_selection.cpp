@@ -237,22 +237,20 @@ TEST_F(BackendSelectionTest, VulkanAndOpenCLNotAdrenoChoosesVulkan) {
   expectChosen(mockBackend, BackendType::GPU, "vulkan0");
 }
 
-// Mali Vulkan: BERT encoder forced to CPU regardless of preferred backend
-// (Mali Vulkan coopmat path is unstable for wide BERT graphs).
-TEST_F(BackendSelectionTest, Mali_ForcesCPU) {
+TEST_F(BackendSelectionTest, Mali_KeepsVulkan) {
   mockBackend.addDevice(createGPUDevice(MALI_DESC, VULKAN0_BACK));
-  expectChosen(mockBackend, BackendType::CPU, "none");
+  expectChosen(mockBackend, BackendType::GPU, "vulkan0");
 }
 
-TEST_F(BackendSelectionTest, MaliIGPU_ForcesCPU) {
+TEST_F(BackendSelectionTest, MaliIGPU_KeepsVulkan) {
   mockBackend.addDevice(createIGPUDevice(MALI_DESC, VULKAN0_BACK));
-  expectChosen(mockBackend, BackendType::CPU, "none");
+  expectChosen(mockBackend, BackendType::GPU, "vulkan0");
 }
 
-TEST_F(BackendSelectionTest, MaliGPUAndIGPU_ForcesCPU) {
+TEST_F(BackendSelectionTest, MaliGPUAndIGPU_PrefersGPU) {
   mockBackend.addDevice(createIGPUDevice(MALI_DESC, VULKAN0_BACK));
   mockBackend.addDevice(createGPUDevice(MALI_DESC, VULKAN1_BACK));
-  expectChosen(mockBackend, BackendType::CPU, "none");
+  expectChosen(mockBackend, BackendType::GPU, "vulkan1");
 }
 
 TEST_F(BackendSelectionTest, VulkanIGPU) {
@@ -450,13 +448,11 @@ TEST_F(BackendSelectionTest, ChooseBackendWithMainGpuIntegerIndexOne) {
   expectChosen(mockBackend, BackendType::GPU, "vulkan1", mainGpu);
 }
 
-// Mali + explicit main_gpu: still forced to CPU (override is intentional and
-// matches the "always on the CPU" intent).
-TEST_F(BackendSelectionTest, Mali_ExplicitMainGpu_StillForcesCPU) {
+TEST_F(BackendSelectionTest, Mali_ExplicitMainGpu_KeepsVulkan) {
   mockBackend.addDevice(createIGPUDevice(MALI_DESC, VULKAN0_BACK));
   mockBackend.addDevice(createGPUDevice(MALI_DESC, VULKAN1_BACK));
   MainGpu mainGpu = 1;
-  expectChosen(mockBackend, BackendType::CPU, "none", mainGpu);
+  expectChosen(mockBackend, BackendType::GPU, "vulkan1", mainGpu);
 }
 
 TEST_F(BackendSelectionTest, PreferredBackendTypeFromStringGpu) {
