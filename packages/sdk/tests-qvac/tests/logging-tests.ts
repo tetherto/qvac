@@ -29,17 +29,11 @@ export const addonLoggingParakeet: TestDefinition = {
   metadata: { category: "addon-logging", handler: "addon-logging", dependency: "parakeet-tdt", trigger: "parakeet", estimatedDurationMs: 20000 },
 };
 
-// TODO(QVAC-18624): remove skip once @qvac/ocr-onnx emits info-level logs on load/run paths
 export const addonLoggingOcr: TestDefinition = {
   testId: "addon-logging-ocr",
   params: { imageFileName: "ocr-simple-test-png.png" },
   expectation: { validation: "type", expectedType: "string" },
   metadata: { category: "addon-logging", handler: "addon-logging", dependency: "ocr", trigger: "ocr", estimatedDurationMs: 30000 },
-  skip: {
-    reason: "@qvac/ocr-onnx emits no info-level logs on load/run paths; loggingStream returns nothing at default loggerLevel: 'info'",
-    issue: "QVAC-18624",
-    impact: "addon-logger contract parity gap: ocr is the only inference addon not observable via loggingStream at default log level",
-  },
 };
 
 export const addonLoggingTts: TestDefinition = {

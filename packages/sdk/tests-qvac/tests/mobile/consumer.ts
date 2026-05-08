@@ -384,6 +384,7 @@ export const executor = createExecutor({
         "ocr-misaligned-text",
         "ocr-multi-sized-text",
         "ocr-multiple-fonts",
+        "addon-logging-ocr",
       ], "OCR disabled on iOS (ONNX/CoreML OOM)"),
       new SkipExecutor(/^translation-afriquegemma-/, "AfriqueGemma 4B (~2.7 GB) exceeds iOS memory budget"),
       // TODO(QVAC-18460): re-enable once iOS transcribe() crash is fixed.
