@@ -65,12 +65,12 @@ jobs:
           - os: ubuntu-22.04
             platform: linux
             arch: x64
-            runner: ubuntu-22.04
+            runner: qvac-ubuntu2204-x64
             no_gpu: 'true'
-          - os: ubuntu-24.04
+          - os: ubuntu-22.04
             platform: linux
             arch: x64
-            runner: ai-run-linux-gpu
+            runner: qvac-ubuntu2204-x64-gpu
             timeout_minutes: 480
           - os: ubuntu-24.04-arm
             platform: linux
@@ -90,10 +90,10 @@ jobs:
             platform: darwin
             arch: x64
             runner: macos-15-large
-          - os: windows-11
+          - os: windows-2025
             platform: win32
             arch: x64
-            runner: ai-run-windows11-gpu
+            runner: qvac-win25-x64-gpu
 
     steps:
       - name: Setup Node.js
@@ -101,10 +101,10 @@ jobs:
         with:
           node-version: lts/*
 
-      - name: Windows - enable git long paths
+      - name: Windows - configure git
         if: ${{ matrix.platform == 'win32' }}
         run: |
-          git config --system core.longpaths true
+          # git config --system core.longpaths true
           git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "https://github.com/"
           git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "git@github.com:"
         shell: powershell
@@ -202,10 +202,10 @@ jobs:
           echo "Prebuilds downloaded from npm successfully"
           Get-ChildItem prebuilds/
 
-      - name: Linux - install dependencies
-        if: matrix.platform == 'linux' || matrix.platform == 'android'
-        shell: bash
-        run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
+      # - name: Linux - install dependencies
+      #   if: matrix.platform == 'linux' || matrix.platform == 'android'
+      #   shell: bash
+      #   run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
 
       - name: Run integration test (Linux/macOS)
         if: ${{ matrix.platform != 'win32' }}
