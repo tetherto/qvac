@@ -5279,42 +5279,6 @@
     "notes": ""
   },
   {
-    "source": "s3:///qvac_models_compiled/parakeet/parakeet-eou-onnx-int8/2026-03-17/encoder_int8.onnx",
-    "engine": "@qvac/transcription-parakeet",
-    "link": "https://huggingface.co/nasedkinpv/parakeet-tdt-0.6b-v3-onnx-int8",
-    "description": "Parakeet EOU 120M INT8 Encoder",
-    "quantization": "int8",
-    "params": "120M",
-    "licenseId": "CC-BY-4.0",
-    "tags": [
-      "transcription",
-      "parakeet",
-      "eou",
-      "int8",
-      "encoder"
-    ],
-    "deprecated": false,
-    "notes": ""
-  },
-  {
-    "source": "s3:///qvac_models_compiled/parakeet/parakeet-eou-onnx-int8/2026-03-17/decoder_joint_int8.onnx",
-    "engine": "@qvac/transcription-parakeet",
-    "link": "https://huggingface.co/nasedkinpv/parakeet-tdt-0.6b-v3-onnx-int8",
-    "description": "Parakeet EOU 120M INT8 Decoder",
-    "quantization": "int8",
-    "params": "120M",
-    "licenseId": "CC-BY-4.0",
-    "tags": [
-      "transcription",
-      "parakeet",
-      "eou",
-      "int8",
-      "decoder"
-    ],
-    "deprecated": false,
-    "notes": ""
-  },
-  {
     "source": "https://huggingface.co/cgus/diar_streaming_sortformer_4spk-v2-onnx/resolve/a3e0e6c8485b963cfdee82e4e961af1a9daca99d/diar_streaming_sortformer_4spk-v2.onnx",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/altunenes/parakeet-rs",
@@ -5328,24 +5292,6 @@
       "sortformer",
       "4spk",
       "en"
-    ],
-    "deprecated": false,
-    "notes": ""
-  },
-  {
-    "source": "s3:///qvac_models_compiled/parakeet/parakeet-sortformer-onnx-int8/2026-03-20/sortformer_int8.onnx",
-    "engine": "@qvac/transcription-parakeet",
-    "link": "https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2",
-    "description": "Parakeet Sortformer 4SPK v2 INT8",
-    "quantization": "int8",
-    "params": "123M",
-    "licenseId": "CC-BY-4.0",
-    "tags": [
-      "transcription",
-      "parakeet",
-      "sortformer",
-      "4spk",
-      "int8"
     ],
     "deprecated": false,
     "notes": ""
@@ -5565,6 +5511,44 @@
     "tags": [
       "generation",
       "diffusion"
+    ]
+  },
+  {
+    "source": "s3:///qvac_models_compiled/esrgan/2026-05-07/RealESRGAN_x4plus.pth",
+    "engine": "@qvac/diffusion-cpp",
+    "link": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth",
+    "description": "Real-ESRGAN x4 upscaler trained on general real-world images",
+    "licenseId": "BSD-3-Clause",
+    "tags": [
+      "upscale",
+      "esrgan",
+      "x4"
+    ]
+  },
+  {
+    "source": "s3:///qvac_models_compiled/esrgan/2026-05-07/RealESRNet_x4plus.pth",
+    "engine": "@qvac/diffusion-cpp",
+    "link": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.1/RealESRNet_x4plus.pth",
+    "description": "Real-ESRNet x4 upscaler trained on general real-world images (non-GAN variant)",
+    "licenseId": "BSD-3-Clause",
+    "tags": [
+      "upscale",
+      "esrgan",
+      "x4",
+      "non-gan"
+    ]
+  },
+  {
+    "source": "s3:///qvac_models_compiled/esrgan/2026-05-07/RealESRGAN_x4plus_anime_6B.pth",
+    "engine": "@qvac/diffusion-cpp",
+    "link": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth",
+    "description": "Real-ESRGAN x4 upscaler optimized for anime illustrations (6 RRDB blocks)",
+    "licenseId": "BSD-3-Clause",
+    "tags": [
+      "upscale",
+      "esrgan",
+      "x4",
+      "anime"
     ]
   },
   {
@@ -10503,5 +10487,35 @@
     ],
     "notes": "",
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/vien"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bci-whispercpp/2026-05-07/bci-embedder.bin",
+    "description": "BCI Whispercpp embedder",
+    "engine": "@qvac/bci-whispercpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "bci",
+      "whispercpp",
+      "embedder"
+    ],
+    "notes": "",
+    "link": "https://github.com/tetherto/qvac/releases/download/bci-test-assets-v0.1.0/bci-embedder.bin"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bci-whispercpp/2026-05-07/ggml-bci-windowed.bin",
+    "description": "BCI Whispercpp model",
+    "engine": "@qvac/bci-whispercpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "bci",
+      "whispercpp",
+      "windowed"
+    ],
+    "notes": "",
+    "link": "https://github.com/tetherto/qvac/releases/download/bci-test-assets-v0.1.0/ggml-bci-windowed.bin"
   }
 ]

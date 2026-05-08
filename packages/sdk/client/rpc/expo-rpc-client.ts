@@ -240,6 +240,7 @@ export async function createDuplexSession(payload: string, commandId: number) {
   const req = rpc.request(commandId);
   const requestStream = req.createRequestStream();
   const responseStream = req.createResponseStream({ encoding: "utf-8" });
-  requestStream.write(payload, "utf-8");
+  // Pre-encode payload — RN/Hermes lacks a global `Buffer`, so `write(string, "utf-8")` would throw.
+  requestStream.write(new TextEncoder().encode(payload));
   return { requestStream, responseStream };
 }
