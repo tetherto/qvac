@@ -15,6 +15,7 @@ test('fetch shim: throws QvacErrorRAG when no fetch implementation is available'
   } catch (err) {
     t.ok(err instanceof QvacErrorRAG, 'Error should be instance of QvacErrorRAG')
     t.is(err.code, ERR_CODES.DEPENDENCY_REQUIRED, 'Error code should be DEPENDENCY_REQUIRED')
+    t.ok(err.message.includes('globalThis.fetch'), 'Error should mention globalThis.fetch')
   } finally {
     if (original !== undefined) globalThis.fetch = original
   }

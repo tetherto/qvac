@@ -8,7 +8,7 @@ function ensureFetch () {
   }
   throw new QvacErrorRAG({
     code: ERR_CODES.DEPENDENCY_REQUIRED,
-    adds: 'No fetch implementation found. Please ensure a Fetch-compatible globalThis.fetch is available (Bare: bare-fetch; Node 18+: built-in; other: provide a polyfill).'
+    adds: 'No fetch implementation found. Please ensure a Fetch-compatible globalThis.fetch is available. Bare: install bare-fetch. Node 18+ and browser/RN environments normally provide fetch globally.'
   })
 }
 

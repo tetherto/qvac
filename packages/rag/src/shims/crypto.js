@@ -3,16 +3,17 @@
 const { QvacErrorRAG, ERR_CODES } = require('../errors')
 
 function ensureCrypto () {
-  if (typeof globalThis !== 'undefined' && globalThis.crypto && typeof globalThis.crypto.createHash === 'function') {
-    return globalThis.crypto
+  const crypto = typeof globalThis !== 'undefined' ? globalThis.crypto : null
+  if (crypto && crypto !== module.exports && typeof crypto.createHash === 'function') {
+    return crypto
   }
   throw new QvacErrorRAG({
     code: ERR_CODES.DEPENDENCY_REQUIRED,
-    adds: 'No crypto implementation found. Please ensure a crypto module is available in your environment (Bare: bare-crypto; Node: node:crypto; other: provide a Web Crypto-compatible globalThis.crypto).'
+    adds: 'No Node-style crypto implementation available. This code path requires globalThis.crypto.createHash, including HyperDB document hashing. Bare: install bare-crypto. Node: node:crypto is used by the package import map. Browser/RN: install and configure crypto-browserify, or another createHash-compatible polyfill, before using APIs that depend on #crypto.'
   })
 }
 
-module.exports = new Proxy({}, {
+const cryptoShim = new Proxy({}, {
   get (_target, prop) {
     return ensureCrypto()[prop]
   },
@@ -20,3 +21,5 @@ module.exports = new Proxy({}, {
     try { return prop in ensureCrypto() } catch { return false }
   }
 })
+
+module.exports = cryptoShim

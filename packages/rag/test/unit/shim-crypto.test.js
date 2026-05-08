@@ -15,6 +15,7 @@ test('crypto shim: throws QvacErrorRAG when no crypto implementation is availabl
   } catch (err) {
     t.ok(err instanceof QvacErrorRAG, 'Error should be instance of QvacErrorRAG')
     t.is(err.code, ERR_CODES.DEPENDENCY_REQUIRED, 'Error code should be DEPENDENCY_REQUIRED')
+    t.ok(err.message.includes('crypto-browserify'), 'Error should mention crypto-browserify')
   } finally {
     if (original !== undefined) globalThis.crypto = original
   }
@@ -32,6 +33,25 @@ test('crypto shim: delegates property access to globalThis.crypto when available
     t.is(typeof cryptoShim.createHash, 'function', 'createHash should be delegated as a function')
     t.is(cryptoShim.createHash(), 'stub', 'createHash invocation should return stubbed value')
     t.is(cryptoShim.anything, 'value', 'arbitrary properties should be delegated to the stub')
+  } finally {
+    if (original === undefined) {
+      delete globalThis.crypto
+    } else {
+      globalThis.crypto = original
+    }
+  }
+})
+
+test('crypto shim: rejects self-referential global crypto', t => {
+  const original = globalThis.crypto
+  globalThis.crypto = cryptoShim
+
+  try {
+    const probe = cryptoShim.createHash
+    t.fail(`Expected accessing a property on the self-referential shim to throw, got ${typeof probe}`)
+  } catch (err) {
+    t.ok(err instanceof QvacErrorRAG, 'Error should be instance of QvacErrorRAG')
+    t.is(err.code, ERR_CODES.DEPENDENCY_REQUIRED, 'Error code should be DEPENDENCY_REQUIRED')
   } finally {
     if (original === undefined) {
       delete globalThis.crypto
