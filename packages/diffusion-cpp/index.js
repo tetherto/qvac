@@ -16,8 +16,6 @@ function assertAbsolute (key, value) {
   }
 }
 
-const LOG_METHODS = ['error', 'warn', 'info', 'debug']
-
 const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed'
 // Matches C++ int max: repeats are stored as int and used in native loop counters.
 const NATIVE_UPSCALE_REPEATS_MAX = 2147483647
@@ -56,7 +54,9 @@ class ImgStableDiffusion {
    * @param {object} [args.config] - SD context configuration (threads, device, type, etc.).
    *   Optional — when omitted, the addon forwards an empty config and the C++ layer falls
    *   back to stable-diffusion.cpp defaults for every parameter.
-   * @param {object} [args.logger] - Structured logger
+   * @param {object} [args.logger] - Structured logger for JS wrapper logs.
+   *   Native C++ logs are process-global; configure them once with
+   *   `require('@qvac/diffusion-cpp/addonLogging').setLogger(...)`.
    * @param {object} [args.opts] - Optional inference options
    */
   constructor ({ files, config, logger = null, opts = {} }) {
@@ -78,8 +78,6 @@ class ImgStableDiffusion {
     this._run = exclusiveRunQueue()
     this.addon = null
     this._hasActiveResponse = false
-    this._binding = null
-    this._nativeLoggerActive = false
     this.state = { configLoaded: false }
   }
 
@@ -127,7 +125,6 @@ class ImgStableDiffusion {
       // load() does not leak a zombie native instance.
       try { await this.addon?.unload?.() } catch (_) {}
       this.addon = null
-      this._releaseNativeLogger()
       throw loadError
     }
 
@@ -139,36 +136,12 @@ class ImgStableDiffusion {
    * @returns {SdInterface}
    */
   _createAddon (configurationParams) {
-    this._binding = require('./binding')
-    this._connectNativeLogger()
+    const binding = require('./binding')
     return new SdInterface(
-      this._binding,
+      binding,
       configurationParams,
       this._addonOutputCallback.bind(this)
     )
-  }
-
-  _connectNativeLogger () {
-    if (!this._binding || !this.logger) return
-    try {
-      this._binding.setLogger((priority, message) => {
-        const method = LOG_METHODS[priority] || 'info'
-        if (typeof this.logger[method] === 'function') {
-          this.logger[method](`[C++] ${message}`)
-        }
-      })
-      this._nativeLoggerActive = true
-    } catch (err) {
-      this.logger.warn('Failed to connect native logger:', err.message)
-    }
-  }
-
-  _releaseNativeLogger () {
-    if (!this._nativeLoggerActive || !this._binding) return
-    try {
-      this._binding.releaseLogger()
-    } catch (_) {}
-    this._nativeLoggerActive = false
   }
 
   _addonOutputCallback (addon, event, data, error) {
@@ -505,7 +478,6 @@ class ImgStableDiffusion {
         // `if (!this.addon)` guard instead of dereferencing a disposed native handle.
         this.addon = null
       }
-      this._releaseNativeLogger()
       this.state.configLoaded = false
     })
   }
@@ -523,7 +495,9 @@ class EsrganUpscaler {
    * @param {object} args.files - Absolute file paths for ESRGAN components
    * @param {string} args.files.esrgan - ESRGAN upscaler model (absolute path)
    * @param {object} [args.config] - ESRGAN context configuration
-   * @param {object} [args.logger] - Structured logger
+   * @param {object} [args.logger] - Structured logger for JS wrapper logs.
+   *   Native C++ logs are process-global; configure them once with
+   *   `require('@qvac/diffusion-cpp/addonLogging').setLogger(...)`.
    * @param {object} [args.opts] - Optional inference options
    */
   constructor ({ files, config, logger = null, opts = {} }) {
@@ -540,8 +514,6 @@ class EsrganUpscaler {
     this._run = exclusiveRunQueue()
     this.addon = null
     this._hasActiveResponse = false
-    this._binding = null
-    this._nativeLoggerActive = false
     this.state = { configLoaded: false }
   }
 
@@ -571,7 +543,6 @@ class EsrganUpscaler {
       this.logger.error('Error during ESRGAN upscaler load:', loadError)
       try { await this.addon?.unload?.() } catch (_) {}
       this.addon = null
-      this._releaseNativeLogger()
       throw loadError
     }
 
@@ -583,36 +554,12 @@ class EsrganUpscaler {
    * @returns {EsrganUpscalerInterface}
    */
   _createAddon (configurationParams) {
-    this._binding = require('./binding')
-    this._connectNativeLogger()
+    const binding = require('./binding')
     return new EsrganUpscalerInterface(
-      this._binding,
+      binding,
       configurationParams,
       this._addonOutputCallback.bind(this)
     )
-  }
-
-  _connectNativeLogger () {
-    if (!this._binding || !this.logger) return
-    try {
-      this._binding.setLogger((priority, message) => {
-        const method = LOG_METHODS[priority] || 'info'
-        if (typeof this.logger[method] === 'function') {
-          this.logger[method](`[C++] ${message}`)
-        }
-      })
-      this._nativeLoggerActive = true
-    } catch (err) {
-      this.logger.warn('Failed to connect native logger:', err.message)
-    }
-  }
-
-  _releaseNativeLogger () {
-    if (!this._nativeLoggerActive || !this._binding) return
-    try {
-      this._binding.releaseLogger()
-    } catch (_) {}
-    this._nativeLoggerActive = false
   }
 
   _addonOutputCallback (addon, event, data, error) {
@@ -712,7 +659,6 @@ class EsrganUpscaler {
         await this.addon.unload()
         this.addon = null
       }
-      this._releaseNativeLogger()
       this.state.configLoaded = false
     })
   }

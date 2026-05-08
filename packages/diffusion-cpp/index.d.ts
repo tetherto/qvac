@@ -177,6 +177,10 @@ export interface ImgStableDiffusionArgs {
    * stable-diffusion.cpp defaults for every parameter.
    */
   config?: SdConfig
+  /**
+   * Logger for JS wrapper messages only. Native C++ logs are process-global;
+   * configure them with `@qvac/diffusion-cpp/addonLogging`.
+   */
   logger?: QvacLogger | Console | null
   opts?: { stats?: boolean }
 }
@@ -184,6 +188,10 @@ export interface ImgStableDiffusionArgs {
 export interface EsrganUpscalerArgs {
   files: EsrganFiles
   config?: EsrganUpscalerConfig
+  /**
+   * Logger for JS wrapper messages only. Native C++ logs are process-global;
+   * configure them with `@qvac/diffusion-cpp/addonLogging`.
+   */
   logger?: QvacLogger | Console | null
   opts?: { stats?: boolean }
 }

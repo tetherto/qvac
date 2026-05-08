@@ -216,8 +216,10 @@ const args = {
 | `files.vae` | — | Absolute path to separate VAE file |
 | `files.esrgan` | — | Absolute path to ESRGAN upscaler model for post-generation upscale |
 | `config` | — | Native backend configuration object (see next section) |
-| `logger` | — | Logger instance (e.g. `console`) |
+| `logger` | — | Logger instance for JS wrapper logs (e.g. `console`) |
 | `opts` | — | Additional options (e.g. `{ stats: true }`) |
+
+Native C++ logs are process-global. Configure native log routing once with `require('@qvac/diffusion-cpp/addonLogging').setLogger(...)`.
 
 ### 3. Configure the native backend (`args.config`)
 
