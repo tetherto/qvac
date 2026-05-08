@@ -3,18 +3,18 @@
     "bergamot-translator",
     {
       "name": "qvac-lib-inference-addon-cpp",
-      "version>=": "1.1.5#1"
+      "version>=": "1.1.7#1"
     },
     {
       "name": "qvac-lint-cpp",
-      "version>=": "1.4.4#2"
+      "version>=": "1.4.4#3"
     },
     "sentencepiece",
     "ssplit",
     {
-      "name" : "qvac-fabric",
+      "name": "qvac-fabric",
       "version>=": "7248.2.3",
-      "default-features" : false
+      "default-features": false
     }
   ],
   "features": {

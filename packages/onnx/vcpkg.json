@@ -9,25 +9,31 @@
     },
     {
       "name": "onnxruntime",
-      "features": ["dml-ep"],
+      "features": [
+        "dml-ep"
+      ],
       "platform": "windows",
       "version>=": "1.24.2#5"
     },
     {
       "name": "onnxruntime",
-      "features": ["nnapi-ep"],
+      "features": [
+        "nnapi-ep"
+      ],
       "platform": "android",
       "version>=": "1.24.2#5"
     },
     {
       "name": "onnxruntime",
-      "features": ["coreml-ep"],
+      "features": [
+        "coreml-ep"
+      ],
       "platform": "osx | ios",
       "version>=": "1.24.2#5"
     },
     {
       "name": "qvac-lint-cpp",
-      "version>=": "1.4.4#2"
+      "version>=": "1.4.4#3"
     }
   ],
   "overrides": [
@@ -42,7 +48,9 @@
       "dependencies": [
         {
           "name": "onnxruntime",
-          "features": ["xnnpack-ep"]
+          "features": [
+            "xnnpack-ep"
+          ]
         }
       ]
     },
