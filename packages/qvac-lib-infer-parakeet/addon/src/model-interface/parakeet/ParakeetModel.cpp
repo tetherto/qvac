@@ -1043,6 +1043,114 @@ ParakeetModel::runEncoder(const std::vector<float> &melFeatures,
   return std::vector<float>(outputData, outputData + outputSize);
 }
 
+// Sliding-window TDT encoder for inputs that exceed
+// TDT_ENCODER_MAX_MEL_FRAMES. Adjacent windows share TDT_ENCODER_OVERLAP_MEL_FRAMES
+// of context. Half of the overlap (in encoder-frame units) is dropped from
+// the trailing edge of each non-final chunk and the leading edge of each
+// non-first chunk so the concatenated output is gap-free and duplicate-free
+// on the time axis. Encoder output layout is [ENCODER_DIM, T] (channels-first,
+// matching greedyDecode's indexing).
+std::vector<float>
+ParakeetModel::runEncoderChunked(const std::vector<float> &melFeatures,
+                                 int64_t numFrames, int64_t &encodedLength,
+                                 bool alreadyTransposed) {
+  const int64_t chunkMel = TDT_ENCODER_CHUNK_MEL_FRAMES;
+  const int64_t overlapMel = TDT_ENCODER_OVERLAP_MEL_FRAMES;
+  const int64_t stride = chunkMel - overlapMel;
+  const int64_t halfOverlapEnc =
+      (overlapMel / TDT_ENCODER_SUBSAMPLING) / 2; // e.g. 400 frames
+
+  struct ChunkOut {
+    std::vector<float> data; // [ENCODER_DIM, keepLen] row-major
+    int64_t keepLen;
+  };
+  std::vector<ChunkOut> chunks;
+  int64_t totalKept = 0;
+
+  for (int64_t start = 0; start < numFrames; start += stride) {
+    throwIfCancelled();
+    const int64_t end = std::min(start + chunkMel, numFrames);
+    const int64_t chunkLen = end - start;
+
+    if (chunkLen < TDT_ENCODER_MIN_TAIL_MEL_FRAMES && start > 0) {
+      // Tail entirely covered by previous chunk's keep-region.
+      break;
+    }
+
+    std::vector<float> melChunk;
+    if (alreadyTransposed) {
+      // Source layout [MEL_BINS, numFrames]; copy time slice column-by-column.
+      melChunk.resize(static_cast<size_t>(MEL_BINS) * chunkLen);
+      for (int b = 0; b < MEL_BINS; ++b) {
+        const float *srcRow = melFeatures.data() + b * numFrames + start;
+        std::copy(srcRow, srcRow + chunkLen,
+                  melChunk.begin() + b * chunkLen);
+      }
+    } else {
+      // Source layout [numFrames, MEL_BINS]; contiguous slice.
+      melChunk.assign(melFeatures.begin() + start * MEL_BINS,
+                      melFeatures.begin() + end * MEL_BINS);
+    }
+
+    int64_t chunkEncLen = 0;
+    std::vector<float> chunkOut =
+        runEncoder(melChunk, chunkLen, chunkEncLen, alreadyTransposed);
+
+    if (chunkEncLen <= 0) {
+      if (end == numFrames) break;
+      continue;
+    }
+
+    const int64_t trimFront = (start > 0) ? std::min(halfOverlapEnc, chunkEncLen) : 0;
+    const int64_t trimBack =
+        (end < numFrames) ? std::min(halfOverlapEnc, chunkEncLen - trimFront) : 0;
+    const int64_t keepLen = chunkEncLen - trimFront - trimBack;
+
+    if (keepLen <= 0) {
+      if (end == numFrames) break;
+      continue;
+    }
+
+    // Slice [ENCODER_DIM, chunkEncLen] -> [ENCODER_DIM, keepLen] (column slice).
+    std::vector<float> kept(static_cast<size_t>(ENCODER_DIM) * keepLen);
+    for (int d = 0; d < ENCODER_DIM; ++d) {
+      const float *srcRow = chunkOut.data() + d * chunkEncLen + trimFront;
+      std::copy(srcRow, srcRow + keepLen, kept.begin() + d * keepLen);
+    }
+
+    chunks.push_back({std::move(kept), keepLen});
+    totalKept += keepLen;
+
+    if (end == numFrames) break;
+  }
+
+  if (totalKept <= 0 || chunks.empty()) {
+    encodedLength = 0;
+    return {};
+  }
+
+  // Re-assemble [ENCODER_DIM, totalKept] by concatenating each row across chunks.
+  std::vector<float> merged(static_cast<size_t>(ENCODER_DIM) * totalKept);
+  for (int d = 0; d < ENCODER_DIM; ++d) {
+    int64_t cursor = 0;
+    for (const auto &c : chunks) {
+      const float *srcRow = c.data.data() + d * c.keepLen;
+      std::copy(srcRow, srcRow + c.keepLen,
+                merged.begin() + d * totalKept + cursor);
+      cursor += c.keepLen;
+    }
+  }
+
+  encodedLength = totalKept;
+
+  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+       "TDT encoder chunked: " + std::to_string(numFrames) + " mel frames, " +
+           std::to_string(chunks.size()) + " windows -> " +
+           std::to_string(totalKept) + " encoded frames");
+
+  return merged;
+}
+
 std::string ParakeetModel::greedyDecode(const std::vector<float> &encoderOutput,
                                         int64_t encodedLength) {
   if (!decoder_session_ || vocab_.empty()) {
@@ -1817,8 +1925,13 @@ std::string ParakeetModel::processTDT(const Input &input) {
   std::vector<float> encoderOutput;
 
   measureTime(encoderMs_, [&]() {
-    encoderOutput =
-        runEncoder(melFeatures, numFrames, encodedLength, alreadyTransposed);
+    if (numFrames > TDT_ENCODER_MAX_MEL_FRAMES) {
+      encoderOutput = runEncoderChunked(melFeatures, numFrames, encodedLength,
+                                        alreadyTransposed);
+    } else {
+      encoderOutput =
+          runEncoder(melFeatures, numFrames, encodedLength, alreadyTransposed);
+    }
     totalEncodedFrames_ += encodedLength;
   });
   throwIfCancelled();

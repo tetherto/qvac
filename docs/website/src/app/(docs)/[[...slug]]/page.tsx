@@ -56,8 +56,11 @@ export default async function Page(props: PageProps<'/[[...slug]]'>) {
       })
     : null;
 
-  // Filter ToC to include H2 through H5 (depth 2, 3, 4, and 5)
-  const filteredToc = page.data.toc?.filter(item => item.depth >= 2 && item.depth <= 5) || [];
+  // Filter ToC to include H2 through H5 by default. A page can opt into a
+  // shallower ToC by setting `tocMaxDepth` in its frontmatter (e.g. `2` to
+  // index only H2 headings).
+  const tocMaxDepth = page.data.tocMaxDepth ?? 5;
+  const filteredToc = page.data.toc?.filter(item => item.depth >= 2 && item.depth <= tocMaxDepth) || [];
 
   const isHomePage = !params.slug || params.slug.length === 0;
   const jsonLdBlocks = buildDocsJsonLd(page, params.slug ?? [], isHomePage);

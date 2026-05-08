@@ -191,6 +191,12 @@ export const customTree: Node[] = [
     icon: resolveIcon('Stethoscope'),
   },
   {
+    name: 'Troubleshooting',
+    url: '/troubleshooting',
+    type: 'page',
+    icon: resolveIcon('Bug'),
+  },
+  {
     name: 'HTTP server',
     url: '/http-server',
     type: 'page',

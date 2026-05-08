@@ -68,7 +68,23 @@ export interface TranscribeAddonSegment {
   id?: number;
 }
 
+export interface TranscribeAddonVadEvent {
+  type: "vad";
+  speaking: boolean;
+  probability: number;
+}
+
+export interface TranscribeAddonEndOfTurnEvent {
+  type: "endOfTurn";
+  silenceDurationMs: number;
+}
+
+export type TranscribeAddonOutput =
+  | Array<TranscribeAddonSegment>
+  | TranscribeAddonVadEvent
+  | TranscribeAddonEndOfTurnEvent;
+
 export interface TranscribeResponse {
   stats?: TranscribeStats;
-  iterate(): AsyncIterable<Array<TranscribeAddonSegment>>;
+  iterate(): AsyncIterable<TranscribeAddonOutput>;
 }

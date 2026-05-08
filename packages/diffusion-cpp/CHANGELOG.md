@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.6.0] - 2026-05-01
+
+### Added
+
+- Post-generation ESRGAN upscale support via `files.esrgan` and `run({ upscale: true })` / `run({ upscale: { repeats } })`
+- ESRGAN upscaler configuration for tile size, direct convolution, CPU parameter offload, and thread count
+- JS integration coverage for the ESRGAN upscale public API guard and forwarding path
+- Example script for SD2.1 generation followed by ESRGAN upscale (`examples/generate-image-esrgan-upscale.js`)
+
 ## [0.5.0] - 2026-04-21
 
 ### Added

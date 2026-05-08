@@ -89,6 +89,7 @@ env:
   APP_BUNDLE_ID: "io.tether.test.qvac"
 
 permissions:
+  actions: read
   id-token: write
   contents: read
 
@@ -251,16 +252,60 @@ jobs:
       - name: Generate runId
         id: runid
         shell: node {0}
+        env:
+          EXPECTED_JOB_NAME: "[ios] build"
+          PR_NUMBER: ${{ github.event.pull_request.number || '' }}
+          CHECKOUT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           const fs = require('fs');
-          const repoName = process.env.GITHUB_REPOSITORY.split('/').pop();
-          const refName = process.env.GITHUB_REF_NAME.replace(/\//g, '-');
-          const sha = process.env.GITHUB_SHA.substring(0, 7);
-          const timestamp = Math.floor(Date.now() / 1000);
-          const runId = `ios-${repoName}-${refName}-${sha}-${timestamp}`;
+
+          (async () => {
+          async function fetchJobs(page) {
+            const url =
+              `https://api.github.com/repos/${process.env.GITHUB_REPOSITORY}` +
+              `/actions/runs/${process.env.GITHUB_RUN_ID}` +
+              `/attempts/${process.env.GITHUB_RUN_ATTEMPT}/jobs?per_page=100&page=${page}`;
+            const res = await fetch(url, {
+              headers: {
+                Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+                Accept: 'application/vnd.github+json',
+                'X-GitHub-Api-Version': '2022-11-28',
+              },
+            });
+            if (!res.ok) {
+              throw new Error(`Failed to list workflow jobs: ${res.status} ${await res.text()}`);
+            }
+            return res.json();
+          }
+
+          const jobs = [];
+          for (let page = 1; ; page++) {
+            const data = await fetchJobs(page);
+            jobs.push(...(data.jobs || []));
+            if (!data.jobs || data.jobs.length < 100) break;
+          }
+
+          const matches = jobs.filter(
+            (job) => job.name === process.env.EXPECTED_JOB_NAME ||
+              job.name.endsWith(` / ${process.env.EXPECTED_JOB_NAME}`),
+          );
+          const runnerMatches = matches.filter((job) => job.runner_name === process.env.RUNNER_NAME);
+          const job = runnerMatches.length === 1 ? runnerMatches[0] : matches[0];
+          if (!job) {
+            throw new Error(`Could not resolve current job id for ${process.env.EXPECTED_JOB_NAME}`);
+          }
+
+          const sha = (process.env.CHECKOUT_SHA || process.env.GITHUB_SHA).substring(0, 7);
+          const refPart = process.env.PR_NUMBER ? `pr${process.env.PR_NUMBER}-${sha}` : sha;
+          const runId = `ios-${refPart}-${job.id}`;
 
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `runId=${runId}\n`, 'utf8');
           console.log(`Generated runId: ${runId}`);
+          })().catch((err) => {
+            console.error(err);
+            process.exit(1);
+          });
 
       - name: Configure npm registries
         shell: node {0}
@@ -889,6 +934,7 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: read
       pull-requests: write
     steps:
@@ -905,3 +951,28 @@ jobs:
           suite: ${{ inputs.suite }}
           filter: ${{ inputs.filter }}
           exclude-suite: ${{ inputs.exclude-suite }}
+
+  report-artifacts-refresh:
+    name: "[ios] report-artifacts-refresh"
+    needs: [report-start, run-producer, cleanup-device-farm]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: .github/actions/sdk-e2e-report-finalize
+          sparse-checkout-cone-mode: false
+
+      - uses: ./.github/actions/sdk-e2e-report-finalize
+        with:
+          family: ios
+          platforms: '["ios"]'
+          comment-ids: ${{ needs.report-start.outputs.comment-ids }}
+          suite: ${{ inputs.suite }}
+          filter: ${{ inputs.filter }}
+          exclude-suite: ${{ inputs.exclude-suite }}
+          update-summary: "false"
