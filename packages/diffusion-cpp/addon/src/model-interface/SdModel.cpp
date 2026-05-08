@@ -470,11 +470,12 @@ std::any SdModel::process(const std::any& input) {
                   "PNG/JPEG buffer.");
 
         sd_image_t decoded = image_codec::decodeImage(job.initImagesBytes[i]);
-        if (!decoded.data)
+        if (decoded.data == nullptr) {
           throw StatusError(
               general_error::InvalidArgument,
               "img2img: failed to decode init_images[" + std::to_string(i) +
                   "] (corrupt or unsupported format; supported: PNG, JPEG)");
+        }
         refImgs->push_back(decoded);
       }
 
@@ -523,14 +524,16 @@ std::any SdModel::process(const std::any& input) {
         for (const auto& el : arr)
           initPng.push_back(static_cast<uint8_t>(el.get<double>()));
       }
-      if (!initPng.empty())
+      if (!initPng.empty()) {
         initImg = image_codec::decodeImage(initPng);
+      }
 
-      if (!initImg.data)
+      if (initImg.data == nullptr) {
         throw StatusError(
             general_error::InvalidArgument,
             "img2img: failed to decode init_image (corrupt or unsupported "
             "format)");
+      }
 
       const int imgW = static_cast<int>(initImg.width);
       const int imgH = static_cast<int>(initImg.height);
@@ -639,8 +642,8 @@ std::any SdModel::process(const std::any& input) {
   // RuntimeStats describe emitted PNGs. Keep generation dimensions as the
   // fallback so a failed encode/callback does not report an upscaled size.
   int64_t outputPixels = 0;
-  int64_t statsWidth = static_cast<int64_t>(gen.width);
-  int64_t statsHeight = static_cast<int64_t>(gen.height);
+  auto statsWidth = static_cast<int64_t>(gen.width);
+  auto statsHeight = static_cast<int64_t>(gen.height);
   bool wasCancelled = false;
   for (int i = 0; i < results.count(); ++i) {
     if (cancelRequested_.load()) {
@@ -648,7 +651,7 @@ std::any SdModel::process(const std::any& input) {
       break;
     }
 
-    if (results[i].data) {
+    if (results[i].data != nullptr) {
       sd_image_t imageForOutput = results[i];
       std::unique_ptr<uint8_t, image_codec::FreeDeleter> upscaledData(nullptr);
 
@@ -662,11 +665,9 @@ std::any SdModel::process(const std::any& input) {
         wasCancelled = true;
       } else {
         auto png = image_codec::encodeToPng(imageForOutput);
-        if (!png.empty() && job.outputCallback) {
-          const int64_t outputWidth =
-              static_cast<int64_t>(imageForOutput.width);
-          const int64_t outputHeight =
-              static_cast<int64_t>(imageForOutput.height);
+        if (!png.empty() && static_cast<bool>(job.outputCallback)) {
+          const auto outputWidth = static_cast<int64_t>(imageForOutput.width);
+          const auto outputHeight = static_cast<int64_t>(imageForOutput.height);
           job.outputCallback(png);
           ++outputCount;
           outputPixels += outputWidth * outputHeight;

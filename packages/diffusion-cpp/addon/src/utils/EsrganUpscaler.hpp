@@ -12,11 +12,13 @@
 
 namespace qvac_lib_inference_addon_sd {
 
+inline constexpr int DEFAULT_UPSCALER_TILE_SIZE = 128;
+
 struct EsrganUpscalerConfig {
   std::string esrganPath;
   int nThreads{-1};
   int upscalerThreads{-1};
-  int upscalerTileSize{128};
+  int upscalerTileSize{DEFAULT_UPSCALER_TILE_SIZE};
   bool upscalerDirect{false};
   bool upscalerOffloadParamsToCpu{false};
 };

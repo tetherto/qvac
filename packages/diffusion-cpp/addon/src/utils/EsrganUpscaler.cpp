@@ -14,19 +14,34 @@ using namespace qvac_errors;
 
 namespace qvac_lib_inference_addon_sd {
 
+namespace {
+
+void freeSdImageData(sd_image_t& image) noexcept {
+  if (image.data == nullptr) {
+    return;
+  }
+
+  // stable-diffusion.cpp returns malloc-owned sd_image_t::data from upscale().
+  // NOLINTNEXTLINE(cppcoreguidelines-no-malloc,cppcoreguidelines-owning-memory)
+  free(image.data);
+  image.data = nullptr;
+}
+
+} // namespace
+
 EsrganUpscalerConfig makeUpscalerConfig(const SdCtxConfig& config) {
-  return {
-      config.esrganPath,
-      config.nThreads,
-      config.upscalerThreads,
-      config.upscalerTileSize,
-      config.upscalerDirect,
-      config.upscalerOffloadParamsToCpu};
+  return EsrganUpscalerConfig{
+      .esrganPath = config.esrganPath,
+      .nThreads = config.nThreads,
+      .upscalerThreads = config.upscalerThreads,
+      .upscalerTileSize = config.upscalerTileSize,
+      .upscalerDirect = config.upscalerDirect,
+      .upscalerOffloadParamsToCpu = config.upscalerOffloadParamsToCpu};
 }
 
 void sdLogCallback(sd_log_level_t level, const char* text, void* /*userData*/) {
   namespace lg = qvac_lib_inference_addon_cpp::logger;
-  lg::Priority priority;
+  auto priority = lg::Priority::ERROR;
   switch (level) {
   case SD_LOG_DEBUG:
     priority = lg::Priority::DEBUG;
@@ -37,14 +52,11 @@ void sdLogCallback(sd_log_level_t level, const char* text, void* /*userData*/) {
   case SD_LOG_WARN:
     priority = lg::Priority::WARNING;
     break;
-  case SD_LOG_ERROR:
-    priority = lg::Priority::ERROR;
-    break;
   default:
-    priority = lg::Priority::ERROR;
     break;
   }
-  QLOG_IF(priority, std::string(text ? text : ""));
+  // NOLINTNEXTLINE(cppcoreguidelines-avoid-do-while)
+  QLOG_IF(priority, std::string(text != nullptr ? text : ""));
 }
 
 EsrganUpscaler::EsrganUpscaler(EsrganUpscalerConfig config)
@@ -87,7 +99,7 @@ upscaler_ctx_t* EsrganUpscaler::ensureContextLocked() {
         "ESRGAN upscale requested but files.esrgan was not provided");
   }
 
-  if (ctx_) {
+  if (ctx_ != nullptr) {
     return ctx_.get();
   }
 
@@ -99,7 +111,7 @@ upscaler_ctx_t* EsrganUpscaler::ensureContextLocked() {
       resolveThreads(),
       tileSize);
 
-  if (!raw) {
+  if (raw == nullptr) {
     throw StatusError(
         general_error::InternalError,
         "Failed to create ESRGAN upscaler context from files.esrgan: " +
@@ -128,7 +140,7 @@ sd_image_t EsrganUpscaler::upscaleImage(
         general_error::InternalError,
         "ESRGAN upscaler reported an invalid scale factor");
   }
-  const uint32_t factor = static_cast<uint32_t>(scale);
+  const auto factor = static_cast<uint32_t>(scale);
 
   sd_image_t current = inputImage;
   bool currentOwned = false;
@@ -137,23 +149,23 @@ sd_image_t EsrganUpscaler::upscaleImage(
   // stable-diffusion.cpp upscale() pass cannot be interrupted mid-pass/tile
   // without upstream support.
   for (int repeat = 0; repeat < repeats; ++repeat) {
-    if (shouldCancel && shouldCancel()) {
+    if (static_cast<bool>(shouldCancel) && shouldCancel()) {
       if (currentOwned) {
-        free(current.data);
+        freeSdImageData(current);
       }
       throw std::runtime_error("Job cancelled");
     }
 
     sd_image_t next = upscale(ctx, current, factor);
-    if (!next.data) {
+    if (next.data == nullptr) {
       if (currentOwned) {
-        free(current.data);
+        freeSdImageData(current);
       }
       throw StatusError(general_error::InternalError, "ESRGAN upscale failed");
     }
 
     if (currentOwned) {
-      free(current.data);
+      freeSdImageData(current);
     }
     current = next;
     currentOwned = true;

@@ -62,11 +62,11 @@ std::any EsrganUpscalerModel::process(const std::any& input) {
   const auto& job = std::any_cast<const UpscaleJob&>(input);
   cancelRequested_.store(false);
 
-  const auto t0 = std::chrono::steady_clock::now();
+  const auto upscaleStart = std::chrono::steady_clock::now();
 
   sd_image_t decoded = image_codec::decodeImage(job.imageBytes);
   std::unique_ptr<uint8_t, image_codec::FreeDeleter> decodedData(decoded.data);
-  if (!decoded.data) {
+  if (decoded.data == nullptr) {
     throw StatusError(
         general_error::InvalidArgument,
         "Failed to decode input image; expected PNG or JPEG bytes");
@@ -94,23 +94,25 @@ std::any EsrganUpscalerModel::process(const std::any& input) {
   int64_t statsWidth = 0;
   int64_t statsHeight = 0;
   if (job.outputCallback) {
-    const int64_t outputWidth = static_cast<int64_t>(upscaled.width);
-    const int64_t outputHeight = static_cast<int64_t>(upscaled.height);
+    const auto outputWidth = static_cast<int64_t>(upscaled.width);
+    const auto outputHeight = static_cast<int64_t>(upscaled.height);
     job.outputCallback(png);
     outputCount = 1;
     outputPixels = outputWidth * outputHeight;
     statsWidth = outputWidth;
     statsHeight = outputHeight;
   } else {
+    // NOLINTNEXTLINE(cppcoreguidelines-avoid-do-while)
     QLOG_IF(
         qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
         "ESRGAN upscale produced an output but no callback was registered; "
         "result discarded.");
   }
 
-  const auto t1 = std::chrono::steady_clock::now();
+  const auto upscaleEnd = std::chrono::steady_clock::now();
   const int64_t upscaleMs = static_cast<int64_t>(
-      std::chrono::duration<double, std::milli>(t1 - t0).count());
+      std::chrono::duration<double, std::milli>(upscaleEnd - upscaleStart)
+          .count());
 
   stats_.totalUpscaleMs += upscaleMs;
   stats_.totalWallMs += upscaleMs;

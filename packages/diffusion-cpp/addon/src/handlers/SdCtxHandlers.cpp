@@ -44,22 +44,22 @@ static int parsePositiveInt(const std::string& v, const std::string& key) {
 }
 
 static int
-parseAutoOrPositiveInt(const std::string& v, const std::string& key) {
-  int parsed;
+parseAutoOrPositiveInt(const std::string& value, const std::string& key) {
+  int parsed = 0;
   std::size_t parsedChars = 0;
   try {
-    parsed = std::stoi(v, &parsedChars);
+    parsed = std::stoi(value, &parsedChars);
   } catch (...) {
     throw StatusError(
         general_error::InvalidArgument,
-        key + " must be -1 (auto) or a positive integer, got: '" + v + "'");
+        key + " must be -1 (auto) or a positive integer, got: '" + value + "'");
   }
-  if (parsedChars == v.size() && (parsed == -1 || parsed > 0)) {
+  if (parsedChars == value.size() && (parsed == -1 || parsed > 0)) {
     return parsed;
   }
   throw StatusError(
       general_error::InvalidArgument,
-      key + " must be -1 (auto) or a positive integer, got: '" + v + "'");
+      key + " must be -1 (auto) or a positive integer, got: '" + value + "'");
 }
 
 static float parseFloat(const std::string& v, const std::string& key) {
