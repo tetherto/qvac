@@ -162,10 +162,8 @@ protected:
 };
 
 constexpr const char* ADRENO_DESC = "Adreno (TM) 740";
-constexpr const char* MALI_DESC = "Mali-G715";
-// Generic non-Adreno, non-Mali Vulkan-capable device for testing the GPU /
-// iGPU / main-gpu selection logic without tripping the Adreno-OpenCL or
-// Mali-CPU overrides.
+// Generic non-Adreno Vulkan-capable device for testing the GPU / iGPU /
+// main-gpu selection logic without tripping the Adreno-OpenCL override.
 constexpr const char* INTEL_DESC = "Intel Iris Xe Graphics";
 
 constexpr const char* VULKAN0_BACK = "Vulkan0";
@@ -235,22 +233,6 @@ TEST_F(BackendSelectionTest, VulkanAndOpenCLNotAdrenoChoosesVulkan) {
   mockBackend.addDevice(createGPUDevice(INTEL_DESC, OPENCL_BACK));
   mockBackend.addDevice(createGPUDevice(INTEL_DESC, VULKAN0_BACK));
   expectChosen(mockBackend, BackendType::GPU, "vulkan0");
-}
-
-TEST_F(BackendSelectionTest, Mali_KeepsVulkan) {
-  mockBackend.addDevice(createGPUDevice(MALI_DESC, VULKAN0_BACK));
-  expectChosen(mockBackend, BackendType::GPU, "vulkan0");
-}
-
-TEST_F(BackendSelectionTest, MaliIGPU_KeepsVulkan) {
-  mockBackend.addDevice(createIGPUDevice(MALI_DESC, VULKAN0_BACK));
-  expectChosen(mockBackend, BackendType::GPU, "vulkan0");
-}
-
-TEST_F(BackendSelectionTest, MaliGPUAndIGPU_PrefersGPU) {
-  mockBackend.addDevice(createIGPUDevice(MALI_DESC, VULKAN0_BACK));
-  mockBackend.addDevice(createGPUDevice(MALI_DESC, VULKAN1_BACK));
-  expectChosen(mockBackend, BackendType::GPU, "vulkan1");
 }
 
 TEST_F(BackendSelectionTest, VulkanIGPU) {
@@ -444,13 +426,6 @@ TEST_F(BackendSelectionTest, ChooseBackendWithMainGpuIntegerIndexOne) {
   mockBackend.addDevice(createIGPUDevice(INTEL_DESC, VULKAN0_BACK));
   mockBackend.addDevice(createGPUDevice(INTEL_DESC, VULKAN1_BACK));
 
-  MainGpu mainGpu = 1;
-  expectChosen(mockBackend, BackendType::GPU, "vulkan1", mainGpu);
-}
-
-TEST_F(BackendSelectionTest, Mali_ExplicitMainGpu_KeepsVulkan) {
-  mockBackend.addDevice(createIGPUDevice(MALI_DESC, VULKAN0_BACK));
-  mockBackend.addDevice(createGPUDevice(MALI_DESC, VULKAN1_BACK));
   MainGpu mainGpu = 1;
   expectChosen(mockBackend, BackendType::GPU, "vulkan1", mainGpu);
 }

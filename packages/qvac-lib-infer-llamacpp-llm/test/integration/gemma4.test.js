@@ -344,7 +344,6 @@ test('Gemma 4 reasoning-budget=0 disables thinking', {
   t.ok(/paris/i.test(disabled), `disabled mentions Paris: "${disabled.slice(0, 80)}"`)
   t.ok(/paris/i.test(disabledUnderscore), 'underscore variant also accepted and mentions Paris')
 
-
   t.ok(/<\|channel>thought/i.test(baseline),
     `baseline should contain <|channel>thought opening marker: "${baseline.slice(0, 100)}"`)
   t.ok(baseline.includes('<channel|>'),
