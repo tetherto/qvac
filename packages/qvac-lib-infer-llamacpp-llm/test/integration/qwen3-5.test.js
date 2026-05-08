@@ -347,8 +347,8 @@ test('Qwen3.5-0.8B reasoning-budget=0 disables thinking', {
   const baseConfig = {
     device: useCpu ? 'cpu' : 'gpu',
     gpu_layers: '999',
-    ctx_size: '1024',
-    n_predict: '256',
+    ctx_size: '2048',
+    n_predict: '1024',
     temp: '0',
     seed: '42',
     verbosity: '0'
