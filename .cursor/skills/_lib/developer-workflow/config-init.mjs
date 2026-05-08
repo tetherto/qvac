@@ -96,7 +96,7 @@ export function assertAllowedAsanaImport(imported) {
     throw new Error("Import must not contain a non-null slack.statusChannel");
   }
   const serialized = JSON.stringify(imported);
-  if (/ASANA_ACCESS_TOKEN|\.env|token|email|user"\s*:/.test(serialized)) {
+  if (/(\"(?:ASANA_ACCESS_TOKEN|tokenEnv|tokenShellFallback|email|user)\"\s*:)|(\.env\b)/.test(serialized)) {
     throw new Error("Import appears to contain token, .env, email, or asana.user data");
   }
 }

@@ -28,13 +28,8 @@ function tokenFromDefaultShell(envName) {
     }
 
     const shell = process.env.SHELL || "/bin/sh";
-    const shellName = shell.split("/").pop();
     const command = `printf %s "$${envName}"`;
-    let args = ["-l", "-c", command];
-    if (shellName === "zsh" || shellName === "bash") {
-      args = ["-i", "-l", "-c", command];
-    }
-    const token = execFileSync(shell, args, {
+    const token = execFileSync(shell, ["-l", "-c", command], {
       encoding: "utf-8",
       stdio: ["ignore", "pipe", "ignore"],
     }).trim();
