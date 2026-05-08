@@ -271,6 +271,7 @@ jobs:
         with:
           path: ${{ inputs.working-directory }}/.qvac-cache
           key: qvac-models-${{ hashFiles('packages/sdk/models/registry/models.ts') }}
+          enableCrossOsArchive: true
 
       - name: Bootstrap (download models)
         if: steps.models-cache.outputs.cache-hit != 'true'
@@ -285,6 +286,7 @@ jobs:
         with:
           path: ${{ inputs.working-directory }}/.qvac-cache
           key: qvac-models-${{ hashFiles('packages/sdk/models/registry/models.ts') }}
+          enableCrossOsArchive: true
 
       - name: Generate runId
         id: runid
