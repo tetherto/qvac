@@ -9,6 +9,7 @@ import { translationIndicTransTests } from "../../translation-indictrans-tests.j
 import { translationBergamotTests } from "../../translation-bergamot-tests.js";
 import { translationLlmTests } from "../../translation-llm-tests.js";
 import { translationSalamandraTests } from "../../translation-salamandra-tests.js";
+import { translationAfriquegemmaTests } from "../../translation-afriquegemma-tests.js";
 
 interface TranslateTestParams {
   text: string;
@@ -23,10 +24,11 @@ const allTests = [
   ...translationBergamotTests,
   ...translationLlmTests,
   ...translationSalamandraTests,
+  ...translationAfriquegemmaTests,
 ];
 
 export class TranslationExecutor extends AbstractModelExecutor<typeof allTests> {
-  pattern = /^translation-(indictrans|bergamot|llm|salamandra)-/;
+  pattern = /^translation-(indictrans|bergamot|llm|salamandra|afriquegemma)-/;
 
   protected handlers = Object.fromEntries(
     allTests.map((test) => {
