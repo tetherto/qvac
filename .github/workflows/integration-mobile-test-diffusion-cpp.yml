@@ -49,7 +49,7 @@ jobs:
       matrix:
         include:
           - platform: Android
-            os: ubuntu-24.04
+            os: ubuntu-22.04
             runner: qvac-ubuntu2204-x64
           - platform: iOS
             os: macos-14
