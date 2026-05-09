@@ -8,7 +8,7 @@
     "nlohmann-json",
     {
       "name": "qvac-fabric",
-      "version>=": "8189.0.1"
+      "version>=": "8189.0.2"
     },
     {
       "name": "qvac-lib-inference-addon-cpp",
