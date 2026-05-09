@@ -105,10 +105,6 @@ struct DeviceDescription {
   }
 };
 
-bool isMaliDevice(const DeviceDescription& devDescr) {
-  return devDescr.gpuDescription.find("mali") != std::string::npos;
-}
-
 bool isAppleM1Device(const DeviceDescription& devDescr) {
   const auto& d = devDescr.gpuDescription;
   const auto pos = d.find("apple m1");
@@ -123,7 +119,7 @@ void emplaceIfValidDevice(
     const BackendInterface& bckI, std::vector<std::string>& gpuBackends,
     std::vector<std::string>& igpuBackends,
     std::vector<std::string>& openClBackends,
-    std::optional<int>& maxAdrenoVersion, bool& sawMali, bool& sawAppleM1,
+    std::optional<int>& maxAdrenoVersion, bool& sawAppleM1,
     const ggml_backend_reg_t reg, const DeviceDescription& devDescr,
     const enum ggml_backend_dev_type backendTypeEnum) {
   if (bckI.ggml_backend_reg_name(reg) != std::string("RPC")) {
@@ -145,9 +141,6 @@ void emplaceIfValidDevice(
                                   version.value() > maxAdrenoVersion.value())) {
         maxAdrenoVersion = version;
       }
-    }
-    if (isMaliDevice(devDescr)) {
-      sawMali = true;
     }
     if (isAppleM1Device(devDescr)) {
       sawAppleM1 = true;
@@ -190,7 +183,7 @@ void tryEmplaceDevice(
     std::vector<std::string>& gpuBackends,
     std::vector<std::string>& igpuBackends,
     std::vector<std::string>& openClBackends,
-    std::optional<int>& maxAdrenoVersion, bool& sawMali, bool& sawAppleM1) {
+    std::optional<int>& maxAdrenoVersion, bool& sawAppleM1) {
   const ggml_backend_dev_t dev = bckI.ggml_backend_dev_get(deviceIndex);
   const ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
   const enum ggml_backend_dev_type backendTypeEnum =
@@ -206,7 +199,6 @@ void tryEmplaceDevice(
         igpuBackends,
         openClBackends,
         maxAdrenoVersion,
-        sawMali,
         sawAppleM1,
         reg,
         devDescr,
@@ -290,7 +282,6 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
   std::vector<std::string> igpuBackends;
   std::vector<std::string> openClBackends;
   std::optional<int> maxAdrenoVersion;
-  bool sawMali = false;
   bool sawAppleM1 = false;
 
   if (preferredBackendType == BackendType::GPU) {
@@ -311,7 +302,6 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
               igpuBackends,
               openClBackends,
               maxAdrenoVersion,
-              sawMali,
               sawAppleM1);
           loopAllDevices = false;
         } else {
@@ -335,7 +325,6 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
           igpuBackends,
           openClBackends,
           maxAdrenoVersion,
-          sawMali,
           sawAppleM1);
     }
   }
