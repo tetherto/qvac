@@ -33,15 +33,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-22.04
+          - os: ubuntu-24.04
             platform: linux
-            runner: qvac-ubuntu2204-x64
+            runner: qvac-ubuntu2404-x64
           - os: macos-14
             platform: darwin
             arch: arm64
           - os: windows-2025
             platform: windows
-            runner: qvac-win25-x64-gpu
+            runner: qvac-win25-x64
 
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
@@ -61,11 +61,11 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
 
-      # - if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'windows-2025' }}
+      # - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'windows-2025' }}
       #   name: Setup LLVM
       #   uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
 
-      # - if: ${{ matrix.os == 'ubuntu-22.04' }}
+      # - if: ${{ matrix.os == 'ubuntu-24.04' }}
       #   name: Install Vulkan SDK on Linux
       #   working-directory: ${{ env.WORKDIR }}
       #   run: |
@@ -114,7 +114,7 @@ jobs:
           # Set deployment target for C++20 std::format support
           echo "MACOSX_DEPLOYMENT_TARGET=14.0" >> $GITHUB_ENV
 
-      - if: ${{ matrix.os == 'ubuntu-22.04' }}
+      - if: ${{ matrix.os == 'ubuntu-24.04' }}
         name: Install vcpkg on linux
         working-directory: ${{ env.WORKDIR }}
         shell: bash
@@ -221,12 +221,12 @@ jobs:
           sudo rm -f /opt/homebrew/bin/clang /opt/homebrew/bin/clang++ 2>/dev/null || true
 
       - name: Build C++ tests with coverage
-        if: ${{ matrix.os == 'ubuntu-22.04' }}
+        if: ${{ matrix.os == 'ubuntu-24.04' }}
         working-directory: ${{ env.WORKDIR }}
         run: npm run coverage:cpp:build
 
       - name: Build C++ tests
-        if: ${{ matrix.os != 'ubuntu-22.04' }}
+        if: ${{ matrix.os != 'ubuntu-24.04' }}
         working-directory: ${{ env.WORKDIR }}
         run: npm run test:cpp:build
 
@@ -265,7 +265,7 @@ jobs:
           fi
 
       - name: Generate Coverage Report
-        if: ${{ matrix.os == 'ubuntu-22.04' && always() }}
+        if: ${{ matrix.os == 'ubuntu-24.04' && always() }}
         working-directory: ${{ env.WORKDIR }}
         run: |
           npm run coverage:cpp:report
@@ -273,7 +273,7 @@ jobs:
           echo "LINE_COVERAGE_PERCENTAGE=${COVERAGE}" >> $GITHUB_ENV
 
       - name: Archive Coverage Results
-        if: ${{ matrix.os == 'ubuntu-22.04' && always() }}
+        if: ${{ matrix.os == 'ubuntu-24.04' && always() }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: cpp-coverage-report-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}
@@ -286,7 +286,7 @@ jobs:
 
 
       - name: Coverage Summary
-        if: ${{ matrix.os == 'ubuntu-22.04' && always() }}
+        if: ${{ matrix.os == 'ubuntu-24.04' && always() }}
         shell: bash
         working-directory: ${{ env.WORKDIR }}
         run: |

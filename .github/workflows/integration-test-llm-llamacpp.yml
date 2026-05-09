@@ -65,12 +65,12 @@ jobs:
           - os: ubuntu-22.04
             platform: linux
             arch: x64
-            runner: qvac-ubuntu2204-x64
-            no_gpu: 'true'
-          - os: ubuntu-22.04
+            runner: qvac-ubuntu2204-x64-gpu
+            timeout_minutes: 480
+          - os: ubuntu-24.04
             platform: linux
             arch: x64
-            runner: qvac-ubuntu2204-x64-gpu
+            runner: qvac-ubuntu2404-x64-gpu
             timeout_minutes: 480
           - os: ubuntu-24.04-arm
             platform: linux
