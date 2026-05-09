@@ -11,16 +11,6 @@ require('./integration-runtime.cjs')
 
 const __FILTERED = { modulePath: 'filtered', summary: { total: 0, passed: 0, failed: 0 } }
 
-async function runAfriquegemmaEdgeCasesTest (options = {}) { // eslint-disable-line no-unused-vars
-  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runAfriquegemmaEdgeCasesTest')) return __FILTERED
-  return runIntegrationModule('../integration/afriquegemma-edge-cases.test.js', options)
-}
-
-async function runAfriquegemmaTranslationTest (options = {}) { // eslint-disable-line no-unused-vars
-  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runAfriquegemmaTranslationTest')) return __FILTERED
-  return runIntegrationModule('../integration/afriquegemma-translation.test.js', options)
-}
-
 async function runApiBehaviorTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runApiBehaviorTest')) return __FILTERED
   return runIntegrationModule('../integration/api-behavior.test.js', options)
@@ -69,11 +59,6 @@ async function runImageTest (options = {}) { // eslint-disable-line no-unused-va
 async function runModelLoadingTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runModelLoadingTest')) return __FILTERED
   return runIntegrationModule('../integration/model-loading.test.js', options)
-}
-
-async function runMoeTest (options = {}) { // eslint-disable-line no-unused-vars
-  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runMoeTest')) return __FILTERED
-  return runIntegrationModule('../integration/moe.test.js', options)
 }
 
 async function runMultiGpuTest (options = {}) { // eslint-disable-line no-unused-vars

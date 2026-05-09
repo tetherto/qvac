@@ -9,8 +9,6 @@
     "heavy7": ["runGemma4Test"],
     "heavy8": ["runOcrPaddleTest"],
     "lightA": [
-      "runAfriquegemmaEdgeCasesTest",
-      "runAfriquegemmaTranslationTest",
       "runApiBehaviorTest",
       "runBitnetTest",
       "runCacheStateMachineTest",
@@ -21,7 +19,6 @@
       "runGenerationParamsTest",
       "runGrammarTest",
       "runModelLoadingTest",
-      "runMoeTest",
       "runMultiGpuTest",
       "runMultiInstanceTest",
       "runQwen35Test",
@@ -30,8 +27,6 @@
   },
   "android": {
     "groupA": [
-      "runAfriquegemmaEdgeCasesTest",
-      "runAfriquegemmaTranslationTest",
       "runApiBehaviorTest",
       "runBitnetTest",
       "runCacheStateMachineTest",
@@ -46,7 +41,6 @@
       "runQwen35Test",
       "runGemma4Test",
       "runModelLoadingTest",
-      "runMoeTest",
       "runMultiGpuTest",
       "runMultiInstanceTest",
       "runOcrLightonTest",

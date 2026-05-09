@@ -37,7 +37,6 @@ import {
   SMOLVLM2_500M_MULTIMODAL_Q8_0,
   MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
   SALAMANDRATA_2B_INST_Q4,
-  AFRICAN_4B_TRANSLATION_Q4_K_M,
   SD_V2_1_1B_Q8_0,
 } from "@qvac/sdk";
 import { ResourceManager } from "../shared/resource-manager.js";
@@ -198,22 +197,6 @@ resources.define("bergamot-es-it-pivot", {
 resources.define("salamandra", {
   constant: SALAMANDRATA_2B_INST_Q4,
   type: "llm",
-});
-
-resources.define("afriquegemma", {
-  constant: AFRICAN_4B_TRANSLATION_Q4_K_M,
-  type: "llm",
-  config: {
-    tools: true,
-    ctx_size: 2048,
-    top_k: 1,
-    top_p: 1,
-    temp: 0,
-    repeat_penalty: 1,
-    seed: 42,
-    predict: 256,
-    stop_sequences: ["\n"],
-  },
 });
 
 /** Look up a bundled audio file by name and resolve it to a POSIX path. */
@@ -385,7 +368,6 @@ export const executor = createExecutor({
         "ocr-multi-sized-text",
         "ocr-multiple-fonts",
       ], "OCR disabled on iOS (ONNX/CoreML OOM)"),
-      new SkipExecutor(/^translation-afriquegemma-/, "AfriqueGemma 4B (~2.7 GB) exceeds iOS memory budget"),
       // TODO(QVAC-18460): re-enable once iOS transcribe() crash is fixed.
       new SkipExecutor(/^transcription-/, "TODO(QVAC-18460): transcription disabled on iOS — transcribe() hard-crashes consumer after FFmpegDecoder unload"),
       new SkipExecutor(/^transcribe-stream-events-/, "TODO(QVAC-18460): transcribeStream disabled on iOS — same native crash path as transcription-* (Silero VAD + whisper_full)"),
