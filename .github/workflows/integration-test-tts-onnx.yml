@@ -151,7 +151,7 @@ jobs:
           - {os: macos-14-xlarge, variant: q4, platform: darwin, arch: arm64, os_version: m14}
           - {os: macos-14-xlarge, variant: q4f16, platform: darwin, arch: arm64, os_version: m14}
           - {os: macos-15-large, variant: q4, platform: darwin, arch: x64, os_version: m15}
-          - {os: windows-2022, variant: q4, platform: win32, arch: x64, os_version: w22,}
+          - {os: windows-2025, variant: q4, platform: win32, arch: x64, os_version: w22,}
 
     steps:
       - name: Setup Node.js
@@ -240,26 +240,35 @@ jobs:
           - os: ubuntu-22.04
             platform: linux
             arch: x64
-            runner_label: ubuntu-22.04
+            runner_label: qvac-ubuntu2204-x64
             device_label: ubuntu-22.04-x64
             backend: cpu
             use_gpu: false
             run_python: false
             round_trip_test: true
-          - os: ai-run-linux-gpu
+          - os: ubuntu-24.04
             platform: linux
             arch: x64
-            runner_label: ai-run-linux-gpu
-            device_label: ai-run-linux-gpu
+            runner_label: qvac-ubuntu2404-x64
+            device_label: ubuntu-24.04-x64
             backend: cpu
             use_gpu: false
             run_python: false
             round_trip_test: true
-          - os: ai-run-linux-gpu
+          - os: ubuntu-22.04
             platform: linux
             arch: x64
-            runner_label: ai-run-linux-gpu
-            device_label: ai-run-linux-gpu
+            runner_label: qvac-ubuntu2204-x64-gpu
+            device_label: ubuntu-22.04-x64-gpu
+            backend: cuda
+            use_gpu: true
+            run_python: false
+            round_trip_test: true
+          - os: ubuntu-24.04
+            platform: linux
+            arch: x64
+            runner_label: qvac-ubuntu2404-x64-gpu
+            device_label: ubuntu-24.04-x64-gpu
             backend: cuda
             use_gpu: true
             run_python: false
@@ -291,20 +300,20 @@ jobs:
             use_gpu: true
             run_python: false
             round_trip_test: true
-          - os: windows-2022
+          - os: windows-2025
             platform: win32
             arch: x64
-            runner_label: windows-2022
-            device_label: windows-2022-x64
+            runner_label: qvac-win25-x64
+            device_label: windows-2025-x64
             backend: cpu
             use_gpu: false
             run_python: false
             round_trip_test: false
-          - os: windows-2022
+          - os: windows-2025
             platform: win32
             arch: x64
-            runner_label: windows-2022
-            device_label: windows-2022-x64
+            runner_label: qvac-win25-x64-gpu
+            device_label: windows-2025-x64-gpu
             backend: directml
             use_gpu: true
             run_python: false
@@ -321,10 +330,10 @@ jobs:
         with:
           python-version: '3.14'
 
-      - name: Windows - enable git long paths
-        if: ${{ matrix.platform == 'win32' }}
-        shell: bash
-        run: git config --system core.longpaths true
+      # - name: Windows - enable git long paths
+      #   if: ${{ matrix.platform == 'win32' }}
+      #   shell: bash
+      #   run: git config --system core.longpaths true
 
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -421,7 +430,7 @@ jobs:
           Copy-Item -Path "$env:TEMP\package\prebuilds\*" -Destination prebuilds -Recurse -Force
 
       - name: Linux - install runtime dependencies
-        if: ${{ matrix.platform == 'linux' }}
+        if: ${{ matrix.platform == 'linux' && matrix.arch == 'arm64' }}
         shell: bash
         run: |
           sudo apt-get update
