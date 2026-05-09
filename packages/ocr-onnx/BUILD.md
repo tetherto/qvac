@@ -38,8 +38,8 @@ npm install -g bare bare-make
 
 Clone the repository, install dependencies, and build.
 ```
-git clone https://github.com/tetherto/qvac-lib-inference-addon-onnx-ocr-fasttext.git
-cd qvac-lib-inference-addon-onnx-ocr-fasttext
+git clone https://github.com/tetherto/inference-addon-onnx-ocr-fasttext.git
+cd inference-addon-onnx-ocr-fasttext
 npm install
 bare-make generate && bare-make build && bare-make install
 ```

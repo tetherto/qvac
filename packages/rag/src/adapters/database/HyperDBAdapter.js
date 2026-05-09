@@ -12,23 +12,7 @@ const {
 } = require('../../utils/helper')
 const QvacLogger = require('@qvac/logging')
 
-let qvacCrypto
-try {
-  qvacCrypto = require('crypto')
-} catch (e) {
-  try {
-    qvacCrypto = require('bare-crypto')
-  } catch (e2) {
-    if (typeof global !== 'undefined' && global.crypto && global.crypto.createHash) {
-      qvacCrypto = global.crypto
-    } else {
-      throw new QvacErrorRAG({
-        code: ERR_CODES.DEPENDENCY_REQUIRED,
-        adds: 'No crypto implementation found. Please ensure a crypto module is available in your environment.'
-      })
-    }
-  }
-}
+const qvacCrypto = require('#crypto')
 
 class HyperDBAdapter extends BaseDBAdapter {
   /**

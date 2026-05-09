@@ -66,7 +66,7 @@
 | Windows | x64 | 10+ | ✅ Tier 1 | DirectML |
 
 **Dependencies:**
-- qvac-lib-inference-addon-cpp (≥1.0.0): C++ addon framework (JsInterface, AddonJs)
+- inference-addon-cpp (≥1.0.0): C++ addon framework (JsInterface, AddonJs)
 - ONNX Runtime: Inference engine (platform-specific EPs via vcpkg)
 - OpenCV (opencv4, features: jpeg, png, quirc, tiff, webp): Image decode and geometry
 - Bare Runtime (≥1.19.3): JavaScript runtime
@@ -127,7 +127,7 @@ graph TB
 |---------|------|---------|---------|
 | @qvac/infer-base | Framework | ^0.1.0 | Base class (ONNXBase), response handling |
 | @qvac/error | Runtime | ^0.1.0 | Structured errors |
-| qvac-lib-inference-addon-cpp | Native | ≥1.0.0 | JsInterface, AddonJs, output handlers |
+| inference-addon-cpp | Native | ≥1.0.0 | JsInterface, AddonJs, output handlers |
 | ONNX Runtime | Native | via vcpkg | Detector and recognizer inference |
 | OpenCV | Native | via vcpkg | Image decode (JPEG/PNG), geometry, preprocessing |
 | Bare Runtime | Runtime | ≥1.19.3 | JavaScript execution |
@@ -464,7 +464,7 @@ Use ONNX Runtime for detector and recognizer inference, with platform-specific e
 
 ## Decision 2: Bare Runtime over Node.js
 
-See [qvac-lib-inference-addon-cpp: Why Bare Runtime](https://github.com/tetherto/qvac-lib-inference-addon-cpp/blob/main/docs/architecture.md) for rationale.
+See [inference-addon-cpp: Why Bare Runtime](https://github.com/tetherto/inference-addon-cpp/blob/main/docs/architecture.md) for rationale.
 
 **Summary:** Mobile support (iOS/Android), lightweight runtime, modern addon API. This package uses the same addon-cpp patterns (JsInterface, AddonJs) as other inference addons.
 

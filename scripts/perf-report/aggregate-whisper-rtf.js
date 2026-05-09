@@ -11,7 +11,7 @@ function parseArgs (argv) {
     input: '',
     output: '',
     jsonOutput: '',
-    manualDir: path.resolve('packages/qvac-lib-infer-whispercpp/benchmarks/manual-results')
+    manualDir: path.resolve('packages/transcription-whispercpp/benchmarks/manual-results')
   }
 
   for (let i = 0; i < argv.length; i++) {

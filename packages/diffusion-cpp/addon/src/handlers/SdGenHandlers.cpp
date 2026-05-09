@@ -6,7 +6,7 @@
 #include <unordered_map>
 #include <utility>
 
-#include <qvac-lib-inference-addon-cpp/Errors.hpp>
+#include <inference-addon-cpp/Errors.hpp>
 
 namespace qvac_lib_inference_addon_sd {
 

@@ -1,0 +1,64 @@
+{
+  "name": "qvac-onnx",
+  "version": "1.0.0",
+  "dependencies": [
+    {
+      "name": "onnxruntime",
+      "platform": "!(android | osx | ios | windows)",
+      "version>=": "1.24.2#5"
+    },
+    {
+      "name": "onnxruntime",
+      "features": [
+        "dml-ep"
+      ],
+      "platform": "windows",
+      "version>=": "1.24.2#5"
+    },
+    {
+      "name": "onnxruntime",
+      "features": [
+        "nnapi-ep"
+      ],
+      "platform": "android",
+      "version>=": "1.24.2#5"
+    },
+    {
+      "name": "onnxruntime",
+      "features": [
+        "coreml-ep"
+      ],
+      "platform": "osx | ios",
+      "version>=": "1.24.2#5"
+    },
+    {
+      "name": "qvac-lint-cpp",
+      "version>=": "1.4.4#3"
+    }
+  ],
+  "overrides": [
+    {
+      "name": "flatbuffers",
+      "version": "23.5.26"
+    }
+  ],
+  "features": {
+    "xnnpack": {
+      "description": "Enable XNNPack execution provider for optimized CPU inference",
+      "dependencies": [
+        {
+          "name": "onnxruntime",
+          "features": [
+            "xnnpack-ep"
+          ]
+        }
+      ]
+    },
+    "tests": {
+      "description": "Build tests",
+      "dependencies": [
+        "gtest"
+      ]
+    }
+  }
+}

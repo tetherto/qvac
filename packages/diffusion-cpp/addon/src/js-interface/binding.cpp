@@ -17,9 +17,13 @@ js_value_t* qvacLibInferenceAddonSdExports(js_env_t* env, js_value_t* exports) {
   }
 
   V("createInstance", qvac_lib_inference_addon_sd::createInstance)
+  V("createUpscalerInstance",
+    qvac_lib_inference_addon_sd::createUpscalerInstance)
   V("runJob", qvac_lib_inference_addon_sd::runJob)
+  V("runUpscaleJob", qvac_lib_inference_addon_sd::runUpscaleJob)
 
   V("activate", qvac_lib_inference_addon_sd::activate)
+  V("activateUpscaler", qvac_lib_inference_addon_sd::activateUpscaler)
   V("cancel", qvac_lib_inference_addon_cpp::JsInterface::cancel)
   V("destroyInstance",
     qvac_lib_inference_addon_cpp::JsInterface::destroyInstance)
