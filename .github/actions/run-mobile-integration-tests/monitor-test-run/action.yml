@@ -1,0 +1,293 @@
+name: Mobile Test — Monitor Device Farm Run
+description: |
+  Phase 5 of the mobile integration test pipeline.
+
+  Polls the scheduled Device Farm runs every 30s (up to 2h), aggregates
+  per-device pass/fail counters, prints AWS Device Farm console links for
+  failed jobs, and fails the step if any user-test ran and failed.
+
+  Accepts a JSON array of run ARNs (any length) so this works for default
+  dual-flagship runs (2 ARNs), embed single-pool (1 ARN), and LLM/OCR
+  sharded mode (2-10 ARNs).
+
+inputs:
+  run-arns:
+    description: "JSON array of Device Farm run ARNs"
+    required: true
+  run-count:
+    description: "Number of scheduled runs (echoed for logging only)"
+    required: false
+    default: ""
+
+outputs:
+  test-result:
+    description: "PASSED | FAILED"
+    value: ${{ steps.monitor.outputs.test_result }}
+  test-total:
+    description: "Total test cases across all runs"
+    value: ${{ steps.monitor.outputs.test_total }}
+  test-passed:
+    description: "Test cases passed"
+    value: ${{ steps.monitor.outputs.test_passed }}
+  test-failed:
+    description: "Test cases failed"
+    value: ${{ steps.monitor.outputs.test_failed }}
+  test-skipped:
+    description: "Test cases skipped"
+    value: ${{ steps.monitor.outputs.test_skipped }}
+  user-test-passed:
+    description: "Devices passed (user-defined PASSED jobs)"
+    value: ${{ steps.monitor.outputs.user_test_passed }}
+  user-test-failed:
+    description: "Devices failed (user-defined non-PASSED jobs)"
+    value: ${{ steps.monitor.outputs.user_test_failed }}
+
+runs:
+  using: composite
+  steps:
+    - name: Monitor Test Run
+      id: monitor
+      shell: bash
+      env:
+        RUN_ARNS_JSON: ${{ inputs.run-arns }}
+      run: |
+        # ── helpers ──────────────────────────────────────────────────
+        # Bash 3.2 compat: no mapfile, no declare -A.
+        aws_retry() {
+          local max_attempts=3 attempt=1 result=""
+          while [ $attempt -le $max_attempts ]; do
+            result=$("$@" 2>/dev/null) && { echo "$result"; return 0; }
+            echo "  ⚠️  AWS API attempt $attempt/$max_attempts failed, retrying in 5s..." >&2
+            sleep 5
+            attempt=$((attempt + 1))
+          done
+          echo ""
+          return 1
+        }
+
+        # ── parse ARNs ──────────────────────────────────────────────
+        if [ -z "$RUN_ARNS_JSON" ] || [ "$RUN_ARNS_JSON" = "[]" ]; then
+          echo "ERROR: run-arns is empty"
+          exit 1
+        fi
+        RUN_ARNS=()
+        while IFS= read -r _arn; do
+          [ -n "$_arn" ] && RUN_ARNS+=("$_arn")
+        done < <(echo "$RUN_ARNS_JSON" | jq -r '.[]')
+        RUN_COUNT=${#RUN_ARNS[@]}
+
+        echo "📊 Monitoring $RUN_COUNT Device Farm run(s)..."
+        for ((i=0; i<RUN_COUNT; i++)); do
+          echo "  Run $((i+1)): ${RUN_ARNS[$i]}"
+        done
+        echo ""
+
+        # ── polling loop ─────────────────────────────────────────────
+        MAX_WAIT_TIME=7200
+        ELAPSED=0
+        DONE_COUNT=0
+        DONE=()
+        CUR_STATUS=()
+        CUR_RESULT=()
+        for ((i=0; i<RUN_COUNT; i++)); do
+          DONE[$i]="false"
+          CUR_STATUS[$i]="PENDING"
+          CUR_RESULT[$i]="PENDING"
+        done
+
+        while [ $DONE_COUNT -lt $RUN_COUNT ]; do
+          STATUS_LINE=""
+          for ((i=0; i<RUN_COUNT; i++)); do
+            arn="${RUN_ARNS[$i]}"
+            if [ "${DONE[$i]}" != "true" ]; then
+              RUN_JSON=$(aws_retry aws devicefarm get-run --arn "$arn" --output json) || true
+              CUR_STATUS[$i]=$(echo "$RUN_JSON" | jq -r '.run.status // "UNKNOWN"')
+              CUR_RESULT[$i]=$(echo "$RUN_JSON" | jq -r '.run.result // "UNKNOWN"')
+              if [ "${CUR_STATUS[$i]}" = "COMPLETED" ]; then
+                DONE[$i]="true"
+                DONE_COUNT=$((DONE_COUNT + 1))
+              fi
+            fi
+            [ -n "$STATUS_LINE" ] && STATUS_LINE="${STATUS_LINE} | "
+            STATUS_LINE="${STATUS_LINE}Run $((i+1)): ${CUR_STATUS[$i]} (${CUR_RESULT[$i]})"
+          done
+          echo "⏳ ${STATUS_LINE} | ${ELAPSED}s"
+
+          if [ $DONE_COUNT -ge $RUN_COUNT ]; then
+            echo ""
+            echo "✅ All runs completed!"
+            break
+          fi
+          if [ $ELAPSED -ge $MAX_WAIT_TIME ]; then
+            echo ""
+            echo "❌ Timeout: exceeded ${MAX_WAIT_TIME}s"
+            exit 1
+          fi
+          sleep 30
+          ELAPSED=$((ELAPSED + 30))
+        done
+
+        # ── aggregate results ────────────────────────────────────────
+        DEVICE_COUNT=0
+        USER_PASSED=0
+        USER_FAILED=0
+        FAILED_TEST_DETAILS=()
+        ALL_RESULTS_PASSED=true
+        TOTAL_TOTAL=0
+        TOTAL_PASSED=0
+        TOTAL_FAILED=0
+        TOTAL_SKIPPED=0
+
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "📊 FINAL TEST RESULTS"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo ""
+
+        RUN_INDEX=0
+        for RUN_ARN in "${RUN_ARNS[@]}"; do
+          RUN_INDEX=$((RUN_INDEX + 1))
+          RUN_DETAILS=$(aws_retry aws devicefarm get-run --arn "$RUN_ARN" --output json) || true
+          [ -z "$RUN_DETAILS" ] && RUN_DETAILS='{}'
+          RESULT=$(echo "$RUN_DETAILS" | jq -r '.run.result // "UNKNOWN"')
+          RUN_NAME_LABEL=$(echo "$RUN_DETAILS" | jq -r '.run.name // "unknown"')
+          COUNTERS=$(echo "$RUN_DETAILS" | jq -r '.run.counters // {}')
+
+          if [ "$RESULT" != "PASSED" ] && [ "$RESULT" != "SKIPPED" ]; then
+            ALL_RESULTS_PASSED=false
+          fi
+
+          TOTAL_TOTAL=$((TOTAL_TOTAL + $(echo "$COUNTERS" | jq -r '.total // 0')))
+          TOTAL_PASSED=$((TOTAL_PASSED + $(echo "$COUNTERS" | jq -r '.passed // 0')))
+          TOTAL_FAILED=$((TOTAL_FAILED + $(echo "$COUNTERS" | jq -r '.failed // 0')))
+          TOTAL_SKIPPED=$((TOTAL_SKIPPED + $(echo "$COUNTERS" | jq -r '.skipped // 0')))
+
+          PROJECT_ID=$(echo "$RUN_ARN" | sed -n 's/.*:run:\([^/]*\)\/.*/\1/p')
+          RUN_ID=$(echo "$RUN_ARN" | sed -n 's/.*:run:[^/]*\/\(.*\)/\1/p')
+
+          if [ "$RUN_COUNT" -ge 2 ]; then
+            echo "--- Run $RUN_INDEX: $RUN_NAME_LABEL (Result: $RESULT) ---"
+          else
+            echo "Result: $RESULT"
+          fi
+
+          JOBS=$(aws_retry aws devicefarm list-jobs --arn "$RUN_ARN" --output json) || true
+          [ -z "$JOBS" ] && JOBS='{"jobs":[]}'
+          for JOB_ARN in $(echo "$JOBS" | jq -r '.jobs[].arn'); do
+            DEVICE_COUNT=$((DEVICE_COUNT + 1))
+            JOB_DETAILS=$(aws_retry aws devicefarm get-job --arn "$JOB_ARN" --output json) || true
+            [ -z "$JOB_DETAILS" ] && JOB_DETAILS='{}'
+            DEVICE_NAME=$(echo "$JOB_DETAILS" | jq -r '.job.device.name // "Unknown Device"')
+            JOB_RESULT=$(echo "$JOB_DETAILS" | jq -r '.job.result // "UNKNOWN"')
+            JOB_ID=$(echo "$JOB_ARN" | sed -n 's/.*:job:[^/]*\/[^/]*\/\(.*\)/\1/p')
+            CONSOLE_LINK="https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${PROJECT_ID}/runs/${RUN_ID}/jobs/${JOB_ID}"
+
+            if [ "$JOB_RESULT" = "PASSED" ]; then
+              echo "   ✅ $DEVICE_NAME: PASSED"
+              USER_PASSED=$((USER_PASSED + 1))
+            else
+              echo "   ❌ $DEVICE_NAME: $JOB_RESULT"
+              USER_FAILED=$((USER_FAILED + 1))
+              FAILED_TEST_DETAILS+=("❌ $DEVICE_NAME: $JOB_RESULT")
+              FAILED_TEST_DETAILS+=("   📎 View logs: $CONSOLE_LINK")
+            fi
+          done
+
+          echo "   🔗 Run link: https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${PROJECT_ID}/runs/${RUN_ID}"
+          echo ""
+        done
+
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "📊 SUMMARY"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo ""
+        echo "Devices tested: $DEVICE_COUNT"
+        echo "  ✅ Passed: $USER_PASSED"
+        echo "  ❌ Failed: $USER_FAILED"
+        echo ""
+
+        if [ ${#FAILED_TEST_DETAILS[@]} -gt 0 ]; then
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "❌ FAILED TESTS"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          for failed_info in "${FAILED_TEST_DETAILS[@]}"; do
+            echo "$failed_info"
+          done
+          echo ""
+        fi
+
+        echo "Device Farm totals: $TOTAL_TOTAL | Passed: $TOTAL_PASSED | Failed: $TOTAL_FAILED | Skipped: $TOTAL_SKIPPED"
+        echo ""
+
+        # ── outputs ──────────────────────────────────────────────────
+        if [ $USER_FAILED -gt 0 ]; then
+          echo "test_result=FAILED" >> "$GITHUB_OUTPUT"
+        elif [ $USER_PASSED -gt 0 ]; then
+          echo "test_result=PASSED" >> "$GITHUB_OUTPUT"
+        else
+          echo "test_result=FAILED" >> "$GITHUB_OUTPUT"
+        fi
+        echo "test_total=$TOTAL_TOTAL" >> "$GITHUB_OUTPUT"
+        echo "test_passed=$TOTAL_PASSED" >> "$GITHUB_OUTPUT"
+        echo "test_failed=$TOTAL_FAILED" >> "$GITHUB_OUTPUT"
+        echo "test_skipped=$TOTAL_SKIPPED" >> "$GITHUB_OUTPUT"
+        echo "user_test_passed=$USER_PASSED" >> "$GITHUB_OUTPUT"
+        echo "user_test_failed=$USER_FAILED" >> "$GITHUB_OUTPUT"
+
+        # ── GitHub Step Summary ─────────────────────────────────────
+        {
+          if [ $USER_FAILED -gt 0 ]; then
+            echo "### :x: Device Farm Test Results"
+          elif [ $USER_PASSED -gt 0 ]; then
+            echo "### :white_check_mark: Device Farm Test Results"
+          else
+            echo "### :warning: Device Farm Test Results"
+          fi
+          echo ""
+          echo "| Metric | Count |"
+          echo "| --- | --- |"
+          echo "| Devices passed | $USER_PASSED |"
+          echo "| Devices failed | $USER_FAILED |"
+          echo "| Test cases total | $TOTAL_TOTAL |"
+          echo "| Test cases passed | $TOTAL_PASSED |"
+          echo "| Test cases failed | $TOTAL_FAILED |"
+          echo "| Test cases skipped | $TOTAL_SKIPPED |"
+          echo ""
+          if [ ${#FAILED_TEST_DETAILS[@]} -gt 0 ]; then
+            echo "<details><summary>Failed devices</summary>"
+            echo ""
+            for failed_info in "${FAILED_TEST_DETAILS[@]}"; do
+              echo "- \`${failed_info}\`"
+            done
+            echo ""
+            echo "</details>"
+            echo ""
+          fi
+          for ((i=0; i<RUN_COUNT; i++)); do
+            arn="${RUN_ARNS[$i]}"
+            _proj=$(echo "$arn" | sed -n 's/.*:run:\([^/]*\)\/.*/\1/p')
+            _rid=$(echo "$arn" | sed -n 's/.*:run:[^/]*\/\(.*\)/\1/p')
+            echo "- [Device Farm Run $((i+1))](https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${_proj}/runs/${_rid})"
+          done
+          echo ""
+        } >> "$GITHUB_STEP_SUMMARY"
+
+        if [ $USER_FAILED -gt 0 ]; then
+          echo ""
+          echo "❌ Device Farm tests failed"
+          echo "   Devices: $USER_PASSED passed, $USER_FAILED failed (out of $DEVICE_COUNT)"
+          echo "   Totals: $TOTAL_TOTAL | Passed: $TOTAL_PASSED | Failed: $TOTAL_FAILED | Skipped: $TOTAL_SKIPPED"
+          exit 1
+        elif [ $USER_PASSED -eq 0 ] && [ "$ALL_RESULTS_PASSED" != "true" ]; then
+          echo ""
+          echo "❌ No devices ran tests (all runs skipped or errored)"
+          exit 1
+        fi
+
+        echo ""
+        echo "✅ Device Farm tests passed!"
+        echo "   Devices: $USER_PASSED passed (out of $DEVICE_COUNT)"
+        if [ "$TOTAL_SKIPPED" -gt 0 ]; then
+          echo "   ⚠️  $TOTAL_SKIPPED test(s) skipped (device unavailable)"
+        fi
+        echo "   Totals: $TOTAL_TOTAL | Passed: $TOTAL_PASSED | Failed: $TOTAL_FAILED | Skipped: $TOTAL_SKIPPED"

@@ -1,0 +1,271 @@
+name: Mobile Test — Collect & Upload Logs
+description: |
+  Phase 6 of the mobile integration test pipeline.
+
+  Always runs, even on monitor failure (so crashes get full forensic data).
+  Refreshes AWS credentials, downloads CUSTOMER_ARTIFACT + LOG artifacts
+  from each Device Farm job, extracts bare_console.log from
+  Customer_Artifacts.zip, parses any [PERF_REPORT_START]/END marker block
+  out of Logcat/console logs, and uploads three artifact bundles:
+    - console-logs-<addon>-<platform>
+    - perf-report-<addon>-<platform> (only when enables-perf=true)
+    - devicefarm-logs-<addon>-<platform>
+
+inputs:
+  platform:
+    description: "Android | iOS"
+    required: true
+  addon-npm-name:
+    description: "NPM package name (used as artifact suffix)"
+    required: true
+  enables-perf:
+    description: "true if the addon emits perf data"
+    required: false
+    default: "false"
+  aws-role-to-assume:
+    description: "AWS IAM role ARN for OIDC (re-assumed for log download)"
+    required: true
+  run-arns:
+    description: "JSON array of Device Farm run ARNs (any length)"
+    required: false
+    default: "[]"
+
+outputs:
+  console-log-artifact:
+    description: "Name of the uploaded bare_console.log artifact"
+    value: ${{ steps.upload_console_log.outputs.artifact-name }}
+  perf-report-artifact:
+    description: "Name of the uploaded perf-report artifact (empty if disabled)"
+    value: ${{ steps.upload_perf_report.outputs.artifact-name }}
+
+runs:
+  using: composite
+  steps:
+    - name: Refresh AWS credentials before log download
+      if: always() && inputs.run-arns != '[]' && inputs.run-arns != ''
+      uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+      with:
+        role-to-assume: ${{ inputs.aws-role-to-assume }}
+        aws-region: us-west-2
+        role-duration-seconds: 3600
+
+    - name: Compute artifact suffix from addon name
+      id: artifact_suffix
+      shell: bash
+      env:
+        ADDON_NAME: ${{ inputs.addon-npm-name }}
+      run: |
+        # Strip @ + replace / with - so @qvac/transcription-whispercpp ->
+        # qvac-transcription-whispercpp (used in upload-artifact names).
+        SUFFIX=$(echo "$ADDON_NAME" | sed 's|@||g' | tr '/' '-')
+        echo "suffix=$SUFFIX" >> "$GITHUB_OUTPUT"
+
+    - name: Download Device Farm logs
+      if: always() && inputs.run-arns != '[]' && inputs.run-arns != ''
+      shell: bash
+      env:
+        PLATFORM: ${{ inputs.platform }}
+        RUN_ARNS_JSON: ${{ inputs.run-arns }}
+      run: |
+        LOG_DIR="devicefarm-logs/${PLATFORM}"
+        mkdir -p "$LOG_DIR"
+
+        # Bash 3.2 compat (macOS runners): avoid mapfile.
+        RUN_ARNS=()
+        while IFS= read -r _arn; do
+          [ -n "$_arn" ] && RUN_ARNS+=("$_arn")
+        done < <(echo "$RUN_ARNS_JSON" | jq -r '.[]')
+
+        download_artifact() {
+          local dest_dir="$1" art_json
+          art_json=$(echo "$2" | base64 -d)
+          local url name ext
+          url=$(echo "$art_json" | jq -r '.url')
+          name=$(echo "$art_json" | jq -r '.name')
+          ext=$(echo "$art_json" | jq -r '.extension')
+          [ -z "$url" ] || [ "$url" = "null" ] && return
+          if [ "$PLATFORM" = "Android" ] && [ "$ext" = "mp4" ]; then
+            return
+          fi
+          local safe_name
+          safe_name=$(echo "$name" | tr ' /' '__' | tr -cd '[:alnum:]_.-')
+          curl -fsSL --max-time 300 -o "${dest_dir}/${safe_name}.${ext}" "$url" || true
+        }
+
+        for RUN_ARN in "${RUN_ARNS[@]}"; do
+          [ -z "$RUN_ARN" ] && continue
+          RUN_DETAILS=$(aws devicefarm get-run --arn "$RUN_ARN" --output json 2>/dev/null || echo '{}')
+          RUN_LABEL=$(echo "$RUN_DETAILS" | jq -r '.run.name // "unknown"')
+          SAFE_RUN=$(echo "$RUN_LABEL" | tr ' /' '__' | tr -cd '[:alnum:]_-')
+          echo ""
+          echo "========================================"
+          echo "Run: $RUN_LABEL"
+          echo "========================================"
+
+          JOBS=$(aws devicefarm list-jobs --arn "$RUN_ARN" --output json 2>/dev/null || echo '{"jobs":[]}')
+          for JOB_ARN in $(echo "$JOBS" | jq -r '.jobs[].arn'); do
+            DEVICE_NAME=$(echo "$JOBS" | jq -r --arg arn "$JOB_ARN" '.jobs[] | select(.arn == $arn) | .device.name // "unknown"')
+            SAFE_DEV=$(echo "$DEVICE_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
+            JOB_DIR="$LOG_DIR/${SAFE_RUN}_${SAFE_DEV}"
+            mkdir -p "$JOB_DIR"
+            echo "  Device: $DEVICE_NAME"
+
+            # Suite-level artifacts (Customer_Artifacts.zip, TESTSPEC_OUTPUT,
+            # Logcat, DEVICE_LOG, etc.) live at the suite level in the Device
+            # Farm hierarchy. Querying only at job level misses them.
+            SUITES=$(aws devicefarm list-suites --arn "$JOB_ARN" --output json 2>/dev/null || echo '{"suites":[]}')
+            for SUITE_ARN in $(echo "$SUITES" | jq -r '.suites[].arn'); do
+              SUITE_NAME=$(echo "$SUITES" | jq -r --arg arn "$SUITE_ARN" '.suites[] | select(.arn == $arn) | .name // "unknown"')
+              SAFE_SUITE=$(echo "$SUITE_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
+              SUITE_DIR="${JOB_DIR}/${SAFE_SUITE}"
+              mkdir -p "$SUITE_DIR"
+
+              ARTIFACTS=$(aws devicefarm list-artifacts --arn "$SUITE_ARN" --type FILE --output json 2>/dev/null || echo '{"artifacts":[]}')
+              for ART in $(echo "$ARTIFACTS" | jq -r '.artifacts[] | @base64'); do
+                download_artifact "$SUITE_DIR" "$ART"
+              done
+
+              ARTIFACTS_LOG=$(aws devicefarm list-artifacts --arn "$SUITE_ARN" --type LOG --output json 2>/dev/null || echo '{"artifacts":[]}')
+              for ART in $(echo "$ARTIFACTS_LOG" | jq -r '.artifacts[] | @base64'); do
+                download_artifact "$SUITE_DIR" "$ART"
+              done
+            done
+
+            # Job-level FILE artifacts (e.g. video, screenshots not tied to a suite).
+            JOB_ARTIFACTS=$(aws devicefarm list-artifacts --arn "$JOB_ARN" --type FILE --output json 2>/dev/null || echo '{"artifacts":[]}')
+            for ART in $(echo "$JOB_ARTIFACTS" | jq -r '.artifacts[] | @base64'); do
+              download_artifact "$JOB_DIR" "$ART"
+            done
+          done
+        done
+
+        echo ""
+        echo "All downloaded artifacts:"
+        find "$LOG_DIR" -type f -exec ls -lh {} \; 2>/dev/null | head -80
+
+    - name: Extract console logs
+      if: always() && inputs.run-arns != '[]' && inputs.run-arns != ''
+      shell: bash
+      env:
+        PLATFORM: ${{ inputs.platform }}
+      run: |
+        LOG_DIR="devicefarm-logs/${PLATFORM}"
+        CONSOLE_DIR="console-logs/${PLATFORM}"
+        mkdir -p "$CONSOLE_DIR"
+        # Artifacts live under <LOG_DIR>/<run_device>/<suite>/.  Use the
+        # job-level dir (grandparent) as the device label for extracted files.
+        find "$LOG_DIR" -type f \( -iname "Logcat.*" -o -iname "*Customer_Artifacts.zip" \) | while read -r f; do
+          fname=$(basename "$f")
+          device=$(basename "$(dirname "$(dirname "$f")")")
+          if echo "$fname" | grep -qiE "Logcat\."; then
+            cp "$f" "$CONSOLE_DIR/${device}_${fname}"
+            echo "  Console log: ${device}_${fname}"
+          fi
+          if echo "$fname" | grep -qiE "Customer_Artifacts\.zip$"; then
+            tmpdir=$(mktemp -d)
+            if unzip -qo "$f" -d "$tmpdir" 2>/dev/null; then
+              bare_log=$(find "$tmpdir" -name "bare_console.log" -type f 2>/dev/null | head -1)
+              if [ -n "$bare_log" ]; then
+                cp "$bare_log" "$CONSOLE_DIR/${device}_bare_console.log"
+                echo "  Extracted: ${device}_bare_console.log"
+              fi
+              appium_log=$(find "$tmpdir" -name "appium.log" -type f 2>/dev/null | head -1)
+              if [ -n "$appium_log" ]; then
+                cp "$appium_log" "$CONSOLE_DIR/${device}_appium.log"
+              fi
+              results_json=$(find "$tmpdir" -name "test-results.json" -type f 2>/dev/null | head -1)
+              if [ -n "$results_json" ]; then
+                cp "$results_json" "$CONSOLE_DIR/${device}_test-results.json"
+                echo "  Extracted: ${device}_test-results.json"
+              fi
+            fi
+            rm -rf "$tmpdir"
+          fi
+        done
+        echo "Console logs extracted to $CONSOLE_DIR:"
+        find "$CONSOLE_DIR" -type f -exec ls -lh {} \; 2>/dev/null || true
+
+    - name: Upload console logs
+      id: upload_console_log
+      if: always() && inputs.run-arns != '[]' && inputs.run-arns != ''
+      uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # 4.6.1
+      with:
+        name: console-logs-${{ steps.artifact_suffix.outputs.suffix }}-${{ inputs.platform }}
+        path: console-logs/
+        retention-days: 30
+        if-no-files-found: ignore
+
+    - name: Extract perf report (if enabled)
+      id: extract_perf
+      if: always() && inputs.enables-perf == 'true' && inputs.run-arns != '[]' && inputs.run-arns != ''
+      shell: bash
+      env:
+        PLATFORM: ${{ inputs.platform }}
+      run: |
+        # Two extraction paths, in priority order:
+        # 1. perf-report-extract.json file inside the unpacked Customer_Artifacts.
+        # 2. The [PERF_REPORT_START]/[PERF_REPORT_END] marker block printed in
+        #    the post_test phase, captured in Logcat / device console.
+        # Both fall through to "no data" silently — the step summary will note it.
+        LOG_DIR="devicefarm-logs/${PLATFORM}"
+        OUT_DIR="perf-report/${PLATFORM}"
+        mkdir -p "$OUT_DIR"
+
+        # Path 1: Customer_Artifacts JSON
+        # The zip lives under <LOG_DIR>/<run_device>/<suite>/Customer_Artifacts.zip.
+        # Use the job-level directory (grandparent of the zip) as the device label.
+        find "$LOG_DIR" -name "*Customer_Artifacts.zip" | while read -r f; do
+          tmpdir=$(mktemp -d)
+          unzip -qo "$f" -d "$tmpdir" 2>/dev/null || true
+          json=$(find "$tmpdir" -name "perf-report-extract.json" -type f 2>/dev/null | head -1)
+          if [ -n "$json" ]; then
+            device=$(basename "$(dirname "$(dirname "$f")")")
+            cp "$json" "$OUT_DIR/${device}_perf-report.json"
+          fi
+          rm -rf "$tmpdir"
+        done
+
+        # Path 2: extract from any text log between PERF_REPORT_START / END
+        find "$LOG_DIR" -type f \( -name "*.txt" -o -name "*.log" -o -name "*.logcat" \) | while read -r f; do
+          if grep -q "\[PERF_REPORT_START\]" "$f" 2>/dev/null; then
+            device=$(basename "$f" | sed 's/\.[^.]*$//')
+            sed -n '/\[PERF_REPORT_START\]/,/\[PERF_REPORT_END\]/p' "$f" \
+              | sed '1d;$d' > "$OUT_DIR/${device}_perf-report-from-log.json" || true
+          fi
+        done
+
+        # Prune empty or invalid JSON files so we don't upload garbage.
+        for f in "$OUT_DIR"/*.json; do
+          [ -f "$f" ] || continue
+          if [ ! -s "$f" ]; then
+            rm -f "$f"
+          elif ! python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$f" 2>/dev/null; then
+            echo "Removing invalid JSON: $f"
+            rm -f "$f"
+          fi
+        done
+
+        if [ -z "$(ls -A "$OUT_DIR" 2>/dev/null)" ]; then
+          echo "found=false" >> "$GITHUB_OUTPUT"
+        else
+          echo "found=true" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Upload perf report (if enabled)
+      id: upload_perf_report
+      if: always() && inputs.enables-perf == 'true' && steps.extract_perf.outputs.found == 'true'
+      uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # 4.6.1
+      with:
+        name: perf-report-${{ steps.artifact_suffix.outputs.suffix }}-${{ inputs.platform }}
+        path: perf-report/
+        retention-days: 30
+        if-no-files-found: ignore
+
+    - name: Upload full Device Farm logs
+      if: always() && inputs.run-arns != '[]' && inputs.run-arns != ''
+      uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # 4.6.1
+      with:
+        name: devicefarm-logs-${{ steps.artifact_suffix.outputs.suffix }}-${{ inputs.platform }}
+        path: devicefarm-logs/
+        retention-days: 30
+        if-no-files-found: ignore

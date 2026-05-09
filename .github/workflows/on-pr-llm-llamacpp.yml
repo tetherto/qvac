@@ -85,8 +85,8 @@ jobs:
     secrets: inherit
     with:
       workdir: packages/llm-llamacpp
-      repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
+      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
   cpp-lint:
     if: needs.authorize.outputs.allowed == 'true'
@@ -94,8 +94,8 @@ jobs:
     needs: authorize
     secrets: inherit
     with:
-      sha: ${{ github.event.pull_request.base.sha }}
-      pr_head_sha: ${{ github.event.pull_request.head.sha }}
+      sha: ${{ github.event.pull_request.base.sha || github.sha }}
+      pr_head_sha: ${{ github.event.pull_request.head.sha || github.sha }}
       workdir: packages/llm-llamacpp
 
   ts-checks:
@@ -138,8 +138,8 @@ jobs:
     uses: ./.github/workflows/prebuilds-llm-llamacpp.yml
     secrets: inherit
     with:
-      repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
+      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
   run-integration-tests:
     if: needs.authorize.outputs.allowed == 'true'
@@ -151,8 +151,8 @@ jobs:
     uses: ./.github/workflows/integration-test-llm-llamacpp.yml
     secrets: inherit
     with:
-      repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
+      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
   run-mobile-integration-tests:
     permissions:
@@ -165,8 +165,8 @@ jobs:
     uses: ./.github/workflows/integration-mobile-test-llm-llamacpp.yml
     secrets: inherit
     with:
-      repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
+      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
   merge-guard:
     needs:

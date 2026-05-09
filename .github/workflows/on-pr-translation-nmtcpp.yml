@@ -139,8 +139,8 @@ jobs:
     uses: ./.github/workflows/reusable-cpp-tests-translation-nmtcpp.yml
     secrets: inherit
     with:
-      ref: ${{ github.event.pull_request.head.ref }}
-      repository: ${{ github.event.pull_request.head.repo.full_name }}
+      ref: ${{ github.event.pull_request.head.ref || github.ref }}
+      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
 
   prebuild:
     permissions:
@@ -156,8 +156,8 @@ jobs:
     uses: ./.github/workflows/prebuilds-translation-nmtcpp.yml
     secrets: inherit
     with:
-      repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
+      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
   run-integration-tests:
     needs: [authorize, changes, sanity-checks, prebuild]
@@ -172,8 +172,8 @@ jobs:
     uses: ./.github/workflows/integration-test-translation-nmtcpp.yml
     secrets: inherit
     with:
-      repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
+      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
   run-mobile-integration-tests:
     permissions:
@@ -189,8 +189,8 @@ jobs:
     uses: ./.github/workflows/integration-mobile-test-translation-nmtcpp.yml
     secrets: inherit
     with:
-      repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.ref }}
+      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
   merge-guard:
     needs:

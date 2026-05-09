@@ -1,12 +1,12 @@
 {
   "ios": {
-    "heavy1": ["runFinetuningPauseResumeTest"],
-    "heavy2": ["runToolCallingTest"],
-    "heavy3": ["runImageTest"],
-    "heavy4": ["runOcrLightonTest"],
-    "heavy5": ["runReasoningTest"],
-    "heavy6": ["runSlidingContextTest"],
-    "lightA": [
+    "Heavy1-Finetuning": ["runFinetuningPauseResumeTest"],
+    "Heavy2-ToolCalling": ["runToolCallingTest"],
+    "Heavy3-Image": ["runImageTest"],
+    "Heavy4-OcrLighton": ["runOcrLightonTest"],
+    "Heavy5-Reasoning": ["runReasoningTest"],
+    "Heavy6-SlidingContext": ["runSlidingContextTest"],
+    "LightA": [
       "runAfriquegemmaEdgeCasesTest",
       "runAfriquegemmaTranslationTest",
       "runApiBehaviorTest",
@@ -15,7 +15,7 @@
       "runConfigParametersTest",
       "runToolsCompactTest"
     ],
-    "lightB": [
+    "LightB": [
       "runGenerationParamsTest",
       "runGrammarTest",
       "runModelLoadingTest",
@@ -26,7 +26,7 @@
     ]
   },
   "android": {
-    "groupA": [
+    "GroupA": [
       "runAfriquegemmaEdgeCasesTest",
       "runAfriquegemmaTranslationTest",
       "runApiBehaviorTest",
@@ -39,7 +39,7 @@
       "runGrammarTest",
       "runImageTest"
     ],
-    "groupB": [
+    "GroupB": [
       "runModelLoadingTest",
       "runMoeTest",
       "runMultiGpuTest",
