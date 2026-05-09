@@ -111,12 +111,14 @@ jobs:
           - os: ubuntu-22.04
             platform: linux
             arch: x64
+            runner: qvac-ubuntu2204-x64
           - os: ubuntu-22.04-arm
             platform: linux
             arch: arm64
           - os: ubuntu-24.04
             platform: android
             arch: arm64
+            runner: qvac-ubuntu2404-x64
           - os: macos-15
             platform: ios
             arch: arm64
@@ -136,9 +138,10 @@ jobs:
           - os: macos-15-intel
             platform: darwin
             arch: x64
-          - os: windows-2022
+          - os: windows-2025
             platform: win32
             arch: x64
+            runner: qvac-win25-x64
 
     runs-on: ${{ matrix.os }}
     environment: release
@@ -167,6 +170,7 @@ jobs:
           echo "Matrix tags: $MATRIX_TAGS"
 
       - name: Setup build host
+        if: matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'macos-15' || matrix.os == 'macos-15-intel'
         uses: tetherto/qvac/.github/actions/setup-build-host@df55c85d7b8004961e430557e85b6ec1b15cf170
         with:
           platform: ${{ matrix.platform }}
@@ -174,6 +178,7 @@ jobs:
           linux-extra-packages: ${{ inputs.linux-extra-packages }}
 
       - name: Setup LLVM
+        if: matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'macos-15' || matrix.os == 'macos-15-intel'
         uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
 
       - name: Checkout repository
@@ -208,7 +213,7 @@ jobs:
       - name: Setup Apple Clang
         uses: tetherto/qvac/.github/actions/setup-apple-clang@1d9b2165867d03c6edd675e402ee101a5d48a6d8
 
-      - if: ${{ inputs.include-vulkan-sdk }}
+      - if: ${{ inputs.include-vulkan-sdk && (matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'macos-15' || matrix.os == 'macos-15-intel') }}
         name: Setup Vulkan SDK
         uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@0bbdca93da303a0b1634ba14a89cec085621078d
         env:
