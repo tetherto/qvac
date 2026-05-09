@@ -640,19 +640,30 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
       common_chat_msg parsed = common_chat_parse(
           assistantText, /*is_partial=*/false, syntax);
       if (!parsed.tool_calls.empty()) {
-        const auto normalizeArgsJson =
-            [](const std::string& src) -> std::string {
-          static const std::regex unquotedKeyRe(
-              R"(([{,])(\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*):)",
-              std::regex::ECMAScript);
-          return std::regex_replace(src, unquotedKeyRe, R"($1$2"$3"$4:)");
-        };
+        // Upstream gemma4_args_to_json (common/chat-parser.cpp) leaves the
+        // very FIRST top-level key unquoted: its at_key_start() helper peeks
+        // backwards in the output buffer for a '{' or ',' and only triggers
+        // after one has been emitted -- by definition the leading key has
+        // neither. Every other key (nested or after a comma) is already
+        // quoted by upstream. Patch only that one case here with a regex
+        // anchored at the start of the buffer; this cannot match anywhere
+        // inside string values, so free-form string arguments containing
+        // ", ident:" patterns survive verbatim. For non-Gemma 4 dialects
+        // common_chat_msg_parser::add_tool_call calls json::dump() upstream,
+        // so tc.arguments already starts with a quoted key and the regex is
+        // a no-op for them.
+        static const std::regex leadingUnquotedKeyRe(
+            R"(^\{(\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*):)",
+            std::regex::ECMAScript);
         std::string envelopes;
         envelopes.reserve(parsed.tool_calls.size() * 64);
         for (const auto& tc : parsed.tool_calls) {
           std::string args = tc.arguments.empty()
                                  ? std::string("{}")
-                                 : normalizeArgsJson(tc.arguments);
+                                 : std::regex_replace(
+                                       tc.arguments,
+                                       leadingUnquotedKeyRe,
+                                       R"({$1"$2"$3:)");
           envelopes.append("<tool_call>{\"name\":\"");
           envelopes.append(tc.name);
           envelopes.append("\",\"arguments\":");
