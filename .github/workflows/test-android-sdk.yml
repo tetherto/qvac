@@ -104,7 +104,7 @@ jobs:
 
   build:
     name: "[android] build"
-    runs-on: ai-run-linux
+    runs-on: qvac-ubuntu2204-x64
     environment: release
     timeout-minutes: 30
     outputs:
