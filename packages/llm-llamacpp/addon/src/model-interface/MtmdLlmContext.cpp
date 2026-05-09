@@ -430,6 +430,11 @@ bool MtmdLlmContext::generateResponse(
   LlamaBatch batch(1, 0, 1); // batch for next token generation
 
   if (thinkingForcedOpen_ && outputCallback) {
+    // MtmdLlmContext doesn't carry a reasoningState_ (no reasoning-aware EOS
+    // replacement on the multimodal path today), so unlike TextLlmContext we
+    // only prepend the visible "<think>\n" opener and don't flip an
+    // inside_reasoning flag. If reasoning state is added here later, mirror
+    // TextLlmContext::generateResponse and set it true alongside this emit.
     outputCallback("<think>\n");
   }
 
