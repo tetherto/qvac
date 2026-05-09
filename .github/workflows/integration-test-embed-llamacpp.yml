@@ -185,7 +185,7 @@ jobs:
           npm config list
         continue-on-error: true
 
-      - name: Install gh cli for ai-run-linux-gpu
+      - name: Install gh cli for arm64 based ubuntu images
         if: matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'ubuntu-24.04-arm'
         shell: bash
         run: |
