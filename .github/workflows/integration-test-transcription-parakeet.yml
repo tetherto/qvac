@@ -65,16 +65,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ai-run-ubuntu-22.04
+          - os: ubuntu-22.04
             platform: linux
             arch: x64
+            runner: qvac-ubuntu2204-x64
             rtf_gpu_enabled: false
             rtf_gpu_backend: cpu
             benchmark_matrix_json: >-
               [{"modelType":"tdt","useGPU":false,"backendHint":"cpu"},{"modelType":"ctc","useGPU":false,"backendHint":"cpu"},{"modelType":"eou","useGPU":false,"backendHint":"cpu"},{"modelType":"sortformer","useGPU":false,"backendHint":"cpu"}]
-          - os: ai-run-linux-gpu
+          - os: ubuntu-24.04
             platform: linux
             arch: x64
+            runner: qvac-ubuntu2404-x64-gpu
             rtf_gpu_enabled: true
             rtf_gpu_backend: cuda
             benchmark_matrix_json: >-
@@ -100,9 +102,10 @@ jobs:
             rtf_gpu_backend: coreml
             benchmark_matrix_json: >-
               [{"modelType":"tdt","useGPU":false,"backendHint":"cpu"},{"modelType":"ctc","useGPU":false,"backendHint":"cpu"},{"modelType":"eou","useGPU":false,"backendHint":"cpu"},{"modelType":"sortformer","useGPU":false,"backendHint":"cpu"},{"modelType":"tdt","useGPU":true,"backendHint":"coreml"},{"modelType":"ctc","useGPU":true,"backendHint":"coreml"},{"modelType":"eou","useGPU":true,"backendHint":"coreml"},{"modelType":"sortformer","useGPU":true,"backendHint":"coreml"}]
-          - os: windows-2022
+          - os: windows-2025
             platform: win32
             arch: x64
+            runner: qvac-win25-x64-gpu
             rtf_gpu_enabled: true
             rtf_gpu_backend: directml
             benchmark_matrix_json: >-
@@ -114,10 +117,10 @@ jobs:
         with:
           node-version: lts/*
 
-      - name: Windows - enable git long paths
-        if: ${{ matrix.platform == 'win32' }}
-        shell: bash
-        run: git config --system core.longpaths true
+      # - name: Windows - enable git long paths
+      #   if: ${{ matrix.platform == 'win32' }}
+      #   shell: bash
+      #   run: git config --system core.longpaths true
 
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -170,7 +173,7 @@ jobs:
           done
 
       - name: Linux - install dependencies
-        if: matrix.platform == 'linux' || matrix.platform == 'android'
+        if: (matrix.platform == 'linux' || matrix.platform == 'android') && matrix.arch == 'arm64'
         shell: bash
         run: |
           sudo apt-get update
