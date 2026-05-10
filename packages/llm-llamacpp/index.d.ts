@@ -60,6 +60,8 @@ export interface LlamaConfig {
   'cache-type-v'?: string
   /** Writable directory for OpenCL kernel binary cache. Required on Android for fast GPU startup. */
   openclCacheDir?: string
+  /** Reasoning channel budget. `-1` (default) leaves the model's reasoning channel on; `0` disables it. */
+  reasoning_budget?: -1 | 0 | '-1' | '0'
   [key: string]: string | number | boolean | string[] | undefined
 }
 
