@@ -399,6 +399,62 @@ test('Qwen3.5-0.8B reasoning-budget=0 disables thinking', {
     `disabled (${disabled.length}) should be substantially shorter than baseline (${baseline.length})`)
 })
 
+test('Qwen3.5-0.8B per-request generationParams.reasoning_budget overrides load-time default', {
+  timeout: 600_000
+}, async t => {
+  const [modelName, dirPath] = await ensureModel({
+    modelName: QWEN3_5_MODEL.name,
+    downloadUrl: QWEN3_5_MODEL.url
+  })
+  const modelPath = path.join(dirPath, modelName)
+
+  const addon = new LlmLlamacpp({
+    files: { model: [modelPath] },
+    config: {
+      device: useCpu ? 'cpu' : 'gpu',
+      gpu_layers: '999',
+      ctx_size: '2048',
+      n_predict: '1024',
+      temp: '0',
+      seed: '42',
+      verbosity: '0'
+    },
+    logger: createLogger()
+  })
+
+  try {
+    await addon.load()
+
+    const messages = [
+      { role: 'system', content: 'You are a helpful assistant.' },
+      { role: 'user', content: 'What is the capital of France? Answer in one word.' }
+    ]
+
+    const overrideResponse = await addon.run(messages, {
+      generationParams: { reasoning_budget: 0 }
+    })
+    const overrideOutput = await collectResponse(overrideResponse)
+
+    const defaultResponse = await addon.run(messages)
+    const defaultOutput = await collectResponse(defaultResponse)
+
+    t.comment(`override (${overrideOutput.length} chars): "${overrideOutput.slice(0, 200)}"`)
+    t.comment(`default  (${defaultOutput.length} chars): "${defaultOutput.slice(0, 200)}"`)
+
+    t.absent(/<think>/.test(overrideOutput),
+      `per-request override should suppress <think>: "${overrideOutput.slice(0, 200)}"`)
+    t.absent(/<\/think>/.test(overrideOutput),
+      `per-request override should suppress </think>: "${overrideOutput.slice(0, 200)}"`)
+
+    t.ok(defaultOutput.includes('<think>'),
+      `subsequent default run should restore <think>: "${defaultOutput.slice(0, 200)}"`)
+    t.ok(defaultOutput.includes('</think>'),
+      `subsequent default run should restore </think>: "${defaultOutput.slice(-200)}"`)
+  } finally {
+    await addon.unload().catch(() => {})
+  }
+})
+
 setImmediate(() => {
   setTimeout(() => {}, 500)
 })
