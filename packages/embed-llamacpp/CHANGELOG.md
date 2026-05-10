@@ -1,12 +1,16 @@
 # Changelog
 
-## [0.16.0] - 2026-05-07
+## [0.16.0] - 2026-05-10
 
 ### Changed
 
-#### qvac-fabric: bump to 8189.0.0
+- **`qvac-fabric` >= 8189.0.2**: Mali/Adreno F16 coopmat1 NaN fix, Vulkan VMA migration, accumulated upstream fixes since `7248.x`.
+- **OpenCL backends default `flash-attn=off`** (not reliably supported on OpenCL); user `flash-attn`/`flash_attn` overrides are honored.
 
-- Bumps the `qvac-fabric` dependency to `>= 8189.0.0`, picking up the new fabric release (Mali/Adreno F16 coopmat1 fix, Vulkan VMA migration, and the wider stack of upstream fixes accumulated since `7248.x`).
+### Internals (no behaviour change)
+
+- ABI port: `common_init_result` → `common_init_result_ptr`.
+- Dropped Mali-detection plumbing now that BERT runs on Mali Vulkan.
 
 ## [0.15.0] - 2026-04-30
 

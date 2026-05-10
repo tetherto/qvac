@@ -1,17 +1,38 @@
 # Changelog
 
-## [0.20.0] - 2026-05-07
+## [0.20.0] - 2026-05-10
 
 ### Changed
 
-#### qvac-fabric: bump to 8189.0.0
+- **`qvac-fabric` >= 8189.0.2**: Mali/Adreno F16 coopmat1 NaN fix, Qwen3.5 OpenCL kernels, Gemma 4 vision/audio support, Vulkan VMA migration, plus accumulated upstream fixes since `7248.x`.
+- **OpenCL backends default `flash-attn=off`** (not reliably supported on OpenCL); user `flash-attn`/`flash_attn` overrides are honored.
+- **Tool-call streaming**: each model now streams its native dialect verbatim — Qwen3 / Hermes (`<tool_call>{json}</tool_call>`), Qwen3.5 (HF function-call XML wrapped in `<tool_call>…</tool_call>`), Gemma 4 (`<|tool_call>call:…<tool_call|>`), Mistral / DeepSeek-R1 / Functionary / GPT-OSS (their own markers). No re-shaping or duplication.
 
-- Bumps the `qvac-fabric` dependency to `>= 8189.0.0`, picking up the new fabric release (Mali/Adreno F16 coopmat1 fix, Qwen3.5/DeltaNet OpenCL backend, Gemma 4 vision/audio support, and the Vulkan VMA migration from earlier in the cycle).
-- Verified end-to-end on macOS-arm64: `bare-make generate && bare-make build && bare-make install` produces a working `prebuilds/darwin-arm64/qvac__llm-llamacpp.bare` against fabric `8189.0.0[core,gpu-backends,llama]`.
+### Added
+
+- **`reasoning-budget`** (`-1` unrestricted, default; `0` disabled) config knob, wired through to fabric's `enable_thinking` template input. Underscore variant `reasoning_budget` accepted.
+- **Synthetic `<think>\n` opener** at stream start when the chat template force-opens the reasoning channel (Qwen3, Qwen3.5, DeepSeek-R1) so consumers see balanced reasoning markup. Gemma 4's natively-emitted `<|channel>thought…<channel|>` markers are unchanged.
+- **Integration tests**: Qwen3.5 (basic, multi-turn, tool calling, image describe, reasoning-budget=0); Gemma 4 E2B via bartowski Q4_K_M (basic, multi-turn, image describe on GPU on mobile, tool calling with native-dialect parser, reasoning-budget=0); PaddleOCR-VL.
+- **C++ unit tests**: OpenCL flash-attn auto-disable, Qwen3 tools-at-end double-tokenize, expanded `tuneConfigMap` coverage.
+
+### Removed
+
+- AfriqueGemma + Dolphin-MoE integration tests; MedGemma variants from tool-calling and finetune-pause-resume.
+
+### Fixed
+
+- `utils.js downloadFile` redirect race that could `fs.unlink` a freshly-redirected file via late writestream errors.
+- Sliding-context test rebased on the post-`GGML_PAD` effective `n_ctx=512`.
+- Logger no longer asks V8 to `JSON.stringify` multi-MB media `Uint8Array` content (was triggering Zone OOMs on long media prompts).
 
 ### Deprecated
 
-- `llama_adapter_lora_free` is now deprecated by upstream ("adapters are now freed together with the associated model"). The current LoRA-resume path in `LlamaModel.cpp` still calls it explicitly and produces three `-Wdeprecated-declarations` warnings; functional behaviour is unchanged. A targeted ownership refactor will be done in a follow-up.
+- `llama_adapter_lora_free` is now deprecated upstream; the LoRA-resume path emits three `-Wdeprecated-declarations` warnings, behaviour unchanged. Ownership refactor is a follow-up.
+
+### Internals (no behaviour change)
+
+- ABI port: `common_init_result` → `common_init_result_ptr`; LoRA adapter API: `llama_clear_adapter_lora` + `llama_set_adapter_lora` → `llama_set_adapters_lora`; parser example: `LLAMA_EXAMPLE_MAIN` → `LLAMA_EXAMPLE_COMMON`.
+- Dropped: dead `sawMali` plumbing, dead Apple-M1 detection + projector-CPU routing, dead `selectToolsCompactMarker(string)` overload, dead Gemma 4 markers in `Qwen3ReasoningUtils`, model-name-based Qwen3 fallback (architecture-only now).
 
 ## [0.19.2] - 2026-05-05
 
