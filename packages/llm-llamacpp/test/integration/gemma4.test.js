@@ -56,16 +56,33 @@ async function collectResponse (response) {
   return chunks.join('').trim()
 }
 
+// Gemma 4 emits tool calls in its own dialect, NOT as <tool_call>{json}</tool_call>:
+//   <|tool_call>call:NAME{key:<|"|>val<|"|>,key2:val2,...}<tool_call|>
+// Strings are wrapped in <|"|>...<|"|> instead of "...". Keys are bare. The
+// closing tag is <tool_call|> (trailing pipe, no slash). This parser extracts
+// each native call and returns { name, argsRaw } so tests can assert on the
+// raw args body (substring checks are sufficient for our purposes; a full
+// dialect-to-JSON converter lives upstream in fabric's gemma4_args_to_json).
 function extractToolCalls (response) {
   const toolCalls = []
-  const toolCallRegex = /<tool_call>([\s\S]*?)<\/tool_call>/g
+  // [^{]+? avoids spilling across braces; [\s\S]*? is non-greedy across newlines.
+  const toolCallRegex = /<\|tool_call>call:([^{]+?)\{([\s\S]*?)\}<tool_call\|>/g
   let match
   while ((match = toolCallRegex.exec(response)) !== null) {
-    try {
-      toolCalls.push(JSON.parse(match[1].trim()))
-    } catch (e) {}
+    toolCalls.push({
+      name: match[1].trim(),
+      argsRaw: match[2].trim()
+    })
   }
   return toolCalls
+}
+
+// Helper: did the Gemma 4 args body contain a quoted string equal to value?
+// String literal in Gemma 4 dialect is <|"|>VALUE<|"|>. Returns true if any
+// occurrence of <|"|>VALUE<|"|> appears in the args body (case-insensitive).
+function argsContainStringValue (argsRaw, value) {
+  const re = new RegExp(`<\\|"\\|>${value.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}<\\|"\\|>`, 'i')
+  return re.test(argsRaw)
 }
 
 test('Gemma 4 can run basic text inference', {
@@ -284,16 +301,18 @@ test('Gemma 4 supports tool calling', {
     const output = await collectResponse(response)
 
     t.ok(output.length > 0, `tool calling produced output (${output.length} chars)`)
-    console.log(`  output: "${output.slice(0, 300)}"`)
+    console.log(`  output: "${output.slice(0, 400)}"`)
 
     const toolCalls = extractToolCalls(output)
-    t.ok(toolCalls.length > 0, `extracted at least one tool call (got ${toolCalls.length})`)
+    t.ok(toolCalls.length > 0, `extracted at least one Gemma 4 native tool call (got ${toolCalls.length})`)
 
     const weatherCall = toolCalls.find(tc => tc.name === 'get_weather')
     t.ok(weatherCall, 'model called get_weather tool')
-    t.ok(weatherCall?.arguments, 'tool call has arguments')
-    const city = weatherCall?.arguments?.city?.toLowerCase() || ''
-    t.ok(/paris/.test(city), `tool call city argument mentions Paris: "${city}"`)
+    t.ok(weatherCall?.argsRaw && weatherCall.argsRaw.length > 0, 'tool call has args body')
+    t.ok(
+      argsContainStringValue(weatherCall?.argsRaw || '', 'Paris'),
+      `args body contains city=<|"|>Paris<|"|>: "${weatherCall?.argsRaw}"`
+    )
   } finally {
     await addon.unload().catch(() => {})
   }
