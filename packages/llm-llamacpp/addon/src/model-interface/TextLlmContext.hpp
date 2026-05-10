@@ -141,10 +141,6 @@ public:
    */
   llama_pos removeLastNTokens(llama_pos count) override;
 
-  [[nodiscard]] common_chat_format getLastChatFormat() const override {
-    return lastChatFormat_;
-  }
-
 private:
   /**
    * The check antiprompt method. It checks the antiprompt.
@@ -192,8 +188,6 @@ private:
   int32_t nSlides_ = 0;
   ThreadPoolPtr threadpool_;
   ThreadPoolPtr threadpoolBatch_;
-
-  common_chat_format lastChatFormat_ = COMMON_CHAT_FORMAT_CONTENT_ONLY;
 
   // UTF-8 token buffer for handling incomplete emoji sequences
   qvac_lib_inference_addon_llama::UTF8TokenBuffer utf8Buffer_;

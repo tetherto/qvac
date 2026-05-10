@@ -47,14 +47,12 @@ std::string getChatTemplate(
  * @brief Applies chat templates to generate a prompt, with fallback handling
  * for models that don't support tools.
  *
- * @p outFormat (optional) receives the parsed chat format identifier.
  * @p outThinkingForcedOpen (optional) receives the flag indicating that the
  *    template force-opened the reasoning channel in the prompt suffix.
  */
 std::string getPrompt(
     const struct common_chat_templates* tmpls,
     struct common_chat_templates_inputs& inputs,
-    common_chat_format* outFormat = nullptr,
     bool* outThinkingForcedOpen = nullptr);
 
 } // namespace utils

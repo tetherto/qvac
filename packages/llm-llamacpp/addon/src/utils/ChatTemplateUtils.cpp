@@ -133,12 +133,9 @@ std::string getChatTemplate(
 
 std::string getPrompt(
     const struct common_chat_templates* tmpls,
-    struct common_chat_templates_inputs& inputs, common_chat_format* outFormat,
+    struct common_chat_templates_inputs& inputs,
     bool* outThinkingForcedOpen) {
   auto exportParams = [&](const common_chat_params& params) {
-    if (outFormat) {
-      *outFormat = params.format;
-    }
     if (outThinkingForcedOpen) {
       *outThinkingForcedOpen = params.thinking_forced_open;
     }

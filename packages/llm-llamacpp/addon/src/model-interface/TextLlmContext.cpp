@@ -237,8 +237,7 @@ void TextLlmContext::tokenizeChat(
   if (!tools.empty()) {
     inputs.tools = tools;
   }
-  prompt = getPrompt(
-      tmpls_.get(), inputs, &lastChatFormat_, &thinkingForcedOpen_);
+  prompt = getPrompt(tmpls_.get(), inputs, &thinkingForcedOpen_);
 
   QLOG_IF(
       Priority::DEBUG,

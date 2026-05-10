@@ -13,7 +13,6 @@
 #include <iostream>
 #include <mutex>
 #include <numeric>
-#include <regex>
 #include <shared_mutex>
 #include <sstream>
 #include <stdexcept>
@@ -599,11 +598,7 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   }
 
   std::ostringstream oss;
-  // Capture output for the toolsCompact controller's trim logic AND for
-  // post-generation tool-call extraction (Gemma 4 etc. emit dialect-specific
-  // tool call markers that need re-wrapping as <tool_call>{...}</tool_call>).
-  bool needsOutputCapture =
-      state_->toolsCompact_->enabled() || !resolved.tools.empty();
+  bool needsOutputCapture = state_->toolsCompact_->enabled();
   auto callback = prompt.outputCallback;
   if (!prompt.outputCallback) {
     callback = [&](const std::string& token) { oss << token; };
@@ -623,72 +618,6 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
 
   if (!prompt.outputCallback) {
     out = oss.str();
-  }
-
-  // Some models (e.g. Gemma 4) don't emit <tool_call> XML envelopes — they
-  // produce structured tool calls in their own dialect. Use common_chat_parse
-  // with the format that was used for templating, then re-wrap any extracted
-  // tool calls as <tool_call>{...}</tool_call> envelopes so JS-side tests and
-  // SDK consumers see a uniform shape.
-  if (!resolved.tools.empty()) {
-    const std::string assistantText =
-        prompt.outputCallback ? oss.str() : out;
-    common_chat_parser_params syntax;
-    syntax.format = state_->llmContext_->getLastChatFormat();
-    syntax.parse_tool_calls = true;
-    try {
-      common_chat_msg parsed = common_chat_parse(
-          assistantText, /*is_partial=*/false, syntax);
-      if (!parsed.tool_calls.empty()) {
-        // Upstream gemma4_args_to_json (common/chat-parser.cpp) leaves the
-        // very FIRST top-level key unquoted: its at_key_start() helper peeks
-        // backwards in the output buffer for a '{' or ',' and only triggers
-        // after one has been emitted -- by definition the leading key has
-        // neither. Every other key (nested or after a comma) is already
-        // quoted by upstream. Patch only that one case here with a regex
-        // anchored at the start of the buffer; this cannot match anywhere
-        // inside string values, so free-form string arguments containing
-        // ", ident:" patterns survive verbatim. For non-Gemma 4 dialects
-        // common_chat_msg_parser::add_tool_call calls json::dump() upstream,
-        // so tc.arguments already starts with a quoted key and the regex is
-        // a no-op for them.
-        static const std::regex leadingUnquotedKeyRe(
-            R"(^\{(\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*):)",
-            std::regex::ECMAScript);
-        std::string envelopes;
-        envelopes.reserve(parsed.tool_calls.size() * 64);
-        for (const auto& tc : parsed.tool_calls) {
-          std::string args = tc.arguments.empty()
-                                 ? std::string("{}")
-                                 : std::regex_replace(
-                                       tc.arguments,
-                                       leadingUnquotedKeyRe,
-                                       R"({$1"$2"$3:)");
-          envelopes.append("<tool_call>{\"name\":\"");
-          envelopes.append(tc.name);
-          envelopes.append("\",\"arguments\":");
-          envelopes.append(args);
-          envelopes.append("}</tool_call>");
-        }
-        if (prompt.outputCallback) {
-          prompt.outputCallback(envelopes);
-        } else {
-          out.append(envelopes);
-        }
-      }
-    } catch (const std::exception& e) {
-      QLOG_IF(
-          Priority::WARNING,
-          string_format(
-              "[LlamaModel] common_chat_parse failed for tool extraction: "
-              "%s\n",
-              e.what()));
-    } catch (...) {
-      QLOG_IF(
-          Priority::WARNING,
-          "[LlamaModel] common_chat_parse threw an unknown exception during "
-          "tool extraction\n");
-    }
   }
 
   // Post-generation tools trim decision via controller
