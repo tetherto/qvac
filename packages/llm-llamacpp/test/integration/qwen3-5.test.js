@@ -11,8 +11,11 @@ const platform = os.platform()
 const arch = os.arch()
 const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
+// Desktop x64-darwin and linux-arm64 hosts have no working GPU stack here
+// so we drop to CPU; everywhere else (including iOS / Android device farm)
+// uses the GPU backend the addon picks. Vision (mmproj) follows the same
+// device routing as text generation -- no separate CPU carve-out.
 const useCpu = isDarwinX64 || isLinuxArm64
-const useCpuForVision = useCpu
 
 const QWEN3_5_MODEL = {
   name: 'Qwen3.5-0.8B-Q8_0.gguf',
@@ -279,7 +282,7 @@ test('Qwen3.5-0.8B can describe an image', {
   const projectionModelPath = path.join(dirPath, projModelName)
 
   const config = {
-    device: useCpuForVision ? 'cpu' : 'gpu',
+    device: useCpu ? 'cpu' : 'gpu',
     gpu_layers: '98',
     ctx_size: '4096',
     temp: '0',

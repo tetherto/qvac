@@ -11,14 +11,13 @@ const platform = os.platform()
 const arch = os.arch()
 const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
+// Desktop x64-darwin and linux-arm64 hosts have no working GPU stack here
+// so we drop to CPU; everywhere else (including iOS / Android device farm)
+// uses the GPU backend the addon picks. Vision (mmproj) follows the same
+// device routing as text generation -- bartowski's mmproj is what we ship
+// as the fixture and we want CI to actually validate the GPU code path on
+// real Adreno/Mali/Metal devices.
 const useCpu = isDarwinX64 || isLinuxArm64
-
-// We exercise the GPU vision path on mobile too (Adreno OpenCL / Mali Vulkan
-// for Android, Metal for iOS) -- bartowski's mmproj is what we ship in this
-// PR's fixture and we want CI to actually validate the device-farm GPU code
-// path. Desktop x64-darwin and linux-arm64 keep the CPU fallback only because
-// those hosts don't have a working GPU stack here.
-const useCpuForVision = useCpu
 
 // Use bartowski's GGUF rather than unsloth's: bartowski's pack tags <eos> as
 // the EOG token (matching the base google/gemma-4-E2B-it tokenizer), so the
@@ -216,7 +215,7 @@ test('Gemma 4 can describe an image', {
   // happily generates 8k+ tokens of CoT for a vision question and the
   // generation loop overflows ctx_size before reaching <eos>.
   const config = {
-    device: useCpuForVision ? 'cpu' : 'gpu',
+    device: useCpu ? 'cpu' : 'gpu',
     gpu_layers: '98',
     ctx_size: '8192',
     temp: '0',
