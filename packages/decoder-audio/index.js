@@ -1,15 +1,14 @@
 'use strict'
 
-const QvacResponse = require('@qvac/response')
 const QvacLogger = require('@qvac/logging')
 const ffmpeg = require('bare-ffmpeg')
-const BaseInference = require('@qvac/infer-base/WeightsProvider/BaseInference')
+const { createJobHandler } = require('@qvac/infer-base')
 const { QvacErrorDecoderAudio, ERR_CODES } = require('./utils/error')
 
 /**
  * FFmpeg-based audio decoder (single-threaded)
  */
-class FFmpegDecoder extends BaseInference {
+class FFmpegDecoder {
   SUPPORTED_AUDIO_FORMATS = {
     s16le: {
       format: null, // Will be set to ffmpeg.constants.sampleFormats.S16
@@ -29,7 +28,6 @@ class FFmpegDecoder extends BaseInference {
    * @param streamIndex - Index of the stream to decode. Default: 0
    * @param inputBitrate - Input audio bitrate. Default: 192000
    * @param audioFormat - Output audio format. Default: 's16le'
-   * @param args - Additional arguments passed to BaseInference
    * @param {Object} [config.streamIndex] - Index of the stream to decode (default: 0)
    * @param {number} [config.inputBitrate] - Input audio bitrate (default: 192000)
    * @param {string} [config.audioFormat] - Output audio format (default: 'f32le')
@@ -41,11 +39,8 @@ class FFmpegDecoder extends BaseInference {
     logger = null,
     streamIndex = 0,
     inputBitrate = 192000,
-    audioFormat = 's16le',
-    ...args
-  }) {
-    super({ ...args, logger })
-
+    audioFormat = 's16le'
+  } = {}) {
     this.config = {
       streamIndex: config.streamIndex || streamIndex,
       inputBitrate: config.inputBitrate || inputBitrate,
@@ -55,7 +50,8 @@ class FFmpegDecoder extends BaseInference {
 
     this.logger = new QvacLogger(logger)
     this.isLoaded = false
-    this.currentJob = null
+    this._cancelled = false
+    this._job = createJobHandler({ cancel: () => this._cancelCurrent() })
 
     // Encoder delay handling
     this.samplesSkipped = 0
@@ -128,7 +124,8 @@ class FFmpegDecoder extends BaseInference {
     this.logger.info('Unloading FFmpegDecoder')
 
     this.isLoaded = false
-    this.currentJob = null
+    this._cancelCurrent()
+    this._job.fail(new QvacErrorDecoderAudio({ code: ERR_CODES.DECODER_NOT_LOADED }))
     this.logger.info('FFmpegDecoder unloaded')
   }
 
@@ -137,33 +134,33 @@ class FFmpegDecoder extends BaseInference {
    * @param {Readable} audioStream - Input audio stream
    * @returns {QvacResponse} Response with decoded audio
    */
-  async run (audioStream) {
+  run (audioStream) {
     if (!this.isLoaded) {
       throw new QvacErrorDecoderAudio({ code: ERR_CODES.DECODER_NOT_LOADED })
     }
 
     this.logger.info('Starting new audio stream processing')
 
-    const response = new QvacResponse({
-      cancelHandler: () => this.stop(),
-      pauseHandler: () => this.pause(),
-      continueHandler: () => this.unpause()
-    })
+    this._cancelled = false
+    const response = this._job.start()
 
-    this.currentJob = {
-      response,
-      audioChunks: [],
-      isActive: true,
-      isPaused: false
-    }
-
-    // Process the audio stream
-    this._processStream(audioStream).catch(err => {
-      this.logger.error('Error processing audio stream:', err)
-      response.failed(err)
-    })
+    this._processStream(audioStream)
+      .then(() => {
+        this._job.end(this.runtimeStats())
+      })
+      .catch(err => {
+        this.logger.error('Error processing audio stream:', err)
+        this._job.active?.updateStats(this.runtimeStats())
+        this._job.fail(err)
+      })
 
     return response
+  }
+
+  _cancelCurrent () {
+    this._cancelled = true
+    this.logger.debug('Decoder cancel requested')
+    return Promise.resolve()
   }
 
   _getBufferSize (inputBitrate) {
@@ -171,7 +168,7 @@ class FFmpegDecoder extends BaseInference {
     return Math.min((inputBitrate / 8) * 4, maxBufferSize)
   }
 
-  _processFrame (decoder, raw, resampler, job) {
+  _processFrame (decoder, raw, resampler) {
     const OUTPUT_FORMAT = this.SUPPORTED_AUDIO_FORMATS[this.config.audioFormat].format
     const OUTPUT_FORMAT_BYTE_LENGTH = this.SUPPORTED_AUDIO_FORMATS[this.config.audioFormat].byteLength
     const OUTPUT_SAMPLE_RATE = this.config.sampleRate
@@ -202,7 +199,7 @@ class FFmpegDecoder extends BaseInference {
         const skipBytes = OUTPUT_FORMAT_BYTE_LENGTH * samplesToSkip * output.channelLayout.nbChannels
         const length = OUTPUT_FORMAT_BYTE_LENGTH * (count - samplesToSkip) * output.channelLayout.nbChannels
         const chunk = Buffer.from(samples.data.subarray(skipBytes, skipBytes + length))
-        job.response.updateOutput({ outputArray: chunk })
+        this._job.output({ outputArray: chunk })
 
         // Track stats for partial frame
         this._runtimeStats.samplesDecoded += (count - samplesToSkip)
@@ -210,7 +207,7 @@ class FFmpegDecoder extends BaseInference {
       } else {
         const length = OUTPUT_FORMAT_BYTE_LENGTH * count * output.channelLayout.nbChannels
         const chunk = Buffer.from(samples.data.subarray(0, length))
-        job.response.updateOutput({ outputArray: chunk })
+        this._job.output({ outputArray: chunk })
 
         // Track stats
         this._runtimeStats.samplesDecoded += count
@@ -219,15 +216,19 @@ class FFmpegDecoder extends BaseInference {
     }
   }
 
-  _processPacket (format, packet, raw, decoder, resampler, job) {
+  _processPacket (format, packet, raw, decoder, resampler) {
     while (format.readFrame(packet)) {
+      if (this._cancelled) {
+        packet.unref()
+        throw new QvacErrorDecoderAudio({ code: ERR_CODES.JOB_CANCELLED })
+      }
       decoder.sendPacket(packet)
-      this._processFrame(decoder, raw, resampler, job)
+      this._processFrame(decoder, raw, resampler)
       packet.unref()
     }
   }
 
-  _processFFmpegStream (format, stream, job) {
+  _processFFmpegStream (format, stream) {
     const OUTPUT_FORMAT = this.SUPPORTED_AUDIO_FORMATS[this.config.audioFormat].format
     const OUTPUT_FORMAT_BYTE_LENGTH = this.SUPPORTED_AUDIO_FORMATS[this.config.audioFormat].byteLength
     const OUTPUT_SAMPLE_RATE = this.config.sampleRate
@@ -270,7 +271,7 @@ class FFmpegDecoder extends BaseInference {
       this.logger.info(`[FFmpegDecoder] Skipping ${skipMs}ms (${this.totalSkipSamples} samples) for ${codecName} to remove encoder artifacts`)
     }
 
-    this._processPacket(format, packet, raw, decoder, resampler, job)
+    this._processPacket(format, packet, raw, decoder, resampler)
 
     // Flush resampler
     const output = new ffmpeg.Frame()
@@ -290,7 +291,7 @@ class FFmpegDecoder extends BaseInference {
     while ((flushCount = resampler.flush(output)) > 0) {
       const actualLength = OUTPUT_FORMAT_BYTE_LENGTH * flushCount * output.channelLayout.nbChannels
       const chunk = Buffer.from(samples.data.subarray(0, actualLength))
-      job.response.updateOutput({ outputArray: chunk })
+      this._job.output({ outputArray: chunk })
 
       // Track stats for flushed samples
       this._runtimeStats.samplesDecoded += flushCount
@@ -300,19 +301,14 @@ class FFmpegDecoder extends BaseInference {
     decoder.destroy()
   }
 
-  async _collectStreamData (audioStream, job) {
+  async _collectStreamData (audioStream) {
     const chunks = []
     let totalBytes = 0
 
     for await (const chunk of audioStream) {
-      if (!job.isActive) {
+      if (this._cancelled) {
         this.logger.info('[FFmpegDecoder] Job cancelled, stopping stream collection')
-        break
-      }
-
-      while (job.isPaused) {
-        this.logger.debug('[FFmpegDecoder] Job is paused, waiting to resume...')
-        await new Promise(resolve => setTimeout(resolve, 100))
+        throw new QvacErrorDecoderAudio({ code: ERR_CODES.JOB_CANCELLED })
       }
 
       chunks.push(chunk)
@@ -324,157 +320,92 @@ class FFmpegDecoder extends BaseInference {
   }
 
   async _processStream (audioStream) {
-    const job = this.currentJob
-    if (!job.isActive) {
-      return
-    }
-
     // Reset and start tracking stats
     this._resetStats()
     const startTime = Date.now()
 
-    try {
-      this.logger.info('[FFmpegDecoder] Starting stream processing')
+    this.logger.info('[FFmpegDecoder] Starting stream processing')
 
-      // Collect all audio data from stream
-      const audioBuffer = await this._collectStreamData(audioStream, job)
-      this.logger.info(`[FFmpegDecoder] Collected ${audioBuffer.length} bytes of audio data`)
+    // Collect all audio data from stream
+    const audioBuffer = await this._collectStreamData(audioStream)
+    this.logger.info(`[FFmpegDecoder] Collected ${audioBuffer.length} bytes of audio data`)
 
-      // Track input bytes
-      this._runtimeStats.inputBytes = audioBuffer.length
+    // Track input bytes
+    this._runtimeStats.inputBytes = audioBuffer.length
 
-      if (!job.isActive) {
-        this.logger.info('[FFmpegDecoder] Job cancelled after data collection')
-        return
-      }
+    if (this._cancelled) {
+      this.logger.info('[FFmpegDecoder] Job cancelled after data collection')
+      this._runtimeStats.decodeTimeMs = Date.now() - startTime
+      throw new QvacErrorDecoderAudio({ code: ERR_CODES.JOB_CANCELLED })
+    }
 
-      // Create FFmpeg IO context with the buffer
-      const bufferSize = this._getBufferSize(this.config.inputBitrate)
-      let bufferOffset = 0
+    // Create FFmpeg IO context with the buffer
+    const bufferSize = this._getBufferSize(this.config.inputBitrate)
+    let bufferOffset = 0
 
-      const io = new ffmpeg.IOContext(bufferSize, {
-        onread: (buffer, requestedLen) => {
-          const remainingBytes = audioBuffer.length - bufferOffset
-          const bytesToRead = Math.min(requestedLen, remainingBytes)
+    const io = new ffmpeg.IOContext(bufferSize, {
+      onread: (buffer, requestedLen) => {
+        const remainingBytes = audioBuffer.length - bufferOffset
+        const bytesToRead = Math.min(requestedLen, remainingBytes)
 
-          if (bytesToRead <= 0) {
-            return 0 // EOF
-          }
-
-          audioBuffer.copy(buffer, 0, bufferOffset, bufferOffset + bytesToRead)
-          bufferOffset += bytesToRead
-
-          this.logger.debug(`[FFmpegDecoder] Read ${bytesToRead} bytes from buffer, offset now: ${bufferOffset}`)
-          return bytesToRead
-        },
-        onseek: (offset, whence) => {
-          const AVSEEK_SIZE = 0x10000
-
-          if (whence === AVSEEK_SIZE) {
-            return audioBuffer.length
-          }
-
-          let newOffset
-          if (whence === 0) {
-            newOffset = offset
-          } else if (whence === 1) {
-            newOffset = bufferOffset + offset
-          } else if (whence === 2) {
-            newOffset = audioBuffer.length + offset
-          } else {
-            return -1
-          }
-
-          if (newOffset < 0 || newOffset > audioBuffer.length) {
-            return -1
-          }
-
-          bufferOffset = newOffset
-          this.logger.debug(`[FFmpegDecoder] Seek to offset: ${bufferOffset}`)
-          return bufferOffset
+        if (bytesToRead <= 0) {
+          return 0 // EOF
         }
-      })
 
-      this.logger.debug('[FFmpegDecoder] IOContext created')
-      const format = new ffmpeg.InputFormatContext(io)
-      this.logger.debug('[FFmpegDecoder] InputFormatContext created')
+        audioBuffer.copy(buffer, 0, bufferOffset, bufferOffset + bytesToRead)
+        bufferOffset += bytesToRead
 
-      const streamIndex = this.config.streamIndex || 0
-      if (format.streams[streamIndex] === undefined) {
-        throw new QvacErrorDecoderAudio({
-          code: ERR_CODES.STREAM_INDEX_OUT_OF_BOUNDS,
-          adds: streamIndex
-        })
+        this.logger.debug(`[FFmpegDecoder] Read ${bytesToRead} bytes from buffer, offset now: ${bufferOffset}`)
+        return bytesToRead
+      },
+      onseek: (offset, whence) => {
+        const AVSEEK_SIZE = 0x10000
+
+        if (whence === AVSEEK_SIZE) {
+          return audioBuffer.length
+        }
+
+        let newOffset
+        if (whence === 0) {
+          newOffset = offset
+        } else if (whence === 1) {
+          newOffset = bufferOffset + offset
+        } else if (whence === 2) {
+          newOffset = audioBuffer.length + offset
+        } else {
+          return -1
+        }
+
+        if (newOffset < 0 || newOffset > audioBuffer.length) {
+          return -1
+        }
+
+        bufferOffset = newOffset
+        this.logger.debug(`[FFmpegDecoder] Seek to offset: ${bufferOffset}`)
+        return bufferOffset
       }
+    })
 
-      // Process the stream and generate decoded output
-      this._processFFmpegStream(format, format.streams[streamIndex], job)
+    this.logger.debug('[FFmpegDecoder] IOContext created')
+    const format = new ffmpeg.InputFormatContext(io)
+    this.logger.debug('[FFmpegDecoder] InputFormatContext created')
 
-      // Calculate final decode time
-      this._runtimeStats.decodeTimeMs = Date.now() - startTime
-
-      // Update stats on response before ending
-      job.response.updateStats(this.runtimeStats())
-
-      // Mark as complete
-      job.response.ended()
-      this.logger.info('[FFmpegDecoder] Stream processing completed successfully')
-      this.logger.info(`[FFmpegDecoder] Runtime stats: ${JSON.stringify(this._runtimeStats)}`)
-    } catch (err) {
-      // Still capture stats even on error
-      this._runtimeStats.decodeTimeMs = Date.now() - startTime
-      job.response.updateStats(this.runtimeStats())
-
-      this.logger.error('Error processing audio stream:', err)
-      job.response.failed(err)
+    const streamIndex = this.config.streamIndex || 0
+    if (format.streams[streamIndex] === undefined) {
+      throw new QvacErrorDecoderAudio({
+        code: ERR_CODES.STREAM_INDEX_OUT_OF_BOUNDS,
+        adds: streamIndex
+      })
     }
 
-    this.logger.info('Audio _processStream completed')
-  }
+    // Process the stream and generate decoded output
+    this._processFFmpegStream(format, format.streams[streamIndex])
 
-  /**
-   * Pause the current job
-   */
-  pause () {
-    if (this.currentJob) {
-      this.currentJob.isPaused = true
-      this.logger.debug('Decoder paused')
-    }
-    return Promise.resolve()
-  }
+    // Calculate final decode time
+    this._runtimeStats.decodeTimeMs = Date.now() - startTime
 
-  /**
-   * Unpause the current job
-   */
-  unpause () {
-    if (this.currentJob) {
-      this.currentJob.isPaused = false
-      this.logger.debug('Decoder unpaused')
-    }
-    return Promise.resolve()
-  }
-
-  /**
-   * Stop the current job
-   */
-  stop () {
-    if (this.currentJob) {
-      this.currentJob.isActive = false
-      this.currentJob.response.finish()
-      this.logger.debug('Decoder stopped')
-    }
-    return Promise.resolve()
-  }
-
-  /**
-   * Get the current status
-   */
-  status () {
-    return {
-      loaded: this.isLoaded,
-      active: this.currentJob?.isActive || false,
-      paused: this.currentJob?.isPaused || false
-    }
+    this.logger.info('[FFmpegDecoder] Stream processing completed successfully')
+    this.logger.info(`[FFmpegDecoder] Runtime stats: ${JSON.stringify(this._runtimeStats)}`)
   }
 }
 

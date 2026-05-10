@@ -1,6 +1,6 @@
 ---
 description: Registry server conventions - strict mode, private methods, ReadyResource, npm lint
-globs: packages/qvac-lib-registry-server/**
+globs: packages/registry-server/**
 alwaysApply: false
 ---
 

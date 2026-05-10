@@ -11,8 +11,8 @@
 #include <opencv2/imgproc.hpp>
 
 #include "AndroidLog.hpp"
-#include "qvac-lib-inference-addon-cpp/Errors.hpp"
-#include "qvac-lib-inference-addon-cpp/Logger.hpp"
+#include "inference-addon-cpp/Errors.hpp"
+#include "inference-addon-cpp/Logger.hpp"
 
 namespace qvac_lib_inference_addon_onnx_ocr_fasttext {
 

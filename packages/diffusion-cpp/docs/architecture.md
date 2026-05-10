@@ -67,7 +67,7 @@
 | Windows | x64 | 10+ | ✅ Tier 1 | Vulkan |
 
 **Dependencies:**
-- qvac-lib-inference-addon-cpp (≥1.1.2): C++ addon framework (single-job runner, runJob/activate/cancel/destroyInstance)
+- inference-addon-cpp (≥1.1.2): C++ addon framework (single-job runner, runJob/activate/cancel/destroyInstance)
 - stable-diffusion.cpp: Diffusion inference engine
 - Bare Runtime (≥1.24.0): JavaScript runtime
 - Ubuntu-22 requires g++-13 installed
@@ -123,7 +123,7 @@ graph TB
 | Package | Type | Version | Purpose |
 |---------|------|---------|---------|
 | @qvac/infer-base | Framework | ^0.4.0 | Composition utilities (`createJobHandler`, `exclusiveRunQueue`, `QvacResponse`) |
-| qvac-lib-inference-addon-cpp | Native | ≥1.1.2 | C++ addon framework (single-job runner) |
+| inference-addon-cpp | Native | ≥1.1.2 | C++ addon framework (single-job runner) |
 | stable-diffusion.cpp | Native | latest | Diffusion inference engine |
 | Bare Runtime | Runtime | ≥1.24.0 | JavaScript execution |
 
@@ -538,7 +538,7 @@ Use stable-diffusion.cpp as the core inference engine instead of Python diffuser
 
 ## Decision 2: Bare Runtime over Node.js
 
-See [qvac-lib-inference-addon-cpp Decision 4: Why Bare Runtime](https://github.com/tetherto/qvac-lib-inference-addon-cpp/blob/main/docs/architecture.md#decision-4-why-bare-runtime) for rationale.
+See [inference-addon-cpp Decision 4: Why Bare Runtime](https://github.com/tetherto/inference-addon-cpp/blob/main/docs/architecture.md#decision-4-why-bare-runtime) for rationale.
 
 **Summary:** Mobile support (iOS/Android), lightweight, modern addon API. Core business logic remains runtime-agnostic.
 
