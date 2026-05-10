@@ -11,13 +11,14 @@ const platform = os.platform()
 const arch = os.arch()
 const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
-const isMobile = platform === 'ios' || platform === 'android'
 const useCpu = isDarwinX64 || isLinuxArm64
 
-// Vision projector is unstable on Android GPU backends (Adreno OpenCL SIGABRT
-// in mtmd_helper_decode_image_chunk, Mali Vulkan unstable), so mobile keeps
-// the CPU fallback for vision. Desktop Metal/Vulkan are fine.
-const useCpuForVision = useCpu || isMobile
+// We exercise the GPU vision path on mobile too (Adreno OpenCL / Mali Vulkan
+// for Android, Metal for iOS) -- bartowski's mmproj is what we ship in this
+// PR's fixture and we want CI to actually validate the device-farm GPU code
+// path. Desktop x64-darwin and linux-arm64 keep the CPU fallback only because
+// those hosts don't have a working GPU stack here.
+const useCpuForVision = useCpu
 
 // Use bartowski's GGUF rather than unsloth's: bartowski's pack tags <eos> as
 // the EOG token (matching the base google/gemma-4-E2B-it tokenizer), so the
@@ -206,12 +207,21 @@ test('Gemma 4 can describe an image', {
   const modelPath = path.join(dirPath, modelName)
   const projectionModelPath = path.join(dirPath, projModelName)
 
+  // ctx_size: a single elephant.jpg encodes to ~260 mtmd image tokens; the
+  // system turn, user message and the answer fit comfortably in 8192 (with
+  // headroom for Gemma 4's typical CoT preamble even though we disable it
+  // below).
+  // reasoning-budget: 0 -- we ask the model for a one-word answer and don't
+  // need the <|channel>thought ...<channel|> preamble. Without this, Gemma 4
+  // happily generates 8k+ tokens of CoT for a vision question and the
+  // generation loop overflows ctx_size before reaching <eos>.
   const config = {
     device: useCpuForVision ? 'cpu' : 'gpu',
     gpu_layers: '98',
-    ctx_size: '2048',
+    ctx_size: '8192',
     temp: '0',
     seed: '42',
+    'reasoning-budget': '0',
     verbosity: '2'
   }
 
