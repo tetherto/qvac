@@ -475,9 +475,9 @@ bool TextLlmContext::generateResponse(
   reasoningState_.recent_output_buffer.clear();
 
   // The chat template force-opened the reasoning channel in the prompt (e.g.
-  // Qwen3.5/Qwen3-coder/gemma4 templates end with "<think>\n" or
-  // "<|channel>thought\n"), so the model resumes generation INSIDE the
-  // reasoning block.
+  // Qwen3-style / DeepSeek-R1 templates end with "<think>\n"), so the model
+  // resumes generation INSIDE the reasoning block. (Gemma4's reasoning channel
+  // is model-emitted upstream and does not set this flag.)
   if (thinkingForcedOpen_ && outputCallback) {
     outputCallback("<think>\n");
     reasoningState_.inside_reasoning = true;
