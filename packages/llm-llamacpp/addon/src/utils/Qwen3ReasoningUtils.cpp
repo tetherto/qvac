@@ -33,19 +33,10 @@ void updateQwen3ReasoningBuffer(
           Qwen3ReasoningState::BUFFER_SIZE);
     }
 
-    // Qwen3 / DeepSeek-style: <think> ... </think>.
     if (state.recent_output_buffer.find("<think>") != std::string::npos) {
       state.inside_reasoning = true;
     }
     if (state.recent_output_buffer.find("</think>") != std::string::npos) {
-      state.inside_reasoning = false;
-    }
-    // Gemma 4-style: <|channel>thought\n ... \n<channel|>.
-    if (state.recent_output_buffer.find("<|channel>thought") !=
-        std::string::npos) {
-      state.inside_reasoning = true;
-    }
-    if (state.recent_output_buffer.find("<channel|>") != std::string::npos) {
       state.inside_reasoning = false;
     }
   }
