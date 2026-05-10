@@ -14,10 +14,9 @@ const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
 const isMobile = platform === 'ios' || platform === 'android'
 const useCpu = isDarwinX64 || isLinuxArm64
 
-// Vision projector is unstable on Apple M1 Metal (SIGSEGV in image encoding)
-// and on Android GPU backends (Adreno OpenCL SIGABRT in
-// mtmd_helper_decode_image_chunk, Mali Vulkan unstable). The addon now
-// detects M1 specifically and routes vision-with-projector to CPU.
+// Vision projector is unstable on Android GPU backends (Adreno OpenCL SIGABRT
+// in mtmd_helper_decode_image_chunk, Mali Vulkan unstable), so mobile keeps
+// the CPU fallback for vision. Desktop Metal/Vulkan are fine.
 const useCpuForVision = useCpu || isMobile
 
 const GEMMA4_MODEL = {

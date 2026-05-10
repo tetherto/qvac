@@ -176,10 +176,6 @@ constexpr const char* ADRENO_DESC = "Adreno (TM) 740";
 constexpr const char* ADRENO_830_DESC = "Adreno (TM) 830";
 constexpr const char* ADRENO_650_DESC = "Adreno (TM) 650";
 constexpr const char* MALI_DESC = "Mali-G715";
-constexpr const char* APPLE_M1_DESC = "Apple M1 Pro";
-constexpr const char* APPLE_M2_DESC = "Apple M2 Max";
-constexpr const char* APPLE_M3_DESC = "Apple M3 Ultra";
-constexpr const char* APPLE_M4_DESC = "Apple M4";
 
 // GPU Backend
 constexpr const char* VULKAN0_BACK = "Vulkan0";
@@ -224,17 +220,6 @@ void expectChosenWithMetadata(
   BackendInterface bckI = mockBackend.toBackendInterface();
   auto result = chooseBackend(preferredBackend, bckI, &metadata, mainGpu);
   expectChosen(result, expectedBackend, expectedBackendName);
-}
-
-std::pair<std::pair<BackendType, std::string>, bool>
-chooseBackendWithM1Flag (
-    MockBackendInterface& mockBackend, BackendType preferredBackend) {
-  BackendInterface bckI = mockBackend.toBackendInterface();
-  bool sawAppleM1 = false;
-  auto result = chooseBackend(
-      preferredBackend, bckI, nullptr, std::nullopt, nullptr, false,
-      &sawAppleM1);
-  return {result, sawAppleM1};
 }
 
 void expectChosenFinetuning(
@@ -848,42 +833,6 @@ TEST_F(BackendSelectionTest, Inference_Gemma3_Mali_KeepsVulkan) {
   MockModelMetaData meta(false, "gemma3");
   expectChosenWithMetadata(
       mockBackend, BackendType::GPU, BackendType::GPU, "vulkan0", meta);
-}
-
-// -- Apple M1 detection: chooseBackend always returns Metal/GPU, but reports
-//    `sawAppleM1=true` for M1 so the caller can route only the projector to
-//    CPU. M2/M3/M4 don't set the flag.
-
-TEST_F(BackendSelectionTest, AppleM1_DetectedAndKeepsMetal) {
-  mockBackend.addDevice(createGPUDevice(APPLE_M1_DESC, "metal"));
-  auto [result, sawM1] =
-      chooseBackendWithM1Flag(mockBackend, BackendType::GPU);
-  expectChosen(result, BackendType::GPU, "metal");
-  EXPECT_TRUE(sawM1);
-}
-
-TEST_F(BackendSelectionTest, AppleM2_NotDetected) {
-  mockBackend.addDevice(createGPUDevice(APPLE_M2_DESC, "metal"));
-  auto [result, sawM1] =
-      chooseBackendWithM1Flag(mockBackend, BackendType::GPU);
-  expectChosen(result, BackendType::GPU, "metal");
-  EXPECT_FALSE(sawM1);
-}
-
-TEST_F(BackendSelectionTest, AppleM3_NotDetected) {
-  mockBackend.addDevice(createGPUDevice(APPLE_M3_DESC, "metal"));
-  auto [result, sawM1] =
-      chooseBackendWithM1Flag(mockBackend, BackendType::GPU);
-  expectChosen(result, BackendType::GPU, "metal");
-  EXPECT_FALSE(sawM1);
-}
-
-TEST_F(BackendSelectionTest, AppleM4_NotDetected) {
-  mockBackend.addDevice(createGPUDevice(APPLE_M4_DESC, "metal"));
-  auto [result, sawM1] =
-      chooseBackendWithM1Flag(mockBackend, BackendType::GPU);
-  expectChosen(result, BackendType::GPU, "metal");
-  EXPECT_FALSE(sawM1);
 }
 
 // -- Finetuning on non-Adreno GPU with unsupported arch: throws --

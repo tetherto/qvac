@@ -105,22 +105,12 @@ struct DeviceDescription {
   }
 };
 
-bool isAppleM1Device(const DeviceDescription& devDescr) {
-  const auto& d = devDescr.gpuDescription;
-  const auto pos = d.find("apple m1");
-  if (pos == std::string::npos) {
-    return false;
-  }
-  const auto next = pos + std::string("apple m1").size();
-  return next >= d.size() || !std::isdigit(static_cast<unsigned char>(d[next]));
-}
-
 void emplaceIfValidDevice(
     const BackendInterface& bckI, std::vector<std::string>& gpuBackends,
     std::vector<std::string>& igpuBackends,
     std::vector<std::string>& openClBackends,
-    std::optional<int>& maxAdrenoVersion, bool& sawAppleM1,
-    const ggml_backend_reg_t reg, const DeviceDescription& devDescr,
+    std::optional<int>& maxAdrenoVersion, const ggml_backend_reg_t reg,
+    const DeviceDescription& devDescr,
     const enum ggml_backend_dev_type backendTypeEnum) {
   if (bckI.ggml_backend_reg_name(reg) != std::string("RPC")) {
     auto logEmplaceGpuBackend = [&](const std::string& gpuBackend) {
@@ -142,10 +132,6 @@ void emplaceIfValidDevice(
         maxAdrenoVersion = version;
       }
     }
-    if (isAppleM1Device(devDescr)) {
-      sawAppleM1 = true;
-    }
-
     if (isOpenCl && isAdreno) {
       logEmplaceGpuBackend(devDescr.gpuBackend);
       openClBackends.emplace_back(devDescr.gpuBackend);
@@ -183,7 +169,7 @@ void tryEmplaceDevice(
     std::vector<std::string>& gpuBackends,
     std::vector<std::string>& igpuBackends,
     std::vector<std::string>& openClBackends,
-    std::optional<int>& maxAdrenoVersion, bool& sawAppleM1) {
+    std::optional<int>& maxAdrenoVersion) {
   const ggml_backend_dev_t dev = bckI.ggml_backend_dev_get(deviceIndex);
   const ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
   const enum ggml_backend_dev_type backendTypeEnum =
@@ -199,7 +185,6 @@ void tryEmplaceDevice(
         igpuBackends,
         openClBackends,
         maxAdrenoVersion,
-        sawAppleM1,
         reg,
         devDescr,
         backendTypeEnum);
@@ -275,14 +260,12 @@ std::optional<MainGpu> backend_selection::tryMainGpuFromMap(
 std::pair<BackendType, std::string> backend_selection::chooseBackend(
     const BackendType preferredBackendType, const BackendInterface& bckI,
     const ModelMetaData* metadata, const std::optional<MainGpu>& mainGpu,
-    std::optional<int>* outAdrenoVersion, const bool isFinetuning,
-    bool* outSawAppleM1) {
+    std::optional<int>* outAdrenoVersion, const bool isFinetuning) {
 
   std::vector<std::string> gpuBackends;
   std::vector<std::string> igpuBackends;
   std::vector<std::string> openClBackends;
   std::optional<int> maxAdrenoVersion;
-  bool sawAppleM1 = false;
 
   if (preferredBackendType == BackendType::GPU) {
     bool loopAllDevices = true;
@@ -301,8 +284,7 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
               gpuBackends,
               igpuBackends,
               openClBackends,
-              maxAdrenoVersion,
-              sawAppleM1);
+              maxAdrenoVersion);
           loopAllDevices = false;
         } else {
           std::string errorMsg = string_format(
@@ -324,8 +306,7 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
           gpuBackends,
           igpuBackends,
           openClBackends,
-          maxAdrenoVersion,
-          sawAppleM1);
+          maxAdrenoVersion);
     }
   }
 
@@ -383,9 +364,6 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
   if (outAdrenoVersion != nullptr) {
     *outAdrenoVersion = maxAdrenoVersion;
   }
-  if (outSawAppleM1 != nullptr) {
-    *outSawAppleM1 = sawAppleM1;
-  }
 
   if (!openClBackends.empty()) {
     bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, "Chosen GPU OpenCL", nullptr);
@@ -409,8 +387,7 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
 std::pair<BackendType, std::string> backend_selection::chooseBackend(
     const BackendType preferredBackendType, llamaLogCallbackF llamaLogcallback,
     const std::optional<MainGpu>& mainGpu, const ModelMetaData* metadata,
-    std::optional<int>* outAdrenoVersion, const bool isFinetuning,
-    bool* outSawAppleM1) {
+    std::optional<int>* outAdrenoVersion, const bool isFinetuning) {
   BackendInterface bckI{
       ggml_backend_dev_count,
       ggml_backend_dev_backend_reg,
@@ -426,8 +403,7 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
       metadata,
       mainGpu,
       outAdrenoVersion,
-      isFinetuning,
-      outSawAppleM1);
+      isFinetuning);
 }
 
 size_t
