@@ -10,7 +10,6 @@
 ### Internals (no behaviour change)
 
 - ABI port: `common_init_result` → `common_init_result_ptr`.
-- Dropped Mali-detection plumbing now that BERT runs on Mali Vulkan.
 
 ## [0.15.0] - 2026-04-30
 
