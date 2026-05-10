@@ -39,19 +39,6 @@ TEST_F(ChatTemplateUtilsTest, IsQwen3ModelWithNullptr) {
   EXPECT_FALSE(isQwen3Model(nullptr));
 }
 
-TEST_F(ChatTemplateUtilsTest, SelectToolsCompactMarkerForQwen3) {
-  auto marker = selectToolsCompactMarker("qwen3");
-  ASSERT_TRUE(marker.has_value());
-  EXPECT_EQ(marker.value(), "<tool_call>");
-}
-
-TEST_F(
-    ChatTemplateUtilsTest, SelectToolsCompactMarkerForUnsupportedArchitecture) {
-  EXPECT_FALSE(selectToolsCompactMarker("llama").has_value());
-  EXPECT_FALSE(selectToolsCompactMarker("mistral").has_value());
-  EXPECT_FALSE(selectToolsCompactMarker("gemma").has_value());
-}
-
 TEST_F(
     ChatTemplateUtilsTest, SupportsToolsCompactForModelMetadataByArchitecture) {
   EXPECT_TRUE(supportsToolsCompactForModelMetadata(std::string("qwen3")));

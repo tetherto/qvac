@@ -85,14 +85,6 @@ bool supportsToolsCompactForModelMetadata(
   return architecture.has_value() && isQwen3Architecture(architecture.value());
 }
 
-std::optional<std::string>
-selectToolsCompactMarker(const std::string& architecture) {
-  if (isQwen3Architecture(architecture)) {
-    return std::string("<tool_call>");
-  }
-  return std::nullopt;
-}
-
 std::optional<std::string> selectToolsCompactMarkerForModelMetadata(
     const std::optional<std::string>& architecture) {
   if (!supportsToolsCompactForModelMetadata(architecture)) {

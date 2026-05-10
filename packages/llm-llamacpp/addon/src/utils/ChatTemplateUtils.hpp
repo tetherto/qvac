@@ -20,8 +20,6 @@ std::optional<std::string> getModelArchitecture(const ::llama_model* model);
 bool supportsToolsCompactForModelMetadata(
     const std::optional<std::string>& architecture);
 
-std::optional<std::string>
-selectToolsCompactMarker(const std::string& architecture);
 std::optional<std::string> selectToolsCompactMarkerForModelMetadata(
     const std::optional<std::string>& architecture);
 
