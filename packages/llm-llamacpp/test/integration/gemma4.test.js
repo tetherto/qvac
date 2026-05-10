@@ -19,14 +19,22 @@ const useCpu = isDarwinX64 || isLinuxArm64
 // the CPU fallback for vision. Desktop Metal/Vulkan are fine.
 const useCpuForVision = useCpu || isMobile
 
+// Use bartowski's GGUF rather than unsloth's: bartowski's pack tags <eos> as
+// the EOG token (matching the base google/gemma-4-E2B-it tokenizer), so the
+// addon's generation loop terminates on the first <eos> the model emits.
+// unsloth's pack instead tags <turn|> as EOG and leaves <eos> classified as a
+// regular text token; in that pack Gemma 4's training-baked post-content
+// <eos> trail is not a stop signal, so generation continues to spit ~9
+// extra <eos> tokens before the loop sees <turn|>. Same vocab, different
+// tokenizer.ggml.eos_token_id metadata, ~30% shorter completions for us.
 const GEMMA4_MODEL = {
   llmModel: {
-    modelName: 'gemma-4-E2B-it-Q4_K_M.gguf',
-    downloadUrl: 'https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/gemma-4-E2B-it-Q4_K_M.gguf'
+    modelName: 'google_gemma-4-E2B-it-Q4_K_M.gguf',
+    downloadUrl: 'https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_M.gguf'
   },
   projModel: {
-    modelName: 'mmproj-gemma-4-E2B-it-BF16.gguf',
-    downloadUrl: 'https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/mmproj-BF16.gguf'
+    modelName: 'mmproj-google_gemma-4-E2B-it-bf16.gguf',
+    downloadUrl: 'https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/mmproj-google_gemma-4-E2B-it-bf16.gguf'
   }
 }
 
