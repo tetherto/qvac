@@ -360,6 +360,20 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
             "generationParams.grammar and generationParams.json_schema are "
             "mutually exclusive");
       }
+
+      auto reasoningBudget =
+          configObj->getOptionalPropertyAs<js::Number, double>(
+              env, "reasoning_budget");
+      if (reasoningBudget.has_value()) {
+        int rb = static_cast<int>(*reasoningBudget);
+        if (rb != 0 && rb != -1) {
+          throw StatusError(
+              general_error::InvalidArgument,
+              "generationParams.reasoning_budget must be -1 (unrestricted) "
+              "or 0 (disabled)");
+        }
+        ov.reasoning_budget = rb;
+      }
     }
 
     prompt.cacheKey =
