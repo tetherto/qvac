@@ -1,21 +1,126 @@
+# =============================================================================
+# QVAC-18612 SAFETY TEST: label-gate composite action
+# =============================================================================
+# This workflow has been temporarily repurposed to validate the new
+# .github/actions/label-gate composite action in a real GitHub Actions run
+# before fanning the gate out to all 75 secret-bearing workflows in the repo.
+#
+# Restoration: revert this file to the previous commit on `main` to bring
+# back the original `run-vulkaninfo` workflow. The original definition is
+# preserved verbatim in the comment block at the bottom of this file.
+#
+# Test plan:
+#
+#   1. workflow_dispatch (anyone with run perms):
+#        - label-gate sees `eventName=workflow_dispatch` -> trusted event
+#        - downstream `would-run-with-secrets` job runs
+#        - expected: gate-job green, downstream-job green, log shows
+#          "trusted event source (workflow_dispatch)"
+#
+#   2. Open this PR (no `verified` label):
+#        - label-gate sees `eventName=pull_request` action=opened, no label
+#        - returns authorised=false (label not currently applied), no API calls
+#        - downstream-job SKIPS via the `if:` condition
+#        - expected: gate-job green (exit 0), downstream skipped, log shows
+#          "'verified' label is not currently applied to PR #<n>"
+#
+#   3. Apply the `verified` label as `Proletter` (in the users allowlist):
+#        - label-gate sees `eventName=pull_request` action=labeled
+#        - applier=Proletter -> matches `users` -> authorised=true,
+#          NO team-membership API calls (zero read:org dependency)
+#        - downstream-job runs
+#        - expected: gate-job green, downstream-job green, log shows
+#          "label applier 'Proletter' is trusted (in users allowlist)"
+#
+#   4. Push a new commit to the PR (synchronize) while still labeled:
+#        - label-gate sees action=synchronize, sender in users allowlist,
+#          label still on PR -> authorised=true
+#        - downstream-job runs
+#        - expected: same as #3
+#
+#   5. Apply `verified` label as a non-allowlisted user (cannot self-test
+#      easily; would need a second account):
+#        - label-gate -> authorised=false (applier not trusted)
+#        - downstream-job skips
+#
+# This safety test does NOT require PAT_TOKEN. It uses the workflow's
+# default GITHUB_TOKEN (which has `pull-requests: write` for the label
+# strip path, but that path is only exercised in scenario #5 above).
+# =============================================================================
+
+name: vulkaninfo (label-gate safety test)
+
 on:
   workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+    paths:
+      - .github/workflows/vulkaninfo.yml
+      - .github/actions/label-gate/**
 
-permissions: {}
+permissions:
+  contents: read
+  pull-requests: write
 
 jobs:
-  run-vulkaninfo:
-    runs-on: ai-run-windows11-gpu
+  label-gate:
+    name: Authorise (label-gate)
+    runs-on: ubuntu-latest
+    outputs:
+      authorised: ${{ steps.gate.outputs.authorised }}
     steps:
-      - name: GPU detection via nvidia-smi and vulkaninfo
-        continue-on-error: true
-        shell: powershell
+      - name: Checkout (so the local action is available)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Run label-gate
+        id: gate
+        uses: ./.github/actions/label-gate
+        with:
+          label: verified
+          users: Proletter
+          teams: ""
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  would-run-with-secrets:
+    name: (would access secrets if real)
+    needs: [label-gate]
+    if: needs.label-gate.outputs.authorised == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Stand-in for a real secret-bearing job
+        env:
+          AUTHORISED: ${{ needs.label-gate.outputs.authorised }}
+          EVENT: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
         run: |
-          Write-Host "=== GPU Device List ==="
-          nvidia-smi -L
-          Write-Host ""
-          Write-Host "=== Running nvidia-smi ==="
-          nvidia-smi
-          Write-Host ""
-          Write-Host "=== Running Vulkaninfo ==="
-          vulkaninfo.exe --summary
+          echo "label-gate output authorised=${AUTHORISED}"
+          echo "event=${EVENT} action=${ACTION:-<none>}"
+          echo
+          echo "If this were a production workflow, secrets would be exposed"
+          echo "to the steps below this point. The actual original vulkaninfo"
+          echo "step is intentionally not executed during the safety test."
+
+# =============================================================================
+# Original vulkaninfo workflow (restore by reverting this file):
+# =============================================================================
+#
+# on:
+#   workflow_dispatch:
+#
+# permissions: {}
+#
+# jobs:
+#   run-vulkaninfo:
+#     runs-on: ai-run-windows11-gpu
+#     steps:
+#       - name: GPU detection via nvidia-smi and vulkaninfo
+#         continue-on-error: true
+#         shell: powershell
+#         run: |
+#           Write-Host "=== GPU Device List ==="
+#           nvidia-smi -L
+#           Write-Host ""
+#           Write-Host "=== Running nvidia-smi ==="
+#           nvidia-smi
+#           Write-Host ""
+#           Write-Host "=== Running Vulkaninfo ==="
+#           vulkaninfo.exe --summary
