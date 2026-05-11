@@ -149,25 +149,131 @@ export const DEFAULT_FEATURES: Feature[] = [
 // ============================================================================
 
 const VIEW_W = 1280;
-const VIEW_H = 880;
 const CENTER_X = VIEW_W / 2;
-const CENTER_Y = VIEW_H / 2;
+// CENTER_Y is intentionally fixed (not derived from VIEW_H) so the rings and
+// platform icons stay locked in place even if VIEW_H is later adjusted to make
+// room for additional content below.
+const CENTER_Y = 440;
+const VIEW_H = 900;
 
 const R_INNER = 95;       // small circle around the Q
 const R_PLATFORMS = 180;  // ring where platform icons sit
 const R_OUTER = 290;      // outermost dotted circle (where feature pins live)
-const R_LABEL = 415;      // center of each feature card outside the rings
-const PIN_TIP_GAP = 90;   // distance from card center where the connector line ends
+
+// Vertical crop applied to the viewBox so the infographic does not waste
+// space above the outer ring (which begins at y = CENTER_Y - R_OUTER).
+// Geometry stays anchored to CENTER_Y; only the visible window is shifted.
+const VIEWBOX_TOP = CENTER_Y - R_OUTER - 2; // = 148, ~2px breathing above the ring
+const VIEWBOX_HEIGHT = VIEW_H - VIEWBOX_TOP;
 
 const PLATFORM_BOX = 80;  // foreignObject square that holds each platform icon
-const CARD_W = 240;
-const CARD_H = 210;
+
+type FeatureCardLayout = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  titleAlign: 'left' | 'center' | 'right';
+};
+
+const TITLE_ALIGN_CLASS: Record<FeatureCardLayout['titleAlign'], string> = {
+  left: 'text-left',
+  center: 'text-center',
+  right: 'text-right',
+};
+
+// Card positions are tuned so that each card's title sits right next to its
+// matching outer-ring bullet (no connector line is drawn; the bullet is the
+// visual anchor instead). titleAlign indicates which edge of the title hugs
+// the bullet (left = title's left edge, right = title's right edge,
+// center = title centered horizontally below the bullet).
+const FEATURE_CARD_LAYOUT: Record<string, FeatureCardLayout> = {
+  // NW bullet ~ (435, 235)
+  'local-first': {
+    x: 103,
+    y: 222,
+    width: 320,
+    height: 180,
+    titleAlign: 'right',
+  },
+  // NE bullet ~ (845, 235)
+  p2p: {
+    x: 857,
+    y: 222,
+    width: 320,
+    height: 165,
+    titleAlign: 'left',
+  },
+  // E bullet ~ (930, 440); shifted slightly up so the taller box still hugs
+  // the bullet vertically without colliding with the SE card below.
+  'cross-platform': {
+    x: 945,
+    y: 420,
+    width: 315,
+    height: 215,
+    titleAlign: 'left',
+  },
+  // SE bullet ~ (845, 645); pushed down a few px to keep clearance from the
+  // taller cross-platform card above.
+  pluggable: {
+    x: 857,
+    y: 642,
+    width: 320,
+    height: 170,
+    titleAlign: 'left',
+  },
+  // S bullet ~ (640, 730)
+  'open-source': {
+    x: 490,
+    y: 742,
+    width: 300,
+    height: 150,
+    titleAlign: 'center',
+  },
+  // SW bullet ~ (435, 645)
+  openai: {
+    x: 103,
+    y: 632,
+    width: 320,
+    height: 180,
+    titleAlign: 'right',
+  },
+  // W bullet ~ (350, 440)
+  unified: {
+    x: 20,
+    y: 427,
+    width: 315,
+    height: 165,
+    titleAlign: 'right',
+  },
+};
 
 function polar(angleDeg: number, radius: number): { x: number; y: number } {
   const rad = (angleDeg * Math.PI) / 180;
   return {
     x: CENTER_X + radius * Math.sin(rad),
     y: CENTER_Y - radius * Math.cos(rad),
+  };
+}
+
+function getFeatureCardLayout(feature: Feature): FeatureCardLayout {
+  const layout = FEATURE_CARD_LAYOUT[feature.id];
+  if (layout) return layout;
+
+  // Fallback: place the card just outside the outer ring at the feature's
+  // angle. Title alignment hugs the bullet on whichever side of the diagram
+  // the card lands.
+  const bullet = polar(feature.angle, R_OUTER);
+  const isLeft = bullet.x < CENTER_X;
+  const width = 320;
+  const height = 160;
+  const gap = 12;
+  return {
+    x: isLeft ? bullet.x - width - gap : bullet.x + gap,
+    y: bullet.y - 13,
+    width,
+    height,
+    titleAlign: isLeft ? 'right' : 'left',
   };
 }
 
@@ -202,7 +308,7 @@ function FeatureCardShell({
     return (
       <Link
         href={feature.href}
-        className={`flex h-full w-full flex-col no-underline ${interactiveClasses}`}
+        className={`inline-flex w-full flex-col no-underline ${interactiveClasses}`}
       >
         {children}
       </Link>
@@ -213,13 +319,13 @@ function FeatureCardShell({
       <button
         type="button"
         onClick={feature.onClick}
-        className={`flex h-full w-full flex-col bg-transparent p-0 text-left ${interactiveClasses}`}
+        className={`inline-flex w-full flex-col bg-transparent p-0 text-left ${interactiveClasses}`}
       >
         {children}
       </button>
     );
   }
-  return <div className="flex h-full w-full flex-col">{children}</div>;
+  return <div className="inline-flex w-full flex-col">{children}</div>;
 }
 
 // ============================================================================
@@ -232,12 +338,11 @@ export function FeaturesInfographicV2({
   className,
 }: FeaturesInfographicV2Props = {}) {
   return (
-    <div className={`not-prose my-8 ${className ?? ''}`}>
-      {/* ============= Infographic (md+) ============= */}
-      <div className="hidden text-fd-primary md:block">
+    <div className={`not-prose mt-2 mb-8 ${className ?? ''}`}>
+      <div className="text-fd-primary">
         <svg
           className="mx-auto block h-auto w-full max-w-[1280px]"
-          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+          viewBox={`0 ${VIEWBOX_TOP} ${VIEW_W} ${VIEWBOX_HEIGHT}`}
           fill="none"
           stroke="currentColor"
           strokeLinecap="round"
@@ -305,28 +410,18 @@ export function FeaturesInfographicV2({
             );
           })}
 
-          {/* ----- Bullets + connectors from outer ring → near each card ----- */}
+          {/* ----- Solid bullets on the outer ring (one per feature) ----- */}
           {features.map((f) => {
             const dot = polar(f.angle, R_OUTER);
-            const tip = polar(f.angle, R_LABEL - PIN_TIP_GAP);
             return (
-              <g key={`conn-${f.id}`}>
-                <line
-                  x1={dot.x}
-                  y1={dot.y}
-                  x2={tip.x}
-                  y2={tip.y}
-                  strokeWidth={STROKE}
-                  strokeDasharray={DASH}
-                />
-                <circle
-                  cx={dot.x}
-                  cy={dot.y}
-                  r={5}
-                  fill="currentColor"
-                  stroke="none"
-                />
-              </g>
+              <circle
+                key={`bullet-${f.id}`}
+                cx={dot.x}
+                cy={dot.y}
+                r={5}
+                fill="currentColor"
+                stroke="none"
+              />
             );
           })}
 
@@ -365,22 +460,24 @@ export function FeaturesInfographicV2({
 
           {/* ----- Feature cards (foreignObject so they scale) ----- */}
           {features.map((f) => {
-            const pos = polar(f.angle, R_LABEL);
+            const layout = getFeatureCardLayout(f);
             return (
               <foreignObject
                 key={f.id}
-                x={pos.x - CARD_W / 2}
-                y={pos.y - CARD_H / 2}
-                width={CARD_W}
-                height={CARD_H}
+                x={layout.x}
+                y={layout.y}
+                width={layout.width}
+                height={layout.height}
               >
-                <div {...{ xmlns: HTML_NS }} className="h-full w-full">
+                <div {...{ xmlns: HTML_NS }} className="w-full overflow-visible">
                   <FeatureCardShell feature={f}>
-                    <p className="m-0 mb-2 text-center text-[22px] font-medium leading-tight text-fd-primary">
+                    <p
+                      className={`m-0 mb-2 text-[22px] font-medium leading-tight text-fd-primary ${TITLE_ALIGN_CLASS[layout.titleAlign]}`}
+                    >
                       {f.name}
                     </p>
-                    <div className="flex-1 rounded-md border border-fd-primary/40 bg-fd-background p-3">
-                      <p className="m-0 text-[18px] leading-snug text-fd-foreground">
+                    <div className="rounded-md border border-fd-primary/40 bg-fd-background p-4">
+                      <p className="m-0 text-left text-[18px] leading-snug text-fd-foreground">
                         {f.description}
                       </p>
                     </div>
@@ -391,37 +488,6 @@ export function FeaturesInfographicV2({
           })}
         </svg>
       </div>
-
-      {/* ============= Mobile fallback list (<md) ============= */}
-      <ul className="m-0 list-none space-y-3 p-0 md:hidden">
-        {features.map((f) => {
-          const content = (
-            <>
-              <p className="m-0 font-medium text-fd-primary">{f.name}</p>
-              <p className="m-0 text-sm text-fd-foreground">{f.description}</p>
-            </>
-          );
-          return (
-            <li key={f.id} className="m-0">
-              {f.href ? (
-                <Link href={f.href} className="block no-underline">
-                  {content}
-                </Link>
-              ) : f.onClick ? (
-                <button
-                  type="button"
-                  onClick={f.onClick}
-                  className="block w-full bg-transparent p-0 text-left"
-                >
-                  {content}
-                </button>
-              ) : (
-                content
-              )}
-            </li>
-          );
-        })}
-      </ul>
     </div>
   );
 }
