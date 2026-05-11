@@ -360,7 +360,7 @@ jobs:
           # Delete them
           $matches | Remove-Item -Force
 
-        - name: Smoke check (tmp-*) package name & prebuilds listing
+      - name: Smoke check (tmp-*) package name & prebuilds listing
         if: ${{ startsWith(github.ref, 'refs/heads/tmp-')
                 || startsWith(github.ref_name, 'tmp-')
                 || (inputs.ref != '' && (startsWith(inputs.ref, 'refs/heads/tmp-') || startsWith(inputs.ref, 'tmp-'))) }}
