@@ -14,7 +14,7 @@ const END_OF_INPUT = 'end of job'
 
 // Upper bound on buffered neural-signal bytes between append() calls.
 // Neural data is ~1 MB/s at 512ch * 50 Hz * 4 B, so 500 MB ~= 8 minutes of
-// signal. The bound matches qvac-lib-infer-whispercpp and protects against
+// signal. The bound matches transcription-whispercpp and protects against
 // runaway producers.
 const MAX_BUFFERED_BYTES = 500 * 1024 * 1024
 

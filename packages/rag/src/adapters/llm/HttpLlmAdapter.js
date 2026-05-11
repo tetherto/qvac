@@ -79,7 +79,7 @@ class HttpLlmAdapter extends BaseLlmAdapter {
    */
   async _makeHttpRequest (requestBody) {
     try {
-      const fetch = await import('bare-fetch').then(module => module.default || module)
+      const fetch = await import('#fetch').then(module => module.default || module)
 
       const response = await fetch(this.httpConfig.apiUrl, {
         method: this.httpConfig.method,
@@ -94,8 +94,12 @@ class HttpLlmAdapter extends BaseLlmAdapter {
 
       return response.json()
     } catch (error) {
-      if ((error.code === 'MODULE_NOT_FOUND' || error.code === 'ERR_MODULE_NOT_FOUND') && error.message.includes('bare-fetch')) {
-        throw new QvacErrorRAG({ code: ERR_CODES.DEPENDENCY_REQUIRED, adds: 'bare-fetch is required for HttpLlmAdapter.', cause: error })
+      if ((error.code === 'MODULE_NOT_FOUND' || error.code === 'ERR_MODULE_NOT_FOUND') && (error.message.includes('bare-fetch') || error.message.includes('#fetch'))) {
+        throw new QvacErrorRAG({
+          code: ERR_CODES.DEPENDENCY_REQUIRED,
+          adds: 'Fetch unavailable: #fetch could not resolve. Bare: install bare-fetch; otherwise ensure globalThis.fetch exists and your bundler supports package imports.',
+          cause: error
+        })
       }
       throw error
     }

@@ -139,7 +139,7 @@ Security hardening release from comprehensive security audit.
 - Reworked integration tests for both FFmpegDecoder and GSTDecoder (#83)
 
 ### Removed
-- qvac-lib-inference-addon-cpp submodule (#84)
+- inference-addon-cpp submodule (#84)
 
 ## [0.2.7]
 
