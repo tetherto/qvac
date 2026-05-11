@@ -254,9 +254,9 @@ const scenarios = [
     name: 'Reverse prompt stops generation',
     overrides: {
       // Whitespace around commas is trimmed by the addon's split() helper;
-      // matching is case-insensitive, so a single "Pizza" entry catches both
-      // "pizza" and "Pizza" in the model output.
-      reverse_prompt: 'network, Pizza, bitcoin, blockchain',
+      // matching is case-insensitive, so a `PiZzA` entry catches the model's
+      // `pizza` / `Pizza` output regardless of casing.
+      reverse_prompt: 'network, PiZzA, bitcoin, blockchain',
       temp: '0',
       top_p: '0.7',
       n_predict: '128'
