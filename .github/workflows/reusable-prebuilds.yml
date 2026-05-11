@@ -211,10 +211,6 @@ jobs:
         if: matrix.os == 'ubuntu-22.04' && matrix.arch == 'x64'
         run: echo "/usr/local/nvm/versions/node/v20.20.2/bin" >> $GITHUB_PATH
 
-      - name: Setup Bare tooling (windows)
-        if: matrix.os == 'windows-2025'
-        run: npm install -g bare-runtime bare-make
-
       - if: ${{ inputs.setup-python-on-windows && matrix.platform == 'win32' }}
         name: Setup Python on self-hosted Windows runner
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
