@@ -21,10 +21,11 @@ namespace {
 constexpr const char* kMedPsyBasenameLower = "medpsy";
 
 std::string toLower(const std::string& value) {
-  std::string lowered = value;
+  std::string lowered;
+  lowered.resize(value.size());
   std::transform(
-      lowered.begin(),
-      lowered.end(),
+      value.begin(),
+      value.end(),
       lowered.begin(),
       [](unsigned char c) { return std::tolower(c); });
   return lowered;
@@ -92,16 +93,13 @@ bool isQwen3Model(const ::llama_model* model) {
 }
 
 bool isMedPsyBasename(const std::optional<std::string>& basename) {
-  if (!basename.has_value()) {
-    return false;
-  }
-  return toLower(basename.value()) == kMedPsyBasenameLower;
+  return basename.has_value() &&
+         toLower(basename.value()) == kMedPsyBasenameLower;
 }
 
 bool isMedPsyModel(const ::llama_model* model) {
-  if (model == nullptr) {
-    return false;
-  }
+  // No explicit nullptr guard needed: getModelBasename() -> readMetadataString()
+  // returns std::nullopt for a null model, which isMedPsyBasename rejects.
   return isMedPsyBasename(getModelBasename(model));
 }
 
