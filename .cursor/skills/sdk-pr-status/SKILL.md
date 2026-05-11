@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # SDK Pod PR Status
 
-Thin wrapper over the shared pr-skills library, pinned to the SDK pod.
+Thin wrapper over the shared pr-skills library, pinned to the SDK pod. PR data collection lives in `.cursor/skills/_lib/pr-skills/pr-activity.mjs`; this skill keeps the SDK-specific invocation.
 
 ## When to use this skill
 
@@ -19,7 +19,7 @@ Thin wrapper over the shared pr-skills library, pinned to the SDK pod.
 ## Prerequisites
 
 - `gh` CLI installed and authenticated (`gh auth status`)
-- User must have access to `tetherto/qvac` repository
+- User must have access to the configured GitHub repository
 - Team roster maintained at [.github/teams/sdk.json](.github/teams/sdk.json)
 
 ## Usage
@@ -29,6 +29,12 @@ node .cursor/skills/_lib/pr-skills/pr-status.mjs --pod sdk --mode team
 ```
 
 For the personal review queue, use `--mode review`. The script and its output format are documented in [.cursor/skills/_lib/pr-skills/README.md](.cursor/skills/_lib/pr-skills/README.md).
+
+Machine-readable output for daily status workflows:
+
+```bash
+node .cursor/skills/_lib/pr-skills/pr-status.mjs --pod sdk --mode team --json
+```
 
 ## Workflow
 

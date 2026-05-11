@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # PR Review
 
-Manual-trigger PR review for any GitHub PR in `tetherto/qvac`. Produces:
+Manual-trigger PR review for any GitHub PR in the configured repository. Produces:
 
 1. A short **overview in chat** (for the user — not posted anywhere).
 2. A **PENDING** GitHub review containing only per-file:line inline comments (no review body).
@@ -153,7 +153,7 @@ When the user passes `--no-worktree`, skip this step entirely and use the API-on
 
 ### 1. Parse PR URL
 
-Extract owner, repo, pr_number from the URL. Verify repo matches `tetherto/qvac`.
+Extract owner, repo, pr_number from the URL. If `~/.config/qvac-pr-skills/config.json` exists, verify the PR repo matches `github.repo`; otherwise use the repo in the provided PR URL.
 
 ### 2. Fetch PR metadata
 
