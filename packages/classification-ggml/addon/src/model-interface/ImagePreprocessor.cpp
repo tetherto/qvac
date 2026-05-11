@@ -6,7 +6,7 @@
 #include <stdexcept>
 #include <string>
 
-#include <qvac-lib-inference-addon-cpp/Errors.hpp>
+#include <inference-addon-cpp/Errors.hpp>
 
 // stb single-header implementations live here for the whole addon.
 #define STB_IMAGE_IMPLEMENTATION

@@ -23,10 +23,10 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   add_link_options(-stdlib=libc++ -static-libstdc++)
 endif()
 
-find_path(VCPKG_INSTALLED_PATH share/qvac-lint-cpp/.clang-format REQUIRED)
-configure_file(${VCPKG_INSTALLED_PATH}/share/qvac-lint-cpp/.clang-format
+find_path(VCPKG_INSTALLED_PATH share/lint-cpp/.clang-format REQUIRED)
+configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.clang-format
                ${CMAKE_CURRENT_SOURCE_DIR}/.clang-format COPYONLY)
-configure_file(${VCPKG_INSTALLED_PATH}/share/qvac-lint-cpp/.clang-tidy
+configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.clang-tidy
                ${CMAKE_CURRENT_SOURCE_DIR}/.clang-tidy COPYONLY)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -39,7 +39,7 @@ if(WIN32)
 endif()
 
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS
-  "qvac-lib-inference-addon-cpp/JsInterface.hpp" REQUIRED)
+  "inference-addon-cpp/JsInterface.hpp" REQUIRED)
 find_path(STB_INCLUDE_DIRS "stb_image.h" REQUIRED)
 
 find_package(ggml CONFIG REQUIRED)
