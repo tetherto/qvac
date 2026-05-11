@@ -76,7 +76,7 @@ function findNoticeFiles () {
 
   for (const dir of topLevel) {
     // Check for sub-packages (registry-server/client, registry-server/shared)
-    if (dir.name === 'qvac-lib-registry-server') {
+    if (dir.name === 'registry-server') {
       for (const sub of ['client', 'shared']) {
         const subDir = path.join(PACKAGES_DIR, dir.name, sub)
         const noticePath = path.join(subDir, 'NOTICE')

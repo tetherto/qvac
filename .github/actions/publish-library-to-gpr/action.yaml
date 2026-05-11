@@ -189,13 +189,13 @@ runs:
           qvac-ext-lib-mlc
           qvac-ext-lib-tokenizers-cpp
           decoder-audio
-          qvac-lib-inference-addon-mlc-ecog
-          qvac-lib-infer-llamacpp-llm
-          qvac-lib-infer-nmtcpp
-          qvac-lib-infer-whispercpp
-          qvac-lib-infer-onnx-vad
-          qvac-lib-infer-llamacpp-embed
-          qvac-lib-infer-onnx-tts
+          inference-addon-mlc-ecog
+          llm-llamacpp
+          translation-nmtcpp
+          transcription-whispercpp
+          onnx-vad
+          embed-llamacpp
+          tts-onnx
           ocr-onnx
         )
 

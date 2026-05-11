@@ -6,8 +6,8 @@
 # and MODEL_S3_BUCKET.
 #
 # Coverage today: parakeet, onnx, nmtcpp, diffusion-cpp,
-# qvac-lib-infer-llamacpp-llm, qvac-lib-infer-llamacpp-embed, whispercpp,
-# qvac-lib-infer-onnx-tts, ocr-onnx. All prebuild workflows in the monorepo
+# llm-llamacpp, embed-llamacpp, whispercpp,
+# tts-onnx, ocr-onnx. All prebuild workflows in the monorepo
 # now route through this reusable.
 name: "Prebuilds (reusable)"
 

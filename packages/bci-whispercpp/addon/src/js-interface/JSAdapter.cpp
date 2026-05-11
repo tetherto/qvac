@@ -4,7 +4,7 @@
 #include <string>
 #include <variant>
 
-#include <qvac-lib-inference-addon-cpp/JsUtils.hpp>
+#include <inference-addon-cpp/JsUtils.hpp>
 
 using namespace qvac_lib_inference_addon_cpp::js;
 

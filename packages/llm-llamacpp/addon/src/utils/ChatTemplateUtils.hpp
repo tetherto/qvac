@@ -1,0 +1,57 @@
+#pragma once
+
+#include <optional>
+#include <string>
+
+#include "common/chat.h"
+#include "common/common.h"
+
+// Forward declaration from llama.h
+struct llama_model;
+struct llama_context;
+
+namespace qvac_lib_inference_addon_llama {
+namespace utils {
+
+bool isQwen3Model(const ::llama_model* model);
+bool isHarmonyModel(const ::llama_model* model);
+llama_token getHarmonyCallToken(::llama_context* lctx);
+std::optional<std::string> getModelArchitecture(const ::llama_model* model);
+bool supportsToolsCompactForModelMetadata(
+    const std::optional<std::string>& architecture);
+
+std::optional<std::string> selectToolsCompactMarkerForModelMetadata(
+    const std::optional<std::string>& architecture);
+
+/**
+ * @brief Gets the appropriate chat template for a model
+ *
+ * For Qwen3 models, returns the fixed template or tools-compact template
+ * based on the toolsCompact flag.
+ * For other models, returns the manual override or empty string.
+ */
+std::string getChatTemplateForModel(
+    const ::llama_model* model, const std::string& manualOverride,
+    bool toolsCompact);
+
+/**
+ * @brief Gets the chat template for a model, applying Qwen3 fixes if Jinja is
+ * enabled
+ */
+std::string getChatTemplate(
+    const ::llama_model* model, const common_params& params, bool toolsCompact);
+
+/**
+ * @brief Applies chat templates to generate a prompt, with fallback handling
+ * for models that don't support tools.
+ *
+ * @p outThinkingForcedOpen (optional) receives the flag indicating that the
+ *    template force-opened the reasoning channel in the prompt suffix.
+ */
+std::string getPrompt(
+    const struct common_chat_templates* tmpls,
+    struct common_chat_templates_inputs& inputs,
+    bool* outThinkingForcedOpen = nullptr);
+
+} // namespace utils
+} // namespace qvac_lib_inference_addon_llama

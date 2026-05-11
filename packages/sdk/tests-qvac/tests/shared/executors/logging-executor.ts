@@ -6,7 +6,7 @@ import { loggingTests } from "../../logging-tests.js";
 type LogEntry = { timestamp: number; level: string; namespace: string; message: string };
 
 // Wait out the documented "run while previous job is settling" busy throw
-// from qvac-lib-infer-llamacpp-llm.
+// from infer-llamacpp-llm.
 const ADDON_BUSY_MARKER = "a job is already set or being processed";
 
 class AddonBusyTimeoutError extends Error {
