@@ -1,6 +1,6 @@
 #include <bare.h>
 
-#include <qvac-lib-inference-addon-cpp/JsInterface.hpp>
+#include <inference-addon-cpp/JsInterface.hpp>
 
 #include "../addon/AddonJs.hpp"
 

@@ -6,14 +6,14 @@
 #include <utility>
 #include <vector>
 
-#include <qvac-lib-inference-addon-cpp/JsInterface.hpp>
-#include <qvac-lib-inference-addon-cpp/JsUtils.hpp>
-#include <qvac-lib-inference-addon-cpp/Logger.hpp>
-#include <qvac-lib-inference-addon-cpp/ModelInterfaces.hpp>
-#include <qvac-lib-inference-addon-cpp/addon/AddonJs.hpp>
-#include <qvac-lib-inference-addon-cpp/handlers/JsOutputHandlerImplementations.hpp>
-#include <qvac-lib-inference-addon-cpp/handlers/OutputHandler.hpp>
-#include <qvac-lib-inference-addon-cpp/queue/OutputCallbackJs.hpp>
+#include <inference-addon-cpp/JsInterface.hpp>
+#include <inference-addon-cpp/JsUtils.hpp>
+#include <inference-addon-cpp/Logger.hpp>
+#include <inference-addon-cpp/ModelInterfaces.hpp>
+#include <inference-addon-cpp/addon/AddonJs.hpp>
+#include <inference-addon-cpp/handlers/JsOutputHandlerImplementations.hpp>
+#include <inference-addon-cpp/handlers/OutputHandler.hpp>
+#include <inference-addon-cpp/queue/OutputCallbackJs.hpp>
 
 #include "../utils/LoggingMacros.hpp"
 #include "AddonCpp.hpp"

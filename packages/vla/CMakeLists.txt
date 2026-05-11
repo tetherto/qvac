@@ -19,10 +19,10 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   add_link_options(-stdlib=libc++ -static-libstdc++)
 endif()
 
-find_path(VCPKG_INSTALLED_PATH share/qvac-lint-cpp/.clang-format REQUIRED)
-configure_file(${VCPKG_INSTALLED_PATH}/share/qvac-lint-cpp/.clang-format
+find_path(VCPKG_INSTALLED_PATH share/lint-cpp/.clang-format REQUIRED)
+configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.clang-format
                ${CMAKE_CURRENT_SOURCE_DIR}/.clang-format COPYONLY)
-configure_file(${VCPKG_INSTALLED_PATH}/share/qvac-lint-cpp/.clang-tidy
+configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.clang-tidy
                ${CMAKE_CURRENT_SOURCE_DIR}/.clang-tidy COPYONLY)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -30,7 +30,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/JsInterface.hpp" REQUIRED)
+find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/JsInterface.hpp" REQUIRED)
 
 # ggml is provided by the qvac-fabric vcpkg port (same port that ships
 # llama.cpp for the LLM addon). Backends (Vulkan, Metal, …) are loaded at
