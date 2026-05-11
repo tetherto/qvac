@@ -4306,6 +4306,104 @@
     "notes": ""
   },
   {
+    "source": "s3:///qvac_models_compiled/chatterbox/2026-05-08/chatterbox-s3gen-mtl.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Chatterbox S3Gen vocoder (GGUF, multilingual)",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "gguf",
+      "s3gen",
+      "multilingual"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/chatterbox/2026-05-08/chatterbox-t3-turbo.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Chatterbox T3 turbo language model (GGUF)",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "gguf",
+      "t3",
+      "turbo",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/chatterbox/2026-05-08/chatterbox-s3gen.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Chatterbox S3Gen vocoder (GGUF, English)",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "gguf",
+      "s3gen",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/chatterbox/2026-05-08/chatterbox-t3-mtl.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Chatterbox T3 language model (GGUF, multilingual)",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "gguf",
+      "t3",
+      "multilingual",
+      "en",
+      "es",
+      "it",
+      "pt"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/supertonic/2026-05-08/supertonic.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Supertonic TTS (GGUF)",
+    "quantization": "",
+    "params": "",
+    "licenseId": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "gguf"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/supertonic/2026-05-08/supertonic2.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Supertonic 2 TTS (GGUF)",
+    "quantization": "",
+    "params": "",
+    "licenseId": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "supertonic2",
+      "gguf"
+    ],
+    "notes": ""
+  },
+  {
     "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/tokenizer.json",
     "engine": "@qvac/tts",
     "description": "Supertonic tokenizer",
