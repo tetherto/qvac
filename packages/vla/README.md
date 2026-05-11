@@ -52,6 +52,9 @@ await model.load() // backend defaults to 'auto' (GPU when available, CPU otherw
 const { hparams } = model
 const size = hparams.visionImageSize // 512
 
+// Note: `imgWidth` and `imgHeight` passed to `model.run` MUST equal
+// `hparams.visionImageSize`. Resize / letterbox up front with
+// `preprocessImage(..., { size })`; the addon rejects mismatches.
 const front = preprocessImage(frontPixels, frontW, frontH, { size })
 const wrist = preprocessImage(wristPixels, wristW, wristH, { size })
 
