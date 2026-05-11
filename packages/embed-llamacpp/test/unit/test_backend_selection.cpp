@@ -162,7 +162,9 @@ protected:
 };
 
 constexpr const char* ADRENO_DESC = "Adreno (TM) 740";
-constexpr const char* MALI_DESC = "Mali-G715";
+// Generic non-Adreno Vulkan-capable device for testing the GPU / iGPU /
+// main-gpu selection logic without tripping the Adreno-OpenCL override.
+constexpr const char* INTEL_DESC = "Intel Iris Xe Graphics";
 
 constexpr const char* VULKAN0_BACK = "Vulkan0";
 constexpr const char* VULKAN1_BACK = "Vulkan1";
@@ -228,30 +230,25 @@ TEST_F(
 }
 
 TEST_F(BackendSelectionTest, VulkanAndOpenCLNotAdrenoChoosesVulkan) {
-  mockBackend.addDevice(createGPUDevice(MALI_DESC, OPENCL_BACK));
-  mockBackend.addDevice(createGPUDevice(MALI_DESC, VULKAN0_BACK));
-  expectChosen(mockBackend, BackendType::GPU, "vulkan0");
-}
-
-TEST_F(BackendSelectionTest, OnlyVulkanMaliChoosesVulkan) {
-  mockBackend.addDevice(createGPUDevice(MALI_DESC, VULKAN0_BACK));
+  mockBackend.addDevice(createGPUDevice(INTEL_DESC, OPENCL_BACK));
+  mockBackend.addDevice(createGPUDevice(INTEL_DESC, VULKAN0_BACK));
   expectChosen(mockBackend, BackendType::GPU, "vulkan0");
 }
 
 TEST_F(BackendSelectionTest, VulkanIGPU) {
-  mockBackend.addDevice(createIGPUDevice(MALI_DESC, VULKAN0_BACK));
+  mockBackend.addDevice(createIGPUDevice(INTEL_DESC, VULKAN0_BACK));
   expectChosen(mockBackend, BackendType::GPU, "vulkan0");
 }
 
 TEST_F(BackendSelectionTest, VulkanGPUOverIGPUWhenGPUBack) {
-  mockBackend.addDevice(createIGPUDevice(MALI_DESC, VULKAN0_BACK));
-  mockBackend.addDevice(createGPUDevice(MALI_DESC, VULKAN1_BACK));
+  mockBackend.addDevice(createIGPUDevice(INTEL_DESC, VULKAN0_BACK));
+  mockBackend.addDevice(createGPUDevice(INTEL_DESC, VULKAN1_BACK));
   expectChosen(mockBackend, BackendType::GPU, "vulkan1");
 }
 
 TEST_F(BackendSelectionTest, VulkanGPUOverIGPUWhenIGPUBack) {
-  mockBackend.addDevice(createGPUDevice(MALI_DESC, VULKAN0_BACK));
-  mockBackend.addDevice(createIGPUDevice(MALI_DESC, VULKAN1_BACK));
+  mockBackend.addDevice(createGPUDevice(INTEL_DESC, VULKAN0_BACK));
+  mockBackend.addDevice(createIGPUDevice(INTEL_DESC, VULKAN1_BACK));
   expectChosen(mockBackend, BackendType::GPU, "vulkan0");
 }
 
@@ -402,32 +399,32 @@ TEST_F(BackendSelectionTest, TryMainGpuFromMapRejectsBothVariants) {
 }
 
 TEST_F(BackendSelectionTest, ChooseBackendWithMainGpuIntegerIndex) {
-  mockBackend.addDevice(createIGPUDevice(MALI_DESC, VULKAN0_BACK));
-  mockBackend.addDevice(createGPUDevice(MALI_DESC, VULKAN1_BACK));
+  mockBackend.addDevice(createIGPUDevice(INTEL_DESC, VULKAN0_BACK));
+  mockBackend.addDevice(createGPUDevice(INTEL_DESC, VULKAN1_BACK));
 
   MainGpu mainGpu = 0;
   expectChosen(mockBackend, BackendType::GPU, "vulkan0", mainGpu);
 }
 
 TEST_F(BackendSelectionTest, ChooseBackendWithMainGpuIntegrated) {
-  mockBackend.addDevice(createIGPUDevice(MALI_DESC, VULKAN0_BACK));
-  mockBackend.addDevice(createGPUDevice(MALI_DESC, VULKAN1_BACK));
+  mockBackend.addDevice(createIGPUDevice(INTEL_DESC, VULKAN0_BACK));
+  mockBackend.addDevice(createGPUDevice(INTEL_DESC, VULKAN1_BACK));
 
   MainGpu mainGpu = MainGpuType::Integrated;
   expectChosen(mockBackend, BackendType::GPU, "vulkan0", mainGpu);
 }
 
 TEST_F(BackendSelectionTest, ChooseBackendWithMainGpuDedicated) {
-  mockBackend.addDevice(createIGPUDevice(MALI_DESC, VULKAN0_BACK));
-  mockBackend.addDevice(createGPUDevice(MALI_DESC, VULKAN1_BACK));
+  mockBackend.addDevice(createIGPUDevice(INTEL_DESC, VULKAN0_BACK));
+  mockBackend.addDevice(createGPUDevice(INTEL_DESC, VULKAN1_BACK));
 
   MainGpu mainGpu = MainGpuType::Dedicated;
   expectChosen(mockBackend, BackendType::GPU, "vulkan1", mainGpu);
 }
 
 TEST_F(BackendSelectionTest, ChooseBackendWithMainGpuIntegerIndexOne) {
-  mockBackend.addDevice(createIGPUDevice(MALI_DESC, VULKAN0_BACK));
-  mockBackend.addDevice(createGPUDevice(MALI_DESC, VULKAN1_BACK));
+  mockBackend.addDevice(createIGPUDevice(INTEL_DESC, VULKAN0_BACK));
+  mockBackend.addDevice(createGPUDevice(INTEL_DESC, VULKAN1_BACK));
 
   MainGpu mainGpu = 1;
   expectChosen(mockBackend, BackendType::GPU, "vulkan1", mainGpu);

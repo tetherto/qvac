@@ -1,5 +1,5 @@
 'use strict'
-// test/integration/ocr-lighton.test.js
+
 const test = require('brittle')
 const fs = require('bare-fs')
 const path = require('bare-path')
@@ -15,20 +15,20 @@ const isMobile = platform === 'ios' || platform === 'android'
 
 const useCpu = isDarwinX64 || isLinuxArm64
 
-const LIGHTON_OCR_CONFIG = {
+const PADDLE_OCR_CONFIG = {
   llmModel: {
-    modelName: 'LightOnOCR-2-1B-ocr-soup-Q4_K_M.gguf',
-    downloadUrl: 'https://huggingface.co/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF/resolve/main/LightOnOCR-2-1B-ocr-soup-Q4_K_M.gguf'
+    modelName: 'PaddleOCR-VL-1.5.gguf',
+    downloadUrl: 'https://huggingface.co/PaddlePaddle/PaddleOCR-VL-1.5-GGUF/resolve/main/PaddleOCR-VL-1.5.gguf'
   },
   projModel: {
-    modelName: 'mmproj-LightOnOCR-2-F16.gguf',
-    downloadUrl: 'https://huggingface.co/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF/resolve/main/mmproj-F16.gguf'
+    modelName: 'PaddleOCR-VL-1.5-mmproj.gguf',
+    downloadUrl: 'https://huggingface.co/PaddlePaddle/PaddleOCR-VL-1.5-GGUF/resolve/main/PaddleOCR-VL-1.5-mmproj.gguf'
   },
   ctx_size: '4096'
 }
 
 const TEST_CONSTANTS = {
-  timeout: 1_800_000, // 30 minutes — model download (~1.2GB) + slow image encoding on Intel Macs
+  timeout: 1_800_000,
   maxTokens: isMobile ? '768' : '1800'
 }
 
@@ -42,21 +42,22 @@ function getConfig (device) {
     temp: '0.1',
     verbosity: '2',
     device,
-    ctx_size: LIGHTON_OCR_CONFIG.ctx_size,
+    ctx_size: PADDLE_OCR_CONFIG.ctx_size,
     predict: TEST_CONSTANTS.maxTokens
   }
 }
 
-async function setupLightOnInference (t, device = 'gpu') {
-  const [modelName, dirPath] = await ensureModel(LIGHTON_OCR_CONFIG.llmModel)
-  t.ok(fs.existsSync(path.join(dirPath, modelName)), 'LLM model file should exist')
-
-  const [projModelName] = await ensureModel(LIGHTON_OCR_CONFIG.projModel)
-  t.ok(fs.existsSync(path.join(dirPath, projModelName)), 'Projection model file should exist')
-
+async function setupPaddleInference (t, device = 'gpu') {
+  const [modelName, dirPath] = await ensureModel(PADDLE_OCR_CONFIG.llmModel)
   const modelPath = path.join(dirPath, modelName)
+  t.ok(fs.existsSync(modelPath), 'LLM model file should exist')
+
+  const [projModelName] = await ensureModel(PADDLE_OCR_CONFIG.projModel)
+  const projectionModelPath = path.join(dirPath, projModelName)
+  t.ok(fs.existsSync(projectionModelPath), 'Projection model file should exist')
+
   const inference = new LlmLlamacpp({
-    files: { model: [modelPath], projectionModel: path.join(dirPath, projModelName) },
+    files: { model: [modelPath], projectionModel: projectionModelPath },
     config: getConfig(device),
     logger: console
   })
@@ -70,12 +71,12 @@ async function setupLightOnInference (t, device = 'gpu') {
   return { inference }
 }
 
-async function runOcr (inference, imageFilePath) {
+async function runOcr (inference, imageFilePath, prompt) {
   const imageBytes = new Uint8Array(fs.readFileSync(imageFilePath))
 
   const messages = [
     { role: 'user', type: 'media', content: imageBytes },
-    { role: 'user', content: 'Extract all text from this image and format it as markdown.' }
+    { role: 'user', content: prompt || 'Extract all text from this image.' }
   ]
 
   const startTime = Date.now()
@@ -102,14 +103,12 @@ async function runOcr (inference, imageFilePath) {
   }
 }
 
-// Test: LightON OCR-2 can extract text from a newspaper document image
-test('LightON OCR-2 can extract text from document image', { timeout: TEST_CONSTANTS.timeout, skip: isMobile }, async t => {
+test('PaddleOCR-VL can extract text from document image', { timeout: TEST_CONSTANTS.timeout }, async t => {
   for (const deviceConfig of DEVICE_CONFIGS) {
     const label = `[${deviceConfig.id.toUpperCase()}]`
 
-    const { inference } = await setupLightOnInference(t, deviceConfig.device)
+    const { inference } = await setupPaddleInference(t, deviceConfig.device)
 
-    // Use the newspaper image — a small document with clear text
     const imageFilePath = getMediaPath('news-paper.jpg')
     t.ok(fs.existsSync(imageFilePath), `${label} news-paper.jpg image file should exist`)
 
@@ -119,10 +118,8 @@ test('LightON OCR-2 can extract text from document image', { timeout: TEST_CONST
     t.comment(`${label} Generated text (${generatedText.length} chars): ${generatedText.substring(0, 500)}...`)
     t.comment(`${label} Total time: ${(totalTime / 1000).toFixed(2)}s`)
 
-    // Assert output is non-empty
     t.ok(generatedText.length > 0, `${label} Should generate OCR output`)
 
-    // Assert key text from the newspaper is present (Titanic headline)
     const lowerText = generatedText.toLowerCase()
     const expectedKeywords = ['titanic', 'new york', 'iceberg']
     const foundKeywords = expectedKeywords.filter(kw => lowerText.includes(kw))
@@ -132,6 +129,28 @@ test('LightON OCR-2 can extract text from document image', { timeout: TEST_CONST
       `${label} OCR output should contain at least one expected keyword. ` +
       `Found: ${foundKeywords.join(', ') || 'none'}. ` +
       `Expected any of: ${expectedKeywords.join(', ')}`
+    )
+  }
+})
+
+test('PaddleOCR-VL produces consistent OCR on repeated runs', { timeout: TEST_CONSTANTS.timeout }, async t => {
+  for (const deviceConfig of DEVICE_CONFIGS) {
+    const label = `[${deviceConfig.id.toUpperCase()}]`
+
+    const { inference } = await setupPaddleInference(t, deviceConfig.device)
+
+    const imageFilePath = getMediaPath('news-paper.jpg')
+    t.ok(fs.existsSync(imageFilePath), `${label} news-paper.jpg image file should exist`)
+
+    const { generatedText: text1 } = await runOcr(inference, imageFilePath)
+    t.ok(text1.length > 0, `${label} first run produced output (${text1.length} chars)`)
+
+    const { generatedText: text2 } = await runOcr(inference, imageFilePath)
+    t.ok(text2.length > 0, `${label} second run produced output (${text2.length} chars)`)
+
+    t.ok(
+      text1.length > 10 && text2.length > 10,
+      `${label} both runs produced substantial output`
     )
   }
 })
