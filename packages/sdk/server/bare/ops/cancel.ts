@@ -20,6 +20,14 @@ const logger = getServerLogger();
  * path: the caller may not have a `requestId` to hand (model unload,
  * app shutdown, admin sweeps), and the escape hatch is cheap because
  * the registry already does the matching.
+ *
+ * Compatibility fallback: only the llama.cpp completion handler routes
+ * through the registry in 0.11.0; embeddings / transcription /
+ * translation / decoder / OCR / TTS handlers will follow in later
+ * milestones. Until then, a `modelId`-targeted cancel that finds zero
+ * registry matches falls back to the pre-0.11.0 behavior of calling
+ * `model.addon.cancel()` directly, so the wire contract for those
+ * surfaces does not regress while the migration is in flight.
  */
 export function cancel(
   params: CancelInferenceBaseParams,
@@ -33,17 +41,28 @@ export function cancel(
   }
 
   const registry = getRequestRegistry();
-  const target = opts?.kind
-    ? { modelId, kind: opts.kind }
-    : { modelId };
+  const target = opts?.kind ? { modelId, kind: opts.kind } : { modelId };
   const cancelled = registry.cancel(target);
 
-  // No active request to cancel is not a hard error — callers (workbench
-  // "Stop" button, app shutdown sweeps) often fire-and-forget. Log so
-  // operators can see when a cancel landed against an empty registry.
-  if (cancelled === 0) {
+  if (cancelled > 0) return;
+
+  // No registry match: a request kind whose handler hasn't been migrated
+  // onto `registry.begin(...)` yet (everything except llama.cpp
+  // completion in 0.11.0). Fire the addon-level cancel directly so the
+  // pre-registry behavior is preserved.
+  const addon = model.addon;
+  if (addon?.cancel) {
+    void addon.cancel.call(addon);
     logger.debug(
-      `[cancel] no in-flight request matched modelId=${modelId}${opts?.kind ? ` kind=${opts.kind}` : ""}`,
+      `[cancel] no registry match for modelId=${modelId}${opts?.kind ? ` kind=${opts.kind}` : ""} — fell back to addon.cancel()`,
     );
+    return;
   }
+
+  // Callers (workbench "Stop" button, app shutdown sweeps) often
+  // fire-and-forget; log so operators can see when a cancel landed
+  // against a registry with nothing in flight and no addon-level cancel.
+  logger.debug(
+    `[cancel] no in-flight request matched modelId=${modelId}${opts?.kind ? ` kind=${opts.kind}` : ""}`,
+  );
 }

@@ -504,6 +504,14 @@ export async function* completion(
     }
   };
   signal.addEventListener("abort", onAbort, { once: true });
+  // `addEventListener("abort", ..., { once: true })` does *not* fire if
+  // the signal is already aborted at register time — but the registry
+  // synchronously aborts a fresh controller when `parentSignal` was
+  // already aborted at `begin(...)`. Without this fall-through, the
+  // addon would keep decoding until `shouldRecordSavedCount` notices
+  // post-loop. Re-using `onAbort` here keeps the listener body as the
+  // single source of truth for "what cancel does."
+  if (signal.aborted) onAbort();
 
   if (kvCache) {
     const systemPromptFromHistory = extractSystemPrompt(history);

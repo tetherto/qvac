@@ -135,10 +135,13 @@ export type CompletionFinal = {
 export type CompletionRun = {
   /**
    * Stable identifier for this run, generated client-side at call time
-   * (UUIDv4) and available synchronously the moment `completion(...)`
-   * returns — before the first network round-trip. Pass it to
-   * `cancel({ requestId })` to target this specific request without
-   * affecting any other inference running on the same model.
+   * (UUIDv4 when `crypto.randomUUID` is available, otherwise an opaque
+   * random hex token) and available synchronously the moment
+   * `completion(...)` returns. Pass it to `cancel({ requestId })` to
+   * target this specific request without affecting any other inference
+   * running on the same model. The cancel only takes effect once the
+   * server has begun the request, so a cancel issued in the same tick
+   * as `completion(...)` may race the begin and is logged as a no-match.
    */
   requestId: string;
   /** Ordered stream of typed completion events — the canonical consumption API. */

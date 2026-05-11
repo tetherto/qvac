@@ -16,6 +16,9 @@ import { InvalidResponseError, CancelFailedError } from "@/utils/errors-client";
  *    `(await completion({ ... })).requestId`) to cancel exactly that
  *    request. Either pass `{ requestId }` directly or the explicit
  *    `{ operation: "request", requestId }` form; both are equivalent.
+ *    The cancel takes effect once the server has begun the request; a
+ *    cancel that races the originating call to the worker may arrive
+ *    before the request is registered and is logged as a no-match.
  *  - **By `modelId`** (broad-cancel escape hatch, kept indefinitely) —
  *    `{ operation: "inference" | "embeddings", modelId }` cancels every
  *    in-flight request running on that model. Useful for model unload,

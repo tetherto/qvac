@@ -9,9 +9,11 @@
  * Two cancel paths exist:
  *
  *  1. `cancel({ requestId })` — targeted cancel, the primary path
- *     introduced in 0.11.0. Available as soon as `completion()` returns,
- *     before the first network round-trip — so a user clicking "stop"
- *     during the queueing phase still hits the right run.
+ *     introduced in 0.11.0. The `requestId` is available synchronously
+ *     on the `CompletionRun`, but the cancel only takes effect once the
+ *     server has begun the request; a cancel issued in the same tick
+ *     as `completion()` may arrive at the worker before the request is
+ *     registered and is logged as a no-match.
  *  2. `cancel({ operation: "inference", modelId })` — broad cancel
  *     (escape hatch, kept indefinitely). Cancels every inference running
  *     on the model. Useful for unload, app shutdown, admin sweeps when
