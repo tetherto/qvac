@@ -1260,6 +1260,16 @@ jobs:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
           role-session-name: device-farm-monitor
+          # Match the initial credentials step (line ~763) which already
+          # uses 7200. Without this, the refresh defaults to the action's
+          # 1h fallback, so every `aws devicefarm get-run` call past the
+          # 1h mark fails until the monitor's MAX_WAIT_TIME (2h) is
+          # reached — producing the spinning
+          #   "AWS API attempt X/3 failed, retrying in 5s..."
+          # output for ~1h with no escape. The persistent-failure escape
+          # below is the real safety net if the session is somehow lost
+          # earlier (revoked / clock-skew / etc.).
+          role-duration-seconds: 7200 # 2hrs for device farm tests
 
       - name: Monitor Test Run
         id: monitor_run
@@ -1298,6 +1308,11 @@ jobs:
 
           MAX_WAIT_TIME=7200
           ELAPSED=0
+          # Number of consecutive aws_retry failures we tolerate per slot
+          # before marking it ERRORED. At a 30s poll cadence, 10 ~= 5 min
+          # of solid API failure, which is past any normal STS / Device
+          # Farm transient and signals a real outage or expired session.
+          MAX_CONSECUTIVE_FAILURES=10
           # Pre-mark empty slots as DONE so perf-only mode (where some
           # slots are intentionally not scheduled) doesn't try to
           # poll them with an empty ARN.
@@ -1307,8 +1322,12 @@ jobs:
               eval "DONE_$i=true"
               eval "STATUS_$i=\"SKIPPED\""
               eval "RESULT_$i=\"-\""
+              eval "FAIL_$i=0"
             else
               eval "DONE_$i=false"
+              eval "STATUS_$i=\"PENDING\""
+              eval "RESULT_$i=\"-\""
+              eval "FAIL_$i=0"
             fi
           done
 
@@ -1320,9 +1339,27 @@ jobs:
                 eval "arn=\$RUN_ARN_$i"
                 STATUS_VAL=$(aws_retry aws devicefarm get-run --arn "$arn" --query 'run.status' --output text) || true
                 RESULT_VAL=$(aws_retry aws devicefarm get-run --arn "$arn" --query 'run.result' --output text) || true
-                eval "STATUS_$i=\"$STATUS_VAL\""
-                eval "RESULT_$i=\"$RESULT_VAL\""
-                if [[ "$STATUS_VAL" == "COMPLETED" ]]; then eval "DONE_$i=true"; fi
+                if [ -z "$STATUS_VAL" ] || [ "$STATUS_VAL" = "None" ]; then
+                  # API failed / empty response: keep last-known-good
+                  # STATUS / RESULT for the dashboard line and bump the
+                  # per-slot failure counter. If the counter trips we
+                  # short-circuit this slot rather than spin until the
+                  # 2h MAX_WAIT_TIME ceiling.
+                  eval "fail_count=\$FAIL_$i"
+                  fail_count=$((fail_count + 1))
+                  eval "FAIL_$i=$fail_count"
+                  if [ "$fail_count" -ge "$MAX_CONSECUTIVE_FAILURES" ]; then
+                    echo "⚠️  Run $i: marking ERRORED after $fail_count consecutive AWS API failures (arn: $arn)" >&2
+                    eval "STATUS_$i=\"ERRORED\""
+                    eval "RESULT_$i=\"NO_API_RESPONSE\""
+                    eval "DONE_$i=true"
+                  fi
+                else
+                  eval "FAIL_$i=0"
+                  eval "STATUS_$i=\"$STATUS_VAL\""
+                  eval "RESULT_$i=\"$RESULT_VAL\""
+                  if [[ "$STATUS_VAL" == "COMPLETED" ]]; then eval "DONE_$i=true"; fi
+                fi
               fi
               eval "STATUS_LINE=\"\$STATUS_LINE Run $i: \$STATUS_$i (\$RESULT_$i) |\""
             done
