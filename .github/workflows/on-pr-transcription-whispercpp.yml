@@ -212,7 +212,7 @@ jobs:
       id-token: write
     needs: [authorize, context, prebuild]
     if: needs.authorize.outputs.allowed == 'true'
-    uses: ./.github/workflows/integration-mobile-test-transcription-whispercpp.yml
+    uses: tetherto/qvac/.github/workflows/integration-mobile-test-transcription-whispercpp.yml@tmp-self-hosted-runners
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}
