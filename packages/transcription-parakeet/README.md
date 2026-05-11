@@ -1,4 +1,4 @@
-# qvac-lib-infer-parakeet
+# transcription-parakeet
 
 This library simplifies running NVIDIA Parakeet speech-to-text and Sortformer speaker-diarization inference within QVAC runtime applications. It provides an easy interface to load, execute, and manage Parakeet inference instances, supporting CTC, TDT, EOU, and Sortformer checkpoints from a single binding.
 
@@ -128,7 +128,7 @@ GPU backends are selected at vcpkg install time via the `parakeet-cpp[metal|vulk
 
 ```bash
 git clone https://github.com/tetherto/qvac.git
-cd qvac/packages/qvac-lib-infer-parakeet
+cd qvac/packages/transcription-parakeet
 npm install
 ```
 
@@ -379,7 +379,7 @@ try {
 
 ```bash
 git clone https://github.com/tetherto/qvac.git
-cd qvac/packages/qvac-lib-infer-parakeet
+cd qvac/packages/transcription-parakeet
 npm install
 ```
 

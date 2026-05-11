@@ -137,7 +137,7 @@ echo "  Max Samples:  $MAX_SAMPLES"
 echo "  Watch:        $WATCH"
 echo ""
 
-if ! gh workflow run benchmark-qvac-lib-infer-parakeet.yml \
+if ! gh workflow run benchmark-transcription-parakeet.yml \
     -R "$REPO" \
     --ref "$BRANCH" \
     -f model_type="$MODEL_TYPE" \
@@ -151,7 +151,7 @@ echo ""
 
 sleep 3
 
-RUN_ID=$(gh run list --workflow=benchmark-qvac-lib-infer-parakeet.yml -R "$REPO" --limit 1 --json databaseId --jq '.[0].databaseId')
+RUN_ID=$(gh run list --workflow=benchmark-transcription-parakeet.yml -R "$REPO" --limit 1 --json databaseId --jq '.[0].databaseId')
 
 if [ -z "$RUN_ID" ]; then
     echo -e "${RED}Error: Could not get workflow run ID.${NC}"

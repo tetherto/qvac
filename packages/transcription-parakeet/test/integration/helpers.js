@@ -898,7 +898,7 @@ async function ensureModelForType (modelType) {
  *   - Mobile + ctc: skip-as-pass. We intentionally do not bundle CTC
  *     into the mobile test app (redundant with TDT for transcription
  *     tests; see helpers.js MODEL_CONFIGS and the
- *     integration-mobile-test-qvac-lib-infer-parakeet workflow).
+ *     integration-mobile-test-transcription-parakeet workflow).
  *     Letting this one case stay as `t.pass` keeps the multi-model
  *     test green on mobile while still actually exercising
  *     TDT / EOU / Sortformer there.

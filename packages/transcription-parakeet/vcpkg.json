@@ -1,6 +1,6 @@
 {
-  "name": "qvac-lib-infer-parakeet",
-  "version": "0.1.0",
+  "name": "transcription-parakeet",
+  "version": "0.4.0",
   "dependencies": [
     {
       "name": "parakeet-cpp",
@@ -22,11 +22,11 @@
     },
     {
       "name": "qvac-lib-inference-addon-cpp",
-      "version>=": "1.1.5#1"
+      "version>=": "1.1.7#1"
     },
     {
       "name": "qvac-lint-cpp",
-      "version>=": "1.4.4#2"
+      "version>=": "1.4.4#3"
     },
     {
       "name": "vcpkg-cmake",

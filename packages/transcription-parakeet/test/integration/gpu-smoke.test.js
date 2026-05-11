@@ -35,7 +35,7 @@
 //   2. The "GPU is expected here" decision is platform-driven (see
 //      `expectsGpu()` below). All four supported platforms (darwin,
 //      ios, linux, win32, android) wire a GPU backend by default in
-//      qvac-lib-infer-parakeet/vcpkg.json, so any CPU result on those
+//      transcription-parakeet/vcpkg.json, so any CPU result on those
 //      platforms is treated as a regression (modulo
 //      QVAC_PARAKEET_GPU_SMOKE_RELAX).
 
@@ -77,7 +77,7 @@ function backendIdToName (id) {
   }
 }
 
-// Which platforms wire up a GPU backend in qvac-lib-infer-parakeet's
+// Which platforms wire up a GPU backend in transcription-parakeet's
 // vcpkg.json today (see the `parakeet-cpp` feature dependencies).
 //   - darwin / ios:        metal              (default)
 //   - linux / win32:       vulkan             (default)
