@@ -33,8 +33,8 @@
 
 #include "ParakeetConfig.hpp"
 #include "model-interface/ParakeetTypes.hpp"
-#include "qvac-lib-inference-addon-cpp/ModelInterfaces.hpp"
-#include "qvac-lib-inference-addon-cpp/RuntimeStats.hpp"
+#include "inference-addon-cpp/ModelInterfaces.hpp"
+#include "inference-addon-cpp/RuntimeStats.hpp"
 
 #include <parakeet/streaming.h>
 #include <parakeet/diarization.h>

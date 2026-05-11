@@ -7,7 +7,7 @@
 #include <sstream>
 #include <utility>
 
-#include "qvac-lib-inference-addon-cpp/Logger.hpp"
+#include "inference-addon-cpp/Logger.hpp"
 #include "model-interface/parakeet/ParakeetModel.hpp"
 
 namespace qvac_lib_infer_parakeet {

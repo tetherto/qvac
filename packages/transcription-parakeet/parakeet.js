@@ -253,7 +253,7 @@ class ParakeetInterface {
    * Get current model status (JS-side state-machine value).
    *
    * NOTE: returns the JavaScript-tracked state of this addon wrapper, not
-   * a native query into qvac-lib-inference-addon-cpp -- the framework does
+   * a native query into inference-addon-cpp -- the framework does
    * not surface a `status` RPC and `binding.cpp` does not export
    * `JsInterface::status`. Values reflect transitions driven by this
    * wrapper itself (`listening` / `processing` / `idle` / `paused` /

@@ -33,7 +33,7 @@ This library simplifies running NVIDIA Parakeet speech-to-text and Sortformer sp
 | Windows | x64 | 10+ | Tier 1 | Vulkan |
 
 **Dependencies:**
-- qvac-lib-inference-addon-cpp: C++ addon framework
+- inference-addon-cpp: C++ addon framework
 - parakeet-cpp (latest): NVIDIA Parakeet ASR + Sortformer diarization engine
 - ggml-speech (latest): GGML flavour shared with the speech stack; library prefix `qvac-speech-` so it can coexist with the fabric/llm and diffusion ggml builds on the same Android device
 - Bare Runtime (latest): JavaScript runtime

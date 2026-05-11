@@ -160,7 +160,7 @@ Job management is now handled by `createJobHandler()` from `@qvac/infer-base ^0.
 ## [0.2.7]
 
 ### Changed
-- Bumped `qvac-lib-inference-addon-cpp` to `1.1.5`.
+- Bumped `inference-addon-cpp` to `1.1.5`.
 - Restored JS-owned job ID routing after addon-cpp reverted the accidental `1.1.3` native callback `jobId` contract and `cancel(jobId)` API break.
 
 ### Added
@@ -227,7 +227,7 @@ A new integration test exercises `TranscriptionParakeet` with TDT named paths: t
 ## [0.2.0]
 
 ### Changed
-- Migrated the native addon implementation to `qvac-lib-inference-addon-cpp` 1.x (`IModel`/`IModelCancel` + `AddonJs`/`AddonCpp`), replacing the removed legacy templated addon API
+- Migrated the native addon implementation to `inference-addon-cpp` 1.x (`IModel`/`IModelCancel` + `AddonJs`/`AddonCpp`), replacing the removed legacy templated addon API
 - Updated the JS/native pipeline to `createInstance` + `runJob` while preserving public transcription API behavior and output semantics
 - Hardened cancel/reload/job lifecycle behavior in runtime and integration paths to match expected production behavior
 

@@ -11,7 +11,7 @@
 #include <parakeet/diarization.h>
 #include <parakeet/streaming.h>
 
-#include "qvac-lib-inference-addon-cpp/queue/OutputQueue.hpp"
+#include "inference-addon-cpp/queue/OutputQueue.hpp"
 
 #include "model-interface/ParakeetTypes.hpp"
 

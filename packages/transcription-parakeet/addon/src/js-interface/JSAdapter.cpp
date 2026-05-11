@@ -1,7 +1,7 @@
 #include "JSAdapter.hpp"
 
-#include "qvac-lib-inference-addon-cpp/JsUtils.hpp"
-#include "qvac-lib-inference-addon-cpp/Logger.hpp"
+#include "inference-addon-cpp/JsUtils.hpp"
+#include "inference-addon-cpp/Logger.hpp"
 
 namespace qvac_lib_infer_parakeet {
 
