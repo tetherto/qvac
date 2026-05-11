@@ -108,11 +108,10 @@ jobs:
         working-directory: packages/translation-nmtcpp
         shell: bash
         run: |
-          mkdir -p prebuilds
-          mkdir -p ${{ runner.temp }}/tmp
-          npm pack ${{ inputs.prebuild_package }} --pack-destination ${{ runner.temp }}/tmp
-          tar -xzf ${{ runner.temp }}/tmp/*.tgz -C ${{ runner.temp }}/tmp
-          cp -r ${{ runner.temp }}/tmp/package/prebuilds/* prebuilds/
+          mkdir -p prebuilds tmp
+          npm pack ${{ inputs.prebuild_package }} --pack-destination tmp
+          tar -xzf tmp/*.tgz -C tmp
+          cp -r tmp/package/prebuilds/* prebuilds/
 
       - name: Print run state
         working-directory: packages/translation-nmtcpp
