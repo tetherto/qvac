@@ -8,6 +8,7 @@
 //     exit 0 with `authorised=false`. Downstream jobs gate on the output.
 
 import { appendFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { GitHubClient, GitHubApiError } from './github-client.mjs';
 import { gate, parseList, loadEventPayload } from './gate.mjs';
 
@@ -18,11 +19,19 @@ const notice = (m) => annotate('notice', m);
 const warning = (m) => annotate('warning', m);
 const error = (m) => annotate('error', m);
 
-function getInput(name, { required = false } = {}) {
-  // Composite/JS actions both expose inputs as INPUT_<NAME_UPPERCASED>
-  // with hyphens replaced by underscores.
-  const key = `INPUT_${name.toUpperCase().replace(/-/g, '_')}`;
-  const raw = process.env[key];
+// Exported for unit tests; index.mjs is the only production caller.
+export function getInput(name, { required = false, env = process.env } = {}) {
+  // Match the GitHub Actions runner / @actions/core convention exactly:
+  // INPUT_<NAME> where <NAME> uppercases the input and replaces spaces
+  // (NOT hyphens) with underscores. Hyphens are preserved verbatim, so
+  // `github-token` becomes `INPUT_GITHUB-TOKEN`. Hyphens in env-var
+  // names are technically non-POSIX but Node.js exposes them via
+  // process.env regardless. An earlier impl replaced hyphens with
+  // underscores too, which silently lost any hyphenated input — caught
+  // by the QVAC-18612 canary; the regression test below pins this for
+  // good.
+  const key = `INPUT_${name.replace(/ /g, '_').toUpperCase()}`;
+  const raw = env[key];
   const value = raw == null ? '' : raw.trim();
   if (required && !value) {
     throw new Error(`required input '${name}' is missing`);
@@ -83,13 +92,20 @@ async function main() {
   await setOutput('authorised', decision.authorised ? 'true' : 'false');
 }
 
-main().catch((e) => {
-  if (e instanceof GitHubApiError) {
-    error(
-      `GitHub API error: ${e.message} (status=${e.status} method=${e.method} path=${e.path})`
-    );
-  } else {
-    error(`unexpected failure: ${e.message ?? e}`);
-  }
-  process.exitCode = 1;
-});
+// Only execute when invoked as the action entrypoint (`node src/index.mjs`).
+// When imported by the test suite the top-level main() must not run.
+const invokedDirectly =
+  process.argv[1] && process.argv[1] === fileURLToPath(import.meta.url);
+
+if (invokedDirectly) {
+  main().catch((e) => {
+    if (e instanceof GitHubApiError) {
+      error(
+        `GitHub API error: ${e.message} (status=${e.status} method=${e.method} path=${e.path})`
+      );
+    } else {
+      error(`unexpected failure: ${e.message ?? e}`);
+    }
+    process.exitCode = 1;
+  });
+}
