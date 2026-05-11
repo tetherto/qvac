@@ -5395,6 +5395,79 @@
     "notes": ""
   },
   {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-05-11/sortformer-4spk-v1.q8_0.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/diar_sortformer_4spk-v1",
+    "description": "Parakeet Sortformer 4SPK v1 GGUF",
+    "quantization": "q8_0",
+    "params": "123M",
+    "licenseId": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "sortformer",
+      "4spk",
+      "ggml",
+      "en"
+    ],
+    "deprecated": false,
+    "notes": "Q8_0 GGUF conversion of nvidia/diar_sortformer_4spk-v1"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-05-11/parakeet-ctc-0.6b.q8_0.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/parakeet-ctc-0.6b",
+    "description": "Parakeet CTC 0.6B GGUF",
+    "quantization": "q8_0",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "ctc",
+      "ggml",
+      "en"
+    ],
+    "deprecated": false,
+    "notes": "Q8_0 GGUF conversion of nvidia/parakeet-ctc-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-05-11/parakeet-tdt-0.6b-v3.q8_0.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
+    "description": "Parakeet TDT 0.6B v3 GGUF",
+    "quantization": "q8_0",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "tdt",
+      "ggml",
+      "en"
+    ],
+    "deprecated": false,
+    "notes": "Q8_0 GGUF conversion of nvidia/parakeet-tdt-0.6b-v3"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-05-11/parakeet-eou-120m-v1.q8_0.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1",
+    "description": "Parakeet EOU 120M v1 GGUF",
+    "quantization": "q8_0",
+    "params": "120M",
+    "licenseId": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "eou",
+      "ggml",
+      "en"
+    ],
+    "deprecated": false,
+    "notes": "Q8_0 GGUF conversion of nvidia/parakeet_realtime_eou_120m-v1"
+  },
+  {
     "source": "https://huggingface.co/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF/resolve/main/LightOnOCR-2-1B-ocr-soup-Q4_K_M.gguf",
     "engine": "@qvac/llm-llamacpp",
     "description": "OCR-specialized vision-language model for document understanding",
