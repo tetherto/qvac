@@ -94,10 +94,17 @@ export const DEFAULT_PLATFORMS: Platform[] = [
 
 export const DEFAULT_FEATURES: Feature[] = [
   {
-    id: 'local-first',
-    name: 'Local-first AI',
+    id: 'complete-suite',
+    name: 'Complete AI suite',
     description:
-      'Run AI models and inference locally, without relying on third-party APIs, SaaS, or cloud infrastructure.',
+      'Use one SDK for LLMs, fine-tuning, diffusion, speech, RAG, and more.',
+    angle: 0,
+  },
+  {
+    id: 'local-first',
+    name: 'Local-first',
+    description:
+      'Run AI models locally, without relying on third-party APIs, SaaS, or cloud infrastructure.',
     angle: 315,
   },
   {
@@ -130,7 +137,7 @@ export const DEFAULT_FEATURES: Feature[] = [
   },
   {
     id: 'openai',
-    name: 'OpenAI-compatible API',
+    name: 'OpenAI-compatible',
     description:
       'Launch an HTTP server that exposes an OpenAI-compatible API for integration with the broader AI ecosystem.',
     angle: 225,
@@ -160,10 +167,11 @@ const R_INNER = 95;       // small circle around the Q
 const R_PLATFORMS = 180;  // ring where platform icons sit
 const R_OUTER = 290;      // outermost dotted circle (where feature pins live)
 
-// Vertical crop applied to the viewBox so the infographic does not waste
-// space above the outer ring (which begins at y = CENTER_Y - R_OUTER).
-// Geometry stays anchored to CENTER_Y; only the visible window is shifted.
-const VIEWBOX_TOP = CENTER_Y - R_OUTER - 2; // = 148, ~2px breathing above the ring
+// Vertical crop applied to the viewBox. The top "Complete AI suite" card sits
+// ABOVE the outer ring (its foreignObject extends from y=-10 upward), so the
+// viewBox starts at y=-20 to give the card ~10px of breathing room. Geometry
+// stays anchored to CENTER_Y; only the visible window is shifted.
+const VIEWBOX_TOP = -20;
 const VIEWBOX_HEIGHT = VIEW_H - VIEWBOX_TOP;
 
 const PLATFORM_BOX = 80;  // foreignObject square that holds each platform icon
@@ -174,6 +182,12 @@ type FeatureCardLayout = {
   width: number;
   height: number;
   titleAlign: 'left' | 'center' | 'right';
+  /**
+   * When true, the card content is rendered bottom-up so the title sits at
+   * the bottom of the card (next to a bullet that lives below). Used for the
+   * top "Complete AI suite" card, mirroring the south "Open source" card.
+   */
+  invert?: boolean;
 };
 
 const TITLE_ALIGN_CLASS: Record<FeatureCardLayout['titleAlign'], string> = {
@@ -188,6 +202,17 @@ const TITLE_ALIGN_CLASS: Record<FeatureCardLayout['titleAlign'], string> = {
 // the bullet (left = title's left edge, right = title's right edge,
 // center = title centered horizontally below the bullet).
 const FEATURE_CARD_LAYOUT: Record<string, FeatureCardLayout> = {
+  // N bullet ~ (640, 150); card sits ABOVE the bullet, mirroring the south
+  // "Open source" card. With invert=true the title renders at the BOTTOM of
+  // the card so it hugs the bullet from above.
+  'complete-suite': {
+    x: 490,
+    y: -10,
+    width: 300,
+    height: 150,
+    titleAlign: 'center',
+    invert: true,
+  },
   // NW bullet ~ (435, 235)
   'local-first': {
     x: 103,
@@ -296,11 +321,14 @@ const HTML_NS = 'http://www.w3.org/1999/xhtml';
 
 function FeatureCardShell({
   feature,
+  invert = false,
   children,
 }: {
   feature: Feature;
+  invert?: boolean;
   children: React.ReactNode;
 }) {
+  const flexClass = invert ? 'flex-col-reverse' : 'flex-col';
   const interactiveClasses =
     'transition-colors hover:bg-fd-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring focus-visible:ring-offset-2 focus-visible:ring-offset-fd-background rounded-md';
 
@@ -308,7 +336,7 @@ function FeatureCardShell({
     return (
       <Link
         href={feature.href}
-        className={`inline-flex w-full flex-col no-underline ${interactiveClasses}`}
+        className={`inline-flex w-full ${flexClass} no-underline ${interactiveClasses}`}
       >
         {children}
       </Link>
@@ -319,13 +347,13 @@ function FeatureCardShell({
       <button
         type="button"
         onClick={feature.onClick}
-        className={`inline-flex w-full flex-col bg-transparent p-0 text-left ${interactiveClasses}`}
+        className={`inline-flex w-full ${flexClass} bg-transparent p-0 text-left ${interactiveClasses}`}
       >
         {children}
       </button>
     );
   }
-  return <div className="inline-flex w-full flex-col">{children}</div>;
+  return <div className={`inline-flex w-full ${flexClass}`}>{children}</div>;
 }
 
 // ============================================================================
@@ -461,6 +489,7 @@ export function FeaturesInfographicV2({
           {/* ----- Feature cards (foreignObject so they scale) ----- */}
           {features.map((f) => {
             const layout = getFeatureCardLayout(f);
+            const inverted = !!layout.invert;
             return (
               <foreignObject
                 key={f.id}
@@ -470,9 +499,9 @@ export function FeaturesInfographicV2({
                 height={layout.height}
               >
                 <div {...{ xmlns: HTML_NS }} className="w-full overflow-visible">
-                  <FeatureCardShell feature={f}>
+                  <FeatureCardShell feature={f} invert={inverted}>
                     <p
-                      className={`m-0 mb-2 text-[22px] font-medium leading-tight text-fd-primary ${TITLE_ALIGN_CLASS[layout.titleAlign]}`}
+                      className={`m-0 ${inverted ? 'mt-2' : 'mb-2'} text-[22px] font-medium leading-tight text-fd-primary ${TITLE_ALIGN_CLASS[layout.titleAlign]}`}
                     >
                       {f.name}
                     </p>
