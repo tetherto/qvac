@@ -237,10 +237,20 @@ export const customTree: Node[] = [
     icon: resolveIcon('Tag'),
   },
   {
-    name: 'Software inventory',
-    url: '/reference/software-inventory',
-    type: 'page',
-    icon: resolveIcon('ClipboardList'),
+    name: 'Addons',
+    type: 'folder',
+    icon: resolveIcon('Blocks'),
+    index: { type: 'page', name: 'Addons', url: '/addons' },
+    children: [
+      { name: 'llm-llamacpp', url: '/addons/llm-llamacpp', type: 'page' },
+      { name: 'embed-llamacpp', url: '/addons/embed-llamacpp', type: 'page' },
+      { name: 'translation-nmtcpp', url: '/addons/translation-nmtcpp', type: 'page' },
+      { name: 'transcription-whispercpp', url: '/addons/transcription-whispercpp', type: 'page' },
+      { name: 'transcription-parakeet', url: '/addons/transcription-parakeet', type: 'page' },
+      { name: 'tts-onnx', url: '/addons/tts-onnx', type: 'page' },
+      { name: 'ocr-onnx', url: '/addons/ocr-onnx', type: 'page' },
+      { name: 'diffusion-cpp', url: '/addons/diffusion-cpp', type: 'page' },
+    ],
   },
   {
     type: 'separator',
@@ -260,20 +270,8 @@ export const customTree: Node[] = [
     icon: resolveIcon('MessageCircle'),
   },
   {
-    name: 'Keet',
-    url: '/#community',
-    type: 'page',
-    icon: resolveIcon('Users'),
-  },
-  {
     type: 'separator',
     name: 'About QVAC',
-  },
-  {
-    name: 'Overview',
-    url: '/about',
-    type: 'page',
-    icon: resolveIcon('DoorOpen'),
   },
   {
     name: 'How it works',
