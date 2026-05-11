@@ -65,6 +65,7 @@ jobs:
 
     steps:
       - name: Setup Node.js
+        if: ${{ matrix.arch == 'arm64' }}
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
@@ -85,6 +86,10 @@ jobs:
         working-directory: packages/translation-nmtcpp
         run: |
           npm install
+      
+      - name: Install Bare tooling on arm64 arch (ubuntu and mac)
+        if: ${{ matrix.arch == 'arm64' }}
+        run: |
           npm install -g bare bare-make
 
       - name: Download prebuilds from artifact
