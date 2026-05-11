@@ -13,6 +13,7 @@ import {
 } from "@/schemas/transcription-config";
 import { ocrConfigSchema } from "@/schemas/ocr";
 import { sdcppConfigSchema } from "@/schemas/sdcpp-config";
+import { sdcppUpscalingConfigSchema } from "@/schemas/sdcpp-upscaling";
 
 export const CANONICAL_TO_ALIAS: Record<CanonicalModelType, string> = {
   [ModelType.llamacppCompletion]: "llm",
@@ -23,6 +24,7 @@ export const CANONICAL_TO_ALIAS: Record<CanonicalModelType, string> = {
   [ModelType.onnxTts]: "tts",
   [ModelType.onnxOcr]: "ocr",
   [ModelType.sdcppGeneration]: "diffusion",
+  [ModelType.sdcppUpscaling]: "upscaler",
 };
 
 export const MODEL_CONFIG_SCHEMAS: Partial<
@@ -34,6 +36,7 @@ export const MODEL_CONFIG_SCHEMAS: Partial<
   [ModelType.parakeetTranscription]: parakeetRuntimeConfigSchema.passthrough(),
   [ModelType.onnxOcr]: ocrConfigSchema,
   [ModelType.sdcppGeneration]: sdcppConfigSchema,
+  [ModelType.sdcppUpscaling]: sdcppUpscalingConfigSchema,
 };
 
 // Ordered general → specific (later patterns override earlier)

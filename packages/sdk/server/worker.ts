@@ -14,6 +14,7 @@ import {
   ttsPlugin,
   ocrPlugin,
   diffusionPlugin,
+  upscalerPlugin,
 } from "@/server/bare/plugins";
 
 const { hasRPCConfig } = initializeWorkerCore();
@@ -31,6 +32,7 @@ registerPlugin(nmtPlugin);
 registerPlugin(ttsPlugin);
 registerPlugin(ocrPlugin);
 registerPlugin(diffusionPlugin);
+registerPlugin(upscalerPlugin);
 
 logger.info(
   hasRPCConfig

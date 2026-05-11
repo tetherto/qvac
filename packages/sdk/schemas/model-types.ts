@@ -15,6 +15,7 @@ export const ModelType = {
   parakeetTranscription: "parakeet-transcription",
   onnxOcr: "onnx-ocr",
   sdcppGeneration: "sdcpp-generation",
+  sdcppUpscaling: "sdcpp-upscaling",
 } as const;
 
 // === INTERNAL: Alias keys (backward compat names) ===
@@ -27,6 +28,7 @@ const AliasKeys = {
   tts: "tts",
   ocr: "ocr",
   diffusion: "diffusion",
+  upscaler: "upscaler",
 } as const;
 
 // === INTERNAL: Aliases (backward compat mapping) ===
@@ -43,6 +45,7 @@ export const ModelTypeAliases = {
   [AliasKeys.tts]: ModelType.onnxTts,
   [AliasKeys.ocr]: ModelType.onnxOcr,
   [AliasKeys.diffusion]: ModelType.sdcppGeneration,
+  [AliasKeys.upscaler]: ModelType.sdcppUpscaling,
 } as const;
 
 // === TYPES ===
@@ -229,4 +232,18 @@ export const diffusionModelTypeSchema = modelTypeInputSchema
   );
 export type DiffusionModelTypeInput = z.infer<
   typeof diffusionModelTypeSchema
+>;
+
+/**
+ * Stable-diffusion.cpp upscaler model type schema.
+ * - Alias: `"upscaler"` → resolves to `"sdcpp-upscaling"`
+ * - Canonical: `"sdcpp-upscaling"`
+ */
+export const upscalerModelTypeSchema = modelTypeInputSchema
+  .extract([AliasKeys.upscaler, ModelType.sdcppUpscaling])
+  .describe(
+    'Upscaler model type: "upscaler" (alias) or "sdcpp-upscaling" (canonical)',
+  );
+export type UpscalerModelTypeInput = z.infer<
+  typeof upscalerModelTypeSchema
 >;

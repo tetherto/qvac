@@ -347,6 +347,15 @@ resources.define("diffusion-esrgan", {
   },
 });
 
+resources.define("upscaler", {
+  constant: REALESRGAN_X4PLUS_ANIME_6B,
+  type: "upscaler",
+  preLoadUnload: true,
+  config: {
+    tile_size: 128,
+  },
+});
+
 export async function bootstrap() {
   // Point the SDK at the committed e2e fixture unless the developer
   // already provided their own qvac.config.json / QVAC_CONFIG_PATH.

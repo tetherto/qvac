@@ -26,6 +26,7 @@ export const ENGINE_TO_ADDON = {
   [ModelType.onnxOcr]: "ocr",
   [ModelType.parakeetTranscription]: "parakeet",
   [ModelType.sdcppGeneration]: "diffusion",
+  [ModelType.sdcppUpscaling]: "diffusion",
   "onnx-vad": "vad",
 } as const satisfies Record<ModelRegistryEngine, ModelRegistryEntryAddon>;
 
@@ -52,6 +53,7 @@ const LEGACY_ENGINE_TO_CANONICAL: Record<string, ModelRegistryEngine> = {
   ocr: ModelType.onnxOcr,
   [ADDON_DIFFUSION]: ModelType.sdcppGeneration,
   diffusion: ModelType.sdcppGeneration,
+  upscaler: ModelType.sdcppUpscaling,
 };
 
 // Resolves any engine string (legacy or canonical) to a validated canonical engine.
