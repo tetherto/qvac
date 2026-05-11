@@ -174,3 +174,36 @@ test('FFmpegDecoder - handles real corrupted mp3 file', async (t) => {
     await decoder.unload()
   }
 })
+
+test('FFmpegDecoder - cancel rejects response and decoder is reusable', async (t) => {
+  const decoder = await loadDecoder({
+    audioFormat: 's16le',
+    sampleRate: 16000
+  })
+
+  try {
+    const sampleFile = isMobile
+      ? getAssetPath('sample_mp3.mp3')
+      : path.join(__dirname, '../../example/sample.mp3')
+
+    const audioStream = fs.createReadStream(sampleFile)
+    const response = decoder.run(audioStream)
+    response.onError(() => {})
+    setImmediate(() => response.cancel())
+
+    try {
+      await response.await()
+      t.fail('cancelled response should reject')
+    } catch (err) {
+      t.is(err.name, 'JOB_CANCELLED', 'rejected with JOB_CANCELLED')
+    }
+
+    const audioStream2 = fs.createReadStream(sampleFile)
+    const response2 = decoder.run(audioStream2)
+    await response2.onFinish(() => {}).await()
+    t.ok(response2.stats.outputBytes > 0, 'second run produced output after a cancel')
+  } finally {
+    await decoder.unload()
+    await new Promise(resolve => setTimeout(resolve, 100))
+  }
+})

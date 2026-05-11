@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.5] - 2026-05-08
+
+### Added
+
+- Info-level addon-logger entries on `_load()` and `_runInternal()` paths, aligning with all other inference addons
+- Unit test for addon logging lifecycle contract (`addon-logging.test.js`)
+
 ## [0.4.4] - 2026-04-27
 
 ### Fixed
@@ -60,7 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Bumped `qvac-lib-inference-addon-cpp` vcpkg dependency to >=1.1.5
+- Bumped `inference-addon-cpp` vcpkg dependency to >=1.1.5
 - DocTR models now download directly from OnnxTR GitHub releases on all platforms
 - Removed legacy `scripts/generate-doctr-presigned-urls.sh`
 
@@ -74,7 +81,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Updated `@qvac/onnx` dependency to ^0.14.0 (ONNX Runtime 1.24.2)
-- Pinned `qvac-lib-inference-addon-cpp` >= 1.1.4 to pick up cancel race condition fix
+- Pinned `inference-addon-cpp` >= 1.1.4 to pick up cancel race condition fix
 - Disabled XNNPACK on Windows CI tests, consistent with all other platforms
 
 ## [0.3.3]

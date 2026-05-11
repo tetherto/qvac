@@ -4,16 +4,16 @@
 #include <atomic>
 #include <functional>
 #include <memory>
-#include <mutex>
 #include <string>
 #include <vector>
 
-#include <qvac-lib-inference-addon-cpp/ModelInterfaces.hpp>
-#include <qvac-lib-inference-addon-cpp/RuntimeStats.hpp>
+#include <inference-addon-cpp/ModelInterfaces.hpp>
+#include <inference-addon-cpp/RuntimeStats.hpp>
 #include <stable-diffusion.h>
 
 #include "handlers/SdCtxHandlers.hpp"
 #include "handlers/SdGenHandlers.hpp"
+#include "utils/EsrganUpscaler.hpp"
 
 /**
  * Core stable-diffusion.cpp model wrapper.
@@ -92,11 +92,6 @@ public:
   [[nodiscard]] qvac_lib_inference_addon_cpp::RuntimeStats
   runtimeStats() const final;
 
-  // -- Log callback -----------------------------------------------------------
-
-  static void
-  sdLogCallback(sd_log_level_t level, const char* text, void* userData);
-
   // -- Generation job input type ---------------------------------------------
 
   struct GenerationJob {
@@ -119,16 +114,12 @@ public:
   };
 
 private:
-  static std::vector<uint8_t> encodeToPng(const sd_image_t& img);
-  static sd_image_t decodePng(const std::vector<uint8_t>& pngBytes);
-  upscaler_ctx_t* ensureUpscaler();
   sd_image_t upscaleImage(const sd_image_t& inputImage, int repeats);
 
   const qvac_lib_inference_addon_sd::SdCtxConfig config_;
 
   std::unique_ptr<sd_ctx_t, decltype(&free_sd_ctx)> sdCtx_;
-  std::unique_ptr<upscaler_ctx_t, decltype(&free_upscaler_ctx)> upscalerCtx_;
-  std::mutex upscalerMutex_;
+  qvac_lib_inference_addon_sd::EsrganUpscaler upscaler_;
   mutable std::atomic<bool> cancelRequested_{false};
   mutable qvac_lib_inference_addon_cpp::RuntimeStats lastStats_{};
 

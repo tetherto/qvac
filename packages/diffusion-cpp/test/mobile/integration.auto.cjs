@@ -10,6 +10,10 @@ async function runApiBehaviorTest (options = {}) { // eslint-disable-line no-unu
   return runIntegrationModule('../integration/api-behavior.test.js', options)
 }
 
+async function runGenerateImageEsrganUpscaleTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/generate-image-esrgan-upscale.test.js', options)
+}
+
 async function runGenerateImageFlux2FusionSurjectiveTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/generate-image-flux2-fusion-surjective.test.js', options)
 }
@@ -56,6 +60,7 @@ async function runModelLoadingTest (options = {}) { // eslint-disable-line no-un
 
 module.exports = {
   runApiBehaviorTest,
+  runGenerateImageEsrganUpscaleTest,
   runGenerateImageFlux2FusionSurjectiveTest,
   runGenerateImageFlux2FusionTest,
   runGenerateImageFlux2I2iTest,
