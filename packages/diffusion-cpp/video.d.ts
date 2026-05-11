@@ -24,6 +24,11 @@ export interface VideoDiffusionFiles {
   t5Xxl?: string
   /** Absolute path to the Wan VAE. */
   vae?: string
+  /**
+   * Optional ESRGAN weights path for native ctx parity; video jobs do not apply
+   * ESRGAN. Omit and the addon passes an empty string.
+   */
+  esrgan?: string
 }
 
 export interface VideoStableDiffusionArgs {

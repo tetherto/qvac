@@ -5,7 +5,7 @@ const QvacLogger = require('@qvac/logging')
 const { createJobHandler, exclusiveRunQueue } = require('@qvac/infer-base')
 const { SdInterface, mapAddonEvent } = require('./addon')
 
-const COMPANION_FILE_KEYS = ['highNoiseDiffusionModel', 't5Xxl', 'vae']
+const COMPANION_FILE_KEYS = ['highNoiseDiffusionModel', 't5Xxl', 'vae', 'esrgan']
 
 const VIDEO_MODES = new Set(['txt2vid', 'img2vid', 'flf2vid'])
 
@@ -70,6 +70,9 @@ class VideoStableDiffusion {
    *        encoder (Wan uses the `t5xxl_path` slot for UMT5). Absolute path.
    * @param {string} [args.files.vae]                     - Absolute path to
    *        the Wan VAE.
+   * @param {string} [args.files.esrgan]                  - Optional; forwarded
+   *        to the native ctx as `esrganPath` (empty string when unset). Video
+   *        generation does not use ESRGAN — same binding shape as image mode.
    * @param {object} [args.config]                        - SD context config
    *        (threads, device, flow_shift, etc.). Optional.
    * @param {object} [args.logger]                        - Structured logger
@@ -137,6 +140,7 @@ class VideoStableDiffusion {
       t5XxlPath: this._files.t5Xxl || '',
       llmPath: '',
       vaePath: this._files.vae || '',
+      esrganPath: this._files.esrgan || '',
       config: this._config
     }
 
