@@ -128,11 +128,10 @@ export class LoggingExecutor extends AbstractModelExecutor<typeof loggingTests> 
   });
 
   private async dispatch(testId: string, params: AnyParams): Promise<TestResult> {
-    const meta = getMeta(testId);
-    const handler = meta["handler"];
+    const handler = params["handler"];
 
     if (!isHandlerKey(handler)) {
-      throw new Error(`Test "${testId}" has missing/invalid metadata.handler: ${String(handler)}`);
+      throw new Error(`Test "${testId}" has missing/invalid params.handler: ${String(handler)}`);
     }
 
     try {
@@ -149,17 +148,15 @@ export class LoggingExecutor extends AbstractModelExecutor<typeof loggingTests> 
   }
 
   private async runAddonLogging(testId: string, params: AnyParams): Promise<TestResult> {
-    const meta = getMeta(testId);
-
     // SDK-server logs flow with any RPC; no explicit trigger needed.
-    if (meta["target"] === "sdk-server") {
+    if (getMeta(testId)["target"] === "sdk-server") {
       return collectLogs({ testId, targetId: SDK_LOG_ID, target: 1, postTriggerWaitMs: POST_TRIGGER_GRACE_MS });
     }
 
     const dep = getRequiredMeta(testId, "dependency");
-    const triggerKey = meta["trigger"];
+    const triggerKey = params["trigger"];
     if (!isTriggerKey(triggerKey)) {
-      throw new Error(`addon-logging test "${testId}" has invalid metadata.trigger: ${String(triggerKey)}`);
+      throw new Error(`addon-logging test "${testId}" has invalid params.trigger: ${String(triggerKey)}`);
     }
 
     const targetId = await this.resources.ensureLoaded(dep);
@@ -308,17 +305,6 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function drainLogs(
-  stream: AsyncIterable<LogEntry>,
-  sink: LogEntry[],
-  target: number,
-): Promise<void> {
-  for await (const log of stream) {
-    sink.push(log);
-    if (sink.length >= target) break;
-  }
-}
-
 interface CollectLogsOptions {
   testId: string;
   targetId: string;
@@ -336,12 +322,24 @@ async function collectLogs(opts: CollectLogsOptions): Promise<CollectLogsResult>
   const { testId, targetId, target, trigger, postTriggerWaitMs, preTriggerExtraWaitMs = 0 } = opts;
   const logs: LogEntry[] = [];
 
-  const collectPromise = drainLogs(loggingStream({ id: targetId }), logs, target);
+  // Drop logs emitted before the trigger fires so buffered load logs from a
+  // preloaded `metadata.dependency` can't satisfy `target`.
+  let triggerStartMs = trigger ? Number.POSITIVE_INFINITY : 0;
+
+  const collectPromise = (async () => {
+    for await (const log of loggingStream({ id: targetId })) {
+      if (log.timestamp < triggerStartMs) continue;
+      logs.push(log);
+      if (logs.length >= target) break;
+    }
+  })();
 
   const triggerPromise = (async () => {
-    // Let the server register the stream before firing the trigger.
     await sleep(STREAM_OPEN_DELAY_MS + preTriggerExtraWaitMs);
-    if (trigger) await trigger();
+    if (trigger) {
+      triggerStartMs = Date.now();
+      await trigger();
+    }
   })();
 
   await Promise.race([
