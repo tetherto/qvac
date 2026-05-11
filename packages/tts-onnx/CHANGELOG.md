@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0]
+
+### Fixed
+
+- Bumped `@qvac/onnx` to `^0.15.0` to track the renamed `inference-addon-cpp` include path. Earlier `0.14.x` versions ship `Logger.hpp` with `#include <qvac-lib-inference-addon-cpp/JsLogger.hpp>`, which no longer matches the vcpkg port `qvac-lib-inference-addon-cpp@1.1.7#1` (post QVAC-16441 rename, headers now install under `include/inference-addon-cpp/`). Followup to QVAC-16441 / #1860. Released as a minor bump (`0.8.6` → `0.9.0`) instead of a patch to avoid version-range conflicts with the upcoming SDK 0.10 release line.
+
 ## [0.8.6]
 
 ### Changed
