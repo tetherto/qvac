@@ -115,7 +115,7 @@ jobs:
           - os: ubuntu-22.04-arm
             platform: linux
             arch: arm64
-          - os: ubuntu-24.04-arm
+          - os: ubuntu-24.04
             platform: android
             arch: arm64
           - os: macos-15
@@ -167,16 +167,16 @@ jobs:
           echo "Matrix arch: $MATRIX_ARCH"
           echo "Matrix tags: $MATRIX_TAGS"
 
-      - name: Setup build host
-        if: matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'ubuntu-24.04-arm' || matrix.os == 'macos-15' || matrix.os == 'macos-15-intel'
+      - name: Setup build host (Linux arm and macOS)
+        if: matrix.arch == 'arm64' || matrix.os == 'macos-15' || matrix.os == 'macos-15-intel'
         uses: tetherto/qvac/.github/actions/setup-build-host@df55c85d7b8004961e430557e85b6ec1b15cf170
         with:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
           linux-extra-packages: ${{ inputs.linux-extra-packages }}
 
-      - name: Setup LLVM
-        if: matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'ubuntu-24.04-arm' || matrix.os == 'macos-15' || matrix.os == 'macos-15-intel'
+      - name: Setup LLVM (Linux arm and macOS)
+        if: matrix.arch == 'arm64' || matrix.os == 'macos-15' || matrix.os == 'macos-15-intel'
         uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
 
       - name: Checkout repository
@@ -203,12 +203,12 @@ jobs:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
 
-      - name: Setup Bare tooling
-        if: matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'ubuntu-24.04-arm' || matrix.os == 'macos-15' || matrix.os == 'macos-15-intel'
+      - name: Setup Bare tooling (Linux ARM and macOS)
+        if: matrix.arch == 'arm64' || matrix.os == 'macos-15' || matrix.os == 'macos-15-intel'
         uses: tetherto/qvac/.github/actions/setup-bare-tooling@0bbdca93da303a0b1634ba14a89cec085621078d
 
-      - name: Add linux Bare tooling to PATH
-        if: matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-24.04'
+      - name: Add linux x64 Bare tooling to PATH
+        if: matrix.os == 'ubuntu-22.04' && matrix.arch == 'x64'
         run: echo "/usr/local/nvm/versions/node/v20.20.2/bin" >> $GITHUB_PATH
 
       - if: ${{ inputs.setup-python-on-windows && matrix.platform == 'win32' }}
@@ -220,7 +220,7 @@ jobs:
       - name: Setup Apple Clang
         uses: tetherto/qvac/.github/actions/setup-apple-clang@1d9b2165867d03c6edd675e402ee101a5d48a6d8
 
-      - if: ${{ inputs.include-vulkan-sdk && (matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'ubuntu-24.04-arm' || matrix.os == 'macos-15' || matrix.os == 'macos-15-intel') }}
+      - if: ${{ inputs.include-vulkan-sdk && (matrix.arch == 'arm64' || matrix.os == 'macos-15' || matrix.os == 'macos-15-intel') }}
         name: Setup Vulkan SDK (Linux ARM and MacOS)
         uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@0bbdca93da303a0b1634ba14a89cec085621078d
         env:
