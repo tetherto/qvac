@@ -1664,7 +1664,7 @@ jobs:
       # "Extract performance report from mobile logs", "Append performance
       # summary to job step summary", and "Upload mobile performance
       # report" steps from
-      # .github/workflows/integration-mobile-test-qvac-lib-infer-parakeet.yml
+      # .github/workflows/integration-mobile-test-transcription-parakeet.yml
       # back into this file.
 
       - name: Upload Full Device Farm Logs

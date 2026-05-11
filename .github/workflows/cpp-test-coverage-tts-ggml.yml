@@ -9,7 +9,7 @@ name: CPP Tests (TTS GGML)
 #
 # When the C++ suite is added, replace the body of `cpp-tests` with the
 # real ccache + vcpkg + npm run coverage:cpp:build/run/report sequence
-# (mirror cpp-test-coverage-qvac-lib-infer-parakeet.yml).
+# (mirror cpp-test-coverage-transcription-parakeet.yml).
 
 on:
   workflow_call:
@@ -37,4 +37,4 @@ jobs:
           echo "CMakeLists.txt's BUILD_TESTING block is reserved for a future"
           echo "qvac::ttsggml::* suite; this workflow will be expanded into"
           echo "the real ccache + vcpkg + coverage pipeline at that point"
-          echo "(mirror cpp-test-coverage-qvac-lib-infer-parakeet.yml)."
+          echo "(mirror cpp-test-coverage-transcription-parakeet.yml)."

@@ -17,15 +17,6 @@ on:
         required: false
         type: boolean
         default: true
-      run_rtf_benchmarks:
-        description: "Run RTF performance benchmarks"
-        required: false
-        type: boolean
-        default: true
-      benchmark_matrix_json:
-        description: "Optional JSON array overriding the per-runner benchmark matrix"
-        required: false
-        type: string
 
   workflow_call:
     inputs:
@@ -39,15 +30,6 @@ on:
         type: boolean
         required: false
         default: true
-      run_rtf_benchmarks:
-        description: "Run RTF performance benchmarks"
-        type: boolean
-        required: false
-        default: true
-      benchmark_matrix_json:
-        description: "Optional JSON array overriding the per-runner benchmark matrix"
-        type: string
-        required: false
 
 jobs:
   run-integration-tests:
@@ -58,6 +40,7 @@ jobs:
     name: ${{ matrix.os }}-${{ matrix.platform }}-${{ matrix.arch }}-integration-tests
     env:
       GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+      NO_GPU: ${{ matrix.no_gpu || 'false' }}
     permissions:
       contents: read
       packages: read
@@ -68,45 +51,26 @@ jobs:
           - os: ai-run-ubuntu-22.04
             platform: linux
             arch: x64
-            rtf_gpu_enabled: false
-            rtf_gpu_backend: cpu
-            benchmark_matrix_json: >-
-              [{"modelType":"tdt","useGPU":false,"backendHint":"cpu"},{"modelType":"ctc","useGPU":false,"backendHint":"cpu"},{"modelType":"eou","useGPU":false,"backendHint":"cpu"},{"modelType":"sortformer","useGPU":false,"backendHint":"cpu"}]
+            no_gpu: 'true'
           - os: ai-run-linux-gpu
             platform: linux
             arch: x64
-            rtf_gpu_enabled: true
-            rtf_gpu_backend: cuda
-            benchmark_matrix_json: >-
-              [{"modelType":"tdt","useGPU":false,"backendHint":"cpu"},{"modelType":"ctc","useGPU":false,"backendHint":"cpu"},{"modelType":"eou","useGPU":false,"backendHint":"cpu"},{"modelType":"sortformer","useGPU":false,"backendHint":"cpu"},{"modelType":"tdt","useGPU":true,"backendHint":"cuda"},{"modelType":"ctc","useGPU":true,"backendHint":"cuda"},{"modelType":"eou","useGPU":true,"backendHint":"cuda"},{"modelType":"sortformer","useGPU":true,"backendHint":"cuda"}]
           - os: ubuntu-24.04-arm
             platform: linux
             arch: arm64
-            rtf_gpu_enabled: false
-            rtf_gpu_backend: cpu
-            benchmark_matrix_json: >-
-              [{"modelType":"tdt","useGPU":false,"backendHint":"cpu"},{"modelType":"ctc","useGPU":false,"backendHint":"cpu"},{"modelType":"eou","useGPU":false,"backendHint":"cpu"},{"modelType":"sortformer","useGPU":false,"backendHint":"cpu"}]
+            no_gpu: 'true'
           - os: macos-14-xlarge
             platform: darwin
             arch: arm64
-            rtf_gpu_enabled: true
-            rtf_gpu_backend: coreml
-            benchmark_matrix_json: >-
-              [{"modelType":"tdt","useGPU":false,"backendHint":"cpu"},{"modelType":"ctc","useGPU":false,"backendHint":"cpu"},{"modelType":"eou","useGPU":false,"backendHint":"cpu"},{"modelType":"sortformer","useGPU":false,"backendHint":"cpu"},{"modelType":"tdt","useGPU":true,"backendHint":"coreml"},{"modelType":"ctc","useGPU":true,"backendHint":"coreml"},{"modelType":"eou","useGPU":true,"backendHint":"coreml"},{"modelType":"sortformer","useGPU":true,"backendHint":"coreml"}]
+            no_gpu: 'true'
           - os: macos-15-large
             platform: darwin
             arch: x64
-            rtf_gpu_enabled: true
-            rtf_gpu_backend: coreml
-            benchmark_matrix_json: >-
-              [{"modelType":"tdt","useGPU":false,"backendHint":"cpu"},{"modelType":"ctc","useGPU":false,"backendHint":"cpu"},{"modelType":"eou","useGPU":false,"backendHint":"cpu"},{"modelType":"sortformer","useGPU":false,"backendHint":"cpu"},{"modelType":"tdt","useGPU":true,"backendHint":"coreml"},{"modelType":"ctc","useGPU":true,"backendHint":"coreml"},{"modelType":"eou","useGPU":true,"backendHint":"coreml"},{"modelType":"sortformer","useGPU":true,"backendHint":"coreml"}]
+            no_gpu: 'true'
           - os: windows-2022
             platform: win32
             arch: x64
-            rtf_gpu_enabled: true
-            rtf_gpu_backend: directml
-            benchmark_matrix_json: >-
-              [{"modelType":"tdt","useGPU":false,"backendHint":"cpu"},{"modelType":"ctc","useGPU":false,"backendHint":"cpu"},{"modelType":"eou","useGPU":false,"backendHint":"cpu"},{"modelType":"sortformer","useGPU":false,"backendHint":"cpu"},{"modelType":"tdt","useGPU":true,"backendHint":"directml"},{"modelType":"ctc","useGPU":true,"backendHint":"directml"},{"modelType":"eou","useGPU":true,"backendHint":"directml"},{"modelType":"sortformer","useGPU":true,"backendHint":"directml"}]
+            no_gpu: 'true'
 
     steps:
       - name: Setup Node.js
@@ -174,7 +138,24 @@ jobs:
         shell: bash
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgomp1
+          sudo apt-get install -y libgomp1 mesa-vulkan-drivers
+
+      - name: Windows - install Vulkan runtime
+        if: matrix.platform == 'win32'
+        uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@0bbdca93da303a0b1634ba14a89cec085621078d
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+
+      - name: Setup Python (for .nemo -> .gguf conversion)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Stage GGUF models (npm run setup-models)
+        shell: bash
+        working-directory: ${{ github.workspace }}/packages/transcription-parakeet
+        run: npm run setup-models
 
       - name: Run integration test
         if: ${{ inputs.run_integration_tests != false }}
@@ -186,65 +167,3 @@ jobs:
           INTEGRATION_TEST_TIMEOUT: ${{ matrix.platform == 'win32' && '1800' || '600' }}
           LD_LIBRARY_PATH: ${{ github.workspace }}/packages/transcription-parakeet/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
           DYLD_LIBRARY_PATH: ${{ github.workspace }}/packages/transcription-parakeet/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
-
-      - name: Run RTF benchmark matrix
-        if: ${{ always() && inputs.run_rtf_benchmarks != false }}
-        continue-on-error: true
-        shell: bash
-        working-directory: ${{ github.workspace }}/packages/transcription-parakeet
-        run: node scripts/run-rtf-benchmark-matrix.js
-        env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
-          LD_LIBRARY_PATH: ${{ github.workspace }}/packages/transcription-parakeet/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
-          DYLD_LIBRARY_PATH: ${{ github.workspace }}/packages/transcription-parakeet/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
-          QVAC_PARAKEET_BENCHMARK_DEVICE: ${{ matrix.os }}
-          QVAC_PARAKEET_BENCHMARK_RUNNER: ${{ matrix.os }}
-          QVAC_PARAKEET_BENCHMARK_MATRIX_JSON: ${{ inputs.benchmark_matrix_json || matrix.benchmark_matrix_json }}
-
-      - name: Upload RTF results
-        if: ${{ always() && inputs.run_rtf_benchmarks != false }}
-        continue-on-error: true
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
-        with:
-          name: rtf-results-${{ matrix.os }}-${{ matrix.platform }}-${{ matrix.arch }}
-          path: ${{ github.workspace }}/packages/transcription-parakeet/benchmarks/results/rtf-benchmark-*.json
-          retention-days: 30
-          if-no-files-found: ignore
-
-      - name: Add RTF summary
-        if: ${{ always() && inputs.run_rtf_benchmarks != false }}
-        continue-on-error: true
-        shell: bash
-        working-directory: ${{ github.workspace }}/packages/transcription-parakeet
-        run: |
-          echo "### RTF — ${{ matrix.platform }}-${{ matrix.arch }}" >> $GITHUB_STEP_SUMMARY
-          node -e "
-            const fs = require('fs');
-            const path = require('path');
-            const resultsDir = path.resolve('benchmarks/results');
-            if (!fs.existsSync(resultsDir)) process.exit(0);
-            const files = fs.readdirSync(resultsDir)
-              .filter(file => file.startsWith('rtf-benchmark-') && file.endsWith('.json'))
-              .sort();
-            if (files.length === 0) process.exit(0);
-            const lines = [
-              '| Model | GPU | Backend | Device | Mean RTF | P50 | P95 |',
-              '|-------|-----|---------|--------|----------|-----|-----|'
-            ];
-            for (const file of files) {
-              const report = JSON.parse(fs.readFileSync(path.join(resultsDir, file), 'utf8'));
-              const summary = report.summary || {};
-              const rtf = summary.rtf || {};
-              lines.push(
-                '| ' + (report.model?.type || 'unknown') +
-                ' | ' + ((report.requested?.useGPU ? 'yes' : 'no')) +
-                ' | ' + (report.labels?.backend || report.requested?.backendHint || report.labels?.requestedBackend || 'n/a') +
-                ' | ' + (report.labels?.device || report.labels?.runner || 'n/a') +
-                ' | ' + (rtf.mean !== undefined ? Number(rtf.mean).toFixed(4) : 'n/a') +
-                ' | ' + (rtf.p50 !== undefined ? Number(rtf.p50).toFixed(4) : 'n/a') +
-                ' | ' + (rtf.p95 !== undefined ? Number(rtf.p95).toFixed(4) : 'n/a') +
-                ' |'
-              );
-            }
-            console.log(lines.join('\n'));
-          " >> $GITHUB_STEP_SUMMARY
