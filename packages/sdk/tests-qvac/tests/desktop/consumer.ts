@@ -333,7 +333,6 @@ resources.define("diffusion", {
 resources.define("diffusion-esrgan", {
   constant: SD_V2_1_1B_Q8_0,
   type: "diffusion",
-  skipPreDownload: true,
   preLoadUnload: true,
   config: {
     device: "gpu",
