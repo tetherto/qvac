@@ -21,13 +21,15 @@ Pod scope and high-level principles live in `.cursor/rules/devops/main.mdc`. Thi
 
 ## Permissions
 
-- **Top-level `permissions:` is mandatory.** Default to least privilege:
-  ```yaml
-  permissions:
-    contents: read
-  ```
-- **Widen per-job, not per-workflow,** when a job needs more (e.g., `pull-requests: write` for label automation).
-- **`id-token: write` is required for OIDC.** Grant only on jobs that authenticate to a cloud provider.
+- **Every workflow declares `permissions:` explicitly** — top-level OR per-job. Relying on repository-default permissions is forbidden.
+  - **Top-level** is preferred when all jobs share the same scope; default to least privilege:
+    ```yaml
+    permissions:
+      contents: read
+    ```
+  - **Per-job** is preferred when scopes differ between jobs (e.g., one job needs `id-token: write` for OIDC, another only needs `contents: read`). Per-job blocks REPLACE the top-level — they do not merge.
+- **Widen per-job, not per-workflow,** when a single job needs more than the rest (e.g., `pull-requests: write` for label automation).
+- **`id-token: write` is required for OIDC.** Grant only on the specific job that authenticates to a cloud provider.
 - **Never use `permissions: write-all`.** If you think you need it, you don't.
 
 ## Triggers and untrusted input
@@ -129,6 +131,7 @@ Pod scope and high-level principles live in `.cursor/rules/devops/main.mdc`. Thi
   - `release-<pkg>.yml` / `create-github-release-<pkg>.yml` — release pipelines
   - `prebuilds-<pkg>.yml` — prebuilt artifact generation
   - `pr-test-*.yml` / `pr-validation-*.yml` / `pr-checks-*.yml` — PR test/validation pipelines
+  - `integration-<scope>-<pkg>.yml` — cross-package integration / e2e suites (e.g., mobile device-farm runs)
   - `reusable-*.yml` — reusable workflow building block (consumed via `workflow_call`)
   - `trigger-reusable-*.yml` — entrypoint workflow whose only job is to call a `reusable-*.yml`
 - **One responsibility per workflow file.** Split when triggers diverge.
