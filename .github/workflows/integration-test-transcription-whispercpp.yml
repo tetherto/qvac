@@ -57,7 +57,7 @@ jobs:
   run-integration-tests:
     timeout-minutes: 60
     continue-on-error: true
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}-integration-tests
 
@@ -108,6 +108,7 @@ jobs:
 
     steps:
       - name: Setup Node.js
+        if: matrix.arch == 'arm64' || matrix.platform == 'darwin'
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
@@ -128,6 +129,10 @@ jobs:
         working-directory: ${{ inputs.workdir }}
         run: |
           npm install
+      
+      - name: Install bare tooling (arm64 and macos)
+        if: matrix.arch == 'arm64' || matrix.platform == 'darwin'
+        run: |
           npm install -g bare@1.26.0 bare-make
 
       - name: Download prebuilds from artifact
@@ -143,10 +148,10 @@ jobs:
         shell: bash
         run: |
           mkdir -p prebuilds
-          mkdir -p "${{ runner.temp }}/tmp"
-          npm pack ${{ inputs.prebuild_package }} --pack-destination "${{ runner.temp }}/tmp"
-          tar -xzf /tmp/*.tgz -C "${{ runner.temp }}/tmp"
-          cp -r "${{ runner.temp }}/tmp/package/prebuilds/"* prebuilds/
+          mkdir -p tmp
+          npm pack ${{ inputs.prebuild_package }} --pack-destination tmp
+          tar -xzf tmp/*.tgz -C tmp
+          cp -r tmp/package/prebuilds/* prebuilds/
           find prebuilds -type f -name 'tetherto__*' | while read f; do
             mv "$f" "${f/tetherto__/qvac__}"
           done
