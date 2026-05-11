@@ -15,7 +15,8 @@
  *   9.  moe_boundary (Wan 2.2, [0, 1])
  *  10.  strength (img2vid / flf2vid, [0, 1])
  *  11.  vace_strength (VACE, [0, 1])
- *  12.  VAE tiling (vae_tiling, vae_tile_size as int and "WxH", vae_tile_overlap)
+ *  12.  VAE tiling (vae_tiling, vae_tile_size as int and "WxH",
+ * vae_tile_overlap)
  *  13.  cache_mode / cache_preset / cache_threshold
  *  14.  Defaults match Wan 2.1 T2V 1.3B recommendations
  *  15.  Unknown keys silently ignored
@@ -39,8 +40,7 @@ using namespace qvac_errors;
 
 namespace {
 
-picojson::object
-makeObj(const std::string& key, const picojson::value& val) {
+picojson::object makeObj(const std::string& key, const picojson::value& val) {
   picojson::object obj;
   obj[key] = val;
   return obj;
@@ -143,11 +143,11 @@ TEST(SdVidGenHandlers_VideoFrames, AcceptsValidTemporallyPackedCounts) {
 }
 
 TEST(SdVidGenHandlers_VideoFrames, RejectsNonFourKPlusOne) {
-  expectThrows("video_frames", num(6));   // 4k + 2
-  expectThrows("video_frames", num(7));   // 4k + 3
-  expectThrows("video_frames", num(8));   // 4k
-  expectThrows("video_frames", num(32));  // 4k
-  expectThrows("video_frames", num(34));  // 4k + 2
+  expectThrows("video_frames", num(6));  // 4k + 2
+  expectThrows("video_frames", num(7));  // 4k + 3
+  expectThrows("video_frames", num(8));  // 4k
+  expectThrows("video_frames", num(32)); // 4k
+  expectThrows("video_frames", num(34)); // 4k + 2
 }
 
 TEST(SdVidGenHandlers_VideoFrames, RejectsBelowMinimum) {
@@ -207,7 +207,8 @@ TEST(SdVidGenHandlers_Steps, ZeroAndNegativeRejected) {
 }
 
 TEST(SdVidGenHandlers_Sampler, SupportedNamesMap) {
-  EXPECT_EQ(applyOne("sampler", str("euler")).sampleMethod, EULER_SAMPLE_METHOD);
+  EXPECT_EQ(
+      applyOne("sampler", str("euler")).sampleMethod, EULER_SAMPLE_METHOD);
   EXPECT_EQ(
       applyOne("sampling_method", str("euler_a")).sampleMethod,
       EULER_A_SAMPLE_METHOD);
@@ -219,10 +220,8 @@ TEST(SdVidGenHandlers_Sampler, UnknownRejected) {
 }
 
 TEST(SdVidGenHandlers_Scheduler, SupportedNamesMap) {
-  EXPECT_EQ(
-      applyOne("scheduler", str("simple")).scheduler, SIMPLE_SCHEDULER);
-  EXPECT_EQ(
-      applyOne("scheduler", str("karras")).scheduler, KARRAS_SCHEDULER);
+  EXPECT_EQ(applyOne("scheduler", str("simple")).scheduler, SIMPLE_SCHEDULER);
+  EXPECT_EQ(applyOne("scheduler", str("karras")).scheduler, KARRAS_SCHEDULER);
 }
 
 TEST(SdVidGenHandlers_Scheduler, UnknownRejected) {
@@ -412,8 +411,7 @@ TEST(SdVidGenHandlers_CachePreset, UnknownRejected) {
 }
 
 TEST(SdVidGenHandlers_CacheThreshold, DirectOverrideAccepted) {
-  EXPECT_FLOAT_EQ(
-      applyOne("cache_threshold", num(0.42)).cacheThreshold, 0.42f);
+  EXPECT_FLOAT_EQ(applyOne("cache_threshold", num(0.42)).cacheThreshold, 0.42f);
 }
 
 // -----------------------------------------------------------------------------
@@ -451,8 +449,8 @@ TEST(SdVidGenHandlers_Defaults, MatchWan21T2vRecommendedConfig) {
 
 TEST(SdVidGenHandlers_UnknownKeys, AreSilentlyIgnored) {
   SdVidGenConfig cfg;
-  EXPECT_NO_THROW(applySdVidGenHandlers(
-      cfg, makeObj("some_future_field", str("value"))));
+  EXPECT_NO_THROW(
+      applySdVidGenHandlers(cfg, makeObj("some_future_field", str("value"))));
   // Defaults must be preserved -- handler silently ignored the unknown key.
   EXPECT_EQ(cfg.mode, "txt2vid");
   EXPECT_EQ(cfg.width, 480);

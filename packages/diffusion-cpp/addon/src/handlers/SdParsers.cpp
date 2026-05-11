@@ -141,8 +141,7 @@ std::pair<int, int> parseVaeTileSize(const picojson::value& v) {
   return {w, h};
 }
 
-std::pair<sd_cache_mode_t, float>
-parseCachePreset(const std::string& preset) {
+std::pair<sd_cache_mode_t, float> parseCachePreset(const std::string& preset) {
   // Approximate threshold values mirroring the stable-diffusion.cpp CLI
   // presets:  slow ~= 0.60 (~10% speed-up)  medium ~= 0.40 (~25%)
   //           fast ~= 0.25 (~40%)            ultra  ~= 0.15 (fastest)

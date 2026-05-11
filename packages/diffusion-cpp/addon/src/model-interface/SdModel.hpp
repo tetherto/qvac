@@ -7,9 +7,9 @@
 #include <string>
 #include <vector>
 
-#include <picojson/picojson.h>
 #include <inference-addon-cpp/ModelInterfaces.hpp>
 #include <inference-addon-cpp/RuntimeStats.hpp>
+#include <picojson/picojson.h>
 #include <stable-diffusion.h>
 
 #include "handlers/SdCtxHandlers.hpp"
@@ -136,8 +136,8 @@ public:
     /** Optional per-frame fan-out for video modes. When set, fires once
      *  per decoded frame with PNG-encoded bytes so JS consumers can do
      *  their own muxing / previewing in parallel with the AVI build. */
-    std::function<void(const std::vector<uint8_t>&, int /*index*/,
-                       int /*total*/)>
+    std::function<void(
+        const std::vector<uint8_t>&, int /*index*/, int /*total*/)>
         frameCallback;
   };
 
@@ -147,10 +147,10 @@ private:
   // Per-mode handlers split from the unified process() entry point. Both
   // run under the progress/abort guard owned by process(); return value is
   // always std::any{} (outputs delivered via job callbacks).
-  std::any processImage(
-      const GenerationJob& job, const picojson::value& parsed);
-  std::any processVideo(
-      const GenerationJob& job, const picojson::value& parsed);
+  std::any
+  processImage(const GenerationJob& job, const picojson::value& parsed);
+  std::any
+  processVideo(const GenerationJob& job, const picojson::value& parsed);
 
   const qvac_lib_inference_addon_sd::SdCtxConfig config_;
 

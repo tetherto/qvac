@@ -115,9 +115,8 @@ std::vector<uint8_t> encodeFramesToAvi(
   std::vector<uint8_t> out;
   // Rough reservation: header (~200B) + 3 bytes per pixel worst-case + overhead
   out.reserve(
-      512 +
-      static_cast<size_t>(numFrames) * static_cast<size_t>(width) *
-          static_cast<size_t>(height) * 3);
+      512 + static_cast<size_t>(numFrames) * static_cast<size_t>(width) *
+                static_cast<size_t>(height) * 3);
 
   // RIFF ____ AVI
   appendFourCC(out, "RIFF");
@@ -136,12 +135,12 @@ std::vector<uint8_t> encodeFramesToAvi(
   appendU32LE(out, 56);
   appendU32LE(out, 1000000u / static_cast<uint32_t>(fps)); // us per frame
   appendU32LE(out, 0);                                     // max bytes/sec
-  appendU32LE(out, 0);                                     // padding granularity
-  appendU32LE(out, 0x110);                 // flags: HASINDEX | ISINTERLEAVED
-  appendU32LE(out, static_cast<uint32_t>(numFrames));  // total frames
-  appendU32LE(out, 0);                                 // initial frames
-  appendU32LE(out, 1);                                 // number of streams
-  appendU32LE(out, width * height * 3);                // suggested buffer size
+  appendU32LE(out, 0);     // padding granularity
+  appendU32LE(out, 0x110); // flags: HASINDEX | ISINTERLEAVED
+  appendU32LE(out, static_cast<uint32_t>(numFrames)); // total frames
+  appendU32LE(out, 0);                                // initial frames
+  appendU32LE(out, 1);                                // number of streams
+  appendU32LE(out, width * height * 3);               // suggested buffer size
   appendU32LE(out, width);
   appendU32LE(out, height);
   appendU32LE(out, 0); // reserved
@@ -157,43 +156,43 @@ std::vector<uint8_t> encodeFramesToAvi(
   // strh (stream header, 56 bytes)
   appendFourCC(out, "strh");
   appendU32LE(out, 56);
-  appendFourCC(out, "vids");                // stream type: video
-  appendFourCC(out, "MJPG");                // codec: Motion JPEG
-  appendU32LE(out, 0);                      // flags
-  appendU16LE(out, 0);                      // priority
-  appendU16LE(out, 0);                      // language
-  appendU32LE(out, 0);                      // initial frames
-  appendU32LE(out, 1);                      // scale
-  appendU32LE(out, static_cast<uint32_t>(fps)); // rate
-  appendU32LE(out, 0);                      // start
+  appendFourCC(out, "vids");                          // stream type: video
+  appendFourCC(out, "MJPG");                          // codec: Motion JPEG
+  appendU32LE(out, 0);                                // flags
+  appendU16LE(out, 0);                                // priority
+  appendU16LE(out, 0);                                // language
+  appendU32LE(out, 0);                                // initial frames
+  appendU32LE(out, 1);                                // scale
+  appendU32LE(out, static_cast<uint32_t>(fps));       // rate
+  appendU32LE(out, 0);                                // start
   appendU32LE(out, static_cast<uint32_t>(numFrames)); // length
-  appendU32LE(out, width * height * 3);     // suggested buffer size
-  appendU32LE(out, 0xFFFFFFFFu);            // quality (== -1 "default")
-  appendU32LE(out, 0);                      // sample size
-  appendU16LE(out, 0);                      // rcFrame.left
-  appendU16LE(out, 0);                      // rcFrame.top
-  appendU16LE(out, 0);                      // rcFrame.right
-  appendU16LE(out, 0);                      // rcFrame.bottom
+  appendU32LE(out, width * height * 3);               // suggested buffer size
+  appendU32LE(out, 0xFFFFFFFFu); // quality (== -1 "default")
+  appendU32LE(out, 0);           // sample size
+  appendU16LE(out, 0);           // rcFrame.left
+  appendU16LE(out, 0);           // rcFrame.top
+  appendU16LE(out, 0);           // rcFrame.right
+  appendU16LE(out, 0);           // rcFrame.bottom
 
   // strf (stream format: BITMAPINFOHEADER, 40 bytes)
   appendFourCC(out, "strf");
   appendU32LE(out, 40);
-  appendU32LE(out, 40);                   // biSize
+  appendU32LE(out, 40); // biSize
   appendU32LE(out, width);
   appendU32LE(out, height);
-  appendU16LE(out, 1);                    // biPlanes
-  appendU16LE(out, 24);                   // biBitCount
-  appendFourCC(out, "MJPG");              // biCompression (FOURCC)
-  appendU32LE(out, width * height * 3);   // biSizeImage
-  appendU32LE(out, 0);                    // XPelsPerMeter
-  appendU32LE(out, 0);                    // YPelsPerMeter
-  appendU32LE(out, 0);                    // colors used
-  appendU32LE(out, 0);                    // colors important
+  appendU16LE(out, 1);                  // biPlanes
+  appendU16LE(out, 24);                 // biBitCount
+  appendFourCC(out, "MJPG");            // biCompression (FOURCC)
+  appendU32LE(out, width * height * 3); // biSizeImage
+  appendU32LE(out, 0);                  // XPelsPerMeter
+  appendU32LE(out, 0);                  // YPelsPerMeter
+  appendU32LE(out, 0);                  // colors used
+  appendU32LE(out, 0);                  // colors important
 
   // LIST movi
   appendFourCC(out, "LIST");
   const size_t moviSizePos = out.size();
-  appendU32LE(out, 0);                    // placeholder
+  appendU32LE(out, 0); // placeholder
   appendFourCC(out, "movi");
 
   // -- Encode and append each frame as an "00dc" chunk -----------------------
@@ -246,8 +245,7 @@ std::vector<uint8_t> encodeFramesToAvi(
     entry.size = jpegSize;
     index.push_back(entry);
 
-    out.insert(
-        out.end(), sink.bytes.begin(), sink.bytes.end());
+    out.insert(out.end(), sink.bytes.begin(), sink.bytes.end());
 
     // Align chunk to even size per RIFF spec
     if (jpegSize % 2) {
@@ -275,7 +273,8 @@ std::vector<uint8_t> encodeFramesToAvi(
 
   // Finalize RIFF size (total file size minus 8 bytes of "RIFF<size>")
   {
-    const uint32_t riffSize = static_cast<uint32_t>(out.size() - riffSizePos - 4);
+    const uint32_t riffSize =
+        static_cast<uint32_t>(out.size() - riffSizePos - 4);
     patchU32LEAt(out, riffSizePos, riffSize);
   }
 

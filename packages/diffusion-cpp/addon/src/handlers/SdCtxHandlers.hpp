@@ -46,9 +46,8 @@ struct SdCtxConfig {
                          // split / SDXL)
   std::string clipGPath; // clip_g_path           -- CLIP-G text encoder (SD3
                          // split / SDXL)
-  std::string
-      t5XxlPath; // t5xxl_path            -- T5-XXL text encoder (SD3 split)
-                 // or UMT5-XXL text encoder (Wan 2.1 / Wan 2.2)
+  std::string t5XxlPath; // t5xxl_path            -- T5-XXL text encoder (SD3
+                         // split) or UMT5-XXL text encoder (Wan 2.1 / Wan 2.2)
   std::string
       llmPath; // llm_path              -- LLM text encoder (FLUX.2 -> Qwen3)
   std::string

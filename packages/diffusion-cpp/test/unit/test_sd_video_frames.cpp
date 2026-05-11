@@ -32,13 +32,15 @@ namespace {
  */
 sd_image_t* makeFrameArray(int count, uint32_t width, uint32_t height) {
   auto* arr = static_cast<sd_image_t*>(malloc(sizeof(sd_image_t) * count));
-  if (!arr) return nullptr;
+  if (!arr)
+    return nullptr;
   for (int i = 0; i < count; ++i) {
     const size_t bytes = static_cast<size_t>(width) * height * 3;
     auto* pixels = static_cast<uint8_t*>(malloc(bytes));
     // Fill with a per-frame sentinel so the destructor visibly frees
     // distinct allocations under ASan.
-    if (pixels) std::memset(pixels, static_cast<int>(i & 0xFF), bytes);
+    if (pixels)
+      std::memset(pixels, static_cast<int>(i & 0xFF), bytes);
     arr[i] = sd_image_t{width, height, 3, pixels};
   }
   return arr;

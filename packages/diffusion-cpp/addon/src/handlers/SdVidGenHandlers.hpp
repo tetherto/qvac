@@ -4,8 +4,8 @@
 #include <string>
 #include <unordered_map>
 
-#include <picojson/picojson.h>
 #include <inference-addon-cpp/Errors.hpp>
+#include <picojson/picojson.h>
 #include <stable-diffusion.h>
 
 namespace qvac_lib_inference_addon_sd {
@@ -128,8 +128,7 @@ struct SdVidGenConfig {
  */
 using SdVidGenHandlerFn =
     std::function<void(SdVidGenConfig&, const picojson::value&)>;
-using SdVidGenHandlersMap =
-    std::unordered_map<std::string, SdVidGenHandlerFn>;
+using SdVidGenHandlersMap = std::unordered_map<std::string, SdVidGenHandlerFn>;
 
 /** All supported per-job video generation param keys and their handlers. */
 extern const SdVidGenHandlersMap SD_VID_GEN_HANDLERS;
@@ -138,7 +137,6 @@ extern const SdVidGenHandlersMap SD_VID_GEN_HANDLERS;
  * Apply SD_VID_GEN_HANDLERS to a parsed JSON params object, writing into
  * config. Unknown keys are silently ignored (forward compatibility).
  */
-void applySdVidGenHandlers(
-    SdVidGenConfig& config, const picojson::object& obj);
+void applySdVidGenHandlers(SdVidGenConfig& config, const picojson::object& obj);
 
 } // namespace qvac_lib_inference_addon_sd

@@ -7,9 +7,9 @@
 #include <utility>
 #include <vector>
 
-#include <picojson/picojson.h>
 #include <inference-addon-cpp/Errors.hpp>
 #include <inference-addon-cpp/Logger.hpp>
+#include <picojson/picojson.h>
 
 #include "utils/AviWriter.hpp"
 #include "utils/BackendLoader.hpp"
@@ -362,8 +362,8 @@ std::any SdModel::process(const std::any& input) {
 // process().
 // ---------------------------------------------------------------------------
 
-std::any SdModel::processImage(
-    const GenerationJob& job, const picojson::value& v) {
+std::any
+SdModel::processImage(const GenerationJob& job, const picojson::value& v) {
   // -- Build SdGenConfig from handlers ---------------------------------------
   qvac_lib_inference_addon_sd::SdGenConfig gen{};
   qvac_lib_inference_addon_sd::applySdGenHandlers(
@@ -779,8 +779,8 @@ std::any SdModel::processImage(
 // Assumes callbacks + guard are already set up by process().
 // ---------------------------------------------------------------------------
 
-std::any SdModel::processVideo(
-    const GenerationJob& job, const picojson::value& v) {
+std::any
+SdModel::processVideo(const GenerationJob& job, const picojson::value& v) {
   // -- Build SdVidGenConfig from handlers ------------------------------------
   qvac_lib_inference_addon_sd::SdVidGenConfig vid{};
   qvac_lib_inference_addon_sd::applySdVidGenHandlers(
@@ -876,8 +876,7 @@ std::any SdModel::processVideo(
   if (!job.controlFramesBytes.empty()) {
     controlFrames.reserve(job.controlFramesBytes.size());
     for (size_t i = 0; i < job.controlFramesBytes.size(); ++i) {
-      sd_image_t decoded =
-          image_codec::decodeImage(job.controlFramesBytes[i]);
+      sd_image_t decoded = image_codec::decodeImage(job.controlFramesBytes[i]);
       if (!decoded.data)
         throw StatusError(
             general_error::InvalidArgument,
@@ -902,8 +901,10 @@ std::any SdModel::processVideo(
   vidParams.vace_strength = vid.vaceStrength;
   vidParams.moe_boundary = vid.moeBoundary;
 
-  if (initImg.data) vidParams.init_image = initImg;
-  if (endImg.data) vidParams.end_image = endImg;
+  if (initImg.data)
+    vidParams.init_image = initImg;
+  if (endImg.data)
+    vidParams.end_image = endImg;
   if (!controlFrames.empty()) {
     vidParams.control_frames = controlFrames.data();
     vidParams.control_frames_size = static_cast<int>(controlFrames.size());
@@ -969,7 +970,8 @@ std::any SdModel::processVideo(
   // -- Fan out per-frame PNGs (opt-in) --------------------------------------
   if (job.frameCallback) {
     for (int i = 0; i < frames.count(); ++i) {
-      if (!frames[i].data) continue;
+      if (!frames[i].data)
+        continue;
       auto png = image_codec::encodeToPng(frames[i]);
       if (!png.empty()) {
         job.frameCallback(png, i, frames.count());
@@ -1020,8 +1022,7 @@ std::any SdModel::processVideo(
   lastStats_.emplace_back("width", static_cast<int64_t>(vid.width));
   lastStats_.emplace_back("height", static_cast<int64_t>(vid.height));
   lastStats_.emplace_back("seed", vid.seed);
-  lastStats_.emplace_back(
-      "videoFrames", static_cast<int64_t>(frames.count()));
+  lastStats_.emplace_back("videoFrames", static_cast<int64_t>(frames.count()));
   lastStats_.emplace_back("fps", static_cast<int64_t>(vid.fps));
 
   return std::any{};

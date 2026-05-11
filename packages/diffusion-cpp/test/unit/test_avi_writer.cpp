@@ -40,8 +40,8 @@ struct SyntheticFrames {
   std::vector<std::vector<uint8_t>> buffers;
 };
 
-static SyntheticFrames
-makeFrames(int count, uint32_t w, uint32_t h, uint32_t channels, uint8_t color) {
+static SyntheticFrames makeFrames(
+    int count, uint32_t w, uint32_t h, uint32_t channels, uint8_t color) {
   SyntheticFrames out;
   out.frames.reserve(count);
   out.buffers.reserve(count);
@@ -61,7 +61,8 @@ makeFrames(int count, uint32_t w, uint32_t h, uint32_t channels, uint8_t color) 
 // first byte of the match, or -1 if not found.
 static std::ptrdiff_t findFourCC(
     const std::vector<uint8_t>& buf, const char tag[4], size_t start = 0) {
-  if (buf.size() < 4) return -1;
+  if (buf.size() < 4)
+    return -1;
   for (size_t i = start; i + 4 <= buf.size(); ++i) {
     if (buf[i] == static_cast<uint8_t>(tag[0]) &&
         buf[i + 1] == static_cast<uint8_t>(tag[1]) &&
@@ -87,8 +88,12 @@ static uint32_t readU32LE(const std::vector<uint8_t>& buf, size_t offset) {
 // -----------------------------------------------------------------------------
 
 TEST(AviWriter, EncodesFiveRgbFramesWithValidRiffHeader) {
-  auto fixture = makeFrames(/*count=*/5, /*w=*/32, /*h=*/32, /*channels=*/3,
-                            /*color=*/128);
+  auto fixture = makeFrames(
+      /*count=*/5,
+      /*w=*/32,
+      /*h=*/32,
+      /*channels=*/3,
+      /*color=*/128);
 
   auto avi = encodeFramesToAvi(fixture.frames.data(), 5, /*fps=*/24);
 
@@ -167,14 +172,12 @@ TEST(AviWriter, FirstEmbeddedJpegDecodesToExpectedDimensions) {
 
 TEST(AviWriter, RejectsZeroFrames) {
   auto fixture = makeFrames(1, 16, 16, 3, 0);
-  EXPECT_THROW(
-      encodeFramesToAvi(fixture.frames.data(), 0, 24), StatusError);
+  EXPECT_THROW(encodeFramesToAvi(fixture.frames.data(), 0, 24), StatusError);
 }
 
 TEST(AviWriter, RejectsNegativeFrameCount) {
   auto fixture = makeFrames(1, 16, 16, 3, 0);
-  EXPECT_THROW(
-      encodeFramesToAvi(fixture.frames.data(), -5, 24), StatusError);
+  EXPECT_THROW(encodeFramesToAvi(fixture.frames.data(), -5, 24), StatusError);
 }
 
 TEST(AviWriter, RejectsNullFrames) {
@@ -187,14 +190,12 @@ TEST(AviWriter, RejectsNullFrames) {
 
 TEST(AviWriter, RejectsZeroFps) {
   auto fixture = makeFrames(2, 16, 16, 3, 0);
-  EXPECT_THROW(
-      encodeFramesToAvi(fixture.frames.data(), 2, 0), StatusError);
+  EXPECT_THROW(encodeFramesToAvi(fixture.frames.data(), 2, 0), StatusError);
 }
 
 TEST(AviWriter, RejectsNegativeFps) {
   auto fixture = makeFrames(2, 16, 16, 3, 0);
-  EXPECT_THROW(
-      encodeFramesToAvi(fixture.frames.data(), 2, -1), StatusError);
+  EXPECT_THROW(encodeFramesToAvi(fixture.frames.data(), 2, -1), StatusError);
 }
 
 // -----------------------------------------------------------------------------
@@ -225,14 +226,12 @@ TEST(AviWriter, AcceptsBoundaryQualities) {
 
 TEST(AviWriter, RejectsUnsupportedChannelCountGrayscale) {
   auto fixture = makeFrames(1, 16, 16, /*channels=*/1, 0);
-  EXPECT_THROW(
-      encodeFramesToAvi(fixture.frames.data(), 1, 24), StatusError);
+  EXPECT_THROW(encodeFramesToAvi(fixture.frames.data(), 1, 24), StatusError);
 }
 
 TEST(AviWriter, RejectsUnsupportedChannelCountTwo) {
   auto fixture = makeFrames(1, 16, 16, /*channels=*/2, 0);
-  EXPECT_THROW(
-      encodeFramesToAvi(fixture.frames.data(), 1, 24), StatusError);
+  EXPECT_THROW(encodeFramesToAvi(fixture.frames.data(), 1, 24), StatusError);
 }
 
 TEST(AviWriter, AcceptsRgbaFrames) {
@@ -249,30 +248,26 @@ TEST(AviWriter, RejectsMismatchedFrameDimensions) {
   auto b = makeFrames(1, 64, 32, 3, 128);
   // Splice: frame 0 from a, frame 1 from b
   std::vector<sd_image_t> frames{a.frames[0], b.frames[0]};
-  EXPECT_THROW(
-      encodeFramesToAvi(frames.data(), 2, 24), StatusError);
+  EXPECT_THROW(encodeFramesToAvi(frames.data(), 2, 24), StatusError);
 }
 
 TEST(AviWriter, RejectsMismatchedFrameChannels) {
   auto a = makeFrames(1, 32, 32, 3, 128);
   auto b = makeFrames(1, 32, 32, 4, 128);
   std::vector<sd_image_t> frames{a.frames[0], b.frames[0]};
-  EXPECT_THROW(
-      encodeFramesToAvi(frames.data(), 2, 24), StatusError);
+  EXPECT_THROW(encodeFramesToAvi(frames.data(), 2, 24), StatusError);
 }
 
 TEST(AviWriter, RejectsZeroDimensionFrame) {
   auto fixture = makeFrames(1, 32, 32, 3, 128);
   fixture.frames[0].width = 0;
-  EXPECT_THROW(
-      encodeFramesToAvi(fixture.frames.data(), 1, 24), StatusError);
+  EXPECT_THROW(encodeFramesToAvi(fixture.frames.data(), 1, 24), StatusError);
 }
 
 TEST(AviWriter, RejectsNullFrameDataAtNonZeroIndex) {
   auto fixture = makeFrames(3, 16, 16, 3, 128);
   fixture.frames[2].data = nullptr;
-  EXPECT_THROW(
-      encodeFramesToAvi(fixture.frames.data(), 3, 24), StatusError);
+  EXPECT_THROW(encodeFramesToAvi(fixture.frames.data(), 3, 24), StatusError);
 }
 
 // -----------------------------------------------------------------------------

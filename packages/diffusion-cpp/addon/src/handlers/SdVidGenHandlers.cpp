@@ -22,7 +22,8 @@ using parsers::requireStr;
 
 namespace {
 
-inline int requirePositiveInt(const picojson::value& v, const std::string& key) {
+inline int
+requirePositiveInt(const picojson::value& v, const std::string& key) {
   const int n = static_cast<int>(requireNum(v, key));
   if (n <= 0)
     throw StatusError(
@@ -32,16 +33,13 @@ inline int requirePositiveInt(const picojson::value& v, const std::string& key) 
 }
 
 inline float requireRange(
-    const picojson::value& v,
-    const std::string& key,
-    float lo,
-    float hi) {
+    const picojson::value& v, const std::string& key, float lo, float hi) {
   const float f = static_cast<float>(requireNum(v, key));
   if (f < lo || f > hi)
     throw StatusError(
         general_error::InvalidArgument,
-        key + " must be in [" + std::to_string(lo) + ", " +
-            std::to_string(hi) + "], got: " + std::to_string(f));
+        key + " must be in [" + std::to_string(lo) + ", " + std::to_string(hi) +
+            "], got: " + std::to_string(f));
   return f;
 }
 

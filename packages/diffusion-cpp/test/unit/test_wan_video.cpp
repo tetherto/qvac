@@ -76,7 +76,8 @@ makeSolidPng(int w, int h, uint8_t r, uint8_t g, uint8_t b) {
 }
 
 inline bool isAvi(const std::vector<uint8_t>& buf) {
-  if (buf.size() < 12) return false;
+  if (buf.size() < 12)
+    return false;
   return buf[0] == 'R' && buf[1] == 'I' && buf[2] == 'F' && buf[3] == 'F' &&
          buf[8] == 'A' && buf[9] == 'V' && buf[10] == 'I' && buf[11] == ' ';
 }
@@ -123,16 +124,15 @@ protected:
   // Build and run a job, expecting a StatusError-derived throw whose message
   // contains `needle`. Using substring matching keeps the tests resilient to
   // wording tweaks while still pinning down which validation branch fired.
-  static void expectThrowContains(
-      SdModel::GenerationJob job, const std::string& needle) {
+  static void
+  expectThrowContains(SdModel::GenerationJob job, const std::string& needle) {
     try {
       model->process(std::any(job));
       FAIL() << "Expected processVideo to throw but it returned normally";
     } catch (const std::exception& e) {
       const std::string msg = e.what();
       EXPECT_NE(msg.find(needle), std::string::npos)
-          << "Thrown message did not contain '" << needle
-          << "'. Got: " << msg;
+          << "Thrown message did not contain '" << needle << "'. Got: " << msg;
     }
   }
 };
@@ -282,8 +282,8 @@ TEST_F(SdWanValidationTest, Img2VidRejectsCorruptInitImage) {
     "video_frames": 5
   })";
   // 12 random bytes that are neither PNG nor JPEG.
-  job.initImageBytes = {0x00, 0xFF, 0xAA, 0x01, 0x02, 0x03,
-                        0xDE, 0xAD, 0xBE, 0xEF, 0x11, 0x22};
+  job.initImageBytes = {
+      0x00, 0xFF, 0xAA, 0x01, 0x02, 0x03, 0xDE, 0xAD, 0xBE, 0xEF, 0x11, 0x22};
   expectThrowContains(
       std::move(job), "processVideo: failed to decode init_image");
 }
@@ -296,8 +296,8 @@ TEST_F(SdWanValidationTest, Flf2VidRejectsCorruptEndImage) {
     "video_frames": 5
   })";
   job.initImageBytes = wan_helpers::makeSolidPng(64, 64, 10, 20, 30);
-  job.endImageBytes = {0x00, 0xFF, 0xAA, 0x01, 0x02, 0x03,
-                       0xDE, 0xAD, 0xBE, 0xEF, 0x11, 0x22};
+  job.endImageBytes = {
+      0x00, 0xFF, 0xAA, 0x01, 0x02, 0x03, 0xDE, 0xAD, 0xBE, 0xEF, 0x11, 0x22};
   expectThrowContains(
       std::move(job), "processVideo: failed to decode end_image");
 }
@@ -314,11 +314,9 @@ TEST_F(SdWanValidationTest, Img2VidRejectsCorruptControlFrame) {
   job.controlFramesBytes.push_back(
       wan_helpers::makeSolidPng(64, 64, 100, 110, 120));
   job.controlFramesBytes.push_back(
-      {0x00, 0xFF, 0xAA, 0x01, 0x02, 0x03,
-       0xDE, 0xAD, 0xBE, 0xEF, 0x11, 0x22});
+      {0x00, 0xFF, 0xAA, 0x01, 0x02, 0x03, 0xDE, 0xAD, 0xBE, 0xEF, 0x11, 0x22});
   expectThrowContains(
-      std::move(job),
-      "processVideo: failed to decode control_frames[1]");
+      std::move(job), "processVideo: failed to decode control_frames[1]");
 }
 
 // ---------------------------------------------------------------------------
@@ -436,9 +434,7 @@ TEST_F(SdWanHappyPathTest, Txt2VidProducesValidAvi) {
   std::vector<uint8_t> avi;
   int progressTicks = 0;
   job.progressCallback = [&](const std::string&) { ++progressTicks; };
-  job.outputCallback = [&](const std::vector<uint8_t>& bytes) {
-    avi = bytes;
-  };
+  job.outputCallback = [&](const std::vector<uint8_t>& bytes) { avi = bytes; };
 
   EXPECT_NO_THROW(model->process(std::any(job)));
 
