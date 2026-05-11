@@ -1140,21 +1140,25 @@ jobs:
             IOS_GREP_HEAVY_6=$(filter_perf "$(jq -r '.ios.heavy6 | join("|")' "$GROUPS_JSON")")
             IOS_GREP_HEAVY_7=$(filter_perf "$(jq -r '.ios.heavy7 | join("|")' "$GROUPS_JSON")")
             IOS_GREP_HEAVY_8=$(filter_perf "$(jq -r '.ios.heavy8 | join("|")' "$GROUPS_JSON")")
+            IOS_GREP_HEAVY_9=$(filter_perf "$(jq -r '.ios.heavy9 | join("|")' "$GROUPS_JSON")")
+            IOS_GREP_HEAVY_10=$(filter_perf "$(jq -r '.ios.heavy10 | join("|")' "$GROUPS_JSON")")
             IOS_GREP_LIGHT_A=$(filter_perf "$(jq -r '.ios.lightA | join("|")' "$GROUPS_JSON")")
             IOS_GREP_LIGHT_B=$(filter_perf "$(jq -r '.ios.lightB | join("|")' "$GROUPS_JSON")")
 
-            echo "iOS split (perf_only=$PERF_ONLY): H1=$IOS_GREP_HEAVY_1 H2=$IOS_GREP_HEAVY_2 H3=$IOS_GREP_HEAVY_3 H4=$IOS_GREP_HEAVY_4 H5=$IOS_GREP_HEAVY_5 H6=$IOS_GREP_HEAVY_6 H7=$IOS_GREP_HEAVY_7 H8=$IOS_GREP_HEAVY_8 LA=$IOS_GREP_LIGHT_A LB=$IOS_GREP_LIGHT_B"
+            echo "iOS split (perf_only=$PERF_ONLY): H1=$IOS_GREP_HEAVY_1 H2=$IOS_GREP_HEAVY_2 H3=$IOS_GREP_HEAVY_3 H4=$IOS_GREP_HEAVY_4 H5=$IOS_GREP_HEAVY_5 H6=$IOS_GREP_HEAVY_6 H7=$IOS_GREP_HEAVY_7 H8=$IOS_GREP_HEAVY_8 H9=$IOS_GREP_HEAVY_9 H10=$IOS_GREP_HEAVY_10 LA=$IOS_GREP_LIGHT_A LB=$IOS_GREP_LIGHT_B"
 
-            maybe_make_and_upload "$IOS_GREP_HEAVY_1" testspec-heavy-1.yml "iOS-Heavy1" "test_spec_arn"
-            maybe_make_and_upload "$IOS_GREP_HEAVY_2" testspec-heavy-2.yml "iOS-Heavy2" "test_spec_arn_2"
-            maybe_make_and_upload "$IOS_GREP_HEAVY_3" testspec-heavy-3.yml "iOS-Heavy3" "test_spec_arn_3"
-            maybe_make_and_upload "$IOS_GREP_HEAVY_4" testspec-heavy-4.yml "iOS-Heavy4" "test_spec_arn_4"
-            maybe_make_and_upload "$IOS_GREP_HEAVY_5" testspec-heavy-5.yml "iOS-Heavy5" "test_spec_arn_5"
-            maybe_make_and_upload "$IOS_GREP_HEAVY_6" testspec-heavy-6.yml "iOS-Heavy6" "test_spec_arn_6"
-            maybe_make_and_upload "$IOS_GREP_HEAVY_7" testspec-heavy-7.yml "iOS-Heavy7" "test_spec_arn_7"
-            maybe_make_and_upload "$IOS_GREP_HEAVY_8" testspec-heavy-8.yml "iOS-Heavy8" "test_spec_arn_8"
-            maybe_make_and_upload "$IOS_GREP_LIGHT_A" testspec-light-a.yml "iOS-LightA" "test_spec_arn_9"
-            maybe_make_and_upload "$IOS_GREP_LIGHT_B" testspec-light-b.yml "iOS-LightB" "test_spec_arn_10"
+            maybe_make_and_upload "$IOS_GREP_HEAVY_1"  testspec-heavy-1.yml  "iOS-Heavy1"  "test_spec_arn"
+            maybe_make_and_upload "$IOS_GREP_HEAVY_2"  testspec-heavy-2.yml  "iOS-Heavy2"  "test_spec_arn_2"
+            maybe_make_and_upload "$IOS_GREP_HEAVY_3"  testspec-heavy-3.yml  "iOS-Heavy3"  "test_spec_arn_3"
+            maybe_make_and_upload "$IOS_GREP_HEAVY_4"  testspec-heavy-4.yml  "iOS-Heavy4"  "test_spec_arn_4"
+            maybe_make_and_upload "$IOS_GREP_HEAVY_5"  testspec-heavy-5.yml  "iOS-Heavy5"  "test_spec_arn_5"
+            maybe_make_and_upload "$IOS_GREP_HEAVY_6"  testspec-heavy-6.yml  "iOS-Heavy6"  "test_spec_arn_6"
+            maybe_make_and_upload "$IOS_GREP_HEAVY_7"  testspec-heavy-7.yml  "iOS-Heavy7"  "test_spec_arn_7"
+            maybe_make_and_upload "$IOS_GREP_HEAVY_8"  testspec-heavy-8.yml  "iOS-Heavy8"  "test_spec_arn_8"
+            maybe_make_and_upload "$IOS_GREP_HEAVY_9"  testspec-heavy-9.yml  "iOS-Heavy9"  "test_spec_arn_9"
+            maybe_make_and_upload "$IOS_GREP_HEAVY_10" testspec-heavy-10.yml "iOS-Heavy10" "test_spec_arn_10"
+            maybe_make_and_upload "$IOS_GREP_LIGHT_A"  testspec-light-a.yml  "iOS-LightA"  "test_spec_arn_11"
+            maybe_make_and_upload "$IOS_GREP_LIGHT_B"  testspec-light-b.yml  "iOS-LightB"  "test_spec_arn_12"
           fi
 
       - name: Schedule Device Farm Test Run
@@ -1232,6 +1236,8 @@ jobs:
             TEST_SPEC_ARN_8="${{ steps.upload_test_spec.outputs.test_spec_arn_8 }}"
             TEST_SPEC_ARN_9="${{ steps.upload_test_spec.outputs.test_spec_arn_9 }}"
             TEST_SPEC_ARN_10="${{ steps.upload_test_spec.outputs.test_spec_arn_10 }}"
+            TEST_SPEC_ARN_11="${{ steps.upload_test_spec.outputs.test_spec_arn_11 }}"
+            TEST_SPEC_ARN_12="${{ steps.upload_test_spec.outputs.test_spec_arn_12 }}"
 
             echo "🚀 Scheduling iOS runs (each runs on ALL devices in pool)..."
             echo "Device Pool ARN: $POOL_ARN"
@@ -1244,8 +1250,10 @@ jobs:
             maybe_schedule  6 "$POOL_ARN" "$RUN_NAME-iOS-Heavy6-SlidingContext"    "$TEST_SPEC_ARN_6"  "Heavy6 (SlidingContext)"
             maybe_schedule  7 "$POOL_ARN" "$RUN_NAME-iOS-Heavy7-ImgFruitPlate"     "$TEST_SPEC_ARN_7"  "Heavy7 (Image-FruitPlate)"
             maybe_schedule  8 "$POOL_ARN" "$RUN_NAME-iOS-Heavy8-ImgHighResAurora"  "$TEST_SPEC_ARN_8"  "Heavy8 (Image-HighResAurora)"
-            maybe_schedule  9 "$POOL_ARN" "$RUN_NAME-iOS-LightA"                   "$TEST_SPEC_ARN_9"  "LightA"
-            maybe_schedule 10 "$POOL_ARN" "$RUN_NAME-iOS-LightB"                   "$TEST_SPEC_ARN_10" "LightB"
+            maybe_schedule  9 "$POOL_ARN" "$RUN_NAME-iOS-Heavy9-Gemma4"            "$TEST_SPEC_ARN_9"  "Heavy9 (Gemma4)"
+            maybe_schedule 10 "$POOL_ARN" "$RUN_NAME-iOS-Heavy10-OcrPaddle"        "$TEST_SPEC_ARN_10" "Heavy10 (OcrPaddle)"
+            maybe_schedule 11 "$POOL_ARN" "$RUN_NAME-iOS-LightA"                   "$TEST_SPEC_ARN_11" "LightA"
+            maybe_schedule 12 "$POOL_ARN" "$RUN_NAME-iOS-LightB"                   "$TEST_SPEC_ARN_12" "LightB"
           fi
 
           # run_count is treated as the highest scheduled slot, since
@@ -1298,6 +1306,8 @@ jobs:
           RUN_ARN_8="${{ steps.schedule_run.outputs.run_arn_8 }}"
           RUN_ARN_9="${{ steps.schedule_run.outputs.run_arn_9 }}"
           RUN_ARN_10="${{ steps.schedule_run.outputs.run_arn_10 }}"
+          RUN_ARN_11="${{ steps.schedule_run.outputs.run_arn_11 }}"
+          RUN_ARN_12="${{ steps.schedule_run.outputs.run_arn_12 }}"
           RUN_COUNT="${{ steps.schedule_run.outputs.run_count }}"
 
           echo "📊 Monitoring $RUN_COUNT Device Farm run(s)..."
@@ -1542,6 +1552,8 @@ jobs:
           RUN_ARN_8="${{ steps.schedule_run.outputs.run_arn_8 }}"
           RUN_ARN_9="${{ steps.schedule_run.outputs.run_arn_9 }}"
           RUN_ARN_10="${{ steps.schedule_run.outputs.run_arn_10 }}"
+          RUN_ARN_11="${{ steps.schedule_run.outputs.run_arn_11 }}"
+          RUN_ARN_12="${{ steps.schedule_run.outputs.run_arn_12 }}"
           RUN_COUNT="${{ steps.schedule_run.outputs.run_count }}"
           LOG_DIR="devicefarm-logs/${{ matrix.platform }}"
           PLATFORM="${{ matrix.platform }}"

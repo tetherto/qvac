@@ -8,6 +8,8 @@
     "heavy6": ["runSlidingContextTest"],
     "heavy7": ["runImageFruitPlateTest"],
     "heavy8": ["runImageHighResAuroraTest"],
+    "heavy9": ["runGemma4Test"],
+    "heavy10": ["runOcrPaddleTest"],
     "lightA": [
       "runApiBehaviorTest",
       "runBitnetTest",
@@ -16,13 +18,11 @@
       "runToolsCompactTest"
     ],
     "lightB": [
-      "runGemma4Test",
       "runGenerationParamsTest",
       "runGrammarTest",
       "runModelLoadingTest",
       "runMultiGpuTest",
       "runMultiInstanceTest",
-      "runOcrPaddleTest",
       "runQwen35Test",
       "runUtf8OutputTest"
     ]
