@@ -87,22 +87,29 @@ void SupertonicModel::validateConfig(const SupertonicConfig& cfg) {
     throw createTTSError(TTSErrorCode::ModelFileNotFound,
                          "noise npy not found: " + cfg.noiseNpyPath);
   }
+  // Defense-in-depth: the JS layer (index.js::_validateConfig) runs the
+  // same conflict check before this method is reached, so direct C++
+  // callers are the only ones who can actually trip this branch.
+  // Mirror the Chatterbox suffix verbatim so users see an identical
+  // hint regardless of which engine they instantiated.  `layers != 0`
+  // matches llama.cpp's "-1 = offload all" sentinel convention.
   if (cfg.useGpu.has_value() && cfg.nGpuLayers.has_value()) {
     const bool wantsGpuFlag   = *cfg.useGpu;
     const int  layers         = *cfg.nGpuLayers;
-    const bool layersWantGpu  = layers > 0;
+    const bool layersWantGpu  = layers != 0;
     if (wantsGpuFlag != layersWantGpu) {
       throw StatusError(
           general_error::InvalidArgument,
           std::string("SupertonicModel: useGPU=") +
               (wantsGpuFlag ? "true" : "false") +
               " conflicts with nGpuLayers=" + std::to_string(layers) +
-              ". Either drop one of the two, or make them agree.");
+              ". Either drop one of the two, or make them agree "
+              "(useGPU:true + nGpuLayers!=0, or useGPU:false + nGpuLayers=0).");
     }
   }
   const bool wantsGpu =
       cfg.useGpu.value_or(false) ||
-      (cfg.nGpuLayers.has_value() && *cfg.nGpuLayers > 0);
+      (cfg.nGpuLayers.has_value() && *cfg.nGpuLayers != 0);
   if (wantsGpu) {
     throw StatusError(
         general_error::InvalidArgument,

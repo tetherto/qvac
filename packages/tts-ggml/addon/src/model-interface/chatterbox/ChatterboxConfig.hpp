@@ -39,9 +39,9 @@ struct ChatterboxConfig {
    *   - true:         if nGpuLayers unset, maps to nGpuLayers=99.
    *   - false:        if nGpuLayers unset, forces nGpuLayers=0 (CPU).
    *
-   * Conflicts with nGpuLayers (true + 0, or false + >0) are rejected by
-   * ChatterboxModel::validateConfig so callers can't silently get the
-   * opposite backend they asked for.
+   * Conflicts with nGpuLayers (true + 0, or false + !=0) are rejected
+   * by ChatterboxModel::validateConfig so callers can't silently get
+   * the opposite backend they asked for.
    */
   std::optional<bool> useGpu;
   /**

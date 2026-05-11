@@ -85,7 +85,10 @@ void ChatterboxModel::validateConfig(const ChatterboxConfig& cfg) {
   if (cfg.useGpu.has_value() && cfg.nGpuLayers.has_value()) {
     const bool wantsGpu = *cfg.useGpu;
     const int  layers   = *cfg.nGpuLayers;
-    const bool layersWantGpu = layers > 0;
+    // `layers != 0` (rather than `layers > 0`) so a llama.cpp-style
+    // sentinel like nGpuLayers=-1 ("offload all layers") is treated as
+    // "wants GPU" and doesn't falsely pass through against useGPU:true.
+    const bool layersWantGpu = layers != 0;
     if (wantsGpu != layersWantGpu) {
       throw StatusError(
           general_error::InvalidArgument,
@@ -93,7 +96,7 @@ void ChatterboxModel::validateConfig(const ChatterboxConfig& cfg) {
               (wantsGpu ? "true" : "false") +
               " conflicts with nGpuLayers=" + std::to_string(layers) +
               ". Either drop one of the two, or make them agree "
-              "(useGPU:true + nGpuLayers>0, or useGPU:false + nGpuLayers=0).");
+              "(useGPU:true + nGpuLayers!=0, or useGPU:false + nGpuLayers=0).");
     }
   }
   if (cfg.t3ModelPath.empty()) {
