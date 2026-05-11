@@ -183,10 +183,7 @@ jobs:
               hashFiles(
                 format('{0}/vcpkg.json', inputs.workdir),
                 format('{0}/vcpkg-configuration.json', inputs.workdir),
-                format('{0}/vcpkg/ports/**', inputs.workdir),
-                'vcpkg.json',
-                'vcpkg-configuration.json',
-                'vcpkg/ports/**'
+                format('{0}/vcpkg/ports/**', inputs.workdir)
               )
             }}
           path: ${{ github.workspace }}/${{ env.WORKDIR }}/vcpkg/cache
