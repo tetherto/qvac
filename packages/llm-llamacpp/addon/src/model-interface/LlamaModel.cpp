@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <charconv>
 #include <chrono>
 #include <cinttypes>
 #include <cmath>
@@ -749,26 +750,27 @@ void LlamaModel::commonParamsParse(
   }
 
   // reasoning-budget controls whether the model emits a <think> reasoning
-  // channel. -1 (default) leaves it on; 0 disables.
+  // channel. -1 (default) leaves it on; 0 disables. `std::from_chars` is used
+  // instead of `std::stoi` because the latter accepts trailing garbage ("0abc"
+  // → 0) and throws an uncaught `std::out_of_range` on overflow.
+  auto parseReasoningBudget = [](const std::string& raw) {
+    int value = 0;
+    const char* begin = raw.data();
+    const char* end = begin + raw.size();
+    const auto [ptr, ec] = std::from_chars(begin, end, value);
+    if (ec != std::errc{} || ptr != end ||
+        (value != 0 && value != -1)) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          qvac_errors::general_error::toString(
+              qvac_errors::general_error::InvalidArgument),
+          "reasoning-budget must be -1 (unrestricted) or 0 (disabled)");
+    }
+    return value;
+  };
   for (const std::string& key : {"reasoning-budget", "reasoning_budget"}) {
     if (auto it = configFilemap.find(key); it != configFilemap.end()) {
-      try {
-        int value = std::stoi(it->second);
-        if (value != 0 && value != -1) {
-          throw qvac_errors::StatusError(
-              ADDON_ID,
-              qvac_errors::general_error::toString(
-                  qvac_errors::general_error::InvalidArgument),
-              "reasoning-budget must be -1 (unrestricted) or 0 (disabled)");
-        }
-        params.reasoning_budget = value;
-      } catch (const std::invalid_argument&) {
-        throw qvac_errors::StatusError(
-            ADDON_ID,
-            qvac_errors::general_error::toString(
-                qvac_errors::general_error::InvalidArgument),
-            "reasoning-budget must be an integer (-1 or 0)");
-      }
+      params.reasoning_budget = parseReasoningBudget(it->second);
       configFilemap.erase(it);
     }
   }
