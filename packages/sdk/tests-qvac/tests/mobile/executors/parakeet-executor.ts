@@ -55,10 +55,14 @@ export class MobileParakeetExecutor extends ModelAssetExecutor<
 
     try {
       const audioUri = await this.resolveAsset(assetModule);
-      const text = p.metadata === true
-        ? (await transcribe({ modelId, audioChunk: audioUri, metadata: true }) as unknown as string)
-        : await transcribe({ modelId, audioChunk: audioUri });
-      const trimmedText = typeof text === "string" ? text.trim() : JSON.stringify(text);
+
+      if (p.metadata === true) {
+        await transcribe({ modelId, audioChunk: audioUri, metadata: true });
+        return { passed: false, output: "Expected error but transcription succeeded" };
+      }
+
+      const text = await transcribe({ modelId, audioChunk: audioUri });
+      const trimmedText = text.trim();
 
       if (exp.validation === "throws-error") {
         return { passed: false, output: "Expected error but transcription succeeded" };

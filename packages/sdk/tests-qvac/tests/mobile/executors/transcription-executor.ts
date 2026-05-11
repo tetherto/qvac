@@ -1,5 +1,4 @@
-import { transcribe, transcribeStream } from "@qvac/sdk";
-import type { TranscribeSegment } from "@qvac/sdk";
+import { transcribe } from "@qvac/sdk";
 import {
   ValidationHelpers,
   type TestResult,
@@ -8,7 +7,11 @@ import {
 import type { ResourceManager } from "../../shared/resource-manager.js";
 import { ModelAssetExecutor } from "./model-asset-executor.js";
 import { transcriptionTests } from "../../transcription-tests.js";
-import { validateSegments } from "../../shared/transcription-segments.js";
+import {
+  runMetadataStreamDuplex,
+  validateSegments,
+  type MetadataStreamOptions,
+} from "../../shared/transcription-segments.js";
 
 export class MobileTranscriptionExecutor extends ModelAssetExecutor<
   typeof transcriptionTests
@@ -42,6 +45,30 @@ export class MobileTranscriptionExecutor extends ModelAssetExecutor<
       return { passed: false, output: `Audio file not found: ${audioFileName}` };
     }
     return this.resolveAsset(assetModule);
+  }
+
+  private async loadAudioBytes(audioFileName: string): Promise<Uint8Array | TestResult> {
+    const audio = await this.loadAudioAssets();
+    const assetModule = audio[audioFileName];
+    if (!assetModule) {
+      return { passed: false, output: `Audio file not found: ${audioFileName}` };
+    }
+    // @ts-ignore - expo-asset is a peer dependency available in mobile context
+    const { Asset } = await import("expo-asset");
+    const asset = Asset.fromModule(assetModule);
+    asset.downloaded = false;
+    await asset.downloadAsync();
+    const uri: string = asset.localUri || asset.uri;
+    if (!uri) {
+      return {
+        passed: false,
+        output: `Failed to resolve asset: ${asset.name ?? audioFileName}`,
+      };
+    }
+    const fileUri = uri.startsWith("file://") ? uri : `file://${uri}`;
+    // @ts-ignore - expo-file-system is a peer dependency available in mobile context
+    const { File } = await import("expo-file-system");
+    return await new File(fileUri).bytes();
   }
 
   private async transcribeAudio(
@@ -97,25 +124,17 @@ export class MobileTranscriptionExecutor extends ModelAssetExecutor<
   }
 
   async metadataStreaming(params: unknown): Promise<TestResult> {
-    const p = params as { audioFileName: string };
+    const p = params as { audioFileName: string } & MetadataStreamOptions;
     const whisperModelId = await this.resources.ensureLoaded("whisper");
-    const audioUriResult = await this.resolveAudioAssetUri(p.audioFileName);
-    if (typeof audioUriResult !== "string") return audioUriResult;
 
-    try {
-      const stream = transcribeStream({
-        modelId: whisperModelId,
-        audioChunk: audioUriResult,
-        metadata: true,
-      });
-      const segments: TranscribeSegment[] = [];
-      for await (const segment of stream) {
-        segments.push(segment);
-      }
-      return validateSegments(segments);
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      return { passed: false, output: `Metadata streaming failed: ${errorMsg}` };
-    }
+    const audioBytesResult = await this.loadAudioBytes(p.audioFileName);
+    if (!(audioBytesResult instanceof Uint8Array)) return audioBytesResult;
+
+    return runMetadataStreamDuplex(whisperModelId, audioBytesResult, {
+      ...(p.trailingSilenceMs !== undefined && {
+        trailingSilenceMs: p.trailingSilenceMs,
+      }),
+      ...(p.chunkMs !== undefined && { chunkMs: p.chunkMs }),
+    });
   }
 }

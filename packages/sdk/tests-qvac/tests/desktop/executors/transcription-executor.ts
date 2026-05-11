@@ -1,5 +1,5 @@
-import { transcribe, transcribeStream } from "@qvac/sdk";
-import type { TranscribeSegment } from "@qvac/sdk";
+import { transcribe } from "@qvac/sdk";
+import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import {
   ValidationHelpers,
@@ -8,7 +8,11 @@ import {
 } from "@tetherto/qvac-test-suite";
 import { AbstractModelExecutor } from "../../shared/executors/abstract-model-executor.js";
 import { transcriptionTests } from "../../transcription-tests.js";
-import { validateSegments } from "../../shared/transcription-segments.js";
+import {
+  runMetadataStreamDuplex,
+  validateSegments,
+  type MetadataStreamOptions,
+} from "../../shared/transcription-segments.js";
 
 export class TranscriptionExecutor extends AbstractModelExecutor<
   typeof transcriptionTests
@@ -82,24 +86,17 @@ export class TranscriptionExecutor extends AbstractModelExecutor<
   }
 
   async metadataStreaming(params: unknown): Promise<TestResult> {
-    const p = params as { audioFileName: string };
+    const p = params as { audioFileName: string } & MetadataStreamOptions;
     const whisperModelId = await this.resources.ensureLoaded("whisper");
     const audioPath = path.resolve(process.cwd(), "assets/audio", p.audioFileName);
 
-    try {
-      const stream = transcribeStream({
-        modelId: whisperModelId,
-        audioChunk: audioPath,
-        metadata: true,
-      });
-      const segments: TranscribeSegment[] = [];
-      for await (const segment of stream) {
-        segments.push(segment);
-      }
-      return validateSegments(segments);
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      return { passed: false, output: `Metadata streaming failed: ${errorMsg}` };
-    }
+    const buf = await fs.readFile(audioPath);
+    const audioBytes = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+    return runMetadataStreamDuplex(whisperModelId, audioBytes, {
+      ...(p.trailingSilenceMs !== undefined && {
+        trailingSilenceMs: p.trailingSilenceMs,
+      }),
+      ...(p.chunkMs !== undefined && { chunkMs: p.chunkMs }),
+    });
   }
 }

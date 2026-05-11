@@ -174,12 +174,16 @@ export const transcriptionMetadataBatch: TestDefinition = {
 
 export const transcriptionMetadataStreaming: TestDefinition = {
   testId: "transcription-metadata-streaming",
-  params: { audioFileName: "transcription-short-wav.wav", metadata: true, stream: true },
+  params: {
+    audioFileName: "diarization-sample-16k.wav",
+    trailingSilenceMs: 1500,
+    chunkMs: 100,
+  },
   expectation: { validation: "function", fn: () => true },
   metadata: {
     category: "transcription",
     dependency: "whisper",
-    estimatedDurationMs: 30000,
+    estimatedDurationMs: 60000,
   },
 };
 

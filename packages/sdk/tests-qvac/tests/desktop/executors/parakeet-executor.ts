@@ -35,10 +35,13 @@ export class ParakeetExecutor extends AbstractModelExecutor<
     );
 
     try {
-      const text = p.metadata === true
-        ? (await transcribe({ modelId, audioChunk: audioPath, metadata: true }) as unknown as string)
-        : await transcribe({ modelId, audioChunk: audioPath });
-      const trimmedText = typeof text === "string" ? text.trim() : JSON.stringify(text);
+      if (p.metadata === true) {
+        await transcribe({ modelId, audioChunk: audioPath, metadata: true });
+        return { passed: false, output: "Expected error but transcription succeeded" };
+      }
+
+      const text = await transcribe({ modelId, audioChunk: audioPath });
+      const trimmedText = text.trim();
 
       if (exp.validation === "throws-error") {
         return { passed: false, output: "Expected error but transcription succeeded" };
