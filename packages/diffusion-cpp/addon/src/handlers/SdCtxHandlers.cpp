@@ -2,7 +2,7 @@
 
 #include <cstddef>
 
-#include <qvac-lib-inference-addon-cpp/Errors.hpp>
+#include <inference-addon-cpp/Errors.hpp>
 
 #include "utils/LoggingMacros.hpp"
 

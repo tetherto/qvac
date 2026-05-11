@@ -12,8 +12,8 @@
 #include "BCIConfig.hpp"
 #include "NeuralProcessor.hpp"
 #include "model-interface/BCITypes.hpp"
-#include "qvac-lib-inference-addon-cpp/ModelInterfaces.hpp"
-#include "qvac-lib-inference-addon-cpp/RuntimeStats.hpp"
+#include "inference-addon-cpp/ModelInterfaces.hpp"
+#include "inference-addon-cpp/RuntimeStats.hpp"
 
 namespace qvac_lib_inference_addon_bci {
 

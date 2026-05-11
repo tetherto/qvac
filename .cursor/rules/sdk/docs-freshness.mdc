@@ -2,7 +2,7 @@
 description: Reminder to check if knowledge-base rules need updating when SDK or registry-server source changes
 globs:
   - packages/sdk/**
-  - packages/qvac-lib-registry-server/**
+  - packages/registry-server/**
 alwaysApply: false
 ---
 
@@ -17,9 +17,9 @@ This rule monitors two packages that have dedicated knowledge-base documentation
 | Package | Why monitored |
 |---|---|
 | `packages/sdk/` | 5 knowledge rules document SDK internals: schemas, config, cache management, model constants, delegated inference |
-| `packages/qvac-lib-registry-server/` | 1 skill documents Autobase/HyperDB patterns, schema build pipeline, and implementation gotchas |
+| `packages/registry-server/` | 1 skill documents Autobase/HyperDB patterns, schema build pipeline, and implementation gotchas |
 
-**Not monitored:** Individual addon packages (`qvac-lib-infer-whispercpp`, etc.). Their corresponding docs (`qvac-whispercpp-example.mdc`) describe external library APIs as static reference material — they drift when upstream libraries change, not when our source changes. Glob-based monitoring can't catch that; those docs are better maintained through periodic review.
+**Not monitored:** Individual addon packages (`transcription-whispercpp`, etc.). Their corresponding docs (`qvac-whispercpp-example.mdc`) describe external library APIs as static reference material — they drift when upstream libraries change, not when our source changes. Glob-based monitoring can't catch that; those docs are better maintained through periodic review.
 
 ## Source → Documentation Map
 
@@ -33,7 +33,7 @@ This rule monitors two packages that have dedicated knowledge-base documentation
 | `schemas/model-src-utils.ts`, `models/registry/models.ts`, `models/update-models/` | `.cursor/rules/sdk/docs/model-constants-and-sources.mdc` |
 | `schemas/delegate.ts`, `server/bare/hyperswarm.ts`, `server/bare/registry/model-registry.ts` | `.cursor/rules/sdk/docs/delegated-inference.mdc` |
 
-### packages/qvac-lib-registry-server/
+### packages/registry-server/
 
 | Source area | Documentation |
 |---|---|

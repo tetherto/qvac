@@ -27,7 +27,7 @@ on:
 jobs:
   pull-request-event:
     runs-on: ubuntu-latest
-    environment: release
+    environment: npm
     if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target' || inputs.debug_mode
     permissions:
       contents: read
@@ -114,7 +114,7 @@ jobs:
 
   push-event:
     runs-on: ubuntu-latest
-    environment: release
+    environment: npm
     if: github.event_name == 'push' || inputs.caller_event_name == 'workflow_dispatch' || inputs.debug_mode
     outputs:
       npm_published_version: ${{ steps.publish-npm.outputs.npm_published_version }}

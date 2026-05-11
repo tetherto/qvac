@@ -1,0 +1,24 @@
+{
+  "action": "synchronize",
+  "number": 4244,
+  "pull_request": {
+    "number": 4244,
+    "head": {
+      "repo": { "full_name": "tetherto/qvac" },
+      "ref": "feature-y",
+      "sha": "1234567"
+    },
+    "base": {
+      "repo": { "full_name": "tetherto/qvac" }
+    },
+    "labels": [
+      { "name": "verified" }
+    ]
+  },
+  "sender": {
+    "login": "alice-team-member"
+  },
+  "repository": {
+    "full_name": "tetherto/qvac"
+  }
+}

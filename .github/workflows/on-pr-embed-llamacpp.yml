@@ -1,0 +1,175 @@
+name: On PR Trigger (Embed)
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
+    branches:
+      - main
+      - release-*
+      - feature-*
+      - tmp-*
+    paths:
+      - "packages/embed-llamacpp/**"
+      - ".github/workflows/*embed*.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+  packages: read
+  id-token: write
+
+jobs:
+  authorize:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      allowed: ${{ steps.auth.outputs.allowed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - name: Authorize
+        id: auth
+        uses: ./.github/actions/authorize-pr
+        with:
+          github-token: ${{ github.token }}
+
+  verify-fabric-lockstep:
+    if: needs.authorize.outputs.allowed == 'true'
+    needs: [authorize]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Verify qvac-fabric versions are lockstep
+        id: lockstep
+        uses: ./.github/actions/verify-qvac-fabric-lockstep
+
+      - name: Report verified version
+        run: 'echo "Verified qvac-fabric version: ${{ steps.lockstep.outputs.version }}"'
+
+  sanity-checks:
+    if: needs.authorize.outputs.allowed == 'true'
+    needs: [authorize, verify-fabric-lockstep]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Run Sanity checks
+        uses: ./.github/actions/sanity-checks
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
+          workdir: packages/embed-llamacpp
+
+  cpp-lint:
+    if: needs.authorize.outputs.allowed == 'true'
+    needs: authorize
+    uses: ./.github/workflows/cpp-lint.yaml
+    secrets: inherit
+    with:
+      sha: ${{ github.event.pull_request.base.sha }}
+      pr_head_sha: ${{ github.event.pull_request.head.sha }}
+      workdir: packages/embed-llamacpp
+
+  cpp-tests:
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+    if: needs.authorize.outputs.allowed == 'true'
+    needs: [authorize, sanity-checks]
+    uses: ./.github/workflows/cpp-tests-embed.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name }}
+      ref: ${{ github.event.pull_request.head.ref }}
+
+  ts-checks:
+    needs: authorize
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: packages/embed-llamacpp
+        run: npm install
+
+      - name: Type declaration check
+        working-directory: packages/embed-llamacpp
+        run: npm run test:dts
+
+      - name: Run lint and unit tests
+        id: run_lint_and_unit_tests
+        uses: ./.github/actions/run-lint-and-unit-tests
+        with:
+          gpr-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
+          registry-type: gpr
+          workdir: packages/embed-llamacpp
+
+  prebuild:
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    if: needs.authorize.outputs.allowed == 'true'
+    needs: [authorize, sanity-checks]
+    uses: ./.github/workflows/prebuilds-embed-llamacpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name }}
+      ref: ${{ github.event.pull_request.head.ref }}
+
+  integration-tests:
+    needs: [authorize, prebuild]
+    if: needs.authorize.outputs.allowed == 'true'
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    uses: ./.github/workflows/integration-test-embed-llamacpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name }}
+      ref: ${{ github.event.pull_request.head.ref }}
+
+  run-mobile-integration-tests:
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write # Allow commenting on PRs
+      id-token: write
+    if: needs.authorize.outputs.allowed == 'true'
+    needs: [authorize, prebuild]
+    uses: ./.github/workflows/integration-mobile-test-embed-llamacpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name }}
+      ref: ${{ github.event.pull_request.head.ref }}
+
+  merge-guard:
+    needs: [authorize, verify-fabric-lockstep, sanity-checks, cpp-lint, cpp-tests, prebuild, integration-tests, run-mobile-integration-tests, ts-checks]
+    if: always()
+    uses: ./.github/workflows/public-pr.yml
+    with:
+      sanity-checks-status: ${{ needs.verify-fabric-lockstep.result == 'success' && needs.sanity-checks.result == 'success' }}
+      build-status: ${{ needs.prebuild.result == 'success' }}

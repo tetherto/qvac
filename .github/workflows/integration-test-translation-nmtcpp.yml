@@ -1,0 +1,441 @@
+name: Integration Tests (NMTCPP)
+
+on:
+  workflow_dispatch:
+    inputs:
+      prebuild_package:
+        description: "NPM package containing prebuilds (e.g. @qvac/translation-nmtcpp@1.0.0)"
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      ref:
+        description: "ref"
+        type: string
+        required: false
+      repository:
+        type: string
+        required: false
+        default: "tetherto/qvac"
+      workdir:
+        description: "Working directory inside the repo (monorepo package path)"
+        type: string
+        required: false
+        default: "packages/translation-nmtcpp"
+
+env:
+  PKG_DIR: packages/qvac-lib-infer-nmtcpp
+
+jobs:
+  run-integration-tests:
+    timeout-minutes: 60
+    runs-on: ${{ matrix.os }}
+    environment: release
+    name: ${{ matrix.platform }}-${{ matrix.arch }}-integration-tests
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Run Linux x64 tests on both Ubuntu 22.04 and 24.04 to ensure compatibility
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
+          - os: ubuntu-24.04
+            platform: linux
+            arch: x64
+          - os: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
+          - os: ubuntu-22.04-arm
+            platform: linux
+            arch: arm64
+          - os: macos-14
+            platform: darwin
+            arch: arm64
+          - os: ai-run-windows11-gpu
+            platform: win32
+            arch: x64
+
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Windows - enable git long paths
+        if: ${{ matrix.platform == 'win32' }}
+        shell: bash
+        run: git config --system core.longpaths true
+
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Install NPM dependencies
+        working-directory: packages/translation-nmtcpp
+        run: |
+          npm install
+          npm install -g bare bare-make
+
+      - name: Download prebuilds from artifact
+        if: ${{ !inputs.prebuild_package }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: packages/translation-nmtcpp/prebuilds
+          merge-multiple: true
+
+      - name: Download prebuilds from package
+        if: ${{ inputs.prebuild_package }}
+        working-directory: packages/translation-nmtcpp
+        shell: bash
+        run: |
+          mkdir -p prebuilds
+          npm pack ${{ inputs.prebuild_package }} --pack-destination /tmp
+          tar -xzf /tmp/*.tgz -C /tmp
+          cp -r /tmp/package/prebuilds/* prebuilds/
+
+      - name: Print run state
+        working-directory: packages/translation-nmtcpp
+        shell: bash
+        run: |
+          echo "node version: $(node -v)"
+          echo "npm version: $(npm -v)"
+          echo "bare version: $(bare -v)"
+          echo "bare-make version: $(bare-make --version)"
+          npm list
+          npm config list
+        continue-on-error: true
+
+      - name: Print run state (model and prebuilds)
+        working-directory: packages/translation-nmtcpp
+        shell: bash
+        run: |
+          echo "node version: $(node -v)"
+          echo "npm version: $(npm -v)"
+          echo "bare version: $(bare -v)"
+          echo "bare-make version: $(bare-make --version)"
+          ls -la prebuilds || true
+          tree prebuilds || true
+        continue-on-error: true
+
+      - name: Linux - install dependencies
+        if: matrix.platform == 'linux' || matrix.platform == 'android'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mesa-vulkan-drivers
+      
+      - if: ${{ matrix.platform == 'win32' }}
+        name: Install AWS CLI on self-hosted Windows runner
+        shell: powershell
+        run: |
+          if (Get-Command aws -ErrorAction SilentlyContinue) {
+            Write-Host "AWS CLI already installed"
+            aws --version
+          } else {
+            Write-Host "Installing AWS CLI v2..."
+            Invoke-WebRequest -Uri https://awscli.amazonaws.com/AWSCLIV2.msi -OutFile $env:TEMP\AWSCLIV2.msi
+            Start-Process msiexec.exe -Wait -ArgumentList '/I', "$env:TEMP\AWSCLIV2.msi", '/qn'
+            $env:PATH = "C:\Program Files\Amazon\AWSCLIV2;$env:PATH"
+            echo "C:\Program Files\Amazon\AWSCLIV2" >> $env:GITHUB_PATH
+            aws --version
+          }
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - name: Download Bergamot models from S3
+        working-directory: packages/translation-nmtcpp
+        shell: bash
+        run: |
+          echo "Downloading Bergamot models from S3..."
+          mkdir -p model/bergamot
+          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/bergamot/bergamot-enit/2026-04-28/" model/bergamot/enit --recursive
+          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/bergamot/bergamot-esen/2026-04-28/" model/bergamot/esen --recursive
+          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/bergamot/bergamot-fren/2025-12-18/" model/bergamot/fren --recursive
+          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/bergamot/bergamot-enes/2025-12-18/" model/bergamot/enes --recursive
+          echo ""
+          echo "Bergamot model directories:"
+          ls -la model/bergamot/
+
+      - name: Download IndicTrans model from S3
+        working-directory: packages/translation-nmtcpp
+        shell: bash
+        run: |
+          echo "Downloading IndicTrans en-indic model from S3..."
+          mkdir -p model/indictrans
+          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-dist-200M/2026-01-01/ggml-indictrans2-en-indic-dist-200M-q4_0.bin" model/indictrans/
+          echo "IndicTrans model files:"
+          ls -la model/indictrans/
+
+      - name: Run integration test (Linux/macOS)
+        if: ${{ matrix.platform != 'win32' }}
+        working-directory: packages/translation-nmtcpp
+        run: |
+          npm run test:integration ${{ matrix.platform }}-${{ matrix.arch }} 2>&1 | tee test-output.log
+          exit ${PIPESTATUS[0]}
+        shell: bash
+        env:
+          QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
+
+      - name: Run integration test (Windows)
+        if: ${{ matrix.platform == 'win32' }}
+        working-directory: packages/translation-nmtcpp
+        run: |
+          npm run test:integration ${{ matrix.platform }}-${{ matrix.arch }} | Tee-Object test-output.log
+        shell: powershell
+        env:
+          QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
+
+      - name: Generate test report (Linux/macOS)
+        if: ${{ always() && matrix.platform != 'win32' }}
+        working-directory: packages/translation-nmtcpp
+        shell: bash
+        run: |
+          REPORT="test-report.txt"
+          PLATFORM="${{ matrix.platform }}-${{ matrix.arch }}"
+
+          echo "========================================" > "$REPORT"
+          echo "  Integration Test Report -- ${PLATFORM}" >> "$REPORT"
+          echo "  $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> "$REPORT"
+          echo "========================================" >> "$REPORT"
+          echo "" >> "$REPORT"
+
+          if [ ! -f test-output.log ]; then
+            echo "NO TEST OUTPUT -- tests may not have started." >> "$REPORT"
+            cat "$REPORT"
+            exit 0
+          fi
+
+          awk '
+          /^[[:space:]]*- chrF\+\+: / {
+            last_chrfpp = $0
+            sub(/^.*chrF\+\+: */, "", last_chrfpp)
+            next
+          }
+          /^ok [0-9]+ - / {
+            name = $0; sub(/^ok [0-9]+ - /, "", name)
+            passed++
+            line = "PASS: " name
+            if (last_chrfpp != "") {
+              line = line "  |  chrF++ = " last_chrfpp
+              last_chrfpp = ""
+            }
+            results[++total] = line
+            next
+          }
+          /^not ok [0-9]+ - / {
+            name = $0; sub(/^not ok [0-9]+ - /, "", name)
+            failed++
+            line = "FAIL: " name
+            if (last_chrfpp != "") {
+              line = line "  |  chrF++ = " last_chrfpp
+              last_chrfpp = ""
+            }
+            results[++total] = line
+            capturing = 1
+            fail_detail[total] = ""
+            next
+          }
+          /^# skip/ {
+            split($0, a, " "); skipped = a[3]
+            next
+          }
+          capturing && /^[^ \t#]/ { capturing = 0; next }
+          capturing {
+            fail_detail[total] = fail_detail[total] $0 "\n"
+          }
+          END {
+            printf "TOTAL: %d  |  PASSED: %d  |  FAILED: %d  |  SKIPPED: %s\n\n", total, passed, failed, (skipped ? skipped : "0")
+
+            if (failed > 0) {
+              print "======== ALL TESTS ========"
+              print ""
+            }
+            for (i = 1; i <= total; i++) {
+              print results[i]
+            }
+
+            has_failures = 0
+            for (i = 1; i <= total; i++) {
+              if (fail_detail[i] != "") has_failures = 1
+            }
+            if (has_failures) {
+              print ""
+              print "======== FAILURE DETAILS ========"
+              for (i = 1; i <= total; i++) {
+                if (fail_detail[i] != "") {
+                  print ""
+                  print results[i]
+                  print "--------"
+                  printf "%s", fail_detail[i]
+                }
+              }
+            }
+          }
+          ' test-output.log >> "$REPORT"
+
+          echo "" >> "$REPORT"
+          echo "Full log: test-output.log (uploaded as artifact)" >> "$REPORT"
+
+          echo "--- Test Report ---"
+          cat "$REPORT"
+
+          echo ""
+          echo "::group::📄 Full Raw Test Output (test-output.log)"
+          cat test-output.log 2>/dev/null || echo "(no test output captured)"
+          echo "::endgroup::"
+
+      - name: Generate test report (Windows)
+        if: ${{ always() && matrix.platform == 'win32' }}
+        working-directory: packages/translation-nmtcpp
+        shell: powershell
+        run: |
+          $report = "test-report.txt"
+          $platform = "${{ matrix.platform }}-${{ matrix.arch }}"
+          $ts = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+          $header = "========================================`n"
+          $header += "  Integration Test Report - $platform`n"
+          $header += "  $ts UTC`n"
+          $header += "========================================`n"
+          $header | Out-File -FilePath $report -Encoding utf8
+
+          if (-not (Test-Path test-output.log)) {
+            "NO TEST OUTPUT -- tests may not have started." | Out-File -Append -FilePath $report
+            Get-Content $report
+            exit 0
+          }
+
+          $lines = Get-Content test-output.log
+          $passed = @()
+          $failed = @()
+          $failDetails = @{}
+          $currentFail = $null
+          $lastChrfpp = $null
+
+          foreach ($line in $lines) {
+            if ($line -match '^\s*- chrF\+\+:\s*(.+)$') {
+              $lastChrfpp = $Matches[1].Trim()
+            }
+            elseif ($line -match '^ok \d+ - (.+)') {
+              $name = $Matches[1]
+              if ($lastChrfpp) {
+                $passed += "PASS: $name  |  chrF++ = $lastChrfpp"
+                $lastChrfpp = $null
+              } else {
+                $passed += "PASS: $name"
+              }
+              $currentFail = $null
+            }
+            elseif ($line -match '^not ok \d+ - (.+)') {
+              $testName = $Matches[1]
+              if ($lastChrfpp) {
+                $failed += "FAIL: $testName  |  chrF++ = $lastChrfpp"
+                $lastChrfpp = $null
+              } else {
+                $failed += "FAIL: $testName"
+              }
+              $currentFail = $testName
+              $failDetails[$testName] = @()
+            }
+            elseif ($null -ne $currentFail) {
+              if ($line -match '^[^ \t#]') {
+                $currentFail = $null
+              } else {
+                $failDetails[$currentFail] += $line
+              }
+            }
+          }
+
+          $total = $passed.Count + $failed.Count
+          "TOTAL: $total  |  PASSED: $($passed.Count)  |  FAILED: $($failed.Count)" | Out-File -Append -FilePath $report
+          "" | Out-File -Append -FilePath $report
+
+          if ($failed.Count -gt 0) {
+            "======== ALL TESTS ========" | Out-File -Append -FilePath $report
+            "" | Out-File -Append -FilePath $report
+          }
+          foreach ($p in $passed) { $p | Out-File -Append -FilePath $report }
+          foreach ($f in $failed) { $f | Out-File -Append -FilePath $report }
+
+          if ($failed.Count -gt 0) {
+            "" | Out-File -Append -FilePath $report
+            "======== FAILURE DETAILS ========" | Out-File -Append -FilePath $report
+            foreach ($f in $failed) {
+              $testName = $f -replace '^FAIL: ', ''
+              "" | Out-File -Append -FilePath $report
+              $f | Out-File -Append -FilePath $report
+              "--------" | Out-File -Append -FilePath $report
+              if ($failDetails.ContainsKey($testName)) {
+                $failDetails[$testName] | Out-File -Append -FilePath $report
+              }
+            }
+          }
+
+          "" | Out-File -Append -FilePath $report
+          "Full log: test-output.log (uploaded as artifact)" | Out-File -Append -FilePath $report
+
+          Write-Host "--- Test Report ---"
+          Get-Content $report
+
+          Write-Host ""
+          Write-Host "::group::Full Raw Test Output (test-output.log)"
+          if (Test-Path test-output.log) { Get-Content test-output.log } else { Write-Host "(no test output captured)" }
+          Write-Host "::endgroup::"
+
+      - name: Generate HTML performance report
+        if: ${{ always() }}
+        working-directory: packages/translation-nmtcpp
+        shell: bash
+        run: |
+          if [ -f test/results/performance-report.json ]; then
+            echo "Found performance-report.json, generating HTML/MD/summary..."
+            node ../../scripts/perf-report/aggregate.js \
+              --dir test/results \
+              --output-html test/results/performance-report.html \
+              --output-json test/results/performance-summary.json \
+              --output test/results/performance-report.md
+          else
+            echo "performance-report.json not found — skipping HTML generation"
+          fi
+
+      - name: Upload performance report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: perf-report-nmtcpp-${{ matrix.os }}-${{ matrix.arch }}-${{ github.run_number }}
+          path: |
+            packages/translation-nmtcpp/test/results/performance-report.json
+            packages/translation-nmtcpp/test/results/performance-report.html
+            packages/translation-nmtcpp/test/results/performance-summary.json
+            packages/translation-nmtcpp/test/results/performance-report.md
+          retention-days: 90
+          if-no-files-found: ignore
+
+      - name: Upload test logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: test-logs-${{ matrix.os }}-${{ matrix.arch }}
+          path: |
+            packages/translation-nmtcpp/test-report.txt
+            packages/translation-nmtcpp/test-output.log
+          retention-days: 14
+
+      - name: Run quickstart example with deps installed
+        working-directory: packages/translation-nmtcpp
+        shell: bash
+        run: |
+          npm install "@qvac/translation-nmtcpp"
+          npx bare examples/quickstart.js
+        continue-on-error: true

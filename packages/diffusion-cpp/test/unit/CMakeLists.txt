@@ -55,7 +55,7 @@ target_include_directories(
   ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
 )
 
-# Set C++20 standard for std::views support (required by qvac-lib-inference-addon-cpp)
+# Set C++20 standard for std::views support (required by inference-addon-cpp)
 target_compile_features(addon-test PRIVATE cxx_std_20)
 
 # Set macOS deployment target for C++20 std::format support
