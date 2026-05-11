@@ -253,11 +253,10 @@ const scenarios = [
   {
     name: 'Reverse prompt stops generation',
     overrides: {
-      // No spaces around commas: addon splits on ',' without trimming, so leading
-      // spaces become part of each antiprompt and would never match a sentence-
-      // initial "Pizza". Both cases listed because the addon does substring
-      // matching case-sensitively.
-      reverse_prompt: 'network,pizza,Pizza,bitcoin,blockchain',
+      // Whitespace around commas is trimmed by the addon's split() helper;
+      // matching is case-insensitive, so a single "Pizza" entry catches both
+      // "pizza" and "Pizza" in the model output.
+      reverse_prompt: 'network, Pizza, bitcoin, blockchain',
       temp: '0',
       top_p: '0.7',
       n_predict: '128'

@@ -145,8 +145,19 @@ bool MtmdLlmContext::checkAntiprompt() {
     // output. We search the full kNPrev-token window because a single token
     // can decode to many characters, and a short antiprompt like "\n" may
     // appear at the start of such a token, far from the string's tail.
+    // Matching is case-insensitive so callers don't have to list every
+    // casing variant the model might emit.
+    std::string lastOutputLower = lastOutput;
+    std::transform(
+        lastOutputLower.begin(), lastOutputLower.end(), lastOutputLower.begin(),
+        [](unsigned char c) { return std::tolower(c); });
     for (const std::string& antiprompt : params_.antiprompt) {
-      if (lastOutput.find(antiprompt) != std::string::npos) {
+      std::string antipromptLower = antiprompt;
+      std::transform(
+          antipromptLower.begin(), antipromptLower.end(),
+          antipromptLower.begin(),
+          [](unsigned char c) { return std::tolower(c); });
+      if (lastOutputLower.find(antipromptLower) != std::string::npos) {
         return true;
       }
     }
