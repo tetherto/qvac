@@ -16,11 +16,13 @@
       "runToolsCompactTest"
     ],
     "lightB": [
+      "runGemma4Test",
       "runGenerationParamsTest",
       "runGrammarTest",
       "runModelLoadingTest",
       "runMultiGpuTest",
       "runMultiInstanceTest",
+      "runOcrPaddleTest",
       "runQwen35Test",
       "runUtf8OutputTest"
     ]
