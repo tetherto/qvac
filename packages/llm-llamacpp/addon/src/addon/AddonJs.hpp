@@ -365,14 +365,16 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
           configObj->getOptionalPropertyAs<js::Number, double>(
               env, "reasoning_budget");
       if (reasoningBudget.has_value()) {
-        int rb = static_cast<int>(*reasoningBudget);
-        if (rb != 0 && rb != -1) {
+        // Validate against the exact double values (0 and -1 are exactly
+        // representable in IEEE-754), so fractional inputs like 0.5 or -1.1
+        // are rejected instead of being silently truncated.
+        if (*reasoningBudget != 0 && *reasoningBudget != -1) {
           throw StatusError(
               general_error::InvalidArgument,
               "generationParams.reasoning_budget must be -1 (unrestricted) "
               "or 0 (disabled)");
         }
-        ov.reasoning_budget = rb;
+        ov.reasoning_budget = static_cast<int>(*reasoningBudget);
       }
     }
 
