@@ -1,24 +1,19 @@
 #include "SdModel.hpp"
 
-#include <algorithm>
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
-#include <filesystem>
 #include <sstream>
-#include <system_error>
+#include <utility>
 #include <vector>
 
-#define STB_IMAGE_IMPLEMENTATION
-#include <stb_image.h>
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include <ggml-backend.h>
 #include <picojson/picojson.h>
-#include <qvac-lib-inference-addon-cpp/Errors.hpp>
-#include <qvac-lib-inference-addon-cpp/Logger.hpp>
-#include <stb_image_write.h>
+#include <inference-addon-cpp/Errors.hpp>
+#include <inference-addon-cpp/Logger.hpp>
 
+#include "utils/BackendLoader.hpp"
 #include "utils/BackendSelection.hpp"
+#include "utils/ImageCodec.hpp"
 #include "utils/ImageUtils.hpp"
 #include "utils/LoggingMacros.hpp"
 
@@ -42,21 +37,6 @@ thread_local ProgressCtx tl_progressCtx;
 // sd_abort_cb_data when multiple SdModel instances could coexist.
 thread_local const SdModel* tl_abortModel = nullptr;
 
-std::string backendDeviceTypeToString(enum ggml_backend_dev_type type) {
-  switch (type) {
-  case GGML_BACKEND_DEVICE_TYPE_CPU:
-    return "CPU";
-  case GGML_BACKEND_DEVICE_TYPE_GPU:
-    return "GPU";
-  case GGML_BACKEND_DEVICE_TYPE_IGPU:
-    return "IGPU";
-  case GGML_BACKEND_DEVICE_TYPE_ACCEL:
-    return "ACCEL";
-  default:
-    return "UNKNOWN";
-  }
-}
-
 std::string preferredBackendToString(enum sd_backend_preference_t pref) {
   switch (pref) {
   case SD_BACKEND_PREF_AUTO:
@@ -70,128 +50,6 @@ std::string preferredBackendToString(enum sd_backend_preference_t pref) {
   default:
     return "unknown";
   }
-}
-
-void logBackendRegistrySnapshot() {
-  using Priority = qvac_lib_inference_addon_cpp::logger::Priority;
-
-  const size_t regCount = ggml_backend_reg_count();
-  const size_t devCount = ggml_backend_dev_count();
-  QLOG_IF(
-      Priority::INFO,
-      "GGML backend registry snapshot: " + std::to_string(regCount) +
-          " registry entries, " + std::to_string(devCount) + " devices");
-
-  for (size_t i = 0; i < regCount; ++i) {
-    ggml_backend_reg_t reg = ggml_backend_reg_get(i);
-    const char* regName = reg ? ggml_backend_reg_name(reg) : nullptr;
-    const size_t regDevCount = reg ? ggml_backend_reg_dev_count(reg) : 0;
-    QLOG_IF(
-        Priority::INFO,
-        "GGML backend registry[" + std::to_string(i) + "]: name='" +
-            std::string(regName ? regName : "<null>") +
-            "', devices=" + std::to_string(regDevCount));
-  }
-
-  for (size_t i = 0; i < devCount; ++i) {
-    ggml_backend_dev_t dev = ggml_backend_dev_get(i);
-    if (!dev) {
-      QLOG_IF(
-          Priority::WARNING,
-          "GGML backend device[" + std::to_string(i) + "]: null device handle");
-      continue;
-    }
-
-    const char* name = ggml_backend_dev_name(dev);
-    const char* desc = ggml_backend_dev_description(dev);
-    const auto type = ggml_backend_dev_type(dev);
-    size_t memFree = 0;
-    size_t memTotal = 0;
-    ggml_backend_dev_memory(dev, &memFree, &memTotal);
-
-    ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(dev);
-    const char* regName = reg ? ggml_backend_reg_name(reg) : nullptr;
-
-    QLOG_IF(
-        Priority::INFO,
-        "GGML backend device[" + std::to_string(i) + "]: name='" +
-            std::string(name ? name : "<null>") + "', desc='" +
-            std::string(desc ? desc : "<null>") +
-            "', type=" + backendDeviceTypeToString(type) + ", reg='" +
-            std::string(regName ? regName : "<null>") +
-            "', mem_free=" + std::to_string(memFree) +
-            ", mem_total=" + std::to_string(memTotal));
-  }
-}
-
-void logBackendModulePathSnapshot(
-    const std::filesystem::path& backendsDirPath) {
-  using Priority = qvac_lib_inference_addon_cpp::logger::Priority;
-
-  std::error_code ec;
-  const bool exists = std::filesystem::exists(backendsDirPath, ec);
-  QLOG_IF(
-      Priority::INFO,
-      "Backend module path exists=" + std::string(exists ? "true" : "false") +
-          " path='" + backendsDirPath.string() + "'");
-  if (ec) {
-    QLOG_IF(
-        Priority::WARNING,
-        "Backend module path existence check error: " + ec.message());
-    return;
-  }
-  if (!exists) {
-    return;
-  }
-
-  const bool isDir = std::filesystem::is_directory(backendsDirPath, ec);
-  QLOG_IF(
-      Priority::INFO,
-      "Backend module path is_directory=" +
-          std::string(isDir ? "true" : "false"));
-  if (ec || !isDir) {
-    if (ec) {
-      QLOG_IF(
-          Priority::WARNING,
-          "Backend module path type check error: " + ec.message());
-    }
-    return;
-  }
-
-  std::vector<std::string> entries;
-  for (const auto& dirEntry :
-       std::filesystem::directory_iterator(backendsDirPath, ec)) {
-    if (ec) {
-      QLOG_IF(
-          Priority::WARNING,
-          "Backend module path iteration error: " + ec.message());
-      break;
-    }
-    const auto filename = dirEntry.path().filename().string();
-    if (filename.rfind("libqvac-diffusion-ggml-", 0) == 0 &&
-        dirEntry.path().extension() == ".so") {
-      entries.push_back(filename);
-    }
-  }
-
-  if (entries.empty()) {
-    QLOG_IF(
-        Priority::WARNING,
-        "No qvac diffusion GGML backend modules found under: " +
-            backendsDirPath.string());
-    return;
-  }
-
-  std::ostringstream oss;
-  for (size_t i = 0; i < entries.size(); ++i) {
-    if (i > 0) {
-      oss << ", ";
-    }
-    oss << entries[i];
-  }
-  QLOG_IF(
-      Priority::INFO,
-      "Detected qvac diffusion GGML backend modules: " + oss.str());
 }
 
 void sdProgressCallback(int step, int steps, float /*time*/, void* /*data*/) {
@@ -220,7 +78,7 @@ bool sdAbortCallback(void* /*data*/) {
 
 // RAII wrapper for the sd_image_t* array returned by generate_image().
 // Frees each image's pixel buffer and the array itself on destruction,
-// even if an exception is thrown mid-iteration (e.g. in encodeToPng or
+// even if an exception is thrown mid-iteration (e.g. in PNG encoding or
 // outputCallback).  Call release(i) after processing image i to free
 // its pixel buffer immediately rather than waiting until destruction.
 class SdImageBatch {
@@ -265,10 +123,6 @@ struct PreparedLoras {
   std::vector<sd_lora_t> items;
 };
 
-struct FreeDeleter {
-  void operator()(uint8_t* ptr) const noexcept { free(ptr); }
-};
-
 // Mirrors the pinned fork's CLI flow in examples/common/common.hpp:
 // build owned path storage first, then build sd_lora_t entries that point
 // at that stable storage for the lifetime of generate_image().
@@ -297,9 +151,9 @@ PreparedLoras prepareLoras(const std::string& loraPath) {
 
 SdModel::SdModel(qvac_lib_inference_addon_sd::SdCtxConfig config)
     : config_(std::move(config)), sdCtx_(nullptr, &free_sd_ctx),
-      upscalerCtx_(nullptr, &free_upscaler_ctx) {
+      upscaler_(qvac_lib_inference_addon_sd::makeUpscalerConfig(config_)) {
 
-  sd_set_log_callback(SdModel::sdLogCallback, nullptr);
+  sd_set_log_callback(qvac_lib_inference_addon_sd::sdLogCallback, nullptr);
 }
 
 // ---------------------------------------------------------------------------
@@ -351,31 +205,7 @@ void SdModel::load() {
   // Load DL GPU backend modules before probing devices / creating the SD
   // context. In GGML_BACKEND_DL mode, device enumeration is empty until these
   // backend modules are loaded.
-#ifdef GGML_BACKEND_DL
-  {
-    static bool backendsLoaded = false;
-    if (!backendsLoaded) {
-      using Priority = qvac_lib_inference_addon_cpp::logger::Priority;
-      if (!config_.backendsDir.empty()) {
-        std::filesystem::path backendsDirPath(config_.backendsDir);
-#ifdef BACKENDS_SUBDIR
-        backendsDirPath = backendsDirPath / BACKENDS_SUBDIR;
-        backendsDirPath = backendsDirPath.lexically_normal();
-#endif
-        QLOG_IF(
-            Priority::INFO,
-            "Loading GPU backends from: " + backendsDirPath.string());
-        logBackendModulePathSnapshot(backendsDirPath);
-        ggml_backend_load_all_from_path(backendsDirPath.string().c_str());
-      } else {
-        QLOG_IF(Priority::INFO, "Loading GPU backends from default path");
-        ggml_backend_load_all();
-      }
-      backendsLoaded = true;
-      logBackendRegistrySnapshot();
-    }
-  }
-#endif
+  qvac_lib_inference_addon_sd::loadBackendModulesOnce(config_.backendsDir);
 
   // -- Memory management -----------------------------------------------------
   params.enable_mmap = config_.mmap;
@@ -639,12 +469,13 @@ std::any SdModel::process(const std::any& input) {
                   "] is empty -- every reference must be a non-empty "
                   "PNG/JPEG buffer.");
 
-        sd_image_t decoded = decodePng(job.initImagesBytes[i]);
-        if (!decoded.data)
+        sd_image_t decoded = image_codec::decodeImage(job.initImagesBytes[i]);
+        if (decoded.data == nullptr) {
           throw StatusError(
               general_error::InvalidArgument,
               "img2img: failed to decode init_images[" + std::to_string(i) +
                   "] (corrupt or unsupported format; supported: PNG, JPEG)");
+        }
         refImgs->push_back(decoded);
       }
 
@@ -693,14 +524,16 @@ std::any SdModel::process(const std::any& input) {
         for (const auto& el : arr)
           initPng.push_back(static_cast<uint8_t>(el.get<double>()));
       }
-      if (!initPng.empty())
-        initImg = decodePng(initPng);
+      if (!initPng.empty()) {
+        initImg = image_codec::decodeImage(initPng);
+      }
 
-      if (!initImg.data)
+      if (initImg.data == nullptr) {
         throw StatusError(
             general_error::InvalidArgument,
             "img2img: failed to decode init_image (corrupt or unsupported "
             "format)");
+      }
 
       const int imgW = static_cast<int>(initImg.width);
       const int imgH = static_cast<int>(initImg.height);
@@ -805,18 +638,22 @@ std::any SdModel::process(const std::any& input) {
     free(genParams.mask_image.data);
   }
 
-  const bool wasCancelled = cancelRequested_.load();
-
   int outputCount = 0;
   // RuntimeStats describe emitted PNGs. Keep generation dimensions as the
   // fallback so a failed encode/callback does not report an upscaled size.
   int64_t outputPixels = 0;
-  int64_t statsWidth = static_cast<int64_t>(gen.width);
-  int64_t statsHeight = static_cast<int64_t>(gen.height);
+  auto statsWidth = static_cast<int64_t>(gen.width);
+  auto statsHeight = static_cast<int64_t>(gen.height);
+  bool wasCancelled = false;
   for (int i = 0; i < results.count(); ++i) {
-    if (results[i].data && !wasCancelled) {
+    if (cancelRequested_.load()) {
+      wasCancelled = true;
+      break;
+    }
+
+    if (results[i].data != nullptr) {
       sd_image_t imageForOutput = results[i];
-      std::unique_ptr<uint8_t, FreeDeleter> upscaledData(nullptr);
+      std::unique_ptr<uint8_t, image_codec::FreeDeleter> upscaledData(nullptr);
 
       if (gen.upscale) {
         sd_image_t upscaled = upscaleImage(results[i], gen.upscaleRepeats);
@@ -824,20 +661,29 @@ std::any SdModel::process(const std::any& input) {
         upscaledData.reset(upscaled.data);
       }
 
-      auto png = encodeToPng(imageForOutput);
-      if (!png.empty() && job.outputCallback) {
-        const int64_t outputWidth = static_cast<int64_t>(imageForOutput.width);
-        const int64_t outputHeight =
-            static_cast<int64_t>(imageForOutput.height);
-        job.outputCallback(png);
-        ++outputCount;
-        outputPixels += outputWidth * outputHeight;
-        statsWidth = outputWidth;
-        statsHeight = outputHeight;
+      if (cancelRequested_.load()) {
+        wasCancelled = true;
+      } else {
+        auto png = image_codec::encodeToPng(imageForOutput);
+        if (!png.empty() && static_cast<bool>(job.outputCallback)) {
+          const auto outputWidth = static_cast<int64_t>(imageForOutput.width);
+          const auto outputHeight = static_cast<int64_t>(imageForOutput.height);
+          job.outputCallback(png);
+          ++outputCount;
+          outputPixels += outputWidth * outputHeight;
+          statsWidth = outputWidth;
+          statsHeight = outputHeight;
+        }
       }
     }
     results.release(
         i); // free pixel buffer immediately; destructor handles the rest
+    if (cancelRequested_.load()) {
+      wasCancelled = true;
+    }
+    if (wasCancelled) {
+      break;
+    }
   }
 
   // If cancelled, propagate as an exception so JobRunner emits
@@ -901,145 +747,7 @@ qvac_lib_inference_addon_cpp::RuntimeStats SdModel::runtimeStats() const {
   return lastStats_;
 }
 
-upscaler_ctx_t* SdModel::ensureUpscaler() {
-  if (config_.esrganPath.empty()) {
-    throw StatusError(
-        general_error::InvalidArgument,
-        "ESRGAN upscale requested but files.esrgan was not provided");
-  }
-
-  if (upscalerCtx_) {
-    return upscalerCtx_.get();
-  }
-
-  int threads =
-      config_.upscalerThreads > 0 ? config_.upscalerThreads : config_.nThreads;
-  if (threads <= 0) {
-    threads = sd_get_num_physical_cores();
-  }
-  if (threads <= 0) {
-    threads = 1;
-  }
-
-  const int tileSize = std::max(1, config_.upscalerTileSize);
-  upscaler_ctx_t* raw = new_upscaler_ctx(
-      config_.esrganPath.c_str(),
-      config_.upscalerOffloadParamsToCpu,
-      config_.upscalerDirect,
-      threads,
-      tileSize);
-
-  if (!raw) {
-    throw StatusError(
-        general_error::InternalError,
-        "Failed to create ESRGAN upscaler context from files.esrgan: " +
-            config_.esrganPath);
-  }
-
-  upscalerCtx_.reset(raw);
-  return upscalerCtx_.get();
-}
-
 sd_image_t SdModel::upscaleImage(const sd_image_t& inputImage, int repeats) {
-  if (repeats <= 0) {
-    throw StatusError(
-        general_error::InvalidArgument,
-        "upscale.repeats must be a positive integer");
-  }
-
-  std::lock_guard<std::mutex> lock(upscalerMutex_);
-
-  upscaler_ctx_t* ctx = ensureUpscaler();
-  const int scale = get_upscale_factor(ctx);
-  if (scale <= 0) {
-    throw StatusError(
-        general_error::InternalError,
-        "ESRGAN upscaler reported an invalid scale factor");
-  }
-  const uint32_t factor = static_cast<uint32_t>(scale);
-
-  sd_image_t current = inputImage;
-  bool currentOwned = false;
-
-  for (int repeat = 0; repeat < repeats; ++repeat) {
-    sd_image_t next = upscale(ctx, current, factor);
-    if (!next.data) {
-      if (currentOwned) {
-        free(current.data);
-      }
-      throw StatusError(general_error::InternalError, "ESRGAN upscale failed");
-    }
-
-    if (currentOwned) {
-      free(current.data);
-    }
-    current = next;
-    currentOwned = true;
-  }
-
-  return current;
-}
-
-// ---------------------------------------------------------------------------
-// PNG encode / decode (stb_image / stb_image_write)
-// ---------------------------------------------------------------------------
-
-std::vector<uint8_t> SdModel::encodeToPng(const sd_image_t& img) {
-  std::vector<uint8_t> out;
-  auto writeCallback = [](void* ctx, void* data, int size) {
-    auto* vec = static_cast<std::vector<uint8_t>*>(ctx);
-    vec->insert(
-        vec->end(),
-        static_cast<const uint8_t*>(data),
-        static_cast<const uint8_t*>(data) + size);
-  };
-  stbi_write_png_to_func(
-      writeCallback,
-      &out,
-      static_cast<int>(img.width),
-      static_cast<int>(img.height),
-      static_cast<int>(img.channel),
-      img.data,
-      static_cast<int>(img.width * img.channel));
-  return out;
-}
-
-sd_image_t SdModel::decodePng(const std::vector<uint8_t>& pngBytes) {
-  if (pngBytes.empty())
-    return sd_image_t{};
-  int w = 0, h = 0, c = 0;
-  uint8_t* data = stbi_load_from_memory(
-      pngBytes.data(), static_cast<int>(pngBytes.size()), &w, &h, &c, 3);
-  if (!data)
-    return sd_image_t{};
-  return sd_image_t{
-      static_cast<uint32_t>(w), static_cast<uint32_t>(h), 3, data};
-}
-
-// ---------------------------------------------------------------------------
-// Log callback
-// ---------------------------------------------------------------------------
-
-void SdModel::sdLogCallback(
-    sd_log_level_t level, const char* text, void* /*userData*/) {
-  namespace lg = qvac_lib_inference_addon_cpp::logger;
-  lg::Priority priority;
-  switch (level) {
-  case SD_LOG_DEBUG:
-    priority = lg::Priority::DEBUG;
-    break;
-  case SD_LOG_INFO:
-    priority = lg::Priority::INFO;
-    break;
-  case SD_LOG_WARN:
-    priority = lg::Priority::WARNING;
-    break;
-  case SD_LOG_ERROR:
-    priority = lg::Priority::ERROR;
-    break;
-  default:
-    priority = lg::Priority::ERROR;
-    break;
-  }
-  QLOG_IF(priority, std::string(text ? text : ""));
+  return upscaler_.upscaleImage(
+      inputImage, repeats, [this]() { return cancelRequested_.load(); });
 }

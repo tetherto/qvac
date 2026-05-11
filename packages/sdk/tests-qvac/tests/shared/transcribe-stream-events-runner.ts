@@ -106,14 +106,13 @@ export async function runTranscribeStreamEventsTest(
 }
 
 function writeInChunks(
-  session: { write(audioChunk: Buffer): void },
+  session: { write(audioChunk: Uint8Array): void },
   bytes: Uint8Array,
   chunkSize: number,
 ) {
   for (let offset = 0; offset < bytes.length; offset += chunkSize) {
     const end = Math.min(offset + chunkSize, bytes.length);
-    const slice = bytes.subarray(offset, end);
-    session.write(Buffer.from(slice.buffer, slice.byteOffset, slice.byteLength));
+    session.write(bytes.subarray(offset, end));
   }
 }
 
