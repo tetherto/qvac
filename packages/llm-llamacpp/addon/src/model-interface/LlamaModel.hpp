@@ -17,6 +17,7 @@
 
 #include "AsyncWeightsLoader.hpp"
 #include "CacheManager.hpp"
+#include "LlamaFinetuner.hpp"
 #include "LlamaFinetuningHelpers.hpp"
 #include "LlamaFinetuningParams.hpp"
 #include "LlamaLazyInitializeBackend.hpp"
@@ -32,26 +33,6 @@
 #include "inference-addon-cpp/RuntimeStats.hpp"
 
 using namespace qvac_lib_inference_addon_cpp::model;
-
-struct FinetuneTerminalResult {
-  struct Stats {
-    double trainLoss = 0.0;
-    double trainLossUncertainty = 0.0;
-    double valLoss = 0.0;
-    double valLossUncertainty = 0.0;
-    double trainAccuracy = 0.0;
-    double trainAccuracyUncertainty = 0.0;
-    double valAccuracy = 0.0;
-    double valAccuracyUncertainty = 0.0;
-    double learningRate = 0.0;
-    int64_t globalSteps = 0;
-    int32_t epochsCompleted = 0;
-  };
-
-  std::string op;
-  std::string status;
-  std::optional<Stats> stats;
-};
 
 struct FinetuneConfigOverrides {
   bool active{false};
@@ -122,16 +103,13 @@ public:
       std::unique_ptr<std::basic_streambuf<char>>&& shard) final;
   void cancel() const final;
 
-  using ProgressCallback = std::function<void(
-      const llama_finetuning_helpers::FinetuneProgressStats&)>;
-
   struct Prompt {
     std::string input;
     bool prefill = false;
     GenerationParams generationParams;
     std::vector<std::vector<uint8_t>> media;
     std::function<void(const std::string&)> outputCallback;
-    ProgressCallback progressCallback;
+    LlamaFinetuner::ProgressCallback progressCallback;
     std::optional<qvac_lib_inference_addon_llama::LlamaFinetuningParams>
         finetuningParams;
 
@@ -192,19 +170,15 @@ public:
   static void
   llamaLogCallback(ggml_log_level level, const char* text, void* userData);
 
-  std::string finetune(
-      const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params,
-      FinetuneTerminalResult::Stats* outStats = nullptr,
-      ProgressCallback progressCallback = nullptr);
-  bool isFinetuneRunning() const;
-  bool requestPause();
-  void clearPauseRequest();
-
-  /** Block until the training thread has completed the finetuning pause path.
-   */
-  void waitUntilFinetuningPauseComplete();
+  /// @brief Access the LoRA finetuner that owns finetune state and lifecycle
+  /// for this model. The reference remains valid for the lifetime of the
+  /// `LlamaModel` instance.
+  LlamaFinetuner& finetuner() { return finetuner_; }
+  const LlamaFinetuner& finetuner() const { return finetuner_; }
 
 private:
+  friend class LlamaFinetuner;
+
   // Impl without mutexes
   std::string processPromptImpl(const Prompt& prompt);
   void cancelImpl() const;
@@ -306,57 +280,6 @@ private:
 
   bool isBitnetModel() const;
   void validateBitnetQuantization();
-  void validateModelForFinetuning();
-  void validateFinetuningParams(
-      const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params);
-  ggml_opt_dataset_t prepareTrainingDataset(
-      const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params);
-  ggml_opt_dataset_t prepareEvalDataset(
-      const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params);
-  ggml_opt_dataset_t prepareDatasetFromPath(
-      const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params,
-      const std::string& datasetPath, const char* errorLabel,
-      const char* constructKind);
-  void initializeLoraAdapter(
-      const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params,
-      uint32_t targetModules, llama_adapter_lora*& adapter);
-  llama_finetuning_helpers::LoraLrSchedulerState createLrScheduler(
-      const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params,
-      int64_t totalSteps);
-  std::shared_ptr<llama_finetuning_helpers::TrainingCheckpointState>
-  initializeCheckpointing(
-      const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params,
-      llama_adapter_lora* adapter,
-      llama_finetuning_helpers::LoraLrSchedulerState* scheduler);
-  void configureOptimizer(
-      const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params,
-      llama_adapter_lora* adapter,
-      llama_finetuning_helpers::LoraLrSchedulerState& scheduler,
-      llama_finetuning_helpers::TrainingCheckpointState* checkpointState,
-      bool loadOptimizerState = false);
-  void executeTrainingLoop(
-      const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params,
-      ggml_opt_dataset_t dataset, int64_t trainSplit, int64_t evalSplit,
-      llama_finetuning_helpers::LoraLrSchedulerState& scheduler,
-      llama_finetuning_helpers::TrainingCheckpointState* checkpointState,
-      uint32_t startEpoch = 0, bool resumingFromPause = false,
-      ggml_opt_dataset_t evalDataset = nullptr,
-      int64_t evalDatasetSampleCount = 0,
-      FinetuneTerminalResult::Stats* outStats = nullptr);
-  void saveLoraAdapter(
-      llama_adapter_lora* adapter,
-      const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params);
-
-  std::shared_ptr<llama_finetuning_helpers::TrainingCheckpointState>
-  getCurrentCheckpointStateShared() const;
-  void setCurrentCheckpointStateShared(
-      std::shared_ptr<llama_finetuning_helpers::TrainingCheckpointState> state);
-  void clearCurrentCheckpointStateShared();
-  std::shared_ptr<llama_finetuning_helpers::TrainingCheckpointState>
-  getPausedCheckpointStateShared() const;
-  void setPausedCheckpointStateShared(
-      std::shared_ptr<llama_finetuning_helpers::TrainingCheckpointState> state);
-  void clearPausedCheckpointStateShared();
 
   // Guarded by stateMtx_: written and read exclusively inside
   // setInitLoader() / init() → commonParamsParse(), both of which run
@@ -364,9 +287,7 @@ private:
   // newFinetuneOverrides parameter to avoid any unsynchronised window.
   FinetuneConfigOverrides pendingFinetuneOverrides_;
 
-  mutable std::mutex checkpointStateMutex_;
-  std::shared_ptr<llama_finetuning_helpers::TrainingCheckpointState>
-      currentCheckpointState_;
-  std::shared_ptr<llama_finetuning_helpers::TrainingCheckpointState>
-      pausedCheckpointState_;
+  // Declared last so it is destroyed first; the finetuner stores a
+  // reference back to this model.
+  LlamaFinetuner finetuner_{*this};
 };
