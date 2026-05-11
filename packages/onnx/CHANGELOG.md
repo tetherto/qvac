@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.15.0] - 2026-05-11
+
+### Changed
+
+- Updated package's directory structure to be more consistent with the remaning QVAC packages.
+
 ## [0.14.1] - 2026-04-21
 
 ### Fixed
