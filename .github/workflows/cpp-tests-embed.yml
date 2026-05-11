@@ -224,7 +224,7 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         env:
-          LSAN_OPTIONS: suppressions=${{ github.workspace }}/.lsan-suppressions.txt
+          LSAN_OPTIONS: suppressions=${{ github.workspace }}/${{ env.WORKDIR }}/.lsan-suppressions.txt
         run: |
           set -euo pipefail
 
