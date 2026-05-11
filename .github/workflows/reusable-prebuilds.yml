@@ -321,7 +321,8 @@ jobs:
         shell: bash
         run: bare-make install
 
-      - name: Strip static libraries (.a) from prebuilds
+      - name: Strip static libraries (.a) from prebuilds (Linux / MacOS)
+        if: matrix.os != 'windows-2025'
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: |
@@ -338,7 +339,28 @@ jobs:
           echo "$MATCHES"
           find prebuilds -type f -name '*.a' -delete
 
-      - name: Smoke check (tmp-*) package name & prebuilds listing
+      - name: Strip static libraries (.a) from prebuilds (Windows)
+        if: matrix.os == 'windows-2025'
+        working-directory: ${{ env.WORKDIR }}
+        shell: powershell
+        run: |
+          # Check that prebuilds/ exists
+          if (-not (Test-Path -Path "prebuilds" -PathType Container)) {
+              Write-Output "prebuilds/ does not exist; skipping"
+              exit 0
+          }
+          # Find all .a files under prebuilds/
+          $matches = Get-ChildItem -Path "prebuilds" -Recurse -File -Filter "*.a"
+          if (-not $matches) {
+              Write-Output "No .a files found under prebuilds/"
+              exit 0
+          }
+          Write-Output "Removing the following .a files:"
+          $matches | ForEach-Object { Write-Output $_.FullName }
+          # Delete them
+          $matches | Remove-Item -Force
+
+        - name: Smoke check (tmp-*) package name & prebuilds listing
         if: ${{ startsWith(github.ref, 'refs/heads/tmp-')
                 || startsWith(github.ref_name, 'tmp-')
                 || (inputs.ref != '' && (startsWith(inputs.ref, 'refs/heads/tmp-') || startsWith(inputs.ref, 'tmp-'))) }}
