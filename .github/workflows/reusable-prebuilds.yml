@@ -205,8 +205,13 @@ jobs:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
 
-      # - name: Setup Bare tooling
-      #   uses: tetherto/qvac/.github/actions/setup-bare-tooling@0bbdca93da303a0b1634ba14a89cec085621078d
+      - name: Setup Bare tooling
+        if: matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'macos-15' || matrix.os == 'macos-15-intel'
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@0bbdca93da303a0b1634ba14a89cec085621078d
+
+      - name: Add linux Bare tooling to PATH
+        if: matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-24.04'
+        run: echo "/usr/local/nvm/versions/node/v20.20.2/bin" >> $GITHUB_PATH
 
       - if: ${{ inputs.setup-python-on-windows && matrix.platform == 'win32' }}
         name: Setup Python on self-hosted Windows runner
