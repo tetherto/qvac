@@ -29,6 +29,18 @@ type T = {
   fail: (msg?: string) => void;
 };
 
+test("disposable-scope: host runtime exposes Symbol.asyncDispose", (t: T) => {
+  // Tripwire for the module-load guard in disposable-scope.ts. If a future
+  // runtime upgrade strips Symbol.asyncDispose (older Bare/Expo, missing
+  // polyfill), the guard throws at SDK import time and this test fails first.
+  // The guard converts a silent registry-leak bug into a loud startup error.
+  t.is(
+    typeof Symbol.asyncDispose,
+    "symbol",
+    "Symbol.asyncDispose must be a symbol; the SDK request-lifecycle stack depends on it",
+  );
+});
+
 test("disposable-scope: cleanups run in LIFO order", async (t: T) => {
   const order: string[] = [];
   const scope = createDisposableScope();

@@ -87,6 +87,7 @@ export const SDK_SERVER_ERROR_CODES = {
   FFMPEG_NOT_AVAILABLE: 53500,
   AUDIO_PLAYER_FAILED: 53501,
   INVALID_AUDIO_CHUNK_TYPE: 53502,
+  ASYNC_DISPOSE_UNAVAILABLE: 53503,
 
   // RPC/Delegation (Server-side) (53,700-53,849)
   DELEGATE_NO_FINAL_RESPONSE: 53700,
@@ -473,6 +474,11 @@ const serverErrorDefinitions: ErrorCodesMap = {
   [SDK_SERVER_ERROR_CODES.INVALID_AUDIO_CHUNK_TYPE]: {
     name: "INVALID_AUDIO_CHUNK_TYPE",
     message: "Invalid audio chunk type",
+  },
+  [SDK_SERVER_ERROR_CODES.ASYNC_DISPOSE_UNAVAILABLE]: {
+    name: "ASYNC_DISPOSE_UNAVAILABLE",
+    message:
+      "Host runtime does not expose Symbol.asyncDispose; the SDK request-lifecycle primitives require ES2024 `using`/`asyncDispose` support. Verify your runtime (Bare/Expo/Node ≥ 20.4) and any polyfill registration.",
   },
 
   // RPC/Delegation (Server-side) (53,700-53,899)

@@ -1,3 +1,20 @@
+import { AsyncDisposeUnavailableError } from "@/utils/errors-server";
+
+/**
+ * Module-load guard. The whole request-lifecycle primitive stack (scopes,
+ * the registry's `ManagedRequestContext`, `await using ctx = ...`) is
+ * built on `Symbol.asyncDispose`, which is an ES2024 feature. If the host
+ * runtime doesn't expose it (older Bare/Expo build, missing polyfill),
+ * the `[Symbol.asyncDispose]:` property key in this file's `dispose`
+ * function would coerce to the string `"undefined"` and silently produce
+ * objects that look async-disposable but are not — handlers would leak
+ * registry entries forever. Better to fail loudly at import time with a
+ * clear error than to debug a slow registry leak in production.
+ */
+if (typeof Symbol.asyncDispose !== "symbol") {
+  throw new AsyncDisposeUnavailableError();
+}
+
 /**
  * Bounded-lifetime cleanup scope for an in-flight request.
  *

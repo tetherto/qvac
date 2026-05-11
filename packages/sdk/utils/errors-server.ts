@@ -303,6 +303,18 @@ export class RequestNotFoundError extends QvacErrorBase {
   }
 }
 
+export class AsyncDisposeUnavailableError extends QvacErrorBase {
+  constructor(cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.ASYNC_DISPOSE_UNAVAILABLE,
+        [],
+        cause,
+      ),
+    );
+  }
+}
+
 export class TextToSpeechFailedError extends QvacErrorBase {
   constructor(details?: string, cause?: unknown) {
     super(
