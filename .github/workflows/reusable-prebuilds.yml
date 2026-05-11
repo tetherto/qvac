@@ -115,10 +115,9 @@ jobs:
           - os: ubuntu-22.04-arm
             platform: linux
             arch: arm64
-          - os: ubuntu-24.04
+          - os: ubuntu-24.04-arm
             platform: android
             arch: arm64
-            runner: ubuntu-24.04-arm
           - os: macos-15
             platform: ios
             arch: arm64
