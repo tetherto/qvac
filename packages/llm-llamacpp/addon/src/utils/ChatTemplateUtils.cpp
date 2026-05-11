@@ -16,14 +16,22 @@ namespace utils {
 
 namespace {
 
-std::string normalizeArchitecture(const std::string& architecture) {
-  std::string normalized = architecture;
+// Lowercased literal used for case-insensitive equality against
+// `general.basename` GGUF metadata to identify MedPsy models.
+constexpr const char* kMedPsyBasenameLower = "medpsy";
+
+std::string toLower(const std::string& value) {
+  std::string lowered = value;
   std::transform(
-      normalized.begin(),
-      normalized.end(),
-      normalized.begin(),
+      lowered.begin(),
+      lowered.end(),
+      lowered.begin(),
       [](unsigned char c) { return std::tolower(c); });
-  return normalized;
+  return lowered;
+}
+
+std::string normalizeArchitecture(const std::string& architecture) {
+  return toLower(architecture);
 }
 
 bool isQwen3Architecture(const std::string& architecture) {
@@ -34,6 +42,26 @@ bool isQwen3Architecture(const std::string& architecture) {
 bool isHarmonyArchitecture(const std::string& architecture) {
   const std::string archStr = normalizeArchitecture(architecture);
   return archStr == "gpt-oss";
+}
+
+std::optional<std::string>
+readMetadataString(const ::llama_model* model, const char* key) {
+  if (model == nullptr || key == nullptr) {
+    return std::nullopt;
+  }
+
+  char buffer[256] = {0};
+  int32_t len =
+      llama_model_meta_val_str(model, key, buffer, sizeof(buffer));
+  if (len > 0 && static_cast<size_t>(len) < sizeof(buffer)) {
+    buffer[len] = '\0';
+    return std::string(buffer);
+  }
+  return std::nullopt;
+}
+
+std::optional<std::string> getModelBasename(const ::llama_model* model) {
+  return readMetadataString(model, "general.basename");
 }
 
 } // namespace
@@ -61,6 +89,20 @@ bool isQwen3Model(const ::llama_model* model) {
   }
 
   return supportsToolsCompactForModelMetadata(getModelArchitecture(model));
+}
+
+bool isMedPsyBasename(const std::optional<std::string>& basename) {
+  if (!basename.has_value()) {
+    return false;
+  }
+  return toLower(basename.value()) == kMedPsyBasenameLower;
+}
+
+bool isMedPsyModel(const ::llama_model* model) {
+  if (model == nullptr) {
+    return false;
+  }
+  return isMedPsyBasename(getModelBasename(model));
 }
 
 bool isHarmonyModel(const ::llama_model* model) {
@@ -98,6 +140,18 @@ std::string getChatTemplateForModel(
     bool toolsCompact) {
   if (!manualOverride.empty()) {
     return manualOverride;
+  }
+
+  // MedPsy ships its own chat template embedded in GGUF metadata. Returning an
+  // empty string makes common_chat_templates_init() defer to that embedded
+  // template instead of substituting the hardcoded Qwen3 templates below, even
+  // when the model's architecture is reported as qwen3.
+  if (isMedPsyModel(model)) {
+    QLOG_IF(
+        Priority::INFO,
+        "[ChatTemplateUtils] MedPsy basename detected; using embedded chat "
+        "template\n");
+    return "";
   }
 
   if (isQwen3Model(model)) {
