@@ -14,7 +14,7 @@
 
 #include "model-interface/supertonic/SupertonicConfig.hpp"
 #include "model-interface/supertonic/SupertonicModel.hpp"
-#include "qvac-lib-inference-addon-cpp/Errors.hpp"
+#include "inference-addon-cpp/Errors.hpp"
 
 using qvac::ttsggml::supertonic::SupertonicConfig;
 using qvac::ttsggml::supertonic::SupertonicModel;

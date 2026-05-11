@@ -3,7 +3,7 @@
 #include <string>
 
 #include <js.h>
-#include <qvac-lib-inference-addon-cpp/JsUtils.hpp>
+#include <inference-addon-cpp/JsUtils.hpp>
 
 #include "model-interface/chatterbox/ChatterboxConfig.hpp"
 #include "model-interface/supertonic/SupertonicConfig.hpp"

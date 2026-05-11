@@ -22,7 +22,7 @@
 
 #include "model-interface/chatterbox/ChatterboxConfig.hpp"
 #include "model-interface/chatterbox/ChatterboxModel.hpp"
-#include "qvac-lib-inference-addon-cpp/Errors.hpp"
+#include "inference-addon-cpp/Errors.hpp"
 
 using qvac::ttsggml::chatterbox::ChatterboxConfig;
 using qvac::ttsggml::chatterbox::ChatterboxModel;
