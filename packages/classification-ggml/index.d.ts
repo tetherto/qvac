@@ -45,8 +45,6 @@ export interface ImageClassifierOptions {
   modelPath?: string;
   /** Optional logger compatible with `@qvac/logging`. */
   logger?: ImageClassifierLogger;
-  /** CPU thread hint for the GGML compute graph. Defaults to libggml's choice. */
-  threads?: number;
   /**
    * When true, forwards native C++ log messages (`QLOG(...)` calls inside
    * the addon) to the JS `logger`. Disabled by default: the underlying

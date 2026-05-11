@@ -11,7 +11,6 @@ rationale for the key implementation choices.
 |  JS: ImageClassifier (index.js)              |
 |   - lifecycle (load / classify / unload)     |
 |     all serialised via exclusiveRunQueue     |
-|   - threads validation fail-fast in ctor     |
 |   - createJobHandler + QvacResponse plumbing |
 |   - thin pass-through to native validation   |
 +----------------------------------------------+
@@ -166,17 +165,15 @@ pixel copy, the compute itself, the 3-element softmax, and label lookup.
   request with `Model was unloaded`).
 - Per-inference mutex (`ClassificationModel::mutex_`) guards against a
   torn state if a future user bypasses `JobRunner`.
-- `ggml_backend_cpu_set_n_threads()` lets the caller tune the CPU compute
-  threads on desktop / iOS; default is libggml's
-  `std::thread::hardware_concurrency`. **On Android the call is
-  `#if !defined(__ANDROID__)`-gated** — the symbol lives inside the
-  per-microarch CPU variant `.so` (loaded via `dlopen` per
-  `GGML_CPU_ALL_VARIANTS=ON`) rather than in `libggml-base.a`, so the
-  `.bare` cannot statically link it. Android falls back to libggml's
-  default thread pool. Invalid `threads` values (non-positive integers,
-  NaN, wrong type) are still rejected fail-fast at
-  `new ImageClassifier(...)` construction on every platform; on Android
-  the value is simply ignored at runtime.
+- The CPU compute thread count is left at libggml's default
+  (`std::thread::hardware_concurrency`) on every platform; the addon
+  does not expose a `threads` knob. Rationale: on Apple/Linux/Windows
+  desktop the symbol `ggml_backend_cpu_set_n_threads` is statically
+  linkable, but on Android the CPU backend is loaded as a per-microarch
+  MODULE `.so` (`GGML_CPU_ALL_VARIANTS=ON`) where the setter is not
+  resolvable from the addon's `.bare`, so a `threads` config value
+  could only ever apply on a subset of platforms. We picked
+  consistency and dropped the knob altogether.
 
 ## Memory footprint
 

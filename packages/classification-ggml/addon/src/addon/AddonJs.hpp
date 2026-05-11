@@ -90,21 +90,6 @@ inline js_value_t* createInstance(
   auto innerConfig =
       configObj.getOptionalProperty<jsu::Object>(env, "config");
   if (innerConfig.has_value()) {
-    auto threadsOpt =
-        innerConfig->getOptionalProperty<jsu::Number>(env, "threads");
-    if (threadsOpt.has_value()) {
-      // bare-runtime's `as<int32_t>` accepts negatives and truncates floats,
-      // so range-check explicitly.
-      const int32_t threads = threadsOpt->as<int32_t>(env);
-      if (threads < 1) {
-        throw StatusError(
-            InvalidArgument,
-            "Configuration 'config.threads' must be a positive integer "
-            "when provided; got " + std::to_string(threads));
-      }
-      model->setNumThreads(threads);
-    }
-
     auto backendsDirOpt =
         innerConfig->getOptionalProperty<jsu::String>(env, "backendsDir");
     if (backendsDirOpt.has_value()) {

@@ -18,22 +18,6 @@ function resolveDefaultModelPath () {
   return path.join(__dirname, 'weights', DEFAULT_WEIGHTS_FILENAME)
 }
 
-// Fail-fast validation matching the README contract ("Must be a positive
-// integer"). The C++ AddonJs::createInstance keeps an equivalent guard as
-// defence-in-depth for any caller that bypasses this constructor.
-function _validateThreads (threads) {
-  if (threads === undefined) return undefined
-  if (typeof threads !== 'number' ||
-      !Number.isInteger(threads) ||
-      threads < 1) {
-    const got = typeof threads === 'number' ? threads : typeof threads
-    throw new TypeError(
-      `'threads' must be a positive integer when provided; got ${got}`
-    )
-  }
-  return threads
-}
-
 /**
  * High-level classifier for MobileNetV3-Small 3-class image triage.
  *
@@ -50,14 +34,12 @@ class ImageClassifier {
    * @param {Object} [opts]
    * @param {string} [opts.modelPath] absolute path to the FP16 GGUF file. Defaults to the bundled model.
    * @param {Object} [opts.logger] optional `@qvac/logging`-compatible logger.
-   * @param {number} [opts.threads] optional CPU thread hint.
    * @param {boolean} [opts.nativeLogger=false] forward C++-side log lines through `logger`.
    */
   constructor (opts = {}) {
-    const { modelPath, logger = null, threads, nativeLogger = false } = opts
+    const { modelPath, logger = null, nativeLogger = false } = opts
     this._modelPath = modelPath ?? resolveDefaultModelPath()
     this.logger = new QvacLogger(logger)
-    this._threads = _validateThreads(threads)
     // Off by default: see `addon.js::_ensureLoggerInstalled` for the
     // process-wide JsLogger lifecycle that opt-in unlocks.
     this._nativeLogger = nativeLogger === true
@@ -89,9 +71,6 @@ class ImageClassifier {
     const configurationParams = {
       path: this._modelPath,
       config: { backendsDir: path.join(__dirname, 'prebuilds') }
-    }
-    if (this._threads !== undefined) {
-      configurationParams.config.threads = this._threads
     }
 
     const disableNativeLogger = !this._nativeLogger ||

@@ -2,7 +2,6 @@
 
 const test = require('brittle')
 
-const ImageClassifier = require('../..')
 const { loadImage, TEST_TIMEOUT, makeClassifier, cleanupClassifier } = require('./utils')
 
 test('classify(null) rejects with structured error', async function (t) {
@@ -115,34 +114,6 @@ test('tiny 1x1 raw image is accepted (upscaled)', async function (t) {
   } finally {
     await cleanupClassifier(classifier)
   }
-})
-
-test('constructor rejects non-positive integer threads', async function (t) {
-  for (const bad of [-1, 0, 4.5, NaN]) {
-    await t.exception.all(
-      async () => new ImageClassifier({ threads: bad }),
-      /threads.*positive integer/i,
-      `threads=${bad} is rejected`
-    )
-  }
-})
-
-test('constructor rejects non-number threads', async function (t) {
-  for (const bad of ['4', '', null, true, [], {}]) {
-    await t.exception.all(
-      async () => new ImageClassifier({ threads: bad }),
-      /threads.*positive integer/i,
-      `threads=${JSON.stringify(bad)} is rejected`
-    )
-  }
-})
-
-test('constructor accepts undefined and positive integer threads', function (t) {
-  // No throw expected.
-  t.execution(() => new ImageClassifier({}))
-  t.execution(() => new ImageClassifier({ threads: undefined }))
-  t.execution(() => new ImageClassifier({ threads: 1 }))
-  t.execution(() => new ImageClassifier({ threads: 8 }))
 })
 
 test('load -> unload -> load cycles do not leak handles', async function (t) {

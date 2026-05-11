@@ -59,9 +59,6 @@ public:
   /// Called from createInstance so load failures surface synchronously.
   void load();
 
-  /// 0 keeps libggml's default (hardware_concurrency).
-  void setNumThreads(int threads);
-
   /// Optional addon-prebuilds root (e.g. `<addon>/prebuilds`). On Android
   /// it's combined with the BACKENDS_SUBDIR compile-time relative path to
   /// locate the per-microarch CPU variant .so files for ggml's runtime
@@ -75,7 +72,6 @@ private:
   graph::WeightsBundle weights_;
   graph::ComputeGraph compute_;
   std::vector<std::string> labels_;
-  int numThreads_ = 0;
   bool loaded_ = false;
   uint64_t lastInferenceUs_ = 0;
   mutable std::mutex mutex_;

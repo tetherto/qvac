@@ -65,11 +65,6 @@ ClassificationModel::runtimeStats() const {
   return stats;
 }
 
-void ClassificationModel::setNumThreads(int threads) {
-  std::scoped_lock lock(mutex_);
-  numThreads_ = threads;
-}
-
 void ClassificationModel::setBackendsDir(std::string backendsDir) {
   std::scoped_lock lock(mutex_);
   backendsDir_ = std::move(backendsDir);
@@ -196,18 +191,6 @@ void ClassificationModel::load() {
     ggml_backend_tensor_set(
         compute_.input, warmupTensor.data(), 0,
         warmupTensor.size() * sizeof(float));
-#if !defined(__ANDROID__)
-    // ggml_backend_cpu_set_n_threads is only statically linkable when the
-    // CPU backend is in libggml-cpu.a (Apple/Linux/Windows desktop). On
-    // Android, qvac-fabric ships per-microarch CPU variants as MODULE .so
-    // files; the symbol lives inside the loaded variant and isn't
-    // resolvable from the addon's .bare. ggml's default thread pool sizes
-    // to std::thread::hardware_concurrency(), which is sensible for a
-    // tiny CPU-only model.
-    if (numThreads_ > 0) {
-      ggml_backend_cpu_set_n_threads(backend_, numThreads_);
-    }
-#endif
     (void)ggml_backend_graph_compute(backend_, compute_.graph);
     float warmupLogits[graph::kNumClasses] = {0.0F};
     ggml_backend_tensor_get(
@@ -258,13 +241,6 @@ std::any ClassificationModel::process(const std::any& input) {
   ggml_backend_tensor_set(
       compute_.input, inputTensor.data(), 0,
       inputTensor.size() * sizeof(float));
-
-#if !defined(__ANDROID__)
-  // See comment in load() above for why this is desktop-only.
-  if (numThreads_ > 0) {
-    ggml_backend_cpu_set_n_threads(backend_, numThreads_);
-  }
-#endif
 
   ggml_status status =
       ggml_backend_graph_compute(backend_, compute_.graph);

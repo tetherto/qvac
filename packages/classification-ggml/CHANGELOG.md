@@ -36,6 +36,16 @@ and this project adheres to
   lifecycle is not safe across rapid create/destroy cycles. JS-level
   logging always routes through the caller's `logger`.
 
+### Removed
+
+- `threads` constructor option. libggml's CPU thread pool now sizes itself
+  to `std::thread::hardware_concurrency` on every platform. The knob was
+  unimplementable on Android (the `ggml_backend_cpu_set_n_threads` symbol
+  lives inside the per-microarch CPU variant `.so` loaded via `dlopen`,
+  not in the addon's statically-linked `.bare`), and exposing it only on
+  desktop / iOS would have produced silently inconsistent behaviour across
+  platforms. Removed for API consistency.
+
 > **Note.** SDK plugin / schema integration (canonical model type
 > `ggml-classification` with `classification` alias) is **out of scope** for
 > 0.1.0 and will land in a follow-up PR; see the PR description for the

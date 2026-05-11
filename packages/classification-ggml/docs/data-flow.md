@@ -16,8 +16,6 @@ End-to-end trace of a single `classifier.classify(buffer)` call.
 |    (load / classify /   |
 |    unload all serialised|
 |    via exclusiveRunQueue)|
-|  - threads validation   |
-|    fail-fast in ctor    |
 |  - thin pass-through:   |
 |    builds native job    |
 |    { type: 'image',     |
@@ -142,7 +140,6 @@ End-to-end trace of a single `classifier.classify(buffer)` call.
 | Raw bytes + channels ≠ 3                    | `AddonJs::runJob` (C++)                       | `StatusError(InvalidArgument)` — "must be exactly 3 (RGB) when passing raw RGB bytes" |
 | Buffer size mismatch (raw input)            | `ImagePreprocessor::validateRawRgb` (C++)     | `StatusError(InvalidArgument)` |
 | `topK ≤ 0` when provided                    | `AddonJs::runJob` (C++)                       | `StatusError(InvalidArgument)` — "must be a positive integer when provided" |
-| Constructor `threads` not a positive int    | `ImageClassifier` constructor (JS)            | `TypeError("'threads' must be a positive integer when provided …")` |
 | Missing `config.backendsDir` on Android     | `ClassificationModel::load` (C++, Android)    | `StatusError(InvalidArgument)` — "Configuration 'config.backendsDir' is required on Android"; `index.js` defaults it to `path.join(__dirname, 'prebuilds')` so this only fires when the addon is wired up by hand |
 | GGML CPU backend variant init failure       | `ClassificationModel::load` (C++, Android)    | `StatusError(InternalError)` — "Failed to find/init CPU backend device"; raised when `ggml_backend_load_all_from_path` couldn't enumerate any per-microarch variant under `<backendsDir>/<BACKENDS_SUBDIR>/` |
 | `classify` before `load`                    | `ImageClassifier._classifyInternal` (JS)      | `Error("Classifier not loaded. Call load() first.")` |
