@@ -278,6 +278,59 @@ All traces stored in `vlm-benchmark/results/traces/`. Open in Instruments: `open
 
 ---
 
+## Addon vs CLI Overhead (Mac M4)
+
+**Date**: 2026-05-11
+**Addon**: llm-llamacpp v0.20.0 (wt-main branch, Bare runtime)
+**CLI**: llama-mtmd-cli b9025 baseline
+
+Measures the overhead introduced by running inference through the qvac addon (JS binding + Bare runtime) vs the raw CLI binary. Same models, image, prompt, and inference parameters. Mean of 3 measured runs (1 warmup discarded).
+
+### Qwen3.5-2B Q4_K_M (elephant.jpg, Metal)
+
+| Metric | CLI | Addon | Delta | Delta % |
+|--------|-----|-------|-------|---------|
+| **Total/Wall (ms)** | 5,748 | 7,726 | +1,978 | **+34.4%** |
+| **Decode (t/s)** | 53.7 | 37.7 | −16.0 | **−29.8%** |
+| **Prefill (t/s)** | 333.0 | 306.4 | −26.6 | **−8.0%** |
+| Prompt tokens | 265 | 276 | +11 | +4.2% |
+| Generated tokens | 255 | 256 | +1 | +0.4% |
+| Model load (ms) | 192 | 614 | +422 | +220% |
+| TTFT (ms) | — | 901 | — | — |
+
+### Gemma 4 E2B Q4_K_M (elephant.jpg, Metal)
+
+| Metric | CLI | Addon | Delta | Delta % |
+|--------|-----|-------|-------|---------|
+| **Total/Wall (ms)** | 6,370 | 7,484 | +1,114 | **+17.5%** |
+| **Decode (t/s)** | 52.1 | 42.1 | −10.0 | **−19.2%** |
+| **Prefill (t/s)** | 261.6 | 258.9 | −2.7 | **−1.0%** |
+| Prompt tokens | 284 | 290 | +6 | +2.1% |
+| Generated tokens | 255 | 256 | +1 | +0.4% |
+| Model load (ms) | 310 | 786 | +476 | +154% |
+| TTFT (ms) | — | 1,120 | — | — |
+
+### Known Differences
+
+| Parameter | CLI | Addon |
+|-----------|-----|-------|
+| Template | `--jinja` | addon template handler |
+| Image scaling | `-fit off` | addon default |
+| Threads | `--threads 4` | llama.cpp default (all cores) |
+| Runtime | native binary | Bare runtime + JS binding |
+| Stats granularity | vision_ms, img_decode_ms, prefill_ms, decode_ms | TTFT, TPS, ppTPS only |
+
+### Addon Trace Inventory
+
+| Trace | Model | Size | Notes |
+|-------|-------|------|-------|
+| `addon-mac-2026-05-11T1943/addon-qwen35-2b.trace` | Qwen3.5-2B Q4_K_M | 478 MB | bare process exited 139 (segfault at cleanup); trace data valid |
+| `addon-mac-2026-05-11T1943/addon-gemma4-e2b.trace` | Gemma 4 E2B Q4_K_M | 121 MB | clean exit |
+
+Source data: `vlm-benchmark/results/parsed/addon-mac-2026-05-11T1943.json`, full comparison at `vlm-benchmark/results/diffs/addon-vs-cli-mac-2026-05-11T1943.md`
+
+---
+
 ## Key Findings
 
 ### 1. Metal decode throughput scales with GPU core count
@@ -325,6 +378,16 @@ On Mac Metal, both models decode at ~51.5 t/s despite different architectures an
 
 Q4_K_M delivers 1.5–1.7x higher decode throughput than Q8_0 across all Gemma 4 configurations on Metal. The halved memory per parameter means more tokens per memory bandwidth cycle. Quality tradeoff is minimal for VLM tasks at these model sizes.
 
+### 10. Addon introduces 19–30% decode throughput overhead vs CLI
+
+Running through the llm-llamacpp addon (Bare runtime + JS binding) drops decode TPS by 30% for Qwen3.5-2B (53.7 → 37.7 t/s) and 19% for Gemma 4 E2B (52.1 → 42.1 t/s). This is the dominant source of the +17–34% wall-time overhead. Likely contributors:
+
+- **Per-token JS callback overhead**: Each generated token fires an `onUpdate` callback across the Bare C++→JS boundary. At ~40 tok/s, that's 40 cross-boundary calls/sec accumulating over 256 tokens.
+- **Process orchestration**: The addon manages model lifecycle, session state, and the event loop — overhead the CLI doesn't have.
+- **Model load**: 2–3x slower (614ms vs 192ms for Qwen, 786ms vs 310ms for Gemma4) due to addon initialization, Bare binding setup, and config validation — one-time cost that doesn't affect steady-state throughput.
+
+Prefill throughput is nearly unaffected for Gemma 4 (−1.0%) and moderately slower for Qwen3.5 (−8.0%), likely due to 11 extra prompt tokens from different template processing.
+
 ---
 
 ## Methodology Notes
@@ -346,7 +409,8 @@ Vision (ms) = image slice encoding + image batch decoding. Encoding runs the CLI
 
 ### Execution Environment
 
-- Mac: Direct execution of `build-mac/bin/llama-mtmd-cli` (native binary)
+- Mac CLI: Direct execution of `build-mac/bin/llama-mtmd-cli` (native binary)
+- Mac addon: `bare test/integration/vlm-bench.js` in `wt-main/packages/llm-llamacpp/` (llm-llamacpp v0.20.0, Bare runtime)
 - iPhone 16e: `xcrun devicectl device process launch --console` targeting app sandbox
 
 ### Measurement Protocol
@@ -357,5 +421,6 @@ Vision (ms) = image slice encoding + image batch decoding. Encoding runs the CLI
 - iPhone CPU runs use `--predict 128` (256 causes OOM); Metal runs use `--predict 256` on Mac, `--predict 128` on iPhone (256 triggers signal 9 during decode)
 - iPhone vision encoder (mmproj/CLIP) runs on Metal regardless of `--gpu-layers` setting
 - iPhone run-2 validates run-1 (vision ±2%, decode ±2%)
-- Raw logs: `vlm-benchmark/results/raw/mac/` (Mac), `vlm-benchmark/results/ios-local/` (iPhone)
-- Profiling traces: `vlm-benchmark/results/traces/` (4 trace files, ~1.55 GB total)
+- Addon: mean of 3 measured runs (1 warmup discarded), wall-clock via `Date.now()` delta
+- Raw logs: `vlm-benchmark/results/raw/mac/` (Mac CLI), `vlm-benchmark/results/raw/addon-mac-2026-05-11T1942/` (Mac addon), `vlm-benchmark/results/ios-local/` (iPhone)
+- Profiling traces: `vlm-benchmark/results/traces/` (4 CLI traces, ~1.55 GB total) + `vlm-benchmark/results/traces/addon-mac-2026-05-11T1943/` (2 addon traces, ~599 MB total)
