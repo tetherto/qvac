@@ -257,7 +257,7 @@ test('opened PR with prior team-applied label -> authorised', async () => {
   const payload = {
     action: 'opened',
     number: 9999,
-    pull_request: { number: 9999 },
+    pull_request: { number: 9999, labels: [{ name: 'verified' }] },
     sender: { login: 'mallory-outsider' },
   };
   const d = await gate({
@@ -278,7 +278,7 @@ test('opened PR with no label at all -> not authorised', async () => {
   const payload = {
     action: 'opened',
     number: 9998,
-    pull_request: { number: 9998 },
+    pull_request: { number: 9998, labels: [] },
     sender: { login: 'mallory-outsider' },
   };
   const d = await gate({
@@ -288,7 +288,85 @@ test('opened PR with no label at all -> not authorised', async () => {
     client,
   });
   assert.equal(d.authorised, false);
-  assert.match(d.reason, /no 'verified' label/);
+  assert.match(d.reason, /not currently applied/);
+});
+
+// --- BYPASS REGRESSION: stale `labeled` event after the label was removed ---
+
+test('REGRESSION: synchronize after label was removed -> deny even if timeline still shows trusted applier', async () => {
+  // Scenario: Alice (team) labels the PR; Mallory removes the label off-band
+  // (no `unlabeled` event subscribed); Alice pushes a new commit; the
+  // synchronize event fires. The timeline still contains Alice's old
+  // `labeled` event but the label is no longer on the PR. We must deny.
+  const client = makeClient({
+    teamMembers: ['alice-team-member'],
+    labelApplier: 'alice-team-member',
+  });
+  const payload = {
+    action: 'synchronize',
+    number: 7777,
+    pull_request: { number: 7777, labels: [] },
+    sender: { login: 'alice-team-member' },
+  };
+  const d = await gate({
+    ...baseArgs(),
+    eventName: 'pull_request_target',
+    payload,
+    client,
+  });
+  assert.equal(d.authorised, false, 'must deny when label is currently absent');
+  assert.match(d.reason, /not currently applied/);
+  assert.equal(
+    client.calls.findLabelApplier,
+    0,
+    'must short-circuit before timeline lookup'
+  );
+});
+
+test('REGRESSION: opened PR with stale labeled timeline but no current label -> deny', async () => {
+  const client = makeClient({
+    teamMembers: ['alice-team-member'],
+    labelApplier: 'alice-team-member',
+  });
+  const payload = {
+    action: 'reopened',
+    number: 7778,
+    pull_request: { number: 7778, labels: [{ name: 'something-else' }] },
+    sender: { login: 'mallory-outsider' },
+  };
+  const d = await gate({
+    ...baseArgs(),
+    eventName: 'pull_request_target',
+    payload,
+    client,
+  });
+  assert.equal(d.authorised, false);
+  assert.match(d.reason, /not currently applied/);
+});
+
+test('synchronize from non-trusted with NO label currently applied -> deny, no API calls at all', async () => {
+  const client = makeClient({ teamMembers: [] });
+  const payload = {
+    action: 'synchronize',
+    number: 7779,
+    pull_request: { number: 7779, labels: [] },
+    sender: { login: 'mallory-outsider' },
+  };
+  const d = await gate({
+    ...baseArgs(),
+    eventName: 'pull_request_target',
+    payload,
+    client,
+  });
+  assert.equal(d.authorised, false);
+  assert.match(d.reason, /not currently applied/);
+  assert.equal(client.calls.stripLabel, 0, 'must not call strip when nothing to strip');
+  assert.equal(
+    client.calls.isTeamMember,
+    0,
+    'no point checking sender trust if the label is already absent'
+  );
+  assert.equal(client.calls.findLabelApplier, 0);
 });
 
 // --- input validation --------------------------------------------------------
@@ -334,7 +412,7 @@ test('missing required gate args throw', async () => {
 
 // --- labeled action with non-matching label name -----------------------------
 
-test('labeled with a different label still falls through to timeline lookup', async () => {
+test('labeled with a different label still falls through to timeline lookup (verified label is currently applied)', async () => {
   const client = makeClient({
     teamMembers: ['alice-team-member'],
     labelApplier: 'alice-team-member',
@@ -342,7 +420,10 @@ test('labeled with a different label still falls through to timeline lookup', as
   const payload = {
     action: 'labeled',
     number: 5555,
-    pull_request: { number: 5555 },
+    pull_request: {
+      number: 5555,
+      labels: [{ name: 'verified' }, { name: 'something-else' }],
+    },
     label: { name: 'something-else' },
     sender: { login: 'mallory-outsider' },
   };

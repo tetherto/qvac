@@ -159,7 +159,30 @@ export async function gate({
     };
   }
 
+  // Authoritative current label state from the PR object. The timeline is
+  // append-only history; trusting it alone would allow a bypass where
+  // someone removes the gate label (no event subscribed to `unlabeled`)
+  // and then any subsequent `synchronize` re-authorises against the
+  // stale labeled event in the timeline. Always require the label to
+  // actually be on the PR right now. Checked before any API call so
+  // unrelated PRs cost us nothing.
+  const currentLabels = Array.isArray(payload?.pull_request?.labels)
+    ? payload.pull_request.labels
+        .map((l) => l?.name)
+        .filter((n) => typeof n === 'string')
+    : [];
+  const labelCurrentlyApplied = currentLabels.includes(label);
+
+  if (!labelCurrentlyApplied) {
+    return {
+      authorised: false,
+      reason: `'${label}' label is not currently applied to PR #${prNumber}`,
+    };
+  }
+
   // Synchronize: protect against new commits from non-trusted actors.
+  // Only reachable when the label IS currently applied (above), so a
+  // strip will always have something to remove.
   if (action === 'synchronize') {
     const senderTrust = await isTrustedActor(sender, {
       users: usersSet,
@@ -175,7 +198,7 @@ export async function gate({
         stripped,
       };
     }
-    // team-member synchronize falls through to the standard label check
+    // trusted-actor synchronize falls through to the standard applier check
   }
 
   // Resolve the label applier.
