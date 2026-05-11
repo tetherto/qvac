@@ -29,7 +29,7 @@ env:
 jobs:
   run-integration-tests:
     timeout-minutes: 60
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}-integration-tests
     permissions:
