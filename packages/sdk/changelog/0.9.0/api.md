@@ -169,7 +169,7 @@ await cancel({
 PR: [#1170](https://github.com/tetherto/qvac/pull/1170)
 
 ```bash
-cd packages/qvac-lib-infer-onnx-tts
+cd packages/tts-onnx
 npm run test:unit
 ```
 

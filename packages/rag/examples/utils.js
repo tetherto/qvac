@@ -27,7 +27,7 @@ async function ensureModels (keys, diskPath) {
     if (!model) {
       throw new Error(`Unknown model key: ${key}. Available keys: ${Object.keys(RAG_MODELS).join(', ')}`)
     }
-    return { key, ...model, fullPath: path.join(diskPath, model.filename) }
+    return { key, ...model, fullPath: path.resolve(diskPath, model.filename) }
   })
 
   const missing = requested.filter(m => !fs.existsSync(m.fullPath))

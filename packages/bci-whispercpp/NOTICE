@@ -68,7 +68,7 @@ C++ Dependencies
 
 --- apache-2.0 (Apache License 2.0) ---
 
-  qvac-lib-inference-addon-cpp
+  inference-addon-cpp
     https://github.com/tetherto/qvac
     Copyright (c) 2024-2026 Tether Data, S.A. de C.V.
 

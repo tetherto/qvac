@@ -26,6 +26,7 @@ Native C++ addon for text-to-image generation using [qvac-ext-stable-diffusion.c
       - [Image-to-image (`init_image`)](#image-to-image-init_image)
       - [Multi-reference fusion (`init_images`) — FLUX.2 only](#multi-reference-fusion-init_images--flux2-only)
     - [7. Release Resources](#7-release-resources)
+  - [Standalone ESRGAN Upscaler](#standalone-esrgan-upscaler)
   - [Model File Reference](#model-file-reference)
     - [FLUX.2 \[klein\] 4B (recommended for 16 GB machines)](#flux2-klein-4b-recommended-for-16-gb-machines)
     - [Stable Diffusion 1.x / 2.x](#stable-diffusion-1x--2x)
@@ -172,6 +173,7 @@ Source: [`examples/generate-image.js`](./examples/generate-image.js)
 -   [Generate Image (SD3)](./examples/generate-image-sd3.js) – Text-to-image with SD3 Medium (safetensors, diffusion + CLIP encoders).
 -   [Generate Image (SDXL)](./examples/generate-image-sdxl.js) – Text-to-image with an SDXL base all-in-one GGUF model.
 -   [Post-generation ESRGAN Upscale](./examples/generate-image-esrgan-upscale.js) – Text-to-image with SD2.1 followed by one or two ESRGAN upscale passes.
+-   [Standalone ESRGAN Upscale](./examples/standalone-esrgan-upscale.js) – Upscale an existing PNG/JPEG without loading a diffusion model (named export `EsrganUpscaler`).
 -   [Runtime Stats](./examples/runtime-stats-sd2.js) – Run SD2.1 inference and report runtime statistics.
 -   [img2img FLUX2](./examples/img2img-flux2.js) – Transform an image with FLUX2-klein (Q8_0, in-context conditioning).
 -   [img2img FLUX2 F16](./examples/img2img-flux2-f16.js) – Transform an image with FLUX2-klein (F16 full precision).
@@ -216,8 +218,10 @@ const args = {
 | `files.vae` | — | Absolute path to separate VAE file |
 | `files.esrgan` | — | Absolute path to ESRGAN upscaler model for post-generation upscale |
 | `config` | — | Native backend configuration object (see next section) |
-| `logger` | — | Logger instance (e.g. `console`) |
+| `logger` | — | Logger instance for JS wrapper logs (e.g. `console`) |
 | `opts` | — | Additional options (e.g. `{ stats: true }`) |
+
+Native C++ logs are process-global. Configure native log routing once with `require('@qvac/diffusion-cpp/addonLogging').setLogger(...)`.
 
 ### 3. Configure the native backend (`args.config`)
 
@@ -434,6 +438,68 @@ await model.unload()
 ```
 
 `unload()` calls `free_sd_ctx` which releases all GPU and CPU memory. The JS object can be safely garbage collected afterwards.
+
+---
+
+## Standalone ESRGAN Upscaler
+
+The package also exports `EsrganUpscaler` for upscaling existing PNG/JPEG images
+without loading a diffusion model. Useful for post-processing pre-existing assets
+(screenshots, photos, third-party generated images).
+
+```js
+const { EsrganUpscaler } = require('@qvac/diffusion-cpp')
+const { setLogger, releaseLogger } = require('@qvac/diffusion-cpp/addonLogging')
+const fs = require('bare-fs')
+
+setLogger((priority, message) => console.log(`[C++] ${message}`))
+
+const upscaler = new EsrganUpscaler({
+  files: {
+    esrgan: '/absolute/path/to/RealESRGAN_x4plus_anime_6B.pth'
+  },
+  config: {
+    upscaler_tile_size: 128
+  },
+  logger: console
+})
+
+await upscaler.load()
+
+const inputBytes = fs.readFileSync('/path/to/source.png')
+const response = await upscaler.upscale(inputBytes, { repeats: 1 })
+
+const images = []
+await response
+  .onUpdate(data => {
+    if (data instanceof Uint8Array) images.push(data)
+  })
+  .await()
+
+await upscaler.unload()
+releaseLogger()
+```
+
+**Constructor args**
+
+| Property | Required | Description |
+|----------|----------|-------------|
+| `files.esrgan` | ✅ | Absolute path to ESRGAN upscaler model (`.pth`) |
+| `config.upscaler_tile_size` | — | Tile size used during inference (default `128`) |
+| `config.upscaler_threads` | — | CPU threads for the upscaler (`-1` = auto) |
+| `config.upscaler_direct` | — | Use direct convolution (default `false`) |
+| `config.upscaler_offload_params_to_cpu` | — | Keep weights on CPU and offload during compute (default `false`) |
+| `logger` | — | Logger instance for JS wrapper logs (e.g. `console`). Native C++ logs are configured separately via `addonLogging.setLogger()` |
+
+**`upscale(imageBytes, options?)`**
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `repeats` | number | `1` | Number of ESRGAN passes. Each pass multiplies output dimensions by the model's scale factor (typically 4×), so `repeats: 2` produces a 16× upscale |
+
+Cancellation works the same as `ImgStableDiffusion`: call `upscaler.cancel()` to interrupt an in-flight upscale (honored between repeat passes).
+
+For a complete runnable example, see [`examples/standalone-esrgan-upscale.js`](./examples/standalone-esrgan-upscale.js).
 
 ---
 

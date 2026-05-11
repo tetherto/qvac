@@ -16,19 +16,19 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..', '..', '..', '..')
 const PACKAGES_DIR = path.join(REPO_ROOT, 'packages')
 
 const MODELS_JSON_PATH = path.join(
-  PACKAGES_DIR, 'qvac-lib-registry-server', 'data', 'models.prod.json'
+  PACKAGES_DIR, 'registry-server', 'data', 'models.prod.json'
 )
 
 // ---------------------------------------------------------------------------
 // Engine-to-package mapping (addon packages only)
 // ---------------------------------------------------------------------------
 const ENGINE_MAP = {
-  '@qvac/embed-llamacpp': 'qvac-lib-infer-llamacpp-embed',
-  '@qvac/llm-llamacpp': 'qvac-lib-infer-llamacpp-llm',
-  '@qvac/translation-nmtcpp': 'qvac-lib-infer-nmtcpp',
-  '@qvac/tts-onnx': 'qvac-lib-infer-onnx-tts',
-  '@qvac/transcription-whispercpp': 'qvac-lib-infer-whispercpp',
-  '@qvac/translation-llamacpp': 'qvac-lib-infer-llamacpp-llm',
+  '@qvac/embed-llamacpp': 'embed-llamacpp',
+  '@qvac/llm-llamacpp': 'llm-llamacpp',
+  '@qvac/translation-nmtcpp': 'translation-nmtcpp',
+  '@qvac/tts-onnx': 'tts-onnx',
+  '@qvac/transcription-whispercpp': 'transcription-whispercpp',
+  '@qvac/translation-llamacpp': 'llm-llamacpp',
   '@qvac/ocr-onnx': 'ocr-onnx',
   '@qvac/diffusion-cpp': 'diffusion-cpp'
 }
@@ -45,7 +45,7 @@ for (const [engine, pkgDir] of Object.entries(ENGINE_MAP)) {
 // ---------------------------------------------------------------------------
 const FULL_MODEL_LIST_PACKAGES = [
   'sdk',
-  'qvac-lib-registry-server/client'
+  'registry-server/client'
 ]
 
 // ---------------------------------------------------------------------------
@@ -58,38 +58,38 @@ const SKIP_VCPKG_PORTS = new Set([
   'vcpkg-get-python-packages',
   'vcpkg-boost',
   'vcpkg-make',
-  'qvac-lint-cpp',
-  'qvac-lib-inference-addon-cpp'
+  'lint-cpp',
+  'inference-addon-cpp'
 ])
 
 // ---------------------------------------------------------------------------
 // Python dependency file locations (relative to package dir)
 // ---------------------------------------------------------------------------
 const PYTHON_DEP_PATHS = {
-  'qvac-lib-infer-llamacpp-embed': [
+  'embed-llamacpp': [
     'benchmarks/client/requirements.txt'
   ],
-  'qvac-lib-infer-llamacpp-llm': [
+  'llm-llamacpp': [
     'benchmarks/client/requirements.txt'
   ],
-  'qvac-lib-infer-nmtcpp': [
+  'translation-nmtcpp': [
     'scripts/conversion_scripts/requirements.txt',
     'benchmarks/quality_eval/requirements.txt'
   ],
-  'qvac-lib-infer-onnx-tts': [
+  'tts-onnx': [
     'benchmarks/python-server/requirements-supertonic.txt',
     'benchmarks/python-server/requirements-chatterbox.txt',
     'benchmarks/client/requirements.txt',
     'benchmarks/client/pyproject.toml'
   ],
-  'qvac-lib-infer-whispercpp': [
+  'transcription-whispercpp': [
     'benchmarks/ci/requirements-conversion.txt',
     'benchmarks/client/pyproject.toml'
   ],
   'ocr-onnx': [
     'benchmarks/quality_eval/requirements.txt'
   ],
-  'qvac-lib-infer-onnx-vad': [
+  'onnx-vad': [
     'benchmarks/client/pyproject.toml'
   ]
 }
@@ -118,7 +118,7 @@ const SKIP_PACKAGES = new Set(['docs'])
 // ---------------------------------------------------------------------------
 // Packages without their own package.json (skip JS scan)
 // ---------------------------------------------------------------------------
-const NO_JS_PACKAGES = new Set(['qvac-lint-cpp'])
+const NO_JS_PACKAGES = new Set(['lint-cpp'])
 
 // ---------------------------------------------------------------------------
 // qvac vcpkg registry
@@ -186,7 +186,7 @@ function getPackageList () {
     const pkgJsonPath = path.join(PACKAGES_DIR, dir, 'package.json')
     if (!fs.existsSync(pkgJsonPath) && NO_JS_PACKAGES.has(dir)) continue
 
-    if (dir === 'qvac-lib-registry-server') {
+    if (dir === 'registry-server') {
       for (const sub of ['client', 'shared']) {
         const subDir = `${dir}/${sub}`
         const subPkgPath = path.join(PACKAGES_DIR, subDir, 'package.json')
