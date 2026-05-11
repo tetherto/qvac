@@ -7,14 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.4.0]
 
-In this release, we have replaced the onnxruntime backend with a pure C++/ggml engine, added a duplex-streaming entry point that bypasses the framework's batch-then-process lifecycle for live use cases, and surfaced two new per-segment signals (`isEndOfTurn`, `startsWord`) so consumers can build cleaner live transcripts.
+In this release, we have replaced the onnxruntime backend with a pure C++/ggml engine, added a duplex-streaming entry point that bypasses the framework's batch-then-process lifecycle for live use cases, and surfaced two new per-segment signals (`isEndOfTurn`, `startsWord`) so consumers can build cleaner live transcripts. The release also exposes per-engine backend stats (`backendDevice`, `backendId`) so callers can verify the GPU path actually engaged, and consolidates the examples / docs / mock fixtures into a single duplex-aware surface.
 
 ### Changed (BREAKING for model files)
 - Replaced the onnxruntime backend with the parakeet-cpp backend. The native addon no longer ships ONNX Runtime; the ggml dependency is now provided by the dedicated `ggml-speech` vcpkg port (separate from the `parakeet-cpp` port itself), with a `qvac-speech-` library prefix so it can coexist with the fabric/llm `qvac-` and the diffusion `qvac-diffusion-` ggml flavours on the same Android device.
 - Models now load from a single `.gguf` file per checkpoint instead of the legacy multi-file ONNX layout. Tokenizer + hyperparameters travel inside the GGUF metadata; no side-loaded files.
 - `loadWeights({ filename, chunk, completed })` now expects a single `.gguf` filename. Non-`.gguf` filenames are ignored with a warning for back-compat with callers still iterating an ONNX file list.
 - `Engine::transcribe_stream` and `StreamSession` are wired through the new backend; existing `is_eou_boundary` + `eot_confidence` slots on `StreamingSegment` now reflect parakeet-cpp's native EOU `<EOU>` token detection.
-- `runtimeStats()` now returns (`encoderMs`, `decoderMs`, `melSpecMs`, `totalEncodedFrames`) besides existing stats.
+- `runtimeStats()` now returns (`encoderMs`, `decoderMs`, `melSpecMs`, `totalEncodedFrames`, `backendDevice`, `backendId`) besides existing stats. `backendDevice` (0 = CPU, 1 = GPU) and `backendId` (`BackendId` enum: 0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 99=other) are captured once at `loadModel()` from `parakeet::Engine::backend_device()` / `backend_name()` and reflect the post-fallback truth -- a `useGPU: true` request that silently falls back to CPU at runtime surfaces as `backendDevice: 0` / `backendId: 0`.
 
 ### Added
 - **Duplex streaming entry point.** `TranscriptionParakeet.runStreaming(audioStream, streamingConfig?)` opens a long-lived `parakeet::StreamSession` (or `SortformerStreamSession`) on the C++ side and feeds each pushed chunk straight in -- bypassing the `run()` path's append-buffer-then-process lifecycle. Per-chunk segments surface through the regular `onUpdate(...)` channel as soon as the engine emits them, with full streaming session state (rolling encoder context, EOU detector, Sortformer history) preserved across chunks. The lower-level `startStreaming` / `appendStreamingAudio` / `endStreaming` / `cancelStreaming` methods are exposed on `ParakeetInterface` for callers that want to drive the session manually. New `StreamingRunConfig` type for per-call `chunkMs` / `historyMs` / `leftContextMs` / `rightLookaheadMs` / `emitPartials` / `emitEnergyVad` overrides.
@@ -26,14 +26,25 @@ In this release, we have replaced the onnxruntime backend with a pure C++/ggml e
 - Four flag-driven examples that replaced the old per-model quickstart: `examples/transcribe.js` (any GGUF, all engine types), `examples/diarized-transcribe.js` (combined Sortformer + ASR), `examples/live-mic.js` (default-device live transcription via `sox`, now using `runStreaming` for sub-second latency), and `examples/live-mic-diarized.js` (live mic with parallel Sortformer + ASR for speaker-tagged transcripts).
 - `scripts/download-models.sh` (downloads upstream NeMo `.nemo`) and `scripts/convert-nemo.sh` (wraps qvac-parakeet.cpp's `convert-nemo-to-gguf.py`); `npm run setup-models` runs both.
 - `test/integration/eou-streaming.test.js` covering the EOU streaming session's `isEndOfTurn` boundary detection.
+- `test/integration/duplex-streaming.test.js` -- end-to-end coverage for `runStreaming()`: asserts segments arrive BEFORE the input is exhausted (genuine streaming-out, not batched in JS) and that the response settles cleanly after `endStreaming`.
+- `test/integration/gpu-smoke.test.js` -- flips `useGPU: true` across all four model types (CTC / TDT / EOU / Sortformer) and gates strictly on `response.stats.backendDevice` + `backendId`. `QVAC_PARAKEET_GPU_SMOKE_RELAX=1` downgrades the gate to a warning (Adreno-6xx phones where ggml-opencl rejects the device by design, Android emulator / iOS simulator without GPU support, Linux / Windows hosts without a Vulkan-capable GPU or Vulkan SDK).
+- `test/unit/streaming-duplex.test.js` -- mock-binding unit coverage for the JS duplex plumbing (`runStreaming` round-trips through `startStreaming` / `appendStreamingAudio` / `endStreaming` without buffering, `cancel` routes through the streaming-aware C++ shim, append without an active session throws).
 - English-CTC accuracy assertion in `test/integration/accuracy-multilang.test.js` (was previously TDT/EOU only); WER coverage for all three ASR heads now lives there.
+- `BackendId` enum exported from `index.d.ts` (CPU / Metal / CUDA / Vulkan / OpenCL / other), backing the new `RuntimeStats.backendDevice` / `backendId` fields. See `index.d.ts` for the numeric codes and the per-platform GPU policy.
+- `examples/decode-audio.js` -- same flag surface as `examples/transcribe.js`, but pipes audio through `@qvac/decoder-audio` (FFmpeg) before inference so any container / codec FFmpeg supports (mp3, m4a, ogg, flac, mp4, ...) works, not just 16 kHz mono `.wav` / raw s16le PCM.
+- `scripts/setup-venv.sh` + `scripts/requirements.txt` -- idempotent local Python venv bootstrap for `convert-nemo-to-gguf.py` (CPython 3.10+; pins `nemo_toolkit`, `huggingface_hub`, `sentencepiece`, ...). Driven by `npm run setup:venv` and transitively by `npm run setup-models`.
 
 ### Removed
 - `@qvac/onnx` peer dependency; `eigen3`, `qvac-onnx` cmake config, ONNX file-name lists in `examples/utils.js`.
+- `@qvac/dl-base` and `@qvac/dl-filesystem` devDependencies, and `bare-buffer` -- no longer needed: weights flow through the framework's `loadWeights` callback against the single `.gguf` file, and `bare-buffer` was only an examples-side helper.
 - `examples/quickstart-{ctc,eou,sortformer,diarized,ggml}.js` and `examples/quickstart.js` (folded into `examples/transcribe.js`).
+- `examples/example.decoder.js` (superseded by `examples/decode-audio.js`).
+- `examples/samples/two-speakers-16k.wav`, replaced by `examples/samples/jfk.wav` and `examples/samples/sample_mp3.mp3` so the new decode + live-mic examples have non-WAV input fixtures.
 - 4 ONNX-specific integration tests (`external-data-staging`, `individual-file-paths`, `named-paths-all-models`, `named-paths-reload`).
 - `test/integration/addon.test.js` (legacy generic addon-lifecycle integration test; superseded by `addon-multimodel.test.js` and `eou-streaming.test.js`).
-- `DEVELOPMENT.md` (folded into the README's Development section).
+- `test/mocks/loader.fake.js` and `test/mocks/test.models.json` -- unused after the constructor `loader` argument was dropped in 0.3.0 and the multi-file ONNX model manifest stopped existing.
+- `DEVELOPMENT.md`, `CONTRIBUTING.md`, `QUICKSTART.md` (folded into the README).
+- `addon/CMakeLists.txt` -- the addon subproject is now driven directly from the top-level `CMakeLists.txt`.
 - Dead code: `addon/src/model-interface/parakeet/ParakeetHandlers.{hpp,cpp}` (unused handler maps + `MiscConfig` + `computeOptimalThreads()`), `JSAdapter::loadMap`, and the `JSValueVariant` typedef -- no consumers anywhere in the package since the JSAdapter rewrite went direct via `getOptionalProperty<>()`.
 
 ### Fixed
@@ -55,6 +66,7 @@ In this release, we have replaced the onnxruntime backend with a pure C++/ggml e
 - **README's Run Inference section** calls out the 500 MiB `MAX_BUFFERED_BYTES` cap on a single `run()` call (~4 hours of 16 kHz int16 audio) so consumers picking `run()` over `runStreaming()` for very long captures know to split into sequential calls (or use `runStreaming` instead, which has no per-call buffer cap).
 - **`ParakeetModel::addTranscription`** now annotated as test-only.
 - **`ParakeetModel::endOfStream` / `isStreamEnded`** now annotated as framework-only -- the duplex `runStreaming()` path (`ParakeetStreamingProcessor`) owns its own session and never sets `stream_ended_`, so consumers must not gate cleanup on `isStreamEnded()` after `runStreaming()`.
+- **`package.json` dependency reshuffle.** `bare-subprocess` added as a runtime dependency (the new `live-mic*` examples spawn `sox` through it). `bare-process` moved from `dependencies` to `devDependencies` (examples / tests only). `typescript` added as a devDependency so `test:dts` can lint both `index.d.ts` and `addonLogging.d.ts` under `--lib es2018 --esModuleInterop --skipLibCheck`. The old `path` / `process` npm aliases (`path: npm:bare-path`, `process: npm:bare-process`) are gone -- consumers should `require('bare-path')` / `require('bare-process')` directly.
 
 ## [0.3.3]
 
