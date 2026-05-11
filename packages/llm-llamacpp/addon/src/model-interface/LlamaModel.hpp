@@ -83,10 +83,14 @@ public:
   /// @param adrenoVersion Detected Adreno GPU version, if any.
   /// @param finetuneOverrides If set, finetuning mode is active with these
   /// context/batch params and GPU caps.
+  /// @param isOpenCl True when the chosen GPU backend is OpenCL; used to
+  /// disable flash-attn by default since it is not reliably supported on
+  /// the OpenCL backend.
   static void tuneConfigMap(
       std::unordered_map<std::string, std::string>& configFilemap,
       const ModelMetaData& metadata, const std::optional<int>& adrenoVersion,
-      const FinetuneConfigOverrides& finetuneOverrides = {});
+      const FinetuneConfigOverrides& finetuneOverrides = {},
+      bool isOpenCl = false);
 
   /**
    * The Constructor for llama model.
@@ -279,7 +283,7 @@ private:
   void resetState(bool resetStats = true);
   std::unique_ptr<LlmContext> createContext(
       std::string&& projectionPath, common_params& params,
-      common_init_result&& llamaInit, ToolsCompactController& tools);
+      common_init_result_ptr llamaInit, ToolsCompactController& tools);
 
   bool loadMedia(const std::vector<uint8_t>& input);
 

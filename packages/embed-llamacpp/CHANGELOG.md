@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.16.0] - 2026-05-10
+
+### Changed
+
+- **`qvac-fabric` >= 8189.0.2**: Mali/Adreno F16 coopmat1 NaN fix, Vulkan VMA migration, accumulated upstream fixes since `7248.x`.
+- **OpenCL backends default `flash-attn=off`** (not reliably supported on OpenCL); user `flash-attn`/`flash_attn` overrides are honored.
+
+### Internals (no behaviour change)
+
+- ABI port: `common_init_result` → `common_init_result_ptr`.
+
 ## [0.15.0] - 2026-04-30
 
 ### Added

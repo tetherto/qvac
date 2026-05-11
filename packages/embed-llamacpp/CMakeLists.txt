@@ -40,6 +40,10 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/JsInterface.hpp")
+# llama-targets.cmake transitively requires OpenSSL::SSL via cpp-httplib's
+# IMPORTED interface. Make OpenSSL discoverable before find_package(llama)
+# so the target chain resolves on local builds.
+find_package(OpenSSL)
 find_package(llama CONFIG REQUIRED)
 
 if(WIN32)

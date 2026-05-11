@@ -13,8 +13,11 @@
     "ssplit",
     {
       "name": "qvac-fabric",
-      "version>=": "7248.2.3",
-      "default-features": false
+      "version>=": "8189.0.2",
+      "default-features": false,
+      "features": [
+        "gpu-backends"
+      ]
     }
   ],
   "features": {

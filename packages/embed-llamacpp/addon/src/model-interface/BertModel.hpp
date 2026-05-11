@@ -54,7 +54,7 @@ public:
 
 struct BertCommonInitResult {
   common_params params;
-  common_init_result result;
+  common_init_result_ptr result;
 };
 
 /// @brief Instantiates a BERT language model. An open source architecture

@@ -7,25 +7,39 @@ const process = require('bare-process')
 
 async function downloadFile (url, dest) {
   return new Promise((resolve, reject) => {
-    let resolved = false
+    let settled = false
+    // Once a redirect has handed off `dest` to a recursive call, this call
+    // must not touch the file again: late error events from the outer
+    // writestream would otherwise unlink the freshly-downloaded file written
+    // by the recursive call, leaving a "successful" promise but an empty
+    // disk path.
+    let handedOff = false
+
     const safeResolve = () => {
-      if (!resolved) {
-        resolved = true
-        resolve()
-      }
+      if (settled) return
+      settled = true
+      resolve()
     }
     const safeReject = (err) => {
-      if (!resolved) {
-        resolved = true
-        reject(err)
+      if (settled) return
+      settled = true
+      reject(err)
+    }
+    // Unlink only when this call still owns `dest`. Skip if a redirect already
+    // delegated ownership to a recursive call.
+    const cleanupAndReject = (err) => {
+      if (settled || handedOff) {
+        if (!settled) safeReject(err)
+        return
       }
+      fs.unlink(dest, () => safeReject(err))
     }
 
     const file = fs.createWriteStream(dest)
 
     file.on('error', (err) => {
       file.destroy()
-      fs.unlink(dest, () => safeReject(err))
+      cleanupAndReject(err)
     })
 
     const req = https.request(url, response => {
@@ -40,6 +54,7 @@ async function downloadFile (url, dest) {
           }
 
           const redirectUrl = new URL(response.headers.location, url).href
+          handedOff = true
 
           downloadFile(redirectUrl, dest)
             .then(safeResolve)
@@ -50,13 +65,13 @@ async function downloadFile (url, dest) {
 
       if (response.statusCode !== 200) {
         file.destroy()
-        fs.unlink(dest, () => safeReject(new Error(`Download failed: HTTP ${response.statusCode} from ${url}`)))
+        cleanupAndReject(new Error(`Download failed: HTTP ${response.statusCode} from ${url}`))
         return
       }
 
       response.on('error', (err) => {
         file.destroy()
-        fs.unlink(dest, () => safeReject(err))
+        cleanupAndReject(err)
       })
 
       response.pipe(file)
@@ -69,7 +84,7 @@ async function downloadFile (url, dest) {
 
     req.on('error', err => {
       file.destroy()
-      fs.unlink(dest, () => safeReject(err))
+      cleanupAndReject(err)
     })
 
     req.end()

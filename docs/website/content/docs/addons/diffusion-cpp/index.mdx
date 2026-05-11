@@ -11,7 +11,7 @@ schemaType: APIReference
 
 ## Models
 
-Supports SD1.x, SD2.x, SDXL, SD3, and FLUX.2-klein model families.
+Supports FLUX.2-klein, SD1.x, SD2.x, SDXL, and SD3 model families.
 
 ### FLUX.2-klein
 
@@ -88,7 +88,7 @@ curl -L -C - -o models/Qwen3-4B-Q4_K_M.gguf \
   https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf
 
 curl -L -C - -o models/flux2-vae.safetensors \
-  https://huggingface.co/black-forest-labs/FLUX.2-klein-4B/blob/main/vae/diffusion_pytorch_model.safetensors
+  https://huggingface.co/black-forest-labs/FLUX.2-klein-4B/resolve/main/vae/diffusion_pytorch_model.safetensors
 ```
 </Step>
 
@@ -111,17 +111,15 @@ async function main () {
 
   const args = {
     logger: console,
-    diskPath: MODELS_DIR,
-    modelName: 'flux-2-klein-4b-Q8_0.gguf',
-    llmModel: 'Qwen3-4B-Q4_K_M.gguf',
-    vaeModel: 'flux2-vae.safetensors'
+    files: {
+      model: path.join(MODELS_DIR, 'flux-2-klein-4b-Q8_0.gguf'),
+      llm:   path.join(MODELS_DIR, 'Qwen3-4B-Q4_K_M.gguf'),
+      vae:   path.join(MODELS_DIR, 'flux2-vae.safetensors')
+    },
+    config: { threads: 8 }
   }
 
-  const config = {
-    threads: 8
-  }
-
-  const model = new ImgStableDiffusion(args, config)
+  const model = new ImgStableDiffusion(args)
   await model.load()
 
   try {
@@ -194,33 +192,43 @@ const path = require('bare-path')
 const MODELS_DIR = path.resolve(__dirname, './models')
 const args = {
   logger: console,
-  diskPath: MODELS_DIR,
-  modelName: 'flux-2-klein-4b-Q8_0.gguf',
-  llmModel: 'Qwen3-4B-Q4_K_M.gguf',
-  vaeModel: 'flux2-vae.safetensors'
+  files: {
+    model: path.join(MODELS_DIR, 'flux-2-klein-4b-Q8_0.gguf'),
+    llm:   path.join(MODELS_DIR, 'Qwen3-4B-Q4_K_M.gguf'),
+    vae:   path.join(MODELS_DIR, 'flux2-vae.safetensors')
+  },
+  config: { threads: 8 },
+  opts: { stats: true }
 }
 ```
 
 | Property | Required | Description |
 |----------|----------|-------------|
-| `diskPath` | ✅ | Local directory where model files are already stored |
-| `modelName` | ✅ | Diffusion model file name (all-in-one for SD1.x/2.x; diffusion-only GGUF for FLUX.2) |
-| `logger` | — | Logger instance (e.g. `console`) |
-| `clipLModel` | — | Separate CLIP-L text encoder (SD3) |
-| `clipGModel` | — | Separate CLIP-G text encoder (SDXL / SD3) |
-| `t5XxlModel` | — | Separate T5-XXL text encoder (SD3) |
-| `llmModel` | — | Qwen3 LLM text encoder (FLUX.2 [klein]) |
-| `vaeModel` | — | Separate VAE file |
+| `files` | ✅ | Object of absolute paths to model files (see below) |
+| `files.model` | ✅ | Absolute path to diffusion model file (diffusion-only GGUF for FLUX.2; all-in-one for SD1.x/2.x) |
+| `files.clipL` | — | Absolute path to separate CLIP-L text encoder (SD3) |
+| `files.clipG` | — | Absolute path to separate CLIP-G text encoder (SDXL / SD3) |
+| `files.t5Xxl` | — | Absolute path to separate T5-XXL text encoder (SD3) |
+| `files.llm` | — | Absolute path to Qwen3 LLM text encoder (FLUX.2 [klein]) |
+| `files.vae` | — | Absolute path to separate VAE file |
+| `files.esrgan` | — | Absolute path to ESRGAN upscaler model for post-generation upscale |
+| `config` | — | Native backend configuration object (see next section) |
+| `logger` | — | Logger instance for JS wrapper logs (e.g. `console`) |
+| `opts` | — | Additional options (e.g. `{ stats: true }`) |
 
-### 3. Create the `config` object
+Native C++ logs are process-global. Configure native log routing once with `require('@qvac/diffusion-cpp/addonLogging').setLogger(...)`.
+
+### 3. Configure the native backend (`args.config`)
+
+`config` is a field on the `args` object built in step 2 — there is no separate constructor argument. The native backend reads it during `load()`.
 
 ```js
-const config = {
+args.config = {
   threads: 8  // CPU threads for tensor operations (Metal handles GPU automatically)
 }
 ```
 
-All config values are coerced to strings internally before being passed to the native layer.
+Config values are coerced to strings internally. Generation parameters (prompt, steps, seed, etc.) are JSON-serialized with their native types preserved.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -230,14 +238,15 @@ All config values are coerced to strings internally before being passed to the n
 | `clip_on_cpu` | `true` \| `false` | `false` | Force CLIP encoder to run on CPU |
 | `vae_on_cpu` | `true` \| `false` | `false` | Force VAE to run on CPU |
 | `flash_attn` | `true` \| `false` | `false` | Enable flash attention (reduces memory) |
+| `upscaler_tile_size` | number | `128` | ESRGAN upscaler tile size |
 
 ### 4. Create a model instance
 
 ```js
-const model = new ImgStableDiffusion(args, config)
+const model = new ImgStableDiffusion(args)
 ```
 
-The constructor stores configuration only — no memory is allocated yet.
+The constructor takes a single object containing `files`, `config`, `logger`, and `opts`. It stores configuration only — no memory is allocated yet.
 
 ### 5. Load the Model
 
@@ -245,7 +254,7 @@ The constructor stores configuration only — no memory is allocated yet.
 await model.load()
 ```
 
-This creates the native `sd_ctx_t` and loads all weights into memory. It can take 10–30 seconds depending on disk speed and model size. All model files must already be present on disk at `diskPath`.
+This creates the native `sd_ctx_t` and loads all weights into memory. It can take 10–30 seconds depending on disk speed and model size. All model files must be passed as absolute paths via the `files` object.
 
 ### 6. Run Inference
 
@@ -296,6 +305,7 @@ require('bare-fs').writeFileSync('output.png', images[0])
 | `batch_count` | number | `1` | Number of images to generate |
 | `vae_tiling` | boolean | `false` | Enable VAE tiling (required for large images on 16 GB) |
 | `cache_preset` | string | — | Step-caching preset: `slow`, `medium`, `fast`, `ultra` |
+| `upscale` | boolean \| `{ repeats?: number }` | `false` | Post-generation ESRGAN upscale. Requires `files.esrgan`; `repeats` defaults to `1` |
 
 <Callout type="info">
 Do not set `sampling_method: 'euler_a'` for FLUX.2 models — it will produce random noise. Leave the field unset to let the library auto-select `euler` for flow-matching models.
