@@ -32,7 +32,7 @@ QVAC (Quantum Versatile AI Compute) is a monorepo for building local-first, P2P 
 
 ## Build & Test — Quick Reference
 
-### Native Addons (C++ packages, e.g. qvac-lib-infer-llamacpp-llm)
+### Native Addons (C++ packages, e.g. llm-llamacpp)
 
 **Prerequisites:** clang-22, libc++-22-dev, libc++abi-22-dev, vcpkg, bare >=1.24, bare-make
 
@@ -128,14 +128,14 @@ qvac/
 │   ├── skills/                # Existing skills (addon-changelog, sdk-*, etc.)
 │   ├── commands/              # Existing commands
 │   └── rules/                 # .mdc files with Cursor-specific rules
-│   ├── qvac-sdk/              # Main SDK entry point
-│   ├── qvac-cli/              # CLI tool
-│   ├── qvac-lib-rag/          # RAG library
-│   ├── qvac-lib-infer-*/      # Inference addons (LLM, TTS, OCR, etc.)
-│   ├── qvac-lib-dl-*/         # Data loaders (filesystem, hyperdrive)
-│   ├── qvac-lib-logging/      # Logging
-│   ├── qvac-lib-error-base/   # Error handling base
-│   ├── qvac-lib-registry-server/ # Distributed model registry
+│   ├── sdk/              # Main SDK entry point
+│   ├── cli/              # CLI tool
+│   ├── rag/          # RAG library
+│   ├── infer-*/      # Inference addons (LLM, TTS, OCR, etc.)
+│   ├── dl-*/         # Data loaders (filesystem, hyperdrive)
+│   ├── logging/      # Logging
+│   ├── error-base/   # Error handling base
+│   ├── registry-server/ # Distributed model registry
 │   └── docs/                  # Documentation
 ├── scripts/                   # Build and validation scripts
 ├── .github/workflows/         # CI/CD (85+ workflow files)

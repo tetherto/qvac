@@ -15,7 +15,7 @@ package-lock.json
 
 test/integration/.exit-code
 
-# Added by qvac-lint-cpp
+# Added by lint-cpp
 .clang-format
 .clang-tidy
 .valgrind.supp

@@ -318,7 +318,7 @@ The encoder accepts up to ~3000 timesteps per forward pass; `MAX_WINDOW_TIMESTEP
 `whisperConfig` is a thin pass-through to whisper.cpp's `whisper_full_params`. For the full surface (decoding strategy, beam search, VAD, suppression, callbacks, etc.) refer to the upstream reference:
 
 - [`whisper_full_params` in whisper.cpp](https://github.com/ggerganov/whisper.cpp/blob/master/include/whisper.h)
-- Concrete shapes used in production: see the [examples](examples) directory and [`@qvac/transcription-whispercpp`](https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-infer-whispercpp) for richer usage patterns (VAD, chunking, live streaming).
+- Concrete shapes used in production: see the [examples](examples) directory and [`@qvac/transcription-whispercpp`](https://github.com/tetherto/qvac/tree/main/packages/transcription-whispercpp) for richer usage patterns (VAD, chunking, live streaming).
 
 ## whisper.cpp Patches
 
@@ -360,7 +360,7 @@ Codes are also re-exported via `require('@qvac/bci-whispercpp/lib/error').ERR_CO
 ## Resources
 
 - whisper.cpp fork (Tether): [`tetherto/qvac-ext-lib-whisper.cpp`](https://github.com/tetherto/qvac-ext-lib-whisper.cpp)
-- Sibling package — audio transcription: [`@qvac/transcription-whispercpp`](https://github.com/tetherto/qvac/tree/main/packages/qvac-lib-infer-whispercpp)
+- Sibling package — audio transcription: [`@qvac/transcription-whispercpp`](https://github.com/tetherto/qvac/tree/main/packages/transcription-whispercpp)
 - vcpkg registry: [`qvac-registry-vcpkg`](https://github.com/tetherto/qvac-registry-vcpkg)
 - BrainWhisperer reference (Python): the model checkpoints converted by `scripts/convert-model.py`
 
