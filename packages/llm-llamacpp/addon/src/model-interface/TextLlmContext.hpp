@@ -20,7 +20,7 @@ public:
   TextLlmContext& operator=(TextLlmContext&&) = delete;
   // Constructor
   TextLlmContext(
-      common_params& commonParams, common_init_result&& llamaInit,
+      common_params& commonParams, common_init_result_ptr llamaInit,
       ToolsCompactController& tools);
 
   // Destructor
@@ -172,7 +172,7 @@ private:
   void handleStopRequestAndAddEot(LlamaBatch& batch);
 
   ToolsCompactController& tools_;
-  common_init_result llamaInit_;
+  common_init_result_ptr llamaInit_;
   llama_model* model_;
   llama_context* lctx_;
   const llama_vocab* vocab_;
@@ -201,6 +201,11 @@ private:
   // GPT-OSS Harmony: <|call|> is a frame delimiter, not a stop signal
   bool isHarmonyModel_ = false;
   llama_token harmonyCallToken_ = LLAMA_TOKEN_NULL;
+
+  // Force-opens the reasoning channel in the prompt suffix to prepend the
+  // matching "<think>\n" opener to the visible stream so consumers see balanced
+  // tags.
+  bool thinkingForcedOpen_ = false;
 
   std::atomic<bool> stopGeneration_ = false;
 };

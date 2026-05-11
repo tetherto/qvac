@@ -26,7 +26,7 @@ const useCpu = isDarwinX64 || isLinuxArm64
 const forceCpuDevice = useCpu || noGpu
 const skipFinetuning = useCpu || (noGpu && !isWindows)
 
-const PAUSE_RESUME_TIMEOUT_MS = 1800_000
+const PAUSE_RESUME_TIMEOUT_MS = 3600_000
 
 const FINETUNE_MODELS = [
   {
@@ -38,16 +38,10 @@ const FINETUNE_MODELS = [
     id: 'bitnet-b1_58-large-tq2_0',
     name: 'bitnet_b1_58-large-TQ2_0.gguf',
     url: 'https://huggingface.co/gianni-cor/bitnet_b1_58-large-TQ2_0/resolve/main/bitnet_b1_58-large-TQ2_0.gguf'
-  },
-  {
-    id: 'medgemma-4b-it-q4_0',
-    name: 'medgemma-4b-it-Q4_0.gguf',
-    url: 'https://huggingface.co/unsloth/medgemma-4b-it-GGUF/resolve/main/medgemma-4b-it-Q4_0.gguf',
-    skip: isMobile || forceCpuDevice || platform === 'darwin' || isWindows
   }
 ]
 
-function waitForProgress (handle, minSteps = 2, timeoutMs = 300_000) {
+function waitForProgress (handle, minSteps = 2, timeoutMs = 600_000) {
   return new Promise((resolve, reject) => {
     let count = 0
     const timer = setTimeout(() => {

@@ -253,7 +253,10 @@ const scenarios = [
   {
     name: 'Reverse prompt stops generation',
     overrides: {
-      reverse_prompt: 'network, pizza, bitcoin, blockchain',
+      // Whitespace around commas is trimmed by the addon's split() helper;
+      // matching is case-insensitive, so a `PiZzA` entry catches the model's
+      // `pizza` / `Pizza` output regardless of casing.
+      reverse_prompt: 'network, PiZzA, bitcoin, blockchain',
       temp: '0',
       top_p: '0.7',
       n_predict: '128'
@@ -270,8 +273,8 @@ const scenarios = [
     ],
     expectSuccess: true,
     assertOutput: (t, output, stats) => {
-      t.ok(output.includes('pizza'), 'reverse prompt output contains keyword')
-      t.ok(output.split('').slice(-5).join('') === 'pizza', 'reverse prompt output ends with keyword')
+      t.ok(output.toLowerCase().includes('pizza'), 'reverse prompt output contains keyword')
+      t.ok(output.toLowerCase().split('').slice(-5).join('') === 'pizza', 'reverse prompt output ends with keyword')
     }
   }
 ]
