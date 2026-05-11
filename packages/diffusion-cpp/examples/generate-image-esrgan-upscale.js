@@ -14,6 +14,9 @@ const ImgStableDiffusion = require('../index')
 // ESRGAN model:
 //   Place RealESRGAN_x4plus_anime_6B.pth in packages/diffusion-cpp/models.
 //   It is the stable-diffusion.cpp recommended ESRGAN sample model.
+//   Real-ESRGAN repo: https://github.com/xinntao/Real-ESRGAN
+//   Model download: https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth
+//   The .pth model is not bundled with this package.
 // ---------------------------------------------------------------------------
 const MODELS_DIR = path.resolve(__dirname, '../models')
 const OUTPUT_DIR = path.resolve(__dirname, '../output')

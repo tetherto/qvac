@@ -120,13 +120,16 @@ TEST(SdCtxHandlers_LoraApplyMode, SupportedValuesAndUnknownThrows) {
 
 TEST(SdCtxHandlers_Threads, ValidIntegerAndInvalidThrows) {
   EXPECT_EQ(applyOne("threads", "8").nThreads, 8);
+  EXPECT_EQ(applyOne("threads", "-1").nThreads, -1);
 
-  SdCtxConfig cfg;
-  EXPECT_THROW(
-      applySdCtxHandlers(
-          cfg,
-          std::unordered_map<std::string, std::string>{{"threads", "abc"}}),
-      StatusError);
+  for (const auto* value : {"0", "-2", "1.5", "abc"}) {
+    SdCtxConfig cfg;
+    EXPECT_THROW(
+        applySdCtxHandlers(
+            cfg,
+            std::unordered_map<std::string, std::string>{{"threads", value}}),
+        StatusError);
+  }
 }
 
 TEST(SdCtxHandlers_MemoryFlags, BoolKeysMapAndInvalidThrow) {
@@ -162,6 +165,12 @@ TEST(SdCtxHandlers_Upscaler, DefaultsAndConfigValuesMapCorrectly) {
   EXPECT_TRUE(cfg.upscalerDirect);
   EXPECT_TRUE(cfg.upscalerOffloadParamsToCpu);
   EXPECT_EQ(cfg.upscalerThreads, 6);
+
+  SdCtxConfig autoThreads;
+  applySdCtxHandlers(
+      autoThreads,
+      std::unordered_map<std::string, std::string>{{"upscaler_threads", "-1"}});
+  EXPECT_EQ(autoThreads.upscalerThreads, -1);
 }
 
 TEST(SdCtxHandlers_Upscaler, InvalidTileSizeThrows) {
@@ -172,6 +181,18 @@ TEST(SdCtxHandlers_Upscaler, InvalidTileSizeThrows) {
           std::unordered_map<std::string, std::string>{
               {"upscaler_tile_size", "0"}}),
       StatusError);
+}
+
+TEST(SdCtxHandlers_Upscaler, InvalidThreadCountsThrow) {
+  for (const auto* value : {"0", "-2", "1.5", "abc"}) {
+    SdCtxConfig cfg;
+    EXPECT_THROW(
+        applySdCtxHandlers(
+            cfg,
+            std::unordered_map<std::string, std::string>{
+                {"upscaler_threads", value}}),
+        StatusError);
+  }
 }
 
 TEST(

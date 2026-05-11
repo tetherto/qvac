@@ -5,7 +5,7 @@
 #include <string>
 #include <unordered_map>
 
-#include <qvac-lib-inference-addon-cpp/Errors.hpp>
+#include <inference-addon-cpp/Errors.hpp>
 #include <stable-diffusion.h>
 
 namespace qvac_lib_inference_addon_sd {

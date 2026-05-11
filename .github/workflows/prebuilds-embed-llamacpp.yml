@@ -1,0 +1,54 @@
+# Build-only workflow. Publishing is handled by on-merge-embed-llamacpp.yml
+name: Prebuilds (Embed)
+
+on:
+  workflow_dispatch:
+    inputs:
+      vk-profiling:
+        type: boolean
+        default: false
+      workdir:
+        description: "Working directory (optional)"
+        required: false
+        type: string
+        default: "packages/embed-llamacpp"
+
+  workflow_call:
+    inputs:
+      ref:
+        description: "ref"
+        type: string
+        required: false
+      repository:
+        type: string
+        required: false
+        default: "tetherto/qvac"
+      vk-profiling:
+        description: "Enable Vulkan profiling"
+        type: boolean
+        required: false
+        default: false
+      workdir:
+        description: "Working directory (optional)"
+        required: false
+        type: string
+        default: "packages/embed-llamacpp"
+
+permissions:
+  contents: read
+
+jobs:
+  prebuild:
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/reusable-prebuilds.yml
+    with:
+      workdir: ${{ inputs.workdir }}
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+      artifact-name-prefix: llama-cpp-
+      include-vulkan-sdk: true
+      extra-cmake-defines: ${{ inputs.vk-profiling && '-D VK_PROFILING=ON' || '' }}
+    secrets: inherit

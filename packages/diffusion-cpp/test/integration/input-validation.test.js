@@ -2,6 +2,7 @@
 
 const test = require('brittle')
 const ImgStableDiffusion = require('../../index')
+const { EsrganUpscaler } = require('../../index')
 const { readImageDimensions } = require('../../addon')
 
 // ---------- Minimal PNG/JPEG fixtures (valid headers, no real pixel data) ----------
@@ -201,6 +202,161 @@ test('run | forwards ESRGAN upscale params when files.esrgan is provided', async
   t.ok(captured, 'captured params passed to addon')
   t.is(captured.upscale.repeats, 2, 'upscale.repeats is forwarded')
   t.is(captured.mode, 'txt2img', 'txt2img mode is selected')
+})
+
+test('EsrganUpscaler | constructor accepts files.esrgan without files.model', async (t) => {
+  const upscaler = new EsrganUpscaler({
+    files: {
+      esrgan: '/tmp/RealESRGAN_x4plus_anime_6B.pth'
+    },
+    config: { upscaler_tile_size: 128 },
+    logger: console
+  })
+
+  t.ok(upscaler, 'constructs standalone upscaler')
+  t.is(upscaler.getState().configLoaded, false, 'does not auto-load')
+})
+
+test('EsrganUpscaler | constructor throws when files.esrgan is missing', async (t) => {
+  try {
+    new EsrganUpscaler({ // eslint-disable-line no-new
+      files: {},
+      config: { upscaler_tile_size: 128 },
+      logger: console
+    })
+    t.fail('should have thrown')
+  } catch (err) {
+    t.ok(err instanceof TypeError, 'throws TypeError')
+    t.ok(
+      /files\.esrgan must be an absolute path string/.test(err.message),
+      'error message explains files.esrgan is required'
+    )
+  }
+})
+
+test('EsrganUpscaler | constructor throws when files.esrgan is relative', async (t) => {
+  try {
+    new EsrganUpscaler({ // eslint-disable-line no-new
+      files: {
+        esrgan: 'RealESRGAN_x4plus_anime_6B.pth'
+      },
+      config: { upscaler_tile_size: 128 },
+      logger: console
+    })
+    t.fail('should have thrown')
+  } catch (err) {
+    t.ok(err instanceof TypeError, 'throws TypeError')
+    t.ok(
+      /files\.esrgan must be an absolute path/.test(err.message),
+      'error message explains files.esrgan must be absolute'
+    )
+  }
+})
+
+test('EsrganUpscaler | upscale rejects non-Uint8Array input', async (t) => {
+  const upscaler = new EsrganUpscaler({
+    files: {
+      esrgan: '/tmp/RealESRGAN_x4plus_anime_6B.pth'
+    },
+    config: { upscaler_tile_size: 128 },
+    logger: console
+  })
+
+  try {
+    await upscaler.upscale('not bytes', { repeats: 1 })
+    t.fail('should have thrown')
+  } catch (err) {
+    t.ok(err instanceof TypeError, 'throws TypeError')
+    t.ok(
+      /input image must be a Uint8Array/.test(err.message),
+      'error message explains input type'
+    )
+  }
+})
+
+test('EsrganUpscaler | upscale forwards repeats into addon path', async (t) => {
+  const upscaler = new EsrganUpscaler({
+    files: {
+      esrgan: '/tmp/RealESRGAN_x4plus_anime_6B.pth'
+    },
+    config: { upscaler_tile_size: 128 },
+    logger: console
+  })
+
+  const sentinel = new Error('fake upscaler addon stop')
+  const input = new Uint8Array([1, 2, 3])
+  let captured = null
+  upscaler.addon = {
+    runJob: async (imageBytes, params) => {
+      captured = { imageBytes, params }
+      throw sentinel
+    },
+    cancel: async () => {}
+  }
+
+  try {
+    await upscaler.upscale(input, { repeats: 2 })
+    t.fail('should have thrown')
+  } catch (err) {
+    t.is(err, sentinel, 'fake addon receives the upscale request')
+  }
+
+  t.ok(captured, 'captured params passed to addon')
+  t.is(captured.imageBytes, input, 'input bytes are forwarded')
+  t.is(captured.params.repeats, 2, 'repeats are forwarded')
+})
+
+test('EsrganUpscaler | upscale defaults repeats to 1', async (t) => {
+  const upscaler = new EsrganUpscaler({
+    files: {
+      esrgan: '/tmp/RealESRGAN_x4plus_anime_6B.pth'
+    },
+    config: { upscaler_tile_size: 128 },
+    logger: console
+  })
+
+  const sentinel = new Error('fake upscaler addon stop')
+  let captured = null
+  upscaler.addon = {
+    runJob: async (imageBytes, params) => {
+      captured = { imageBytes, params }
+      throw sentinel
+    },
+    cancel: async () => {}
+  }
+
+  try {
+    await upscaler.upscale(new Uint8Array([1, 2, 3]))
+    t.fail('should have thrown')
+  } catch (err) {
+    t.is(err, sentinel, 'fake addon receives the upscale request')
+  }
+
+  t.ok(captured, 'captured params passed to addon')
+  t.is(captured.params.repeats, 1, 'missing repeats defaults to 1')
+})
+
+test('EsrganUpscaler | upscale rejects invalid repeats', async (t) => {
+  const upscaler = new EsrganUpscaler({
+    files: {
+      esrgan: '/tmp/RealESRGAN_x4plus_anime_6B.pth'
+    },
+    config: { upscaler_tile_size: 128 },
+    logger: console
+  })
+
+  const invalidRepeats = [0, -1, 1.5, '2', true]
+  for (const repeats of invalidRepeats) {
+    try {
+      await upscaler.upscale(new Uint8Array([1, 2, 3]), { repeats })
+      t.fail(`should have thrown for repeats=${repeats}`)
+    } catch (err) {
+      t.ok(
+        /upscale\.repeats must be a positive integer/.test(err.message),
+        `rejects invalid repeats=${repeats}`
+      )
+    }
+  }
 })
 
 // ---------- FLUX img2img prediction guard ----------

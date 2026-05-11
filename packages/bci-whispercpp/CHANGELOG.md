@@ -20,7 +20,7 @@ signal transcription addon powered by a BCI-patched fork of whisper.cpp.
 - `./addonLogging` subpath exposing `setLogger` / `releaseLogger` for wiring a
   native log handler.
 - C++ native addon (`NeuralProcessor`, `BCIModel`, `BCIConfig`) using the
-  `qvac-lib-inference-addon-cpp` framework, with BCI-specific preprocessing
+  `inference-addon-cpp` framework, with BCI-specific preprocessing
   (Gaussian smoothing, low-rank day projection, softsign non-linearity) and
   mel-layout injection into a patched whisper.cpp encoder.
 - Integration tests for load/destroy, batch transcription, and a 5-sample
