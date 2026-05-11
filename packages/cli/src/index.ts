@@ -105,7 +105,7 @@ function setupCli (): void {
           formatVerifyDepsResult,
           hasNativeChanges,
           verifyDeps
-        } = await import('./verify-deps/index.js')
+        } = await import('./verify/deps/index.js')
         const result = await verifyDeps({
           projectRoot: process.cwd(),
           base: options.base,

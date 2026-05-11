@@ -10,12 +10,12 @@ import {
   packageNameFromNpmLockPath,
   parseNpmPackageLock,
   UnsupportedLockfileError
-} from '../src/verify-deps/npm-lockfile.js'
+} from '../src/verify/deps/npm-lockfile.js'
 import {
   collectNativePackages,
   type NativePackage,
   type UnclassifiedPackage
-} from '../src/verify-deps/native-packages.js'
+} from '../src/verify/deps/native-packages.js'
 import {
   diffUnknownRemovedPackages,
   diffNativePackages,
@@ -25,7 +25,7 @@ import {
   hasUnclassifiedPackages,
   resolveLockfilePackageRoot,
   verifyDeps
-} from '../src/verify-deps/index.js'
+} from '../src/verify/deps/index.js'
 
 async function withTempDir (fn: (dir: string) => Promise<void> | void): Promise<void> {
   const dir = fs.realpathSync(
