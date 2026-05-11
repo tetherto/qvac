@@ -46,17 +46,17 @@ The JS SDK is cross-platform, type-safe, and pluggable, exposing all QVAC capabi
 {/* <Task name>: <what computation is performed> for <what the developer achieves> via <engine> */}
 {/* <task>: <tech process> for <use case>, via <engine> */}
 
-* [**Completion:**](/ai-capabilities/text-generation) LLM inference for text generation and chat via [`qvac-fabric-llm.cpp`](https://github.com/tetherto/qvac-fabric-llm.cpp).
+* [**Text generation:**](/ai-capabilities/text-generation) LLM inference for text generation and chat via [`qvac-fabric-llm.cpp`](https://github.com/tetherto/qvac-fabric-llm.cpp).
 * [**Text embeddings:**](/ai-capabilities/text-embeddings) vector embedding generation for semantic search, clustering, and retrieval, via `qvac-fabric-llm.cpp`.
-* [**Translation:**](/ai-capabilities/translation) text-to-text neural machine translation (NMT), via `qvac-fabric-llm.cpp` and [Bergamot](https://browser.mt).
-* [**Transcription:**](/ai-capabilities/transcription) automatic speech recognition (ASR) for speech-to-text via [`qvac-ext-lib-whisper.cpp`](https://github.com/tetherto/qvac-ext-lib-whisper.cpp) or [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2).
-* [**Text-to-Speech:**](/ai-capabilities/text-to-speech) speech synthesis for text-to-speech (TTS) via [ONNX Runtime](https://onnxruntime.ai).
-* [**OCR:**](/ai-capabilities/ocr) optical character recognition (OCR) for extracting text from images via ONNX runtime.
-* [**Image generation:**](/ai-capabilities/image-generation) text-to-image and image-to-image generation via [`qvac-ext-stable-diffusion.cpp`](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp).
-* [**Multimodal:**](/ai-capabilities/multimodal) LLM inference over text, images, and other media within a single conversation context.
-* [**Fine-tuning:**](/ai-capabilities/fine-tuning) adapting LLMs to domain-specific tasks via LoRA.
 * [**RAG:**](/ai-capabilities/rag) out-of-the-box retrieval-augmented generation workflow.
-* [**Voice assistant:**](/ai-capabilities/voice-assistant) real-time voice conversation pipeline chaining transcription, LLM completion, and text-to-speech.
+* [**Fine-tuning:**](/ai-capabilities/fine-tuning) adapting LLMs to domain-specific tasks via LoRA.
+* [**Multimodal:**](/ai-capabilities/multimodal) LLM inference over text, images, and other media within a single conversation context.
+* [**Image generation:**](/ai-capabilities/image-generation) text-to-image and image-to-image generation via a customized Diffusion engine.
+* [**Transcription:**](/ai-capabilities/transcription) automatic speech recognition (ASR) for speech-to-text via a customized Whisper engine or [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2).
+* [**Text-to-Speech:**](/ai-capabilities/text-to-speech) speech synthesis for text-to-speech (TTS) via [ONNX Runtime](https://onnxruntime.ai).
+* [**Voice assistant:**](/ai-capabilities/voice-assistant) real-time voice conversation pipeline chaining transcription, text generation, and text-to-speech.
+* [**Translation:**](/ai-capabilities/translation) text-to-text neural machine translation (NMT), via `qvac-fabric-llm.cpp` and [Bergamot](https://browser.mt).
+* [**OCR:**](/ai-capabilities/ocr) optical character recognition (OCR) for extracting text from images via ONNX runtime.
 
 ### P2P capabilities
 

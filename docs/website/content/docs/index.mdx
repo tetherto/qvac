@@ -1,21 +1,14 @@
 ---
 title: "QVAC by Tether: the Infinite Stable Intelligence Platform"
-description: QVAC is a local AI JS/TS SDK for building local-first, peer-to-peer AI applications and systems. With QVAC, you can run AI tasks like LLMs, speech, RAG, and more locally across Linux, macOS, Windows, Android, and iOS — or delegate inference to peers using its built-in P2P capabilities.
+description: A local AI SDK for building cross-platform, P2P applications and systems.
 ogImage: /og-home.png
 ---
 
-import { MessagesSquare, Hash, Languages, Mic, Volume2, ScanText, Image as ImageIcon, GalleryHorizontal, FlaskConical, ScanSearch, Map, Rocket, Server, MonitorPlay } from 'lucide-react'
+import { MessagesSquare, Hash, Languages, Mic, Speech, Volume2, ScanText, Image as ImageIcon, GalleryHorizontal, FlaskConical, ScanSearch, Map, Rocket, Server, MonitorPlay } from 'lucide-react'
 
-## Key features
+## Features
 
-- **Local-first:** load AI models and perform inference on your own machine. No third-party APIs, SaaS, or cloud involved.
-- **P2P:** build unstoppable internet systems — like BitTorrent, IPFS, and blockchain networks, but for AI.
-- **Cross-platform:** consistent developer experience across hardware, operating systems, and JS runtime environments — write code once, run it everywhere.
-- **Unified interface:** multiple AI tasks, one single npm package to install in your project.
-- **Type-safe:** typed JS API.
-- **Pluggable**: build lean apps by including only what you need, and extend the SDK with custom plugins.
-- **Open source:** 100% free to use and modify, released under Apache 2.0 license.
-- **OpenAI-compatible API:** via an additional HTTP server to integrate with the broader AI ecosystem.
+<FeaturesInfographic />
 
 ## AI capabilities
 
@@ -23,35 +16,38 @@ import { MessagesSquare, Hash, Languages, Mic, Volume2, ScanText, Image as Image
 {/* <task>: <tech process> for <use case>, via <engine> */}
 
 <Cards className="grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-  <Card href="/ai-capabilities/text-generation" title={<span className="inline-flex items-center gap-2"><MessagesSquare className="size-4 text-[var(--color-fd-primary)]" />Completion</span>}>
-    LLM inference for text generation and chat via Fabric LLM.
+  <Card href="/ai-capabilities/text-generation" title={<span className="inline-flex items-center gap-2"><MessagesSquare className="size-4 text-[var(--color-fd-primary)]" />Text generation</span>}>
+    LLM inference for text generation and chat via [Fabric LLM](https://github.com/tetherto/qvac-fabric-llm.cpp).
   </Card>
   <Card href="/ai-capabilities/text-embeddings" title={<span className="inline-flex items-center gap-2"><Hash className="size-4 text-[var(--color-fd-primary)]" />Text embeddings</span>}>
     Vector embedding generation for semantic search, clustering, and retrieval, via Fabric LLM.
   </Card>
-  <Card href="/ai-capabilities/translation" title={<span className="inline-flex items-center gap-2"><Languages className="size-4 text-[var(--color-fd-primary)]" />Translation</span>}>
-    Text-to-text neural machine translation (NMT), via Fabric LLM and [Bergamot](https://browser.mt).
-  </Card>
-  <Card href="/ai-capabilities/transcription" title={<span className="inline-flex items-center gap-2"><Mic className="size-4 text-[var(--color-fd-primary)]" />Transcription</span>}>
-    Automatic speech recognition (ASR) via [`qvac-ext-lib-whisper.cpp`](https://github.com/tetherto/qvac-ext-lib-whisper.cpp) or [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2).
-  </Card>
-  <Card href="/ai-capabilities/text-to-speech" title={<span className="inline-flex items-center gap-2"><Volume2 className="size-4 text-[var(--color-fd-primary)]" />Text-to-Speech</span>}>
-    Speech synthesis (TTS) via [ONNX Runtime](https://onnxruntime.ai).
-  </Card>
-  <Card href="/ai-capabilities/ocr" title={<span className="inline-flex items-center gap-2"><ScanText className="size-4 text-[var(--color-fd-primary)]" />OCR</span>}>
-    Optical character recognition for extracting text from images via ONNX Runtime.
-  </Card>
-  <Card href="/ai-capabilities/image-generation" title={<span className="inline-flex items-center gap-2"><ImageIcon className="size-4 text-[var(--color-fd-primary)]" />Image generation</span>}>
-    Text-to-image generation via [`qvac-ext-stable-diffusion.cpp`](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp).
-  </Card>
-  <Card href="/ai-capabilities/multimodal" title={<span className="inline-flex items-center gap-2"><GalleryHorizontal className="size-4 text-[var(--color-fd-primary)]" />Multimodal</span>}>
-    LLM inference over text, images, and other media within a single conversation context.
+  <Card href="/ai-capabilities/rag" title={<span className="inline-flex items-center gap-2"><ScanSearch className="size-4 text-[var(--color-fd-primary)]" />RAG</span>}>
+    Out-of-the-box retrieval-augmented generation workflow.
   </Card>
   <Card href="/ai-capabilities/fine-tuning" title={<span className="inline-flex items-center gap-2"><FlaskConical className="size-4 text-[var(--color-fd-primary)]" />Fine-tuning</span>}>
     Adapting LLMs to domain-specific tasks via LoRA.
   </Card>
-  <Card href="/ai-capabilities/rag" title={<span className="inline-flex items-center gap-2"><ScanSearch className="size-4 text-[var(--color-fd-primary)]" />RAG</span>}>
-    Out-of-the-box retrieval-augmented generation workflow.
+  <Card href="/ai-capabilities/multimodal" title={<span className="inline-flex items-center gap-2"><GalleryHorizontal className="size-4 text-[var(--color-fd-primary)]" />Multimodal</span>}>
+    LLM inference over text, images, and other media within a single conversation context.
+  </Card>
+  <Card href="/ai-capabilities/image-generation" title={<span className="inline-flex items-center gap-2"><ImageIcon className="size-4 text-[var(--color-fd-primary)]" />Image generation</span>}>
+    Text-to-image and image-to-image generation via a customized [Diffusion](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp) engine.
+  </Card>
+  <Card href="/ai-capabilities/transcription" title={<span className="inline-flex items-center gap-2"><Speech className="size-4 text-[var(--color-fd-primary)]" />Transcription</span>}>
+    Automatic speech recognition (ASR) via a customized [Whisper](https://github.com/tetherto/qvac-ext-lib-whisper.cpp) engine or [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2).
+  </Card>
+  <Card href="/ai-capabilities/text-to-speech" title={<span className="inline-flex items-center gap-2"><Volume2 className="size-4 text-[var(--color-fd-primary)]" />Text-to-Speech</span>}>
+    Speech synthesis (TTS) via [ONNX Runtime](https://onnxruntime.ai).
+  </Card>
+  <Card href="/ai-capabilities/voice-assistant" title={<span className="inline-flex items-center gap-2"><Mic className="size-4 text-[var(--color-fd-primary)]" />Voice assistant</span>}>
+    Real-time voice pipeline: transcription, text generation, and speech synthesis in one loop.
+  </Card>
+  <Card href="/ai-capabilities/translation" title={<span className="inline-flex items-center gap-2"><Languages className="size-4 text-[var(--color-fd-primary)]" />Translation</span>}>
+    Text-to-text neural machine translation (NMT), via Fabric LLM and [Bergamot](https://browser.mt).
+  </Card>
+  <Card href="/ai-capabilities/ocr" title={<span className="inline-flex items-center gap-2"><ScanText className="size-4 text-[var(--color-fd-primary)]" />OCR</span>}>
+    Optical character recognition for extracting text from images via ONNX Runtime.
   </Card>
 </Cards>
 

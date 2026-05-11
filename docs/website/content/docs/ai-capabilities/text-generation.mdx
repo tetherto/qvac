@@ -1,18 +1,18 @@
 ---
-title: Completion
+title: Text generation
 description: LLM inference for text generation and chat — i.e., use a large language model to generate text output based on input prompts and context.
 schemaType: HowTo
 ---
 
 ## Overview
 
-Completion uses [`qvac-fabric-llm.cpp`](https://github.com/tetherto/qvac-fabric-llm.cpp) as inference engine. Load any supported model using `modelType: "llm"`. Then, provide array `history` as input where each element is an object with properties: 
+Text generation uses [`qvac-fabric-llm.cpp`](https://github.com/tetherto/qvac-fabric-llm.cpp) as inference engine. Load any supported model using `modelType: "llm"`. Then, provide array `history` as input where each element is an object with properties: 
 - `role: string`; can be either `"user"` or `"assistant"` 
 - `content: string`
 
 `role: "user"` indicates that `content` is a previous prompt.  `role: "assistant"` indicates that `content` is a previous inference (LLM output).
 
-Completion output is generated based on the full sequence of messages provided in `history`.
+Output is generated based on the full sequence of messages provided in `history`.
 
 ## Functions
 

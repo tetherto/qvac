@@ -10,13 +10,13 @@ A voice assistant chains three AI capabilities into a continuous conversation lo
 ```mermaid
 flowchart LR
     Mic([Microphone]) -->|PCM audio| ASR[ASR<br/>Whisper + Silero VAD]
-    ASR -->|utterance| LLM[LLM<br/>completion]
+    ASR -->|utterance| LLM[LLM<br/>text generation]
     LLM -->|response text| TTS[TTS<br/>Supertonic]
     TTS -->|audio| Spk([Speakers])
     Spk -.conversation loop.-> Mic
 
     click ASR "/ai-capabilities/transcription" "Transcription"
-    click LLM "/ai-capabilities/text-generation" "Completion"
+    click LLM "/ai-capabilities/text-generation" "Text generation"
     click TTS "/ai-capabilities/text-to-speech" "Text-to-speech"
 ```
 

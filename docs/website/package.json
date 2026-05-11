@@ -25,6 +25,7 @@
   "dependencies": {
     "@ai-sdk/openai-compatible": "^1.0.29",
     "@ai-sdk/react": "^2.0.118",
+    "@iconify/react": "^6.0.2",
     "@icons-pack/react-simple-icons": "^13.8.0",
     "@inkeep/cxkit-react": "^0.5.111",
     "@next/third-parties": "^16.2.0",

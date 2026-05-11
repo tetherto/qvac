@@ -1,12 +1,12 @@
 ---
 title: Image generation
-description: Text-to-image and image-to-image generation using Stable Diffusion.
+description: Text-to-image and image-to-image generation using a customized Diffusion engine.
 schemaType: HowTo
 ---
 
 ## Overview
 
-Image generation uses [`qvac-ext-stable-diffusion.cpp`](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp) as the inference engine. Load a supported model using `modelType: "diffusion"`. Then, provide a text `prompt` describing the image to generate.
+Image generation runs on a **customized Diffusion engine** ([`qvac-ext-stable-diffusion.cpp`](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp)). Load a supported model using `modelType: "diffusion"`. Then, provide a text `prompt` describing the image to generate.
 
 For image-to-image, also pass `init_image` (a `Uint8Array` of PNG bytes) — the model transforms the input guided by the prompt instead of starting from noise.
 

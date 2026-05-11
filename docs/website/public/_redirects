@@ -20,3 +20,9 @@
 
 /sdk/release-notes/v0.9.1/   /sdk/release-notes/v0.9.1/index.html   200
 /sdk/release-notes/v0.9.1    /sdk/release-notes/v0.9.1/index.html   200
+
+# Legacy paths — links from qvac.tether.io and older bookmarks (301 → current IA).
+/sdk/getting-started/quickstart/   /quickstart/   301
+/sdk/getting-started/quickstart    /quickstart/   301
+/about-qvac/vision/   /about/vision/   301
+/about-qvac/vision    /about/vision/   301

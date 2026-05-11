@@ -18,9 +18,9 @@ All the built-in plugins you can select, along with the AI tasks that depend on 
 
 | Plugin | Use in `qvac.config.*` | AI tasks that require it |
 | --- | --- | --- |
-| LLM | `@qvac/sdk/llamacpp-completion/plugin` | [Completion](/ai-capabilities/text-generation); [multimodal](/ai-capabilities/multimodal); [RAG](/ai-capabilities/rag) ; [Fine-tuning](/ai-capabilities/fine-tuning) |
+| LLM | `@qvac/sdk/llamacpp-completion/plugin` | [Text generation](/ai-capabilities/text-generation); [multimodal](/ai-capabilities/multimodal); [RAG](/ai-capabilities/rag) ; [Fine-tuning](/ai-capabilities/fine-tuning) |
 | Embeddings | `@qvac/sdk/llamacpp-embedding/plugin` | [Text embeddings](/ai-capabilities/text-embeddings); [RAG](/ai-capabilities/rag) |
-| ASR with `qvac-ext-lib-whisper.cpp` | `@qvac/sdk/whispercpp-transcription/plugin` | [Transcription](/ai-capabilities/transcription) |
+| ASR with customized Whisper engine | `@qvac/sdk/whispercpp-transcription/plugin` | [Transcription](/ai-capabilities/transcription) |
 | ASR with Parakeet | `@qvac/sdk/parakeet-transcription/plugin` | [Transcription](/ai-capabilities/transcription) |
 | NMT | `@qvac/sdk/nmtcpp-translation/plugin` | [Translation](/ai-capabilities/translation) |
 | TTS | `@qvac/sdk/onnx-tts/plugin` | [Text-to-Speech](/ai-capabilities/text-to-speech) |
