@@ -11,7 +11,7 @@ schemaType: APIReference
 
 ## Models
 
-Supports SD1.x, SD2.x, SDXL, SD3, and FLUX.2-klein model families.
+Supports FLUX.2-klein, SD1.x, SD2.x, SDXL, and SD3 model families.
 
 ### FLUX.2-klein
 
@@ -205,7 +205,7 @@ const args = {
 | Property | Required | Description |
 |----------|----------|-------------|
 | `files` | ✅ | Object of absolute paths to model files (see below) |
-| `files.model` | ✅ | Absolute path to diffusion model file (all-in-one for SD1.x/2.x; diffusion-only GGUF for FLUX.2) |
+| `files.model` | ✅ | Absolute path to diffusion model file (diffusion-only GGUF for FLUX.2; all-in-one for SD1.x/2.x) |
 | `files.clipL` | — | Absolute path to separate CLIP-L text encoder (SD3) |
 | `files.clipG` | — | Absolute path to separate CLIP-G text encoder (SDXL / SD3) |
 | `files.t5Xxl` | — | Absolute path to separate T5-XXL text encoder (SD3) |
