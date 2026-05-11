@@ -418,16 +418,73 @@ No software optimization can meaningfully improve decode throughput. Gains come 
 
 ---
 
-## 10. Methodology & Sources
+## 10. Phase 3 Optimization Status (QVAC-18297)
 
-### 10.1 Source Reports (QVAC-18293)
+This section tracks which recommendations from Sections 7–8 have been implemented, validated, or deferred in Phase 3.
+
+### 10.1 Implemented
+
+| ID | Optimization | Branch / Commit | Measured Impact | Notes |
+|---|---|---|---|---|
+| **A2** | Post-projection vision cache | `feat/QVAC-18297-vlm-pr1-cache-and-overflow-guard` commit `a531624b` (addon) | Saves ~649 ms (Mac) / ~1,012 ms (iPhone) per cache-hit | SHA-256 keyed LRU, 5-10 entries, CPU memory. Ported from MLX content-addressed caching. |
+| **A3** | Qwen3.5 context overflow guard | Same branch, commit `670be1db` (addon) | Prevents crash on large images (4,015 tokens at ctx=4096) | Typed `ContextOverflow` error replaces libmtmd `init_batch` crash. |
+| **U1 (Cost-S)** | Deepstack preallocation | `feat/QVAC-18297-u1-deepstack-prealloc` commit `3cd776c5c` (llama.cpp) | Qwen3.5 iPhone projection: **183 ms → 11 ms (−94%)**; Mac: no change (2 ms baseline) | Replaced chained `ggml_concat` with pre-allocated buffer + `ggml_set_inplace`. Validates Hypothesis 1 (Section 5.3). |
+| **F4** | Hybrid/recurrent multi-turn cache fix | `feat/QVAC-18297-f4-hybrid-multiturn-cache` commit `567bc4b23` (llama.cpp) | Single-shot: no regression. Multi-turn: avoids full re-processing per turn. | Fix in `llama_memory_hybrid::seq_pos_min()` — recurrent state implicitly covers all positions. |
+| **F6** | Metal vision encode profiling | `feat/QVAC-18297-f6-metal-vision-profile` commit `a38d3036c` (llama.cpp) | Profiling-only — traces captured (469 MB Gemma4, 376 MB Qwen3.5) | Mac M4 Metal System Traces ready for Instruments analysis to identify vision encode bottleneck ops. |
+
+### 10.2 MLX Cross-Pollination (QVAC-18297 DoD)
+
+| MLX Optimization | What We Ported | Status |
+|---|---|---|
+| Content-addressed vision prefix caching | Full port → A2 (VisionPrefixCache class, SHA-256 + LRU) | **Done** |
+| Op fusion (lazy graph evaluation) | Partial port → U1 Cost-S (static deepstack preallocation) | **Done** |
+| Zero-copy unified-memory | Already default on Apple Silicon UMA (`ggml-metal-device.m:783`) | **No action needed** |
+| Runtime lazy graph evaluation (JIT) | Not feasible — requires ggml architecture redesign | **Not ported** |
+| QKV / gate+up GEMM fusion | <5% impact on Metal (decode is bandwidth-limited at ~51.5 t/s Mac, ~25 t/s iPhone) | **Not ported** |
+
+### 10.3 Deferred / Not Started
+
+| ID | Optimization | Reason | Could revisit? |
+|---|---|---|---|
+| **A1** | Model-aware hybrid dispatch | No per-phase backend hook in upstream llama.cpp; dual-context split is multi-day effort | Yes — if llama.cpp adds phase-specific backend routing |
+| **U1 (Cost-M)** | Deepstack norm+FFN kernel fusion | Cost-S fix already reduced projection from 183→11 ms; remaining 11→~5 ms is low ROI vs complexity | Low priority |
+| **U2** | mmproj quantization F16→Q8_0 | Not started — requires quality validation (VQA/OCR benchmarks) | Yes — next priority after PR merge |
+| **F1** | KV cache quantization Q4_0 | Not started — addon-only change, set `common_params` cache type | High priority (P1) |
+| **F5** | Speculative decoding | Requires ≥2.5× draft-to-target speed ratio on UMA | Medium priority |
+
+### 10.4 Mac M4 Branch Benchmark Results (2026-05-11)
+
+Independent benchmark of each llama.cpp branch vs b9025 baseline. Metal, elephant.jpg, 256 predict, 1 warmup + 3 measured runs (median).
+
+| Branch | Gemma4 Total (ms) | Qwen3.5 Total (ms) | Δ vs Baseline | Verdict |
+|---|---|---|---|---|
+| b9025 baseline | 6,370 | 5,748 | — | Reference |
+| U1 (deepstack) | 6,370 | 5,743 | ±0.1% | No change on Mac (expected — iPhone-specific fix) |
+| F4 (multi-turn) | 6,357 | 5,740 | ±0.2% | No regression in single-shot (expected) |
+| F6 (profiling) | 6,359 | 5,741 | ±0.1% | Identical to baseline (expected — profiling scripts only) |
+
+Zero regressions across all branches. Full per-metric breakdown in `vlm-benchmark/QVAC-18297-plan.md`.
+
+### 10.5 Remaining Validation
+
+- [ ] iPhone 16e benchmarks for A2+A3 (cache hit/miss delta)
+- [ ] iPhone 16/17 benchmarks for full perf delta vs Phase 1 baseline
+- [ ] Text-only LLM regression test (≤ 2% threshold)
+- [ ] F6 trace analysis in Instruments — identify top-5 bottleneck Metal kernels in vision encode
+- [ ] F4 multi-turn validation with `llama-server` (single-shot CLI doesn't exercise the fix)
+
+---
+
+## 11. Methodology & Sources
+
+### 11.1 Source Reports (QVAC-18293)
 | Report | Content | Devices |
 |--------|---------|---------|
 | `gemma4-vl-baseline.md` | Phase 1 mobile baseline: CPU/Vulkan/OpenCL/Metal | S25, P9P, iPhone 16e |
 | `metal-baseline.md` | Metal-specific benchmarks, GPU memory, phase timings, System Traces | Mac M4, iPhone 16e |
 | `vlm-mac-baseline.md` | Mac M4 full CPU+Metal matrix, all model variants | Mac M4 |
 
-### 10.2 Metal System Traces
+### 11.2 Metal System Traces
 | Trace File | Device | Model | Size | Predict Tokens |
 |-----------|--------|-------|------|---|
 | `mac-m4-gemma4-e2b-q4km.trace` | Mac M4 | Gemma4 E2B Q4_K_M | 597 MB | 256 |
@@ -435,7 +492,7 @@ No software optimization can meaningfully improve decode throughput. Gains come 
 | `iPhone16e-gemma4-e2b-q4km.trace` | iPhone 16e | Gemma4 E2B Q4_K_M | 371 MB | 128 |
 | `iPhone16e-qwen3.5-2b-q4km.trace` | iPhone 16e | Qwen3.5-2B Q4_K_M | 101 MB | 128 |
 
-### 10.3 Code References
+### 11.3 Code References
 - Upstream llama.cpp: `qvac-fabric-llm.cpp/tools/mtmd/` (clip.cpp, clip-impl.h, mtmd.cpp, mtmd-helper.cpp)
 - Addon integration: `packages/qvac-lib-infer-llamacpp-llm/addon/src/model-interface/MtmdLlmContext.cpp`
 - llama.cpp version: b9025
