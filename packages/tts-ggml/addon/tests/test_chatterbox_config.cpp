@@ -142,7 +142,7 @@ TEST(ChatterboxValidate, ConfigDefaultLanguageIsEnglish) {
 
 TEST(ChatterboxValidate, ConfigUseGpuDefaultIsFalse) {
   ChatterboxConfig cfg;
-  EXPECT_FALSE(cfg.useGpu);
+  EXPECT_FALSE(cfg.useGpu.has_value());
   EXPECT_FALSE(cfg.seed.has_value());
   EXPECT_FALSE(cfg.threads.has_value());
   EXPECT_FALSE(cfg.nGpuLayers.has_value());

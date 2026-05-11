@@ -33,8 +33,17 @@ struct ChatterboxConfig {
   std::optional<int> nGpuLayers;
   /** Post-processing output sample rate.  Currently unused (engine always emits 24 kHz). */
   std::optional<int> outputSampleRate;
-  /** Shortcut: if true and nGpuLayers unset, maps to nGpuLayers=99. */
-  bool useGpu = false;
+  /**
+   * Tri-state GPU intent:
+   *   - std::nullopt: unspecified, let the engine use its library default.
+   *   - true:         if nGpuLayers unset, maps to nGpuLayers=99.
+   *   - false:        if nGpuLayers unset, forces nGpuLayers=0 (CPU).
+   *
+   * Conflicts with nGpuLayers (true + 0, or false + !=0) are rejected
+   * by ChatterboxModel::validateConfig so callers can't silently get
+   * the opposite backend they asked for.
+   */
+  std::optional<bool> useGpu;
   /**
    * Native streaming controls.  When `streamChunkTokens > 0` and the
    * caller passes a chunk callback on the job input, the engine runs

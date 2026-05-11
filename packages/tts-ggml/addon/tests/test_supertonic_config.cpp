@@ -137,7 +137,7 @@ TEST(SupertonicValidate, WaitForLoadInitializationDelegatesToLoad) {
 TEST(SupertonicValidate, ConfigDefaultsAreCpuFriendly) {
   SupertonicConfig cfg;
   EXPECT_EQ(cfg.language, "en");
-  EXPECT_FALSE(cfg.useGpu);
+  EXPECT_FALSE(cfg.useGpu.has_value());
   EXPECT_FALSE(cfg.nGpuLayers.has_value());
   EXPECT_FALSE(cfg.steps.has_value());
   EXPECT_FALSE(cfg.speed.has_value());

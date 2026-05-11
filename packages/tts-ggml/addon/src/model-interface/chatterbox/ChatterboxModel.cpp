@@ -36,8 +36,11 @@ tts_cpp::chatterbox::EngineOptions toEngineOptions(const ChatterboxConfig& cfg) 
   if (cfg.threads.has_value()) opts.n_threads    = *cfg.threads;
   if (cfg.nGpuLayers.has_value()) {
     opts.n_gpu_layers = *cfg.nGpuLayers;
-  } else if (cfg.useGpu) {
-    opts.n_gpu_layers = 99;
+  } else if (cfg.useGpu.has_value()) {
+    // Explicit useGpu must produce an explicit n_gpu_layers so we don't
+    // depend on the tts-cpp library default flipping out from under us
+    // (see also: gpu-smoke.test.js asserts backendDevice from this).
+    opts.n_gpu_layers = *cfg.useGpu ? 99 : 0;
   }
   if (cfg.streamChunkTokens.has_value())      opts.stream_chunk_tokens       = *cfg.streamChunkTokens;
   if (cfg.streamFirstChunkTokens.has_value()) opts.stream_first_chunk_tokens = *cfg.streamFirstChunkTokens;
@@ -79,6 +82,23 @@ ChatterboxModel::ChatterboxModel(ChatterboxConfig config)
 ChatterboxModel::~ChatterboxModel() noexcept = default;
 
 void ChatterboxModel::validateConfig(const ChatterboxConfig& cfg) {
+  if (cfg.useGpu.has_value() && cfg.nGpuLayers.has_value()) {
+    const bool wantsGpu = *cfg.useGpu;
+    const int  layers   = *cfg.nGpuLayers;
+    // `layers != 0` (rather than `layers > 0`) so a llama.cpp-style
+    // sentinel like nGpuLayers=-1 ("offload all layers") is treated as
+    // "wants GPU" and doesn't falsely pass through against useGPU:true.
+    const bool layersWantGpu = layers != 0;
+    if (wantsGpu != layersWantGpu) {
+      throw StatusError(
+          general_error::InvalidArgument,
+          std::string("ChatterboxModel: useGPU=") +
+              (wantsGpu ? "true" : "false") +
+              " conflicts with nGpuLayers=" + std::to_string(layers) +
+              ". Either drop one of the two, or make them agree "
+              "(useGPU:true + nGpuLayers!=0, or useGPU:false + nGpuLayers=0).");
+    }
+  }
   if (cfg.t3ModelPath.empty()) {
     throw StatusError(general_error::InvalidArgument, "t3ModelPath is required");
   }

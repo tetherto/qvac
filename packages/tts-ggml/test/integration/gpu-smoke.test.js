@@ -29,7 +29,8 @@ const proc = require('bare-process')
 const test = require('brittle')
 
 const { loadChatterboxTTS, runChatterboxTTS } = require('../utils/runChatterboxTTS')
-const { ensureChatterboxModels } = require('../utils/downloadModel')
+const { loadSupertonicTTS, runSupertonicTTS } = require('../utils/runSupertonicTTS')
+const { ensureChatterboxModels, ensureSupertonicModel } = require('../utils/downloadModel')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
@@ -104,6 +105,23 @@ function assertGpuBackend (t, engineTag, stats) {
   }
 }
 
+// Companion to assertGpuBackend: when the caller passes useGPU=false we
+// expect the engine to actually pick the CPU backend.  This is the gate
+// that prevents `useGPU=false` from silently still running on GPU when
+// the underlying tts-cpp library default is non-zero n_gpu_layers.
+function assertCpuBackend (t, engineTag, stats) {
+  if (!stats) {
+    t.fail(`${engineTag}/CPU: no response.stats returned (cannot verify backend)`)
+    return
+  }
+  const dev = stats.backendDevice
+  const id = stats.backendId
+  const name = backendIdToName(id)
+  console.log(`[${engineTag}/CPU] backendDevice=${dev} backendId=${id} (${name})`)
+  t.is(dev, 0, `${engineTag}: useGPU:false must resolve to backendDevice=0 (CPU), got ${name}`)
+  t.is(id, 0, `${engineTag}: useGPU:false must resolve to backendId=0 (CPU), got ${name}`)
+}
+
 test('Chatterbox GPU smoke - useGPU=true must engage the GPU backend on GPU-capable platforms', { timeout: 600000, skip: NO_GPU }, async (t) => {
   const baseDir = getBaseDir()
   const modelsDir = path.join(baseDir, 'models')
@@ -160,4 +178,83 @@ test('Supertonic GPU smoke - useGPU=true is rejected at constructor (engine is C
       'rejection message tells user how to fix')
   }
   t.ok(threw, 'TTSGgml constructor should throw on Supertonic + useGPU:true')
+})
+
+// CPU smoke: useGPU:false must actually pin the engine to CPU on every
+// platform (no NO_GPU skip — CPU is expected to work everywhere).  This
+// is the counterpart to the GPU smoke above and exists because the
+// previous tts-ggml behaviour left n_gpu_layers at the tts-cpp library
+// default when useGPU:false was passed without an explicit nGpuLayers,
+// which could silently fall back to GPU.  Now that ChatterboxModel /
+// SupertonicModel translate explicit useGPU=false → n_gpu_layers=0,
+// these tests lock that contract in.
+test('Chatterbox CPU smoke - useGPU=false must run on the CPU backend', { timeout: 600000 }, async (t) => {
+  const baseDir = getBaseDir()
+  const modelsDir = path.join(baseDir, 'models')
+
+  const download = await ensureChatterboxModels({ targetDir: modelsDir })
+  if (!download.success) {
+    t.pass('Skipped: Chatterbox GGUFs not available locally')
+    return
+  }
+
+  const refWavPath = path.join(__dirname, '..', 'reference-audio', 'jfk.wav')
+  if (!fs.existsSync(refWavPath)) {
+    t.pass('Skipped: reference audio missing')
+    return
+  }
+
+  const model = await loadChatterboxTTS({
+    modelDir: download.targetDir,
+    refWavPath,
+    language: 'en',
+    useGPU: false
+  })
+  try {
+    const result = await runChatterboxTTS(
+      model,
+      { text: 'CPU smoke check.' },
+      { minSamples: 5000 }
+    )
+    console.log(result.output)
+    t.ok(result.passed, 'Chatterbox/CPU produced expected sample count')
+    t.ok(result.data.sampleCount > 0, 'Chatterbox/CPU produced audio')
+    assertCpuBackend(t, 'Chatterbox', result.data.stats)
+  } finally {
+    try { await model.unload() } catch (_e) {}
+  }
+})
+
+test('Supertonic CPU smoke - useGPU=false must run on the CPU backend', { timeout: 600000 }, async (t) => {
+  const baseDir = getBaseDir()
+  const modelsDir = path.join(baseDir, 'models')
+
+  const download = await ensureSupertonicModel({ targetDir: modelsDir })
+  if (!download || !download.success) {
+    t.pass('Skipped: Supertonic GGUF not available locally')
+    return
+  }
+
+  const supertonicPath = download.path ||
+    path.join(modelsDir, 'supertonic.gguf')
+
+  const model = await loadSupertonicTTS({
+    supertonicModelPath: supertonicPath,
+    language: 'en',
+    voice: 'F1',
+    useGPU: false
+  })
+  try {
+    const result = await runSupertonicTTS(
+      model,
+      { text: 'CPU smoke check.' },
+      { minSamples: 5000 }
+    )
+    console.log(result.output)
+    t.ok(result.passed, 'Supertonic/CPU produced expected sample count')
+    t.ok(result.data.sampleCount > 0, 'Supertonic/CPU produced audio')
+    assertCpuBackend(t, 'Supertonic', result.data.stats)
+  } finally {
+    try { await model.unload() } catch (_e) {}
+  }
 })

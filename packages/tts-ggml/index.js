@@ -292,6 +292,28 @@ class TTSGgml {
     this._speed = speed
     this._noiseNpyPath = noiseNpyPath
 
+    // Run the conflict check before any engine-specific GPU policy so a
+    // caller passing { useGPU:false, nGpuLayers:99 } gets the precise
+    // conflict message instead of, e.g., the Supertonic "GPU not
+    // supported" branch firing on `nGpuLayers > 0` and confusing them.
+    // `layers != 0` (rather than `layers > 0`) so a future llama.cpp-
+    // style `nGpuLayers: -1` ("offload all layers") doesn't falsely
+    // pass through as "wants CPU" against an explicit useGPU:true.
+    if (
+      typeof this._config.useGPU === 'boolean' &&
+      this._nGpuLayers != null
+    ) {
+      const layersWantGpu = this._nGpuLayers !== 0
+      if (this._config.useGPU !== layersWantGpu) {
+        throw new Error(
+          'tts-ggml: useGPU=' + this._config.useGPU +
+          ' conflicts with nGpuLayers=' + this._nGpuLayers + '. ' +
+          'Either drop one of the two, or make them agree ' +
+          '(useGPU:true + nGpuLayers!=0, or useGPU:false + nGpuLayers=0).'
+        )
+      }
+    }
+
     if (this._engineType === ENGINE_SUPERTONIC) {
       if (this._streamChunkTokens != null || this._streamFirstChunkTokens != null) {
         throw new Error(
@@ -304,7 +326,7 @@ class TTSGgml {
       }
       const wantsGpu =
         this._config.useGPU === true ||
-        (this._nGpuLayers != null && this._nGpuLayers > 0)
+        (this._nGpuLayers != null && this._nGpuLayers !== 0)
       if (wantsGpu) {
         throw new Error(
           'tts-ggml: GPU execution is not supported by the Supertonic engine yet ' +

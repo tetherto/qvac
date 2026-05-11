@@ -68,10 +68,9 @@ std::string readOptionalString(
   return v.value_or(std::string{});
 }
 
-bool readOptionalBool(
-    js::Object obj, js_env_t* env, const char* key, bool fallback = false) {
-  auto b = obj.getOptionalPropertyAs<js::Boolean, bool>(env, key);
-  return b.value_or(fallback);
+std::optional<bool> readOptionalBool(
+    js::Object obj, js_env_t* env, const char* key) {
+  return obj.getOptionalPropertyAs<js::Boolean, bool>(env, key);
 }
 
 }
@@ -118,15 +117,11 @@ chatterbox::ChatterboxConfig JSAdapter::buildChatterboxConfig(
   cfg.streamChunkTokens       = readOptionalInt(configurationParams, env, "streamChunkTokens");
   cfg.streamFirstChunkTokens  = readOptionalInt(configurationParams, env, "streamFirstChunkTokens");
   cfg.streamCfmSteps          = readOptionalInt(configurationParams, env, "cfmSteps");
-  // The JS layer is the source of truth for useGPU: index.js only sets
-  // params.useGPU when _config.useGPU is non-null, so absence here means
-  // "not specified".  readOptionalBool collapses that to `false`, which
-  // is harmless today because nGpuLayers (also forwarded above) takes
-  // precedence in toEngineOptions when both are set.  If a future caller
-  // ever needs to distinguish "explicitly false" from "unset" on the C++
-  // side, switch this to std::optional<bool> + a readOptionalBoolOpt
-  // helper; today the explicit nGpuLayers always wins, so leave the
-  // implicit-false default in place.
+  // useGPU is tri-state on the C++ side: std::nullopt means "unspecified"
+  // (let the engine pick its default); true/false are explicit user
+  // intent.  ChatterboxModel::validateConfig rejects useGPU/nGpuLayers
+  // conflicts, and toEngineOptions translates explicit-false into
+  // n_gpu_layers=0 so CPU is actually forced.
   cfg.useGpu                  = readOptionalBool(configurationParams, env, "useGPU");
   return cfg;
 }
