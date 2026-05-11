@@ -18,14 +18,10 @@ bool isHarmonyModel(const ::llama_model* model);
 llama_token getHarmonyCallToken(::llama_context* lctx);
 std::optional<std::string> getModelArchitecture(const ::llama_model* model);
 bool supportsToolsCompactForModelMetadata(
-    const std::optional<std::string>& architecture,
-    const std::optional<std::string>& modelName);
+    const std::optional<std::string>& architecture);
 
-std::optional<std::string>
-selectToolsCompactMarker(const std::string& architecture);
 std::optional<std::string> selectToolsCompactMarkerForModelMetadata(
-    const std::optional<std::string>& architecture,
-    const std::optional<std::string>& modelName);
+    const std::optional<std::string>& architecture);
 
 /**
  * @brief Gets the appropriate chat template for a model
@@ -47,11 +43,15 @@ std::string getChatTemplate(
 
 /**
  * @brief Applies chat templates to generate a prompt, with fallback handling
- * for models that don't support tools
+ * for models that don't support tools.
+ *
+ * @p outThinkingForcedOpen (optional) receives the flag indicating that the
+ *    template force-opened the reasoning channel in the prompt suffix.
  */
 std::string getPrompt(
     const struct common_chat_templates* tmpls,
-    struct common_chat_templates_inputs& inputs);
+    struct common_chat_templates_inputs& inputs,
+    bool* outThinkingForcedOpen = nullptr);
 
 } // namespace utils
 } // namespace qvac_lib_inference_addon_llama

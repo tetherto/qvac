@@ -23,10 +23,10 @@ using namespace qvac_lib_inference_addon_llama::utils;
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 MtmdLlmContext::MtmdLlmContext(
-    common_params& commonParams, common_init_result&& llamaInit,
+    common_params& commonParams, common_init_result_ptr llamaInit,
     ToolsCompactController& tools)
     : tools_(tools), llamaInit_(std::move(llamaInit)), params_(commonParams),
-      model_(llamaInit_.model.get()), lctx_(llamaInit_.context.get()) {
+      model_(llamaInit_->model()), lctx_(llamaInit_->context()) {
 
   if (model_ == nullptr) {
     throw qvac_errors::StatusError(
@@ -145,8 +145,19 @@ bool MtmdLlmContext::checkAntiprompt() {
     // output. We search the full kNPrev-token window because a single token
     // can decode to many characters, and a short antiprompt like "\n" may
     // appear at the start of such a token, far from the string's tail.
+    // Matching is case-insensitive so callers don't have to list every
+    // casing variant the model might emit.
+    std::string lastOutputLower = lastOutput;
+    std::transform(
+        lastOutputLower.begin(), lastOutputLower.end(), lastOutputLower.begin(),
+        [](unsigned char c) { return std::tolower(c); });
     for (const std::string& antiprompt : params_.antiprompt) {
-      if (lastOutput.find(antiprompt) != std::string::npos) {
+      std::string antipromptLower = antiprompt;
+      std::transform(
+          antipromptLower.begin(), antipromptLower.end(),
+          antipromptLower.begin(),
+          [](unsigned char c) { return std::tolower(c); });
+      if (lastOutputLower.find(antipromptLower) != std::string::npos) {
         return true;
       }
     }
@@ -191,13 +202,14 @@ void MtmdLlmContext::tokenizeChat(
   }
 
   inputs.use_jinja = params_.use_jinja;
+  inputs.enable_thinking = params_.reasoning_budget != 0;
   inputs.messages = chatMsgs;
   inputs.add_generation_prompt = isLastMessageFromUser;
 
   if (!tools.empty()) {
     inputs.tools = tools;
   }
-  formattedChat = getPrompt(tmpls_.get(), inputs);
+  formattedChat = getPrompt(tmpls_.get(), inputs, &thinkingForcedOpen_);
 
   if (formattedChat.empty()) {
     std::string errorMsg = string_format(
@@ -232,6 +244,7 @@ void MtmdLlmContext::tokenizeChat(
     inputs.tools = {};
     inputs.add_generation_prompt = false;
     inputs.use_jinja = params_.use_jinja;
+    inputs.enable_thinking = params_.reasoning_budget != 0;
     auto promptNoTools = getPrompt(tmpls_.get(), inputs);
 
     if (!promptNoTools.empty()) {
@@ -425,6 +438,15 @@ bool MtmdLlmContext::generateResponse(
 
   int nRemain = params_.n_predict;
   LlamaBatch batch(1, 0, 1); // batch for next token generation
+
+  if (thinkingForcedOpen_ && outputCallback) {
+    // MtmdLlmContext doesn't carry a reasoningState_ (no reasoning-aware EOS
+    // replacement on the multimodal path today), so unlike TextLlmContext we
+    // only prepend the visible "<think>\n" opener and don't flip an
+    // inside_reasoning flag. If reasoning state is added here later, mirror
+    // TextLlmContext::generateResponse and set it true alongside this emit.
+    outputCallback("<think>\n");
+  }
 
   if (stopGeneration_.load()) {
     stopGeneration_.store(false);

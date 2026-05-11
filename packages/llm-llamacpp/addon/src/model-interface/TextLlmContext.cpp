@@ -26,13 +26,13 @@ using namespace qvac_lib_inference_addon_llama::utils;
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TextLlmContext::TextLlmContext(
-    common_params& commonParams, common_init_result&& llamaInit,
+    common_params& commonParams, common_init_result_ptr llamaInit,
     ToolsCompactController& tools)
     : tools_(tools), llamaInit_(std::move(llamaInit)), params_(commonParams) {
   {
 
-    model_ = llamaInit_.model.get();
-    lctx_ = llamaInit_.context.get();
+    model_ = llamaInit_->model();
+    lctx_ = llamaInit_->context();
     if (model_ == nullptr) {
       throw qvac_errors::StatusError(
           ADDON_ID, toString(UnableToLoadModel), "Failed to initialize model");
@@ -184,8 +184,19 @@ bool TextLlmContext::checkAntiprompt() {
     // output. We search the full kNPrev-token window because a single token
     // can decode to many characters, and a short antiprompt like "\n" may
     // appear at the start of such a token, far from the string's tail.
+    // Matching is case-insensitive so callers don't have to list every
+    // casing variant the model might emit.
+    std::string lastOutputLower = lastOutput;
+    std::transform(
+        lastOutputLower.begin(), lastOutputLower.end(), lastOutputLower.begin(),
+        [](unsigned char c) { return std::tolower(c); });
     for (const std::string& antiprompt : params_.antiprompt) {
-      if (lastOutput.find(antiprompt) != std::string::npos) {
+      std::string antipromptLower = antiprompt;
+      std::transform(
+          antipromptLower.begin(), antipromptLower.end(),
+          antipromptLower.begin(),
+          [](unsigned char c) { return std::tolower(c); });
+      if (lastOutputLower.find(antipromptLower) != std::string::npos) {
         return true;
       }
     }
@@ -230,13 +241,14 @@ void TextLlmContext::tokenizeChat(
   }
 
   inputs.use_jinja = params_.use_jinja;
+  inputs.enable_thinking = params_.reasoning_budget != 0;
   inputs.messages = chatMsgs;
   inputs.add_generation_prompt = isLastMessageFromUser;
 
   if (!tools.empty()) {
     inputs.tools = tools;
   }
-  prompt = getPrompt(tmpls_.get(), inputs);
+  prompt = getPrompt(tmpls_.get(), inputs, &thinkingForcedOpen_);
 
   QLOG_IF(
       Priority::DEBUG,
@@ -259,6 +271,7 @@ void TextLlmContext::tokenizeChat(
       inputs.tools = {};
       inputs.add_generation_prompt = false;
       inputs.use_jinja = params_.use_jinja;
+      inputs.enable_thinking = params_.reasoning_budget != 0;
       auto promptNoTools = getPrompt(tmpls_.get(), inputs);
       auto tokensNoTools =
           common_tokenize(lctx_, promptNoTools, addSpecial, true);
@@ -471,6 +484,15 @@ bool TextLlmContext::generateResponse(
 
   reasoningState_.inside_reasoning = false;
   reasoningState_.recent_output_buffer.clear();
+
+  // The chat template force-opened the reasoning channel in the prompt (e.g.
+  // Qwen3-style / DeepSeek-R1 templates end with "<think>\n"), so the model
+  // resumes generation INSIDE the reasoning block. (Gemma4's reasoning channel
+  // is model-emitted upstream and does not set this flag.)
+  if (thinkingForcedOpen_ && outputCallback) {
+    outputCallback("<think>\n");
+    reasoningState_.inside_reasoning = true;
+  }
 
   if (stopGeneration_.load()) {
     stopGeneration_.store(false);

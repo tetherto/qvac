@@ -132,7 +132,6 @@ void emplaceIfValidDevice(
         maxAdrenoVersion = version;
       }
     }
-
     if (isOpenCl && isAdreno) {
       logEmplaceGpuBackend(devDescr.gpuBackend);
       openClBackends.emplace_back(devDescr.gpuBackend);
