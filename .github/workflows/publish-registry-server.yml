@@ -252,7 +252,7 @@ jobs:
       needs.publish-logic.outputs.publish_release == 'true' &&
       (needs.release-merge-guard-schema.result == 'success' || needs.release-merge-guard-schema.result == 'skipped')
     runs-on: ubuntu-latest
-    environment: release
+    environment: npm
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
     permissions:
@@ -433,7 +433,7 @@ jobs:
       needs.publish-logic.outputs.publish_release == 'true' &&
       (needs.release-merge-guard-client.result == 'success' || needs.release-merge-guard-client.result == 'skipped')
     runs-on: ubuntu-latest
-    environment: release
+    environment: npm
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
     permissions:
