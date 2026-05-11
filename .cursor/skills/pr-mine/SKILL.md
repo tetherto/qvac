@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # My PRs
 
-Cross-pod skill. Surfaces the current user's open PRs in `tetherto/qvac` and emits copy-paste Slack ping messages. The owning pod for each PR is auto-detected from the touched files against every `.github/teams/<pod>.json`'s `ownedPaths`, so per-PR ping logic uses the right team automatically — no `--pod` argument needed.
+Cross-pod skill. Surfaces the current user's open PRs in the configured repo and emits copy-paste Slack ping messages. The owning pod for each PR is auto-detected from the touched files against every `.github/teams/<pod>.json`'s `ownedPaths`, so per-PR ping logic uses the right team automatically — no `--pod` argument needed.
 
 ## When to use this skill
 
@@ -19,7 +19,7 @@ Cross-pod skill. Surfaces the current user's open PRs in `tetherto/qvac` and emi
 ## Prerequisites
 
 - `gh` CLI installed and authenticated (`gh auth status`)
-- User must have access to `tetherto/qvac` repository
+- User must have access to the configured GitHub repository
 - At least one pod metadata file at `.github/teams/<pod>.json`
 - Per-user Slack handle map at `~/.config/qvac-pr-skills/slack.json` (auto-bootstrapped on first run; see workflow step 2)
 
@@ -33,7 +33,7 @@ node .cursor/skills/_lib/pr-skills/pr-status.mjs --mode my
 
 ## Workflow
 
-1. Run the script with `--mode my`.
+1. Run the script with `--mode my`. The script uses `.cursor/skills/_lib/pr-skills/pr-activity.mjs` for shared PR state collection and `~/.config/qvac-pr-skills/config.json` for repo/stale settings when available.
 
 2. **Slack-handle validation gate.** If the script's stderr contains `SLACK_VALIDATION_REQUIRED <N>`, run the validation flow before presenting any output to the user:
 
