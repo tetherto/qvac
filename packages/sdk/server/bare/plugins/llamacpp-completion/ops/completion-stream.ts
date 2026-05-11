@@ -1,3 +1,4 @@
+import type { AbortSignal } from "bare-abort-controller";
 import type { RunOptions } from "@qvac/llm-llamacpp";
 import type {
   CompletionParams,

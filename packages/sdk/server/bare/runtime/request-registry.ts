@@ -1,4 +1,8 @@
 import {
+  AbortController,
+  type AbortSignal,
+} from "bare-abort-controller";
+import {
   createDisposableScope,
   type DisposableScope,
 } from "@/server/bare/runtime/disposable-scope";
