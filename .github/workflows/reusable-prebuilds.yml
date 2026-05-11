@@ -118,7 +118,7 @@ jobs:
           - os: ubuntu-24.04
             platform: android
             arch: arm64
-            runner: qvac-ubuntu2404-x64
+            runner: ubuntu-24.04-arm
           - os: macos-15
             platform: ios
             arch: arm64
@@ -169,7 +169,7 @@ jobs:
           echo "Matrix tags: $MATRIX_TAGS"
 
       - name: Setup build host
-        if: matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'macos-15' || matrix.os == 'macos-15-intel'
+        if: matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'ubuntu-24.04-arm' || matrix.os == 'macos-15' || matrix.os == 'macos-15-intel'
         uses: tetherto/qvac/.github/actions/setup-build-host@df55c85d7b8004961e430557e85b6ec1b15cf170
         with:
           platform: ${{ matrix.platform }}
@@ -177,7 +177,7 @@ jobs:
           linux-extra-packages: ${{ inputs.linux-extra-packages }}
 
       - name: Setup LLVM
-        if: matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'macos-15' || matrix.os == 'macos-15-intel'
+        if: matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'ubuntu-24.04-arm' || matrix.os == 'macos-15' || matrix.os == 'macos-15-intel'
         uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
 
       - name: Checkout repository
@@ -201,7 +201,7 @@ jobs:
           arch: ${{ matrix.arch }}
 
       - name: Setup Bare tooling
-        if: matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'macos-15' || matrix.os == 'macos-15-intel'
+        if: matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'ubuntu-24.04-arm' || matrix.os == 'macos-15' || matrix.os == 'macos-15-intel'
         uses: tetherto/qvac/.github/actions/setup-bare-tooling@0bbdca93da303a0b1634ba14a89cec085621078d
 
       - name: Add linux Bare tooling to PATH
@@ -217,7 +217,7 @@ jobs:
       - name: Setup Apple Clang
         uses: tetherto/qvac/.github/actions/setup-apple-clang@1d9b2165867d03c6edd675e402ee101a5d48a6d8
 
-      - if: ${{ inputs.include-vulkan-sdk && (matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'macos-15' || matrix.os == 'macos-15-intel') }}
+      - if: ${{ inputs.include-vulkan-sdk && (matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'ubuntu-24.04-arm' || matrix.os == 'macos-15' || matrix.os == 'macos-15-intel') }}
         name: Setup Vulkan SDK (Linux ARM and MacOS)
         uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@0bbdca93da303a0b1634ba14a89cec085621078d
         env:
@@ -228,7 +228,7 @@ jobs:
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
 
-      - if: ${{ (inputs.platform == 'linux' && inputs.arch == 'x64') || inputs.platform == 'android' }}
+      - if: ${{ inputs.platform == 'linux' && inputs.arch == 'x64' }}
         name: Set Vulkan SDK path in Linux x64
         shell: bash
         run: |
