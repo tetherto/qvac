@@ -122,28 +122,32 @@ jobs:
           - os: macos-15
             platform: ios
             arch: arm64
+            runner: macos-15
           - os: macos-15
             platform: ios
             arch: arm64
             tags: -simulator
             flags: --simulator
+            runner: macos-15
           - os: macos-15
             platform: ios
             arch: x64
             tags: -simulator
             flags: --simulator
+            runner: macos-15
           - os: macos-15
             platform: darwin
             arch: arm64
+            runner: macos-15
           - os: macos-15-intel
             platform: darwin
             arch: x64
+            runner: macos-15-intel
           - os: windows-2025
             platform: win32
             arch: x64
             runner: qvac-win25-x64
-
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner }}
     environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
