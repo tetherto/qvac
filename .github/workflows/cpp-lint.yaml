@@ -96,10 +96,6 @@ jobs:
       # - name: Setup Bare tooling
       #   uses: tetherto/qvac/.github/actions/setup-bare-tooling@0bbdca93da303a0b1634ba14a89cec085621078d
 
-      - name: Setup Bare tooling
-        shell: bash
-        run: npm install -g bare-runtime bare-make
-
       # - if: ${{ inputs.include-vulkan-sdk }}
       #   name: Setup Vulkan SDK
       #   uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@0bbdca93da303a0b1634ba14a89cec085621078d

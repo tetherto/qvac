@@ -205,8 +205,8 @@ jobs:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
 
-      - name: Setup Bare tooling
-        uses: tetherto/qvac/.github/actions/setup-bare-tooling@0bbdca93da303a0b1634ba14a89cec085621078d
+      # - name: Setup Bare tooling
+      #   uses: tetherto/qvac/.github/actions/setup-bare-tooling@0bbdca93da303a0b1634ba14a89cec085621078d
 
       - if: ${{ inputs.setup-python-on-windows && matrix.platform == 'win32' }}
         name: Setup Python on self-hosted Windows runner
