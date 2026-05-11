@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-#include <qvac-lib-inference-addon-cpp/Errors.hpp>
+#include <inference-addon-cpp/Errors.hpp>
 #include <stb_image_write.h>
 
 namespace qvac_lib_inference_addon_sd {

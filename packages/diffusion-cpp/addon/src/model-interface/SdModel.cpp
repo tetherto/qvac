@@ -856,7 +856,7 @@ std::any SdModel::processVideo(
   } frameGuard{&initImg, &endImg, &controlFrames};
 
   if (!job.initImageBytes.empty()) {
-    initImg = decodePng(job.initImageBytes);
+    initImg = image_codec::decodeImage(job.initImageBytes);
     if (!initImg.data)
       throw StatusError(
           general_error::InvalidArgument,
@@ -865,7 +865,7 @@ std::any SdModel::processVideo(
   }
 
   if (!job.endImageBytes.empty()) {
-    endImg = decodePng(job.endImageBytes);
+    endImg = image_codec::decodeImage(job.endImageBytes);
     if (!endImg.data)
       throw StatusError(
           general_error::InvalidArgument,
@@ -876,7 +876,8 @@ std::any SdModel::processVideo(
   if (!job.controlFramesBytes.empty()) {
     controlFrames.reserve(job.controlFramesBytes.size());
     for (size_t i = 0; i < job.controlFramesBytes.size(); ++i) {
-      sd_image_t decoded = decodePng(job.controlFramesBytes[i]);
+      sd_image_t decoded =
+          image_codec::decodeImage(job.controlFramesBytes[i]);
       if (!decoded.data)
         throw StatusError(
             general_error::InvalidArgument,
@@ -969,7 +970,7 @@ std::any SdModel::processVideo(
   if (job.frameCallback) {
     for (int i = 0; i < frames.count(); ++i) {
       if (!frames[i].data) continue;
-      auto png = encodeToPng(frames[i]);
+      auto png = image_codec::encodeToPng(frames[i]);
       if (!png.empty()) {
         job.frameCallback(png, i, frames.count());
       }

@@ -18,7 +18,7 @@
 #include <vector>
 
 #include <gtest/gtest.h>
-#include <qvac-lib-inference-addon-cpp/Errors.hpp>
+#include <inference-addon-cpp/Errors.hpp>
 #include <stable-diffusion.h>
 
 // stb_image implementation is already compiled into SdModel.cpp (which is
