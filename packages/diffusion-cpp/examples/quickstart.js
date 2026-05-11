@@ -53,6 +53,7 @@ async function main () {
     config: {
       threads: 4,
       prediction: 'v',
+      diffusion_fa: true,
       verbosity: 2
     },
     logger: console,

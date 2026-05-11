@@ -38,6 +38,7 @@ async function main () {
     config: {
       threads: 4,
       device: 'gpu',
+      diffusion_fa: true,
       prediction: 'flux2_flow'
     },
     logger: console

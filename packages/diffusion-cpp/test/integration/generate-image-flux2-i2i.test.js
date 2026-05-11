@@ -81,6 +81,7 @@ test('FLUX2-klein img2img — transforms an input image', { timeout: 1800000, sk
     config: {
       threads: 4,
       device: useCpu ? 'cpu' : 'gpu',
+      diffusion_fa: true,
       prediction: 'flux2_flow'
     },
     logger: console

@@ -39,6 +39,7 @@ async function main () {
     config: {
       threads: 4,
       device: 'gpu', // or 'cpu' for MacBook Air
+      diffusion_fa: true,
       prediction: 'flux2_flow'
     },
     logger: console
