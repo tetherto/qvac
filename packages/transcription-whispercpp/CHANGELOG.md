@@ -8,7 +8,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.6.8]
 
 ### Changed
-- Bumped `@qvac/transcription-whispercpp` package version from `0.6.7` to `0.6.8`.
 - Bumped `qvac-lib-inference-addon-cpp` to `1.1.7#1`.
 
 ## [0.6.7]
