@@ -79,41 +79,75 @@ jobs:
         name: Configure vcpkg in linux
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
 
+      - name: Setup Vulkan SDK
+        uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@0bbdca93da303a0b1634ba14a89cec085621078d
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
       - name: Generate and build unit tests
         working-directory: ${{ env.PKG_DIR }}
         run: |
           npm run coverage:cpp:build
 
-      - name: Download test models
+      - name: Setup Python (.nemo -> .gguf conversion)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # The C++ test suite only needs ONE GGUF pointed at by
+      # QVAC_TEST_GGUF (see addon/tests/test_core.cpp::gguf_test_path).
+      # Engine identity does not matter -- the comment there says
+      # "any of the shipping CTC / TDT / EOU / Sortformer GGUFs is
+      # fine". Sortformer q4_0 is the smallest at ~75 MiB and the
+      # cheapest to convert, so we ship just that one. The
+      # GGUF-on-disk smoke tests skip cleanly via GTEST_SKIP() when
+      # QVAC_TEST_GGUF is unset, so partial cache corruption never
+      # hard-fails the suite.
+      - name: Cache Parakeet sortformer .nemo + q4 GGUF
+        id: cache-parakeet-models
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.PKG_DIR }}/models/nemo
+            ${{ env.PKG_DIR }}/models/sortformer-4spk-v1.q4_0.gguf
+          key: parakeet-cpp-q4-sortformer-v1-${{ hashFiles(format('{0}/scripts/convert-nemo-to-gguf.py', env.PKG_DIR), format('{0}/scripts/convert-nemo.sh', env.PKG_DIR), format('{0}/scripts/download-models.sh', env.PKG_DIR), format('{0}/scripts/requirements.txt', env.PKG_DIR)) }}
+          restore-keys: |
+            parakeet-cpp-q4-sortformer-v1-
+
+      - name: Convert .nemo -> sortformer q4_0 GGUF (cache miss)
+        if: steps.cache-parakeet-models.outputs.cache-hit != 'true'
         working-directory: ${{ env.PKG_DIR }}
+        shell: bash
         run: |
-          mkdir -p models examples/models
+          set -euo pipefail
+          echo "Cache miss -- provisioning Python venv and converting sortformer..."
+          bash scripts/setup-venv.sh
+          bash scripts/download-models.sh -t sortformer
+          bash scripts/convert-nemo.sh    -t sortformer -q q4_0
+          ls -lh models/sortformer-4spk-v1.q4_0.gguf
 
-          echo "Downloading Parakeet TDT int8 models for C++ tests..."
-          REPO_URL="https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/main"
-
-          curl -L -o models/encoder-model.int8.onnx \
-            "${REPO_URL}/encoder-model.int8.onnx" \
-            --fail --silent --show-error --connect-timeout 30 --max-time 600
-
-          curl -L -o models/decoder_joint-model.int8.onnx \
-            "${REPO_URL}/decoder_joint-model.int8.onnx" \
-            --fail --silent --show-error --connect-timeout 30 --max-time 300
-
-          curl -L -o models/nemo128.onnx \
-            "${REPO_URL}/nemo128.onnx" \
-            --fail --silent --show-error --connect-timeout 30 --max-time 60
-
-          curl -L -o models/vocab.txt \
-            "${REPO_URL}/vocab.txt" \
-            --fail --silent --show-error --connect-timeout 30 --max-time 60
-
-          echo "Downloaded models:"
-          ls -lha models/
+      - name: Verify GGUF for C++ tests
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -s models/sortformer-4spk-v1.q4_0.gguf ]; then
+            echo "ERROR: missing or empty models/sortformer-4spk-v1.q4_0.gguf -- cache may be corrupt" >&2
+            ls -la models/ || true
+            exit 1
+          fi
+          echo "QVAC_TEST_GGUF -> $(pwd)/models/sortformer-4spk-v1.q4_0.gguf"
 
       - name: Run C++ Unit Tests
         id: cpp-tests
         working-directory: ${{ env.PKG_DIR }}
+        env:
+          QVAC_TEST_GGUF: ${{ github.workspace }}/${{ env.PKG_DIR }}/models/sortformer-4spk-v1.q4_0.gguf
         run: |
           echo "=== Running Parakeet C++ tests ==="
           pwd

@@ -336,6 +336,12 @@ export function ensureWorktreeSynced({ num, sha }) {
   const root = repoRoot();
   const wtAdd = (target) =>
     git(["-C", root, "worktree", "add", "--detach", target, PR_REF(num)]);
+  const recreateWorktree = () => {
+    removeWorktree(path);
+    wtAdd(path);
+    touchPath(path);
+    return { path, sha };
+  };
 
   if (!existsSync(path)) {
     wtAdd(path);
@@ -345,22 +351,35 @@ export function ensureWorktreeSynced({ num, sha }) {
 
   // Path exists. Ensure it's a registered worktree we can trust.
   if (!isRegisteredWorktree(path)) {
-    removeWorktree(path);
-    wtAdd(path);
-    touchPath(path);
-    return { path, sha };
+    return recreateWorktree();
   }
 
-  const headNow = git(["-C", path, "rev-parse", "HEAD"]);
+  let headNow;
+  try {
+    headNow = git(["-C", path, "rev-parse", "HEAD"]);
+  } catch {
+    // Corrupt or half-broken cached worktree: rebuild from refs/pr/<num>/head.
+    return recreateWorktree();
+  }
   if (headNow !== sha) {
-    git(["-C", path, "reset", "--hard", PR_REF(num)]);
-    // Drop build/test artifacts from the old PR head so the next /pr-test
-    // setup starts from a clean artifact state for the new commit.
-    git(["-C", path, "clean", "-fdx"]);
+    try {
+      git(["-C", path, "reset", "--hard", PR_REF(num)]);
+      // Drop build/test artifacts from the old PR head so the next /pr-test
+      // setup starts from a clean artifact state for the new commit.
+      git(["-C", path, "clean", "-fdx"]);
+    } catch {
+      // If reset/clean fails, recover by rebuilding the cached worktree.
+      return recreateWorktree();
+    }
   } else if (!isWorktreeClean(path)) {
     // Preserve untracked artifacts (node_modules, dist, native build dirs)
     // while discarding tracked-file edits before exposing the PR head again.
-    git(["-C", path, "reset", "--hard", "HEAD"]);
+    try {
+      git(["-C", path, "reset", "--hard", "HEAD"]);
+    } catch {
+      // Dirty tracked state is recoverable via rebuild if git metadata is bad.
+      return recreateWorktree();
+    }
   }
   touchPath(path);
   return { path, sha };
