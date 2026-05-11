@@ -1,7 +1,7 @@
 {
   "default-registry": {
     "kind": "git",
-    "baseline": "35ea286a57a005a165a54991bc0ece2dc03ee9e4",
+    "baseline": "e36670e67570f54fb67a7d26a628b9a35e4c01e4",
     "repository": "https://github.com/mario-rei/qvac-registry-vcpkg.git"
   },
   "registries": [
@@ -11,6 +11,7 @@
       "repository": "https://github.com/microsoft/vcpkg",
       "packages": [
         "gtest",
+        "spirv-headers",
         "vulkan",
         "vulkan-headers",
         "vulkan-loader"
