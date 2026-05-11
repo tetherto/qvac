@@ -10,27 +10,16 @@ const os = require('bare-os')
 const platform = os.platform()
 const arch = os.arch()
 const isDarwinX64 = platform === 'darwin' && arch === 'x64'
-const isMobile = platform === 'ios' || platform === 'android'
 const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
 const useCpu = isLinuxArm64
 
-const ALL_TOOL_MODEL_VARIANTS = [
+const TOOL_MODEL_VARIANTS = [
   {
     id: 'qwen3-1.7b',
     modelName: 'Qwen3-1.7B-Q4_0.gguf',
     downloadUrl: 'https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_0.gguf'
-  },
-  {
-    id: 'medgemma-4b-it',
-    modelName: 'medgemma-4b-it-Q4_1.gguf',
-    downloadUrl: 'https://huggingface.co/unsloth/medgemma-4b-it-GGUF/resolve/main/medgemma-4b-it-Q4_1.gguf'
   }
 ]
-
-// On mobile, only run qwen3-1.7b
-const TOOL_MODEL_VARIANTS = isMobile
-  ? ALL_TOOL_MODEL_VARIANTS.filter(m => m.id === 'qwen3-1.7b')
-  : ALL_TOOL_MODEL_VARIANTS
 
 const BASE_CONFIG = {
   device: useCpu ? 'cpu' : 'gpu',

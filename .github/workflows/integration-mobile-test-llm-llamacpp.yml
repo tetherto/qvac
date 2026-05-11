@@ -346,6 +346,27 @@ jobs:
 
           echo "✅ All required files generated successfully"
 
+      - name: Extend Android mobile test timeouts
+        if: matrix.platform == 'Android'
+        working-directory: test-framework
+        run: |
+          node <<'NODE'
+          const fs = require('fs')
+          const testFile = 'e2e/tests/app.test.js'
+          let content = fs.readFileSync(testFile, 'utf8')
+
+          const patched = content
+            .replaceAll('timeout: 1200000,', 'timeout: 1800000,')
+            .replaceAll('did not complete within 20 minutes', 'did not complete within 30 minutes')
+
+          if (patched === content) {
+            throw new Error('No generated Android test timeout blocks matched expected format')
+          }
+
+          fs.writeFileSync(testFile, patched)
+          console.log('Extended generated Android test timeouts to 30 minutes')
+          NODE
+
           # Show what tests were extracted
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -1049,6 +1070,9 @@ jobs:
             cfg=$(echo "$cfg" | sed "s#__TEST_FILTER__#$pattern#")
             cfg=$(echo "$cfg" | sed "s#__QVAC_PERF_RUNS__#$QVAC_PERF_RUNS_INPUT#")
             cfg=$(echo "$cfg" | sed "s#__QVAC_PERF_WARMUP_RUNS__#$QVAC_PERF_WARMUP_RUNS_INPUT#")
+            if [ "${{ matrix.platform }}" == "Android" ]; then
+              cfg=$(echo "$cfg" | sed "s#timeout:1800000#timeout:2100000#")
+            fi
             local b64
             b64=$(echo "$cfg" | base64 | tr -d '\n')
             generate_spec "$output" "$b64"

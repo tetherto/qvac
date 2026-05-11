@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.20.0] - 2026-05-10
+
+### Changed
+
+- **`qvac-fabric` >= 8189.0.2**: Mali/Adreno F16 coopmat1 NaN fix, Qwen3.5 OpenCL kernels, Gemma 4 vision/audio support, Vulkan VMA migration, plus accumulated upstream fixes since `7248.x`.
+- **OpenCL backends default `flash-attn=off`** (not reliably supported on OpenCL); user `flash-attn`/`flash_attn` overrides are honored.
+- **Qwen3 detection is architecture-only** now (`general.architecture == "qwen3"`); the previous `general.name` substring fallback is removed.
+
+### Added
+
+- **`reasoning-budget`** (`-1` unrestricted, default; `0` disabled) config knob, wired through to fabric's `enable_thinking` template input. Underscore variant `reasoning_budget` accepted.
+- **Synthetic `<think>\n` opener** at stream start when the chat template force-opens the reasoning channel (Qwen3, Qwen3.5, DeepSeek-R1) so consumers see balanced reasoning markup.
+- **Integration tests**: Qwen3.5 (basic, multi-turn, tool calling, image describe, reasoning-budget=0); Gemma 4 E2B via bartowski Q4_K_M (basic, multi-turn, image describe on GPU on mobile, tool calling with native-dialect parser, reasoning-budget=0); PaddleOCR-VL.
+- **C++ unit tests**: OpenCL flash-attn auto-disable, Qwen3 tools-at-end double-tokenize, expanded `tuneConfigMap` coverage.
+
+### Removed
+
+- AfriqueGemma + Dolphin-MoE integration tests; MedGemma variants from tool-calling and finetune-pause-resume.
+- Dead `selectToolsCompactMarker(std::string)` overload (its only callers were unit tests).
+
+### Fixed
+
+- `utils.js downloadFile` redirect race that could `fs.unlink` a freshly-redirected file via late writestream errors.
+- Sliding-context test rebased on the post-`GGML_PAD` effective `n_ctx=512`.
+- Logger no longer asks V8 to `JSON.stringify` multi-MB media `Uint8Array` content (was triggering Zone OOMs on long media prompts).
+
+### Deprecated
+
+- `llama_adapter_lora_free` is now deprecated upstream; the LoRA-resume path emits three `-Wdeprecated-declarations` warnings, behaviour unchanged. Ownership refactor is a follow-up.
+
+### Internals (no behaviour change)
+
+- ABI port: `common_init_result` → `common_init_result_ptr`; LoRA adapter API: `llama_clear_adapter_lora` + `llama_set_adapter_lora` → `llama_set_adapters_lora`; parser example: `LLAMA_EXAMPLE_MAIN` → `LLAMA_EXAMPLE_COMMON`.
+
 ## [0.19.2] - 2026-05-05
 
 ### Added
