@@ -3,45 +3,65 @@
 const test = require('brittle')
 const path = require('bare-path')
 const fs = require('bare-fs')
+const proc = require('bare-process')
 const {
   binding,
   ParakeetInterface,
+  TranscriptionParakeet,
   detectPlatform,
   setupJsLogger,
   getTestPaths,
   ensureModel,
   ensureModelForType,
   getNamedPathsConfig,
+  loadGgufOrSkip,
   isMobile,
   recordParakeetStats
 } = require('./helpers.js')
 
 const platform = detectPlatform()
 const { modelPath, samplesDir } = getTestPaths()
+const NO_GPU = proc.env && proc.env.NO_GPU === 'true'
 
-// Device configurations for the perf-report sweep.
-// Mobile runs both CPU + GPU so the step-summary table shows the comparison
-// the team uses to spot regressions (CoreML on iOS, NNAPI on Android).
-// Desktop runs CPU only — the GPU EP isn't built into our prebuilt onnx
-// runtime for darwin/linux desktops, so a `useGPU: true` run there would
-// silently fall back to CPU and pollute the comparison.
+function loadAudio (samplePath) {
+  const rawBuffer = fs.readFileSync(samplePath)
+  const pcmData = new Int16Array(rawBuffer.buffer, rawBuffer.byteOffset, rawBuffer.length / 2)
+  const audioData = new Float32Array(pcmData.length)
+  for (let i = 0; i < pcmData.length; i++) audioData[i] = pcmData[i] / 32768.0
+  return audioData
+}
+
+async function transcribe (model, audio) {
+  const segments = []
+  const response = await model.run(audio)
+  await response
+    .onUpdate(out => {
+      const items = Array.isArray(out) ? out : [out]
+      for (const seg of items) {
+        if (seg && seg.text) segments.push(seg)
+      }
+    })
+    .await()
+  return segments
+}
+
 const ALL_DEVICE_CONFIGS = [
   { id: 'gpu', useGPU: true },
   { id: 'cpu', useGPU: false }
 ]
-const DEVICE_CONFIGS = isMobile
-  ? ALL_DEVICE_CONFIGS
-  : ALL_DEVICE_CONFIGS.filter(c => c.id === 'cpu')
-// Keep the legacy mobile multiple-transcriptions path scoped to TDT. Non-TDT
-// mobile perf coverage lives in dedicated model/backend files so Device Farm
-// can report the exact failing case instead of one combined failure.
+const DEVICE_CONFIGS = ALL_DEVICE_CONFIGS.filter(c => {
+  if (NO_GPU && c.useGPU) return false
+  if (!isMobile && c.useGPU) return false
+  return true
+})
 const MOBILE_PERF_MODEL_TYPES = ['tdt']
 const PERF_MODEL_TYPES = isMobile ? MOBILE_PERF_MODEL_TYPES : ['tdt']
 
 async function resolvePerfModelPath (modelType) {
   if (modelType === 'tdt') {
-    await ensureModel(modelPath)
-    return modelPath
+    const resolved = await ensureModel(modelPath)
+    if (!resolved) throw new Error(`Unable to resolve model for type: ${modelType}`)
+    return resolved
   }
   const resolved = await ensureModelForType(modelType)
   if (!resolved) throw new Error(`Unable to resolve model for type: ${modelType}`)
@@ -49,11 +69,8 @@ async function resolvePerfModelPath (modelType) {
 }
 
 /**
- * Test that multiple consecutive transcriptions work without errors.
- * This verifies:
- * - Model can be reused across multiple transcriptions
- * - No memory leaks or state corruption between runs
- * - Job IDs increment correctly
+ * Test that multiple consecutive transcriptions on the same model
+ * instance work without errors.
  */
 for (const modelType of PERF_MODEL_TYPES) {
   for (const deviceConfig of DEVICE_CONFIGS) {
@@ -278,8 +295,8 @@ for (const modelType of PERF_MODEL_TYPES) {
 }
 
 /**
- * Test that creating fresh model instances for each transcription works correctly.
- * This simulates app restart scenarios.
+ * Test that creating fresh model instances for each transcription
+ * works correctly. Simulates app-restart scenarios.
  */
 test('Fresh model instance per transcription (app restart simulation)', { timeout: 600000 }, async (t) => {
   const NUM_INSTANCES = 2
@@ -292,10 +309,9 @@ test('Fresh model instance per transcription (app restart simulation)', { timeou
   console.log(` Instances to create: ${NUM_INSTANCES}`)
   console.log('='.repeat(60) + '\n')
 
-  // Ensure model is downloaded
-  await ensureModel(modelPath)
+  const stagedGguf = await loadGgufOrSkip(t)
+  if (!stagedGguf) return
 
-  // Check sample audio exists
   const samplePath = path.join(samplesDir, 'sample.raw')
   if (!fs.existsSync(samplePath)) {
     loggerBinding.releaseLogger()
@@ -303,104 +319,50 @@ test('Fresh model instance per transcription (app restart simulation)', { timeou
     return
   }
 
-  // Load audio once
-  const rawBuffer = fs.readFileSync(samplePath)
-  const pcmData = new Int16Array(rawBuffer.buffer, rawBuffer.byteOffset, rawBuffer.length / 2)
-  const audioData = new Float32Array(pcmData.length)
-  for (let i = 0; i < pcmData.length; i++) {
-    audioData[i] = pcmData[i] / 32768.0
-  }
-
+  const audioData = loadAudio(samplePath)
   const results = []
 
   for (let instance = 1; instance <= NUM_INSTANCES; instance++) {
     console.log(`--- Instance ${instance}/${NUM_INSTANCES} ---`)
     const instanceStartTime = Date.now()
 
-    const transcriptions = []
-    let outputResolve = null
-    const outputPromise = new Promise(resolve => { outputResolve = resolve })
-
-    function outputCallback (handle, event, id, output, error) {
-      if (event === 'Output' && Array.isArray(output)) {
-        for (const segment of output) {
-          if (segment && segment.text) {
-            transcriptions.push(segment)
-          }
-        }
-      }
-      if ((event === 'JobEnded' || event === 'Error') && outputResolve) {
-        outputResolve()
-        outputResolve = null
-      }
-    }
-
-    const config = {
-      modelPath,
-      modelType: 'tdt',
-      maxThreads: 4,
-      useGPU: false,
-      sampleRate: 16000,
-      channels: 1,
-      ...getNamedPathsConfig('tdt', modelPath)
-    }
-
-    let parakeet = null
+    const model = new TranscriptionParakeet({
+      files: { model: stagedGguf },
+      config: { parakeetConfig: { maxThreads: 4, useGPU: false } }
+    })
     try {
-      parakeet = new ParakeetInterface(binding, config, outputCallback)
-
+      await model.load()
       const loadTime = Date.now() - instanceStartTime
 
-      await parakeet.activate()
-
-      // Transcribe
-      await parakeet.append({ type: 'audio', data: audioData.buffer })
-      await parakeet.append({ type: 'end of job' })
-
-      // Wait for output
-      const timeout = setTimeout(() => { if (outputResolve) { outputResolve(); outputResolve = null } }, 600000)
-      await outputPromise
-      clearTimeout(timeout)
-
+      const segments = await transcribe(model, audioData)
       const totalTime = Date.now() - instanceStartTime
       const transcriptionTime = totalTime - loadTime
-
-      const fullText = transcriptions.map(s => s.text).join(' ').trim()
+      const fullText = segments.map(s => s.text).join(' ').trim()
 
       console.log(`   Load time: ${loadTime}ms`)
       console.log(`   Transcription time: ${transcriptionTime}ms`)
       console.log(`   Total time: ${totalTime}ms`)
-      console.log(`   Segments: ${transcriptions.length}`)
-      console.log('')
+      console.log(`   Segments: ${segments.length}\n`)
 
       results.push({
         loadTime,
         transcriptionTime,
         totalTime,
-        segmentCount: transcriptions.length,
+        segmentCount: segments.length,
         textLength: fullText.length
       })
     } finally {
-      if (parakeet) {
-        try {
-          await parakeet.destroyInstance()
-        } catch (e) {
-          // Ignore cleanup errors
-        }
-      }
+      try { await model.unload() } catch (e) { /* ignore */ }
     }
 
-    // Delay between instances
     if (instance < NUM_INSTANCES) {
       await new Promise(resolve => setTimeout(resolve, 500))
     }
   }
 
-  // Summary
   console.log('='.repeat(60))
   console.log('FRESH INSTANCE SUMMARY')
   console.log('='.repeat(60))
-
   results.forEach((r, i) => {
     console.log(`  Instance ${i + 1}:`)
     console.log(`    Load: ${r.loadTime}ms`)
@@ -408,18 +370,10 @@ test('Fresh model instance per transcription (app restart simulation)', { timeou
     console.log(`    Total: ${r.totalTime}ms`)
     console.log(`    Segments: ${r.segmentCount}`)
   })
-
   console.log('='.repeat(60) + '\n')
 
-  // Assertions
   t.ok(results.length === NUM_INSTANCES, `Created ${NUM_INSTANCES} fresh model instances`)
   t.ok(results.every(r => r.segmentCount > 0), 'All instances should produce segments')
 
-  try {
-    loggerBinding.releaseLogger()
-  } catch (e) {
-    // Ignore
-  }
-
-  console.log('✅ Fresh instance test completed successfully!\n')
+  try { loggerBinding.releaseLogger() } catch (e) { /* ignore */ }
 })

@@ -14,7 +14,7 @@ wer:
 cer:
   enabled: true
 model:
-  path: "/home/raju/Documents/T/workspace/transcription-parakeet/models/parakeet-tdt-0.6b-v3-onnx"
+  path: "/home/raju/Documents/T/workspace/qvac-lib-infer-parakeet/models/parakeet-tdt-0.6b-v3-onnx"
   sample_rate: 16000
   audio_format: "s16le"
   model_type: "tdt" # tdt, ctc, eou, sortformer

@@ -5,6 +5,57 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0]
+
+In this release, we have replaced the onnxruntime backend with a pure C++/ggml engine, added a duplex-streaming entry point that bypasses the framework's batch-then-process lifecycle for live use cases, and surfaced two new per-segment signals (`isEndOfTurn`, `startsWord`) so consumers can build cleaner live transcripts.
+
+### Changed (BREAKING for model files)
+- Replaced the onnxruntime backend with the parakeet-cpp backend. The native addon no longer ships ONNX Runtime; the ggml dependency is now provided by the dedicated `ggml-speech` vcpkg port (separate from the `parakeet-cpp` port itself), with a `qvac-speech-` library prefix so it can coexist with the fabric/llm `qvac-` and the diffusion `qvac-diffusion-` ggml flavours on the same Android device.
+- Models now load from a single `.gguf` file per checkpoint instead of the legacy multi-file ONNX layout. Tokenizer + hyperparameters travel inside the GGUF metadata; no side-loaded files.
+- `loadWeights({ filename, chunk, completed })` now expects a single `.gguf` filename. Non-`.gguf` filenames are ignored with a warning for back-compat with callers still iterating an ONNX file list.
+- `Engine::transcribe_stream` and `StreamSession` are wired through the new backend; existing `is_eou_boundary` + `eot_confidence` slots on `StreamingSegment` now reflect parakeet-cpp's native EOU `<EOU>` token detection.
+- `runtimeStats()` now returns (`encoderMs`, `decoderMs`, `melSpecMs`, `totalEncodedFrames`) besides existing stats.
+
+### Added
+- **Duplex streaming entry point.** `TranscriptionParakeet.runStreaming(audioStream, streamingConfig?)` opens a long-lived `parakeet::StreamSession` (or `SortformerStreamSession`) on the C++ side and feeds each pushed chunk straight in -- bypassing the `run()` path's append-buffer-then-process lifecycle. Per-chunk segments surface through the regular `onUpdate(...)` channel as soon as the engine emits them, with full streaming session state (rolling encoder context, EOU detector, Sortformer history) preserved across chunks. The lower-level `startStreaming` / `appendStreamingAudio` / `endStreaming` / `cancelStreaming` methods are exposed on `ParakeetInterface` for callers that want to drive the session manually. New `StreamingRunConfig` type for per-call `chunkMs` / `historyMs` / `leftContextMs` / `rightLookaheadMs` / `emitPartials` / `emitEnergyVad` overrides.
+- **C++ `ParakeetStreamingProcessor`** (mirrors qvac-lib-infer-whispercpp's `StreamingProcessor`): a worker-thread-driven class that owns the duplex session lifetime, drains audio from a `pending_` queue under `mtx_+cv_`, calls `feed_pcm_f32` directly, and queues per-segment `Transcript`s into `addonCpp->outputQueue` so the JS `onUpdate` channel surfaces them with no batching. New binding entry points wire in via `qvac_lib_infer_parakeet::{startStreaming,appendStreamingAudio,endStreaming,cancelWithStreaming,destroyInstanceWithStreaming}` in `AddonJs.hpp`.
+- `TranscriptionSegment.isEndOfTurn` boolean field. EOU streaming sessions set this on every segment whose chunk contained an `<EOU>` token, so consumers can detect end-of-turn boundaries independently of segment text. CTC / TDT / Sortformer always leave the field `false`. Replaces the never-fired synthetic `<EOU>` text marker that earlier 0.4.0 builds attempted to surface.
+- `TranscriptionSegment.startsWord` boolean field. Forwarded from the upstream `parakeet::StreamingSegment::starts_word` flag, which is set true when the segment's first token is a SentencePiece word-start (the piece begins with the `▁` U+2581 marker). Streaming consumers building a running transcript can use it to gate the inserted separator: concatenate verbatim when `startsWord === false` to rejoin chunk-boundary wordpiece splits like `["pun", "ctuation"]` into `"punctuation"` instead of `"pun ctuation"`. Default `true` so callers that ignore it see no behaviour change.
+- `streamingLeftContextMs` and `streamingRightLookaheadMs` config knobs. Forwarded to `parakeet::StreamingOptions::left_context_ms` / `right_lookahead_ms`. ASR sessions only (Sortformer ignores them). `-1` keeps parakeet-cpp's defaults (10000 / 2000 ms). `right_lookahead_ms` adds directly to the per-segment latency floor; tune lower for snappier live transcripts at the cost of chunk-boundary accuracy.
+- Long-form audio support for the TDT engine carries over from 0.3.3 (`runEncoderChunked`-style mel-spectrogram windowing) but is now handled natively by the parakeet-cpp engine's `transcribe_samples` / `StreamSession` paths -- no addon-side chunked driver needed.
+- Four flag-driven examples that replaced the old per-model quickstart: `examples/transcribe.js` (any GGUF, all engine types), `examples/diarized-transcribe.js` (combined Sortformer + ASR), `examples/live-mic.js` (default-device live transcription via `sox`, now using `runStreaming` for sub-second latency), and `examples/live-mic-diarized.js` (live mic with parallel Sortformer + ASR for speaker-tagged transcripts).
+- `scripts/download-models.sh` (downloads upstream NeMo `.nemo`) and `scripts/convert-nemo.sh` (wraps qvac-parakeet.cpp's `convert-nemo-to-gguf.py`); `npm run setup-models` runs both.
+- `test/integration/eou-streaming.test.js` covering the EOU streaming session's `isEndOfTurn` boundary detection.
+- English-CTC accuracy assertion in `test/integration/accuracy-multilang.test.js` (was previously TDT/EOU only); WER coverage for all three ASR heads now lives there.
+
+### Removed
+- `@qvac/onnx` peer dependency; `eigen3`, `qvac-onnx` cmake config, ONNX file-name lists in `examples/utils.js`.
+- `examples/quickstart-{ctc,eou,sortformer,diarized,ggml}.js` and `examples/quickstart.js` (folded into `examples/transcribe.js`).
+- 4 ONNX-specific integration tests (`external-data-staging`, `individual-file-paths`, `named-paths-all-models`, `named-paths-reload`).
+- `test/integration/addon.test.js` (legacy generic addon-lifecycle integration test; superseded by `addon-multimodel.test.js` and `eou-streaming.test.js`).
+- `DEVELOPMENT.md` (folded into the README's Development section).
+- Dead code: `addon/src/model-interface/parakeet/ParakeetHandlers.{hpp,cpp}` (unused handler maps + `MiscConfig` + `computeOptimalThreads()`), `JSAdapter::loadMap`, and the `JSValueVariant` typedef -- no consumers anywhere in the package since the JSAdapter rewrite went direct via `getOptionalProperty<>()`.
+
+### Fixed
+- **Data race in `ParakeetModel::cancel()`.** `asr_session_` / `diar_session_` reads now sit under a dedicated `session_mutex_` so they cannot race against `openStreamingSession_()` / `closeStreamingSession_()` / `endOfStream()` / `~ParakeetModel`. The framework documents `cancel()` as concurrent with `process()`/`unload()`/`reload()`, and the previous unsynchronised access could deref a torn `unique_ptr`. `closeStreamingSession_()` uses a snapshot-and-release pattern (move ownership out under the lock, run the session destructor outside) so a concurrent `cancel()` can never observe a half-destroyed session.
+- **Double-join race in `ParakeetStreamingProcessor`.** `end()` / `cancel()` / `~ParakeetStreamingProcessor`'s fallback `cancel()` now serialise through a `std::once_flag teardown_once_` so `thread_.join()` runs at most once across the three paths. Without this, a race between `end()` and `cancel()` (or two `cancel()` calls) could pass `thread_.joinable()` simultaneously and the loser's `join()` would raise `std::system_error`.
+- **`runAsrProcess_` encoder-time mis-attribution.** Per-stage timings now record verbatim from `parakeet::EngineResult`. The earlier wall-clock fallback (substitute `transcribe_samples`'s total when `encoder_ms == 0`) silently rolled mel + decoder time into the encoder bucket, inflating it roughly 3-5x on the first call.
+- **`_runInternal` / `_runStreamingInternal` job leak on synchronous kickoff failure.** `_runInternal` now wraps the `_normalizeAudioStream` call in `try/catch` -> `_job.fail(error); throw` so a synchronous throw (e.g. `null` input) doesn't leave `_job.active === true` for the next `run()`. `_runStreamingInternal` similarly wraps the `await this.addon.startStreaming(...)` call so a rejected `startStreaming` (engine not loaded, `dynamic_cast` failure, session already populated, ...) fails the job before propagating.
+
+### Changed (docs / behaviour clarifications)
+- **Cross-call streaming-state scope**, spelled out everywhere it was implied: `index.d.ts`, `index.js`, `parakeet.js`, README's `streaming` row, `ParakeetConfig.hpp`'s comment, and the inline comment in `runStreamingProcess_`. Within a single `run()` call the streaming session preserves state (Sortformer speaker history, EOU rolling window, partial decode state); across separate `run()` calls on the same model instance, the session is closed and reopened, so cross-call state is lost. For continuous live capture, drive a single long-running `run()` from a pushable stream, or use `runStreaming()` (which owns one streaming session for the lifetime of the call regardless of append count).
+- **`endStreaming()` synthetic `JobEnded` now reports real stats.** The C++ `cleanupStreamingSession()` returns `{ cleaned, audioDurationMs, totalSamples }` captured from `ParakeetStreamingProcessor::audioSeconds()` right after the worker thread joins. JS plumbs those into the synthetic `JobEnded` payload so consumers reading `response.stats.audioDurationMs` / `totalSamples` after a duplex `runStreaming()` get a non-zero value (the framework's `RuntimeStats` path is bypassed by the duplex processor entirely).
+- **`ParakeetModel::reload()`** now throws an explicit `InternalError` when `cfg_.modelPath` is empty -- the in-memory `gguf_buffer_` is dropped on `unload()`, so a model originally loaded from streamed bytes without a temp file would otherwise fail mid-load with a less obvious error.
+- **ASR streaming default `chunk_ms`** is now 2000 (was 1000) when `streamingChunkMs <= 0`, matching the documented default in README / `index.d.ts` / `index.js`.
+- **`streamingHistoryMs` warning** logged when set on a non-Sortformer (CTC / TDT / EOU) instance, since the option is silently ignored for ASR streaming sessions.
+- **`parakeet.js` `_addonOutputCallback`** event mapping trusts explicit `'Output' / 'JobEnded' / 'Error'` event strings verbatim and only falls back to data-shape sniffing when the event is unrecognised, preventing silent misclassification if a future framework event happens to share a key name.
+- **`parakeet.js` `pause()` / `status()`** JSDoc now explicitly notes these are JS-side state-machine flips that don't reach the native engine; use `cancel()` / `stop()` to actually abort an inference call.
+- **`index.d.ts`** Vulkan doc now reflects reality (`enabled on Linux / Windows / Android via parakeet-cpp[vulkan]`) instead of "not yet enabled".
+- **README's Stage-a-Model section** lists `sentencepiece` as a venv requirement (matching `scripts/requirements.txt`); `convert-nemo-to-gguf.py` raises a clear actionable error if `huggingface_hub` is missing instead of opaque `ImportError` (with a pointer at `download-models.sh`, the documented entry point that needs no Python deps for download).
+- **README's Run Inference section** calls out the 500 MiB `MAX_BUFFERED_BYTES` cap on a single `run()` call (~4 hours of 16 kHz int16 audio) so consumers picking `run()` over `runStreaming()` for very long captures know to split into sequential calls (or use `runStreaming` instead, which has no per-call buffer cap).
+- **`ParakeetModel::addTranscription`** now annotated as test-only.
+- **`ParakeetModel::endOfStream` / `isStreamEnded`** now annotated as framework-only -- the duplex `runStreaming()` path (`ParakeetStreamingProcessor`) owns its own session and never sets `stream_ended_`, so consumers must not gate cleanup on `isStreamEnded()` after `runStreaming()`.
+
 ## [0.3.3]
 
 This release adds long-form audio support to the Parakeet TDT pipeline. Audio inputs that previously failed against the encoder's static positional-encoding ceilings are now transcribed by streaming the mel-spectrogram through the encoder in overlapping windows.
@@ -109,7 +160,7 @@ Job management is now handled by `createJobHandler()` from `@qvac/infer-base ^0.
 ## [0.2.7]
 
 ### Changed
-- Bumped `inference-addon-cpp` to `1.1.5`.
+- Bumped `qvac-lib-inference-addon-cpp` to `1.1.5`.
 - Restored JS-owned job ID routing after addon-cpp reverted the accidental `1.1.3` native callback `jobId` contract and `cancel(jobId)` API break.
 
 ### Added
@@ -176,7 +227,7 @@ A new integration test exercises `TranscriptionParakeet` with TDT named paths: t
 ## [0.2.0]
 
 ### Changed
-- Migrated the native addon implementation to `inference-addon-cpp` 1.x (`IModel`/`IModelCancel` + `AddonJs`/`AddonCpp`), replacing the removed legacy templated addon API
+- Migrated the native addon implementation to `qvac-lib-inference-addon-cpp` 1.x (`IModel`/`IModelCancel` + `AddonJs`/`AddonCpp`), replacing the removed legacy templated addon API
 - Updated the JS/native pipeline to `createInstance` + `runJob` while preserving public transcription API behavior and output semantics
 - Hardened cancel/reload/job lifecycle behavior in runtime and integration paths to match expected production behavior
 
