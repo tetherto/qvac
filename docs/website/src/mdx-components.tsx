@@ -9,6 +9,7 @@ import { GithubInfo } from 'fumadocs-ui/components/github-info';
 import { CustomTabs, CustomTabsItem } from "@/components/custom-tabs";
 import { Accordion, Accordions } from 'fumadocs-ui/components/accordion';
 import { FeaturesInfographic } from "@/components/features-infographic";
+import { FeaturesInfographicV2 } from "@/components/features-infographic-v2";
 
 function WrapCode({ children }: { children: React.ReactNode }) {
   return <div className="fd-code-wrap">{children}</div>;
@@ -56,6 +57,7 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     Accordion, 
     Accordions,
     FeaturesInfographic,
+    FeaturesInfographicV2,
     ...StepComponents,
     ...components,
   };
