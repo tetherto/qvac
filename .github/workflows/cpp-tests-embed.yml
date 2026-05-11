@@ -148,7 +148,6 @@ jobs:
 
       - if: ${{ matrix.os == 'ubuntu-24.04' }}
         name: Install vcpkg on linux
-        working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: |
           git clone https://github.com/microsoft/vcpkg.git/ vcpkg_microsoft
