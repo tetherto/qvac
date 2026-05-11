@@ -127,6 +127,56 @@ function setupCli (): void {
       }
     })
 
+  verifyCmd
+    .command('bundle')
+    .description('Verify native addon prebuilds and ABI for a bundle or node_modules tree')
+    .requiredOption(
+      '--addons-source <path>',
+      'Path to a worker.bundle.js or a node_modules directory'
+    )
+    .option('--host <target>', 'Target host (repeatable, at least one required)', collect, [])
+    .option(
+      '--bare-runtime-version <semver>',
+      'Override detected Bare runtime version for ABI checks'
+    )
+    .option(
+      '--project-root <path>',
+      'Project root used to resolve bundle resolutions and runtime metadata (default: cwd)'
+    )
+    .option('-q, --quiet', 'Suppress success output')
+    .action(async (options: {
+      addonsSource: string
+      host: string[]
+      bareRuntimeVersion?: string
+      projectRoot?: string
+      quiet?: boolean
+    }) => {
+      try {
+        const {
+          formatVerifyBundleResult,
+          hasErrors,
+          verifyBundle
+        } = await import('./verify/bundle/index.js')
+        const verifyOptions: Parameters<typeof verifyBundle>[0] = {
+          projectRoot: options.projectRoot ?? process.cwd(),
+          addonsSource: options.addonsSource,
+          hosts: options.host
+        }
+        if (options.bareRuntimeVersion) {
+          verifyOptions.bareRuntimeVersion = options.bareRuntimeVersion
+        }
+        const result = await verifyBundle(verifyOptions)
+        const failed = hasErrors(result)
+        if (!options.quiet || failed || result.issues.length > 0) {
+          console.log(formatVerifyBundleResult(result))
+        }
+        if (failed) process.exit(1)
+      } catch (error: unknown) {
+        handleError(error)
+        process.exit(1)
+      }
+    })
+
   const serveCmd = program
     .command('serve')
     .description('Start an API server backed by QVAC')

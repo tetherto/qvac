@@ -11,6 +11,7 @@ This package is published to npm as **`@qvac/cli`** and lives in the QVAC monore
   - [`doctor`](#doctor)
   - [`bundle sdk`](#bundle-sdk)
   - [`verify deps`](#verify-deps)
+  - [`verify bundle`](#verify-bundle)
 - [Configuration](#configuration)
 - [System Requirements](#system-requirements)
 - [Development](#development)
@@ -190,6 +191,93 @@ CI guardrails should treat `1` and `2` differently: `1` means "real native chang
 - Native packages are identified by reading installed `node_modules/<pkg>/package.json` and checking for top-level `"addon": true`, so run from a checkout with dependencies installed for the head under review.
 - Removed lockfile packages whose `package.json` is unavailable are reported with unknown native status so reviewers can inspect them.
 - Packages with unreadable metadata are reported as warnings only when native addon changes are also reported.
+
+### `verify bundle`
+
+Verify that every native Bare addon reachable from a generated worker bundle or
+an installed `node_modules` tree has prebuilds for the requested host(s) and a
+declared `engines.bare` range compatible with the installed Bare runtime.
+
+```bash
+qvac verify bundle --addons-source <path> --host <target> [--host <target>...] [options]
+```
+
+`--addons-source` may be either a `qvac/worker.bundle.js` produced by
+`qvac bundle sdk` or a `node_modules` directory. The source kind is detected
+automatically: files are parsed as bare-pack bundles, directories are walked
+as `node_modules` trees.
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--addons-source <path>` | Required. Path to a `worker.bundle.js` or a `node_modules` directory. |
+| `--host <target>` | Repeatable. At least one host required. Examples: `android-arm64`, `ios-arm64`, `ios-arm64-simulator`, `ios-x64-simulator`, `darwin-arm64`, `linux-x64`, `win32-x64`. |
+| `--bare-runtime-version <semver>` | Optional. Override the resolved Bare runtime version used for ABI checks. **Recommended for mobile / Expo CI**, where the BareKit-embedded runtime version is not currently exposed by `react-native-bare-kit` package metadata and auto-detection is unreliable. Also useful for Electron packaging where runtime inference is ambiguous. |
+| `--project-root <path>` | Optional. Project root used to resolve bundle resolutions and detect the installed Bare runtime (default: cwd). |
+| `--quiet, -q` | Suppress the success summary; failures and warnings are always printed. |
+
+**Examples:**
+
+```bash
+# Mobile bundle, runs after `qvac bundle sdk` writes qvac/worker.bundle.js
+qvac verify bundle --addons-source qvac/worker.bundle.js \
+  --host android-arm64 \
+  --host ios-arm64 \
+  --host ios-arm64-simulator \
+  --host ios-x64-simulator
+
+# Desktop / Electron dev tree
+qvac verify bundle --addons-source ./node_modules \
+  --host darwin-arm64 --host linux-x64 --host win32-x64
+
+# Packaged Electron app (validates what actually ships)
+qvac verify bundle \
+  --addons-source dist/mac-arm64/MyApp.app/Contents/Resources/app.asar.unpacked/node_modules \
+  --host darwin-arm64
+
+# Force a specific runtime version (e.g. CI)
+qvac verify bundle --addons-source qvac/worker.bundle.js \
+  --host android-arm64 --bare-runtime-version 1.15.2
+```
+
+**Exit codes:**
+
+| Exit | Meaning |
+|------|---------|
+| `0` | No error-level issues. All required prebuilds are present, and every ABI check that *ran* passed. Warnings may indicate skipped checks: `unknown-runtime-version` (no Bare runtime could be resolved for the project; pass `--bare-runtime-version` to enable ABI checks) or `malformed-engines-bare` (an addon's `engines.bare` is not a valid semver range; report to the addon maintainer). |
+| `1` | At least one error-level issue: `missing-prebuild`, `abi-mismatch`, `invalid-runtime-version` (malformed `--bare-runtime-version`), or `invalid-source` (unreadable `--addons-source` or missing `--host`). |
+
+**Issue codes:**
+
+| Code | Level | Meaning |
+|------|-------|---------|
+| `missing-prebuild` | error | The addon's `<packageRoot>/prebuilds/<host>/*.bare` directory is missing or empty. |
+| `abi-mismatch` | error | The addon's declared `engines.bare` range does not include the resolved runtime version. |
+| `unknown-runtime-version` | warning | At least one addon declares `engines.bare`, but no Bare runtime version could be auto-detected. Pass `--bare-runtime-version` to enable strict ABI verification. |
+| `invalid-runtime-version` | error | The value passed to `--bare-runtime-version` is not a valid semver. An invalid explicit version is rejected as an error (vs. auto-detection failure, which is only a warning) because the user opted into runtime verification by passing the flag. |
+| `malformed-engines-bare` | warning | An addon's `package.json` declares an `engines.bare` value that is not a valid semver range. ABI check is skipped for that addon and warning is surfaced for escalation to the addon maintainer. |
+| `invalid-source` | error | `--addons-source` does not point to a readable bundle or directory, or `--host` was empty. |
+
+**Bare runtime detection:**
+
+Runtime resolution order:
+
+1. `--bare-runtime-version <semver>` (authoritative — user-provided).
+2. `<projectRoot>/node_modules/bare-runtime/package.json` — `version` field (Pear / Electron / desktop Node).
+3. `<projectRoot>/node_modules/bare/package.json` — `version` field (standalone Bare installs).
+
+If neither installed package resolves, ABI checks emit a single
+`unknown-runtime-version` warning and the exit code stays `0`. Prebuild checks
+always run regardless of runtime detection.
+
+**Mobile / Expo:** the BareKit-embedded runtime version is not currently
+exposed by `react-native-bare-kit` package metadata (no `engines.bare`,
+`bareVersion`, or equivalent field), so auto-detection cannot establish the
+on-device runtime version from a mobile dependency tree. **Pass
+`--bare-runtime-version <semver>` explicitly in mobile CI** to guarantee
+strict ABI verification; otherwise mobile bundles will emit
+`unknown-runtime-version` and skip the ABI check pass.
 
 ## Configuration
 
