@@ -308,6 +308,41 @@ const DASH = '0.1 5';
 const HTML_NS = 'http://www.w3.org/1999/xhtml';
 
 // ============================================================================
+// Sparkles around the Q (continuous, discreet twinkle).
+// ============================================================================
+
+// 4-pointer star, ~20×20 viewBox units, centered on (0,0). Curves give a soft
+// "scintillation" silhouette instead of a hard star.
+const SPARKLE_PATH =
+  'M0 -10 C 0 -3, 3 0, 10 0 C 3 0, 0 3, 0 10 C 0 3, -3 0, -10 0 C -3 0, 0 -3, 0 -10 Z';
+
+type Sparkle = {
+  id: string;
+  /** Compass angle in degrees: 0 = top, increases clockwise. */
+  angle: number;
+  /** Distance from center, in viewBox units. Stays inside R_INNER vicinity. */
+  radius: number;
+  /** Final scale multiplier applied to the 20×20 sparkle path. */
+  scale: number;
+  /** Per-sparkle animation duration (ms). Distinct values prevent sync. */
+  duration: number;
+  /** Per-sparkle initial delay (ms). Spreads the entry across ~2.2s. */
+  delay: number;
+};
+
+// Irregular distribution so the eye doesn't pick up a pattern. Durations and
+// delays are co-prime-ish to avoid all sparkles peaking at the same instant.
+const SPARKLES: Sparkle[] = [
+  { id: 's1', angle: 25,  radius: 70,  scale: 0.85, duration: 4100, delay: 0    },
+  { id: 's2', angle: 80,  radius: 105, scale: 0.55, duration: 3300, delay: 700  },
+  { id: 's3', angle: 135, radius: 60,  scale: 1.0,  duration: 4700, delay: 1500 },
+  { id: 's4', angle: 195, radius: 95,  scale: 0.7,  duration: 3800, delay: 400  },
+  { id: 's5', angle: 250, radius: 75,  scale: 0.5,  duration: 5200, delay: 2000 },
+  { id: 's6', angle: 305, radius: 110, scale: 0.95, duration: 3600, delay: 1100 },
+  { id: 's7', angle: 350, radius: 55,  scale: 0.6,  duration: 4400, delay: 2200 },
+];
+
+// ============================================================================
 // Card shell — chooses the right wrapper element based on `feature` props.
 // Extracted so future interactivity hooks live in a single place.
 // ============================================================================
@@ -370,6 +405,38 @@ export function FeaturesInfographic({
           <title id="features-infographic-title">
             QVAC features and platforms overview
           </title>
+
+          {/* ----- Sparkle twinkle styles (around the Q) -----
+              Scoped via the .qvac-sparkle class. Each sparkle is hidden by
+              default (opacity: 0) and only animates when the OS doesn't ask
+              for reduced motion. The keyframe spends ~70% of every cycle in
+              an invisible "rest" state, so at any given moment only 1-2 of
+              the seven sparkles are actually visible — discreet, not festive.
+          */}
+          <style>{`
+            .qvac-sparkle {
+              transform-box: fill-box;
+              transform-origin: center;
+              opacity: 0;
+            }
+            @media (prefers-reduced-motion: no-preference) {
+              .qvac-sparkle {
+                animation-name: qvac-sparkle-twinkle;
+                animation-iteration-count: infinite;
+                animation-timing-function: ease-in-out;
+              }
+            }
+            /* Note: each sparkle's peak scale comes from --sparkle-scale, set
+               inline per element. Position is handled by the wrapper <g>'s
+               SVG transform attribute, so this CSS transform only animates
+               size + opacity around the sparkle's own center. */
+            @keyframes qvac-sparkle-twinkle {
+              0%   { transform: scale(0);                                  opacity: 0; }
+              12%  { transform: scale(var(--sparkle-scale, 1));            opacity: 0.8; }
+              28%  { transform: scale(calc(var(--sparkle-scale, 1) * 0.5)); opacity: 0; }
+              100% { transform: scale(0);                                  opacity: 0; }
+            }
+          `}</style>
 
           {/* ----- Geometry: rings ----- */}
           <circle
@@ -452,6 +519,35 @@ export function FeaturesInfographic({
             }) scale(${Q_SCALE})`}
           >
             <path d={Q_PATH} fill="currentColor" stroke="none" />
+          </g>
+
+          {/* ----- Sparkles around the Q (pointer-events: none → never blocks clicks) -----
+              Each sparkle is wrapped in a <g> whose SVG `transform` carries
+              the position (CSS animations on SVG can't compose with the SVG
+              `transform` attribute, so position MUST live on the wrapper).
+              The inner <path> only animates scale + opacity via CSS, with
+              per-sparkle peak size driven by the --sparkle-scale custom
+              property set inline.
+          */}
+          <g pointerEvents="none" aria-hidden="true">
+            {SPARKLES.map((s) => {
+              const pos = polar(s.angle, s.radius);
+              return (
+                <g key={s.id} transform={`translate(${pos.x}, ${pos.y})`}>
+                  <path
+                    d={SPARKLE_PATH}
+                    fill="currentColor"
+                    stroke="none"
+                    className="qvac-sparkle"
+                    style={{
+                      ['--sparkle-scale' as string]: s.scale,
+                      animationDuration: `${s.duration}ms`,
+                      animationDelay: `${s.delay}ms`,
+                    } as React.CSSProperties}
+                  />
+                </g>
+              );
+            })}
           </g>
 
           {/* ----- Platform icons (foreignObject so they scale with viewBox) ----- */}
