@@ -14,8 +14,8 @@ wer:
 cer:
   enabled: true
 aradiawer:
-  enabled: true # Auto-applied when language is Arabic
-  min_score_threshold: 0.5 # Minimum threshold for semantic/syntactic scores
+  enabled: true  # Auto-applied when language is Arabic
+  min_score_threshold: 0.5  # Minimum threshold for semantic/syntactic scores
 model:
   path: "../../models/ggml-tiny.bin"
   sample_rate: 16000

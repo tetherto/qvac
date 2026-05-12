@@ -7,10 +7,10 @@ server:
 
 dataset:
   dataset_type: "common_voice"
-  speaker_group: "clean" # Not used for Common Voice
+  speaker_group: "clean"  # Not used for Common Voice
   language: "arabic"
   dialect: "levantine"
-  max_samples: 0 # 0 = use all samples from manifest
+  max_samples: 0  # 0 = use all samples from manifest
   # Path to Common Voice manifest.json (relative to benchmarks/client/)
   common_voice_manifest: "../../data/samples/arabic_levantine/manifest.json"
 
@@ -21,8 +21,8 @@ cer:
   enabled: true
 
 aradiawer:
-  enabled: true # Auto-applied when language is Arabic
-  min_score_threshold: 0.5 # Minimum threshold for semantic/syntactic scores
+  enabled: true  # Auto-applied when language is Arabic
+  min_score_threshold: 0.5  # Minimum threshold for semantic/syntactic scores
 
 model:
   path: "../../models/ggml-tiny.bin"
@@ -30,6 +30,6 @@ model:
   audio_format: "f32le"
   vad: false
   vad_model_path: ""
-  language: "ar" # Arabic language code
+  language: "ar"  # Arabic language code
   streaming: false
   streaming_chunk_size: 64000
