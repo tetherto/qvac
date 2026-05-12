@@ -282,7 +282,7 @@ test("registry: end() detaches parent listener so long-lived parents don't accum
 });
 
 test("registry: same-tick cancel-before-begin retroactively aborts the later begin() (Stop-button race close)", async (t: T) => {
-  // QVAC-18182. Stop-button race: the client generates a `requestId`
+  // Stop-button race: the client generates a `requestId`
   // and the user clicks Stop before the server-side `begin(...)` for
   // that id has landed. The registry has nothing to abort, so the
   // immediate `cancel(...)` still returns 0 ("no in-flight match" is

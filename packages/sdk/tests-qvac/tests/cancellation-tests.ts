@@ -1,4 +1,4 @@
-// Cancellation-path e2e tests (QVAC-18182).
+// Cancellation-path e2e tests.
 //
 // Covers the three observable contracts that typed cancel outcomes +
 // KvCacheSession introduce:
@@ -58,7 +58,7 @@ export const cancelBeforeBeginCompletion: TestDefinition = {
 export const cancelThenResumeKvCache: TestDefinition = {
   testId: "cancel-then-resume-kv-cache",
   params: {
-    cacheKey: "qvac-18182-cancel-resume-kvcache",
+    cacheKey: "cancel-then-resume-kvcache",
     firstUserMessage: "Tell me a long story about wizards.",
     secondUserMessage: "What is 2+2? Answer with just the number.",
     expectedAnswerContains: "4",

@@ -9,23 +9,21 @@ import {
 // Unit-level regression coverage for `decideCachedHistorySlice` — the pure
 // piece of the kv-cache cancel/zero-token fix (QVAC-17780).
 //
-// History notes:
-//   - QVAC-18181 (SDK 0.11.0): the per-model cancel counter that used to
-//     live in `kv-cache-state.ts` (`modelCancelCounters`,
-//     `noteCancelRequested`, `snapshotCancelCount`,
-//     `shouldRecordSavedCount`) was retired. Cancel detection now flows
-//     through the per-request `AbortSignal` from `RequestRegistry` (see
-//     `test/unit/runtime/request-registry.test.ts`) and
-//     `completion-stream.ts` reads `signal.aborted` directly.
-//   - QVAC-18182: the `cachedMessageCounts` map and its
-//     `clearCachedMessageCounts` helper that this file used to seed via
-//     `import { cachedMessageCounts } from "kv-cache-state"` were moved
-//     into `kv-cache-session.ts` as the single owner of all three
-//     KV-cache bookkeeping layers. The pure slice-decision helper still
-//     lives in `kv-cache-state.ts` and takes `savedCount` as a plain
-//     parameter; these tests now drive it without seeding any module
-//     state. The session's own commit/rollback semantics are covered by
-//     `runtime/kv-cache-session.test.ts`.
+// In SDK 0.11.0 the cancel-counter side channel that used to live in
+// this module (`modelCancelCounters`, `noteCancelRequested`,
+// `snapshotCancelCount`, `shouldRecordSavedCount`) was retired. Cancel
+// detection now flows through the per-request `AbortSignal` from
+// `RequestRegistry` (see `test/unit/runtime/request-registry.test.ts`)
+// and `completion-stream.ts` reads `signal.aborted` directly.
+//
+// The `cachedMessageCounts` map and its `clearCachedMessageCounts`
+// helper that this file used to seed via `import { cachedMessageCounts }
+// from "kv-cache-state"` were moved into `kv-cache-session.ts` as the
+// single owner of all three KV-cache bookkeeping layers. The pure
+// slice-decision helper still lives in `kv-cache-state.ts` and takes
+// `savedCount` as a plain parameter; these tests now drive it without
+// seeding any module state. The session's own commit/rollback
+// semantics are covered by `runtime/kv-cache-session.test.ts`.
 //
 // The slice-decision regression coverage below remains relevant — it
 // guards the "stale savedCount → empty payload" failure mode that's

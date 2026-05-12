@@ -283,7 +283,7 @@ export const tests = [
   // Multi-GPU config smoke (verifies split-mode and main-gpu flow through stack)
   ...multiGpuTests,
 
-  // M2 (QVAC-18182) typed cancel outcomes + KvCacheSession rollback e2e
+  // Typed cancel outcomes + KvCacheSession rollback e2e
   ...cancellationTests,
 
   // Additional model tests

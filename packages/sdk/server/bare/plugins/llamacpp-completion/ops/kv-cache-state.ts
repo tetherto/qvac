@@ -8,17 +8,11 @@
  * pulling in the Bare runtime (which is not available in that
  * environment).
  *
- * History notes:
- *
- *   - QVAC-18181 (SDK 0.11.0): the per-model cancel counter
- *     (`modelCancelCounters` / `noteCancelRequested` /
- *     `snapshotCancelCount`) that used to live here was retired in
- *     favor of `RequestRegistry`'s per-request `AbortSignal`.
- *   - QVAC-18182: the `cachedMessageCounts` map that previously
- *     lived in this module moved into
- *     `kv-cache-session.ts`, which now owns all three KV-cache
- *     bookkeeping layers (saved counts, init flags, on-disk files).
- *     Only the pure slice-decision helper remains here.
+ * Cancel detection flows through the per-request `AbortSignal` from
+ * `RequestRegistry`; the `cachedMessageCounts` map lives in
+ * `kv-cache-session.ts`, which owns all three KV-cache bookkeeping
+ * layers (saved counts, init flags, on-disk files). Only the pure
+ * slice-decision helper remains here.
  */
 
 export interface HistoryMessage {

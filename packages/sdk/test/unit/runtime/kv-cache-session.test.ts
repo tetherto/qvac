@@ -2,7 +2,7 @@
 import test from "brittle";
 
 // -----------------------------------------------------------------------------
-// `KvCacheSession` unit tests (QVAC-18182).
+// `KvCacheSession` unit tests.
 //
 // The session is the single owner of the three KV-cache bookkeeping layers
 // (on-disk `.bin`, `initializedCaches` set, `cachedMessageCounts` map).

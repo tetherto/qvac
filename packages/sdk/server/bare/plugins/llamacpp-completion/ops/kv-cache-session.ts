@@ -31,7 +31,7 @@ const logger = getServerLogger();
  *
  * Without a single owner, every cancel / zero-token / rename-failed /
  * tool-call exit would need to touch all three; any branch that forgets
- * a layer produces three-layer drift bugs (e.g. QVAC-17780).
+ * a layer produces three-layer drift bugs.
  *
  * `KvCacheSession` collapses the three layers behind one object with
  * three operations:
@@ -71,7 +71,7 @@ const logger = getServerLogger();
  * INVARIANT that existed in `kv-cache-state.ts` still holds: an entry is
  * present only when the corresponding `.bin` file is considered
  * trustworthy. Cancelled or zero-token turns must remove the entry so
- * the next-turn slice doesn't read a stale boundary (QVAC-17780).
+ * the next-turn slice doesn't read a stale boundary.
  */
 const cachedMessageCounts = new Map<string, number>();
 
