@@ -32,7 +32,7 @@ env:
 jobs:
   run-integration-tests:
     continue-on-error: true
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
     name: test-${{ matrix.platform }}-${{ matrix.arch }}
 
@@ -90,7 +90,15 @@ jobs:
         shell: bash
         run: |
           npm install
+
+      - name: Install bare tooling (arm64 and macos)
+        if: matrix.arch == 'arm64' || matrix.platform == 'darwin'
+        run: |
           npm install -g bare bare-make
+
+      - name: Add bare tooling to PATH (Linux x64)
+        if: (matrix.platform == 'linux' || matrix.platform == 'x64')
+        run: echo "/usr/local/nvm/versions/node/v20.20.2/bin" >> $GITHUB_PATH
 
       - name: Download prebuilds from artifact
         if: ${{ !inputs.prebuild_package }}
@@ -104,13 +112,13 @@ jobs:
         working-directory: ${{ inputs.workdir || env.PKG_DIR }}
         shell: bash
         run: |
-          mkdir -p prebuilds
-          npm pack ${{ inputs.prebuild_package }} --pack-destination /tmp
-          tar -xzf /tmp/*.tgz -C /tmp
-          cp -r /tmp/package/prebuilds/* prebuilds/
+          mkdir -p prebuilds tmp
+          npm pack ${{ inputs.prebuild_package }} --pack-destination tmp
+          tar -xzf tmp/*.tgz -C tmp
+          cp -r tmp/package/prebuilds/* prebuilds/
 
       - name: Linux - install dependencies
-        if: matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'ubuntu-24.04-arm'
+        if: (matrix.platform == 'linux' || matrix.platform == 'android') && matrix.arch == 'arm64'
         shell: bash
         run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
 

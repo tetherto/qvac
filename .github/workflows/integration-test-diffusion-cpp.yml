@@ -170,7 +170,15 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: |
           npm install
+
+      - name: Install bare tooling (arm64 and macos)
+        if: matrix.arch == 'arm64' || matrix.platform == 'darwin'
+        run: |
           npm install -g bare bare-make bare-runtime bare-https brittle
+
+      - name: Add bare tooling to PATH (Linux x64)
+        if: (matrix.platform == 'linux' || matrix.platform == 'x64')
+        run: echo "/usr/local/nvm/versions/node/v20.20.2/bin" >> $GITHUB_PATH
 
       - run: mkdir -p ${{ runner.temp }}/qvac-diffusion-cpp
       - run: mkdir -p ${{ env.WORKDIR }}/prebuilds

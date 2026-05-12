@@ -133,7 +133,7 @@ jobs:
       - name: Install bare tooling (arm64 and macos)
         if: matrix.arch == 'arm64' || matrix.platform == 'darwin'
         run: |
-          npm install -g bare@1.26.0 bare-make
+          npm install -g bare bare-make
 
       - name: Add bare tooling to PATH (Linux x64)
         if: (matrix.platform == 'linux' || matrix.platform == 'x64')
@@ -151,8 +151,7 @@ jobs:
         working-directory: ${{ inputs.workdir }}
         shell: bash
         run: |
-          mkdir -p prebuilds
-          mkdir -p tmp
+          mkdir -p prebuilds tmp
           npm pack ${{ inputs.prebuild_package }} --pack-destination tmp
           tar -xzf tmp/*.tgz -C tmp
           cp -r tmp/package/prebuilds/* prebuilds/
