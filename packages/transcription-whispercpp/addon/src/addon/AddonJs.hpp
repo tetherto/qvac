@@ -8,13 +8,13 @@
 #include <unordered_map>
 #include <vector>
 
-#include <js.h>
 #include <inference-addon-cpp/JsInterface.hpp>
 #include <inference-addon-cpp/JsUtils.hpp>
 #include <inference-addon-cpp/ModelInterfaces.hpp>
 #include <inference-addon-cpp/addon/AddonJs.hpp>
 #include <inference-addon-cpp/handlers/JsOutputHandlerImplementations.hpp>
 #include <inference-addon-cpp/handlers/OutputHandler.hpp>
+#include <js.h>
 #include <whisper.h>
 
 #include "model-interface/StreamingProcessor.hpp"
@@ -172,9 +172,7 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   // the full rationale.
   unique_ptr<OutputCallBackInterface> callback =
       make_unique<WhisperOutputCallBackJs>(
-          env,
-          args.get(0, "jsHandle"),
-          args.getFunction(2, "outputCallback"),
+          env, args.get(0, "jsHandle"), args.getFunction(2, "outputCallback"),
           std::move(outputHandlers));
 
   auto addon = make_unique<AddonJs>(env, std::move(callback), std::move(model));
