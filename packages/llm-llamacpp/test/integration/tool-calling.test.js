@@ -5,13 +5,27 @@ const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
 const { ensureModel } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
+const { recordPerformance } = require('./_perf-helper.js')
 const os = require('bare-os')
 
 const platform = os.platform()
 const arch = os.arch()
 const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
-const useCpu = isLinuxArm64
+
+// QVAC-17830: also honour NO_GPU=true so the `linux-x64-cpu` matrix
+// leg (ubuntu-22.04 runner with no_gpu='true') labels its perf rows
+// as [CPU] in the report. Previously useCpu was hardcoded to
+// isLinuxArm64, so on linux-x64-cpu the test ran on CPU (llama.cpp
+// fell back since no Vulkan device was present) but emitted rows
+// tagged [GPU] — making the combined report show GPU bars on a CPU
+// runner. Same NO_GPU detection pattern as _image-common.js.
+// Bare doesn't define `process` as a global at module-init time, so
+// the fallback to `process.env` is guarded with `typeof process`.
+const noGpuEnv = (typeof os.getEnv === 'function' ? os.getEnv('NO_GPU') : '') ||
+  (typeof process !== 'undefined' && process.env ? process.env.NO_GPU : '')
+const noGpu = String(noGpuEnv || '').toLowerCase() === 'true'
+const useCpu = isLinuxArm64 || noGpu
 
 const TOOL_MODEL_VARIANTS = [
   {
@@ -120,7 +134,8 @@ async function collectResponse (response) {
   const stats = response.stats || {}
   return {
     text: chunks.join('').trim(),
-    generatedTokens: Number(stats.generatedTokens || 0)
+    generatedTokens: Number(stats.generatedTokens || 0),
+    stats
   }
 }
 
@@ -163,9 +178,18 @@ async function createToolModel (modelVariant) {
 }
 
 async function runPrompt (model, prompt) {
+  const startTime = Date.now()
   const response = await model.run(prompt)
-  return await collectResponse(response)
+  const collected = await collectResponse(response)
+  return {
+    ...collected,
+    startTime,
+    endTime: Date.now()
+  }
 }
+
+const epTag = useCpu ? 'CPU' : 'GPU'
+const deviceId = useCpu ? 'cpu' : 'gpu'
 
 test('[tools] prompt scenarios', { timeout: 1_800_000, skip: isDarwinX64 }, async t => {
   for (const modelVariant of TOOL_MODEL_VARIANTS) {
@@ -173,13 +197,33 @@ test('[tools] prompt scenarios', { timeout: 1_800_000, skip: isDarwinX64 }, asyn
     const label = `[${modelVariant.id}]`
 
     try {
+      // QVAC-17830: record one perf row per (model_variant x prompt)
+      // cell, scenario='tool-calling'. prompt1 is the cold inference
+      // (KV cache empty, function-spec prefill heavy); prompt2 reuses
+      // the loaded model so its TTFT/TPS reflect a warm follow-up
+      // call. Keeping both rows in the report shows the cold-vs-warm
+      // delta for the same model on the same device.
       const firstRun = await runPrompt(model, clonePrompt())
       t.ok(firstRun.text.length > 0, `${label} prompt1: generated text`)
       t.ok(firstRun.generatedTokens > 0, `${label} prompt1: generated tokens tracked`)
+      const perfLabel1 = `[tools batch] [${modelVariant.id}] [${epTag}]`
+      t.comment(recordPerformance(perfLabel1, firstRun.endTime - firstRun.startTime, {
+        _output: firstRun.text,
+        stats: firstRun.stats,
+        deviceId,
+        scenario: 'tool-calling'
+      }))
 
       const secondRun = await runPrompt(model, buildPrompt2(firstRun.text))
       t.ok(secondRun.text.length > 0, `${label} prompt2: generated text`)
       t.ok(secondRun.generatedTokens > 0, `${label} prompt2: generated tokens tracked`)
+      const perfLabel2 = `[tools followup] [${modelVariant.id}] [${epTag}]`
+      t.comment(recordPerformance(perfLabel2, secondRun.endTime - secondRun.startTime, {
+        _output: secondRun.text,
+        stats: secondRun.stats,
+        deviceId,
+        scenario: 'tool-calling'
+      }))
     } finally {
       await release()
     }
