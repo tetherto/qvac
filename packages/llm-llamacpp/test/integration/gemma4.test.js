@@ -169,30 +169,33 @@ test('Gemma 4 supports multi-turn conversation with KV cache', {
     const systemMsg = { role: 'system', content: 'You are a helpful assistant. Answer concisely with just the city name.' }
     const userTurn1 = { role: 'user', content: 'What is the capital of France?' }
 
-    const prompt1 = [
-      { role: 'session', content: sessionName },
-      systemMsg,
-      userTurn1
-    ]
-    const response1 = await addon.run(prompt1)
+    // Cache control is a runOption (cacheKey), NOT a `{ role: 'session' }`
+    // chat message — the latter was removed in v0.15.0 and is silently dropped
+    // by Jinja chat templates that have no matching elif branch.
+    const prompt1 = [systemMsg, userTurn1]
+    const response1 = await addon.run(prompt1, { cacheKey: sessionName })
     const output1 = await collectResponse(response1)
     t.ok(output1.length > 0, `first turn produced output (${output1.length} chars)`)
     const lowerOutput1 = output1.toLowerCase()
     t.ok(/paris/.test(lowerOutput1), `first turn mentions Paris: "${output1.slice(0, 100)}"`)
+    t.ok(response1.stats?.CacheTokens > 0, `first turn populated KV cache (CacheTokens=${response1.stats?.CacheTokens})`)
 
     const prompt2 = [
-      { role: 'session', content: sessionName },
       systemMsg,
       userTurn1,
       { role: 'assistant', content: output1 },
       { role: 'user', content: 'And what about Germany?' }
     ]
-    const response2 = await addon.run(prompt2)
+    const response2 = await addon.run(prompt2, { cacheKey: sessionName })
     const output2 = await collectResponse(response2)
     t.ok(output2.length > 0, `second turn produced output (${output2.length} chars)`)
     const lowerOutput2 = output2.toLowerCase()
     t.ok(/berlin/.test(lowerOutput2), `second turn mentions Berlin: "${output2.slice(0, 100)}"`)
     t.ok(output2 !== output1, 'second turn produced different output from first')
+    t.ok(
+      response2.stats?.CacheTokens > response1.stats?.CacheTokens,
+      `second turn extended the KV cache from turn 1 (${response1.stats?.CacheTokens} -> ${response2.stats?.CacheTokens})`
+    )
   } finally {
     await addon.unload().catch(() => {})
   }

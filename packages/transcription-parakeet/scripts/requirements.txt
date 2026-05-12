@@ -1,0 +1,37 @@
+# Runtime requirements for scripts/convert-nemo-to-gguf.py.
+#
+# Despite the .nemo extension, the converter does not import the
+# (multi-GB) `nemo_toolkit` package -- it reads the .nemo archive
+# directly via `tarfile` + `torch.load`. Real deps:
+#
+#   gguf          -- writes the output .gguf file
+#   numpy         -- tensor shaping / quantization helpers
+#   torch         -- loads model_weights.ckpt out of the .nemo tarball
+#   pyyaml        -- parses model_config.yaml from the .nemo tarball
+#   sentencepiece -- decodes the .nemo's tokenizer.model proto into the
+#                    pieces / scores / piece_types arrays that
+#                    parakeet.cpp's C++ reader expects under
+#                    tokenizer.ggml.{tokens,scores,token_type}. Without
+#                    this, the converter still emits a GGUF, but
+#                    transcription output is raw token IDs because
+#                    parakeet.cpp has no native sentencepiece decoder
+#                    and relies on the converter to pre-decode the
+#                    pieces array.
+#
+# Mostly unpinned because this is a developer-time conversion tool,
+# not a runtime dep of the addon. Pin here if a specific upstream
+# release breaks the converter and we need to lock it.
+#
+# Exception: on darwin-x64 (Intel Macs) the latest available torch
+# wheel is torch==2.2.2 -- PyTorch stopped shipping macOS x86_64
+# wheels after 2.2.x. That wheel is built against the NumPy 1.x C
+# ABI and crashes at `import torch` when paired with NumPy 2.x
+# ("Failed to initialize NumPy: _ARRAY_API not found" -> "Numpy is
+# not available"). We pin numpy<2 only on that platform; every
+# other platform stays free to resolve the latest numpy.
+gguf
+numpy<2; sys_platform == "darwin" and platform_machine == "x86_64"
+numpy; sys_platform != "darwin" or platform_machine != "x86_64"
+torch
+pyyaml
+sentencepiece

@@ -1,6 +1,8 @@
 # pr-skills shared library
 
 Shared script + helpers for the PR status / review-queue / my-PR / PR-review skills.
+Cross-cutting daily workflow helpers live next door in
+`.cursor/skills/_lib/developer-workflow/`.
 
 This directory does not contain a `SKILL.md`; it is not a Cursor skill itself. The user-facing skills live under `.cursor/skills/`:
 
@@ -11,7 +13,8 @@ This directory does not contain a `SKILL.md`; it is not a Cursor skill itself. T
 
 ## Files
 
-- [`pr-status.mjs`](pr-status.mjs) — main entry. Modes: `team`, `review`, `my`. `team` and `review` are pod-scoped (`--pod` required). `my` is cross-pod by default (`--pod` optional; if omitted, every pod under `.github/teams/` is loaded).
+- [`pr-status.mjs`](pr-status.mjs) — CLI renderer. Modes: `team`, `review`, `my`. `team` and `review` are pod-scoped (`--pod` required). `my` is cross-pod by default (`--pod` optional; if omitted, every pod under `.github/teams/` is loaded). Add `--json` for machine-readable output used by daily status workflows.
+- [`pr-activity.mjs`](pr-activity.mjs) — shared PR data collector/classifier used by `pr-status.mjs` and daily workflow tooling. It fetches open PRs, resolves pod ownership, computes review state, stale/re-review/ready groups, and merge-conflict flags.
 - [`team.mjs`](team.mjs) — team-metadata loader. `loadTeam(pod)` reads a single pod; `discoverPods()` enumerates every `.github/teams/<pod>.json`; `findPodForFiles(files, pods)` returns the pod that owns a PR's touched files (first match wins).
 - [`slack.mjs`](slack.mjs) — Slack-handle map loader. File lives at `~/.config/qvac-pr-skills/slack.json`, schema `{ map, pendingReview }`. Bootstraps missing entries from `gh api users/<login>` and parks newly seeded logins on `pendingReview` so the skill workflow can confirm them with the user.
 - [`worktree.mjs`](worktree.mjs) — worktree manager for `/pr-review` and `/pr-test`. `resolvePR` (gh-resolved baseRefName, fail-fast — does NOT default to main), `fetchPRRefs` (single fetch for both PR head and base ref), `ensureWorktreeSynced` (sync mode, in-place `reset --hard`; preserves untracked artifacts at the same SHA and runs `clean -fdx` only after SHA drift), `lockPR` (per-PR flock), `computePatch` (3-dot diff to `/tmp/pr-<num>.patch`), `cleanupCache` (LRU keep 3).
@@ -39,7 +42,14 @@ node .cursor/skills/_lib/pr-skills/pr-status.mjs --mode my
 
 # pod-scoped my (unusual — only useful if you want to filter to a single pod)
 node .cursor/skills/_lib/pr-skills/pr-status.mjs --pod <name> --mode my
+
+# machine-readable output
+node .cursor/skills/_lib/pr-skills/pr-status.mjs --pod <name> --mode team --json
 ```
+
+`pr-status.mjs` reads `~/.config/qvac-pr-skills/config.json` when present for
+GitHub repo and stale-day settings. If config is missing, the repo is inferred
+from the local `upstream` remote.
 
 ## Onboarding a new pod
 

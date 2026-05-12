@@ -22,21 +22,6 @@ auto JSAdapter::loadFromJSObject(js::Object jsObject, js_env_t* env)
     config.modelPath = pathOpt.value().as<std::string>(env);
   }
 
-  auto modelTypeOpt =
-      jsObject.getOptionalProperty<js::String>(env, "modelType");
-  if (modelTypeOpt.has_value()) {
-    std::string typeStr = modelTypeOpt.value().as<std::string>(env);
-    if (typeStr == "ctc") {
-      config.modelType = ModelType::CTC;
-    } else if (typeStr == "tdt") {
-      config.modelType = ModelType::TDT;
-    } else if (typeStr == "eou") {
-      config.modelType = ModelType::EOU;
-    } else if (typeStr == "sortformer") {
-      config.modelType = ModelType::SORTFORMER;
-    }
-  }
-
   auto threadsOpt = jsObject.getOptionalProperty<js::Number>(env, "maxThreads");
   if (threadsOpt.has_value()) {
     config.maxThreads = threadsOpt.value().as<int32_t>(env);
@@ -75,60 +60,51 @@ auto JSAdapter::loadFromJSObject(js::Object jsObject, js_env_t* env)
     config.seed = seedOpt.value().as<int32_t>(env);
   }
 
-  auto encoderPathOpt =
-      jsObject.getOptionalProperty<js::String>(env, "encoderPath");
-  if (encoderPathOpt.has_value()) {
-    config.encoderPath = encoderPathOpt.value().as<std::string>(env);
+  // Streaming mode (see ParakeetConfig comments). All fields optional;
+  // unspecified values keep ParakeetConfig's defaults.
+  auto streamingOpt =
+      jsObject.getOptionalProperty<js::Boolean>(env, "streaming");
+  if (streamingOpt.has_value()) {
+    config.streaming = streamingOpt.value().as<bool>(env);
   }
-  auto encoderDataPathOpt =
-      jsObject.getOptionalProperty<js::String>(env, "encoderDataPath");
-  if (encoderDataPathOpt.has_value()) {
-    config.encoderDataPath = encoderDataPathOpt.value().as<std::string>(env);
+
+  auto streamingChunkMsOpt =
+      jsObject.getOptionalProperty<js::Number>(env, "streamingChunkMs");
+  if (streamingChunkMsOpt.has_value()) {
+    config.streamingChunkMs = streamingChunkMsOpt.value().as<int32_t>(env);
   }
-  auto decoderPathOpt =
-      jsObject.getOptionalProperty<js::String>(env, "decoderPath");
-  if (decoderPathOpt.has_value()) {
-    config.decoderPath = decoderPathOpt.value().as<std::string>(env);
+
+  auto streamingHistoryMsOpt =
+      jsObject.getOptionalProperty<js::Number>(env, "streamingHistoryMs");
+  if (streamingHistoryMsOpt.has_value()) {
+    config.streamingHistoryMs = streamingHistoryMsOpt.value().as<int32_t>(env);
   }
-  auto vocabPathOpt =
-      jsObject.getOptionalProperty<js::String>(env, "vocabPath");
-  if (vocabPathOpt.has_value()) {
-    config.vocabPath = vocabPathOpt.value().as<std::string>(env);
+
+  auto streamingEmitPartialsOpt =
+      jsObject.getOptionalProperty<js::Boolean>(env, "streamingEmitPartials");
+  if (streamingEmitPartialsOpt.has_value()) {
+    config.streamingEmitPartials = streamingEmitPartialsOpt.value().as<bool>(env);
   }
-  auto preprocessorPathOpt =
-      jsObject.getOptionalProperty<js::String>(env, "preprocessorPath");
-  if (preprocessorPathOpt.has_value()) {
-    config.preprocessorPath = preprocessorPathOpt.value().as<std::string>(env);
+
+  auto streamingEnergyVadOpt =
+      jsObject.getOptionalProperty<js::Boolean>(env, "streamingEnergyVad");
+  if (streamingEnergyVadOpt.has_value()) {
+    config.streamingEnergyVad = streamingEnergyVadOpt.value().as<bool>(env);
   }
-  auto ctcModelPathOpt =
-      jsObject.getOptionalProperty<js::String>(env, "ctcModelPath");
-  if (ctcModelPathOpt.has_value()) {
-    config.ctcModelPath = ctcModelPathOpt.value().as<std::string>(env);
+
+  auto streamingLeftContextMsOpt =
+      jsObject.getOptionalProperty<js::Number>(env, "streamingLeftContextMs");
+  if (streamingLeftContextMsOpt.has_value()) {
+    config.streamingLeftContextMs =
+        streamingLeftContextMsOpt.value().as<int32_t>(env);
   }
-  auto ctcModelDataPathOpt =
-      jsObject.getOptionalProperty<js::String>(env, "ctcModelDataPath");
-  if (ctcModelDataPathOpt.has_value()) {
-    config.ctcModelDataPath = ctcModelDataPathOpt.value().as<std::string>(env);
-  }
-  auto tokenizerPathOpt =
-      jsObject.getOptionalProperty<js::String>(env, "tokenizerPath");
-  if (tokenizerPathOpt.has_value()) {
-    config.tokenizerPath = tokenizerPathOpt.value().as<std::string>(env);
-  }
-  auto eouEncoderPathOpt =
-      jsObject.getOptionalProperty<js::String>(env, "eouEncoderPath");
-  if (eouEncoderPathOpt.has_value()) {
-    config.eouEncoderPath = eouEncoderPathOpt.value().as<std::string>(env);
-  }
-  auto eouDecoderPathOpt =
-      jsObject.getOptionalProperty<js::String>(env, "eouDecoderPath");
-  if (eouDecoderPathOpt.has_value()) {
-    config.eouDecoderPath = eouDecoderPathOpt.value().as<std::string>(env);
-  }
-  auto sortformerPathOpt =
-      jsObject.getOptionalProperty<js::String>(env, "sortformerPath");
-  if (sortformerPathOpt.has_value()) {
-    config.sortformerPath = sortformerPathOpt.value().as<std::string>(env);
+
+  auto streamingRightLookaheadMsOpt =
+      jsObject.getOptionalProperty<js::Number>(
+          env, "streamingRightLookaheadMs");
+  if (streamingRightLookaheadMsOpt.has_value()) {
+    config.streamingRightLookaheadMs =
+        streamingRightLookaheadMsOpt.value().as<int32_t>(env);
   }
 
   auto innerConfigOpt = jsObject.getOptionalProperty<js::Object>(env, "config");
@@ -172,47 +148,6 @@ auto JSAdapter::loadAudioParams(js::Object audioParamsObj, js_env_t *env,
   }
 
   return parakeetConfig;
-}
-
-void JSAdapter::loadMap(js::Object jsObject, js_env_t *env,
-                        std::map<std::string, JSValueVariant> &output) {
-  js_value_t* propNames = nullptr;
-  JS(js_get_property_names(env, jsObject, &propNames));
-
-  uint32_t length = 0;
-  JS(js_get_array_length(env, propNames, &length));
-
-  for (uint32_t i = 0; i < length; ++i) {
-    js_value_t* propName = nullptr;
-    JS(js_get_element(env, propNames, i, &propName));
-
-    auto key = js::String(env, propName).as<std::string>(env);
-    auto value = jsObject.getProperty(env, key.c_str());
-
-    js_value_type_t type;
-    JS(js_typeof(env, value, &type));
-
-    switch (type) {
-    case js_boolean: {
-      bool boolVal = false;
-      JS(js_get_value_bool(env, value, &boolVal));
-      output[key] = boolVal;
-      break;
-    }
-    case js_number: {
-      double numVal = 0.0;
-      JS(js_get_value_double(env, value, &numVal));
-      output[key] = numVal;
-      break;
-    }
-    case js_string: {
-      output[key] = js::String(env, value).as<std::string>(env);
-      break;
-    }
-    default:
-      break;
-    }
-  }
 }
 
 } // namespace qvac_lib_infer_parakeet
