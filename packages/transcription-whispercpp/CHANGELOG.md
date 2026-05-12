@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Bumped `qvac-lib-inference-addon-cpp` to `1.1.7#1`.
-- Disabled Metal for iOS at the build layer to avoid a separate Metal/MTLCompiler XPC crash (`XPC_ERROR_CONNECTION_INTERRUPTED`, peer unloaded) that reproduces during `transcribe()` on physical iPhone (tracked independently of the OutputCallBackJs teardown UAF). The `whisper-cpp` port (`qvac-registry-vcpkg/ports/whisper-cpp/portfile.cmake`) now passes `-DGGML_METAL=ON` only when `VCPKG_TARGET_IS_OSX`, and `-DGGML_METAL=OFF` when `VCPKG_TARGET_IS_IOS`, so iOS builds no longer link the Metal backend at all. Port-version bumped to `1.8.4.2#1`. Once that port revision is merged into `qvac-registry-vcpkg` and the consumer's baseline is bumped, no manifest change is required here. While the registry change is in flight, this package's `vcpkg-configuration.json` overlays the port from a local clone of `qvac-registry-vcpkg` for testing — that overlay-ports entry is **temporary** and should be removed before merging this branch. macOS / Linux / Android / Windows are unaffected.
+- Bumped `whisper-cpp` to `1.8.4.2#1`.
 
 ## [0.6.8]
 
