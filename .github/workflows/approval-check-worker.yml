@@ -351,7 +351,7 @@ jobs:
                   : "";
 
                 const commentBody = `## Tier-based Approval Status
-
+                            
                 **PR Tier:** ${tier.toUpperCase()}
 
                 **Current Status:** ${requirementsMet ? "✅ APPROVED" : "❌ PENDING"}
@@ -384,7 +384,7 @@ jobs:
                 }
               }
             }
-
+            
             const approvals = await checkApprovals(github, context, prNumber);
 
             // Get PR labels
@@ -401,7 +401,7 @@ jobs:
 
             // Check requirements
             const result = checkTierRequirements(github, context, approvals, tier, prNumber);
-
+            
             console.log(`Repository: ${approvals.repoOwningTeam}`);
             console.log(result.statusMessage);
 
@@ -414,7 +414,7 @@ jobs:
               description: result.statusMessage,
               context: 'Tier-based Approval Check'
             });
-
+            
             if (!result.requirementsMet) {
               core.setFailed(result.statusMessage);
             }
