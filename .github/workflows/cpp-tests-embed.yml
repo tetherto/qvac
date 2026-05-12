@@ -273,7 +273,6 @@ jobs:
             ${{ env.WORKDIR }}/build/test/unit/cpp-test-results.xml
           retention-days: 30
 
-
       - name: Coverage Summary
         if: ${{ matrix.os == 'ubuntu-24.04' && always() }}
         shell: bash

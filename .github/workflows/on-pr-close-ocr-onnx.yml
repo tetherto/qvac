@@ -32,7 +32,7 @@ run-name: Delete NPM Versions ${{ inputs.version }} ${{ inputs.pr-number }} ${{ 
 
 permissions:
   contents: read
-  
+
 jobs:
   print-context:
     runs-on: ubuntu-latest
@@ -56,4 +56,4 @@ jobs:
       pattern: ${{ inputs.pattern }}
       packages: ${{ inputs.packages }}
       dry-run: ${{ inputs.dry-run || true }}
-    
+

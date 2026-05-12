@@ -198,19 +198,7 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref }}
 
   merge-guard:
-    needs:
-      [
-        authorize,
-        changes,
-        verify-fabric-lockstep,
-        sanity-checks,
-        ts-checks,
-        cpp-lint,
-        cpp-tests,
-        prebuild,
-        run-integration-tests,
-        run-mobile-integration-tests,
-      ]
+    needs: [authorize, changes, verify-fabric-lockstep, sanity-checks, ts-checks, cpp-lint, cpp-tests, prebuild, run-integration-tests, run-mobile-integration-tests]
     if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/public-pr.yml
     with:

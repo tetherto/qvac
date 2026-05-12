@@ -20,7 +20,7 @@ inputs:
   pr_head_sha:
     description: "PR head SHA"
     required: false
-  workdir: 
+  workdir:
     default: "."
     type: string
 
@@ -79,7 +79,7 @@ runs:
     - name: Create vcpkg cache location
       shell: bash
       run: mkdir -p vcpkg/cache
- 
+
     - name: Get vcpkg cache
       uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
       with:

@@ -74,8 +74,7 @@ jobs:
   release-merge-guard-schema:
     name: Release Merge Guard (Schema)
     if: >-
-      github.event_name == 'push' &&
-      startsWith(github.ref_name, 'release-qvac-registry-schema')
+      github.event_name == 'push' && startsWith(github.ref_name, 'release-qvac-registry-schema')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -94,8 +93,7 @@ jobs:
   release-merge-guard-client:
     name: Release Merge Guard (Client)
     if: >-
-      github.event_name == 'push' &&
-      startsWith(github.ref_name, 'release-qvac-registry-client')
+      github.event_name == 'push' && startsWith(github.ref_name, 'release-qvac-registry-client')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2

@@ -6,9 +6,7 @@ on:
       sha:
         required: false
         description: >-
-          Base ref/SHA to diff against for clang-format. When empty (e.g. on
-          workflow_dispatch runs without a PR context), the workflow falls
-          back to `github.event.before` and finally to `HEAD~1`.
+          Base ref/SHA to diff against for clang-format. When empty (e.g. on workflow_dispatch runs without a PR context), the workflow falls back to `github.event.before` and finally to `HEAD~1`.
         type: string
       pr_head_sha:
         required: false

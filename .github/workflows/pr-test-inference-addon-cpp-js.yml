@@ -87,21 +87,21 @@ jobs:
             name: win32-x64
             asan: false
             run_tests: true
-          # Android/iOS entries are build-only here.
-          # Disable for now to save CI time.
-          # - runner: ubuntu-24.04
-          #   platform: android
-          #   arch: arm64
-          #   name: android-arm64
-          #   flags: -D ANDROID_STL=c++_shared
-          #   asan: false
-          #   run_tests: false
-          # - runner: macos-15
-          #   platform: ios
-          #   arch: arm64
-          #   name: ios-arm64
-          #   asan: false
-          #   run_tests: false
+            # Android/iOS entries are build-only here.
+            # Disable for now to save CI time.
+            # - runner: ubuntu-24.04
+            #   platform: android
+            #   arch: arm64
+            #   name: android-arm64
+            #   flags: -D ANDROID_STL=c++_shared
+            #   asan: false
+            #   run_tests: false
+            # - runner: macos-15
+            #   platform: ios
+            #   arch: arm64
+            #   name: ios-arm64
+            #   asan: false
+            #   run_tests: false
     runs-on: ${{ matrix.runner }}
     name: js-${{ matrix.name }}
     permissions:

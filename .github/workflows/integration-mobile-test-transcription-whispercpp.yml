@@ -36,9 +36,9 @@ on:
 env:
   NODE_VERSION: 'lts/*'
   ADDON_NAME: '@qvac/transcription-whispercpp'
-  PREBUILD_ARTIFACT_PREFIX: 'whisper-cpp-'  # Prefix for prebuild artifacts (matches prebuilds.yaml)
-  TEST_FRAMEWORK_REF: 'main'  # Branch/tag of qvac-test-addon-mobile framework
-  APP_BUNDLE_ID: 'io.tether.test.qvac'  # Bundle ID for the test app (same for all addons)
+  PREBUILD_ARTIFACT_PREFIX: 'whisper-cpp-' # Prefix for prebuild artifacts (matches prebuilds.yaml)
+  TEST_FRAMEWORK_REF: 'main' # Branch/tag of qvac-test-addon-mobile framework
+  APP_BUNDLE_ID: 'io.tether.test.qvac' # Bundle ID for the test app (same for all addons)
 
 jobs:
   label-gate:
@@ -71,7 +71,7 @@ jobs:
     permissions:
       contents: read
       packages: read
-      pull-requests: write  # Allow commenting on PRs
+      pull-requests: write # Allow commenting on PRs
       id-token: write
     strategy:
       fail-fast: false
@@ -79,7 +79,7 @@ jobs:
         include:
           - platform: Android
             os: ubuntu-24.04
-            runner: ai-run-linux  # Self-hosted runner to avoid Maven Central 403 issues
+            runner: ai-run-linux # Self-hosted runner to avoid Maven Central 403 issues
           - platform: iOS
             os: macos-14
             runner: macos-14

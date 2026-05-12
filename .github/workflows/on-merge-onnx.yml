@@ -142,9 +142,7 @@ jobs:
   publish-gpr:
     needs: [build, publish-logic]
     if: >-
-      needs.publish-logic.outputs.publish_main == 'true' ||
-      needs.publish-logic.outputs.publish_feature == 'true' ||
-      needs.publish-logic.outputs.publish_tmp == 'true'
+      needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true'
     continue-on-error: true
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
@@ -220,9 +218,7 @@ jobs:
   publish-release:
     needs: [publish-npm]
     if: >-
-      !cancelled() &&
-      needs.publish-npm.result == 'success' &&
-      needs.publish-npm.outputs.published_version != ''
+      !cancelled() && needs.publish-npm.result == 'success' && needs.publish-npm.outputs.published_version != ''
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release-onnx.yml

@@ -1,19 +1,6 @@
 name: Setup build host
 description: >-
-  Install and configure the OS-level prerequisites needed by prebuild
-  workflows. Runs a fixed set of steps per runner/platform/arch: on ubuntu
-  we maximize disk space; on windows we enable long paths, configure the
-  CMake generator, and (on arm64) rename the Windows 10 SDK; on linux we
-  install the base X11 dev headers plus any caller-supplied extras; on
-  android we export the NDK / toolchain env and install the ubuntu cross
-  toolchain.
-
-  LLVM/Clang installation has been split out into the dedicated
-  `setup-llvm` composite action. Callers that need a versioned LLVM
-  toolchain (every C++ workflow today) MUST invoke `setup-llvm` themselves
-  on linux/windows runners; it is the single source of truth for the LLVM
-  major used across the monorepo.
-
+  Install and configure the OS-level prerequisites needed by prebuild workflows. Runs a fixed set of steps per runner/platform/arch: on ubuntu we maximize disk space; on windows we enable long paths, configure the CMake generator, and (on arm64) rename the Windows 10 SDK; on linux we install the base X11 dev headers plus any caller-supplied extras; on android we export the NDK / toolchain env and install the ubuntu cross toolchain. #magic___^_^___line LLVM/Clang installation has been split out into the dedicated `setup-llvm` composite action. Callers that need a versioned LLVM toolchain (every C++ workflow today) MUST invoke `setup-llvm` themselves on linux/windows runners; it is the single source of truth for the LLVM major used across the monorepo. #magic___^_^___line
 inputs:
   platform:
     description: Build platform (linux, android, darwin, ios, win32)
@@ -23,8 +10,7 @@ inputs:
     required: true
   linux-extra-packages:
     description: >-
-      Additional apt packages to install on linux runners, on top of the
-      always-installed base set (libxi-dev libxtst-dev libxrandr-dev).
+      Additional apt packages to install on linux runners, on top of the always-installed base set (libxi-dev libxtst-dev libxrandr-dev).
     required: false
     default: ""
 

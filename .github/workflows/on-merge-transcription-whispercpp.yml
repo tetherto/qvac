@@ -105,8 +105,7 @@ jobs:
   release-merge-guard:
     name: Release Merge Guard
     if: >-
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-      startsWith(github.ref_name, 'release-')
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && startsWith(github.ref_name, 'release-')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -140,9 +139,7 @@ jobs:
   publish-gpr:
     needs: [build, publish-logic]
     if: >-
-      needs.publish-logic.outputs.publish_main == 'true' ||
-      needs.publish-logic.outputs.publish_feature == 'true' ||
-      needs.publish-logic.outputs.publish_tmp == 'true'
+      needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true'
     continue-on-error: true
     outputs:
       published_version: ${{ steps.capture_version.outputs.published_version }}

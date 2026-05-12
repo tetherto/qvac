@@ -1,10 +1,6 @@
 name: Setup Rust toolchain for prebuilds
 description: >-
-  Ensure a stable Rust toolchain is available and add per-target stdlib for
-  the current matrix entry. On Windows the action bootstraps rustup itself
-  if it isn't already installed; macOS and Linux runners are assumed to ship
-  rustup preinstalled (true for current GitHub-hosted images).
-
+  Ensure a stable Rust toolchain is available and add per-target stdlib for the current matrix entry. On Windows the action bootstraps rustup itself if it isn't already installed; macOS and Linux runners are assumed to ship rustup preinstalled (true for current GitHub-hosted images). #magic___^_^___line
 inputs:
   platform:
     description: Build platform (linux, android, darwin, ios, win32)

@@ -40,7 +40,6 @@ permissions:
   packages: read
   id-token: write
 
-
 jobs:
   label-gate:
     name: Authorise (label-gate)
@@ -250,9 +249,7 @@ jobs:
   publish-release:
     needs: [publish-npm]
     if: >-
-      !cancelled() &&
-      needs.publish-npm.result == 'success' &&
-      needs.publish-npm.outputs.published_version != ''
+      !cancelled() && needs.publish-npm.result == 'success' && needs.publish-npm.outputs.published_version != ''
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release.yml

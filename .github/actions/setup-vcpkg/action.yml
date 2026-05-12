@@ -1,11 +1,6 @@
 name: Setup vcpkg
 description: >-
-  Point VCPKG_ROOT at the runner's pre-installed vcpkg (Linux, Windows) or do
-  a shallow blobless sparse bootstrap (macOS), pin policy env vars
-  (VCPKG_BUILD_TYPE=release to skip debug libs, --no-parallel-configure to
-  stabilize Visual Studio / Apple toolchain configuration), and enable the
-  shared S3-backed binary cache.
-
+  Point VCPKG_ROOT at the runner's pre-installed vcpkg (Linux, Windows) or do a shallow blobless sparse bootstrap (macOS), pin policy env vars (VCPKG_BUILD_TYPE=release to skip debug libs, --no-parallel-configure to stabilize Visual Studio / Apple toolchain configuration), and enable the shared S3-backed binary cache. #magic___^_^___line
 inputs:
   platform:
     description: Build platform (linux, android, darwin, ios, win32)

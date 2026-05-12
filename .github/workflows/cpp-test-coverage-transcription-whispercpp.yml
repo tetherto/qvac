@@ -105,17 +105,17 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: |
           mkdir -p models
-          
+
           echo "Downloading ggml-tiny.bin..."
           curl -L -o models/ggml-tiny.bin \
             "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin" \
             --fail --silent --show-error --connect-timeout 30 --max-time 300
-          
+
           echo "Downloading ggml-silero VAD model..."
           curl -L -o models/ggml-silero-v5.1.2.bin \
             "https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin" \
             --fail --silent --show-error --connect-timeout 30 --max-time 300
-          
+
           echo "Downloaded models:"
           ls -lha models/
 

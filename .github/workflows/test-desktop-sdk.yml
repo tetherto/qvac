@@ -475,7 +475,6 @@ jobs:
               ]);
             }
 
-
             const exitCode = producerExit || consumerExitCode;
             if (exitCode !== 0) {
               console.log(`❌ Tests failed with exit code: ${exitCode}`);

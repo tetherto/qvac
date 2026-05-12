@@ -586,7 +586,7 @@ jobs:
             echo "apk_path=$APK_ABSOLUTE_PATH" >> $GITHUB_OUTPUT
             echo "app_type=ANDROID_APP" >> $GITHUB_OUTPUT
             echo "app_name=test-app-${{ matrix.platform }}.apk" >> $GITHUB_OUTPUT
-            
+
             # Clean up build intermediates to free disk space
             echo "Cleaning up build intermediates..."
             rm -rf android/app/build/intermediates
@@ -1074,8 +1074,6 @@ jobs:
             # so the `Extract Console Logs` post-test step still has a
             # bare_console.log file to harvest from Customer_Artifacts.zip.
           fi
-
-
 
           # Create test spec YAML using printf to avoid variable expansion issues
           {

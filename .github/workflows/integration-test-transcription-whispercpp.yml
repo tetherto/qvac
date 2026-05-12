@@ -123,8 +123,7 @@ jobs:
             platform: win32
             arch: x64
             benchmark_matrix_json: >-
-              [{"modelFile":"ggml-tiny.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-tiny.bin","useGPU":true,"backendHint":"directml"}]
-
+              [{"modelFile":"ggml-tiny.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-tiny.bin","useGPU":true,"backendHint":"directml"}] #magic___^_^___line
     steps:
       - name: Setup Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
@@ -243,7 +242,7 @@ jobs:
         run: npm run test:stand-alone:gpu
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
-          
+
       - name: Run RTF benchmark (Unix)
         if: ${{ always() && matrix.platform != 'win32' && inputs.run_rtf_benchmarks != false }}
         continue-on-error: true

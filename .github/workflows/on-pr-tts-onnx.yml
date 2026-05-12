@@ -265,16 +265,7 @@ jobs:
       workdir: ${{ needs.context.outputs.workdir }}
 
   merge-guard:
-    needs:
-      [
-        authorize,
-        sanity-checks,
-        cpp-lint,
-        cpp-tests-coverage,
-        prebuild,
-        run-integration-tests,
-        run-mobile-integration-tests,
-      ]
+    needs: [authorize, sanity-checks, cpp-lint, cpp-tests-coverage, prebuild, run-integration-tests, run-mobile-integration-tests]
     if: always()
     uses: ./.github/workflows/public-pr.yml
     with:

@@ -58,12 +58,7 @@ jobs:
         env:
           SDK_PATH: ${{ github.workspace }}/packages/sdk
         run: >
-          bun run scripts/generate-api-docs.ts
-          ${{ steps.sdk.outputs.version }}
-          --latest
-          --force-extract
-          --no-ai
-
+          bun run scripts/generate-api-docs.ts ${{ steps.sdk.outputs.version }} --latest --force-extract --no-ai #magic___^_^___line
       - name: Snapshot first run output
         run: |
           cp scripts/api-docs/api-data.json /tmp/api-data-run1.json
@@ -76,12 +71,7 @@ jobs:
         env:
           SDK_PATH: ${{ github.workspace }}/packages/sdk
         run: >
-          bun run scripts/generate-api-docs.ts
-          ${{ steps.sdk.outputs.version }}
-          --latest
-          --force-extract
-          --no-ai
-
+          bun run scripts/generate-api-docs.ts ${{ steps.sdk.outputs.version }} --latest --force-extract --no-ai #magic___^_^___line
       - name: Assert api-data.json is byte-identical across runs
         run: |
           diff -u /tmp/api-data-run1.json scripts/api-docs/api-data.json || {

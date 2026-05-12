@@ -108,13 +108,13 @@ jobs:
         working-directory: ${{ inputs.workdir }}
         run: |
           PACKAGE_NAME=$(node -p "require('./package.json').name")
-          
+
           # Allow @qvac/* scoped packages
           if [[ "$PACKAGE_NAME" == @qvac/* ]]; then
             echo "✅ Package name is scoped: $PACKAGE_NAME"
             exit 0
           fi
-          
+
           # Allow specific unscoped packages
           ALLOWED_UNSCOPED=("qvac")
           for allowed in "${ALLOWED_UNSCOPED[@]}"; do
@@ -123,7 +123,7 @@ jobs:
               exit 0
             fi
           done
-          
+
           echo "::error title=Invalid package name::Package name must be @qvac/* or an allowed unscoped"
           exit 1
 
