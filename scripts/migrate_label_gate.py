@@ -102,7 +102,15 @@ def detect_secret_bearing(job_text: str) -> tuple[bool, bool]:
         # Match `secrets:` followed (possibly after blank/comment lines) by an
         # indented child key — i.e. a non-empty mapping. We don't try to enumerate
         # the keys; if any are present, this is a user-secret pass-through.
-        if re.search(r"^(\s+)secrets\s*:\s*\n(?:\s*\n|\s*#.*\n)*\1\s+\S", job_text, re.MULTILINE):
+        # Use [ \t]* (horizontal whitespace only) inside the inner alternation
+        # so each iteration consumes exactly one line; `\s*` would let
+        # newlines overlap and trigger exponential backtracking on long
+        # blank runs (CodeQL py/redos).
+        if re.search(
+            r"^(\s+)secrets[ \t]*:[ \t]*\n(?:[ \t]*\n|[ \t]*#[^\n]*\n)*\1[ \t]+\S",
+            job_text,
+            re.MULTILINE,
+        ):
             references_user_secret = True
     return has_env, references_user_secret
 
