@@ -105,6 +105,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Install global dependencies
+        if: matrix.platform == 'iOS'
         run: |
           echo "Installing global dependencies..."
           npm install -g @expo/cli@latest
