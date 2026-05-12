@@ -654,7 +654,7 @@ export function FeaturesInfographic({
                   className="flex h-full w-full items-center justify-center rounded-full bg-fd-background"
                   aria-label={p.label}
                 >
-                  <p.Icon size={48} stroke={1} className="text-fd-primary" />
+                  <p.Icon size={48} stroke={1.25} className="text-fd-primary" />
                 </div>
               </foreignObject>
             );
