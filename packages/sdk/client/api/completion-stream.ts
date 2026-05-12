@@ -129,6 +129,14 @@ type CompletionParams = Omit<CompletionClientParams, "tools"> & {
  * ```
  */
 export function completion(params: CompletionParams): CompletionRun {
+  // Stable identity for this run, generated client-side so it's
+  // available synchronously the moment we return — before the first
+  // network round-trip and therefore before the user could possibly
+  // have a "stop" handler. Surfaced on the returned `CompletionRun`
+  // (`run.requestId`) so callers can `cancel({ requestId })` at any
+  // point during the stream.
+  const requestId = generateClientRequestId();
+
   let statsResolver: (value: CompletionStats | undefined) => void = () => {};
   let statsRejecter: (error: unknown) => void = () => {};
   const statsPromise = new Promise<CompletionStats | undefined>(
@@ -226,6 +234,7 @@ export function completion(params: CompletionParams): CompletionRun {
         emitRawDeltas: params.emitRawDeltas,
         toolDialect: params.toolDialect,
         responseFormat: params.responseFormat,
+        requestId,
       };
 
       const responses: AsyncGenerator<unknown> = streamRpc(
@@ -347,6 +356,7 @@ export function completion(params: CompletionParams): CompletionRun {
     })();
 
     return {
+      requestId,
       events: eventStream,
       final: finalPromise,
       tokenStream,
@@ -365,6 +375,7 @@ export function completion(params: CompletionParams): CompletionRun {
     })() as AsyncGenerator<ToolCallEvent>;
 
     return {
+      requestId,
       events: eventStream,
       final: finalPromise,
       tokenStream,
@@ -374,4 +385,29 @@ export function completion(params: CompletionParams): CompletionRun {
       toolCalls: toolCallsPromise,
     };
   }
+}
+
+/**
+ * UUIDv4 generator for client-side request ids. The Web Crypto API ships
+ * `crypto.randomUUID` everywhere we run today (Bun, modern Node, modern
+ * browsers, React Native via the polyfill that the workbench-desktop /
+ * RN runtime config injects). The fallback exists so the SDK never
+ * crashes in an exotic JS environment without `crypto.randomUUID` —
+ * `requestId` semantics still hold (uniqueness, opaque to the caller),
+ * just without the UUIDv4 wire shape.
+ */
+function generateClientRequestId(): string {
+  const c = (
+    globalThis as {
+      crypto?: { randomUUID?: () => string };
+    }
+  ).crypto;
+  if (c?.randomUUID) return c.randomUUID();
+  // Fallback: 128 random bits encoded as a hex string. Distinct enough
+  // for in-flight cancel targeting; not a wire-spec UUID.
+  const bytes = new Uint8Array(16);
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = Math.floor(Math.random() * 256);
+  }
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
