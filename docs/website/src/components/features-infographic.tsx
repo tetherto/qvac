@@ -3,22 +3,21 @@
 import * as React from 'react';
 import Link from 'next/link';
 import {
-  TbBrandApple,
-  TbBrandWindows,
-  TbDeviceLaptop,
-  TbDeviceMobile,
-  TbAccessPoint,
-} from 'react-icons/tb';
-import {
-  SiLinux,
-  SiAndroid,
-} from '@icons-pack/react-simple-icons';
+  IconAccessPoint,
+  IconDeviceAirtag,
+  IconDeviceCctv,
+  IconDeviceImac,
+  IconDeviceMobile,
+  IconDeviceWatchHeart,
+  IconRobot,
+  IconServer2,
+} from '@tabler/icons-react';
 
 // ============================================================================
 // Public types
 // ============================================================================
 
-export type IconProps = { size?: number; className?: string };
+export type IconProps = { size?: number; stroke?: number; className?: string };
 
 export type Platform = {
   id: string;
@@ -47,49 +46,18 @@ export type FeaturesInfographicProps = {
 };
 
 // ============================================================================
-// Custom 3-tier outlined server icon (Tabler ships only 2-tier variants).
-// Stroke style matches Tabler's default (width 2, round caps/joins).
-// Exported so consumers can reuse or replace it.
-// ============================================================================
-
-export function ServerStackIcon({ size = 24, className }: IconProps) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden="true"
-    >
-      <rect x="3" y="3" width="18" height="5" rx="1" />
-      <rect x="3" y="9.5" width="18" height="5" rx="1" />
-      <rect x="3" y="16" width="18" height="5" rx="1" />
-      <line x1="6.5" y1="5.5" x2="6.51" y2="5.5" />
-      <line x1="6.5" y1="12" x2="6.51" y2="12" />
-      <line x1="6.5" y1="18.5" x2="6.51" y2="18.5" />
-    </svg>
-  );
-}
-
-// ============================================================================
 // Default data
 // ============================================================================
 
 export const DEFAULT_PLATFORMS: Platform[] = [
-  { id: 'mobile',  label: 'Mobile',  Icon: TbDeviceMobile as unknown as React.ComponentType<IconProps>,         angle: 0 },
-  { id: 'apple',   label: 'Apple',   Icon: TbBrandApple as unknown as React.ComponentType<IconProps>,           angle: 45 },
-  { id: 'server',  label: 'Server',  Icon: ServerStackIcon,                                                     angle: 90 },
-  { id: 'android', label: 'Android', Icon: SiAndroid as unknown as React.ComponentType<IconProps>,              angle: 135 },
-  { id: 'iot',     label: 'IoT',     Icon: TbAccessPoint as unknown as React.ComponentType<IconProps>,          angle: 180 },
-  { id: 'windows', label: 'Windows', Icon: TbBrandWindows as unknown as React.ComponentType<IconProps>,         angle: 225 },
-  { id: 'desktop', label: 'Desktop', Icon: TbDeviceLaptop as unknown as React.ComponentType<IconProps>,         angle: 270 },
-  { id: 'linux',   label: 'Linux',   Icon: SiLinux as unknown as React.ComponentType<IconProps>,                angle: 315 },
+  { id: 'mobile',   label: 'Mobile',   Icon: IconDeviceMobile as unknown as React.ComponentType<IconProps>,     angle: 0 },
+  { id: 'robot',    label: 'Robot',    Icon: IconRobot as unknown as React.ComponentType<IconProps>,            angle: 45 },
+  { id: 'server',   label: 'Server',   Icon: IconServer2 as unknown as React.ComponentType<IconProps>,          angle: 90 },
+  { id: 'drone',    label: 'Drone',    Icon: IconDeviceCctv as unknown as React.ComponentType<IconProps>,       angle: 135 },
+  { id: 'iot',      label: 'IoT',      Icon: IconAccessPoint as unknown as React.ComponentType<IconProps>,      angle: 180 },
+  { id: 'tracker',  label: 'Tracker',  Icon: IconDeviceAirtag as unknown as React.ComponentType<IconProps>,     angle: 225 },
+  { id: 'desktop',  label: 'Desktop',  Icon: IconDeviceImac as unknown as React.ComponentType<IconProps>,       angle: 270 },
+  { id: 'wearable', label: 'Wearable', Icon: IconDeviceWatchHeart as unknown as React.ComponentType<IconProps>, angle: 315 },
 ];
 
 export const DEFAULT_FEATURES: Feature[] = [
@@ -686,7 +654,7 @@ export function FeaturesInfographic({
                   className="flex h-full w-full items-center justify-center rounded-full bg-fd-background"
                   aria-label={p.label}
                 >
-                  <p.Icon size={48} className="text-fd-primary" />
+                  <p.Icon size={48} stroke={1} className="text-fd-primary" />
                 </div>
               </foreignObject>
             );
