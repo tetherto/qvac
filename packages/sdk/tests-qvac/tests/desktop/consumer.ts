@@ -58,7 +58,7 @@ import { TranscribeStreamEventsExecutor } from "./executors/transcribe-stream-ev
 import { RagExecutor } from "./executors/rag-executor.js";
 import { OcrExecutor } from "./executors/ocr-executor.js";
 import { ConfigReloadExecutor } from "./executors/config-reload-executor.js";
-import { LoggingExecutor } from "../shared/executors/logging-executor.js";
+import { DesktopLoggingExecutor } from "./executors/logging-executor.js";
 import { RegistryExecutor } from "../shared/executors/registry-executor.js";
 import { ModelInfoExecutor } from "../shared/executors/model-info-executor.js";
 import { WrongModelExecutor } from "../shared/executors/wrong-model-executor.js";
@@ -379,7 +379,7 @@ export const executor = createExecutor({
     new OcrExecutor(resources),
     new TtsExecutor(resources),
     new ConfigReloadExecutor(resources),
-    new LoggingExecutor(resources),
+    new DesktopLoggingExecutor(resources),
     new RegistryExecutor(resources),
     new HttpEmbeddingExecutor(resources),
     new KvCacheExecutor(resources),

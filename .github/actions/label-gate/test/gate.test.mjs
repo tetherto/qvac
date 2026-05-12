@@ -138,7 +138,9 @@ test("labeled by team member -> authorised; no timeline lookup", async () => {
   assert.equal(d.applier, 'alice-team-member');
 });
 
-test('labeled by non-member -> not authorised', async () => {
+test('labeled by non-member -> not authorised AND label stripped', async () => {
+  // Visible PR state must match security state. Non-trusted user just
+  // clicked the gate label -> we deny AND remove the misleading label.
   const client = makeClient({ teamMembers: [] });
   const payload = await loadFixture('labeled-non-member');
   const d = await gate({
@@ -149,10 +151,15 @@ test('labeled by non-member -> not authorised', async () => {
   });
   assert.equal(d.authorised, false);
   assert.equal(d.applier, 'mallory-outsider');
-  assert.equal(client.stripped.length, 0);
+  assert.equal(d.stripped, true, 'must strip the label on non-trusted apply');
+  assert.match(d.reason, /label stripped/);
+  assert.equal(client.stripped.length, 1);
+  assert.equal(client.stripped[0].label, 'verified');
+  assert.equal(client.stripped[0].pr, 4243);
 });
 
-test('labeled by bot account -> not authorised (bots are never team members)', async () => {
+test('labeled by bot account -> not authorised AND label stripped', async () => {
+  // Bots are never team members; same strip-on-apply policy as humans.
   const client = makeClient({ teamMembers: [] });
   const payload = await loadFixture('labeled-by-bot');
   const d = await gate({
@@ -163,6 +170,9 @@ test('labeled by bot account -> not authorised (bots are never team members)', a
   });
   assert.equal(d.authorised, false);
   assert.equal(d.applier, 'renovate[bot]');
+  assert.equal(d.stripped, true);
+  assert.equal(client.stripped.length, 1);
+  assert.equal(client.stripped[0].label, 'verified');
 });
 
 test('labeled by allowlisted user (case-insensitive) -> authorised, no team API call', async () => {
@@ -367,6 +377,99 @@ test('synchronize from non-trusted with NO label currently applied -> deny, no A
     'no point checking sender trust if the label is already absent'
   );
   assert.equal(client.calls.findLabelApplier, 0);
+});
+
+// --- strip-on-untrusted-apply: edge cases -----------------------------------
+
+test('REGRESSION: labeled with a DIFFERENT label by non-trusted user -> no strip', async () => {
+  // Untrusted Mallory adds an unrelated label like `wip` while the gate
+  // label `verified` is already legitimately on the PR (applied earlier
+  // by trusted Alice). The labeled event is for `wip`, not `verified`,
+  // so we MUST NOT strip `verified`. We also MUST NOT authorise (since
+  // we'd resolve the historical applier, which is fine -> authorised).
+  // The key assertion here is the ABSENCE of any stripLabel call.
+  const client = makeClient({
+    teamMembers: ['alice'],
+    labelApplier: 'alice',
+  });
+  const payload = {
+    action: 'labeled',
+    number: 5151,
+    pull_request: {
+      number: 5151,
+      labels: [{ name: 'verified' }, { name: 'wip' }],
+    },
+    label: { name: 'wip' },
+    sender: { login: 'mallory-outsider' },
+  };
+  const d = await gate({
+    ...baseArgs(),
+    eventName: 'pull_request_target',
+    payload,
+    client,
+  });
+  assert.equal(d.authorised, true, 'verified label is still legitimately applied');
+  assert.equal(d.applier, 'alice');
+  assert.equal(client.calls.stripLabel, 0, 'must not strip on unrelated label add');
+});
+
+test('strip-on-untrusted-apply: idempotent strip API result is propagated', async () => {
+  // stripLabel returns true on both 200 and 404 (idempotent). The
+  // decision should mirror that without throwing.
+  const client = makeClient({ teamMembers: [], stripResult: true });
+  const payload = await loadFixture('labeled-non-member');
+  const d = await gate({
+    ...baseArgs(),
+    eventName: 'pull_request_target',
+    payload,
+    client,
+  });
+  assert.equal(d.stripped, true);
+});
+
+test('strip-on-untrusted-apply: NOT performed when applier is trusted', async () => {
+  const client = makeClient({ teamMembers: ['alice-team-member'] });
+  const payload = await loadFixture('labeled-team-member');
+  const d = await gate({
+    ...baseArgs(),
+    eventName: 'pull_request_target',
+    payload,
+    client,
+  });
+  assert.equal(d.authorised, true);
+  assert.equal(client.calls.stripLabel, 0);
+});
+
+test('strip-on-untrusted-apply: NOT performed for non-labeled events with non-trusted timeline applier', async () => {
+  // PR is opened/reopened with the gate label currently applied (somehow);
+  // findLabelApplier resolves to a non-trusted user. We deny (correct)
+  // but we must NOT strip — the labeled event isn't "this run". The
+  // synchronize path will clean up on the next push from a non-trusted
+  // actor; non-labeled deny-only avoids aggressive removal of labels
+  // applied legitimately by users whose trust status changed later
+  // (e.g. former team members).
+  const client = makeClient({
+    teamMembers: [],
+    labelApplier: 'mallory-outsider',
+  });
+  const payload = {
+    action: 'reopened',
+    number: 6262,
+    pull_request: {
+      number: 6262,
+      labels: [{ name: 'verified' }],
+    },
+    sender: { login: 'someone-else' },
+  };
+  const d = await gate({
+    ...baseArgs(),
+    eventName: 'pull_request_target',
+    payload,
+    client,
+  });
+  assert.equal(d.authorised, false);
+  assert.equal(d.applier, 'mallory-outsider');
+  assert.equal(client.calls.stripLabel, 0, 'no strip on reopened/opened/edited deny');
 });
 
 // --- input validation --------------------------------------------------------

@@ -20,7 +20,7 @@ A JS server for benchmarking Parakeet transcription addons, built with `bare` ru
 ```bash
 # Clone the repository
 git clone https://github.com/tetherto/qvac.git
-cd qvac/packages/transcription-parakeet/benchmarks/server
+cd qvac/packages/qvac-lib-infer-parakeet/benchmarks/server
 
 # Install dependencies
 npm install
