@@ -1,0 +1,459 @@
+import type { IncomingMessage, ServerResponse } from 'node:http'
+import { readBody, sendJson, sendError } from '../../../http.js'
+import {
+  sdkRagListWorkspaces,
+  sdkRagSearch,
+  sdkRagDeleteWorkspace
+} from '../../../core/sdk.js'
+import {
+  vectorStoreToOpenAI,
+  searchResultsToOpenAI,
+  parseExpiresAfter,
+  parseMetadata,
+  InvalidExpiresAfterError,
+  InvalidMetadataError,
+  type VectorStoreRagInfo
+} from '../translate.js'
+import {
+  idToWorkspace,
+  InvalidVectorStoreIdError,
+  type CreateVectorStoreInput,
+  type UpdateVectorStoreInput,
+  type VectorStoreMeta
+} from '../vector-stores-store.js'
+import type { ResolvedModelEntry, ServeConfig } from '../../../core/model-registry.js'
+import type { RouteContext } from '../../types.js'
+
+export async function handleListVectorStores (
+  _req: IncomingMessage,
+  res: ServerResponse,
+  ctx: RouteContext
+): Promise<void> {
+  const ragInfo = await safeListWorkspaces(ctx)
+  const local = ctx.vectorStores.list()
+  const merged = mergeStoresAndWorkspaces(local, ragInfo.workspaces)
+
+  sendJson(res, 200, {
+    object: 'list',
+    data: merged.map((entry) => vectorStoreToOpenAI(entry.meta, entry.ragInfo)),
+    first_id: merged[0]?.meta.id ?? null,
+    last_id: merged[merged.length - 1]?.meta.id ?? null,
+    has_more: false
+  })
+}
+
+export async function handleCreateVectorStore (
+  req: IncomingMessage,
+  res: ServerResponse,
+  ctx: RouteContext
+): Promise<void> {
+  let body: Record<string, unknown>
+  try {
+    body = await readBody(req)
+  } catch {
+    sendError(res, 400, 'invalid_json', 'Request body must be valid JSON.')
+    return
+  }
+
+  let input: CreateVectorStoreInput
+  try {
+    input = parseCreateInput(body)
+  } catch (err) {
+    handleInputError(res, err)
+    return
+  }
+
+  if (Array.isArray(body['file_ids']) && body['file_ids'].length > 0) {
+    ctx.logger.warn('Ignoring "file_ids": files endpoints are not yet supported.')
+  }
+  if (body['chunking_strategy'] !== undefined) {
+    ctx.logger.warn('Ignoring "chunking_strategy": chunking is configured via SDK ingest options.')
+  }
+
+  let meta: VectorStoreMeta
+  try {
+    meta = ctx.vectorStores.create(input)
+  } catch (err) {
+    if (err instanceof InvalidVectorStoreIdError) {
+      sendError(res, 400, 'invalid_vector_store_id', err.message)
+      return
+    }
+    throw err
+  }
+
+  ctx.logger.info(`  vector_store create id=${meta.id} name=${meta.name ?? '(none)'}`)
+  sendJson(res, 200, vectorStoreToOpenAI(meta, { exists: false }))
+}
+
+export async function handleGetVectorStore (
+  _req: IncomingMessage,
+  res: ServerResponse,
+  ctx: RouteContext,
+  rawId: string
+): Promise<void> {
+  const id = decodeId(rawId)
+  if (id === null) {
+    sendError(res, 400, 'invalid_vector_store_id', 'Vector store id is invalid.')
+    return
+  }
+
+  const ragInfo = await safeListWorkspaces(ctx)
+  const meta = ctx.vectorStores.get(id) ?? syntheticFromWorkspace(id, ragInfo.workspaces)
+  if (!meta) {
+    sendError(res, 404, 'vector_store_not_found', `Vector store "${id}" not found.`)
+    return
+  }
+  sendJson(res, 200, vectorStoreToOpenAI(meta, workspaceInfoFor(id, ragInfo.workspaces)))
+}
+
+export async function handleUpdateVectorStore (
+  req: IncomingMessage,
+  res: ServerResponse,
+  ctx: RouteContext,
+  rawId: string
+): Promise<void> {
+  const id = decodeId(rawId)
+  if (id === null) {
+    sendError(res, 400, 'invalid_vector_store_id', 'Vector store id is invalid.')
+    return
+  }
+
+  let body: Record<string, unknown>
+  try {
+    body = await readBody(req)
+  } catch {
+    sendError(res, 400, 'invalid_json', 'Request body must be valid JSON.')
+    return
+  }
+
+  let update: UpdateVectorStoreInput
+  try {
+    update = parseUpdateInput(body)
+  } catch (err) {
+    handleInputError(res, err)
+    return
+  }
+
+  const ragInfo = await safeListWorkspaces(ctx)
+  let meta = ctx.vectorStores.get(id)
+  if (!meta) {
+    const synthetic = syntheticFromWorkspace(id, ragInfo.workspaces)
+    if (!synthetic) {
+      sendError(res, 404, 'vector_store_not_found', `Vector store "${id}" not found.`)
+      return
+    }
+    meta = ctx.vectorStores.create({ id: synthetic.id, name: synthetic.name })
+  }
+
+  const updated = ctx.vectorStores.update(meta.id, update)
+  if (!updated) {
+    sendError(res, 404, 'vector_store_not_found', `Vector store "${id}" not found.`)
+    return
+  }
+  ctx.logger.info(`  vector_store update id=${updated.id}`)
+  sendJson(res, 200, vectorStoreToOpenAI(updated, workspaceInfoFor(id, ragInfo.workspaces)))
+}
+
+export async function handleDeleteVectorStore (
+  _req: IncomingMessage,
+  res: ServerResponse,
+  ctx: RouteContext,
+  rawId: string
+): Promise<void> {
+  const id = decodeId(rawId)
+  if (id === null) {
+    sendError(res, 400, 'invalid_vector_store_id', 'Vector store id is invalid.')
+    return
+  }
+
+  const ragInfo = await safeListWorkspaces(ctx)
+  const hadMeta = ctx.vectorStores.delete(id)
+  const workspaceExists = ragInfo.workspaces.some((w) => w.name === id)
+
+  if (!hadMeta && !workspaceExists) {
+    sendError(res, 404, 'vector_store_not_found', `Vector store "${id}" not found.`)
+    return
+  }
+
+  if (workspaceExists) {
+    try {
+      await sdkRagDeleteWorkspace({ workspace: id })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      ctx.logger.error(`Failed to delete RAG workspace "${id}": ${message}`)
+      sendError(res, 500, 'vector_store_delete_failed', 'Failed to delete underlying RAG workspace.')
+      return
+    }
+  }
+
+  ctx.logger.info(`  vector_store delete id=${id} workspace=${workspaceExists ? 'deleted' : 'noop'}`)
+  sendJson(res, 200, {
+    id,
+    object: 'vector_store.deleted',
+    deleted: true
+  })
+}
+
+export async function handleSearchVectorStore (
+  req: IncomingMessage,
+  res: ServerResponse,
+  ctx: RouteContext,
+  rawId: string
+): Promise<void> {
+  const id = decodeId(rawId)
+  if (id === null) {
+    sendError(res, 400, 'invalid_vector_store_id', 'Vector store id is invalid.')
+    return
+  }
+
+  let body: Record<string, unknown>
+  try {
+    body = await readBody(req)
+  } catch {
+    sendError(res, 400, 'invalid_json', 'Request body must be valid JSON.')
+    return
+  }
+
+  const query = body['query']
+  if (typeof query !== 'string' || query.length === 0) {
+    sendError(res, 400, 'missing_query', '"query" must be a non-empty string.')
+    return
+  }
+
+  for (const param of ['filters', 'ranking_options', 'rewrite_query'] as const) {
+    if (body[param] !== undefined) {
+      ctx.logger.warn(`Ignoring unsupported vector_store search param: ${param}`)
+    }
+  }
+
+  const maxNumResults = body['max_num_results']
+  let topK: number | undefined
+  if (typeof maxNumResults === 'number' && Number.isInteger(maxNumResults) && maxNumResults > 0) {
+    topK = maxNumResults
+  } else if (maxNumResults !== undefined) {
+    sendError(res, 400, 'invalid_max_num_results', '"max_num_results" must be a positive integer.')
+    return
+  }
+
+  const ragInfo = await safeListWorkspaces(ctx)
+  const meta = ctx.vectorStores.get(id) ?? syntheticFromWorkspace(id, ragInfo.workspaces)
+  if (!meta) {
+    sendError(res, 404, 'vector_store_not_found', `Vector store "${id}" not found.`)
+    return
+  }
+
+  const embedding = resolveEmbeddingModel(ctx)
+  if (!embedding.ok) {
+    sendError(res, embedding.status, embedding.code, embedding.message)
+    return
+  }
+
+  ctx.vectorStores.touch(id)
+
+  ctx.logger.info(
+    `  vector_store search id=${id} model=${embedding.entry.alias} q.len=${query.length}${topK ? ` topK=${topK}` : ''}`
+  )
+
+  try {
+    const results = await sdkRagSearch({
+      modelId: embedding.sdkModelId,
+      query,
+      ...(topK !== undefined ? { topK } : {}),
+      workspace: id
+    })
+    sendJson(res, 200, searchResultsToOpenAI(results, query))
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    ctx.logger.error(`Vector store search error for "${id}": ${message}`)
+    sendError(res, 500, 'vector_store_search_failed', 'An internal error occurred during vector store search.')
+  }
+}
+
+// ---------- internals ----------
+
+interface RagInfo {
+  workspaces: Array<{ name: string; open: boolean }>
+}
+
+async function safeListWorkspaces (ctx: RouteContext): Promise<RagInfo> {
+  try {
+    const workspaces = await sdkRagListWorkspaces()
+    return { workspaces }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    ctx.logger.warn(`ragListWorkspaces failed; assuming none: ${message}`)
+    return { workspaces: [] }
+  }
+}
+
+function workspaceInfoFor (
+  id: string,
+  workspaces: Array<{ name: string; open: boolean }>
+): VectorStoreRagInfo {
+  const found = workspaces.find((w) => w.name === id)
+  return found ? { exists: true, open: found.open } : { exists: false }
+}
+
+function syntheticFromWorkspace (
+  id: string,
+  workspaces: Array<{ name: string; open: boolean }>
+): VectorStoreMeta | null {
+  const found = workspaces.find((w) => w.name === id)
+  if (!found) return null
+  const now = Date.now()
+  return {
+    id,
+    createdAt: now,
+    name: id,
+    metadata: {},
+    expiresAfter: null,
+    expiresAt: null,
+    lastActiveAt: now
+  }
+}
+
+interface MergedEntry {
+  meta: VectorStoreMeta
+  ragInfo: VectorStoreRagInfo
+}
+
+function mergeStoresAndWorkspaces (
+  local: VectorStoreMeta[],
+  workspaces: Array<{ name: string; open: boolean }>
+): MergedEntry[] {
+  const seen = new Set<string>()
+  const merged: MergedEntry[] = []
+  for (const meta of local) {
+    seen.add(meta.id)
+    merged.push({ meta, ragInfo: workspaceInfoFor(meta.id, workspaces) })
+  }
+  for (const ws of workspaces) {
+    if (seen.has(ws.name)) continue
+    const synthetic = syntheticFromWorkspace(ws.name, workspaces)
+    if (synthetic) {
+      merged.push({ meta: synthetic, ragInfo: { exists: true, open: ws.open } })
+    }
+  }
+  merged.sort((a, b) => b.meta.createdAt - a.meta.createdAt)
+  return merged
+}
+
+function decodeId (raw: string): string | null {
+  try {
+    const decoded = decodeURIComponent(raw)
+    return idToWorkspace(decoded)
+  } catch {
+    return null
+  }
+}
+
+function parseCreateInput (body: Record<string, unknown>): CreateVectorStoreInput {
+  const input: CreateVectorStoreInput = {}
+  if (body['name'] !== undefined && body['name'] !== null) {
+    if (typeof body['name'] !== 'string') {
+      throw new InvalidMetadataError('"name" must be a string.')
+    }
+    input.name = body['name']
+  } else if (body['name'] === null) {
+    input.name = null
+  }
+
+  const expires = parseExpiresAfter(body['expires_after'])
+  if (expires !== undefined) input.expiresAfter = expires
+
+  const metadata = parseMetadata(body['metadata'])
+  if (metadata !== undefined) input.metadata = metadata ?? {}
+
+  return input
+}
+
+function parseUpdateInput (body: Record<string, unknown>): UpdateVectorStoreInput {
+  const update: UpdateVectorStoreInput = {}
+  if (Object.prototype.hasOwnProperty.call(body, 'name')) {
+    const name = body['name']
+    if (name === null) {
+      update.name = null
+    } else if (typeof name === 'string') {
+      update.name = name
+    } else {
+      throw new InvalidMetadataError('"name" must be a string or null.')
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, 'expires_after')) {
+    const expires = parseExpiresAfter(body['expires_after'])
+    if (expires !== undefined) update.expiresAfter = expires
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, 'metadata')) {
+    const metadata = parseMetadata(body['metadata'])
+    if (metadata !== undefined) update.metadata = metadata
+  }
+
+  return update
+}
+
+function handleInputError (res: ServerResponse, err: unknown): void {
+  if (err instanceof InvalidExpiresAfterError) {
+    sendError(res, 400, 'invalid_expires_after', err.message)
+    return
+  }
+  if (err instanceof InvalidMetadataError) {
+    sendError(res, 400, 'invalid_metadata', err.message)
+    return
+  }
+  if (err instanceof InvalidVectorStoreIdError) {
+    sendError(res, 400, 'invalid_vector_store_id', err.message)
+    return
+  }
+  throw err
+}
+
+interface EmbeddingResolutionOk {
+  ok: true
+  entry: ResolvedModelEntry
+  sdkModelId: string
+}
+
+interface EmbeddingResolutionErr {
+  ok: false
+  status: number
+  code: string
+  message: string
+}
+
+function resolveEmbeddingModel (ctx: RouteContext): EmbeddingResolutionOk | EmbeddingResolutionErr {
+  const entry = pickDefaultEmbedding(ctx.serveConfig)
+  if (!entry) {
+    return {
+      ok: false,
+      status: 400,
+      code: 'no_embedding_model_configured',
+      message: 'No embedding model configured. Add an embedding model under serve.models, optionally with default: true.'
+    }
+  }
+  const registryEntry = ctx.registry.getEntry(entry.alias)
+  if (!registryEntry || registryEntry.state !== ctx.registry.STATES.READY) {
+    return {
+      ok: false,
+      status: 503,
+      code: 'model_not_ready',
+      message: `Embedding model "${entry.alias}" is not loaded yet.`
+    }
+  }
+  const sdkModelId = registryEntry.sdkModelId ?? registryEntry.id
+  return { ok: true, entry, sdkModelId }
+}
+
+function pickDefaultEmbedding (serveConfig: ServeConfig): ResolvedModelEntry | null {
+  const embeddings: ResolvedModelEntry[] = []
+  let explicitDefault: ResolvedModelEntry | null = null
+  for (const [, entry] of serveConfig.models) {
+    if (entry.endpointCategory !== 'embedding') continue
+    embeddings.push(entry)
+    if (entry.isDefault) explicitDefault = entry
+  }
+  if (explicitDefault) return explicitDefault
+  if (embeddings.length === 1) return embeddings[0] ?? null
+  return null
+}

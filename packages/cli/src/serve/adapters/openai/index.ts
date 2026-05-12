@@ -62,6 +62,47 @@ export function createOpenAIAdapter (): APIAdapter {
         return true
       }
 
+      if (method === 'GET' && path === '/v1/vector_stores') {
+        const { handleListVectorStores } = await import('./routes/vector-stores.js')
+        await handleListVectorStores(req, res, ctx)
+        return true
+      }
+
+      if (method === 'POST' && path === '/v1/vector_stores') {
+        const { handleCreateVectorStore } = await import('./routes/vector-stores.js')
+        await handleCreateVectorStore(req, res, ctx)
+        return true
+      }
+
+      const vectorStoreMatch = path.match(/^\/v1\/vector_stores\/([^/]+)(?:\/(search))?$/)
+      if (vectorStoreMatch) {
+        const id = vectorStoreMatch[1] ?? ''
+        const sub = vectorStoreMatch[2]
+        if (sub === 'search') {
+          if (method === 'POST') {
+            const { handleSearchVectorStore } = await import('./routes/vector-stores.js')
+            await handleSearchVectorStore(req, res, ctx, id)
+            return true
+          }
+        } else {
+          if (method === 'GET') {
+            const { handleGetVectorStore } = await import('./routes/vector-stores.js')
+            await handleGetVectorStore(req, res, ctx, id)
+            return true
+          }
+          if (method === 'POST') {
+            const { handleUpdateVectorStore } = await import('./routes/vector-stores.js')
+            await handleUpdateVectorStore(req, res, ctx, id)
+            return true
+          }
+          if (method === 'DELETE') {
+            const { handleDeleteVectorStore } = await import('./routes/vector-stores.js')
+            await handleDeleteVectorStore(req, res, ctx, id)
+            return true
+          }
+        }
+      }
+
       sendError(res, 404, 'not_found', `Unknown endpoint: ${method} ${path}`)
       return true
     }
