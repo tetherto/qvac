@@ -6,6 +6,12 @@ ogImage: /og-home.png
 
 import { MessagesSquare, Hash, Languages, Mic, Speech, Volume2, ScanText, Image as ImageIcon, GalleryHorizontal, FlaskConical, ScanSearch, Map, Rocket, Server, MonitorPlay } from 'lucide-react'
 
+## Why QVAC?
+
+QVAC is Tether's answer to the centralized AI by ensuring it's not tied to massive data centers in the hands of a few _but is free to run on everyone's devices, without a central point of failure or without arbitrary censorship_.
+
+We do so by enabling devices to run local AI models and ensuring connectivity only happens peer-to-peer, through [Holepunch](https://holepunch.to) technology. We do so by building an SDK for developers, and flagship end-user applications around it, to showcase the capabilities of our technology to a wider audience.
+
 ## Features
 
 <FeaturesInfographic />
@@ -68,18 +74,7 @@ _The SDK is the main entry point for using QVAC_. It is type-safe and exposes al
 
 Additionally, QVAC provides a CLI with development tools, as well as an HTTP server that wraps QVAC and exposes an [**OpenAI-compatible API**](https://platform.openai.com/docs/api-reference). *By implementing the OpenAI API format, QVAC can integrate with the broader AI ecosystem.*
 
-Finally, QVAC also encompasses desktop and mobile **flagship applications** to empower users and showcase QVAC capabilities, as well as **research initiatives** to advance the state of the art in local AI.
-
-## Why QVAC?
-
-QVAC is Tether's answer to the centralized AI by ensuring it's not tied to massive data centers in the hands of a few _but is free to run on everyone's devices, without a central point of failure or without arbitrary censorship_.
-
-We do so by enabling devices to run local AI models and ensuring connectivity only happens peer-to-peer, through [Holepunch](https://holepunch.to) technology. We do so by building an SDK for developers, and flagship end-user applications around it, to showcase the capabilities of our technology to a wider audience.
-
-## Key differentiators
-
-- **Unified approach:** other local AI solutions like Llama.rn, Cactus, and `react-native-executorch` each solve parts of the puzzle, but none offer a unified approach like QVAC — one single API surface, feature-complete, and consistent behavior across runtime environments and platforms.
-- **Out-of-the-box P2P:** share and run AI models with peers, with no extra setup or prior knowledge required.
+Finally, QVAC also encompasses desktop and mobile [**flagship applications**](https://qvac.tether.io#products) to empower users and showcase QVAC capabilities, as well as [**research initiatives**](https://huggingface.co/qvac) to advance the state of the art in local AI.
 
 ## Next steps
 
@@ -93,7 +88,7 @@ Choose how you want to start with QVAC:
     Run your first example using the JS/TS SDK. At the end, you'll find instructions to run any example in this documentation.
   </Card>
   <Card href="https://qvac.tether.io/products/workbench/" icon={<MonitorPlay className="text-[var(--color-fd-primary)]" />} title="See QVAC in practice">
-    Try QVAC Assistant, our flagship desktop and mobile app built with QVAC.
+    Try QVAC Workbench, our flagship desktop and mobile app built with QVAC.
   </Card>
   <Card href="/cli/http-server" icon={<Server className="text-[var(--color-fd-primary)]" />} title="Integrate an OpenAI-compatible client">
     Run the QVAC HTTP server and connect any existing OpenAI-compatible system to local AI.
