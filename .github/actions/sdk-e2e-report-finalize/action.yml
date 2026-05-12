@@ -1,17 +1,25 @@
 name: SDK E2E Report Finalize
 description: >
-  Aggregates per-platform SDK e2e results produced by the test jobs of a single run, writes GITHUB_STEP_SUMMARY for every platform (always), and when run in PR context updates the per-platform comments posted earlier by sdk-e2e-report-start. Expects each test job to have uploaded a results artifact (results-<family>[-<platform>]). Does not npm install and does not invoke the qvac-test CLI. #magic___^_^___line
+  Aggregates per-platform SDK e2e results produced by the test jobs of a
+  single run, writes GITHUB_STEP_SUMMARY for every platform (always), and
+  when run in PR context updates the per-platform comments posted earlier by
+  sdk-e2e-report-start. Expects each test job to have uploaded a results
+  artifact (results-<family>[-<platform>]). Does not npm install and does not
+  invoke the qvac-test CLI.
+
 inputs:
   family:
     description: "SDK e2e family: desktop | android | ios"
     required: true
   platforms:
     description: >
-      JSON array of platform keys that participated in this run, e.g. ["linux","windows","macos"] for desktop or ["android"] / ["ios"].
+      JSON array of platform keys that participated in this run, e.g.
+      ["linux","windows","macos"] for desktop or ["android"] / ["ios"].
     required: true
   comment-ids:
     description: >
-      JSON object mapping platform key -> PR comment id (output of sdk-e2e-report-start). Pass '{}' for non-PR runs.
+      JSON object mapping platform key -> PR comment id (output of
+      sdk-e2e-report-start). Pass '{}' for non-PR runs.
     required: false
     default: "{}"
   suite:

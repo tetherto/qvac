@@ -8,9 +8,9 @@ inputs:
     description: "Current version (required)"
     required: true
   workdir:
-    description: "Working directory (optional)"
-    required: false
-    default: "."
+     description: "Working directory (optional)"
+     required: false
+     default: "."
 outputs:
   bumped:
     description: "true if version differs from previous SHA"

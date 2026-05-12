@@ -1,15 +1,29 @@
 name: Setup LLVM
 description: >-
-  Install (or upgrade) LLVM/Clang to a pinned version on Linux and Windows runners and wire the unversioned `clang`, `clang++`, `clang-format`, `clang-tidy`, `lld`, and friends to point at it. macOS uses Apple Clang and is a no-op here. #magic___^_^___line This action is the single source of truth for the LLVM major used across every prebuild / cpp-test / coverage / benchmark workflow in the repo. Bump the `version` (Linux + Windows major) and `windows-version` (Windows full pin) defaults below to roll the whole monorepo forward. #magic___^_^___line
+  Install (or upgrade) LLVM/Clang to a pinned version on Linux and Windows
+  runners and wire the unversioned `clang`, `clang++`, `clang-format`,
+  `clang-tidy`, `lld`, and friends to point at it. macOS uses Apple Clang
+  and is a no-op here.
+
+  This action is the single source of truth for the LLVM major used across
+  every prebuild / cpp-test / coverage / benchmark workflow in the repo.
+  Bump the `version` (Linux + Windows major) and `windows-version` (Windows
+  full pin) defaults below to roll the whole monorepo forward.
+
 inputs:
   version:
     description: >-
-      LLVM major version installed via apt.llvm.org on Linux. Also used as the major component when computing the Windows chocolatey pin if `windows-version` is left at its default. Must match the major of `windows-version`.
+      LLVM major version installed via apt.llvm.org on Linux. Also used as
+      the major component when computing the Windows chocolatey pin if
+      `windows-version` is left at its default. Must match the major of
+      `windows-version`.
     required: false
     default: "22"
   windows-version:
     description: >-
-      Exact chocolatey LLVM package version to pin on Windows runners (e.g. "22.1.0"). Pinning avoids silent drift when chocolatey ships a new patch release. Must share its major with `version`.
+      Exact chocolatey LLVM package version to pin on Windows runners (e.g.
+      "22.1.0"). Pinning avoids silent drift when chocolatey ships a new
+      patch release. Must share its major with `version`.
     required: false
     default: "22.1.0"
 

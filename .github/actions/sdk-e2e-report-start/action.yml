@@ -1,13 +1,18 @@
 name: SDK E2E Report Start
 description: >
-  Posts a per-platform "running" comment on the PR for an SDK e2e run and minimizes any prior comment from an earlier run (matched by a hidden marker). No-op outside PR context. Emits comment-ids JSON keyed by platform for sdk-e2e-report-finalize to edit in place once results are available. #magic___^_^___line
+  Posts a per-platform "running" comment on the PR for an SDK e2e run and
+  minimizes any prior comment from an earlier run (matched by a hidden marker).
+  No-op outside PR context. Emits comment-ids JSON keyed by platform for
+  sdk-e2e-report-finalize to edit in place once results are available.
+
 inputs:
   family:
     description: "SDK e2e family: desktop | android | ios"
     required: true
   platforms:
     description: >
-      JSON array of platform keys targeted by this run, e.g. ["linux","windows","macos"] for desktop or ["android"] / ["ios"].
+      JSON array of platform keys targeted by this run, e.g.
+      ["linux","windows","macos"] for desktop or ["android"] / ["ios"].
     required: true
   suite:
     description: "Suite filter passed to the run (empty = full)"
@@ -25,7 +30,8 @@ inputs:
 outputs:
   comment-ids:
     description: >
-      JSON object mapping platform key -> PR comment id. Empty object when not running in PR context (no comments posted).
+      JSON object mapping platform key -> PR comment id. Empty object when
+      not running in PR context (no comments posted).
     value: ${{ steps.post.outputs.comment-ids }}
 
 runs:

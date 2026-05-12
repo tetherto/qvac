@@ -1,6 +1,11 @@
 name: Setup Apple Clang
 description: >-
-  Uninstall any Homebrew LLVM formulae so macOS runners fall back to Apple Clang. Required for darwin / ios builds that link against Apple system frameworks (UIKit, CoreML, Metal) which Homebrew Clang cannot target. Called unconditionally from every prebuild workflow; no-op on non-macOS runners. #magic___^_^___line
+  Uninstall any Homebrew LLVM formulae so macOS runners fall back to Apple
+  Clang. Required for darwin / ios builds that link against Apple system
+  frameworks (UIKit, CoreML, Metal) which Homebrew Clang cannot target.
+  Called unconditionally from every prebuild workflow; no-op on non-macOS
+  runners.
+
 runs:
   using: composite
   steps:
