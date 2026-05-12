@@ -237,8 +237,7 @@ jobs:
         shell: bash
         working-directory: ${{ env.WORKDIR }}
         env:
-          # keep as repo-root absolute path to avoid assuming it's copied into workdir
-          LSAN_OPTIONS: suppressions=${{ github.workspace }}/.lsan-suppressions.txt
+          LSAN_OPTIONS: suppressions=${{ github.workspace }}/${{ env.WORKDIR }}/.lsan-suppressions.txt
         run: |
           # Windows build will typically emit addon-test.exe; unix emits addon-test
           EXE="build/test/unit/addon-test"
