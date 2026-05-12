@@ -40,6 +40,14 @@ permissions:
   packages: read
 
 jobs:
+  # NOTE: continue-on-error: true mirrors the early-days landing posture
+  # we use for parakeet's matching workflow.  The on-pr-tts-ggml.yml
+  # merge-guard treats this job's `success || skipped` as a pass, so a
+  # hard failure inside the integration suite does NOT block a merge —
+  # only sanity-checks + cpp-lint + cpp-tests-coverage + prebuild really
+  # gate today.  Tighten this gate (drop `continue-on-error` and/or
+  # change merge-guard to require `success`) once the addon's flake
+  # surface is small enough to make a hard gate cheap.
   run-integration-tests:
     timeout-minutes: 60
     continue-on-error: true
@@ -146,7 +154,22 @@ jobs:
         shell: bash
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgomp1 mesa-vulkan-drivers
+          # libgomp1   - GNU OpenMP runtime, used when ggml-cpu's libgomp
+          #              path is selected.
+          # libomp5    - LLVM OpenMP runtime (libomp.so.5).  tts-cpp is
+          #              built with clang under our linux-clang toolchain
+          #              and links against libomp at -fopenmp time, so
+          #              load fails with `libomp.so.5: cannot open shared
+          #              object file` without this package.
+          # libblas3   - runtime BLAS soname (libblas.so.3) required by
+          #              the Linux prebuilds on x64.
+          # mesa-vulkan-drivers - software / Mesa Vulkan ICD so the
+          #              Vulkan-enabled prebuild's runtime backend probe
+          #              has at least one Vulkan device to enumerate
+          #              (works for the no_gpu matrix entries too,
+          #              because the test runners explicitly force
+          #              useGPU=false when NO_GPU=true).
+          sudo apt-get install -y libgomp1 libomp5 libblas3 mesa-vulkan-drivers
 
       - name: Windows - install Vulkan runtime
         if: matrix.platform == 'win32'
@@ -155,22 +178,45 @@ jobs:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
 
+      # Pin to 3.11 (not 3.12) because numba 0.65+ stopped shipping
+      # darwin-x86_64 wheels for Python 3.12.  librosa pulls in numba
+      # transitively; on 3.12 + macos-15-large pip falls back to building
+      # llvmlite from source which fails because the runner doesn't have
+      # an LLVM 15 development install.  3.11 has prebuilt darwin-x64
+      # wheels for the entire numba/llvmlite/librosa stack and is fine
+      # for every other converter dependency we use.
       - name: Setup Python (HF -> .gguf conversion)
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: '3.11'
 
-      # Stage every Chatterbox + Supertonic GGUF the integration suite can
-      # exercise.  npm run setup-models internally runs setup-venv.sh +
-      # convert-models.sh -t all which:
-      #   - chatterbox-t3-turbo.gguf + chatterbox-s3gen.gguf  (English)
-      #   - chatterbox-t3-mtl.gguf  + chatterbox-s3gen-mtl.gguf  (multilingual)
-      #   - supertonic.gguf  (English)
-      #   - supertonic2.gguf (multilingual)
-      # Each `ensure*Models` helper in test/utils/downloadModel.js gracefully
-      # skips its test when the matching GGUF isn't on disk, so partial
-      # cache failures degrade rather than abort the whole matrix.
+      # Cache the Python venv + every Chatterbox + Supertonic GGUF the
+      # integration suite can exercise.  Mirrors the mobile workflow's
+      # caching pattern (integration-mobile-test-tts-ggml.yml).  Without
+      # this every desktop matrix entry re-pays the multi-GB HF download
+      # + Torch install + multi-arch GGUF convert (~10-30 min cold) on
+      # six runners per PR.  Each `ensure*Models` helper in
+      # test/utils/downloadModel.js gracefully skips its test when the
+      # matching GGUF isn't on disk, so partial cache misses degrade
+      # rather than abort the whole matrix.
+      - name: Cache TTS GGML venv + GGUFs
+        id: cache-tts-ggml-models
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/packages/tts-ggml/venv
+            ${{ github.workspace }}/packages/tts-ggml/models/chatterbox-t3-turbo.gguf
+            ${{ github.workspace }}/packages/tts-ggml/models/chatterbox-s3gen.gguf
+            ${{ github.workspace }}/packages/tts-ggml/models/chatterbox-t3-mtl.gguf
+            ${{ github.workspace }}/packages/tts-ggml/models/chatterbox-s3gen-mtl.gguf
+            ${{ github.workspace }}/packages/tts-ggml/models/supertonic.gguf
+            ${{ github.workspace }}/packages/tts-ggml/models/supertonic2.gguf
+          key: tts-ggml-desktop-all-gguf-v1-${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles('packages/tts-ggml/scripts/convert-models.sh', 'packages/tts-ggml/scripts/setup-venv.sh', 'packages/tts-ggml/scripts/requirements.txt', 'packages/tts-ggml/scripts/convert-t3-turbo-to-gguf.py', 'packages/tts-ggml/scripts/convert-t3-mtl-to-gguf.py', 'packages/tts-ggml/scripts/convert-s3gen-to-gguf.py', 'packages/tts-ggml/scripts/convert-supertonic2-to-gguf.py') }}
+          restore-keys: |
+            tts-ggml-desktop-all-gguf-v1-${{ matrix.platform }}-${{ matrix.arch }}-
+
       - name: Stage GGUF models (npm run setup-models)
+        if: steps.cache-tts-ggml-models.outputs.cache-hit != 'true'
         shell: bash
         working-directory: ${{ github.workspace }}/packages/tts-ggml
         run: npm run setup-models

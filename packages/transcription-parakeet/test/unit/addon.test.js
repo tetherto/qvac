@@ -6,7 +6,7 @@ const MockedBinding = require('../mocks/MockedBinding.js')
 const { transitionCb, wait } = require('../mocks/utils.js')
 const { ParakeetInterface } = require('../../parakeet')
 
-const process = require('process')
+const process = require('bare-process')
 global.process = process
 const sinon = require('sinon')
 
@@ -17,10 +17,12 @@ function createMockedModel ({ onOutput = () => { }, binding = undefined } = {}) 
   const validateStub = sinon.stub(TranscriptionParakeet.prototype, 'validateModelFiles').returns(undefined)
 
   const model = new TranscriptionParakeet({
-    files: {},
+    files: { model: './models/parakeet-tdt-0.6b-v3.q8_0.gguf' },
     config: {
       parakeetConfig: {
-        modelType: 'tdt',
+        // modelType is auto-detected from the GGUF metadata by the
+        // binding; the unit-test MockedBinding doesn't read GGUF
+        // bytes so we just rely on its Mock-* output shape here.
         maxThreads: 4,
         useGPU: false
       }
@@ -147,8 +149,7 @@ test('ParakeetInterface full sequence: status, append, and job boundaries', asyn
 
   const binding = new MockedBinding()
   const addon = new ParakeetInterface(binding, {
-    modelPath: './models/parakeet-tdt-0.6b-v3-onnx',
-    modelType: 'tdt',
+    modelPath: './models/parakeet-tdt-0.6b-v3.q8_0.gguf',
     maxThreads: 4,
     useGPU: false
   }, onOutput, transitionCb)
@@ -156,7 +157,11 @@ test('ParakeetInterface full sequence: status, append, and job boundaries', asyn
   let status = await addon.status()
   t.ok(status === 'loading', 'Initial addon status should be "loading"')
 
-  await addon.loadWeights({ filename: 'encoder-model.onnx', chunk: new Uint8Array([1, 2, 3]), completed: true })
+  await addon.loadWeights({
+    filename: 'parakeet-tdt-0.6b-v3.q8_0.gguf',
+    chunk: new Uint8Array([1, 2, 3]),
+    completed: true
+  })
 
   await addon.activate()
   status = await addon.status()
@@ -206,8 +211,7 @@ test('ParakeetInterface full sequence: status, append, and job boundaries', asyn
 test('ParakeetInterface runJob preserves active job when native rejects new job', async (t) => {
   const binding = new MockedBinding()
   const addon = new ParakeetInterface(binding, {
-    modelPath: './models/parakeet-tdt-0.6b-v3-onnx',
-    modelType: 'tdt'
+    modelPath: './models/parakeet-tdt-0.6b-v3.q8_0.gguf'
   }, () => {})
 
   addon._activeJobId = 42
@@ -229,8 +233,7 @@ test('ParakeetInterface runJob preserves active job when native rejects new job'
 test('ParakeetInterface cancel clears active job only after cancel resolves', async (t) => {
   const binding = new MockedBinding()
   const addon = new ParakeetInterface(binding, {
-    modelPath: './models/parakeet-tdt-0.6b-v3-onnx',
-    modelType: 'tdt'
+    modelPath: './models/parakeet-tdt-0.6b-v3.q8_0.gguf'
   }, () => {})
 
   addon._activeJobId = 7
@@ -255,8 +258,7 @@ test('ParakeetInterface cancels buffered job before native run starts', async (t
   const events = []
   const binding = new MockedBinding()
   const addon = new ParakeetInterface(binding, {
-    modelPath: './models/parakeet-tdt-0.6b-v3-onnx',
-    modelType: 'tdt'
+    modelPath: './models/parakeet-tdt-0.6b-v3.q8_0.gguf'
   }, (handle, event, jobId, output, error) => {
     events.push({ event, jobId, output, error })
   })
@@ -280,8 +282,7 @@ test('ParakeetInterface cancels buffered job before native run starts', async (t
 test('ParakeetInterface ignores stale wrapper job ids when cancelling', async (t) => {
   const binding = new MockedBinding()
   const addon = new ParakeetInterface(binding, {
-    modelPath: './models/parakeet-tdt-0.6b-v3-onnx',
-    modelType: 'tdt'
+    modelPath: './models/parakeet-tdt-0.6b-v3.q8_0.gguf'
   }, () => {})
 
   addon._activeJobId = 2
@@ -302,8 +303,7 @@ test('ParakeetInterface ignores stale wrapper job ids when cancelling', async (t
 
 test('ParakeetInterface unloadWeights throws unsupported operation error', async (t) => {
   const addon = new ParakeetInterface(new MockedBinding(), {
-    modelPath: './models/parakeet-tdt-0.6b-v3-onnx',
-    modelType: 'tdt'
+    modelPath: './models/parakeet-tdt-0.6b-v3.q8_0.gguf'
   }, () => {})
 
   let threw = false
@@ -320,8 +320,7 @@ test('ParakeetInterface unloadWeights throws unsupported operation error', async
 test('ParakeetInterface destroyInstance awaits active cancel before teardown', async (t) => {
   const binding = new MockedBinding()
   const addon = new ParakeetInterface(binding, {
-    modelPath: './models/parakeet-tdt-0.6b-v3-onnx',
-    modelType: 'tdt'
+    modelPath: './models/parakeet-tdt-0.6b-v3.q8_0.gguf'
   }, () => {})
 
   addon._activeJobId = 9
@@ -352,8 +351,7 @@ test('ParakeetInterface destroyInstance awaits active cancel before teardown', a
 test('ParakeetInterface destroyInstance skips cancel with no active job', async (t) => {
   const binding = new MockedBinding()
   const addon = new ParakeetInterface(binding, {
-    modelPath: './models/parakeet-tdt-0.6b-v3-onnx',
-    modelType: 'tdt'
+    modelPath: './models/parakeet-tdt-0.6b-v3.q8_0.gguf'
   }, () => {})
 
   let cancelCalls = 0
@@ -369,8 +367,7 @@ test('ParakeetInterface destroyInstance skips cancel with no active job', async 
 test('ParakeetInterface reload preserves wrapper job numbering across native recreation', async (t) => {
   const binding = new MockedBinding()
   const addon = new ParakeetInterface(binding, {
-    modelPath: './models/parakeet-tdt-0.6b-v3-onnx',
-    modelType: 'tdt'
+    modelPath: './models/parakeet-tdt-0.6b-v3.q8_0.gguf'
   }, () => {})
 
   addon._nextJobId = 7
@@ -381,8 +378,7 @@ test('ParakeetInterface reload preserves wrapper job numbering across native rec
     addon._addonOutputCallback(addon, 'Error', null, 'Job cancelled')
   }
   await addon.reload({
-    modelPath: './models/parakeet-tdt-0.6b-v3-onnx',
-    modelType: 'tdt'
+    modelPath: './models/parakeet-tdt-0.6b-v3.q8_0.gguf'
   })
 
   t.is(addon._nextJobId, 7, 'reload should preserve JS-owned job numbering')
