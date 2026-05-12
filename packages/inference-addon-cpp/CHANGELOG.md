@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.1.8] - 2026-05-12
+
+### Fixed
+- Guard `OutputCallBackJs` against use-after-free of `js_env_t*` during model unload. The destructor's `uv_close` close callback released JS references asynchronously, so a model that left a dirty libuv queue at teardown (pending `uv_async_send` activations, unjoined streaming threads, or in-flight `cancel` work) could race the host env invalidation. On iOS, where react-native-bare-kit worklets tear down the env aggressively on unload, this manifested as `EXC_BAD_ACCESS` (PAC failure) inside `js_delete_reference` / `js_open_handle_scope`. An atomic `envInvalidated` flag is now flipped from a `js_add_teardown_callback`, and all paths that touch JS state (`uv_close` close callback, sync destructor branch, `jsOutputCallback`) bail out when the env is gone instead of dereferencing a dangling pointer. This does not absolve callers from draining their own queues before destroying the instance.
+
 ## [1.1.5] - 2026-04-30
 
 ### Fixed
