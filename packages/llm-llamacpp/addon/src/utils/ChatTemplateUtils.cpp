@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cctype>
+#include <ranges>
+#include <string_view>
 
 #include <llama.h>
 
@@ -18,31 +20,26 @@ namespace {
 
 // Lowercased literal used for case-insensitive equality against
 // `general.basename` GGUF metadata to identify MedPsy models.
-constexpr const char* kMedPsyBasenameLower = "medpsy";
+inline constexpr std::string_view MEDPSY_BASENAME_LOWER{"medpsy"};
 
-std::string toLower(const std::string& value) {
-  std::string lowered;
-  lowered.resize(value.size());
-  std::transform(
-      value.begin(),
-      value.end(),
-      lowered.begin(),
-      [](unsigned char c) { return std::tolower(c); });
+std::string toLower(std::string_view value) {
+  std::string lowered(value.size(), '\0');
+  std::ranges::transform(value, lowered.begin(), [](unsigned char ch) {
+    return std::tolower(ch);
+  });
   return lowered;
 }
 
-std::string normalizeArchitecture(const std::string& architecture) {
+std::string normalizeArchitecture(std::string_view architecture) {
   return toLower(architecture);
 }
 
-bool isQwen3Architecture(const std::string& architecture) {
-  const std::string archStr = normalizeArchitecture(architecture);
-  return archStr == "qwen3";
+bool isQwen3Architecture(std::string_view architecture) {
+  return normalizeArchitecture(architecture) == "qwen3";
 }
 
-bool isHarmonyArchitecture(const std::string& architecture) {
-  const std::string archStr = normalizeArchitecture(architecture);
-  return archStr == "gpt-oss";
+bool isHarmonyArchitecture(std::string_view architecture) {
+  return normalizeArchitecture(architecture) == "gpt-oss";
 }
 
 std::optional<std::string>
@@ -52,8 +49,7 @@ readMetadataString(const ::llama_model* model, const char* key) {
   }
 
   char buffer[256] = {0};
-  int32_t len =
-      llama_model_meta_val_str(model, key, buffer, sizeof(buffer));
+  int32_t len = llama_model_meta_val_str(model, key, buffer, sizeof(buffer));
   if (len > 0 && static_cast<size_t>(len) < sizeof(buffer)) {
     buffer[len] = '\0';
     return std::string(buffer);
@@ -77,9 +73,9 @@ std::optional<std::string> getModelArchitecture(const ::llama_model* model) {
   char arch[64] = {0};
   int32_t len = llama_model_meta_val_str(
       model, "general.architecture", arch, sizeof(arch));
-  if (len > 0 && len < sizeof(arch)) {
+  if (len > 0 && static_cast<size_t>(len) < sizeof(arch)) {
     arch[len] = '\0';
-    return normalizeArchitecture(std::string(arch));
+    return normalizeArchitecture(arch);
   }
   return std::nullopt;
 }
@@ -92,15 +88,16 @@ bool isQwen3Model(const ::llama_model* model) {
   return supportsToolsCompactForModelMetadata(getModelArchitecture(model));
 }
 
-bool isMedPsyBasename(const std::optional<std::string>& basename) {
-  return basename.has_value() &&
-         toLower(basename.value()) == kMedPsyBasenameLower;
+bool isMedPsyBasename(std::string_view basename) {
+  return !basename.empty() && toLower(basename) == MEDPSY_BASENAME_LOWER;
 }
 
 bool isMedPsyModel(const ::llama_model* model) {
-  // No explicit nullptr guard needed: getModelBasename() -> readMetadataString()
-  // returns std::nullopt for a null model, which isMedPsyBasename rejects.
-  return isMedPsyBasename(getModelBasename(model));
+  // No explicit nullptr guard needed: getModelBasename() ->
+  // readMetadataString() returns std::nullopt for a null model, and
+  // value_or("") below feeds isMedPsyBasename an empty string view which it
+  // rejects.
+  return isMedPsyBasename(getModelBasename(model).value_or(""));
 }
 
 bool isHarmonyModel(const ::llama_model* model) {

@@ -757,7 +757,7 @@ void LlamaModel::commonParamsParse(
   // tools setting.
   if (!params.use_jinja &&
       qvac_lib_inference_addon_llama::utils::isMedPsyBasename(
-          metadata_.tryGetString("general.basename"))) {
+          metadata_.tryGetString("general.basename").value_or(""))) {
     params.use_jinja = true;
     QLOG_IF(
         Priority::INFO,

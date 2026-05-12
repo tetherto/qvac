@@ -2,6 +2,7 @@
 
 #include <optional>
 #include <string>
+#include <string_view>
 
 #include "common/chat.h"
 #include "common/common.h"
@@ -24,9 +25,11 @@ bool supportsToolsCompactForModelMetadata(
  * @brief Returns true when the GGUF metadata basename identifies a MedPsy
  * model. Exposed for unit testing without requiring a real ::llama_model.
  *
- * Comparison is case-insensitive against the literal "MedPsy".
+ * Comparison is case-insensitive against the literal "MedPsy"; an empty
+ * basename returns false (callers should pass `value_or("")` from the
+ * upstream `std::optional<std::string>` metadata accessor).
  */
-bool isMedPsyBasename(const std::optional<std::string>& basename);
+bool isMedPsyBasename(std::string_view basename);
 
 /**
  * @brief Returns true when the model's `general.basename` metadata identifies
