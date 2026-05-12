@@ -75,7 +75,10 @@ const ERROR_LABELS: Record<string, string> = {
   InvalidPluginSpecifierError: 'Plugin Error',
   BarePackNotInstalledError: 'Bundler Error',
   BarePackError: 'Bundle Failed',
-  BareImportsMapNotFoundError: 'SDK Error'
+  BareImportsMapNotFoundError: 'SDK Error',
+  LockfileReadError: 'Lockfile Error',
+  LockfileNotFoundAtRefError: 'Lockfile Error',
+  UnsupportedLockfileError: 'Lockfile Error'
 }
 
 export function handleError (error: unknown): void {
