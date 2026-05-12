@@ -4,6 +4,7 @@ const path = require('bare-path')
 const QvacLogger = require('@qvac/logging')
 const { createJobHandler, exclusiveRunQueue } = require('@qvac/infer-base')
 const { SdInterface, mapAddonEvent } = require('./addon')
+const addonLogging = require('./addonLogging')
 
 const COMPANION_FILE_KEYS = ['highNoiseDiffusionModel', 't5Xxl', 'vae', 'esrgan']
 
@@ -112,7 +113,6 @@ class VideoStableDiffusion {
     this.addon = null
     this._hasActiveResponse = false
     this._binding = null
-    this._nativeLoggerActive = false
     this.state = { configLoaded: false }
   }
 
@@ -172,7 +172,6 @@ class VideoStableDiffusion {
    */
   _createAddon (configurationParams) {
     this._binding = require('./binding')
-    this._connectNativeLogger()
     return new SdInterface(
       this._binding,
       configurationParams,
@@ -181,26 +180,23 @@ class VideoStableDiffusion {
   }
 
   _connectNativeLogger () {
-    if (!this._binding || !this.logger) return
+    if (!this.logger) return
     try {
-      this._binding.setLogger((priority, message) => {
+      addonLogging.setLogger((priority, message) => {
         const method = LOG_METHODS[priority] || 'info'
         if (typeof this.logger[method] === 'function') {
           this.logger[method](`[C++] ${message}`)
         }
       })
-      this._nativeLoggerActive = true
     } catch (err) {
       this.logger.warn('Failed to connect native logger:', err.message)
     }
   }
 
   _releaseNativeLogger () {
-    if (!this._nativeLoggerActive || !this._binding) return
     try {
-      this._binding.releaseLogger()
+      addonLogging.releaseLogger()
     } catch (_) {}
-    this._nativeLoggerActive = false
   }
 
   _addonOutputCallback (addon, event, data, error) {
@@ -298,13 +294,13 @@ class VideoStableDiffusion {
     const alignTo = 8
     const w = params.width
     const h = params.height
-    const wBad = w != null && (!Number.isFinite(w) || w % alignTo !== 0)
-    const hBad = h != null && (!Number.isFinite(h) || h % alignTo !== 0)
+    const wBad = w != null && (!Number.isFinite(w) || w <= 0 || w % alignTo !== 0)
+    const hBad = h != null && (!Number.isFinite(h) || h <= 0 || h % alignTo !== 0)
     if (wBad || hBad) {
-      const suggestW = Number.isFinite(w) ? Math.round(w / alignTo) * alignTo : 480
-      const suggestH = Number.isFinite(h) ? Math.round(h / alignTo) * alignTo : 832
+      const suggestW = Number.isFinite(w) && w > 0 ? Math.round(w / alignTo) * alignTo : 480
+      const suggestH = Number.isFinite(h) && h > 0 ? Math.round(h / alignTo) * alignTo : 832
       throw new Error(
-        `width and height must be multiples of ${alignTo}. ` +
+        `width and height must be positive multiples of ${alignTo}. ` +
         `Got: ${w}x${h}. Use ${suggestW}x${suggestH} instead.`
       )
     }

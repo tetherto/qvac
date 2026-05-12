@@ -24,7 +24,14 @@ namespace {
 
 inline int
 requirePositiveInt(const picojson::value& v, const std::string& key) {
-  const int n = static_cast<int>(requireNum(v, key));
+  const double d = requireNum(v, key);
+  // Check that the double is actually an integer value before casting
+  if (d != std::floor(d)) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        key + " must be an integer, got: " + std::to_string(d));
+  }
+  const int n = static_cast<int>(d);
   if (n <= 0)
     throw StatusError(
         general_error::InvalidArgument,
@@ -80,7 +87,13 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
 
     {"width",
      [](SdVidGenConfig& c, const picojson::value& v) {
-       const int w = static_cast<int>(requireNum(v, "width"));
+       const double d = requireNum(v, "width");
+       if (d != std::floor(d)) {
+         throw StatusError(
+             general_error::InvalidArgument,
+             "width must be an integer, got: " + std::to_string(d));
+       }
+       const int w = static_cast<int>(d);
        if (w <= 0 || w % 8 != 0)
          throw StatusError(
              general_error::InvalidArgument,
@@ -91,7 +104,13 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
 
     {"height",
      [](SdVidGenConfig& c, const picojson::value& v) {
-       const int h = static_cast<int>(requireNum(v, "height"));
+       const double d = requireNum(v, "height");
+       if (d != std::floor(d)) {
+         throw StatusError(
+             general_error::InvalidArgument,
+             "height must be an integer, got: " + std::to_string(d));
+       }
+       const int h = static_cast<int>(d);
        if (h <= 0 || h % 8 != 0)
          throw StatusError(
              general_error::InvalidArgument,
@@ -110,7 +129,13 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
 
     {"video_frames",
      [](SdVidGenConfig& c, const picojson::value& v) {
-       const int n = static_cast<int>(requireNum(v, "video_frames"));
+       const double d = requireNum(v, "video_frames");
+       if (d != std::floor(d)) {
+         throw StatusError(
+             general_error::InvalidArgument,
+             "video_frames must be an integer, got: " + std::to_string(d));
+       }
+       const int n = static_cast<int>(d);
        // Mirror the JS-side message in video.js -- both layers list the
        // same valid set up to 81 (Wan 1.3B native cap) so callers see a
        // consistent error regardless of which validator fires first.
@@ -136,7 +161,13 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
 
     {"fps",
      [](SdVidGenConfig& c, const picojson::value& v) {
-       const int f = static_cast<int>(requireNum(v, "fps"));
+       const double d = requireNum(v, "fps");
+       if (d != std::floor(d)) {
+         throw StatusError(
+             general_error::InvalidArgument,
+             "fps must be an integer, got: " + std::to_string(d));
+       }
+       const int f = static_cast<int>(d);
        if (f <= 0 || f > 120)
          throw StatusError(
              general_error::InvalidArgument,

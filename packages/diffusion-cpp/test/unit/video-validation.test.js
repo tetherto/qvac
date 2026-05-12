@@ -185,7 +185,7 @@ test('run | throws when width is not a multiple of 8', async (t) => {
   const m = makeWanModel()
   await t.exception.all(
     m.run({ mode: 'txt2vid', prompt: 'hi', width: 833, height: 480 }),
-    /width and height must be multiples of 8/
+    /width and height must be positive multiples of 8/
   )
 })
 
@@ -193,7 +193,7 @@ test('run | throws when height is not a multiple of 8', async (t) => {
   const m = makeWanModel()
   await t.exception.all(
     m.run({ mode: 'txt2vid', prompt: 'hi', width: 832, height: 481 }),
-    /width and height must be multiples of 8/
+    /width and height must be positive multiples of 8/
   )
 })
 
