@@ -4,7 +4,6 @@ const path = require('bare-path')
 const QvacLogger = require('@qvac/logging')
 const { createJobHandler, exclusiveRunQueue } = require('@qvac/infer-base')
 const { SdInterface, mapAddonEvent } = require('./addon')
-const addonLogging = require('./addonLogging')
 
 const COMPANION_FILE_KEYS = ['highNoiseDiffusionModel', 't5Xxl', 'vae', 'esrgan']
 
@@ -18,8 +17,6 @@ function assertAbsolute (key, value) {
     throw new TypeError(`files.${key} must be an absolute path (got: ${value})`)
   }
 }
-
-const LOG_METHODS = ['error', 'warn', 'info', 'debug']
 
 const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed'
 
@@ -76,7 +73,10 @@ class VideoStableDiffusion {
    *        generation does not use ESRGAN — same binding shape as image mode.
    * @param {object} [args.config]                        - SD context config
    *        (threads, device, flow_shift, etc.). Optional.
-   * @param {object} [args.logger]                        - Structured logger
+   * @param {object} [args.logger]                        - Structured logger for
+   *        JS wrapper logs. Native C++ logs are process-global; configure them
+   *        once with `require('@qvac/diffusion-cpp/addonLogging').setLogger(...)`
+   *        (mirrors `ImgStableDiffusion` -- one global hook for the whole addon).
    * @param {object} [args.opts]                          - Inference options
    */
   constructor ({ files, config, logger = null, opts = {} }) {
@@ -112,7 +112,6 @@ class VideoStableDiffusion {
     this._run = exclusiveRunQueue()
     this.addon = null
     this._hasActiveResponse = false
-    this._binding = null
     this.state = { configLoaded: false }
   }
 
@@ -159,7 +158,6 @@ class VideoStableDiffusion {
       // subsequent load() does not leak a zombie native instance.
       try { await this.addon?.unload?.() } catch (_) {}
       this.addon = null
-      this._releaseNativeLogger()
       throw loadError
     }
 
@@ -171,32 +169,12 @@ class VideoStableDiffusion {
    * @returns {SdInterface}
    */
   _createAddon (configurationParams) {
-    this._binding = require('./binding')
+    const binding = require('./binding')
     return new SdInterface(
-      this._binding,
+      binding,
       configurationParams,
       this._addonOutputCallback.bind(this)
     )
-  }
-
-  _connectNativeLogger () {
-    if (!this.logger) return
-    try {
-      addonLogging.setLogger((priority, message) => {
-        const method = LOG_METHODS[priority] || 'info'
-        if (typeof this.logger[method] === 'function') {
-          this.logger[method](`[C++] ${message}`)
-        }
-      })
-    } catch (err) {
-      this.logger.warn('Failed to connect native logger:', err.message)
-    }
-  }
-
-  _releaseNativeLogger () {
-    try {
-      addonLogging.releaseLogger()
-    } catch (_) {}
   }
 
   _addonOutputCallback (addon, event, data, error) {
@@ -518,7 +496,6 @@ class VideoStableDiffusion {
         await this.addon.unload()
         this.addon = null
       }
-      this._releaseNativeLogger()
       this.state.configLoaded = false
     })
   }
