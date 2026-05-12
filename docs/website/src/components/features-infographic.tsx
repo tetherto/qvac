@@ -331,42 +331,101 @@ type Sparkle = {
 };
 
 // Sparkles are organised as 8 RAYS, one per platform direction (matching
-// DEFAULT_PLATFORMS angles). Each ray is a pair: an INNER sparkle close to
-// the Q, and an OUTER sparkle a step further out, just before the platform
-// icon's box (which spans roughly r=140 → r=220 on each ray, since
-// PLATFORM_BOX=80 is centred on R_PLATFORMS=180). The outer sparkle's delay
-// is INNER_OUT_DELAY ms AFTER its inner sibling, so the eye reads the pair
-// as a flow "from inside the QVAC outward to the platform". The per-ray
-// initial delays are spread across one cycle, producing a continuous,
-// rotating outward pulse — denser than the previous version, but kept
-// discreet by the same 70%-rest keyframe.
-const INNER_OUT_DELAY = 750; // ms — outer sparkle follows its inner sibling
-const SPARKLES: Sparkle[] = [
-  // N (mobile)
-  { id: 'inner-n',  angle: 0,   radius: 70, scale: 0.85, duration: 4400, delay: 0 },
-  { id: 'outer-n',  angle: 0,   radius: 130, scale: 0.6,  duration: 4400, delay: 0   + INNER_OUT_DELAY },
-  // NE (apple)
-  { id: 'inner-ne', angle: 45,  radius: 75, scale: 0.7,  duration: 4500, delay: 550 },
-  { id: 'outer-ne', angle: 45,  radius: 125, scale: 0.55, duration: 4500, delay: 550 + INNER_OUT_DELAY },
-  // E (server)
-  { id: 'inner-e',  angle: 90,  radius: 65, scale: 0.95, duration: 4200, delay: 1100 },
-  { id: 'outer-e',  angle: 90,  radius: 130, scale: 0.7,  duration: 4200, delay: 1100 + INNER_OUT_DELAY },
-  // SE (android)
-  { id: 'inner-se', angle: 135, radius: 80, scale: 0.6,  duration: 4600, delay: 1650 },
-  { id: 'outer-se', angle: 135, radius: 125, scale: 0.5,  duration: 4600, delay: 1650 + INNER_OUT_DELAY },
-  // S (iot)
-  { id: 'inner-s',  angle: 180, radius: 70, scale: 0.85, duration: 4300, delay: 2200 },
-  { id: 'outer-s',  angle: 180, radius: 130, scale: 0.65, duration: 4300, delay: 2200 + INNER_OUT_DELAY },
-  // SW (windows)
-  { id: 'inner-sw', angle: 225, radius: 75, scale: 0.65, duration: 4500, delay: 2750 },
-  { id: 'outer-sw', angle: 225, radius: 125, scale: 0.55, duration: 4500, delay: 2750 + INNER_OUT_DELAY },
-  // W (desktop)
-  { id: 'inner-w',  angle: 270, radius: 65, scale: 0.8,  duration: 4200, delay: 3300 },
-  { id: 'outer-w',  angle: 270, radius: 130, scale: 0.65, duration: 4200, delay: 3300 + INNER_OUT_DELAY },
-  // NW (linux)
-  { id: 'inner-nw', angle: 315, radius: 75, scale: 0.7,  duration: 4500, delay: 3850 },
-  { id: 'outer-nw', angle: 315, radius: 125, scale: 0.5,  duration: 4500, delay: 3850 + INNER_OUT_DELAY },
+// DEFAULT_PLATFORMS angles). Each ray fires TWO sparkles per tier (inner
+// and outer), slightly offset in angle, radius and timing — so each tier
+// reads as a small twin-burst rather than a lone particle. With 8 rays ×
+// 4 sparkles = 32 sparkles total, the effect is denser than the previous
+// 16-particle version while still kept discreet by the 70%-rest keyframe.
+//
+// For each ray:
+//   - inner-A fires at baseDelay (slightly above the ray's central angle)
+//   - inner-B fires at baseDelay + INTRA_DELAY (slightly below)
+//   - outer-A fires at baseDelay + INNER_OUT_DELAY (above-of-centre, but
+//     with a smaller angular spread because at a larger radius the same
+//     spread would visually drift further apart)
+//   - outer-B fires at baseDelay + INNER_OUT_DELAY + INTRA_DELAY (below-of-
+//     centre)
+//
+// The outer band stops at r=140 to stay clear of each platform icon's
+// foreignObject box (PLATFORM_BOX=80 centred on R_PLATFORMS=180 spans
+// r=140 → r=220 on its ray).
+const INNER_OUT_DELAY = 750; // ms — outer pair follows the inner pair
+const INTRA_DELAY = 220;     // ms — A → B within a tier
+const ANGLE_SPREAD = 8;      // deg — angular fan within a tier (inner)
+const RADIUS_SPREAD = 6;     // viewBox units — radial scatter within a tier
+
+type SparkleRayConfig = {
+  id: string;
+  /** Compass angle in degrees: 0 = top, increases clockwise. */
+  angle: number;
+  /** Mean radius for the inner pair (around the Q, inside R_INNER=95). */
+  innerRadius: number;
+  /** Mean radius for the outer pair (between rings, ≤140 to clear icons). */
+  outerRadius: number;
+  /** Peak scale for the inner pair (B sibling is rendered ~80% as large). */
+  innerScale: number;
+  /** Peak scale for the outer pair. */
+  outerScale: number;
+  /** Cycle duration in ms (shared by all 4 sparkles in this ray). */
+  duration: number;
+  /** When this ray's inner-A starts; the others key off this value. */
+  baseDelay: number;
+};
+
+const SPARKLE_RAYS: SparkleRayConfig[] = [
+  { id: 'n',  angle: 0,   innerRadius: 70, outerRadius: 130, innerScale: 0.85, outerScale: 0.6,  duration: 4400, baseDelay: 0    },
+  { id: 'ne', angle: 45,  innerRadius: 75, outerRadius: 125, innerScale: 0.7,  outerScale: 0.55, duration: 4500, baseDelay: 550  },
+  { id: 'e',  angle: 90,  innerRadius: 65, outerRadius: 130, innerScale: 0.95, outerScale: 0.7,  duration: 4200, baseDelay: 1100 },
+  { id: 'se', angle: 135, innerRadius: 80, outerRadius: 125, innerScale: 0.6,  outerScale: 0.5,  duration: 4600, baseDelay: 1650 },
+  { id: 's',  angle: 180, innerRadius: 70, outerRadius: 130, innerScale: 0.85, outerScale: 0.65, duration: 4300, baseDelay: 2200 },
+  { id: 'sw', angle: 225, innerRadius: 75, outerRadius: 125, innerScale: 0.65, outerScale: 0.55, duration: 4500, baseDelay: 2750 },
+  { id: 'w',  angle: 270, innerRadius: 65, outerRadius: 130, innerScale: 0.8,  outerScale: 0.65, duration: 4200, baseDelay: 3300 },
+  { id: 'nw', angle: 315, innerRadius: 75, outerRadius: 125, innerScale: 0.7,  outerScale: 0.5,  duration: 4500, baseDelay: 3850 },
 ];
+
+// Outer pairs use a smaller angular fan (×0.7) so the visual spread along
+// the ray stays roughly constant once the angular gap is multiplied by the
+// larger radius. Sibling B is ~80% the scale of sibling A in each tier,
+// adding a subtle "echo" feel without registering as a distinct second hit.
+function expandRay(ray: SparkleRayConfig): Sparkle[] {
+  const outerAngleSpread = ANGLE_SPREAD * 0.7;
+  return [
+    {
+      id: `inner-${ray.id}-a`,
+      angle: ray.angle - ANGLE_SPREAD,
+      radius: ray.innerRadius - RADIUS_SPREAD / 2,
+      scale: ray.innerScale,
+      duration: ray.duration,
+      delay: ray.baseDelay,
+    },
+    {
+      id: `inner-${ray.id}-b`,
+      angle: ray.angle + ANGLE_SPREAD,
+      radius: ray.innerRadius + RADIUS_SPREAD / 2,
+      scale: ray.innerScale * 0.8,
+      duration: ray.duration,
+      delay: ray.baseDelay + INTRA_DELAY,
+    },
+    {
+      id: `outer-${ray.id}-a`,
+      angle: ray.angle - outerAngleSpread,
+      radius: ray.outerRadius - RADIUS_SPREAD / 2,
+      scale: ray.outerScale,
+      duration: ray.duration,
+      delay: ray.baseDelay + INNER_OUT_DELAY,
+    },
+    {
+      id: `outer-${ray.id}-b`,
+      angle: ray.angle + outerAngleSpread,
+      radius: ray.outerRadius + RADIUS_SPREAD / 2,
+      scale: ray.outerScale * 0.8,
+      duration: ray.duration,
+      delay: ray.baseDelay + INNER_OUT_DELAY + INTRA_DELAY,
+    },
+  ];
+}
+
+const SPARKLES: Sparkle[] = SPARKLE_RAYS.flatMap(expandRay);
 
 // ============================================================================
 // Card shell — chooses the right wrapper element based on `feature` props.
