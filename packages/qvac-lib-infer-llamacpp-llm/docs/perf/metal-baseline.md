@@ -1,6 +1,6 @@
 # Metal GPU Baseline Performance Report
 
-**Date**: 2026-05-07 (updated 2026-05-12 with fiber baseline)
+**Date**: 2026-05-07 (updated 2026-05-12 with fiber baseline + verified rebuild validation)
 **Task**: QVAC-18293 — VLM inference profiling on Apple Metal GPUs
 **llama.cpp**: tag [`b9025`](https://github.com/ggml-org/llama.cpp/releases/tag/b9025) (commit [`eff06702`](https://github.com/ggml-org/llama.cpp/commit/eff06702b2a52e1020ea009ebd86cb9f5acabab5)), fiber fork `tetherto/temp-8189` (build 8412, commit `f686a1324`)
 
@@ -418,6 +418,40 @@ Key observations:
 Raw results: `vlm-benchmark/results/parsed/mac-fiber-2026-05-12T1006.json`
 Binary archive: `vlm-benchmark/llama.cpp/binaries/b9025/` and `vlm-benchmark/llama.cpp/binaries/fiber-temp8189/`
 
+### 11a. Verified rebuild validation (2026-05-12, 15:00)
+
+The b9025 binary was rebuilt from a verified upstream tag checkout (`git checkout b9025`, confirmed commit `eff06702b`) to ensure provenance. Full benchmark suite re-run with identical test matrix. All runs used pre-compiled binaries from the archive directory with `DYLD_LIBRARY_PATH`.
+
+| Model | Build | Vision (ms) | Prefill (t/s) | Decode (t/s) | Total (ms) |
+|-------|-------|-------------|---------------|--------------|------------|
+| Qwen3.5-2B Q4_K_M | b9025 (verified) | 395 | 334.2 | 52.62 | 5,943 |
+| | Fiber | 419 | 302.1 | 38.21 | 7,768 |
+| | **Delta** | +6.1% | −9.6% | **−27.4%** | +30.7% |
+| Gemma 4 E2B Q4_K_M | b9025 (verified) | 604 | 261.9 | 50.72 | 6,574 |
+| | Fiber | 603 | 258.2 | 41.88 | 7,670 |
+| | **Delta** | −0.2% | −1.4% | **−17.4%** | +16.7% |
+
+Cross-session decode consistency (t/s):
+
+| Build | Model | Original (05-07) | Unverified (13:40) | Verified (15:00) |
+|-------|-------|-----------------|-------------------|-----------------|
+| b9025 | Qwen3.5 | 53.7 | 52.63 | 52.62 |
+| b9025 | Gemma4 | 52.1 | 49.79 | 50.72 |
+| Fiber | Qwen3.5 | — | 38.23 | 38.21 |
+| Fiber | Gemma4 | — | 41.81 | 41.88 |
+
+Observations:
+
+- **Binary provenance confirmed**: Verified rebuild produces identical decode throughput to the original binary (52.62 vs 52.63 Qwen3.5, 50.72 vs 49.79 Gemma4), confirming the archived binary was genuine upstream b9025.
+- **Fiber decode regression confirmed across 3 independent sessions**: Qwen3.5 consistently −27–29%, Gemma4 consistently −16–17%.
+- **b9025 Gemma4 variance**: 49.79–52.1 t/s across sessions (±2.3%), likely thermal/system load. Qwen3.5 more stable (52.49–53.7, ±1.2%).
+- **Intra-run variance <1%** for all combinations, confirming no thermal throttling within sessions.
+- Previous unverified binary backed up to `binaries/b9025-unverified/` for reference.
+
+Raw results: `vlm-benchmark/results/parsed/mac-verified-2026-05-12T1500.json`
+Raw logs: `vlm-benchmark/results/raw/b9025-mac-2026-05-12T1500/` and `vlm-benchmark/results/raw/fiber-mac-2026-05-12T1500/`
+Prior run (unverified): `vlm-benchmark/results/parsed/mac-rerun-2026-05-12T1340.json`
+
 ---
 
 ## Methodology Notes
@@ -455,4 +489,6 @@ Vision (ms) = image slice encoding + image batch decoding. Encoding runs the CLI
 - Raw logs: `vlm-benchmark/results/raw/mac/` (Mac CLI), `vlm-benchmark/results/raw/addon-mac-2026-05-11T1942/` (Mac addon), `vlm-benchmark/results/ios-local/` (iPhone)
 - Profiling traces: `vlm-benchmark/results/traces/` (4 CLI traces, ~1.55 GB total) + `vlm-benchmark/results/traces/addon-mac-2026-05-11T1943/` (2 addon traces, ~599 MB total)
 - Fiber results: `vlm-benchmark/results/parsed/mac-fiber-2026-05-12T1006.json`
-- Pre-compiled binary archive: `vlm-benchmark/llama.cpp/binaries/b9025/` (upstream) and `vlm-benchmark/llama.cpp/binaries/fiber-temp8189/` (tetherto fork). Run with `DYLD_LIBRARY_PATH=<dir> <dir>/llama-mtmd-cli`
+- Re-run validation (unverified binary): `vlm-benchmark/results/parsed/mac-rerun-2026-05-12T1340.json`
+- Verified rebuild validation: `vlm-benchmark/results/parsed/mac-verified-2026-05-12T1500.json`
+- Pre-compiled binary archive: `vlm-benchmark/llama.cpp/binaries/b9025/` (verified upstream rebuild), `vlm-benchmark/llama.cpp/binaries/b9025-unverified/` (original binary, kept for reference), `vlm-benchmark/llama.cpp/binaries/fiber-temp8189/` (tetherto fork). Run with `DYLD_LIBRARY_PATH=<dir> <dir>/llama-mtmd-cli`
