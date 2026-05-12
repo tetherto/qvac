@@ -123,12 +123,30 @@ jobs:
           prebuild-artifact-prefix: 'llama-cpp-'
           pat-token: ${{ secrets.PAT_TOKEN }}
 
+      - name: Build mobile app
+        id: build
+        uses: ./.github/actions/run-mobile-integration-tests/build-mobile-app
+        with:
+          platform: ${{ matrix.platform }}
+          addon-workdir: 'packages/llm-llamacpp'
+          addon-npm-name: '@qvac/llm-llamacpp'
+          ios-build-cert-base64: ${{ secrets.TEST_APP_APPLE_DISTRIBUTION_CERTIFICATE }}
+          ios-build-cert-password: ${{ secrets.APPLE_P12_PASSWORD }}
+          ios-keychain-password: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+          ios-provisioning-profile-base64: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
+          apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
+
       # QVAC-17830: VLM image tests on Android take longer than the
       # generated 20-minute per-test ceiling in app.test.js. Bump the
       # generated `timeout: 1200000` / "20 minutes" wording up to 30
       # minutes so individual VLM tests don't trip Mocha first. The
-      # WDIO Mocha ceiling below (mocha-timeout-ms) is then bumped to
-      # 35 minutes so the runner outlives any single test.
+      # WDIO Mocha ceiling on `upload-to-devicefarm` (mocha-timeout-ms)
+      # is then bumped to 35 minutes so the runner outlives any single
+      # test.
+      #
+      # Must run AFTER build-mobile-app (which generates app.test.js
+      # via `npm run build`) and BEFORE upload-to-devicefarm (which
+      # packs `e2e/tests/` into the Device Farm test package).
       - name: Extend Android mobile test timeouts
         if: matrix.platform == 'Android'
         working-directory: test-framework
@@ -136,6 +154,9 @@ jobs:
           node <<'NODE'
           const fs = require('fs')
           const testFile = 'e2e/tests/app.test.js'
+          if (!fs.existsSync(testFile)) {
+            throw new Error(`Expected generated ${testFile} not found — did build-mobile-app run?`)
+          }
           let content = fs.readFileSync(testFile, 'utf8')
 
           const patched = content
@@ -149,19 +170,6 @@ jobs:
           fs.writeFileSync(testFile, patched)
           console.log('Extended generated Android test timeouts to 30 minutes')
           NODE
-
-      - name: Build mobile app
-        id: build
-        uses: ./.github/actions/run-mobile-integration-tests/build-mobile-app
-        with:
-          platform: ${{ matrix.platform }}
-          addon-workdir: 'packages/llm-llamacpp'
-          addon-npm-name: '@qvac/llm-llamacpp'
-          ios-build-cert-base64: ${{ secrets.TEST_APP_APPLE_DISTRIBUTION_CERTIFICATE }}
-          ios-build-cert-password: ${{ secrets.APPLE_P12_PASSWORD }}
-          ios-keychain-password: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
-          ios-provisioning-profile-base64: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
-          apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
 
       # LLM ships with its own dedicated Device Farm project + iOS pool
       # (the LLM_* secrets), historically because LLM runs more often
