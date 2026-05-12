@@ -94,6 +94,9 @@ function setupCli (): void {
     .requiredOption('--head <ref>', 'Head git ref or SHA')
     .option('--lockfile <path>', 'Path to npm package-lock.json', 'package-lock.json')
     .option('-q, --quiet', 'Suppress output when there are no native changes')
+    .exitOverride((err) => {
+      process.exit(err.exitCode === 0 ? 0 : 2)
+    })
     .action(async (options: {
       base: string
       head: string
@@ -120,7 +123,7 @@ function setupCli (): void {
         if (changed) process.exit(1)
       } catch (error: unknown) {
         handleError(error)
-        process.exit(1)
+        process.exit(2)
       }
     })
 

@@ -105,13 +105,13 @@ http_status() {
 
 @test "qvac verify deps requires base and head" {
   run ${QVAC} verify deps --base HEAD
-  [[ "${status}" -eq 1 ]]
+  [[ "${status}" -eq 2 ]]
   [[ "${output}" =~ "--head" ]]
 }
 
 @test "qvac verify deps rejects unsupported lockfiles" {
   run ${QVAC} verify deps --base HEAD --head HEAD --lockfile bun.lock
-  [[ "${status}" -eq 1 ]]
+  [[ "${status}" -eq 2 ]]
   [[ "${output}" =~ "Unsupported lockfile" ]]
   [[ "${output}" =~ "package-lock.json" ]]
 }

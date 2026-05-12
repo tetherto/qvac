@@ -77,6 +77,7 @@ const ERROR_LABELS: Record<string, string> = {
   BarePackError: 'Bundle Failed',
   BareImportsMapNotFoundError: 'SDK Error',
   LockfileReadError: 'Lockfile Error',
+  LockfileNotFoundAtRefError: 'Lockfile Error',
   UnsupportedLockfileError: 'Lockfile Error'
 }
 

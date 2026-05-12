@@ -178,7 +178,10 @@ qvac verify deps --base upstream/main --head HEAD --lockfile packages/sdk/packag
 | Exit | Meaning |
 |------|---------|
 | `0` | No native addon changes, or no npm lockfile exists at either ref. |
-| `1` | Native addon additions/removals were detected, removed package native status could not be determined, required args are missing, git/lockfile parsing failed, or an unsupported lockfile was requested. |
+| `1` | Native addon additions or removals were detected, or a removed package's native status could not be determined. Reviewers should confirm the change is intentional. |
+| `2` | Tool error (missing required args, unsupported lockfile, git ref could not be resolved, lockfile read or parse failure, etc.). The check did not complete and no judgment about native dependency changes can be made. |
+
+CI guardrails should treat `1` and `2` differently: `1` means "real native change to confirm", `2` means "infrastructure/usage problem to fix".
 
 **Detection Capabilities:**
 

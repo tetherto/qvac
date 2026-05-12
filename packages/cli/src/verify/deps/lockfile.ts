@@ -4,6 +4,12 @@ import { promisify } from 'node:util'
 
 const execFileAsync = promisify(execFile)
 
+const GIT_EXEC_ENV: NodeJS.ProcessEnv = {
+  ...process.env,
+  LANG: 'C',
+  LC_ALL: 'C'
+}
+
 export interface LockfilePackage {
   lockPath: string
   name: string
@@ -63,6 +69,7 @@ async function runGit (cwd: string, args: string[]): Promise<string> {
   try {
     const { stdout } = await execFileAsync('git', args, {
       cwd,
+      env: GIT_EXEC_ENV,
       maxBuffer: 32 * 1024 * 1024
     })
     return toText(stdout).trim()
@@ -96,6 +103,7 @@ export async function readLockfileTextAtRef (
   try {
     const { stdout } = await execFileAsync('git', ['show', showArg], {
       cwd: options.projectRoot,
+      env: GIT_EXEC_ENV,
       maxBuffer: 32 * 1024 * 1024
     })
     return toText(stdout).trim()

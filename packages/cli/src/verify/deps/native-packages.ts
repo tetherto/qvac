@@ -76,7 +76,7 @@ export async function collectNativePackages (
         lockPath: pkg.lockPath,
         name: pkg.name,
         packageJsonPath,
-        reason: (error as Error).message
+        reason: error instanceof Error ? error.message : String(error)
       }, pkg.version))
       continue
     }
