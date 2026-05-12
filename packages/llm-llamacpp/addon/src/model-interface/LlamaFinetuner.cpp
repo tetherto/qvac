@@ -253,9 +253,10 @@ std::string LlamaFinetuner::finetune(
         throw std::runtime_error(
             "Failed to load LoRA adapter from checkpoint: " + adapterPath);
       }
-      llama_set_adapters_lora(ctx, nullptr, 0, nullptr);
       std::array<llama_adapter_lora*, 1> adapters{adapter};
       std::array<float, 1> adapterScales{1.0F};
+      // llama_set_adapters_lora replaces the active adapter list, so no
+      // separate clear is needed in 78db8bf4 (no llama_clear_adapter_lora).
       if (llama_set_adapters_lora(
               ctx, adapters.data(), adapters.size(), adapterScales.data()) <
           0) {
