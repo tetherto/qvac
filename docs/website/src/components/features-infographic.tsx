@@ -330,16 +330,42 @@ type Sparkle = {
   delay: number;
 };
 
-// Irregular distribution so the eye doesn't pick up a pattern. Durations and
-// delays are co-prime-ish to avoid all sparkles peaking at the same instant.
+// Sparkles are organised as 8 RAYS, one per platform direction (matching
+// DEFAULT_PLATFORMS angles). Each ray is a pair: an INNER sparkle close to
+// the Q, and an OUTER sparkle a step further out, just before the platform
+// icon's box (which spans roughly r=140 → r=220 on each ray, since
+// PLATFORM_BOX=80 is centred on R_PLATFORMS=180). The outer sparkle's delay
+// is INNER_OUT_DELAY ms AFTER its inner sibling, so the eye reads the pair
+// as a flow "from inside the QVAC outward to the platform". The per-ray
+// initial delays are spread across one cycle, producing a continuous,
+// rotating outward pulse — denser than the previous version, but kept
+// discreet by the same 70%-rest keyframe.
+const INNER_OUT_DELAY = 750; // ms — outer sparkle follows its inner sibling
 const SPARKLES: Sparkle[] = [
-  { id: 's1', angle: 25,  radius: 70,  scale: 0.85, duration: 4100, delay: 0    },
-  { id: 's2', angle: 80,  radius: 105, scale: 0.55, duration: 3300, delay: 700  },
-  { id: 's3', angle: 135, radius: 60,  scale: 1.0,  duration: 4700, delay: 1500 },
-  { id: 's4', angle: 195, radius: 95,  scale: 0.7,  duration: 3800, delay: 400  },
-  { id: 's5', angle: 250, radius: 75,  scale: 0.5,  duration: 5200, delay: 2000 },
-  { id: 's6', angle: 305, radius: 110, scale: 0.95, duration: 3600, delay: 1100 },
-  { id: 's7', angle: 350, radius: 55,  scale: 0.6,  duration: 4400, delay: 2200 },
+  // N (mobile)
+  { id: 'inner-n',  angle: 0,   radius: 70, scale: 0.85, duration: 4400, delay: 0 },
+  { id: 'outer-n',  angle: 0,   radius: 130, scale: 0.6,  duration: 4400, delay: 0   + INNER_OUT_DELAY },
+  // NE (apple)
+  { id: 'inner-ne', angle: 45,  radius: 75, scale: 0.7,  duration: 4500, delay: 550 },
+  { id: 'outer-ne', angle: 45,  radius: 125, scale: 0.55, duration: 4500, delay: 550 + INNER_OUT_DELAY },
+  // E (server)
+  { id: 'inner-e',  angle: 90,  radius: 65, scale: 0.95, duration: 4200, delay: 1100 },
+  { id: 'outer-e',  angle: 90,  radius: 130, scale: 0.7,  duration: 4200, delay: 1100 + INNER_OUT_DELAY },
+  // SE (android)
+  { id: 'inner-se', angle: 135, radius: 80, scale: 0.6,  duration: 4600, delay: 1650 },
+  { id: 'outer-se', angle: 135, radius: 125, scale: 0.5,  duration: 4600, delay: 1650 + INNER_OUT_DELAY },
+  // S (iot)
+  { id: 'inner-s',  angle: 180, radius: 70, scale: 0.85, duration: 4300, delay: 2200 },
+  { id: 'outer-s',  angle: 180, radius: 130, scale: 0.65, duration: 4300, delay: 2200 + INNER_OUT_DELAY },
+  // SW (windows)
+  { id: 'inner-sw', angle: 225, radius: 75, scale: 0.65, duration: 4500, delay: 2750 },
+  { id: 'outer-sw', angle: 225, radius: 125, scale: 0.55, duration: 4500, delay: 2750 + INNER_OUT_DELAY },
+  // W (desktop)
+  { id: 'inner-w',  angle: 270, radius: 65, scale: 0.8,  duration: 4200, delay: 3300 },
+  { id: 'outer-w',  angle: 270, radius: 130, scale: 0.65, duration: 4200, delay: 3300 + INNER_OUT_DELAY },
+  // NW (linux)
+  { id: 'inner-nw', angle: 315, radius: 75, scale: 0.7,  duration: 4500, delay: 3850 },
+  { id: 'outer-nw', angle: 315, radius: 125, scale: 0.5,  duration: 4500, delay: 3850 + INNER_OUT_DELAY },
 ];
 
 // ============================================================================
