@@ -78,14 +78,6 @@ protected:
            MP::OnMissing::Skip,
            "https://huggingface.co/Qwen/Qwen3-0.6B-GGUF");
 
-    // MedGemma is a Gemma-3-based model used in integration tests.
-    // https://huggingface.co/unsloth/medgemma-4b-it-GGUF
-    gemma3Model_ =
-        MP("medgemma-4b-it-Q4_1.gguf",
-           "GEMMA3_MODEL_PATH",
-           MP::OnMissing::Skip,
-           "https://huggingface.co/unsloth/medgemma-4b-it-GGUF");
-
     // Sharded models: constructor expands the shard list; resolveShardPaths
     // then fills in absolute paths (requires LlamaModel, kept out of
     // test_common.hpp to avoid pulling in the heavy llama headers there).
@@ -115,7 +107,6 @@ protected:
   test_common::TestModelPath normalModel_;
   test_common::TestModelPath bitnetModel_;
   test_common::TestModelPath qwen3Model_;
-  test_common::TestModelPath gemma3Model_;
   test_common::TestModelPath normalModelSharded_;
   test_common::TestModelPath bitnetModelSharded_;
 
@@ -499,7 +490,6 @@ TEST_F(
 // Known models exercised:
 //   Llama-3.2-1B-Instruct-Q4_0  (llama  arch, LLAMA_FTYPE_MOSTLY_Q4_0)
 //   Qwen3-0.6B-Q8_0             (qwen3  arch, LLAMA_FTYPE_MOSTLY_Q8_0)
-//   medgemma-4b-it-Q4_1         (gemma3 arch, LLAMA_FTYPE_MOSTLY_Q4_1)
 //   bitnet_b1_58-large-TQ2_0    (bitnet arch, LLAMA_FTYPE_MOSTLY_TQ2_0)
 
 // Adreno 800+ requires Vulkan to be available when fine-tuning with any of
@@ -557,30 +547,6 @@ TEST_F(ModelMetadataTest, DiskSingleFile_Qwen3Arch_IsSpecificallyQ8_0) {
     EXPECT_FALSE(meta.isU32OneOf(
         "general.file_type",
         {static_cast<uint32_t>(LLAMA_FTYPE_MOSTLY_Q4_0),
-         static_cast<uint32_t>(LLAMA_FTYPE_MOSTLY_TQ2_0),
-         static_cast<uint32_t>(LLAMA_FTYPE_MOSTLY_TQ1_0)}));
-  });
-}
-
-// gemma3 architecture – medgemma-4b-it-Q4_1
-// Set GEMMA3_MODEL_PATH or place medgemma-4b-it-Q4_1.gguf in models/unit-test.
-
-TEST_F(
-    ModelMetadataTest,
-    DiskSingleFile_Gemma3Arch_Q4_1_VulkanNeededForFinetuneAdreno800Plus) {
-  REQUIRE_MODEL(gemma3Model_);
-  parseDiskSingleFile(gemma3Model_.path, kVulkanNeededForFinetuneAdreno800Plus);
-}
-
-TEST_F(ModelMetadataTest, DiskSingleFile_Gemma3Arch_IsSpecificallyQ4_1) {
-  REQUIRE_MODEL(gemma3Model_);
-  parseDiskSingleFile(gemma3Model_.path, [](const ModelMetaData& meta) {
-    EXPECT_TRUE(meta.isU32OneOf(
-        "general.file_type", {static_cast<uint32_t>(LLAMA_FTYPE_MOSTLY_Q4_1)}));
-    EXPECT_FALSE(meta.isU32OneOf(
-        "general.file_type",
-        {static_cast<uint32_t>(LLAMA_FTYPE_MOSTLY_Q4_0),
-         static_cast<uint32_t>(LLAMA_FTYPE_MOSTLY_Q8_0),
          static_cast<uint32_t>(LLAMA_FTYPE_MOSTLY_TQ2_0),
          static_cast<uint32_t>(LLAMA_FTYPE_MOSTLY_TQ1_0)}));
   });

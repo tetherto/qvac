@@ -21,7 +21,7 @@ public:
    * @param tools - reference to the tools compact controller
    */
   MtmdLlmContext(
-      common_params& commonParams, common_init_result&& llamaInit,
+      common_params& commonParams, common_init_result_ptr llamaInit,
       ToolsCompactController& tools);
 
   /**
@@ -201,7 +201,7 @@ private:
   void handleStopRequestAndAddEot(LlamaBatch& batchPtr);
 
   ToolsCompactController& tools_;
-  common_init_result llamaInit_;
+  common_init_result_ptr llamaInit_;
   mtmd::context_ptr ctxVision_;
   llama_model* model_;
   llama_context* lctx_;
@@ -224,6 +224,11 @@ private:
   // GPT-OSS Harmony: <|call|> is a frame delimiter, not a stop signal
   bool isHarmonyModel_ = false;
   llama_token harmonyCallToken_ = LLAMA_TOKEN_NULL;
+
+  // Force-opens the reasoning channel in the prompt suffix to prepend the
+  // matching "<think>\n" opener to the visible stream so consumers see balanced
+  // tags.
+  bool thinkingForcedOpen_ = false;
 
   std::atomic<bool> stopGeneration_ = false;
 };

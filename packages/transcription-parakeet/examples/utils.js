@@ -1,164 +1,96 @@
 'use strict'
 
+// Shared helpers for the (flag-driven) examples. They orchestrate
+// audio decode + native logger filtering + a small pushable async
+// iterable for live-mic streaming. The examples themselves drive
+// transcription through the public `TranscriptionParakeet` class
+// (`require('../index.js')`).
+
 const fs = require('bare-fs')
-const path = require('bare-path')
-const process = require('bare-process')
 
+// Mirror of qvac_lib_inference_addon_cpp::logger::Priority. The
+// native binding queues every priority; we filter at WARNING+ here
+// so kernel-JIT INFO spam from ggml's GPU backends never reaches the
+// console. To see INFO/DEBUG, lower NATIVE_MIN_PRIORITY below.
 const LOG_PRIORITIES = ['ERROR', 'WARNING', 'INFO', 'DEBUG']
-
-// Grace period (ms) after JobEnded fires to wait for a late Output event.
-// Increase on slow devices where inference may lag behind the event loop.
-const JOB_TRACKER_GRACE_MS = 5000
+const NATIVE_MIN_PRIORITY = 1 // WARNING
 
 /**
- * TDT model files to load (order matters)
+ * Install a JS-side sink for native log messages. Filters at
+ * WARNING+ so ggml's metal/vulkan/opencl kernel-JIT INFO lines stay
+ * silent. Edit NATIVE_MIN_PRIORITY at the top of this file to see
+ * INFO / DEBUG. Pass `require('../addonLogging.js')` (or the raw
+ * binding) -- both expose `setLogger` / `releaseLogger`.
+ *
+ * @param {Object} loggerBinding
  */
-const TDT_MODEL_FILES = [
-  'encoder-model.onnx',
-  'decoder_joint-model.onnx',
-  'preprocessor.onnx',
-  'vocab.txt'
-]
-
-/**
- * CTC model files to load
- */
-const CTC_MODEL_FILES = [
-  'model.onnx',
-  'model.onnx_data',
-  'tokenizer.json'
-]
-
-/**
- * EOU model files to load
- */
-const EOU_MODEL_FILES = [
-  'encoder.onnx',
-  'decoder_joint.onnx',
-  'tokenizer.json'
-]
-
-/**
- * Sortformer model files to load
- */
-const SORTFORMER_MODEL_FILES = [
-  'sortformer.onnx'
-]
-
-/**
- * Setup C++ logger with formatted output
- * @param {Object} binding - The native binding
- */
-function setupLogger (binding) {
-  const shouldEnableNativeLogs = process.env &&
-    process.env.QVAC_EXAMPLE_NATIVE_LOGS === '1'
-
-  if (!shouldEnableNativeLogs) {
-    if (!binding.__qvacExampleReleaseLoggerPatched) {
-      binding.releaseLogger = () => {}
-      binding.__qvacExampleReleaseLoggerPatched = true
-    }
-    return
-  }
-
-  if (binding.__qvacExampleLoggerSet) return
-  binding.setLogger((priority, message) => {
-    const priorityName = LOG_PRIORITIES[priority] || `UNKNOWN(${priority})`
-    console.log(`[C++ ${priorityName}] ${message}`)
+function setupLogger (loggerBinding) {
+  if (loggerBinding.__qvacExampleLoggerSet) return
+  loggerBinding.setLogger((priority, message) => {
+    if (priority > NATIVE_MIN_PRIORITY) return
+    const name = LOG_PRIORITIES[priority] || `UNKNOWN(${priority})`
+    console.log(`[C++ ${name}] ${message}`)
   })
-  binding.__qvacExampleLoggerSet = true
+  loggerBinding.__qvacExampleLoggerSet = true
 }
 
 /**
- * Read a file using streams to handle large files (>2GB)
- * @param {string} filePath - path to the file
- * @returns {Promise<Buffer>} - file contents as a Buffer
+ * Read a file using streams to handle large GGUFs (>2 GiB).
  */
 function readFileAsStream (filePath) {
   return new Promise((resolve, reject) => {
     const chunks = []
     const stream = fs.createReadStream(filePath)
-    stream.on('data', (chunk) => chunks.push(chunk))
+    stream.on('data', chunk => chunks.push(chunk))
     stream.on('end', () => resolve(Buffer.concat(chunks)))
-    stream.on('error', (err) => reject(err))
+    stream.on('error', reject)
   })
 }
 
 /**
- * Parse WAV file and extract raw PCM data as Float32Array
- * @param {string} wavPath - path to the WAV file
- * @returns {Float32Array} - audio samples normalized to [-1, 1]
+ * Parse a WAV file (RIFF/PCM int16 mono) into a Float32Array of
+ * normalised samples. Skips non-`data` chunks.
  */
 function parseWavFile (wavPath) {
   const buffer = fs.readFileSync(wavPath)
-
   if (buffer.toString('utf8', 0, 4) !== 'RIFF') throw new Error('Not a valid WAV file')
   if (buffer.toString('utf8', 8, 12) !== 'WAVE') throw new Error('Not a valid WAV file')
 
   let pos = 12
   while (pos < buffer.length - 8) {
-    const chunkId = buffer.toString('utf8', pos, pos + 4)
-    const chunkSize = buffer.readUInt32LE(pos + 4)
-
-    if (chunkId === 'data') {
-      const dataStart = pos + 8
-      const dataBuffer = buffer.slice(dataStart, dataStart + chunkSize)
-      const samples = new Float32Array(dataBuffer.length / 2)
+    const id = buffer.toString('utf8', pos, pos + 4)
+    const sz = buffer.readUInt32LE(pos + 4)
+    if (id === 'data') {
+      const data = buffer.slice(pos + 8, pos + 8 + sz)
+      const samples = new Float32Array(data.length / 2)
       for (let i = 0; i < samples.length; i++) {
-        samples[i] = dataBuffer.readInt16LE(i * 2) / 32768
+        samples[i] = data.readInt16LE(i * 2) / 32768
       }
       return samples
     }
-    pos += 8 + chunkSize + (chunkSize % 2)
+    pos += 8 + sz + (sz % 2)
   }
   throw new Error('No data chunk found in WAV file')
 }
 
 /**
- * Convert raw PCM (16-bit signed integer) to Float32Array
- * @param {Buffer} rawBuffer - raw PCM buffer
- * @returns {Float32Array} - audio samples normalized to [-1, 1]
+ * Convert a raw int16 little-endian PCM buffer to a normalised
+ * Float32Array. Used for `.raw` audio fixtures.
  */
 function convertRawToFloat32 (rawBuffer) {
-  const int16View = new Int16Array(rawBuffer.buffer, rawBuffer.byteOffset, rawBuffer.length / 2)
-  const audioData = new Float32Array(int16View.length)
-  for (let i = 0; i < int16View.length; i++) {
-    audioData[i] = int16View[i] / 32768.0
-  }
-  return audioData
+  const view = new Int16Array(rawBuffer.buffer, rawBuffer.byteOffset, rawBuffer.length / 2)
+  const out = new Float32Array(view.length)
+  for (let i = 0; i < view.length; i++) out[i] = view[i] / 32768
+  return out
 }
 
 /**
- * Load model weights from a directory
- * @param {Object} parakeet - ParakeetInterface instance
- * @param {string} modelPath - path to model directory
- * @param {string[]} [files] - model files to load (defaults to TDT_MODEL_FILES)
- */
-async function loadModelWeights (parakeet, modelPath, files = TDT_MODEL_FILES) {
-  for (const filename of files) {
-    const filePath = path.join(modelPath, filename)
-    if (!fs.existsSync(filePath)) {
-      console.log(`   Skipping: ${filename} (not found)`)
-      continue
-    }
-
-    const buffer = await readFileAsStream(filePath)
-    const chunk = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength)
-
-    await parakeet.loadWeights({ filename, chunk, completed: true })
-    console.log(`   Loaded: ${filename} (${(buffer.length / 1024 / 1024).toFixed(1)} MB)`)
-  }
-}
-
-/**
- * Validate that required paths exist
- * @param {Object} paths - { model: string, audio: string }
- * @returns {boolean} - true if all paths exist
+ * Validate that required paths exist on disk.
  */
 function validatePaths (paths) {
   if (!fs.existsSync(paths.model)) {
     console.error(`Model not found: ${paths.model}`)
-    console.error("Run 'npm run download-models' to download a model.")
+    console.error("Run 'npm run setup-models' or pass --model </path/to/model.gguf>.")
     return false
   }
   if (paths.audio && !fs.existsSync(paths.audio)) {
@@ -169,89 +101,61 @@ function validatePaths (paths) {
 }
 
 /**
- * Create a promise that resolves when job ends and output is received.
- *
- * Handles a race condition where the addon's JobEnded event can fire before
- * the Output event on fast models. The promise resolves when both conditions
- * are met, or after a grace period following whichever fires first.
- *
- * @returns {{ promise: Promise, resolve: Function, transcriptions: Array }}
+ * Pushable async-iterable: consumers `await for (const chunk of
+ * stream)` while producers `stream.push(chunk)` and `stream.end()`
+ * close it. Used by the live-mic examples to feed chunks captured
+ * from `sox` into `TranscriptionParakeet.runStreaming()` (duplex
+ * path) without buffering the entire stream. Also accepted by the
+ * batched `run()` path; both consumers iterate it lazily.
  */
-function createJobTracker () {
-  const transcriptions = []
-  let resolveJob = null
-  let hasOutput = false
-  let jobEnded = false
-  let graceTimeout = null
+function pushableStream () {
+  const queue = []
+  let waiter = null
+  let ended = false
 
-  const promise = new Promise(resolve => { resolveJob = resolve })
+  function push (chunk) {
+    if (ended) return
+    queue.push(chunk)
+    if (waiter) {
+      const w = waiter
+      waiter = null
+      w()
+    }
+  }
 
-  const tryResolve = () => {
-    if (hasOutput && jobEnded) {
-      if (graceTimeout) clearTimeout(graceTimeout)
-      resolveJob()
+  function end () {
+    ended = true
+    if (waiter) {
+      const w = waiter
+      waiter = null
+      w()
     }
   }
 
   return {
-    promise,
-    resolve: () => resolveJob(),
-    transcriptions,
-    markOutput () {
-      hasOutput = true
-      tryResolve()
-    },
-    markJobEnded () {
-      jobEnded = true
-      tryResolve()
-      if (!hasOutput) {
-        graceTimeout = setTimeout(() => resolveJob(), JOB_TRACKER_GRACE_MS)
-      }
-    }
-  }
-}
-
-/**
- * Create a standard output callback that collects transcriptions
- * @param {Object} tracker - from createJobTracker()
- * @param {Object} [options] - { verbose: boolean }
- * @returns {Function} - output callback
- */
-function createOutputCallback (tracker, options = {}) {
-  return (handle, event, id, output, error) => {
-    if (error) {
-      console.error('Error:', error)
-      return
-    }
-
-    if (event === 'Output' && output) {
-      const segments = Array.isArray(output) ? output : [output]
-      for (const seg of segments) {
-        if (seg && seg.text && seg.toAppend) {
-          tracker.transcriptions.push(seg)
-          if (options.verbose) {
-            console.log(`   [${seg.start?.toFixed(2) || '?'}s - ${seg.end?.toFixed(2) || '?'}s] ${seg.text}`)
-          }
+    push,
+    end,
+    async * [Symbol.asyncIterator] () {
+      while (true) {
+        if (queue.length > 0) {
+          yield queue.shift()
+          continue
         }
+        if (ended) return
+        await new Promise(resolve => { waiter = resolve })
       }
-      tracker.markOutput()
-    }
-
-    if (event === 'JobEnded') {
-      tracker.markJobEnded()
     }
   }
 }
 
 /**
- * Print transcription results
- * @param {Array} transcriptions - array of transcription segments
+ * Print transcription segments to stdout in a uniform banner block.
  */
-function printResults (transcriptions) {
+function printResults (segments) {
   console.log('\n=== RESULT ===')
   console.log('='.repeat(50))
-  if (transcriptions.length > 0) {
-    const text = transcriptions.map(s => s.text).join(' ').trim().replace(/\s+/g, ' ')
+  if (segments.length > 0) {
+    const text = segments.map(s => s.text).join(' ').trim().replace(/\s+/g, ' ')
     console.log(text)
   } else {
     console.log('[No speech detected]')
@@ -260,18 +164,11 @@ function printResults (transcriptions) {
 }
 
 module.exports = {
-  LOG_PRIORITIES,
-  TDT_MODEL_FILES,
-  CTC_MODEL_FILES,
-  EOU_MODEL_FILES,
-  SORTFORMER_MODEL_FILES,
   setupLogger,
   readFileAsStream,
   parseWavFile,
   convertRawToFloat32,
-  loadModelWeights,
   validatePaths,
-  createJobTracker,
-  createOutputCallback,
+  pushableStream,
   printResults
 }

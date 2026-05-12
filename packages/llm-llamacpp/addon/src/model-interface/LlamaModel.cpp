@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <charconv>
 #include <chrono>
 #include <cinttypes>
 #include <cmath>
@@ -104,7 +105,7 @@ void LlamaModel::resolveShardPaths(
 void LlamaModel::tuneConfigMap(
     std::unordered_map<std::string, std::string>& configFilemap,
     const ModelMetaData& metadata, const std::optional<int>& adrenoVersion,
-    const FinetuneConfigOverrides& finetuneOverrides) {
+    const FinetuneConfigOverrides& finetuneOverrides, bool isOpenCl) {
 
   const bool isFinetuning = finetuneOverrides.active;
 
@@ -149,6 +150,13 @@ void LlamaModel::tuneConfigMap(
     QLOG_IF(
         Priority::INFO,
         "[LlamaModel] BitNet model detected: disabling flash attention\n");
+  } else if (isOpenCl && notUserSet("flash-attn", "flash_attn")) {
+    configFilemap.erase("flash_attn");
+    configFilemap["flash-attn"] = "off";
+    QLOG_IF(
+        Priority::INFO,
+        "[LlamaModel] OpenCL backend selected: disabling flash attention by "
+        "default (not reliably supported on OpenCL)\n");
   }
 
   constexpr int kAdrenoUbatchThreshold = 800;
@@ -336,7 +344,7 @@ void LlamaModel::init(bool acquireLock) {
 
   snap.demoteToRead();
 
-  common_init_result llamaInit = initFromConfig(
+  common_init_result_ptr llamaInit = initFromConfig(
       params,
       modelPath,
       streamedFiles,
@@ -698,9 +706,8 @@ LlamaModel::resolveToolsCompactConfig(bool toolsCompactRequested) const {
   }
 
   auto arch = metadata_.tryGetString("general.architecture");
-  auto modelName = metadata_.tryGetString("general.name");
   auto marker = qvac_lib_inference_addon_llama::utils::
-      selectToolsCompactMarkerForModelMetadata(arch, modelName);
+      selectToolsCompactMarkerForModelMetadata(arch);
 
   if (!marker.has_value()) {
     return {
@@ -740,6 +747,32 @@ void LlamaModel::commonParamsParse(
   if (auto jit = configFilemap.find("jinja"); jit != configFilemap.end()) {
     // Remove "jinja" from config
     configFilemap.erase(jit);
+  }
+
+  // reasoning-budget controls whether the model emits a <think> reasoning
+  // channel. -1 (default) leaves it on; 0 disables. `std::from_chars` is used
+  // instead of `std::stoi` because the latter accepts trailing garbage ("0abc"
+  // → 0) and throws an uncaught `std::out_of_range` on overflow.
+  auto parseReasoningBudget = [](const std::string& raw) {
+    int value = 0;
+    const char* begin = raw.data();
+    const char* end = begin + raw.size();
+    const auto [ptr, ec] = std::from_chars(begin, end, value);
+    if (ec != std::errc{} || ptr != end ||
+        (value != 0 && value != -1)) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          qvac_errors::general_error::toString(
+              qvac_errors::general_error::InvalidArgument),
+          "reasoning-budget must be -1 (unrestricted) or 0 (disabled)");
+    }
+    return value;
+  };
+  for (const std::string& key : {"reasoning-budget", "reasoning_budget"}) {
+    if (auto it = configFilemap.find(key); it != configFilemap.end()) {
+      params.reasoning_budget = parseReasoningBudget(it->second);
+      configFilemap.erase(it);
+    }
   }
 
   // parse custom nDiscarded from config (apply only if > 0)
@@ -822,6 +855,7 @@ void LlamaModel::commonParamsParse(
         qvac_errors::general_error::InvalidArgument, errorMsg);
   }
 
+  bool isOpenCl = false;
   {
     using namespace backend_selection;
     const BackendType preferredBackend =
@@ -885,10 +919,17 @@ void LlamaModel::commonParamsParse(
       configVector.emplace_back(chosenBackend.second);
     }
     configFilemap.erase("device");
+
+    isOpenCl = chosenBackend.first == BackendType::GPU &&
+               chosenBackend.second.find("opencl") != std::string::npos;
   }
 
   tuneConfigMap(
-      configFilemap, metadata_, outAdrenoVersion, pendingFinetuneOverrides_);
+      configFilemap,
+      metadata_,
+      outAdrenoVersion,
+      pendingFinetuneOverrides_,
+      isOpenCl);
 
   // Handle both reverse-prompt variants
   for (const std::string& key : {"reverse-prompt", "reverse_prompt"}) {
@@ -914,7 +955,7 @@ void LlamaModel::commonParamsParse(
   }
 
   auto ctxArg =
-      common_params_parser_init(params, LLAMA_EXAMPLE_MAIN, [](int, char**) {});
+      common_params_parser_init(params, LLAMA_EXAMPLE_COMMON, [](int, char**) {});
 
   // disable warmup run
   params.warmup = false;
@@ -1202,7 +1243,7 @@ void LlamaModel::resetState(bool resetStats) {
 
 std::unique_ptr<LlmContext> LlamaModel::createContext(
     std::string&& projectionPath, common_params& params,
-    common_init_result&& llamaInit, ToolsCompactController& tools) {
+    common_init_result_ptr llamaInit, ToolsCompactController& tools) {
   if (!projectionPath.empty()) {
     params.mmproj.path = std::move(projectionPath);
     return std::make_unique<MtmdLlmContext>(
@@ -1473,11 +1514,16 @@ std::string LlamaModel::finetune(
         throw std::runtime_error(
             "Failed to load LoRA adapter from checkpoint: " + adapterPath);
       }
-      llama_clear_adapter_lora(ctx);
-      if (llama_set_adapter_lora(ctx, adapter, 1.0f) < 0) {
-        llama_adapter_lora_free(adapter);
-        throw std::runtime_error(
-            "Failed to attach resumed LoRA adapter to context");
+      {
+        struct llama_adapter_lora* adapters[1] = {adapter};
+        float scales[1] = {1.0f};
+        // llama_set_adapters_lora replaces the active adapter list, so no
+        // separate clear is needed in 78db8bf4 (no llama_clear_adapter_lora).
+        if (llama_set_adapters_lora(ctx, adapters, 1, scales) < 0) {
+          llama_adapter_lora_free(adapter);
+          throw std::runtime_error(
+              "Failed to attach resumed LoRA adapter to context");
+        }
       }
     } else {
       uint32_t targetModules = parseLoraModules(params.loraModules);

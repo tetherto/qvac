@@ -1,17 +1,12 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { usePathname } from 'next/navigation';
 import { Check, ChevronDown, Copy, ExternalLinkIcon, MessageSquare, Sparkles, Tag } from 'lucide-react';
 import { cn } from '../lib/cn';
 import { useCopyButton } from 'fumadocs-ui/utils/use-copy-button';
 import { buttonVariants } from './ui/button';
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from './ui/popover';
 import { cva } from 'class-variance-authority';
-import {
-  computeSectionVersionUrl,
-  getCurrentVersion,
-  getVersionedSection,
-} from '@/lib/versions';
+import type { VersionSelectorProps } from '@/lib/versions';
 
 const cache = new Map<string, string>();
 
@@ -241,25 +236,24 @@ export function ViewOptions({
 }
 
 /**
- * Visible only on URLs that fall inside a versioned section (currently
- * `/sdk/api*` and `/sdk/release-notes*`). Switches between sibling MDX
- * files via a full page reload (`window.location.href`) — Fumadocs is
- * statically exported so cross-version navigation can't use `router.push`.
+ * Pure-presentation popover that switches between sibling versioned MDX
+ * files. Section detection, version list, current label, and per-version
+ * URLs are precomputed at build time by `getVersionSelectorProps()` and
+ * passed in as props — the client bundle no longer carries the version
+ * manifest or `usePathname()` for this widget. Cross-version navigation
+ * goes through `window.location.href` because Fumadocs is statically
+ * exported and `router.push` can't soft-navigate to sibling MDX files.
  */
-export function VersionSelector() {
-  const pathname = usePathname();
-
-  const section = getVersionedSection(pathname);
-  if (!section) return null;
-
-  const currentVersion = getCurrentVersion(pathname, section);
-  const currentLabel =
-    section.versions.find((v) => v.value === currentVersion)?.label ??
-    currentVersion;
-
+export function VersionSelector({
+  versions,
+  currentVersion,
+  currentLabel,
+  versionUrls,
+}: VersionSelectorProps) {
   function handleVersionChange(targetVersion: string) {
-    if (!section || targetVersion === currentVersion) return;
-    window.location.href = computeSectionVersionUrl(section, targetVersion);
+    if (targetVersion === currentVersion) return;
+    const target = versionUrls[targetVersion];
+    if (target) window.location.href = target;
   }
 
   return (
@@ -279,7 +273,7 @@ export function VersionSelector() {
         <ChevronDown className="size-3.5 text-fd-muted-foreground" />
       </PopoverTrigger>
       <PopoverContent className="flex flex-col">
-        {section.versions.map((version) => (
+        {versions.map((version) => (
           <PopoverClose asChild key={version.value}>
             <button
               type="button"

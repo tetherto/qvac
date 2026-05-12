@@ -4306,6 +4306,104 @@
     "notes": ""
   },
   {
+    "source": "s3:///qvac_models_compiled/chatterbox/2026-05-08/chatterbox-s3gen-mtl.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Chatterbox S3Gen vocoder (GGUF, multilingual)",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "gguf",
+      "s3gen",
+      "multilingual"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/chatterbox/2026-05-08/chatterbox-t3-turbo.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Chatterbox T3 turbo language model (GGUF)",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "gguf",
+      "t3",
+      "turbo",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/chatterbox/2026-05-08/chatterbox-s3gen.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Chatterbox S3Gen vocoder (GGUF, English)",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "gguf",
+      "s3gen",
+      "en"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/chatterbox/2026-05-08/chatterbox-t3-mtl.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Chatterbox T3 language model (GGUF, multilingual)",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "gguf",
+      "t3",
+      "multilingual",
+      "en",
+      "es",
+      "it",
+      "pt"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/supertonic/2026-05-08/supertonic.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Supertonic TTS (GGUF)",
+    "quantization": "",
+    "params": "",
+    "licenseId": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "gguf"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/supertonic/2026-05-08/supertonic2.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Supertonic 2 TTS (GGUF)",
+    "quantization": "",
+    "params": "",
+    "licenseId": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "supertonic2",
+      "gguf"
+    ],
+    "notes": ""
+  },
+  {
     "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/tokenizer.json",
     "engine": "@qvac/tts",
     "description": "Supertonic tokenizer",
@@ -5295,6 +5393,79 @@
     ],
     "deprecated": false,
     "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-05-11/sortformer-4spk-v1.q8_0.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/diar_sortformer_4spk-v1",
+    "description": "Parakeet Sortformer 4SPK v1 GGUF",
+    "quantization": "q8_0",
+    "params": "123M",
+    "licenseId": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "sortformer",
+      "4spk",
+      "ggml",
+      "en"
+    ],
+    "deprecated": false,
+    "notes": "Q8_0 GGUF conversion of nvidia/diar_sortformer_4spk-v1"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-05-11/parakeet-ctc-0.6b.q8_0.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/parakeet-ctc-0.6b",
+    "description": "Parakeet CTC 0.6B GGUF",
+    "quantization": "q8_0",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "ctc",
+      "ggml",
+      "en"
+    ],
+    "deprecated": false,
+    "notes": "Q8_0 GGUF conversion of nvidia/parakeet-ctc-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-05-11/parakeet-tdt-0.6b-v3.q8_0.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
+    "description": "Parakeet TDT 0.6B v3 GGUF",
+    "quantization": "q8_0",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "tdt",
+      "ggml",
+      "en"
+    ],
+    "deprecated": false,
+    "notes": "Q8_0 GGUF conversion of nvidia/parakeet-tdt-0.6b-v3"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-05-11/parakeet-eou-120m-v1.q8_0.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1",
+    "description": "Parakeet EOU 120M v1 GGUF",
+    "quantization": "q8_0",
+    "params": "120M",
+    "licenseId": "CC-BY-4.0",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "eou",
+      "ggml",
+      "en"
+    ],
+    "deprecated": false,
+    "notes": "Q8_0 GGUF conversion of nvidia/parakeet_realtime_eou_120m-v1"
   },
   {
     "source": "https://huggingface.co/noctrex/LightOnOCR-2-1B-ocr-soup-GGUF/resolve/main/LightOnOCR-2-1B-ocr-soup-Q4_K_M.gguf",
@@ -10517,5 +10688,581 @@
     ],
     "notes": "",
     "link": "https://github.com/tetherto/qvac/releases/download/bci-test-assets-v0.1.0/ggml-bci-windowed.bin"
+  },
+  {
+    "source": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/b5e99bd964eaacc27ba484bb2eb3e9f6160b9143/google_gemma-4-E2B-it-Q4_K_M.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Gemma 4 E2B instruct multimodal model",
+    "quantization": "q4_k_m",
+    "params": "2B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "gemma4",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/b5e99bd964eaacc27ba484bb2eb3e9f6160b9143/google_gemma-4-E2B-it-Q6_K.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Gemma 4 E2B instruct multimodal model",
+    "quantization": "q6_k",
+    "params": "2B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "gemma4",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/b5e99bd964eaacc27ba484bb2eb3e9f6160b9143/mmproj-google_gemma-4-E2B-it-bf16.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for Gemma 4 E2B",
+    "quantization": "bf16",
+    "params": "2B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "gemma4",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/b5e99bd964eaacc27ba484bb2eb3e9f6160b9143/mmproj-google_gemma-4-E2B-it-f16.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for Gemma 4 E2B",
+    "quantization": "f16",
+    "params": "2B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "gemma4",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/bartowski/google_gemma-4-E4B-it-GGUF/resolve/c04cb322fd63e347db759a08b6249b867488ccf8/google_gemma-4-E4B-it-Q4_K_M.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Gemma 4 E4B instruct multimodal model",
+    "quantization": "q4_k_m",
+    "params": "4B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "gemma4",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/bartowski/google_gemma-4-E4B-it-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/bartowski/google_gemma-4-E4B-it-GGUF/resolve/c04cb322fd63e347db759a08b6249b867488ccf8/google_gemma-4-E4B-it-Q6_K.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Gemma 4 E4B instruct multimodal model",
+    "quantization": "q6_k",
+    "params": "4B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "gemma4",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/bartowski/google_gemma-4-E4B-it-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/bartowski/google_gemma-4-E4B-it-GGUF/resolve/c04cb322fd63e347db759a08b6249b867488ccf8/mmproj-google_gemma-4-E4B-it-bf16.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for Gemma 4 E4B",
+    "quantization": "bf16",
+    "params": "4B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "gemma4",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/bartowski/google_gemma-4-E4B-it-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/bartowski/google_gemma-4-E4B-it-GGUF/resolve/c04cb322fd63e347db759a08b6249b867488ccf8/mmproj-google_gemma-4-E4B-it-f16.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for Gemma 4 E4B",
+    "quantization": "f16",
+    "params": "4B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "gemma4",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/bartowski/google_gemma-4-E4B-it-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/bartowski/google_gemma-4-31B-it-GGUF/resolve/dbdaa0588c16bed9aa3897f81ad3f48cbdd4244b/google_gemma-4-31B-it-Q4_K_M.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Gemma 4 31B instruct multimodal model",
+    "quantization": "q4_k_m",
+    "params": "31B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "gemma4",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/bartowski/google_gemma-4-31B-it-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/bartowski/google_gemma-4-31B-it-GGUF/resolve/dbdaa0588c16bed9aa3897f81ad3f48cbdd4244b/google_gemma-4-31B-it-Q6_K.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Gemma 4 31B instruct multimodal model",
+    "quantization": "q6_k",
+    "params": "31B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "gemma4",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/bartowski/google_gemma-4-31B-it-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/bartowski/google_gemma-4-31B-it-GGUF/resolve/dbdaa0588c16bed9aa3897f81ad3f48cbdd4244b/mmproj-google_gemma-4-31B-it-f16.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for Gemma 4 31B",
+    "quantization": "f16",
+    "params": "31B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "gemma4",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/bartowski/google_gemma-4-31B-it-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/bartowski/google_gemma-4-31B-it-GGUF/resolve/dbdaa0588c16bed9aa3897f81ad3f48cbdd4244b/mmproj-google_gemma-4-31B-it-bf16.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for Gemma 4 31B",
+    "quantization": "bf16",
+    "params": "31B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "gemma4",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/bartowski/google_gemma-4-31B-it-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/Qwen3.5-0.8B-Q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Qwen 3.5 0.8B multimodal model",
+    "quantization": "q8_0",
+    "params": "0.8B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "qwen3.5",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/Qwen3.5-0.8B-Q4_K_M.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Qwen 3.5 0.8B multimodal model",
+    "quantization": "q4_k_m",
+    "params": "0.8B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "qwen3.5",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/mmproj-F16.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for Qwen 3.5 0.8B",
+    "quantization": "f16",
+    "params": "0.8B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "qwen3.5",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/mmproj-BF16.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for Qwen 3.5 0.8B",
+    "quantization": "bf16",
+    "params": "0.8B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "qwen3.5",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/f6d5376be1edb4d416d56da11e5397a961aca8ae/Qwen3.5-2B-Q4_K_M.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Qwen 3.5 2B multimodal model",
+    "quantization": "q4_k_m",
+    "params": "2B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "qwen3.5",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/f6d5376be1edb4d416d56da11e5397a961aca8ae/Qwen3.5-2B-Q6_K.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Qwen 3.5 2B multimodal model",
+    "quantization": "q6_k",
+    "params": "2B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "qwen3.5",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/f6d5376be1edb4d416d56da11e5397a961aca8ae/mmproj-F16.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for Qwen 3.5 2B",
+    "quantization": "f16",
+    "params": "2B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "qwen3.5",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/f6d5376be1edb4d416d56da11e5397a961aca8ae/mmproj-BF16.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for Qwen 3.5 2B",
+    "quantization": "bf16",
+    "params": "2B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "qwen3.5",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/e87f176479d0855a907a41277aca2f8ee7a09523/Qwen3.5-4B-Q4_K_M.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Qwen 3.5 4B multimodal model",
+    "quantization": "q4_k_m",
+    "params": "4B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "qwen3.5",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/e87f176479d0855a907a41277aca2f8ee7a09523/Qwen3.5-4B-Q6_K.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Qwen 3.5 4B multimodal model",
+    "quantization": "q6_k",
+    "params": "4B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "qwen3.5",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/e87f176479d0855a907a41277aca2f8ee7a09523/mmproj-BF16.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for Qwen 3.5 4B",
+    "quantization": "bf16",
+    "params": "4B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "qwen3.5",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/e87f176479d0855a907a41277aca2f8ee7a09523/mmproj-F16.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for Qwen 3.5 4B",
+    "quantization": "f16",
+    "params": "4B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "qwen3.5",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/3885219b6810b007914f3a7950a8d1b469d598a5/Qwen3.5-9B-Q4_K_M.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Qwen 3.5 9B multimodal model",
+    "quantization": "q4_k_m",
+    "params": "9B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "qwen3.5",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/3885219b6810b007914f3a7950a8d1b469d598a5/Qwen3.5-9B-Q6_K.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Qwen 3.5 9B multimodal model",
+    "quantization": "q6_k",
+    "params": "9B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "qwen3.5",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/3885219b6810b007914f3a7950a8d1b469d598a5/mmproj-F16.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for Qwen 3.5 9B",
+    "quantization": "f16",
+    "params": "9B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "qwen3.5",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/3885219b6810b007914f3a7950a8d1b469d598a5/mmproj-BF16.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for Qwen 3.5 9B",
+    "quantization": "bf16",
+    "params": "9B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "qwen3.5",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.6-27B-GGUF/resolve/82d411acf4a06cfb8d9b073a5211bf410bfc29bf/Qwen3.6-27B-UD-Q4_K_XL.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Qwen 3.6 27B multimodal model",
+    "quantization": "q4_k_xl",
+    "params": "27B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "qwen3.6",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/unsloth/Qwen3.6-27B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.6-27B-GGUF/resolve/82d411acf4a06cfb8d9b073a5211bf410bfc29bf/Qwen3.6-27B-UD-Q6_K_XL.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Qwen 3.6 27B multimodal model",
+    "quantization": "q6_k_xl",
+    "params": "27B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "qwen3.6",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/unsloth/Qwen3.6-27B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.6-27B-GGUF/resolve/82d411acf4a06cfb8d9b073a5211bf410bfc29bf/mmproj-BF16.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for Qwen 3.6 27B",
+    "quantization": "bf16",
+    "params": "27B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "qwen3.6",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/unsloth/Qwen3.6-27B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.6-27B-GGUF/resolve/82d411acf4a06cfb8d9b073a5211bf410bfc29bf/mmproj-F16.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for Qwen 3.6 27B",
+    "quantization": "f16",
+    "params": "27B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "qwen3.6",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/unsloth/Qwen3.6-27B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.6-35B-A3B-GGUF/resolve/a483e9e6cbd595906af30beda3187c2663a1118c/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Qwen 3.6 35B-A3B multimodal model",
+    "quantization": "q4_k_m",
+    "params": "35B-A3B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "qwen3.6",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/unsloth/Qwen3.6-35B-A3B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.6-35B-A3B-GGUF/resolve/a483e9e6cbd595906af30beda3187c2663a1118c/Qwen3.6-35B-A3B-UD-Q6_K_XL.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Qwen 3.6 35B-A3B multimodal model",
+    "quantization": "q6_k_xl",
+    "params": "35B-A3B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "qwen3.6",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/unsloth/Qwen3.6-35B-A3B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.6-35B-A3B-GGUF/resolve/a483e9e6cbd595906af30beda3187c2663a1118c/mmproj-BF16.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for Qwen 3.6 35B-A3B",
+    "quantization": "bf16",
+    "params": "35B-A3B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "qwen3.6",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/unsloth/Qwen3.6-35B-A3B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.6-35B-A3B-GGUF/resolve/a483e9e6cbd595906af30beda3187c2663a1118c/mmproj-F16.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for Qwen 3.6 35B-A3B",
+    "quantization": "f16",
+    "params": "35B-A3B",
+    "licenseId": "Apache-2.0",
+    "tags": [
+      "generation",
+      "multimodal",
+      "qwen3.6",
+      "instruct"
+    ],
+    "notes": "",
+    "link": "https://huggingface.co/unsloth/Qwen3.6-35B-A3B-GGUF"
   }
 ]

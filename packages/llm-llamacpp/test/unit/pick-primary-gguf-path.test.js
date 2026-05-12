@@ -10,14 +10,14 @@ test('single non-sharded file returns that file', function (t) {
 
 test('sharded model with tensors.txt first returns first shard, not tensors.txt', function (t) {
   const files = [
-    '/models/medgemma-4b-it-Q4_1.tensors.txt',
-    '/models/medgemma-4b-it-Q4_1-00001-of-00005.gguf',
-    '/models/medgemma-4b-it-Q4_1-00002-of-00005.gguf',
-    '/models/medgemma-4b-it-Q4_1-00003-of-00005.gguf',
-    '/models/medgemma-4b-it-Q4_1-00004-of-00005.gguf',
-    '/models/medgemma-4b-it-Q4_1-00005-of-00005.gguf'
+    '/models/Qwen3-4B-Q4_K_M.tensors.txt',
+    '/models/Qwen3-4B-Q4_K_M-00001-of-00005.gguf',
+    '/models/Qwen3-4B-Q4_K_M-00002-of-00005.gguf',
+    '/models/Qwen3-4B-Q4_K_M-00003-of-00005.gguf',
+    '/models/Qwen3-4B-Q4_K_M-00004-of-00005.gguf',
+    '/models/Qwen3-4B-Q4_K_M-00005-of-00005.gguf'
   ]
-  t.is(pickPrimaryGgufPath(files), '/models/medgemma-4b-it-Q4_1-00001-of-00005.gguf')
+  t.is(pickPrimaryGgufPath(files), '/models/Qwen3-4B-Q4_K_M-00001-of-00005.gguf')
 })
 
 test('sharded model without tensors.txt returns first shard', function (t) {

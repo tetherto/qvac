@@ -22,14 +22,13 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const process = require('bare-process')
 const binding = require('../../binding')
-const { ParakeetInterface } = require('../../parakeet')
+const TranscriptionParakeet = require('../../index.js')
 const {
   detectPlatform,
   setupJsLogger,
   getTestPaths,
   ensureModel,
   ensureModelForType,
-  getNamedPathsConfig,
   isMobile
 } = require('../integration/helpers.js')
 
@@ -205,42 +204,33 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
   console.log(`  Audio samples:  ${audioData.length}`)
   console.log(`  Audio duration: ${audioDurationSec.toFixed(2)}s\n`)
 
-  const config = {
-    modelPath,
-    modelType: benchmarkSettings.modelType,
-    maxThreads: benchmarkSettings.maxThreads,
-    useGPU: benchmarkSettings.useGPU,
-    sampleRate: SAMPLE_RATE,
-    channels: 1,
-    ...getNamedPathsConfig(benchmarkSettings.modelType, modelPath)
-  }
-
   const allResults = []
-  const receivedStats = []
-  let parakeet = null
-
-  try {
-    function outputCallback (handle, event, id, output, error) {
-      if (event === 'JobEnded' && output) {
-        receivedStats.push(output)
+  const model = new TranscriptionParakeet({
+    files: { model: modelPath },
+    config: {
+      parakeetConfig: {
+        maxThreads: benchmarkSettings.maxThreads,
+        useGPU: benchmarkSettings.useGPU,
+        sampleRate: SAMPLE_RATE,
+        channels: 1
       }
     }
+  })
 
+  async function runOnce (audio) {
+    const response = await model.run(audio)
+    await response.onUpdate(() => { /* discard segments here -- we only need stats */ }).await()
+    return response.stats || null
+  }
+
+  try {
     console.log('Loading model...')
     const loadStart = getTimeMs()
-    parakeet = new ParakeetInterface(binding, config, outputCallback)
-    await parakeet.activate()
+    await model.load()
 
-    // Warmup with silent audio to trigger full model initialisation
+    // Warmup with silent audio to trigger full model initialisation.
     const silentAudio = new Float32Array(SAMPLE_RATE).fill(0)
-    receivedStats.length = 0
-    await parakeet.append({ type: 'audio', data: silentAudio.buffer })
-    await parakeet.append({ type: 'end of job' })
-
-    const warmupDeadline = getTimeMs() + 30000
-    while (receivedStats.length === 0 && getTimeMs() < warmupDeadline) {
-      await new Promise(resolve => setTimeout(resolve, 100))
-    }
+    await runOnce(silentAudio).catch(() => null)
 
     const loadMs = getTimeMs() - loadStart
     console.log(`Model loaded and initialised in ${loadMs.toFixed(0)}ms\n`)
@@ -248,18 +238,9 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
     // --- Warmup runs (discard) ---
     for (let w = 0; w < benchmarkSettings.numWarmup; w++) {
       console.log(`[warmup ${w + 1}/${benchmarkSettings.numWarmup}]`)
-      receivedStats.length = 0
-      await parakeet.append({ type: 'audio', data: audioData.buffer })
-      await parakeet.append({ type: 'end of job' })
-
-      const deadline = getTimeMs() + 600000
-      while (receivedStats.length === 0 && getTimeMs() < deadline) {
-        await new Promise(resolve => setTimeout(resolve, 50))
-      }
-
-      if (receivedStats.length > 0) {
-        const s = receivedStats[receivedStats.length - 1]
-        console.log(`  RTF (warmup): ${(s.realTimeFactor || 0).toFixed(4)}`)
+      const stats = await runOnce(audioData)
+      if (stats) {
+        console.log(`  RTF (warmup): ${(stats.realTimeFactor || 0).toFixed(4)}`)
       }
     }
 
@@ -267,25 +248,15 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
 
     // --- Benchmark runs ---
     for (let i = 0; i < benchmarkSettings.numRuns; i++) {
-      receivedStats.length = 0
       const runStart = getTimeMs()
-
-      await parakeet.append({ type: 'audio', data: audioData.buffer })
-      await parakeet.append({ type: 'end of job' })
-
-      const deadline = getTimeMs() + 600000
-      while (receivedStats.length === 0 && getTimeMs() < deadline) {
-        await new Promise(resolve => setTimeout(resolve, 50))
-      }
-
+      const jobStats = await runOnce(audioData)
       const wallMs = getTimeMs() - runStart
 
-      if (receivedStats.length === 0) {
-        console.log(`  Run ${i + 1}: TIMEOUT (no JobEnded received)`)
+      if (!jobStats) {
+        console.log(`  Run ${i + 1}: no stats reported`)
         continue
       }
 
-      const jobStats = receivedStats[receivedStats.length - 1]
       const run = {
         iteration: i + 1,
         wallMs,
@@ -398,9 +369,9 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
       config: {
         warmupRuns: benchmarkSettings.numWarmup,
         benchmarkRuns: benchmarkSettings.numRuns,
-        maxThreads: config.maxThreads,
-        useGPU: config.useGPU,
-        sampleRate: config.sampleRate
+        maxThreads: benchmarkSettings.maxThreads,
+        useGPU: benchmarkSettings.useGPU,
+        sampleRate: SAMPLE_RATE
       },
       requested: {
         modelType: benchmarkSettings.modelType,
@@ -461,9 +432,7 @@ test('RTF benchmark: collect real-time factor on CI device', { timeout: 600000 }
 
     console.log('RTF benchmark completed successfully!\n')
   } finally {
-    if (parakeet) {
-      try { parakeet.destroyInstance() } catch (_) {}
-    }
-    try { loggerBinding.releaseLogger() } catch (_) {}
+    try { await model.unload() } catch (_) { /* ignore */ }
+    try { loggerBinding.releaseLogger() } catch (_) { /* ignore */ }
   }
 })
