@@ -1,8 +1,8 @@
 # Metal GPU Baseline Performance Report
 
-**Date**: 2026-05-07
+**Date**: 2026-05-07 (updated 2026-05-12 with fiber baseline)
 **Task**: QVAC-18293 — VLM inference profiling on Apple Metal GPUs
-**llama.cpp**: tag [`b9025`](https://github.com/ggml-org/llama.cpp/releases/tag/b9025) (commit [`eff06702`](https://github.com/ggml-org/llama.cpp/commit/eff06702b2a52e1020ea009ebd86cb9f5acabab5))
+**llama.cpp**: tag [`b9025`](https://github.com/ggml-org/llama.cpp/releases/tag/b9025) (commit [`eff06702`](https://github.com/ggml-org/llama.cpp/commit/eff06702b2a52e1020ea009ebd86cb9f5acabab5)), fiber fork `tetherto/temp-8189` (build 8412, commit `f686a1324`)
 
 This report consolidates all Metal GPU benchmark results and profiling findings from the QVAC-18293 investigation. It covers two Apple Metal devices — the Mac M4 (performance ceiling) and iPhone 16e A18 (mobile target) — across Gemma 4 and Qwen3.5-2B models. For non-Metal results (Android Vulkan, OpenCL, CPU-only), see [`gemma4-vl-baseline.md`](./gemma4-vl-baseline.md). For full Mac results including CPU, see [`vlm-mac-baseline.md`](./vlm-mac-baseline.md).
 
@@ -380,6 +380,8 @@ Q4_K_M delivers 1.5–1.7x higher decode throughput than Q8_0 across all Gemma 4
 
 ### 10. Addon introduces 19–30% decode throughput overhead vs CLI
 
+> **Update (2026-05-12)**: Finding #11 reveals the fiber fork itself introduces a 19–29% decode regression vs upstream b9025. Since the addon benchmarks used the fiber-based addon (not upstream b9025), the overhead attributed here to JS binding may be partially or entirely caused by the fiber fork regression. Isolating true addon overhead requires re-benchmarking the addon against an upstream b9025 build.
+
 Running through the llm-llamacpp addon (Bare runtime + JS binding) drops decode TPS by 30% for Qwen3.5-2B (53.7 → 37.7 t/s) and 19% for Gemma 4 E2B (52.1 → 42.1 t/s). This is the dominant source of the +17–34% wall-time overhead. Likely contributors:
 
 - **Per-token JS callback overhead**: Each generated token fires an `onUpdate` callback across the Bare C++→JS boundary. At ~40 tok/s, that's 40 cross-boundary calls/sec accumulating over 256 tokens.
@@ -387,6 +389,34 @@ Running through the llm-llamacpp addon (Bare runtime + JS binding) drops decode 
 - **Model load**: 2–3x slower (614ms vs 192ms for Qwen, 786ms vs 310ms for Gemma4) due to addon initialization, Bare binding setup, and config validation — one-time cost that doesn't affect steady-state throughput.
 
 Prefill throughput is nearly unaffected for Gemma 4 (−1.0%) and moderately slower for Qwen3.5 (−8.0%), likely due to 11 extra prompt tokens from different template processing.
+
+### 11. Fiber fork (tetherto/temp-8189) introduces 19–29% decode regression vs upstream b9025
+
+**Date**: 2026-05-12
+**Branch**: `test/QVAC-18293-fiber-baseline` from `tetherto/temp-8189`
+**Build**: 8412 (f686a1324), cmake flags identical to b9025 baseline
+
+| Model | Metric | b9025 | Fiber | Delta |
+|-------|--------|-------|-------|-------|
+| Qwen3.5-2B Q4_K_M | Vision (ms) | 402 | 434 | +8.0% |
+| | Prefill (t/s) | 333.0 | 298.7 | −10.3% |
+| | Decode (t/s) | 53.7 | 38.2 | −28.8% |
+| | Total (ms) | 5,748 | 7,774 | +35.3% |
+| Gemma 4 E2B Q4_K_M | Vision (ms) | 604 | 636 | +5.3% |
+| | Prefill (t/s) | 261.6 | 255.4 | −2.4% |
+| | Decode (t/s) | 52.1 | 42.0 | −19.3% |
+| | Total (ms) | 6,369 | 7,649 | +20.1% |
+
+Key observations:
+
+- **Decode is the dominant regression**: Qwen3.5 loses 28.8% decode TPS, Gemma4 loses 19.3%. Prefill and vision are less affected.
+- **Qwen3.5 fiber decode (38.2 t/s) matches addon decode (37.7 t/s)**: The addon overhead measured in Finding #10 may partially reflect fiber fork regression rather than JS binding overhead alone. Addon benchmarks used the fiber-based addon, not upstream b9025.
+- **Gemma4 Flash Attention auto-disabled on fiber**: The fiber build logs show `layer 4 is assigned to device MTL0 but the Flash Attention tensor is assigned to device CPU`, causing FA to be disabled. The b9025 build did not have this issue. This may account for part of the Gemma4 decode regression.
+- **Qwen3.5 FA enabled but still regressed 28.8%**: FA was auto-enabled for Qwen3.5 on both builds, so the Qwen3.5 regression is in the fiber fork's code changes, not FA-related.
+- **Run 3 outlier**: Qwen3.5 run 3 showed 18.36 t/s decode (thermal throttling suspected), excluded by median selection. Runs 1-2 were consistent (38.28/38.23 t/s).
+
+Raw results: `vlm-benchmark/results/parsed/mac-fiber-2026-05-12T1006.json`
+Binary archive: `vlm-benchmark/llama.cpp/binaries/b9025/` and `vlm-benchmark/llama.cpp/binaries/fiber-temp8189/`
 
 ---
 
@@ -424,3 +454,5 @@ Vision (ms) = image slice encoding + image batch decoding. Encoding runs the CLI
 - Addon: mean of 3 measured runs (1 warmup discarded), wall-clock via `Date.now()` delta
 - Raw logs: `vlm-benchmark/results/raw/mac/` (Mac CLI), `vlm-benchmark/results/raw/addon-mac-2026-05-11T1942/` (Mac addon), `vlm-benchmark/results/ios-local/` (iPhone)
 - Profiling traces: `vlm-benchmark/results/traces/` (4 CLI traces, ~1.55 GB total) + `vlm-benchmark/results/traces/addon-mac-2026-05-11T1943/` (2 addon traces, ~599 MB total)
+- Fiber results: `vlm-benchmark/results/parsed/mac-fiber-2026-05-12T1006.json`
+- Pre-compiled binary archive: `vlm-benchmark/llama.cpp/binaries/b9025/` (upstream) and `vlm-benchmark/llama.cpp/binaries/fiber-temp8189/` (tetherto fork). Run with `DYLD_LIBRARY_PATH=<dir> <dir>/llama-mtmd-cli`
