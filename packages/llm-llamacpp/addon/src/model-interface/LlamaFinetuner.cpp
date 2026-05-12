@@ -6,6 +6,7 @@
 #include <array>
 #include <chrono>
 #include <cstdint>
+#include <cmath>
 #include <filesystem>
 #include <iostream>
 #include <memory>

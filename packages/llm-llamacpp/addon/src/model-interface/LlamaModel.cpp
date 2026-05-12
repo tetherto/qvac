@@ -1281,4 +1281,3 @@ void LlamaModel::validateBitnetQuantization() {
 }
 
 // Finetuning implementation moved to LlamaFinetuner.{hpp,cpp}.
-
