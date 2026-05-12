@@ -16,7 +16,7 @@ Server-side long-running operations (`completion`, `embeddings`, `transcribe`, `
 - **`RequestContext`** — per-request handle bundling `requestId`, `kind`, `modelId`, `signal`, `scope`, `state`.
 - **`RequestRegistry`** — module-scoped registry that mints contexts via `begin(...)` and routes `cancel(...)` by `requestId` or `modelId`.
 
-Migration is rolling out across milestones (M1 ships completion; M2 adds typed cancel outcomes + `KvCacheSession`; M3 migrates embeddings / transcribe / translate / loadModel / downloadAsset). The contract below applies to every newly-migrated handler.
+Migration is rolling out across milestones (M1 shipped completion; M2 shipped typed cancel outcomes + `KvCacheSession` + the Stop-button race close; M3 migrates embeddings / transcribe / translate / loadModel / downloadAsset). The contract below applies to every newly-migrated handler.
 
 ## Canonical Handler Shape
 
@@ -123,7 +123,18 @@ Controllers are owned by the registry. Handlers receive `ctx.signal` from `regis
 if (signal.aborted) throw new Error("cancelled");
 ```
 
-Use a structured error from `@/utils/errors-server` — see `error-handling.mdc`. M2 will add a dedicated `InferenceCancelledError` (cancelled promise-aggregates carry partial state across the RPC boundary). Until then, the `events` stream simply ends and existing `CompletionFailedError` carries cancel-as-failure cases.
+Use `InferenceCancelledError` from `@/utils/errors-server` (re-exported from `@qvac/sdk` so clients can `instanceof`-check it). The structured error carries `requestId` + a `partial: { text, toolCalls, stats }` payload so the cancelled promise-aggregates (`CompletionRun.final`, `.text`, `.toolCalls`, `.stats`) hand the caller whatever was accumulated before the cancel. The `events` stream still ends *normally* with `stopReason: "cancelled"` — stream-first consumers see cancel as a typed event, aggregate-first consumers see it as a typed rejection. See `error-handling.mdc`.
+
+### Reaching into three-layer KV-cache state by hand
+
+```typescript
+// WRONG — drift-prone three-layer cleanup duplicated on every error branch
+try { await fsPromises.unlink(cachePathToUse); } catch (...) {}
+clearCacheRegistry({ cacheKey, modelId });
+cachedMessageCounts.delete(cachePathToUse);
+```
+
+The on-disk `.bin` file, the `initializedCaches` set, and the `cachedMessageCounts` map are private to `KvCacheSession` (`server/bare/plugins/llamacpp-completion/ops/kv-cache-session.ts`). Use `session.beginTurn(...)` + `scope.defer(() => session.rollback(turn))` + `session.commitTurn(...)` instead — one cleanup point that touches all three layers atomically. Cross-model administrative cleanups go through the module-level `deleteKvCacheState(...)`, which `handleDeleteCache` delegates to. See `docs/kv-cache-system.mdc`.
 
 ## Cancel API Surface
 
@@ -213,21 +224,23 @@ Cleanups run in LIFO order on dispose. If multiple cleanups throw, an `Aggregate
 
 ### Error Codes
 
-Two errors are owned by this stack today (both in `@/utils/errors-server`):
+Three errors are owned by this stack today (all in `@/utils/errors-server`):
 
 | Code  | Class                          | When                                                                       |
 |-------|--------------------------------|----------------------------------------------------------------------------|
 | 52417 | `RequestIdConflictError`       | `registry.begin(...)` called with a `requestId` already present.           |
+| 52419 | `InferenceCancelledError`      | A cancelled inference run's `CompletionRun` promise-aggregates (`final` / `text` / `toolCalls` / `stats`) reject with this carrying the partial state. The `events` stream itself ends normally with `stopReason: "cancelled"`. |
 | 53503 | `AsyncDisposeUnavailableError` | Module-load guard: host runtime doesn't expose `Symbol.asyncDispose`.      |
 
-M2 adds `InferenceCancelledError` for the typed cancel-outcome contract — promise-aggregates (`final`, `text`, `toolCalls`, `stats`) reject with it carrying the partial state, while the `events` stream ends normally with `stopReason: "cancelled"`. Until M2 ships, handlers fall back on `CompletionFailedError` / existing per-op errors.
+`InferenceCancelledError` carries `requestId` plus a `partial: { text?, toolCalls?, stats? }` payload. Construction is **client-side** (`packages/sdk/client/api/completion-stream.ts`): when the event stream ends with `stopReason: "cancelled"`, the client builds the error from its locally-aggregated partial state and rejects the aggregates. The class is server-defined for reusability and re-exported from `@qvac/sdk` so client code can `instanceof`-check it. See `error-handling.mdc`.
 
 ## Verification
 
-Two unit-test files pin the contract — read them as canonical examples:
+Three unit-test files pin the contract — read them as canonical examples:
 
 - `packages/sdk/test/unit/runtime/disposable-scope.test.ts` — LIFO cleanup, idempotency, error aggregation, late `defer` behavior.
-- `packages/sdk/test/unit/runtime/request-registry.test.ts` — `begin`/`cancel`/`end` flow, `requestId` conflict detection, parent-signal composition + listener detach discipline, and the same-tick "cancel-before-begin" tripwire.
+- `packages/sdk/test/unit/runtime/request-registry.test.ts` — `begin`/`cancel`/`end` flow, `requestId` conflict detection, parent-signal composition + listener detach discipline, the M2 Stop-button race close (`same-tick cancel-before-begin retroactively aborts the later begin()`), and the bounded `cancelled-before-begin` map invariants.
+- `packages/sdk/test/unit/runtime/kv-cache-session.test.ts` — `beginTurn` / `commitTurn` / `rollback` semantics in isolation: commit suppresses the deferred rollback, rollback after commit is a no-op, double-rollback is idempotent, and rollback wipes all three layers (file / `initializedCaches` / `cachedMessageCounts`) regardless of who fails along the way.
 
 When adding new behavior to the primitives, add the test before the implementation and pair it with the corresponding doc update in this rule.
 
@@ -265,5 +278,5 @@ Already covered by the `CancelTarget` discriminated union. If you genuinely need
 ## Related Rules
 
 - `error-handling.mdc` — `InferenceCancelledError` / `AsyncDisposeUnavailableError` / `RequestIdConflictError` placement and propagation across the RPC boundary.
-- `docs/kv-cache-system.mdc` — KV-cache bookkeeping coupled to cancellation (`shouldRecordSavedCount`, cancel-branch rollback). `KvCacheSession` is M2 — until then handlers replicate the three-layer cleanup pattern around `signal.aborted`.
-- `docs/request-lifecycle-system.mdc` — full reference (design rationale, migration roadmap, FAQ).
+- `docs/kv-cache-system.mdc` — `KvCacheSession` ownership of the three KV-cache bookkeeping layers (on-disk `.bin`, `initializedCaches`, `cachedMessageCounts`), `beginTurn` / `commitTurn` / `rollback` semantics, and the cross-model `deleteKvCacheState` administrative API.
+- `docs/request-lifecycle-system.mdc` — full reference (design rationale, migration roadmap, FAQ, M2 Stop-button race close rationale).

@@ -32,6 +32,7 @@ import { configTests } from "./config-tests.js";
 import { noLingeringBareTests } from "./no-lingering-bare-tests.js";
 import { wrongModelTests } from "./wrong-model-tests.js";
 import { multiGpuTests } from "./multi-gpu-tests.js";
+import { cancellationTests } from "./cancellation-tests.js";
 
 // Model loading tests
 export const modelLoadLlm: TestDefinition = {
@@ -281,6 +282,9 @@ export const tests = [
 
   // Multi-GPU config smoke (verifies split-mode and main-gpu flow through stack)
   ...multiGpuTests,
+
+  // M2 (QVAC-18182) typed cancel outcomes + KvCacheSession rollback e2e
+  ...cancellationTests,
 
   // Additional model tests
   modelSwitchLlm,
