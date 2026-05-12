@@ -1,7 +1,7 @@
 import type {
   UpscaleStreamRequest,
   UpscaleStreamResponse,
-} from "@/schemas/sdcpp-upscaling";
+} from "@/schemas/sdcpp-config";
 import { dispatchPluginStream } from "@/server/rpc/handlers/plugin-dispatch";
 
 export async function* handleUpscaleStream(

@@ -340,17 +340,10 @@ export const PLUGIN_OCR = "@qvac/sdk/onnx-ocr/plugin" as const;
 
 /**
  * Image generation plugin (stable-diffusion.cpp).
- * Provides: text-to-image generation.
+ * Provides: text-to-image generation and standalone ESRGAN image upscaling.
  */
 export const PLUGIN_DIFFUSION =
   "@qvac/sdk/sdcpp-generation/plugin" as const;
-
-/**
- * Image upscaling plugin (stable-diffusion.cpp ESRGAN).
- * Provides: standalone image upscaling.
- */
-export const PLUGIN_UPSCALER =
-  "@qvac/sdk/sdcpp-upscaling/plugin" as const;
 
 /**
  * All built-in SDK plugins.
@@ -370,7 +363,6 @@ export const SDK_DEFAULT_PLUGINS = [
   PLUGIN_TTS,
   PLUGIN_OCR,
   PLUGIN_DIFFUSION,
-  PLUGIN_UPSCALER,
 ] as const;
 
 export type BuiltinPlugin = (typeof SDK_DEFAULT_PLUGINS)[number];

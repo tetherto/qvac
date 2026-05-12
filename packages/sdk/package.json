@@ -100,10 +100,6 @@
       "types": "./dist/server/bare/plugins/sdcpp-generation/plugin.d.ts",
       "import": "./dist/server/bare/plugins/sdcpp-generation/plugin.js"
     },
-    "./sdcpp-upscaling/plugin": {
-      "types": "./dist/server/bare/plugins/sdcpp-upscaling/plugin.d.ts",
-      "import": "./dist/server/bare/plugins/sdcpp-upscaling/plugin.js"
-    },
     "./plugin-utils": {
       "types": "./dist/schemas/plugin.d.ts",
       "import": "./dist/schemas/plugin.js"

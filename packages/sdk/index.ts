@@ -125,7 +125,6 @@ export {
   PLUGIN_TTS,
   PLUGIN_OCR,
   PLUGIN_DIFFUSION,
-  PLUGIN_UPSCALER,
   SDK_DEFAULT_PLUGINS,
   type BuiltinPlugin,
   type ProfilerMode,

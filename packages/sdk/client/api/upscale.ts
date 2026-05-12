@@ -3,7 +3,7 @@ import {
   type UpscaleClientParams,
   type UpscaleStats,
   type UpscaleStreamRequest,
-} from "@/schemas";
+} from "@/schemas/sdcpp-config";
 import { stream as streamRpc } from "@/client/rpc/rpc-client";
 import { decodeBase64, encodeBase64 } from "@/utils/encoding";
 import { StreamEndedError } from "@/utils/errors-client";

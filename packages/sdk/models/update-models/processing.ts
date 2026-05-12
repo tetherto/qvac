@@ -3,7 +3,6 @@ import {
   getAddonFromEngine,
   resolveCanonicalEngine,
 } from "../../schemas/engine-addon-map";
-import { ENGINE_OVERRIDES_BY_FILENAME } from "./engine-overrides";
 import { detectShardedModel } from "./shards";
 import type { ProcessedModel } from "./types";
 
@@ -35,8 +34,8 @@ export function extractModelName(registryPath: string): string {
 export function processRegistryModel(
   model: QVACModelEntry,
 ): ProcessedModel | null {
-  const resolvedEngine = resolveCanonicalEngine(model.engine);
-  if (!resolvedEngine) {
+  const engine = resolveCanonicalEngine(model.engine);
+  if (!engine) {
     console.warn(
       `⚠️  Skipping model with unknown engine "${model.engine}": ${model.path}`,
     );
@@ -44,7 +43,6 @@ export function processRegistryModel(
   }
 
   const filename = model.path.split("/").pop() || model.path;
-  const engine = ENGINE_OVERRIDES_BY_FILENAME[filename] ?? resolvedEngine;
   const blobBinding = model.blobBinding;
 
   const blobCoreKey = toHexString(blobBinding?.coreKey);

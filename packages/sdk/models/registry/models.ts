@@ -184,7 +184,7 @@ export const models = [
     expectedSize: 17938799,
     sha256Checksum:
       "f872d837d3c90ed2e05227bed711af5671a6fd1c9f7d7e91c911a61f155e99da",
-    engine: "sdcpp-upscaling",
+    engine: "sdcpp-generation",
     quantization: "",
     params: "",
   },
@@ -203,7 +203,7 @@ export const models = [
     expectedSize: 67040989,
     sha256Checksum:
       "4fa0d38905f75ac06eb49a7951b426670021be3018265fd191d2125df9d682f1",
-    engine: "sdcpp-upscaling",
+    engine: "sdcpp-generation",
     quantization: "",
     params: "",
   },
@@ -222,7 +222,7 @@ export const models = [
     expectedSize: 67040989,
     sha256Checksum:
       "a820b9bde89a874d7599d545567308ce6c128fc8754a53208eda016d40aa81df",
-    engine: "sdcpp-upscaling",
+    engine: "sdcpp-generation",
     quantization: "",
     params: "",
   },

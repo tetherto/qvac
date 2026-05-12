@@ -28,14 +28,12 @@ import {
   ttsModelTypeSchema,
   ocrModelTypeSchema,
   diffusionModelTypeSchema,
-  upscalerModelTypeSchema,
   ModelType,
   ModelTypeAliases,
   type CanonicalModelType,
   type ModelTypeInput,
 } from "./model-types";
 import { sdcppConfigSchema } from "./sdcpp-config";
-import { sdcppUpscalingConfigSchema } from "./sdcpp-upscaling";
 
 // Set of all built-in model types (canonical + aliases) for catch-all exclusion
 const builtInModelTypes = new Set([
@@ -113,13 +111,6 @@ export const loadBuiltinModelOptionsBaseSchema = z.union([
       ...loadModelCommonFields,
       modelType: diffusionModelTypeSchema,
       modelConfig: sdcppConfigSchema.strict().optional(),
-    })
-    .strict(),
-  z
-    .object({
-      ...loadModelCommonFields,
-      modelType: upscalerModelTypeSchema,
-      modelConfig: sdcppUpscalingConfigSchema.strict().optional(),
     })
     .strict(),
 ]);
@@ -296,23 +287,6 @@ const loadModelOptionsToRequestBaseSchema = z.union([
   z
     .object({
       ...loadModelRequestCommonFields,
-      modelType: upscalerModelTypeSchema,
-      modelConfig: sdcppUpscalingConfigSchema.strict().optional(),
-    })
-    .strict()
-    .transform((data) => ({
-      type: "loadModel" as const,
-      modelType: ModelType.sdcppUpscaling,
-      modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
-      modelName: modelInputToNameSchema.parse(data.modelSrc),
-      modelConfig: data.modelConfig ?? {},
-      seed: data.seed ?? false,
-      withProgress: data.withProgress ?? !!data.onProgress,
-      delegate: data.delegate,
-    })),
-  z
-    .object({
-      ...loadModelRequestCommonFields,
       modelType: z.string().refine((val) => !builtInModelTypes.has(val), {
         message: "Built-in model types must use their specific schema",
       }),
@@ -401,13 +375,6 @@ export const loadDiffusionModelRequestSchema = commonModelConfigSchema
   })
   .strict();
 
-export const loadUpscalerModelRequestSchema = commonModelConfigSchema
-  .extend({
-    modelType: z.literal(ModelType.sdcppUpscaling),
-    modelConfig: sdcppUpscalingConfigSchema.optional(),
-  })
-  .strict();
-
 // Custom plugin catch-all: accepts any modelType string EXCEPT built-ins
 export const loadCustomPluginModelRequestSchema =
   commonModelConfigSchema.extend({
@@ -428,7 +395,6 @@ export const loadModelSrcRequestSchema = z
     loadTtsModelRequestSchema,
     loadOcrModelRequestSchema,
     loadDiffusionModelRequestSchema,
-    loadUpscalerModelRequestSchema,
     loadCustomPluginModelRequestSchema,
   ])
   .transform((data) => ({
@@ -586,9 +552,7 @@ export type InferredConfig<S> = S extends {
               ? z.input<typeof parakeetConfigSchema>
               : S extends { engine: typeof ModelType.sdcppGeneration }
                 ? z.input<typeof sdcppConfigSchema>
-                : S extends { engine: typeof ModelType.sdcppUpscaling }
-                  ? z.input<typeof sdcppUpscalingConfigSchema>
-                  : Record<string, unknown>;
+                : Record<string, unknown>;
 
 /**
  * `loadModel` options for descriptors that preserve a literal `engine`.

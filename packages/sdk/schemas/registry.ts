@@ -29,7 +29,6 @@ export const modelRegistryEngineSchema = z.enum([
   ModelType.onnxOcr,
   ModelType.parakeetTranscription,
   ModelType.sdcppGeneration,
-  ModelType.sdcppUpscaling,
   "onnx-vad",
 ]);
 

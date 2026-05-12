@@ -349,10 +349,13 @@ resources.define("diffusion-esrgan", {
 
 resources.define("upscaler", {
   constant: REALESRGAN_X4PLUS_ANIME_6B,
-  type: "upscaler",
+  type: "diffusion",
   preLoadUnload: true,
   config: {
-    tile_size: 128,
+    mode: "upscale",
+    upscaler: {
+      tile_size: 128,
+    },
   },
 });
 

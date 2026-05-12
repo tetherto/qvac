@@ -64,11 +64,9 @@ import { ocrStreamRequestSchema, ocrStreamResponseSchema } from "./ocr";
 import {
   diffusionStreamRequestSchema,
   diffusionStreamResponseSchema,
-} from "./sdcpp-config";
-import {
   upscaleStreamRequestSchema,
   upscaleStreamResponseSchema,
-} from "./sdcpp-upscaling";
+} from "./sdcpp-config";
 import {
   finetuneRequestSchema,
   finetuneResponseSchema,
