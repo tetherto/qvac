@@ -632,39 +632,27 @@ test('run | combines multiple high_noise_* params into a single warning', async 
 })
 
 // ─────────────────────────────────────────────────────────────────────
-//  run(): LoRA path validation
+//  run(): LoRA is not yet supported on the video path
 // ─────────────────────────────────────────────────────────────────────
+//
+// The native `SD_VID_GEN_HANDLERS` map has no "lora" entry and
+// `SdModel::processVideo` never touches `sd_vid_gen_params_t::loras`,
+// so we reject `params.lora` at the JS boundary to avoid silently
+// dropping the adapter. When LoRA-on-video is wired through native,
+// drop these tests and re-add the absolute-path validation tests.
 
-test('run | rejects empty LoRA string', async (t) => {
+test('run | rejects params.lora (not supported on video path yet)', async (t) => {
   const m = makeWanModel()
-  await t.exception.all(
-    m.run({ mode: 'txt2vid', prompt: 'hi', lora: '' }),
-    /params\.lora must be a non-empty string/
-  )
-})
-
-test('run | rejects non-string LoRA', async (t) => {
-  const m = makeWanModel()
-  await t.exception.all(
-    m.run({ mode: 'txt2vid', prompt: 'hi', lora: 42 }),
-    /params\.lora must be a non-empty string/
-  )
-})
-
-test('run | rejects relative LoRA path', async (t) => {
-  const m = makeWanModel()
-  await t.exception.all(
-    m.run({ mode: 'txt2vid', prompt: 'hi', lora: 'lora.safetensors' }),
-    /params\.lora must be an absolute path/
-  )
-})
-
-test('run | accepts an absolute LoRA path', async (t) => {
-  const m = makeWanModel()
-  await t.exception.all(
-    m.run({ mode: 'txt2vid', prompt: 'hi', lora: '/tmp/lora.safetensors' }),
-    /Addon not initialized/
-  )
+  // The same loud TypeError fires regardless of input shape -- whether
+  // the value would have passed the old "non-empty absolute string"
+  // check or not. Cover all four old shapes so a future re-introduction
+  // of the validation can't bring back a silent-drop regression.
+  for (const lora of ['', 42, 'lora.safetensors', '/tmp/lora.safetensors']) {
+    await t.exception.all(
+      m.run({ mode: 'txt2vid', prompt: 'hi', lora }),
+      /params\.lora is not supported for video generation yet/
+    )
+  }
 })
 
 // ─────────────────────────────────────────────────────────────────────

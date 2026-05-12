@@ -290,9 +290,14 @@ TEST_F(SdWanValidationTest, Img2VidRejectsCorruptInitImage) {
 
 TEST_F(SdWanValidationTest, Flf2VidRejectsCorruptEndImage) {
   SdModel::GenerationJob job;
+  // Pin width/height to the init-image size so the (new) init-image
+  // dimension check in processVideo() passes and we reach the corrupt-
+  // end-image decode-failure path that this test is actually exercising.
   job.paramsJson = R"({
     "mode": "flf2vid",
     "prompt": "interpolate",
+    "width": 64,
+    "height": 64,
     "video_frames": 5
   })";
   job.initImageBytes = wan_helpers::makeSolidPng(64, 64, 10, 20, 30);
@@ -325,11 +330,32 @@ TEST_F(SdWanValidationTest, Img2VidRejectsCorruptControlFrame) {
 }
 
 // ---------------------------------------------------------------------------
-// Dimension validation (added in QVAC-18026 follow-up): end_image and every
-// control_frames entry must match the video width/height before we hand
-// pointers to generate_video(), which would otherwise see mismatched stride
-// and either segfault inside the VAE or silently produce garbage.
+// Dimension validation (added in QVAC-18026 follow-up): init_image, end_image,
+// and every control_frames entry must all match the video width/height before
+// we hand pointers to generate_video(), which would otherwise see mismatched
+// stride and either segfault inside the VAE or silently produce garbage.
+// All three checks compare against vid.width / vid.height as the single
+// source of truth for the video's final dimensions.
 // ---------------------------------------------------------------------------
+
+TEST_F(SdWanValidationTest, Img2VidRejectsInitImageWithWrongDimensions) {
+  SdModel::GenerationJob job;
+  job.paramsJson = R"({
+    "mode": "img2vid",
+    "prompt": "animate",
+    "width": 64,
+    "height": 64,
+    "video_frames": 5
+  })";
+  // init_image is 128x128 -- explicitly different from width/height = 64x64.
+  // generate_video() takes a single (width, height) and would otherwise be
+  // handed an inconsistently-sized first frame.
+  job.initImageBytes = wan_helpers::makeSolidPng(128, 128, 10, 20, 30);
+  expectThrowContains(
+      std::move(job),
+      "processVideo: init_image dimensions 128x128 do not match video "
+      "dimensions 64x64");
+}
 
 TEST_F(SdWanValidationTest, Flf2VidRejectsEndImageWithWrongDimensions) {
   SdModel::GenerationJob job;

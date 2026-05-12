@@ -126,8 +126,6 @@ export interface VideoGenerationParams {
   cache_mode?: CacheMode
   cache_preset?: string
   cache_threshold?: number
-  /** Non-empty absolute path to a LoRA adapter (.safetensors, etc.). */
-  lora?: string
 }
 
 /**

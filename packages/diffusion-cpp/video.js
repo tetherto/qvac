@@ -418,14 +418,19 @@ class VideoStableDiffusion {
       }
     }
 
-    // ── LoRA path validation ─────────────────────────────────────────────
+    // ── LoRA: not yet supported on the video path ────────────────────────
+    // `SD_VID_GEN_HANDLERS` has no "lora" entry and `SdModel::processVideo`
+    // never touches `sd_vid_gen_params_t::loras` / `lora_count`, so any LoRA
+    // path passed through here is silently dropped by the native side. Fail
+    // loudly at the JS boundary instead of silently producing LoRA-less
+    // output -- callers can re-enable this once the native handler + wiring
+    // land (mirror of `processImage` + `prepareLoras()`).
     if (params.lora != null) {
-      if (typeof params.lora !== 'string' || params.lora.length === 0) {
-        throw new TypeError('params.lora must be a non-empty string')
-      }
-      if (!path.isAbsolute(params.lora)) {
-        throw new TypeError(`params.lora must be an absolute path (got: ${params.lora})`)
-      }
+      throw new TypeError(
+        'params.lora is not supported for video generation yet. ' +
+        'LoRA is currently only wired through the image path ' +
+        '(ImgStableDiffusion); the Wan video pipeline ignores it.'
+      )
     }
 
     if (!this.addon) {

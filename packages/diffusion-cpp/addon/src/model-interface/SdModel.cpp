@@ -845,7 +845,24 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& v) {
           general_error::InvalidArgument,
           "processVideo: failed to decode init_image (corrupt or "
           "unsupported format; supported: PNG, JPEG)");
+    // Take ownership *before* the dimension check so a mismatch can't leak
+    // the freshly-decoded pixel buffer (mirrors the control_frames path).
     initData.reset(initImg.data);
+    // generate_video() takes a single (width, height) for the whole pipeline;
+    // mixing an init_image of a different size with a width/height the user
+    // declared elsewhere produces inconsistent frame data downstream. Reject
+    // explicitly here -- consistent with the end_image / control_frames
+    // checks below, all three compare against vid.width / vid.height as the
+    // single source of truth for the video's final dimensions.
+    if (static_cast<int>(initImg.width) != vid.width ||
+        static_cast<int>(initImg.height) != vid.height)
+      throw StatusError(
+          general_error::InvalidArgument,
+          "processVideo: init_image dimensions " +
+              std::to_string(initImg.width) + "x" +
+              std::to_string(initImg.height) +
+              " do not match video dimensions " + std::to_string(vid.width) +
+              "x" + std::to_string(vid.height));
   }
 
   if (!job.endImageBytes.empty()) {
