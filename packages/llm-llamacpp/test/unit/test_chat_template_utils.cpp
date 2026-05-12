@@ -1,5 +1,6 @@
 #include <filesystem>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 
 #include <gtest/gtest.h>
@@ -37,6 +38,32 @@ protected:
 
 TEST_F(ChatTemplateUtilsTest, IsQwen3ModelWithNullptr) {
   EXPECT_FALSE(isQwen3Model(nullptr));
+}
+
+TEST_F(ChatTemplateUtilsTest, IsMedPsyModelWithNullptr) {
+  EXPECT_FALSE(isMedPsyModel(nullptr));
+}
+
+TEST_F(ChatTemplateUtilsTest, IsMedPsyBasenameEmpty) {
+  EXPECT_FALSE(isMedPsyBasename(std::string_view{}));
+  EXPECT_FALSE(isMedPsyBasename(""));
+}
+
+TEST_F(ChatTemplateUtilsTest, IsMedPsyBasenameExactMatch) {
+  EXPECT_TRUE(isMedPsyBasename("MedPsy"));
+}
+
+TEST_F(ChatTemplateUtilsTest, IsMedPsyBasenameCaseInsensitive) {
+  EXPECT_TRUE(isMedPsyBasename("medpsy"));
+  EXPECT_TRUE(isMedPsyBasename("MEDPSY"));
+  EXPECT_TRUE(isMedPsyBasename("MedPSY"));
+}
+
+TEST_F(ChatTemplateUtilsTest, IsMedPsyBasenameRejectsOtherNames) {
+  EXPECT_FALSE(isMedPsyBasename("Qwen3"));
+  EXPECT_FALSE(isMedPsyBasename("Llama-3.1"));
+  EXPECT_FALSE(isMedPsyBasename("MedPsy-7B"));
+  EXPECT_FALSE(isMedPsyBasename("NotMedPsy"));
 }
 
 TEST_F(
