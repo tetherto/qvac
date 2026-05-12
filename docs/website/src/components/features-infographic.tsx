@@ -4,9 +4,9 @@ import * as React from 'react';
 import Link from 'next/link';
 import {
   IconAccessPoint,
-  IconDeviceAirtag,
   IconDeviceCctv,
   IconDeviceImac,
+  IconDeviceLaptop,
   IconDeviceMobile,
   IconDeviceWatchHeart,
   IconRobot,
@@ -50,14 +50,14 @@ export type FeaturesInfographicProps = {
 // ============================================================================
 
 export const DEFAULT_PLATFORMS: Platform[] = [
-  { id: 'mobile',   label: 'Mobile',   Icon: IconDeviceMobile as unknown as React.ComponentType<IconProps>,     angle: 0 },
-  { id: 'robot',    label: 'Robot',    Icon: IconRobot as unknown as React.ComponentType<IconProps>,            angle: 45 },
-  { id: 'server',   label: 'Server',   Icon: IconServer2 as unknown as React.ComponentType<IconProps>,          angle: 90 },
-  { id: 'drone',    label: 'Drone',    Icon: IconDeviceCctv as unknown as React.ComponentType<IconProps>,       angle: 135 },
-  { id: 'iot',      label: 'IoT',      Icon: IconAccessPoint as unknown as React.ComponentType<IconProps>,      angle: 180 },
-  { id: 'tracker',  label: 'Tracker',  Icon: IconDeviceAirtag as unknown as React.ComponentType<IconProps>,     angle: 225 },
-  { id: 'desktop',  label: 'Desktop',  Icon: IconDeviceImac as unknown as React.ComponentType<IconProps>,       angle: 270 },
-  { id: 'wearable', label: 'Wearable', Icon: IconDeviceWatchHeart as unknown as React.ComponentType<IconProps>, angle: 315 },
+  { id: 'mobile',       label: 'Mobile',       Icon: IconDeviceMobile as unknown as React.ComponentType<IconProps>,     angle: 0   }, // 12:00
+  { id: 'notebook',     label: 'Notebook',     Icon: IconDeviceLaptop as unknown as React.ComponentType<IconProps>,     angle: 45  }, // 1:30
+  { id: 'server',       label: 'Server',       Icon: IconServer2 as unknown as React.ComponentType<IconProps>,          angle: 90  }, // 3:00
+  { id: 'cctv',         label: 'CCTV camera',  Icon: IconDeviceCctv as unknown as React.ComponentType<IconProps>,       angle: 135 }, // 4:30
+  { id: 'smartwatch',   label: 'Smartwatch',   Icon: IconDeviceWatchHeart as unknown as React.ComponentType<IconProps>, angle: 180 }, // 6:00
+  { id: 'access-point', label: 'Access point', Icon: IconAccessPoint as unknown as React.ComponentType<IconProps>,      angle: 225 }, // 7:30
+  { id: 'robot',        label: 'Robot',        Icon: IconRobot as unknown as React.ComponentType<IconProps>,            angle: 270 }, // 9:00
+  { id: 'desktop',      label: 'Desktop',      Icon: IconDeviceImac as unknown as React.ComponentType<IconProps>,       angle: 315 }, // 10:30
 ];
 
 export const DEFAULT_FEATURES: Feature[] = [
@@ -65,7 +65,7 @@ export const DEFAULT_FEATURES: Feature[] = [
     id: 'complete-suite',
     name: 'Complete AI suite',
     description:
-      'All-in-one AI SDK: LLMs, fine-tuning, diffusion, speech, RAG, and more.',
+      'All-in-one SDK: LLMs, fine-tuning, diffusion, speech, RAG, and more.',
     angle: 0,
     href: '#ai-capabilities',
   },
