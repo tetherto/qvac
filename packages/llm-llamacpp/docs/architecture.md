@@ -900,6 +900,4 @@ Provide hand-written TypeScript definitions in `index.d.ts` alongside JavaScript
 - [tools-compact.md](tools-compact.md) - Tool-call compaction behavior
 - [finetuning.md](finetuning.md) - LoRA finetuning entrypoints and parameters
 
-**LLM-friendly sections:** Retained. The collapsed tables still provide useful machine-readable summaries, but they must be kept aligned with `package.json`, `index.js`, `addon.js`, and `index.d.ts`.
-
 **Last Updated:** 2026-05-07

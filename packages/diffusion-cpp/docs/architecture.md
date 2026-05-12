@@ -771,6 +771,4 @@ Provide hand-written TypeScript definitions in `index.d.ts`.
 
 ---
 
-**LLM-friendly sections:** Retained, but intentionally tied to current source paths. These sections are useful for machine readers as long as they mirror `package.json`, `index.js`, `index.d.ts`, `addon.js`, and `addon/src/addon/AddonJs.hpp`.
-
 **Last Updated:** 2026-05-07

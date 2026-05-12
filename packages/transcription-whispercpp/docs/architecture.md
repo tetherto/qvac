@@ -633,6 +633,4 @@ Use whisper.cpp's built-in Silero VAD integration rather than a separate externa
 **Related Document:**
 - [data-flows-detailed.md](data-flows-detailed.md) - Detailed data flow diagrams and sequences
 
-**LLM-friendly sections:** Retained. They still help agents navigate the package, but the old inheritance/loader and templated-addon facts were removed because they no longer match the implementation.
-
 **Last Updated:** 2026-05-07

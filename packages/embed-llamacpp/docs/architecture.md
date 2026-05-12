@@ -807,6 +807,4 @@ Provide hand-written TypeScript definitions in `index.d.ts` alongside JavaScript
 **Related Document:**
 - [data-flows-detailed.md](data-flows-detailed.md) - Detailed data flow diagrams and sequences
 
-**LLM-friendly sections:** Retained. The collapsed tables are useful for agents and RAG-style retrieval, provided the duplicated versions, dependencies, and source paths stay synchronized with `package.json`, `index.js`, and `addon/src`.
-
 **Last Updated:** 2026-05-07

@@ -691,6 +691,4 @@ Use addon-cpp's `AddonJs` / `AddonCpp` pattern, which provides a single-job runn
 **Related Document:**
 - [data-flows-detailed.md](data-flows-detailed.md) - Detailed data flow diagrams and sequences
 
-**LLM-friendly sections:** Retained. They continue to help machine readers after replacing stale inheritance, loader, `append`, batch-helper, and pause/resume references.
-
 **Last Updated:** 2026-05-07

@@ -656,6 +656,4 @@ Ship hand-written index.d.ts with ONNXOcr, ONNXOcrParams, OCRArgs, OCRRunParams,
 **Related Document:**
 - [data-flows-detailed.md](data-flows-detailed.md) - Detailed data flow diagrams and sequences
 
-**LLM-friendly sections:** Retained. They remain useful after correcting the old inheritance model and documenting EasyOCR vs DocTR behavior.
-
 **Last Updated:** 2026-05-07

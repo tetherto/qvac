@@ -760,7 +760,5 @@ Implement a pluggable output handler system:
 
 ---
 
-**LLM-friendly sections:** Retained. The collapsed tables still add value for machine readers, but they now use runtime-neutral JS terminology, current package names, and the current `IModel` signature.
-
 **Last Updated:** 2026-05-07
 **Maintainer:** QVAC Team

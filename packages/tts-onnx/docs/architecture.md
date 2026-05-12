@@ -726,6 +726,4 @@ Provide hand-written TypeScript definitions in `index.d.ts` alongside JavaScript
 **Related Document:**
 - [data-flows-detailed.md](data-flows-detailed.md) - Detailed data flow diagrams and sequences
 
-**LLM-friendly sections:** Retained. They still provide useful machine-readable summaries after removing stale inheritance/loader and C++ sentence-splitting claims.
-
 **Last Updated:** 2026-05-07
