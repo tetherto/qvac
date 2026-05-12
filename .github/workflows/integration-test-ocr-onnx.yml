@@ -89,20 +89,40 @@ jobs:
           npm install
           npm install -g bare bare-make
 
+      # Artifact-poisoning mitigation (QVAC-18047): write artifact to runner.temp,
+      # then copy into workspace via a separate step. Breaks the CodeQL
+      # download-artifact -> workspace data-flow trace. Bash/PowerShell branches
+      # avoid the win32 cp escape-sequence regression that reverted PR #1728.
       - name: Download prebuilds from artifact
         if: ${{ !inputs.prebuild_package }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          path: ${{ inputs.workdir || env.PKG_DIR }}/prebuilds
+          path: ${{ runner.temp }}/prebuilds-staging
           merge-multiple: true
+
+      - name: Move prebuilds from staging to workspace (Unix)
+        if: ${{ !inputs.prebuild_package && runner.os != 'Windows' }}
+        shell: bash
+        run: |
+          mkdir -p "${{ inputs.workdir || env.PKG_DIR }}/prebuilds"
+          cp -r "${RUNNER_TEMP}/prebuilds-staging/." "${{ inputs.workdir || env.PKG_DIR }}/prebuilds/"
+
+      - name: Move prebuilds from staging to workspace (Windows)
+        if: ${{ !inputs.prebuild_package && runner.os == 'Windows' }}
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force "${{ inputs.workdir || env.PKG_DIR }}/prebuilds" | Out-Null
+          Copy-Item -Path "$env:RUNNER_TEMP\prebuilds-staging\*" -Destination "${{ inputs.workdir || env.PKG_DIR }}/prebuilds" -Recurse
 
       - name: Download prebuilds from package
         if: ${{ inputs.prebuild_package }}
         working-directory: ${{ inputs.workdir || env.PKG_DIR }}
         shell: bash
+        env:
+          PREBUILD_PKG: ${{ inputs.prebuild_package }}
         run: |
           mkdir -p prebuilds
-          npm pack ${{ inputs.prebuild_package }} --pack-destination /tmp
+          npm pack "$PREBUILD_PKG" --pack-destination /tmp
           tar -xzf /tmp/*.tgz -C /tmp
           cp -r /tmp/package/prebuilds/* prebuilds/
 
@@ -132,12 +152,16 @@ jobs:
           mkdir -p models/ocr/rec_dyn
           aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ocr/rec_dyn/ models/ocr/rec_dyn/ --recursive
 
-      - name: Run integration test
+      # Artifact-poisoning mitigation (QVAC-18047): strip the inherited env
+      # before running test code. The test only sees HOME/PATH and the Qase
+      # token that's explicitly passed through. AWS/GH/Qase-from-AWS credentials
+      # configured in earlier steps are not visible to npm or to package scripts.
+      - name: Run integration test (env-stripped)
         working-directory: ${{ inputs.workdir || env.PKG_DIR }}
         shell: bash
-        run: npm run test:integration
+        run: env -i HOME="$HOME" PATH="$PATH" QASE_API_TOKEN_TEST="$QASE_API_TOKEN_TEST" bash -c 'npm run test:integration'
         env:
-          QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
+          QASE_API_TOKEN_TEST: ${{ secrets.QASE_API_TOKEN }}
 
       - name: Generate HTML performance report
         if: always()
