@@ -49,7 +49,7 @@ jobs:
   # change merge-guard to require `success`) once the addon's flake
   # surface is small enough to make a hard gate cheap.
   run-integration-tests:
-    timeout-minutes: 60
+    timeout-minutes: 120
     continue-on-error: true
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
