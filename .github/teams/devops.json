@@ -1,0 +1,17 @@
+{
+  "name": "DevOps Pod",
+  "leads": ["Proletter"],
+  "members": [
+    "darkynt",
+    "GiacomoSorbiWork",
+    "sidj-thr",
+    "tamer-hassan-tether",
+    "yauhenipankratovich-web"
+  ],
+  "ownedPaths": [
+    ".github/workflows/",
+    ".github/actions/",
+    ".github/scripts/",
+    "scripts/"
+  ]
+}

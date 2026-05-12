@@ -149,6 +149,18 @@ function pickPrimaryGgufPath (files) {
   return files.find((p) => SHARD_REGEX.test(p)) || files[0]
 }
 
+// Replace media Uint8Array contents with a small summary so the logger never
+// asks V8 to JSON.stringify multi-MB binary blobs.
+function sanitizePromptForLog (prompt) {
+  if (!Array.isArray(prompt)) return prompt
+  return prompt.map((msg) => {
+    if (msg && msg.type === 'media' && msg.content instanceof Uint8Array) {
+      return { ...msg, content: `[Uint8Array byteLength=${msg.content.byteLength}]` }
+    }
+    return msg
+  })
+}
+
 /** LLM client wrapping the native LlamaInterface for inference, finetuning, and pause/resume. */
 class LlmLlamacpp {
   constructor ({ files, config, logger = null, opts = {} }) {
@@ -259,7 +271,7 @@ class LlmLlamacpp {
     }
     const { prefill, generationParams, cacheKey, saveCacheToDisk } = normalizeRunOptions(runOptions)
 
-    this.logger.info('Starting inference with prompt:', prompt)
+    this.logger.info('Starting inference with prompt:', sanitizePromptForLog(prompt))
 
     // Separate media messages from text messages
     const textMessages = []

@@ -3,6 +3,8 @@
 const test = require('brittle')
 const os = require('bare-os')
 const path = require('bare-path')
+const fs = require('bare-fs')
+const process = require('bare-process')
 const { loadChatterboxTTS, runChatterboxTTS, runChatterboxTTSWithSplit } = require('../utils/runChatterboxTTS')
 const { loadSupertonicTTS, runSupertonicTTS, runSupertonicStream, runSupertonicStreaming } = require('../utils/runSupertonicTTS')
 const { ensureChatterboxModels, ensureSupertonicModels, ensureSupertonicModelsMultilingual, ensureWhisperModel, ensureLavaSRModels } = require('../utils/downloadModel')
@@ -22,6 +24,149 @@ const TTS_INTEGRATION_PROFILE = (_integrationProfileRaw === 'short' || _integrat
   : 'long'
 const runWerIntegration = TTS_INTEGRATION_PROFILE === 'long'
 const useSplit = INPUT_SENTENCES !== 'short'
+
+// ---------------------------------------------------------------------------
+// Supertonic mobile performance reporter
+// ---------------------------------------------------------------------------
+
+let createPerformanceReporter
+const _perfReporterPath = '../../../../scripts/test-utils/performance-reporter'
+try {
+  const perfReporterMod = require(_perfReporterPath)
+  perfReporterMod.configure({ fs, path, process, os })
+  createPerformanceReporter = perfReporterMod.createPerformanceReporter
+} catch (_) {
+  createPerformanceReporter = function (opts) {
+    const results = []
+    const startedAt = new Date().toISOString()
+    const addon = (opts && opts.addon) || 'onnx-tts'
+    const addonType = (opts && opts.addonType) || 'tts'
+    const device = {
+      name: platform,
+      platform,
+      os_version: '',
+      arch: os.arch ? os.arch() : '',
+      runner: isMobile ? 'device-farm' : 'local'
+    }
+
+    return {
+      record (testName, metrics, extra) {
+        results.push({
+          test: testName,
+          execution_provider: (extra && extra.execution_provider) || null,
+          metrics: Object.assign({
+            total_time_ms: null,
+            tps: null,
+            real_time_factor: null,
+            sample_count: null,
+            duration_ms: null
+          }, metrics),
+          input: (extra && extra.input) || null,
+          output: (extra && extra.output) || null
+        })
+      },
+      toJSON () {
+        return {
+          schema_version: '1.0',
+          addon,
+          addon_type: addonType,
+          timestamp: startedAt,
+          device,
+          results
+        }
+      },
+      writeReport (destPath) {
+        const json = JSON.stringify(this.toJSON(), null, 2) + '\n'
+        const targets = destPath && !isMobile ? [destPath] : []
+        if (!destPath || isMobile) {
+          if (global.testDir) targets.push(path.join(global.testDir, 'perf-report.json'))
+          if (platform === 'android') {
+            targets.push('/sdcard/Android/data/io.tether.test.qvac/files/perf-report.json')
+            targets.push('/storage/emulated/0/Android/data/io.tether.test.qvac/files/perf-report.json')
+          }
+          targets.push('/tmp/perf-report.json')
+        }
+        for (const target of targets) {
+          try {
+            fs.mkdirSync(path.dirname(target), { recursive: true })
+            fs.writeFileSync(target, json)
+            console.log('[PERF_REPORT_PATH]' + target)
+          } catch (err) {
+            console.log('[perf-reporter] write to ' + target + ' failed: ' + err.message)
+          }
+        }
+      },
+      writeStepSummary () {},
+      writeToConsole () {
+        try {
+          const json = JSON.stringify(this.toJSON())
+          const chunkSize = 800
+          if (json.length <= chunkSize) {
+            console.log('[PERF_REPORT_START]' + json + '[PERF_REPORT_END]')
+            return
+          }
+          const id = Date.now().toString(36)
+          const total = Math.ceil(json.length / chunkSize)
+          for (let i = 0; i < total; i++) {
+            console.log('[PERF_CHUNK:' + id + ':' + i + ':' + total + ']' + json.substring(i * chunkSize, (i + 1) * chunkSize))
+          }
+        } catch (err) {
+          console.log('[perf-reporter] mobile console write failed: ' + err.message)
+        }
+      },
+      get length () { return results.length }
+    }
+  }
+}
+
+const _supertonicPerfReporter = createPerformanceReporter({
+  addon: 'onnx-tts',
+  addonType: 'tts'
+})
+
+const _supertonicReportPath = path.resolve('.', 'test/results/performance-report.json')
+let _supertonicReportScheduled = false
+
+function flushSupertonicPerfReport () {
+  if (_supertonicPerfReporter.length === 0) return
+  try { _supertonicPerfReporter.writeReport(_supertonicReportPath) } catch (_) {}
+  try { _supertonicPerfReporter.writeToConsole() } catch (_) {}
+}
+
+function scheduleSupertonicPerfReport () {
+  if (_supertonicReportScheduled) return
+  _supertonicReportScheduled = true
+  process.on('exit', flushSupertonicPerfReport)
+}
+
+function recordSupertonicResult (label, result, extra = {}) {
+  const stats = result && result.data && result.data.stats
+  if (!stats || typeof stats !== 'object') return
+
+  const totalTimeMs = typeof stats.totalTime === 'number'
+    ? Math.round(stats.totalTime * 1000)
+    : null
+  const durationMs = typeof result.data.durationMs === 'number'
+    ? Math.round(result.data.durationMs)
+    : (typeof stats.audioDurationMs === 'number' ? Math.round(stats.audioDurationMs) : null)
+  const provider = extra.executionProvider || (isMobile ? 'gpu' : 'cpu')
+
+  _supertonicPerfReporter.record(label, {
+    total_time_ms: totalTimeMs,
+    tps: typeof stats.tokensPerSecond === 'number' ? stats.tokensPerSecond : null,
+    real_time_factor: typeof stats.realTimeFactor === 'number' ? stats.realTimeFactor : null,
+    sample_count: typeof result.data.sampleCount === 'number' ? result.data.sampleCount : stats.totalSamples || null,
+    duration_ms: durationMs
+  }, {
+    execution_provider: provider,
+    input: extra.input || null
+  })
+  scheduleSupertonicPerfReport()
+
+  if (isMobile) {
+    flushSupertonicPerfReport()
+  }
+}
 
 function chatterboxPath (modelDir, baseName, isMultilingual = false) {
   const suffix = isMultilingual ? '' : VARIANT_SUFFIX
@@ -437,6 +582,7 @@ test('Supertonic TTS: Basic synthesis test', { timeout: 1800000 }, async (t) => 
   t.ok(result.data.sampleCount > 0, 'Supertonic TTS should produce audio samples')
   t.is(SUPERTONIC_SAMPLE_RATE, 44100, 'Supertonic output sample rate is 44.1kHz')
   t.is(result.data.reportedSampleRate, 44100, 'Sample rate should be native 44.1kHz without enhancement')
+  recordSupertonicResult('Supertonic basic synthesis', result, { input: text })
 
   if (result.data?.stats) {
     console.log(`Inference stats: ${JSON.stringify(result.data.stats)}`)
@@ -525,6 +671,7 @@ test('Supertonic TTS: Output-only stream (run({ streamOutput: true }) + onUpdate
     result.data.streamChunkCount,
     'Should collect one sentenceChunk per audio chunk'
   )
+  recordSupertonicResult('Supertonic output-only stream', result, { input: text })
   const normalizedInput = text.replace(/\s+/g, ' ').trim()
   for (let i = 0; i < result.data.sentenceChunks.length; i++) {
     const sc = result.data.sentenceChunks[i]
@@ -615,6 +762,7 @@ test('Supertonic TTS: IO stream (runStreaming + onUpdate)', { timeout: 1800000 }
     'runStreaming should emit one native chunk per yielded phrase'
   )
   t.is(result.data.sentenceChunks.length, phrases.length)
+  recordSupertonicResult('Supertonic IO stream', result, { input: phrases.join(' ') })
   for (let i = 0; i < phrases.length; i++) {
     t.is(
       result.data.sentenceChunks[i],
@@ -688,6 +836,7 @@ test('Supertonic TTS: Multiple sentences synthesis', { timeout: 1800000 }, async
       durationMs: result.data.durationMs,
       stats: result.data.stats
     })
+    recordSupertonicResult(`Supertonic multiple sentences ${i + 1}`, result, { input: text })
   }
 
   await model.unload()
@@ -797,6 +946,7 @@ test('Supertonic TTS multilingual (Spanish): basic synthesis with HF Supertone/s
   const result = await runSupertonicTTS(model, { text }, expectation)
   t.ok(result.passed, 'Supertonic multilingual Spanish synthesis should pass expectations')
   t.ok(result.data.sampleCount > 0, 'Supertonic multilingual should produce audio samples')
+  recordSupertonicResult('Supertonic multilingual Spanish synthesis', result, { input: text })
 
   await model.unload()
   console.log('\nSupertonic multilingual TTS model unloaded')

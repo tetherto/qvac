@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cctype>
+#include <ranges>
+#include <string_view>
 
 #include <llama.h>
 
@@ -16,50 +18,47 @@ namespace utils {
 
 namespace {
 
-std::string normalizeArchitecture(const std::string& architecture) {
-  std::string normalized = architecture;
-  std::transform(
-      normalized.begin(),
-      normalized.end(),
-      normalized.begin(),
-      [](unsigned char c) { return std::tolower(c); });
-  return normalized;
+// Lowercased literal used for case-insensitive equality against
+// `general.basename` GGUF metadata to identify MedPsy models.
+inline constexpr std::string_view MEDPSY_BASENAME_LOWER{"medpsy"};
+
+std::string toLower(std::string_view value) {
+  std::string lowered(value.size(), '\0');
+  std::ranges::transform(value, lowered.begin(), [](unsigned char ch) {
+    return std::tolower(ch);
+  });
+  return lowered;
 }
 
-bool isQwen3Architecture(const std::string& architecture) {
-  const std::string archStr = normalizeArchitecture(architecture);
-  return archStr == "qwen3";
+std::string normalizeArchitecture(std::string_view architecture) {
+  return toLower(architecture);
 }
 
-bool isHarmonyArchitecture(const std::string& architecture) {
-  const std::string archStr = normalizeArchitecture(architecture);
-  return archStr == "gpt-oss";
+bool isQwen3Architecture(std::string_view architecture) {
+  return normalizeArchitecture(architecture) == "qwen3";
 }
 
-bool modelNameLooksLikeQwen3(const std::string& modelName) {
-  std::string normalizedName = modelName;
-  std::transform(
-      normalizedName.begin(),
-      normalizedName.end(),
-      normalizedName.begin(),
-      [](unsigned char c) { return std::tolower(c); });
-  return normalizedName.find("qwen3") != std::string::npos ||
-         normalizedName.find("qwen-3") != std::string::npos;
+bool isHarmonyArchitecture(std::string_view architecture) {
+  return normalizeArchitecture(architecture) == "gpt-oss";
 }
 
-std::optional<std::string> getModelName(const ::llama_model* model) {
-  if (model == nullptr) {
+std::optional<std::string>
+readMetadataString(const ::llama_model* model, const char* key) {
+  if (model == nullptr || key == nullptr) {
     return std::nullopt;
   }
 
-  char modelName[256] = {0};
-  int32_t len = llama_model_meta_val_str(
-      model, "general.name", modelName, sizeof(modelName));
-  if (len > 0 && len < sizeof(modelName)) {
-    modelName[len] = '\0';
-    return std::string(modelName);
+  char buffer[256] = {0};
+  int32_t len = llama_model_meta_val_str(model, key, buffer, sizeof(buffer));
+  if (len > 0 && static_cast<size_t>(len) < sizeof(buffer)) {
+    buffer[len] = '\0';
+    return std::string(buffer);
   }
   return std::nullopt;
+}
+
+std::optional<std::string> getModelBasename(const ::llama_model* model) {
+  return readMetadataString(model, "general.basename");
 }
 
 } // namespace
@@ -74,9 +73,9 @@ std::optional<std::string> getModelArchitecture(const ::llama_model* model) {
   char arch[64] = {0};
   int32_t len = llama_model_meta_val_str(
       model, "general.architecture", arch, sizeof(arch));
-  if (len > 0 && len < sizeof(arch)) {
+  if (len > 0 && static_cast<size_t>(len) < sizeof(arch)) {
     arch[len] = '\0';
-    return normalizeArchitecture(std::string(arch));
+    return normalizeArchitecture(arch);
   }
   return std::nullopt;
 }
@@ -86,8 +85,19 @@ bool isQwen3Model(const ::llama_model* model) {
     return false;
   }
 
-  return supportsToolsCompactForModelMetadata(
-      getModelArchitecture(model), getModelName(model));
+  return supportsToolsCompactForModelMetadata(getModelArchitecture(model));
+}
+
+bool isMedPsyBasename(std::string_view basename) {
+  return !basename.empty() && toLower(basename) == MEDPSY_BASENAME_LOWER;
+}
+
+bool isMedPsyModel(const ::llama_model* model) {
+  // No explicit nullptr guard needed: getModelBasename() ->
+  // readMetadataString() returns std::nullopt for a null model, and
+  // value_or("") below feeds isMedPsyBasename an empty string view which it
+  // rejects.
+  return isMedPsyBasename(getModelBasename(model).value_or(""));
 }
 
 bool isHarmonyModel(const ::llama_model* model) {
@@ -108,29 +118,13 @@ llama_token getHarmonyCallToken(::llama_context* lctx) {
 }
 
 bool supportsToolsCompactForModelMetadata(
-    const std::optional<std::string>& architecture,
-    const std::optional<std::string>& modelName) {
-  if (architecture.has_value() && isQwen3Architecture(architecture.value())) {
-    return true;
-  }
-  if (modelName.has_value() && modelNameLooksLikeQwen3(modelName.value())) {
-    return true;
-  }
-  return false;
-}
-
-std::optional<std::string>
-selectToolsCompactMarker(const std::string& architecture) {
-  if (isQwen3Architecture(architecture)) {
-    return std::string("<tool_call>");
-  }
-  return std::nullopt;
+    const std::optional<std::string>& architecture) {
+  return architecture.has_value() && isQwen3Architecture(architecture.value());
 }
 
 std::optional<std::string> selectToolsCompactMarkerForModelMetadata(
-    const std::optional<std::string>& architecture,
-    const std::optional<std::string>& modelName) {
-  if (!supportsToolsCompactForModelMetadata(architecture, modelName)) {
+    const std::optional<std::string>& architecture) {
+  if (!supportsToolsCompactForModelMetadata(architecture)) {
     return std::nullopt;
   }
   return std::string("<tool_call>");
@@ -143,8 +137,18 @@ std::string getChatTemplateForModel(
     return manualOverride;
   }
 
-  // Keep a single source of truth for Qwen3 detection so architecture-only and
-  // metadata-name fallback behave consistently across marker/template paths.
+  // MedPsy ships its own chat template embedded in GGUF metadata. Returning an
+  // empty string makes common_chat_templates_init() defer to that embedded
+  // template instead of substituting the hardcoded Qwen3 templates below, even
+  // when the model's architecture is reported as qwen3.
+  if (isMedPsyModel(model)) {
+    QLOG_IF(
+        Priority::INFO,
+        "[ChatTemplateUtils] MedPsy basename detected; using embedded chat "
+        "template\n");
+    return "";
+  }
+
   if (isQwen3Model(model)) {
     return toolsCompact ? getToolsDynamicQwen3Template()
                         : getFixedQwen3Template();
@@ -156,7 +160,6 @@ std::string getChatTemplateForModel(
 std::string getChatTemplate(
     const ::llama_model* model, const common_params& params,
     bool toolsCompact) {
-  // Use fixed Qwen3 template if model is Qwen3 and Jinja is enabled
   std::string chatTemplate = params.chat_template;
   if (params.use_jinja) {
     chatTemplate =
@@ -171,9 +174,17 @@ std::string getChatTemplate(
 
 std::string getPrompt(
     const struct common_chat_templates* tmpls,
-    struct common_chat_templates_inputs& inputs) {
+    struct common_chat_templates_inputs& inputs,
+    bool* outThinkingForcedOpen) {
+  auto exportParams = [&](const common_chat_params& params) {
+    if (outThinkingForcedOpen) {
+      *outThinkingForcedOpen = params.thinking_forced_open;
+    }
+  };
   try {
-    return common_chat_templates_apply(tmpls, inputs).prompt;
+    auto params = common_chat_templates_apply(tmpls, inputs);
+    exportParams(params);
+    return params.prompt;
   } catch (const std::exception& e) {
     // Catching known issue when a model does not support tools
     QLOG_IF(
@@ -184,7 +195,9 @@ std::string getPrompt(
             "be ignored.\n",
             e.what()));
     inputs.use_jinja = false;
-    return common_chat_templates_apply(tmpls, inputs).prompt;
+    auto params = common_chat_templates_apply(tmpls, inputs);
+    exportParams(params);
+    return params.prompt;
   } catch (...) {
     // Catching any other exception type
     QLOG_IF(
@@ -193,7 +206,9 @@ std::string getPrompt(
         "Tools "
         "will be ignored.\n");
     inputs.use_jinja = false;
-    return common_chat_templates_apply(tmpls, inputs).prompt;
+    auto params = common_chat_templates_apply(tmpls, inputs);
+    exportParams(params);
+    return params.prompt;
   }
 }
 

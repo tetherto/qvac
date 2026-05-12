@@ -1,34 +1,34 @@
 {
   "ios": {
-    "Heavy1-Finetuning": ["runFinetuningPauseResumeTest"],
-    "Heavy2-ToolCalling": ["runToolCallingTest"],
-    "Heavy3-Image": ["runImageTest"],
-    "Heavy4-OcrLighton": ["runOcrLightonTest"],
-    "Heavy5-Reasoning": ["runReasoningTest"],
-    "Heavy6-SlidingContext": ["runSlidingContextTest"],
-    "LightA": [
-      "runAfriquegemmaEdgeCasesTest",
-      "runAfriquegemmaTranslationTest",
+    "heavy1": ["runFinetuningPauseResumeTest"],
+    "heavy2": ["runToolCallingTest"],
+    "heavy3": ["runImageElephantTest"],
+    "heavy4": ["runOcrLightonTest"],
+    "heavy5": ["runReasoningTest"],
+    "heavy6": ["runSlidingContextTest"],
+    "heavy7": ["runImageFruitPlateTest"],
+    "heavy8": ["runImageHighResAuroraTest"],
+    "heavy9": ["runGemma4Test"],
+    "heavy10": ["runOcrPaddleTest"],
+    "lightA": [
       "runApiBehaviorTest",
       "runBitnetTest",
       "runCacheStateMachineTest",
       "runConfigParametersTest",
       "runToolsCompactTest"
     ],
-    "LightB": [
+    "lightB": [
       "runGenerationParamsTest",
       "runGrammarTest",
       "runModelLoadingTest",
-      "runMoeTest",
       "runMultiGpuTest",
       "runMultiInstanceTest",
+      "runQwen35Test",
       "runUtf8OutputTest"
     ]
   },
   "android": {
-    "GroupA": [
-      "runAfriquegemmaEdgeCasesTest",
-      "runAfriquegemmaTranslationTest",
+    "groupA": [
       "runApiBehaviorTest",
       "runBitnetTest",
       "runCacheStateMachineTest",
@@ -36,19 +36,25 @@
       "runToolsCompactTest",
       "runFinetuningPauseResumeTest",
       "runGenerationParamsTest",
-      "runGrammarTest",
-      "runImageTest"
+      "runGrammarTest"
     ],
-    "GroupB": [
+    "groupB": [
+      "runQwen35Test",
+      "runGemma4Test",
       "runModelLoadingTest",
-      "runMoeTest",
       "runMultiGpuTest",
       "runMultiInstanceTest",
       "runOcrLightonTest",
+      "runOcrPaddleTest",
       "runReasoningTest",
       "runSlidingContextTest",
       "runToolCallingTest",
       "runUtf8OutputTest"
+    ],
+    "groupImagesPerf": [
+      "runImageElephantTest",
+      "runImageFruitPlateTest",
+      "runImageHighResAuroraTest"
     ]
   }
 }

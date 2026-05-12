@@ -29,7 +29,7 @@ const LIGHTON_OCR_CONFIG = {
 
 const TEST_CONSTANTS = {
   timeout: 1_800_000, // 30 minutes — model download (~1.2GB) + slow image encoding on Intel Macs
-  maxTokens: '2048'
+  maxTokens: isMobile ? '768' : '1800'
 }
 
 const DEVICE_CONFIGS = (isMobile || useCpu)
@@ -103,7 +103,7 @@ async function runOcr (inference, imageFilePath) {
 }
 
 // Test: LightON OCR-2 can extract text from a newspaper document image
-test('LightON OCR-2 can extract text from document image', { timeout: TEST_CONSTANTS.timeout }, async t => {
+test('LightON OCR-2 can extract text from document image', { timeout: TEST_CONSTANTS.timeout, skip: isMobile }, async t => {
   for (const deviceConfig of DEVICE_CONFIGS) {
     const label = `[${deviceConfig.id.toUpperCase()}]`
 

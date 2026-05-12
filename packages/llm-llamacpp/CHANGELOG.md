@@ -1,5 +1,56 @@
 # Changelog
 
+## [0.20.1] - 2026-05-11
+
+### Fixed
+
+#### MedPsy GGUF models now apply their embedded chat template
+
+MedPsy models report `general.architecture = qwen3` in GGUF metadata, so the llm addon was substituting the hardcoded Qwen3 chat templates in `ChatTemplateUtils` whenever the model was loaded. That replaced the model's own embedded Jinja chat template — which contains a `{%- set persona -%}` block injecting the `"You are MedPsy, ..."` system prompt the model is fine-tuned to expect — and as a result the model lost its identity at runtime and answered as a generic assistant.
+
+The addon now identifies MedPsy models via the GGUF `general.basename` metadata (case-insensitive match against `MedPsy`) and:
+
+- `ChatTemplateUtils::getChatTemplateForModel` returns an empty string for MedPsy, so `common_chat_templates_init` falls through to the model's embedded chat template instead of substituting the hardcoded Qwen3 ones. The Qwen3 reasoning state and EOS handling in `TextLlmContext` continue to apply because the architecture is still `qwen3`.
+- `LlamaModel::commonParamsParse` auto-enables `params.use_jinja` when it detects the MedPsy basename, so the embedded Jinja template is applied even when the caller did not pass `tools: 'true'`. The auto-enable is gated on `!use_jinja`, so passing `tools: 'true'` continues to work and the auto-enable log is correctly skipped.
+
+After the fix, MedPsy self-identifies correctly at runtime (e.g. `"I'm MedPsy, a medical and healthcare AI assistant developed by QVAC."`).
+
+The new `qvac_lib_inference_addon_llama::utils::isMedPsyBasename` and `isMedPsyModel` helpers are unit-tested for null, empty, exact match, mixed case, and near-miss strings such as `MedPsy-7B` and `NotMedPsy`.
+
+## [0.20.0] - 2026-05-10
+
+### Changed
+
+- **`qvac-fabric` >= 8189.0.2**: Mali/Adreno F16 coopmat1 NaN fix, Qwen3.5 OpenCL kernels, Gemma 4 vision/audio support, Vulkan VMA migration, plus accumulated upstream fixes since `7248.x`.
+- **OpenCL backends default `flash-attn=off`** (not reliably supported on OpenCL); user `flash-attn`/`flash_attn` overrides are honored.
+- **Qwen3 detection is architecture-only** now (`general.architecture == "qwen3"`); the previous `general.name` substring fallback is removed.
+
+### Added
+
+- **`reasoning-budget`** (`-1` unrestricted, default; `0` disabled) config knob, wired through to fabric's `enable_thinking` template input. Underscore variant `reasoning_budget` accepted.
+- **Synthetic `<think>\n` opener** at stream start when the chat template force-opens the reasoning channel (Qwen3, Qwen3.5, DeepSeek-R1) so consumers see balanced reasoning markup.
+- **Integration tests**: Qwen3.5 (basic, multi-turn, tool calling, image describe, reasoning-budget=0); Gemma 4 E2B via bartowski Q4_K_M (basic, multi-turn, image describe on GPU on mobile, tool calling with native-dialect parser, reasoning-budget=0); PaddleOCR-VL.
+- **C++ unit tests**: OpenCL flash-attn auto-disable, Qwen3 tools-at-end double-tokenize, expanded `tuneConfigMap` coverage.
+
+### Removed
+
+- AfriqueGemma + Dolphin-MoE integration tests; MedGemma variants from tool-calling and finetune-pause-resume.
+- Dead `selectToolsCompactMarker(std::string)` overload (its only callers were unit tests).
+
+### Fixed
+
+- `utils.js downloadFile` redirect race that could `fs.unlink` a freshly-redirected file via late writestream errors.
+- Sliding-context test rebased on the post-`GGML_PAD` effective `n_ctx=512`.
+- Logger no longer asks V8 to `JSON.stringify` multi-MB media `Uint8Array` content (was triggering Zone OOMs on long media prompts).
+
+### Deprecated
+
+- `llama_adapter_lora_free` is now deprecated upstream; the LoRA-resume path emits three `-Wdeprecated-declarations` warnings, behaviour unchanged. Ownership refactor is a follow-up.
+
+### Internals (no behaviour change)
+
+- ABI port: `common_init_result` → `common_init_result_ptr`; LoRA adapter API: `llama_clear_adapter_lora` + `llama_set_adapter_lora` → `llama_set_adapters_lora`; parser example: `LLAMA_EXAMPLE_MAIN` → `LLAMA_EXAMPLE_COMMON`.
+
 ## [0.19.2] - 2026-05-05
 
 ### Added

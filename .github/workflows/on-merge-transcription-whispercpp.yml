@@ -203,7 +203,7 @@ jobs:
     outputs:
       published_version: ${{ steps.capture_version.outputs.published_version }}
     runs-on: ubuntu-latest
-    environment: release
+    environment: npm
     permissions:
       contents: write
       packages: write

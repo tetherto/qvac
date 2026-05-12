@@ -99,10 +99,14 @@ std::function<void()> applyGenerationParamsToContext(
   // roll the request's mutations back at the end of the call.
   common_params_sampling savedSampling = params.sampling;
   int savedPredict = params.n_predict;
+  int savedReasoningBudget = params.reasoning_budget;
 
   params.sampling = std::move(nextSampling);
   params.n_predict = nextPredict;
   smpl = std::move(nextSmpl);
+  if (overrides.reasoning_budget) {
+    params.reasoning_budget = *overrides.reasoning_budget;
+  }
 
   bool restored = false;
   return [&params,
@@ -110,12 +114,14 @@ std::function<void()> applyGenerationParamsToContext(
           model,
           savedSampling = std::move(savedSampling),
           savedPredict,
+          savedReasoningBudget,
           restored]() mutable {
     if (restored)
       return;
     restored = true;
     params.sampling = savedSampling;
     params.n_predict = savedPredict;
+    params.reasoning_budget = savedReasoningBudget;
     smpl.reset(common_sampler_init(model, params.sampling));
   };
 }
