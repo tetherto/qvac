@@ -232,7 +232,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
 
       - name: Run Vulkan GPU smoke test
-        if: matrix.os == 'ai-run-linux-gpu'
+        if: matrix.os == 'qvac-ubuntu2404-x64-gpu'
         working-directory: ${{ inputs.workdir }}
         shell: bash
         run: npm run test:stand-alone:gpu
