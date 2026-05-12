@@ -1,12 +1,15 @@
 'use strict'
 
 /**
- * Accuracy and Multi-Language Tests
+ * Accuracy and multi-language tests.
  *
- * Tests transcription accuracy using Word Error Rate (WER).
- * Note: NVIDIA Parakeet models are primarily trained on English,
- * so non-English tests verify the model handles other languages
- * gracefully (may not produce accurate transcriptions).
+ * English is gated on Word Error Rate (WER), once with the multilingual
+ * TDT v3 GGUF (the addon's default) and once with the English-only CTC
+ * GGUF; both should land within the 30 % WER threshold on a clean clip.
+ * The non-English tests run against TDT only and verify multi-segment
+ * non-empty output for Spanish / French / Croatian audio (TDT v3
+ * handles ~25 languages natively). Per-language WER for non-English
+ * remains a separate task pending reference transcripts.
  */
 
 const test = require('brittle')
@@ -14,13 +17,12 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const {
   binding,
-  ParakeetInterface,
+  TranscriptionParakeet,
   detectPlatform,
   setupJsLogger,
   getTestPaths,
   validateAccuracy,
-  ensureModel,
-  getNamedPathsConfig,
+  loadGgufOrSkip,
   isMobile
 } = require('./helpers.js')
 
@@ -63,7 +65,7 @@ const LANGUAGE_TESTS = {
 /**
  * Helper function to run transcription for a specific language
  */
-async function runLanguageTest (t, langConfig, loggerBinding) {
+async function runLanguageTest (t, langConfig, loggerBinding, stagedGguf) {
   const samplePath = path.join(samplesDir, langConfig.sampleFile)
 
   // Check if sample exists
@@ -99,67 +101,26 @@ async function runLanguageTest (t, langConfig, loggerBinding) {
 
   console.log(`   Audio duration: ${(audioData.length / sampleRate).toFixed(2)}s`)
 
-  // Configuration
-  const config = {
-    modelPath,
-    modelType: 'tdt',
-    maxThreads: 4,
-    useGPU: false,
-    sampleRate: 16000,
-    channels: 1,
-    ...getNamedPathsConfig('tdt', modelPath)
-  }
+  const model = new TranscriptionParakeet({
+    files: { model: stagedGguf },
+    config: { parakeetConfig: { maxThreads: 4, useGPU: false } }
+  })
 
-  // Track transcription
   const transcriptions = []
-  let jobDoneResolve = null
-  const jobDonePromise = new Promise(resolve => { jobDoneResolve = resolve })
-
-  function outputCallback (handle, event, id, output, error) {
-    if (event === 'Output' && Array.isArray(output)) {
-      for (const segment of output) {
-        if (segment && segment.text) {
-          transcriptions.push(segment)
-        }
-      }
-    }
-    if (event === 'Error') {
-      console.log(`   Error: ${error}`)
-      if (jobDoneResolve) {
-        jobDoneResolve()
-        jobDoneResolve = null
-      }
-    }
-    if (event === 'JobEnded') {
-      if (jobDoneResolve) {
-        jobDoneResolve()
-        jobDoneResolve = null
-      }
-    }
-  }
-
-  let parakeet = null
 
   try {
-    parakeet = new ParakeetInterface(binding, config, outputCallback)
+    await model.load()
 
-    await parakeet.activate()
+    const response = await model.run(audioData)
+    await response
+      .onUpdate(out => {
+        const items = Array.isArray(out) ? out : [out]
+        for (const seg of items) {
+          if (seg && seg.text) transcriptions.push(seg)
+        }
+      })
+      .await()
 
-    // Transcribe
-    await parakeet.append({ type: 'audio', data: audioData.buffer })
-    await parakeet.append({ type: 'end of job' })
-
-    // Wait for output with timeout (10 min should be enough for truncated audio)
-    const timeout = setTimeout(() => {
-      if (jobDoneResolve) {
-        jobDoneResolve()
-        jobDoneResolve = null
-      }
-    }, 600000)
-    await jobDonePromise
-    clearTimeout(timeout)
-
-    // Get results
     const fullText = transcriptions.map(s => s.text).join(' ').trim()
 
     console.log(`\n📝 ${langConfig.name} transcription (${transcriptions.length} segments):`)
@@ -182,9 +143,12 @@ async function runLanguageTest (t, langConfig, loggerBinding) {
         segmentCount: transcriptions.length
       }
     } else {
-      // For non-English, just verify we got some output
+      // No reference transcript supplied for this language; verify
+      // the engine produced non-empty output. Useful as a smoke test
+      // for multilingual GGUFs (TDT v3) and as a "doesn't crash"
+      // check for English-only GGUFs (CTC).
       const hasOutput = fullText.length > 0
-      console.log('\n⚠️ No WER validation - Parakeet is English-only')
+      console.log(`\nℹ️ No reference transcript for ${langConfig.name}; checking output non-emptiness`)
       console.log(`   Output received: ${hasOutput ? 'Yes' : 'No'}`)
       console.log(`   Text length: ${fullText.length} characters`)
 
@@ -200,13 +164,7 @@ async function runLanguageTest (t, langConfig, loggerBinding) {
     console.log(`❌ Test error: ${error.message}`)
     return { skipped: false, passed: false, error: error.message }
   } finally {
-    if (parakeet) {
-      try {
-        await parakeet.destroyInstance()
-      } catch (e) {
-        // Ignore cleanup errors
-      }
-    }
+    try { await model.unload() } catch (e) { /* ignore */ }
   }
 }
 
@@ -224,10 +182,11 @@ test('Accuracy test - English (primary language)', { timeout: 300000 }, async (t
   console.log('='.repeat(60))
 
   // Ensure model is available
-  await ensureModel(modelPath)
+  const stagedGguf = await loadGgufOrSkip(t)
+  if (!stagedGguf) return
 
   try {
-    const result = await runLanguageTest(t, LANGUAGE_TESTS.en, loggerBinding)
+    const result = await runLanguageTest(t, LANGUAGE_TESTS.en, loggerBinding, stagedGguf)
 
     if (result.skipped) {
       t.pass(`English accuracy test skipped (${result.reason})`)
@@ -238,7 +197,7 @@ test('Accuracy test - English (primary language)', { timeout: 300000 }, async (t
       t.ok(result.segmentCount > 0, `Should produce segments (got ${result.segmentCount})`)
     }
   } finally {
-    // Logger is released once at the end of the summary test.
+    try { loggerBinding.releaseLogger() } catch (e) { /* ignore */ }
   }
 })
 
@@ -250,26 +209,28 @@ test('Transcription test - Spanish (non-primary language)', { timeout: 300000 },
 
   console.log('\n' + '='.repeat(60))
   console.log('SPANISH TRANSCRIPTION TEST')
-  console.log('Note: Parakeet is English-only, testing graceful handling')
   console.log('='.repeat(60))
 
-  await ensureModel(modelPath)
+  const stagedGguf = await loadGgufOrSkip(t)
+  if (!stagedGguf) return
 
   try {
-    const result = await runLanguageTest(t, LANGUAGE_TESTS.es, loggerBinding)
+    const result = await runLanguageTest(t, LANGUAGE_TESTS.es, loggerBinding, stagedGguf)
 
     if (result.skipped) {
       t.pass(`Spanish test skipped (${result.reason})`)
     } else if (result.error) {
       t.fail(`Spanish test failed: ${result.error}`)
     } else {
-      // For non-English, verify no crash and non-empty transcription payload.
+      // No reference transcript yet, so we only assert non-empty
+      // multi-segment output. TDT v3 should produce real Spanish
+      // text here; CTC GGUFs would produce gibberish-but-non-empty.
       t.ok(result.segmentCount > 0, `Should produce at least one segment for Spanish audio (got ${result.segmentCount})`)
       t.ok(result.actualText.length > 0, `Should produce non-empty text for Spanish audio (got ${result.actualText.length} chars)`)
-      console.log('\n✅ Spanish audio handled gracefully')
+      console.log('\n✅ Spanish audio produced output')
     }
   } finally {
-    // Logger is released once at the end of the summary test.
+    try { loggerBinding.releaseLogger() } catch (e) { /* ignore */ }
   }
 })
 
@@ -281,13 +242,13 @@ test('Transcription test - French (non-primary language)', { timeout: 300000 }, 
 
   console.log('\n' + '='.repeat(60))
   console.log('FRENCH TRANSCRIPTION TEST')
-  console.log('Note: Parakeet is English-only, testing graceful handling')
   console.log('='.repeat(60))
 
-  await ensureModel(modelPath)
+  const stagedGguf = await loadGgufOrSkip(t)
+  if (!stagedGguf) return
 
   try {
-    const result = await runLanguageTest(t, LANGUAGE_TESTS.fr, loggerBinding)
+    const result = await runLanguageTest(t, LANGUAGE_TESTS.fr, loggerBinding, stagedGguf)
 
     if (result.skipped) {
       t.pass(`French test skipped (${result.reason})`)
@@ -296,10 +257,10 @@ test('Transcription test - French (non-primary language)', { timeout: 300000 }, 
     } else {
       t.ok(result.segmentCount > 0, `Should produce at least one segment for French audio (got ${result.segmentCount})`)
       t.ok(result.actualText.length > 0, `Should produce non-empty text for French audio (got ${result.actualText.length} chars)`)
-      console.log('\n✅ French audio handled gracefully')
+      console.log('\n✅ French audio produced output')
     }
   } finally {
-    // Logger is released once at the end of the summary test.
+    try { loggerBinding.releaseLogger() } catch (e) { /* ignore */ }
   }
 })
 
@@ -311,13 +272,13 @@ test('Transcription test - Croatian (non-primary language)', { timeout: 300000 }
 
   console.log('\n' + '='.repeat(60))
   console.log('CROATIAN TRANSCRIPTION TEST')
-  console.log('Note: Parakeet is English-only, testing graceful handling')
   console.log('='.repeat(60))
 
-  await ensureModel(modelPath)
+  const stagedGguf = await loadGgufOrSkip(t)
+  if (!stagedGguf) return
 
   try {
-    const result = await runLanguageTest(t, LANGUAGE_TESTS.hr, loggerBinding)
+    const result = await runLanguageTest(t, LANGUAGE_TESTS.hr, loggerBinding, stagedGguf)
 
     if (result.skipped) {
       t.pass(`Croatian test skipped (${result.reason})`)
@@ -326,78 +287,50 @@ test('Transcription test - Croatian (non-primary language)', { timeout: 300000 }
     } else {
       t.ok(result.segmentCount > 0, `Should produce at least one segment for Croatian audio (got ${result.segmentCount})`)
       t.ok(result.actualText.length > 0, `Should produce non-empty text for Croatian audio (got ${result.actualText.length} chars)`)
-      console.log('\n✅ Croatian audio handled gracefully')
+      console.log('\n✅ Croatian audio produced output')
     }
   } finally {
-    // Logger is released once at the end of the summary test.
+    try { loggerBinding.releaseLogger() } catch (e) { /* ignore */ }
   }
 })
 
 /**
- * Summary test - run all languages and report results
+ * CTC English accuracy test with WER validation.
+ *
+ * Mirrors the TDT-default English test above but loads the CTC GGUF
+ * explicitly. CTC is English-only and uses a different decoder
+ * topology than TDT, so we want an independent WER signal: a
+ * regression in the CTC head (e.g. a ggml-cpu / ggml-metal mat-mul
+ * patch breaking only one of the two heads) wouldn't be caught by
+ * the TDT-default English test alone.
+ *
+ * Skipped on mobile (CTC GGUF intentionally not bundled into the
+ * mobile test app -- see helpers.js MODEL_CONFIGS comments).
  */
-test('Multi-language summary test', { timeout: 900000 }, async (t) => {
+test('Accuracy test - English (CTC head)', { timeout: 300000 }, async (t) => {
   const loggerBinding = setupJsLogger(binding)
 
   console.log('\n' + '='.repeat(60))
-  console.log('MULTI-LANGUAGE SUMMARY TEST')
+  console.log('ENGLISH ACCURACY TEST (CTC)')
   console.log('='.repeat(60))
+  console.log(` Platform: ${platform}`)
 
-  await ensureModel(modelPath)
-
-  const results = {}
-
-  for (const [code, config] of Object.entries(LANGUAGE_TESTS)) {
-    results[code] = await runLanguageTest(t, config, loggerBinding)
-  }
-
-  // Summary
-  console.log('\n' + '='.repeat(60))
-  console.log('📊 SUMMARY')
-  console.log('='.repeat(60))
-
-  let passedCount = 0
-  let skippedCount = 0
-  let failedCount = 0
-
-  for (const [code, result] of Object.entries(results)) {
-    const config = LANGUAGE_TESTS[code]
-    let status = ''
-
-    if (result.skipped) {
-      status = '⏭️ SKIPPED'
-      skippedCount++
-    } else if (result.passed) {
-      status = '✅ PASSED'
-      passedCount++
-    } else {
-      status = '❌ FAILED'
-      failedCount++
-    }
-
-    console.log(`\n  ${config.name} (${code}): ${status}`)
-    if (result.werPercent) {
-      console.log(`    WER: ${result.werPercent}`)
-    }
-    if (result.segmentCount !== undefined) {
-      console.log(`    Segments: ${result.segmentCount}`)
-    }
-    if (result.error) {
-      console.log(`    Error: ${result.error}`)
-    }
-  }
-
-  console.log('\n' + '='.repeat(60))
-  console.log(`  Total: ${passedCount} passed, ${skippedCount} skipped, ${failedCount} failed`)
-  console.log('='.repeat(60) + '\n')
-
-  // Assertions
-  t.ok(passedCount > 0, 'At least one language test should pass')
-  t.ok(results.en?.passed !== false, 'English test should pass (primary language)')
+  const stagedGguf = await loadGgufOrSkip(t, 'ctc')
+  if (!stagedGguf) return
+  console.log(` Model: ${stagedGguf}`)
 
   try {
-    loggerBinding.releaseLogger()
-  } catch (e) {
-    // Ignore
+    const result = await runLanguageTest(t, LANGUAGE_TESTS.en, loggerBinding, stagedGguf)
+
+    if (result.skipped) {
+      t.pass(`CTC English accuracy test skipped (${result.reason})`)
+    } else if (result.error) {
+      t.fail(`CTC English accuracy test failed: ${result.error}`)
+    } else {
+      t.ok(result.passed, `CTC English WER should be below ${LANGUAGE_TESTS.en.threshold * 100}%, got ${result.werPercent}`)
+      t.ok(result.segmentCount > 0, `Should produce segments (got ${result.segmentCount})`)
+    }
+  } finally {
+    try { loggerBinding.releaseLogger() } catch (e) { /* ignore */ }
   }
 })

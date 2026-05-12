@@ -18,10 +18,6 @@ const ERR_CODES = Object.freeze({
   FAILED_TO_PAUSE: 24008,
   MODEL_NOT_FOUND: 24009,
   INVALID_AUDIO_FORMAT: 24010,
-  PREPROCESSOR_NOT_FOUND: 24011,
-  VOCAB_NOT_FOUND: 24012,
-  ENCODER_NOT_FOUND: 24013,
-  DECODER_NOT_FOUND: 24014,
   INVALID_CONFIG: 24015,
   JOB_ALREADY_RUNNING: 24016,
   BUFFER_LIMIT_EXCEEDED: 24017,
@@ -69,22 +65,6 @@ addCodes({
   [ERR_CODES.INVALID_AUDIO_FORMAT]: {
     name: 'INVALID_AUDIO_FORMAT',
     message: (format) => `Invalid audio format: ${format}. Expected 16kHz mono audio.`
-  },
-  [ERR_CODES.PREPROCESSOR_NOT_FOUND]: {
-    name: 'PREPROCESSOR_NOT_FOUND',
-    message: () => 'Preprocessor model (preprocessor.onnx) not found. Required for accurate transcription.'
-  },
-  [ERR_CODES.VOCAB_NOT_FOUND]: {
-    name: 'VOCAB_NOT_FOUND',
-    message: () => 'Vocabulary file (vocab.txt) not found.'
-  },
-  [ERR_CODES.ENCODER_NOT_FOUND]: {
-    name: 'ENCODER_NOT_FOUND',
-    message: () => 'Encoder model (encoder-model.onnx) not found.'
-  },
-  [ERR_CODES.DECODER_NOT_FOUND]: {
-    name: 'DECODER_NOT_FOUND',
-    message: () => 'Decoder model (decoder_joint-model.onnx) not found.'
   },
   [ERR_CODES.INVALID_CONFIG]: {
     name: 'INVALID_CONFIG',

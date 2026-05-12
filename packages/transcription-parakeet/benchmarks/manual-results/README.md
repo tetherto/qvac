@@ -43,7 +43,7 @@ File naming convention:
 These files are picked up automatically by:
 
 - `scripts/perf-report/aggregate-parakeet-rtf.js`
-- `.github/workflows/benchmark-performance-transcription-parakeet.yml`
+- `.github/workflows/benchmark-performance-qvac-lib-infer-parakeet.yml`
 
 Use this directory for results such as:
 
