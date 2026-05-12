@@ -33,9 +33,6 @@ function asUpscalerModel(model: unknown, modelId: string): EsrganUpscaler {
     "upscale",
     ["diffusion"],
     [],
-    new Error(
-      'Model is not loaded in upscale mode. Re-load the model with `modelConfig: { mode: "upscale" }` before invoking upscale().',
-    ),
   );
 }
 

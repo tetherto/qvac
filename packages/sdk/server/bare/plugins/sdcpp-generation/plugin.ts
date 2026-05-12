@@ -176,8 +176,8 @@ export const diffusionPlugin = definePlugin({
     // `mode` is consumed by this plugin to select the model class above; the
     // stable-diffusion.cpp native config does not understand it. Strip it
     // before forwarding `rest` to the addon.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { upscaler, mode, ...rest } = config;
-    void mode;
     const addonConfig = {
       ...rest,
       ...flattenUpscalerKeys(upscaler),

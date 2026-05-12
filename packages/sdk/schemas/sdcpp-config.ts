@@ -8,7 +8,7 @@ const ABSOLUTE_PATH_PATTERN = /^(\/|[A-Za-z]:[\\/]|\\\\)/;
 
 export const sdcppConfigSchema = z
   .object({
-    mode: z.enum(["diffusion", "upscale"]).optional()
+    mode: z.enum(["diffusion", "upscale"]).default("diffusion")
       .describe(
         "Operation mode for the diffusion plugin. " +
         "`'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from " +
@@ -105,7 +105,7 @@ export const sdcppConfigSchema = z
       ),
   });
 
-export type SdcppConfig = z.infer<typeof sdcppConfigSchema>;
+export type SdcppConfig = z.input<typeof sdcppConfigSchema>;
 
 export const diffusionStatsSchema = z.object({
   modelLoadMs: z
