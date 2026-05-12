@@ -41,6 +41,6 @@ jobs:
       ref: ${{ inputs.ref }}
       repository: ${{ inputs.repository }}
       artifact-name-prefix: onnx-tts-
-      setup-python-on-windows: true
+      # setup-python-on-windows: true
       setup-rust-toolchain: true
     secrets: inherit
