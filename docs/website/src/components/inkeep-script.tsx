@@ -1,10 +1,18 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
-import {
-  InkeepChatButton,
-  type InkeepChatButtonProps,
-} from "@inkeep/cxkit-react";
+import type { InkeepChatButtonProps } from "@inkeep/cxkit-react";
+
+// `@inkeep/cxkit-react` weighs ~1.35 MB minified. Loading it via `next/dynamic`
+// with `ssr: false` keeps it out of the critical-path bundle: it now arrives
+// in its own async chunk after hydration, so the docs page becomes
+// interactive without waiting on the chat widget to parse. The button
+// appears a moment later — acceptable for a non-essential floating UI.
+const InkeepChatButton = dynamic(
+  () => import("@inkeep/cxkit-react").then((m) => ({ default: m.InkeepChatButton })),
+  { ssr: false, loading: () => null },
+);
 
 export function InkeepScript() {
   const [mounted, setMounted] = useState(false);

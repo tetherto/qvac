@@ -8,6 +8,7 @@ declare module "bare-crypto" {
 
   export function createHash(algorithm: string): Hash;
   export function randomBytes(size: number): Buffer;
+  export function randomUUID(): string;
   export function createCipher(
     algorithm: string,
     password: string | Buffer,

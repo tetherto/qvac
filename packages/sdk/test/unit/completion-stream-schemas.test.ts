@@ -3,6 +3,8 @@ import test from "brittle";
 import {
   completionStreamResponseSchema,
   completionStatsSchema,
+  generationParamsSchema,
+  toolDialectSchema,
 } from "@/schemas/completion-stream";
 
 test("completionStatsSchema: accepts backendDevice 'cpu' and 'gpu'", (t) => {
@@ -27,6 +29,25 @@ test("completionStatsSchema: backendDevice is optional", (t) => {
     tokensPerSecond: 50,
   });
   t.is(result.success, true);
+});
+
+test("generationParamsSchema: accepts reasoning_budget -1 and 0", (t) => {
+  t.is(generationParamsSchema.safeParse({ reasoning_budget: -1 }).success, true);
+  t.is(generationParamsSchema.safeParse({ reasoning_budget: 0 }).success, true);
+});
+
+test("generationParamsSchema: rejects reasoning_budget other values", (t) => {
+  t.is(generationParamsSchema.safeParse({ reasoning_budget: 1 }).success, false);
+  t.is(generationParamsSchema.safeParse({ reasoning_budget: -2 }).success, false);
+});
+
+test("toolDialectSchema: accepts qwen35 and gemma4", (t) => {
+  t.is(toolDialectSchema.safeParse("qwen35").success, true);
+  t.is(toolDialectSchema.safeParse("gemma4").success, true);
+});
+
+test("toolDialectSchema: rejects unknown dialects", (t) => {
+  t.is(toolDialectSchema.safeParse("unknown").success, false);
 });
 
 test("completionStreamResponseSchema: round-trips backendDevice through completionStats event", (t) => {

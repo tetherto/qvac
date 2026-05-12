@@ -23,6 +23,15 @@ export class DesktopDiffusionExecutor extends SharedDiffusionExecutor {
       out.init_image = readImageBytes(p.init_image);
     }
 
+    if (p.image !== undefined) {
+      if (typeof p.image !== "string") {
+        throw new Error(
+          `image in test params must be a string filename, got: ${typeof p.image}`,
+        );
+      }
+      out.image = readImageBytes(p.image);
+    }
+
     if (p.init_images !== undefined) {
       if (
         !Array.isArray(p.init_images) ||
