@@ -49,11 +49,11 @@ jobs:
           - os: ubuntu-22.04
             platform: linux
             arch: x64
-            runner: qvac-ubuntu2204-x64-gpu
+            runner: qvac-ubuntu2204-x64
           - os: ubuntu-24.04
             platform: linux
             arch: x64
-            runner: qvac-ubuntu2404-x64-gpu
+            runner: qvac-ubuntu2404-x64
           - os: ubuntu-24.04-arm
             platform: linux
             arch: arm64
@@ -66,7 +66,7 @@ jobs:
           - os: windows-2025
             platform: win32
             arch: x64
-            runner: qvac-win25-x64-gpu
+            runner: qvac-win25-x64
 
     steps:
       - name: Setup Node.js
