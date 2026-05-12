@@ -64,6 +64,8 @@ env:
   PREBUILD_ARTIFACT_PREFIX: "tts-ggml-" # Prefix for prebuild artifacts (must match prebuilds workflow upload names)
   TEST_FRAMEWORK_REF: "main"
   APP_BUNDLE_ID: "io.tether.test.qvac"
+  AWS_DEVICE_FARM_PROJECT_ARN: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_TTS_GGML || secrets.AWS_DEVICE_FARM_PROJECT_ARN_ONNX_TTS }}
+  IOS_DEVICE_POOL_ARN: ${{ secrets.IOS_DEVICE_POOL_ARN_TTS_GGML || secrets.IOS_DEVICE_POOL_ARN_ONNX_TTS }}
   WORKDIR: ${{ inputs.workdir || github.event.inputs.workdir || 'packages/tts-ggml' }}
   ADDON_DIR: addon/${{ inputs.workdir || github.event.inputs.workdir || 'packages/tts-ggml' }}
   TEST_FRAMEWORK_DIR: test-framework
@@ -77,6 +79,13 @@ permissions:
   contents: read
 
 jobs:
+  # NOTE: continue-on-error: true mirrors integration-test-tts-ggml.yml
+  # and parakeet's matching workflow.  on-pr-tts-ggml.yml's merge-guard
+  # treats `success || skipped` as a pass, so a hard Device Farm failure
+  # does NOT block a merge today — only sanity-checks + cpp-lint +
+  # cpp-tests-coverage + prebuild really gate.  Tighten this once the
+  # mobile pipeline (Device Farm provisioning, signing, runner pool
+  # availability) is stable enough to make a hard gate cheap.
   build-and-test:
     name: Build ${{ matrix.platform }} and Run E2E Tests
     runs-on: ${{ matrix.runner }}
@@ -358,62 +367,65 @@ jobs:
       # The mobile test framework bundles whatever sits in
       # `test/mobile/testAssets/` into the test app at `npm run build`
       # time (see qvac-test-addon-mobile/scripts/build-test-app.js's
-      # copyTestAssets / generateAssetManifest).  On mobile we ship
-      # one GGUF per engine (not both English + multilingual variants
-      # for each) to keep the bundle reasonable:
-      #   - chatterbox-t3-turbo.gguf + chatterbox-s3gen.gguf  (English Turbo, q4_0)
-      #   - supertonic.gguf  (English Supertonic; --quant q4_0 maps to f16
-      #                       for the Supertonic converter -- see
-      #                       supertonic_ftype() in scripts/convert-models.sh)
-      # The MTL Chatterbox / Supertonic-2 GGUFs are NOT bundled; the
-      # `ensure*Models` helpers in test/utils/downloadModel.js return
-      # success=false when their files aren't on disk so the matching
-      # MTL tests skip cleanly via t.pass('Skipped: ...') instead of
-      # failing.  Bundle the MTL variants from this workflow when mobile
-      # MTL coverage becomes a release gate.
+      # copyTestAssets / generateAssetManifest).  Metro's bundler reads
+      # each asset via `Buffer.toString()`, so any single asset has to
+      # fit in V8's max string length (0x1fffffe8 ~= 512 MiB).
       #
-      # The Python venv + converted GGUFs are cached together; cache-hit
-      # skips the whole HF download + conversion (~15 min cold, ~0s warm).
-      - name: Cache TTS GGML venv + q4 GGUFs
+      # On mobile we therefore bundle ONLY supertonic.gguf (~125 MiB at
+      # q4_0 -> f16 via supertonic_ftype()).  The Chatterbox bundle does
+      # not fit: chatterbox-s3gen.gguf is ~1 GiB even at --quant q4_0
+      # because the s3gen converter doesn't quantize most weight tensors
+      # ("0/291 weight tensors quantized" in the converter log), and
+      # Metro fails the bundle step with
+      #   SyntaxError: assets/testAssets/chatterbox-s3gen.gguf:
+      #     Cannot create a string longer than 0x1fffffe8 characters
+      #
+      # Mobile Chatterbox tests degrade cleanly (ensureChatterboxModels
+      # returns { success: false } and the test passes via
+      # t.pass('Skipped: Chatterbox GGUFs not available')).  To enable
+      # them, either add `gguf` to the test framework's metro
+      # `assetExts` so it skips the JS-string read (then chatterbox can
+      # be bundled), or push the GGUFs to the device via `adb push`
+      # outside the bundle and surface the path through the existing
+      # ANDROID_CANDIDATE_DIRS fallback in downloadModel.js.
+      #
+      # The Python venv + converted GGUF are cached together; cache-hit
+      # skips the HF download + conversion entirely.
+      - name: Cache TTS GGML venv + Supertonic GGUF
         id: cache-tts-ggml-models
         uses: actions/cache@v4
         with:
           path: |
             ${{ env.ADDON_DIR }}/venv
-            ${{ env.ADDON_DIR }}/models/chatterbox-t3-turbo.gguf
-            ${{ env.ADDON_DIR }}/models/chatterbox-s3gen.gguf
             ${{ env.ADDON_DIR }}/models/supertonic.gguf
-          key: tts-ggml-mobile-turbo-supertonic-en-q4-v1-${{ hashFiles(format('{0}/scripts/convert-models.sh', env.ADDON_DIR), format('{0}/scripts/setup-venv.sh', env.ADDON_DIR), format('{0}/scripts/requirements.txt', env.ADDON_DIR), format('{0}/scripts/convert-t3-turbo-to-gguf.py', env.ADDON_DIR), format('{0}/scripts/convert-s3gen-to-gguf.py', env.ADDON_DIR), format('{0}/scripts/convert-supertonic2-to-gguf.py', env.ADDON_DIR)) }}
+          key: tts-ggml-mobile-supertonic-en-q4-v2-${{ hashFiles(format('{0}/scripts/convert-models.sh', env.ADDON_DIR), format('{0}/scripts/setup-venv.sh', env.ADDON_DIR), format('{0}/scripts/requirements.txt', env.ADDON_DIR), format('{0}/scripts/convert-supertonic2-to-gguf.py', env.ADDON_DIR)) }}
           restore-keys: |
-            tts-ggml-mobile-turbo-supertonic-en-q4-v1-
+            tts-ggml-mobile-supertonic-en-q4-v2-
 
-      - name: Convert HF -> q4_0 GGUFs (cache miss)
+      - name: Convert HF -> Supertonic GGUF (cache miss)
         if: steps.cache-tts-ggml-models.outputs.cache-hit != 'true'
         working-directory: ${{ env.ADDON_DIR }}
         shell: bash
         run: |
           set -euo pipefail
-          echo "Cache miss -- provisioning Python venv and converting models..."
+          echo "Cache miss -- provisioning Python venv and converting Supertonic..."
           bash scripts/setup-venv.sh
-          echo ""
-          echo "=== Converting Chatterbox Turbo (English, q4_0) ==="
-          bash scripts/convert-models.sh -t turbo -q q4_0
           echo ""
           echo "=== Converting Supertonic English (q4_0 -> f16) ==="
           bash scripts/convert-models.sh -t supertonic-en -q q4_0
           echo ""
-          echo "Converted GGUFs:"
+          echo "Converted GGUF:"
           ls -lh models/
 
-      - name: Stage q4 GGUFs into test/mobile/testAssets/
+      - name: Stage Supertonic GGUF into test/mobile/testAssets/
         working-directory: ${{ env.ADDON_DIR }}
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p test/mobile/testAssets
-          for f in chatterbox-t3-turbo.gguf \
-                   chatterbox-s3gen.gguf \
-                   supertonic.gguf; do
+          # Only Supertonic is bundled today (see comment above the
+          # cache step for why Chatterbox can't fit through Metro yet).
+          for f in supertonic.gguf; do
             if [ ! -s "models/$f" ]; then
               echo "ERROR: missing or empty models/$f -- cache may be corrupt" >&2
               ls -la models/ || true
@@ -888,7 +900,7 @@ jobs:
 
           echo "Uploading app to AWS Device Farm..."
           UPLOAD_RESPONSE=$(aws devicefarm create-upload \
-            --project-arn "${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_TTS_GGML }}" \
+            --project-arn "${{ env.AWS_DEVICE_FARM_PROJECT_ARN }}" \
             --name "$APP_NAME" \
             --type "$APP_TYPE" \
             --output json)
@@ -989,7 +1001,7 @@ jobs:
 
           echo "Uploading test package to AWS Device Farm..."
           UPLOAD_RESPONSE=$(aws devicefarm create-upload \
-            --project-arn "${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_TTS_GGML }}" \
+            --project-arn "${{ env.AWS_DEVICE_FARM_PROJECT_ARN }}" \
             --name "$ZIP_NAME" \
             --type "APPIUM_NODE_TEST_PACKAGE" \
             --output json)
@@ -1173,7 +1185,7 @@ jobs:
 
           echo "Uploading test spec to Device Farm..."
           SPEC_RESPONSE=$(aws devicefarm create-upload \
-            --project-arn "${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_TTS_GGML }}" \
+            --project-arn "${{ env.AWS_DEVICE_FARM_PROJECT_ARN }}" \
             --name "testspec.yml" \
             --type "APPIUM_NODE_TEST_SPEC" \
             --output json)
@@ -1215,7 +1227,7 @@ jobs:
             RUN_NAME="PR-${{ github.event.pull_request.number || github.run_number }}-${{ matrix.platform }}"
           fi
 
-          PROJECT_ARN="${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_TTS_GGML }}"
+          PROJECT_ARN="${{ env.AWS_DEVICE_FARM_PROJECT_ARN }}"
           APP_ARN="${{ steps.upload_app.outputs.app_upload_arn }}"
           TEST_PACKAGE_ARN="${{ steps.upload_test_package.outputs.test_package_upload_arn }}"
           TEST_SPEC_ARN="${{ steps.upload_test_spec.outputs.test_spec_arn }}"
@@ -1282,7 +1294,7 @@ jobs:
               --filters '[{"attribute":"MANUFACTURER","operator":"EQUALS","values":["Apple"]},{"attribute":"MODEL","operator":"CONTAINS","values":["iPhone 17"]},{"attribute":"PLATFORM","operator":"EQUALS","values":["IOS"]}]' \
               --query 'devices[].{name:name,model:model,os:os,availability:availability}' --output table || true
 
-            POOL_ARN="${{ secrets.IOS_DEVICE_POOL_ARN_TTS_GGML }}"
+            POOL_ARN="${{ env.IOS_DEVICE_POOL_ARN }}"
             RUN_ARN_1=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME" "$TEST_SPEC_ARN")
             echo "✅ iOS pool run scheduled: $RUN_ARN_1"
 
@@ -1664,7 +1676,7 @@ jobs:
       # "Extract performance report from mobile logs", "Append performance
       # summary to job step summary", and "Upload mobile performance
       # report" steps from
-      # .github/workflows/integration-mobile-test-qvac-lib-infer-parakeet.yml
+      # .github/workflows/integration-mobile-test-transcription-parakeet.yml
       # back into this file.
 
       - name: Upload Full Device Farm Logs

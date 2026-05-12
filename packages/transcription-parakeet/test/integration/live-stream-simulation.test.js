@@ -1,12 +1,20 @@
 'use strict'
 
 /**
- * Live Stream Simulation Tests
+ * Chunked-input simulation tests for the OFFLINE `run()` path.
  *
- * These tests simulate real-time audio streaming by:
- * 1. Reading audio files and chunking them
- * 2. Feeding chunks at a controlled rate (simulating microphone input)
- * 3. Verifying the model can handle streaming input
+ * Despite the file name, this suite does NOT exercise the duplex
+ * `runStreaming()` API -- for that, see
+ * `test/integration/duplex-streaming.test.js`. What it validates is
+ * that `TranscriptionParakeet.run(asyncIterable)` accepts arbitrary
+ * chunk sizes / cadences without choking on the chunking itself
+ * (the addon framework batches every appended chunk into a single
+ * job before invoking the C++ `process()` once -- see
+ * `ParakeetModel.cpp` for the JS-batches-then-C++-runs comment).
+ *
+ * If you're looking for evidence that the engine emits segments
+ * incrementally as audio is fed, that's the duplex API; this suite
+ * only covers the chunk-size invariance of the batched path.
  */
 
 const test = require('brittle')
@@ -14,60 +22,106 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const {
   binding,
-  ParakeetInterface,
+  TranscriptionParakeet,
   detectPlatform,
   setupJsLogger,
   getTestPaths,
-  ensureModel,
-  getNamedPathsConfig,
+  loadGgufOrSkip,
   isMobile
 } = require('./helpers.js')
 
 const platform = detectPlatform()
 const { modelPath, samplesDir } = getTestPaths()
 
+function loadAudio (samplePath) {
+  const rawBuffer = fs.readFileSync(samplePath)
+  const pcmData = new Int16Array(rawBuffer.buffer, rawBuffer.byteOffset, rawBuffer.length / 2)
+  const audioData = new Float32Array(pcmData.length)
+  for (let i = 0; i < pcmData.length; i++) audioData[i] = pcmData[i] / 32768.0
+  return audioData
+}
+
 /**
- * Feed audio chunks at a simulated rate
- * @param {ParakeetInterface} parakeet - The model interface
- * @param {Float32Array} audioData - Full audio data
- * @param {number} chunkDurationMs - Duration of each chunk in milliseconds
- * @param {number} delayMs - Delay between chunks in milliseconds (0 = as fast as possible)
- * @returns {Promise<Object>} Stats about the feeding process
+ * Pushable async-iterable: producers `push(chunk)` / `end()`,
+ * consumers `for await (const c of stream)`.
  */
-async function feedAudioChunked (parakeet, audioData, chunkDurationMs = 500, delayMs = 10) {
+function pushableStream () {
+  const queue = []
+  let waiter = null
+  let ended = false
+  function push (chunk) {
+    if (ended) return
+    queue.push(chunk)
+    if (waiter) { const w = waiter; waiter = null; w() }
+  }
+  function end () {
+    ended = true
+    if (waiter) { const w = waiter; waiter = null; w() }
+  }
+  return {
+    push,
+    end,
+    async * [Symbol.asyncIterator] () {
+      while (true) {
+        if (queue.length > 0) { yield queue.shift(); continue }
+        if (ended) return
+        await new Promise(resolve => { waiter = resolve })
+      }
+    }
+  }
+}
+
+/**
+ * Run streaming inference on `audioData` by chunking it and pushing
+ * each chunk through a `pushableStream`. Returns
+ * `{ chunksFed, totalSamplesFed, segments, firstUpdateTime,
+ *    feedDurationMs }`.
+ */
+async function streamAudio (model, audioData, chunkDurationMs, delayMs) {
   const sampleRate = 16000
   const samplesPerChunk = Math.floor((chunkDurationMs / 1000) * sampleRate)
   const totalChunks = Math.ceil(audioData.length / samplesPerChunk)
+  const stream = pushableStream()
+  const segments = []
+  let firstUpdateTime = null
+  const startTime = Date.now()
+
+  const runPromise = (async () => {
+    const response = await model.run(stream)
+    await response
+      .onUpdate(out => {
+        if (firstUpdateTime === null) firstUpdateTime = Date.now()
+        const items = Array.isArray(out) ? out : [out]
+        for (const seg of items) {
+          if (seg && seg.text) {
+            const txt = seg.text
+            console.log(`[onUpdate] segment: "${txt.substring(0, 60)}${txt.length > 60 ? '...' : ''}"`)
+            segments.push(seg)
+          }
+        }
+      })
+      .await()
+  })()
 
   let chunksFed = 0
   let totalSamplesFed = 0
-
   for (let i = 0; i < audioData.length; i += samplesPerChunk) {
     const endIdx = Math.min(i + samplesPerChunk, audioData.length)
     const chunk = audioData.slice(i, endIdx)
-
-    // Convert to ArrayBuffer for the append call
-    const chunkBuffer = new Float32Array(chunk).buffer
-
-    await parakeet.append({ type: 'audio', data: chunkBuffer })
-
+    stream.push(new Float32Array(chunk))
     chunksFed++
     totalSamplesFed += chunk.length
-
-    console.log(`[feed] chunk #${chunksFed}/${totalChunks} samples=${chunk.length} total=${totalSamplesFed}`)
-
-    // Simulate real-time delay between chunks
     if (delayMs > 0 && i + samplesPerChunk < audioData.length) {
       await new Promise(resolve => setTimeout(resolve, delayMs))
     }
   }
+  stream.end()
 
-  return { chunksFed, totalSamplesFed, totalChunks }
+  const feedDurationMs = Date.now() - startTime
+  await runPromise
+  return { chunksFed, totalSamplesFed, totalChunks, segments, firstUpdateTime, feedDurationMs }
 }
 
-/**
- * Test live stream simulation - feed audio in small chunks
- */
 test('Live stream simulation: chunked audio feeding', { timeout: 300000 }, async (t) => {
   const loggerBinding = setupJsLogger(binding)
 
@@ -79,10 +133,9 @@ test('Live stream simulation: chunked audio feeding', { timeout: 300000 }, async
   console.log(` Mobile: ${isMobile}`)
   console.log('='.repeat(60) + '\n')
 
-  // Ensure model is available
-  await ensureModel(modelPath)
+  const stagedGguf = await loadGgufOrSkip(t)
+  if (!stagedGguf) return
 
-  // Check sample audio exists
   const samplePath = path.join(samplesDir, 'sample.raw')
   if (!fs.existsSync(samplePath)) {
     loggerBinding.releaseLogger()
@@ -90,143 +143,53 @@ test('Live stream simulation: chunked audio feeding', { timeout: 300000 }, async
     return
   }
 
-  // Load audio
-  const rawBuffer = fs.readFileSync(samplePath)
-  const pcmData = new Int16Array(rawBuffer.buffer, rawBuffer.byteOffset, rawBuffer.length / 2)
-  const audioData = new Float32Array(pcmData.length)
-  for (let i = 0; i < pcmData.length; i++) {
-    audioData[i] = pcmData[i] / 32768.0
-  }
-
+  const audioData = loadAudio(samplePath)
   const audioDuration = audioData.length / 16000
   console.log(`Audio file: ${path.basename(samplePath)}`)
   console.log(`Audio duration: ${audioDuration.toFixed(2)}s`)
   console.log(`Total samples: ${audioData.length}\n`)
 
-  // Configuration
-  const config = {
-    modelPath,
-    modelType: 'tdt',
-    maxThreads: 4,
-    useGPU: false,
-    sampleRate: 16000,
-    channels: 1,
-    ...getNamedPathsConfig('tdt', modelPath)
-  }
-
-  // Track results
-  const segments = []
-  let firstUpdateTime = null
-  const feedStartTime = Date.now()
-  let outputResolve = null
-  const outputPromise = new Promise(resolve => { outputResolve = resolve })
-
-  function outputCallback (handle, event, id, output, error) {
-    if (event === 'Output' && Array.isArray(output)) {
-      if (firstUpdateTime === null) {
-        firstUpdateTime = Date.now()
-      }
-      for (const segment of output) {
-        if (segment && segment.text) {
-          const txt = segment.text
-          console.log(`[onUpdate] segment: "${txt.substring(0, 60)}${txt.length > 60 ? '...' : ''}"`)
-          segments.push(segment)
-        }
-      }
-    }
-    if ((event === 'JobEnded' || event === 'Error') && outputResolve) {
-      if (event === 'Error') {
-        console.log(`[error] ${error}`)
-      }
-      outputResolve()
-      outputResolve = null
-    }
-  }
-
-  let parakeet = null
-
+  const model = new TranscriptionParakeet({
+    files: { model: stagedGguf },
+    config: { parakeetConfig: { maxThreads: 4, useGPU: false } }
+  })
   try {
-    parakeet = new ParakeetInterface(binding, config, outputCallback)
-
-    await parakeet.activate()
+    await model.load()
     console.log('Model activated, starting live stream simulation...\n')
 
-    // Feed audio in chunks (500ms chunks, 10ms delay between)
-    const CHUNK_DURATION_MS = 500
-    const DELAY_BETWEEN_CHUNKS_MS = 10
-
-    const feedStats = await feedAudioChunked(
-      parakeet,
-      audioData,
-      CHUNK_DURATION_MS,
-      DELAY_BETWEEN_CHUNKS_MS
-    )
-
-    // Signal end of stream
-    console.log('\n[feed] Sending end of job signal...')
-    await parakeet.append({ type: 'end of job' })
-
-    const feedEndTime = Date.now()
-
-    // Wait for output with timeout
-    const timeout = setTimeout(() => { if (outputResolve) { outputResolve(); outputResolve = null } }, 600000)
-    await outputPromise
-    clearTimeout(timeout)
-
-    // Timing analysis
-    const totalFeedTime = feedEndTime - feedStartTime
-    const timeToFirstUpdate = firstUpdateTime ? firstUpdateTime - feedStartTime : null
+    const { chunksFed, totalSamplesFed, segments, firstUpdateTime, feedDurationMs } =
+      await streamAudio(model, audioData, 500, 10)
 
     console.log('\n' + '='.repeat(60))
     console.log('📊 LIVE STREAM RESULTS')
     console.log('='.repeat(60))
     console.log('\n  Feed statistics:')
-    console.log(`    Chunks fed: ${feedStats.chunksFed}`)
-    console.log(`    Total samples: ${feedStats.totalSamplesFed}`)
-    console.log(`    Feed duration: ${totalFeedTime}ms`)
-
+    console.log(`    Chunks fed: ${chunksFed}`)
+    console.log(`    Total samples: ${totalSamplesFed}`)
+    console.log(`    Feed duration: ${feedDurationMs}ms`)
     console.log('\n  Timing:')
-    if (timeToFirstUpdate) {
-      console.log(`    Time to first update: ${timeToFirstUpdate}ms`)
-      console.log(`    First update vs feed end: ${firstUpdateTime - feedEndTime}ms`)
+    if (firstUpdateTime) {
+      console.log('    Time to first update (from feed start): see [onUpdate] log lines above')
     } else {
       console.log('    No updates received during/after feed')
     }
-
     console.log('\n  Output:')
     console.log(`    Segments received: ${segments.length}`)
     if (segments.length > 0) {
       const fullText = segments.map(s => s.text).join(' ').trim()
       console.log(`    Full text: "${fullText.substring(0, 100)}${fullText.length > 100 ? '...' : ''}"`)
     }
-
     console.log('='.repeat(60) + '\n')
 
-    // Assertions
-    t.ok(feedStats.chunksFed > 0, 'Should have fed chunks (chunksFed > 0)')
-    t.ok(feedStats.totalSamplesFed > 0, 'Should have fed samples (totalSamplesFed > 0)')
+    t.ok(chunksFed > 0, 'Should have fed chunks (chunksFed > 0)')
+    t.ok(totalSamplesFed > 0, 'Should have fed samples (totalSamplesFed > 0)')
     t.ok(segments.length > 0, 'Should receive transcription segments')
-
-    console.log('✅ Live stream simulation completed successfully!\n')
   } finally {
-    if (parakeet) {
-      try {
-        await parakeet.destroyInstance()
-      } catch (e) {
-        // Ignore
-      }
-    }
-    try {
-      loggerBinding.releaseLogger()
-    } catch (e) {
-      // Ignore
-    }
+    try { await model.unload() } catch (e) { /* ignore */ }
+    try { loggerBinding.releaseLogger() } catch (e) { /* ignore */ }
   }
 })
 
-/**
- * Test rapid chunk feeding - feed as fast as possible
- */
 test('Rapid chunk feeding: stress test with no delay', { timeout: 300000 }, async (t) => {
   const loggerBinding = setupJsLogger(binding)
 
@@ -235,10 +198,9 @@ test('Rapid chunk feeding: stress test with no delay', { timeout: 300000 }, asyn
   console.log('Feeding audio chunks as fast as possible (no delay)')
   console.log('='.repeat(60) + '\n')
 
-  // Ensure model is available
-  await ensureModel(modelPath)
+  const stagedGguf = await loadGgufOrSkip(t)
+  if (!stagedGguf) return
 
-  // Check sample audio exists
   const samplePath = path.join(samplesDir, 'sample.raw')
   if (!fs.existsSync(samplePath)) {
     loggerBinding.releaseLogger()
@@ -246,106 +208,35 @@ test('Rapid chunk feeding: stress test with no delay', { timeout: 300000 }, asyn
     return
   }
 
-  // Load audio
-  const rawBuffer = fs.readFileSync(samplePath)
-  const pcmData = new Int16Array(rawBuffer.buffer, rawBuffer.byteOffset, rawBuffer.length / 2)
-  const audioData = new Float32Array(pcmData.length)
-  for (let i = 0; i < pcmData.length; i++) {
-    audioData[i] = pcmData[i] / 32768.0
-  }
-
-  // Configuration
-  const config = {
-    modelPath,
-    modelType: 'tdt',
-    maxThreads: 4,
-    useGPU: false,
-    sampleRate: 16000,
-    channels: 1,
-    ...getNamedPathsConfig('tdt', modelPath)
-  }
-
-  // Track results
-  const segments = []
-  let outputResolve = null
-  const outputPromise = new Promise(resolve => { outputResolve = resolve })
-
-  function outputCallback (handle, event, id, output, error) {
-    if (event === 'Output' && Array.isArray(output)) {
-      for (const segment of output) {
-        if (segment && segment.text) {
-          segments.push(segment)
-        }
-      }
-    }
-    if ((event === 'JobEnded' || event === 'Error') && outputResolve) {
-      outputResolve()
-      outputResolve = null
-    }
-  }
-
-  let parakeet = null
-
+  const audioData = loadAudio(samplePath)
+  const model = new TranscriptionParakeet({
+    files: { model: stagedGguf },
+    config: { parakeetConfig: { maxThreads: 4, useGPU: false } }
+  })
   try {
-    parakeet = new ParakeetInterface(binding, config, outputCallback)
-
-    await parakeet.activate()
-
-    // Feed audio in small chunks with NO delay (stress test)
-    const CHUNK_DURATION_MS = 100 // 100ms chunks = smaller, more chunks
-    const DELAY_BETWEEN_CHUNKS_MS = 0 // No delay
+    await model.load()
 
     console.log('Feeding audio rapidly (100ms chunks, no delay)...')
-    const startTime = Date.now()
-
-    const feedStats = await feedAudioChunked(
-      parakeet,
-      audioData,
-      CHUNK_DURATION_MS,
-      DELAY_BETWEEN_CHUNKS_MS
-    )
-
-    await parakeet.append({ type: 'end of job' })
-
-    const feedTime = Date.now() - startTime
-
-    // Wait for output
-    const timeout = setTimeout(() => { if (outputResolve) { outputResolve(); outputResolve = null } }, 600000)
-    await outputPromise
-    clearTimeout(timeout)
+    const { chunksFed, totalSamplesFed, segments, feedDurationMs } =
+      await streamAudio(model, audioData, 100, 0)
 
     console.log('\n' + '='.repeat(60))
     console.log('📊 RAPID FEED RESULTS')
     console.log('='.repeat(60))
-    console.log(`  Chunks fed: ${feedStats.chunksFed}`)
-    console.log(`  Feed time: ${feedTime}ms`)
-    console.log(`  Throughput: ${(feedStats.totalSamplesFed / (feedTime / 1000)).toFixed(0)} samples/sec`)
+    console.log(`  Chunks fed: ${chunksFed}`)
+    console.log(`  Feed time: ${feedDurationMs}ms`)
+    console.log(`  Throughput: ${(totalSamplesFed / (feedDurationMs / 1000)).toFixed(0)} samples/sec`)
     console.log(`  Segments: ${segments.length}`)
     console.log('='.repeat(60) + '\n')
 
-    t.ok(feedStats.chunksFed > 10, 'Should have fed many chunks (rapid feeding)')
+    t.ok(chunksFed > 10, 'Should have fed many chunks (rapid feeding)')
     t.ok(segments.length > 0, 'Should produce transcription despite rapid feeding')
-
-    console.log('✅ Rapid chunk feeding test completed!\n')
   } finally {
-    if (parakeet) {
-      try {
-        await parakeet.destroyInstance()
-      } catch (e) {
-        // Ignore
-      }
-    }
-    try {
-      loggerBinding.releaseLogger()
-    } catch (e) {
-      // Ignore
-    }
+    try { await model.unload() } catch (e) { /* ignore */ }
+    try { loggerBinding.releaseLogger() } catch (e) { /* ignore */ }
   }
 })
 
-/**
- * Test chunked feeding with varying chunk sizes
- */
 test('Variable chunk sizes: small to large chunks', { timeout: 300000 }, async (t) => {
   const loggerBinding = setupJsLogger(binding)
 
@@ -354,10 +245,9 @@ test('Variable chunk sizes: small to large chunks', { timeout: 300000 }, async (
   console.log('Testing with different chunk sizes')
   console.log('='.repeat(60) + '\n')
 
-  // Ensure model is available
-  await ensureModel(modelPath)
+  const stagedGguf = await loadGgufOrSkip(t)
+  if (!stagedGguf) return
 
-  // Check sample audio exists
   const samplePath = path.join(samplesDir, 'sample.raw')
   if (!fs.existsSync(samplePath)) {
     loggerBinding.releaseLogger()
@@ -365,108 +255,44 @@ test('Variable chunk sizes: small to large chunks', { timeout: 300000 }, async (
     return
   }
 
-  // Load audio
-  const rawBuffer = fs.readFileSync(samplePath)
-  const pcmData = new Int16Array(rawBuffer.buffer, rawBuffer.byteOffset, rawBuffer.length / 2)
-  const audioData = new Float32Array(pcmData.length)
-  for (let i = 0; i < pcmData.length; i++) {
-    audioData[i] = pcmData[i] / 32768.0
-  }
-
-  // Test different chunk sizes
-  const CHUNK_SIZES_MS = [100, 500, 1000, 2000] // 100ms, 500ms, 1s, 2s chunks
+  const audioData = loadAudio(samplePath)
+  const CHUNK_SIZES_MS = [100, 500, 1000, 2000]
   const results = []
 
   for (const chunkSizeMs of CHUNK_SIZES_MS) {
     console.log(`\n--- Testing ${chunkSizeMs}ms chunks ---`)
-
-    const segments = []
-    let outputResolve = null
-    const outputPromise = new Promise(resolve => { outputResolve = resolve })
-
-    function outputCallback (handle, event, id, output, error) {
-      if (event === 'Output' && Array.isArray(output)) {
-        for (const segment of output) {
-          if (segment && segment.text) {
-            segments.push(segment)
-          }
-        }
-      }
-      if ((event === 'JobEnded' || event === 'Error') && outputResolve) {
-        outputResolve()
-        outputResolve = null
-      }
-    }
-
-    const config = {
-      modelPath,
-      modelType: 'tdt',
-      maxThreads: 4,
-      useGPU: false,
-      sampleRate: 16000,
-      channels: 1,
-      ...getNamedPathsConfig('tdt', modelPath)
-    }
-
-    let parakeet = null
-
+    const model = new TranscriptionParakeet({
+      files: { model: stagedGguf },
+      config: { parakeetConfig: { maxThreads: 4, useGPU: false } }
+    })
     try {
-      parakeet = new ParakeetInterface(binding, config, outputCallback)
-
-      await parakeet.activate()
-
-      const startTime = Date.now()
-      const feedStats = await feedAudioChunked(parakeet, audioData, chunkSizeMs, 0)
-      await parakeet.append({ type: 'end of job' })
-      const feedTime = Date.now() - startTime
-
-      // Wait for output
-      const timeout = setTimeout(() => { if (outputResolve) { outputResolve(); outputResolve = null } }, 600000)
-      await outputPromise
-      clearTimeout(timeout)
-
+      await model.load()
+      const { chunksFed, segments, feedDurationMs } =
+        await streamAudio(model, audioData, chunkSizeMs, 0)
       const fullText = segments.map(s => s.text).join(' ').trim()
-
       results.push({
         chunkSizeMs,
-        chunksFed: feedStats.chunksFed,
-        feedTime,
+        chunksFed,
+        feedTime: feedDurationMs,
         segments: segments.length,
         textLength: fullText.length
       })
-
-      console.log(`  Chunks: ${feedStats.chunksFed}, Time: ${feedTime}ms, Segments: ${segments.length}`)
+      console.log(`  Chunks: ${chunksFed}, Time: ${feedDurationMs}ms, Segments: ${segments.length}`)
     } finally {
-      if (parakeet) {
-        try {
-          await parakeet.destroyInstance()
-        } catch (e) {
-          // Ignore
-        }
-      }
+      try { await model.unload() } catch (e) { /* ignore */ }
     }
   }
 
-  // Summary
   console.log('\n' + '='.repeat(60))
   console.log('📊 VARIABLE CHUNK SIZE SUMMARY')
   console.log('='.repeat(60))
-
   for (const result of results) {
     console.log(`  ${result.chunkSizeMs}ms chunks: ${result.chunksFed} chunks, ${result.feedTime}ms, ${result.segments} segments`)
   }
-
   console.log('='.repeat(60) + '\n')
 
-  // Assertions
   t.ok(results.length === CHUNK_SIZES_MS.length, 'Should test all chunk sizes')
   t.ok(results.every(r => r.segments > 0), 'All chunk sizes should produce output')
 
-  try {
-    loggerBinding.releaseLogger()
-  } catch (e) {
-    // Ignore
-  }
-
-  console.log('✅ Variable chunk size test completed!\n')
+  try { loggerBinding.releaseLogger() } catch (e) { /* ignore */ }
 })

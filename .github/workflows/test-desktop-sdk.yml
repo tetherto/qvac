@@ -15,7 +15,7 @@ on:
         required: true
         type: string
       platforms:
-        description: 'JSON array of runner labels (e.g., ["ubuntu-latest"] or ["ai-run-linux-gpu", "mac-mini-m4-gpu"])'
+        description: 'JSON array of runner labels (e.g., ["ubuntu-latest"] or ["qvac-ubuntu2204-x64-gpu", "mac-mini-m4-gpu"])'
         required: true
         type: string
       consumer-timeout:
@@ -272,6 +272,7 @@ jobs:
         with:
           path: ${{ inputs.working-directory }}/.qvac-cache
           key: qvac-models-${{ hashFiles('packages/sdk/models/registry/models.ts') }}
+          enableCrossOsArchive: true
 
       - name: Bootstrap (download models)
         if: steps.models-cache.outputs.cache-hit != 'true'
@@ -286,6 +287,7 @@ jobs:
         with:
           path: ${{ inputs.working-directory }}/.qvac-cache
           key: qvac-models-${{ hashFiles('packages/sdk/models/registry/models.ts') }}
+          enableCrossOsArchive: true
 
       - name: Generate runId
         id: runid

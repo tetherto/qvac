@@ -1,6 +1,6 @@
 {
   "name": "@qvac/transcription-parakeet",
-  "version": "0.3.3",
+  "version": "0.4.0",
   "description": "High-performance speech-to-text inference addon using NVIDIA Parakeet models for Bare runtime",
   "addon": true,
   "engines": {
@@ -26,10 +26,15 @@
     "coverage:cpp": "npm run coverage:cpp:build && npm run test:cpp:run && npm run coverage:cpp:report",
     "test:mobile:generate": "node scripts/generate-mobile-integration-tests.js",
     "test:mobile:validate": "node scripts/validate-mobile-tests.js",
-    "test:dts": "tsc index.d.ts --noEmit",
-    "download-models": "./scripts/download-models.sh",
+    "test:dts": "tsc index.d.ts addonLogging.d.ts --noEmit --lib es2018 --esModuleInterop --skipLibCheck",
+    "setup:venv": "bash scripts/setup-venv.sh",
+    "download-models": "bash scripts/download-models.sh",
+    "convert-models": "bash scripts/convert-nemo.sh",
+    "setup-models": "bash scripts/setup-venv.sh && bash scripts/download-models.sh && bash scripts/convert-nemo.sh",
     "example": "bare examples/transcribe.js",
-    "example:real": "bare examples/test-real-audio.js",
+    "example:diarize": "bare examples/diarized-transcribe.js",
+    "example:mic": "bare examples/live-mic.js",
+    "example:mic-diarize": "bare examples/live-mic-diarized.js",
     "prepare:husky": "husky"
   },
   "files": [
@@ -59,7 +64,7 @@
     "stt",
     "asr",
     "nvidia",
-    "onnx",
+    "ggml",
     "transcription",
     "bare"
   ],
@@ -68,9 +73,7 @@
   "homepage": "https://github.com/tetherto/qvac/tree/main/packages/transcription-parakeet#readme",
   "devDependencies": {
     "@qvac/decoder-audio": "^0.3.3",
-    "@qvac/dl-base": "^0.1.0",
-    "@qvac/dl-filesystem": "^0.1.0",
-    "bare-buffer": "^3.4.2",
+    "bare-process": "^4.2.2",
     "brittle": "^3.17.0",
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
@@ -80,17 +83,16 @@
     "sinon": "^21.0.0",
     "standard": "^17.1.2",
     "tty": "npm:bare-node-tty",
+    "typescript": "^6.0.3",
     "util": "npm:bare-utils@^1.5.1"
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",
     "@qvac/infer-base": "^0.4.0",
     "@qvac/logging": "^0.1.0",
-    "@qvac/onnx": "^0.14.0",
     "bare-fs": "^4.5.1",
     "bare-path": "^3.0.0",
-    "path": "npm:bare-path",
-    "process": "npm:bare-process@^4.2.2"
+    "bare-subprocess": "^5.2.3"
   },
   "exports": {
     "./package": "./package.json",

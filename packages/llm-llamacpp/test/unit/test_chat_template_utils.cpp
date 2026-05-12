@@ -39,52 +39,29 @@ TEST_F(ChatTemplateUtilsTest, IsQwen3ModelWithNullptr) {
   EXPECT_FALSE(isQwen3Model(nullptr));
 }
 
-TEST_F(ChatTemplateUtilsTest, SelectToolsCompactMarkerForQwen3) {
-  auto marker = selectToolsCompactMarker("qwen3");
-  ASSERT_TRUE(marker.has_value());
-  EXPECT_EQ(marker.value(), "<tool_call>");
-}
-
-TEST_F(
-    ChatTemplateUtilsTest, SelectToolsCompactMarkerForUnsupportedArchitecture) {
-  EXPECT_FALSE(selectToolsCompactMarker("llama").has_value());
-  EXPECT_FALSE(selectToolsCompactMarker("mistral").has_value());
-  EXPECT_FALSE(selectToolsCompactMarker("gemma").has_value());
-}
-
 TEST_F(
     ChatTemplateUtilsTest, SupportsToolsCompactForModelMetadataByArchitecture) {
-  EXPECT_TRUE(
-      supportsToolsCompactForModelMetadata(std::string("qwen3"), std::nullopt));
-  EXPECT_FALSE(
-      supportsToolsCompactForModelMetadata(std::string("llama"), std::nullopt));
-}
-
-TEST_F(ChatTemplateUtilsTest, SupportsToolsCompactForModelMetadataByModelName) {
-  EXPECT_TRUE(supportsToolsCompactForModelMetadata(
-      std::nullopt, std::string("Qwen3-1.7B-Instruct")));
-  EXPECT_TRUE(supportsToolsCompactForModelMetadata(
-      std::nullopt, std::string("qwen-3-4b")));
-  EXPECT_FALSE(supportsToolsCompactForModelMetadata(
-      std::nullopt, std::string("Llama-3.1-8B")));
+  EXPECT_TRUE(supportsToolsCompactForModelMetadata(std::string("qwen3")));
+  EXPECT_FALSE(supportsToolsCompactForModelMetadata(std::string("qwen35")));
+  EXPECT_FALSE(supportsToolsCompactForModelMetadata(std::string("llama")));
+  EXPECT_FALSE(supportsToolsCompactForModelMetadata(std::nullopt));
 }
 
 TEST_F(
     ChatTemplateUtilsTest,
-    SelectToolsCompactMarkerForModelMetadataUsesArchitectureOrNameFallback) {
-  auto markerFromArch = selectToolsCompactMarkerForModelMetadata(
-      std::string("qwen3"), std::nullopt);
+    SelectToolsCompactMarkerForModelMetadataUsesArchitecture) {
+  auto markerFromArch =
+      selectToolsCompactMarkerForModelMetadata(std::string("qwen3"));
   ASSERT_TRUE(markerFromArch.has_value());
   EXPECT_EQ(markerFromArch.value(), "<tool_call>");
 
-  auto markerFromName = selectToolsCompactMarkerForModelMetadata(
-      std::nullopt, std::string("Qwen3-1.7B-Instruct"));
-  ASSERT_TRUE(markerFromName.has_value());
-  EXPECT_EQ(markerFromName.value(), "<tool_call>");
-
-  EXPECT_FALSE(selectToolsCompactMarkerForModelMetadata(
-                   std::string("llama"), std::string("Llama-3.1-8B"))
+  EXPECT_FALSE(
+      selectToolsCompactMarkerForModelMetadata(std::string("qwen35"))
+          .has_value());
+  EXPECT_FALSE(selectToolsCompactMarkerForModelMetadata(std::string("llama"))
                    .has_value());
+  EXPECT_FALSE(
+      selectToolsCompactMarkerForModelMetadata(std::nullopt).has_value());
 }
 
 TEST_F(

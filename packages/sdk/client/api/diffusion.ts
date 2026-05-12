@@ -68,6 +68,28 @@ interface DiffusionResult {
  *   lora: "/home/user/loras/watercolor.safetensors",
  * });
  *
+ * // ESRGAN upscale; requires the model to be loaded with `modelConfig.upscaler.model_src` set.
+ * const { outputs: singleOutputs } = diffusion({
+ *   modelId,
+ *   prompt: "a fox portrait",
+ *   width: 128,
+ *   height: 128,
+ *   upscale: true, // one native-scale pass
+ * });
+ * const single = await singleOutputs;
+ * fs.writeFileSync("upscaled.png", single[0]);
+ *
+ * // Repeat upscale passes when needed.
+ * const { outputs: hiresOutputs } = diffusion({
+ *   modelId,
+ *   prompt: "a fox portrait",
+ *   width: 128,
+ *   height: 128,
+ *   upscale: { repeats: 2 },
+ * });
+ * const hires = await hiresOutputs;
+ * fs.writeFileSync("hires.png", hires[0]);
+ *
  * // With progress tracking
  * const { progressStream, outputs } = diffusion({ modelId, prompt: "a cat" });
  * for await (const { step, totalSteps } of progressStream) {

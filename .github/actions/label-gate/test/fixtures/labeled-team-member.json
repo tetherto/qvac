@@ -1,0 +1,27 @@
+{
+  "action": "labeled",
+  "number": 4242,
+  "pull_request": {
+    "number": 4242,
+    "head": {
+      "repo": { "full_name": "tetherto/qvac" },
+      "ref": "feature-x",
+      "sha": "deadbeef"
+    },
+    "base": {
+      "repo": { "full_name": "tetherto/qvac" }
+    },
+    "labels": [
+      { "name": "verified" }
+    ]
+  },
+  "label": {
+    "name": "verified"
+  },
+  "sender": {
+    "login": "alice-team-member"
+  },
+  "repository": {
+    "full_name": "tetherto/qvac"
+  }
+}

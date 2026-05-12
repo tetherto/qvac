@@ -25,7 +25,8 @@ type DiffusionArtifactKey =
   | "clipGModelPath"
   | "t5XxlModelPath"
   | "llmModelPath"
-  | "vaeModelPath";
+  | "vaeModelPath"
+  | "esrganModelPath";
 
 export const diffusionPlugin = definePlugin({
   modelType: ModelType.sdcppGeneration,
@@ -39,10 +40,18 @@ export const diffusionPlugin = definePlugin({
   ): Promise<ResolveResult<SdcppConfig, DiffusionArtifactKey>> {
     const {
       clipLModelSrc, clipGModelSrc, t5XxlModelSrc,
-      llmModelSrc, vaeModelSrc, ...runtimeConfig
+      llmModelSrc, vaeModelSrc, upscaler, ...rest
     } = cfg;
+    const { model_src: esrganModelSrc, ...upscalerRuntime } = upscaler ?? {};
+    const runtimeConfig = {
+      ...rest,
+      ...(upscaler && { upscaler: upscalerRuntime }),
+    } as SdcppConfig;
 
-    const sources = { clipLModelSrc, clipGModelSrc, t5XxlModelSrc, llmModelSrc, vaeModelSrc };
+    const sources = {
+      clipLModelSrc, clipGModelSrc, t5XxlModelSrc,
+      llmModelSrc, vaeModelSrc, esrganModelSrc,
+    };
     const hasSources = Object.values(sources).some(Boolean);
 
     if (!hasSources) {
@@ -50,14 +59,17 @@ export const diffusionPlugin = definePlugin({
     }
 
     const resolve = ctx.resolveModelPath;
-    const [clipLModelPath, clipGModelPath, t5XxlModelPath, llmModelPath, vaeModelPath] =
-      await Promise.all([
-        clipLModelSrc ? resolve(clipLModelSrc) : undefined,
-        clipGModelSrc ? resolve(clipGModelSrc) : undefined,
-        t5XxlModelSrc ? resolve(t5XxlModelSrc) : undefined,
-        llmModelSrc ? resolve(llmModelSrc) : undefined,
-        vaeModelSrc ? resolve(vaeModelSrc) : undefined,
-      ]);
+    const [
+      clipLModelPath, clipGModelPath, t5XxlModelPath,
+      llmModelPath, vaeModelPath, esrganModelPath,
+    ] = await Promise.all([
+      clipLModelSrc ? resolve(clipLModelSrc) : undefined,
+      clipGModelSrc ? resolve(clipGModelSrc) : undefined,
+      t5XxlModelSrc ? resolve(t5XxlModelSrc) : undefined,
+      llmModelSrc ? resolve(llmModelSrc) : undefined,
+      vaeModelSrc ? resolve(vaeModelSrc) : undefined,
+      esrganModelSrc ? resolve(esrganModelSrc) : undefined,
+    ]);
 
     return {
       config: runtimeConfig,
@@ -67,6 +79,7 @@ export const diffusionPlugin = definePlugin({
         ...(t5XxlModelPath && { t5XxlModelPath }),
         ...(llmModelPath && { llmModelPath }),
         ...(vaeModelPath && { vaeModelPath }),
+        ...(esrganModelPath && { esrganModelPath }),
       },
     };
   },
@@ -84,11 +97,23 @@ export const diffusionPlugin = definePlugin({
       ...(artifacts?.["t5XxlModelPath"] && { t5Xxl: artifacts["t5XxlModelPath"] }),
       ...(artifacts?.["llmModelPath"] && { llm: artifacts["llmModelPath"] }),
       ...(artifacts?.["vaeModelPath"] && { vae: artifacts["vaeModelPath"] }),
+      ...(artifacts?.["esrganModelPath"] && { esrgan: artifacts["esrganModelPath"] }),
     };
+
+    const { upscaler, ...rest } = config;
+    const addonConfig = {
+      ...rest,
+      ...(upscaler?.tile_size !== undefined && { upscaler_tile_size: upscaler.tile_size }),
+      ...(upscaler?.direct !== undefined && { upscaler_direct: upscaler.direct }),
+      ...(upscaler?.offload_params_to_cpu !== undefined && {
+        upscaler_offload_params_to_cpu: upscaler.offload_params_to_cpu,
+      }),
+      ...(upscaler?.threads !== undefined && { upscaler_threads: upscaler.threads }),
+    } as SdConfig;
 
     const model = new ImgStableDiffusion({
       files,
-      config: config as SdConfig,
+      config: addonConfig,
       logger,
       opts: { stats: true },
     });

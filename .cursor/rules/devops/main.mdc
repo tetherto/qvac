@@ -1,0 +1,85 @@
+---
+description: DevOps pod conventions — security-first, AI-first, validate-before-merge. Index pointing to topic-specific rules under .cursor/rules/devops/
+globs:
+  - .github/workflows/**
+  - .github/actions/**
+  - .github/scripts/**
+  - scripts/**
+alwaysApply: false
+---
+
+# DevOps Pod
+
+## Scope
+
+Owns CI/CD pipelines (GitHub Actions workflows + composite actions), repo-wide automation scripts under `.github/scripts/` and `scripts/`, and any infra-as-code (Terraform, Ansible, Docker, K8s) that lands in this repo. Per-package scripts under `packages/<pkg>/scripts/` are owned by the corresponding package's pod, not DevOps.
+
+## Operating Principles
+
+- **AI-first**: Prefer Cursor / agentic paths — MCPs, skills, hooks, rules — over manual operations. Fall back to manual only when the AI path is infeasible or unsafe, and document why.
+- **Security-first**: Treat every change as security- and compliance-sensitive. Never log, echo, or interpolate secrets, tokens, or credentials. Default to least-privilege scope for tokens, runners, and roles.
+- **Validate before commit, validate before PR**: Run linters, syntax checks, and dry-runs locally. For state-changing operations and IaC, surface the plan/diff in the PR body before any apply is suggested.
+- **Speed with rigor**: Move fast; never trade correctness or security for speed.
+
+## Related rules (read when relevant)
+
+| Rule | Scope | When it applies |
+|---|---|---|
+| `.cursor/rules/devops/github-actions.mdc` | `.github/workflows/**`, `.github/actions/**` | Authoring or modifying any workflow or composite action |
+| `.cursor/rules/devops/secrets-and-credentials.mdc` | `.github/**`, `scripts/**` | Anything that can read, derive, or transmit a secret |
+| `.cursor/rules/devops/agentic-automation.mdc` | `.cursor/skills/**`, `.cursor/rules/**`, `.cursor/hooks/**`, `.github/workflows/**`, `.github/scripts/**`, `scripts/**` | Authoring skills, hooks, MCP integrations, or any AI-driven DevOps workflow |
+
+Commit message and PR title format guidance lives in the [`devops-pr-create`](../../skills/devops-pr-create/SKILL.md) skill — invoke it explicitly rather than autoloading a rule for it (skill-only on purpose, to keep the format spec out of the always-on context window).
+
+## Quick rules — surface-level reminders
+
+These are the bar; the deep-dive lives in the topic files above.
+
+### GitHub Actions
+- Pin third-party actions to a 40-character commit SHA with `# v<version>` annotation; never `@v3`.
+- Top-level `permissions:` is mandatory and defaults to `contents: read`.
+- `pull_request_target` never checks out untrusted PR HEAD ("pwn request" pattern).
+- Use OIDC for cloud auth; long-lived credentials are the fallback, not the default.
+
+### Secrets
+- Never inline a secret value. Always reference via `${{ secrets.X }}`.
+- Never `echo`, `cat`, `printenv`, or `set -x` near a secret.
+- A leaked secret is rotated FIRST, scrubbed second. History rewriting alone does not protect.
+- Personal credentials are forbidden in CI; use machine accounts, OIDC, or GitHub Apps.
+
+### Scripts
+- Bash: `set -euo pipefail` at the top; quote every variable expansion.
+- Node: target Node 20+, prefer ESM (`.mjs`).
+- Idempotent: re-runs must not corrupt state.
+- Never `curl ... | bash`.
+
+### Runners
+- Self-hosted runners must not execute jobs from forked PRs by default.
+- Runner labels must match actual hardware/OS requirements.
+
+### Validation expectations
+- `actionlint` clean for `.github/workflows/**` and `.github/actions/**` before merge.
+- YAML formatted with `yamlfmt` (existing repo convention; see `.github/actions/yamlfmt/`).
+- Terraform: `fmt -check` + `plan` summary in the PR body.
+- Ansible: `--syntax-check` + `--check --diff` summary in the PR body.
+- Docker: `hadolint` clean; pinned base-image digests (`@sha256:...`), never floating tags.
+
+### Agentic automation
+- Read-only by default. Mutations require explicit user opt-in per call.
+- Plan-then-apply for any state-changing operation.
+- Validation before "success." No "done" without evidence.
+- Fail-stop on ambiguity — never guess.
+
+## Useful commands
+
+- `gh workflow list` — list workflows
+- `gh workflow view <name>` — inspect a workflow
+- `gh run list --workflow=<name>` — recent runs
+- `gh run view --log-failed --job <id>` — fetch failing job logs
+- `gh api repos/tetherto/qvac/actions/permissions` — repo-wide GHA settings
+- `actionlint .github/workflows/*.yml` — lint workflows locally
+- `gitleaks detect --source . --no-banner` — secret scan the working tree
+
+## Commit messages and PR titles
+
+The full format spec, allowed prefixes, allowed tags, validation regex, and quality guidelines live in the [`devops-pr-create`](../../skills/devops-pr-create/SKILL.md) skill. Invoke `/devops-pr-create` rather than relying on this rule — kept out of the auto-load context window on purpose.
