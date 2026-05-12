@@ -433,8 +433,9 @@ export const upscaleRequestSchema = z.object({
     .positive()
     .optional()
     .describe(
-      "Number of ESRGAN passes to run sequentially. Each pass multiplies output " +
-      "dimensions by the model's native scale factor. Defaults to 1.",
+      "Number of ESRGAN passes to run sequentially. Each pass multiplies " +
+      "dimensions by the model's native scale factor; only the final image " +
+      "is emitted (`outputs.length === 1`). Defaults to 1.",
     ),
 });
 

@@ -45,11 +45,10 @@ export async function* upscale(
     request.repeats === undefined ? undefined : { repeats: request.repeats },
   );
 
-  // `outputIndex` is currently always sequential (Bare RPC delivers stream
-  // chunks in order, and the addon emits at most one PNG per repeat pass).
-  // Emitting it on the wire keeps parity with diffusionStream and gives
-  // future consumers (e.g. UIs that need a stable per-image identifier
-  // across reordered renderers) a hook without a wire-format change.
+  // The addon emits exactly one final PNG regardless of `repeats`, so
+  // this loop typically iterates once. `outputIndex` is still emitted for
+  // wire parity with diffusionStream and to leave headroom for future
+  // multi-output variants.
   let outputIndex = 0;
   for await (const chunk of response.iterate()) {
     if (chunk instanceof Uint8Array) {
