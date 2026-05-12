@@ -44,6 +44,7 @@ jobs:
           - os: windows-2025
             platform: windows
             runner: qvac-win25-x64
+            arch: x64
 
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release

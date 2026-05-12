@@ -36,12 +36,14 @@ jobs:
           - os: ubuntu-24.04
             platform: linux
             runner: qvac-ubuntu2404-x64
+            arch: x64
           - os: macos-14
             platform: darwin
             arch: arm64
           - os: windows-2025
             platform: windows
             runner: qvac-win25-x64
+            arch: x64
 
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
