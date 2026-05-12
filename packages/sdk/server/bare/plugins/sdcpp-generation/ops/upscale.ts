@@ -1,5 +1,10 @@
-import { getModel } from "@/server/bare/registry/model-registry";
-import { ModelLoadFailedError } from "@/utils/errors-server";
+import { EsrganUpscaler } from "@qvac/diffusion-cpp";
+import {
+  getModel,
+  getModelEntry,
+} from "@/server/bare/registry/model-registry";
+import { ModelOperationNotSupportedError } from "@/utils/errors-server";
+import { ModelType } from "@/schemas";
 import type {
   UpscaleRequest,
   UpscaleStats,
@@ -10,33 +15,28 @@ interface ResponseWithStats {
   stats?: UpscaleStats;
 }
 
-interface UpscalerModel {
-  upscale(
-    imageBytes: Uint8Array,
-    options?: { repeats?: number },
-  ): Promise<{
-    iterate(): AsyncGenerator<unknown>;
-    stats?: UpscaleStats;
-  }>;
-}
-
 // The diffusion plugin instantiates `EsrganUpscaler` when the model is loaded
 // with `modelConfig.mode === "upscale"` and `ImgStableDiffusion` otherwise. The
 // latter has no `.upscale()` method, so we refuse the call upfront with a
 // structured error rather than letting a TypeError propagate.
-function asUpscalerModel(model: unknown, modelId: string): UpscalerModel {
-  if (
-    !model ||
-    typeof model !== "object" ||
-    typeof (model as { upscale?: unknown }).upscale !== "function"
-  ) {
-    throw new ModelLoadFailedError(
-      `Model "${modelId}" is not loaded in upscale mode. ` +
-        'Re-load the model with `modelConfig: { mode: "upscale" }` ' +
-        "before invoking upscale().",
-    );
+function asUpscalerModel(model: unknown, modelId: string): EsrganUpscaler {
+  if (model instanceof EsrganUpscaler) {
+    return model;
   }
-  return model as UpscalerModel;
+
+  const entry = getModelEntry(modelId);
+  const modelType =
+    entry && !entry.isDelegated ? entry.local.modelType : ModelType.sdcppGeneration;
+  throw new ModelOperationNotSupportedError(
+    modelId,
+    modelType,
+    "upscale",
+    ["diffusion"],
+    [],
+    new Error(
+      'Model is not loaded in upscale mode. Re-load the model with `modelConfig: { mode: "upscale" }` before invoking upscale().',
+    ),
+  );
 }
 
 export async function* upscale(
@@ -48,6 +48,11 @@ export async function* upscale(
     request.repeats === undefined ? undefined : { repeats: request.repeats },
   );
 
+  // `outputIndex` is currently always sequential (Bare RPC delivers stream
+  // chunks in order, and the addon emits at most one PNG per repeat pass).
+  // Emitting it on the wire keeps parity with diffusionStream and gives
+  // future consumers (e.g. UIs that need a stable per-image identifier
+  // across reordered renderers) a hook without a wire-format change.
   let outputIndex = 0;
   for await (const chunk of response.iterate()) {
     if (chunk instanceof Uint8Array) {
@@ -59,7 +64,7 @@ export async function* upscale(
     }
   }
 
-  const responseWithStats = response as ResponseWithStats;
+  const responseWithStats = response as unknown as ResponseWithStats;
   yield {
     type: "upscaleStream",
     done: true,

@@ -98,9 +98,10 @@ export const sdcppConfigSchema = z
         "post-generation upscale path invoked via diffusion({ upscale }) and " +
         "requires `model_src`. In `mode: 'upscale'` only the tuning fields " +
         "(tile_size, direct, offload_params_to_cpu, threads) are honored — " +
-        "the primary modelSrc IS the ESRGAN model in that mode. " +
-        "Cross-field validation (e.g. requiring model_src in diffusion mode) " +
-        "is enforced by the diffusion plugin at load time.",
+        "the primary modelSrc IS the ESRGAN model in that mode and " +
+        "`model_src` here is ignored. Mode-dependent constraints (e.g. " +
+        "`model_src` required in diffusion mode) are enforced by the " +
+        "sdcpp-generation plugin at load time, not at the schema layer.",
       ),
   });
 

@@ -34,26 +34,40 @@ type DiffusionArtifactKey =
   | "vaeModelPath"
   | "esrganModelPath";
 
-function toEsrganAddonConfig(config: SdcppConfig): EsrganUpscalerConfig {
-  const { upscaler } = config;
+// Single source of truth for `SdcppConfig.upscaler.*` → addon-config key
+// mapping. Used by both the diffusion-mode (post-generation upscaler) and the
+// standalone-upscale-mode branches; keeping the mapping in one place avoids
+// drift if `@qvac/diffusion-cpp` ever adds or renames an `upscaler_*` key.
+function flattenUpscalerKeys(
+  upscaler: SdcppConfig["upscaler"],
+): Partial<EsrganUpscalerConfig> {
+  if (!upscaler) return {};
   return {
-    ...(upscaler?.tile_size !== undefined && {
+    ...(upscaler.tile_size !== undefined && {
       upscaler_tile_size: upscaler.tile_size,
     }),
-    ...(upscaler?.direct !== undefined && { upscaler_direct: upscaler.direct }),
-    ...(upscaler?.offload_params_to_cpu !== undefined && {
+    ...(upscaler.direct !== undefined && {
+      upscaler_direct: upscaler.direct,
+    }),
+    ...(upscaler.offload_params_to_cpu !== undefined && {
       upscaler_offload_params_to_cpu: upscaler.offload_params_to_cpu,
     }),
-    ...(upscaler?.threads !== undefined && {
+    ...(upscaler.threads !== undefined && {
       upscaler_threads: upscaler.threads,
     }),
+  };
+}
+
+function toEsrganAddonConfig(config: SdcppConfig): EsrganUpscalerConfig {
+  return {
+    ...flattenUpscalerKeys(config.upscaler),
     ...(config.verbosity !== undefined && { verbosity: config.verbosity }),
   };
 }
 
 export const diffusionPlugin = definePlugin({
   modelType: ModelType.sdcppGeneration,
-  displayName: "Image Generation (stable-diffusion.cpp)",
+  displayName: "Image Generation & Upscaling (stable-diffusion.cpp)",
   addonPackage: ADDON_DIFFUSION,
   loadConfigSchema: sdcppConfigSchema,
 
@@ -166,12 +180,7 @@ export const diffusionPlugin = definePlugin({
     void mode;
     const addonConfig = {
       ...rest,
-      ...(upscaler?.tile_size !== undefined && { upscaler_tile_size: upscaler.tile_size }),
-      ...(upscaler?.direct !== undefined && { upscaler_direct: upscaler.direct }),
-      ...(upscaler?.offload_params_to_cpu !== undefined && {
-        upscaler_offload_params_to_cpu: upscaler.offload_params_to_cpu,
-      }),
-      ...(upscaler?.threads !== undefined && { upscaler_threads: upscaler.threads }),
+      ...flattenUpscalerKeys(upscaler),
     } as SdConfig;
 
     const model = new ImgStableDiffusion({
