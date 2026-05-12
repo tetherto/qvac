@@ -858,6 +858,176 @@ describe('verifyBundle orchestrator', () => {
   })
 })
 
+describe('verifyBundle config source', () => {
+  it('reads bareRuntimeVersion from auto-detected qvac.config.json', async () => {
+    await withTempDir(async (dir) => {
+      const packageRoot = writePackageJson(dir, 'node_modules/bare-os', {
+        name: 'bare-os',
+        version: '3.9.0',
+        addon: true,
+        engines: { bare: '>=1.14.0' }
+      })
+      writePrebuild(packageRoot, 'darwin-arm64')
+      writeJson(path.join(dir, 'qvac.config.json'), { bareRuntimeVersion: '1.15.0' })
+      const result = await verifyBundle({
+        projectRoot: dir,
+        addonsSource: path.join(dir, 'node_modules'),
+        hosts: ['darwin-arm64']
+      })
+      assert.equal(hasErrors(result), false)
+      assert.equal(hasWarnings(result), false)
+      assert.equal(result.runtime?.resolved, true)
+      if (result.runtime?.resolved) {
+        assert.equal(result.runtime.runtime.source, 'config')
+        assert.equal(result.runtime.runtime.version, '1.15.0')
+      }
+    })
+  })
+
+  it('--bare-runtime-version overrides config bareRuntimeVersion', async () => {
+    await withTempDir(async (dir) => {
+      const packageRoot = writePackageJson(dir, 'node_modules/bare-os', {
+        name: 'bare-os',
+        version: '3.9.0',
+        addon: true,
+        engines: { bare: '>=1.14.0' }
+      })
+      writePrebuild(packageRoot, 'darwin-arm64')
+      writeJson(path.join(dir, 'qvac.config.json'), { bareRuntimeVersion: '1.13.0' })
+      const result = await verifyBundle({
+        projectRoot: dir,
+        addonsSource: path.join(dir, 'node_modules'),
+        hosts: ['darwin-arm64'],
+        bareRuntimeVersion: '1.15.0'
+      })
+      assert.equal(hasErrors(result), false)
+      if (result.runtime?.resolved) {
+        assert.equal(result.runtime.runtime.source, 'flag')
+        assert.equal(result.runtime.runtime.version, '1.15.0')
+      }
+    })
+  })
+
+  it('--config <path> loads a non-default config location', async () => {
+    await withTempDir(async (dir) => {
+      const packageRoot = writePackageJson(dir, 'node_modules/bare-os', {
+        name: 'bare-os',
+        version: '3.9.0',
+        addon: true,
+        engines: { bare: '>=1.14.0' }
+      })
+      writePrebuild(packageRoot, 'darwin-arm64')
+      const customConfigPath = path.join(dir, 'tools', 'qvac.config.json')
+      writeJson(customConfigPath, { bareRuntimeVersion: '1.15.0' })
+      const result = await verifyBundle({
+        projectRoot: dir,
+        addonsSource: path.join(dir, 'node_modules'),
+        hosts: ['darwin-arm64'],
+        configPath: customConfigPath
+      })
+      assert.equal(hasErrors(result), false)
+      if (result.runtime?.resolved) {
+        assert.equal(result.runtime.runtime.source, 'config')
+      }
+    })
+  })
+
+  it('emits invalid-runtime-version (source: config) when config bareRuntimeVersion is malformed', async () => {
+    await withTempDir(async (dir) => {
+      const packageRoot = writePackageJson(dir, 'node_modules/bare-os', {
+        name: 'bare-os',
+        version: '3.9.0',
+        addon: true
+      })
+      writePrebuild(packageRoot, 'darwin-arm64')
+      writeJson(path.join(dir, 'qvac.config.json'), { bareRuntimeVersion: 'garbage' })
+      const result = await verifyBundle({
+        projectRoot: dir,
+        addonsSource: path.join(dir, 'node_modules'),
+        hosts: ['darwin-arm64']
+      })
+      assert.equal(hasErrors(result), true)
+      assert.equal(result.issues.length, 1)
+      const issue = result.issues[0]
+      assert.equal(issue?.code, 'invalid-runtime-version')
+      if (issue?.code === 'invalid-runtime-version') {
+        assert.equal(issue.source, 'config')
+        assert.equal(issue.providedValue, 'garbage')
+        assert.match(issue.message, /qvac\.config\.json/)
+      }
+    })
+  })
+
+  it('includes the explicit --config path in invalid-runtime-version messages', async () => {
+    await withTempDir(async (dir) => {
+      const packageRoot = writePackageJson(dir, 'node_modules/bare-os', {
+        name: 'bare-os',
+        version: '3.9.0',
+        addon: true
+      })
+      writePrebuild(packageRoot, 'darwin-arm64')
+      const customConfigPath = path.join(dir, 'tools', 'custom.json')
+      writeJson(customConfigPath, { bareRuntimeVersion: 'garbage' })
+      const result = await verifyBundle({
+        projectRoot: dir,
+        addonsSource: path.join(dir, 'node_modules'),
+        hosts: ['darwin-arm64'],
+        configPath: path.join('tools', 'custom.json')
+      })
+      assert.equal(hasErrors(result), true)
+      const issue = result.issues[0]
+      assert.equal(issue?.code, 'invalid-runtime-version')
+      if (issue?.code === 'invalid-runtime-version') {
+        assert.equal(issue.source, 'config')
+        assert.match(issue.message, /tools\/custom\.json/)
+      }
+    })
+  })
+
+  it('ignores non-string bareRuntimeVersion in config and falls through to auto-detect', async () => {
+    await withTempDir(async (dir) => {
+      const packageRoot = writePackageJson(dir, 'node_modules/bare-os', {
+        name: 'bare-os',
+        version: '3.9.0',
+        addon: true,
+        engines: { bare: '>=1.14.0' }
+      })
+      writePrebuild(packageRoot, 'darwin-arm64')
+      writeJson(path.join(dir, 'qvac.config.json'), { bareRuntimeVersion: 12345 })
+      const result = await verifyBundle({
+        projectRoot: dir,
+        addonsSource: path.join(dir, 'node_modules'),
+        hosts: ['darwin-arm64']
+      })
+      assert.equal(hasErrors(result), false)
+      assert.equal(hasWarnings(result), true)
+      assert.equal(
+        result.issues.some((i) => i.code === 'unknown-runtime-version'),
+        true
+      )
+    })
+  })
+
+  it('emits invalid-source when explicit --config path does not exist', async () => {
+    await withTempDir(async (dir) => {
+      writePackageJson(dir, 'node_modules/bare-os', {
+        name: 'bare-os',
+        version: '3.9.0',
+        addon: true
+      })
+      const result = await verifyBundle({
+        projectRoot: dir,
+        addonsSource: path.join(dir, 'node_modules'),
+        hosts: ['darwin-arm64'],
+        configPath: 'nope.config.json'
+      })
+      assert.equal(hasErrors(result), true)
+      assert.equal(result.issues[0]?.code, 'invalid-source')
+      assert.match(result.issues[0]?.message ?? '', /--config/)
+    })
+  })
+})
+
 describe('formatVerifyBundleResult', () => {
   it('renders a success summary when there are no issues', async () => {
     await withTempDir(async (dir) => {

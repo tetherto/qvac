@@ -5,7 +5,7 @@ import { formatAddonId, type NativeAddon } from './addon-source.js'
 
 export interface BareRuntime {
   version: string
-  source: 'flag' | 'bare-runtime' | 'bare'
+  source: 'flag' | 'config' | 'bare-runtime' | 'bare'
 }
 
 export interface UnresolvedBareRuntime {
@@ -16,6 +16,8 @@ export interface UnresolvedBareRuntime {
 export interface ResolveBareRuntimeOptions {
   projectRoot: string
   explicitVersion?: string
+  explicitSource?: 'flag' | 'config'
+  explicitConfigPath?: string
 }
 
 export type BareRuntimeResolution =
@@ -79,12 +81,18 @@ export async function resolveBareRuntime (
   if (options.explicitVersion) {
     const cleaned = normalizeVersion(options.explicitVersion)
     if (cleaned) {
-      return { resolved: true, runtime: { version: cleaned, source: 'flag' } }
+      return {
+        resolved: true,
+        runtime: { version: cleaned, source: options.explicitSource ?? 'flag' }
+      }
     }
+    const sourceLabel = options.explicitSource === 'config'
+      ? `\`bareRuntimeVersion\` in ${formatConfigLabel(options.projectRoot, options.explicitConfigPath)}`
+      : '--bare-runtime-version'
     return {
       resolved: false,
       error: {
-        reason: `--bare-runtime-version "${options.explicitVersion}" is not a valid semver`,
+        reason: `${sourceLabel} "${options.explicitVersion}" is not a valid semver`,
         triedPaths: []
       }
     }
@@ -150,6 +158,13 @@ async function tryReadRuntimeVersion (
 export function normalizeVersion (value: string): string | null {
   const coerced = semver.coerce(value)
   return coerced ? coerced.version : null
+}
+
+export function formatConfigLabel (projectRoot: string, configPath?: string): string {
+  if (!configPath) return 'qvac.config'
+  const rel = path.relative(projectRoot, configPath)
+  if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) return configPath
+  return rel
 }
 
 export function checkAbi (options: CheckAbiOptions): AbiIssue[] {

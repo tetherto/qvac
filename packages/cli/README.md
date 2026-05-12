@@ -214,6 +214,7 @@ as `node_modules` trees.
 | `--addons-source <path>` | Required. Path to a `worker.bundle.js` or a `node_modules` directory. |
 | `--host <target>` | Repeatable. At least one host required. Examples: `android-arm64`, `ios-arm64`, `ios-arm64-simulator`, `ios-x64-simulator`, `darwin-arm64`, `linux-x64`, `win32-x64`. |
 | `--bare-runtime-version <semver>` | Optional. Override the resolved Bare runtime version used for ABI checks. **Recommended for mobile / Expo CI**, where the BareKit-embedded runtime version is not currently exposed by `react-native-bare-kit` package metadata and auto-detection is unreliable. Also useful for Electron packaging where runtime inference is ambiguous. |
+| `--config, -c <path>` | Optional. Path to a `qvac.config.*` file (default: auto-detect `qvac.config.{json,js,mjs,ts}` in the project root). Reads `bareRuntimeVersion` if present. |
 | `--project-root <path>` | Optional. Project root used to resolve bundle resolutions and detect the installed Bare runtime (default: cwd). |
 | `--quiet, -q` | Suppress the success summary; failures and warnings are always printed. |
 
@@ -239,6 +240,14 @@ qvac verify bundle \
 # Force a specific runtime version (e.g. CI)
 qvac verify bundle --addons-source qvac/worker.bundle.js \
   --host android-arm64 --bare-runtime-version 1.15.2
+
+# Pin via qvac.config.json (committed with the project)
+# {
+#   "plugins": ["llamacpp-completion"],
+#   "bareRuntimeVersion": "1.15.2"
+# }
+qvac verify bundle --addons-source qvac/worker.bundle.js \
+  --host android-arm64
 ```
 
 **Exit codes:**
@@ -264,8 +273,9 @@ qvac verify bundle --addons-source qvac/worker.bundle.js \
 Runtime resolution order:
 
 1. `--bare-runtime-version <semver>` (authoritative — user-provided).
-2. `<projectRoot>/node_modules/bare-runtime/package.json` — `version` field (Pear / Electron / desktop Node).
-3. `<projectRoot>/node_modules/bare/package.json` — `version` field (standalone Bare installs).
+2. `bareRuntimeVersion` field in `qvac.config.{json,js,mjs,ts}` (auto-detected from `--project-root`, or supplied via `--config`). Committed and shared across the team.
+3. `<projectRoot>/node_modules/bare-runtime/package.json` — `version` field (Pear / Electron / desktop Node).
+4. `<projectRoot>/node_modules/bare/package.json` — `version` field (standalone Bare installs).
 
 If neither installed package resolves, ABI checks emit a single
 `unknown-runtime-version` warning and the exit code stays `0`. Prebuild checks

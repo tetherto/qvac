@@ -140,6 +140,10 @@ function setupCli (): void {
       'Override detected Bare runtime version for ABI checks'
     )
     .option(
+      '-c, --config <path>',
+      'Config file path (default: auto-detect qvac.config.*)'
+    )
+    .option(
       '--project-root <path>',
       'Project root used to resolve bundle resolutions and runtime metadata (default: cwd)'
     )
@@ -148,6 +152,7 @@ function setupCli (): void {
       addonsSource: string
       host: string[]
       bareRuntimeVersion?: string
+      config?: string
       projectRoot?: string
       quiet?: boolean
     }) => {
@@ -164,6 +169,9 @@ function setupCli (): void {
         }
         if (options.bareRuntimeVersion) {
           verifyOptions.bareRuntimeVersion = options.bareRuntimeVersion
+        }
+        if (options.config) {
+          verifyOptions.configPath = options.config
         }
         const result = await verifyBundle(verifyOptions)
         const failed = hasErrors(result)

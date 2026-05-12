@@ -1,5 +1,6 @@
 import { promises as fsp } from 'node:fs'
 import path from 'node:path'
+import { findConfigFile, loadConfig } from '../../config.js'
 import {
   formatAddonId,
   type AddonSourceKind,
@@ -16,6 +17,7 @@ import {
 import { checkPrebuilds, type MissingPrebuildIssue } from './prebuilds.js'
 import {
   checkAbi,
+  formatConfigLabel,
   normalizeVersion,
   resolveBareRuntime,
   type AbiIssue,
@@ -27,6 +29,7 @@ export interface VerifyBundleOptions {
   addonsSource: string
   hosts: string[]
   bareRuntimeVersion?: string
+  configPath?: string
 }
 
 export interface InvalidSourceIssue {
@@ -41,6 +44,7 @@ export interface InvalidRuntimeVersionIssue {
   level: 'error'
   message: string
   providedValue: string
+  source: 'flag' | 'config'
 }
 
 export type VerifyBundleIssue =
@@ -62,7 +66,7 @@ export interface VerifyBundleResult {
 export async function verifyBundle (
   options: VerifyBundleOptions
 ): Promise<VerifyBundleResult> {
-  const { projectRoot, addonsSource, hosts, bareRuntimeVersion } = options
+  const { projectRoot, addonsSource, hosts, bareRuntimeVersion, configPath } = options
   const resolvedAddonsSource = path.isAbsolute(addonsSource)
     ? addonsSource
     : path.resolve(projectRoot, addonsSource)
@@ -99,9 +103,70 @@ export async function verifyBundle (
           code: 'invalid-runtime-version',
           level: 'error',
           providedValue: bareRuntimeVersion,
+          source: 'flag',
           message:
             `--bare-runtime-version "${bareRuntimeVersion}" is not a valid semver. ` +
             'Pass a version like 1.15.0 (with optional v-prefix and pre-release tag) or omit the flag to use auto-detection.'
+        }
+      ]
+    }
+  }
+
+  let configRuntimeVersion: string | undefined
+  let resolvedConfigPath: string | null = null
+  try {
+    resolvedConfigPath = findConfigFile(projectRoot, configPath)
+    if (resolvedConfigPath !== null) {
+      const config = await loadConfig(resolvedConfigPath)
+      if (config !== null && typeof config === 'object') {
+        const candidate = (config as { bareRuntimeVersion?: unknown }).bareRuntimeVersion
+        if (typeof candidate === 'string') configRuntimeVersion = candidate
+      }
+    }
+  } catch (error) {
+    if (configPath !== undefined) {
+      const message = error instanceof Error ? error.message : String(error)
+      return {
+        addonsSource,
+        resolvedAddonsSource,
+        sourceKind: null,
+        hosts,
+        runtime: null,
+        addons: [],
+        issues: [
+          {
+            code: 'invalid-source',
+            level: 'error',
+            addonsSource,
+            message: `Failed to load --config: ${message}`
+          }
+        ]
+      }
+    }
+  }
+
+  if (
+    bareRuntimeVersion === undefined &&
+    configRuntimeVersion !== undefined &&
+    normalizeVersion(configRuntimeVersion) === null
+  ) {
+    return {
+      addonsSource,
+      resolvedAddonsSource,
+      sourceKind: null,
+      hosts,
+      runtime: null,
+      addons: [],
+      issues: [
+        {
+          code: 'invalid-runtime-version',
+          level: 'error',
+          providedValue: configRuntimeVersion,
+          source: 'config',
+          message:
+            `\`bareRuntimeVersion\` in ${formatConfigLabel(projectRoot, resolvedConfigPath ?? undefined)} ` +
+            `"${configRuntimeVersion}" is not a valid semver. ` +
+            'Use a version like 1.15.0 (with optional v-prefix and pre-release tag), or remove the field to use auto-detection.'
         }
       ]
     }
@@ -172,7 +237,16 @@ export async function verifyBundle (
   }
 
   const runtimeOptions: Parameters<typeof resolveBareRuntime>[0] = { projectRoot }
-  if (bareRuntimeVersion) runtimeOptions.explicitVersion = bareRuntimeVersion
+  if (bareRuntimeVersion !== undefined) {
+    runtimeOptions.explicitVersion = bareRuntimeVersion
+    runtimeOptions.explicitSource = 'flag'
+  } else if (configRuntimeVersion !== undefined) {
+    runtimeOptions.explicitVersion = configRuntimeVersion
+    runtimeOptions.explicitSource = 'config'
+    if (resolvedConfigPath !== null) {
+      runtimeOptions.explicitConfigPath = resolvedConfigPath
+    }
+  }
   const runtime = await resolveBareRuntime(runtimeOptions)
   issues.push(...checkAbi({ addons, runtime }))
 
@@ -322,7 +396,7 @@ function formatInvalidRuntimeVersions (issues: VerifyBundleIssue[]): string[] {
       issue.code === 'invalid-runtime-version'
   )
   if (matches.length === 0) return []
-  const lines = ['  Invalid --bare-runtime-version:']
+  const lines = ['  Invalid Bare runtime version:']
   for (const issue of matches) {
     lines.push(`    - ${issue.message}`)
   }

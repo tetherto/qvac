@@ -122,6 +122,7 @@ http_status() {
   [[ "${output}" =~ "--addons-source" ]]
   [[ "${output}" =~ "--host" ]]
   [[ "${output}" =~ "--bare-runtime-version" ]]
+  [[ "${output}" =~ "--config" ]]
 }
 
 @test "qvac verify bundle requires --addons-source" {
@@ -162,8 +163,20 @@ http_status() {
   mkdir -p "${dir}/node_modules"
   run ${QVAC} verify bundle --addons-source "${dir}/node_modules" --host darwin-arm64 --bare-runtime-version not-a-version
   [[ "${status}" -eq 1 ]]
-  [[ "${output}" =~ "Invalid --bare-runtime-version" ]]
+  [[ "${output}" =~ "Invalid Bare runtime version" ]]
   [[ "${output}" =~ "not-a-version" ]]
+  rm -rf "${dir}"
+}
+
+@test "qvac verify bundle rejects malformed bareRuntimeVersion in qvac.config.json" {
+  local dir
+  dir=$(mktemp -d)
+  mkdir -p "${dir}/node_modules"
+  printf '{"bareRuntimeVersion": "garbage"}' > "${dir}/qvac.config.json"
+  run ${QVAC} verify bundle --addons-source "${dir}/node_modules" --host darwin-arm64 --project-root "${dir}"
+  [[ "${status}" -eq 1 ]]
+  [[ "${output}" =~ "Invalid Bare runtime version" ]]
+  [[ "${output}" =~ "garbage" ]]
   rm -rf "${dir}"
 }
 
