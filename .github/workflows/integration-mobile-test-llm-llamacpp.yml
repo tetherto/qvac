@@ -135,41 +135,11 @@ jobs:
           ios-keychain-password: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
           ios-provisioning-profile-base64: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
           apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
-
-      # QVAC-17830: VLM image tests on Android take longer than the
-      # generated 20-minute per-test ceiling in app.test.js. Bump the
-      # generated `timeout: 1200000` / "20 minutes" wording up to 30
-      # minutes so individual VLM tests don't trip Mocha first. The
-      # WDIO Mocha ceiling on `upload-to-devicefarm` (mocha-timeout-ms)
-      # is then bumped to 35 minutes so the runner outlives any single
-      # test.
-      #
-      # Must run AFTER build-mobile-app (which generates app.test.js
-      # via `npm run build`) and BEFORE upload-to-devicefarm (which
-      # packs `e2e/tests/` into the Device Farm test package).
-      - name: Extend Android mobile test timeouts
-        if: matrix.platform == 'Android'
-        working-directory: test-framework
-        run: |
-          node <<'NODE'
-          const fs = require('fs')
-          const testFile = 'e2e/tests/app.test.js'
-          if (!fs.existsSync(testFile)) {
-            throw new Error(`Expected generated ${testFile} not found — did build-mobile-app run?`)
-          }
-          let content = fs.readFileSync(testFile, 'utf8')
-
-          const patched = content
-            .replaceAll('timeout: 1200000,', 'timeout: 1800000,')
-            .replaceAll('did not complete within 20 minutes', 'did not complete within 30 minutes')
-
-          if (patched === content) {
-            throw new Error('No generated Android test timeout blocks matched expected format')
-          }
-
-          fs.writeFileSync(testFile, patched)
-          console.log('Extended generated Android test timeouts to 30 minutes')
-          NODE
+          # QVAC-17830: VLM image tests on Android exceed the 20-minute
+          # default per-test ceiling. Paired with mocha-timeout-ms on
+          # upload-to-devicefarm below (35 min) so the WDIO/Mocha
+          # session outlives any single test.
+          android-per-test-timeout-minutes: '30'
 
       # LLM ships with its own dedicated Device Farm project + iOS pool
       # (the LLM_* secrets), historically because LLM runs more often
@@ -225,89 +195,21 @@ jobs:
 
       # QVAC-17830: VLM image tests are split across multiple
       # `image-*.test.js` files; each Device Farm group emits its own
-      # `performance-report.json` payload. We pass --merge so
-      # extract-from-log.js concatenates them per device. Output goes
-      # to `perf-results/<platform>/...` so the artifact below mirrors
-      # the layout that the umbrella `combine-perf-reports` job (in
-      # on-pr-llm-llamacpp.yml) expects when running aggregate.js with
-      # --addon-type vision.
-      - name: Extract performance report from logs (LLM)
+      # `performance-report.json` payload, so we pass merge=true to
+      # union them per device. We also need
+      # unzip-customer-artifacts=true so the markers buried in
+      # bare_console.log inside Customer_Artifacts.zip are visible to
+      # extract-from-log.js. Artifact name matches the pattern the
+      # umbrella `combine-perf-reports` job (on-pr-llm-llamacpp.yml)
+      # scans for.
+      - name: Extract & upload addon perf report (LLM)
         if: always() && steps.schedule.outputs.run-count != '0' && steps.schedule.outputs.run-count != ''
-        shell: bash
-        run: |
-          set +e
-
-          ARTIFACT_DIR="devicefarm-logs/${{ matrix.platform }}"
-          OUTPUT_DIR="${GITHUB_WORKSPACE}/perf-results/${{ matrix.platform }}"
-          mkdir -p "$OUTPUT_DIR"
-
-          if [ ! -d "$ARTIFACT_DIR" ]; then
-            echo "No Device Farm logs directory at $ARTIFACT_DIR — skipping perf extraction"
-            exit 0
-          fi
-
-          # Unzip Customer_Artifacts.zip inline so bare_console.log /
-          # appium.log (which carry the PERF_REPORT markers) are
-          # scannable by extract-from-log.js alongside the plain LOG
-          # artifacts. collect-and-upload-logs already extracted one
-          # bare_console.log per device into a flat console-logs/ tree,
-          # but extract-from-log.js needs the per-device subdir layout
-          # to bucket markers correctly.
-          echo "=== Unzipping Customer_Artifacts.zip inline ==="
-          find "$ARTIFACT_DIR" -name "*Customer_Artifacts.zip" -type f | while read -r zf; do
-            base=$(basename "$zf" .zip)
-            extract_to="$(dirname "$zf")/${base}_unpacked"
-            rm -rf "$extract_to"
-            mkdir -p "$extract_to"
-            if unzip -qo "$zf" -d "$extract_to" 2>/dev/null; then
-              echo "  Unpacked: $zf -> $extract_to"
-            else
-              echo "  WARNING: failed to unzip $zf"
-            fi
-          done
-
-          echo "=== Searching for PERF_REPORT markers in $ARTIFACT_DIR ==="
-          MARKER_HITS=$(grep -rl "PERF_REPORT_START" "$ARTIFACT_DIR" 2>/dev/null || true)
-          if [ -z "$MARKER_HITS" ]; then
-            echo "No PERF_REPORT markers found in Device Farm logs — nothing to extract"
-            exit 0
-          fi
-          echo "Files containing markers:"
-          echo "$MARKER_HITS"
-
-          echo "=== Running extract-from-log.js ==="
-          node "${GITHUB_WORKSPACE}/addon/scripts/perf-report/extract-from-log.js" \
-            "$ARTIFACT_DIR" \
-            "$OUTPUT_DIR/performance-report.json" \
-            --run-number "${{ github.run_number }}" \
-            --merge
-
-          if find "$OUTPUT_DIR" -name "performance-report.json" -type f 2>/dev/null | head -1 | grep -q .; then
-            echo "=== Generating aggregated HTML / MD report ==="
-            node "${GITHUB_WORKSPACE}/addon/scripts/perf-report/aggregate.js" \
-              --dir "$OUTPUT_DIR" \
-              --output-html "$OUTPUT_DIR/performance-report.html" \
-              --output-json "$OUTPUT_DIR/performance-summary.json" \
-              --output "$OUTPUT_DIR/performance-report.md"
-          else
-            echo "extract-from-log.js did not produce a performance-report.json — nothing to aggregate"
-          fi
-
-      # Separate from the composite's perf-report artifact so the
-      # umbrella combine-perf-reports job (which scans for
-      # `perf-report-llamacpp-llm-*-<run_number>`) picks this one up.
-      - name: Upload performance report (LLM)
-        if: always() && steps.schedule.outputs.run-count != '0' && steps.schedule.outputs.run-count != ''
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: ./.github/actions/run-mobile-integration-tests/extract-addon-perf
         with:
-          name: perf-report-llamacpp-llm-${{ matrix.platform }}-${{ github.run_number }}
-          path: |
-            perf-results/${{ matrix.platform }}/**/performance-report.json
-            perf-results/${{ matrix.platform }}/performance-report.html
-            perf-results/${{ matrix.platform }}/performance-report.md
-            perf-results/${{ matrix.platform }}/performance-summary.json
-          retention-days: 90
-          if-no-files-found: ignore
+          platform: ${{ matrix.platform }}
+          merge: 'true'
+          unzip-customer-artifacts: 'true'
+          artifact-name: perf-report-llamacpp-llm-${{ matrix.platform }}-${{ github.run_number }}
 
       - name: Comment results on PR
         if: always()

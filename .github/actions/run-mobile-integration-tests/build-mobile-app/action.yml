@@ -51,6 +51,20 @@ inputs:
     required: false
     default: ""
 
+  # Optional per-test timeout extension applied after the test
+  # framework generates `e2e/tests/app.test.js`. The generator emits a
+  # 20-minute (1,200,000 ms) Mocha ceiling per test; addons whose
+  # individual tests legitimately exceed that (e.g. LLM VLM image
+  # tests on Android) opt in here. No-op when unset or on iOS.
+  # NOTE: pair this with `mocha-timeout-ms` on `upload-to-devicefarm`
+  # so the WDIO/Mocha session ceiling outlives any single test.
+  android-per-test-timeout-minutes:
+    description: |
+      Override per-test Mocha timeout (minutes) in the generated Android
+      app.test.js. Leave empty to keep the framework default (20 min).
+    required: false
+    default: ""
+
 outputs:
   app-path:
     description: "Absolute path to the built APK or IPA"
@@ -132,6 +146,45 @@ runs:
           exit 1
         fi
         echo "Test app built successfully"
+
+    # Patches the freshly generated e2e/tests/app.test.js to bump the
+    # per-test Mocha ceiling. Runs ONLY on Android with the input set;
+    # no-op otherwise. Must sit between "Build test app with addon"
+    # (which generates the file) and `upload-to-devicefarm` (which
+    # packs it into the Device Farm test bundle).
+    - name: Extend Android per-test mocha timeout
+      if: inputs.platform == 'Android' && inputs.android-per-test-timeout-minutes != ''
+      shell: bash
+      working-directory: ./test-framework
+      env:
+        TIMEOUT_MIN: ${{ inputs.android-per-test-timeout-minutes }}
+      run: |
+        node <<'NODE'
+        const fs = require('fs')
+        const path = require('path')
+
+        const minutes = Number(process.env.TIMEOUT_MIN)
+        if (!Number.isFinite(minutes) || minutes <= 0) {
+          throw new Error(`android-per-test-timeout-minutes must be a positive number, got "${process.env.TIMEOUT_MIN}"`)
+        }
+        const newMs = minutes * 60 * 1000
+
+        const testFile = 'e2e/tests/app.test.js'
+        if (!fs.existsSync(testFile)) {
+          throw new Error(`Expected generated ${testFile} not found — did "Build test app with addon" run?`)
+        }
+        const before = fs.readFileSync(testFile, 'utf8')
+        const after = before
+          .replaceAll('timeout: 1200000,', `timeout: ${newMs},`)
+          .replaceAll('did not complete within 20 minutes', `did not complete within ${minutes} minutes`)
+
+        if (after === before) {
+          throw new Error('No generated Android test timeout blocks matched expected format (timeout: 1200000 / "20 minutes")')
+        }
+
+        fs.writeFileSync(testFile, after)
+        console.log(`Extended generated Android per-test timeout to ${minutes} minutes (${newMs} ms)`)
+        NODE
 
     - name: Display build summary
       if: always()

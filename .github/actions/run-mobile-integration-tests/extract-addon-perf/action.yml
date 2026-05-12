@@ -23,6 +23,23 @@ inputs:
     description: 'Regex passed to extract-from-log.js --filter (empty = no filter)'
     required: false
     default: ''
+  merge:
+    description: >
+      When 'true', passes --merge to extract-from-log.js so multiple
+      performance-report.json payloads from the same device (e.g. when
+      a single physical device runs several Device Farm groups, like
+      the LLM VLM image-*.test.js split) are unioned per device.
+    required: false
+    default: 'false'
+  unzip-customer-artifacts:
+    description: >
+      When 'true', recursively unzips any Customer_Artifacts.zip files
+      under the platform log dir before extraction. Required for addons
+      whose perf markers land in bare_console.log / appium.log (zipped
+      inside Customer_Artifacts) rather than in the plain LOG output.
+      No-op when false or when no such zips exist.
+    required: false
+    default: 'false'
   step-summary-title:
     description: >
       If non-empty, writes a rich Step Summary table via
@@ -55,6 +72,8 @@ runs:
         OUTPUT_DIR_NAME: ${{ inputs.output-dir-name }}
         PLATFORM: ${{ inputs.platform }}
         FILTER: ${{ inputs.filter }}
+        MERGE: ${{ inputs.merge }}
+        UNZIP_CUSTOMER_ARTIFACTS: ${{ inputs.unzip-customer-artifacts }}
       run: |
         LOG_DIR="${GITHUB_WORKSPACE}/${LOG_DIR_NAME}/${PLATFORM}"
         OUTPUT_DIR="${GITHUB_WORKSPACE}/${OUTPUT_DIR_NAME}/${PLATFORM}"
@@ -73,16 +92,37 @@ runs:
           exit 0
         fi
 
-        FILTER_ARGS=""
+        # Optional: unzip every Customer_Artifacts.zip inline so
+        # PERF_REPORT markers buried in bare_console.log / appium.log
+        # become scannable by extract-from-log.js alongside the plain
+        # LOG artifacts.
+        if [ "$UNZIP_CUSTOMER_ARTIFACTS" = "true" ]; then
+          echo "Unzipping Customer_Artifacts.zip in $LOG_DIR ..."
+          find "$LOG_DIR" -name "*Customer_Artifacts.zip" -type f | while read -r zf; do
+            extract_to="$(dirname "$zf")/$(basename "$zf" .zip)_unpacked"
+            rm -rf "$extract_to"
+            mkdir -p "$extract_to"
+            if unzip -qo "$zf" -d "$extract_to" 2>/dev/null; then
+              echo "  Unpacked: $zf"
+            else
+              echo "  WARNING: failed to unzip $zf"
+            fi
+          done
+        fi
+
+        EXTRA_ARGS=""
         if [ -n "$FILTER" ]; then
-          FILTER_ARGS="--filter $FILTER"
+          EXTRA_ARGS="$EXTRA_ARGS --filter $FILTER"
+        fi
+        if [ "$MERGE" = "true" ]; then
+          EXTRA_ARGS="$EXTRA_ARGS --merge"
         fi
 
         node "$SCRIPTS_DIR/extract-from-log.js" \
           "$LOG_DIR" \
           "$OUTPUT_DIR/performance-report.json" \
           --run-number "${{ github.run_number }}" \
-          $FILTER_ARGS || true
+          $EXTRA_ARGS || true
 
         if find "$OUTPUT_DIR" -name "performance-report.json" -type f -size +0 | head -1 | grep -q .; then
           echo "Generating HTML/MD/summary..."
