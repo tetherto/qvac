@@ -18,6 +18,7 @@ import {
 } from '@/lib/docs-open-graph';
 import { buildDocsJsonLd } from '@/lib/docs-json-ld';
 import { QVAC_DOC_OG_HEIGHT, QVAC_DOC_OG_WIDTH } from '@/lib/qvac-doc-og';
+import { getVersionSelectorProps } from '@/lib/versions';
 
 function TitleText({
   title,
@@ -64,6 +65,7 @@ export default async function Page(props: PageProps<'/[[...slug]]'>) {
 
   const isHomePage = !params.slug || params.slug.length === 0;
   const jsonLdBlocks = buildDocsJsonLd(page, params.slug ?? [], isHomePage);
+  const versionSelectorProps = getVersionSelectorProps(params.slug ?? []);
 
   return (
     <>
@@ -91,7 +93,7 @@ export default async function Page(props: PageProps<'/[[...slug]]'>) {
       </DocsTitle>
       <DocsDescription>{page.data.description}</DocsDescription>
       <div className="flex flex-row gap-2 items-center border-b pb-6 -mt-6">
-        <VersionSelector />
+        {versionSelectorProps && <VersionSelector {...versionSelectorProps} />}
         <LLMCopyButton markdownUrl={`/llms-full.txt`} />
         <ViewOptions
           markdownUrl={`/llms-full.txt`}
