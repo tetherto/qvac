@@ -243,7 +243,8 @@ jobs:
               context,
               approvals,
               tier,
-              prNumber
+              prNumber,
+              tierSource
             ) {
               const { teamMemberApprovals, teamLeadApprovals, managementApprovals } = approvals;
 
@@ -289,7 +290,8 @@ jobs:
                 approvals,
                 tier,
                 prNumber,
-                bypass ? bypassReason : null
+                bypass ? bypassReason : null,
+                tierSource
               );
               return { requirementsMet, statusMessage };
             }
@@ -302,7 +304,8 @@ jobs:
               approvals,
               tier,
               prNumber,
-              bypassReason
+              bypassReason,
+              tierSource
             ) {
               console.log(`\nStatus: ${statusMessage}`);
 
@@ -353,6 +356,7 @@ jobs:
                 const commentBody = `## Tier-based Approval Status
                             
                 **PR Tier:** ${tier.toUpperCase()}
+                **Tier source:** ${tierSource}
 
                 **Current Status:** ${requirementsMet ? "✅ APPROVED" : "❌ PENDING"}
 
@@ -390,17 +394,36 @@ jobs:
             // Get PR labels
             const labels = approvals.pr.labels.map(label => label.name);
 
-            // Determine tier - default to tier1 if no label
+            // Determine tier and a human-readable source for the bot comment.
+            //
+            //   - `verified`           -> explicit tier 1 (set by label-gate / a
+            //     trusted reviewer; QVAC-18613).
+            //   - `tier2`              -> tier 2 (unchanged from previous
+            //     behaviour).
+            //   - both labels present  -> `tier2` wins. Stricter requirements
+            //     take priority when there is a conflict.
+            //   - neither              -> default tier 1 (unchanged from
+            //     previous behaviour).
+            const hasVerified = labels.includes('verified');
+            const hasTier2 = labels.includes('tier2');
+
             let tier = 'tier1';
-            if (labels.includes('tier2')) {
+            let tierSource = 'default (no tier label applied)';
+            if (hasVerified) {
+              tierSource = '`verified` label applied (explicit tier 1)';
+            }
+            if (hasTier2) {
               tier = 'tier2';
+              tierSource = hasVerified
+                ? '`tier2` label applied (overrides `verified`)'
+                : '`tier2` label applied';
             }
 
-            console.log(`PR #${prNumber} is classified as: ${tier}`);
+            console.log(`PR #${prNumber} is classified as: ${tier} (${tierSource})`);
             console.log(`PR Labels: ${labels.join(', ')}`);
 
             // Check requirements
-            const result = checkTierRequirements(github, context, approvals, tier, prNumber);
+            const result = checkTierRequirements(github, context, approvals, tier, prNumber, tierSource);
             
             console.log(`Repository: ${approvals.repoOwningTeam}`);
             console.log(result.statusMessage);
