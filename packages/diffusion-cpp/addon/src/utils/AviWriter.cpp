@@ -1,5 +1,6 @@
 #include "AviWriter.hpp"
 
+#include <climits>
 #include <cstdint>
 #include <cstring>
 #include <string>
@@ -112,38 +113,57 @@ std::vector<uint8_t> encodeFramesToAvi(
   }
 
   // -- Build AVI in a single growable buffer ---------------------------------
-  std::vector<uint8_t> out;
-  
-  // Calculate buffer size with overflow checking:
-  // Each frame is roughly: 4 (chunk type) + 4 (size) + JPEG data (~1-3 bytes/pixel) + padding
-  // Total estimate: header (~200B) + numFrames * (width * height * 3 + 16)
-  // Reject allocations that would overflow uint32_t (AVI file size limit).
-  constexpr size_t kHeaderSize = 512;
-  constexpr size_t kChunkOverhead = 16; // per-frame chunk header + alignment
-  
-  // Compute max bytes per frame: width * height * 3 (worst-case RGB uncompressed)
-  // Check for overflow: if width * height > SIZE_MAX / 3, reject
-  if (width > SIZE_MAX / 3 || width * 3 > SIZE_MAX / height) {
+  //
+  // The reserve size below was previously computed as:
+  //   512 + numFrames * width * height * 3
+  // which can silently overflow size_t for large dimensions / long videos
+  // (e.g. 4096x4096 x 200 frames overflows the 3-byte-per-pixel step on
+  // 32-bit targets, and 64-bit targets still hit the 4 GB RIFF cap below).
+  //
+  // We perform the multiplication step-by-step against SIZE_MAX, and also
+  // gate the final size against UINT32_MAX because RIFF stores file size
+  // as a little-endian uint32_t -- anything past 4 GB cannot be addressed
+  // by the AVI 1.0 spec regardless of host memory.
+  constexpr size_t kHeaderBytes = 512;
+  constexpr size_t kChunkOverhead = 16; // 4 fourcc + 4 size + alignment slack
+
+  // width / height / channels are uint32_t (verified > 0 above), so each
+  // step is unsigned with well-defined wrap semantics, but we still want to
+  // reject overflow rather than wrap-around silently.
+  const size_t wSz = static_cast<size_t>(width);
+  const size_t hSz = static_cast<size_t>(height);
+  if (wSz > SIZE_MAX / hSz || wSz > SIZE_MAX / 3 ||
+      wSz * hSz > SIZE_MAX / 3) {
     throw StatusError(
         general_error::InvalidArgument,
-        "encodeFramesToAvi: dimensions " + std::to_string(width) + "x" +
-            std::to_string(height) + " would overflow size calculation");
+        "encodeFramesToAvi: frame size " + std::to_string(width) + "x" +
+            std::to_string(height) +
+            " is too large -- width*height*3 would overflow size_t");
   }
-  const size_t bytesPerFrame = static_cast<size_t>(width) * static_cast<size_t>(height) * 3;
-  
-  // Check for overflow: if numFrames * bytesPerFrame > SIZE_MAX - header, reject
-  if (numFrames > static_cast<int>(SIZE_MAX / bytesPerFrame) ||
-      static_cast<size_t>(numFrames) * bytesPerFrame >
-          SIZE_MAX - kHeaderSize - kChunkOverhead) {
+  const size_t bytesPerFrame = wSz * hSz * 3;
+  const size_t perFrameWithOverhead = bytesPerFrame + kChunkOverhead;
+
+  const size_t framesSz = static_cast<size_t>(numFrames);
+  if (framesSz > (SIZE_MAX - kHeaderBytes) / perFrameWithOverhead) {
     throw StatusError(
         general_error::InvalidArgument,
         "encodeFramesToAvi: " + std::to_string(numFrames) + " frames at " +
             std::to_string(width) + "x" + std::to_string(height) +
             " would overflow buffer size");
   }
-  
-  out.reserve(kHeaderSize + static_cast<size_t>(numFrames) * 
-              (bytesPerFrame + kChunkOverhead));
+
+  const size_t estimated = kHeaderBytes + framesSz * perFrameWithOverhead;
+  // AVI 1.0 stores RIFF/LIST sizes as uint32 -- anything past 4 GB cannot
+  // be represented in the header even if we had the RAM.
+  if (estimated > static_cast<size_t>(UINT32_MAX)) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "encodeFramesToAvi: estimated output (" + std::to_string(estimated) +
+            " bytes) exceeds the AVI 1.0 4 GB RIFF size limit");
+  }
+
+  std::vector<uint8_t> out;
+  out.reserve(estimated);
 
   // RIFF ____ AVI
   appendFourCC(out, "RIFF");
@@ -298,11 +318,18 @@ std::vector<uint8_t> encodeFramesToAvi(
     appendU32LE(out, entry.size);
   }
 
-  // Finalize RIFF size (total file size minus 8 bytes of "RIFF<size>")
+  // Finalize RIFF size (total file size minus 8 bytes of "RIFF<size>").
+  // The pre-flight estimate above bounds this, but the final length depends
+  // on JPEG compression so re-check before truncating to uint32_t.
   {
-    const uint32_t riffSize =
-        static_cast<uint32_t>(out.size() - riffSizePos - 4);
-    patchU32LEAt(out, riffSizePos, riffSize);
+    const size_t riffPayload = out.size() - riffSizePos - 4;
+    if (riffPayload > static_cast<size_t>(UINT32_MAX)) {
+      throw StatusError(
+          general_error::InternalError,
+          "encodeFramesToAvi: produced AVI of " + std::to_string(out.size()) +
+              " bytes exceeds the AVI 1.0 4 GB RIFF size limit");
+    }
+    patchU32LEAt(out, riffSizePos, static_cast<uint32_t>(riffPayload));
   }
 
   return out;

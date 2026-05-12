@@ -271,6 +271,33 @@ TEST(AviWriter, RejectsNullFrameDataAtNonZeroIndex) {
 }
 
 // -----------------------------------------------------------------------------
+// 6b. Overflow / 4 GB RIFF-cap guards -- the buffer-size estimate used to be
+//     a raw multiply that could silently wrap on 32-bit targets and would
+//     also exceed the AVI 1.0 uint32_t file-size header on 64-bit hosts.
+//     Both paths must throw *before* we try to allocate or write anything.
+// -----------------------------------------------------------------------------
+
+TEST(AviWriter, RejectsDimensionsThatWouldOverflowFrameSize) {
+  // 32-bit overflow protection: 1 GB^2 * 3 bytes/pixel saturates size_t on
+  // 32-bit and approaches it on 64-bit. We don't allocate this -- the
+  // pre-flight check fires before any encoding starts.
+  auto fixture = makeFrames(1, 16, 16, 3, 128);
+  fixture.frames[0].width = 1'000'000u;
+  fixture.frames[0].height = 1'000'000u;
+  EXPECT_THROW(encodeFramesToAvi(fixture.frames.data(), 1, 24), StatusError);
+}
+
+TEST(AviWriter, RejectsFrameCountTimesSizeExceedingRiffCap) {
+  // 4096 * 4096 * 3 == 48 MB per uncompressed frame. 200 frames -> ~9.4 GB
+  // which is well past the 4 GB RIFF cap. The pre-flight estimate guard
+  // fires here, before we hit the (post-encode) final-size guard.
+  auto fixture = makeFrames(1, 16, 16, 3, 128);
+  fixture.frames[0].width = 4096u;
+  fixture.frames[0].height = 4096u;
+  EXPECT_THROW(encodeFramesToAvi(fixture.frames.data(), 200, 24), StatusError);
+}
+
+// -----------------------------------------------------------------------------
 // 7. File-size monotonicity -- more frames produce strictly larger output
 // -----------------------------------------------------------------------------
 

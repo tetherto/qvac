@@ -1,5 +1,8 @@
 #include "SdVidGenHandlers.hpp"
 
+#include <climits>
+#include <cmath>
+
 #include <inference-addon-cpp/Errors.hpp>
 
 #include "SdParsers.hpp"
@@ -22,16 +25,36 @@ using parsers::requireStr;
 
 namespace {
 
-inline int
-requirePositiveInt(const picojson::value& v, const std::string& key) {
+// Convert a JSON number to int with full safety checks:
+//   - rejects NaN and infinity (since NaN != NaN and inf != floor(inf) trips
+//     std::isfinite, while a plain `d != std::floor(d)` only catches NaN)
+//   - rejects non-integer doubles (e.g. 8.5)
+//   - rejects values that don't fit in a signed 32-bit int (casting a double
+//     outside [INT_MIN, INT_MAX] to int is undefined behaviour)
+// Use this anywhere a JSON number must land in a C++ `int` slot.
+inline int requireInt(const picojson::value& v, const std::string& key) {
   const double d = requireNum(v, key);
-  // Check that the double is actually an integer value before casting
+  if (!std::isfinite(d)) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        key + " must be a finite integer, got: " + std::to_string(d));
+  }
   if (d != std::floor(d)) {
     throw StatusError(
         general_error::InvalidArgument,
         key + " must be an integer, got: " + std::to_string(d));
   }
-  const int n = static_cast<int>(d);
+  if (d < static_cast<double>(INT_MIN) || d > static_cast<double>(INT_MAX)) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        key + " is out of int range, got: " + std::to_string(d));
+  }
+  return static_cast<int>(d);
+}
+
+inline int
+requirePositiveInt(const picojson::value& v, const std::string& key) {
+  const int n = requireInt(v, key);
   if (n <= 0)
     throw StatusError(
         general_error::InvalidArgument,
@@ -87,13 +110,7 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
 
     {"width",
      [](SdVidGenConfig& c, const picojson::value& v) {
-       const double d = requireNum(v, "width");
-       if (d != std::floor(d)) {
-         throw StatusError(
-             general_error::InvalidArgument,
-             "width must be an integer, got: " + std::to_string(d));
-       }
-       const int w = static_cast<int>(d);
+       const int w = requireInt(v, "width");
        if (w <= 0 || w % 8 != 0)
          throw StatusError(
              general_error::InvalidArgument,
@@ -104,13 +121,7 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
 
     {"height",
      [](SdVidGenConfig& c, const picojson::value& v) {
-       const double d = requireNum(v, "height");
-       if (d != std::floor(d)) {
-         throw StatusError(
-             general_error::InvalidArgument,
-             "height must be an integer, got: " + std::to_string(d));
-       }
-       const int h = static_cast<int>(d);
+       const int h = requireInt(v, "height");
        if (h <= 0 || h % 8 != 0)
          throw StatusError(
              general_error::InvalidArgument,
@@ -129,13 +140,7 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
 
     {"video_frames",
      [](SdVidGenConfig& c, const picojson::value& v) {
-       const double d = requireNum(v, "video_frames");
-       if (d != std::floor(d)) {
-         throw StatusError(
-             general_error::InvalidArgument,
-             "video_frames must be an integer, got: " + std::to_string(d));
-       }
-       const int n = static_cast<int>(d);
+       const int n = requireInt(v, "video_frames");
        // Mirror the JS-side message in video.js -- both layers list the
        // same valid set up to 81 (Wan 1.3B native cap) so callers see a
        // consistent error regardless of which validator fires first.
@@ -161,13 +166,7 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
 
     {"fps",
      [](SdVidGenConfig& c, const picojson::value& v) {
-       const double d = requireNum(v, "fps");
-       if (d != std::floor(d)) {
-         throw StatusError(
-             general_error::InvalidArgument,
-             "fps must be an integer, got: " + std::to_string(d));
-       }
-       const int f = static_cast<int>(d);
+       const int f = requireInt(v, "fps");
        if (f <= 0 || f > 120)
          throw StatusError(
              general_error::InvalidArgument,

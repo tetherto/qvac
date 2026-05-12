@@ -22,7 +22,9 @@
  *  15.  Unknown keys silently ignored
  */
 
+#include <cmath>
 #include <cstdlib>
+#include <limits>
 #include <stdexcept>
 
 #include <gtest/gtest.h>
@@ -128,6 +130,48 @@ TEST(SdVidGenHandlers_Dimensions, ZeroOrNegativeRejected) {
 
 TEST(SdVidGenHandlers_Dimensions, NonNumberRejected) {
   expectThrows("width", str("832"));
+}
+
+// -----------------------------------------------------------------------------
+// 3b. Integer-coercion safety (requireInt helper, shared by width, height,
+//     video_frames, fps, steps, high_noise_steps). Doubles that aren't
+//     exact integers, NaN, infinity, and out-of-range values must all be
+//     rejected *before* the static_cast<int> -- otherwise a 8.5 would
+//     silently truncate to 8 and an infinity cast is undefined behaviour.
+// -----------------------------------------------------------------------------
+
+TEST(SdVidGenHandlers_IntCoercion, RejectsFractionalDoubles) {
+  expectThrows("width", num(832.5));
+  expectThrows("height", num(480.001));
+  expectThrows("video_frames", num(5.5));
+  expectThrows("fps", num(16.25));
+  expectThrows("steps", num(30.7));
+}
+
+TEST(SdVidGenHandlers_IntCoercion, NaNAndInfinityBlockedAtJsonLayer) {
+  // picojson::value's double constructor refuses NaN / +inf / -inf at the
+  // JSON parser layer (it throws std::overflow_error), so non-finite values
+  // can never reach a handler via real JSON input. The std::isfinite() guard
+  // in requireInt() is a belt-and-braces check for direct C++ callers that
+  // bypass picojson. Document that contract here.
+  const double nan = std::nan("");
+  const double inf = std::numeric_limits<double>::infinity();
+  EXPECT_THROW(picojson::value{nan}, std::overflow_error);
+  EXPECT_THROW(picojson::value{inf}, std::overflow_error);
+  EXPECT_THROW(picojson::value{-inf}, std::overflow_error);
+}
+
+TEST(SdVidGenHandlers_IntCoercion, RejectsValuesOutsideIntRange) {
+  // 2^40 -- well beyond INT_MAX (~2.1e9) but representable as a double.
+  expectThrows("width", num(1099511627776.0));
+  expectThrows("fps", num(-1099511627776.0));
+}
+
+TEST(SdVidGenHandlers_IntCoercion, AcceptsIntegerDoubles) {
+  // JSON numbers are doubles -- "832" still arrives as 832.0 and must work.
+  EXPECT_EQ(applyOne("width", num(832.0)).width, 832);
+  EXPECT_EQ(applyOne("video_frames", num(33.0)).videoFrames, 33);
+  EXPECT_EQ(applyOne("fps", num(16.0)).fps, 16);
 }
 
 // -----------------------------------------------------------------------------

@@ -824,22 +824,19 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& v) {
         "txt2vid does not accept init_image; use img2vid or flf2vid instead");
 
   // -- Decode init / end / control-frame images -----------------------------
-  // All decoded pixel buffers are owned here and freed at scope exit (even
-  // if generate_video throws or the AVI muxer fails). sd_image_t::data is
-  // allocated by stb_image via malloc(), so image_codec::FreeDeleter is correct.
+  // sd_image_t::data is allocated by stb_image via malloc(), so we wrap each
+  // pixel buffer in unique_ptr with image_codec::FreeDeleter to guarantee
+  // release on every exit path (including exceptions from generate_video()
+  // or the AVI muxer). The sd_image_t structs themselves stay plain values
+  // so we can pass them straight to the C ABI.
   sd_image_t initImg{};
   sd_image_t endImg{};
   std::vector<sd_image_t> controlFrames;
 
-  struct FrameBuffersGuard {
-    std::unique_ptr<uint8_t, image_codec::FreeDeleter> initData;
-    std::unique_ptr<uint8_t, image_codec::FreeDeleter> endData;
-    std::vector<std::unique_ptr<uint8_t, image_codec::FreeDeleter>> controlData;
-
-    ~FrameBuffersGuard() {
-      // unique_ptr destructors handle cleanup automatically
-    }
-  } frameGuard;
+  using PixelBuffer = std::unique_ptr<uint8_t, image_codec::FreeDeleter>;
+  PixelBuffer initData;
+  PixelBuffer endData;
+  std::vector<PixelBuffer> controlData;
 
   if (!job.initImageBytes.empty()) {
     initImg = image_codec::decodeImage(job.initImageBytes);
@@ -848,7 +845,7 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& v) {
           general_error::InvalidArgument,
           "processVideo: failed to decode init_image (corrupt or "
           "unsupported format; supported: PNG, JPEG)");
-    frameGuard.initData.reset(initImg.data);
+    initData.reset(initImg.data);
   }
 
   if (!job.endImageBytes.empty()) {
@@ -858,8 +855,7 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& v) {
           general_error::InvalidArgument,
           "processVideo: failed to decode end_image (corrupt or unsupported "
           "format; supported: PNG, JPEG)");
-    frameGuard.endData.reset(endImg.data);
-    // Validate end_image dimensions match expected video dimensions
+    endData.reset(endImg.data);
     if (static_cast<int>(endImg.width) != vid.width ||
         static_cast<int>(endImg.height) != vid.height)
       throw StatusError(
@@ -872,6 +868,7 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& v) {
 
   if (!job.controlFramesBytes.empty()) {
     controlFrames.reserve(job.controlFramesBytes.size());
+    controlData.reserve(job.controlFramesBytes.size());
     for (size_t i = 0; i < job.controlFramesBytes.size(); ++i) {
       sd_image_t decoded = image_codec::decodeImage(job.controlFramesBytes[i]);
       if (!decoded.data)
@@ -880,11 +877,11 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& v) {
             "processVideo: failed to decode control_frames[" +
                 std::to_string(i) +
                 "] (corrupt or unsupported format; supported: PNG, JPEG)");
-      // Validate control frame dimensions match expected video dimensions
+      // Take ownership *before* the dimension check so a mismatch can't leak
+      // the freshly-decoded pixel buffer.
+      PixelBuffer owned(decoded.data);
       if (static_cast<int>(decoded.width) != vid.width ||
           static_cast<int>(decoded.height) != vid.height) {
-        // Use unique_ptr to auto-cleanup on exception
-        std::unique_ptr<uint8_t, image_codec::FreeDeleter> temp(decoded.data);
         throw StatusError(
             general_error::InvalidArgument,
             "processVideo: control_frames[" + std::to_string(i) +
@@ -893,9 +890,7 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& v) {
                 " do not match video dimensions " + std::to_string(vid.width) +
                 "x" + std::to_string(vid.height));
       }
-      // Transfer ownership to guard
-      frameGuard.controlData.push_back(
-          std::unique_ptr<uint8_t, image_codec::FreeDeleter>(decoded.data));
+      controlData.push_back(std::move(owned));
       controlFrames.push_back(decoded);
     }
   }

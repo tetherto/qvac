@@ -304,9 +304,14 @@ TEST_F(SdWanValidationTest, Flf2VidRejectsCorruptEndImage) {
 
 TEST_F(SdWanValidationTest, Img2VidRejectsCorruptControlFrame) {
   SdModel::GenerationJob job;
+  // Pin width/height to the control-frame size so the (new) dimension check
+  // in processVideo() passes for frame [0] and we reach the decode-failure
+  // path for frame [1] that this test is exercising.
   job.paramsJson = R"({
     "mode": "img2vid",
     "prompt": "animate with VACE guidance",
+    "width": 64,
+    "height": 64,
     "video_frames": 5
   })";
   job.initImageBytes = wan_helpers::makeSolidPng(64, 64, 10, 20, 30);
@@ -317,6 +322,53 @@ TEST_F(SdWanValidationTest, Img2VidRejectsCorruptControlFrame) {
       {0x00, 0xFF, 0xAA, 0x01, 0x02, 0x03, 0xDE, 0xAD, 0xBE, 0xEF, 0x11, 0x22});
   expectThrowContains(
       std::move(job), "processVideo: failed to decode control_frames[1]");
+}
+
+// ---------------------------------------------------------------------------
+// Dimension validation (added in QVAC-18026 follow-up): end_image and every
+// control_frames entry must match the video width/height before we hand
+// pointers to generate_video(), which would otherwise see mismatched stride
+// and either segfault inside the VAE or silently produce garbage.
+// ---------------------------------------------------------------------------
+
+TEST_F(SdWanValidationTest, Flf2VidRejectsEndImageWithWrongDimensions) {
+  SdModel::GenerationJob job;
+  job.paramsJson = R"({
+    "mode": "flf2vid",
+    "prompt": "interpolate",
+    "width": 64,
+    "height": 64,
+    "video_frames": 5
+  })";
+  job.initImageBytes = wan_helpers::makeSolidPng(64, 64, 10, 20, 30);
+  // end_image is 96x96 -- explicitly different from width/height = 64x64.
+  job.endImageBytes = wan_helpers::makeSolidPng(96, 96, 90, 80, 70);
+  expectThrowContains(
+      std::move(job),
+      "processVideo: end_image dimensions 96x96 do not match video "
+      "dimensions 64x64");
+}
+
+TEST_F(SdWanValidationTest, Img2VidRejectsControlFrameWithWrongDimensions) {
+  SdModel::GenerationJob job;
+  job.paramsJson = R"({
+    "mode": "img2vid",
+    "prompt": "animate with VACE guidance",
+    "width": 64,
+    "height": 64,
+    "video_frames": 5
+  })";
+  job.initImageBytes = wan_helpers::makeSolidPng(64, 64, 10, 20, 30);
+  // First control frame matches; second is wrong size -- error must call
+  // out index 1 specifically so users can find the offending input quickly.
+  job.controlFramesBytes.push_back(
+      wan_helpers::makeSolidPng(64, 64, 100, 110, 120));
+  job.controlFramesBytes.push_back(
+      wan_helpers::makeSolidPng(128, 128, 200, 210, 220));
+  expectThrowContains(
+      std::move(job),
+      "processVideo: control_frames[1] dimensions 128x128 do not match "
+      "video dimensions 64x64");
 }
 
 // ---------------------------------------------------------------------------
