@@ -43,6 +43,7 @@ export async function* diffusion(
     auto_resize_ref_image: request.auto_resize_ref_image,
     strength: request.strength,
     lora: request.lora,
+    upscale: request.upscale === false ? undefined : request.upscale,
   });
 
   let outputIndex = 0;

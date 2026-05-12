@@ -50,7 +50,7 @@ import { TranslationExecutor } from "../shared/executors/translation-executor.js
 import { ShardedModelExecutor } from "../shared/executors/sharded-model-executor.js";
 import { HttpEmbeddingExecutor } from "../shared/executors/http-embedding-executor.js";
 import { KvCacheExecutor } from "../shared/executors/kv-cache-executor.js";
-import { LoggingExecutor } from "../shared/executors/logging-executor.js";
+import { MobileLoggingExecutor } from "./executors/logging-executor.js";
 import { RegistryExecutor } from "../shared/executors/registry-executor.js";
 import { ModelInfoExecutor } from "../shared/executors/model-info-executor.js";
 import { WrongModelExecutor } from "../shared/executors/wrong-model-executor.js";
@@ -344,7 +344,7 @@ function skipTests(testIds: string[], reason: string) {
 
 export async function bootstrap() {
   await resources.downloadAllOnce(console.log);
-};
+}
 
 export const executor = createExecutor({
   handlers: [
@@ -358,7 +358,7 @@ export const executor = createExecutor({
     ], "HTTP test disabled on mobile (OOM)"),
     new SkipExecutor(/^finetune-/, "Finetune tests disabled on mobile"),
     new SkipExecutor(/^tools-(?!simple-function$|no-function-match$)/, "Tools test disabled on mobile"),
-    new SkipExecutor(/^diffusion-/, "SD v2.1 1B Q8_0 cold-load is too heavy for Device Farm devices (iOS variable 5–15min, Android blocks JS thread >300s and trips heartbeat)"),
+    new SkipExecutor(/^(diffusion-|addon-logging-diffusion$)/, "SD v2.1 1B Q8_0 cold-load is too heavy for Device Farm devices (iOS variable 5–15min, Android blocks JS thread >300s and trips heartbeat)"),
     // suspend() hangs the test runner on mobile (the lifecycle coordinator
     // pauses MQTT/network ops and never resumes within the test timeout).
     // Only resume-idempotent is safe -- it does not call suspend().
@@ -384,10 +384,11 @@ export const executor = createExecutor({
         "ocr-misaligned-text",
         "ocr-multi-sized-text",
         "ocr-multiple-fonts",
+        "addon-logging-ocr",
       ], "OCR disabled on iOS (ONNX/CoreML OOM)"),
       new SkipExecutor(/^translation-afriquegemma-/, "AfriqueGemma 4B (~2.7 GB) exceeds iOS memory budget"),
       // TODO(QVAC-18460): re-enable once iOS transcribe() crash is fixed.
-      new SkipExecutor(/^transcription-/, "TODO(QVAC-18460): transcription disabled on iOS — transcribe() hard-crashes consumer after FFmpegDecoder unload"),
+      new SkipExecutor(/^(transcription-|addon-logging-whisper$)/, "TODO(QVAC-18460): transcription disabled on iOS — transcribe() hard-crashes consumer after FFmpegDecoder unload"),
       new SkipExecutor(/^transcribe-stream-events-/, "TODO(QVAC-18460): transcribeStream disabled on iOS — same native crash path as transcription-* (Silero VAD + whisper_full)"),
       skipTests([
         "config-reload-then-transcribe",
@@ -411,7 +412,7 @@ export const executor = createExecutor({
     new MobileOcrExecutor(resources),
     new MobileTtsExecutor(resources),
     new MobileConfigReloadExecutor(resources),
-    new LoggingExecutor(resources),
+    new MobileLoggingExecutor(resources),
     new RegistryExecutor(resources),
     new HttpEmbeddingExecutor(resources),
     new KvCacheExecutor(resources),

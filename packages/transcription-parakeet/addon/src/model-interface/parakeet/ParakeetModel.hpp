@@ -1,15 +1,33 @@
 #pragma once
 
-#include <any>
+// Pure-ggml backend for the Parakeet binding (sourced from qvac-parakeet.cpp).
+//
+// This class used to host four ggml sessions (preprocessor + encoder
+// + decoder + ctc/sortformer) plus a hand-rolled mel-spectrogram, CMVN,
+// chunked-limited streaming state machine for EOU, and a Sortformer
+// post-processing pipeline. All of that has been replaced by a single
+// `parakeet::Engine` from `parakeet-cpp` (vcpkg overlay port). The
+// engine internally handles mel + encoder + decoder + diarization for any
+// of the four model types (CTC, TDT, EOU, Sortformer) given a single GGUF
+// file, so the binding's job is reduced to:
+//
+//   1. accumulate GGUF bytes from `setWeightsForFile()` into a temp file,
+//   2. open `parakeet::Engine` against that path,
+//   3. dispatch `process()` to either `transcribe_samples()` (CTC / TDT /
+//      EOU) or `diarize_samples()` (Sortformer),
+//   4. wrap the engine result in `Transcript` and fire the on-segment
+//      callback.
+
 #include <atomic>
 #include <cstdint>
+#include <filesystem>
 #include <functional>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <span>
 #include <streambuf>
 #include <string>
-#include <tuple>
 #include <type_traits>
 #include <vector>
 
@@ -18,12 +36,12 @@
 #include "inference-addon-cpp/ModelInterfaces.hpp"
 #include "inference-addon-cpp/RuntimeStats.hpp"
 
-namespace Ort {
-class Env;
-class Session;
-class SessionOptions;
-class MemoryInfo;
-} // namespace Ort
+#include <parakeet/streaming.h>
+#include <parakeet/diarization.h>
+
+namespace parakeet {
+class Engine;
+} // namespace parakeet
 
 namespace qvac_lib_infer_parakeet {
 
@@ -38,12 +56,6 @@ public:
   using Output = std::vector<Transcript>;
   struct AnyInput {
     Input input;
-  };
-
-  struct MelFilter {
-    int startBin;
-    int endBin;
-    std::vector<float> weights;
   };
 
   explicit ParakeetModel(const ParakeetConfig& config);
@@ -61,7 +73,16 @@ public:
   void unloadWeights() { unload(); }
   void reload();
   void reset();
-  void endOfStream() { stream_ended_ = true; }
+  // Finalises the streaming session (if open) so the trailing partial
+  // chunk's segments are flushed via the on-segment callback before the
+  // session is torn down on unload(). For offline mode this is just a
+  // flag flip.
+  //
+  // SCOPE: framework path only. The duplex `runStreaming()` path
+  // (ParakeetStreamingProcessor) owns its own parakeet streaming session
+  // and never calls endOfStream() / sets stream_ended_. Consumers must
+  // not gate their cleanup on `isStreamEnded()` after `runStreaming()`.
+  void endOfStream();
   bool isStreamEnded() const { return stream_ended_; }
   bool isLoaded() const { return is_loaded_; }
   qvac_lib_inference_addon_cpp::RuntimeStats runtimeStats() const override;
@@ -75,11 +96,67 @@ public:
   Output
   process(const Input& input, std::function<void(const Output&)> callback);
 
+  // ── Duplex streaming helpers ───────────────────────────────────────────
+  // Open a long-lived parakeet StreamSession owned by the caller (e.g.
+  // ParakeetStreamingProcessor). Bypasses the framework's per-call
+  // process() lifecycle: the caller drives feed_pcm_f32 / finalize /
+  // cancel directly on its own thread, and the on_segment callback fires
+  // synchronously inside feed_pcm_f32 / finalize whenever the engine
+  // emits a segment. Throws if the engine isn't loaded.
+  std::unique_ptr<parakeet::StreamSession> createDuplexAsrSession(
+      const parakeet::StreamingOptions& opts,
+      parakeet::StreamingCallback on_segment);
+
+  // Same idea for Sortformer-flavoured GGUFs.
+  std::unique_ptr<parakeet::SortformerStreamSession>
+  createDuplexDiarizationSession(
+      const parakeet::SortformerStreamingOptions& opts,
+      parakeet::SortformerSegmentCallback on_segment);
+
+  // Cheap accessors used by the duplex processor (and unit tests) to
+  // build session opts from cfg_ when the JS caller doesn't override
+  // them. Reads only; safe without holding engine_mutex_.
+  int                 getSampleRate() const { return sample_rate_; }
+  int                 getStreamingChunkMs() const {
+    return cfg_.streamingChunkMs > 0 ? cfg_.streamingChunkMs : 1000;
+  }
+  int                 getStreamingHistoryMs() const {
+    return cfg_.streamingHistoryMs > 0 ? cfg_.streamingHistoryMs : 30000;
+  }
+  // <0 sentinel = "not set; let parakeet use its own defaults"
+  // (10000 / 2000). Returned verbatim so callers can treat the negative
+  // value as "skip the override" rather than baking a duplicate of
+  // parakeet's defaults into our wrapper.
+  int                 getStreamingLeftContextMs() const {
+    return cfg_.streamingLeftContextMs;
+  }
+  int                 getStreamingRightLookaheadMs() const {
+    return cfg_.streamingRightLookaheadMs;
+  }
+  bool                getStreamingEmitPartials() const {
+    return cfg_.streamingEmitPartials;
+  }
+  bool                getStreamingEnergyVad() const {
+    return cfg_.streamingEnergyVad;
+  }
+  bool                isSortformer() const {
+    return cfg_.modelType == ModelType::SORTFORMER;
+  }
+  float               getDiarOnsetThreshold() const { return diarConfig_.onset; }
+  float               getDiarMinDurationOn() const {
+    return diarConfig_.minDurationOn;
+  }
+
   // ── Configuration ──────────────────────────────────────────────────────
   void setConfig(const ParakeetConfig& config) { cfg_ = config; }
   void setOnSegmentCallback(const OutputCallback& callback) {
     on_segment_ = callback;
   }
+  // TEST-ONLY hook: directly append a Transcript to output_ so unit
+  // tests can exercise the framework's drainage path without driving a
+  // real engine. Production callers should never invoke this -- any
+  // segment pushed here will be flushed verbatim with the next
+  // process() call.
   void addTranscription(const Transcript& transcript) {
     output_.push_back(transcript);
   }
@@ -96,7 +173,10 @@ public:
       const std::string& filename,
       std::unique_ptr<std::basic_streambuf<char>>&& streambuf) override;
   void waitForLoadInitialization() override { load(); }
-  // ── Weight loading ─────────────────────────────────────────────────────
+
+  // Two streaming overloads. The ggml backend doesn't actually care about chunking; it
+  // just buffers the bytes until `completed=true`, then materialises them
+  // into a temp file on `load()`.
   void set_weights_for_file(
       const std::string& filename, std::span<const uint8_t> contents,
       bool completed);
@@ -110,6 +190,10 @@ public:
 
   // ── Queries ────────────────────────────────────────────────────────────
   [[nodiscard]] std::string getDisplayName() const { return getName(); }
+
+  // Convenience helper -- decode raw int16 PCM bytes into normalised
+  // float samples. Kept for back-compat with callers that used to pipe
+  // raw mic captures straight into `process()`.
   [[nodiscard]] static std::vector<float> preprocessAudioData(
       const std::vector<uint8_t>& audioData,
       const std::string& audioFormat = "s16le");
@@ -118,112 +202,90 @@ private:
   void throwIfCancelled() const;
   static bool isCancellationError(const std::exception& e);
 
-  // ── Session loading helpers ─────────────────────────────────────────────
-  void loadCTCSessions(Ort::SessionOptions& options);
-  void loadEOUSessions(Ort::SessionOptions& options);
-  void loadSortformerSessions(Ort::SessionOptions& options);
-  void loadTDTSessions(Ort::SessionOptions& options);
+  // ── GGUF buffer staging ────────────────────────────────────────────────
+  // The addon framework streams the GGUF bytes via setWeightsForFile().
+  // We accumulate them into `gguf_buffer_` keyed by the (single) GGUF
+  // filename; on load() we materialise the buffer into a temp file and
+  // hand the path to parakeet::Engine.
+  std::string                          gguf_filename_;
+  std::vector<uint8_t>                 gguf_buffer_;
+  std::filesystem::path                gguf_temp_path_;
+  bool                                 gguf_completed_ = false;
 
-  // ── Shared utilities ───────────────────────────────────────────────────
-  void dispatchWeightFile(const std::string& filename);
-  std::string tokensToString(const std::vector<int64_t>& tokens) const;
-  void loadVocabulary(const std::vector<uint8_t>& vocabData);
-  void loadTokenizerJson(const std::vector<uint8_t>& data);
-  [[nodiscard]] int64_t getLanguageToken(const std::string& langCode) const;
-
-  // ── Feature extraction ─────────────────────────────────────────────────
-  std::pair<std::vector<float>, int64_t> runPreprocessor(const Input& audio);
-  std::vector<float>
-  computeMelSpectrogram(const Input& audio, int numMelBins = MEL_BINS);
-  void stftMelEnergies(
-      const float* source, size_t sourceLen, size_t numFrames, int numMelBins,
-      float logGuard, const std::vector<MelFilter>& melFilterbank,
-      std::vector<float>& melSpec);
-  static void
-  applyCMVN(std::vector<float>& melSpec, size_t numFrames, int numMelBins);
-
-  // ── Per-model-type pipelines ───────────────────────────────────────────
-  std::string runInferencePipeline(const Input& audio);
-  std::string processTDT(const Input& input);
-  std::string processCTC(const Input& input);
-  std::string processEOU(const Input& input);
-  std::string processSortformer(const Input& input);
-
-  // ── TDT transducer ─────────────────────────────────────────────────────
-  std::vector<float> runEncoder(
-      const std::vector<float>& melFeatures, int64_t numFrames,
-      int64_t& encodedLength, bool alreadyTransposed = false);
-  std::vector<float> runEncoderChunked(
-      const std::vector<float>& melFeatures, int64_t numFrames,
-      int64_t& encodedLength, bool alreadyTransposed = false);
-  std::string
-  greedyDecode(const std::vector<float>& encoderOutput, int64_t encodedLength);
-
-  // ── CTC ────────────────────────────────────────────────────────────────
-  std::vector<float>
-  runCTCModel(const std::vector<float>& melFeatures, int64_t numFrames);
-  std::string
-  ctcGreedyDecode(const std::vector<float>& logits, int64_t numFrames);
-
-  // ── EOU streaming ──────────────────────────────────────────────────────
-  void resetEOUStreamingState();
-  std::vector<float> eouEncodeChunk(
-      const std::vector<float>& melChunk, int64_t chunkFrames,
-      int64_t& outFrames);
-  std::string eouDecodeChunk(
-      const std::vector<float>& encoderOutput, int64_t encodedFrames,
-      int& eouCount);
-
-  // ── Sortformer diarization ─────────────────────────────────────────────
-  std::string runSortformerFromMel(
-      const std::vector<float>& melFeatures, int64_t numFrames);
-  std::vector<float> runSortformerChunked(
-      const std::vector<float>& melFeatures, int64_t numFrames);
-  std::vector<float> medianFilter(
-      const std::vector<float>& preds, int64_t numFrames,
-      int numSpeakers) const;
-  std::vector<SpeakerSegment>
-  binarizePredictions(const std::vector<float>& preds, int64_t numFrames) const;
+  std::filesystem::path                writeBufferToTempFile_();
+  void                                 cleanupTempFile_();
 
   // ── State ──────────────────────────────────────────────────────────────
-  ParakeetConfig cfg_;
-  OutputCallback on_segment_;
-  Output output_;
-  bool stream_ended_ = false;
-  bool is_loaded_ = false;
-  bool is_warmed_up_ = false;
+  ParakeetConfig                       cfg_;
+  OutputCallback                       on_segment_;
+  Output                               output_;
 
-  // ── ONNX Runtime ───────────────────────────────────────────────────────
-  std::unique_ptr<Ort::Env> ort_env_;
-  std::unique_ptr<Ort::Session> preprocessor_session_;
-  std::unique_ptr<Ort::Session> encoder_session_;
-  std::unique_ptr<Ort::Session> decoder_session_;
-  std::unique_ptr<Ort::Session> ctc_session_;
-  std::unique_ptr<Ort::Session> sortformer_session_;
-  std::unique_ptr<Ort::MemoryInfo> memory_info_;
+  bool                                 stream_ended_ = false;
+  bool                                 is_loaded_    = false;
+  bool                                 is_warmed_up_ = false;
 
-  std::map<std::string, std::vector<uint8_t>> model_weights_;
+  // The Engine itself (pimpl-owned via unique_ptr to keep the
+  // qvac-parakeet headers out of the binding's public include surface).
+  std::unique_ptr<parakeet::Engine> engine_;
+  mutable std::mutex                     engine_mutex_;
 
-  // ── Vocabulary ─────────────────────────────────────────────────────────
-  std::vector<std::string> vocab_;
+  // Streaming sessions (only one of the two is open at a time, depending on
+  // model_type). Lifetime: opened in load() when cfg_.streaming == true,
+  // finalize()d on endOfStream(), reset on unload(). Each process() call
+  // routes through feed_pcm_f32() instead of the offline *_samples paths.
+  //
+  // session_mutex_ guards the unique_ptrs against the data race between
+  // cancel() (framework-callable from any thread, concurrent with
+  // process()/unload()/reload()) and the lifecycle paths
+  // openStreamingSession_() / closeStreamingSession_() / endOfStream() /
+  // ~ParakeetModel that .reset() them. cancel() copies the raw pointer
+  // under the lock and invokes the engine's session-internal cancel()
+  // (itself thread-safe with concurrent feed/finalize) without holding
+  // the lock further; closeStreamingSession_() moves ownership out under
+  // the lock and runs the destructor outside.
+  mutable std::mutex                                 session_mutex_;
+  std::unique_ptr<parakeet::StreamSession>           asr_session_;
+  std::unique_ptr<parakeet::SortformerStreamSession> diar_session_;
 
-  // ── Token constants ────────────────────────────────────────────────────
-  static constexpr int64_t BLANK_TOKEN = 8192;
-  static constexpr int64_t PAD_TOKEN = 2;
-  static constexpr int64_t EOS_TOKEN = 3;
-  static constexpr int64_t NOSPEECH_TOKEN = 1;
-  static constexpr int64_t PREDICT_LANG = 22;
-  static constexpr int64_t CTC_BLANK_TOKEN = 1024;
-  static constexpr int64_t EOU_FALLBACK_TOKEN = 1024;
+  // Wall-clock seconds of audio fed to the streaming sessions so far,
+  // used to translate per-session relative segment timestamps into a
+  // monotonically growing wall-clock-style timeline that mirrors what
+  // the offline path emits in `process(input)`.
+  double                              streaming_audio_seconds_ = 0.0;
+  bool                                streaming_finalized_     = false;
 
-  // ── Error return strings (non-exception feedback to callers) ───────────
-  static constexpr const char* ERR_NO_SPEECH = "[No speech detected]";
-  static constexpr const char* ERR_AUDIO_SHORT = "[Audio too short]";
-  static constexpr const char* ERR_MODEL_NOT_READY = "[Model not ready]";
+  // Sample rate in Hz; copied from cfg_.sampleRate at load time. The
+  // ggml engine does not currently support non-16 kHz models, so anything
+  // other than 16 000 throws on load.
+  int                                  sample_rate_ = 16000;
+
+  // Active backend, captured once at load() from
+  // parakeet::Engine::backend_device() / ::backend_name(). The
+  // *_device_ field is the post-fallback truth: a load-time GPU init
+  // failure (e.g. Adreno-tier rejection, missing OpenCL ICD subgroup
+  // extensions, simulator without Metal) leaves it at 0 / "CPU" even
+  // when cfg_.useGPU was true. Surfaced through runtimeStats() as
+  // numeric fields (the addon-cpp RuntimeStats variant only carries
+  // double / int64); the GPU smoke tests gate on
+  // `backendDevice == 1` and friends.
+  //
+  // backend_id_ codes (kept stable; mirrored on the JS side):
+  //   0 = CPU, 1 = Metal, 2 = CUDA, 3 = Vulkan, 4 = OpenCL, 99 = other
+  int                                  backend_device_ = 0;
+  int                                  backend_id_     = 0;
+  std::string                          backend_name_   = "CPU";
+
+  // ── Token / sentinel constants ─────────────────────────────────────────
+  // The engine itself uses different vocab IDs internally; we surface only 
+  // the "[No speech detected]" / "[Audio too short]" / ... text sentinels 
+  // through Transcript::text.
+  static constexpr const char* ERR_NO_SPEECH        = "[No speech detected]";
+  static constexpr const char* ERR_AUDIO_SHORT      = "[Audio too short]";
+  static constexpr const char* ERR_MODEL_NOT_READY  = "[Model not ready]";
   static constexpr const char* ERR_MODEL_NOT_LOADED = "[Model not loaded]";
-  static constexpr const char* ERR_INFERENCE = "[Inference error]";
-  static constexpr const char* ERR_NO_SPEAKERS = "[No speakers detected]";
-  static constexpr const char* ERR_JOB_CANCELLED = "Job cancelled";
+  static constexpr const char* ERR_INFERENCE       = "[Inference error]";
+  static constexpr const char* ERR_NO_SPEAKERS     = "[No speakers detected]";
+  static constexpr const char* ERR_JOB_CANCELLED   = "Job cancelled";
 
   static bool isSentinel(const std::string& text) {
     return text == ERR_NO_SPEECH || text == ERR_AUDIO_SHORT ||
@@ -231,102 +293,68 @@ private:
            text == ERR_INFERENCE || text == ERR_NO_SPEAKERS;
   }
 
-  // ── Audio / mel constants ──────────────────────────────────────────────
-  static constexpr int MEL_BINS = 128;
-  static constexpr int CTC_MEL_BINS = 80;
-  static constexpr int FFT_SIZE = 512;
-  static constexpr int HOP_LENGTH = 160;
-  static constexpr int WIN_LENGTH = 400;
+  // ── Audio constants ────────────────────────────────────────────────────
+  // The Engine handles its own mel-spectrogram internally; these are
+  // here only so JS-facing logging / metric reporting keeps the same
+  // numbers as the old binding.
+  static constexpr int   HOP_LENGTH  = 160;
   static constexpr float SAMPLE_RATE = 16000.0f;
 
-  // ── Encoder / decoder dimensions ───────────────────────────────────────
-  static constexpr int ENCODER_DIM = 1024;
-  static constexpr int DECODER_STATE_DIM = 640;
-  static constexpr int TDT_DECODER_LSTM_LAYERS = 2;
-  static constexpr int EOU_DECODER_LSTM_LAYERS = 1;
+  DiarizationConfig                    diarConfig_;
 
-  // ── TDT encoder long-form chunking ─────────────────────────────────────
-  // The exported TDT encoder graph has positional-encoding tensors that
-  // impose two static length ceilings on the encoder time axis:
-  //   - a long-range bucket of 9999 frames
-  //   - a tighter (relative/local) bucket of 3000 frames
-  // The tighter bucket is the binding constraint, so chunks fed to the
-  // encoder must stay under 3000 encoder frames (= 24000 mel frames).
-  // Audio whose post-subsampling length exceeds the chunk size is processed
-  // via a sliding window over the mel features (see runEncoderChunked).
-  static constexpr int64_t TDT_ENCODER_MAX_OUTPUT_FRAMES = 3000;
-  static constexpr int64_t TDT_ENCODER_SUBSAMPLING = 8;
-  static constexpr int64_t TDT_ENCODER_CHUNK_MEL_FRAMES = 20000;  // ~200s, 2500 enc frames
-  static constexpr int64_t TDT_ENCODER_OVERLAP_MEL_FRAMES = 2000; // ~20s
-  static constexpr int64_t TDT_ENCODER_MAX_MEL_FRAMES =
-      TDT_ENCODER_CHUNK_MEL_FRAMES; // chunk anything beyond one window
-  static constexpr int64_t TDT_ENCODER_MIN_TAIL_MEL_FRAMES = 80;  // ~0.8s
+  // ── Sortformer head dispatch ───────────────────────────────────────────
+  std::string runSortformerProcess_(const Input& input);
 
-  static_assert(TDT_ENCODER_CHUNK_MEL_FRAMES / TDT_ENCODER_SUBSAMPLING
-                    < TDT_ENCODER_MAX_OUTPUT_FRAMES,
-                "Chunk mel frames exceed encoder positional-encoding ceiling");
+  // ── ASR head dispatch ──────────────────────────────────────────────────
+  std::string runAsrProcess_(const Input& input);
 
-  // ── EOU (FastConformer-RNNT 120M) ─────────────────────────────────────
-  static constexpr int EOU_ENCODER_DIM = 512;
-  static constexpr int EOU_DECODER_STATE_DIM = 640;
-  static constexpr int EOU_NUM_LAYERS = 17;
-  static constexpr int EOU_CACHE_LOOKBACK = 70;
-  static constexpr int EOU_CACHE_TIME_STEPS = 8;
-  static constexpr int EOU_ENCODER_CHUNK_FRAMES = 25;
-  static constexpr int EOU_MAX_SYMBOLS_PER_STEP = 5;
-  static constexpr int64_t EOU_MIN_ENCODER_FRAMES = 10;
+  // ── Streaming session helpers ──────────────────────────────────────────
+  // Opens an ASR or Sortformer streaming session against the loaded engine
+  // for the LEGACY framework path: called from load() when cfg_.streaming
+  // is true, then runStreamingProcess_() drives it via the framework's
+  // process() callback. The on_segment callback pushes a Transcript onto
+  // pending_streaming_segments_ for the next process() call to drain into
+  // output_ + on_segment_.
+  //
+  // For the duplex path consumed by `runStreaming(...)` see
+  // `createDuplexAsrSession()` / `createDuplexDiarizationSession()` (above)
+  // and `ParakeetStreamingProcessor` (../ParakeetStreamingProcessor.hpp);
+  // those own a separate session per addon instance and queue segments
+  // directly into addonCpp->outputQueue without going through process().
+  void openStreamingSession_();
+  void closeStreamingSession_();
 
-  // ── Sortformer ─────────────────────────────────────────────────────────
-  static constexpr int SF_NUM_SPEAKERS = 4;
-  static constexpr int SF_EMB_DIM = 512;
-  static constexpr int SF_CHUNK_LEN = 124;
-  static constexpr int SF_FIFO_LEN = 124;
-  static constexpr int SF_SPKCACHE_LEN = 188;
-  static constexpr int SF_SUBSAMPLING = 8;
-  static constexpr float SF_FRAME_DURATION = 0.08f;
+  // process() drainage: streaming-session callbacks fire mid-feed (and
+  // potentially from a different thread on finalize()), so we stash the
+  // per-segment Transcripts here under streaming_mutex_ and flush them
+  // into output_ at the end of each process() call.
+  std::mutex                          streaming_mutex_;
+  std::vector<Transcript>             pending_streaming_segments_;
 
-  DiarizationConfig diarConfig_;
+  // Runs cfg_.streaming feed for a chunk and returns the concatenated
+  // text of the segments fired during the call (joined with single
+  // spaces). Sentinel-string fallbacks ([No speech detected] etc.) are
+  // applied when the session emitted nothing for the chunk so the
+  // existing Transcript-shaped JS contract stays intact.
+  std::string runStreamingProcess_(const Input& input);
 
-  struct EOUStreamState {
-    std::vector<float> cacheChan;
-    std::vector<float> cacheTime;
-    std::vector<int64_t> cacheChanLen;
-    std::vector<float> stateH;
-    std::vector<float> stateC;
-    int32_t lastToken = -1;
-    int64_t eouId = -1;
-    int64_t blankId = -1;
-    bool initialized = false;
-  };
-  EOUStreamState eouState_;
+  // ── Runtime stats (subset of legacy fields; we now derive most numbers
+  //     from the Engine's own per-call timings) ────────────────────────
+  float                                processed_time_       = 0.0f;
+  int64_t                              totalSamples_         = 0;
+  int64_t                              totalTokens_          = 0;
+  int64_t                              totalTranscriptions_  = 0;
+  int64_t                              processCalls_         = 0;
+  int64_t                              totalWallMs_          = 0;
+  int64_t                              modelLoadMs_          = 0;
+  int64_t                              melSpecMs_            = 0;
+  int64_t                              encoderMs_            = 0;
+  int64_t                              decoderMs_            = 0;
+  int64_t                              totalEncodedFrames_   = 0;
 
-  float processed_time_ = 0.0f;
-
-  // ── Mel filterbank cache ────────────────────────────────────────────────
-  struct FilterbankKey {
-    int melBins;
-    bool slaney;
-    bool operator<(const FilterbankKey& o) const {
-      return std::tie(melBins, slaney) < std::tie(o.melBins, o.slaney);
-    }
-  };
-  std::map<FilterbankKey, std::vector<MelFilter>> filterbanks_;
-
-  // ── Runtime stats ──────────────────────────────────────────────────────
-  int64_t totalSamples_ = 0;
-  int64_t totalTokens_ = 0;
-  int64_t totalTranscriptions_ = 0;
-  int64_t processCalls_ = 0;
-  int64_t totalWallMs_ = 0;
-  int64_t modelLoadMs_ = 0;
-  int64_t melSpecMs_ = 0;
-  int64_t encoderMs_ = 0;
-  int64_t decoderMs_ = 0;
-  int64_t totalMelFrames_ = 0;
-  int64_t totalEncodedFrames_ = 0;
-  mutable std::atomic_uint64_t nextGeneration_ = 1;
-  mutable std::atomic_uint64_t activeGeneration_ = 0;
-  mutable std::atomic_uint64_t cancelGeneration_ = 0;
+  mutable std::atomic_uint64_t         nextGeneration_   = 1;
+  mutable std::atomic_uint64_t         activeGeneration_ = 0;
+  mutable std::atomic_uint64_t         cancelGeneration_ = 0;
 };
 
 } // namespace qvac_lib_infer_parakeet
