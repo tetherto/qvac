@@ -28,14 +28,13 @@ test("completionDone: enforces error/stopReason invariant", (t) => {
   bad({ type: "completionDone", seq: 0, error: { message: "orphan" } });
 });
 
-test("completionDone: accepts the new M2 'cancelled' stopReason on the success path (D2)", (t) => {
-  // D2 (pitch-3-decisions.md): a cancelled completion is a *clean*
-  // termination, not an error. The event must validate against the
-  // `successDoneSchema` discriminant — same shape as `"eos"` — so
-  // stream-first consumers see the cancel as a typed `stopReason`
-  // rather than a thrown error. The companion `errorDoneSchema`'s
-  // `stopReason: "error"` is reserved for genuine mid-stream failures
-  // where the partial state is unsafe to use.
+test("completionDone: accepts the 'cancelled' stopReason on the success path", (t) => {
+  // A cancelled completion is a *clean* termination, not an error. The
+  // event must validate against the `successDoneSchema` discriminant —
+  // same shape as `"eos"` — so stream-first consumers see the cancel
+  // as a typed `stopReason` rather than a thrown error. The companion
+  // `errorDoneSchema`'s `stopReason: "error"` is reserved for genuine
+  // mid-stream failures where the partial state is unsafe to use.
   const ok = (v: unknown) => t.is(doneEventSchema.safeParse(v).success, true);
   const bad = (v: unknown) => t.is(doneEventSchema.safeParse(v).success, false);
 

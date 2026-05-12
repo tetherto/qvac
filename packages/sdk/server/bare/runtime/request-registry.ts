@@ -124,7 +124,7 @@ interface RegistryEntry {
 /**
  * Bookkeeping entry for a `cancel({ requestId })` that arrived before
  * the matching `begin({ requestId })` ran. Used to close the
- * Stop-button race described in QVAC-18182 / M2 deliverable 6.
+ * Stop-button race described in QVAC-18182.
  */
 interface CancelBeforeBeginEntry {
   /** `Date.now()` snapshot for TTL eviction. */
@@ -160,7 +160,7 @@ export function createRequestRegistry(): RequestRegistry {
   const entries = new Map<string, RegistryEntry>();
 
   /**
-   * "Cancelled-before-begin" tripwire (M2, QVAC-18182). A
+   * "Cancelled-before-begin" tripwire (QVAC-18182). A
    * `cancel({ requestId })` whose target isn't yet in `entries` records
    * the id here; the subsequent `begin({ requestId: <same id> })` then
    * aborts the new controller before returning. Map order is insertion
@@ -252,7 +252,7 @@ export function createRequestRegistry(): RequestRegistry {
     const controller = new AbortController();
     const scope = createDisposableScope();
 
-    // Stop-button race close (M2, QVAC-18182). If a
+    // Stop-button race close (QVAC-18182). If a
     // `cancel({ requestId })` already arrived for this id, abort the
     // new controller before observers can subscribe to it. The
     // tripwire entry is consumed so a later, separate `begin(...)`
@@ -335,7 +335,7 @@ export function createRequestRegistry(): RequestRegistry {
         if (cancelEntry(entry, target.reason)) cancelled++;
         return cancelled;
       }
-      // Stop-button race (M2, QVAC-18182): the client beat its own
+      // Stop-button race (QVAC-18182): the client beat its own
       // `begin(...)`. Record the cancel so the next matching `begin`
       // aborts immediately. The return value stays 0 — no in-flight
       // request was matched, which is still the truth — but the

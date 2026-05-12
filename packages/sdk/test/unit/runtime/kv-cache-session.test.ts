@@ -2,14 +2,13 @@
 import test from "brittle";
 
 // -----------------------------------------------------------------------------
-// `KvCacheSession` unit tests — M2 (QVAC-18182).
+// `KvCacheSession` unit tests (QVAC-18182).
 //
 // The session is the single owner of the three KV-cache bookkeeping layers
 // (on-disk `.bin`, `initializedCaches` set, `cachedMessageCounts` map).
-// Before M2 those layers lived in three different modules and the
-// completion handler had to touch all three on every cancel / error
-// branch. The functional-equivalence assertions below pin the new
-// contract:
+// Without a single owner the completion handler would have to touch all
+// three on every cancel / error branch and quickly drift out of sync.
+// The functional-equivalence assertions below pin the contract:
 //
 //   1. `beginTurn` primes the cache (calls the injected closure) the
 //      first time and reuses the in-memory init flag on subsequent
@@ -179,8 +178,8 @@ bareTest(
         primeIfMissing,
       });
 
-      // Pre-M2 callers had to manually `fs.access` the cache file before
-      // recording the count (the addon silently swallows save errors).
+      // The addon silently swallows save errors, so the session
+      // `fs.access`-checks the cache file before recording the count.
       // Simulate that the addon wrote the file.
       fs.writeFileSync(turn.cachePath, "fake-cache-bytes");
 
@@ -279,9 +278,9 @@ bareTest(
         primeIfMissing,
       });
       mod.__kvCacheSessionTestHooks.setSavedCountForTest(turn.cachePath, 2);
-      // Intentionally do NOT create the file. Pre-M2 callers had to
-      // be defensive on this branch (cancelled mid-write); the
-      // session collapses that into the same code path.
+      // Intentionally do NOT create the file. Cancelled mid-write
+      // turns hit this branch — the session must still clear the
+      // in-memory state cleanly when there's nothing to unlink.
 
       await session.rollback(turn);
 

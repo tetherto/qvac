@@ -18,22 +18,20 @@ import { getServerLogger } from "@/logging";
 const logger = getServerLogger();
 
 /**
- * Single owner of the three KV-cache bookkeeping layers (M2, QVAC-18182).
+ * Single owner of the three KV-cache bookkeeping layers.
  *
- * Before M2 the llama.cpp completion handler coordinated three
- * independent layers around every cancel/error branch:
+ * The llama.cpp completion handler has three independent layers it must
+ * keep consistent across every cancel/error branch:
  *
- *   1. `cachedMessageCounts: Map<path, count>` (in `kv-cache-state.ts`)
- *      — the "n messages currently on disk" tracker.
- *   2. `initializedCaches: Set<key>` (in `kv-cache-utils.ts`)
- *      — the "addon defers disk writes; we know this cache is primed"
- *      tracker.
+ *   1. `cachedMessageCounts: Map<path, count>` — the "n messages
+ *      currently on disk" tracker.
+ *   2. `initializedCaches: Set<key>` — the "addon defers disk writes;
+ *      we know this cache is primed" tracker.
  *   3. On-disk `.bin` files written by the addon.
  *
- * Three near-identical cleanup blocks in `completion-stream.ts` had to
- * touch all three on every cancel / zero-token / rename-failed / tool-call
- * exit. Any one of those blocks forgetting a layer produced the
- * three-layer drift bugs the pitch documents (QVAC-17780 and friends).
+ * Without a single owner, every cancel / zero-token / rename-failed /
+ * tool-call exit would need to touch all three; any branch that forgets
+ * a layer produces three-layer drift bugs (e.g. QVAC-17780).
  *
  * `KvCacheSession` collapses the three layers behind one object with
  * three operations:
@@ -54,16 +52,17 @@ const logger = getServerLogger();
  *     `ctx.scope.defer(() => session.rollback(turn))`; `commitTurn`
  *     short-circuits it on success.
  *
- * Plus a `delete(...)` method that the `handleDeleteCache` RPC handler
- * uses instead of touching the three layers by hand (deliverable 5).
+ * The module-level `deleteKvCacheState(...)` function (below) provides
+ * an administrative cross-model delete API for the
+ * `handleDeleteCache` RPC handler.
  *
  * The module-scoped `cachedMessageCounts` and `initializedCaches` maps
- * are *private* to this file in M2 — no other module reaches into them.
+ * are *private* to this file — no other module reaches into them.
  * Callers that need cache-status info do so through the session API.
  */
 
-// ----- module-scoped state (formerly split across kv-cache-state.ts and
-// kv-cache-utils.ts). M2 makes the session the single mutation point. -----
+// ----- module-scoped state. The session is the single mutation point
+// for the in-memory KV-cache bookkeeping. -----
 
 /**
  * Number of chat messages the kv-cache file on disk is known to cover,
@@ -80,9 +79,8 @@ const cachedMessageCounts = new Map<string, number>();
  * In-memory registry of caches initialized this session. The addon
  * defers disk writes, so the absence of a `.bin` file on disk isn't
  * proof that the cache hasn't been primed in this worker process. Keyed
- * by `${modelId}:${configHash}:${cacheKey}` — the same shape the
- * pre-M2 `getCacheRegistryKey` produced, so on-disk caches from older
- * worker runs still hit the lazy-load path in `beginTurn`.
+ * by `${modelId}:${configHash}:${cacheKey}`, so on-disk caches from
+ * older worker runs still hit the lazy-load path in `beginTurn`.
  */
 const initializedCaches = new Set<string>();
 
@@ -243,8 +241,7 @@ export function createKvCacheSession(modelId: string): KvCacheSession {
     // In-memory registry check first — the addon defers disk writes, so
     // a freshly-primed cache may not yet exist on disk. If the
     // in-memory flag isn't set, fall back to a filesystem probe so
-    // caches surviving across worker restarts still hit the reuse
-    // path. This mirrors the pre-M2 `customCacheExists` behaviour.
+    // caches surviving across worker restarts still hit the reuse path.
     let exists = initializedCaches.has(registryKey);
     if (!exists) {
       try {
@@ -328,9 +325,9 @@ export function createKvCacheSession(modelId: string): KvCacheSession {
 
     if (result.kind === "static") {
       // Custom-key path: the addon wrote the new cache state inline
-      // at the same path. Verify the file persisted (addon swallows
-      // save errors today; see TODO in pre-M2 `recordCacheSaveCount`)
-      // and record the new boundary.
+      // at the same path. Verify the file persisted (the addon
+      // currently swallows save errors — see TODO in
+      // `verifySaveAndRecord`) and record the new boundary.
       const ok = await verifySaveAndRecord(state.cachePath, result.messageCount);
       if (!ok) {
         // The expected save didn't land — treat the turn as a rollback
@@ -416,14 +413,13 @@ export function createKvCacheSession(modelId: string): KvCacheSession {
   };
 }
 
-// ----- module-level administrative API (deliverable 5) -----
+// ----- module-level administrative API -----
 
 /**
  * Atomically delete every layer of KV-cache state for a
- * `(kvCacheKey, modelId)` pair, or wipe everything. Replaces the
- * pre-M2 `handleDeleteCache` body which touched the three layers by
- * hand. Single entry point — the only mutation point for cross-model
- * state outside of turn-scoped `commitTurn`/`rollback`.
+ * `(kvCacheKey, modelId)` pair, or wipe everything. Single entry point
+ * — the only mutation point for cross-model state outside of
+ * turn-scoped `commitTurn`/`rollback`.
  *
  * Why this isn't a method on `KvCacheSession`: deletes are
  * cross-model (`all: true` has no model; the keyed form has

@@ -279,8 +279,8 @@ export function completion(params: CompletionParams): CompletionRun {
               toolCallsRejecter(err);
             } else if (cancelled) {
               // The wire stream ended with `stopReason: "cancelled"` — the
-              // run was aborted mid-flight. Per D5: `events` ended
-              // normally (consumers iterating `run.events` see the
+              // run was aborted mid-flight. Cancellation contract: `events`
+              // ends normally (consumers iterating `run.events` see the
               // cancelled `completionDone` and exit naturally), and the
               // promise-aggregates reject with `InferenceCancelledError`
               // carrying whatever the aggregator accumulated up to the

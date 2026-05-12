@@ -9,7 +9,7 @@ import { RequestIdConflictError } from "@/utils/errors-server";
 // -----------------------------------------------------------------------------
 // RequestRegistry unit tests.
 //
-// Covers the contract M1 hands to handler authors:
+// Covers the contract the registry hands to handler authors:
 //   - begin / get / list reflect a coherent in-flight set.
 //   - cancel-by-requestId targets exactly one entry.
 //   - cancel-by-modelId predicate fans out across entries with optional
@@ -281,9 +281,8 @@ test("registry: end() detaches parent listener so long-lived parents don't accum
   );
 });
 
-test("registry: same-tick cancel-before-begin retroactively aborts the later begin() (M2 Stop-button race close)", async (t: T) => {
-  // M2 contract (flipped from the M1 tripwire — QVAC-18182, deliverable
-  // 6, option A). Stop-button race: the client generates a `requestId`
+test("registry: same-tick cancel-before-begin retroactively aborts the later begin() (Stop-button race close)", async (t: T) => {
+  // QVAC-18182. Stop-button race: the client generates a `requestId`
   // and the user clicks Stop before the server-side `begin(...)` for
   // that id has landed. The registry has nothing to abort, so the
   // immediate `cancel(...)` still returns 0 ("no in-flight match" is
@@ -291,11 +290,7 @@ test("registry: same-tick cancel-before-begin retroactively aborts the later beg
   // "cancelled-before-begin" set, and the subsequent `begin(...)`
   // checks the set: if its id is present, the new controller is
   // aborted before the context is returned and the entry is consumed.
-  //
-  // The pre-M2 contract (`begin(...)` is *not* retroactively aborted)
-  // was pinned by `same-tick cancel-before-begin returns 0 and does not
-  // retroactively abort the later begin()`. M2 flips it; the surface
-  // change is intentional and documented in
+  // The surface contract is documented in
   // `request-lifecycle-system.mdc`.
   const r = createRequestRegistry();
   const cancelled = r.cancel({ requestId: "r-1", reason: "stop-button" });

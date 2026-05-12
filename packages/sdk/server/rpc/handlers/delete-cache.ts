@@ -5,16 +5,13 @@ import { getServerLogger } from "@/logging";
 const logger = getServerLogger();
 
 /**
- * RPC handler for `deleteCache(...)`. Pre-M2 this touched the three
- * KV-cache bookkeeping layers (on-disk `.bin`, `initializedCaches`,
- * `cachedMessageCounts`) directly, which had the same drift risk the
- * three-block cleanup pattern in `completion-stream.ts` had. M2
- * consolidated all three layers behind `kv-cache-session.ts`; this
- * handler delegates to that module's single administrative entry point
- * (`deleteKvCacheState`). The handler must have **zero** direct
- * references to `fsPromises.unlink`, the `initializedCaches` set, or
- * the `cachedMessageCounts` map — those layers are private to the
- * session module.
+ * RPC handler for `deleteCache(...)`. The three KV-cache bookkeeping
+ * layers (on-disk `.bin`, `initializedCaches`, `cachedMessageCounts`)
+ * are private to `kv-cache-session.ts`; this handler delegates to that
+ * module's single administrative entry point (`deleteKvCacheState`).
+ * The handler must have **zero** direct references to
+ * `fsPromises.unlink`, the `initializedCaches` set, or the
+ * `cachedMessageCounts` map.
  */
 export async function handleDeleteCache(
   request: DeleteCacheRequest,

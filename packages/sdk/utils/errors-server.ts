@@ -327,7 +327,7 @@ export class RequestNotFoundError extends QvacErrorBase {
  * `stopReason: "cancelled"` on the last `completionDone`, but the
  * promise-aggregates on the same run (`final` / `text` / `toolCalls` /
  * `stats`) reject with this error so callers can't accidentally treat a
- * cancelled run as a successful one (D5).
+ * cancelled run as a successful one.
  *
  * Carries:
  *  - `requestId` — correlates with `run.requestId` so callers know which
@@ -346,7 +346,7 @@ export class RequestNotFoundError extends QvacErrorBase {
  * `stopReason: "cancelled"` — the partial payload comes from the
  * client's own event aggregator. The class lives in `errors-server.ts`
  * (and is re-exported from the package root) because the *semantic*
- * origin of the cancel is server-side, and M3b/M3c handlers
+ * origin of the cancel is server-side, and other handlers
  * (embeddings, transcribe, …) will reuse the same class once their
  * cancel surface lands.
  */

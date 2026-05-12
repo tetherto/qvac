@@ -14,7 +14,7 @@
  *     (`modelCancelCounters` / `noteCancelRequested` /
  *     `snapshotCancelCount`) that used to live here was retired in
  *     favor of `RequestRegistry`'s per-request `AbortSignal`.
- *   - QVAC-18182 (M2): the `cachedMessageCounts` map that previously
+ *   - QVAC-18182: the `cachedMessageCounts` map that previously
  *     lived in this module moved into
  *     `kv-cache-session.ts`, which now owns all three KV-cache
  *     bookkeeping layers (saved counts, init flags, on-disk files).

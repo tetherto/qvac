@@ -23,7 +23,7 @@ export type AggregatedEvents = {
    * `stopReason: "cancelled"`. The client wrapper rejects the
    * promise-aggregates (`final` / `text` / `toolCalls` / `stats`) with
    * `InferenceCancelledError` carrying the partial state when this is
-   * set; the `events` stream itself still ends normally (D5).
+   * set; the `events` stream itself still ends normally.
    */
   cancelled: boolean;
 };

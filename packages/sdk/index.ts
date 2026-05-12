@@ -153,7 +153,7 @@ export { SUPPORTED_AUDIO_FORMATS } from "./constants/audio";
 // promises. `InferenceCancelledError` rides the standard `QvacError`
 // envelope, but consumers reach for it through `instanceof` on
 // `await run.final` / `run.text` / `run.toolCalls` / `run.stats`
-// rejections (see D7).
+// rejections.
 export { InferenceCancelledError } from "./utils/errors-server";
 export type { InferenceCancelledPartial } from "./utils/errors-server";
 

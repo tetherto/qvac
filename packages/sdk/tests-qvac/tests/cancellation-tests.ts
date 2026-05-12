@@ -1,7 +1,7 @@
-// M2 (QVAC-18182) cancellation-path e2e tests.
+// Cancellation-path e2e tests (QVAC-18182).
 //
-// Covers the three observable contracts introduced when typed cancel
-// outcomes shipped with KvCacheSession:
+// Covers the three observable contracts that typed cancel outcomes +
+// KvCacheSession introduce:
 //
 //  1. `cancel-mid-stream-completion` — mid-stream cancel:
 //     - `events` stream ends with `stopReason: "cancelled"`
@@ -12,7 +12,7 @@
 //  2. `cancel-before-begin-completion` — synthetic same-tick race:
 //     fire `cancel({ requestId })` immediately after `completion(...)`
 //     returns, before the worker has had a chance to call
-//     `registry.begin(...)`. Asserts that the M2 cancelled-before-begin
+//     `registry.begin(...)`. Asserts that the cancelled-before-begin
 //     map applies the cancel retroactively (events end with
 //     `stopReason: "cancelled"`, `final` rejects with
 //     `InferenceCancelledError`).

@@ -17,7 +17,7 @@ import {
 //     through the per-request `AbortSignal` from `RequestRegistry` (see
 //     `test/unit/runtime/request-registry.test.ts`) and
 //     `completion-stream.ts` reads `signal.aborted` directly.
-//   - QVAC-18182 (M2): the `cachedMessageCounts` map and its
+//   - QVAC-18182: the `cachedMessageCounts` map and its
 //     `clearCachedMessageCounts` helper that this file used to seed via
 //     `import { cachedMessageCounts } from "kv-cache-state"` were moved
 //     into `kv-cache-session.ts` as the single owner of all three
@@ -159,11 +159,9 @@ test("regression: an externally-seeded stale savedCount still triggers the fallb
   // confirm that `decideCachedHistorySlice` refuses to emit an empty
   // payload and also flags the stale count for cleanup.
   //
-  // Pre-M2 this test reached into the `cachedMessageCounts` map
-  // directly to simulate poisoning. With the M2 ownership split that
-  // map is private to `kv-cache-session.ts`; the equivalent regression
-  // is now exercised by feeding the poisoned count into the pure
-  // helper directly (which is the surface the session calls).
+  // The `cachedMessageCounts` map is private to `kv-cache-session.ts`,
+  // so this regression is exercised by feeding the poisoned count into
+  // the pure helper directly — the same surface the session calls.
   const savedCount = 3;
   const history: HistoryMessage[] = [
     { role: "system", content: "sys" },

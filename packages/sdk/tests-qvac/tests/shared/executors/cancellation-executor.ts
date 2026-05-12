@@ -67,7 +67,7 @@ export class CancellationExecutor extends AbstractModelExecutor<
     // Concurrently accumulate contentDelta text from `run.events`. This
     // is the "source of truth" the SDK's aggregator builds `partial.text`
     // from — equality between this and the rejected promise's
-    // `.partial.text` is the D5 contract.
+    // `.partial.text` is the cancellation contract under test.
     let accumulatedText = "";
     let lastEventType: string | null = null;
     let lastStopReason: string | null = null;
@@ -122,7 +122,7 @@ export class CancellationExecutor extends AbstractModelExecutor<
       };
     }
 
-    // D5 part (a): the `events` stream must terminate normally with a
+    // (a) The `events` stream must terminate normally with a
     // `completionDone` event carrying `stopReason: "cancelled"`. The
     // server still flushes a terminal event when the registry signal
     // aborts so consumers iterating `run.events` exit naturally.
@@ -139,7 +139,7 @@ export class CancellationExecutor extends AbstractModelExecutor<
       };
     }
 
-    // D5 part (b): `run.final` must reject with InferenceCancelledError.
+    // (b) `run.final` must reject with InferenceCancelledError.
     if (finalResolved) {
       return {
         passed: false,
@@ -158,7 +158,7 @@ export class CancellationExecutor extends AbstractModelExecutor<
       };
     }
 
-    // D5 part (c): `error.partial.text` must equal the concatenated
+    // (c) `error.partial.text` must equal the concatenated
     // `contentDelta` text we observed on the events stream. The
     // SDK always populates `partial.text` for cancelled completions
     // (even an empty string), but the schema marks it optional so we
@@ -203,7 +203,7 @@ export class CancellationExecutor extends AbstractModelExecutor<
     // `requestId` is generated before any RPC round-trip, so the cancel
     // RPC can land while the server has not yet seen the
     // `completionStream` request — or with `bare-rpc`'s request
-    // multiplexing, even slightly after begin() ran. M2's bounded
+    // multiplexing, even slightly after begin() ran. The bounded
     // cancelled-before-begin map handles both orderings: the eventual
     // outcome is always a typed `cancelled` result on the wire.
     const run = completion({
@@ -257,9 +257,9 @@ export class CancellationExecutor extends AbstractModelExecutor<
       };
     }
 
-    // The M2 contract: the eventual outcome is a typed `cancelled`
-    // result, regardless of whether the cancel landed before or after
-    // begin() ran on the server.
+    // Contract: the eventual outcome is a typed `cancelled` result,
+    // regardless of whether the cancel landed before or after begin()
+    // ran on the server.
     if (lastStopReason !== "cancelled") {
       return {
         passed: false,

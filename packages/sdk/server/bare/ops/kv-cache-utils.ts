@@ -11,12 +11,10 @@ import { getServerLogger } from "@/logging";
 
 const logger = getServerLogger();
 
-// In-memory KV-cache state (the `initializedCaches` Set + the
-// `markCacheInitialized` / `isCacheInitialized` / `clearCacheRegistry`
-// helpers that managed it) moved into `KvCacheSession` in M2
-// (QVAC-18182). The session is now the single mutation point for all
-// three KV-cache bookkeeping layers; this module keeps only the pure
-// path / hash utilities that don't touch in-memory state.
+// In-memory KV-cache state lives in `KvCacheSession` (the single
+// mutation point for all three KV-cache bookkeeping layers). This
+// module keeps only the pure path / hash utilities that don't touch
+// in-memory state.
 
 export function extractSystemPrompt(messages: CacheMessage[]): string | null {
   const systemMessage = messages.find((msg) => msg.role === "system");
@@ -126,12 +124,10 @@ export async function renameCacheFile(
   }
 }
 
-// `customCacheExists(modelId, configHash, cacheKey)` lived here pre-M2
-// as the "in-memory registry first, fall back to fs.access" probe used
-// by the completion handler. M2 (QVAC-18182) moved both layers into
-// `KvCacheSession.beginTurn(...)`, so this helper has no callers and
-// was removed to keep the in-memory `initializedCaches` set private to
-// the session module.
+// Cache-existence probing (in-memory registry first, fall back to
+// `fs.access`) lives in `KvCacheSession.beginTurn(...)`. Keeping the
+// in-memory `initializedCaches` set private to the session module
+// avoids drift between the two layers.
 
 export async function deleteCache(
   options: { all: true } | { kvCacheKey: string; modelId?: string },

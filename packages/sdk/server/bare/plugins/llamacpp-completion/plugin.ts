@@ -173,12 +173,12 @@ export const llmPlugin = definePlugin({
           }
 
           const { modelExecutionMs, stats, toolCalls } = result.value;
-          // `stopReason: "cancelled"` rides the success-done path (D2): the
+          // `stopReason: "cancelled"` rides the success-done path: the
           // events stream ends normally, the cancellation is observable
           // via the last event's `stopReason`, and the client-side
           // `CompletionRun` aggregates (`final` / `text` / `toolCalls` /
           // `stats`) reject with `InferenceCancelledError` carrying the
-          // partial state (D5).
+          // partial state.
           const cancelled = ctx.signal.aborted;
           const terminalEvents = normalizer.finish({
             ...(stats && { stats }),

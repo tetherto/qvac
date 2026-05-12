@@ -521,8 +521,7 @@ export async function* completion(
   // handler asks for a turn, registers rollback on the scope, and on
   // the happy path calls `commitTurn` which short-circuits the deferred
   // rollback. Cancellations / zero-token replies / rename failures all
-  // unwind through the same `scope.defer` hook — one cleanup point
-  // instead of the three duplicated blocks of pre-M2. ----
+  // unwind through the same `scope.defer` hook. ----
 
   const session = createKvCacheSession(modelId);
   const systemPromptFromHistory = extractSystemPrompt(history);
@@ -578,7 +577,7 @@ export async function* completion(
   // flips the turn's internal `committed` flag so this becomes a no-op
   // on the happy path. Scope unwinding is LIFO — registered after the
   // `removeEventListener` defer above so rollback runs before the
-  // listener detach (matches the pre-M2 ordering).
+  // listener detach.
   scope.defer(() => session.rollback(turn));
 
   // `cacheExists` is implied by `beginTurn` — the session either found
@@ -621,8 +620,8 @@ export async function* completion(
   // `result.responseText`, which here is raw tool-call markup rather
   // than a clean assistant message. There's no safe post-response key
   // to rename to, so we let the deferred rollback drop the file. Once
-  // the SDK supports auto-cache for structured assistant/tool turns
-  // (TODO above the pre-M2 branch), this becomes a normal commit path.
+  // the SDK supports auto-cache for structured assistant/tool turns,
+  // this becomes a normal commit path.
   if (result.toolCalls.length > 0) {
     logger.warn(
       `[kv-cache] Auto cache tool-call turn; rolling back to avoid disk leak. path=${turn.cachePath}`,
