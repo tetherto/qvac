@@ -6,6 +6,7 @@ on:
     branches: [main, release-*, feature-*, tmp-*]
     paths:
       - "packages/tts-onnx/**"
+      - "scripts/perf-report/**"
       - ".github/workflows/*onnx-tts*.yml"
 
   workflow_dispatch:
@@ -63,6 +64,7 @@ permissions:
   pull-requests: read
   packages: read
   checks: read
+  actions: read
   id-token: write
 
 jobs:
@@ -228,6 +230,7 @@ jobs:
       ref: ${{ needs.context.outputs.ref }}
       workdir: ${{ needs.context.outputs.workdir }}
       tts_integration_profile: ${{ needs.context.outputs.tts_integration_profile }}
+      run_supertonic_desktop_benchmarks: ${{ needs.context.outputs.run_verify == 'true' }}
 
   run-mobile-integration-tests:
     permissions:
@@ -244,6 +247,85 @@ jobs:
       ref: ${{ needs.context.outputs.ref }}
       workdir: ${{ needs.context.outputs.workdir }}
 
+  aggregate-performance-report:
+    needs:
+      [
+        authorize,
+        context,
+        run-integration-tests,
+        run-mobile-integration-tests,
+      ]
+    if: always() && needs.authorize.outputs.allowed == 'true' && github.event_name != 'pull_request_target'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          # Only report tooling is needed here. Use the workflow SHA so
+          # pull_request_target never executes scripts from untrusted PR code.
+          ref: ${{ github.sha }}
+
+      - name: Download desktop aggregate report
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: supertonic-performance-findings
+          path: performance-artifacts/desktop
+          merge-multiple: true
+
+      - name: Download mobile performance reports
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: perf-report-onnx-tts-*
+          path: performance-artifacts/mobile
+          merge-multiple: false
+
+      - name: Generate mobile aggregate report
+        run: |
+          mkdir -p performance-report/mobile
+          mkdir -p performance-artifacts/mobile
+          if find performance-artifacts/mobile -name "performance-report.json" -type f -size +0 | head -1 | grep -q .; then
+            node scripts/perf-report/aggregate.js \
+              --dir performance-artifacts/mobile \
+              --output performance-report/mobile/supertonic-mobile-performance.md \
+              --output-json performance-report/mobile/supertonic-mobile-performance.json \
+              --output-html performance-report/mobile/supertonic-mobile-performance.html
+          else
+            echo "No mobile performance-report.json files found; skipping mobile aggregation."
+          fi
+
+      - name: Build combined PR performance report
+        run: |
+          node scripts/perf-report/combine-html-reports.js \
+            --title "Supertonic PR Performance Report" \
+            --section "Desktop benchmarks=performance-artifacts/desktop/supertonic-performance-findings.html" \
+            --section "Mobile integration benchmarks=performance-report/mobile/supertonic-mobile-performance.html" \
+            --output performance-report/supertonic-pr-performance-report.md \
+            --output-html performance-report/supertonic-pr-performance-report.html
+
+      - name: Add performance report summary
+        run: cat performance-report/supertonic-pr-performance-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload combined performance report
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: supertonic-pr-performance-report
+          path: |
+            performance-report/supertonic-pr-performance-report.html
+            performance-report/supertonic-pr-performance-report.md
+            performance-report/mobile/supertonic-mobile-performance.html
+            performance-report/mobile/supertonic-mobile-performance.md
+            performance-report/mobile/supertonic-mobile-performance.json
+            performance-artifacts/desktop/supertonic-performance-findings.html
+            performance-artifacts/desktop/supertonic-performance-findings.md
+            performance-artifacts/desktop/supertonic-performance-findings.json
+          retention-days: 30
+          if-no-files-found: ignore
+
   merge-guard:
     needs:
       [
@@ -254,10 +336,11 @@ jobs:
         prebuild,
         run-integration-tests,
         run-mobile-integration-tests,
+        aggregate-performance-report,
       ]
     if: always()
     uses: ./.github/workflows/public-pr.yml
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.cpp-tests-coverage.result == 'success' || needs.cpp-tests-coverage.result == 'skipped') }}
       build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' }}
-      integration-tests-status: ${{ (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') && (needs.run-mobile-integration-tests.result == 'success' || needs.run-mobile-integration-tests.result == 'skipped') }}
+      integration-tests-status: ${{ (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') && (needs.run-mobile-integration-tests.result == 'success' || needs.run-mobile-integration-tests.result == 'skipped') && (needs.aggregate-performance-report.result == 'success' || needs.aggregate-performance-report.result == 'skipped') }}
