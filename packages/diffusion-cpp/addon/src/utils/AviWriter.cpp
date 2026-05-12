@@ -113,10 +113,37 @@ std::vector<uint8_t> encodeFramesToAvi(
 
   // -- Build AVI in a single growable buffer ---------------------------------
   std::vector<uint8_t> out;
-  // Rough reservation: header (~200B) + 3 bytes per pixel worst-case + overhead
-  out.reserve(
-      512 + static_cast<size_t>(numFrames) * static_cast<size_t>(width) *
-                static_cast<size_t>(height) * 3);
+  
+  // Calculate buffer size with overflow checking:
+  // Each frame is roughly: 4 (chunk type) + 4 (size) + JPEG data (~1-3 bytes/pixel) + padding
+  // Total estimate: header (~200B) + numFrames * (width * height * 3 + 16)
+  // Reject allocations that would overflow uint32_t (AVI file size limit).
+  constexpr size_t kHeaderSize = 512;
+  constexpr size_t kChunkOverhead = 16; // per-frame chunk header + alignment
+  
+  // Compute max bytes per frame: width * height * 3 (worst-case RGB uncompressed)
+  // Check for overflow: if width * height > SIZE_MAX / 3, reject
+  if (width > SIZE_MAX / 3 || width * 3 > SIZE_MAX / height) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "encodeFramesToAvi: dimensions " + std::to_string(width) + "x" +
+            std::to_string(height) + " would overflow size calculation");
+  }
+  const size_t bytesPerFrame = static_cast<size_t>(width) * static_cast<size_t>(height) * 3;
+  
+  // Check for overflow: if numFrames * bytesPerFrame > SIZE_MAX - header, reject
+  if (numFrames > static_cast<int>(SIZE_MAX / bytesPerFrame) ||
+      static_cast<size_t>(numFrames) * bytesPerFrame >
+          SIZE_MAX - kHeaderSize - kChunkOverhead) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "encodeFramesToAvi: " + std::to_string(numFrames) + " frames at " +
+            std::to_string(width) + "x" + std::to_string(height) +
+            " would overflow buffer size");
+  }
+  
+  out.reserve(kHeaderSize + static_cast<size_t>(numFrames) * 
+              (bytesPerFrame + kChunkOverhead));
 
   // RIFF ____ AVI
   appendFourCC(out, "RIFF");

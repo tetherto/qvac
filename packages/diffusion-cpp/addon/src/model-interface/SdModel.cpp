@@ -826,34 +826,20 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& v) {
   // -- Decode init / end / control-frame images -----------------------------
   // All decoded pixel buffers are owned here and freed at scope exit (even
   // if generate_video throws or the AVI muxer fails). sd_image_t::data is
-  // allocated by stb_image via malloc(), so free() is correct.
+  // allocated by stb_image via malloc(), so image_codec::FreeDeleter is correct.
   sd_image_t initImg{};
   sd_image_t endImg{};
   std::vector<sd_image_t> controlFrames;
 
   struct FrameBuffersGuard {
-    sd_image_t* init;
-    sd_image_t* end;
-    std::vector<sd_image_t>* controls;
+    std::unique_ptr<uint8_t, image_codec::FreeDeleter> initData;
+    std::unique_ptr<uint8_t, image_codec::FreeDeleter> endData;
+    std::vector<std::unique_ptr<uint8_t, image_codec::FreeDeleter>> controlData;
+
     ~FrameBuffersGuard() {
-      if (init && init->data) {
-        free(init->data);
-        init->data = nullptr;
-      }
-      if (end && end->data) {
-        free(end->data);
-        end->data = nullptr;
-      }
-      if (controls) {
-        for (auto& f : *controls) {
-          if (f.data) {
-            free(f.data);
-            f.data = nullptr;
-          }
-        }
-      }
+      // unique_ptr destructors handle cleanup automatically
     }
-  } frameGuard{&initImg, &endImg, &controlFrames};
+  } frameGuard;
 
   if (!job.initImageBytes.empty()) {
     initImg = image_codec::decodeImage(job.initImageBytes);
@@ -862,6 +848,7 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& v) {
           general_error::InvalidArgument,
           "processVideo: failed to decode init_image (corrupt or "
           "unsupported format; supported: PNG, JPEG)");
+    frameGuard.initData.reset(initImg.data);
   }
 
   if (!job.endImageBytes.empty()) {
@@ -871,6 +858,16 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& v) {
           general_error::InvalidArgument,
           "processVideo: failed to decode end_image (corrupt or unsupported "
           "format; supported: PNG, JPEG)");
+    frameGuard.endData.reset(endImg.data);
+    // Validate end_image dimensions match expected video dimensions
+    if (static_cast<int>(endImg.width) != vid.width ||
+        static_cast<int>(endImg.height) != vid.height)
+      throw StatusError(
+          general_error::InvalidArgument,
+          "processVideo: end_image dimensions " + std::to_string(endImg.width) +
+              "x" + std::to_string(endImg.height) +
+              " do not match video dimensions " + std::to_string(vid.width) +
+              "x" + std::to_string(vid.height));
   }
 
   if (!job.controlFramesBytes.empty()) {
@@ -883,6 +880,22 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& v) {
             "processVideo: failed to decode control_frames[" +
                 std::to_string(i) +
                 "] (corrupt or unsupported format; supported: PNG, JPEG)");
+      // Validate control frame dimensions match expected video dimensions
+      if (static_cast<int>(decoded.width) != vid.width ||
+          static_cast<int>(decoded.height) != vid.height) {
+        // Use unique_ptr to auto-cleanup on exception
+        std::unique_ptr<uint8_t, image_codec::FreeDeleter> temp(decoded.data);
+        throw StatusError(
+            general_error::InvalidArgument,
+            "processVideo: control_frames[" + std::to_string(i) +
+                "] dimensions " + std::to_string(decoded.width) + "x" +
+                std::to_string(decoded.height) +
+                " do not match video dimensions " + std::to_string(vid.width) +
+                "x" + std::to_string(vid.height));
+      }
+      // Transfer ownership to guard
+      frameGuard.controlData.push_back(
+          std::unique_ptr<uint8_t, image_codec::FreeDeleter>(decoded.data));
       controlFrames.push_back(decoded);
     }
   }
