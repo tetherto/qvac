@@ -84,20 +84,36 @@ public:
           reinterpret_cast<uv_handle_t*>(state->asyncHandle),
           [](uv_handle_t* handle) {
             auto* state = static_cast<State*>(uv_handle_get_data(handle));
-            if (!state->envInvalidated.load()) {
-              js_remove_teardown_callback(state->env, envTeardownCb, state);
-              deleteJsReferences(state);
+            delete reinterpret_cast<uv_async_t *>(handle);
+            if (state->envInvalidated.load()) {
+              delete state;
+              return;
             }
-            delete reinterpret_cast<uv_async_t*>(handle);
+            if (js_remove_teardown_callback(state->env, envTeardownCb, state) !=
+                0) {
+              QLOG(logger::Priority::WARNING,
+                   "Could not remove env teardown callback; leaking state to "
+                   "avoid UAF");
+              return; // intentional leak: env may still call
+                      // envTeardownCb(state)
+            }
+            deleteJsReferences(state);
             delete state;
           });
       return;
     }
 
-    if (!state->envInvalidated.load()) {
-      js_remove_teardown_callback(state->env, envTeardownCb, state);
-      deleteJsReferences(state);
+    if (state->envInvalidated.load()) {
+      delete state;
+      return;
     }
+    if (js_remove_teardown_callback(state->env, envTeardownCb, state) != 0) {
+      QLOG(
+          logger::Priority::WARNING,
+          "Could not remove env teardown callback; leaking state to avoid UAF");
+      return; // intentional leak
+    }
+    deleteJsReferences(state);
     delete state;
   }
 
