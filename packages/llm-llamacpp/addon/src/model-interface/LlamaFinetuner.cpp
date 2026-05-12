@@ -5,8 +5,8 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
-#include <cstdint>
 #include <cmath>
+#include <cstdint>
 #include <filesystem>
 #include <iostream>
 #include <memory>
@@ -110,13 +110,14 @@ std::string LlamaFinetuner::finetune(
   // (e.g. flash-attn off, ubatch sizing) and gives a clean llama_context.
   // TODO: investigate recreating the context without a full weights reload
   // to reduce latency when the backend itself does not change.
-  model_.reload(FinetuneConfigOverrides{
-      .active = true,
-      .batchSize = params.batchSize,
-      .microBatchSize = params.microBatchSize,
-      .contextLength = params.contextLength,
-      .gpuSupportsF16OutProd = gpuSupportsOutProdF16(),
-      .flashAttn = params.flashAttn});
+  model_.reload(
+      FinetuneConfigOverrides{
+          .active = true,
+          .batchSize = params.batchSize,
+          .microBatchSize = params.microBatchSize,
+          .contextLength = params.contextLength,
+          .gpuSupportsF16OutProd = gpuSupportsOutProdF16(),
+          .flashAttn = params.flashAttn});
 
   llama_context* ctx = model_.getContext();
   llama_model* mdl = model_.getModel();
@@ -452,8 +453,8 @@ void LlamaFinetuner::validateModelForFinetuning() {
     }
   }
 
-  if (auto unsupported =
-          backend_selection::getUnknownFinetuneArchitecture(&model_.metadata_)) {
+  if (auto unsupported = backend_selection::getUnknownFinetuneArchitecture(
+          &model_.metadata_)) {
     throw std::runtime_error(
         "Finetuning is not supported for architecture: " + unsupported.value());
   }
@@ -602,7 +603,8 @@ void LlamaFinetuner::initializeLoraAdapter(
   }
 }
 
-llama_finetuning_helpers::LoraLrSchedulerState LlamaFinetuner::createLrScheduler(
+llama_finetuning_helpers::LoraLrSchedulerState
+LlamaFinetuner::createLrScheduler(
     const qvac_lib_inference_addon_llama::LlamaFinetuningParams& params,
     int64_t totalSteps) {
   using namespace llama_finetuning_helpers;

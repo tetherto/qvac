@@ -17,10 +17,10 @@
 #include <common/chat.h>
 #include <common/common.h>
 #include <common/log.h>
+#include <inference-addon-cpp/Errors.hpp>
 #include <llama.h>
 #include <llama/mtmd/mtmd.h>
 #include <picojson/picojson.h>
-#include <inference-addon-cpp/Errors.hpp>
 
 #include "MtmdLlmContext.hpp"
 #include "TextLlmContext.hpp"
