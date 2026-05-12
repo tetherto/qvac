@@ -27,6 +27,7 @@ class OutputCallBackJs : public OutputCallBackInterface {
     out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface>
         outputHandlers;
     std::atomic_bool stopped{false};
+    std::atomic_bool envInvalidated{false};
 
     State(
         js_env_t* env, js_ref_t* jsHandle, js_ref_t* outputCb,
@@ -37,6 +38,11 @@ class OutputCallBackJs : public OutputCallBackInterface {
   };
 
   State* state_;
+
+  static void envTeardownCb(void* data) {
+    auto* state = static_cast<State*>(data);
+    state->envInvalidated = true;
+  }
 
 public:
   uv_async_t* jsOutputCallbackAsyncHandle_;
@@ -62,6 +68,7 @@ public:
     state_ = new State(
         env, jsHandleRef, outputCbRef, std::move(outputHandlers));
     jsOutputCallbackAsyncHandle_ = nullptr;
+    js_add_teardown_callback(env, envTeardownCb, state_);
   }
 
   ~OutputCallBackJs() {
@@ -71,19 +78,26 @@ public:
     }
 
     State* state = std::exchange(state_, nullptr);
+    
     if (state->asyncHandle != nullptr) {
       uv_close(
           reinterpret_cast<uv_handle_t*>(state->asyncHandle),
           [](uv_handle_t* handle) {
             auto* state = static_cast<State*>(uv_handle_get_data(handle));
-            deleteJsReferences(state);
+            if (!state->envInvalidated.load()) {
+              js_remove_teardown_callback(state->env, envTeardownCb, state);
+              deleteJsReferences(state);
+            }
             delete reinterpret_cast<uv_async_t*>(handle);
             delete state;
           });
       return;
     }
 
-    deleteJsReferences(state);
+    if (!state->envInvalidated.load()) {
+      js_remove_teardown_callback(state->env, envTeardownCb, state);
+      deleteJsReferences(state);
+    }
     delete state;
   }
 
@@ -185,7 +199,7 @@ private:
   static void jsOutputCallback(uv_async_t* handle) try {
     auto& state = *reinterpret_cast<State*>(
         uv_handle_get_data(reinterpret_cast<uv_handle_t*>(handle)));
-    if (state.stopped.load()) {
+    if (state.stopped.load() || state.envInvalidated.load()) {
       return;
     }
     js_handle_scope_t* scope;
@@ -226,6 +240,9 @@ private:
   } catch (...) {
     auto& state = *reinterpret_cast<State*>(
         uv_handle_get_data(reinterpret_cast<uv_handle_t*>(handle)));
+    if (state.envInvalidated.load()) {
+      return;
+    }
     js_handle_scope_t* scope;
     if (js_open_handle_scope(state.env, &scope) != 0)
       return;
