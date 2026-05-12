@@ -65,7 +65,7 @@ export const DEFAULT_FEATURES: Feature[] = [
     id: 'complete-suite',
     name: 'Complete AI suite',
     description:
-      'Use one SDK for LLMs, fine-tuning, diffusion, speech, RAG, and more.',
+      'All-in-one AI SDK: LLMs, fine-tuning, diffusion, speech, RAG, and more.',
     angle: 0,
     href: '#ai-capabilities',
   },
@@ -111,7 +111,7 @@ export const DEFAULT_FEATURES: Feature[] = [
   },
   {
     id: 'openai',
-    name: 'OpenAI-compatible',
+    name: 'OpenAI-compatible API',
     description:
       'Launch an HTTP server that exposes an OpenAI-compatible API for integration with the broader AI ecosystem.',
     angle: 225,
