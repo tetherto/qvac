@@ -25,10 +25,31 @@ on:
         value: ${{ jobs.push-event.outputs.npm_publish_skipped }}
 
 jobs:
+  label-gate:
+    name: Authorise (label-gate)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      authorised: ${{ steps.gate.outputs.authorised }}
+    steps:
+      - name: Checkout (label-gate action only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: .github/actions/label-gate
+          sparse-checkout-cone-mode: false
+      - name: Run label-gate
+        id: gate
+        uses: ./.github/actions/label-gate
+        with:
+          github-token: ${{ secrets.PAT_TOKEN }}
+
   pull-request-event:
+    needs: [label-gate]
     runs-on: ubuntu-latest
     environment: npm
-    if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target' || inputs.debug_mode
+    if: needs.label-gate.outputs.authorised == 'true' && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target' || inputs.debug_mode)
     permissions:
       contents: read
       packages: write
@@ -113,9 +134,10 @@ jobs:
           workdir: ${{ inputs.workdir }}
 
   push-event:
+    needs: [label-gate]
     runs-on: ubuntu-latest
     environment: npm
-    if: github.event_name == 'push' || inputs.caller_event_name == 'workflow_dispatch' || inputs.debug_mode
+    if: needs.label-gate.outputs.authorised == 'true' && (github.event_name == 'push' || inputs.caller_event_name == 'workflow_dispatch' || inputs.debug_mode)
     outputs:
       npm_published_version: ${{ steps.publish-npm.outputs.npm_published_version }}
       npm_publish_skipped: ${{ steps.publish-npm.outputs.npm_publish_skipped }}
