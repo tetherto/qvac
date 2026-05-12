@@ -16,12 +16,16 @@ export {
  * - `"pythonic"`: `[get_weather(city="Tokyo")]` (optionally `<|tool_call_start|>...<|tool_call_end|>`-wrapped)
  * - `"json"`:     `{"name":"get_weather","arguments":{"city":"Tokyo"}}` or `{"tool_calls":[{"name":"...","arguments":{...}}]}`
  * - `"harmony"`:  `<|channel|>commentary to=functions.get_weather <|constrain|>json<|message|>{"city":"Tokyo"}<|call|>`
+ * - `"qwen35"`:   `<tool_call><function=NAME><parameter=KEY>VALUE</parameter></function></tool_call>`
+ * - `"gemma4"`:   `<|tool_call>call:NAME{key:<|"|>val<|"|>,...}<tool_call|>`
  */
 export const toolDialectSchema = z.enum([
   "hermes",
   "pythonic",
   "json",
   "harmony",
+  "qwen35",
+  "gemma4"
 ]);
 
 export const attachmentSchema = z.object({
@@ -70,6 +74,12 @@ export const generationParamsSchema = z
       .number()
       .optional()
       .describe("Penalty applied to repeated tokens."),
+    reasoning_budget: z
+      .union([z.literal(-1), z.literal(0)])
+      .optional()
+      .describe(
+        "Per-request reasoning channel budget. `-1` keeps the model's reasoning channel on; `0` disables it for this request. Equivalent to the load-time `reasoning_budget` config but scoped to a single `run()` call; the prior value is restored afterwards.",
+      ),
   })
   .strict();
 
