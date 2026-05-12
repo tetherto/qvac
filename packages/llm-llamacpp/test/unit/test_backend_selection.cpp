@@ -564,6 +564,46 @@ TEST_F(BackendSelectionTest, BitnetTQ_Mali_ChoosesVulkanNormally) {
       mockBackend, BackendType::GPU, BackendType::GPU, "vulkan0", bitnetMeta);
 }
 
+// Mali Vulkan + Qwen3.5: keeps GPU (the Mali-CPU override is disabled
+// for now; see chooseBackend).
+TEST_F(BackendSelectionTest, Qwen35_Mali_KeepsVulkan) {
+  mockBackend.addDevice(createGPUDevice(MALI_DESC, VULKAN0_BACK));
+  MockModelMetaData qwen35Meta(false, "qwen35");
+  expectChosenWithMetadata(
+      mockBackend, BackendType::GPU, BackendType::GPU, "vulkan0", qwen35Meta);
+}
+
+TEST_F(BackendSelectionTest, Qwen35Moe_Mali_KeepsVulkan) {
+  mockBackend.addDevice(createIGPUDevice(MALI_DESC, VULKAN0_BACK));
+  MockModelMetaData qwen35MoeMeta(false, "qwen35moe");
+  expectChosenWithMetadata(
+      mockBackend,
+      BackendType::GPU,
+      BackendType::GPU,
+      "vulkan0",
+      qwen35MoeMeta);
+}
+
+// Qwen3 (3.0) on Mali: keeps GPU (unchanged).
+TEST_F(BackendSelectionTest, Qwen3_Mali_KeepsVulkan) {
+  mockBackend.addDevice(createGPUDevice(MALI_DESC, VULKAN0_BACK));
+  MockModelMetaData qwen3Meta(false, "qwen3");
+  expectChosenWithMetadata(
+      mockBackend, BackendType::GPU, BackendType::GPU, "vulkan0", qwen3Meta);
+}
+
+// Qwen3.5 on Adreno: keeps GPU (unchanged).
+TEST_F(BackendSelectionTest, Qwen35_Adreno_KeepsGPU) {
+  mockBackend.addDevice(createGPUDevice(ADRENO_830_DESC, OPENCL_BACK));
+  MockModelMetaData qwen35Meta(false, "qwen35");
+  expectChosenWithMetadata(
+      mockBackend,
+      BackendType::GPU,
+      BackendType::GPU,
+      "gpuopencl",
+      qwen35Meta);
+}
+
 // Adreno 800+ with bitnet TQ, only OpenCL available (no Vulkan): falls to CPU
 TEST_F(BackendSelectionTest, BitnetTQ_Adreno830_OnlyOpenCL_FallsToCPU) {
   mockBackend.addDevice(createGPUDevice(ADRENO_830_DESC, OPENCL_BACK));
@@ -777,13 +817,21 @@ TEST_F(BackendSelectionTest, Finetuning_UnknownArch_Adreno650_Throws) {
   expectFinetuningThrows(mockBackend, BackendType::GPU, &meta);
 }
 
-// -- Finetuning on non-Adreno GPU: no special backend behavior for known arch
-// --
+// -- Finetuning on Mali: keeps GPU (the Mali finetune-CPU override is
+// disabled for now; only the Qwen3.5 inference override is active) --
 
-TEST_F(BackendSelectionTest, Finetuning_Gemma3_Mali_ChoosesVulkanNormally) {
+TEST_F(BackendSelectionTest, Finetuning_Gemma3_Mali_KeepsVulkan) {
   mockBackend.addDevice(createGPUDevice(MALI_DESC, VULKAN0_BACK));
   MockModelMetaData meta(false, "gemma3");
   expectChosenFinetuning(
+      mockBackend, BackendType::GPU, BackendType::GPU, "vulkan0", meta);
+}
+
+// Inference (non-finetuning) on Mali with a non-Qwen3.5 arch keeps the GPU.
+TEST_F(BackendSelectionTest, Inference_Gemma3_Mali_KeepsVulkan) {
+  mockBackend.addDevice(createGPUDevice(MALI_DESC, VULKAN0_BACK));
+  MockModelMetaData meta(false, "gemma3");
+  expectChosenWithMetadata(
       mockBackend, BackendType::GPU, BackendType::GPU, "vulkan0", meta);
 }
 

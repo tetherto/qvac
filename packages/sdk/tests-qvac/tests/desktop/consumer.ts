@@ -40,6 +40,8 @@ import {
   FLUX_2_KLEIN_4B_Q4_0,
   FLUX_2_KLEIN_4B_VAE,
   QWEN3_4B_Q4_K_M,
+  SD_V2_1_1B_Q8_0,
+  REALESRGAN_X4PLUS_ANIME_6B
 } from "@qvac/sdk";
 import * as path from "node:path";
 import { ResourceManager } from "../shared/resource-manager.js";
@@ -56,7 +58,7 @@ import { TranscribeStreamEventsExecutor } from "./executors/transcribe-stream-ev
 import { RagExecutor } from "./executors/rag-executor.js";
 import { OcrExecutor } from "./executors/ocr-executor.js";
 import { ConfigReloadExecutor } from "./executors/config-reload-executor.js";
-import { LoggingExecutor } from "../shared/executors/logging-executor.js";
+import { DesktopLoggingExecutor } from "./executors/logging-executor.js";
 import { RegistryExecutor } from "../shared/executors/registry-executor.js";
 import { ModelInfoExecutor } from "../shared/executors/model-info-executor.js";
 import { WrongModelExecutor } from "../shared/executors/wrong-model-executor.js";
@@ -327,6 +329,24 @@ resources.define("diffusion", {
   },
 });
 
+// Isolated from "diffusion" so ESRGAN load failures don't affect the rest of the suite.
+resources.define("diffusion-esrgan", {
+  constant: SD_V2_1_1B_Q8_0,
+  type: "diffusion",
+  preLoadUnload: true,
+  config: {
+    device: "gpu",
+    threads: 4,
+    prediction: "v",
+    vae_on_cpu: true,
+    upscaler: {
+      type: "esrgan",
+      model_src: REALESRGAN_X4PLUS_ANIME_6B,
+      tile_size: 128,
+    },
+  },
+});
+
 export async function bootstrap() {
   // Point the SDK at the committed e2e fixture unless the developer
   // already provided their own qvac.config.json / QVAC_CONFIG_PATH.
@@ -359,7 +379,7 @@ export const executor = createExecutor({
     new OcrExecutor(resources),
     new TtsExecutor(resources),
     new ConfigReloadExecutor(resources),
-    new LoggingExecutor(resources),
+    new DesktopLoggingExecutor(resources),
     new RegistryExecutor(resources),
     new HttpEmbeddingExecutor(resources),
     new KvCacheExecutor(resources),

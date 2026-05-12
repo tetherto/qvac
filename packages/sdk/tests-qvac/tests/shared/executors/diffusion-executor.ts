@@ -38,6 +38,9 @@ export class DiffusionExecutor extends AbstractModelExecutor<typeof diffusionTes
     if (testId === "diffusion-fusion-flux2-basic") {
       return await this.fusionFlux2Basic(params, expectation);
     }
+    if (testId === "diffusion-esrgan-upscale-x4") {
+      return await this.esrganUpscaleX4(params, expectation);
+    }
 
     const handler = (this.handlers as Record<string, (params: unknown, expectation: unknown) => Promise<TestResult>>)[testId];
     if (handler) {
@@ -75,6 +78,7 @@ export class DiffusionExecutor extends AbstractModelExecutor<typeof diffusionTes
     if (p.auto_resize_ref_image != null) params.auto_resize_ref_image = p.auto_resize_ref_image as boolean;
     if (p.lora != null) params.lora = p.lora as string;
     if (p.strength != null) params.strength = p.strength as number;
+    if (p.upscale != null) params.upscale = p.upscale as DiffusionClientParams["upscale"];
 
     if (p.init_image != null && p.init_images != null) {
       throw new Error(
@@ -276,6 +280,26 @@ export class DiffusionExecutor extends AbstractModelExecutor<typeof diffusionTes
         passed: false,
         output: `FLUX.2 fusion comparison failed: ${errorMsg}`,
       };
+    }
+  }
+
+  // Output dimensions are validated by the function expectation on the test
+  // definition (see diffusion-tests.ts → validateEsrganUpscale).
+  async esrganUpscaleX4(
+    params: unknown,
+    expectation: unknown,
+  ): Promise<TestResult> {
+    const p = await this.resolveParams(params as Record<string, unknown>);
+    const modelId = await this.resources.ensureLoaded("diffusion-esrgan");
+
+    try {
+      const genParams = this.buildParams(modelId, p);
+      const { outputs } = diffusion(genParams);
+      const buffers = await outputs;
+      return ValidationHelpers.validate(buffers, expectation as Expectation);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      return { passed: false, output: `ESRGAN upscale failed: ${errorMsg}` };
     }
   }
 

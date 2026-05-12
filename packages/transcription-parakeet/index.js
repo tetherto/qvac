@@ -8,63 +8,11 @@ const { ParakeetInterface } = require('./parakeet')
 const { END_OF_INPUT, ERR_CODES, QvacErrorAddonParakeet } = require('./lib/error')
 
 /**
- * Required model files for TDT model
- */
-const TDT_MODEL_FILES = [
-  'encoder-model.onnx',
-  'encoder-model.onnx.data',
-  'decoder_joint-model.onnx',
-  'vocab.txt',
-  'preprocessor.onnx'
-]
-
-/**
- * Required model files for CTC model
- */
-const CTC_MODEL_FILES = [
-  'model.onnx',
-  'model.onnx_data',
-  'tokenizer.json'
-]
-
-/**
- * Required model files for EOU model
- */
-const EOU_MODEL_FILES = [
-  'encoder.onnx',
-  'decoder_joint.onnx',
-  'tokenizer.json'
-]
-
-/**
- * Required model files for Sortformer model
- */
-const SORTFORMER_MODEL_FILES = [
-  'sortformer.onnx'
-]
-
-/**
- * Get required model files based on model type
- * @param {string} modelType - 'tdt', 'ctc', 'eou', or 'sortformer'
- * @returns {string[]} - array of required file names
- */
-function getRequiredModelFiles (modelType) {
-  switch (modelType) {
-    case 'ctc':
-      return CTC_MODEL_FILES
-    case 'eou':
-      return EOU_MODEL_FILES
-    case 'sortformer':
-      return SORTFORMER_MODEL_FILES
-    case 'tdt':
-    default:
-      return TDT_MODEL_FILES
-  }
-}
-
-/**
- * ONNX Runtime client implementation for the Parakeet speech-to-text model.
- * Supports NVIDIA Parakeet ASR models in ONNX format.
+ * High-level Parakeet speech-to-text client backed by the ggml engine
+ * sourced from qvac-parakeet.cpp. Takes a single `.gguf` checkpoint
+ * (CTC, TDT, EOU, or Sortformer); the model type is auto-detected
+ * from GGUF metadata, so the same class transcribes or diarizes
+ * depending on the file you load.
  */
 class TranscriptionParakeet {
   /**
@@ -72,25 +20,35 @@ class TranscriptionParakeet {
    * @constructor
    * @param {Object} opts
    * @param {Object} [opts.files={}] - Map of model file paths
-   * @param {string} [opts.files.encoder] - Absolute path to TDT encoder-model.onnx
-   * @param {string} [opts.files.encoderData] - Absolute path to TDT encoder-model.onnx.data
-   * @param {string} [opts.files.decoder] - Absolute path to TDT decoder_joint-model.onnx
-   * @param {string} [opts.files.vocab] - Absolute path to TDT vocab.txt
-   * @param {string} [opts.files.preprocessor] - Absolute path to TDT preprocessor.onnx
-   * @param {string} [opts.files.model] - Absolute path to CTC model.onnx
-   * @param {string} [opts.files.modelData] - Absolute path to CTC model.onnx_data
-   * @param {string} [opts.files.tokenizer] - Absolute path to CTC/EOU tokenizer.json
-   * @param {string} [opts.files.eouEncoder] - Absolute path to EOU encoder.onnx
-   * @param {string} [opts.files.eouDecoder] - Absolute path to EOU decoder_joint.onnx
-   * @param {string} [opts.files.sortformer] - Absolute path to sortformer.onnx
+   * @param {string} [opts.files.model] - Absolute path to a single
+   *   `.gguf` produced by `qvac-parakeet.cpp/scripts/convert-nemo-to-gguf.py`.
    * @param {Object} [opts.config={}] - Parakeet inference configuration
    * @param {Object} [opts.config.parakeetConfig] - Parakeet-specific configuration
-   * @param {string} [opts.config.parakeetConfig.modelType='tdt'] - Model type: 'tdt', 'ctc', 'eou', or 'sortformer'
-   * @param {number} [opts.config.parakeetConfig.maxThreads=4] - Max CPU threads for inference
-   * @param {boolean} [opts.config.parakeetConfig.useGPU=false] - Enable GPU acceleration
-   * @param {boolean} [opts.config.parakeetConfig.captionEnabled=false] - Enable caption/subtitle mode
+   * @param {number} [opts.config.parakeetConfig.maxThreads=4] - Max CPU threads (0 = engine picks)
+   * @param {boolean} [opts.config.parakeetConfig.useGPU=false] - Enable the linked ggml GPU backend
+   * @param {boolean} [opts.config.parakeetConfig.captionEnabled=false] - Caption/subtitle mode
    * @param {boolean} [opts.config.parakeetConfig.timestampsEnabled=true] - Include timestamps in output
-   * @param {number} [opts.config.parakeetConfig.seed=-1] - Random seed (-1 for random)
+   * @param {number} [opts.config.parakeetConfig.seed=-1] - Random seed (-1 = random)
+   * @param {boolean} [opts.config.parakeetConfig.streaming=false] - Open a long-lived
+   *   StreamSession / SortformerStreamSession at load time so speaker IDs stay
+   *   stable across appends and EOU `<EOU>` boundaries surface as segments.
+   *   Cross-append state (speaker history, EOU rolling window, partial decode
+   *   state) survives only within a single `run()` call -- it does NOT persist
+   *   across separate `run()` calls on the same instance. For live continuous
+   *   capture, drive a single long-running `run()` from a pushable stream, or
+   *   use {@link TranscriptionParakeet#runStreaming} which owns one parakeet
+   *   streaming session for the entire call regardless of append count.
+   * @param {number} [opts.config.parakeetConfig.streamingChunkMs=2000] - Streaming chunk cadence
+   * @param {number} [opts.config.parakeetConfig.streamingHistoryMs=30000] - Sortformer rolling history
+   * @param {boolean} [opts.config.parakeetConfig.streamingEmitPartials=true] - Emit partial segments
+   * @param {boolean} [opts.config.parakeetConfig.streamingEnergyVad=false] - CTC/TDT energy-VAD events
+   * @param {number} [opts.config.parakeetConfig.streamingLeftContextMs] - Encoder left
+   *   context kept upstream of each chunk (default 10000 -- parakeet-cpp's own).
+   *   ASR sessions only; Sortformer ignores it.
+   * @param {number} [opts.config.parakeetConfig.streamingRightLookaheadMs] - Future
+   *   audio the encoder waits for before emitting each chunk (default 2000 --
+   *   parakeet-cpp's own). Adds directly to per-segment latency floor.
+   *   ASR sessions only; Sortformer ignores it.
    * @param {Object} [opts.logger=null] - Optional structured logger
    * @param {boolean} [opts.exclusiveRun=true] - Whether to run exclusively
    */
@@ -102,17 +60,7 @@ class TranscriptionParakeet {
 
     this._config = {
       ...config,
-      encoderPath: files.encoder,
-      encoderDataPath: files.encoderData,
-      decoderPath: files.decoder,
-      vocabPath: files.vocab,
-      preprocessorPath: files.preprocessor,
-      ctcModelPath: files.model,
-      ctcModelDataPath: files.modelData,
-      tokenizerPath: files.tokenizer,
-      eouEncoderPath: files.eouEncoder,
-      eouDecoderPath: files.eouDecoder,
-      sortformerPath: files.sortformer
+      modelPath: files.model
     }
 
     this.params = config.parakeetConfig || {}
@@ -127,45 +75,15 @@ class TranscriptionParakeet {
   }
 
   /**
-   * Validate that required model files exist
+   * Validate that the configured GGUF exists. Logs (does not throw)
+   * so callers can pre-stage the file asynchronously between
+   * construction and `load()`.
    */
   validateModelFiles () {
-    const modelType = this.params.modelType || 'tdt'
-    const requiredFiles = getRequiredModelFiles(modelType)
-    for (const file of requiredFiles) {
-      const filePath = this._resolveFilePath(file)
-      if (filePath && !fs.existsSync(filePath)) {
-        this.logger.warn('Model file not found', { file, path: filePath })
-      }
+    const modelPath = this._config.modelPath
+    if (modelPath && !fs.existsSync(modelPath)) {
+      this.logger.warn('Model file not found', { path: modelPath })
     }
-  }
-
-  /**
-   * Resolve the absolute path for a model file from the files map.
-   * @param {string} filename - model file name (e.g. 'encoder-model.onnx')
-   * @returns {string} - absolute path to the file, or empty string if not set
-   * @private
-   */
-  _resolveFilePath (filename) {
-    const namedPaths = {
-      // TDT
-      'encoder-model.onnx': this._config.encoderPath,
-      'encoder-model.onnx.data': this._config.encoderDataPath,
-      'decoder_joint-model.onnx': this._config.decoderPath,
-      'vocab.txt': this._config.vocabPath,
-      'preprocessor.onnx': this._config.preprocessorPath,
-      // CTC
-      'model.onnx': this._config.ctcModelPath,
-      'model.onnx_data': this._config.ctcModelDataPath,
-      // CTC / EOU shared
-      'tokenizer.json': this._config.tokenizerPath,
-      // EOU
-      'encoder.onnx': this._config.eouEncoderPath,
-      'decoder_joint.onnx': this._config.eouDecoderPath,
-      // Sortformer
-      'sortformer.onnx': this._config.sortformerPath
-    }
-    return namedPaths[filename] || ''
   }
 
   /**
@@ -174,33 +92,27 @@ class TranscriptionParakeet {
    * @private
    */
   _buildConfigurationParams () {
-    const modelType = this.params.modelType || 'tdt'
-
-    const configurationParams = {
-      modelPath: '',
-      modelType,
-      maxThreads: this.params.maxThreads || 4,
-      useGPU: this.params.useGPU || false,
+    // modelType is intentionally not passed: the binding reads
+    // `parakeet.model.type` from the GGUF metadata at load() time and
+    // overrides cfg_.modelType so the right dispatch (ASR vs
+    // Sortformer) is chosen automatically.
+    return {
+      modelPath: this._config.modelPath || '',
+      maxThreads: this.params.maxThreads ?? 4,
+      useGPU: this.params.useGPU === true,
       sampleRate: this.params.sampleRate || 16000,
       channels: this.params.channels || 1,
-      captionEnabled: this.params.captionEnabled || false,
+      captionEnabled: this.params.captionEnabled === true,
       timestampsEnabled: this.params.timestampsEnabled !== false,
-      seed: this.params.seed ?? -1
+      seed: this.params.seed ?? -1,
+      streaming: this.params.streaming === true,
+      streamingChunkMs: this.params.streamingChunkMs ?? 2000,
+      streamingHistoryMs: this.params.streamingHistoryMs ?? 30000,
+      streamingEmitPartials: this.params.streamingEmitPartials !== false,
+      streamingEnergyVad: this.params.streamingEnergyVad === true,
+      streamingLeftContextMs: this.params.streamingLeftContextMs ?? -1,
+      streamingRightLookaheadMs: this.params.streamingRightLookaheadMs ?? -1
     }
-
-    if (this._config.encoderPath) configurationParams.encoderPath = this._config.encoderPath
-    if (this._config.encoderDataPath) configurationParams.encoderDataPath = this._config.encoderDataPath
-    if (this._config.decoderPath) configurationParams.decoderPath = this._config.decoderPath
-    if (this._config.vocabPath) configurationParams.vocabPath = this._config.vocabPath
-    if (this._config.preprocessorPath) configurationParams.preprocessorPath = this._config.preprocessorPath
-    if (this._config.ctcModelPath) configurationParams.ctcModelPath = this._config.ctcModelPath
-    if (this._config.ctcModelDataPath) configurationParams.ctcModelDataPath = this._config.ctcModelDataPath
-    if (this._config.tokenizerPath) configurationParams.tokenizerPath = this._config.tokenizerPath
-    if (this._config.eouEncoderPath) configurationParams.eouEncoderPath = this._config.eouEncoderPath
-    if (this._config.eouDecoderPath) configurationParams.eouDecoderPath = this._config.eouDecoderPath
-    if (this._config.sortformerPath) configurationParams.sortformerPath = this._config.sortformerPath
-
-    return configurationParams
   }
 
   getState () {
@@ -225,6 +137,41 @@ class TranscriptionParakeet {
       return await this._withExclusiveRun(() => this._runInternal(input))
     }
     return await this._runInternal(input)
+  }
+
+  /**
+   * Duplex streaming entry point. Opens a long-lived
+   * `parakeet::StreamSession` (or `SortformerStreamSession`) on the C++
+   * side and feeds each chunk from `audioStream` directly into it as
+   * the chunks arrive -- without batching the whole utterance in JS
+   * memory the way `run()` does. Per-chunk segments surface through
+   * `response.onUpdate(...)` as soon as the engine emits them. The
+   * session is closed (and the response resolves with a synthetic
+   * `JobEnded`) when the audio stream completes.
+   *
+   * @param {AsyncIterable<Buffer|Float32Array>} audioStream - 16 kHz mono
+   *   PCM stream. s16le `Buffer` chunks are converted to Float32 in
+   *   [-1, 1] internally; Float32Array chunks are passed through.
+   * @param {Object} [streamingConfig] - per-call overrides forwarded to
+   *   the native processor. Any field omitted falls back to the
+   *   `parakeetConfig.streaming*` value used at load time.
+   * @param {number} [streamingConfig.chunkMs] - encoder cadence in ms
+   * @param {number} [streamingConfig.historyMs] - Sortformer rolling
+   *   history window in ms
+   * @param {boolean} [streamingConfig.emitPartials] - emit partial
+   *   segments on chunk boundaries (default true)
+   * @param {boolean} [streamingConfig.emitEnergyVad] - surface
+   *   energy-VAD events for CTC/TDT
+   * @returns {Promise<QvacResponse>} - response object exposing
+   *   `onUpdate(seg => ...).await()`
+   */
+  async runStreaming (audioStream, streamingConfig = {}) {
+    if (this.exclusiveRun) {
+      return await this._withExclusiveRun(
+        () => this._runStreamingInternal(audioStream, streamingConfig)
+      )
+    }
+    return await this._runStreamingInternal(audioStream, streamingConfig)
   }
 
   async _withExclusiveRun (fn) {
@@ -260,11 +207,58 @@ class TranscriptionParakeet {
   async _runInternal (audioStream) {
     const response = this._job.start()
 
-    this._handleAudioStream(this._normalizeAudioStream(audioStream)).catch((error) => {
+    let normalized
+    try {
+      normalized = this._normalizeAudioStream(audioStream)
+    } catch (error) {
+      this._job.fail(error)
+      throw error
+    }
+
+    this._handleAudioStream(normalized).catch((error) => {
       this._job.fail(error)
     })
 
     return response
+  }
+
+  async _runStreamingInternal (audioStream, streamingConfig) {
+    const normalized = this._normalizeAudioStream(audioStream)
+    const response = this._job.start()
+
+    try {
+      await this.addon.startStreaming(streamingConfig || {})
+    } catch (error) {
+      this._job.fail(error)
+      throw error
+    }
+
+    this._pumpStreamingAudio(normalized).catch((error) => {
+      this.addon.endStreaming().catch(() => {})
+      this._job.fail(error)
+    })
+
+    return response
+  }
+
+  async _pumpStreamingAudio (audioStream) {
+    this.logger.debug('Start pumping audio into duplex streaming session')
+    for await (const chunk of audioStream) {
+      let audioData
+      if (chunk instanceof Float32Array) {
+        audioData = chunk
+      } else {
+        const int16Data = new Int16Array(chunk.buffer, chunk.byteOffset, chunk.byteLength / 2)
+        audioData = new Float32Array(int16Data.length)
+        for (let i = 0; i < int16Data.length; i++) {
+          audioData[i] = int16Data[i] / 32768.0
+        }
+      }
+      if (audioData.length === 0) continue
+      await this.addon.appendStreamingAudio(audioData)
+    }
+    this.logger.debug('Audio stream completed; closing duplex streaming session')
+    await this.addon.endStreaming()
   }
 
   /**

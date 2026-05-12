@@ -1,0 +1,24 @@
+{
+  "action": "synchronize",
+  "number": 4245,
+  "pull_request": {
+    "number": 4245,
+    "head": {
+      "repo": { "full_name": "external-fork/qvac" },
+      "ref": "external-feature",
+      "sha": "abcdef0"
+    },
+    "base": {
+      "repo": { "full_name": "tetherto/qvac" }
+    },
+    "labels": [
+      { "name": "verified" }
+    ]
+  },
+  "sender": {
+    "login": "mallory-outsider"
+  },
+  "repository": {
+    "full_name": "tetherto/qvac"
+  }
+}

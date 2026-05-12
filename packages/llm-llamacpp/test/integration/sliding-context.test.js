@@ -23,9 +23,12 @@ const DEFAULT_MODEL = {
 }
 
 // ── Constants ────────────────────────────────────────────────────────────────
-const N_CTX = 256
-const PROMPT_TOKENS = 44 // STORY_PROMPT tokenizes to 44 tokens with Llama 3.2 1B
-const FREE_SLOTS = N_CTX - PROMPT_TOKENS
+// llama.cpp pads the requested ctx_size up to the next multiple of 256 via
+// GGML_PAD(cparams.n_ctx, 256), so the effective n_ctx the slider sees is 512.
+// PROMPT_TOKENS is the chat-template wrapper around STORY_PROMPT (Llama 3.2 1B).
+const N_CTX = 512
+const PROMPT_TOKENS = 64
+const FREE_SLOTS = N_CTX - PROMPT_TOKENS // 448
 const SLIDE_PREDICT = isWindowsX64 ? 256 : 512
 const MANY_SLIDES_PREDICT = isWindowsX64 ? 384 : 1024
 
@@ -226,12 +229,12 @@ test('Sliding context works with minimal n_discarded of 1', {
   )
 })
 
-// n_discarded=64, n_predict=200 (first run), n_predict=10 (second run)
-// First run: n_past = 44 + 200 = 244, firstMsgTokens = 44
+// n_discarded=64, n_predict=430 (first run), predict=10 (second run)
+// First run: n_past = 64 + 430 = 494, firstMsgTokens = 64
 // Second run follow-up (~20 tokens):
-//   n_past + nTokens = 244 + ~20 = ~264 >= 256 (outer condition)
-//   leftTokens = 244 - 44 - 64 = 136 >= 0
-//   n_past + nTokens - n_discarded = ~264 - 64 = ~200 < 256
+//   n_past + nTokens = 494 + ~20 = ~514 >= 512 (outer condition)
+//   leftTokens = 494 - 64 - 64 = 366 >= 0
+//   n_past + nTokens - n_discarded = ~514 - 64 = ~450 < 512
 // :> discards n_discarded (64) tokens after first message
 // Second run uses predict=10 via generationParams so generation can't
 // reach the context limit — any contextSlides must come from prefill.
@@ -245,7 +248,7 @@ test('Cached follow-up discards middle tokens to fit new message', {
   )
 
   const { model } = await setupModel(t, {
-    n_predict: '200',
+    n_predict: '430',
     n_discarded: '64'
   })
 
@@ -255,10 +258,10 @@ test('Cached follow-up discards middle tokens to fit new message', {
   const first = await runAndCollect(model, STORY_PROMPT, opts)
   t.is(first.stats.promptTokens, PROMPT_TOKENS, 'first run: prompt tokens match')
   t.ok(first.stats.generatedTokens > 0, 'first run: generated output')
-  t.is(first.stats.contextSlides, 0, 'first run: no slides (n_past 244 < n_ctx 256)')
+  t.is(first.stats.contextSlides, 0, 'first run: no slides (n_past 494 < n_ctx 512)')
 
   // Second run: low predict so only prefill discard can cause slides
-  // After prefill discard: n_past ~200, generate 10 → ~210 < 256 (no generation sliding)
+  // After prefill discard: n_past ~430, generate 10 → ~440 < 512 (no generation sliding)
   const second = await runAndCollect(
     model,
     [FOLLOW_UP_MSG],
@@ -268,13 +271,13 @@ test('Cached follow-up discards middle tokens to fit new message', {
   t.is(second.stats.contextSlides, 1, 'exactly one prefill discard slide')
 })
 
-// n_discarded=250 (clamped to 211), n_predict=200 (first run), predict=10 (second run)
-// First run: n_past = 244, firstMsgTokens = 44, n_discarded = 211
+// n_discarded=450 (clamped to FREE_SLOTS-1 = 447), n_predict=430 (first run), predict=10 (second run)
+// First run: n_past = 494, firstMsgTokens = 64, n_discarded = 447
 // Second run follow-up (~20 tokens):
-//   leftTokens = 244 - 44 - 211 = -11 < 0
-//   firstMsgTokens + nTokens = 44 + ~20 = ~64 < 256
-//   n_discarded = 211 > 0
-// :> removes all middle tokens from pos 44 to 244
+//   leftTokens = 494 - 64 - 447 = -17 < 0
+//   firstMsgTokens + nTokens = 64 + ~20 = ~84 < 512
+//   n_discarded = 447 > 0
+// :> removes all middle tokens from pos 64 to 494
 // Second run uses predict=10 so generation can't cause slides.
 test('Cached follow-up clears all middle tokens when discard window is exhausted', {
   timeout: 900_000,
@@ -286,8 +289,8 @@ test('Cached follow-up clears all middle tokens when discard window is exhausted
   )
 
   const { model } = await setupModel(t, {
-    n_predict: '200',
-    n_discarded: '250'
+    n_predict: '430',
+    n_discarded: '450'
   })
 
   const opts = cacheOpts(cachePath)
@@ -296,10 +299,10 @@ test('Cached follow-up clears all middle tokens when discard window is exhausted
   const first = await runAndCollect(model, STORY_PROMPT, opts)
   t.is(first.stats.promptTokens, PROMPT_TOKENS, 'first run: prompt tokens match')
   t.ok(first.stats.generatedTokens > 0, 'first run: generated output')
-  t.is(first.stats.contextSlides, 0, 'first run: no slides (n_past 244 < n_ctx 256)')
+  t.is(first.stats.contextSlides, 0, 'first run: no slides (n_past 494 < n_ctx 512)')
 
   // Second run: low predict so only prefill full-middle-discard can cause slides
-  // After discard: n_past = 44 (firstMsgTokens), generate 10 → 54 < 256
+  // After discard: n_past = 64 (firstMsgTokens), generate 10 → 74 < 512
   const second = await runAndCollect(
     model,
     [FOLLOW_UP_MSG],
@@ -309,12 +312,12 @@ test('Cached follow-up clears all middle tokens when discard window is exhausted
   t.is(second.stats.contextSlides, 1, 'exactly one full middle token discard slide')
 })
 
-// n_discarded=0, n_predict=200
-// First run: n_past = 244, firstMsgTokens = 44, n_discarded = 0
+// n_discarded=0, n_predict=430
+// First run: n_past = 494, firstMsgTokens = 64, n_discarded = 0
 // Second run follow-up (~20 tokens):
-//   n_past + nTokens = ~264 >= 256 (outer condition)
-//   leftTokens = 244 - 44 - 0 = 200 >= 0
-//   normal discard: n_past + nTokens - 0 = ~264 >= 256 (fails)
+//   n_past + nTokens = ~514 >= 512 (outer condition)
+//   leftTokens = 494 - 64 - 0 = 430 >= 0
+//   normal discard: discard > 0 fails
 //   full middle discard: leftTokens >= 0 (first condition fails)
 // :> no recovery possible, throws ContextOverflow
 test('Cached follow-up overflows when sliding is disabled and context is full', {
@@ -327,13 +330,13 @@ test('Cached follow-up overflows when sliding is disabled and context is full', 
   )
 
   const { model } = await setupModel(t, {
-    n_predict: '200',
+    n_predict: '430',
     n_discarded: '0'
   })
 
   const opts = cacheOpts(cachePath)
 
-  // First run: accumulate n_past with cache (no overflow since 244 < 256)
+  // First run: accumulate n_past with cache (no overflow since 494 < 512)
   const first = await runAndCollect(model, STORY_PROMPT, opts)
   t.is(first.stats.promptTokens, PROMPT_TOKENS, 'first run: prompt tokens match')
   t.ok(first.stats.generatedTokens > 0, 'first run: generated output')
