@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.20.1] - 2026-05-11
+
+### Fixed
+
+#### MedPsy GGUF models now apply their embedded chat template
+
+MedPsy models report `general.architecture = qwen3` in GGUF metadata, so the llm addon was substituting the hardcoded Qwen3 chat templates in `ChatTemplateUtils` whenever the model was loaded. That replaced the model's own embedded Jinja chat template — which contains a `{%- set persona -%}` block injecting the `"You are MedPsy, ..."` system prompt the model is fine-tuned to expect — and as a result the model lost its identity at runtime and answered as a generic assistant.
+
+The addon now identifies MedPsy models via the GGUF `general.basename` metadata (case-insensitive match against `MedPsy`) and:
+
+- `ChatTemplateUtils::getChatTemplateForModel` returns an empty string for MedPsy, so `common_chat_templates_init` falls through to the model's embedded chat template instead of substituting the hardcoded Qwen3 ones. The Qwen3 reasoning state and EOS handling in `TextLlmContext` continue to apply because the architecture is still `qwen3`.
+- `LlamaModel::commonParamsParse` auto-enables `params.use_jinja` when it detects the MedPsy basename, so the embedded Jinja template is applied even when the caller did not pass `tools: 'true'`. The auto-enable is gated on `!use_jinja`, so passing `tools: 'true'` continues to work and the auto-enable log is correctly skipped.
+
+After the fix, MedPsy self-identifies correctly at runtime (e.g. `"I'm MedPsy, a medical and healthcare AI assistant developed by QVAC."`).
+
+The new `qvac_lib_inference_addon_llama::utils::isMedPsyBasename` and `isMedPsyModel` helpers are unit-tested for null, empty, exact match, mixed case, and near-miss strings such as `MedPsy-7B` and `NotMedPsy`.
+
 ## [0.20.0] - 2026-05-10
 
 ### Changed
