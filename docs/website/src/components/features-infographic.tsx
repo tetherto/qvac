@@ -99,6 +99,7 @@ export const DEFAULT_FEATURES: Feature[] = [
     description:
       'Use one SDK for LLMs, fine-tuning, diffusion, speech, RAG, and more.',
     angle: 0,
+    href: '#ai-capabilities',
   },
   {
     id: 'local-first',
@@ -106,6 +107,7 @@ export const DEFAULT_FEATURES: Feature[] = [
     description:
       'Run AI models locally, without relying on third-party APIs, SaaS, or cloud infrastructure.',
     angle: 315,
+    href: '/quickstart',
   },
   {
     id: 'p2p',
@@ -113,6 +115,7 @@ export const DEFAULT_FEATURES: Feature[] = [
     description:
       'Delegate inference to peers and build AI systems that work across P2P networks.',
     angle: 45,
+    href: '/p2p-capabilities/delegated-inference',
   },
   {
     id: 'cross-platform',
@@ -120,6 +123,7 @@ export const DEFAULT_FEATURES: Feature[] = [
     description:
       'Consistent developer experience across hardware, operating systems, and JavaScript runtimes — write code once, run it everywhere.',
     angle: 90,
+    href: '/installation#supported-environments',
   },
   {
     id: 'pluggable',
@@ -127,6 +131,7 @@ export const DEFAULT_FEATURES: Feature[] = [
     description:
       'Include only the capabilities your app needs, and extend the SDK with custom plugins.',
     angle: 135,
+    href: '/configuration/plugins',
   },
   {
     id: 'open-source',
@@ -134,6 +139,7 @@ export const DEFAULT_FEATURES: Feature[] = [
     description:
       '100% free to use and modify, released under Apache 2.0 license.',
     angle: 180,
+    href: 'https://github.com/tetherto/qvac',
   },
   {
     id: 'openai',
@@ -141,6 +147,7 @@ export const DEFAULT_FEATURES: Feature[] = [
     description:
       'Launch an HTTP server that exposes an OpenAI-compatible API for integration with the broader AI ecosystem.',
     angle: 225,
+    href: '/cli/http-server',
   },
   {
     id: 'unified',
@@ -148,6 +155,7 @@ export const DEFAULT_FEATURES: Feature[] = [
     description:
       'Use one typed JavaScript SDK to run multiple AI capabilities from a single npm package.',
     angle: 270,
+    href: '/introduction',
   },
 ];
 
@@ -432,6 +440,15 @@ const SPARKLES: Sparkle[] = SPARKLE_RAYS.flatMap(expandRay);
 // Extracted so future interactivity hooks live in a single place.
 // ============================================================================
 
+// Anything starting with `http(s)://` is treated as off-site and rendered as
+// a native <a target="_blank">, matching the behaviour of the sidebar link
+// items that set `external: true`. Internal hrefs (including pure anchors
+// like "#ai-capabilities") use next/link so client-side navigation and hash
+// scrolling stay intact.
+function isExternalHref(href: string): boolean {
+  return /^https?:\/\//i.test(href);
+}
+
 function FeatureCardShell({
   feature,
   children,
@@ -439,15 +456,32 @@ function FeatureCardShell({
   feature: Feature;
   children: React.ReactNode;
 }) {
+  // The `group` class lets hover state propagate from the whole wrapper
+  // (which extends above the box to include the title) to the inner box, so
+  // the border highlight + soft shadow on the box trigger even when the
+  // cursor is over the title region. We intentionally don't apply a hover
+  // background to the wrapper itself: with the title sitting OUTSIDE the
+  // visible box, an accent-tinted pill behind the title looks disconnected
+  // from the rest of the card.
   const interactiveClasses =
-    'transition-colors hover:bg-fd-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring focus-visible:ring-offset-2 focus-visible:ring-offset-fd-background rounded-md';
+    'group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring focus-visible:ring-offset-2 focus-visible:ring-offset-fd-background rounded-md';
+  const linkClasses = `inline-flex w-full flex-col no-underline ${interactiveClasses}`;
 
   if (feature.href) {
+    if (isExternalHref(feature.href)) {
+      return (
+        <a
+          href={feature.href}
+          target="_blank"
+          rel="noreferrer noopener"
+          className={linkClasses}
+        >
+          {children}
+        </a>
+      );
+    }
     return (
-      <Link
-        href={feature.href}
-        className={`inline-flex w-full flex-col no-underline ${interactiveClasses}`}
-      >
+      <Link href={feature.href} className={linkClasses}>
         {children}
       </Link>
     );
@@ -485,11 +519,12 @@ export function FeaturesInfographic({
           stroke="currentColor"
           strokeLinecap="round"
           role="img"
-          aria-labelledby="features-infographic-title"
+          aria-label="QVAC features and platforms overview"
         >
-          <title id="features-infographic-title">
-            QVAC features and platforms overview
-          </title>
+          {/* The accessible name lives on the <svg aria-label> above rather
+              than in a <title> child element, because browsers render <title>
+              as a native hover tooltip and we don't want that here. Screen
+              readers still announce the SVG correctly via aria-label. */}
 
           {/* ----- Sparkle twinkle styles (around the Q) -----
               Scoped via the .qvac-sparkle class. Each sparkle is hidden by
@@ -675,7 +710,14 @@ export function FeaturesInfographic({
                     >
                       {f.name}
                     </p>
-                    <div className="rounded-md border border-fd-primary/40 bg-fd-background p-4">
+                    {/* Hover effect lives on the box (the visible card shell): the
+                        border picks up an inset ring of the primary color (≈2px
+                        thick visual) and a subtle shadow. transition-shadow
+                        animates both because Tailwind's `ring` and `shadow` are
+                        implemented as box-shadows. `group-hover:` triggers
+                        whenever the cursor is anywhere on the wrapper, which
+                        includes the title above the box. */}
+                    <div className="rounded-md border border-fd-primary/40 bg-fd-background p-4 transition-shadow group-hover:shadow-sm group-hover:ring-1 group-hover:ring-inset group-hover:ring-fd-primary">
                       <p className="m-0 text-left text-[18px] leading-snug text-fd-foreground">
                         {f.description}
                       </p>
