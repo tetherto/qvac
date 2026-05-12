@@ -63,6 +63,21 @@ LABEL_GATE_BLOCK = """\
           github-token: ${{ secrets.PAT_TOKEN }}
 """
 
+# Workflows that MUST NOT be gated by label-gate, even if their jobs touch
+# user secrets, because they ARE the gating / labelling / approval machinery
+# itself. Gating them creates a deadlock where the verified label can never
+# be applied (no signal to reviewers) or the approval status check never
+# fires (PR un-mergeable until verified, but verified is meant to follow
+# the approval signal).
+#
+# Add a workflow here only when its sole purpose is to react to PR-meta
+# events (review, label, comment) to drive the trust signal that label-gate
+# itself depends on.
+EXEMPT_WORKFLOWS = frozenset({
+    ".github/workflows/approval-worker.yml",
+    ".github/workflows/approval-check-worker.yml",
+})
+
 GATE_GUARD = "needs.label-gate.outputs.authorised == 'true'"
 
 
@@ -255,6 +270,13 @@ def render_if_with_gate(value, body_indent: int) -> list[str]:
     pad = " " * body_indent
     if value is None or (isinstance(value, str) and not value.strip()):
         return [f"{pad}if: {GATE_GUARD}"]
+    if isinstance(value, bool):
+        # `if: false` is a permanent disable; gating it is a no-op (still
+        # never runs). `if: true` collapses to the gate alone. Preserve the
+        # explicit literal when false so the disable intent stays loud.
+        if value is False:
+            return [f"{pad}if: false"]
+        return [f"{pad}if: {GATE_GUARD}"]
     if not isinstance(value, str):
         raise ValueError(f"unsupported if: shape: {type(value).__name__} {value!r}")
     # Folded (`>-`) scalars come back with embedded \n. Collapse all
@@ -281,9 +303,18 @@ def file_already_migrated(text: str) -> bool:
     return bool(re.search(r"^\s*label-gate\s*:\s*$", text, re.MULTILINE))
 
 
-def migrate(text: str) -> tuple[str, list[str]]:
+def migrate(text: str, *, source_path: Optional[Path] = None) -> tuple[str, list[str]]:
     """Return (new_text, change_log)."""
     log: list[str] = []
+    if source_path is not None:
+        try:
+            rel = source_path.resolve().relative_to(Path.cwd().resolve())
+            rel_posix = rel.as_posix()
+        except ValueError:
+            rel_posix = source_path.as_posix()
+        if rel_posix in EXEMPT_WORKFLOWS or source_path.as_posix() in EXEMPT_WORKFLOWS:
+            log.append(f"exempt: {rel_posix} is part of label/approval machinery -- skipping")
+            return text, log
     if file_already_migrated(text):
         log.append("already migrated -- no changes")
         return text, log
@@ -294,6 +325,21 @@ def migrate(text: str) -> tuple[str, list[str]]:
 
     parsed = parse_jobs(text)
     jobs = collect_jobs_info(lines, parsed)
+
+    # No-op when no job in the file consumes user secrets / gates on a
+    # GitHub Environment. Inserting label-gate would just add a runtime
+    # cost (and a spurious queue slot) for zero security benefit -- nothing
+    # downstream `needs:` it. We also exclude jobs that are already hard-
+    # disabled (`if: false`); gating them is a no-op (still never runs)
+    # and rewriting their `if:` would clobber the explanatory comment that
+    # usually accompanies such an intentional disable.
+    secret_bearing = [
+        j for j in jobs
+        if (j.has_environment or j.references_user_secret) and j.if_value is not False
+    ]
+    if not secret_bearing:
+        log.append("no secret-bearing jobs to gate -- skipping (label-gate would be unused)")
+        return text, log
 
     # ---- Pass 1: insert the label-gate job block --------------------------
     jobs_line = find_jobs_block_line(lines)
@@ -331,6 +377,9 @@ def migrate(text: str) -> tuple[str, list[str]]:
         if j.name == "label-gate":
             continue
         if not (j.has_environment or j.references_user_secret):
+            continue
+        if j.if_value is False:
+            # Already hard-disabled; gating wouldn't change runtime semantics.
             continue
 
         # Compute the patch for `needs:` and `if:`.
@@ -392,7 +441,7 @@ def main():
         path = Path(f)
         try:
             text = path.read_text()
-            new_text, log = migrate(text)
+            new_text, log = migrate(text, source_path=path)
         except Exception as e:
             errors.append(f"{f}: {type(e).__name__}: {e}")
             continue
