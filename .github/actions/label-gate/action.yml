@@ -1,0 +1,46 @@
+name: Label Gate
+description: >
+  Authorise secret-bearing workflow jobs based on a "verified" label
+  applied by a member of one of the configured GitHub teams or by a user
+  on the explicit allowlist. Replaces per-job environment approvals as the
+  primary trust gate.
+
+inputs:
+  label:
+    description: "Label name required for PR events"
+    required: false
+    default: "verified"
+  teams:
+    description: >
+      Comma- and/or newline-separated list of GitHub team slugs (within the
+      repository owner's org). The label applier must be an active member
+      of at least one listed team for the run to be authorised. Either
+      `teams` or `users` (or both) must contain at least one entry.
+    required: false
+    default: |
+      qvac-internal-dev
+      qvac-internal-merge
+      qvac-internal-release
+  users:
+    description: >
+      Comma- and/or newline-separated list of GitHub user logins that are
+      authorised regardless of team membership. Login comparison is
+      case-insensitive. Default: empty (rely on `teams` only).
+    required: false
+    default: ""
+  github-token:
+    description: >
+      PAT with `read:org` (for team membership lookups) and write access
+      to pull-request labels (for stripping the gate label on synchronize
+      from non-trusted actors). Exposed as an input so swapping to a
+      fine-grained PAT or GitHub App is a secret rotation, not a workflow
+      edit.
+    required: true
+
+outputs:
+  authorised:
+    description: "'true' when the workflow run is authorised to access secrets"
+
+runs:
+  using: "node20"
+  main: "src/index.mjs"

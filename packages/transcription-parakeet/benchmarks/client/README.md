@@ -18,7 +18,7 @@ A Python client for benchmarking Parakeet transcription addons. It sends request
 ```bash
 # Clone the repository
 git clone https://github.com/tetherto/qvac.git
-cd qvac/packages/transcription-parakeet/benchmarks/client
+cd qvac/packages/qvac-lib-infer-parakeet/benchmarks/client
 
 # Install poetry if you haven't already
 curl -sSL https://install.python-poetry.org | python3 -
