@@ -2,13 +2,14 @@
 
 const fs = require('bare-fs')
 const path = require('bare-path')
+const proc = require('bare-process')
 const {
   binding,
   ParakeetInterface,
   detectPlatform,
   setupJsLogger,
   getTestPaths,
-  ensureModelForType,
+  loadGgufOrSkip,
   getNamedPathsConfig,
   isMobile,
   recordParakeetStats
@@ -17,6 +18,7 @@ const {
 const platform = detectPlatform()
 const { samplesDir } = getTestPaths()
 const NUM_TRANSCRIPTIONS = 3
+const NO_GPU = proc.env && proc.env.NO_GPU === 'true'
 
 function loadSampleAudio () {
   const samplePath = path.join(samplesDir, 'sample.raw')
@@ -39,6 +41,11 @@ async function runMobilePerfCase (t, opts) {
 
   if (!isMobile) {
     t.pass(`${modelLabel} ${epLabel} mobile perf case skipped on desktop`)
+    return
+  }
+
+  if (useGPU && NO_GPU) {
+    t.pass(`${modelLabel} ${epLabel} mobile perf GPU case skipped (NO_GPU=true)`)
     return
   }
 
@@ -65,11 +72,8 @@ async function runMobilePerfCase (t, opts) {
     console.log(` useGPU: ${useGPU}`)
     console.log('='.repeat(60) + '\n')
 
-    const modelPath = await ensureModelForType(modelType)
-    if (!modelPath) {
-      t.fail(`Unable to resolve model for type: ${modelType}`)
-      return
-    }
+    const modelPath = await loadGgufOrSkip(t, modelType)
+    if (!modelPath) return
     console.log(` Model path: ${modelPath}`)
 
     const audioData = loadSampleAudio()

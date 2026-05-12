@@ -40,6 +40,8 @@ import {
   FLUX_2_KLEIN_4B_Q4_0,
   FLUX_2_KLEIN_4B_VAE,
   QWEN3_4B_Q4_K_M,
+  SD_V2_1_1B_Q8_0,
+  REALESRGAN_X4PLUS_ANIME_6B
 } from "@qvac/sdk";
 import * as path from "node:path";
 import { ResourceManager } from "../shared/resource-manager.js";
@@ -324,6 +326,24 @@ resources.define("diffusion", {
     prediction: "flux2_flow",
     llmModelSrc: QWEN3_4B_Q4_K_M,
     vaeModelSrc: FLUX_2_KLEIN_4B_VAE,
+  },
+});
+
+// Isolated from "diffusion" so ESRGAN load failures don't affect the rest of the suite.
+resources.define("diffusion-esrgan", {
+  constant: SD_V2_1_1B_Q8_0,
+  type: "diffusion",
+  preLoadUnload: true,
+  config: {
+    device: "gpu",
+    threads: 4,
+    prediction: "v",
+    vae_on_cpu: true,
+    upscaler: {
+      type: "esrgan",
+      model_src: REALESRGAN_X4PLUS_ANIME_6B,
+      tile_size: 128,
+    },
   },
 });
 

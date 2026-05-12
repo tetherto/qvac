@@ -41,4 +41,5 @@ jobs:
       artifact-name-prefix: parakeet-
       linux-extra-packages: pkg-config libx11-dev libxcb1-dev libxkbcommon-dev
       setup-python-on-windows: true
+      include-vulkan-sdk: true
     secrets: inherit

@@ -2,7 +2,19 @@
 
 const path = require('bare-path')
 const fs = require('bare-fs')
+const proc = require('bare-process')
 const { pathToFileURL } = require('bare-url')
+
+// Force the gpu-smoke + mobile-perf-*-gpu integration tests to skip on
+// Device Farm. The desktop integration-test workflow toggles this via
+// matrix `no_gpu: 'true'` -> job env (matching qvac-lib-infer-llamacpp-llm),
+// but mobile bundles execute on real devices where workflow env vars do
+// not propagate. Setting it here means every test that reads
+// `process.env.NO_GPU` (gpu-smoke.test.js, mobile-perf-runner.js) sees
+// the same off-switch on Device Farm. Drop or gate this assignment when
+// the parakeet-cpp mobile GPU paths are stable enough for strict CI
+// coverage on Adreno / Apple Silicon devices.
+proc.env.NO_GPU = 'true'
 
 if (typeof Bare !== 'undefined' && typeof Bare.on === 'function') {
   Bare.on('unhandledRejection', (reason) => {
