@@ -29,10 +29,10 @@ const logger = getServerLogger();
  * `model.addon.cancel()` directly, so the wire contract for those
  * surfaces does not regress while the migration is in flight.
  */
-export function cancel(
+export async function cancel(
   params: CancelInferenceBaseParams,
   opts?: { kind?: RequestKind },
-) {
+): Promise<void> {
   const { modelId } = cancelInferenceBaseSchema.parse(params);
   const model = getModel(modelId);
 
@@ -49,10 +49,13 @@ export function cancel(
   // No registry match: a request kind whose handler hasn't been migrated
   // onto `registry.begin(...)` yet (everything except llama.cpp
   // completion in 0.11.0). Fire the addon-level cancel directly so the
-  // pre-registry behavior is preserved.
+  // pre-registry behavior is preserved — including awaiting acknowledgement,
+  // which is the wire contract callers relied on before this PR (the RPC
+  // response resolves once the addon has flipped its cancel flag, not
+  // beforehand).
   const addon = model.addon;
   if (addon?.cancel) {
-    void addon.cancel.call(addon);
+    await addon.cancel.call(addon);
     logger.debug(
       `[cancel] no registry match for modelId=${modelId}${opts?.kind ? ` kind=${opts.kind}` : ""} — fell back to addon.cancel()`,
     );

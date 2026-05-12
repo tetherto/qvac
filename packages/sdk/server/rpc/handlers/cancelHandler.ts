@@ -10,16 +10,22 @@ import { getServerLogger } from "@/logging";
 
 const logger = getServerLogger();
 
-export function cancelHandler(
+export async function cancelHandler(
   request: CancelRequest,
 ): Promise<CancelResponse> {
   try {
     switch (request.operation) {
       case "inference":
-        cancel({ modelId: request.modelId }, { kind: "completion" });
+        // Awaited so the RPC response resolves after the addon has
+        // acknowledged the cancel for non-registry-migrated handlers
+        // (embeddings / transcription / translation / decoder / OCR / TTS
+        // until M3b/M3c). The registry-routed path inside `cancel()` is
+        // already synchronous w.r.t. the abort, so the await is a no-op
+        // for completion-stream's signal-driven cancel.
+        await cancel({ modelId: request.modelId }, { kind: "completion" });
         break;
       case "embeddings":
-        cancel({ modelId: request.modelId }, { kind: "embeddings" });
+        await cancel({ modelId: request.modelId }, { kind: "embeddings" });
         break;
       case "request": {
         const cancelled = getRequestRegistry().cancel({
@@ -46,16 +52,16 @@ export function cancelHandler(
       }
     }
 
-    return Promise.resolve({
+    return {
       type: "cancel",
       success: true,
-    });
+    };
   } catch (error) {
     logger.error("Error during cancellation:", error);
-    return Promise.resolve({
+    return {
       type: "cancel",
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",
-    });
+    };
   }
 }

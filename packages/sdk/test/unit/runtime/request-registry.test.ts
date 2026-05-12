@@ -235,6 +235,76 @@ test("registry: end without prior begin is a no-op", async (t: T) => {
   t.is(r.list().length, 0);
 });
 
+test("registry: end() detaches parent listener so long-lived parents don't accumulate listeners", async (t: T) => {
+  // The `parentSignal` composition exists so a worker-level shutdown
+  // signal can compose into per-request signals. Without an explicit
+  // `detachParent` discipline, every `begin(...)` would leave a listener
+  // on the long-lived parent for the lifetime of the worker — a slow
+  // O(n requests) leak that's invisible until production-scale traffic.
+  // Verify the listener is removed on the request's `end()` path.
+  const parent = new AbortController();
+  let adds = 0;
+  let removes = 0;
+  const origAdd = parent.signal.addEventListener.bind(parent.signal);
+  const origRemove = parent.signal.removeEventListener.bind(parent.signal);
+  parent.signal.addEventListener = ((...args: Parameters<typeof origAdd>) => {
+    adds++;
+    return origAdd(...args);
+  }) as typeof parent.signal.addEventListener;
+  parent.signal.removeEventListener = ((
+    ...args: Parameters<typeof origRemove>
+  ) => {
+    removes++;
+    return origRemove(...args);
+  }) as typeof parent.signal.removeEventListener;
+
+  const r = createRequestRegistry();
+  for (let i = 0; i < 5; i++) {
+    const id = `r-${i}`;
+    const ctx = r.begin({
+      requestId: id,
+      kind: "completion",
+      modelId: "m1",
+      parentSignal: parent.signal,
+    });
+    t.is(ctx.state, "running");
+    await r.end(id, "completed");
+  }
+  t.is(adds, 5, "each begin() with parentSignal registered one listener");
+  t.is(
+    removes,
+    5,
+    "each end() removed it — long-lived parent doesn't accumulate listeners",
+  );
+});
+
+test("registry: same-tick cancel-before-begin returns 0 and does not retroactively abort the later begin()", async (t: T) => {
+  // Documents the current M1 behavior of the Stop-button race the
+  // synchronous-`requestId` design property allows: client generates a
+  // `requestId` and immediately fires `cancel({ requestId })` before the
+  // server-side `begin(...)` lands. The registry has nothing to match,
+  // so the cancel is a no-op — the subsequent `begin(...)` runs to
+  // completion. M2's typed-cancel outcomes will close this gap (likely
+  // via a small bounded "cancelled-before-begin" set checked by
+  // `begin(...)`); this test pins the current contract so the M2 change
+  // surfaces here.
+  const r = createRequestRegistry();
+  const cancelled = r.cancel({ requestId: "r-1" });
+  t.is(cancelled, 0, "no entry yet — cancel returns 0");
+
+  await using ctx = r.begin({
+    requestId: "r-1",
+    kind: "completion",
+    modelId: "m1",
+  });
+  t.is(
+    ctx.signal.aborted,
+    false,
+    "subsequent begin() is not retroactively aborted by the pre-begin cancel",
+  );
+  t.is(ctx.state, "running");
+});
+
 test("registry: derived terminal state is 'cancelled' if signal aborted, 'completed' otherwise", async (t: T) => {
   const r = createRequestRegistry();
 
