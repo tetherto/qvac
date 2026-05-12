@@ -1,8 +1,25 @@
 {
-  "name": "qvac-lib-infer-parakeet",
-  "version": "0.1.0",
+  "name": "transcription-parakeet",
+  "version": "0.4.0",
   "dependencies": [
-    "eigen3",
+    {
+      "name": "parakeet-cpp",
+      "version>=": "2026-05-05#1",
+      "features": ["metal"],
+      "platform": "osx | ios"
+    },
+    {
+      "name": "parakeet-cpp",
+      "version>=": "2026-05-05#1",
+      "features": ["vulkan", "opencl"],
+      "platform": "android"
+    },
+    {
+      "name": "parakeet-cpp",
+      "version>=": "2026-05-05#1",
+      "features": ["vulkan"],
+      "platform": "!(osx | ios | android)"
+    },
     {
       "name": "qvac-lib-inference-addon-cpp",
       "version>=": "1.1.7#1"
@@ -11,7 +28,6 @@
       "name": "qvac-lint-cpp",
       "version>=": "1.4.4#3"
     },
-    "nlohmann-json",
     {
       "name": "vcpkg-cmake",
       "host": true

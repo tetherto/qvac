@@ -36,3 +36,6 @@ data/
 benchmarks/results/
 test/integration/all.js
 test/integration/.exit-code
+test/mobile/testAssets/*.gguf
+test/results/
+venv/

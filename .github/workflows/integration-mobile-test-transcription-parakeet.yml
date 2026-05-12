@@ -16,6 +16,19 @@ on:
         type: string
         required: false
         default: "packages/transcription-parakeet"
+      package_spec:
+        description: |
+          Optional npm spec (e.g. @qvac/transcription-parakeet@1.0.0) to download
+          prebuilds from. When empty (the default for workflow_call) the workflow
+          uses prebuild artifacts produced earlier in the same run. Mirrors the
+          integration-test workflow's `prebuild_package` knob -- gating on this
+          input rather than on `github.event_name` because event_name propagates
+          from the parent (e.g. on-pr-transcription-parakeet) and would
+          otherwise force the npm path on a workflow_dispatch chain even when
+          a fresh artifact is available.
+        type: string
+        required: false
+        default: ""
   workflow_dispatch:
     inputs:
       # TODO(QVAC-17801): the `default: main` here is a footgun. `gh workflow
@@ -126,8 +139,24 @@ jobs:
           echo "Installing global dependencies..."
           npm install -g @expo/cli@latest
 
+      # Prebuild source selection.
+      #
+      # When invoked via workflow_call from on-pr-transcription-parakeet (the
+      # normal PR / verify path), the parent workflow runs prebuilds-...yml
+      # first and uploads `parakeet-{android,ios}-*` artifacts. Calling the
+      # mobile workflow without setting `package_spec` falls into the artifact
+      # branch below.
+      #
+      # Setting `package_spec` (default for the standalone workflow_dispatch
+      # trigger) opts into the npm path and ignores any artifacts.
+      #
+      # We deliberately do NOT gate on `github.event_name` here: when a parent
+      # workflow_dispatch fans out to this workflow via `uses: ./...yml`,
+      # event_name propagates from the parent, so an event-name gate would
+      # always pick the npm path on `on-pr` manual reruns even when a fresh
+      # prebuild was just uploaded in the same run.
       - name: Download Android prebuilds (from artifacts)
-        if: matrix.platform == 'Android' && github.event_name != 'workflow_dispatch'
+        if: matrix.platform == 'Android' && !inputs.package_spec
         id: artifact_android
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
@@ -137,7 +166,7 @@ jobs:
         continue-on-error: true
 
       - name: Download iOS prebuilds (from artifacts)
-        if: matrix.platform == 'iOS' && github.event_name != 'workflow_dispatch'
+        if: matrix.platform == 'iOS' && !inputs.package_spec
         id: artifact_ios
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
@@ -146,12 +175,12 @@ jobs:
           merge-multiple: true
         continue-on-error: true
 
-      - name: Download prebuilds (from npm - workflow_dispatch)
-        if: github.event_name == 'workflow_dispatch'
+      - name: Download prebuilds (from npm package_spec)
+        if: inputs.package_spec
         working-directory: ${{ env.ADDON_DIR }}
         run: |
-          PACKAGE_SPEC="${{ inputs.package_spec || '@qvac/transcription-parakeet@latest' }}"
-          echo "Downloading $PACKAGE_SPEC from registry for manual trigger..."
+          PACKAGE_SPEC="${{ inputs.package_spec }}"
+          echo "Downloading $PACKAGE_SPEC from registry..."
 
           if ! npm pack "$PACKAGE_SPEC"; then
             echo "ERROR: Failed to download $PACKAGE_SPEC"
@@ -289,11 +318,80 @@ jobs:
           echo "Installing addon dependencies..."
           npm install
 
+      # Skip the "auto-generated test glue is up-to-date" check only when
+      # running against a pinned `package_spec` (where the test sources may
+      # not match the published binary). Same propagation reasoning as the
+      # prebuild gate above.
       - name: Validate mobile tests are up-to-date
-        if: github.event_name != 'workflow_dispatch'
+        if: ${{ !inputs.package_spec }}
         working-directory: ${{ env.ADDON_DIR }}
         run: npm run test:mobile:validate
         continue-on-error: true
+
+      - name: Setup Python (.nemo -> .gguf conversion)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # The mobile test framework bundles whatever sits in
+      # `test/mobile/testAssets/` into the test app at `npm run build`
+      # time (see qvac-test-addon-mobile/scripts/build-test-app.js's
+      # copyTestAssets / generateAssetManifest). On the GGML backend
+      # we ship q4_0 GGUFs for TDT/EOU/Sortformer (~520 MB total;
+      # CTC is intentionally skipped -- shares the FastConformer
+      # encoder with TDT and would only add bundle size). The .nemo
+      # checkpoints + converted GGUFs + Python venv are cached
+      # together; cache-hit skips the whole conversion (~10 min on
+      # cold cache, ~0s warm).
+      - name: Cache Parakeet .nemo + q4 GGUFs + Python venv
+        id: cache-parakeet-models
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.ADDON_DIR }}/models/nemo
+            ${{ env.ADDON_DIR }}/models/parakeet-tdt-0.6b-v3.q4_0.gguf
+            ${{ env.ADDON_DIR }}/models/parakeet-eou-120m-v1.q4_0.gguf
+            ${{ env.ADDON_DIR }}/models/sortformer-4spk-v1.q4_0.gguf
+          key: parakeet-mobile-q4-tdt-eou-sortformer-v1-${{ hashFiles(format('{0}/scripts/convert-nemo-to-gguf.py', env.ADDON_DIR), format('{0}/scripts/convert-nemo.sh', env.ADDON_DIR), format('{0}/scripts/download-models.sh', env.ADDON_DIR), format('{0}/scripts/requirements.txt', env.ADDON_DIR)) }}
+          restore-keys: |
+            parakeet-mobile-q4-tdt-eou-sortformer-v1-
+
+      - name: Convert .nemo -> q4_0 GGUFs (cache miss)
+        if: steps.cache-parakeet-models.outputs.cache-hit != 'true'
+        working-directory: ${{ env.ADDON_DIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Cache miss -- provisioning Python venv and converting models..."
+          bash scripts/setup-venv.sh
+          for t in tdt eou sortformer; do
+            echo ""
+            echo "=== Downloading and converting ${t} ==="
+            bash scripts/download-models.sh -t "$t"
+            bash scripts/convert-nemo.sh    -t "$t" -q q4_0
+          done
+          echo ""
+          echo "Converted GGUFs:"
+          ls -lh models/*.q4_0.gguf
+
+      - name: Stage q4 GGUFs into test/mobile/testAssets/
+        working-directory: ${{ env.ADDON_DIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p test/mobile/testAssets
+          for f in parakeet-tdt-0.6b-v3.q4_0.gguf \
+                   parakeet-eou-120m-v1.q4_0.gguf \
+                   sortformer-4spk-v1.q4_0.gguf; do
+            if [ ! -s "models/$f" ]; then
+              echo "ERROR: missing or empty models/$f -- cache may be corrupt" >&2
+              ls -la models/ || true
+              exit 1
+            fi
+            cp "models/$f" "test/mobile/testAssets/"
+          done
+          echo "Staged GGUFs in test/mobile/testAssets/:"
+          ls -lh test/mobile/testAssets/
 
       - name: Pack addon
         working-directory: ${{ env.ADDON_DIR }}
@@ -414,6 +512,19 @@ jobs:
         if: matrix.platform == 'Android'
         id: build_apk
         working-directory: ./test-framework
+        env:
+          # AAPT's resource compiler (Container.addFileEntry ->
+          # kotlin.io.ByteStreamsKt.readBytes) reads each binary asset
+          # into a single ByteArray; with the q4 GGUFs we now bundle
+          # (~370 MiB for TDT alone) the default ~2 GB heap OOMs at
+          # `:app:mergeReleaseResources`. GRADLE_OPTS sizes the launcher
+          # JVM, but Gradle still forks a "single-use Daemon" JVM for
+          # AGP workers (because we override JAVA_HOME below) and that
+          # child reads its heap from `gradle.properties`, not from
+          # GRADLE_OPTS — so we ALSO append `org.gradle.jvmargs` into
+          # `android/gradle.properties` after `expo prebuild` regenerates
+          # it. Both sites need the same headroom.
+          GRADLE_OPTS: "-Xmx12g -XX:MaxMetaspaceSize=1g"
         run: |
           echo "Building Android APK for Device Farm..."
           export JAVA_HOME=$JAVA_HOME_17_X64
@@ -429,7 +540,26 @@ jobs:
           echo "Bundle completed successfully"
 
           cd android
+          # Propagate the heap headroom into the forked AGP build JVM.
+          # `expo prebuild --clean` regenerates this file each run and
+          # writes a default `org.gradle.jvmargs=-Xmx2048m ...` line that
+          # AAPT's Container.addFileEntry OOMs on when reading the q4
+          # GGUFs we bundle (TDT alone is ~370 MiB). Replace the existing
+          # line in place if present, otherwise append it.
+          if grep -q '^org\.gradle\.jvmargs=' gradle.properties 2>/dev/null; then
+            sed -i 's|^org\.gradle\.jvmargs=.*|org.gradle.jvmargs=-Xmx12g -XX:MaxMetaspaceSize=1g|' gradle.properties
+          else
+            {
+              echo ""
+              echo "# Heap headroom for AAPT resource compilation (parakeet bundles q4 GGUFs)."
+              echo "org.gradle.jvmargs=-Xmx12g -XX:MaxMetaspaceSize=1g"
+            } >> gradle.properties
+          fi
+          echo "Effective gradle.properties heap config:"
+          grep -E '^org\.gradle\.jvmargs' gradle.properties || echo "(none)"
+
           echo "Building APK with Gradle (RELEASE with embedded JS bundle)..."
+          echo "GRADLE_OPTS=${GRADLE_OPTS}"
           ./gradlew assembleRelease \
             -PreactNativeArchitectures=arm64-v8a \
             --no-daemon \
