@@ -50,6 +50,24 @@ export async function cancelHandler(
         }
         break;
       }
+      default: {
+        // Exhaustiveness guard: if the `CancelRequest` union ever grows a
+        // new `operation` and this switch isn't updated, TypeScript fails
+        // here at compile time. At runtime the zod discriminated union in
+        // `cancelRequestSchema` is upstream, so reaching this branch means
+        // the schema and the handler have drifted — surface the
+        // mismatch as an explicit failure rather than a silent
+        // `success: true` no-op.
+        const _exhaustive: never = request;
+        void _exhaustive;
+        const op = (request as { operation?: string }).operation ?? "unknown";
+        logger.error(`[cancel] unhandled cancel operation: ${op}`);
+        return {
+          type: "cancel",
+          success: false,
+          error: `Unhandled cancel operation: ${op}`,
+        };
+      }
     }
 
     return {

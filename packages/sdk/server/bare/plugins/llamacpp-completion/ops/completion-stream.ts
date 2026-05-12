@@ -494,13 +494,21 @@ export async function* completion(
   // SDK still treats `signal.aborted` as the truth for cancel detection
   // (post-completion bookkeeping below) — this listener only shortens
   // the latency between "user clicked stop" and "addon stops decoding".
-  // Best-effort fire-and-forget: the addon's cancel resolves quickly and
-  // we can't await it from inside an event listener; the iterator below
-  // will see EOF/empty tokens once the C++ side returns.
+  //
+  // Fire-and-forget by construction (event listeners can't `await`), but
+  // `addon.cancel()` returns a Promise — if it ever rejects the bare
+  // `void` would leak it as an unhandledRejection. Attach `.catch(...)`
+  // so a rejection is logged and the process stays clean; the iterator
+  // below still sees EOF/empty tokens via the addon's normal cancel path
+  // so callers aren't affected.
   const onAbort = () => {
     const addon = model.addon;
     if (addon?.cancel) {
-      void addon.cancel.call(addon);
+      addon.cancel.call(addon).catch((err: unknown) => {
+        logger.warn(
+          `[cancel] addon.cancel() rejected during abort for modelId=${modelId}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      });
     }
   };
   signal.addEventListener("abort", onAbort, { once: true });
