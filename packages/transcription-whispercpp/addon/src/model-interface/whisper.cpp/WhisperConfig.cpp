@@ -3,13 +3,7 @@
 #include <fstream>
 #include <iostream>
 
-#include <inference-addon-cpp/Logger.hpp>
-
 #include "WhisperHandlers.hpp"
-
-#if defined(__APPLE__)
-#include <TargetConditionals.h>
-#endif
 
 // print for all variants
 
@@ -89,31 +83,6 @@ toWhisperContextParams(const WhisperConfig& whisperConfig) {
           "error in context handler: " + key + "| exception: " + e.what());
     }
   }
-
-#if defined(__APPLE__) && TARGET_OS_IOS && !TARGET_OS_MACCATALYST
-  // iOS device + iOS Simulator override (Catalyst excluded): force CPU
-  // backend even if the caller asked for use_gpu=true. The ggml Metal
-  // backend's MTLCompiler service triggers an XPC connection crash
-  // (XPC_ERROR_CONNECTION_INTERRUPTED, peer unloaded) during
-  // transcribe() on physical iPhone, surfacing as a hard process kill
-  // before any whisper output is produced. We are tracking that issue
-  // separately from the OutputCallBackJs teardown UAF; until it is
-  // resolved, iOS must run on CPU only.
-  //
-  // macOS / Mac Catalyst / Linux / Android / Windows are unaffected:
-  // TARGET_OS_IOS is also 1 on Catalyst per Apple's TargetConditionals,
-  // so the explicit !TARGET_OS_MACCATALYST keeps Catalyst on Metal.
-  //
-  // Remove this block (and the <TargetConditionals.h> include) once
-  // the iOS Metal/XPC crash is fixed upstream.
-  if (contextParams.use_gpu) {
-    QLOG(
-        qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-        "Forcing use_gpu=false on iOS to avoid Metal/MTLCompiler XPC "
-        "crash during transcribe().");
-  }
-  contextParams.use_gpu = false;
-#endif
 
   return contextParams;
 }
