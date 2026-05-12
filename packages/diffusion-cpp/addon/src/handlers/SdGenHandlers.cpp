@@ -17,23 +17,24 @@ using parsers::parseSampler;
 using parsers::parseScheduler;
 using parsers::parseVaeTileSize;
 using parsers::requireBool;
+using parsers::requireFiniteFloat;
+using parsers::requireFiniteFloatInRange;
+using parsers::requireInt;
+using parsers::requireInt64;
 using parsers::requireNum;
 using parsers::requireStr;
 
 // -- Local image-gen helpers --------------------------------------------------
 
 static int parseUpscaleRepeats(const picojson::value& v) {
-  const double raw = requireNum(v, "upscale.repeats");
-  // No policy cap: repeated x4 upscales are memory-bound, so only guard the
-  // native int storage used for the loop count.
-  if (raw < 1.0 || raw > static_cast<double>(std::numeric_limits<int>::max())) {
-    throw StatusError(
-        general_error::InvalidArgument,
-        "upscale.repeats must be a positive integer");
-  }
-
-  const int repeats = static_cast<int>(raw);
-  if (raw != static_cast<double>(repeats)) {
+  // requireInt rejects NaN / inf / fractional / out-of-int-range; we only
+  // need to add the `>= 1` policy here. (The previous implementation used
+  // raw requireNum -- NaN sneaks past `raw < 1.0 || raw > MAX` because both
+  // comparisons are false for NaN, and the static_cast<int>(NaN) is then
+  // undefined behaviour.) No policy cap: repeated x4 upscales are memory-
+  // bound, so the int range check inside requireInt is enough.
+  const int repeats = requireInt(v, "upscale.repeats");
+  if (repeats < 1) {
     throw StatusError(
         general_error::InvalidArgument,
         "upscale.repeats must be a positive integer");
@@ -80,7 +81,7 @@ const SdGenHandlersMap SD_GEN_HANDLERS = {
 
     {"width",
      [](SdGenConfig& c, const picojson::value& v) {
-       int w = static_cast<int>(requireNum(v, "width"));
+       const int w = requireInt(v, "width");
        if (w <= 0 || w % 8 != 0)
          throw StatusError(
              general_error::InvalidArgument,
@@ -91,7 +92,7 @@ const SdGenHandlersMap SD_GEN_HANDLERS = {
 
     {"height",
      [](SdGenConfig& c, const picojson::value& v) {
-       int h = static_cast<int>(requireNum(v, "height"));
+       const int h = requireInt(v, "height");
        if (h <= 0 || h % 8 != 0)
          throw StatusError(
              general_error::InvalidArgument,
@@ -105,7 +106,7 @@ const SdGenHandlersMap SD_GEN_HANDLERS = {
 
     {"steps",
      [](SdGenConfig& c, const picojson::value& v) {
-       int s = static_cast<int>(requireNum(v, "steps"));
+       const int s = requireInt(v, "steps");
        if (s <= 0)
          throw StatusError(general_error::InvalidArgument, "steps must be > 0");
        c.steps = s;
@@ -128,7 +129,7 @@ const SdGenHandlersMap SD_GEN_HANDLERS = {
 
     {"eta",
      [](SdGenConfig& c, const picojson::value& v) {
-       c.eta = static_cast<float>(requireNum(v, "eta"));
+       c.eta = requireFiniteFloat(v, "eta");
      }},
 
     // -- Guidance
@@ -136,7 +137,7 @@ const SdGenHandlersMap SD_GEN_HANDLERS = {
 
     {"cfg_scale",
      [](SdGenConfig& c, const picojson::value& v) {
-       c.cfgScale = static_cast<float>(requireNum(v, "cfg_scale"));
+       c.cfgScale = requireFiniteFloat(v, "cfg_scale");
      }},
 
     // distilled_guidance -- FLUX.2 specific; separate from cfg_scale.
@@ -144,14 +145,14 @@ const SdGenHandlersMap SD_GEN_HANDLERS = {
     // over-saturated.
     {"guidance",
      [](SdGenConfig& c, const picojson::value& v) {
-       c.guidance = static_cast<float>(requireNum(v, "guidance"));
+       c.guidance = requireFiniteFloat(v, "guidance");
      }},
 
     // img_cfg -- image guidance for img2img / inpaint workflows; -1 = use
     // cfg_scale.
     {"img_cfg_scale",
      [](SdGenConfig& c, const picojson::value& v) {
-       c.imgCfgScale = static_cast<float>(requireNum(v, "img_cfg_scale"));
+       c.imgCfgScale = requireFiniteFloat(v, "img_cfg_scale");
      }},
 
     // -- Reproducibility
@@ -159,7 +160,7 @@ const SdGenHandlersMap SD_GEN_HANDLERS = {
 
     {"seed",
      [](SdGenConfig& c, const picojson::value& v) {
-       c.seed = static_cast<int64_t>(requireNum(v, "seed"));
+       c.seed = requireInt64(v, "seed");
      }},
 
     // -- Batching
@@ -167,7 +168,7 @@ const SdGenHandlersMap SD_GEN_HANDLERS = {
 
     {"batch_count",
      [](SdGenConfig& c, const picojson::value& v) {
-       int b = static_cast<int>(requireNum(v, "batch_count"));
+       const int b = requireInt(v, "batch_count");
        if (b <= 0)
          throw StatusError(
              general_error::InvalidArgument, "batch_count must be > 0");
@@ -179,19 +180,14 @@ const SdGenHandlersMap SD_GEN_HANDLERS = {
 
     {"strength",
      [](SdGenConfig& c, const picojson::value& v) {
-       float s = static_cast<float>(requireNum(v, "strength"));
-       if (s < 0.0f || s > 1.0f)
-         throw StatusError(
-             general_error::InvalidArgument,
-             "strength must be in [0, 1], got: " + std::to_string(s));
-       c.strength = s;
+       c.strength = requireFiniteFloatInRange(v, "strength", 0.0f, 1.0f);
      }},
 
     // clip_skip -- skip last N CLIP layers. Used by SD1.x / SD2.x fine-tunes.
     // -1 = auto (1 for SD1, 2 for SD2). Ignored for FLUX.
     {"clip_skip",
      [](SdGenConfig& c, const picojson::value& v) {
-       c.clipSkip = static_cast<int>(requireNum(v, "clip_skip"));
+       c.clipSkip = requireInt(v, "clip_skip");
      }},
 
     // -- VAE tiling
@@ -234,7 +230,10 @@ const SdGenHandlersMap SD_GEN_HANDLERS = {
 
     {"vae_tile_overlap",
      [](SdGenConfig& c, const picojson::value& v) {
-       float overlap = static_cast<float>(requireNum(v, "vae_tile_overlap"));
+       // Half-open [0, 1) -- see SdVidGenHandlers for the NaN-sneak-past
+       // rationale; the finite guard runs before the upper-bound check here
+       // too.
+       const float overlap = requireFiniteFloat(v, "vae_tile_overlap");
        if (overlap < 0.0f || overlap >= 1.0f)
          throw StatusError(
              general_error::InvalidArgument,
@@ -265,7 +264,7 @@ const SdGenHandlersMap SD_GEN_HANDLERS = {
     // default.
     {"cache_threshold",
      [](SdGenConfig& c, const picojson::value& v) {
-       c.cacheThreshold = static_cast<float>(requireNum(v, "cache_threshold"));
+       c.cacheThreshold = requireFiniteFloat(v, "cache_threshold");
      }},
 
     // ── Post-generation ESRGAN upscale

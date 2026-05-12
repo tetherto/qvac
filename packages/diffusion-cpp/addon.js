@@ -21,7 +21,13 @@ function mapAddonEvent (rawEvent, rawData, rawError) {
     return { type: 'Output', data: rawData, error: null }
   }
 
-  if (rawData && typeof rawData === 'object') {
+  // JobEnded carries a plain runtime-stats POJO. Excluding typed-array views
+  // here keeps future per-frame typed-array handlers (e.g. when
+  // SdModel::GenerationJob::frameCallback wires through to JS) from being
+  // misclassified as JobEnded and prematurely closing the response stream.
+  // `ArrayBuffer.isView` is true for every TypedArray + DataView, false for
+  // plain objects -- exactly the discrimination we want.
+  if (rawData && typeof rawData === 'object' && !ArrayBuffer.isView(rawData)) {
     return { type: 'JobEnded', data: rawData, error: null }
   }
 
@@ -238,8 +244,24 @@ class SdInterface {
 
   /**
    * Helper: fill missing dimensions from image buffer, preserving explicit values.
-   * If neither width nor height is set, read from the image and align to 8-pixel boundary.
-   * If one axis is set, only fill the missing axis from the image.
+   *
+   * Passes the image's *actual* pixel dimensions through verbatim. We
+   * deliberately do NOT silently round up to a multiple of 8 here, because:
+   *
+   *   - The image SDEdit path in SdModel::processImage independently aligns
+   *     and resizes init_image to a multiple of 8 (see the alignedW/alignedH
+   *     branch around SdModel.cpp:600), so any rounding done here would be
+   *     redundant on the image path.
+   *   - The FLUX/FLUX2 multi-reference path uses generate_image()'s
+   *     auto_resize_ref_image, which also handles alignment internally.
+   *   - The video path in SdModel::processVideo strict-compares the decoded
+   *     init/end/control frames against vid.width/vid.height -- if we round
+   *     up here (e.g. 100 -> 104) but hand processVideo a 100x100 decoded
+   *     frame, the dimension check throws an error citing 104x104 (a value
+   *     the caller never passed). VideoStableDiffusion._runInternal now
+   *     rejects off-grid init/end/control images at the JS layer instead,
+   *     pointing the caller at the exact mismatched dimensions.
+   *
    * @private
    */
   _fillDimsFromImage (params, buf) {
@@ -248,12 +270,8 @@ class SdInterface {
     const dims = readImageDimensions(buf)
     if (!dims) return
 
-    if (!params.width) {
-      params.width = Math.ceil(dims.width / 8) * 8
-    }
-    if (!params.height) {
-      params.height = Math.ceil(dims.height / 8) * 8
-    }
+    if (!params.width) params.width = dims.width
+    if (!params.height) params.height = dims.height
   }
 
   /**

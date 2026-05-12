@@ -26,6 +26,44 @@ std::string requireStr(const picojson::value& v, const std::string& key);
 bool requireBool(const picojson::value& v, const std::string& key);
 
 /**
+ * Convert a JSON number to a finite C++ `float`. Rejects NaN and infinity
+ * (which would otherwise silently coerce -- `static_cast<float>(NaN)` is
+ * still NaN, `(inf)` is still inf, and downstream range checks like
+ * `f < 0.0f` are FALSE for NaN, so a missing isfinite() check lets NaN
+ * sneak past every guard).
+ *
+ * Use this anywhere a JSON number must land in a `float`.
+ */
+float requireFiniteFloat(const picojson::value& v, const std::string& key);
+
+/**
+ * Convert a JSON number to a C++ `int` with full safety checks:
+ *   - rejects NaN and infinity
+ *   - rejects non-integer doubles (e.g. 8.5)
+ *   - rejects values outside [INT_MIN, INT_MAX] (casting a double outside
+ *     this range to int is undefined behaviour)
+ */
+int requireInt(const picojson::value& v, const std::string& key);
+
+/**
+ * Like requireInt() but for `int64_t`. Range is [INT64_MIN, INT64_MAX].
+ * Note that double's mantissa is 53 bits, so values above ~2^53 cannot be
+ * represented exactly and the range check is the best we can offer here.
+ */
+int64_t requireInt64(const picojson::value& v, const std::string& key);
+
+/** requireInt() + `> 0` check, with a friendly error pointing at `key`. */
+int requirePositiveInt(const picojson::value& v, const std::string& key);
+
+/**
+ * Convert a JSON number to a finite float and assert it lies in [lo, hi].
+ * The finite guard runs before the range check (NaN compares false against
+ * every bound and would otherwise sneak through).
+ */
+float requireFiniteFloatInRange(
+    const picojson::value& v, const std::string& key, float lo, float hi);
+
+/**
  * Parse a sampler name (e.g. "euler", "dpm++2m") into a sample_method_t.
  * Wan 2.1 / 2.2 use "euler" by default.
  */

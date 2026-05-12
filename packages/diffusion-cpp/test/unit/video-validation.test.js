@@ -223,6 +223,119 @@ test('run | width/height omitted is allowed (C++ defaults to 480x832)', async (t
 })
 
 // ─────────────────────────────────────────────────────────────────────
+//  run(): prompt is required
+//  JSDoc declares params.prompt as Required, but it was never type-checked
+//  -- `prompt: undefined` got JSON.stringify'd away and the C++ default
+//  empty string produced silent noise output. These tests pin down the
+//  loud TypeError that now fires at the JS boundary for all bad shapes.
+// ─────────────────────────────────────────────────────────────────────
+
+test('run | rejects missing prompt', async (t) => {
+  const m = makeWanModel()
+  await t.exception.all(
+    m.run({ mode: 'txt2vid' }),
+    /params\.prompt is required and must be a non-empty string/
+  )
+})
+
+test('run | rejects empty-string prompt', async (t) => {
+  const m = makeWanModel()
+  await t.exception.all(
+    m.run({ mode: 'txt2vid', prompt: '' }),
+    /params\.prompt is required and must be a non-empty string/
+  )
+})
+
+test('run | rejects non-string prompt (number)', async (t) => {
+  const m = makeWanModel()
+  await t.exception.all(
+    m.run({ mode: 'txt2vid', prompt: 42 }),
+    /params\.prompt is required and must be a non-empty string/
+  )
+})
+
+test('run | rejects null prompt', async (t) => {
+  const m = makeWanModel()
+  await t.exception.all(
+    m.run({ mode: 'txt2vid', prompt: null }),
+    /params\.prompt is required and must be a non-empty string/
+  )
+})
+
+// ─────────────────────────────────────────────────────────────────────
+//  run(): off-grid init/end/control frames are rejected when the caller
+//         relies on implicit-dim inference (no explicit width/height).
+//
+//  Background: addon.js _fillDimsFromImage previously did
+//  `Math.ceil(d/8)*8` -- so a 100x100 init_image got dispatched as
+//  104x104, and the native processVideo dimension check then threw
+//  citing 104x104 (a value the caller never passed). Now addon.js
+//  passes dims through verbatim, and this layer pre-empts the cryptic
+//  native error with a clear "your image is off-grid, pre-align or
+//  pass explicit dims" message.
+// ─────────────────────────────────────────────────────────────────────
+
+// 100x100 PNG header -- both axes off the multiple-of-8 grid.
+const OFFGRID_PNG = new Uint8Array([
+  0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+  0x00, 0x00, 0x00, 0x0D,
+  0x49, 0x48, 0x44, 0x52,
+  0x00, 0x00, 0x00, 0x64, // width = 100
+  0x00, 0x00, 0x00, 0x64 // height = 100
+])
+
+test('run | rejects off-grid init_image when width/height are implicit', async (t) => {
+  const m = makeWanModel()
+  await t.exception.all(
+    m.run({ mode: 'img2vid', prompt: 'hi', init_image: OFFGRID_PNG }),
+    /init_image dimensions 100x100 must be multiples of 8/
+  )
+})
+
+test('run | rejects off-grid end_image when width/height are implicit', async (t) => {
+  const m = makeWanModel()
+  await t.exception.all(
+    m.run({
+      mode: 'flf2vid',
+      prompt: 'hi',
+      init_image: FAKE_PNG, // aligned 64x48
+      end_image: OFFGRID_PNG
+    }),
+    /end_image dimensions 100x100 must be multiples of 8/
+  )
+})
+
+test('run | rejects off-grid control_frames[i] with index when dims implicit', async (t) => {
+  const m = makeWanModel()
+  await t.exception.all(
+    m.run({
+      mode: 'txt2vid',
+      prompt: 'hi',
+      control_frames: [FAKE_PNG, OFFGRID_PNG, FAKE_JPEG]
+    }),
+    /control_frames\[1\] dimensions 100x100 must be multiples of 8/
+  )
+})
+
+test('run | accepts off-grid init_image when caller passes explicit aligned width/height', async (t) => {
+  // Caller is asserting "yes I know the image is 100x100, please render
+  // 104x104 video -- I'll handle alignment myself." The probe must NOT
+  // fire when width/height are explicit; the strict native check still
+  // catches a mismatched explicit dim downstream.
+  const m = makeWanModel()
+  await t.exception.all(
+    m.run({
+      mode: 'img2vid',
+      prompt: 'hi',
+      init_image: OFFGRID_PNG,
+      width: 104,
+      height: 104
+    }),
+    /Addon not initialized/
+  )
+})
+
+// ─────────────────────────────────────────────────────────────────────
 //  run(): video_frames (4*k + 1 rule)
 // ─────────────────────────────────────────────────────────────────────
 

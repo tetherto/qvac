@@ -726,8 +726,20 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& v) {
   // on cancel (partial text output is still useful).  Diffusion produces no
   // partial images, so a "successful" completion with output_count=0 would
   // be misleading -- throwing gives the JS caller an explicit cancel signal.
+  // We tag the StatusError with localCodeMsg="Cancelled" so the JS layer
+  // can discriminate cancel from real internal failures via the status
+  // code (codeString() == "[ General :: Cancelled ]") instead of
+  // string-matching the exception message.
+  //
+  // Note: we use the 3-arg StatusError ctor with explicit addonId +
+  // localCodeMsg instead of adding `Cancelled` to general_error's enum
+  // so this PR doesn't have to touch the shared inference-addon-cpp
+  // header (which would force a coordinated update across every other
+  // package that pulls it in via vcpkg).
   if (wasCancelled) {
-    throw std::runtime_error("Job cancelled");
+    throw StatusError(
+        std::string(general_error::GeneralAddonId), "Cancelled",
+        "Job cancelled");
   }
 
   const auto t1 = std::chrono::steady_clock::now();
@@ -979,12 +991,17 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& v) {
   qvac_lib_inference_addon_sd::SdVideoFrames frames(
       generate_video(sdCtx_.get(), &vidParams, &numFramesOut), numFramesOut);
 
-  const bool wasCancelled = cancelRequested_.load();
-
-  // If cancelled, surface as an exception for the same reason as the image
-  // path: a "successful" completion with zero frames would be misleading.
-  if (wasCancelled) {
-    throw std::runtime_error("Job cancelled");
+  // If cancelled during the sampler, surface as an exception for the same
+  // reason as the image path: a "successful" completion with zero frames
+  // would be misleading. Typed Cancelled status (see image path above for
+  // the 3-arg ctor rationale).
+  auto throwCancelled = []() {
+    throw StatusError(
+        std::string(general_error::GeneralAddonId), "Cancelled",
+        "Job cancelled");
+  };
+  if (cancelRequested_.load()) {
+    throwCancelled();
   }
 
   if (frames.empty())
@@ -993,8 +1010,14 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& v) {
         "processVideo: generate_video() returned no frames");
 
   // -- Fan out per-frame PNGs (opt-in) --------------------------------------
+  // PNG encoding for an 81-frame 832x480 video can take multiple seconds; we
+  // re-check cancelRequested_ at the top of each iteration so a user pressing
+  // cancel during the fan-out gets a prompt signal instead of waiting for
+  // the AVI mux to finish.
   if (job.frameCallback) {
     for (int i = 0; i < frames.count(); ++i) {
+      if (cancelRequested_.load())
+        throwCancelled();
       if (!frames[i].data)
         continue;
       auto png = image_codec::encodeToPng(frames[i]);
@@ -1003,6 +1026,12 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& v) {
       }
     }
   }
+
+  // One last cancellation check before the MJPG mux: encodeFramesToAvi can
+  // also take multiple seconds on large videos, and it has no cancellation
+  // hook of its own.
+  if (cancelRequested_.load())
+    throwCancelled();
 
   // -- Encode AVI and deliver ----------------------------------------------
   auto avi = qvac_lib_inference_addon_sd::encodeFramesToAvi(

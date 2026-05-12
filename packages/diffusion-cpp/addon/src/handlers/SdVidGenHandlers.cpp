@@ -1,8 +1,5 @@
 #include "SdVidGenHandlers.hpp"
 
-#include <climits>
-#include <cmath>
-
 #include <inference-addon-cpp/Errors.hpp>
 
 #include "SdParsers.hpp"
@@ -16,64 +13,12 @@ using parsers::parseSampler;
 using parsers::parseScheduler;
 using parsers::parseVaeTileSize;
 using parsers::requireBool;
-using parsers::requireNum;
+using parsers::requireFiniteFloat;
+using parsers::requireFiniteFloatInRange;
+using parsers::requireInt;
+using parsers::requireInt64;
+using parsers::requirePositiveInt;
 using parsers::requireStr;
-
-// -----------------------------------------------------------------------------
-// Shared mini-helpers for this file only
-// -----------------------------------------------------------------------------
-
-namespace {
-
-// Convert a JSON number to int with full safety checks:
-//   - rejects NaN and infinity (since NaN != NaN and inf != floor(inf) trips
-//     std::isfinite, while a plain `d != std::floor(d)` only catches NaN)
-//   - rejects non-integer doubles (e.g. 8.5)
-//   - rejects values that don't fit in a signed 32-bit int (casting a double
-//     outside [INT_MIN, INT_MAX] to int is undefined behaviour)
-// Use this anywhere a JSON number must land in a C++ `int` slot.
-inline int requireInt(const picojson::value& v, const std::string& key) {
-  const double d = requireNum(v, key);
-  if (!std::isfinite(d)) {
-    throw StatusError(
-        general_error::InvalidArgument,
-        key + " must be a finite integer, got: " + std::to_string(d));
-  }
-  if (d != std::floor(d)) {
-    throw StatusError(
-        general_error::InvalidArgument,
-        key + " must be an integer, got: " + std::to_string(d));
-  }
-  if (d < static_cast<double>(INT_MIN) || d > static_cast<double>(INT_MAX)) {
-    throw StatusError(
-        general_error::InvalidArgument,
-        key + " is out of int range, got: " + std::to_string(d));
-  }
-  return static_cast<int>(d);
-}
-
-inline int
-requirePositiveInt(const picojson::value& v, const std::string& key) {
-  const int n = requireInt(v, key);
-  if (n <= 0)
-    throw StatusError(
-        general_error::InvalidArgument,
-        key + " must be > 0, got: " + std::to_string(n));
-  return n;
-}
-
-inline float requireRange(
-    const picojson::value& v, const std::string& key, float lo, float hi) {
-  const float f = static_cast<float>(requireNum(v, key));
-  if (f < lo || f > hi)
-    throw StatusError(
-        general_error::InvalidArgument,
-        key + " must be in [" + std::to_string(lo) + ", " + std::to_string(hi) +
-            "], got: " + std::to_string(f));
-  return f;
-}
-
-} // namespace
 
 // -----------------------------------------------------------------------------
 // Handler map
@@ -178,7 +123,7 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
 
     {"seed",
      [](SdVidGenConfig& c, const picojson::value& v) {
-       c.seed = static_cast<int64_t>(requireNum(v, "seed"));
+       c.seed = requireInt64(v, "seed");
      }},
 
     // -- Low-noise expert sample params (single expert for Wan 2.1) ----------
@@ -205,7 +150,7 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
 
     {"cfg_scale",
      [](SdVidGenConfig& c, const picojson::value& v) {
-       c.cfgScale = static_cast<float>(requireNum(v, "cfg_scale"));
+       c.cfgScale = requireFiniteFloat(v, "cfg_scale");
      }},
 
     // flow_shift per-job override. 0 = fall through to SdCtxConfig::flowShift
@@ -214,7 +159,7 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
     // produce visibly "frozen" video.
     {"flow_shift",
      [](SdVidGenConfig& c, const picojson::value& v) {
-       c.flowShift = static_cast<float>(requireNum(v, "flow_shift"));
+       c.flowShift = requireFiniteFloat(v, "flow_shift");
      }},
 
     // -- High-noise expert sample params (Wan 2.2 only) ----------------------
@@ -238,34 +183,34 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
 
     {"high_noise_cfg_scale",
      [](SdVidGenConfig& c, const picojson::value& v) {
-       c.highNoiseCfgScale =
-           static_cast<float>(requireNum(v, "high_noise_cfg_scale"));
+       c.highNoiseCfgScale = requireFiniteFloat(v, "high_noise_cfg_scale");
      }},
 
     {"high_noise_flow_shift",
      [](SdVidGenConfig& c, const picojson::value& v) {
-       c.highNoiseFlowShift =
-           static_cast<float>(requireNum(v, "high_noise_flow_shift"));
+       c.highNoiseFlowShift = requireFiniteFloat(v, "high_noise_flow_shift");
      }},
 
     // moe_boundary in normalized timestep [0, 1].
     {"moe_boundary",
      [](SdVidGenConfig& c, const picojson::value& v) {
-       c.moeBoundary = requireRange(v, "moe_boundary", 0.0f, 1.0f);
+       c.moeBoundary =
+           requireFiniteFloatInRange(v, "moe_boundary", 0.0f, 1.0f);
      }},
 
     // -- img2vid / flf2vid ---------------------------------------------------
 
     {"strength",
      [](SdVidGenConfig& c, const picojson::value& v) {
-       c.strength = requireRange(v, "strength", 0.0f, 1.0f);
+       c.strength = requireFiniteFloatInRange(v, "strength", 0.0f, 1.0f);
      }},
 
     // -- VACE (controlled video) ---------------------------------------------
 
     {"vace_strength",
      [](SdVidGenConfig& c, const picojson::value& v) {
-       c.vaceStrength = requireRange(v, "vace_strength", 0.0f, 1.0f);
+       c.vaceStrength =
+           requireFiniteFloatInRange(v, "vace_strength", 0.0f, 1.0f);
      }},
 
     // -- VAE tiling ----------------------------------------------------------
@@ -284,8 +229,11 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
 
     {"vae_tile_overlap",
      [](SdVidGenConfig& c, const picojson::value& v) {
-       const float overlap =
-           static_cast<float>(requireNum(v, "vae_tile_overlap"));
+       // Half-open [0, 1) -- requireFiniteFloatInRange uses closed bounds,
+       // so we still need the explicit upper bound check, but the finite
+       // guard now runs before it (NaN <= bound is false, so a missing
+       // guard previously let NaN slip past both ends).
+       const float overlap = requireFiniteFloat(v, "vae_tile_overlap");
        if (overlap < 0.0f || overlap >= 1.0f)
          throw StatusError(
              general_error::InvalidArgument,
@@ -310,7 +258,7 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
 
     {"cache_threshold",
      [](SdVidGenConfig& c, const picojson::value& v) {
-       c.cacheThreshold = static_cast<float>(requireNum(v, "cache_threshold"));
+       c.cacheThreshold = requireFiniteFloat(v, "cache_threshold");
      }},
 };
 

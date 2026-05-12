@@ -108,14 +108,22 @@ struct SdCtxConfig {
   bool forceSDXLVaeConvScale = false; // force SDXL VAE conv scale (compat fix)
 
   // -- Preview callback -------------------------------------------------------
-  // Opt-in, ctx-level toggle for mid-denoising preview frames. Wired to
-  // sd_set_preview_callback() in SdModel::process(). When previewMode !=
-  // PREVIEW_NONE, the upstream library fires the preview callback every
-  // previewInterval steps with an intermediate sd_image_t that the addon
-  // forwards to JS as PNG bytes (one event per fire).
+  // TODO(QVAC-18026 follow-up): wire to sd_set_preview_callback() in
+  //   SdModel::process(). The four config keys (preview_mode, preview_interval,
+  //   preview_denoised, preview_noisy) and their SdCtxHandlers entries below
+  //   already parse, validate, and store values into this struct, but no
+  //   reader exists yet -- a grep across packages/diffusion-cpp/ for
+  //   sd_set_preview_callback currently returns zero matches, so today the
+  //   four keys are a silent no-op end-to-end. Pick one of:
+  //     (a) install sd_set_preview_callback() in SdModel::process() next to
+  //         sd_set_abort_callback (~SdModel.cpp:312), forward the preview
+  //         sd_image_t to JS as PNG bytes via outputCallback, and add an
+  //         integration test asserting at least one preview event fires; OR
+  //     (b) remove the handlers + fields + tests until the wiring lands.
   //
   // Modes (preview_t from stable-diffusion.h):
-  //   PREVIEW_NONE  -- disabled (default; zero overhead)
+  //   PREVIEW_NONE  -- disabled (default; zero overhead, also today's behaviour
+  //                    regardless of the user-supplied preview_mode)
   //   PREVIEW_PROJ  -- cheap linear projection of latents (fast, blurry)
   //   PREVIEW_TAE   -- Tiny AutoEncoder (requires taesdPath; mid quality)
   //   PREVIEW_VAE   -- full VAE decode every N steps (slowest, highest quality)

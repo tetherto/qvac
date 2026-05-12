@@ -3,7 +3,7 @@
 const path = require('bare-path')
 const QvacLogger = require('@qvac/logging')
 const { createJobHandler, exclusiveRunQueue } = require('@qvac/infer-base')
-const { SdInterface, mapAddonEvent } = require('./addon')
+const { SdInterface, mapAddonEvent, readImageDimensions } = require('./addon')
 
 const COMPANION_FILE_KEYS = ['highNoiseDiffusionModel', 't5Xxl', 'vae', 'esrgan']
 
@@ -265,6 +265,24 @@ class VideoStableDiffusion {
     }
     const { mode } = params
 
+    // ── Prompt is required ─────────────────────────────────────────────
+    // JSDoc declares `params.prompt` as Required, but it's never type-checked
+    // here. Without this guard:
+    //   prompt: undefined  → JSON.stringify strips the key → C++
+    //                        SdVidGenConfig::prompt stays "" → noise-y, empty-
+    //                        prompt clip with no diagnostic.
+    //   prompt: ""         → SdParsers::requireStr accepts (no length check)
+    //                        → same outcome.
+    //   prompt: 42         → stringifies to "42" → requireStr throws in the
+    //                        native handler, far from this layer (confusing).
+    // Catch all three here so the JS caller gets one clear error at the
+    // wrapper boundary.
+    if (typeof params.prompt !== 'string' || params.prompt.length === 0) {
+      throw new TypeError(
+        'params.prompt is required and must be a non-empty string'
+      )
+    }
+
     // ── Dimension alignment (multiples of 8) ─────────────────────────────
     // Only validate provided dims; C++ falls back to 480x832 (portrait,
     // phone-screen friendly) when omitted. Override either field for
@@ -394,6 +412,42 @@ class VideoStableDiffusion {
         'vace_strength was set but control_frames is not provided — ' +
         'vace_strength will have no effect.'
       )
+    }
+
+    // ── Off-grid image probe (implicit-dim path) ─────────────────────────
+    // Native processVideo() strict-compares every decoded init/end/control
+    // frame against vid.width / vid.height. When the caller doesn't pass
+    // explicit width/height, addon.js infers them from the first image's
+    // actual pixel dims (verbatim -- no silent rounding). Wan requires
+    // multiples of 8, so an off-grid image here would fail deep in the
+    // native pipeline with a cryptic stride error. Catch it up front and
+    // tell the user exactly which image and how to fix it.
+    if (params.width == null || params.height == null) {
+      const offGrid = (label, buf) => {
+        const d = readImageDimensions(buf)
+        if (!d) return null
+        if (d.width % alignTo !== 0 || d.height % alignTo !== 0) {
+          return `${label} dimensions ${d.width}x${d.height} must be ` +
+            `multiples of ${alignTo}. Pre-align the image, or pass ` +
+            `explicit width/height (also multiples of ${alignTo}) so the ` +
+            'video pipeline uses those dims instead.'
+        }
+        return null
+      }
+      if (params.init_image instanceof Uint8Array) {
+        const err = offGrid('init_image', params.init_image)
+        if (err) throw new Error(err)
+      }
+      if (params.end_image instanceof Uint8Array) {
+        const err = offGrid('end_image', params.end_image)
+        if (err) throw new Error(err)
+      }
+      if (Array.isArray(params.control_frames)) {
+        for (let i = 0; i < params.control_frames.length; i++) {
+          const err = offGrid(`control_frames[${i}]`, params.control_frames[i])
+          if (err) throw new Error(err)
+        }
+      }
     }
 
     // ── Wan 2.2 sanity check ─────────────────────────────────────────────

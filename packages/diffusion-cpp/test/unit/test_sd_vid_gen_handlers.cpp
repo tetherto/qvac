@@ -409,6 +409,29 @@ TEST(SdVidGenHandlers_VaeTileSize, InvalidFormatsRejected) {
   expectThrows("vae_tile_size", boolean(true));
 }
 
+// vae_tile_size hardening (C4 follow-up): zero / negative / fractional /
+// out-of-int-range values must all throw at the parser layer instead of
+// silently coercing to nonsensical tile dims (or hitting UB on the cast).
+TEST(SdVidGenHandlers_VaeTileSize, NumericFormRejectsZeroAndNegative) {
+  expectThrows("vae_tile_size", num(0));
+  expectThrows("vae_tile_size", num(-128));
+}
+
+TEST(SdVidGenHandlers_VaeTileSize, NumericFormRejectsFractional) {
+  expectThrows("vae_tile_size", num(256.5));
+}
+
+TEST(SdVidGenHandlers_VaeTileSize, NumericFormRejectsOutOfIntRange) {
+  // 2^40 -- representable as a double, but well past INT_MAX.
+  expectThrows("vae_tile_size", num(1099511627776.0));
+}
+
+TEST(SdVidGenHandlers_VaeTileSize, StringFormRejectsZeroAndNegativeDims) {
+  expectThrows("vae_tile_size", str("0x128"));
+  expectThrows("vae_tile_size", str("256x0"));
+  expectThrows("vae_tile_size", str("-1x128"));
+}
+
 TEST(SdVidGenHandlers_VaeTileOverlap, AcceptsRangeZeroToAlmostOne) {
   EXPECT_FLOAT_EQ(applyOne("vae_tile_overlap", num(0.0)).vaeTileOverlap, 0.0f);
   EXPECT_FLOAT_EQ(applyOne("vae_tile_overlap", num(0.5)).vaeTileOverlap, 0.5f);

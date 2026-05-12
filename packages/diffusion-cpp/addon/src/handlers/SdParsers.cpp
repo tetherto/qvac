@@ -1,6 +1,9 @@
 #include "SdParsers.hpp"
 
 #include <charconv>
+#include <climits>
+#include <cmath>
+#include <cstdint>
 #include <string_view>
 #include <unordered_map>
 
@@ -31,6 +34,81 @@ bool requireBool(const picojson::value& v, const std::string& key) {
     throw StatusError(
         general_error::InvalidArgument, key + " must be a boolean");
   return v.get<bool>();
+}
+
+float requireFiniteFloat(const picojson::value& v, const std::string& key) {
+  const double d = requireNum(v, key);
+  if (!std::isfinite(d)) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        key + " must be a finite number, got: " + std::to_string(d));
+  }
+  return static_cast<float>(d);
+}
+
+int requireInt(const picojson::value& v, const std::string& key) {
+  const double d = requireNum(v, key);
+  if (!std::isfinite(d)) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        key + " must be a finite integer, got: " + std::to_string(d));
+  }
+  if (d != std::floor(d)) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        key + " must be an integer, got: " + std::to_string(d));
+  }
+  if (d < static_cast<double>(INT_MIN) || d > static_cast<double>(INT_MAX)) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        key + " is out of int range, got: " + std::to_string(d));
+  }
+  return static_cast<int>(d);
+}
+
+int64_t requireInt64(const picojson::value& v, const std::string& key) {
+  const double d = requireNum(v, key);
+  if (!std::isfinite(d)) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        key + " must be a finite integer, got: " + std::to_string(d));
+  }
+  if (d != std::floor(d)) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        key + " must be an integer, got: " + std::to_string(d));
+  }
+  // double can represent integers exactly only up to 2^53; the range check
+  // below uses the safe representable bounds so a caller cannot land in the
+  // undefined-behaviour zone between 2^53 and INT64_MAX.
+  constexpr double kInt64Lo = -9223372036854775808.0; // -2^63
+  constexpr double kInt64Hi = 9223372036854775807.0;  //  2^63 - 1
+  if (d < kInt64Lo || d > kInt64Hi) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        key + " is out of int64 range, got: " + std::to_string(d));
+  }
+  return static_cast<int64_t>(d);
+}
+
+int requirePositiveInt(const picojson::value& v, const std::string& key) {
+  const int n = requireInt(v, key);
+  if (n <= 0)
+    throw StatusError(
+        general_error::InvalidArgument,
+        key + " must be > 0, got: " + std::to_string(n));
+  return n;
+}
+
+float requireFiniteFloatInRange(
+    const picojson::value& v, const std::string& key, float lo, float hi) {
+  const float f = requireFiniteFloat(v, key);
+  if (f < lo || f > hi)
+    throw StatusError(
+        general_error::InvalidArgument,
+        key + " must be in [" + std::to_string(lo) + ", " + std::to_string(hi) +
+            "], got: " + std::to_string(f));
+  return f;
 }
 
 // -- Enum parsers -------------------------------------------------------------
@@ -109,7 +187,13 @@ sd_cache_mode_t parseCacheMode(const std::string& name) {
 
 std::pair<int, int> parseVaeTileSize(const picojson::value& v) {
   if (v.is<double>()) {
-    int sz = static_cast<int>(v.get<double>());
+    // Route through requireInt so NaN / inf / fractional / out-of-range
+    // values throw at the JSON layer instead of UB-ing through the cast.
+    const int sz = requireInt(v, "vae_tile_size");
+    if (sz <= 0)
+      throw StatusError(
+          general_error::InvalidArgument,
+          "vae_tile_size must be > 0, got: " + std::to_string(sz));
     return {sz, sz};
   }
   if (!v.is<std::string>()) {
@@ -138,6 +222,14 @@ std::pair<int, int> parseVaeTileSize(const picojson::value& v) {
         "vae_tile_size: could not parse dimensions from '" + std::string(s) +
             "'");
   }
+  // from_chars rejects '-' for unsigned but happily parses negative ints, and
+  // a `0x0` string is a degenerate tile size that would later trigger asserts
+  // deep in the VAE tiler.
+  if (w <= 0 || h <= 0)
+    throw StatusError(
+        general_error::InvalidArgument,
+        "vae_tile_size: both dimensions must be > 0, got: " + std::to_string(w) +
+            "x" + std::to_string(h));
   return {w, h};
 }
 
