@@ -271,6 +271,12 @@ Both models carry F16 projection weights. Q8_0 quantization would halve memory b
 The average pooling in Gemma4's projection uses generic GGML pool_2d. A Metal-specialized kernel for the exact dimensions (n_merge=2 or 4, 1152-dim vectors) could exploit SIMD grouping.
 - Expected impact: 5-10 ms reduction on iPhone (36 → ~28 ms)
 
+**P6. SigLIP FP16 standardization overflow** (Impact: correctness, Cost: S)
+The final standardization step in SigLIP vision encoding can overflow in FP16: `std_bias` reaches ~5.4e4, approaching FP16 max (6.55e4). This causes `-inf` and NaN propagation in vision embeddings. Relevant to our Gemma4 SigLIP-SO400M encoder on Metal with FP16 compute — certain input images could trigger silent corruption.
+- Mitigation: cast the standardization norm layer to FP32 (or BF16 on Apple GPU Family 9+)
+- Verify whether ggml-metal already promotes this op to higher precision
+- Risk: latent correctness bug, not just performance
+
 #### 5.4b Addon-level (MtmdLlmContext.cpp)
 
 **P5. Vision embedding cache with projection bypass** (Impact: high on repeat, Cost: S)
@@ -342,7 +348,7 @@ Ranked by (impact × breadth) ÷ cost. Split by implementation location.
 | **U1** | **Qwen3VL deepstack fusion** | Projection -50 to -80% on iPhone | M | `clip.cpp:1055-1070` | Fuse deepstack reshape+norm+FFN into fewer kernel dispatches. Pre-allocate concat output buffer. Primary fix for the 183ms iPhone anomaly. |
 | **U2** | **mmproj quantization (F16→Q8_0)** | Memory -50%, BW +1.5-2× | M | clip.cpp weight loading | Add Q8_0 quantization for projection weights. Gemma4: 154→~77 MiB. Frees GPU memory for larger context. Low risk for projection linear transforms. |
 | **U3** | **Batch vision encoding** | Vision -30 to -50% (multi-tile) | M | `mtmd.cpp:824` | Fix existing TODO: implement batched encoding in `clip_image_batch_encode()`. Currently loops per-image for some model types. Impacts multi-tile images (4× tiles). |
-| **U4** | **CLIP flash attention on Metal** | Vision -10 to -20% | S | `clip.cpp:3334` | Enable and validate flash attention for CLIP model on Metal. Currently auto-detected with fallback warning. Reduces memory and compute for ViT attention. |
+| **U4** | **CLIP flash attention on Metal** | Vision -10 to -20% | S | `clip.cpp:3334` | Enable and validate flash attention for CLIP model on Metal. Currently auto-detected with fallback warning. External Metal FA implementation ([philipturner/metal-flash-attention](https://github.com/philipturner/metal-flash-attention)) shows 43-120% speedup via two-pass online softmax. Apple lacks native FP32 atomics, which is why ggml-metal FA regresses on some configs — the external implementation works around this. Evaluate whether its two-pass approach can be integrated into ggml-metal's FA path. |
 | **U5** | **Vision encoder Metal kernel specialization** | Vision -15 to -25% | L | ggml-metal | Custom Metal compute kernels for ViT dimensions (1152 hidden, 16 heads, 72 head_dim). Generic GGML Metal kernels don't exploit architecture-specific tiling for these exact sizes. |
 
 ### 7.3 Priority Matrix
@@ -359,6 +365,32 @@ For Phase 3 implementation (top-2 optimizations), the recommended pair is:
 - Upstream change, but highest single-optimization impact for Qwen3.5 on iPhone
 - Requires Metal System Trace analysis first to validate hypothesis
 - Could be contributed upstream to llama.cpp
+
+### 7.4 Research-Informed Upstream Optimizations (2026-05-12)
+
+Additional optimization candidates identified via web research. Sequenced as U6+ to avoid collisions with tracked U1-U5.
+
+| Rank | Optimization | Impact | Cost | Details |
+|------|-------------|--------|------|---------|
+| **U6** | **BF16 mmproj on Apple GPU Family 9+** | Memory −25% vs F16, quality ≈ F16 | S | BFloat16 is fully supported on Apple9 (M4, A18). Provides a middle ground between F16 (current) and Q8_0 (U2) for projection weights — same numerical fidelity as F16 for most ops with better mixed-precision behavior. Lower priority than U2 but relevant if Q8_0 shows quality regression on projection. |
+| **U7** | **MTMD vision CPU fallback monitor** | Regression watchpoint | S | [llama.cpp #22582](https://github.com/ggml-org/llama.cpp/issues/22582): BF16 mmproj runs on CPU in `llama-server` MTMD path, causing 82s+ per image instead of ~630ms. Our addon uses the MTMD library directly (not through llama-server) and benchmarks confirm GPU dispatch (sub-second TTFT). **Not currently affected**, but if upstream MTMD API changes break GPU dispatch, vision would silently fall back to CPU. Add a regression test: assert vision TTFT < 2s on Metal. |
+| **U8** | **Input-adaptive visual preprocessing** | Vision −50%+, token count −55% | L | [arxiv 2512.20839](https://arxiv.org/abs/2512.20839): Content-aware resolution selection dynamically adjusts image resolution based on content complexity. Reduces per-image inference time by >50% and visual token count by >55%. Partial solution to A3 (context overflow) — downscale intelligently instead of hard-rejecting. Long-term / research-grade. |
+
+### 7.5 Advanced KV Cache Strategies
+
+KV cache optimization is the highest-impact remaining lever for memory-constrained deployment (iPhone 16e has only ~1.9 GB free with Gemma4 loaded). Three tiers of increasing complexity:
+
+**Tier 1 — Immediate (llama.cpp native, addon config change):**
+- **F1 baseline**: `--cache-type-k q4_0 --cache-type-v q4_0` — 75% KV memory reduction. Qwen3.5 hybrid models are reported to be token-identical at Q4_0 KV (lossless). Symmetric types enable fused Flash Attention path; mismatched types fall back to slower non-fused implementation.
+- **Per-head adaptive quantization** ([llama.cpp #21385](https://github.com/ggml-org/llama.cpp/issues/21385)): Bottom 2% of heads by entropy ("sink heads") contribute disproportionately to quantization error. Skipping quantization on just 3/144 heads provides more benefit than optimal uniform bit redistribution. Not yet merged upstream.
+- **TurboQuant** ([llama.cpp #20969](https://github.com/ggml-org/llama.cpp/discussions/20969)): WHT rotation (128-element groups, 4 blocks of 32) for extreme KV compression. Qwen3.5-specific advantage: only 8 of 32 layers have full-attention KV cache — compression benefit concentrates on those 8 layers.
+
+**Tier 2 — Medium-term (upstream work or fork):**
+- **Open-TQ-Metal** ([arxiv 2604.16957](https://arxiv.org/abs/2604.16957)): First fused compressed-domain attention on Apple Silicon. Quantizes KV cache to INT4 on-the-fly and computes attention directly on the compressed representation — eliminates all intermediate dequantization overhead. Enables 128K-context inference for 70B models on 64GB consumer Mac. Not yet in llama.cpp but explicitly targets Apple Silicon via custom Metal compute shaders.
+
+**Tier 3 — Research (VLM-specific, not in llama.cpp):**
+- **AKVQ-VL** ([arxiv 2501.15021](https://arxiv.org/abs/2501.15021)): Attention-aware KV cache adaptive 2-bit quantization for VLMs. Exploits Text-Salient Attention (TSA) and Pivot-Token-Salient Attention (PSA) patterns to adaptively allocate bit budgets. Results: 2.13x peak memory reduction, 3.25x batch size increase, 2.46x throughput improvement.
+- **Q Cache** ([arxiv 2602.01901](https://arxiv.org/abs/2602.01901)): Visual attention is valuable in less than half of decode layers for multimodal LLMs. Attention in certain layers can be streamlined by inheriting from preceding layers. Complementary to KV quantization — reduces both memory and compute.
 
 ---
 
@@ -412,9 +444,9 @@ No software optimization can meaningfully improve decode throughput. Gains come 
 - SSM recurrent state (19 MiB RS buffer) adds memory overhead not present in Gemma4
 
 ### 9.3 Qwen3.5 Architecture Uniqueness
-- **Hybrid attention + SSM decoder** — first VLM model in our stack using selective state space model layers alongside attention. The RS buffer (19 MiB) stores SSM recurrent state.
+- **Hybrid attention + SSM decoder** — first VLM model in our stack using selective state space model layers alongside attention. Only 8 of 32 layers use full attention with KV cache; the remaining 24 use Gated Delta Net (GDN) linear attention with no KV cache. This makes KV quantization (F1, Section 7.5) particularly effective — compressing 8 layers' cache is cheaper and lower-risk than 32. The RS buffer (19 MiB) stores SSM recurrent state.
 - **Deepstack feature extraction** — features from intermediate ViT layers are processed and concatenated with the final projection, giving the LLM multi-scale visual information. This is architecturally superior but computationally expensive.
-- **M-RoPE (Multi-Resolution RoPE)** — 4D positional encoding (temporal + 3 spatial) in the vision encoder, enabling native dynamic resolution support without interpolation artifacts.
+- **M-RoPE (Multi-Resolution RoPE)** — 4D positional encoding (temporal + 3 spatial) in the vision encoder, enabling native dynamic resolution support without interpolation artifacts. Qwen3.5 uses Interleaved-MRoPE, which distributes temporal, height, and width information more evenly across feature dimensions than the original MRoPE layout, with improved long-sequence extrapolation (native support up to 262K tokens).
 
 ---
 
@@ -442,6 +474,8 @@ This section tracks which recommendations from Sections 7–8 have been implemen
 | Runtime lazy graph evaluation (JIT) | Not feasible — requires ggml architecture redesign | **Not ported** |
 | QKV / gate+up GEMM fusion | <5% impact on Metal (decode is bandwidth-limited at ~51.5 t/s Mac, ~25 t/s iPhone) | **Not ported** |
 
+> **MLX performance gap context**: Benchmarks show MLX achieves ~230 tok/s vs llama.cpp ~150 tok/s on Apple Silicon for comparable models. The gap is primarily due to `mx.compile()` automatic kernel fusion and lazy evaluation — techniques the table above notes are "not feasible" without ggml architecture redesign. RMS_NORM + MUL fusion already exists in llama.cpp's CPU backend; the Metal equivalent would be incremental but does not close the fundamental gap. MLX wins on long token generation (25% faster); llama.cpp wins on prompt-processing-heavy workloads.
+
 ### 10.3 Deferred / Not Started
 
 | ID | Optimization | Reason | Could revisit? |
@@ -449,7 +483,7 @@ This section tracks which recommendations from Sections 7–8 have been implemen
 | **A1** | Model-aware hybrid dispatch | No per-phase backend hook in upstream llama.cpp; dual-context split is multi-day effort | Yes — if llama.cpp adds phase-specific backend routing |
 | **U1 (Cost-M)** | Deepstack norm+FFN kernel fusion | Cost-S fix already reduced projection from 183→11 ms; remaining 11→~5 ms is low ROI vs complexity | Low priority |
 | **U2** | mmproj quantization F16→Q8_0 | Not started — requires quality validation (VQA/OCR benchmarks) | Yes — next priority after PR merge |
-| **F1** | KV cache quantization Q4_0 | Not started — addon-only change, set `common_params` cache type | High priority (P1) |
+| **F1** | KV cache quantization Q4_0 | Not started — addon-only change, set `common_params` cache type. See Section 7.5 for tiered strategy: per-head adaptive (llama.cpp #21385), TurboQuant (#20969), and VLM-specific AKVQ-VL. Qwen3.5 has only 8/32 layers with KV cache — ideal target for aggressive quantization. | High priority (P1) |
 | **F5** | Speculative decoding | Requires ≥2.5× draft-to-target speed ratio on UMA | Medium priority |
 
 ### 10.4 Mac M4 Branch Benchmark Results (2026-05-11)
@@ -497,3 +531,37 @@ Zero regressions across all branches. Full per-metric breakdown in `vlm-benchmar
 - Addon integration: `packages/qvac-lib-infer-llamacpp-llm/addon/src/model-interface/MtmdLlmContext.cpp`
 - llama.cpp version: b9025
 - Reproducibility: Run-2 validation shows ±2% variance (iPhone 16e Gemma4 E2B decode: 26.66 → 27.24 t/s)
+
+### 11.4 External Research References (2026-05-12)
+
+KV cache optimization:
+- Open-TQ-Metal (fused compressed-domain attention on Apple Silicon): [arxiv 2604.16957](https://arxiv.org/abs/2604.16957)
+- AKVQ-VL (adaptive 2-bit KV quantization for VLMs): [arxiv 2501.15021](https://arxiv.org/abs/2501.15021)
+- Q Cache (visual attention inheritance across decode layers): [arxiv 2602.01901](https://arxiv.org/abs/2602.01901)
+- Per-head adaptive KV quantization: [llama.cpp #21385](https://github.com/ggml-org/llama.cpp/issues/21385)
+- TurboQuant (WHT rotation for extreme KV compression): [llama.cpp #20969](https://github.com/ggml-org/llama.cpp/discussions/20969)
+
+VLM quantization and vision optimization:
+- Q-VLM (post-training quantization for VLMs, 2.78x compression): [arxiv 2410.08119](https://arxiv.org/abs/2410.08119)
+- MBQ (modality-balanced quantization): [arxiv 2412.19509](https://arxiv.org/abs/2412.19509)
+- VLM quantization quality study (Q4_K_M bimodal instability): [arxiv 2603.26770](https://arxiv.org/abs/2603.26770)
+- Input-adaptive visual preprocessing (>50% inference reduction): [arxiv 2512.20839](https://arxiv.org/abs/2512.20839)
+
+Metal GPU inference:
+- Metal FlashAttention (two-pass online softmax, 43-120% speedup): [github.com/philipturner/metal-flash-attention](https://github.com/philipturner/metal-flash-attention)
+- MetalQwen3 (complete Metal transformer with QKV fusion): [github.com/BoltzmannEntropy/metalQwen3](https://github.com/BoltzmannEntropy/metalQwen3)
+- MTMD vision CPU fallback (BF16 mmproj on CPU in server path): [llama.cpp #22582](https://github.com/ggml-org/llama.cpp/issues/22582)
+
+---
+
+## 12. Forward-Looking: Metal 4 and Next-Gen Hardware
+
+WWDC 2025 introduced Metal 4 with features relevant to LLM/VLM inference on future Apple Silicon (iPhone 17, next-gen Macs):
+
+**Metal Performance Primitives (MPP):** New `matmul2d_descriptor` API provides native tensor operations at the shader level, programmable at both SIMD-group and threadgroup scope. For ggml-metal, MPP could replace hand-tuned GEMM kernels with framework-optimized equivalents — potentially simplifying U5 (vision encoder Metal kernel specialization) from Cost: L to Cost: M.
+
+**Shader ML / ML Encoder:** Native tensor support directly in Metal shaders. ML workloads can execute on the GPU timeline alongside rendering/compute using the same command buffers and barriers. Relevant if QVAC integrates vision encoding into a rendering pipeline (e.g., camera preview → VLM). Not immediately actionable for the current CLI/addon architecture, which uses dedicated inference calls.
+
+**BFloat16 on Apple GPU Family 9:** Already fully supported on M4 and A18 (our current targets). MPSGraph adds BFloat16 support for mixed-precision inference. Relevant to U6 (BF16 mmproj) and P6 (SigLIP FP16 overflow mitigation).
+
+**Target timeline:** Current M4/A18 targets are Apple GPU Family 9 / Metal 3. Metal 4 APIs require minimum deployment target updates for future devices. Monitor post-WWDC 2025 Apple developer documentation for MPP availability in ggml-metal and ggml compute graph compilation.
