@@ -74,6 +74,12 @@ export function createOpenAIAdapter (): APIAdapter {
         return true
       }
 
+      if (method === 'POST' && path === '/v1/audio/speech') {
+        const { handleAudioSpeech } = await import('./routes/speech.js')
+        await handleAudioSpeech(req, res, ctx)
+        return true
+      }
+
       if (method === 'POST' && path === '/v1/images/generations') {
         const { handleImagesGenerations } = await import('./routes/images.js')
         await handleImagesGenerations(req, res, ctx)

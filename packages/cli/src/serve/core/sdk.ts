@@ -51,6 +51,7 @@ interface SDKModule {
   }) => CompletionResult
   embed: (opts: { modelId: string; text: string | string[] }) => Promise<{ embedding: number[] | number[][]; stats?: Record<string, unknown> }> & { requestId: string }
   transcribe: (opts: { modelId: string; audioChunk: string | Buffer; prompt?: string }) => Promise<string> & { requestId: string }
+  textToSpeech: (opts: { modelId: string; text: string; inputType?: string; stream?: boolean }) => TtsResult
   cancel: (opts: { requestId: string } | { operation: "request"; requestId: string } | { operation: "broad"; modelId: string; kind?: string }) => Promise<void>
   diffusion: (opts: SDKDiffusionParams) => SDKDiffusionResult
   ragListWorkspaces: () => Promise<RagWorkspaceInfo[]>
@@ -144,6 +145,12 @@ export interface CompletionResult {
   toolCalls: Promise<SDKToolCall[] | null>
   tokenStream: AsyncIterable<string>
   toolCallStream: AsyncIterable<SDKToolEvent>
+}
+
+export interface TtsResult {
+  bufferStream: AsyncIterable<number>
+  buffer: Promise<number[]>
+  done: Promise<boolean>
 }
 
 export interface SDKToolCallEvent {
@@ -411,6 +418,34 @@ export async function sdkRagIngest (opts: {
   }
   if (opts.workspace !== undefined) params.workspace = opts.workspace
   return ragIngest(params)
+}
+
+export async function sdkTextToSpeech (opts: {
+  modelId: string
+  text: string
+}): Promise<{ samples: number[] }> {
+  const { textToSpeech } = await getSDK()
+  // Stream from the SDK so synthesis can start producing samples while we
+  // accumulate them into a single buffer for the HTTP response. The CLI
+  // currently buffers the full audio payload (WAV needs a header with the
+  // total length); chunked HTTP streaming is tracked as a follow-up.
+  const result = textToSpeech({
+    modelId: opts.modelId,
+    text: opts.text,
+    inputType: 'text',
+    stream: true
+  })
+
+  const samples: number[] = []
+  for await (const sample of result.bufferStream) {
+    samples.push(sample)
+  }
+  // Surface any pipeline error that the bufferStream may have settled
+  // through .done rather than the iterator (the SDK may resolve done after
+  // the iterator returns cleanly).
+  await result.done
+
+  return { samples }
 }
 
 export async function sdkClose (): Promise<void> {

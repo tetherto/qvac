@@ -26,6 +26,15 @@ interface RawServeConfig {
   serve?: {
     models?: Record<string, string | ConstantModelEntry | ExplicitModelEntry>
     publicBaseUrl?: string
+    openai?: RawOpenAIOptions
+  }
+}
+
+interface RawOpenAIOptions {
+  audio?: {
+    speech?: {
+      defaultVoice?: unknown
+    }
   }
 }
 
@@ -91,7 +100,8 @@ export async function parseServeConfig (rawConfig: RawServeConfig, cliOptions: C
   return {
     models,
     defaults: resolveDefaults(models),
-    publicBaseUrl
+    publicBaseUrl,
+    openai: parseOpenAIOptions(serve.openai)
   }
 }
 
@@ -103,6 +113,27 @@ function normalizePublicBaseUrl (raw: string | undefined): string | null {
     throw new Error(`serve.publicBaseUrl must start with http:// or https:// (got "${trimmed}").`)
   }
   return trimmed.replace(/\/+$/, '')
+}
+
+const DEFAULT_SPEECH_VOICE = 'alloy'
+
+function parseOpenAIOptions (raw: RawOpenAIOptions | undefined): {
+  audio: { speech: { defaultVoice: string | null } }
+} {
+  const rawDefaultVoice = raw?.audio?.speech?.defaultVoice
+  let defaultVoice: string | null = DEFAULT_SPEECH_VOICE
+
+  if (rawDefaultVoice === null) {
+    // Explicit null disables the fallback so callers must always send `voice`.
+    defaultVoice = null
+  } else if (typeof rawDefaultVoice === 'string') {
+    const trimmed = rawDefaultVoice.trim()
+    defaultVoice = trimmed.length > 0 ? trimmed : null
+  } else if (rawDefaultVoice !== undefined) {
+    throw new Error('serve.openai.audio.speech.defaultVoice must be a string or null')
+  }
+
+  return { audio: { speech: { defaultVoice } } }
 }
 
 export function normalizeEndpointCategory (sdkType: string): string {

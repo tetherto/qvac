@@ -29,6 +29,15 @@ export interface ServeConfig {
    * `response_format=url`. Trailing slash is stripped on parse.
    */
   publicBaseUrl: string | null
+  openai: OpenAIServeOptions
+}
+
+export interface OpenAIServeOptions {
+  audio: {
+    speech: {
+      defaultVoice: string | null
+    }
+  }
 }
 
 export interface ResolvedModelEntry {
