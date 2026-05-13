@@ -1,0 +1,269 @@
+---
+description: Request lifecycle primitives (RequestRegistry, RequestContext, DisposableScope, AbortSignal) - canonical handler shape and anti-patterns for SDK server-side cancellable operations
+globs:
+  - packages/sdk/server/bare/**/*.ts
+  - packages/sdk/server/rpc/handlers/**/*.ts
+  - packages/sdk/client/api/cancel.ts
+  - packages/sdk/client/api/completion.ts
+alwaysApply: false
+---
+
+# Request Lifecycle Primitives
+
+Server-side long-running operations (`completion`, `embeddings`, `transcribe`, `translate`, `loadModel`, `downloadAsset`, `rag`, etc.) all go through three primitives in `@/server/bare/runtime`:
+
+- **`DisposableScope`** — LIFO cleanup container disposed via `Symbol.asyncDispose`.
+- **`RequestContext`** — per-request handle bundling `requestId`, `kind`, `modelId`, `signal`, `scope`, `state`.
+- **`RequestRegistry`** — module-scoped registry that mints contexts via `begin(...)` and routes `cancel(...)` by `requestId` or `modelId`.
+
+Migration is rolling out across milestones (M1 ships completion; M2 adds typed cancel outcomes + `KvCacheSession`; M3 migrates embeddings / transcribe / translate / loadModel / downloadAsset). The contract below applies to every newly-migrated handler.
+
+## Canonical Handler Shape
+
+Every cancellable server-side handler MUST follow this shape:
+
+```typescript
+import { getRequestRegistry } from "@/server/bare/runtime";
+
+async function* handleX(req: XRequest): AsyncGenerator<XEvent> {
+  const registry = getRequestRegistry();
+  await using ctx = registry.begin({
+    requestId: req.requestId,
+    kind: "completion", // or "embeddings", "transcribe", "translate", ...
+    modelId: req.modelId,
+  });
+
+  // Wire the abort signal at exactly ONE leaf — the addon binding.
+  const onAbort = () => {
+    const addon = getModel(req.modelId).addon;
+    if (addon?.cancel) {
+      addon.cancel.call(addon).catch((err) => {
+        logger.warn(`[cancel] addon.cancel rejected: ${String(err)}`);
+      });
+    }
+  };
+  ctx.signal.addEventListener("abort", onAbort, { once: true });
+  if (ctx.signal.aborted) onAbort(); // parent-signal-already-aborted case
+
+  try {
+    for await (const event of model.runStreaming(req, { signal: ctx.signal })) {
+      yield event;
+    }
+  } finally {
+    ctx.signal.removeEventListener("abort", onAbort);
+  }
+}
+```
+
+Key invariants in this shape:
+
+1. **`await using ctx = registry.begin(...)`** — the registry mints a `ManagedRequestContext` whose `Symbol.asyncDispose` removes the entry and unwinds the scope. `await using` guarantees disposal on every exit path (return / throw / generator close / cancellation).
+2. **Signal consumed at one place only** — the addon binding leaf. After that the addon throws or returns, the loop exits naturally, and the scope unwinds.
+3. **`{ once: true }` listener + `finally` removeEventListener** — `{ once: true }` auto-removes if the signal fires; the `finally` is the cleanup hook for the signal-never-fired path. Both together mean no leaked listeners on long-lived parent signals.
+4. **`if (ctx.signal.aborted) onAbort()` fall-through** — `addEventListener("abort", ..., { once: true })` does NOT fire if the signal is already aborted at register time. This line handles the case where the registry synchronously aborts a fresh controller because the `parentSignal` was already aborted at `begin(...)`.
+
+## DO NOT (Anti-Patterns)
+
+These patterns produce the bugs the lifecycle primitives exist to prevent. Reviewers will block PRs that introduce them.
+
+### Polling `signal.aborted` mid-handler
+
+```typescript
+// WRONG — polling cancellation through the handler body
+for await (const chunk of model.runStreaming(req, { signal })) {
+  if (signal.aborted) return; // <-- DO NOT
+  yield chunk;
+}
+```
+
+Signal is consumed at exactly one point: the addon binding. After that, cancellation propagates by the addon returning / throwing, the loop exiting, and the scope unwinding. Polling scatters cancellation logic and gets out of sync with the truth (registry state).
+
+### Manual cleanup in `if (signal.aborted) { ... }` branches
+
+```typescript
+// WRONG — duplicated cleanup on the cancel branch
+const cachePath = await getCachePath(...);
+const result = await model.run(...);
+if (signal.aborted) {
+  await fs.unlink(cachePath);
+  clearCacheRegistry({ ... });
+  return; // <-- DO NOT
+}
+await fs.unlink(cachePath); // also runs on happy path
+```
+
+Register cleanup with `ctx.scope.defer(...)` (or commit-on-success / rollback-on-anything-else with `await using`). Cleanup runs regardless of how the handler exits — the cancel branch is not special.
+
+### Tracking cancellation through a side counter
+
+```typescript
+// WRONG — bookkeeping that drifts from real addon state
+let cancelCounter = 0;
+function onCancel() { cancelCounter++; }
+// ... later
+if (cancelCounter > 0) { /* assume cancelled */ }
+```
+
+The signal IS the source of truth. The registry owns it; the addon listens to it; everything else reads `signal.aborted` synchronously when needed (e.g. post-completion bookkeeping like `shouldRecordSavedCount(signal, producedTokens)`).
+
+### Passing `AbortController` instances around
+
+```typescript
+// WRONG — handlers should never see the controller
+function handleX(req, controller: AbortController) { ... }
+function handleY(req, signal: AbortSignal) { ... } // also wrong — get it from ctx
+```
+
+Controllers are owned by the registry. Handlers receive `ctx.signal` from `registry.begin(...)` and never construct or override a controller themselves. Cancellation always enters through `registry.cancel(...)` or `registry.cancelAll(...)`.
+
+### Throwing a plain `Error` on the cancel branch
+
+```typescript
+// WRONG
+if (signal.aborted) throw new Error("cancelled");
+```
+
+Use a structured error from `@/utils/errors-server` — see `error-handling.mdc`. M2 will add a dedicated `InferenceCancelledError` (cancelled promise-aggregates carry partial state across the RPC boundary). Until then, the `events` stream simply ends and existing `CompletionFailedError` carries cancel-as-failure cases.
+
+## Cancel API Surface
+
+There are two cancel paths exposed to clients:
+
+### Targeted (preferred, new in 0.11.0)
+
+Cancel by `requestId`. Pair with the `requestId` field exposed on `CompletionRun` (and equivalent long-running result objects):
+
+```typescript
+// Client side
+const run = sdk.completion({ ... });
+console.log(run.requestId); // available synchronously
+
+// Later, from anywhere with access to the SDK client:
+await sdk.cancel({ requestId: run.requestId });
+```
+
+### Broad (escape hatch)
+
+Cancel every in-flight request matching a `modelId` — for model unload, app shutdown, admin sweeps. Kept stable from pre-0.11.0:
+
+```typescript
+await sdk.cancel({ operation: "inference", modelId });
+await sdk.cancel({ operation: "embeddings", modelId });
+```
+
+Internally, both paths land on `RequestRegistry.cancel(...)`. The broad path falls back to `addon.cancel()` for handler kinds that haven't been registry-migrated yet (everything except llama.cpp completion in 0.11.0).
+
+## Primitives Reference
+
+All exports come from `@/server/bare/runtime`:
+
+```typescript
+import {
+  // singleton accessor
+  getRequestRegistry,
+
+  // factory (test code only — production uses the singleton)
+  createRequestRegistry,
+
+  // scope factory (rarely used directly — `registry.begin(...)` carries one)
+  createDisposableScope,
+} from "@/server/bare/runtime";
+
+import type {
+  RequestRegistry,
+  RequestContext,
+  ManagedRequestContext, // RequestContext & AsyncDisposable
+  RequestKind,
+  RequestState, // "running" | "cancelling" | "completed" | "failed" | "cancelled"
+  RequestOutcome, // "completed" | "failed" | "cancelled"
+  BeginOpts,
+  CancelTarget,
+  CancelByRequestId,
+  CancelByModelId,
+  DisposableScope,
+} from "@/server/bare/runtime";
+```
+
+### `RequestRegistry`
+
+```typescript
+interface RequestRegistry {
+  begin(opts: BeginOpts): ManagedRequestContext;
+  get(requestId: string): RequestContext | null;
+  list(): RequestContext[];
+  cancel(target: CancelTarget): number; // count of contexts whose abort fired this call
+  cancelAll(reason: "shutdown" | "modelUnload"): Promise<void>;
+  end(requestId: string, outcome: RequestOutcome): Promise<void>;
+}
+```
+
+`cancel(...)` returns the number of contexts cancelled by *this* call (already-cancelled contexts are skipped, so the count is "newly cancelled," safe to log as "n requests cancelled" once).
+
+### `DisposableScope`
+
+```typescript
+interface DisposableScope {
+  defer(cleanup: () => Promise<void> | void): void;
+  [Symbol.asyncDispose](): Promise<void>;
+  readonly disposed: boolean;
+}
+```
+
+Cleanups run in LIFO order on dispose. If multiple cleanups throw, an `AggregateError` aggregates them so no failure is silently dropped. Calling `defer` AFTER dispose runs the cleanup eagerly — resources never leak silently.
+
+### Error Codes
+
+Two errors are owned by this stack today (both in `@/utils/errors-server`):
+
+| Code  | Class                          | When                                                                       |
+|-------|--------------------------------|----------------------------------------------------------------------------|
+| 52417 | `RequestIdConflictError`       | `registry.begin(...)` called with a `requestId` already present.           |
+| 53503 | `AsyncDisposeUnavailableError` | Module-load guard: host runtime doesn't expose `Symbol.asyncDispose`.      |
+
+M2 adds `InferenceCancelledError` for the typed cancel-outcome contract — promise-aggregates (`final`, `text`, `toolCalls`, `stats`) reject with it carrying the partial state, while the `events` stream ends normally with `stopReason: "cancelled"`. Until M2 ships, handlers fall back on `CompletionFailedError` / existing per-op errors.
+
+## Verification
+
+Two unit-test files pin the contract — read them as canonical examples:
+
+- `packages/sdk/test/unit/runtime/disposable-scope.test.ts` — LIFO cleanup, idempotency, error aggregation, late `defer` behavior.
+- `packages/sdk/test/unit/runtime/request-registry.test.ts` — `begin`/`cancel`/`end` flow, `requestId` conflict detection, parent-signal composition + listener detach discipline, and the same-tick "cancel-before-begin" tripwire.
+
+When adding new behavior to the primitives, add the test before the implementation and pair it with the corresponding doc update in this rule.
+
+## Common Tasks
+
+### Migrating a new handler onto the registry
+
+1. Identify the `RequestKind` (`embeddings`, `transcribe`, `translate`, ...).
+2. Replace any ad-hoc cancel bookkeeping (counters, flags, manual `signal.aborted` polling) with the canonical handler shape above.
+3. Wire `ctx.signal` to the addon binding leaf with `addEventListener("abort", onAbort, { once: true })` + the `if (signal.aborted) onAbort()` fall-through + a `try/finally` removeEventListener.
+4. Replace duplicated cleanup branches with `ctx.scope.defer(...)` or `await using` rollbacks.
+5. Verify the broad-cancel path still works: `cancel({ operation: <kind>, modelId })` should land on `registry.cancel({ modelId, kind })` and propagate via the registered listener — no addon-level fallback needed once the kind is migrated.
+6. Add a unit test that begins a request, fires `cancel({ requestId })`, asserts the addon was notified once, and asserts the registry slot is freed after dispose.
+
+### Adding a new `RequestKind`
+
+Open-coded union in `packages/sdk/server/bare/runtime/request-context.ts`:
+
+```typescript
+export type RequestKind =
+  | "completion"
+  | "embeddings"
+  | "transcribe"
+  | "translate"
+  // ... add here
+  | "yourNewKind";
+```
+
+Then thread it through any cancel handler that needs to broad-cancel by kind. Editor autocomplete will surface every call site that needs updating.
+
+### Adding a new cancel target
+
+Already covered by the `CancelTarget` discriminated union. If you genuinely need a new shape (e.g. `cancel({ tag: ... })`), extend `CancelTarget` in `request-registry.ts` and update `RequestRegistry.cancel`'s switch.
+
+## Related Rules
+
+- `error-handling.mdc` — `InferenceCancelledError` / `AsyncDisposeUnavailableError` / `RequestIdConflictError` placement and propagation across the RPC boundary.
+- `docs/kv-cache-system.mdc` — KV-cache bookkeeping coupled to cancellation (`shouldRecordSavedCount`, cancel-branch rollback). `KvCacheSession` is M2 — until then handlers replicate the three-layer cleanup pattern around `signal.aborted`.
+- `docs/request-lifecycle-system.mdc` — full reference (design rationale, migration roadmap, FAQ).

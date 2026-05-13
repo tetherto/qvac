@@ -10,6 +10,7 @@ This package is published to npm as **`@qvac/cli`** and lives in the QVAC monore
 - [Command Reference](#command-reference)
   - [`doctor`](#doctor)
   - [`bundle sdk`](#bundle-sdk)
+  - [`verify deps`](#verify-deps)
 - [Configuration](#configuration)
 - [System Requirements](#system-requirements)
 - [Development](#development)
@@ -138,6 +139,57 @@ qvac bundle sdk --verbose
 | `qvac/addons.manifest.json` | Native addon allowlist for tree-shaking |
 
 > **Note:** Your project must have `@qvac/sdk` installed.
+
+### `verify deps`
+
+Detect native Bare addon package changes between two git refs by comparing
+npm `package-lock.json` contents.
+
+```bash
+qvac verify deps --base <ref> --head <ref> [options]
+```
+
+Both `--base` and `--head` are required.
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--base <ref>` | Base git ref or SHA. |
+| `--head <ref>` | Head git ref or SHA. |
+| `--lockfile <path>` | Path to npm `package-lock.json` (default: `package-lock.json`). |
+| `--quiet, -q` | Suppress output when there are no native changes. |
+
+**Examples:**
+
+```bash
+# Local fork checkout
+qvac verify deps --base upstream/main --head HEAD
+
+# Direct clone where origin points at the canonical repo
+qvac verify deps --base origin/main --head HEAD
+
+# Package with a nested npm lockfile
+qvac verify deps --base upstream/main --head HEAD --lockfile packages/sdk/package-lock.json
+```
+
+**Exit codes:**
+
+| Exit | Meaning |
+|------|---------|
+| `0` | No native addon changes, or no npm lockfile exists at either ref. |
+| `1` | Native addon additions or removals were detected, or a removed package's native status could not be determined. Reviewers should confirm the change is intentional. |
+| `2` | Tool error (missing required args, unsupported lockfile, git ref could not be resolved, lockfile read or parse failure, etc.). The check did not complete and no judgment about native dependency changes can be made. |
+
+CI guardrails should treat `1` and `2` differently: `1` means "real native change to confirm", `2` means "infrastructure/usage problem to fix".
+
+**Detection Capabilities:**
+
+- Supports npm `package-lock.json` only.
+- Yarn, Bun, and pnpm lockfiles are not parsed yet.
+- Native packages are identified by reading installed `node_modules/<pkg>/package.json` and checking for top-level `"addon": true`, so run from a checkout with dependencies installed for the head under review.
+- Removed lockfile packages whose `package.json` is unavailable are reported with unknown native status so reviewers can inspect them.
+- Packages with unreadable metadata are reported as warnings only when native addon changes are also reported.
 
 ## Configuration
 

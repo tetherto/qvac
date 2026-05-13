@@ -749,6 +749,22 @@ void LlamaModel::commonParamsParse(
     configFilemap.erase(jit);
   }
 
+  // MedPsy ships only a Jinja chat template embedded in its GGUF; the non-jinja
+  // fallback path used by llama.cpp does not execute the {%- set persona -%}
+  // block that injects the model's persona system prompt, so the model loses
+  // its identity when jinja is off. Auto-enable jinja whenever we detect the
+  // MedPsy basename so the embedded template is applied regardless of the
+  // tools setting.
+  if (!params.use_jinja &&
+      qvac_lib_inference_addon_llama::utils::isMedPsyBasename(
+          metadata_.tryGetString("general.basename").value_or(""))) {
+    params.use_jinja = true;
+    QLOG_IF(
+        Priority::INFO,
+        "[LlamaModel] MedPsy basename detected; auto-enabling jinja so the "
+        "embedded chat template is applied\n");
+  }
+
   // reasoning-budget controls whether the model emits a <think> reasoning
   // channel. -1 (default) leaves it on; 0 disables. `std::from_chars` is used
   // instead of `std::stoi` because the latter accepts trailing garbage ("0abc"
