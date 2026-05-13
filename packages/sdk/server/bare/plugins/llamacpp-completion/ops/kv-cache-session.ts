@@ -253,7 +253,8 @@ export function createKvCacheSession(modelId: string): KvCacheSession {
     logCacheStatus(input.customKey, exists);
 
     if (!exists) {
-      await primeAtomically(cachePath, input.primeIfMissing);
+      await input.primeIfMissing(cachePath);
+      await verifyPrimedFile(cachePath);
       initializedCaches.add(registryKey);
     }
 
@@ -295,7 +296,8 @@ export function createKvCacheSession(modelId: string): KvCacheSession {
     logCacheStatus("auto", cacheExists);
 
     if (!cacheExists) {
-      await primeAtomically(cachePath, input.primeIfMissing);
+      await input.primeIfMissing(cachePath);
+      await verifyPrimedFile(cachePath);
       initializedCaches.add(registryKey);
     }
 
@@ -479,128 +481,62 @@ export async function deleteKvCacheState(
 
 // ----- private helpers -----
 
-/** Suffix appended to `cachePath` for the temp file the addon writes
- *  into during prime. Promoted to `cachePath` via atomic `rename` only
- *  after the prime closure resolves successfully. */
-const PRIME_TEMP_SUFFIX = ".prime.tmp";
-
 /**
- * Prime the system-prompt cache **atomically**: the addon writes to
- * `cachePath + ".prime.tmp"`, and only on a successful prime do we
- * promote it to the canonical `cachePath` via `fsPromises.rename` (an
- * atomic same-volume operation on every host we target). The canonical
- * cache path is therefore *never* observable in a partial state — the
- * next `beginCustom` / `beginAuto` existence probe (or a cross-process
- * worker restart's disk probe) sees either a complete cache or no file
- * at all.
+ * Verify that the addon actually persisted a usable cache file after a
+ * prime. Mirrors the `verifySaveAndRecord` access-probe used at commit
+ * time, applied at prime time so the session doesn't mark a cache
+ * `initializedCaches.add(...)` against a path that's missing or empty
+ * on disk.
  *
- * This closes the addon-layer gap where `model.run({ saveSessionPath })`
- * is not transactional: a thrown prime (addon error, OOM, signal abort
- * mid-prime, etc.) can leave a partial `.bin` at the path the addon was
- * writing to. By steering that path to a `.prime.tmp` sibling, the
- * "partial" file lives on a non-canonical name that no other code path
- * trusts; the canonical name only ever appears via atomic rename, so a
- * failed prime is indistinguishable on disk from a never-attempted
- * prime.
+ * Failure modes this catches:
  *
- * Defensive details:
+ *   - The addon's `model.run({ saveSessionPath })` was interrupted
+ *     before the save call ran (e.g. signal abort during prefill); the
+ *     prime closure resolves cleanly because addon save errors are not
+ *     propagated, but no file is on disk.
+ *   - The addon's `llama_state_save_file` was called but produced an
+ *     empty file (out-of-space / fs error swallowed by the addon).
  *
- *   - We unlink any leftover `.prime.tmp` *before* invoking the closure.
- *     A worker that crashed mid-prime previously could leave one
- *     behind; the addon would otherwise overwrite it harmlessly, but a
- *     deferred-write addon (one that returns from prime without having
- *     touched disk) would let us mistakenly promote stale-from-crash
- *     bytes to the canonical name.
- *   - On prime failure, the `.prime.tmp` unlink is best-effort. Unlike
- *     the previous workaround, an unlink failure here does **not** put
- *     the canonical path at risk — the temp path lives on a non-trusted
- *     name, so the worst case is a leaked temp file (cleaned up on the
- *     next prime attempt by the leftover-unlink above).
- *   - On prime success, the addon may have deferred its disk write
- *     (some llama.cpp addon paths flush lazily). We probe `tempPath`
- *     before renaming; if it doesn't exist, we leave the canonical
- *     path absent rather than synthesizing one. The next
- *     `verifySaveAndRecord` probe in `commitTurn` is the authoritative
- *     "did the addon actually persist?" check.
- *   - On rename failure (cross-volume? permission flap?), we surface
- *     the error to the caller — the canonical path is by definition
- *     untouched (rename is atomic on success; on failure the source
- *     still owns the bytes), so the caller sees a clean "prime failed"
- *     semantics with no stale canonical file.
+ * Failure modes this does **NOT** catch:
  *
- * Long-term, the right fix lives one layer down: the llama.cpp addon
- * should write transactionally itself (write `target.tmp`, atomic
- * rename to `target`, surface save errors instead of swallowing them).
- * When that lands, this helper can collapse to a direct
- * `prime(cachePath)` call and `verifySaveAndRecord`'s access-probe
- * fallback can be retired alongside the TODO it already documents.
+ *   - A partial-but-nonzero file written by the addon (e.g. header +
+ *     truncated KV state). Catching this requires either an
+ *     addon-side change (have `CacheManager::writeCacheFile` check the
+ *     return value of `llama_state_save_file` and throw on failure) or
+ *     a structural hash check we can't currently compute from the
+ *     SDK. Filed as a follow-up — see `cache-api.md` in the addon
+ *     repo / tracking ticket.
+ *
+ * On failure we best-effort `unlink` an empty leftover file (so the
+ * next existence probe doesn't trust it) and throw — the handler in
+ * `completion-stream.ts` lets the error propagate up and no
+ * `initializedCaches` entry is recorded.
  */
-async function primeAtomically(
-  cachePath: string,
-  prime: (cachePath: string) => Promise<void>,
-): Promise<void> {
-  const tempPath = cachePath + PRIME_TEMP_SUFFIX;
-
-  // Defensive: clear any temp leftover from a prior crashed prime
-  // before handing the path to the closure. See doc-block above.
-  await safeUnlink(tempPath);
-
+async function verifyPrimedFile(cachePath: string): Promise<void> {
+  let stats: { size: number };
   try {
-    await prime(tempPath);
-  } catch (primeError) {
-    // Best-effort cleanup of the temp file. A failure here does NOT
-    // affect the canonical path's invariant (it was never written by
-    // this prime attempt) — at worst we leak a temp file that the
-    // next prime's `safeUnlink` above will sweep.
-    await safeUnlink(tempPath);
-    throw primeError;
+    stats = await fsPromises.stat(cachePath);
+  } catch (statError) {
+    // ENOENT is the common case here — addon prime returned without
+    // calling save (most often: signal abort during prefill).
+    throw new Error(
+      `[kv-cache] prime closure resolved but no cache file was written. path=${cachePath} cause=${statError instanceof Error ? statError.message : String(statError)}`,
+    );
   }
-
-  // Prime resolved successfully. Promote the temp file to the
-  // canonical path *iff* the addon actually wrote it. Some addon
-  // paths defer the disk write — in that case the temp file doesn't
-  // exist, and forcing a rename would mask the deferred semantics.
-  // The canonical path's eventual presence is then asserted by
-  // `verifySaveAndRecord` in `commitTurn`.
-  let tempExists = false;
-  try {
-    await fsPromises.access(tempPath);
-    tempExists = true;
-  } catch {
-    /* addon deferred or wrote nothing — both are valid */
-  }
-  if (!tempExists) return;
-
-  try {
-    await fsPromises.rename(tempPath, cachePath);
-  } catch (renameError) {
-    // Source still owns the bytes (rename is atomic). Drop the temp
-    // file so we don't leak it, then surface the failure as the
-    // prime error — caller treats this as a clean prime failure.
-    await safeUnlink(tempPath);
-    throw renameError;
-  }
-}
-
-/** Best-effort unlink. Logs and swallows errors so callers can use it
- *  in cleanup paths without contaminating the originating error. */
-async function safeUnlink(path: string): Promise<void> {
-  try {
-    await fsPromises.unlink(path);
-  } catch (err) {
-    // ENOENT is the common case (file already gone) and uninteresting;
-    // log other errors so ops can spot recurring permission / fs flaps.
-    if (
-      !(
-        err instanceof Error &&
-        "code" in err &&
-        (err as { code?: string }).code === "ENOENT"
-      )
-    ) {
+  if (stats.size === 0) {
+    // Best-effort cleanup so a future probe doesn't trust the empty
+    // file. Unlink failure is non-fatal — we still throw on the
+    // primary "prime didn't persist" condition.
+    try {
+      await fsPromises.unlink(cachePath);
+    } catch (unlinkError) {
       logger.warn(
-        `[kv-cache] safeUnlink ignored a non-ENOENT error. path=${path} error=${err instanceof Error ? err.message : String(err)}`,
+        `[kv-cache] Failed to remove empty primed cache file. path=${cachePath} error=${unlinkError instanceof Error ? unlinkError.message : String(unlinkError)}`,
       );
     }
+    throw new Error(
+      `[kv-cache] prime closure resolved but cache file is empty. path=${cachePath}`,
+    );
   }
 }
 
