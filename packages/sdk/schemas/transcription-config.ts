@@ -79,32 +79,32 @@ export const whisperConfigSchema = z.object({
 
 export type WhisperConfig = z.infer<typeof whisperConfigSchema>;
 
-// === Parakeet (NVIDIA NeMo ONNX) engine config ===
-
-export const parakeetModelTypeEnumSchema = z.enum(["tdt", "ctc", "sortformer"]);
-export type ParakeetModelVariant = z.infer<typeof parakeetModelTypeEnumSchema>;
+// === Parakeet (NVIDIA NeMo GGML) engine config ===
+//
+// Backed by the ggml-based qvac-parakeet.cpp engine. A single GGUF
+// checkpoint covers every variant (TDT, CTC, EOU, Sortformer); the
+// addon auto-detects the model type from `parakeet.model.type` GGUF
+// metadata, so callers no longer pass a `modelType` discriminator.
 
 export const parakeetRuntimeConfigSchema = z.object({
-  modelType: parakeetModelTypeEnumSchema.default("tdt"),
   maxThreads: z.number().int().optional(),
   useGPU: z.boolean().optional(),
   sampleRate: z.number().int().optional(),
   channels: z.number().int().optional(),
   captionEnabled: z.boolean().optional(),
   timestampsEnabled: z.boolean().optional(),
+  seed: z.number().int().optional(),
+  streaming: z.boolean().optional(),
+  streamingChunkMs: z.number().int().optional(),
+  streamingHistoryMs: z.number().int().optional(),
+  streamingEmitPartials: z.boolean().optional(),
+  streamingEnergyVad: z.boolean().optional(),
+  streamingLeftContextMs: z.number().int().optional(),
+  streamingRightLookaheadMs: z.number().int().optional(),
 });
 
 export const parakeetConfigSchema = parakeetRuntimeConfigSchema.extend({
-  // TDT sources
-  parakeetEncoderSrc: modelSrcInputSchema.optional(),
-  parakeetDecoderSrc: modelSrcInputSchema.optional(),
-  parakeetVocabSrc: modelSrcInputSchema.optional(),
-  parakeetPreprocessorSrc: modelSrcInputSchema.optional(),
-  // CTC sources
-  parakeetCtcModelSrc: modelSrcInputSchema.optional(),
-  parakeetTokenizerSrc: modelSrcInputSchema.optional(),
-  // Sortformer source
-  parakeetSortformerSrc: modelSrcInputSchema.optional(),
+  parakeetModelSrc: modelSrcInputSchema.optional(),
 });
 
 export type ParakeetRuntimeConfig = z.infer<typeof parakeetRuntimeConfigSchema>;

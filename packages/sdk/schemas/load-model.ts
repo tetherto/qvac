@@ -75,7 +75,7 @@ export const loadBuiltinModelOptionsBaseSchema = z.union([
     .object({
       ...loadModelCommonFields,
       modelType: parakeetModelTypeSchema,
-      modelConfig: parakeetConfigSchema,
+      modelConfig: parakeetConfigSchema.partial().strict().optional(),
     })
     .strict(),
   z
@@ -175,7 +175,7 @@ const loadModelOptionsToRequestBaseSchema = z.union([
     .object({
       ...loadModelRequestCommonFields,
       modelType: parakeetModelTypeSchema,
-      modelConfig: parakeetConfigSchema,
+      modelConfig: parakeetConfigSchema.partial().strict().optional(),
     })
     .strict()
     .transform((data) => ({
@@ -183,7 +183,7 @@ const loadModelOptionsToRequestBaseSchema = z.union([
       modelType: ModelType.parakeetTranscription,
       modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
       modelName: modelInputToNameSchema.parse(data.modelSrc),
-      modelConfig: data.modelConfig,
+      modelConfig: data.modelConfig ?? {},
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,
@@ -336,7 +336,7 @@ export const loadWhisperModelRequestSchema = commonModelConfigSchema
 export const loadParakeetModelRequestSchema = commonModelConfigSchema
   .extend({
     modelType: z.literal(ModelType.parakeetTranscription),
-    modelConfig: parakeetConfigSchema,
+    modelConfig: parakeetConfigSchema.partial().optional(),
   })
   .strict();
 

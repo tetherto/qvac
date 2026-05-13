@@ -21,172 +21,76 @@ import {
 import { createStreamLogger, registerAddonLogger } from "@/logging";
 import {
   ModelLoadFailedError,
-  ParakeetArtifactsRequiredError,
   TranscriptionFailedError,
 } from "@/utils/errors-server";
 import { transcribe } from "@/server/bare/ops/transcribe";
 import { attachModelExecutionMs } from "@/profiling/model-execution";
 
 type ParakeetModelConfig = {
-  modelType?: string;
   maxThreads?: number;
   useGPU?: boolean;
   sampleRate?: number;
   channels?: number;
   captionEnabled?: boolean;
   timestampsEnabled?: boolean;
-  // TDT
-  parakeetEncoderSrc?: ModelSrcInput;
-  parakeetEncoderDataSrc?: ModelSrcInput;
-  parakeetDecoderSrc?: ModelSrcInput;
-  parakeetVocabSrc?: ModelSrcInput;
-  parakeetPreprocessorSrc?: ModelSrcInput;
-  // CTC
-  parakeetCtcModelSrc?: ModelSrcInput;
-  parakeetCtcModelDataSrc?: ModelSrcInput;
-  parakeetTokenizerSrc?: ModelSrcInput;
-  // Sortformer
-  parakeetSortformerSrc?: ModelSrcInput;
+  seed?: number;
+  streaming?: boolean;
+  streamingChunkMs?: number;
+  streamingHistoryMs?: number;
+  streamingEmitPartials?: boolean;
+  streamingEnergyVad?: boolean;
+  streamingLeftContextMs?: number;
+  streamingRightLookaheadMs?: number;
+  // Override the primary model source. When omitted the plugin falls
+  // back to `params.modelPath` (the modelSrc passed to loadModel).
+  parakeetModelSrc?: ModelSrcInput;
 };
 
-
-async function resolveTdtConfig(
+async function resolveParakeetConfig(
   cfg: ParakeetModelConfig,
   ctx: ResolveContext,
 ): Promise<ResolveResult<ParakeetModelConfig>> {
-  const {
-    parakeetEncoderSrc,
-    parakeetEncoderDataSrc,
-    parakeetDecoderSrc,
-    parakeetVocabSrc,
-    parakeetPreprocessorSrc,
-  } = cfg;
-
-  if (
-    !parakeetEncoderSrc ||
-    !parakeetDecoderSrc ||
-    !parakeetVocabSrc ||
-    !parakeetPreprocessorSrc
-  ) {
-    throw new ParakeetArtifactsRequiredError(
-      "TDT requires: parakeetEncoderSrc, parakeetDecoderSrc, parakeetVocabSrc, parakeetPreprocessorSrc",
-    );
+  if (!cfg.parakeetModelSrc) {
+    return { config: cfg };
   }
 
-  const resolve = ctx.resolveModelPath;
-  const [
-    encoderPath,
-    encoderDataPath,
-    decoderPath,
-    vocabPath,
-    preprocessorPath,
-  ] = await Promise.all([
-    resolve(parakeetEncoderSrc),
-    parakeetEncoderDataSrc ? resolve(parakeetEncoderDataSrc) : undefined,
-    resolve(parakeetDecoderSrc),
-    resolve(parakeetVocabSrc),
-    resolve(parakeetPreprocessorSrc),
-  ]);
-
+  const modelPath = await ctx.resolveModelPath(cfg.parakeetModelSrc);
   return {
     config: cfg,
     artifacts: {
-      encoder: encoderPath,
-      ...(encoderDataPath !== undefined && { encoderData: encoderDataPath }),
-      ...(decoderPath !== undefined && { decoder: decoderPath }),
-      ...(vocabPath !== undefined && { vocab: vocabPath }),
-      ...(preprocessorPath !== undefined && { preprocessor: preprocessorPath }),
+      ...(modelPath !== undefined && { model: modelPath }),
     },
   };
 }
 
-async function resolveCtcConfig(
-  cfg: ParakeetModelConfig,
-  ctx: ResolveContext,
-): Promise<ResolveResult<ParakeetModelConfig>> {
-  const { parakeetCtcModelSrc, parakeetCtcModelDataSrc, parakeetTokenizerSrc } =
-    cfg;
-
-  if (!parakeetCtcModelSrc || !parakeetTokenizerSrc) {
-    throw new ParakeetArtifactsRequiredError(
-      "CTC requires: parakeetCtcModelSrc, parakeetTokenizerSrc",
-    );
-  }
-
-  const resolve = ctx.resolveModelPath;
-  const [ctcModelPath, ctcModelDataPath, tokenizerPath] = await Promise.all([
-    resolve(parakeetCtcModelSrc),
-    parakeetCtcModelDataSrc ? resolve(parakeetCtcModelDataSrc) : undefined,
-    resolve(parakeetTokenizerSrc),
-  ]);
-
-  return {
-    config: cfg,
-    artifacts: {
-      model: ctcModelPath,
-      ...(ctcModelDataPath !== undefined && { modelData: ctcModelDataPath }),
-      ...(tokenizerPath !== undefined && { tokenizer: tokenizerPath }),
-    },
-  };
-}
-
-async function resolveSortformerConfig(
-  cfg: ParakeetModelConfig,
-  ctx: ResolveContext,
-): Promise<ResolveResult<ParakeetModelConfig>> {
-  const { parakeetSortformerSrc } = cfg;
-
-  if (!parakeetSortformerSrc) {
-    throw new ParakeetArtifactsRequiredError(
-      "Sortformer requires: parakeetSortformerSrc",
-    );
-  }
-
-  const resolve = ctx.resolveModelPath;
-  const sortformerPath = await resolve(parakeetSortformerSrc);
-
-  return {
-    config: cfg,
-    artifacts: {
-      ...(sortformerPath !== undefined && { sortformer: sortformerPath }),
-    },
-  };
-}
-
-function createParakeetModel(
-  params: CreateModelParams,
-  primaryFileKey: keyof TranscriptionParakeetFiles,
-): PluginModelResult {
+function createParakeetModel(params: CreateModelParams): PluginModelResult {
   const config = (params.modelConfig ?? {}) as ParakeetModelConfig;
   const artifacts = { ...(params.artifacts ?? {}) };
-  const modelType = config.modelType ?? "tdt";
-  const primaryPath = artifacts[primaryFileKey] ?? params.modelPath;
+  const modelPath = artifacts["model"] ?? params.modelPath;
 
-  if (!primaryPath) {
-    throw new ModelLoadFailedError(
-      `Parakeet ${modelType} requires a model source`,
-    );
+  if (!modelPath) {
+    throw new ModelLoadFailedError("Parakeet requires a GGUF model source");
   }
 
-  const logger = createStreamLogger(params.modelId, ModelType.parakeetTranscription);
+  const logger = createStreamLogger(
+    params.modelId,
+    ModelType.parakeetTranscription,
+  );
   registerAddonLogger(params.modelId, ModelType.parakeetTranscription, logger);
 
   const files: TranscriptionParakeetFiles = {
-    [primaryFileKey]: primaryPath,
-    ...artifacts,
+    model: modelPath,
   };
+
+  const {
+    parakeetModelSrc: _omit,
+    ...runtime
+  } = config;
+  void _omit;
 
   const addonConfig: TranscriptionParakeetConfig = {
     enableStats: true,
-    parakeetConfig: {
-      modelType,
-      maxThreads: config.maxThreads,
-      useGPU: config.useGPU,
-      sampleRate: config.sampleRate,
-      channels: config.channels,
-      captionEnabled: config.captionEnabled,
-      timestampsEnabled: config.timestampsEnabled,
-    } as ParakeetConfig,
+    parakeetConfig: { ...runtime } satisfies ParakeetConfig,
   };
 
   const model = new TranscriptionParakeet({
@@ -200,7 +104,7 @@ function createParakeetModel(
 
 export const parakeetPlugin = definePlugin({
   modelType: ModelType.parakeetTranscription,
-  displayName: "Parakeet (NVIDIA NeMo ONNX)",
+  displayName: "Parakeet (NVIDIA NeMo GGML)",
   addonPackage: ADDON_PARAKEET,
   loadConfigSchema: parakeetConfigSchema,
   skipPrimaryModelPathValidation: true,
@@ -209,21 +113,11 @@ export const parakeetPlugin = definePlugin({
     cfg: ParakeetModelConfig,
     ctx: ResolveContext,
   ): Promise<ResolveResult<ParakeetModelConfig>> {
-    const modelType = cfg.modelType ?? "tdt";
-
-    if (modelType === "ctc") return resolveCtcConfig(cfg, ctx);
-    if (modelType === "sortformer") return resolveSortformerConfig(cfg, ctx);
-    return resolveTdtConfig(cfg, ctx);
+    return resolveParakeetConfig(cfg, ctx);
   },
 
   createModel(params: CreateModelParams): PluginModelResult {
-    const modelType =
-      ((params.modelConfig ?? {}) as ParakeetModelConfig).modelType ?? "tdt";
-
-    if (modelType === "ctc") return createParakeetModel(params, "model");
-    if (modelType === "sortformer")
-      return createParakeetModel(params, "sortformer");
-    return createParakeetModel(params, "encoder");
+    return createParakeetModel(params);
   },
 
   handlers: {
@@ -256,12 +150,15 @@ export const parakeetPlugin = definePlugin({
           }
 
           const { modelExecutionMs, stats } = result.value;
-          yield attachModelExecutionMs({
-            type: "transcribe" as const,
-            text: "",
-            done: true,
-            ...(stats && { stats }),
-          }, modelExecutionMs);
+          yield attachModelExecutionMs(
+            {
+              type: "transcribe" as const,
+              text: "",
+              done: true,
+              ...(stats && { stats }),
+            },
+            modelExecutionMs,
+          );
         } finally {
           await stream.return?.(undefined as never);
         }

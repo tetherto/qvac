@@ -1,52 +1,44 @@
 // @ts-expect-error brittle has no type declarations
 import test from "brittle";
 import {
-  parakeetModelTypeEnumSchema,
   parakeetRuntimeConfigSchema,
   parakeetConfigSchema,
 } from "@/schemas/transcription-config";
 
-test("parakeetModelTypeEnumSchema: accepts tdt, ctc, sortformer", (t) => {
-  t.is(parakeetModelTypeEnumSchema.parse("tdt"), "tdt");
-  t.is(parakeetModelTypeEnumSchema.parse("ctc"), "ctc");
-  t.is(parakeetModelTypeEnumSchema.parse("sortformer"), "sortformer");
-});
-
-test("parakeetModelTypeEnumSchema: rejects invalid variants", (t) => {
-  t.exception(() => parakeetModelTypeEnumSchema.parse("invalid"));
-  t.exception(() => parakeetModelTypeEnumSchema.parse(""));
-  t.exception(() => parakeetModelTypeEnumSchema.parse("TDT"));
-});
-
-test("parakeetRuntimeConfigSchema: defaults modelType to tdt", (t) => {
+test("parakeetRuntimeConfigSchema: accepts empty config", (t) => {
   const result = parakeetRuntimeConfigSchema.parse({});
-  t.is(result.modelType, "tdt");
+  t.alike(result, {});
 });
 
-test("parakeetConfigSchema: TDT config", (t) => {
-  const result = parakeetConfigSchema.parse({
-    modelType: "tdt",
-    parakeetEncoderSrc: "pear://abc/encoder.onnx",
-    parakeetDecoderSrc: "pear://abc/decoder.onnx",
-    parakeetVocabSrc: "pear://abc/vocab.txt",
-    parakeetPreprocessorSrc: "pear://abc/preprocessor.onnx",
+test("parakeetRuntimeConfigSchema: accepts streaming + GPU options", (t) => {
+  const result = parakeetRuntimeConfigSchema.parse({
+    useGPU: true,
+    streaming: true,
+    streamingChunkMs: 1000,
+    streamingHistoryMs: 30000,
+    streamingEmitPartials: false,
+    maxThreads: 4,
+    seed: 42,
   });
-  t.is(result.modelType, "tdt");
+  t.is(result.useGPU, true);
+  t.is(result.streaming, true);
+  t.is(result.streamingChunkMs, 1000);
+  t.is(result.streamingHistoryMs, 30000);
+  t.is(result.streamingEmitPartials, false);
+  t.is(result.maxThreads, 4);
+  t.is(result.seed, 42);
 });
 
-test("parakeetConfigSchema: CTC config", (t) => {
+test("parakeetConfigSchema: accepts an explicit parakeetModelSrc", (t) => {
   const result = parakeetConfigSchema.parse({
-    modelType: "ctc",
-    parakeetCtcModelSrc: "pear://abc/model.onnx",
-    parakeetTokenizerSrc: "pear://abc/tokenizer.json",
+    parakeetModelSrc: "pear://abc/parakeet-tdt-0.6b-v3.q8_0.gguf",
+    useGPU: false,
   });
-  t.is(result.modelType, "ctc");
+  t.is(result.parakeetModelSrc, "pear://abc/parakeet-tdt-0.6b-v3.q8_0.gguf");
+  t.is(result.useGPU, false);
 });
 
-test("parakeetConfigSchema: Sortformer config", (t) => {
-  const result = parakeetConfigSchema.parse({
-    modelType: "sortformer",
-    parakeetSortformerSrc: "pear://abc/sortformer.onnx",
-  });
-  t.is(result.modelType, "sortformer");
+test("parakeetConfigSchema: accepts no parakeetModelSrc (falls back to modelSrc)", (t) => {
+  const result = parakeetConfigSchema.parse({});
+  t.is(result.parakeetModelSrc, undefined);
 });

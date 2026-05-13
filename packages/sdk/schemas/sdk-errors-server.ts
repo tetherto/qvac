@@ -18,7 +18,6 @@ export const SDK_SERVER_ERROR_CODES = {
   VAD_MODEL_REQUIRED: 52205,
   TTS_ARTIFACTS_REQUIRED: 52208,
   TTS_REFERENCE_AUDIO_REQUIRED: 52209,
-  PARAKEET_ARTIFACTS_REQUIRED: 52210,
 
   // Model Operations (52,400-52,799)
   MODEL_UNLOAD_FAILED: 52400,
@@ -182,12 +181,6 @@ const serverErrorDefinitions: ErrorCodesMap = {
     message:
       "TTS (Chatterbox) requires referenceAudioSrc (path or URL to a WAV file for voice cloning)",
   },
-  [SDK_SERVER_ERROR_CODES.PARAKEET_ARTIFACTS_REQUIRED]: {
-    name: "PARAKEET_ARTIFACTS_REQUIRED",
-    message:
-      "Parakeet model sources are missing. TDT requires parakeetEncoderSrc, parakeetDecoderSrc, parakeetVocabSrc, parakeetPreprocessorSrc. CTC requires parakeetCtcModelSrc, parakeetTokenizerSrc. Sortformer requires parakeetSortformerSrc.",
-  },
-
   // Model Operations (52,400-52,799)
   [SDK_SERVER_ERROR_CODES.MODEL_UNLOAD_FAILED]: {
     name: "MODEL_UNLOAD_FAILED",
