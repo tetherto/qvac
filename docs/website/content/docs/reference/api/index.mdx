@@ -1294,9 +1294,10 @@ console.log(await response.text);
 
 Unloads a previously loaded model from the server.
 
-When the last model is unloaded (no more models remain), this function
-automatically closes the RPC connection, allowing the process to exit
-naturally without requiring manual cleanup.
+When no models or providers remain active, the SDK can auto-close the RPC
+connection so the host process exits naturally. The default flips by
+runtime: **on** for Node/Electron, **off** for Bare. Pass `autoClose` to
+override.
 
 **Signature**:
 
@@ -1307,6 +1308,18 @@ function unloadModel(params: UnloadModelParams): Promise<void>;
 **Throws**:
 
 - `QvacErrorBase` — When the response type is invalid or when the unload operation fails
+
+**Example**:
+
+```ts
+await unloadModel({ modelId });
+
+// Force close on Bare
+await unloadModel({ modelId, autoClose: true });
+
+// Keep the connection open on Node/Electron
+await unloadModel({ modelId, autoClose: false });
+```
 
 ---
 
