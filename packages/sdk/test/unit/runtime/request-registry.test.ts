@@ -1,12 +1,15 @@
 // @ts-expect-error brittle has no type declarations
 import test from "brittle";
-import { createRequestRegistry } from "@/server/bare/runtime/request-registry";
+import {
+  createRequestRegistry,
+  __requestRegistryTestHooks,
+} from "@/server/bare/runtime/request-registry";
 import { RequestIdConflictError } from "@/utils/errors-server";
 
 // -----------------------------------------------------------------------------
 // RequestRegistry unit tests.
 //
-// Covers the contract M1 hands to handler authors:
+// Covers the contract the registry hands to handler authors:
 //   - begin / get / list reflect a coherent in-flight set.
 //   - cancel-by-requestId targets exactly one entry.
 //   - cancel-by-modelId predicate fans out across entries with optional
@@ -181,6 +184,10 @@ test("registry: parentSignal already aborted aborts the new context", async (t: 
     parentSignal: parent.signal,
   });
   t.is(ctx.signal.aborted, true);
+  // The controller is aborted at begin time, so observers must see
+  // `cancelling` rather than the momentarily-`running` state the
+  // pre-cancel branch was already guarding against.
+  t.is(ctx.state, "cancelling");
 });
 
 test("registry: parentSignal aborts propagate to children", async (t: T) => {
@@ -278,19 +285,24 @@ test("registry: end() detaches parent listener so long-lived parents don't accum
   );
 });
 
-test("registry: same-tick cancel-before-begin returns 0 and does not retroactively abort the later begin()", async (t: T) => {
-  // Documents the current M1 behavior of the Stop-button race the
-  // synchronous-`requestId` design property allows: client generates a
-  // `requestId` and immediately fires `cancel({ requestId })` before the
-  // server-side `begin(...)` lands. The registry has nothing to match,
-  // so the cancel is a no-op — the subsequent `begin(...)` runs to
-  // completion. M2's typed-cancel outcomes will close this gap (likely
-  // via a small bounded "cancelled-before-begin" set checked by
-  // `begin(...)`); this test pins the current contract so the M2 change
-  // surfaces here.
+test("registry: same-tick cancel-before-begin retroactively aborts the later begin() (Stop-button race close)", async (t: T) => {
+  // Stop-button race: the client generates a `requestId`
+  // and the user clicks Stop before the server-side `begin(...)` for
+  // that id has landed. The registry has nothing to abort, so the
+  // immediate `cancel(...)` still returns 0 ("no in-flight match" is
+  // still the truth on the wire). The id is recorded in a bounded
+  // "cancelled-before-begin" set, and the subsequent `begin(...)`
+  // checks the set: if its id is present, the new controller is
+  // aborted before the context is returned and the entry is consumed.
+  // The surface contract is documented in
+  // `request-lifecycle-system.mdc`.
   const r = createRequestRegistry();
-  const cancelled = r.cancel({ requestId: "r-1" });
-  t.is(cancelled, 0, "no entry yet — cancel returns 0");
+  const cancelled = r.cancel({ requestId: "r-1", reason: "stop-button" });
+  t.is(
+    cancelled,
+    0,
+    "no entry yet — cancel still returns 0 (race remembered, not retroactively counted)",
+  );
 
   await using ctx = r.begin({
     requestId: "r-1",
@@ -299,10 +311,103 @@ test("registry: same-tick cancel-before-begin returns 0 and does not retroactive
   });
   t.is(
     ctx.signal.aborted,
-    false,
-    "subsequent begin() is not retroactively aborted by the pre-begin cancel",
+    true,
+    "subsequent begin() is retroactively aborted by the pre-begin cancel",
   );
-  t.is(ctx.state, "running");
+  t.is(
+    ctx.state,
+    "cancelling",
+    "context starts in 'cancelling' so observers see a coherent state",
+  );
+  t.is(
+    String((ctx.signal as { reason?: unknown }).reason),
+    "stop-button",
+    "the recorded cancel reason is forwarded to the aborted controller",
+  );
+});
+
+test("registry: a second begin() with the same id (UUID retry) after the race is consumed runs cleanly", async (t: T) => {
+  // The Stop-button race close consumes its entry on the matching
+  // `begin(...)`. In practice ids are UUIDv4 and never reused, but a
+  // buggy client could retry an id whose first attempt was already
+  // aborted (and its scope torn down). The second begin must NOT see
+  // a phantom pre-cancel — entries are single-use.
+  const r = createRequestRegistry();
+  r.cancel({ requestId: "r-1" });
+
+  async function firstAttempt() {
+    await using ctx = r.begin({
+      requestId: "r-1",
+      kind: "completion",
+      modelId: "m1",
+    });
+    t.is(
+      ctx.signal.aborted,
+      true,
+      "first attempt is aborted by the race close",
+    );
+  }
+  await firstAttempt();
+
+  await using second = r.begin({
+    requestId: "r-1",
+    kind: "completion",
+    modelId: "m1",
+  });
+  t.is(
+    second.signal.aborted,
+    false,
+    "second attempt with the same id is unaffected — pre-cancel entry was consumed",
+  );
+});
+
+test("registry: bounded cancel-before-begin set does not grow past its cap (TTL + size eviction)", async (t: T) => {
+  // The race-close map must be bounded so a malicious / buggy client
+  // can't fire 100k `cancel({ requestId: <unique> })` calls and grow
+  // the registry's memory unboundedly. The cap is documented at the
+  // module top (`CANCEL_BEFORE_BEGIN_MAX_ENTRIES`) and exported via
+  // `__requestRegistryTestHooks` for assertion stability.
+  const r = createRequestRegistry();
+  const cap = __requestRegistryTestHooks.cancelBeforeBeginMaxEntries;
+  const overshoot = cap + 64; // fire well past the cap
+
+  const sizeProbe = r as unknown as { __cancelBeforeBeginSize: () => number };
+
+  for (let i = 0; i < overshoot; i++) {
+    r.cancel({ requestId: `r-${i}` });
+  }
+  t.is(
+    sizeProbe.__cancelBeforeBeginSize() <= cap,
+    true,
+    `internal map stays within the documented cap of ${cap} entries`,
+  );
+
+  // The oldest entries should have been evicted; the most recently
+  // inserted id should still be honoured on the matching begin(...).
+  const newestId = `r-${overshoot - 1}`;
+  await using newest = r.begin({
+    requestId: newestId,
+    kind: "completion",
+    modelId: "m1",
+  });
+  t.is(
+    newest.signal.aborted,
+    true,
+    "the freshest pre-cancel still wins the race (oldest entries evicted, newest preserved)",
+  );
+
+  // And one of the early (presumed-evicted) ids should NOT trigger a
+  // retroactive abort, because its entry was bumped out by the cap.
+  await using ancient = r.begin({
+    requestId: "r-0",
+    kind: "completion",
+    modelId: "m1",
+  });
+  t.is(
+    ancient.signal.aborted,
+    false,
+    "an evicted pre-cancel no longer affects later begin() — bound holds",
+  );
 });
 
 test("registry: derived terminal state is 'cancelled' if signal aborted, 'completed' otherwise", async (t: T) => {

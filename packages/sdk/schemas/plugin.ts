@@ -314,8 +314,9 @@ export const PLUGIN_WHISPER =
   "@qvac/sdk/whispercpp-transcription/plugin" as const;
 
 /**
- * Speech-to-text transcription plugin (Parakeet ONNX).
- * Provides: audio transcription using NVIDIA Parakeet models.
+ * Speech-to-text transcription plugin (Parakeet GGML).
+ * Provides: audio transcription, EOU detection, and speaker diarization
+ * using NVIDIA Parakeet models via the qvac-parakeet.cpp engine.
  */
 export const PLUGIN_PARAKEET =
   "@qvac/sdk/parakeet-transcription/plugin" as const;
@@ -380,7 +381,7 @@ export const ADDON_EMBEDDING = "@qvac/embed-llamacpp" as const;
 /** Native addon package for Whisper transcription (whisper.cpp) */
 export const ADDON_WHISPER = "@qvac/transcription-whispercpp" as const;
 
-/** Native addon package for Parakeet transcription (ONNX) */
+/** Native addon package for Parakeet transcription (GGML) */
 export const ADDON_PARAKEET = "@qvac/transcription-parakeet" as const;
 
 /** Native addon package for NMT translation (nmt.cpp) */
