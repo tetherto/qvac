@@ -65,7 +65,7 @@ jobs:
 
     steps:
       - name: Setup Node.js
-        if: ${{ matrix.arch == 'arm64' }}
+        if: matrix.platform == 'darwin' || matrix.arch == 'arm64'
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
