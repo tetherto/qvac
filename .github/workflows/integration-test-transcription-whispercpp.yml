@@ -127,20 +127,40 @@ jobs:
           npm install
           npm install -g bare@1.26.0 bare-make
 
+      # Artifact-poisoning mitigation (QVAC-18047): write artifact to runner.temp,
+      # then copy into workspace via a separate step. Breaks the CodeQL
+      # download-artifact -> workspace data-flow trace. Bash/PowerShell branches
+      # avoid the win32 cp escape-sequence regression that reverted PR #1728.
       - name: Download prebuilds from artifact
         if: ${{ !inputs.prebuild_package }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          path: ${{ inputs.workdir }}/prebuilds
+          path: ${{ runner.temp }}/prebuilds-staging
           merge-multiple: true
+
+      - name: Move prebuilds from staging to workspace (Unix)
+        if: ${{ !inputs.prebuild_package && runner.os != 'Windows' }}
+        shell: bash
+        run: |
+          mkdir -p "${{ inputs.workdir }}/prebuilds"
+          cp -r "${RUNNER_TEMP}/prebuilds-staging/." "${{ inputs.workdir }}/prebuilds/"
+
+      - name: Move prebuilds from staging to workspace (Windows)
+        if: ${{ !inputs.prebuild_package && runner.os == 'Windows' }}
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force "${{ inputs.workdir }}/prebuilds" | Out-Null
+          Copy-Item -Path "$env:RUNNER_TEMP\prebuilds-staging\*" -Destination "${{ inputs.workdir }}/prebuilds" -Recurse
 
       - name: Download prebuilds from package (Unix)
         if: ${{ inputs.prebuild_package && matrix.platform != 'win32' }}
         working-directory: ${{ inputs.workdir }}
         shell: bash
+        env:
+          PREBUILD_PKG: ${{ inputs.prebuild_package }}
         run: |
           mkdir -p prebuilds
-          npm pack ${{ inputs.prebuild_package }} --pack-destination /tmp
+          npm pack "$PREBUILD_PKG" --pack-destination /tmp
           tar -xzf /tmp/*.tgz -C /tmp
           cp -r /tmp/package/prebuilds/* prebuilds/
           find prebuilds -type f -name 'tetherto__*' | while read f; do
@@ -151,9 +171,11 @@ jobs:
         if: ${{ inputs.prebuild_package && matrix.platform == 'win32' }}
         working-directory: ${{ inputs.workdir }}
         shell: powershell
+        env:
+          PREBUILD_PKG: ${{ inputs.prebuild_package }}
         run: |
           New-Item -ItemType Directory -Force -Path prebuilds | Out-Null
-          npm pack ${{ inputs.prebuild_package }} --pack-destination $env:TEMP
+          npm pack $env:PREBUILD_PKG --pack-destination $env:TEMP
           $tgz = Get-ChildItem "$env:TEMP\*.tgz" | Select-Object -First 1
           tar -xzf $tgz.FullName -C $env:TEMP
           Copy-Item -Path "$env:TEMP\package\prebuilds\*" -Destination prebuilds -Recurse -Force
@@ -198,11 +220,14 @@ jobs:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
 
-      - name: Run integration test (Unix)
+      # Artifact-poisoning mitigation (QVAC-18047): strip the inherited env
+      # before running test code. The test only sees HOME/PATH and the GitHub
+      # token that's explicitly passed through.
+      - name: Run integration test (Unix, env-stripped)
         if: ${{ matrix.platform != 'win32' && inputs.run_integration_tests != false }}
         working-directory: ${{ inputs.workdir }}
         shell: bash
-        run: npm run test:integration
+        run: env -i HOME="$HOME" PATH="$PATH" GITHUB_TOKEN="$GITHUB_TOKEN" bash -c 'npm run test:integration'
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
 
@@ -214,11 +239,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
 
-      - name: Run Vulkan GPU smoke test
+      - name: Run Vulkan GPU smoke test (env-stripped)
         if: matrix.os == 'ai-run-linux-gpu'
         working-directory: ${{ inputs.workdir }}
         shell: bash
-        run: npm run test:stand-alone:gpu
+        run: env -i HOME="$HOME" PATH="$PATH" GITHUB_TOKEN="$GITHUB_TOKEN" bash -c 'npm run test:stand-alone:gpu'
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
           
