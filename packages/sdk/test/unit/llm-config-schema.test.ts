@@ -101,3 +101,17 @@ test("loadModelSrcRequestSchema: accepts split-mode for LLM", (t) => {
   });
   t.is(result.success, true);
 });
+
+test("llmConfigBaseSchema: accepts reasoning_budget -1 (unrestricted)", (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ reasoning_budget: -1 }).success, true);
+});
+
+test("llmConfigBaseSchema: accepts reasoning_budget 0 (disabled)", (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ reasoning_budget: 0 }).success, true);
+});
+
+test("llmConfigBaseSchema: rejects reasoning_budget other values", (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ reasoning_budget: 1 }).success, false);
+  t.is(llmConfigBaseSchema.safeParse({ reasoning_budget: -2 }).success, false);
+  t.is(llmConfigBaseSchema.safeParse({ reasoning_budget: 0.5 }).success, false);
+});
