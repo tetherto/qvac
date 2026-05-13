@@ -659,3 +659,4 @@ must be released under a compatible CC BY-SA license.
 ## License
 
 Apache-2.0 — see [LICENSE](./LICENSE) for details.
+<!-- test: label-gate fan-out validation (PR will be closed; do not merge) -->

@@ -566,3 +566,5 @@ This project is licensed under the Apache-2.0 License – see the LICENSE file f
 
 For questions or issues, please open an issue on the GitHub repository.
 
+
+<!-- test: label-gate fan-out validation (PR will be closed; do not merge) -->
