@@ -43,10 +43,14 @@ const MAX_ID_LENGTH = 64
 const SAFE_ID_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/
 const TRAVERSAL_PATTERNS = ['..', '/', '\\', '\0']
 
+export type InvalidVectorStoreIdKind = 'invalid' | 'duplicate'
+
 export class InvalidVectorStoreIdError extends Error {
-  constructor (id: string, reason: string) {
+  readonly kind: InvalidVectorStoreIdKind
+  constructor (id: string, reason: string, kind: InvalidVectorStoreIdKind = 'invalid') {
     super(`Invalid vector store id "${id}": ${reason}`)
     this.name = 'InvalidVectorStoreIdError'
+    this.kind = kind
   }
 }
 
@@ -105,7 +109,7 @@ export function createVectorStoresStore (
   function create (input: CreateVectorStoreInput = {}): VectorStoreMeta {
     const id = input.id !== undefined ? idToWorkspace(input.id) : generateVectorStoreId()
     if (stores.has(id)) {
-      throw new InvalidVectorStoreIdError(id, 'already exists')
+      throw new InvalidVectorStoreIdError(id, 'already exists', 'duplicate')
     }
     const created = now()
     const expiresAfter = input.expiresAfter ?? null

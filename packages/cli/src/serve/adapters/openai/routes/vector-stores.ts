@@ -79,7 +79,7 @@ export async function handleCreateVectorStore (
     meta = ctx.vectorStores.create(input)
   } catch (err) {
     if (err instanceof InvalidVectorStoreIdError) {
-      sendError(res, 400, 'invalid_vector_store_id', err.message)
+      handleInputError(res, err)
       return
     }
     throw err
@@ -146,7 +146,23 @@ export async function handleUpdateVectorStore (
       sendError(res, 404, 'vector_store_not_found', `Vector store "${id}" not found.`)
       return
     }
-    meta = ctx.vectorStores.create({ id: synthetic.id, name: synthetic.name })
+    try {
+      meta = ctx.vectorStores.create({ id: synthetic.id, name: synthetic.name })
+    } catch (err) {
+      // Race: a concurrent request materialized the same synthetic between
+      // get() and create() above. Reuse whatever the winner produced.
+      if (err instanceof InvalidVectorStoreIdError && err.kind === 'duplicate') {
+        const existing = ctx.vectorStores.get(id)
+        if (!existing) {
+          // Created-then-deleted within the window — vanishingly unlikely.
+          sendError(res, 404, 'vector_store_not_found', `Vector store "${id}" not found.`)
+          return
+        }
+        meta = existing
+      } else {
+        throw err
+      }
+    }
   }
 
   const updated = ctx.vectorStores.update(meta.id, update)
@@ -272,13 +288,13 @@ export async function handleSearchVectorStore (
       ...(topK !== undefined ? { topK } : {}),
       workspace: id
     })
-    await closeWorkspaceQuiet(ctx, id, 'search')
     sendJson(res, 200, searchResultsToOpenAI(results, query))
   } catch (err) {
-    await closeWorkspaceQuiet(ctx, id, 'search')
     const message = err instanceof Error ? err.message : String(err)
     ctx.logger.error(`Vector store search error for "${id}": ${message}`)
     sendError(res, 500, 'vector_store_search_failed', 'An internal error occurred during vector store search.')
+  } finally {
+    await closeWorkspaceQuiet(ctx, id, 'search')
   }
 }
 
@@ -371,14 +387,14 @@ export async function handleAttachVectorStoreFile (
       chunk: true
     })
   } catch (err) {
-    await closeWorkspaceQuiet(ctx, id, 'ingest')
     const message = err instanceof Error ? err.message : String(err)
     ctx.logger.error(`Vector store ingest error for "${id}": ${message}`)
     sendError(res, 500, 'vector_store_ingest_failed', 'An internal error occurred while ingesting file content into the vector store.')
     return
+  } finally {
+    await closeWorkspaceQuiet(ctx, id, 'ingest')
   }
 
-  await closeWorkspaceQuiet(ctx, id, 'ingest')
   ctx.ephemeralFiles.remove(fileId)
 
   sendJson(res, 200, {
@@ -546,7 +562,11 @@ function handleInputError (res: ServerResponse, err: unknown): void {
     return
   }
   if (err instanceof InvalidVectorStoreIdError) {
-    sendError(res, 400, 'invalid_vector_store_id', err.message)
+    if (err.kind === 'duplicate') {
+      sendError(res, 409, 'vector_store_already_exists', err.message)
+    } else {
+      sendError(res, 400, 'invalid_vector_store_id', err.message)
+    }
     return
   }
   throw err
@@ -566,8 +586,8 @@ interface EmbeddingResolutionErr {
 }
 
 function resolveEmbeddingModel (ctx: RouteContext): EmbeddingResolutionOk | EmbeddingResolutionErr {
-  const entry = pickDefaultEmbedding(ctx.serveConfig)
-  if (!entry) {
+  const picked = pickDefaultEmbedding(ctx.serveConfig)
+  if (picked.kind === 'none') {
     return {
       ok: false,
       status: 400,
@@ -575,6 +595,15 @@ function resolveEmbeddingModel (ctx: RouteContext): EmbeddingResolutionOk | Embe
       message: 'No embedding model configured. Add an embedding model under serve.models, optionally with default: true.'
     }
   }
+  if (picked.kind === 'ambiguous') {
+    return {
+      ok: false,
+      status: 400,
+      code: 'ambiguous_embedding_model',
+      message: `Multiple embedding models configured (${picked.aliases.join(', ')}); none flagged as default. Mark exactly one with default: true.`
+    }
+  }
+  const entry = picked.entry
   const registryEntry = ctx.registry.getEntry(entry.alias)
   if (!registryEntry || registryEntry.state !== ctx.registry.STATES.READY) {
     return {
@@ -588,7 +617,12 @@ function resolveEmbeddingModel (ctx: RouteContext): EmbeddingResolutionOk | Embe
   return { ok: true, entry, sdkModelId }
 }
 
-function pickDefaultEmbedding (serveConfig: ServeConfig): ResolvedModelEntry | null {
+type PickEmbeddingResult =
+  | { kind: 'found'; entry: ResolvedModelEntry }
+  | { kind: 'none' }
+  | { kind: 'ambiguous'; aliases: string[] }
+
+function pickDefaultEmbedding (serveConfig: ServeConfig): PickEmbeddingResult {
   const embeddings: ResolvedModelEntry[] = []
   let explicitDefault: ResolvedModelEntry | null = null
   for (const [, entry] of serveConfig.models) {
@@ -596,7 +630,8 @@ function pickDefaultEmbedding (serveConfig: ServeConfig): ResolvedModelEntry | n
     embeddings.push(entry)
     if (entry.isDefault) explicitDefault = entry
   }
-  if (explicitDefault) return explicitDefault
-  if (embeddings.length === 1) return embeddings[0] ?? null
-  return null
+  if (explicitDefault) return { kind: 'found', entry: explicitDefault }
+  if (embeddings.length === 1) return { kind: 'found', entry: embeddings[0]! }
+  if (embeddings.length === 0) return { kind: 'none' }
+  return { kind: 'ambiguous', aliases: embeddings.map((e) => e.alias) }
 }
