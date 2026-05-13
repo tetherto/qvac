@@ -163,7 +163,7 @@ export async function runParakeetStreamMetadataRejected(
       modelId,
       metadata: true,
       parakeetStreamingConfig: { chunkMs: 1000 },
-    } as never)) as TranscribeStreamSession;
+    } as never)) as unknown as TranscribeStreamSession;
     session.end();
 
     let receivedAny = false;
