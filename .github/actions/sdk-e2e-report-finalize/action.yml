@@ -4,10 +4,8 @@ description: >
   single run, writes GITHUB_STEP_SUMMARY for every platform (always), and
   when run in PR context updates the per-platform comments posted earlier by
   sdk-e2e-report-start. Expects each test job to have uploaded a results
-  artifact (results-<family>[-<platform>]) and, when a baseline existed, a
-  pre-formatted section artifact (report-section-<family>[-<platform>])
-  containing section-<platform>.md and comparison-<platform>.json. Does not
-  npm install and does not invoke the qvac-test CLI.
+  artifact (results-<family>[-<platform>]). Does not npm install and does not
+  invoke the qvac-test CLI.
 
 inputs:
   family:
@@ -36,6 +34,10 @@ inputs:
     description: "Exclude-suite filter used for the run"
     required: false
     default: ""
+  update-summary:
+    description: "Whether to append the rendered report to GITHUB_STEP_SUMMARY"
+    required: false
+    default: "true"
 
 runs:
   using: composite
@@ -49,15 +51,12 @@ runs:
         case "$FAMILY" in
           desktop)
             echo "results-pattern=results-desktop-*" >> "$GITHUB_OUTPUT"
-            echo "section-pattern=report-section-desktop-*" >> "$GITHUB_OUTPUT"
             ;;
           android)
             echo "results-pattern=results-android" >> "$GITHUB_OUTPUT"
-            echo "section-pattern=report-section-android" >> "$GITHUB_OUTPUT"
             ;;
           ios)
             echo "results-pattern=results-ios" >> "$GITHUB_OUTPUT"
-            echo "section-pattern=report-section-ios" >> "$GITHUB_OUTPUT"
             ;;
           *)
             echo "Unknown family: $FAMILY" >&2
@@ -71,13 +70,6 @@ runs:
         pattern: ${{ steps.patterns.outputs.results-pattern }}
         path: .sdk-e2e-report/current-results
 
-    - name: Download report sections (optional)
-      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
-      continue-on-error: true
-      with:
-        pattern: ${{ steps.patterns.outputs.section-pattern }}
-        path: .sdk-e2e-report/report-sections
-
     - name: Build and publish reports
       uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
       env:
@@ -87,6 +79,7 @@ runs:
         SUITE: ${{ inputs.suite }}
         FILTER: ${{ inputs.filter }}
         EXCLUDE_SUITE: ${{ inputs.exclude-suite }}
+        UPDATE_SUMMARY: ${{ inputs.update-summary }}
       with:
         script: |
           const fs = require('fs');
@@ -98,27 +91,65 @@ runs:
           const suite = process.env.SUITE || '';
           const filter = process.env.FILTER || '';
           const excludeSuite = process.env.EXCLUDE_SUITE || '';
+          const updateSummary = process.env.UPDATE_SUMMARY !== 'false';
 
           const pr = context.payload.pull_request?.number;
           const runUrl =
             `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}` +
             `/actions/runs/${context.runId}`;
-          const artifactsUrl = `${runUrl}/artifacts`;
 
           const resultsRoot = '.sdk-e2e-report/current-results';
-          const sectionsRoot = '.sdk-e2e-report/report-sections';
 
           const artifactDir = (platform) =>
             family === 'desktop' ? `results-desktop-${platform}` : `results-${family}`;
-          const sectionArtifactDir = (platform) =>
-            family === 'desktop' ? `report-section-desktop-${platform}` : `report-section-${family}`;
           const marker = (platform) =>
             `<!-- sdk-e2e-report:pr=${pr ?? 'none'}:family=${family}:platform=${platform} -->`;
 
           const fmt = (v) => (v && v.length > 0 ? `\`${v}\`` : '`(none)`');
           const configLine =
             `**Config:** suite=${fmt(suite)} · filter=${fmt(filter)} · exclude=${fmt(excludeSuite)}`;
-          const linksLine = `[View run](${runUrl}) · [Artifacts](${artifactsUrl})`;
+
+          const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            run_id: context.runId,
+            per_page: 100,
+          });
+          const artifactsByName = new Map(artifacts.map((artifact) => [artifact.name, artifact]));
+
+          function artifactUrl(artifact) {
+            return `${runUrl}/artifacts/${artifact.id}`;
+          }
+
+          function artifactSpecs(platform) {
+            const specs = [{ name: artifactDir(platform), label: 'reports' }];
+
+            if (family !== 'desktop') {
+              const logPrefix = `device-farm-logs-${family}-`;
+              for (const artifact of artifacts) {
+                if (artifact.name.startsWith(logPrefix)) {
+                  specs.push({ name: artifact.name, label: 'Device Farm logs' });
+                }
+              }
+            }
+
+            return specs;
+          }
+
+          function buildLinksLine(platform) {
+            const artifactLinks = [];
+            for (const spec of artifactSpecs(platform)) {
+              const artifact = artifactsByName.get(spec.name);
+              if (artifact) {
+                artifactLinks.push(`[${spec.label}](${artifactUrl(artifact)})`);
+              }
+            }
+
+            if (artifactLinks.length === 0) {
+              return `[View run](${runUrl})`;
+            }
+            return `[View run](${runUrl}) · Artifacts: ${artifactLinks.join(' · ')}`;
+          }
 
           // actions/download-artifact@v8 extracts a single matched artifact directly
           // into `path` instead of `path/<artifact-name>/` (the per-artifact subdir is
@@ -140,33 +171,25 @@ runs:
             return null;
           }
 
-          function findSectionFiles(platform) {
-            const candidates = [
-              path.join(sectionsRoot, sectionArtifactDir(platform)),
-              sectionsRoot,
-            ];
-            for (const dir of candidates) {
-              if (!fs.existsSync(dir)) continue;
-              const entries = fs.readdirSync(dir);
-              const md = entries.find((f) => f.endsWith('.md'));
-              const comparison = entries.find((f) => f.startsWith('comparison-') && f.endsWith('.json'));
-              if (!md && !comparison) continue;
-              return {
-                md: md ? path.join(dir, md) : null,
-                comparison: comparison ? path.join(dir, comparison) : null,
-              };
-            }
-            return { md: null, comparison: null };
-          }
-
           function truncate(s, n) {
             if (!s) return '';
             const first = s.split('\n')[0].trim();
             return first.length > n ? `${first.slice(0, n - 1)}…` : first;
           }
 
-          function buildBody(platform, results, section) {
+          function failureMessage(test) {
+            return truncate(test.error || 'no error message', 200);
+          }
+
+          function formatAffectedTests(tests) {
+            const shown = tests.slice(0, 5).map((t) => `\`${t.testId}\``).join(', ');
+            const remaining = tests.length - 5;
+            return remaining > 0 ? `${shown}, and ${remaining} more` : shown;
+          }
+
+          function buildBody(platform, results) {
             const mark = marker(platform);
+            const linksLine = buildLinksLine(platform);
             const summary = results.summary || {};
             const total = Number(summary.total || 0);
             const passed = Number(summary.passed || 0);
@@ -176,21 +199,6 @@ runs:
             const categories = results.categories || {};
             const tests = Array.isArray(results.tests) ? results.tests : [];
 
-            // Parse comparison JSON (if any) for fixed/new-failure counts.
-            let fixedCount = 0;
-            let newFailuresCount = 0;
-            let overallDelta = 0;
-            if (section.comparison && fs.existsSync(section.comparison)) {
-              try {
-                const cmp = JSON.parse(fs.readFileSync(section.comparison, 'utf8'));
-                fixedCount = cmp.changes?.fixedTests?.length || 0;
-                newFailuresCount = cmp.changes?.newFailures?.length || 0;
-                overallDelta = Number(cmp.summary?.delta || 0);
-              } catch (err) {
-                core.warning(`Failed to parse comparison json for ${platform}: ${err.message}`);
-              }
-            }
-
             if (failed === 0) {
               const lines = [
                 mark,
@@ -198,9 +206,6 @@ runs:
                 configLine,
                 linksLine,
               ];
-              if (fixedCount > 0) {
-                lines.push(`**Fixed vs baseline:** ${fixedCount}`);
-              }
               return lines.join('\n');
             }
 
@@ -231,6 +236,18 @@ runs:
             if (failedTests.length === 0) {
               lines.push('- (no per-test details available)');
             } else {
+              const byError = new Map();
+              for (const t of failedTests) {
+                const error = failureMessage(t);
+                if (!byError.has(error)) byError.set(error, []);
+                byError.get(error).push(t);
+              }
+              const collapsedErrors = new Set(
+                [...byError.entries()]
+                  .filter(([, list]) => list.length > 5)
+                  .map(([error]) => error),
+              );
+              const emittedCollapsedErrors = new Set();
               const byCat = new Map();
               for (const t of failedTests) {
                 const cat = String(t.testId || '').split('-')[0] || 'uncategorized';
@@ -239,22 +256,22 @@ runs:
               }
               for (const [, list] of [...byCat.entries()].sort(([a], [b]) => a.localeCompare(b))) {
                 for (const t of list) {
-                  lines.push(`- \`${t.testId}\`: ${truncate(t.error || 'no error message', 200)}`);
+                  const error = failureMessage(t);
+                  if (collapsedErrors.has(error)) {
+                    if (emittedCollapsedErrors.has(error)) {
+                      continue;
+                    }
+                    const affected = byError.get(error);
+                    lines.push(`- ${affected.length} tests: ${error}`);
+                    lines.push(`  Affected: ${formatAffectedTests(affected)}`);
+                    emittedCollapsedErrors.add(error);
+                    continue;
+                  }
+                  lines.push(`- \`${t.testId}\`: ${error}`);
                 }
               }
             }
 
-            if (section.md && fs.existsSync(section.md)) {
-              lines.push('');
-              lines.push('**Baseline delta**');
-              lines.push(fs.readFileSync(section.md, 'utf8').trim());
-            } else if (newFailuresCount > 0 || fixedCount > 0) {
-              lines.push('');
-              lines.push('**Baseline delta**');
-              lines.push(
-                `New failures: ${newFailuresCount} · Fixed: ${fixedCount} · Overall: ${overallDelta >= 0 ? `+${overallDelta}` : overallDelta}`,
-              );
-            }
             return lines.join('\n');
           }
 
@@ -264,6 +281,7 @@ runs:
             const resultsPath = findResultsJson(platform);
             let body;
             if (!resultsPath) {
+              const linksLine = buildLinksLine(platform);
               body = [
                 marker(platform),
                 `### QVAC E2E — \`${platform}\` — ⚠️ no results`,
@@ -280,11 +298,10 @@ runs:
                 core.warning(`Failed to parse results JSON for ${platform}: ${err.message}`);
                 results = { summary: {}, categories: {}, tests: [] };
               }
-              const section = findSectionFiles(platform);
-              body = buildBody(platform, results, section);
+              body = buildBody(platform, results);
             }
 
-            if (summaryPath) {
+            if (summaryPath && updateSummary) {
               fs.appendFileSync(summaryPath, `${body}\n\n`);
             }
 

@@ -74,7 +74,7 @@ set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_O
 set(VCPKG_INSTALL_OPTIONS --clean-after-build)
 
 project(
-  qvac-lib-inference-addon-onnx-ocr-fasttext
+  inference-addon-onnx-ocr-fasttext
   VERSION 0.2.0
   LANGUAGES C CXX)
 
@@ -83,14 +83,14 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   add_link_options(-stdlib=libc++ -static-libstdc++)
 endif()
 
-find_path(VCPKG_INSTALLED_PATH share/qvac-lint-cpp/.clang-format REQUIRED)
-configure_file(${VCPKG_INSTALLED_PATH}/share/qvac-lint-cpp/.clang-format
+find_path(VCPKG_INSTALLED_PATH share/lint-cpp/.clang-format REQUIRED)
+configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.clang-format
                ${CMAKE_CURRENT_SOURCE_DIR}/.clang-format COPYONLY)
-configure_file(${VCPKG_INSTALLED_PATH}/share/qvac-lint-cpp/.clang-tidy
+configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.clang-tidy
                ${CMAKE_CURRENT_SOURCE_DIR}/.clang-tidy COPYONLY)
-configure_file(${VCPKG_INSTALLED_PATH}/share/qvac-lint-cpp/.valgrind.supp
+configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.valgrind.supp
                ${CMAKE_CURRENT_SOURCE_DIR}/.valgrind.supp COPYONLY)
-configure_file(${VCPKG_INSTALLED_PATH}/tools/qvac-lint-cpp/hooks/pre-commit
+configure_file(${VCPKG_INSTALLED_PATH}/tools/lint-cpp/hooks/pre-commit
                ${CMAKE_CURRENT_SOURCE_DIR}/.git/hooks/pre-commit COPYONLY)
 
 include(CTest)
@@ -102,15 +102,15 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 
 
-find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/JsInterface.hpp")
+find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/JsInterface.hpp")
 find_package(OpenCV REQUIRED)
 set(qvac-onnx_DIR "${CMAKE_CURRENT_SOURCE_DIR}/node_modules/@qvac/onnx/prebuilds/share/qvac-onnx/cmake")
 find_package(qvac-onnx CONFIG REQUIRED)
 
-add_bare_module(qvac-lib-inference-addon-onnx-ocr-fasttext EXPORTS)
+add_bare_module(inference-addon-onnx-ocr-fasttext EXPORTS)
 
 target_sources(
-  ${qvac-lib-inference-addon-onnx-ocr-fasttext}
+  ${inference-addon-onnx-ocr-fasttext}
   PRIVATE
     addon/js-interface/binding.cpp
     addon/pipeline/Lang.cpp
@@ -123,7 +123,7 @@ target_sources(
     addon/pipeline/StepDoctrRecognition.cpp
 )
 target_include_directories(
-  ${qvac-lib-inference-addon-onnx-ocr-fasttext}
+  ${inference-addon-onnx-ocr-fasttext}
   PRIVATE
     ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
     addon
@@ -132,7 +132,7 @@ target_include_directories(
 if((ANDROID OR (APPLE AND CMAKE_SYSTEM_NAME STREQUAL "iOS")) AND NOT MOBILE_DYNAMIC_LINK)
   # Mobile (static): each addon embeds ONNX Runtime
   target_link_libraries(
-    ${qvac-lib-inference-addon-onnx-ocr-fasttext}
+    ${inference-addon-onnx-ocr-fasttext}
     PRIVATE
       ${OpenCV_LIBS}
       qvac-onnx::qvac-onnx-static
@@ -142,13 +142,13 @@ else()
   include_bare_module("@qvac/onnx" qvac_onnx_target PREBUILD)
 
   target_link_libraries(
-    ${qvac-lib-inference-addon-onnx-ocr-fasttext}
+    ${inference-addon-onnx-ocr-fasttext}
     PRIVATE
       ${OpenCV_LIBS}
       qvac-onnx::headers
   )
   target_link_libraries(
-    ${qvac-lib-inference-addon-onnx-ocr-fasttext}_module
+    ${inference-addon-onnx-ocr-fasttext}_module
     PRIVATE
       ${qvac_onnx_target}_module
   )
@@ -162,7 +162,7 @@ else()
 endif()
 
 target_compile_definitions(
-  ${qvac-lib-inference-addon-onnx-ocr-fasttext}
+  ${inference-addon-onnx-ocr-fasttext}
   PRIVATE
     JS_LOGGER
 )
@@ -181,7 +181,7 @@ endfunction()
 
 if(ANDROID)
   find_package(Vulkan REQUIRED)
-  target_link_libraries(${qvac-lib-inference-addon-onnx-ocr-fasttext} PRIVATE ${Vulkan_LIBRARY} log)
+  target_link_libraries(${inference-addon-onnx-ocr-fasttext} PRIVATE ${Vulkan_LIBRARY} log)
 
   # Strip vcpkg installed binaries for Android builds
   find_program(LLVM_STRIP llvm-strip)
@@ -200,12 +200,12 @@ if(ANDROID)
 endif()
 
 if(WIN32)
-  target_compile_options(${qvac-lib-inference-addon-onnx-ocr-fasttext} PRIVATE "/utf-8")
+  target_compile_options(${inference-addon-onnx-ocr-fasttext} PRIVATE "/utf-8")
 
-  target_compile_definitions(${qvac-lib-inference-addon-onnx-ocr-fasttext} PUBLIC WIN32_LEAN_AND_MEAN NOMINMAX NOGDI)
+  target_compile_definitions(${inference-addon-onnx-ocr-fasttext} PUBLIC WIN32_LEAN_AND_MEAN NOMINMAX NOGDI)
 
   target_link_libraries(
-    ${qvac-lib-inference-addon-onnx-ocr-fasttext}
+    ${inference-addon-onnx-ocr-fasttext}
     PRIVATE
       msvcrt.lib
   )

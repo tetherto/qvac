@@ -1,0 +1,169 @@
+name: Run Integration Tests (Parakeet)
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref (branch/tag/SHA) to test"
+        type: string
+        required: false
+        default: main
+      prebuild_package:
+        description: "NPM package containing prebuilds (e.g. @qvac/transcription-parakeet@1.0.0)"
+        required: true
+        type: string
+      run_integration_tests:
+        description: "Run the regular integration suite"
+        required: false
+        type: boolean
+        default: true
+
+  workflow_call:
+    inputs:
+      ref:
+        description: 'ref'
+        type: string
+      repository:
+        type: string
+      run_integration_tests:
+        description: "Run the regular integration suite"
+        type: boolean
+        required: false
+        default: true
+
+jobs:
+  run-integration-tests:
+    timeout-minutes: 60
+    continue-on-error: true
+    runs-on: ${{ matrix.os }}
+    environment: release
+    name: ${{ matrix.os }}-${{ matrix.platform }}-${{ matrix.arch }}-integration-tests
+    env:
+      GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+      NO_GPU: ${{ matrix.no_gpu || 'false' }}
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ai-run-ubuntu-22.04
+            platform: linux
+            arch: x64
+            no_gpu: 'true'
+          - os: ai-run-linux-gpu
+            platform: linux
+            arch: x64
+          - os: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
+            no_gpu: 'true'
+          - os: macos-14-xlarge
+            platform: darwin
+            arch: arm64
+            no_gpu: 'true'
+          - os: macos-15-large
+            platform: darwin
+            arch: x64
+            no_gpu: 'true'
+          - os: windows-2022
+            platform: win32
+            arch: x64
+            no_gpu: 'true'
+
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Windows - enable git long paths
+        if: ${{ matrix.platform == 'win32' }}
+        shell: bash
+        run: git config --system core.longpaths true
+
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Install NPM dependencies
+        working-directory: ${{ github.workspace }}/packages/transcription-parakeet
+        run: |
+          npm install
+          npm install -g bare bare-make
+
+      - run: mkdir -p "${{ runner.temp }}/transcription-parakeet"
+        shell: bash
+      - run: mkdir -p "${{ github.workspace }}/packages/transcription-parakeet/prebuilds"
+        shell: bash
+
+      - name: Download prebuilds from artifact
+        if: ${{ !inputs.prebuild_package }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: ${{ runner.temp }}/transcription-parakeet
+          merge-multiple: true
+
+      - if: ${{ !inputs.prebuild_package }}
+        shell: bash
+        run: cp -r "${{ runner.temp }}/transcription-parakeet"/* "${{ github.workspace }}/packages/transcription-parakeet/prebuilds"
+
+      - name: Download prebuilds from package
+        if: ${{ inputs.prebuild_package }}
+        working-directory: ${{ runner.temp }}/transcription-parakeet
+        shell: bash
+        run: |
+          npm pack ${{ inputs.prebuild_package }}
+          tar -xzf *.tgz
+          cp -r ./package/prebuilds/* "${{ github.workspace }}/packages/transcription-parakeet/prebuilds"
+
+      - name: Rename prebuilds from tetherto_ to qvac_ prefix
+        if: ${{ inputs.prebuild_package }}
+        working-directory: ${{ github.workspace }}/packages/transcription-parakeet
+        shell: bash
+        run: |
+          find prebuilds -depth -name 'tetherto_*' | while read -r file; do
+            dir=$(dirname "$file")
+            base=$(basename "$file")
+            newbase=$(echo "$base" | sed 's/^tetherto_/qvac_/')
+            mv "$file" "$dir/$newbase"
+          done
+
+      - name: Linux - install dependencies
+        if: matrix.platform == 'linux' || matrix.platform == 'android'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgomp1 mesa-vulkan-drivers
+
+      - name: Windows - install Vulkan runtime
+        if: matrix.platform == 'win32'
+        uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@0bbdca93da303a0b1634ba14a89cec085621078d
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+
+      - name: Setup Python (for .nemo -> .gguf conversion)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Stage GGUF models (npm run setup-models)
+        shell: bash
+        working-directory: ${{ github.workspace }}/packages/transcription-parakeet
+        run: npm run setup-models
+
+      - name: Run integration test
+        if: ${{ inputs.run_integration_tests != false }}
+        shell: bash
+        working-directory: ${{ github.workspace }}/packages/transcription-parakeet
+        run: npm run test:integration
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          INTEGRATION_TEST_TIMEOUT: ${{ matrix.platform == 'win32' && '1800' || '600' }}
+          LD_LIBRARY_PATH: ${{ github.workspace }}/packages/transcription-parakeet/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
+          DYLD_LIBRARY_PATH: ${{ github.workspace }}/packages/transcription-parakeet/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}

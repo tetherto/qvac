@@ -340,7 +340,7 @@ export const PLUGIN_OCR = "@qvac/sdk/onnx-ocr/plugin" as const;
 
 /**
  * Image generation plugin (stable-diffusion.cpp).
- * Provides: text-to-image generation.
+ * Provides: text-to-image generation and standalone ESRGAN image upscaling.
  */
 export const PLUGIN_DIFFUSION =
   "@qvac/sdk/sdcpp-generation/plugin" as const;

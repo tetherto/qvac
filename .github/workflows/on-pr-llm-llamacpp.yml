@@ -1,0 +1,422 @@
+name: On PR Trigger (LLM)
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
+    branches:
+      - main
+      - release-*
+      - feature-*
+      - tmp-*
+    paths:
+      - "packages/llm-llamacpp/**"
+      - ".github/workflows/*llamacpp-llm*.yml"
+  workflow_dispatch:
+  
+  workflow_call:
+
+permissions:
+  contents: read
+  pull-requests: read
+  packages: read
+  id-token: write
+
+env:
+  PKG_DIR: packages/llm-llamacpp
+
+jobs:
+  authorize:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      allowed: ${{ steps.auth.outputs.allowed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - name: Authorize
+        id: auth
+        uses: ./.github/actions/authorize-pr
+        with:
+          github-token: ${{ github.token }}
+
+  verify-fabric-lockstep:
+    if: needs.authorize.outputs.allowed == 'true'
+    needs: [authorize]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Verify qvac-fabric versions are lockstep
+        id: lockstep
+        uses: ./.github/actions/verify-qvac-fabric-lockstep
+
+      - name: Report verified version
+        run: 'echo "Verified qvac-fabric version: ${{ steps.lockstep.outputs.version }}"'
+
+  sanity-checks:
+    if: needs.authorize.outputs.allowed == 'true'
+    needs: [authorize, verify-fabric-lockstep]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Run Sanity checks
+        uses: ./.github/actions/sanity-checks
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
+          workdir: packages/llm-llamacpp
+
+  cpp-tests:
+    if: needs.authorize.outputs.allowed == 'true'
+    needs: [authorize, sanity-checks]
+    uses: ./.github/workflows/cpp-tests-llm.yml
+    secrets: inherit
+    with:
+      workdir: packages/llm-llamacpp
+      repository: ${{ github.event.pull_request.head.repo.full_name }}
+      ref: ${{ github.event.pull_request.head.ref }}
+
+  cpp-lint:
+    if: needs.authorize.outputs.allowed == 'true'
+    uses: ./.github/workflows/cpp-lint.yaml
+    needs: authorize
+    secrets: inherit
+    with:
+      sha: ${{ github.event.pull_request.base.sha }}
+      pr_head_sha: ${{ github.event.pull_request.head.sha }}
+      workdir: packages/llm-llamacpp
+
+  ts-checks:
+    needs: authorize
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: packages/llm-llamacpp
+        run: npm install
+
+      - name: Type declaration check
+        working-directory: packages/llm-llamacpp
+        run: npm run test:dts
+
+      - name: Run lint and unit tests
+        id: run_lint_and_unit_tests
+        uses: ./.github/actions/run-lint-and-unit-tests
+        with:
+          gpr-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
+          registry-type: gpr
+          workdir: packages/llm-llamacpp
+
+  prebuild:
+    needs: [authorize, sanity-checks]
+    if: needs.authorize.outputs.allowed == 'true'
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/prebuilds-llm-llamacpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name }}
+      ref: ${{ github.event.pull_request.head.ref }}
+
+  run-integration-tests:
+    if: needs.authorize.outputs.allowed == 'true'
+    needs: [authorize, prebuild]
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    uses: ./.github/workflows/integration-test-llm-llamacpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name }}
+      ref: ${{ github.event.pull_request.head.ref }}
+
+  run-mobile-integration-tests:
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write # Allow commenting on PRs
+      id-token: write
+    if: needs.authorize.outputs.allowed == 'true'
+    needs: [authorize, prebuild]
+    uses: ./.github/workflows/integration-mobile-test-llm-llamacpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name }}
+      ref: ${{ github.event.pull_request.head.ref }}
+
+  # QVAC-17830: per-run joint perf reporter. Lives in the umbrella (not in
+  # either child workflow) so it can block on BOTH `run-integration-tests`
+  # (desktop matrix) and `run-mobile-integration-tests` (Android / iOS)
+  # before scanning for perf-report artifacts. Fixes the race where
+  # test-darwin-x64 (or any slow desktop job) finished AFTER the old
+  # mobile-local combine-reports had already shipped the summary.
+  # SECURITY (CodeQL js/cache-poisoning, alerts 735/736):
+  # This job runs in the privileged `pull_request_target` context (see
+  # `on:` at the top of this file). The integration matrix it depends
+  # on already runs PR-author code on real hardware, so this aggregator
+  # by definition consumes attacker-controllable artifacts (the per-leg
+  # `performance-report.json` files). The mitigations are:
+  #   - The checkout below has NO `repository:` / `ref:` override, so
+  #     in `pull_request_target` context `actions/checkout` falls back
+  #     to the base-branch SHA. `aggregate.js` therefore runs from the
+  #     trusted default branch, not from PR-author code. On
+  #     `workflow_dispatch` runs, `github.ref` resolves to the dispatch
+  #     branch, so manual verification still uses the latest
+  #     `aggregate.js` from that branch.
+  #   - `permissions: contents: read` only — no write access, no
+  #     packages / id-token / pull-requests permissions.
+  #   - No use of `actions/cache` here, so there is no shared cache
+  #     for a malicious PR to poison for the default branch.
+  #   - `aggregate.js` does not touch GITHUB_TOKEN, secrets, or any
+  #     external network endpoints; its only outputs are artifact files.
+  #   - `device.name` (the only attacker-controllable string we let
+  #     near a filesystem path) is sanitised through a strict
+  #     `[A-Za-z0-9-]` allowlist + 64-char cap below before use.
+  combine-perf-reports:
+    name: Combined Performance Report
+    needs: [authorize, run-integration-tests, run-mobile-integration-tests]
+    if: always() && needs.authorize.outputs.allowed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout addon repository
+        # No explicit `repository:` / `ref:` — see SECURITY block above.
+        # In `pull_request_target` context this resolves to the base
+        # branch SHA (trusted code); on `workflow_dispatch` it resolves
+        # to the dispatch branch.
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: |
+            scripts/perf-report
+            packages/qvac-lib-infer-llamacpp-llm/media
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # 4.4.0
+        with:
+          node-version: lts/*
+
+      - name: Download all perf report artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: perf-report-llamacpp-llm-*-${{ github.run_number }}
+          path: combined-reports
+        continue-on-error: true
+
+      - name: Fix desktop device names
+        shell: bash
+        run: |
+          # Every desktop matrix entry uses a unique `label` in its
+          # artifact name (e.g. linux-x64-cpu / linux-x64-gpu). The sed
+          # below strips our fixed prefix + run number; the remainder
+          # IS the raw matrix label.
+          #
+          # QVAC-17830 (combined-report fix): the CI matrix intentionally
+          # runs two legs on the same physical Linux x64 target (one
+          # no_gpu=true for pure CPU data, one on a GPU runner for CPU+GPU
+          # data) and likewise two ubuntu versions for linux-arm64. In the
+          # combined summary those should show up as ONE column per
+          # platform — otherwise the GPU row on the "*-cpu" / "*-u22" /
+          # "*-u24" columns renders as "-" and looks like missing data
+          # even though the data lives in the sibling leg.
+          #
+          # We therefore fold them to the physical platform name here so
+          # `aggregate.js` buckets CPU and GPU measurements under one
+          # device. Test labels already carry [CPU]/[GPU], so the rows
+          # stay distinct.
+          for dir in combined-reports/perf-report-llamacpp-llm-*/; do
+            [ -d "$dir" ] || continue
+            base=$(basename "$dir")
+            platform=$(echo "$base" | sed "s/^perf-report-llamacpp-llm-//" | sed "s/-${{ github.run_number }}$//")
+
+            case "$platform" in Android|iOS) continue ;; esac
+
+            case "$platform" in
+              linux-x64-cpu|linux-x64-gpu) device_name="linux-x64" ;;
+              linux-arm64-u22|linux-arm64-u24) device_name="linux-arm64" ;;
+              *) device_name="$platform" ;;
+            esac
+
+            for json in $(find "$dir" -name "performance-report.json" 2>/dev/null); do
+              if command -v jq >/dev/null 2>&1; then
+                jq --arg name "$device_name" '.device.name = $name' "$json" > "${json}.tmp" && mv "${json}.tmp" "$json"
+                echo "Patched device name in $json -> $device_name (was matrix label $platform)"
+              fi
+            done
+          done
+
+      - name: Generate combined report
+        shell: bash
+        run: |
+          # SECURITY (CodeQL alerts 735/736, actions/cache-poisoning/poisonable-step):
+          # `aggregate.js` is checked out from the base branch (no
+          # `repository:` / `ref:` override on the checkout above), so
+          # this step does not execute PR-author code. The job-level
+          # `permissions: contents: read` (no actions/cache, no secrets,
+          # no GITHUB_TOKEN write usage) bounds the blast radius further
+          # — see the block comment on the `combine-perf-reports` job
+          # above. The script's only side effect is writing artifact
+          # files to `combined-output/`; the artifacts themselves are
+          # uploaded via SHA-pinned `actions/upload-artifact` and
+          # consumed only by reviewers from the run page.
+          if ! find combined-reports -name "performance-report.json" -type f 2>/dev/null | grep -q .; then
+            echo "No performance reports found."
+            exit 0
+          fi
+
+          echo "=== Reports found ==="
+          find combined-reports -name "performance-report.json" -type f
+
+          mkdir -p combined-output
+
+          # QVAC-17830: combined PR summary surfaces BOTH the squashed
+          # Mean ± std mini-tables (Total Time / TTFT / TPS, grouped
+          # by scenario) AND the per-device detail tables underneath
+          # them. Detail-table cells now render `mean ±std` themselves
+          # so the std is visible at every metric, not just the
+          # rolled-up ones. HTML keeps the same content.
+          node scripts/perf-report/aggregate.js \
+            --dir combined-reports \
+            --addon-type vision \
+            --device-details \
+            --output-html combined-output/performance-report-combined.html \
+            --output-json combined-output/performance-summary-combined.json \
+            --output combined-output/performance-report-combined.md
+
+      - name: Generate per-device HTML reports
+        if: always()
+        shell: bash
+        run: |
+          # SECURITY: `aggregate.js` runs from the base branch (see
+          # SECURITY block on the job above), but the
+          # `performance-report.json` files it consumes are still
+          # produced by PR-author code in the matrix legs, so
+          # `device.name` is attacker-controlled. We do not interpolate
+          # it into shell or pass it as code; we sanitise it to an
+          # alphanumeric+hyphen filename slug capped at 64 chars before
+          # using it as a path suffix, which prevents path traversal and
+          # any kind of shell-meta exposure even if the JSON were crafted.
+          mkdir -p per-device-reports
+          for json in $(find combined-reports -name "performance-report.json" -type f 2>/dev/null); do
+            device_name=$(node -e "const d=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));process.stdout.write((d.device&&typeof d.device.name==='string'?d.device.name:'Unknown'))" "$json" 2>/dev/null)
+            [ -z "$device_name" ] || [ "$device_name" = "Unknown" ] && continue
+
+            # Strict allowlist: collapse anything that is not [A-Za-z0-9-]
+            # to '_', then truncate to 64 characters.
+            safe_name=$(printf '%s' "$device_name" | LC_ALL=C tr -c 'A-Za-z0-9-' '_' | cut -c1-64)
+            [ -z "$safe_name" ] && continue
+
+            tmp_dir=$(mktemp -d)
+            mkdir -p "$tmp_dir/device"
+            cp "$json" "$tmp_dir/device/performance-report.json"
+
+            echo "Generating HTML for $device_name (slug: $safe_name)..."
+            node scripts/perf-report/aggregate.js \
+              --dir "$tmp_dir" \
+              --addon-type vision \
+              --device-details \
+              --output-html "per-device-reports/HTML-Report-${safe_name}.html" \
+              2>/dev/null || true
+
+            rm -rf "$tmp_dir"
+          done
+          echo "=== Per-device reports generated ==="
+          ls -la per-device-reports/ 2>/dev/null || echo "No per-device reports"
+
+      - name: Upload combined HTML report
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: HTML-Report-All-Platforms-${{ github.run_number }}
+          path: combined-output/performance-report-combined.html
+          retention-days: 90
+          if-no-files-found: ignore
+
+      - name: Upload per-device HTML reports
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: HTML-Reports-Per-Device-${{ github.run_number }}
+          path: per-device-reports/
+          retention-days: 90
+          if-no-files-found: ignore
+
+      - name: Write combined summary
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          MD_FILE="combined-output/performance-report-combined.md"
+          echo "## LLM / VLM Performance Report (All Platforms)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f "$MD_FILE" ]; then
+            cat "$MD_FILE" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "No combined performance report available." >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Downloadable HTML Reports" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f "combined-output/performance-report-combined.html" ]; then
+            echo "> **Full Combined Report (all platforms)**: download artifact \`HTML-Report-All-Platforms-${{ github.run_number }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+          HAS_DEVICES=0
+          for html in per-device-reports/HTML-Report-*.html; do
+            [ -f "$html" ] || continue
+            if [ "$HAS_DEVICES" -eq 0 ]; then
+              echo "> **Individual Device Reports**: download artifact \`HTML-Reports-Per-Device-${{ github.run_number }}\`" >> $GITHUB_STEP_SUMMARY
+              echo ">" >> $GITHUB_STEP_SUMMARY
+              echo "> Includes:" >> $GITHUB_STEP_SUMMARY
+              HAS_DEVICES=1
+            fi
+            device=$(basename "$html" .html | sed 's/^HTML-Report-//' | tr '-' ' ')
+            echo "> - ${device}" >> $GITHUB_STEP_SUMMARY
+          done
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+  merge-guard:
+    needs:
+      [
+        authorize,
+        verify-fabric-lockstep,
+        run-integration-tests,
+        run-mobile-integration-tests,
+        sanity-checks,
+        prebuild,
+        cpp-tests,
+        cpp-lint,
+        ts-checks,
+      ]
+    if: always()
+    uses: ./.github/workflows/public-pr.yml
+    with:
+      sanity-checks-status: ${{ needs.verify-fabric-lockstep.result == 'success' && needs.sanity-checks.result == 'success' }}
+      build-status: ${{ needs.prebuild.result == 'success'}}

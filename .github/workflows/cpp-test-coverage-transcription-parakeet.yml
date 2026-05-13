@@ -1,0 +1,253 @@
+name: CPP Tests (Parakeet)
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: 'ref'
+        type: string
+      repository:
+        type: string
+  workflow_dispatch:
+
+env:
+  BUILD_TYPE: Debug
+  ENABLE_COVERAGE: ON
+  PKG_DIR: packages/transcription-parakeet
+
+jobs:
+  cpp-tests:
+    permissions:
+      contents: read
+      id-token: write
+      checks: write
+    runs-on: ${{ matrix.os }}
+    environment: release
+    name: ${{ matrix.platform }}-${{ matrix.arch }}-cpp-tests
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
+            coverage: true
+    env:
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg/cache,readwrite"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+          lfs: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Setup LLVM
+        if: matrix.platform == 'linux'
+        uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
+
+      - name: Setup ccache
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get install -y ccache
+          ccache -z
+          echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
+          echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
+
+      - name: Get ccache cache
+        if: matrix.platform == 'linux'
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          key: ccache-cpp-coverage-parakeet-${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles(format('{0}/vcpkg.json', env.PKG_DIR)) }}
+          path: ~/.cache/ccache
+          restore-keys: ccache-cpp-coverage-parakeet-${{ matrix.platform }}-${{ matrix.arch }}-
+
+      - name: Install NPM dependencies
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          npm install
+          npm install -g bare bare-make
+
+      - if: ${{ matrix.os == 'ubuntu-22.04' }}
+        name: Configure vcpkg in linux
+        run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
+
+      - name: Setup Vulkan SDK
+        uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@0bbdca93da303a0b1634ba14a89cec085621078d
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - name: Generate and build unit tests
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          npm run coverage:cpp:build
+
+      - name: Setup Python (.nemo -> .gguf conversion)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # The C++ test suite only needs ONE GGUF pointed at by
+      # QVAC_TEST_GGUF (see addon/tests/test_core.cpp::gguf_test_path).
+      # Engine identity does not matter -- the comment there says
+      # "any of the shipping CTC / TDT / EOU / Sortformer GGUFs is
+      # fine". Sortformer q4_0 is the smallest at ~75 MiB and the
+      # cheapest to convert, so we ship just that one. The
+      # GGUF-on-disk smoke tests skip cleanly via GTEST_SKIP() when
+      # QVAC_TEST_GGUF is unset, so partial cache corruption never
+      # hard-fails the suite.
+      - name: Cache Parakeet sortformer .nemo + q4 GGUF
+        id: cache-parakeet-models
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.PKG_DIR }}/models/nemo
+            ${{ env.PKG_DIR }}/models/sortformer-4spk-v1.q4_0.gguf
+          key: parakeet-cpp-q4-sortformer-v1-${{ hashFiles(format('{0}/scripts/convert-nemo-to-gguf.py', env.PKG_DIR), format('{0}/scripts/convert-nemo.sh', env.PKG_DIR), format('{0}/scripts/download-models.sh', env.PKG_DIR), format('{0}/scripts/requirements.txt', env.PKG_DIR)) }}
+          restore-keys: |
+            parakeet-cpp-q4-sortformer-v1-
+
+      - name: Convert .nemo -> sortformer q4_0 GGUF (cache miss)
+        if: steps.cache-parakeet-models.outputs.cache-hit != 'true'
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Cache miss -- provisioning Python venv and converting sortformer..."
+          bash scripts/setup-venv.sh
+          bash scripts/download-models.sh -t sortformer
+          bash scripts/convert-nemo.sh    -t sortformer -q q4_0
+          ls -lh models/sortformer-4spk-v1.q4_0.gguf
+
+      - name: Verify GGUF for C++ tests
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -s models/sortformer-4spk-v1.q4_0.gguf ]; then
+            echo "ERROR: missing or empty models/sortformer-4spk-v1.q4_0.gguf -- cache may be corrupt" >&2
+            ls -la models/ || true
+            exit 1
+          fi
+          echo "QVAC_TEST_GGUF -> $(pwd)/models/sortformer-4spk-v1.q4_0.gguf"
+
+      - name: Run C++ Unit Tests
+        id: cpp-tests
+        working-directory: ${{ env.PKG_DIR }}
+        env:
+          QVAC_TEST_GGUF: ${{ github.workspace }}/${{ env.PKG_DIR }}/models/sortformer-4spk-v1.q4_0.gguf
+        run: |
+          echo "=== Running Parakeet C++ tests ==="
+          pwd
+          ls -la models/
+          npm run test:cpp:run
+        continue-on-error: true
+
+      - name: Debug - List test output files
+        if: always()
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          echo "Contents of build/:"
+          ls -la build/ || echo "Directory not found"
+          echo "Profiling files:"
+          ls -la build/*.profraw || echo "No profraw files"
+
+      - name: Generate Coverage Report
+        if: matrix.coverage
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          npm run coverage:cpp:report
+          COVERAGE=$(grep 'TOTAL' build/coverage-summary.txt | awk '{print $10}')
+          echo "LINE_COVERAGE_PERCENTAGE=${COVERAGE}" >> $GITHUB_ENV
+          echo "Line Coverage: ${COVERAGE}" > coverage-badge.txt
+
+      - name: Show ccache statistics
+        if: matrix.platform == 'linux'
+        run: ccache -s
+
+      - name: Archive Coverage Results
+        if: matrix.coverage
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: coverage-report-${{ matrix.platform }}-${{ matrix.arch }}
+          path: |
+            ${{ env.PKG_DIR }}/build/coverage-html/
+            ${{ env.PKG_DIR }}/build/lcov.info
+            ${{ env.PKG_DIR }}/build/coverage-summary.txt
+            ${{ env.PKG_DIR }}/build/cpp-test-results.xml
+          retention-days: 30
+
+      - name: Check if test results exist
+        id: check-test-results
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          if [ -f build/cpp-test-results.xml ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+        continue-on-error: true
+
+      - name: Publish Test Results
+        uses: EnricoMi/publish-unit-test-result-action@c950f6fb443cb5af20a377fd0dfaa78838901040 # 2.23.0
+        if: always() && steps.check-test-results.outputs.exists == 'true'
+        with:
+          files: ${{ env.PKG_DIR }}/build/cpp-test-results.xml
+          comment_mode: off
+          check_name: "C++ Test Results (${{ matrix.platform }}-${{ matrix.arch }})"
+
+      - name: Coverage Summary
+        if: matrix.coverage
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          echo "## 🎯 Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          echo "**Platform:** ${{ matrix.platform }}-${{ matrix.arch }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Coverage:** ${{ env.LINE_COVERAGE_PERCENTAGE }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f build/coverage-summary.txt ]; then
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            cat build/coverage-summary.txt >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  coverage-report:
+    permissions:
+      contents: read
+      actions: read
+    needs: cpp-tests
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Download all coverage reports
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: coverage-reports
+
+      - name: Combine Coverage Reports
+        run: |
+          echo "## 📊 C++ Code Coverage Summary (Parakeet)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Test Suite:** ParakeetModel C++ tests" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          for report in coverage-reports/*/coverage-summary.txt; do
+            if [ -f "$report" ]; then
+              platform=$(basename $(dirname "$report"))
+              echo "### $platform" >> $GITHUB_STEP_SUMMARY
+              echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+              cat "$report" >> $GITHUB_STEP_SUMMARY
+              echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+            fi
+          done

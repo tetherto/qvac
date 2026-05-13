@@ -56,11 +56,11 @@ Create `release-notes/vX.Y.Z.md` with these guidelines:
 1. **Title**: `# QVAC <package_name_readable> v{VERSION} Release Notes`
    Replace `<package_name_readable>` with a corresponding name:
    - `decoder-audio`: `Audio Decoder`
-   - `qvac-lib-infer-llamacpp-embed`: `Embeddings Addon`
-   - `qvac-lib-infer-llamacpp-llm`: `LLM Addon`
-   - `qvac-lib-infer-nmtcpp`: `NMT Addon`
-   - `qvac-lib-infer-onnx-tts`: `TTS ONNX Addon`
-   - `qvac-lib-infer-whispercpp`: `Transcription Whisper Addon`
+   - `embed-llamacpp`: `Embeddings Addon`
+   - `llm-llamacpp`: `LLM Addon`
+   - `translation-nmtcpp`: `NMT Addon`
+   - `tts-onnx`: `TTS ONNX Addon`
+   - `transcription-whispercpp`: `Transcription Whisper Addon`
    - `ocr-onnx`: `OCR Addon`
 
 2. **Introduction**: Write a brief 2-3 sentence summary of what this release brings

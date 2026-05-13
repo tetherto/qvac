@@ -4,14 +4,11 @@ import React from 'react';
 import { SiExpo, SiElectron } from '@icons-pack/react-simple-icons';
 
 /**
- * The single sidebar tree for the docs site. Imported directly by
- * `src/app/(docs)/layout.tsx` — no per-version trees, no aggregator.
- *
  * Only the API summary and release notes are versioned (one MDX per
- * version; latest at `index.mdx`, older at `vX.Y.Z.mdx`). The version
- * dropdown next to the page title handles version switching for those
- * sections; everything else here lives at a single bare path that always
- * reflects the current SDK.
+ * version; latest at `index.mdx`, older at `vX.Y.Z.mdx` under
+ * `content/docs/reference/api` and `content/docs/reference/release-notes`).
+ * The version dropdown handles switching for those pages; everything else
+ * uses a single bare path per topic.
  */
 export const customTree: Node[] = [
   {
@@ -21,168 +18,20 @@ export const customTree: Node[] = [
     icon: resolveIcon('House'),
   },
   {
-    name: 'About QVAC',
-    type: 'folder',
-    icon: resolveIcon('Info'),
-    index: { type: 'page', name: 'About QVAC', url: '/about-qvac/welcome' },
-    children: [
-      {
-        name: 'Welcome',
-        url: '/about-qvac/welcome',
-        type: 'page',
-        icon: resolveIcon('DoorOpen'),
-      },
-      {
-        name: 'Our vision',
-        url: '/about-qvac/vision',
-        type: 'page',
-        icon: resolveIcon('Telescope'),
-      },
-      {
-        name: 'How it works',
-        url: '/about-qvac/how-it-works',
-        type: 'page',
-        icon: resolveIcon('Cog'),
-      },
-      {
-        name: 'Flagship apps',
-        url: '/about-qvac/flagship-apps',
-        type: 'page',
-        icon: resolveIcon('LayoutGrid'),
-      },
-      {
-        name: 'Public launch',
-        url: '/about-qvac/public-launch',
-        type: 'page',
-        icon: resolveIcon('Megaphone'),
-      },
-    ],
-  },
-  {
     type: 'separator',
-    name: 'Build',
-  },
-  {
     name: 'Getting started',
-    type: 'folder',
-    icon: resolveIcon('Compass'),
-    index: { type: 'page', name: 'Getting started', url: '/sdk/getting-started' },
-    children: [
-      {
-        name: 'Overview',
-        url: '/sdk/getting-started',
-        type: 'page',
-        icon: resolveIcon('Map'),
-      },
-      {
-        name: 'Quickstart',
-        url: '/sdk/getting-started/quickstart',
-        type: 'page',
-        icon: resolveIcon('Rocket'),
-      },
-      {
-        name: 'Installation',
-        url: '/sdk/getting-started/installation',
-        type: 'page',
-        icon: resolveIcon('Package'),
-      },
-      {
-        name: 'Configuration',
-        url: '/sdk/getting-started/configuration',
-        type: 'page',
-        icon: resolveIcon('SlidersHorizontal'),
-      },
-    ],
   },
   {
-    name: 'Usage examples',
-    type: 'folder',
-    icon: resolveIcon('ListChecks'),
-    children: [
-      {
-        name: 'AI tasks',
-        type: 'folder',
-        icon: resolveIcon('Sparkles'),
-        children: [
-          { name: 'Completion', url: '/sdk/examples/ai-tasks/completion', type: 'page', icon: resolveIcon('MessagesSquare') },
-          { name: 'Text embeddings', url: '/sdk/examples/ai-tasks/text-embeddings', type: 'page', icon: resolveIcon('Hash') },
-          { name: 'Translation', url: '/sdk/examples/ai-tasks/translation', type: 'page', icon: resolveIcon('Languages') },
-          { name: 'Transcription', url: '/sdk/examples/ai-tasks/transcription', type: 'page', icon: resolveIcon('Speech') },
-          { name: 'Text-to-Speech', url: '/sdk/examples/ai-tasks/text-to-speech', type: 'page', icon: resolveIcon('Volume2') },
-          { name: 'OCR', url: '/sdk/examples/ai-tasks/ocr', type: 'page', icon: resolveIcon('ScanText') },
-          { name: 'Image generation', url: '/sdk/examples/ai-tasks/image-generation', type: 'page', icon: resolveIcon('Image') },
-          { name: 'Multimodal', url: '/sdk/examples/ai-tasks/multimodal', type: 'page', icon: resolveIcon('GalleryHorizontal') },
-          { name: 'Fine-tuning', url: '/sdk/examples/ai-tasks/fine-tuning', type: 'page', icon: resolveIcon('FlaskConical') },
-          { name: 'RAG', url: '/sdk/examples/ai-tasks/rag', type: 'page', icon: resolveIcon('ScanSearch') },
-          { name: 'Voice assistant', url: '/sdk/examples/ai-tasks/voice-assistant', type: 'page', icon: resolveIcon('Mic') },
-        ],
-      },
-      {
-        name: 'P2P capabilities',
-        type: 'folder',
-        icon: resolveIcon('Network'),
-        children: [
-          { name: 'Delegated inference', url: '/sdk/examples/p2p/delegated-inference', type: 'page', icon: resolveIcon('Share2') },
-          { name: 'Blind relays', url: '/sdk/examples/p2p/blind-relays', type: 'page', icon: resolveIcon('Router') },
-        ],
-      },
-      {
-        name: 'Utilities',
-        type: 'folder',
-        icon: resolveIcon('Wrench'),
-        children: [
-          {
-            name: 'Plugin system',
-            type: 'folder',
-            icon: resolveIcon('Plug'),
-            index: { type: 'page', name: 'Plugin system', url: '/sdk/examples/utilities/plugin-system' },
-            children: [
-              { name: 'Write a custom plugin', url: '/sdk/examples/utilities/write-custom-plugin', type: 'page' },
-            ],
-          },
-          { name: 'Logging', url: '/sdk/examples/utilities/logging', type: 'page', icon: resolveIcon('Activity') },
-          { name: 'Profiler', url: '/sdk/examples/utilities/profiler', type: 'page', icon: resolveIcon('Timer') },
-          { name: 'Download lifecycle', url: '/sdk/examples/utilities/download-lifecycle', type: 'page', icon: resolveIcon('Download') },
-          { name: 'Runtime lifecycle', url: '/sdk/examples/utilities/runtime-lifecycle', type: 'page', icon: resolveIcon('Moon') },
-          { name: 'Sharded models', url: '/sdk/examples/utilities/sharded-models', type: 'page', icon: resolveIcon('Merge') },
-        ],
-      },
-    ],
-  },
-  {
-    name: 'Tutorials',
-    type: 'folder',
-    icon: resolveIcon('GraduationCap'),
-    children: [
-      {
-        name: 'Build on Electron',
-        url: '/sdk/tutorials/electron',
-        type: 'page',
-        icon: React.createElement(SiElectron, { className: 'h-4 w-4' }),
-      },
-      {
-        name: 'Build on Expo',
-        url: '/sdk/tutorials/expo',
-        type: 'page',
-        icon: React.createElement(SiExpo, { className: 'h-4 w-4' }),
-      },
-    ],
-  },
-  {
-    type: 'separator',
-    name: 'References',
-  },
-  {
-    name: 'JS API',
-    url: '/sdk/api',
+    name: 'Introduction',
+    url: '/introduction',
     type: 'page',
-    icon: resolveIcon('BookA'),
+    icon: resolveIcon('DoorOpen'),
   },
   {
-    name: 'CLI',
-    url: '/cli',
+    name: 'Quickstart',
+    url: '/quickstart',
     type: 'page',
-    icon: resolveIcon('Terminal'),
+    icon: resolveIcon('Rocket'),
   },
   {
     name: 'System requirements',
@@ -191,14 +40,199 @@ export const customTree: Node[] = [
     icon: resolveIcon('Stethoscope'),
   },
   {
-    name: 'HTTP server',
-    url: '/http-server',
+    name: 'Installation',
+    url: '/installation',
     type: 'page',
-    icon: resolveIcon('Server'),
+    icon: resolveIcon('Package'),
+  },
+  {
+    name: 'Configuration',
+    type: 'folder',
+    icon: resolveIcon('SlidersHorizontal'),
+    index: { type: 'page', name: 'Configuration', url: '/configuration' },
+    children: [
+      {
+        name: 'Plugin system',
+        type: 'folder',
+        icon: resolveIcon('Plug'),
+        index: { type: 'page', name: 'Plugin system', url: '/configuration/plugins' },
+        children: [
+          {
+            name: 'Write a custom plugin',
+            url: '/configuration/plugins/write-custom-plugin',
+            type: 'page',
+          },
+        ],
+      },
+    ],
+  },
+  {
+    name: 'CLI',
+    type: 'folder',
+    icon: resolveIcon('Terminal'),
+    index: { type: 'page', name: 'CLI', url: '/cli' },
+    children: [
+      {
+        name: 'HTTP server',
+        url: '/cli/http-server',
+        type: 'page',
+        icon: resolveIcon('Server'),
+      },
+    ],
+  },
+  {
+    type: 'separator',
+    name: 'Models',
+  },
+  {
+    name: 'Download lifecycle',
+    url: '/models/download-lifecycle',
+    type: 'page',
+    icon: resolveIcon('Download'),
+  },
+  {
+    name: 'Sharded models',
+    url: '/models/sharded-models',
+    type: 'page',
+    icon: resolveIcon('Merge'),
+  },
+  {
+    type: 'separator',
+    name: 'AI capabilities',
+  },
+  {
+    name: 'Text generation',
+    url: '/ai-capabilities/text-generation',
+    type: 'page',
+    icon: resolveIcon('MessagesSquare'),
+  },
+  {
+    name: 'Text embeddings',
+    url: '/ai-capabilities/text-embeddings',
+    type: 'page',
+    icon: resolveIcon('Hash'),
+  },
+  {
+    name: 'RAG',
+    url: '/ai-capabilities/rag',
+    type: 'page',
+    icon: resolveIcon('ScanSearch'),
+  },
+  {
+    name: 'Fine-tuning',
+    url: '/ai-capabilities/fine-tuning',
+    type: 'page',
+    icon: resolveIcon('FlaskConical'),
+  },
+  {
+    name: 'Multimodal',
+    url: '/ai-capabilities/multimodal',
+    type: 'page',
+    icon: resolveIcon('GalleryHorizontal'),
+  },
+  {
+    name: 'Image generation',
+    url: '/ai-capabilities/image-generation',
+    type: 'page',
+    icon: resolveIcon('Image'),
+  },
+  {
+    name: 'Transcription',
+    url: '/ai-capabilities/transcription',
+    type: 'page',
+    icon: resolveIcon('Speech'),
+  },
+  {
+    name: 'Text-to-Speech',
+    url: '/ai-capabilities/text-to-speech',
+    type: 'page',
+    icon: resolveIcon('Volume2'),
+  },
+  {
+    name: 'Voice assistant',
+    url: '/ai-capabilities/voice-assistant',
+    type: 'page',
+    icon: resolveIcon('Mic'),
+  },
+  {
+    name: 'Translation',
+    url: '/ai-capabilities/translation',
+    type: 'page',
+    icon: resolveIcon('Languages'),
+  },
+  {
+    name: 'OCR',
+    url: '/ai-capabilities/ocr',
+    type: 'page',
+    icon: resolveIcon('ScanText'),
+  },
+  {
+    type: 'separator',
+    name: 'P2P capabilities',
+  },
+  {
+    name: 'Delegated inference',
+    url: '/p2p-capabilities/delegated-inference',
+    type: 'page',
+    icon: resolveIcon('Share2'),
+  },
+  {
+    name: 'Blind relays',
+    url: '/p2p-capabilities/blind-relays',
+    type: 'page',
+    icon: resolveIcon('Router'),
+  },
+  {
+    type: 'separator',
+    name: 'Runtime',
+  },
+  {
+    name: 'Runtime lifecycle',
+    url: '/runtime/lifecycle',
+    type: 'page',
+    icon: resolveIcon('Moon'),
+  },
+  {
+    name: 'Logging',
+    url: '/runtime/logging',
+    type: 'page',
+    icon: resolveIcon('Activity'),
+  },
+  {
+    name: 'Profiler',
+    url: '/runtime/profiler',
+    type: 'page',
+    icon: resolveIcon('Timer'),
+  },
+  {
+    type: 'separator',
+    name: 'Tutorials',
+  },
+  {
+    name: 'Build on Electron',
+    url: '/tutorials/electron',
+    type: 'page',
+    icon: React.createElement(SiElectron, { className: 'h-4 w-4' }),
+  },
+  {
+    name: 'Build on Expo',
+    url: '/tutorials/expo',
+    type: 'page',
+    icon: React.createElement(SiExpo, { className: 'h-4 w-4' }),
+  },
+  {
+    type: 'separator',
+    name: 'Reference',
+  },
+  {
+    name: 'API',
+    url: '/reference/api',
+    type: 'page',
+    icon: resolveIcon('BookA'),
   },
   {
     name: 'Release notes',
-    url: '/sdk/release-notes',
+    url: '/reference/release-notes',
     type: 'page',
     icon: resolveIcon('Tag'),
   },
@@ -223,9 +257,40 @@ export const customTree: Node[] = [
     name: 'Help',
   },
   {
-    name: 'Support',
-    url: '/#support',
+    name: 'Troubleshooting',
+    url: '/troubleshooting',
     type: 'page',
-    icon: resolveIcon('LifeBuoy'),
+    icon: resolveIcon('Bug'),
+  },
+  {
+    name: 'Discord',
+    url: 'https://discord.com/invite/tetherdev',
+    type: 'page',
+    external: true,
+    icon: resolveIcon('MessageCircle'),
+  },
+  {
+    type: 'separator',
+    name: 'About QVAC',
+  },
+  {
+    name: 'How it works',
+    url: '/about/how-it-works',
+    type: 'page',
+    icon: resolveIcon('Cog'),
+  },
+  {
+    name: 'Vision',
+    type: 'folder',
+    icon: resolveIcon('Telescope'),
+    index: { type: 'page', name: 'Vision', url: '/about/vision' },
+    children: [
+      {
+        name: 'Public launch',
+        url: '/about/public-launch',
+        type: 'page',
+        icon: resolveIcon('Megaphone'),
+      },
+    ],
   },
 ];

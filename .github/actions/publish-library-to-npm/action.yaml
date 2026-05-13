@@ -90,9 +90,9 @@ runs:
           RELEASE="tmp"
         fi
 
-        # Track whether the caller supplied an explicit tag. If not, fall back to
-        # the legacy release-branch heuristic so existing callers without inputs.tag
-        # keep working.
+        # Track whether the caller supplied an explicit tag. Empty input means
+        # "auto-decide" on release branches (handled below); for non-release
+        # branches it falls through to the dev/tmp short-circuit.
         EXPLICIT_TAG="true"
         if [ -z "$TAG" ]; then
           EXPLICIT_TAG="false"
@@ -102,16 +102,124 @@ runs:
         echo "Base branch: ${GIT_REF}"
         echo "Event name: ${EVENT_NAME}"
 
-        # Only force the legacy "latest" override when the caller did NOT pass an
-        # explicit tag. With the explicit tag, the caller is in control (e.g. an
-        # old release line publishing under a different dist-tag like release-1.x
-        # so it doesn't clobber `latest`).
-        if [ "$EXPLICIT_TAG" = "false" ]; then
-          if [[ "${EVENT_NAME}" == "push" || "${EVENT_NAME}" == "workflow_dispatch" ]]; then
-            if [[ "${GIT_REF}" == refs/heads/release-* ]]; then
-              TAG="latest"
+        # Hoist package metadata for both the auto-decide step and downstream logic.
+        SHORT_SHA=$(git -C "$ROOT" rev-parse --short HEAD || echo "unknown")
+        PACKAGE_VERSION=$(node -p "require('./package.json').version")
+        PACKAGE_NAME=$(node -p "require('./package.json').name")
+        VERSION="${PACKAGE_VERSION}"
+
+        # Auto-decide the dist-tag on release branches when the caller did not
+        # pass an explicit non-"latest" tag. Backports to older release-* lines
+        # (where package.json version is lower than the current published
+        # `latest`) are published under v<major>.<minor> so they never clobber
+        # the homepage pointer. The newest release line auto-promotes `latest`.
+        #
+        # Triggered when:
+        #   - caller passed empty input  (EXPLICIT_TAG=false), OR
+        #   - caller passed literal "latest"
+        # AND we are on a push/workflow_dispatch on a release-* branch.
+        #
+        # Any other explicit tag (e.g. "release-1.x", "next", "beta") is
+        # respected verbatim as an operator override.
+        #
+        # IMPORTANT for on-call: a manual workflow_dispatch with
+        # npm_tag="latest" is INTENTIONALLY upgraded to auto-decide -- this
+        # prevents the UI from re-introducing the very bug this logic guards
+        # against (a backport branch publishing under `latest`). To repair a
+        # regressed `latest` pointer, do NOT re-run this workflow with
+        # npm_tag=latest; instead run a one-shot dist-tag move:
+        #     npm dist-tag add <pkg>@<correct-version> latest
+        # If you genuinely need to publish a new build under `latest` from a
+        # release-* branch where auto-decide would route elsewhere, pass an
+        # explicit non-"latest" override (e.g. npm_tag="next"); only an actual
+        # version bump on the newest release line auto-promotes `latest`.
+        AUTO_DECIDE="false"
+        if [[ "${EVENT_NAME}" == "push" || "${EVENT_NAME}" == "workflow_dispatch" ]]; then
+          if [[ "${GIT_REF}" == refs/heads/release-* ]]; then
+            if [ "$EXPLICIT_TAG" = "false" ] || [ "$TAG" = "latest" ]; then
+              AUTO_DECIDE="true"
             fi
           fi
+        fi
+
+        if [ "$AUTO_DECIDE" = "true" ]; then
+          # Distinguish "package never published" (E404 -> CURRENT_LATEST=0.0.0)
+          # from any other npm view failure (transient registry blip, DNS/timeout,
+          # auth issue, etc.). Collapsing every error to 0.0.0 would silently
+          # promote any version to `latest` and re-introduce the very bug this
+          # logic is meant to prevent. On unknown failures we fail loudly so a
+          # human re-runs after the registry recovers.
+          set +e
+          NPM_OUT=$(npm view "$PACKAGE_NAME" dist-tags.latest 2>&1)
+          NPM_RC=$?
+          set -e
+
+          if [ "$NPM_RC" -ne 0 ]; then
+            if echo "$NPM_OUT" | grep -q 'E404'; then
+              echo "npm view returned E404 for $PACKAGE_NAME -> treating as first publish (current latest = 0.0.0)"
+              CURRENT_LATEST="0.0.0"
+            else
+              echo "::error title=npm view failed::Could not query dist-tags.latest for $PACKAGE_NAME (exit $NPM_RC). Auto-decide refuses to assume 'latest' on registry errors. Re-run this job after the registry recovers, or pass an explicit npm_tag." >&2
+              echo "npm view output:" >&2
+              echo "$NPM_OUT" >&2
+              exit 1
+            fi
+          else
+            CURRENT_LATEST="${NPM_OUT:-0.0.0}"
+          fi
+
+          # Two-part defence for prerelease versions (e.g. "0.16.0-rc.1",
+          # produced by .github/workflows/release-pr.yml when run with --preid):
+          #
+          #  1. core() strips the "-rc.1" suffix before splitting on "." so
+          #     numeric compare is well-defined. Without this, the third
+          #     segment parses as NaN, and (a-x || b-y || NaN) >= 0 is always
+          #     false, which silently routes every prerelease that would
+          #     otherwise win to the backport branch -- including the newest
+          #     line, which is the catastrophic case (no `latest` promotion
+          #     for a legitimate release).
+          #  2. IS_PRERELEASE is checked separately and FORCES v<major>.<minor>
+          #     regardless of how core() compares. npm convention is that
+          #     `npm install <pkg>` should never pull a prerelease, so even a
+          #     prerelease whose core is >= current latest must NOT take the
+          #     `latest` tag. Consumers opt in via `npm i <pkg>@v<M>.<m>`,
+          #     or operators can override with an explicit npm_tag (e.g.
+          #     "next") on workflow_dispatch.
+          #
+          # Removing either piece reintroduces a footgun. Keep both.
+          IS_PRERELEASE=$(node -e 'console.log(/-/.test(process.argv[1]) ? "yes" : "no")' "$PACKAGE_VERSION")
+
+          HIGHER=$(node -e '
+            const core = v => v.replace(/^v/, "").split("-")[0].split(".").map(Number);
+            const [a,b,c] = core(process.argv[1]);
+            const [x,y,z] = core(process.argv[2]);
+            console.log((a-x || b-y || c-z) >= 0 ? "yes" : "no");
+          ' "$PACKAGE_VERSION" "$CURRENT_LATEST")
+
+          MAJOR_MINOR=$(echo "$PACKAGE_VERSION" | awk -F. '{print $1"."$2}')
+
+          if [ "$IS_PRERELEASE" = "yes" ]; then
+            TAG="v${MAJOR_MINOR}"
+            REASON="prerelease $PACKAGE_VERSION never auto-promotes latest (current latest=$CURRENT_LATEST)"
+          elif [ "$HIGHER" = "yes" ]; then
+            TAG="latest"
+            REASON="package.json version $PACKAGE_VERSION >= current latest $CURRENT_LATEST"
+          else
+            TAG="v${MAJOR_MINOR}"
+            REASON="package.json version $PACKAGE_VERSION < current latest $CURRENT_LATEST (backport)"
+          fi
+
+          echo "Auto-decided npm dist-tag for $PACKAGE_NAME: $TAG"
+          echo "  Reason: $REASON"
+          {
+            echo "## NPM dist-tag decision"
+            echo ""
+            echo "- Package: \`$PACKAGE_NAME\`"
+            echo "- New version: \`$PACKAGE_VERSION\`"
+            echo "- Current \`latest\` on npm: \`$CURRENT_LATEST\`"
+            echo "- Chosen dist-tag: \`$TAG\`"
+            echo "- Reason: $REASON"
+          } >> "$GITHUB_STEP_SUMMARY"
         fi
 
         if [ "$TAG" = "dev" ] || [ "$TAG" = "tmp" ]; then
@@ -121,11 +229,6 @@ runs:
           echo "npm_published_version=" >> "$GITHUB_OUTPUT"
           exit 0
         fi
-
-        SHORT_SHA=$(git -C "$ROOT" rev-parse --short HEAD || echo "unknown")
-        PACKAGE_VERSION=$(node -p "require('./package.json').version")
-        PACKAGE_NAME=$(node -p "require('./package.json').name")
-        VERSION="${PACKAGE_VERSION}"
 
         echo "Publishing package: $PACKAGE_NAME"
         echo "Publishing with tag: $TAG"

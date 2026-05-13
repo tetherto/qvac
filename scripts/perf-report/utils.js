@@ -45,7 +45,9 @@ const METRIC_LABELS = {
   total_time_ms: 'Total time',
   detection_time_ms: 'Detection time',
   recognition_time_ms: 'Recognition time',
+  prefill_time_ms: 'Prefill time',
   decode_time_ms: 'Decode time',
+  vision_encode_time_ms: 'Vision encode',
   ttft_ms: 'TTFT',
   generated_tokens: 'Generated tokens',
   prompt_tokens: 'Prompt tokens',
@@ -54,6 +56,8 @@ const METRIC_LABELS = {
   real_time_factor: 'RTF',
   sample_count: 'Samples',
   duration_ms: 'Duration',
+  backend: 'Backend',
+  platform: 'Platform',
   wall_time_ms: 'Wall time',
   encoder_time_ms: 'Encoder time',
   decoder_time_ms: 'Decoder time',
@@ -108,13 +112,170 @@ function _shortDeviceName (name) {
     .replace(/^GitHub Actions\s+\d+$/i, name)
 }
 
-function generateMarkdownReport (aggregated) {
+// QVAC-17830: same column list writeStepSummary() uses for vision
+// addons in scripts/test-utils/performance-reporter.js. The combined
+// markdown report rebuilds this table per device so mobile runs that
+// can't write to GITHUB_STEP_SUMMARY (they execute on Device Farm, not
+// on the GitHub runner) still surface a detailed table alongside the
+// desktop ones in the combined summary.
+const _VISION_DETAIL_COLUMNS = [
+  { key: 'backend', label: 'Backend' },
+  { key: 'platform', label: 'Platform' },
+  { key: 'total_time_ms', label: 'Total Time (ms)' },
+  { key: 'prefill_time_ms', label: 'Prefill (ms)' },
+  { key: 'decode_time_ms', label: 'Decode (ms)' },
+  { key: 'vision_encode_time_ms', label: 'Vision Enc (ms)' },
+  { key: 'ttft_ms', label: 'TTFT (ms)' },
+  { key: 'generated_tokens', label: 'Gen Tokens' },
+  { key: 'prompt_tokens', label: 'Prompt Tokens' },
+  { key: 'tps', label: 'TPS' }
+]
+
+// QVAC-17830: detail-table cell formatter. Numeric cells render as
+// `<mean> ±<std>` to match the squashed mini-tables — that way the
+// std the user sees in the rollup is also visible per metric in the
+// detail breakdown. Token-count columns (generated_tokens /
+// prompt_tokens) stay as bare integers because deterministic
+// generation makes `±0` noise on every row.
+const _INTEGER_DETAIL_KEYS = new Set(['generated_tokens', 'prompt_tokens'])
+
+function _formatDetailCell (key, summary, categoricalVal) {
+  if (categoricalVal != null && categoricalVal !== '') return String(categoricalVal)
+  if (!summary || summary.mean == null) return '-'
+  const m = summary.mean
+  const s = summary.std == null ? 0 : summary.std
+  if (_INTEGER_DETAIL_KEYS.has(key)) return String(Math.round(m))
+  if (key.endsWith('_ms')) return `${Math.round(m)} \u00b1${Math.round(s)}`
+  if (key === 'tps') return `${m.toFixed(2)} \u00b1${s.toFixed(2)}`
+  if (Number.isInteger(m) && Number.isInteger(s)) return `${m} \u00b1${s}`
+  return `${m.toFixed(2)} \u00b1${s.toFixed(2)}`
+}
+
+/**
+ * Per-device detail table (one row per test) matching the
+ * writeStepSummary() layout used by desktop matrix legs. When rendered
+ * into the combined step summary this gives every device — mobile
+ * included — the same detail breakdown without requiring a
+ * GITHUB_STEP_SUMMARY write from inside the Device Farm container.
+ */
+// QVAC-17830: stable display order for the scenario partitions in
+// the per-device detail tables. Anything not in this list falls back
+// to alphabetical order after the known scenarios.
+const _SCENARIO_ORDER = ['image', 'tool-calling', 'bitnet', 'default']
+
+function _scenarioLabel (scn) {
+  if (!scn || scn === 'default') return 'default'
+  return scn
+}
+
+function _sortedScenarios (scnSet) {
+  const known = []
+  const extras = []
+  for (const scn of scnSet) {
+    if (_SCENARIO_ORDER.includes(scn)) known.push(scn)
+    else extras.push(scn)
+  }
+  known.sort((a, b) => _SCENARIO_ORDER.indexOf(a) - _SCENARIO_ORDER.indexOf(b))
+  extras.sort()
+  return [...known, ...extras]
+}
+
+function _groupTestsByScenario (testNames, scenarioMapForDevice) {
+  const buckets = {}
+  for (const t of testNames) {
+    const scn = (scenarioMapForDevice && scenarioMapForDevice[t]) || 'default'
+    if (!buckets[scn]) buckets[scn] = []
+    buckets[scn].push(t)
+  }
+  for (const k of Object.keys(buckets)) buckets[k].sort()
+  return buckets
+}
+
+function generateDeviceDetailTables (aggregated, addonType) {
+  if (addonType !== 'vision') return ''
+
+  const lines = []
+  const {
+    devices,
+    device_meta: deviceMeta = {},
+    categorical = {},
+    scenarios = {},
+    addon,
+    run_numbers: runNumbers = []
+  } = aggregated
+  const deviceNames = Object.keys(devices)
+  if (!deviceNames.length) return ''
+
+  for (const devName of deviceNames) {
+    const tests = devices[devName] || {}
+    const testNames = Object.keys(tests)
+    if (!testNames.length) continue
+
+    const meta = deviceMeta[devName] || {}
+    const platformArch = meta.platform && meta.arch
+      ? `${meta.platform}/${meta.arch}`
+      : meta.platform || '-'
+    const runLabel = runNumbers.length ? runNumbers.join(', ') : 'local'
+
+    // QVAC-17830: previously every device used the same `### Performance: <addon>`
+    // header, which GitHub's step-summary renderer collapses into a single
+    // anchor — making it hard to find mobile detail tables when scrolling
+    // past a long desktop list. Use the device name as the heading so each
+    // section gets its own anchor + TOC entry.
+    lines.push(`### ${devName} \u2014 ${addon} (${platformArch})`)
+    lines.push('')
+    const subline = [`Run: ${runLabel}`]
+    if (meta.gpu) subline.push(`GPU: ${meta.gpu}`)
+    lines.push(`> ${subline.join(' | ')}`)
+    lines.push('')
+
+    const buckets = _groupTestsByScenario(testNames, scenarios[devName])
+    const orderedScenarios = _sortedScenarios(Object.keys(buckets))
+    const showScenarioHeading = orderedScenarios.length > 1 ||
+      (orderedScenarios.length === 1 && orderedScenarios[0] !== 'default')
+
+    for (const scn of orderedScenarios) {
+      if (showScenarioHeading) {
+        lines.push(`#### ${_scenarioLabel(scn)}`)
+        lines.push('')
+      }
+
+      const header = ['Test', 'EP', ..._VISION_DETAIL_COLUMNS.map(c => c.label)]
+      lines.push('| ' + header.join(' | ') + ' |')
+      lines.push('| ' + header.map(() => '---').join(' | ') + ' |')
+
+      for (const testName of buckets[scn]) {
+        const metrics = tests[testName] || {}
+        const cats = (categorical[devName] && categorical[devName][testName]) || {}
+        const ep = cats.execution_provider || '-'
+        const row = [testName, ep]
+        for (const col of _VISION_DETAIL_COLUMNS) {
+          row.push(_formatDetailCell(col.key, metrics[col.key], cats[col.key]))
+        }
+        lines.push('| ' + row.join(' | ') + ' |')
+      }
+      lines.push('')
+    }
+  }
+
+  return lines.join('\n')
+}
+
+function generateMarkdownReport (aggregated, opts) {
+  const options = opts || {}
   const lines = []
   const { addon, generated_at, run_numbers, devices, quality } = aggregated
   const iterCount = _maxIterationCount(devices)
 
   lines.push(`## ${addon} Performance Report`)
   lines.push(`Generated: ${generated_at} | CI Runs: ${run_numbers.join(', ')} | Iterations: ${iterCount}`)
+  lines.push('')
+  // QVAC-17830: terse one-liner so reviewers don't read dashes as
+  // broken data. Per-scenario column filtering already drops devices
+  // with zero data in a scenario; the dashes that remain are
+  // intentional test gates (model too heavy for mobile, no GPU on
+  // that runner, etc.).
+  lines.push('> _`-` = not run on this device._')
   lines.push('')
 
   const deviceNames = Object.keys(devices)
@@ -136,29 +297,110 @@ function generateMarkdownReport (aggregated) {
 
   const hasEp = parsed.some(p => p.ep !== '')
 
-  // --- Performance Summary (combined) ---
-  lines.push('### Performance Summary (Mean Total Time)')
-  lines.push('')
+  // QVAC-17830: squashed step-summary layout — one mini-table per
+  // headline metric, each row=test, col=device, cell="mean ±std".
+  // Per the latest review feedback we surface the full breakdown
+  // (Total / Prefill / Decode / Vision Encode / TTFT / TPS) instead
+  // of just Total/TTFT/TPS so the cross-platform comparison shows
+  // the same numbers as the per-device detail tables. Each table
+  // is suppressed when EVERY cell is null (e.g. vision_encode_time_ms
+  // is currently null everywhere until the native timer lands —
+  // Asana 1214371583877702 — so its table won't render yet) and
+  // is also suppressed for OCR reports that never produce TTFT/TPS.
+  const SUMMARY_METRICS = [
+    { key: 'total_time_ms', unit: 'ms', round: true, label: 'Mean Total Time (ms)' },
+    { key: 'prefill_time_ms', unit: 'ms', round: true, label: 'Mean Prefill (ms)' },
+    { key: 'decode_time_ms', unit: 'ms', round: true, label: 'Mean Decode (ms)' },
+    { key: 'vision_encode_time_ms', unit: 'ms', round: true, label: 'Mean Vision Encode (ms)' },
+    { key: 'ttft_ms', unit: 'ms', round: true, label: 'Mean TTFT (ms)' },
+    { key: 'tps', unit: '', round: false, label: 'Mean TPS' }
+  ]
 
-  const perfHeader = hasEp ? ['Test', 'EP'] : ['Test']
-  for (const sn of shortNames) perfHeader.push(sn)
-  lines.push('| ' + perfHeader.join(' | ') + ' |')
-  lines.push('| ' + perfHeader.map(() => '---').join(' | ') + ' |')
+  const scenarioMap = aggregated.scenarios || {}
 
+  function _scenarioFor (devName, testFull) {
+    return (scenarioMap[devName] && scenarioMap[devName][testFull]) || 'default'
+  }
+
+  function _formatMeanStd (summary, unit, round) {
+    if (!summary || summary.mean == null) return '-'
+    const m = round ? Math.round(summary.mean) : summary.mean.toFixed(2)
+    const s = round ? Math.round(summary.std) : summary.std.toFixed(2)
+    return `${m} \u00b1${s}${unit}`
+  }
+
+  // Group tests by scenario so the squashed summary has the same
+  // implementation breakdown as the HTML detail tables. Picks the
+  // scenario from the FIRST device that recorded the test (sibling
+  // legs always share scenario for the same test name).
+  const testScenario = {}
   for (const t of parsed) {
-    const cells = hasEp ? [t.base, `**${t.ep}**`] : [t.full]
+    let scn = 'default'
     for (const devName of deviceNames) {
-      const metrics = devices[devName] && devices[devName][t.full]
-      if (metrics && metrics.total_time_ms) {
-        const s = metrics.total_time_ms
-        cells.push(`${Math.round(s.mean)} \u00b1${Math.round(s.std)}ms`)
-      } else {
-        cells.push('-')
+      if (devices[devName] && devices[devName][t.full]) {
+        scn = _scenarioFor(devName, t.full)
+        if (scn !== 'default') break
       }
     }
-    lines.push('| ' + cells.join(' | ') + ' |')
+    testScenario[t.full] = scn
   }
-  lines.push('')
+  const scenariosSeen = _sortedScenarios([...new Set(parsed.map(t => testScenario[t.full]))])
+  const showScenarioHeading = scenariosSeen.length > 1 ||
+    (scenariosSeen.length === 1 && scenariosSeen[0] !== 'default')
+
+  for (const metricSpec of SUMMARY_METRICS) {
+    const hasAnyData = parsed.some(t => deviceNames.some(d => {
+      const m = devices[d] && devices[d][t.full] && devices[d][t.full][metricSpec.key]
+      return m && m.mean != null
+    }))
+    if (!hasAnyData) continue
+
+    lines.push(`### ${metricSpec.label}`)
+    lines.push('')
+
+    for (const scn of scenariosSeen) {
+      const scopedTests = parsed.filter(t => testScenario[t.full] === scn)
+      if (!scopedTests.length) continue
+
+      // QVAC-17830: per-scenario column filtering. The cross-platform
+      // table previously rendered ALL device columns for every
+      // scenario block, so e.g. the bitnet block (Android-only by
+      // design — see bitnet.test.js `skip: !isAndroid`) showed 7
+      // empty desktop/iOS columns of dashes, which made the report
+      // look broken when it was actually intentional. Drop columns
+      // that have zero data in this scenario × metric.
+      const scopedDeviceNames = deviceNames.filter(d => {
+        return scopedTests.some(t => {
+          const m = devices[d] && devices[d][t.full] && devices[d][t.full][metricSpec.key]
+          return m && m.mean != null
+        })
+      })
+      if (!scopedDeviceNames.length) continue
+
+      const scopedShortNames = scopedDeviceNames.map(_shortDeviceName)
+
+      if (showScenarioHeading) {
+        lines.push(`#### ${_scenarioLabel(scn)}`)
+        lines.push('')
+      }
+
+      const perfHeader = hasEp ? ['Test', 'EP'] : ['Test']
+      for (const sn of scopedShortNames) perfHeader.push(sn)
+      lines.push('| ' + perfHeader.join(' | ') + ' |')
+      lines.push('| ' + perfHeader.map(() => '---').join(' | ') + ' |')
+
+      for (const t of scopedTests) {
+        const epCell = hasEp ? (t.ep ? `**${t.ep}**` : '-') : null
+        const cells = hasEp ? [t.base, epCell] : [t.full]
+        for (const devName of scopedDeviceNames) {
+          const metrics = devices[devName] && devices[devName][t.full]
+          cells.push(_formatMeanStd(metrics && metrics[metricSpec.key], metricSpec.unit, metricSpec.round))
+        }
+        lines.push('| ' + cells.join(' | ') + ' |')
+      }
+      lines.push('')
+    }
+  }
 
   // --- Quality Summary (combined) ---
   if (quality && Object.keys(quality).length > 0) {
@@ -200,6 +442,17 @@ function generateMarkdownReport (aggregated) {
     }
   }
 
+  if (options.includeDeviceDetails) {
+    const detail = generateDeviceDetailTables(aggregated, options.addonType || 'vision')
+    if (detail) {
+      lines.push('---')
+      lines.push('')
+      lines.push('### Per-Device Detail')
+      lines.push('')
+      lines.push(detail)
+    }
+  }
+
   return lines.join('\n') + '\n'
 }
 
@@ -214,7 +467,9 @@ function generateMarkdownReport (aggregated) {
  * @returns {Object} Aggregated result
  */
 function aggregateReports (reports) {
-  if (!reports.length) return { addon: 'unknown', devices: {}, run_numbers: [], quality: {} }
+  if (!reports.length) {
+    return { addon: 'unknown', devices: {}, run_numbers: [], quality: {}, device_meta: {}, categorical: {}, scenarios: {} }
+  }
 
   const addon = reports[0].addon
   const runNumbers = [...new Set(reports.map(r => r.run_number).filter(Boolean))]
@@ -222,27 +477,103 @@ function aggregateReports (reports) {
   const deviceMap = {}
   const qualityMap = {}
   const imagePathMap = {}
+  // Per-device metadata (platform / arch) harvested from the first
+  // report that landed under that device name. Used by the per-device
+  // detail tables in the combined summary.
+  const deviceMeta = {}
+  // Categorical metrics (e.g. backend, platform, status) — numeric
+  // summarize() drops these because typeof v !== 'number'. We keep the
+  // most recent string value per [device][test][metric] so the per-
+  // device detail table can render the real backend / platform / status
+  // instead of the blank "-" produced by summarize on strings.
+  const categorical = {}
+  // QVAC-17830: scenarioMap[device][test] = 'image' | 'bitnet' |
+  // 'tool-calling' | 'default'. Lets the per-device detail tables
+  // partition rows by implementation so a single combined report can
+  // surface "image" and "tool-calling" numbers side by side without
+  // mixing them into one giant table.
+  const scenarioMap = {}
+  // QVAC-17830: dedupe by (device, test, run_number). The combined
+  // report folds sibling matrix legs (linux-x64-cpu+linux-x64-gpu,
+  // linux-arm64-u22+linux-arm64-u24) onto one device name so users see
+  // ONE column per physical platform. Without dedupe each shared
+  // [test] [CPU] row gets 3 iters from each leg → iteration count
+  // explodes to 6 ("Run 4 / 5 / 6" headers). First-leg-wins per
+  // (device, test, run_number) keeps it at 3 while still picking up
+  // the GPU leg's exclusive [GPU] rows. The weekly aggregator is
+  // unaffected: it accumulates across DIFFERENT run_numbers.
+  const seenLeg = {}
 
   for (const report of reports) {
     const deviceName = report.device ? report.device.name : 'unknown'
+    const reportRun = report.run_number || 'local'
 
     if (!deviceMap[deviceName]) deviceMap[deviceName] = {}
     if (!qualityMap[deviceName]) qualityMap[deviceName] = {}
+    if (!categorical[deviceName]) categorical[deviceName] = {}
+    if (!scenarioMap[deviceName]) scenarioMap[deviceName] = {}
+    if (!seenLeg[deviceName]) seenLeg[deviceName] = {}
+    if (!deviceMeta[deviceName] && report.device) {
+      deviceMeta[deviceName] = {
+        name: report.device.name,
+        platform: report.device.platform || null,
+        arch: report.device.arch || null,
+        os_version: report.device.os_version || null,
+        gpu: report.device.gpu || null,
+        runner: report.device.runner || null
+      }
+    } else if (deviceMeta[deviceName] && report.device && report.device.gpu && !deviceMeta[deviceName].gpu) {
+      // Sibling matrix legs may report different gpu strings — keep
+      // the first non-null one we see (e.g. linux-x64-gpu reports
+      // NVIDIA, linux-x64-cpu reports null; fold both onto one
+      // device, surface the GPU label).
+      deviceMeta[deviceName].gpu = report.device.gpu
+    }
+
+    // Per-test "claim" set for THIS report. Once a sibling leg has
+    // already contributed a (device, test) pair for this run_number we
+    // skip the current report's rows for that pair — but within a
+    // single report we still keep ALL iterations (e.g. PERF_RUNS=3).
+    const claimedThisReport = new Set()
 
     for (const result of (report.results || [])) {
       const testKey = result.test
+      const legKey = `${testKey}::${reportRun}`
+      const alreadyClaimed = seenLeg[deviceName][legKey]
+      if (alreadyClaimed && !claimedThisReport.has(legKey)) continue
+      claimedThisReport.add(legKey)
+      seenLeg[deviceName][legKey] = true
+
       if (!deviceMap[deviceName][testKey]) deviceMap[deviceName][testKey] = {}
+      if (!categorical[deviceName][testKey]) categorical[deviceName][testKey] = {}
 
       if (result.image_path && !imagePathMap[testKey]) {
         imagePathMap[testKey] = result.image_path
       }
 
+      if (result.execution_provider != null) {
+        categorical[deviceName][testKey].execution_provider = String(result.execution_provider)
+      }
+
+      // First non-default scenario wins per (device, test). Sibling
+      // matrix legs always tag the same test with the same scenario,
+      // so this is stable; if the field is missing or 'default' from
+      // an older report we won't overwrite a real one set later.
+      const scn = result.scenario && String(result.scenario)
+      if (scn && (!scenarioMap[deviceName][testKey] || scenarioMap[deviceName][testKey] === 'default')) {
+        scenarioMap[deviceName][testKey] = scn
+      }
+
       for (const [metricKey, value] of Object.entries(result.metrics || {})) {
         if (value === null || value === undefined) continue
-        if (!deviceMap[deviceName][testKey][metricKey]) {
-          deviceMap[deviceName][testKey][metricKey] = []
+        if (typeof value === 'number') {
+          if (!deviceMap[deviceName][testKey][metricKey]) {
+            deviceMap[deviceName][testKey][metricKey] = []
+          }
+          deviceMap[deviceName][testKey][metricKey].push(value)
+        } else {
+          categorical[deviceName][testKey][metricKey] = String(value)
         }
-        deviceMap[deviceName][testKey][metricKey].push(value)
       }
 
       if (result.quality) {
@@ -289,7 +620,10 @@ function aggregateReports (reports) {
     devices: summarized,
     quality: qualitySummarized,
     image_paths: imagePathMap,
-    quality_details: qualityDetails
+    quality_details: qualityDetails,
+    device_meta: deviceMeta,
+    categorical,
+    scenarios: scenarioMap
   }
 }
 
@@ -442,12 +776,93 @@ function _mdIterationHeaders (count, runNumbers) {
 }
 
 /**
+ * Builds the per-device "row-per-test" detail section in HTML. Mirrors the
+ * markdown `generateDeviceDetailTables` output — same columns, same ordering
+ * — so the combined HTML report has parity with the GitHub step summary.
+ * Each device gets one section; each test is one row with Backend / Platform
+ * / Total Time / .../ Status columns taken from numeric means + preserved
+ * categorical values.
+ *
+ * Without this block mobile rows render as blank categorical cells in the
+ * HTML since `generateStepSummary()` runs per-device on the GitHub runner
+ * and Device Farm containers can't write to GITHUB_STEP_SUMMARY.
+ */
+function _buildHtmlDetailSections (aggregated, addonType) {
+  if (addonType !== 'vision') return ''
+  const { devices, device_meta: deviceMeta = {}, categorical = {}, scenarios = {}, addon, run_numbers: runNumbers = [] } = aggregated
+  const deviceNames = Object.keys(devices)
+  if (!deviceNames.length) return ''
+
+  let html = ''
+  for (const devName of deviceNames) {
+    const tests = devices[devName] || {}
+    const testNames = Object.keys(tests)
+    if (!testNames.length) continue
+
+    const meta = deviceMeta[devName] || {}
+    const platformArch = meta.platform && meta.arch
+      ? `${meta.platform}/${meta.arch}`
+      : meta.platform || '-'
+    const runLabel = runNumbers.length ? runNumbers.map(n => '#' + n).join(', ') : 'local'
+    const gpuLabel = meta.gpu ? ` \u00b7 GPU: ${meta.gpu}` : ''
+
+    const buckets = _groupTestsByScenario(testNames, scenarios[devName])
+    const orderedScenarios = _sortedScenarios(Object.keys(buckets))
+    const showScenarioHeading = orderedScenarios.length > 1 ||
+      (orderedScenarios.length === 1 && orderedScenarios[0] !== 'default')
+
+    let scenarioBlocks = ''
+    for (const scn of orderedScenarios) {
+      const headerCells = ['Test', 'EP', ..._VISION_DETAIL_COLUMNS.map(c => c.label)]
+        .map(h => `<th>${escapeHtml(h)}</th>`).join('')
+
+      let bodyRows = ''
+      for (const testName of buckets[scn]) {
+        const metrics = tests[testName] || {}
+        const cats = (categorical[devName] && categorical[devName][testName]) || {}
+        const ep = cats.execution_provider || '-'
+        const cells = [escapeHtml(testName), escapeHtml(ep)]
+        for (const col of _VISION_DETAIL_COLUMNS) {
+          cells.push(escapeHtml(_formatDetailCell(col.key, metrics[col.key], cats[col.key])))
+        }
+        bodyRows += '<tr>' + cells.map(c => `<td>${c}</td>`).join('') + '</tr>'
+      }
+
+      const scenarioHeading = showScenarioHeading
+        ? `<h3 class="scenario-name">${escapeHtml(_scenarioLabel(scn))}</h3>`
+        : ''
+
+      scenarioBlocks += `
+        <div class="test-block">
+          ${scenarioHeading}
+          <table class="detail-table">
+            <thead><tr>${headerCells}</tr></thead>
+            <tbody>${bodyRows}</tbody>
+          </table>
+        </div>`
+    }
+
+    html += `
+    <section class="device-card detail-card">
+      <h2 class="device-name">${escapeHtml(devName)} <span class="detail-sub">(${escapeHtml(platformArch)} \u00b7 Run ${escapeHtml(runLabel)} \u00b7 ${escapeHtml(addon)}${escapeHtml(gpuLabel)})</span></h2>
+${scenarioBlocks}
+    </section>`
+  }
+
+  return html
+}
+
+/**
  * Generates a self-contained HTML performance report.
  *
  * @param {Object} aggregated - Output of aggregateReports()
+ * @param {Object} [opts]
+ * @param {boolean} [opts.includeDeviceDetails] - Append per-device row-per-test summary tables (vision addons only)
+ * @param {string} [opts.addonType] - Addon type ('vision' enables the detail tables)
  * @returns {string} Complete HTML document
  */
-function generateHtmlReport (aggregated) {
+function generateHtmlReport (aggregated, opts) {
+  const options = opts || {}
   const { addon, generated_at, run_numbers, devices, quality, image_paths } = aggregated
   const timestamp = new Date(generated_at).toLocaleString('en-US', {
     dateStyle: 'medium',
@@ -543,6 +958,10 @@ function generateHtmlReport (aggregated) {
       ${tables}
     </section>`
   }
+
+  const detailSections = options.includeDeviceDetails
+    ? _buildHtmlDetailSections(aggregated, options.addonType || 'vision')
+    : ''
 
   let qualitySection = ''
   const qualityDetails = aggregated.quality_details || {}
@@ -844,6 +1263,45 @@ function generateHtmlReport (aggregated) {
 
   .quality-card { border-color: #c3dfc3; }
 
+  /* QVAC-17830: per-device summary table used by --device-details.
+     Row-per-test layout matching the markdown step-summary tables. */
+  .detail-card .device-name { background: #eef3fa; border-bottom-color: #cfdcee; }
+  .detail-sub {
+    font-size: 0.78rem;
+    font-weight: 400;
+    color: var(--text-secondary);
+    margin-left: 0.4rem;
+  }
+  .detail-table {
+    table-layout: auto;
+    font-size: 0.78rem;
+  }
+  .detail-table thead th {
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 0.72rem;
+  }
+  .detail-table tbody td {
+    white-space: nowrap;
+    text-align: right;
+  }
+  .detail-table tbody td:first-child,
+  .detail-table tbody td:nth-child(2),
+  .detail-table tbody td:nth-child(3),
+  .detail-table tbody td:nth-child(4) {
+    text-align: left;
+  }
+
+  /* Scenario sub-heading inside a detail-card test-block. */
+  .scenario-name {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--accent);
+    margin: 0.25rem 0 0.4rem;
+    text-transform: lowercase;
+    letter-spacing: 0.02em;
+  }
+
   .q-good {
     background: rgba(40, 167, 69, 0.12);
     color: #1a7f37;
@@ -1057,6 +1515,8 @@ function generateHtmlReport (aggregated) {
   </div>
 </header>
 
+${detailSections ? `<h2 class="section-divider">Per-Device Summary</h2>` + detailSections : ''}
+
 ${deviceCards}
 
 ${qualitySection ? `<h2 class="section-divider">Accuracy &amp; Quality</h2>` + qualitySection : ''}
@@ -1180,6 +1640,7 @@ module.exports = {
   metricLabel,
   formatMetricValue,
   generateMarkdownReport,
+  generateDeviceDetailTables,
   generateHtmlReport,
   aggregateReports
 }

@@ -1,0 +1,1271 @@
+'use strict'
+
+const test = require('brittle')
+const os = require('bare-os')
+const path = require('bare-path')
+const fs = require('bare-fs')
+const process = require('bare-process')
+const { loadChatterboxTTS, runChatterboxTTS, runChatterboxTTSWithSplit } = require('../utils/runChatterboxTTS')
+const { loadSupertonicTTS, runSupertonicTTS, runSupertonicStream, runSupertonicStreaming } = require('../utils/runSupertonicTTS')
+const { ensureChatterboxModels, ensureSupertonicModels, ensureSupertonicModelsMultilingual, ensureWhisperModel, ensureLavaSRModels } = require('../utils/downloadModel')
+const { loadWhisper, runWhisper } = require('../utils/runWhisper')
+const { lavasrEnhancerConfig, loadReferenceAudio } = require('../utils/lavasr-helpers')
+
+const platform = os.platform()
+const isMobile = platform === 'ios' || platform === 'android'
+
+const CHATTERBOX_VARIANT = os.getEnv('CHATTERBOX_VARIANT') || 'q4'
+const VARIANT_SUFFIX = CHATTERBOX_VARIANT === 'fp32' ? '' : `_${CHATTERBOX_VARIANT}`
+const INPUT_SENTENCES = (isMobile ? 'short' : os.getEnv('INPUT_SENTENCES')) || 'short'
+const TEST_ALL_LANGUAGES = os.getEnv('TEST_ALL_LANGUAGES') === 'true'
+const _integrationProfileRaw = (os.getEnv('TTS_INTEGRATION_PROFILE') || 'long').toLowerCase()
+const TTS_INTEGRATION_PROFILE = (_integrationProfileRaw === 'short' || _integrationProfileRaw === 'long')
+  ? _integrationProfileRaw
+  : 'long'
+const runWerIntegration = TTS_INTEGRATION_PROFILE === 'long'
+const useSplit = INPUT_SENTENCES !== 'short'
+
+// ---------------------------------------------------------------------------
+// Supertonic mobile performance reporter
+// ---------------------------------------------------------------------------
+
+let createPerformanceReporter
+const _perfReporterPath = '../../../../scripts/test-utils/performance-reporter'
+try {
+  const perfReporterMod = require(_perfReporterPath)
+  perfReporterMod.configure({ fs, path, process, os })
+  createPerformanceReporter = perfReporterMod.createPerformanceReporter
+} catch (_) {
+  createPerformanceReporter = function (opts) {
+    const results = []
+    const startedAt = new Date().toISOString()
+    const addon = (opts && opts.addon) || 'onnx-tts'
+    const addonType = (opts && opts.addonType) || 'tts'
+    const device = {
+      name: platform,
+      platform,
+      os_version: '',
+      arch: os.arch ? os.arch() : '',
+      runner: isMobile ? 'device-farm' : 'local'
+    }
+
+    return {
+      record (testName, metrics, extra) {
+        results.push({
+          test: testName,
+          execution_provider: (extra && extra.execution_provider) || null,
+          metrics: Object.assign({
+            total_time_ms: null,
+            tps: null,
+            real_time_factor: null,
+            sample_count: null,
+            duration_ms: null
+          }, metrics),
+          input: (extra && extra.input) || null,
+          output: (extra && extra.output) || null
+        })
+      },
+      toJSON () {
+        return {
+          schema_version: '1.0',
+          addon,
+          addon_type: addonType,
+          timestamp: startedAt,
+          device,
+          results
+        }
+      },
+      writeReport (destPath) {
+        const json = JSON.stringify(this.toJSON(), null, 2) + '\n'
+        const targets = destPath && !isMobile ? [destPath] : []
+        if (!destPath || isMobile) {
+          if (global.testDir) targets.push(path.join(global.testDir, 'perf-report.json'))
+          if (platform === 'android') {
+            targets.push('/sdcard/Android/data/io.tether.test.qvac/files/perf-report.json')
+            targets.push('/storage/emulated/0/Android/data/io.tether.test.qvac/files/perf-report.json')
+          }
+          targets.push('/tmp/perf-report.json')
+        }
+        for (const target of targets) {
+          try {
+            fs.mkdirSync(path.dirname(target), { recursive: true })
+            fs.writeFileSync(target, json)
+            console.log('[PERF_REPORT_PATH]' + target)
+          } catch (err) {
+            console.log('[perf-reporter] write to ' + target + ' failed: ' + err.message)
+          }
+        }
+      },
+      writeStepSummary () {},
+      writeToConsole () {
+        try {
+          const json = JSON.stringify(this.toJSON())
+          const chunkSize = 800
+          if (json.length <= chunkSize) {
+            console.log('[PERF_REPORT_START]' + json + '[PERF_REPORT_END]')
+            return
+          }
+          const id = Date.now().toString(36)
+          const total = Math.ceil(json.length / chunkSize)
+          for (let i = 0; i < total; i++) {
+            console.log('[PERF_CHUNK:' + id + ':' + i + ':' + total + ']' + json.substring(i * chunkSize, (i + 1) * chunkSize))
+          }
+        } catch (err) {
+          console.log('[perf-reporter] mobile console write failed: ' + err.message)
+        }
+      },
+      get length () { return results.length }
+    }
+  }
+}
+
+const _supertonicPerfReporter = createPerformanceReporter({
+  addon: 'onnx-tts',
+  addonType: 'tts'
+})
+
+const _supertonicReportPath = path.resolve('.', 'test/results/performance-report.json')
+let _supertonicReportScheduled = false
+
+function flushSupertonicPerfReport () {
+  if (_supertonicPerfReporter.length === 0) return
+  try { _supertonicPerfReporter.writeReport(_supertonicReportPath) } catch (_) {}
+  try { _supertonicPerfReporter.writeToConsole() } catch (_) {}
+}
+
+function scheduleSupertonicPerfReport () {
+  if (_supertonicReportScheduled) return
+  _supertonicReportScheduled = true
+  process.on('exit', flushSupertonicPerfReport)
+}
+
+function recordSupertonicResult (label, result, extra = {}) {
+  const stats = result && result.data && result.data.stats
+  if (!stats || typeof stats !== 'object') return
+
+  const totalTimeMs = typeof stats.totalTime === 'number'
+    ? Math.round(stats.totalTime * 1000)
+    : null
+  const durationMs = typeof result.data.durationMs === 'number'
+    ? Math.round(result.data.durationMs)
+    : (typeof stats.audioDurationMs === 'number' ? Math.round(stats.audioDurationMs) : null)
+  const provider = extra.executionProvider || (isMobile ? 'gpu' : 'cpu')
+
+  _supertonicPerfReporter.record(label, {
+    total_time_ms: totalTimeMs,
+    tps: typeof stats.tokensPerSecond === 'number' ? stats.tokensPerSecond : null,
+    real_time_factor: typeof stats.realTimeFactor === 'number' ? stats.realTimeFactor : null,
+    sample_count: typeof result.data.sampleCount === 'number' ? result.data.sampleCount : stats.totalSamples || null,
+    duration_ms: durationMs
+  }, {
+    execution_provider: provider,
+    input: extra.input || null
+  })
+  scheduleSupertonicPerfReport()
+
+  if (isMobile) {
+    flushSupertonicPerfReport()
+  }
+}
+
+function chatterboxPath (modelDir, baseName, isMultilingual = false) {
+  const suffix = isMultilingual ? '' : VARIANT_SUFFIX
+  return path.join(modelDir, `${baseName}${suffix}.onnx`)
+}
+
+function chatterboxLmPath (modelDir) {
+  return path.join(modelDir, `language_model${VARIANT_SUFFIX}.onnx`)
+}
+
+function getBaseDir () {
+  return isMobile && global.testDir ? global.testDir : '.'
+}
+
+const ENGLISH_SENTENCES_SHORT = [
+  'The quick brown fox jumps over the lazy dog.',
+  'How are you doing today?'
+]
+
+const MULTILINGUAL_SENTENCES_BASE = {
+  es: 'Hola mundo. Esta es una prueba del sistema de texto a voz.',
+  pt: 'Olá mundo! Essa é uma demonstração de síntese de texto para voz usando Chatterbox.',
+  he: 'שלום עולם.',
+  ko: '안녕하세요. 한글입니다.'
+}
+
+const MULTILINGUAL_SENTENCES_EXTENDED = {
+  ar: 'مرحبا بالعالم.',
+  da: 'Hej verden. Vejret er smukt i dag.',
+  el: 'Γεια σου κόσμε. Ο καιρός είναι όμορφος.',
+  fi: 'Hei maailma. Sää on kaunis tänään.',
+  hi: 'नमस्ते दुनिया. आज मौसम अच्छा है.',
+  ms: 'Helo dunia. Cuaca hari ini sangat cantik.',
+  nl: 'Hallo wereld. Het weer is vandaag prachtig.',
+  no: 'Hei verden. Været er vakkert i dag.',
+  pl: 'Witaj świecie. Pogoda jest dziś piękna.',
+  sv: 'Hej världen. Vädret är vackert idag.',
+  sw: 'Habari dunia. Hali ya hewa ni nzuri leo.',
+  tr: 'Merhaba dünya. Bugün hava çok güzel.'
+}
+
+const MULTILINGUAL_SENTENCES_SHORT = TEST_ALL_LANGUAGES
+  ? { ...MULTILINGUAL_SENTENCES_BASE, ...MULTILINGUAL_SENTENCES_EXTENDED }
+  : MULTILINGUAL_SENTENCES_BASE
+
+function getEnglishSentences () {
+  if (INPUT_SENTENCES === 'short') return ENGLISH_SENTENCES_SHORT
+  const data = require(`../data/sentences-${INPUT_SENTENCES}`)
+  return [data.en]
+}
+
+function getMultilingualSentences () {
+  const sentences = INPUT_SENTENCES === 'short'
+    ? MULTILINGUAL_SENTENCES_SHORT
+    : (() => { const { en, ...multilingual } = require(`../data/sentences-${INPUT_SENTENCES}`); return multilingual })()
+  if (TTS_INTEGRATION_PROFILE === 'short') {
+    return Object.fromEntries(Object.keys(sentences).slice(0, 2).map((k) => [k, sentences[k]]))
+  }
+  return sentences
+}
+
+function runChatterboxSynth (model, params, expectation) {
+  if (useSplit) return runChatterboxTTSWithSplit(model, params, expectation)
+  return runChatterboxTTS(model, params, expectation)
+}
+
+// ---------------------------------------------------------------------------
+// Chatterbox English + Reload + WER
+// ---------------------------------------------------------------------------
+
+test('Chatterbox TTS: English + Spanish synthesis and WER verification', { timeout: 1800000 }, async (t) => {
+  const baseDir = getBaseDir()
+  const enModelDir = path.join(baseDir, 'models', 'chatterbox')
+  const multiModelDir = path.join(baseDir, 'models', 'chatterbox-multilingual')
+  const whisperModelDir = path.join(baseDir, 'models', 'whisper')
+
+  console.log('\n=== Ensuring Chatterbox English models ===')
+  const enDownload = await ensureChatterboxModels({ targetDir: enModelDir, variant: CHATTERBOX_VARIANT })
+  t.ok(enDownload.success, 'Chatterbox English models should be downloaded')
+  if (!enDownload.success) return
+
+  console.log('\n=== Ensuring Chatterbox multilingual models ===')
+  const multiDownload = await ensureChatterboxModels({ targetDir: multiModelDir, language: 'multilingual', variant: CHATTERBOX_VARIANT })
+  t.ok(multiDownload.success, 'Chatterbox multilingual models should be downloaded')
+  if (!multiDownload.success) return
+
+  if (runWerIntegration && INPUT_SENTENCES === 'short') {
+    console.log('\n=== Ensuring Whisper model ===')
+    const whisperModelPath = path.join(whisperModelDir, 'ggml-small.bin')
+    await ensureWhisperModel(whisperModelPath)
+    t.pass('Whisper model downloaded')
+  }
+
+  const expectation = {
+    minSamples: 5000,
+    maxSamples: 5000000,
+    minDurationMs: 200,
+    maxDurationMs: 300000
+  }
+
+  const werEntries = []
+  const englishSentences = getEnglishSentences()
+
+  console.log(`\n=== [1/2] English synthesis (${englishSentences.length} sentences, tier: ${INPUT_SENTENCES}) ===`)
+  const enModel = await loadChatterboxTTS({
+    tokenizerPath: path.join(enModelDir, 'tokenizer.json'),
+    speechEncoderPath: chatterboxPath(enModelDir, 'speech_encoder'),
+    embedTokensPath: chatterboxPath(enModelDir, 'embed_tokens'),
+    conditionalDecoderPath: chatterboxPath(enModelDir, 'conditional_decoder'),
+    languageModelPath: chatterboxLmPath(enModelDir),
+    language: 'en'
+  })
+  t.ok(enModel, 'English TTS model should be loaded')
+
+  for (let i = 0; i < englishSentences.length; i++) {
+    const text = englishSentences[i]
+    console.log(`\n--- English ${i + 1}/${englishSentences.length}: "${text.substring(0, 60)}${text.length > 60 ? '...' : ''}" ---`)
+
+    const saveWav = !isMobile
+    const wavPath = saveWav ? path.join(baseDir, 'test', 'output', `chatterbox-english-${i + 1}.wav`) : undefined
+    const result = await runChatterboxSynth(enModel, { text, saveWav, wavOutputPath: wavPath }, expectation)
+    console.log(result.output)
+
+    t.ok(result.passed, `English TTS ${i + 1} should pass expectations`)
+    t.ok(result.data.sampleCount > 0, `English TTS ${i + 1} should produce audio samples`)
+    t.is(result.data.reportedSampleRate, 24000, 'Sample rate should be native 24kHz without enhancement')
+
+    const wavBuffer = result.data?.wavBuffer ? Buffer.from(result.data.wavBuffer) : null
+    werEntries.push({ text, lang: 'en', wavBuffer, sampleCount: result.data.sampleCount, durationMs: result.data.durationMs })
+  }
+
+  await enModel.unload()
+  t.pass('English model unloaded')
+
+  console.log('\n=== [2/2] Spanish synthesis (multilingual model) ===')
+  const multiModel = await loadChatterboxTTS({
+    tokenizerPath: path.join(multiModelDir, 'tokenizer.json'),
+    speechEncoderPath: chatterboxPath(multiModelDir, 'speech_encoder', true),
+    embedTokensPath: chatterboxPath(multiModelDir, 'embed_tokens', true),
+    conditionalDecoderPath: chatterboxPath(multiModelDir, 'conditional_decoder', true),
+    languageModelPath: chatterboxLmPath(multiModelDir),
+    language: 'es'
+  })
+  t.ok(multiModel, 'Multilingual TTS model should be loaded')
+
+  const spanishText = 'Hola mundo! Esta es una prueba del sistema de texto a voz.'
+  const spanishSaveWav = !isMobile
+  const spanishWavPath = spanishSaveWav ? path.join(baseDir, 'test', 'output', 'chatterbox-spanish.wav') : undefined
+  const spanishResult = await runChatterboxTTS(multiModel, { text: spanishText, saveWav: spanishSaveWav, wavOutputPath: spanishWavPath }, expectation)
+  console.log(spanishResult.output)
+
+  t.ok(spanishResult.passed, 'Spanish TTS should pass expectations')
+  t.ok(spanishResult.data.sampleCount > 0, 'Spanish TTS should produce audio samples')
+
+  const spanishWavBuffer = spanishResult.data?.wavBuffer ? Buffer.from(spanishResult.data.wavBuffer) : null
+  werEntries.push({ text: spanishText, lang: 'es', wavBuffer: spanishWavBuffer, sampleCount: spanishResult.data.sampleCount, durationMs: spanishResult.data.durationMs })
+
+  await multiModel.unload()
+  t.pass('Multilingual model unloaded')
+
+  console.log('\n=== WER verification ===')
+  if (!runWerIntegration) {
+    console.log('WER verification skipped (TTS_INTEGRATION_PROFILE=short)')
+    t.pass('WER skipped (TTS_INTEGRATION_PROFILE=short)')
+  } else if (INPUT_SENTENCES !== 'short') {
+    console.log('WER verification skipped (non-short input)')
+    t.pass('WER skipped (non-short input)')
+  } else {
+    const whisperModel = await loadWhisper({
+      modelName: 'ggml-small.bin',
+      diskPath: whisperModelDir,
+      language: 'en'
+    })
+    t.ok(whisperModel, 'Whisper model should be loaded')
+
+    for (let i = 0; i < werEntries.length; i++) {
+      const entry = werEntries[i]
+      if (!entry.wavBuffer) {
+        console.log(`\n--- Whisper ${i + 1}/${werEntries.length}: Skipped (no WAV buffer) ---`)
+        continue
+      }
+
+      if (entry.lang !== 'en') {
+        await whisperModel.reload({ whisperConfig: { language: entry.lang, translate: false } })
+      }
+
+      console.log(`\n--- Whisper ${i + 1}/${werEntries.length} [${entry.lang}]: "${entry.text.substring(0, 50)}..." ---`)
+      const whisperResult = await runWhisper(whisperModel, entry.text, entry.wavBuffer)
+      const werPct = (whisperResult.wer * 100).toFixed(1)
+      console.log(`>>> [WHISPER] [${entry.lang}] WER: ${werPct}%`)
+
+      const threshold = entry.lang === 'en' ? 0.4 : 0.5
+      t.ok(whisperResult.wer <= threshold, `WER [${entry.lang}] should be <= ${threshold * 100}% (got ${werPct}%)`)
+    }
+
+    await whisperModel.unload()
+    console.log('Whisper model unloaded')
+  }
+
+  console.log('\n' + '='.repeat(60))
+  console.log('CHATTERBOX ENGLISH + SPANISH TEST SUMMARY')
+  console.log('='.repeat(60))
+  for (const e of werEntries) {
+    console.log(`  [${e.lang}] ${e.sampleCount} samples, ${e.durationMs?.toFixed(0) || 'N/A'}ms - "${e.text.substring(0, 50)}..."`)
+  }
+  console.log('='.repeat(60))
+})
+
+// ---------------------------------------------------------------------------
+// Chatterbox Multilingual TTS (parameterized by INPUT_SENTENCES)
+// ---------------------------------------------------------------------------
+
+test('Chatterbox Multilingual TTS: Synthesis across languages', { timeout: 3600000 }, async (t) => {
+  if (isMobile) {
+    t.pass('Skipped on mobile')
+    return
+  }
+
+  const baseDir = getBaseDir()
+  const modelDir = path.join(baseDir, 'models', 'chatterbox-multilingual')
+
+  console.log('\n=== Ensuring Chatterbox multilingual models ===')
+  const downloadResult = await ensureChatterboxModels({ targetDir: modelDir, language: 'multilingual', variant: CHATTERBOX_VARIANT })
+  t.ok(downloadResult.success, 'Chatterbox multilingual models should be downloaded')
+  if (!downloadResult.success) return
+
+  const multilingualSentences = getMultilingualSentences()
+  const languages = Object.keys(multilingualSentences)
+  const firstLang = languages[0]
+
+  const expectation = {
+    minSamples: 5000,
+    maxSamples: 5000000,
+    minDurationMs: 200,
+    maxDurationMs: 300000
+  }
+
+  const modelParams = {
+    tokenizerPath: path.join(modelDir, 'tokenizer.json'),
+    speechEncoderPath: chatterboxPath(modelDir, 'speech_encoder', true),
+    embedTokensPath: chatterboxPath(modelDir, 'embed_tokens', true),
+    conditionalDecoderPath: chatterboxPath(modelDir, 'conditional_decoder', true),
+    languageModelPath: chatterboxLmPath(modelDir),
+    language: firstLang
+  }
+
+  console.log(`\n=== Loading Chatterbox multilingual model (${firstLang}, tier: ${INPUT_SENTENCES}) ===`)
+  const model = await loadChatterboxTTS(modelParams)
+  t.ok(model, 'Multilingual TTS model should be loaded')
+
+  const results = []
+
+  for (let i = 0; i < languages.length; i++) {
+    const lang = languages[i]
+    const text = multilingualSentences[lang]
+
+    if (i > 0) {
+      console.log(`\n=== Reloading model for language: ${lang} ===`)
+      try {
+        await model.reload({ language: lang })
+      } catch (err) {
+        t.fail(`Failed to reload for language ${lang}: ${err.message}`)
+        continue
+      }
+    }
+
+    console.log(`\n--- [${lang}] "${text.substring(0, 60)}${text.length > 60 ? '...' : ''}" ---`)
+
+    const saveWav = !isMobile
+    const wavPath = saveWav
+      ? path.join(baseDir, 'test', 'output', `chatterbox-multilingual-${lang}-${INPUT_SENTENCES}.wav`)
+      : undefined
+
+    const startTime = Date.now()
+    const result = await runChatterboxSynth(model, { text, saveWav, wavOutputPath: wavPath }, expectation)
+    const elapsedMs = Date.now() - startTime
+
+    console.log(result.output)
+
+    t.ok(result.passed, `[${lang}] ${INPUT_SENTENCES} should pass expectations`)
+    t.ok(result.data.sampleCount > 0, `[${lang}] ${INPUT_SENTENCES} should produce audio`)
+    t.is(result.data.sampleRate, 24000, `[${lang}] sample rate should be 24kHz`)
+
+    results.push({ lang, text, sampleCount: result.data.sampleCount, durationMs: result.data.durationMs, elapsedMs, stats: result.data.stats })
+  }
+
+  console.log('\n=== Unloading multilingual model ===')
+  try {
+    await model.unload()
+    t.pass('Model unloaded successfully')
+  } catch (err) {
+    t.fail(`Model unload failed: ${err.message}`)
+  }
+
+  console.log('\n' + '='.repeat(60))
+  console.log(`CHATTERBOX MULTILINGUAL TEST SUMMARY (tier: ${INPUT_SENTENCES})`)
+  console.log('='.repeat(60))
+  for (const r of results) {
+    const durationSec = (r.durationMs || 0) / 1000
+    const rtf = durationSec > 0 ? (r.elapsedMs / 1000 / durationSec).toFixed(2) : 'N/A'
+    console.log(`  [${r.lang}] ${r.sampleCount} samples, ${r.durationMs?.toFixed(0) || 'N/A'}ms audio, RTF: ${rtf} - "${r.text.substring(0, 40)}..."`)
+  }
+  console.log('='.repeat(60))
+})
+
+// ---------------------------------------------------------------------------
+// Chatterbox Japanese TTS (kanji + MeCab) synthesis
+// ---------------------------------------------------------------------------
+
+const TEXT_JA = 'こんにちは世界。今日はいい天気です。'
+
+function resolveMecabDictDir () {
+  const indexJsDir = path.dirname(require.resolve('../../index.js'))
+  return path.join(indexJsDir, 'dict')
+}
+
+function statSizeSafe (p) {
+  try {
+    return fs.statSync(p).size
+  } catch (e) {
+    return null
+  }
+}
+
+function diagnoseMecabDict () {
+  const dictDir = resolveMecabDictDir()
+  const ipadicDir = path.join(dictDir, 'mecab-ipadic')
+  console.log('\n=== MeCab dict diagnostic ===')
+  console.log(`>>> [MECAB] dict root:   ${dictDir} (exists=${fs.existsSync(dictDir)})`)
+  console.log(`>>> [MECAB] ipadic dir:  ${ipadicDir} (exists=${fs.existsSync(ipadicDir)})`)
+  const expectedFiles = ['mecabrc', 'sys.dic', 'unk.dic', 'matrix.bin', 'char.bin', 'dicrc']
+  for (const name of expectedFiles) {
+    const filePath = path.join(ipadicDir, name)
+    const size = statSizeSafe(filePath)
+    console.log(`>>> [MECAB]   ${name.padEnd(12)} -> exists=${size !== null}, size=${size}`)
+  }
+  if (fs.existsSync(ipadicDir)) {
+    try {
+      const entries = fs.readdirSync(ipadicDir)
+      console.log(`>>> [MECAB] readdir ipadic-dir: [${entries.join(', ')}]`)
+    } catch (e) {
+      console.log(`>>> [MECAB] readdir failed: ${e && e.message}`)
+    }
+  }
+}
+
+test('Chatterbox Multilingual TTS: Japanese (kanji + MeCab) synthesis', { timeout: 3600000 }, async (t) => {
+  if (isMobile) {
+    t.pass('Skipped on mobile')
+    return
+  }
+
+  const baseDir = getBaseDir()
+  const modelDir = path.join(baseDir, 'models', 'chatterbox-multilingual')
+
+  console.log('\n=== Ensuring Chatterbox multilingual models ===')
+  const downloadResult = await ensureChatterboxModels({ targetDir: modelDir, language: 'multilingual', variant: CHATTERBOX_VARIANT })
+  t.ok(downloadResult.success, 'Chatterbox multilingual models should be downloaded')
+  if (!downloadResult.success) return
+
+  const expectation = {
+    minSamples: 5000,
+    maxSamples: 5000000,
+    minDurationMs: 200,
+    maxDurationMs: 300000
+  }
+
+  diagnoseMecabDict()
+
+  console.log('\n=== Loading Chatterbox multilingual model (ja) ===')
+  const model = await loadChatterboxTTS({
+    tokenizerPath: path.join(modelDir, 'tokenizer.json'),
+    speechEncoderPath: chatterboxPath(modelDir, 'speech_encoder', true),
+    embedTokensPath: chatterboxPath(modelDir, 'embed_tokens', true),
+    conditionalDecoderPath: chatterboxPath(modelDir, 'conditional_decoder', true),
+    languageModelPath: chatterboxLmPath(modelDir),
+    language: 'ja'
+  })
+  t.ok(model, 'Japanese TTS model should be loaded')
+
+  console.log(`\nInput text: "${TEXT_JA}"`)
+  const saveWav = !isMobile
+  const wavPath = saveWav ? path.join(baseDir, 'test', 'output', 'chatterbox-japanese.wav') : undefined
+  const result = await runChatterboxSynth(model, { text: TEXT_JA, saveWav, wavOutputPath: wavPath }, expectation)
+  console.log(result.output)
+
+  t.ok(result.passed, '[ja] should pass basic audio bounds')
+  t.ok(result.data.sampleCount > 0, '[ja] should produce audio samples')
+
+  await model.unload()
+  t.pass('Japanese TTS model unloaded')
+})
+
+// ---------------------------------------------------------------------------
+// outputSampleRate tests (no LavaSR models needed, tests resampling)
+// ---------------------------------------------------------------------------
+
+test('Supertonic TTS: outputSampleRate resamples to 16kHz', { timeout: 1800000 }, async (t) => {
+  const baseDir = getBaseDir()
+  const modelDir = path.join(baseDir, 'models', 'supertonic')
+
+  const downloadResult = await ensureSupertonicModels({ targetDir: modelDir })
+  if (!downloadResult.success) {
+    console.log('Failed to download Supertonic models, skipping test')
+    return
+  }
+
+  const ONNXTTS = require('../..')
+  const targetRate = 16000
+
+  const model = new ONNXTTS({
+    files: { modelDir },
+    voiceName: 'F1',
+    config: { language: 'en', outputSampleRate: targetRate },
+    opts: { stats: true }
+  })
+
+  await model.load()
+
+  let outputArray = []
+  let reportedSampleRate = null
+  const response = await model.run({ type: 'text', input: 'Hello world.' })
+  await response
+    .onUpdate(data => {
+      if (data && data.outputArray) {
+        outputArray = outputArray.concat(Array.from(data.outputArray))
+        if (data.sampleRate) {
+          reportedSampleRate = data.sampleRate
+        }
+      }
+    })
+    .await()
+
+  t.ok(outputArray.length > 0, 'Should produce non-empty output audio')
+  t.is(reportedSampleRate, targetRate, `Reported sample rate should be ${targetRate}Hz`)
+
+  const nativeRate = 44100
+  const expectedRatio = targetRate / nativeRate
+  const nativeSamples = outputArray.length / expectedRatio
+  t.ok(nativeSamples > 1000, 'Estimated native sample count should be plausible')
+
+  console.log(`Output: ${outputArray.length} samples @ ${reportedSampleRate}Hz (resampled from ${nativeRate}Hz)`)
+
+  await model.unload()
+})
+
+// ---------------------------------------------------------------------------
+// Supertonic TTS tests
+// ---------------------------------------------------------------------------
+
+const SUPERTONIC_SAMPLE_RATE = 44100
+const SUPERTONIC_WER_THRESHOLD = 0.3
+
+const SUPERTONIC_DATASET = [
+  'The quick brown fox jumps over the lazy dog.',
+  'How are you doing today?',
+  'Artificial intelligence is transforming the world.',
+  'The weather is beautiful outside.'
+]
+
+test('Supertonic TTS: Basic synthesis test', { timeout: 1800000 }, async (t) => {
+  const baseDir = getBaseDir()
+  const modelDir = path.join(baseDir, 'models', 'supertonic')
+
+  console.log('\n=== Ensuring Supertonic models ===')
+  const downloadResult = await ensureSupertonicModels({ targetDir: modelDir })
+  t.ok(downloadResult.success, 'Supertonic models should be downloaded')
+  if (!downloadResult.success) {
+    console.log('Failed to download Supertonic models, skipping test')
+    return
+  }
+
+  const modelParams = {
+    modelDir,
+    voiceName: 'F1',
+    language: 'en',
+    supertonicMultilingual: false
+  }
+
+  console.log('\n=== Loading Supertonic TTS model ===')
+  const model = await loadSupertonicTTS(modelParams)
+  t.ok(model, 'Supertonic TTS model should be loaded')
+  t.ok(model.addon, 'Addon should be created')
+
+  console.log('\n=== Running Supertonic TTS synthesis ===')
+  const text = 'Hello world! This is a test of the Supertonic text to speech system.'
+
+  const expectation = {
+    minSamples: 10000,
+    maxSamples: 500000,
+    minDurationMs: 400,
+    maxDurationMs: 20000
+  }
+
+  const saveWav = !isMobile
+  const wavOutputPath = saveWav ? path.join(__dirname, '../output/supertonic-test.wav') : undefined
+  const result = await runSupertonicTTS(model, { text, saveWav, wavOutputPath }, expectation)
+  console.log(result.output)
+
+  t.ok(result.passed, 'Supertonic TTS synthesis should pass expectations')
+  t.ok(result.data.sampleCount > 0, 'Supertonic TTS should produce audio samples')
+  t.is(SUPERTONIC_SAMPLE_RATE, 44100, 'Supertonic output sample rate is 44.1kHz')
+  t.is(result.data.reportedSampleRate, 44100, 'Sample rate should be native 44.1kHz without enhancement')
+  recordSupertonicResult('Supertonic basic synthesis', result, { input: text })
+
+  if (result.data?.stats) {
+    console.log(`Inference stats: ${JSON.stringify(result.data.stats)}`)
+  }
+
+  console.log('\n=== Unloading Supertonic TTS model ===')
+  await model.unload()
+  t.pass('Model unloaded successfully')
+
+  console.log('\n' + '='.repeat(60))
+  console.log('SUPERTONIC BASIC TEST SUMMARY')
+  console.log('='.repeat(60))
+  console.log(`Text: "${text}"`)
+  console.log(`Samples: ${result.data.sampleCount}`)
+  console.log(`Duration: ${result.data.durationMs?.toFixed(0) || 'N/A'}ms`)
+  console.log(`Sample rate: ${SUPERTONIC_SAMPLE_RATE}Hz`)
+  if (result.data.stats) {
+    console.log(`Total time: ${result.data.stats.totalTime}s`)
+    console.log(`Real-time factor: ${result.data.stats.realTimeFactor}`)
+    console.log(`Tokens/sec: ${result.data.stats.tokensPerSecond}`)
+  }
+  console.log('='.repeat(60))
+})
+
+test('Supertonic TTS: Output-only stream (run({ streamOutput: true }) + onUpdate)', { timeout: 1800000 }, async (t) => {
+  const baseDir = getBaseDir()
+  const modelDir = path.join(baseDir, 'models', 'supertonic')
+
+  console.log('\n=== Ensuring Supertonic models (output-only stream) ===')
+  const downloadResult = await ensureSupertonicModels({ targetDir: modelDir })
+  t.ok(downloadResult.success, 'Supertonic models should be downloaded')
+  if (!downloadResult.success) {
+    console.log('Failed to download Supertonic models, skipping test')
+    return
+  }
+
+  const modelParams = {
+    modelDir,
+    voiceName: 'F1',
+    language: 'en',
+    supertonicMultilingual: false
+  }
+
+  console.log('\n=== Loading Supertonic TTS model (output-only stream) ===')
+  const model = await loadSupertonicTTS(modelParams)
+  t.ok(model, 'Supertonic TTS model should be loaded')
+
+  const text =
+    'The quick brown fox jumps over the lazy dog. How are you doing today? Artificial intelligence is transforming the world.'
+
+  const expectation = {
+    minSamples: 20000,
+    maxSamples: 900000,
+    minDurationMs: 400,
+    maxDurationMs: 120000
+  }
+
+  const saveWav = !isMobile
+  const wavOutputPath = saveWav
+    ? path.join(__dirname, '../output/supertonic-sentence-stream.wav')
+    : undefined
+
+  console.log('\n=== Running Supertonic output-only stream synthesis ===')
+  const result = await runSupertonicStream(
+    model,
+    {
+      text,
+      saveWav,
+      wavOutputPath,
+      streamOptions: { maxChunkScalars: 80 }
+    },
+    expectation
+  )
+  console.log(result.output)
+
+  t.ok(result.passed, 'Supertonic output-only stream should pass expectations')
+  t.ok(result.data.sampleCount > 0, 'Output-only stream should produce audio samples')
+  t.is(result.data.sampleRate, SUPERTONIC_SAMPLE_RATE, 'Output-only stream sample rate is 44.1kHz')
+  t.ok(
+    result.data.streamChunkCount >= 2,
+    'Output-only stream splits one string into multiple native chunks (>=2)'
+  )
+
+  t.is(
+    result.data.sentenceChunks.length,
+    result.data.streamChunkCount,
+    'Should collect one sentenceChunk per audio chunk'
+  )
+  recordSupertonicResult('Supertonic output-only stream', result, { input: text })
+  const normalizedInput = text.replace(/\s+/g, ' ').trim()
+  for (let i = 0; i < result.data.sentenceChunks.length; i++) {
+    const sc = result.data.sentenceChunks[i]
+    t.ok(typeof sc === 'string' && sc.trim().length > 0, `chunk ${i} should carry non-empty sentenceChunk`)
+    const n = sc.replace(/\s+/g, ' ').trim()
+    t.ok(
+      normalizedInput.includes(n),
+      `chunk ${i} text should be a substring of the single run() input (output-only, not runStreaming)`
+    )
+  }
+
+  if (result.data?.stats) {
+    console.log(`Inference stats: ${JSON.stringify(result.data.stats)}`)
+  }
+
+  await model.unload()
+  t.pass('Model unloaded successfully')
+
+  console.log('\n' + '='.repeat(60))
+  console.log('SUPERTONIC OUTPUT-ONLY STREAM TEST SUMMARY')
+  console.log('='.repeat(60))
+  console.log(`Text: "${text}"`)
+  console.log(`Chunks: ${result.data.streamChunkCount}`)
+  console.log(`Samples: ${result.data.sampleCount}`)
+  console.log(`Duration: ${result.data.durationMs?.toFixed(0) || 'N/A'}ms`)
+  console.log('='.repeat(60))
+})
+
+test('Supertonic TTS: IO stream (runStreaming + onUpdate)', { timeout: 1800000 }, async (t) => {
+  const baseDir = getBaseDir()
+  const modelDir = path.join(baseDir, 'models', 'supertonic')
+
+  console.log('\n=== Ensuring Supertonic models (IO stream) ===')
+  const downloadResult = await ensureSupertonicModels({ targetDir: modelDir })
+  t.ok(downloadResult.success, 'Supertonic models should be downloaded')
+  if (!downloadResult.success) {
+    console.log('Failed to download Supertonic models, skipping test')
+    return
+  }
+
+  const modelParams = {
+    modelDir,
+    voiceName: 'F1',
+    language: 'en',
+    supertonicMultilingual: false
+  }
+
+  console.log('\n=== Loading Supertonic TTS model (IO stream) ===')
+  const model = await loadSupertonicTTS(modelParams)
+  t.ok(model, 'Supertonic TTS model should be loaded')
+
+  const phrases = [
+    'First phrase arrives from the upstream text stream.',
+    'A short pause could sit between chunks.',
+    'Each yield is one discrete synthesis job.'
+  ]
+
+  const expectation = {
+    minSamples: 15000,
+    maxSamples: 900000,
+    minDurationMs: 400,
+    maxDurationMs: 120000
+  }
+
+  const saveWav = !isMobile
+  const wavOutputPath = saveWav
+    ? path.join(__dirname, '../output/supertonic-io-stream.wav')
+    : undefined
+
+  console.log('\n=== Running Supertonic IO stream synthesis (runStreaming) ===')
+  const result = await runSupertonicStreaming(
+    model,
+    {
+      phrases,
+      saveWav,
+      wavOutputPath
+    },
+    expectation
+  )
+  console.log(result.output)
+
+  t.ok(result.passed, 'Supertonic IO stream should pass expectations')
+  t.ok(result.data.sampleCount > 0, 'IO stream should produce audio samples')
+  t.is(result.data.sampleRate, SUPERTONIC_SAMPLE_RATE, 'IO stream sample rate is 44.1kHz')
+  t.is(
+    result.data.streamChunkCount,
+    phrases.length,
+    'runStreaming should emit one native chunk per yielded phrase'
+  )
+  t.is(result.data.sentenceChunks.length, phrases.length)
+  recordSupertonicResult('Supertonic IO stream', result, { input: phrases.join(' ') })
+  for (let i = 0; i < phrases.length; i++) {
+    t.is(
+      result.data.sentenceChunks[i],
+      phrases[i],
+      `chunk ${i} sentenceChunk should match the streamed-in phrase (not sentence-split from one string)`
+    )
+  }
+
+  if (result.data?.stats) {
+    console.log(`Inference stats: ${JSON.stringify(result.data.stats)}`)
+  }
+
+  await model.unload()
+  t.pass('Model unloaded successfully')
+
+  console.log('\n' + '='.repeat(60))
+  console.log('SUPERTONIC IO STREAM TEST SUMMARY')
+  console.log('='.repeat(60))
+  console.log(`Phrases: ${phrases.length}`)
+  console.log(`Chunks: ${result.data.streamChunkCount}`)
+  console.log(`Samples: ${result.data.sampleCount}`)
+  console.log(`Duration: ${result.data.durationMs?.toFixed(0) || 'N/A'}ms`)
+  console.log('='.repeat(60))
+})
+
+test('Supertonic TTS: Multiple sentences synthesis', { timeout: 1800000 }, async (t) => {
+  const baseDir = getBaseDir()
+  const modelDir = path.join(baseDir, 'models', 'supertonic')
+
+  console.log('\n=== Ensuring Supertonic models ===')
+  const downloadResult = await ensureSupertonicModels({ targetDir: modelDir })
+  t.ok(downloadResult.success, 'Supertonic models should be downloaded')
+  if (!downloadResult.success) {
+    console.log('Failed to download Supertonic models, skipping test')
+    return
+  }
+
+  const modelParams = {
+    modelDir,
+    voiceName: 'F1',
+    language: 'en',
+    supertonicMultilingual: false
+  }
+
+  const expectation = {
+    minSamples: 5000,
+    maxSamples: 500000,
+    minDurationMs: 200,
+    maxDurationMs: 20000
+  }
+
+  console.log('\n=== Loading Supertonic TTS model ===')
+  const model = await loadSupertonicTTS(modelParams)
+  t.ok(model, 'Supertonic TTS model should be loaded')
+
+  const results = []
+
+  for (let i = 0; i < SUPERTONIC_DATASET.length; i++) {
+    const text = SUPERTONIC_DATASET[i]
+    console.log(`\n--- Supertonic TTS ${i + 1}/${SUPERTONIC_DATASET.length}: "${text}" ---`)
+
+    const result = await runSupertonicTTS(model, { text }, expectation)
+    console.log(result.output)
+
+    t.ok(result.passed, `Supertonic TTS synthesis ${i + 1} should pass expectations`)
+    t.ok(result.data.sampleCount > 0, `Supertonic TTS synthesis ${i + 1} should produce samples`)
+
+    results.push({
+      text,
+      sampleCount: result.data.sampleCount,
+      durationMs: result.data.durationMs,
+      stats: result.data.stats
+    })
+    recordSupertonicResult(`Supertonic multiple sentences ${i + 1}`, result, { input: text })
+  }
+
+  await model.unload()
+  console.log('\nSupertonic TTS model unloaded')
+
+  console.log('\n' + '='.repeat(60))
+  console.log('SUPERTONIC MULTIPLE SENTENCES TEST SUMMARY')
+  console.log('='.repeat(60))
+  console.log(`Total sentences: ${SUPERTONIC_DATASET.length}`)
+  for (let i = 0; i < results.length; i++) {
+    const rtf = results[i].stats?.realTimeFactor ?? 'N/A'
+    console.log(`  ${i + 1}. "${results[i].text.substring(0, 40)}..." - ${results[i].sampleCount} samples, ${results[i].durationMs?.toFixed(0) || 'N/A'}ms, RTF: ${rtf}`)
+  }
+  console.log('='.repeat(60))
+})
+
+test('Supertonic TTS: WER test (TTS + Whisper)', { timeout: 1800000 }, async (t) => {
+  if (!runWerIntegration) {
+    console.log('WER test skipped (TTS_INTEGRATION_PROFILE=short)')
+    t.pass('WER test skipped (TTS_INTEGRATION_PROFILE=short)')
+    return
+  }
+
+  const baseDir = getBaseDir()
+  const modelDir = path.join(baseDir, 'models', 'supertonic')
+  const whisperPath = path.join(baseDir, 'models', 'whisper', 'ggml-small.bin')
+
+  console.log('\n=== Ensuring Supertonic models ===')
+  const supertonicResult = await ensureSupertonicModels({ targetDir: modelDir })
+  t.ok(supertonicResult.success, 'Supertonic models should be downloaded')
+  if (!supertonicResult.success) {
+    console.log('Failed to download Supertonic models, skipping test')
+    return
+  }
+
+  console.log('\n=== Ensuring Whisper model ===')
+  const whisperResult = await ensureWhisperModel(whisperPath)
+  if (!whisperResult.success) {
+    t.skip('Whisper model not available - skipping WER test')
+    return
+  }
+
+  const text = 'The quick brown fox jumps over the lazy dog.'
+  const modelParams = { modelDir, voiceName: 'F1', language: 'en', supertonicMultilingual: false }
+
+  console.log('\n=== Loading Supertonic TTS and running synthesis ===')
+  const ttsModel = await loadSupertonicTTS(modelParams)
+  t.ok(ttsModel, 'Supertonic TTS model should be loaded')
+
+  const ttsResult = await runSupertonicTTS(ttsModel, { text }, {})
+  t.ok(ttsResult.passed && ttsResult.data?.wavBuffer, 'TTS should produce WAV')
+  await ttsModel.unload()
+
+  if (!ttsResult.data?.wavBuffer) {
+    t.fail('No WAV buffer for Whisper')
+    return
+  }
+
+  console.log('\n=== Loading Whisper and transcribing ===')
+  const whisperModel = await loadWhisper({
+    modelName: 'ggml-small.bin',
+    diskPath: path.join(baseDir, 'models', 'whisper'),
+    language: 'en'
+  })
+  t.ok(whisperModel, 'Whisper model should be loaded')
+
+  const { wer } = await runWhisper(whisperModel, text, ttsResult.data.wavBuffer)
+  const werPct = (wer * 100).toFixed(1)
+
+  t.ok(wer <= SUPERTONIC_WER_THRESHOLD, `WER should be <= ${SUPERTONIC_WER_THRESHOLD * 100}%, got ${werPct}%`)
+
+  await whisperModel.unload()
+})
+
+test('Supertonic TTS multilingual (Spanish): basic synthesis with HF Supertone/supertonic-2 weights', { timeout: 1800000 }, async (t) => {
+  const baseDir = getBaseDir()
+  const modelDir = path.join(baseDir, 'models', 'supertonic-multilingual')
+
+  console.log('\n=== Ensuring Supertonic multilingual models (HF supertonic-2) ===')
+  const downloadResult = await ensureSupertonicModelsMultilingual({ targetDir: modelDir })
+  t.ok(downloadResult.success, 'Supertonic multilingual models should be downloaded')
+  if (!downloadResult.success) {
+    console.log('Failed to download Supertonic multilingual models, skipping test')
+    return
+  }
+
+  const modelParams = {
+    modelDir,
+    voiceName: 'F1',
+    language: 'es',
+    supertonicMultilingual: true
+  }
+
+  console.log('\n=== Loading Supertonic multilingual TTS model ===')
+  const model = await loadSupertonicTTS(modelParams)
+  t.ok(model, 'Supertonic multilingual TTS model should be loaded')
+
+  const text =
+    'Hola mundo. Esta es una prueba del sistema Supertonic de síntesis de voz en español.'
+  const expectation = {
+    minSamples: 8000,
+    maxSamples: 800000,
+    minDurationMs: 400,
+    maxDurationMs: 30000
+  }
+
+  const result = await runSupertonicTTS(model, { text }, expectation)
+  t.ok(result.passed, 'Supertonic multilingual Spanish synthesis should pass expectations')
+  t.ok(result.data.sampleCount > 0, 'Supertonic multilingual should produce audio samples')
+  recordSupertonicResult('Supertonic multilingual Spanish synthesis', result, { input: text })
+
+  await model.unload()
+  console.log('\nSupertonic multilingual TTS model unloaded')
+})
+
+// ---------------------------------------------------------------------------
+// LavaSR enhancement integration tests
+// ---------------------------------------------------------------------------
+
+const ENHANCED_SAMPLE_RATE = 48000
+
+test('LavaSR: Chatterbox + enhance produces 48kHz output', { timeout: 1800000 }, async (t) => {
+  if (isMobile) { t.pass('Skipped on mobile — LavaSR models not bundled'); return }
+  const baseDir = getBaseDir()
+  const chatterboxDir = path.join(baseDir, 'models', 'chatterbox')
+  const lavasrDir = path.join(baseDir, 'models', 'lavasr')
+
+  const cbResult = await ensureChatterboxModels({ targetDir: chatterboxDir, variant: CHATTERBOX_VARIANT })
+  const lsResult = await ensureLavaSRModels({ targetDir: lavasrDir })
+
+  if (!cbResult.success || !lsResult.success) {
+    t.fail('Required models not available (Chatterbox: ' + cbResult.success + ', LavaSR: ' + lsResult.success + ')')
+    return
+  }
+
+  const referenceAudio = loadReferenceAudio()
+  const ONNXTTS = require('../..')
+
+  const model = new ONNXTTS({
+    files: {
+      tokenizerPath: path.join(chatterboxDir, 'tokenizer.json'),
+      speechEncoderPath: chatterboxPath(chatterboxDir, 'speech_encoder'),
+      embedTokensPath: chatterboxPath(chatterboxDir, 'embed_tokens'),
+      conditionalDecoderPath: chatterboxPath(chatterboxDir, 'conditional_decoder'),
+      languageModelPath: chatterboxLmPath(chatterboxDir)
+    },
+    referenceAudio,
+    config: { language: 'en' },
+    enhancer: lavasrEnhancerConfig(lavasrDir),
+    opts: { stats: true }
+  })
+
+  await model.load()
+
+  let outputArray = []
+  let reportedSampleRate = null
+  const response = await model.run({ type: 'text', input: 'Hello world.' })
+  await response
+    .onUpdate(data => {
+      if (data && data.outputArray) {
+        outputArray = outputArray.concat(Array.from(data.outputArray))
+      }
+      if (data && data.sampleRate) reportedSampleRate = data.sampleRate
+    })
+    .await()
+
+  t.ok(outputArray.length > 0, 'Should produce non-empty output audio')
+  t.is(reportedSampleRate, ENHANCED_SAMPLE_RATE, `Sample rate should be ${ENHANCED_SAMPLE_RATE}Hz after enhancement`)
+
+  console.log(`Output: ${outputArray.length} samples @ ${reportedSampleRate}Hz`)
+
+  await model.unload()
+})
+
+test('LavaSR: Supertonic + denoise + enhance', { timeout: 1800000 }, async (t) => {
+  if (isMobile) { t.pass('Skipped on mobile — LavaSR models not bundled'); return }
+  const baseDir = getBaseDir()
+  const supertonicDir = path.join(baseDir, 'models', 'supertonic')
+  const lavasrDir = path.join(baseDir, 'models', 'lavasr')
+
+  const stResult = await ensureSupertonicModels({ targetDir: supertonicDir })
+  const lsResult = await ensureLavaSRModels({ targetDir: lavasrDir })
+  if (!stResult.success || !lsResult.success) {
+    t.fail('Required models not available (Supertonic: ' + stResult.success + ', LavaSR: ' + lsResult.success + ')')
+    return
+  }
+
+  const ONNXTTS = require('../..')
+
+  const model = new ONNXTTS({
+    files: { modelDir: supertonicDir },
+    voiceName: 'F1',
+    config: { language: 'en' },
+    enhancer: lavasrEnhancerConfig(lavasrDir, { denoise: true }),
+    opts: { stats: true }
+  })
+
+  await model.load()
+
+  let outputArray = []
+  let reportedSampleRate = null
+  const response = await model.run({ type: 'text', input: 'Testing denoiser and enhancer.' })
+  await response
+    .onUpdate(data => {
+      if (data && data.outputArray) {
+        outputArray = outputArray.concat(Array.from(data.outputArray))
+      }
+      if (data && data.sampleRate) reportedSampleRate = data.sampleRate
+    })
+    .await()
+
+  t.ok(outputArray.length > 0, 'Should produce non-empty output audio')
+  t.is(reportedSampleRate, ENHANCED_SAMPLE_RATE, `Sample rate should be ${ENHANCED_SAMPLE_RATE}Hz after denoise+enhance`)
+
+  await model.unload()
+})
+
+test('LavaSR: Supertonic + outputSampleRate without enhance (conventional resample)', { timeout: 1800000 }, async (t) => {
+  if (isMobile) { t.pass('Skipped on mobile — LavaSR models not bundled'); return }
+  const baseDir = getBaseDir()
+  const supertonicDir = path.join(baseDir, 'models', 'supertonic')
+
+  const stResult = await ensureSupertonicModels({ targetDir: supertonicDir })
+  if (!stResult.success) {
+    t.fail('Supertonic models not available')
+    return
+  }
+
+  const ONNXTTS = require('../..')
+  const targetRate = 16000
+
+  const model = new ONNXTTS({
+    files: { modelDir: supertonicDir },
+    voiceName: 'F1',
+    config: { language: 'en', outputSampleRate: targetRate },
+    opts: { stats: true }
+  })
+
+  await model.load()
+
+  let outputArray = []
+  let reportedSampleRate = null
+  const response = await model.run({ type: 'text', input: 'Testing conventional resampling.' })
+  await response
+    .onUpdate(data => {
+      if (data && data.outputArray) {
+        outputArray = outputArray.concat(Array.from(data.outputArray))
+      }
+      if (data && data.sampleRate) reportedSampleRate = data.sampleRate
+    })
+    .await()
+
+  t.ok(outputArray.length > 0, 'Should produce non-empty output audio')
+  t.is(reportedSampleRate, targetRate, `Sample rate should be ${targetRate}Hz after resampling`)
+
+  await model.unload()
+})
+
+test('LavaSR: Supertonic + enhance + custom outputSampleRate', { timeout: 1800000 }, async (t) => {
+  if (isMobile) { t.pass('Skipped on mobile — LavaSR models not bundled'); return }
+  const baseDir = getBaseDir()
+  const supertonicDir = path.join(baseDir, 'models', 'supertonic')
+  const lavasrDir = path.join(baseDir, 'models', 'lavasr')
+
+  const stResult = await ensureSupertonicModels({ targetDir: supertonicDir })
+  const lsResult = await ensureLavaSRModels({ targetDir: lavasrDir })
+  if (!stResult.success || !lsResult.success) {
+    t.fail('Required models not available (Supertonic: ' + stResult.success + ', LavaSR: ' + lsResult.success + ')')
+    return
+  }
+
+  const ONNXTTS = require('../..')
+  const targetRate = 22050
+
+  const model = new ONNXTTS({
+    files: { modelDir: supertonicDir },
+    voiceName: 'F1',
+    config: { language: 'en', outputSampleRate: targetRate },
+    enhancer: lavasrEnhancerConfig(lavasrDir),
+    opts: { stats: true }
+  })
+
+  await model.load()
+
+  let outputArray = []
+  let reportedSampleRate = null
+  const response = await model.run({ type: 'text', input: 'Testing enhance then downsample.' })
+  await response
+    .onUpdate(data => {
+      if (data && data.outputArray) {
+        outputArray = outputArray.concat(Array.from(data.outputArray))
+      }
+      if (data && data.sampleRate) reportedSampleRate = data.sampleRate
+    })
+    .await()
+
+  t.ok(outputArray.length > 0, 'Should produce non-empty output audio')
+  t.is(reportedSampleRate, targetRate, `Sample rate should be ${targetRate}Hz after enhance+downsample`)
+
+  await model.unload()
+})
+
+test('LavaSR: Supertonic + enhance', { timeout: 1800000 }, async (t) => {
+  if (isMobile) { t.pass('Skipped on mobile — LavaSR models not bundled'); return }
+  const baseDir = getBaseDir()
+  const supertonicDir = path.join(baseDir, 'models', 'supertonic')
+  const lavasrDir = path.join(baseDir, 'models', 'lavasr')
+
+  const stResult = await ensureSupertonicModels({ targetDir: supertonicDir })
+  const lsResult = await ensureLavaSRModels({ targetDir: lavasrDir })
+  if (!stResult.success || !lsResult.success) {
+    t.fail('Required models not available (Supertonic: ' + stResult.success + ', LavaSR: ' + lsResult.success + ')')
+    return
+  }
+
+  const ONNXTTS = require('../..')
+
+  const model = new ONNXTTS({
+    files: { modelDir: supertonicDir },
+    voiceName: 'F1',
+    config: { language: 'en' },
+    enhancer: lavasrEnhancerConfig(lavasrDir),
+    opts: { stats: true }
+  })
+
+  await model.load()
+
+  let outputArray = []
+  let reportedSampleRate = null
+  const response = await model.run({ type: 'text', input: 'Testing Supertonic enhancement.' })
+  await response
+    .onUpdate(data => {
+      if (data && data.outputArray) {
+        outputArray = outputArray.concat(Array.from(data.outputArray))
+      }
+      if (data && data.sampleRate) reportedSampleRate = data.sampleRate
+    })
+    .await()
+
+  t.ok(outputArray.length > 0, 'Should produce non-empty output audio')
+  t.is(reportedSampleRate, ENHANCED_SAMPLE_RATE, `Sample rate should be ${ENHANCED_SAMPLE_RATE}Hz after Supertonic enhancement`)
+
+  await model.unload()
+})

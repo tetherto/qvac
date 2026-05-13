@@ -68,8 +68,16 @@ function tryParseReport (jsonStr) {
   }
 }
 
-function extractFromText (text) {
-  let lastReport = null
+/**
+ * Scans text for every [PERF_REPORT_START]...[PERF_REPORT_END] marker
+ * pair and returns each successfully parsed report as an element of
+ * the returned array. The mobile fallback reporter emits a delta
+ * (single-row) report per `record()` call so earlier rows survive a
+ * later OOM crash; the caller (typically `main()` with `--merge`)
+ * must union across all of them.
+ */
+function extractAllFromText (text) {
+  const reports = []
   let searchFrom = 0
   while (true) {
     const startIdx = text.indexOf(START_MARKER, searchFrom)
@@ -82,7 +90,6 @@ function extractFromText (text) {
     const jsonRaw = text.substring(jsonStart, endIdx)
     const cleaned = cleanJsonFromLogcat(jsonRaw)
 
-    // Skip content that is clearly shell source code, not JSON.
     if (cleaned.length > 0 && cleaned[0] !== '{' && cleaned[0] !== '[') {
       searchFrom = endIdx + END_MARKER.length
       continue
@@ -90,10 +97,8 @@ function extractFromText (text) {
 
     let parsed = tryParseReport(cleaned)
 
-    // If parse fails, the outer START may have captured interleaved logcat
-    // lines (bare runtime splits output across lines, other logs interleave).
-    // Look for inner START markers closer to the END — the ReactNativeJS
-    // bridge often has the complete report on a single line.
+    // If parse fails, the outer START may have captured interleaved
+    // logcat lines; try inner START markers closer to the END.
     if (!parsed) {
       let innerFrom = startIdx + 1
       while (!parsed) {
@@ -107,7 +112,7 @@ function extractFromText (text) {
     }
 
     if (parsed) {
-      lastReport = parsed
+      reports.push(parsed)
     } else if (cleaned.length > 0 && cleaned[0] === '{') {
       console.error('  Found markers but JSON parse failed (tried outer + inner START positions)')
       try { JSON.parse(cleaned) } catch (err) {
@@ -123,7 +128,13 @@ function extractFromText (text) {
     }
     searchFrom = endIdx + END_MARKER.length
   }
-  return lastReport
+  return reports
+}
+
+/** Legacy single-report API — returns the last parsed report or null. */
+function extractFromText (text) {
+  const all = extractAllFromText(text)
+  return all.length ? all[all.length - 1] : null
 }
 
 /**
@@ -239,21 +250,49 @@ function extractFromJsonLogcat (content) {
   return extractFromText(messages.join('\n'))
 }
 
-function extractFromFile (filePath) {
+function extractAllFromJsonLogcat (content) {
+  let entries
+  try {
+    entries = JSON.parse(content)
+  } catch (_) {
+    return []
+  }
+  if (!Array.isArray(entries)) return []
+  const messages = entries
+    .map(e => (e && e.message) || '')
+    .filter(m => m.includes(START_MARKER))
+  if (messages.length === 0) return []
+  return extractAllFromText(messages.join('\n'))
+}
+
+/**
+ * When `opts.all` is true, returns every report found in the file
+ * (delta-per-record emits plus any chunked final emits). Otherwise
+ * returns the best single report (legacy behaviour).
+ */
+function extractFromFile (filePath, opts) {
   let content
   try {
     content = fs.readFileSync(filePath, 'utf-8')
   } catch (_) {
-    return null
+    return opts && opts.all ? [] : null
   }
 
-  // Try plain text markers first (test spec output, plain logcat)
-  const markerReport = extractFromText(content)
+  if (opts && opts.all) {
+    const textReports = extractAllFromText(content)
+    const chunked = extractChunkedFromText(content)
+    const jsonLogcatReports = textReports.length === 0
+      ? extractAllFromJsonLogcat(content)
+      : []
+    const out = textReports.slice()
+    if (chunked) out.push(chunked)
+    out.push(...jsonLogcatReports)
+    return out
+  }
 
-  // Try chunked format (large reports split across multiple logcat lines)
+  const markerReport = extractFromText(content)
   const chunkedReport = extractChunkedFromText(content)
 
-  // Keep whichever found more results
   let report = null
   if (markerReport && chunkedReport) {
     report = chunkedReport.results.length >= markerReport.results.length
@@ -264,7 +303,6 @@ function extractFromFile (filePath) {
   }
   if (report) return report
 
-  // Try JSON logcat format (Device Farm DEVICE_LOG / LOGCAT artifacts)
   report = extractFromJsonLogcat(content)
   if (report) return report
 
@@ -317,13 +355,21 @@ function deriveDeviceName (filePath, logDir) {
 }
 
 function parseArgs () {
-  const args = { logDir: null, outputPath: null, runNumber: null, filter: null }
+  const args = {
+    logDir: null,
+    outputPath: null,
+    runNumber: null,
+    filter: null,
+    merge: false
+  }
   const positional = []
   for (let i = 2; i < process.argv.length; i++) {
     if (process.argv[i] === '--run-number' && i + 1 < process.argv.length) {
       args.runNumber = parseInt(process.argv[++i], 10) || null
     } else if (process.argv[i] === '--filter' && i + 1 < process.argv.length) {
       args.filter = process.argv[++i]
+    } else if (process.argv[i] === '--merge') {
+      args.merge = true
     } else {
       positional.push(process.argv[i])
     }
@@ -331,6 +377,48 @@ function parseArgs () {
   args.logDir = positional[0] || null
   args.outputPath = positional[1] || null
   return args
+}
+
+/**
+ * Concatenates `results` from every report found for a given device
+ * into one report. Used when a single physical device runs multiple
+ * Device Farm groups (e.g. QVAC-17830 splits the LLM image test into
+ * three per-image groups on Android / iOS). The default behaviour of
+ * keeping only the largest report would drop two of the three groups.
+ *
+ * Deduping by `(test, output, metrics snapshot)` keeps the reporter's
+ * repeated lightweight flushes from inflating the row count — those
+ * flushes emit cumulative snapshots, so the same (test, iteration)
+ * can appear in many payloads from one group.
+ */
+function mergeDeviceReports (reports) {
+  if (!reports || reports.length === 0) return null
+  const base = JSON.parse(JSON.stringify(reports[0]))
+  base.results = []
+  const seen = new Set()
+  for (const r of reports) {
+    if (!r || !Array.isArray(r.results)) continue
+    for (const row of r.results) {
+      // Perf reporter re-emits cumulative snapshots, so the same row
+      // typically appears in many payloads. Dedupe on a stable
+      // fingerprint that ignores the output text (may be trimmed in
+      // lightweight emits) and focuses on the measured metrics.
+      const m = row.metrics || {}
+      const key = [
+        row.test || '',
+        row.execution_provider || '',
+        m.total_time_ms != null ? m.total_time_ms : '',
+        m.prefill_time_ms != null ? m.prefill_time_ms : '',
+        m.decode_time_ms != null ? m.decode_time_ms : '',
+        m.generated_tokens != null ? m.generated_tokens : '',
+        m.tps != null ? m.tps : ''
+      ].join('|')
+      if (seen.has(key)) continue
+      seen.add(key)
+      base.results.push(row)
+    }
+  }
+  return base
 }
 
 function filterResults (report, pattern) {
@@ -355,10 +443,10 @@ function injectCIMetadata (report, runNumber) {
 }
 
 function main () {
-  const { logDir, outputPath, runNumber, filter } = parseArgs()
+  const { logDir, outputPath, runNumber, filter, merge } = parseArgs()
 
   if (!logDir || !outputPath) {
-    console.error('Usage: node extract-from-log.js <log-dir> <output-path> [--run-number N] [--filter PATTERN]')
+    console.error('Usage: node extract-from-log.js <log-dir> <output-path> [--run-number N] [--filter PATTERN] [--merge]')
     process.exit(1)
   }
 
@@ -370,16 +458,30 @@ function main () {
     console.log(`  ${f} (${size} bytes)`)
   }
 
+  // When `merge` is on, collect every valid report per device and
+  // concatenate at the end. When off, keep only the largest per
+  // device (original behaviour — matches OCR pre-QVAC-17830).
   const deviceReports = {}
 
   for (const file of files) {
-    const report = extractFromFile(file)
-    if (report && report.results) {
-      const count = report.results.length
-      const deviceName = deriveDeviceName(file, logDir)
-      const key = deviceName || 'unknown'
-      console.log(`  ${file}: found report with ${count} results (device: ${key})`)
+    const key = deriveDeviceName(file, logDir) || 'unknown'
 
+    if (merge) {
+      // Delta emits: each record() call produces a one-row report, so
+      // scooping every marker is required — the largest one alone
+      // only carries the final iteration.
+      const reports = extractFromFile(file, { all: true }).filter(r => r && Array.isArray(r.results))
+      if (reports.length === 0) continue
+      const totalRows = reports.reduce((n, r) => n + r.results.length, 0)
+      console.log(`  ${file}: found ${reports.length} report(s) with ${totalRows} total row(s) (device: ${key})`)
+      if (!deviceReports[key]) deviceReports[key] = { reports: [], files: [], deviceName: key }
+      deviceReports[key].reports.push(...reports)
+      deviceReports[key].files.push(file)
+    } else {
+      const report = extractFromFile(file)
+      if (!report || !report.results) continue
+      const count = report.results.length
+      console.log(`  ${file}: found report with ${count} results (device: ${key})`)
       const prev = deviceReports[key]
       if (!prev || count > prev.report.results.length) {
         deviceReports[key] = { report, file, deviceName: key }
@@ -391,6 +493,22 @@ function main () {
   if (devices.length === 0) {
     console.log('No performance report markers found in logs')
     process.exit(0)
+  }
+
+  // After merging, collapse each device's [reports] list into a
+  // single concatenated report so the rest of the pipeline is
+  // identical regardless of --merge.
+  if (merge) {
+    for (const key of devices) {
+      const bucket = deviceReports[key]
+      const merged = mergeDeviceReports(bucket.reports)
+      if (merged && merged.device) merged.device.name = key
+      console.log(
+        `  merged ${key}: ${bucket.reports.length} reports from ${bucket.files.length} files ` +
+        `→ ${merged ? merged.results.length : 0} deduped results`
+      )
+      deviceReports[key] = { report: merged, file: bucket.files.join(','), deviceName: key }
+    }
   }
 
   const outputDir = path.dirname(outputPath)

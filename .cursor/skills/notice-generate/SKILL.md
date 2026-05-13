@@ -46,8 +46,8 @@ node .cursor/skills/notice-generate/scripts/generate-notice.js <package-dir-name
 Example: `node .cursor/skills/notice-generate/scripts/generate-notice.js sdk`
 
 For registry sub-packages use the full path:
-- `qvac-lib-registry-server/client`
-- `qvac-lib-registry-server/shared`
+- `registry-server/client`
+- `registry-server/shared`
 
 ### Generate NOTICE for all packages
 
@@ -115,7 +115,7 @@ Reads existing NOTICE files across all packages (no scanning, no tokens needed) 
 
 ## Package coverage
 
-- **Models (full list)**: `sdk`, `qvac-lib-registry-server/client`
+- **Models (full list)**: `sdk`, `registry-server/client`
 - **Models (by engine)**: All addon packages, mapped by engine name
 - **JS**: Every package with dependencies in `package.json`
 - **Python**: Packages with `requirements.txt` or `pyproject.toml` in benchmarks/scripts
@@ -125,11 +125,11 @@ Reads existing NOTICE files across all packages (no scanning, no tokens needed) 
 
 | Package directory | Engine |
 |---|---|
-| `qvac-lib-infer-llamacpp-embed` | `@qvac/embed-llamacpp` |
-| `qvac-lib-infer-llamacpp-llm` | `@qvac/llm-llamacpp` |
-| `qvac-lib-infer-nmtcpp` | `@qvac/translation-nmtcpp` |
-| `qvac-lib-infer-onnx-tts` | `@qvac/tts-onnx` |
-| `qvac-lib-infer-whispercpp` | `@qvac/transcription-whispercpp` |
+| `embed-llamacpp` | `@qvac/embed-llamacpp` |
+| `llm-llamacpp` | `@qvac/llm-llamacpp` |
+| `translation-nmtcpp` | `@qvac/translation-nmtcpp` |
+| `tts-onnx` | `@qvac/tts-onnx` |
+| `transcription-whispercpp` | `@qvac/transcription-whispercpp` |
 | `ocr-onnx` | `@qvac/ocr-onnx` |
 | `diffusion-cpp` | `@qvac/diffusion-cpp` |
 
@@ -139,7 +139,7 @@ All entries within every NOTICE file section are sorted deterministically using 
 
 ## Related scripts
 
-- **Model license verification**: `npm run verify:licenses` in `packages/qvac-lib-registry-server` -- verifies model licenses in `models.prod.json` against HuggingFace/GitHub APIs (dry-run only, console output, fails on unverifiable).
+- **Model license verification**: `npm run verify:licenses` in `packages/registry-server` -- verifies model licenses in `models.prod.json` against HuggingFace/GitHub APIs (dry-run only, console output, fails on unverifiable).
 
 ## References
 

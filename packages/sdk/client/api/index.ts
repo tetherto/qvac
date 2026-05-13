@@ -29,6 +29,7 @@ export { getLoadedModelInfo } from "./get-loaded-model-info";
 export { ocr } from "./ocr";
 export { invokePlugin, invokePluginStream } from "./invoke-plugin";
 export { diffusion, type DiffusionProgressTick } from "./diffusion";
+export { upscale } from "./upscale";
 export {
   modelRegistryList,
   modelRegistrySearch,

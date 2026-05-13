@@ -1,0 +1,60 @@
+{
+  "ios": {
+    "heavy1": ["runFinetuningPauseResumeTest"],
+    "heavy2": ["runToolCallingTest"],
+    "heavy3": ["runImageElephantTest"],
+    "heavy4": ["runOcrLightonTest"],
+    "heavy5": ["runReasoningTest"],
+    "heavy6": ["runSlidingContextTest"],
+    "heavy7": ["runImageFruitPlateTest"],
+    "heavy8": ["runImageHighResAuroraTest"],
+    "heavy9": ["runGemma4Test"],
+    "heavy10": ["runOcrPaddleTest"],
+    "lightA": [
+      "runApiBehaviorTest",
+      "runBitnetTest",
+      "runCacheStateMachineTest",
+      "runConfigParametersTest",
+      "runToolsCompactTest"
+    ],
+    "lightB": [
+      "runGenerationParamsTest",
+      "runGrammarTest",
+      "runModelLoadingTest",
+      "runMultiGpuTest",
+      "runMultiInstanceTest",
+      "runQwen35Test",
+      "runUtf8OutputTest"
+    ]
+  },
+  "android": {
+    "groupA": [
+      "runApiBehaviorTest",
+      "runBitnetTest",
+      "runCacheStateMachineTest",
+      "runConfigParametersTest",
+      "runToolsCompactTest",
+      "runFinetuningPauseResumeTest",
+      "runGenerationParamsTest",
+      "runGrammarTest"
+    ],
+    "groupB": [
+      "runQwen35Test",
+      "runGemma4Test",
+      "runModelLoadingTest",
+      "runMultiGpuTest",
+      "runMultiInstanceTest",
+      "runOcrLightonTest",
+      "runOcrPaddleTest",
+      "runReasoningTest",
+      "runSlidingContextTest",
+      "runToolCallingTest",
+      "runUtf8OutputTest"
+    ],
+    "groupImagesPerf": [
+      "runImageElephantTest",
+      "runImageFruitPlateTest",
+      "runImageHighResAuroraTest"
+    ]
+  }
+}

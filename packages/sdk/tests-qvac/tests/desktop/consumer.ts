@@ -1,4 +1,4 @@
-import { createExecutor } from "@tetherto/qvac-test-suite";
+import { createExecutor, type TestDefinition } from "@tetherto/qvac-test-suite";
 import {
   profiler,
   LLAMA_3_2_1B_INST_Q4_0,
@@ -40,9 +40,12 @@ import {
   FLUX_2_KLEIN_4B_Q4_0,
   FLUX_2_KLEIN_4B_VAE,
   QWEN3_4B_Q4_K_M,
+  SD_V2_1_1B_Q8_0,
+  REALESRGAN_X4PLUS_ANIME_6B
 } from "@qvac/sdk";
 import * as path from "node:path";
 import { ResourceManager } from "../shared/resource-manager.js";
+import { collectTestDeps } from "../shared/collect-test-deps.js";
 import { ModelLoadingExecutor } from "../shared/executors/model-loading-executor.js";
 import { CompletionExecutor } from "../shared/executors/completion-executor.js";
 import { ToolsExecutor } from "../shared/executors/tools-executor.js";
@@ -56,7 +59,7 @@ import { TranscribeStreamEventsExecutor } from "./executors/transcribe-stream-ev
 import { RagExecutor } from "./executors/rag-executor.js";
 import { OcrExecutor } from "./executors/ocr-executor.js";
 import { ConfigReloadExecutor } from "./executors/config-reload-executor.js";
-import { LoggingExecutor } from "../shared/executors/logging-executor.js";
+import { DesktopLoggingExecutor } from "./executors/logging-executor.js";
 import { RegistryExecutor } from "../shared/executors/registry-executor.js";
 import { ModelInfoExecutor } from "../shared/executors/model-info-executor.js";
 import { WrongModelExecutor } from "../shared/executors/wrong-model-executor.js";
@@ -327,7 +330,37 @@ resources.define("diffusion", {
   },
 });
 
-export async function bootstrap() {
+// Isolated from "diffusion" so ESRGAN load failures don't affect the rest of the suite.
+resources.define("diffusion-esrgan", {
+  constant: SD_V2_1_1B_Q8_0,
+  type: "diffusion",
+  preLoadUnload: true,
+  config: {
+    device: "gpu",
+    threads: 4,
+    prediction: "v",
+    vae_on_cpu: true,
+    upscaler: {
+      type: "esrgan",
+      model_src: REALESRGAN_X4PLUS_ANIME_6B,
+      tile_size: 128,
+    },
+  },
+});
+
+resources.define("upscaler", {
+  constant: REALESRGAN_X4PLUS_ANIME_6B,
+  type: "diffusion",
+  preLoadUnload: true,
+  config: {
+    mode: "upscale",
+    upscaler: {
+      tile_size: 128,
+    },
+  },
+});
+
+export async function bootstrap(filteredTests?: TestDefinition[]) {
   // Point the SDK at the committed e2e fixture unless the developer
   // already provided their own qvac.config.json / QVAC_CONFIG_PATH.
   // This exercises the registryDownloadMaxRetries + registryStreamTimeoutMs
@@ -338,7 +371,10 @@ export async function bootstrap() {
       "fixtures/qvac.config.e2e.json",
     );
   }
-  await resources.downloadAllOnce(console.log);
+  // `filteredTests` (when present) is the producer's post-filter test list
+  // delivered via register-ack; absence keeps the legacy "warm everything" path.
+  const allowedDeps = filteredTests ? collectTestDeps(filteredTests) : undefined;
+  await resources.downloadAllOnce(console.log, { allowedDeps });
 };
 
 export const executor = createExecutor({
@@ -359,7 +395,7 @@ export const executor = createExecutor({
     new OcrExecutor(resources),
     new TtsExecutor(resources),
     new ConfigReloadExecutor(resources),
-    new LoggingExecutor(resources),
+    new DesktopLoggingExecutor(resources),
     new RegistryExecutor(resources),
     new HttpEmbeddingExecutor(resources),
     new KvCacheExecutor(resources),

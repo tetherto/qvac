@@ -1,0 +1,110 @@
+---
+description: Agentic automation rules — plan-then-apply for state changes, read-only by default, validation-before-success, provenance, idempotency, fail-stop on ambiguity. Applies to skills, hooks, and any AI-driven DevOps workflow.
+globs:
+  - .cursor/skills/**
+  - .cursor/rules/**
+  - .cursor/hooks/**
+  - .github/workflows/**
+  - .github/scripts/**
+  - scripts/**
+alwaysApply: false
+---
+
+# Agentic Automation
+
+Rules governing agent-driven automation in DevOps surfaces — Cursor skills, hooks, MCPs, AI-invoked scripts, and any workflow where an agent takes action on the user's or repo's behalf.
+
+## Core stance
+
+- **AI-first, human-gated.** Agents propose; humans approve state changes. The agent should always be the one drafting the diff, the command, the PR body — never the one quietly running `apply`.
+
+## Read-only default
+
+- **Skills default to read-only.** Mutations to the local repo, the remote (GitHub state, releases, branch protection), or external systems (cloud, k8s, Slack, Asana) require explicit user opt-in per call.
+- **The `pr-review` pattern is the reference**: print the exact command, wait for user confirmation, then execute. Never auto-execute.
+- **No silent file mutations** to the user's working tree. If a skill writes outside `/tmp/` or its own `_lib/` cache, it announces what and why first.
+- **No silent git mutations**: forbidden without explicit user instruction — `git switch`, `git checkout` (any ref/file), `git reset`, `git restore`, `git stash`, `git pull`, `git merge`, `git rebase`, `git cherry-pick`, `git clean`, `gh pr checkout`. (See `.cursor/skills/pr-review/SKILL.md` "Safety rules" section for the canonical wording.)
+
+## Plan-then-apply for state changes
+
+- Any state-changing operation MUST present a plan/diff and require human confirmation before execution. State-changing means: anything that, if undone, requires effort.
+- Examples that REQUIRE plan-then-apply:
+  - `terraform apply` — show `terraform plan` output first
+  - `kubectl apply` — show `kubectl diff -f <file>` (or `kubectl apply --dry-run=server -f <file>`) first
+  - `helm install` / `helm upgrade` — show `helm diff upgrade` (via the `helm-diff` plugin) or `--dry-run` output first
+  - `gh ruleset edit` / branch protection updates — show before/after
+  - Secret rotation — show the rotation steps and rollback before executing
+  - Release tag creation, release publication
+  - `gh pr merge` (any merge method)
+  - Any `gcloud … set-iam-policy` / `aws … put-policy` / equivalent
+  - Repository setting changes (`gh repo edit`)
+- **Production-impacting ops always require human-in-the-loop**, even if the user has previously approved similar ops. There is no "trusted auto-apply" mode.
+- **Confirmation is per-operation, not per-session.** A blanket "yes, do everything" is not accepted.
+
+## Idempotency
+
+- **Skills must be idempotent.** Re-running with identical inputs produces the same effect, or reports "already applied" without making changes.
+- **Generated artifacts (NOTICE files, changelog entries, generated docs) sort deterministically** so re-runs produce byte-identical output and clean diffs (the `notice-generate` skill is the reference).
+- **Network-dependent skills** cache responses where reasonable (`/tmp/<skill>-<id>.json`) and document staleness.
+
+## Validation before success
+
+- Skills MUST validate their output before reporting "done."
+  - File mutations → re-read, parse, lint
+  - Git operations → `git status` shows expected state
+  - PR operations → `gh pr view` confirms state
+  - Workflow file edits → `actionlint` clean
+- **No "done" without evidence.** The user should never have to ask "did it work?"
+- **Print the verification step** in the chat output, not just "✅ done".
+
+## Fail-stop on ambiguity
+
+- **Stop when state is unexpected.** Examples that trigger fail-stop:
+  - Uncommitted local changes when the skill expects a clean tree
+  - Branch is not what the skill expected
+  - A required env var, secret, or file is missing
+  - Two conflicting cursor rules apply
+  - A required tool is not on PATH
+  - PR data fetched but the SHA does not match the expected one
+- **Failure mode is "stop and ask," never "guess and proceed."**
+- **Partial success is reported as partial success.** Don't summarize "everything worked" when one of three steps failed.
+
+## Provenance and traceability
+
+- **Agent-authored commits/PRs are labeled.** PR body includes a footer indicating which agent and which skill produced the work, so reviewers know what to audit harder.
+- **MCP tool descriptors are read before invocation.** Never call an MCP tool blind. (Reinforced in the system prompt; rule-level for emphasis.)
+- **Sensitive operations are logged.** Skills that touch secrets, deploy, or modify protected branches append a redacted summary to a session log under `/tmp/agent-session-<id>.log`. The log path is mentioned in the chat output.
+- **Skills declare which secrets they read** in their `SKILL.md` frontmatter description or "Prerequisites" section. No silent secret access.
+
+## Bounded resource use
+
+- **Bound shell-call count per skill.** State an explicit budget in the skill's "Efficiency rules" section (the `pr-review` skill caps at ~5–8 calls; treat that as the ceiling unless justified).
+- **Cache fetched data once per session** (`/tmp/<skill>-<id>.json`). Never re-fetch the same PR/run/file in one session.
+- **Use dedicated tools, not shell.** `Read` instead of `cat`/`head`/`tail`, `Grep` instead of `grep`/`rg`, `Glob` instead of `find`, `Write`/`StrReplace` instead of `echo >` / heredoc.
+- **Prefer scripts in `_lib/<domain>/`** over inline shell pipelines. Scripts are testable, deterministic, and share-able across skills.
+
+## Skill authoring conventions
+
+- **One skill = one capability.** Don't compose unrelated workflows in a single skill.
+- **Naming**: kebab-case, prefix-grouped (`devops-*`, `sdk-*`, `addon-*`, `pr-*`).
+- **`SKILL.md` body ≤ 500 lines.** Push detail to `references/*.md` and link one level deep.
+- **Slash-command discoverability**: include `/<skill-name>` in the description.
+- **Auto-invoke vs explicit**: `disable-model-invocation: true` for any skill that mutates state, posts publicly, or runs slow / expensive tooling. Auto-invoke only for read-only, fast, contextually obvious helpers.
+- **Description includes WHAT and WHEN** in third person.
+- **Co-locate shared logic** under `.cursor/skills/_lib/<domain>/` when two or more skills want the same primitive.
+
+## Hooks
+
+- **Hooks run on every applicable agent event.** Keep them fast (<2s) and side-effect-free unless the side effect is the whole point.
+- **Hooks must not silently modify the user's working tree** (see read-only default).
+- **Hooks that block the agent** must say so loudly and explain how to unblock.
+
+## Secrets and external systems
+
+- **Secrets handling defers to `.cursor/rules/devops/secrets-and-credentials.mdc`** — every rule there applies.
+- **External writes (Slack, Asana, Linear, GitHub) require explicit user confirmation** for the specific message/issue/PR being created.
+- **Drafts over publishes**: where the platform supports drafts (PRs, releases, Slack scheduled), prefer creating a draft and surfacing the link to the user.
+
+## When the rails block a useful flow
+
+- If a rail is blocking a flow that's clearly safe and clearly useful, the answer is to relax the rail in this rule (with a PR), not to override it case-by-case in a skill. Code that quietly bypasses these rules is a bug.
