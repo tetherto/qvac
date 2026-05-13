@@ -1,3 +1,4 @@
+import crypto from 'node:crypto'
 import type { Logger } from '../../../logger.js'
 import type { SDKTool, SDKToolCall, SDKGenerationParams, SDKResponseFormat, SDKDiffusionParams } from '../../core/sdk.js'
 import type { VectorStoreExpiresAfter, VectorStoreMeta } from './vector-stores-store.js'
@@ -562,8 +563,7 @@ const RESPONSES_UNSUPPORTED_PARAMS = [
   'reasoning',
   'modalities',
   'audio',
-  'tool_choice',
-  'parallel_tool_calls'
+  'tool_choice'
 ] as const
 
 export function logResponsesUnsupportedParams (body: Record<string, unknown>, logger: Logger): void {
@@ -665,20 +665,30 @@ function inputTextPart (text: string): Record<string, unknown> {
 
 function normalizeInputItemId (item: Record<string, unknown>, index: number): Record<string, unknown> {
   if (typeof item['id'] === 'string' && item['id'].length > 0) return item
-  return { ...item, id: `item_${index}_${randomHex(8)}` }
+  return { ...item, id: `item_${index}_${crypto.randomUUID()}` }
 }
 
-function randomHex (len: number): string {
-  let s = ''
-  for (let i = 0; i < len; i++) s += Math.floor(Math.random() * 16).toString(16)
-  return s
+function responsesFunctionCallItemToAssistantContent (item: Record<string, unknown>): string {
+  const name = typeof item['name'] === 'string' ? item['name'] : ''
+  const rawArgs = item['arguments']
+  const argsStr = typeof rawArgs === 'string'
+    ? rawArgs
+    : (rawArgs !== null && rawArgs !== undefined ? JSON.stringify(rawArgs) : '{}')
+  let args: Record<string, unknown>
+  try {
+    args = JSON.parse(argsStr) as Record<string, unknown>
+  } catch {
+    args = {}
+  }
+  const callObj = { name, arguments: args }
+  return `<tool_call>\n${JSON.stringify(callObj)}\n</tool_call>`
 }
 
 export function normalizeResponsesInputItemsForStorage (input: unknown): unknown[] {
   if (typeof input === 'string') {
     return [{
       type: 'message',
-      id: `item_0_${randomHex(8)}`,
+      id: `item_0_${crypto.randomUUID()}`,
       role: 'user',
       content: [inputTextPart(input)]
     }]
@@ -686,7 +696,7 @@ export function normalizeResponsesInputItemsForStorage (input: unknown): unknown
   if (!Array.isArray(input)) {
     return [{
       type: 'message',
-      id: `item_0_${randomHex(8)}`,
+      id: `item_0_${crypto.randomUUID()}`,
       role: 'user',
       content: [inputTextPart('')]
     }]
@@ -695,7 +705,7 @@ export function normalizeResponsesInputItemsForStorage (input: unknown): unknown
     if (typeof raw === 'string') {
       return {
         type: 'message',
-        id: `item_${i}_${randomHex(8)}`,
+        id: `item_${i}_${crypto.randomUUID()}`,
         role: 'user',
         content: [inputTextPart(raw)]
       }
@@ -703,7 +713,7 @@ export function normalizeResponsesInputItemsForStorage (input: unknown): unknown
     if (raw !== null && typeof raw === 'object' && !Array.isArray(raw)) {
       return normalizeInputItemId(raw as Record<string, unknown>, i)
     }
-    return { type: 'message', id: `item_${i}_${randomHex(8)}`, role: 'user', content: [inputTextPart('')] }
+    return { type: 'message', id: `item_${i}_${crypto.randomUUID()}`, role: 'user', content: [inputTextPart('')] }
   })
 }
 
@@ -744,6 +754,18 @@ export function openaiResponsesInputToHistory (
     if (t === 'input_text') {
       const text = typeof item['text'] === 'string' ? item['text'] : ''
       history.push({ role: 'user', content: text })
+      continue
+    }
+    if (t === 'function_call_output') {
+      const out = item['output']
+      const text = typeof out === 'string'
+        ? out
+        : (out !== null && out !== undefined ? JSON.stringify(out) : '')
+      history.push({ role: 'tool', content: text })
+      continue
+    }
+    if (t === 'function_call') {
+      history.push({ role: 'assistant', content: responsesFunctionCallItemToAssistantContent(item) })
     }
   }
 
@@ -781,17 +803,21 @@ export function historyPrefixFromStoredResponse (stored: {
     } else if (item['type'] === 'input_text') {
       const text = typeof item['text'] === 'string' ? item['text'] : ''
       prefix.push({ role: 'user', content: text })
+    } else if (item['type'] === 'function_call_output') {
+      const out = item['output']
+      const text = typeof out === 'string'
+        ? out
+        : (out !== null && out !== undefined ? JSON.stringify(out) : '')
+      prefix.push({ role: 'tool', content: text })
+    } else if (item['type'] === 'function_call') {
+      prefix.push({ role: 'assistant', content: responsesFunctionCallItemToAssistantContent(item) })
     }
   }
 
   const output = stored.responseObject['output']
   const outputText = stored.responseObject['output_text']
-  if (typeof outputText === 'string' && outputText.length > 0) {
-    prefix.push({ role: 'assistant', content: outputText })
-    return prefix
-  }
 
-  if (Array.isArray(output)) {
+  if (Array.isArray(output) && output.length > 0) {
     for (const out of output) {
       if (out === null || typeof out !== 'object' || Array.isArray(out)) continue
       const o = out as Record<string, unknown>
@@ -807,6 +833,11 @@ export function historyPrefixFromStoredResponse (stored: {
         })
       }
     }
+    return prefix
+  }
+
+  if (typeof outputText === 'string' && outputText.length > 0) {
+    prefix.push({ role: 'assistant', content: outputText })
   }
 
   return prefix

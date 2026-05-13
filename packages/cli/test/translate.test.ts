@@ -22,6 +22,7 @@ import {
   validateResponsesStatefulOptions,
   normalizeResponsesInputItemsForStorage,
   historyPrefixFromStoredResponse,
+  logResponsesUnsupportedParams,
   UnsupportedToolTypeError,
   InvalidResponsesConversationError,
   InvalidResponsesBackgroundError
@@ -708,6 +709,22 @@ describe('openaiResponsesInputToHistory', () => {
     assert.equal(h[0]!.role, 'user')
     assert.equal(h[0]!.content, 'a')
   })
+
+  it('maps function_call_output to tool role', () => {
+    const h = openaiResponsesInputToHistory([
+      { type: 'function_call_output', output: '{"ok":true}' }
+    ], undefined)
+    assert.deepEqual(h[0], { role: 'tool', content: '{"ok":true}' })
+  })
+
+  it('maps function_call to synthesized assistant tool markup', () => {
+    const h = openaiResponsesInputToHistory([
+      { type: 'function_call', name: 'x', arguments: '{"a":1}' }
+    ], undefined)
+    assert.equal(h[0]!.role, 'assistant')
+    assert.ok(h[0]!.content.includes('<tool_call>'))
+    assert.ok(h[0]!.content.includes('x'))
+  })
 })
 
 describe('openaiResponsesToolsToSdk', () => {
@@ -773,6 +790,20 @@ describe('validateResponsesStatefulOptions', () => {
   })
 })
 
+describe('logResponsesUnsupportedParams', () => {
+  it('does not treat parallel_tool_calls as unsupported', () => {
+    const lines: string[] = []
+    const logger = {
+      info: (msg: string) => lines.push(msg),
+      warn: (): void => {},
+      error: (): void => {},
+      debug: (): void => {}
+    } as Parameters<typeof logResponsesUnsupportedParams>[1]
+    logResponsesUnsupportedParams({ parallel_tool_calls: false, input: '' }, logger)
+    assert.ok(!lines.some((l) => l.includes('parallel_tool_calls')))
+  })
+})
+
 describe('normalizeResponsesInputItemsForStorage', () => {
   it('wraps string input', () => {
     const items = normalizeResponsesInputItemsForStorage('hi')
@@ -782,7 +813,7 @@ describe('normalizeResponsesInputItemsForStorage', () => {
 })
 
 describe('historyPrefixFromStoredResponse', () => {
-  it('uses output_text shortcut when present', () => {
+  it('uses output_text when output array is empty', () => {
     const prefix = historyPrefixFromStoredResponse({
       inputItems: [{ type: 'message', id: '1', role: 'user', content: [{ type: 'input_text', text: 'u' }] }],
       responseObject: { output_text: 'assistant reply', output: [] }
@@ -791,5 +822,33 @@ describe('historyPrefixFromStoredResponse', () => {
       { role: 'user', content: 'u' },
       { role: 'assistant', content: 'assistant reply' }
     ])
+  })
+
+  it('prefers non-empty output array so tool calls are included with assistant text', () => {
+    const prefix = historyPrefixFromStoredResponse({
+      inputItems: [],
+      responseObject: {
+        output_text: 'ignored when structured output present',
+        output: [
+          { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'hello' }] },
+          { type: 'function_call', name: 'f', arguments: '{}', call_id: 'c1' }
+        ]
+      }
+    })
+    const assistantText = prefix.filter((p) => p.role === 'assistant' && !p.content.includes('tool_call'))
+    const toolCalls = prefix.filter((p) => p.role === 'assistant' && p.content.includes('tool_call'))
+    assert.equal(assistantText.length, 1)
+    assert.equal(assistantText[0]!.content, 'hello')
+    assert.equal(toolCalls.length, 1)
+  })
+
+  it('includes function_call_output from stored input items', () => {
+    const prefix = historyPrefixFromStoredResponse({
+      inputItems: [
+        { type: 'function_call_output', output: '{"r":1}' }
+      ],
+      responseObject: { output: [], output_text: '' }
+    })
+    assert.deepEqual(prefix, [{ role: 'tool', content: '{"r":1}' }])
   })
 })

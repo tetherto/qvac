@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { readBody, sendJson, sendError, initSSE, sendSSE, endSSE } from '../../../http.js'
 import { resolveModelAlias } from '../../../config.js'
-import { sdkCompletion } from '../../../core/sdk.js'
+import { sdkCompletion, type CompletionResult } from '../../../core/sdk.js'
 import type { SDKGenerationParams, SDKResponseFormat, SDKTool } from '../../../core/sdk.js'
 import {
   extractResponsesGenerationParams,
@@ -84,14 +84,6 @@ export async function handlePostResponses (req: IncomingMessage, res: ServerResp
     return
   }
 
-  if (previousResponseId) {
-    const prev = ctx.responsesStore.get(previousResponseId)
-    if (!prev) {
-      sendError(res, 404, 'previous_response_not_found', `No response found for previous_response_id "${previousResponseId}".`)
-      return
-    }
-  }
-
   logResponsesUnsupportedParams(body, ctx.logger)
 
   let tools: SDKTool[] | undefined
@@ -169,47 +161,47 @@ export async function handlePostResponses (req: IncomingMessage, res: ServerResp
     ? body['max_output_tokens'] as number
     : (typeof body['max_tokens'] === 'number' ? body['max_tokens'] as number : undefined)
 
+  const handlerParams: ResponsesHandlerParams = {
+    ctx,
+    sdkModelId,
+    history,
+    tools,
+    generationParams,
+    responseFormat,
+    modelAlias,
+    rid,
+    createdAtSec,
+    storeEnabled,
+    inputItems,
+    metadata,
+    temperature,
+    topP,
+    maxOutputTokens: maxOut,
+    parallelToolCalls,
+    previousResponseId: previousResponseId ?? null
+  }
+
   try {
     if (streaming) {
-      await handleStreamingResponses(res, {
-        ctx,
-        sdkModelId,
-        history,
-        tools,
-        generationParams,
-        responseFormat,
-        modelAlias,
-        rid,
-        createdAtSec,
-        storeEnabled,
-        inputItems,
-        metadata,
-        temperature,
-        topP,
-        maxOutputTokens: maxOut,
-        parallelToolCalls,
-        previousResponseId: previousResponseId ?? null
+      const result = await sdkCompletion({
+        modelId: handlerParams.sdkModelId,
+        history: handlerParams.history,
+        stream: true,
+        tools: handlerParams.tools,
+        generationParams: handlerParams.generationParams,
+        responseFormat: handlerParams.responseFormat
       })
+      await writeStreamingResponse(res, handlerParams, result)
     } else {
-      await handleBlockingResponses(res, {
-        ctx,
-        sdkModelId,
-        history,
-        tools,
-        generationParams,
-        responseFormat,
-        modelAlias,
-        rid,
-        createdAtSec,
-        storeEnabled,
-        inputItems,
-        metadata,
-        temperature,
-        topP,
-        maxOutputTokens: maxOut,
-        parallelToolCalls,
-        previousResponseId: previousResponseId ?? null
+      const result = await sdkCompletion({
+        modelId: handlerParams.sdkModelId,
+        history: handlerParams.history,
+        stream: false,
+        tools: handlerParams.tools,
+        generationParams: handlerParams.generationParams,
+        responseFormat: handlerParams.responseFormat
       })
+      await writeBlockingResponse(res, handlerParams, result)
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
@@ -218,7 +210,7 @@ export async function handlePostResponses (req: IncomingMessage, res: ServerResp
   }
 }
 
-interface ResponsesHandlerParams {
+export interface ResponsesHandlerParams {
   ctx: RouteContext
   sdkModelId: string
   history: Array<{ role: string; content: string }>
@@ -238,18 +230,14 @@ interface ResponsesHandlerParams {
   previousResponseId: string | null
 }
 
-async function handleBlockingResponses (res: ServerResponse, p: ResponsesHandlerParams): Promise<void> {
-  const result = await sdkCompletion({
-    modelId: p.sdkModelId,
-    history: p.history,
-    stream: false,
-    tools: p.tools,
-    generationParams: p.generationParams,
-    responseFormat: p.responseFormat
-  })
-
+export async function writeBlockingResponse (
+  res: ServerResponse,
+  p: ResponsesHandlerParams,
+  result: CompletionResult
+): Promise<Record<string, unknown>> {
   const text = await result.text
   const toolCalls = await result.toolCalls
+  const stats = await result.stats
 
   const responseObject = buildResponseObject({
     id: p.rid,
@@ -263,7 +251,8 @@ async function handleBlockingResponses (res: ServerResponse, p: ResponsesHandler
     maxOutputTokens: p.maxOutputTokens,
     parallelToolCalls: p.parallelToolCalls,
     previousResponseId: p.previousResponseId,
-    store: p.storeEnabled
+    store: p.storeEnabled,
+    ...(stats !== undefined ? { stats } : {})
   })
 
   if (p.storeEnabled) {
@@ -281,18 +270,14 @@ async function handleBlockingResponses (res: ServerResponse, p: ResponsesHandler
   p.ctx.logger.info(`  responses done id=${p.rid} stored=${p.storeEnabled}`)
 
   sendJson(res, 200, responseObject)
+  return responseObject
 }
 
-async function handleStreamingResponses (res: ServerResponse, p: ResponsesHandlerParams): Promise<void> {
-  const result = await sdkCompletion({
-    modelId: p.sdkModelId,
-    history: p.history,
-    stream: true,
-    tools: p.tools,
-    generationParams: p.generationParams,
-    responseFormat: p.responseFormat
-  })
-
+export async function writeStreamingResponse (
+  res: ServerResponse,
+  p: ResponsesHandlerParams,
+  result: CompletionResult
+): Promise<Record<string, unknown>> {
   initSSE(res)
 
   const msgId = messageId()
@@ -365,14 +350,20 @@ async function handleStreamingResponses (res: ServerResponse, p: ResponsesHandle
     response_id: p.rid
   })
 
+  const openaiCalls = sdkToolCallsToOpenai(toolCalls)
+  const fcItemIds = hasToolCalls
+    ? (openaiCalls ?? []).map(() => functionCallOutputItemId())
+    : []
+
   if (hasToolCalls) {
-    const openaiCalls = sdkToolCallsToOpenai(toolCalls)
+    let i = 0
     for (const tc of openaiCalls ?? []) {
-      const fcItemId = functionCallOutputItemId()
+      const fcItemId = fcItemIds[i]!
+      const outputIndex = i + 1
       const argsStr = tc.function.arguments
       sendSSE(res, {
         type: 'response.output_item.added',
-        output_index: 1,
+        output_index: outputIndex,
         item: {
           type: 'function_call',
           id: fcItemId,
@@ -385,21 +376,21 @@ async function handleStreamingResponses (res: ServerResponse, p: ResponsesHandle
       })
       sendSSE(res, {
         type: 'response.function_call_arguments.delta',
-        item_id: tc.id,
-        output_index: 1,
+        item_id: fcItemId,
+        output_index: outputIndex,
         delta: argsStr,
         response_id: p.rid
       })
       sendSSE(res, {
         type: 'response.function_call_arguments.done',
-        item_id: tc.id,
-        output_index: 1,
+        item_id: fcItemId,
+        output_index: outputIndex,
         arguments: argsStr,
         response_id: p.rid
       })
       sendSSE(res, {
         type: 'response.output_item.done',
-        output_index: 1,
+        output_index: outputIndex,
         item: {
           type: 'function_call',
           id: fcItemId,
@@ -410,8 +401,11 @@ async function handleStreamingResponses (res: ServerResponse, p: ResponsesHandle
         },
         response_id: p.rid
       })
+      i++
     }
   }
+
+  const stats = await result.stats
 
   const responseObject = buildResponseObject({
     id: p.rid,
@@ -425,7 +419,10 @@ async function handleStreamingResponses (res: ServerResponse, p: ResponsesHandle
     maxOutputTokens: p.maxOutputTokens,
     parallelToolCalls: p.parallelToolCalls,
     previousResponseId: p.previousResponseId,
-    store: p.storeEnabled
+    store: p.storeEnabled,
+    messageItemId: msgId,
+    ...(hasToolCalls ? { functionCallItemIds: fcItemIds } : {}),
+    ...(stats !== undefined ? { stats } : {})
   })
 
   if (p.storeEnabled) {
@@ -443,4 +440,5 @@ async function handleStreamingResponses (res: ServerResponse, p: ResponsesHandle
   sendSSE(res, { type: 'response.completed', response: responseObject })
   endSSE(res)
   p.ctx.logger.info(`  responses stream done id=${p.rid} stored=${p.storeEnabled}`)
+  return responseObject
 }
