@@ -25,9 +25,16 @@ export interface ReadAddonPackageJsonOptions {
   expectedName?: string
 }
 
+export interface InvalidPackageJsonRecord {
+  packageJsonPath: string
+  expectedName?: string
+  reason: string
+}
+
 export interface ReadAddonPackageJsonResult {
   found: boolean
   isAddon: boolean
+  invalid?: InvalidPackageJsonRecord
   addon?: NativeAddon
 }
 
@@ -45,12 +52,21 @@ export async function readAddonPackageJson (
   let parsed: unknown
   try {
     parsed = JSON.parse(raw)
-  } catch {
-    return { found: true, isAddon: false }
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    return {
+      found: true,
+      isAddon: false,
+      invalid: buildInvalid(packageJsonPath, expectedName, `malformed JSON: ${reason}`)
+    }
   }
 
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    return { found: true, isAddon: false }
+    return {
+      found: true,
+      isAddon: false,
+      invalid: buildInvalid(packageJsonPath, expectedName, 'package.json is not a JSON object')
+    }
   }
 
   const pkg = parsed as AddonPackageJson
@@ -60,7 +76,15 @@ export async function readAddonPackageJson (
 
   const name = pkg.name ?? expectedName
   if (!name) {
-    return { found: true, isAddon: false }
+    return {
+      found: true,
+      isAddon: false,
+      invalid: buildInvalid(
+        packageJsonPath,
+        expectedName,
+        'addon package.json is missing a `name` field'
+      )
+    }
   }
 
   const addon: NativeAddon = {
@@ -72,6 +96,25 @@ export async function readAddonPackageJson (
   if (typeof pkg.engines?.bare === 'string') addon.enginesBare = pkg.engines.bare
 
   return { found: true, isAddon: true, addon }
+}
+
+function buildInvalid (
+  packageJsonPath: string,
+  expectedName: string | undefined,
+  reason: string
+): InvalidPackageJsonRecord {
+  const record: InvalidPackageJsonRecord = { packageJsonPath, reason }
+  if (expectedName !== undefined) record.expectedName = expectedName
+  return record
+}
+
+export interface CollectDiagnostics {
+  invalidPackageJsons: InvalidPackageJsonRecord[]
+  emptyResolutions: boolean
+}
+
+export function createCollectDiagnostics (): CollectDiagnostics {
+  return { invalidPackageJsons: [], emptyResolutions: false }
 }
 
 export function formatAddonId (addon: { name: string; version?: string }): string {

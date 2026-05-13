@@ -142,14 +142,18 @@ describe('readAddonPackageJson', () => {
     })
   })
 
-  it('returns not-addon for malformed JSON', async () => {
+  it('returns not-addon for malformed JSON and surfaces an invalid record for diagnostics', async () => {
     await withTempDir(async (dir) => {
       fs.writeFileSync(path.join(dir, 'package.json'), '{not json')
       const result = await readAddonPackageJson({
-        packageJsonPath: path.join(dir, 'package.json')
+        packageJsonPath: path.join(dir, 'package.json'),
+        expectedName: 'broken-addon'
       })
       assert.equal(result.found, true)
       assert.equal(result.isAddon, false)
+      assert.ok(result.invalid, 'expected invalid record for malformed package.json')
+      assert.match(result.invalid?.reason ?? '', /malformed JSON/)
+      assert.equal(result.invalid?.expectedName, 'broken-addon')
     })
   })
 })
@@ -899,6 +903,54 @@ describe('verifyBundle orchestrator', () => {
         result.issues.some((i) => i.code === 'unknown-runtime-version'),
         true
       )
+    })
+  })
+
+  it('invalid --bare-runtime-version does not short-circuit prebuild checks', async () => {
+    await withTempDir(async (dir) => {
+      writePackageJson(dir, 'node_modules/bare-os', {
+        name: 'bare-os',
+        version: '3.9.0',
+        addon: true
+      })
+      const result = await verifyBundle({
+        projectRoot: dir,
+        addonsSource: path.join(dir, 'node_modules'),
+        hosts: ['darwin-arm64'],
+        bareRuntimeVersion: 'not-a-version'
+      })
+      assert.equal(hasErrors(result), true)
+      assert.equal(
+        result.issues.some((i) => i.code === 'invalid-runtime-version'),
+        true
+      )
+      assert.equal(
+        result.issues.some((i) => i.code === 'missing-prebuild'),
+        true,
+        'prebuild walk must still surface missing prebuilds when --bare-runtime-version is malformed'
+      )
+      assert.equal(result.runtime, null)
+    })
+  })
+
+  it('emits empty-bundle-resolutions warning when bundle source has no resolutions', async () => {
+    await withTempDir(async (dir) => {
+      const bundlePath = path.join(dir, 'qvac', 'worker.bundle.js')
+      writeBareBundle(bundlePath, {})
+      const result = await verifyBundle({
+        projectRoot: dir,
+        addonsSource: bundlePath,
+        hosts: ['darwin-arm64']
+      })
+      assert.equal(hasErrors(result), false)
+      assert.equal(hasWarnings(result), true)
+      const warning = result.issues.find((i) => i.code === 'empty-bundle-resolutions')
+      assert.ok(warning, 'expected empty-bundle-resolutions warning')
+      if (warning?.code === 'empty-bundle-resolutions') {
+        assert.equal(warning.level, 'warning')
+        assert.equal(warning.bundlePath, bundlePath)
+      }
+      assert.equal(result.addons.length, 0)
     })
   })
 })

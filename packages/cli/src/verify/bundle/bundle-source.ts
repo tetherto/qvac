@@ -7,6 +7,7 @@ import {
 import {
   deduplicateAddons,
   readAddonPackageJson,
+  type CollectDiagnostics,
   type NativeAddon
 } from './addon-source.js'
 
@@ -27,12 +28,13 @@ export class InvalidBundleSourceError extends Error {
 export interface CollectAddonsFromBundleOptions {
   bundlePath: string
   projectRoot: string
+  diagnostics?: CollectDiagnostics
 }
 
 export async function collectAddonsFromBundle (
   options: CollectAddonsFromBundleOptions
 ): Promise<NativeAddon[]> {
-  const { bundlePath, projectRoot } = options
+  const { bundlePath, projectRoot, diagnostics } = options
 
   let bundleText: string
   try {
@@ -50,6 +52,10 @@ export async function collectAddonsFromBundle (
     throw new InvalidBundleSourceError(bundlePath, error)
   }
 
+  if (diagnostics !== undefined && Object.keys(resolutions).length === 0) {
+    diagnostics.emptyResolutions = true
+  }
+
   const pathsByPackage = buildNestedPathIndex(resolutions, projectRoot)
 
   const addons: NativeAddon[] = []
@@ -61,6 +67,8 @@ export async function collectAddonsFromBundle (
       })
       if (result.isAddon && result.addon) {
         addons.push(result.addon)
+      } else if (result.invalid !== undefined && diagnostics !== undefined) {
+        diagnostics.invalidPackageJsons.push(result.invalid)
       }
     }
   }

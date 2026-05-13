@@ -2,8 +2,10 @@ import { promises as fsp } from 'node:fs'
 import path from 'node:path'
 import { findConfigFile, loadConfig } from '../../config.js'
 import {
+  createCollectDiagnostics,
   formatAddonId,
   type AddonSourceKind,
+  type InvalidPackageJsonRecord,
   type NativeAddon
 } from './addon-source.js'
 import {
@@ -55,12 +57,30 @@ export interface ConfigLoadFailedIssue {
   reason: string
 }
 
+export interface InvalidPackageJsonIssue {
+  code: 'invalid-package-json'
+  level: 'warning'
+  message: string
+  packageJsonPath: string
+  expectedName?: string
+  reason: string
+}
+
+export interface EmptyBundleResolutionsIssue {
+  code: 'empty-bundle-resolutions'
+  level: 'warning'
+  message: string
+  bundlePath: string
+}
+
 export type VerifyBundleIssue =
   | MissingPrebuildIssue
   | AbiIssue
   | InvalidSourceIssue
   | InvalidRuntimeVersionIssue
   | ConfigLoadFailedIssue
+  | InvalidPackageJsonIssue
+  | EmptyBundleResolutionsIssue
 
 export interface VerifyBundleResult {
   addonsSource: string
@@ -99,25 +119,16 @@ export async function verifyBundle (
     }
   }
 
+  let invalidRuntimeVersion: InvalidRuntimeVersionIssue | null = null
   if (bareRuntimeVersion !== undefined && normalizeVersion(bareRuntimeVersion) === null) {
-    return {
-      addonsSource,
-      resolvedAddonsSource,
-      sourceKind: null,
-      hosts,
-      runtime: null,
-      addons: [],
-      issues: [
-        {
-          code: 'invalid-runtime-version',
-          level: 'error',
-          providedValue: bareRuntimeVersion,
-          source: 'flag',
-          message:
-            `--bare-runtime-version "${bareRuntimeVersion}" is not a valid semver. ` +
-            'Pass a version like 1.15.0 (with optional v-prefix and pre-release tag) or omit the flag to use auto-detection.'
-        }
-      ]
+    invalidRuntimeVersion = {
+      code: 'invalid-runtime-version',
+      level: 'error',
+      providedValue: bareRuntimeVersion,
+      source: 'flag',
+      message:
+        `--bare-runtime-version "${bareRuntimeVersion}" is not a valid semver. ` +
+        'Pass a version like 1.15.0 (with optional v-prefix and pre-release tag) or omit the flag to use auto-detection.'
     }
   }
 
@@ -168,29 +179,20 @@ export async function verifyBundle (
   }
 
   if (
+    invalidRuntimeVersion === null &&
     bareRuntimeVersion === undefined &&
     configRuntimeVersion !== undefined &&
     normalizeVersion(configRuntimeVersion) === null
   ) {
-    return {
-      addonsSource,
-      resolvedAddonsSource,
-      sourceKind: null,
-      hosts,
-      runtime: null,
-      addons: [],
-      issues: [
-        {
-          code: 'invalid-runtime-version',
-          level: 'error',
-          providedValue: configRuntimeVersion,
-          source: 'config',
-          message:
-            `\`bareRuntimeVersion\` in ${formatConfigLabel(projectRoot, resolvedConfigPath ?? undefined)} ` +
-            `"${configRuntimeVersion}" is not a valid semver. ` +
-            'Use a version like 1.15.0 (with optional v-prefix and pre-release tag), or remove the field to use auto-detection.'
-        }
-      ]
+    invalidRuntimeVersion = {
+      code: 'invalid-runtime-version',
+      level: 'error',
+      providedValue: configRuntimeVersion,
+      source: 'config',
+      message:
+        `\`bareRuntimeVersion\` in ${formatConfigLabel(projectRoot, resolvedConfigPath ?? undefined)} ` +
+        `"${configRuntimeVersion}" is not a valid semver. ` +
+        'Use a version like 1.15.0 (with optional v-prefix and pre-release tag), or remove the field to use auto-detection.'
     }
   }
 
@@ -216,15 +218,18 @@ export async function verifyBundle (
     }
   }
 
+  const diagnostics = createCollectDiagnostics()
   let addons: NativeAddon[]
   try {
     addons = sourceKind === 'bare-pack-bundle'
       ? await collectAddonsFromBundle({
         bundlePath: resolvedAddonsSource,
-        projectRoot
+        projectRoot,
+        diagnostics
       })
       : await collectAddonsFromNodeModules({
-        nodeModulesRoot: resolvedAddonsSource
+        nodeModulesRoot: resolvedAddonsSource,
+        diagnostics
       })
   } catch (error) {
     if (
@@ -253,25 +258,42 @@ export async function verifyBundle (
 
   const issues: VerifyBundleIssue[] = []
   if (configLoadFailed !== null) issues.push(configLoadFailed)
+  if (invalidRuntimeVersion !== null) issues.push(invalidRuntimeVersion)
+  issues.push(...buildInvalidPackageJsonIssues(diagnostics.invalidPackageJsons))
+  if (sourceKind === 'bare-pack-bundle' && diagnostics.emptyResolutions) {
+    issues.push({
+      code: 'empty-bundle-resolutions',
+      level: 'warning',
+      bundlePath: resolvedAddonsSource,
+      message:
+        `Bundle at ${resolvedAddonsSource} has no resolutions in its bare-pack header ` +
+        '(0 packages discoverable). The verifier cannot inspect any addons in this bundle; ' +
+        '`Native addon verification passed` would be vacuous. Regenerate the bundle via ' +
+        '`qvac bundle sdk` and re-run, or check for a corrupted/empty bundle file.'
+    })
+  }
 
   for (const addon of addons) {
     const prebuildIssues = await checkPrebuilds({ addon, hosts })
     issues.push(...prebuildIssues)
   }
 
-  const runtimeOptions: Parameters<typeof resolveBareRuntime>[0] = { projectRoot }
-  if (bareRuntimeVersion !== undefined) {
-    runtimeOptions.explicitVersion = bareRuntimeVersion
-    runtimeOptions.explicitSource = 'flag'
-  } else if (configRuntimeVersion !== undefined) {
-    runtimeOptions.explicitVersion = configRuntimeVersion
-    runtimeOptions.explicitSource = 'config'
-    if (resolvedConfigPath !== null) {
-      runtimeOptions.explicitConfigPath = resolvedConfigPath
+  let runtime: BareRuntimeResolution | null = null
+  if (invalidRuntimeVersion === null) {
+    const runtimeOptions: Parameters<typeof resolveBareRuntime>[0] = { projectRoot }
+    if (bareRuntimeVersion !== undefined) {
+      runtimeOptions.explicitVersion = bareRuntimeVersion
+      runtimeOptions.explicitSource = 'flag'
+    } else if (configRuntimeVersion !== undefined) {
+      runtimeOptions.explicitVersion = configRuntimeVersion
+      runtimeOptions.explicitSource = 'config'
+      if (resolvedConfigPath !== null) {
+        runtimeOptions.explicitConfigPath = resolvedConfigPath
+      }
     }
+    runtime = await resolveBareRuntime(runtimeOptions)
+    issues.push(...checkAbi({ addons, runtime }))
   }
-  const runtime = await resolveBareRuntime(runtimeOptions)
-  issues.push(...checkAbi({ addons, runtime }))
 
   return {
     addonsSource,
@@ -282,6 +304,26 @@ export async function verifyBundle (
     addons,
     issues
   }
+}
+
+function buildInvalidPackageJsonIssues (
+  records: InvalidPackageJsonRecord[]
+): InvalidPackageJsonIssue[] {
+  return records.map((record) => {
+    const issue: InvalidPackageJsonIssue = {
+      code: 'invalid-package-json',
+      level: 'warning',
+      packageJsonPath: record.packageJsonPath,
+      reason: record.reason,
+      message:
+        `Skipping ${record.expectedName ?? record.packageJsonPath}: ` +
+        `${record.reason}. The package is being treated as a non-addon; if it ships ` +
+        'native code, the verifier cannot check its prebuilds or ABI. ' +
+        'Fix the package.json or remove the package.'
+    }
+    if (record.expectedName !== undefined) issue.expectedName = record.expectedName
+    return issue
+  })
 }
 
 async function detectSourceKind (
@@ -337,6 +379,8 @@ export function formatVerifyBundleResult (result: VerifyBundleResult): string {
   sections.push(...formatInvalidRuntimeVersions(result.issues))
   sections.push(...formatMalformedEnginesBare(result.issues))
   sections.push(...formatConfigLoadFailed(result.issues))
+  sections.push(...formatInvalidPackageJsons(result.issues))
+  sections.push(...formatEmptyBundleResolutions(result.issues))
   sections.push(...formatUnknownRuntime(result.issues))
   sections.push(...formatInvalidSources(result.issues))
 
@@ -434,6 +478,33 @@ function formatInvalidRuntimeVersions (issues: VerifyBundleIssue[]): string[] {
   )
   if (matches.length === 0) return []
   const lines = ['  Invalid Bare runtime version:']
+  for (const issue of matches) {
+    lines.push(`    - ${issue.message}`)
+  }
+  lines.push('')
+  return lines
+}
+
+function formatInvalidPackageJsons (issues: VerifyBundleIssue[]): string[] {
+  const matches = issues.filter(
+    (issue): issue is InvalidPackageJsonIssue => issue.code === 'invalid-package-json'
+  )
+  if (matches.length === 0) return []
+  const lines = ['  Invalid package.json (skipped):']
+  for (const issue of matches) {
+    lines.push(`    - ${issue.message}`)
+  }
+  lines.push('')
+  return lines
+}
+
+function formatEmptyBundleResolutions (issues: VerifyBundleIssue[]): string[] {
+  const matches = issues.filter(
+    (issue): issue is EmptyBundleResolutionsIssue =>
+      issue.code === 'empty-bundle-resolutions'
+  )
+  if (matches.length === 0) return []
+  const lines = ['  Empty bundle resolutions:']
   for (const issue of matches) {
     lines.push(`    - ${issue.message}`)
   }
