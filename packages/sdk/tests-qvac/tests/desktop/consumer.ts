@@ -1,4 +1,4 @@
-import { createExecutor } from "@tetherto/qvac-test-suite";
+import { createExecutor, type TestDefinition } from "@tetherto/qvac-test-suite";
 import {
   profiler,
   LLAMA_3_2_1B_INST_Q4_0,
@@ -45,10 +45,12 @@ import {
 } from "@qvac/sdk";
 import * as path from "node:path";
 import { ResourceManager } from "../shared/resource-manager.js";
+import { collectTestDeps } from "../shared/collect-test-deps.js";
 import { ModelLoadingExecutor } from "../shared/executors/model-loading-executor.js";
 import { CompletionExecutor } from "../shared/executors/completion-executor.js";
 import { ToolsExecutor } from "../shared/executors/tools-executor.js";
 import { TranslationExecutor } from "../shared/executors/translation-executor.js";
+import { TranslationBergamotCacheExecutor } from "../shared/executors/translation-bergamot-cache-executor.js";
 import { ShardedModelExecutor } from "../shared/executors/sharded-model-executor.js";
 import { HttpEmbeddingExecutor } from "../shared/executors/http-embedding-executor.js";
 import { KvCacheExecutor } from "../shared/executors/kv-cache-executor.js";
@@ -347,7 +349,19 @@ resources.define("diffusion-esrgan", {
   },
 });
 
-export async function bootstrap() {
+resources.define("upscaler", {
+  constant: REALESRGAN_X4PLUS_ANIME_6B,
+  type: "diffusion",
+  preLoadUnload: true,
+  config: {
+    mode: "upscale",
+    upscaler: {
+      tile_size: 128,
+    },
+  },
+});
+
+export async function bootstrap(filteredTests?: TestDefinition[]) {
   // Point the SDK at the committed e2e fixture unless the developer
   // already provided their own qvac.config.json / QVAC_CONFIG_PATH.
   // This exercises the registryDownloadMaxRetries + registryStreamTimeoutMs
@@ -358,7 +372,10 @@ export async function bootstrap() {
       "fixtures/qvac.config.e2e.json",
     );
   }
-  await resources.downloadAllOnce(console.log);
+  // `filteredTests` (when present) is the producer's post-filter test list
+  // delivered via register-ack; absence keeps the legacy "warm everything" path.
+  const allowedDeps = filteredTests ? collectTestDeps(filteredTests) : undefined;
+  await resources.downloadAllOnce(console.log, { allowedDeps });
 };
 
 export const executor = createExecutor({
@@ -374,6 +391,8 @@ export const executor = createExecutor({
     new ErrorExecutor(resources),
     new ToolsExecutor(resources),
 
+    // Must precede TranslationExecutor — patterns overlap, dispatch is first-match-wins.
+    new TranslationBergamotCacheExecutor(),
     new TranslationExecutor(resources),
     new ShardedModelExecutor(resources),
     new OcrExecutor(resources),

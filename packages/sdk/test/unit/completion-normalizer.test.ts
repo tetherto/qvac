@@ -770,3 +770,91 @@ test("harmony spec defined but hermes dialect still strips <think> as before", (
   t.alike(texts(events, "thinkingDelta"), ["thought"]);
   t.alike(texts(events, "contentDelta"), ["A", "B"]);
 });
+
+test("qwen35 streaming: tool frame emits toolCall mid-stream", (t) => {
+  const n = createCompletionNormalizer(
+    baseConfig({
+      capabilities: TEXT_PARSE_CAPS,
+      tools: [GET_WEATHER_TOOL],
+      toolDialect: "qwen35",
+    }),
+  );
+  const text = `<tool_call><function=get_weather><parameter=city>Paris</parameter></function></tool_call>`;
+  const events = [...pushAll(n, [text]), ...n.finish()];
+  const toolEvents = events.filter((e) => e.type === "toolCall");
+  t.is(toolEvents.length, 1, "qwen35 tool frame emits toolCall");
+  t.is((toolEvents[0] as { call: { name: string } }).call.name, "get_weather");
+  t.alike((toolEvents[0] as { call: { arguments: unknown } }).call.arguments, { city: "Paris" });
+  const contentJoined = texts(events, "contentDelta").join("");
+  t.absent(contentJoined.includes("<tool_call>"), "open marker must not leak");
+  t.absent(contentJoined.includes("</tool_call>"), "close marker must not leak");
+});
+
+test("qwen35 streaming: marker split across pushes still detected", (t) => {
+  const n = createCompletionNormalizer(
+    baseConfig({
+      capabilities: TEXT_PARSE_CAPS,
+      tools: [GET_WEATHER_TOOL],
+      toolDialect: "qwen35",
+    }),
+  );
+  const events = pushAll(n, [
+    "<tool_",
+    "call><function=get_weather><parameter=city>Lima</parameter></function></tool_call>",
+  ]);
+  const toolEvents = events.filter((e) => e.type === "toolCall");
+  t.is(toolEvents.length, 1, "qwen35 frame detected across split marker");
+});
+
+test("gemma4 streaming: tool frame emits toolCall mid-stream", (t) => {
+  const n = createCompletionNormalizer(
+    baseConfig({
+      capabilities: TEXT_PARSE_CAPS,
+      tools: [GET_WEATHER_TOOL],
+      toolDialect: "gemma4",
+    }),
+  );
+  const text = `<|tool_call>call:get_weather{city:<|"|>Tokyo<|"|>}<tool_call|>`;
+  const events = [...pushAll(n, [text]), ...n.finish()];
+  const toolEvents = events.filter((e) => e.type === "toolCall");
+  t.is(toolEvents.length, 1, "gemma4 tool frame emits toolCall");
+  t.is((toolEvents[0] as { call: { name: string } }).call.name, "get_weather");
+  t.alike((toolEvents[0] as { call: { arguments: unknown } }).call.arguments, { city: "Tokyo" });
+  const contentJoined = texts(events, "contentDelta").join("");
+  t.absent(contentJoined.includes("<|tool_call>"), "open marker must not leak");
+  t.absent(contentJoined.includes("<tool_call|>"), "close marker must not leak");
+});
+
+test("gemma4 thought frame: inner emitted as thinkingDelta (captureThinking=true)", (t) => {
+  const n = createCompletionNormalizer(
+    baseConfig({
+      capabilities: NONE_CAPS,
+      toolDialect: "gemma4",
+      captureThinking: true,
+    }),
+  );
+  const text = `<|channel>thoughtthinking here<channel|>after`;
+  const events = [...pushAll(n, [text]), ...n.finish()];
+  t.alike(texts(events, "thinkingDelta"), ["thinking here"]);
+  t.alike(texts(events, "contentDelta"), ["after"]);
+  t.is(n.getAccumulated().thinkingText, "thinking here");
+  t.is(n.getAccumulated().contentText, "after");
+});
+
+test("gemma4 thought frame: silently dropped (captureThinking=false)", (t) => {
+  const n = createCompletionNormalizer(
+    baseConfig({
+      capabilities: NONE_CAPS,
+      toolDialect: "gemma4",
+      captureThinking: false,
+    }),
+  );
+  const text = `<|channel>thoughtthinking here<channel|>after`;
+  const events = [...pushAll(n, [text]), ...n.finish()];
+  t.absent(types(events).includes("thinkingDelta"), "no thinkingDelta when not captured");
+  t.alike(texts(events, "contentDelta"), ["after"]);
+  const contentJoined = texts(events, "contentDelta").join("");
+  t.absent(contentJoined.includes("<|channel>thought"), "open marker must not leak");
+  t.absent(contentJoined.includes("<channel|>"), "close marker must not leak");
+  t.absent(contentJoined.includes("thinking here"), "thought inner must be dropped");
+});
