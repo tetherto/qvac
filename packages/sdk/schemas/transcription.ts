@@ -81,8 +81,41 @@ export type TranscribeClientParams = {
 export type TranscribeRequest = z.infer<typeof transcribeRequestSchema>;
 export type TranscribeResponse = z.infer<typeof transcribeResponseSchema>;
 
+/**
+ * Per-call overrides for parakeet's duplex streaming session. Any field
+ * omitted falls back to the corresponding `parakeetConfig.streaming*`
+ * value supplied at load time.
+ */
+export const parakeetStreamingRunConfigSchema = z.object({
+  /** Encoder cadence in ms (overrides `streamingChunkMs`). */
+  chunkMs: z.number().int().positive().optional(),
+  /** Sortformer rolling-history window in ms (overrides `streamingHistoryMs`). */
+  historyMs: z.number().int().positive().optional(),
+  /** ASR encoder left-context window in ms (overrides `streamingLeftContextMs`). */
+  leftContextMs: z.number().int().nonnegative().optional(),
+  /** ASR encoder right-lookahead window in ms (overrides `streamingRightLookaheadMs`). */
+  rightLookaheadMs: z.number().int().nonnegative().optional(),
+  /** Emit partial segments before chunk boundaries. */
+  emitPartials: z.boolean().optional(),
+  /**
+   * CTC/TDT-only energy-based voice-activity hint. Engine-internal
+   * flag forwarded to parakeet-cpp's `StreamingOptions::enable_energy_vad`;
+   * it influences how the engine segments speech (affecting segment
+   * cadence and what surfaces as a partial vs a finalized segment) but
+   * does NOT add new event types to the transcribeStream output. Use
+   * the whisper engine if you need standalone VAD `speaking`/`probability`
+   * events.
+   */
+  emitEnergyVad: z.boolean().optional(),
+});
+
+export type ParakeetStreamingRunConfig = z.infer<
+  typeof parakeetStreamingRunConfigSchema
+>;
+
 export const transcribeStreamRequestSchema = transcribeBaseSchema.extend({
   type: z.literal("transcribeStream"),
+  // Whisper-only knobs (ignored by other engines).
   emitVadEvents: z.boolean().optional(),
   endOfTurnSilenceMs: z
     .number()
@@ -90,9 +123,11 @@ export const transcribeStreamRequestSchema = transcribeBaseSchema.extend({
     .nonnegative()
     .optional()
     .describe(
-      "Silence (ms) before an endOfTurn event fires. 0 or unset disables end-of-turn detection entirely.",
+      "Silence (ms) before an endOfTurn event fires. 0 or unset disables end-of-turn detection entirely. Whisper engine only.",
     ),
   vadRunIntervalMs: z.number().int().positive().optional(),
+  // Parakeet-only per-call streaming overrides (ignored by other engines).
+  parakeetStreamingConfig: parakeetStreamingRunConfigSchema.optional(),
 });
 
 export const transcribeStreamResponseSchema = transcriptionResultBase.extend({
@@ -115,10 +150,16 @@ export type TranscribeStreamClientParams = {
    * Silence (ms) before an `endOfTurn` event fires. `0` or unset disables
    * end-of-turn detection entirely — no `endOfTurn` events will be emitted
    * even when `emitVadEvents` is `true`. Pass a positive value (e.g. `800`)
-   * to enable.
+   * to enable. Whisper engine only.
    */
   endOfTurnSilenceMs?: number;
   vadRunIntervalMs?: number;
+  /**
+   * Per-call overrides for parakeet's duplex streaming session. Each field
+   * defaults to the matching `parakeetConfig.streaming*` value supplied at
+   * `loadModel` time. Parakeet engine only.
+   */
+  parakeetStreamingConfig?: ParakeetStreamingRunConfig;
 };
 
 export interface TranscribeStreamSession {

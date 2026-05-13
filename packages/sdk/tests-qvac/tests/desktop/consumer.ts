@@ -53,6 +53,7 @@ import { WrongModelExecutor } from "../shared/executors/wrong-model-executor.js"
 import { ErrorExecutor } from "../shared/executors/error-executor.js";
 import { TtsExecutor } from "../shared/executors/tts-executor.js";
 import { ParakeetExecutor } from "./executors/parakeet-executor.js";
+import { ParakeetStreamExecutor } from "./executors/parakeet-stream-executor.js";
 import { VisionExecutor } from "./executors/vision-executor.js";
 import { DownloadExecutor } from "../shared/executors/download-executor.js";
 import { DelegatedInferenceExecutor } from "./executors/delegated-inference-executor.js";
@@ -351,6 +352,7 @@ export const executor = createExecutor({
     new HttpEmbeddingExecutor(resources),
     new KvCacheExecutor(resources),
     new ParakeetExecutor(resources),
+    new ParakeetStreamExecutor(resources),
     new VisionExecutor(resources),
     new DownloadExecutor(),
     new DelegatedInferenceExecutor(),

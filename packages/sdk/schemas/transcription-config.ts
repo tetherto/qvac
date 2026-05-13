@@ -98,6 +98,14 @@ export const parakeetRuntimeConfigSchema = z.object({
   streamingChunkMs: z.number().int().optional(),
   streamingHistoryMs: z.number().int().optional(),
   streamingEmitPartials: z.boolean().optional(),
+  /**
+   * CTC/TDT-only energy-based voice-activity hint. Forwarded to
+   * parakeet-cpp's `StreamingOptions::enable_energy_vad`. Influences
+   * how the engine segments speech (segment cadence, partial vs final
+   * emission) but does NOT add new event types to the transcribeStream
+   * output. Use the whisper engine if you need standalone VAD
+   * `speaking`/`probability` events.
+   */
   streamingEnergyVad: z.boolean().optional(),
   streamingLeftContextMs: z.number().int().optional(),
   streamingRightLookaheadMs: z.number().int().optional(),

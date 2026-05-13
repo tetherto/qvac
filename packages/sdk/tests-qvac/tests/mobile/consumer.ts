@@ -46,6 +46,7 @@ import { ErrorExecutor } from "../shared/executors/error-executor.js";
 import { MobileTranscriptionExecutor } from "./executors/transcription-executor.js";
 import { MobileTranscribeStreamEventsExecutor } from "./executors/transcribe-stream-events-executor.js";
 import { MobileParakeetExecutor } from "./executors/parakeet-executor.js";
+import { MobileParakeetStreamExecutor } from "./executors/parakeet-stream-executor.js";
 import { MobileVisionExecutor } from "./executors/vision-executor.js";
 import { MobileOcrExecutor } from "./executors/ocr-executor.js";
 import { MobileRagExecutor } from "./executors/rag-executor.js";
@@ -384,6 +385,7 @@ export const executor = createExecutor({
     new HttpEmbeddingExecutor(resources),
     new KvCacheExecutor(resources),
     new MobileParakeetExecutor(resources),
+    new MobileParakeetStreamExecutor(resources),
     new MobileVisionExecutor(resources),
     new DownloadExecutor(),
     new DelegatedInferenceExecutor(),

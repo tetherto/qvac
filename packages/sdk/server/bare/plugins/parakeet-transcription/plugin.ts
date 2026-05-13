@@ -7,8 +7,11 @@ import TranscriptionParakeet, {
 import {
   definePlugin,
   defineHandler,
+  defineDuplexHandler,
   transcribeRequestSchema,
   transcribeResponseSchema,
+  transcribeStreamRequestSchema,
+  transcribeStreamResponseSchema,
   ModelType,
   parakeetConfigSchema,
   ADDON_PARAKEET,
@@ -23,7 +26,7 @@ import {
   ModelLoadFailedError,
   TranscriptionFailedError,
 } from "@/utils/errors-server";
-import { transcribe } from "@/server/bare/ops/transcribe";
+import { transcribe, transcribeStream } from "@/server/bare/ops/transcribe";
 import { attachModelExecutionMs } from "@/profiling/model-execution";
 
 type ParakeetModelConfig = {
@@ -162,6 +165,67 @@ export const parakeetPlugin = definePlugin({
         } finally {
           await stream.return?.(undefined as never);
         }
+      },
+    }),
+
+    transcribeStream: defineDuplexHandler({
+      requestSchema: transcribeStreamRequestSchema,
+      responseSchema: transcribeStreamResponseSchema,
+      streaming: true,
+      duplex: true,
+
+      handler: async function* (request, inputStream) {
+        if (request.metadata === true) {
+          throw new TranscriptionFailedError(
+            `Parakeet transcribeStream does not support metadata: true; only the whisper engine emits per-segment metadata.`,
+          );
+        }
+
+        const streamOpts = {
+          ...(request.parakeetStreamingConfig && {
+            parakeetStreamingConfig: request.parakeetStreamingConfig,
+          }),
+        };
+
+        const iterator = transcribeStream(
+          request.modelId,
+          inputStream,
+          request.prompt,
+          false,
+          streamOpts,
+        );
+
+        // Parakeet's duplex stream emits text segments plus synthetic
+        // `endOfTurn` events derived from the EOU model's
+        // `<EOU>` boundary flag. The addon does NOT surface separate
+        // VAD `speaking`/`probability` events; the
+        // `parakeetStreamingConfig.emitEnergyVad` knob is purely an
+        // engine-internal hint that influences how parakeet-cpp
+        // segments speech (it changes segmentation cadence, not the
+        // event shape). Whisper is the only engine that emits
+        // standalone `vad` events.
+        for await (const value of iterator) {
+          if (typeof value === "object" && value !== null && "type" in value) {
+            if (value.type === "endOfTurn") {
+              yield {
+                type: "transcribeStream" as const,
+                endOfTurn: { silenceDurationMs: value.silenceDurationMs },
+              };
+            }
+            continue;
+          }
+
+          yield {
+            type: "transcribeStream" as const,
+            text: value,
+          };
+        }
+
+        yield {
+          type: "transcribeStream" as const,
+          text: "",
+          done: true,
+        };
       },
     }),
   },
