@@ -109,10 +109,12 @@ jobs:
         working-directory: ${{ inputs.workdir || env.PKG_DIR }}
         shell: bash
         run: |
-          mkdir -p prebuilds tmp
-          npm pack ${{ inputs.prebuild_package }} --pack-destination tmp
-          tar -xzf tmp/*.tgz -C tmp
-          cp -r tmp/package/prebuilds/* prebuilds/
+          mkdir -p prebuilds "${{ runner.temp }}/tmp"
+          rm -f "${{ runner.temp }}/tmp"/*.tgz
+          rm -rf "${{ runner.temp }}/tmp/package"
+          npm pack ${{ inputs.prebuild_package }} --pack-destination "${{ runner.temp }}/tmp"
+          tar -xzf "${{ runner.temp }}/tmp"/*.tgz -C "${{ runner.temp }}/tmp"
+          cp -r "${{ runner.temp }}/tmp"/package/prebuilds/* prebuilds/
 
       - name: Linux - install dependencies
         if: (matrix.platform == 'linux' || matrix.platform == 'android') && matrix.arch == 'arm64'
