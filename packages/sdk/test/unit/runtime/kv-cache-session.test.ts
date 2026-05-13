@@ -477,25 +477,32 @@ bareTest(
 );
 
 bareTest(
-  "kv-cache-session: beginTurn cleans up partial cache file when primeIfMissing throws",
+  "kv-cache-session: prime is atomic — canonical path is never observable in a partial state when primeIfMissing throws",
   async (t: T) => {
-    // If the addon partially writes a `.bin` and the prime closure
-    // throws (signal aborted mid-prime, OOM, addon error, etc.), the
-    // session must remove the half-primed file before re-throwing —
-    // otherwise the next `beginCustom` would `fsPromises.access(...)`
-    // → true and trust a corrupt cache. No `TurnHandle` has been
-    // returned yet, so no `scope.defer(rollback)` hook can save us.
+    // The addon's `model.run({ saveSessionPath })` is not transactional
+    // — a thrown prime can leave a partial `.bin` at whatever path it
+    // was writing to. The session steers the addon's writes to a
+    // `.prime.tmp` sibling and only `rename`s into the canonical path
+    // after the prime closure resolves successfully. So a thrown prime
+    // must leave the canonical path *untouched* (the only test that
+    // matters here — a failed unlink on the temp path is by
+    // construction unable to corrupt the canonical name).
     const { fs, mod, cleanup } = await loadSession();
     try {
       const session = mod.createKvCacheSession("test-model");
       const configHash = mod.generateConfigHash("sys", []);
 
-      let capturedPath: string | null = null;
+      // The session computes the canonical cache path internally; we
+      // capture the path the closure receives (which is the temp path
+      // ending in `.prime.tmp`) and derive the canonical path by
+      // stripping the suffix.
+      let receivedPath: string | null = null;
       const primeError = new Error("addon prime failed mid-write");
       const primeIfMissing = async (cachePath: string) => {
-        capturedPath = cachePath;
-        // Simulate the addon writing a partial cache file before the
-        // prime call rejects.
+        receivedPath = cachePath;
+        // Simulate the addon writing a partial file before failing.
+        // This goes to the temp path the session handed us — NOT the
+        // canonical path.
         fs.writeFileSync(cachePath, "half-primed-bytes");
         throw primeError;
       };
@@ -513,11 +520,24 @@ bareTest(
       }
 
       t.is(caught, primeError, "the original prime error propagates verbatim");
-      t.ok(capturedPath, "primeIfMissing observed a cache path");
+      t.ok(receivedPath, "primeIfMissing observed a path");
+
+      const tempPath = receivedPath as unknown as string;
+      t.ok(
+        tempPath.endsWith(".prime.tmp"),
+        "session handed the closure the temp path, not the canonical one",
+      );
+      const canonicalPath = tempPath.slice(0, -".prime.tmp".length);
+
       t.is(
-        fs.existsSync(capturedPath as unknown as string),
+        fs.existsSync(canonicalPath),
         false,
-        "partial .bin was unlinked so the next beginCustom won't trust it",
+        "canonical cache path was NEVER written — atomic-by-construction",
+      );
+      t.is(
+        fs.existsSync(tempPath),
+        false,
+        "temp path was unlinked on failure (best-effort, but expected here)",
       );
       t.is(
         mod.__kvCacheSessionTestHooks.hasInitializedKey(
@@ -527,6 +547,139 @@ bareTest(
         ),
         false,
         "init flag was NOT set on the failed-prime path",
+      );
+    } finally {
+      cleanup();
+    }
+  },
+);
+
+bareTest(
+  "kv-cache-session: prime is atomic — successful prime promotes temp to canonical via rename",
+  async (t: T) => {
+    // Companion to the throw test above: on a successful prime the
+    // session must `rename` the closure-written temp file to the
+    // canonical path so the next turn's existence probe sees a
+    // complete cache. The temp path must not survive.
+    const { fs, mod, cleanup } = await loadSession();
+    try {
+      const session = mod.createKvCacheSession("test-model");
+      const configHash = mod.generateConfigHash("sys", []);
+
+      let receivedPath: string | null = null;
+      const primedBytes = "complete-primed-cache-bytes";
+      const primeIfMissing = async (cachePath: string) => {
+        receivedPath = cachePath;
+        fs.writeFileSync(cachePath, primedBytes);
+      };
+
+      const turn = await session.beginTurn({
+        kind: "custom",
+        customKey: "prime-succeeds",
+        configHash,
+        primeIfMissing,
+      });
+
+      const tempPath = receivedPath as unknown as string;
+      t.ok(
+        tempPath.endsWith(".prime.tmp"),
+        "session handed the closure the temp path, not the canonical one",
+      );
+      const canonicalPath = tempPath.slice(0, -".prime.tmp".length);
+
+      t.is(
+        turn.cachePath,
+        canonicalPath,
+        "TurnHandle.cachePath is the canonical path, not the temp path",
+      );
+      t.ok(
+        fs.existsSync(canonicalPath),
+        "canonical cache path exists after the successful prime",
+      );
+      t.is(
+        fs.readFileSync(canonicalPath, "utf8"),
+        primedBytes,
+        "canonical cache holds the bytes the addon wrote to the temp path",
+      );
+      t.is(
+        fs.existsSync(tempPath),
+        false,
+        "temp path was renamed away — no leftover .prime.tmp",
+      );
+    } finally {
+      cleanup();
+    }
+  },
+);
+
+bareTest(
+  "kv-cache-session: prime is atomic — leftover .prime.tmp from a prior crashed prime is swept before the next prime",
+  async (t: T) => {
+    // If a worker crashed mid-prime previously, a stale `.prime.tmp`
+    // could survive on disk. A deferred-write addon (one that returns
+    // from prime without actually touching disk) would otherwise let
+    // the session promote the stale-from-crash bytes to the canonical
+    // name on the *next* successful prime. Defensive cleanup at the
+    // start of `primeAtomically` prevents that.
+    const { fs, mod, cleanup } = await loadSession();
+    try {
+      const session = mod.createKvCacheSession("test-model");
+      const configHash = mod.generateConfigHash("sys", []);
+
+      let receivedPath: string | null = null;
+      const primeIfMissing = async (cachePath: string) => {
+        receivedPath = cachePath;
+        // Simulate the deferred-write addon path: prime returns
+        // without actually touching disk.
+      };
+
+      // First prime to discover the temp path the session computes.
+      // We don't actually need its result; we just need the path so
+      // we can plant a "stale temp from a prior crash" before the
+      // real prime runs.
+      const probeKey = "leak-probe";
+      const probeTurn = await session.beginTurn({
+        kind: "custom",
+        customKey: probeKey,
+        configHash,
+        primeIfMissing,
+      });
+      // Drop the probe state so the "real" prime below isn't a
+      // reuse-the-init-flag fast path.
+      await session.rollback(probeTurn);
+      mod.__kvCacheSessionTestHooks.resetForTest();
+
+      // Plant the stale temp file the prior crash would have left.
+      const tempPathFromProbe =
+        (receivedPath as unknown as string) ?? "<unused>";
+      fs.writeFileSync(tempPathFromProbe, "stale-bytes-from-prior-crash");
+      t.ok(
+        fs.existsSync(tempPathFromProbe),
+        "stale .prime.tmp planted before the real prime runs",
+      );
+
+      // Real prime — the deferred-write closure returns successfully
+      // without touching disk.
+      receivedPath = null;
+      await session.beginTurn({
+        kind: "custom",
+        customKey: probeKey,
+        configHash,
+        primeIfMissing,
+      });
+
+      const tempPath = receivedPath as unknown as string;
+      const canonicalPath = tempPath.slice(0, -".prime.tmp".length);
+
+      t.is(
+        fs.existsSync(canonicalPath),
+        false,
+        "canonical path was NOT synthesised from stale-from-crash bytes",
+      );
+      t.is(
+        fs.existsSync(tempPath),
+        false,
+        "stale .prime.tmp was swept by the defensive unlink at prime start",
       );
     } finally {
       cleanup();
