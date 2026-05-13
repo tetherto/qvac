@@ -14,7 +14,7 @@ The action returns `authorised=true` iff one of the following is true:
 
 | Event                                  | Authorised when                                                                                          |
 | -------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `push`, `workflow_dispatch`, `workflow_call`, `schedule`, `release` | Always (intrinsically trusted event sources). |
+| `push`, `workflow_dispatch`, `workflow_call`, `schedule`, `release`, `repository_dispatch` | Always (intrinsically trusted event sources). |
 | `pull_request`, `pull_request_target` with `action=labeled` matching `inputs.label` | The applier (i.e. the event sender) is in `inputs.users` OR an active member of any `inputs.teams` team. **If non-trusted, the label is stripped.** |
 | `pull_request`, `pull_request_target` with `action=synchronize` | The push sender is trusted **and** the existing label was applied by a trusted actor. **Otherwise the label is stripped.** |
 | `pull_request`, `pull_request_target` with any other action | A trusted actor has previously applied the label (verified by walking the PR timeline). Deny only — no strip (the synchronize path will clean up on the next push). |

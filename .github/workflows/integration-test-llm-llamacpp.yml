@@ -20,6 +20,11 @@ on:
         type: string
         required: false
         default: ""
+      qvac_perf_only:
+        description: "If true, run only the perf-emitting tests (image-elephant, image-fruit-plate, image-high-res-aurora, bitnet, tool-calling)."
+        type: boolean
+        required: false
+        default: false
 
   workflow_dispatch:
     inputs:
@@ -42,6 +47,11 @@ on:
         type: string
         required: false
         default: ""
+      qvac_perf_only:
+        description: "If true, run only the perf-emitting tests."
+        type: boolean
+        required: false
+        default: false
 
 jobs:
   run-integration-tests:
@@ -61,39 +71,53 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # QVAC-17830: `label` disambiguates matrix entries that share
+        # the same `<platform>-<arch>` tuple so every entry produces a
+        # uniquely-named perf-report artifact. Without this, the two
+        # `linux-x64` entries (CPU-only vs GPU runner) and the two
+        # `linux-arm64` entries (ubuntu 22 vs 24) collided on upload
+        # and `actions/download-artifact` silently dropped one of each,
+        # hiding GPU data in the combined report.
         include:
           - os: ubuntu-22.04
             platform: linux
             arch: x64
             runner: ubuntu-22.04
             no_gpu: 'true'
+            label: linux-x64-cpu
           - os: ubuntu-24.04
             platform: linux
             arch: x64
             runner: ai-run-linux-gpu
             timeout_minutes: 480
+            label: linux-x64-gpu
           - os: ubuntu-24.04-arm
             platform: linux
             arch: arm64
             runner: ubuntu-24.04-arm
             no_gpu: 'true'
+            label: linux-arm64-u24
           - os: ubuntu-22.04-arm
             platform: linux
             arch: arm64
             runner: ubuntu-22.04-arm
             no_gpu: 'true'
+            label: linux-arm64-u22
           - os: macos-15-xlarge
             platform: darwin
             arch: arm64
             runner: macos-15-xlarge
+            label: darwin-arm64
           - os: macos-15-large
             platform: darwin
             arch: x64
             runner: macos-15-large
+            label: darwin-x64
           - os: windows-11
             platform: win32
             arch: x64
             runner: ai-run-windows11-gpu
+            label: win32-x64
 
     steps:
       - name: Setup Node.js
@@ -211,6 +235,17 @@ jobs:
         if: ${{ matrix.platform != 'win32' }}
         working-directory: ${{ env.WORKDIR }}
         run: |
+          if [ "${{ inputs.qvac_perf_only }}" = "true" ]; then
+            echo "qvac_perf_only=true: regenerating test/integration/all.js with perf-emitting tests only"
+            npx brittle -r test/integration/all.js \
+              test/integration/bitnet.test.js \
+              test/integration/tool-calling.test.js \
+              test/integration/image-elephant.test.js \
+              test/integration/image-fruit-plate.test.js \
+              test/integration/image-high-res-aurora.test.js
+            bare test/integration/all.js --exit 2>&1 | tee test-output.log
+            exit ${PIPESTATUS[0]}
+          fi
           npm run test:integration 2>&1 | tee test-output.log
           exit ${PIPESTATUS[0]}
         shell: bash
@@ -223,10 +258,49 @@ jobs:
         if: ${{ matrix.platform == 'win32' }}
         working-directory: ${{ env.WORKDIR }}
         run: |
-          npm run test:integration:generate
+          if ("${{ inputs.qvac_perf_only }}" -eq "true") {
+            Write-Host "qvac_perf_only=true: regenerating test/integration/all.js with perf-emitting tests only"
+            npx brittle -r test/integration/all.js `
+              test/integration/bitnet.test.js `
+              test/integration/tool-calling.test.js `
+              test/integration/image-elephant.test.js `
+              test/integration/image-fruit-plate.test.js `
+              test/integration/image-high-res-aurora.test.js
+          } else {
+            npm run test:integration:generate
+          }
           bare test/integration/all.js --exit | Tee-Object test-output.log
         shell: powershell
         env:
           QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
           QVAC_PERF_RUNS: ${{ inputs.qvac_perf_runs }}
           QVAC_PERF_WARMUP_RUNS: ${{ inputs.qvac_perf_warmup_runs }}
+
+      - name: Generate HTML performance report
+        if: ${{ always() }}
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          if [ -f test/results/performance-report.json ]; then
+            echo "Found performance-report.json, generating HTML/MD/summary..."
+            node ../../scripts/perf-report/aggregate.js \
+              --dir test/results \
+              --output-html test/results/performance-report.html \
+              --output-json test/results/performance-summary.json \
+              --output test/results/performance-report.md
+          else
+            echo "performance-report.json not found - skipping HTML generation"
+          fi
+
+      - name: Upload performance report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: perf-report-llamacpp-llm-${{ matrix.label }}-${{ github.run_number }}
+          path: |
+            ${{ env.WORKDIR }}/test/results/performance-report.json
+            ${{ env.WORKDIR }}/test/results/performance-report.html
+            ${{ env.WORKDIR }}/test/results/performance-summary.json
+            ${{ env.WORKDIR }}/test/results/performance-report.md
+          retention-days: 90
+          if-no-files-found: ignore

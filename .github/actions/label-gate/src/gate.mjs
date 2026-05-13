@@ -17,6 +17,13 @@ const TRUSTED_EVENTS = new Set([
   'workflow_call',
   'schedule',
   'release',
+  // repository_dispatch is API-initiated. Triggering it requires a token
+  // with `repo` scope on the target repo, so the dispatcher is by
+  // construction trusted; no PR review/label flow applies. Without this
+  // entry, any workflow that gates on label-gate but triggers via
+  // repository_dispatch (e.g. docs-generate-api.yml) would fail closed
+  // and never run.
+  'repository_dispatch',
 ]);
 
 const PR_EVENTS = new Set(['pull_request', 'pull_request_target']);

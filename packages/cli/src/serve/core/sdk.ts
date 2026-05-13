@@ -11,6 +11,7 @@ export interface SDKGenerationParams {
   frequency_penalty?: number
   presence_penalty?: number
   repeat_penalty?: number
+  reasoning_budget?: boolean
 }
 
 export type SDKResponseFormat =
@@ -162,7 +163,12 @@ export async function sdkCompletion (opts: {
     params['tools'] = opts.tools
   }
   if (opts.generationParams) {
-    params['generationParams'] = opts.generationParams
+    const { reasoning_budget, ...rest } = opts.generationParams
+    const sdkGenParams: Record<string, unknown> = { ...rest }
+    if (reasoning_budget !== undefined) {
+      sdkGenParams['reasoning_budget'] = reasoning_budget ? -1 : 0
+    }
+    params['generationParams'] = sdkGenParams
   }
   if (opts.responseFormat) {
     params['responseFormat'] = opts.responseFormat
