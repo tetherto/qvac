@@ -11,55 +11,10 @@ import { getServerLogger } from "@/logging";
 
 const logger = getServerLogger();
 
-// In-memory registry tracks caches initialized this session (addon defers disk writes)
-const initializedCaches = new Set<string>();
-
-function getCacheRegistryKey(
-  modelId: string,
-  configHash: string,
-  cacheKey: string,
-): string {
-  return `${modelId}:${configHash}:${cacheKey}`;
-}
-
-export function markCacheInitialized(
-  modelId: string,
-  configHash: string,
-  cacheKey: string,
-): void {
-  initializedCaches.add(getCacheRegistryKey(modelId, configHash, cacheKey));
-}
-
-export function isCacheInitialized(
-  modelId: string,
-  configHash: string,
-  cacheKey: string,
-): boolean {
-  return initializedCaches.has(
-    getCacheRegistryKey(modelId, configHash, cacheKey),
-  );
-}
-
-export function clearCacheRegistry(scope?: {
-  cacheKey?: string | undefined;
-  modelId?: string | undefined;
-}): void {
-  if (!scope || (scope.cacheKey === undefined && scope.modelId === undefined)) {
-    initializedCaches.clear();
-    return;
-  }
-  // key format: "modelId:configHash:cacheKey"
-  for (const key of initializedCaches) {
-    const firstSep = key.indexOf(":");
-    const secondSep = key.indexOf(":", firstSep + 1);
-    if (firstSep === -1 || secondSep === -1) continue;
-    const modelId = key.slice(0, firstSep);
-    const cacheKey = key.slice(secondSep + 1);
-    if (scope.cacheKey !== undefined && cacheKey !== scope.cacheKey) continue;
-    if (scope.modelId !== undefined && modelId !== scope.modelId) continue;
-    initializedCaches.delete(key);
-  }
-}
+// In-memory KV-cache state lives in `KvCacheSession` (the single
+// mutation point for all three KV-cache bookkeeping layers). This
+// module keeps only the pure path / hash utilities that don't touch
+// in-memory state.
 
 export function extractSystemPrompt(messages: CacheMessage[]): string | null {
   const systemMessage = messages.find((msg) => msg.role === "system");
@@ -169,26 +124,10 @@ export async function renameCacheFile(
   }
 }
 
-export async function customCacheExists(
-  modelId: string,
-  configHash: string,
-  cacheKey: string,
-): Promise<boolean> {
-  // Check in-memory registry first (addon defers disk writes)
-  if (isCacheInitialized(modelId, configHash, cacheKey)) {
-    return true;
-  }
-
-  // Then check file system (for caches from previous runs)
-  const cachePath = await getCacheFilePath(modelId, configHash, cacheKey);
-  try {
-    await fsPromises.access(cachePath);
-    markCacheInitialized(modelId, configHash, cacheKey);
-    return true;
-  } catch {
-    return false;
-  }
-}
+// Cache-existence probing (in-memory registry first, fall back to
+// `fs.access`) lives in `KvCacheSession.beginTurn(...)`. Keeping the
+// in-memory `initializedCaches` set private to the session module
+// avoids drift between the two layers.
 
 export async function deleteCache(
   options: { all: true } | { kvCacheKey: string; modelId?: string },

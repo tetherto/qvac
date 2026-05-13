@@ -1,76 +1,19 @@
 /**
- * Pure state + decision helpers for kv-cache bookkeeping used by
- * `completion-stream.ts`.
+ * Pure decision helper for kv-cache history slicing used by
+ * `completion-stream.ts` (via the slice computed from
+ * `TurnHandle.savedCount`).
  *
  * This module intentionally has **no** `bare-*` imports so it can be
- * exercised directly from unit tests running under `bun` without pulling
- * in the Bare runtime (which is not available in that environment).
- * The file-system-dependent pieces (e.g. `recordCacheSaveCount`) live in
- * `completion-stream.ts` and consume the state exported here.
+ * exercised directly from unit tests running under `bun` without
+ * pulling in the Bare runtime (which is not available in that
+ * environment).
  *
- * History note (QVAC-18181, SDK 0.11.0): this module previously also
- * carried a per-model cancel counter (`modelCancelCounters` /
- * `noteCancelRequested` / `snapshotCancelCount`) used by `completion()`
- * to detect mid-decode cancellation. That side channel was retired
- * alongside the introduction of `RequestRegistry` — the in-flight
- * `RequestContext.signal` is now the single source of truth and
- * `completion-stream.ts` reads `signal.aborted` directly.
+ * Cancel detection flows through the per-request `AbortSignal` from
+ * `RequestRegistry`; the `cachedMessageCounts` map lives in
+ * `kv-cache-session.ts`, which owns all three KV-cache bookkeeping
+ * layers (saved counts, init flags, on-disk files). Only the pure
+ * slice-decision helper remains here.
  */
-
-/**
- * Number of chat messages the kv-cache file on disk is known to cover, keyed
- * by cache path. Written after a successful completion records a save, read
- * by `prepareMessagesForCache` to slice the history on the next turn so a
- * consumer can stage multiple messages between completions (e.g. an
- * `[assistant, user]` recovery sequence) without resending the whole history.
- *
- * INVARIANT: an entry is only present if the corresponding kv-cache file is
- * considered trustworthy. On any turn where the SDK cannot prove the saved
- * count reflects the on-disk state (cancellation mid-decode, zero-token
- * reply, cache file missing after a save attempt), the entry MUST be
- * deleted; a stale entry causes the next turn to slice its history down to
- * an empty payload and the model returns zero tokens.
- *
- * Mode notes:
- *   - Static-mode turns are the only readers of this map. `clearStaleCount`
- *     in `decideCachedHistorySlice` exists so a stale-but-non-zero entry
- *     can be detected and dropped on the next read.
- *   - Dynamic-mode turns do NOT consume this map — the addon trims tools
- *     and the chain output from the kv-cache after each round, so the
- *     SDK falls back to role-based dispatch in `prepareMessagesForCache`.
- *     Writes still happen on dynamic-mode turns, but the recorded count
- *     reflects the messages the SDK shipped, not the (possibly trimmed)
- *     on-disk cache shape. The map is internally consistent within a
- *     single mode; a `kvCache` key should not be reused across modes.
- */
-export const cachedMessageCounts = new Map<string, number>();
-
-/**
- * Clear bookkeeping entries. With no argument, clears the whole map. With a
- * `prefix`, removes any entry whose path is equal to it OR sits beneath it
- * as a directory (i.e. `key.startsWith(prefix + sep)`).
- *
- * Runtime callers MUST pass the platform path separator (e.g. `path.sep`
- * from `bare-path`) so directory-prefix matches are correct on every
- * target. The "/" default exists only for unit tests under `bun`, where
- * cache paths are POSIX-shaped and importing `bare-path` would pull in
- * the Bare runtime. The exported wrapper in `completion-stream.ts`
- * injects the real separator for in-process use.
- */
-export function clearCachedMessageCounts(prefix?: string, sep = "/"): void {
-  if (!prefix) {
-    cachedMessageCounts.clear();
-    return;
-  }
-  for (const key of cachedMessageCounts.keys()) {
-    if (key === prefix) {
-      cachedMessageCounts.delete(key);
-      continue;
-    }
-    if (!key.startsWith(prefix + sep)) continue;
-    cachedMessageCounts.delete(key);
-  }
-}
 
 export interface HistoryMessage {
   role: string;
@@ -83,8 +26,9 @@ export interface HistorySliceDecision {
   messages: HistoryMessage[];
   /**
    * True when the decision path proves the current `savedCount` is stale
-   * and the caller should `cachedMessageCounts.delete(cachePath)` to avoid
-   * propagating the bad count to the next turn.
+   * and the caller should drop the cached entry (via
+   * `KvCacheSession.dropStaleSavedCount(turn)`) to avoid propagating the
+   * bad count to the next turn.
    */
   clearStaleCount: boolean;
 }
@@ -93,13 +37,14 @@ export interface HistorySliceDecision {
  * Pure slice decision for `prepareMessagesForCache`.
  *
  * Mirrors the shape of the logic in `completion-stream.ts` but without
- * calling `transformMessages` (which depends on `bare-fs` for attachment
- * probing). Kept here so the decision can be unit-tested in isolation.
+ * calling `transformMessages` (which depends on `bare-fs` for
+ * attachment probing). Kept here so the decision can be unit-tested in
+ * isolation.
  *
- * The key regression guard: when a non-zero `savedCount` would slice the
- * history down to an empty array, it is treated as stale — the caller
- * falls back to sending the system-stripped full history rather than
- * handing the model an empty payload.
+ * The key regression guard: when a non-zero `savedCount` would slice
+ * the history down to an empty array, it is treated as stale — the
+ * caller falls back to sending the system-stripped full history rather
+ * than handing the model an empty payload.
  */
 export function decideCachedHistorySlice(
   savedCount: number,
