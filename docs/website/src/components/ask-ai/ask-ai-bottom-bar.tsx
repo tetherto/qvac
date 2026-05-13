@@ -13,6 +13,22 @@ const SAMPLE_QUESTIONS = [
 ];
 
 /**
+ * Forward the click to the assistant after blurring the trigger
+ * button. If we leave focus on the button while the bar transitions to
+ * its hidden / `inert` state, the browser's accessibility layer logs
+ * "Blocked aria-hidden on an element because its descendant retained
+ * focus", because the focused button ends up inside a non-interactive
+ * subtree mid-frame.
+ */
+function handoff(action: () => void) {
+  if (typeof document !== 'undefined') {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement) active.blur();
+  }
+  action();
+}
+
+/**
  * Sticky "Ask AI…" bar that hugs the bottom of the viewport on every
  * docs page. Mirrors the entry-point Mintlify ships at the bottom of
  * each docs page: a single search-input-shaped trigger plus a row of
@@ -22,7 +38,10 @@ const SAMPLE_QUESTIONS = [
  * modal on mobile).
  *
  * The bar hides itself once the assistant is open, so the user is
- * never staring at two competing prompts at once.
+ * never staring at two competing prompts at once. We use the `inert`
+ * attribute (which removes the subtree from focus order AND blocks
+ * pointer events) instead of `aria-hidden`, so AT users never run
+ * into a focused-inside-hidden-ancestor situation.
  */
 export function AskAIBottomBar() {
   const { open, openWith, sidebarOpen, modalOpen } = useAskAI();
@@ -31,18 +50,23 @@ export function AskAIBottomBar() {
   return (
     <div
       data-ask-ai-bottom-bar=""
-      aria-hidden={isAssistantOpen ? 'true' : undefined}
+      // `inert` is a boolean attribute supported in React 19+.
+      // Truthy → adds `inert=""`; falsy/undefined → omits the attribute.
+      // Using `inert` instead of `aria-hidden` avoids the "Blocked
+      // aria-hidden on an element because its descendant retained focus"
+      // browser warning when the user clicks the bar to open chat.
+      inert={isAssistantOpen || undefined}
       className={cn(
-        'pointer-events-none fixed inset-x-0 bottom-0 z-30 flex justify-center px-3 pb-3 transition-all duration-200 sm:px-6 sm:pb-4',
+        'fixed inset-x-0 bottom-0 z-30 flex justify-center px-3 pb-3 transition-all duration-200 sm:px-6 sm:pb-4',
         isAssistantOpen
-          ? 'translate-y-4 opacity-0'
+          ? 'pointer-events-none translate-y-4 opacity-0'
           : 'translate-y-0 opacity-100',
       )}
     >
-      <div className="pointer-events-auto flex w-full max-w-3xl flex-col gap-2">
+      <div className="flex w-full max-w-3xl flex-col gap-2">
         <button
           type="button"
-          onClick={() => open()}
+          onClick={() => handoff(open)}
           aria-label="Ask the AI assistant"
           className={cn(
             'group flex w-full items-center gap-3 rounded-full border bg-fd-popover/85 px-4 py-3 text-left shadow-lg backdrop-blur-md transition-colors',
@@ -61,7 +85,7 @@ export function AskAIBottomBar() {
             <button
               key={question}
               type="button"
-              onClick={() => openWith(question)}
+              onClick={() => handoff(() => openWith(question))}
               className={cn(
                 'rounded-full border bg-fd-popover/70 px-3 py-1 text-xs text-fd-muted-foreground shadow-sm backdrop-blur-md transition-colors',
                 'hover:bg-fd-accent hover:text-fd-accent-foreground',

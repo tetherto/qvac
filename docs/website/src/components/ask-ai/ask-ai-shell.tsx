@@ -139,14 +139,19 @@ function DesktopSidebar({ baseSettings, aiChatSettings }: DesktopSidebarProps) {
   // sized container. We wrap it in a viewport-fixed shell so the sidebar
   // slides in/out from the right edge of the screen at full viewport height.
   // The `[data-sidebar]` attribute is required by Inkeep's `[data-sidebar] &`
-  // utility selectors. The wrapper itself stays `pointer-events-none` so the
-  // empty space next to the sidebar never blocks clicks on the underlying
-  // page; the sidebar element re-enables pointer events for itself.
+  // utility selectors.
+  //
+  // We do NOT set `pointer-events-none` on the wrapper. Inkeep mounts the
+  // sidebar inside a Shadow DOM, so a CSS selector from outside cannot
+  // re-enable pointer events on its inner buttons / inputs; everything
+  // inside the sidebar would become unclickable. The wrapper is sized to
+  // its content (auto width via `flex`), so when the sidebar is closed it
+  // collapses to 0 px and never blocks clicks on the page underneath.
   return (
     <div
       data-sidebar=""
       data-ask-ai-sidebar-shell=""
-      className="pointer-events-none fixed inset-y-0 right-0 z-40 flex h-screen [&_[data-state=open]]:pointer-events-auto"
+      className="fixed inset-y-0 right-0 z-40 flex h-screen"
     >
       <InkeepSidebarChat
         baseSettings={baseSettings}
