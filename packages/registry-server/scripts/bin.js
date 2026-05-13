@@ -3,6 +3,14 @@
 // Load environment variables from .env
 require('dotenv').config()
 
+// Defense in depth: HF downloads occasionally surface late socket errors
+// from undici's keep-alive pool (after the awaiting Promise has settled).
+// We log them instead of letting Node tear the long-lived registry-server
+// process down with exit_code 1.
+process.on('unhandledRejection', (reason) => {
+  console.error('[unhandledRejection]', reason)
+})
+
 const { command, flag } = require('paparam')
 const Corestore = require('corestore')
 const Hyperswarm = require('hyperswarm')

@@ -84,6 +84,7 @@
     "readline": "npm:bare-node-readline",
     "ready-resource": "^1.2.0",
     "stream": "npm:bare-node-stream",
+    "undici": "^7.0.0",
     "zod": "^3.24.0"
   },
   "devDependencies": {

@@ -10,6 +10,7 @@ const fsPromises = require('fs').promises
 const { pipeline } = require('stream/promises')
 const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3')
 const { downloadFileToCacheDir } = require('@huggingface/hub')
+const { Agent: UndiciAgent, fetch: undiciFetch } = require('undici')
 const { createWriteStream, createReadStream } = require('fs')
 const cenc = require('compact-encoding')
 const crypto = require('crypto')
@@ -47,6 +48,21 @@ const DISPATCH_DELETE_MODEL = `@${QVAC_MAIN_REGISTRY}/delete-model`
 const BLOB_CORE_NAME = 'models'
 
 const MODEL_TOTALS_REFRESH_INTERVAL_MS = 5 * 60 * 1000
+
+// HF downloads have hit two distinct failure modes in this long-lived process:
+// 1. Stale TLS sockets returned by undici's global keep-alive pool — HF's
+//    CDN had silently half-closed the parked connection, so the next reuse
+//    failed with ECONNRESET / "terminated" mid-stream. We isolate each
+//    download into its own short-lived undici Agent (closed in `finally`)
+//    so no socket is ever shared between downloads.
+// 2. HF's xet CAS bridge dropping early on large GGUFs (bartowski/unsloth
+//    repos) — manifests as `bytesRead: 0` at connect. `xet: false` forces
+//    the LFS HTTPS path and bypasses that service.
+// The retry loop is defense-in-depth for any remaining genuine network blips.
+const HF_DOWNLOAD_MAX_ATTEMPTS = 3
+const HF_DOWNLOAD_BACKOFF_MS = 3000
+const HF_DISPATCHER_KEEPALIVE_MS = 30_000
+const HF_DISPATCHER_CONNECT_TIMEOUT_MS = 30_000
 
 class RegistryService extends ReadyResource {
   constructor (store, swarm, config, opts = {}) {
@@ -901,8 +917,6 @@ class RegistryService extends ReadyResource {
   }
 
   async _downloadFromHuggingFace (hfUrl, localPath) {
-    this.logger.info({ url: hfUrl }, 'Downloading from HuggingFace')
-
     const hfToken = this.config.getHuggingFaceToken()
     const parsed = this._parseHfDownloadUrl(hfUrl)
 
@@ -910,17 +924,61 @@ class RegistryService extends ReadyResource {
       throw new Error('Invalid HuggingFace URL')
     }
 
-    const cachePath = await downloadFileToCacheDir({
-      repo: parsed.repo,
-      path: parsed.hfPath,
-      revision: parsed.revision,
-      accessToken: hfToken
+    // Isolated undici pool for this single download. Closed in `finally`
+    // so no parked socket can leak into the next download and trigger
+    // ECONNRESET from a half-closed remote.
+    const dispatcher = new UndiciAgent({
+      keepAliveTimeout: HF_DISPATCHER_KEEPALIVE_MS,
+      keepAliveMaxTimeout: HF_DISPATCHER_KEEPALIVE_MS,
+      connect: { timeout: HF_DISPATCHER_CONNECT_TIMEOUT_MS }
     })
+    const dispatcherFetch = (url, init = {}) => undiciFetch(url, { ...init, dispatcher })
 
-    await this._ensureLocalPath(localPath)
-    await fsPromises.copyFile(cachePath, localPath)
+    try {
+      let lastErr
+      for (let attempt = 1; attempt <= HF_DOWNLOAD_MAX_ATTEMPTS; attempt++) {
+        try {
+          this.logger.info({ url: hfUrl, attempt }, 'Downloading from HuggingFace')
 
-    return localPath
+          const cachePath = await downloadFileToCacheDir({
+            repo: parsed.repo,
+            path: parsed.hfPath,
+            revision: parsed.revision,
+            accessToken: hfToken,
+            fetch: dispatcherFetch,
+            // Force LFS over xet — the xet CAS bridge has been unreliable
+            // for the bartowski / unsloth GGUF repos this server ingests.
+            xet: false
+          })
+
+          await this._ensureLocalPath(localPath)
+          await fsPromises.copyFile(cachePath, localPath)
+
+          return localPath
+        } catch (err) {
+          lastErr = err
+          this.logger.warn({
+            url: hfUrl,
+            attempt,
+            maxAttempts: HF_DOWNLOAD_MAX_ATTEMPTS,
+            code: err.code || err.cause?.code,
+            msg: err.message
+          }, 'HuggingFace download attempt failed')
+
+          if (attempt < HF_DOWNLOAD_MAX_ATTEMPTS) {
+            await new Promise(resolve => setTimeout(resolve, HF_DOWNLOAD_BACKOFF_MS * attempt))
+          }
+        }
+      }
+
+      throw lastErr
+    } finally {
+      try {
+        await dispatcher.close()
+      } catch (err) {
+        this.logger.warn({ err: err.message }, 'Failed to close HF dispatcher cleanly')
+      }
+    }
   }
 
   _parseHfDownloadUrl (urlString) {
