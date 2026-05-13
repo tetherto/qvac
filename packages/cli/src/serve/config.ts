@@ -30,6 +30,7 @@ interface RawServeConfig {
 
 interface ConstantModelEntry {
   model: string
+  type?: string
   default?: boolean
   preload?: boolean
   config?: Record<string, unknown>
@@ -146,7 +147,7 @@ function isConstantModelEntry (entry: unknown): entry is ConstantModelEntry {
   )
 }
 
-function resolveModelConstant (alias: string, constantName: string, registry: Map<string, SDKModelConstant>, overrides?: ConstantModelEntry): ResolvedModelEntry {
+export function resolveModelConstant (alias: string, constantName: string, registry: Map<string, SDKModelConstant>, overrides?: ConstantModelEntry): ResolvedModelEntry {
   const model = registry.get(constantName)
   if (!model) {
     throw new Error(
@@ -155,14 +156,23 @@ function resolveModelConstant (alias: string, constantName: string, registry: Ma
     )
   }
 
+  const rawConfig = overrides?.config ?? {}
+  const resolved = overrides?.type
+    ? resolveExplicitServeModel(overrides.type, rawConfig)
+    : {
+        sdkType: model.addon,
+        endpointCategory: normalizeEndpointCategory(model.addon),
+        config: rawConfig
+      }
+
   return {
     alias,
     src: model.src,
-    sdkType: model.addon,
-    endpointCategory: normalizeEndpointCategory(model.addon),
+    sdkType: resolved.sdkType,
+    endpointCategory: resolved.endpointCategory,
     isDefault: overrides?.default === true,
     preload: overrides?.preload !== false,
-    config: overrides?.config ?? {}
+    config: resolved.config
   }
 }
 

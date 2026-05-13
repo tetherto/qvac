@@ -39,8 +39,8 @@ setup_file() {
         "preload": true
       },
       "test-whisper-translate": {
+        "model": "WHISPER_EN_TINY_Q8_0",
         "type": "whispercpp-audio-translation",
-        "src": "WHISPER_EN_TINY_Q8_0",
         "preload": true
       }
     }

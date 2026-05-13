@@ -38,9 +38,7 @@ Use the virtual SDK type **`whispercpp-audio-translation`** in `serve.models`. T
 
 You may omit `translate`. If you set `translate: false` (top-level or under `whisperConfig`), it is **overridden to `true`** with a console warning.
 
-### The `src` field (same as everywhere else in `serve.models`)
-
-For explicit entries, **`src` is passed to the SDK as `modelSrc`**. It is **not** limited to a hyperdrive or file path. Use whatever the SDK already accepts for Whisper loads: an **SDK model constant** name (e.g. `WHISPER_EN_TINY_Q8_0`), a `registry://…` descriptor, `https://…`, a local path, etc. — the same patterns as `qvac serve` models that use the `"model": "CONSTANT_NAME"` shorthand (that shorthand resolves to a `src` taken from the registry entry).
+The recommended shape is the same `"model": "<SDK_CONSTANT>"` shorthand used elsewhere in `serve.models`, with `type` set to the virtual translation type. The constant resolves to its registry `src`; `type` switches the alias from the constant's natural addon (`whispercpp-transcription`) to `whispercpp-audio-translation`.
 
 **Minimal JSON — same weights as a transcription alias, second alias for translate:**
 
@@ -50,8 +48,8 @@ For explicit entries, **`src` is passed to the SDK as `modelSrc`**. It is **not*
     "models": {
       "whisper-transcribe": { "model": "WHISPER_EN_TINY_Q8_0", "preload": true },
       "whisper-translate": {
+        "model": "WHISPER_EN_TINY_Q8_0",
         "type": "whispercpp-audio-translation",
-        "src": "WHISPER_EN_TINY_Q8_0",
         "preload": true
       }
     }
@@ -67,8 +65,8 @@ For explicit entries, **`src` is passed to the SDK as `modelSrc`**. It is **not*
 serve:
   models:
     whisper-1:
+      model: WHISPER_EN_TINY_Q8_0
       type: whispercpp-audio-translation
-      src: WHISPER_EN_TINY_Q8_0
       preload: true
       config:
         language: auto
@@ -79,6 +77,8 @@ serve:
         miscConfig:
           caption_enabled: false
 ```
+
+If you need to point at non-registry weights (a local path, `https://…`, `registry://…`, etc.), drop the `model` shorthand and use the explicit `{ "type": "whispercpp-audio-translation", "src": "<weights>" }` form. `src` is passed to `@qvac/sdk` as `modelSrc` verbatim, so it cannot be an SDK constant name in that form — use the `model` shorthand above when you want constant resolution.
 
 ### Example (`curl`)
 
@@ -94,7 +94,7 @@ Response (`text`): body is plain UTF-8 text.
 
 ### Same weights as transcriptions
 
-You normally use the **same** underlying weights for both transcription and translation; register **two aliases** (e.g. shorthand `"model": "WHISPER_…"` for `/v1/audio/transcriptions` and explicit `whispercpp-audio-translation` + the same `src` for `/v1/audio/translations`).
+You normally use the **same** underlying weights for both transcription and translation; register **two aliases** that share the same `"model": "WHISPER_…"` constant — one without `type` (defaults to transcription) and one with `type: "whispercpp-audio-translation"`.
 
 ### Errors
 
