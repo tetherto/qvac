@@ -4315,26 +4315,25 @@
     "tags": [
       "tts",
       "chatterbox",
-      "gguf",
       "s3gen",
-      "multilingual"
+      "multilingual",
+      "gguf"
     ],
     "notes": ""
   },
   {
     "source": "s3:///qvac_models_compiled/chatterbox/2026-05-08/chatterbox-t3-turbo.gguf",
     "engine": "@qvac/tts-ggml",
-    "description": "Chatterbox T3 turbo language model (GGUF)",
+    "description": "Chatterbox T3 turbo language model (GGUF, English)",
     "quantization": "",
     "params": "",
     "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
-      "gguf",
-      "t3",
-      "turbo",
-      "en"
+      "t3-turbo",
+      "en",
+      "gguf"
     ],
     "notes": ""
   },
@@ -4348,9 +4347,9 @@
     "tags": [
       "tts",
       "chatterbox",
-      "gguf",
       "s3gen",
-      "en"
+      "en",
+      "gguf"
     ],
     "notes": ""
   },
@@ -4364,9 +4363,9 @@
     "tags": [
       "tts",
       "chatterbox",
-      "gguf",
       "t3",
       "multilingual",
+      "gguf",
       "en",
       "es",
       "it",
@@ -4377,13 +4376,14 @@
   {
     "source": "s3:///qvac_models_compiled/supertonic/2026-05-08/supertonic.gguf",
     "engine": "@qvac/tts-ggml",
-    "description": "Supertonic TTS (GGUF)",
+    "description": "Supertonic TTS (GGUF, English)",
     "quantization": "",
     "params": "",
     "licenseId": "openrail",
     "tags": [
       "tts",
       "supertonic",
+      "en",
       "gguf"
     ],
     "notes": ""
@@ -4391,14 +4391,14 @@
   {
     "source": "s3:///qvac_models_compiled/supertonic/2026-05-08/supertonic2.gguf",
     "engine": "@qvac/tts-ggml",
-    "description": "Supertonic 2 TTS (GGUF)",
+    "description": "Supertonic 2 TTS (GGUF, multilingual)",
     "quantization": "",
     "params": "",
     "licenseId": "openrail",
     "tags": [
       "tts",
-      "supertonic",
       "supertonic2",
+      "multilingual",
       "gguf"
     ],
     "notes": ""
