@@ -432,20 +432,31 @@ export interface RagSearchResultLike {
   score: number
 }
 
+/**
+ * Optional lookup from RAG chunk id back to the original upload's identity.
+ * When unknown (eg. pre-restart chunks, disk-only workspaces), the caller
+ * falls back to the chunk id, matching today's behavior.
+ */
+export type ChunkAttributionLookup = (chunkId: string) => { fileId: string; fileName: string } | null
+
 export function searchResultsToOpenAI (
   results: RagSearchResultLike[],
-  query: string
+  query: string,
+  lookup?: ChunkAttributionLookup
 ): OpenAISearchResultsPage {
   return {
     object: 'vector_store.search_results.page',
     search_query: query,
-    data: results.map((r) => ({
-      file_id: r.id,
-      filename: r.id,
-      score: r.score,
-      attributes: {},
-      content: [{ type: 'text', text: r.content }]
-    })),
+    data: results.map((r) => {
+      const attribution = lookup ? lookup(r.id) : null
+      return {
+        file_id: attribution?.fileId ?? r.id,
+        filename: attribution?.fileName ?? r.id,
+        score: r.score,
+        attributes: {},
+        content: [{ type: 'text', text: r.content }]
+      }
+    }),
     has_more: false,
     next_page: null
   }

@@ -603,6 +603,30 @@ describe('searchResultsToOpenAI', () => {
     assert.deepEqual(first.attributes, {})
     assert.deepEqual(first.content, [{ type: 'text', text: 'first chunk text' }])
   })
+
+  it('uses the attribution lookup for file_id and filename when available', () => {
+    const page = searchResultsToOpenAI(
+      [
+        { id: 'chunk-1', content: 'first chunk', score: 0.9 },
+        { id: 'chunk-2', content: 'second chunk', score: 0.8 }
+      ],
+      'query',
+      (chunkId) => {
+        if (chunkId === 'chunk-1') return { fileId: 'file-abc', fileName: 'notes.txt' }
+        return null
+      }
+    )
+    const first = page.data[0]
+    const second = page.data[1]
+    assert.ok(first)
+    assert.ok(second)
+    // Attributed hit reports the original upload's identity.
+    assert.equal(first.file_id, 'file-abc')
+    assert.equal(first.filename, 'notes.txt')
+    // Unattributed hit falls back to the chunk id (today's behavior).
+    assert.equal(second.file_id, 'chunk-2')
+    assert.equal(second.filename, 'chunk-2')
+  })
 })
 
 describe('parseExpiresAfter', () => {

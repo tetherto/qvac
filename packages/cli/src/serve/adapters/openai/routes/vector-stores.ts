@@ -212,6 +212,7 @@ export async function handleDeleteVectorStore (
   }
 
   ctx.vectorStores.delete(id)
+  ctx.chunkAttributions.evict(id)
 
   ctx.logger.info(`  vector_store delete id=${id} workspace=${workspaceExists ? 'deleted' : 'noop'}`)
   sendJson(res, 200, {
@@ -300,7 +301,7 @@ export async function handleSearchVectorStore (
       ...(topK !== undefined ? { topK } : {}),
       workspace: id
     })
-    sendJson(res, 200, searchResultsToOpenAI(results, query))
+    sendJson(res, 200, searchResultsToOpenAI(results, query, (chunkId) => ctx.chunkAttributions.lookup(id, chunkId)))
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     ctx.logger.error(`Vector store search error for "${id}": ${message}`)
@@ -423,8 +424,9 @@ export async function handleAttachVectorStoreFile (
     `  vector_store files attach id=${id} file_id=${fileId} bytes=${record.data.length} embed=${embedding.entry.alias}`
   )
 
+  let ingestResult: { processed: unknown[]; droppedIndices: number[] }
   try {
-    await sdkRagIngest({
+    ingestResult = await sdkRagIngest({
       modelId: embedding.sdkModelId,
       documents: text,
       workspace: id,
@@ -440,6 +442,7 @@ export async function handleAttachVectorStoreFile (
   }
 
   ctx.vectorStores.setEmbedding(id, embedding.entry.alias)
+  recordChunkAttributions(ctx, id, fileId, record.fileName, ingestResult.processed)
   ctx.ephemeralFiles.remove(fileId)
 
   sendJson(res, 200, {
@@ -464,6 +467,28 @@ export async function handleAttachVectorStoreFile (
 export function looksBinary (data: Buffer): boolean {
   const window = data.length > 8192 ? data.subarray(0, 8192) : data
   return window.includes(0)
+}
+
+/**
+ * Record per-chunk attribution so subsequent search hits can carry the
+ * uploaded file's `file_id` and `filename` instead of an opaque chunk id.
+ * Defensive against the SDK's `processed[i]` shape — we only treat entries
+ * with `status === 'fulfilled'` and a string `id` as recordable.
+ */
+function recordChunkAttributions (
+  ctx: RouteContext,
+  vectorStoreId: string,
+  fileId: string,
+  fileName: string,
+  processed: unknown[]
+): void {
+  for (const entry of processed) {
+    if (typeof entry !== 'object' || entry === null) continue
+    const e = entry as { status?: unknown, id?: unknown }
+    if (e.status !== 'fulfilled') continue
+    if (typeof e.id !== 'string') continue
+    ctx.chunkAttributions.record(vectorStoreId, e.id, { fileId, fileName })
+  }
 }
 
 interface RagInfo {

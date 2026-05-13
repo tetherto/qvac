@@ -8,6 +8,7 @@ import { createModelRegistry } from './core/model-registry.js'
 import { preloadModels, shutdownSDK } from './core/lifecycle.js'
 import { handleCors, sendError } from './http.js'
 import { createOpenAIAdapter } from './adapters/openai/index.js'
+import { createChunkAttributionStore } from './adapters/openai/chunk-attribution-store.js'
 import { createEphemeralFilesStore } from './adapters/openai/ephemeral-files-store.js'
 import { createVectorStoresStore } from './adapters/openai/vector-stores-store.js'
 import type { APIAdapter, RouteContext } from './adapters/types.js'
@@ -42,7 +43,8 @@ export async function startServer (options: StartServerOptions): Promise<http.Se
 
   const vectorStores = createVectorStoresStore()
   const ephemeralFiles = createEphemeralFilesStore()
-  const ctx: RouteContext = { registry, serveConfig, logger, vectorStores, ephemeralFiles }
+  const chunkAttributions = createChunkAttributionStore()
+  const ctx: RouteContext = { registry, serveConfig, logger, vectorStores, ephemeralFiles, chunkAttributions }
 
   const server = http.createServer(async (req: IncomingMessage, res: ServerResponse) => {
     const start = performance.now()
