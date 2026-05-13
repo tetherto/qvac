@@ -7,7 +7,7 @@
 #include <mecab/mecab.h>
 
 #include "FileUtils.hpp"
-#include "qvac-lib-inference-addon-cpp/Logger.hpp"
+#include "inference-addon-cpp/Logger.hpp"
 
 namespace qvac::ttslib::chatterbox::text_preprocess {
 

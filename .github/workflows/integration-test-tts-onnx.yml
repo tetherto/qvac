@@ -205,6 +205,22 @@ jobs:
         shell: bash
         run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
 
+      - name: Setup Python for MeCab dict
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        with:
+          python-version: '3.x'
+
+      - name: Install ipadic
+        shell: bash
+        run: pip install ipadic
+
+      - name: Materialize MeCab dict
+        working-directory: ${{ inputs.workdir }}
+        shell: bash
+        run: |
+          python3 scripts/build_mecab_dict.py "${RUNNER_TEMP}/mecab-ipadic"
+          echo "QVAC_MECAB_DICT_DIR=${RUNNER_TEMP}" >> "$GITHUB_ENV"
+
       - name: Run integration test
         working-directory: ${{ inputs.workdir }}
         run: npm run test:integration

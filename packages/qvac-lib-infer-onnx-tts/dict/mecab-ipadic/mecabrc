@@ -1,5 +1,0 @@
-;
-; Minimal MeCab configuration file used by qvac TTS.
-; The dicdir is overridden at runtime via the -d flag.
-;
-dicdir = .

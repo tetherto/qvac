@@ -479,8 +479,14 @@ test('Chatterbox Multilingual TTS: Synthesis across languages', { timeout: 36000
 const TEXT_JA = 'こんにちは世界。今日はいい天気です。'
 
 function resolveMecabDictDir () {
-  const indexJsDir = path.dirname(require.resolve('../../index.js'))
-  return path.join(indexJsDir, 'dict')
+  const fromEnv = os.getEnv('QVAC_MECAB_DICT_DIR')
+  if (fromEnv && fromEnv.length > 0) return fromEnv
+  throw new Error(
+    'QVAC_MECAB_DICT_DIR is not set. Materialize the MeCab dict first:\n' +
+    '  pip install ipadic\n' +
+    '  python3 packages/tts-onnx/scripts/build_mecab_dict.py "$RUNNER_TEMP/mecab-ipadic"\n' +
+    '  export QVAC_MECAB_DICT_DIR="$RUNNER_TEMP"'
+  )
 }
 
 function statSizeSafe (p) {
@@ -543,7 +549,8 @@ test('Chatterbox Multilingual TTS: Japanese (kanji + MeCab) synthesis', { timeou
     embedTokensPath: chatterboxPath(modelDir, 'embed_tokens', true),
     conditionalDecoderPath: chatterboxPath(modelDir, 'conditional_decoder', true),
     languageModelPath: chatterboxLmPath(modelDir),
-    language: 'ja'
+    language: 'ja',
+    mecabDictPath: resolveMecabDictDir()
   })
   t.ok(model, 'Japanese TTS model should be loaded')
 
