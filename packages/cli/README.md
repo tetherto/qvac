@@ -216,7 +216,7 @@ as `node_modules` trees.
 | `--bare-runtime-version <semver>` | Optional. Override the resolved Bare runtime version used for ABI checks. **Recommended for mobile / Expo CI**, where the BareKit-embedded runtime version is not currently exposed by `react-native-bare-kit` package metadata and auto-detection is unreliable. Also useful for Electron packaging where runtime inference is ambiguous. |
 | `--config, -c <path>` | Optional. Path to a `qvac.config.*` file (default: auto-detect `qvac.config.{json,js,mjs,ts}` in the project root). Reads `bareRuntimeVersion` if present. |
 | `--project-root <path>` | Optional. Project root used to resolve bundle resolutions and detect the installed Bare runtime (default: cwd). |
-| `--json` | Optional. Emit the verification result as JSON on stdout (addons, runtime, issues, hosts, source) instead of the human-readable summary. Exit codes are unchanged. Useful when wiring `verify bundle` into CI scripts, dashboards, or other tooling that needs structured output. |
+| `--json` | Optional. Output the verification result as JSON instead of the human-readable summary. Useful for CI scripts and downstream tooling. |
 | `--quiet, -q` | Suppress the success summary; failures and warnings are always printed. Ignored when `--json` is set. |
 
 **Examples:**
