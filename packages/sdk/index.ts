@@ -153,9 +153,14 @@ export { SUPPORTED_AUDIO_FORMATS } from "./constants/audio";
 // promises. `InferenceCancelledError` rides the standard `QvacError`
 // envelope, but consumers reach for it through `instanceof` on
 // `await run.final` / `run.text` / `run.toolCalls` / `run.stats`
-// rejections.
+// rejections. `RequestRejectedByPolicyError` is thrown by
+// `RequestRegistry.begin(...)` when a registered concurrency policy
+// (e.g. `oneAtATimePerModel` on `completion`) rejects a new request;
+// it propagates out through the worker so the client can distinguish
+// "the request collided with another one" from "the request failed".
 export { InferenceCancelledError } from "./utils/errors-server";
 export type { InferenceCancelledPartial } from "./utils/errors-server";
+export { RequestRejectedByPolicyError } from "./utils/errors-server";
 
 // Logging exports
 export { getLogger, SDK_LOG_ID } from "./logging";

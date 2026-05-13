@@ -42,6 +42,7 @@ import { parseToolCalls } from "@/server/utils/tools";
 import { getResponseFormatJsonSchema } from "@/server/utils/response-format";
 import { buildAutoCacheSaveHistory, type CacheMessage } from "@/server/utils";
 import { getServerLogger } from "@/logging";
+import type { Logger } from "@/logging/types";
 import { AttachmentNotFoundError } from "@/utils/errors-server";
 import { nowMs } from "@/profiling";
 import {
@@ -415,11 +416,21 @@ export async function* completion(
     toolDialect?: ToolDialect;
     responseFormat?: ResponseFormat;
   },
-  opts: { signal: AbortSignal; scope: DisposableScope },
+  opts: {
+    signal: AbortSignal;
+    scope: DisposableScope;
+    /**
+     * Request-scoped logger forwarded to `createKvCacheSession` so
+     * kv-cache lines share the request's lifecycle prefix. Falls
+     * back to the module-level server logger when omitted.
+     */
+    logger?: Logger;
+  },
 ): AsyncGenerator<{ token: string }, CompletionResult, unknown> {
   const { history, modelId, kvCache, tools, generationParams, responseFormat } =
     params;
   const { signal, scope } = opts;
+  const requestLogger = opts.logger ?? logger;
 
   const modelConfig = getModelConfig(modelId);
   const toolsEnabled = (modelConfig as { tools?: boolean }).tools === true;
@@ -470,7 +481,7 @@ export async function* completion(
     const addon = model.addon;
     if (addon?.cancel) {
       addon.cancel.call(addon).catch((err: unknown) => {
-        logger.warn(
+        requestLogger.warn(
           `[cancel] addon.cancel() rejected during abort for modelId=${modelId}: ${err instanceof Error ? err.message : String(err)}`,
         );
       });
@@ -523,7 +534,7 @@ export async function* completion(
   // rollback. Cancellations / zero-token replies / rename failures all
   // unwind through the same `scope.defer` hook. ----
 
-  const session = createKvCacheSession(modelId);
+  const session = createKvCacheSession(modelId, { logger: requestLogger });
   const systemPromptFromHistory = extractSystemPrompt(history);
   // Dynamic mode lets each turn carry its own tool set, so the cache
   // hash must not depend on the tool list — otherwise a tool change

@@ -94,6 +94,9 @@ export const whisperPlugin = definePlugin({
       requestSchema: transcribeRequestSchema,
       responseSchema: transcribeResponseSchema,
       streaming: true,
+      // whisper.cpp addon exposes a model-wide hard cancel — compute
+      // is interrupted on the currently-running transcription.
+      cancel: { scope: "model", hard: true },
 
       handler: async function* (request) {
         const metadata = request.metadata === true;
@@ -143,6 +146,9 @@ export const whisperPlugin = definePlugin({
       responseSchema: transcribeStreamResponseSchema,
       streaming: true,
       duplex: true,
+      // Same model-wide hard cancel surface as `transcribe` — both
+      // route through the whisper.cpp addon.
+      cancel: { scope: "model", hard: true },
 
       handler: async function* (request, inputStream) {
         const streamOpts = {
