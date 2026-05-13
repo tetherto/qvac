@@ -188,7 +188,7 @@ jobs:
           npm install -g bare bare-make
 
       - name: Add bare tooling to PATH (Linux x64)
-        if: (matrix.platform == 'linux' || matrix.platform == 'x64')
+        if: (matrix.platform == 'linux' || matrix.arch == 'x64')
         run: echo "/usr/local/nvm/versions/node/v20.20.2/bin" >> $GITHUB_PATH
 
       - name: Download prebuilds from artifact
@@ -415,7 +415,7 @@ jobs:
           npm install -g bare bare-make
 
       - name: Add bare tooling to PATH (Linux x64)
-        if: (matrix.platform == 'linux' || matrix.platform == 'x64')
+        if: (matrix.platform == 'linux' || matrix.arch == 'x64')
         run: echo "/usr/local/nvm/versions/node/v20.20.2/bin" >> $GITHUB_PATH
 
       - name: Download prebuilds from artifact
