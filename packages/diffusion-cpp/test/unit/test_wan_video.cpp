@@ -289,10 +289,16 @@ TEST_F(SdWanValidationTest, Img2VidRejectsCorruptInitImage) {
 }
 
 TEST_F(SdWanValidationTest, Flf2VidRejectsCorruptEndImage) {
+  // Pin width/height to 64 so the new init_image dim check above passes
+  // for the 64x64 init and we still reach the intended end-decode-failure
+  // path. Without the pin, this test would now fail on init_image dim
+  // mismatch (defaults are 480x832) before end_image is even decoded.
   SdModel::GenerationJob job;
   job.paramsJson = R"({
     "mode": "flf2vid",
     "prompt": "interpolate",
+    "width": 64,
+    "height": 64,
     "video_frames": 5
   })";
   job.initImageBytes = wan_helpers::makeSolidPng(64, 64, 10, 20, 30);
@@ -325,11 +331,50 @@ TEST_F(SdWanValidationTest, Img2VidRejectsCorruptControlFrame) {
 }
 
 // ---------------------------------------------------------------------------
-// Dimension validation (added in QVAC-18026 follow-up): end_image and every
-// control_frames entry must match the video width/height before we hand
-// pointers to generate_video(), which would otherwise see mismatched stride
-// and either segfault inside the VAE or silently produce garbage.
+// Dimension validation (added in QVAC-18026 follow-up): init_image,
+// end_image and every control_frames entry must match the video
+// width/height before we hand pointers to generate_video(), which would
+// otherwise see mismatched stride and either segfault inside the VAE or
+// silently produce garbage.
 // ---------------------------------------------------------------------------
+
+TEST_F(SdWanValidationTest, Img2VidRejectsInitImageWithWrongDimensions) {
+  // Pin video at 64x64 but ship a 96x96 init_image; the new check in
+  // processVideo() must fire BEFORE generate_video() is dispatched.
+  SdModel::GenerationJob job;
+  job.paramsJson = R"({
+    "mode": "img2vid",
+    "prompt": "animate the frame",
+    "width": 64,
+    "height": 64,
+    "video_frames": 5
+  })";
+  job.initImageBytes = wan_helpers::makeSolidPng(96, 96, 10, 20, 30);
+  expectThrowContains(
+      std::move(job),
+      "processVideo: init_image dimensions 96x96 do not match video "
+      "dimensions 64x64");
+}
+
+TEST_F(SdWanValidationTest, Flf2VidRejectsInitImageWithWrongDimensions) {
+  // Same check applies to flf2vid (init = first frame). The mismatch here
+  // must be caught at init_image decode, not at end_image decode, so we
+  // ship a matching end_image to prove the early-out fires first.
+  SdModel::GenerationJob job;
+  job.paramsJson = R"({
+    "mode": "flf2vid",
+    "prompt": "interpolate",
+    "width": 64,
+    "height": 64,
+    "video_frames": 5
+  })";
+  job.initImageBytes = wan_helpers::makeSolidPng(128, 128, 10, 20, 30);
+  job.endImageBytes = wan_helpers::makeSolidPng(64, 64, 90, 80, 70);
+  expectThrowContains(
+      std::move(job),
+      "processVideo: init_image dimensions 128x128 do not match video "
+      "dimensions 64x64");
+}
 
 TEST_F(SdWanValidationTest, Flf2VidRejectsEndImageWithWrongDimensions) {
   SdModel::GenerationJob job;
@@ -495,4 +540,233 @@ TEST_F(SdWanHappyPathTest, Txt2VidProducesValidAvi) {
       << "Output must be a valid RIFF/AVI container";
   EXPECT_GT(progressTicks, 0)
       << "progressCallback should fire during denoising";
+}
+
+// ---------------------------------------------------------------------------
+// img2vid happy path on the Wan 2.1 1.3B T2V checkpoint
+//
+// Wan 2.1 1.3B can accept an init_image as a first frame even though it
+// was trained primarily for T2V; examples/img2vid-wan.js relies on this
+// exact behaviour. Here we exercise the same path under the validation
+// fixture's umbrella to prove:
+//   - init_image bytes are decoded and forwarded to generate_video()
+//   - the dimension check we just added does NOT spuriously fire when
+//     init_image matches width/height
+//   - img_cfg falls through to cfg_scale (sentinel -1) without any caller
+//     having to set img_cfg_scale explicitly
+//   - the frameCallback fan-out fires exactly video_frames times
+// Same opt-in env var as the txt2vid smoke; same model on disk.
+// ---------------------------------------------------------------------------
+
+TEST_F(SdWanHappyPathTest, Img2VidProducesValidAvi) {
+  // Build a 832x480 init frame in memory -- pure-grey background so we
+  // don't have to ship a fixture image. Wan 2.1 native res is 832x480.
+  const int kW = 832;
+  const int kH = 480;
+  const std::vector<uint8_t> initPng =
+      wan_helpers::makeSolidPng(kW, kH, 128, 128, 128);
+
+  SdModel::GenerationJob job;
+  job.paramsJson = R"({
+    "mode": "img2vid",
+    "prompt": "a soft breeze moves through the frame",
+    "negative_prompt": "blurry, low quality, jitter",
+    "width": 832,
+    "height": 480,
+    "video_frames": 5,
+    "fps": 16,
+    "steps": 2,
+    "cfg_scale": 6.0,
+    "strength": 0.8,
+    "flow_shift": 3.0,
+    "seed": 42
+  })";
+  job.initImageBytes = initPng;
+
+  std::vector<uint8_t> avi;
+  int progressTicks = 0;
+  int frameFanout = 0;
+  job.progressCallback = [&](const std::string&) { ++progressTicks; };
+  job.outputCallback = [&](const std::vector<uint8_t>& bytes) { avi = bytes; };
+  job.frameCallback =
+      [&](const std::vector<uint8_t>& png, int idx, int total) {
+        EXPECT_FALSE(png.empty());
+        EXPECT_GE(idx, 0);
+        EXPECT_EQ(total, 5);
+        ++frameFanout;
+      };
+
+  EXPECT_NO_THROW(model->process(std::any(job)));
+
+  EXPECT_FALSE(avi.empty()) << "outputCallback should fire once with AVI bytes";
+  EXPECT_TRUE(wan_helpers::isAvi(avi))
+      << "Output must be a valid RIFF/AVI container";
+  EXPECT_GT(progressTicks, 0)
+      << "progressCallback should fire during denoising";
+  EXPECT_EQ(frameFanout, 5)
+      << "frameCallback should fire exactly video_frames times";
+}
+
+// ---------------------------------------------------------------------------
+// Dedicated Wan 2.1 I2V (14B) happy path
+//
+// Separate from SdWanHappyPathTest because the dedicated I2V checkpoint is
+// 14B (~16-32 GB depending on precision) and is downloaded via the
+// purpose-built ./scripts/download-model-wan-i2v.sh, not the regular
+// download-model-wan.sh. Opt in via SD_RUN_WAN_I2V_SMOKE=1.
+//
+// The fixture probes models/ for any of the four supported variant
+// filenames (480p/720p x fp16/bf16/fp8_e4m3fn/fp8_scaled) and uses the
+// first one it finds; this matches the variant matrix in the download
+// script. Width/height are pinned to the resolution that variant was
+// trained on, so a user can pre-download either resolution and the test
+// adapts.
+// ---------------------------------------------------------------------------
+
+namespace wan_helpers {
+
+struct I2vModelChoice {
+  std::string path;
+  int width = 0;
+  int height = 0;
+};
+
+// Probes models/ in the same order the download script's defaults pick:
+// 480p fp8_scaled first (smallest, default), then 480p variants, then 720p.
+inline I2vModelChoice findI2vModel() {
+  struct Candidate {
+    const char* filename;
+    int width;
+    int height;
+  };
+  static constexpr Candidate kCandidates[] = {
+      {"wan2.1_i2v_480p_14B_fp8_scaled.safetensors", 832, 480},
+      {"wan2.1_i2v_480p_14B_fp8_e4m3fn.safetensors", 832, 480},
+      {"wan2.1_i2v_480p_14B_bf16.safetensors", 832, 480},
+      {"wan2.1_i2v_480p_14B_fp16.safetensors", 832, 480},
+      {"wan2.1_i2v_720p_14B_fp8_scaled.safetensors", 1280, 720},
+      {"wan2.1_i2v_720p_14B_fp8_e4m3fn.safetensors", 1280, 720},
+      {"wan2.1_i2v_720p_14B_bf16.safetensors", 1280, 720},
+      {"wan2.1_i2v_720p_14B_fp16.safetensors", 1280, 720},
+  };
+  const std::string dir = modelsDir();
+  for (const auto& c : kCandidates) {
+    const std::string full = dir + "/" + c.filename;
+    if (std::filesystem::exists(full))
+      return {full, c.width, c.height};
+  }
+  return {};
+}
+
+} // namespace wan_helpers
+
+class SdWanI2vHappyPathTest : public ::testing::Test {
+protected:
+  static std::unique_ptr<SdModel> model;
+  static wan_helpers::I2vModelChoice choice;
+
+  static void SetUpTestSuite() {
+    // Opt-in: full 14B I2V generation needs >= 32 GB unified memory and
+    // takes minutes even with just 2 steps, so we keep it behind an
+    // explicit env var distinct from SD_RUN_WAN_SMOKE.
+    if (!std::getenv("SD_RUN_WAN_I2V_SMOKE"))
+      return;
+
+    choice = wan_helpers::findI2vModel();
+    const std::string vae = wan_helpers::wanVaePath();
+    const std::string t5 = wan_helpers::wanT5Path();
+
+    if (choice.path.empty() || !std::filesystem::exists(vae) ||
+        !std::filesystem::exists(t5)) {
+      std::cout << "[SKIP] Wan 2.1 I2V model files not found. Run "
+                << "./scripts/download-model-wan-i2v.sh to enable this "
+                   "test.\n";
+      return;
+    }
+
+    SdCtxConfig config{};
+    config.diffusionModelPath = choice.path;
+    config.vaePath = vae;
+    config.t5XxlPath = t5;
+    config.nThreads = sd_test_helpers::getTestThreads();
+    config.device = sd_test_helpers::getTestDevice();
+    // 14B I2V is large enough that vanilla VRAM allocation often fails on
+    // <=24 GB devices without CPU offload. Mirror the example default.
+    config.offloadToCpu = true;
+    // Flash attention is strongly recommended for Wan on Metal / CUDA --
+    // matches the JS example default.
+    config.diffusionFlashAttn = true;
+
+    std::cout << "[SdWanI2vHappyPathTest] Loading Wan 2.1 I2V 14B...\n"
+              << "  diffusion : " << choice.path << "\n"
+              << "  vae       : " << vae << "\n"
+              << "  t5xxl     : " << t5 << "\n"
+              << "  trained res : " << choice.width << "x" << choice.height
+              << "\n";
+
+    model = std::make_unique<SdModel>(std::move(config));
+    model->load();
+    std::cout << "[SdWanI2vHappyPathTest] Model loaded.\n";
+  }
+
+  static void TearDownTestSuite() { model.reset(); }
+
+  void SetUp() override {
+    if (!model)
+      GTEST_SKIP() << "Wan I2V smoke test skipped. To enable: set "
+                      "SD_RUN_WAN_I2V_SMOKE=1 and download a Wan 2.1 I2V "
+                      "variant via ./scripts/download-model-wan-i2v.sh.";
+  }
+};
+
+std::unique_ptr<SdModel> SdWanI2vHappyPathTest::model = nullptr;
+wan_helpers::I2vModelChoice SdWanI2vHappyPathTest::choice{};
+
+TEST_F(SdWanI2vHappyPathTest, DedicatedI2vCheckpointProducesValidAvi) {
+  // Build prompt JSON inline so width/height adapt to whichever I2V
+  // resolution variant the user downloaded.
+  const std::string paramsJson = std::string(R"({
+    "mode": "img2vid",
+    "prompt": "gentle camera push-in, cinematic lighting",
+    "negative_prompt": "blurry, distorted, low quality, jittery",
+    "width": )") +
+      std::to_string(choice.width) + R"(,
+    "height": )" +
+      std::to_string(choice.height) + R"(,
+    "video_frames": 5,
+    "fps": 16,
+    "steps": 2,
+    "cfg_scale": 6.0,
+    "img_cfg_scale": 1.5,
+    "strength": 0.85,
+    "flow_shift": 3.0,
+    "seed": 42
+  })";
+
+  SdModel::GenerationJob job;
+  job.paramsJson = paramsJson;
+  job.initImageBytes =
+      wan_helpers::makeSolidPng(choice.width, choice.height, 120, 130, 140);
+
+  std::vector<uint8_t> avi;
+  int progressTicks = 0;
+  int frameFanout = 0;
+  job.progressCallback = [&](const std::string&) { ++progressTicks; };
+  job.outputCallback = [&](const std::vector<uint8_t>& bytes) { avi = bytes; };
+  job.frameCallback =
+      [&](const std::vector<uint8_t>& png, int /*idx*/, int total) {
+        EXPECT_FALSE(png.empty());
+        EXPECT_EQ(total, 5);
+        ++frameFanout;
+      };
+
+  EXPECT_NO_THROW(model->process(std::any(job)));
+
+  EXPECT_FALSE(avi.empty()) << "outputCallback should fire once with AVI bytes";
+  EXPECT_TRUE(wan_helpers::isAvi(avi))
+      << "Output must be a valid RIFF/AVI container";
+  EXPECT_GT(progressTicks, 0)
+      << "progressCallback should fire during denoising";
+  EXPECT_EQ(frameFanout, 5)
+      << "frameCallback should fire exactly video_frames times";
 }

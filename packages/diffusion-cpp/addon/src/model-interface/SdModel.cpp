@@ -845,7 +845,25 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& v) {
           general_error::InvalidArgument,
           "processVideo: failed to decode init_image (corrupt or "
           "unsupported format; supported: PNG, JPEG)");
+    // Take ownership of the freshly-decoded pixel buffer BEFORE the
+    // dimension check so a mismatch can't leak the buffer. Mirrors the
+    // control_frames pattern below.
     initData.reset(initImg.data);
+    // Dimension parity: vid.width / vid.height drive both latent stride
+    // (frame data layout in generate_video) and the AVI muxer's frame
+    // header. If init_image disagrees, generate_video receives mismatched
+    // stride for the first frame and the VAE either segfaults or silently
+    // produces garbage. Catch it here, consistent with the end_image /
+    // control_frames checks just below.
+    if (static_cast<int>(initImg.width) != vid.width ||
+        static_cast<int>(initImg.height) != vid.height)
+      throw StatusError(
+          general_error::InvalidArgument,
+          "processVideo: init_image dimensions " +
+              std::to_string(initImg.width) + "x" +
+              std::to_string(initImg.height) +
+              " do not match video dimensions " + std::to_string(vid.width) +
+              "x" + std::to_string(vid.height));
   }
 
   if (!job.endImageBytes.empty()) {
@@ -923,6 +941,12 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& v) {
   vidParams.sample_params.scheduler = vid.scheduler;
   vidParams.sample_params.sample_steps = vid.sampleSteps;
   vidParams.sample_params.guidance.txt_cfg = vid.cfgScale;
+  // img_cfg: -1 sentinel means "use cfg_scale for image conditioning too",
+  // identical to the image-gen path (SdModel processImage's img_cfg
+  // wiring). For txt2vid the field is ignored downstream; for img2vid /
+  // flf2vid it drives sample_params.guidance.img_cfg.
+  vidParams.sample_params.guidance.img_cfg =
+      vid.imgCfgScale < 0.0f ? vid.cfgScale : vid.imgCfgScale;
   // Per-job flow_shift overrides ctx-level flowShift; 0.0 falls through to
   // the ctx default (SdCtxConfig::flowShift, which is infinity / embedded).
   if (vid.flowShift > 0.0f) {

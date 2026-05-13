@@ -66,6 +66,16 @@ struct SdVidGenConfig {
   sample_method_t sampleMethod = EULER_SAMPLE_METHOD; // Wan recommended
   scheduler_t scheduler = SIMPLE_SCHEDULER;           // Wan recommended
   float cfgScale = 6.0f;                              // guidance.txt_cfg
+  // Image-conditioning guidance for img2vid / flf2vid. Mirrors the image
+  // path's SdGenConfig::imgCfgScale exactly:
+  //   -1.0f (default sentinel): fall through to cfgScale (txt_cfg), so a
+  //     caller that only sets cfg_scale gets the same value applied to
+  //     both txt_cfg and img_cfg without having to repeat themselves.
+  //   >= 0.0f: explicit override of sample_params.guidance.img_cfg.
+  // Ignored by generate_video() for txt2vid but always set in the params
+  // struct -- safe to populate unconditionally because upstream simply
+  // doesn't read it when no image conditioning is in play.
+  float imgCfgScale = -1.0f;
   // Flow-matching noise schedule shift. Convention:
   //   - 0.0f (default sentinel): fall through to SdCtxConfig::flowShift,
   //     which itself defaults to infinity (model-embedded value).

@@ -277,6 +277,40 @@ TEST(SdVidGenHandlers_CfgScale, SetsValue) {
   EXPECT_FLOAT_EQ(applyOne("cfg_scale", num(7.5)).cfgScale, 7.5f);
 }
 
+// -----------------------------------------------------------------------------
+// 7b. img_cfg_scale -- image-conditioning guidance for img2vid / flf2vid
+// -----------------------------------------------------------------------------
+//
+// Mirrors SdGenHandlers' img_cfg_scale semantics:
+//   -1.0f default = "use cfg_scale (txt_cfg) for img_cfg too"
+//   >= 0.0f       = explicit override of sample_params.guidance.img_cfg
+//
+// We test the handler in isolation; the -1 fall-through to cfgScale is
+// verified end-to-end at the param-build layer in test_wan_video.cpp.
+// -----------------------------------------------------------------------------
+
+TEST(SdVidGenHandlers_ImgCfgScale, DefaultIsSentinelMinusOne) {
+  SdVidGenConfig cfg;
+  EXPECT_FLOAT_EQ(cfg.imgCfgScale, -1.0f);
+}
+
+TEST(SdVidGenHandlers_ImgCfgScale, PositiveValuesSetExplicitOverride) {
+  EXPECT_FLOAT_EQ(applyOne("img_cfg_scale", num(0.0)).imgCfgScale, 0.0f);
+  EXPECT_FLOAT_EQ(applyOne("img_cfg_scale", num(1.5)).imgCfgScale, 1.5f);
+  EXPECT_FLOAT_EQ(applyOne("img_cfg_scale", num(7.5)).imgCfgScale, 7.5f);
+}
+
+TEST(SdVidGenHandlers_ImgCfgScale, MinusOneRoundTrips) {
+  // Explicit -1 is identical to the default sentinel: still means
+  // "fall through to cfg_scale". Round-trip the handler to confirm.
+  EXPECT_FLOAT_EQ(applyOne("img_cfg_scale", num(-1.0)).imgCfgScale, -1.0f);
+}
+
+TEST(SdVidGenHandlers_ImgCfgScale, NonNumberRejected) {
+  expectThrows("img_cfg_scale", str("6.0"));
+  expectThrows("img_cfg_scale", boolean(true));
+}
+
 TEST(SdVidGenHandlers_FlowShift, AcceptsFloats) {
   EXPECT_FLOAT_EQ(applyOne("flow_shift", num(5.0)).flowShift, 5.0f);
   EXPECT_FLOAT_EQ(applyOne("flow_shift", num(8.0)).flowShift, 8.0f);
@@ -476,6 +510,7 @@ TEST(SdVidGenHandlers_Defaults, MatchWan21T2vRecommendedConfig) {
   EXPECT_EQ(cfg.sampleMethod, EULER_SAMPLE_METHOD);
   EXPECT_EQ(cfg.scheduler, SIMPLE_SCHEDULER);
   EXPECT_FLOAT_EQ(cfg.cfgScale, 6.0f);
+  EXPECT_FLOAT_EQ(cfg.imgCfgScale, -1.0f);
   EXPECT_FLOAT_EQ(cfg.flowShift, 0.0f);
   EXPECT_FLOAT_EQ(cfg.moeBoundary, 0.875f);
   EXPECT_FLOAT_EQ(cfg.strength, 0.75f);
@@ -517,6 +552,7 @@ TEST(SdVidGenHandlers_Integration, FullWan22PayloadSetsAllExpectedFields) {
   obj["sampler"] = str("euler");
   obj["scheduler"] = str("simple");
   obj["cfg_scale"] = num(6.0);
+  obj["img_cfg_scale"] = num(4.5);
   obj["flow_shift"] = num(7.0);
   obj["high_noise_steps"] = num(25);
   obj["high_noise_sampler"] = str("dpm++2m");
@@ -541,6 +577,7 @@ TEST(SdVidGenHandlers_Integration, FullWan22PayloadSetsAllExpectedFields) {
   EXPECT_EQ(cfg.sampleMethod, EULER_SAMPLE_METHOD);
   EXPECT_EQ(cfg.scheduler, SIMPLE_SCHEDULER);
   EXPECT_FLOAT_EQ(cfg.cfgScale, 6.0f);
+  EXPECT_FLOAT_EQ(cfg.imgCfgScale, 4.5f);
   EXPECT_FLOAT_EQ(cfg.flowShift, 7.0f);
   EXPECT_EQ(cfg.highNoiseSteps, 25);
   EXPECT_EQ(cfg.highNoiseSampleMethod, DPMPP2M_SAMPLE_METHOD);

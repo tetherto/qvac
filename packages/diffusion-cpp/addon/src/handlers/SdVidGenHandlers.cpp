@@ -208,6 +208,15 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
        c.cfgScale = static_cast<float>(requireNum(v, "cfg_scale"));
      }},
 
+    // img_cfg_scale -- image-conditioning guidance for img2vid / flf2vid.
+    // Mirrors SdGenHandlers' "img_cfg_scale" handler. Sentinel -1 means
+    // "use cfgScale (txt_cfg) for img_cfg too", which is what most callers
+    // want. Any value >= 0 overrides sample_params.guidance.img_cfg.
+    {"img_cfg_scale",
+     [](SdVidGenConfig& c, const picojson::value& v) {
+       c.imgCfgScale = static_cast<float>(requireNum(v, "img_cfg_scale"));
+     }},
+
     // flow_shift per-job override. 0 = fall through to SdCtxConfig::flowShift
     // (which defaults to infinity / model-embedded). Wan T2V 1.3B sweet spot:
     // 3.0 (see examples/generate-video-wan.js). Higher values (5+) tend to
