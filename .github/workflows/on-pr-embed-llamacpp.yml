@@ -40,6 +40,27 @@ jobs:
         with:
           github-token: ${{ github.token }}
 
+  label-gate:
+    name: Authorise (label-gate)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      authorised: ${{ steps.gate.outputs.authorised }}
+    steps:
+      - name: Checkout (label-gate action only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/label-gate
+          sparse-checkout-cone-mode: false
+      - name: Run label-gate
+        id: gate
+        uses: ./.github/actions/label-gate
+        with:
+          github-token: ${{ secrets.PAT_TOKEN }}
+
   verify-fabric-lockstep:
     if: needs.authorize.outputs.allowed == 'true'
     needs: [authorize]
@@ -56,8 +77,8 @@ jobs:
         run: 'echo "Verified qvac-fabric version: ${{ steps.lockstep.outputs.version }}"'
 
   sanity-checks:
-    if: needs.authorize.outputs.allowed == 'true'
-    needs: [authorize, verify-fabric-lockstep]
+    if: needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
+    needs: [authorize, verify-fabric-lockstep, label-gate]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -74,8 +95,8 @@ jobs:
           workdir: packages/embed-llamacpp
 
   cpp-lint:
-    if: needs.authorize.outputs.allowed == 'true'
-    needs: authorize
+    if: needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
+    needs: [authorize, label-gate]
     uses: ./.github/workflows/cpp-lint.yaml
     secrets: inherit
     with:
@@ -88,8 +109,8 @@ jobs:
       contents: read
       packages: read
       pull-requests: write
-    if: needs.authorize.outputs.allowed == 'true'
-    needs: [authorize, sanity-checks]
+    if: needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
+    needs: [authorize, sanity-checks, label-gate]
     uses: ./.github/workflows/cpp-tests-embed.yml
     secrets: inherit
     with:
@@ -131,8 +152,8 @@ jobs:
       packages: write
       pull-requests: write
       id-token: write
-    if: needs.authorize.outputs.allowed == 'true'
-    needs: [authorize, sanity-checks]
+    if: needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
+    needs: [authorize, sanity-checks, label-gate]
     uses: ./.github/workflows/prebuilds-embed-llamacpp.yml
     secrets: inherit
     with:
@@ -140,8 +161,8 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref }}
 
   integration-tests:
-    needs: [authorize, prebuild]
-    if: needs.authorize.outputs.allowed == 'true'
+    needs: [authorize, prebuild, label-gate]
+    if: needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
     permissions:
       contents: read
       packages: read
@@ -158,8 +179,8 @@ jobs:
       packages: read
       pull-requests: write # Allow commenting on PRs
       id-token: write
-    if: needs.authorize.outputs.allowed == 'true'
-    needs: [authorize, prebuild]
+    if: needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
+    needs: [authorize, prebuild, label-gate]
     uses: ./.github/workflows/integration-mobile-test-embed-llamacpp.yml
     secrets: inherit
     with:

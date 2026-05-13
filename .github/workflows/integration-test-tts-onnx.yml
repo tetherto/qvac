@@ -128,8 +128,30 @@ on:
         type: boolean
 
 jobs:
+  label-gate:
+    name: Authorise (label-gate)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      authorised: ${{ steps.gate.outputs.authorised }}
+    steps:
+      - name: Checkout (label-gate action only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/label-gate
+          sparse-checkout-cone-mode: false
+      - name: Run label-gate
+        id: gate
+        uses: ./.github/actions/label-gate
+        with:
+          github-token: ${{ secrets.PAT_TOKEN }}
+
   run-integration-tests:
-    if: ${{ inputs.run_integration_tests != false }}
+    needs: [label-gate]
+    if: needs.label-gate.outputs.authorised == 'true' && inputs.run_integration_tests != false
     continue-on-error: true
     runs-on: ${{ matrix.os }}
     environment: release
@@ -223,7 +245,8 @@ jobs:
           if-no-files-found: ignore
 
   run-supertonic-desktop-benchmarks:
-    if: ${{ inputs.run_supertonic_desktop_benchmarks == true }}
+    needs: [label-gate]
+    if: needs.label-gate.outputs.authorised == 'true' && inputs.run_supertonic_desktop_benchmarks == true
     continue-on-error: true
     runs-on: ${{ matrix.os }}
     environment: release
@@ -668,8 +691,8 @@ jobs:
           if-no-files-found: ignore
 
   summarize-supertonic-desktop-benchmarks:
-    if: ${{ always() && inputs.run_supertonic_desktop_benchmarks == true }}
-    needs: run-supertonic-desktop-benchmarks
+    if: needs.label-gate.outputs.authorised == 'true' && always() && inputs.run_supertonic_desktop_benchmarks == true
+    needs: [run-supertonic-desktop-benchmarks, label-gate]
     runs-on: ubuntu-latest
     permissions:
       contents: read

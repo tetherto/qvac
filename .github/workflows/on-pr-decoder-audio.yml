@@ -70,6 +70,27 @@ jobs:
         with:
           github-token: ${{ github.token }}
 
+  label-gate:
+    name: Authorise (label-gate)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      authorised: ${{ steps.gate.outputs.authorised }}
+    steps:
+      - name: Checkout (label-gate action only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/label-gate
+          sparse-checkout-cone-mode: false
+      - name: Run label-gate
+        id: gate
+        uses: ./.github/actions/label-gate
+        with:
+          github-token: ${{ secrets.PAT_TOKEN }}
+
   context:
     needs: authorize
     if: needs.authorize.outputs.allowed == 'true'
@@ -133,8 +154,8 @@ jobs:
           echo "  workdir=$workdir"
 
   sanity-checks:
-    if: needs.authorize.outputs.allowed == 'true'
-    needs: [authorize, context]
+    if: needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
+    needs: [authorize, context, label-gate]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -151,8 +172,8 @@ jobs:
           workdir: ${{ needs.context.outputs.workdir }}
 
   run-integration-tests:
-    needs: context
-    if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
+    needs: [context, label-gate]
+    if: needs.label-gate.outputs.authorised == 'true' && (needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch')
     permissions:
       contents: read
       packages: read
@@ -170,8 +191,8 @@ jobs:
       packages: read
       pull-requests: write # Allow commenting on PRs
       id-token: write
-    needs: context
-    if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
+    needs: [context, label-gate]
+    if: needs.label-gate.outputs.authorised == 'true' && (needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/integration-mobile-test-decoder-audio.yml
     secrets: inherit
     with:

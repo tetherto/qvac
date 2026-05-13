@@ -45,7 +45,30 @@ env:
   TEST_FRAMEWORK_DIR: test-framework
 
 jobs:
+  label-gate:
+    name: Authorise (label-gate)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      authorised: ${{ steps.gate.outputs.authorised }}
+    steps:
+      - name: Checkout (label-gate action only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/label-gate
+          sparse-checkout-cone-mode: false
+      - name: Run label-gate
+        id: gate
+        uses: ./.github/actions/label-gate
+        with:
+          github-token: ${{ secrets.PAT_TOKEN }}
+
   build-and-test:
+    needs: [label-gate]
+    if: needs.label-gate.outputs.authorised == 'true'
     name: Build ${{ matrix.platform }} and Run E2E Tests (${{ matrix.variant }})
     runs-on: ${{ matrix.runner }}
     environment: release
@@ -319,7 +342,7 @@ jobs:
         working-directory: ${{ env.ADDON_DIR }}
         run: |
           echo "Injecting CHATTERBOX_VARIANT=${{ matrix.variant }} into mobile runtime"
-          
+
           # Create a patch to mock os.getEnv for our specific variable
           echo "
           const os = require('bare-os');
@@ -330,7 +353,7 @@ jobs:
             return originalGetEnv ? originalGetEnv.call(this, key) : undefined;
           };
           " > test/mobile/inject-env.cjs
-          
+
           # Prepend this patch to the integration runtime wrapper
           cat test/mobile/integration-runtime.cjs >> test/mobile/inject-env.cjs
           mv test/mobile/inject-env.cjs test/mobile/integration-runtime.cjs
@@ -473,7 +496,7 @@ jobs:
             echo "apk_path=$APK_ABSOLUTE_PATH" >> $GITHUB_OUTPUT
             echo "app_type=ANDROID_APP" >> $GITHUB_OUTPUT
             echo "app_name=test-app-${{ matrix.platform }}.apk" >> $GITHUB_OUTPUT
-            
+
             # Clean up build intermediates to free disk space
             echo "Cleaning up build intermediates..."
             rm -rf android/app/build/intermediates
@@ -802,18 +825,18 @@ jobs:
           while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
             STATUS=$(aws devicefarm get-upload --arn "$APP_UPLOAD_ARN" --query "upload.status" --output text)
             echo "Status (attempt $ATTEMPT/$MAX_ATTEMPTS): $STATUS"
-            
+
             if [ "$STATUS" = "SUCCEEDED" ]; then
               echo "✅ App upload successful"
               break
             fi
-            
+
             if [ "$STATUS" = "FAILED" ]; then
               echo "❌ Upload failed"
               aws devicefarm get-upload --arn "$APP_UPLOAD_ARN"
               exit 1
             fi
-            
+
             sleep 10
             ATTEMPT=$((ATTEMPT + 1))
           done
@@ -909,18 +932,18 @@ jobs:
           while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
             STATUS=$(aws devicefarm get-upload --arn "$TEST_UPLOAD_ARN" --query "upload.status" --output text)
             echo "Test package status (attempt $ATTEMPT/$MAX_ATTEMPTS): $STATUS"
-            
+
             if [ "$STATUS" = "SUCCEEDED" ]; then
               echo "✅ Test package upload successful"
               break
             fi
-            
+
             if [ "$STATUS" = "FAILED" ]; then
               echo "❌ Test package upload failed"
               aws devicefarm get-upload --arn "$TEST_UPLOAD_ARN"
               exit 1
             fi
-            
+
             sleep 10
             ATTEMPT=$((ATTEMPT + 1))
           done
@@ -1096,18 +1119,18 @@ jobs:
           while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
             STATUS=$(aws devicefarm get-upload --arn "$SPEC_UPLOAD_ARN" --query "upload.status" --output text)
             echo "Test spec status (attempt $ATTEMPT/$MAX_ATTEMPTS): $STATUS"
-            
+
             if [ "$STATUS" = "SUCCEEDED" ]; then
               echo "✅ Test spec upload successful"
               break
             fi
-            
+
             if [ "$STATUS" = "FAILED" ]; then
               echo "❌ Test spec upload failed"
               aws devicefarm get-upload --arn "$SPEC_UPLOAD_ARN"
               exit 1
             fi
-            
+
             sleep 5
             ATTEMPT=$((ATTEMPT + 1))
           done

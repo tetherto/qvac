@@ -42,6 +42,28 @@ jobs:
           github-token: ${{ github.token }}
 
   # Gate the workflow so label events (and other PR_target quirks) don't trigger unrelated packages.
+
+  label-gate:
+    name: Authorise (label-gate)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      authorised: ${{ steps.gate.outputs.authorised }}
+    steps:
+      - name: Checkout (label-gate action only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/label-gate
+          sparse-checkout-cone-mode: false
+      - name: Run label-gate
+        id: gate
+        uses: ./.github/actions/label-gate
+        with:
+          github-token: ${{ secrets.PAT_TOKEN }}
+
   changes:
     runs-on: ubuntu-latest
     outputs:
@@ -62,11 +84,8 @@ jobs:
               - ".github/workflows/*onnx*.yml"
 
   sanity-checks:
-    needs: [authorize, changes]
-    if: |
-      (needs.changes.outputs.pkg == 'true' &&
-       needs.authorize.outputs.allowed == 'true') ||
-      github.event_name == 'workflow_dispatch'
+    needs: [authorize, changes, label-gate]
+    if: needs.label-gate.outputs.authorised == 'true' && ((needs.changes.outputs.pkg == 'true' && needs.authorize.outputs.allowed == 'true') || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-22.04
     permissions:
       contents: read
@@ -154,8 +173,8 @@ jobs:
           fi
 
   cpp-lint:
-    needs: [authorize, changes]
-    if: needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch'
+    needs: [authorize, changes, label-gate]
+    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/cpp-lint.yaml
     secrets: inherit
     with:
@@ -169,13 +188,8 @@ jobs:
       packages: write
       pull-requests: write
       id-token: write
-    needs: [authorize, changes]
-    if: |
-      (needs.changes.outputs.pkg == 'true') &&
-      (
-        github.event_name == 'workflow_dispatch' ||
-        needs.authorize.outputs.allowed == 'true'
-      )
+    needs: [authorize, changes, label-gate]
+    if: needs.label-gate.outputs.authorised == 'true' && ((needs.changes.outputs.pkg == 'true') && ( github.event_name == 'workflow_dispatch' || needs.authorize.outputs.allowed == 'true' ))
     uses: ./.github/workflows/prebuilds-onnx.yml
     secrets: inherit
     with:
