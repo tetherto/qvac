@@ -50,6 +50,7 @@ import { ModelLoadingExecutor } from "../shared/executors/model-loading-executor
 import { CompletionExecutor } from "../shared/executors/completion-executor.js";
 import { ToolsExecutor } from "../shared/executors/tools-executor.js";
 import { TranslationExecutor } from "../shared/executors/translation-executor.js";
+import { TranslationBergamotCacheExecutor } from "../shared/executors/translation-bergamot-cache-executor.js";
 import { ShardedModelExecutor } from "../shared/executors/sharded-model-executor.js";
 import { HttpEmbeddingExecutor } from "../shared/executors/http-embedding-executor.js";
 import { KvCacheExecutor } from "../shared/executors/kv-cache-executor.js";
@@ -391,6 +392,8 @@ export const executor = createExecutor({
     new ErrorExecutor(resources),
     new ToolsExecutor(resources),
 
+    // Must precede TranslationExecutor — patterns overlap, dispatch is first-match-wins.
+    new TranslationBergamotCacheExecutor(),
     new TranslationExecutor(resources),
     new ShardedModelExecutor(resources),
     new OcrExecutor(resources),
