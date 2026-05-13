@@ -6,7 +6,7 @@ schemaType: HowTo
 
 ## Overview
 
-Transcription uses your choice of either [`qvac-ext-lib-whisper.cpp`](https://github.com/tetherto/qvac-ext-lib-whisper.cpp) or [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) (via the GGML-based [`qvac-parakeet.cpp`](https://github.com/tetherto/qvac-parakeet.cpp) engine) as inference engine. Load a model using `modelType: "whisper"` for `qvac-ext-lib-whisper.cpp`, or `modelType: "parakeet"` for Parakeet. Parakeet supports multilingual transcription (TDT), english-only transcription (CTC), speaker diarization (Sortformer), and end-of-utterance detection (EOU) for duplex streaming.
+Transcription uses your choice of either [`qvac-ext-lib-whisper.cpp`](https://github.com/tetherto/qvac-ext-lib-whisper.cpp) or [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) (via the GGML-based [`parakeet-cpp`](https://github.com/tetherto/qvac-ext-lib-whisper.cpp/tree/main/parakeet-cpp) engine) as inference engine. Load a model using `modelType: "whisper"` for `qvac-ext-lib-whisper.cpp`, or `modelType: "parakeet"` for Parakeet. Parakeet supports multilingual transcription (TDT), english-only transcription (CTC), speaker diarization (Sortformer), and end-of-utterance detection (EOU) for duplex streaming.
 
 Provide audio input as `audioChunk`, either as a file path (string) or an in-memory audio buffer.
 
