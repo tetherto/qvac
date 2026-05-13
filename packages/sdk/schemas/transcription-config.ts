@@ -126,3 +126,43 @@ export const parakeetConfigSchema = parakeetRuntimeConfigSchema;
 
 export type ParakeetRuntimeConfig = z.infer<typeof parakeetRuntimeConfigSchema>;
 export type ParakeetConfig = z.infer<typeof parakeetConfigSchema>;
+
+// === Parakeet legacy ONNX modelConfig fields (deprecated) ===
+//
+// As of @qvac/transcription-parakeet 0.4.0 the addon ships as a single
+// GGUF that auto-detects TDT / CTC / EOU / Sortformer from GGUF
+// metadata. The pre-0.4 multi-file ONNX `modelConfig` fields below are
+// kept ONLY so callers migrating from earlier SDK versions hit a
+// structured `LegacyParakeetModelDeprecatedError` (with a migration
+// message) raised from the parakeet plugin's `resolveConfig`, rather
+// than a generic Zod `Unrecognized key` error.
+//
+// This deprecation alias will be removed in the next minor release.
+export const LEGACY_PARAKEET_ONNX_MODEL_CONFIG_FIELDS = [
+  "parakeetEncoderSrc",
+  "parakeetDecoderSrc",
+  "parakeetVocabSrc",
+  "parakeetPreprocessorSrc",
+  "parakeetCtcModelSrc",
+  "parakeetTokenizerSrc",
+  "parakeetSortformerSrc",
+  "parakeetModelSrc",
+  "modelType",
+] as const;
+
+const legacyParakeetOnnxFieldsShape =
+  LEGACY_PARAKEET_ONNX_MODEL_CONFIG_FIELDS.reduce<
+    Record<string, z.ZodOptional<z.ZodUnknown>>
+  >((acc, name) => {
+    acc[name] = z.unknown().optional();
+    return acc;
+  }, {});
+
+// Strict schema used by `loadModel` and the parakeet plugin's
+// `loadConfigSchema`. Permits the deprecated ONNX field names so the
+// plugin's `resolveConfig` can raise a structured
+// `LegacyParakeetModelDeprecatedError` instead of a generic Zod error;
+// other unknown keys are still rejected by `.strict()`.
+export const parakeetLoadConfigSchema = parakeetRuntimeConfigSchema
+  .extend(legacyParakeetOnnxFieldsShape)
+  .strict();

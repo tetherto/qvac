@@ -5,6 +5,8 @@ import {
   runParakeetStreamHappy,
   runParakeetStreamMetadataRejected,
   runParakeetStreamEou,
+  runParakeetStreamDestroyMidUtterance,
+  runParakeetStreamIteratorThrow,
   type ParakeetStreamParams,
 } from "../../shared/parakeet-stream-runner.js";
 import { parakeetStreamTests } from "../../parakeet-stream-tests.js";
@@ -71,6 +73,16 @@ export class MobileParakeetStreamExecutor extends ModelAssetExecutor<
 
     if (testId === "parakeet-stream-metadata-rejected") {
       return runParakeetStreamMetadataRejected(modelId);
+    }
+
+    if (testId === "parakeet-stream-destroy-mid-utterance") {
+      const bytes = await this.loadAudioBytes(p.audioFileName);
+      return runParakeetStreamDestroyMidUtterance(modelId, bytes, p);
+    }
+
+    if (testId === "parakeet-stream-iterator-throw") {
+      const bytes = await this.loadAudioBytes(p.audioFileName);
+      return runParakeetStreamIteratorThrow(modelId, bytes, p);
     }
 
     const bytes = await this.loadAudioBytes(p.audioFileName);

@@ -298,8 +298,15 @@ export async function* transcribeStream(
             continue;
           }
           if (output.type === "endOfTurn") {
+            // `endOfTurn` events that arrive via the typed-event path
+            // come exclusively from the whisper engine — whisper
+            // measures a trailing silence window and surfaces the
+            // boundary as `{ type: "endOfTurn", silenceDurationMs }`.
+            // Parakeet's EOU is token-driven and is emitted from
+            // `emitSegment` below, tagged `source: "parakeet"`.
             yield {
               type: "endOfTurn",
+              source: "whisper",
               silenceDurationMs: output.silenceDurationMs,
             };
             continue;
@@ -329,11 +336,11 @@ export async function* transcribeStream(
  * `isEndOfTurn` flag on the same segment that carries the trailing
  * speech tokens).
  *
- * `silenceDurationMs` is intentionally omitted on parakeet's
- * synthesized event — the EOU is token-driven, so there is no
- * measured silence window. Whisper's own `endOfTurn` events (emitted
- * upstream as `{ type: "endOfTurn", silenceDurationMs }`) are not
- * routed through this helper.
+ * Parakeet's EOU is token-driven, so the synthesized event carries
+ * `source: "parakeet"` and no measured silence window. Whisper's own
+ * `endOfTurn` events (emitted upstream as `{ type: "endOfTurn",
+ * silenceDurationMs }`) are tagged `source: "whisper"` in the typed-
+ * event branch above and are not routed through this helper.
  */
 function* emitSegment(
   segment: StreamingSegment,
@@ -342,13 +349,13 @@ function* emitSegment(
 ): Generator<string | TranscribeSegment | TranscribeStreamEvent> {
   if (!segment.text) {
     if (segment.isEndOfTurn) {
-      yield { type: "endOfTurn" };
+      yield { type: "endOfTurn", source: "parakeet" };
     }
     return;
   }
   if (silenceMarker && segment.text.includes(silenceMarker)) {
     if (segment.isEndOfTurn) {
-      yield { type: "endOfTurn" };
+      yield { type: "endOfTurn", source: "parakeet" };
     }
     return;
   }
@@ -358,7 +365,7 @@ function* emitSegment(
     yield segment.text;
   }
   if (segment.isEndOfTurn) {
-    yield { type: "endOfTurn" };
+    yield { type: "endOfTurn", source: "parakeet" };
   }
 }
 

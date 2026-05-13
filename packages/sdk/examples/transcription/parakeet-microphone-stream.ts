@@ -12,9 +12,11 @@
  *
  * The session yields a discriminated union of events:
  *   - { type: "text", text }    transcript chunks
- *   - { type: "endOfTurn" }     EOU model turn boundary (token-driven;
+ *   - { type: "endOfTurn", source: "parakeet" }
+ *                               EOU model turn boundary (token-driven;
  *                               `silenceDurationMs` is whisper-only and
- *                               omitted on parakeet)
+ *                               absent on the parakeet branch of the
+ *                               discriminated union)
  *
  * Notes:
  *   - This example uses the EOU (`<EOU>` token) Parakeet checkpoint, so
@@ -101,6 +103,8 @@ try {
         break;
     }
   }
+  await cleanup();
+  process.exit(0);
 } catch (error) {
   console.error("Error:", error);
   await cleanup();

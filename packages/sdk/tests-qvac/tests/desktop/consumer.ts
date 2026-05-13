@@ -14,10 +14,18 @@ import {
   BERGAMOT_EN_IT,
   MARIAN_EN_HI_INDIC_200M_Q4_0,
   MARIAN_HI_EN_INDIC_200M_Q4_0,
-  TTS_T3_CHATTERBOX_1,
-  TTS_S3GEN_CHATTERBOX_1,
-  TTS_SUPERTONIC,
-  TTS_SUPERTONIC2_SUPERTONIC,
+  TTS_TOKENIZER_EN_CHATTERBOX,
+  TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP32,
+  TTS_EMBED_TOKENS_EN_CHATTERBOX_FP32,
+  TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP32,
+  TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP32,
+  TTS_SUPERTONIC2_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32,
+  TTS_SUPERTONIC2_OFFICIAL_DURATION_PREDICTOR_SUPERTONE_FP32,
+  TTS_SUPERTONIC2_OFFICIAL_VECTOR_ESTIMATOR_SUPERTONE_FP32,
+  TTS_SUPERTONIC2_OFFICIAL_VOCODER_SUPERTONE_FP32,
+  TTS_SUPERTONIC2_OFFICIAL_UNICODE_INDEXER_SUPERTONE_FP32,
+  TTS_SUPERTONIC2_OFFICIAL_TTS_CONFIG_SUPERTONE,
+  TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE,
   PARAKEET_TDT_0_6B_V3_Q8_0,
   PARAKEET_CTC_0_6B_Q8_0,
   PARAKEET_SORTFORMER_4SPK_V1_Q8_0,
@@ -213,42 +221,51 @@ resources.define("afriquegemma", {
 
 const referenceAudioPath = path.resolve(process.cwd(), "assets/audio/transcription-short-wav.wav");
 
-// TTS resources are wired against the ggml-tts plugin (TTSGgml /
-// @qvac/tts-ggml). Chatterbox uses the T3 GGUF as the primary model and
-// the s3gen GGUF as the decoder companion; Supertonic uses the single GGUF
-// per language.
 resources.define("tts-chatterbox", {
-  constant: TTS_T3_CHATTERBOX_1,
-  type: "ggml-tts",
+  constant: TTS_TOKENIZER_EN_CHATTERBOX,
+  type: "tts",
   preLoadUnload: true,
   config: {
     ttsEngine: "chatterbox",
     language: "en",
-    ttsT3ModelSrc: TTS_T3_CHATTERBOX_1,
-    ttsS3genModelSrc: TTS_S3GEN_CHATTERBOX_1,
+    ttsTokenizerSrc: TTS_TOKENIZER_EN_CHATTERBOX,
+    ttsSpeechEncoderSrc: TTS_SPEECH_ENCODER_EN_CHATTERBOX_FP32,
+    ttsEmbedTokensSrc: TTS_EMBED_TOKENS_EN_CHATTERBOX_FP32,
+    ttsConditionalDecoderSrc: TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP32,
+    ttsLanguageModelSrc: TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP32,
     referenceAudioSrc: referenceAudioPath,
   },
 });
 
+const ttsSupertonicBaseConfig = {
+  ttsEngine: "supertonic",
+  ttsTextEncoderSrc: TTS_SUPERTONIC2_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32,
+  ttsDurationPredictorSrc: TTS_SUPERTONIC2_OFFICIAL_DURATION_PREDICTOR_SUPERTONE_FP32,
+  ttsVectorEstimatorSrc: TTS_SUPERTONIC2_OFFICIAL_VECTOR_ESTIMATOR_SUPERTONE_FP32,
+  ttsVocoderSrc: TTS_SUPERTONIC2_OFFICIAL_VOCODER_SUPERTONE_FP32,
+  ttsUnicodeIndexerSrc: TTS_SUPERTONIC2_OFFICIAL_UNICODE_INDEXER_SUPERTONE_FP32,
+  ttsTtsConfigSrc: TTS_SUPERTONIC2_OFFICIAL_TTS_CONFIG_SUPERTONE,
+  ttsVoiceStyleSrc: TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE,
+};
+
 resources.define("tts-supertonic", {
-  constant: TTS_SUPERTONIC,
-  type: "ggml-tts",
+  constant: TTS_SUPERTONIC2_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32,
+  type: "onnx-tts",
   preLoadUnload: true,
   config: {
-    ttsEngine: "supertonic",
+    ...ttsSupertonicBaseConfig,
     language: "en",
-    ttsSupertonicModelSrc: TTS_SUPERTONIC,
   },
 });
 
 resources.define("tts-supertonic-multilingual", {
-  constant: TTS_SUPERTONIC2_SUPERTONIC,
-  type: "ggml-tts",
+  constant: TTS_SUPERTONIC2_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32,
+  type: "onnx-tts",
   preLoadUnload: true,
   config: {
-    ttsEngine: "supertonic",
+    ...ttsSupertonicBaseConfig,
     language: "es",
-    ttsSupertonicModelSrc: TTS_SUPERTONIC2_SUPERTONIC,
+    supertonicMultilingual: true,
   },
 });
 

@@ -22,6 +22,7 @@ export interface ParakeetStreamParams {
 interface CollectedEvent {
   type: string;
   text?: string;
+  source?: "whisper" | "parakeet";
   silenceDurationMs?: number;
 }
 
@@ -205,6 +206,215 @@ function writeInChunks(
   }
 }
 
+/**
+ * Mid-utterance teardown: opens a duplex session, writes a couple of
+ * audio chunks (no `end()` / no trailing silence), calls
+ * `session.destroy()`, then opens a fresh session against the same
+ * loaded model and runs a happy-path stream end-to-end.
+ *
+ * Locks down two invariants of the new parakeet `StreamSession`:
+ *   1. `destroy()` mid-utterance does NOT hang the worker — the
+ *      addon's input stream tear-down must propagate so the duplex
+ *      handler exits cleanly.
+ *   2. The model remains usable for subsequent sessions; the native
+ *      `parakeet::StreamSession` is per-call and must not leave the
+ *      addon in a wedged state after a forced shutdown.
+ */
+export async function runParakeetStreamDestroyMidUtterance(
+  modelId: string,
+  audioBytes: Uint8Array,
+  params: ParakeetStreamParams,
+): Promise<TestResult> {
+  let firstSession: TranscribeStreamConversationSession | null = null;
+  let secondSession: TranscribeStreamConversationSession | null = null;
+  try {
+    const decoded = decodeWavToMonoF32(audioBytes);
+    if (decoded.sampleRate !== EXPECTED_SAMPLE_RATE) {
+      return {
+        passed: false,
+        output: `Fixture sample rate ${decoded.sampleRate} != expected ${EXPECTED_SAMPLE_RATE}`,
+      };
+    }
+    const chunkMs = params.chunkMs ?? 1000;
+    const speech = f32ToS16LeBytes(decoded.samplesMono);
+    const chunkSize =
+      Math.floor((chunkMs / 1000) * EXPECTED_SAMPLE_RATE) *
+      BYTES_PER_S16_SAMPLE;
+
+    firstSession = await transcribeStream({
+      modelId,
+      parakeetStreamingConfig: { chunkMs },
+    });
+
+    // Write exactly 2 chunks, then yank the session WITHOUT calling
+    // `end()` — this exercises the mid-utterance teardown path.
+    const chunks = Math.min(2, Math.ceil(speech.length / chunkSize));
+    for (let i = 0; i < chunks; i++) {
+      const offset = i * chunkSize;
+      const end = Math.min(offset + chunkSize, speech.length);
+      firstSession.write(speech.subarray(offset, end));
+    }
+    firstSession.destroy();
+    firstSession = null;
+
+    // Recover with a fresh session — same modelId, full happy path.
+    const trailingMs = params.trailingSilenceMs ?? 1500;
+    const trailingSamples = Math.floor(
+      (trailingMs / 1000) * EXPECTED_SAMPLE_RATE,
+    );
+    const silence = new Uint8Array(trailingSamples * BYTES_PER_S16_SAMPLE);
+
+    secondSession = await transcribeStream({
+      modelId,
+      parakeetStreamingConfig: {
+        chunkMs,
+        ...(params.emitPartials !== undefined && {
+          emitPartials: params.emitPartials,
+        }),
+      },
+    });
+    writeInChunks(secondSession, speech, chunkSize);
+    writeInChunks(secondSession, silence, chunkSize);
+    secondSession.end();
+
+    const events: CollectedEvent[] = [];
+    for await (const event of secondSession) {
+      events.push(event as CollectedEvent);
+    }
+    return assertHappy(events);
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    return {
+      passed: false,
+      output: `parakeet destroy-then-recover failed: ${errorMsg}`,
+    };
+  } finally {
+    try {
+      firstSession?.destroy();
+    } catch {
+      // first session already destroyed in the success path
+    }
+    try {
+      secondSession?.destroy();
+    } catch {
+      // already torn down by `for await` completion
+    }
+  }
+}
+
+/**
+ * Consumer-side throw mid-iteration: opens a duplex session, drives
+ * the stream, then throws from inside the `for await` body after the
+ * first event surfaces. The iterator MUST unwind cleanly — no hung
+ * worker, no leaked native `StreamSession`. After the throw, a fresh
+ * session against the same model must complete normally, proving
+ * that consumer-driven cancellation propagates through to the native
+ * teardown path.
+ */
+export async function runParakeetStreamIteratorThrow(
+  modelId: string,
+  audioBytes: Uint8Array,
+  params: ParakeetStreamParams,
+): Promise<TestResult> {
+  let throwingSession: TranscribeStreamConversationSession | null = null;
+  let recoverySession: TranscribeStreamConversationSession | null = null;
+  const sentinel = new Error("__test_consumer_threw__");
+  try {
+    const decoded = decodeWavToMonoF32(audioBytes);
+    if (decoded.sampleRate !== EXPECTED_SAMPLE_RATE) {
+      return {
+        passed: false,
+        output: `Fixture sample rate ${decoded.sampleRate} != expected ${EXPECTED_SAMPLE_RATE}`,
+      };
+    }
+    const chunkMs = params.chunkMs ?? 1000;
+    const trailingMs = params.trailingSilenceMs ?? 1500;
+    const trailingSamples = Math.floor(
+      (trailingMs / 1000) * EXPECTED_SAMPLE_RATE,
+    );
+    const speech = f32ToS16LeBytes(decoded.samplesMono);
+    const silence = new Uint8Array(trailingSamples * BYTES_PER_S16_SAMPLE);
+    const chunkSize =
+      Math.floor((chunkMs / 1000) * EXPECTED_SAMPLE_RATE) *
+      BYTES_PER_S16_SAMPLE;
+
+    throwingSession = await transcribeStream({
+      modelId,
+      parakeetStreamingConfig: { chunkMs },
+    });
+    writeInChunks(throwingSession, speech, chunkSize);
+    writeInChunks(throwingSession, silence, chunkSize);
+    throwingSession.end();
+
+    let caughtSentinel = false;
+    try {
+      for await (const _ of throwingSession) {
+        throw sentinel;
+      }
+      return {
+        passed: false,
+        output: "expected consumer throw, but iterator completed without yielding",
+      };
+    } catch (err) {
+      if (err !== sentinel) {
+        return {
+          passed: false,
+          output: `consumer-side throw produced unexpected error: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        };
+      }
+      caughtSentinel = true;
+    }
+    if (!caughtSentinel) {
+      return {
+        passed: false,
+        output: "consumer-side sentinel error was not propagated",
+      };
+    }
+    throwingSession = null;
+
+    // Recover: a brand new session against the same model must
+    // complete normally. If the addon were wedged after the
+    // consumer-side throw, this would hang or fail to load.
+    recoverySession = await transcribeStream({
+      modelId,
+      parakeetStreamingConfig: {
+        chunkMs,
+        ...(params.emitPartials !== undefined && {
+          emitPartials: params.emitPartials,
+        }),
+      },
+    });
+    writeInChunks(recoverySession, speech, chunkSize);
+    writeInChunks(recoverySession, silence, chunkSize);
+    recoverySession.end();
+
+    const events: CollectedEvent[] = [];
+    for await (const event of recoverySession) {
+      events.push(event as CollectedEvent);
+    }
+    return assertHappy(events);
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    return {
+      passed: false,
+      output: `parakeet iterator-throw recovery failed: ${errorMsg}`,
+    };
+  } finally {
+    try {
+      throwingSession?.destroy();
+    } catch {
+      // session already torn down by sentinel throw / consumer exit
+    }
+    try {
+      recoverySession?.destroy();
+    } catch {
+      // already torn down by `for await` completion
+    }
+  }
+}
+
 function f32ToS16LeBytes(samples: Float32Array): Uint8Array {
   const out = new Uint8Array(samples.length * BYTES_PER_S16_SAMPLE);
   const view = new DataView(out.buffer);
@@ -257,11 +467,19 @@ function assertEou(events: CollectedEvent[]): TestResult {
       output: `parakeet must not emit standalone vad events, got: ${summary}`,
     };
   }
-  // Per-event sanity: parakeet's EOU is token-driven, so the
-  // `silenceDurationMs` field must NOT be set on its `endOfTurn`
-  // events (that's whisper-only).
+  // Per-event sanity: parakeet's EOU is token-driven; every parakeet
+  // `endOfTurn` event must carry `source: "parakeet"` and MUST NOT
+  // surface a `silenceDurationMs` field (that's the whisper variant
+  // of the discriminated union).
   for (const ev of events) {
-    if (ev.type === "endOfTurn" && ev.silenceDurationMs !== undefined) {
+    if (ev.type !== "endOfTurn") continue;
+    if (ev.source !== "parakeet") {
+      return {
+        passed: false,
+        output: `parakeet endOfTurn must declare source="parakeet", got: ${JSON.stringify(ev)}`,
+      };
+    }
+    if (ev.silenceDurationMs !== undefined) {
       return {
         passed: false,
         output: `parakeet endOfTurn must omit silenceDurationMs (whisper-only), got: ${JSON.stringify(ev)}`,

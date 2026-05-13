@@ -155,6 +155,18 @@ export class TtsReferenceAudioRequiredError extends QvacErrorBase {
   }
 }
 
+export class LegacyParakeetModelDeprecatedError extends QvacErrorBase {
+  constructor(legacyFields: readonly string[], cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.LEGACY_PARAKEET_MODEL_DEPRECATED,
+        [legacyFields.join(", ")],
+        cause,
+      ),
+    );
+  }
+}
+
 // ============== Model Unloading Errors ==============
 
 export class ModelUnloadFailedError extends QvacErrorBase {

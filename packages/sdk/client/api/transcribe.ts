@@ -430,12 +430,17 @@ function processLineConversation(
       };
     }
     if (response.endOfTurn) {
-      return {
-        type: "endOfTurn",
-        ...(response.endOfTurn.silenceDurationMs !== undefined && {
+      // `endOfTurn` is a discriminated union on `source`; whisper
+      // events carry a measured `silenceDurationMs`, parakeet events
+      // are token-driven and carry only the discriminator.
+      if (response.endOfTurn.source === "whisper") {
+        return {
+          type: "endOfTurn",
+          source: "whisper",
           silenceDurationMs: response.endOfTurn.silenceDurationMs,
-        }),
-      };
+        };
+      }
+      return { type: "endOfTurn", source: "parakeet" };
     }
     if (wantsMetadata) {
       if (response.segment) {

@@ -52,15 +52,33 @@ export const vadStateEventSchema = z.object({
   probability: z.number(),
 });
 
-export const endOfTurnEventSchema = z.object({
-  /**
-   * Trailing silence (in ms) measured by the engine before the EOU
-   * event fired. Set by the whisper engine. Omitted for parakeet,
-   * whose EOU detection is token-driven (the EOU model emits an
-   * explicit `<EOU>` token rather than measuring silence).
-   */
-  silenceDurationMs: z.number().optional(),
+// `endOfTurn` is shaped as a discriminated union on `source` so each
+// engine carries the fields it actually owns. Whisper measures a
+// trailing silence window (`silenceDurationMs`, REQUIRED) and emits
+// the event when that window elapses. Parakeet's EOU is token-driven
+// — its EOU model emits an explicit `<EOU>` token, so there is no
+// silence window to report and the event carries no payload beyond
+// the discriminator.
+//
+// Modelling these as a union rather than a single shape with an
+// optional `silenceDurationMs` keeps the whisper invariant (silence
+// window MUST be present) statically checked and prevents accidental
+// regressions in either engine from going undetected at the schema
+// boundary.
+export const whisperEndOfTurnEventSchema = z.object({
+  source: z.literal("whisper"),
+  /** Trailing silence (in ms) measured by whisper before the EOU event fired. */
+  silenceDurationMs: z.number(),
 });
+
+export const parakeetEndOfTurnEventSchema = z.object({
+  source: z.literal("parakeet"),
+});
+
+export const endOfTurnEventSchema = z.discriminatedUnion("source", [
+  whisperEndOfTurnEventSchema,
+  parakeetEndOfTurnEventSchema,
+]);
 
 export const transcribeRequestSchema = transcribeParamsSchema.extend({
   type: z.literal("transcribe"),
@@ -198,6 +216,8 @@ export interface TranscribeStreamMetadataSession {
 }
 
 export type VadStateEvent = z.infer<typeof vadStateEventSchema>;
+export type WhisperEndOfTurnEvent = z.infer<typeof whisperEndOfTurnEventSchema>;
+export type ParakeetEndOfTurnEvent = z.infer<typeof parakeetEndOfTurnEventSchema>;
 export type EndOfTurnEvent = z.infer<typeof endOfTurnEventSchema>;
 
 export type TranscribeStreamEvent =

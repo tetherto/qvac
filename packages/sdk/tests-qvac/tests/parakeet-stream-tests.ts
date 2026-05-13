@@ -69,8 +69,58 @@ export const parakeetStreamEou: TestDefinition = {
   },
 };
 
+/**
+ * Mid-utterance teardown: opens a session, writes 2 chunks, calls
+ * `session.destroy()`, then opens a fresh session against the same
+ * model and runs a happy-path stream. Locks down the parakeet
+ * `StreamSession` cleanup contract — `destroy()` must propagate
+ * synchronously through the duplex handler so the next session can
+ * load against the same modelId without the addon being left in a
+ * wedged state.
+ */
+export const parakeetStreamDestroyMidUtterance: TestDefinition = {
+  testId: "parakeet-stream-destroy-mid-utterance",
+  params: {
+    audioFileName: AUDIO_FIXTURE,
+    chunkMs: 1000,
+    emitPartials: true,
+    trailingSilenceMs: 1500,
+  },
+  expectation: { validation: "function", fn: () => true },
+  metadata: {
+    category: "parakeet",
+    dependency: "parakeet-tdt",
+    estimatedDurationMs: 180000,
+  },
+};
+
+/**
+ * Consumer-side iterator throw: the `for await` body throws after
+ * the first event surfaces. The iterator MUST unwind (cleanly tear
+ * down the native `StreamSession`); a fresh session against the same
+ * model must then succeed end-to-end. This is the "consumer
+ * disconnect / error path" referenced in PR review #4280580987.
+ */
+export const parakeetStreamIteratorThrow: TestDefinition = {
+  testId: "parakeet-stream-iterator-throw",
+  params: {
+    audioFileName: AUDIO_FIXTURE,
+    chunkMs: 1000,
+    emitPartials: true,
+    trailingSilenceMs: 1500,
+  },
+  expectation: { validation: "function", fn: () => true },
+  metadata: {
+    category: "parakeet",
+    dependency: "parakeet-tdt",
+    estimatedDurationMs: 180000,
+  },
+};
+
 export const parakeetStreamTests = [
   parakeetStreamHappy,
   parakeetStreamMetadataRejected,
   parakeetStreamEou,
+  parakeetStreamDestroyMidUtterance,
+  parakeetStreamIteratorThrow,
 ];

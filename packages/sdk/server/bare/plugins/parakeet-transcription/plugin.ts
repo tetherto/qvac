@@ -13,7 +13,8 @@ import {
   transcribeStreamRequestSchema,
   transcribeStreamResponseSchema,
   ModelType,
-  parakeetConfigSchema,
+  parakeetLoadConfigSchema,
+  LEGACY_PARAKEET_ONNX_MODEL_CONFIG_FIELDS,
   ADDON_PARAKEET,
   type ParakeetConfig,
   type CreateModelParams,
@@ -24,6 +25,7 @@ import { createStreamLogger, registerAddonLogger } from "@/logging";
 import {
   ModelLoadFailedError,
   TranscriptionFailedError,
+  LegacyParakeetModelDeprecatedError,
 } from "@/utils/errors-server";
 import { transcribe, transcribeStream } from "@/server/bare/ops/transcribe";
 import { attachModelExecutionMs } from "@/profiling/model-execution";
@@ -35,6 +37,20 @@ function resolveParakeetConfig(
   // `modelSrc` of `loadModel`. The plugin doesn't need to resolve any
   // additional artifact paths here — `createModel` consumes
   // `params.modelPath` directly.
+  //
+  // Detect any pre-0.4 ONNX-era `modelConfig` fields and surface a
+  // structured `LegacyParakeetModelDeprecatedError` with migration
+  // guidance. `parakeetLoadConfigSchema` (used by `loadModel`)
+  // explicitly allow-lists these field names so they reach this
+  // resolver instead of being rejected by Zod with an opaque
+  // "Unrecognized key" error.
+  const cfgRecord = cfg as unknown as Record<string, unknown>;
+  const legacyFields = LEGACY_PARAKEET_ONNX_MODEL_CONFIG_FIELDS.filter(
+    (name) => cfgRecord[name] !== undefined,
+  );
+  if (legacyFields.length > 0) {
+    throw new LegacyParakeetModelDeprecatedError(legacyFields);
+  }
   return Promise.resolve({ config: cfg });
 }
 
@@ -85,8 +101,13 @@ export const parakeetPlugin = definePlugin({
   modelType: ModelType.parakeetTranscription,
   displayName: "Parakeet (NVIDIA NeMo GGML)",
   addonPackage: ADDON_PARAKEET,
-  loadConfigSchema: parakeetConfigSchema,
-  skipPrimaryModelPathValidation: true,
+  loadConfigSchema: parakeetLoadConfigSchema,
+  // Parakeet 0.4+ supplies the GGUF via the top-level `modelSrc`,
+  // which the framework's primary-path file check stats before the
+  // plugin's `createModel` runs. Set to false (the default) so the
+  // framework verifies the GGUF exists at load time — the addon then
+  // mmaps `params.modelPath` directly inside `createModel`.
+  skipPrimaryModelPathValidation: false,
 
   resolveConfig(
     cfg: ParakeetConfig,
@@ -149,6 +170,20 @@ export const parakeetPlugin = definePlugin({
       streaming: true,
       duplex: true,
 
+      // TODO(QVAC-17869-followup): wire `AbortSignal` through the
+      // duplex handler signature so the worker learns about consumer
+      // disconnects without depending on `inputStream.end()`. Today
+      // the only signals are (a) `inputStream` ending — which does
+      // NOT fire if the client is dropping packets while TCP stays
+      // alive — and (b) the iterator unwinding when the consumer
+      // throws. Under sustained slow consumers (e.g. mobile under
+      // thermal throttling), `runStreaming` yields buffer between the
+      // server generator and the duplex RPC writer; backpressure
+      // characteristics are not yet captured here. Pair the
+      // `AbortSignal` plumbing with the request-lifecycle migration
+      // (see `request-lifecycle-primitives.mdc`, kind:
+      // `"transcribeStream"`) so cancellation routes through
+      // `RequestRegistry.cancel({ requestId })`.
       handler: async function* (request, inputStream) {
         if (request.metadata === true) {
           throw new TranscriptionFailedError(
@@ -185,11 +220,13 @@ export const parakeetPlugin = definePlugin({
           if (typeof value === "object" && value !== null && "type" in value) {
             if (value.type === "endOfTurn") {
               // Parakeet's EOU is token-driven; there is no measured
-              // silence to report. We forward an empty endOfTurn
-              // payload (silenceDurationMs is whisper-only).
+              // silence to report. The discriminated `source` field
+              // tags the event as parakeet-shaped so consumers can
+              // narrow correctly — `silenceDurationMs` is whisper-only
+              // by schema construction (see `endOfTurnEventSchema`).
               yield {
                 type: "transcribeStream" as const,
-                endOfTurn: {},
+                endOfTurn: { source: "parakeet" as const },
               };
             }
             continue;

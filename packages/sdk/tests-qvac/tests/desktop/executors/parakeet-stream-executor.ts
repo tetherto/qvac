@@ -6,6 +6,8 @@ import {
   runParakeetStreamHappy,
   runParakeetStreamMetadataRejected,
   runParakeetStreamEou,
+  runParakeetStreamDestroyMidUtterance,
+  runParakeetStreamIteratorThrow,
   type ParakeetStreamParams,
 } from "../../shared/parakeet-stream-runner.js";
 import { parakeetStreamTests } from "../../parakeet-stream-tests.js";
@@ -23,6 +25,10 @@ export class ParakeetStreamExecutor extends AbstractModelExecutor<
     "parakeet-stream-happy": this.runHappy.bind(this),
     "parakeet-stream-metadata-rejected": this.runMetadataRejected.bind(this),
     "parakeet-stream-eou": this.runEou.bind(this),
+    "parakeet-stream-destroy-mid-utterance": this.runDestroyMidUtterance.bind(
+      this,
+    ),
+    "parakeet-stream-iterator-throw": this.runIteratorThrow.bind(this),
   } as never;
 
   private async loadAudioBytes(audioFileName: string): Promise<Uint8Array> {
@@ -52,5 +58,19 @@ export class ParakeetStreamExecutor extends AbstractModelExecutor<
     const modelId = await this.resources.ensureLoaded("parakeet-eou");
     const bytes = await this.loadAudioBytes(p.audioFileName);
     return runParakeetStreamEou(modelId, bytes, p);
+  }
+
+  async runDestroyMidUtterance(params: unknown): Promise<TestResult> {
+    const p = params as BaseParams;
+    const modelId = await this.resources.ensureLoaded("parakeet-tdt");
+    const bytes = await this.loadAudioBytes(p.audioFileName);
+    return runParakeetStreamDestroyMidUtterance(modelId, bytes, p);
+  }
+
+  async runIteratorThrow(params: unknown): Promise<TestResult> {
+    const p = params as BaseParams;
+    const modelId = await this.resources.ensureLoaded("parakeet-tdt");
+    const bytes = await this.loadAudioBytes(p.audioFileName);
+    return runParakeetStreamIteratorThrow(modelId, bytes, p);
   }
 }
