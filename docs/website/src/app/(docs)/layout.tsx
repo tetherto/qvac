@@ -44,13 +44,6 @@ export default function Layout({ children }: LayoutProps<'/'>) {
       icon: <FaXTwitter />,
       external: true,
     },
-    {
-      type: 'icon',
-      url: '/#community',
-      label: 'Keet',
-      text: 'Keet',
-      icon: <KeetIcon />,
-    },
   ];
 
   return (
