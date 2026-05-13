@@ -36,10 +36,10 @@ Android devices: see [Appendix D](#appendix-d-android-gpu-results).
 
 | Model | Quant | Model Size | mmproj Size | Total |
 |-------|-------|-----------|------------|-------|
-| Gemma 4 E2B | Q4_K_M | 2.9 GB | 940 MB | 3.8 GB |
-| Gemma 4 E2B | Q8_0 | 4.7 GB | 940 MB | 5.6 GB |
-| Gemma 4 E4B | Q4_K_M | 4.6 GB | 944 MB | 5.5 GB |
-| Gemma 4 E4B | Q8_0 | 7.6 GB | 944 MB | 8.5 GB |
+| Gemma4-E2B | Q4_K_M | 2.9 GB | 940 MB | 3.8 GB |
+| Gemma4-E2B | Q8_0 | 4.7 GB | 940 MB | 5.6 GB |
+| Gemma4-E4B | Q4_K_M | 4.6 GB | 944 MB | 5.5 GB |
+| Gemma4-E4B | Q8_0 | 7.6 GB | 944 MB | 8.5 GB |
 | Qwen3.5-2B | Q4_K_M | 1.2 GB | 637 MB | 1.8 GB |
 
 ### 1.3 Test Images
@@ -92,33 +92,45 @@ All results use elephant.jpg (612 x 408). **Peak RSS was not captured in the tes
 
 ### Mac M4
 
-| Backend | Model | Quant | Vision (ms) | Prefill (t/s) | Decode (t/s) | TTFT (ms) | Total (ms) | Peak RSS |
-|---------|-------|-------|------------|---------------|-------------|----------|-----------|----------|
-| Metal | E2B | Q4_K_M | 630 | 259.61 | 51.28 | 1,724 | 6,512 | **TODO** |
-| Metal | E2B | Q8_0 | 689 | 237.04 | 30.30 | 1,887 | 10,062 | **TODO** |
-| Metal | E4B | Q4_K_M | 768 | 135.86 | 23.28 | 2,858 | 13,619 | **TODO** |
-| Metal | E4B | Q8_0 | 827 | 138.36 | 15.26 | 2,880 | 20,040 | **TODO** |
-| Metal | Qwen3.5-2B | Q4_K_M | 417 | 323.59 | 51.83 | 1,236 | 5,947 | **TODO** |
-| CPU | E2B | Q4_K_M | 2,113 | 424.35 | 38.74 | 2,782 | 9,196 | **TODO** |
-| CPU | E2B | Q8_0 | 1,941 | 422.74 | 25.18 | 2,613 | 12,677 | **TODO** |
-| CPU | E4B | Q4_K_M | 4,370 | 353.32 | 17.64 | 5,174 | 19,803 | **TODO** |
-| CPU | E4B | Q8_0 | 3,881 | 251.04 | 12.12 | 5,012 | 26,824 | **TODO** |
-| CPU | Qwen3.5-2B | Q4_K_M | 1,922 | 127.36 | 32.74 | 4,003 | 10,144 | **TODO** |
+> Fiber = `tetherto/temp-8189` (build 8412). Only Gemma4-E2B Q4_K_M and Qwen3.5-2B Q4_K_M tested on Fiber (Metal only). See [Section 6](#6-branch-comparison--b9025-vs-u1-vs-fiber) for detailed branch comparison.
+
+| Branch | Backend | Model | Quant | Vision (ms) | Prefill (t/s) | Decode (t/s) | TTFT (ms) | Total (ms) | Peak RSS |
+|--------|---------|-------|-------|------------|---------------|-------------|----------|-----------|----------|
+| b9025 | Metal | Gemma4-E2B | Q4_K_M | 630 | 259.61 | 51.28 | 1,724 | 6,512 | **TODO** |
+| Fiber | Metal | Gemma4-E2B | Q4_K_M | 603 | 258.2 | 41.88 | 1,703 | 7,670 | **TODO** |
+| b9025 | Metal | Gemma4-E2B | Q8_0 | 689 | 237.04 | 30.30 | 1,887 | 10,062 | **TODO** |
+| Fiber | Metal | Gemma4-E2B | Q8_0 | — | — | — | — | — | — |
+| b9025 | Metal | Gemma4-E4B | Q4_K_M | 768 | 135.86 | 23.28 | 2,858 | 13,619 | **TODO** |
+| Fiber | Metal | Gemma4-E4B | Q4_K_M | — | — | — | — | — | — |
+| b9025 | Metal | Gemma4-E4B | Q8_0 | 827 | 138.36 | 15.26 | 2,880 | 20,040 | **TODO** |
+| Fiber | Metal | Gemma4-E4B | Q8_0 | — | — | — | — | — | — |
+| b9025 | Metal | Qwen3.5-2B | Q4_K_M | 417 | 323.59 | 51.83 | 1,236 | 5,947 | **TODO** |
+| Fiber | Metal | Qwen3.5-2B | Q4_K_M | 419 | 302.1 | 38.21 | 1,296 | 7,768 | **TODO** |
+| b9025 | CPU | Gemma4-E2B | Q4_K_M | 2,113 | 424.35 | 38.74 | 2,782 | 9,196 | **TODO** |
+| Fiber | CPU | Gemma4-E2B | Q4_K_M | — | — | — | — | — | — |
+| b9025 | CPU | Gemma4-E2B | Q8_0 | 1,941 | 422.74 | 25.18 | 2,613 | 12,677 | **TODO** |
+| Fiber | CPU | Gemma4-E2B | Q8_0 | — | — | — | — | — | — |
+| b9025 | CPU | Gemma4-E4B | Q4_K_M | 4,370 | 353.32 | 17.64 | 5,174 | 19,803 | **TODO** |
+| Fiber | CPU | Gemma4-E4B | Q4_K_M | — | — | — | — | — | — |
+| b9025 | CPU | Gemma4-E4B | Q8_0 | 3,881 | 251.04 | 12.12 | 5,012 | 26,824 | **TODO** |
+| Fiber | CPU | Gemma4-E4B | Q8_0 | — | — | — | — | — | — |
+| b9025 | CPU | Qwen3.5-2B | Q4_K_M | 1,922 | 127.36 | 32.74 | 4,003 | 10,144 | **TODO** |
+| Fiber | CPU | Qwen3.5-2B | Q4_K_M | — | — | — | — | — | — |
 
 ### iPhone 16e (A18)
 
-> Only E2B Q4_K_M fits in 8 GB RAM. E2B Q8_0, E4B Q4_K_M, E4B Q8_0 all OOM (see [Section 3](#3-iphone-16e-oom-detail)). Run-2 (2026-05-07) values shown; run-1 validated within 2%.
+> Only Gemma4-E2B Q4_K_M fits in 8 GB RAM. Gemma4-E2B Q8_0, Gemma4-E4B Q4_K_M, Gemma4-E4B Q8_0 all OOM (see [Section 3](#3-iphone-16e-oom-detail)). Run-2 (2026-05-07) values shown; run-1 validated within 2%. Fiber: not benchmarked on iPhone 16e.
 
 | Backend | Model | Quant | Vision (ms) | Prefill (t/s) | Decode (t/s) | TTFT (ms) | Peak RSS |
 |---------|-------|-------|------------|---------------|-------------|----------|----------|
-| Metal | E2B | Q4_K_M | 1,236 | 125.92 | 27.24 | 3,492 | **TODO** |
-| CPU | E2B | Q4_K_M | 1,151 | 160.96 | 25.37 | 2,916 | **TODO** |
-| Metal | Qwen3.5-2B | Q4_K_M | 1,012 ^[p]^ | 133.66 | 24.33 | 2,995 ^[p]^ | **TODO** |
-| Metal | E2B | Q8_0 | N/A | N/A | N/A | N/A | — OOM (`kIOGPUCommandBufferCallbackErrorOutOfMemory`) |
-| Metal | E4B | Q4_K_M | N/A | N/A | N/A | N/A | — OOM (`kIOGPUCommandBufferCallbackErrorOutOfMemory`) |
-| Metal | E4B | Q8_0 | N/A | N/A | N/A | N/A | — OOM (`mmap failed: Cannot allocate memory`) |
+| Metal | Gemma4-E2B | Q4_K_M | 1,236 | 125.92 | 27.24 | 3,492 | **TODO** |
+| CPU | Gemma4-E2B | Q4_K_M | 1,151 | 160.96 | 25.37 | 2,916 | **TODO** |
+| Metal | Qwen3.5-2B | Q4_K_M | 1,012 [^1] | 133.66 | 24.33 | 2,995 [^1] | **TODO** |
+| Metal | Gemma4-E2B | Q8_0 | N/A | N/A | N/A | N/A | — OOM (`kIOGPUCommandBufferCallbackErrorOutOfMemory`) |
+| Metal | Gemma4-E4B | Q4_K_M | N/A | N/A | N/A | N/A | — OOM (`kIOGPUCommandBufferCallbackErrorOutOfMemory`) |
+| Metal | Gemma4-E4B | Q8_0 | N/A | N/A | N/A | N/A | — OOM (`mmap failed: Cannot allocate memory`) |
 
-^[p]^ Profiling run only (1 run, not 3-run median). Vision = encode 829 ms + projection 183 ms. **TODO**: Formal 3-run matrix entry.
+[^1]: Profiling run only (1 run, not 3-run median). Vision = encode 829 ms + projection 183 ms. **TODO**: Formal 3-run matrix entry.
 
 Android device results: see [Appendix D](#appendix-d-android-gpu-results).
 
@@ -126,13 +138,13 @@ Android device results: see [Appendix D](#appendix-d-android-gpu-results).
 
 ## 3. iPhone 16e OOM Detail
 
-The iPhone 16e's ~5.7 GB app memory limit means only model+mmproj combinations under ~4 GB can run. E2B Q4_K_M (3.8 GB) is the only viable Gemma 4 configuration.
+The iPhone 16e's ~5.7 GB app memory limit means only model+mmproj combinations under ~4 GB can run. Gemma4-E2B Q4_K_M (3.8 GB) is the only viable Gemma4 configuration.
 
 | Model | Quant | Total Size | Error |
 |-------|-------|-----------|-------|
-| E2B | Q8_0 | 5.6 GB | `kIOGPUCommandBufferCallbackErrorOutOfMemory` + signal 11 |
-| E4B | Q4_K_M | 5.5 GB | `kIOGPUCommandBufferCallbackErrorOutOfMemory` + signal 11 |
-| E4B | Q8_0 | 8.5 GB | `mmap failed: Cannot allocate memory` + signal 11 |
+| Gemma4-E2B | Q8_0 | 5.6 GB | `kIOGPUCommandBufferCallbackErrorOutOfMemory` + signal 11 |
+| Gemma4-E4B | Q4_K_M | 5.5 GB | `kIOGPUCommandBufferCallbackErrorOutOfMemory` + signal 11 |
+| Gemma4-E4B | Q8_0 | 8.5 GB | `mmap failed: Cannot allocate memory` + signal 11 |
 
 OOM confirmed across both run-1 (2026-05-06) and run-2 (2026-05-07) with consistent error messages.
 
@@ -144,33 +156,33 @@ OOM confirmed across both run-1 (2026-05-06) and run-2 (2026-05-07) with consist
 
 | Model | Quant | CPU (t/s) | Metal (t/s) | Speedup |
 |-------|-------|----------|------------|---------|
-| E2B | Q4_K_M | 38.74 | 51.28 | **1.32x** |
-| E2B | Q8_0 | 25.18 | 30.30 | **1.20x** |
-| E4B | Q4_K_M | 17.64 | 23.28 | **1.32x** |
-| E4B | Q8_0 | 12.12 | 15.26 | **1.26x** |
+| Gemma4-E2B | Q4_K_M | 38.74 | 51.28 | **1.32x** |
+| Gemma4-E2B | Q8_0 | 25.18 | 30.30 | **1.20x** |
+| Gemma4-E4B | Q4_K_M | 17.64 | 23.28 | **1.32x** |
+| Gemma4-E4B | Q8_0 | 12.12 | 15.26 | **1.26x** |
 | Qwen3.5-2B | Q4_K_M | 32.74 | 51.83 | **1.58x** |
 
 ### 4.1b Mac M4 — Metal vs CPU Prefill
 
 | Model | Quant | CPU (t/s) | Metal (t/s) | Winner |
 |-------|-------|----------|------------|--------|
-| E2B | Q4_K_M | 424.35 | 259.61 | **CPU (1.63x)** |
-| E2B | Q8_0 | 422.74 | 237.04 | **CPU (1.78x)** |
-| E4B | Q4_K_M | 353.32 | 135.86 | **CPU (2.60x)** |
-| E4B | Q8_0 | 251.04 | 138.36 | **CPU (1.81x)** |
+| Gemma4-E2B | Q4_K_M | 424.35 | 259.61 | **CPU (1.63x)** |
+| Gemma4-E2B | Q8_0 | 422.74 | 237.04 | **CPU (1.78x)** |
+| Gemma4-E4B | Q4_K_M | 353.32 | 135.86 | **CPU (2.60x)** |
+| Gemma4-E4B | Q8_0 | 251.04 | 138.36 | **CPU (1.81x)** |
 | Qwen3.5-2B | Q4_K_M | 127.36 | 323.59 | **Metal (2.54x)** |
 
 ### 4.1c Mac M4 — Metal vs CPU Vision Pipeline
 
 | Model | Quant | CPU (ms) | Metal (ms) | Speedup |
 |-------|-------|---------|-----------|---------|
-| E2B | Q4_K_M | 2,113 | 630 | **3.35x** |
-| E2B | Q8_0 | 1,941 | 689 | **2.82x** |
-| E4B | Q4_K_M | 4,370 | 768 | **5.69x** |
-| E4B | Q8_0 | 3,881 | 827 | **4.69x** |
+| Gemma4-E2B | Q4_K_M | 2,113 | 630 | **3.35x** |
+| Gemma4-E2B | Q8_0 | 1,941 | 689 | **2.82x** |
+| Gemma4-E4B | Q4_K_M | 4,370 | 768 | **5.69x** |
+| Gemma4-E4B | Q8_0 | 3,881 | 827 | **4.69x** |
 | Qwen3.5-2B | Q4_K_M | 1,922 | 417 | **4.61x** |
 
-### 4.2 iPhone 16e — Metal vs CPU (E2B Q4_K_M only)
+### 4.2 iPhone 16e — Metal vs CPU (Gemma4-E2B Q4_K_M only)
 
 | Metric | CPU (run-2) | Metal (run-2) | Winner |
 |--------|-----------|-------------|--------|
@@ -193,17 +205,17 @@ Android GPU vs CPU comparisons: see [Appendix D](#appendix-d-android-gpu-results
 
 | Model | Quant | Mac M4 (t/s) | iPhone 16e (t/s) | Mac / iPhone |
 |-------|-------|-------------|-----------------|-------------|
-| E2B | Q4_K_M | 51.28 | 27.24 | **1.88x** |
-| E2B | Q8_0 | 30.30 | — (OOM) | — |
-| E4B | Q4_K_M | 23.28 | — (OOM) | — |
-| E4B | Q8_0 | 15.26 | — (OOM) | — |
+| Gemma4-E2B | Q4_K_M | 51.28 | 27.24 | **1.88x** |
+| Gemma4-E2B | Q8_0 | 30.30 | — (OOM) | — |
+| Gemma4-E4B | Q4_K_M | 23.28 | — (OOM) | — |
+| Gemma4-E4B | Q8_0 | 15.26 | — (OOM) | — |
 | Qwen3.5-2B | Q4_K_M | 51.83 | — | — |
 
 #### TTFT (elephant.jpg, Metal)
 
 | Model | Quant | Mac M4 (ms) | iPhone 16e (ms) | Mac speedup |
 |-------|-------|------------|----------------|-------------|
-| E2B | Q4_K_M | 1,724 | 3,492 | **2.03x** |
+| Gemma4-E2B | Q4_K_M | 1,724 | 3,492 | **2.03x** |
 | Qwen3.5-2B | Q4_K_M | 1,236 | — | — |
 
 > Mac Metal TTFT is 2.0x faster than iPhone 16e.
@@ -227,7 +239,7 @@ All branch comparisons use Mac M4 Metal, elephant.jpg, identical test matrix.
 | | Prefill (t/s) | 333.0 | 298.7 | **-10.3%** |
 | | Decode (t/s) | 53.7 | 38.2 | **-28.8%** |
 | | Total (ms) | 5,748 | 7,774 | **+35.3%** |
-| Gemma 4 E2B Q4_K_M | Vision (ms) | 604 | 636 | +5.3% |
+| Gemma4-E2B Q4_K_M | Vision (ms) | 604 | 636 | +5.3% |
 | | Prefill (t/s) | 261.6 | 255.4 | -2.4% |
 | | Decode (t/s) | 52.1 | 42.0 | **-19.3%** |
 | | Total (ms) | 6,369 | 7,649 | **+20.1%** |
@@ -241,7 +253,7 @@ The b9025 binary was rebuilt from a verified upstream tag checkout (`git checkou
 | Qwen3.5-2B Q4_K_M | b9025 (verified) | 395 | 334.2 | 52.62 | 5,943 |
 | | Fiber | 419 | 302.1 | 38.21 | 7,768 |
 | | **Delta** | +6.1% | -9.6% | **-27.4%** | +30.7% |
-| Gemma 4 E2B Q4_K_M | b9025 (verified) | 604 | 261.9 | 50.72 | 6,574 |
+| Gemma4-E2B Q4_K_M | b9025 (verified) | 604 | 261.9 | 50.72 | 6,574 |
 | | Fiber | 603 | 258.2 | 41.88 | 7,670 |
 | | **Delta** | -0.2% | -1.4% | **-17.4%** | +16.7% |
 
@@ -270,7 +282,7 @@ Intra-run variance <1% for all combinations. Cross-session decode variance <=2.3
 | Decode (t/s) | 53.74 | 53.82 | +0.1% | 38.21 | **-28.9%** |
 | Total (ms) | 5,748 | 5,743 | -0.1% | 7,768 | **+35.1%** |
 
-#### Gemma 4 E2B Q4_K_M
+#### Gemma4-E2B Q4_K_M
 
 | Metric | b9025 | U1 | Delta U1 | Fiber | Delta Fiber |
 |--------|-------|-----|------|-------|---------|
@@ -306,7 +318,7 @@ Four root causes identified, three fixes applied as individual commits:
 
 - **RC2 (MUL_MAT)**: Zero effect on M4 Mac — Metal Tensor API is disabled for pre-M5/pre-A19 devices (`has tensor = false`).
 - **RC1 (Fused GDN)**: Largest single improvement for Qwen3.5. Ported 4 upstream commits as a squashed commit. 16 files, 563 lines added. Graph splits reduced 38 -> 3 for Qwen3.5 decode.
-- **RC3 (FA dk512)**: Largest improvement for Gemma4. Gemma4 E2B uses 512-dim heads for full-attention layers (every 5th layer); Metal had no FA kernel for dk512_dv512, causing auto-FA to globally disable Flash Attention. Added 19 template instantiations.
+- **RC3 (FA dk512)**: Largest improvement for Gemma4. Gemma4-E2B uses 512-dim heads for full-attention layers (every 5th layer); Metal had no FA kernel for dk512_dv512, causing auto-FA to globally disable Flash Attention. Added 19 template instantiations.
 - **RC4**: `9e4530f51` (view_4d->reshape_4d) and `6aff83a75` (Metal buffer fallback) are both no-ops on M4 Mac during single-token decode.
 
 #### Remaining Qwen3.5 Gap (-14.0%)
@@ -336,7 +348,7 @@ Possible causes:
 | Model load (ms) | 192 | 614 | +422 | +220% |
 | TTFT (ms) | — | 901 | — | — |
 
-### Gemma 4 E2B Q4_K_M (elephant.jpg, Metal)
+### Gemma4-E2B Q4_K_M (elephant.jpg, Metal)
 
 | Metric | CLI | Addon | Delta | Delta % |
 |--------|-----|-------|-------|---------|
@@ -374,7 +386,7 @@ Possible causes:
 
 ### 8.2 Metal Memory Allocation (Mac M4)
 
-| Component | Gemma 4 E2B Q4_K_M | Qwen3.5-2B Q4_K_M |
+| Component | Gemma4-E2B Q4_K_M | Qwen3.5-2B Q4_K_M |
 |-----------|--------------------|--------------------|
 | MTL0 model buffer | 2,948 MiB | 1,211 MiB |
 | CPU mapped model buffer | 1,756 MiB | 398 MiB |
@@ -392,7 +404,7 @@ Possible causes:
 
 ### 8.3 Phase Breakdown — Mac M4 (elephant.jpg, Metal, `--predict 256`)
 
-| Phase | Gemma 4 E2B Q4_K_M | Qwen3.5-2B Q4_K_M | Notes |
+| Phase | Gemma4-E2B Q4_K_M | Qwen3.5-2B Q4_K_M | Notes |
 |-------|--------------------|--------------------|-------|
 | Model load | 280 ms | 191 ms | mmap + Metal buffer allocation |
 | Vision encode (CLIP) | 611 ms | 415 ms | SigLIP / Qwen3VL encoder |
@@ -403,7 +415,7 @@ Possible causes:
 
 ### 8.4 Phase Breakdown — iPhone 16e (elephant.jpg, Metal, `--predict 128`)
 
-| Phase | Gemma 4 E2B Q4_K_M | Qwen3.5-2B Q4_K_M | Notes |
+| Phase | Gemma4-E2B Q4_K_M | Qwen3.5-2B Q4_K_M | Notes |
 |-------|--------------------|--------------------|-------|
 | Vision encode (CLIP) | 1,272 ms | 829 ms | SigLIP / Qwen3VL encoder |
 | Image decode (projection) | 36 ms | 183 ms | gemma4a cross-attn vs qwen3vl_merger |
@@ -411,7 +423,7 @@ Possible causes:
 | Decode | 5,478 ms (127 tok, 23.2 t/s) | 5,220 ms (127 tok, 24.3 t/s) | Token generation |
 | **Total** | **9,885 ms** | **8,086 ms** | |
 
-### 8.5 Phase Speedup — Mac M4 vs iPhone 16e (Gemma 4 E2B Q4_K_M)
+### 8.5 Phase Speedup — Mac M4 vs iPhone 16e (Gemma4-E2B Q4_K_M)
 
 | Phase | Mac M4 | iPhone 16e | Mac speedup |
 |-------|--------|-----------|-------------|
@@ -426,12 +438,12 @@ Possible causes:
 
 | Trace | Device | Model | Predict | Size | Method |
 |-------|--------|-------|---------|------|--------|
-| `mac-m4-gemma4-e2b-q4km.trace` | Mac M4 | Gemma 4 E2B Q4_K_M | 256 | 597 MB | `xcrun xctrace record --launch` |
+| `mac-m4-gemma4-e2b-q4km.trace` | Mac M4 | Gemma4-E2B Q4_K_M | 256 | 597 MB | `xcrun xctrace record --launch` |
 | `mac-m4-qwen3.5-2b-q4km.trace` | Mac M4 | Qwen3.5-2B Q4_K_M | 256 | 480 MB | `xcrun xctrace record --launch` |
-| `iPhone16e-gemma4-e2b-q4km.trace` | iPhone 16e | Gemma 4 E2B Q4_K_M | 128 | 371 MB | Xcode Instruments GUI (manual) |
+| `iPhone16e-gemma4-e2b-q4km.trace` | iPhone 16e | Gemma4-E2B Q4_K_M | 128 | 371 MB | Xcode Instruments GUI (manual) |
 | `iPhone16e-qwen3.5-2b-q4km.trace` | iPhone 16e | Qwen3.5-2B Q4_K_M | 128 | 101 MB | Xcode Instruments GUI (manual) |
 | `addon-qwen35-2b.trace` | Mac M4 | Qwen3.5-2B Q4_K_M (addon) | 256 | 478 MB | `xcrun xctrace record --launch` |
-| `addon-gemma4-e2b.trace` | Mac M4 | Gemma 4 E2B Q4_K_M (addon) | 256 | 121 MB | `xcrun xctrace record --launch` |
+| `addon-gemma4-e2b.trace` | Mac M4 | Gemma4-E2B Q4_K_M (addon) | 256 | 121 MB | `xcrun xctrace record --launch` |
 
 CLI traces stored in `vlm-benchmark/results/traces/`. Addon traces in `vlm-benchmark/results/traces/addon-mac-2026-05-11T1943/`. Open with: `open <path>.trace`
 
@@ -441,7 +453,7 @@ CLI traces stored in `vlm-benchmark/results/traces/`. Addon traces in `vlm-bench
 
 ## 9. Top-3 Bottlenecks per Platform
 
-Ranked by % of wall-clock time for E2B Q4_K_M on elephant.jpg. Percentages derived from benchmark timing data.
+Ranked by % of wall-clock time for Gemma4-E2B Q4_K_M on elephant.jpg. Percentages derived from benchmark timing data.
 
 > **TODO**: Apple profiler evidence screenshots (Xcode Instruments Metal System Trace) not included. Detailed shader/memory analysis of captured traces pending.
 
@@ -469,7 +481,7 @@ Android bottleneck analysis: see [Appendix D, Section D.7](#d7-top-3-bottlenecks
 
 ### Metal Performance
 
-1. **Metal decode throughput scales with GPU core count.** Mac M4 (8 cores) achieves 51.3 t/s vs iPhone 16e (5 cores) at 27.2 t/s for E2B Q4_K_M — 1.88x speedup from 1.6x more cores. Super-linear scaling from higher memory bandwidth and thermal headroom.
+1. **Metal decode throughput scales with GPU core count.** Mac M4 (8 cores) achieves 51.3 t/s vs iPhone 16e (5 cores) at 27.2 t/s for Gemma4-E2B Q4_K_M — 1.88x speedup from 1.6x more cores. Super-linear scaling from higher memory bandwidth and thermal headroom.
 
 2. **CPU prefill beats Metal prefill on Apple Silicon (Gemma 4).** Accelerate BLAS outperforms Metal dispatch for batch token processing: Mac 1.63x, iPhone 1.28x. Exception: Qwen3.5-2B where Metal prefill is 2.54x faster (SSM layers have poor Accelerate mapping).
 
@@ -477,17 +489,17 @@ Android bottleneck analysis: see [Appendix D, Section D.7](#d7-top-3-bottlenecks
 
 4. **Vision pipeline is 2-6x faster on Metal.** Driven by image projection: CPU 1,300-3,800 ms, Metal 2-91 ms.
 
-5. **Q4_K_M is optimal for Metal decode.** 1.5-1.7x higher decode throughput than Q8_0 across all Gemma 4 configs.
+5. **Q4_K_M is optimal for Metal decode.** 1.5-1.7x higher decode throughput than Q8_0 across all Gemma4 configs.
 
 ### Memory & Compatibility
 
-6. **iPhone 16e memory is the primary Metal constraint.** Only E2B Q4_K_M (3.8 GB) fits in ~5.7 GB app limit. All larger models OOM.
+6. **iPhone 16e memory is the primary Metal constraint.** Only Gemma4-E2B Q4_K_M (3.8 GB) fits in ~5.7 GB app limit. All larger models OOM.
 
 7. **Qwen3.5-2B works correctly on Metal (Mac + iPhone).** SSM (Gated Delta Net) architecture is correctly supported by Metal. Garbled output observed on Pixel 9 Pro — see [Appendix D](#appendix-d-android-gpu-results).
 
 8. **Image projection behaves differently across devices.** `qwen3vl_merger` is 2 ms on Mac but 183 ms on iPhone 16e (5x slower than Gemma 4's `gemma4a`). Suggests merger requires GPU parallelism that 5-core GPU cannot exploit.
 
-9. **Qwen3.5-2B and Gemma 4 E2B Q4_K_M hit the same decode ceiling.** Both at ~51.5 t/s on Mac Metal despite different architectures — M4's ~120 GB/s memory bandwidth is the shared bottleneck.
+9. **Qwen3.5-2B and Gemma4-E2B Q4_K_M hit the same decode ceiling.** Both at ~51.5 t/s on Mac Metal despite different architectures — M4's ~120 GB/s memory bandwidth is the shared bottleneck.
 
 ### Branch Comparison
 
@@ -688,14 +700,14 @@ All results use elephant.jpg (612 x 408). Peak RSS not captured.
 
 | Backend | Model | Quant | Vision (ms) | Prefill (t/s) | Decode (t/s) | TTFT (ms) | Peak RSS |
 |---------|-------|-------|------------|---------------|-------------|----------|----------|
-| OpenCL | E2B | Q4_K_M | 2,871 | 73.36 | 14.95 | 6,742 | **TODO** |
-| OpenCL | E2B | Q8_0 | 2,282 | 95.60 | 15.53 | 5,253 | **TODO** |
-| OpenCL | E4B | Q4_K_M | 2,669 | 68.55 | 9.34 | 6,812 | **TODO** |
-| OpenCL | E4B | Q8_0 | 2,801 | 70.29 | 8.03 | 6,841 | **TODO** |
-| CPU | E2B | Q4_K_M | 2,622 | 91.33 | 12.73 | 5,732 | **TODO** |
-| CPU | E2B | Q8_0 | 2,181 | 110.33 | 15.81 | 4,755 | **TODO** |
-| CPU | E4B | Q4_K_M | 2,378 | 82.95 | 7.21 | 5,802 | **TODO** |
-| CPU | E4B | Q8_0 | 2,185 | 71.89 | 7.42 | 6,135 | **TODO** |
+| OpenCL | Gemma4-E2B | Q4_K_M | 2,871 | 73.36 | 14.95 | 6,742 | **TODO** |
+| OpenCL | Gemma4-E2B | Q8_0 | 2,282 | 95.60 | 15.53 | 5,253 | **TODO** |
+| OpenCL | Gemma4-E4B | Q4_K_M | 2,669 | 68.55 | 9.34 | 6,812 | **TODO** |
+| OpenCL | Gemma4-E4B | Q8_0 | 2,801 | 70.29 | 8.03 | 6,841 | **TODO** |
+| CPU | Gemma4-E2B | Q4_K_M | 2,622 | 91.33 | 12.73 | 5,732 | **TODO** |
+| CPU | Gemma4-E2B | Q8_0 | 2,181 | 110.33 | 15.81 | 4,755 | **TODO** |
+| CPU | Gemma4-E4B | Q4_K_M | 2,378 | 82.95 | 7.21 | 5,802 | **TODO** |
+| CPU | Gemma4-E4B | Q8_0 | 2,185 | 71.89 | 7.42 | 6,135 | **TODO** |
 
 ##### Pixel 9 Pro (Mali-G715 MC7)
 
@@ -703,19 +715,19 @@ All results use elephant.jpg (612 x 408). Peak RSS not captured.
 
 | Backend | Model | Quant | Vision (ms) | Prefill (t/s) | Decode (t/s) | TTFT (ms) | Peak RSS |
 |---------|-------|-------|------------|---------------|-------------|----------|----------|
-| Vulkan | E2B | Q4_K_M | 25,429 | 8.29 | 10.62 | 59,687 | **TODO** |
-| Vulkan | E2B | Q8_0 | 27,544 | 5.68 | 7.91 | 77,544 | **TODO** |
-| Vulkan | E4B | Q4_K_M | 27,703 | 5.43 | 6.89 | 80,005 | **TODO** |
-| Vulkan | E4B | Q8_0 | 33,773 | 2.86 | 4.69 | 133,074 | **TODO** |
+| Vulkan | Gemma4-E2B | Q4_K_M | 25,429 | 8.29 | 10.62 | 59,687 | **TODO** |
+| Vulkan | Gemma4-E2B | Q8_0 | 27,544 | 5.68 | 7.91 | 77,544 | **TODO** |
+| Vulkan | Gemma4-E4B | Q4_K_M | 27,703 | 5.43 | 6.89 | 80,005 | **TODO** |
+| Vulkan | Gemma4-E4B | Q8_0 | 33,773 | 2.86 | 4.69 | 133,074 | **TODO** |
 | Vulkan | Qwen3.5-2B | Q4_K_M | 17,843 | 9.48 | 14.22 | 45,798 | **TODO** |
-| OpenCL | E2B | Q4_K_M | 34,507 | 3.63 | 10.59 | 112,744 | **TODO** |
-| OpenCL | E2B | Q8_0 | 34,516 | 3.66 | 7.86 | 112,112 | **TODO** |
-| OpenCL | E4B | Q4_K_M | 41,073 | 2.06 | 6.89 | 178,937 | **TODO** |
-| OpenCL | E4B | Q8_0 | 40,928 | 2.08 | 4.64 | 177,466 | **TODO** |
-| CPU | E2B | Q4_K_M | 29,956 | 8.06 | 1.02 | 65,192 | **TODO** |
-| CPU | E2B | Q8_0 | 29,940 | 8.19 | 1.36 | 64,616 | **TODO** |
-| CPU | E4B | Q4_K_M | 30,005 | 7.42 | 0.73 | 68,280 | **TODO** |
-| CPU | E4B | Q8_0 | 29,945 | 7.68 | 0.79 | 66,924 | **TODO** |
+| OpenCL | Gemma4-E2B | Q4_K_M | 34,507 | 3.63 | 10.59 | 112,744 | **TODO** |
+| OpenCL | Gemma4-E2B | Q8_0 | 34,516 | 3.66 | 7.86 | 112,112 | **TODO** |
+| OpenCL | Gemma4-E4B | Q4_K_M | 41,073 | 2.06 | 6.89 | 178,937 | **TODO** |
+| OpenCL | Gemma4-E4B | Q8_0 | 40,928 | 2.08 | 4.64 | 177,466 | **TODO** |
+| CPU | Gemma4-E2B | Q4_K_M | 29,956 | 8.06 | 1.02 | 65,192 | **TODO** |
+| CPU | Gemma4-E2B | Q8_0 | 29,940 | 8.19 | 1.36 | 64,616 | **TODO** |
+| CPU | Gemma4-E4B | Q4_K_M | 30,005 | 7.42 | 0.73 | 68,280 | **TODO** |
+| CPU | Gemma4-E4B | Q8_0 | 29,945 | 7.68 | 0.79 | 66,924 | **TODO** |
 | CPU | Qwen3.5-2B | Q4_K_M | 21,850 | 4.76 | 1.97 | 77,522 | **TODO** |
 
 #### D.5 Android GPU vs CPU Speedup
@@ -724,10 +736,10 @@ All results use elephant.jpg (612 x 408). Peak RSS not captured.
 
 | Model | Quant | CPU Decode (t/s) | OpenCL Decode (t/s) | Speedup |
 |-------|-------|-----------------|---------------------|---------|
-| E2B | Q4_K_M | 12.73 | 14.95 | **1.17x** |
-| E2B | Q8_0 | 15.81 | 15.53 | 0.98x |
-| E4B | Q4_K_M | 7.21 | 9.34 | **1.30x** |
-| E4B | Q8_0 | 7.42 | 8.03 | **1.08x** |
+| Gemma4-E2B | Q4_K_M | 12.73 | 14.95 | **1.17x** |
+| Gemma4-E2B | Q8_0 | 15.81 | 15.53 | 0.98x |
+| Gemma4-E4B | Q4_K_M | 7.21 | 9.34 | **1.30x** |
+| Gemma4-E4B | Q8_0 | 7.42 | 8.03 | **1.08x** |
 
 > S25 CPU is fast enough that GPU offloading provides only marginal decode speedup (1.1-1.3x). Q8_0 on CPU is faster than Q4_K_M due to simpler dequantization in the Oryon CPU SIMD pipeline.
 
@@ -735,10 +747,10 @@ All results use elephant.jpg (612 x 408). Peak RSS not captured.
 
 | Model | Quant | CPU Decode (t/s) | Best GPU Decode (t/s) | Backend | Speedup |
 |-------|-------|-----------------|----------------------|---------|---------|
-| E2B | Q4_K_M | 1.02 | 10.62 | Vulkan | **10.4x** |
-| E2B | Q8_0 | 1.36 | 7.91 | Vulkan | **5.8x** |
-| E4B | Q4_K_M | 0.73 | 6.89 | Vulkan | **9.4x** |
-| E4B | Q8_0 | 0.79 | 4.69 | Vulkan | **5.9x** |
+| Gemma4-E2B | Q4_K_M | 1.02 | 10.62 | Vulkan | **10.4x** |
+| Gemma4-E2B | Q8_0 | 1.36 | 7.91 | Vulkan | **5.8x** |
+| Gemma4-E4B | Q4_K_M | 0.73 | 6.89 | Vulkan | **9.4x** |
+| Gemma4-E4B | Q8_0 | 0.79 | 4.69 | Vulkan | **5.9x** |
 
 > GPU offloading is essential on P9P — CPU decode is 0.7-1.4 t/s (unusable).
 
@@ -748,31 +760,31 @@ All results use elephant.jpg (612 x 408). Peak RSS not captured.
 
 | Model | Quant | Mac Metal | iPhone 16e Metal | S25 Best | P9P Best | Mac/S25 | Mac/P9P |
 |-------|-------|----------|-----------------|---------|---------|---------|---------|
-| E2B | Q4_K_M | 51.28 t/s | 27.24 t/s | 14.95 (OCL) | 10.62 (VK) | **3.43x** | **4.83x** |
-| E2B | Q8_0 | 30.30 t/s | — (OOM) | 15.81 (CPU) | 7.91 (VK) | **1.92x** | **3.83x** |
-| E4B | Q4_K_M | 23.28 t/s | — (OOM) | 9.34 (OCL) | 6.89 (VK) | **2.49x** | **3.38x** |
-| E4B | Q8_0 | 15.26 t/s | — (OOM) | 8.03 (OCL) | 4.69 (VK) | **1.90x** | **3.25x** |
+| Gemma4-E2B | Q4_K_M | 51.28 t/s | 27.24 t/s | 14.95 (OCL) | 10.62 (VK) | **3.43x** | **4.83x** |
+| Gemma4-E2B | Q8_0 | 30.30 t/s | — (OOM) | 15.81 (CPU) | 7.91 (VK) | **1.92x** | **3.83x** |
+| Gemma4-E4B | Q4_K_M | 23.28 t/s | — (OOM) | 9.34 (OCL) | 6.89 (VK) | **2.49x** | **3.38x** |
+| Gemma4-E4B | Q8_0 | 15.26 t/s | — (OOM) | 8.03 (OCL) | 4.69 (VK) | **1.90x** | **3.25x** |
 | Qwen3.5-2B | Q4_K_M | 51.83 t/s | — | — | 14.22 (VK) | — | **3.64x** |
 
 ##### TTFT (elephant.jpg)
 
 | Model | Quant | Mac Metal (ms) | iPhone 16e Metal (ms) | S25 Best (ms) | P9P Best (ms) |
 |-------|-------|---------------|---------------------|--------------|--------------|
-| E2B | Q4_K_M | 1,724 | 3,492 | 5,732 (CPU) | 59,687 (VK) |
-| E2B | Q8_0 | 1,887 | — (OOM) | 4,755 (CPU) | 64,616 (CPU) |
-| E4B | Q4_K_M | 2,858 | — (OOM) | 5,802 (CPU) | 68,280 (CPU) |
-| E4B | Q8_0 | 2,880 | — (OOM) | 6,135 (CPU) | 66,924 (CPU) |
+| Gemma4-E2B | Q4_K_M | 1,724 | 3,492 | 5,732 (CPU) | 59,687 (VK) |
+| Gemma4-E2B | Q8_0 | 1,887 | — (OOM) | 4,755 (CPU) | 64,616 (CPU) |
+| Gemma4-E4B | Q4_K_M | 2,858 | — (OOM) | 5,802 (CPU) | 68,280 (CPU) |
+| Gemma4-E4B | Q8_0 | 2,880 | — (OOM) | 6,135 (CPU) | 66,924 (CPU) |
 | Qwen3.5-2B | Q4_K_M | 1,236 | — | — | 45,798 (VK) |
 
 > Mac Metal TTFT is 2.0-2.1x faster than iPhone 16e, 2.1-3.3x faster than S25, and 23-37x faster than P9P.
 
 #### D.7 Top-3 Bottlenecks (Android)
 
-Ranked by % of wall-clock time for E2B Q4_K_M on elephant.jpg. Percentages derived from benchmark timing data.
+Ranked by % of wall-clock time for Gemma4-E2B Q4_K_M on elephant.jpg. Percentages derived from benchmark timing data.
 
 > **TODO** *(deferred to separate Android ticket and report doc)*: Profiler evidence screenshots (Perfetto, Snapdragon Profiler, Mali Streamline) not included. Requires local device access.
 
-##### Samsung S25 OpenCL (E2B Q4_K_M, est. total ~8,000 ms)
+##### Samsung S25 OpenCL (Gemma4-E2B Q4_K_M, est. total ~8,000 ms)
 
 | Rank | Phase | Time (est.) | % of Wall | Notes |
 |------|-------|------------|-----------|-------|
@@ -780,7 +792,7 @@ Ranked by % of wall-clock time for E2B Q4_K_M on elephant.jpg. Percentages deriv
 | 2 | Vision encode | 2,871 ms | **~36%** | Comparable to CPU (2,622 ms) |
 | 3 | Decode | ~1,300 ms | **~16%** | 14.95 t/s — marginal GPU speedup |
 
-##### Pixel 9 Pro Vulkan (E2B Q4_K_M, est. total ~90,000 ms)
+##### Pixel 9 Pro Vulkan (Gemma4-E2B Q4_K_M, est. total ~90,000 ms)
 
 | Rank | Phase | Time (est.) | % of Wall | Notes |
 |------|-------|------------|-----------|-------|
@@ -788,7 +800,7 @@ Ranked by % of wall-clock time for E2B Q4_K_M on elephant.jpg. Percentages deriv
 | 2 | Vision encode | 25,429 ms | **~28%** | 10-15x slower than S25 and iPhone |
 | 3 | Decode | ~24,104 ms | **~27%** | 10.62 t/s — GPU essential (CPU is 1.02 t/s) |
 
-##### Pixel 9 Pro CPU (E2B Q4_K_M, est. total ~316,000 ms)
+##### Pixel 9 Pro CPU (Gemma4-E2B Q4_K_M, est. total ~316,000 ms)
 
 | Rank | Phase | Time (est.) | % of Wall | Notes |
 |------|-------|------------|-----------|-------|
