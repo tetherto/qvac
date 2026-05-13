@@ -10,6 +10,17 @@ Long-running inference calls (`completion()`, `embed()`, etc.) can be cancelled 
 
 The mental model is: **the primary path is `requestId`** — pass `run.requestId` to `cancel()` to stop that exact run. **The `modelId` path is an escape hatch** — use it for model unload, app shutdown, or admin sweeps where no `requestId` is at hand.
 
+<Callout title="Attention" type="warn">
+At the moment, `cancel()` only covers the following requests: `completion()`, `embed()`, and `rag*()`.
+
+Other cancellable operations have their own mechanism:
+- Downloads: `cancel({ operation: "downloadAsset", downloadKey })` — see [Download lifecycle](/models/download-lifecycle).
+- Finetune jobs: `finetune({ operation: "cancel", ... })` — see [Fine-tuning](/ai-capabilities/fine-tuning).
+- `transcribeStream(...)` and `textToSpeechStream(...)` duplex sessions: call `.destroy()` on the returned session.
+
+Other inference requests (e.g., `transcribe()`, `translate()`, `textToSpeech()`, `ocr()`, `diffusion()`) cannot yet be cancelled.
+</Callout>
+
 ## Functions
 
 1. [`completion()`](/reference/api#completion) — returns a `CompletionRun` that exposes a synchronous `requestId` field.
