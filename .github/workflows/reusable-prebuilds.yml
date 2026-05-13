@@ -231,7 +231,7 @@ jobs:
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
 
-      - if: ${{ inputs.platform == 'linux' && inputs.arch == 'x64' }}
+      - if: ${{ matrix.platform == 'linux' && matrix.arch == 'x64' }}
         name: Set Vulkan SDK path in Linux x64
         shell: bash
         run: |
