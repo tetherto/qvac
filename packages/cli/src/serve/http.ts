@@ -28,14 +28,21 @@ export function readBody (req: IncomingMessage): Promise<Record<string, unknown>
   })
 }
 
-export function sendJson (res: ServerResponse, status: number, body: unknown): void {
+export function sendJson (
+  res: ServerResponse,
+  status: number,
+  body: unknown,
+  extraHeaders?: Record<string, string | number>
+): void {
   if (res.headersSent) return
 
   const payload = JSON.stringify(body)
-  res.writeHead(status, {
+  const headers: Record<string, string | number> = {
     'Content-Type': 'application/json',
-    'Content-Length': Buffer.byteLength(payload)
-  })
+    'Content-Length': Buffer.byteLength(payload),
+    ...extraHeaders
+  }
+  res.writeHead(status, headers)
   res.end(payload)
 }
 
@@ -55,11 +62,12 @@ export function sendError (res: ServerResponse, status: number, code: string, me
   })
 }
 
-export function initSSE (res: ServerResponse): void {
+export function initSSE (res: ServerResponse, extraHeaders?: Record<string, string | number>): void {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
-    Connection: 'keep-alive'
+    Connection: 'keep-alive',
+    ...extraHeaders
   })
 }
 

@@ -525,3 +525,310 @@ export function parseMetadata (raw: unknown): Record<string, string> | null | un
   }
   return out
 }
+
+// ── OpenAI Responses API (POST /v1/responses) ─────────────────────────────
+
+export class UnsupportedToolTypeError extends Error {
+  readonly toolType: string
+
+  constructor (toolType: string) {
+    super(`Unsupported tool type "${toolType}" for Responses API.`)
+    this.name = 'UnsupportedToolTypeError'
+    this.toolType = toolType
+  }
+}
+
+export class InvalidResponsesConversationError extends Error {
+  constructor () {
+    super('"conversation" is not supported by this server (no Conversation persistence).')
+    this.name = 'InvalidResponsesConversationError'
+  }
+}
+
+export class InvalidResponsesBackgroundError extends Error {
+  constructor () {
+    super('"background": true is not supported; only synchronous responses are available.')
+    this.name = 'InvalidResponsesBackgroundError'
+  }
+}
+
+const RESPONSES_UNSUPPORTED_PARAMS = [
+  'service_tier',
+  'safety_identifier',
+  'prompt_cache_key',
+  'truncation',
+  'top_logprobs',
+  'include',
+  'reasoning',
+  'modalities',
+  'audio',
+  'tool_choice',
+  'parallel_tool_calls'
+] as const
+
+export function logResponsesUnsupportedParams (body: Record<string, unknown>, logger: Logger): void {
+  for (const param of RESPONSES_UNSUPPORTED_PARAMS) {
+    if (body[param] !== undefined) {
+      logger.info(`Ignoring unsupported Responses param: ${param}=${JSON.stringify(body[param])}`)
+    }
+  }
+  const text = body['text']
+  if (text !== null && text !== undefined && typeof text === 'object' && !Array.isArray(text)) {
+    const verbosity = (text as Record<string, unknown>)['verbosity']
+    if (verbosity !== undefined) {
+      logger.info(`Ignoring unsupported Responses param: text.verbosity=${JSON.stringify(verbosity)}`)
+    }
+  }
+}
+
+export function validateResponsesStatefulOptions (body: Record<string, unknown>): {
+  previousResponseId: string | undefined
+  storeEnabled: boolean
+} {
+  if (body['conversation'] !== undefined && body['conversation'] !== null) {
+    throw new InvalidResponsesConversationError()
+  }
+  if (body['background'] === true) {
+    throw new InvalidResponsesBackgroundError()
+  }
+  const prev = body['previous_response_id']
+  const previousResponseId = typeof prev === 'string' && prev.length > 0 ? prev : undefined
+  const storeEnabled = body['store'] !== false
+  return { previousResponseId, storeEnabled }
+}
+
+export function extractResponsesGenerationParams (body: Record<string, unknown>): SDKGenerationParams | undefined {
+  const params: SDKGenerationParams = {}
+
+  if (typeof body['temperature'] === 'number') params.temp = body['temperature']
+  if (typeof body['top_p'] === 'number') params.top_p = body['top_p']
+  if (typeof body['seed'] === 'number') params.seed = body['seed']
+  if (typeof body['frequency_penalty'] === 'number') params.frequency_penalty = body['frequency_penalty']
+  if (typeof body['presence_penalty'] === 'number') params.presence_penalty = body['presence_penalty']
+
+  if (typeof body['max_tokens'] === 'number') params.predict = body['max_tokens']
+  if (typeof body['max_output_tokens'] === 'number') params.predict = body['max_output_tokens']
+
+  if (typeof body['reasoning_budget'] === 'boolean') params.reasoning_budget = body['reasoning_budget']
+
+  return Object.keys(params).length > 0 ? params : undefined
+}
+
+export function extractResponsesResponseFormat (body: Record<string, unknown>): SDKResponseFormat | undefined {
+  const top = body['response_format']
+  if (top !== undefined && top !== null) {
+    return extractResponseFormat({ response_format: top } as Record<string, unknown>)
+  }
+  const text = body['text']
+  if (text !== null && text !== undefined && typeof text === 'object' && !Array.isArray(text)) {
+    const fmt = (text as Record<string, unknown>)['format']
+    if (fmt !== undefined && fmt !== null) {
+      return extractResponseFormat({ response_format: fmt } as Record<string, unknown>)
+    }
+  }
+  return undefined
+}
+
+interface ResponsesFunctionTool {
+  type: string
+  name?: string
+  description?: string
+  parameters?: Record<string, unknown>
+}
+
+export function openaiResponsesToolsToSdk (tools: ResponsesFunctionTool[] | undefined): SDKTool[] | undefined {
+  if (!tools || tools.length === 0) return undefined
+
+  return tools
+    .map((t): SDKTool | null => {
+      if (t.type === 'function') {
+        const name = typeof t.name === 'string' ? t.name : ''
+        if (!name) return null
+        return {
+          type: 'function',
+          name,
+          description: typeof t.description === 'string' ? t.description : '',
+          parameters: normalizeToolParameters(t.parameters ?? { type: 'object', properties: {} })
+        }
+      }
+      if (t.type === 'web_search' || t.type === 'file_search' || t.type === 'code_interpreter') {
+        throw new UnsupportedToolTypeError(t.type)
+      }
+      throw new UnsupportedToolTypeError(t.type)
+    })
+    .filter((t): t is SDKTool => t !== null)
+}
+
+function inputTextPart (text: string): Record<string, unknown> {
+  return { type: 'input_text', text }
+}
+
+function normalizeInputItemId (item: Record<string, unknown>, index: number): Record<string, unknown> {
+  if (typeof item['id'] === 'string' && item['id'].length > 0) return item
+  return { ...item, id: `item_${index}_${randomHex(8)}` }
+}
+
+function randomHex (len: number): string {
+  let s = ''
+  for (let i = 0; i < len; i++) s += Math.floor(Math.random() * 16).toString(16)
+  return s
+}
+
+export function normalizeResponsesInputItemsForStorage (input: unknown): unknown[] {
+  if (typeof input === 'string') {
+    return [{
+      type: 'message',
+      id: `item_0_${randomHex(8)}`,
+      role: 'user',
+      content: [inputTextPart(input)]
+    }]
+  }
+  if (!Array.isArray(input)) {
+    return [{
+      type: 'message',
+      id: `item_0_${randomHex(8)}`,
+      role: 'user',
+      content: [inputTextPart('')]
+    }]
+  }
+  return input.map((raw, i) => {
+    if (typeof raw === 'string') {
+      return {
+        type: 'message',
+        id: `item_${i}_${randomHex(8)}`,
+        role: 'user',
+        content: [inputTextPart(raw)]
+      }
+    }
+    if (raw !== null && typeof raw === 'object' && !Array.isArray(raw)) {
+      return normalizeInputItemId(raw as Record<string, unknown>, i)
+    }
+    return { type: 'message', id: `item_${i}_${randomHex(8)}`, role: 'user', content: [inputTextPart('')] }
+  })
+}
+
+export function openaiResponsesInputToHistory (
+  input: unknown,
+  instructions: string | undefined
+): Array<{ role: string; content: string }> {
+  const history: Array<{ role: string; content: string }> = []
+
+  if (typeof instructions === 'string' && instructions.length > 0) {
+    history.push({ role: 'system', content: instructions })
+  }
+
+  if (typeof input === 'string') {
+    history.push({ role: 'user', content: input })
+    return history
+  }
+
+  if (!Array.isArray(input)) {
+    history.push({ role: 'user', content: '' })
+    return history
+  }
+
+  for (const raw of input) {
+    if (typeof raw === 'string') {
+      history.push({ role: 'user', content: raw })
+      continue
+    }
+    if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) continue
+    const item = raw as Record<string, unknown>
+    const t = item['type']
+    if (t === 'message') {
+      const role = typeof item['role'] === 'string' ? item['role'] : 'user'
+      const content = item['content']
+      history.push({ role, content: flattenResponsesContent(content) })
+      continue
+    }
+    if (t === 'input_text') {
+      const text = typeof item['text'] === 'string' ? item['text'] : ''
+      history.push({ role: 'user', content: text })
+    }
+  }
+
+  return history
+}
+
+function flattenResponsesContent (content: unknown): string {
+  if (typeof content === 'string') return content
+  if (!Array.isArray(content)) return ''
+  const parts: string[] = []
+  for (const p of content) {
+    if (typeof p === 'string') {
+      parts.push(p)
+      continue
+    }
+    if (p === null || typeof p !== 'object' || Array.isArray(p)) continue
+    const o = p as Record<string, unknown>
+    if (o['type'] === 'input_text' && typeof o['text'] === 'string') parts.push(o['text'])
+  }
+  return parts.join('\n')
+}
+
+export function historyPrefixFromStoredResponse (stored: {
+  inputItems: unknown[]
+  responseObject: Record<string, unknown>
+}): Array<{ role: string; content: string }> {
+  const prefix: Array<{ role: string; content: string }> = []
+
+  for (const raw of stored.inputItems) {
+    if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) continue
+    const item = raw as Record<string, unknown>
+    if (item['type'] === 'message') {
+      const role = typeof item['role'] === 'string' ? item['role'] : 'user'
+      prefix.push({ role, content: flattenResponsesContent(item['content']) })
+    } else if (item['type'] === 'input_text') {
+      const text = typeof item['text'] === 'string' ? item['text'] : ''
+      prefix.push({ role: 'user', content: text })
+    }
+  }
+
+  const output = stored.responseObject['output']
+  const outputText = stored.responseObject['output_text']
+  if (typeof outputText === 'string' && outputText.length > 0) {
+    prefix.push({ role: 'assistant', content: outputText })
+    return prefix
+  }
+
+  if (Array.isArray(output)) {
+    for (const out of output) {
+      if (out === null || typeof out !== 'object' || Array.isArray(out)) continue
+      const o = out as Record<string, unknown>
+      if (o['type'] === 'message' && o['role'] === 'assistant') {
+        const text = extractOutputTextFromMessage(o)
+        prefix.push({ role: 'assistant', content: text })
+      } else if (o['type'] === 'function_call') {
+        const name = typeof o['name'] === 'string' ? o['name'] : ''
+        const args = typeof o['arguments'] === 'string' ? o['arguments'] : JSON.stringify(o['arguments'] ?? {})
+        prefix.push({
+          role: 'assistant',
+          content: `<tool_call>\n${JSON.stringify({ name, arguments: safeJsonParse(args) })}\n</tool_call>`
+        })
+      }
+    }
+  }
+
+  return prefix
+}
+
+function safeJsonParse (s: string): Record<string, unknown> {
+  try {
+    return JSON.parse(s) as Record<string, unknown>
+  } catch {
+    return {}
+  }
+}
+
+function extractOutputTextFromMessage (msg: Record<string, unknown>): string {
+  const content = msg['content']
+  if (typeof content === 'string') return content
+  if (!Array.isArray(content)) return ''
+  const parts: string[] = []
+  for (const p of content) {
+    if (p === null || typeof p !== 'object' || Array.isArray(p)) continue
+    const o = p as Record<string, unknown>
+    if (o['type'] === 'output_text' && typeof o['text'] === 'string') parts.push(o['text'])
+  }
+  return parts.join('')
+}

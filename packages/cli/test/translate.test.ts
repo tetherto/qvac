@@ -14,7 +14,17 @@ import {
   parseExpiresAfter,
   parseMetadata,
   InvalidExpiresAfterError,
-  InvalidMetadataError
+  InvalidMetadataError,
+  openaiResponsesInputToHistory,
+  openaiResponsesToolsToSdk,
+  extractResponsesGenerationParams,
+  extractResponsesResponseFormat,
+  validateResponsesStatefulOptions,
+  normalizeResponsesInputItemsForStorage,
+  historyPrefixFromStoredResponse,
+  UnsupportedToolTypeError,
+  InvalidResponsesConversationError,
+  InvalidResponsesBackgroundError
 } from '../src/serve/adapters/openai/translate.js'
 import type { VectorStoreMeta } from '../src/serve/adapters/openai/vector-stores-store.js'
 
@@ -677,5 +687,109 @@ describe('parseMetadata', () => {
   it('rejects oversized keys or values', () => {
     assert.throws(() => parseMetadata({ ['x'.repeat(65)]: 'v' }), InvalidMetadataError)
     assert.throws(() => parseMetadata({ k: 'v'.repeat(513) }), InvalidMetadataError)
+  })
+})
+
+describe('openaiResponsesInputToHistory', () => {
+  it('maps string input to user message', () => {
+    const h = openaiResponsesInputToHistory('hello', undefined)
+    assert.deepEqual(h, [{ role: 'user', content: 'hello' }])
+  })
+
+  it('prepends instructions as system', () => {
+    const h = openaiResponsesInputToHistory('x', 'sys')
+    assert.deepEqual(h, [{ role: 'system', content: 'sys' }, { role: 'user', content: 'x' }])
+  })
+
+  it('maps message items', () => {
+    const h = openaiResponsesInputToHistory([
+      { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'a' }] }
+    ], undefined)
+    assert.equal(h[0]!.role, 'user')
+    assert.equal(h[0]!.content, 'a')
+  })
+})
+
+describe('openaiResponsesToolsToSdk', () => {
+  it('maps Responses-style function tools', () => {
+    const t = openaiResponsesToolsToSdk([{
+      type: 'function',
+      name: 'fn',
+      description: 'd',
+      parameters: { type: 'object', properties: {} }
+    }])
+    assert.ok(t && t.length === 1)
+    assert.equal(t[0]!.name, 'fn')
+  })
+
+  it('throws on web_search', () => {
+    assert.throws(
+      () => openaiResponsesToolsToSdk([{ type: 'web_search' }]),
+      UnsupportedToolTypeError
+    )
+  })
+})
+
+describe('extractResponsesGenerationParams', () => {
+  it('maps max_output_tokens to predict', () => {
+    const p = extractResponsesGenerationParams({ max_output_tokens: 64 })
+    assert.equal(p!.predict, 64)
+  })
+})
+
+describe('extractResponsesResponseFormat', () => {
+  it('reads nested text.format', () => {
+    const f = extractResponsesResponseFormat({
+      text: { format: { type: 'json_object' } }
+    })
+    assert.ok(f && f.type === 'json_object')
+  })
+})
+
+describe('validateResponsesStatefulOptions', () => {
+  it('returns previous id and store default true', () => {
+    const r = validateResponsesStatefulOptions({ previous_response_id: 'resp_x', input: '' })
+    assert.equal(r.previousResponseId, 'resp_x')
+    assert.equal(r.storeEnabled, true)
+  })
+
+  it('store false opts out', () => {
+    const r = validateResponsesStatefulOptions({ store: false, input: '' })
+    assert.equal(r.storeEnabled, false)
+  })
+
+  it('throws on conversation', () => {
+    assert.throws(
+      () => validateResponsesStatefulOptions({ conversation: 'c1' }),
+      InvalidResponsesConversationError
+    )
+  })
+
+  it('throws on background true', () => {
+    assert.throws(
+      () => validateResponsesStatefulOptions({ background: true }),
+      InvalidResponsesBackgroundError
+    )
+  })
+})
+
+describe('normalizeResponsesInputItemsForStorage', () => {
+  it('wraps string input', () => {
+    const items = normalizeResponsesInputItemsForStorage('hi')
+    assert.equal(items.length, 1)
+    assert.equal((items[0] as { type: string }).type, 'message')
+  })
+})
+
+describe('historyPrefixFromStoredResponse', () => {
+  it('uses output_text shortcut when present', () => {
+    const prefix = historyPrefixFromStoredResponse({
+      inputItems: [{ type: 'message', id: '1', role: 'user', content: [{ type: 'input_text', text: 'u' }] }],
+      responseObject: { output_text: 'assistant reply', output: [] }
+    })
+    assert.deepEqual(prefix, [
+      { role: 'user', content: 'u' },
+      { role: 'assistant', content: 'assistant reply' }
+    ])
   })
 })
