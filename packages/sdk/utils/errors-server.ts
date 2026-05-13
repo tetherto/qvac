@@ -155,12 +155,12 @@ export class TtsReferenceAudioRequiredError extends QvacErrorBase {
   }
 }
 
-export class ParakeetArtifactsRequiredError extends QvacErrorBase {
-  constructor(details?: string, cause?: unknown) {
+export class LegacyParakeetModelDeprecatedError extends QvacErrorBase {
+  constructor(legacyFields: readonly string[], cause?: unknown) {
     super(
       createErrorOptions(
-        SDK_SERVER_ERROR_CODES.PARAKEET_ARTIFACTS_REQUIRED,
-        details ? [details] : undefined,
+        SDK_SERVER_ERROR_CODES.LEGACY_PARAKEET_MODEL_DEPRECATED,
+        [legacyFields.join(", ")],
         cause,
       ),
     );
