@@ -498,21 +498,28 @@ function workspaceInfoFor (
   return found ? { exists: true, open: found.open } : { exists: false }
 }
 
-function syntheticFromWorkspace (
+/**
+ * Stable sentinel for disk-only (workspace-but-no-local-meta) synthetics.
+ * Using 0 keeps GET responses deterministic across reads, sorts these
+ * reconstructed-from-disk entries last in list responses (smallest
+ * createdAt), and honestly signals "timestamp unknown" to OpenAI clients.
+ */
+const SYNTHETIC_TIMESTAMP = 0
+
+export function syntheticFromWorkspace (
   id: string,
   workspaces: Array<{ name: string; open: boolean }>
 ): VectorStoreMeta | null {
   const found = workspaces.find((w) => w.name === id)
   if (!found) return null
-  const now = Date.now()
   return {
     id,
-    createdAt: now,
+    createdAt: SYNTHETIC_TIMESTAMP,
     name: id,
     metadata: {},
     expiresAfter: null,
     expiresAt: null,
-    lastActiveAt: now,
+    lastActiveAt: SYNTHETIC_TIMESTAMP,
     embeddingAlias: null
   }
 }
