@@ -264,7 +264,7 @@ if(WIN32)
       msvcrt.lib
   )
   target_link_options(
-    ${qvac-lib-inference-tts}_module
+    ${inference-tts}_module
     PRIVATE
       /FORCE:MULTIPLE
   )
