@@ -16,7 +16,9 @@ const ENDPOINT_CATEGORY: Record<string, string> = {
   tts: 'speech',
   'onnx-tts': 'speech',
   ocr: 'ocr',
-  'onnx-ocr': 'ocr'
+  'onnx-ocr': 'ocr',
+  diffusion: 'image',
+  'sdcpp-generation': 'image'
 }
 
 interface RawServeConfig {
