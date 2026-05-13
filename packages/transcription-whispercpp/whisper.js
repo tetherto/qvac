@@ -396,6 +396,25 @@ class WhisperInterface {
       this._bufferedBytes = 0
       this._activeJobId = null
       this._setState(state.IDLE)
+
+      // Defense-in-depth for the iOS bare-kit teardown race.
+      // ~OutputCallBackJs schedules a uv_close whose close-callback runs
+      // in the libuv close phase of a *later* loop iteration. The
+      // whisper-local WhisperOutputCallBackJs already deletes the JS
+      // references synchronously inside that destructor, so the close
+      // callback no longer touches js_env_t* and is safe even if the
+      // host invalidates the worklet env right after this function
+      // returns. These two yields are kept anyway as a belt-and-braces
+      // measure: they guarantee one full libuv iteration boundary
+      // elapses before unload() resolves to its caller (the SDK), so
+      // the close callback has fired and the uv_async_t handle has
+      // actually been freed before any subsequent worklet teardown
+      // step. Two `setImmediate` waits are required because the first
+      // resume happens during the same iteration's check phase
+      // (BEFORE the close phase); the second wait pushes us past the
+      // following iteration's close phase. ~1ms cost.
+      await new Promise((resolve) => setImmediate(resolve))
+      await new Promise((resolve) => setImmediate(resolve))
     } catch (err) {
       throw new QvacErrorAddonWhisper({
         code: ERR_CODES.FAILED_TO_DESTROY,

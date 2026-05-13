@@ -1,6 +1,6 @@
 # Architecture Documentation
 
-**Package:** `@qvac/translation-nmtcpp` v0.3.7  
+**Package:** `@qvac/translation-nmtcpp` v2.1.1
 **Stack:** JavaScript, C++20, GGML, Bergamot, Bare Runtime, CMake, vcpkg  
 **License:** Apache-2.0
 
@@ -42,21 +42,21 @@ Offline neural machine translation for QVAC-powered applications (mobile and des
 
 **Core value:**
 - High-level JavaScript API for NMT inference
-- Model distribution via registry or local files
+- Caller-supplied local model files, with registry/examples outside the runtime path
 - Multi-backend architecture (IndicTrans2, Bergamot)
 - Batch translation support
-- Pluggable model weight loaders
+- Pivot translation and lazy GGML backend loading
 
 ## Key Features
 
 - **Multi-backend architecture:** GGML-based custom NMT (IndicTrans2) and Mozilla Bergamot
 - **Cross-platform support:** macOS, iOS, Linux, Android, Windows
-- **GPU acceleration:** via GGML backends (Metal on Apple, Vulkan on others)
+- **GPU acceleration:** via GGML backends (Metal on Apple, Vulkan/OpenCL where configured)
 - **Beam search decoding** with configurable beam size, length penalty, and repetition control
 - **SentencePiece tokenization** for subword segmentation
 - **Batch translation** (Bergamot backend) for high-throughput scenarios
-- **Model distribution** via registry or local files
-- **Queue-based inference** with pause/cancel/resume support
+- **Local model files** supplied through constructor `files`
+- **Single-job inference** with cancel support and JS-level serialization
 
 ## Target Platforms
 
@@ -69,7 +69,8 @@ Offline neural machine translation for QVAC-powered applications (mobile and des
 | Windows | x64 | 10+ | ✅ Tier 1 | Vulkan |
 
 **Dependencies:**
-- inference-addon-cpp (≥0.12.2): C++ addon framework
+- inference-addon-cpp (≥1.1.5#1): C++ addon framework
+- @qvac/infer-base (^0.4.0): `createJobHandler`, `exclusiveRunQueue`, QvacResponse
 - ggml (vcpkg): Tensor computation and GPU backends
 - sentencepiece (vcpkg): Subword tokenization
 - bergamot-translator (vcpkg, optional): Mozilla Bergamot translation engine
@@ -98,7 +99,7 @@ graph TB
 
     subgraph "core libs"
         BASE["@qvac/infer-base"]
-        DL["@qvac/registry-client"]
+        LOG["@qvac/logging"]
     end
 
     subgraph "Native Framework"
@@ -113,7 +114,7 @@ graph TB
 
     APP --> NMT
     NMT --> BASE
-    NMT --> DL
+    NMT --> LOG
     NMT --> ADDON
     ADDON --> BARE
     ADDON --> GGML_LIB
@@ -129,9 +130,10 @@ graph TB
 
 | Package | Type | Version | Purpose |
 |---------|------|---------|---------|
-| @qvac/infer-base | Framework | ^0.2.0 | Base classes, WeightsProvider, QvacResponse |
-| @qvac/registry-client | Framework | ^0.1.0 | Model distribution |
-| inference-addon-cpp | Native | ≥0.12.2 | C++ addon framework (threading, job queue, JS interop) |
+| @qvac/infer-base | Framework | ^0.4.0 | `createJobHandler`, `exclusiveRunQueue`, QvacResponse |
+| @qvac/logging | Runtime | ^0.1.0 | Logger bridge for JS and native logs |
+| @qvac/registry-client | Dev/example | ^0.4.0 | Optional model distribution examples, not runtime loading |
+| inference-addon-cpp | Native | ≥1.1.5#1 | C++ addon framework (`AddonJs`/`AddonCpp`, runJob, cancel) |
 | ggml | Native | (vcpkg) | Tensor computation and GPU backends |
 | sentencepiece | Native | (vcpkg) | Subword tokenization |
 | protobuf | Native | (vcpkg) | SentencePiece model serialization |
@@ -143,10 +145,10 @@ graph TB
 | From | To | Mechanism | Data Format |
 |------|----|-----------|-------------|
 | JavaScript | TranslationNmtcpp | Constructor | args, config objects |
-| TranslationNmtcpp | BaseInference | Inheritance | Template method pattern |
+| TranslationNmtcpp | createJobHandler / exclusiveRunQueue | Composition | Job lifecycle + single-job serialization |
 | TranslationNmtcpp | TranslationInterface | Composition | Method calls |
 | TranslationInterface | C++ Addon | require.addon() | Native binding |
-| WeightsProvider | Data Loader | Interface | Stream protocol |
+| TranslationNmtcpp | files/config | Constructor | Local model/vocab/pivot/backend paths |
 
 </details>
 
@@ -164,6 +166,8 @@ classDiagram
         +load(close?, reportProgressCallback?) Promise~void~
         +run(input: string) Promise~QvacResponse~
         +runBatch(texts: string[]) Promise~string[]~
+        +getActiveBackendName() string
+        +getActiveBackendDescription() string
         +unload() Promise~void~
     }
 
@@ -175,20 +179,20 @@ classDiagram
     class TranslationInterface {
         -_handle : native
         +activate() Promise~void~
-        +append(data) Promise~number~
-        +pause() Promise~void~
-        +cancel(jobId) Promise~void~
-        +stop() Promise~void~
+        +runJob(data) Promise~boolean~
+        +cancel() Promise~void~
         +unload() Promise~void~
-        +processBatch(texts) Promise~string[]~
+        +getActiveBackendName() string
+        +getActiveBackendDescription() string
         +destroy() Promise~void~
     }
 
-    class BaseInference {
-        <<abstract>>
-        +load()
-        +run()
-        +unload()
+    class JobHandler {
+        <<createJobHandler>>
+        +start() QvacResponse
+        +output(data)
+        +end(stats)
+        +fail(error)
     }
 
     class QvacResponse {
@@ -199,12 +203,13 @@ classDiagram
         +iterate()
     }
 
-    class WeightsProvider {
-        +downloadFiles(files, path, opts) Promise~void~
+    class RunQueue {
+        <<exclusiveRunQueue>>
+        +(fn) Promise
     }
 
-    TranslationNmtcpp --|> BaseInference
-    TranslationNmtcpp *-- WeightsProvider
+    TranslationNmtcpp *-- JobHandler
+    TranslationNmtcpp *-- RunQueue
     TranslationNmtcpp --> TranslationInterface : creates
     TranslationNmtcpp --> ModelTypes
     TranslationNmtcpp ..> QvacResponse : creates
@@ -217,17 +222,16 @@ classDiagram
 
 | Class | Responsibility | Lifecycle | Dependencies |
 |-------|---------------|-----------|--------------|
-| TranslationNmtcpp | Orchestrate model lifecycle, manage loading/inference | Created by user, persistent | WeightsProvider, TranslationInterface |
-| BaseInference | Define standard inference API | Abstract base class | None |
+| TranslationNmtcpp | Orchestrate model lifecycle, local file paths, pivot config, loading/inference | Created by user, persistent | TranslationInterface, createJobHandler, exclusiveRunQueue |
 | QvacResponse | Stream inference output | Created per run() call, short-lived | None |
-| WeightsProvider | Abstract model weight loading | Created by TranslationNmtcpp | DataLoader |
+| TranslationInterface | JS wrapper around native `runJob`, cancel, backend introspection, and logging | Created in `_load()` | Native binding |
 
 **Key Relationships:**
 
 | From | To | Type | Purpose |
 |------|----|------|---------|
-| TranslationNmtcpp | BaseInference | Inheritance | Standard QVAC inference API |
-| TranslationNmtcpp | WeightsProvider | Composition | Model weight acquisition |
+| TranslationNmtcpp | createJobHandler | Composition | Response lifecycle |
+| TranslationNmtcpp | exclusiveRunQueue | Composition | Serialize load/run/runBatch/unload |
 | TranslationNmtcpp | TranslationInterface | Composition | Native addon operations |
 | TranslationNmtcpp | QvacResponse | Creates | Streaming output per inference |
 
@@ -246,8 +250,8 @@ graph TB
     subgraph "Layer 1: JavaScript API"
         APP["Application Code"]
         NMTCPP["TranslationNmtcpp<br/>(index.js)"]
-        BASEINF["BaseInference<br/>(@qvac/infer-base)"]
-        WEIGHTSPR["WeightsProvider<br/>(@qvac/infer-base)"]
+        JOBH["createJobHandler<br/>(@qvac/infer-base)"]
+        RUNQ["exclusiveRunQueue<br/>(@qvac/infer-base)"]
         RESPONSE["QvacResponse / QvacIndicTransResponse"]
     end
 
@@ -258,11 +262,12 @@ graph TB
 
     subgraph "Layer 3: C++ Addon"
         BINDING_CPP["JsInterface<br/>(binding.cpp)"]
-        ADDON["Addon&lt;TranslationModel&gt;<br/>(Addon.cpp)"]
+        ADDON["AddonJs / AddonCpp<br/>(addon/src/addon/AddonJs.hpp)"]
     end
 
     subgraph "Layer 4: Model"
         TMODEL["TranslationModel<br/>(TranslationModel.cpp)"]
+        PIVOT["PivotTranslationModel<br/>(PivotTranslationModel.cpp)"]
     end
 
     subgraph "Layer 5a: GGML Backend"
@@ -286,8 +291,8 @@ graph TB
     end
 
     APP --> NMTCPP
-    NMTCPP --> BASEINF
-    NMTCPP --> WEIGHTSPR
+    NMTCPP --> JOBH
+    NMTCPP --> RUNQ
     NMTCPP --> TRANS_IF
     NMTCPP -.-> RESPONSE
 
@@ -296,6 +301,7 @@ graph TB
 
     BINDING_CPP --> ADDON
     ADDON --> TMODEL
+    ADDON --> PIVOT
 
     TMODEL --> NMT
     TMODEL --> BERG
@@ -325,10 +331,10 @@ graph TB
 
 | Layer | Components | Responsibility | Language | Why This Layer |
 |-------|-----------|---------------|----------|----------------|
-| 1. JavaScript API | TranslationNmtcpp, BaseInference | High-level API, error handling | JS | Ergonomic API for npm consumers |
+| 1. JavaScript API | TranslationNmtcpp, createJobHandler, exclusiveRunQueue | High-level API, response lifecycle, error handling | JS | Ergonomic API for npm consumers |
 | 2. Bridge | TranslationInterface, binding.js | JS↔C++ communication | JS wrapper | Lifecycle management, handle safety |
-| 3. C++ Addon | JsInterface, Addon\<T\> | Job queue, threading, callbacks | C++ | Performance, native integration |
-| 4. Model | TranslationModel | Backend detection and dispatch | C++ | Multi-backend routing |
+| 3. C++ Addon | JsInterface, AddonJs/AddonCpp | Single-job runner, threading, callbacks | C++ | Performance, native integration |
+| 4. Model | TranslationModel, PivotTranslationModel | Backend detection, pivot routing, dispatch | C++ | Multi-backend routing |
 | 5a. GGML Backend | nmt_* modules | Custom encoder-decoder with beam search | C++ | IndicTrans2 inference |
 | 5b. Bergamot Backend | bergamot wrapper | Bergamot translator integration | C++ | Batch-optimized translation |
 | 6. Native Libraries | ggml, sentencepiece, bergamot | Tensor ops, tokenization, translation | C++ | Optimized inference |
@@ -354,13 +360,14 @@ graph TB
 
 #### **TranslationNmtcpp (index.js)**
 
-**Responsibility:** Main API class, orchestrates model lifecycle, manages data loaders, routes to correct backend
+**Responsibility:** Main API class, orchestrates model lifecycle, validates caller-supplied local file paths, configures optional pivot translation, and routes requests to the native backend.
 
 **Why JavaScript:**
 - High-level API ergonomics for npm consumers
 - Promise/async-await integration
 - IndicTrans pre/post-processing via third-party JS module
 - Configuration parsing
+- `createJobHandler` and `exclusiveRunQueue` for response lifecycle and one native job at a time
 
 #### **TranslationInterface (marian.js)**
 
@@ -391,16 +398,24 @@ graph TB
 - Backend auto-detection from model file format
 - Unified process() interface over heterogeneous backends
 
-#### **Addon\<TranslationModel\> (addon/Addon.cpp)**
+#### **AddonJs / AddonCpp (addon/src/addon/AddonJs.hpp)**
 
-**Responsibility:** Template specialization of addon framework
+**Responsibility:** Package-specific integration with the addon-cpp 1.x framework.
 
 **Why C++:**
-- Provides job queue and priority scheduling
+- Provides single-job execution and cancellation
 - Dedicated processing thread
 - Thread-safe state machine
 - Output dispatching via uv_async
-- Batch processing helper functions
+- `runJob` accepts single text or `type: 'sequences'` batch payloads
+
+#### **PivotTranslationModel (model-interface/PivotTranslationModel.cpp)**
+
+**Responsibility:** Routes source → pivot → target translation when `config.pivotModel` and the corresponding pivot files/config are supplied.
+
+**Why C++:**
+- Keeps multi-step translation close to model dispatch
+- Reuses the same native backend abstractions as direct translation
 
 #### **nmt_context / nmt_* (model-interface/nmt*.cpp)**
 
@@ -423,14 +438,13 @@ graph TB
 - Exposes single and batch translation
 - Manages BlockingService and TranslationModel lifecycle
 
-#### **WeightsProvider (@qvac/infer-base)**
+#### **NmtLazyInitializeBackend (model-interface/NmtLazyInitializeBackend.cpp)**
 
-**Responsibility:** Abstracts model weight acquisition
+**Responsibility:** Lazy GGML backend/plugin loading.
 
-**Why JavaScript:**
-- Integrates with data loaders (registry, filesystem)
-- Progress tracking and reporting
-- Handles multi-file downloads (model + vocabularies)
+**Why C++:**
+- Defers backend initialization until model activation
+- Supports `backendsDir`, `openclCacheDir`, and optional OpenCL backend configuration
 
 ---
 
@@ -443,14 +457,14 @@ sequenceDiagram
     participant JS as JavaScript
     participant IF as TranslationInterface
     participant Bind as Native Binding
-    participant Addon as Addon<TranslationModel>
+    participant Addon as AddonJs/AddonCpp
     participant Model as TranslationModel
     participant Backend as GGML / Bergamot
 
     JS->>IF: run(input)
-    IF->>Bind: append({type:'text', input})
-    Bind->>Addon: append() [lock mutex]
-    Addon->>Addon: Enqueue job
+    IF->>Bind: runJob({type:'text', input})
+    Bind->>Addon: runJob() [single-job guard]
+    Addon->>Addon: Accept job
     Addon->>Addon: cv.notify_one()
     Bind-->>IF: jobId
     IF-->>JS: QvacResponse
@@ -626,9 +640,9 @@ Use the SentencePiece library for tokenization and detokenization, loading vocab
 <details>
 <summary>⚡ TL;DR</summary>
 
-**Chose:** `inference-addon-cpp`'s `Addon<T>` template  
-**Why:** Proven pattern used by all QVAC inference addons, handles threading and lifecycle  
-**Cost:** Template complexity, indirect control over processing thread
+**Chose:** `inference-addon-cpp` 1.x `AddonJs` / `AddonCpp` framework
+**Why:** Shared single-job runner, cancellation, output events, and JS bridge across QVAC inference addons
+**Cost:** One request at a time per native instance
 
 </details>
 
@@ -638,14 +652,14 @@ Translation requests arrive from the JavaScript thread but inference must run on
 
 ### Decision
 
-Use `inference-addon-cpp`'s `Addon<T>` template, which provides a job queue, worker thread, and callback mechanism for communicating results back to JavaScript.
+Use addon-cpp's `AddonJs` / `AddonCpp` pattern, which provides a single-job runner, worker thread, cancellation, and callback mechanism for communicating results back to JavaScript. JavaScript submits complete requests with `runJob`; batch translation uses `runJob({ type: 'sequences', input })`.
 
 ### Rationale
 
 **Proven Pattern:**
 - Used by all QVAC inference addons (LLM, embeddings, STT)
 - Handles thread synchronization, lifecycle management, and error propagation
-- Supports pause/cancel/resume out of the box
+- Supports cancel; pause/resume was removed with the 1.x addon framework migration
 
 **Consistency:**
 - Same addon patterns across all inference packages
@@ -667,21 +681,14 @@ Use `inference-addon-cpp`'s `Addon<T>` template, which provides a job queue, wor
 **Root Cause:** Renaming requires coordinated changes across JS, C++, and consumer packages  
 **Plan:** Rename in a dedicated refactoring PR — `marian.js` → `translationInterface.js`, `QvacErrorAddonMarian` → `QvacErrorTranslation`, namespace → `qvac_lib_infer_nmtcpp`
 
-### 2. Whisper.cpp as Indirect GGML Provider
-**Status:** Active dependency — `whisper-cpp` is declared in `vcpkg.json` and built via a custom overlay port with multiple patches  
-**Issue:** The package depends on `whisper-cpp` solely to obtain the `ggml` library it bundles as a submodule. No whisper.cpp APIs are used anywhere in the codebase. This adds unnecessary build complexity, overlay maintenance (build patches, cross-compile fixes), and a confusing dependency chain for contributors  
-**Root Cause:** The package originally used MLC-LLM (as a git submodule) for its translation backend. In July 2025, MLC-LLM was removed and `whisper-cpp` was added to `vcpkg.json` as the vehicle to obtain a vcpkg-installable `ggml`.
-**Plan:** Migrate to a standalone `ggml` vcpkg port, remove the `whisper-cpp` overlay port and its associated patches (`0001-fix-vcpkg-build.patch`, `0002-fix-apple-silicon-cross-compile.patch`), and update `vcpkg.json` to depend on `ggml` directly
-
-### 3. Overlay Ports Instead of Registry
-**Status:** 7 local overlay ports in `vcpkg-overlays/` — `whisper-cpp`, `bergamot-translator`, `marian-dev`, `ssplit`, `intgemm`, `ruy`, `simd-utils`  
-**Issue:** Dependencies are maintained as local overlay ports with custom portfiles and patches instead of being published to `qvac-registry-vcpkg`. This duplicates port maintenance into the package itself, makes dependency updates error-prone, and diverges from the pattern already adopted by other inference packages (e.g. `transcription-whispercpp` migrated to the registry in `94bcdfc` — July 2025)  
-**Root Cause:** The Bergamot backend was originally built from deeply nested git submodules (`bergamot-translator` → `marian-dev` → `intgemm`, `ruy`, `simd-utils`, `ssplit`). When the package migrated to vcpkg, these submodule trees were converted to local overlay ports to unblock the build, but were never promoted to the shared registry  
-**Plan:** Publish all overlay ports to `qvac-registry-vcpkg`, remove the `vcpkg-overlays/` directory, and update `vcpkg-configuration.json` to resolve all dependencies from the registry. This can be done incrementally — `whisper-cpp` removal is covered by item #2, and the Bergamot chain (`bergamot-translator`, `marian-dev`, `ssplit`, `intgemm`, `ruy`, `simd-utils`) can be migrated as a group
+### 2. Native Backend Supply Chain
+**Status:** Current dependency resolution uses `vcpkg-configuration.json` and the shared QVAC registry rather than the older local overlay-port layout.
+**Issue:** Contributors still need to understand which GGML, qvac-fabric, Bergamot, and optional OpenCL components are resolved through vcpkg.
+**Plan:** Keep `vcpkg.json`, `vcpkg-configuration.json`, and this architecture doc aligned when adding or removing backend plugins.
 
 ---
 
 **Related Document:**
 - [data-flows-detailed.md](data-flows-detailed.md) - Detailed data flow diagrams and sequences
 
-**Last Updated:** 2026-02-12
+**Last Updated:** 2026-05-07

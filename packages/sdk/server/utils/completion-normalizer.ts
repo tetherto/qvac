@@ -71,6 +71,14 @@ const DIALECT_SPECS: Record<Dialect, DialectSpec> = {
       "<|return|>",
     ],
   },
+  qwen35: {
+    // Same <tool_call>…</tool_call> framing as hermes; inner content is XML.
+    toolFrames: [{ open: "<tool_call>", close: "</tool_call>" }],
+  },
+  gemma4: {
+    toolFrames: [{ open: "<|tool_call>", close: "<tool_call|>" }],
+    thinkingFrames: [{ open: "<|channel>thought", close: "<channel|>" }],
+  },
 };
 
 // Capture-gated reasoning marker — the generic `<think>...</think>`

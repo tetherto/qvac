@@ -1,6 +1,6 @@
 # inference-addon-cpp Architecture Documentation
 
-**Version:** 1.1.0  
+**Version:** 1.1.7
 **Technology Stack:** C++20, CMake, vcpkg, Bare Runtime  
 **Package Type:** Header-only C++ library
 
@@ -39,7 +39,7 @@
 
 ### Purpose
 
-This library enables developers to build native inference addons by implementing the `model::IModel` interface with a `process(std::any)` method and registering output handlers. The framework transparently manages: job execution, JavaScript callbacks, event loop integration, multi-threading, and memory management. Jobs are submitted from JavaScript without blocking the calling thread; output is always delivered asynchronously via callback.
+This library enables developers to build native inference addons by implementing the `model::IModel` interface with a `process(const std::any& input)` method and registering output handlers. The framework transparently manages: job execution, JavaScript callbacks, event loop integration, multi-threading, and memory management. Jobs are submitted from JavaScript without blocking the calling thread; output is always delivered asynchronously via callback.
 
 ### Key Features
 
@@ -70,7 +70,7 @@ Platform-specific details are handled by Bare runtime and libuv.
 - C++20 compiler (GCC 11+, Clang 14+, MSVC 2022+)
 - CMake 3.25+
 - vcpkg package manager
-- lint-cpp 1.4.1+ (code quality)
+- qvac-lint-cpp 1.4.4+ (code quality)
 
 **Runtime:**
 - Bare runtime (any version with native addon API support)
@@ -89,11 +89,11 @@ graph TB
         APP[JavaScript Application]
         BARE[Bare Runtime]
         LIBUV[libuv Event Loop]
-        V8[V8 JavaScript Engine]
+        JSENGINE[JavaScript Engine]
         
         APP <--> BARE
         BARE --> LIBUV
-        BARE --> V8
+        BARE --> JSENGINE
     end
     
     subgraph "Bridging Layer"
@@ -101,12 +101,12 @@ graph TB
     end
     
     subgraph "Inference Addons"
-        LLAMA[llm-llamacpp]
-        WHISPER[transcription-whispercpp]
-        NMT[translation-nmtcpp]
-        TTS[tts-onnx]
-        EMBED[embed-llamacpp]
-        OCR[inference-addon-onnx-ocr-fasttext]
+        LLAMA[@qvac/llm-llamacpp]
+        WHISPER[@qvac/transcription-whispercpp]
+        NMT[@qvac/translation-nmtcpp]
+        TTS[@qvac/tts-onnx]
+        EMBED[@qvac/embed-llamacpp]
+        OCR["@qvac/ocr-onnx"]
     end
     
     subgraph "Native Compute"
@@ -142,14 +142,14 @@ graph TB
 | Application | JavaScript Application | User code consuming inference |
 | Runtime | Bare Runtime | JavaScript engine + native addon host |
 | Runtime | libuv Event Loop | Async I/O and threading |
-| Runtime | V8 JavaScript Engine | JavaScript execution |
+| Runtime | JavaScript Engine | JavaScript execution |
 | Bridging | inference-addon-cpp | JavaScript bridging and addon orchestration framework (this library) |
-| Addons | llm-llamacpp | LLM inference using llama.cpp |
-| Addons | transcription-whispercpp | Speech-to-text using Whisper |
-| Addons | translation-nmtcpp | Neural machine translation |
-| Addons | tts-onnx | Text-to-speech using ONNX |
-| Addons | embed-llamacpp | Text embeddings using llama.cpp |
-| Addons | inference-addon-onnx-ocr-fasttext | OCR using ONNX |
+| Addons | @qvac/llm-llamacpp | LLM inference using llama.cpp |
+| Addons | @qvac/transcription-whispercpp | Speech-to-text using Whisper |
+| Addons | @qvac/translation-nmtcpp | Neural machine translation |
+| Addons | @qvac/tts-onnx | Text-to-speech using ONNX |
+| Addons | @qvac/embed-llamacpp | Text embeddings using llama.cpp |
+| Addons | @qvac/ocr-onnx | OCR using ONNX |
 | Backend | CPU/GPU Inference Backends | Native ML computation |
 
 **Data Flow:** Application → Bare → addon-cpp → Specific Addon → CPU/GPU Backend
@@ -159,12 +159,12 @@ graph TB
 ### Known Consumers
 
 Production addons built on this library:
-- **llm-llamacpp** - LLM inference using llama.cpp
-- **transcription-whispercpp** - Speech-to-text using Whisper
-- **translation-nmtcpp** - Neural machine translation
-- **tts-onnx** - Text-to-speech using ONNX
-- **embed-llamacpp** - Text embeddings using llama.cpp
-- **inference-addon-onnx-ocr-fasttext** - OCR using ONNX and FastText
+- **@qvac/llm-llamacpp** - LLM inference using llama.cpp
+- **@qvac/transcription-whispercpp** - Speech-to-text using Whisper
+- **@qvac/translation-nmtcpp** - Neural machine translation
+- **@qvac/tts-onnx** - Text-to-speech using ONNX
+- **@qvac/embed-llamacpp** - Text embeddings using llama.cpp
+- **@qvac/ocr-onnx** - OCR using ONNX and OpenCV
 
 ---
 
@@ -178,7 +178,7 @@ The library exposes the following main entry points for addon developers:
 
 1. **`AddonCpp` Class** - The main C++ framework class
 2. **`AddonJs` Class** - JavaScript-aware wrapper around AddonCpp
-3. **`model::IModel` Interface** - Virtual interface that models must implement with `process(std::any)`
+3. **`model::IModel` Interface** - Virtual interface that models must implement with `process(const std::any& input)`
 4. **Optional Model Interfaces:**
    - `IModelAsyncLoad` - Asynchronous weight loading
    - `IModelCancel` - Job cancellation support
@@ -191,7 +191,7 @@ classDiagram
     class IModel {
         <<interface>>
         +getName() string
-        +process(std::any input) std::any
+        +process(const std::any& input) std::any
         +runtimeStats() RuntimeStats
     }
     
@@ -203,7 +203,7 @@ classDiagram
     
     class IModelCancel {
         <<interface>>
-        +cancel() void
+        +cancel() const
     }
     
     class OutputHandlerInterface {
@@ -307,11 +307,11 @@ addon->runJob(std::any(std::string("Hello")));
 
 #### Architectural Pattern
 
-The library follows a **single-job processing model** with a **dedicated processing thread**:
+The library follows a **single-job processing model** with a **dedicated processing thread** for addons that use `AddonCpp`/`JobRunner`. Some consumers, such as synchronous `AddonJs` integrations, may intentionally run model work on the caller thread.
 
 - **Type erasure via `std::any`** - Model receives and returns `std::any` for flexible input/output types
 - **Single job runner** - Processes one job at a time with cancellation support
-- **Dedicated processing thread** - Isolates heavy inference work from JavaScript event loop
+- **Dedicated processing thread** - Isolates heavy inference work from JavaScript event loop for `AddonCpp` users
 - **Mutex-protected synchronization** - Thread-safe job execution and cancellation
 - **RAII** throughout for automatic resource management
 
@@ -362,7 +362,7 @@ The system uses **two threads** with **shared memory** synchronized via **mutex 
 
 **Thread 2: Processing Thread (Dedicated C++ Thread)**
 - Runs inference workloads via `JobRunner`
-- Calls `model->process(std::any)` 
+- Calls `model->process(const std::any&)`
 - Blocks for seconds/minutes on model processing
 - Isolated from JavaScript event loop
 
@@ -440,6 +440,14 @@ The system uses **two threads** with **shared memory** synchronized via **mutex 
 - `BlobsStream<T>` implements standard `std::basic_streambuf<T>` interface
 - Zero-copy access to JavaScript ArrayBuffers
 - Supports sharded models (GGUF multi-file)
+
+**JsInterface.hpp - Binding Surface**
+
+**Responsibility:** Shared helper surface used by package `binding.cpp` files for `createInstance`, `loadWeights`, `activate`, `runJob`, `cancel`, `destroyInstance`, and `setLogger` style entry points.
+
+**Key Design:**
+- Keeps addon bindings consistent across packages while leaving model-specific parsing in each addon
+- Centralizes handle safety and lifecycle conventions around `AddonJs`
 
 ### Bare Runtime Integration
 
@@ -558,6 +566,7 @@ Implement single job runner that processes one job at a time with cancellation s
 - **Simplicity:** Easier to reason about than priority queue
 - **Cancellation:** Clear cancellation semantics for single active job
 - **Sufficient:** Most addons process one request at a time anyway
+- **Reliability:** Recent 1.1.x fixes focus on cancellation while active, async cancel behavior, callback lifetime, and integration_js coverage; consult `CHANGELOG.md` when changing these paths.
 
 **Trade-offs**
 
@@ -751,6 +760,5 @@ Implement a pluggable output handler system:
 
 ---
 
-**Document Version:** 2.1  
-**Last Updated:** 2025-12-15  
+**Last Updated:** 2026-05-07
 **Maintainer:** QVAC Team

@@ -83,6 +83,50 @@ function setupCli (): void {
       }
     })
 
+  const verifyCmd = program
+    .command('verify')
+    .description('Verify QVAC artifacts and dependency changes')
+
+  verifyCmd
+    .command('deps')
+    .description('Detect native addon changes between two npm lockfile refs')
+    .requiredOption('--base <ref>', 'Base git ref or SHA')
+    .requiredOption('--head <ref>', 'Head git ref or SHA')
+    .option('--lockfile <path>', 'Path to npm package-lock.json', 'package-lock.json')
+    .option('-q, --quiet', 'Suppress output when there are no native changes')
+    .exitOverride((err) => {
+      process.exit(err.exitCode === 0 ? 0 : 2)
+    })
+    .action(async (options: {
+      base: string
+      head: string
+      lockfile: string
+      quiet?: boolean
+    }) => {
+      try {
+        const {
+          formatVerifyDepsResult,
+          hasNativeChanges,
+          verifyDeps
+        } = await import('./verify/deps/index.js')
+        const result = await verifyDeps({
+          projectRoot: process.cwd(),
+          base: options.base,
+          head: options.head,
+          lockfilePath: options.lockfile
+        })
+
+        const changed = hasNativeChanges(result)
+        if (!options.quiet || changed) {
+          console.log(formatVerifyDepsResult(result))
+        }
+        if (changed) process.exit(1)
+      } catch (error: unknown) {
+        handleError(error)
+        process.exit(2)
+      }
+    })
+
   const serveCmd = program
     .command('serve')
     .description('Start an API server backed by QVAC')
