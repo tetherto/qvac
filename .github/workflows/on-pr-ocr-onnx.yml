@@ -1,4 +1,4 @@
-name: On PR Trigger (OCR ONNX)
+name: On PR Trigger (OCR)
 
 on:
   pull_request_target:
