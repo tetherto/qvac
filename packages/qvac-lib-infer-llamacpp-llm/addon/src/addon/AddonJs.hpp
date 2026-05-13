@@ -14,6 +14,7 @@
 #include <qvac-lib-inference-addon-cpp/handlers/OutputHandler.hpp>
 #include <qvac-lib-inference-addon-cpp/queue/OutputCallbackJs.hpp>
 
+#include "addon/JsBatchIds.hpp"
 #include "addon/PayloadHandler.hpp"
 #include "model-interface/LlamaFinetuningParams.hpp"
 #include "model-interface/LlamaModel.hpp"
@@ -434,18 +435,22 @@ inline LlamaModel::Prompt parsePromptInputs(
 
 inline std::vector<LlamaModel::Prompt>
 parseBatchInputs(js_env_t* env, qvac_lib_inference_addon_cpp::AddonJs& instance,
-                 js::Array batchArray) {
+                 js::Array batchArray, JsBatchIds& batchIds) {
   using namespace qvac_lib_inference_addon_cpp;
   using namespace std;
 
   vector<LlamaModel::Prompt> prompts;
   const uint32_t batchSize = batchArray.size(env);
+  if (batchSize == 0) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "Batch input must be a non-empty array");
+  }
   prompts.reserve(batchSize);
 
   for (uint32_t i = 0; i < batchSize; ++i) {
     auto item = batchArray.get<js::Object>(env, i);
-    string id =
-        item.getProperty<js::String>(env, "id").as<std::string>(env);
+    const string& id = batchIds.resolveAndTrack(env, item);
     auto messages = item.getProperty<js::Array>(env, "messages");
     auto inputs = parseInputArray(env, messages);
 
@@ -518,7 +523,20 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
           .getOptionalProperty<js::Array>(env, "messages")
           .has_value();
   if (isBatch) {
-    return instance.runJob(any(parseBatchInputs(env, instance, inputsArray)));
+    // Static + reset-on-entry to recycle the per-batch id vector
+    // capacity across calls. Safe because the addon's JS entrypoint is
+    // single-threaded and the job runner serializes admissions, so only
+    // one batch is in flight at a time. If that ever changes, demote
+    // this to a local.
+    static JsBatchIds batchIds;
+    batchIds.reset(inputsArray.size(env));
+    auto prompts = parseBatchInputs(env, instance, inputsArray, batchIds);
+    js_value_t* acceptedJs = instance.runJob(any(std::move(prompts)));
+
+    js::Object result = js::Object::create(env);
+    result.setProperty(env, "accepted", acceptedJs);
+    result.setProperty(env, "ids", batchIds.toJsArray(env));
+    return result;
   }
 
   vector<pair<string, js::Object>> inputs = parseInputArray(env, inputsArray);

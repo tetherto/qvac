@@ -6,14 +6,10 @@ const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or bein
 
 /**
  * Encapsulates the JS-side continuous-batching flow that sits on top of
- * `LlmLlamacpp`: input classification, per-prompt id assignment and
- * validation, native `runJob` admission, and reassembly of streaming
- * `BatchOutput` chunks plus the final ordered `BatchResult` array
- * delivered alongside the addon's terminal `JobEnded` event.
- *
- * Composition over inheritance: `LlmLlamacpp` owns one instance and
- * forwards batch-only events here. The single-prompt path in
- * `LlmLlamacpp` is unaffected.
+ * `LlmLlamacpp`: input classification, prompt unwrapping, native
+ * `runJob` admission, and reassembly of streaming `BatchOutput` chunks
+ * plus the final ordered `BatchResult` array delivered alongside the
+ * addon's terminal `JobEnded` event. 
  */
 class BatchHandler {
   /**
@@ -21,14 +17,13 @@ class BatchHandler {
    * @param {Object} deps.job - exclusive job handler from LlmLlamacpp
    * @param {Function} deps.parsePrompt - (prompt, runOptions) -> addon messages
    * @param {Function} deps.cancelHandler - cancels the in-flight job
-   * @param {Function} deps.runJob - (items) => Promise<boolean> admission ack
+   * @param {Function} deps.runJob - (items) => Promise<{accepted, ids}> admission result
    */
   constructor ({ job, parsePrompt, cancelHandler, runJob }) {
     this._job = job
     this._parsePrompt = parsePrompt
     this._cancelHandler = cancelHandler
     this._runJob = runJob
-    this._nextId = 0
     this._activeIds = null
     this._pendingResult = null
   }
@@ -53,32 +48,30 @@ class BatchHandler {
   get isActive () { return this._activeIds !== null }
 
   /**
-   * Validate, normalize and ship a batch input to the native addon.
-   * Returns the `QvacResponse` carrying `response.ids` so callers can
-   * correlate streaming chunks. Caller guards against busy state before
-   * invoking; this method only mutates active-batch state once admission
-   * succeeds.
+   * Ship a batch input to the native addon. Returns the `QvacResponse`
+   * carrying `response.ids` so consumers can correlate streaming chunks.
+   * Caller guards against busy state before invoking; this method only
+   * mutates active-batch state once admission succeeds.
    */
   async run (batchInput) {
-    const items = this._normalizeItems(batchInput)
-    const ids = items.map(item => item.id)
+    const items = this._unwrapItems(batchInput)
     const response = new QvacResponse({ cancelHandler: this._cancelHandler })
-    response.ids = ids
     this._job.startWith(response)
 
-    let accepted
+    let result
     try {
-      accepted = await this._runJob(items)
+      result = await this._runJob(items)
     } catch (err) {
       this._job.fail(err)
       throw err
     }
-    if (!accepted) {
+    if (!result.accepted) {
       this._job.fail(new Error(RUN_BUSY_ERROR_MESSAGE))
       throw new Error(RUN_BUSY_ERROR_MESSAGE)
     }
 
-    this._activeIds = ids
+    response.ids = result.ids
+    this._activeIds = result.ids
     this._pendingResult = null
     return response
   }
@@ -113,32 +106,17 @@ class BatchHandler {
     this._pendingResult = null
   }
 
-  _createId () {
-    this._nextId += 1
-    return `batch-${this._nextId}`
-  }
-
-  _normalizeItems (batchInput) {
-    if (!Array.isArray(batchInput) || batchInput.length === 0) {
-      throw new TypeError('Batch input must be a non-empty array')
-    }
-    const seenIds = new Set()
+  _unwrapItems (batchInput) {
     return batchInput.map((item) => {
       const isWrapped = item &&
         typeof item === 'object' &&
         !Array.isArray(item) &&
         Array.isArray(item.prompt)
-      const id = isWrapped && item.id !== undefined ? item.id : this._createId()
-      if (typeof id !== 'string' || id.length === 0) {
-        throw new TypeError('Batch prompt id must be a non-empty string when provided')
-      }
-      if (seenIds.has(id)) {
-        throw new TypeError(`Duplicate batch prompt id: ${id}`)
-      }
-      seenIds.add(id)
       const prompt = isWrapped ? item.prompt : item
       const itemRunOptions = isWrapped && item.runOptions ? item.runOptions : {}
-      return { id, messages: this._parsePrompt(prompt, itemRunOptions) }
+      const unwrapped = { messages: this._parsePrompt(prompt, itemRunOptions) }
+      if (isWrapped && item.id !== undefined) unwrapped.id = item.id
+      return unwrapped
     })
   }
 }
