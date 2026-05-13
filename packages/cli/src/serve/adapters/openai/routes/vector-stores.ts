@@ -171,7 +171,7 @@ export async function handleDeleteVectorStore (
   }
 
   const ragInfo = await safeListWorkspaces(ctx)
-  const hadMeta = ctx.vectorStores.delete(id)
+  const hadMeta = ctx.vectorStores.get(id) !== null
   const workspaceExists = ragInfo.workspaces.some((w) => w.name === id)
 
   if (!hadMeta && !workspaceExists) {
@@ -179,6 +179,11 @@ export async function handleDeleteVectorStore (
     return
   }
 
+  // RAG first: if it throws, both the workspace and the local meta stay
+  // intact so a retry sees the same state. If we deleted the local meta
+  // up-front, a partial failure would lose caller-supplied fields
+  // (name, expires_after, metadata) permanently — the synthetic-from-
+  // workspace fallback in GET only recovers id and an empty record.
   if (workspaceExists) {
     try {
       await sdkRagDeleteWorkspace({ workspace: id })
@@ -189,6 +194,8 @@ export async function handleDeleteVectorStore (
       return
     }
   }
+
+  ctx.vectorStores.delete(id)
 
   ctx.logger.info(`  vector_store delete id=${id} workspace=${workspaceExists ? 'deleted' : 'noop'}`)
   sendJson(res, 200, {
