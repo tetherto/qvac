@@ -233,7 +233,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: perf-report-tts-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.variant }}-${{ github.run_number }}
+          name: perf-report-tts-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.os_version && format('-{0}', matrix.os_version) || '' }}-${{ matrix.variant }}-${{ github.run_number }}
           path: ${{ inputs.workdir }}/test/results/performance-report.json
           retention-days: 90
           if-no-files-found: ignore
