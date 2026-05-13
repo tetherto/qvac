@@ -10,7 +10,7 @@ The QVAC Model Registry is a distributed, multi-writer system built on **Autobas
 
 ### Step 1 — Prepare Model Metadata
 
-Models are configured in JSON files on the registry server side (`qvac-lib-registry-server`):
+Models are configured in JSON files on the registry server side (`registry-server`):
 - `data/models.test.json` (test environment)
 - `data/models.prod.json` (production)
 
@@ -30,7 +30,7 @@ Sources can be: HuggingFace URLs, S3 paths, or local files.
 
 ### Step 2 — Open a PR
 
-Add/modify entries in `models.prod.json` and open a PR with the `verify` label. GitHub Actions (`.github/workflows/pr-models-validation-qvac-lib-registry-server.yml`) automatically validates JSON structure, licenses, duplicates, and engine format. Models are **not uploaded yet**.
+Add/modify entries in `models.prod.json` and open a PR with the `verify` label. GitHub Actions (`.github/workflows/pr-models-validation-registry-server.yml`) automatically validates JSON structure, licenses, duplicates, and engine format. Models are **not uploaded yet**.
 
 ### Step 3 — Merge to `main`
 
@@ -228,8 +228,8 @@ If newly uploaded models are not showing up via static constants or `findModels(
 | Engine-to-addon mapping | `packages/sdk/schemas/engine-addon-map.ts` |
 | Registry schemas | `packages/sdk/schemas/registry.ts` |
 | Registry query example | `packages/sdk/examples/registry-query.ts` |
-| Registry server README | `packages/qvac-lib-registry-server/README.md` |
-| Registry client README | `packages/qvac-lib-registry-server/client/README.md` |
+| Registry server README | `packages/registry-server/README.md` |
+| Registry client README | `packages/registry-server/client/README.md` |
 
 ---
 

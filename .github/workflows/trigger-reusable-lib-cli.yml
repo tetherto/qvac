@@ -164,7 +164,7 @@ jobs:
       needs.publish-logic.outputs.publish_release == 'true' &&
       (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')
     runs-on: ubuntu-latest
-    environment: release
+    environment: npm
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
     permissions:
@@ -195,7 +195,7 @@ jobs:
         id: publish
         uses: ./.github/actions/publish-library-to-npm
         with:
-          tag: ${{ inputs.npm_tag || 'latest' }}
+          tag: ${{ inputs.npm_tag }}
           workdir: ${{ env.WORKDIR }}
 
   publish-release:

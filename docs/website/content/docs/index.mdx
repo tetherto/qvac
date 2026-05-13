@@ -1,97 +1,95 @@
 ---
 title: "QVAC by Tether: the Infinite Stable Intelligence Platform"
-description: Local AI JS/TS SDK, libraries, and tools for building local-first, P2P AI applications and systems. Run AI tasks like LLMs, speech, RAG, and more across Linux, macOS, Windows, Android, and iOS.
+description: A local AI SDK for building cross-platform, P2P applications and systems.
 ogImage: /og-home.png
 ---
 
-import { Sparkles, Telescope, Compass, Rocket, BookA, LayoutGrid, FolderTree, Blocks, MessageCircleQuestionMark, Wrench, DoorOpen, Package, Terminal } from 'lucide-react'
-import { SiDiscord, SiHuggingface, SiExpo, SiElectron } from '@icons-pack/react-simple-icons';
-import { CopyInline } from '@/components/copy-inline'
-import { FeaturebaseIcon } from '@/components/featurebase-icon';
-import { KeetIcon } from '@/components/keet-icon';
+import { MessagesSquare, Hash, Languages, Mic, Speech, Volume2, ScanText, Image as ImageIcon, GalleryHorizontal, FlaskConical, ScanSearch, Map, Rocket, Server, MonitorPlay } from 'lucide-react'
 
-## Discover
+## Why QVAC?
 
-<Cards>
-  <Card href="/about-qvac/welcome" icon={<DoorOpen className="text-[var(--color-fd-primary)]" />} title="Welcome">
-    Learn what QVAC is, why Tether built it, and what makes it different.
-  </Card>
-  <Card href="/about-qvac/vision" icon={<Telescope className="text-[var(--color-fd-primary)]" />} title="Our vision">
-    Learn about Tether's long-term vision for QVAC.
-  </Card>
-</Cards>
+QVAC is Tether's answer to centralized AI by ensuring AI is not tied to massive data centers in the hands of a few _but is free to run on everyone's devices, without a central point of failure or arbitrary censorship_.
 
-## Build
+## Features
 
-<Cards>
-  <Card href="/sdk/getting-started" icon={<Compass className="text-[var(--color-fd-primary)]" />} title="Get started with QVAC SDK">
-    Use the JS/TS SDK to build local and P2P AI applications and systems.
-  </Card>
-  <Card href="/sdk/getting-started/quickstart" icon={<Rocket className="text-[var(--color-fd-primary)]" />} title="Quickstart">
-    Run your first example using the JS/TS SDK.
-  </Card>
-  <Card href="/sdk/getting-started/installation" icon={<Package className="text-[var(--color-fd-primary)]" />} title="Installation">
-    Supported environments and how to install the SDK for each one: Node.js, Bare, and Expo.
-  </Card>
-  <Card href="/sdk/api" icon={<BookA className="text-[var(--color-fd-primary)]" />} title="JS API reference">
-    `@qvac/sdk` npm package exposes a function-centric, typed JS API.
-  </Card>
-  <Card href="/cli" icon={<Terminal className="text-[var(--color-fd-primary)]" />} title="CLI">
-    `@qvac/cli` npm package provides tools and an HTTP server that exposes an OpenAI-compatible API.
-  </Card>
-</Cards>
+<FeaturesInfographic />
 
-## Explore
+## AI capabilities
 
-<Cards>
-  <Card href="/about-qvac/flagship-apps" icon={<LayoutGrid className="text-[var(--color-fd-primary)]" />} title="Flagship applications">
-    Desktop and mobile apps to empower users and showcase QVAC capabilities.
+{/* <Task name>: <what computation is performed> for <what the developer achieves> via <engine> */}
+{/* <task>: <tech process> for <use case>, via <engine> */}
+
+<Cards className="grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+  <Card href="/ai-capabilities/text-generation" title={<span className="inline-flex items-center gap-2"><MessagesSquare className="size-4 text-[var(--color-fd-primary)]" />Text generation</span>}>
+    LLM inference for text generation and chat via [Fabric LLM](https://github.com/tetherto/qvac-fabric-llm.cpp).
   </Card>
-
-  <Card href="/addons" icon={<Blocks className="text-[var(--color-fd-primary)]" />} title="Addons">
-    Reference for the QVAC components that provide AI capabilities.
+  <Card href="/ai-capabilities/text-embeddings" title={<span className="inline-flex items-center gap-2"><Hash className="size-4 text-[var(--color-fd-primary)]" />Text embeddings</span>}>
+    Vector embedding generation for semantic search, clustering, and retrieval, via Fabric LLM.
   </Card>
-
-  <Card href="https://huggingface.co/qvac" icon={<SiHuggingface className="text-[var(--color-fd-primary)]" />} title="Research">
-    Ongoing research focused on advancing the state of the art in local AI. See the research outputs on Hugging Face.
+  <Card href="/ai-capabilities/rag" title={<span className="inline-flex items-center gap-2"><ScanSearch className="size-4 text-[var(--color-fd-primary)]" />RAG</span>}>
+    Out-of-the-box retrieval-augmented generation workflow.
+  </Card>
+  <Card href="/ai-capabilities/fine-tuning" title={<span className="inline-flex items-center gap-2"><FlaskConical className="size-4 text-[var(--color-fd-primary)]" />Fine-tuning</span>}>
+    Adapting LLMs to domain-specific tasks via LoRA.
+  </Card>
+  <Card href="/ai-capabilities/multimodal" title={<span className="inline-flex items-center gap-2"><GalleryHorizontal className="size-4 text-[var(--color-fd-primary)]" />Multimodal</span>}>
+    LLM inference over text, images, and other media within a single conversation context.
+  </Card>
+  <Card href="/ai-capabilities/image-generation" title={<span className="inline-flex items-center gap-2"><ImageIcon className="size-4 text-[var(--color-fd-primary)]" />Image generation</span>}>
+    Text-to-image and image-to-image generation via a [customized Diffusion backend](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp).
+  </Card>
+  <Card href="/ai-capabilities/transcription" title={<span className="inline-flex items-center gap-2"><Speech className="size-4 text-[var(--color-fd-primary)]" />Transcription</span>}>
+    Automatic speech recognition (ASR) via a [customized Whisper backend](https://github.com/tetherto/qvac-ext-lib-whisper.cpp) or [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2).
+  </Card>
+  <Card href="/ai-capabilities/text-to-speech" title={<span className="inline-flex items-center gap-2"><Volume2 className="size-4 text-[var(--color-fd-primary)]" />Text-to-Speech</span>}>
+    Speech synthesis (TTS) via [ONNX Runtime](https://onnxruntime.ai).
+  </Card>
+  <Card href="/ai-capabilities/voice-assistant" title={<span className="inline-flex items-center gap-2"><Mic className="size-4 text-[var(--color-fd-primary)]" />Voice assistant</span>}>
+    Real-time voice pipeline: transcription, text generation, and speech synthesis in one loop.
+  </Card>
+  <Card href="/ai-capabilities/translation" title={<span className="inline-flex items-center gap-2"><Languages className="size-4 text-[var(--color-fd-primary)]" />Translation</span>}>
+    Text-to-text neural machine translation (NMT), via Fabric LLM and [Bergamot](https://browser.mt).
+  </Card>
+  <Card href="/ai-capabilities/ocr" title={<span className="inline-flex items-center gap-2"><ScanText className="size-4 text-[var(--color-fd-primary)]" />OCR</span>}>
+    Optical character recognition for extracting text from images via ONNX Runtime.
   </Card>
 </Cards>
 
-## Learn
+## System overview
+
+<object
+  type="image/svg+xml"
+  data="/diagrams/system-overview.svg"
+  width={721}
+  height={575}
+  className="mx-auto my-8 block max-w-full h-auto"
+  aria-label="System overview diagram"
+>
+  System overview diagram
+</object>
+
+_The SDK is the main entry point for using QVAC_. It is type-safe and exposes all QVAC capabilities through a unified interface. It runs on Node.js, [Bare runtime](https://bare.pears.com), and [Expo](https://expo.dev).
+
+Additionally, QVAC provides a CLI with development tools, as well as an HTTP server that wraps QVAC and exposes an [**OpenAI-compatible API**](https://platform.openai.com/docs/api-reference). *By implementing the OpenAI API format, QVAC can integrate with the broader AI ecosystem.*
+
+Finally, QVAC also encompasses desktop and mobile [**flagship applications**](https://qvac.tether.io#products) to empower users and showcase QVAC capabilities, as well as [**research initiatives**](https://huggingface.co/qvac) to advance the state of the art in local AI.
+
+## Next steps
+
+Choose how you want to start with QVAC:
 
 <Cards>
-  <Card href="/sdk/tutorials/electron" icon={<SiElectron className="text-[var(--color-fd-primary)]" />} title="Build an Electron app">
-    Hands-on tutorial on using QVAC SDK with Electron.
+  <Card href="/introduction" icon={<Map className="text-[var(--color-fd-primary)]" />} title="Get started with the SDK">
+    Learn the essentials for using the SDK: system requirements, compatibility matrix, setup basics, and core usage flows.
   </Card>
-  <Card href="/sdk/tutorials/expo" icon={<SiExpo className="text-[var(--color-fd-primary)]" />} title="Build an Expo app">
-    Hands-on tutorial on using QVAC SDK with Expo.
+  <Card href="/quickstart" icon={<Rocket className="text-[var(--color-fd-primary)]" />} title="Quickstart">
+    Run your first example using the JS/TS SDK. At the end, you'll find instructions to run any example in this documentation.
+  </Card>
+  <Card href="https://qvac.tether.io/products/workbench/" icon={<MonitorPlay className="text-[var(--color-fd-primary)]" />} title="See QVAC in practice">
+    Try QVAC Workbench, our flagship desktop and mobile app built with QVAC.
+  </Card>
+  <Card href="/cli/http-server" icon={<Server className="text-[var(--color-fd-primary)]" />} title="Integrate an OpenAI-compatible client">
+    Run the QVAC HTTP server and connect any existing OpenAI-compatible system to local AI.
   </Card>
 </Cards>
 
-## Community
-
-<Cards>
-  <Card href="https://discord.com/invite/tetherdev" icon={<SiDiscord className="text-[var(--color-fd-primary)]" />} title="Discord">
-    Where we gather. Get real-time help from the team and community, meet peers, join in, discuss QVAC.
-  </Card>
-
-  <Card
-    icon={
-      <KeetIcon className="text-[var(--color-fd-primary)]" />
-    }
-    title="Keet"
-  >
-    Also another place where we gather, but using [Keet P2P app](https://keet.io). <CopyInline textToCopy="pear://keet/nfo35rbknsh35m184tmww7s4ssjh1hftiysx8yqreyi5njwsknuxs47nwhsbzt6wijoxfzmi6a8fh7b49gun3qxea3mumixnti8spizeysthyxdm968t6zof93yqpgyygb39rmoobki7fo7rh5hod71map4gayedt3qiwhkjakycqnfa5kswn58mtt8qg">
-    Copy this invite link [pear://keet/nfo35...](pear://keet/nfo35rbknsh35m184tmww7s4ssjh1hftiysx8yqreyi5njwsknuxs47nwhsbzt6wijoxfzmi6a8fh7b49gun3qxea3mumixnti8spizeysthyxdm968t6zof93yqpgyygb39rmoobki7fo7rh5hod71map4gayedt3qiwhkjakycqnfa5kswn58mtt8qg) 
-    </CopyInline> into your Keet app.
-  </Card>
-</Cards>
-
-## Support
-
-[_Use the appropriate channel in our **Discord** to talk directly with us._](https://discord.com/invite/tetherdev) Get real-time help, report bugs, ask questions, share feedback, request and vote for features, take part in QVAC's evolution.
-
-## Miscellaneous
-
-Other resources:
-- [Main website](https://qvac.tether.io)

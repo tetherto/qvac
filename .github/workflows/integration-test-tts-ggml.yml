@@ -1,0 +1,233 @@
+name: Run Integration Tests (TTS GGML)
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref (branch/tag/SHA) to test"
+        type: string
+        required: false
+        default: main
+      prebuild_package:
+        description: "NPM package containing prebuilds (e.g. @qvac/tts-ggml@1.0.0)"
+        required: true
+        type: string
+      run_integration_tests:
+        description: "Run the regular integration suite"
+        required: false
+        type: boolean
+        default: true
+
+  workflow_call:
+    inputs:
+      ref:
+        description: 'ref'
+        type: string
+      repository:
+        type: string
+      run_integration_tests:
+        description: "Run the regular integration suite"
+        type: boolean
+        required: false
+        default: true
+
+# Least-privilege default scoped to the whole file (CodeQL
+# actions/missing-workflow-permissions).  Individual jobs widen this as
+# needed; today the only job (run-integration-tests) explicitly requests
+# contents:read + packages:read, both already covered here.
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  # NOTE: continue-on-error: true mirrors the early-days landing posture
+  # we use for parakeet's matching workflow.  The on-pr-tts-ggml.yml
+  # merge-guard treats this job's `success || skipped` as a pass, so a
+  # hard failure inside the integration suite does NOT block a merge —
+  # only sanity-checks + cpp-lint + cpp-tests-coverage + prebuild really
+  # gate today.  Tighten this gate (drop `continue-on-error` and/or
+  # change merge-guard to require `success`) once the addon's flake
+  # surface is small enough to make a hard gate cheap.
+  run-integration-tests:
+    timeout-minutes: 60
+    continue-on-error: true
+    runs-on: ${{ matrix.os }}
+    environment: release
+    name: ${{ matrix.os }}-${{ matrix.platform }}-${{ matrix.arch }}-integration-tests
+    env:
+      GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+      NO_GPU: ${{ matrix.no_gpu || 'false' }}
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ai-run-ubuntu-22.04
+            platform: linux
+            arch: x64
+            no_gpu: 'true'
+          - os: ai-run-linux-gpu
+            platform: linux
+            arch: x64
+          - os: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
+            no_gpu: 'true'
+          - os: macos-14-xlarge
+            platform: darwin
+            arch: arm64
+            no_gpu: 'true'
+          - os: macos-15-large
+            platform: darwin
+            arch: x64
+            no_gpu: 'true'
+          - os: windows-2022
+            platform: win32
+            arch: x64
+            no_gpu: 'true'
+
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Windows - enable git long paths
+        if: ${{ matrix.platform == 'win32' }}
+        shell: bash
+        run: git config --system core.longpaths true
+
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Install NPM dependencies
+        working-directory: ${{ github.workspace }}/packages/tts-ggml
+        run: |
+          npm install
+          npm install -g bare bare-make
+
+      - run: mkdir -p "${{ runner.temp }}/tts-ggml"
+        shell: bash
+      - run: mkdir -p "${{ github.workspace }}/packages/tts-ggml/prebuilds"
+        shell: bash
+
+      - name: Download prebuilds from artifact
+        if: ${{ !inputs.prebuild_package }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: ${{ runner.temp }}/tts-ggml
+          merge-multiple: true
+
+      - if: ${{ !inputs.prebuild_package }}
+        shell: bash
+        run: cp -r "${{ runner.temp }}/tts-ggml"/* "${{ github.workspace }}/packages/tts-ggml/prebuilds"
+
+      - name: Download prebuilds from package
+        if: ${{ inputs.prebuild_package }}
+        working-directory: ${{ runner.temp }}/tts-ggml
+        shell: bash
+        run: |
+          npm pack ${{ inputs.prebuild_package }}
+          tar -xzf *.tgz
+          cp -r ./package/prebuilds/* "${{ github.workspace }}/packages/tts-ggml/prebuilds"
+
+      - name: Rename prebuilds from tetherto_ to qvac_ prefix
+        if: ${{ inputs.prebuild_package }}
+        working-directory: ${{ github.workspace }}/packages/tts-ggml
+        shell: bash
+        run: |
+          find prebuilds -depth -name 'tetherto_*' | while read -r file; do
+            dir=$(dirname "$file")
+            base=$(basename "$file")
+            newbase=$(echo "$base" | sed 's/^tetherto_/qvac_/')
+            mv "$file" "$dir/$newbase"
+          done
+
+      - name: Linux - install dependencies
+        if: matrix.platform == 'linux' || matrix.platform == 'android'
+        shell: bash
+        run: |
+          sudo apt-get update
+          # libgomp1   - GNU OpenMP runtime, used when ggml-cpu's libgomp
+          #              path is selected.
+          # libomp5    - LLVM OpenMP runtime (libomp.so.5).  tts-cpp is
+          #              built with clang under our linux-clang toolchain
+          #              and links against libomp at -fopenmp time, so
+          #              load fails with `libomp.so.5: cannot open shared
+          #              object file` without this package.
+          # libblas3   - runtime BLAS soname (libblas.so.3) required by
+          #              the Linux prebuilds on x64.
+          # mesa-vulkan-drivers - software / Mesa Vulkan ICD so the
+          #              Vulkan-enabled prebuild's runtime backend probe
+          #              has at least one Vulkan device to enumerate
+          #              (works for the no_gpu matrix entries too,
+          #              because the test runners explicitly force
+          #              useGPU=false when NO_GPU=true).
+          sudo apt-get install -y libgomp1 libomp5 libblas3 mesa-vulkan-drivers
+
+      - name: Windows - install Vulkan runtime
+        if: matrix.platform == 'win32'
+        uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@0bbdca93da303a0b1634ba14a89cec085621078d
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+
+      # Pin to 3.11 (not 3.12) because numba 0.65+ stopped shipping
+      # darwin-x86_64 wheels for Python 3.12.  librosa pulls in numba
+      # transitively; on 3.12 + macos-15-large pip falls back to building
+      # llvmlite from source which fails because the runner doesn't have
+      # an LLVM 15 development install.  3.11 has prebuilt darwin-x64
+      # wheels for the entire numba/llvmlite/librosa stack and is fine
+      # for every other converter dependency we use.
+      - name: Setup Python (HF -> .gguf conversion)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # Cache the Python venv + every Chatterbox + Supertonic GGUF the
+      # integration suite can exercise.  Mirrors the mobile workflow's
+      # caching pattern (integration-mobile-test-tts-ggml.yml).  Without
+      # this every desktop matrix entry re-pays the multi-GB HF download
+      # + Torch install + multi-arch GGUF convert (~10-30 min cold) on
+      # six runners per PR.  Each `ensure*Models` helper in
+      # test/utils/downloadModel.js gracefully skips its test when the
+      # matching GGUF isn't on disk, so partial cache misses degrade
+      # rather than abort the whole matrix.
+      - name: Cache TTS GGML venv + GGUFs
+        id: cache-tts-ggml-models
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/packages/tts-ggml/venv
+            ${{ github.workspace }}/packages/tts-ggml/models/chatterbox-t3-turbo.gguf
+            ${{ github.workspace }}/packages/tts-ggml/models/chatterbox-s3gen.gguf
+            ${{ github.workspace }}/packages/tts-ggml/models/chatterbox-t3-mtl.gguf
+            ${{ github.workspace }}/packages/tts-ggml/models/chatterbox-s3gen-mtl.gguf
+            ${{ github.workspace }}/packages/tts-ggml/models/supertonic.gguf
+            ${{ github.workspace }}/packages/tts-ggml/models/supertonic2.gguf
+          key: tts-ggml-desktop-all-gguf-v1-${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles('packages/tts-ggml/scripts/convert-models.sh', 'packages/tts-ggml/scripts/setup-venv.sh', 'packages/tts-ggml/scripts/requirements.txt', 'packages/tts-ggml/scripts/convert-t3-turbo-to-gguf.py', 'packages/tts-ggml/scripts/convert-t3-mtl-to-gguf.py', 'packages/tts-ggml/scripts/convert-s3gen-to-gguf.py', 'packages/tts-ggml/scripts/convert-supertonic2-to-gguf.py') }}
+          restore-keys: |
+            tts-ggml-desktop-all-gguf-v1-${{ matrix.platform }}-${{ matrix.arch }}-
+
+      - name: Stage GGUF models (npm run setup-models)
+        if: steps.cache-tts-ggml-models.outputs.cache-hit != 'true'
+        shell: bash
+        working-directory: ${{ github.workspace }}/packages/tts-ggml
+        run: npm run setup-models
+
+      - name: Run integration test
+        if: ${{ inputs.run_integration_tests != false }}
+        shell: bash
+        working-directory: ${{ github.workspace }}/packages/tts-ggml
+        run: npm run test:integration
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          INTEGRATION_TEST_TIMEOUT: ${{ matrix.platform == 'win32' && '1800' || '600' }}
+          LD_LIBRARY_PATH: ${{ github.workspace }}/packages/tts-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
+          DYLD_LIBRARY_PATH: ${{ github.workspace }}/packages/tts-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}

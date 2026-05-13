@@ -151,7 +151,7 @@ Below is an example of how [HyperDriveDL](index.d.ts) can be used within the QVA
 ```javascript
 const Qvac = require("qvac-rt-local");
 const HyperDriveDL = require("@qvac/dl-hyperdrive");
-const MLCWhisper = require("qvac-lib-inference-addon-mlc-whisper");
+const MLCWhisper = require("inference-addon-mlc-whisper");
 
 const qvac = new Qvac({
   /* runtime options */

@@ -28,6 +28,7 @@ import {
   PluginResponseValidationFailedError,
   PluginRequestValidationFailedError,
 } from "@/utils/errors-server";
+import { diffusion as diffusionOp } from "@/server/bare/plugins/sdcpp-generation/ops/diffusion";
 
 // ============================================
 // sdcppConfigSchema
@@ -50,6 +51,14 @@ test("sdcppConfigSchema: accepts valid full config", (t) => {
     vae_on_cpu: false,
     vae_tiling: true,
     flash_attn: true,
+    upscaler: {
+      type: "esrgan",
+      tile_size: 128,
+      direct: false,
+      offload_params_to_cpu: true,
+      threads: -1,
+      model_src: "RealESRGAN_x4plus_anime_6B.pth",
+    },
     verbosity: 2,
     clipLModelSrc: "clip-l.safetensors",
     clipGModelSrc: "clip-g.safetensors",
@@ -495,6 +504,193 @@ test("sdcppConfigSchema: accepts lora_apply_mode", (t) => {
   t.is(result.success, true);
 });
 
+// ---- sdcppConfigSchema: ESRGAN upscaler ----
+
+test("sdcppConfigSchema: accepts upscaler config with all tuning fields", (t) => {
+  const result = sdcppConfigSchema.safeParse({
+    upscaler: {
+      type: "esrgan",
+      model_src: "RealESRGAN_x4plus_anime_6B.pth",
+      tile_size: 128,
+      direct: true,
+      offload_params_to_cpu: false,
+      threads: -1,
+    },
+  });
+  t.is(result.success, true);
+});
+
+// `upscaler.model_src` is optional at the schema level so the same block
+// shape can be reused for standalone-upscaler mode (modelConfig.mode =
+// "upscale") where the primary modelSrc itself is the ESRGAN file. The
+// diffusion plugin enforces "model_src required in diffusion mode" at
+// createModel time — see the corresponding plugin test below.
+test("sdcppConfigSchema: accepts upscaler block without model_src (validated at plugin layer)", (t) => {
+  const result = sdcppConfigSchema.safeParse({
+    upscaler: { tile_size: 128 },
+  });
+  t.is(result.success, true);
+});
+
+test("sdcppConfigSchema: accepts mode: 'upscale' for standalone ESRGAN", (t) => {
+  const result = sdcppConfigSchema.safeParse({
+    mode: "upscale",
+    upscaler: { tile_size: 128, threads: -1 },
+  });
+  t.is(result.success, true);
+});
+
+test("sdcppConfigSchema: rejects invalid mode value", (t) => {
+  const result = sdcppConfigSchema.safeParse({ mode: "img2vid" });
+  t.is(result.success, false);
+});
+
+test("sdcppConfigSchema: rejects upscaler.type other than 'esrgan'", (t) => {
+  const result = sdcppConfigSchema.safeParse({
+    upscaler: {
+      type: "swinir",
+      model_src: "RealESRGAN_x4plus_anime_6B.pth",
+    },
+  });
+  t.is(result.success, false);
+});
+
+test("sdcppConfigSchema: rejects upscaler with unknown keys (strict)", (t) => {
+  const result = sdcppConfigSchema.safeParse({
+    upscaler: {
+      model_src: "RealESRGAN_x4plus_anime_6B.pth",
+      tileSize: 128,
+    },
+  });
+  t.is(result.success, false);
+});
+
+test("sdcppConfigSchema: rejects non-positive upscaler.tile_size", (t) => {
+  const result = sdcppConfigSchema.safeParse({
+    upscaler: {
+      model_src: "RealESRGAN_x4plus_anime_6B.pth",
+      tile_size: 0,
+    },
+  });
+  t.is(result.success, false);
+});
+
+test("sdcppConfigSchema: rejects non-integer upscaler.tile_size", (t) => {
+  const result = sdcppConfigSchema.safeParse({
+    upscaler: {
+      model_src: "RealESRGAN_x4plus_anime_6B.pth",
+      tile_size: 64.5,
+    },
+  });
+  t.is(result.success, false);
+});
+
+test("sdcppConfigSchema: accepts upscaler.threads = -1 (auto) and positive integers", (t) => {
+  const ms = "RealESRGAN_x4plus_anime_6B.pth";
+  t.is(sdcppConfigSchema.safeParse({ upscaler: { model_src: ms, threads: -1 } }).success, true);
+  t.is(sdcppConfigSchema.safeParse({ upscaler: { model_src: ms, threads: 4 } }).success, true);
+});
+
+test("sdcppConfigSchema: rejects upscaler.threads = 0 and negative values other than -1", (t) => {
+  const ms = "RealESRGAN_x4plus_anime_6B.pth";
+  t.is(sdcppConfigSchema.safeParse({ upscaler: { model_src: ms, threads: 0 } }).success, false);
+  t.is(sdcppConfigSchema.safeParse({ upscaler: { model_src: ms, threads: -2 } }).success, false);
+});
+
+test("sdcppConfigSchema: rejects non-integer upscaler.threads", (t) => {
+  const result = sdcppConfigSchema.safeParse({
+    upscaler: {
+      model_src: "RealESRGAN_x4plus_anime_6B.pth",
+      threads: 2.5,
+    },
+  });
+  t.is(result.success, false);
+});
+
+// ---- diffusionRequestSchema: upscale ----
+
+test("diffusionRequestSchema: accepts upscale: true", (t) => {
+  const result = diffusionRequestSchema.safeParse({
+    modelId: "model-1",
+    prompt: "a fox",
+    upscale: true,
+  });
+  t.is(result.success, true);
+});
+
+test("diffusionRequestSchema: accepts upscale: false (no-op)", (t) => {
+  const result = diffusionRequestSchema.safeParse({
+    modelId: "model-1",
+    prompt: "a fox",
+    upscale: false,
+  });
+  t.is(result.success, true);
+  if (result.success) {
+    t.is(result.data.upscale, false);
+  }
+});
+
+test("diffusionRequestSchema: accepts upscale object with repeats", (t) => {
+  const result = diffusionRequestSchema.safeParse({
+    modelId: "model-1",
+    prompt: "a fox",
+    upscale: { repeats: 2 },
+  });
+  t.is(result.success, true);
+});
+
+test("diffusionRequestSchema: accepts empty upscale object (repeats optional, equivalent to upscale: true)", (t) => {
+  const result = diffusionRequestSchema.safeParse({
+    modelId: "model-1",
+    prompt: "a fox",
+    upscale: {},
+  });
+  t.is(result.success, true);
+});
+
+test("diffusionRequestSchema: rejects upscale.repeats <= 0", (t) => {
+  const resultZero = diffusionRequestSchema.safeParse({
+    modelId: "model-1",
+    prompt: "a fox",
+    upscale: { repeats: 0 },
+  });
+  t.is(resultZero.success, false);
+
+  const resultNegative = diffusionRequestSchema.safeParse({
+    modelId: "model-1",
+    prompt: "a fox",
+    upscale: { repeats: -1 },
+  });
+  t.is(resultNegative.success, false);
+});
+
+test("diffusionRequestSchema: rejects non-integer upscale.repeats", (t) => {
+  const result = diffusionRequestSchema.safeParse({
+    modelId: "model-1",
+    prompt: "a fox",
+    upscale: { repeats: 1.5 },
+  });
+  t.is(result.success, false);
+});
+
+test("diffusionRequestSchema: rejects unknown keys on upscale object", (t) => {
+  const result = diffusionRequestSchema.safeParse({
+    modelId: "model-1",
+    prompt: "a fox",
+    upscale: { repeats: 2, unknown: true },
+  });
+  t.is(result.success, false);
+});
+
+test("diffusionRequestSchema: rejects non-boolean / non-object upscale", (t) => {
+  const result = diffusionRequestSchema.safeParse({
+    modelId: "model-1",
+    prompt: "a fox",
+    upscale: 4,
+  });
+  t.is(result.success, false);
+});
+
 // ============================================
 // diffusionStreamResponseSchema
 // ============================================
@@ -592,6 +788,24 @@ test("loadModelSrcRequestSchema: accepts diffusion config with companion sources
   t.is(result.success, true);
 });
 
+test("loadModelSrcRequestSchema: accepts diffusion config with upscaler and upscaler tuning", (t) => {
+  const result = loadModelSrcRequestSchema.safeParse({
+    type: "loadModel",
+    modelType: ModelType.sdcppGeneration,
+    modelSrc: "stable-diffusion-v2-1-Q8_0.gguf",
+    modelConfig: {
+      prediction: "v",
+      upscaler: {
+        type: "esrgan",
+        model_src: "RealESRGAN_x4plus_anime_6B.pth",
+        tile_size: 128,
+        threads: 4,
+      },
+    },
+  });
+  t.is(result.success, true);
+});
+
 // ============================================
 // loadModelOptionsBaseSchema — diffusion entries
 // ============================================
@@ -612,6 +826,18 @@ test("loadModelOptionsBaseSchema: rejects diffusion with unknown config key (str
     modelConfig: { device: "gpu", notAField: true },
   });
   t.is(result.success, false);
+});
+
+test("loadModelOptionsBaseSchema: accepts diffusion with mode: 'upscale' (standalone ESRGAN)", (t) => {
+  const result = loadModelOptionsBaseSchema.safeParse({
+    modelSrc: "RealESRGAN_x4plus_anime_6B.pth",
+    modelType: "diffusion",
+    modelConfig: {
+      mode: "upscale",
+      upscaler: { tile_size: 128 },
+    },
+  });
+  t.is(result.success, true);
 });
 
 // ============================================
@@ -750,6 +976,50 @@ test("diffusion plugin: img2img request reaches handler verbatim after safeParse
       t.alike(observedRequest, { ...requestParams, img_cfg_scale: -1 });
     },
   );
+});
+
+test("diffusion plugin: upscale request reaches handler verbatim after safeParse (true / false / { repeats })", async function (t) {
+  const cases: Array<{ name: string; upscale: unknown }> = [
+    { name: "upscale: true", upscale: true },
+    { name: "upscale: false", upscale: false },
+    { name: "upscale: {}", upscale: {} },
+    { name: "upscale: { repeats: 2 }", upscale: { repeats: 2 } },
+  ];
+
+  for (const { name, upscale } of cases) {
+    let observedRequest: unknown = undefined;
+
+    await withMockDiffusionPlugin(
+      async function* (request: unknown) {
+        observedRequest = request;
+        yield { type: "diffusionStream" as const, done: true };
+      },
+      async (modelId) => {
+        const requestParams = {
+          modelId,
+          prompt: "a fox",
+          upscale,
+        };
+
+        const stream = handlePluginInvokeStream({
+          type: "pluginInvokeStream",
+          modelId,
+          handler: "diffusionStream",
+          params: requestParams,
+        });
+
+        for await (const _ of stream) {
+          // no-op
+        }
+
+        t.alike(
+          observedRequest,
+          { ...requestParams, img_cfg_scale: -1 },
+          `${name} reaches handler verbatim`,
+        );
+      },
+    );
+  }
 });
 
 test("diffusion plugin: dispatcher forwards interleaved multi-tick + multi-output stream verbatim", async function (t) {
@@ -989,12 +1259,14 @@ test("sdcppConfigSchema: companion source fields are valid modelSrcInput", (t) =
     { t5XxlModelSrc: "t5xxl.gguf" },
     { llmModelSrc: "qwen3-8b.gguf" },
     { vaeModelSrc: "vae.safetensors" },
+    { upscaler: { model_src: "RealESRGAN_x4plus_anime_6B.pth" } },
     {
       clipLModelSrc: "clip-l.safetensors",
       clipGModelSrc: "clip-g.safetensors",
       t5XxlModelSrc: "t5xxl.gguf",
       llmModelSrc: "qwen3.gguf",
       vaeModelSrc: "vae.safetensors",
+      upscaler: { model_src: "RealESRGAN_x4plus_anime_6B.pth" },
     },
   ];
 
@@ -1021,4 +1293,160 @@ test("sdcppConfigSchema: companion sources are stripped from config by resolveCo
     t.ok("clipLModelSrc" in result.data);
     t.ok("vaeModelSrc" in result.data);
   }
+});
+
+// ============================================
+// diffusion op — upscale forwarding
+// ============================================
+//
+// Optional companion validation stays in the addon; the op only normalizes
+// and forwards `upscale`.
+
+async function withRegisteredDiffusionModel<T>(
+  options: {
+    runImpl?: (params: unknown) => Promise<unknown>;
+  },
+  body: (modelId: string) => Promise<T>,
+): Promise<T> {
+  const modelId = `test-diffusion-${Math.random().toString(36).slice(2, 10)}`;
+  const fakeModel = {
+    load: async function () {},
+    run: options.runImpl ?? (async function () {
+      return {
+        iterate: async function* () {
+          return;
+        },
+      };
+    }),
+  } as unknown as AnyModel;
+
+  try {
+    registerModel(modelId, {
+      model: fakeModel,
+      path: "/tmp/model.safetensors",
+      config: {},
+      modelType: ModelType.sdcppGeneration,
+    });
+    return await body(modelId);
+  } finally {
+    unregisterModel(modelId);
+  }
+}
+
+test("diffusion op: upscale: true forwards verbatim to model.run (addon owns missing-companion failure)", async function (t) {
+  let observed: { upscale?: unknown } | undefined;
+  await withRegisteredDiffusionModel(
+    {
+      runImpl: async function (params: unknown) {
+        observed = params as { upscale?: unknown };
+        return {
+          iterate: async function* () {
+            return;
+          },
+        };
+      },
+    },
+    async (modelId) => {
+      const stream = diffusionOp({
+        modelId,
+        prompt: "a fox",
+        img_cfg_scale: -1,
+        upscale: true,
+      });
+      for await (const _ of stream) {
+        void _;
+      }
+      t.ok(observed, "model.run was called");
+      t.is(observed?.upscale, true);
+    },
+  );
+});
+
+test("diffusion op: upscale: { repeats } forwards verbatim to model.run", async function (t) {
+  let observed: { upscale?: unknown } | undefined;
+  await withRegisteredDiffusionModel(
+    {
+      runImpl: async function (params: unknown) {
+        observed = params as { upscale?: unknown };
+        return {
+          iterate: async function* () {
+            return;
+          },
+        };
+      },
+    },
+    async (modelId) => {
+      const stream = diffusionOp({
+        modelId,
+        prompt: "a fox",
+        img_cfg_scale: -1,
+        upscale: { repeats: 2 },
+      });
+      for await (const _ of stream) {
+        void _;
+      }
+      t.alike(observed?.upscale, { repeats: 2 });
+    },
+  );
+});
+
+test("diffusion op: upscale: false is normalized to undefined before reaching the addon", async function (t) {
+  let observed: { upscale?: unknown } | undefined;
+  await withRegisteredDiffusionModel(
+    {
+      runImpl: async function (params: unknown) {
+        observed = params as { upscale?: unknown };
+        return {
+          iterate: async function* () {
+            return;
+          },
+        };
+      },
+    },
+    async (modelId) => {
+      const stream = diffusionOp({
+        modelId,
+        prompt: "a fox",
+        img_cfg_scale: -1,
+        upscale: false,
+      });
+      for await (const _ of stream) {
+        void _;
+      }
+      t.ok(observed, "model.run was called");
+      t.is(
+        observed?.upscale,
+        undefined,
+        "upscale: false normalizes to undefined",
+      );
+    },
+  );
+});
+
+test("diffusion op: upscale omitted forwards undefined to the addon", async function (t) {
+  let observed: { upscale?: unknown } | undefined;
+  await withRegisteredDiffusionModel(
+    {
+      runImpl: async function (params: unknown) {
+        observed = params as { upscale?: unknown };
+        return {
+          iterate: async function* () {
+            return;
+          },
+        };
+      },
+    },
+    async (modelId) => {
+      const stream = diffusionOp({
+        modelId,
+        prompt: "a fox",
+        img_cfg_scale: -1,
+      });
+      for await (const _ of stream) {
+        void _;
+      }
+      t.ok(observed, "model.run was called");
+      t.is(observed?.upscale, undefined);
+    },
+  );
 });

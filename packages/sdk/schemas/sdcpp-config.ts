@@ -8,6 +8,15 @@ const ABSOLUTE_PATH_PATTERN = /^(\/|[A-Za-z]:[\\/]|\\\\)/;
 
 export const sdcppConfigSchema = z
   .object({
+    mode: z.enum(["diffusion", "upscale"]).default("diffusion")
+      .describe(
+        "Operation mode for the diffusion plugin. " +
+        "`'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from " +
+        "the primary model plus optional auxiliary text encoders, VAE, and ESRGAN " +
+        "upscaler, and exposes diffusion({ ... }). " +
+        "`'upscale'` builds a standalone ESRGAN upscaler from the primary model " +
+        "file alone (auxiliary model sources are ignored) and exposes upscale({ ... }).",
+      ),
     threads: z.number().optional(),
     device: z.enum(["gpu", "cpu"]).optional(),
     prediction: z
@@ -49,9 +58,54 @@ export const sdcppConfigSchema = z
       .describe("LLM text encoder model (e.g. Qwen3) — required for FLUX.2 [klein]"),
     vaeModelSrc: modelSrcInputSchema.optional()
       .describe("VAE decoder model — required for FLUX.2 [klein], optional for SDXL"),
+    upscaler: z.object({
+      type: z.literal("esrgan").optional()
+        .describe("Type of upscaler to use for post-generation upscaling when requested in diffusion({ upscale })."),
+      model_src: modelSrcInputSchema.optional()
+        .describe(
+          "ESRGAN upscaler model (e.g. RealESRGAN_x4plus_anime_6B.pth). " +
+          "Required in diffusion mode when this `upscaler` block is set — " +
+          "configures the post-generation upscaler invoked via diffusion({ upscale }). " +
+          "In `mode: 'upscale'` the primary modelSrc itself is the ESRGAN model, " +
+          "so this field is ignored.",
+        ),
+      tile_size: z.number().int().positive().optional()
+        .describe(
+          "ESRGAN upscaler tile size in pixels. Smaller tiles use less VRAM " +
+          "at the cost of more passes.",
+        ),
+      direct: z.boolean().optional()
+        .describe(
+          "Use direct convolution in the ESRGAN upscaler instead of im2col + " +
+          "GEMM. Faster on some backends, slower on others.",
+        ),
+      offload_params_to_cpu: z.boolean().optional()
+        .describe(
+          "Keep ESRGAN upscaler weights on CPU and offload them during compute. " +
+          "Trades latency for VRAM headroom on memory-constrained GPUs.",
+        ),
+      threads: z.union([
+        z.literal(-1),
+        z.number().int().positive(),
+      ])
+        .optional()
+        .describe(
+          "Number of CPU threads dedicated to the ESRGAN upscaler. -1 = auto.",
+        ),
+    }).strict().optional()
+      .describe(
+        "ESRGAN upscaler configuration. In diffusion mode this enables the " +
+        "post-generation upscale path invoked via diffusion({ upscale }) and " +
+        "requires `model_src`. In `mode: 'upscale'` only the tuning fields " +
+        "(tile_size, direct, offload_params_to_cpu, threads) are honored — " +
+        "the primary modelSrc IS the ESRGAN model in that mode and " +
+        "`model_src` here is ignored. Mode-dependent constraints (e.g. " +
+        "`model_src` required in diffusion mode) are enforced by the " +
+        "sdcpp-generation plugin at load time, not at the schema layer.",
+      ),
   });
 
-export type SdcppConfig = z.infer<typeof sdcppConfigSchema>;
+export type SdcppConfig = z.input<typeof sdcppConfigSchema>;
 
 export const diffusionStatsSchema = z.object({
   modelLoadMs: z
@@ -269,6 +323,24 @@ export const diffusionRequestSchema = z.object({
     .describe(
       "img2img denoising strength (0.0 = keep source, 1.0 = ignore source); used by the SD/SDXL SDEdit path. No-op for FLUX.2, which uses in-context conditioning and ignores this field.",
     ),
+  upscale: z
+    .union([
+      z.boolean(),
+      z.object({
+        repeats: z.number().int().positive().optional(),
+      }).strict(),
+    ])
+    .optional()
+    .describe(
+      "Post-generation ESRGAN upscale. " +
+      "`true` (or `{}` / `{ repeats: 1 }`) runs a single upscale pass at the " +
+      "model's native scale factor (e.g. x4 for RealESRGAN_x4plus). " +
+      "`false` is a no-op (same as omitting the field). " +
+      "`{ repeats: N }` runs the upscaler N times sequentially — each pass " +
+      "multiplies the output dimensions by the model's scale factor. When " +
+      "`batch_count > 1`, every output image is upscaled independently. " +
+      "Requires the model to be loaded with `upscaler.model_src` set in modelConfig.",
+    ),
 }).refine(
   (d) => d.init_image === undefined || d.init_images === undefined,
   {
@@ -297,3 +369,94 @@ export type DiffusionClientParams = DiffusionClientParamsBase &
     | { init_image?: Uint8Array; init_images?: never }
     | { init_image?: never; init_images?: Uint8Array[] }
   );
+
+// ============================================
+// Standalone ESRGAN upscale (mode: "upscale")
+// ============================================
+
+export const upscaleStatsSchema = z.object({
+  modelLoadMs: z
+    .number()
+    .optional()
+    .describe("Wall-clock time in milliseconds spent loading the upscaler model."),
+  upscaleMs: z
+    .number()
+    .optional()
+    .describe("Wall-clock time in milliseconds for the most recent upscale job."),
+  totalUpscaleMs: z
+    .number()
+    .optional()
+    .describe("Cumulative upscale time in milliseconds across all jobs."),
+  totalWallMs: z
+    .number()
+    .optional()
+    .describe(
+      "Total wall-clock time in milliseconds including model load and upscaling.",
+    ),
+  totalUpscales: z
+    .number()
+    .optional()
+    .describe("Cumulative number of upscale calls."),
+  totalImages: z
+    .number()
+    .optional()
+    .describe("Cumulative number of images produced."),
+  totalPixels: z
+    .number()
+    .optional()
+    .describe("Cumulative number of pixels produced across all images."),
+  width: z.number().optional().describe("Width of the most recent emitted PNG."),
+  height: z.number().optional().describe("Height of the most recent emitted PNG."),
+  repeats: z
+    .number()
+    .optional()
+    .describe("Number of ESRGAN passes used by the most recent upscale job."),
+});
+
+export type UpscaleStats = z.infer<typeof upscaleStatsSchema>;
+
+export const upscaleRequestSchema = z.object({
+  modelId: z
+    .string()
+    .describe(
+      "Identifier of the loaded upscaler model. The model must have been loaded " +
+      "with `modelType: 'diffusion'` and `modelConfig.mode: 'upscale'`.",
+    ),
+  image: z
+    .string()
+    .min(1)
+    .regex(BASE64_PATTERN)
+    .describe("Base64-encoded PNG/JPEG bytes of the source image."),
+  repeats: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe(
+      "Number of ESRGAN passes to run sequentially. Each pass multiplies " +
+      "dimensions by the model's native scale factor; only the final image " +
+      "is emitted (`outputs.length === 1`). Defaults to 1.",
+    ),
+});
+
+export type UpscaleRequest = z.input<typeof upscaleRequestSchema>;
+
+export const upscaleStreamRequestSchema = upscaleRequestSchema.extend({
+  type: z.literal("upscaleStream"),
+});
+
+export type UpscaleStreamRequest = z.input<typeof upscaleStreamRequestSchema>;
+
+export const upscaleStreamResponseSchema = z.object({
+  type: z.literal("upscaleStream"),
+  data: z.string().optional(),
+  outputIndex: z.number().optional(),
+  done: z.boolean().optional(),
+  stats: upscaleStatsSchema.optional(),
+});
+
+export type UpscaleStreamResponse = z.infer<typeof upscaleStreamResponseSchema>;
+
+export type UpscaleClientParams = Omit<UpscaleRequest, "image"> & {
+  image: Uint8Array;
+};

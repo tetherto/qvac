@@ -137,20 +137,20 @@ Legend:
 | lib-infer-onnx | Bare addon for ONNX Runtime session management | Addon |
 | lib-infer-onnx-tts | Text-to-Speech (TTS) library using Chatterbox and Supertonic neural TTS model via ONNX Runtime | Addon |
 | lib-infer-parakeet | High-performance speech-to-text inference addon using via NVIDIA/Parakeet | Addon |
-| lib-infer-whispercpp | Library for running Whisper transcription model for audio transcription via `qvac-ext-lib-whisper.cpp` | Addon |
-| lib-inference-addon-cpp | Header-only C++ library providing common abstractions and infrastructure for building high-performance inference addons | Addon |
-| lib-langdetect-text | Language detection library providing interface for detecting language of given text | Addon |
-| lib-langdetect-text-cld2 | Language detection using CLD2 with same API as @qvac/langdetect-text | Addon |
+| transcription-whispercpp | Library for running Whisper transcription model for audio transcription via `qvac-ext-lib-whisper.cpp` | Addon |
+| inference-addon-cpp | Header-only C++ library providing common abstractions and infrastructure for building high-performance inference addons | Addon |
+| langdetect-text | Language detection library providing interface for detecting language of given text | Addon |
+| langdetect-text-cld2 | Language detection using CLD2 with same API as @qvac/langdetect-text | Addon |
 | ocr-onnx | Optical Character Recognition (OCR) addon using ONNX Runtime | Addon |
 | rag | JavaScript library for Retrieval-Augmented Generation (RAG) with document ingestion, vector search, and LLM integration | Addon |
-| lib-dl-base | Base class for QVAC dataloader libraries providing common interface for loading data from various sources | Core |
-| lib-dl-filesystem | Data loading library for loading model weights and resources from local filesystem | Core |
-| lib-dl-hyperdrive | Data loading library for loading model weights and resources from Hyperdrive distributed file system | Core |
+| dl-base | Base class for QVAC dataloader libraries providing common interface for loading data from various sources | Core |
+| dl-filesystem | Data loading library for loading model weights and resources from local filesystem | Core |
+| dl-hyperdrive | Data loading library for loading model weights and resources from Hyperdrive distributed file system | Core |
 | error | Standardized error handling capabilities for all QVAC libraries | Core |
-| lib-infer-base | Base class for inference addon clients defining common lifecycle and generic methods for model interaction | Core |
+| infer-base | Base class for inference addon clients defining common lifecycle and generic methods for model interaction | Core |
 | logging | Logger wrapper that normalizes logging interface across QVAC libraries | Core |
 | cli | Command-line interface for the QVAC ecosystem with tooling for building, bundling, and managing QVAC-powered applications | Tool |
-| lib-diagnostics | Diagnostic report generation library for QVAC | Tool |
+| diagnostics | Diagnostic report generation library for QVAC | Tool |
 | lib-registry-server | Distributed model registry for downloading AI models for local inference and contributing new models | Tool |
 | lint-cpp | Configuration files for formatting and linting C++ source files with pre-commit hooks | Tool |
 

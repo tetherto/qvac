@@ -80,7 +80,7 @@ jobs:
             echo "::error title=Tests have not returned success::Some tests have not returned success"
             failed=1
           fi
-          if [[ "${{ github.repository }}" == "tetherto/qvac-lib-inference-addon-mlc-marian" ]]; then
+          if [[ "${{ github.repository }}" == "tetherto/inference-addon-mlc-marian" ]]; then
             echo "per repo additionals checks"
           fi
           if [[ $failed -eq 1 ]]; then

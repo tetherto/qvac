@@ -368,12 +368,12 @@ async function* streamProfiled<T extends Request>(
 }
 
 export interface DuplexWritable {
-  write(chunk: Buffer): void;
+  write(chunk: Uint8Array): void;
   end(): void;
   destroy(): void;
 }
 
-export interface DuplexReadable extends AsyncIterable<Buffer> {
+export interface DuplexReadable extends AsyncIterable<Buffer | string> {
   destroy(): void;
 }
 
@@ -463,7 +463,7 @@ async function duplexProfiled<T extends Request>(
 
   const rawReadable = session.responseStream as DuplexReadable;
 
-  async function* profiledResponseStream(): AsyncGenerator<Buffer> {
+  async function* profiledResponseStream(): AsyncGenerator<string> {
     let lineBuffer = "";
     try {
       for await (const chunk of rawReadable) {
@@ -504,13 +504,14 @@ async function duplexProfiled<T extends Request>(
 
         if (outputParts.length > 0) {
           timings.chunkCount += outputParts.length;
-          yield Buffer.from(outputParts.join("\n") + "\n");
+          // Yield strings (not Buffer) — RN/Hermes has no global `Buffer`; consumers call `.toString()` either way.
+          yield outputParts.join("\n") + "\n";
         }
       }
 
       if (lineBuffer.trim()) {
         timings.chunkCount++;
-        yield Buffer.from(lineBuffer + "\n");
+        yield lineBuffer + "\n";
       }
     } catch (error) {
       if (timings.requestEnd === undefined) {

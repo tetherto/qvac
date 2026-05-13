@@ -6,7 +6,7 @@
  * Computes chrF++ (character + word n-gram F-score, beta=2), matching
  * sacrebleu's `-m chrf --chrf-word-order 2` formulation. This aligns with
  * the repo-wide NMT quality metric used by
- * `packages/qvac-lib-infer-nmtcpp/benchmarks/quality_eval/evaluate.py`
+ * `packages/translation-nmtcpp/benchmarks/quality_eval/evaluate.py`
  * for comparing QVAC against OpusMT / Google / NLLB / Bergamot on
  * FLORES-200. Integration-test scores are therefore directly comparable
  * to benchmark scores.

@@ -1,10 +1,14 @@
 import { loadModel, downloadAsset, unloadModel, cancel } from "@qvac/sdk";
 import type { ModelConstant } from "@qvac/sdk";
 
+type ModelConfig = Record<string, unknown>;
+type ModelConfigResolver = () => Promise<ModelConfig>;
+
 interface ModelDefinition {
   constant: ModelConstant;
   type: string;
-  config?: Record<string, unknown>;
+  /** Static config or async resolver (cached per-dep) for runtime-only fields like RN asset URIs. */
+  config?: ModelConfig | ModelConfigResolver;
   skipPreDownload?: boolean;
   preLoadUnload?: true;
 }
@@ -37,6 +41,7 @@ export interface ResourceManagerOptions {
 
 export class ResourceManager {
   private definitions = new Map<string, ModelDefinition>();
+  private resolvedConfigs = new Map<string, ModelConfig>();
   private models = new Map<string, TrackedModel>();
   private testCount = 0;
   private downloaded = false;
@@ -46,19 +51,48 @@ export class ResourceManager {
     this.unloadSettleMs = options.unloadSettleMs ?? 0;
   }
 
+  private async resolveConfig(dep: string, def: ModelDefinition): Promise<ModelConfig | undefined> {
+    if (typeof def.config !== "function") return def.config;
+    const cached = this.resolvedConfigs.get(dep);
+    if (cached) return cached;
+    const resolved = await def.config();
+    this.resolvedConfigs.set(dep, resolved);
+    return resolved;
+  }
+
   define(dep: string, definition: ModelDefinition) {
     this.definitions.set(dep, definition);
   }
 
-  async downloadAllOnce(log?: (msg: string) => void): Promise<void> {
+  /**
+   * Pre-download (and pre-load+unload for `preLoadUnload` entries) every
+   * registered model. `options.allowedDeps`, if given, narrows the work
+   * to that subset; omit it to keep the legacy "warm everything" path.
+   * Idempotent on `downloaded` — pass the full filter on the first call;
+   * later calls with a different filter are a no-op.
+   */
+  async downloadAllOnce(
+    log?: (msg: string) => void,
+    options: { allowedDeps?: ReadonlySet<string> } = {},
+  ): Promise<void> {
     if (this.downloaded) return;
     this.downloaded = true;
 
-    const entries = Array.from(this.definitions.entries()).filter(
-      ([, def]) => !def.skipPreDownload,
-    );
-    const preLoadUnload = Array.from(this.definitions.entries()).filter(([, def]) => def.preLoadUnload);
-    const skipped = this.definitions.size - entries.length;
+    const allowed = options.allowedDeps;
+    const isAllowed = (dep: string) => allowed === undefined || allowed.has(dep);
+
+    const allDefinitions = Array.from(this.definitions.entries());
+    const entries = allDefinitions.filter(([dep, def]) => !def.skipPreDownload && isAllowed(dep));
+    const preLoadUnload = allDefinitions.filter(([dep, def]) => def.preLoadUnload && isAllowed(dep));
+
+    if (allowed !== undefined) {
+      const filteredOut = allDefinitions.filter(([dep]) => !isAllowed(dep)).length;
+      log?.(
+        `🎯 Bootstrap dep-filter active: keeping ${allowed.size} dep(s); ${filteredOut} of ${allDefinitions.length} defined excluded`,
+      );
+    }
+
+    const skipped = allDefinitions.filter(([dep, def]) => def.skipPreDownload && isAllowed(dep)).length;
     if (skipped > 0) log?.(`⏭️  Skipping ${skipped} models marked skipPreDownload`);
 
     log?.(`📥 Downloading ${entries.length} models in parallel...`);
@@ -106,7 +140,7 @@ export class ResourceManager {
       const modelId = await loadModel({
         modelSrc: def.constant as never,
         modelType: def.type,
-        modelConfig: def.config,
+        modelConfig: await this.resolveConfig(dep, def),
       });
       log?.(`✅ pre-loaded ${dep}: ${def.constant.name} - unloading...`);
       await unloadModel({ modelId });
@@ -140,7 +174,7 @@ export class ResourceManager {
     const modelId = await loadModel({
       modelSrc: def.constant as never,
       modelType: def.type as "llm" | "whisper" | "embeddings",
-      modelConfig: def.config,
+      modelConfig: await this.resolveConfig(dep, def),
     });
 
     this.models.set(dep, {

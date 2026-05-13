@@ -1,0 +1,835 @@
+name: Benchmark (NMTCPP)
+
+on:
+  workflow_dispatch:
+    inputs:
+      pairs:
+        description: 'Comma-separated language pairs (e.g., en-it,en-de,de-en)'
+        required: true
+        default: 'en-it'
+        type: string
+      translators:
+        description: 'Comma-separated translators (qvac_bergamot,opusmt,google,nllb,bergamot)'
+        required: false
+        default: 'qvac_bergamot'
+        type: string
+      dataset_flores_devtest:
+        description: 'Evaluate on Flores-devtest dataset'
+        required: false
+        default: true
+        type: boolean
+      dataset_conversational_phrases:
+        description: 'Evaluate on Conversational Phrases dataset'
+        required: false
+        default: false
+        type: boolean
+      metric_chrfpp:
+        description: 'Calculate chrF++ score'
+        required: false
+        default: true
+        type: boolean
+      metric_comet:
+        description: 'Calculate COMET score'
+        required: false
+        default: true
+        type: boolean
+      use_pivot:
+        description: 'Use English as pivot for non-English pairs (e.g., de-fr via de->en->fr)'
+        required: false
+        default: false
+        type: boolean
+      use_batch:
+        description: 'Use batch translation only with qvac_bergamot (faster) option'
+        required: false
+        default: false
+        type: boolean
+      hyperparams:
+        description: 'Hyperparameter preset for translation'
+        required: false
+        default: 'fast'
+        type: choice
+        options:
+          - default
+          - fast
+
+  workflow_call:
+    inputs:
+      pairs:
+        description: 'Comma-separated language pairs (e.g., en-it,en-de,de-en)'
+        required: true
+        type: string
+      translators:
+        description: 'Comma-separated translators (qvac_bergamot,opusmt,google,nllb,bergamot)'
+        required: false
+        default: 'qvac_bergamot'
+        type: string
+      dataset_flores_devtest:
+        description: 'Evaluate on Flores-devtest dataset'
+        required: false
+        default: true
+        type: boolean
+      dataset_conversational_phrases:
+        description: 'Evaluate on Conversational Phrases dataset'
+        required: false
+        default: false
+        type: boolean
+      metric_chrfpp:
+        description: 'Calculate chrF++ score'
+        required: false
+        default: true
+        type: boolean
+      metric_comet:
+        description: 'Calculate COMET score'
+        required: false
+        default: true
+        type: boolean
+      use_pivot:
+        description: 'Use English as pivot for non-English pairs'
+        required: false
+        default: false
+        type: boolean
+      use_batch:
+        description: 'Use batch translation only with qvac_bergamot (faster) option'
+        required: false
+        default: false
+        type: boolean
+      hyperparams:
+        description: 'Hyperparameter preset for translation'
+        required: false
+        default: 'fast'
+        type: string
+
+env:
+  PKG_DIR: packages/translation-nmtcpp
+
+permissions:
+  contents: read
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      datasets: ${{ steps.set-matrix.outputs.datasets }}
+      datasets_cache_key: ${{ steps.set-matrix.outputs.datasets_cache_key }}
+    steps:
+      - name: Parse language pairs and datasets
+        id: set-matrix
+        run: |
+          # Convert comma-separated pairs to JSON array
+          pairs_input="${{ inputs.pairs }}"
+          pairs_array=$(echo "$pairs_input" | tr ',' '\n' | sed 's/^ *//;s/ *$//' | jq -R -s -c 'split("\n")[:-1]')
+          echo "matrix={\"pair\":$pairs_array}" >> $GITHUB_OUTPUT
+          echo "Parsed pairs: $pairs_array"
+
+          # Build dataset list from boolean inputs
+          datasets=""
+          if [ "${{ inputs.dataset_flores_devtest }}" = "true" ]; then
+            datasets="flores-devtest"
+          fi
+          if [ "${{ inputs.dataset_conversational_phrases }}" = "true" ]; then
+            if [ -n "$datasets" ]; then
+              datasets="$datasets,conversational-phrases"
+            else
+              datasets="conversational-phrases"
+            fi
+          fi
+
+          if [ -z "$datasets" ]; then
+            echo "ERROR: No datasets selected"
+            exit 1
+          fi
+
+          echo "datasets=$datasets" >> $GITHUB_OUTPUT
+          echo "Selected datasets: $datasets"
+
+          # Create cache-safe key by replacing commas with hyphens
+          datasets_cache_key=$(echo "$datasets" | tr ',' '-')
+          echo "datasets_cache_key=$datasets_cache_key" >> $GITHUB_OUTPUT
+
+  build:
+    needs: setup
+    runs-on: ubuntu-22.04
+    environment: release
+    timeout-minutes: 60
+    name: Build QVAC addon
+
+    env:
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/translation-nmtcpp/vcpkg/cache,readwrite"
+
+    steps:
+      - name: Setup LLVM
+        uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          submodules: recursive
+
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Install global dependencies
+        run: npm install -g bare-make bare-runtime
+
+      - name: Replace bare-make's CMake with compatible version
+        shell: bash
+        run: |
+          echo "Installing CMake 3.28.3..."
+          wget -O cmake.sh https://github.com/Kitware/CMake/releases/download/v3.28.3/cmake-3.28.3-linux-x86_64.sh
+          sudo sh cmake.sh --skip-license --prefix=/usr/local
+          rm cmake.sh
+          echo "Finding bare-make's cmake binary..."
+          BARE_MAKE_CMAKE=$(find /opt/hostedtoolcache/node -path "*/bare-make/node_modules/cmake-runtime-*/bin/cmake" 2>/dev/null | head -1)
+          echo "bare-make cmake location: $BARE_MAKE_CMAKE"
+          echo "Replacing bare-make's cmake with version 3.28.3..."
+          sudo cp "$BARE_MAKE_CMAKE" "${BARE_MAKE_CMAKE}.bak"
+          sudo rm "$BARE_MAKE_CMAKE"
+          sudo ln -s /usr/local/bin/cmake "$BARE_MAKE_CMAKE"
+          echo "Verifying cmake version used by bare-make:"
+          "$BARE_MAKE_CMAKE" --version
+
+      - name: Configure vcpkg
+        run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
+
+      - name: Update apt sources
+        run: sudo apt-get update
+
+      - name: Download Vulkan SDK
+        run: |
+          sudo apt install -y xz-utils
+          wget -q -O /tmp/vulkansdk.tar.xz https://sdk.lunarg.com/sdk/download/latest/linux/vulkan_sdk.tar.xz
+          cd ~
+          mkdir -p vulkan
+          cd vulkan
+          tar xf /tmp/vulkansdk.tar.xz --strip-components=1
+
+      - name: Setup Vulkan SDK path
+        run: |
+          VULKAN_SDK=~/vulkan/x86_64
+          echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
+
+      - name: Configure git
+        shell: bash
+        run: |
+          GIT_PAT="${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}"
+          git config --global --add url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
+          git config --global --add url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "git@github.com:"
+          git config --global --add url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "ssh://git@github.com/"
+
+      - name: Install npm dependencies
+        working-directory: ${{ env.PKG_DIR }}
+        run: npm install
+
+      - name: Create vcpkg cache location
+        working-directory: ${{ env.PKG_DIR }}
+        run: mkdir -p vcpkg/cache
+
+      - name: Restore vcpkg cache
+        id: cache-vcpkg
+        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          path: ${{ env.PKG_DIR }}/vcpkg/cache
+          key: vcpkg-nmtcpp-v1-linux-x64-benchmark-${{ hashFiles('packages/translation-nmtcpp/vcpkg.json', 'packages/translation-nmtcpp/vcpkg-configuration.json', 'packages/translation-nmtcpp/vcpkg-overlays/**') }}
+          restore-keys: |
+            vcpkg-nmtcpp-v1-linux-x64-benchmark-
+            vcpkg-nmtcpp-v1-linux-x64-
+
+      - name: Create config.cmake for Bergamot backend
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: |
+          echo "set(USE_BERGAMOT ON CACHE BOOL \"Enable Bergamot backend support\" FORCE)" > config.cmake
+          echo "set(USE_INTGEMM ON CACHE BOOL \"Use INTGEMM for int8 quantized models\" FORCE)" >> config.cmake
+          echo "set(BUILD_ARCH x86-64-v2 CACHE STRING \"Target CPU architecture\" FORCE)" >> config.cmake
+          cat config.cmake
+
+      - name: Apply clog CMake version fix
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          CLOG_CMAKE="third-party/bergamot-translator/3rd_party/marian-dev/src/3rd_party/ruy/third_party/cpuinfo/deps/clog/CMakeLists.txt"
+          if [ -f "$CLOG_CMAKE" ]; then
+            sed -i.bak 's/CMAKE_MINIMUM_REQUIRED(VERSION 3\.1/CMAKE_MINIMUM_REQUIRED(VERSION 3.5/' "$CLOG_CMAKE"
+          fi
+
+      - name: Apply sentencepiece CMake version fix
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          SENTENCEPIECE_CMAKE="third-party/bergamot-translator/3rd_party/marian-dev/src/3rd_party/sentencepiece/CMakeLists.txt"
+          if [ -f "$SENTENCEPIECE_CMAKE" ]; then
+            sed -i.bak 's/cmake_minimum_required(VERSION 3\.1/cmake_minimum_required(VERSION 3.5/' "$SENTENCEPIECE_CMAKE"
+          fi
+
+      - name: Fix std::result_of for C++17/C++20 compatibility
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: |
+          CLI_APP_HPP="third-party/bergamot-translator/3rd_party/marian-dev/src/3rd_party/CLI/App.hpp"
+          if [ -f "$CLI_APP_HPP" ]; then
+            sed -i.bak 's/std::result_of<decltype (\&App::_parse_arg)(App, Args\.\.\.)>/std::invoke_result<decltype (\&App::_parse_arg), App, Args...>/g' "$CLI_APP_HPP"
+            sed -i.bak2 's/std::result_of<decltype (\&App::_parse_subcommand)(App, Args\.\.\.)>/std::invoke_result<decltype (\&App::_parse_subcommand), App, Args...>/g' "$CLI_APP_HPP"
+          fi
+          THREADPOOL_H="third-party/bergamot-translator/3rd_party/marian-dev/src/3rd_party/threadpool.h"
+          if [ -f "$THREADPOOL_H" ]; then
+            sed -i.bak 's/std::result_of<F(Args\.\.\.)>/std::invoke_result<F, Args...>/g' "$THREADPOOL_H"
+          fi
+
+      - name: Remove -march=native from cpuinfo and marian-dev
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: |
+          MARIAN_CMAKE="third-party/bergamot-translator/3rd_party/marian-dev/CMakeLists.txt"
+          if [ -f "$MARIAN_CMAKE" ]; then
+            sed -i.bak3 's/-msse2//g' "$MARIAN_CMAKE"
+            sed -i.bak4 's/-march=native//g' "$MARIAN_CMAKE"
+          fi
+          CPUINFO_CMAKE="third-party/bergamot-translator/3rd_party/marian-dev/src/3rd_party/ruy/third_party/cpuinfo/CMakeLists.txt"
+          if [ -f "$CPUINFO_CMAKE" ]; then
+            sed -i.bak5 's/-march=native//g' "$CPUINFO_CMAKE"
+          fi
+
+      - name: Build addon
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          bare-make generate --platform linux --arch x64
+          bare-make build
+          bare-make install
+
+      - if: ${{ steps.cache-vcpkg.outputs.cache-hit != 'true' }}
+        name: Save vcpkg cache
+        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          path: ${{ env.PKG_DIR }}/vcpkg/cache
+          key: vcpkg-nmtcpp-v1-linux-x64-benchmark-${{ hashFiles('packages/translation-nmtcpp/vcpkg.json', 'packages/translation-nmtcpp/vcpkg-configuration.json', 'packages/translation-nmtcpp/vcpkg-overlays/**') }}
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: qvac-addon-build-${{ inputs.translators }}
+          path: |
+            ${{ env.PKG_DIR }}/prebuilds/
+            ${{ env.PKG_DIR }}/node_modules/
+          retention-days: 1
+
+  evaluate:
+    needs: [setup, build]
+    if: |
+      always() &&
+      needs.setup.result == 'success' &&
+      (needs.build.result == 'success' || needs.build.result == 'skipped')
+    runs-on: ubuntu-24.04
+    environment: release
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 9 # Limit concurrent jobs to avoid resource contention
+      matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
+
+    name: Evaluate ${{ matrix.pair }} with ${{ inputs.translators }}
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          submodules: recursive
+
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 20
+
+      - name: Install bare-runtime
+        run: npm install -g bare-runtime
+
+      - name: Download build artifact
+        if: needs.build.result == 'success'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: qvac-addon-build-${{ inputs.translators }}
+          path: ${{ env.PKG_DIR }}
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        with:
+          python-version: '3.10'
+          cache: pip
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake wget build-essential \
+            libprotobuf-dev protobuf-compiler \
+            libboost-all-dev \
+            ccache \
+            libunwind-dev
+
+      - name: Configure AWS credentials via OIDC
+        if: needs.setup.outputs.qvac_needed == 'true'
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - name: Download QVAC models (GGML format)
+        # Only download GGML models for 'qvac' translator (not qvac_bergamot which uses Bergamot models)
+        if: contains(format(',{0},', inputs.translators), ',qvac,')
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          mkdir -p qvac_models
+          # Download model for this specific language pair
+          pair="${{ matrix.pair }}"
+          echo "Downloading model for $pair..."
+
+          # Function to download a model
+          download_model() {
+            local model_pair=$1
+            local temp_dir="qvac_models/temp_$model_pair"
+            mkdir -p "$temp_dir"
+
+            # Map pt (Portuguese) to roa (Romance languages) for S3 path
+            local s3_pair="$model_pair"
+            if [[ "$model_pair" == "en-pt" ]]; then
+              s3_pair="en-roa"
+              echo "Mapping en-pt to en-roa for S3 download"
+            elif [[ "$model_pair" == "pt-en" ]]; then
+              s3_pair="roa-en"
+              echo "Mapping pt-en to roa-en for S3 download"
+            fi
+
+            # Download f16 or q4 model from S3
+            if [ "${{ inputs.is_quantized_model }}" = "true" ]; then
+              echo "Downloading quantized (q4_0) model for $model_pair (S3 pair: $s3_pair)..."
+              aws_path="s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/marian/q4_0/ggml-opus-$s3_pair"
+            else
+              echo "Downloading f16 model for $model_pair (S3 pair: $s3_pair)..."
+              aws_path="s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/marian/q0f16/ggml-opus-$s3_pair"
+            fi
+            echo "AWS PATH: $aws_path"
+            if aws s3 cp "$aws_path/" "$temp_dir/" --recursive; then
+              echo "Successfully downloaded model for $model_pair from S3 (using $s3_pair)"
+              
+              # Find the latest date directory and move files up
+              date_dir=$(find "$temp_dir" -mindepth 1 -maxdepth 1 -type d | sort -r | head -1)
+              if [ -n "$date_dir" ]; then
+                echo "Found date directory: $date_dir"
+                mkdir -p "qvac_models/$model_pair"
+                mv "$date_dir"/* "qvac_models/$model_pair/"
+                rm -rf "$temp_dir"
+
+                # Rename ggml-opus-{s3_pair}.bin to model_f16.bin or model_q4_0.bin
+                # Note: The downloaded file uses the S3 pair name (e.g., roa-en), not the model_pair (e.g., pt-en)
+                if [ -f "qvac_models/$model_pair/ggml-opus-$s3_pair.bin" ]; then
+                  if [ "${{ inputs.is_quantized_model }}" = "true" ]; then
+                    mv "qvac_models/$model_pair/ggml-opus-$s3_pair.bin" "qvac_models/$model_pair/model_q4_0.bin"
+                    echo "Renamed ggml-opus-$s3_pair.bin to model_q4_0.bin"
+                  else
+                    mv "qvac_models/$model_pair/ggml-opus-$s3_pair.bin" "qvac_models/$model_pair/model_f16.bin"
+                    echo "Renamed ggml-opus-$s3_pair.bin to model_f16.bin"
+                  fi
+                elif [ -f "qvac_models/$model_pair/ggml-opus-$model_pair.bin" ]; then
+                  if [ "${{ inputs.is_quantized_model }}" = "true" ]; then
+                    mv "qvac_models/$model_pair/ggml-opus-$model_pair.bin" "qvac_models/$model_pair/model_q4_0.bin"
+                    echo "Renamed ggml-opus-$model_pair.bin to model_q4_0.bin"
+                  else
+                    mv "qvac_models/$model_pair/ggml-opus-$model_pair.bin" "qvac_models/$model_pair/model_f16.bin"
+                    echo "Renamed ggml-opus-$model_pair.bin to model_f16.bin"
+                  fi
+                fi
+                
+                # Verify the model file exists
+                if [ -f "qvac_models/$model_pair/model_f16.bin" ]; then
+                  echo "Model verified: $(ls -lh qvac_models/$model_pair/model_f16.bin)"
+                elif [ -f "qvac_models/$model_pair/model_q4_0.bin" ]; then
+                  echo "Model verified: $(ls -lh qvac_models/$model_pair/model_q4_0.bin)"
+                else
+                  echo "Warning: neither model_f16.bin nor model_q4_0.bin found after flattening"
+                  ls -la "qvac_models/$model_pair/"
+                fi
+              else
+                echo "No date directory found, moving files directly"
+                mkdir -p "qvac_models/$model_pair"
+                mv "$temp_dir"/* "qvac_models/$model_pair/" 2>/dev/null || true
+                rm -rf "$temp_dir"
+              fi
+            else
+              echo "S3 download failed for $model_pair, evaluation will attempt to use Hyperdrive"
+              rm -rf "$temp_dir"
+            fi
+          }
+
+          # Download the main model
+          download_model "$pair"
+
+          # If using pivot translation and this is a non-English pair, download pivot models
+          if [ "${{ inputs.use_pivot }}" = "true" ]; then
+            src_lang="${pair%-*}"
+            trg_lang="${pair#*-}"
+            
+            # Check if this is a non-English pair
+            if [ "$src_lang" != "en" ] && [ "$trg_lang" != "en" ]; then
+              echo "Pivot translation enabled for non-English pair $pair"
+              echo "Downloading pivot models: ${src_lang}-en and en-${trg_lang}"
+              
+              # Download source-to-English model
+              download_model "${src_lang}-en"
+              
+              # Download English-to-target model
+              download_model "en-${trg_lang}"
+            fi
+          fi
+        continue-on-error: true
+
+      - name: Cache datasets
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          key: datasets-${{ needs.setup.outputs.datasets_cache_key }}
+          path: ${{ env.PKG_DIR }}/benchmarks/quality_eval/data
+          restore-keys: datasets-
+
+      - name: Free up disk space
+        run: |
+          echo "Disk space before cleanup:"
+          df -h
+
+          # Remove unnecessary software to free up disk space
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force
+
+          # Clean APT cache
+          sudo apt-get clean
+
+          echo "Disk space after cleanup:"
+          df -h
+
+      - name: Download Firefox translations models for Bergamot (from GitHub)
+        # Only for 'bergamot' translator (not qvac_bergamot which downloads from Firefox CDN)
+        if: contains(format(',{0},', inputs.translators), ',bergamot,')
+        run: |
+          # Install git-lfs on Linux
+          sudo apt-get install -y git-lfs
+          git lfs install
+
+          # Clone Firefox translations models repo (shallow clone)
+          git clone --depth 1 https://github.com/mozilla/firefox-translations-models.git
+          cd firefox-translations-models
+
+          # Download specific language pair models
+          pair="${{ matrix.pair }}"
+          src_lang="${pair%-*}"
+          trg_lang="${pair#*-}"
+
+          # Download main pair model
+          pair_code="${src_lang}${trg_lang}"
+          echo "Downloading Firefox model for $pair_code..."
+          git lfs pull --include="models/base-memory/$pair_code/*"
+
+          # Extract model files
+          cd models/base-memory/$pair_code
+          gunzip -k *.gz
+
+          # Set up Firefox models directory for bergamot
+          mkdir -p ~/.local/share/bergamot/models/firefox/base-memory/$pair_code
+          cp -v *.bin *.spm ~/.local/share/bergamot/models/firefox/base-memory/$pair_code/
+
+          echo "Firefox models installed to ~/.local/share/bergamot/models/firefox/"
+        continue-on-error: true
+
+      - name: Download Bergamot models for qvac_bergamot (from Firefox CDN)
+        if: contains(inputs.translators, 'qvac_bergamot')
+        run: |
+          # Download specific language pair models from Firefox Remote Settings CDN
+          pair="${{ matrix.pair }}"
+          src_lang="${pair%-*}"
+          trg_lang="${pair#*-}"
+          pair_code="${src_lang}${trg_lang}"
+
+          echo "Downloading Bergamot model for $pair_code from Firefox CDN..."
+
+          RECORDS_URL="https://firefox.settings.services.mozilla.com/v1/buckets/main/collections/translations-models/records"
+          ATTACHMENT_BASE="https://firefox-settings-attachments.cdn.mozilla.net"
+
+          # Set up Firefox models directory
+          DEST_DIR="$HOME/.local/share/bergamot/models/firefox/base-memory/$pair_code"
+          mkdir -p "$DEST_DIR"
+
+          # Fetch model records from Firefox Remote Settings
+          echo "Fetching model index from Mozilla..."
+          RECORDS=$(curl -sS "$RECORDS_URL")
+
+          URLS=$(echo "$RECORDS" | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          for r in data.get('data', []):
+              if r.get('fromLang') == '${src_lang}' and r.get('toLang') == '${trg_lang}':
+                  att = r.get('attachment', {})
+                  loc = att.get('location', '')
+                  name = r.get('name', '') or att.get('filename', '')
+                  if loc and name:
+                      print(f'{name}|{loc}')
+          ")
+
+          if [ -z "$URLS" ]; then
+            echo "WARNING: No Firefox model found for ${src_lang}-${trg_lang}"
+            echo "Check https://github.com/mozilla/firefox-translations-models for supported pairs"
+            exit 1
+          fi
+
+          while IFS='|' read -r FILENAME LOCATION; do
+              URL="${ATTACHMENT_BASE}/${LOCATION}"
+              echo "  Downloading ${FILENAME}..."
+              curl -sS -L -o "${DEST_DIR}/${FILENAME}" "$URL"
+          done <<< "$URLS"
+
+          echo "✅ Model files downloaded from Firefox CDN:"
+          ls -la "$DEST_DIR"
+
+          echo "Bergamot models installed to ~/.local/share/bergamot/models/firefox/"
+        continue-on-error: true
+
+      - name: Install Python dependencies
+        working-directory: ${{ env.PKG_DIR }}/benchmarks/quality_eval
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build metrics list
+        id: metrics
+        run: |
+          metrics=""
+          if [ "${{ inputs.metric_chrfpp }}" = "true" ]; then
+            if [ -n "$metrics" ]; then
+              metrics="$metrics,chrfpp"
+            else
+              metrics="chrfpp"
+            fi
+          fi
+          if [ "${{ inputs.metric_comet }}" = "true" ]; then
+            if [ -n "$metrics" ]; then
+              metrics="$metrics,comet"
+            else
+              metrics="comet"
+            fi
+          fi
+          if [ -z "$metrics" ]; then
+            echo "ERROR: No metrics selected"
+            exit 1
+          fi
+          echo "metrics=$metrics" >> $GITHUB_OUTPUT
+          echo "Selected metrics: $metrics"
+
+      - name: Run evaluation on all selected datasets
+        timeout-minutes: 90 # Timeout per language pair evaluation
+        working-directory: ${{ env.PKG_DIR }}/benchmarks/quality_eval
+        run: |
+          # Set hyperparameters based on preset
+          case "${{ inputs.hyperparams }}" in
+            fast)
+              BEAM=1
+              LENGTH_PENALTY=1.0
+              REPETITION_PENALTY=1.2
+              NO_REPEAT_NGRAM=3
+              TEMPERATURE=1.0
+              TOPK=0
+              TOPP=1.0
+              MAXLENGTH=512
+              ;;
+            default|*)
+              BEAM=4
+              LENGTH_PENALTY=1.0
+              REPETITION_PENALTY=1.0
+              NO_REPEAT_NGRAM=0
+              TEMPERATURE=1.0
+              TOPK=0
+              TOPP=1.0
+              MAXLENGTH=512
+              ;;
+          esac
+
+          pivot_flag=""
+          if [ "${{ inputs.use_pivot }}" = "true" ]; then
+            pivot_flag="--use-pivot"
+          fi
+
+          batch_flag=""
+          if [ "${{ inputs.use_batch }}" = "true" ]; then
+            batch_flag="--batch"
+          fi
+
+          # Loop through each selected dataset
+          IFS=',' read -ra DATASETS <<< "${{ needs.setup.outputs.datasets }}"
+          for dataset in "${DATASETS[@]}"; do
+            echo "=========================================="
+            echo "Evaluating on dataset: $dataset"
+            echo "=========================================="
+
+            python evaluate.py \
+              --pairs "${{ matrix.pair }}" \
+              --translators "${{ inputs.translators }}" \
+              --dataset "$dataset" \
+              --metrics "${{ steps.metrics.outputs.metrics }}" \
+              --results-dir "results" \
+              --data-dir "data" \
+              --no-skip-existing \
+              --beamsize "$BEAM" \
+              --lengthpenalty "$LENGTH_PENALTY" \
+              --repetitionpenalty "$REPETITION_PENALTY" \
+              --norepeatngramsize "$NO_REPEAT_NGRAM" \
+              --temperature "$TEMPERATURE" \
+              --topk "$TOPK" \
+              --topp "$TOPP" \
+              --maxlength "$MAXLENGTH" \
+              $pivot_flag \
+              $batch_flag
+          done
+        env:
+          PYTHONUNBUFFERED: 1
+
+      - name: Upload evaluation results
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        if: always()
+        with:
+          name: results-${{ matrix.pair }}-${{ inputs.translators }}-${{ steps.metrics.outputs.metrics }}-${{ inputs.hyperparams }}${{ inputs.use_pivot && '-pivot' || '' }}
+          path: ${{ env.PKG_DIR }}/benchmarks/quality_eval/results/${{ matrix.pair }}
+          retention-days: 30
+
+      - name: Upload evaluation logs
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        if: failure()
+        with:
+          name: logs-${{ matrix.pair }}-${{ inputs.translators }}-${{ steps.metrics.outputs.metrics }}-${{ inputs.hyperparams }}
+          path: |
+            ${{ env.PKG_DIR }}/benchmarks/quality_eval/*.log
+          retention-days: 7
+
+  consolidate:
+    needs: evaluate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: always()
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: all-results
+          pattern: results-*
+
+      - name: Generate results table
+        run: |
+          echo "## 📊 Translation Quality Evaluation Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Collect all unique pairs, translators, datasets, and metrics
+          declare -A results
+          pairs=()
+          translators=()
+          datasets=()
+          metrics=()
+
+          # Parse all result files
+          for file in $(find all-results -type f \( -name "*.bleu" -o -name "*.chrfpp" -o -name "*.comet" -o -name "*.perf" \)); do
+            # Extract components from path: all-results/results-{pair}-{translators}-{metrics}-{hyperparams}/{dataset}.{translator}.{lang}.{metric}
+            filename=$(basename "$file")
+
+            # Extract metric from file extension
+            metric="${filename##*.}"
+
+            # Extract dataset, translator, and language
+            # Format: {dataset}.{translator}.{lang}.{metric}
+            parts=(${filename//./ })
+            dataset="${parts[0]}"
+            translator="${parts[1]}"
+
+            # Extract pair from parent directory name
+            parent=$(dirname "$file")
+            parent_name=$(basename "$parent")
+            # Format: results-{pair}-{translators}-{metrics}-{hyperparams}
+            pair=$(echo "$parent_name" | sed 's/^results-//' | cut -d'-' -f1-2)
+
+            # Read score
+            score=$(cat "$file" | tr -d '\n' | xargs)
+
+            # Store result
+            key="${pair}|${dataset}|${translator}|${metric}"
+            results[$key]="$score"
+
+            # Track unique values
+            if [[ ! " ${pairs[@]} " =~ " ${pair} " ]]; then
+              pairs+=("$pair")
+            fi
+            if [[ ! " ${translators[@]} " =~ " ${translator} " ]]; then
+              translators+=("$translator")
+            fi
+            if [[ ! " ${datasets[@]} " =~ " ${dataset} " ]]; then
+              datasets+=("$dataset")
+            fi
+            if [[ ! " ${metrics[@]} " =~ " ${metric} " ]]; then
+              metrics+=("$metric")
+            fi
+          done
+
+          # Sort arrays
+          IFS=$'\n' pairs=($(sort <<<"${pairs[*]}")); unset IFS
+          IFS=$'\n' translators=($(sort <<<"${translators[*]}")); unset IFS
+          IFS=$'\n' datasets=($(sort <<<"${datasets[*]}")); unset IFS
+          IFS=$'\n' metrics=($(sort <<<"${metrics[*]}")); unset IFS
+
+          # Generate table for each dataset
+          for dataset in "${datasets[@]}"; do
+            echo "### ${dataset}" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+
+            # Build header row
+            header="| Pair |"
+            separator="|------|"
+            for translator in "${translators[@]}"; do
+              for metric in "${metrics[@]}"; do
+                metric_upper=$(echo "$metric" | tr '[:lower:]' '[:upper:]')
+                header="$header ${translator}-${metric_upper} |"
+                separator="$separator------:|"
+              done
+            done
+            echo "$header" >> $GITHUB_STEP_SUMMARY
+            echo "$separator" >> $GITHUB_STEP_SUMMARY
+
+            # Build data rows
+            for pair in "${pairs[@]}"; do
+              row="| $pair |"
+              for translator in "${translators[@]}"; do
+                for metric in "${metrics[@]}"; do
+                  key="${pair}|${dataset}|${translator}|${metric}"
+                  score="${results[$key]:-N/A}"
+                  row="$row $score |"
+                done
+              done
+              echo "$row" >> $GITHUB_STEP_SUMMARY
+            done
+
+            echo "" >> $GITHUB_STEP_SUMMARY
+          done
+
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Configuration:**" >> $GITHUB_STEP_SUMMARY
+          echo "- Hyperparameters: \`${{ inputs.hyperparams }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Pivot translation: \`${{ inputs.use_pivot }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Batch mode: \`${{ inputs.use_batch }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Translators: \`${{ inputs.translators }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Metrics: chrF++=\`${{ inputs.metric_chrfpp }}\`, COMET=\`${{ inputs.metric_comet }}\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload consolidated results
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: consolidated-results-${{ inputs.translators }}
+          path: all-results
+          retention-days: 90

@@ -1,6 +1,6 @@
 # Architecture Documentation
 
-**Package:** `@qvac/ocr-onnx` v0.1.6  
+**Package:** `@qvac/ocr-onnx` v0.4.4
 **Stack:** JavaScript, C++20, ONNX Runtime, OpenCV, Bare Runtime, CMake, vcpkg  
 **License:** Apache-2.0
 
@@ -38,7 +38,7 @@
 
 ## Purpose
 
-`@qvac/ocr-onnx` is a cross-platform npm package providing Optical Character Recognition (OCR) for Bare runtime applications. It runs a two-stage pipeline (text detection then text recognition) using **models exported from [EasyOCR](https://github.com/JaidedAI/EasyOCR) to ONNX format**. The pipeline (preprocessing, geometry, and tunable parameters such as `magRatio`) is aligned with EasyOCR’s design. The package runs these ONNX models via ONNX Runtime and OpenCV, with multi-language and multi-script support. Applications supply detector and recognizer model paths; the package handles image decoding, geometry, and inference orchestration.
+`@qvac/ocr-onnx` is a cross-platform npm package providing Optical Character Recognition (OCR) for Bare runtime applications. It supports EasyOCR-style detector/recognizer pipelines and a DocTR mode selected with `params.pipelineMode === 'doctr'`. The package runs ONNX models via ONNX Runtime and OpenCV, with multi-language and multi-script support. Applications supply detector and recognizer model paths; the package handles image decoding, geometry, and inference orchestration.
 
 **Core value:**
 - High-level JavaScript API for OCR (load → run image path → receive text regions with bounding boxes)
@@ -48,7 +48,7 @@
 
 ## Key Features
 
-- **Models exported from EasyOCR to ONNX**: Two-stage flow—detector (ONNX) locates text regions; OpenCV extracts bounding boxes; recognizer (ONNX) extracts text per region. The detector and recognizer are EasyOCR models exported to ONNX; preprocessing (e.g. dynamic-width recognizer, CRAFT-style detection) is aligned with EasyOCR.
+- **EasyOCR and DocTR pipelines**: EasyOCR is the default two-stage detector/recognizer flow; DocTR mode uses its own model-key selection and validation path.
 - **Multi-script support**: Latin, Arabic, Bengali, Cyrillic, Devanagari, Thai, Chinese (sim/tra), Japanese, Korean, Tamil, Telugu, Kannada
 - **Cross-platform**: macOS, Linux, Windows, iOS, Android with platform-specific ONNX execution providers (CoreML, NNAPI, DirectML)
 - **Image formats**: BMP (decoded in JS), JPEG and PNG (decoded in C++ via OpenCV)
@@ -66,7 +66,9 @@
 | Windows | x64 | 10+ | ✅ Tier 1 | DirectML |
 
 **Dependencies:**
-- qvac-lib-inference-addon-cpp (≥1.0.0): C++ addon framework (JsInterface, AddonJs)
+- inference-addon-cpp (≥1.1.5#1): C++ addon framework (JsInterface, AddonJs)
+- @qvac/infer-base (^0.4.0): `createJobHandler` response lifecycle
+- @qvac/onnx: shared ONNX integration used by native ONNX session setup
 - ONNX Runtime: Inference engine (platform-specific EPs via vcpkg)
 - OpenCV (opencv4, features: jpeg, png, quirc, tiff, webp): Image decode and geometry
 - Bare Runtime (≥1.19.3): JavaScript runtime
@@ -95,7 +97,7 @@ graph TB
 
     subgraph "Core Libs"
         BASE["@qvac/infer-base"]
-        REG["@qvac/registry-client"]
+        ONNXLIB["@qvac/onnx"]
     end
 
     subgraph "Native Framework"
@@ -125,9 +127,11 @@ graph TB
 
 | Package | Type | Version | Purpose |
 |---------|------|---------|---------|
-| @qvac/infer-base | Framework | ^0.1.0 | Base class (ONNXBase), response handling |
+| @qvac/infer-base | Framework | ^0.4.0 | `createJobHandler`, response handling |
 | @qvac/error | Runtime | ^0.1.0 | Structured errors |
-| qvac-lib-inference-addon-cpp | Native | ≥1.0.0 | JsInterface, AddonJs, output handlers |
+| @qvac/onnx | Runtime | ^0.1.0 | Shared ONNX integration |
+| @qvac/registry-client | Dev/example | ^0.4.0 | Optional model distribution examples, not a runtime dependency |
+| inference-addon-cpp | Native | ≥1.1.5#1 | JsInterface, AddonJs, output handlers |
 | ONNX Runtime | Native | via vcpkg | Detector and recognizer inference |
 | OpenCV | Native | via vcpkg | Image decode (JPEG/PNG), geometry, preprocessing |
 | Bare Runtime | Runtime | ≥1.19.3 | JavaScript execution |
@@ -137,7 +141,7 @@ graph TB
 | From | To | Mechanism | Data Format |
 |------|-----|-----------|-------------|
 | JavaScript | ONNXOcr | Constructor | args with params (pathDetector, pathRecognizer, langList, etc.) |
-| ONNXOcr | ONNXBase | Inheritance | load / run / unload |
+| ONNXOcr | createJobHandler | Composition | Response lifecycle |
 | ONNXOcr | OcrFasttextInterface | Composition | createInstance, runJob, activate |
 | OcrFasttextInterface | C++ Addon | require.addon() | Native binding |
 | run(input) | getImage(path) | JS | BMP raw pixels or JPEG/PNG buffer (isEncoded) |
@@ -161,11 +165,12 @@ classDiagram
         +getRecognizerModelName(langList) string
     }
 
-    class ONNXBase {
-        <<abstract>>
-        +load() Promise~void~
-        +run() Promise~Response~
-        +unload() Promise~void~
+    class JobHandler {
+        <<createJobHandler>>
+        +start() QvacResponse
+        +output(data)
+        +end(stats)
+        +fail(error)
     }
 
     class OcrFasttextInterface {
@@ -181,7 +186,7 @@ classDiagram
         +stats object
     }
 
-    ONNXOcr --|> ONNXBase
+    ONNXOcr *-- JobHandler
     ONNXOcr *-- OcrFasttextInterface
     ONNXOcr ..> OCRResponse : creates
 ```
@@ -194,7 +199,7 @@ classDiagram
 | Class | Responsibility | Lifecycle | Dependencies |
 |-------|----------------|-----------|--------------|
 | ONNXOcr | Orchestrate load/run/unload, validate params, resolve recognizer model name, decode BMP / pass JPEG-PNG | Created by user, persistent | OcrFasttextInterface, supportedLanguages |
-| ONNXBase | Standard inference API (load/run/unload) | Abstract base class | None |
+| JobHandler | Per-run response lifecycle via `createJobHandler` | Created by ONNXOcr | None |
 | OcrFasttextInterface | JS wrapper around native binding, error translation | Created by ONNXOcr in _load() | Native binding |
 | OCRResponse | Deliver output and stats via onUpdate callback | Created per run(), short-lived | None |
 
@@ -202,7 +207,7 @@ classDiagram
 
 | From | To | Type | Purpose |
 |------|-----|------|---------|
-| ONNXOcr | ONNXBase | Inheritance | Standard QVAC inference API |
+| ONNXOcr | createJobHandler | Composition | Per-run output and stats lifecycle |
 | ONNXOcr | OcrFasttextInterface | Composition | Native addon lifecycle and runJob |
 | ONNXOcr | OCRResponse | Creates | Per-run output (InferredText array, stats) |
 
@@ -221,7 +226,7 @@ graph TB
     subgraph "Layer 1: JavaScript API"
         APP["Application Code"]
         OCRCLASS["ONNXOcr<br/>(index.js)"]
-        BASEINF["ONNXBase<br/>(@qvac/infer-base)"]
+        JOBH["createJobHandler<br/>(@qvac/infer-base)"]
         RESPONSE["QvacResponse<br/>(@qvac/infer-base)"]
     end
 
@@ -248,7 +253,7 @@ graph TB
     end
 
     APP --> OCRCLASS
-    OCRCLASS --> BASEINF
+    OCRCLASS --> JOBH
     OCRCLASS --> OCRIF
     OCRCLASS -.-> RESPONSE
 
@@ -285,7 +290,7 @@ graph TB
 
 | Layer | Components | Responsibility | Language | Why This Layer |
 |-------|------------|----------------|----------|----------------|
-| 1. JavaScript API | ONNXOcr, ONNXBase | High-level API, param validation, language filtering, image format dispatch | JS | Ergonomic API for npm consumers |
+| 1. JavaScript API | ONNXOcr, createJobHandler | High-level API, param validation, language filtering, image format dispatch | JS | Ergonomic API for npm consumers |
 | 2. Bridge | OcrFasttextInterface, binding.js | JS↔C++ communication, error translation to QvacErrorAddonOcr | JS | Handle lifecycle, type conversion |
 | 3. C++ Addon | AddonJs.hpp, binding.cpp | createInstance, runJob, config parsing, output handler (Pipeline::Output → JS array) | C++ | addon-cpp patterns, single-threaded execution |
 | 4. Pipeline | Pipeline, StepDetectionInference, StepBoundingBox, StepRecognizeText | Sequential OCR: detect → boxes → recognize | C++ | Orchestration and ONNX/OpenCV usage |
@@ -312,13 +317,14 @@ graph TB
 
 #### **ONNXOcr (index.js)**
 
-**Responsibility:** Main API class; validates params (langList, pathDetector, pathRecognizer or pathRecognizerPrefix); filters unsupported languages; resolves recognizer model name from lang list; loads addon and activates; runs by reading image from path and calling runJob; maps addon output events to base-class callback (Output, JobEnded with stats).
+**Responsibility:** Main API class; validates params (`pipelineMode`, `langList`, `pathDetector`, `pathRecognizer` or `pathRecognizerPrefix`); filters unsupported languages for EasyOCR; resolves recognizer model name from lang list; loads addon and activates; runs by reading image from path and calling `runJob`; maps addon output events to `createJobHandler` callbacks (`Output`, `JobEnded` with stats).
 
 **Why JavaScript:**
 - High-level API and validation (required params, language support)
 - Image format detection and BMP decoding (magic bytes, pixel extraction)
 - JPEG/PNG passed through as encoded buffers for C++ to decode
 - Recognizer model naming (latin, arabic, bengali, cyrillic, devanagari, other map) lives in JS with supportedLanguages
+- DocTR mode requires an explicit `pathRecognizer`, uses `pipelineMode: 'doctr'`, and skips EasyOCR language filtering/model-name resolution.
 
 #### **OcrFasttextInterface (ocr-fasttext.js)**
 
@@ -339,7 +345,7 @@ graph TB
 
 #### **AddonJs + custom createInstance/runJob (addon/AddonJs.hpp)**
 
-**Responsibility:** Parses configuration from JS (pathDetector, pathRecognizer, langList, useGPU, timeout, magRatio, defaultRotationAngles, contrastRetry, lowConfidenceThreshold, recognizerBatchSize); constructs Pipeline; registers PipelineOutputHandler to convert Pipeline::Output to JS array of [ [box], text, confidence ]; creates AddonJs (addon-cpp) with Pipeline as model; runJob parses image input (raw or encoded) and options (paragraph, boxMarginMultiplier, rotationAngles) and calls addon.runJob(std::any(Pipeline::Input)).
+**Responsibility:** Parses configuration from JS (pipeline mode, pathDetector, pathRecognizer, langList, useGPU, timeout, magRatio, defaultRotationAngles, contrastRetry, lowConfidenceThreshold, recognizerBatchSize, graphOptimization, enableXnnpack, enableCpuMemArena, intraOpThreads, decodingMethod, straightenPages); constructs Pipeline; registers PipelineOutputHandler to convert Pipeline::Output to JS array of [ [box], text, confidence ]; creates AddonJs (addon-cpp) with Pipeline as model; runJob parses image input (raw or encoded) and options (paragraph, boxMarginMultiplier, rotationAngles) and calls addon.runJob(std::any(Pipeline::Input)).
 
 **Why C++:**
 - addon-cpp JsInterface and AddonJs run on JS thread; no separate worker thread
@@ -464,7 +470,7 @@ Use ONNX Runtime for detector and recognizer inference, with platform-specific e
 
 ## Decision 2: Bare Runtime over Node.js
 
-See [qvac-lib-inference-addon-cpp: Why Bare Runtime](https://github.com/tetherto/qvac-lib-inference-addon-cpp/blob/main/docs/architecture.md) for rationale.
+See [inference-addon-cpp: Why Bare Runtime](https://github.com/tetherto/inference-addon-cpp/blob/main/docs/architecture.md) for rationale.
 
 **Summary:** Mobile support (iOS/Android), lightweight runtime, modern addon API. This package uses the same addon-cpp patterns (JsInterface, AddonJs) as other inference addons.
 
@@ -589,7 +595,7 @@ Detector and recognizer models are large and vary by language/script. Shipping t
 
 ### Decision
 
-Require the application to supply pathDetector and either pathRecognizer or (pathRecognizerPrefix + recognizer model name derived from langList). No built-in download or registry integration in the current package. If future constraints (package size, model evolution) demand it, registry-based distribution could be added.
+Require the application to supply `pathDetector` and either `pathRecognizer` or, for EasyOCR mode, `pathRecognizerPrefix` plus a recognizer model name derived from `langList`. DocTR mode requires an explicit `pathRecognizer` and does not derive one from language lists. No model bytes are embedded in the package; examples may use the registry client, but runtime model distribution remains the application's responsibility.
 
 ### Rationale
 
@@ -650,4 +656,4 @@ Ship hand-written index.d.ts with ONNXOcr, ONNXOcrParams, OCRArgs, OCRRunParams,
 **Related Document:**
 - [data-flows-detailed.md](data-flows-detailed.md) - Detailed data flow diagrams and sequences
 
-**Last Updated:** 2026-02-18
+**Last Updated:** 2026-05-07

@@ -1,0 +1,262 @@
+name: CPP Tests (TTS GGML)
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: 'ref'
+        type: string
+      repository:
+        type: string
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  BUILD_TYPE: Debug
+  ENABLE_COVERAGE: ON
+  PKG_DIR: packages/tts-ggml
+
+jobs:
+  cpp-tests:
+    permissions:
+      contents: read
+      id-token: write
+      checks: write
+    runs-on: ${{ matrix.os }}
+    environment: release
+    name: ${{ matrix.platform }}-${{ matrix.arch }}-cpp-tests
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
+            coverage: true
+    env:
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg/cache,readwrite"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+          lfs: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Setup LLVM
+        if: matrix.platform == 'linux'
+        uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
+
+      - name: Setup ccache
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get install -y ccache
+          ccache -z
+          echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
+          echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
+
+      - name: Get ccache cache
+        if: matrix.platform == 'linux'
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          key: ccache-cpp-coverage-tts-ggml-${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles(format('{0}/vcpkg.json', env.PKG_DIR)) }}
+          path: ~/.cache/ccache
+          restore-keys: ccache-cpp-coverage-tts-ggml-${{ matrix.platform }}-${{ matrix.arch }}-
+
+      - name: Install NPM dependencies
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          npm install
+          npm install -g bare bare-make
+
+      - if: ${{ matrix.os == 'ubuntu-22.04' }}
+        name: Configure vcpkg in linux
+        run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
+
+      - name: Setup Vulkan SDK
+        uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@0bbdca93da303a0b1634ba14a89cec085621078d
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - name: Generate and build C++ unit tests (with coverage)
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          npm run coverage:cpp:build
+
+      - name: Setup Python (HF -> .gguf conversion for QVAC_TEST_* gates)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Mirrors parakeet's cpp-test-coverage flow.  The C++ suite has two
+      # tiers of tests:
+      #   - Pure validation / static-helper tests (no GGUF needed).
+      #   - QVAC_TEST_CHATTERBOX_T3_GGUF + QVAC_TEST_CHATTERBOX_S3GEN_GGUF
+      #     and QVAC_TEST_SUPERTONIC_GGUF gated round-trip tests.
+      # We provision the multilingual Chatterbox (q4_0) + English
+      # Supertonic (q4_0 -> f16 per supertonic_ftype) GGUFs because they
+      # exercise the most code paths per byte downloaded.  Cache hit
+      # skips the full HF download + conversion (~15 min cold, ~0s warm).
+      - name: Cache TTS GGML venv + q4 GGUFs
+        id: cache-tts-ggml-models
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.PKG_DIR }}/venv
+            ${{ env.PKG_DIR }}/models/chatterbox-t3-mtl.gguf
+            ${{ env.PKG_DIR }}/models/chatterbox-s3gen-mtl.gguf
+            ${{ env.PKG_DIR }}/models/supertonic.gguf
+          key: tts-ggml-cpp-mtl-supertonic-en-q4-v1-${{ hashFiles(format('{0}/scripts/convert-models.sh', env.PKG_DIR), format('{0}/scripts/setup-venv.sh', env.PKG_DIR), format('{0}/scripts/requirements.txt', env.PKG_DIR), format('{0}/scripts/convert-t3-mtl-to-gguf.py', env.PKG_DIR), format('{0}/scripts/convert-s3gen-to-gguf.py', env.PKG_DIR), format('{0}/scripts/convert-supertonic2-to-gguf.py', env.PKG_DIR)) }}
+          restore-keys: |
+            tts-ggml-cpp-mtl-supertonic-en-q4-v1-
+
+      - name: Convert HF -> q4_0 GGUFs (cache miss)
+        if: steps.cache-tts-ggml-models.outputs.cache-hit != 'true'
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Cache miss -- provisioning Python venv and converting models..."
+          bash scripts/setup-venv.sh
+          bash scripts/convert-models.sh -t multilingual -q q4_0
+          bash scripts/convert-models.sh -t supertonic-en -q q4_0
+          ls -lh models/
+
+      - name: Verify GGUFs for C++ tests
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in chatterbox-t3-mtl.gguf chatterbox-s3gen-mtl.gguf supertonic.gguf; do
+            if [ ! -s "models/$f" ]; then
+              echo "WARN: missing or empty models/$f -- gated tests will skip" >&2
+              ls -la models/ || true
+            else
+              echo "OK: models/$f"
+            fi
+          done
+
+      - name: Run C++ Unit Tests
+        id: cpp-tests
+        working-directory: ${{ env.PKG_DIR }}
+        env:
+          QVAC_TEST_CHATTERBOX_T3_GGUF: ${{ github.workspace }}/${{ env.PKG_DIR }}/models/chatterbox-t3-mtl.gguf
+          QVAC_TEST_CHATTERBOX_S3GEN_GGUF: ${{ github.workspace }}/${{ env.PKG_DIR }}/models/chatterbox-s3gen-mtl.gguf
+          QVAC_TEST_SUPERTONIC_GGUF: ${{ github.workspace }}/${{ env.PKG_DIR }}/models/supertonic.gguf
+        run: |
+          echo "=== Running TTS GGML C++ tests ==="
+          pwd
+          ls -la models/ || true
+          npm run test:cpp:run
+        continue-on-error: true
+
+      - name: Debug - List test output files
+        if: always()
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          echo "Contents of build/:"
+          ls -la build/ || echo "Directory not found"
+          echo "Profiling files:"
+          ls -la build/*.profraw || echo "No profraw files"
+
+      - name: Generate Coverage Report
+        if: matrix.coverage
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          npm run coverage:cpp:report
+          COVERAGE=$(grep 'TOTAL' build/coverage-summary.txt | awk '{print $10}')
+          echo "LINE_COVERAGE_PERCENTAGE=${COVERAGE}" >> $GITHUB_ENV
+          echo "Line Coverage: ${COVERAGE}" > coverage-badge.txt
+
+      - name: Show ccache statistics
+        if: matrix.platform == 'linux'
+        run: ccache -s
+
+      - name: Archive Coverage Results
+        if: matrix.coverage
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: coverage-report-tts-ggml-${{ matrix.platform }}-${{ matrix.arch }}
+          path: |
+            ${{ env.PKG_DIR }}/build/coverage-html/
+            ${{ env.PKG_DIR }}/build/lcov.info
+            ${{ env.PKG_DIR }}/build/coverage-summary.txt
+            ${{ env.PKG_DIR }}/build/cpp-test-results.xml
+          retention-days: 30
+
+      - name: Check if test results exist
+        id: check-test-results
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          if [ -f build/cpp-test-results.xml ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+        continue-on-error: true
+
+      - name: Publish Test Results
+        uses: EnricoMi/publish-unit-test-result-action@c950f6fb443cb5af20a377fd0dfaa78838901040 # 2.23.0
+        if: always() && steps.check-test-results.outputs.exists == 'true'
+        with:
+          files: ${{ env.PKG_DIR }}/build/cpp-test-results.xml
+          comment_mode: off
+          check_name: "C++ Test Results (${{ matrix.platform }}-${{ matrix.arch }})"
+
+      - name: Coverage Summary
+        if: matrix.coverage
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          echo "## C++ Coverage Summary (TTS GGML)" >> $GITHUB_STEP_SUMMARY
+          echo "**Platform:** ${{ matrix.platform }}-${{ matrix.arch }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Coverage:** ${{ env.LINE_COVERAGE_PERCENTAGE }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f build/coverage-summary.txt ]; then
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            cat build/coverage-summary.txt >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  coverage-report:
+    permissions:
+      contents: read
+      actions: read
+    needs: cpp-tests
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Download all coverage reports
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: coverage-reports
+
+      - name: Combine Coverage Reports
+        run: |
+          echo "## TTS GGML C++ Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Test Suite:** ChatterboxModel + SupertonicModel + AddonCpp" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          for report in coverage-reports/*/coverage-summary.txt; do
+            if [ -f "$report" ]; then
+              platform=$(basename $(dirname "$report"))
+              echo "### $platform" >> $GITHUB_STEP_SUMMARY
+              echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+              cat "$report" >> $GITHUB_STEP_SUMMARY
+              echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+            fi
+          done

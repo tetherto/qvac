@@ -20,9 +20,14 @@ add_executable(
   test_cancel_stale_flag.cpp
   test_img2img.cpp
   test_sd_gen_handlers.cpp
+  test_stb_image_security.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/utils/BackendLoader.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/utils/EsrganUpscaler.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/utils/ImageCodec.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/ImageUtils.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/EsrganUpscalerModel.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/SdModel.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/handlers/SdCtxHandlers.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/handlers/SdGenHandlers.cpp
@@ -50,7 +55,7 @@ target_include_directories(
   ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
 )
 
-# Set C++20 standard for std::views support (required by qvac-lib-inference-addon-cpp)
+# Set C++20 standard for std::views support (required by inference-addon-cpp)
 target_compile_features(addon-test PRIVATE cxx_std_20)
 
 # Set macOS deployment target for C++20 std::format support

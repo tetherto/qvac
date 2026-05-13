@@ -28,21 +28,21 @@ find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
 set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 
-project(qvac-lib-inference-addon-sd C CXX)
+project(inference-addon-sd C CXX)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   add_compile_options(-stdlib=libc++)
   add_link_options(-stdlib=libc++ -static-libstdc++)
 endif()
 
-find_path(VCPKG_INSTALLED_PATH share/qvac-lint-cpp/.clang-format REQUIRED)
-configure_file(${VCPKG_INSTALLED_PATH}/share/qvac-lint-cpp/.clang-format
+find_path(VCPKG_INSTALLED_PATH share/lint-cpp/.clang-format REQUIRED)
+configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.clang-format
                ${CMAKE_CURRENT_SOURCE_DIR}/.clang-format COPYONLY)
-configure_file(${VCPKG_INSTALLED_PATH}/share/qvac-lint-cpp/.clang-tidy
+configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.clang-tidy
                ${CMAKE_CURRENT_SOURCE_DIR}/.clang-tidy COPYONLY)
 
 find_path(PICOJSON_INCLUDE_DIRS "picojson/picojson.h")
-find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/JsInterface.hpp")
+find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/JsInterface.hpp")
 
 # stable-diffusion.cpp – uses the CMake config installed by the overlay port
 find_package(stable-diffusion-cpp CONFIG REQUIRED)
@@ -60,7 +60,7 @@ endif()
 bare_target(bare_target_value)
 bare_module_target("." unused_target NAME module_name VERSION unused_version)
 set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/${module_name}")
-message("Building qvac-lib-inference-addon-sd with BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VALUE}'")
+message("Building inference-addon-sd with BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VALUE}'")
 
 # On Android with GGML_BACKEND_DL, install GPU backend .so modules alongside
 # the addon so ggml can dlopen them at runtime.  CPU backends are statically
@@ -89,25 +89,29 @@ if(ANDROID AND GGML_BACKEND_DL)
   endforeach()
 endif()
 
-add_bare_module(qvac-lib-inference-addon-sd EXPORTS ${BACKEND_DL_EXPORTS})
+add_bare_module(inference-addon-sd EXPORTS ${BACKEND_DL_EXPORTS})
   set(ADDON_SOURCES
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/handlers/SdCtxHandlers.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/handlers/SdGenHandlers.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/EsrganUpscalerModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/SdModel.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/utils/BackendLoader.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/utils/EsrganUpscaler.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/utils/ImageCodec.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/ImageUtils.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
   )
 
   target_sources(
-    ${qvac-lib-inference-addon-sd}
+    ${inference-addon-sd}
     PRIVATE
       ${ADDON_SOURCES}
   )
 
   target_include_directories(
-    ${qvac-lib-inference-addon-sd}
+    ${inference-addon-sd}
     PRIVATE
       ${PICOJSON_INCLUDE_DIRS}
       ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
@@ -116,17 +120,17 @@ add_bare_module(qvac-lib-inference-addon-sd EXPORTS ${BACKEND_DL_EXPORTS})
   )
 
   target_link_libraries(
-    ${qvac-lib-inference-addon-sd}
+    ${inference-addon-sd}
     PRIVATE
       stable-diffusion::stable-diffusion
   )
 
-target_compile_features(${qvac-lib-inference-addon-sd} PRIVATE cxx_std_20)
-target_compile_definitions(${qvac-lib-inference-addon-sd} PUBLIC JS_LOGGER)
-target_compile_definitions(${qvac-lib-inference-addon-sd} PRIVATE BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}")
+target_compile_features(${inference-addon-sd} PRIVATE cxx_std_20)
+target_compile_definitions(${inference-addon-sd} PUBLIC JS_LOGGER)
+target_compile_definitions(${inference-addon-sd} PRIVATE BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}")
 
 if(GGML_BACKEND_DL)
-  target_compile_definitions(${qvac-lib-inference-addon-sd} PRIVATE GGML_BACKEND_DL)
+  target_compile_definitions(${inference-addon-sd} PRIVATE GGML_BACKEND_DL)
 endif()
 
 if(BUILD_TESTING)
@@ -138,9 +142,8 @@ endif()
 
 if(WIN32)
   target_link_libraries(
-    ${qvac-lib-inference-addon-sd}
+    ${inference-addon-sd}
     PRIVATE
       msvcrt.lib
   )
 endif()
-
