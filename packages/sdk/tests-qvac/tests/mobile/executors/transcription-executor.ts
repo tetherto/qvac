@@ -48,27 +48,11 @@ export class MobileTranscriptionExecutor extends ModelAssetExecutor<
   }
 
   private async loadAudioBytes(audioFileName: string): Promise<Uint8Array | TestResult> {
-    const audio = await this.loadAudioAssets();
-    const assetModule = audio[audioFileName];
-    if (!assetModule) {
-      return { passed: false, output: `Audio file not found: ${audioFileName}` };
-    }
-    // @ts-ignore - expo-asset is a peer dependency available in mobile context
-    const { Asset } = await import("expo-asset");
-    const asset = Asset.fromModule(assetModule);
-    asset.downloaded = false;
-    await asset.downloadAsync();
-    const uri: string = asset.localUri || asset.uri;
-    if (!uri) {
-      return {
-        passed: false,
-        output: `Failed to resolve asset: ${asset.name ?? audioFileName}`,
-      };
-    }
-    const fileUri = uri.startsWith("file://") ? uri : `file://${uri}`;
+    const uriResult = await this.resolveAudioAssetUri(audioFileName);
+    if (typeof uriResult !== "string") return uriResult;
     // @ts-ignore - expo-file-system is a peer dependency available in mobile context
     const { File } = await import("expo-file-system");
-    return await new File(fileUri).bytes();
+    return await new File(`file://${uriResult}`).bytes();
   }
 
   private async transcribeAudio(
