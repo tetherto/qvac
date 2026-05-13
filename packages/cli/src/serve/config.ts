@@ -9,6 +9,7 @@ const ENDPOINT_CATEGORY: Record<string, string> = {
   'llamacpp-embedding': 'embedding',
   whisper: 'transcription',
   'whispercpp-transcription': 'transcription',
+  'whispercpp-audio-translation': 'audio-translation',
   parakeet: 'transcription',
   'parakeet-transcription': 'transcription',
   nmt: 'translation',
@@ -92,6 +93,46 @@ export function normalizeEndpointCategory (sdkType: string): string {
   return ENDPOINT_CATEGORY[sdkType] ?? sdkType
 }
 
+const VIRTUAL_SDK_WHISPER_AUDIO_TRANSLATION = 'whispercpp-audio-translation'
+
+/**
+ * Resolves explicit serve.models entries: maps the virtual whisper translation
+ * alias to whispercpp-transcription + forces whisperConfig.translate=true.
+ * Exported for unit tests.
+ */
+export function resolveExplicitServeModel (type: string, config: Record<string, unknown>): {
+  sdkType: string
+  endpointCategory: string
+  config: Record<string, unknown>
+} {
+  if (type !== VIRTUAL_SDK_WHISPER_AUDIO_TRANSLATION) {
+    return {
+      sdkType: type,
+      endpointCategory: normalizeEndpointCategory(type),
+      config: { ...config }
+    }
+  }
+
+  const whisperRaw = config['whisperConfig']
+  const mergedWhisper =
+    whisperRaw !== null && typeof whisperRaw === 'object' && !Array.isArray(whisperRaw)
+      ? { ...(whisperRaw as Record<string, unknown>) }
+      : {}
+
+  if (mergedWhisper['translate'] === false) {
+    console.warn(
+      'serve.models: whispercpp-audio-translation forces whisperConfig.translate=true (ignoring translate=false)'
+    )
+  }
+  mergedWhisper['translate'] = true
+
+  return {
+    sdkType: 'whispercpp-transcription',
+    endpointCategory: 'audio-translation',
+    config: { ...config, whisperConfig: mergedWhisper }
+  }
+}
+
 function isConstantModelEntry (entry: unknown): entry is ConstantModelEntry {
   return (
     entry !== null &&
@@ -129,14 +170,17 @@ function parseExplicitEntry (alias: string, entry: ExplicitModelEntry): Resolved
     throw new Error(`serve.models.${alias}: "type" is required`)
   }
 
+  const rawConfig = entry.config ?? {}
+  const resolved = resolveExplicitServeModel(entry.type, rawConfig)
+
   return {
     alias,
     src: entry.src,
-    sdkType: entry.type,
-    endpointCategory: normalizeEndpointCategory(entry.type),
+    sdkType: resolved.sdkType,
+    endpointCategory: resolved.endpointCategory,
     isDefault: entry.default === true,
     preload: entry.preload === true,
-    config: entry.config ?? {}
+    config: resolved.config
   }
 }
 
