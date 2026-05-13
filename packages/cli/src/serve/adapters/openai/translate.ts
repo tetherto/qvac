@@ -236,6 +236,13 @@ export class InvalidImagePromptError extends Error {
   }
 }
 
+export class InvalidImageBatchCountError extends Error {
+  constructor (message: string) {
+    super(message)
+    this.name = 'InvalidImageBatchCountError'
+  }
+}
+
 export type ParsedImageSize =
   | { width: number; height: number }
   | { auto: true }
@@ -274,11 +281,13 @@ export function parseImageSize (size: unknown): ParsedImageSize {
   return { width, height }
 }
 
-const MAX_BATCH_COUNT = 4
-
 /**
  * Build the SDK diffusion call parameters from an OpenAI /v1/images/generations body.
- * Throws InvalidImagePromptError / InvalidImageSizeError on bad input.
+ * Throws InvalidImagePromptError / InvalidImageSizeError / InvalidImageBatchCountError on bad input.
+ *
+ * `n` is forwarded as `batch_count` with no upper bound — the SDK / underlying
+ * diffusion addon governs how large a batch is feasible. Only `n < 1` or
+ * non-integer values are rejected here.
  */
 export function extractImageGenerationParams (
   body: Record<string, unknown>,
@@ -301,8 +310,12 @@ export function extractImageGenerationParams (
     params.seed = body['seed']
   }
 
-  if (typeof body['n'] === 'number' && Number.isInteger(body['n']) && body['n'] > 0) {
-    params.batch_count = Math.min(body['n'], MAX_BATCH_COUNT)
+  if (body['n'] !== undefined) {
+    const n = body['n']
+    if (typeof n !== 'number' || !Number.isInteger(n) || n < 1) {
+      throw new InvalidImageBatchCountError(`"n" must be a positive integer (got ${JSON.stringify(n)}).`)
+    }
+    params.batch_count = n
   }
 
   return params
@@ -316,8 +329,9 @@ const IMAGE_UNSUPPORTED_PARAMS = [
 /**
  * Log warnings for OpenAI image-generation params we accept but do not forward to the SDK.
  *
- * `output_format` and `stream` are warned with extra context because they are commonly
- * sent by clients but Tier-1 always returns blocking PNG responses.
+ * `output_format` is warned with extra context because the response body is always PNG
+ * (the response object echoes `output_format: "png"` so clients can detect mismatch).
+ * `stream` is handled by the route itself (single-event SSE), so it is not warned here.
  */
 export function logImageUnsupportedParams (body: Record<string, unknown>, logger: Logger): void {
   for (const param of IMAGE_UNSUPPORTED_PARAMS) {
@@ -329,14 +343,6 @@ export function logImageUnsupportedParams (body: Record<string, unknown>, logger
   const outputFormat = body['output_format']
   if (typeof outputFormat === 'string' && outputFormat !== 'png') {
     logger.warn(`output_format=${outputFormat} is not supported; returning PNG.`)
-  }
-
-  if (body['stream'] === true) {
-    logger.warn('stream=true is not supported for /v1/images/generations; returning the blocking response.')
-  }
-
-  if (typeof body['n'] === 'number' && body['n'] > MAX_BATCH_COUNT) {
-    logger.warn(`n=${body['n']} exceeds maximum of ${MAX_BATCH_COUNT}; clamping.`)
   }
 }
 

@@ -6,7 +6,8 @@ import {
   logImageUnsupportedParams,
   encodeImageDataUrl,
   InvalidImagePromptError,
-  InvalidImageSizeError
+  InvalidImageSizeError,
+  InvalidImageBatchCountError
 } from '../src/serve/adapters/openai/translate.js'
 
 describe('parseImageSize', () => {
@@ -87,15 +88,18 @@ describe('extractImageGenerationParams', () => {
     assert.equal(params.seed, undefined)
   })
 
-  it('clamps n to MAX_BATCH_COUNT (4)', () => {
+  it('forwards positive integer n unchanged (no upper clamp)', () => {
     assert.equal(extractImageGenerationParams({ prompt: 'p', n: 1 }, 'm').batch_count, 1)
     assert.equal(extractImageGenerationParams({ prompt: 'p', n: 4 }, 'm').batch_count, 4)
-    assert.equal(extractImageGenerationParams({ prompt: 'p', n: 10 }, 'm').batch_count, 4)
+    assert.equal(extractImageGenerationParams({ prompt: 'p', n: 10 }, 'm').batch_count, 10)
+    assert.equal(extractImageGenerationParams({ prompt: 'p', n: 64 }, 'm').batch_count, 64)
   })
 
-  it('ignores non-positive n', () => {
-    assert.equal(extractImageGenerationParams({ prompt: 'p', n: 0 }, 'm').batch_count, undefined)
-    assert.equal(extractImageGenerationParams({ prompt: 'p', n: -3 }, 'm').batch_count, undefined)
+  it('throws InvalidImageBatchCountError on n < 1, non-integer, or non-number', () => {
+    assert.throws(() => extractImageGenerationParams({ prompt: 'p', n: 0 }, 'm'), InvalidImageBatchCountError)
+    assert.throws(() => extractImageGenerationParams({ prompt: 'p', n: -3 }, 'm'), InvalidImageBatchCountError)
+    assert.throws(() => extractImageGenerationParams({ prompt: 'p', n: 1.5 }, 'm'), InvalidImageBatchCountError)
+    assert.throws(() => extractImageGenerationParams({ prompt: 'p', n: '4' }, 'm'), InvalidImageBatchCountError)
   })
 
   it('propagates parseImageSize errors', () => {
@@ -154,29 +158,18 @@ describe('logImageUnsupportedParams', () => {
     assert.equal(warnings.length, 0)
   })
 
-  it('warns when stream=true', () => {
+  it('does not warn on stream (handled by route, not the warning helper)', () => {
     const { warnings, logger } = makeLogger()
     logImageUnsupportedParams({ stream: true }, logger)
-    assert.equal(warnings.length, 1)
-    assert.ok(warnings[0]!.includes('stream=true'))
-  })
-
-  it('does not warn when stream=false', () => {
-    const { warnings, logger } = makeLogger()
+    assert.equal(warnings.length, 0)
     logImageUnsupportedParams({ stream: false }, logger)
     assert.equal(warnings.length, 0)
   })
 
-  it('warns when n exceeds MAX_BATCH_COUNT', () => {
+  it('does not warn on n (forwarded as-is by extractImageGenerationParams)', () => {
     const { warnings, logger } = makeLogger()
     logImageUnsupportedParams({ n: 10 }, logger)
-    assert.equal(warnings.length, 1)
-    assert.ok(warnings[0]!.includes('n=10'))
-    assert.ok(warnings[0]!.includes('clamping'))
-  })
-
-  it('does not warn when n is at or below MAX_BATCH_COUNT', () => {
-    const { warnings, logger } = makeLogger()
+    assert.equal(warnings.length, 0)
     logImageUnsupportedParams({ n: 4 }, logger)
     assert.equal(warnings.length, 0)
   })
