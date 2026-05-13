@@ -1,6 +1,6 @@
 # Metal GPU Baseline Performance Report
 
-**Date**: 2026-05-07 (updated 2026-05-12 with fiber baseline + verified rebuild validation)
+**Date**: 2026-05-07 (updated 2026-05-12 with fiber baseline + verified rebuild validation, 2026-05-13 with fiber regression fix results)
 **Task**: QVAC-18293 — VLM inference profiling on Apple Metal GPUs
 **llama.cpp**: tag [`b9025`](https://github.com/ggml-org/llama.cpp/releases/tag/b9025) (commit [`eff06702`](https://github.com/ggml-org/llama.cpp/commit/eff06702b2a52e1020ea009ebd86cb9f5acabab5)), fiber fork `tetherto/temp-8189` (build 8412, commit `f686a1324`)
 
@@ -451,6 +451,83 @@ Observations:
 Raw results: `vlm-benchmark/results/parsed/mac-verified-2026-05-12T1500.json`
 Raw logs: `vlm-benchmark/results/raw/b9025-mac-2026-05-12T1500/` and `vlm-benchmark/results/raw/fiber-mac-2026-05-12T1500/`
 Prior run (unverified): `vlm-benchmark/results/parsed/mac-rerun-2026-05-12T1340.json`
+
+### 12. Three-way CLI comparison: b9025 vs U1 deepstack prealloc vs Fiber
+
+**Date**: 2026-05-11 (b9025, U1), 2026-05-12 (Fiber verified)
+**Builds**: b9025 tag `eff06702b`, U1 branch `feat/QVAC-18297-u1-deepstack-prealloc` (commit `3cd776c5c`), Fiber `tetherto/temp-8189` (build 8412, `f686a1324`)
+**Device**: Mac M4, Metal, identical test matrix
+
+#### Qwen3.5-2B Q4_K_M
+
+| Metric | b9025 | U1 | Δ U1 | Fiber | Δ Fiber |
+|--------|-------|-----|------|-------|---------|
+| Vision (ms) | 402 | 406 | +1.0% | 419 | +4.2% |
+| Img decode (ms) | 2 | 2 | — | — | — |
+| Prefill (t/s) | 333.0 | 331.5 | −0.4% | 302.1 | **−9.3%** |
+| Decode (t/s) | 53.74 | 53.82 | +0.1% | 38.21 | **−28.9%** |
+| Total (ms) | 5,748 | 5,743 | −0.1% | 7,768 | **+35.1%** |
+| Load (ms) | 192 | 197 | +2.6% | 214 | +11.5% |
+
+#### Gemma 4 E2B Q4_K_M
+
+| Metric | b9025 | U1 | Δ U1 | Fiber | Δ Fiber |
+|--------|-------|-----|------|-------|---------|
+| Vision (ms) | 604 | 603 | −0.2% | 603 | −0.2% |
+| Img decode (ms) | 26 | 22 | −15.4% | — | — |
+| Prefill (t/s) | 261.6 | 261.7 | +0.0% | 258.2 | −1.3% |
+| Decode (t/s) | 52.12 | 52.11 | −0.0% | 41.88 | **−19.6%** |
+| Total (ms) | 6,370 | 6,370 | 0.0% | 7,670 | **+20.4%** |
+| Load (ms) | 310 | 305 | −1.6% | 232 | −25.2% |
+
+#### Observations
+
+- **U1 is identical to b9025 on Mac M4** — all metrics within ±1%. Expected: U1 targets the Qwen3.5 iPhone 16e projection anomaly (183 ms → 11 ms). On Mac the projection is already 2 ms; there is no buffer reallocation overhead to eliminate.
+- **Fiber regresses decode by 19–29%** across both models, consistent with Findings #11 and #11a.
+- **Fiber prefill regresses 9.3% on Qwen3.5** but only 1.3% on Gemma4 — the missing fused GDN (4743 graph nodes vs 1377, 38 splits vs 2) disproportionately affects the SSM-heavy Qwen3.5 architecture.
+- **Fiber vision encode is stable** for Gemma4 (603 vs 604 ms) but 4.2% slower for Qwen3.5 (419 vs 402 ms).
+
+Raw data: `vlm-benchmark/results/parsed/mac-baseline-2026-05-11T1557.json` (b9025), `vlm-benchmark/results/parsed/mac-u1-2026-05-11T1557.json` (U1), `vlm-benchmark/results/parsed/mac-verified-2026-05-12T1500.json` (Fiber)
+
+### 13. Fiber decode regression fix — progressive improvement (QVAC-18297)
+
+**Date**: 2026-05-13
+**Branch**: `feat/QVAC-18297-fiber-updates` from `tetherto/temp-8189`
+**Device**: Mac M4, Metal, identical test matrix
+**Gap analysis**: `vlm-benchmark/QVAC-18297-fiber-b9025-gap.md`
+
+Four root causes identified, three fixes applied as individual commits:
+
+| Commit | Fix | Qwen3.5 Decode (t/s) | Gemma4 Decode (t/s) |
+|--------|-----|----------------------|---------------------|
+| baseline (fiber) | — | 38.21 | 41.88 |
+| RC2: cherry-pick `d1649047a` | Metal MUL_MAT Tensor API opt | 38.14 (−0.2%) | 42.09 (+0.5%) |
+| RC1: port GGML_OP_GATED_DELTA_NET | Fused GDN Metal SIMD kernel | 45.40 (+18.8%) | 40.90 (−2.3%) |
+| RC3: port `342d6125b` | FA dk512_dv512 instantiations | 45.23 (+18.4%) | **49.29 (+17.7%)** |
+| RC4: investigation only | No fix needed | — | — |
+
+**Final gap vs b9025**: Qwen3.5 −14.0% (45.23 vs 52.62), Gemma4 −2.8% (49.29 vs 50.72)
+
+#### Key findings
+
+- **RC2 (MUL_MAT)**: Zero effect on M4 Mac — the Metal Tensor API is disabled for pre-M5/pre-A19 devices (`has tensor = false`)
+- **RC1 (Fused GDN)**: Largest single improvement for Qwen3.5. Ported 4 upstream commits (c5a778891, d28961d81, e30f1fdf7, f17b3be63) as a single squashed commit. 16 files, 563 lines added. Graph splits reduced 38 → 3 for Qwen3.5 decode
+- **RC3 (FA dk512)**: Largest improvement for Gemma4. Root cause: Gemma4 E2B uses 512-dim heads for full-attention layers (every 5th layer); Metal had no FA kernel for dk512_dv512, causing auto-FA to globally disable Flash Attention. Added 19 template instantiations across all quant types
+- **RC4 (attn path)**: `9e4530f51` (view_4d→reshape_4d) and `6aff83a75` (Metal buffer fallback) are both no-ops on M4 Mac during single-token decode
+
+#### Remaining Qwen3.5 gap (−14.0%)
+
+Possible causes:
+1. Extra graph split: fiber has 3 splits (decode) vs b9025's 2 — one additional GPU↔CPU sync per token
+2. State layout transpose overhead: `ggml_cont(ggml_transpose(s))` on input and `ggml_transpose(s_new)` on output add 2 extra ops per GDN layer (fiber's `delta_net_ar` uses column-major state vs upstream's row-major `gated_delta_net`)
+3. Upstream micro-optimizations between merge base (4d828bd1a) and b9025 (836 commits) not yet ported
+
+Raw data:
+- `vlm-benchmark/results/parsed/mac-fiber-rc2-2026-05-13T0900.json`
+- `vlm-benchmark/results/parsed/mac-fiber-rc1-2026-05-13T0130.json`
+- `vlm-benchmark/results/parsed/mac-fiber-rc3-2026-05-13T0230.json`
+- Raw logs: `vlm-benchmark/results/raw/fiber-rc{1,2,3}-mac-2026-05-13T*/`
+- Binary archives: `vlm-benchmark/llama.cpp/binaries/fiber-rc{1,2}-*/`, `vlm-benchmark/binaries/fiber-rc3-fa/`
 
 ---
 
