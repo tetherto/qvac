@@ -5,21 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.6.8]
+## [0.7.0]
+
+### Fixed
+- iOS bare-kit hard-crash on `transcribe()` after `unload()` (Mach exception 309 / EXC_BAD_ACCESS / PAC failure inside `js_delete_reference` / `js_open_handle_scope`) caused by `qvac-lib-inference-addon-cpp` 1.1.6+ deferring `js_delete_reference()` into a `uv_close` close-callback that races worklet `js_env_t*` invalidation:
+  - Added a whisper-local `WhisperOutputCallBackJs` (`addon/src/addon/WhisperOutputCallbackJs.hpp`) that subclasses `OutputCallBackInterface` and synchronously deletes the JS references in its destructor (1.1.5-style ordering), keeping only the no-op `uv_async_t` teardown deferred. Wired into `createInstance` in `addon/src/addon/AddonJs.hpp` instead of the upstream `OutputCallBackJs`.
+  - Defense-in-depth: `WhisperInterface.destroyInstance()` (`whisper.js`) now yields twice via `setImmediate` after the native `destroyInstance` returns, guaranteeing a full libuv iteration boundary (and therefore the close phase) elapses before `unload()` resolves to the SDK.
 
 ### Changed
 - Bumped `qvac-lib-inference-addon-cpp` to `1.1.7#1`.
+- Bumped `whisper-cpp` to `1.8.4.2#1`.
+
+## [0.6.8]
+
+### Changed
+- Reverted `qvac-lib-inference-addon-cpp` to `1.1.5#1` due to iOS crash. It will be updated again in 0.7.0.
 
 ## [0.6.7]
 
 ### Changed
-- Bumped `@qvac/transcription-whispercpp` package version from `0.6.6` to `0.6.7`.
 - Bumped `qvac-lib-inference-addon-cpp` to `1.1.6`.
 
 ## [0.6.6]
-
-### Changed
-- Bumped `@qvac/transcription-whispercpp` package version from `0.6.5` to `0.6.6`.
 
 ### Removed
 - Removed redundant `path` (`npm:bare-path`) and `process` (`npm:bare-process@^4.2.2`) entries from `dependencies` in `package.json`. The `bare-path` package is already declared directly as `bare-path: "^3.0.0"`, and `process` was unused.
