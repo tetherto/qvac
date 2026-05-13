@@ -1,10 +1,12 @@
-# VLM Metal & Mobile GPU Baseline Performance Report
+# VLM Metal Baseline Performance Report
 
 **Date**: 2026-05-13
 **Tasks**: QVAC-18293 (profiling baseline), QVAC-18297 (optimization PR 1)
 **Assignee**: Ian Cris Lomugdang
 
-This report consolidates all VLM inference benchmark and profiling results from the QVAC-18293 investigation across Apple Metal devices (Mac M4, iPhone 16e) and Android mobile GPUs (Samsung S25 Adreno 830, Pixel 9 Pro Mali-G715). It includes branch comparison data (upstream b9025 vs U1 deepstack prealloc vs Fiber fork) and the fiber regression fix progression (RC1-RC4) from QVAC-18297.
+This report consolidates VLM inference benchmark and profiling results from the QVAC-18293 investigation on Apple Metal devices (Mac M4, iPhone 16e). It includes branch comparison data (upstream b9025 vs U1 deepstack prealloc vs Fiber fork) and the fiber regression fix progression (RC1-RC4) from QVAC-18297.
+
+Android mobile GPU results (Samsung S25 Adreno 830, Pixel 9 Pro Mali-G715) are in [Appendix D](#appendix-d-android-gpu-results). Full Android analysis will continue under a separate ticket and dedicated report document.
 
 ### llama.cpp Branches Tested
 
@@ -25,10 +27,10 @@ This report consolidates all VLM inference benchmark and profiling results from 
 |--------|-----|-----|-----------|--------|-------------|-----|--------|
 | Mac (local) | Apple M4 | Apple M4 GPU | 8 | 16 GB unified | Metal | macOS 26.4.1 | **Tested** |
 | iPhone 16e | Apple A18 | Apple A18 GPU | 5 | 8 GB (~5.7 GB usable) | Metal | iOS 18.5 | **Tested** |
-| Samsung S25 | Snapdragon 8 Elite | Adreno 830 | — | 12 GB | OpenCL | Android 16 (API 36) | **Tested** |
-| Pixel 9 Pro | Tensor G4 | Mali-G715 MC7 | — | 16 GB | Vulkan | Android 15 (API 35) | **Tested** |
 | iPhone 16 Pro | Apple A18 Pro | Apple A18 Pro GPU | 6 | — | — | — | **TODO**: not tested (Firebase `DEVICE_CAPACITY_NONE`) |
 | iPhone 17 | Apple A19 Pro | — | — | — | — | — | **TODO**: not tested (Firebase `DEVICE_CAPACITY_NONE`) |
+
+Android devices: see [Appendix D](#appendix-d-android-gpu-results).
 
 ### 1.2 Models
 
@@ -68,9 +70,8 @@ This report consolidates all VLM inference benchmark and profiling results from 
 |----------|-------|
 | Mac | Native arm64: `cmake .. -DCMAKE_BUILD_TYPE=Release -DGGML_METAL=ON` |
 | iPhone | Cross-compiled arm64 iOS via CMake + Xcode, `GGML_METAL=ON`, statically linked |
-| Android CPU | NDK r27b: `-DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-28 -DGGML_OPENMP=OFF` |
-| Android Vulkan | As above + `-DGGML_VULKAN=ON` + SPIR-V headers |
-| Android OpenCL | As above + `-DGGML_OPENCL=ON -DGGML_OPENCL_USE_ADRENO_KERNELS=ON` |
+
+Android build configs: see [Appendix D](#appendix-d-android-gpu-results).
 
 ### 1.6 Measurement Protocol
 
@@ -78,8 +79,6 @@ This report consolidates all VLM inference benchmark and profiling results from 
 - Mac: no cool-down (active cooling); mobile: 60s cool-down between runs
 - iPhone 16e CPU/Metal: `--predict 128` (256 triggers OOM/signal 9)
 - iPhone 16e vision encoder (mmproj/CLIP) runs on Metal regardless of `--gpu-layers` setting
-- Pixel 9 Pro Vulkan: `GGML_VK_DISABLE_COOPMAT=1`, `GGML_VK_DISABLE_COOPMAT2=1`
-- Samsung S25: OpenCL binary used for all tests; Vulkan binary crashes on load (driver bug)
 
 **TTFT derivation**: TTFT = vision pipeline time + (prompt tokens / prefill t/s x 1000) ms. The first generated token arrives after both vision processing and LLM prefill complete.
 
@@ -121,42 +120,7 @@ All results use elephant.jpg (612 x 408). **Peak RSS was not captured in the tes
 
 ^[p]^ Profiling run only (1 run, not 3-run median). Vision = encode 829 ms + projection 183 ms. **TODO**: Formal 3-run matrix entry.
 
-### Samsung S25 (Adreno 830)
-
-> Vulkan: N/A — Adreno 830 crashes when `libggml-vulkan.so` is loaded, even at `ngl=0` (driver bug).
-> Qwen3.5-2B: **TODO** — not benchmarked on S25.
-
-| Backend | Model | Quant | Vision (ms) | Prefill (t/s) | Decode (t/s) | TTFT (ms) | Peak RSS |
-|---------|-------|-------|------------|---------------|-------------|----------|----------|
-| OpenCL | E2B | Q4_K_M | 2,871 | 73.36 | 14.95 | 6,742 | **TODO** |
-| OpenCL | E2B | Q8_0 | 2,282 | 95.60 | 15.53 | 5,253 | **TODO** |
-| OpenCL | E4B | Q4_K_M | 2,669 | 68.55 | 9.34 | 6,812 | **TODO** |
-| OpenCL | E4B | Q8_0 | 2,801 | 70.29 | 8.03 | 6,841 | **TODO** |
-| CPU | E2B | Q4_K_M | 2,622 | 91.33 | 12.73 | 5,732 | **TODO** |
-| CPU | E2B | Q8_0 | 2,181 | 110.33 | 15.81 | 4,755 | **TODO** |
-| CPU | E4B | Q4_K_M | 2,378 | 82.95 | 7.21 | 5,802 | **TODO** |
-| CPU | E4B | Q8_0 | 2,185 | 71.89 | 7.42 | 6,135 | **TODO** |
-
-### Pixel 9 Pro (Mali-G715 MC7)
-
-> Qwen3.5-2B produces garbled output on ALL P9P backends (Vulkan: `@@@`, CPU: empty newlines) but works correctly on Apple Silicon. Performance numbers valid for throughput comparison.
-
-| Backend | Model | Quant | Vision (ms) | Prefill (t/s) | Decode (t/s) | TTFT (ms) | Peak RSS |
-|---------|-------|-------|------------|---------------|-------------|----------|----------|
-| Vulkan | E2B | Q4_K_M | 25,429 | 8.29 | 10.62 | 59,687 | **TODO** |
-| Vulkan | E2B | Q8_0 | 27,544 | 5.68 | 7.91 | 77,544 | **TODO** |
-| Vulkan | E4B | Q4_K_M | 27,703 | 5.43 | 6.89 | 80,005 | **TODO** |
-| Vulkan | E4B | Q8_0 | 33,773 | 2.86 | 4.69 | 133,074 | **TODO** |
-| Vulkan | Qwen3.5-2B | Q4_K_M | 17,843 | 9.48 | 14.22 | 45,798 | **TODO** |
-| OpenCL | E2B | Q4_K_M | 34,507 | 3.63 | 10.59 | 112,744 | **TODO** |
-| OpenCL | E2B | Q8_0 | 34,516 | 3.66 | 7.86 | 112,112 | **TODO** |
-| OpenCL | E4B | Q4_K_M | 41,073 | 2.06 | 6.89 | 178,937 | **TODO** |
-| OpenCL | E4B | Q8_0 | 40,928 | 2.08 | 4.64 | 177,466 | **TODO** |
-| CPU | E2B | Q4_K_M | 29,956 | 8.06 | 1.02 | 65,192 | **TODO** |
-| CPU | E2B | Q8_0 | 29,940 | 8.19 | 1.36 | 64,616 | **TODO** |
-| CPU | E4B | Q4_K_M | 30,005 | 7.42 | 0.73 | 68,280 | **TODO** |
-| CPU | E4B | Q8_0 | 29,945 | 7.68 | 0.79 | 66,924 | **TODO** |
-| CPU | Qwen3.5-2B | Q4_K_M | 21,850 | 4.76 | 1.97 | 77,522 | **TODO** |
+Android device results: see [Appendix D](#appendix-d-android-gpu-results).
 
 ---
 
@@ -217,27 +181,7 @@ OOM confirmed across both run-1 (2026-05-06) and run-2 (2026-05-07) with consist
 
 > On iPhone 16e, CPU wins on prefill and TTFT; Metal wins only on decode. The vision encoder (mmproj) runs on Metal regardless of backend setting.
 
-### 4.3 Samsung S25 — OpenCL vs CPU
-
-| Model | Quant | CPU Decode (t/s) | OpenCL Decode (t/s) | Speedup |
-|-------|-------|-----------------|---------------------|---------|
-| E2B | Q4_K_M | 12.73 | 14.95 | **1.17x** |
-| E2B | Q8_0 | 15.81 | 15.53 | 0.98x |
-| E4B | Q4_K_M | 7.21 | 9.34 | **1.30x** |
-| E4B | Q8_0 | 7.42 | 8.03 | **1.08x** |
-
-> S25 CPU is fast enough that GPU offloading provides only marginal decode speedup (1.1-1.3x). Q8_0 on CPU is faster than Q4_K_M due to simpler dequantization in the Oryon CPU SIMD pipeline.
-
-### 4.4 Pixel 9 Pro — Best GPU vs CPU
-
-| Model | Quant | CPU Decode (t/s) | Best GPU Decode (t/s) | Backend | Speedup |
-|-------|-------|-----------------|----------------------|---------|---------|
-| E2B | Q4_K_M | 1.02 | 10.62 | Vulkan | **10.4x** |
-| E2B | Q8_0 | 1.36 | 7.91 | Vulkan | **5.8x** |
-| E4B | Q4_K_M | 0.73 | 6.89 | Vulkan | **9.4x** |
-| E4B | Q8_0 | 0.79 | 4.69 | Vulkan | **5.9x** |
-
-> GPU offloading is essential on P9P — CPU decode is 0.7-1.4 t/s (unusable).
+Android GPU vs CPU comparisons: see [Appendix D](#appendix-d-android-gpu-results).
 
 ---
 
@@ -262,27 +206,9 @@ OOM confirmed across both run-1 (2026-05-06) and run-2 (2026-05-07) with consist
 | E2B | Q4_K_M | 1,724 | 3,492 | **2.03x** |
 | Qwen3.5-2B | Q4_K_M | 1,236 | — | — |
 
-### 5.2 Cross-Platform Best Decode (elephant.jpg, best backend per device)
+> Mac Metal TTFT is 2.0x faster than iPhone 16e.
 
-| Model | Quant | Mac Metal | iPhone 16e Metal | S25 Best | P9P Best | Mac/S25 | Mac/P9P |
-|-------|-------|----------|-----------------|---------|---------|---------|---------|
-| E2B | Q4_K_M | 51.28 t/s | 27.24 t/s | 14.95 (OCL) | 10.62 (VK) | **3.43x** | **4.83x** |
-| E2B | Q8_0 | 30.30 t/s | — (OOM) | 15.81 (CPU) | 7.91 (VK) | **1.92x** | **3.83x** |
-| E4B | Q4_K_M | 23.28 t/s | — (OOM) | 9.34 (OCL) | 6.89 (VK) | **2.49x** | **3.38x** |
-| E4B | Q8_0 | 15.26 t/s | — (OOM) | 8.03 (OCL) | 4.69 (VK) | **1.90x** | **3.25x** |
-| Qwen3.5-2B | Q4_K_M | 51.83 t/s | — | — | 14.22 (VK) | — | **3.64x** |
-
-### 5.3 Cross-Platform TTFT (elephant.jpg)
-
-| Model | Quant | Mac Metal (ms) | iPhone 16e Metal (ms) | S25 Best (ms) | P9P Best (ms) |
-|-------|-------|---------------|---------------------|--------------|--------------|
-| E2B | Q4_K_M | 1,724 | 3,492 | 5,732 (CPU) | 59,687 (VK) |
-| E2B | Q8_0 | 1,887 | — (OOM) | 4,755 (CPU) | 64,616 (CPU) |
-| E4B | Q4_K_M | 2,858 | — (OOM) | 5,802 (CPU) | 68,280 (CPU) |
-| E4B | Q8_0 | 2,880 | — (OOM) | 6,135 (CPU) | 66,924 (CPU) |
-| Qwen3.5-2B | Q4_K_M | 1,236 | — | — | 45,798 (VK) |
-
-> Mac Metal TTFT is 2.0-2.1x faster than iPhone 16e, 2.1-3.3x faster than S25, and 23-37x faster than P9P.
+Cross-platform comparisons including Android devices: see [Appendix D, Section D.6](#d6-cross-platform-comparison-all-devices).
 
 ---
 
@@ -517,7 +443,7 @@ CLI traces stored in `vlm-benchmark/results/traces/`. Addon traces in `vlm-bench
 
 Ranked by % of wall-clock time for E2B Q4_K_M on elephant.jpg. Percentages derived from benchmark timing data.
 
-> **TODO**: Profiler evidence screenshots (Perfetto / Xcode Instruments / Snapdragon Profiler / Mali Streamline) not included. Android profiler traces require local device access. iOS Metal System Traces captured but detailed shader/memory analysis pending.
+> **TODO**: Apple profiler evidence screenshots (Xcode Instruments Metal System Trace) not included. Detailed shader/memory analysis of captured traces pending.
 
 ### Mac M4 Metal (Total: 6,512 ms)
 
@@ -535,29 +461,7 @@ Ranked by % of wall-clock time for E2B Q4_K_M on elephant.jpg. Percentages deriv
 | 2 | Prefill | 2,330 ms | **23.6%** | CPU prefill is 1.28x faster (161 vs 126 t/s) |
 | 3 | Vision encode | 1,272 ms | **12.9%** | 2.08x slower than Mac due to fewer GPU cores |
 
-### Samsung S25 OpenCL (E2B Q4_K_M, est. total ~8,000 ms)
-
-| Rank | Phase | Time (est.) | % of Wall | Notes |
-|------|-------|------------|-----------|-------|
-| 1 | Prefill | ~3,871 ms | **~48%** | 73 t/s — OpenCL dispatch overhead |
-| 2 | Vision encode | 2,871 ms | **~36%** | Comparable to CPU (2,622 ms) |
-| 3 | Decode | ~1,300 ms | **~16%** | 14.95 t/s — marginal GPU speedup |
-
-### Pixel 9 Pro Vulkan (E2B Q4_K_M, est. total ~90,000 ms)
-
-| Rank | Phase | Time (est.) | % of Wall | Notes |
-|------|-------|------------|-----------|-------|
-| 1 | Prefill | ~34,258 ms | **~38%** | 8.29 t/s — extremely slow |
-| 2 | Vision encode | 25,429 ms | **~28%** | 10-15x slower than S25 and iPhone |
-| 3 | Decode | ~24,104 ms | **~27%** | 10.62 t/s — GPU essential (CPU is 1.02 t/s) |
-
-### Pixel 9 Pro CPU (E2B Q4_K_M, est. total ~316,000 ms)
-
-| Rank | Phase | Time (est.) | % of Wall | Notes |
-|------|-------|------------|-----------|-------|
-| 1 | Decode | ~250,980 ms | **~79%** | 1.02 t/s — unusable |
-| 2 | Prefill | ~35,236 ms | **~11%** | 8.06 t/s |
-| 3 | Vision encode | 29,956 ms | **~9%** | Runs on CPU (no GPU acceleration) |
+Android bottleneck analysis: see [Appendix D, Section D.7](#d7-top-3-bottlenecks-android).
 
 ---
 
@@ -579,7 +483,7 @@ Ranked by % of wall-clock time for E2B Q4_K_M on elephant.jpg. Percentages deriv
 
 6. **iPhone 16e memory is the primary Metal constraint.** Only E2B Q4_K_M (3.8 GB) fits in ~5.7 GB app limit. All larger models OOM.
 
-7. **Qwen3.5-2B works correctly on Metal (Mac + iPhone), garbled on Android P9P.** SSM (Gated Delta Net) architecture is correctly supported by Metal but broken on Tensor G4 / ARM64 Android runtime.
+7. **Qwen3.5-2B works correctly on Metal (Mac + iPhone).** SSM (Gated Delta Net) architecture is correctly supported by Metal. Garbled output observed on Pixel 9 Pro — see [Appendix D](#appendix-d-android-gpu-results).
 
 8. **Image projection behaves differently across devices.** `qwen3vl_merger` is 2 ms on Mac but 183 ms on iPhone 16e (5x slower than Gemma 4's `gemma4a`). Suggests merger requires GPU parallelism that 5-core GPU cannot exploit.
 
@@ -595,15 +499,7 @@ Ranked by % of wall-clock time for E2B Q4_K_M on elephant.jpg. Percentages deriv
 
 13. **Fiber regression fixes recovered most Gemma4 gap** (-2.8% remaining) **but Qwen3.5 retains a 14% gap.** RC1 (fused GDN) gave +18.8% for Qwen3.5; RC3 (FA dk512) gave +17.7% for Gemma4.
 
-### Mobile GPU
-
-14. **Samsung S25 dramatically outperforms Pixel 9 Pro.** 10-15x faster vision encode, 10-12x faster CPU decode, 1.4-2x faster GPU decode.
-
-15. **Vision encode dominates P9P latency.** 25-41 seconds on P9P vs 1-4s on S25 and ~1.2s on iPhone 16e. #1 optimization target for Tensor G4.
-
-16. **Adreno 830 Vulkan is broken.** Driver crashes on load; OpenCL is the only viable GPU backend on S25.
-
-17. **CPU decode on P9P is unusable.** 0.7-1.4 t/s — GPU offloading is essential.
+Android-specific findings: see [Appendix D, Section D.8](#d8-android-key-findings).
 
 ---
 
@@ -613,16 +509,23 @@ Items required by the Asana ticket (QVAC-18293) but not yet delivered:
 
 | # | Item | Status | Reason |
 |---|------|--------|--------|
-| 1 | **Peak RSS (MB)** | Not captured | `VmHWM` from `/proc/<pid>/status` not read in test harness; Xcode Memory Gauge not used |
+| 1 | **Peak RSS (MB) — Apple devices** | Not captured | Xcode Memory Gauge not used in test harness |
 | 2 | **iPhone 16 Pro** | Not tested | Firebase Test Lab: `DEVICE_CAPACITY_NONE` for `iphone16pro,version=18.3` |
 | 3 | **iPhone 17** | Not tested | Firebase Test Lab: `DEVICE_CAPACITY_NONE` |
-| 4 | **Android profiler traces** | Not captured | Perfetto, Snapdragon Profiler, Streamline require local device access (Firebase provides timing only) |
-| 5 | **Profiler evidence screenshots** | Not included | Top-3 bottleneck percentages derived from timing data, not profiler trace instrumentation |
-| 6 | **S25 Qwen3.5-2B** | Not benchmarked | Not included in original benchmark matrix |
-| 7 | **iPhone 16e Qwen3.5-2B** | Profiling run only | 1 run during Metal profiling; formal 3-run median entry not collected |
-| 8 | **Raw traces as Asana attachments** | Not uploaded | 6 trace files (~2.1 GB total) — too large for Asana attachment; stored locally |
-| 9 | **Executive summary comment** | Not posted | Pending report PR merge |
-| 10 | **Report PR reviewed and merged** | Pending | PR #1923 opened on `feat/QVAC-18293-profile-gemma4-vl-mobile-gpus` |
+| 4 | **Apple profiler evidence screenshots** | Not included | Metal System Traces captured but detailed shader/memory analysis pending |
+| 5 | **iPhone 16e Qwen3.5-2B** | Profiling run only | 1 run during Metal profiling; formal 3-run median entry not collected |
+| 6 | **Raw traces as Asana attachments** | Not uploaded | 6 trace files (~2.1 GB total) — too large for Asana attachment; stored locally |
+| 7 | **Executive summary comment** | Not posted | Pending report PR merge |
+| 8 | **Report PR reviewed and merged** | Pending | PR #1923 opened on `feat/QVAC-18293-profile-gemma4-vl-mobile-gpus` |
+
+### Android TODO items *(deferred to separate Android ticket and report doc)*
+
+| # | Item | Status | Reason |
+|---|------|--------|--------|
+| A1 | **Peak RSS (MB) — Android devices** | Not captured | `VmHWM` from `/proc/<pid>/status` not read in test harness |
+| A2 | **Android profiler traces** | Not captured | Perfetto, Snapdragon Profiler, Streamline require local device access (Firebase provides timing only) |
+| A3 | **Android profiler evidence screenshots** | Not included | Requires local device access for profiler instrumentation |
+| A4 | **S25 Qwen3.5-2B** | Not benchmarked | Not included in original benchmark matrix |
 
 ---
 
@@ -644,15 +547,37 @@ All paths relative to `vlm-benchmark/` in the working directory.
 | Fiber RC3 | `results/parsed/mac-fiber-rc3-2026-05-13T0230.json` |
 | Addon comparison | `results/parsed/addon-mac-2026-05-11T1943.json` |
 | Addon vs CLI diff | `results/diffs/addon-vs-cli-mac-2026-05-11T1943.md` |
+| Fiber gap analysis | `QVAC-18297-fiber-b9025-gap.md` |
+| All parsed results | `results/all_parsed_results.json` |
+
+**Raw logs — Mac:**
+
+| Data Set | Path |
+|----------|------|
 | Mac raw CLI logs | `results/raw/mac/` |
 | Mac raw addon logs | `results/raw/addon-mac-2026-05-11T1942/` |
-| iPhone raw logs | `results/ios-local/` |
 | b9025 raw logs (verified) | `results/raw/b9025-mac-2026-05-12T1500/` |
 | Fiber raw logs (verified) | `results/raw/fiber-mac-2026-05-12T1500/` |
 | Fiber RC1-3 raw logs | `results/raw/fiber-rc{1,2,3}-mac-2026-05-13T*/` |
-| Fiber gap analysis | `QVAC-18297-fiber-b9025-gap.md` |
+
+**Raw logs — iOS:**
+
+| Data Set | Path |
+|----------|------|
+| iPhone local logs | `results/ios-local/` |
+| iOS Firebase submissions | `results/benchmark-ios-e2b-q4/`, `benchmark-ios-e2b-q8/`, `benchmark-ios-e4b-q4/`, `benchmark-ios-e4b-q8/` |
+
+**Profiling traces:**
+
+| Data Set | Path |
+|----------|------|
 | CLI traces (4 files, ~1.55 GB) | `results/traces/` |
 | Addon traces (2 files, ~599 MB) | `results/traces/addon-mac-2026-05-11T1943/` |
+
+**Pre-compiled binaries:**
+
+| Data Set | Path |
+|----------|------|
 | Binary: b9025 (verified) | `llama.cpp/binaries/b9025/` |
 | Binary: b9025 (unverified, reference) | `llama.cpp/binaries/b9025-unverified/` |
 | Binary: Fiber (tetherto/temp-8189) | `llama.cpp/binaries/fiber-temp8189/` |
@@ -725,7 +650,206 @@ bare benchmarks/qvac-18297-vlm-cache-bench.js
 # --device cpu to force CPU; default is GPU on Mac arm64
 ```
 
-#### Android Firebase Test Lab
+---
+
+### Appendix D: Android GPU Results
+
+> Android GPU benchmarking will continue under a **separate ticket and dedicated report document**. The data below was collected during the QVAC-18293 Metal baseline investigation and is preserved here for reference.
+
+#### D.1 Android Devices
+
+| Device | SoC | GPU | GPU Cores | Memory | Best Backend | OS | Status |
+|--------|-----|-----|-----------|--------|-------------|-----|--------|
+| Samsung S25 | Snapdragon 8 Elite | Adreno 830 | — | 12 GB | OpenCL | Android 16 (API 36) | **Tested** |
+| Pixel 9 Pro | Tensor G4 | Mali-G715 MC7 | — | 16 GB | Vulkan | Android 15 (API 35) | **Tested** |
+
+#### D.2 Android Build Configuration
+
+| Platform | Build |
+|----------|-------|
+| Android CPU | NDK r27b: `-DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-28 -DGGML_OPENMP=OFF` |
+| Android Vulkan | As above + `-DGGML_VULKAN=ON` + SPIR-V headers |
+| Android OpenCL | As above + `-DGGML_OPENCL=ON -DGGML_OPENCL_USE_ADRENO_KERNELS=ON` |
+
+#### D.3 Android Measurement Protocol Notes
+
+- Pixel 9 Pro Vulkan: `GGML_VK_DISABLE_COOPMAT=1`, `GGML_VK_DISABLE_COOPMAT2=1`
+- Samsung S25: OpenCL binary used for all tests; Vulkan binary crashes on load (driver bug)
+- All other parameters same as [Section 1.4](#14-inference-parameters)
+
+#### D.4 Primary Results
+
+All results use elephant.jpg (612 x 408). Peak RSS not captured.
+
+##### Samsung S25 (Adreno 830)
+
+> Vulkan: N/A — Adreno 830 crashes when `libggml-vulkan.so` is loaded, even at `ngl=0` (driver bug).
+> Qwen3.5-2B: not benchmarked on S25.
+
+| Backend | Model | Quant | Vision (ms) | Prefill (t/s) | Decode (t/s) | TTFT (ms) | Peak RSS |
+|---------|-------|-------|------------|---------------|-------------|----------|----------|
+| OpenCL | E2B | Q4_K_M | 2,871 | 73.36 | 14.95 | 6,742 | **TODO** |
+| OpenCL | E2B | Q8_0 | 2,282 | 95.60 | 15.53 | 5,253 | **TODO** |
+| OpenCL | E4B | Q4_K_M | 2,669 | 68.55 | 9.34 | 6,812 | **TODO** |
+| OpenCL | E4B | Q8_0 | 2,801 | 70.29 | 8.03 | 6,841 | **TODO** |
+| CPU | E2B | Q4_K_M | 2,622 | 91.33 | 12.73 | 5,732 | **TODO** |
+| CPU | E2B | Q8_0 | 2,181 | 110.33 | 15.81 | 4,755 | **TODO** |
+| CPU | E4B | Q4_K_M | 2,378 | 82.95 | 7.21 | 5,802 | **TODO** |
+| CPU | E4B | Q8_0 | 2,185 | 71.89 | 7.42 | 6,135 | **TODO** |
+
+##### Pixel 9 Pro (Mali-G715 MC7)
+
+> Qwen3.5-2B produces garbled output on ALL P9P backends (Vulkan: `@@@`, CPU: empty newlines) but works correctly on Apple Silicon. Performance numbers valid for throughput comparison.
+
+| Backend | Model | Quant | Vision (ms) | Prefill (t/s) | Decode (t/s) | TTFT (ms) | Peak RSS |
+|---------|-------|-------|------------|---------------|-------------|----------|----------|
+| Vulkan | E2B | Q4_K_M | 25,429 | 8.29 | 10.62 | 59,687 | **TODO** |
+| Vulkan | E2B | Q8_0 | 27,544 | 5.68 | 7.91 | 77,544 | **TODO** |
+| Vulkan | E4B | Q4_K_M | 27,703 | 5.43 | 6.89 | 80,005 | **TODO** |
+| Vulkan | E4B | Q8_0 | 33,773 | 2.86 | 4.69 | 133,074 | **TODO** |
+| Vulkan | Qwen3.5-2B | Q4_K_M | 17,843 | 9.48 | 14.22 | 45,798 | **TODO** |
+| OpenCL | E2B | Q4_K_M | 34,507 | 3.63 | 10.59 | 112,744 | **TODO** |
+| OpenCL | E2B | Q8_0 | 34,516 | 3.66 | 7.86 | 112,112 | **TODO** |
+| OpenCL | E4B | Q4_K_M | 41,073 | 2.06 | 6.89 | 178,937 | **TODO** |
+| OpenCL | E4B | Q8_0 | 40,928 | 2.08 | 4.64 | 177,466 | **TODO** |
+| CPU | E2B | Q4_K_M | 29,956 | 8.06 | 1.02 | 65,192 | **TODO** |
+| CPU | E2B | Q8_0 | 29,940 | 8.19 | 1.36 | 64,616 | **TODO** |
+| CPU | E4B | Q4_K_M | 30,005 | 7.42 | 0.73 | 68,280 | **TODO** |
+| CPU | E4B | Q8_0 | 29,945 | 7.68 | 0.79 | 66,924 | **TODO** |
+| CPU | Qwen3.5-2B | Q4_K_M | 21,850 | 4.76 | 1.97 | 77,522 | **TODO** |
+
+#### D.5 Android GPU vs CPU Speedup
+
+##### Samsung S25 — OpenCL vs CPU
+
+| Model | Quant | CPU Decode (t/s) | OpenCL Decode (t/s) | Speedup |
+|-------|-------|-----------------|---------------------|---------|
+| E2B | Q4_K_M | 12.73 | 14.95 | **1.17x** |
+| E2B | Q8_0 | 15.81 | 15.53 | 0.98x |
+| E4B | Q4_K_M | 7.21 | 9.34 | **1.30x** |
+| E4B | Q8_0 | 7.42 | 8.03 | **1.08x** |
+
+> S25 CPU is fast enough that GPU offloading provides only marginal decode speedup (1.1-1.3x). Q8_0 on CPU is faster than Q4_K_M due to simpler dequantization in the Oryon CPU SIMD pipeline.
+
+##### Pixel 9 Pro — Best GPU vs CPU
+
+| Model | Quant | CPU Decode (t/s) | Best GPU Decode (t/s) | Backend | Speedup |
+|-------|-------|-----------------|----------------------|---------|---------|
+| E2B | Q4_K_M | 1.02 | 10.62 | Vulkan | **10.4x** |
+| E2B | Q8_0 | 1.36 | 7.91 | Vulkan | **5.8x** |
+| E4B | Q4_K_M | 0.73 | 6.89 | Vulkan | **9.4x** |
+| E4B | Q8_0 | 0.79 | 4.69 | Vulkan | **5.9x** |
+
+> GPU offloading is essential on P9P — CPU decode is 0.7-1.4 t/s (unusable).
+
+#### D.6 Cross-Platform Comparison (All Devices)
+
+##### Best Decode (elephant.jpg, best backend per device)
+
+| Model | Quant | Mac Metal | iPhone 16e Metal | S25 Best | P9P Best | Mac/S25 | Mac/P9P |
+|-------|-------|----------|-----------------|---------|---------|---------|---------|
+| E2B | Q4_K_M | 51.28 t/s | 27.24 t/s | 14.95 (OCL) | 10.62 (VK) | **3.43x** | **4.83x** |
+| E2B | Q8_0 | 30.30 t/s | — (OOM) | 15.81 (CPU) | 7.91 (VK) | **1.92x** | **3.83x** |
+| E4B | Q4_K_M | 23.28 t/s | — (OOM) | 9.34 (OCL) | 6.89 (VK) | **2.49x** | **3.38x** |
+| E4B | Q8_0 | 15.26 t/s | — (OOM) | 8.03 (OCL) | 4.69 (VK) | **1.90x** | **3.25x** |
+| Qwen3.5-2B | Q4_K_M | 51.83 t/s | — | — | 14.22 (VK) | — | **3.64x** |
+
+##### TTFT (elephant.jpg)
+
+| Model | Quant | Mac Metal (ms) | iPhone 16e Metal (ms) | S25 Best (ms) | P9P Best (ms) |
+|-------|-------|---------------|---------------------|--------------|--------------|
+| E2B | Q4_K_M | 1,724 | 3,492 | 5,732 (CPU) | 59,687 (VK) |
+| E2B | Q8_0 | 1,887 | — (OOM) | 4,755 (CPU) | 64,616 (CPU) |
+| E4B | Q4_K_M | 2,858 | — (OOM) | 5,802 (CPU) | 68,280 (CPU) |
+| E4B | Q8_0 | 2,880 | — (OOM) | 6,135 (CPU) | 66,924 (CPU) |
+| Qwen3.5-2B | Q4_K_M | 1,236 | — | — | 45,798 (VK) |
+
+> Mac Metal TTFT is 2.0-2.1x faster than iPhone 16e, 2.1-3.3x faster than S25, and 23-37x faster than P9P.
+
+#### D.7 Top-3 Bottlenecks (Android)
+
+Ranked by % of wall-clock time for E2B Q4_K_M on elephant.jpg. Percentages derived from benchmark timing data.
+
+> **TODO** *(deferred to separate Android ticket and report doc)*: Profiler evidence screenshots (Perfetto, Snapdragon Profiler, Mali Streamline) not included. Requires local device access.
+
+##### Samsung S25 OpenCL (E2B Q4_K_M, est. total ~8,000 ms)
+
+| Rank | Phase | Time (est.) | % of Wall | Notes |
+|------|-------|------------|-----------|-------|
+| 1 | Prefill | ~3,871 ms | **~48%** | 73 t/s — OpenCL dispatch overhead |
+| 2 | Vision encode | 2,871 ms | **~36%** | Comparable to CPU (2,622 ms) |
+| 3 | Decode | ~1,300 ms | **~16%** | 14.95 t/s — marginal GPU speedup |
+
+##### Pixel 9 Pro Vulkan (E2B Q4_K_M, est. total ~90,000 ms)
+
+| Rank | Phase | Time (est.) | % of Wall | Notes |
+|------|-------|------------|-----------|-------|
+| 1 | Prefill | ~34,258 ms | **~38%** | 8.29 t/s — extremely slow |
+| 2 | Vision encode | 25,429 ms | **~28%** | 10-15x slower than S25 and iPhone |
+| 3 | Decode | ~24,104 ms | **~27%** | 10.62 t/s — GPU essential (CPU is 1.02 t/s) |
+
+##### Pixel 9 Pro CPU (E2B Q4_K_M, est. total ~316,000 ms)
+
+| Rank | Phase | Time (est.) | % of Wall | Notes |
+|------|-------|------------|-----------|-------|
+| 1 | Decode | ~250,980 ms | **~79%** | 1.02 t/s — unusable |
+| 2 | Prefill | ~35,236 ms | **~11%** | 8.06 t/s |
+| 3 | Vision encode | 29,956 ms | **~9%** | Runs on CPU (no GPU acceleration) |
+
+#### D.8 Android Key Findings
+
+14. **Samsung S25 dramatically outperforms Pixel 9 Pro.** 10-15x faster vision encode, 10-12x faster CPU decode, 1.4-2x faster GPU decode.
+
+15. **Vision encode dominates P9P latency.** 25-41 seconds on P9P vs 1-4s on S25 and ~1.2s on iPhone 16e. #1 optimization target for Tensor G4.
+
+16. **Adreno 830 Vulkan is broken.** Driver crashes on load; OpenCL is the only viable GPU backend on S25.
+
+17. **CPU decode on P9P is unusable.** 0.7-1.4 t/s — GPU offloading is essential.
+
+#### D.9 Android TODO Items *(deferred to separate Android ticket and report doc)*
+
+| # | Item | Status | Reason |
+|---|------|--------|--------|
+| A1 | **Peak RSS (MB) — Android devices** | Not captured | `VmHWM` from `/proc/<pid>/status` not read in test harness |
+| A2 | **Android profiler traces** | Not captured | Perfetto, Snapdragon Profiler, Streamline require local device access (Firebase provides timing only) |
+| A3 | **Android profiler evidence screenshots** | Not included | Requires local device access for profiler instrumentation |
+| A4 | **S25 Qwen3.5-2B** | Not benchmarked | Not included in original benchmark matrix |
+
+#### D.10 Android Raw Data & Firebase Paths
+
+All paths relative to `vlm-benchmark/` in the working directory.
+
+**Raw logs — Firebase (Android):**
+
+| Data Set | Path |
+|----------|------|
+| S25 Firebase raw logs | `results/raw/firebase-s25/` |
+| P9P Firebase raw logs | `results/raw/firebase-pixel9/` |
+| S25 E2B Q4 runs (v3-v6) | `results/raw/benchmark-s25-e2b-q4-v3/` through `benchmark-s25-e2b-q4-v6/` |
+| S25 E2B Q8 runs | `results/raw/benchmark-s25-e2b-q8-v6/` |
+| P9P E2B Q4 CPU | `results/raw/benchmark-p9p-e2b-q4-cpu/` |
+| P9P E2B Q4 GPU | `results/raw/benchmark-p9p-e2b-q4-gpu/` |
+| P9P E4B Q4 CPU | `results/raw/benchmark-p9p-e4b-q4-cpu/` |
+| P9P E4B Q4 GPU | `results/raw/benchmark-p9p-e4b-q4-gpu/` |
+| P9P E4B Q8 GPU | `results/raw/benchmark-p9p-e4b-q8-gpu/` |
+| GCS results bucket | `gs://qvac-vlm-benchmark-results/` |
+| GCS: S25 OpenCL run | `gs://qvac-vlm-benchmark-results/gpu-opencl-s25-20260506/` |
+| GCS: P9P all backends | `gs://qvac-vlm-benchmark-results/gpu-pixel9-20260506/` |
+| GCS: Qwen3.5 P9P VK | `gs://qvac-vlm-benchmark-results/qwen35-p9p-vulkan-20260507/` |
+| GCS: Qwen3.5 P9P CPU+OCL | `gs://qvac-vlm-benchmark-results/qwen35-p9p-cpu-opencl-20260507/` |
+
+**Firebase APK wrappers:**
+
+| Data Set | Path |
+|----------|------|
+| Android CPU APK | `firebase-benchmark/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk` |
+| Android GPU APK | `firebase-benchmark-gpu/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk` |
+| iOS XCTest wrapper | `firebase-benchmark-ios/` |
+| GCS models bucket | `gs://qvac-vlm-benchmark-models/` |
+
+#### D.11 How to Reproduce (Android)
+
+##### Android Firebase Test Lab
 
 ```
 gcloud firebase test android run \
