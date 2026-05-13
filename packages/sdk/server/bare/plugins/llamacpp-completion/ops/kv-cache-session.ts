@@ -435,6 +435,15 @@ export function createKvCacheSession(modelId: string): KvCacheSession {
  *      so any per-cache count under the deleted tree is forgotten.
  *   3. `initializedCaches`: scope clear by `(kvCacheKey[, modelId])`,
  *      matching the on-disk scope.
+ *
+ * Concurrency with in-flight turns: this delete is wire-async with
+ * respect to any turn currently holding a `TurnHandle` for the same
+ * cache key. Worst case the on-disk `.bin` is removed while a turn is
+ * mid-write; the turn's eventual `commitTurn(...)` then fails the
+ * `verifySaveAndRecord` probe (file gone) and rolls back idempotently.
+ * No coordination primitive is needed because every layer's mutation
+ * is idempotent (`unlink` no-ops if missing, `Map.delete` / `Set.delete`
+ * no-op on absent keys).
  */
 export async function deleteKvCacheState(
   target: { kvCacheKey: string; modelId?: string } | { all: true },

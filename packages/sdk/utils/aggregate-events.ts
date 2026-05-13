@@ -50,6 +50,9 @@ export function aggregateEvents(events: CompletionEvent[]): AggregatedEvents {
       if ("raw" in event && event.raw) {
         rawFullText = event.raw.fullText;
       }
+      // Error wins over cancelled if a wire event ever carries both
+      // signals: a mid-stream addon failure makes the partial state
+      // unsafe to expose, regardless of why the loop exited.
       if (event.stopReason === "error" && "error" in event) {
         error = event.error;
       } else if (event.stopReason === "cancelled") {
