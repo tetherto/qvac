@@ -31,27 +31,6 @@ permissions:
   contents: read
 
 jobs:
-  label-gate:
-    name: Authorise (label-gate)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    outputs:
-      authorised: ${{ steps.gate.outputs.authorised }}
-    steps:
-      - name: Checkout (label-gate action only)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/actions/label-gate
-          sparse-checkout-cone-mode: false
-      - name: Run label-gate
-        id: gate
-        uses: ./.github/actions/label-gate
-        with:
-          github-token: ${{ secrets.PAT_TOKEN }}
-
   setup:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -80,8 +59,8 @@ jobs:
           fi
 
   build:
-    needs: [setup, label-gate]
-    if: needs.label-gate.outputs.authorised == 'true' && needs.setup.outputs.qvac_needed == 'true'
+    needs: setup
+    if: needs.setup.outputs.qvac_needed == 'true'
     runs-on: ubuntu-24.04
     environment: release
     timeout-minutes: 120
@@ -169,8 +148,11 @@ jobs:
           retention-days: 1
 
   evaluate:
-    needs: [setup, build, label-gate]
-    if: needs.label-gate.outputs.authorised == 'true' && (always() && needs.setup.result == 'success' && (needs.build.result == 'success' || needs.build.result == 'skipped'))
+    needs: [setup, build]
+    if: |
+      always() &&
+      needs.setup.result == 'success' &&
+      (needs.build.result == 'success' || needs.build.result == 'skipped')
     runs-on: ubuntu-24.04
     environment: release
     timeout-minutes: 180

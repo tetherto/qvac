@@ -54,30 +54,7 @@ on:
         type: string
 
 jobs:
-  label-gate:
-    name: Authorise (label-gate)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    outputs:
-      authorised: ${{ steps.gate.outputs.authorised }}
-    steps:
-      - name: Checkout (label-gate action only)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/actions/label-gate
-          sparse-checkout-cone-mode: false
-      - name: Run label-gate
-        id: gate
-        uses: ./.github/actions/label-gate
-        with:
-          github-token: ${{ secrets.PAT_TOKEN }}
-
   run-integration-tests:
-    needs: [label-gate]
-    if: needs.label-gate.outputs.authorised == 'true'
     timeout-minutes: 60
     continue-on-error: true
     runs-on: ${{ matrix.os }}
@@ -124,7 +101,8 @@ jobs:
             platform: win32
             arch: x64
             benchmark_matrix_json: >-
-              [{"modelFile":"ggml-tiny.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-tiny.bin","useGPU":true,"backendHint":"directml"}] #magic___^_^___line
+              [{"modelFile":"ggml-tiny.bin","useGPU":false,"backendHint":"cpu"},{"modelFile":"ggml-tiny.bin","useGPU":true,"backendHint":"directml"}]
+
     steps:
       - name: Setup Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
@@ -243,7 +221,7 @@ jobs:
         run: npm run test:stand-alone:gpu
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
-
+          
       - name: Run RTF benchmark (Unix)
         if: ${{ always() && matrix.platform != 'win32' && inputs.run_rtf_benchmarks != false }}
         continue-on-error: true

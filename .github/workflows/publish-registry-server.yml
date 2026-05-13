@@ -51,31 +51,11 @@ jobs:
         with:
           github-token: ${{ github.token }}
 
-  label-gate:
-    name: Authorise (label-gate)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    outputs:
-      authorised: ${{ steps.gate.outputs.authorised }}
-    steps:
-      - name: Checkout (label-gate action only)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/actions/label-gate
-          sparse-checkout-cone-mode: false
-      - name: Run label-gate
-        id: gate
-        uses: ./.github/actions/label-gate
-        with:
-          github-token: ${{ secrets.PAT_TOKEN }}
-
   release-merge-guard-schema:
     name: Release Merge Guard (Schema)
     if: >-
-      github.event_name == 'push' && startsWith(github.ref_name, 'release-qvac-registry-schema')
+      github.event_name == 'push' &&
+      startsWith(github.ref_name, 'release-qvac-registry-schema')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -94,7 +74,8 @@ jobs:
   release-merge-guard-client:
     name: Release Merge Guard (Client)
     if: >-
-      github.event_name == 'push' && startsWith(github.ref_name, 'release-qvac-registry-client')
+      github.event_name == 'push' &&
+      startsWith(github.ref_name, 'release-qvac-registry-client')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -111,10 +92,10 @@ jobs:
           changelog-path: packages/registry-server/client/CHANGELOG.md
 
   detect-changes:
-    needs: [authorize, label-gate]
+    needs: [authorize]
     runs-on: ubuntu-latest
     environment: release
-    if: needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
+    if: needs.authorize.outputs.allowed == 'true'
     outputs:
       schema_changed: ${{ steps.filter.outputs.schema }}
       client_changed: ${{ steps.filter.outputs.client }}
@@ -226,8 +207,13 @@ jobs:
           echo "gpr_tag=$gpr_tag" >> "$GITHUB_OUTPUT"
 
   publish-schema-gpr:
-    needs: [authorize, detect-changes, publish-logic, label-gate]
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true' && needs.detect-changes.outputs.schema_changed == 'true' && (needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_tmp == 'true'))
+    needs: [authorize, detect-changes, publish-logic]
+    if: |
+      needs.authorize.outputs.allowed == 'true' &&
+      needs.detect-changes.outputs.schema_changed == 'true' &&
+      (needs.publish-logic.outputs.publish_feature == 'true' ||
+       needs.publish-logic.outputs.publish_main == 'true' ||
+       needs.publish-logic.outputs.publish_tmp == 'true')
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -258,8 +244,13 @@ jobs:
           name-suffix: ${{ env.NAME_SUFFIX }}
 
   publish-schema-npm:
-    needs: [authorize, detect-changes, publish-logic, release-merge-guard-schema, label-gate]
-    if: needs.label-gate.outputs.authorised == 'true' && (always() && needs.authorize.outputs.allowed == 'true' && needs.detect-changes.outputs.schema_changed == 'true' && needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard-schema.result == 'success' || needs.release-merge-guard-schema.result == 'skipped'))
+    needs: [authorize, detect-changes, publish-logic, release-merge-guard-schema]
+    if: |
+      always() &&
+      needs.authorize.outputs.allowed == 'true' &&
+      needs.detect-changes.outputs.schema_changed == 'true' &&
+      needs.publish-logic.outputs.publish_release == 'true' &&
+      (needs.release-merge-guard-schema.result == 'success' || needs.release-merge-guard-schema.result == 'skipped')
     runs-on: ubuntu-latest
     environment: npm
     outputs:
@@ -326,8 +317,10 @@ jobs:
       workdir: "packages/registry-server/shared"
 
   lint-and-test:
-    needs: [authorize, detect-changes, label-gate]
-    if: needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true' && needs.detect-changes.outputs.client_changed == 'true'
+    needs: [authorize, detect-changes]
+    if: |
+      needs.authorize.outputs.allowed == 'true' &&
+      needs.detect-changes.outputs.client_changed == 'true'
     permissions:
       contents: read
       packages: read
@@ -393,8 +386,13 @@ jobs:
         run: npm run typecheck
 
   publish-client-gpr:
-    needs: [authorize, detect-changes, publish-logic, lint-and-test, label-gate]
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true' && needs.detect-changes.outputs.client_changed == 'true' && (needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_tmp == 'true'))
+    needs: [authorize, detect-changes, publish-logic, lint-and-test]
+    if: |
+      needs.authorize.outputs.allowed == 'true' &&
+      needs.detect-changes.outputs.client_changed == 'true' &&
+      (needs.publish-logic.outputs.publish_feature == 'true' ||
+       needs.publish-logic.outputs.publish_main == 'true' ||
+       needs.publish-logic.outputs.publish_tmp == 'true')
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -427,8 +425,13 @@ jobs:
           name-suffix: ${{ env.NAME_SUFFIX }}
 
   publish-client-npm:
-    needs: [authorize, detect-changes, publish-logic, lint-and-test, release-merge-guard-client, label-gate]
-    if: needs.label-gate.outputs.authorised == 'true' && (always() && needs.authorize.outputs.allowed == 'true' && needs.detect-changes.outputs.client_changed == 'true' && needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard-client.result == 'success' || needs.release-merge-guard-client.result == 'skipped'))
+    needs: [authorize, detect-changes, publish-logic, lint-and-test, release-merge-guard-client]
+    if: |
+      always() &&
+      needs.authorize.outputs.allowed == 'true' &&
+      needs.detect-changes.outputs.client_changed == 'true' &&
+      needs.publish-logic.outputs.publish_release == 'true' &&
+      (needs.release-merge-guard-client.result == 'success' || needs.release-merge-guard-client.result == 'skipped')
     runs-on: ubuntu-latest
     environment: npm
     outputs:

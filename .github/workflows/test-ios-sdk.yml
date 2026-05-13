@@ -94,27 +94,6 @@ permissions:
   contents: read
 
 jobs:
-  label-gate:
-    name: Authorise (label-gate)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    outputs:
-      authorised: ${{ steps.gate.outputs.authorised }}
-    steps:
-      - name: Checkout (label-gate action only)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/actions/label-gate
-          sparse-checkout-cone-mode: false
-      - name: Run label-gate
-        id: gate
-        uses: ./.github/actions/label-gate
-        with:
-          github-token: ${{ secrets.PAT_TOKEN }}
-
   report-start:
     name: "[ios] report-start"
     runs-on: ubuntu-latest
@@ -140,8 +119,6 @@ jobs:
           exclude-suite: ${{ inputs.exclude-suite }}
 
   build:
-    needs: [label-gate]
-    if: needs.label-gate.outputs.authorised == 'true'
     name: "[ios] build"
     runs-on: macos-14
     environment: release
@@ -450,8 +427,7 @@ jobs:
 
   device-farm:
     name: "[ios] device-farm"
-    needs: [build, label-gate]
-    if: needs.label-gate.outputs.authorised == 'true'
+    needs: build
     runs-on: ubuntu-latest
     environment: release
     timeout-minutes: 45
@@ -636,8 +612,7 @@ jobs:
 
   run-producer:
     name: "[ios] run-producer"
-    needs: [build, label-gate]
-    if: needs.label-gate.outputs.authorised == 'true'
+    needs: build
     runs-on: ubuntu-latest
     environment: release
     timeout-minutes: 90
@@ -869,8 +844,8 @@ jobs:
 
   cleanup-device-farm:
     name: "[ios] cleanup-device-farm"
-    needs: [build, run-producer, device-farm, label-gate]
-    if: needs.label-gate.outputs.authorised == 'true' && always()
+    needs: [build, run-producer, device-farm]
+    if: always()
     runs-on: ubuntu-latest
     environment: release
     timeout-minutes: 35

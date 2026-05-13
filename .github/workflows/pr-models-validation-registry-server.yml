@@ -41,27 +41,6 @@ jobs:
         with:
           github-token: ${{ github.token }}
 
-  label-gate:
-    name: Authorise (label-gate)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    outputs:
-      authorised: ${{ steps.gate.outputs.authorised }}
-    steps:
-      - name: Checkout (label-gate action only)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/actions/label-gate
-          sparse-checkout-cone-mode: false
-      - name: Run label-gate
-        id: gate
-        uses: ./.github/actions/label-gate
-        with:
-          github-token: ${{ secrets.PAT_TOKEN }}
-
   detect-changes:
     needs: authorize
     runs-on: ubuntu-latest
@@ -206,8 +185,13 @@ jobs:
         run: npm install && npm run lint && npm run test:unit
 
   sync-staging:
-    needs: [detect-changes, validate-json, test, label-gate]
-    if: needs.label-gate.outputs.authorised == 'true' && (always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.detect-changes.outputs.models_changed == 'true' && needs.validate-json.result == 'success' && (needs.test.result == 'success' || needs.test.result == 'skipped'))
+    needs: [detect-changes, validate-json, test]
+    if: |
+      always() &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      needs.detect-changes.outputs.models_changed == 'true' &&
+      needs.validate-json.result == 'success' &&
+      (needs.test.result == 'success' || needs.test.result == 'skipped')
     runs-on: ubuntu-latest
     environment: release
     env:
@@ -255,8 +239,7 @@ jobs:
         timeout-minutes: 30
 
   smoke-test:
-    needs: [sync-staging, label-gate]
-    if: needs.label-gate.outputs.authorised == 'true'
+    needs: sync-staging
     runs-on: ubuntu-latest
     env:
       QVAC_REGISTRY_CORE_KEY: ${{ secrets.QVAC_REGISTRY_CORE_KEY }}

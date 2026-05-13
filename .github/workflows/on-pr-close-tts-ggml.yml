@@ -32,7 +32,10 @@ on:
         default: true
 
 run-name: >-
-  Delete NPM Versions (tts-ggml) v=${{ inputs.version }} pr=${{ github.event_name == 'pull_request' && github.event.pull_request.number || inputs.pr-number }} dry=${{ github.event_name == 'pull_request' && true || inputs.dry-run }}
+  Delete NPM Versions (tts-ggml)
+  v=${{ inputs.version }}
+  pr=${{ github.event_name == 'pull_request' && github.event.pull_request.number || inputs.pr-number }}
+  dry=${{ github.event_name == 'pull_request' && true || inputs.dry-run }}
 
 permissions:
   contents: read

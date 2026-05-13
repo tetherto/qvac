@@ -101,27 +101,6 @@ permissions:
   packages: read
 
 jobs:
-  label-gate:
-    name: Authorise (label-gate)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    outputs:
-      authorised: ${{ steps.gate.outputs.authorised }}
-    steps:
-      - name: Checkout (label-gate action only)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/actions/label-gate
-          sparse-checkout-cone-mode: false
-      - name: Run label-gate
-        id: gate
-        uses: ./.github/actions/label-gate
-        with:
-          github-token: ${{ secrets.PAT_TOKEN }}
-
   resolve:
     runs-on: ubuntu-latest
     outputs:
@@ -141,8 +120,8 @@ jobs:
           fi
 
   desktop-tests:
-    needs: [resolve, label-gate]
-    if: needs.label-gate.outputs.authorised == 'true' && inputs.targets != 'mobile' && inputs.targets != 'android' && inputs.targets != 'ios'
+    needs: resolve
+    if: inputs.targets != 'mobile' && inputs.targets != 'android' && inputs.targets != 'ios'
     uses: ./.github/workflows/test-desktop-sdk.yml
     with:
       project-directory: "packages/sdk"
@@ -157,14 +136,14 @@ jobs:
     secrets: inherit
 
   android-tests:
-    needs: [resolve, label-gate]
+    needs: resolve
     permissions:
       actions: read
       id-token: write
       contents: read
       pull-requests: write
       packages: read
-    if: needs.label-gate.outputs.authorised == 'true' && inputs.targets != 'desktop' && inputs.targets != 'ios'
+    if: inputs.targets != 'desktop' && inputs.targets != 'ios'
     uses: ./.github/workflows/test-android-sdk.yml
     with:
       project-directory: "packages/sdk"
@@ -180,14 +159,14 @@ jobs:
     secrets: inherit
 
   ios-tests:
-    needs: [resolve, label-gate]
+    needs: resolve
     permissions:
       actions: read
       id-token: write
       contents: read
       pull-requests: write
       packages: read
-    if: needs.label-gate.outputs.authorised == 'true' && inputs.targets != 'desktop' && inputs.targets != 'android'
+    if: inputs.targets != 'desktop' && inputs.targets != 'android'
     uses: ./.github/workflows/test-ios-sdk.yml
     with:
       project-directory: "packages/sdk"

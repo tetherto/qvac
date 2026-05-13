@@ -3,7 +3,7 @@ on:
 
 jobs:
   build-win11-nvidia-image:
-    runs-on: generator-windows11
+    runs-on:  generator-windows11
     snapshot: win11-nvidia-grid-image
     steps:
       - name: Check OS version
@@ -44,7 +44,7 @@ jobs:
 
           # Set the registry value to enable Developer Mode
           Set-ItemProperty -Path $registryPath -Name $propertyName -Value $propertyValue -Type DWORD -Force
-
+          
           Write-Host "Developer Mode enabled successfully."
 
       - name: Install latest Visual C++ Redistributable
@@ -114,9 +114,10 @@ jobs:
           }
           Write-Host "NVIDIA driver installation verified successfully."
 
-        # run-vulkaninfo:
-        #   runs-on: ai-run-windows11-gpu
-        #   steps:
+
+  # run-vulkaninfo:
+  #   runs-on: ai-run-windows11-gpu
+  #   steps:
       - name: GPU detection via nvidia-smi and vulkaninfo
         continue-on-error: true
         shell: powershell
