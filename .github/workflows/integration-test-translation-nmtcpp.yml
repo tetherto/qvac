@@ -84,20 +84,40 @@ jobs:
           npm install
           npm install -g bare bare-make
 
+      # Artifact-poisoning mitigation (QVAC-18047): write artifact to runner.temp,
+      # then copy into workspace via a separate step. Breaks the CodeQL
+      # download-artifact -> workspace data-flow trace. Bash/PowerShell branches
+      # avoid the win32 cp escape-sequence regression that reverted PR #1728.
       - name: Download prebuilds from artifact
         if: ${{ !inputs.prebuild_package }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          path: packages/translation-nmtcpp/prebuilds
+          path: ${{ runner.temp }}/prebuilds-staging
           merge-multiple: true
+
+      - name: Move prebuilds from staging to workspace (Unix)
+        if: ${{ !inputs.prebuild_package && runner.os != 'Windows' }}
+        shell: bash
+        run: |
+          mkdir -p packages/translation-nmtcpp/prebuilds
+          cp -r "${RUNNER_TEMP}/prebuilds-staging/." packages/translation-nmtcpp/prebuilds/
+
+      - name: Move prebuilds from staging to workspace (Windows)
+        if: ${{ !inputs.prebuild_package && runner.os == 'Windows' }}
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force packages/translation-nmtcpp/prebuilds | Out-Null
+          Copy-Item -Path "$env:RUNNER_TEMP\prebuilds-staging\*" -Destination packages/translation-nmtcpp/prebuilds -Recurse
 
       - name: Download prebuilds from package
         if: ${{ inputs.prebuild_package }}
         working-directory: packages/translation-nmtcpp
         shell: bash
+        env:
+          PREBUILD_PKG: ${{ inputs.prebuild_package }}
         run: |
           mkdir -p prebuilds
-          npm pack ${{ inputs.prebuild_package }} --pack-destination /tmp
+          npm pack "$PREBUILD_PKG" --pack-destination /tmp
           tar -xzf /tmp/*.tgz -C /tmp
           cp -r /tmp/package/prebuilds/* prebuilds/
 
@@ -178,15 +198,18 @@ jobs:
           echo "IndicTrans model files:"
           ls -la model/indictrans/
 
-      - name: Run integration test (Linux/macOS)
+      # Artifact-poisoning mitigation (QVAC-18047): strip the inherited env
+      # before running test code. The test only sees HOME/PATH and the Qase
+      # token that's explicitly passed through.
+      - name: Run integration test (Linux/macOS, env-stripped)
         if: ${{ matrix.platform != 'win32' }}
         working-directory: packages/translation-nmtcpp
         run: |
-          npm run test:integration ${{ matrix.platform }}-${{ matrix.arch }} 2>&1 | tee test-output.log
-          exit ${PIPESTATUS[0]}
+          env -i HOME="$HOME" PATH="$PATH" QASE_API_TOKEN_TEST="$QASE_API_TOKEN_TEST" PLATFORM_ARCH="$PLATFORM_ARCH" bash -c 'npm run test:integration "$PLATFORM_ARCH" 2>&1 | tee test-output.log; exit ${PIPESTATUS[0]}'
         shell: bash
         env:
-          QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
+          QASE_API_TOKEN_TEST: ${{ secrets.QASE_API_TOKEN }}
+          PLATFORM_ARCH: ${{ matrix.platform }}-${{ matrix.arch }}
 
       - name: Run integration test (Windows)
         if: ${{ matrix.platform == 'win32' }}
