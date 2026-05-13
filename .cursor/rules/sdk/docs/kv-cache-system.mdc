@@ -123,9 +123,29 @@ if (shouldCommit) await session.commitTurn(turn, ...);  // suppresses the deferr
 
 The maps that backed `clearCacheRegistry` and `cachedMessageCounts` are **private to `kv-cache-session.ts`**. No other module reads or writes them.
 
-### Cache Initialization (primeIfMissing)
+### Cache Initialization (primeIfMissing) and Addon Non-Transactional Save
 
-`beginTurn` injects a `primeIfMissing(cachePath)` closure that the session calls when the cache doesn't exist in-memory and on-disk. The closure (constructed by the completion handler) sends system prompt + (static) tools through `runModel` with `{ cacheKey: cachePath, saveCacheToDisk: true, prefill: true }`. The session marks the cache initialized only after the closure resolves successfully.
+`beginTurn` injects a `primeIfMissing(cachePath)` closure that the session calls when the cache doesn't exist in-memory and on-disk. The closure (constructed by the completion handler) sends system prompt + (static) tools through `runModel` with `{ cacheKey: cachePath, saveCacheToDisk: true, prefill: true }`.
+
+**Addon contract today (non-transactional):** the llama.cpp addon's save path is `CacheManager::writeCacheFile` → `llama_state_save_file(...)`, and the addon **discards** the bool return value. `maybeSaveCacheToDisk` is the very last call on the prefill path, so any earlier throw means no save was attempted. As a result, the prime closure's outcomes from the SDK's perspective are:
+
+| Scenario | Closure result | Disk state |
+|---|---|---|
+| Eval interrupted (cancel mid-prefill) | resolves cleanly | no file (early return before save) |
+| Eval succeeds, save succeeds | resolves cleanly | full file |
+| Eval succeeds, save fails (return value swallowed) | **resolves cleanly** | empty or partial file |
+| `validatePrompt` / `loadMedia` / similar throws (pre-eval) | rejects | no file |
+
+Critically: there is **no path** where the closure rejects AND a partial file exists on disk. Any rejected prime is by construction "no save was attempted".
+
+**SDK-side defenses (matched access-probes):**
+
+- **`verifyPrimedFile(cachePath)` at prime time** — after `primeIfMissing` resolves, `fsPromises.stat` the canonical path. If missing or zero-size, best-effort unlink the empty leftover and throw so the session does NOT mark the cache initialized. Catches the cancelled-mid-prime and addon-silent-empty-write rows above.
+- **`verifySaveAndRecord(cachePath, count)` at commit time** — same `access` probe applied before recording the new saved-message count. A missing file triggers `runRollback(...)` instead of recording a phantom commit.
+
+**What the SDK probes do NOT catch:** a partial-but-nonzero file. Closing that gap requires either a structural integrity check the SDK can't currently compute, or — the right answer — an addon-layer change so the addon throws on save failure.
+
+**Pending addon-layer fix:** `CacheManager::writeCacheFile` should check `llama_state_save_file`'s return value and throw `qvac_errors::StatusError(ADDON_ID, "UnableToSaveSessionFile", ...)` on failure (and ideally write atomically inside the addon — temp + rename around the existing save call). When that lands, **both `verifyPrimedFile` and `verifySaveAndRecord` collapse**: the prime closure's rejection becomes the authoritative signal, the rollback hook handles cleanup, and both access-probes can be retired together. Tracked as `[tech-debt] llama.cpp addon: throw on llama_state_save_file failure` in the SDK Asana board (gid `1214778658064488`).
 
 Injecting the prime via closure keeps `kv-cache-session.ts` free of model-registry / addon dependencies — the session is unit-testable without a real model.
 
