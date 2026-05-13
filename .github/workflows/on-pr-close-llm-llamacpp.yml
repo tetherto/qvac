@@ -34,7 +34,7 @@ run-name: Delete NPM Versions (llm-llamacpp) ${{ inputs.version }} ${{ inputs.pr
 
 permissions:
   contents: read
-  
+
 jobs:
   print-context-trigger:
     runs-on: ubuntu-latest

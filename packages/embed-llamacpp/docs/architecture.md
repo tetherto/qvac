@@ -1,9 +1,9 @@
 # Architecture Documentation
 
-**Package:** `@qvac/embed-llamacpp` v0.14.0  
+**Package:** `@qvac/embed-llamacpp` v0.15.0
 **Stack:** JavaScript, C++20, llama.cpp, Bare Runtime, CMake, vcpkg  
 **License:** Apache-2.0  
-**Addon-cpp:** ≥1.1.2 (single job per run, `runJob(input)`, `cancel()` waits until job stopped, no transition callback)
+**Addon-cpp:** ≥1.1.5#1 (single job per run, `runJob(input)`, `cancel()` waits until job stopped, no transition callback)
 
 ---
 
@@ -53,6 +53,7 @@
 - **Caller-supplied paths**: Application passes absolute file paths; addon streams them from disk
 - **Batch processing**: Process multiple texts in a single forward pass
 - **GPU acceleration**: Metal, Vulkan, OpenCL
+- **Multi-GPU**: `split-mode`/`tensor-split` config for pipeline (`'layer'`) and tensor (`'row'` on CUDA/SYCL) parallelism (see `examples/multiGpuBenchmark.js`)
 - **Quantized models**: GGUF format (Q2-Q8, 1-bit variants)
 - **Sharded loading**: Caller passes every shard + `.tensors.txt` companion; addon streams them in order
 - **Encoder-only models**: Optimized for embedding generation
@@ -70,8 +71,9 @@
 Tier 1: Platform targets for which prebuilds are provided as defined by the .github/workflows/prebuilds-embed-llamacpp.yml workflow. Compilation and test failures for these targets will cause workflow runs to go red.
 
 **Dependencies:**
-- inference-addon-cpp (≥1.1.2): C++ addon framework
+- inference-addon-cpp (≥1.1.5#1): C++ addon framework
 - @qvac/infer-base: Provides `createJobHandler` and `exclusiveRunQueue` helpers (composition, no base class)
+- @qvac/logging: `QvacLogger` wrapper and native logging bridge
 - qvac-fabric-llm.cpp (≥7248.2.3): Inference engine
 - Bare Runtime (≥1.24.0): JavaScript runtime (provides `bare-fs` for direct file streaming)
 
@@ -98,6 +100,7 @@ graph TB
 
     subgraph "core libs"
         BASE["@qvac/infer-base<br/>(createJobHandler,<br/>exclusiveRunQueue)"]
+        LOG["@qvac/logging"]
     end
 
     subgraph "Native Framework"
@@ -111,6 +114,7 @@ graph TB
 
     APP --> EMBED
     EMBED --> BASE
+    EMBED --> LOG
     EMBED --> ADDON
     EMBED --> BARE
     ADDON --> BARE
@@ -127,8 +131,9 @@ graph TB
 | Package | Type | Version | Purpose |
 |---------|------|---------|---------|
 | @qvac/infer-base | Framework | ^0.4.0 | `createJobHandler`, `exclusiveRunQueue`, `QvacResponse` helpers (composition, no base class) |
-| inference-addon-cpp | Native | ≥1.1.2 | C++ addon framework |
-| llama.cpp | Native | ≥7248.2.1 | Inference engine |
+| @qvac/logging | Framework | ^0.1.0 | `QvacLogger` wrapper and C++ log routing |
+| inference-addon-cpp | Native | ≥1.1.5#1 | C++ addon framework |
+| qvac-fabric-llm.cpp | Native | ≥7248.2.3 | llama.cpp-based inference engine |
 | Bare Runtime | Runtime | ≥1.24.0 | JavaScript execution, `bare-fs`, `bare-path` |
 
 **Integration Points:**
@@ -138,8 +143,9 @@ graph TB
 | JavaScript | GGMLBert | Constructor | `{ files, config, logger, opts }` (single object) |
 | GGMLBert | createJobHandler / exclusiveRunQueue | Composition | Function calls |
 | GGMLBert | BertInterface | Composition | Method calls |
-| GGMLBert | bare-fs | `fs.createReadStream(path)` | Raw chunks per shard |
+| GGMLBert | bare-fs | `bare-fs.createReadStream(path)` | Raw chunks per shard |
 | BertInterface | C++ Addon | require.addon() | Native binding |
+| Application | package exports | `.` / `./addonLogging` | Public API plus native log bridge |
 
 </details>
 
@@ -245,13 +251,13 @@ graph TB
 
     subgraph "Layer 3: C++ Addon"
         JSINTERFACE["JsInterface<br/>(js-interface/binding.cpp)"]
-        ADDON["Addon<BertModel><br/>(addon/Addon.cpp)"]
+        ADDON["AddonCpp / AddonJs<br/>(addon/src/addon/AddonCpp.hpp<br/>addon/src/addon/AddonJs.hpp)"]
         WEIGHTSLOAD["WeightsLoader<br/>(addon-cpp)"]
     end
 
     subgraph "Layer 4: Model"
         BERTMODEL["BertModel<br/>(model-interface/BertModel.cpp)"]
-        ENCODE["encode_host_f32<br/>encode_host_f32_sequences"]
+        ENCODE["encodeHostF32<br/>encodeHostF32Sequences"]
     end
 
     subgraph "Layer 5: Backend"
@@ -296,7 +302,7 @@ graph TB
 |-------|------------|----------------|----------|----------------|
 | 1. JavaScript API | GGMLBert (standalone class), `createJobHandler`, `exclusiveRunQueue`, `bare-fs` | High-level API, file streaming, job/queue composition | JS | Ergonomic API for npm consumers |
 | 2. Bridge | BertInterface, binding.js | JS↔C++ communication | JS wrapper | Lifecycle management, handle safety |
-| 3. C++ Addon | JsInterface, Addon<T> | Job queue, threading, callbacks | C++ | Performance, native integration |
+| 3. C++ Addon | JsInterface, AddonCpp/AddonJs | Single-job runner, threading, callbacks | C++ | Performance, native integration |
 | 4. Model | BertModel, encode methods | Inference logic, batch processing | C++ | Direct llama.cpp integration |
 | 5. Backend | llama.cpp, GGML | Tensor ops, GPU kernels | C++ | Optimized inference |
 
@@ -329,6 +335,7 @@ graph TB
 - `config` — llama.cpp hyper-parameters (all string values).
 - `logger` — wrapped in a `QvacLogger`.
 - `opts.stats` — emit runtime stats on the response.
+- `pickPrimaryGgufPath()` is exported for callers that need to apply the same primary-shard selection logic outside the class.
 
 **`load()`** takes no arguments. For single-file models it just activates the addon using the provided path. For sharded models it opens `bare-fs.createReadStream(path)` on each file in order, pipes chunks into `addon.loadWeights({ filename, chunk, completed: false })`, and sends a final `completed: true` marker for each file before calling `addon.activate()`.
 
@@ -347,7 +354,7 @@ graph TB
 - Native handle lifecycle management
 - Type conversion between JS and native
 
-**Addon surface (addon-cpp ≥1.1.2):** Constructor `(binding, configurationParams, outputCb)` only (no transition callback). Single job per instance: `runJob({ type, input })` (no job ID returned), `cancel()` (waits until job stopped), `unload()` → `destroyInstance` to release resources.
+**Addon surface (addon-cpp ≥1.1.5#1):** Constructor `(binding, configurationParams, outputCb)` only (no transition callback). Single job per instance: `runJob({ type, input })` (no job ID returned), `cancel()` (waits until job stopped), `unload()` → `destroyInstance` to release resources. `addonLogging.js` exposes the package's native log bridge as a secondary export.
 
 ### C++ Components
 
@@ -362,16 +369,16 @@ graph TB
 - Native GPU backend access
 
 **Key Methods:**
-- `encode_host_f32(string)`: Single text embedding
-- `encode_host_f32_sequences(vector<string>)`: Batch embedding generation
+- `encodeHostF32(string)`: Single text embedding
+- `encodeHostF32Sequences(vector<string>)`: Batch embedding generation
 - `process(Input)`: Unified processing via std::visit
 
-#### **Addon<BertModel> (addon/Addon.cpp)**
+#### **AddonCpp / AddonJs (addon/src/addon/AddonCpp.hpp, addon/src/addon/AddonJs.hpp)**
 
-**Responsibility:** Template specialization of addon framework
+**Responsibility:** Package-specific integration with the addon-cpp framework.
 
 **Why C++:**
-- Provides job queue and priority scheduling
+- Provides single-job execution and cancellation via addon-cpp
 - Dedicated processing thread
 - Thread-safe state machine
 - Output dispatching via uv_async
@@ -416,7 +423,7 @@ sequenceDiagram
     participant JS as JavaScript
     participant IF as BertInterface
     participant Bind as Native Binding
-    participant Addon as Addon<BertModel>
+    participant Addon as AddonCpp/AddonJs
     participant Model as BertModel
     participant Llama as llama.cpp
     
@@ -716,13 +723,13 @@ Support batch processing natively by accepting both single strings and arrays of
 
 ### Context
 
-With addon-cpp ≥1.1.2, a single inference request is one `runJob({ type, input })` call (full input in one shot). The addon allows only one job at a time. Without coordination, a second `run()` could call `runJob()` while the first job is still processing, which the addon rejects.
+With addon-cpp ≥1.1.5#1, a single inference request is one `runJob({ type, input })` call (full input in one shot). The addon allows only one job at a time. Without coordination, a second `run()` could call `runJob()` while the first job is still processing, which the addon rejects.
 
 ### Decision
 
-Use the `exclusiveRunQueue()` helper from `@qvac/infer-base@^0.4.0`. The constructor stores the queue as `this._run`, and `load()`, `run()`, and `unload()` wrap their bodies with `this._run(() => …)`. This replaces the previous `BaseInference._withExclusiveRun()` template-method approach with a small composable utility, in line with the loader-removal refactor that dropped `BaseInference` inheritance.
+Use the `exclusiveRunQueue()` helper from `@qvac/infer-base@^0.4.0`. The constructor stores the queue as `this._run`, and `load()`, `run()`, and `unload()` wrap their bodies with `this._run(() => …)`. This replaces the previous inheritance-based template-method approach with a small composable utility, in line with the loader-removal refactor that dropped base-class inheritance.
 
-**Note:** C++ level thread safety (mutex-protected job queue) and single-job semantics (runJob, cancel waits until stopped) are handled by the addon-cpp (≥1.1.2) framework.
+**Note:** C++ level thread safety (mutex-protected job queue) and single-job semantics (runJob, cancel waits until stopped) are handled by the addon-cpp (≥1.1.5#1) framework.
 
 ### Rationale
 
@@ -800,4 +807,4 @@ Provide hand-written TypeScript definitions in `index.d.ts` alongside JavaScript
 **Related Document:**
 - [data-flows-detailed.md](data-flows-detailed.md) - Detailed data flow diagrams and sequences
 
-**Last Updated:** 2026-04-16
+**Last Updated:** 2026-05-07
