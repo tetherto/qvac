@@ -55,6 +55,82 @@ function getEnvVar (name) {
   return (processMod.env && processMod.env[name]) || ''
 }
 
+// QVAC-17830: lightweight GPU probe so reports can label the actual
+// GPU (NVIDIA Tesla T4 vs Apple M2 Max vs integrated Intel) instead
+// of the opaque "linux-x64-gpu" / "darwin-arm64" runner names. Falls
+// back to null on any failure — runs once per `createPerformanceReporter`
+// so the subprocess cost is paid at most once per test suite.
+//
+// Lazy-requires child_process so the file still loads cleanly under
+// the Bare runtime (where child_process isn't available) — bare
+// callers see gpu=null which the aggregator handles gracefully.
+function _detectGpu (platform) {
+  let execSync
+  try {
+    execSync = require('child_process').execSync
+  } catch (_) {
+    return null
+  }
+
+  function _safeExec (cmd) {
+    try {
+      return execSync(cmd, {
+        encoding: 'utf-8',
+        stdio: ['pipe', 'pipe', 'pipe'],
+        timeout: 5000
+      }).trim()
+    } catch (_) {
+      return null
+    }
+  }
+
+  function _parseNvidiaSmi (out) {
+    if (!out) return null
+    const m = out.match(/GPU \d+:\s*(.+?)(?:\s*\(UUID:|$)/m)
+    return m ? m[1].trim() : null
+  }
+
+  if (platform === 'linux') {
+    const nv = _parseNvidiaSmi(_safeExec('nvidia-smi -L'))
+    if (nv) return nv
+    const lspci = _safeExec('lspci')
+    if (lspci) {
+      const lines = lspci.split('\n').filter(l => /VGA|3D|Display/i.test(l))
+      if (lines.length) {
+        const m = lines[0].match(/(?:VGA|3D|Display)[^:]*:\s*(.+)$/)
+        if (m) return m[1].trim()
+      }
+    }
+    return null
+  }
+
+  if (platform === 'win32') {
+    const nv = _parseNvidiaSmi(_safeExec('nvidia-smi -L'))
+    if (nv) return nv
+    const wmic = _safeExec('wmic path win32_VideoController get name')
+    if (wmic) {
+      const lines = wmic.split('\n').slice(1).map(l => l.trim()).filter(Boolean)
+      if (lines.length) return lines[0]
+    }
+    return null
+  }
+
+  if (platform === 'darwin') {
+    const sp = _safeExec('system_profiler SPDisplaysDataType')
+    if (sp) {
+      const m = sp.match(/Chipset Model:\s*(.+)$/m)
+      if (m) return m[1].trim()
+    }
+    return null
+  }
+
+  // android / ios: probing is harder from inside Bare. Leave null
+  // and let the aggregator surface device.name (Device Farm label
+  // already encodes the model — "iPhone 17 Pro", "Samsung Galaxy
+  // S24" — which implies the chipset).
+  return null
+}
+
 function detectDevice () {
   const platform = osMod.platform ? osMod.platform() : processMod.platform
   const arch = osMod.arch ? osMod.arch() : processMod.arch
@@ -68,6 +144,7 @@ function detectDevice () {
       platform,
       os_version: getEnvVar('DEVICE_FARM_DEVICE_OS_VERSION') || '',
       arch,
+      gpu: null,
       runner: 'device-farm'
     }
   }
@@ -81,6 +158,7 @@ function detectDevice () {
     platform,
     os_version: runnerOs || '',
     arch,
+    gpu: _detectGpu(platform),
     runner: getEnvVar('GITHUB_ACTIONS') ? 'github-actions' : 'local'
   }
 }
@@ -123,7 +201,12 @@ const METRIC_COLUMNS = {
     { key: 'chrfpp', label: 'chrF++', format: 'percent' }
   ],
   vision: [
+    { key: 'backend', label: 'Backend' },
+    { key: 'platform', label: 'Platform' },
     { key: 'total_time_ms', label: 'Total Time (ms)' },
+    { key: 'prefill_time_ms', label: 'Prefill (ms)' },
+    { key: 'decode_time_ms', label: 'Decode (ms)' },
+    { key: 'vision_encode_time_ms', label: 'Vision Enc (ms)' },
     { key: 'ttft_ms', label: 'TTFT (ms)' },
     { key: 'generated_tokens', label: 'Gen Tokens' },
     { key: 'prompt_tokens', label: 'Prompt Tokens' },
@@ -174,17 +257,33 @@ function createPerformanceReporter (opts) {
      *
      * @param {string} testName         - Human-readable test name (e.g. '[GPU] OCR Basic')
      * @param {Object} metrics          - Metric key/value pairs (use null for N/A)
-     * @param {Object} [extra]          - Optional extra fields (input, output, execution_provider)
+     * @param {Object} [extra]          - Optional extra fields
+     * @param {string} [extra.execution_provider] - 'cpu' | 'gpu' (or addon-specific)
+     * @param {string} [extra.scenario] - Implementation group: 'image', 'bitnet',
+     *                                    'tool-calling', etc. Defaults to 'default'.
+     * @param {*}      [extra.input]    - Original test input snapshot
+     * @param {*}      [extra.output]   - Generated output snapshot
+     * @param {Object} [extra.quality]  - Quality metric pairs
+     * @param {string} [extra.image_path] - Path to test image (OCR)
      */
     record (testName, metrics, extra) {
       const entry = {
         test: testName,
+        // QVAC-17830: scenario is a top-level group key (e.g.
+        // 'image', 'bitnet', 'tool-calling'). Tests opt into a
+        // scenario so the report can split rows by implementation
+        // when multiple test families share the same device column.
+        // Defaults to 'default' so callers that don't care still
+        // produce a row in the aggregated detail table.
+        scenario: (extra && extra.scenario) || 'default',
         execution_provider: (extra && extra.execution_provider) || null,
         metrics: {
           total_time_ms: null,
           detection_time_ms: null,
           recognition_time_ms: null,
+          prefill_time_ms: null,
           decode_time_ms: null,
+          vision_encode_time_ms: null,
           ttft_ms: null,
           generated_tokens: null,
           prompt_tokens: null,
@@ -193,6 +292,8 @@ function createPerformanceReporter (opts) {
           real_time_factor: null,
           sample_count: null,
           duration_ms: null,
+          backend: null,
+          platform: null,
           ...metrics
         },
         input: (extra && extra.input) || null,
@@ -345,4 +446,3 @@ module.exports = {
   METRIC_COLUMNS,
   QUALITY_COLUMNS
 }
-

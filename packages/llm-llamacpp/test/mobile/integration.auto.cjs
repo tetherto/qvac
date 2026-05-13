@@ -51,9 +51,19 @@ async function runGrammarTest (options = {}) { // eslint-disable-line no-unused-
   return runIntegrationModule('../integration/grammar.test.js', options)
 }
 
-async function runImageTest (options = {}) { // eslint-disable-line no-unused-vars
-  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runImageTest')) return __FILTERED
-  return runIntegrationModule('../integration/image.test.js', options)
+async function runImageElephantTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runImageElephantTest')) return __FILTERED
+  return runIntegrationModule('../integration/image-elephant.test.js', options)
+}
+
+async function runImageFruitPlateTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runImageFruitPlateTest')) return __FILTERED
+  return runIntegrationModule('../integration/image-fruit-plate.test.js', options)
+}
+
+async function runImageHighResAuroraTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runImageHighResAuroraTest')) return __FILTERED
+  return runIntegrationModule('../integration/image-high-res-aurora.test.js', options)
 }
 
 async function runModelLoadingTest (options = {}) { // eslint-disable-line no-unused-vars

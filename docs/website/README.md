@@ -50,3 +50,25 @@ npm run serve
 - `src`: source code of docs website.
 - `content/docs`: docs website content.
 - `scripts`: integration and automation between the codebase and automatic documentation generation.
+
+## CDN configuration (Sevalla)
+
+Next.js static export emits per-segment React Server Component prefetch
+payloads as `__next.*.txt` files alongside each page (`__next._tree.txt`,
+`__next._head.txt`, `__next._index.txt`, `__next.<segment>.txt`). These files
+are fetched on every link hover/visible to enable instant client-side
+navigation; the layout shell (`__next.!KGRvY3Mp.txt`) is ~60 KB uncompressed.
+
+Verify the CDN compresses them:
+
+```bash
+curl -sI -H 'Accept-Encoding: gzip, br' \
+  https://docs.qvac.tether.io/__next._tree.txt | grep -i content-encoding
+```
+
+The response **must** include `content-encoding: gzip` or `content-encoding: br`.
+If the header is missing, hover-prefetch performance suffers ~10x. Sevalla
+auto-compresses common MIME types (`text/html`, `application/javascript`,
+`text/css`); ensure `text/plain` is in its compressible-MIME allowlist, or
+add a CDN rule rewriting `Content-Type` for `__next.*.txt` to
+`text/x-component` (Next.js's actual MIME for these payloads).
