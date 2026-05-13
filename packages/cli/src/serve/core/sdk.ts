@@ -40,8 +40,47 @@ interface SDKModule {
   }) => Promise<CompletionResult>
   embed: (opts: { modelId: string; text: string | string[] }) => Promise<{ embedding: number[] | number[][]; stats?: Record<string, unknown> }>
   transcribe: (opts: { modelId: string; audioChunk: string | Buffer; prompt?: string }) => Promise<string>
+  diffusion: (opts: SDKDiffusionParams) => SDKDiffusionResult
   close: () => Promise<void>
   [key: string]: unknown
+}
+
+export interface SDKDiffusionParams {
+  modelId: string
+  prompt: string
+  negative_prompt?: string
+  width?: number
+  height?: number
+  steps?: number
+  seed?: number
+  batch_count?: number
+  cfg_scale?: number
+  guidance?: number
+  sampling_method?: string
+  scheduler?: string
+}
+
+export interface SDKDiffusionStats {
+  width?: number
+  height?: number
+  seed?: number
+  totalSteps?: number
+  totalImages?: number
+  generationMs?: number
+  totalGenerationMs?: number
+  totalWallMs?: number
+}
+
+export interface SDKDiffusionProgressTick {
+  step: number
+  totalSteps: number
+  elapsedMs: number
+}
+
+export interface SDKDiffusionResult {
+  progressStream: AsyncIterable<SDKDiffusionProgressTick>
+  outputs: Promise<Uint8Array[]>
+  stats: Promise<SDKDiffusionStats | undefined>
 }
 
 export interface SDKTool {
@@ -210,6 +249,37 @@ export async function sdkTranscribe (opts: {
   } finally {
     try { fs.unlinkSync(tmpFile) } catch {}
   }
+}
+
+export interface SDKDiffusionRunResult {
+  buffers: Uint8Array[]
+  stats: SDKDiffusionStats | undefined
+}
+
+export async function sdkDiffusion (opts: {
+  params: SDKDiffusionParams
+  onProgress?: (tick: SDKDiffusionProgressTick) => void
+}): Promise<SDKDiffusionRunResult> {
+  const { diffusion } = await getSDK()
+  const result = diffusion(opts.params)
+
+  const drainProgress = async (): Promise<void> => {
+    try {
+      for await (const tick of result.progressStream) {
+        if (opts.onProgress) opts.onProgress(tick)
+      }
+    } catch {
+      // Progress drain errors are reported via outputs/stats below.
+    }
+  }
+
+  const [buffers, stats] = await Promise.all([
+    result.outputs,
+    result.stats,
+    drainProgress()
+  ])
+
+  return { buffers, stats }
 }
 
 export async function sdkClose (): Promise<void> {
