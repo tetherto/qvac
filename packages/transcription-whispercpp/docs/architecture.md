@@ -1,6 +1,6 @@
 # Architecture Documentation
 
-**Package:** `@qvac/transcription-whispercpp` v0.4.0  
+**Package:** `@qvac/transcription-whispercpp` v0.6.7
 **Stack:** JavaScript, C++20, whisper.cpp, Bare Runtime, CMake, vcpkg  
 **License:** Apache-2.0
 
@@ -28,9 +28,7 @@
 - [Decision 5: Silero VAD via whisper.cpp Built-in Support](#decision-5-silero-vad-via-whispercpp-built-in-support)
 
 ### Technical Debt
-- [Addon Framework v1.0 → v1.1 Migration](#1-addon-framework-v10--v11-migration)
-- [Singleton WhisperModelJobsHandler](#2-singleton-whispermodeljobshandler)
-- [Audio Format Map Keyed by Instance Pointer](#3-audio-format-map-keyed-by-instance-pointer)
+- [Streaming Session Lifecycle](#1-streaming-session-lifecycle)
 
 ---
 
@@ -52,7 +50,7 @@
 - **Cross-platform**: macOS, Linux, Windows, iOS, Android
 - **Streaming transcription**: Audio chunks appended in real-time; segments emitted as decoded
 - **GPU acceleration**: Metal (Apple), Vulkan (Linux/Android/Windows) with automatic CPU fallback
-- **Silero VAD**: Built-in Voice Activity Detection; significantly improves quality (effectively required for production)
+- **Silero VAD**: Voice Activity Detection via explicit `files.vadModel`; required for `runStreaming()`
 - **Hot-reload**: Change language, VAD params, etc. at runtime; only context-level changes trigger full model reload
 - **Runtime statistics**: Wall time, real-time factor, tokens/second, whisper.cpp internal timings
 
@@ -67,13 +65,13 @@
 | Windows | x64 | 10+ | ✅ Tier 1 | Vulkan (CPU fallback) |
 
 **Dependencies:**
-- whisper.cpp (=1.7.5.1): Inference engine (GGML-based)
-- inference-addon-cpp: C++ addon framework (templated `Addon<Model>`)
-- @qvac/infer-base (^0.2.0): Base classes, WeightsProvider, QvacResponse
+- whisper.cpp (=1.8.4.1): Inference engine (GGML-based)
+- inference-addon-cpp (≥1.1.6): C++ addon framework (`AddonJs`, `runJob`, streaming exports, cancellation)
+- @qvac/infer-base (^0.4.0): `createJobHandler`, `exclusiveRunQueue`, QvacResponse
 - @qvac/decoder-audio (^0.3.3): Audio decoding and sample rate conversion
 - @qvac/error (^0.1.0): Shared error code infrastructure
 - @qvac/logging (^0.1.0): Structured logging
-- Bare Runtime (≥1.19.0): JavaScript runtime
+- Bare Runtime (≥1.24.0): JavaScript runtime
 
 ---
 
@@ -127,22 +125,21 @@ graph TB
 
 | Package | Type | Version | Purpose |
 |---------|------|---------|---------|
-| @qvac/infer-base | Framework | ^0.2.0 | Base classes, WeightsProvider, QvacResponse |
+| @qvac/infer-base | Framework | ^0.4.0 | `createJobHandler`, `exclusiveRunQueue`, QvacResponse |
 | @qvac/decoder-audio | Runtime | ^0.3.3 | Audio decoding and resampling |
-| @qvac/dl-hyperdrive | Peer | ^0.1.0 | P2P model loading |
-| inference-addon-cpp | Native | — | C++ addon framework |
-| whisper.cpp | Native | =1.7.5.1 | Inference engine |
-| Bare Runtime | Runtime | ≥1.19.0 | JavaScript execution |
+| inference-addon-cpp | Native | ≥1.1.6 | C++ addon framework |
+| whisper.cpp | Native | =1.8.4.1 | Inference engine |
+| Bare Runtime | Runtime | ≥1.24.0 | JavaScript execution |
 
 **Integration Points:**
 
 | From | To | Mechanism | Data Format |
 |------|-----|-----------|-------------|
 | JavaScript | TranscriptionWhispercpp | Constructor | args, config objects |
-| TranscriptionWhispercpp | BaseInference | Inheritance | Template method pattern |
+| TranscriptionWhispercpp | createJobHandler / exclusiveRunQueue | Composition | Job lifecycle + single-job serialization |
 | TranscriptionWhispercpp | WhisperInterface | Composition | Method calls |
 | WhisperInterface | C++ Addon | require.addon() | Native binding |
-| WeightsProvider | Data Loader | Interface | Stream protocol |
+| TranscriptionWhispercpp | files.model / files.vadModel | Constructor paths | Local model files; no package-owned download |
 
 </details>
 
@@ -156,18 +153,20 @@ graph TB
 classDiagram
     class TranscriptionWhispercpp {
         +constructor(args, config)
-        +load(closeLoader, onProgress) Promise~void~
+        +load() Promise~void~
         +run(audioStream) Promise~QvacResponse~
+        +runStreaming(options) Promise~QvacResponse~
         +reload(newConfig) Promise~void~
         +unload() Promise~void~
         +validateModelFiles()
     }
 
-    class BaseInference {
-        <<abstract>>
-        +load() Promise~void~
-        +run() Promise~QvacResponse~
-        +unload() Promise~void~
+    class JobHandler {
+        <<createJobHandler>>
+        +start() QvacResponse
+        +output(data)
+        +end(stats)
+        +fail(error)
     }
 
     class QvacResponse {
@@ -176,16 +175,16 @@ classDiagram
         +onFinish(callback) QvacResponse
         +await() Promise~void~
         +cancel() Promise~void~
-        +pause() Promise~void~
         +stats object
     }
 
-    class WeightsProvider {
-        +downloadFiles(files, path, opts) Promise~void~
+    class RunQueue {
+        <<exclusiveRunQueue>>
+        +(fn) Promise
     }
 
-    TranscriptionWhispercpp --|> BaseInference
-    TranscriptionWhispercpp *-- WeightsProvider
+    TranscriptionWhispercpp *-- JobHandler
+    TranscriptionWhispercpp *-- RunQueue
     TranscriptionWhispercpp ..> QvacResponse : creates
 ```
 
@@ -196,17 +195,16 @@ classDiagram
 
 | Class | Responsibility | Lifecycle | Dependencies |
 |-------|----------------|-----------|--------------|
-| TranscriptionWhispercpp | Orchestrate model lifecycle, manage audio streaming | Created by user, persistent | WeightsProvider, WhisperInterface |
-| BaseInference | Define standard inference API | Abstract base class | None |
+| TranscriptionWhispercpp | Orchestrate model lifecycle, manage batch and streaming transcription | Created by user, persistent | WhisperInterface, createJobHandler, exclusiveRunQueue |
 | QvacResponse | Stream inference output | Created per run() call, short-lived | None |
-| WeightsProvider | Abstract model weight loading | Created by TranscriptionWhispercpp | DataLoader |
+| WhisperInterface | JS wrapper around native batch and streaming exports | Created by TranscriptionWhispercpp | Native binding |
 
 **Key Relationships:**
 
 | From | To | Type | Purpose |
 |------|-----|------|---------|
-| TranscriptionWhispercpp | BaseInference | Inheritance | Standard QVAC inference API |
-| TranscriptionWhispercpp | WeightsProvider | Composition | Model weight acquisition |
+| TranscriptionWhispercpp | createJobHandler | Composition | Response lifecycle |
+| TranscriptionWhispercpp | exclusiveRunQueue | Composition | Serialize batch calls |
 | TranscriptionWhispercpp | QvacResponse | Creates | Streaming output per inference |
 
 </details>
@@ -224,8 +222,8 @@ graph TB
     subgraph "Layer 1: JavaScript API"
         APP["Application Code"]
         TWCLASS["TranscriptionWhispercpp<br/>(index.js)"]
-        BASEINF["BaseInference<br/>(@qvac/infer-base)"]
-        WEIGHTSPR["WeightsProvider<br/>(@qvac/infer-base)"]
+        JOBH["createJobHandler<br/>(@qvac/infer-base)"]
+        RUNQ["exclusiveRunQueue<br/>(@qvac/infer-base)"]
         RESPONSE["QvacResponse<br/>(@qvac/infer-base)"]
     end
 
@@ -238,8 +236,8 @@ graph TB
     subgraph "Layer 3: C++ Addon"
         JSINTERFACE["JsInterface<br/>(js-interface/binding.cpp)"]
         JSADAPTER["JSAdapter<br/>(js-interface/JSAdapter.cpp)"]
-        ADDON["Addon<WhisperModel><br/>(addon/Addon.cpp)"]
-        JOBSHANDLER["WhisperModelJobsHandler<br/>(addon/WhisperModelJobsHandler.cpp)"]
+        ADDON["AddonJs<br/>(addon/src/addon/AddonJs.hpp)"]
+        STREAMING["StreamingProcessor<br/>(model-interface/StreamingProcessor.cpp)"]
     end
 
     subgraph "Layer 4: Model"
@@ -254,8 +252,8 @@ graph TB
     end
 
     APP --> TWCLASS
-    TWCLASS --> BASEINF
-    TWCLASS --> WEIGHTSPR
+    TWCLASS --> JOBH
+    TWCLASS --> RUNQ
     TWCLASS --> WHISPERIF
     TWCLASS -.-> RESPONSE
 
@@ -265,7 +263,7 @@ graph TB
     JSINTERFACE --> JSADAPTER
 
     JSINTERFACE --> ADDON
-    ADDON --> JOBSHANDLER
+    ADDON --> STREAMING
     ADDON --> WHISPERMODEL
 
     WHISPERMODEL --> WHISPERCONFIG
@@ -287,9 +285,9 @@ graph TB
 
 | Layer | Components | Responsibility | Language | Why This Layer |
 |-------|------------|----------------|----------|----------------|
-| 1. JavaScript API | TranscriptionWhispercpp, BaseInference | High-level API, config normalization | JS | Ergonomic API for npm consumers |
+| 1. JavaScript API | TranscriptionWhispercpp, createJobHandler, exclusiveRunQueue | High-level API, config normalization, response lifecycle | JS | Ergonomic API for npm consumers |
 | 2. Bridge | WhisperInterface, configChecker, binding.js | JS↔C++ communication, validation | JS wrapper | Lifecycle management, handle safety |
-| 3. C++ Addon | JsInterface, JSAdapter, Addon\<T\>, JobsHandler | Job queue, threading, config conversion | C++ | Performance, native integration |
+| 3. C++ Addon | JsInterface, JSAdapter, AddonJs, StreamingProcessor | Batch jobs, streaming sessions, config conversion | C++ | Performance, native integration |
 | 4. Model | WhisperModel, WhisperConfig | Inference logic, parameter mapping | C++ | Direct whisper.cpp integration |
 | 5. Backend | whisper.cpp, GGML | Audio processing, GPU kernels | C++ | Optimized inference |
 
@@ -315,13 +313,14 @@ graph TB
 
 #### **TranscriptionWhispercpp (index.js)**
 
-**Responsibility:** Main API class, orchestrates model lifecycle, manages audio stream consumption
+**Responsibility:** Main API class, orchestrates model lifecycle, manages batch audio jobs and streaming sessions.
 
 **Why JavaScript:**
 - High-level API ergonomics for npm consumers
 - Promise/async-await integration for streaming
 - Configuration normalization and default-filling
-- Weight download orchestration via WeightsProvider
+- Local model path validation (`files.model`, optional `files.vadModel`)
+- Response lifecycle via `createJobHandler`; batch calls serialized with `exclusiveRunQueue`
 
 #### **WhisperInterface (whisper.js)**
 
@@ -352,26 +351,17 @@ graph TB
 - Segment callback integration with whisper_full()
 - Runtime statistics collection (timings, tokens, segments)
 
-#### **Addon\<WhisperModel\> (addon/Addon.cpp)**
+#### **AddonJs + streaming exports (addon/src/addon/AddonJs.hpp, binding.cpp)**
 
-**Responsibility:** Template specialization of addon framework
+**Responsibility:** Native addon integration for batch transcription plus explicit streaming session functions.
 
 **Why C++:**
-- Provides job queue and priority scheduling
-- Dedicated processing thread
-- Thread-safe state machine (Unloaded → Loading → Idle → Listening → Processing → Paused → Stopped)
+- Provides `runJob`, `reload`, `cancel`, `destroyInstance`
+- Exposes `startStreaming`, `appendStreamingAudio`, `endStreaming`, and streaming cancellation
+- Manages streaming sessions via `StreamingProcessor` and session maps guarded by mutexes
 - Output dispatching via uv_async
 
-**Specialization:** Constructor takes `WhisperConfig`, `jsOutputCallback` marshals `Transcript` structs to JS arrays of `{text, toAppend, start, end, id}`
-
-#### **WhisperModelJobsHandler (addon/WhisperModelJobsHandler.cpp)**
-
-**Responsibility:** Singleton job processing loop
-
-- Manages job lifecycle: dequeue → start → process → end
-- Coordinates model loading (lazy, on first job)
-- Model warmup with silent audio on first load
-- Error handling with `OutputEvent::Error` propagation
+**Specialization:** Constructor takes `WhisperConfig`; callbacks marshal transcript segments and runtime stats to JS.
 
 #### **JSAdapter (js-interface/JSAdapter.cpp)**
 
@@ -401,17 +391,16 @@ sequenceDiagram
     participant JS as JavaScript
     participant IF as WhisperInterface
     participant Bind as Native Binding
-    participant Addon as Addon<WhisperModel>
+    participant Addon as AddonJs / StreamingProcessor
     participant Model as WhisperModel
     participant Whisper as whisper.cpp
 
     JS->>IF: run(audioStream)
-    IF->>Bind: append({type:'audio', input:Uint8Array})
+    IF->>Bind: runJob({type:'audio', input:Uint8Array}) or appendStreamingAudio(session, chunk)
     Bind->>Bind: preprocessAudioData()
-    Bind->>Addon: append() [lock mutex]
-    Addon->>Addon: Enqueue job
-    Addon->>Addon: cv.notify_one()
-    Bind-->>IF: jobId
+    Bind->>Addon: runJob(...) or stream append
+    Addon->>Addon: Accept single job / update streaming session
+    Bind-->>IF: accepted / session state
     IF-->>JS: QvacResponse
 
     Note over Addon: Processing Thread
@@ -420,7 +409,7 @@ sequenceDiagram
 
     loop For each audio chunk
         JS-->>IF: append({type:'audio', input:chunk})
-        Bind->>Addon: append to job input
+        Bind->>Addon: appendStreamingAudio
         Addon->>Model: process(input)
         Model->>Whisper: whisper_full()
         Whisper-->>Model: onNewSegment callback
@@ -486,7 +475,7 @@ Need a performant, cross-platform speech-to-text engine that runs on-device with
 
 ### Decision
 
-Use whisper.cpp (via vcpkg, pinned to v1.7.5.1) as the sole inference backend.
+Use whisper.cpp (via vcpkg, pinned to v1.8.4.1) as the sole inference backend.
 
 ### Rationale
 
@@ -504,7 +493,7 @@ Use whisper.cpp (via vcpkg, pinned to v1.7.5.1) as the sole inference backend.
 - ✅ Runs fully on-device — no network dependency at inference time
 - ✅ Quantized models enable deployment on resource-constrained devices
 - ❌ Tied to whisper.cpp release cadence for model and feature updates
-- ❌ Pinned to v1.7.5.1 via vcpkg override — upgrading requires compatibility verification
+- ❌ Pinned to v1.8.4.1 via vcpkg override — upgrading requires compatibility verification
 
 ---
 
@@ -521,7 +510,7 @@ See [inference-addon-cpp Decision 4: Why Bare Runtime](https://github.com/tether
 <details>
 <summary>⚡ TL;DR</summary>
 
-**Chose:** Shared, templated C++ addon framework (`Addon<Model>`)  
+**Chose:** Shared C++ addon framework (`AddonJs` plus package-specific binding exports)
 **Why:** Eliminate duplication of threading, job queues, state machines across inference packages  
 **Cost:** Template specialization complexity, coordinated framework upgrades
 
@@ -533,25 +522,24 @@ Multiple inference packages (whisper, llama.cpp, NMT, embeddings) need the same 
 
 ### Decision
 
-Use a shared, templated C++ addon framework (`Addon<Model>`) parameterized by the model type. Each package implements only model-specific logic.
+Use the shared addon-cpp framework for lifecycle, callbacks, logging, cancellation, and model integration. Whisper adds package-specific binding exports for streaming sessions in addition to the standard `runJob` path.
 
 ### Rationale
 
 **Code Reuse:**
 - Eliminates duplication of threading, state management, and JS-bridge code
-- Each package only implements `WhisperModel`, `WhisperModelJobsHandler`, etc.
+- Each package only implements its model and package-specific bridge/streaming logic.
 - Bug fixes in the framework benefit all packages simultaneously
 
 **Consistency:**
-- Identical addon lifecycle (Unloaded → Loading → Idle → Listening → Processing → Paused → Stopped) across all backends
+- Consistent addon lifecycle and output-event protocol across backends
 - Same output event protocol (JobStarted, Output, JobEnded, Error)
 - Same `uv_async_t` communication pattern to JS
 
 ### Trade-offs
 - ✅ Consistent behavior and lifecycle across all inference backends
 - ✅ Framework improvements benefit all packages
-- ❌ Template specializations (in `Addon.cpp`) can be complex to debug
-- ❌ Framework upgrades (e.g., to v1.1) require coordinated refactoring across packages
+- ❌ Package-specific streaming exports still need focused integration tests
 
 ---
 
@@ -599,7 +587,7 @@ Use a multi-stage configuration pipeline with variant-based intermediate represe
 <details>
 <summary>⚡ TL;DR</summary>
 
-**Chose:** whisper.cpp's built-in Silero VAD rather than a separate external VAD pipeline  
+**Chose:** whisper.cpp's built-in Silero VAD with an explicit caller-supplied VAD model path
 **Why:** Single inference call, no IPC overhead, native integration  
 **Cost:** Silero-only (not pluggable), requires separate VAD model file
 
@@ -616,7 +604,7 @@ Use whisper.cpp's built-in Silero VAD integration rather than a separate externa
 ### Rationale
 
 **Simplicity:**
-- whisper.cpp v1.7.x integrates Silero VAD natively — no separate pre-processing pipeline needed
+- whisper.cpp v1.8.x integrates Silero VAD natively — no separate pre-processing pipeline needed
 - VAD parameters are passed alongside transcription parameters in `whisper_full_params`
 - Single model load path for both VAD and transcription
 
@@ -634,27 +622,15 @@ Use whisper.cpp's built-in Silero VAD integration rather than a separate externa
 
 # Technical Debt
 
-### 1. Addon Framework v1.0 → v1.1 Migration
-**Status:** Planned  
-**Issue:** Current dependency on `inference-addon-cpp` v1.0; upcoming v1.1 will change internal APIs  
-**Root Cause:** v1.1 framework is not yet finalized; migration requires coordinated changes across all inference packages  
-**Plan:** Refactor once v1.1 is stable; update `Addon.hpp/cpp`, `WhisperModelJobsHandler`, and `binding.cpp` specializations
-
-### 2. Singleton WhisperModelJobsHandler
+### 1. Streaming Session Lifecycle
 **Status:** Active  
-**Issue:** All `Addon<WhisperModel>` instances share a single `WhisperModelJobsHandler` (singleton via `std::once_flag`), preventing truly independent concurrent whisper instances  
-**Root Cause:** Inherited from current addon framework design  
-**Plan:** Address as part of the v1.1 migration
-
-### 3. Audio Format Map Keyed by Instance Pointer
-**Status:** Active  
-**Issue:** Audio format per instance stored in a static `std::unordered_map<uintptr_t, std::string>` that is never cleaned up on `destroyInstance`, causing a minor memory leak  
-**Root Cause:** Low severity; entries are small and instances are typically long-lived  
-**Plan:** Clean up the map entry in `destroyInstance`, or move `audio_format` into `WhisperConfig`
+**Issue:** Streaming introduces session maps and mutex-protected state outside the simple batch `runJob` path.
+**Root Cause:** Real-time transcription needs append/end/cancel operations that do not fit a single synchronous job payload.
+**Plan:** Keep session cleanup and cancellation covered by integration tests, especially `startStreaming` / `appendStreamingAudio` / `endStreaming` / cancel flows.
 
 ---
 
 **Related Document:**
 - [data-flows-detailed.md](data-flows-detailed.md) - Detailed data flow diagrams and sequences
 
-**Last Updated:** 2026-02-17
+**Last Updated:** 2026-05-07

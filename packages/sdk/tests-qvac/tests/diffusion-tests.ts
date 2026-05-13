@@ -232,6 +232,8 @@ export const diffusionFusionFlux2Basic = createDiffusionTest(
 const ESRGAN_SCALE = 4;
 const ESRGAN_SOURCE_WIDTH = 128;
 const ESRGAN_SOURCE_HEIGHT = 128;
+const STANDALONE_UPSCALER_SOURCE_WIDTH = 64;
+const STANDALONE_UPSCALER_SOURCE_HEIGHT = 64;
 
 // Decode the IHDR chunk (width/height as big-endian uint32 at offsets 16 and 20)
 // and assert dimensions are source * scale.
@@ -254,6 +256,25 @@ function validateEsrganUpscale(result: unknown): TestResult {
   };
 }
 
+function validateStandaloneUpscale(result: unknown): TestResult {
+  if (!Array.isArray(result) || result.length === 0) {
+    return { passed: false, output: "No outputs generated" };
+  }
+  const output = result[0] as Uint8Array;
+  const view = new DataView(output.buffer, output.byteOffset, output.byteLength);
+  const width = view.getUint32(16, false);
+  const height = view.getUint32(20, false);
+  const expectedWidth = STANDALONE_UPSCALER_SOURCE_WIDTH * ESRGAN_SCALE;
+  const expectedHeight = STANDALONE_UPSCALER_SOURCE_HEIGHT * ESRGAN_SCALE;
+  const passed = width === expectedWidth && height === expectedHeight;
+  return {
+    passed,
+    output: passed
+      ? `Standalone upscaler x${ESRGAN_SCALE} OK: ${STANDALONE_UPSCALER_SOURCE_WIDTH}x${STANDALONE_UPSCALER_SOURCE_HEIGHT} -> ${width}x${height}`
+      : `Expected ${expectedWidth}x${expectedHeight} from ${STANDALONE_UPSCALER_SOURCE_WIDTH}x${STANDALONE_UPSCALER_SOURCE_HEIGHT} input, got ${width}x${height}`,
+  };
+}
+
 export const diffusionEsrganUpscaleX4 = createDiffusionTest(
   "diffusion-esrgan-upscale-x4",
   {
@@ -266,6 +287,16 @@ export const diffusionEsrganUpscaleX4 = createDiffusionTest(
   },
   { validation: "function", fn: validateEsrganUpscale },
   { estimatedDurationMs: 600000, dependency: "diffusion-esrgan" },
+);
+
+export const diffusionStandaloneUpscalerX4 = createDiffusionTest(
+  "diffusion-standalone-upscaler-x4",
+  {
+    image: "small-64.jpg",
+    repeats: 1,
+  },
+  { validation: "function", fn: validateStandaloneUpscale },
+  { estimatedDurationMs: 600000, dependency: "upscaler" },
 );
 
 // ---- error cases ----
@@ -298,5 +329,6 @@ export const diffusionTests = [
   diffusionStatsPresent,
   diffusionFusionFlux2Basic,
   diffusionEsrganUpscaleX4,
+  diffusionStandaloneUpscalerX4,
   diffusionEmptyPrompt,
 ];

@@ -33,6 +33,7 @@ export const llmConfigBaseSchema = z.object({
       z.number().int().min(1), // positive integer: fixed token count
     ])
     .optional(),
+  /** JS-side only: seeds conversation history. Never forwarded to the C++ addon. */
   system_prompt: z.string().optional(),
   no_mmap: z.boolean().optional(),
   verbosity: verbositySchema.optional(),
@@ -60,6 +61,10 @@ export const llmConfigBaseSchema = z.object({
    * for fast GPU startup.
    */
   openclCacheDir: z.string().optional(),
+  /**
+   * Reasoning channel token budget. `-1` = unrestricted, `0` = disabled.
+   */
+  reasoning_budget: z.union([z.literal(-1), z.literal(0)]).optional(),
   projectionModelSrc: modelSrcInputSchema.optional(),
 });
 

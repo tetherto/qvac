@@ -1,6 +1,6 @@
 # Architecture Documentation
 
-**Package:** `@qvac/llm-llamacpp` v0.16.0
+**Package:** `@qvac/llm-llamacpp` v0.19.2
 **Stack:** JavaScript, C++20, llama.cpp, Bare Runtime, CMake, vcpkg  
 **License:** Apache-2.0
 
@@ -55,6 +55,7 @@
 - **Quantized models**: GGUF format
 - **Multimodal**: Vision models (i.e. Qwen3-VL, SmolVLM, etc.)
 - **Sharded loading**: Caller passes every shard (and the `.tensors.txt` companion); the addon streams them into llama.cpp in order
+- **Multi-GPU**: `split-mode`/`tensor-split` for pipeline (`'layer'`) and tensor (`'row'` on CUDA/SYCL) parallelism — see [multi-gpu.md](multi-gpu.md)
 
 ## Target Platforms
 
@@ -67,10 +68,11 @@
 | Windows | x64 | 10+ | ✅ Tier 1 | Vulkan |
 
 **Dependencies:**
-- inference-addon-cpp (≥1.1.2): C++ addon framework (single-job runner, runJob/activate/loadWeights/cancel/destroyInstance)
+- inference-addon-cpp (≥1.1.5#1): C++ addon framework (single-job runner, runJob/activate/loadWeights/cancel/destroyInstance)
 - qvac-fabric-llm.cpp (≥7248.2.3): Inference engine
 - @qvac/infer-base: `createJobHandler` and `exclusiveRunQueue` helpers (job/response lifecycle + single-job serialization)
 - @qvac/logging: `QvacLogger` wrapper
+- bare-process: runtime/process integration used by the JS package surface
 - Bare Runtime (≥1.24.0): JavaScript runtime
 - Linux requires Clang/LLVM 22 with libc++
 
@@ -130,18 +132,20 @@ graph TB
 | @qvac/logging | Framework | `QvacLogger` wrapper |
 | inference-addon-cpp | Native | C++ addon framework (single-job runner) |
 | qvac-fabric-llm.cpp | Native | Inference engine |
+| bare-process | Runtime | Process/runtime integration |
 | Bare Runtime | Runtime | JavaScript execution |
 
 **Integration Points:**
 
 | From | To | Mechanism | Data Format |
 |------|-----|-----------|-------------|
-| JavaScript | LlmLlamacpp | Constructor `{ files, config, logger, opts }` | Object |
+| JavaScript | LlmLlamacpp | Constructor `{ files, config, logger, opts }` | Object; `files.projectionModel` enables multimodal projection |
 | LlmLlamacpp | createJobHandler | Composition | Job handle + callbacks |
 | LlmLlamacpp | exclusiveRunQueue | Composition | Promise-based queue |
 | LlmLlamacpp | LlamaInterface | Composition | Method calls |
 | LlamaInterface | C++ Addon | require.addon() | Native binding |
 | LlmLlamacpp | bare-fs | Direct read stream | Absolute file paths |
+| Application | package exports | `.` / `./addonLogging` / `./addon.js` / `./binding.js` | Public API plus advanced native bridge entry points |
 
 </details>
 
@@ -237,7 +241,9 @@ new LlmLlamacpp({
 ```
 
 - `files.model` is an array of absolute file paths. For single-file GGUFs, pass a one-element array. For sharded GGUFs the caller passes the `.tensors.txt` companion first, followed by every shard in numerical order.
+- `files.projectionModel`, when present, is forwarded as `projectionPath` for multimodal models.
 - `load()` takes no arguments. It constructs the native addon with the first shard-matching entry of `files.model` (via `pickPrimaryGgufPath`) as the primary model path, streams all entries via `bare-fs` + `loadWeights`, and finally calls `activate()`.
+- `run(messages, runOptions?)` forwards `prefill`, normalized `generationParams` (`grammar` and `json_schema` are mutually exclusive), optional `cacheKey`, and `saveCacheToDisk` into the native request path.
 
 </details>
 
@@ -273,7 +279,7 @@ graph TB
 
     subgraph "Layer 4: Model"
         LLAMAMODEL["LlamaModel<br/>(model-interface/LlamaModel.cpp)"]
-        METADATA["ModelMetaData<br/>(model-interface/ModelMetadata.cpp)"]
+        METADATA["ModelMetadata<br/>(model-interface/ModelMetadata.cpp)"]
         ASYNCWL["AsyncWeightsLoader<br/>(model-interface/AsyncWeightsLoader.cpp)"]
         TEXTCTX["TextLlmContext<br/>(model-interface/TextLlmContext.cpp)"]
         MTMDCTX["MtmdLlmContext<br/>(model-interface/MtmdLlmContext.cpp)"]
@@ -327,7 +333,7 @@ graph TB
 | 1. JavaScript API | LlmLlamacpp, createJobHandler, exclusiveRunQueue, bare-fs | High-level API, job/response lifecycle, shard streaming | JS | Ergonomic API for npm consumers |
 | 2. Bridge | LlamaInterface, binding.js | JS↔C++ communication | JS wrapper | Lifecycle management, handle safety |
 | 3. C++ Addon | JsInterface, AddonCpp/AddonJs | Single-job runner, threading, callbacks | C++ | Performance, native integration |
-| 4. Model | LlamaModel, ModelMetaData, AsyncWeightsLoader, Contexts | Inference logic, metadata extraction, streaming weight coordination, chat formatting | C++ | Direct llama.cpp integration |
+| 4. Model | LlamaModel, ModelMetadata, AsyncWeightsLoader, Contexts | Inference logic, metadata extraction, streaming weight coordination, chat formatting | C++ | Direct llama.cpp integration |
 | 5. Backend | llama.cpp, GGML | Tensor ops, GPU kernels | C++ | Optimized inference |
 
 **Data Flow Through Layers:**
@@ -365,15 +371,17 @@ graph TB
 - `this._job = createJobHandler({ cancel: () => this.addon.cancel() })` — single active job + response
 - `this._run = exclusiveRunQueue()` — serialized `run()` / `finetune()` / `unload()`
 - `this.addon = new LlamaInterface(...)` — native bridge, created lazily in `_load()`
+- `normalizeGenerationParams()` validates/normalizes run-time overrides before the request crosses the JS/C++ boundary.
 
 #### **LlamaInterface (addon.js)**
 
-**Responsibility:** JavaScript wrapper around native addon, manages handle lifecycle
+**Responsibility:** JavaScript wrapper around native addon, manages handle lifecycle and maps native output events into JS-friendly events.
 
 **Why JavaScript:**
 - Clean JavaScript API over raw C++ bindings
 - Native handle lifecycle management
 - Type conversion between JS and native
+- `mapAddonEvent()` routes `Output`, `JobEnded`, `RuntimeStats`, `FinetuneProgress`, and `LogMsg`; it also coalesces finetune terminal events with following runtime stats so responses do not finish twice.
 
 ### C++ Components
 
@@ -408,13 +416,13 @@ graph TB
 - Calls `addon.loadWeights({ filename, chunk: null, completed: true })` after each file to finalize that shard
 - The caller is responsible for the **complete set of files and their order** (including the `.tensors.txt` companion first for sharded models). No discovery, no expansion, no download logic inside the addon.
 
-#### **ModelMetaData (model-interface/ModelMetadata.cpp)**
+#### **ModelMetadata (model-interface/ModelMetadata.cpp)**
 
 **Responsibility:** Extract and query GGUF metadata without loading model weights into backend memory
 
 - Parses GGUF key-value metadata from disk files or streamed buffers
 - Enables early decisions (quantization detection, backend selection) before the full model is loaded
-- For streaming loads, coordinates with `AsyncWeightsLoader` to borrow the first shard buffer: `AsyncWeightsLoader` calls `provide()` to lend the buffer, `ModelMetaData::parse()` reads metadata via `waitConsumeAndClear()`, then releases it so the shard can proceed to llama.cpp
+- For streaming loads, coordinates with `AsyncWeightsLoader` to borrow the first shard buffer: `AsyncWeightsLoader` calls `provide()` to lend the buffer, `ModelMetadata::parse()` reads metadata via `waitConsumeAndClear()`, then releases it so the shard can proceed to llama.cpp
 - Exposes typed queries: `tryGetU32()`, `isU32OneOf()`, `hasOneBitQuantization()`
 - After `parse()`, all metadata is held in memory and no further disk/stream access is needed
 
@@ -423,7 +431,7 @@ graph TB
 **Responsibility:** Coordinate async/streaming weight loading for sharded and single-GGUF models
 
 - Receives streamed shards via `setWeightsForFile()` from the JavaScript download thread
-- For sharded models, the first shard is lent to `ModelMetaData` for metadata extraction before being forwarded to llama.cpp via `fulfillSplitFuture()`
+- For sharded models, the first shard is lent to `ModelMetadata` for metadata extraction before being forwarded to llama.cpp via `fulfillSplitFuture()`
 - The first-shard lending runs on an async worker thread to avoid blocking the download thread while metadata is parsed
 - `waitForRelease()` has a configurable timeout (template parameter, default 60s) to detect stalled metadata parsing 
 - For single-GGUF models, buffers are stored until `init()` consumes them
@@ -435,6 +443,11 @@ graph TB
 - Saves/loads llama.cpp KV cache to disk for conversation continuity
 - Handles cache invalidation on context changes
 - Configurable discard policy via `n_discarded` parameter
+- Connected to JS `runOptions.cacheKey` and `runOptions.saveCacheToDisk`, which select and persist per-request inference context.
+
+#### **Notable C++ modules**
+
+The diagram above lists the primary types, not every source file. Current LLM behavior also depends on `GenerationParamsApply`, `ContextSlider`, `ToolsCompactController`, Qwen template/reasoning/tool helpers, and finetuning helpers under `addon/src/model-interface/` and `addon/src/utils/`.
 
 #### **BackendSelection (utils/BackendSelection.cpp)**
 
@@ -785,7 +798,7 @@ Serialize chat messages array to JSON string before passing to C++, rather than 
 <details>
 <summary>⚡ TL;DR</summary>
 
-**Chose:** Promise-based exclusive run queue using `_withExclusiveRun()` wrapper  
+**Chose:** Promise-based exclusive run queue stored as `this._run` from `exclusiveRunQueue()`
 **Why:** Ensure atomic multi-step operations (text + media + end-of-input) complete without interruption  
 **Cost:** One inference request at a time per model instance
 
@@ -794,14 +807,14 @@ Serialize chat messages array to JSON string before passing to C++, rather than 
 ### Context
 
 A single inference request sends one `runJob(inputs)` call with an array of inputs:
-1. Zero or more `{ type: 'media', content: Uint8Array }` - Image/audio data
+1. Zero or more `{ type: 'media', content: Uint8Array }` - in-memory media bytes. The JS layer only forwards `Uint8Array` media payloads; path-string media is not currently passed through by `index.js`.
 2. One `{ type: 'text', input: JSON.stringify(messages) }` - Chat history
 
 Without coordination, concurrent requests could call `runJob()` while a job is already set or running; the addon returns `false` (not accepted) in that case.
 
 ### Decision
 
-Implement JavaScript-level promise queue using `_withExclusiveRun()` helper that ensures only one runJob is in flight at a time. A second `run()` during an active job first waits a short window for the previous job to settle, then fails with a consistent busy error if the second run is not accepted:
+Implement a JavaScript-level promise queue using the `exclusiveRunQueue()` helper stored as `this._run`. `load()`, `run()`, `finetune()`, and `unload()` wrap their bodies with `this._run(() => ...)` so only one native operation is in flight at a time. A second `run()` during an active job first waits a short window for the previous job to settle, then fails with a consistent busy error if the second run is not accepted:
 - `"Cannot set new job: a job is already set or being processed"`
 
 **Note:** C++ level thread safety (single-job runner with mutex-protected job state, optional IModelCancel) is handled by the addon-cpp 1.1.x framework; see addon-cpp docs for architecture and decisions.
@@ -880,7 +893,11 @@ Provide hand-written TypeScript definitions in `index.d.ts` alongside JavaScript
 
 ---
 
-**Related Document:**
+**Related Documents:**
 - [data-flows-detailed.md](data-flows-detailed.md) - Detailed data flow diagrams and sequences
+- [multi-gpu.md](multi-gpu.md) - `device` / `split-mode` / `tensor-split` / `main-gpu` semantics for multi-GPU inference and finetuning
+- [cache-api.md](cache-api.md) - KV cache persistence (`cacheKey`, `saveCacheToDisk`)
+- [tools-compact.md](tools-compact.md) - Tool-call compaction behavior
+- [finetuning.md](finetuning.md) - LoRA finetuning entrypoints and parameters
 
-**Last Updated:** 2026-04-16
+**Last Updated:** 2026-05-07

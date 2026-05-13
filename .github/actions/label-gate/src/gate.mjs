@@ -17,6 +17,13 @@ const TRUSTED_EVENTS = new Set([
   'workflow_call',
   'schedule',
   'release',
+  // repository_dispatch is API-initiated. Triggering it requires a token
+  // with `repo` scope on the target repo, so the dispatcher is by
+  // construction trusted; no PR review/label flow applies. Without this
+  // entry, any workflow that gates on label-gate but triggers via
+  // repository_dispatch (e.g. docs-generate-api.yml) would fail closed
+  // and never run.
+  'repository_dispatch',
 ]);
 
 const PR_EVENTS = new Set(['pull_request', 'pull_request_target']);
@@ -232,6 +239,28 @@ export async function gate({
       authorised: true,
       reason: `label applier '${applier}' is trusted (${detail})`,
       applier,
+    };
+  }
+
+  // Non-trusted applier. If they JUST added the label themselves
+  // (action='labeled' for our gate label), strip it so the visible PR
+  // state matches the security state. Without the strip the label
+  // would sit there falsely advertising "verified" until the next
+  // synchronize from a non-trusted actor cleans it up — that's both a
+  // confusing UX and a minor social-engineering vector ("look, the PR
+  // is verified"). For non-labeled events (opened/reopened/edited
+  // /labeled-with-different-label/...) we resolved the applier from
+  // the timeline; we don't strip in that case because the applier
+  // status may have changed since the label was applied legitimately
+  // (e.g. team member who later left), and the synchronize path will
+  // strip on the next push if the actor is also untrusted.
+  if (action === 'labeled' && payload?.label?.name === label) {
+    const stripped = await client.stripLabel(prNumber, label);
+    return {
+      authorised: false,
+      reason: `non-trusted '${applier}' applied '${label}' — label stripped`,
+      applier,
+      stripped,
     };
   }
 
