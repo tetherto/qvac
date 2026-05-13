@@ -13,7 +13,22 @@
  */
 import type { TestDefinition } from "@tetherto/qvac-test-suite";
 
-const AUDIO_FIXTURE = "transcription-short-wav.wav";
+// The duplex runner feeds raw PCM directly into the parakeet session
+// (no FFmpegDecoder hop, unlike `transcribe()`), so the fixture itself
+// must already be 16 kHz mono — parakeet's expected sample rate. The
+// `transcription-short-wav.wav` fixture is 48 kHz stereo and would be
+// rejected by the runner's `sampleRate !== 16000` precondition.
+const AUDIO_FIXTURE = "diarization-sample-16k.wav";
+
+// The EOU detector fires `<EOU>` based on sentence-final / turn-boundary
+// linguistic patterns from its small ASR head (see the addon's own
+// `eou-streaming.test.js` regression note). `diarization-sample-16k.wav`
+// is continuous multi-speaker overlap and produces transcript text but no
+// clean turn boundaries, so the model emits zero `isEndOfTurn` segments
+// against it. `two-speakers-16k.wav` is the same format (16 kHz mono) but
+// is alternating two-speaker conversation — exactly the stimulus the EOU
+// head is trained on — so at least one boundary surfaces reliably.
+const EOU_AUDIO_FIXTURE = "two-speakers-16k.wav";
 
 export const parakeetStreamHappy: TestDefinition = {
   testId: "parakeet-stream-happy",
@@ -56,7 +71,7 @@ export const parakeetStreamMetadataRejected: TestDefinition = {
 export const parakeetStreamEou: TestDefinition = {
   testId: "parakeet-stream-eou",
   params: {
-    audioFileName: AUDIO_FIXTURE,
+    audioFileName: EOU_AUDIO_FIXTURE,
     chunkMs: 1000,
     emitPartials: true,
     trailingSilenceMs: 1500,

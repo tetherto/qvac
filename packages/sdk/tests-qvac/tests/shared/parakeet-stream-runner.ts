@@ -66,8 +66,8 @@ export async function runParakeetStreamHappy(
       },
     });
 
-    writeInChunks(session, speech, chunkSize);
-    writeInChunks(session, silence, chunkSize);
+    await writeInChunks(session, speech, chunkSize, chunkMs);
+    await writeInChunks(session, silence, chunkSize, chunkMs);
     session.end();
 
     const events: CollectedEvent[] = [];
@@ -132,8 +132,8 @@ export async function runParakeetStreamEou(
       },
     });
 
-    writeInChunks(session, speech, chunkSize);
-    writeInChunks(session, silence, chunkSize);
+    await writeInChunks(session, speech, chunkSize, chunkMs);
+    await writeInChunks(session, silence, chunkSize, chunkMs);
     session.end();
 
     const events: CollectedEvent[] = [];
@@ -195,14 +195,28 @@ export async function runParakeetStreamMetadataRejected(
   }
 }
 
-function writeInChunks(
+// Parakeet's `StreamSession` is designed for live audio and only
+// emits segments when the feed is wall-clock-paced (see the addon's
+// own `duplex-streaming.test.js` / `live-stream-simulation.test.js`,
+// which sleep `setTimeout(chunkMs)` between chunks). Flooding the
+// duplex RPC with the full clip synchronously results in zero
+// segments coming back, so callers MUST `await` this helper and pass
+// a non-zero `delayMs` for any test that expects transcript output.
+// `delayMs = 0` is the fast-path used by the destroy-mid-utterance
+// "first session", where we deliberately want to write a couple of
+// chunks and yank the session before the engine ever produces text.
+async function writeInChunks(
   session: { write(audioChunk: Uint8Array): void },
   bytes: Uint8Array,
   chunkSize: number,
+  delayMs: number,
 ) {
   for (let offset = 0; offset < bytes.length; offset += chunkSize) {
     const end = Math.min(offset + chunkSize, bytes.length);
     session.write(bytes.subarray(offset, end));
+    if (delayMs > 0 && end < bytes.length) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
   }
 }
 
@@ -273,8 +287,8 @@ export async function runParakeetStreamDestroyMidUtterance(
         }),
       },
     });
-    writeInChunks(secondSession, speech, chunkSize);
-    writeInChunks(secondSession, silence, chunkSize);
+    await writeInChunks(secondSession, speech, chunkSize, chunkMs);
+    await writeInChunks(secondSession, silence, chunkSize, chunkMs);
     secondSession.end();
 
     const events: CollectedEvent[] = [];
@@ -342,8 +356,8 @@ export async function runParakeetStreamIteratorThrow(
       modelId,
       parakeetStreamingConfig: { chunkMs },
     });
-    writeInChunks(throwingSession, speech, chunkSize);
-    writeInChunks(throwingSession, silence, chunkSize);
+    await writeInChunks(throwingSession, speech, chunkSize, chunkMs);
+    await writeInChunks(throwingSession, silence, chunkSize, chunkMs);
     throwingSession.end();
 
     let caughtSentinel = false;
@@ -386,8 +400,8 @@ export async function runParakeetStreamIteratorThrow(
         }),
       },
     });
-    writeInChunks(recoverySession, speech, chunkSize);
-    writeInChunks(recoverySession, silence, chunkSize);
+    await writeInChunks(recoverySession, speech, chunkSize, chunkMs);
+    await writeInChunks(recoverySession, silence, chunkSize, chunkMs);
     recoverySession.end();
 
     const events: CollectedEvent[] = [];
