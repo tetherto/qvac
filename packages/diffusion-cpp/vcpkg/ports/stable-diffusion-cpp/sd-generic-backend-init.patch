@@ -1,0 +1,176 @@
+diff --git a/include/stable-diffusion.h b/include/stable-diffusion.h
+index 51b2b329..7bfd6816 100644
+--- a/include/stable-diffusion.h
++++ b/include/stable-diffusion.h
+@@ -145,6 +145,13 @@ enum lora_apply_mode_t {
+     LORA_APPLY_MODE_COUNT,
+ };
+ 
++enum sd_backend_preference_t {
++    SD_BACKEND_PREF_AUTO = 0,
++    SD_BACKEND_PREF_CPU,
++    SD_BACKEND_PREF_GPU,
++    SD_BACKEND_PREF_OPENCL,
++};
++
+ typedef struct {
+     bool enabled;
+     int tile_size_x;
+@@ -201,6 +208,7 @@ typedef struct {
+     bool chroma_use_t5_mask;
+     int chroma_t5_mask_pad;
+     bool qwen_image_zero_cond_t;
++    enum sd_backend_preference_t preferred_gpu_backend;
+ } sd_ctx_params_t;
+ 
+ typedef struct {
+diff --git a/src/stable-diffusion.cpp b/src/stable-diffusion.cpp
+index d769d45c..004ddabf 100644
+--- a/src/stable-diffusion.cpp
++++ b/src/stable-diffusion.cpp
+@@ -164,60 +164,81 @@ public:
+         ggml_backend_free(backend);
+     }
+ 
+-    void init_backend() {
+-#ifdef SD_USE_CUDA
+-        LOG_DEBUG("Using CUDA backend");
+-        backend = ggml_backend_cuda_init(0);
+-#endif
+-#ifdef SD_USE_METAL
+-        LOG_DEBUG("Using Metal backend");
+-        backend = ggml_backend_metal_init();
+-#endif
+-#ifdef SD_USE_VULKAN
+-        LOG_DEBUG("Using Vulkan backend");
+-        size_t device          = 0;
+-        const int device_count = ggml_backend_vk_get_device_count();
+-        if (device_count) {
+-            const char* SD_VK_DEVICE = getenv("SD_VK_DEVICE");
+-            if (SD_VK_DEVICE != nullptr) {
+-                std::string sd_vk_device_str = SD_VK_DEVICE;
+-                try {
+-                    device = std::stoull(sd_vk_device_str);
+-                } catch (const std::invalid_argument&) {
+-                    LOG_WARN("SD_VK_DEVICE environment variable is not a valid integer (%s). Falling back to device 0.", SD_VK_DEVICE);
+-                    device = 0;
+-                } catch (const std::out_of_range&) {
+-                    LOG_WARN("SD_VK_DEVICE environment variable value is out of range for `unsigned long long` type (%s). Falling back to device 0.", SD_VK_DEVICE);
+-                    device = 0;
++    void init_backend(enum sd_backend_preference_t preferred_backend) {
++        const char* pref_name = "auto";
++        if (preferred_backend == SD_BACKEND_PREF_CPU) {
++            pref_name = "cpu";
++        } else if (preferred_backend == SD_BACKEND_PREF_GPU) {
++            pref_name = "gpu";
++        } else if (preferred_backend == SD_BACKEND_PREF_OPENCL) {
++            pref_name = "opencl";
++        }
++        LOG_INFO("Backend preference requested: %s", pref_name);
++
++        if (getenv("SD_CPU_ONLY")) {
++            LOG_INFO("SD_CPU_ONLY set - using CPU backend");
++            backend = ggml_backend_init_by_type(GGML_BACKEND_DEVICE_TYPE_CPU, NULL);
++            if (!backend) {
++                LOG_ERROR("SD_CPU_ONLY set but CPU backend failed to initialize");
++            }
++            return;
++        }
++
++        if (preferred_backend == SD_BACKEND_PREF_CPU) {
++            backend = ggml_backend_init_by_type(GGML_BACKEND_DEVICE_TYPE_CPU, NULL);
++            if (backend) {
++                LOG_INFO("Initialized CPU backend from explicit preference");
++            } else {
++                LOG_WARN("CPU backend preference requested but CPU backend initialization failed");
++            }
++            return;
++        }
++
++        if (preferred_backend == SD_BACKEND_PREF_OPENCL) {
++            const size_t n_devices = ggml_backend_dev_count();
++            for (size_t i = 0; i < n_devices; ++i) {
++                ggml_backend_dev_t dev = ggml_backend_dev_get(i);
++                const enum ggml_backend_dev_type dev_type = ggml_backend_dev_type(dev);
++                if (dev_type != GGML_BACKEND_DEVICE_TYPE_GPU &&
++                    dev_type != GGML_BACKEND_DEVICE_TYPE_IGPU) {
++                    continue;
++                }
++                const char* name = ggml_backend_dev_name(dev);
++                if (!name) {
++                    continue;
+                 }
+-                if (device >= device_count) {
+-                    LOG_WARN("Cannot find targeted vulkan device (%llu). Falling back to device 0.", device);
+-                    device = 0;
++                const bool is_opencl = strstr(name, "opencl") != NULL ||
++                                       strstr(name, "OpenCL") != NULL;
++                if (!is_opencl) {
++                    continue;
++                }
++                backend = ggml_backend_dev_init(dev, NULL);
++                if (backend) {
++                    LOG_INFO("Using OpenCL backend '%s'", name);
++                    LOG_INFO("Backend initialized successfully (OpenCL preference)");
++                    return;
+                 }
+             }
+-            LOG_INFO("Vulkan: Using device %llu", device);
+-            backend = ggml_backend_vk_init(device);
+-        }
+-        if (!backend) {
+-            LOG_WARN("Failed to initialize Vulkan backend");
++            LOG_WARN("OpenCL preference requested but no OpenCL backend could be initialized; falling back to generic GPU selection");
+         }
+-#endif
+-#ifdef SD_USE_OPENCL
+-        LOG_DEBUG("Using OpenCL backend");
+-        // ggml_log_set(ggml_log_callback_default, nullptr); // Optional ggml logs
+-        backend = ggml_backend_opencl_init();
++
++        backend = ggml_backend_init_by_type(GGML_BACKEND_DEVICE_TYPE_GPU, NULL);
+         if (!backend) {
+-            LOG_WARN("Failed to initialize OpenCL backend");
++            LOG_WARN("GPU backend initialization failed; falling back to CPU backend");
++            backend = ggml_backend_init_by_type(GGML_BACKEND_DEVICE_TYPE_CPU, NULL);
++            if (!backend) {
++                LOG_ERROR("CPU fallback backend initialization failed");
++            }
++        } else {
++            LOG_INFO("Initialized generic GPU backend");
+         }
+-#endif
+-#ifdef SD_USE_SYCL
+-        LOG_DEBUG("Using SYCL backend");
+-        backend = ggml_backend_sycl_init(0);
+-#endif
+ 
+-        if (!backend) {
+-            LOG_DEBUG("Using CPU backend");
+-            backend = ggml_backend_cpu_init();
++        if (backend) {
++            if (ggml_backend_is_cpu(backend)) {
++                LOG_INFO("Final backend type: CPU");
++            } else {
++                LOG_INFO("Final backend type: non-CPU");
++            }
+         }
+     }
+ 
+@@ -248,7 +269,7 @@ public:
+ 
+         ggml_log_set(ggml_log_callback_default, nullptr);
+ 
+-        init_backend();
++        init_backend(sd_ctx_params->preferred_gpu_backend);
+ 
+         ModelLoader model_loader;
+ 
+@@ -2953,6 +2974,7 @@ void sd_ctx_params_init(sd_ctx_params_t* sd_ctx_params) {
+     sd_ctx_params->chroma_use_dit_mask     = true;
+     sd_ctx_params->chroma_use_t5_mask      = false;
+     sd_ctx_params->chroma_t5_mask_pad      = 1;
++    sd_ctx_params->preferred_gpu_backend = SD_BACKEND_PREF_AUTO;
+ }
+ 
+ char* sd_ctx_params_to_str(const sd_ctx_params_t* sd_ctx_params) {
