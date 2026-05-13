@@ -165,4 +165,46 @@ describe('createVectorStoresStore', () => {
     const store = createVectorStoresStore()
     assert.doesNotThrow(() => store.touch('vs_missing'))
   })
+
+  it('create initializes embeddingAlias to null', () => {
+    const store = createVectorStoresStore()
+    const meta = store.create()
+    assert.equal(meta.embeddingAlias, null)
+  })
+
+  it('setEmbedding records the alias on a known id', () => {
+    const store = createVectorStoresStore()
+    const meta = store.create()
+    store.setEmbedding(meta.id, 'gte-large-fp16')
+    const fresh = store.get(meta.id)
+    assert.ok(fresh)
+    assert.equal(fresh.embeddingAlias, 'gte-large-fp16')
+  })
+
+  it('setEmbedding is idempotent (never overwrites an existing alias)', () => {
+    const store = createVectorStoresStore()
+    const meta = store.create()
+    store.setEmbedding(meta.id, 'first-model')
+    store.setEmbedding(meta.id, 'second-model')
+    const fresh = store.get(meta.id)
+    assert.ok(fresh)
+    assert.equal(fresh.embeddingAlias, 'first-model')
+  })
+
+  it('setEmbedding on missing id is a no-op', () => {
+    const store = createVectorStoresStore()
+    assert.doesNotThrow(() => store.setEmbedding('vs_missing', 'whatever'))
+  })
+
+  it('get returns a clone — mutating embeddingAlias on the result does not leak', () => {
+    const store = createVectorStoresStore()
+    const meta = store.create()
+    store.setEmbedding(meta.id, 'a')
+    const fetched = store.get(meta.id)
+    assert.ok(fetched)
+    fetched.embeddingAlias = 'b'
+    const fresh = store.get(meta.id)
+    assert.ok(fresh)
+    assert.equal(fresh.embeddingAlias, 'a')
+  })
 })

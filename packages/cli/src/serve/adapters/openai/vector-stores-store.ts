@@ -13,6 +13,12 @@ export interface VectorStoreMeta {
   expiresAfter: VectorStoreExpiresAfter | null
   expiresAt: number | null
   lastActiveAt: number
+  /**
+   * Embedding alias the store was first ingested with. Null until the first
+   * successful attach records it. Used to reject silent-mismatch searches
+   * if the operator swaps the default embedding mid-flight.
+   */
+  embeddingAlias: string | null
 }
 
 export interface CreateVectorStoreInput {
@@ -35,6 +41,11 @@ export interface VectorStoresStore {
   delete: (id: string) => boolean
   list: () => VectorStoreMeta[]
   touch: (id: string) => void
+  /**
+   * Record the embedding alias used at first attach. No-op if id is unknown
+   * or if an alias is already recorded (idempotent: never overwrites).
+   */
+  setEmbedding: (id: string, alias: string) => void
 }
 
 const ID_PREFIX = 'vs_'
@@ -87,7 +98,8 @@ function clone (meta: VectorStoreMeta): VectorStoreMeta {
     metadata: { ...meta.metadata },
     expiresAfter: meta.expiresAfter ? { ...meta.expiresAfter } : null,
     expiresAt: meta.expiresAt,
-    lastActiveAt: meta.lastActiveAt
+    lastActiveAt: meta.lastActiveAt,
+    embeddingAlias: meta.embeddingAlias
   }
 }
 
@@ -120,7 +132,8 @@ export function createVectorStoresStore (
       metadata: { ...(input.metadata ?? {}) },
       expiresAfter,
       expiresAt: computeExpiresAt(created, expiresAfter),
-      lastActiveAt: created
+      lastActiveAt: created,
+      embeddingAlias: null
     }
     stores.set(id, meta)
     return clone(meta)
@@ -166,12 +179,20 @@ export function createVectorStoresStore (
     }
   }
 
+  function setEmbedding (id: string, alias: string): void {
+    const meta = stores.get(id)
+    if (!meta) return
+    if (meta.embeddingAlias !== null) return
+    meta.embeddingAlias = alias
+  }
+
   return {
     create,
     get,
     update,
     delete: deleteStore,
     list,
-    touch
+    touch,
+    setEmbedding
   }
 }

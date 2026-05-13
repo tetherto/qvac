@@ -275,6 +275,18 @@ export async function handleSearchVectorStore (
     return
   }
 
+  if (meta.embeddingAlias !== null && meta.embeddingAlias !== embedding.entry.alias) {
+    sendError(
+      res,
+      400,
+      'embedding_model_mismatch',
+      `Vector store "${id}" was previously ingested with embedding "${meta.embeddingAlias}"; ` +
+      `current request resolves to "${embedding.entry.alias}". Mark "${meta.embeddingAlias}" as the default ` +
+      'embedding under serve.models, or create a new vector store.'
+    )
+    return
+  }
+
   ctx.vectorStores.touch(id)
 
   ctx.logger.info(
@@ -325,15 +337,47 @@ export async function handleAttachVectorStoreFile (
   }
 
   const ragInfo = await safeListWorkspaces(ctx)
-  const meta = ctx.vectorStores.get(id) ?? syntheticFromWorkspace(id, ragInfo.workspaces)
+  let meta = ctx.vectorStores.get(id)
   if (!meta) {
-    sendError(res, 404, 'vector_store_not_found', `Vector store "${id}" not found.`)
-    return
+    const synthetic = syntheticFromWorkspace(id, ragInfo.workspaces)
+    if (!synthetic) {
+      sendError(res, 404, 'vector_store_not_found', `Vector store "${id}" not found.`)
+      return
+    }
+    // Materialize a local meta entry for the disk-only workspace so we can
+    // record the embedding alias. Uses the same race-guarded pattern as
+    // handleUpdateVectorStore.
+    try {
+      meta = ctx.vectorStores.create({ id: synthetic.id, name: synthetic.name })
+    } catch (err) {
+      if (err instanceof InvalidVectorStoreIdError && err.kind === 'duplicate') {
+        const existing = ctx.vectorStores.get(id)
+        if (!existing) {
+          sendError(res, 404, 'vector_store_not_found', `Vector store "${id}" not found.`)
+          return
+        }
+        meta = existing
+      } else {
+        throw err
+      }
+    }
   }
 
   const embedding = resolveEmbeddingModel(ctx)
   if (!embedding.ok) {
     sendError(res, embedding.status, embedding.code, embedding.message)
+    return
+  }
+
+  if (meta.embeddingAlias !== null && meta.embeddingAlias !== embedding.entry.alias) {
+    sendError(
+      res,
+      400,
+      'embedding_model_mismatch',
+      `Vector store "${id}" was previously ingested with embedding "${meta.embeddingAlias}"; ` +
+      `current request resolves to "${embedding.entry.alias}". Mark "${meta.embeddingAlias}" as the default ` +
+      'embedding under serve.models, or create a new vector store.'
+    )
     return
   }
 
@@ -395,6 +439,7 @@ export async function handleAttachVectorStoreFile (
     await closeWorkspaceQuiet(ctx, id, 'ingest')
   }
 
+  ctx.vectorStores.setEmbedding(id, embedding.entry.alias)
   ctx.ephemeralFiles.remove(fileId)
 
   sendJson(res, 200, {
@@ -467,7 +512,8 @@ function syntheticFromWorkspace (
     metadata: {},
     expiresAfter: null,
     expiresAt: null,
-    lastActiveAt: now
+    lastActiveAt: now,
+    embeddingAlias: null
   }
 }
 
