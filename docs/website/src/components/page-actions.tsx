@@ -7,6 +7,7 @@ import { buttonVariants } from './ui/button';
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from './ui/popover';
 import { cva } from 'class-variance-authority';
 import type { VersionSelectorProps } from '@/lib/versions';
+import { useAskAI } from '@/components/ask-ai';
 
 const cache = new Map<string, string>();
 
@@ -149,6 +150,7 @@ export function ViewOptions({
    */
   markdownUrl: string;
 }) {
+  const askAI = useAskAI();
   const items = useMemo(() => {
     const fullMarkdownUrl =
       typeof window !== 'undefined' ? new URL(markdownUrl, window.location.origin) : 'loading';
@@ -211,7 +213,11 @@ export function ViewOptions({
       </PopoverTrigger>
       <PopoverContent className="flex flex-col">
         <PopoverClose asChild>
-          <button type="button" data-inkeep-modal-trigger="chat" className={cn(optionVariants())}>
+          <button
+            type="button"
+            onClick={() => askAI.open()}
+            className={cn(optionVariants())}
+          >
             <MessageSquare className="text-fd-muted-foreground" />
             Ask our AI assistant
           </button>

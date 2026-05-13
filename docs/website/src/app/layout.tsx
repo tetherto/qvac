@@ -2,7 +2,7 @@ import './global.css';
 import { Inter } from 'next/font/google';
 import type { Metadata } from 'next';
 import { GoogleTagManager } from '@next/third-parties/google';
-import { InkeepScript } from '@/components/inkeep-script';
+import { AskAIProvider, AskAIShell } from '@/components/ask-ai';
 import { Provider } from "./provider";
 import 'katex/dist/katex.css';
 import { docsRootMetadataRobots } from '@/lib/docs-indexing';
@@ -41,8 +41,10 @@ export default function Layout({ children }: LayoutProps<'/'>) {
       </head>
       {gtmId && <GoogleTagManager gtmId={gtmId} />}
       <body className="flex flex-col min-h-screen">
-        <InkeepScript />
+        <AskAIProvider>
           <Provider>{children}</Provider>
+          <AskAIShell />
+        </AskAIProvider>
       </body>
     </html>
   );

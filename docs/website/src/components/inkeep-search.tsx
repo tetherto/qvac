@@ -1,16 +1,28 @@
-"use client";
+'use client';
 
-import type { SharedProps } from "fumadocs-ui/components/dialog/search";
+import type { SharedProps } from 'fumadocs-ui/components/dialog/search';
 import {
   InkeepModalSearchAndChat,
   type InkeepModalSearchAndChatProps,
-} from "@inkeep/cxkit-react";
-import { useEffect, useState } from "react";
+} from '@inkeep/cxkit-react';
+import { useEffect, useState } from 'react';
 
+import { useAskAI } from '@/components/ask-ai';
+
+/**
+ * Fumadocs's `RootProvider` mounts this as the `Cmd/Ctrl+K` search
+ * dialog. On every breakpoint it stays a search-first modal, but on
+ * desktop we hijack the in-modal "Ask AI" tab and forward to the
+ * persistent sidebar so the docs site has exactly one chat
+ * conversation surface, matching Mintlify's behavior. On mobile the
+ * tab toggle is allowed to flip the modal into chat view normally,
+ * because the sidebar is not available there.
+ */
 export default function CustomDialog(props: SharedProps) {
+  const askAI = useAskAI();
   const [syncTarget, setSyncTarget] = useState<HTMLElement | null>(null);
   const { open, onOpenChange } = props;
-  // We do this because document is not available in the server
+
   useEffect(() => {
     setSyncTarget(document.documentElement);
   }, []);
@@ -18,37 +30,53 @@ export default function CustomDialog(props: SharedProps) {
   const config: InkeepModalSearchAndChatProps = {
     baseSettings: {
       apiKey: process.env.NEXT_PUBLIC_INKEEP_API_KEY!,
-      primaryBrandColor: "#16E3C1", // your brand color, widget color scheme is derived from this
-      organizationDisplayName: "QVAC",
-      // ...optional settings
+      primaryBrandColor: '#16E3C1',
+      organizationDisplayName: 'QVAC',
       colorMode: {
         sync: {
           target: syncTarget,
-          attributes: ["class"],
-          isDarkMode: (attributes) => !!attributes.class?.includes("dark"),
+          attributes: ['class'],
+          isDarkMode: (attributes) => !!attributes.class?.includes('dark'),
         },
       },
     },
     modalSettings: {
       isOpen: open,
       onOpenChange,
-      // optional settings
-      // Avoid reacting to the default `[data-inkeep-modal-trigger]` custom trigger,
-      // since the site also has a chat trigger and we don't want both modals opening.
+      // Avoid reacting to the default `[data-inkeep-modal-trigger]` custom
+      // trigger, since the site also has a chat trigger and we don't want
+      // both modals opening.
       triggerSelector: '[data-inkeep-modal-trigger="search"]',
     },
-    searchSettings: {
-      // optional settings
-    },
+    searchSettings: {},
+    defaultView: 'search',
     aiChatSettings: {
-      // optional settings
-      aiAssistantAvatar: "/qvac-favicon.ico", // use your own AI assistant avatar
+      aiAssistantAvatar: '/qvac-favicon.ico',
       exampleQuestions: [
-        "What is QVAC?",
-        "Why Tether built QVAC?",
-        "How to use QVAC?",
+        'What is QVAC?',
+        'Why Tether built QVAC?',
+        'How to use QVAC?',
       ],
     },
+    onToggleView: ({ view, query, autoSubmit }) => {
+      // Only hijack switching INTO the chat view; switching back to
+      // search should be left to the modal.
+      if (view !== 'chat') return;
+
+      // On desktop, route every chat into the persistent sidebar so the
+      // user keeps a single conversation across surfaces. On mobile,
+      // keep the in-modal chat experience because no sidebar exists.
+      if (askAI.surface !== 'sidebar') return;
+
+      onOpenChange(false);
+      const trimmed = query?.trim();
+      if (trimmed && autoSubmit !== false) {
+        askAI.openWith(trimmed);
+      } else {
+        askAI.open();
+      }
+    },
   };
+
   return <InkeepModalSearchAndChat {...config} />;
 }

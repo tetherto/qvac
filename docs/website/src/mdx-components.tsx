@@ -8,6 +8,7 @@ import Link from "next/link";
 import { GithubInfo } from 'fumadocs-ui/components/github-info';
 import { CustomTabs, CustomTabsItem } from "@/components/custom-tabs";
 import { Accordion, Accordions } from 'fumadocs-ui/components/accordion';
+import { AskAICodeBlock } from "@/components/ask-ai";
 
 function WrapCode({ children }: { children: React.ReactNode }) {
   return <div className="fd-code-wrap">{children}</div>;
@@ -45,6 +46,10 @@ function ButtonLink({
 export function getMDXComponents(components?: MDXComponents): MDXComponents {
   return {
     ...defaultMdxComponents,
+    // Replace the default `pre` (which Fumadocs maps to `CodeBlock` +
+    // `Pre`) with a wrapper that injects an "Ask AI" trigger into every
+    // code block alongside the existing copy button.
+    pre: AskAICodeBlock,
     Mermaid,
     WrapCode,
     ButtonLink,
