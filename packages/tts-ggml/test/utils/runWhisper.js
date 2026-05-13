@@ -119,7 +119,7 @@ async function runWhisper (model, text, wavBuffer) {
   }
   console.log(`>>> [WHISPER] Full text: ${fullText}`)
   const wer = wordErrorRate(text, fullText)
-  return { wer, text: fullText }
+  return { wer }
 }
 
 async function _processResponse (response) {
