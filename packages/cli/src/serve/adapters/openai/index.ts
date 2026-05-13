@@ -74,6 +74,12 @@ export function createOpenAIAdapter (): APIAdapter {
         return true
       }
 
+      if (method === 'POST' && path === '/v1/images/edits') {
+        const { handleImagesEdits } = await import('./routes/images.js')
+        await handleImagesEdits(req, res, ctx)
+        return true
+      }
+
       if (method === 'POST' && path === '/v1/files') {
         const { handlePostFile } = await import('./routes/files.js')
         await handlePostFile(req, res, ctx)

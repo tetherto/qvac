@@ -85,6 +85,10 @@ export interface SDKDiffusionParams {
   guidance?: number
   sampling_method?: string
   scheduler?: string
+  /** Base image for img2img / image edits (SDK `diffusion()`). */
+  init_image?: Uint8Array
+  /** SD/SDXL denoising strength in [0, 1]; ignored by FLUX.2. */
+  strength?: number
 }
 
 export interface SDKDiffusionStats {

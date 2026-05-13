@@ -325,7 +325,7 @@ export function extractImageGenerationParams (
 
 const IMAGE_UNSUPPORTED_PARAMS = [
   'quality', 'style', 'background', 'moderation',
-  'output_compression', 'partial_images', 'user'
+  'output_compression', 'partial_images', 'user', 'input_fidelity'
 ] as const
 
 /**
@@ -903,4 +903,80 @@ function extractOutputTextFromMessage (msg: Record<string, unknown>): string {
     if (o['type'] === 'output_text' && typeof o['text'] === 'string') parts.push(o['text'])
   }
   return parts.join('')
+}
+
+// ─── /v1/images/edits (multipart) helpers ─────────────────────────────────
+
+/**
+ * Turn multipart text fields into a JSON-like object so we can reuse
+ * `extractImageGenerationParams` for shared validation and diffusion mapping.
+ */
+export function coerceMultipartFields (fields: Map<string, string>): Record<string, unknown> {
+  const obj: Record<string, unknown> = {}
+  for (const [k, v] of fields.entries()) {
+    const trimmed = v.trim()
+    if (k === 'n' || k === 'seed') {
+      if (/^-?\d+$/.test(trimmed)) {
+        obj[k] = parseInt(trimmed, 10)
+      } else {
+        obj[k] = v
+      }
+      continue
+    }
+    if (k === 'stream') {
+      if (trimmed === 'true' || trimmed === 'false') {
+        obj[k] = trimmed === 'true'
+      } else {
+        obj[k] = v
+      }
+      continue
+    }
+    if (k === 'strength') {
+      const f = parseFloat(trimmed)
+      if (!Number.isNaN(f)) {
+        obj[k] = f
+      } else {
+        obj[k] = v
+      }
+      continue
+    }
+    obj[k] = v
+  }
+  return obj
+}
+
+export function extractImageEditParams (
+  body: Record<string, unknown>,
+  imageBuffer: Uint8Array,
+  modelId: string
+): SDKDiffusionParams {
+  const params = extractImageGenerationParams(body, modelId)
+  params.init_image = imageBuffer
+
+  const strengthRaw = body['strength']
+  if (typeof strengthRaw === 'number' && !Number.isNaN(strengthRaw)) {
+    if (strengthRaw >= 0 && strengthRaw <= 1) {
+      params.strength = strengthRaw
+    }
+  }
+
+  return params
+}
+
+export function logImageEditExtraWarnings (
+  body: Record<string, unknown>,
+  opts: { hasMask: boolean; extraImageCount: number },
+  logger: Logger
+): void {
+  if (opts.hasMask) {
+    logger.warn('mask is accepted but not yet applied; QVAC diffusion has no mask support')
+  }
+  if (opts.extraImageCount > 0) {
+    logger.warn(`image[] received ${opts.extraImageCount + 1} files; using only the first`)
+  }
+
+  const s = body['strength']
+  if (typeof s === 'number' && !Number.isNaN(s) && (s < 0 || s > 1)) {
+    logger.warn(`strength=${JSON.stringify(s)} is out of range [0,1]; ignoring`)
+  }
 }

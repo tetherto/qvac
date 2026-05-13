@@ -5,6 +5,9 @@ import {
   extractImageGenerationParams,
   logImageUnsupportedParams,
   encodeImageDataUrl,
+  coerceMultipartFields,
+  extractImageEditParams,
+  logImageEditExtraWarnings,
   InvalidImagePromptError,
   InvalidImageSizeError,
   InvalidImageBatchCountError
@@ -132,9 +135,10 @@ describe('logImageUnsupportedParams', () => {
       moderation: 'low',
       output_compression: 60,
       partial_images: 2,
-      user: 'end-user-42'
+      user: 'end-user-42',
+      input_fidelity: 'high'
     }, logger)
-    assert.equal(warnings.length, 7)
+    assert.equal(warnings.length, 8)
     assert.ok(warnings.some(w => w.includes('quality')))
     assert.ok(warnings.some(w => w.includes('style')))
     assert.ok(warnings.some(w => w.includes('background')))
@@ -142,6 +146,7 @@ describe('logImageUnsupportedParams', () => {
     assert.ok(warnings.some(w => w.includes('output_compression')))
     assert.ok(warnings.some(w => w.includes('partial_images')))
     assert.ok(warnings.some(w => w.includes('user')))
+    assert.ok(warnings.some(w => w.includes('input_fidelity')))
   })
 
   it('warns when output_format is not png', () => {
@@ -192,5 +197,87 @@ describe('encodeImageDataUrl', () => {
     const url = encodeImageDataUrl(new Uint8Array([0, 0, 0, 0]))
     const base64 = url.split(',')[1]!
     assert.match(base64, /^[A-Za-z0-9+/]+={0,2}$/)
+  })
+})
+
+describe('coerceMultipartFields', () => {
+  it('parses integer n and seed from strings', () => {
+    const m = new Map<string, string>([
+      ['n', '4'],
+      ['seed', '42'],
+      ['model', 'sd']
+    ])
+    const o = coerceMultipartFields(m)
+    assert.equal(o['n'], 4)
+    assert.equal(o['seed'], 42)
+    assert.equal(o['model'], 'sd')
+  })
+
+  it('parses stream and strength', () => {
+    const m = new Map<string, string>([
+      ['stream', 'true'],
+      ['strength', '0.7']
+    ])
+    const o = coerceMultipartFields(m)
+    assert.equal(o['stream'], true)
+    assert.equal(o['strength'], 0.7)
+  })
+})
+
+describe('extractImageEditParams', () => {
+  const buf = new Uint8Array([1, 2, 3])
+
+  it('sets init_image and forwards prompt', () => {
+    const body: Record<string, unknown> = { model: 'ignored', prompt: 'x', n: 2 }
+    const p = extractImageEditParams(body, buf, 'sdk-1')
+    assert.equal(p.modelId, 'sdk-1')
+    assert.equal(p.prompt, 'x')
+    assert.deepEqual(Array.from(p.init_image!), Array.from(buf))
+    assert.equal(p.batch_count, 2)
+  })
+
+  it('maps strength when in range', () => {
+    const body: Record<string, unknown> = { prompt: 'p', strength: 0.5 }
+    const p = extractImageEditParams(body, buf, 'm')
+    assert.equal(p.strength, 0.5)
+  })
+
+  it('omits strength when out of range', () => {
+    const body: Record<string, unknown> = { prompt: 'p', strength: 2 }
+    const p = extractImageEditParams(body, buf, 'm')
+    assert.equal(p.strength, undefined)
+  })
+
+  it('propagates InvalidImagePromptError', () => {
+    assert.throws(
+      () => extractImageEditParams({ prompt: '' } as Record<string, unknown>, buf, 'm'),
+      InvalidImagePromptError
+    )
+  })
+})
+
+describe('logImageEditExtraWarnings', () => {
+  function makeLogger (): { warnings: string[]; logger: Parameters<typeof logImageEditExtraWarnings>[2] } {
+    const warnings: string[] = []
+    const logger = { warn: (msg: string) => warnings.push(msg) } as Parameters<typeof logImageEditExtraWarnings>[2]
+    return { warnings, logger }
+  }
+
+  it('warns when mask present', () => {
+    const { warnings, logger } = makeLogger()
+    logImageEditExtraWarnings({}, { hasMask: true, extraImageCount: 0 }, logger)
+    assert.ok(warnings.some(w => w.includes('mask')))
+  })
+
+  it('warns on extra images', () => {
+    const { warnings, logger } = makeLogger()
+    logImageEditExtraWarnings({}, { hasMask: false, extraImageCount: 2 }, logger)
+    assert.ok(warnings.some(w => w.includes('3 files')))
+  })
+
+  it('warns when strength out of range', () => {
+    const { warnings, logger } = makeLogger()
+    logImageEditExtraWarnings({ strength: 9 }, { hasMask: false, extraImageCount: 0 }, logger)
+    assert.ok(warnings.some(w => w.includes('strength')))
   })
 })
