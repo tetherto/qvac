@@ -21,6 +21,11 @@ on:
         type: string
         required: false
         default: ""
+      qvac_perf_only:
+        description: "If true, restrict each test group to its perf-emitting tests only and skip groups that have none. Used by Benchmark Performance (LLM)."
+        type: boolean
+        required: false
+        default: false
   workflow_dispatch:
     inputs:
       ref:
@@ -43,6 +48,11 @@ on:
         type: string
         required: false
         default: ""
+      qvac_perf_only:
+        description: "If true, restrict each test group to its perf-emitting tests only and skip groups that have none."
+        type: boolean
+        required: false
+        default: false
 
 env:
   NODE_VERSION: "lts/*"
@@ -932,22 +942,29 @@ jobs:
 
       - name: Create and Upload Test Spec
         id: upload_test_spec
+        # WDIO_CONFIG strings live in env: rather than inline because GitHub
+        # Actions imposes a 21,000-char limit on any `run:` block that
+        # contains ${{ }} expressions, and the two giant Appium/WDIO JS
+        # blobs would push us well over.
+        env:
+          WDIO_ANDROID: 'exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"Android","appium:automationName":"UiAutomator2","appium:appPackage":"${{ env.APP_BUNDLE_ID }}","appium:appActivity":"${{ env.APP_BUNDLE_ID }}.MainActivity","appium:newCommandTimeout":300,"appium:autoGrantPermissions":true,"appium:autoAcceptAlerts":true,"appium:noReset":true,"appium:dontStopAppOnReset":true,"appium:forceAppLaunch":false}],logLevel:"debug",waitforTimeout:120000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:1800000,grep:"__MOCHA_GREP__"},before:async function(capabilities,specs,browser){const BUNDLE_ID="${{ env.APP_BUNDLE_ID }}";const TEST_FILTER="__TEST_FILTER__";const QVAC_PERF_RUNS_VALUE="__QVAC_PERF_RUNS__";const QVAC_PERF_WARMUP_RUNS_VALUE="__QVAC_PERF_WARMUP_RUNS__";global.appCrashed=false;global.checkAppCrash=async(stage)=>{try{const state=await browser.queryAppState(BUNDLE_ID);console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\\n🛑 APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\\n");global.appCrashed=true;setTimeout(function(){process.exit(1);},5000);}return state;}catch(e){console.log("["+stage+"] queryAppState error: "+e.message);return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("android=new UiSelector().textContains(\"INITIALIZED\")");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");if(TEST_FILTER!=="__TEST_FILTER__"){try{const b64=Buffer.from(TEST_FILTER).toString("base64");await browser.pushFile("/data/local/tmp/testFilter.txt",b64);console.log("Pushed test filter: "+TEST_FILTER);}catch(e){console.log("pushFile failed: "+e.message);}}if(QVAC_PERF_RUNS_VALUE.length>0||QVAC_PERF_WARMUP_RUNS_VALUE.length>0){try{var perfCfg="QVAC_PERF_RUNS="+QVAC_PERF_RUNS_VALUE+"\\nQVAC_PERF_WARMUP_RUNS="+QVAC_PERF_WARMUP_RUNS_VALUE+"\\n";var pcb64=Buffer.from(perfCfg).toString("base64");await browser.pushFile("/data/local/tmp/qvacPerfConfig.txt",pcb64);console.log("Pushed perf config: "+perfCfg.replace(/\\n/g," "));}catch(e){console.log("perfConfig pushFile failed: "+e.message);}}console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("android=new UiSelector().textContains(\"Run Automated Tests\")");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");global.crashMonitor=setInterval(async()=>{if(global.appCrashed)return;try{const s=await browser.queryAppState(BUNDLE_ID);if(s<3){console.error("\\n🛑 BACKGROUND CRASH DETECTED! App state="+s);global.appCrashed=true;setTimeout(function(){process.exit(1);},5000);}}catch(e){}},15000);},after:async function(){if(global.crashMonitor)clearInterval(global.crashMonitor);},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);}};'
+          WDIO_IOS: 'exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"iOS","appium:automationName":"XCUITest","appium:bundleId":"${{ env.APP_BUNDLE_ID }}","appium:newCommandTimeout":300,"appium:noReset":true,"appium:forceAppLaunch":false,"appium:usePrebuiltWDA":true,"appium:wdaLocalPort":8100,"appium:showIOSLog":true,"appium:realDeviceLogger":"/usr/local/lib/node_modules/appium/node_modules/deviceconsole/deviceconsole"}],logLevel:"debug",waitforTimeout:120000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:1800000,grep:"__MOCHA_GREP__"},before:async function(capabilities,specs,browser){const BUNDLE_ID="${{ env.APP_BUNDLE_ID }}";const TEST_FILTER="__TEST_FILTER__";const QVAC_PERF_RUNS_VALUE="__QVAC_PERF_RUNS__";const QVAC_PERF_WARMUP_RUNS_VALUE="__QVAC_PERF_WARMUP_RUNS__";global.appCrashed=false;global.flushBareLog=async function(reason){try{var _h=require("http");var lb64=await new Promise(function(ok,fail){var bd=JSON.stringify({path:"@"+BUNDLE_ID+":documents/bare_console.log"});var rq=_h.request({hostname:"127.0.0.1",port:4723,path:"/wd/hub/session/"+browser.sessionId+"/appium/device/pull_file",method:"POST",headers:{"Content-Type":"application/json","Content-Length":Buffer.byteLength(bd)}},function(rs){var d="";rs.on("data",function(c){d+=c;});rs.on("end",function(){try{ok(JSON.parse(d).value);}catch(e){fail(e);}});});rq.on("error",fail);rq.write(bd);rq.end();});var logTxt=Buffer.from(lb64,"base64").toString();var logDir=process.env.DEVICEFARM_LOG_DIR||".";require("fs").writeFileSync(logDir+"/bare_console.log",logTxt);console.log("[bare-log] "+reason+" flush ok ("+logTxt.length+" bytes)");}catch(e){console.log("[bare-log] "+reason+" flush failed: "+e.message);}};global.checkAppCrash=async(stage)=>{try{const state=await browser.queryAppState(BUNDLE_ID);console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\\n🛑 APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\\n");global.appCrashed=true;setTimeout(function(){process.exit(1);},5000);try{await browser.pause(1500);await Promise.race([global.flushBareLog("crash-"+stage),new Promise(function(_,rj){setTimeout(function(){rj(new Error("bare-log flush timed out"));},3000);})]);}catch(_){}}return state;}catch(e){console.log("["+stage+"] queryAppState error: "+e.message);return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("-ios predicate string:label CONTAINS \"INITIALIZED\"");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");if(TEST_FILTER!=="__TEST_FILTER__"){try{const b64=Buffer.from(TEST_FILTER).toString("base64");await browser.pushFile("@"+BUNDLE_ID+":documents/testFilter.txt",b64);console.log("Pushed test filter: "+TEST_FILTER);}catch(e){console.log("pushFile failed: "+e.message);}}if(QVAC_PERF_RUNS_VALUE.length>0||QVAC_PERF_WARMUP_RUNS_VALUE.length>0){try{var perfCfg="QVAC_PERF_RUNS="+QVAC_PERF_RUNS_VALUE+"\\nQVAC_PERF_WARMUP_RUNS="+QVAC_PERF_WARMUP_RUNS_VALUE+"\\n";var pcb64=Buffer.from(perfCfg).toString("base64");await browser.pushFile("@"+BUNDLE_ID+":documents/qvacPerfConfig.txt",pcb64);console.log("Pushed perf config: "+perfCfg.replace(/\\n/g," "));}catch(e){console.log("perfConfig pushFile failed: "+e.message);}}console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("-ios predicate string:label CONTAINS \"Run Automated Tests\"");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");global.crashMonitor=setInterval(async()=>{if(global.appCrashed)return;try{const s=await browser.queryAppState(BUNDLE_ID);if(s<3){console.error("\\n🛑 BACKGROUND CRASH DETECTED! App state="+s);global.appCrashed=true;setTimeout(function(){process.exit(1);},5000);try{await browser.pause(1500);await Promise.race([global.flushBareLog("crash-bg"),new Promise(function(_,rj){setTimeout(function(){rj(new Error("bare-log flush timed out"));},3000);})]);}catch(_){}}}catch(e){}},15000);},after:async function(){if(global.crashMonitor)clearInterval(global.crashMonitor);console.log("[bare-log] Waiting for log flush...");await browser.pause(3000);if(global.flushBareLog)await global.flushBareLog("after");},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);}};'
         run: |
           echo "📝 Creating test spec for custom environment mode..."
           echo "Platform: ${{ matrix.platform }}"
-          
+
           if [ "${{ matrix.platform }}" == "Android" ]; then
             PLATFORM="Android"
             AUTOMATION="UiAutomator2"
             HOST_LINE="android_test_host: amazon_linux_2"
             BUNDLE_ID="${{ env.APP_BUNDLE_ID }}"
-            WDIO_CONFIG='exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"Android","appium:automationName":"UiAutomator2","appium:appPackage":"'${{ env.APP_BUNDLE_ID }}'","appium:appActivity":"'${{ env.APP_BUNDLE_ID }}'.MainActivity","appium:newCommandTimeout":300,"appium:autoGrantPermissions":true,"appium:autoAcceptAlerts":true,"appium:noReset":true,"appium:dontStopAppOnReset":true,"appium:forceAppLaunch":false}],logLevel:"debug",waitforTimeout:120000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:1800000,grep:"__MOCHA_GREP__"},before:async function(capabilities,specs,browser){const BUNDLE_ID="'${{ env.APP_BUNDLE_ID }}'";const TEST_FILTER="__TEST_FILTER__";const QVAC_PERF_RUNS_VALUE="__QVAC_PERF_RUNS__";const QVAC_PERF_WARMUP_RUNS_VALUE="__QVAC_PERF_WARMUP_RUNS__";global.appCrashed=false;global.checkAppCrash=async(stage)=>{try{const state=await browser.queryAppState(BUNDLE_ID);console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\\n🛑 APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\\n");global.appCrashed=true;setTimeout(function(){process.exit(1);},5000);}return state;}catch(e){console.log("["+stage+"] queryAppState error: "+e.message);return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("android=new UiSelector().textContains(\"INITIALIZED\")");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");if(TEST_FILTER!=="__TEST_FILTER__"){try{const b64=Buffer.from(TEST_FILTER).toString("base64");await browser.pushFile("/data/local/tmp/testFilter.txt",b64);console.log("Pushed test filter: "+TEST_FILTER);}catch(e){console.log("pushFile failed: "+e.message);}}if(QVAC_PERF_RUNS_VALUE.length>0||QVAC_PERF_WARMUP_RUNS_VALUE.length>0){try{var perfCfg="QVAC_PERF_RUNS="+QVAC_PERF_RUNS_VALUE+"\\nQVAC_PERF_WARMUP_RUNS="+QVAC_PERF_WARMUP_RUNS_VALUE+"\\n";var pcb64=Buffer.from(perfCfg).toString("base64");await browser.pushFile("/data/local/tmp/qvacPerfConfig.txt",pcb64);console.log("Pushed perf config: "+perfCfg.replace(/\\n/g," "));}catch(e){console.log("perfConfig pushFile failed: "+e.message);}}console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("android=new UiSelector().textContains(\"Run Automated Tests\")");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");global.crashMonitor=setInterval(async()=>{if(global.appCrashed)return;try{const s=await browser.queryAppState(BUNDLE_ID);if(s<3){console.error("\\n🛑 BACKGROUND CRASH DETECTED! App state="+s);global.appCrashed=true;setTimeout(function(){process.exit(1);},5000);}}catch(e){}},15000);},after:async function(){if(global.crashMonitor)clearInterval(global.crashMonitor);},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);}};'
+            WDIO_CONFIG="$WDIO_ANDROID"
           else
             PLATFORM="iOS"
             AUTOMATION="XCUITest"
             HOST_LINE="ios_test_host: macos_sequoia"
             BUNDLE_ID="${{ env.APP_BUNDLE_ID }}"
-            WDIO_CONFIG='exports.config={runner:"local",hostname:"127.0.0.1",port:4723,path:"/wd/hub",specs:["*.spec.js","*.test.js"],maxInstances:1,bail:0,capabilities:[{platformName:"iOS","appium:automationName":"XCUITest","appium:bundleId":"'${{ env.APP_BUNDLE_ID }}'","appium:newCommandTimeout":300,"appium:noReset":true,"appium:forceAppLaunch":false,"appium:usePrebuiltWDA":true,"appium:wdaLocalPort":8100,"appium:showIOSLog":true,"appium:realDeviceLogger":"/usr/local/lib/node_modules/appium/node_modules/deviceconsole/deviceconsole"}],logLevel:"debug",waitforTimeout:120000,connectionRetryTimeout:30000,connectionRetryCount:3,services:[],framework:"mocha",reporters:["spec"],mochaOpts:{ui:"bdd",timeout:1800000,grep:"__MOCHA_GREP__"},before:async function(capabilities,specs,browser){const BUNDLE_ID="'${{ env.APP_BUNDLE_ID }}'";const TEST_FILTER="__TEST_FILTER__";const QVAC_PERF_RUNS_VALUE="__QVAC_PERF_RUNS__";const QVAC_PERF_WARMUP_RUNS_VALUE="__QVAC_PERF_WARMUP_RUNS__";global.appCrashed=false;global.flushBareLog=async function(reason){try{var _h=require("http");var lb64=await new Promise(function(ok,fail){var bd=JSON.stringify({path:"@"+BUNDLE_ID+":documents/bare_console.log"});var rq=_h.request({hostname:"127.0.0.1",port:4723,path:"/wd/hub/session/"+browser.sessionId+"/appium/device/pull_file",method:"POST",headers:{"Content-Type":"application/json","Content-Length":Buffer.byteLength(bd)}},function(rs){var d="";rs.on("data",function(c){d+=c;});rs.on("end",function(){try{ok(JSON.parse(d).value);}catch(e){fail(e);}});});rq.on("error",fail);rq.write(bd);rq.end();});var logTxt=Buffer.from(lb64,"base64").toString();var logDir=process.env.DEVICEFARM_LOG_DIR||".";require("fs").writeFileSync(logDir+"/bare_console.log",logTxt);console.log("[bare-log] "+reason+" flush ok ("+logTxt.length+" bytes)");}catch(e){console.log("[bare-log] "+reason+" flush failed: "+e.message);}};global.checkAppCrash=async(stage)=>{try{const state=await browser.queryAppState(BUNDLE_ID);console.log("["+stage+"] App state: "+state+" (4=foreground,3=background,1=not running)");if(state<3){console.error("\\n🛑 APP CRASHED at "+stage+"! State="+state);console.error("Check device logs for BareKit/native errors.\\n");global.appCrashed=true;setTimeout(function(){process.exit(1);},5000);try{await browser.pause(1500);await Promise.race([global.flushBareLog("crash-"+stage),new Promise(function(_,rj){setTimeout(function(){rj(new Error("bare-log flush timed out"));},3000);})]);}catch(_){}}return state;}catch(e){console.log("["+stage+"] queryAppState error: "+e.message);return-1;}};console.log("Checking initial app state...");await global.checkAppCrash("startup");console.log("Waiting for app to initialize...");await browser.pause(5000);await global.checkAppCrash("after-pause");const initText=await browser.$("-ios predicate string:label CONTAINS \"INITIALIZED\"");await initText.waitForDisplayed({timeout:60000});await global.checkAppCrash("after-init");if(TEST_FILTER!=="__TEST_FILTER__"){try{const b64=Buffer.from(TEST_FILTER).toString("base64");await browser.pushFile("@"+BUNDLE_ID+":documents/testFilter.txt",b64);console.log("Pushed test filter: "+TEST_FILTER);}catch(e){console.log("pushFile failed: "+e.message);}}if(QVAC_PERF_RUNS_VALUE.length>0||QVAC_PERF_WARMUP_RUNS_VALUE.length>0){try{var perfCfg="QVAC_PERF_RUNS="+QVAC_PERF_RUNS_VALUE+"\\nQVAC_PERF_WARMUP_RUNS="+QVAC_PERF_WARMUP_RUNS_VALUE+"\\n";var pcb64=Buffer.from(perfCfg).toString("base64");await browser.pushFile("@"+BUNDLE_ID+":documents/qvacPerfConfig.txt",pcb64);console.log("Pushed perf config: "+perfCfg.replace(/\\n/g," "));}catch(e){console.log("perfConfig pushFile failed: "+e.message);}}console.log("App initialized, clicking Run Automated Tests...");const button=await browser.$("-ios predicate string:label CONTAINS \"Run Automated Tests\"");await button.waitForDisplayed({timeout:15000});await button.click();console.log("Button clicked!");await browser.pause(5000);await global.checkAppCrash("after-click");global.crashMonitor=setInterval(async()=>{if(global.appCrashed)return;try{const s=await browser.queryAppState(BUNDLE_ID);if(s<3){console.error("\\n🛑 BACKGROUND CRASH DETECTED! App state="+s);global.appCrashed=true;setTimeout(function(){process.exit(1);},5000);try{await browser.pause(1500);await Promise.race([global.flushBareLog("crash-bg"),new Promise(function(_,rj){setTimeout(function(){rj(new Error("bare-log flush timed out"));},3000);})]);}catch(_){}}}catch(e){}},15000);},after:async function(){if(global.crashMonitor)clearInterval(global.crashMonitor);console.log("[bare-log] Waiting for log flush...");await browser.pause(3000);if(global.flushBareLog)await global.flushBareLog("after");},afterTest:async function(test,context,{error}){if(global.appCrashed)return;await global.checkAppCrash("after-test:"+test.title);}};'
+            WDIO_CONFIG="$WDIO_IOS"
           fi
           
           WDIO_B64=$(echo "$WDIO_CONFIG" | base64 | tr -d '\n')
@@ -1080,76 +1097,68 @@ jobs:
 
           GROUPS_JSON="${{ github.workspace }}/${{ env.ADDON_WORKDIR }}/test/mobile/test-groups.json"
 
+          # Perf-only mode: keep only run*Test wrappers that emit perf
+          # data. Groups whose intersection with this set is empty are
+          # skipped entirely (no spec uploaded → empty test_spec_arn_X
+          # → schedule step won't book a Device Farm run for them).
+          PERF_ONLY="${{ inputs.qvac_perf_only }}"
+          PERF_REGEX='^(runImageElephantTest|runImageFruitPlateTest|runImageHighResAuroraTest|runBitnetTest|runToolCallingTest)$'
+          filter_perf () {
+            if [ "$PERF_ONLY" != "true" ]; then echo "$1"; return; fi
+            [ -z "$1" ] && return
+            echo "$1" | tr '|' '\n' | grep -E "$PERF_REGEX" | tr '\n' '|' | sed 's/|$//'
+          }
+
+          maybe_make_and_upload () {
+            local pattern="$1" spec_file="$2" name="$3" output_key="$4"
+            if [ -z "$pattern" ]; then
+              echo "[$name] skipped (no perf-emitting tests in this group)"
+              return
+            fi
+            make_split "$pattern" "$spec_file"
+            local arn
+            arn=$(upload_spec "$spec_file" "$name")
+            echo "$output_key=$arn" >> "$GITHUB_OUTPUT"
+          }
+
           if [ "${{ matrix.platform }}" == "Android" ]; then
-            ANDROID_GROUP_A=$(jq -r '.android.groupA | join("|")' "$GROUPS_JSON")
-            ANDROID_GROUP_B=$(jq -r '.android.groupB | join("|")' "$GROUPS_JSON")
+            ANDROID_GROUP_A=$(filter_perf "$(jq -r '.android.groupA | join("|")' "$GROUPS_JSON")")
+            ANDROID_GROUP_B=$(filter_perf "$(jq -r '.android.groupB | join("|")' "$GROUPS_JSON")")
+            ANDROID_GROUP_IMG_PERF=$(filter_perf "$(jq -r '.android.groupImagesPerf | join("|")' "$GROUPS_JSON")")
 
-            echo "Android test split (2 groups):"
-            echo "  Group A: $ANDROID_GROUP_A"
-            echo "  Group B: $ANDROID_GROUP_B"
+            echo "Android split (perf_only=$PERF_ONLY): A=$ANDROID_GROUP_A B=$ANDROID_GROUP_B IMG=$ANDROID_GROUP_IMG_PERF"
 
-            make_split "$ANDROID_GROUP_A" testspec-android-a.yml
-            make_split "$ANDROID_GROUP_B" testspec-android-b.yml
-
-            SPEC_ARN_A=$(upload_spec testspec-android-a.yml "Android-A")
-            echo "test_spec_arn=$SPEC_ARN_A" >> $GITHUB_OUTPUT
-            SPEC_ARN_B=$(upload_spec testspec-android-b.yml "Android-B")
-            echo "test_spec_arn_2=$SPEC_ARN_B" >> $GITHUB_OUTPUT
+            maybe_make_and_upload "$ANDROID_GROUP_A"        testspec-android-a.yml         "Android-A"           "test_spec_arn"
+            maybe_make_and_upload "$ANDROID_GROUP_B"        testspec-android-b.yml         "Android-B"           "test_spec_arn_2"
+            maybe_make_and_upload "$ANDROID_GROUP_IMG_PERF" testspec-android-img-perf.yml  "Android-ImagesPerf"  "test_spec_arn_3"
           else
-            IOS_GREP_HEAVY_1=$(jq -r '.ios.heavy1 | join("|")' "$GROUPS_JSON")
-            IOS_GREP_HEAVY_2=$(jq -r '.ios.heavy2 | join("|")' "$GROUPS_JSON")
-            IOS_GREP_HEAVY_3=$(jq -r '.ios.heavy3 | join("|")' "$GROUPS_JSON")
-            IOS_GREP_HEAVY_4=$(jq -r '.ios.heavy4 | join("|")' "$GROUPS_JSON")
-            IOS_GREP_HEAVY_5=$(jq -r '.ios.heavy5 | join("|")' "$GROUPS_JSON")
-            IOS_GREP_HEAVY_6=$(jq -r '.ios.heavy6 | join("|")' "$GROUPS_JSON")
-            IOS_GREP_HEAVY_7=$(jq -r '.ios.heavy7 | join("|")' "$GROUPS_JSON")
-            IOS_GREP_HEAVY_8=$(jq -r '.ios.heavy8 | join("|")' "$GROUPS_JSON")
-            IOS_GREP_LIGHT_A=$(jq -r '.ios.lightA | join("|")' "$GROUPS_JSON")
-            IOS_GREP_LIGHT_B=$(jq -r '.ios.lightB | join("|")' "$GROUPS_JSON")
+            IOS_GREP_HEAVY_1=$(filter_perf "$(jq -r '.ios.heavy1 | join("|")' "$GROUPS_JSON")")
+            IOS_GREP_HEAVY_2=$(filter_perf "$(jq -r '.ios.heavy2 | join("|")' "$GROUPS_JSON")")
+            IOS_GREP_HEAVY_3=$(filter_perf "$(jq -r '.ios.heavy3 | join("|")' "$GROUPS_JSON")")
+            IOS_GREP_HEAVY_4=$(filter_perf "$(jq -r '.ios.heavy4 | join("|")' "$GROUPS_JSON")")
+            IOS_GREP_HEAVY_5=$(filter_perf "$(jq -r '.ios.heavy5 | join("|")' "$GROUPS_JSON")")
+            IOS_GREP_HEAVY_6=$(filter_perf "$(jq -r '.ios.heavy6 | join("|")' "$GROUPS_JSON")")
+            IOS_GREP_HEAVY_7=$(filter_perf "$(jq -r '.ios.heavy7 | join("|")' "$GROUPS_JSON")")
+            IOS_GREP_HEAVY_8=$(filter_perf "$(jq -r '.ios.heavy8 | join("|")' "$GROUPS_JSON")")
+            IOS_GREP_HEAVY_9=$(filter_perf "$(jq -r '.ios.heavy9 | join("|")' "$GROUPS_JSON")")
+            IOS_GREP_HEAVY_10=$(filter_perf "$(jq -r '.ios.heavy10 | join("|")' "$GROUPS_JSON")")
+            IOS_GREP_LIGHT_A=$(filter_perf "$(jq -r '.ios.lightA | join("|")' "$GROUPS_JSON")")
+            IOS_GREP_LIGHT_B=$(filter_perf "$(jq -r '.ios.lightB | join("|")' "$GROUPS_JSON")")
 
-            echo "iOS test split (8 heavy + 2 light = 10 groups):"
-            echo "  Heavy 1 (iPhone 16 Pro Max): $IOS_GREP_HEAVY_1"
-            echo "  Heavy 2 (iPhone 16 Pro Max): $IOS_GREP_HEAVY_2"
-            echo "  Heavy 3 (iPhone 17):         $IOS_GREP_HEAVY_3"
-            echo "  Heavy 4 (OcrLighton):        $IOS_GREP_HEAVY_4"
-            echo "  Heavy 5 (Reasoning):         $IOS_GREP_HEAVY_5"
-            echo "  Heavy 6 (SlidingContext):    $IOS_GREP_HEAVY_6"
-            echo "  Heavy 7 (Gemma4):            $IOS_GREP_HEAVY_7"
-            echo "  Heavy 8 (OcrPaddle):         $IOS_GREP_HEAVY_8"
-            echo "  Light A (iPhone 16 Pro):     $IOS_GREP_LIGHT_A"
-            echo "  Light B (iPhone 16 Pro):     $IOS_GREP_LIGHT_B"
+            echo "iOS split (perf_only=$PERF_ONLY): H1=$IOS_GREP_HEAVY_1 H2=$IOS_GREP_HEAVY_2 H3=$IOS_GREP_HEAVY_3 H4=$IOS_GREP_HEAVY_4 H5=$IOS_GREP_HEAVY_5 H6=$IOS_GREP_HEAVY_6 H7=$IOS_GREP_HEAVY_7 H8=$IOS_GREP_HEAVY_8 H9=$IOS_GREP_HEAVY_9 H10=$IOS_GREP_HEAVY_10 LA=$IOS_GREP_LIGHT_A LB=$IOS_GREP_LIGHT_B"
 
-            make_split "$IOS_GREP_HEAVY_1" testspec-heavy-1.yml
-            make_split "$IOS_GREP_HEAVY_2" testspec-heavy-2.yml
-            make_split "$IOS_GREP_HEAVY_3" testspec-heavy-3.yml
-            make_split "$IOS_GREP_HEAVY_4" testspec-heavy-4.yml
-            make_split "$IOS_GREP_HEAVY_5" testspec-heavy-5.yml
-            make_split "$IOS_GREP_HEAVY_6" testspec-heavy-6.yml
-            make_split "$IOS_GREP_HEAVY_7" testspec-heavy-7.yml
-            make_split "$IOS_GREP_HEAVY_8" testspec-heavy-8.yml
-            make_split "$IOS_GREP_LIGHT_A" testspec-light-a.yml
-            make_split "$IOS_GREP_LIGHT_B" testspec-light-b.yml
-
-            SPEC_ARN_H1=$(upload_spec testspec-heavy-1.yml "iOS-Heavy1")
-            echo "test_spec_arn=$SPEC_ARN_H1" >> $GITHUB_OUTPUT
-            SPEC_ARN_H2=$(upload_spec testspec-heavy-2.yml "iOS-Heavy2")
-            echo "test_spec_arn_2=$SPEC_ARN_H2" >> $GITHUB_OUTPUT
-            SPEC_ARN_H3=$(upload_spec testspec-heavy-3.yml "iOS-Heavy3")
-            echo "test_spec_arn_3=$SPEC_ARN_H3" >> $GITHUB_OUTPUT
-            SPEC_ARN_H4=$(upload_spec testspec-heavy-4.yml "iOS-Heavy4")
-            echo "test_spec_arn_4=$SPEC_ARN_H4" >> $GITHUB_OUTPUT
-            SPEC_ARN_H5=$(upload_spec testspec-heavy-5.yml "iOS-Heavy5")
-            echo "test_spec_arn_5=$SPEC_ARN_H5" >> $GITHUB_OUTPUT
-            SPEC_ARN_H6=$(upload_spec testspec-heavy-6.yml "iOS-Heavy6")
-            echo "test_spec_arn_6=$SPEC_ARN_H6" >> $GITHUB_OUTPUT
-            SPEC_ARN_LA=$(upload_spec testspec-light-a.yml "iOS-LightA")
-            echo "test_spec_arn_7=$SPEC_ARN_LA" >> $GITHUB_OUTPUT
-            SPEC_ARN_LB=$(upload_spec testspec-light-b.yml "iOS-LightB")
-            echo "test_spec_arn_8=$SPEC_ARN_LB" >> $GITHUB_OUTPUT
-            SPEC_ARN_H7=$(upload_spec testspec-heavy-7.yml "iOS-Heavy7")
-            echo "test_spec_arn_9=$SPEC_ARN_H7" >> $GITHUB_OUTPUT
-            SPEC_ARN_H8=$(upload_spec testspec-heavy-8.yml "iOS-Heavy8")
-            echo "test_spec_arn_10=$SPEC_ARN_H8" >> $GITHUB_OUTPUT
+            maybe_make_and_upload "$IOS_GREP_HEAVY_1"  testspec-heavy-1.yml  "iOS-Heavy1"  "test_spec_arn"
+            maybe_make_and_upload "$IOS_GREP_HEAVY_2"  testspec-heavy-2.yml  "iOS-Heavy2"  "test_spec_arn_2"
+            maybe_make_and_upload "$IOS_GREP_HEAVY_3"  testspec-heavy-3.yml  "iOS-Heavy3"  "test_spec_arn_3"
+            maybe_make_and_upload "$IOS_GREP_HEAVY_4"  testspec-heavy-4.yml  "iOS-Heavy4"  "test_spec_arn_4"
+            maybe_make_and_upload "$IOS_GREP_HEAVY_5"  testspec-heavy-5.yml  "iOS-Heavy5"  "test_spec_arn_5"
+            maybe_make_and_upload "$IOS_GREP_HEAVY_6"  testspec-heavy-6.yml  "iOS-Heavy6"  "test_spec_arn_6"
+            maybe_make_and_upload "$IOS_GREP_HEAVY_7"  testspec-heavy-7.yml  "iOS-Heavy7"  "test_spec_arn_7"
+            maybe_make_and_upload "$IOS_GREP_HEAVY_8"  testspec-heavy-8.yml  "iOS-Heavy8"  "test_spec_arn_8"
+            maybe_make_and_upload "$IOS_GREP_HEAVY_9"  testspec-heavy-9.yml  "iOS-Heavy9"  "test_spec_arn_9"
+            maybe_make_and_upload "$IOS_GREP_HEAVY_10" testspec-heavy-10.yml "iOS-Heavy10" "test_spec_arn_10"
+            maybe_make_and_upload "$IOS_GREP_LIGHT_A"  testspec-light-a.yml  "iOS-LightA"  "test_spec_arn_11"
+            maybe_make_and_upload "$IOS_GREP_LIGHT_B"  testspec-light-b.yml  "iOS-LightB"  "test_spec_arn_12"
           fi
 
       - name: Schedule Device Farm Test Run
@@ -1179,23 +1188,42 @@ jobs:
               --query 'run.arn' --output text
           }
 
+          # When the upstream test-spec step skips a group (perf-only
+          # mode, no perf-emitting tests in that group), its
+          # test_spec_arn_* output is empty. Don't book Device Farm
+          # time for an empty spec — leaves the matching RUN_ARN_*
+          # variable empty, which the existing 1..10 iterator in the
+          # subsequent steps already tolerates.
+          maybe_schedule () {
+            local idx="$1" pool_arn="$2" name="$3" spec_arn="$4" label="$5"
+            if [ -z "$spec_arn" ]; then
+              echo "[$label] skipped (no test spec — group has no perf-emitting tests in perf-only mode)"
+              return
+            fi
+            local arn
+            arn=$(schedule_run_with_pool "$pool_arn" "$name" "$spec_arn")
+            echo "✅ $label scheduled: $arn"
+            eval "RUN_ARN_$idx=$arn"
+            echo "run_arn_$idx=$arn" >> "$GITHUB_OUTPUT"
+            SCHEDULED_COUNT=$((SCHEDULED_COUNT + 1))
+            HIGHEST_IDX=$idx
+          }
+
+          SCHEDULED_COUNT=0
+          HIGHEST_IDX=0
+
           if [ "${{ matrix.platform }}" == "Android" ]; then
             POOL_ARN="${{ secrets.LLM_ANDROID_DEVICE_POOL_ARN }}"
             TEST_SPEC_ARN_A="${{ steps.upload_test_spec.outputs.test_spec_arn }}"
             TEST_SPEC_ARN_B="${{ steps.upload_test_spec.outputs.test_spec_arn_2 }}"
+            TEST_SPEC_ARN_IMG_PERF="${{ steps.upload_test_spec.outputs.test_spec_arn_3 }}"
 
-            echo "🚀 Scheduling 2 Android runs (each runs on all devices in pool)..."
+            echo "🚀 Scheduling Android runs (each runs on all devices in pool)..."
             echo "Device Pool ARN: $POOL_ARN"
 
-            RUN_ARN_1=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-Android-GroupA" "$TEST_SPEC_ARN_A")
-            echo "✅ Android Group A scheduled: $RUN_ARN_1"
-
-            RUN_ARN_2=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-Android-GroupB" "$TEST_SPEC_ARN_B")
-            echo "✅ Android Group B scheduled: $RUN_ARN_2"
-
-            echo "run_arn_1=$RUN_ARN_1" >> $GITHUB_OUTPUT
-            echo "run_arn_2=$RUN_ARN_2" >> $GITHUB_OUTPUT
-            echo "run_count=2" >> $GITHUB_OUTPUT
+            maybe_schedule 1 "$POOL_ARN" "$RUN_NAME-Android-GroupA"      "$TEST_SPEC_ARN_A"        "Android-GroupA"
+            maybe_schedule 2 "$POOL_ARN" "$RUN_NAME-Android-GroupB"      "$TEST_SPEC_ARN_B"        "Android-GroupB"
+            maybe_schedule 3 "$POOL_ARN" "$RUN_NAME-Android-ImagesPerf"  "$TEST_SPEC_ARN_IMG_PERF" "Android-ImagesPerf"
           else
             POOL_ARN="${{ secrets.LLM_IOS_DEVICE_POOL_ARN }}"
             TEST_SPEC_ARN_1="${{ steps.upload_test_spec.outputs.test_spec_arn }}"
@@ -1208,54 +1236,31 @@ jobs:
             TEST_SPEC_ARN_8="${{ steps.upload_test_spec.outputs.test_spec_arn_8 }}"
             TEST_SPEC_ARN_9="${{ steps.upload_test_spec.outputs.test_spec_arn_9 }}"
             TEST_SPEC_ARN_10="${{ steps.upload_test_spec.outputs.test_spec_arn_10 }}"
+            TEST_SPEC_ARN_11="${{ steps.upload_test_spec.outputs.test_spec_arn_11 }}"
+            TEST_SPEC_ARN_12="${{ steps.upload_test_spec.outputs.test_spec_arn_12 }}"
 
-            echo "🚀 Scheduling 10 iOS runs (each runs on ALL devices in pool)..."
+            echo "🚀 Scheduling iOS runs (each runs on ALL devices in pool)..."
             echo "Device Pool ARN: $POOL_ARN"
 
-            RUN_ARN_1=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy1-Finetuning" "$TEST_SPEC_ARN_1")
-            echo "✅ Heavy1 (Finetuning) scheduled: $RUN_ARN_1"
-
-            RUN_ARN_2=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy2-ToolCalling" "$TEST_SPEC_ARN_2")
-            echo "✅ Heavy2 (ToolCalling) scheduled: $RUN_ARN_2"
-
-            RUN_ARN_3=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy3-Image" "$TEST_SPEC_ARN_3")
-            echo "✅ Heavy3 (Image) scheduled: $RUN_ARN_3"
-
-            RUN_ARN_4=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy4-OcrLighton" "$TEST_SPEC_ARN_4")
-            echo "✅ Heavy4 (OcrLighton) scheduled: $RUN_ARN_4"
-
-            RUN_ARN_5=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy5-Reasoning" "$TEST_SPEC_ARN_5")
-            echo "✅ Heavy5 (Reasoning) scheduled: $RUN_ARN_5"
-
-            RUN_ARN_6=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy6-SlidingContext" "$TEST_SPEC_ARN_6")
-            echo "✅ Heavy6 (SlidingContext) scheduled: $RUN_ARN_6"
-
-            RUN_ARN_7=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-LightA" "$TEST_SPEC_ARN_7")
-            echo "✅ LightA scheduled: $RUN_ARN_7"
-
-            RUN_ARN_8=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-LightB" "$TEST_SPEC_ARN_8")
-            echo "✅ LightB scheduled: $RUN_ARN_8"
-
-            RUN_ARN_9=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy7-Gemma4" "$TEST_SPEC_ARN_9")
-            echo "✅ Heavy7 (Gemma4) scheduled: $RUN_ARN_9"
-
-            RUN_ARN_10=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME-iOS-Heavy8-OcrPaddle" "$TEST_SPEC_ARN_10")
-            echo "✅ Heavy8 (OcrPaddle) scheduled: $RUN_ARN_10"
-
-            echo "run_arn_1=$RUN_ARN_1" >> $GITHUB_OUTPUT
-            echo "run_arn_2=$RUN_ARN_2" >> $GITHUB_OUTPUT
-            echo "run_arn_3=$RUN_ARN_3" >> $GITHUB_OUTPUT
-            echo "run_arn_4=$RUN_ARN_4" >> $GITHUB_OUTPUT
-            echo "run_arn_5=$RUN_ARN_5" >> $GITHUB_OUTPUT
-            echo "run_arn_6=$RUN_ARN_6" >> $GITHUB_OUTPUT
-            echo "run_arn_7=$RUN_ARN_7" >> $GITHUB_OUTPUT
-            echo "run_arn_8=$RUN_ARN_8" >> $GITHUB_OUTPUT
-            echo "run_arn_9=$RUN_ARN_9" >> $GITHUB_OUTPUT
-            echo "run_arn_10=$RUN_ARN_10" >> $GITHUB_OUTPUT
-            echo "run_count=10" >> $GITHUB_OUTPUT
+            maybe_schedule  1 "$POOL_ARN" "$RUN_NAME-iOS-Heavy1-Finetuning"        "$TEST_SPEC_ARN_1"  "Heavy1 (Finetuning)"
+            maybe_schedule  2 "$POOL_ARN" "$RUN_NAME-iOS-Heavy2-ToolCalling"       "$TEST_SPEC_ARN_2"  "Heavy2 (ToolCalling)"
+            maybe_schedule  3 "$POOL_ARN" "$RUN_NAME-iOS-Heavy3-ImgElephant"       "$TEST_SPEC_ARN_3"  "Heavy3 (Image-Elephant)"
+            maybe_schedule  4 "$POOL_ARN" "$RUN_NAME-iOS-Heavy4-OcrLighton"        "$TEST_SPEC_ARN_4"  "Heavy4 (OcrLighton)"
+            maybe_schedule  5 "$POOL_ARN" "$RUN_NAME-iOS-Heavy5-Reasoning"         "$TEST_SPEC_ARN_5"  "Heavy5 (Reasoning)"
+            maybe_schedule  6 "$POOL_ARN" "$RUN_NAME-iOS-Heavy6-SlidingContext"    "$TEST_SPEC_ARN_6"  "Heavy6 (SlidingContext)"
+            maybe_schedule  7 "$POOL_ARN" "$RUN_NAME-iOS-Heavy7-ImgFruitPlate"     "$TEST_SPEC_ARN_7"  "Heavy7 (Image-FruitPlate)"
+            maybe_schedule  8 "$POOL_ARN" "$RUN_NAME-iOS-Heavy8-ImgHighResAurora"  "$TEST_SPEC_ARN_8"  "Heavy8 (Image-HighResAurora)"
+            maybe_schedule  9 "$POOL_ARN" "$RUN_NAME-iOS-Heavy9-Gemma4"            "$TEST_SPEC_ARN_9"  "Heavy9 (Gemma4)"
+            maybe_schedule 10 "$POOL_ARN" "$RUN_NAME-iOS-Heavy10-OcrPaddle"        "$TEST_SPEC_ARN_10" "Heavy10 (OcrPaddle)"
+            maybe_schedule 11 "$POOL_ARN" "$RUN_NAME-iOS-LightA"                   "$TEST_SPEC_ARN_11" "LightA"
+            maybe_schedule 12 "$POOL_ARN" "$RUN_NAME-iOS-LightB"                   "$TEST_SPEC_ARN_12" "LightB"
           fi
 
-          echo "All runs scheduled."
+          # run_count is treated as the highest scheduled slot, since
+          # the wait/download iterators walk from RUN_ARN_1 .. run_count
+          # checking each slot for emptiness.
+          echo "run_count=$HIGHEST_IDX" >> "$GITHUB_OUTPUT"
+          echo "$SCHEDULED_COUNT run(s) scheduled (highest slot $HIGHEST_IDX)."
 
       - name: Refresh AWS credentials for monitoring
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
@@ -1263,6 +1268,16 @@ jobs:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
           role-session-name: device-farm-monitor
+          # Match the initial credentials step (line ~763) which already
+          # uses 7200. Without this, the refresh defaults to the action's
+          # 1h fallback, so every `aws devicefarm get-run` call past the
+          # 1h mark fails until the monitor's MAX_WAIT_TIME (2h) is
+          # reached — producing the spinning
+          #   "AWS API attempt X/3 failed, retrying in 5s..."
+          # output for ~1h with no escape. The persistent-failure escape
+          # below is the real safety net if the session is somehow lost
+          # earlier (revoked / clock-skew / etc.).
+          role-duration-seconds: 7200 # 2hrs for device farm tests
 
       - name: Monitor Test Run
         id: monitor_run
@@ -1291,6 +1306,8 @@ jobs:
           RUN_ARN_8="${{ steps.schedule_run.outputs.run_arn_8 }}"
           RUN_ARN_9="${{ steps.schedule_run.outputs.run_arn_9 }}"
           RUN_ARN_10="${{ steps.schedule_run.outputs.run_arn_10 }}"
+          RUN_ARN_11="${{ steps.schedule_run.outputs.run_arn_11 }}"
+          RUN_ARN_12="${{ steps.schedule_run.outputs.run_arn_12 }}"
           RUN_COUNT="${{ steps.schedule_run.outputs.run_count }}"
 
           echo "📊 Monitoring $RUN_COUNT Device Farm run(s)..."
@@ -1301,7 +1318,28 @@ jobs:
 
           MAX_WAIT_TIME=7200
           ELAPSED=0
-          for i in $(seq 1 "$RUN_COUNT"); do eval "DONE_$i=false"; done
+          # Number of consecutive aws_retry failures we tolerate per slot
+          # before marking it ERRORED. At a 30s poll cadence, 10 ~= 5 min
+          # of solid API failure, which is past any normal STS / Device
+          # Farm transient and signals a real outage or expired session.
+          MAX_CONSECUTIVE_FAILURES=10
+          # Pre-mark empty slots as DONE so perf-only mode (where some
+          # slots are intentionally not scheduled) doesn't try to
+          # poll them with an empty ARN.
+          for i in $(seq 1 "$RUN_COUNT"); do
+            eval "arn=\$RUN_ARN_$i"
+            if [ -z "$arn" ]; then
+              eval "DONE_$i=true"
+              eval "STATUS_$i=\"SKIPPED\""
+              eval "RESULT_$i=\"-\""
+              eval "FAIL_$i=0"
+            else
+              eval "DONE_$i=false"
+              eval "STATUS_$i=\"PENDING\""
+              eval "RESULT_$i=\"-\""
+              eval "FAIL_$i=0"
+            fi
+          done
 
           while true; do
             STATUS_LINE="⏳"
@@ -1311,9 +1349,27 @@ jobs:
                 eval "arn=\$RUN_ARN_$i"
                 STATUS_VAL=$(aws_retry aws devicefarm get-run --arn "$arn" --query 'run.status' --output text) || true
                 RESULT_VAL=$(aws_retry aws devicefarm get-run --arn "$arn" --query 'run.result' --output text) || true
-                eval "STATUS_$i=\"$STATUS_VAL\""
-                eval "RESULT_$i=\"$RESULT_VAL\""
-                if [[ "$STATUS_VAL" == "COMPLETED" ]]; then eval "DONE_$i=true"; fi
+                if [ -z "$STATUS_VAL" ] || [ "$STATUS_VAL" = "None" ]; then
+                  # API failed / empty response: keep last-known-good
+                  # STATUS / RESULT for the dashboard line and bump the
+                  # per-slot failure counter. If the counter trips we
+                  # short-circuit this slot rather than spin until the
+                  # 2h MAX_WAIT_TIME ceiling.
+                  eval "fail_count=\$FAIL_$i"
+                  fail_count=$((fail_count + 1))
+                  eval "FAIL_$i=$fail_count"
+                  if [ "$fail_count" -ge "$MAX_CONSECUTIVE_FAILURES" ]; then
+                    echo "⚠️  Run $i: marking ERRORED after $fail_count consecutive AWS API failures (arn: $arn)" >&2
+                    eval "STATUS_$i=\"ERRORED\""
+                    eval "RESULT_$i=\"NO_API_RESPONSE\""
+                    eval "DONE_$i=true"
+                  fi
+                else
+                  eval "FAIL_$i=0"
+                  eval "STATUS_$i=\"$STATUS_VAL\""
+                  eval "RESULT_$i=\"$RESULT_VAL\""
+                  if [[ "$STATUS_VAL" == "COMPLETED" ]]; then eval "DONE_$i=true"; fi
+                fi
               fi
               eval "STATUS_LINE=\"\$STATUS_LINE Run $i: \$STATUS_$i (\$RESULT_$i) |\""
             done
@@ -1340,7 +1396,8 @@ jobs:
             ELAPSED=$((ELAPSED + 30))
           done
 
-          RUN_ARNS=("$RUN_ARN_1")
+          RUN_ARNS=()
+          [ -n "$RUN_ARN_1" ] && RUN_ARNS+=("$RUN_ARN_1")
           for i in $(seq 2 "$RUN_COUNT"); do
             eval "arn=\$RUN_ARN_$i"
             if [ -n "$arn" ]; then
@@ -1475,7 +1532,7 @@ jobs:
           echo "   Totals: $TOTAL_TOTAL | Passed: $TOTAL_PASSED | Failed: $TOTAL_FAILED | Skipped: $TOTAL_SKIPPED"
 
       - name: Refresh AWS credentials for log download
-        if: always() && steps.schedule_run.outputs.run_arn_1
+        if: always() && steps.schedule_run.outputs.run_count != '0' && steps.schedule_run.outputs.run_count != ''
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
@@ -1483,7 +1540,7 @@ jobs:
           role-session-name: device-farm-logs
 
       - name: Download Device Farm Logs
-        if: always() && steps.schedule_run.outputs.run_arn_1
+        if: always() && steps.schedule_run.outputs.run_count != '0' && steps.schedule_run.outputs.run_count != ''
         run: |
           RUN_ARN_1="${{ steps.schedule_run.outputs.run_arn_1 }}"
           RUN_ARN_2="${{ steps.schedule_run.outputs.run_arn_2 }}"
@@ -1495,12 +1552,15 @@ jobs:
           RUN_ARN_8="${{ steps.schedule_run.outputs.run_arn_8 }}"
           RUN_ARN_9="${{ steps.schedule_run.outputs.run_arn_9 }}"
           RUN_ARN_10="${{ steps.schedule_run.outputs.run_arn_10 }}"
+          RUN_ARN_11="${{ steps.schedule_run.outputs.run_arn_11 }}"
+          RUN_ARN_12="${{ steps.schedule_run.outputs.run_arn_12 }}"
           RUN_COUNT="${{ steps.schedule_run.outputs.run_count }}"
           LOG_DIR="devicefarm-logs/${{ matrix.platform }}"
           PLATFORM="${{ matrix.platform }}"
           mkdir -p "$LOG_DIR"
 
-          RUN_ARNS=("$RUN_ARN_1")
+          RUN_ARNS=()
+          [ -n "$RUN_ARN_1" ] && RUN_ARNS+=("$RUN_ARN_1")
           for i in $(seq 2 "$RUN_COUNT"); do
             eval "arn=\$RUN_ARN_$i"
             if [ -n "$arn" ]; then
@@ -1529,6 +1589,14 @@ jobs:
               DEVICE_NAME=$(echo "$JOBS" | jq -r --arg arn "$JOB_ARN" '.jobs[] | select(.arn == $arn) | .device.name // "unknown"')
               JOB_RESULT=$(echo "$JOBS" | jq -r --arg arn "$JOB_ARN" '.jobs[] | select(.arn == $arn) | .result // "UNKNOWN"')
               SAFE_NAME=$(echo "$DEVICE_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
+              # QVAC-17830: put per-device logs into a subdirectory so
+              # that when the same physical device runs multiple Device
+              # Farm groups (up to 3 Android / 10 iOS groups per device)
+              # extract-from-log.js can use its path-based
+              # deriveDeviceName to bucket them correctly and --merge
+              # to concatenate all reports.
+              DEVICE_DIR="$LOG_DIR/$SAFE_NAME"
+              mkdir -p "$DEVICE_DIR"
 
               echo ""
               echo "📱 $DEVICE_NAME ($JOB_RESULT)"
@@ -1552,7 +1620,7 @@ jobs:
                     fi
                   fi
                   SAFE_ART=$(echo "$ART_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
-                  DEST="$LOG_DIR/${SAFE_RUN}_${SAFE_NAME}_${SAFE_SUITE}_${SAFE_ART}.${ART_EXT}"
+                  DEST="$DEVICE_DIR/${SAFE_RUN}_${SAFE_SUITE}_${SAFE_ART}.${ART_EXT}"
                   if curl -fsSL --max-time 300 -o "$DEST" "$ART_URL" 2>/dev/null; then
                     echo "  Downloaded: $SUITE_NAME / $ART_NAME"
                     if echo "$ART_NAME" | grep -qiE "test.spec|testspec"; then
@@ -1569,7 +1637,7 @@ jobs:
                   ART_EXT=$(echo "$ARTIFACT" | jq -r '.extension // "txt"')
                   [ -z "$ART_URL" ] && continue
                   SAFE_ART=$(echo "$ART_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
-                  DEST="$LOG_DIR/${SAFE_RUN}_${SAFE_NAME}_${SAFE_SUITE}_${SAFE_ART}.${ART_EXT}"
+                  DEST="$DEVICE_DIR/${SAFE_RUN}_${SAFE_SUITE}_${SAFE_ART}.${ART_EXT}"
                   if curl -fsSL --max-time 300 -o "$DEST" "$ART_URL" 2>/dev/null; then
                     echo "  Downloaded: $SUITE_NAME / $ART_NAME (LOG)"
                   fi
@@ -1589,7 +1657,7 @@ jobs:
                   fi
                 fi
                 SAFE_ART=$(echo "$ART_NAME" | tr ' /' '__' | tr -cd '[:alnum:]_-')
-                DEST="$LOG_DIR/${SAFE_RUN}_${SAFE_NAME}_job_${SAFE_ART}.${ART_EXT}"
+                DEST="$DEVICE_DIR/${SAFE_RUN}_job_${SAFE_ART}.${ART_EXT}"
                 if curl -fsSL --max-time 300 -o "$DEST" "$ART_URL" 2>/dev/null; then
                   echo "  Downloaded (job-level): $ART_NAME"
                 fi
@@ -1602,17 +1670,22 @@ jobs:
           find "$LOG_DIR" -type f -exec ls -lh {} \; 2>/dev/null || echo "  (no logs downloaded)"
 
       - name: Extract Console Logs
-        if: always() && steps.schedule_run.outputs.run_arn_1
+        if: always() && steps.schedule_run.outputs.run_count != '0' && steps.schedule_run.outputs.run_count != ''
         run: |
           LOG_DIR="devicefarm-logs/${{ matrix.platform }}"
           CONSOLE_DIR="console-logs/${{ matrix.platform }}"
           mkdir -p "$CONSOLE_DIR"
-          for f in "$LOG_DIR"/*; do
+          # QVAC-17830: logs now live in per-device subdirs
+          # (<LOG_DIR>/<device>/...), so walk recursively. Prefix the
+          # destination with the device name to keep uniqueness when
+          # the same SAFE_RUN runs on multiple devices.
+          find "$LOG_DIR" -type f | while read -r f; do
             [ -f "$f" ] || continue
             fname=$(basename "$f")
+            device=$(basename "$(dirname "$f")")
             if echo "$fname" | grep -qiE "Logcat\."; then
-              cp "$f" "$CONSOLE_DIR/"
-              echo "  Console log: $fname"
+              cp "$f" "$CONSOLE_DIR/${device}_${fname}"
+              echo "  Console log: ${device}/${fname}"
             fi
             if echo "$fname" | grep -qiE "Customer_Artifacts\.zip$"; then
               prefix=$(echo "$fname" | sed 's/_Customer_Artifacts\.zip$//')
@@ -1620,13 +1693,13 @@ jobs:
               if unzip -qo "$f" -d "$tmpdir" 2>/dev/null; then
                 bare_log=$(find "$tmpdir" -name "bare_console.log" -type f 2>/dev/null | head -1)
                 if [ -n "$bare_log" ]; then
-                  cp "$bare_log" "$CONSOLE_DIR/${prefix}_bare_console.log"
-                  echo "  Extracted: ${prefix}_bare_console.log"
+                  cp "$bare_log" "$CONSOLE_DIR/${device}_${prefix}_bare_console.log"
+                  echo "  Extracted: ${device}_${prefix}_bare_console.log"
                 fi
                 appium_log=$(find "$tmpdir" -name "appium.log" -type f 2>/dev/null | head -1)
                 if [ -n "$appium_log" ]; then
-                  cp "$appium_log" "$CONSOLE_DIR/${prefix}_appium.log"
-                  echo "  Extracted: ${prefix}_appium.log"
+                  cp "$appium_log" "$CONSOLE_DIR/${device}_${prefix}_appium.log"
+                  echo "  Extracted: ${device}_${prefix}_appium.log"
                 fi
               else
                 echo "  WARNING: Failed to unzip $fname"
@@ -1639,7 +1712,7 @@ jobs:
           find "$CONSOLE_DIR" -type f -exec ls -lh {} \; 2>/dev/null || echo "  (no console logs found)"
 
       - name: Upload Console Logs
-        if: always() && steps.schedule_run.outputs.run_arn_1
+        if: always() && steps.schedule_run.outputs.run_count != '0' && steps.schedule_run.outputs.run_count != ''
         uses: actions/upload-artifact@v4
         with:
           name: console-logs-${{ matrix.platform }}
@@ -1648,7 +1721,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Upload Full Device Farm Logs
-        if: always() && steps.schedule_run.outputs.run_arn_1
+        if: always() && steps.schedule_run.outputs.run_count != '0' && steps.schedule_run.outputs.run_count != ''
         uses: actions/upload-artifact@v4
         with:
           name: devicefarm-logs-${{ matrix.platform }}
@@ -1656,4 +1729,99 @@ jobs:
           retention-days: 30
           if-no-files-found: ignore
 
+      # QVAC-17830: extract VLM performance metrics emitted by the
+      # image-*.test.js files (via the mobile fallback perf reporter's
+      # per-test writeToConsole() checkpoints) from the Device Farm
+      # logcat / syslog output, aggregate them into HTML / MD, and
+      # upload as an artifact so the cross-device combine job (and the
+      # weekly perf-report.yml) can pick them up. Mirrors the OCR
+      # mobile workflow pattern.
+      #
+      # Because we split the image test into 3 per-image files, each
+      # physical device runs multiple Device Farm groups that each
+      # emit their own performance-report.json payload. We pass
+      # --merge so extract-from-log.js concatenates their `results`
+      # arrays (deduped) into one per-device report. Device bucketing
+      # comes from the <LOG_DIR>/<device>/ subdir structure created
+      # by the Download Device Farm Logs step.
+      - name: Extract performance report from logs
+        if: always() && steps.schedule_run.outputs.run_count != '0' && steps.schedule_run.outputs.run_count != ''
+        shell: bash
+        run: |
+          set +e
+
+          ARTIFACT_DIR="devicefarm-logs/${{ matrix.platform }}"
+          OUTPUT_DIR="${GITHUB_WORKSPACE}/perf-results/${{ matrix.platform }}"
+          mkdir -p "$OUTPUT_DIR"
+
+          if [ ! -d "$ARTIFACT_DIR" ]; then
+            echo "No Device Farm logs directory at $ARTIFACT_DIR — skipping perf extraction"
+            exit 0
+          fi
+
+          # Unzip Customer_Artifacts.zip inline into each device
+          # subdirectory so bare_console.log / appium.log contents
+          # (which carry the PERF_REPORT markers) are scannable by
+          # extract-from-log.js alongside the plain LOG artifacts.
+          echo "=== Unzipping Customer_Artifacts.zip inline ==="
+          find "$ARTIFACT_DIR" -name "*Customer_Artifacts.zip" -type f | while read -r zf; do
+            device_dir=$(dirname "$zf")
+            base=$(basename "$zf" .zip)
+            extract_to="$device_dir/${base}_unpacked"
+            rm -rf "$extract_to"
+            mkdir -p "$extract_to"
+            if unzip -qo "$zf" -d "$extract_to" 2>/dev/null; then
+              echo "  Unpacked: $zf -> $extract_to"
+            else
+              echo "  WARNING: failed to unzip $zf"
+            fi
+          done
+
+          echo "=== Searching for PERF_REPORT markers in $ARTIFACT_DIR ==="
+          MARKER_HITS=$(grep -rl "PERF_REPORT_START" "$ARTIFACT_DIR" 2>/dev/null || true)
+          if [ -z "$MARKER_HITS" ]; then
+            echo "No PERF_REPORT markers found in Device Farm logs — nothing to extract"
+            exit 0
+          fi
+          echo "Files containing markers:"
+          echo "$MARKER_HITS"
+
+          echo "=== Running extract-from-log.js ==="
+          node "${GITHUB_WORKSPACE}/addon/scripts/perf-report/extract-from-log.js" \
+            "$ARTIFACT_DIR" \
+            "$OUTPUT_DIR/performance-report.json" \
+            --run-number "${{ github.run_number }}" \
+            --merge
+
+          if find "$OUTPUT_DIR" -name "performance-report.json" -type f 2>/dev/null | head -1 | grep -q .; then
+            echo "=== Generating aggregated HTML / MD report ==="
+            node "${GITHUB_WORKSPACE}/addon/scripts/perf-report/aggregate.js" \
+              --dir "$OUTPUT_DIR" \
+              --output-html "$OUTPUT_DIR/performance-report.html" \
+              --output-json "$OUTPUT_DIR/performance-summary.json" \
+              --output "$OUTPUT_DIR/performance-report.md"
+          else
+            echo "extract-from-log.js did not produce a performance-report.json — nothing to aggregate"
+          fi
+
+      - name: Upload performance report
+        if: always() && steps.schedule_run.outputs.run_count != '0' && steps.schedule_run.outputs.run_count != ''
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: perf-report-llamacpp-llm-${{ matrix.platform }}-${{ github.run_number }}
+          path: |
+            perf-results/${{ matrix.platform }}/**/performance-report.json
+            perf-results/${{ matrix.platform }}/performance-report.html
+            perf-results/${{ matrix.platform }}/performance-report.md
+            perf-results/${{ matrix.platform }}/performance-summary.json
+          retention-days: 90
+          if-no-files-found: ignore
+
+# QVAC-17830: the per-run joint perf reporter that used to live here
+# has moved to the umbrella workflow (`on-pr-qvac-lib-infer-llamacpp-llm.yml`)
+# so it can wait for BOTH the mobile and the desktop reusable workflows.
+# Keeping it here only waited for `build-and-test` (mobile), so a slow
+# desktop job (e.g. test-darwin-x64 at ~1h) could finish AFTER the
+# combined report had already run and be silently excluded from the
+# per-run summary.
 

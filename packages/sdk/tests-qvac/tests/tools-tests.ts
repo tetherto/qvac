@@ -1,5 +1,6 @@
 // Tools/Function calling test definitions
 import type { TestDefinition } from "@tetherto/qvac-test-suite";
+import type { ToolDialect } from "@qvac/sdk";
 
 // Helper for creating tools tests
 const createToolsTest = (
@@ -21,6 +22,8 @@ const createToolsTest = (
       expectedType: "string" | "number" | "array";
     };
     toolsMode?: "static" | "dynamic";
+    toolDialect?: ToolDialect;
+    resourceKey?: string;
     suites?: string[];
   } = {},
 ): TestDefinition => {
@@ -29,7 +32,7 @@ const createToolsTest = (
     expectedType: "string" as const,
   };
   const dependency =
-    options.toolsMode === "dynamic" ? "tools-dynamic" : "tools";
+    options.resourceKey ?? (options.toolsMode === "dynamic" ? "tools-dynamic" : "tools");
   return {
     testId,
     params: {
@@ -37,6 +40,8 @@ const createToolsTest = (
       tools,
       stream: false,
       ...(options.toolsMode && { toolsMode: options.toolsMode }),
+      ...(options.toolDialect && { toolDialect: options.toolDialect }),
+      ...(options.resourceKey && { resourceKey: options.resourceKey }),
     },
     expectation,
     ...(options.suites && { suites: options.suites }),

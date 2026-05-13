@@ -1,5 +1,6 @@
 import { Platform } from "react-native";
 import { createExecutor, SkipExecutor } from "@tetherto/qvac-test-suite/mobile";
+import type { TestDefinition } from "@tetherto/qvac-test-suite";
 import {
   profiler,
   LLAMA_3_2_1B_INST_Q4_0,
@@ -41,6 +42,7 @@ import {
   SD_V2_1_1B_Q8_0,
 } from "@qvac/sdk";
 import { ResourceManager } from "../shared/resource-manager.js";
+import { collectTestDeps } from "../shared/collect-test-deps.js";
 import { resolveBundledAssetUri } from "./asset-uri.js";
 import { ModelLoadingExecutor } from "../shared/executors/model-loading-executor.js";
 import { CompletionExecutor } from "../shared/executors/completion-executor.js";
@@ -68,7 +70,6 @@ import { DelegatedInferenceExecutor } from "../shared/executors/delegated-infere
 import { MobileDiffusionExecutor } from "./executors/diffusion-executor.js";
 import { LifecycleExecutor } from "../shared/executors/lifecycle-executor.js";
 import { ConfigExecutor } from "../shared/executors/config-executor.js";
-import { MultiGpuExecutor } from "../shared/executors/multi-gpu-executor.js";
 
 const resources = new ResourceManager({
   // Mobile (iOS + Android) needs a tick after each unloadModel for the
@@ -342,8 +343,11 @@ function skipTests(testIds: string[], reason: string) {
   return new SkipExecutor(new RegExp(`^(${testIds.join("|")})$`), reason);
 }
 
-export async function bootstrap() {
-  await resources.downloadAllOnce(console.log);
+export async function bootstrap(filteredTests?: TestDefinition[]) {
+  // `filteredTests` (when present) is the producer's post-filter test list
+  // delivered via register-ack; absence keeps the legacy "warm everything" path.
+  const allowedDeps = filteredTests ? collectTestDeps(filteredTests) : undefined;
+  await resources.downloadAllOnce(console.log, { allowedDeps });
 }
 
 export const executor = createExecutor({
@@ -357,6 +361,7 @@ export const executor = createExecutor({
       "http-archive-embed-inference",
     ], "HTTP test disabled on mobile (OOM)"),
     new SkipExecutor(/^finetune-/, "Finetune tests disabled on mobile"),
+    new SkipExecutor(/^multi-gpu-/, "Multi-GPU tests disabled on mobile (not supported on single-GPU devices)"),
     new SkipExecutor(/^tools-(?!simple-function$|no-function-match$)/, "Tools test disabled on mobile"),
     new SkipExecutor(/^(diffusion-|addon-logging-diffusion$)/, "SD v2.1 1B Q8_0 cold-load is too heavy for Device Farm devices (iOS variable 5–15min, Android blocks JS thread >300s and trips heartbeat)"),
     // suspend() hangs the test runner on mobile (the lifecycle coordinator
@@ -423,7 +428,6 @@ export const executor = createExecutor({
     new MobileDiffusionExecutor(resources),
     new LifecycleExecutor(resources),
     new ConfigExecutor(),
-    new MultiGpuExecutor(resources),
   ],
   profiling: {
     init: () => profiler.enable({ mode: "summary", includeServerBreakdown: true }),

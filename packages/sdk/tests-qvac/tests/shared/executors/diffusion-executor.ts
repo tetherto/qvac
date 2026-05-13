@@ -1,5 +1,5 @@
 // Diffusion executor
-import { diffusion, type DiffusionClientParams } from "@qvac/sdk";
+import { diffusion, upscale, type DiffusionClientParams } from "@qvac/sdk";
 import {
   ValidationHelpers,
   type TestResult,
@@ -40,6 +40,9 @@ export class DiffusionExecutor extends AbstractModelExecutor<typeof diffusionTes
     }
     if (testId === "diffusion-esrgan-upscale-x4") {
       return await this.esrganUpscaleX4(params, expectation);
+    }
+    if (testId === "diffusion-standalone-upscaler-x4") {
+      return await this.standaloneUpscalerX4(params, expectation);
     }
 
     const handler = (this.handlers as Record<string, (params: unknown, expectation: unknown) => Promise<TestResult>>)[testId];
@@ -300,6 +303,35 @@ export class DiffusionExecutor extends AbstractModelExecutor<typeof diffusionTes
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       return { passed: false, output: `ESRGAN upscale failed: ${errorMsg}` };
+    }
+  }
+
+  async standaloneUpscalerX4(
+    params: unknown,
+    expectation: unknown,
+  ): Promise<TestResult> {
+    const p = await this.resolveParams(params as Record<string, unknown>);
+    const modelId = await this.resources.ensureLoaded("upscaler");
+    const image = p.image;
+
+    if (!(image instanceof Uint8Array)) {
+      return {
+        passed: false,
+        output: "Standalone upscaler test requires image bytes",
+      };
+    }
+
+    try {
+      const { outputs } = upscale({
+        modelId,
+        image,
+        ...(p.repeats !== undefined && { repeats: p.repeats as number }),
+      });
+      const buffers = await outputs;
+      return ValidationHelpers.validate(buffers, expectation as Expectation);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      return { passed: false, output: `Standalone upscaler failed: ${errorMsg}` };
     }
   }
 
