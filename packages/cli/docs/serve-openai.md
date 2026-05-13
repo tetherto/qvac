@@ -34,56 +34,57 @@ OpenAI’s **translations** endpoint always returns **English text**. It maps to
 
 ### Registering a translation model (`whispercpp-audio-translation`)
 
-Use the virtual SDK type **`whispercpp-audio-translation`** in `serve.models`. The CLI resolves it to the real engine **`whispercpp-transcription`** and **forces** `whisperConfig.translate: true` at config parse time (so the loaded Whisper model runs in translate-to-English mode).
+Use the virtual SDK type **`whispercpp-audio-translation`** in `serve.models`. The CLI resolves it to the real engine **`whispercpp-transcription`** and **forces** `translate: true` on the **loadModel** `modelConfig` (Whisper translate-to-English). Nested `whisperConfig: { … }` in JSON is flattened into the top-level `modelConfig` for this alias so it matches what `@qvac/sdk` expects.
 
-You may omit `translate` in config. If you set `translate: false`, it is **overridden to `true`** with a console warning — a `whispercpp-audio-translation` alias would otherwise contradict its purpose.
+You may omit `translate`. If you set `translate: false` (top-level or under `whisperConfig`), it is **overridden to `true`** with a console warning.
 
-**Minimal YAML (`qvac.config.yaml`):**
+### The `src` field (same as everywhere else in `serve.models`)
 
-```yaml
-serve:
-  models:
-    whisper-1:
-      type: whispercpp-audio-translation
-      src: hyper://your-hyperdrive/whisper-tiny.en.gguf
-      preload: true
-      config:
-        whisperConfig:
-          language: auto
-          n_threads: 4
-        contextParams:
-          model: hyper://your-hyperdrive/whisper-tiny.en.gguf
-          use_gpu: true
-        miscConfig:
-          caption_enabled: false
-```
+For explicit entries, **`src` is passed to the SDK as `modelSrc`**. It is **not** limited to a hyperdrive or file path. Use whatever the SDK already accepts for Whisper loads: an **SDK model constant** name (e.g. `WHISPER_EN_TINY_Q8_0`), a `registry://…` descriptor, `https://…`, a local path, etc. — the same patterns as `qvac serve` models that use the `"model": "CONSTANT_NAME"` shorthand (that shorthand resolves to a `src` taken from the registry entry).
 
-**Minimal JSON (`qvac.config.json`):**
+**Minimal JSON — same weights as a transcription alias, second alias for translate:**
 
 ```json
 {
   "serve": {
     "models": {
-      "whisper-1": {
+      "whisper-transcribe": { "model": "WHISPER_EN_TINY_Q8_0", "preload": true },
+      "whisper-translate": {
         "type": "whispercpp-audio-translation",
-        "src": "hyper://your-hyperdrive/whisper-tiny.en.gguf",
-        "preload": true,
-        "config": {
-          "whisperConfig": { "language": "auto", "n_threads": 4 },
-          "contextParams": { "model": "hyper://your-hyperdrive/whisper-tiny.en.gguf", "use_gpu": true },
-          "miscConfig": { "caption_enabled": false }
-        }
+        "src": "WHISPER_EN_TINY_Q8_0",
+        "preload": true
       }
     }
   }
 }
 ```
 
+**Optional full `config`** uses the same **flat** Whisper keys as other `serve.models` Whisper entries (see [changelog example](./changelog/0.2.2/api.md): `language`, `n_threads`, `strategy`, … alongside `contextParams` / `miscConfig` if needed). You may also nest tuning under `whisperConfig`; for **`whispercpp-audio-translation` only**, those keys are merged to the top level before load.
+
+**Example with extra Whisper tuning (flat keys, same style as transcriptions):**
+
+```yaml
+serve:
+  models:
+    whisper-1:
+      type: whispercpp-audio-translation
+      src: WHISPER_EN_TINY_Q8_0
+      preload: true
+      config:
+        language: auto
+        n_threads: 4
+        strategy: greedy
+        contextParams:
+          use_gpu: true
+        miscConfig:
+          caption_enabled: false
+```
+
 ### Example (`curl`)
 
 ```bash
 curl -s http://127.0.0.1:11434/v1/audio/translations \
-  -F model=whisper-1 \
+  -F model=whisper-translate \
   -F file=@./sample.wav \
   -F response_format=json
 ```
@@ -93,7 +94,7 @@ Response (`text`): body is plain UTF-8 text.
 
 ### Same weights as transcriptions
 
-You normally use the **same** Whisper weights for both `whispercpp-transcription` (transcriptions) and `whispercpp-audio-translation` (translations); register **two aliases** pointing at the same `src` if you want both `/v1/audio/transcriptions` and `/v1/audio/translations` available.
+You normally use the **same** underlying weights for both transcription and translation; register **two aliases** (e.g. shorthand `"model": "WHISPER_…"` for `/v1/audio/transcriptions` and explicit `whispercpp-audio-translation` + the same `src` for `/v1/audio/translations`).
 
 ### Errors
 

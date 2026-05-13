@@ -97,7 +97,8 @@ const VIRTUAL_SDK_WHISPER_AUDIO_TRANSLATION = 'whispercpp-audio-translation'
 
 /**
  * Resolves explicit serve.models entries: maps the virtual whisper translation
- * alias to whispercpp-transcription + forces whisperConfig.translate=true.
+ * alias to whispercpp-transcription + forces translate=true for SDK loadModel
+ * (whisper modelConfig is flat whisper fields, not a nested whisperConfig object).
  * Exported for unit tests.
  */
 export function resolveExplicitServeModel (type: string, config: Record<string, unknown>): {
@@ -113,23 +114,26 @@ export function resolveExplicitServeModel (type: string, config: Record<string, 
     }
   }
 
-  const whisperRaw = config['whisperConfig']
-  const mergedWhisper =
-    whisperRaw !== null && typeof whisperRaw === 'object' && !Array.isArray(whisperRaw)
-      ? { ...(whisperRaw as Record<string, unknown>) }
-      : {}
+  const out: Record<string, unknown> = { ...config }
+  const nested = out['whisperConfig']
+  if (nested !== null && typeof nested === 'object' && !Array.isArray(nested)) {
+    for (const [k, v] of Object.entries(nested as Record<string, unknown>)) {
+      out[k] = v
+    }
+    delete out['whisperConfig']
+  }
 
-  if (mergedWhisper['translate'] === false) {
+  if (out['translate'] === false) {
     console.warn(
-      'serve.models: whispercpp-audio-translation forces whisperConfig.translate=true (ignoring translate=false)'
+      'serve.models: whispercpp-audio-translation forces translate=true (ignoring translate=false)'
     )
   }
-  mergedWhisper['translate'] = true
+  out['translate'] = true
 
   return {
     sdkType: 'whispercpp-transcription',
     endpointCategory: 'audio-translation',
-    config: { ...config, whisperConfig: mergedWhisper }
+    config: out
   }
 }
 

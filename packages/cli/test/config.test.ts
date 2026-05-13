@@ -9,21 +9,30 @@ describe('resolveExplicitServeModel', () => {
     })
     assert.equal(r.sdkType, 'whispercpp-transcription')
     assert.equal(r.endpointCategory, 'audio-translation')
-    assert.equal((r.config.whisperConfig as Record<string, unknown>).translate, true)
-    assert.equal((r.config.whisperConfig as Record<string, unknown>).language, 'auto')
-    assert.equal((r.config.whisperConfig as Record<string, unknown>).n_threads, 4)
+    assert.equal(r.config['translate'], true)
+    assert.equal(r.config['language'], 'auto')
+    assert.equal(r.config['n_threads'], 4)
+    assert.equal('whisperConfig' in r.config, false)
   })
 
-  it('creates whisperConfig.translate when whisperConfig was absent', () => {
+  it('creates translate when config was empty', () => {
     const r = resolveExplicitServeModel('whispercpp-audio-translation', {})
-    assert.equal((r.config.whisperConfig as Record<string, unknown>).translate, true)
+    assert.equal(r.config['translate'], true)
   })
 
-  it('forces translate true when operator set translate false', () => {
+  it('forces translate true when operator set translate false (nested)', () => {
     const r = resolveExplicitServeModel('whispercpp-audio-translation', {
       whisperConfig: { translate: false }
     })
-    assert.equal((r.config.whisperConfig as Record<string, unknown>).translate, true)
+    assert.equal(r.config['translate'], true)
+    assert.equal('whisperConfig' in r.config, false)
+  })
+
+  it('forces translate true when operator set translate false (top-level)', () => {
+    const r = resolveExplicitServeModel('whispercpp-audio-translation', {
+      translate: false
+    })
+    assert.equal(r.config['translate'], true)
   })
 
   it('passes through non-virtual types unchanged', () => {
