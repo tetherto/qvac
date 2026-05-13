@@ -1,5 +1,5 @@
 import type { Logger } from '../../../logger.js'
-import type { SDKTool, SDKToolCall, SDKGenerationParams, SDKResponseFormat } from '../../core/sdk.js'
+import type { SDKTool, SDKToolCall, SDKGenerationParams, SDKResponseFormat, SDKDiffusionParams } from '../../core/sdk.js'
 
 interface OpenAIMessage {
   role: string
@@ -218,4 +218,139 @@ export function logUnsupportedParams (body: Record<string, unknown>, logger: Log
       logger.warn(`Ignoring unsupported OpenAI param: ${param}=${JSON.stringify(body[param])}`)
     }
   }
+}
+
+// ─── /v1/images/generations helpers ────────────────────────────────────────
+
+export class InvalidImageSizeError extends Error {
+  constructor (message: string) {
+    super(message)
+    this.name = 'InvalidImageSizeError'
+  }
+}
+
+export class InvalidImagePromptError extends Error {
+  constructor (message: string) {
+    super(message)
+    this.name = 'InvalidImagePromptError'
+  }
+}
+
+export class InvalidImageBatchCountError extends Error {
+  constructor (message: string) {
+    super(message)
+    this.name = 'InvalidImageBatchCountError'
+  }
+}
+
+export type ParsedImageSize =
+  | { width: number; height: number }
+  | { auto: true }
+  | null
+
+const SIZE_PATTERN = /^(\d+)x(\d+)$/
+
+/**
+ * Parse OpenAI `size` request field.
+ * - undefined / missing → null (caller uses SDK defaults)
+ * - "auto" → { auto: true }
+ * - "WIDTHxHEIGHT" → { width, height } (both must be positive multiples of 8)
+ * - anything else → throws InvalidImageSizeError
+ */
+export function parseImageSize (size: unknown): ParsedImageSize {
+  if (size === undefined || size === null || size === '') return null
+  if (typeof size !== 'string') {
+    throw new InvalidImageSizeError('"size" must be a string like "1024x1024" or "auto".')
+  }
+  if (size === 'auto') return { auto: true }
+
+  const match = SIZE_PATTERN.exec(size)
+  if (!match) {
+    throw new InvalidImageSizeError(`"size" must be "WIDTHxHEIGHT" or "auto" (got ${JSON.stringify(size)}).`)
+  }
+
+  const width = Number(match[1])
+  const height = Number(match[2])
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) {
+    throw new InvalidImageSizeError(`"size" dimensions must be positive integers (got ${JSON.stringify(size)}).`)
+  }
+  if (width % 8 !== 0 || height % 8 !== 0) {
+    throw new InvalidImageSizeError(`"size" dimensions must be multiples of 8 (got ${width}x${height}).`)
+  }
+
+  return { width, height }
+}
+
+/**
+ * Build the SDK diffusion call parameters from an OpenAI /v1/images/generations body.
+ * Throws InvalidImagePromptError / InvalidImageSizeError / InvalidImageBatchCountError on bad input.
+ *
+ * `n` is forwarded as `batch_count` with no upper bound — the SDK / underlying
+ * diffusion addon governs how large a batch is feasible. Only `n < 1` or
+ * non-integer values are rejected here.
+ */
+export function extractImageGenerationParams (
+  body: Record<string, unknown>,
+  modelId: string
+): SDKDiffusionParams {
+  const prompt = body['prompt']
+  if (typeof prompt !== 'string' || prompt.length === 0) {
+    throw new InvalidImagePromptError('"prompt" is required and must be a non-empty string.')
+  }
+
+  const params: SDKDiffusionParams = { modelId, prompt }
+
+  const parsedSize = parseImageSize(body['size'])
+  if (parsedSize && 'width' in parsedSize) {
+    params.width = parsedSize.width
+    params.height = parsedSize.height
+  }
+
+  if (typeof body['seed'] === 'number' && Number.isInteger(body['seed'])) {
+    params.seed = body['seed']
+  }
+
+  if (body['n'] !== undefined) {
+    const n = body['n']
+    if (typeof n !== 'number' || !Number.isInteger(n) || n < 1) {
+      throw new InvalidImageBatchCountError(`"n" must be a positive integer (got ${JSON.stringify(n)}).`)
+    }
+    params.batch_count = n
+  }
+
+  return params
+}
+
+const IMAGE_UNSUPPORTED_PARAMS = [
+  'quality', 'style', 'background', 'moderation',
+  'output_compression', 'partial_images', 'user'
+] as const
+
+/**
+ * Log warnings for OpenAI image-generation params we accept but do not forward to the SDK.
+ *
+ * `output_format` is warned with extra context because the response body is always PNG
+ * (the response object echoes `output_format: "png"` so clients can detect mismatch).
+ * `stream` is handled by the route itself (single-event SSE), so it is not warned here.
+ */
+export function logImageUnsupportedParams (body: Record<string, unknown>, logger: Logger): void {
+  for (const param of IMAGE_UNSUPPORTED_PARAMS) {
+    if (body[param] !== undefined) {
+      logger.warn(`Ignoring unsupported OpenAI image param: ${param}=${JSON.stringify(body[param])}`)
+    }
+  }
+
+  const outputFormat = body['output_format']
+  if (typeof outputFormat === 'string' && outputFormat !== 'png') {
+    logger.warn(`output_format=${outputFormat} is not supported; returning PNG.`)
+  }
+}
+
+/**
+ * Encode raw image bytes as a `data:` URL for `response_format: "url"` requests.
+ * Defaults to PNG since the SDK diffusion addon emits PNG.
+ */
+export function encodeImageDataUrl (buf: Uint8Array, mime: string = 'image/png'): string {
+  const base64 = Buffer.from(buf).toString('base64')
+  return `data:${mime};base64,${base64}`
 }
