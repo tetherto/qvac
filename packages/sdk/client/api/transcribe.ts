@@ -432,7 +432,9 @@ function processLineConversation(
     if (response.endOfTurn) {
       return {
         type: "endOfTurn",
-        silenceDurationMs: response.endOfTurn.silenceDurationMs,
+        ...(response.endOfTurn.silenceDurationMs !== undefined && {
+          silenceDurationMs: response.endOfTurn.silenceDurationMs,
+        }),
       };
     }
     if (wantsMetadata) {

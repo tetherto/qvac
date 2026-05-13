@@ -11,8 +11,10 @@
  *   })
  *
  * The session yields a discriminated union of events:
- *   - { type: "text", text }                      transcript chunks
- *   - { type: "endOfTurn", silenceDurationMs }    EOU model turn boundary
+ *   - { type: "text", text }    transcript chunks
+ *   - { type: "endOfTurn" }     EOU model turn boundary (token-driven;
+ *                               `silenceDurationMs` is whisper-only and
+ *                               omitted on parakeet)
  *
  * Notes:
  *   - This example uses the EOU (`<EOU>` token) Parakeet checkpoint, so

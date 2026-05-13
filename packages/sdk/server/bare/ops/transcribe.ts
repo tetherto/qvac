@@ -328,6 +328,12 @@ export async function* transcribeStream(
  * (parakeet's EOU model surfaces end-of-utterance via the
  * `isEndOfTurn` flag on the same segment that carries the trailing
  * speech tokens).
+ *
+ * `silenceDurationMs` is intentionally omitted on parakeet's
+ * synthesized event — the EOU is token-driven, so there is no
+ * measured silence window. Whisper's own `endOfTurn` events (emitted
+ * upstream as `{ type: "endOfTurn", silenceDurationMs }`) are not
+ * routed through this helper.
  */
 function* emitSegment(
   segment: StreamingSegment,
@@ -336,13 +342,13 @@ function* emitSegment(
 ): Generator<string | TranscribeSegment | TranscribeStreamEvent> {
   if (!segment.text) {
     if (segment.isEndOfTurn) {
-      yield { type: "endOfTurn", silenceDurationMs: 0 };
+      yield { type: "endOfTurn" };
     }
     return;
   }
   if (silenceMarker && segment.text.includes(silenceMarker)) {
     if (segment.isEndOfTurn) {
-      yield { type: "endOfTurn", silenceDurationMs: 0 };
+      yield { type: "endOfTurn" };
     }
     return;
   }
@@ -352,7 +358,7 @@ function* emitSegment(
     yield segment.text;
   }
   if (segment.isEndOfTurn) {
-    yield { type: "endOfTurn", silenceDurationMs: 0 };
+    yield { type: "endOfTurn" };
   }
 }
 

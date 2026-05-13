@@ -22,6 +22,7 @@ import {
   PARAKEET_TDT_0_6B_V3_Q8_0,
   PARAKEET_CTC_0_6B_Q8_0,
   PARAKEET_SORTFORMER_4SPK_V1_Q8_0,
+  PARAKEET_EOU_120M_V1_Q8_0,
   SMOLVLM2_500M_MULTIMODAL_Q8_0,
   MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
   SALAMANDRATA_2B_INST_Q4,
@@ -280,6 +281,16 @@ resources.define("parakeet-ctc", {
 // Parakeet Sortformer 4spk v1 (Q8_0 GGUF) — speaker diarization
 resources.define("parakeet-sortformer", {
   constant: PARAKEET_SORTFORMER_4SPK_V1_Q8_0,
+  type: "parakeet",
+  preLoadUnload: true,
+  config: {},
+});
+
+// Parakeet EOU 120M v1 (Q8_0 GGUF) — duplex streaming with end-of-utterance
+// detection (token-driven `<EOU>` boundary). Used by parakeet-stream-eou
+// e2e tests to validate the synthetic `endOfTurn` event path.
+resources.define("parakeet-eou", {
+  constant: PARAKEET_EOU_120M_V1_Q8_0,
   type: "parakeet",
   preLoadUnload: true,
   config: {},

@@ -4,6 +4,7 @@ import { ModelAssetExecutor } from "./model-asset-executor.js";
 import {
   runParakeetStreamHappy,
   runParakeetStreamMetadataRejected,
+  runParakeetStreamEou,
   type ParakeetStreamParams,
 } from "../../shared/parakeet-stream-runner.js";
 import { parakeetStreamTests } from "../../parakeet-stream-tests.js";
@@ -59,6 +60,13 @@ export class MobileParakeetStreamExecutor extends ModelAssetExecutor<
 
   private async run(testId: string, params: unknown): Promise<TestResult> {
     const p = params as BaseParams;
+
+    if (testId === "parakeet-stream-eou") {
+      const modelId = await this.resources.ensureLoaded("parakeet-eou");
+      const bytes = await this.loadAudioBytes(p.audioFileName);
+      return runParakeetStreamEou(modelId, bytes, p);
+    }
+
     const modelId = await this.resources.ensureLoaded("parakeet-tdt");
 
     if (testId === "parakeet-stream-metadata-rejected") {

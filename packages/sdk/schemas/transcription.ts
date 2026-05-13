@@ -13,6 +13,11 @@ export const audioInputSchema = z.discriminatedUnion("type", [
 
 const transcribeBaseSchema = z.object({
   modelId: z.string(),
+  /**
+   * Initial transcription prompt. Whisper engine only — silently
+   * ignored by the parakeet engine, which has no equivalent prompting
+   * surface in `qvac-parakeet.cpp`.
+   */
   prompt: z.string().optional(),
   metadata: z.boolean().optional(),
 });
@@ -48,7 +53,13 @@ export const vadStateEventSchema = z.object({
 });
 
 export const endOfTurnEventSchema = z.object({
-  silenceDurationMs: z.number(),
+  /**
+   * Trailing silence (in ms) measured by the engine before the EOU
+   * event fired. Set by the whisper engine. Omitted for parakeet,
+   * whose EOU detection is token-driven (the EOU model emits an
+   * explicit `<EOU>` token rather than measuring silence).
+   */
+  silenceDurationMs: z.number().optional(),
 });
 
 export const transcribeRequestSchema = transcribeParamsSchema.extend({
@@ -82,24 +93,30 @@ export type TranscribeRequest = z.infer<typeof transcribeRequestSchema>;
 export type TranscribeResponse = z.infer<typeof transcribeResponseSchema>;
 
 /**
- * Per-call overrides for parakeet's duplex streaming session. Any field
- * omitted falls back to the corresponding `parakeetConfig.streaming*`
- * value supplied at load time.
+ * Per-call overrides for parakeet's duplex streaming session.
+ *
+ * Each field maps to its `streaming*`-prefixed counterpart in
+ * `parakeetConfig` (see `parakeetRuntimeConfigSchema`). The `streaming`
+ * prefix is intentionally dropped here because every field on this
+ * object is already namespaced under the `parakeetStreamingConfig`
+ * field of `transcribeStream({ ... })`. Any field omitted falls back
+ * to the load-time value.
  */
 export const parakeetStreamingRunConfigSchema = z.object({
-  /** Encoder cadence in ms (overrides `streamingChunkMs`). */
+  /** Encoder cadence in ms (overrides `parakeetConfig.streamingChunkMs`). */
   chunkMs: z.number().int().positive().optional(),
-  /** Sortformer rolling-history window in ms (overrides `streamingHistoryMs`). */
+  /** Sortformer rolling-history window in ms (overrides `parakeetConfig.streamingHistoryMs`). */
   historyMs: z.number().int().positive().optional(),
-  /** ASR encoder left-context window in ms (overrides `streamingLeftContextMs`). */
+  /** ASR encoder left-context window in ms (overrides `parakeetConfig.streamingLeftContextMs`). */
   leftContextMs: z.number().int().nonnegative().optional(),
-  /** ASR encoder right-lookahead window in ms (overrides `streamingRightLookaheadMs`). */
+  /** ASR encoder right-lookahead window in ms (overrides `parakeetConfig.streamingRightLookaheadMs`). */
   rightLookaheadMs: z.number().int().nonnegative().optional(),
-  /** Emit partial segments before chunk boundaries. */
+  /** Emit partial segments before chunk boundaries (overrides `parakeetConfig.streamingEmitPartials`). */
   emitPartials: z.boolean().optional(),
   /**
-   * CTC/TDT-only energy-based voice-activity hint. Engine-internal
-   * flag forwarded to parakeet-cpp's `StreamingOptions::enable_energy_vad`;
+   * CTC/TDT-only energy-based voice-activity hint (overrides
+   * `parakeetConfig.streamingEnergyVad`). Engine-internal flag
+   * forwarded to parakeet-cpp's `StreamingOptions::enable_energy_vad`;
    * it influences how the engine segments speech (affecting segment
    * cadence and what surfaces as a partial vs a finalized segment) but
    * does NOT add new event types to the transcribeStream output. Use
@@ -143,6 +160,10 @@ export type TranscribeStreamResponse = z.infer<
 
 export type TranscribeStreamClientParams = {
   modelId: string;
+  /**
+   * Initial transcription prompt. Whisper engine only — silently
+   * ignored by the parakeet engine.
+   */
   prompt?: string;
   metadata?: boolean;
   emitVadEvents?: boolean;

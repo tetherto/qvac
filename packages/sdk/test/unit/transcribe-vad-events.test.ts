@@ -43,9 +43,11 @@ test("endOfTurnEventSchema: accepts a well-formed payload", (t: BrittleT) => {
   t.ok(result.success, "endOfTurn payload is valid");
 });
 
-test("endOfTurnEventSchema: rejects missing fields", (t: BrittleT) => {
+test("endOfTurnEventSchema: accepts an empty payload (parakeet EOU)", (t: BrittleT) => {
+  // `silenceDurationMs` is whisper-only; parakeet's EOU is token-driven
+  // and surfaces the event without a measured silence window.
   const empty = endOfTurnEventSchema.safeParse({});
-  t.ok(!empty.success, "endOfTurn without silenceDurationMs is rejected");
+  t.ok(empty.success, "endOfTurn without silenceDurationMs is accepted");
 });
 
 // =============================================================================

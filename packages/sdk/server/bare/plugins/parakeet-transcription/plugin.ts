@@ -1,6 +1,6 @@
 import parakeetAddonLogging from "@qvac/transcription-parakeet/addonLogging";
 import TranscriptionParakeet, {
-  type ParakeetConfig,
+  type ParakeetConfig as AddonParakeetConfig,
   type TranscriptionParakeetFiles,
   type TranscriptionParakeetConfig,
 } from "@qvac/transcription-parakeet";
@@ -15,10 +15,9 @@ import {
   ModelType,
   parakeetConfigSchema,
   ADDON_PARAKEET,
-  type ModelSrcInput,
+  type ParakeetConfig,
   type CreateModelParams,
   type PluginModelResult,
-  type ResolveContext,
   type ResolveResult,
 } from "@/schemas";
 import { createStreamLogger, registerAddonLogger } from "@/logging";
@@ -29,47 +28,19 @@ import {
 import { transcribe, transcribeStream } from "@/server/bare/ops/transcribe";
 import { attachModelExecutionMs } from "@/profiling/model-execution";
 
-type ParakeetModelConfig = {
-  maxThreads?: number;
-  useGPU?: boolean;
-  sampleRate?: number;
-  channels?: number;
-  captionEnabled?: boolean;
-  timestampsEnabled?: boolean;
-  seed?: number;
-  streaming?: boolean;
-  streamingChunkMs?: number;
-  streamingHistoryMs?: number;
-  streamingEmitPartials?: boolean;
-  streamingEnergyVad?: boolean;
-  streamingLeftContextMs?: number;
-  streamingRightLookaheadMs?: number;
-  // Override the primary model source. When omitted the plugin falls
-  // back to `params.modelPath` (the modelSrc passed to loadModel).
-  parakeetModelSrc?: ModelSrcInput;
-};
-
-async function resolveParakeetConfig(
-  cfg: ParakeetModelConfig,
-  ctx: ResolveContext,
-): Promise<ResolveResult<ParakeetModelConfig>> {
-  if (!cfg.parakeetModelSrc) {
-    return { config: cfg };
-  }
-
-  const modelPath = await ctx.resolveModelPath(cfg.parakeetModelSrc);
-  return {
-    config: cfg,
-    artifacts: {
-      ...(modelPath !== undefined && { model: modelPath }),
-    },
-  };
+function resolveParakeetConfig(
+  cfg: ParakeetConfig,
+): Promise<ResolveResult<ParakeetConfig>> {
+  // Parakeet 0.4+ ships as a single GGUF, supplied via the top-level
+  // `modelSrc` of `loadModel`. The plugin doesn't need to resolve any
+  // additional artifact paths here — `createModel` consumes
+  // `params.modelPath` directly.
+  return Promise.resolve({ config: cfg });
 }
 
 function createParakeetModel(params: CreateModelParams): PluginModelResult {
-  const config = (params.modelConfig ?? {}) as ParakeetModelConfig;
-  const artifacts = { ...(params.artifacts ?? {}) };
-  const modelPath = artifacts["model"] ?? params.modelPath;
+  const config = (params.modelConfig ?? {}) as ParakeetConfig;
+  const modelPath = params.modelPath;
 
   if (!modelPath) {
     throw new ModelLoadFailedError("Parakeet requires a GGUF model source");
@@ -85,15 +56,20 @@ function createParakeetModel(params: CreateModelParams): PluginModelResult {
     model: modelPath,
   };
 
-  const {
-    parakeetModelSrc: _omit,
-    ...runtime
-  } = config;
-  void _omit;
+  // The SDK's Zod-inferred `ParakeetConfig` types optional fields as
+  // `T | undefined`, while the addon's `ParakeetConfig` types them as
+  // `T?` (without an explicit `undefined`). Under
+  // `exactOptionalPropertyTypes` the two aren't directly assignable,
+  // and passing `undefined` keys through to the native addon can also
+  // mask "use the default" intent. Strip undefined entries before
+  // forwarding.
+  const parakeetConfig = Object.fromEntries(
+    Object.entries(config).filter(([, value]) => value !== undefined),
+  ) as AddonParakeetConfig;
 
   const addonConfig: TranscriptionParakeetConfig = {
     enableStats: true,
-    parakeetConfig: { ...runtime } satisfies ParakeetConfig,
+    parakeetConfig,
   };
 
   const model = new TranscriptionParakeet({
@@ -112,11 +88,10 @@ export const parakeetPlugin = definePlugin({
   loadConfigSchema: parakeetConfigSchema,
   skipPrimaryModelPathValidation: true,
 
-  async resolveConfig(
-    cfg: ParakeetModelConfig,
-    ctx: ResolveContext,
-  ): Promise<ResolveResult<ParakeetModelConfig>> {
-    return resolveParakeetConfig(cfg, ctx);
+  resolveConfig(
+    cfg: ParakeetConfig,
+  ): Promise<ResolveResult<ParakeetConfig>> {
+    return resolveParakeetConfig(cfg);
   },
 
   createModel(params: CreateModelParams): PluginModelResult {
@@ -187,18 +162,20 @@ export const parakeetPlugin = definePlugin({
           }),
         };
 
+        // `prompt` is whisper-only; pass `undefined` so the op does
+        // not even attempt to apply it.
         const iterator = transcribeStream(
           request.modelId,
           inputStream,
-          request.prompt,
+          undefined,
           false,
           streamOpts,
         );
 
         // Parakeet's duplex stream emits text segments plus synthetic
-        // `endOfTurn` events derived from the EOU model's
-        // `<EOU>` boundary flag. The addon does NOT surface separate
-        // VAD `speaking`/`probability` events; the
+        // `endOfTurn` events derived from the EOU model's `<EOU>`
+        // boundary flag. The addon does NOT surface separate VAD
+        // `speaking`/`probability` events; the
         // `parakeetStreamingConfig.emitEnergyVad` knob is purely an
         // engine-internal hint that influences how parakeet-cpp
         // segments speech (it changes segmentation cadence, not the
@@ -207,9 +184,12 @@ export const parakeetPlugin = definePlugin({
         for await (const value of iterator) {
           if (typeof value === "object" && value !== null && "type" in value) {
             if (value.type === "endOfTurn") {
+              // Parakeet's EOU is token-driven; there is no measured
+              // silence to report. We forward an empty endOfTurn
+              // payload (silenceDurationMs is whisper-only).
               yield {
                 type: "transcribeStream" as const,
-                endOfTurn: { silenceDurationMs: value.silenceDurationMs },
+                endOfTurn: {},
               };
             }
             continue;

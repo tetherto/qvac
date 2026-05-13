@@ -45,7 +45,32 @@ export const parakeetStreamMetadataRejected: TestDefinition = {
   },
 };
 
+/**
+ * EOU model end-to-end coverage: drives the duplex stream against the
+ * `<EOU>`-token-emitting parakeet checkpoint, then asserts that at
+ * least one synthetic `endOfTurn` event surfaces alongside transcript
+ * text. Locks down the EOU → `isEndOfTurn` → conversation-event path
+ * across `ops/transcribe.ts` (`emitSegment`), the parakeet plugin
+ * handler, and the client `processLineConversation` decoder.
+ */
+export const parakeetStreamEou: TestDefinition = {
+  testId: "parakeet-stream-eou",
+  params: {
+    audioFileName: AUDIO_FIXTURE,
+    chunkMs: 1000,
+    emitPartials: true,
+    trailingSilenceMs: 1500,
+  },
+  expectation: { validation: "function", fn: () => true },
+  metadata: {
+    category: "parakeet",
+    dependency: "parakeet-eou",
+    estimatedDurationMs: 120000,
+  },
+};
+
 export const parakeetStreamTests = [
   parakeetStreamHappy,
   parakeetStreamMetadataRejected,
+  parakeetStreamEou,
 ];

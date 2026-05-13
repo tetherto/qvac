@@ -5,6 +5,7 @@ import { AbstractModelExecutor } from "../../shared/executors/abstract-model-exe
 import {
   runParakeetStreamHappy,
   runParakeetStreamMetadataRejected,
+  runParakeetStreamEou,
   type ParakeetStreamParams,
 } from "../../shared/parakeet-stream-runner.js";
 import { parakeetStreamTests } from "../../parakeet-stream-tests.js";
@@ -21,6 +22,7 @@ export class ParakeetStreamExecutor extends AbstractModelExecutor<
   protected handlers = {
     "parakeet-stream-happy": this.runHappy.bind(this),
     "parakeet-stream-metadata-rejected": this.runMetadataRejected.bind(this),
+    "parakeet-stream-eou": this.runEou.bind(this),
   } as never;
 
   private async loadAudioBytes(audioFileName: string): Promise<Uint8Array> {
@@ -43,5 +45,12 @@ export class ParakeetStreamExecutor extends AbstractModelExecutor<
   async runMetadataRejected(): Promise<TestResult> {
     const modelId = await this.resources.ensureLoaded("parakeet-tdt");
     return runParakeetStreamMetadataRejected(modelId);
+  }
+
+  async runEou(params: unknown): Promise<TestResult> {
+    const p = params as BaseParams;
+    const modelId = await this.resources.ensureLoaded("parakeet-eou");
+    const bytes = await this.loadAudioBytes(p.audioFileName);
+    return runParakeetStreamEou(modelId, bytes, p);
   }
 }

@@ -29,16 +29,20 @@ test("parakeetRuntimeConfigSchema: accepts streaming + GPU options", (t) => {
   t.is(result.seed, 42);
 });
 
-test("parakeetConfigSchema: accepts an explicit parakeetModelSrc", (t) => {
-  const result = parakeetConfigSchema.parse({
-    parakeetModelSrc: "pear://abc/parakeet-tdt-0.6b-v3.q8_0.gguf",
-    useGPU: false,
-  });
-  t.is(result.parakeetModelSrc, "pear://abc/parakeet-tdt-0.6b-v3.q8_0.gguf");
-  t.is(result.useGPU, false);
+test("parakeetConfigSchema: accepts an empty config (modelSrc supplied at top level)", (t) => {
+  // Parakeet 0.4+ takes only a single GGUF, and it is supplied via
+  // `loadModel({ modelSrc })` rather than a per-engine field on
+  // `modelConfig`. Empty `{}` must therefore round-trip cleanly.
+  const result = parakeetConfigSchema.parse({});
+  t.alike(result, {});
 });
 
-test("parakeetConfigSchema: accepts no parakeetModelSrc (falls back to modelSrc)", (t) => {
-  const result = parakeetConfigSchema.parse({});
-  t.is(result.parakeetModelSrc, undefined);
+test("parakeetConfigSchema: rejects unknown fields under .strict()", (t) => {
+  const result = parakeetConfigSchema
+    .strict()
+    .safeParse({ parakeetModelSrc: "pear://x/y.gguf" });
+  t.ok(
+    !result.success,
+    "legacy `parakeetModelSrc` is rejected — use top-level modelSrc",
+  );
 });

@@ -84,7 +84,14 @@ export type WhisperConfig = z.infer<typeof whisperConfigSchema>;
 // Backed by the ggml-based qvac-parakeet.cpp engine. A single GGUF
 // checkpoint covers every variant (TDT, CTC, EOU, Sortformer); the
 // addon auto-detects the model type from `parakeet.model.type` GGUF
-// metadata, so callers no longer pass a `modelType` discriminator.
+// metadata, so callers no longer pass a `modelType` discriminator and
+// only ever supply a single `modelSrc` at `loadModel` time.
+//
+// The `streaming*` knobs below configure the addon at load time. To
+// override any of them per `transcribeStream` call, see
+// `parakeetStreamingRunConfigSchema` in `./transcription.ts` — the
+// per-call schema intentionally drops the `streaming` prefix because
+// every field on it is already namespaced under `parakeetStreamingConfig`.
 
 export const parakeetRuntimeConfigSchema = z.object({
   maxThreads: z.number().int().optional(),
@@ -111,9 +118,11 @@ export const parakeetRuntimeConfigSchema = z.object({
   streamingRightLookaheadMs: z.number().int().optional(),
 });
 
-export const parakeetConfigSchema = parakeetRuntimeConfigSchema.extend({
-  parakeetModelSrc: modelSrcInputSchema.optional(),
-});
+// Parakeet's load-time config currently has no fields beyond the
+// runtime knobs (single GGUF model is supplied via the top-level
+// `modelSrc` of `loadModel`). The alias is retained so consumers can
+// keep importing `ParakeetConfig` / `parakeetConfigSchema`.
+export const parakeetConfigSchema = parakeetRuntimeConfigSchema;
 
 export type ParakeetRuntimeConfig = z.infer<typeof parakeetRuntimeConfigSchema>;
 export type ParakeetConfig = z.infer<typeof parakeetConfigSchema>;

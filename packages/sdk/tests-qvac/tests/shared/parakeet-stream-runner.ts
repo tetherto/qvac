@@ -87,6 +87,72 @@ export async function runParakeetStreamHappy(
   }
 }
 
+/**
+ * Same audio fixture / chunking as `runParakeetStreamHappy`, but
+ * additionally asserts that ≥ 1 `endOfTurn` event surfaces. Designed
+ * to be paired with the EOU parakeet checkpoint
+ * (`PARAKEET_EOU_120M_V1_Q8_0`); CTC/TDT models will fail this
+ * assertion because they don't emit `<EOU>` tokens.
+ */
+export async function runParakeetStreamEou(
+  modelId: string,
+  audioBytes: Uint8Array,
+  params: ParakeetStreamParams,
+): Promise<TestResult> {
+  let session: TranscribeStreamConversationSession | null = null;
+  try {
+    const decoded = decodeWavToMonoF32(audioBytes);
+    if (decoded.sampleRate !== EXPECTED_SAMPLE_RATE) {
+      return {
+        passed: false,
+        output: `Fixture sample rate ${decoded.sampleRate} != expected ${EXPECTED_SAMPLE_RATE}`,
+      };
+    }
+
+    const trailingMs = params.trailingSilenceMs ?? 1500;
+    const chunkMs = params.chunkMs ?? 1000;
+    const trailingSamples = Math.floor(
+      (trailingMs / 1000) * EXPECTED_SAMPLE_RATE,
+    );
+
+    const speech = f32ToS16LeBytes(decoded.samplesMono);
+    const silence = new Uint8Array(trailingSamples * BYTES_PER_S16_SAMPLE);
+    const chunkSize =
+      Math.floor((chunkMs / 1000) * EXPECTED_SAMPLE_RATE) *
+      BYTES_PER_S16_SAMPLE;
+
+    session = await transcribeStream({
+      modelId,
+      parakeetStreamingConfig: {
+        chunkMs,
+        ...(params.emitPartials !== undefined && {
+          emitPartials: params.emitPartials,
+        }),
+      },
+    });
+
+    writeInChunks(session, speech, chunkSize);
+    writeInChunks(session, silence, chunkSize);
+    session.end();
+
+    const events: CollectedEvent[] = [];
+    for await (const event of session) {
+      events.push(event as CollectedEvent);
+    }
+
+    return assertEou(events);
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    return { passed: false, output: `parakeet eou stream failed: ${errorMsg}` };
+  } finally {
+    try {
+      session?.destroy();
+    } catch {
+      // Ignore destroy-after-iteration errors; the session may already be torn down.
+    }
+  }
+}
+
 export async function runParakeetStreamMetadataRejected(
   modelId: string,
 ): Promise<TestResult> {
@@ -165,6 +231,42 @@ function assertHappy(events: CollectedEvent[]): TestResult {
       passed: false,
       output: `parakeet must not emit standalone vad events, got: ${summary}`,
     };
+  }
+  return { passed: true, output: summary };
+}
+
+function assertEou(events: CollectedEvent[]): TestResult {
+  const counts = countByType(events);
+  const summary = JSON.stringify(counts);
+
+  if (!counts["text"]) {
+    return {
+      passed: false,
+      output: `expected at least one text event, got: ${summary}`,
+    };
+  }
+  if (!counts["endOfTurn"]) {
+    return {
+      passed: false,
+      output: `expected at least one endOfTurn event from EOU model, got: ${summary}`,
+    };
+  }
+  if (counts["vad"]) {
+    return {
+      passed: false,
+      output: `parakeet must not emit standalone vad events, got: ${summary}`,
+    };
+  }
+  // Per-event sanity: parakeet's EOU is token-driven, so the
+  // `silenceDurationMs` field must NOT be set on its `endOfTurn`
+  // events (that's whisper-only).
+  for (const ev of events) {
+    if (ev.type === "endOfTurn" && ev.silenceDurationMs !== undefined) {
+      return {
+        passed: false,
+        output: `parakeet endOfTurn must omit silenceDurationMs (whisper-only), got: ${JSON.stringify(ev)}`,
+      };
+    }
   }
   return { passed: true, output: summary };
 }
