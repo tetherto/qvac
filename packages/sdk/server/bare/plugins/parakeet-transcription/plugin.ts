@@ -102,12 +102,10 @@ export const parakeetPlugin = definePlugin({
   displayName: "Parakeet (NVIDIA NeMo GGML)",
   addonPackage: ADDON_PARAKEET,
   loadConfigSchema: parakeetLoadConfigSchema,
-  // Parakeet 0.4+ supplies the GGUF via the top-level `modelSrc`,
-  // which the framework's primary-path file check stats before the
-  // plugin's `createModel` runs. Set to false (the default) so the
-  // framework verifies the GGUF exists at load time — the addon then
-  // mmaps `params.modelPath` directly inside `createModel`.
-  skipPrimaryModelPathValidation: false,
+  // `skipPrimaryModelPathValidation` intentionally omitted (defaults to
+  // false). Parakeet 0.4+ ships as a single GGUF that the addon mmaps
+  // from `params.modelPath` inside `createModel`, so we want the
+  // framework's standard primary-path file check to run.
 
   resolveConfig(
     cfg: ParakeetConfig,
