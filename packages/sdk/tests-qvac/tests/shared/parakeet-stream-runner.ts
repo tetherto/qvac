@@ -386,6 +386,24 @@ export async function runParakeetStreamIteratorThrow(
         output: "consumer-side sentinel error was not propagated",
       };
     }
+    // The for-await sentinel throw is supposed to invoke the iterator's
+    // async `return()`, which in turn tears down the native
+    // `StreamSession`. On Node/Bare-desktop the unwind runs to
+    // completion synchronously enough that the native session is fully
+    // released before the next `transcribeStream({ modelId })` call. On
+    // the Bare-RN bridge (iOS / Android) the iterator-return →
+    // native-destroy chain crosses JSI and is best-effort: opening the
+    // recovery session before the previous one is released leaves the
+    // model wedged and the recovery session yields zero events. Real
+    // SDK consumers that want to abandon mid-iteration should always
+    // call `destroy()` explicitly — emulate that here so the test
+    // exercises the recovery contract, not JSI return-propagation
+    // timing.
+    try {
+      throwingSession.destroy();
+    } catch {
+      // session may already be torn down by the iterator unwind
+    }
     throwingSession = null;
 
     // Recover: a brand new session against the same model must
