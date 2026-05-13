@@ -20,6 +20,7 @@ import { handleFinetune } from "./finetune";
 import { handleOCRStream } from "./ocr-stream";
 import { handleHeartbeat } from "./heartbeat";
 import { handleDiffusionStream } from "./diffusion-stream";
+import { handleUpscaleStream } from "./upscale-stream";
 import { handlePluginInvoke, handlePluginInvokeStream } from "./plugin-invoke";
 import {
   handleModelRegistryList,
@@ -53,6 +54,7 @@ export const handlers = {
   finetune: handleFinetune,
   ocrStream: handleOCRStream,
   diffusionStream: handleDiffusionStream,
+  upscaleStream: handleUpscaleStream,
   pluginInvoke: handlePluginInvoke,
   pluginInvokeStream: handlePluginInvokeStream,
   modelRegistryList: handleModelRegistryList,

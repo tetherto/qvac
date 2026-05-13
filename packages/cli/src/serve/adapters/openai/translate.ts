@@ -146,6 +146,8 @@ export function extractGenerationParams (body: Record<string, unknown>): SDKGene
   if (typeof body['max_tokens'] === 'number') params.predict = body['max_tokens']
   if (typeof body['max_completion_tokens'] === 'number') params.predict = body['max_completion_tokens']
 
+  if (typeof body['reasoning_budget'] === 'boolean') params.reasoning_budget = body['reasoning_budget']
+
   return Object.keys(params).length > 0 ? params : undefined
 }
 
