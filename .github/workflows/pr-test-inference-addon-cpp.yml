@@ -141,10 +141,6 @@ jobs:
           cat $GITHUB_PATH >> temp
           mv temp $GITHUB_PATH
 
-      # - if: ${{ matrix.os == 'windows-2025' }}
-      #   name: Longpaths on windows
-      #   run: git config --system core.longpaths true
-
       - if: ${{ matrix.os == 'macos-14' }}
         name: Install vcpkg in macos
         run: |

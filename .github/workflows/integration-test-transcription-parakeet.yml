@@ -82,11 +82,6 @@ jobs:
         with:
           node-version: lts/*
 
-      # - name: Windows - enable git long paths
-      #   if: ${{ matrix.platform == 'win32' }}
-      #   shell: bash
-      #   run: git config --system core.longpaths true
-
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -144,20 +139,6 @@ jobs:
             newbase=$(echo "$base" | sed 's/^tetherto_/qvac_/')
             mv "$file" "$dir/$newbase"
           done
-
-      # - name: Linux - install dependencies
-      #   if: (matrix.platform == 'linux' || matrix.platform == 'android') && matrix.arch == 'arm64'
-      #   shell: bash
-      #   run: |
-      #     sudo apt-get update
-      #     sudo apt-get install -y libgomp1 mesa-vulkan-drivers
-
-      # - name: Windows - install Vulkan runtime
-      #   if: matrix.platform == 'win32'
-      #   uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@0bbdca93da303a0b1634ba14a89cec085621078d
-      #   with:
-      #     platform: ${{ matrix.platform }}
-      #     arch: ${{ matrix.arch }}
 
       - if: ${{ matrix.os == 'windows-2025' }}
         name: Set Vulkan SDK Path on Windows Server 2025

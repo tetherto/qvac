@@ -45,15 +45,6 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
           lfs: true
 
-      # - name: Setup Node.js
-      #   uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
-      #   with:
-      #     node-version: lts/*
-
-      # - name: Setup LLVM
-      #   if: matrix.platform == 'linux'
-      #   uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
-
       - name: Setup ccache
         if: matrix.platform == 'linux'
         run: |
@@ -84,25 +75,10 @@ jobs:
         name: Configure vcpkg in linux
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
 
-      # - name: Setup Vulkan SDK
-      #   uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@0bbdca93da303a0b1634ba14a89cec085621078d
-      #   env:
-      #     MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
-      #   with:
-      #     platform: ${{ matrix.platform }}
-      #     arch: ${{ matrix.arch }}
-      #     aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-      #     aws-region: eu-central-1
-
       - name: Generate and build unit tests
         working-directory: ${{ env.PKG_DIR }}
         run: |
           npm run coverage:cpp:build
-
-      # - name: Setup Python (.nemo -> .gguf conversion)
-      #   uses: actions/setup-python@v5
-      #   with:
-      #     python-version: '3.12'
 
       # The C++ test suite only needs ONE GGUF pointed at by
       # QVAC_TEST_GGUF (see addon/tests/test_core.cpp::gguf_test_path).

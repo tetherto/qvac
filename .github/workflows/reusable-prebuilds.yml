@@ -211,12 +211,6 @@ jobs:
         if: matrix.os == 'ubuntu-22.04' && matrix.arch == 'x64'
         run: echo "/usr/local/nvm/versions/node/v20.20.2/bin" >> $GITHUB_PATH
 
-      # - if: ${{ inputs.setup-python-on-windows && matrix.platform == 'win32' }}
-      #   name: Setup Python on self-hosted Windows runner
-      #   uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
-      #   with:
-      #     python-version: "3.12"
-
       - name: Setup Apple Clang
         uses: tetherto/qvac/.github/actions/setup-apple-clang@1d9b2165867d03c6edd675e402ee101a5d48a6d8
 

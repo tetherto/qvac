@@ -80,11 +80,6 @@ jobs:
         with:
           node-version: lts/*
 
-      # - if: ${{ matrix.os == 'windows-2025' }}
-      #   name: Configure Windows runner
-      #   run: |
-      #     git config --system core.longpaths true
-
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -107,28 +102,6 @@ jobs:
         if: ${{ matrix.os == 'ubuntu-24.04' }}
         run: echo "/usr/local/nvm/versions/node/v20.20.2/bin" >> $GITHUB_PATH
 
-
-      # - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'windows-2025' }}
-      #   name: Setup LLVM
-      #   uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
-
-      # - if: ${{ matrix.os == 'ubuntu-24.04' }}
-      #   name: Install Vulkan SDK on Linux
-      #   shell: bash
-      #   run: |
-      #     wget -qO- https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo tee /etc/apt/trusted.gpg.d/lunarg.asc > /dev/null
-      #     sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-noble.list http://packages.lunarg.com/vulkan/lunarg-vulkan-noble.list
-      #     sudo apt update
-      #     sudo apt install -y vulkan-sdk
-
-      # - if: ${{ matrix.os == 'windows-2025' }}
-      #   name: Install Vulkan SDK on Windows
-      #   working-directory: ${{ env.WORKDIR }}
-      #   run: |
-      #     $ProgressPreference = 'SilentlyContinue'
-      #     Invoke-WebRequest -Uri https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe -OutFile vulkan-sdk.exe
-      #     ./vulkan-sdk.exe --root C:\VulkanSDK --accept-licenses --default-answer --confirm-command install
-      #     echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
 
       - if: ${{ matrix.os == 'windows-2025' }}
         name: Set Vulkan SDK Path on Windows Server 2025

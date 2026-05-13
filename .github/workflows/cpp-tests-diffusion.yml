@@ -63,43 +63,6 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
 
-      # - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'windows-2025' }}
-      #   name: Setup LLVM
-      #   uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
-
-      # - if: ${{ matrix.os == 'ubuntu-24.04' }}
-      #   name: Install pkg-config on Linux
-      #   run: sudo apt-get install -y pkg-config
-
-      # - if: ${{ matrix.os == 'ubuntu-24.04' }}
-      #   name: Install Vulkan SDK on Linux
-      #   working-directory: ${{ env.WORKDIR }}
-      #   run: |
-      #     sudo rm -f /etc/apt/sources.list.d/lunarg-vulkan-noble.list
-      #     sudo rm -f /etc/apt/sources.list.d/archive_uri-https_packages_lunarg_com_vulkan-*.list
-      #     sudo rm -f /etc/apt/trusted.gpg.d/lunarg.asc
-
-      #     curl -fsSL https://packages.lunarg.com/lunarg-signing-key-pub.asc | gpg --dearmor | sudo tee /usr/share/keyrings/lunarg-archive-keyring.gpg > /dev/null
-      #     sudo chmod 644 /usr/share/keyrings/lunarg-archive-keyring.gpg
-      #     echo "deb [signed-by=/usr/share/keyrings/lunarg-archive-keyring.gpg] https://packages.lunarg.com/vulkan/ noble main" | sudo tee /etc/apt/sources.list.d/lunarg-vulkan-noble.list > /dev/null
-      #     sudo apt-get update
-      #     sudo apt-get install -y vulkan-sdk
-
-      # - if: ${{ matrix.os == 'windows-2025' }}
-      #   name: Configure Windows runner
-      #   working-directory: ${{ env.WORKDIR }}
-      #   run: |
-      #     git config --system core.longpaths true
-
-      # - if: ${{ matrix.os == 'windows-2025' }}
-      #   name: Install Vulkan SDK on Windows
-      #   working-directory: ${{ env.WORKDIR }}
-      #   run: |
-      #     $ProgressPreference = 'SilentlyContinue'
-      #     Invoke-WebRequest -Uri https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe -OutFile vulkan-sdk.exe
-      #     ./vulkan-sdk.exe --root C:\VulkanSDK --accept-licenses --default-answer --confirm-command install
-      #     echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
-
       - if: ${{ matrix.os == 'windows-2025' }}
         name: Set Vulkan SDK Path on Windows Server 2025
         working-directory: ${{ env.WORKDIR }}
@@ -122,21 +85,6 @@ jobs:
           echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
           echo "$VCPKG_ROOT" >> $GITHUB_PATH
           echo "MACOSX_DEPLOYMENT_TARGET=14.0" >> $GITHUB_ENV
-
-      # - if: ${{ matrix.os == 'ubuntu-24.04' }}
-      #   name: Configure vcpkg in linux
-      #   shell: bash
-      #   run: |
-      #     if [ -n "${VCPKG_INSTALLATION_ROOT:-}" ] && [ -d "$VCPKG_INSTALLATION_ROOT" ]; then
-      #       echo "Using pre-installed vcpkg at $VCPKG_INSTALLATION_ROOT"
-      #       echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> "$GITHUB_ENV"
-      #     else
-      #       sudo apt-get update
-      #       sudo apt-get install -y zip unzip tar curl
-      #       git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git /tmp/vcpkg
-      #       /tmp/vcpkg/bootstrap-vcpkg.sh -disableMetrics
-      #       echo "VCPKG_ROOT=/tmp/vcpkg" >> "$GITHUB_ENV"
-      #     fi
 
       - if: ${{ matrix.os == 'ubuntu-24.04' }}
         name: Install vcpkg on linux

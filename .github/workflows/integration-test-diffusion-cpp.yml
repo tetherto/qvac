@@ -79,14 +79,6 @@ jobs:
         with:
           node-version: lts/*
 
-      # - name: Windows - enable git long paths
-      #   if: ${{ matrix.platform == 'win32' }}
-      #   run: |
-      #     git config --system core.longpaths true
-      #     git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "https://github.com/"
-      #     git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "git@github.com:"
-      #   shell: powershell
-
       - name: Windows - configure git credentials
         if: ${{ matrix.platform == 'win32' }}
         run: |
