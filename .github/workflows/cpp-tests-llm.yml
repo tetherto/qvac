@@ -100,7 +100,7 @@ jobs:
       - if: ${{ matrix.os == 'windows-2025' }}
         name: Clone and bootstrap vcpkg (Windows)
         run: |
-          git clone https://github.com/microsoft/vcpkg.git
+          git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git
           ./vcpkg/bootstrap-vcpkg.bat -disableMetrics
           echo ("VCPKG_ROOT=$env:GITHUB_WORKSPACE/vcpkg" -replace '\\', '/') >> $env:GITHUB_ENV
 
@@ -121,9 +121,8 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: |
-          git clone https://github.com/microsoft/vcpkg.git/ vcpkg_microsoft
-          cd vcpkg_microsoft
-          ./bootstrap-vcpkg.sh -disableMetrics
+          git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git vcpkg_microsoft
+          cd vcpkg_microsoft & ./bootstrap-vcpkg.sh -disableMetrics
           VCPKG_ROOT="$(pwd)"
           echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
           echo "$VCPKG_ROOT" >> $GITHUB_PATH
