@@ -25,6 +25,14 @@ export type Platform = {
   Icon: React.ComponentType<IconProps>;
   /** Compass angle in degrees: 0 = top, increases clockwise. */
   angle: number;
+  /**
+   * Optional content shown in a "hidden card" tooltip on hover. Accepts
+   * a string or a React node so callers can pass rich JSX (lists, bold
+   * labels, inline code). When omitted, no tooltip is rendered for that
+   * platform. Kept reasonably short so the rendered card fits inside the
+   * tooltip's foreignObject bounding box.
+   */
+  description?: React.ReactNode;
 };
 
 export type Feature = {
@@ -50,14 +58,67 @@ export type FeaturesInfographicProps = {
 // ============================================================================
 
 export const DEFAULT_PLATFORMS: Platform[] = [
-  { id: 'mobile',       label: 'Mobile',       Icon: IconDeviceMobile as unknown as React.ComponentType<IconProps>,     angle: 0   }, // 12:00
-  { id: 'notebook',     label: 'Notebook',     Icon: IconDeviceLaptop as unknown as React.ComponentType<IconProps>,     angle: 45  }, // 1:30
-  { id: 'server',       label: 'Server',       Icon: IconServer2 as unknown as React.ComponentType<IconProps>,          angle: 90  }, // 3:00
-  { id: 'cctv',         label: 'CCTV camera',  Icon: IconDeviceCctv as unknown as React.ComponentType<IconProps>,       angle: 135 }, // 4:30
-  { id: 'smartwatch',   label: 'Smartwatch',   Icon: IconDeviceWatchHeart as unknown as React.ComponentType<IconProps>, angle: 180 }, // 6:00
-  { id: 'access-point', label: 'Access point', Icon: IconAccessPoint as unknown as React.ComponentType<IconProps>,      angle: 225 }, // 7:30
-  { id: 'robot',        label: 'Robot',        Icon: IconRobot as unknown as React.ComponentType<IconProps>,            angle: 270 }, // 9:00
-  { id: 'desktop',      label: 'Desktop',      Icon: IconDeviceImac as unknown as React.ComponentType<IconProps>,       angle: 315 }, // 10:30
+  {
+    id: 'mobile',
+    label: 'Mobile',
+    Icon: IconDeviceMobile as unknown as React.ComponentType<IconProps>,
+    angle: 0, // 12:00
+    description: 'QVAC runs on iOS and Android mobile devices via Expo.',
+  },
+  {
+    id: 'notebook',
+    label: 'Notebook',
+    Icon: IconDeviceLaptop as unknown as React.ComponentType<IconProps>,
+    angle: 45, // 1:30
+    description: 'QVAC runs on Node.js, Bare runtime, and Expo.',
+  },
+  {
+    id: 'server',
+    label: 'Server',
+    Icon: IconServer2 as unknown as React.ComponentType<IconProps>,
+    angle: 90, // 3:00
+    description:
+      'Local AI lets organizations use AI without giving up control over their data.',
+  },
+  {
+    id: 'cctv',
+    label: 'CCTV',
+    Icon: IconDeviceCctv as unknown as React.ComponentType<IconProps>,
+    angle: 135, // 4:30
+    description:
+      'Local AI reduces costs, improves privacy, and turns every device into an intelligent endpoint.',
+  },
+  {
+    id: 'smartwatch',
+    label: 'Wearable devices',
+    Icon: IconDeviceWatchHeart as unknown as React.ComponentType<IconProps>,
+    angle: 180, // 6:00
+    description:
+      'AI extends human intelligence, and local AI lets you own yours.',
+  },
+  {
+    id: 'access-point',
+    label: 'Access point',
+    Icon: IconAccessPoint as unknown as React.ComponentType<IconProps>,
+    angle: 225, // 7:30
+    description:
+      "QVAC's P2P capabilities let AI agents communicate directly over the internet.",
+  },
+  {
+    id: 'robot',
+    label: 'Robots',
+    Icon: IconRobot as unknown as React.ComponentType<IconProps>,
+    angle: 270, // 9:00
+    description:
+      'Local AI ensures robots do not need to rely on the cloud to function.',
+  },
+  {
+    id: 'desktop',
+    label: 'Desktop',
+    Icon: IconDeviceImac as unknown as React.ComponentType<IconProps>,
+    angle: 315, // 10:30
+    description: 'QVAC runs on macOS, Linux, and Windows.',
+  },
 ];
 
 export const DEFAULT_FEATURES: Feature[] = [
@@ -150,7 +211,32 @@ const R_OUTER = 290;      // outermost dotted circle (where feature pins live)
 const VIEWBOX_TOP = -20;
 const VIEWBOX_HEIGHT = VIEW_H - VIEWBOX_TOP;
 
-const PLATFORM_BOX = 80;  // foreignObject square that holds each platform icon
+const PLATFORM_BOX = 80;   // visible circular wrapper holding each platform icon
+const PLATFORM_HIT_BOX = 120; // hover-sensitive square around the visible icon
+
+// The foreignObject around each platform icon is intentionally much larger than
+// the visible 80px circle, to give the "hidden card" tooltip room to render at
+// the same font size as feature card descriptions (text-[18px], p-4, rounded
+// border, etc.). The icon stays visually centered at its native 80px diameter;
+// only the bounding box of the foreignObject grows. The foreignObject element
+// itself carries pointerEvents="none" (SVG attribute) so the giant transparent
+// area never intercepts hover from adjacent icons — CSS pointer-events:none on
+// inner HTML alone is not enough because the foreignObject's default SVG
+// pointer-events is "visiblePainted", which makes the whole bounding box act
+// as a hit target. With pointerEvents="none" at the SVG level, only descendants
+// with explicit pointer-events:auto receive events (the 120px hit area).
+const PLATFORM_HOVER_BOX_W = 360;
+const PLATFORM_HOVER_BOX_H = 400;
+
+// The Q (center) gets its own much larger foreignObject. The "Key
+// differentiators" tooltip wraps over multiple lines and needs space below the
+// Q (where the open-source card sits — the tooltip overlaps it visually when
+// hovered, but pointerEvents="none" on the wrapper means it never blocks card
+// hover). overflow:visible is set as an extra safety net; Safari ignores it
+// inside foreignObject, hence the deliberately oversized box.
+const Q_HOVER_DIAMETER = 190;   // same diameter as the inner dashed ring
+const Q_HOVER_BOX_W = 700;
+const Q_HOVER_BOX_H = 800;
 
 type FeatureCardLayout = {
   x: number;
@@ -477,6 +563,26 @@ export function FeaturesInfographic({
   platforms = DEFAULT_PLATFORMS,
   className,
 }: FeaturesInfographicProps = {}) {
+  // Track which platform icon is currently hovered. SVG has no native z-index
+  // (paint order = document order), so to make the hovered icon's tooltip
+  // appear on top of neighboring icons we re-sort the platform list at render
+  // time, pushing the hovered one to the END. React reuses DOM nodes by `key`
+  // so the hovered node moves DOM position without remounting — :hover state
+  // and the in-flight tooltip fade stay intact.
+  const [hoveredPlatformId, setHoveredPlatformId] = React.useState<
+    string | null
+  >(null);
+
+  const orderedPlatforms = React.useMemo(() => {
+    if (!hoveredPlatformId) return platforms;
+    const idx = platforms.findIndex((p) => p.id === hoveredPlatformId);
+    if (idx < 0) return platforms;
+    const reordered = platforms.slice();
+    const [hovered] = reordered.splice(idx, 1);
+    reordered.push(hovered);
+    return reordered;
+  }, [platforms, hoveredPlatformId]);
+
   return (
     <div className={`not-prose mt-2 mb-8 ${className ?? ''}`}>
       <div className="text-fd-primary">
@@ -638,28 +744,6 @@ export function FeaturesInfographic({
             })}
           </g>
 
-          {/* ----- Platform icons (foreignObject so they scale with viewBox) ----- */}
-          {platforms.map((p) => {
-            const pos = polar(p.angle, R_PLATFORMS);
-            return (
-              <foreignObject
-                key={p.id}
-                x={pos.x - PLATFORM_BOX / 2}
-                y={pos.y - PLATFORM_BOX / 2}
-                width={PLATFORM_BOX}
-                height={PLATFORM_BOX}
-              >
-                <div
-                  {...{ xmlns: HTML_NS }}
-                  className="flex h-full w-full items-center justify-center rounded-full bg-fd-background"
-                  aria-label={p.label}
-                >
-                  <p.Icon size={48} stroke={1.25} className="text-fd-primary" />
-                </div>
-              </foreignObject>
-            );
-          })}
-
           {/* ----- Feature cards (foreignObject so they scale) ----- */}
           {features.map((f) => {
             const layout = getFeatureCardLayout(f);
@@ -695,6 +779,174 @@ export function FeaturesInfographic({
               </foreignObject>
             );
           })}
+
+          {/* ----- Platform icons + "hidden card" tooltip (rendered AFTER
+                  feature cards so the tooltip paints on top in overlap
+                  regions). Notable details:
+                  - pointerEvents="none" on the foreignObject itself (SVG
+                    attribute) — without this, the foreignObject's enlarged
+                    bounding box would intercept hover from adjacent icons,
+                    causing some tooltips to misfire (the bug we saw on the
+                    earliest-rendered platforms, e.g. mobile).
+                  - overflow:visible (style) — extra safety so tooltips that
+                    exceed the box are still rendered in Chrome/FF. Safari
+                    ignores this inside foreignObject; we cope by oversizing
+                    the box (PLATFORM_HOVER_BOX_W/H).
+                  - The "group" wrapper is the 120×120 hover-sensitive area,
+                    larger than the visible 80px icon — i.e. the user can
+                    hover slightly outside the icon and still trigger.
+                  - The tooltip is a DOM CHILD of the group AND has
+                    pointer-events:auto. This lets the user move the mouse
+                    onto the tooltip without it disappearing (because :hover
+                    on a descendant keeps the ancestor's :hover active). ----- */}
+          {orderedPlatforms.map((p) => {
+            const pos = polar(p.angle, R_PLATFORMS);
+            return (
+              <foreignObject
+                key={p.id}
+                pointerEvents="none"
+                x={pos.x - PLATFORM_HOVER_BOX_W / 2}
+                y={pos.y - PLATFORM_HOVER_BOX_H / 2}
+                width={PLATFORM_HOVER_BOX_W}
+                height={PLATFORM_HOVER_BOX_H}
+                style={{ overflow: 'visible' }}
+              >
+                <div
+                  {...{ xmlns: HTML_NS }}
+                  className="flex h-full w-full items-center justify-center"
+                  style={{ overflow: 'visible' }}
+                >
+                  {/* Group: expanded hover area (120×120). Pointer events
+                      re-enabled so the 20px transparent ring around the
+                      visible icon is also hover-sensitive. `relative` so
+                      the tooltip below positions against the group center.
+                      onMouseEnter/Leave drive the React reorder above; CSS
+                      group-hover continues to drive the visual halo/tooltip
+                      transitions for snappy feedback. */}
+                  <div
+                    className="group pointer-events-auto relative flex items-center justify-center"
+                    style={{ width: PLATFORM_HIT_BOX, height: PLATFORM_HIT_BOX }}
+                    onMouseEnter={() => setHoveredPlatformId(p.id)}
+                    onMouseLeave={() =>
+                      setHoveredPlatformId((current) =>
+                        current === p.id ? null : current,
+                      )
+                    }
+                  >
+                    {/* Visible icon — scales up + primary ring on group hover. */}
+                    <div
+                      className="flex h-20 w-20 items-center justify-center rounded-full bg-fd-background ring-0 ring-fd-primary transition-all duration-200 group-hover:scale-110 group-hover:ring-1"
+                      aria-label={p.label}
+                    >
+                      <p.Icon size={48} stroke={1.25} className="text-fd-primary" />
+                    </div>
+                    {/* Tooltip — "hidden card": same visual language as
+                        feature card description boxes. Positioned above the
+                        icon (8px gap). pointer-events:auto so the user can
+                        move the mouse into it without losing the hover. */}
+                    {p.description ? (
+                      <div
+                        role="tooltip"
+                        className="pointer-events-auto absolute left-1/2 z-10 -translate-x-1/2 whitespace-normal rounded-md border border-fd-primary/40 bg-fd-background p-4 text-left text-[18px] leading-snug text-fd-foreground opacity-0 shadow-md transition-opacity duration-150 group-hover:opacity-100"
+                        style={{ bottom: 'calc(50% + 48px)', width: 280 }}
+                      >
+                        {p.description}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </foreignObject>
+            );
+          })}
+
+          {/* ----- Q hover area + "Key differentiators" tooltip (rendered
+                  LAST so it paints on top of everything, including platform
+                  icons that would otherwise occlude the longer Q tooltip).
+                  Uses the same pattern as platform icons: pointerEvents="none"
+                  on the SVG element, pointer-events:auto on the inner hit
+                  area, tooltip as a DOM child of the group so the hover
+                  bridge works. The hit area matches the inner dashed ring's
+                  diameter (R_INNER * 2). ----- */}
+          <foreignObject
+            pointerEvents="none"
+            x={CENTER_X - Q_HOVER_BOX_W / 2}
+            y={CENTER_Y - Q_HOVER_BOX_H / 2}
+            width={Q_HOVER_BOX_W}
+            height={Q_HOVER_BOX_H}
+            style={{ overflow: 'visible' }}
+          >
+            <div
+              {...{ xmlns: HTML_NS }}
+              className="flex h-full w-full items-center justify-center"
+              style={{ overflow: 'visible' }}
+            >
+              {/* Group: rectangular wrapper, NO clip-path here (otherwise the
+                  tooltip below would also be clipped). The group itself has
+                  no pointer events; only its descendants do. The DOM-ancestor
+                  relationship is what makes group-hover work — when any
+                  descendant with pointer-events:auto is hovered, :hover
+                  propagates up to the group regardless of the cursor's
+                  geometric position relative to the group's bounding box. */}
+              <div
+                className="group relative"
+                style={{ width: Q_HOVER_DIAMETER, height: Q_HOVER_DIAMETER }}
+              >
+                {/* Visual halo: rounded-full + ring on hover. No clip-path
+                    here, so the box-shadow that backs `ring-1` is fully
+                    visible around the circle. No pointer events, since this
+                    element is purely decorative — hit testing happens on the
+                    sibling hit-zone below. */}
+                <div
+                  className="pointer-events-none absolute inset-0 rounded-full ring-0 ring-fd-primary transition-shadow duration-200 group-hover:ring-1"
+                  aria-hidden="true"
+                />
+                {/* Hit-zone: clipped to a perfect inscribed circle. The
+                    clip-path constrains BOTH the visual rendering AND the
+                    hit testing — mouse outside the circle is NOT considered
+                    to be on this element, so hover never triggers when the
+                    user is just "near" the inner ring. */}
+                <div
+                  className="pointer-events-auto absolute inset-0"
+                  style={{ clipPath: 'circle(50%)' }}
+                  aria-label="What makes QVAC different?"
+                />
+                {/* Tooltip wrapper — sibling of the hit-zone (NOT inside it,
+                    to escape the clip-path). Default pointer-events:none so
+                    the area below the Q doesn't capture hover by itself.
+                    When the group becomes hovered (via the circular hit-zone
+                    above), pointer-events flips to auto, enabling the bridge
+                    that keeps the tooltip visible while the cursor moves
+                    from the circle down onto the card. paddingTop forms an
+                    invisible vertical bridge between hit-zone and card. */}
+                <div
+                  className="pointer-events-none absolute left-1/2 z-20 -translate-x-1/2 opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100"
+                  style={{ top: '100%', paddingTop: 8 }}
+                >
+                  <div
+                    role="tooltip"
+                    className="whitespace-normal rounded-md border border-fd-primary/40 bg-fd-background p-4 text-left text-[18px] leading-snug text-fd-foreground shadow-md"
+                    style={{ width: 500 }}
+                  >
+                    <p className="m-0 mb-2 text-[22px] font-medium leading-tight text-fd-primary">
+                      What makes QVAC different?
+                    </p>
+                    <ul className="m-0 list-disc space-y-2 pl-5">
+                      <li className="leading-snug">
+                        <strong>Unified approach:</strong> other local AI
+                        solutions solve parts of the puzzle; QVAC provides a
+                        complete local AI solution that runs on any platform.
+                      </li>
+                      <li className="leading-snug">
+                        <strong>Out-of-the-box P2P:</strong> share and run AI
+                        models with peers, with no extra setup or prior
+                        knowledge required.
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </foreignObject>
         </svg>
       </div>
     </div>
