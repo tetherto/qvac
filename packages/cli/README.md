@@ -216,7 +216,8 @@ as `node_modules` trees.
 | `--bare-runtime-version <semver>` | Optional. Override the resolved Bare runtime version used for ABI checks. **Recommended for mobile / Expo CI**, where the BareKit-embedded runtime version is not currently exposed by `react-native-bare-kit` package metadata and auto-detection is unreliable. Also useful for Electron packaging where runtime inference is ambiguous. |
 | `--config, -c <path>` | Optional. Path to a `qvac.config.*` file (default: auto-detect `qvac.config.{json,js,mjs,ts}` in the project root). Reads `bareRuntimeVersion` if present. |
 | `--project-root <path>` | Optional. Project root used to resolve bundle resolutions and detect the installed Bare runtime (default: cwd). |
-| `--quiet, -q` | Suppress the success summary; failures and warnings are always printed. |
+| `--json` | Optional. Emit the verification result as JSON on stdout (addons, runtime, issues, hosts, source) instead of the human-readable summary. Exit codes are unchanged. Useful when wiring `verify bundle` into CI scripts, dashboards, or other tooling that needs structured output. |
+| `--quiet, -q` | Suppress the success summary; failures and warnings are always printed. Ignored when `--json` is set. |
 
 **Examples:**
 
@@ -248,14 +249,18 @@ qvac verify bundle --addons-source qvac/worker.bundle.js \
 # }
 qvac verify bundle --addons-source qvac/worker.bundle.js \
   --host android-arm64
+
+# Structured output for CI consumers
+qvac verify bundle --addons-source qvac/worker.bundle.js \
+  --host darwin-arm64 --json | jq '.issues[] | select(.level == "error")'
 ```
 
 **Exit codes:**
 
 | Exit | Meaning |
 |------|---------|
-| `0` | No error-level issues. All required prebuilds are present, and every ABI check that *ran* passed. Warnings may indicate skipped checks: `unknown-runtime-version` (no Bare runtime could be resolved for the project; pass `--bare-runtime-version` to enable ABI checks) or `malformed-engines-bare` (an addon's `engines.bare` is not a valid semver range; report to the addon maintainer). |
-| `1` | At least one error-level issue: `missing-prebuild`, `abi-mismatch`, `invalid-runtime-version` (malformed `--bare-runtime-version`), or `invalid-source` (unreadable `--addons-source` or missing `--host`). |
+| `0` | No error-level issues. All required prebuilds are present, and every ABI check that *ran* passed. Warnings may indicate skipped checks or surfaced metadata problems: `unknown-runtime-version`, `malformed-engines-bare`, `invalid-package-json`, `empty-bundle-resolutions`, or `config-load-failed`. |
+| `1` | At least one error-level issue: `missing-prebuild`, `abi-mismatch`, `invalid-runtime-version` (malformed `--bare-runtime-version` or config `bareRuntimeVersion`), or `invalid-source`. Prebuild checks always run regardless of runtime parse failures, so a typo in `--bare-runtime-version` cannot hide a real `missing-prebuild`. |
 
 **Issue codes:**
 
@@ -264,9 +269,12 @@ qvac verify bundle --addons-source qvac/worker.bundle.js \
 | `missing-prebuild` | error | The addon's `<packageRoot>/prebuilds/<host>/*.bare` directory is missing or empty. |
 | `abi-mismatch` | error | The addon's declared `engines.bare` range does not include the resolved runtime version. |
 | `unknown-runtime-version` | warning | At least one addon declares `engines.bare`, but no Bare runtime version could be auto-detected. Pass `--bare-runtime-version` to enable strict ABI verification. |
-| `invalid-runtime-version` | error | The value passed to `--bare-runtime-version` is not a valid semver. An invalid explicit version is rejected as an error (vs. auto-detection failure, which is only a warning) because the user opted into runtime verification by passing the flag. |
+| `invalid-runtime-version` | error | The value passed via `--bare-runtime-version` or via the config `bareRuntimeVersion` field is not a valid semver. An invalid explicit version is rejected as an error (vs. auto-detection failure, which is only a warning) because the user opted into runtime verification. ABI resolution is skipped, but prebuild checks still run. |
 | `malformed-engines-bare` | warning | An addon's `package.json` declares an `engines.bare` value that is not a valid semver range. ABI check is skipped for that addon and warning is surfaced for escalation to the addon maintainer. |
-| `invalid-source` | error | `--addons-source` does not point to a readable bundle or directory, or `--host` was empty. |
+| `invalid-package-json` | warning | An addon `package.json` could not be parsed (malformed JSON, non-object root, missing `name` on an `addon: true` package). The package is treated as a non-addon and its prebuilds/ABI cannot be verified. |
+| `empty-bundle-resolutions` | warning | The `--addons-source` bundle has an empty bare-pack resolutions table. The verifier cannot inspect any addons; a "passed" summary would be vacuous. Regenerate the bundle or check for corruption. |
+| `config-load-failed` | warning | An auto-detected `qvac.config.*` exists but failed to load (syntax error, throwing import, etc.). The project-pinned `bareRuntimeVersion` is being ignored. Fix the config or pass `--config` explicitly to escalate to an error. |
+| `invalid-source` | error | `--addons-source` does not point to a readable bundle or directory, `--host` was empty, or an explicit `--config` path could not be loaded. |
 
 **Bare runtime detection:**
 

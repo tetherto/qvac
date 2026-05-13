@@ -147,6 +147,7 @@ function setupCli (): void {
       '--project-root <path>',
       'Project root used to resolve bundle resolutions and runtime metadata (default: cwd)'
     )
+    .option('--json', 'Output the verification result as JSON')
     .option('-q, --quiet', 'Suppress success output')
     .action(async (options: {
       addonsSource: string
@@ -154,6 +155,7 @@ function setupCli (): void {
       bareRuntimeVersion?: string
       config?: string
       projectRoot?: string
+      json?: boolean
       quiet?: boolean
     }) => {
       try {
@@ -175,7 +177,9 @@ function setupCli (): void {
         }
         const result = await verifyBundle(verifyOptions)
         const failed = hasErrors(result)
-        if (!options.quiet || failed || result.issues.length > 0) {
+        if (options.json) {
+          console.log(JSON.stringify(result, null, 2))
+        } else if (!options.quiet || failed || result.issues.length > 0) {
           console.log(formatVerifyBundleResult(result))
         }
         if (failed) process.exit(1)
