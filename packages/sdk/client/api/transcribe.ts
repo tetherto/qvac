@@ -10,6 +10,8 @@ import {
   type TranscribeStreamClientParams,
   type TranscribeStreamSession,
   type TranscribeStreamMetadataSession,
+  type TranscribeStreamConversationSession,
+  type TranscribeStreamEvent,
   type TranscribeStreamResponse,
 } from "@/schemas";
 import { stream, duplex, type DuplexReadable } from "@/client/rpc/rpc-client";
@@ -132,10 +134,15 @@ export function transcribeStream(
  *                          objects (`{ text, startMs, endMs, append, id }`)
  *                          instead of plain text. Whisper engine only.
  * @param options - Optional RPC options including per-call profiling.
- * @returns A session object: call `write(buffer)` to feed audio,
- *          iterate with `for await (...)` to receive transcription,
- *          and `end()` to signal end of audio.
+ * @returns A session object: call `write(audioChunk)` with a `Uint8Array`
+ *          (Node `Buffer` is a `Uint8Array` subtype) to feed audio,
+ *          iterate with `for await (...)` to receive transcription, and
+ *          `end()` to signal end of audio.
  */
+export function transcribeStream(
+  params: TranscribeStreamClientParams & { emitVadEvents: true },
+  options?: RPCOptions,
+): Promise<TranscribeStreamConversationSession>;
 export function transcribeStream(
   params: TranscribeStreamClientParams & { metadata: true },
   options?: RPCOptions,
@@ -152,7 +159,8 @@ export function transcribeStream(
   | AsyncGenerator<string>
   | AsyncGenerator<TranscribeSegment>
   | Promise<TranscribeStreamSession>
-  | Promise<TranscribeStreamMetadataSession> {
+  | Promise<TranscribeStreamMetadataSession>
+  | Promise<TranscribeStreamConversationSession> {
   if ("audioChunk" in params && params.audioChunk !== undefined) {
     logger.warn(
       "transcribeStream() with audioChunk is deprecated — use transcribe() instead.",
@@ -162,7 +170,10 @@ export function transcribeStream(
     }
     return transcribeStreamWithAudio(params, options);
   }
-  const streamParams = params;
+  const streamParams = params as TranscribeStreamClientParams;
+  if (streamParams.emitVadEvents === true) {
+    return transcribeStreamDuplexConversation(streamParams, options);
+  }
   if (streamParams.metadata === true) {
     return transcribeStreamDuplexMetadata(streamParams, options);
   }
@@ -214,6 +225,13 @@ function buildTranscribeStreamRequest(
     modelId: params.modelId,
     ...(params.prompt && { prompt: params.prompt }),
     ...(params.metadata === true && { metadata: true }),
+    ...(params.emitVadEvents === true && { emitVadEvents: true }),
+    ...(params.endOfTurnSilenceMs !== undefined && {
+      endOfTurnSilenceMs: params.endOfTurnSilenceMs,
+    }),
+    ...(params.vadRunIntervalMs !== undefined && {
+      vadRunIntervalMs: params.vadRunIntervalMs,
+    }),
   };
 }
 
@@ -228,7 +246,7 @@ async function createTranscribeStreamSession<T>(
   process: (line: string) => T | undefined | null,
   sessionName: string,
 ): Promise<{
-  write(audioChunk: Buffer): void;
+  write(audioChunk: Uint8Array): void;
   end(): void;
   destroy(): void;
   [Symbol.asyncIterator](): AsyncIterator<T>;
@@ -241,7 +259,7 @@ async function createTranscribeStreamSession<T>(
   let consumed = false;
 
   return {
-    write(audioChunk: Buffer) {
+    write(audioChunk: Uint8Array) {
       requestStream.write(audioChunk);
     },
     end() {
@@ -284,6 +302,19 @@ function transcribeStreamDuplexMetadata(
     options,
     processLineMetadata,
     "TranscribeStreamMetadataSession",
+  );
+}
+
+function transcribeStreamDuplexConversation(
+  params: TranscribeStreamClientParams,
+  options?: RPCOptions,
+): Promise<TranscribeStreamConversationSession> {
+  const wantsMetadata = params.metadata === true;
+  return createTranscribeStreamSession(
+    params,
+    options,
+    (line) => processLineConversation(line, wantsMetadata),
+    "TranscribeStreamConversationSession",
   );
 }
 
@@ -364,5 +395,36 @@ function processLineMetadata(
   line: string,
 ): TranscribeSegment | undefined | null {
   return processWith(line, (response) => response.segment);
+}
+
+function processLineConversation(
+  line: string,
+  wantsMetadata: boolean,
+): TranscribeStreamEvent | undefined | null {
+  return processWith(line, (response) => {
+    if (response.vad) {
+      return {
+        type: "vad",
+        speaking: response.vad.speaking,
+        probability: response.vad.probability,
+      };
+    }
+    if (response.endOfTurn) {
+      return {
+        type: "endOfTurn",
+        silenceDurationMs: response.endOfTurn.silenceDurationMs,
+      };
+    }
+    if (wantsMetadata) {
+      if (response.segment) {
+        return { type: "segment", segment: response.segment };
+      }
+      return undefined;
+    }
+    if (response.text && response.text.trim()) {
+      return { type: "text", text: response.text };
+    }
+    return undefined;
+  });
 }
 

@@ -75,6 +75,7 @@ http_status() {
   run ${QVAC} --help
   [[ "${status}" -eq 0 ]]
   [[ "${output}" =~ "bundle" ]]
+  [[ "${output}" =~ "verify" ]]
   [[ "${output}" =~ "serve" ]]
 }
 
@@ -92,6 +93,27 @@ http_status() {
   [[ "${status}" -eq 0 ]]
   [[ "${output}" =~ "--config" ]]
   [[ "${output}" =~ "--sdk-path" ]]
+}
+
+@test "qvac verify deps --help shows options" {
+  run ${QVAC} verify deps --help
+  [[ "${status}" -eq 0 ]]
+  [[ "${output}" =~ "--base" ]]
+  [[ "${output}" =~ "--head" ]]
+  [[ "${output}" =~ "--lockfile" ]]
+}
+
+@test "qvac verify deps requires base and head" {
+  run ${QVAC} verify deps --base HEAD
+  [[ "${status}" -eq 2 ]]
+  [[ "${output}" =~ "--head" ]]
+}
+
+@test "qvac verify deps rejects unsupported lockfiles" {
+  run ${QVAC} verify deps --base HEAD --head HEAD --lockfile bun.lock
+  [[ "${status}" -eq 2 ]]
+  [[ "${output}" =~ "Unsupported lockfile" ]]
+  [[ "${output}" =~ "package-lock.json" ]]
 }
 
 # ── CLI: doctor ───────────────────────────────────────────────────────

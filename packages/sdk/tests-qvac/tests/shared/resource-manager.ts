@@ -1,10 +1,14 @@
 import { loadModel, downloadAsset, unloadModel, cancel } from "@qvac/sdk";
 import type { ModelConstant } from "@qvac/sdk";
 
+type ModelConfig = Record<string, unknown>;
+type ModelConfigResolver = () => Promise<ModelConfig>;
+
 interface ModelDefinition {
   constant: ModelConstant;
   type: string;
-  config?: Record<string, unknown>;
+  /** Static config or async resolver (cached per-dep) for runtime-only fields like RN asset URIs. */
+  config?: ModelConfig | ModelConfigResolver;
   skipPreDownload?: boolean;
   preLoadUnload?: true;
 }
@@ -37,6 +41,7 @@ export interface ResourceManagerOptions {
 
 export class ResourceManager {
   private definitions = new Map<string, ModelDefinition>();
+  private resolvedConfigs = new Map<string, ModelConfig>();
   private models = new Map<string, TrackedModel>();
   private testCount = 0;
   private downloaded = false;
@@ -44,6 +49,15 @@ export class ResourceManager {
 
   constructor(options: ResourceManagerOptions = {}) {
     this.unloadSettleMs = options.unloadSettleMs ?? 0;
+  }
+
+  private async resolveConfig(dep: string, def: ModelDefinition): Promise<ModelConfig | undefined> {
+    if (typeof def.config !== "function") return def.config;
+    const cached = this.resolvedConfigs.get(dep);
+    if (cached) return cached;
+    const resolved = await def.config();
+    this.resolvedConfigs.set(dep, resolved);
+    return resolved;
   }
 
   define(dep: string, definition: ModelDefinition) {
@@ -106,7 +120,7 @@ export class ResourceManager {
       const modelId = await loadModel({
         modelSrc: def.constant as never,
         modelType: def.type,
-        modelConfig: def.config,
+        modelConfig: await this.resolveConfig(dep, def),
       });
       log?.(`✅ pre-loaded ${dep}: ${def.constant.name} - unloading...`);
       await unloadModel({ modelId });
@@ -140,7 +154,7 @@ export class ResourceManager {
     const modelId = await loadModel({
       modelSrc: def.constant as never,
       modelType: def.type as "llm" | "whisper" | "embeddings",
-      modelConfig: def.config,
+      modelConfig: await this.resolveConfig(dep, def),
     });
 
     this.models.set(dep, {

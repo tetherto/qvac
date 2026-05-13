@@ -1,0 +1,137 @@
+---
+description: GitHub Actions conventions — pinned actions, least-privilege permissions, OIDC, hardened runners, caching, concurrency, environments, reusable workflows
+globs:
+  - .github/workflows/**
+  - .github/actions/**
+alwaysApply: false
+---
+
+# GitHub Actions
+
+Pod scope and high-level principles live in `.cursor/rules/devops/main.mdc`. This file is the deep-dive for workflow and composite-action authoring.
+
+## Action references
+
+- **Third-party actions MUST be pinned to a 40-character commit SHA** with a trailing `# v<version>` comment. Tags are silently mutable.
+  - ✅ `uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2` (this repo's current pin)
+  - ❌ `uses: actions/checkout@v4`
+- **Pin transitively.** If a composite action under `.github/actions/<name>/` uses a third-party action, that nested reference is also pinned to a SHA.
+- **First-party actions** in this repo (`.github/actions/<name>/`) may be referenced by relative path or by SHA. Prefer relative path for in-repo usage; SHA when the action is consumed by a workflow that may run on a different ref.
+- **Action upgrades land in their own PR**, never bundled with feature changes. The PR body links the action's release notes and includes the SHA diff.
+
+## Permissions
+
+- **Every workflow declares `permissions:` explicitly** — top-level OR per-job. Relying on repository-default permissions is forbidden.
+  - **Top-level** is preferred when all jobs share the same scope; default to least privilege:
+    ```yaml
+    permissions:
+      contents: read
+    ```
+  - **Per-job** is preferred when scopes differ between jobs (e.g., one job needs `id-token: write` for OIDC, another only needs `contents: read`). Per-job blocks REPLACE the top-level — they do not merge.
+- **Widen per-job, not per-workflow,** when a single job needs more than the rest (e.g., `pull-requests: write` for label automation).
+- **`id-token: write` is required for OIDC.** Grant only on the specific job that authenticates to a cloud provider.
+- **Never use `permissions: write-all`.** If you think you need it, you don't.
+
+## Triggers and untrusted input
+
+- **`pull_request_target` is dangerous.** Use it only when the workflow does not check out PR HEAD code. Common safe uses: labeling, commenting, gating on metadata.
+- **Never reference user-controlled `${{ github.event.* }}`, `github.head_ref`, `github.event.pull_request.title`, `body`, or `commits[*].message` directly inside `run:` blocks.** Pipe via `env:` and quote.
+  - ✅
+    ```yaml
+    env:
+      PR_TITLE: ${{ github.event.pull_request.title }}
+    run: |
+      echo "$PR_TITLE"
+    ```
+  - ❌ `run: echo "${{ github.event.pull_request.title }}"`
+- **Token scope on fork PRs**: `pull_request` from forks gets a read-only `GITHUB_TOKEN` and no secrets. Do not work around this — design fork-safe workflows or split into a `pull_request_target` follow-up that does not check out PR code.
+
+## OIDC over long-lived credentials
+
+- **Cloud authentication uses OIDC.** No long-lived access keys / service-account JSON in secrets where OIDC is supported.
+  - GCP: `google-github-actions/auth` with `workload_identity_provider`
+  - AWS: `aws-actions/configure-aws-credentials` with `role-to-assume`
+  - Azure: `azure/login` with `client-id` + `tenant-id` + `subscription-id`
+- **OIDC role/policy must be scoped per-workflow or per-environment**, never repo-wide read-write.
+- **Document the trust relationship** in a comment near the auth step (which IdP, which role, which environment).
+
+## Hardened runners
+
+- **Sensitive workflows run `step-security/harden-runner`** as the first step, in `audit` mode initially and `block` mode once egress is characterized.
+  - Examples of sensitive: any workflow handling secrets, publishing artifacts, deploying to prod, or with `id-token: write`.
+- **Document allowed egress** in the `harden-runner` config; do not silently expand it.
+
+## Caching
+
+- `actions/cache` keys are deterministic and prefixed:
+  ```yaml
+  key: ${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('**/lockfile') }}
+  restore-keys: |
+    ${{ runner.os }}-${{ matrix.target }}-
+  ```
+- **Never write to a shared cache from PR-triggered jobs running on fork code.** Cache poisoning is a real attack. Restrict cache writes to `push` / `workflow_dispatch` / `merge_group` triggers.
+- Caches scoped to a branch by default; that's fine for build artifacts. Cross-branch caches require justification.
+
+## Concurrency
+
+- **Every workflow declares a `concurrency` block** unless concurrent runs are explicitly required.
+  ```yaml
+  concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+  ```
+- **Release workflows do NOT cancel in progress.** Use `cancel-in-progress: false` on `release-*.yml` and any workflow that mutates external state.
+
+## Matrix builds
+
+- `fail-fast: true` is the default. Set `fail-fast: false` only for diagnostic / cross-platform matrices where seeing all failures is more useful than stopping early.
+- Matrix dimension names are concrete and stable: `os`, `arch`, `node-version`, `target` — not `config`, `variant`, `flavor`.
+- `include` and `exclude` are documented in a comment when used; they obscure the matrix.
+
+## Environments
+
+- **Production deployments target a GitHub Environment** with required reviewers configured in the GitHub UI, not in YAML.
+- **Environment names are stable**: `production`, `staging`, `preview-<feature>`. Do not invent per-PR environment names that won't be reused.
+- **Environment secrets** are scoped to the environment, not the repo. Promote from preview → staging → production.
+
+## Reusable workflows and composite actions
+
+- **Reusable workflow** (`workflow_call`): for multi-step orchestration with its own triggers, jobs, and concurrency.
+- **Composite action** (`.github/actions/<name>/action.yml`): for a sequence of steps that runs inside a job. One responsibility per action.
+- **Extract when duplicated** across two or more workflows.
+- **Reusable workflow inputs and outputs are documented** in the workflow header. No magic strings.
+
+## Status checks
+
+- **Job names are stable.** Branch protection rulesets bind to job names; renaming a job breaks protection silently.
+- **Names are descriptive and lowercase-hyphenated** (e.g., `lint`, `unit-tests`, `cpp-tests`). Choose once and treat as part of the public contract.
+- **Required checks are declared in the GitHub ruleset**, not in YAML. The ruleset is the source of truth.
+- **Renaming a required check requires a coordinated change**: update the ruleset and the workflow in the same change window, or add the new name as required while leaving the old one until merges drain.
+
+## Outputs and step IDs
+
+- **Use `$GITHUB_OUTPUT`**, never `::set-output::` (deprecated).
+  ```bash
+  echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+  ```
+- **Every step that produces an output has an `id:`.** Reference as `${{ steps.<id>.outputs.<key> }}`.
+
+## Failure handling
+
+- **`continue-on-error: true` is forbidden on Tier-1 checks** (lint, format, type-check, security scans, tests). Allowed on diagnostic-only steps.
+- **`if: always()`** on cleanup steps so artifacts and logs are uploaded even on failure.
+- **Timeouts**: every job declares `timeout-minutes`. Default budget is 30 minutes; longer requires a comment explaining why.
+
+## File layout and naming
+
+- Workflow filenames describe the trigger and target. Existing repo conventions:
+  - `on-pr-<pkg>.yml` — triggered by PR events on a package surface
+  - `on-merge-<pkg>.yml` — triggered when a PR merges to main
+  - `on-pr-close-<pkg>.yml` — triggered when a PR closes
+  - `release-<pkg>.yml` / `create-github-release-<pkg>.yml` — release pipelines
+  - `prebuilds-<pkg>.yml` — prebuilt artifact generation
+  - `pr-test-*.yml` / `pr-validation-*.yml` / `pr-checks-*.yml` — PR test/validation pipelines
+  - `integration-<scope>-<pkg>.yml` — cross-package integration / e2e suites (e.g., mobile device-farm runs)
+  - `reusable-*.yml` — reusable workflow building block (consumed via `workflow_call`)
+  - `trigger-reusable-*.yml` — entrypoint workflow whose only job is to call a `reusable-*.yml`
+- **One responsibility per workflow file.** Split when triggers diverge.

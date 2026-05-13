@@ -183,16 +183,16 @@ async function ensureRPCConnection(
       `🔗 Establishing direct DHT connection to peer: ${publicKey}${timeout ? `, timeout: ${timeout}ms` : ""}`,
     );
 
-    // Ensure the DHT routing table is populated before attempting to look up
-    // the peer. On a cold swarm the table is nearly empty and findPeer can
-    // return PEER_NOT_FOUND immediately even when the provider is reachable.
-    const bootstrapStart = nowMs();
-    const swarm = getSwarm();
-    logger.info(`⏳ Waiting for DHT to fully bootstrap before connect...`);
-    await withTimeout(swarm.dht.fullyBootstrapped(), getRemainingTimeout());
-    logger.info(
-      `✅ DHT bootstrapped in ${(nowMs() - bootstrapStart).toFixed(0)}ms`,
-    );
+    // We deliberately do NOT `await swarm.dht.fullyBootstrapped()` here. The
+    // earlier guard (added with #1729 to side-step a theoretical PEER_NOT_FOUND
+    // on a fully-cold swarm) added a serial 1-3s wait on every first delegated
+    // call — measurably regressing `loadModel.delegation.connection` vs 0.9.0
+    // (≈3.2× slower in local benches). `getSwarm()` is invoked early during
+    // SDK init (registry/runtime), so by the time the consumer reaches this
+    // path the routing table is already warm enough; `dht.connect()` also
+    // bootstraps on demand if it isn't, so we lose nothing by skipping the
+    // explicit await.
+    getSwarm();
 
     conn = openDhtConnection(publicKey);
     await waitForOpen(conn, getRemainingTimeout());

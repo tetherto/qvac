@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.7.0] - 2026-05-06
+
+### Added
+
+- Standalone ESRGAN upscaler API via named export `EsrganUpscaler` for upscaling existing PNG/JPEG images without loading a diffusion model
+- End-to-end ESRGAN integration coverage for both post-generation upscale and standalone upscale output dimensions
+
+### Changed
+
+- Native log routing is no longer connected/released per instance; configure process-global native C++ logs through `addonLogging.setLogger()` for coexistence safety
+
+## [0.6.0] - 2026-05-01
+
+### Added
+
+- Post-generation ESRGAN upscale support via `files.esrgan` and `run({ upscale: true })` / `run({ upscale: { repeats } })`
+- ESRGAN upscaler configuration for tile size, direct convolution, CPU parameter offload, and thread count
+- JS integration coverage for the ESRGAN upscale public API guard and forwarding path
+- Example script for SD2.1 generation followed by ESRGAN upscale (`examples/generate-image-esrgan-upscale.js`)
+
 ## [0.5.0] - 2026-04-21
 
 ### Added
@@ -157,7 +177,7 @@ If `addon.activate()` throws during `_load()` (for example a native init failure
 
 ### Changed
 
-- Updated qvac-lib-inference-addon-cpp dependancy from 1.1.2 to 1.1.5
+- Updated inference-addon-cpp dependancy from 1.1.2 to 1.1.5
 - Reason for the version update:
     - addon-cpp v1.1.2's cancelJob() unconditionally set the model's stop flag whenever a job existed, even if that job was only queued and never started processing. Since the queued job never entered process(), the flag was never consumed or reset.
     - In the diffusion addon, this meant that cancelling a request and then submitting a new one would cause the new request to abort instantly on entry — returning no results — because it inherited the stale stop flag from the previous cancel.

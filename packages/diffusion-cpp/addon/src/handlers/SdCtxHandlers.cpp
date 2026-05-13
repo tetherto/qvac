@@ -1,6 +1,8 @@
 #include "SdCtxHandlers.hpp"
 
-#include <qvac-lib-inference-addon-cpp/Errors.hpp>
+#include <cstddef>
+
+#include <inference-addon-cpp/Errors.hpp>
 
 #include "utils/LoggingMacros.hpp"
 
@@ -31,6 +33,35 @@ static int parseInt(const std::string& v, const std::string& key) {
   }
 }
 
+static int parsePositiveInt(const std::string& v, const std::string& key) {
+  const int parsed = parseInt(v, key);
+  if (parsed <= 0) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        key + " must be a positive integer, got: '" + v + "'");
+  }
+  return parsed;
+}
+
+static int
+parseAutoOrPositiveInt(const std::string& value, const std::string& key) {
+  int parsed = 0;
+  std::size_t parsedChars = 0;
+  try {
+    parsed = std::stoi(value, &parsedChars);
+  } catch (...) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        key + " must be -1 (auto) or a positive integer, got: '" + value + "'");
+  }
+  if (parsedChars == value.size() && (parsed == -1 || parsed > 0)) {
+    return parsed;
+  }
+  throw StatusError(
+      general_error::InvalidArgument,
+      key + " must be -1 (auto) or a positive integer, got: '" + value + "'");
+}
+
 static float parseFloat(const std::string& v, const std::string& key) {
   try {
     return std::stof(v);
@@ -51,7 +82,7 @@ const SdCtxHandlersMap SD_CTX_HANDLERS = {
 
     {"threads",
      [](SdCtxConfig& c, const std::string& v) {
-       c.nThreads = parseInt(v, "threads");
+       c.nThreads = parseAutoOrPositiveInt(v, "threads");
      }},
 
     // "fa" is the CLI short-form; "flash_attn" is the long-form -- both
@@ -240,6 +271,30 @@ const SdCtxHandlersMap SD_CTX_HANDLERS = {
     {"force_sdxl_vae_conv_scale",
      [](SdCtxConfig& c, const std::string& v) {
        c.forceSDXLVaeConvScale = parseBool(v, "force_sdxl_vae_conv_scale");
+     }},
+
+    // -- ESRGAN upscaler
+    // ------------------------------------------------------------
+
+    {"upscaler_tile_size",
+     [](SdCtxConfig& c, const std::string& v) {
+       c.upscalerTileSize = parsePositiveInt(v, "upscaler_tile_size");
+     }},
+
+    {"upscaler_direct",
+     [](SdCtxConfig& c, const std::string& v) {
+       c.upscalerDirect = parseBool(v, "upscaler_direct");
+     }},
+
+    {"upscaler_offload_params_to_cpu",
+     [](SdCtxConfig& c, const std::string& v) {
+       c.upscalerOffloadParamsToCpu =
+           parseBool(v, "upscaler_offload_params_to_cpu");
+     }},
+
+    {"upscaler_threads",
+     [](SdCtxConfig& c, const std::string& v) {
+       c.upscalerThreads = parseAutoOrPositiveInt(v, "upscaler_threads");
      }},
 
     // -- Backend loading

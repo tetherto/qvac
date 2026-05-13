@@ -2,6 +2,7 @@
 import type { TestDefinition } from "@tetherto/qvac-test-suite";
 import { completionTests } from "./completion-tests.js";
 import { transcriptionTests } from "./transcription-tests.js";
+import { transcribeStreamEventsTests } from "./transcribe-stream-events-tests.js";
 import { embeddingTests } from "./embedding-tests.js";
 import { ragTests } from "./rag-tests.js";
 import { translationIndicTransTests } from "./translation-indictrans-tests.js";
@@ -30,6 +31,7 @@ import { lifecycleTests } from "./lifecycle-tests.js";
 import { configTests } from "./config-tests.js";
 import { noLingeringBareTests } from "./no-lingering-bare-tests.js";
 import { wrongModelTests } from "./wrong-model-tests.js";
+import { multiGpuTests } from "./multi-gpu-tests.js";
 
 // Model loading tests
 export const modelLoadLlm: TestDefinition = {
@@ -193,6 +195,9 @@ export const tests = [
   // Transcription tests
   ...transcriptionTests,
 
+  // transcribeStream VAD + endOfTurn event tests
+  ...transcribeStreamEventsTests,
+
   // Embedding tests
   ...embeddingTests,
 
@@ -273,6 +278,9 @@ export const tests = [
 
   // No-lingering-bare regression tests
   ...noLingeringBareTests,
+
+  // Multi-GPU config smoke (verifies split-mode and main-gpu flow through stack)
+  ...multiGpuTests,
 
   // Additional model tests
   modelSwitchLlm,

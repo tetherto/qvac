@@ -344,6 +344,23 @@ describe('extractGenerationParams', () => {
     assert.equal(params.presence_penalty, 0.1)
   })
 
+  it('extracts reasoning_budget true', () => {
+    const params = extractGenerationParams({ reasoning_budget: true })
+    assert.ok(params)
+    assert.equal(params.reasoning_budget, true)
+  })
+
+  it('extracts reasoning_budget false', () => {
+    const params = extractGenerationParams({ reasoning_budget: false })
+    assert.ok(params)
+    assert.equal(params.reasoning_budget, false)
+  })
+
+  it('ignores non-boolean reasoning_budget', () => {
+    const params = extractGenerationParams({ reasoning_budget: -1 })
+    assert.equal(params, undefined)
+  })
+
   it('ignores non-number values', () => {
     const params = extractGenerationParams({ temperature: 'hot', max_tokens: '100' })
     assert.equal(params, undefined)

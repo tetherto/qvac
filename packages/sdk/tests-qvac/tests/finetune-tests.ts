@@ -62,10 +62,17 @@ export const finetuneProgressZeroDrop = createFinetuneTest(
   120000,
 );
 
+export const finetuneProgressLossSchema = createFinetuneTest(
+  "finetune-progress-loss-schema",
+  { numberOfEpochs: 1 },
+  60000,
+);
+
 export const finetuneTests = [
   finetuneStartComplete,
   finetunePauseResume,
   finetuneProgressStreaming,
   finetuneErrorCases,
   finetuneProgressZeroDrop,
+  finetuneProgressLossSchema,
 ];

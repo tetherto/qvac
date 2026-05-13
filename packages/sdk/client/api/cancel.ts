@@ -1,21 +1,43 @@
 import { send } from "@/client/rpc/rpc-client";
-import { type CancelParams, type CancelRequest } from "@/schemas";
+import {
+  type CancelClientInput,
+  type CancelParams,
+  type CancelRequest,
+} from "@/schemas";
 import { InvalidResponseError, CancelFailedError } from "@/utils/errors-client";
 
 /**
  * Cancels an ongoing operation.
  *
+ * Two cancel paths are supported:
+ *
+ *  - **By `requestId`** (introduced in 0.11.0, primary path) — pass the
+ *    `requestId` exposed on the result of a long-running call (e.g.
+ *    `(await completion({ ... })).requestId`) to cancel exactly that
+ *    request. Either pass `{ requestId }` directly or the explicit
+ *    `{ operation: "request", requestId }` form; both are equivalent.
+ *    The cancel takes effect once the server has begun the request; a
+ *    cancel that races the originating call to the worker may arrive
+ *    before the request is registered and is logged as a no-match.
+ *  - **By `modelId`** (broad-cancel escape hatch, kept indefinitely) —
+ *    `{ operation: "inference" | "embeddings", modelId }` cancels every
+ *    in-flight request running on that model. Useful for model unload,
+ *    app shutdown, or "cancel everything" admin paths where the caller
+ *    doesn't have a `requestId` to hand.
+ *
+ * The download and RAG cancel paths are unchanged in 0.11.0; they still
+ * route through their own existing handlers.
+ *
  * @param params - The parameters for the cancellation
- * @param params.operation - The type of operation to cancel ("inference", "downloadAsset", or "rag")
- * @param params.modelId - The model ID (required for inference cancellation)
- * @param params.downloadKey - The download key (required for download cancellation)
- * @param params.clearCache - If true, deletes the partial download file (default: false)
- * @param params.delegate - Delegation target for remote download cancellation (optional)
- * @param params.workspace - The RAG workspace to cancel (optional, defaults to "default")
  * @throws {QvacErrorBase} When the response type is invalid or when the cancellation fails
  *
  * @example
- * // Cancel inference
+ * // Cancel a specific completion by requestId (new in 0.11.0)
+ * const run = completion({ ... });
+ * await cancel({ requestId: run.requestId });
+ *
+ * @example
+ * // Broad-cancel every inference running on a model (escape hatch)
  * await cancel({ operation: "inference", modelId: "model-123" });
  *
  * @example
@@ -42,10 +64,11 @@ import { InvalidResponseError, CancelFailedError } from "@/utils/errors-client";
  * // Cancel RAG operation on specific workspace
  * await cancel({ operation: "rag", workspace: "my-workspace" });
  */
-export async function cancel(params: CancelParams) {
+export async function cancel(params: CancelClientInput) {
+  const wireParams = normalizeCancelParams(params);
   const request: CancelRequest = {
     type: "cancel",
-    ...params,
+    ...wireParams,
   };
 
   const response = await send(request);
@@ -56,4 +79,11 @@ export async function cancel(params: CancelParams) {
   if (!response.success) {
     throw new CancelFailedError(response.error);
   }
+}
+
+function normalizeCancelParams(params: CancelClientInput): CancelParams {
+  if (!("operation" in params) && "requestId" in params) {
+    return { operation: "request", requestId: params.requestId };
+  }
+  return params;
 }

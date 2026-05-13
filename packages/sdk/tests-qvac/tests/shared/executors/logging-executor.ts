@@ -1,12 +1,47 @@
-import { loggingStream, completion, embed, unloadModel, SDK_LOG_ID } from "@qvac/sdk";
+import {
+  loggingStream,
+  completion,
+  embed,
+  textToSpeech,
+  translate,
+  diffusion,
+  unloadModel,
+  SDK_LOG_ID,
+} from "@qvac/sdk";
 import { type TestResult } from "@tetherto/qvac-test-suite";
 import { AbstractModelExecutor } from "./abstract-model-executor.js";
 import { loggingTests } from "../../logging-tests.js";
 
-type LogEntry = { timestamp: number; level: string; namespace: string; message: string };
+// Mirror of `LoggingStreamResponse` from @qvac/sdk (not currently exported).
+export interface LogEntry {
+  timestamp: number;
+  level: string;
+  namespace: string;
+  message: string;
+}
 
-// Wait out the documented "run while previous job is settling" busy throw
-// from qvac-lib-infer-llamacpp-llm.
+interface AudioParams { audioFileName: string }
+interface ImageParams { imageFileName: string }
+interface InvalidModelIdParams { invalidModelId: string }
+interface OperationsParams { operations: ReadonlyArray<string> }
+interface DuringInferenceParams {
+  operationCount?: number;
+  streaming?: boolean;
+  verifyTimestamps?: boolean;
+}
+
+type AnyParams = Record<string, unknown>;
+
+const STREAM_OPEN_DELAY_MS = 100;
+const POST_TRIGGER_GRACE_MS = 5_000;
+const INVALID_ID_TIMEOUT_MS = 3_000;
+const DURING_INFERENCE_DRAIN_MS = 1_000;
+const CONCURRENT_DRAIN_MS = 3_000;
+const RELOAD_DRAIN_MS = 5_000;
+const ADDON_BUSY_TIMEOUT_MS = 30_000;
+const ADDON_BUSY_POLL_MS = 250;
+
+// Documented busy throw from infer-llamacpp-llm; we retry until idle.
 const ADDON_BUSY_MARKER = "a job is already set or being processed";
 
 class AddonBusyTimeoutError extends Error {
@@ -16,7 +51,11 @@ class AddonBusyTimeoutError extends Error {
   }
 }
 
-async function callWhenAddonIdle<T>(fn: () => Promise<T>, timeoutMs = 30_000, intervalMs = 250): Promise<T> {
+export async function callWhenAddonIdle<T>(
+  fn: () => Promise<T>,
+  timeoutMs = ADDON_BUSY_TIMEOUT_MS,
+  intervalMs = ADDON_BUSY_POLL_MS,
+): Promise<T> {
   const deadline = Date.now() + timeoutMs;
   while (true) {
     try {
@@ -25,7 +64,7 @@ async function callWhenAddonIdle<T>(fn: () => Promise<T>, timeoutMs = 30_000, in
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes(ADDON_BUSY_MARKER)) {
         if (Date.now() >= deadline) throw new AddonBusyTimeoutError(timeoutMs, err);
-        await new Promise((r) => setTimeout(r, intervalMs));
+        await sleep(intervalMs);
         continue;
       }
       throw err;
@@ -33,267 +72,356 @@ async function callWhenAddonIdle<T>(fn: () => Promise<T>, timeoutMs = 30_000, in
   }
 }
 
+const TRIGGER_KEYS = [
+  "llm", "embed", "tts", "nmt", "diffusion",
+  "whisper", "parakeet", "ocr",
+] as const;
+
+type TriggerKey = typeof TRIGGER_KEYS[number];
+type Trigger = (modelId: string, params: AnyParams) => Promise<void>;
+
+const isTriggerKey = makeKeyGuard(TRIGGER_KEYS);
+
+const HANDLER_KEYS = [
+  "addon-logging",
+  "invalid-model-id",
+  "during-inference",
+  "concurrent",
+  "reload",
+] as const;
+
+const isHandlerKey = makeKeyGuard(HANDLER_KEYS);
+
+const TESTS_BY_ID = new Map(loggingTests.map((t) => [t.testId, t]));
+
+function getMeta(testId: string): Record<string, unknown> {
+  return (TESTS_BY_ID.get(testId)?.metadata ?? {}) as Record<string, unknown>;
+}
+
+function getRequiredMeta(testId: string, key: string): string {
+  const value = getMeta(testId)[key];
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error(`Test "${testId}" missing required metadata.${key}`);
+  }
+  return value;
+}
+
 export class LoggingExecutor extends AbstractModelExecutor<typeof loggingTests> {
   pattern = /^(addon-logging-|logging-)/;
 
   protected handlers = Object.fromEntries(
-    loggingTests.map((test) => {
-      if (test.testId === "addon-logging-invalid-model-id") return [test.testId, this.invalidModelId.bind(this)];
-      if (test.testId === "addon-logging-during-inference") return [test.testId, this.duringInference.bind(this)];
-      if (test.testId.startsWith("addon-logging-")) return [test.testId, this.makeAddonStream(test.testId)];
-      if (test.testId === "logging-concurrent-operations") return [test.testId, this.concurrentOperations.bind(this)];
-      if (test.testId === "logging-persist-across-reload") return [test.testId, this.persistAcrossReload.bind(this)];
-      return [test.testId, this.loggingDuringInference.bind(this)];
-    }),
+    loggingTests.map((test) => [
+      test.testId,
+      (params: AnyParams) => this.dispatch(test.testId, params),
+    ]),
   ) as never;
 
-  private getModelType(testId: string): string {
-    if (testId.includes("-llm")) return "llm";
-    if (testId.includes("-embed")) return "embeddings";
-    if (testId.includes("-whisper")) return "whisper";
-    if (testId.includes("-sdk-server")) return "sdk";
-    return "llm";
+  private readonly triggers: Readonly<Record<TriggerKey, Trigger>> = Object.freeze({
+    llm:       (id) => this.triggerLlm(id),
+    embed:     (id) => this.triggerEmbed(id),
+    tts:       (id) => this.triggerTts(id),
+    nmt:       (id) => this.triggerNmt(id),
+    diffusion: (id) => this.triggerDiffusion(id),
+    whisper:   (id, p) => this.triggerWhisper(id, requireAudioParams(p)),
+    parakeet:  (id, p) => this.triggerParakeet(id, requireAudioParams(p)),
+    ocr:       (id, p) => this.triggerOcr(id, requireImageParams(p)),
+  });
+
+  private async dispatch(testId: string, params: AnyParams): Promise<TestResult> {
+    const handler = params["handler"];
+
+    if (!isHandlerKey(handler)) {
+      throw new Error(`Test "${testId}" has missing/invalid params.handler: ${String(handler)}`);
+    }
+
+    try {
+      switch (handler) {
+        case "addon-logging":     return await this.runAddonLogging(testId, params);
+        case "invalid-model-id":  return await this.runInvalidModelId(requireInvalidModelIdParams(params));
+        case "during-inference":  return await this.runDuringInference(testId, params as DuringInferenceParams);
+        case "concurrent":        return await this.runConcurrent(testId, requireOperationsParams(params));
+        case "reload":            return await this.runReload(testId);
+      }
+    } catch (error) {
+      return wrapError(testId, error);
+    }
   }
 
-  private makeAddonStream(testId: string) {
-    const modelType = this.getModelType(testId);
-    return async (): Promise<TestResult> => {
-      let targetId: string;
-      if (modelType === "sdk") {
-        targetId = SDK_LOG_ID ?? "__sdk__";
-      } else {
-        const dep = modelType === "embeddings" ? "embeddings" : modelType;
-        targetId = await this.resources.ensureLoaded(dep);
-      }
+  private async runAddonLogging(testId: string, params: AnyParams): Promise<TestResult> {
+    // SDK-server logs flow with any RPC; no explicit trigger needed.
+    if (getMeta(testId)["target"] === "sdk-server") {
+      return collectLogs({ testId, targetId: SDK_LOG_ID, target: 1, postTriggerWaitMs: POST_TRIGGER_GRACE_MS });
+    }
 
-      const logs: LogEntry[] = [];
+    const dep = getRequiredMeta(testId, "dependency");
+    const triggerKey = params["trigger"];
+    if (!isTriggerKey(triggerKey)) {
+      throw new Error(`addon-logging test "${testId}" has invalid params.trigger: ${String(triggerKey)}`);
+    }
+
+    const targetId = await this.resources.ensureLoaded(dep);
+    return collectLogs({
+      testId,
+      targetId,
+      target: 1,
+      trigger: () => this.triggers[triggerKey](targetId, params),
+      postTriggerWaitMs: POST_TRIGGER_GRACE_MS,
+    });
+  }
+
+  private async runInvalidModelId(params: InvalidModelIdParams): Promise<TestResult> {
+    let receivedLogs = 0;
+    const streamPromise = (async () => {
       try {
-        const collectPromise = (async () => {
-          for await (const log of loggingStream({ id: targetId })) {
-            logs.push(log);
-            if (logs.length >= 1) break;
-          }
-        })();
+        for await (const _log of loggingStream({ id: params.invalidModelId })) {
+          receivedLogs++;
+          if (receivedLogs >= 3) break;
+        }
+      } catch { /* expected */ }
+    })();
 
-        const triggerPromise = (async () => {
-          await new Promise((r) => setTimeout(r, 100));
-          if (modelType === "llm") {
-            await callWhenAddonIdle(async () => {
-              const r = completion({ modelId: targetId, history: [{ role: "user", content: "Hi" }], stream: false });
-              await r.text;
-            });
-          } else if (modelType === "embeddings") {
-            await embed({ modelId: targetId, text: "test" });
-          }
-        })();
+    await Promise.race([streamPromise, sleep(INVALID_ID_TIMEOUT_MS)]);
 
-        await Promise.race([collectPromise, triggerPromise.then(() => new Promise((r) => setTimeout(r, 5000)))]);
-
-        return {
-          passed: logs.length > 0,
-          output: logs.length > 0
-            ? `Received ${logs.length} log(s) from ${modelType}`
-            : `No logs received from ${modelType} within timeout`,
-        };
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        return { passed: false, output: `Addon logging error: ${errorMsg}` };
-      }
+    return {
+      passed: receivedLogs === 0,
+      output: receivedLogs === 0
+        ? "Invalid model ID produced no logs"
+        : `Unexpectedly received ${receivedLogs} log(s)`,
     };
   }
 
-  async invalidModelId(params: unknown): Promise<TestResult> {
-    const p = params as { invalidModelId: string };
+  private async runDuringInference(testId: string, params: DuringInferenceParams): Promise<TestResult> {
+    const dep = getRequiredMeta(testId, "dependency");
+    const targetId = await this.resources.ensureLoaded(dep);
+    const operationCount = params.operationCount ?? 1;
+    const streaming = params.streaming ?? false;
 
-    try {
-      let receivedLogs = 0;
-      const streamPromise = (async () => {
-        try {
-          for await (const _log of loggingStream({ id: p.invalidModelId })) {
-            receivedLogs++;
-            if (receivedLogs >= 3) break;
-          }
-        } catch { /* expected */ }
-      })();
+    const result = await collectLogs({
+      testId,
+      targetId,
+      target: operationCount * 5,
+      preTriggerExtraWaitMs: streaming ? STREAM_OPEN_DELAY_MS : 0,
+      postTriggerWaitMs: streaming ? DURING_INFERENCE_DRAIN_MS : RELOAD_DRAIN_MS,
+      trigger: async () => {
+        for (let i = 0; i < operationCount; i++) {
+          await callWhenAddonIdle(() => runCompletion(targetId, `Logging test ${i + 1}`, streaming));
+        }
+      },
+    });
 
-      await Promise.race([streamPromise, new Promise((r) => setTimeout(r, 3000))]);
-
-      return {
-        passed: receivedLogs === 0,
-        output: receivedLogs === 0
-          ? "Invalid model ID produced no logs"
-          : `Unexpectedly received ${receivedLogs} log(s)`,
-      };
-    } catch (error) {
-      return { passed: true, output: `Invalid model ID correctly rejected: ${error}` };
+    if (params.verifyTimestamps && result.passed) {
+      return verifyTimestamps(result);
     }
+    return result;
   }
 
-  async duringInference(): Promise<TestResult> {
-    const modelId = await this.resources.ensureLoaded("llm");
-    const logs: LogEntry[] = [];
+  private async runConcurrent(testId: string, params: OperationsParams): Promise<TestResult> {
+    const dep = getRequiredMeta(testId, "dependency");
+    const targetId = await this.resources.ensureLoaded(dep);
 
-    try {
-      const logPromise = (async () => {
-        for await (const log of loggingStream({ id: modelId })) {
-          logs.push(log);
-          if (logs.length >= 5) break;
+    return collectLogs({
+      testId,
+      targetId,
+      target: 5,
+      postTriggerWaitMs: CONCURRENT_DRAIN_MS,
+      trigger: async () => {
+        const ops: Promise<void>[] = [];
+        if (params.operations.includes("completion")) {
+          ops.push(callWhenAddonIdle(() => runCompletion(targetId, "Test concurrent logging", false)));
         }
-      })();
-
-      await new Promise((r) => setTimeout(r, 200));
-
-      await callWhenAddonIdle(async () => {
-        const result = completion({
-          modelId,
-          history: [{ role: "user", content: "Say hello in one word." }],
-          stream: true,
-        });
-        for await (const _token of result.tokenStream) { /* drain */ }
-      });
-
-      await Promise.race([logPromise, new Promise((r) => setTimeout(r, 1000))]);
-
-      return {
-        passed: logs.length > 0,
-        output: logs.length > 0
-          ? `Received ${logs.length} log(s) during streaming inference`
-          : "No logs received during inference",
-      };
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      return { passed: false, output: `Inference logging error: ${errorMsg}` };
-    }
+        if (params.operations.includes("embedding")) {
+          const embeddingModelId = await this.resources.ensureLoaded("embeddings");
+          ops.push(embed({ modelId: embeddingModelId, text: "test concurrent" }).then(() => undefined));
+        }
+        await Promise.allSettled(ops);
+      },
+    });
   }
 
-  async concurrentOperations(params: unknown): Promise<TestResult> {
-    const p = params as { operations: string[]; runConcurrently: boolean };
-    const llmModelId = await this.resources.ensureLoaded("llm");
+  private async runReload(testId: string): Promise<TestResult> {
+    const dep = getRequiredMeta(testId, "dependency");
 
-    const logs: LogEntry[] = [];
-    try {
-      const collectPromise = (async () => {
-        for await (const log of loggingStream({ id: llmModelId })) {
-          logs.push(log);
-          if (logs.length >= 5) break;
-        }
-      })();
-
-      await new Promise((r) => setTimeout(r, 100));
-
-      const operations: Promise<unknown>[] = [];
-      if (p.operations.includes("completion")) {
-        operations.push(callWhenAddonIdle(async () => {
-          const r = completion({ modelId: llmModelId, history: [{ role: "user", content: "Test concurrent logging" }], stream: false });
-          await r.text;
-        }));
-      }
-      if (p.operations.includes("embedding")) {
-        const embeddingModelId = await this.resources.ensureLoaded("embeddings");
-        operations.push(embed({ modelId: embeddingModelId, text: "test concurrent" }));
-      }
-
-      await Promise.allSettled(operations);
-      await Promise.race([collectPromise, new Promise((r) => setTimeout(r, 3000))]);
-
-      return {
-        passed: logs.length > 0,
-        output: logs.length > 0
-          ? `${p.operations.length} concurrent operations produced ${logs.length} log(s)`
-          : `No logs received from ${p.operations.length} concurrent operations`,
-      };
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      return { passed: false, output: `Concurrent logging error: ${errorMsg}` };
+    const originalModelId = this.resources.getModelId(dep);
+    if (originalModelId) {
+      await unloadModel({ modelId: originalModelId });
+      this.resources.unregister(originalModelId);
     }
+
+    const reloadedModelId = await this.resources.ensureLoaded(dep);
+    return collectLogs({
+      testId,
+      targetId: reloadedModelId,
+      target: 1,
+      postTriggerWaitMs: RELOAD_DRAIN_MS,
+      trigger: () => callWhenAddonIdle(() => runCompletion(reloadedModelId, "Post-reload test", false)),
+    });
   }
 
-  async persistAcrossReload(): Promise<TestResult> {
-    try {
-      const originalModelId = this.resources.getModelId("llm");
-      if (originalModelId) {
-        await unloadModel({ modelId: originalModelId });
-        this.resources.unregister(originalModelId);
-      }
-
-      const reloadedModelId = await this.resources.ensureLoaded("llm");
-
-      const logs: LogEntry[] = [];
-      const collectPromise = (async () => {
-        for await (const log of loggingStream({ id: reloadedModelId })) {
-          logs.push(log);
-          if (logs.length >= 1) break;
-        }
-      })();
-
-      await new Promise((r) => setTimeout(r, 100));
-
-      await callWhenAddonIdle(async () => {
-        const r = completion({ modelId: reloadedModelId, history: [{ role: "user", content: "Post-reload test" }], stream: false });
-        await r.text;
-      });
-
-      await Promise.race([collectPromise, new Promise((r) => setTimeout(r, 5000))]);
-
-      return {
-        passed: logs.length > 0,
-        output: logs.length > 0
-          ? `Logging works after reload (${logs.length} log(s) received)`
-          : "No logs received after model reload",
-      };
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      return { passed: false, output: `Persist across reload error: ${errorMsg}` };
-    }
+  protected triggerLlm(modelId: string): Promise<void> {
+    return callWhenAddonIdle(() => runCompletion(modelId, "Hi", false));
   }
 
-  async loggingDuringInference(params: unknown): Promise<TestResult> {
-    const p = params as { operationCount?: number; verifyTimestamps?: boolean };
-    const modelId = await this.resources.ensureLoaded("llm");
-    const operationCount = p.operationCount || 1;
-
-    const logs: LogEntry[] = [];
-    try {
-      const collectPromise = (async () => {
-        for await (const log of loggingStream({ id: modelId })) {
-          logs.push(log);
-          if (logs.length >= operationCount * 5) break;
-        }
-      })();
-
-      await new Promise((r) => setTimeout(r, 100));
-
-      for (let i = 0; i < operationCount; i++) {
-        await callWhenAddonIdle(async () => {
-          const r = completion({ modelId, history: [{ role: "user", content: `Logging test ${i + 1}` }], stream: false });
-          await r.text;
-        });
-      }
-
-      await Promise.race([collectPromise, new Promise((r) => setTimeout(r, 5000))]);
-
-      if (p.verifyTimestamps) {
-        if (logs.length < 2) {
-          return { passed: false, output: `Need >= 2 logs to verify timestamps, got ${logs.length}` };
-        }
-        const outOfOrder = logs.some((log, i) => i > 0 && log.timestamp < logs[i - 1].timestamp);
-        return {
-          passed: !outOfOrder,
-          output: outOfOrder
-            ? `Timestamps out of order in ${logs.length} logs`
-            : `Timestamps monotonic across ${logs.length} logs`,
-        };
-      }
-
-      return {
-        passed: logs.length > 0,
-        output: logs.length > 0
-          ? `${operationCount} operation(s) produced ${logs.length} log(s)`
-          : `No logs received from ${operationCount} operation(s)`,
-      };
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      return { passed: false, output: `Logging during inference error: ${errorMsg}` };
-    }
+  protected async triggerEmbed(modelId: string): Promise<void> {
+    await embed({ modelId, text: "test" });
   }
+
+  protected async triggerTts(modelId: string): Promise<void> {
+    const r = textToSpeech({ modelId, text: "Hi", inputType: "text", stream: false });
+    await r.buffer;
+  }
+
+  protected async triggerNmt(modelId: string): Promise<void> {
+    const r = translate({ modelId, text: "Hello world", modelType: "nmt", stream: false });
+    await r.text;
+  }
+
+  // steps=1 + small dims; we only need the first log, not the full image.
+  protected async triggerDiffusion(modelId: string): Promise<void> {
+    const { outputs } = diffusion({
+      modelId,
+      prompt: "a red square",
+      width: 256,
+      height: 256,
+      steps: 1,
+    });
+    await outputs;
+  }
+
+  // Overridden in DesktopLoggingExecutor / MobileLoggingExecutor.
+  protected triggerWhisper(_modelId: string, _params: AudioParams): Promise<void> {
+    return notImplemented("triggerWhisper");
+  }
+
+  protected triggerParakeet(_modelId: string, _params: AudioParams): Promise<void> {
+    return notImplemented("triggerParakeet");
+  }
+
+  protected triggerOcr(_modelId: string, _params: ImageParams): Promise<void> {
+    return notImplemented("triggerOcr");
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+interface CollectLogsOptions {
+  testId: string;
+  targetId: string;
+  target: number;
+  trigger?: () => Promise<void>;
+  postTriggerWaitMs: number;
+  preTriggerExtraWaitMs?: number;
+}
+
+interface CollectLogsResult extends TestResult {
+  logs: LogEntry[];
+}
+
+async function collectLogs(opts: CollectLogsOptions): Promise<CollectLogsResult> {
+  const { testId, targetId, target, trigger, postTriggerWaitMs, preTriggerExtraWaitMs = 0 } = opts;
+  const logs: LogEntry[] = [];
+
+  // Drop logs emitted before the trigger fires so buffered load logs from a
+  // preloaded `metadata.dependency` can't satisfy `target`.
+  let triggerStartMs = trigger ? Number.POSITIVE_INFINITY : 0;
+
+  const collectPromise = (async () => {
+    for await (const log of loggingStream({ id: targetId })) {
+      if (log.timestamp < triggerStartMs) continue;
+      logs.push(log);
+      if (logs.length >= target) break;
+    }
+  })();
+
+  const triggerPromise = (async () => {
+    await sleep(STREAM_OPEN_DELAY_MS + preTriggerExtraWaitMs);
+    if (trigger) {
+      triggerStartMs = Date.now();
+      await trigger();
+    }
+  })();
+
+  await Promise.race([
+    collectPromise,
+    triggerPromise.then(() => sleep(postTriggerWaitMs)),
+  ]);
+
+  return {
+    logs,
+    passed: logs.length > 0,
+    output: logs.length > 0
+      ? `Received ${logs.length} log(s) for ${testId}`
+      : `No logs received for ${testId} within timeout`,
+  };
+}
+
+function verifyTimestamps(result: CollectLogsResult): TestResult {
+  const { logs } = result;
+  if (logs.length < 2) {
+    return { passed: false, output: `Need >= 2 logs to verify timestamps, got ${logs.length}` };
+  }
+  const outOfOrder = logs.some((log, i) => i > 0 && log.timestamp < logs[i - 1].timestamp);
+  return {
+    passed: !outOfOrder,
+    output: outOfOrder
+      ? `Timestamps out of order in ${logs.length} logs`
+      : `Timestamps monotonic across ${logs.length} logs`,
+  };
+}
+
+function wrapError(testId: string, error: unknown): TestResult {
+  const msg = error instanceof Error ? error.message : String(error);
+  return { passed: false, output: `Logging test error (${testId}): ${msg}` };
+}
+
+async function runCompletion(modelId: string, content: string, stream: boolean): Promise<void> {
+  const result = completion({
+    modelId,
+    history: [{ role: "user", content }],
+    stream,
+  });
+  if (stream) {
+    for await (const _token of result.tokenStream) { /* drain */ }
+    return;
+  }
+  await result.text;
+}
+
+function requireStringField<K extends string>(
+  p: AnyParams,
+  key: K,
+  context: string,
+): { [P in K]: string } {
+  const value = p[key];
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error(`${context} expected \`${key}\` (non-empty string) in params`);
+  }
+  return { [key]: value } as { [P in K]: string };
+}
+
+function requireStringArrayField<K extends string>(
+  p: AnyParams,
+  key: K,
+  context: string,
+): { [P in K]: string[] } {
+  const value = p[key];
+  if (!Array.isArray(value) || value.some((v) => typeof v !== "string")) {
+    throw new Error(`${context} expected \`${key}: string[]\` in params`);
+  }
+  return { [key]: value as string[] } as { [P in K]: string[] };
+}
+
+const requireAudioParams = (p: AnyParams) => requireStringField(p, "audioFileName", "Trigger");
+const requireImageParams = (p: AnyParams) => requireStringField(p, "imageFileName", "Trigger");
+const requireInvalidModelIdParams = (p: AnyParams) => requireStringField(p, "invalidModelId", "invalid-model-id handler");
+const requireOperationsParams = (p: AnyParams) => requireStringArrayField(p, "operations", "concurrent handler");
+
+function makeKeyGuard<T extends string>(keys: ReadonlyArray<T>) {
+  const set: ReadonlySet<string> = new Set(keys);
+  return (value: unknown): value is T => typeof value === "string" && set.has(value);
+}
+
+function notImplemented(name: string): never {
+  throw new Error(`${name} must be overridden by the platform LoggingExecutor subclass`);
 }

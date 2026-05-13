@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <chrono>
 #include <string>
-#include "qvac-lib-inference-addon-cpp/Logger.hpp"
+#include "inference-addon-cpp/Logger.hpp"
 #include "AndroidLog.hpp"
 
 namespace qvac_lib_inference_addon_onnx_ocr_fasttext {
