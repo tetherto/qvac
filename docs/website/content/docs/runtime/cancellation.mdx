@@ -1,0 +1,112 @@
+---
+title: Cancellation
+description: Cancel an in-flight inference request by requestId; broad-cancel by modelId.
+schemaType: HowTo
+---
+
+## Overview
+
+Long-running inference calls (`completion()`, `embed()`, etc.) can be cancelled at any point during execution. The SDK exposes a per-request cancellation contract that lets you stop a single in-flight request without affecting other requests running on the same model.
+
+The mental model is: **the primary path is `requestId`** — pass `run.requestId` to `cancel()` to stop that exact run. **The `modelId` path is an escape hatch** — use it for model unload, app shutdown, or admin sweeps where no `requestId` is at hand.
+
+## Functions
+
+1. [`completion()`](/reference/api#completion) — returns a `CompletionRun` that exposes a synchronous `requestId` field.
+2. [`cancel()`](/reference/api#cancel) — cancel by `requestId` (targeted) or by `operation` + `modelId` (broad).
+
+For how to use each function, see [SDK — API reference](/reference/api/).
+
+## Targeted cancel by `requestId`
+
+Every `completion()` call returns a `CompletionRun` with a stable `requestId` (UUIDv4, generated client-side). The `requestId` is available **synchronously** on the returned run — before the first network round-trip — so you can wire a stop button to it immediately, without waiting for the first chunk to arrive.
+
+There are two equivalent forms:
+
+```ts
+const run = completion({ modelId, history, stream: true });
+
+// Sugar form (recommended for most callers)
+await cancel({ requestId: run.requestId });
+
+// Explicit form (same behavior)
+await cancel({ operation: "request", requestId: run.requestId });
+```
+
+Outcome on the consumer side:
+
+- The `events` async iterable closes cleanly.
+- The terminal `completionDone` event carries `stopReason: "cancelled"`.
+- The `final` promise rejects with [`InferenceCancelledError`](/reference/api#errors) (code `52419`).
+
+Only the targeted run is affected — other inference calls on the same `modelId` keep running.
+
+## Broad cancel by `modelId` (escape hatch)
+
+When you don't have a `requestId` — typically because you're unloading the model, shutting down the app, or sweeping stale requests from admin code — use the broad-cancel form:
+
+```ts
+// Cancel every in-flight completion on this model
+await cancel({ operation: "inference", modelId });
+
+// Cancel every in-flight embedding on this model
+await cancel({ operation: "embeddings", modelId });
+```
+
+Broad cancel terminates **every** in-flight request of the given kind on the model simultaneously. Prefer the targeted `{ requestId }` form when you do have a `requestId` — it scopes the cancellation precisely and avoids killing unrelated work that happens to share the model.
+
+## History-trim
+
+A cancelled assistant turn is **partial** — the model stopped mid-decode, so its content cuts off in the middle of a thought. Drop it (or mark it as partial) before appending the next user turn to `history` on the follow-up `completion()`. Otherwise the model sees a truncated assistant message as if it were complete, which biases subsequent generations:
+
+```ts
+const run = completion({ modelId, history, stream: true });
+let cancelled = false;
+
+for await (const event of run.events) {
+  if (event.type === "completionDone" && event.stopReason === "cancelled") {
+    cancelled = true;
+  }
+}
+
+const nextHistory = cancelled
+  ? history // drop the partial assistant turn
+  : [...history, { role: "assistant", content: (await run.final).contentText }];
+```
+
+<Callout type="info">
+The same partial-turn rule applies if you abort the `events` iterator early (e.g., `break` out of the `for await` loop) without calling `cancel()`. The model still committed a truncated turn — treat it as partial.
+</Callout>
+
+## Example
+
+The following script loads a model, starts a streaming `completion()`, cancels it shortly after by `requestId`, and prints how many content deltas streamed before the cancel took effect:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/cancel-by-request-id.js title="cancel-by-request-id.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/cancel-by-request-id.ts title="cancel-by-request-id.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/quickstart).
+</Callout>
+
+## Errors
+
+- `InferenceCancelledError` (code `52419`) — expected on the `final` promise after a consumer-initiated cancel. Treat it as a normal outcome, not a failure.
+- `RequestIdConflictError` (code `52417`) — two requests landed with the same `requestId`. Astronomically unlikely with UUIDv4; if you see it, report.
+- `AsyncDisposeUnavailableError` (code `53503`) — the runtime is missing `Symbol.asyncDispose` (older Bare builds). Upgrade Bare.
+

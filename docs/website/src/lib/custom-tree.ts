@@ -187,7 +187,7 @@ export const customTree: Node[] = [
     name: 'Runtime',
   },
   {
-    name: 'Runtime lifecycle',
+    name: 'Lifecycle',
     url: '/runtime/lifecycle',
     type: 'page',
     icon: resolveIcon('Moon'),
@@ -203,6 +203,12 @@ export const customTree: Node[] = [
     url: '/runtime/profiler',
     type: 'page',
     icon: resolveIcon('Timer'),
+  },
+  {
+    name: 'Cancellation',
+    url: '/runtime/cancellation',
+    type: 'page',
+    icon: resolveIcon('CircleStop'),
   },
   {
     type: 'separator',
