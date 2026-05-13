@@ -37,9 +37,9 @@ function collectUrls (nodes: Node[]): string[] {
 }
 
 /**
- * For a sidebar URL like `/sdk/api`, the content file resolves to either:
- *   - `content/docs/sdk/api.mdx`, or
- *   - `content/docs/sdk/api/index.mdx`
+ * For a sidebar URL like `/reference/api`, the content file resolves to either:
+ *   - `content/docs/reference/api.mdx`, or
+ *   - `content/docs/reference/api/index.mdx`
  *
  * Anchor-only URLs (`/#community`) resolve against the docs root index.
  */
