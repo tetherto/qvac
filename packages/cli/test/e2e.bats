@@ -381,6 +381,25 @@ TXT
   curl -s -X DELETE "${BASE}/v1/vector_stores/${vs}" >/dev/null
 }
 
+@test "vector_stores: attach binary upload returns 400 unsupported_file_type" {
+  local vs upload file body
+  vs=$(json_post "/v1/vector_stores" '{"name":"binary-sad"}' | jq -r '.id')
+
+  # PNG magic header — contains NUL bytes so looksBinary catches it.
+  local png_path="${BATS_TEST_TMPDIR}/bin.png"
+  printf '\x89PNG\r\n\x1a\n\x00\x00\x00\x0dIHDR' > "${png_path}"
+
+  upload=$(curl -sf "${BASE}/v1/files" \
+    -F "file=@${png_path};type=image/png" \
+    -F "purpose=assistants")
+  file=$(echo "${upload}" | jq -r '.id')
+
+  body=$(json_post "/v1/vector_stores/${vs}/files" "{\"file_id\":\"${file}\"}")
+  assert_error "${body}" "unsupported_file_type"
+
+  curl -s -X DELETE "${BASE}/v1/vector_stores/${vs}" >/dev/null
+}
+
 @test "vector_stores: invalid id returns 400 invalid_vector_store_id" {
   local body
   body=$(curl -s "${BASE}/v1/vector_stores/bad%2Fid")

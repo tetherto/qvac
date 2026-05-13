@@ -332,6 +332,20 @@ export async function handleAttachVectorStoreFile (
     return
   }
 
+  // Buffer#toString('utf8') is lossy: invalid bytes become U+FFFD and most
+  // binaries (PDF / PNG / DOCX) survive .trim() non-empty and would silently
+  // ingest garbage. A null-byte sniff catches every common binary format
+  // before we waste an embed pass on it.
+  if (looksBinary(record.data)) {
+    sendError(
+      res,
+      400,
+      'unsupported_file_type',
+      'File appears to be binary. This minimal ingest path expects UTF-8 text content (e.g. .txt, .md, .json).'
+    )
+    return
+  }
+
   const text = record.data.toString('utf8').trim()
   if (text.length === 0) {
     sendError(
@@ -379,6 +393,17 @@ export async function handleAttachVectorStoreFile (
 }
 
 // ---------- internals ----------
+
+/**
+ * Cheap heuristic: any NUL byte in the first 8 KB is a strong binary signal
+ * (every common text encoding avoids U+0000, and every common binary format
+ * — PDF, PNG, JPEG, GZIP, ZIP, DOCX, etc. — has one within the header).
+ * Exported for unit testing.
+ */
+export function looksBinary (data: Buffer): boolean {
+  const window = data.length > 8192 ? data.subarray(0, 8192) : data
+  return window.includes(0)
+}
 
 interface RagInfo {
   workspaces: Array<{ name: string; open: boolean }>
