@@ -92,6 +92,13 @@ export function createOpenAIAdapter (): APIAdapter {
         return true
       }
 
+      const fileContentMatch = path.match(/^\/v1\/files\/([^/]+)\/content$/)
+      if (fileContentMatch && method === 'GET') {
+        const { handleGetFileContent } = await import('./routes/files.js')
+        handleGetFileContent(req, res, ctx, fileContentMatch[1] ?? '')
+        return true
+      }
+
       const fileIdMatch = path.match(/^\/v1\/files\/([^/]+)$/)
       if (fileIdMatch && method === 'GET') {
         const { handleGetFile } = await import('./routes/files.js')

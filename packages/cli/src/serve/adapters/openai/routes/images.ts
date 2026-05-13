@@ -5,19 +5,51 @@ import { resolveModelAlias } from '../../../config.js'
 import { sdkDiffusion } from '../../../core/sdk.js'
 import {
   extractImageGenerationParams,
-  encodeImageDataUrl,
   logImageUnsupportedParams,
+  assertSupportedImageOutputParams,
   coerceMultipartFields,
   extractImageEditParams,
   logImageEditExtraWarnings,
   InvalidImagePromptError,
   InvalidImageSizeError,
-  InvalidImageBatchCountError
+  InvalidImageBatchCountError,
+  InvalidImageStrengthError,
+  UnsupportedImageOutputError
 } from '../translate.js'
+import type { EphemeralFilesStore } from '../ephemeral-files-store.js'
 import type { RouteContext } from '../../types.js'
 
 const SUPPORTED_RESPONSE_FORMATS = new Set(['b64_json', 'url'])
 const RESPONSE_OUTPUT_FORMAT = 'png' as const
+const RESPONSE_CONTENT_TYPE = 'image/png' as const
+
+function buildImageData (
+  buffers: Uint8Array[],
+  responseFormat: string,
+  publicBaseUrl: string,
+  ephemeralFiles: EphemeralFilesStore
+): Array<{ b64_json: string } | { url: string }> {
+  if (responseFormat !== 'url') {
+    return buffers.map((buf) => ({ b64_json: Buffer.from(buf).toString('base64') }))
+  }
+  return buffers.map((buf, i) => {
+    const id = ephemeralFiles.put({
+      data: Buffer.from(buf),
+      fileName: `image-${Date.now()}-${i}.png`,
+      purpose: 'image_generation',
+      contentType: RESPONSE_CONTENT_TYPE
+    })
+    return { url: `${publicBaseUrl}/v1/files/${id}/content` }
+  })
+}
+
+function rejectUrlWithoutBaseUrl (res: ServerResponse): void {
+  sendError(res, 400, 'unsupported_response_format',
+    'response_format="url" requires the server to be started with --public-base-url ' +
+    '(or `serve.publicBaseUrl` in the config). This deployment has not configured a ' +
+    'public origin, so it cannot mint downloadable URLs. Use response_format="b64_json" instead.'
+  )
+}
 
 export async function handleImagesGenerations (req: IncomingMessage, res: ServerResponse, ctx: RouteContext): Promise<void> {
   let body: Record<string, unknown>
@@ -37,6 +69,20 @@ export async function handleImagesGenerations (req: IncomingMessage, res: Server
   if (!SUPPORTED_RESPONSE_FORMATS.has(responseFormat)) {
     sendError(res, 400, 'invalid_response_format', `Unknown response_format "${responseFormat}". Use "b64_json" or "url".`)
     return
+  }
+  if (responseFormat === 'url' && !ctx.serveConfig.publicBaseUrl) {
+    rejectUrlWithoutBaseUrl(res)
+    return
+  }
+
+  try {
+    assertSupportedImageOutputParams(body)
+  } catch (err) {
+    if (err instanceof UnsupportedImageOutputError) {
+      sendError(res, 400, err.code, err.message)
+      return
+    }
+    throw err
   }
 
   const modelName = body['model'] as string
@@ -108,12 +154,7 @@ export async function handleImagesGenerations (req: IncomingMessage, res: Server
       return
     }
 
-    const data = buffers.map((buf) => {
-      if (responseFormat === 'url') {
-        return { url: encodeImageDataUrl(buf) }
-      }
-      return { b64_json: Buffer.from(buf).toString('base64') }
-    })
+    const data = buildImageData(buffers, responseFormat, ctx.serveConfig.publicBaseUrl ?? '', ctx.ephemeralFiles)
 
     sendJson(res, 200, {
       created: Math.floor(Date.now() / 1000),
@@ -135,8 +176,9 @@ function collectImageFiles (files: MultipartFile[]): MultipartFile[] {
   return files.filter((f) => EDIT_IMAGE_FIELD_NAMES.has(f.fieldName))
 }
 
-function hasMaskFile (files: MultipartFile[]): boolean {
-  return files.some((f) => MASK_FIELD_NAMES.has(f.fieldName))
+function hasMaskField (files: MultipartFile[], fields: Map<string, string>): boolean {
+  return files.some((f) => MASK_FIELD_NAMES.has(f.fieldName)) ||
+    [...fields.keys()].some((k) => MASK_FIELD_NAMES.has(k))
 }
 
 export async function handleImagesEdits (req: IncomingMessage, res: ServerResponse, ctx: RouteContext): Promise<void> {
@@ -166,6 +208,15 @@ export async function handleImagesEdits (req: IncomingMessage, res: ServerRespon
     return
   }
 
+  if (hasMaskField(files, fields)) {
+    sendError(res, 400, 'mask_not_supported',
+      'mask inpainting is not supported by this server; the underlying diffusion ' +
+      'engine has no mask channel. Resend without `mask` / `mask[]`. Until masks ' +
+      'are supported, use a prompt-only edit (full-image img2img).'
+    )
+    return
+  }
+
   const body = coerceMultipartFields(fields)
 
   if (!body['model']) {
@@ -178,9 +229,19 @@ export async function handleImagesEdits (req: IncomingMessage, res: ServerRespon
     sendError(res, 400, 'invalid_response_format', `Unknown response_format "${responseFormat}". Use "b64_json" or "url".`)
     return
   }
+  if (responseFormat === 'url' && !ctx.serveConfig.publicBaseUrl) {
+    rejectUrlWithoutBaseUrl(res)
+    return
+  }
 
-  if (body['stream'] === true) {
-    ctx.logger.warn('stream=true is not supported for /v1/images/edits; returning the blocking JSON response.')
+  try {
+    assertSupportedImageOutputParams(body)
+  } catch (err) {
+    if (err instanceof UnsupportedImageOutputError) {
+      sendError(res, 400, err.code, err.message)
+      return
+    }
+    throw err
   }
 
   const modelName = body['model'] as string
@@ -197,6 +258,10 @@ export async function handleImagesEdits (req: IncomingMessage, res: ServerRespon
     return
   }
 
+  if (body['stream'] === true) {
+    ctx.logger.warn('stream=true is not supported for /v1/images/edits; returning the blocking JSON response.')
+  }
+
   const alias = 'alias' in modelEntry ? (modelEntry.alias as string) : modelEntry.id
   const registryEntry = ctx.registry.getEntry(alias)
   if (!registryEntry || registryEntry.state !== ctx.registry.STATES.READY) {
@@ -208,7 +273,6 @@ export async function handleImagesEdits (req: IncomingMessage, res: ServerRespon
 
   const firstImage = imageFiles[0]!.data
   const extraImageCount = imageFiles.length - 1
-  const maskPresent = hasMaskFile(files)
 
   let params
   try {
@@ -226,11 +290,15 @@ export async function handleImagesEdits (req: IncomingMessage, res: ServerRespon
       sendError(res, 400, 'invalid_n', err.message)
       return
     }
+    if (err instanceof InvalidImageStrengthError) {
+      sendError(res, 400, 'invalid_strength', err.message)
+      return
+    }
     throw err
   }
 
   logImageUnsupportedParams(body, ctx.logger)
-  logImageEditExtraWarnings(body, { hasMask: maskPresent, extraImageCount }, ctx.logger)
+  logImageEditExtraWarnings(body, { extraImageCount }, ctx.logger)
 
   const dims = params.width && params.height ? `${params.width}x${params.height}` : 'default'
   ctx.logger.info(`  image_edit model=${alias} prompt_chars=${params.prompt.length} size=${dims} n=${params.batch_count ?? 1} response_format=${responseFormat}`)
@@ -251,12 +319,7 @@ export async function handleImagesEdits (req: IncomingMessage, res: ServerRespon
 
     const sizeStr = buildSizeString(params.width, params.height, stats?.width, stats?.height)
 
-    const data = buffers.map((buf) => {
-      if (responseFormat === 'url') {
-        return { url: encodeImageDataUrl(buf) }
-      }
-      return { b64_json: Buffer.from(buf).toString('base64') }
-    })
+    const data = buildImageData(buffers, responseFormat, ctx.serveConfig.publicBaseUrl ?? '', ctx.ephemeralFiles)
 
     sendJson(res, 200, {
       created: Math.floor(Date.now() / 1000),

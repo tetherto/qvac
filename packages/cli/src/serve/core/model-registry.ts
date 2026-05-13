@@ -23,6 +23,12 @@ export interface ModelEntry {
 export interface ServeConfig {
   models: Map<string, ResolvedModelEntry>
   defaults: Map<string, string>
+  /**
+   * Externally reachable origin for this server (e.g. "https://api.example.com").
+   * Required to mint absolute URLs in image-generation responses when
+   * `response_format=url`. Trailing slash is stripped on parse.
+   */
+  publicBaseUrl: string | null
 }
 
 export interface ResolvedModelEntry {

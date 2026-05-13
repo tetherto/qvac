@@ -23,6 +23,7 @@ export interface StartServerOptions {
   model?: string[] | undefined
   apiKey?: string | undefined
   cors?: boolean | undefined
+  publicBaseUrl?: string | undefined
   verbose?: boolean | undefined
 }
 

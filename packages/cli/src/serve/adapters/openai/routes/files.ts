@@ -96,3 +96,26 @@ export function handleGetFile (
   }
   sendJson(res, 200, toOpenAIFile(id, record))
 }
+
+/**
+ * `GET /v1/files/{file_id}/content`: returns the raw bytes with the stored
+ * `Content-Type`. Used by image routes to back `response_format=url`.
+ */
+export function handleGetFileContent (
+  _req: IncomingMessage,
+  res: ServerResponse,
+  ctx: RouteContext,
+  rawId: string
+): void {
+  const id = decodeURIComponent(rawId)
+  const record = ctx.ephemeralFiles.get(id)
+  if (record === null) {
+    sendError(res, 404, 'file_not_found', `File "${id}" not found.`)
+    return
+  }
+  res.writeHead(200, {
+    'Content-Type': record.contentType,
+    'Content-Length': record.data.length.toString()
+  })
+  res.end(record.data)
+}

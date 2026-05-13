@@ -4,13 +4,15 @@ import {
   parseImageSize,
   extractImageGenerationParams,
   logImageUnsupportedParams,
-  encodeImageDataUrl,
+  assertSupportedImageOutputParams,
   coerceMultipartFields,
   extractImageEditParams,
   logImageEditExtraWarnings,
   InvalidImagePromptError,
   InvalidImageSizeError,
-  InvalidImageBatchCountError
+  InvalidImageBatchCountError,
+  InvalidImageStrengthError,
+  UnsupportedImageOutputError
 } from '../src/serve/adapters/openai/translate.js'
 
 describe('parseImageSize', () => {
@@ -126,40 +128,32 @@ describe('logImageUnsupportedParams', () => {
     assert.equal(warnings.length, 0)
   })
 
-  it('warns for each unsupported image param', () => {
+  it('warns for each advisory image param (no output-shaping ones — those throw)', () => {
     const { warnings, logger } = makeLogger()
     logImageUnsupportedParams({
       quality: 'high',
       style: 'vivid',
-      background: 'transparent',
       moderation: 'low',
-      output_compression: 60,
       partial_images: 2,
       user: 'end-user-42',
       input_fidelity: 'high'
     }, logger)
-    assert.equal(warnings.length, 8)
+    assert.equal(warnings.length, 6)
     assert.ok(warnings.some(w => w.includes('quality')))
     assert.ok(warnings.some(w => w.includes('style')))
-    assert.ok(warnings.some(w => w.includes('background')))
     assert.ok(warnings.some(w => w.includes('moderation')))
-    assert.ok(warnings.some(w => w.includes('output_compression')))
     assert.ok(warnings.some(w => w.includes('partial_images')))
     assert.ok(warnings.some(w => w.includes('user')))
     assert.ok(warnings.some(w => w.includes('input_fidelity')))
   })
 
-  it('warns when output_format is not png', () => {
+  it('does not warn on output-shaping params (they are rejected loudly elsewhere)', () => {
     const { warnings, logger } = makeLogger()
-    logImageUnsupportedParams({ output_format: 'jpeg' }, logger)
-    assert.equal(warnings.length, 1)
-    assert.ok(warnings[0]!.includes('output_format=jpeg'))
-    assert.ok(warnings[0]!.includes('PNG'))
-  })
-
-  it('does not warn when output_format is png', () => {
-    const { warnings, logger } = makeLogger()
-    logImageUnsupportedParams({ output_format: 'png' }, logger)
+    logImageUnsupportedParams({
+      output_format: 'jpeg',
+      output_compression: 60,
+      background: 'transparent'
+    }, logger)
     assert.equal(warnings.length, 0)
   })
 
@@ -180,23 +174,46 @@ describe('logImageUnsupportedParams', () => {
   })
 })
 
-describe('encodeImageDataUrl', () => {
-  it('encodes raw bytes as a base64 data URL with the default png mime', () => {
-    const url = encodeImageDataUrl(new Uint8Array([0xff, 0xd8, 0xff]))
-    assert.ok(url.startsWith('data:image/png;base64,'))
-    const base64 = url.slice('data:image/png;base64,'.length)
-    assert.deepEqual(Array.from(Buffer.from(base64, 'base64')), [0xff, 0xd8, 0xff])
+describe('assertSupportedImageOutputParams', () => {
+  it('accepts an empty body', () => {
+    assert.doesNotThrow(() => assertSupportedImageOutputParams({}))
   })
 
-  it('honors a custom mime type', () => {
-    const url = encodeImageDataUrl(new Uint8Array([1, 2, 3]), 'image/webp')
-    assert.ok(url.startsWith('data:image/webp;base64,'))
+  it('accepts output_format=png', () => {
+    assert.doesNotThrow(() => assertSupportedImageOutputParams({ output_format: 'png' }))
   })
 
-  it('produces a valid base64 payload', () => {
-    const url = encodeImageDataUrl(new Uint8Array([0, 0, 0, 0]))
-    const base64 = url.split(',')[1]!
-    assert.match(base64, /^[A-Za-z0-9+/]+={0,2}$/)
+  it('throws unsupported_output_format on jpeg/webp', () => {
+    for (const fmt of ['jpeg', 'webp', 'JPG', 'avif']) {
+      let err: unknown
+      try { assertSupportedImageOutputParams({ output_format: fmt }) } catch (e) { err = e }
+      assert.ok(err instanceof UnsupportedImageOutputError)
+      assert.equal((err as UnsupportedImageOutputError).code, 'unsupported_output_format')
+    }
+  })
+
+  it('throws unsupported_output_compression when output_compression is set', () => {
+    let err: unknown
+    try { assertSupportedImageOutputParams({ output_compression: 80 }) } catch (e) { err = e }
+    assert.ok(err instanceof UnsupportedImageOutputError)
+    assert.equal((err as UnsupportedImageOutputError).code, 'unsupported_output_compression')
+  })
+
+  it('throws unsupported_background when background is set', () => {
+    for (const bg of ['transparent', 'opaque', 'auto']) {
+      let err: unknown
+      try { assertSupportedImageOutputParams({ background: bg }) } catch (e) { err = e }
+      assert.ok(err instanceof UnsupportedImageOutputError)
+      assert.equal((err as UnsupportedImageOutputError).code, 'unsupported_background')
+    }
+  })
+
+  it('treats undefined / null as absent', () => {
+    assert.doesNotThrow(() => assertSupportedImageOutputParams({
+      output_format: undefined,
+      output_compression: null,
+      background: undefined
+    }))
   })
 })
 
@@ -242,9 +259,26 @@ describe('extractImageEditParams', () => {
     assert.equal(p.strength, 0.5)
   })
 
-  it('omits strength when out of range', () => {
-    const body: Record<string, unknown> = { prompt: 'p', strength: 2 }
-    const p = extractImageEditParams(body, buf, 'm')
+  it('throws InvalidImageStrengthError when strength is out of range', () => {
+    assert.throws(
+      () => extractImageEditParams({ prompt: 'p', strength: 2 }, buf, 'm'),
+      InvalidImageStrengthError
+    )
+    assert.throws(
+      () => extractImageEditParams({ prompt: 'p', strength: -0.1 }, buf, 'm'),
+      InvalidImageStrengthError
+    )
+  })
+
+  it('throws InvalidImageStrengthError when strength is non-numeric', () => {
+    assert.throws(
+      () => extractImageEditParams({ prompt: 'p', strength: 'half' }, buf, 'm'),
+      InvalidImageStrengthError
+    )
+  })
+
+  it('treats absent strength as no-op', () => {
+    const p = extractImageEditParams({ prompt: 'p' }, buf, 'm')
     assert.equal(p.strength, undefined)
   })
 
@@ -263,21 +297,15 @@ describe('logImageEditExtraWarnings', () => {
     return { warnings, logger }
   }
 
-  it('warns when mask present', () => {
-    const { warnings, logger } = makeLogger()
-    logImageEditExtraWarnings({}, { hasMask: true, extraImageCount: 0 }, logger)
-    assert.ok(warnings.some(w => w.includes('mask')))
-  })
-
   it('warns on extra images', () => {
     const { warnings, logger } = makeLogger()
-    logImageEditExtraWarnings({}, { hasMask: false, extraImageCount: 2 }, logger)
+    logImageEditExtraWarnings({}, { extraImageCount: 2 }, logger)
     assert.ok(warnings.some(w => w.includes('3 files')))
   })
 
-  it('warns when strength out of range', () => {
+  it('does not warn when there is exactly one image', () => {
     const { warnings, logger } = makeLogger()
-    logImageEditExtraWarnings({ strength: 9 }, { hasMask: false, extraImageCount: 0 }, logger)
-    assert.ok(warnings.some(w => w.includes('strength')))
+    logImageEditExtraWarnings({}, { extraImageCount: 0 }, logger)
+    assert.equal(warnings.length, 0)
   })
 })

@@ -4,12 +4,23 @@ export interface EphemeralFileRecord {
   data: Buffer
   fileName: string
   purpose: string
+  /** MIME type for `GET /v1/files/{id}/content`. Defaults to `application/octet-stream`. */
+  contentType: string
   createdAtMs: number
+}
+
+export interface EphemeralFilesStoreOptions {
+  /** Hard cap on total bytes across the store; oldest records evicted first when exceeded. */
+  maxBytes?: number
+  /** Hard cap on number of records. */
+  maxFiles?: number
+  /** Records older than this (ms) are evicted on every put. */
+  ttlMs?: number
 }
 
 export interface EphemeralFilesStore {
   /** Store bytes and return an OpenAI-shaped `file-…` id. */
-  put: (record: Omit<EphemeralFileRecord, 'createdAtMs'>) => string
+  put: (record: Omit<EphemeralFileRecord, 'createdAtMs' | 'contentType'> & { contentType?: string }) => string
   /** Return the record if present; does not remove. */
   get: (id: string) => EphemeralFileRecord | null
   /** Return all current records (newest first), without their bytes. */
@@ -18,22 +29,68 @@ export interface EphemeralFilesStore {
   remove: (id: string) => void
 }
 
-export function createEphemeralFilesStore (nowMs: () => number = () => Date.now()): EphemeralFilesStore {
+const DEFAULT_MAX_BYTES = 256 * 1024 * 1024
+const DEFAULT_MAX_FILES = 256
+const DEFAULT_TTL_MS = 60 * 60 * 1000
+
+export function createEphemeralFilesStore (
+  nowMs: () => number = () => Date.now(),
+  options: EphemeralFilesStoreOptions = {}
+): EphemeralFilesStore {
+  const maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES
+  const maxFiles = options.maxFiles ?? DEFAULT_MAX_FILES
+  const ttlMs = options.ttlMs ?? DEFAULT_TTL_MS
+
   const map = new Map<string, EphemeralFileRecord>()
+
+  function totalBytes (): number {
+    let n = 0
+    for (const rec of map.values()) n += rec.data.length
+    return n
+  }
+
+  function evictExpired (now: number): void {
+    if (ttlMs <= 0) return
+    for (const [id, rec] of map.entries()) {
+      if (now - rec.createdAtMs > ttlMs) map.delete(id)
+    }
+  }
+
+  function evictOldestUntil (predicate: () => boolean): void {
+    if (predicate()) return
+    const ids = Array.from(map.entries())
+      .sort((a, b) => a[1].createdAtMs - b[1].createdAtMs)
+      .map(([id]) => id)
+    for (const id of ids) {
+      if (predicate()) return
+      map.delete(id)
+    }
+  }
 
   return {
     put (record) {
+      const now = nowMs()
+      evictExpired(now)
       const id = `file-${randomBytes(12).toString('hex')}`
       map.set(id, {
         data: record.data,
         fileName: record.fileName,
         purpose: record.purpose,
-        createdAtMs: nowMs()
+        contentType: record.contentType ?? 'application/octet-stream',
+        createdAtMs: now
       })
+      evictOldestUntil(() => map.size <= maxFiles)
+      evictOldestUntil(() => totalBytes() <= maxBytes)
       return id
     },
     get (id) {
-      return map.get(id) ?? null
+      const rec = map.get(id)
+      if (!rec) return null
+      if (ttlMs > 0 && nowMs() - rec.createdAtMs > ttlMs) {
+        map.delete(id)
+        return null
+      }
+      return rec
     },
     list () {
       return Array.from(map.entries())
