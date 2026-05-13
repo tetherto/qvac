@@ -62,6 +62,12 @@ interface SDKModule {
   }) => Promise<RagSearchResult[]>
   ragDeleteWorkspace: (opts: { workspace: string }) => Promise<void>
   ragCloseWorkspace: (opts: { workspace?: string; deleteOnClose?: boolean }) => Promise<void>
+  ragIngest: (opts: {
+    modelId: string
+    documents: string | string[]
+    workspace?: string
+    chunk?: boolean
+  }) => Promise<{ processed: unknown[]; droppedIndices: number[] }>
   close: () => Promise<void>
   [key: string]: unknown
 }
@@ -340,6 +346,22 @@ export async function sdkRagCloseWorkspace (opts: {
   if (opts.workspace !== undefined) params.workspace = opts.workspace
   if (opts.deleteOnClose !== undefined) params.deleteOnClose = opts.deleteOnClose
   await ragCloseWorkspace(params)
+}
+
+export async function sdkRagIngest (opts: {
+  modelId: string
+  documents: string | string[]
+  workspace?: string | undefined
+  chunk?: boolean | undefined
+}): Promise<{ processed: unknown[]; droppedIndices: number[] }> {
+  const { ragIngest } = await getSDK()
+  const params: Parameters<SDKModule['ragIngest']>[0] = {
+    modelId: opts.modelId,
+    documents: opts.documents,
+    chunk: opts.chunk ?? true
+  }
+  if (opts.workspace !== undefined) params.workspace = opts.workspace
+  return ragIngest(params)
 }
 
 export async function sdkClose (): Promise<void> {

@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { ModelRegistry, ServeConfig } from '../core/model-registry.js'
 import type { Logger } from '../../logger.js'
+import type { EphemeralFilesStore } from './openai/ephemeral-files-store.js'
 import type { VectorStoresStore } from './openai/vector-stores-store.js'
 
 export interface RouteContext {
@@ -8,6 +9,7 @@ export interface RouteContext {
   serveConfig: ServeConfig
   logger: Logger
   vectorStores: VectorStoresStore
+  ephemeralFiles: EphemeralFilesStore
   /** @internal Unit tests only — replaces sdkTranscribe when set */
   transcribeOverride?: (opts: {
     modelId: string

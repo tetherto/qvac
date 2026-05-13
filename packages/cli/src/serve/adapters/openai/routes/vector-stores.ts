@@ -3,7 +3,9 @@ import { readBody, sendJson, sendError } from '../../../http.js'
 import {
   sdkRagListWorkspaces,
   sdkRagSearch,
-  sdkRagDeleteWorkspace
+  sdkRagDeleteWorkspace,
+  sdkRagCloseWorkspace,
+  sdkRagIngest
 } from '../../../core/sdk.js'
 import {
   vectorStoreToOpenAI,
@@ -64,7 +66,9 @@ export async function handleCreateVectorStore (
   }
 
   if (Array.isArray(body['file_ids']) && body['file_ids'].length > 0) {
-    ctx.logger.warn('Ignoring "file_ids": files endpoints are not yet supported.')
+    ctx.logger.warn(
+      'Ignoring "file_ids" on create: upload with POST /v1/files, then attach with POST /v1/vector_stores/{id}/files.'
+    )
   }
   if (body['chunking_strategy'] !== undefined) {
     ctx.logger.warn('Ignoring "chunking_strategy": chunking is configured via SDK ingest options.')
@@ -261,18 +265,125 @@ export async function handleSearchVectorStore (
       ...(topK !== undefined ? { topK } : {}),
       workspace: id
     })
+    await closeWorkspaceQuiet(ctx, id, 'search')
     sendJson(res, 200, searchResultsToOpenAI(results, query))
   } catch (err) {
+    await closeWorkspaceQuiet(ctx, id, 'search')
     const message = err instanceof Error ? err.message : String(err)
     ctx.logger.error(`Vector store search error for "${id}": ${message}`)
     sendError(res, 500, 'vector_store_search_failed', 'An internal error occurred during vector store search.')
   }
 }
 
+export async function handleAttachVectorStoreFile (
+  req: IncomingMessage,
+  res: ServerResponse,
+  ctx: RouteContext,
+  rawId: string
+): Promise<void> {
+  const id = decodeId(rawId)
+  if (id === null) {
+    sendError(res, 400, 'invalid_vector_store_id', 'Vector store id is invalid.')
+    return
+  }
+
+  let body: Record<string, unknown>
+  try {
+    body = await readBody(req)
+  } catch {
+    sendError(res, 400, 'invalid_json', 'Request body must be valid JSON.')
+    return
+  }
+
+  const fileId = body['file_id']
+  if (typeof fileId !== 'string' || fileId.length === 0) {
+    sendError(res, 400, 'missing_file_id', '"file_id" must be a non-empty string.')
+    return
+  }
+
+  const ragInfo = await safeListWorkspaces(ctx)
+  const meta = ctx.vectorStores.get(id) ?? syntheticFromWorkspace(id, ragInfo.workspaces)
+  if (!meta) {
+    sendError(res, 404, 'vector_store_not_found', `Vector store "${id}" not found.`)
+    return
+  }
+
+  const embedding = resolveEmbeddingModel(ctx)
+  if (!embedding.ok) {
+    sendError(res, embedding.status, embedding.code, embedding.message)
+    return
+  }
+
+  const record = ctx.ephemeralFiles.get(fileId)
+  if (record === null) {
+    sendError(
+      res,
+      404,
+      'file_not_found',
+      `File "${fileId}" not found. Upload bytes with POST /v1/files (multipart) first; files are kept in memory only until attached.`
+    )
+    return
+  }
+
+  const text = record.data.toString('utf8').trim()
+  if (text.length === 0) {
+    sendError(
+      res,
+      400,
+      'empty_file',
+      'File has no UTF-8 text after trim. This minimal ingest path expects text-like content (e.g. .txt, .md, .json).'
+    )
+    return
+  }
+
+  ctx.vectorStores.touch(id)
+
+  ctx.logger.info(
+    `  vector_store files attach id=${id} file_id=${fileId} bytes=${record.data.length} embed=${embedding.entry.alias}`
+  )
+
+  try {
+    await sdkRagIngest({
+      modelId: embedding.sdkModelId,
+      documents: text,
+      workspace: id,
+      chunk: true
+    })
+  } catch (err) {
+    await closeWorkspaceQuiet(ctx, id, 'ingest')
+    const message = err instanceof Error ? err.message : String(err)
+    ctx.logger.error(`Vector store ingest error for "${id}": ${message}`)
+    sendError(res, 500, 'vector_store_ingest_failed', 'An internal error occurred while ingesting file content into the vector store.')
+    return
+  }
+
+  await closeWorkspaceQuiet(ctx, id, 'ingest')
+  ctx.ephemeralFiles.remove(fileId)
+
+  sendJson(res, 200, {
+    id: fileId,
+    object: 'vector_store.file',
+    created_at: Math.floor(Date.now() / 1000),
+    vector_store_id: meta.id,
+    status: 'completed',
+    last_error: null,
+    usage_bytes: record.data.length
+  })
+}
+
 // ---------- internals ----------
 
 interface RagInfo {
   workspaces: Array<{ name: string; open: boolean }>
+}
+
+async function closeWorkspaceQuiet (ctx: RouteContext, id: string, op: string): Promise<void> {
+  try {
+    await sdkRagCloseWorkspace({ workspace: id })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    ctx.logger.warn(`ragCloseWorkspace after ${op} failed for "${id}": ${message}`)
+  }
 }
 
 async function safeListWorkspaces (ctx: RouteContext): Promise<RagInfo> {
