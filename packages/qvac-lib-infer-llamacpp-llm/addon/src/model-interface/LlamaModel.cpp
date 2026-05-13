@@ -750,15 +750,16 @@ qvac_lib_inference_addon_cpp::RuntimeStats
 LlamaModel::batchRuntimeStatsLocked() const {
   // Pull the live snapshot from the scheduler. It already aggregates
   // across every `processBatch` caller in the current idle epoch
-  // (`resetRuntimeStatsLocked` only fires when the queue is both empty
-  // and has no in-flight work), so this composes correctly with multiple
-  // queued / in-flight batches without LlamaModel having to cache state.
+  // (`stats_.reset()` only fires when the queue is both empty and has no
+  // in-flight work), so this composes correctly with multiple queued /
+  // in-flight batches without LlamaModel having to cache state.
   const batching::RuntimeStatsSnapshot stats =
       state_->batchScheduler_->runtimeStats();
   constexpr double kMillisInSecond = 1000.0;
+  const double elapsedMs = stats.elapsedMs();
   const double tokensPerSecond =
-      stats.elapsedMs > 0.0
-          ? kMillisInSecond / stats.elapsedMs *
+      elapsedMs > 0.0
+          ? kMillisInSecond / elapsedMs *
                 static_cast<double>(stats.generatedTokens)
           : 0.0;
   // TTFT comes from `llama_perf_context` to match legacy single-prompt
@@ -774,7 +775,7 @@ LlamaModel::batchRuntimeStatsLocked() const {
       {"generatedTokens", stats.generatedTokens},
       {"promptTokens", stats.promptTokens},
       {"contextSlides", stats.contextSlides},
-      {"avgConcurrentSeq", stats.avgConcurrentSeq},
+      {"avgConcurrentSeq", stats.avgConcurrentSeq()},
       {"backendDevice", runtimeBackendDevice_}};
 }
 

@@ -51,7 +51,7 @@ ContinuousBatchScheduler::ContinuousBatchScheduler(
       perSeqMaxTokens_(perSeqCeiling(ctxTotalTokens, batchSize)),
       batcher_(maxChunkSize, perSeqMaxTokens_, batchSize),
       batch_(batchCapacity, 0, static_cast<int32_t>(batchSize)),
-      slots_(batchSize), statsStart_(std::chrono::steady_clock::now()) {
+      slots_(batchSize) {
 
   const bool ctxValid = shared_.lctx != nullptr && shared_.model != nullptr &&
                         shared_.vocab != nullptr;
@@ -96,7 +96,7 @@ ContinuousBatchScheduler::processBatch(std::vector<SubmitRequest>&& requests) {
 
   std::unique_lock lock(mutex_);
   if (pending_.empty() && !hasWorkLocked()) {
-    resetRuntimeStatsLocked();
+    stats_.reset();
   }
   ensureWorkerStartedLocked();
   for (size_t i = 0; i < requests.size(); i++) {
@@ -352,8 +352,7 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
     }
     return false;
   }
-  decodeStepCount_++;
-  concurrentSeqSum_ += fillResult.numActiveSequences;
+  stats_.recordDecodeStep(fillResult.numActiveSequences);
 
   batcher_.advance(
       fillResult.chunkSize,
@@ -482,40 +481,39 @@ unsigned ContinuousBatchScheduler::numActiveLocked() const {
 
 void ContinuousBatchScheduler::resetRuntimeStats() {
   std::scoped_lock lock(mutex_);
-  resetRuntimeStatsLocked();
-}
-
-void ContinuousBatchScheduler::resetRuntimeStatsLocked() {
-  decodeStepCount_ = 0;
-  concurrentSeqSum_ = 0;
-  completedCacheTokens_ = 0;
-  completedContextSlides_ = 0;
-  completedGeneratedTokens_ = 0;
-  completedPromptTokens_ = 0;
-  statsStart_ = std::chrono::steady_clock::now();
+  stats_.reset();
 }
 
 RuntimeStatsSnapshot ContinuousBatchScheduler::runtimeStats() const {
   std::scoped_lock lock(mutex_);
-  return runtimeStatsLocked();
+  return stats_;
 }
 
-RuntimeStatsSnapshot ContinuousBatchScheduler::runtimeStatsLocked() const {
-  const double avgConcurrentSeq =
-      decodeStepCount_ > 0
-          ? static_cast<double>(concurrentSeqSum_) /
-                static_cast<double>(decodeStepCount_)
-          : 0.0;
-  const auto elapsed = std::chrono::steady_clock::now() - statsStart_;
-  const double elapsedMs =
-      std::chrono::duration<double, std::milli>(elapsed).count();
-  return {
-      .avgConcurrentSeq = avgConcurrentSeq,
-      .cacheTokens = completedCacheTokens_,
-      .contextSlides = completedContextSlides_,
-      .generatedTokens = completedGeneratedTokens_,
-      .promptTokens = completedPromptTokens_,
-      .elapsedMs = elapsedMs};
+void RuntimeStatsSnapshot::reset() { *this = RuntimeStatsSnapshot{}; }
+
+void RuntimeStatsSnapshot::recordDecodeStep(uint64_t numActiveSequences) {
+  decodeStepCount_++;
+  concurrentSeqSum_ += numActiveSequences;
+}
+
+void RuntimeStatsSnapshot::accumulateSlot(
+    int64_t nPast, int64_t nSlides, const Request& req) {
+  cacheTokens += nPast;
+  contextSlides += nSlides;
+  generatedTokens += static_cast<int64_t>(req.generatedTokens.size());
+  promptTokens += static_cast<int64_t>(req.prefillTokenCount);
+}
+
+double RuntimeStatsSnapshot::avgConcurrentSeq() const {
+  return decodeStepCount_ > 0
+             ? static_cast<double>(concurrentSeqSum_) /
+                   static_cast<double>(decodeStepCount_)
+             : 0.0;
+}
+
+double RuntimeStatsSnapshot::elapsedMs() const {
+  const auto elapsed = std::chrono::steady_clock::now() - start_;
+  return std::chrono::duration<double, std::milli>(elapsed).count();
 }
 
 bool ContinuousBatchScheduler::cancel(uint32_t seqId) {
@@ -579,7 +577,7 @@ void ContinuousBatchScheduler::completeGroupRequestLocked(
   }
   group->completedCount++;
   if (group->completedCount >= group->totalCount) {
-    group->stats = runtimeStatsLocked();
+    group->stats = stats_;
     group->done = true;
     workCv_.notify_all();
   }
@@ -591,7 +589,7 @@ void ContinuousBatchScheduler::failGroupLocked(
     return;
   }
   group->error = error;
-  group->stats = runtimeStatsLocked();
+  group->stats = stats_;
   group->done = true;
   pending_.erase(
       std::remove_if(
@@ -660,14 +658,13 @@ void ContinuousBatchScheduler::saveCacheForSlot(
 
 void ContinuousBatchScheduler::accumulateSlotRuntimeStats(
     const SlotState& slot, const Request& req) {
+  int64_t nPast = 0;
+  int64_t nSlides = 0;
   if (slot.driver) {
-    completedCacheTokens_ += static_cast<int64_t>(slot.driver->getNPast());
-    completedContextSlides_ +=
-        static_cast<int64_t>(slot.driver->getNSlides());
+    nPast = static_cast<int64_t>(slot.driver->getNPast());
+    nSlides = static_cast<int64_t>(slot.driver->getNSlides());
   }
-  completedGeneratedTokens_ +=
-      static_cast<int64_t>(req.generatedTokens.size());
-  completedPromptTokens_ += static_cast<int64_t>(req.prefillTokenCount);
+  stats_.accumulateSlot(nPast, nSlides, req);
 }
 
 } // namespace qvac_lib_inference_addon_llama::batching

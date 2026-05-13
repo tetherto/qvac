@@ -51,13 +51,35 @@ struct SubmitRequest {
   StreamCallbacks streams;
 };
 
+/// Aggregated per-scheduler runtime stats. Owns its own clock + decode-step
+/// counters internally and exposes the two derived metrics
+/// (`avgConcurrentSeq`, `elapsedMs`) as const getters so they are always
+/// computed from the live state rather than stored alongside it.
 struct RuntimeStatsSnapshot {
-  double avgConcurrentSeq = 0.0;
   int64_t cacheTokens = 0;
   int64_t contextSlides = 0;
   int64_t generatedTokens = 0;
   int64_t promptTokens = 0;
-  double elapsedMs = 0.0;
+
+  /// Reset all counters and restart the elapsed-time clock.
+  void reset();
+
+  /// Account for one completed `llama_decode` step that had
+  /// `numActiveSequences` slots feeding tokens.
+  void recordDecodeStep(uint64_t numActiveSequences);
+
+  /// Fold one completed slot's contribution (cache footprint, slides,
+  /// prompt/generated tokens) into the running totals.
+  void accumulateSlot(int64_t nPast, int64_t nSlides, const Request& req);
+
+  [[nodiscard]] double avgConcurrentSeq() const;
+  [[nodiscard]] double elapsedMs() const;
+
+private:
+  uint64_t decodeStepCount_ = 0;
+  uint64_t concurrentSeqSum_ = 0;
+  std::chrono::steady_clock::time_point start_ =
+      std::chrono::steady_clock::now();
 };
 
 struct BatchResult {
@@ -183,8 +205,6 @@ private:
   [[nodiscard]] bool stepLocked(std::unique_lock<std::mutex>* lock = nullptr);
   [[nodiscard]] bool hasWorkLocked() const;
   [[nodiscard]] unsigned numActiveLocked() const;
-  void resetRuntimeStatsLocked();
-  [[nodiscard]] RuntimeStatsSnapshot runtimeStatsLocked() const;
   void completeGroupRequestLocked(const std::shared_ptr<BatchGroup>& group);
   void failGroupLocked(
       const std::shared_ptr<BatchGroup>& group, std::exception_ptr error);
@@ -218,13 +238,7 @@ private:
   std::thread worker_;
   bool workerStarted_ = false;
   bool stopping_ = false;
-  uint64_t decodeStepCount_ = 0;
-  uint64_t concurrentSeqSum_ = 0;
-  int64_t completedCacheTokens_ = 0;
-  int64_t completedContextSlides_ = 0;
-  int64_t completedGeneratedTokens_ = 0;
-  int64_t completedPromptTokens_ = 0;
-  std::chrono::steady_clock::time_point statsStart_;
+  RuntimeStatsSnapshot stats_;
 };
 
 } // namespace qvac_lib_inference_addon_llama::batching
