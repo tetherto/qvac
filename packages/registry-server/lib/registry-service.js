@@ -53,16 +53,55 @@ const MODEL_TOTALS_REFRESH_INTERVAL_MS = 5 * 60 * 1000
 // 1. Stale TLS sockets returned by undici's global keep-alive pool — HF's
 //    CDN had silently half-closed the parked connection, so the next reuse
 //    failed with ECONNRESET / "terminated" mid-stream. We isolate each
-//    download into its own short-lived undici Agent (closed in `finally`)
+//    download into its own short-lived undici Agent (destroyed in `finally`)
 //    so no socket is ever shared between downloads.
 // 2. HF's xet CAS bridge dropping early on large GGUFs (bartowski/unsloth
 //    repos) — manifests as `bytesRead: 0` at connect. `xet: false` forces
 //    the LFS HTTPS path and bypasses that service.
-// The retry loop is defense-in-depth for any remaining genuine network blips.
+// The retry loop is defense-in-depth for any remaining genuine network blips
+// — gated on `isTransientHfDownloadError` so we don't retry permanent
+// failures (401/403/404, malformed URL) and burn 9s + 2 extra attempts.
 const HF_DOWNLOAD_MAX_ATTEMPTS = 3
 const HF_DOWNLOAD_BACKOFF_MS = 3000
 const HF_DISPATCHER_KEEPALIVE_MS = 30_000
 const HF_DISPATCHER_CONNECT_TIMEOUT_MS = 30_000
+
+const TRANSIENT_HF_DOWNLOAD_CODES = new Set([
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'ETIMEDOUT',
+  'EAI_AGAIN',
+  'UND_ERR_SOCKET',
+  'UND_ERR_CONNECT_TIMEOUT',
+  'UND_ERR_BODY_TIMEOUT',
+  'UND_ERR_HEADERS_TIMEOUT'
+])
+
+function isTransientHfDownloadError (err) {
+  if (!err) return false
+
+  // HubApiError (from @huggingface/hub) carries a numeric `statusCode`.
+  // Retry 5xx and 429 (rate limit); fail fast on the rest of 4xx
+  // (401 = bad token, 403 = license not accepted, 404 = missing file).
+  if (typeof err.statusCode === 'number') {
+    return err.statusCode === 429 || err.statusCode >= 500
+  }
+
+  // undici / Node net errors expose the code directly or wrapped via `cause`.
+  const code = err.code || err.cause?.code
+  if (code && TRANSIENT_HF_DOWNLOAD_CODES.has(code)) {
+    return true
+  }
+
+  // undici sometimes throws "terminated" / "socket hang up" without a
+  // structured code when the remote half-closes mid-stream.
+  const msg = (err.message || '').toLowerCase()
+  if (msg.includes('terminated') || msg.includes('socket hang up')) {
+    return true
+  }
+
+  return false
+}
 
 class RegistryService extends ReadyResource {
   constructor (store, swarm, config, opts = {}) {
@@ -924,7 +963,7 @@ class RegistryService extends ReadyResource {
       throw new Error('Invalid HuggingFace URL')
     }
 
-    // Isolated undici pool for this single download. Closed in `finally`
+    // Isolated undici pool for this single download. Destroyed in `finally`
     // so no parked socket can leak into the next download and trigger
     // ECONNRESET from a half-closed remote.
     const dispatcher = new UndiciAgent({
@@ -957,13 +996,18 @@ class RegistryService extends ReadyResource {
           return localPath
         } catch (err) {
           lastErr = err
+          const transient = isTransientHfDownloadError(err)
           this.logger.warn({
             url: hfUrl,
             attempt,
             maxAttempts: HF_DOWNLOAD_MAX_ATTEMPTS,
+            transient,
             code: err.code || err.cause?.code,
+            statusCode: err.statusCode,
             msg: err.message
           }, 'HuggingFace download attempt failed')
+
+          if (!transient) throw err
 
           if (attempt < HF_DOWNLOAD_MAX_ATTEMPTS) {
             await new Promise(resolve => setTimeout(resolve, HF_DOWNLOAD_BACKOFF_MS * attempt))
@@ -974,9 +1018,9 @@ class RegistryService extends ReadyResource {
       throw lastErr
     } finally {
       try {
-        await dispatcher.close()
+        await dispatcher.destroy()
       } catch (err) {
-        this.logger.warn({ err: err.message }, 'Failed to close HF dispatcher cleanly')
+        this.logger.warn({ err: err.message }, 'Failed to destroy HF dispatcher cleanly')
       }
     }
   }
@@ -1330,5 +1374,7 @@ class RegistryService extends ReadyResource {
     throw new TypeError('Writer key must be a Buffer or hex string')
   }
 }
+
+RegistryService.isTransientHfDownloadError = isTransientHfDownloadError
 
 module.exports = RegistryService
