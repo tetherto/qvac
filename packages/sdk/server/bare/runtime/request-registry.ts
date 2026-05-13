@@ -1,7 +1,4 @@
-import {
-  AbortController,
-  type AbortSignal,
-} from "bare-abort-controller";
+import { AbortController, type AbortSignal } from "bare-abort-controller";
 import {
   createDisposableScope,
   type DisposableScope,
@@ -282,10 +279,13 @@ export function createRequestRegistry(): RequestRegistry {
       modelId: opts.modelId,
       signal: controller.signal,
       scope,
-      // Pre-cancel races land the context in `cancelling` from the
-      // outset so observers see a coherent state rather than a
+      // Land the context in `cancelling` from the outset whenever the
+      // controller was already aborted by `begin(...)` itself — either
+      // the Stop-button race (`preCancel`) or a `parentSignal` that was
+      // already aborted at begin time. Both branches abort the
+      // controller above, so without this guard observers would see a
       // momentarily-`running` context with an already-aborted signal.
-      state: preCancel ? "cancelling" : "running",
+      state: preCancel || opts.parentSignal?.aborted ? "cancelling" : "running",
     };
 
     const entry: RegistryEntry = { ctx, controller, scope, detachParent };

@@ -224,9 +224,7 @@ export function createKvCacheSession(modelId: string): KvCacheSession {
     return handle;
   }
 
-  async function beginCustom(
-    input: BeginCustomTurnInput,
-  ): Promise<TurnHandle> {
+  async function beginCustom(input: BeginCustomTurnInput): Promise<TurnHandle> {
     const cachePath = await getCacheFilePath(
       modelId,
       input.configHash,
@@ -255,7 +253,7 @@ export function createKvCacheSession(modelId: string): KvCacheSession {
     logCacheStatus(input.customKey, exists);
 
     if (!exists) {
-      await input.primeIfMissing(cachePath);
+      await primeOrCleanup(cachePath, input.primeIfMissing);
       initializedCaches.add(registryKey);
     }
 
@@ -297,7 +295,7 @@ export function createKvCacheSession(modelId: string): KvCacheSession {
     logCacheStatus("auto", cacheExists);
 
     if (!cacheExists) {
-      await input.primeIfMissing(cachePath);
+      await primeOrCleanup(cachePath, input.primeIfMissing);
       initializedCaches.add(registryKey);
     }
 
@@ -328,7 +326,10 @@ export function createKvCacheSession(modelId: string): KvCacheSession {
       // at the same path. Verify the file persisted (the addon
       // currently swallows save errors — see TODO in
       // `verifySaveAndRecord`) and record the new boundary.
-      const ok = await verifySaveAndRecord(state.cachePath, result.messageCount);
+      const ok = await verifySaveAndRecord(
+        state.cachePath,
+        result.messageCount,
+      );
       if (!ok) {
         // The expected save didn't land — treat the turn as a rollback
         // so the next turn re-primes cleanly.
@@ -342,9 +343,7 @@ export function createKvCacheSession(modelId: string): KvCacheSession {
     // Auto-rename path: the pre-response file is now stale (its key
     // refers to history minus the last user turn). Rename it to the
     // post-response key and record the new count there.
-    if (
-      !(await renameCacheFile(state.cachePath, result.targetCachePath))
-    ) {
+    if (!(await renameCacheFile(state.cachePath, result.targetCachePath))) {
       logger.warn(
         `[kv-cache] Auto cache rename failed; rolling back. from=${state.cachePath} to=${result.targetCachePath}`,
       );
@@ -481,6 +480,39 @@ export async function deleteKvCacheState(
 // ----- private helpers -----
 
 /**
+ * Run the caller's prime closure, but if it throws, best-effort delete
+ * any partial `.bin` the addon may have written before failing. Without
+ * this guard a thrown prime (addon error during prime, signal aborted
+ * mid-prime, OOM, etc.) leaves a corrupt file on disk; no rollback hook
+ * has been registered yet (the handler hasn't seen the `TurnHandle`),
+ * so the next `beginCustom` would `fsPromises.access(cachePath)` → true
+ * and trust the half-primed file as a usable cache.
+ *
+ * Cleanup is best-effort: an unlink failure here is logged but does not
+ * shadow the original prime error — the prime error is the actionable
+ * one for the caller, and the worst case is the same as the bug we are
+ * closing (a stale file on disk), which a manual `deleteKvCacheState`
+ * can still mop up.
+ */
+async function primeOrCleanup(
+  cachePath: string,
+  prime: (cachePath: string) => Promise<void>,
+): Promise<void> {
+  try {
+    await prime(cachePath);
+  } catch (primeError) {
+    try {
+      await fsPromises.unlink(cachePath);
+    } catch (unlinkError) {
+      logger.warn(
+        `[kv-cache] Failed to remove partial cache file after prime error; next turn may load stale KV state. path=${cachePath} unlinkError=${unlinkError instanceof Error ? unlinkError.message : String(unlinkError)}`,
+      );
+    }
+    throw primeError;
+  }
+}
+
+/**
  * Verify the addon actually persisted the cache file before recording
  * its message count. The addon currently swallows write errors
  * silently, so a missing file means the next turn must resend the full
@@ -568,7 +600,9 @@ export const __kvCacheSessionTestHooks = {
     configHash: string,
     cacheKey: string,
   ): boolean {
-    return initializedCaches.has(initRegistryKey(modelId, configHash, cacheKey));
+    return initializedCaches.has(
+      initRegistryKey(modelId, configHash, cacheKey),
+    );
   },
   markInitializedForTest(
     modelId: string,

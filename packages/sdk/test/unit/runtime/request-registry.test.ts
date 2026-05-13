@@ -184,6 +184,10 @@ test("registry: parentSignal already aborted aborts the new context", async (t: 
     parentSignal: parent.signal,
   });
   t.is(ctx.signal.aborted, true);
+  // The controller is aborted at begin time, so observers must see
+  // `cancelling` rather than the momentarily-`running` state the
+  // pre-cancel branch was already guarding against.
+  t.is(ctx.state, "cancelling");
 });
 
 test("registry: parentSignal aborts propagate to children", async (t: T) => {
@@ -337,7 +341,11 @@ test("registry: a second begin() with the same id (UUID retry) after the race is
       kind: "completion",
       modelId: "m1",
     });
-    t.is(ctx.signal.aborted, true, "first attempt is aborted by the race close");
+    t.is(
+      ctx.signal.aborted,
+      true,
+      "first attempt is aborted by the race close",
+    );
   }
   await firstAttempt();
 

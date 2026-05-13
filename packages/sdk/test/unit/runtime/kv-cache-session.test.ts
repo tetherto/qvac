@@ -84,9 +84,8 @@ async function loadSession() {
   const testHome = fs.mkdtempSync(path.join(os.tmpdir(), "qvac-kvcache-"));
   process.env["HOME"] = testHome;
 
-  const mod = await import(
-    "@/server/bare/plugins/llamacpp-completion/ops/kv-cache-session"
-  );
+  const mod =
+    await import("@/server/bare/plugins/llamacpp-completion/ops/kv-cache-session");
 
   // Reset state between tests — module state is per-process, the
   // tests share it.
@@ -470,6 +469,64 @@ bareTest(
         ),
         false,
         "all-delete clears the second init flag",
+      );
+    } finally {
+      cleanup();
+    }
+  },
+);
+
+bareTest(
+  "kv-cache-session: beginTurn cleans up partial cache file when primeIfMissing throws",
+  async (t: T) => {
+    // If the addon partially writes a `.bin` and the prime closure
+    // throws (signal aborted mid-prime, OOM, addon error, etc.), the
+    // session must remove the half-primed file before re-throwing —
+    // otherwise the next `beginCustom` would `fsPromises.access(...)`
+    // → true and trust a corrupt cache. No `TurnHandle` has been
+    // returned yet, so no `scope.defer(rollback)` hook can save us.
+    const { fs, mod, cleanup } = await loadSession();
+    try {
+      const session = mod.createKvCacheSession("test-model");
+      const configHash = mod.generateConfigHash("sys", []);
+
+      let capturedPath: string | null = null;
+      const primeError = new Error("addon prime failed mid-write");
+      const primeIfMissing = async (cachePath: string) => {
+        capturedPath = cachePath;
+        // Simulate the addon writing a partial cache file before the
+        // prime call rejects.
+        fs.writeFileSync(cachePath, "half-primed-bytes");
+        throw primeError;
+      };
+
+      let caught: unknown = null;
+      try {
+        await session.beginTurn({
+          kind: "custom",
+          customKey: "prime-throws",
+          configHash,
+          primeIfMissing,
+        });
+      } catch (err) {
+        caught = err;
+      }
+
+      t.is(caught, primeError, "the original prime error propagates verbatim");
+      t.ok(capturedPath, "primeIfMissing observed a cache path");
+      t.is(
+        fs.existsSync(capturedPath as unknown as string),
+        false,
+        "partial .bin was unlinked so the next beginCustom won't trust it",
+      );
+      t.is(
+        mod.__kvCacheSessionTestHooks.hasInitializedKey(
+          "test-model",
+          configHash,
+          "prime-throws",
+        ),
+        false,
+        "init flag was NOT set on the failed-prime path",
       );
     } finally {
       cleanup();
