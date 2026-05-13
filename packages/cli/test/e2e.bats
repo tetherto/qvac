@@ -459,12 +459,15 @@ TXT
 }
 
 @test "responses: previous_response_id chains context" {
-  json_post_capture "/v1/responses" "{\"model\":\"${LLM_ALIAS}\",\"input\":\"Remember the code word is XYZZY.\",\"store\":true,\"max_output_tokens\":48}"
+  # Pin sampling (temperature=0, seed) and give a generous token budget so the tiny reasoning
+  # LLM has room for both its <think> block and an actual answer. Test exercises chain wiring,
+  # not the model's creativity, so XYZZY recall must be deterministic.
+  json_post_capture "/v1/responses" "{\"model\":\"${LLM_ALIAS}\",\"input\":\"Remember the code word is XYZZY.\",\"store\":true,\"max_output_tokens\":512,\"temperature\":0,\"seed\":1}"
   local rid
   rid=$(jq -r '.id' "${FILE_TMPDIR}/resp.body")
 
   local body2
-  body2=$(json_post "/v1/responses" "{\"model\":\"${LLM_ALIAS}\",\"previous_response_id\":\"${rid}\",\"input\":\"What is the code word? Reply with one word only.\",\"max_output_tokens\":32}")
+  body2=$(json_post "/v1/responses" "{\"model\":\"${LLM_ALIAS}\",\"previous_response_id\":\"${rid}\",\"input\":\"What is the code word? Reply with one word only.\",\"max_output_tokens\":512,\"temperature\":0,\"seed\":1}")
   echo "${body2}" | jq -e '(.output_text | test("XYZZY"; "i"))' >/dev/null
 }
 
