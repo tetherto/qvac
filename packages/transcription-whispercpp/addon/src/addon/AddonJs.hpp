@@ -8,19 +8,19 @@
 #include <unordered_map>
 #include <vector>
 
-#include <js.h>
 #include <inference-addon-cpp/JsInterface.hpp>
 #include <inference-addon-cpp/JsUtils.hpp>
 #include <inference-addon-cpp/ModelInterfaces.hpp>
 #include <inference-addon-cpp/addon/AddonJs.hpp>
 #include <inference-addon-cpp/handlers/JsOutputHandlerImplementations.hpp>
 #include <inference-addon-cpp/handlers/OutputHandler.hpp>
-#include <inference-addon-cpp/queue/OutputCallbackJs.hpp>
+#include <js.h>
 #include <whisper.h>
 
 #include "model-interface/StreamingProcessor.hpp"
 #include "model-interface/WhisperTypes.hpp"
 #include "model-interface/whisper.cpp/WhisperModel.hpp"
+#include "src/addon/WhisperOutputCallbackJs.hpp"
 #include "src/js-interface/JSAdapter.hpp"
 
 namespace qvac_lib_inference_addon_whisper {
@@ -163,11 +163,17 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   outputHandlers.add(make_shared<JsTranscriptArrayOutputHandler>());
   outputHandlers.add(make_shared<JsVadStateOutputHandler>());
   outputHandlers.add(make_shared<JsEndOfTurnOutputHandler>());
-  unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
-      env,
-      args.get(0, "jsHandle"),
-      args.getFunction(2, "outputCallback"),
-      std::move(outputHandlers));
+  // Use the whisper-local OutputCallBackJs subclass that synchronously
+  // releases JS references in its destructor. The upstream
+  // qvac-lib-inference-addon-cpp 1.1.6+ implementation defers the
+  // js_delete_reference() calls into a uv_close close-callback lambda,
+  // which races worklet env teardown on iOS bare-kit and crashes with
+  // EXC_BAD_ACCESS / PAC failure. See WhisperOutputCallbackJs.hpp for
+  // the full rationale.
+  unique_ptr<OutputCallBackInterface> callback =
+      make_unique<WhisperOutputCallBackJs>(
+          env, args.get(0, "jsHandle"), args.getFunction(2, "outputCallback"),
+          std::move(outputHandlers));
 
   auto addon = make_unique<AddonJs>(env, std::move(callback), std::move(model));
   return JsInterface::createInstance(env, std::move(addon));

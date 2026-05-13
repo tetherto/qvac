@@ -1,5 +1,6 @@
 import { Platform } from "react-native";
 import { createExecutor, SkipExecutor } from "@tetherto/qvac-test-suite/mobile";
+import type { TestDefinition } from "@tetherto/qvac-test-suite";
 import {
   profiler,
   LLAMA_3_2_1B_INST_Q4_0,
@@ -41,6 +42,7 @@ import {
   SD_V2_1_1B_Q8_0,
 } from "@qvac/sdk";
 import { ResourceManager } from "../shared/resource-manager.js";
+import { collectTestDeps } from "../shared/collect-test-deps.js";
 import { resolveBundledAssetUri } from "./asset-uri.js";
 import { ModelLoadingExecutor } from "../shared/executors/model-loading-executor.js";
 import { CompletionExecutor } from "../shared/executors/completion-executor.js";
@@ -341,8 +343,11 @@ function skipTests(testIds: string[], reason: string) {
   return new SkipExecutor(new RegExp(`^(${testIds.join("|")})$`), reason);
 }
 
-export async function bootstrap() {
-  await resources.downloadAllOnce(console.log);
+export async function bootstrap(filteredTests?: TestDefinition[]) {
+  // `filteredTests` (when present) is the producer's post-filter test list
+  // delivered via register-ack; absence keeps the legacy "warm everything" path.
+  const allowedDeps = filteredTests ? collectTestDeps(filteredTests) : undefined;
+  await resources.downloadAllOnce(console.log, { allowedDeps });
 }
 
 export const executor = createExecutor({

@@ -1,6 +1,6 @@
 # Architecture Documentation
 
-**Package:** `@qvac/tts-onnx` v0.5.0  
+**Package:** `@qvac/tts-onnx` v0.8.6
 **Stack:** JavaScript, C++20, ONNX Runtime, Bare Runtime, CMake, vcpkg  
 **License:** Apache-2.0
 
@@ -43,15 +43,15 @@
 **Core value:**
 - Unified JavaScript API for dual-engine TTS inference
 - Cross-platform native inference via ONNX Runtime with hardware-specific acceleration (CoreML, NNAPI, DirectML)
-- Model distribution via Hyperdrive (P2P) or filesystem with pluggable data loaders
-- Sentence-level streaming audio output for responsive UX
+- Caller-supplied local model paths with JS-side path normalization
+- Sentence-level streaming audio output via JS text chunking and queued native runs
 - Voice cloning via reference audio (Chatterbox engine)
 
 ## Key Features
 
 - **Dual-engine TTS**: Chatterbox for high-quality voice cloning, Supertonic for faster-than-realtime synthesis
 - **Cross-platform**: macOS, Linux, Windows, iOS, Android with platform-specific GPU acceleration
-- **Multiple loaders**: Hyperdrive (P2P), filesystem, custom data loaders via `@qvac/infer-base`
+- **Caller-supplied files**: Applications provide local model paths; the package does not own downloads
 - **Streaming output**: Sentence-level audio chunks delivered via callbacks as Int16Array PCM data
 - **Multi-language**: Chatterbox (en, es, fr, de, it, pt, ru), Supertonic (en, ko, es, pt, fr)
 - **Voice cloning**: Reference audio input for speaker-adaptive synthesis (Chatterbox)
@@ -68,7 +68,9 @@
 | Windows | x64 | 10+ | ✅ Tier 1 | DirectML |
 
 **Dependencies:**
-- inference-addon-cpp (=0.12.2): C++ addon framework
+- inference-addon-cpp (≥1.1.6): C++ addon framework
+- @qvac/infer-base (^0.4.0): `createJobHandler`, `exclusiveRunQueue`, QvacResponse
+- @qvac/onnx: shared ONNX integration conventions
 - ONNX Runtime: Inference engine (platform-specific EP builds via vcpkg)
 - tokenizers-cpp (≥0.1.1#2): HuggingFace tokenizer C bindings
 - Bare Runtime (≥1.19.0): JavaScript runtime
@@ -97,7 +99,7 @@ graph TB
 
     subgraph "Core Libs"
         BASE["@qvac/infer-base"]
-        DL["@qvac/dl-hyperdrive"]
+        ONNXLIB["@qvac/onnx"]
     end
 
     subgraph "Native Framework"
@@ -111,7 +113,7 @@ graph TB
 
     APP --> TTS
     TTS --> BASE
-    TTS --> DL
+    TTS --> ONNXLIB
     TTS --> ADDON
     ADDON --> BARE
     ADDON --> ONNX
@@ -126,10 +128,10 @@ graph TB
 
 | Package | Type | Version | Purpose |
 |---------|------|---------|---------|
-| @qvac/infer-base | Framework | ^0.1.0 | Base classes, WeightsProvider, QvacResponse |
-| @qvac/dl-hyperdrive | Peer | ^0.1.0 | P2P model loading |
+| @qvac/infer-base | Framework | ^0.4.0 | `createJobHandler`, `exclusiveRunQueue`, QvacResponse |
+| @qvac/onnx | Runtime | ^0.1.0 | Shared ONNX integration |
 | @qvac/error | Runtime | ^0.1.0 | Structured error handling |
-| inference-addon-cpp | Native | =0.12.2 | C++ addon framework |
+| inference-addon-cpp | Native | ≥1.1.6 | C++ addon framework |
 | ONNX Runtime | Native | via vcpkg | Inference engine |
 | tokenizers-cpp | Native | ≥0.1.1#2 | HuggingFace tokenizer |
 | Bare Runtime | Runtime | ≥1.19.0 | JavaScript execution |
@@ -139,10 +141,10 @@ graph TB
 | From | To | Mechanism | Data Format |
 |------|-----|-----------|-------------|
 | JavaScript | ONNXTTS | Constructor | args, config objects |
-| ONNXTTS | BaseInference | Inheritance | Template method pattern |
+| ONNXTTS | createJobHandler / exclusiveRunQueue | Composition | Job lifecycle + optional serialization |
 | ONNXTTS | TTSInterface | Composition | Method calls |
 | TTSInterface | C++ Addon | require.addon() | Native binding |
-| WeightsProvider | Data Loader | Interface | File download protocol |
+| ONNXTTS | textChunker / accumulator | JS helpers | Streaming text chunks and audio accumulation |
 
 </details>
 
@@ -156,17 +158,20 @@ graph TB
 classDiagram
     class ONNXTTS {
         +constructor(args, config)
-        +load(closeLoader, onProgress) Promise~void~
+        +load() Promise~void~
         +run(input) Promise~QvacResponse~
+        +runStream(input) AsyncIterable
+        +runStreaming(input) Promise~QvacResponse~
         +reload(newConfig) Promise~void~
         +unload() Promise~void~
     }
 
-    class BaseInference {
-        <<abstract>>
-        +load() Promise~void~
-        +run() Promise~QvacResponse~
-        +unload() Promise~void~
+    class JobHandler {
+        <<createJobHandler>>
+        +start() QvacResponse
+        +output(data)
+        +end(stats)
+        +fail(error)
     }
 
     class QvacResponse {
@@ -178,17 +183,14 @@ classDiagram
 
     class TTSInterface {
         +activate() Promise~void~
-        +append(data) Promise~number~
-        +status() Promise~string~
-        +pause() Promise~void~
-        +stop() Promise~void~
-        +cancel(jobId) Promise~void~
+        +runJob(data) Promise~boolean~
+        +cancel() Promise~void~
         +reload(params) Promise~void~
         +unload() Promise~void~
         +destroyInstance() Promise~void~
     }
 
-    ONNXTTS --|> BaseInference
+    ONNXTTS *-- JobHandler
     ONNXTTS *-- TTSInterface
     ONNXTTS ..> QvacResponse : creates
 ```
@@ -200,20 +202,18 @@ classDiagram
 
 | Class | Responsibility | Lifecycle | Dependencies |
 |-------|----------------|-----------|--------------|
-| ONNXTTS | Orchestrate model lifecycle, engine detection, weight management | Created by user, persistent | WeightsProvider, TTSInterface |
-| BaseInference | Define standard inference API (load/run/unload) | Abstract base class | None |
+| ONNXTTS | Orchestrate model lifecycle, engine detection, local path normalization, streaming chunks | Created by user, persistent | createJobHandler, exclusiveRunQueue, TTSInterface |
 | QvacResponse | Stream inference output via callbacks | Created per run() call, short-lived | None |
 | TTSInterface | JS wrapper around native binding, error translation | Created by ONNXTTS during load | Native binding |
-| WeightsProvider | Abstract model weight loading from data loaders | Created by ONNXTTS | DataLoader |
 
 **Key Relationships:**
 
 | From | To | Type | Purpose |
 |------|-----|------|---------|
-| ONNXTTS | BaseInference | Inheritance | Standard QVAC inference API |
+| ONNXTTS | createJobHandler | Composition | Response lifecycle |
 | ONNXTTS | TTSInterface | Composition | Native addon lifecycle management |
 | ONNXTTS | QvacResponse | Creates | Streaming audio output per inference |
-| ONNXTTS | WeightsProvider | Composition | Model file acquisition |
+| ONNXTTS | textChunker / textStreamAccumulator | Composition | JS-side streaming chunking |
 
 </details>
 
@@ -230,8 +230,9 @@ graph TB
     subgraph "Layer 1: JavaScript API"
         APP["Application Code"]
         TTSCLASS["ONNXTTS<br/>(index.js)"]
-        BASEINF["BaseInference<br/>(@qvac/infer-base)"]
-        WEIGHTSPR["WeightsProvider<br/>(@qvac/infer-base)"]
+        JOBH["createJobHandler<br/>(@qvac/infer-base)"]
+        RUNQ["exclusiveRunQueue<br/>(@qvac/infer-base)"]
+        CHUNKER["textChunker / textStreamAccumulator<br/>(lib/)"]
         RESPONSE["QvacResponse<br/>(@qvac/infer-base)"]
     end
 
@@ -242,7 +243,7 @@ graph TB
 
     subgraph "Layer 3: C++ Addon"
         JSINTERFACE["JsInterface<br/>(binding.cpp)"]
-        ADDONTEMPL["Addon&lt;TTSModel&gt;<br/>(Addon.cpp)"]
+        ADDONTEMPL["AddonJs + TTSModel bridge<br/>(binding.cpp / addon-cpp)"]
     end
 
     subgraph "Layer 4: Model"
@@ -258,8 +259,9 @@ graph TB
     end
 
     APP --> TTSCLASS
-    TTSCLASS --> BASEINF
-    TTSCLASS --> WEIGHTSPR
+    TTSCLASS --> JOBH
+    TTSCLASS --> RUNQ
+    TTSCLASS --> CHUNKER
     TTSCLASS --> TTSIF
     TTSCLASS -.-> RESPONSE
 
@@ -294,9 +296,9 @@ graph TB
 
 | Layer | Components | Responsibility | Language | Why This Layer |
 |-------|------------|----------------|----------|----------------|
-| 1. JavaScript API | ONNXTTS, BaseInference | High-level API, engine detection, error handling | JS | Ergonomic API for npm consumers |
+| 1. JavaScript API | ONNXTTS, createJobHandler, exclusiveRunQueue, textChunker | High-level API, engine detection, error handling, streaming chunking | JS | Ergonomic API for npm consumers |
 | 2. Bridge | TTSInterface, binding.js | JS↔C++ communication, handle lifecycle | JS wrapper | Error translation, lifecycle management |
-| 3. C++ Addon | JsInterface, Addon&lt;TTSModel&gt; | Job queue, threading, output dispatch | C++ | Performance, native integration |
+| 3. C++ Addon | JsInterface, AddonJs/TTSModel bridge | Single-job runner, threading, output dispatch | C++ | Performance, native integration |
 | 4. Model | TTSModel, ChatterboxEngine, SupertonicEngine | Engine-specific inference pipelines | C++ | Direct ONNX Runtime integration |
 | 5. Backend | ONNX Runtime, tokenizers-cpp | Tensor ops, GPU execution | C++ | Optimized model inference |
 
@@ -305,7 +307,7 @@ graph TB
 | Direction | Path | Data Format | Transform |
 |-----------|------|-------------|-----------|
 | Input → | JS → Bridge → Addon | {type, input} object | Extract text string |
-| Input → | Addon → TTSModel | std::string | Split into sentences |
+| Input → | JS textChunker → Addon → TTSModel | string chunks | JS splits/accumulates streaming text before native synthesis |
 | Input → | TTSModel → Engine | std::string | Tokenize → tensor |
 | Output ← | Engine → TTSModel | AudioResult (vector&lt;int16_t&gt;) | PCM samples |
 | Output ← | TTSModel → Addon | vector&lt;int16_t&gt; | Queue output |
@@ -322,13 +324,15 @@ graph TB
 
 #### **ONNXTTS (index.js)**
 
-**Responsibility:** Main API class, engine auto-detection, model lifecycle orchestration, weight downloading
+**Responsibility:** Main API class, engine auto-detection, model lifecycle orchestration, path normalization, optional run serialization, and JS-side streaming text chunking.
 
 **Why JavaScript:**
 - High-level API ergonomics for npm consumers
-- Engine detection logic based on constructor arguments (Supertonic if `textEncoderPath` or `modelDir+voiceName` provided)
+- Engine detection logic based on explicit `engine`, `modelDir`, and artifact paths (`textEncoder` / `durationPredictor` imply Supertonic; otherwise Chatterbox unless configured)
 - Promise/async-await integration for loading and inference
 - Path resolution with platform-specific handling (Windows long path prefix)
+- `lazySessionLoading` defaults to true on iOS/Android to reduce load-time cost
+- `streamOutput`, `runStream`, and `runStreaming` use `lib/textChunker.js` and `lib/textStreamAccumulator.js`
 
 #### **TTSInterface (tts.js)**
 
@@ -349,19 +353,19 @@ graph TB
 
 ### C++ Components
 
-#### **Addon&lt;TTSModel&gt; (addon/Addon.cpp)**
+#### **AddonJs / TTSModel bridge (binding.cpp / addon-cpp)**
 
-**Responsibility:** Template specialization of addon-cpp framework for TTS
+**Responsibility:** Package-specific bridge between addon-cpp and `TTSModel`.
 
 **Why C++:**
-- Provides job queue and dedicated processing thread
+- Provides single-job execution and dedicated processing thread
 - Thread-safe state machine (IDLE → LOADING → LISTENING → PROCESSING)
 - Output dispatching via `uv_async_send`
 
 **Specializations:**
-- `getNextPiece()`: Splits input text on sentence boundaries (`.!?`) with minimum 25-character pieces for streaming UX
 - `loadWeights()`: No-op (TTS loads models from file paths, not streamed buffers)
-- `createOutputData()`: Copies `vector<int16_t>` into JS Int16Array via ArrayBuffer
+- Output conversion copies native PCM data into JS Int16Array via ArrayBuffer
+- Sentence-level streaming is handled in JavaScript before each native `runJob`, not by a C++ `getNextPiece()` hook
 
 #### **TTSModel (model-interface/TTSModel.cpp)**
 
@@ -392,6 +396,12 @@ graph TB
 - Voice style loading from `.bin` files
 - Output: 44.1 kHz, 16-bit PCM, mono
 
+#### **LavaSR enhancer (model-interface/LavaSR*.cpp)**
+
+**Responsibility:** Optional audio enhancement path selected by constructor/configuration.
+
+**Why C++:** Runs additional ONNX sessions close to the synthesis pipeline and shares audio buffer handling with the engines.
+
 #### **OnnxInferSession (model-interface/OnnxInferSession.cpp)**
 
 **Responsibility:** ONNX Runtime session wrapper with tensor management
@@ -412,21 +422,19 @@ sequenceDiagram
     participant JS as JavaScript
     participant IF as TTSInterface
     participant Bind as Native Binding
-    participant Addon as Addon<TTSModel>
+    participant Addon as AddonJs/TTSModel bridge
     participant Model as TTSModel
     participant Engine as Engine (Chatterbox/Supertonic)
 
-    JS->>IF: run({input: "Hello world.", type: "text"})
-    IF->>Bind: append({type:'text', input:'Hello world.'})
-    Bind->>Addon: append() [lock mutex]
-    Addon->>Addon: Enqueue job
-    Addon->>Addon: cv.notify_one()
-    Bind-->>IF: jobId
+    JS->>JS: splitTtsText(input) when streamOutput/runStream is used
+    JS->>IF: runJob({input: "Hello world.", type: "text"})
+    IF->>Bind: runJob({type:'text', input:'Hello world.'})
+    Bind->>Addon: runJob() [single-job guard]
+    Bind-->>IF: accepted
     IF-->>JS: QvacResponse
 
     Note over Addon: Processing Thread
     Addon->>Addon: Dequeue job
-    Addon->>Addon: getNextPiece() → "Hello world."
     Addon->>Model: process("Hello world.")
     Model->>Engine: synthesize("Hello world.")
 
@@ -551,7 +559,7 @@ No single open-source TTS engine satisfies both. Chatterbox produces high-qualit
 
 ### Decision
 
-Support both engines through a unified `ONNXTTS` class with automatic engine detection based on constructor arguments. Chatterbox is selected when speech encoder / language model paths are provided; Supertonic is selected when `textEncoderPath` or `modelDir + voiceName` is provided.
+Support both synthesis engines through a unified `ONNXTTS` class with automatic engine detection based on constructor arguments. An explicit `engine` wins; `modelDir` without explicit artifacts selects Supertonic, `textEncoder` or `durationPredictor` also select Supertonic, and the remaining artifact layout selects Chatterbox. Optional enhancer files enable the LavaSR path.
 
 ### Rationale
 
@@ -586,9 +594,9 @@ Support both engines through a unified `ONNXTTS` class with automatic engine det
 <details>
 <summary>⚡ TL;DR</summary>
 
-**Chose:** Download model files to disk, pass file paths to ONNX Runtime  
+**Chose:** Require local model files and pass file paths to ONNX Runtime
 **Why:** ONNX Runtime's session API loads from file paths natively; avoids buffer-streaming complexity  
-**Cost:** Requires local disk space for model files; no zero-copy loading from P2P
+**Cost:** Callers must download/cache files before constructing the addon
 
 </details>
 
@@ -598,7 +606,7 @@ ONNX Runtime's `Ort::Session` constructor accepts either a file path or an in-me
 
 ### Decision
 
-Download model files to local disk via `WeightsProvider.downloadFiles()`, then pass resolved file paths to ONNX Runtime session constructors. The `loadWeights()` addon-cpp hook is a no-op.
+Require callers to provide local file paths, then pass resolved paths to ONNX Runtime session constructors. The `loadWeights()` addon-cpp hook is a no-op.
 
 ### Rationale
 
@@ -615,8 +623,8 @@ Download model files to local disk via `WeightsProvider.downloadFiles()`, then p
 ### Trade-offs
 - ✅ Simpler implementation — no custom buffer management
 - ✅ ONNX Runtime can memory-map files internally for efficiency
-- ✅ Models persist on disk for offline use after first download
-- ❌ Requires local disk space (Hyperdrive cache + downloaded files)
+- ✅ Models persist on disk under caller control
+- ❌ Requires local disk space and caller-owned download/cache logic
 - ❌ No zero-copy loading from P2P streams
 
 ---
@@ -638,7 +646,7 @@ TTS synthesis of a full paragraph takes significant time. Without streaming, the
 
 ### Decision
 
-The `getNextPiece()` specialization splits input text on sentence-ending punctuation (`.!?`) with a minimum piece size of 25 characters. Each sentence is synthesized independently and its audio delivered via callback, allowing the application to play audio while remaining sentences are still being processed.
+The JavaScript helpers in `lib/textChunker.js` split input text on sentence-like boundaries and the streaming path submits chunks as separate native runs. Each chunk is synthesized independently and its audio delivered via callback/iterator, allowing the application to play audio while remaining text is still being processed.
 
 ### Rationale
 
@@ -648,7 +656,7 @@ The `getNextPiece()` specialization splits input text on sentence-ending punctua
 - Consistent with how humans read text aloud — sentence by sentence
 
 **Implementation:**
-- Leverages the existing addon-cpp `getNextPiece()` hook — no framework changes needed
+- Keeps chunking policy in JavaScript where it can share logic with `runStream` and `runStreaming`
 - Each piece produces an independent `AudioResult` with its own PCM samples
 - Minimum piece size (25 chars) prevents overly short fragments that would sound choppy
 
@@ -718,4 +726,4 @@ Provide hand-written TypeScript definitions in `index.d.ts` alongside JavaScript
 **Related Document:**
 - [data-flows-detailed.md](data-flows-detailed.md) - Detailed data flow diagrams and sequences
 
-**Last Updated:** 2026-02-18
+**Last Updated:** 2026-05-07
