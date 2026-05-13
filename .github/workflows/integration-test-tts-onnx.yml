@@ -187,16 +187,36 @@ jobs:
         if: ${{ !inputs.prebuild_package }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          path: ${{ inputs.workdir }}/prebuilds
+          path: ${{ runner.temp }}/prebuilds-staging
           merge-multiple: true
+
+      - name: Move prebuilds from staging to workspace (Unix)
+        if: ${{ !inputs.prebuild_package && runner.os != 'Windows' }}
+        shell: bash
+        env:
+          WORKDIR: ${{ inputs.workdir }}
+        run: |
+          mkdir -p "${WORKDIR}/prebuilds"
+          cp -r "${RUNNER_TEMP}/prebuilds-staging/." "${WORKDIR}/prebuilds/"
+
+      - name: Move prebuilds from staging to workspace (Windows)
+        if: ${{ !inputs.prebuild_package && runner.os == 'Windows' }}
+        shell: pwsh
+        env:
+          WORKDIR: ${{ inputs.workdir }}
+        run: |
+          New-Item -ItemType Directory -Force "$env:WORKDIR/prebuilds" | Out-Null
+          Copy-Item -Path "$env:RUNNER_TEMP\prebuilds-staging\*" -Destination "$env:WORKDIR/prebuilds" -Recurse
 
       - name: Download prebuilds from package
         if: ${{ inputs.prebuild_package }}
         working-directory: ${{ inputs.workdir }}
         shell: bash
+        env:
+          PREBUILD_PKG: ${{ inputs.prebuild_package }}
         run: |
           mkdir -p prebuilds
-          npm pack ${{ inputs.prebuild_package }} --pack-destination /tmp
+          npm pack "$PREBUILD_PKG" --pack-destination /tmp
           tar -xzf /tmp/*.tgz -C /tmp
           cp -r /tmp/package/prebuilds/* prebuilds/
 
@@ -205,7 +225,19 @@ jobs:
         shell: bash
         run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
 
-      - name: Run integration test
+      - name: Run integration test (Linux/macOS, env-stripped)
+        if: ${{ matrix.platform != 'win32' }}
+        working-directory: ${{ inputs.workdir }}
+        shell: bash
+        env:
+          QASE_API_TOKEN_TEST: ${{ secrets.QASE_API_TOKEN }}
+          CHATTERBOX_VARIANT_TEST: ${{ matrix.variant }}
+          TTS_INTEGRATION_PROFILE_TEST: ${{ inputs.tts_integration_profile || 'short' }}
+        run: |
+          env -i HOME="$HOME" PATH="$PATH" QASE_API_TOKEN="$QASE_API_TOKEN_TEST" CHATTERBOX_VARIANT="$CHATTERBOX_VARIANT_TEST" TTS_INTEGRATION_PROFILE="$TTS_INTEGRATION_PROFILE_TEST" bash -c 'npm run test:integration'
+
+      - name: Run integration test (Windows)
+        if: ${{ matrix.platform == 'win32' }}
         working-directory: ${{ inputs.workdir }}
         run: npm run test:integration
         env:
@@ -396,16 +428,36 @@ jobs:
         if: ${{ !inputs.prebuild_package }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          path: ${{ inputs.workdir }}/prebuilds
+          path: ${{ runner.temp }}/prebuilds-staging
           merge-multiple: true
+
+      - name: Move prebuilds from staging to workspace (Unix)
+        if: ${{ !inputs.prebuild_package && runner.os != 'Windows' }}
+        shell: bash
+        env:
+          WORKDIR: ${{ inputs.workdir }}
+        run: |
+          mkdir -p "${WORKDIR}/prebuilds"
+          cp -r "${RUNNER_TEMP}/prebuilds-staging/." "${WORKDIR}/prebuilds/"
+
+      - name: Move prebuilds from staging to workspace (Windows)
+        if: ${{ !inputs.prebuild_package && runner.os == 'Windows' }}
+        shell: pwsh
+        env:
+          WORKDIR: ${{ inputs.workdir }}
+        run: |
+          New-Item -ItemType Directory -Force "$env:WORKDIR/prebuilds" | Out-Null
+          Copy-Item -Path "$env:RUNNER_TEMP\prebuilds-staging\*" -Destination "$env:WORKDIR/prebuilds" -Recurse
 
       - name: Download prebuilds from package (Unix)
         if: ${{ inputs.prebuild_package && matrix.platform != 'win32' }}
         working-directory: ${{ inputs.workdir }}
         shell: bash
+        env:
+          PREBUILD_PKG: ${{ inputs.prebuild_package }}
         run: |
           mkdir -p prebuilds
-          npm pack ${{ inputs.prebuild_package }} --pack-destination /tmp
+          npm pack "$PREBUILD_PKG" --pack-destination /tmp
           tar -xzf /tmp/*.tgz -C /tmp
           cp -r /tmp/package/prebuilds/* prebuilds/
 
@@ -413,9 +465,11 @@ jobs:
         if: ${{ inputs.prebuild_package && matrix.platform == 'win32' }}
         working-directory: ${{ inputs.workdir }}
         shell: powershell
+        env:
+          PREBUILD_PKG: ${{ inputs.prebuild_package }}
         run: |
           New-Item -ItemType Directory -Force -Path prebuilds | Out-Null
-          npm pack ${{ inputs.prebuild_package }} --pack-destination $env:TEMP
+          npm pack $env:PREBUILD_PKG --pack-destination $env:TEMP
           $tgz = Get-ChildItem "$env:TEMP\*.tgz" | Select-Object -First 1
           tar -xzf $tgz.FullName -C $env:TEMP
           Copy-Item -Path "$env:TEMP\package\prebuilds\*" -Destination prebuilds -Recurse -Force
