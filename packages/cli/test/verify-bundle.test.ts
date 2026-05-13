@@ -425,6 +425,38 @@ describe('collectAddonsFromNodeModules', () => {
       assert.deepEqual(result.map((r) => r.name), ['bare-os'])
     })
   })
+
+  it('walks symlinked package directories (pnpm / yarn-pnp layouts)', async () => {
+    await withTempDir(async (dir) => {
+      const nm = path.join(dir, 'node_modules')
+      const store = path.join(dir, '.store')
+      writePackageJson(store, 'bare-os-real', {
+        name: 'bare-os',
+        version: '3.9.0',
+        addon: true
+      })
+      writePackageJson(store, 'qvac-native-real', {
+        name: '@qvac/native-thing',
+        version: '0.1.0',
+        addon: true
+      })
+      fs.mkdirSync(nm, { recursive: true })
+      fs.symlinkSync(
+        path.join(store, 'bare-os-real'),
+        path.join(nm, 'bare-os'),
+        'dir'
+      )
+      fs.mkdirSync(path.join(nm, '@qvac'), { recursive: true })
+      fs.symlinkSync(
+        path.join(store, 'qvac-native-real'),
+        path.join(nm, '@qvac', 'native-thing'),
+        'dir'
+      )
+      const result = await collectAddonsFromNodeModules({ nodeModulesRoot: nm })
+      const names = result.map((r) => r.name).sort()
+      assert.deepEqual(names, ['@qvac/native-thing', 'bare-os'])
+    })
+  })
 })
 
 describe('checkPrebuilds', () => {
@@ -576,6 +608,19 @@ describe('resolveBareRuntime', () => {
       assert.equal(result.resolved, false)
       if (!result.resolved) {
         assert.ok(result.error.triedPaths.length >= 2)
+      }
+    })
+  })
+
+  it('preserves pre-release tags so RC runtimes are not silently coerced to a release', async () => {
+    await withTempDir(async (dir) => {
+      const result = await resolveBareRuntime({
+        projectRoot: dir,
+        explicitVersion: '1.16.0-rc.1'
+      })
+      assert.equal(result.resolved, true)
+      if (result.resolved) {
+        assert.equal(result.runtime.version, '1.16.0-rc.1')
       }
     })
   })
@@ -1024,6 +1069,41 @@ describe('verifyBundle config source', () => {
       assert.equal(hasErrors(result), true)
       assert.equal(result.issues[0]?.code, 'invalid-source')
       assert.match(result.issues[0]?.message ?? '', /--config/)
+    })
+  })
+
+  it('emits config-load-failed (warning, not error) when an auto-detected config fails to load', async () => {
+    await withTempDir(async (dir) => {
+      const packageRoot = writePackageJson(dir, 'node_modules/bare-os', {
+        name: 'bare-os',
+        version: '3.9.0',
+        addon: true,
+        engines: { bare: '>=1.14.0' }
+      })
+      writePrebuild(packageRoot, 'darwin-arm64')
+      writeJson(
+        path.join(dir, 'node_modules', 'bare-runtime', 'package.json'),
+        { name: 'bare-runtime', version: '1.15.0' }
+      )
+      fs.writeFileSync(path.join(dir, 'qvac.config.json'), '{ "bareRuntimeVersion": ')
+      const result = await verifyBundle({
+        projectRoot: dir,
+        addonsSource: path.join(dir, 'node_modules'),
+        hosts: ['darwin-arm64']
+      })
+      assert.equal(hasErrors(result), false)
+      assert.equal(hasWarnings(result), true)
+      const warning = result.issues.find((i) => i.code === 'config-load-failed')
+      assert.ok(warning, 'expected config-load-failed warning')
+      if (warning?.code === 'config-load-failed') {
+        assert.equal(warning.level, 'warning')
+        assert.equal(warning.configPath, path.join(dir, 'qvac.config.json'))
+        assert.match(warning.message, /qvac\.config\.json/)
+      }
+      assert.equal(result.runtime?.resolved, true)
+      if (result.runtime?.resolved) {
+        assert.equal(result.runtime.runtime.source, 'bare-runtime')
+      }
     })
   })
 })

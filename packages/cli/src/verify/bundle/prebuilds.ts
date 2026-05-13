@@ -50,7 +50,7 @@ async function hasBarePrebuild (hostDir: string): Promise<boolean> {
     return false
   }
   for (const entry of entries) {
-    if (!entry.isFile()) continue
+    if (!entry.isFile() && !entry.isSymbolicLink()) continue
     if (entry.name.endsWith('.bare')) return true
   }
   return false

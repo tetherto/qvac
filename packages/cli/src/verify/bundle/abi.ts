@@ -156,7 +156,7 @@ async function tryReadRuntimeVersion (
 }
 
 export function normalizeVersion (value: string): string | null {
-  const coerced = semver.coerce(value)
+  const coerced = semver.coerce(value, { includePrerelease: true })
   return coerced ? coerced.version : null
 }
 

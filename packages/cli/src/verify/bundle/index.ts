@@ -47,11 +47,20 @@ export interface InvalidRuntimeVersionIssue {
   source: 'flag' | 'config'
 }
 
+export interface ConfigLoadFailedIssue {
+  code: 'config-load-failed'
+  level: 'warning'
+  message: string
+  configPath: string
+  reason: string
+}
+
 export type VerifyBundleIssue =
   | MissingPrebuildIssue
   | AbiIssue
   | InvalidSourceIssue
   | InvalidRuntimeVersionIssue
+  | ConfigLoadFailedIssue
 
 export interface VerifyBundleResult {
   addonsSource: string
@@ -114,6 +123,7 @@ export async function verifyBundle (
 
   let configRuntimeVersion: string | undefined
   let resolvedConfigPath: string | null = null
+  let configLoadFailed: ConfigLoadFailedIssue | null = null
   try {
     resolvedConfigPath = findConfigFile(projectRoot, configPath)
     if (resolvedConfigPath !== null) {
@@ -124,8 +134,8 @@ export async function verifyBundle (
       }
     }
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
     if (configPath !== undefined) {
-      const message = error instanceof Error ? error.message : String(error)
       return {
         addonsSource,
         resolvedAddonsSource,
@@ -141,6 +151,18 @@ export async function verifyBundle (
             message: `Failed to load --config: ${message}`
           }
         ]
+      }
+    }
+    if (resolvedConfigPath !== null) {
+      configLoadFailed = {
+        code: 'config-load-failed',
+        level: 'warning',
+        configPath: resolvedConfigPath,
+        reason: message,
+        message:
+          `Found ${formatConfigLabel(projectRoot, resolvedConfigPath)} but failed to load it: ${message}. ` +
+          'Falling back to auto-detection for Bare runtime; the project-pinned ' +
+          '`bareRuntimeVersion` is being ignored. Fix the config file or pass --config explicitly to surface it as an error.'
       }
     }
   }
@@ -230,6 +252,7 @@ export async function verifyBundle (
   }
 
   const issues: VerifyBundleIssue[] = []
+  if (configLoadFailed !== null) issues.push(configLoadFailed)
 
   for (const addon of addons) {
     const prebuildIssues = await checkPrebuilds({ addon, hosts })
@@ -313,10 +336,24 @@ export function formatVerifyBundleResult (result: VerifyBundleResult): string {
   sections.push(...formatAbiMismatches(result.issues))
   sections.push(...formatInvalidRuntimeVersions(result.issues))
   sections.push(...formatMalformedEnginesBare(result.issues))
+  sections.push(...formatConfigLoadFailed(result.issues))
   sections.push(...formatUnknownRuntime(result.issues))
   sections.push(...formatInvalidSources(result.issues))
 
   return sections.join('\n').trimEnd()
+}
+
+function formatConfigLoadFailed (issues: VerifyBundleIssue[]): string[] {
+  const matches = issues.filter(
+    (issue): issue is ConfigLoadFailedIssue => issue.code === 'config-load-failed'
+  )
+  if (matches.length === 0) return []
+  const lines = ['  Config load failed:']
+  for (const issue of matches) {
+    lines.push(`    - ${issue.message}`)
+  }
+  lines.push('')
+  return lines
 }
 
 function formatMissingPrebuilds (issues: VerifyBundleIssue[]): string[] {

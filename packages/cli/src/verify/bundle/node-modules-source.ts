@@ -48,7 +48,7 @@ async function walkNodeModules (
 
   for (const entry of entries) {
     if (entry.name.startsWith('.')) continue
-    if (!entry.isDirectory()) continue
+    if (!isPackageEntry(entry)) continue
 
     if (entry.name.startsWith('@')) {
       await walkScopeDirectory(path.join(nodeModulesDir, entry.name), addons)
@@ -76,13 +76,17 @@ async function walkScopeDirectory (
   }
   for (const entry of entries) {
     if (entry.name.startsWith('.')) continue
-    if (!entry.isDirectory()) continue
+    if (!isPackageEntry(entry)) continue
     await visitPackageDirectory(
       path.join(scopeDir, entry.name),
       `${scope}/${entry.name}`,
       addons
     )
   }
+}
+
+function isPackageEntry (entry: import('node:fs').Dirent): boolean {
+  return entry.isDirectory() || entry.isSymbolicLink()
 }
 
 async function visitPackageDirectory (
