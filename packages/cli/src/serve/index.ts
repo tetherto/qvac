@@ -112,7 +112,8 @@ export async function startServer (options: StartServerOptions): Promise<http.Se
 const CATEGORY_ENDPOINTS: Record<string, string[]> = {
   chat: ['POST /v1/chat/completions'],
   embedding: ['POST /v1/embeddings'],
-  transcription: ['POST /v1/audio/transcriptions']
+  transcription: ['POST /v1/audio/transcriptions'],
+  image: ['POST /v1/images/generations']
 }
 
 const MANAGEMENT_ENDPOINTS = [
@@ -127,7 +128,8 @@ const CATEGORY_LABELS: Record<string, string> = {
   transcription: 'transcription',
   translation: 'translation',
   speech: 'speech',
-  ocr: 'ocr'
+  ocr: 'ocr',
+  image: 'image'
 }
 
 function logStartupSummary (serveConfig: ServeConfig, logger: Logger): void {
