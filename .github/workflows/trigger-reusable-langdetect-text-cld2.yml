@@ -33,30 +33,8 @@ permissions:
   contents: read
 
 jobs:
-  label-gate:
-    name: Authorise (label-gate)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    outputs:
-      authorised: ${{ steps.gate.outputs.authorised }}
-    steps:
-      - name: Checkout (label-gate action only)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/actions/label-gate
-          sparse-checkout-cone-mode: false
-      - name: Run label-gate
-        id: gate
-        uses: ./.github/actions/label-gate
-        with:
-          github-token: ${{ secrets.PAT_TOKEN }}
-
   test:
-    needs: [label-gate]
-    if: needs.label-gate.outputs.authorised == 'true' && github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     environment: release
     steps:
@@ -92,7 +70,8 @@ jobs:
   release-merge-guard:
     name: Release Merge Guard
     if: >-
-      github.event_name == 'push' && startsWith(github.ref_name, 'release-')
+      github.event_name == 'push' &&
+      startsWith(github.ref_name, 'release-')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -157,8 +136,8 @@ jobs:
           echo "gpr_tag=$gpr_tag" >> "$GITHUB_OUTPUT"
 
   publish-main-gpr-dev:
-    needs: [publish-logic, label-gate]
-    if: needs.label-gate.outputs.authorised == 'true' && needs.publish-logic.outputs.publish_main == 'true'
+    needs: publish-logic
+    if: needs.publish-logic.outputs.publish_main == 'true'
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -179,12 +158,15 @@ jobs:
           name-suffix: "-mono"
 
   publish-release-npm:
-    needs: [publish-logic, release-merge-guard, label-gate]
+    needs: [publish-logic, release-merge-guard]
     permissions:
       contents: write
       packages: write
       id-token: write
-    if: needs.label-gate.outputs.authorised == 'true' && (always() && needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped'))
+    if: |
+      always() &&
+      needs.publish-logic.outputs.publish_release == 'true' &&
+      (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')
     uses: ./.github/workflows/public-reusable-npm.yml
     secrets: inherit
     with:
@@ -192,8 +174,8 @@ jobs:
       caller_event_name: ${{ github.event_name }}
 
   publish-feature-gpr:
-    needs: [publish-logic, label-gate]
-    if: needs.label-gate.outputs.authorised == 'true' && needs.publish-logic.outputs.publish_feature == 'true'
+    needs: publish-logic
+    if: needs.publish-logic.outputs.publish_feature == 'true'
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -214,8 +196,8 @@ jobs:
           name-suffix: "-mono"
 
   publish-tmp-gpr:
-    needs: [publish-logic, label-gate]
-    if: needs.label-gate.outputs.authorised == 'true' && needs.publish-logic.outputs.publish_tmp == 'true'
+    needs: publish-logic
+    if: needs.publish-logic.outputs.publish_tmp == 'true'
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -233,4 +215,4 @@ jobs:
           npm-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
           workdir: packages/langdetect-text-cld2
-          name-suffix: "-mono"
+          name-suffix: "-mono" 

@@ -106,27 +106,6 @@ permissions:
   contents: read
 
 jobs:
-  label-gate:
-    name: Authorise (label-gate)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    outputs:
-      authorised: ${{ steps.gate.outputs.authorised }}
-    steps:
-      - name: Checkout (label-gate action only)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/actions/label-gate
-          sparse-checkout-cone-mode: false
-      - name: Run label-gate
-        id: gate
-        uses: ./.github/actions/label-gate
-        with:
-          github-token: ${{ secrets.PAT_TOKEN }}
-
   setup:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -170,8 +149,7 @@ jobs:
           echo "datasets_cache_key=$datasets_cache_key" >> $GITHUB_OUTPUT
 
   build:
-    needs: [setup, label-gate]
-    if: needs.label-gate.outputs.authorised == 'true'
+    needs: setup
     runs-on: ubuntu-22.04
     environment: release
     timeout-minutes: 60
@@ -337,8 +315,11 @@ jobs:
           retention-days: 1
 
   evaluate:
-    needs: [setup, build, label-gate]
-    if: needs.label-gate.outputs.authorised == 'true' && (always() && needs.setup.result == 'success' && (needs.build.result == 'success' || needs.build.result == 'skipped'))
+    needs: [setup, build]
+    if: |
+      always() &&
+      needs.setup.result == 'success' &&
+      (needs.build.result == 'success' || needs.build.result == 'skipped')
     runs-on: ubuntu-24.04
     environment: release
     timeout-minutes: 120
@@ -433,7 +414,7 @@ jobs:
             echo "AWS PATH: $aws_path"
             if aws s3 cp "$aws_path/" "$temp_dir/" --recursive; then
               echo "Successfully downloaded model for $model_pair from S3 (using $s3_pair)"
-
+              
               # Find the latest date directory and move files up
               date_dir=$(find "$temp_dir" -mindepth 1 -maxdepth 1 -type d | sort -r | head -1)
               if [ -n "$date_dir" ]; then
@@ -461,7 +442,7 @@ jobs:
                     echo "Renamed ggml-opus-$model_pair.bin to model_f16.bin"
                   fi
                 fi
-
+                
                 # Verify the model file exists
                 if [ -f "qvac_models/$model_pair/model_f16.bin" ]; then
                   echo "Model verified: $(ls -lh qvac_models/$model_pair/model_f16.bin)"
@@ -490,15 +471,15 @@ jobs:
           if [ "${{ inputs.use_pivot }}" = "true" ]; then
             src_lang="${pair%-*}"
             trg_lang="${pair#*-}"
-
+            
             # Check if this is a non-English pair
             if [ "$src_lang" != "en" ] && [ "$trg_lang" != "en" ]; then
               echo "Pivot translation enabled for non-English pair $pair"
               echo "Downloading pivot models: ${src_lang}-en and en-${trg_lang}"
-
+              
               # Download source-to-English model
               download_model "${src_lang}-en"
-
+              
               # Download English-to-target model
               download_model "en-${trg_lang}"
             fi

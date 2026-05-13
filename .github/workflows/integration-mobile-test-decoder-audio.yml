@@ -41,30 +41,7 @@ env:
   APP_BUNDLE_ID: "io.tether.test.qvac" # Bundle ID for the test app (same for all addons)
 
 jobs:
-  label-gate:
-    name: Authorise (label-gate)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    outputs:
-      authorised: ${{ steps.gate.outputs.authorised }}
-    steps:
-      - name: Checkout (label-gate action only)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/actions/label-gate
-          sparse-checkout-cone-mode: false
-      - name: Run label-gate
-        id: gate
-        uses: ./.github/actions/label-gate
-        with:
-          github-token: ${{ secrets.PAT_TOKEN }}
-
   build-and-test:
-    needs: [label-gate]
-    if: needs.label-gate.outputs.authorised == 'true'
     name: Build ${{ matrix.platform }} and Run E2E Tests
     runs-on: ${{ matrix.runner }}
     environment: release
@@ -982,18 +959,18 @@ jobs:
           while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
             STATUS=$(aws devicefarm get-upload --arn "$SPEC_UPLOAD_ARN" --query "upload.status" --output text)
             echo "Test spec status (attempt $ATTEMPT/$MAX_ATTEMPTS): $STATUS"
-
+            
             if [ "$STATUS" = "SUCCEEDED" ]; then
               echo "✅ Test spec upload successful"
               break
             fi
-
+            
             if [ "$STATUS" = "FAILED" ]; then
               echo "❌ Test spec upload failed"
               aws devicefarm get-upload --arn "$SPEC_UPLOAD_ARN"
               exit 1
             fi
-
+            
             sleep 5
             ATTEMPT=$((ATTEMPT + 1))
           done
@@ -1032,7 +1009,187 @@ jobs:
 
       - name: Monitor Test Run
         id: monitor_run
-        run: "RUN_ARN=\"${{ steps.schedule_run.outputs.run_arn }}\"\necho \"📊 Monitoring test run: $RUN_ARN\"\necho \"\"\n    #magic___^_^___line\nMAX_WAIT_TIME=3600  # 60 minutes (audio decoding should be faster than LLM inference)\nELAPSED=0\n    #magic___^_^___line\nwhile true; do\n  STATUS=$(aws devicefarm get-run --arn \"$RUN_ARN\" --query 'run.status' --output text)\n  RESULT=$(aws devicefarm get-run --arn \"$RUN_ARN\" --query 'run.result' --output text)\n    #magic___^_^___line\n  echo \"⏳ Run status: $STATUS (Result: $RESULT) - Elapsed: ${ELAPSED}s\"\n    #magic___^_^___line\n  if [[ \"$STATUS\" == \"COMPLETED\" ]]; then\n    echo \"\"\n    echo \"✅ Test run completed!\"\n    break\n  fi\n    #magic___^_^___line\n  if [ $ELAPSED -ge $MAX_WAIT_TIME ]; then\n    echo \"\"\n    echo \"❌ Timeout: Test run exceeded $MAX_WAIT_TIME seconds\"\n    exit 1\n  fi\n    #magic___^_^___line\n  sleep 30\n  ELAPSED=$((ELAPSED + 30))\ndone\n    #magic___^_^___line\n# Get detailed results\nRUN_DETAILS=$(aws devicefarm get-run --arn \"$RUN_ARN\" --output json)\nRESULT=$(echo $RUN_DETAILS | jq -r '.run.result')\nCOUNTERS=$(echo $RUN_DETAILS | jq -r '.run.counters')\n    #magic___^_^___line\necho \"\"\necho \"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\"\necho \"📊 FINAL TEST RESULTS\"\necho \"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\"\necho \"Result: $RESULT\"\necho \"\"\n    #magic___^_^___line\n# Get jobs (devices) and extract actual test names\necho \"📱 Fetching detailed test results...\"\nJOBS=$(aws devicefarm list-jobs --arn \"$RUN_ARN\" --output json)\n    #magic___^_^___line\necho \"\"\necho \"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\"\necho \"📋 YOUR TESTS (excluding Setup/Teardown)\"\necho \"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\"\necho \"\"\n    #magic___^_^___line\nDEVICE_COUNT=0\nUSER_TEST_COUNT=0\nUSER_PASSED=0\nUSER_FAILED=0\nFAILED_TEST_DETAILS=()\n    #magic___^_^___line\n# Extract project ID and run ID from RUN_ARN for console links\n# RUN_ARN format: arn:aws:devicefarm:us-west-2:ACCOUNT:run:PROJECT_ID/RUN_ID\nPROJECT_ID=$(echo \"$RUN_ARN\" | sed -n 's/.*:run:\\([^/]*\\)\\/.*/\\1/p')\nRUN_ID=$(echo \"$RUN_ARN\" | sed -n 's/.*:run:[^/]*\\/\\(.*\\)/\\1/p')\n    #magic___^_^___line\n# Process each device/job\nfor JOB_ARN in $(echo \"$JOBS\" | jq -r '.jobs[].arn'); do\n  DEVICE_COUNT=$((DEVICE_COUNT + 1))\n  JOB_DETAILS=$(aws devicefarm get-job --arn \"$JOB_ARN\" --output json)\n  DEVICE_NAME=$(echo \"$JOB_DETAILS\" | jq -r '.job.device.name // \"Unknown Device\"')\n  JOB_RESULT=$(echo \"$JOB_DETAILS\" | jq -r '.job.result // \"UNKNOWN\"')\n  JOB_ID=$(echo \"$JOB_ARN\" | sed -n 's/.*:job:[^/]*\\/[^/]*\\/\\(.*\\)/\\1/p')\n    #magic___^_^___line\n  # Build console link (no region param needed when region is in subdomain)\n  CONSOLE_LINK=\"https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${PROJECT_ID}/runs/${RUN_ID}/jobs/${JOB_ID}\"\n    #magic___^_^___line\n  if [ \"$JOB_RESULT\" = \"PASSED\" ]; then\n    echo \"   ✅ $DEVICE_NAME: PASSED\"\n    USER_PASSED=$((USER_PASSED + 1))\n  else\n    echo \"   ❌ $DEVICE_NAME: $JOB_RESULT\"\n    USER_FAILED=$((USER_FAILED + 1))\n    FAILED_TEST_DETAILS+=(\"❌ $DEVICE_NAME: $JOB_RESULT\")\n    FAILED_TEST_DETAILS+=(\"   📎 View logs: $CONSOLE_LINK\")\n  fi\n    #magic___^_^___line\n  USER_TEST_COUNT=$((USER_TEST_COUNT + 1))\n  echo \"\"\ndone\n    #magic___^_^___line\n# Show AWS Device Farm console link for the entire run\necho \"\"\necho \"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\"\necho \"🔗 AWS DEVICE FARM LINKS\"\necho \"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\"\necho \"\"\necho \"📊 Full Run Details:\"\necho \"   https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${PROJECT_ID}/runs/${RUN_ID}\"\necho \"\"\necho \"💡 Tip: Click the link above, then select a device to view:\"\necho \"   • Video recording of the test\"\necho \"   • Screenshots\"  \necho \"   • Device logs\"\necho \"   • Test spec output (shows individual test results)\"\necho \"\"\n    #magic___^_^___line\n# Summary\necho \"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\"\necho \"📊 SUMMARY\"\necho \"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\"\necho \"\"\necho \"Devices tested: $DEVICE_COUNT\"\necho \"  ✅ Passed: $USER_PASSED\"\necho \"  ❌ Failed: $USER_FAILED\"\necho \"\"\necho \"📋 What these tests verify:\"\necho \"   The E2E tests run on Device Farm check that your app:\"\necho \"   1. Shows 'INITIALIZED' after startup\"\necho \"   2. Runs all test functions from test/mobile/*.cjs\"\necho \"   3. Reports PASS/FAIL for each test function\"\necho \"\"\necho \"💡 If a test times out but the video shows PASS:\"\necho \"   → The app test passed, but E2E gave up waiting too early\"\necho \"   → Check timeout settings in qvac-test-addon-mobile\"\necho \"\"\necho \"Device Farm Counters (includes Setup/Teardown):\"\necho \"$COUNTERS\" | jq '.'\necho \"\"\n    #magic___^_^___line\nif [ ${#FAILED_TEST_DETAILS[@]} -gt 0 ]; then\n  echo \"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\"\n  echo \"❌ FAILED TESTS\"\n  echo \"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\"\n  for failed_info in \"${FAILED_TEST_DETAILS[@]}\"; do\n    echo \"$failed_info\"\n  done\n  echo \"\"\nfi\n    #magic___^_^___line\n# Save for PR comment\necho \"test_result=$RESULT\" >> $GITHUB_OUTPUT\necho \"test_counters<<EOF\" >> $GITHUB_OUTPUT\necho \"$COUNTERS\" >> $GITHUB_OUTPUT\necho \"EOF\" >> $GITHUB_OUTPUT\n    #magic___^_^___line\n# Extract test counts\nTOTAL=$(echo $COUNTERS | jq -r '.total // 0')\nPASSED=$(echo $COUNTERS | jq -r '.passed // 0')\nFAILED=$(echo $COUNTERS | jq -r '.failed // 0')\nSKIPPED=$(echo $COUNTERS | jq -r '.skipped // 0')\n    #magic___^_^___line\necho \"test_total=$TOTAL\" >> $GITHUB_OUTPUT\necho \"test_passed=$PASSED\" >> $GITHUB_OUTPUT\necho \"test_failed=$FAILED\" >> $GITHUB_OUTPUT\necho \"test_skipped=$SKIPPED\" >> $GITHUB_OUTPUT\n    #magic___^_^___line\n# Also save user test counts\necho \"user_test_count=$USER_TEST_COUNT\" >> $GITHUB_OUTPUT\necho \"user_test_passed=$USER_PASSED\" >> $GITHUB_OUTPUT\necho \"user_test_failed=$USER_FAILED\" >> $GITHUB_OUTPUT\n    #magic___^_^___line\n# Determine if tests passed or failed\n# Red status (exit 1) if:\n#   1. Device Farm overall result is not PASSED, OR\n#   2. Any of your tests failed\n# Green status (exit 0) only if all tests passed\n    #magic___^_^___line\nif [[ \"$RESULT\" != \"PASSED\" ]] || [ $USER_FAILED -gt 0 ]; then\n  echo \"\"\n  echo \"❌ Device Farm tests failed\"\n  if [[ \"$RESULT\" != \"PASSED\" ]]; then\n    echo \"   Device Farm result: $RESULT\"\n  fi\n  echo \"   Your tests: $USER_PASSED passed, $USER_FAILED failed (out of $USER_TEST_COUNT total)\"\n  echo \"   Device Farm total: $TOTAL | Passed: $PASSED | Failed: $FAILED | Skipped: $SKIPPED\"\n  exit 1\nfi\n    #magic___^_^___line\necho \"\"\necho \"✅ All Device Farm tests passed!\"\necho \"   Your tests: $USER_PASSED passed (out of $USER_TEST_COUNT total)\"\necho \"   Device Farm total: $TOTAL | Passed: $PASSED | Failed: $FAILED | Skipped: $SKIPPED\"\n    #magic___^_^___line\n"
+        run: |
+          RUN_ARN="${{ steps.schedule_run.outputs.run_arn }}"
+          echo "📊 Monitoring test run: $RUN_ARN"
+          echo ""
+
+          MAX_WAIT_TIME=3600  # 60 minutes (audio decoding should be faster than LLM inference)
+          ELAPSED=0
+
+          while true; do
+            STATUS=$(aws devicefarm get-run --arn "$RUN_ARN" --query 'run.status' --output text)
+            RESULT=$(aws devicefarm get-run --arn "$RUN_ARN" --query 'run.result' --output text)
+            
+            echo "⏳ Run status: $STATUS (Result: $RESULT) - Elapsed: ${ELAPSED}s"
+            
+            if [[ "$STATUS" == "COMPLETED" ]]; then
+              echo ""
+              echo "✅ Test run completed!"
+              break
+            fi
+            
+            if [ $ELAPSED -ge $MAX_WAIT_TIME ]; then
+              echo ""
+              echo "❌ Timeout: Test run exceeded $MAX_WAIT_TIME seconds"
+              exit 1
+            fi
+            
+            sleep 30
+            ELAPSED=$((ELAPSED + 30))
+          done
+
+          # Get detailed results
+          RUN_DETAILS=$(aws devicefarm get-run --arn "$RUN_ARN" --output json)
+          RESULT=$(echo $RUN_DETAILS | jq -r '.run.result')
+          COUNTERS=$(echo $RUN_DETAILS | jq -r '.run.counters')
+
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📊 FINAL TEST RESULTS"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Result: $RESULT"
+          echo ""
+
+          # Get jobs (devices) and extract actual test names
+          echo "📱 Fetching detailed test results..."
+          JOBS=$(aws devicefarm list-jobs --arn "$RUN_ARN" --output json)
+
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📋 YOUR TESTS (excluding Setup/Teardown)"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+
+          DEVICE_COUNT=0
+          USER_TEST_COUNT=0
+          USER_PASSED=0
+          USER_FAILED=0
+          FAILED_TEST_DETAILS=()
+
+          # Extract project ID and run ID from RUN_ARN for console links
+          # RUN_ARN format: arn:aws:devicefarm:us-west-2:ACCOUNT:run:PROJECT_ID/RUN_ID
+          PROJECT_ID=$(echo "$RUN_ARN" | sed -n 's/.*:run:\([^/]*\)\/.*/\1/p')
+          RUN_ID=$(echo "$RUN_ARN" | sed -n 's/.*:run:[^/]*\/\(.*\)/\1/p')
+
+          # Process each device/job
+          for JOB_ARN in $(echo "$JOBS" | jq -r '.jobs[].arn'); do
+            DEVICE_COUNT=$((DEVICE_COUNT + 1))
+            JOB_DETAILS=$(aws devicefarm get-job --arn "$JOB_ARN" --output json)
+            DEVICE_NAME=$(echo "$JOB_DETAILS" | jq -r '.job.device.name // "Unknown Device"')
+            JOB_RESULT=$(echo "$JOB_DETAILS" | jq -r '.job.result // "UNKNOWN"')
+            JOB_ID=$(echo "$JOB_ARN" | sed -n 's/.*:job:[^/]*\/[^/]*\/\(.*\)/\1/p')
+            
+            # Build console link (no region param needed when region is in subdomain)
+            CONSOLE_LINK="https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${PROJECT_ID}/runs/${RUN_ID}/jobs/${JOB_ID}"
+            
+            if [ "$JOB_RESULT" = "PASSED" ]; then
+              echo "   ✅ $DEVICE_NAME: PASSED"
+              USER_PASSED=$((USER_PASSED + 1))
+            else
+              echo "   ❌ $DEVICE_NAME: $JOB_RESULT"
+              USER_FAILED=$((USER_FAILED + 1))
+              FAILED_TEST_DETAILS+=("❌ $DEVICE_NAME: $JOB_RESULT")
+              FAILED_TEST_DETAILS+=("   📎 View logs: $CONSOLE_LINK")
+            fi
+            
+            USER_TEST_COUNT=$((USER_TEST_COUNT + 1))
+            echo ""
+          done
+
+          # Show AWS Device Farm console link for the entire run
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🔗 AWS DEVICE FARM LINKS"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "📊 Full Run Details:"
+          echo "   https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${PROJECT_ID}/runs/${RUN_ID}"
+          echo ""
+          echo "💡 Tip: Click the link above, then select a device to view:"
+          echo "   • Video recording of the test"
+          echo "   • Screenshots"  
+          echo "   • Device logs"
+          echo "   • Test spec output (shows individual test results)"
+          echo ""
+
+          # Summary
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📊 SUMMARY"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "Devices tested: $DEVICE_COUNT"
+          echo "  ✅ Passed: $USER_PASSED"
+          echo "  ❌ Failed: $USER_FAILED"
+          echo ""
+          echo "📋 What these tests verify:"
+          echo "   The E2E tests run on Device Farm check that your app:"
+          echo "   1. Shows 'INITIALIZED' after startup"
+          echo "   2. Runs all test functions from test/mobile/*.cjs"
+          echo "   3. Reports PASS/FAIL for each test function"
+          echo ""
+          echo "💡 If a test times out but the video shows PASS:"
+          echo "   → The app test passed, but E2E gave up waiting too early"
+          echo "   → Check timeout settings in qvac-test-addon-mobile"
+          echo ""
+          echo "Device Farm Counters (includes Setup/Teardown):"
+          echo "$COUNTERS" | jq '.'
+          echo ""
+
+          if [ ${#FAILED_TEST_DETAILS[@]} -gt 0 ]; then
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "❌ FAILED TESTS"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            for failed_info in "${FAILED_TEST_DETAILS[@]}"; do
+              echo "$failed_info"
+            done
+            echo ""
+          fi
+
+          # Save for PR comment
+          echo "test_result=$RESULT" >> $GITHUB_OUTPUT
+          echo "test_counters<<EOF" >> $GITHUB_OUTPUT
+          echo "$COUNTERS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          # Extract test counts
+          TOTAL=$(echo $COUNTERS | jq -r '.total // 0')
+          PASSED=$(echo $COUNTERS | jq -r '.passed // 0')
+          FAILED=$(echo $COUNTERS | jq -r '.failed // 0')
+          SKIPPED=$(echo $COUNTERS | jq -r '.skipped // 0')
+
+          echo "test_total=$TOTAL" >> $GITHUB_OUTPUT
+          echo "test_passed=$PASSED" >> $GITHUB_OUTPUT
+          echo "test_failed=$FAILED" >> $GITHUB_OUTPUT
+          echo "test_skipped=$SKIPPED" >> $GITHUB_OUTPUT
+
+          # Also save user test counts
+          echo "user_test_count=$USER_TEST_COUNT" >> $GITHUB_OUTPUT
+          echo "user_test_passed=$USER_PASSED" >> $GITHUB_OUTPUT
+          echo "user_test_failed=$USER_FAILED" >> $GITHUB_OUTPUT
+
+          # Determine if tests passed or failed
+          # Red status (exit 1) if:
+          #   1. Device Farm overall result is not PASSED, OR
+          #   2. Any of your tests failed
+          # Green status (exit 0) only if all tests passed
+
+          if [[ "$RESULT" != "PASSED" ]] || [ $USER_FAILED -gt 0 ]; then
+            echo ""
+            echo "❌ Device Farm tests failed"
+            if [[ "$RESULT" != "PASSED" ]]; then
+              echo "   Device Farm result: $RESULT"
+            fi
+            echo "   Your tests: $USER_PASSED passed, $USER_FAILED failed (out of $USER_TEST_COUNT total)"
+            echo "   Device Farm total: $TOTAL | Passed: $PASSED | Failed: $FAILED | Skipped: $SKIPPED"
+            exit 1
+          fi
+
+          echo ""
+          echo "✅ All Device Farm tests passed!"
+          echo "   Your tests: $USER_PASSED passed (out of $USER_TEST_COUNT total)"
+          echo "   Device Farm total: $TOTAL | Passed: $PASSED | Failed: $FAILED | Skipped: $SKIPPED"
+
       - name: Refresh AWS credentials for log download
         if: always() && steps.schedule_run.outputs.run_arn
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0

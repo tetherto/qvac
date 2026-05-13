@@ -29,7 +29,13 @@ on:
         default: "tetherto/qvac"
       artifact-name-prefix:
         description: >-
-          Optional prefix for the per-matrix prebuild artifact name. The merged artifact is always uploaded under the well-known name `prebuilds`, but downstream mobile-integration test workflows download per-matrix artifacts via glob patterns built from this prefix (see PREBUILD_ARTIFACT_PREFIX in integration-mobile-test-*.yml), so it must match the convention expected by the consumer.
+          Optional prefix for the per-matrix prebuild artifact name. The
+          merged artifact is always uploaded under the well-known name
+          `prebuilds`, but downstream mobile-integration test workflows
+          download per-matrix artifacts via glob patterns built from this
+          prefix (see PREBUILD_ARTIFACT_PREFIX in
+          integration-mobile-test-*.yml), so it must match the convention
+          expected by the consumer.
         type: string
         required: false
         default: ""
@@ -50,13 +56,21 @@ on:
         default: false
       extra-cmake-defines:
         description: >-
-          Additional cmake defines appended verbatim to `bare-make generate` on every matrix entry. Space-separated. Example: "-D VK_PROFILING=ON" to enable Vulkan profiling on the llamacpp packages.
+          Additional cmake defines appended verbatim to `bare-make generate`
+          on every matrix entry. Space-separated. Example:
+          "-D VK_PROFILING=ON" to enable Vulkan profiling on the llamacpp
+          packages.
         type: string
         required: false
         default: ""
       platform-cmake-defines:
         description: >-
-          Platform-conditional cmake defines, one entry per line in `<platform>: <defines>` form. The matched platform's defines are appended after `extra-cmake-defines`, so they can override common defines if needed. Platforms without an entry contribute nothing. Example: #magic___^_^___line
+          Platform-conditional cmake defines, one entry per line in
+          `<platform>: <defines>` form. The matched platform's defines are
+          appended after `extra-cmake-defines`, so they can override common
+          defines if needed. Platforms without an entry contribute nothing.
+          Example:
+
             platform-cmake-defines: |
               darwin: -D WHISPER_USE_METAL=ON
               ios: -D WHISPER_USE_METAL=ON
@@ -73,7 +87,10 @@ on:
         default: false
       setup-rust-toolchain:
         description: >-
-          Ensure a stable Rust toolchain plus the per-platform stdlib targets required by native crates that ship Rust code (iOS / Android via `rustup target add ...`). On Windows the action will bootstrap rustup itself if it isn't already on PATH.
+          Ensure a stable Rust toolchain plus the per-platform stdlib targets
+          required by native crates that ship Rust code (iOS / Android via
+          `rustup target add ...`). On Windows the action will bootstrap
+          rustup itself if it isn't already on PATH.
         type: boolean
         required: false
         default: false
@@ -82,30 +99,7 @@ permissions:
   contents: read
 
 jobs:
-  label-gate:
-    name: Authorise (label-gate)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    outputs:
-      authorised: ${{ steps.gate.outputs.authorised }}
-    steps:
-      - name: Checkout (label-gate action only)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/actions/label-gate
-          sparse-checkout-cone-mode: false
-      - name: Run label-gate
-        id: gate
-        uses: ./.github/actions/label-gate
-        with:
-          github-token: ${{ secrets.PAT_TOKEN }}
-
   prebuild:
-    needs: [label-gate]
-    if: needs.label-gate.outputs.authorised == 'true'
     permissions:
       contents: write
       pull-requests: write
@@ -321,7 +315,9 @@ jobs:
           find prebuilds -type f -name '*.a' -delete
 
       - name: Smoke check (tmp-*) package name & prebuilds listing
-        if: ${{ startsWith(github.ref, 'refs/heads/tmp-') || startsWith(github.ref_name, 'tmp-') || (inputs.ref != '' && (startsWith(inputs.ref, 'refs/heads/tmp-') || startsWith(inputs.ref, 'tmp-'))) }}
+        if: ${{ startsWith(github.ref, 'refs/heads/tmp-')
+                || startsWith(github.ref_name, 'tmp-')
+                || (inputs.ref != '' && (startsWith(inputs.ref, 'refs/heads/tmp-') || startsWith(inputs.ref, 'tmp-'))) }}
         shell: bash
         working-directory: ${{ env.WORKDIR }}
         run: |

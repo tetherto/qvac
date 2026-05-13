@@ -36,35 +36,12 @@ on:
 env:
   NODE_VERSION: 'lts/*'
   ADDON_NAME: '@qvac/transcription-whispercpp'
-  PREBUILD_ARTIFACT_PREFIX: 'whisper-cpp-' # Prefix for prebuild artifacts (matches prebuilds.yaml)
-  TEST_FRAMEWORK_REF: 'main' # Branch/tag of qvac-test-addon-mobile framework
-  APP_BUNDLE_ID: 'io.tether.test.qvac' # Bundle ID for the test app (same for all addons)
+  PREBUILD_ARTIFACT_PREFIX: 'whisper-cpp-'  # Prefix for prebuild artifacts (matches prebuilds.yaml)
+  TEST_FRAMEWORK_REF: 'main'  # Branch/tag of qvac-test-addon-mobile framework
+  APP_BUNDLE_ID: 'io.tether.test.qvac'  # Bundle ID for the test app (same for all addons)
 
 jobs:
-  label-gate:
-    name: Authorise (label-gate)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    outputs:
-      authorised: ${{ steps.gate.outputs.authorised }}
-    steps:
-      - name: Checkout (label-gate action only)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/actions/label-gate
-          sparse-checkout-cone-mode: false
-      - name: Run label-gate
-        id: gate
-        uses: ./.github/actions/label-gate
-        with:
-          github-token: ${{ secrets.PAT_TOKEN }}
-
   build-and-test:
-    needs: [label-gate]
-    if: needs.label-gate.outputs.authorised == 'true'
     name: Build ${{ matrix.platform }} and Run E2E Tests
     runs-on: ${{ matrix.runner }}
     environment: release
@@ -72,7 +49,7 @@ jobs:
     permissions:
       contents: read
       packages: read
-      pull-requests: write # Allow commenting on PRs
+      pull-requests: write  # Allow commenting on PRs
       id-token: write
     strategy:
       fail-fast: false
@@ -80,7 +57,7 @@ jobs:
         include:
           - platform: Android
             os: ubuntu-24.04
-            runner: ai-run-linux # Self-hosted runner to avoid Maven Central 403 issues
+            runner: ai-run-linux  # Self-hosted runner to avoid Maven Central 403 issues
           - platform: iOS
             os: macos-14
             runner: macos-14
