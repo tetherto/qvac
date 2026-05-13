@@ -30,7 +30,7 @@ public:
       common_params& commonParams, common_init_result&& llamaInit,
       ToolsCompactController& tools);
   TextLlmContext(
-      const common_params& commonParams, const LlmContextShared& shared,
+      const common_params& commonParams, const LlmModelContext& shared,
       ToolsCompactController& tools, llama_seq_id seqId);
 
   // Destructor
@@ -90,7 +90,7 @@ public:
   /**
    * Access the underlying llama model pointer.
    */
-  llama_model* getModel() override { return model_; }
+  llama_model* getModel() override { return modelCtx_.model; }
 
   /**
    * Access the mutable common parameters associated with this context.
@@ -224,9 +224,7 @@ private:
 
   ToolsCompactController& tools_;
   common_init_result llamaInit_;
-  llama_model* model_ = nullptr;
-  llama_context* lctx_ = nullptr;
-  const llama_vocab* vocab_ = nullptr;
+  LlmModelContext modelCtx_;
   CommonSamplerPtr smpl_;
 
   common_params params_;

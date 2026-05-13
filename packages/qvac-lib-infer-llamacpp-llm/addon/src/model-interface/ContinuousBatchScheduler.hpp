@@ -75,8 +75,7 @@ struct BatchResult {
 /// and refills slots as soon as completed requests are drained.
 class ContinuousBatchScheduler {
 public:
-  /// @param ctx                Live llama_context. Must outlive `*this`.
-  /// @param model              Live llama_model. Must outlive `*this`.
+  /// @param shared             Live llama handles. Must outlive `*this`.
   /// @param maxChunkSize       Tokens fed per slot per step (typically n_batch).
   /// @param ctxTotalTokens     Whole-pool KV-cache size (== llama_n_ctx).
   ///                            Partitioned uniformly across `batchSize`
@@ -88,9 +87,9 @@ public:
   ///                            admitted slot policy before request overrides
   ///                            are applied.
   ContinuousBatchScheduler(
-      llama_context* ctx, llama_model* model, unsigned maxChunkSize,
-      unsigned ctxTotalTokens, size_t batchSize, int32_t batchCapacity,
-      const common_params& baseParams, llama_pos configuredNDiscarded,
+      LlmModelContext shared, unsigned maxChunkSize, unsigned ctxTotalTokens,
+      size_t batchSize, int32_t batchCapacity, const common_params& baseParams,
+      llama_pos configuredNDiscarded,
       std::optional<ToolsCompactProfile> toolsCompactProfile);
 
   ContinuousBatchScheduler(const ContinuousBatchScheduler&) = delete;
@@ -196,9 +195,7 @@ private:
   void saveCacheForSlot(uint32_t seqId, const SlotState& slot);
   void accumulateSlotRuntimeStats(const SlotState& slot, const Request& req);
 
-  llama_context* ctx_;
-  llama_model* model_;
-  const llama_vocab* vocab_;
+  LlmModelContext shared_;
 
   /// Baseline sampling block + n_predict, used when admitting requests
   /// to derive per-request sampling and cap.

@@ -132,26 +132,10 @@ struct ThreadPoolDeleter {
 };
 using ThreadPoolPtr = std::unique_ptr<ggml_threadpool, ThreadPoolDeleter>;
 
-/// Non-owning bundle of the resources that survive across slot
-/// boundaries when an `LlmContext` is used as a per-slot policy under
-/// the `ContinuousBatchScheduler`. The owner (the scheduler / the
-/// outer `LlamaModel`) keeps `model`, `lctx`, and the threadpools
-/// alive for the entire lifetime of every slot policy that borrows
-/// them; per-slot `LlmContext` instances populated through this
-/// bundle MUST NOT call `llama_*_free` on any of these handles.
-///
-/// In the legacy single-prompt path the same `LlmContext` instance
-/// owns its bundle directly (via `common_init_result llamaInit_` +
-/// the threadpools it builds in its ctor); this struct is only used
-/// by the new shared-ctx ctor path.
-struct LlmContextShared {
+struct LlmModelContext {
   llama_model* model = nullptr;
   llama_context* lctx = nullptr;
   const llama_vocab* vocab = nullptr;
-  /// Threadpools attached to `lctx` via `llama_attach_threadpool`.
-  /// One pair per `lctx`, shared across every borrowing slot policy.
-  ggml_threadpool* threadpool = nullptr;
-  ggml_threadpool* threadpoolBatch = nullptr;
 };
 
 class LlmContext { // NOLINT(cppcoreguidelines-special-member-functions)

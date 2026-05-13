@@ -391,9 +391,13 @@ LlamaModel::initBatchScheduler(ReloadableState& state) {
   const auto ctxTotalTokens = static_cast<unsigned>(llama_n_ctx(ctx));
   const auto batchCapacity = static_cast<int32_t>(cparams.n_batch);
   const auto maxChunkSize = static_cast<unsigned>(cparams.n_ubatch);
+  LlmModelContext shared{
+      .model = mdl,
+      .lctx = ctx,
+      .vocab = mdl != nullptr ? llama_model_get_vocab(mdl) : nullptr,
+  };
   return std::make_unique<batching::ContinuousBatchScheduler>(
-      ctx,
-      mdl,
+      shared,
       maxChunkSize,
       ctxTotalTokens,
       batchSize,

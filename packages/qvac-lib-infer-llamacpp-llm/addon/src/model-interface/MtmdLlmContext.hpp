@@ -87,7 +87,7 @@ public:
   /**
    * Access the underlying llama model pointer.
    */
-  llama_model* getModel() override { return model_; }
+  llama_model* getModel() override { return modelCtx_.model; }
 
   /**
    * Access the mutable common parameters associated with this context.
@@ -203,9 +203,7 @@ private:
   ToolsCompactController& tools_;
   common_init_result llamaInit_;
   mtmd::context_ptr ctxVision_;
-  llama_model* model_;
-  llama_context* lctx_;
-  const llama_vocab* vocab_;
+  LlmModelContext modelCtx_;
   CommonSamplerPtr smpl_;
 
   common_params params_;

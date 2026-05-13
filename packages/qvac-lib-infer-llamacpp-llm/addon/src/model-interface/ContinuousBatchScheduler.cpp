@@ -38,12 +38,11 @@ unsigned perSeqCeiling(unsigned ctxTotalTokens, size_t batchSize) {
 } // namespace
 
 ContinuousBatchScheduler::ContinuousBatchScheduler(
-    llama_context* ctx, llama_model* model, unsigned maxChunkSize,
-    unsigned ctxTotalTokens, size_t batchSize, int32_t batchCapacity,
-    const common_params& baseParams, llama_pos configuredNDiscarded,
+    LlmModelContext shared, unsigned maxChunkSize, unsigned ctxTotalTokens,
+    size_t batchSize, int32_t batchCapacity, const common_params& baseParams,
+    llama_pos configuredNDiscarded,
     std::optional<ToolsCompactProfile> toolsCompactProfile)
-    : ctx_(ctx), model_(model),
-      vocab_(model != nullptr ? llama_model_get_vocab(model) : nullptr),
+    : shared_(shared),
       baseSampling_(baseParams.sampling),
       baseNPredict_(baseParams.n_predict),
       baseParams_(baseParams),
@@ -54,8 +53,8 @@ ContinuousBatchScheduler::ContinuousBatchScheduler(
       batch_(batchCapacity, 0, static_cast<int32_t>(batchSize)),
       slots_(batchSize), statsStart_(std::chrono::steady_clock::now()) {
 
-  const bool ctxValid =
-      ctx_ != nullptr && model_ != nullptr && vocab_ != nullptr;
+  const bool ctxValid = shared_.lctx != nullptr && shared_.model != nullptr &&
+                        shared_.vocab != nullptr;
   if (!ctxValid) {
     throw std::invalid_argument(
         "ContinuousBatchScheduler: ctx, model, and vocab must be non-null");
@@ -217,7 +216,7 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
     // json_schema or grammars rejected by `common_sampler_init`;
     // propagated to the caller, mirroring single-prompt behaviour.
     [[maybe_unused]] auto discardedRestore = applyGenerationParamsToContext(
-        tmpParams, overrideSampler, model_, request.overrides);
+        tmpParams, overrideSampler, shared_.model, request.overrides);
   }
 
   // `n_predict` is a per-request *generation budget* (max tokens to
@@ -243,11 +242,9 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
             ")");
   }
   const uint32_t seqId = *maybeSeqId;
-  LlmContextShared shared{
-      .model = model_, .lctx = ctx_, .vocab = vocab_};
   auto tools = std::make_unique<ToolsCompactController>(toolsCompactProfile_);
   std::unique_ptr<SequenceDriver> driver =
-      std::make_unique<TextLlmContext>(tmpParams, shared, *tools, seqId);
+      std::make_unique<TextLlmContext>(tmpParams, shared_, *tools, seqId);
   const bool isCacheLoaded =
       driver->loadCache(request.cacheKey, configuredNDiscarded_);
   const bool hasKvCacheContext = isCacheLoaded || driver->getNPast() > 0;
@@ -332,7 +329,7 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
   if (lock != nullptr) {
     lock->unlock();
   }
-  const int decodeRc = llama_decode(ctx_, *batch_);
+  const int decodeRc = llama_decode(shared_.lctx, *batch_);
   if (lock != nullptr) {
     lock->lock();
   }
@@ -340,7 +337,7 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
   if (decodeRc != 0) {
     batcher_.markAllFinished(StopReason::DecodeError);
     auto kvClear = [this](uint32_t seqId) {
-      llama_memory_t mem = llama_get_memory(ctx_);
+      llama_memory_t mem = llama_get_memory(shared_.lctx);
       if (mem != nullptr) {
         llama_memory_seq_rm(mem, static_cast<llama_seq_id>(seqId), -1, -1);
       }
@@ -424,7 +421,7 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
   }
 
   auto kvClear = [this](uint32_t seqId) {
-    auto* mem = llama_get_memory(ctx_);
+    auto* mem = llama_get_memory(shared_.lctx);
     if (mem != nullptr) {
       llama_memory_seq_rm(mem, static_cast<llama_seq_id>(seqId), -1, -1);
     }
@@ -535,7 +532,7 @@ bool ContinuousBatchScheduler::cancel(uint32_t seqId) {
     }
     notifyDone(seqId);
     auto kvClear = [this](uint32_t s) {
-      auto* mem = llama_get_memory(ctx_);
+      auto* mem = llama_get_memory(shared_.lctx);
       if (mem != nullptr) {
         llama_memory_seq_rm(mem, static_cast<llama_seq_id>(s), -1, -1);
       }
@@ -567,7 +564,7 @@ void ContinuousBatchScheduler::clearLocked() {
     }
   }
   auto kvClear = [this](uint32_t s) {
-    auto* mem = llama_get_memory(ctx_);
+    auto* mem = llama_get_memory(shared_.lctx);
     if (mem != nullptr) {
       llama_memory_seq_rm(mem, static_cast<llama_seq_id>(s), -1, -1);
     }
@@ -606,7 +603,7 @@ void ContinuousBatchScheduler::failGroupLocked(
       pending_.end());
 
   auto kvClear = [this](uint32_t seqId) {
-    auto* mem = llama_get_memory(ctx_);
+    auto* mem = llama_get_memory(shared_.lctx);
     if (mem != nullptr) {
       llama_memory_seq_rm(mem, static_cast<llama_seq_id>(seqId), -1, -1);
     }
