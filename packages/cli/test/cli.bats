@@ -43,6 +43,17 @@ setup_file() {
     [[ "${code}" == "401" ]] && break
     sleep 0.25
   done
+
+  # Minimal 1x1 PNG for multipart /v1/images/edits tests.
+  node -e "
+    const fs = require('fs');
+    const p = '${FILE_TMPDIR}/tiny.png';
+    const b = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      'base64'
+    );
+    fs.writeFileSync(p, b);
+  "
 }
 
 teardown_file() {
@@ -402,6 +413,75 @@ http_status() {
   local body
   body=$(curl -s "http://127.0.0.1:19920/v1/audio/translations" \
     -F "model=nonexistent" -F "file=@/dev/null;filename=audio.wav")
+  assert_error "${body}" "model_not_found"
+}
+
+# ── Serve: images generations validation (JSON) ───────────────────────
+
+@test "images generations: missing model returns 400" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/images/generations" \
+    -H "Content-Type: application/json" \
+    -d '{"prompt":"a red square"}')
+  assert_error "${body}" "missing_model"
+}
+
+@test "images generations: invalid response_format returns 400" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/images/generations" \
+    -H "Content-Type: application/json" \
+    -d '{"model":"x","prompt":"a red square","response_format":"png"}')
+  assert_error "${body}" "invalid_response_format"
+}
+
+@test "images generations: unknown model returns 404" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/images/generations" \
+    -H "Content-Type: application/json" \
+    -d '{"model":"nonexistent","prompt":"a red square"}')
+  assert_error "${body}" "model_not_found"
+}
+
+# ── Serve: images edits validation (multipart) ──────────────────────────
+
+@test "images edits: JSON body returns 400 invalid_content_type" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/images/edits" \
+    -H "Content-Type: application/json" \
+    -d '{"model":"test","prompt":"hi"}')
+  assert_error "${body}" "invalid_content_type"
+}
+
+@test "images edits: missing image returns 400" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/images/edits" \
+    -F "model=test" -F "prompt=make it blue")
+  assert_error "${body}" "missing_image"
+}
+
+@test "images edits: missing model returns 400" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/images/edits" \
+    -F "image=@${FILE_TMPDIR}/tiny.png" -F "prompt=make it blue")
+  assert_error "${body}" "missing_model"
+}
+
+@test "images edits: invalid response_format returns 400" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/images/edits" \
+    -F "image=@${FILE_TMPDIR}/tiny.png" \
+    -F "model=nonexistent" \
+    -F "prompt=make it blue" \
+    -F "response_format=png")
+  assert_error "${body}" "invalid_response_format"
+}
+
+@test "images edits: unknown model returns 404" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/images/edits" \
+    -F "image=@${FILE_TMPDIR}/tiny.png" \
+    -F "model=nonexistent" \
+    -F "prompt=make it blue")
   assert_error "${body}" "model_not_found"
 }
 
