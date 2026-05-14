@@ -31,7 +31,7 @@ jobs:
       id-token: write
 
     env:
-      WORKDIR: packages/vla
+      WORKDIR: packages/vla-ggml
 
     strategy:
       fail-fast: false
