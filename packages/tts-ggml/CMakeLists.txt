@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.25)
 
+option(ANDROID_STL "Android STL linkage" c++_shared)
 option(BUILD_TESTING "Build tests" OFF)
 option(ENABLE_COVERAGE "Enable coverage" OFF)
 option(ENABLE_VULKAN "Enable Vulkan GPU acceleration" OFF)
@@ -49,7 +50,31 @@ if(WIN32)
   add_definitions(-DNOMINMAX -DWIN32_LEAN_AND_MEAN -DNOGDI)
 endif()
 
-add_bare_module(tts-ggml EXPORTS)
+# On Android with GGML_BACKEND_DL, install all ggml backend .so modules
+# alongside the addon so ggml can dlopen them at runtime. The local overlay
+# of the ggml-speech port drops GGML_CPU_STATIC so the CPU backend is also a
+# MODULE .so (no static cpu code linked into the addon).
+set(BACKEND_DL_EXPORTS "")
+if(ANDROID AND GGML_BACKEND_DL)
+  foreach(_backend ${GGML_AVAILABLE_BACKENDS})
+    string(REPLACE "-" "_" _backend_target_suffix "${_backend}")
+    find_library(_${_backend_target_suffix}_LIB NAMES
+      "qvac-speech-${_backend}"
+      "${_backend}"
+      PATHS
+        "${VCPKG_INSTALLED_PATH}/bin"
+        "${VCPKG_INSTALLED_PATH}/lib"
+      REQUIRED)
+
+    add_library(qvac_speech_${_backend_target_suffix} SHARED IMPORTED)
+    set_target_properties(qvac_speech_${_backend_target_suffix} PROPERTIES
+      IMPORTED_LOCATION "${_${_backend_target_suffix}_LIB}"
+      IMPORTED_NO_SONAME TRUE)
+    list(APPEND BACKEND_DL_EXPORTS INSTALL TARGET qvac_speech_${_backend_target_suffix})
+  endforeach()
+endif()
+
+add_bare_module(tts-ggml EXPORTS ${BACKEND_DL_EXPORTS})
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   target_link_options(${tts-ggml}_module PRIVATE -Wl,--exclude-libs,ALL)
