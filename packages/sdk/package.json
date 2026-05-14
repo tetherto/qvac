@@ -195,7 +195,7 @@
     "@expo/config-plugins": "^54.0.4",
     "@lancedb/lancedb": "^0.21.3",
     "@modelcontextprotocol/sdk": "^1.12.1",
-    "@qvac/cli": "^0.2.4",
+    "@qvac/cli": "^0.4.0",
     "@sqliteai/sqlite-wasm": "3.50.4-sync.0.8.30-vector.0.9.23",
     "@types/node": "^24.2.1",
     "@types/tar-stream": "^3.1.4",
@@ -226,7 +226,7 @@
   },
   "peerDependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
-    "@qvac/cli": "^0.2.4",
+    "@qvac/cli": "^0.4.0",
     "bare-abort-controller": "^1.0.0",
     "bare-buffer": "^3.4.2",
     "bare-crypto": "^1.13.4",
