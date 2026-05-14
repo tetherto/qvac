@@ -153,7 +153,7 @@ jobs:
   cpp-lint:
     needs: [authorize, context]
     if: needs.authorize.outputs.allowed == 'true'
-    uses: tetherto/qvac/.github/workflows/cpp-lint.yaml@tmp-self-hosted-runners
+    uses: ./.github/workflows/cpp-lint.yaml
     secrets: inherit
     with:
       sha: ${{ needs.context.outputs.base_sha }}
@@ -170,7 +170,7 @@ jobs:
       id-token: write
     needs: [authorize, context]
     if: needs.authorize.outputs.allowed == 'true'
-    uses: tetherto/qvac/.github/workflows/cpp-test-coverage-transcription-whispercpp.yml@tmp-self-hosted-runners
+    uses: ./.github/workflows/cpp-test-coverage-transcription-whispercpp.yml
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}
@@ -197,7 +197,7 @@ jobs:
       id-token: write
     needs: [authorize, context, prebuild]
     if: needs.authorize.outputs.allowed == 'true'
-    uses: tetherto/qvac/.github/workflows/integration-test-transcription-whispercpp.yml@tmp-self-hosted-runners
+    uses: ./.github/workflows/integration-test-transcription-whispercpp.yml
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}
@@ -212,7 +212,7 @@ jobs:
       id-token: write
     needs: [authorize, context, prebuild]
     if: needs.authorize.outputs.allowed == 'true'
-    uses: tetherto/qvac/.github/workflows/integration-mobile-test-transcription-whispercpp.yml@tmp-self-hosted-runners
+    uses: ./.github/workflows/integration-mobile-test-transcription-whispercpp.yml
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}
