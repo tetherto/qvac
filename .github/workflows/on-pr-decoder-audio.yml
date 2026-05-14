@@ -157,7 +157,7 @@ jobs:
       contents: read
       packages: read
       id-token: write
-    uses: ./.github/workflows/integration-test-decoder-audio.yml
+    uses: tetherto/qvac/.github/workflows/integration-test-decoder-audio.yml@tmp-self-hosted-runners
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}
@@ -172,7 +172,7 @@ jobs:
       id-token: write
     needs: context
     if: needs.context.outputs.run_verify == 'true' || github.event_name == 'workflow_dispatch'
-    uses: ./.github/workflows/integration-mobile-test-decoder-audio.yml
+    uses: tetherto/qvac/.github/workflows/integration-mobile-test-decoder-audio.yml@tmp-self-hosted-runners
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}

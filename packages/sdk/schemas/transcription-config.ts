@@ -79,33 +79,90 @@ export const whisperConfigSchema = z.object({
 
 export type WhisperConfig = z.infer<typeof whisperConfigSchema>;
 
-// === Parakeet (NVIDIA NeMo ONNX) engine config ===
-
-export const parakeetModelTypeEnumSchema = z.enum(["tdt", "ctc", "sortformer"]);
-export type ParakeetModelVariant = z.infer<typeof parakeetModelTypeEnumSchema>;
+// === Parakeet (NVIDIA NeMo GGML) engine config ===
+//
+// Backed by the ggml-based qvac-parakeet.cpp engine. A single GGUF
+// checkpoint covers every variant (TDT, CTC, EOU, Sortformer); the
+// addon auto-detects the model type from `parakeet.model.type` GGUF
+// metadata, so callers no longer pass a `modelType` discriminator and
+// only ever supply a single `modelSrc` at `loadModel` time.
+//
+// The `streaming*` knobs below configure the addon at load time. To
+// override any of them per `transcribeStream` call, see
+// `parakeetStreamingRunConfigSchema` in `./transcription.ts` — the
+// per-call schema intentionally drops the `streaming` prefix because
+// every field on it is already namespaced under `parakeetStreamingConfig`.
 
 export const parakeetRuntimeConfigSchema = z.object({
-  modelType: parakeetModelTypeEnumSchema.default("tdt"),
   maxThreads: z.number().int().optional(),
   useGPU: z.boolean().optional(),
   sampleRate: z.number().int().optional(),
   channels: z.number().int().optional(),
   captionEnabled: z.boolean().optional(),
   timestampsEnabled: z.boolean().optional(),
+  seed: z.number().int().optional(),
+  streaming: z.boolean().optional(),
+  streamingChunkMs: z.number().int().optional(),
+  streamingHistoryMs: z.number().int().optional(),
+  streamingEmitPartials: z.boolean().optional(),
+  /**
+   * CTC/TDT-only energy-based voice-activity hint. Forwarded to
+   * parakeet-cpp's `StreamingOptions::enable_energy_vad`. Influences
+   * how the engine segments speech (segment cadence, partial vs final
+   * emission) but does NOT add new event types to the transcribeStream
+   * output. Use the whisper engine if you need standalone VAD
+   * `speaking`/`probability` events.
+   */
+  streamingEnergyVad: z.boolean().optional(),
+  streamingLeftContextMs: z.number().int().optional(),
+  streamingRightLookaheadMs: z.number().int().optional(),
 });
 
-export const parakeetConfigSchema = parakeetRuntimeConfigSchema.extend({
-  // TDT sources
-  parakeetEncoderSrc: modelSrcInputSchema.optional(),
-  parakeetDecoderSrc: modelSrcInputSchema.optional(),
-  parakeetVocabSrc: modelSrcInputSchema.optional(),
-  parakeetPreprocessorSrc: modelSrcInputSchema.optional(),
-  // CTC sources
-  parakeetCtcModelSrc: modelSrcInputSchema.optional(),
-  parakeetTokenizerSrc: modelSrcInputSchema.optional(),
-  // Sortformer source
-  parakeetSortformerSrc: modelSrcInputSchema.optional(),
-});
+// Parakeet's load-time config currently has no fields beyond the
+// runtime knobs (single GGUF model is supplied via the top-level
+// `modelSrc` of `loadModel`). The alias is retained so consumers can
+// keep importing `ParakeetConfig` / `parakeetConfigSchema`.
+export const parakeetConfigSchema = parakeetRuntimeConfigSchema;
 
 export type ParakeetRuntimeConfig = z.infer<typeof parakeetRuntimeConfigSchema>;
 export type ParakeetConfig = z.infer<typeof parakeetConfigSchema>;
+
+// === Parakeet legacy ONNX modelConfig fields (deprecated) ===
+//
+// As of @qvac/transcription-parakeet 0.4.0 the addon ships as a single
+// GGUF that auto-detects TDT / CTC / EOU / Sortformer from GGUF
+// metadata. The pre-0.4 multi-file ONNX `modelConfig` fields below are
+// kept ONLY so callers migrating from earlier SDK versions hit a
+// structured `LegacyParakeetModelDeprecatedError` (with a migration
+// message) raised from the parakeet plugin's `resolveConfig`, rather
+// than a generic Zod `Unrecognized key` error.
+//
+// This deprecation alias will be removed in the next minor release.
+export const LEGACY_PARAKEET_ONNX_MODEL_CONFIG_FIELDS = [
+  "parakeetEncoderSrc",
+  "parakeetDecoderSrc",
+  "parakeetVocabSrc",
+  "parakeetPreprocessorSrc",
+  "parakeetCtcModelSrc",
+  "parakeetTokenizerSrc",
+  "parakeetSortformerSrc",
+  "parakeetModelSrc",
+  "modelType",
+] as const;
+
+const legacyParakeetOnnxFieldsShape =
+  LEGACY_PARAKEET_ONNX_MODEL_CONFIG_FIELDS.reduce<
+    Record<string, z.ZodOptional<z.ZodUnknown>>
+  >((acc, name) => {
+    acc[name] = z.unknown().optional();
+    return acc;
+  }, {});
+
+// Strict schema used by `loadModel` and the parakeet plugin's
+// `loadConfigSchema`. Permits the deprecated ONNX field names so the
+// plugin's `resolveConfig` can raise a structured
+// `LegacyParakeetModelDeprecatedError` instead of a generic Zod error;
+// other unknown keys are still rejected by `.strict()`.
+export const parakeetLoadConfigSchema = parakeetRuntimeConfigSchema
+  .extend(legacyParakeetOnnxFieldsShape)
+  .strict();

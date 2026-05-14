@@ -111,6 +111,7 @@ jobs:
           - os: ubuntu-22.04
             platform: linux
             arch: x64
+            runner: qvac-ubuntu2204-x64
           - os: ubuntu-22.04-arm
             platform: linux
             arch: arm64
@@ -136,11 +137,11 @@ jobs:
           - os: macos-15-intel
             platform: darwin
             arch: x64
-          - os: windows-2022
+          - os: windows-2025
             platform: win32
             arch: x64
-
-    runs-on: ${{ matrix.os }}
+            runner: qvac-win25-x64
+    runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
@@ -166,14 +167,16 @@ jobs:
           echo "Matrix arch: $MATRIX_ARCH"
           echo "Matrix tags: $MATRIX_TAGS"
 
-      - name: Setup build host
+      - name: Setup build host (Linux arm and macOS)
+        if: matrix.arch == 'arm64' || matrix.os == 'macos-15' || matrix.os == 'macos-15-intel'
         uses: tetherto/qvac/.github/actions/setup-build-host@df55c85d7b8004961e430557e85b6ec1b15cf170
         with:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
           linux-extra-packages: ${{ inputs.linux-extra-packages }}
 
-      - name: Setup LLVM
+      - name: Setup LLVM (Linux arm and macOS)
+        if: matrix.arch == 'arm64' || matrix.os == 'macos-15' || matrix.os == 'macos-15-intel'
         uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
 
       - name: Checkout repository
@@ -188,6 +191,10 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
+      - name: Use vcpkg in user profile on windows
+        if: matrix.os == 'windows-2025'
+        run: echo "VCPKG_INSTALLATION_ROOT=$HOME\vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Append
+
       - name: Setup vcpkg
         uses: tetherto/qvac/.github/actions/setup-vcpkg@1d9b2165867d03c6edd675e402ee101a5d48a6d8
         env:
@@ -196,20 +203,19 @@ jobs:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
 
-      - name: Setup Bare tooling
+      - name: Setup Bare tooling (Linux ARM and macOS)
+        if: matrix.arch == 'arm64' || matrix.os == 'macos-15' || matrix.os == 'macos-15-intel'
         uses: tetherto/qvac/.github/actions/setup-bare-tooling@0bbdca93da303a0b1634ba14a89cec085621078d
 
-      - if: ${{ inputs.setup-python-on-windows && matrix.platform == 'win32' }}
-        name: Setup Python on self-hosted Windows runner
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
-        with:
-          python-version: "3.12"
+      - name: Add linux x64 Bare tooling to PATH
+        if: matrix.os == 'ubuntu-22.04' && matrix.arch == 'x64'
+        run: echo "/usr/local/nvm/versions/node/v20.20.2/bin" >> $GITHUB_PATH
 
       - name: Setup Apple Clang
         uses: tetherto/qvac/.github/actions/setup-apple-clang@1d9b2165867d03c6edd675e402ee101a5d48a6d8
 
-      - if: ${{ inputs.include-vulkan-sdk }}
-        name: Setup Vulkan SDK
+      - if: ${{ inputs.include-vulkan-sdk && (matrix.arch == 'arm64' || matrix.os == 'macos-15' || matrix.os == 'macos-15-intel') }}
+        name: Setup Vulkan SDK (Linux ARM and MacOS)
         uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@0bbdca93da303a0b1634ba14a89cec085621078d
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
@@ -218,6 +224,18 @@ jobs:
           arch: ${{ matrix.arch }}
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
+
+      - if: ${{ matrix.platform == 'linux' && matrix.arch == 'x64' }}
+        name: Set Vulkan SDK path in Linux x64
+        shell: bash
+        run: |
+          echo "VULKAN_SDK=/opt/vulkansdk/x86_64" >> "$GITHUB_ENV"
+
+      - if: ${{ inputs.include-vulkan-sdk && matrix.os == 'windows-2025' }}
+        name: Set Vulkan SDK Path (Windows)
+        run: |
+          "VULKAN_SDK=C:\VulkanSDK" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+          "PATH=C:\VulkanSDK\Bin;$Env:PATH" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
 
       - if: ${{ inputs.mac-brew-packages != '' && startsWith(matrix.os, 'macos') }}
         name: Install extra brew packages on macOS
@@ -297,7 +315,8 @@ jobs:
         shell: bash
         run: bare-make install
 
-      - name: Strip static libraries (.a) from prebuilds
+      - name: Strip static libraries (.a) from prebuilds (Linux / MacOS)
+        if: matrix.os != 'windows-2025'
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: |
@@ -313,6 +332,27 @@ jobs:
           echo "Removing the following .a files:"
           echo "$MATCHES"
           find prebuilds -type f -name '*.a' -delete
+
+      - name: Strip static libraries (.a) from prebuilds (Windows)
+        if: matrix.os == 'windows-2025'
+        working-directory: ${{ env.WORKDIR }}
+        shell: powershell
+        run: |
+          # Check that prebuilds/ exists
+          if (-not (Test-Path -Path "prebuilds" -PathType Container)) {
+              Write-Output "prebuilds/ does not exist; skipping"
+              exit 0
+          }
+          # Find all .a files under prebuilds/
+          $matches = Get-ChildItem -Path "prebuilds" -Recurse -File -Filter "*.a"
+          if (-not $matches) {
+              Write-Output "No .a files found under prebuilds/"
+              exit 0
+          }
+          Write-Output "Removing the following .a files:"
+          $matches | ForEach-Object { Write-Output $_.FullName }
+          # Delete them
+          $matches | Remove-Item -Force
 
       - name: Smoke check (tmp-*) package name & prebuilds listing
         if: ${{ startsWith(github.ref, 'refs/heads/tmp-')

@@ -35,12 +35,12 @@ jobs:
       contents: write
       pull-requests: write
       id-token: write
-    uses: ./.github/workflows/reusable-prebuilds.yml
+    uses: tetherto/qvac/.github/workflows/reusable-prebuilds.yml@tmp-self-hosted-runners
     with:
       workdir: ${{ inputs.workdir }}
       ref: ${{ inputs.ref }}
       repository: ${{ inputs.repository }}
       artifact-name-prefix: onnx-tts-
-      setup-python-on-windows: true
+      # setup-python-on-windows: true
       setup-rust-toolchain: true
     secrets: inherit
