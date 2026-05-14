@@ -306,7 +306,7 @@ Run an **OpenAI-compatible HTTP server** backed by locally configured QVAC model
 qvac serve openai [options]
 ```
 
-See **[docs/serve-openai.md](./docs/serve-openai.md)** for supported `/v1/...` routes, multipart request shapes, and how to register models — including **`whispercpp-audio-translation`** for `POST /v1/audio/translations` (Whisper translate-to-English).
+See **[docs/serve-openai.md](./docs/serve-openai.md)** for supported `/v1/...` routes, multipart request shapes, and how to register models — including **`whispercpp-audio-translation`** for `POST /v1/audio/translations` (Whisper translate-to-English) and the volatile **`POST /v1/responses`** Responses API with `previous_response_id` chaining.
 
 ## Configuration
 

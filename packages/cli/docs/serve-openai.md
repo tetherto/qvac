@@ -12,11 +12,52 @@ This document describes the supported routes and how to configure `serve.models`
 | `GET` | `/v1/models/{id}` | Model metadata |
 | `DELETE` | `/v1/models/{id}` | Unload |
 | `POST` | `/v1/chat/completions` | Chat |
+| `POST` | `/v1/responses` | Responses API (blocking + SSE streaming); volatile, see below |
+| `GET` | `/v1/responses/{id}` | Retrieve a stored response |
+| `DELETE` | `/v1/responses/{id}` | Delete a stored response |
+| `GET` | `/v1/responses/{id}/input_items` | Paginate the original input items |
 | `POST` | `/v1/embeddings` | Embeddings |
 | `POST` | `/v1/audio/transcriptions` | Speech-to-text (source language) |
 | `POST` | `/v1/audio/translations` | Speech-to-text **into English** (Whisper translate task) |
 
 Other OpenAI routes may be added over time; this file is updated when they ship.
+
+## `POST /v1/responses`
+
+OpenAI-compatible Responses API: blocking, SSE streaming, retrieval by id,
+and `previous_response_id` chaining. Backed by the same chat models registered
+under `serve.models` (any alias whose endpoint category is `chat`).
+
+> **Volatile state.** All responses are kept in process memory only — there is
+> no disk or P2P persistence. Stored ids expire on server restart, after the
+> per-entry TTL (1h by default), or once the LRU cap (256 entries) evicts
+> them. Each response is also tagged with `X-QVAC-Stub: responses-volatile`
+> and a one-line warn is logged at startup so operators know the surface is
+> not durable. Pass `store: false` in the request body to skip persistence
+> entirely.
+
+Intentionally rejected with `400`: `conversation`, `background: true`, and
+built-in tools (`web_search`, `file_search`, `code_interpreter`).
+`function`-typed tools work normally.
+
+### Examples
+
+```bash
+# Blocking
+curl -sS http://127.0.0.1:11434/v1/responses \
+  -H "Content-Type: application/json" \
+  -d '{"model":"<alias>","input":"ping","store":true}'
+
+# Streaming (SSE)
+curl -sN http://127.0.0.1:11434/v1/responses \
+  -H "Content-Type: application/json" \
+  -d '{"model":"<alias>","input":"ping","stream":true}'
+
+# Multi-turn via previous_response_id
+curl -sS http://127.0.0.1:11434/v1/responses \
+  -H "Content-Type: application/json" \
+  -d '{"model":"<alias>","input":"and now?","previous_response_id":"resp_..."}'
+```
 
 ## `POST /v1/audio/translations`
 
