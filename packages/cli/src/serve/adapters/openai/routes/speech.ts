@@ -6,6 +6,7 @@ import {
   buildWavBuffer,
   int16SamplesToBuffer,
   mapResponseFormat,
+  pcmContentType,
   resolveSampleRate,
   speechAliasKey
 } from '../../../audio.js'
@@ -39,6 +40,18 @@ export async function handleAudioSpeech (req: IncomingMessage, res: ServerRespon
     return
   }
 
+  const maxInputChars = ctx.serveConfig.openai.audio.speech.maxInputChars
+  if (maxInputChars !== null && input.length > maxInputChars) {
+    sendError(
+      res,
+      400,
+      'input_too_long',
+      `"input" exceeds the configured limit of ${maxInputChars} characters (got ${input.length}). ` +
+      'Raise serve.openai.audio.speech.maxInputChars or split the request.'
+    )
+    return
+  }
+
   const voice = resolveVoice(body['voice'], ctx.serveConfig.openai.audio.speech.defaultVoice)
   if (voice === null) {
     sendError(res, 400, 'missing_voice', '"voice" is required (no default voice configured).')
@@ -55,18 +68,45 @@ export async function handleAudioSpeech (req: IncomingMessage, res: ServerRespon
     return
   }
 
+  const ignoredParams: string[] = []
   for (const key of IGNORED_PARAMS) {
     if (body[key] !== undefined) {
+      ignoredParams.push(key)
       ctx.logger.warn(`Ignoring unsupported param: ${key}=${stringifyForLog(body[key])}`)
     }
   }
 
   const aliasKey = speechAliasKey(modelName, voice)
-  let modelEntry: ResolvedModelEntry | ModelEntry | null = resolveModelAlias(ctx.serveConfig, aliasKey)
-  let resolvedAlias = aliasKey
+  const voiceKey = voice.toLowerCase()
+  const voiceMapAlias = ctx.serveConfig.openai.audio.speech.voices?.[voiceKey] ?? null
+
+  let modelEntry: ResolvedModelEntry | ModelEntry | null = null
+  let resolvedAlias = ''
+  let matchMode: 'voice_map' | 'hyphen' | 'model' = 'model'
+
+  if (typeof voiceMapAlias === 'string' && voiceMapAlias.trim().length > 0) {
+    const mapped = voiceMapAlias.trim()
+    modelEntry = resolveModelAlias(ctx.serveConfig, mapped)
+    if (modelEntry) {
+      resolvedAlias = mapped
+      matchMode = 'voice_map'
+    }
+  }
+
+  if (!modelEntry) {
+    modelEntry = resolveModelAlias(ctx.serveConfig, aliasKey)
+    if (modelEntry) {
+      resolvedAlias = aliasKey
+      matchMode = 'hyphen'
+    }
+  }
+
   if (!modelEntry) {
     modelEntry = resolveModelAlias(ctx.serveConfig, modelName) ?? ctx.registry.getEntry(modelName)
-    resolvedAlias = modelName
+    if (modelEntry) {
+      resolvedAlias = modelName
+      matchMode = 'model'
+    }
   }
 
   if (!modelEntry) {
@@ -74,7 +114,7 @@ export async function handleAudioSpeech (req: IncomingMessage, res: ServerRespon
       res,
       404,
       'model_not_found',
-      `Model "${modelName}" with voice "${voice}" is not available. Add either a "${modelName}" alias or a "${aliasKey}" alias under serve.models.`
+      `Model "${modelName}" with voice "${voice}" is not available. Add a "${aliasKey}" alias, a "${modelName}" alias, or map this voice under serve.openai.audio.speech.voices to a model alias.`
     )
     return
   }
@@ -97,26 +137,42 @@ export async function handleAudioSpeech (req: IncomingMessage, res: ServerRespon
   const charCount = input.length
 
   ctx.logger.info(
-    `  speech model=${alias} voice=${voice} format=${formatMapping.format} chars=${charCount} alias_match=${resolvedAlias === aliasKey ? 'voice' : 'model'}`
+    `  speech model=${alias} voice=${voice} format=${formatMapping.format} chars=${charCount} route=${matchMode} resolved_alias=${resolvedAlias}`
   )
 
   try {
+    // TODO(QVAC-18181): wire client disconnect → cancel SDK call. Currently
+    // this awaits to completion even if the HTTP client closed the socket.
     const { samples } = await sdkTextToSpeech({ modelId: sdkModelId, text: input })
+
+    if (samples.length === 0) {
+      ctx.logger.warn(`  speech empty model=${alias} voice=${voice} chars=${charCount}`)
+      sendError(res, 502, 'speech_empty', 'Speech synthesis returned no audio samples.')
+      return
+    }
 
     const audioBytes = formatMapping.format === 'wav'
       ? buildWavBuffer(samples, sampleRate)
       : int16SamplesToBuffer(samples)
+    const contentType = formatMapping.format === 'pcm'
+      ? pcmContentType(sampleRate)
+      : formatMapping.contentType
 
     ctx.logger.info(`  speech done samples=${samples.length} bytes=${audioBytes.length} sample_rate=${sampleRate}`)
 
     if (res.headersSent) return
-    res.writeHead(200, {
-      'Content-Type': formatMapping.contentType,
+    const headers: Record<string, string | number> = {
+      'Content-Type': contentType,
       'Content-Length': audioBytes.length,
       'X-Audio-Sample-Rate': String(sampleRate),
       'X-Audio-Channels': '1',
       'X-Audio-Bits-Per-Sample': '16'
-    })
+    }
+    if (ignoredParams.length > 0) {
+      // Surface dropped OpenAI params to clients without making them grep logs.
+      headers['X-QVAC-Ignored-Params'] = ignoredParams.join(',')
+    }
+    res.writeHead(200, headers)
     res.end(audioBytes)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)

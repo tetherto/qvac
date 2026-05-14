@@ -1,21 +1,8 @@
-// OpenAI's documented voice catalog. These are accepted as input on
-// /v1/audio/speech for client compatibility, but voice routing in QVAC is
-// resolved through the model alias suffix (see resolveSpeechAlias).
-export const OPENAI_VOICES = [
-  'alloy',
-  'ash',
-  'ballad',
-  'coral',
-  'echo',
-  'fable',
-  'nova',
-  'onyx',
-  'sage',
-  'shimmer',
-  'verse'
-] as const
-
-export type OpenAIVoice = typeof OPENAI_VOICES[number]
+// Voice routing on /v1/audio/speech (no enforced catalog — clients can use
+// any string; the route resolves it via, in order):
+//   1) serve.openai.audio.speech.voices[voice] -> serve.models alias
+//   2) serve.models["${model}-${voice}"]
+//   3) serve.models[model]
 
 const NATIVE_FORMATS = new Set(['wav', 'pcm'])
 const TRANSCODED_FORMATS = new Set(['mp3', 'opus', 'aac', 'flac'])
@@ -85,15 +72,28 @@ export function mapResponseFormat (input: unknown): MappedSpeechFormat {
 }
 
 function formatNative (format: SpeechResponseFormat): SpeechFormatNative {
+  // PCM uses a placeholder here; the route rebuilds it via pcmContentType()
+  // once it knows the model's sample rate (RFC 2586 audio/L16 needs `rate`).
   return {
     kind: 'native',
     format,
-    contentType: format === 'wav' ? 'audio/wav' : 'audio/pcm'
+    contentType: format === 'wav' ? 'audio/wav' : 'audio/L16'
   }
+}
+
+// RFC 2586 audio/L16: linear PCM, 16-bit, signed, big-endian by default —
+// we emit little-endian, so consumers must read the `rate`/`channels` params.
+// We document the sample rate inline so HTTP clients can pick it up without
+// reaching for the `X-Audio-Sample-Rate` header.
+export function pcmContentType (sampleRate: number): string {
+  return `audio/L16; rate=${sampleRate}; channels=1`
 }
 
 // Engine → native sample rate. Mirrors the constants used in the SDK
 // examples (packages/sdk/examples/tts/{chatterbox,supertonic}.ts).
+// TODO(QVAC-18522): add the GGML engine key here when the TTS-GGML migration
+// lands, otherwise the engine falls through to DEFAULT_SAMPLE_RATE and audio
+// plays back at the wrong speed.
 const ENGINE_SAMPLE_RATE: Record<string, number> = {
   chatterbox: 24000,
   supertonic: 44100

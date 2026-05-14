@@ -34,6 +34,10 @@ interface RawOpenAIOptions {
   audio?: {
     speech?: {
       defaultVoice?: unknown
+      /** Map OpenAI `voice` -> `serve.models` alias (see ServeConfig.openai.audio.speech.voices). */
+      voices?: unknown
+      /** Cap on `input` length; `null` disables. See ServeConfig.openai.audio.speech.maxInputChars. */
+      maxInputChars?: unknown
     }
   }
 }
@@ -116,9 +120,18 @@ function normalizePublicBaseUrl (raw: string | undefined): string | null {
 }
 
 const DEFAULT_SPEECH_VOICE = 'alloy'
+// OpenAI's documented limit for /v1/audio/speech `input`. Keeps memory
+// pressure bounded since we buffer the full WAV before responding.
+const DEFAULT_MAX_INPUT_CHARS = 4096
 
 function parseOpenAIOptions (raw: RawOpenAIOptions | undefined): {
-  audio: { speech: { defaultVoice: string | null } }
+  audio: {
+    speech: {
+      defaultVoice: string | null
+      voices: Record<string, string> | null
+      maxInputChars: number | null
+    }
+  }
 } {
   const rawDefaultVoice = raw?.audio?.speech?.defaultVoice
   let defaultVoice: string | null = DEFAULT_SPEECH_VOICE
@@ -133,7 +146,36 @@ function parseOpenAIOptions (raw: RawOpenAIOptions | undefined): {
     throw new Error('serve.openai.audio.speech.defaultVoice must be a string or null')
   }
 
-  return { audio: { speech: { defaultVoice } } }
+  const rawVoices = raw?.audio?.speech?.voices
+  let voices: Record<string, string> | null = null
+  if (rawVoices !== undefined && rawVoices !== null) {
+    if (typeof rawVoices !== 'object' || Array.isArray(rawVoices)) {
+      throw new Error('serve.openai.audio.speech.voices must be a JSON object (voice -> model alias)')
+    }
+    const out: Record<string, string> = {}
+    for (const [key, val] of Object.entries(rawVoices as Record<string, unknown>)) {
+      if (typeof val !== 'string' || !val.trim()) {
+        throw new Error(`serve.openai.audio.speech.voices["${key}"] must be a non-empty string (model alias)`)
+      }
+      const k = key.trim().toLowerCase()
+      if (!k) continue
+      out[k] = val.trim()
+    }
+    voices = Object.keys(out).length > 0 ? out : null
+  }
+
+  const rawMaxInput = raw?.audio?.speech?.maxInputChars
+  let maxInputChars: number | null = DEFAULT_MAX_INPUT_CHARS
+  if (rawMaxInput === null) {
+    maxInputChars = null
+  } else if (rawMaxInput !== undefined) {
+    if (typeof rawMaxInput !== 'number' || !Number.isInteger(rawMaxInput) || rawMaxInput < 1) {
+      throw new Error('serve.openai.audio.speech.maxInputChars must be a positive integer or null')
+    }
+    maxInputChars = rawMaxInput
+  }
+
+  return { audio: { speech: { defaultVoice, voices, maxInputChars } } }
 }
 
 export function normalizeEndpointCategory (sdkType: string): string {

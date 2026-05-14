@@ -683,6 +683,16 @@ http_status() {
   assert_error "${body}" "invalid_response_format"
 }
 
+@test "speech: input over default 4096-char cap returns 400 input_too_long" {
+  # default server inherits the documented default cap (4096).
+  local big body
+  big=$(printf 'a%.0s' $(seq 1 4097))
+  body=$(curl -s "http://127.0.0.1:19920/v1/audio/speech" \
+    -H "Content-Type: application/json" \
+    -d "{\"model\":\"test\",\"voice\":\"alloy\",\"input\":\"${big}\"}")
+  assert_error "${body}" "input_too_long"
+}
+
 @test "speech: unknown model returns 404" {
   local body
   body=$(curl -s "http://127.0.0.1:19920/v1/audio/speech" \

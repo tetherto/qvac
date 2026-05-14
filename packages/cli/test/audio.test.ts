@@ -1,16 +1,17 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  OPENAI_VOICES,
   DEFAULT_SPEECH_FORMAT,
   DEFAULT_SAMPLE_RATE,
   mapResponseFormat,
+  pcmContentType,
   resolveSampleRate,
   int16SamplesToBuffer,
   buildWavHeader,
   buildWavBuffer,
   speechAliasKey
 } from '../src/serve/audio.js'
+import { parseServeConfig } from '../src/serve/config.js'
 
 describe('mapResponseFormat', () => {
   it('returns the documented default for missing input', () => {
@@ -27,13 +28,20 @@ describe('mapResponseFormat', () => {
     assert.equal(result.kind, 'native')
   })
 
-  it('accepts wav and pcm with correct content types', () => {
+  it('accepts wav and pcm as native formats', () => {
     const wav = mapResponseFormat('wav')
     const pcm = mapResponseFormat('pcm')
     assert.equal(wav.kind, 'native')
     assert.equal(pcm.kind, 'native')
-    if (wav.kind === 'native') assert.equal(wav.contentType, 'audio/wav')
-    if (pcm.kind === 'native') assert.equal(pcm.contentType, 'audio/pcm')
+    if (wav.kind === 'native') {
+      assert.equal(wav.format, 'wav')
+      assert.equal(wav.contentType, 'audio/wav')
+    }
+    // PCM content-type is rebuilt with the sample rate at the call site
+    // (RFC 2586 audio/L16 requires it). The mapping only exposes the kind.
+    if (pcm.kind === 'native') {
+      assert.equal(pcm.format, 'pcm')
+    }
   })
 
   it('is case-insensitive for native formats', () => {
@@ -188,10 +196,89 @@ describe('speechAliasKey', () => {
   })
 })
 
-describe('OPENAI_VOICES', () => {
-  it('includes the documented OpenAI voice catalog', () => {
-    for (const v of ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer', 'ash', 'ballad', 'coral', 'sage', 'verse']) {
-      assert.ok(OPENAI_VOICES.includes(v as typeof OPENAI_VOICES[number]), `expected ${v} in OPENAI_VOICES`)
+describe('pcmContentType', () => {
+  it('emits an RFC 2586 audio/L16 type with rate and channels', () => {
+    assert.equal(pcmContentType(24000), 'audio/L16; rate=24000; channels=1')
+    assert.equal(pcmContentType(44100), 'audio/L16; rate=44100; channels=1')
+  })
+})
+
+describe('parseServeConfig — openai.audio.speech.voices', () => {
+  it('normalizes voice keys to lowercase', async () => {
+    const cfg = await parseServeConfig(
+      {
+        serve: {
+          models: {},
+          openai: {
+            audio: {
+              speech: {
+                voices: { Alloy: 'tts-a', ECHO: 'tts-b' }
+              }
+            }
+          }
+        }
+      },
+      {}
+    )
+    assert.equal(cfg.openai.audio.speech.voices?.alloy, 'tts-a')
+    assert.equal(cfg.openai.audio.speech.voices?.echo, 'tts-b')
+  })
+
+  it('rejects a non-object voices value', async () => {
+    await assert.rejects(
+      () =>
+        parseServeConfig(
+          {
+            serve: {
+              models: {},
+              openai: { audio: { speech: { voices: ['alloy'] } } }
+            }
+          },
+          {}
+        ),
+      /serve\.openai\.audio\.speech\.voices must be a JSON object/
+    )
+  })
+})
+
+describe('parseServeConfig — openai.audio.speech.maxInputChars', () => {
+  it('defaults to 4096 when unset', async () => {
+    const cfg = await parseServeConfig({ serve: { models: {} } }, {})
+    assert.equal(cfg.openai.audio.speech.maxInputChars, 4096)
+  })
+
+  it('accepts an explicit positive integer', async () => {
+    const cfg = await parseServeConfig(
+      { serve: { models: {}, openai: { audio: { speech: { maxInputChars: 1024 } } } } },
+      {}
+    )
+    assert.equal(cfg.openai.audio.speech.maxInputChars, 1024)
+  })
+
+  it('treats null as "no cap"', async () => {
+    const cfg = await parseServeConfig(
+      { serve: { models: {}, openai: { audio: { speech: { maxInputChars: null } } } } },
+      {}
+    )
+    assert.equal(cfg.openai.audio.speech.maxInputChars, null)
+  })
+
+  it('rejects non-integer or non-positive values', async () => {
+    for (const bad of [0, -1, 1.5, '4096', true]) {
+      await assert.rejects(
+        () =>
+          parseServeConfig(
+            {
+              serve: {
+                models: {},
+                openai: { audio: { speech: { maxInputChars: bad as unknown as number } } }
+              }
+            },
+            {}
+          ),
+        /serve\.openai\.audio\.speech\.maxInputChars must be a positive integer or null/
+      )
     }
   })
 })
+
