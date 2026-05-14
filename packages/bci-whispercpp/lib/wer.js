@@ -8,8 +8,9 @@
  * @returns {number} WER as a ratio (0.0 = perfect, 1.0 = 100% errors)
  */
 function computeWER (hypothesis, reference) {
-  const hyp = hypothesis.toLowerCase().trim().split(/\s+/).filter(Boolean)
-  const ref = reference.toLowerCase().trim().split(/\s+/).filter(Boolean)
+  const normalizeWord = (w) => w.toLowerCase().replace(/[^a-z0-9']/g, '')
+  const hyp = hypothesis.trim().split(/\s+/).map(normalizeWord).filter(Boolean)
+  const ref = reference.trim().split(/\s+/).map(normalizeWord).filter(Boolean)
 
   if (ref.length === 0) return hyp.length === 0 ? 0 : 1
 
