@@ -56,7 +56,7 @@ test('SD2.1 txt2img — generates a valid PNG image', { timeout: 600000, skip },
       diffusion_fa: true,
       fa: true,
       'diffusion-conv-direct': true,
-      'vae-conv-direct': true,
+      'vae-conv-direct': true
     },
     logger: console
   })
