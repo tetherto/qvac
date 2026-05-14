@@ -50,6 +50,7 @@ import { ModelLoadingExecutor } from "../shared/executors/model-loading-executor
 import { CompletionExecutor } from "../shared/executors/completion-executor.js";
 import { ToolsExecutor } from "../shared/executors/tools-executor.js";
 import { TranslationExecutor } from "../shared/executors/translation-executor.js";
+import { TranslationBergamotCacheExecutor } from "../shared/executors/translation-bergamot-cache-executor.js";
 import { ShardedModelExecutor } from "../shared/executors/sharded-model-executor.js";
 import { HttpEmbeddingExecutor } from "../shared/executors/http-embedding-executor.js";
 import { KvCacheExecutor } from "../shared/executors/kv-cache-executor.js";
@@ -75,6 +76,7 @@ import { LifecycleExecutor } from "../shared/executors/lifecycle-executor.js";
 import { ConfigExecutor } from "../shared/executors/config-executor.js";
 import { NoLingeringBareExecutor } from "./executors/no-lingering-bare-executor.js";
 import { MultiGpuExecutor } from "../shared/executors/multi-gpu-executor.js";
+import { CancellationExecutor } from "../shared/executors/cancellation-executor.js";
 
 const resources = new ResourceManager();
 
@@ -390,6 +392,8 @@ export const executor = createExecutor({
     new ErrorExecutor(resources),
     new ToolsExecutor(resources),
 
+    // Must precede TranslationExecutor — patterns overlap, dispatch is first-match-wins.
+    new TranslationBergamotCacheExecutor(),
     new TranslationExecutor(resources),
     new ShardedModelExecutor(resources),
     new OcrExecutor(resources),
@@ -409,6 +413,7 @@ export const executor = createExecutor({
     new ConfigExecutor(),
     new NoLingeringBareExecutor(),
     new MultiGpuExecutor(resources),
+    new CancellationExecutor(resources),
   ],
   profiling: {
     init: () => profiler.enable({ mode: "summary", includeServerBreakdown: true }),

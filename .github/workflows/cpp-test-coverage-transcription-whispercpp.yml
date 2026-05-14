@@ -32,7 +32,7 @@ jobs:
       contents: read
       id-token: write
       checks: write
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner }}
     environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}-cpp-tests
     strategy:
@@ -42,6 +42,7 @@ jobs:
           - os: ubuntu-22.04
             platform: linux
             arch: x64
+            runner: qvac-ubuntu2204-x64
             coverage: true
     env:
       VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg/cache,readwrite"
@@ -55,24 +56,19 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
           lfs: true
 
-      - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
-        with:
-          node-version: lts/*
-
-      - name: Setup LLVM
-        if: matrix.platform == 'linux'
-        uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
-
       - name: Install NPM dependencies
         working-directory: ${{ env.WORKDIR }}
         run: |
           npm install
-          npm install -g bare bare-make
+          # npm install -g bare bare-make
 
       - if: ${{ matrix.os == 'ubuntu-22.04' }}
         name: Configure vcpkg in linux
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
+
+      - name: Add bare tooling to PATH (Linux x64)
+        if: ${{ matrix.os == 'ubuntu-22.04' }}
+        run: echo "/usr/local/nvm/versions/node/v20.20.2/bin" >> $GITHUB_PATH
 
       - name: Generate and build unit tests
         working-directory: ${{ env.WORKDIR }}

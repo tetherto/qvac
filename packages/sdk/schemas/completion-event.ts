@@ -63,7 +63,17 @@ const rawOutputSchema = z.object({
   fullText: z.string(),
 });
 
-const stopReasonEnum = z.enum(["eos", "length", "stopSequence"]);
+// `"cancelled"` is a clean termination, not a mid-stream failure: the
+// stream ended on purpose because the request was aborted, just not at
+// EOS. It rides the success-done path (alongside "eos" / "length" /
+// "stopSequence") so consumers iterating `events` see the stream end
+// naturally. The companion error path (`errorDoneSchema` below) keeps
+// `stopReason: "error"` for actual mid-stream failures where the
+// partial state is unsafe to use. The promise-aggregates on the
+// client-side `CompletionRun` (`final` / `text` / `toolCalls` / `stats`)
+// reject with `InferenceCancelledError` carrying the partial state — see
+// `client/api/completion-stream.ts` for the rejection plumbing.
+const stopReasonEnum = z.enum(["eos", "length", "stopSequence", "cancelled"]);
 
 const successDoneSchema = z
   .object({

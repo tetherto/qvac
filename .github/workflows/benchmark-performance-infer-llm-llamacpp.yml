@@ -43,6 +43,26 @@ permissions:
   id-token: write
 
 jobs:
+  label-gate:
+    name: Authorise (label-gate)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      authorised: ${{ steps.gate.outputs.authorised }}
+    steps:
+      - name: Checkout (label-gate action only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/label-gate
+          sparse-checkout-cone-mode: false
+      - name: Run label-gate
+        id: gate
+        uses: ./.github/actions/label-gate
+        with:
+          github-token: ${{ secrets.PAT_TOKEN }}
   context:
     runs-on: ubuntu-latest
     outputs:
@@ -63,7 +83,9 @@ jobs:
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
 
   prebuild:
-    needs: context
+    needs:
+      - context
+      - label-gate
     permissions:
       contents: write
       packages: write
@@ -75,9 +97,13 @@ jobs:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
 
+    if: needs.label-gate.outputs.authorised == 'true'
   desktop-benchmarks:
-    needs: [context, prebuild]
-    if: ${{ inputs.run_desktop }}
+    needs:
+      - context
+      - prebuild
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true' && (inputs.run_desktop)
     permissions:
       contents: read
       packages: read
@@ -92,8 +118,11 @@ jobs:
       qvac_perf_only: true
 
   mobile-benchmarks:
-    needs: [context, prebuild]
-    if: ${{ inputs.run_mobile }}
+    needs:
+      - context
+      - prebuild
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true' && (inputs.run_mobile)
     permissions:
       contents: read
       packages: read
@@ -112,8 +141,12 @@ jobs:
     # `if: always()` lets summarize run even when one of the benchmark
     # jobs was skipped via the run_desktop / run_mobile toggles or
     # failed mid-run; we still want the partial report.
-    needs: [context, desktop-benchmarks, mobile-benchmarks]
-    if: ${{ always() && needs.context.result == 'success' }}
+    needs:
+      - context
+      - desktop-benchmarks
+      - mobile-benchmarks
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true' && (always() && needs.context.result == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
