@@ -17,7 +17,7 @@ on:
       - feature-*
       - tmp-*
     paths:
-      - "packages/vla/**"
+      - "packages/vla-ggml/**"
       - ".github/workflows/*-vla.yml"
   workflow_dispatch:
 
@@ -30,7 +30,7 @@ permissions:
   id-token: write
 
 env:
-  PKG_DIR: packages/vla
+  PKG_DIR: packages/vla-ggml
 
 jobs:
   authorize:
@@ -79,7 +79,7 @@ jobs:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
           run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
-          workdir: packages/vla
+          workdir: packages/vla-ggml
 
   cpp-lint:
     # Only runs when we have a PR base SHA to diff against. Workflow_dispatch
@@ -91,7 +91,7 @@ jobs:
     with:
       sha: ${{ github.event.pull_request.base.sha }}
       pr_head_sha: ${{ github.event.pull_request.head.sha }}
-      workdir: packages/vla
+      workdir: packages/vla-ggml
 
   cpp-tests:
     permissions:
@@ -121,11 +121,11 @@ jobs:
           node-version: 20
 
       - name: Install dependencies
-        working-directory: packages/vla
+        working-directory: packages/vla-ggml
         run: npm install
 
       - name: Type declaration check
-        working-directory: packages/vla
+        working-directory: packages/vla-ggml
         run: npm run test:dts
 
       - name: Run lint and unit tests
@@ -135,7 +135,7 @@ jobs:
           gpr-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.GITHUB_TOKEN }}
           registry-type: gpr
-          workdir: packages/vla
+          workdir: packages/vla-ggml
 
   prebuild:
     permissions:

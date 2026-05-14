@@ -7,7 +7,7 @@
     "start": "bare server.js"
   },
   "dependencies": {
-    "@qvac/vla": "*",
+    "@qvac/vla-ggml": "*",
     "bare-http1": "^4.5.6",
     "bare-process": "^4.4.1"
   }

@@ -16,7 +16,7 @@ on:
         required: false
         default: main
       prebuild_package:
-        description: "NPM package containing prebuilds (e.g. @qvac/vla@1.0.0)"
+        description: "NPM package containing prebuilds (e.g. @qvac/vla-ggml@1.0.0)"
         type: string
         required: true
 

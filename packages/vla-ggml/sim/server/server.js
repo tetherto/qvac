@@ -2,7 +2,7 @@
 
 const http = require('bare-http1')
 const process = require('bare-process')
-const { VlaModel } = require('@qvac/vla')
+const { VlaModel } = require('@qvac/vla-ggml')
 
 const MODEL_PATH = process.env.QVAC_VLA_MODEL
 if (!MODEL_PATH) {
@@ -174,7 +174,7 @@ const server = http.createServer(async (req, res) => {
   }
 })
 
-// VlaModel.load is async (the published @qvac/vla API), so we boot the server
+// VlaModel.load is async (the published @qvac/vla-ggml API), so we boot the server
 // inside an async IIFE that awaits the load before listen() begins accepting
 // connections. Otherwise the first request races the weight upload and 500s.
 ;(async () => {

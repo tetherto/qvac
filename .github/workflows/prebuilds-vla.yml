@@ -14,7 +14,7 @@ on:
         description: "Working directory (optional)"
         required: false
         type: string
-        default: "packages/vla"
+        default: "packages/vla-ggml"
 
   workflow_call:
     inputs:
@@ -30,7 +30,7 @@ on:
         description: "Working directory (optional)"
         required: false
         type: string
-        default: "packages/vla"
+        default: "packages/vla-ggml"
 
 permissions:
   contents: read

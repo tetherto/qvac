@@ -1,6 +1,6 @@
 # Mobile Testing for VLA
 
-This directory contains the mobile test entrypoint for the `@qvac/vla` addon.
+This directory contains the mobile test entrypoint for the `@qvac/vla-ggml` addon.
 
 > ⚠️ **Note**: This test directory is included in the published npm package to support the mobile testing framework. These test files are NOT part of the public API and should only be used by the internal mobile testing infrastructure.
 

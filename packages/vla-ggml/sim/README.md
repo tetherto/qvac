@@ -1,11 +1,11 @@
 # Running the LIBERO closed-loop sim for SmolVLA
 
 This describes how to run the LIBERO closed-loop eval against either
-the **QVAC GGUF policy** (via the `@qvac/vla` addon over HTTP) or the
+the **QVAC GGUF policy** (via the `@qvac/vla-ggml` addon over HTTP) or the
 **original PyTorch SmolVLA policy**, so the two are directly
 comparable on the same seeds and tasks.
 
-The driver is `packages/vla/sim/eval_libero_sim.py`. It re-uses
+The driver is `packages/vla-ggml/sim/eval_libero_sim.py`. It re-uses
 lerobot's eval pipeline; the only difference is that for the QVAC
 backend we monkey-patch `make_policy` to wrap the PyTorch policy with
 an HTTP shim (`SmolVLAQvacHTTPPolicy`) that delegates inference to the
@@ -35,7 +35,7 @@ pip install torch==2.10.0 torchvision==0.25.0 \
     --index-url https://download.pytorch.org/whl/cu128
 
 # 4) Pip-installable deps:
-pip install -r packages/vla/sim/requirements.txt
+pip install -r packages/vla-ggml/sim/requirements.txt
 
 # 5) Headless MuJoCo backend (export this in every shell that runs the eval):
 export MUJOCO_GL=egl
@@ -61,8 +61,8 @@ Every file is needed for the qvac backend. PyTorch backend only needs
 | `eval_libero_sim.py` | Python entry point. Parses `--backend`, then calls lerobot's `eval_main`. In qvac mode it monkey-patches `lerobot.policies.make_policy` to wrap the PyTorch policy with `SmolVLAQvacHTTPPolicy`. | both |
 | `qvac_http_policy.py` | Subclass of lerobot's `SmolVLAPolicy`. Inherits *all* preprocessing / state normalization / action queueing / unnormalization — only the network forward pass is replaced. Calls `SmolVLAHTTP.predict_raw()` instead of running the PyTorch transformer. | qvac |
 | `smolvla_http.py` | Tiny binary-protocol HTTP client. Tokenizes the instruction with the SmolVLM2 tokenizer, packs `{state, images, tokens, mask, noise}` into a single POST body, parses the response. | qvac |
-| `server/server.js` | Bare HTTP server hosting the `@qvac/vla` addon. Loads the GGUF once at boot, exposes `/info` + `/predict` on `127.0.0.1:8765`. | qvac |
-| `server/package.json` | Declares the server's three runtime deps: `@qvac/vla`, `bare-http1`, `bare-process`. | qvac |
+| `server/server.js` | Bare HTTP server hosting the `@qvac/vla-ggml` addon. Loads the GGUF once at boot, exposes `/info` + `/predict` on `127.0.0.1:8765`. | qvac |
+| `server/package.json` | Declares the server's three runtime deps: `@qvac/vla-ggml`, `bare-http1`, `bare-process`. | qvac |
 | `requirements.txt` | Pinned Python deps for the eval driver + lerobot policy code. | both |
 | `README.md` | This file. | — |
 
@@ -82,7 +82,7 @@ eval_libero_sim.py                  (Python entry, parses --backend)
                                     └─► POST /predict     (binary body)
                                             ↓
                                     server/server.js
-                                        └─► @qvac/vla → ggml on Vulkan
+                                        └─► @qvac/vla-ggml → ggml on Vulkan
                                             └─► returns 50×7 action chunk
 ```
 
@@ -92,7 +92,7 @@ eval_libero_sim.py                  (Python entry, parses --backend)
 
 | Backend | Inference path | Needs server? | Device |
 |---|---|---|---|
-| `--backend qvac` | lerobot → HTTP → `@qvac/vla` addon → ggml on Vulkan | **Yes** (`vla-server` on `:8765`) | GPU (Vulkan) — pass `--policy.device=cpu` since the PyTorch policy is only kept around for preprocessing in qvac mode |
+| `--backend qvac` | lerobot → HTTP → `@qvac/vla-ggml` addon → ggml on Vulkan | **Yes** (`vla-server` on `:8765`) | GPU (Vulkan) — pass `--policy.device=cpu` since the PyTorch policy is only kept around for preprocessing in qvac mode |
 | `--backend pytorch` | lerobot → PyTorch SmolVLAPolicy → CUDA | No | `--policy.device=cuda` |
 
 **The qvac backend evaluates whatever GGUF the server was started
@@ -108,11 +108,11 @@ compare F32 GGUF vs Q8 GGUF, restart the server with a different
 One-time setup of the server's Node deps:
 
 ```bash
-cd packages/vla/sim/server
+cd packages/vla-ggml/sim/server
 npm install
 ```
 
-This pulls `@qvac/vla` from npm (the prebuilds wheel) along with
+This pulls `@qvac/vla-ggml` from npm (the prebuilds wheel) along with
 `bare-http1` / `bare-process`. Make sure you have `bare` installed
 globally (`npm install -g bare bare-make`).
 
@@ -125,7 +125,7 @@ pkill -f 'server.js' || true
 
 # start with a specific GGUF:
 QVAC_VLA_MODEL=/abs/path/to/smolvla-libero-vision-q8.gguf \
-    nohup setsid bare packages/vla/sim/server/server.js \
+    nohup setsid bare packages/vla-ggml/sim/server/server.js \
     > /tmp/vla-server.log 2>&1 < /dev/null & disown
 
 # wait until weights are loaded (~10 s on Vulkan, longer on CPU):
@@ -148,7 +148,7 @@ ask a maintainer for a pre-built copy.
 
 ### One task, quick smoke (~20 s wall):
 ```bash
-python packages/vla/sim/eval_libero_sim.py \
+python packages/vla-ggml/sim/eval_libero_sim.py \
   --backend qvac \
   --policy.path=HuggingFaceVLA/smolvla_libero \
   --env.type=libero --env.task=libero_spatial \
@@ -161,7 +161,7 @@ python packages/vla/sim/eval_libero_sim.py \
 ### Full libero_spatial eval (10 tasks × 3 episodes = 30, ~17 min wall):
 ```bash
 # QVAC (whatever GGUF the server loaded):
-python packages/vla/sim/eval_libero_sim.py \
+python packages/vla-ggml/sim/eval_libero_sim.py \
   --backend qvac \
   --policy.path=HuggingFaceVLA/smolvla_libero \
   --env.type=libero --env.task=libero_spatial \
@@ -170,7 +170,7 @@ python packages/vla/sim/eval_libero_sim.py \
   --output_dir=./eval_qvac_$(date +%F)
 
 # PyTorch reference (no server needed):
-python packages/vla/sim/eval_libero_sim.py \
+python packages/vla-ggml/sim/eval_libero_sim.py \
   --backend pytorch \
   --policy.path=HuggingFaceVLA/smolvla_libero \
   --env.type=libero --env.task=libero_spatial \
@@ -188,7 +188,7 @@ The eval takes ~17 min for 30 episodes. Use `nohup` + `disown` so an
 SSH disconnect doesn't kill it:
 
 ```bash
-nohup python packages/vla/sim/eval_libero_sim.py \
+nohup python packages/vla-ggml/sim/eval_libero_sim.py \
   --backend qvac ... \
   --output_dir=./eval_qvac_today \
   > /tmp/eval_qvac.log 2>&1 < /dev/null & disown
@@ -239,10 +239,10 @@ Typical workflow to compare two GGUFs (env vars `F32_GGUF`,
 # 1) F32 baseline
 pkill -f 'server.js' || true
 QVAC_VLA_MODEL=$F32_GGUF \
-    nohup setsid bare packages/vla/sim/server/server.js \
+    nohup setsid bare packages/vla-ggml/sim/server/server.js \
     > /tmp/vla-server.log 2>&1 < /dev/null & disown
 until curl -s --max-time 2 http://127.0.0.1:8765/info | grep -q chunkSize; do sleep 2; done
-python packages/vla/sim/eval_libero_sim.py --backend qvac \
+python packages/vla-ggml/sim/eval_libero_sim.py --backend qvac \
     --policy.path=HuggingFaceVLA/smolvla_libero --env.type=libero --env.task=libero_spatial \
     --eval.n_episodes=3 --eval.batch_size=1 --policy.device=cpu \
     --output_dir=./eval_f32
@@ -250,17 +250,17 @@ python packages/vla/sim/eval_libero_sim.py --backend qvac \
 # 2) Q8 vision
 pkill -f 'server.js'
 QVAC_VLA_MODEL=$Q8_GGUF \
-    nohup setsid bare packages/vla/sim/server/server.js \
+    nohup setsid bare packages/vla-ggml/sim/server/server.js \
     > /tmp/vla-server.log 2>&1 < /dev/null & disown
 until curl -s --max-time 2 http://127.0.0.1:8765/info | grep -q chunkSize; do sleep 2; done
-python packages/vla/sim/eval_libero_sim.py --backend qvac \
+python packages/vla-ggml/sim/eval_libero_sim.py --backend qvac \
     --policy.path=HuggingFaceVLA/smolvla_libero --env.type=libero --env.task=libero_spatial \
     --eval.n_episodes=3 --eval.batch_size=1 --policy.device=cpu \
     --output_dir=./eval_q8
 
 # 3) PyTorch reference
 pkill -f 'server.js' || true   # cleanup
-python packages/vla/sim/eval_libero_sim.py --backend pytorch \
+python packages/vla-ggml/sim/eval_libero_sim.py --backend pytorch \
     --policy.path=HuggingFaceVLA/smolvla_libero --env.type=libero --env.task=libero_spatial \
     --eval.n_episodes=3 --eval.batch_size=1 --policy.device=cuda \
     --output_dir=./eval_pytorch
@@ -312,5 +312,5 @@ you.
 **SSH drops mid-eval** — always run with `nohup … & disown` and tail
 `/tmp/eval_*.log`. The Python process survives.
 
-**`Cannot find module '@qvac/vla'` from server.js** — run
-`npm install` in `packages/vla/sim/server/` first.
+**`Cannot find module '@qvac/vla-ggml'` from server.js** — run
+`npm install` in `packages/vla-ggml/sim/server/` first.

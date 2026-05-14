@@ -1,4 +1,4 @@
-# @qvac/vla
+# @qvac/vla-ggml
 
 **Technology Stack:** C++20, CMake, vcpkg, Bare Runtime, ggml
 **Package Type:** Native Bare addon
@@ -33,7 +33,7 @@ and flow-matching projections in a unified file.
 ## Installation
 
 ```bash
-npm install @qvac/vla
+npm install @qvac/vla-ggml
 ```
 
 The package ships prebuilt native binaries for linux-x64, linux-arm64,
@@ -43,7 +43,7 @@ win32-x64. No build step required for consumers.
 ## Usage
 
 ```js
-const { VlaModel, preprocessImage, padState } = require('@qvac/vla')
+const { VlaModel, preprocessImage, padState } = require('@qvac/vla-ggml')
 
 const model = new VlaModel({
   files: { model: ['/path/to/smolvla-libero-vision-q8.gguf'] },
@@ -142,5 +142,5 @@ see [`sim/README.md`](./sim/README.md).
 
 ## License
 
-@qvac/vla itself is Apache-2.0. Bundled third-party components are governed
+@qvac/vla-ggml itself is Apache-2.0. Bundled third-party components are governed
 by their respective licenses; see [`NOTICE`](./NOTICE).
