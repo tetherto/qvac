@@ -15,9 +15,11 @@
 #include "addon/AddonCpp.hpp"
 #include "addon/BertErrors.hpp"
 #include "model-interface/BertModel.hpp"
+#include "model-interface/logging.hpp"
 #include "test_common.hpp"
 
 namespace fs = std::filesystem;
+using namespace qvac_lib_inference_addon_cpp::logger;
 
 namespace {
 double getStatValue(
@@ -161,6 +163,7 @@ protected:
     backendDir = fs::current_path() / "build" / "test" / "unit";
 #endif
     test_backends_dir = backendDir.string();
+    qvac_lib_infer_llamacpp_embed::logging::g_verbosityLevel = Priority::ERROR;
 
     // Try multiple possible locations for the model file
     std::vector<fs::path> possiblePaths = {
@@ -186,6 +189,10 @@ protected:
     if (test_model_path.empty()) {
       test_model_path = "models/unit-test/test-model.gguf";
     }
+  }
+
+  void TearDown() override {
+    qvac_lib_infer_llamacpp_embed::logging::g_verbosityLevel = Priority::ERROR;
   }
 
   std::string test_backends_dir;
@@ -258,6 +265,7 @@ TEST_F(BertModelTest, RuntimeStatsBeforeProcessing) {
   // is loaded
   bool hasBatchSize = false;
   bool hasContextSize = false;
+  bool hasTrainedContextSize = false;
   for (const auto& stat : stats) {
     if (stat.first == "batch_size") {
       hasBatchSize = true;
@@ -265,12 +273,73 @@ TEST_F(BertModelTest, RuntimeStatsBeforeProcessing) {
     if (stat.first == "context_size") {
       hasContextSize = true;
     }
+    if (stat.first == "trained_context_size") {
+      hasTrainedContextSize = true;
+    }
   }
   // These should be present if model is loaded
   EXPECT_TRUE(hasBatchSize);
   EXPECT_TRUE(hasContextSize);
+  EXPECT_TRUE(hasTrainedContextSize);
+  EXPECT_EQ(
+      getStatValue(stats, "context_size"),
+      static_cast<double>(llama_n_ctx(model.getCtx())));
+  EXPECT_EQ(
+      getStatValue(stats, "trained_context_size"),
+      static_cast<double>(llama_model_n_ctx_train(model.getModel())));
   double backendDevice = getStatValue(stats, "backendDevice");
   EXPECT_TRUE(backendDevice == 0.0 || backendDevice == 1.0);
+}
+
+TEST_F(BertModelTest, DefaultContextSizeMatchesTrainedContext) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  model.waitForLoadInitialization();
+
+  ASSERT_TRUE(model.isLoaded());
+  EXPECT_EQ(
+      static_cast<int>(llama_n_ctx(model.getCtx())),
+      llama_model_n_ctx_train(model.getModel()));
+}
+
+TEST_F(BertModelTest, ContextSizeAboveTrainingContextIsCapped) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config = {
+      {"device", "cpu"}, {"ctx_size", "999999"}};
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  model.waitForLoadInitialization();
+
+  ASSERT_TRUE(model.isLoaded());
+  EXPECT_EQ(
+      static_cast<int>(llama_n_ctx(model.getCtx())),
+      llama_model_n_ctx_train(model.getModel()));
+}
+
+TEST_F(BertModelTest, DefaultContextSizeDoesNotWarnWhenUnconfigured) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config = {
+      {"device", "cpu"}, {"verbosity", "1"}};
+
+  testing::internal::CaptureStdout();
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  model.waitForLoadInitialization();
+  const std::string output = testing::internal::GetCapturedStdout();
+
+  ASSERT_TRUE(model.isLoaded());
+  EXPECT_EQ(output.find("requested ctx_size"), std::string::npos);
 }
 
 TEST_F(BertModelTest, RuntimeStatsAfterProcessing) {
@@ -670,6 +739,61 @@ TEST_F(BertModelTest, ContextOverflowSequences) {
   std::vector<std::string> sequences = {"Normal sequence", longString};
 
   using namespace qvac_lib_infer_llamacpp_embed::errors;
+  EXPECT_THROW(
+      { model.encodeHostF32Sequences(sequences); }, qvac_errors::StatusError);
+}
+
+TEST_F(BertModelTest, ContextOverflowUsesRuntimeContextSizeForPrompts) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  // Configure a runtime context smaller than the model's trained context so we
+  // can verify validation triggers on the runtime ctx, not the trained ctx.
+  std::unordered_map<std::string, std::string> config = {
+      {"device", "cpu"}, {"ctx_size", "256"}, {"batch_size", "256"}};
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  model.waitForLoadInitialization();
+
+  ASSERT_TRUE(model.isLoaded());
+  const int runtimeCtx = static_cast<int>(llama_n_ctx(model.getCtx()));
+  const int trainedCtx = llama_model_n_ctx_train(model.getModel());
+  ASSERT_LT(runtimeCtx, trainedCtx);
+
+  // Build an input that overflows the runtime ctx but stays under the trained
+  // ctx, so only the runtime-ctx check can catch it.
+  std::string longString = "Hello world ";
+  for (int i = 0; i < 200; ++i) {
+    longString += "Hello world ";
+  }
+
+  EXPECT_THROW({ model.encodeHostF32(longString); }, qvac_errors::StatusError);
+}
+
+TEST_F(BertModelTest, ContextOverflowUsesRuntimeContextSizeForSequences) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config = {
+      {"device", "cpu"}, {"ctx_size", "256"}, {"batch_size", "256"}};
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  model.waitForLoadInitialization();
+
+  ASSERT_TRUE(model.isLoaded());
+  const int runtimeCtx = static_cast<int>(llama_n_ctx(model.getCtx()));
+  const int trainedCtx = llama_model_n_ctx_train(model.getModel());
+  ASSERT_LT(runtimeCtx, trainedCtx);
+
+  std::string longString = "Hello world ";
+  for (int i = 0; i < 200; ++i) {
+    longString += "Hello world ";
+  }
+
+  std::vector<std::string> sequences = {"Normal sequence", longString};
+
   EXPECT_THROW(
       { model.encodeHostF32Sequences(sequences); }, qvac_errors::StatusError);
 }

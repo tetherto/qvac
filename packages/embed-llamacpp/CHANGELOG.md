@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.19.0] - 2026-06-01
+
+### Changed
+
+- `feat[bc]`: `RuntimeStats.context_size` now reports the active runtime llama context size. Use the new `RuntimeStats.trained_context_size` field for the model's trained context size.
+- The embed runtime now defaults `ctx_size` to the model's trained context size and caps oversized `ctx_size` requests to that value before creating the llama context.
+
+### Fixed
+
+- Context overflow validation now compares tokenized inputs against the active runtime context size (`llama_n_ctx`), which is itself capped to the trained context.
+
 ## [0.18.0] - 2026-05-29
 
 ### Fixed

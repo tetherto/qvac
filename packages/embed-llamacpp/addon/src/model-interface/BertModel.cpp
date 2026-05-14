@@ -4,9 +4,11 @@
 #include <any>
 #include <cctype>
 #include <cstring>
+#include <ranges>
 #include <stdexcept>
 
 #include <common/common.h>
+#include <llama-cpp.h>
 #include <llama.h>
 #include <llama/common/arg.h>
 #include <inference-addon-cpp/Errors.hpp>
@@ -231,6 +233,90 @@ void logTokenizationIfVerbose(
   }
 }
 
+bool hasContextSizeConfig(
+    const std::unordered_map<std::string, std::string>& configFilemap) {
+  return configFilemap.find("ctx_size") != configFilemap.end() ||
+         configFilemap.find("ctx-size") != configFilemap.end();
+}
+
+int getEffectiveContextSize(const llama_model* model, const llama_context* ctx) {
+  return std::min(
+      llama_model_n_ctx_train(model), static_cast<int>(llama_n_ctx(ctx)));
+}
+
+/// @brief Read the model's trained context size from GGUF metadata without
+/// loading model weights.
+/// @returns The trained context size, or std::nullopt if metadata cannot be
+/// read (e.g. streaming load where the file is not yet on disk, or the GGUF
+/// file lacks the expected keys).
+std::optional<int> readTrainedContextSize(
+    const std::string& modelPath, const GGUFShards& shards, bool isStreaming) {
+  // Streaming loads consume the GGUF stream during model load; pre-load
+  // metadata inspection is not supported on this path. Callers fall back to
+  // the llama.cpp default in that case.
+  if (isStreaming) {
+    return std::nullopt;
+  }
+
+  const std::string& sourcePath =
+      shards.gguf_files.empty() ? modelPath : shards.gguf_files.front();
+  if (sourcePath.empty() || !std::filesystem::exists(sourcePath)) {
+    return std::nullopt;
+  }
+
+  metadata_handle_ptr meta;
+  if (llama_model_meta_from_file(sourcePath.c_str(), &meta) !=
+      MetaResultStatus::SUCCESS) {
+    return std::nullopt;
+  }
+
+  std::string architecture;
+  if (llama_model_meta_get_str(meta, "general.architecture", &architecture) !=
+      MetaResultStatus::SUCCESS) {
+    return std::nullopt;
+  }
+
+  uint32_t trainedCtx = 0;
+  const std::string contextLengthKey = architecture + ".context_length";
+  if (llama_model_meta_get_u32(meta, contextLengthKey.c_str(), &trainedCtx) !=
+      MetaResultStatus::SUCCESS) {
+    return std::nullopt;
+  }
+
+  return static_cast<int>(trainedCtx);
+}
+
+/// @brief Adjusts @p params.n_ctx so the runtime context does not exceed the
+/// model's trained context. When the caller did not configure ctx_size, the
+/// trained context is used as the default (overriding llama.cpp's hard-coded
+/// 4096 fallback). When the caller configured an oversized ctx_size, it is
+/// capped and an ERROR-level message is emitted so users see it without
+/// bumping verbosity.
+void adjustEmbeddingContextSize(
+    common_params& params, int trainedCtx, bool ctxSizeConfigured) {
+  const int requestedCtx = params.n_ctx;
+
+  if (!ctxSizeConfigured) {
+    params.n_ctx = trainedCtx;
+    return;
+  }
+
+  if (requestedCtx > trainedCtx) {
+    params.n_ctx = trainedCtx;
+    qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
+        GGML_LOG_LEVEL_ERROR,
+        string_format(
+            "%s: requested ctx_size %d exceeds model trained context size %d; "
+            "capping to %d\n",
+            __func__,
+            requestedCtx,
+            trainedCtx,
+            trainedCtx)
+            .c_str(),
+        nullptr);
+  }
+}
+
 } // namespace
 
 BertEmbeddings::BertEmbeddings(
@@ -287,9 +373,11 @@ parseSplitMode(std::unordered_map<std::string, std::string>& configFilemap) {
 common_params setupParams(
     const std::string& modelGgufPath,
     std::unordered_map<std::string, std::string> configFilemap,
+    bool& ctxSizeConfigured,
     int64_t& resolvedBackendDevice) {
   // Default params
   common_params params;
+  ctxSizeConfigured = hasContextSizeConfig(configFilemap);
 
   // Override default params
   std::vector<std::string> configVector;
@@ -434,11 +522,12 @@ BertModel::BertModel(
       backendsDir);
 }
 
-BertModel::BertModel(common_params& params)
+BertModel::BertModel(common_params& params, bool ctxSizeConfigured)
     : model_(nullptr), ctx_(nullptr), vocab_(nullptr), batch_{},
       pooling_type(LLAMA_POOLING_TYPE_NONE), n_embd(0), is_loaded_(false),
       loadingContext_(InitLoader::getLoadingContext("BertModel")),
-      shards_(GGUFShards::expandGGUFIntoShards(params.model.path)) {
+      shards_(GGUFShards::expandGGUFIntoShards(params.model.path)),
+      ctxSizeConfigured_(ctxSizeConfigured) {
   auto modelInit = [this](common_params commonParams) {
     this->init(commonParams);
   };
@@ -467,8 +556,8 @@ void BertModel::init(
   lazyCommonInit();
   initializeBackend(backendsDir, openclCacheDir);
 
-  common_params params =
-      setupParams(modelGgufPath, configCopy, runtimeBackendDevice_);
+  common_params params = setupParams(
+      modelGgufPath, configCopy, ctxSizeConfigured_, runtimeBackendDevice_);
   BertModel::init(params);
 }
 
@@ -499,6 +588,16 @@ void BertModel::init(common_params& params) {
   llama_numa_init(params.numa);
 
   const std::string errorWhenFailed = toString(UnableToLoadModel);
+
+  // Inspect GGUF metadata (no weight load) so we can default / cap the runtime
+  // context size before the llama context is created. Mirrors the pattern used
+  // by llm-llamacpp via ModelMetaData. When metadata cannot be read (e.g.
+  // streaming load), the runtime context falls back to llama.cpp's default.
+  if (auto trainedCtx = readTrainedContextSize(
+          params.model.path, shards_, isStreaming_)) {
+    adjustEmbeddingContextSize(params, *trainedCtx, ctxSizeConfigured_);
+  }
+
   common_init_result_ptr llamaInit = initFromConfig(
       params,
       params.model.path,
@@ -528,28 +627,12 @@ void BertModel::init(common_params& params) {
       },
       const_cast<BertModel*>(this));
 
-  int nCtxTrain = llama_model_n_ctx_train(model_);
-  int nCtx = static_cast<int>(llama_n_ctx(ctx_));
-
   if (llama_model_has_encoder(model_) && llama_model_has_decoder(model_)) {
     std::string msg = string_format(
         "%s: computing embeddings in encoder-decoder models is not supported",
         __func__);
     throw qvac_errors::StatusError(
         ADDON_ID, toString(UnsupportedEmbeddings), msg);
-  }
-
-  if (nCtx > nCtxTrain) {
-    qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
-        GGML_LOG_LEVEL_WARN,
-        string_format(
-            "%s: warning: model was trained on only %d context tokens (%d "
-            "specified)\n",
-            __func__,
-            nCtxTrain,
-            nCtx)
-            .c_str(),
-        nullptr);
   }
 
   // print system information
@@ -641,9 +724,8 @@ void BertModel::setWeightsForFile(
     throw std::runtime_error(msg);
   }
 
-  static int fulfilledFiles = 0;
-  fulfilledFiles++;
-  if (fulfilledFiles == static_cast<int>(shards_.gguf_files.size()) + 1) {
+  int current = fulfilledFiles_.fetch_add(1) + 1;
+  if (current == static_cast<int>(shards_.gguf_files.size()) + 1) {
     initLoader_.waitForLoadInitialization();
   }
 }
@@ -655,17 +737,18 @@ BertModel::tokenizeInput(const std::vector<std::string>& prompts) const {
   // tokenize all prompts first
   std::vector<std::vector<int32_t>> inputs = tokenizePrompts(ctx_, prompts);
 
-  // Check for context overflow: compare against model's training context size
-  int nCtxTrain = llama_model_n_ctx_train(model_);
+  // Check for context overflow against the active runtime context, capped by
+  // the model's trained context size.
+  int effectiveContextSize = getEffectiveContextSize(model_, ctx_);
   for (std::size_t i = 0; i < inputs.size(); ++i) {
-    if (static_cast<int>(inputs[i].size()) > nCtxTrain) {
+    if (static_cast<int>(inputs[i].size()) > effectiveContextSize) {
       std::string msg = string_format(
           "%s: context overflow: number of tokens in prompt %zu (%zu) exceeds "
-          "model training context size (%d)",
+          "effective context size (%d)",
           __func__,
           i,
           inputs[i].size(),
-          nCtxTrain);
+          effectiveContextSize);
       throw qvac_errors::StatusError(ADDON_ID, toString(ContextOverflow), msg);
     }
   }
@@ -805,7 +888,7 @@ BertEmbeddings BertModel::encodeHostF32Sequences(
   std::vector<std::vector<int32_t>> inputTokens;
   inputTokens.reserve(sequenceArray.size());
 
-  int nCtxTrain = llama_model_n_ctx_train(model_);
+  int effectiveContextSize = getEffectiveContextSize(model_, ctx_);
   for (std::size_t i = 0; i < sequenceArray.size(); ++i) {
     if (stopCancelled_.load()) {
       throw std::runtime_error("Job cancelled");
@@ -814,14 +897,14 @@ BertEmbeddings BertModel::encodeHostF32Sequences(
     std::vector<int32_t> tokens = common_tokenize(ctx_, sequence, true, true);
 
     // Validate context size during tokenization
-    if (static_cast<int>(tokens.size()) > nCtxTrain) {
+    if (static_cast<int>(tokens.size()) > effectiveContextSize) {
       std::string msg = string_format(
           "%s: context overflow: number of tokens in sequence %zu (%zu) "
-          "exceeds model training context size (%d)",
+          "exceeds effective context size (%d)",
           __func__,
           i,
           tokens.size(),
-          nCtxTrain);
+          effectiveContextSize);
       throw qvac_errors::StatusError(ADDON_ID, toString(ContextOverflow), msg);
     }
 
@@ -859,8 +942,10 @@ qvac_lib_inference_addon_cpp::RuntimeStats BertModel::runtimeStats() const {
     stats.emplace_back(
         "batch_size", static_cast<long long>(init_.params.n_batch));
     stats.emplace_back(
-        "context_size",
+        "trained_context_size",
         static_cast<long long>(llama_model_n_ctx_train(model_)));
+    stats.emplace_back(
+        "context_size", static_cast<long long>(llama_n_ctx(ctx_)));
     stats.emplace_back("backendDevice", runtimeBackendDevice_);
   }
 
