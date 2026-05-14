@@ -144,14 +144,6 @@ export function transcribeStream(
   options?: RPCOptions,
 ): Promise<TranscribeStreamConversationSession>;
 export function transcribeStream(
-  params: TranscribeStreamClientParams & {
-    parakeetStreamingConfig: NonNullable<
-      TranscribeStreamClientParams["parakeetStreamingConfig"]
-    >;
-  },
-  options?: RPCOptions,
-): Promise<TranscribeStreamConversationSession>;
-export function transcribeStream(
   params: TranscribeStreamClientParams & { metadata: true },
   options?: RPCOptions,
 ): Promise<TranscribeStreamMetadataSession>;
@@ -179,16 +171,7 @@ export function transcribeStream(
     return transcribeStreamWithAudio(params, options);
   }
   const streamParams = params as TranscribeStreamClientParams;
-  // Parakeet's duplex path emits `endOfTurn` boundary events whenever
-  // the EOU model fires; surfacing them requires the conversation
-  // session shape (`{ type: "text" | "endOfTurn" | ... }`). Treat
-  // `parakeetStreamingConfig` as an implicit conversation-mode opt-in
-  // so callers don't have to flip the whisper-flavoured `emitVadEvents`
-  // knob just to receive parakeet boundary events.
-  if (
-    streamParams.emitVadEvents === true ||
-    streamParams.parakeetStreamingConfig !== undefined
-  ) {
+  if (streamParams.emitVadEvents === true) {
     return transcribeStreamDuplexConversation(streamParams, options);
   }
   if (streamParams.metadata === true) {
@@ -248,9 +231,6 @@ function buildTranscribeStreamRequest(
     }),
     ...(params.vadRunIntervalMs !== undefined && {
       vadRunIntervalMs: params.vadRunIntervalMs,
-    }),
-    ...(params.parakeetStreamingConfig && {
-      parakeetStreamingConfig: params.parakeetStreamingConfig,
     }),
   };
 }
@@ -430,17 +410,10 @@ function processLineConversation(
       };
     }
     if (response.endOfTurn) {
-      // `endOfTurn` is a discriminated union on `source`; whisper
-      // events carry a measured `silenceDurationMs`, parakeet events
-      // are token-driven and carry only the discriminator.
-      if (response.endOfTurn.source === "whisper") {
-        return {
-          type: "endOfTurn",
-          source: "whisper",
-          silenceDurationMs: response.endOfTurn.silenceDurationMs,
-        };
-      }
-      return { type: "endOfTurn", source: "parakeet" };
+      return {
+        type: "endOfTurn",
+        silenceDurationMs: response.endOfTurn.silenceDurationMs,
+      };
     }
     if (wantsMetadata) {
       if (response.segment) {
