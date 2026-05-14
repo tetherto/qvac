@@ -177,7 +177,7 @@ jobs:
   cpp-lint:
     needs: [authorize, context]
     if: needs.authorize.outputs.allowed == 'true'
-    uses: tetherto/qvac/.github/workflows/cpp-lint.yaml@tmp-self-hosted-runners
+    uses: ./.github/workflows/cpp-lint.yaml
     secrets: inherit
     with:
       sha: ${{ needs.context.outputs.base_sha }}
@@ -194,7 +194,7 @@ jobs:
       actions: read
     needs: [authorize, context]
     if: needs.authorize.outputs.allowed == 'true'
-    uses: tetherto/qvac/.github/workflows/cpp-test-coverage-tts-onnx.yml@tmp-self-hosted-runners
+    uses: ./.github/workflows/cpp-test-coverage-tts-onnx.yml
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}
@@ -209,7 +209,7 @@ jobs:
       id-token: write
     needs: [authorize, context]
     if: needs.authorize.outputs.allowed == 'true'
-    uses: tetherto/qvac/.github/workflows/prebuilds-tts-onnx.yml@tmp-self-hosted-runners
+    uses: ./.github/workflows/prebuilds-tts-onnx.yml
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}
@@ -223,7 +223,7 @@ jobs:
       id-token: write
     needs: [authorize, context, prebuild]
     if: needs.authorize.outputs.allowed == 'true'
-    uses: tetherto/qvac/.github/workflows/integration-test-tts-onnx.yml@tmp-self-hosted-runners
+    uses: ./.github/workflows/integration-test-tts-onnx.yml
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}
@@ -240,7 +240,7 @@ jobs:
       id-token: write
     needs: [authorize, context, prebuild]
     if: needs.authorize.outputs.allowed == 'true'
-    uses: tetherto/qvac/.github/workflows/integration-mobile-test-tts-onnx.yml@tmp-self-hosted-runners
+    uses: ./.github/workflows/integration-mobile-test-tts-onnx.yml
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}

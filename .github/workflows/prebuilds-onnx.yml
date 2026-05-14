@@ -36,7 +36,7 @@ jobs:
       contents: write
       pull-requests: write
       id-token: write
-    uses: tetherto/qvac/.github/workflows/reusable-prebuilds.yml@tmp-self-hosted-runners
+    uses: ./.github/workflows/reusable-prebuilds.yml
     with:
       workdir: ${{ inputs.workdir }}
       ref: ${{ inputs.ref }}

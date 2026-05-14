@@ -118,7 +118,7 @@ jobs:
       always() &&
        needs.authorize.outputs.allowed == 'true' &&
       (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
-    uses: tetherto/qvac/.github/workflows/cpp-lint.yaml@tmp-self-hosted-runners
+    uses: ./.github/workflows/cpp-lint.yaml
     secrets: inherit
     with:
       sha: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD~1' }}
@@ -136,7 +136,7 @@ jobs:
       always() &&
       needs.authorize.outputs.allowed == 'true' &&
       (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
-    uses: tetherto/qvac/.github/workflows/reusable-cpp-tests-translation-nmtcpp.yml@tmp-self-hosted-runners
+    uses: ./.github/workflows/reusable-cpp-tests-translation-nmtcpp.yml
     secrets: inherit
     with:
       ref: ${{ github.event.pull_request.head.ref }}
@@ -153,7 +153,7 @@ jobs:
       always() &&
       needs.authorize.outputs.allowed == 'true' &&
       (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
-    uses: tetherto/qvac/.github/workflows/prebuilds-translation-nmtcpp.yml@tmp-self-hosted-runners
+    uses: ./.github/workflows/prebuilds-translation-nmtcpp.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
@@ -169,7 +169,7 @@ jobs:
       contents: read
       packages: read
       id-token: write
-    uses: tetherto/qvac/.github/workflows/integration-test-translation-nmtcpp.yml@tmp-self-hosted-runners
+    uses: ./.github/workflows/integration-test-translation-nmtcpp.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
@@ -186,7 +186,7 @@ jobs:
       always() &&
       needs.authorize.outputs.allowed == 'true' &&
       (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
-    uses: tetherto/qvac/.github/workflows/integration-mobile-test-translation-nmtcpp.yml@tmp-self-hosted-runners
+    uses: ./.github/workflows/integration-mobile-test-translation-nmtcpp.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}

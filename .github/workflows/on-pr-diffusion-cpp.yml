@@ -66,7 +66,7 @@ jobs:
   cpp-tests:
     if: needs.authorize.outputs.allowed == 'true'
     needs: [authorize, sanity-checks]
-    uses: tetherto/qvac/.github/workflows/cpp-tests-diffusion.yml@tmp-self-hosted-runners
+    uses: ./.github/workflows/cpp-tests-diffusion.yml
     secrets: inherit
     with:
       workdir: packages/diffusion-cpp
@@ -75,7 +75,7 @@ jobs:
 
   cpp-lint:
     if: needs.authorize.outputs.allowed == 'true'
-    uses: tetherto/qvac/.github/workflows/cpp-lint.yaml@tmp-self-hosted-runners
+    uses: ./.github/workflows/cpp-lint.yaml
     needs: authorize
     secrets: inherit
     with:
@@ -119,7 +119,7 @@ jobs:
       packages: write
       pull-requests: write
       id-token: write
-    uses: tetherto/qvac/.github/workflows/prebuilds-diffusion-cpp.yml@tmp-self-hosted-runners
+    uses: ./.github/workflows/prebuilds-diffusion-cpp.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
@@ -132,7 +132,7 @@ jobs:
       contents: read
       packages: read
       id-token: write
-    uses: tetherto/qvac/.github/workflows/integration-test-diffusion-cpp.yml@tmp-self-hosted-runners
+    uses: ./.github/workflows/integration-test-diffusion-cpp.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
@@ -146,7 +146,7 @@ jobs:
       id-token: write
     if: needs.authorize.outputs.allowed == 'true'
     needs: [authorize, prebuild]
-    uses: tetherto/qvac/.github/workflows/integration-mobile-test-diffusion-cpp.yml@tmp-self-hosted-runners
+    uses: ./.github/workflows/integration-mobile-test-diffusion-cpp.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name }}

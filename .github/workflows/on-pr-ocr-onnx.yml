@@ -159,7 +159,7 @@ jobs:
   cpp-lint:
     needs: [authorize, changes]
     if: needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch'
-    uses: tetherto/qvac/.github/workflows/cpp-lint.yaml@tmp-self-hosted-runners
+    uses: ./.github/workflows/cpp-lint.yaml
     secrets: inherit
     with:
       sha: ${{ github.event.pull_request.base.sha || github.sha }}
@@ -179,7 +179,7 @@ jobs:
         github.event_name == 'workflow_dispatch' ||
         needs.authorize.outputs.allowed == 'true'
       )
-    uses: tetherto/qvac/.github/workflows/prebuilds-ocr-onnx.yml@tmp-self-hosted-runners
+    uses: ./.github/workflows/prebuilds-ocr-onnx.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
@@ -197,7 +197,7 @@ jobs:
         github.event_name == 'workflow_dispatch' ||
         needs.authorize.outputs.allowed == 'true'
       )
-    uses: tetherto/qvac/.github/workflows/integration-test-ocr-onnx.yml@tmp-self-hosted-runners
+    uses: ./.github/workflows/integration-test-ocr-onnx.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
@@ -216,7 +216,7 @@ jobs:
         github.event_name == 'workflow_dispatch' ||
         needs.authorize.outputs.allowed == 'true'
       )
-    uses: tetherto/qvac/.github/workflows/integration-mobile-test-ocr-onnx.yml@tmp-self-hosted-runners
+    uses: ./.github/workflows/integration-mobile-test-ocr-onnx.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
