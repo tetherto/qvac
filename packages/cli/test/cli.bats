@@ -116,6 +116,70 @@ http_status() {
   [[ "${output}" =~ "package-lock.json" ]]
 }
 
+@test "qvac verify bundle --help shows options" {
+  run ${QVAC} verify bundle --help
+  [[ "${status}" -eq 0 ]]
+  [[ "${output}" =~ "--addons-source" ]]
+  [[ "${output}" =~ "--host" ]]
+  [[ "${output}" =~ "--bare-runtime-version" ]]
+  [[ "${output}" =~ "--config" ]]
+}
+
+@test "qvac verify bundle requires --addons-source" {
+  run ${QVAC} verify bundle --host android-arm64
+  [[ "${status}" -eq 1 ]]
+  [[ "${output}" =~ "--addons-source" ]]
+}
+
+@test "qvac verify bundle rejects missing --addons-source path" {
+  run ${QVAC} verify bundle --addons-source /nonexistent/path --host android-arm64
+  [[ "${status}" -eq 1 ]]
+  [[ "${output}" =~ "not a readable file or directory" ]]
+}
+
+@test "qvac verify bundle rejects empty --host list" {
+  local dir
+  dir=$(mktemp -d)
+  mkdir -p "${dir}/node_modules"
+  run ${QVAC} verify bundle --addons-source "${dir}/node_modules"
+  [[ "${status}" -eq 1 ]]
+  [[ "${output}" =~ "--host" ]]
+  rm -rf "${dir}"
+}
+
+@test "qvac verify bundle passes on empty node_modules" {
+  local dir
+  dir=$(mktemp -d)
+  mkdir -p "${dir}/node_modules"
+  run ${QVAC} verify bundle --addons-source "${dir}/node_modules" --host darwin-arm64
+  [[ "${status}" -eq 0 ]]
+  [[ "${output}" =~ "verification passed" ]]
+  rm -rf "${dir}"
+}
+
+@test "qvac verify bundle rejects malformed --bare-runtime-version" {
+  local dir
+  dir=$(mktemp -d)
+  mkdir -p "${dir}/node_modules"
+  run ${QVAC} verify bundle --addons-source "${dir}/node_modules" --host darwin-arm64 --bare-runtime-version not-a-version
+  [[ "${status}" -eq 1 ]]
+  [[ "${output}" =~ "Invalid Bare runtime version" ]]
+  [[ "${output}" =~ "not-a-version" ]]
+  rm -rf "${dir}"
+}
+
+@test "qvac verify bundle rejects malformed bareRuntimeVersion in qvac.config.json" {
+  local dir
+  dir=$(mktemp -d)
+  mkdir -p "${dir}/node_modules"
+  printf '{"bareRuntimeVersion": "garbage"}' > "${dir}/qvac.config.json"
+  run ${QVAC} verify bundle --addons-source "${dir}/node_modules" --host darwin-arm64 --project-root "${dir}"
+  [[ "${status}" -eq 1 ]]
+  [[ "${output}" =~ "Invalid Bare runtime version" ]]
+  [[ "${output}" =~ "garbage" ]]
+  rm -rf "${dir}"
+}
+
 # ── CLI: doctor ───────────────────────────────────────────────────────
 
 @test "qvac doctor --help shows options" {

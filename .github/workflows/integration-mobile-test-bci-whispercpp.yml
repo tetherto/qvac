@@ -62,31 +62,12 @@ jobs:
         include:
           - platform: Android
             os: ubuntu-24.04
-            runner: ai-run-linux
+            runner: qvac-ubuntu2404-x64
           - platform: iOS
             os: macos-14
             runner: macos-14
 
     steps:
-      - name: Free up disk space
-        if: matrix.platform == 'Android'
-        run: |
-          echo "Disk space before cleanup:"
-          df -h
-          sudo rm -rf /usr/share/dotnet || true
-          sudo rm -rf /opt/ghc || true
-          sudo rm -rf /opt/hostedtoolcache/CodeQL || true
-          sudo rm -rf /opt/hostedtoolcache/go || true
-          sudo rm -rf /opt/hostedtoolcache/Python || true
-          sudo rm -rf /opt/hostedtoolcache/Ruby || true
-          sudo rm -rf /usr/local/lib/android/sdk/ndk || true
-          sudo rm -rf /usr/local/share/boost || true
-          sudo rm -rf /usr/share/swift || true
-          sudo docker image prune --all --force || true
-          sudo apt-get clean || true
-          echo "Disk space after cleanup:"
-          df -h
-
       - name: Resolve prebuild source
         id: resolve_prebuild
         shell: bash
@@ -135,11 +116,13 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Node.js
+        if: matrix.platform == 'iOS'
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Install global dependencies
+        if: matrix.platform == 'iOS'
         run: |
           echo "Installing global dependencies..."
           npm install -g @expo/cli@latest
