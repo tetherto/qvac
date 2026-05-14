@@ -42,19 +42,18 @@ export async function embed(
 
   // Open a request-scoped lifecycle. The registry routes
   // `cancel({ requestId })` and broad `cancel({ modelId, kind: "embeddings" })`
-  // straight to this context's signal, replacing the M1 compat fallback
-  // for the `embeddings` kind. Falls back to a server-generated id if
-  // the client didn't send one (older releases).
+  // straight to this context's signal. Falls back to a server-generated
+  // id if the client didn't send one (older releases).
   await using ctx = getRequestRegistry().begin({
     requestId: requestId ?? generateServerRequestId(),
     kind: "embeddings",
     modelId,
   });
-  // `requestLogger` is intentionally referenced once so the M3a
-  // contract (handler builds a request-scoped logger at entry) holds
-  // even when this op has no per-step emits beyond the registry's own
-  // lifecycle lines. Future addon-level warns inside this body should
-  // route through `requestLogger`.
+  // `requestLogger` is intentionally referenced once so the
+  // request-scoped logger is built at handler entry per the canonical
+  // shape, even when this op has no per-step emits beyond the
+  // registry's own lifecycle lines. Future addon-level warns inside
+  // this body should route through `requestLogger`.
   const requestLogger = withRequestContext(getServerLogger(), ctx);
 
   const model = getModel(modelId);

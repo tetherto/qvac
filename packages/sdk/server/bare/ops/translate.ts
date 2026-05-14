@@ -105,8 +105,8 @@ export async function* translate(
   // `{ scope: "none" }` — so the addon-cancel wiring below only
   // engages on the LLM path. NMT cancel is purely soft: the loop
   // exits on `signal.aborted`, scope unwinds, and the addon may run
-  // to completion in the background (acceptable per D2 — the result
-  // is dropped either way).
+  // to completion in the background — acceptable because the result
+  // is dropped either way.
   await using ctx = getRequestRegistry().begin({
     requestId: requestId ?? generateServerRequestId(),
     kind: "translate",

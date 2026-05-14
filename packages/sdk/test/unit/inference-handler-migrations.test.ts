@@ -7,10 +7,11 @@ import {
 } from "@/schemas";
 
 // -----------------------------------------------------------------------------
-// M3b inference-handler migration tests.
+// Inference-handler migration tests.
 //
-// Covers the registry-driven cancel surface for the four kinds migrated
-// in M3b. The bare ops register themselves on the singleton registry via
+// Covers the registry-driven cancel surface for the four registry-routed
+// inference kinds (`embeddings`, `transcribe`, `translate`, `finetune`).
+// The bare ops register themselves on the singleton registry via
 // `getRequestRegistry().begin(...)`, so the assertions here exercise the
 // same singleton — `cancel({ requestId })` and `cancel({ modelId, kind })`
 // must both route to the ops' `signal.aborted`.
@@ -24,8 +25,8 @@ import {
 // `plugin-cancel-capability.test.ts`. The schema-level test surface
 // (request schemas accepting an optional `requestId`) is covered by the
 // `*-schemas.test.ts` files; the registry-level surface is covered by
-// `runtime/request-registry.test.ts`. The truth-table flip for finetune
-// (`scope: "model", hard: true`) is verified in
+// `runtime/request-registry.test.ts`. The cancel-capability truth-table
+// row for `finetune` (`{ scope: "model", hard: true }`) is verified in
 // `plugin-cancel-capability.test.ts`.
 // -----------------------------------------------------------------------------
 
@@ -60,7 +61,7 @@ function makeId(prefix: string): string {
   return `${prefix}-${idCounter}-${Date.now()}`;
 }
 
-// -- Schema-level requestId coverage for the M3b kinds --------------------
+// -- Schema-level requestId coverage for the registry-routed kinds -------
 // embed/finetune `*-schemas.test.ts` files cover those two separately.
 // Transcribe and translate don't have dedicated schema test files, so the
 // new optional-`requestId` fields are exercised inline below.
@@ -509,7 +510,7 @@ bareTest(
     let addonCancelCalls = 0;
     // `reload` is called by `applyPrompt` at handler entry (once) and
     // by `restorePrompt` at scope unwind (once). Count both — the test
-    // pins the M2 invariant: `restorePrompt` runs on every exit path
+    // pins the invariant: `restorePrompt` runs on every exit path
     // including cancel, via `scope.defer(...)`.
     let reloadCalls = 0;
     let release: () => void = () => {};
@@ -703,15 +704,15 @@ bareTest(
 );
 
 test(
-  "lifecycle logs: registry emits [request-lifecycle] lines on begin/cancel/end for the four M3b kinds",
+  "lifecycle logs: registry emits [request-lifecycle] lines on begin/cancel/end for the four registry-routed inference kinds",
   async (t: T) => {
     // Confirms the registry's lifecycle log shape independently of which
     // op is driving it. The op-level wiring (`withRequestContext`) is
     // covered by `runtime/with-request-context.test.ts`; this assertion
-    // proves the begin/cancel/end events still carry the M3a-shaped
+    // proves the begin/cancel/end events carry the
     // `[request-lifecycle] <event> requestId=... kind=... modelId=...`
     // prefix that operators and log shippers depend on, exercised
-    // explicitly for each of the kinds M3b migrated.
+    // explicitly for each of the registry-routed inference kinds.
     const { createRequestRegistry } = await import(
       "@/server/bare/runtime/request-registry"
     );

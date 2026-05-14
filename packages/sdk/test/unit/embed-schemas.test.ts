@@ -56,7 +56,7 @@ test("embedRequestSchema: accepts an optional requestId", (t) => {
   }
 });
 
-test("embedRequestSchema: requestId is optional (M1 wire-compat fallback to server-generated id)", (t) => {
+test("embedRequestSchema: requestId is optional (server falls back to a generated id for older clients)", (t) => {
   const result = embedRequestSchema.safeParse({
     type: "embed",
     modelId: "m1",

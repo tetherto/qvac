@@ -186,14 +186,13 @@ export async function pauseFinetune(modelId: string): Promise<FinetuneResult> {
   };
 }
 
-// Thin compat wrapper over the request registry. M3a/M3b retired the
-// direct `model.cancel()` call path here: the in-flight finetune is
-// tracked by a `RequestContext` (kind `"finetune"`), and the registry
-// owns the broadcast to its `AbortSignal`. `startFinetune` installs
-// the addon-level `model.cancel()` listener tied to that signal, so
-// callers see the same observable effect as the legacy path. The
-// addon-call wiring is centralised there — never invoke
-// `model.cancel()` here.
+// Thin compat wrapper over the request registry. The in-flight
+// finetune is tracked by a `RequestContext` (kind `"finetune"`), and
+// the registry owns the broadcast to its `AbortSignal`. `startFinetune`
+// installs the addon-level `model.cancel()` listener tied to that
+// signal, so callers see the same observable effect as a direct
+// `model.cancel()` call. The addon-call wiring is centralised there —
+// never invoke `model.cancel()` here.
 export function cancelFinetune(modelId: string): Promise<FinetuneResult> {
   // `registry.cancel(...)` is synchronous — it triggers the matching
   // requests' abort signals and returns the cancelled count. Scope

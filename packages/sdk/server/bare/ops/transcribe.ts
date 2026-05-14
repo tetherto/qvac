@@ -159,8 +159,8 @@ export async function* transcribe(
   const originalConfig = await applyPrompt(modelId, params.prompt, engineType);
   if (originalConfig) {
     // `restorePrompt` runs on every exit path — happy, throw, cancel —
-    // via the scope. Replaces the M2 `try / finally { restorePrompt }`
-    // block; LIFO unwinding pairs with the addon-cancel detach below.
+    // via the scope. LIFO unwinding pairs with the addon-cancel detach
+    // below.
     ctx.scope.defer(() => restorePrompt(modelId, originalConfig));
   }
 

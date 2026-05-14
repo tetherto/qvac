@@ -16,11 +16,11 @@ Server-side long-running operations (`completion`, `embeddings`, `transcribe`, `
 - **`RequestContext`** — per-request handle bundling `requestId`, `kind`, `modelId`, `signal`, `scope`, `state`.
 - **`RequestRegistry`** — module-scoped registry that mints contexts via `begin(...)` and routes `cancel(...)` by `requestId` or `modelId`.
 
-Migration is rolling out across milestones (M1 shipped completion; M2 shipped typed cancel outcomes + `KvCacheSession` + the Stop-button race close; **M3a** added per-handler cancel-capability declaration, registry concurrency policy, and structured `[request-lifecycle]` logging; **M3b** migrated embeddings / transcribe / translate / finetune onto the primitives; M3c–M3d migrate loadModel / downloadAsset and retire the M1 compat-fallback in `ops/cancel.ts`). The contract below applies to every newly-migrated handler.
+The contract below applies to every cancellable server-side handler. The truth table further down ("Truth table for built-in plugins") tracks each handler's addon-level cancel surface; kinds dispatched outside the registry use the broad-cancel fallback in `server/bare/ops/cancel.ts`.
 
 ## Canonical Handler Shape
 
-Every cancellable server-side handler MUST follow this shape. The clearest production reference is **`packages/sdk/server/bare/ops/embed.ts`** (M3b) — it's a unary op, has no kv-cache plumbing, and shows the begin / `withRequestContext` / abort-listener / scope-defer / post-await `signal.aborted` checks in their minimum-viable form. `completion-stream.ts` is the streaming reference; `transcribe.ts` and `translate.ts` are the soft-cancel-loop variants (per-iteration `if (ctx.signal.aborted) break;`).
+Every cancellable server-side handler MUST follow this shape. The clearest production reference is **`packages/sdk/server/bare/ops/embed.ts`** — it's a unary op, has no kv-cache plumbing, and shows the begin / `withRequestContext` / abort-listener / scope-defer / post-await `signal.aborted` checks in their minimum-viable form. `completion-stream.ts` is the streaming reference; `transcribe.ts` and `translate.ts` are the soft-cancel-loop variants (per-iteration `if (ctx.signal.aborted) break;`).
 
 ```typescript
 import { getRequestRegistry, withRequestContext } from "@/server/bare/runtime";
@@ -64,13 +64,13 @@ Key invariants in this shape:
 1. **`await using ctx = registry.begin(...)`** — the registry mints a `ManagedRequestContext` whose `Symbol.asyncDispose` removes the entry and unwinds the scope. `await using` guarantees disposal on every exit path (return / throw / generator close / cancellation).
 2. **Signal consumed at one place only** — the addon binding leaf. After that the addon throws or returns, the loop exits naturally, and the scope unwinds.
 3. **`{ once: true }` listener + `scope.defer(removeEventListener)`** — `{ once: true }` auto-removes if the signal fires; the `scope.defer(...)` is the cleanup hook for the signal-never-fired path. Both together mean no leaked listeners on long-lived parent signals. Use `scope.defer` rather than a bare `try/finally` so the listener-detach runs in LIFO order with any other resource cleanups the handler registers (e.g. `restorePrompt` in transcribe, `clearFinetuneRuntimeState` in finetune).
-4. **`if (ctx.signal.aborted) onAbort()` fall-through** — `addEventListener("abort", ..., { once: true })` does NOT fire if the signal is already aborted at register time. This line handles the case where the registry synchronously aborts a fresh controller because the `parentSignal` was already aborted at `begin(...)`, or the M2 Stop-button race retroactively aborted the new controller from the `cancelled-before-begin` map.
+4. **`if (ctx.signal.aborted) onAbort()` fall-through** — `addEventListener("abort", ..., { once: true })` does NOT fire if the signal is already aborted at register time. This line handles the case where the registry synchronously aborts a fresh controller because the `parentSignal` was already aborted at `begin(...)`, or the Stop-button race retroactively aborted the new controller from the `cancelled-before-begin` map.
 5. **`withRequestContext(getServerLogger(), ctx)`** — build the per-request logger ONCE at handler entry and thread it through every emit (kv-cache turn, addon-cancel rejection, prime failure). The wrapped logger's prefix matches the registry's lifecycle lines, so `grep "requestId=<id>"` returns the full per-request story.
 6. **`requestId: req.requestId ?? generateServerRequestId()`** — the wire schema for every migrated kind marks `requestId` optional; the server falls back to a UUID when an older client didn't send one. This is the only place the fallback should fire.
 
-### Per-iteration cancel check (M3b)
+### Per-iteration cancel check
 
-For streaming loops, M3b standardised on Option A — an explicit per-iteration `if (ctx.signal.aborted) break;` immediately after entering the loop body. Rationale:
+For streaming loops, the canonical pattern is an explicit per-iteration `if (ctx.signal.aborted) break;` immediately after entering the loop body. Rationale:
 
 - **Visible at the call site.** Reviewers see the cancel point in the same diff as the loop, instead of inferring it from a wrapper utility's semantics.
 - **No new abstractions.** Avoids introducing a `takeWhileNotAborted(iter, signal)` helper for a one-liner that's already idiomatic.
@@ -95,7 +95,7 @@ for await (const chunk of model.runStreaming(req, { signal })) {
 
 Signal is consumed at exactly one point: the addon binding. After that, cancellation propagates by the addon returning / throwing, the loop exiting, and the scope unwinding. Polling scatters cancellation logic and gets out of sync with the truth (registry state).
 
-**Not to be confused with the M3b per-iteration check.** The pattern above is wrong when the addon already honours `signal` via its `RunOptions.signal` (e.g. `llamacpp-completion.runStreaming`). For handlers whose addon does NOT consume the signal directly (whisper, parakeet, nmtcpp, llamacpp-embedding's `iterate()` path), a single `if (ctx.signal.aborted) break;` at the top of the loop body IS the canonical pattern — see ["Per-iteration cancel check (M3b)"](#per-iteration-cancel-check-m3b) above. The anti-pattern is *adding* the check when the addon already does the same work; the M3b pattern is *introducing* the check where it's the only soft-cancel exit.
+**Not to be confused with the per-iteration cancel check.** The pattern above is wrong when the addon already honours `signal` via its `RunOptions.signal` (e.g. `llamacpp-completion.runStreaming`). For handlers whose addon does NOT consume the signal directly (whisper, parakeet, nmtcpp, llamacpp-embedding's `iterate()` path), a single `if (ctx.signal.aborted) break;` at the top of the loop body IS the canonical pattern — see ["Per-iteration cancel check"](#per-iteration-cancel-check) above. The anti-pattern is *adding* the check when the addon already does the same work; the canonical pattern is *introducing* the check where it's the only soft-cancel exit.
 
 ### Manual cleanup in `if (signal.aborted) { ... }` branches
 
@@ -182,7 +182,7 @@ defineHandler({
 
 The framework reads `cancel.scope` to decide how to wire `signal.onabort`; the handler stays oblivious to whether the addon supports per-request, per-model, or no cancel surface. See the truth table in the next section.
 
-## Cancel Capability Declaration (new in M3a)
+## Cancel Capability Declaration
 
 Every plugin handler declares its addon's cancel surface on the manifest so the framework knows what `cancel({ requestId })` can actually do today, and so future code can decide whether to wire `signal.onabort → addon.cancel()` directly or fall back to soft-cancel.
 
@@ -210,7 +210,7 @@ completionStream: defineHandler({
 
 Omitting the field entirely is equivalent to `{ scope: "none" }`. The runtime schema in `packages/sdk/schemas/plugin.ts` validates it on plugin registration.
 
-### Truth table for built-in plugins (as of M3b)
+### Truth table for built-in plugins
 
 | Plugin                       | Handler(s)                            | `cancel`                          |
 |------------------------------|---------------------------------------|-----------------------------------|
@@ -225,11 +225,11 @@ Omitting the field entirely is equivalent to `{ scope: "none" }`. The runtime sc
 | `sdcpp-generation`           | `diffusionStream`                     | `{ scope: "model", hard: true }`  |
 | `sdcpp-generation`           | `upscaleStream`                       | `{ scope: "none" }`               |
 
-M3b flipped `llamacpp-completion.finetune` from `{ scope: "none" }` to `{ scope: "model", hard: true }`. The addon exposes `model.cancel()` for the running finetune job; `startFinetune` wires the registry's abort signal to that call, and the legacy `cancelFinetune(modelId)` wrapper now broadcasts through `getRequestRegistry().cancel({ modelId, kind: "finetune" })`.
+`llamacpp-completion.finetune` declares `{ scope: "model", hard: true }`: the addon exposes `model.cancel()` for the running finetune job, `startFinetune` wires the registry's abort signal to that call, and the legacy `cancelFinetune(modelId)` wrapper broadcasts through `getRequestRegistry().cancel({ modelId, kind: "finetune" })`.
 
 The truth table is pinned by `packages/sdk/test/unit/plugin-cancel-capability.test.ts`. When a handler's addon gains a per-request cancel surface, flip its declaration to `{ scope: "request", hard: true }` and update the test row in the same PR.
 
-## Concurrency Policy (new in M3a)
+## Concurrency Policy
 
 The registry exposes an opt-in admission-control surface on `policy(...)`:
 
@@ -242,11 +242,11 @@ interface RequestRegistry {
 
 `getRequestRegistry()` (the worker-process singleton in `request-registry-singleton.ts`) registers `{ kind: "completion", oneAtATimePerModel: true }` on first use. The llama.cpp addon owns one KV-cache + one decode loop per model — two concurrent `completionStream` requests on the same model would interleave on the same logical session, so the second `begin(...)` is rejected explicitly with `RequestRejectedByPolicyError` (code 52420) instead of producing a confusing interleave.
 
-Kinds without a registered policy are unconstrained (pre-M3a admission semantics). M3b deliberately did **not** register `oneAtATimePerModel` for `embeddings` / `transcribe` / `translate` / `finetune` — those addons can sustain concurrent requests against the same model, and the registry's per-request lifecycle is sufficient for cancel routing without admission control. Future milestones may register policies on a per-kind basis if and when an addon's concurrency invariants change.
+Kinds without a registered policy are unconstrained. `embeddings` / `transcribe` / `translate` / `finetune` deliberately do **not** register `oneAtATimePerModel` — those addons can sustain concurrent requests against the same model, and the registry's per-request lifecycle is sufficient for cancel routing without admission control. Per-kind policies can be registered if and when an addon's concurrency invariants change.
 
 Policy enforcement runs in `registry.begin(...)` **before** any controller / scope allocation, so a rejected `begin` leaves no entry behind. Tests pin both the rejection and the "no slot leak" property in `packages/sdk/test/unit/runtime/request-registry.test.ts`.
 
-## Structured Logging (new in M3a)
+## Structured Logging
 
 The registry emits a single line per lifecycle event so log shippers can correlate per-request activity by grepping `requestId=<id>`:
 
@@ -359,7 +359,7 @@ import {
   // scope factory (rarely used directly — `registry.begin(...)` carries one)
   createDisposableScope,
 
-  // per-request logger wrapper (M3a)
+  // per-request logger wrapper
   withRequestContext,
 } from "@/server/bare/runtime";
 
@@ -374,9 +374,9 @@ import type {
   CancelTarget,
   CancelByRequestId,
   CancelByModelId,
-  ConcurrencyPolicy, // M3a
+  ConcurrencyPolicy,
   DisposableScope,
-  RequestLogContext, // M3a — narrow shape `withRequestContext` reads
+  RequestLogContext, // narrow shape `withRequestContext` reads
 } from "@/server/bare/runtime";
 ```
 
@@ -430,7 +430,7 @@ Four errors are owned by this stack today (all in `@/utils/errors-server`):
 Five unit-test files pin the contract — read them as canonical examples:
 
 - `packages/sdk/test/unit/runtime/disposable-scope.test.ts` — LIFO cleanup, idempotency, error aggregation, late `defer` behavior.
-- `packages/sdk/test/unit/runtime/request-registry.test.ts` — `begin`/`cancel`/`end` flow, `requestId` conflict detection, parent-signal composition + listener detach discipline, the M2 Stop-button race close (`same-tick cancel-before-begin retroactively aborts the later begin()`), the bounded `cancelled-before-begin` map invariants, **and the M3a concurrency policy** (`oneAtATimePerModel` admission rule + `RequestRejectedByPolicyError` propagation + rejected-begin leaves no slot behind).
+- `packages/sdk/test/unit/runtime/request-registry.test.ts` — `begin`/`cancel`/`end` flow, `requestId` conflict detection, parent-signal composition + listener detach discipline, Stop-button race close (`same-tick cancel-before-begin retroactively aborts the later begin()`), the bounded `cancelled-before-begin` map invariants, **and concurrency policy** (`oneAtATimePerModel` admission rule + `RequestRejectedByPolicyError` propagation + rejected-begin leaves no slot behind).
 - `packages/sdk/test/unit/runtime/kv-cache-session.test.ts` — `beginTurn` / `commitTurn` / `rollback` semantics in isolation: commit suppresses the deferred rollback, rollback after commit is a no-op, double-rollback is idempotent, and rollback wipes all three layers (file / `initializedCaches` / `cachedMessageCounts`) regardless of who fails along the way.
 - `packages/sdk/test/unit/runtime/request-lifecycle-logging.test.ts` — registry's `[request-lifecycle] begin/cancel/end` line shape, single-emit guarantee on redundant cancels, `cancelAll` fans out one line per active entry, `state=cancelling` on a `parentSignal`-pre-aborted begin, and the `modelId=-` placeholder for model-less requests.
 - `packages/sdk/test/unit/runtime/with-request-context.test.ts` — `withRequestContext` prefix shape across every level, `modelId`-segment dropping when absent, multi-argument preservation, and pass-through of `setLevel` / `getLevel` / `addTransport` / `setConsoleOutput`.
@@ -474,4 +474,4 @@ Already covered by the `CancelTarget` discriminated union. If you genuinely need
 
 - `error-handling.mdc` — `InferenceCancelledError` / `AsyncDisposeUnavailableError` / `RequestIdConflictError` placement and propagation across the RPC boundary.
 - `docs/kv-cache-system.mdc` — `KvCacheSession` ownership of the three KV-cache bookkeeping layers (on-disk `.bin`, `initializedCaches`, `cachedMessageCounts`), `beginTurn` / `commitTurn` / `rollback` semantics, and the cross-model `deleteKvCacheState` administrative API.
-- `docs/request-lifecycle-system.mdc` — full reference (design rationale, migration roadmap, FAQ, M2 Stop-button race close rationale).
+- `docs/request-lifecycle-system.mdc` — full reference (design rationale, FAQ, Stop-button race close rationale).
