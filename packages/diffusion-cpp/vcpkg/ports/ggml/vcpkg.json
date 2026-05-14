@@ -1,0 +1,49 @@
+{
+  "name": "ggml",
+  "version-date": "2026-01-30",
+  "port-version": 8,
+  "description": "Tensor library for machine learning \u2014 testing PR #9: fused RoPE kernel + conv2d implicit GEMM (2x faster Flux2 denoising)",
+  "homepage": "https://github.com/tetherto/qvac-ext-ggml",
+  "license": "MIT",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    }
+  ],
+  "default-features": [
+    {
+      "name": "metal",
+      "platform": "osx | ios"
+    },
+    {
+      "name": "opencl",
+      "platform": "android"
+    },
+    {
+      "name": "vulkan",
+      "platform": "windows | linux | android"
+    }
+  ],
+  "features": {
+    "cuda": {
+      "description": "Enable CUDA GPU backend"
+    },
+    "metal": {
+      "description": "Enable Metal GPU backend (macOS/iOS)"
+    },
+    "opencl": {
+      "description": "Enable OpenCL GPU backend",
+      "dependencies": [
+        "opencl"
+      ]
+    },
+    "vulkan": {
+      "description": "Enable Vulkan GPU backend"
+    }
+  }
+}
