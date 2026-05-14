@@ -6,19 +6,20 @@
 #include <cstring>
 #include <ranges>
 #include <stdexcept>
+#include <utility>
 
 #include <common/common.h>
+#include <inference-addon-cpp/Errors.hpp>
 #include <llama-cpp.h>
 #include <llama.h>
 #include <llama/common/arg.h>
-#include <inference-addon-cpp/Errors.hpp>
 
 #include "BackendSelection.hpp"
 #include "LlamaLazyInitializeBackend.hpp"
 #include "addon/BertErrors.hpp"
-#include "logging.hpp"
 #include "inference-addon-cpp/GGUFShards.hpp"
 #include "inference-addon-cpp/LlamacppUtils.hpp"
+#include "logging.hpp"
 #include "utils.hpp"
 
 using namespace qvac_lib_infer_llamacpp_embed::errors;
@@ -235,8 +236,8 @@ void logTokenizationIfVerbose(
 
 bool hasContextSizeConfig(
     const std::unordered_map<std::string, std::string>& configFilemap) {
-  return configFilemap.find("ctx_size") != configFilemap.end() ||
-         configFilemap.find("ctx-size") != configFilemap.end();
+  return configFilemap.contains("ctx_size") ||
+         configFilemap.contains("ctx-size");
 }
 
 int getEffectiveContextSize(const llama_model* model, const llama_context* ctx) {
@@ -387,11 +388,13 @@ parseSplitMode(std::unordered_map<std::string, std::string>& configFilemap) {
   return splitMode;
 }
 
+// NOLINTBEGIN(bugprone-easily-swappable-parameters)
 common_params setupParams(
     const std::string& modelGgufPath,
     std::unordered_map<std::string, std::string> configFilemap,
     bool& ctxSizeConfigured,
     int64_t& resolvedBackendDevice) {
+  // NOLINTEND(bugprone-easily-swappable-parameters)
   // Default params
   common_params params;
   ctxSizeConfigured = hasContextSizeConfig(configFilemap);
@@ -474,9 +477,8 @@ common_params setupParams(
     const bool isOpenCl =
         chosenBackend.first == BackendType::GPU &&
         chosenBackend.second.find("opencl") != std::string::npos;
-    const bool userSetFlashAttn =
-        configFilemap.find("flash-attn") != configFilemap.end() ||
-        configFilemap.find("flash_attn") != configFilemap.end();
+    const bool userSetFlashAttn = configFilemap.contains("flash-attn") ||
+                                  configFilemap.contains("flash_attn");
     if (isOpenCl && !userSetFlashAttn) {
       configFilemap["flash-attn"] = "off";
       qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
@@ -758,7 +760,7 @@ BertModel::tokenizeInput(const std::vector<std::string>& prompts) const {
   // the model's trained context size.
   int effectiveContextSize = getEffectiveContextSize(model_, ctx_);
   for (std::size_t i = 0; i < inputs.size(); ++i) {
-    if (static_cast<int>(inputs[i].size()) > effectiveContextSize) {
+    if (std::cmp_greater(inputs[i].size(), effectiveContextSize)) {
       std::string msg = string_format(
           "%s: context overflow: number of tokens in prompt %zu (%zu) exceeds "
           "effective context size (%d)",
@@ -914,7 +916,7 @@ BertEmbeddings BertModel::encodeHostF32Sequences(
     std::vector<int32_t> tokens = common_tokenize(ctx_, sequence, true, true);
 
     // Validate context size during tokenization
-    if (static_cast<int>(tokens.size()) > effectiveContextSize) {
+    if (std::cmp_greater(tokens.size(), effectiveContextSize)) {
       std::string msg = string_format(
           "%s: context overflow: number of tokens in sequence %zu (%zu) "
           "exceeds effective context size (%d)",
