@@ -14,7 +14,7 @@ on:
       - tmp-*
     paths:
       - "packages/ocr-ggml/**"
-      - ".github/workflows/*ocr*.yml"
+      - ".github/workflows/*ocr-ggml*.yml"
   workflow_dispatch:
   workflow_call:
 
