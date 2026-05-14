@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0]
+
+### Changed
+
+- Bumped `qvac-lib-inference-addon-cpp` baseline to `1.1.7#1`.
+
 ## [0.3.3]
 
 This release adds long-form audio support to the Parakeet TDT pipeline. Audio inputs that previously failed against the encoder's static positional-encoding ceilings are now transcribed by streaming the mel-spectrogram through the encoder in overlapping windows.
