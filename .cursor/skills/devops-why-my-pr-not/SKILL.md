@@ -135,7 +135,7 @@ Walk down this checklist in order. Stop at the first match per dimension; print 
 | C3 | Same SKIPPED jobs, `verified` is present, but the latest `synchronize` event was a push by a non-trusted actor | `label-gate` strips `verified` on every `synchronize` from a non-trusted actor. A trusted actor must re-apply after reviewing the new commits. | `LABELS.md § verified — Behaviour on synchronize`, `label-gate/README.md § Strip policy` |
 | C4 | `verified` label was *applied* by a non-trusted actor (look at the labeled-event applier in the timeline) and was immediately stripped | `label-gate` strips on apply by non-trusted actor (avoids a misleading "verified" social signal). | `LABELS.md § verified — Behaviour on apply by non-trusted actor`, `label-gate/README.md § Strip policy` |
 | C5 | PR is from a fork (`headRepositoryOwner.login != tetherto`) AND only secret-bearing jobs are missing | `pull_request` from a fork gets a read-only `GITHUB_TOKEN` and no secrets. The `verified`-gated jobs intentionally won't run until a trusted actor verifies. | `LABELS.md § verified` |
-| C6 | An inference-addon C++ test workflow run is missing AND `verify` label is absent | The `pr-test-inference-addon-cpp*` workflows opt into expensive integration runs only when `verify` is on the PR. Apply `verify` (separate from `verified`) when you want them to run. | `LABELS.md § verify` |
+| C6 | An expensive test/validation workflow is missing on a legacy `verify`-gated path (currently `pr-test-inference-addon-cpp*.yml`, `public-reusable-npm.yml`, `pr-models-validation-registry-server.yml`) AND `verified` is absent | Ask a trusted actor to apply `verified` — that is the canonical authorisation label across the repo. `verify` is **deprecated** and exists only on the legacy workflows listed in `LABELS.md § verify`; do not recommend applying it. | `LABELS.md § verify (deprecated)`, `LABELS.md § verified` |
 | C7 | `pr-checks-sdk-pod.yml` jobs are skipped AND PR touches `packages/sdk/` from a fork AND `safe-to-test` is missing | SDK pod's check-running gate. Reviewer must apply `safe-to-test` after auditing the diff. | `LABELS.md § safe-to-test` |
 | C8 | E2E suite did not run AND PR touches SDK AND neither `test-e2e-smoke` nor `test-e2e-full` is present | SDK E2E is opt-in via these labels. Apply the smoke variant for normal PR feedback. | `LABELS.md § test-e2e-smoke / test-e2e-full` |
 | C9 | A workflow run is FAILED with `label-gate` exiting non-zero (red, not skipped) | Hard misconfiguration in `label-gate` — usually missing `PAT_TOKEN` or `read:org` API failure. This is a DevOps issue, not a label issue. | `label-gate/README.md § Exit policy` |
@@ -209,10 +209,6 @@ Use simple symbols: `[!]` for blocking, `[~]` for soft (e.g. waiting), `[i]` for
 
 The skill MAY propose at most one mutation per finding. Each proposal prints the exact command and waits for explicit confirmation. Examples:
 
-- **Apply `verify` label** (NOT `verified`):
-  ```bash
-  gh pr edit <num> -R <owner>/<repo> --add-label verify
-  ```
 - **Apply `safe-to-test`** (only after the user confirms they have audited the fork's diff):
   ```bash
   gh pr edit <num> -R <owner>/<repo> --add-label safe-to-test
