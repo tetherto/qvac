@@ -140,7 +140,7 @@ The `config` is a plain JS object whose keys are forwarded directly to the nativ
 | `embd_normalize` | string of integer                             | `"2"`         | Embedding normalization (`-1` = none, `0` = max abs int16, `1` = taxicab, `2` = euclidean, `>2` = p-norm) |
 | `flash_attn`     | `"on"` \| `"off"` \| `"auto"`                 | `"auto"`      | Enable / disable flash attention                                                         |
 | `main-gpu`       | string of integer \| `"integrated"` \| `"dedicated"` | —      | GPU selection for multi-GPU systems                                                      |
-| `verbosity`      | string of `"0"`–`"3"` (0=ERROR, 1=WARN, 2=INFO, 3=DEBUG) | `"0"` | Native logging verbosity. The `addonLogging.setLogger` callback receives only messages at or above this threshold. Use `"2"` for llama.cpp INFO logs and `"3"` for DEBUG logs. |
+| `verbosity`      | string of `"0"`–`"3"` (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | `"0"` | Native logging verbosity. The `addonLogging.setLogger` callback receives only messages at or above this threshold. Use `"2"` for llama.cpp INFO logs and `"3"` for DEBUG logs. The verbosity level is process-global and is updated each time a model is constructed, so the most recently constructed model's `config.verbosity` wins for all subsequent native log dispatch. |
 
 #### Native addon logging
 
@@ -157,8 +157,11 @@ setLogger((priority, message) => {
 The callback is wired before model load, but it still follows `config.verbosity`.
 With the default `"0"` setting, only native `ERROR` messages are delivered. Set
 `config.verbosity` to `"2"` to receive llama.cpp `INFO` diagnostics, or `"3"` for
-`DEBUG` messages. Some startup diagnostics printed directly by llama.cpp may
-still appear on `stderr` before the addon installs its callback.
+`DEBUG` messages. The verbosity level is process-global and is updated each
+time a model is constructed, so when multiple models are loaded the most
+recently constructed model's `config.verbosity` wins for all subsequent
+native log dispatch. Some startup diagnostics printed directly by llama.cpp
+may still appear on `stderr` before the addon installs its callback.
 
 #### IGPU/GPU  selection logic:
 
