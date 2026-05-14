@@ -13,9 +13,11 @@ produces a chunk of robot actions ready to dispatch to a manipulator.
 - **SmolVLA inference on ggml** — full pipeline: SigLIP-B/16 vision encoder,
   SmolLM2 language tower, action expert, and 10-step flow-matching ODE.
 - **Cross-platform GPU acceleration** — Vulkan on Linux/Windows/Android-Mali,
-  Metal on Apple, OpenCL/CPU fallbacks. Adreno GPUs are deliberately rejected
-  by the backend selector (driver-level matmul issues — see
-  `addon/src/utils/BackendSelection.cpp`).
+  Metal on Apple, OpenCL on Adreno 800+, CPU fallback everywhere else. On
+  Adreno the backend selector picks OpenCL (the path Qualcomm/qvac-fabric
+  actively maintain) and skips Vulkan because the Adreno Vulkan driver
+  produces numerically incorrect ggml output; older Adreno (< 800) falls
+  back to CPU. See `addon/src/utils/BackendSelection.cpp`.
 - **Q8_0-quantized vision encoder** — vision-tower linear weights ship as Q8_0
   (~4× smaller than F32) with no measurable task-accuracy loss on LIBERO
   closed-loop eval. Other towers stay F32.
@@ -93,10 +95,21 @@ Full TypeScript types in [`index.d.ts`](./index.d.ts).
 ## Backend Selection
 
 The addon picks a GPU at load time when `backend: 'auto'` (the default).
-Non-Adreno GPUs are accepted; Adreno GPUs are skipped because their drivers
-produce numerically incorrect ggml matmul output (cos sim ~0.73 vs CPU's
-~0.9999 on the LIBERO fixture). To force CPU, pass `backend: 'cpu'` to
-`load()`.
+Non-Adreno GPUs are accepted. On Adreno hardware:
+
+- **Adreno >= 800 + OpenCL** is accepted (Qualcomm/qvac-fabric actively
+  maintain this path; integration test asserts cos sim > 0.99 vs PyTorch
+  on the LIBERO fixture).
+- **Adreno >= 800 + Vulkan** is skipped — the Vulkan driver on Adreno 830
+  produced cos sim ~0.73 vs PyTorch on the LIBERO fixture (vs ~0.999 on
+  every other accepted Vulkan target), so any Adreno Vulkan device is
+  rejected even when OpenCL isn't loaded.
+- **Adreno < 800** is rejected (older Qualcomm OpenCL ICDs have incomplete
+  OpenCL 3.0 support, kernel-compile failures on several ggml ops, and
+  shared-memory OOMs).
+
+When no acceptable GPU is found the addon falls back to CPU; to force CPU
+regardless, pass `backend: 'cpu'` to `load()`.
 
 ## Built With
 

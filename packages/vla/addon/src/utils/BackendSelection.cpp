@@ -49,28 +49,54 @@ ggml_backend_dev_t pickBestGpuDevice() {
 
     const char* descRaw = ggml_backend_dev_description(dev);
     const std::string desc = descRaw ? descRaw : "";
+    const char* nameRaw = ggml_backend_dev_name(dev);
+    const std::string backendName = nameRaw ? nameRaw : "";
+    std::string backendLower = backendName;
+    std::transform(
+        backendLower.begin(), backendLower.end(), backendLower.begin(),
+        [](unsigned char c) { return std::tolower(c); });
+
     const int adreno = parseAdrenoModel(desc);
 
-    // Reject every Adreno generation we can identify. The original cutoff
-    // assumed Adreno >= 800 had working Vulkan drivers, but mobile CI on
-    // Samsung Galaxy S25 Ultra (Adreno 830) produced numerically broken
-    // output: cos sim 0.73 vs PyTorch on the real-LIBERO fixture, where
-    // every other accepted Vulkan target (Apple Metal, NVIDIA, Intel Iris,
-    // Mali on Pixel 9 Pro) lands above 0.999. Re-enable a specific Adreno
-    // model only with evidence that its driver round-trips ggml matmul
-    // correctly (cos > 0.99 on the real-LIBERO fixture).
+    // Adreno-specific policy. Empirical data so far:
+    //   * Adreno 830 Vulkan on the Samsung Galaxy S25 Ultra produces cos sim
+    //     0.73 vs PyTorch on the LIBERO real fixture (every other accepted
+    //     Vulkan target — Apple Metal, NVIDIA, Intel Iris, Mali on Pixel 9
+    //     Pro — sits above 0.999). Reject Vulkan on any Adreno.
+    //   * Adreno < 800 has known Qualcomm OpenCL ICD issues (incomplete
+    //     OpenCL 3.0, kernel-compile failures on several ggml ops,
+    //     shared-memory OOMs). Reject any backend on Adreno < 800.
+    //   * Adreno >= 800 on OpenCL is the path Qualcomm and qvac-fabric's own
+    //     ggml backend loader actively maintain (GGML_OPENCL_USE_ADRENO_KERNELS,
+    //     "Adreno > 700 found keeping OpenCL backend"), and diffusion-cpp
+    //     uses it for Adreno 800+. Accept OpenCL on Adreno >= 800 and let
+    //     the integration test's cos-sim assertion vs PyTorch catch
+    //     regressions on the LIBERO fixture.
     if (adreno > 0) {
+      const bool isOpenCl = backendLower.find("opencl") != std::string::npos;
+      if (isOpenCl && adreno >= 800) {
+        QLOG_IF(
+            Priority::INFO,
+            "vla_backend_selection: Adreno " + std::to_string(adreno) +
+                " OpenCL accepted (preferred Adreno path)");
+        // Prefer OpenCL-on-Adreno-800+ over any other candidate iterated
+        // later (in particular Vulkan-on-Adreno, which would otherwise be
+        // skipped but only after we'd already accepted nothing).
+        return dev;
+      }
       QLOG_IF(
           Priority::WARNING,
           "vla_backend_selection: skipping Adreno " + std::to_string(adreno) +
-              " GPU (driver path produces incorrect ggml output) — will fall "
-              "back to CPU");
+              " " + backendName +
+              " GPU (driver path known/suspected broken) — will fall back to "
+              "CPU unless another acceptable GPU is found");
       continue;
     }
 
     QLOG_IF(
         Priority::INFO,
-        "vla_backend_selection: non-Adreno GPU accepted: " + desc);
+        "vla_backend_selection: non-Adreno GPU accepted: " + desc +
+            " (backend: " + backendName + ")");
 
     if (fallbackGpu == nullptr) {
       fallbackGpu = dev;
