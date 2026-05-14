@@ -110,6 +110,9 @@ export const embeddingsPlugin = definePlugin({
       requestSchema: embedRequestSchema,
       responseSchema: embedResponseSchema,
       streaming: false,
+      // Model-wide hard cancel via `addon.cancel()` on the llama.cpp
+      // embedding addon. Compute is interrupted when fired.
+      cancel: { scope: "model", hard: true },
 
       handler: async function (request) {
         const embedResult = await embed({

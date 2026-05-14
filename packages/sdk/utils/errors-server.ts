@@ -322,6 +322,39 @@ export class RequestNotFoundError extends QvacErrorBase {
 }
 
 /**
+ * Thrown by `RequestRegistry.begin(...)` when a registered concurrency
+ * policy rejects the request (e.g. `oneAtATimePerModel` for the
+ * `completion` kind). Distinct from `RequestIdConflictError`, which
+ * only fires on UUID collisions.
+ */
+export class RequestRejectedByPolicyError extends QvacErrorBase {
+  readonly requestId: string;
+  readonly kind: string;
+  readonly modelId: string;
+  readonly reason: string;
+
+  constructor(
+    requestId: string,
+    kind: string,
+    modelId: string,
+    reason: string,
+    cause?: unknown,
+  ) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.REQUEST_REJECTED_BY_POLICY,
+        [requestId, kind, modelId, reason],
+        cause,
+      ),
+    );
+    this.requestId = requestId;
+    this.kind = kind;
+    this.modelId = modelId;
+    this.reason = reason;
+  }
+}
+
+/**
  * Thrown when a long-running inference request was cancelled before
  * completion. The `events` stream on `CompletionRun` ends normally with
  * `stopReason: "cancelled"` on the last `completionDone`, but the
