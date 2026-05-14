@@ -7,6 +7,7 @@ import {
   diffusion,
   unloadModel,
   SDK_LOG_ID,
+  RequestRejectedByPolicyError,
 } from "@qvac/sdk";
 import { type TestResult } from "@tetherto/qvac-test-suite";
 import { AbstractModelExecutor } from "./abstract-model-executor.js";
@@ -51,6 +52,14 @@ class AddonBusyTimeoutError extends Error {
   }
 }
 
+// "Slot still occupied" surfaces as either the legacy addon throw or, since
+// the `oneAtATimePerModel` registry policy, a typed admission rejection.
+function isTransientAddonBusy(err: unknown): boolean {
+  if (err instanceof RequestRejectedByPolicyError) return true;
+  const msg = err instanceof Error ? err.message : String(err);
+  return msg.includes(ADDON_BUSY_MARKER);
+}
+
 export async function callWhenAddonIdle<T>(
   fn: () => Promise<T>,
   timeoutMs = ADDON_BUSY_TIMEOUT_MS,
@@ -61,8 +70,7 @@ export async function callWhenAddonIdle<T>(
     try {
       return await fn();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes(ADDON_BUSY_MARKER)) {
+      if (isTransientAddonBusy(err)) {
         if (Date.now() >= deadline) throw new AddonBusyTimeoutError(timeoutMs, err);
         await sleep(intervalMs);
         continue;
@@ -248,13 +256,26 @@ export class LoggingExecutor extends AbstractModelExecutor<typeof loggingTests> 
     }
 
     const reloadedModelId = await this.resources.ensureLoaded(dep);
-    return collectLogs({
+
+    // Join the trigger before returning — `collectLogs` races it against
+    // log arrival, so without this the next test can race the still-open
+    // completion slot.
+    let triggerPromise: Promise<void> = Promise.resolve();
+    const result = await collectLogs({
       testId,
       targetId: reloadedModelId,
       target: 1,
       postTriggerWaitMs: RELOAD_DRAIN_MS,
-      trigger: () => callWhenAddonIdle(() => runCompletion(reloadedModelId, "Post-reload test", false)),
+      trigger: () => {
+        triggerPromise = callWhenAddonIdle(() =>
+          runCompletion(reloadedModelId, "Post-reload test", false),
+        );
+        return triggerPromise;
+      },
     });
+
+    await triggerPromise.catch(() => {});
+    return result;
   }
 
   protected triggerLlm(modelId: string): Promise<void> {
