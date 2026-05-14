@@ -9,7 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Bumped `@qvac/onnx` to `^0.15.0`.
 - Bumped `qvac-lib-inference-addon-cpp` baseline to `1.1.7#1`.
+
+### Fixed
+
+- Fixed mobile integration test workflow downloading wrong prebuilds (GGML 0.4.0 from npm) when triggered via `workflow_dispatch` chain. Prebuild source selection now gates on `inputs.package_spec` instead of `github.event_name`.
 
 ## [0.3.3]
 
