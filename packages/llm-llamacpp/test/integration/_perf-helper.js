@@ -87,6 +87,11 @@ try {
           // scenario so the report can split rows by implementation
           // when multiple test families share the same device column.
           scenario: (extra && extra.scenario) || 'default',
+          // Follow-up to QVAC-17830: optional model id so per-row
+          // breakdowns show which weights produced the timings.
+          // Renderer falls back to '-' if null, so mobile rows that
+          // forget to pass it still produce valid output.
+          model: (extra && extra.model) || null,
           execution_provider: (extra && extra.execution_provider) || null,
           metrics: Object.assign({
             backend: null,
@@ -159,6 +164,7 @@ try {
           data.results = rows.map(r => ({
             test: r.test,
             scenario: r.scenario || 'default',
+            model: r.model || null,
             execution_provider: r.execution_provider,
             metrics: r.metrics,
             output: lightweight ? null : r.output
@@ -249,6 +255,10 @@ function _num (v) {
  *                                  'bitnet', 'tool-calling', ... .
  *                                  Defaults to 'default' so every row
  *                                  is groupable in the detail table.
+ * @param {string} [extra.model]    Short model id for this row (e.g.
+ *                                  'SmolVLM2-500M-Q8_0',
+ *                                  'Qwen3-1.7B-Q4_0'). Surfaces as the
+ *                                  Model column in the perf renderer.
  * @param {string} [extra._output]  Generated text (will be capped for mobile).
  */
 function recordPerformance (label, totalTime, extra) {
@@ -292,6 +302,7 @@ function recordPerformance (label, totalTime, extra) {
     tps: tps !== null ? Number(tps.toFixed(2)) : null
   }, {
     scenario: (extra && extra.scenario) || 'default',
+    model: (extra && extra.model) || null,
     execution_provider: effectiveDevice,
     output: (extra && extra._output) || null
   })

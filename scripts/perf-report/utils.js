@@ -240,7 +240,17 @@ function generateDeviceDetailTables (aggregated, addonType) {
         lines.push('')
       }
 
-      const header = ['Test', 'EP', ..._VISION_DETAIL_COLUMNS.map(c => c.label)]
+      // Follow-up to QVAC-17830: emit a Model column when any row in
+      // this scenario has a model id stashed on the categorical map.
+      // Drop it when no row sets one so existing reports stay
+      // pixel-identical for addons that haven't started plumbing it.
+      const scnHasModel = buckets[scn].some(name => {
+        const c = (categorical[devName] && categorical[devName][name]) || {}
+        return Boolean(c.model)
+      })
+      const header = ['Test']
+      if (scnHasModel) header.push('Model')
+      header.push('EP', ..._VISION_DETAIL_COLUMNS.map(c => c.label))
       lines.push('| ' + header.join(' | ') + ' |')
       lines.push('| ' + header.map(() => '---').join(' | ') + ' |')
 
@@ -248,7 +258,9 @@ function generateDeviceDetailTables (aggregated, addonType) {
         const metrics = tests[testName] || {}
         const cats = (categorical[devName] && categorical[devName][testName]) || {}
         const ep = cats.execution_provider || '-'
-        const row = [testName, ep]
+        const row = [testName]
+        if (scnHasModel) row.push(cats.model || '-')
+        row.push(ep)
         for (const col of _VISION_DETAIL_COLUMNS) {
           row.push(_formatDetailCell(col.key, metrics[col.key], cats[col.key]))
         }
@@ -555,6 +567,14 @@ function aggregateReports (reports) {
         categorical[deviceName][testKey].execution_provider = String(result.execution_provider)
       }
 
+      // Follow-up to QVAC-17830: stash the model id on the categorical
+      // map so per-device detail tables can render a Model column.
+      // First non-null wins per (device, test) so sibling matrix legs
+      // that share the same test all converge on the same label.
+      if (result.model != null && !categorical[deviceName][testKey].model) {
+        categorical[deviceName][testKey].model = String(result.model)
+      }
+
       // First non-default scenario wins per (device, test). Sibling
       // matrix legs always tag the same test with the same scenario,
       // so this is stable; if the field is missing or 'default' from
@@ -813,7 +833,17 @@ function _buildHtmlDetailSections (aggregated, addonType) {
 
     let scenarioBlocks = ''
     for (const scn of orderedScenarios) {
-      const headerCells = ['Test', 'EP', ..._VISION_DETAIL_COLUMNS.map(c => c.label)]
+      // Follow-up to QVAC-17830: emit a Model column only when any row
+      // in this scenario has a model id. Mirrors the markdown branch
+      // above so the HTML + Markdown artifacts stay in lockstep.
+      const scnHasModel = buckets[scn].some(name => {
+        const c = (categorical[devName] && categorical[devName][name]) || {}
+        return Boolean(c.model)
+      })
+      const headerLabels = ['Test']
+      if (scnHasModel) headerLabels.push('Model')
+      headerLabels.push('EP', ..._VISION_DETAIL_COLUMNS.map(c => c.label))
+      const headerCells = headerLabels
         .map(h => `<th>${escapeHtml(h)}</th>`).join('')
 
       let bodyRows = ''
@@ -821,7 +851,9 @@ function _buildHtmlDetailSections (aggregated, addonType) {
         const metrics = tests[testName] || {}
         const cats = (categorical[devName] && categorical[devName][testName]) || {}
         const ep = cats.execution_provider || '-'
-        const cells = [escapeHtml(testName), escapeHtml(ep)]
+        const cells = [escapeHtml(testName)]
+        if (scnHasModel) cells.push(escapeHtml(cats.model || '-'))
+        cells.push(escapeHtml(ep))
         for (const col of _VISION_DETAIL_COLUMNS) {
           cells.push(escapeHtml(_formatDetailCell(col.key, metrics[col.key], cats[col.key])))
         }
