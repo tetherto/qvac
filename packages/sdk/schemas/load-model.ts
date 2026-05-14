@@ -7,8 +7,9 @@ import {
 } from "./llamacpp-config";
 import {
   whisperConfigSchema,
-  parakeetConfigSchema,
+  parakeetLoadConfigSchema,
 } from "./transcription-config";
+import type { parakeetConfigSchema } from "./transcription-config";
 import { delegateSchema } from "./delegate";
 import { nmtConfigSchema } from "./translation-config";
 import { ttsConfigSchema } from "./text-to-speech";
@@ -75,7 +76,7 @@ export const loadBuiltinModelOptionsBaseSchema = z.union([
     .object({
       ...loadModelCommonFields,
       modelType: parakeetModelTypeSchema,
-      modelConfig: parakeetConfigSchema,
+      modelConfig: parakeetLoadConfigSchema.optional(),
     })
     .strict(),
   z
@@ -175,7 +176,7 @@ const loadModelOptionsToRequestBaseSchema = z.union([
     .object({
       ...loadModelRequestCommonFields,
       modelType: parakeetModelTypeSchema,
-      modelConfig: parakeetConfigSchema,
+      modelConfig: parakeetLoadConfigSchema.optional(),
     })
     .strict()
     .transform((data) => ({
@@ -183,7 +184,7 @@ const loadModelOptionsToRequestBaseSchema = z.union([
       modelType: ModelType.parakeetTranscription,
       modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
       modelName: modelInputToNameSchema.parse(data.modelSrc),
-      modelConfig: data.modelConfig,
+      modelConfig: data.modelConfig ?? {},
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,
@@ -336,7 +337,7 @@ export const loadWhisperModelRequestSchema = commonModelConfigSchema
 export const loadParakeetModelRequestSchema = commonModelConfigSchema
   .extend({
     modelType: z.literal(ModelType.parakeetTranscription),
-    modelConfig: parakeetConfigSchema,
+    modelConfig: parakeetLoadConfigSchema.optional(),
   })
   .strict();
 

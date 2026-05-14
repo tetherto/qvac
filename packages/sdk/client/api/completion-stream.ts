@@ -14,7 +14,10 @@ import {
   type ToolCallWithCall,
   type RPCOptions,
 } from "@/schemas";
-import { CompletionFailedError } from "@/utils/errors-server";
+import {
+  CompletionFailedError,
+  InferenceCancelledError,
+} from "@/utils/errors-server";
 import { getMcpToolsWithHandlers } from "@/utils/mcp-adapter";
 import {
   validateTools,
@@ -265,12 +268,31 @@ export function completion(params: CompletionParams): CompletionRun {
           notifyWaiters();
 
           if (streamResponse.done) {
-            const { final, error } = buildFinalFromEvents(
+            const { final, error, cancelled } = buildFinalFromEvents(
               allEvents,
               allHandlers,
             );
             if (error) {
               const err = new CompletionFailedError(error.message, error);
+              finalRejecter(err);
+              statsRejecter(err);
+              toolCallsRejecter(err);
+            } else if (cancelled) {
+              // The wire stream ended with `stopReason: "cancelled"` — the
+              // run was aborted mid-flight. Cancellation contract: `events`
+              // ends normally (consumers iterating `run.events` see the
+              // cancelled `completionDone` and exit naturally), and the
+              // promise-aggregates reject with `InferenceCancelledError`
+              // carrying whatever the aggregator accumulated up to the
+              // cancel point. Consumers do `instanceof
+              // InferenceCancelledError` and read `.partial.text` /
+              // `.partial.toolCalls` / `.partial.stats` if they want the
+              // partial output.
+              const err = new InferenceCancelledError(requestId, {
+                text: final.contentText,
+                toolCalls: final.toolCalls,
+                ...(final.stats && { stats: final.stats }),
+              });
               finalRejecter(err);
               statsRejecter(err);
               toolCallsRejecter(err);

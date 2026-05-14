@@ -28,13 +28,10 @@ import {
   TTS_SUPERTONIC2_OFFICIAL_UNICODE_INDEXER_SUPERTONE_FP32,
   TTS_SUPERTONIC2_OFFICIAL_TTS_CONFIG_SUPERTONE,
   TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE,
-  PARAKEET_TDT_ENCODER_INT8,
-  PARAKEET_TDT_DECODER_INT8,
-  PARAKEET_TDT_PREPROCESSOR_INT8,
-  PARAKEET_TDT_VOCAB,
-  PARAKEET_CTC_FP32,
-  PARAKEET_CTC_TOKENIZER,
-  PARAKEET_SORTFORMER_FP32,
+  PARAKEET_TDT_0_6B_V3_Q8_0,
+  PARAKEET_CTC_0_6B_Q8_0,
+  PARAKEET_SORTFORMER_4SPK_V1_Q8_0,
+  PARAKEET_EOU_120M_V1_Q8_0,
   SMOLVLM2_500M_MULTIMODAL_Q8_0,
   MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
   SALAMANDRATA_2B_INST_Q4,
@@ -60,6 +57,7 @@ import { ErrorExecutor } from "../shared/executors/error-executor.js";
 import { MobileTranscriptionExecutor } from "./executors/transcription-executor.js";
 import { MobileTranscribeStreamEventsExecutor } from "./executors/transcribe-stream-events-executor.js";
 import { MobileParakeetExecutor } from "./executors/parakeet-executor.js";
+import { MobileParakeetStreamExecutor } from "./executors/parakeet-stream-executor.js";
 import { MobileVisionExecutor } from "./executors/vision-executor.js";
 import { MobileOcrExecutor } from "./executors/ocr-executor.js";
 import { MobileRagExecutor } from "./executors/rag-executor.js";
@@ -70,6 +68,7 @@ import { DelegatedInferenceExecutor } from "../shared/executors/delegated-infere
 import { MobileDiffusionExecutor } from "./executors/diffusion-executor.js";
 import { LifecycleExecutor } from "../shared/executors/lifecycle-executor.js";
 import { ConfigExecutor } from "../shared/executors/config-executor.js";
+import { CancellationExecutor } from "../shared/executors/cancellation-executor.js";
 
 const resources = new ResourceManager({
   // Mobile (iOS + Android) needs a tick after each unloadModel for the
@@ -282,40 +281,38 @@ resources.define("tts-supertonic-multilingual", {
   },
 });
 
-// Parakeet TDT 0.6B (INT8) — multilingual speech-to-text (~700MB)
+// Parakeet TDT 0.6B v3 (Q8_0 GGUF) — multilingual speech-to-text (~750MB)
 resources.define("parakeet-tdt", {
-  constant: PARAKEET_TDT_ENCODER_INT8,
+  constant: PARAKEET_TDT_0_6B_V3_Q8_0,
   type: "parakeet",
   preLoadUnload: true,
-  config: {
-    parakeetEncoderSrc: PARAKEET_TDT_ENCODER_INT8,
-    parakeetDecoderSrc: PARAKEET_TDT_DECODER_INT8,
-    parakeetVocabSrc: PARAKEET_TDT_VOCAB,
-    parakeetPreprocessorSrc: PARAKEET_TDT_PREPROCESSOR_INT8,
-  },
+  config: {},
 });
 
-// Parakeet CTC FP32 — streaming-capable speech-to-text
+// Parakeet CTC 0.6B (Q8_0 GGUF) — streaming-capable speech-to-text
 resources.define("parakeet-ctc", {
-  constant: PARAKEET_CTC_FP32,
+  constant: PARAKEET_CTC_0_6B_Q8_0,
   type: "parakeet",
   preLoadUnload: true,
-  config: {
-    modelType: "ctc",
-    parakeetCtcModelSrc: PARAKEET_CTC_FP32,
-    parakeetTokenizerSrc: PARAKEET_CTC_TOKENIZER,
-  },
+  config: {},
 });
 
-// Parakeet Sortformer — speaker diarization
+// Parakeet Sortformer 4spk v1 (Q8_0 GGUF) — speaker diarization
 resources.define("parakeet-sortformer", {
-  constant: PARAKEET_SORTFORMER_FP32,
+  constant: PARAKEET_SORTFORMER_4SPK_V1_Q8_0,
   type: "parakeet",
   preLoadUnload: true,
-  config: {
-    modelType: "sortformer",
-    parakeetSortformerSrc: PARAKEET_SORTFORMER_FP32,
-  },
+  config: {},
+});
+
+// Parakeet EOU 120M v1 (Q8_0 GGUF) — duplex streaming with end-of-utterance
+// detection (token-driven `<EOU>` boundary). Used by parakeet-stream-eou
+// e2e tests to validate the synthetic `endOfTurn` event path.
+resources.define("parakeet-eou", {
+  constant: PARAKEET_EOU_120M_V1_Q8_0,
+  type: "parakeet",
+  preLoadUnload: true,
+  config: {},
 });
 
 resources.define("vision", {
@@ -364,6 +361,10 @@ export const executor = createExecutor({
     new SkipExecutor(/^multi-gpu-/, "Multi-GPU tests disabled on mobile (not supported on single-GPU devices)"),
     new SkipExecutor(/^tools-(?!simple-function$|no-function-match$)/, "Tools test disabled on mobile"),
     new SkipExecutor(/^(diffusion-|addon-logging-diffusion$)/, "SD v2.1 1B Q8_0 cold-load is too heavy for Device Farm devices (iOS variable 5–15min, Android blocks JS thread >300s and trips heartbeat)"),
+    new SkipExecutor(
+      /^translation-bergamot-.+-cache-reload$/,
+      "Server-side Bare code path, identical across platforms — desktop coverage is source of truth",
+    ),
     // suspend() hangs the test runner on mobile (the lifecycle coordinator
     // pauses MQTT/network ops and never resumes within the test timeout).
     // Only resume-idempotent is safe -- it does not call suspend().
@@ -392,13 +393,6 @@ export const executor = createExecutor({
         "addon-logging-ocr",
       ], "OCR disabled on iOS (ONNX/CoreML OOM)"),
       new SkipExecutor(/^translation-afriquegemma-/, "AfriqueGemma 4B (~2.7 GB) exceeds iOS memory budget"),
-      // TODO(QVAC-18460): re-enable once iOS transcribe() crash is fixed.
-      new SkipExecutor(/^(transcription-|addon-logging-whisper$)/, "TODO(QVAC-18460): transcription disabled on iOS — transcribe() hard-crashes consumer after FFmpegDecoder unload"),
-      new SkipExecutor(/^transcribe-stream-events-/, "TODO(QVAC-18460): transcribeStream disabled on iOS — same native crash path as transcription-* (Silero VAD + whisper_full)"),
-      skipTests([
-        "config-reload-then-transcribe",
-        "error-transcription-failed",
-      ], "TODO(QVAC-18460): transcribe() hard-crashes consumer on iOS"),
     ] : []),
 
     // Real executors
@@ -421,6 +415,7 @@ export const executor = createExecutor({
     new RegistryExecutor(resources),
     new HttpEmbeddingExecutor(resources),
     new KvCacheExecutor(resources),
+    new MobileParakeetStreamExecutor(resources),
     new MobileParakeetExecutor(resources),
     new MobileVisionExecutor(resources),
     new DownloadExecutor(),
@@ -428,6 +423,7 @@ export const executor = createExecutor({
     new MobileDiffusionExecutor(resources),
     new LifecycleExecutor(resources),
     new ConfigExecutor(),
+    new CancellationExecutor(resources),
   ],
   profiling: {
     init: () => profiler.enable({ mode: "summary", includeServerBreakdown: true }),

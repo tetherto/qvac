@@ -26,13 +26,10 @@ import {
   TTS_SUPERTONIC2_OFFICIAL_UNICODE_INDEXER_SUPERTONE_FP32,
   TTS_SUPERTONIC2_OFFICIAL_TTS_CONFIG_SUPERTONE,
   TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE,
-  PARAKEET_TDT_ENCODER_INT8,
-  PARAKEET_TDT_DECODER_INT8,
-  PARAKEET_TDT_PREPROCESSOR_INT8,
-  PARAKEET_TDT_VOCAB,
-  PARAKEET_CTC_FP32,
-  PARAKEET_CTC_TOKENIZER,
-  PARAKEET_SORTFORMER_FP32,
+  PARAKEET_TDT_0_6B_V3_Q8_0,
+  PARAKEET_CTC_0_6B_Q8_0,
+  PARAKEET_SORTFORMER_4SPK_V1_Q8_0,
+  PARAKEET_EOU_120M_V1_Q8_0,
   SMOLVLM2_500M_MULTIMODAL_Q8_0,
   MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
   SALAMANDRATA_2B_INST_Q4,
@@ -50,6 +47,7 @@ import { ModelLoadingExecutor } from "../shared/executors/model-loading-executor
 import { CompletionExecutor } from "../shared/executors/completion-executor.js";
 import { ToolsExecutor } from "../shared/executors/tools-executor.js";
 import { TranslationExecutor } from "../shared/executors/translation-executor.js";
+import { TranslationBergamotCacheExecutor } from "../shared/executors/translation-bergamot-cache-executor.js";
 import { ShardedModelExecutor } from "../shared/executors/sharded-model-executor.js";
 import { HttpEmbeddingExecutor } from "../shared/executors/http-embedding-executor.js";
 import { KvCacheExecutor } from "../shared/executors/kv-cache-executor.js";
@@ -66,6 +64,7 @@ import { WrongModelExecutor } from "../shared/executors/wrong-model-executor.js"
 import { ErrorExecutor } from "../shared/executors/error-executor.js";
 import { TtsExecutor } from "../shared/executors/tts-executor.js";
 import { ParakeetExecutor } from "./executors/parakeet-executor.js";
+import { ParakeetStreamExecutor } from "./executors/parakeet-stream-executor.js";
 import { VisionExecutor } from "./executors/vision-executor.js";
 import { DownloadExecutor } from "../shared/executors/download-executor.js";
 import { DelegatedInferenceExecutor } from "./executors/delegated-inference-executor.js";
@@ -75,6 +74,7 @@ import { LifecycleExecutor } from "../shared/executors/lifecycle-executor.js";
 import { ConfigExecutor } from "../shared/executors/config-executor.js";
 import { NoLingeringBareExecutor } from "./executors/no-lingering-bare-executor.js";
 import { MultiGpuExecutor } from "../shared/executors/multi-gpu-executor.js";
+import { CancellationExecutor } from "../shared/executors/cancellation-executor.js";
 
 const resources = new ResourceManager();
 
@@ -271,40 +271,38 @@ resources.define("tts-supertonic-multilingual", {
   },
 });
 
-// Parakeet TDT 0.6B (INT8) — multilingual speech-to-text (~700MB)
+// Parakeet TDT 0.6B v3 (Q8_0 GGUF) — multilingual speech-to-text (~750MB)
 resources.define("parakeet-tdt", {
-  constant: PARAKEET_TDT_ENCODER_INT8,
+  constant: PARAKEET_TDT_0_6B_V3_Q8_0,
   type: "parakeet",
   preLoadUnload: true,
-  config: {
-    parakeetEncoderSrc: PARAKEET_TDT_ENCODER_INT8,
-    parakeetDecoderSrc: PARAKEET_TDT_DECODER_INT8,
-    parakeetVocabSrc: PARAKEET_TDT_VOCAB,
-    parakeetPreprocessorSrc: PARAKEET_TDT_PREPROCESSOR_INT8,
-  },
+  config: {},
 });
 
-// Parakeet CTC FP32 — streaming-capable speech-to-text
+// Parakeet CTC 0.6B (Q8_0 GGUF) — streaming-capable speech-to-text
 resources.define("parakeet-ctc", {
-  constant: PARAKEET_CTC_FP32,
+  constant: PARAKEET_CTC_0_6B_Q8_0,
   type: "parakeet",
   preLoadUnload: true,
-  config: {
-    modelType: "ctc",
-    parakeetCtcModelSrc: PARAKEET_CTC_FP32,
-    parakeetTokenizerSrc: PARAKEET_CTC_TOKENIZER,
-  },
+  config: {},
 });
 
-// Parakeet Sortformer — speaker diarization
+// Parakeet Sortformer 4spk v1 (Q8_0 GGUF) — speaker diarization
 resources.define("parakeet-sortformer", {
-  constant: PARAKEET_SORTFORMER_FP32,
+  constant: PARAKEET_SORTFORMER_4SPK_V1_Q8_0,
   type: "parakeet",
   preLoadUnload: true,
-  config: {
-    modelType: "sortformer",
-    parakeetSortformerSrc: PARAKEET_SORTFORMER_FP32,
-  },
+  config: {},
+});
+
+// Parakeet EOU 120M v1 (Q8_0 GGUF) — duplex streaming with end-of-utterance
+// detection (token-driven `<EOU>` boundary). Used by parakeet-stream-eou
+// e2e tests to validate the synthetic `endOfTurn` event path.
+resources.define("parakeet-eou", {
+  constant: PARAKEET_EOU_120M_V1_Q8_0,
+  type: "parakeet",
+  preLoadUnload: true,
+  config: {},
 });
 
 resources.define("vision", {
@@ -390,6 +388,8 @@ export const executor = createExecutor({
     new ErrorExecutor(resources),
     new ToolsExecutor(resources),
 
+    // Must precede TranslationExecutor — patterns overlap, dispatch is first-match-wins.
+    new TranslationBergamotCacheExecutor(),
     new TranslationExecutor(resources),
     new ShardedModelExecutor(resources),
     new OcrExecutor(resources),
@@ -399,6 +399,7 @@ export const executor = createExecutor({
     new RegistryExecutor(resources),
     new HttpEmbeddingExecutor(resources),
     new KvCacheExecutor(resources),
+    new ParakeetStreamExecutor(resources),
     new ParakeetExecutor(resources),
     new VisionExecutor(resources),
     new DownloadExecutor(),
@@ -409,6 +410,7 @@ export const executor = createExecutor({
     new ConfigExecutor(),
     new NoLingeringBareExecutor(),
     new MultiGpuExecutor(resources),
+    new CancellationExecutor(resources),
   ],
   profiling: {
     init: () => profiler.enable({ mode: "summary", includeServerBreakdown: true }),

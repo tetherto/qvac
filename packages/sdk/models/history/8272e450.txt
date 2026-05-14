@@ -1,0 +1,9 @@
+commit=8272e450ed6762ee722230b9ef9c6f3bd80b973d
+timestamp=2026-05-13T08:44:52.720Z
+previous_count=636
+new_count=638
+
+[added]
+QWEN3_5_0_8B_MULTIMODAL_Q4_K_M
+QWEN3_5_0_8B_MULTIMODAL_Q8_0
+
