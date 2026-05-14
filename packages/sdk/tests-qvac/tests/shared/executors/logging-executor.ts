@@ -160,7 +160,21 @@ export class LoggingExecutor extends AbstractModelExecutor<typeof loggingTests> 
         case "reload":            return await this.runReload(testId);
       }
     } catch (error) {
+      // Break the busy cascade: evict the wedged dep so the next test reloads a fresh model.
+      if (error instanceof AddonBusyTimeoutError) {
+        await this.evictTestDeps(testId);
+      }
       return wrapError(testId, error);
+    }
+  }
+
+  private async evictTestDeps(testId: string): Promise<void> {
+    const dep = getMeta(testId)["dependency"];
+    if (typeof dep !== "string" || dep.length === 0 || dep === "none") return;
+    try {
+      await this.resources.evict(dep);
+    } catch (error) {
+      console.warn(`LoggingExecutor: failed to evict dep "${dep}" after AddonBusyTimeoutError: ${error}`);
     }
   }
 
