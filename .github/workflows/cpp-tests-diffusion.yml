@@ -40,10 +40,11 @@ jobs:
           - os: ubuntu-24.04
             platform: linux
             arch: x64
-            runner: ai-run-linux-gpu
-          - os: windows-11
+            runner: qvac-ubuntu2404-x64
+          - os: windows-2025
             platform: windows
-            runner: ai-run-windows11-gpu
+            runner: qvac-win25-x64
+            arch: x64
 
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
@@ -62,47 +63,15 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'windows-11' }}
-        name: Setup LLVM
-        uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
-
-      - if: ${{ matrix.os == 'ubuntu-24.04' }}
-        name: Install pkg-config on Linux
-        run: sudo apt-get install -y pkg-config
-
-      - if: ${{ matrix.os == 'ubuntu-24.04' }}
-        name: Install Vulkan SDK on Linux
+      - if: ${{ matrix.os == 'windows-2025' }}
+        name: Set Vulkan SDK Path on Windows Server 2025
         working-directory: ${{ env.WORKDIR }}
-        run: |
-          sudo rm -f /etc/apt/sources.list.d/lunarg-vulkan-noble.list
-          sudo rm -f /etc/apt/sources.list.d/archive_uri-https_packages_lunarg_com_vulkan-*.list
-          sudo rm -f /etc/apt/trusted.gpg.d/lunarg.asc
+        run: echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
 
-          curl -fsSL https://packages.lunarg.com/lunarg-signing-key-pub.asc | gpg --dearmor | sudo tee /usr/share/keyrings/lunarg-archive-keyring.gpg > /dev/null
-          sudo chmod 644 /usr/share/keyrings/lunarg-archive-keyring.gpg
-          echo "deb [signed-by=/usr/share/keyrings/lunarg-archive-keyring.gpg] https://packages.lunarg.com/vulkan/ noble main" | sudo tee /etc/apt/sources.list.d/lunarg-vulkan-noble.list > /dev/null
-          sudo apt-get update
-          sudo apt-get install -y vulkan-sdk
-
-      - if: ${{ matrix.os == 'windows-11' }}
-        name: Configure Windows runner
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          git config --system core.longpaths true
-
-      - if: ${{ matrix.os == 'windows-11' }}
-        name: Install Vulkan SDK on Windows
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          $ProgressPreference = 'SilentlyContinue'
-          Invoke-WebRequest -Uri https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe -OutFile vulkan-sdk.exe
-          ./vulkan-sdk.exe --root C:\VulkanSDK --accept-licenses --default-answer --confirm-command install
-          echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
-
-      - if: ${{ matrix.os == 'windows-11' }}
+      - if: ${{ matrix.os == 'windows-2025' }}
         name: Clone and bootstrap vcpkg (Windows)
         run: |
-          git clone https://github.com/microsoft/vcpkg.git
+          git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git
           ./vcpkg/bootstrap-vcpkg.bat -disableMetrics
           echo ("VCPKG_ROOT=$env:GITHUB_WORKSPACE/vcpkg" -replace '\\', '/') >> $env:GITHUB_ENV
 
@@ -118,21 +87,17 @@ jobs:
           echo "MACOSX_DEPLOYMENT_TARGET=14.0" >> $GITHUB_ENV
 
       - if: ${{ matrix.os == 'ubuntu-24.04' }}
-        name: Configure vcpkg in linux
+        name: Install vcpkg on linux
+        working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: |
-          if [ -n "${VCPKG_INSTALLATION_ROOT:-}" ] && [ -d "$VCPKG_INSTALLATION_ROOT" ]; then
-            echo "Using pre-installed vcpkg at $VCPKG_INSTALLATION_ROOT"
-            echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> "$GITHUB_ENV"
-          else
-            sudo apt-get update
-            sudo apt-get install -y zip unzip tar curl
-            git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git /tmp/vcpkg
-            /tmp/vcpkg/bootstrap-vcpkg.sh -disableMetrics
-            echo "VCPKG_ROOT=/tmp/vcpkg" >> "$GITHUB_ENV"
-          fi
+          git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git vcpkg_microsoft
+          cd vcpkg_microsoft && ./bootstrap-vcpkg.sh -disableMetrics
+          VCPKG_ROOT="$(pwd)"
+          echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
+          echo "$VCPKG_ROOT" >> $GITHUB_PATH
 
-      - if: ${{ matrix.os == 'windows-11' }}
+      - if: ${{ matrix.os == 'windows-2025' }}
         name: Configure CMake generator on Windows
         shell: powershell
         working-directory: ${{ env.WORKDIR }}
@@ -141,12 +106,12 @@ jobs:
           echo "CMAKE_GENERATOR_PLATFORM=x64" >> $env:GITHUB_ENV
 
       - name: Create vcpkg cache location (non-Windows)
-        if: ${{ matrix.os != 'windows-11' }}
+        if: ${{ matrix.os != 'windows-2025' }}
         working-directory: ${{ env.WORKDIR }}
         run: mkdir -p vcpkg/cache
 
       - name: Create vcpkg cache location (Windows)
-        if: ${{ matrix.os == 'windows-11' }}
+        if: ${{ matrix.os == 'windows-2025' }}
         shell: powershell
         working-directory: ${{ env.WORKDIR }}
         run: |
@@ -160,6 +125,7 @@ jobs:
           restore-keys: cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch }}-
 
       - name: Setup Node.js
+        if: matrix.platform == 'darwin' || matrix.arch == 'arm64'
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
@@ -168,7 +134,15 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: |
           npm install
+
+      - name: Install bare tooling (macos)
+        if: matrix.platform == 'darwin'
+        run: |
           npm install -g bare bare-make
+
+      - name: Add bare tooling to PATH (Linux x64)
+        if: matrix.platform == 'linux'
+        run: echo "/usr/local/nvm/versions/node/v20.20.2/bin" >> $GITHUB_PATH
 
       - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'macos-14' }}
         name: Download SD2 model for C++ tests
@@ -182,7 +156,7 @@ jobs:
           cp "$MODEL_PATH" ./test/model/stable-diffusion-v2-1-Q8_0.gguf
           test -f ./test/model/stable-diffusion-v2-1-Q8_0.gguf
 
-      - if: ${{ matrix.os == 'windows-11' }}
+      - if: ${{ matrix.os == 'windows-2025' }}
         name: Download SD2 model for C++ tests (Windows)
         working-directory: ${{ env.WORKDIR }}
         shell: powershell

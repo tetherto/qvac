@@ -29,7 +29,7 @@ env:
 jobs:
   run-integration-tests:
     timeout-minutes: 60
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}-integration-tests
     permissions:
@@ -44,9 +44,11 @@ jobs:
           - os: ubuntu-22.04
             platform: linux
             arch: x64
+            runner: qvac-ubuntu2204-x64-gpu
           - os: ubuntu-24.04
             platform: linux
             arch: x64
+            runner: qvac-ubuntu2404-x64-gpu
           - os: ubuntu-24.04-arm
             platform: linux
             arch: arm64
@@ -56,20 +58,17 @@ jobs:
           - os: macos-14
             platform: darwin
             arch: arm64
-          - os: ai-run-windows11-gpu
+          - os: windows-2025
             platform: win32
             arch: x64
+            runner: qvac-win25-x64-gpu
 
     steps:
       - name: Setup Node.js
+        if: matrix.platform == 'darwin' || matrix.arch == 'arm64'
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
-
-      - name: Windows - enable git long paths
-        if: ${{ matrix.platform == 'win32' }}
-        shell: bash
-        run: git config --system core.longpaths true
 
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -82,7 +81,15 @@ jobs:
         working-directory: packages/translation-nmtcpp
         run: |
           npm install
+      
+      - name: Install Bare tooling on arm64 arch (ubuntu and mac)
+        if: ${{ matrix.arch == 'arm64' || matrix.platform == 'darwin' }}
+        run: |
           npm install -g bare bare-make
+
+      - name: Add bare tooling to PATH (Linux x64)
+        if: (matrix.platform == 'linux' && matrix.arch == 'x64')
+        run: echo "/usr/local/nvm/versions/node/v20.20.2/bin" >> $GITHUB_PATH
 
       - name: Download prebuilds from artifact
         if: ${{ !inputs.prebuild_package }}
@@ -96,10 +103,12 @@ jobs:
         working-directory: packages/translation-nmtcpp
         shell: bash
         run: |
-          mkdir -p prebuilds
-          npm pack ${{ inputs.prebuild_package }} --pack-destination /tmp
-          tar -xzf /tmp/*.tgz -C /tmp
-          cp -r /tmp/package/prebuilds/* prebuilds/
+          mkdir -p prebuilds "${{ runner.temp }}/tmp"
+          rm -f "${{ runner.temp }}/tmp"/*.tgz
+          rm -rf "${{ runner.temp }}/tmp/package"
+          npm pack ${{ inputs.prebuild_package }} --pack-destination "${{ runner.temp }}/tmp"
+          tar -xzf "${{ runner.temp }}/tmp"/*.tgz -C "${{ runner.temp }}/tmp"
+          cp -r "${{ runner.temp }}/tmp"/package/prebuilds/* prebuilds/
 
       - name: Print run state
         working-directory: packages/translation-nmtcpp
@@ -125,29 +134,13 @@ jobs:
           tree prebuilds || true
         continue-on-error: true
 
-      - name: Linux - install dependencies
-        if: matrix.platform == 'linux' || matrix.platform == 'android'
+      - name: Linux arm64 - install dependencies
+        if: (matrix.platform == 'linux' || matrix.platform == 'android') && matrix.arch == 'arm64'
         shell: bash
         run: |
           sudo apt-get update
           sudo apt-get install -y mesa-vulkan-drivers
       
-      - if: ${{ matrix.platform == 'win32' }}
-        name: Install AWS CLI on self-hosted Windows runner
-        shell: powershell
-        run: |
-          if (Get-Command aws -ErrorAction SilentlyContinue) {
-            Write-Host "AWS CLI already installed"
-            aws --version
-          } else {
-            Write-Host "Installing AWS CLI v2..."
-            Invoke-WebRequest -Uri https://awscli.amazonaws.com/AWSCLIV2.msi -OutFile $env:TEMP\AWSCLIV2.msi
-            Start-Process msiexec.exe -Wait -ArgumentList '/I', "$env:TEMP\AWSCLIV2.msi", '/qn'
-            $env:PATH = "C:\Program Files\Amazon\AWSCLIV2;$env:PATH"
-            echo "C:\Program Files\Amazon\AWSCLIV2" >> $env:GITHUB_PATH
-            aws --version
-          }
-
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
