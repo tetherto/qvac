@@ -32,7 +32,12 @@ export async function cancelHandler(
           requestId: request.requestId,
         });
         if (cancelled === 0) {
-          logger.debug(
+          // info-level (not debug) because the decorated-promise pattern
+          // makes "no in-flight match" a common and user-visible case:
+          // a Stop button fired after the request settled but before the
+          // UI cleared lands here. Users debugging "my Stop button isn't
+          // working" need this visible without lowering the log level.
+          logger.info(
             `[cancel] no in-flight request matched requestId=${request.requestId}`,
           );
         }

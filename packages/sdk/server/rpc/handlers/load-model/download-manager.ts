@@ -336,15 +336,13 @@ export function cancelTransfer(
   }
 
   // Legacy subscribers (no registry binding): mirror the pre-M3c
-  // behaviour — settle each with `DownloadCancelledError` and tear the
-  // transfer down directly. Registry-bound subscribers are handled by
-  // their `attachRequestBinding` listener triggered above.
+  // behaviour — settle each with `DownloadCancelledError` and route
+  // removal through the `removeSubscriber` helper so the last-subscriber
+  // teardown rule is enforced in one place. Registry-bound subscribers
+  // are handled by their `attachRequestBinding` listener triggered above.
   for (const sub of orphanSubs) {
     settleSubscriber(sub, new DownloadCancelledError());
-    transfer.subscribers.delete(sub.id);
-  }
-  if (transfer.subscribers.size === 0 && !transfer.abortController.signal.aborted) {
-    transfer.abortController.abort();
+    removeSubscriber(transfer, sub.id);
   }
 }
 
