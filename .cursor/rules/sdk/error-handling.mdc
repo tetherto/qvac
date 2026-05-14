@@ -180,6 +180,7 @@ Located in `@/utils/errors-server`
 - `RequestIdConflictError` (52417) - `registry.begin(...)` called with a `requestId` already present
 - `RequestNotFoundError` (52418) - registry lookup miss (no in-flight request for the given id)
 - `InferenceCancelledError` (52419) - cancelled inference run; carries `requestId` + `partial: { text?, toolCalls?, stats? }`. Constructed client-side on `stopReason: "cancelled"` (event stream ends normally; promise-aggregates reject with this). Re-exported from `@qvac/sdk` for `instanceof` checks.
+- `RequestRejectedByPolicyError` (52420) - registry concurrency-policy admission failure (e.g. `oneAtATimePerModel`); carries `requestId`, `kind`, `modelId`, and a `reason` string. Re-exported from `@qvac/sdk` for `instanceof` checks. See `.cursor/rules/sdk/request-lifecycle-primitives.mdc` for the policy contract.
 
 #### RAG Operations (52,800-52,999)
 - `RAGSaveFailedError` - Save failed

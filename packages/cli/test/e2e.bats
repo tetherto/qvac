@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-# End-to-end tests with real models (LLM, embedding, whisper).
+# End-to-end tests with real models (LLM, embedding, whisper transcription + translation).
 # Requires: npm run build, jq, @qvac/sdk installed as devDependency.
 # These tests download small models and run real inference — expect ~5-10 min on first run.
 
@@ -12,6 +12,7 @@ BASE="http://127.0.0.1:${E2E_PORT}"
 LLM_ALIAS="test-llm"
 EMBED_ALIAS="test-embed"
 WHISPER_ALIAS="test-whisper"
+WHISPER_TRANSLATE_ALIAS="test-whisper-translate"
 
 # ── Server lifecycle (once per file) ──────────────────────────────────
 
@@ -35,6 +36,11 @@ setup_file() {
       },
       "test-whisper": {
         "model": "WHISPER_EN_TINY_Q8_0",
+        "preload": true
+      },
+      "test-whisper-translate": {
+        "model": "WHISPER_EN_TINY_Q8_0",
+        "type": "whispercpp-audio-translation",
         "preload": true
       }
     }
@@ -65,7 +71,7 @@ CONF
   while [[ "${elapsed}" -lt "${max_wait}" ]]; do
     local count
     count=$(curl -sf "${BASE}/v1/models" 2>/dev/null | jq '.data | length' 2>/dev/null || echo 0)
-    [[ "${count}" -ge 3 ]] && break
+    [[ "${count}" -ge 4 ]] && break
     sleep 2
     elapsed=$((elapsed + 2))
   done
@@ -97,15 +103,15 @@ json_post() {
 
 # ── Models ────────────────────────────────────────────────────────────
 
-@test "GET /v1/models lists all 3 loaded models" {
+@test "GET /v1/models lists all 4 loaded models" {
   local body
   body=$(curl -sf "${BASE}/v1/models")
   echo "${body}" | jq -e '.object == "list"' >/dev/null
-  echo "${body}" | jq -e '.data | length == 3' >/dev/null
+  echo "${body}" | jq -e '.data | length == 4' >/dev/null
 
   local ids
   ids=$(echo "${body}" | jq -r '[.data[].id] | sort | join(",")')
-  [[ "${ids}" == "test-embed,test-llm,test-whisper" ]]
+  [[ "${ids}" == "test-embed,test-llm,test-whisper,test-whisper-translate" ]]
 
   echo "${body}" | jq -e '.data | all(.object == "model")' >/dev/null
   echo "${body}" | jq -e '.data | all(.owned_by == "qvac")' >/dev/null
@@ -226,6 +232,35 @@ json_post() {
   ! echo "${body}" | jq -e '.' >/dev/null 2>&1 || [[ $(echo "${body}" | jq -r 'type' 2>/dev/null) == "string" ]]
 }
 
+# ── Translations (Whisper translate-to-English) ─────────────────────
+
+@test "translations: returns JSON with text field" {
+  local body
+  body=$(curl -s "${BASE}/v1/audio/translations" \
+    -F "model=${WHISPER_TRANSLATE_ALIAS}" \
+    -F "file=@${BATS_FILE_TMPDIR}/silence.wav;filename=silence.wav")
+
+  echo "${body}" | jq -e '.text | type == "string"' >/dev/null
+}
+
+@test "translations: response_format=text returns plain text" {
+  local body
+  body=$(curl -s "${BASE}/v1/audio/translations" \
+    -F "model=${WHISPER_TRANSLATE_ALIAS}" \
+    -F "response_format=text" \
+    -F "file=@${BATS_FILE_TMPDIR}/silence.wav;filename=silence.wav")
+
+  ! echo "${body}" | jq -e '.' >/dev/null 2>&1 || [[ $(echo "${body}" | jq -r 'type' 2>/dev/null) == "string" ]]
+}
+
+@test "translations: rejects transcription-only alias" {
+  local body
+  body=$(curl -s "${BASE}/v1/audio/translations" \
+    -F "model=${WHISPER_ALIAS}" \
+    -F "file=@${BATS_FILE_TMPDIR}/silence.wav;filename=silence.wav")
+  assert_error "${body}" "invalid_model_type"
+}
+
 # ── Cross-endpoint model type validation ──────────────────────────────
 
 @test "cross-type: chat endpoint rejects embedding model" {
@@ -250,11 +285,23 @@ json_post() {
   assert_error "${body}" "invalid_model_type"
 }
 
+@test "cross-type: translations endpoint rejects chat model" {
+  local body
+  body=$(curl -s "${BASE}/v1/audio/translations" \
+    -F "model=${LLM_ALIAS}" \
+    -F "file=@${BATS_FILE_TMPDIR}/silence.wav;filename=audio.wav")
+  assert_error "${body}" "invalid_model_type"
+}
+
 # ── Model lifecycle ───────────────────────────────────────────────────
 # Run last — unloading a model affects subsequent tests.
 
 @test "DELETE /v1/models/:id unloads model" {
   local body
+  body=$(curl -s -X DELETE "${BASE}/v1/models/${WHISPER_TRANSLATE_ALIAS}")
+  echo "${body}" | jq -e ".id == \"${WHISPER_TRANSLATE_ALIAS}\"" >/dev/null
+  echo "${body}" | jq -e '.deleted == true' >/dev/null
+
   body=$(curl -s -X DELETE "${BASE}/v1/models/${WHISPER_ALIAS}")
   echo "${body}" | jq -e ".id == \"${WHISPER_ALIAS}\"" >/dev/null
   echo "${body}" | jq -e '.deleted == true' >/dev/null
@@ -263,4 +310,5 @@ json_post() {
   list=$(curl -sf "${BASE}/v1/models")
   echo "${list}" | jq -e '.data | length == 2' >/dev/null
   echo "${list}" | jq -e "[.data[].id] | index(\"${WHISPER_ALIAS}\") | not" >/dev/null
+  echo "${list}" | jq -e "[.data[].id] | index(\"${WHISPER_TRANSLATE_ALIAS}\") | not" >/dev/null
 }
