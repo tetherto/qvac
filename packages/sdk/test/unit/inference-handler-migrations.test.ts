@@ -359,6 +359,7 @@ bareTest(
 
     const modelId = makeId("nmt-cancel-modelid");
     const requestId = makeId("req");
+    let addonCancelCalls = 0;
     const response = {
       async *iterate() {
         yield "hello";
@@ -371,6 +372,15 @@ bareTest(
       },
       async runBatch(text: string[]) {
         return text.map((s) => `t:${s}`);
+      },
+      // Even though `nmtcpp-translation.translate` declares
+      // `cancel: { scope: "none" }`, instrument the addon so a future
+      // regression that wires a hard-cancel listener for NMT trips
+      // this assertion instead of silently breaking the contract.
+      addon: {
+        async cancel() {
+          addonCancelCalls++;
+        },
       },
     };
 
@@ -402,6 +412,11 @@ bareTest(
       t.is(cancelled, 1, "registry cancelled the translate-kind entry");
       const first = await stepPromise;
       t.is(first.done, true, "cancel ends the generator without yielding");
+      t.is(
+        addonCancelCalls,
+        0,
+        "soft-cancel contract: NMT must not invoke addon.cancel()",
+      );
     } finally {
       unregisterModel(modelId);
     }
@@ -468,6 +483,219 @@ bareTest(
 
       getRequestRegistry().cancel({ requestId });
       await stepPromise;
+    } finally {
+      unregisterModel(modelId);
+    }
+  },
+);
+
+bareTest(
+  "transcribe (whisper): cancel-by-requestId exits loop and runs restorePrompt exactly once",
+  async (t: T) => {
+    const [
+      { registerModel, unregisterModel },
+      { ModelType },
+      { getRequestRegistry },
+      { transcribe },
+    ] = await Promise.all([
+      import("@/server/bare/registry/model-registry"),
+      import("@/schemas"),
+      import("@/server/bare/runtime/request-registry-singleton"),
+      import("@/server/bare/ops/transcribe"),
+    ]);
+
+    const modelId = makeId("transcribe-cancel-id");
+    const requestId = makeId("req");
+    let addonCancelCalls = 0;
+    // `reload` is called by `applyPrompt` at handler entry (once) and
+    // by `restorePrompt` at scope unwind (once). Count both — the test
+    // pins the M2 invariant: `restorePrompt` runs on every exit path
+    // including cancel, via `scope.defer(...)`.
+    let reloadCalls = 0;
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    const response = {
+      async *iterate() {
+        await gate;
+        // Per-iteration `if (ctx.signal.aborted) break;` should fire
+        // before this segment is yielded if cancel landed first.
+        yield [{ text: "should not arrive" }];
+      },
+      stats: {},
+    };
+    const model = {
+      async run() {
+        return response;
+      },
+      async reload() {
+        reloadCalls++;
+      },
+      addon: {
+        async cancel() {
+          addonCancelCalls++;
+        },
+      },
+    };
+
+    registerModel(modelId, {
+      model: model as never,
+      path: "/tmp/whisper.gguf",
+      // `getModelConfig` returns this object; `applyPrompt`'s
+      // destructure of `contextParams: _, miscConfig, ...whisperParams`
+      // tolerates absent keys.
+      config: { audio_format: "s16le" } as never,
+      modelType: ModelType.whispercppTranscription,
+    } as never);
+
+    try {
+      const gen = transcribe(
+        {
+          modelId,
+          audioChunk: { type: "base64", value: "" },
+          prompt: "p1",
+        } as never,
+        requestId,
+      );
+      const stepPromise = gen.next();
+      // Yield once so `applyPrompt`'s `await model.reload(...)` and the
+      // `await using ctx = ...` admission both run before we cancel.
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      const cancelled = getRequestRegistry().cancel({ requestId });
+      t.is(cancelled, 1, "registry cancelled the transcribe entry");
+
+      release();
+      const first = await stepPromise;
+      t.is(first.done, true, "cancel ends the generator without yielding");
+
+      t.ok(
+        addonCancelCalls >= 1,
+        "registry abort forwarded to addon.cancel (hard-cancel)",
+      );
+      t.is(
+        reloadCalls,
+        2,
+        "applyPrompt + restorePrompt each call reload exactly once",
+      );
+    } finally {
+      unregisterModel(modelId);
+    }
+  },
+);
+
+bareTest(
+  "finetune: cancel-by-requestId calls model.cancel() and runs clearFinetuneRuntimeState",
+  async (t: T) => {
+    const [
+      { registerModel, unregisterModel },
+      { ModelType },
+      { getRequestRegistry },
+      { startFinetune, getFinetuneState },
+    ] = await Promise.all([
+      import("@/server/bare/registry/model-registry"),
+      import("@/schemas"),
+      import("@/server/bare/runtime/request-registry-singleton"),
+      import("@/server/bare/plugins/llamacpp-completion/ops/finetune"),
+    ]);
+
+    const modelId = makeId("finetune-cancel-id");
+    const requestId = makeId("req");
+    let modelCancelCalls = 0;
+    let releaseAwait: (value: { op: "finetune"; status: "COMPLETED" }) => void =
+      () => {};
+    const awaitGate = new Promise<{ op: "finetune"; status: "COMPLETED" }>(
+      (resolve) => {
+        releaseAwait = resolve;
+      },
+    );
+
+    const handle = {
+      on() {
+        return handle;
+      },
+      removeListener() {
+        return handle;
+      },
+      async await() {
+        return awaitGate;
+      },
+    };
+
+    const model = {
+      async finetune() {
+        return handle;
+      },
+      async pause() {},
+      async cancel() {
+        modelCancelCalls++;
+        // The real addon flips its cancel flag and the in-flight
+        // finetune resolves with status. Mock that wire by releasing
+        // the gate so `handle.await()` returns.
+        releaseAwait({ op: "finetune", status: "COMPLETED" });
+      },
+    };
+
+    registerModel(modelId, {
+      model: model as never,
+      path: "/tmp/llama.gguf",
+      config: {} as never,
+      modelType: ModelType.llamacppCompletion,
+    } as never);
+
+    // Use a checkpoint dir guaranteed not to exist so the post-cancel
+    // `getFinetuneState(...)` falls through to `IDLE` rather than
+    // hitting `bare-fs.readdirSync` on a real directory.
+    const checkpointSaveDir = `/tmp/__qvac_nonexistent_${requestId}__`;
+    const options = {
+      trainDatasetDir: "/tmp/train",
+      validation: { type: "none" as const },
+      outputParametersDir: "/tmp/out",
+      checkpointSaveDir,
+    };
+
+    try {
+      const finetunePromise = startFinetune({
+        type: "finetune",
+        modelId,
+        options,
+        requestId,
+      } as never);
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      // Before cancel: runtime state is RUNNING (set by
+      // `registerRunningFinetune`).
+      const runningState = getFinetuneState({
+        modelId,
+        options,
+      } as never);
+      t.is(runningState.status, "RUNNING", "runtime state flagged RUNNING");
+
+      const cancelled = getRequestRegistry().cancel({ requestId });
+      t.is(cancelled, 1, "registry cancelled the finetune entry");
+
+      await finetunePromise;
+
+      t.is(modelCancelCalls, 1, "registry abort forwarded to model.cancel()");
+
+      // After dispose: `clearFinetuneRuntimeState` ran via
+      // `scope.defer(...)`, so runtime state is no longer RUNNING.
+      // With a non-existent checkpoint dir the fallback is IDLE.
+      const finalState = getFinetuneState({
+        modelId,
+        options,
+      } as never);
+      t.is(
+        finalState.status,
+        "IDLE",
+        "scope unwind cleared the runtime-state flag",
+      );
     } finally {
       unregisterModel(modelId);
     }

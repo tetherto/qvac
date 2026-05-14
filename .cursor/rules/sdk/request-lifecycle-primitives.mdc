@@ -95,6 +95,8 @@ for await (const chunk of model.runStreaming(req, { signal })) {
 
 Signal is consumed at exactly one point: the addon binding. After that, cancellation propagates by the addon returning / throwing, the loop exiting, and the scope unwinding. Polling scatters cancellation logic and gets out of sync with the truth (registry state).
 
+**Not to be confused with the M3b per-iteration check.** The pattern above is wrong when the addon already honours `signal` via its `RunOptions.signal` (e.g. `llamacpp-completion.runStreaming`). For handlers whose addon does NOT consume the signal directly (whisper, parakeet, nmtcpp, llamacpp-embedding's `iterate()` path), a single `if (ctx.signal.aborted) break;` at the top of the loop body IS the canonical pattern — see ["Per-iteration cancel check (M3b)"](#per-iteration-cancel-check-m3b) above. The anti-pattern is *adding* the check when the addon already does the same work; the M3b pattern is *introducing* the check where it's the only soft-cancel exit.
+
 ### Manual cleanup in `if (signal.aborted) { ... }` branches
 
 ```typescript

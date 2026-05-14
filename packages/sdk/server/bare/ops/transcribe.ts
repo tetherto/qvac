@@ -37,8 +37,6 @@ export {
   type WhisperAddonSegment,
 };
 
-const logger = getServerLogger();
-
 // Per-engine output shapes from `runStreaming`'s response iterator.
 //
 // Whisper emits arrays of segments interleaved with VAD / end-of-turn
@@ -181,9 +179,7 @@ export async function* transcribe(
     // `restorePrompt` runs on every exit path — happy, throw, cancel —
     // via the scope. Replaces the M2 `try / finally { restorePrompt }`
     // block; LIFO unwinding pairs with the addon-cancel detach below.
-    ctx.scope.defer(async () => {
-      await restorePrompt(modelId, originalConfig);
-    });
+    ctx.scope.defer(() => restorePrompt(modelId, originalConfig));
   }
 
   const model = getModel(modelId);
@@ -217,7 +213,7 @@ export async function* transcribe(
 
   for await (const output of response.iterate()) {
     if (ctx.signal.aborted) break;
-    logger.debug("Streaming Transcription Update:", output);
+    requestLogger.debug("Streaming Transcription Update:", output);
 
     const chunks = (Array.isArray(output) ? output : [output]) as WhisperAddonSegment[];
 
@@ -329,9 +325,7 @@ export async function* transcribeStream(
 
   const originalConfig = await applyPrompt(modelId, prompt, engineType);
   if (originalConfig) {
-    ctx.scope.defer(async () => {
-      await restorePrompt(modelId, originalConfig);
-    });
+    ctx.scope.defer(() => restorePrompt(modelId, originalConfig));
   }
 
   const model = getModel(modelId);
@@ -363,7 +357,7 @@ export async function* transcribeStream(
 
   for await (const output of response.iterate()) {
     if (ctx.signal.aborted) break;
-    logger.debug("Live Transcription Update:", output);
+    requestLogger.debug("Live Transcription Update:", output);
 
     if (!Array.isArray(output)) {
       // Whisper event objects.
