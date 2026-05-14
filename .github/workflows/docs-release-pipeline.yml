@@ -34,9 +34,29 @@ env:
   DOCS_DIR: docs/website
 
 jobs:
+  label-gate:
+    name: Authorise (label-gate)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      authorised: ${{ steps.gate.outputs.authorised }}
+    steps:
+      - name: Checkout (label-gate action only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/label-gate
+          sparse-checkout-cone-mode: false
+      - name: Run label-gate
+        id: gate
+        uses: ./.github/actions/label-gate
+        with:
+          github-token: ${{ secrets.PAT_TOKEN }}
   generate-and-publish:
     runs-on: ubuntu-latest
-    if: ${{ !vars.DOCS_SYNC_BOT_USER || github.actor != vars.DOCS_SYNC_BOT_USER }}
+    if: needs.label-gate.outputs.authorised == 'true' && (!vars.DOCS_SYNC_BOT_USER || github.actor != vars.DOCS_SYNC_BOT_USER)
 
     steps:
       # Dual checkout to close the race window where a PR landing on `main`
@@ -203,3 +223,5 @@ jobs:
           git config user.email "$BOT_EMAIL"
           git commit -m "chore(docs): release v${VERSION} (API summary + release notes) [skip ci]"
           git push origin main
+    needs:
+      - label-gate

@@ -24,7 +24,7 @@ jobs:
       contents: read
       id-token: write
       checks: write
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}-cpp-tests
     strategy:
@@ -34,6 +34,7 @@ jobs:
           - os: ubuntu-22.04
             platform: linux
             arch: x64
+            runner: qvac-ubuntu2204-x64
             coverage: true
     env:
       VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg/cache,readwrite"
@@ -47,19 +48,10 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
           lfs: true
 
-      - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
-        with:
-          node-version: lts/*
-
-      - name: Setup LLVM
-        if: matrix.platform == 'linux'
-        uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
-
       - name: Setup ccache
         if: matrix.platform == 'linux'
         run: |
-          sudo apt-get install -y ccache
+          # sudo apt-get install -y ccache
           ccache -z
           echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
           echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
@@ -76,31 +68,20 @@ jobs:
         working-directory: ${{ env.PKG_DIR }}
         run: |
           npm install
-          npm install -g bare bare-make
+          # npm install -g bare bare-make
 
+      - name: Add bare tooling to PATH (Linux x64)
+        if: ${{ matrix.os == 'ubuntu-22.04' }}
+        run: echo "/usr/local/nvm/versions/node/v20.20.2/bin" >> $GITHUB_PATH
+          
       - if: ${{ matrix.os == 'ubuntu-22.04' }}
         name: Configure vcpkg in linux
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
-
-      - name: Setup Vulkan SDK
-        uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@0bbdca93da303a0b1634ba14a89cec085621078d
-        env:
-          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
-        with:
-          platform: ${{ matrix.platform }}
-          arch: ${{ matrix.arch }}
-          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          aws-region: eu-central-1
 
       - name: Generate and build C++ unit tests (with coverage)
         working-directory: ${{ env.PKG_DIR }}
         run: |
           npm run coverage:cpp:build
-
-      - name: Setup Python (HF -> .gguf conversion for QVAC_TEST_* gates)
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
 
       # Mirrors parakeet's cpp-test-coverage flow.  The C++ suite has two
       # tiers of tests:

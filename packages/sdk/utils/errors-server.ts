@@ -1,6 +1,24 @@
 import { QvacErrorBase } from "@qvac/error";
 import { SDK_SERVER_ERROR_CODES } from "@/schemas/sdk-errors-server";
+import type { CompletionStats, ToolCallWithCall } from "@/schemas";
 import { createErrorOptions } from "./errors-base";
+
+/**
+ * Partial completion payload attached to `InferenceCancelledError` when a
+ * cancel hits mid-stream. Mirrors the named fields on `CompletionFinal`
+ * so callers who want the partial output can read `.partial.text`,
+ * `.partial.toolCalls`, `.partial.stats` directly without reaching for
+ * a `Partial<CompletionFinal>` import.
+ *
+ * Fields are all optional: a same-tick cancel-before-begin races every
+ * event; a cancel after the first content chunk carries `text` but no
+ * `stats`; a cancel after a tool-call frame carries both.
+ */
+export interface InferenceCancelledPartial {
+  text?: string;
+  toolCalls?: ToolCallWithCall[];
+  stats?: CompletionStats;
+}
 
 // ============== Model Registry Errors ==============
 
@@ -300,6 +318,56 @@ export class RequestNotFoundError extends QvacErrorBase {
         cause,
       ),
     );
+  }
+}
+
+/**
+ * Thrown when a long-running inference request was cancelled before
+ * completion. The `events` stream on `CompletionRun` ends normally with
+ * `stopReason: "cancelled"` on the last `completionDone`, but the
+ * promise-aggregates on the same run (`final` / `text` / `toolCalls` /
+ * `stats`) reject with this error so callers can't accidentally treat a
+ * cancelled run as a successful one.
+ *
+ * Carries:
+ *  - `requestId` — correlates with `run.requestId` so callers know which
+ *    in-flight request was cancelled when they fan out multiple cancels.
+ *  - `partial` — whatever the aggregator accumulated up to the cancel
+ *    point. Optional fields so consumers can opt into "show partial":
+ *
+ *      try { await run.text } catch (err) {
+ *        if (err instanceof InferenceCancelledError) {
+ *          renderPartial(err.partial.text);
+ *        }
+ *      }
+ *
+ * The error is constructed client-side in
+ * `client/api/completion-stream.ts` when the wire stream ends with
+ * `stopReason: "cancelled"` — the partial payload comes from the
+ * client's own event aggregator. The class lives in `errors-server.ts`
+ * (and is re-exported from the package root) because the *semantic*
+ * origin of the cancel is server-side, and other handlers
+ * (embeddings, transcribe, …) will reuse the same class once their
+ * cancel surface lands.
+ */
+export class InferenceCancelledError extends QvacErrorBase {
+  readonly requestId: string;
+  readonly partial: InferenceCancelledPartial;
+
+  constructor(
+    requestId: string,
+    partial: InferenceCancelledPartial = {},
+    cause?: unknown,
+  ) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.INFERENCE_CANCELLED,
+        [requestId],
+        cause,
+      ),
+    );
+    this.requestId = requestId;
+    this.partial = partial;
   }
 }
 
