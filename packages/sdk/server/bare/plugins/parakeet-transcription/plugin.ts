@@ -133,11 +133,14 @@ export const parakeetPlugin = definePlugin({
           );
         }
 
-        const stream = transcribe({
-          modelId: request.modelId,
-          audioChunk: request.audioChunk,
-          prompt: request.prompt,
-        });
+        const stream = transcribe(
+          {
+            modelId: request.modelId,
+            audioChunk: request.audioChunk,
+            prompt: request.prompt,
+          },
+          request.requestId,
+        );
 
         try {
           let result = await stream.next();
@@ -212,6 +215,7 @@ export const parakeetPlugin = definePlugin({
           undefined,
           false,
           streamOpts,
+          request.requestId,
         );
 
         // Parakeet's duplex stream emits text segments plus synthetic

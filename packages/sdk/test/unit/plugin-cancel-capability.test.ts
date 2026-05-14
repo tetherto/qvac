@@ -184,7 +184,10 @@ bareTest(
     const truthTable: Record<string, Record<string, PluginHandlerCancel>> = {
       [llmPlugin.modelType]: {
         completionStream: { scope: "model", hard: true },
-        finetune: { scope: "none" },
+        // M3b flipped finetune from "none" → "model"/hard. The addon
+        // exposes `model.cancel()` for the running finetune job, and
+        // `startFinetune` wires it through the registry's abort signal.
+        finetune: { scope: "model", hard: true },
         translate: { scope: "model", hard: true },
       },
       [embeddingsPlugin.modelType]: {
