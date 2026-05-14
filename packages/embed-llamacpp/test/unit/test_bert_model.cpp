@@ -18,6 +18,15 @@
 namespace fs = std::filesystem;
 using namespace qvac_lib_inference_addon_cpp::logger;
 
+// Test fixtures intentionally hold members directly and many tests assert
+// against literal sample values; the noisy clang-tidy checks below add no
+// value in a unit-test context.
+// NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers,
+// readability-magic-numbers,
+// readability-function-cognitive-complexity,
+// cppcoreguidelines-non-private-member-variables-in-classes,
+// bugprone-unchecked-optional-access)
+
 namespace {
 double getStatValue(
     const qvac_lib_inference_addon_cpp::RuntimeStats& stats,
@@ -54,12 +63,12 @@ getModelFromAddon(qvac_lib_inference_addon_cpp::AddonCpp* addon) {
 class BertEmbeddingsTest : public ::testing::Test {};
 
 TEST_F(BertEmbeddingsTest, ConstructorWithValidLayout) {
-  std::vector<float> data(10 * 5);
+  std::vector<float> data(std::size_t{10} * 5);
   for (std::size_t i = 0; i < data.size(); ++i) {
     data[i] = static_cast<float>(i);
   }
 
-  BertEmbeddings::Layout layout{10, 5};
+  BertEmbeddings::Layout layout{.embeddingCount = 10, .embeddingSize = 5};
   BertEmbeddings embeddings(std::move(data), layout);
 
   EXPECT_EQ(embeddings.size(), 10);
@@ -67,8 +76,8 @@ TEST_F(BertEmbeddingsTest, ConstructorWithValidLayout) {
 }
 
 TEST_F(BertEmbeddingsTest, SingleEmbedding) {
-  std::vector<float> data{1.0f, 2.0f, 3.0f};
-  BertEmbeddings::Layout layout{1, 3};
+  std::vector<float> data{1.0F, 2.0F, 3.0F};
+  BertEmbeddings::Layout layout{.embeddingCount = 1, .embeddingSize = 3};
   BertEmbeddings embeddings(std::move(data), layout);
 
   EXPECT_EQ(embeddings.size(), 1);
@@ -76,14 +85,14 @@ TEST_F(BertEmbeddingsTest, SingleEmbedding) {
 
   auto embedding = embeddings[0];
   EXPECT_EQ(embedding.size(), 3);
-  EXPECT_FLOAT_EQ(embedding[0], 1.0f);
-  EXPECT_FLOAT_EQ(embedding[1], 2.0f);
-  EXPECT_FLOAT_EQ(embedding[2], 3.0f);
+  EXPECT_FLOAT_EQ(embedding[0], 1.0F);
+  EXPECT_FLOAT_EQ(embedding[1], 2.0F);
+  EXPECT_FLOAT_EQ(embedding[2], 3.0F);
 }
 
 TEST_F(BertEmbeddingsTest, MultipleEmbeddings) {
-  std::vector<float> data{1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f};
-  BertEmbeddings::Layout layout{2, 3};
+  std::vector<float> data{1.0F, 2.0F, 3.0F, 4.0F, 5.0F, 6.0F};
+  BertEmbeddings::Layout layout{.embeddingCount = 2, .embeddingSize = 3};
   BertEmbeddings embeddings(std::move(data), layout);
 
   EXPECT_EQ(embeddings.size(), 2);
@@ -91,20 +100,20 @@ TEST_F(BertEmbeddingsTest, MultipleEmbeddings) {
 
   auto embedding0 = embeddings[0];
   EXPECT_EQ(embedding0.size(), 3);
-  EXPECT_FLOAT_EQ(embedding0[0], 1.0f);
-  EXPECT_FLOAT_EQ(embedding0[1], 2.0f);
-  EXPECT_FLOAT_EQ(embedding0[2], 3.0f);
+  EXPECT_FLOAT_EQ(embedding0[0], 1.0F);
+  EXPECT_FLOAT_EQ(embedding0[1], 2.0F);
+  EXPECT_FLOAT_EQ(embedding0[2], 3.0F);
 
   auto embedding1 = embeddings[1];
   EXPECT_EQ(embedding1.size(), 3);
-  EXPECT_FLOAT_EQ(embedding1[0], 4.0f);
-  EXPECT_FLOAT_EQ(embedding1[1], 5.0f);
-  EXPECT_FLOAT_EQ(embedding1[2], 6.0f);
+  EXPECT_FLOAT_EQ(embedding1[0], 4.0F);
+  EXPECT_FLOAT_EQ(embedding1[1], 5.0F);
+  EXPECT_FLOAT_EQ(embedding1[2], 6.0F);
 }
 
 TEST_F(BertEmbeddingsTest, EmptyEmbeddings) {
   std::vector<float> data;
-  BertEmbeddings::Layout layout{0, 0};
+  BertEmbeddings::Layout layout{.embeddingCount = 0, .embeddingSize = 0};
   BertEmbeddings embeddings(std::move(data), layout);
 
   EXPECT_EQ(embeddings.size(), 0);
@@ -119,14 +128,14 @@ TEST_F(BertEmbeddingsTest, AccessAllEmbeddings) {
     data[i] = static_cast<float>(i);
   }
 
-  BertEmbeddings::Layout layout{count, size};
+  BertEmbeddings::Layout layout{.embeddingCount = count, .embeddingSize = size};
   BertEmbeddings embeddings(std::move(data), layout);
 
   for (std::size_t i = 0; i < count; ++i) {
     auto embedding = embeddings[i];
     EXPECT_EQ(embedding.size(), size);
     for (std::size_t j = 0; j < size; ++j) {
-      EXPECT_FLOAT_EQ(embedding[j], static_cast<float>(i * size + j));
+      EXPECT_FLOAT_EQ(embedding[j], static_cast<float>((i * size) + j));
     }
   }
 }
@@ -136,10 +145,10 @@ TEST_F(BertEmbeddingsTest, LargeEmbeddings) {
   const std::size_t size = 768;
   std::vector<float> data(count * size);
   for (std::size_t i = 0; i < data.size(); ++i) {
-    data[i] = static_cast<float>(i) * 0.001f;
+    data[i] = static_cast<float>(i) * 0.001F;
   }
 
-  BertEmbeddings::Layout layout{count, size};
+  BertEmbeddings::Layout layout{.embeddingCount = count, .embeddingSize = size};
   BertEmbeddings embeddings(std::move(data), layout);
 
   EXPECT_EQ(embeddings.size(), count);
@@ -147,7 +156,7 @@ TEST_F(BertEmbeddingsTest, LargeEmbeddings) {
 
   auto embedding = embeddings[50];
   EXPECT_EQ(embedding.size(), size);
-  EXPECT_FLOAT_EQ(embedding[0], 50.0f * size * 0.001f);
+  EXPECT_FLOAT_EQ(embedding[0], 50.0F * size * 0.001F);
 }
 
 class BertModelTest : public ::testing::Test {
@@ -196,7 +205,7 @@ protected:
   std::string test_model_path;
 
   std::string getValidModelPath() { return test_model_path; }
-  std::string getInvalidModelPath() { return "nonexistent_model.gguf"; }
+  static std::string getInvalidModelPath() { return "nonexistent_model.gguf"; }
 };
 
 TEST_F(BertModelTest, IsLoadedBeforeInit) {
@@ -378,20 +387,20 @@ TEST_F(BertModelTest, RuntimeStatsAfterProcessing) {
 }
 
 TEST_F(BertModelTest, ConstructorWithInvalidPath) {
-  std::string invalid_path = getInvalidModelPath();
+  std::string invalidPath = getInvalidModelPath();
   std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
   EXPECT_NO_THROW({
-    BertModel model(invalid_path, config);
+    BertModel model(invalidPath, config);
     EXPECT_FALSE(model.isLoaded());
   });
 }
 
 TEST_F(BertModelTest, ConstructorWithEmptyConfig) {
-  std::string invalid_path = getInvalidModelPath();
+  std::string invalidPath = getInvalidModelPath();
   std::unordered_map<std::string, std::string> config;
 
   EXPECT_NO_THROW({
-    BertModel model(invalid_path, config);
+    BertModel model(invalidPath, config);
     EXPECT_FALSE(model.isLoaded());
   });
 }
@@ -424,9 +433,9 @@ TEST_F(BertModelTest, ModelLoadsSuccessfully) {
 }
 
 TEST_F(BertModelTest, ModelFailsToLoadWithInvalidPath) {
-  std::string invalid_path = getInvalidModelPath();
+  std::string invalidPath = getInvalidModelPath();
   std::unordered_map<std::string, std::string> config = {{"device", "cpu"}};
-  BertModel model(invalid_path, config);
+  BertModel model(invalidPath, config);
   model.initializeBackend(test_backends_dir);
 
   // waitForLoadInitialization() throws an exception when model file doesn't
@@ -461,7 +470,7 @@ TEST_F(BertModelTest, EncodeHostF32SingleString) {
   // Verify embedding values are not all zeros
   bool hasNonZero = false;
   for (float val : embeddings[0]) {
-    if (val != 0.0f) {
+    if (val != 0.0F) {
       hasNonZero = true;
       break;
     }
@@ -522,7 +531,7 @@ TEST_F(BertModelTest, EncodeHostF32EmptyString) {
     FAIL() << "Model failed to load";
   }
 
-  std::string prompt = "";
+  std::string prompt;
   BertEmbeddings embeddings = model.encodeHostF32(prompt);
 
   EXPECT_EQ(embeddings.size(), 1);
@@ -590,7 +599,7 @@ TEST_F(BertModelTest, ProcessWithStringInput) {
   instance.addon->activate();
 
   auto* model = getModelFromAddon(instance.addon.get());
-  if (model && !model->isLoaded()) {
+  if (model != nullptr && !model->isLoaded()) {
     FAIL() << "Model failed to load";
   }
 
@@ -603,7 +612,7 @@ TEST_F(BertModelTest, ProcessWithStringInput) {
   ASSERT_TRUE(maybeEmbeddings.has_value())
       << "Timeout waiting for embeddings output";
 
-  BertEmbeddings embeddings = maybeEmbeddings.value();
+  const auto& embeddings = maybeEmbeddings.value();
 
   EXPECT_EQ(embeddings.size(), 1);
   EXPECT_GT(embeddings.embeddingSize(), 0);
@@ -625,7 +634,7 @@ TEST_F(BertModelTest, ProcessWithVectorInput) {
   instance.addon->activate();
 
   auto* model = getModelFromAddon(instance.addon.get());
-  if (model && !model->isLoaded()) {
+  if (model != nullptr && !model->isLoaded()) {
     FAIL() << "Model failed to load";
   }
 
@@ -638,7 +647,7 @@ TEST_F(BertModelTest, ProcessWithVectorInput) {
   ASSERT_TRUE(maybeEmbeddings.has_value())
       << "Timeout waiting for embeddings output";
 
-  BertEmbeddings embeddings = maybeEmbeddings.value();
+  const auto& embeddings = maybeEmbeddings.value();
 
   EXPECT_EQ(embeddings.size(), 3);
   EXPECT_GT(embeddings.embeddingSize(), 0);
@@ -839,7 +848,7 @@ TEST_F(BertModelTest, ModelLoadsAndProcessesMultipleTimes) {
   instance.addon->activate();
 
   auto* model = getModelFromAddon(instance.addon.get());
-  if (model && !model->isLoaded()) {
+  if (model != nullptr && !model->isLoaded()) {
     FAIL() << "Model failed to load";
   }
 
@@ -854,8 +863,7 @@ TEST_F(BertModelTest, ModelLoadsAndProcessesMultipleTimes) {
     ASSERT_TRUE(maybeEmbeddings.has_value())
         << "Timeout waiting for embeddings output on job " << i;
 
-    BertEmbeddings embeddings =
-        std::any_cast<BertEmbeddings>(maybeEmbeddings.value());
+    auto embeddings = std::any_cast<BertEmbeddings>(maybeEmbeddings.value());
 
     EXPECT_EQ(embeddings.size(), 1);
     EXPECT_GT(embeddings.embeddingSize(), 0);
@@ -1033,3 +1041,9 @@ TEST_F(BertModelTest, CommonParamsParseSplitModeBothKeysRejects) {
       },
       qvac_errors::StatusError);
 }
+
+// NOLINTEND(cppcoreguidelines-avoid-magic-numbers,
+// readability-magic-numbers,
+// readability-function-cognitive-complexity,
+// cppcoreguidelines-non-private-member-variables-in-classes,
+// bugprone-unchecked-optional-access)

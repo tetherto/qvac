@@ -23,7 +23,7 @@
 #include "inference-addon-cpp/RuntimeStats.hpp"
 #include "utils.hpp"
 
-#if defined(_MSC_VER)
+#ifdef _MSC_VER
 #pragma warning(disable : 4244 4267) // possible loss of data
 #endif
 
