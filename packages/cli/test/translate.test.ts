@@ -851,4 +851,58 @@ describe('historyPrefixFromStoredResponse', () => {
     })
     assert.deepEqual(prefix, [{ role: 'tool', content: '{"r":1}' }])
   })
+
+  it('walks previous_response_id chain so depth-3 carries the grandparent turn', () => {
+    const records: Record<string, { inputItems: unknown[]; responseObject: Record<string, unknown> }> = {
+      resp_1: {
+        inputItems: [
+          { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'A' }] }
+        ],
+        responseObject: { output: [], output_text: 'X' }
+      },
+      resp_2: {
+        inputItems: [
+          { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'B' }] }
+        ],
+        responseObject: { output: [], output_text: 'Y', previous_response_id: 'resp_1' }
+      },
+      resp_3: {
+        inputItems: [
+          { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'C' }] }
+        ],
+        responseObject: { output: [], output_text: 'Z', previous_response_id: 'resp_2' }
+      }
+    }
+    const prefix = historyPrefixFromStoredResponse(
+      records['resp_3']!,
+      (id) => records[id]
+    )
+    assert.deepEqual(prefix, [
+      { role: 'user', content: 'A' }, { role: 'assistant', content: 'X' },
+      { role: 'user', content: 'B' }, { role: 'assistant', content: 'Y' },
+      { role: 'user', content: 'C' }, { role: 'assistant', content: 'Z' }
+    ])
+  })
+
+  it('caps chain walk at maxDepth to bound work on pathological input', () => {
+    const records: Record<string, { inputItems: unknown[]; responseObject: Record<string, unknown> }> = {
+      a: {
+        inputItems: [{ type: 'message', role: 'user', content: [{ type: 'input_text', text: 'aIn' }] }],
+        responseObject: { output: [], output_text: 'aOut' }
+      },
+      b: {
+        inputItems: [{ type: 'message', role: 'user', content: [{ type: 'input_text', text: 'bIn' }] }],
+        responseObject: { output: [], output_text: 'bOut', previous_response_id: 'a' }
+      },
+      c: {
+        inputItems: [{ type: 'message', role: 'user', content: [{ type: 'input_text', text: 'cIn' }] }],
+        responseObject: { output: [], output_text: 'cOut', previous_response_id: 'b' }
+      }
+    }
+    const prefix = historyPrefixFromStoredResponse(records['c']!, (id) => records[id], 1)
+    assert.deepEqual(prefix, [
+      { role: 'user', content: 'bIn' }, { role: 'assistant', content: 'bOut' },
+      { role: 'user', content: 'cIn' }, { role: 'assistant', content: 'cOut' }
+    ])
+  })
 })

@@ -471,6 +471,23 @@ TXT
   echo "${body2}" | jq -e '(.output_text | test("XYZZY"; "i"))' >/dev/null
 }
 
+@test "responses: previous_response_id walks deeper than one step (chain depth 3)" {
+  # Each StoredResponse only carries its own NEW input items, so without a recursive walk
+  # depth-3 chains would silently lose the grandparent turn. This test asserts the resp_1
+  # fact (XYZZY) survives through resp_2 (innocuous) into resp_3.
+  json_post_capture "/v1/responses" "{\"model\":\"${LLM_ALIAS}\",\"input\":\"Remember the code word is XYZZY.\",\"store\":true,\"max_output_tokens\":512,\"temperature\":0,\"seed\":1}"
+  local rid1
+  rid1=$(jq -r '.id' "${FILE_TMPDIR}/resp.body")
+
+  json_post_capture "/v1/responses" "{\"model\":\"${LLM_ALIAS}\",\"previous_response_id\":\"${rid1}\",\"input\":\"Got it.\",\"store\":true,\"max_output_tokens\":256,\"temperature\":0,\"seed\":1}"
+  local rid2
+  rid2=$(jq -r '.id' "${FILE_TMPDIR}/resp.body")
+
+  local body3
+  body3=$(json_post "/v1/responses" "{\"model\":\"${LLM_ALIAS}\",\"previous_response_id\":\"${rid2}\",\"input\":\"What is the code word? Reply with one word only.\",\"max_output_tokens\":512,\"temperature\":0,\"seed\":1}")
+  echo "${body3}" | jq -e '(.output_text | test("XYZZY"; "i"))' >/dev/null
+}
+
 @test "responses: bogus previous_response_id returns 404" {
   local body
   body=$(json_post "/v1/responses" "{\"model\":\"${LLM_ALIAS}\",\"previous_response_id\":\"resp_nonexistent123\",\"input\":\"hi\"}")

@@ -130,7 +130,7 @@ export async function handlePostResponses (req: IncomingMessage, res: ServerResp
       sendError(res, 404, 'previous_response_not_found', `No response found for previous_response_id "${previousResponseId}".`)
       return
     }
-    const prefix = historyPrefixFromStoredResponse(prev)
+    const prefix = historyPrefixFromStoredResponse(prev, (id) => ctx.responsesStore.get(id))
     history = [...prefix, ...history]
   }
 

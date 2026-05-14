@@ -788,11 +788,47 @@ function flattenResponsesContent (content: unknown): string {
   return parts.join('\n')
 }
 
-export function historyPrefixFromStoredResponse (stored: {
+export interface StoredResponseLike {
   inputItems: unknown[]
   responseObject: Record<string, unknown>
-}): Array<{ role: string; content: string }> {
+}
+
+/**
+ * Default cap for `historyPrefixFromStoredResponse` chain walks.
+ * Prevents pathological recursion if a malformed `previous_response_id` cycle is ever stored,
+ * and bounds work for very long chains. 32 mirrors typical chat-app history depth.
+ */
+export const RESPONSES_HISTORY_MAX_DEPTH = 32
+
+/**
+ * Build the chat history that should precede the current request when chaining
+ * via `previous_response_id`.
+ *
+ * If a `resolve` callback is provided, this walks the chain via
+ * `responseObject.previous_response_id` and prepends earlier turns first
+ * (oldest → newest). Without `resolve`, only the immediate stored turn is used
+ * — kept that way so the legacy single-step callers and unit tests still work.
+ *
+ * Each `StoredResponse.inputItems` only carries that turn's NEW input
+ * (`normalizeResponsesInputItemsForStorage(body['input'])`), so without the
+ * walk a chain of depth ≥ 3 would silently lose grandparent history.
+ */
+export function historyPrefixFromStoredResponse (
+  stored: StoredResponseLike,
+  resolve?: (id: string) => StoredResponseLike | undefined,
+  maxDepth: number = RESPONSES_HISTORY_MAX_DEPTH
+): Array<{ role: string; content: string }> {
   const prefix: Array<{ role: string; content: string }> = []
+
+  if (resolve && maxDepth > 0) {
+    const prevId = stored.responseObject['previous_response_id']
+    if (typeof prevId === 'string' && prevId.length > 0) {
+      const prev = resolve(prevId)
+      if (prev) {
+        prefix.push(...historyPrefixFromStoredResponse(prev, resolve, maxDepth - 1))
+      }
+    }
+  }
 
   for (const raw of stored.inputItems) {
     if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) continue
