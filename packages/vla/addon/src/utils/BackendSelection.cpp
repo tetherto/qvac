@@ -58,6 +58,14 @@ ggml_backend_dev_t pickBestGpuDevice() {
 
     const int adreno = parseAdrenoModel(desc);
 
+    // [DIAG] Emit at ERROR so the selection decision reaches Android logcat
+    // regardless of g_verbosityLevel (default=ERROR filters WARNING/INFO).
+    // Revert priority back to INFO/WARNING after the OpenCL-on-Adreno CI run.
+    QLOG_IF(
+        Priority::ERROR,
+        "vla_backend_selection: [diag] GPU seen: name=" + backendName +
+            " desc=" + desc + " adreno=" + std::to_string(adreno));
+
     // Adreno-specific policy. Empirical data so far:
     //   * Adreno 830 Vulkan on the Samsung Galaxy S25 Ultra produces cos sim
     //     0.73 vs PyTorch on the LIBERO real fixture (every other accepted
@@ -76,7 +84,7 @@ ggml_backend_dev_t pickBestGpuDevice() {
       const bool isOpenCl = backendLower.find("opencl") != std::string::npos;
       if (isOpenCl && adreno >= 800) {
         QLOG_IF(
-            Priority::INFO,
+            Priority::ERROR,
             "vla_backend_selection: Adreno " + std::to_string(adreno) +
                 " OpenCL accepted (preferred Adreno path)");
         // Prefer OpenCL-on-Adreno-800+ over any other candidate iterated
@@ -85,7 +93,7 @@ ggml_backend_dev_t pickBestGpuDevice() {
         return dev;
       }
       QLOG_IF(
-          Priority::WARNING,
+          Priority::ERROR,
           "vla_backend_selection: skipping Adreno " + std::to_string(adreno) +
               " " + backendName +
               " GPU (driver path known/suspected broken) — will fall back to "
@@ -94,7 +102,7 @@ ggml_backend_dev_t pickBestGpuDevice() {
     }
 
     QLOG_IF(
-        Priority::INFO,
+        Priority::ERROR,
         "vla_backend_selection: non-Adreno GPU accepted: " + desc +
             " (backend: " + backendName + ")");
 
