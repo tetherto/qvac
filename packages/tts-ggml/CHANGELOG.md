@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1]
+
+### Fixed
+
+- Fixed two issues when loading chatterbox on iOS:
+  - gguf_init_from_file race: bake_voice_conditioning() now runs before s3gen_preload_thread is spawned, so the two gguf_init_from_file calls no longer race against ggml's process-global state (previously aborted in ggml_abort on iOS).
+  - Metal shared-buffer-type init race when unload is called immediately after load
+
 ## [0.1.0]
 
 Initial release of `@qvac/tts-ggml`, a GGML-backed TTS addon wrapping the

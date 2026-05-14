@@ -20,9 +20,6 @@ const RPC_INIT_TIMEOUT_MS = 30_000;
 
 const logger = getClientLogger();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 let rpcInstance: RPC | null = null;
 let rpcPromise: Promise<RPC> | null = null;
 let bareWorkerProc: BareChildProcess | null = null;
@@ -71,14 +68,34 @@ function resolvePackagedWorkerPath(): string | undefined {
 }
 
 /**
- * Get default worker path from SDK dist
+ * Resolve the SDK's default worker entry via bundler-visible asset references.
+ *
+ * `path.resolve(__dirname, ...)` is invisible to static analysis, so packaged
+ * consumers ship without worker.js. We use `import.meta.asset(<literal>)` on
+ * Bare (detected by bare-module-lexer) and fall back to
+ * `new URL(<literal>, import.meta.url)` elsewhere. Specs must be string
+ * literals at the call site.
  */
 function getDefaultWorkerPath(): string {
-  const packagedWorker = path.resolve(__dirname, "../../server/worker.js");
-  if (fs.existsSync(packagedWorker)) return packagedWorker;
+  type ImportMetaAsset = { asset?: (spec: string) => string };
+  const hasAsset =
+    typeof (import.meta as ImportMetaAsset).asset === "function";
+
+  const packagedUrl = hasAsset
+    ? new URL(
+        (import.meta as ImportMetaAsset).asset!("../../server/worker.js"),
+      )
+    : new URL("../../server/worker.js", import.meta.url);
+  const packaged = fileURLToPath(packagedUrl);
+  if (fs.existsSync(packaged)) return packaged;
 
   // Dev/source layout fallback
-  return path.resolve(__dirname, "../../dist/server/worker.js");
+  const devUrl = hasAsset
+    ? new URL(
+        (import.meta as ImportMetaAsset).asset!("../../dist/server/worker.js"),
+      )
+    : new URL("../../dist/server/worker.js", import.meta.url);
+  return fileURLToPath(devUrl);
 }
 
 /**

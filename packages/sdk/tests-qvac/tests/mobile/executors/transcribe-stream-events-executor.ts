@@ -40,19 +40,10 @@ export class MobileTranscribeStreamEventsExecutor extends ModelAssetExecutor<
     if (!assetModule) {
       throw new Error(`Audio fixture not found in bundled assets: ${audioFileName}`);
     }
-    // @ts-ignore - expo-asset is a peer dependency available in mobile context
-    const { Asset } = await import("expo-asset");
-    const asset = Asset.fromModule(assetModule);
-    asset.downloaded = false;
-    await asset.downloadAsync();
-    const uri: string = asset.localUri || asset.uri;
-    if (!uri) {
-      throw new Error(`Failed to resolve asset: ${asset.name ?? audioFileName}`);
-    }
-    const fileUri = uri.startsWith("file://") ? uri : `file://${uri}`;
+    const path = await this.resolveAsset(assetModule);
     // @ts-ignore - expo-file-system is a peer dependency available in mobile context
     const { File } = await import("expo-file-system");
-    return await new File(fileUri).bytes();
+    return await new File(`file://${path}`).bytes();
   }
 
   private async run(
