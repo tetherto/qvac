@@ -336,8 +336,9 @@ export interface RuntimeStats {
   /** Seed used for the most recent generation */
   seed: number
   /**
-   * Actual compute device used for the most recent job (when reported by the
-   * native layer as 0/1, mapped here to 'cpu' / 'gpu').
+   * Standalone ESRGAN upscaler only: actual ggml compute device used for the
+   * most recent upscale (native 0/1 mapped to 'cpu' / 'gpu' in JS). Not set for
+   * diffusion `ImgStableDiffusion.run()` stats until the native layer reports it.
    */
   backendDevice?: 'cpu' | 'gpu'
 }
