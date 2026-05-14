@@ -58,33 +58,23 @@ ggml_backend_dev_t pickBestGpuDevice() {
 
     const int adreno = parseAdrenoModel(desc);
 
-    // [DIAG] Emit at ERROR so the selection decision reaches Android logcat
-    // regardless of g_verbosityLevel (default=ERROR filters WARNING/INFO).
-    // Revert priority back to INFO/WARNING after the OpenCL-on-Adreno CI run.
-    QLOG_IF(
-        Priority::ERROR,
-        "vla_backend_selection: [diag] GPU seen: name=" + backendName +
-            " desc=" + desc + " adreno=" + std::to_string(adreno));
-
-    // Adreno-specific policy. Empirical data so far:
-    //   * Adreno 830 Vulkan on the Samsung Galaxy S25 Ultra produces cos sim
-    //     0.73 vs PyTorch on the LIBERO real fixture (every other accepted
-    //     Vulkan target — Apple Metal, NVIDIA, Intel Iris, Mali on Pixel 9
-    //     Pro — sits above 0.999). Reject Vulkan on any Adreno.
-    //   * Adreno < 800 has known Qualcomm OpenCL ICD issues (incomplete
+    // Adreno-specific policy. Empirical data:
+    //   * Adreno 830 Vulkan (Samsung Galaxy S25 Ultra): cos sim 0.73 vs
+    //     PyTorch on the LIBERO real fixture — numerically broken. Every
+    //     other accepted Vulkan target (Apple Metal, NVIDIA, Intel Iris,
+    //     Mali on Pixel 9 Pro) sits above 0.999. Reject Vulkan on any Adreno.
+    //   * Adreno 830 OpenCL (Samsung Galaxy S25 Ultra, PR #1784 CI run
+    //     Manual-1229): cos sim 0.9843 / 0.9998 on fixed + real LIBERO
+    //     fixtures, 4x faster than CPU (1.5 s vs 6 s total). Passes all
+    //     thresholds. Accept OpenCL on Adreno >= 800.
+    //   * Adreno < 800: known Qualcomm OpenCL ICD issues (incomplete
     //     OpenCL 3.0, kernel-compile failures on several ggml ops,
     //     shared-memory OOMs). Reject any backend on Adreno < 800.
-    //   * Adreno >= 800 on OpenCL is the path Qualcomm and qvac-fabric's own
-    //     ggml backend loader actively maintain (GGML_OPENCL_USE_ADRENO_KERNELS,
-    //     "Adreno > 700 found keeping OpenCL backend"), and diffusion-cpp
-    //     uses it for Adreno 800+. Accept OpenCL on Adreno >= 800 and let
-    //     the integration test's cos-sim assertion vs PyTorch catch
-    //     regressions on the LIBERO fixture.
     if (adreno > 0) {
       const bool isOpenCl = backendLower.find("opencl") != std::string::npos;
       if (isOpenCl && adreno >= 800) {
         QLOG_IF(
-            Priority::ERROR,
+            Priority::INFO,
             "vla_backend_selection: Adreno " + std::to_string(adreno) +
                 " OpenCL accepted (preferred Adreno path)");
         // Prefer OpenCL-on-Adreno-800+ over any other candidate iterated
@@ -93,7 +83,7 @@ ggml_backend_dev_t pickBestGpuDevice() {
         return dev;
       }
       QLOG_IF(
-          Priority::ERROR,
+          Priority::WARNING,
           "vla_backend_selection: skipping Adreno " + std::to_string(adreno) +
               " " + backendName +
               " GPU (driver path known/suspected broken) — will fall back to "
@@ -102,7 +92,7 @@ ggml_backend_dev_t pickBestGpuDevice() {
     }
 
     QLOG_IF(
-        Priority::ERROR,
+        Priority::INFO,
         "vla_backend_selection: non-Adreno GPU accepted: " + desc +
             " (backend: " + backendName + ")");
 
