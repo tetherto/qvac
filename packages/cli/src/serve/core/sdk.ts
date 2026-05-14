@@ -1,4 +1,4 @@
-const MIN_SDK_VERSION = '0.8.0'
+const MIN_SDK_VERSION = '0.10.0'
 const SDK_SPECIFIER = '@qvac/sdk'
 const SDK_PACKAGE_SPECIFIER = '@qvac/sdk/package'
 
@@ -11,7 +11,21 @@ export interface SDKGenerationParams {
   frequency_penalty?: number
   presence_penalty?: number
   repeat_penalty?: number
+  reasoning_budget?: boolean
 }
+
+export type SDKResponseFormat =
+  | { type: 'text' }
+  | { type: 'json_object' }
+  | {
+      type: 'json_schema'
+      json_schema: {
+        name: string
+        description?: string
+        schema: Record<string, unknown>
+        strict?: boolean
+      }
+    }
 
 interface SDKModule {
   loadModel: (opts: { modelSrc: string; modelType: string; modelConfig: Record<string, unknown> }) => Promise<string>
@@ -22,11 +36,51 @@ interface SDKModule {
     stream: boolean
     tools?: SDKTool[]
     generationParams?: SDKGenerationParams
+    responseFormat?: SDKResponseFormat
   }) => Promise<CompletionResult>
   embed: (opts: { modelId: string; text: string | string[] }) => Promise<{ embedding: number[] | number[][]; stats?: Record<string, unknown> }>
   transcribe: (opts: { modelId: string; audioChunk: string | Buffer; prompt?: string }) => Promise<string>
+  diffusion: (opts: SDKDiffusionParams) => SDKDiffusionResult
   close: () => Promise<void>
   [key: string]: unknown
+}
+
+export interface SDKDiffusionParams {
+  modelId: string
+  prompt: string
+  negative_prompt?: string
+  width?: number
+  height?: number
+  steps?: number
+  seed?: number
+  batch_count?: number
+  cfg_scale?: number
+  guidance?: number
+  sampling_method?: string
+  scheduler?: string
+}
+
+export interface SDKDiffusionStats {
+  width?: number
+  height?: number
+  seed?: number
+  totalSteps?: number
+  totalImages?: number
+  generationMs?: number
+  totalGenerationMs?: number
+  totalWallMs?: number
+}
+
+export interface SDKDiffusionProgressTick {
+  step: number
+  totalSteps: number
+  elapsedMs: number
+}
+
+export interface SDKDiffusionResult {
+  progressStream: AsyncIterable<SDKDiffusionProgressTick>
+  outputs: Promise<Uint8Array[]>
+  stats: Promise<SDKDiffusionStats | undefined>
 }
 
 export interface SDKTool {
@@ -136,6 +190,7 @@ export async function sdkCompletion (opts: {
   stream: boolean
   tools?: SDKTool[] | undefined
   generationParams?: SDKGenerationParams | undefined
+  responseFormat?: SDKResponseFormat | undefined
 }): Promise<CompletionResult> {
   const { completion } = await getSDK()
   const params: Record<string, unknown> = {
@@ -147,7 +202,15 @@ export async function sdkCompletion (opts: {
     params['tools'] = opts.tools
   }
   if (opts.generationParams) {
-    params['generationParams'] = opts.generationParams
+    const { reasoning_budget, ...rest } = opts.generationParams
+    const sdkGenParams: Record<string, unknown> = { ...rest }
+    if (reasoning_budget !== undefined) {
+      sdkGenParams['reasoning_budget'] = reasoning_budget ? -1 : 0
+    }
+    params['generationParams'] = sdkGenParams
+  }
+  if (opts.responseFormat) {
+    params['responseFormat'] = opts.responseFormat
   }
   return completion(params as Parameters<SDKModule['completion']>[0])
 }
@@ -186,6 +249,37 @@ export async function sdkTranscribe (opts: {
   } finally {
     try { fs.unlinkSync(tmpFile) } catch {}
   }
+}
+
+export interface SDKDiffusionRunResult {
+  buffers: Uint8Array[]
+  stats: SDKDiffusionStats | undefined
+}
+
+export async function sdkDiffusion (opts: {
+  params: SDKDiffusionParams
+  onProgress?: (tick: SDKDiffusionProgressTick) => void
+}): Promise<SDKDiffusionRunResult> {
+  const { diffusion } = await getSDK()
+  const result = diffusion(opts.params)
+
+  const drainProgress = async (): Promise<void> => {
+    try {
+      for await (const tick of result.progressStream) {
+        if (opts.onProgress) opts.onProgress(tick)
+      }
+    } catch {
+      // Progress drain errors are reported via outputs/stats below.
+    }
+  }
+
+  const [buffers, stats] = await Promise.all([
+    result.outputs,
+    result.stats,
+    drainProgress()
+  ])
+
+  return { buffers, stats }
 }
 
 export async function sdkClose (): Promise<void> {

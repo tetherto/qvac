@@ -26,37 +26,56 @@ export {
   ragCloseWorkspace,
   ragDeleteWorkspace,
   textToSpeech,
+  textToSpeechStream,
   getModelInfo,
+  getLoadedModelInfo,
   loggingStream,
   ocr,
   invokePlugin,
   invokePluginStream,
   diffusion,
   type DiffusionProgressTick,
+  upscale,
   modelRegistryList,
   modelRegistrySearch,
   modelRegistryGetModel,
   type ModelRegistrySearchParams,
   suspend,
   resume,
+  state,
   type FinetuneHandle,
 } from "./client/api";
 export { close } from "./client";
 export {
+  type LifecycleState,
   type ModelProgressUpdate,
   type LoadModelOptions,
+  type LoadCustomPluginModelOptions,
   type DownloadAssetOptions,
   type Tool,
   type ToolCall,
   type ToolCallWithCall,
   type ToolCallError,
   type ToolCallEvent,
+  type CompletionEvent,
+  type CompletionFinal,
+  type CompletionRun,
   type CompletionStats,
   type EmbedStats,
   VERBOSITY,
   type Attachment,
   type TranscribeStreamSession,
+  type TranscribeStreamMetadataSession,
+  type TranscribeStreamConversationSession,
+  type TranscribeStreamEvent,
+  type VadStateEvent,
+  type EndOfTurnEvent,
+  type TranscribeSegment,
+  type TextToSpeechStreamSession,
+  type TextToSpeechStreamResponse,
+  type TextToSpeechStreamClientParams,
   type CompletionParams,
+  type ToolDialect,
   type RagSearchResult,
   type RagSaveEmbeddingsResult,
   type RagReindexResult,
@@ -73,9 +92,13 @@ export {
   type QvacConfig,
   type ModelInfo,
   type GetModelInfoParams,
+  type GetLoadedModelInfoParams,
+  type LoadedModelInfo,
   type LoadedInstance,
   type CacheFileInfo,
   toolSchema,
+  TOOLS_MODE,
+  type ToolsMode,
   type McpClient,
   type McpClientInput,
   type OCRClientParams,
@@ -84,6 +107,9 @@ export {
   type DiffusionClientParams,
   type DiffusionStreamResponse,
   type DiffusionStats,
+  type UpscaleClientParams,
+  type UpscaleStreamResponse,
+  type UpscaleStats,
   definePlugin,
   defineHandler,
   defineDuplexHandler,
@@ -122,6 +148,14 @@ export { MODEL_TYPES, ModelType } from "./schemas";
 export * from "./models/registry";
 
 export { SUPPORTED_AUDIO_FORMATS } from "./constants/audio";
+
+// Error classes that clients need for `instanceof` checks on rejected
+// promises. `InferenceCancelledError` rides the standard `QvacError`
+// envelope, but consumers reach for it through `instanceof` on
+// `await run.final` / `run.text` / `run.toolCalls` / `run.stats`
+// rejections.
+export { InferenceCancelledError } from "./utils/errors-server";
+export type { InferenceCancelledPartial } from "./utils/errors-server";
 
 // Logging exports
 export { getLogger, SDK_LOG_ID } from "./logging";

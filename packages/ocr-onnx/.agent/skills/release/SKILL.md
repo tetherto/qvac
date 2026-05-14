@@ -9,14 +9,14 @@ disable-model-invocation: true
 
 Release a package to NPM. Ensures version bump, changelog, release branch, CI pipeline, and npm publish.
 
-The package is identified by the `<package-name>` argument, which is the directory name under `packages/` (e.g., `ocr-onnx`, `qvac-sdk`, `qvac-lib-infer-onnx-tts`). The skill reads `packages/<package-name>/package.json` to determine the package type and npm scope.
+The package is identified by the `<package-name>` argument, which is the directory name under `packages/` (e.g., `ocr-onnx`, `qvac-sdk`, `tts-onnx`). The skill reads `packages/<package-name>/package.json` to determine the package type and npm scope.
 
 ## Usage
 
 `/release <package-name> [base-branch]`
 
 Where:
-- `<package-name>` is the directory name under `packages/` (e.g., `ocr-onnx`, `qvac-lib-infer-onnx-tts`)
+- `<package-name>` is the directory name under `packages/` (e.g., `ocr-onnx`, `tts-onnx`)
 - `[base-branch]` is optional — the branch to create the release from. Defaults to `main`. Use this for patches, e.g., `/release ocr-onnx release-ocr-onnx-0.6.0`
 
 ## Workflow

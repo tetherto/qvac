@@ -1,0 +1,95 @@
+---
+title: "QVAC by Tether: the Infinite Stable Intelligence Platform"
+description: A local AI SDK for building cross-platform, P2P applications and systems.
+ogImage: /og-home.png
+---
+
+import { MessagesSquare, Hash, Languages, Mic, Speech, Volume2, ScanText, Image as ImageIcon, GalleryHorizontal, FlaskConical, ScanSearch, Map, Rocket, Server, MonitorPlay } from 'lucide-react'
+
+## Why QVAC?
+
+QVAC is Tether's answer to centralized AI by ensuring AI is not tied to massive data centers in the hands of a few _but is free to run on everyone's devices, without a central point of failure or arbitrary censorship_.
+
+## Features
+
+<FeaturesInfographic />
+
+## AI capabilities
+
+{/* <Task name>: <what computation is performed> for <what the developer achieves> via <engine> */}
+{/* <task>: <tech process> for <use case>, via <engine> */}
+
+<Cards className="grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+  <Card href="/ai-capabilities/text-generation" title={<span className="inline-flex items-center gap-2"><MessagesSquare className="size-4 text-[var(--color-fd-primary)]" />Text generation</span>}>
+    LLM inference for text generation and chat via [Fabric LLM](https://github.com/tetherto/qvac-fabric-llm.cpp).
+  </Card>
+  <Card href="/ai-capabilities/text-embeddings" title={<span className="inline-flex items-center gap-2"><Hash className="size-4 text-[var(--color-fd-primary)]" />Text embeddings</span>}>
+    Vector embedding generation for semantic search, clustering, and retrieval, via Fabric LLM.
+  </Card>
+  <Card href="/ai-capabilities/rag" title={<span className="inline-flex items-center gap-2"><ScanSearch className="size-4 text-[var(--color-fd-primary)]" />RAG</span>}>
+    Out-of-the-box retrieval-augmented generation workflow.
+  </Card>
+  <Card href="/ai-capabilities/fine-tuning" title={<span className="inline-flex items-center gap-2"><FlaskConical className="size-4 text-[var(--color-fd-primary)]" />Fine-tuning</span>}>
+    Adapting LLMs to domain-specific tasks via LoRA.
+  </Card>
+  <Card href="/ai-capabilities/multimodal" title={<span className="inline-flex items-center gap-2"><GalleryHorizontal className="size-4 text-[var(--color-fd-primary)]" />Multimodal</span>}>
+    LLM inference over text, images, and other media within a single conversation context.
+  </Card>
+  <Card href="/ai-capabilities/image-generation" title={<span className="inline-flex items-center gap-2"><ImageIcon className="size-4 text-[var(--color-fd-primary)]" />Image generation</span>}>
+    Text-to-image and image-to-image generation via a [customized Diffusion backend](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp).
+  </Card>
+  <Card href="/ai-capabilities/transcription" title={<span className="inline-flex items-center gap-2"><Speech className="size-4 text-[var(--color-fd-primary)]" />Transcription</span>}>
+    Automatic speech recognition (ASR) via a [customized Whisper backend](https://github.com/tetherto/qvac-ext-lib-whisper.cpp) or [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2).
+  </Card>
+  <Card href="/ai-capabilities/text-to-speech" title={<span className="inline-flex items-center gap-2"><Volume2 className="size-4 text-[var(--color-fd-primary)]" />Text-to-Speech</span>}>
+    Speech synthesis (TTS) via [ONNX Runtime](https://onnxruntime.ai).
+  </Card>
+  <Card href="/ai-capabilities/voice-assistant" title={<span className="inline-flex items-center gap-2"><Mic className="size-4 text-[var(--color-fd-primary)]" />Voice assistant</span>}>
+    Real-time voice pipeline: transcription, text generation, and speech synthesis in one loop.
+  </Card>
+  <Card href="/ai-capabilities/translation" title={<span className="inline-flex items-center gap-2"><Languages className="size-4 text-[var(--color-fd-primary)]" />Translation</span>}>
+    Text-to-text neural machine translation (NMT), via Fabric LLM and [Bergamot](https://browser.mt).
+  </Card>
+  <Card href="/ai-capabilities/ocr" title={<span className="inline-flex items-center gap-2"><ScanText className="size-4 text-[var(--color-fd-primary)]" />OCR</span>}>
+    Optical character recognition for extracting text from images via ONNX Runtime.
+  </Card>
+</Cards>
+
+## System overview
+
+<object
+  type="image/svg+xml"
+  data="/diagrams/system-overview.svg"
+  width={721}
+  height={575}
+  className="mx-auto my-8 block max-w-full h-auto"
+  aria-label="System overview diagram"
+>
+  System overview diagram
+</object>
+
+_The SDK is the main entry point for using QVAC_. It is type-safe and exposes all QVAC capabilities through a unified interface. It runs on Node.js, [Bare runtime](https://bare.pears.com), and [Expo](https://expo.dev).
+
+Additionally, QVAC provides a CLI with development tools, as well as an HTTP server that wraps QVAC and exposes an [**OpenAI-compatible API**](https://platform.openai.com/docs/api-reference). *By implementing the OpenAI API format, QVAC can integrate with the broader AI ecosystem.*
+
+Finally, QVAC also encompasses desktop and mobile [**flagship applications**](https://qvac.tether.io#products) to empower users and showcase QVAC capabilities, as well as [**research initiatives**](https://huggingface.co/qvac) to advance the state of the art in local AI.
+
+## Next steps
+
+Choose how you want to start with QVAC:
+
+<Cards>
+  <Card href="/introduction" icon={<Map className="text-[var(--color-fd-primary)]" />} title="Get started with the SDK">
+    Learn the essentials for using the SDK: system requirements, compatibility matrix, setup basics, and core usage flows.
+  </Card>
+  <Card href="/quickstart" icon={<Rocket className="text-[var(--color-fd-primary)]" />} title="Quickstart">
+    Run your first example using the JS/TS SDK. At the end, you'll find instructions to run any example in this documentation.
+  </Card>
+  <Card href="https://qvac.tether.io/products/workbench/" icon={<MonitorPlay className="text-[var(--color-fd-primary)]" />} title="See QVAC in practice">
+    Try QVAC Workbench, our flagship desktop and mobile app built with QVAC.
+  </Card>
+  <Card href="/cli/http-server" icon={<Server className="text-[var(--color-fd-primary)]" />} title="Integrate an OpenAI-compatible client">
+    Run the QVAC HTTP server and connect any existing OpenAI-compatible system to local AI.
+  </Card>
+</Cards>
+

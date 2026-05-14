@@ -1,10 +1,14 @@
 import { loadModel, downloadAsset, unloadModel, cancel } from "@qvac/sdk";
 import type { ModelConstant } from "@qvac/sdk";
 
+type ModelConfig = Record<string, unknown>;
+type ModelConfigResolver = () => Promise<ModelConfig>;
+
 interface ModelDefinition {
   constant: ModelConstant;
   type: string;
-  config?: Record<string, unknown>;
+  /** Static config or async resolver (cached per-dep) for runtime-only fields like RN asset URIs. */
+  config?: ModelConfig | ModelConfigResolver;
   skipPreDownload?: boolean;
   preLoadUnload?: true;
 }
@@ -15,25 +19,80 @@ interface TrackedModel {
   lastUsedAtTest: number;
 }
 
+export interface ResourceManagerOptions {
+  /**
+   * Milliseconds to sleep after a successful unloadModel() call inside
+   * `evict()`. Lets the OS catch up on lazy page reclamation before the
+   * next load starts allocating on top.
+   *
+   * Mobile (iOS) needs this — kernel doesn't release pages instantly when
+   * a Bare worklet's V8 isolate destroys its handles, and the next test's
+   * load can crash with EXC_CRASH/SIGABRT inside the GGML allocator if it
+   * arrives at the still-resident-residue moment.
+   *
+   * Desktop doesn't need it — `unloadModel` over the IPC socket completes
+   * with the worker process already having freed the memory, and the
+   * kernel reclaims fast.
+   *
+   * Default 0 (off).
+   */
+  unloadSettleMs?: number;
+}
+
 export class ResourceManager {
   private definitions = new Map<string, ModelDefinition>();
+  private resolvedConfigs = new Map<string, ModelConfig>();
   private models = new Map<string, TrackedModel>();
   private testCount = 0;
   private downloaded = false;
+  private readonly unloadSettleMs: number;
+
+  constructor(options: ResourceManagerOptions = {}) {
+    this.unloadSettleMs = options.unloadSettleMs ?? 0;
+  }
+
+  private async resolveConfig(dep: string, def: ModelDefinition): Promise<ModelConfig | undefined> {
+    if (typeof def.config !== "function") return def.config;
+    const cached = this.resolvedConfigs.get(dep);
+    if (cached) return cached;
+    const resolved = await def.config();
+    this.resolvedConfigs.set(dep, resolved);
+    return resolved;
+  }
 
   define(dep: string, definition: ModelDefinition) {
     this.definitions.set(dep, definition);
   }
 
-  async downloadAllOnce(log?: (msg: string) => void): Promise<void> {
+  /**
+   * Pre-download (and pre-load+unload for `preLoadUnload` entries) every
+   * registered model. `options.allowedDeps`, if given, narrows the work
+   * to that subset; omit it to keep the legacy "warm everything" path.
+   * Idempotent on `downloaded` — pass the full filter on the first call;
+   * later calls with a different filter are a no-op.
+   */
+  async downloadAllOnce(
+    log?: (msg: string) => void,
+    options: { allowedDeps?: ReadonlySet<string> } = {},
+  ): Promise<void> {
     if (this.downloaded) return;
     this.downloaded = true;
 
-    const entries = Array.from(this.definitions.entries()).filter(
-      ([, def]) => !def.skipPreDownload,
-    );
-    const preLoadUnload = Array.from(this.definitions.entries()).filter(([, def]) => def.preLoadUnload);
-    const skipped = this.definitions.size - entries.length;
+    const allowed = options.allowedDeps;
+    const isAllowed = (dep: string) => allowed === undefined || allowed.has(dep);
+
+    const allDefinitions = Array.from(this.definitions.entries());
+    const entries = allDefinitions.filter(([dep, def]) => !def.skipPreDownload && isAllowed(dep));
+    const preLoadUnload = allDefinitions.filter(([dep, def]) => def.preLoadUnload && isAllowed(dep));
+
+    if (allowed !== undefined) {
+      const filteredOut = allDefinitions.filter(([dep]) => !isAllowed(dep)).length;
+      log?.(
+        `🎯 Bootstrap dep-filter active: keeping ${allowed.size} dep(s); ${filteredOut} of ${allDefinitions.length} defined excluded`,
+      );
+    }
+
+    const skipped = allDefinitions.filter(([dep, def]) => def.skipPreDownload && isAllowed(dep)).length;
     if (skipped > 0) log?.(`⏭️  Skipping ${skipped} models marked skipPreDownload`);
 
     log?.(`📥 Downloading ${entries.length} models in parallel...`);
@@ -81,7 +140,7 @@ export class ResourceManager {
       const modelId = await loadModel({
         modelSrc: def.constant as never,
         modelType: def.type,
-        modelConfig: def.config,
+        modelConfig: await this.resolveConfig(dep, def),
       });
       log?.(`✅ pre-loaded ${dep}: ${def.constant.name} - unloading...`);
       await unloadModel({ modelId });
@@ -115,7 +174,7 @@ export class ResourceManager {
     const modelId = await loadModel({
       modelSrc: def.constant as never,
       modelType: def.type as "llm" | "whisper" | "embeddings",
-      modelConfig: def.config,
+      modelConfig: await this.resolveConfig(dep, def),
     });
 
     this.models.set(dep, {
@@ -183,10 +242,19 @@ export class ResourceManager {
       }
       try {
         await unloadModel({ modelId: entry.modelId });
+        // Optionally yield so the OS can reclaim pages before the next
+        // load starts allocating. See `unloadSettleMs` docs above. Only
+        // wait when the unload actually succeeded; on failure there's
+        // nothing to settle.
+        if (this.unloadSettleMs > 0) {
+          await new Promise<void>((resolve) =>
+            setTimeout(resolve, this.unloadSettleMs),
+          );
+        }
       } catch (error) {
         console.warn(`Error unloading model ${dep}: ${error}`);
       }
-      
+
       this.models.delete(dep);
     }
   }

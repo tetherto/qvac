@@ -4,7 +4,7 @@ alwaysApply: false
 ---
 # @qvac/transcription-whispercpp — Usage Example
 
-Package: `@qvac/transcription-whispercpp` (`packages/qvac-lib-infer-whispercpp`)
+Package: `@qvac/transcription-whispercpp` (`packages/transcription-whispercpp`)
 
 Based on the official quickstart at `examples/quickstart.js`.
 

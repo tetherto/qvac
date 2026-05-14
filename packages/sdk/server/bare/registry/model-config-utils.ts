@@ -107,9 +107,7 @@ export function getDefaultsFromPattern(
   if (!defaults) {
     const aliasKey = CANONICAL_TO_ALIAS[modelType];
     if (aliasKey && aliasKey in pattern.defaults) {
-      defaults = pattern.defaults[aliasKey as keyof typeof pattern.defaults] as
-        | Record<string, unknown>
-        | undefined;
+      defaults = pattern.defaults[aliasKey as keyof typeof pattern.defaults];
     }
   }
 

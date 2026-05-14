@@ -23,11 +23,13 @@ export {
   ragCloseWorkspace,
   ragDeleteWorkspace,
 } from "./rag";
-export { textToSpeech } from "./text-to-speech";
+export { textToSpeech, textToSpeechStream } from "./text-to-speech";
 export { getModelInfo } from "./get-model-info";
+export { getLoadedModelInfo } from "./get-loaded-model-info";
 export { ocr } from "./ocr";
 export { invokePlugin, invokePluginStream } from "./invoke-plugin";
 export { diffusion, type DiffusionProgressTick } from "./diffusion";
+export { upscale } from "./upscale";
 export {
   modelRegistryList,
   modelRegistrySearch,
@@ -36,3 +38,4 @@ export {
 } from "./registry";
 export { suspend } from "./suspend";
 export { resume } from "./resume";
+export { state } from "./state";

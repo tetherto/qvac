@@ -18,17 +18,24 @@ import {
   PluginHandlerTypeMismatchError,
 } from "@/utils/errors-server";
 import { registry } from "./handler-registry";
+import type { HandlerEntry } from "./handler-utils";
 import {
   executeHandler,
   executeDuplexHandler,
   handleInitConfig,
   isInitConfigMessage,
+  handleShutdown,
+  isShutdownMessage,
 } from "./handler-utils";
 import { createServerProfiler, type ServerProfiler } from "./profiling";
+import { assertLifecycleAllowed } from "@/server/bare/runtime-lifecycle";
+import { shouldUseStreamErrorTransport } from "./transport-selector";
 
 export async function handleRequest(req: RPC.IncomingRequest): Promise<void> {
   let profiler: ServerProfiler | undefined;
   let validationStart = 0;
+  let rawRequest: Record<string, unknown> | undefined;
+  let entry: HandlerEntry | undefined;
 
   try {
     const rawData = req.data?.toString();
@@ -52,7 +59,23 @@ export async function handleRequest(req: RPC.IncomingRequest): Promise<void> {
       return;
     }
 
+    // Handle internal pre-terminate cleanup signal (bypasses schema). Lets
+    // the client tear addons down while the JS env is still alive so static
+    // js_ref_t state doesn't survive into the next worklet's isolate.
+    if (isShutdownMessage(jsonData)) {
+      await handleShutdown(req);
+      return;
+    }
+
     const { data: cleanData, profilingMeta } = extractProfilingMeta(jsonData);
+
+    if (cleanData && typeof cleanData === "object") {
+      rawRequest = cleanData as Record<string, unknown>;
+      const rawType = rawRequest["type"];
+      if (typeof rawType === "string") {
+        entry = registry[rawType];
+      }
+    }
 
     profiler = createServerProfiler(profilingMeta);
     profiler.markRequestParsed(jsonParseMs);
@@ -64,7 +87,9 @@ export async function handleRequest(req: RPC.IncomingRequest): Promise<void> {
     profiler.markRequestValidated(nowMs() - validationStart);
     validationStart = 0;
 
-    const entry = registry[request.type];
+    assertLifecycleAllowed(request);
+
+    entry = registry[request.type];
     if (!entry) {
       throw new RPCUnknownRequestTypeError(request.type);
     }
@@ -74,7 +99,12 @@ export async function handleRequest(req: RPC.IncomingRequest): Promise<void> {
     if (profiler && validationStart > 0) {
       profiler.markRequestValidated(nowMs() - validationStart);
     }
-    sendErrorResponse(req, error, profiler);
+
+    if (shouldUseStreamErrorTransport(entry, rawRequest)) {
+      sendStreamErrorResponse(req.createResponseStream(), error, profiler);
+    } else {
+      sendErrorResponse(req, error, profiler);
+    }
   }
 }
 
@@ -84,7 +114,7 @@ function attachProfilingMetaToRequest(
 ): void {
   if (!profilingMeta) return;
 
-  Object.defineProperty(request as Record<string, unknown>, PROFILING_KEY, {
+  Object.defineProperty(request, PROFILING_KEY, {
     value: profilingMeta,
     enumerable: false,
     configurable: true,
@@ -142,6 +172,8 @@ async function handleDuplexRequest(req: RPC.IncomingRequest): Promise<void> {
     const request: Request = requestSchema.parse(processedData);
     attachProfilingMetaToRequest(request, profilingMeta);
     profiler.markRequestValidated(nowMs() - validationStart);
+
+    assertLifecycleAllowed(request);
 
     const entry = registry[request.type];
 

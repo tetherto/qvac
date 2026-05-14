@@ -14,6 +14,14 @@ export async function* diffusion(
 ): AsyncGenerator<DiffusionStreamResponse> {
   const model = getModel(request.modelId);
 
+  const init_image = request.init_image
+    ? Buffer.from(request.init_image, "base64")
+    : undefined;
+
+  const init_images = request.init_images
+    ? request.init_images.map((b64) => Buffer.from(b64, "base64"))
+    : undefined;
+
   const response = await model.run({
     prompt: request.prompt,
     negative_prompt: request.negative_prompt,
@@ -21,6 +29,7 @@ export async function* diffusion(
     height: request.height,
     steps: request.steps,
     cfg_scale: request.cfg_scale,
+    img_cfg_scale: request.img_cfg_scale ?? -1,
     guidance: request.guidance,
     sampling_method: request.sampling_method,
     scheduler: request.scheduler,
@@ -28,6 +37,13 @@ export async function* diffusion(
     batch_count: request.batch_count,
     vae_tiling: request.vae_tiling,
     cache_preset: request.cache_preset,
+    init_image,
+    init_images,
+    increase_ref_index: request.increase_ref_index,
+    auto_resize_ref_image: request.auto_resize_ref_image,
+    strength: request.strength,
+    lora: request.lora,
+    upscale: request.upscale === false ? undefined : request.upscale,
   });
 
   let outputIndex = 0;

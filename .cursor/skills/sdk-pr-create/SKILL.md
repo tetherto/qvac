@@ -18,14 +18,15 @@ Generate PR titles and descriptions for SDK pod packages, following the team's t
 
 ## Workflow
 
-1. Identify base (main) and current branch
-2. Collect commits/diff from `main...origin/<branch>`
+1. Identify base and current branch — note whether the base is `main` or a `release-<pkg>-<x.y.z>` branch
+2. Collect commits/diff from `<base>...origin/<branch>`
 3. Infer ticket, prefix, and tags from changes (see Inference Strategy)
 4. Only ask user for input when inference confidence is low
 5. Generate title: `TICKET prefix[tags]: subject`
 6. Fill template sections based on changes
 7. Validate tag requirements ([bc]/[api]/[mod])
 8. Output complete PR description
+9. If base is a release branch, chain into the dual-PR flow (see "Release Target Dual-PR Flow" below)
 
 ## Inference Strategy
 
@@ -113,6 +114,32 @@ gh pr view --repo UPSTREAM_ORG/REPO BRANCH --web
 6. If gh not available, output the copy-ready markdown format above
 7. As part of the output, provide a clickable hyperlink (not plain text) to the PR on GitHub.
 
+## Release Target Dual-PR Flow
+
+**Trigger:** the just-created PR's base is `release-<pkg>-<x.y.z>` for any SDK pod package.
+
+When triggered, automatically chain into the `sdk-backmerge` skill so a follow-up PR is also opened against `main` with the same version-bump + changelog metadata. This applies the gitflow.md "Keep main aligned" rule at PR-creation time so nobody has to remember a follow-up step after the release PR merges.
+
+### Steps (after Step 5 of gh CLI Integration above)
+
+1. Capture context for the backmerge:
+   - Just-created release PR number and URL
+   - Release branch name (`release-<pkg>-<x.y.z>`) and parsed `<pkg>` / `<x.y.z>`
+   - Source fork branch (the head of the release PR)
+   - Ticket number from the title
+2. Invoke the `sdk-backmerge` workflow inline with these inputs (read `.cursor/skills/sdk-backmerge/SKILL.md` and follow it).
+3. **Fail-stop policy** — if the backmerge cherry-pick produces a conflict outside `sdk-backmerge`'s auto-resolve list, STOP. Print:
+   - The release PR URL (success — PR #1 is open)
+   - The current `git status -sb` from the conflicted cherry-pick
+   - Resume instructions: `git add <files> && git cherry-pick --continue`, then run `/sdk-backmerge --resume`
+4. On success, print **both** PR URLs as clickable hyperlinks, ordered:
+   - Release PR (target: `release-<pkg>-<x.y.z>`)
+   - Backmerge PR (target: `main`)
+
+### Opt-out
+
+To skip the backmerge for a single run, the user can invoke `/sdk-pr-create --no-backmerge`. The skill still creates PR #1 normally and prints a reminder pointing to `/sdk-backmerge` for later.
+
 ## Quality Checklist
 
 Before outputting the PR description, verify:
@@ -125,9 +152,12 @@ Before outputting the PR description, verify:
 - [ ] `[api]` tag has usage example
 - [ ] `[mod]` tag has Added/Removed models list
 - [ ] Description is concise - bullet points, no fluff
+- [ ] If base is `release-<pkg>-<x.y.z>`, the dual-PR flow ran (or `--no-backmerge` was set), and both PR URLs are reported
 
 ## References
 
 - SDK pod packages: `.cursor/rules/sdk/sdk-pod-packages.mdc`
 - PR template: `.github/PULL_REQUEST_TEMPLATE/sdk-pod.md`
 - Format rules: `.cursor/rules/sdk/commit-and-pr-format.mdc`
+- Backmerge skill: `.cursor/skills/sdk-backmerge/SKILL.md`
+- GitFlow: `docs/gitflow.md`

@@ -2,7 +2,7 @@
  * Parakeet Sortformer diarization + TDT transcription example.
  *
  * Usage:
- *   bun examples/transcription/parakeet-sortformer.ts [sortformer-src] [path-to-audio]
+ *   bun examples/transcription/parakeet-sortformer.ts [sortformer-gguf] [path-to-audio]
  *
  * This example requires a test audio file (default: examples/audio/diarization-sample-16k.wav).
  * Sample audio files are available in the QVAC source repository, but not included in the published npm package.
@@ -13,11 +13,8 @@ import {
   loadModel,
   unloadModel,
   transcribe,
-  PARAKEET_TDT_ENCODER_FP32,
-  PARAKEET_TDT_DECODER_FP32,
-  PARAKEET_TDT_VOCAB,
-  PARAKEET_TDT_PREPROCESSOR_FP32,
-  PARAKEET_SORTFORMER_FP32,
+  PARAKEET_TDT_0_6B_V3_Q8_0,
+  PARAKEET_SORTFORMER_4SPK_V1_Q8_0,
 } from "@qvac/sdk";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
@@ -27,7 +24,7 @@ import { tmpdir } from "os";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const args = process.argv.slice(2);
-const sortformerSrc = args[0] ?? PARAKEET_SORTFORMER_FP32;
+const sortformerSrc = args[0] ?? PARAKEET_SORTFORMER_4SPK_V1_Q8_0;
 
 const defaultAudioPath = join(
   __dirname,
@@ -37,74 +34,76 @@ const defaultAudioPath = join(
 );
 const audioFilePath = args[1] ?? defaultAudioPath;
 
-// ── Step 1: Diarize with Sortformer ──
+try {
+  // ── Step 1: Diarize with Sortformer ──
 
-const sfModelId = await loadModel({
-  modelSrc: sortformerSrc,
-  modelType: "parakeet",
-  modelConfig: {
-    modelType: "sortformer",
-    parakeetSortformerSrc: sortformerSrc,
-  },
-});
+  const sfModelId = await loadModel({
+    modelSrc: sortformerSrc,
+    modelType: "parakeet",
+  });
 
-const diarization = await transcribe({
-  modelId: sfModelId,
-  audioChunk: audioFilePath,
-});
-await unloadModel({ modelId: sfModelId });
+  const diarization = await transcribe({
+    modelId: sfModelId,
+    audioChunk: audioFilePath,
+  });
+  await unloadModel({ modelId: sfModelId });
 
-const segments = parseDiarization(diarization);
+  const segments = parseDiarization(diarization);
 
-// ── Step 2: Transcribe each segment with TDT ──
+  // ── Step 2: Transcribe each segment with TDT ──
 
-const tdtModelId = await loadModel({
-  modelSrc: PARAKEET_TDT_ENCODER_FP32,
-  modelType: "parakeet",
-  modelConfig: {
-    parakeetEncoderSrc: PARAKEET_TDT_ENCODER_FP32,
-    parakeetDecoderSrc: PARAKEET_TDT_DECODER_FP32,
-    parakeetVocabSrc: PARAKEET_TDT_VOCAB,
-    parakeetPreprocessorSrc: PARAKEET_TDT_PREPROCESSOR_FP32,
-  },
-});
+  const tdtModelId = await loadModel({
+    modelSrc: PARAKEET_TDT_0_6B_V3_Q8_0,
+    modelType: "parakeet",
+  });
 
-const pcm = readPcm(audioFilePath);
-const sliceDir = join(tmpdir(), `qvac-diarize-${Date.now()}`);
-mkdirSync(sliceDir, { recursive: true });
+  const pcm = readPcm(audioFilePath);
+  const sliceDir = join(tmpdir(), `qvac-diarize-${Date.now()}`);
+  mkdirSync(sliceDir, { recursive: true });
 
-const results: { speaker: number; start: number; end: number; text: string }[] =
-  [];
+  const results: {
+    speaker: number;
+    start: number;
+    end: number;
+    text: string;
+  }[] = [];
 
-for (let i = 0; i < segments.length; i++) {
-  const seg = segments[i]!;
-  const slicePath = join(sliceDir, `seg-${i}.wav`);
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i]!;
+    const slicePath = join(sliceDir, `seg-${i}.wav`);
 
-  if (!writeWavSlice(pcm, seg.start, seg.end, slicePath)) {
-    results.push({ ...seg, text: "[No speech detected]" });
-    continue;
+    if (!writeWavSlice(pcm, seg.start, seg.end, slicePath)) {
+      results.push({ ...seg, text: "[No speech detected]" });
+      continue;
+    }
+
+    const text = await transcribe({
+      modelId: tdtModelId,
+      audioChunk: slicePath,
+    });
+    results.push({ ...seg, text: text.trim() || "[No speech detected]" });
   }
 
-  const text = await transcribe({ modelId: tdtModelId, audioChunk: slicePath });
-  results.push({ ...seg, text: text.trim() || "[No speech detected]" });
+  await unloadModel({ modelId: tdtModelId });
+
+  // ── Step 3: Merge consecutive same-speaker segments and print ──
+
+  const merged = mergeSpeakers(results);
+
+  console.log("\n=== DIARIZED TRANSCRIPTION ===");
+  console.log("=".repeat(60));
+  for (const entry of merged) {
+    console.log(
+      `Speaker ${entry.speaker} (${entry.start.toFixed(2)}s - ${entry.end.toFixed(2)}s):`,
+    );
+    console.log(`  ${entry.text}\n`);
+  }
+  console.log("=".repeat(60));
+  console.log("\nDone!");
+} catch (error) {
+  console.error("❌ Error:", error);
+  process.exit(1);
 }
-
-await unloadModel({ modelId: tdtModelId });
-
-// ── Step 3: Merge consecutive same-speaker segments and print ──
-
-const merged = mergeSpeakers(results);
-
-console.log("\n=== DIARIZED TRANSCRIPTION ===");
-console.log("=".repeat(60));
-for (const entry of merged) {
-  console.log(
-    `Speaker ${entry.speaker} (${entry.start.toFixed(2)}s - ${entry.end.toFixed(2)}s):`,
-  );
-  console.log(`  ${entry.text}\n`);
-}
-console.log("=".repeat(60));
-console.log("\nDone!");
 
 // ── Helpers ──
 
@@ -154,9 +153,9 @@ function writeWavSlice(
   return true;
 }
 
-function mergeSpeakers<T extends { speaker: number; start: number; end: number; text: string }>(
-  entries: T[],
-): T[] {
+function mergeSpeakers<
+  T extends { speaker: number; start: number; end: number; text: string },
+>(entries: T[]): T[] {
   const out: T[] = [];
   for (const e of entries) {
     const last = out[out.length - 1];

@@ -1,0 +1,46 @@
+# Build-only workflow. Publishing is handled by on-merge-tts-onnx.yml
+name: Prebuilds (TTS)
+
+on:
+  workflow_dispatch:
+    inputs:
+      workdir:
+        description: "Working directory inside the repo (monorepo package path)"
+        required: false
+        default: "packages/tts-onnx"
+        type: string
+
+  workflow_call:
+    inputs:
+      ref:
+        description: "ref"
+        type: string
+        required: false
+      repository:
+        type: string
+        required: false
+        default: "tetherto/qvac"
+      workdir:
+        description: "Working directory inside the repo (monorepo package path)"
+        type: string
+        required: false
+        default: "packages/tts-onnx"
+
+permissions:
+  contents: read
+
+jobs:
+  prebuild:
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/reusable-prebuilds.yml
+    with:
+      workdir: ${{ inputs.workdir }}
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+      artifact-name-prefix: onnx-tts-
+      # setup-python-on-windows: true
+      setup-rust-toolchain: true
+    secrets: inherit

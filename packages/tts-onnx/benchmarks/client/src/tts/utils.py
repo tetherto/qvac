@@ -1,0 +1,907 @@
+"""Utility functions for TTS benchmarks"""
+
+import json
+import logging
+import os
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Optional
+import platform as pyplatform
+import re
+import statistics
+import numpy as np
+
+from .config import Config
+from .client import TTSResults
+
+logger = logging.getLogger(__name__)
+
+
+def _get_results_root() -> Path:
+    """Get the results directory"""
+    project_root = Path(__file__).resolve().parents[3]
+    results_root = project_root / "results"
+    results_root.mkdir(parents=True, exist_ok=True)
+    return results_root
+
+
+def _get_model_name(cfg: Config) -> str:
+    """Get model name from config"""
+    model_path = getattr(cfg.model, 'modelDir', None)
+    return Path(model_path).stem if model_path else "chatterbox"
+
+
+def calculate_percentiles(values: List[float]) -> Dict[str, float]:
+    """Calculate percentile statistics"""
+    if not values:
+        return {"p50": 0, "p90": 0, "p95": 0, "p99": 0}
+    
+    sorted_vals = sorted(values)
+    return {
+        "p50": statistics.median(sorted_vals),
+        "p90": statistics.quantiles(sorted_vals, n=10)[8] if len(sorted_vals) >= 10 else sorted_vals[-1],
+        "p95": statistics.quantiles(sorted_vals, n=20)[18] if len(sorted_vals) >= 20 else sorted_vals[-1],
+        "p99": statistics.quantiles(sorted_vals, n=100)[98] if len(sorted_vals) >= 100 else sorted_vals[-1]
+    }
+
+
+def summarize_numeric_values(values: List[float]) -> Optional[Dict[str, float]]:
+    """Summarize numeric values with percentiles."""
+    nums = [float(v) for v in values if v is not None]
+    if not nums:
+        return None
+
+    percentiles = calculate_percentiles(nums)
+    return {
+        "mean": float(statistics.mean(nums)),
+        "min": float(min(nums)),
+        "max": float(max(nums)),
+        "stddev": float(statistics.pstdev(nums)) if len(nums) > 1 else 0.0,
+        "p50": float(percentiles["p50"]),
+        "p90": float(percentiles["p90"]),
+        "p95": float(percentiles["p95"]),
+        "p99": float(percentiles["p99"]),
+        "count": len(nums),
+    }
+
+
+def _sanitize_tag(value: str) -> str:
+    if not value:
+        return ""
+    return re.sub(r"[^a-z0-9]+", "-", str(value).lower()).strip("-")
+
+
+def _normalize_platform_name(raw_name: str) -> str:
+    value = str(raw_name or "").lower()
+    if value.startswith("win"):
+        return "win32"
+    if value == "darwin":
+        return "darwin"
+    if value == "linux":
+        return "linux"
+    return value or "unknown"
+
+
+def _normalize_arch(raw_arch: str) -> str:
+    value = str(raw_arch or "").lower()
+    return {
+        "x86_64": "x64",
+        "amd64": "x64",
+        "arm64": "arm64",
+        "aarch64": "arm64",
+    }.get(value, value or "unknown")
+
+
+def derive_benchmark_backend(platform_name: str, use_gpu: bool, backend_hint: str = "") -> str:
+    """Infer the backend family for the benchmark record."""
+    hint = str(backend_hint or "").lower()
+    if hint:
+        return hint
+    if not use_gpu:
+        return "cpu"
+    if platform_name == "darwin":
+        return "coreml"
+    if platform_name == "win32":
+        return "directml"
+    if platform_name == "linux":
+        return "cuda"
+    return "gpu"
+
+
+def _get_supertonic_benchmark_labels() -> Dict[str, str]:
+    return {
+        "label": os.environ.get("QVAC_SUPERTONIC_BENCHMARK_LABEL", ""),
+        "runner": os.environ.get("QVAC_SUPERTONIC_BENCHMARK_RUNNER", ""),
+        "device": os.environ.get("QVAC_SUPERTONIC_BENCHMARK_DEVICE", ""),
+        "backend": os.environ.get("QVAC_SUPERTONIC_BENCHMARK_BACKEND", ""),
+    }
+
+
+def _build_supertonic_quality_summary(round_trip_metrics: Optional[Dict]) -> Optional[Dict]:
+    if not round_trip_metrics or not round_trip_metrics.get("runs"):
+        return None
+
+    wer_summary = summarize_numeric_values([
+        run.get("avg_wer") for run in round_trip_metrics["runs"]
+        if run.get("avg_wer") is not None
+    ])
+    cer_summary = summarize_numeric_values([
+        run.get("avg_cer") for run in round_trip_metrics["runs"]
+        if run.get("avg_cer") is not None
+    ])
+
+    return {
+        "wer": wer_summary,
+        "cer": cer_summary,
+        "samplesTested": round_trip_metrics.get("total_tested", 0),
+    }
+
+
+def _build_supertonic_run_reports(
+    runs: List[TTSResults],
+    round_trip_metrics: Optional[Dict],
+) -> List[Dict]:
+    run_reports = []
+    quality_runs = (round_trip_metrics or {}).get("runs", [])
+
+    for run_idx, run in enumerate(runs, 1):
+        run_report = {
+            "iteration": run_idx,
+            "sampleCount": len(run.results),
+            "loadTimeMs": float(run.load_time_ms),
+            "totalGenerationMs": float(run.total_generation_ms),
+            "totalAudioDurationSec": float(run.total_audio_duration),
+            "summary": {
+                "rtf": summarize_numeric_values([result.rtf for result in run.results]),
+                "generationMs": summarize_numeric_values([result.generation_ms for result in run.results]),
+                "durationSec": summarize_numeric_values([result.duration_sec for result in run.results]),
+                "speedRealtime": summarize_numeric_values([
+                    (1 / result.rtf) for result in run.results if result.rtf > 0
+                ]),
+            },
+        }
+
+        if run_idx <= len(quality_runs):
+            quality_run = quality_runs[run_idx - 1]
+            run_report["quality"] = {
+                "avgWer": quality_run.get("avg_wer"),
+                "avgCer": quality_run.get("avg_cer"),
+                "minWer": quality_run.get("min_wer"),
+                "maxWer": quality_run.get("max_wer"),
+                "minCer": quality_run.get("min_cer"),
+                "maxCer": quality_run.get("max_cer"),
+                "perLanguage": quality_run.get("per_language", {}),
+                "perLanguageRtf": quality_run.get("per_language_rtf", {}),
+            }
+
+        run_reports.append(run_report)
+
+    return run_reports
+
+
+def build_supertonic_perf_report(
+    cfg: Config,
+    runs: List[TTSResults],
+    label: str,
+    round_trip_metrics: Optional[Dict] = None,
+    *,
+    result_language: Optional[str] = None,
+) -> Dict:
+    """Build a structured Supertonic benchmark report."""
+    if not runs:
+        raise ValueError("Supertonic benchmark report requires at least one run")
+
+    labels = _get_supertonic_benchmark_labels()
+    platform_name = _normalize_platform_name(pyplatform.system())
+    arch = _normalize_arch(pyplatform.machine())
+    platform_id = f"{platform_name}-{arch}"
+    backend = derive_benchmark_backend(platform_name, cfg.model.useGPU, labels["backend"])
+    language = result_language or cfg.model.language
+    model_dir = getattr(cfg.model, "modelDir", None)
+    all_results = [result for run in runs for result in run.results]
+
+    report = {
+        "schemaVersion": 1,
+        "benchmark": "supertonic-rtf",
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "platform": platform_id,
+        "platformName": platform_name,
+        "arch": arch,
+        "labels": {
+            "label": labels["label"],
+            "runner": labels["runner"],
+            "device": labels["device"],
+            "backend": backend,
+        },
+        "requested": {
+            "useGPU": bool(cfg.model.useGPU),
+            "backendHint": labels["backend"],
+            "deviceLabel": labels["device"],
+            "runnerLabel": labels["runner"],
+            "numRuns": cfg.comparison.num_runs,
+            "roundTripTest": cfg.comparison.round_trip_test,
+            "runPython": cfg.comparison.run_python,
+        },
+        "implementation": {
+            "key": label,
+            "name": runs[0].implementation,
+            "version": runs[0].version,
+        },
+        "model": {
+            "name": "supertonic",
+            "variant": Path(model_dir).name if model_dir else "supertonic",
+            "modelDir": model_dir,
+            "language": language,
+            "voiceName": cfg.model.voiceName or "F1",
+            "supertonicMultilingual": bool(getattr(cfg.model, "supertonicMultilingual", False)),
+        },
+        "dataset": {
+            "name": cfg.dataset.name,
+            "split": cfg.dataset.split,
+            "maxSamples": cfg.dataset.max_samples,
+            "language": language,
+        },
+        "config": {
+            "batchSize": cfg.server.batch_size,
+            "numRuns": cfg.comparison.num_runs,
+            "roundTripTest": cfg.comparison.round_trip_test,
+            "whisperModel": cfg.comparison.whisper_model,
+            "speed": getattr(cfg.model, "speed", None),
+            "numInferenceSteps": getattr(cfg.model, "numInferenceSteps", None),
+        },
+        "samples": {
+            "total": len(all_results),
+            "perRun": [len(run.results) for run in runs],
+        },
+        "summary": {
+            "rtf": summarize_numeric_values([result.rtf for result in all_results]),
+            "generationMs": summarize_numeric_values([result.generation_ms for result in all_results]),
+            "durationSec": summarize_numeric_values([result.duration_sec for result in all_results]),
+            "speedRealtime": summarize_numeric_values([
+                (1 / result.rtf) for result in all_results if result.rtf > 0
+            ]),
+            "loadTimeMs": summarize_numeric_values([run.load_time_ms for run in runs]),
+            "totalGenerationMs": summarize_numeric_values([run.total_generation_ms for run in runs]),
+            "totalAudioDurationSec": summarize_numeric_values([run.total_audio_duration for run in runs]),
+        },
+        "quality": _build_supertonic_quality_summary(round_trip_metrics),
+        "runs": _build_supertonic_run_reports(runs, round_trip_metrics),
+    }
+
+    return report
+
+
+def get_supertonic_report_filename(report: Dict) -> str:
+    """Get a stable filename for a structured Supertonic benchmark report."""
+    parts = [
+        "rtf-benchmark",
+        report.get("platform", "unknown"),
+        report.get("implementation", {}).get("key", "unknown"),
+        report.get("dataset", {}).get("language", "unknown"),
+        "gpu" if report.get("requested", {}).get("useGPU") else "cpu",
+    ]
+
+    backend = _sanitize_tag(report.get("labels", {}).get("backend", ""))
+    if backend and backend not in parts:
+        parts.append(backend)
+
+    label = _sanitize_tag(report.get("labels", {}).get("label", ""))
+    if label:
+        parts.append(label)
+
+    return "-".join(filter(None, parts)) + ".json"
+
+
+def save_supertonic_perf_report(
+    cfg: Config,
+    runs: List[TTSResults],
+    label: str,
+    round_trip_metrics: Optional[Dict] = None,
+    *,
+    result_language: Optional[str] = None,
+) -> Path:
+    """Write a structured Supertonic benchmark report to disk."""
+    results_root = _get_results_root()
+    report = build_supertonic_perf_report(
+        cfg,
+        runs,
+        label,
+        round_trip_metrics,
+        result_language=result_language,
+    )
+    report_path = results_root / get_supertonic_report_filename(report)
+    report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    logger.info(f"Saved structured benchmark report to {report_path}")
+    return report_path
+
+
+def save_single_result(
+    cfg: Config,
+    results: TTSResults,
+    label: str,
+    round_trip_metrics: Optional[Dict] = None,
+    *,
+    result_language: Optional[str] = None,
+):
+    """Save results for a single implementation
+
+    Args:
+        cfg: Configuration object
+        results: TTS benchmark results
+        label: Label for the implementation (e.g., "addon", "python-native")
+        round_trip_metrics: Optional round-trip quality metrics (WER/CER)
+        result_language: If set, filename is {model}_{lang}_{label}.md (no merging across languages)
+    """
+    results_root = _get_results_root()
+
+    model_name = _get_model_name(cfg)
+    if result_language:
+        md_path = results_root / f"{model_name}_{result_language}_{label}.md"
+    else:
+        md_path = results_root / f"{model_name}_{label}.md"
+    
+    rtf_values = [r.rtf for r in results.results]
+    percentiles = calculate_percentiles(rtf_values)
+    
+    lines = [
+        f"# TTS Benchmark Results: {label}",
+        "",
+        f"**Implementation:** {results.implementation}",
+        f"**Version:** {results.version}",
+        f"**Model:** {model_name}",
+        f"**Dataset:** {cfg.dataset.name}",
+        f"**Samples:** {len(results.results)}",
+    ]
+    if result_language:
+        lines.append(f"**Benchmark language:** {result_language}")
+    lines.extend(["", ""])
+    
+    # Add round-trip quality metrics if available
+    if round_trip_metrics and round_trip_metrics.get('runs'):
+        rt = round_trip_metrics['runs'][0]  # Use first run metrics
+        lines.extend([
+            "## Quality Metrics (Round-Trip Test)",
+            "",
+            f"- **Average WER:** {rt['avg_wer']:.2%}",
+            f"- **Average CER:** {rt['avg_cer']:.2%}",
+            f"- **Min WER:** {rt['min_wer']:.2%}",
+            f"- **Max WER:** {rt['max_wer']:.2%}",
+            f"- **Min CER:** {rt['min_cer']:.2%}",
+            f"- **Max CER:** {rt['max_cer']:.2%}",
+            f"- **Samples Tested:** {round_trip_metrics.get('total_tested', len(results.results))}",
+            "",
+        ])
+
+        # Per-language breakdown
+        per_language = rt.get("per_language", {})
+        per_language_rtf = rt.get("per_language_rtf", {})
+        if per_language:
+            lines.extend([
+                "### Quality Metrics by Language",
+                "",
+                "| Language | Avg WER | Min WER | Max WER | Avg CER | Min CER | Max CER | Avg RTF |",
+                "|----------|---------|---------|---------|---------|---------|---------|---------|",
+            ])
+            for lang in sorted(per_language.keys()):
+                lm = per_language[lang]
+                avg_rtf = per_language_rtf.get(lang, 0.0)
+                lines.append(
+                    f"| {lang.upper()} "
+                    f"| {lm['avg_wer']:.2%} | {lm['min_wer']:.2%} | {lm['max_wer']:.2%} "
+                    f"| {lm['avg_cer']:.2%} | {lm['min_cer']:.2%} | {lm['max_cer']:.2%} "
+                    f"| {avg_rtf:.4f} |"
+                )
+            lines.append("")
+    
+    lines.extend([
+        "## Performance Metrics",
+        "",
+        f"- **Model Load Time:** {results.load_time_ms:.2f} ms",
+        f"- **Total Generation Time:** {results.total_generation_ms:.2f} ms",
+        f"- **Total Audio Duration:** {results.total_audio_duration:.2f} s",
+        f"- **Average RTF:** {results.avg_rtf:.4f}",
+        "",
+        "## RTF Distribution",
+        "",
+        f"- **p50 (median):** {percentiles['p50']:.4f}",
+        f"- **p90:** {percentiles['p90']:.4f}",
+        f"- **p95:** {percentiles['p95']:.4f}",
+        f"- **p99:** {percentiles['p99']:.4f}",
+        "",
+        "## Interpretation",
+        "",
+        "**RTF (Real-Time Factor)** = generation_time / audio_duration",
+        "",
+        "- RTF < 1.0 means faster than real-time (good!)",
+        "- RTF > 1.0 means slower than real-time (bad)",
+        "- Lower RTF is better (more efficient)",
+        f"- This implementation runs at **{(1 / results.avg_rtf) if results.avg_rtf > 0 else 0:.2f}x real-time speed**",
+        ""
+    ])
+    
+    md_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    logger.info(f"Saved results to {md_path}")
+
+
+def round_trip_single_implementation(
+    original_texts: List[str],
+    runs: List[TTSResults],
+    whisper_transcriber,
+    implementation_name: str,
+    lang_per_result: Optional[List[str]] = None,
+) -> Optional[Dict]:
+    """
+    Perform round-trip quality test for a single implementation.
+
+    Args:
+        original_texts: Original input texts
+        runs: List of results from implementation (one per run)
+        whisper_transcriber: Loaded WhisperTranscriber instance
+        implementation_name: Name of implementation for logging
+        lang_per_result: Optional per-sample Whisper language override
+
+    Returns:
+        Dict with WER/CER metrics for each run or None if samples not available
+    """
+    from jiwer import wer, cer
+
+    if not runs or not runs[0].results:
+        return None
+
+    # Check if samples are available
+    if not runs[0].results[0].samples:
+        logger.info(f"Audio samples not available for {implementation_name} round-trip test")
+        return None
+
+    logger.info(f"Running round-trip quality test for {implementation_name} with {len(runs)} run(s)...")
+
+    # Process each run
+    run_metrics = []
+
+    for run_idx, results in enumerate(runs, 1):
+        logger.info(f"Processing {implementation_name} run {run_idx}/{len(runs)}...")
+
+        wers = []
+        cers = []
+        langs = []
+
+        for i, (original, result) in enumerate(zip(original_texts, results.results)):
+            if result.samples:
+                # Transcribe audio (use per-result language when provided)
+                samples = np.array(result.samples, dtype=np.int16)
+                lang = lang_per_result[i] if lang_per_result and i < len(lang_per_result) else None
+                transcription = whisper_transcriber.transcribe_samples(
+                    samples, result.sample_rate, language=lang
+                )
+                
+                # Normalize texts for comparison (lowercase, strip)
+                original_norm = original.lower().strip()
+                trans_norm = transcription.lower().strip()
+                
+                # Calculate WER and CER
+                try:
+                    wer_val = wer(original_norm, trans_norm)
+                    cer_val = cer(original_norm, trans_norm)
+                    
+                    wers.append(wer_val)
+                    cers.append(cer_val)
+                    langs.append(lang or "unknown")
+                    
+                    logger.debug(f"{implementation_name} Run {run_idx}, Sample {i+1}: WER={wer_val:.3f}, CER={cer_val:.3f}")
+                except Exception as e:
+                    logger.warning(f"Failed to calculate error rates for {implementation_name} run {run_idx}, sample {i+1}: {e}")
+        
+        if wers:
+            # Compute per-language WER/CER metrics
+            per_language = {}
+            if lang_per_result:
+                lang_buckets: Dict[str, Dict[str, List[float]]] = {}
+                for lang, w, c in zip(langs, wers, cers):
+                    bucket = lang_buckets.setdefault(lang, {"wers": [], "cers": []})
+                    bucket["wers"].append(w)
+                    bucket["cers"].append(c)
+                for lang, data in lang_buckets.items():
+                    per_language[lang] = {
+                        "avg_wer": np.mean(data["wers"]),
+                        "min_wer": np.min(data["wers"]),
+                        "max_wer": np.max(data["wers"]),
+                        "avg_cer": np.mean(data["cers"]),
+                        "min_cer": np.min(data["cers"]),
+                        "max_cer": np.max(data["cers"]),
+                    }
+
+            # Compute per-language RTF from all results in this run
+            per_language_rtf: Dict[str, float] = {}
+            if lang_per_result:
+                rtf_by_lang: Dict[str, List[float]] = {}
+                for i, result_item in enumerate(results.results):
+                    lang = lang_per_result[i] if i < len(lang_per_result) else "unknown"
+                    rtf_by_lang.setdefault(lang, []).append(result_item.rtf)
+                for lang, rtf_vals in rtf_by_lang.items():
+                    per_language_rtf[lang] = float(np.mean(rtf_vals))
+
+            run_metrics.append({
+                "avg_wer": np.mean(wers),
+                "std_wer": np.std(wers),
+                "min_wer": np.min(wers),
+                "max_wer": np.max(wers),
+                "avg_cer": np.mean(cers),
+                "std_cer": np.std(cers),
+                "min_cer": np.min(cers),
+                "max_cer": np.max(cers),
+                "per_language": per_language,
+                "per_language_rtf": per_language_rtf,
+            })
+    
+    if not run_metrics:
+        return None
+    
+    return {
+        "runs": run_metrics,
+        "total_tested": len(runs[0].results)
+    }
+
+
+def round_trip_quality_test(
+    original_texts: List[str],
+    addon_runs: List[TTSResults],
+    python_runs: List[TTSResults],
+    whisper_transcriber
+) -> Optional[Dict]:
+    """
+    Perform round-trip quality test: TTS -> Audio -> Whisper -> Text
+    Compare transcribed text to original using WER and CER
+    
+    Args:
+        original_texts: Original input texts
+        addon_runs: List of results from addon implementation (one per run)
+        python_runs: List of results from python native implementation (one per run)
+        whisper_transcriber: Loaded WhisperTranscriber instance
+        
+    Returns:
+        Dict with WER/CER metrics for each run or None if samples not available
+    """
+    addon_metrics = round_trip_single_implementation(original_texts, addon_runs, whisper_transcriber, "Addon")
+    python_metrics = round_trip_single_implementation(original_texts, python_runs, whisper_transcriber, "Python")
+    
+    if not addon_metrics or not python_metrics:
+        return None
+    
+    return {
+        "addon": addon_metrics,
+        "python": python_metrics,
+        "total_tested": min(addon_metrics.get("total_tested", 0), python_metrics.get("total_tested", 0))
+    }
+
+
+def save_comparison_report(cfg: Config, addon_runs: List[TTSResults], python_runs: List[TTSResults], round_trip_results: Optional[Dict] = None):
+    """Save comparison report between addon and python implementations"""
+    results_root = _get_results_root()
+    
+    model_name = _get_model_name(cfg)
+    md_path = results_root / f"{model_name}_comparison.md"
+    
+    # Use first run for base comparison
+    addon_results = addon_runs[0]
+    python_results = python_runs[0]
+    
+    # Calculate metrics
+    load_time_diff_pct = ((addon_results.load_time_ms - python_results.load_time_ms) / python_results.load_time_ms) * 100
+    rtf_diff_pct = ((addon_results.avg_rtf - python_results.avg_rtf) / python_results.avg_rtf) * 100
+    gen_time_diff_pct = ((addon_results.total_generation_ms - python_results.total_generation_ms) / python_results.total_generation_ms) * 100
+    speedup = python_results.total_generation_ms / addon_results.total_generation_ms if addon_results.total_generation_ms > 0 else 0
+    
+    addon_rtfs = [r.rtf for r in addon_results.results]
+    python_rtfs = [r.rtf for r in python_results.results]
+    addon_percentiles = calculate_percentiles(addon_rtfs)
+    python_percentiles = calculate_percentiles(python_rtfs)
+    
+    lines = [
+        f"# TTS Benchmark Comparison: Addon vs Python Native",
+        "",
+        f"**Model:** {model_name}",
+        f"**Dataset:** {cfg.dataset.name}",
+        f"**Samples:** {len(addon_results.results)}",
+        "",
+    ]
+    
+    # Add round-trip quality test section if available
+    if round_trip_results:
+        addon_runs_rt = round_trip_results['addon']['runs']
+        python_runs_rt = round_trip_results['python']['runs']
+        num_runs = len(addon_runs_rt)
+        
+        lines.extend([
+            "## Round-Trip Quality Test (TTS → Whisper → Text)",
+            "",
+            f"Tested {round_trip_results['total_tested']} samples using Whisper transcription across {num_runs} run(s):",
+            "",
+        ])
+        
+        if num_runs > 1:
+            # Add variance table for multiple runs
+            lines.extend([
+                "### Determinism Analysis (Multiple Runs)",
+                "",
+                "**TTS Addon WER by Run:**",
+                "",
+            ])
+            
+            # Create WER table header
+            wer_header = "| Metric |"
+            wer_sep = "|--------|"
+            for i in range(num_runs):
+                wer_header += f" Run {i+1} |"
+                wer_sep += "--------|"
+            lines.append(wer_header)
+            lines.append(wer_sep)
+            
+            # Average WER
+            avg_row = "| Avg WER |"
+            for run_data in addon_runs_rt:
+                avg_row += f" {run_data['avg_wer']:.2%} |"
+            lines.append(avg_row)
+            
+            # Std Dev WER
+            std_row = "| Std Dev |"
+            for run_data in addon_runs_rt:
+                std_row += f" {run_data['std_wer']:.2%} |"
+            lines.append(std_row)
+            
+            lines.extend([
+                "",
+                "**TTS Addon CER by Run:**",
+                "",
+            ])
+            
+            # Create CER table header
+            cer_header = "| Metric |"
+            cer_sep = "|--------|"
+            for i in range(num_runs):
+                cer_header += f" Run {i+1} |"
+                cer_sep += "--------|"
+            lines.append(cer_header)
+            lines.append(cer_sep)
+            
+            # Average CER
+            avg_cer_row = "| Avg CER |"
+            for run_data in addon_runs_rt:
+                avg_cer_row += f" {run_data['avg_cer']:.2%} |"
+            lines.append(avg_cer_row)
+            
+            # Std Dev CER
+            std_cer_row = "| Std Dev |"
+            for run_data in addon_runs_rt:
+                std_cer_row += f" {run_data['std_cer']:.2%} |"
+            lines.append(std_cer_row)
+            
+            lines.extend([
+                "",
+                "**Python Native WER by Run:**",
+                "",
+            ])
+            
+            # Create WER table header for Python
+            wer_header = "| Metric |"
+            wer_sep = "|--------|"
+            for i in range(num_runs):
+                wer_header += f" Run {i+1} |"
+                wer_sep += "--------|"
+            lines.append(wer_header)
+            lines.append(wer_sep)
+            
+            # Average WER
+            avg_row = "| Avg WER |"
+            for run_data in python_runs_rt:
+                avg_row += f" {run_data['avg_wer']:.2%} |"
+            lines.append(avg_row)
+            
+            # Std Dev WER
+            std_row = "| Std Dev |"
+            for run_data in python_runs_rt:
+                std_row += f" {run_data['std_wer']:.2%} |"
+            lines.append(std_row)
+            
+            lines.extend([
+                "",
+                "**Python Native CER by Run:**",
+                "",
+            ])
+            
+            # Create CER table header for Python
+            cer_header = "| Metric |"
+            cer_sep = "|--------|"
+            for i in range(num_runs):
+                cer_header += f" Run {i+1} |"
+                cer_sep += "--------|"
+            lines.append(cer_header)
+            lines.append(cer_sep)
+            
+            # Average CER
+            avg_cer_row = "| Avg CER |"
+            for run_data in python_runs_rt:
+                avg_cer_row += f" {run_data['avg_cer']:.2%} |"
+            lines.append(avg_cer_row)
+            
+            # Std Dev CER
+            std_cer_row = "| Std Dev |"
+            for run_data in python_runs_rt:
+                std_cer_row += f" {run_data['std_cer']:.2%} |"
+            lines.append(std_cer_row)
+            
+            lines.append("")
+            
+            # Calculate variance across runs
+            addon_wer_variance = np.var([run['avg_wer'] for run in addon_runs_rt])
+            python_wer_variance = np.var([run['avg_wer'] for run in python_runs_rt])
+            
+            if addon_wer_variance < 0.0001 and python_wer_variance < 0.0001:
+                lines.append("✅ **Excellent determinism** - WER is highly consistent across runs (variance < 0.01%)")
+            elif addon_wer_variance < 0.001 and python_wer_variance < 0.001:
+                lines.append("✅ **Good determinism** - WER shows minimal variance across runs (variance < 0.1%)")
+            else:
+                lines.append(f"⚠️ **Variance detected** - WER varies across runs (Addon variance: {addon_wer_variance:.4%}, Python variance: {python_wer_variance:.4%})")
+            
+            lines.append("")
+        
+        # Summary comparison using first run
+        addon_rt = addon_runs_rt[0]
+        python_rt = python_runs_rt[0]
+        
+        lines.extend([
+            "### Overall Quality Comparison (Run 1)",
+            "",
+            "**Word Error Rate (WER):**",
+            "",
+            "| Implementation | Average | Min | Max |",
+            "|----------------|---------|-----|-----|",
+            f"| TTS Addon | {addon_rt['avg_wer']:.2%} | {addon_rt['min_wer']:.2%} | {addon_rt['max_wer']:.2%} |",
+            f"| Python Native | {python_rt['avg_wer']:.2%} | {python_rt['min_wer']:.2%} | {python_rt['max_wer']:.2%} |",
+            "",
+            "**Character Error Rate (CER):**",
+            "",
+            "| Implementation | Average | Min | Max |",
+            "|----------------|---------|-----|-----|",
+            f"| TTS Addon | {addon_rt['avg_cer']:.2%} | {addon_rt['min_cer']:.2%} | {addon_rt['max_cer']:.2%} |",
+            f"| Python Native | {python_rt['avg_cer']:.2%} | {python_rt['min_cer']:.2%} | {python_rt['max_cer']:.2%} |",
+            "",
+        ])
+
+        # Per-language quality breakdown
+        addon_per_lang = addon_rt.get("per_language", {})
+        python_per_lang = python_rt.get("per_language", {})
+        addon_per_lang_rtf = addon_rt.get("per_language_rtf", {})
+        python_per_lang_rtf = python_rt.get("per_language_rtf", {})
+        all_langs = sorted(set(list(addon_per_lang.keys()) + list(python_per_lang.keys())))
+        if all_langs:
+            lines.extend([
+                "### Quality by Language (Run 1)",
+                "",
+                "**Word Error Rate (WER) by Language:**",
+                "",
+                "| Language | Addon Avg WER | Addon Min WER | Addon Max WER | Python Avg WER | Python Min WER | Python Max WER |",
+                "|----------|---------------|---------------|---------------|----------------|----------------|----------------|",
+            ])
+            for lang in all_langs:
+                a = addon_per_lang.get(lang, {})
+                p = python_per_lang.get(lang, {})
+                lines.append(
+                    f"| {lang.upper()} "
+                    f"| {a.get('avg_wer', 0):.2%} | {a.get('min_wer', 0):.2%} | {a.get('max_wer', 0):.2%} "
+                    f"| {p.get('avg_wer', 0):.2%} | {p.get('min_wer', 0):.2%} | {p.get('max_wer', 0):.2%} |"
+                )
+            lines.extend([
+                "",
+                "**Character Error Rate (CER) by Language:**",
+                "",
+                "| Language | Addon Avg CER | Addon Min CER | Addon Max CER | Python Avg CER | Python Min CER | Python Max CER |",
+                "|----------|---------------|---------------|---------------|----------------|----------------|----------------|",
+            ])
+            for lang in all_langs:
+                a = addon_per_lang.get(lang, {})
+                p = python_per_lang.get(lang, {})
+                lines.append(
+                    f"| {lang.upper()} "
+                    f"| {a.get('avg_cer', 0):.2%} | {a.get('min_cer', 0):.2%} | {a.get('max_cer', 0):.2%} "
+                    f"| {p.get('avg_cer', 0):.2%} | {p.get('min_cer', 0):.2%} | {p.get('max_cer', 0):.2%} |"
+                )
+            lines.extend([
+                "",
+                "**RTF by Language:**",
+                "",
+                "| Language | Addon Avg RTF | Python Avg RTF |",
+                "|----------|---------------|----------------|",
+            ])
+            for lang in all_langs:
+                a_rtf = addon_per_lang_rtf.get(lang, 0.0)
+                p_rtf = python_per_lang_rtf.get(lang, 0.0)
+                lines.append(f"| {lang.upper()} | {a_rtf:.4f} | {p_rtf:.4f} |")
+            lines.append("")
+        
+        # Add interpretation
+        addon_wer = addon_rt['avg_wer']
+        python_wer = python_rt['avg_wer']
+        
+        if addon_wer < 0.05 and python_wer < 0.05:
+            lines.append("✅ **Excellent audio quality** - both implementations produce highly intelligible speech (WER < 5%)")
+        elif addon_wer < 0.10 and python_wer < 0.10:
+            lines.append("✅ **Good audio quality** - both implementations produce clear speech (WER < 10%)")
+        elif addon_wer < 0.20 and python_wer < 0.20:
+            lines.append("⚠️ **Acceptable audio quality** - some transcription errors detected (WER < 20%)")
+        else:
+            lines.append("❌ **Audio quality issues** - high transcription error rates (WER > 20%)")
+        
+        # Compare implementations
+        wer_diff = abs(addon_wer - python_wer)
+        if wer_diff < 0.02:
+            lines.append("✅ **Implementations produce similar quality audio** (WER difference < 2%)")
+        elif wer_diff < 0.05:
+            lines.append("⚠️ **Minor quality differences detected** (WER difference < 5%)")
+        else:
+            better = "Addon" if addon_wer < python_wer else "Python"
+            lines.append(f"⚠️ **{better} produces noticeably better audio quality** (WER difference {wer_diff:.2%})")
+        
+        lines.append("")
+    
+    # Performance comparison table
+    load_indicator = '✅' if load_time_diff_pct < 0 else '⚠️'
+    rtf_indicator = '✅' if rtf_diff_pct < 0 else '⚠️'  # Lower RTF is better
+    gen_indicator = '✅' if gen_time_diff_pct < 0 else '⚠️'
+    speed_word = 'faster' if speedup > 1 else 'slower'
+    
+    addon_realtime_speed = (1 / addon_results.avg_rtf) if addon_results.avg_rtf > 0 else 0
+    python_realtime_speed = (1 / python_results.avg_rtf) if python_results.avg_rtf > 0 else 0
+    
+    lines.extend([
+        "## Performance Comparison",
+        "",
+        "| Metric | TTS Addon | Python Native | Difference |",
+        "|--------|-----------|---------------|------------|",
+        f"| Model Load Time | {addon_results.load_time_ms:.2f} ms | {python_results.load_time_ms:.2f} ms | {load_time_diff_pct:+.1f}% {load_indicator} |",
+        f"| Avg RTF | {addon_results.avg_rtf:.4f} | {python_results.avg_rtf:.4f} | {rtf_diff_pct:+.1f}% {rtf_indicator} |",
+        f"| Total Generation | {addon_results.total_generation_ms:.2f} ms | {python_results.total_generation_ms:.2f} ms | {gen_time_diff_pct:+.1f}% {gen_indicator} |",
+        f"| Real-time Speed | {addon_realtime_speed:.2f}x | {python_realtime_speed:.2f}x | Addon is {speedup:.2f}x {speed_word} |",
+        "",
+        "## RTF Distribution",
+        "",
+        "| Percentile | Addon | Python | Difference |",
+        "|------------|-------|--------|------------|",
+        f"| p50 (median) | {addon_percentiles['p50']:.4f} | {python_percentiles['p50']:.4f} | {((addon_percentiles['p50'] - python_percentiles['p50']) / python_percentiles['p50'] * 100):+.1f}% |",
+        f"| p90 | {addon_percentiles['p90']:.4f} | {python_percentiles['p90']:.4f} | {((addon_percentiles['p90'] - python_percentiles['p90']) / python_percentiles['p90'] * 100):+.1f}% |",
+        f"| p95 | {addon_percentiles['p95']:.4f} | {python_percentiles['p95']:.4f} | {((addon_percentiles['p95'] - python_percentiles['p95']) / python_percentiles['p95'] * 100):+.1f}% |",
+        f"| p99 | {addon_percentiles['p99']:.4f} | {python_percentiles['p99']:.4f} | {((addon_percentiles['p99'] - python_percentiles['p99']) / python_percentiles['p99'] * 100):+.1f}% |",
+        "",
+        "## Summary",
+        "",
+    ])
+    
+    # Add summary analysis
+    if speedup > 1:
+        lines.append(f"✅ **Addon is {speedup:.2f}x faster** than Python native implementation")
+    elif speedup < 1:
+        lines.append(f"⚠️ **Addon is {1/speedup:.2f}x slower** than Python native implementation")
+    else:
+        lines.append("➡️ **Addon and Python have similar performance**")
+    
+    lines.extend([
+        "",
+        "### Key Findings:",
+        "",
+        f"- Model loading: Addon is **{abs(load_time_diff_pct):.1f}% {'faster' if load_time_diff_pct < 0 else 'slower'}**",
+        f"- Average RTF: Addon is **{abs(rtf_diff_pct):.1f}% {'better' if rtf_diff_pct < 0 else 'worse'}**",
+        f"- Total generation: Addon is **{abs(gen_time_diff_pct):.1f}% {'faster' if gen_time_diff_pct < 0 else 'slower'}**",
+        "",
+        "## Interpretation",
+        "",
+        "**RTF (Real-Time Factor)** = generation_time / audio_duration",
+        "",
+        "- RTF < 1.0 means faster than real-time",
+        "- RTF > 1.0 means slower than real-time",
+        "- Lower RTF is better (more efficient)",
+        "- Negative percentage difference in RTF means addon is better",
+        ""
+    ])
+    
+    md_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    logger.info(f"Saved comparison report to {md_path}")
+

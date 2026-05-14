@@ -5,32 +5,21 @@ import {
   close,
 } from "@qvac/sdk";
 
-// Topic hex (required)
-const topicHex = process.argv[2];
-if (!topicHex) {
-  console.error(
-    "❌ Topic hex is required. Usage: node consumer.ts <topic-hex> <provider-public-key> [consumer-seed]",
-  );
-  process.exit(1);
-}
-
-// Provider public key (required)
-const providerPublicKey = process.argv[3];
+const providerPublicKey = process.argv[2];
 if (!providerPublicKey) {
   console.error(
-    "❌ Provider public key is required. Usage: node consumer.ts <topic-hex> <provider-public-key> [consumer-seed]",
+    "❌ Provider public key is required. Usage: node consumer.ts <provider-public-key> [consumer-seed]",
   );
   process.exit(1);
 }
 
 try {
   // Optional: Consumer seed for deterministic consumer identity (for firewall testing)
-  const consumerSeed = process.argv[4];
+  const consumerSeed = process.argv[3];
 
   process.env["QVAC_HYPERSWARM_SEED"] = consumerSeed;
 
   console.log(`🚀 Testing delegated inference`);
-  console.log(`📡 Topic: ${topicHex}`);
   console.log(`🔑 Provider: ${providerPublicKey}`);
   if (consumerSeed) {
     console.log(
@@ -44,9 +33,12 @@ try {
     modelSrc: LLAMA_3_2_1B_INST_Q4_0,
     modelType: "llm",
     delegate: {
-      topic: topicHex,
       providerPublicKey,
-      timeout: 5_000, // Optional: 5 second timeout for delegated requests
+      // Generous timeout for the first call on a cold DHT: bootstrapping
+      // hyperdht and looking up the provider's key can take 15–45s on the
+      // very first run. Subsequent connections in the same process are
+      // sub-second because the DHT is already warm.
+      timeout: 60_000,
       fallbackToLocal: true, // Optional: Fall back to local inference if delegation fails
       // forceNewConnection: true, // Optional: Force a new connection instead of reusing cached one
     },

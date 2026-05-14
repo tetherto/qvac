@@ -1,4 +1,4 @@
-[![QVAC logo](docs/logo.avif)](https://docs.qvac.tether.io)
+[![QVAC logo](docs/branding/logo.avif)](https://docs.qvac.tether.io)
 
 ---
 
@@ -132,25 +132,25 @@ Legend:
 | lib-decoder-audio | Audio decoder library leveraging FFmpeg for efficient audio decoding as preprocessing step for other addons | Addon |
 | lib-infer-llamacpp-embed | Native C++ addon for running text embedding models to generate high-quality contextual embeddings via `qvac-fabric-llm.cpp` | Addon |
 | lib-infer-llamacpp-llm | Native C++ addon for running Large Language Models (LLMs) via `qvac-fabric-llm.cpp` | Addon |
-| lib-infer-diffusion | Native C++ addon for text-to-image generation via `qvac-ext-stable-diffusion.cpp` | Addon |
+| diffusion-cpp | Native C++ addon for text-to-image generation via `qvac-ext-stable-diffusion.cpp` | Addon |
 | lib-infer-nmtcpp | Native C++ addon for translation using either `qvac-fabric-llm.cpp` or [Bergamot](https://browser.mt) | Addon |
 | lib-infer-onnx | Bare addon for ONNX Runtime session management | Addon |
 | lib-infer-onnx-tts | Text-to-Speech (TTS) library using Chatterbox and Supertonic neural TTS model via ONNX Runtime | Addon |
 | lib-infer-parakeet | High-performance speech-to-text inference addon using via NVIDIA/Parakeet | Addon |
-| lib-infer-whispercpp | Library for running Whisper transcription model for audio transcription via `qvac-ext-lib-whisper.cpp` | Addon |
-| lib-inference-addon-cpp | Header-only C++ library providing common abstractions and infrastructure for building high-performance inference addons | Addon |
-| lib-langdetect-text | Language detection library providing interface for detecting language of given text | Addon |
-| lib-langdetect-text-cld2 | Language detection using CLD2 with same API as @qvac/langdetect-text | Addon |
+| transcription-whispercpp | Library for running Whisper transcription model for audio transcription via `qvac-ext-lib-whisper.cpp` | Addon |
+| inference-addon-cpp | Header-only C++ library providing common abstractions and infrastructure for building high-performance inference addons | Addon |
+| langdetect-text | Language detection library providing interface for detecting language of given text | Addon |
+| langdetect-text-cld2 | Language detection using CLD2 with same API as @qvac/langdetect-text | Addon |
 | ocr-onnx | Optical Character Recognition (OCR) addon using ONNX Runtime | Addon |
 | rag | JavaScript library for Retrieval-Augmented Generation (RAG) with document ingestion, vector search, and LLM integration | Addon |
-| lib-dl-base | Base class for QVAC dataloader libraries providing common interface for loading data from various sources | Core |
-| lib-dl-filesystem | Data loading library for loading model weights and resources from local filesystem | Core |
-| lib-dl-hyperdrive | Data loading library for loading model weights and resources from Hyperdrive distributed file system | Core |
+| dl-base | Base class for QVAC dataloader libraries providing common interface for loading data from various sources | Core |
+| dl-filesystem | Data loading library for loading model weights and resources from local filesystem | Core |
+| dl-hyperdrive | Data loading library for loading model weights and resources from Hyperdrive distributed file system | Core |
 | error | Standardized error handling capabilities for all QVAC libraries | Core |
-| lib-infer-base | Base class for inference addon clients defining common lifecycle and generic methods for model interaction | Core |
+| infer-base | Base class for inference addon clients defining common lifecycle and generic methods for model interaction | Core |
 | logging | Logger wrapper that normalizes logging interface across QVAC libraries | Core |
 | cli | Command-line interface for the QVAC ecosystem with tooling for building, bundling, and managing QVAC-powered applications | Tool |
-| lib-diagnostics | Diagnostic report generation library for QVAC | Tool |
+| diagnostics | Diagnostic report generation library for QVAC | Tool |
 | lib-registry-server | Distributed model registry for downloading AI models for local inference and contributing new models | Tool |
 | lint-cpp | Configuration files for formatting and linting C++ source files with pre-commit hooks | Tool |
 
@@ -159,3 +159,55 @@ Legend:
 - For the standard development workflow used in this monorepo, see [`/docs/gitflow.md`](./docs/gitflow.md).
 - For development specifics of each QVAC component, refer to the documentation in the respective subdirectory under `/packages`.
 - For the QVAC architecture as a whole, see `/docs/architecture`.
+
+## Banners and badges
+
+Built something with QVAC? Add a badge or banner to your README, website, or app. It is a simple way to highlight your project, help others discover QVAC, and strengthen our community.
+
+By using these badges and banners, you help foster the QVAC ecosystem!
+
+Choose a banner or badge below and copy its Markdown snippet, or copy its image URL and use the hosted SVG asset directly.
+
+### Banners
+
+Large format badges (240x60) for prominent placement in your README header.
+
+**Dark with monochrome glow**</br>
+![Dark with monochrome glow](https://raw.githubusercontent.com/tetherto/qvac/refs/heads/main/docs/branding/qvac-banner-dark-glow.svg)
+
+**Dark with colorful flow**</br>
+![Dark with colorful flow](https://raw.githubusercontent.com/tetherto/qvac/refs/heads/main/docs/branding/qvac-banner-dark-flow.svg)
+
+**Dark with stars pattern**</br>
+![Dark with stars pattern](https://raw.githubusercontent.com/tetherto/qvac/refs/heads/main/docs/branding/qvac-banner-dark-stars.svg)
+
+**Light with colorful flow**</br>
+![Light with colorful flow](https://raw.githubusercontent.com/tetherto/qvac/refs/heads/main/docs/branding/qvac-banner-light-flow.svg)
+
+**Banner usage**
+```
+[![Built with QVAC](https://raw.githubusercontent.com/tetherto/qvac/refs/heads/main/docs/branding/qvac-banner-dark-glow.svg)](https://github.com/tetherto/qvac)
+```
+
+### Badges
+
+Compact badges for use alongside other shields/badges in your README.
+
+**Compact**
+
+| Variant | Dark bg | Light bg |
+|---------|---------|----------|
+| Green logo | ![Green on dark](https://raw.githubusercontent.com/tetherto/qvac/refs/heads/main/docs/branding/qvac-badge-green-dark.svg) | ![Green on light](https://raw.githubusercontent.com/tetherto/qvac/refs/heads/main/docs/branding/qvac-badge-green-light.svg) |
+| Monochrome | ![Mono on dark](https://raw.githubusercontent.com/tetherto/qvac/refs/heads/main/docs/branding/qvac-badge-mono-dark.svg) | ![Mono on light](https://raw.githubusercontent.com/tetherto/qvac/refs/heads/main/docs/branding/qvac-badge-mono-light.svg) |
+
+**Inline**
+
+| Variant | Dark bg | Light bg |
+|---------|---------|----------|
+| Green logo | ![Green on dark](https://raw.githubusercontent.com/tetherto/qvac/refs/heads/main/docs/branding/qvac-badge-inline-green-dark.svg) | ![Green on light](https://raw.githubusercontent.com/tetherto/qvac/refs/heads/main/docs/branding/qvac-badge-inline-green-light.svg) |
+| Monochrome | ![Mono on dark](https://raw.githubusercontent.com/tetherto/qvac/refs/heads/main/docs/branding/qvac-badge-inline-mono-dark.svg) | ![Mono on light](https://raw.githubusercontent.com/tetherto/qvac/refs/heads/main/docs/branding/qvac-badge-inline-mono-light.svg) |
+
+**Badge usage**
+```
+[![Built with QVAC](https://raw.githubusercontent.com/tetherto/qvac/refs/heads/main/docs/branding/qvac-badge-green-dark.svg)](https://github.com/tetherto/qvac)
+```

@@ -1,0 +1,214 @@
+name: On PR Trigger (ONNX)
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
+    branches:
+      - main
+      - release-*
+      - feature-*
+      - tmp-*
+    paths:
+      - "packages/onnx/**"
+      - ".github/workflows/*onnx*.yml"
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+  pull-requests: read
+  packages: read
+  id-token: write
+
+jobs:
+  label-gate:
+    name: Authorise (label-gate)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      authorised: ${{ steps.gate.outputs.authorised }}
+    steps:
+      - name: Checkout (label-gate action only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/label-gate
+          sparse-checkout-cone-mode: false
+      - name: Run label-gate
+        id: gate
+        uses: ./.github/actions/label-gate
+        with:
+          github-token: ${{ secrets.PAT_TOKEN }}
+  authorize:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      allowed: ${{ steps.auth.outputs.allowed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - name: Authorize
+        id: auth
+        uses: ./.github/actions/authorize-pr
+        with:
+          github-token: ${{ github.token }}
+
+  # Gate the workflow so label events (and other PR_target quirks) don't trigger unrelated packages.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      pkg: ${{ steps.filter.outputs.pkg }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+
+      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # 4.0.1
+        id: filter
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          filters: |
+            pkg:
+              - "packages/onnx/**"
+              - ".github/workflows/*onnx*.yml"
+
+  sanity-checks:
+    needs:
+      - authorize
+      - changes
+      - label-gate
+    if: |-
+      needs.label-gate.outputs.authorised == 'true' && ((needs.changes.outputs.pkg == 'true' && needs.authorize.outputs.allowed == 'true') || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    env:
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/onnx/vcpkg/cache,readwrite"
+      PKG_DIR: packages/onnx
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+          fetch-depth: 0
+
+      - name: Fetch PR head and target branch
+        id: fetch_pr
+        if: github.event_name == 'pull_request_target' || github.event_name == 'pull_request'
+        continue-on-error: true
+        run: |
+          git fetch origin ${{ github.event.pull_request.base.ref }}:refs/remotes/origin/${{ github.event.pull_request.base.ref }}
+          git fetch origin ${{ github.event.pull_request.head.sha }}:refs/pr/head
+
+      - name: Check PR Status with Target Branch
+        continue-on-error: true
+        id: target_branch_checks
+        if: github.event_name == 'pull_request_target' || github.event_name == 'pull_request'
+        run: |
+          TARGET_SHA=${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA=${{ github.event.pull_request.head.sha }}
+          if ! git merge-base --is-ancestor "$TARGET_SHA" "$PR_HEAD_SHA"; then
+            echo "::error title=PR is not up to date::This PR is not up to date with target branch"
+          fi
+
+      - name: Verify that yaml files are formatted
+        id: yamlfmt
+        uses: tetherto/qvac/.github/actions/yamlfmt@0bbdca93da303a0b1634ba14a89cec085621078d
+        continue-on-error: true
+
+      - name: Check for disallowed dependencies
+        id: check_dependencies
+        continue-on-error: true
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          deps=$(jq -r '([.dependencies, .devDependencies] | map(select(type=="object")) | add // {}) | to_entries[] | .value' package.json)
+          if echo "$deps" | grep -Eq '^(git\+https:\/\/github.com|[0-9]+\.[0-9]+\.[0-9]+-(dev|tmp)[^"]*)$'; then
+            echo "::error title=Disallowed dependency detected::Do not use git URLs or dev/tmp versions in dependencies"
+          fi
+
+      - name: Run JavaScript tests
+        id: run_js_tests
+        continue-on-error: true
+        uses: tetherto/qvac/.github/actions/run-lint-and-unit-tests@0bbdca93da303a0b1634ba14a89cec085621078d
+        with:
+          gpr-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
+          registry-type: gpr
+          workdir: ${{ env.PKG_DIR }}
+
+      - name: Check for errors
+        run: |
+          count=0
+          if [ "${{ steps.run_js_tests.outcome }}" = "failure" ]; then
+            echo "::error::Step - Lint or unit tests failed"
+            count=$((count + 1))
+          fi
+          if [ "${{ steps.yamlfmt.outcome }}" = "failure" ]; then
+            echo "::error::Step - Verify that yaml files are formatted failed"
+            count=$((count + 1))
+          fi
+          if [ "${{ steps.check_dependencies.outcome }}" = "failure" ]; then
+            echo "::error::Step - Check for disallowed dependencies failed"
+            count=$((count + 1))
+          fi
+          if [ "${{ steps.target_branch_checks.outcome }}" = "failure" ]; then
+            echo "::error::Step - Check PR Status with Target Branch failed"
+            count=$((count + 1))
+          fi
+          if [ "${{ steps.fetch_pr.outcome }}" = "failure" ]; then
+            echo "::error::Step - Fetch PR head and target branch failed"
+            count=$((count + 1))
+          fi
+          if [ $count -gt 0 ]; then
+            echo "::error::There were $count failed checks"
+            exit 1
+          fi
+
+  cpp-lint:
+    needs:
+      - authorize
+      - changes
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch')
+    uses: ./.github/workflows/cpp-lint.yaml
+    secrets: inherit
+    with:
+      sha: ${{ github.event.pull_request.base.sha || github.sha }}
+      pr_head_sha: ${{ github.event.pull_request.head.sha }}
+      workdir: packages/onnx
+
+  prebuild:
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    needs:
+      - authorize
+      - changes
+      - label-gate
+    if: |-
+      needs.label-gate.outputs.authorised == 'true' && ((needs.changes.outputs.pkg == 'true') && ( github.event_name == 'workflow_dispatch' || needs.authorize.outputs.allowed == 'true' ))
+    uses: ./.github/workflows/prebuilds-onnx.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      ref: ${{ github.event.pull_request.head.ref || github.ref }}
+
+  merge-guard:
+    needs: [authorize, changes, sanity-checks, prebuild]
+    if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+    uses: ./.github/workflows/public-pr.yml
+    with:
+      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
+      build-status: ${{ needs.prebuild.result == 'success' }}

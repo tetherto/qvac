@@ -1,4 +1,4 @@
-import { createExecutor } from "@tetherto/qvac-test-suite";
+import { createExecutor, type TestDefinition } from "@tetherto/qvac-test-suite";
 import {
   profiler,
   LLAMA_3_2_1B_INST_Q4_0,
@@ -26,13 +26,10 @@ import {
   TTS_SUPERTONIC2_OFFICIAL_UNICODE_INDEXER_SUPERTONE_FP32,
   TTS_SUPERTONIC2_OFFICIAL_TTS_CONFIG_SUPERTONE,
   TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE,
-  PARAKEET_TDT_ENCODER_INT8,
-  PARAKEET_TDT_DECODER_INT8,
-  PARAKEET_TDT_PREPROCESSOR_INT8,
-  PARAKEET_TDT_VOCAB,
-  PARAKEET_CTC_FP32,
-  PARAKEET_CTC_TOKENIZER,
-  PARAKEET_SORTFORMER_FP32,
+  PARAKEET_TDT_0_6B_V3_Q8_0,
+  PARAKEET_CTC_0_6B_Q8_0,
+  PARAKEET_SORTFORMER_4SPK_V1_Q8_0,
+  PARAKEET_EOU_120M_V1_Q8_0,
   SMOLVLM2_500M_MULTIMODAL_Q8_0,
   MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
   SALAMANDRATA_2B_INST_Q4,
@@ -40,33 +37,44 @@ import {
   FLUX_2_KLEIN_4B_Q4_0,
   FLUX_2_KLEIN_4B_VAE,
   QWEN3_4B_Q4_K_M,
+  SD_V2_1_1B_Q8_0,
+  REALESRGAN_X4PLUS_ANIME_6B
 } from "@qvac/sdk";
 import * as path from "node:path";
 import { ResourceManager } from "../shared/resource-manager.js";
+import { collectTestDeps } from "../shared/collect-test-deps.js";
 import { ModelLoadingExecutor } from "../shared/executors/model-loading-executor.js";
 import { CompletionExecutor } from "../shared/executors/completion-executor.js";
 import { ToolsExecutor } from "../shared/executors/tools-executor.js";
 import { TranslationExecutor } from "../shared/executors/translation-executor.js";
+import { TranslationBergamotCacheExecutor } from "../shared/executors/translation-bergamot-cache-executor.js";
 import { ShardedModelExecutor } from "../shared/executors/sharded-model-executor.js";
 import { HttpEmbeddingExecutor } from "../shared/executors/http-embedding-executor.js";
 import { KvCacheExecutor } from "../shared/executors/kv-cache-executor.js";
 import { EmbeddingExecutor } from "../shared/executors/embedding-executor.js";
 import { TranscriptionExecutor } from "./executors/transcription-executor.js";
+import { TranscribeStreamEventsExecutor } from "./executors/transcribe-stream-events-executor.js";
 import { RagExecutor } from "./executors/rag-executor.js";
 import { OcrExecutor } from "./executors/ocr-executor.js";
 import { ConfigReloadExecutor } from "./executors/config-reload-executor.js";
-import { LoggingExecutor } from "../shared/executors/logging-executor.js";
+import { DesktopLoggingExecutor } from "./executors/logging-executor.js";
 import { RegistryExecutor } from "../shared/executors/registry-executor.js";
 import { ModelInfoExecutor } from "../shared/executors/model-info-executor.js";
+import { WrongModelExecutor } from "../shared/executors/wrong-model-executor.js";
 import { ErrorExecutor } from "../shared/executors/error-executor.js";
 import { TtsExecutor } from "../shared/executors/tts-executor.js";
 import { ParakeetExecutor } from "./executors/parakeet-executor.js";
+import { ParakeetStreamExecutor } from "./executors/parakeet-stream-executor.js";
 import { VisionExecutor } from "./executors/vision-executor.js";
 import { DownloadExecutor } from "../shared/executors/download-executor.js";
 import { DelegatedInferenceExecutor } from "./executors/delegated-inference-executor.js";
-import { DiffusionExecutor } from "../shared/executors/diffusion-executor.js";
+import { DesktopDiffusionExecutor } from "./executors/diffusion-executor.js";
 import { FinetuneExecutor } from "./executors/finetune-executor.js";
 import { LifecycleExecutor } from "../shared/executors/lifecycle-executor.js";
+import { ConfigExecutor } from "../shared/executors/config-executor.js";
+import { NoLingeringBareExecutor } from "./executors/no-lingering-bare-executor.js";
+import { MultiGpuExecutor } from "../shared/executors/multi-gpu-executor.js";
+import { CancellationExecutor } from "../shared/executors/cancellation-executor.js";
 
 const resources = new ResourceManager();
 
@@ -116,6 +124,12 @@ resources.define("tools", {
   constant: QWEN3_1_7B_INST_Q4,
   type: "llm",
   config: { ctx_size: 4096, tools: true },
+});
+
+resources.define("tools-dynamic", {
+  constant: QWEN3_1_7B_INST_Q4,
+  type: "llm",
+  config: { ctx_size: 4096, tools: true, toolsMode: "dynamic" },
 });
 
 resources.define("ocr", {
@@ -212,7 +226,6 @@ const referenceAudioPath = path.resolve(process.cwd(), "assets/audio/transcripti
 resources.define("tts-chatterbox", {
   constant: TTS_TOKENIZER_EN_CHATTERBOX,
   type: "tts",
-  skipPreDownload: true,
   preLoadUnload: true,
   config: {
     ttsEngine: "chatterbox",
@@ -240,7 +253,6 @@ const ttsSupertonicBaseConfig = {
 resources.define("tts-supertonic", {
   constant: TTS_SUPERTONIC2_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32,
   type: "onnx-tts",
-  skipPreDownload: true,
   preLoadUnload: true,
   config: {
     ...ttsSupertonicBaseConfig,
@@ -251,7 +263,6 @@ resources.define("tts-supertonic", {
 resources.define("tts-supertonic-multilingual", {
   constant: TTS_SUPERTONIC2_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32,
   type: "onnx-tts",
-  skipPreDownload: true,
   preLoadUnload: true,
   config: {
     ...ttsSupertonicBaseConfig,
@@ -260,49 +271,43 @@ resources.define("tts-supertonic-multilingual", {
   },
 });
 
-// Parakeet TDT 0.6B (INT8) — multilingual speech-to-text (~700MB)
+// Parakeet TDT 0.6B v3 (Q8_0 GGUF) — multilingual speech-to-text (~750MB)
 resources.define("parakeet-tdt", {
-  constant: PARAKEET_TDT_ENCODER_INT8,
+  constant: PARAKEET_TDT_0_6B_V3_Q8_0,
   type: "parakeet",
-  skipPreDownload: true,
   preLoadUnload: true,
-  config: {
-    parakeetEncoderSrc: PARAKEET_TDT_ENCODER_INT8,
-    parakeetDecoderSrc: PARAKEET_TDT_DECODER_INT8,
-    parakeetVocabSrc: PARAKEET_TDT_VOCAB,
-    parakeetPreprocessorSrc: PARAKEET_TDT_PREPROCESSOR_INT8,
-  },
+  config: {},
 });
 
-// Parakeet CTC FP32 — streaming-capable speech-to-text
+// Parakeet CTC 0.6B (Q8_0 GGUF) — streaming-capable speech-to-text
 resources.define("parakeet-ctc", {
-  constant: PARAKEET_CTC_FP32,
+  constant: PARAKEET_CTC_0_6B_Q8_0,
   type: "parakeet",
-  skipPreDownload: true,
   preLoadUnload: true,
-  config: {
-    modelType: "ctc",
-    parakeetCtcModelSrc: PARAKEET_CTC_FP32,
-    parakeetTokenizerSrc: PARAKEET_CTC_TOKENIZER,
-  },
+  config: {},
 });
 
-// Parakeet Sortformer — speaker diarization
+// Parakeet Sortformer 4spk v1 (Q8_0 GGUF) — speaker diarization
 resources.define("parakeet-sortformer", {
-  constant: PARAKEET_SORTFORMER_FP32,
+  constant: PARAKEET_SORTFORMER_4SPK_V1_Q8_0,
   type: "parakeet",
-  skipPreDownload: true,
   preLoadUnload: true,
-  config: {
-    modelType: "sortformer",
-    parakeetSortformerSrc: PARAKEET_SORTFORMER_FP32,
-  },
+  config: {},
+});
+
+// Parakeet EOU 120M v1 (Q8_0 GGUF) — duplex streaming with end-of-utterance
+// detection (token-driven `<EOU>` boundary). Used by parakeet-stream-eou
+// e2e tests to validate the synthetic `endOfTurn` event path.
+resources.define("parakeet-eou", {
+  constant: PARAKEET_EOU_120M_V1_Q8_0,
+  type: "parakeet",
+  preLoadUnload: true,
+  config: {},
 });
 
 resources.define("vision", {
   constant: SMOLVLM2_500M_MULTIMODAL_Q8_0,
   type: "llm",
-  skipPreDownload: true,
   preLoadUnload: true,
   config: {
     ctx_size: 1024,
@@ -313,18 +318,61 @@ resources.define("vision", {
 resources.define("diffusion", {
   constant: FLUX_2_KLEIN_4B_Q4_0,
   type: "diffusion",
-  skipPreDownload: true,
   preLoadUnload: true,
   config: {
     device: "gpu",
     threads: 4,
+    prediction: "flux2_flow",
     llmModelSrc: QWEN3_4B_Q4_K_M,
     vaeModelSrc: FLUX_2_KLEIN_4B_VAE,
   },
 });
 
-export async function bootstrap() {
-  await resources.downloadAllOnce(console.log);
+// Isolated from "diffusion" so ESRGAN load failures don't affect the rest of the suite.
+resources.define("diffusion-esrgan", {
+  constant: SD_V2_1_1B_Q8_0,
+  type: "diffusion",
+  preLoadUnload: true,
+  config: {
+    device: "gpu",
+    threads: 4,
+    prediction: "v",
+    vae_on_cpu: true,
+    upscaler: {
+      type: "esrgan",
+      model_src: REALESRGAN_X4PLUS_ANIME_6B,
+      tile_size: 128,
+    },
+  },
+});
+
+resources.define("upscaler", {
+  constant: REALESRGAN_X4PLUS_ANIME_6B,
+  type: "diffusion",
+  preLoadUnload: true,
+  config: {
+    mode: "upscale",
+    upscaler: {
+      tile_size: 128,
+    },
+  },
+});
+
+export async function bootstrap(filteredTests?: TestDefinition[]) {
+  // Point the SDK at the committed e2e fixture unless the developer
+  // already provided their own qvac.config.json / QVAC_CONFIG_PATH.
+  // This exercises the registryDownloadMaxRetries + registryStreamTimeoutMs
+  // propagation end-to-end (see tests/config-tests.ts).
+  if (!process.env["QVAC_CONFIG_PATH"]) {
+    process.env["QVAC_CONFIG_PATH"] = path.resolve(
+      process.cwd(),
+      "fixtures/qvac.config.e2e.json",
+    );
+  }
+  // `filteredTests` (when present) is the producer's post-filter test list
+  // delivered via register-ack; absence keeps the legacy "warm everything" path.
+  const allowedDeps = filteredTests ? collectTestDeps(filteredTests) : undefined;
+  await resources.downloadAllOnce(console.log, { allowedDeps });
 };
 
 export const executor = createExecutor({
@@ -332,28 +380,37 @@ export const executor = createExecutor({
     new ModelLoadingExecutor(resources),
     new CompletionExecutor(resources),
     new TranscriptionExecutor(resources),
+    new TranscribeStreamEventsExecutor(resources),
     new EmbeddingExecutor(resources),
     new RagExecutor(resources),
     new ModelInfoExecutor(resources),
+    new WrongModelExecutor(resources),
     new ErrorExecutor(resources),
     new ToolsExecutor(resources),
 
+    // Must precede TranslationExecutor — patterns overlap, dispatch is first-match-wins.
+    new TranslationBergamotCacheExecutor(),
     new TranslationExecutor(resources),
     new ShardedModelExecutor(resources),
     new OcrExecutor(resources),
     new TtsExecutor(resources),
     new ConfigReloadExecutor(resources),
-    new LoggingExecutor(resources),
+    new DesktopLoggingExecutor(resources),
     new RegistryExecutor(resources),
     new HttpEmbeddingExecutor(resources),
     new KvCacheExecutor(resources),
+    new ParakeetStreamExecutor(resources),
     new ParakeetExecutor(resources),
     new VisionExecutor(resources),
     new DownloadExecutor(),
     new DelegatedInferenceExecutor(),
-    new DiffusionExecutor(resources),
+    new DesktopDiffusionExecutor(resources),
     new FinetuneExecutor(resources),
     new LifecycleExecutor(resources),
+    new ConfigExecutor(),
+    new NoLingeringBareExecutor(),
+    new MultiGpuExecutor(resources),
+    new CancellationExecutor(resources),
   ],
   profiling: {
     init: () => profiler.enable({ mode: "summary", includeServerBreakdown: true }),

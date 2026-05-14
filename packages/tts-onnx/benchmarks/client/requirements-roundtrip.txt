@@ -1,0 +1,2 @@
+faster-whisper>=1.0.0
+jiwer>=3.0.0

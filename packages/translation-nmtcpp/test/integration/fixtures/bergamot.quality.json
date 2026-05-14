@@ -1,0 +1,9 @@
+[
+  {
+    "source": "Hello, how are you?",
+    "src_lang": "en",
+    "dst_lang": "it",
+    "reference": "Ciao, come stai?",
+    "notes": "validated 2026-04-23 (informal register)"
+  }
+]
