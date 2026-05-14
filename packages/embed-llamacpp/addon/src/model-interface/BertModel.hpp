@@ -3,6 +3,8 @@
 #include <any>
 #include <atomic>
 #include <functional>
+#include <map>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <span>
@@ -92,6 +94,8 @@ private:
   std::optional<LlamaBackendsHandle> backendsHandle_;
   mutable std::atomic<bool> stopCancelled_{false};
   int64_t runtimeBackendDevice_ = 0;
+  bool ctxSizeConfigured_ = false;
+  std::atomic<int> fulfilledFiles_{0};
 
 public:
   // These using definitions are accessed by the Addon<BertModel> template.
@@ -112,7 +116,8 @@ public:
       const std::string& backendsDir = "");
 
   /// @brief Construct with already parsed parameters.
-  explicit BertModel(common_params& params);
+  explicit BertModel(
+      common_params& params, bool ctxSizeConfigured = false);
 
   /// @see BertModel::BertModel(common_params)
   void init(common_params& params);
@@ -133,7 +138,7 @@ public:
   /// @brief Processes text to embeddings using Bert encoder and syncs the
   /// result back to the host. Processes the entire prompt as a single sequence
   /// without splitting. Throws ContextOverflow error if prompt exceeds model
-  /// training context size.
+  /// effective runtime context size.
   /// @returns A host vector of embeddings with one embedding per prompt.
   /// @note Awaits for initialization to finish if its loading .gguf shards
   /// asynchronously.
@@ -147,7 +152,7 @@ public:
   /// @brief Process an array of sequences. Each sequence is processed as-is
   /// without splitting by delimiter. Sequences are processed in batches and one
   /// embedding is returned per sequence. Throws ContextOverflow error if any
-  /// sequence exceeds model training context size.
+  /// sequence exceeds the effective runtime context size.
   /// @param sequenceArray Array of sequence strings to process (no
   /// preprocessing/splitting)
   /// @returns Embeddings with one embedding per sequence

@@ -29,6 +29,13 @@ test('stats payload leaves unknown backendDevice values as-is', function (t) {
   t.is(result.data.backendDevice, 2)
 })
 
+test('stats payload with trained_context_size maps to JobEnded', function (t) {
+  const result = mapAddonEvent('Stats', { trained_context_size: 512, context_size: 512 }, null)
+  t.is(result.type, 'JobEnded')
+  t.is(result.data.trained_context_size, 512)
+  t.is(result.data.context_size, 512)
+})
+
 test('Error event name maps to Error type carrying rawError', function (t) {
   const err = new Error('boom')
   const result = mapAddonEvent('SomeError', null, err)

@@ -17,6 +17,7 @@ export interface GGMLConfig {
   device: 'gpu' | 'cpu'
   gpu_layers?: NumericLike
   batch_size?: NumericLike
+  ctx_size?: NumericLike
   pooling?: 'none' | 'mean' | 'cls' | 'last' | 'rank'
   attention?: 'causal' | 'non-causal'
   embd_normalize?: NumericLike
@@ -48,6 +49,7 @@ export interface RuntimeStats {
   total_time_ms: number
   tokens_per_second?: number
   batch_size: number
+  trained_context_size: number
   context_size: number
   backendDevice: 'cpu' | 'gpu'
 }
@@ -70,6 +72,12 @@ export default class GGMLBert {
 export { GGMLBert }
 
 export interface AddonLogging {
+  /**
+   * Registers a callback for native addon logs.
+   *
+   * The callback receives only messages allowed by the model's `config.verbosity`
+   * setting: `"0"` = ERROR, `"1"` = WARNING, `"2"` = INFO, `"3"` = DEBUG.
+   */
   setLogger(callback: (priority: number, message: string) => void): void
   releaseLogger(): void
 }

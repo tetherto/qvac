@@ -133,6 +133,38 @@ TEST_F(LoggingTest, DefaultVerbosityLevel) {
   EXPECT_EQ(g_verbosityLevel, Priority::ERROR);
 }
 
+#ifndef JS_LOGGER
+TEST_F(LoggingTest, LlamaLogCallbackEmitsErrorsAtDefaultVerbosity) {
+  testing::internal::CaptureStdout();
+
+  llamaLogCallback(GGML_LOG_LEVEL_ERROR, "Test error message", nullptr);
+
+  std::string output = testing::internal::GetCapturedStdout();
+  EXPECT_NE(output.find("ERROR"), std::string::npos);
+  EXPECT_NE(output.find("Test error message"), std::string::npos);
+}
+
+TEST_F(LoggingTest, LlamaLogCallbackSuppressesInfoAtDefaultVerbosity) {
+  testing::internal::CaptureStdout();
+
+  llamaLogCallback(GGML_LOG_LEVEL_INFO, "Test info message", nullptr);
+
+  std::string output = testing::internal::GetCapturedStdout();
+  EXPECT_EQ(output, "");
+}
+
+TEST_F(LoggingTest, LlamaLogCallbackEmitsInfoWhenVerbosityAllowsInfo) {
+  g_verbosityLevel = Priority::INFO;
+  testing::internal::CaptureStdout();
+
+  llamaLogCallback(GGML_LOG_LEVEL_INFO, "Test info message", nullptr);
+
+  std::string output = testing::internal::GetCapturedStdout();
+  EXPECT_NE(output.find("INFO"), std::string::npos);
+  EXPECT_NE(output.find("Test info message"), std::string::npos);
+}
+#endif
+
 TEST_F(LoggingTest, LlamaLogCallbackError) {
   EXPECT_NO_THROW({
     llamaLogCallback(GGML_LOG_LEVEL_ERROR, "Test error message", nullptr);
