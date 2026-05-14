@@ -17,7 +17,6 @@ on:
     types: [labeled, opened, synchronize]
     paths:
       - "packages/sdk/**"
-  workflow_dispatch:
 
 permissions:
   actions: read
@@ -78,7 +77,7 @@ jobs:
   run-tests:
     needs: resolve-config
     if: needs.resolve-config.outputs.should-run == 'true'
-    uses: tetherto/qvac/.github/workflows/test-sdk.yml@tmp-self-hosted-runners
+    uses: ./.github/workflows/test-sdk.yml
     with:
       targets: all
       suite: ${{ needs.resolve-config.outputs.suite }}
