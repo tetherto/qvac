@@ -3,7 +3,7 @@ import test from "brittle";
 import { decoratePromise } from "@/utils/decorate-promise";
 
 // -----------------------------------------------------------------------------
-// decoratePromise (M3c Deliverable 4) unit tests.
+// decoratePromise unit tests.
 //
 // Locks in the contract the long-running client-API helpers depend on:
 //   - awaiting a decorated promise still unwraps to T (backward-compat

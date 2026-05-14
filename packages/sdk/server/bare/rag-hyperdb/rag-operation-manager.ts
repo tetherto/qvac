@@ -15,9 +15,11 @@ const DEFAULT_WORKSPACE = "default";
  * The historical workspace-level pre-emption rule — "starting a new
  * `ingest` / `reindex` / `saveEmbeddings` on a workspace cancels any prior
  * op on the same workspace" — is preserved by the dispatcher in
- * `server/rpc/handlers/rag.ts` per Decision B.2: the dispatcher cancels
- * the workspace's prior `requestId` (if any) and then begins a new
- * registry context.
+ * `server/rpc/handlers/rag.ts`: the dispatcher cancels the workspace's
+ * prior `requestId` (if any) and then begins a new registry context.
+ * Workspace-level admission lives in the dispatcher rather than as a
+ * registry policy primitive — it's a dispatch concern, not part of the
+ * registry's per-`kind` admission rules.
  *
  * This module owns the small workspace → requestId map that makes that
  * pre-emption decision routable from the dispatcher. The map is module-

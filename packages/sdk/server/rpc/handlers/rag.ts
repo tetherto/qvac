@@ -90,11 +90,12 @@ function omitOnProgress<T extends Record<string, unknown>>(
 /**
  * Begin a registry-tracked RAG context with workspace-level pre-emption.
  *
- * Per Decision B.2 of the M3c brief, workspace-level admission lives in
- * the dispatcher (not the registry policy primitive). The sequence is
- * **cancel-prior → begin-new**: if another RAG operation is already
- * running on the same workspace, cancel it first, then begin the new
- * context. Reversing the order would cancel the just-installed context.
+ * Workspace-level admission lives in the dispatcher rather than as a
+ * registry policy primitive (it's a dispatch concern, not a registry
+ * `kind` admission rule). The sequence is **cancel-prior → begin-new**:
+ * if another RAG operation is already running on the same workspace,
+ * cancel it first, then begin the new context. Reversing the order
+ * would cancel the just-installed context.
  *
  * The workspace → requestId map is updated after `begin(...)` succeeds
  * and cleared on scope unwind via `scope.defer(...)`, with a

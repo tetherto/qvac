@@ -18,9 +18,9 @@ export async function cancelHandler(
       case "inference":
         // Awaited so the RPC response resolves after the addon has
         // acknowledged the cancel for non-registry-migrated handlers
-        // (decoder / OCR / TTS until M3d). The registry-routed path
-        // inside `cancel()` is already synchronous w.r.t. the abort, so
-        // the await is a no-op for completion-stream's signal-driven
+        // (decoder / OCR / TTS). The registry-routed path inside
+        // `cancel()` is already synchronous w.r.t. the abort, so the
+        // await is a no-op for completion-stream's signal-driven
         // cancel.
         await cancel({ modelId: request.modelId }, { kind: "completion" });
         break;
@@ -44,29 +44,27 @@ export async function cancelHandler(
         break;
       }
       case "downloadAsset":
-        // Deprecated cancel arm. M3c migrated `downloadAsset` onto the
-        // request registry; the primary cancel path is now
-        // `cancel({ operation: "request", requestId })`. This case stays
-        // for wire-compat with older clients; `cancelTransfer(...)` in
-        // download-manager.ts routes each subscriber through
+        // Deprecated cancel arm. `downloadAsset` is registry-migrated
+        // and the primary cancel path is now
+        // `cancel({ operation: "request", requestId })`. This case
+        // stays for wire-compat with older clients; `cancelTransfer(...)`
+        // in download-manager.ts routes each subscriber through
         // `registry.cancel({ requestId })` so the behaviour is
-        // equivalent to a broad per-`downloadKey` cancel. M3d removes
-        // this arm.
+        // equivalent to a broad per-`downloadKey` cancel.
         logger.warn(
-          "[cancel] `cancel({ operation: \"downloadAsset\", downloadKey })` is deprecated — use `cancel({ requestId })` against the value exposed on the `loadModel(...)` / `downloadAsset(...)` promise instead. This compat path is removed in the next milestone.",
+          "[cancel] `cancel({ operation: \"downloadAsset\", downloadKey })` is deprecated — use `cancel({ requestId })` against the value exposed on the `loadModel(...)` / `downloadAsset(...)` promise instead. This compat path is scheduled for removal in a future release.",
         );
         cancelTransfer(request.downloadKey, request.clearCache);
         break;
       case "rag": {
-        // Deprecated cancel arm. M3c migrated RAG onto the request
-        // registry with workspace-level admission moved to the
-        // dispatcher (`rag.ts`). Primary cancel path is
-        // `cancel({ operation: "request", requestId })`. This arm stays
-        // for wire-compat — it walks the workspace→requestId map
-        // installed by the dispatcher and routes via the registry. M3d
-        // removes it.
+        // Deprecated cancel arm. RAG is registry-migrated with
+        // workspace-level admission in the dispatcher (`rag.ts`).
+        // Primary cancel path is
+        // `cancel({ operation: "request", requestId })`. This arm
+        // stays for wire-compat — it walks the workspace→requestId map
+        // installed by the dispatcher and routes via the registry.
         logger.warn(
-          "[cancel] `cancel({ operation: \"rag\", workspace })` is deprecated — use `cancel({ requestId })` instead. This compat path is removed in the next milestone.",
+          "[cancel] `cancel({ operation: \"rag\", workspace })` is deprecated — use `cancel({ requestId })` instead. This compat path is scheduled for removal in a future release.",
         );
         const workspace = request.workspace ?? DEFAULT_WORKSPACE;
         const requestId = getActiveRagRequest(workspace);

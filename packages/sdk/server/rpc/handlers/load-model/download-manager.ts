@@ -12,8 +12,8 @@ import type { DownloadHooks } from "@/server/rpc/handlers/load-model/types";
 const logger = getServerLogger();
 
 /**
- * Per-subscriber binding to a registry-tracked request. M3c made
- * `startOrJoinDownload` request-aware: each caller (the
+ * Per-subscriber binding to a registry-tracked request.
+ * `startOrJoinDownload` is request-aware: each caller (the
  * `await using ctx = registry.begin(...)` inside `handleLoadModel` /
  * `handleDownloadAsset`) registers a subscriber bound to its
  * `requestId`. A `cancel({ requestId })` against the registry aborts
@@ -24,7 +24,7 @@ const logger = getServerLogger();
  *
  * The shared-transfer dedup logic in `startOrJoinDownload` is preserved
  * — two callers requesting the same `downloadKey` still share one
- * underlying download — but cancel is per-`requestId`-honest now:
+ * underlying download — but cancel is per-`requestId`-honest:
  * cancelling one subscriber does not affect siblings on the same
  * `downloadKey`.
  */
@@ -167,7 +167,7 @@ function removeSubscriber(transfer: Transfer, subscriberId: string): void {
  * progress-callback throw), abort the shared transfer so the underlying
  * HTTP / hyperdrive download tears down. Until then the transfer keeps
  * running for the remaining subscribers — the content-addressed dedup
- * semantics that M1/M2 callers rely on.
+ * semantics callers rely on.
  */
 function maybeCancelTransfer(transfer: Transfer): void {
   if (transfer.subscribers.size > 0) return;
@@ -296,18 +296,16 @@ export function startOrJoinDownload(
 }
 
 /**
- * Legacy cancel entry point. Pre-M3c callers (`cancelHandler`'s
- * deprecated `case "downloadAsset"` arm, the shutdown sweep, intra-
- * resolve cleanup) call this with a `downloadKey`. Post-M3c the single
- * source of cancel routing is the request registry, so this function
- * now resolves each subscriber's request via `registry.cancel({ requestId })`.
+ * Legacy cancel entry point. Callers (`cancelHandler`'s deprecated
+ * `case "downloadAsset"` arm, the shutdown sweep, intra-resolve
+ * cleanup) call this with a `downloadKey`. The single source of cancel
+ * routing is the request registry, so this function resolves each
+ * subscriber's request via `registry.cancel({ requestId })`.
  *
- * Subscribers without a `requestId` (pre-migration callers that didn't
- * pass a registry binding) are settled directly with
- * `DownloadCancelledError`, mirroring the pre-M3c behaviour so we don't
- * leak the transfer if a legacy code path holds the only reference.
- *
- * M3d removes this function entirely once `cancelHandler.ts` retires.
+ * Subscribers without a `requestId` (legacy callers that didn't pass a
+ * registry binding) are settled directly with `DownloadCancelledError`
+ * so we don't leak the transfer if a legacy code path holds the only
+ * reference.
  */
 export function cancelTransfer(
   downloadKey: string,
@@ -335,11 +333,11 @@ export function cancelTransfer(
     return;
   }
 
-  // Legacy subscribers (no registry binding): mirror the pre-M3c
-  // behaviour — settle each with `DownloadCancelledError` and route
-  // removal through the `removeSubscriber` helper so the last-subscriber
-  // teardown rule is enforced in one place. Registry-bound subscribers
-  // are handled by their `attachRequestBinding` listener triggered above.
+  // Legacy subscribers (no registry binding): settle each with
+  // `DownloadCancelledError` and route removal through the
+  // `removeSubscriber` helper so the last-subscriber teardown rule is
+  // enforced in one place. Registry-bound subscribers are handled by
+  // their `attachRequestBinding` listener triggered above.
   for (const sub of orphanSubs) {
     settleSubscriber(sub, new DownloadCancelledError());
     removeSubscriber(transfer, sub.id);

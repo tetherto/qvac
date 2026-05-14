@@ -184,9 +184,9 @@ const ragDeleteWorkspaceOperationSchema = ragDeleteWorkspaceParamsSchema.extend(
 // ============== Unified Request Schema ==============
 
 // `requestId` is threaded onto every RAG operation as an optional field so
-// the M3c request-registry migration can correlate the in-flight context
-// with the client-side decorated-promise (`op.requestId`). Optional on the
-// wire so legacy clients keep working — the server falls back to a
+// the request registry can correlate the in-flight context with the
+// client-side decorated-promise (`op.requestId`). Optional on the wire
+// so legacy clients keep working — the server falls back to a
 // server-generated id when the field is missing.
 const ragRequestIdField = {
   requestId: z.string().min(1).optional(),

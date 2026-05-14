@@ -16,7 +16,7 @@ Server-side long-running operations (`completion`, `embeddings`, `transcribe`, `
 - **`RequestContext`** — per-request handle bundling `requestId`, `kind`, `modelId`, `signal`, `scope`, `state`.
 - **`RequestRegistry`** — module-scoped registry that mints contexts via `begin(...)` and routes `cancel(...)` by `requestId` or `modelId`.
 
-Migration is rolling out across milestones (M1 shipped completion; M2 shipped typed cancel outcomes + `KvCacheSession` + the Stop-button race close; **M3a** added per-handler cancel-capability declaration, registry concurrency policy, and structured `[request-lifecycle]` logging; **M3b** (in review, #2058) migrates the remaining inference handlers — `embed`, `transcribe`, `translate`, `finetune`; **M3c** migrated the non-inference handlers — `loadModel`, `downloadAsset`, `rag` — and added the decorated-promise pattern that exposes `requestId` synchronously on the client-side `loadModel(...)` / `downloadAsset(...)` calls; M3d retires the legacy `cancelHandler` dispatcher entirely). The contract below applies to every newly-migrated handler.
+The contract below applies to every cancellable server-side handler. The dispatch-level truth table below ("What's on the registry today") tracks which `RequestKind`s are currently routed through the registry; kinds not in that table use the broad-cancel fallback in `server/bare/ops/cancel.ts`.
 
 ## Canonical Handler Shape
 
@@ -163,7 +163,7 @@ defineHandler({
 
 The framework reads `cancel.scope` to decide how to wire `signal.onabort`; the handler stays oblivious to whether the addon supports per-request, per-model, or no cancel surface. See the truth table in the next section.
 
-## Cancel Capability Declaration (new in M3a)
+## Cancel Capability Declaration
 
 Every plugin handler declares its addon's cancel surface on the manifest so the framework knows what `cancel({ requestId })` can actually do today, and so future code can decide whether to wire `signal.onabort → addon.cancel()` directly or fall back to soft-cancel.
 
@@ -191,7 +191,7 @@ completionStream: defineHandler({
 
 Omitting the field entirely is equivalent to `{ scope: "none" }`. The runtime schema in `packages/sdk/schemas/plugin.ts` validates it on plugin registration.
 
-### Truth table for built-in plugins (as of M3a)
+### Truth table for built-in plugins
 
 | Plugin                       | Handler(s)                            | `cancel`                          |
 |------------------------------|---------------------------------------|-----------------------------------|
@@ -208,24 +208,20 @@ Omitting the field entirely is equivalent to `{ scope: "none" }`. The runtime sc
 
 The truth table is pinned by `packages/sdk/test/unit/plugin-cancel-capability.test.ts`. When a handler's addon gains a per-request cancel surface, flip its declaration to `{ scope: "request", hard: true }` and update the test row in the same PR.
 
-### What's on the registry today (post-M3c)
+### What's on the registry today
 
-The truth table above describes the addon-level capability for plugin handlers. The table below tracks the **dispatch-level** migration: which request kinds run through `registry.begin(...)` (and therefore expose `cancel({ requestId })`) as of M3c.
+The truth table above describes the addon-level capability for plugin handlers. The table below tracks the **dispatch-level** state: which request kinds run through `registry.begin(...)` (and therefore expose `cancel({ requestId })`) on this branch.
 
 | `RequestKind`     | Dispatched from                                                  | Cancel reach                                                 | Notes                                                                                                                                                                                              |
 |-------------------|------------------------------------------------------------------|--------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `completion`      | `llamacpp-completion/plugin.ts` → `completion-stream.ts`         | Hard (`addon.cancel()` mid-decode)                            | M1/M2/M3a reference handler. `oneAtATimePerModel` policy.                                                                                                                                          |
-| `embeddings`      | `bare/ops/embed.ts`                                              | Hard                                                          | Migration in review (M3b, #2058).                                                                                                                                                                  |
-| `transcribe`      | `bare/ops/transcribe.ts`                                         | Hard                                                          | Migration in review (M3b, #2058).                                                                                                                                                                  |
-| `translate`       | `bare/ops/translate.ts`                                          | Hard                                                          | Migration in review (M3b, #2058).                                                                                                                                                                  |
-| `finetune`        | `llamacpp-completion/ops/finetune.ts`                            | Soft (no addon cancel)                                        | Migration in review (M3b, #2058) — registry slot tracks the in-flight op even though the addon runs to completion.                                                                                 |
-| `loadModel`       | `server/rpc/handlers/load-model/handler.ts`                      | Mixed: download phase hard (signal threaded to `resolveModelPath`); load phase soft (addon `createModel`/`load(false)` has no signal) | M3c. The handler checks `ctx.signal.aborted` at the download/load phase boundary and again after the load to surface `InferenceCancelledError`; the orphan-model edge case during load is a documented follow-up. |
-| `downloadAsset`   | `server/rpc/handlers/download-asset.ts`                          | Hard (signal threaded to `resolveModelPath`)                  | M3c. Per-`requestId` cancel preserves the content-addressed dedup in `download-manager.ts` — two subscribers on the same `downloadKey` share one transfer, and the transfer aborts only when the **last** subscriber leaves. |
-| `rag`             | `server/rpc/handlers/rag.ts`                                     | Soft (workspace-bound; ingest/saveEmbeddings/reindex)         | M3c. Dispatcher-level pre-emption: starting a new RAG op on a workspace cancels the prior in-flight op on the same workspace **before** `registry.begin(...)` (Decision B.2 — not a registry policy primitive). |
+| `completion`      | `llamacpp-completion/plugin.ts` → `completion-stream.ts`         | Hard (`addon.cancel()` mid-decode)                            | Reference handler. `oneAtATimePerModel` policy.                                                                                                                                                    |
+| `loadModel`       | `server/rpc/handlers/load-model/handler.ts`                      | Mixed: download phase hard (signal threaded to `resolveModelPath`); load phase soft (addon `createModel`/`load(false)` has no signal) | The handler checks `ctx.signal.aborted` at the download/load phase boundary and again after the load to surface `InferenceCancelledError`; the orphan-model edge case during load is a documented follow-up. |
+| `downloadAsset`   | `server/rpc/handlers/download-asset.ts`                          | Hard (signal threaded to `resolveModelPath`)                  | Per-`requestId` cancel preserves the content-addressed dedup in `download-manager.ts` — two subscribers on the same `downloadKey` share one transfer, and the transfer aborts only when the **last** subscriber leaves. |
+| `rag`             | `server/rpc/handlers/rag.ts`                                     | Soft (workspace-bound; ingest/saveEmbeddings/reindex)         | Dispatcher-level pre-emption: starting a new RAG op on a workspace cancels the prior in-flight op on the same workspace **before** `registry.begin(...)`. Workspace admission lives in the dispatcher rather than as a registry policy primitive. |
 
-Kinds **not** in this table (e.g. `textToSpeech`, `ocr`, `diffusion`, `upscale`) still use the broad-cancel fallback in `server/bare/ops/cancel.ts`. M3d retires that fallback once every remaining kind is migrated.
+Kinds **not** in this table (e.g. `embeddings`, `transcribe`, `translate`, `finetune`, `textToSpeech`, `ocr`, `diffusion`, `upscale`) still use the broad-cancel fallback in `server/bare/ops/cancel.ts`.
 
-## Concurrency Policy (new in M3a)
+## Concurrency Policy
 
 The registry exposes an opt-in admission-control surface on `policy(...)`:
 
@@ -238,11 +234,11 @@ interface RequestRegistry {
 
 `getRequestRegistry()` (the worker-process singleton in `request-registry-singleton.ts`) registers `{ kind: "completion", oneAtATimePerModel: true }` on first use. The llama.cpp addon owns one KV-cache + one decode loop per model — two concurrent `completionStream` requests on the same model would interleave on the same logical session, so the second `begin(...)` is rejected explicitly with `RequestRejectedByPolicyError` (code 52420) instead of producing a confusing interleave.
 
-Kinds without a registered policy are unconstrained (pre-M3a admission semantics — `embed`, `transcribe`, `translate`, etc. are unaffected until M3b–M3d wire their own policies).
+Kinds without a registered policy are unconstrained — `embed`, `transcribe`, `translate`, etc. accept arbitrary concurrency until per-kind admission rules are wired.
 
 Policy enforcement runs in `registry.begin(...)` **before** any controller / scope allocation, so a rejected `begin` leaves no entry behind. Tests pin both the rejection and the "no slot leak" property in `packages/sdk/test/unit/runtime/request-registry.test.ts`.
 
-## Structured Logging (new in M3a)
+## Structured Logging
 
 The registry emits a single line per lifecycle event so log shippers can correlate per-request activity by grepping `requestId=<id>`:
 
@@ -325,7 +321,7 @@ Cancel by `requestId`. Pair with the `requestId` field exposed on `CompletionRun
 const run = sdk.completion({ ... });
 console.log(run.requestId); // available synchronously
 
-// Long-running Promise-shaped call (M3c — decorated promise)
+// Long-running Promise-shaped call (decorated promise)
 const op = sdk.loadModel({ ... });
 console.log(op.requestId); // also synchronously available
 
@@ -343,11 +339,11 @@ await sdk.cancel({ operation: "inference", modelId });
 await sdk.cancel({ operation: "embeddings", modelId });
 ```
 
-Internally, both paths land on `RequestRegistry.cancel(...)`. The broad path falls back to `addon.cancel()` for handler kinds that haven't been registry-migrated yet. As of M3c the migrated set is `completion`, `embeddings`, `transcribe`, `translate`, `finetune`, `loadModel`, `downloadAsset`, `rag` — these never take the addon-fallback path.
+Internally, both paths land on `RequestRegistry.cancel(...)`. The broad path falls back to `addon.cancel()` for handler kinds that haven't been registry-migrated yet — see the "What's on the registry today" table above for the current set of registry-routed kinds.
 
-## Decorated-Promise Pattern (new in M3c)
+## Decorated-Promise Pattern
 
-`completion(...)` was the first long-running call to expose `op.requestId` synchronously, by virtue of returning a `CompletionRun` object (not a `Promise`). M3c extends that contract to `loadModel(...)` and `downloadAsset(...)` — both of which **stay** `Promise<string>` on the unwrap path (so `await loadModel(...)` keeps returning the model id, no breaking change) but gain a synchronously-readable `requestId` field on the returned object.
+`completion(...)` exposes `op.requestId` synchronously by virtue of returning a `CompletionRun` object (not a `Promise`). The same contract applies to `loadModel(...)` and `downloadAsset(...)` — both of which **stay** `Promise<string>` on the unwrap path (so `await loadModel(...)` keeps returning the model id) but carry a synchronously-readable `requestId` field on the returned object.
 
 The helper:
 
@@ -394,7 +390,7 @@ const modelId = await op; // legacy `Promise<string>` unwrap still works
 ### Test surface
 
 - `packages/sdk/test/unit/utils/decorate-promise.test.ts` pins the helper contract: synchronous metadata access, `await` unwrap to `T`, rejection propagation, in-place identity, `.then`/`.finally` chain integrity.
-- `packages/sdk/test/unit/request-id-wire.test.ts` pins the wire envelope: `loadModelOptionsToRequestSchema` / `downloadAssetOptionsToRequestSchema` / `ragRequestSchema` accept and preserve `requestId` (server keys the registry on it) and treat it as optional (legacy clients pre-M3c omit it; server falls back to a server-generated id).
+- `packages/sdk/test/unit/request-id-wire.test.ts` pins the wire envelope: `loadModelOptionsToRequestSchema` / `downloadAssetOptionsToRequestSchema` / `ragRequestSchema` accept and preserve `requestId` (server keys the registry on it) and treat it as optional (legacy clients omit it; server falls back to a server-generated id).
 
 ## Primitives Reference
 
@@ -411,7 +407,7 @@ import {
   // scope factory (rarely used directly — `registry.begin(...)` carries one)
   createDisposableScope,
 
-  // per-request logger wrapper (M3a)
+  // per-request logger wrapper
   withRequestContext,
 } from "@/server/bare/runtime";
 
@@ -426,9 +422,9 @@ import type {
   CancelTarget,
   CancelByRequestId,
   CancelByModelId,
-  ConcurrencyPolicy, // M3a
+  ConcurrencyPolicy,
   DisposableScope,
-  RequestLogContext, // M3a — narrow shape `withRequestContext` reads
+  RequestLogContext, // narrow shape `withRequestContext` reads
 } from "@/server/bare/runtime";
 ```
 
@@ -470,7 +466,7 @@ Four errors are owned by this stack today (all in `@/utils/errors-server`):
 |-------|----------------------------------|----------------------------------------------------------------------------|
 | 52417 | `RequestIdConflictError`         | `registry.begin(...)` called with a `requestId` already present.           |
 | 52419 | `InferenceCancelledError`        | A cancelled inference run's `CompletionRun` promise-aggregates (`final` / `text` / `toolCalls` / `stats`) reject with this carrying the partial state. The `events` stream itself ends normally with `stopReason: "cancelled"`. |
-| 52420 | `RequestRejectedByPolicyError`   | `registry.begin(...)` rejected by a registered concurrency policy (e.g. `oneAtATimePerModel` for `completion`). Carries `requestId`, `kind`, `modelId`, and a human-readable `reason`. |
+| 52420 | `RequestRejectedByPolicyError`   | `registry.begin(...)` rejected by a registered concurrency policy (e.g. `oneAtATimePerModel` for `completion`). Carries `requestId`, `kind`, `modelId`, and a human-readable `reason`.   |
 | 53503 | `AsyncDisposeUnavailableError`   | Module-load guard: host runtime doesn't expose `Symbol.asyncDispose`.      |
 
 `InferenceCancelledError` carries `requestId` plus a `partial: { text?, toolCalls?, stats? }` payload. Construction is **client-side** (`packages/sdk/client/api/completion-stream.ts`): when the event stream ends with `stopReason: "cancelled"`, the client builds the error from its locally-aggregated partial state and rejects the aggregates. The class is server-defined for reusability and re-exported from `@qvac/sdk` so client code can `instanceof`-check it. See `error-handling.mdc`.
@@ -482,10 +478,12 @@ Four errors are owned by this stack today (all in `@/utils/errors-server`):
 Five unit-test files pin the contract — read them as canonical examples:
 
 - `packages/sdk/test/unit/runtime/disposable-scope.test.ts` — LIFO cleanup, idempotency, error aggregation, late `defer` behavior.
-- `packages/sdk/test/unit/runtime/request-registry.test.ts` — `begin`/`cancel`/`end` flow, `requestId` conflict detection, parent-signal composition + listener detach discipline, the M2 Stop-button race close (`same-tick cancel-before-begin retroactively aborts the later begin()`), the bounded `cancelled-before-begin` map invariants, **and the M3a concurrency policy** (`oneAtATimePerModel` admission rule + `RequestRejectedByPolicyError` propagation + rejected-begin leaves no slot behind).
+- `packages/sdk/test/unit/runtime/request-registry.test.ts` — `begin`/`cancel`/`end` flow, `requestId` conflict detection, parent-signal composition + listener detach discipline, Stop-button race close (`same-tick cancel-before-begin retroactively aborts the later begin()`), the bounded `cancelled-before-begin` map invariants, **and concurrency policy** (`oneAtATimePerModel` admission rule + `RequestRejectedByPolicyError` propagation + rejected-begin leaves no slot behind).
 - `packages/sdk/test/unit/runtime/kv-cache-session.test.ts` — `beginTurn` / `commitTurn` / `rollback` semantics in isolation: commit suppresses the deferred rollback, rollback after commit is a no-op, double-rollback is idempotent, and rollback wipes all three layers (file / `initializedCaches` / `cachedMessageCounts`) regardless of who fails along the way.
 - `packages/sdk/test/unit/runtime/request-lifecycle-logging.test.ts` — registry's `[request-lifecycle] begin/cancel/end` line shape, single-emit guarantee on redundant cancels, `cancelAll` fans out one line per active entry, `state=cancelling` on a `parentSignal`-pre-aborted begin, and the `modelId=-` placeholder for model-less requests.
 - `packages/sdk/test/unit/runtime/with-request-context.test.ts` — `withRequestContext` prefix shape across every level, `modelId`-segment dropping when absent, multi-argument preservation, and pass-through of `setLevel` / `getLevel` / `addTransport` / `setConsoleOutput`.
+
+
 
 The cancel-capability truth table is pinned by `packages/sdk/test/unit/plugin-cancel-capability.test.ts` — when a built-in plugin's `cancel` declaration changes, update the truth-table row in the same PR.
 
@@ -526,4 +524,4 @@ Already covered by the `CancelTarget` discriminated union. If you genuinely need
 
 - `error-handling.mdc` — `InferenceCancelledError` / `AsyncDisposeUnavailableError` / `RequestIdConflictError` placement and propagation across the RPC boundary.
 - `docs/kv-cache-system.mdc` — `KvCacheSession` ownership of the three KV-cache bookkeeping layers (on-disk `.bin`, `initializedCaches`, `cachedMessageCounts`), `beginTurn` / `commitTurn` / `rollback` semantics, and the cross-model `deleteKvCacheState` administrative API.
-- `docs/request-lifecycle-system.mdc` — full reference (design rationale, migration roadmap, FAQ, M2 Stop-button race close rationale).
+- `docs/request-lifecycle-system.mdc` — full reference (design rationale, FAQ, Stop-button race close rationale).

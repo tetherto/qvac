@@ -31,7 +31,7 @@ export interface ResolveSessionOptions {
    * against `binding.signal`, registers a scope-defer cleanup, and stamps
    * the subscriber with `binding.requestId` so the legacy
    * `cancelTransfer(downloadKey)` path can route through
-   * `registry.cancel({ requestId })` until M3d retires it.
+   * `registry.cancel({ requestId })`.
    */
   requestBinding?: DownloadRequestBinding | undefined;
 }

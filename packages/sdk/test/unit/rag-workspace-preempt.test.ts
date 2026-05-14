@@ -7,7 +7,7 @@ import {
 } from "@/server/bare/rag-hyperdb/rag-operation-manager";
 
 // -----------------------------------------------------------------------------
-// RAG workspace → requestId map (M3c Deliverable 1 + Decision B.2).
+// RAG workspace → requestId map.
 //
 // The dispatcher-level pre-emption rule in `server/rpc/handlers/rag.ts`
 // (cancel any existing RAG request on the same workspace before

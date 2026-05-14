@@ -11,7 +11,7 @@ import { InferenceCancelledError } from "@/utils/errors-server";
 // -----------------------------------------------------------------------------
 // download-manager: per-`requestId` cancel + content-addressed dedup.
 //
-// These tests pin the M3c contract for `startOrJoinDownload`:
+// These tests pin the contract for `startOrJoinDownload`:
 //
 //   1. Two callers with the same `downloadKey` share one underlying
 //      transfer (dedup preserved).

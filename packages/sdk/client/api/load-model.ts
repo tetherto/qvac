@@ -218,7 +218,7 @@ export function loadModel(
   //     before `await` resolves. Generating client-side and surfacing
   //     it synchronously is what closes the "stop-button race" gap for
   //     `loadModel` / `downloadAsset` callers — same shape as the
-  //     `CompletionRun.requestId` contract introduced in M2.
+  //     `CompletionRun.requestId` contract.
   const requestId = generateClientRequestId();
   const inner = runLoadModel(options, requestId, rpcOptions);
   return decoratePromise(inner, { requestId });

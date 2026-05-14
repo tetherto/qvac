@@ -194,9 +194,9 @@ export async function handleLoadModel(
     // model is now loaded and registered. Surface
     // `InferenceCancelledError` so the caller's promise rejects
     // consistently — even though the model state is the "loaded"
-    // post-condition. The orphan-model trade-off is documented in the
-    // M3c PR description and tracked as a follow-up (the addon would
-    // need a per-load cancel surface).
+    // post-condition. The orphan-model edge case is a known
+    // limitation that requires a per-load cancel surface on the addon
+    // to fix end-to-end.
     if (ctx.signal.aborted) {
       throw new InferenceCancelledError(requestId);
     }

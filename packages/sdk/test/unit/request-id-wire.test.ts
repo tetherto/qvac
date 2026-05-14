@@ -8,7 +8,7 @@ import { ragRequestSchema } from "@/schemas/rag";
 import { ModelType } from "@/schemas/model-types";
 
 // -----------------------------------------------------------------------------
-// requestId wire-shape round-trip (M3c Deliverable 4 — schema half).
+// requestId wire-shape round-trip — schema half.
 //
 // The decorated-promise contract says: the client generates a
 // `requestId` once, the request envelope carries it on the wire, and
