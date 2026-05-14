@@ -22,7 +22,7 @@ export class ParakeetExecutor extends AbstractModelExecutor<
   ) as never;
 
   async runTest(testId: string, params: unknown, expectation: unknown): Promise<TestResult> {
-    const p = params as { audioFileName: string };
+    const p = params as { audioFileName: string; metadata?: boolean };
     const exp = expectation as Expectation;
 
     const resourceKey = this.resolveResource(testId);
@@ -35,10 +35,12 @@ export class ParakeetExecutor extends AbstractModelExecutor<
     );
 
     try {
-      const text = await transcribe({
-        modelId,
-        audioChunk: audioPath,
-      });
+      if (p.metadata === true) {
+        await transcribe({ modelId, audioChunk: audioPath, metadata: true });
+        return { passed: false, output: "Expected error but transcription succeeded" };
+      }
+
+      const text = await transcribe({ modelId, audioChunk: audioPath });
       const trimmedText = text.trim();
 
       if (exp.validation === "throws-error") {

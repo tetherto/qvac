@@ -17,7 +17,7 @@ env:
 
 jobs:
   cpp-tests:
-    runs-on: ubuntu-24.04
+    runs-on: qvac-ubuntu2204-x64
     environment: release
     timeout-minutes: 90
     defaults:
@@ -41,20 +41,13 @@ jobs:
         with:
           node-version: lts/*
 
-      - name: Setup LLVM
-        uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
-
-      - name: Install Vulkan SDK
-        run: |
-          wget -qO- https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo tee /etc/apt/trusted.gpg.d/lunarg.asc
-          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-noble.list http://packages.lunarg.com/vulkan/lunarg-vulkan-noble.list
-          sudo apt update
-          sudo apt install -y vulkan-sdk
-
       - name: Install NPM dependencies
         run: |
           npm install
-          npm install -g bare bare-make
+          # npm install -g bare bare-make
+
+      - name: Add bare tooling to PATH
+        run: echo "/usr/local/nvm/versions/node/v20.20.2/bin" >> $GITHUB_PATH
 
       - name: Configure vcpkg
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV

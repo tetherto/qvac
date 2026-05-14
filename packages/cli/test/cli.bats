@@ -15,7 +15,7 @@ setup_file() {
   for name in default auth nocors; do
     local dir="${FILE_TMPDIR}/${name}"
     mkdir -p "${dir}"
-    echo '{ "serve": { "models": {} } }' > "${dir}/qvac.config.json"
+    echo '{"serve":{"models":{"fake-transcribe":{"type":"whispercpp-transcription","src":"hyper://example.invalid/model","preload":false}}}}' > "${dir}/qvac.config.json"
   done
 
   cd "${FILE_TMPDIR}/default"
@@ -114,6 +114,70 @@ http_status() {
   [[ "${status}" -eq 2 ]]
   [[ "${output}" =~ "Unsupported lockfile" ]]
   [[ "${output}" =~ "package-lock.json" ]]
+}
+
+@test "qvac verify bundle --help shows options" {
+  run ${QVAC} verify bundle --help
+  [[ "${status}" -eq 0 ]]
+  [[ "${output}" =~ "--addons-source" ]]
+  [[ "${output}" =~ "--host" ]]
+  [[ "${output}" =~ "--bare-runtime-version" ]]
+  [[ "${output}" =~ "--config" ]]
+}
+
+@test "qvac verify bundle requires --addons-source" {
+  run ${QVAC} verify bundle --host android-arm64
+  [[ "${status}" -eq 1 ]]
+  [[ "${output}" =~ "--addons-source" ]]
+}
+
+@test "qvac verify bundle rejects missing --addons-source path" {
+  run ${QVAC} verify bundle --addons-source /nonexistent/path --host android-arm64
+  [[ "${status}" -eq 1 ]]
+  [[ "${output}" =~ "not a readable file or directory" ]]
+}
+
+@test "qvac verify bundle rejects empty --host list" {
+  local dir
+  dir=$(mktemp -d)
+  mkdir -p "${dir}/node_modules"
+  run ${QVAC} verify bundle --addons-source "${dir}/node_modules"
+  [[ "${status}" -eq 1 ]]
+  [[ "${output}" =~ "--host" ]]
+  rm -rf "${dir}"
+}
+
+@test "qvac verify bundle passes on empty node_modules" {
+  local dir
+  dir=$(mktemp -d)
+  mkdir -p "${dir}/node_modules"
+  run ${QVAC} verify bundle --addons-source "${dir}/node_modules" --host darwin-arm64
+  [[ "${status}" -eq 0 ]]
+  [[ "${output}" =~ "verification passed" ]]
+  rm -rf "${dir}"
+}
+
+@test "qvac verify bundle rejects malformed --bare-runtime-version" {
+  local dir
+  dir=$(mktemp -d)
+  mkdir -p "${dir}/node_modules"
+  run ${QVAC} verify bundle --addons-source "${dir}/node_modules" --host darwin-arm64 --bare-runtime-version not-a-version
+  [[ "${status}" -eq 1 ]]
+  [[ "${output}" =~ "Invalid Bare runtime version" ]]
+  [[ "${output}" =~ "not-a-version" ]]
+  rm -rf "${dir}"
+}
+
+@test "qvac verify bundle rejects malformed bareRuntimeVersion in qvac.config.json" {
+  local dir
+  dir=$(mktemp -d)
+  mkdir -p "${dir}/node_modules"
+  printf '{"bareRuntimeVersion": "garbage"}' > "${dir}/qvac.config.json"
+  run ${QVAC} verify bundle --addons-source "${dir}/node_modules" --host darwin-arm64 --project-root "${dir}"
+  [[ "${status}" -eq 1 ]]
+  [[ "${output}" =~ "Invalid Bare runtime version" ]]
+  [[ "${output}" =~ "garbage" ]]
+  rm -rf "${dir}"
 }
 
 # ── CLI: doctor ───────────────────────────────────────────────────────
@@ -287,6 +351,56 @@ http_status() {
 @test "transcriptions: unknown model returns 404" {
   local body
   body=$(curl -s "http://127.0.0.1:19920/v1/audio/transcriptions" \
+    -F "model=nonexistent" -F "file=@/dev/null;filename=audio.wav")
+  assert_error "${body}" "model_not_found"
+}
+
+# ── Serve: translations validation ──────────────────────────────────
+
+@test "translations: JSON content-type returns 400" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/audio/translations" \
+    -H "Content-Type: application/json" -d '{"model":"test"}')
+  assert_error "${body}" "invalid_content_type"
+}
+
+@test "translations: missing file returns 400" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/audio/translations" -F "model=test")
+  assert_error "${body}" "missing_file"
+}
+
+@test "translations: missing model returns 400" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/audio/translations" \
+    -F "file=@/dev/null;filename=audio.wav")
+  assert_error "${body}" "missing_model"
+}
+
+@test "translations: language field returns 400" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/audio/translations" \
+    -F "model=fake-transcribe" -F "language=es" -F "file=@/dev/null;filename=audio.wav")
+  assert_error "${body}" "unsupported_param"
+}
+
+@test "translations: unsupported srt format returns 400" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/audio/translations" \
+    -F "model=fake-transcribe" -F "response_format=srt" -F "file=@/dev/null;filename=audio.wav")
+  assert_error "${body}" "unsupported_response_format"
+}
+
+@test "translations: transcription-only model returns invalid_model_type" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/audio/translations" \
+    -F "model=fake-transcribe" -F "file=@/dev/null;filename=audio.wav")
+  assert_error "${body}" "invalid_model_type"
+}
+
+@test "translations: unknown model returns 404" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/audio/translations" \
     -F "model=nonexistent" -F "file=@/dev/null;filename=audio.wav")
   assert_error "${body}" "model_not_found"
 }

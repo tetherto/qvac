@@ -57,7 +57,7 @@ jobs:
         include:
           - platform: Android
             os: ubuntu-24.04
-            runner: ubuntu-24.04
+            runner: qvac-ubuntu2404-x64
           - platform: iOS
             os: macos-14
             runner: macos-14
@@ -104,11 +104,13 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Node.js
+        if: matrix.platform == 'iOS'
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Install global dependencies
+        if: matrix.platform == 'iOS'
         run: |
           echo "Installing global dependencies..."
           npm install -g @expo/cli@latest

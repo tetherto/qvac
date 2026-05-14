@@ -1,0 +1,26 @@
+{
+  "dependencies": [
+    {
+      "name": "qvac-fabric",
+      "version>=": "8189.0.2",
+      "default-features": false
+    },
+    {
+      "name": "qvac-lib-inference-addon-cpp",
+      "version>=": "1.1.7#1"
+    },
+    {
+      "name": "qvac-lint-cpp",
+      "version>=": "1.4.4#3"
+    },
+    "stb"
+  ],
+  "features": {
+    "tests": {
+      "description": "Build tests",
+      "dependencies": [
+        "gtest"
+      ]
+    }
+  }
+}

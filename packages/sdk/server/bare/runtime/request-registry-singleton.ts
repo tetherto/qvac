@@ -11,12 +11,23 @@ import {
  *
  * Exposed alongside `createRequestRegistry()` rather than replacing it so
  * unit tests can spin up isolated registries without contaminating the
- * shared instance.
+ * shared instance. On first use the singleton registers the SDK's
+ * baseline concurrency policies.
  */
 let registry: RequestRegistry | null = null;
 
+function installDefaultPolicies(r: RequestRegistry): void {
+  // The llama.cpp addon owns one KV-cache + one decode loop per model,
+  // so two concurrent `completionStream` requests on the same model
+  // would interleave their token streams on the same logical session.
+  r.policy({ kind: "completion", oneAtATimePerModel: true });
+}
+
 export function getRequestRegistry(): RequestRegistry {
-  if (!registry) registry = createRegistry();
+  if (!registry) {
+    registry = createRegistry();
+    installDefaultPolicies(registry);
+  }
   return registry;
 }
 

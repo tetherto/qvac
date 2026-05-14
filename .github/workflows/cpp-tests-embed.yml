@@ -44,16 +44,17 @@ jobs:
           - os: ubuntu-24.04
             platform: linux
             arch: x64
+            runner: qvac-ubuntu2404-x64
           - os: macos-14
             platform: darwin
             arch: arm64
           - os: macos-15-intel
             platform: darwin
             arch: x64
-          - os: windows-11
+          - os: windows-2025
             platform: windows
             arch: x64
-            runner: ai-run-windows11-gpu
+            runner: qvac-win25-x64
 
     env:
       WORKDIR: ${{ inputs.workdir }}
@@ -74,14 +75,10 @@ jobs:
           echo "workdir=$INPUT_WORKDIR"
 
       - name: Setup Node.js
+        if: matrix.platform == 'darwin' || matrix.arch == 'arm64'
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
-
-      - if: ${{ matrix.os == 'windows-11' }}
-        name: Configure Windows runner
-        run: |
-          git config --system core.longpaths true
 
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -95,29 +92,21 @@ jobs:
         shell: bash
         run: |
           npm install
+      
+      - name: Set Bare tooling on MacOS
+        if: matrix.platform == 'darwin'
+        run: |
           npm install -g bare bare-make
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'windows-11' }}
-        name: Setup LLVM
-        uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
+      - name: Add bare tooling to PATH (Linux x64)
+        if: ${{ matrix.os == 'ubuntu-24.04' }}
+        run: echo "/usr/local/nvm/versions/node/v20.20.2/bin" >> $GITHUB_PATH
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' }}
-        name: Install Vulkan SDK on Linux
-        shell: bash
-        run: |
-          wget -qO- https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo tee /etc/apt/trusted.gpg.d/lunarg.asc > /dev/null
-          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-noble.list http://packages.lunarg.com/vulkan/lunarg-vulkan-noble.list
-          sudo apt update
-          sudo apt install -y vulkan-sdk
 
-      - if: ${{ matrix.os == 'windows-11' }}
-        name: Install Vulkan SDK on Windows
+      - if: ${{ matrix.os == 'windows-2025' }}
+        name: Set Vulkan SDK Path on Windows Server 2025
         working-directory: ${{ env.WORKDIR }}
-        run: |
-          $ProgressPreference = 'SilentlyContinue'
-          Invoke-WebRequest -Uri https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe -OutFile vulkan-sdk.exe
-          ./vulkan-sdk.exe --root C:\VulkanSDK --accept-licenses --default-answer --confirm-command install
-          echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
+        run: echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
 
       - if: ${{ startsWith(matrix.os, 'macos') }}
         name: Install vcpkg on macOS
@@ -131,18 +120,23 @@ jobs:
           echo "MACOSX_DEPLOYMENT_TARGET=14.0" >> $GITHUB_ENV
 
       - if: ${{ matrix.os == 'ubuntu-24.04' }}
-        name: Configure vcpkg in linux
+        name: Install vcpkg on linux
         shell: bash
-        run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
+        run: |
+          git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git vcpkg_microsoft
+          cd vcpkg_microsoft && ./bootstrap-vcpkg.sh -disableMetrics
+          VCPKG_ROOT="$(pwd)"
+          echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
+          echo "$VCPKG_ROOT" >> $GITHUB_PATH
 
-      - if: ${{ matrix.os == 'windows-11' }}
+      - if: ${{ matrix.os == 'windows-2025' }}
         name: Clone and bootstrap vcpkg (Windows)
         run: |
-          git clone https://github.com/microsoft/vcpkg.git
+          git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git
           ./vcpkg/bootstrap-vcpkg.bat -disableMetrics
           echo ("VCPKG_ROOT=$env:GITHUB_WORKSPACE/vcpkg" -replace '\\', '/') >> $env:GITHUB_ENV
 
-      - if: ${{ matrix.os == 'windows-11' }}
+      - if: ${{ matrix.os == 'windows-2025' }}
         name: Configure CMake generator on Windows
         shell: powershell
         run: |
@@ -161,10 +155,7 @@ jobs:
               hashFiles(
                 format('{0}/vcpkg.json', inputs.workdir),
                 format('{0}/vcpkg-configuration.json', inputs.workdir),
-                format('{0}/vcpkg/ports/**', inputs.workdir),
-                'vcpkg.json',
-                'vcpkg-configuration.json',
-                'vcpkg/ports/**'
+                format('{0}/vcpkg/ports/**', inputs.workdir)
               )
             }}
           path: ${{ github.workspace }}/${{ env.WORKDIR }}/vcpkg/cache
@@ -206,7 +197,7 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         env:
-          LSAN_OPTIONS: suppressions=${{ github.workspace }}/.lsan-suppressions.txt
+          LSAN_OPTIONS: suppressions=${{ github.workspace }}/${{ env.WORKDIR }}/.lsan-suppressions.txt
         run: |
           set -euo pipefail
 
