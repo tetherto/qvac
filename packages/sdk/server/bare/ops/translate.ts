@@ -116,10 +116,7 @@ export async function* translate(
 
   if (isLlm) {
     const onAbort = () => {
-      const addonModel = model as unknown as {
-        addon?: { cancel?(jobId?: string): Promise<void> };
-      };
-      const addon = addonModel.addon;
+      const addon = model.addon;
       if (addon?.cancel) {
         addon.cancel.call(addon).catch((err: unknown) => {
           requestLogger.warn(
