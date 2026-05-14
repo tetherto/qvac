@@ -16,7 +16,7 @@ Server-side long-running operations (`completion`, `embeddings`, `transcribe`, `
 - **`RequestContext`** — per-request handle bundling `requestId`, `kind`, `modelId`, `signal`, `scope`, `state`.
 - **`RequestRegistry`** — module-scoped registry that mints contexts via `begin(...)` and routes `cancel(...)` by `requestId` or `modelId`.
 
-Migration is rolling out across milestones (M1 shipped completion; M2 shipped typed cancel outcomes + `KvCacheSession` + the Stop-button race close; **M3a** added per-handler cancel-capability declaration, registry concurrency policy, and structured `[request-lifecycle]` logging; M3b–M3d migrate embeddings / transcribe / translate / loadModel / downloadAsset onto the same primitives). The contract below applies to every newly-migrated handler.
+Migration is rolling out across milestones (M1 shipped completion; M2 shipped typed cancel outcomes + `KvCacheSession` + the Stop-button race close; **M3a** added per-handler cancel-capability declaration, registry concurrency policy, and structured `[request-lifecycle]` logging; **M3b** migrated the remaining inference handlers — `embed`, `transcribe`, `translate`, `finetune`; **M3c** migrated the non-inference handlers — `loadModel`, `downloadAsset`, `rag` — and added the decorated-promise pattern that exposes `requestId` synchronously on the client-side `loadModel(...)` / `downloadAsset(...)` calls; M3d retires the legacy `cancelHandler` dispatcher entirely). The contract below applies to every newly-migrated handler.
 
 ## Canonical Handler Shape
 
@@ -208,6 +208,23 @@ Omitting the field entirely is equivalent to `{ scope: "none" }`. The runtime sc
 
 The truth table is pinned by `packages/sdk/test/unit/plugin-cancel-capability.test.ts`. When a handler's addon gains a per-request cancel surface, flip its declaration to `{ scope: "request", hard: true }` and update the test row in the same PR.
 
+### What's on the registry today (post-M3c)
+
+The truth table above describes the addon-level capability for plugin handlers. The table below tracks the **dispatch-level** migration: which request kinds run through `registry.begin(...)` (and therefore expose `cancel({ requestId })`) as of M3c.
+
+| `RequestKind`     | Dispatched from                                                  | Cancel reach                                                 | Notes                                                                                                                                                                                              |
+|-------------------|------------------------------------------------------------------|--------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `completion`      | `llamacpp-completion/plugin.ts` → `completion-stream.ts`         | Hard (`addon.cancel()` mid-decode)                            | M1/M2/M3a reference handler. `oneAtATimePerModel` policy.                                                                                                                                          |
+| `embeddings`      | `bare/ops/embed.ts`                                              | Hard                                                          | Migrated in M3b.                                                                                                                                                                                   |
+| `transcribe`      | `bare/ops/transcribe.ts`                                         | Hard                                                          | Migrated in M3b.                                                                                                                                                                                   |
+| `translate`       | `bare/ops/translate.ts`                                          | Hard                                                          | Migrated in M3b.                                                                                                                                                                                   |
+| `finetune`        | `llamacpp-completion/ops/finetune.ts`                            | Soft (no addon cancel)                                        | Migrated in M3b — registry slot tracks the in-flight op even though the addon runs to completion.                                                                                                  |
+| `loadModel`       | `server/rpc/handlers/load-model/handler.ts`                      | Mixed: download phase hard (signal threaded to `resolveModelPath`); load phase soft (addon `createModel`/`load(false)` has no signal) | M3c. The handler checks `ctx.signal.aborted` at the download/load phase boundary and again after the load to surface `InferenceCancelledError`; the orphan-model edge case during load is a documented follow-up. |
+| `downloadAsset`   | `server/rpc/handlers/download-asset.ts`                          | Hard (signal threaded to `resolveModelPath`)                  | M3c. Per-`requestId` cancel preserves the content-addressed dedup in `download-manager.ts` — two subscribers on the same `downloadKey` share one transfer, and the transfer aborts only when the **last** subscriber leaves. |
+| `rag`             | `server/rpc/handlers/rag.ts`                                     | Soft (workspace-bound; ingest/saveEmbeddings/reindex)         | M3c. Dispatcher-level pre-emption: starting a new RAG op on a workspace cancels the prior in-flight op on the same workspace **before** `registry.begin(...)` (Decision B.2 — not a registry policy primitive). |
+
+Kinds **not** in this table (e.g. `textToSpeech`, `ocr`, `diffusion`, `upscale`) still use the broad-cancel fallback in `server/bare/ops/cancel.ts`. M3d retires that fallback once every remaining kind is migrated.
+
 ## Concurrency Policy (new in M3a)
 
 The registry exposes an opt-in admission-control surface on `policy(...)`:
@@ -301,15 +318,20 @@ There are two cancel paths exposed to clients:
 
 ### Targeted (preferred, new in 0.11.0)
 
-Cancel by `requestId`. Pair with the `requestId` field exposed on `CompletionRun` (and equivalent long-running result objects):
+Cancel by `requestId`. Pair with the `requestId` field exposed on `CompletionRun` and the decorated `loadModel(...)` / `downloadAsset(...)` promises:
 
 ```typescript
-// Client side
+// Streaming long-running call
 const run = sdk.completion({ ... });
 console.log(run.requestId); // available synchronously
 
+// Long-running Promise-shaped call (M3c — decorated promise)
+const op = sdk.loadModel({ ... });
+console.log(op.requestId); // also synchronously available
+
 // Later, from anywhere with access to the SDK client:
 await sdk.cancel({ requestId: run.requestId });
+await sdk.cancel({ requestId: op.requestId });
 ```
 
 ### Broad (escape hatch)
@@ -321,7 +343,58 @@ await sdk.cancel({ operation: "inference", modelId });
 await sdk.cancel({ operation: "embeddings", modelId });
 ```
 
-Internally, both paths land on `RequestRegistry.cancel(...)`. The broad path falls back to `addon.cancel()` for handler kinds that haven't been registry-migrated yet (everything except llama.cpp completion in 0.11.0).
+Internally, both paths land on `RequestRegistry.cancel(...)`. The broad path falls back to `addon.cancel()` for handler kinds that haven't been registry-migrated yet. As of M3c the migrated set is `completion`, `embeddings`, `transcribe`, `translate`, `finetune`, `loadModel`, `downloadAsset`, `rag` — these never take the addon-fallback path.
+
+## Decorated-Promise Pattern (new in M3c)
+
+`completion(...)` was the first long-running call to expose `op.requestId` synchronously, by virtue of returning a `CompletionRun` object (not a `Promise`). M3c extends that contract to `loadModel(...)` and `downloadAsset(...)` — both of which **stay** `Promise<string>` on the unwrap path (so `await loadModel(...)` keeps returning the model id, no breaking change) but gain a synchronously-readable `requestId` field on the returned object.
+
+The helper:
+
+```typescript
+// packages/sdk/utils/decorate-promise.ts
+export function decoratePromise<T, M extends Record<string, unknown>>(
+  promise: Promise<T>,
+  metadata: M,
+): Promise<T> & M {
+  return Object.assign(promise, metadata);
+}
+```
+
+Client-side call sites mint the `requestId` once, thread it onto the wire envelope, and decorate the returned promise:
+
+```typescript
+// packages/sdk/client/api/load-model.ts
+export function loadModel(
+  options: LoadModelOptions,
+  rpcOptions?: RPCOptions,
+): Promise<string> & { requestId: string } {
+  const requestId = generateClientRequestId();
+  const inner = runLoadModel(options, requestId, rpcOptions);
+  return decoratePromise(inner, { requestId });
+}
+```
+
+Callers can grab `op.requestId` before the network round-trip resolves and fire a targeted cancel:
+
+```typescript
+const op = sdk.loadModel({ modelSrc: "https://example.com/big.gguf" });
+// op.requestId is reachable RIGHT NOW — before the download even starts
+stopButton.onclick = () => sdk.cancel({ requestId: op.requestId });
+const modelId = await op; // legacy `Promise<string>` unwrap still works
+```
+
+### Invariants the helper exists to preserve
+
+1. **`await loadModel(...)` still returns `string`.** The decoration mutates the inner promise in place via `Object.assign`; the prototype chain is untouched, so `.then` / `.catch` / `.finally` / async-await unwrapping behave exactly as for a bare `Promise<T>`. Pin this in your call site's tests — if it goes red, the decoration broke the unwrap chain.
+2. **`op.requestId` and the server's registry-entry `requestId` are the same value.** The client generates the id once, the request envelope carries it (`request.requestId`), and the server's `registry.begin({ requestId, kind })` uses it as the registry key. `cancel({ requestId: op.requestId })` is a precise abort against this exact call.
+3. **No prototype-extension shenanigans.** Do **not** add properties via `Promise.prototype` or `Object.setPrototypeOf`. The plain-object approach is intentional — extending `Promise.prototype` would silently affect every promise in the worker. If a future refactor wants to make the wrapper a class, push back.
+4. **Metadata keys must not collide with `Promise` members.** Don't decorate with `{ then: ... }` / `{ catch: ... }` / `{ finally: ... }` — those would shadow the Promise methods and break `await`. `requestId` is safe; new metadata fields go through code review.
+
+### Test surface
+
+- `packages/sdk/test/unit/utils/decorate-promise.test.ts` pins the helper contract: synchronous metadata access, `await` unwrap to `T`, rejection propagation, in-place identity, `.then`/`.finally` chain integrity.
+- `packages/sdk/test/unit/request-id-wire.test.ts` pins the wire envelope: `loadModelOptionsToRequestSchema` / `downloadAssetOptionsToRequestSchema` / `ragRequestSchema` accept and preserve `requestId` (server keys the registry on it) and treat it as optional (legacy clients pre-M3c omit it; server falls back to a server-generated id).
 
 ## Primitives Reference
 
