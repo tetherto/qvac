@@ -1,5 +1,5 @@
-// Adapted from @qvac/ocr-onnx's addon/pipeline/StepRecognizeText.cpp per
-// Phase 5 of docs/PLAN.md.  Most of the body (image cropping, contrast
+// Adapted from @qvac/ocr-onnx's addon/pipeline/StepRecognizeText.cpp.
+// Most of the body (image cropping, contrast
 // retry, rotation retry, CTC greedy decode, paragraph merge) is lifted
 // verbatim — see git diff against the source for the trivial surface
 // changes.  The substantive replacements are:
@@ -10,9 +10,9 @@
 //     ggml_backend_tensor_get).
 //
 // The vocab string used by `decodeGreedy` is sourced from the GGUF's
-// `crnn.vocab` metadata at load time (PLAN.md §6); Lang.cpp's per-
-// language table is consulted for the LTR flag and the ignore-mask, and
-// asserted against the GGUF vocab to catch drift.
+// `crnn.vocab` metadata at load time; Lang.cpp's per-language table is
+// consulted for the LTR flag and the ignore-mask, and asserted against
+// the GGUF vocab to catch drift.
 
 #include "easyocr-ggml/pipeline/step_recognize_text.hpp"
 
@@ -559,7 +559,7 @@ StepRecognizeText::StepRecognizeText(
     std::tie(langChars, ignoreChars_, isLeftToRightScript_) =
         getCharsInfoFromLangList(langList);
 
-    // Source the runtime vocab from the GGUF (PLAN.md §6).  The Lang.cpp
+    // Source the runtime vocab from the GGUF.  The Lang.cpp
     // table for `langList` is asserted to match — if a future custom GGUF
     // is loaded against a wrong language list we want a loud failure.
     if (auto vocab_utf8 = loader_->get_string("crnn.vocab")) {

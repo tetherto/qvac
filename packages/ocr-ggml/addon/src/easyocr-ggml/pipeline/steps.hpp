@@ -1,7 +1,7 @@
 #pragma once
 
 // Shared pipeline types — lifted from `@qvac/ocr-onnx`'s
-// `addon/pipeline/Steps.hpp` per Phase 3 of docs/PLAN.md.
+// `addon/pipeline/Steps.hpp`.
 //
 // Differences vs. the source:
 //   - namespace renamed `qvac_lib_inference_addon_onnx_ocr_fasttext`
@@ -86,7 +86,7 @@ cv::Mat fourPointTransform(const cv::Mat& image,
 // on every logical core is typically slower than running on every physical
 // core, because SMT siblings contend for the same FP/SIMD execution units.
 // A T=physical_cores baseline reliably matches or beats T=logical_cores on
-// our CRAFT/CRNN graphs (see the thread-scaling sweep in Phase 11 docs).
+// our CRAFT/CRNN graphs.
 //
 // Strategy:
 //   - If std::thread::hardware_concurrency() returns > 1, treat that as the

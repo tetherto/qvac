@@ -1,7 +1,7 @@
 #pragma once
 
-// Lifted from @qvac/ocr-onnx's addon/pipeline/StepBoundingBox.hpp per
-// Phase 3 of docs/PLAN.md.  Differences vs. the source:
+// Lifted from @qvac/ocr-onnx's addon/pipeline/StepBoundingBox.hpp.
+// Differences vs. the source:
 //   - namespace renamed to `easyocr::ggml::pipeline`,
 //   - the `CONSTRUCT_FROM_TUPLE(StepBoundingBox)` macro use is dropped
 //     (this repo does not use the step-template construction pattern).

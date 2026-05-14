@@ -1,5 +1,5 @@
-// Lifted verbatim from @qvac/ocr-onnx's addon/pipeline/Lang.cpp per Phase 5
-// of docs/PLAN.md. Only changes are the include path and the namespace.
+// Lifted verbatim from @qvac/ocr-onnx's addon/pipeline/Lang.cpp. Only changes
+// are the include path and the namespace.
 
 #include "easyocr-ggml/pipeline/lang.hpp"
 

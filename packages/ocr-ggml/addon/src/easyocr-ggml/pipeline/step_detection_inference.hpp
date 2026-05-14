@@ -2,8 +2,8 @@
 
 // CRAFT detection step.
 //
-// Adapted from @qvac/ocr-onnx's `addon/pipeline/StepDetectionInference.hpp`
-// per Phase 3 of docs/PLAN.md.  The pre-processing (resize + ImageNet
+// Adapted from @qvac/ocr-onnx's `addon/pipeline/StepDetectionInference.hpp`.
+// The pre-processing (resize + ImageNet
 // normalize) is the same; the inference glue is replaced with our GGML
 // graph (`build_craft`) instead of ONNX Runtime.
 //
@@ -31,8 +31,7 @@ class CraftWeights;
 namespace pipeline {
 
 // Per-stage wall-clock timings populated by every StepDetectionInference::
-// process() call.  Used by the `detect --profile` CLI mode and by Phase 11
-// Workstream 2 (detector profiling).  Field semantics:
+// process() call.  Used by the `detect --profile` CLI mode.  Field semantics:
 //   preprocessMs       resize + ImageNet normalize (CPU/OpenCV)
 //   graphBuildMs       ggml_init + build_craft + ggml_build_forward_expand
 //   graphAllocMs       ggml_gallocr_new + ggml_gallocr_alloc_graph

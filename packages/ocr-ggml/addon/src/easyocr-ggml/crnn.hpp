@@ -1,6 +1,6 @@
 #pragma once
 
-// CRNN gen-2 recognizer compute graph (Phase 4 of docs/PLAN.md).
+// CRNN gen-2 recognizer compute graph.
 //
 // `build_crnn_gen2` mirrors `easyocr/model/vgg_model.py`'s `Model.forward`:
 //

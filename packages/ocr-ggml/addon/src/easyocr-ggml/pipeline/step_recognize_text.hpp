@@ -1,6 +1,6 @@
 #pragma once
 
-// CRNN gen-2 recognition step (Phase 5 of docs/PLAN.md).
+// CRNN gen-2 recognition step.
 //
 // Adapted from @qvac/ocr-onnx's addon/pipeline/StepRecognizeText.hpp.
 // Differences vs. the source:
@@ -13,9 +13,8 @@
 //     extend the lifetime of the Ort tensor backing the cv::Mat header);
 //   - `Lang.cpp`'s character set for the requested language is asserted at
 //     load time to match the GGUF's `crnn.vocab` metadata, but the runtime
-//     vocab string is read from the GGUF (PLAN.md §6 endorses GGUF as the
-//     primary source of truth so custom-trained recognizers work without
-//     code changes);
+//     vocab string is read from the GGUF (so custom-trained recognizers
+//     work without code changes);
 //   - dropped: the `CONSTRUCT_FROM_TUPLE` macro use, the Windows ORT-leak
 //     workaround.
 //
@@ -47,8 +46,7 @@ class CrnnGen2Weights;
 namespace pipeline {
 
 // Per-stage wall-clock timings for one StepRecognizeText::process() call.
-// Used by `test_ocr_pipeline --profile` and Phase 11 Workstream 2 to make
-// the recognizer half of the pipeline observable.
+// Makes the recognizer half of the pipeline observable.
 //
 // Field semantics:
 //   populateMs     populateImageList + expandImgListWithRotatedImgs

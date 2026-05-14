@@ -1,5 +1,5 @@
-// Lifted verbatim from @qvac/ocr-onnx's addon/pipeline/StepBoundingBox.cpp
-// per Phase 3 of docs/PLAN.md, except for:
+// Lifted verbatim from @qvac/ocr-onnx's addon/pipeline/StepBoundingBox.cpp,
+// except for:
 //   - the include line (StepBoundingBox.hpp -> our pipeline/ path),
 //   - the qvac logger include replaced with our QLOG no-op shim,
 //   - the namespace renamed to `easyocr::ggml::pipeline`.

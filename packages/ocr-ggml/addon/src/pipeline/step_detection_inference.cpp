@@ -1,5 +1,4 @@
-// Adapted from @qvac/ocr-onnx's addon/pipeline/StepDetectionInference.cpp
-// per Phase 3 of docs/PLAN.md.
+// Adapted from @qvac/ocr-onnx's addon/pipeline/StepDetectionInference.cpp.
 //
 // Verbatim from source:
 //   - constants (MAX_IMAGE_SIZE, RATIO_DETECTOR_NET, SIZE_MULTIPLE,

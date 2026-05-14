@@ -1,5 +1,4 @@
-// Lifted verbatim from @qvac/ocr-onnx's addon/pipeline/Steps.cpp per Phase 3
-// of docs/PLAN.md, except for:
+// Lifted verbatim from @qvac/ocr-onnx's addon/pipeline/Steps.cpp, except for:
 //   - namespace renamed to `easyocr::ggml::pipeline`,
 //   - the Windows ORT-leak workaround removed (no Ort::Session here).
 

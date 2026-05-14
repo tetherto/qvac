@@ -23,7 +23,7 @@
 #     AND `cblas_sgemm` appears in section 3. Whether it is *actually used* at
 #     runtime depends on whether OcrModel routes through the scheduler API,
 #     which (today, mirroring upstream) it does not — so external BLAS is
-#     usually REGISTERED but UNUSED. See upstream docs/PLAN.md Workstream-3.
+#     usually REGISTERED but UNUSED.
 #   - Vulkan / OpenCL are AVAILABLE iff the corresponding `libggml-vulkan.so`
 #     / `libggml-opencl.so` is present AND the matching symbols appear. They
 #     are only EXERCISED if the addon is loaded with `useGPU=true` and the

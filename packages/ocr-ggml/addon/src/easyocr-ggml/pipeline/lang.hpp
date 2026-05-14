@@ -6,8 +6,8 @@
 #include <tuple>
 #include <vector>
 
-// Lifted from @qvac/ocr-onnx's addon/pipeline/Lang.hpp per Phase 5 of
-// docs/PLAN.md. Only change is the namespace.
+// Lifted from @qvac/ocr-onnx's addon/pipeline/Lang.hpp. Only change is the
+// namespace.
 namespace easyocr::ggml::pipeline {
 
 /**

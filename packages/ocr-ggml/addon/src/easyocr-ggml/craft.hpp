@@ -1,6 +1,6 @@
 #pragma once
 
-// CRAFT detector compute graph (Phase 2 of docs/PLAN.md).
+// CRAFT detector compute graph.
 //
 // `build_craft` emits a ggml graph that mirrors easyocr/craft.py layer-by-
 // layer.  All BatchNorm parameters are assumed to have been folded into the
