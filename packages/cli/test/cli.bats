@@ -554,6 +554,15 @@ http_status() {
   assert_error "${body}" "model_not_found"
 }
 
+@test "images edits: stream=true is not rejected before model lookup (parity with /images/generations)" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/images/edits" \
+    -F "image=@${FILE_TMPDIR}/tiny.png" \
+    -F "model=nonexistent" \
+    -F "prompt=p" -F "stream=true")
+  assert_error "${body}" "model_not_found"
+}
+
 # ── Serve: images on the publicBaseUrl-enabled server (port 19923) ────
 
 @test "images generations: response_format=url is ACCEPTED when publicBaseUrl is set (then 404 on unknown model)" {
@@ -585,6 +594,20 @@ http_status() {
   code=$(curl -s -o "${out}" -w "%{http_code}" "http://127.0.0.1:19920/v1/files/${id}/content")
   [[ "${code}" == "200" ]]
   cmp -s "${out}" "${FILE_TMPDIR}/tiny.png"
+}
+
+@test "GET /v1/files/:id/content sets Cache-Control private with bounded max-age" {
+  local upload
+  upload=$(curl -s "http://127.0.0.1:19920/v1/files" \
+    -F "file=@${FILE_TMPDIR}/tiny.png" -F "purpose=image_generation")
+  local id
+  id=$(echo "${upload}" | jq -r '.id')
+  local headers
+  headers=$(curl -s -D- -o /dev/null "http://127.0.0.1:19920/v1/files/${id}/content")
+  [[ "${headers}" =~ [Cc]ache-[Cc]ontrol:\ private,\ max-age=([0-9]+) ]]
+  local max_age=${BASH_REMATCH[1]}
+  [[ "${max_age}" -gt 0 ]]
+  [[ "${max_age}" -le 3600 ]]
 }
 
 # ── Serve: routing ────────────────────────────────────────────────────

@@ -100,6 +100,10 @@ export function handleGetFile (
 /**
  * `GET /v1/files/{file_id}/content`: returns the raw bytes with the stored
  * `Content-Type`. Used by image routes to back `response_format=url`.
+ *
+ * Sets `Cache-Control: private, max-age=<ttl-remaining>` so downstream proxies
+ * and browsers cannot serve stale bytes after the in-memory store has evicted
+ * them. Falls back to `private, no-store` when no TTL is configured.
  */
 export function handleGetFileContent (
   _req: IncomingMessage,
@@ -113,9 +117,17 @@ export function handleGetFileContent (
     sendError(res, 404, 'file_not_found', `File "${id}" not found.`)
     return
   }
+
+  let cacheControl = 'private, no-store'
+  if (record.expiresAtMs !== null) {
+    const remainingSec = Math.max(0, Math.floor((record.expiresAtMs - Date.now()) / 1000))
+    cacheControl = `private, max-age=${remainingSec}`
+  }
+
   res.writeHead(200, {
     'Content-Type': record.contentType,
-    'Content-Length': record.data.length.toString()
+    'Content-Length': record.data.length.toString(),
+    'Cache-Control': cacheControl
   })
   res.end(record.data)
 }

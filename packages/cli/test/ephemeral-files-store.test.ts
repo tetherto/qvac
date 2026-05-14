@@ -20,6 +20,16 @@ describe('createEphemeralFilesStore', () => {
     assert.equal(got.purpose, 'assistants')
     assert.equal(got.contentType, 'application/octet-stream')
     assert.equal(got.createdAtMs, 1_700_000_000_000)
+    assert.equal(got.expiresAtMs, 1_700_000_000_000 + 60 * 60 * 1000)
+  })
+
+  it('expiresAtMs is null when ttl is disabled', () => {
+    const clock = () => 1_000
+    const store = createEphemeralFilesStore(clock, { ttlMs: 0 })
+    const id = store.put({ data: Buffer.from('x'), fileName: 'x', purpose: 'p' })
+    const got = store.get(id)
+    assert.notEqual(got, null)
+    if (got !== null) assert.equal(got.expiresAtMs, null)
   })
 
   it('put honors an explicit contentType', () => {
@@ -84,5 +94,46 @@ describe('createEphemeralFilesStore', () => {
     assert.notEqual(store.get(id), null)
     t = 5_000
     assert.equal(store.get(id), null)
+  })
+
+  it('fires onEvict with reason="ttl" when an expired record is read', () => {
+    let t = 1_000
+    const evictions: Array<{ id: string; reason: string }> = []
+    const store = createEphemeralFilesStore(() => t, {
+      ttlMs: 1_000,
+      onEvict: (id, reason) => evictions.push({ id, reason })
+    })
+    t = 1_000
+    const a = store.put({ data: Buffer.from('a'), fileName: 'a', purpose: 'p' })
+    t = 5_000
+    assert.equal(store.get(a), null)
+    assert.deepEqual(evictions, [{ id: a, reason: 'ttl' }])
+  })
+
+  it('fires onEvict with reason="max_files" when the file count cap is hit', () => {
+    let t = 1_000
+    const evictions: Array<{ id: string; reason: string }> = []
+    const store = createEphemeralFilesStore(() => t, {
+      ttlMs: 0,
+      maxFiles: 2,
+      onEvict: (id, reason) => evictions.push({ id, reason })
+    })
+    t = 1_000; const a = store.put({ data: Buffer.from('a'), fileName: 'a', purpose: 'p' })
+    t = 2_000; store.put({ data: Buffer.from('b'), fileName: 'b', purpose: 'p' })
+    t = 3_000; store.put({ data: Buffer.from('c'), fileName: 'c', purpose: 'p' })
+    assert.deepEqual(evictions, [{ id: a, reason: 'max_files' }])
+  })
+
+  it('fires onEvict with reason="max_bytes" when the byte cap is hit', () => {
+    let t = 1_000
+    const evictions: Array<{ id: string; reason: string }> = []
+    const store = createEphemeralFilesStore(() => t, {
+      ttlMs: 0,
+      maxBytes: 8,
+      onEvict: (id, reason) => evictions.push({ id, reason })
+    })
+    t = 1_000; const a = store.put({ data: Buffer.alloc(5), fileName: 'a', purpose: 'p' })
+    t = 2_000; store.put({ data: Buffer.alloc(5), fileName: 'b', purpose: 'p' })
+    assert.deepEqual(evictions, [{ id: a, reason: 'max_bytes' }])
   })
 })

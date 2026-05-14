@@ -28,7 +28,7 @@ function buildImageData (
   responseFormat: string,
   publicBaseUrl: string,
   ephemeralFiles: EphemeralFilesStore
-): Array<{ b64_json: string } | { url: string }> {
+): Array<{ b64_json: string } | { url: string; expires_at?: number }> {
   if (responseFormat !== 'url') {
     return buffers.map((buf) => ({ b64_json: Buffer.from(buf).toString('base64') }))
   }
@@ -39,7 +39,12 @@ function buildImageData (
       purpose: 'image_generation',
       contentType: RESPONSE_CONTENT_TYPE
     })
-    return { url: `${publicBaseUrl}/v1/files/${id}/content` }
+    const url = `${publicBaseUrl}/v1/files/${id}/content`
+    const stored = ephemeralFiles.get(id)
+    if (stored?.expiresAtMs != null) {
+      return { url, expires_at: Math.floor(stored.expiresAtMs / 1000) }
+    }
+    return { url }
   })
 }
 
@@ -258,10 +263,6 @@ export async function handleImagesEdits (req: IncomingMessage, res: ServerRespon
     return
   }
 
-  if (body['stream'] === true) {
-    ctx.logger.warn('stream=true is not supported for /v1/images/edits; returning the blocking JSON response.')
-  }
-
   const alias = 'alias' in modelEntry ? (modelEntry.alias as string) : modelEntry.id
   const registryEntry = ctx.registry.getEntry(alias)
   if (!registryEntry || registryEntry.state !== ctx.registry.STATES.READY) {
@@ -300,8 +301,9 @@ export async function handleImagesEdits (req: IncomingMessage, res: ServerRespon
   logImageUnsupportedParams(body, ctx.logger)
   logImageEditExtraWarnings(body, { extraImageCount }, ctx.logger)
 
+  const wantsStream = body['stream'] === true
   const dims = params.width && params.height ? `${params.width}x${params.height}` : 'default'
-  ctx.logger.info(`  image_edit model=${alias} prompt_chars=${params.prompt.length} size=${dims} n=${params.batch_count ?? 1} response_format=${responseFormat}`)
+  ctx.logger.info(`  image_edit model=${alias} prompt_chars=${params.prompt.length} size=${dims} n=${params.batch_count ?? 1} response_format=${responseFormat} stream=${wantsStream}`)
 
   try {
     const { buffers, stats } = await sdkDiffusion({
@@ -318,6 +320,11 @@ export async function handleImagesEdits (req: IncomingMessage, res: ServerRespon
     }
 
     const sizeStr = buildSizeString(params.width, params.height, stats?.width, stats?.height)
+
+    if (wantsStream) {
+      sendStreamingResponse(res, buffers, sizeStr)
+      return
+    }
 
     const data = buildImageData(buffers, responseFormat, ctx.serveConfig.publicBaseUrl ?? '', ctx.ephemeralFiles)
 

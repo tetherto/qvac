@@ -45,7 +45,11 @@ export async function startServer (options: StartServerOptions): Promise<http.Se
   ]
 
   const vectorStores = createVectorStoresStore()
-  const ephemeralFiles = createEphemeralFilesStore()
+  const ephemeralFiles = createEphemeralFilesStore(undefined, {
+    onEvict: (id, reason) => {
+      logger.warn(`ephemeral file evicted id=${id} reason=${reason}`)
+    }
+  })
   const chunkAttributions = createChunkAttributionStore()
   const ctx: RouteContext = { registry, serveConfig, logger, vectorStores, ephemeralFiles, chunkAttributions, responsesStore }
   logger.warn(responsesStore.bannerLine())
