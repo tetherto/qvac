@@ -5,10 +5,12 @@
 
 #include "inference-addon-cpp/Logger.hpp"
 
+// NOLINTNEXTLINE(modernize-concat-nested-namespaces)
 namespace qvac_lib_inference_addon_sd {
 namespace logging {
 
 // Global verbosity level shared across all SD model instances
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 extern qvac_lib_inference_addon_cpp::logger::Priority g_verbosityLevel;
 
 /**

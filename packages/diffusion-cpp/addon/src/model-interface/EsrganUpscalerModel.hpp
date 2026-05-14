@@ -49,7 +49,7 @@ private:
   qvac_lib_inference_addon_sd::SdCtxConfig config_;
   qvac_lib_inference_addon_sd::EsrganUpscaler upscaler_;
   mutable std::atomic<bool> cancelRequested_{false};
-  mutable qvac_lib_inference_addon_cpp::RuntimeStats lastStats_{};
+  mutable qvac_lib_inference_addon_cpp::RuntimeStats lastStats_;
 
   struct CumulativeStats {
     int64_t modelLoadMs{0};
