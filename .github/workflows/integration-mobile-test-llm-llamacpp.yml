@@ -1306,16 +1306,33 @@ jobs:
           # Pre-mark empty slots as DONE so perf-only mode (where some
           # slots are intentionally not scheduled) doesn't try to
           # poll them with an empty ARN.
+          # QVAC-18943: also init PREV_STATUS / RUNNING_AT trackers so
+          # the loop can detect state transitions (PENDING -> RUNNING,
+          # RUNNING -> COMPLETED, ...) and emit a `::notice::` the
+          # moment a Device Farm slot actually starts executing. Prior
+          # behaviour was a single PENDING line every 30s for up to 2h,
+          # so we could not tell from the logs whether a 60-min run had
+          # been queued for 5 min + executing for 55, or queued for 55
+          # min + executing for 5. The trackers + transition notices
+          # turn that into clear `queued X | executed Y` summaries.
           for i in $(seq 1 "$RUN_COUNT"); do
             eval "arn=\$RUN_ARN_$i"
             if [ -z "$arn" ]; then
               eval "DONE_$i=true"
               eval "STATUS_$i=\"SKIPPED\""
+              eval "PREV_STATUS_$i=\"SKIPPED\""
+              eval "RUNNING_AT_$i=\"\""
               eval "RESULT_$i=\"-\""
               eval "FAIL_$i=0"
             else
               eval "DONE_$i=false"
               eval "STATUS_$i=\"PENDING\""
+              # Leave PREV blank so the first observed status (typically
+              # PENDING / PENDING_CONCURRENCY) still fires a transition
+              # notice — gives operators a clear "monitoring started"
+              # signal even when AWS sits in PENDING for several polls.
+              eval "PREV_STATUS_$i=\"\""
+              eval "RUNNING_AT_$i=\"\""
               eval "RESULT_$i=\"-\""
               eval "FAIL_$i=0"
             fi
@@ -1349,6 +1366,49 @@ jobs:
                   eval "STATUS_$i=\"$STATUS_VAL\""
                   eval "RESULT_$i=\"$RESULT_VAL\""
                   if [[ "$STATUS_VAL" == "COMPLETED" ]]; then eval "DONE_$i=true"; fi
+                fi
+
+                # QVAC-18943: emit a state-transition notice the moment
+                # AWS reports a new status for this slot. Two cases get
+                # promoted to `::notice::` (visible at the top of the
+                # GitHub Actions job UI) because they bracket the
+                # interesting interval:
+                #   * <anything> -> RUNNING : Device Farm acquired a
+                #     device; everything before this was queue time.
+                #   * <anything> -> COMPLETED : run finished; we can
+                #     surface a queued / executed / total breakdown
+                #     using the elapsed timestamps we captured.
+                # Every other transition (e.g. PENDING ->
+                # PENDING_CONCURRENCY, SCHEDULING -> PREPARING) goes to
+                # a plain echo so the log still tells the full story
+                # without burying the two summaries in notice spam.
+                eval "prev_status=\$PREV_STATUS_$i"
+                eval "cur_status=\$STATUS_$i"
+                if [ -n "$cur_status" ] && [ "$cur_status" != "$prev_status" ]; then
+                  TS=$(date -u +%H:%M:%S)
+                  if [ "$cur_status" = "RUNNING" ]; then
+                    eval "running_at=\$RUNNING_AT_$i"
+                    if [ -z "$running_at" ]; then
+                      eval "RUNNING_AT_$i=$ELAPSED"
+                      echo "::notice title=Device Farm Run $i acquired device::[$TS] $prev_status -> RUNNING after ${ELAPSED}s of queue time"
+                    fi
+                  elif [ "$cur_status" = "COMPLETED" ]; then
+                    eval "running_at=\$RUNNING_AT_$i"
+                    if [ -n "$running_at" ]; then
+                      exec_time=$((ELAPSED - running_at))
+                      echo "::notice title=Device Farm Run $i finished::[$TS] result=$RESULT_VAL | queued ${running_at}s | executed ${exec_time}s | total ${ELAPSED}s"
+                    else
+                      # Defensive: COMPLETED without ever observing
+                      # RUNNING means we missed the RUNNING window
+                      # between two 30s polls (rare, only for trivially
+                      # short runs) or the run errored straight from a
+                      # pending state.
+                      echo "::notice title=Device Farm Run $i finished::[$TS] result=$RESULT_VAL | total ${ELAPSED}s (no RUNNING window observed)"
+                    fi
+                  else
+                    echo "🔄 Run $i: $prev_status -> $cur_status (elapsed ${ELAPSED}s)"
+                  fi
+                  eval "PREV_STATUS_$i=\"$cur_status\""
                 fi
               fi
               eval "STATUS_LINE=\"\$STATUS_LINE Run $i: \$STATUS_$i (\$RESULT_$i) |\""
