@@ -86,7 +86,7 @@ jobs:
         include:
           - platform: Android
             os: ubuntu-24.04
-            runner: qvac-ubuntu2404-x64
+            runner: ai-run-linux
           - platform: iOS
             os: macos-14
             runner: macos-14
