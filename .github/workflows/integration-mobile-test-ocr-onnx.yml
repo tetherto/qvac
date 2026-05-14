@@ -65,8 +65,10 @@ jobs:
       matrix:
         include:
           - platform: Android
-            runner: ai-run-linux
+            os: ubuntu-24.04
+            runner: qvac-ubuntu2404-x64
           - platform: iOS
+            os: macos-14
             runner: macos-14
 
     steps:

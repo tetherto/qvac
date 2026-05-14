@@ -520,10 +520,28 @@ test("sdcppConfigSchema: accepts upscaler config with all tuning fields", (t) =>
   t.is(result.success, true);
 });
 
-test("sdcppConfigSchema: rejects upscaler without model_src", (t) => {
+// `upscaler.model_src` is optional at the schema level so the same block
+// shape can be reused for standalone-upscaler mode (modelConfig.mode =
+// "upscale") where the primary modelSrc itself is the ESRGAN file. The
+// diffusion plugin enforces "model_src required in diffusion mode" at
+// createModel time — see the corresponding plugin test below.
+test("sdcppConfigSchema: accepts upscaler block without model_src (validated at plugin layer)", (t) => {
   const result = sdcppConfigSchema.safeParse({
     upscaler: { tile_size: 128 },
   });
+  t.is(result.success, true);
+});
+
+test("sdcppConfigSchema: accepts mode: 'upscale' for standalone ESRGAN", (t) => {
+  const result = sdcppConfigSchema.safeParse({
+    mode: "upscale",
+    upscaler: { tile_size: 128, threads: -1 },
+  });
+  t.is(result.success, true);
+});
+
+test("sdcppConfigSchema: rejects invalid mode value", (t) => {
+  const result = sdcppConfigSchema.safeParse({ mode: "img2vid" });
   t.is(result.success, false);
 });
 
@@ -808,6 +826,18 @@ test("loadModelOptionsBaseSchema: rejects diffusion with unknown config key (str
     modelConfig: { device: "gpu", notAField: true },
   });
   t.is(result.success, false);
+});
+
+test("loadModelOptionsBaseSchema: accepts diffusion with mode: 'upscale' (standalone ESRGAN)", (t) => {
+  const result = loadModelOptionsBaseSchema.safeParse({
+    modelSrc: "RealESRGAN_x4plus_anime_6B.pth",
+    modelType: "diffusion",
+    modelConfig: {
+      mode: "upscale",
+      upscaler: { tile_size: 128 },
+    },
+  });
+  t.is(result.success, true);
 });
 
 // ============================================

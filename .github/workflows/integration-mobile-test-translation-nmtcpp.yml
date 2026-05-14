@@ -49,7 +49,7 @@ on:
 jobs:
   build-and-test:
     name: Build ${{ matrix.platform }} and Run E2E Tests
-    runs-on: ${{ matrix.runner }}
+    runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
     timeout-minutes: 120
     continue-on-error: true
@@ -63,9 +63,10 @@ jobs:
       matrix:
         include:
           - platform: Android
-            runner: ai-run-linux
+            os: ubuntu-24.04
+            runner: qvac-ubuntu2404-x64
           - platform: iOS
-            runner: macos-14
+            os: macos-14
 
     steps:
       - name: Checkout composite action source

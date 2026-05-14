@@ -1,3 +1,4 @@
+import type { AbortSignal } from "bare-abort-controller";
 import type { RunOptions } from "@qvac/llm-llamacpp";
 import type {
   CompletionParams,
@@ -13,34 +14,25 @@ import {
   logCacheDisabled,
   logCacheInit,
   logCacheSave,
-  logCacheSaveError,
-  logCacheStatus,
   logMessagesToAddon,
 } from "@/server/bare/plugins/llamacpp-completion/ops/cache-logger";
 import {
-  clearCacheRegistry,
-  customCacheExists,
   extractSystemPrompt,
-  findMatchingCache,
-  generateConfigHash,
-  getCacheFilePath,
   getCurrentCacheInfo,
-  markCacheInitialized,
-  renameCacheFile,
 } from "@/server/bare/ops/kv-cache-utils";
 import {
   getModel,
   getModelConfig,
   type AnyModel,
 } from "@/server/bare/registry/model-registry";
+import { decideCachedHistorySlice } from "@/server/bare/plugins/llamacpp-completion/ops/kv-cache-state";
 import {
-  cachedMessageCounts,
-  clearCachedMessageCounts as clearCachedMessageCountsFromState,
-  decideCachedHistorySlice,
-  noteCancelRequested as noteCancelRequestedFromState,
-  shouldRecordSavedCount,
-  snapshotCancelCount,
-} from "@/server/bare/plugins/llamacpp-completion/ops/kv-cache-state";
+  createKvCacheSession,
+  generateConfigHash,
+  type KvCacheSession,
+  type TurnHandle,
+} from "@/server/bare/plugins/llamacpp-completion/ops/kv-cache-session";
+import type { DisposableScope } from "@/server/bare/runtime/disposable-scope";
 import {
   appendToolsToHistory,
   detectToolDialect,
@@ -50,6 +42,7 @@ import { parseToolCalls } from "@/server/utils/tools";
 import { getResponseFormatJsonSchema } from "@/server/utils/response-format";
 import { buildAutoCacheSaveHistory, type CacheMessage } from "@/server/utils";
 import { getServerLogger } from "@/logging";
+import type { Logger } from "@/logging/types";
 import { AttachmentNotFoundError } from "@/utils/errors-server";
 import { nowMs } from "@/profiling";
 import {
@@ -57,8 +50,7 @@ import {
   hasDefinedValues,
 } from "@/profiling/model-execution";
 import type { LlmStats } from "@/server/bare/types/addon-responses";
-import fs, { promises as fsPromises } from "bare-fs";
-import path from "bare-path";
+import fs from "bare-fs";
 
 const logger = getServerLogger();
 
@@ -110,37 +102,24 @@ type CompletionRunOptions = Pick<
   generationParams?: CompletionGenerationParams;
 };
 
-// Re-export so existing callers keep their import surface intact. The pure
-// state module has no `bare-*` imports, so we inject the platform path
-// separator here — without this, prefix-based clears would miss entries
-// under directory keys on Windows.
-export function clearCachedMessageCounts(prefix?: string): void {
-  clearCachedMessageCountsFromState(prefix, path.sep);
-}
-export const noteCancelRequested = noteCancelRequestedFromState;
-
-// Verify the addon actually persisted the cache file before recording its
-// message count. The addon currently swallows write errors silently, so a
-// missing file means the next turn must resend the full history rather than
-// slicing against a stale `savedCount`.
-//
-// TODO: once the addon surfaces save failures (e.g. throws
-// `UnableToSaveSessionFile` when `llama_state_save_file` returns false),
-// drop the `access()` probe and wrap the `model.run()` call in a real
-// try/catch that forwards the error to `logCacheSaveError`.
-async function recordCacheSaveCount(
-  cachePath: string,
-  messageCount: number,
-): Promise<boolean> {
-  try {
-    await fsPromises.access(cachePath);
-    cachedMessageCounts.set(cachePath, messageCount);
-    return true;
-  } catch (err) {
-    cachedMessageCounts.delete(cachePath);
-    logCacheSaveError(cachePath, err);
-    return false;
-  }
+/**
+ * Decide whether a completed turn earned the right to record its kv-cache
+ * boundary. A `savedCount` is only safe to write when the turn ran to
+ * completion AND produced at least one token — anything else (cancelled
+ * mid-decode, zero-token reply, early EOS) leaves the on-disk cache file
+ * in an unknown state relative to `history.length + 1`, and a stale entry
+ * would slice the next turn's history down to an empty payload.
+ *
+ * Replaces the pre-0.11.0 `shouldRecordSavedCount(wasCancelled, ...)` with
+ * a signal-driven check that reads directly from the request's
+ * `AbortSignal`. The local helper keeps the call sites in
+ * `completion-stream.ts` honest without importing the registry every time.
+ */
+function shouldCommitTurn(
+  signal: AbortSignal,
+  producedTokens: boolean,
+): boolean {
+  return !signal.aborted && producedTokens;
 }
 
 function transformMessage(
@@ -270,7 +249,8 @@ type HistoryMsg = {
  *     consumer pushing both an assistant transcript and a follow-up user
  *     message between completions) all reaches the model.
  *   - Cache hit with a stale/missing `savedCount`: fall back to the full
- *     non-system history.
+ *     non-system history. The session is told (`dropStaleSavedCount`) so
+ *     the bad boundary doesn't propagate into the next turn.
  *
  * Dynamic mode (`tools` argument set):
  *   - The addon anchors the tool block after the last user message and
@@ -287,7 +267,8 @@ type HistoryMsg = {
  *       * otherwise: send just the last message + tool block.
  */
 function prepareMessagesForCache(
-  cachePathToUse: string,
+  session: KvCacheSession,
+  turn: TurnHandle,
   cacheExists: boolean,
   history: HistoryMsg[],
   tools?: Tool[],
@@ -301,21 +282,23 @@ function prepareMessagesForCache(
   }
 
   if (!dynamic) {
-    // Static path — slice from the recorded `savedCount` so callers can
+    // Static path — slice from the turn's `savedCount` so callers can
     // stage multiple messages between completions. `decideCachedHistorySlice`
     // also guards against the QVAC-17780 stale-count regression: if the
     // saved boundary would slice the history down to an empty payload
     // (e.g. after a cancelled mid-decode), it falls back to the full
     // non-system history and signals the caller to drop the bad entry.
-    const savedCount = cachedMessageCounts.get(cachePathToUse) ?? 0;
+    // The session owns the entry; `dropStaleSavedCount` clears it
+    // without touching the on-disk file (the file is still trustworthy
+    // — only the boundary count is wrong).
     const { messages, clearStaleCount } = decideCachedHistorySlice(
-      savedCount,
+      turn.savedCount,
       cacheExists,
       history,
     );
 
     if (clearStaleCount) {
-      cachedMessageCounts.delete(cachePathToUse);
+      session.dropStaleSavedCount(turn);
     }
 
     return transformMessages(messages);
@@ -338,8 +321,7 @@ function prepareMessagesForCache(
 
   if (lastMsg.role === "user") {
     const prevMsg = history[history.length - 2];
-    const tail =
-      prevMsg?.role === "assistant" ? [prevMsg, lastMsg] : [lastMsg];
+    const tail = prevMsg?.role === "assistant" ? [prevMsg, lastMsg] : [lastMsg];
     return [...transformMessages(tail), ...addTools];
   }
 
@@ -434,9 +416,21 @@ export async function* completion(
     toolDialect?: ToolDialect;
     responseFormat?: ResponseFormat;
   },
+  opts: {
+    signal: AbortSignal;
+    scope: DisposableScope;
+    /**
+     * Request-scoped logger forwarded to `createKvCacheSession` so
+     * kv-cache lines share the request's lifecycle prefix. Falls
+     * back to the module-level server logger when omitted.
+     */
+    logger?: Logger;
+  },
 ): AsyncGenerator<{ token: string }, CompletionResult, unknown> {
   const { history, modelId, kvCache, tools, generationParams, responseFormat } =
     params;
+  const { signal, scope } = opts;
+  const requestLogger = opts.logger ?? logger;
 
   const modelConfig = getModelConfig(modelId);
   const toolsEnabled = (modelConfig as { tools?: boolean }).tools === true;
@@ -471,226 +465,48 @@ export async function* completion(
 
   const model = getModel(modelId);
 
-  if (kvCache) {
-    const systemPromptFromHistory = extractSystemPrompt(history);
-    // Dynamic mode lets each turn carry its own tool set, so the cache
-    // hash must not depend on the tool list — otherwise a tool change
-    // would force a fresh cache file and defeat the whole optimisation.
-    const configHash = generateConfigHash(
-      systemPromptFromHistory,
-      dynamicTools ? undefined : tools,
-    );
-
-    const systemPromptToUse =
-      systemPromptFromHistory ||
-      (modelConfig as { system_prompt?: string }).system_prompt ||
-      "You are a helpful assistant.";
-
-    let cachePathToUse: string;
-
-    if (typeof kvCache === "string") {
-      cachePathToUse = await getCacheFilePath(modelId, configHash, kvCache);
-      let cacheExists = await customCacheExists(modelId, configHash, kvCache);
-      logCacheStatus(kvCache, cacheExists);
-
-      if (!cacheExists) {
-        await initSystemPromptCache(
-          model,
-          cachePathToUse,
-          systemPromptToUse,
-          kvCache,
-          // Static-mode tools are baked into the system-prompt cache so
-          // they're shared across the session. Dynamic-mode tools belong
-          // to a per-turn anchor and must not enter the system cache.
-          staticTools ? tools : undefined,
+  // Hard-cancel wiring: when the registry aborts the request's signal,
+  // forward to the addon so the C++ work stops as soon as it can. The
+  // SDK still treats `signal.aborted` as the truth for cancel detection
+  // (post-completion bookkeeping below) — this listener only shortens
+  // the latency between "user clicked stop" and "addon stops decoding".
+  //
+  // Fire-and-forget by construction (event listeners can't `await`), but
+  // `addon.cancel()` returns a Promise — if it ever rejects the bare
+  // `void` would leak it as an unhandledRejection. Attach `.catch(...)`
+  // so a rejection is logged and the process stays clean; the iterator
+  // below still sees EOF/empty tokens via the addon's normal cancel path
+  // so callers aren't affected.
+  const onAbort = () => {
+    const addon = model.addon;
+    if (addon?.cancel) {
+      addon.cancel.call(addon).catch((err: unknown) => {
+        requestLogger.warn(
+          `[cancel] addon.cancel() rejected during abort for modelId=${modelId}: ${err instanceof Error ? err.message : String(err)}`,
         );
-        markCacheInitialized(modelId, configHash, kvCache);
-        cacheExists = true;
-      }
-
-      const messagesToSend = prepareMessagesForCache(
-        cachePathToUse,
-        cacheExists,
-        history,
-        dynamicTools ? tools : undefined,
-      );
-      logMessagesToAddon(messagesToSend, "PROMPT_SEND");
-
-      const cancelCountBefore = snapshotCancelCount(modelId);
-      const result = yield* processModelResponse(
-        model,
-        messagesToSend,
-        tools,
-        mergedGenerationParams,
-        { cacheKey: cachePathToUse, saveCacheToDisk: true },
-        dialect,
-      );
-      const wasCancelled = snapshotCancelCount(modelId) > cancelCountBefore;
-
-      if (shouldRecordSavedCount(wasCancelled, result.producedTokens)) {
-        // Turn ran to completion and produced content — record the new
-        // boundary so the next turn can slice its history.
-        await recordCacheSaveCount(cachePathToUse, history.length + 1);
-      } else {
-        // The addon writes the cache file unconditionally on
-        // `saveCacheToDisk` turns, including cancellations and zero-token
-        // exits, so what's left on disk holds partial decode state that
-        // does not correspond to a clean turn boundary. Mirror the
-        // auto-key handling: drop the file, clear the in-memory init
-        // flag (otherwise `customCacheExists` would still report true),
-        // and forget the saved count. Next turn re-primes the system
-        // prompt cleanly — a one-turn perf hit, but no risk of the
-        // addon loading the stale KV state.
-        try {
-          await fsPromises.unlink(cachePathToUse);
-        } catch (unlinkError) {
-          logger.warn(
-            `[kv-cache] Failed to remove cache file after cancelled or empty custom-key turn; next turn may load stale KV state. path=${cachePathToUse} error=${unlinkError instanceof Error ? unlinkError.message : String(unlinkError)}`,
-          );
-        }
-        clearCacheRegistry({ cacheKey: kvCache, modelId });
-        cachedMessageCounts.delete(cachePathToUse);
-      }
-      return result;
-    } else {
-      // Auto-generate cache key based on conversation history
-      const cacheMessages: CacheMessage[] = history.map((msg) => ({
-        role: msg.role,
-        content: msg.content,
-        attachments: msg.attachments ?? undefined,
-      }));
-
-      const existingCache = await findMatchingCache(
-        modelId,
-        configHash,
-        cacheMessages,
-      );
-      const preResponseCacheInfo = await getCurrentCacheInfo(
-        modelId,
-        configHash,
-        cacheMessages,
-      );
-
-      cachePathToUse =
-        existingCache !== null
-          ? existingCache.cachePath
-          : preResponseCacheInfo.cachePath;
-
-      let cacheExists = existingCache !== null;
-      logCacheStatus("auto", cacheExists);
-
-      if (!cacheExists) {
-        await initSystemPromptCache(
-          model,
-          cachePathToUse,
-          systemPromptToUse,
-          "auto",
-          staticTools ? tools : undefined,
-        );
-        markCacheInitialized(
-          modelId,
-          configHash,
-          preResponseCacheInfo.cacheKey,
-        );
-        cacheExists = true;
-      }
-
-      const messagesToSend = prepareMessagesForCache(
-        cachePathToUse,
-        cacheExists,
-        history,
-        dynamicTools ? tools : undefined,
-      );
-      logMessagesToAddon(messagesToSend, "PROMPT_SEND");
-
-      const cancelCountBefore = snapshotCancelCount(modelId);
-      const result = yield* processModelResponse(
-        model,
-        messagesToSend,
-        tools,
-        mergedGenerationParams,
-        { cacheKey: cachePathToUse, saveCacheToDisk: true },
-        dialect,
-      );
-      const wasCancelled = snapshotCancelCount(modelId) > cancelCountBefore;
-
-      // TODO: support auto-cache for tool-call turns by keying off the
-      // structured assistant/tool messages callers push into history,
-      // not result.responseText (which is raw tool-call markup here).
-      // Until then, remove any cache file the addon wrote so it doesn't
-      // leak on disk (the next turn would compute a different key and
-      // never reach it).
-      if (result.toolCalls.length > 0) {
-        logger.warn(
-          `[kv-cache] Auto cache tool-call turn; removing orphaned cache to avoid disk leak. path=${cachePathToUse}`,
-        );
-        try {
-          await fsPromises.unlink(cachePathToUse);
-        } catch (unlinkError) {
-          logger.warn(
-            `[kv-cache] Failed to remove orphaned tool-turn cache file; disk leak likely. path=${cachePathToUse} error=${unlinkError instanceof Error ? unlinkError.message : String(unlinkError)}`,
-          );
-        }
-        cachedMessageCounts.delete(cachePathToUse);
-        return result;
-      }
-
-      // A cancelled or zero-token turn cannot be promoted to a post-response
-      // cache: the post-response key is derived from `result.responseText`,
-      // which is empty/partial in those cases, and the on-disk cache the
-      // addon wrote is not aligned with the current-history hash. Treat it
-      // like the tool-call branch — drop the cache file and clear the count.
-      if (!shouldRecordSavedCount(wasCancelled, result.producedTokens)) {
-        try {
-          await fsPromises.unlink(cachePathToUse);
-        } catch (unlinkError) {
-          logger.warn(
-            `[kv-cache] Failed to remove cache file after cancelled or empty turn; disk leak possible. path=${cachePathToUse} error=${unlinkError instanceof Error ? unlinkError.message : String(unlinkError)}`,
-          );
-        }
-        cachedMessageCounts.delete(cachePathToUse);
-        return result;
-      }
-
-      const savedHistory = buildAutoCacheSaveHistory(
-        cacheMessages,
-        result.responseText,
-      );
-      const postResponseCacheInfo = await getCurrentCacheInfo(
-        modelId,
-        configHash,
-        savedHistory,
-      );
-
-      if (
-        !(await renameCacheFile(
-          cachePathToUse,
-          postResponseCacheInfo.cachePath,
-        ))
-      ) {
-        logger.warn(
-          `[kv-cache] Auto cache rename failed; removing stale cache to avoid disk leak. from=${cachePathToUse} to=${postResponseCacheInfo.cachePath}`,
-        );
-        try {
-          await fsPromises.unlink(cachePathToUse);
-        } catch (unlinkError) {
-          logger.warn(
-            `[kv-cache] Failed to remove stale cache file; disk leak likely. path=${cachePathToUse} error=${unlinkError instanceof Error ? unlinkError.message : String(unlinkError)}`,
-          );
-        }
-        cachedMessageCounts.delete(cachePathToUse);
-        return result;
-      }
-
-      cachedMessageCounts.delete(cachePathToUse);
-      await recordCacheSaveCount(
-        postResponseCacheInfo.cachePath,
-        savedHistory.length,
-      );
-
-      return result;
+      });
     }
-  } else {
+  };
+  signal.addEventListener("abort", onAbort, { once: true });
+  // `addEventListener("abort", ..., { once: true })` does *not* fire if
+  // the signal is already aborted at register time — but the registry
+  // synchronously aborts a fresh controller when `parentSignal` was
+  // already aborted at `begin(...)`. Without this fall-through, the
+  // addon would keep decoding until the post-loop check notices.
+  // Re-using `onAbort` here keeps the listener body as the single
+  // source of truth for "what cancel does."
+  if (signal.aborted) onAbort();
+
+  // Detach the abort listener on every exit path (happy, throw, generator
+  // `return()` from upstream). `{ once: true }` already removes the
+  // listener if the signal fires, so the `removeEventListener` here is
+  // the cleanup hook for the signal-never-fired path.
+  scope.defer(() => {
+    signal.removeEventListener("abort", onAbort);
+  });
+
+  if (!kvCache) {
+    // KV-cache disabled — straight passthrough, no session involvement.
     let historyWithTools: Array<HistoryMsg | Tool> = history;
     if (staticTools && tools) {
       historyWithTools = prependToolsToHistory(history, tools);
@@ -710,4 +526,146 @@ export async function* completion(
       dialect,
     );
   }
+
+  // ---- KV-cache path. The session owns all three bookkeeping layers
+  // (on-disk `.bin`, `initializedCaches`, `cachedMessageCounts`). The
+  // handler asks for a turn, registers rollback on the scope, and on
+  // the happy path calls `commitTurn` which short-circuits the deferred
+  // rollback. Cancellations / zero-token replies / rename failures all
+  // unwind through the same `scope.defer` hook. ----
+
+  const session = createKvCacheSession(modelId, { logger: requestLogger });
+  const systemPromptFromHistory = extractSystemPrompt(history);
+  // Dynamic mode lets each turn carry its own tool set, so the cache
+  // hash must not depend on the tool list — otherwise a tool change
+  // would force a fresh cache file and defeat the whole optimisation.
+  const configHash = generateConfigHash(
+    systemPromptFromHistory,
+    dynamicTools ? undefined : tools,
+  );
+
+  const systemPromptToUse =
+    systemPromptFromHistory ||
+    (modelConfig as { system_prompt?: string }).system_prompt ||
+    "You are a helpful assistant.";
+
+  const primeIfMissing = async (cachePath: string) => {
+    await initSystemPromptCache(
+      model,
+      cachePath,
+      systemPromptToUse,
+      typeof kvCache === "string" ? kvCache : "auto",
+      // Static-mode tools are baked into the system-prompt cache so
+      // they're shared across the session. Dynamic-mode tools belong
+      // to a per-turn anchor and must not enter the system cache.
+      staticTools ? tools : undefined,
+    );
+  };
+
+  let turn: TurnHandle;
+  if (typeof kvCache === "string") {
+    turn = await session.beginTurn({
+      kind: "custom",
+      customKey: kvCache,
+      configHash,
+      primeIfMissing,
+    });
+  } else {
+    const cacheMessages: CacheMessage[] = history.map((msg) => ({
+      role: msg.role,
+      content: msg.content,
+      attachments: msg.attachments ?? undefined,
+    }));
+    turn = await session.beginTurn({
+      kind: "auto",
+      configHash,
+      history: cacheMessages,
+      primeIfMissing,
+    });
+  }
+
+  // Single cleanup hook for every non-success exit path. `commitTurn`
+  // flips the turn's internal `committed` flag so this becomes a no-op
+  // on the happy path. Scope unwinding is LIFO — registered after the
+  // `removeEventListener` defer above so rollback runs before the
+  // listener detach.
+  scope.defer(() => session.rollback(turn));
+
+  // `cacheExists` is implied by `beginTurn` — the session either found
+  // an existing cache or just primed one. Pass `true` to the message
+  // selector so the slicing branches engage.
+  const messagesToSend = prepareMessagesForCache(
+    session,
+    turn,
+    /* cacheExists */ true,
+    history,
+    dynamicTools ? tools : undefined,
+  );
+  logMessagesToAddon(messagesToSend, "PROMPT_SEND");
+
+  const result = yield* processModelResponse(
+    model,
+    messagesToSend,
+    tools,
+    mergedGenerationParams,
+    { cacheKey: turn.cachePath, saveCacheToDisk: true },
+    dialect,
+  );
+
+  if (typeof kvCache === "string") {
+    // Custom-key path: the addon wrote the new cache state inline at
+    // the same path. Either commit (records the boundary, suppresses
+    // rollback) or fall through to the deferred rollback.
+    if (shouldCommitTurn(signal, result.producedTokens)) {
+      await session.commitTurn(turn, {
+        kind: "static",
+        messageCount: history.length + 1,
+      });
+    }
+    return result;
+  }
+
+  // Auto-cache path.
+  //
+  // Tool-call turns: the auto-cache key is derived from
+  // `result.responseText`, which here is raw tool-call markup rather
+  // than a clean assistant message. There's no safe post-response key
+  // to rename to, so we let the deferred rollback drop the file. Once
+  // the SDK supports auto-cache for structured assistant/tool turns,
+  // this becomes a normal commit path.
+  if (result.toolCalls.length > 0) {
+    logger.warn(
+      `[kv-cache] Auto cache tool-call turn; rolling back to avoid disk leak. path=${turn.cachePath}`,
+    );
+    return result;
+  }
+
+  if (!shouldCommitTurn(signal, result.producedTokens)) {
+    // Cancelled or zero-token turn — the addon wrote the file but its
+    // contents don't correspond to a clean turn boundary. Let the
+    // deferred rollback unlink it.
+    return result;
+  }
+
+  const savedHistory = buildAutoCacheSaveHistory(
+    history.map((msg) => ({
+      role: msg.role,
+      content: msg.content,
+      attachments: msg.attachments ?? undefined,
+    })),
+    result.responseText,
+  );
+  const postResponseCacheInfo = await getCurrentCacheInfo(
+    modelId,
+    configHash,
+    savedHistory,
+  );
+
+  await session.commitTurn(turn, {
+    kind: "autoRename",
+    targetCachePath: postResponseCacheInfo.cachePath,
+    messageCount: savedHistory.length,
+  });
+
+  return result;
 }

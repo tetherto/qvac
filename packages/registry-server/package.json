@@ -55,7 +55,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.998.0",
     "@huggingface/gguf": "^0.3.3",
-    "@huggingface/hub": "^2.4.1",
+    "@huggingface/hub": "^2.11.0",
     "@qvac/registry-schema": "^0.1.2",
     "autobase": "^7.18.1",
     "b4a": "^1.6.7",
@@ -84,6 +84,7 @@
     "readline": "npm:bare-node-readline",
     "ready-resource": "^1.2.0",
     "stream": "npm:bare-node-stream",
+    "undici": "^7.0.0",
     "zod": "^3.24.0"
   },
   "devDependencies": {

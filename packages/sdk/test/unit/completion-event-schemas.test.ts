@@ -28,6 +28,34 @@ test("completionDone: enforces error/stopReason invariant", (t) => {
   bad({ type: "completionDone", seq: 0, error: { message: "orphan" } });
 });
 
+test("completionDone: accepts the 'cancelled' stopReason on the success path", (t) => {
+  // A cancelled completion is a *clean* termination, not an error. The
+  // event must validate against the `successDoneSchema` discriminant —
+  // same shape as `"eos"` — so stream-first consumers see the cancel
+  // as a typed `stopReason` rather than a thrown error. The companion
+  // `errorDoneSchema`'s `stopReason: "error"` is reserved for genuine
+  // mid-stream failures where the partial state is unsafe to use.
+  const ok = (v: unknown) => t.is(doneEventSchema.safeParse(v).success, true);
+  const bad = (v: unknown) => t.is(doneEventSchema.safeParse(v).success, false);
+
+  ok({ type: "completionDone", seq: 5, stopReason: "cancelled" });
+  ok({
+    type: "completionDone",
+    seq: 5,
+    stopReason: "cancelled",
+    raw: { fullText: "partial..." },
+  });
+
+  // Cancelled is NOT a valid error-done discriminant — the error
+  // payload is forbidden because the stream-end carries no error.
+  bad({
+    type: "completionDone",
+    seq: 5,
+    stopReason: "cancelled",
+    error: { message: "spurious" },
+  });
+});
+
 test("completionEventSchema: routes event types and rejects unknown", (t) => {
   const ok = (v: unknown) => t.is(completionEventSchema.safeParse(v).success, true);
 
@@ -37,6 +65,7 @@ test("completionEventSchema: routes event types and rejects unknown", (t) => {
   ok({ type: "completionStats", seq: 3, stats: { tokensPerSecond: 45 } });
   ok({ type: "completionDone", seq: 4, stopReason: "error", error: { message: "timeout" } });
   ok({ type: "completionDone", seq: 5 });
+  ok({ type: "completionDone", seq: 6, stopReason: "cancelled" });
 
   t.is(completionEventSchema.safeParse({ type: "unknown", seq: 0 }).success, false);
   t.is(completionEventSchema.safeParse({ type: "contentDelta", seq: -1, text: "x" }).success, false);

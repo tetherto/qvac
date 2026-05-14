@@ -2,8 +2,7 @@ import {
   loadModel,
   unloadModel,
   transcribe,
-  PARAKEET_CTC_FP32,
-  PARAKEET_CTC_TOKENIZER,
+  PARAKEET_CTC_0_6B_Q8_0,
 } from "@qvac/sdk";
 
 const args = process.argv.slice(2);
@@ -11,26 +10,20 @@ const args = process.argv.slice(2);
 if (!args[0]) {
   console.error(
     "Usage: bun run examples/transcription/parakeet-ctc-filesystem.ts <wav-file> " +
-      "[model.onnx] [tokenizer.json]",
+      "[parakeet-ctc-gguf]",
   );
-  console.error("\nIf model paths are omitted, defaults to registry models.");
+  console.error("\nIf the model path is omitted, defaults to the registry model.");
   process.exit(1);
 }
 
 const audioFilePath = args[0];
-const parakeetCtcModelSrc = args[1] ?? PARAKEET_CTC_FP32;
-const parakeetTokenizerSrc = args[2] ?? PARAKEET_CTC_TOKENIZER;
+const parakeetModelSrc = args[1] ?? PARAKEET_CTC_0_6B_Q8_0;
 
 try {
   console.log("Loading Parakeet CTC model...");
   const modelId = await loadModel({
-    modelSrc: parakeetCtcModelSrc,
+    modelSrc: parakeetModelSrc,
     modelType: "parakeet",
-    modelConfig: {
-      modelType: "ctc",
-      parakeetCtcModelSrc,
-      parakeetTokenizerSrc,
-    },
     onProgress: (progress) => {
       console.log(`Download progress: ${progress.percentage.toFixed(1)}%`);
     },
@@ -48,6 +41,6 @@ try {
   await unloadModel({ modelId });
   console.log("Done");
 } catch (error) {
-  console.error("Error:", error);
+  console.error("❌ Error:", error);
   process.exit(1);
 }

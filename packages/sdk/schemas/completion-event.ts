@@ -63,7 +63,17 @@ const rawOutputSchema = z.object({
   fullText: z.string(),
 });
 
-const stopReasonEnum = z.enum(["eos", "length", "stopSequence"]);
+// `"cancelled"` is a clean termination, not a mid-stream failure: the
+// stream ended on purpose because the request was aborted, just not at
+// EOS. It rides the success-done path (alongside "eos" / "length" /
+// "stopSequence") so consumers iterating `events` see the stream end
+// naturally. The companion error path (`errorDoneSchema` below) keeps
+// `stopReason: "error"` for actual mid-stream failures where the
+// partial state is unsafe to use. The promise-aggregates on the
+// client-side `CompletionRun` (`final` / `text` / `toolCalls` / `stats`)
+// reject with `InferenceCancelledError` carrying the partial state — see
+// `client/api/completion-stream.ts` for the rejection plumbing.
+const stopReasonEnum = z.enum(["eos", "length", "stopSequence", "cancelled"]);
 
 const successDoneSchema = z
   .object({
@@ -133,6 +143,17 @@ export type CompletionFinal = {
 };
 
 export type CompletionRun = {
+  /**
+   * Stable identifier for this run, generated client-side at call time
+   * (UUIDv4 when `crypto.randomUUID` is available, otherwise an opaque
+   * random hex token) and available synchronously the moment
+   * `completion(...)` returns. Pass it to `cancel({ requestId })` to
+   * target this specific request without affecting any other inference
+   * running on the same model. The cancel only takes effect once the
+   * server has begun the request, so a cancel issued in the same tick
+   * as `completion(...)` may race the begin and is logged as a no-match.
+   */
+  requestId: string;
   /** Ordered stream of typed completion events — the canonical consumption API. */
   events: AsyncIterable<CompletionEvent>;
   /** Resolves when the stream ends with aggregated content, thinking, tool calls, stats, and raw output. */
