@@ -27,6 +27,17 @@ export type SDKResponseFormat =
       }
     }
 
+export interface RagWorkspaceInfo {
+  name: string
+  open: boolean
+}
+
+export interface RagSearchResult {
+  id: string
+  content: string
+  score: number
+}
+
 interface SDKModule {
   loadModel: (opts: { modelSrc: string; modelType: string; modelConfig: Record<string, unknown> }) => Promise<string>
   unloadModel: (opts: { modelId: string }) => Promise<void>
@@ -41,6 +52,22 @@ interface SDKModule {
   embed: (opts: { modelId: string; text: string | string[] }) => Promise<{ embedding: number[] | number[][]; stats?: Record<string, unknown> }>
   transcribe: (opts: { modelId: string; audioChunk: string | Buffer; prompt?: string }) => Promise<string>
   diffusion: (opts: SDKDiffusionParams) => SDKDiffusionResult
+  ragListWorkspaces: () => Promise<RagWorkspaceInfo[]>
+  ragSearch: (opts: {
+    modelId: string
+    query: string
+    topK?: number
+    n?: number
+    workspace?: string
+  }) => Promise<RagSearchResult[]>
+  ragDeleteWorkspace: (opts: { workspace: string }) => Promise<void>
+  ragCloseWorkspace: (opts: { workspace?: string; deleteOnClose?: boolean }) => Promise<void>
+  ragIngest: (opts: {
+    modelId: string
+    documents: string | string[]
+    workspace?: string
+    chunk?: boolean
+  }) => Promise<{ processed: unknown[]; droppedIndices: number[] }>
   close: () => Promise<void>
   [key: string]: unknown
 }
@@ -280,6 +307,61 @@ export async function sdkDiffusion (opts: {
   ])
 
   return { buffers, stats }
+}
+
+export async function sdkRagListWorkspaces (): Promise<RagWorkspaceInfo[]> {
+  const { ragListWorkspaces } = await getSDK()
+  return ragListWorkspaces()
+}
+
+export async function sdkRagSearch (opts: {
+  modelId: string
+  query: string
+  topK?: number | undefined
+  n?: number | undefined
+  workspace?: string | undefined
+}): Promise<RagSearchResult[]> {
+  const { ragSearch } = await getSDK()
+  const params: Parameters<SDKModule['ragSearch']>[0] = {
+    modelId: opts.modelId,
+    query: opts.query
+  }
+  if (opts.topK !== undefined) params.topK = opts.topK
+  if (opts.n !== undefined) params.n = opts.n
+  if (opts.workspace !== undefined) params.workspace = opts.workspace
+  return ragSearch(params)
+}
+
+export async function sdkRagDeleteWorkspace (opts: { workspace: string }): Promise<void> {
+  const { ragDeleteWorkspace } = await getSDK()
+  await ragDeleteWorkspace({ workspace: opts.workspace })
+}
+
+export async function sdkRagCloseWorkspace (opts: {
+  workspace?: string | undefined
+  deleteOnClose?: boolean | undefined
+}): Promise<void> {
+  const { ragCloseWorkspace } = await getSDK()
+  const params: Parameters<SDKModule['ragCloseWorkspace']>[0] = {}
+  if (opts.workspace !== undefined) params.workspace = opts.workspace
+  if (opts.deleteOnClose !== undefined) params.deleteOnClose = opts.deleteOnClose
+  await ragCloseWorkspace(params)
+}
+
+export async function sdkRagIngest (opts: {
+  modelId: string
+  documents: string | string[]
+  workspace?: string | undefined
+  chunk?: boolean | undefined
+}): Promise<{ processed: unknown[]; droppedIndices: number[] }> {
+  const { ragIngest } = await getSDK()
+  const params: Parameters<SDKModule['ragIngest']>[0] = {
+    modelId: opts.modelId,
+    documents: opts.documents,
+    chunk: opts.chunk ?? true
+  }
+  if (opts.workspace !== undefined) params.workspace = opts.workspace
+  return ragIngest(params)
 }
 
 export async function sdkClose (): Promise<void> {

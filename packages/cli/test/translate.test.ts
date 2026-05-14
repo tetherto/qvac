@@ -8,8 +8,15 @@ import {
   extractGenerationParams,
   extractResponseFormat,
   InvalidResponseFormatError,
-  logUnsupportedParams
+  logUnsupportedParams,
+  vectorStoreToOpenAI,
+  searchResultsToOpenAI,
+  parseExpiresAfter,
+  parseMetadata,
+  InvalidExpiresAfterError,
+  InvalidMetadataError
 } from '../src/serve/adapters/openai/translate.js'
+import type { VectorStoreMeta } from '../src/serve/adapters/openai/vector-stores-store.js'
 
 describe('openaiMessagesToHistory', () => {
   it('converts simple user/assistant messages', () => {
@@ -502,5 +509,173 @@ describe('extractResponseFormat', () => {
       }),
       InvalidResponseFormatError
     )
+  })
+})
+
+function fixtureMeta (overrides: Partial<VectorStoreMeta> = {}): VectorStoreMeta {
+  return {
+    id: 'vs_abc123',
+    createdAt: 1_700_000_000_000,
+    name: 'docs',
+    metadata: { topic: 'rag' },
+    expiresAfter: null,
+    expiresAt: null,
+    lastActiveAt: 1_700_000_000_000,
+    ...overrides
+  }
+}
+
+describe('vectorStoreToOpenAI', () => {
+  it('produces the OpenAI vector_store shape with second-precision timestamps', () => {
+    const out = vectorStoreToOpenAI(fixtureMeta())
+    assert.equal(out.object, 'vector_store')
+    assert.equal(out.id, 'vs_abc123')
+    assert.equal(out.created_at, 1_700_000_000)
+    assert.equal(out.name, 'docs')
+    assert.equal(out.usage_bytes, 0)
+    assert.deepEqual(out.file_counts, {
+      in_progress: 0,
+      completed: 0,
+      failed: 0,
+      cancelled: 0,
+      total: 0
+    })
+    assert.equal(out.last_active_at, 1_700_000_000)
+    assert.deepEqual(out.metadata, { topic: 'rag' })
+  })
+
+  it('reports status="in_progress" when no underlying RAG workspace exists', () => {
+    const out = vectorStoreToOpenAI(fixtureMeta())
+    assert.equal(out.status, 'in_progress')
+  })
+
+  it('reports status="completed" once a workspace exists', () => {
+    const out = vectorStoreToOpenAI(fixtureMeta(), { exists: true, open: true })
+    assert.equal(out.status, 'completed')
+  })
+
+  it('preserves expires_after and converts expires_at to seconds', () => {
+    const out = vectorStoreToOpenAI(fixtureMeta({
+      expiresAfter: { anchor: 'last_active_at', days: 7 },
+      expiresAt: 1_700_604_800_000
+    }))
+    assert.deepEqual(out.expires_after, { anchor: 'last_active_at', days: 7 })
+    assert.equal(out.expires_at, 1_700_604_800)
+  })
+
+  it('keeps null name (no synthetic fallback)', () => {
+    const out = vectorStoreToOpenAI(fixtureMeta({ name: null }))
+    assert.equal(out.name, null)
+  })
+
+  it('clones metadata so mutations on the response do not leak', () => {
+    const meta = fixtureMeta()
+    const out = vectorStoreToOpenAI(meta)
+    out.metadata['topic'] = 'mutated'
+    assert.equal(meta.metadata['topic'], 'rag')
+  })
+})
+
+describe('searchResultsToOpenAI', () => {
+  it('returns an empty page on no results', () => {
+    const page = searchResultsToOpenAI([], 'find me')
+    assert.equal(page.object, 'vector_store.search_results.page')
+    assert.equal(page.search_query, 'find me')
+    assert.deepEqual(page.data, [])
+    assert.equal(page.has_more, false)
+    assert.equal(page.next_page, null)
+  })
+
+  it('maps RAG results to OpenAI search items preserving score', () => {
+    const page = searchResultsToOpenAI(
+      [
+        { id: 'doc-1', content: 'first chunk text', score: 0.92 },
+        { id: 'doc-2', content: 'second chunk text', score: 0.81 }
+      ],
+      'embedding query'
+    )
+    assert.equal(page.data.length, 2)
+    const first = page.data[0]
+    assert.ok(first)
+    assert.equal(first.file_id, 'doc-1')
+    assert.equal(first.filename, 'doc-1')
+    assert.equal(first.score, 0.92)
+    assert.deepEqual(first.attributes, {})
+    assert.deepEqual(first.content, [{ type: 'text', text: 'first chunk text' }])
+  })
+
+  it('uses the attribution lookup for file_id and filename when available', () => {
+    const page = searchResultsToOpenAI(
+      [
+        { id: 'chunk-1', content: 'first chunk', score: 0.9 },
+        { id: 'chunk-2', content: 'second chunk', score: 0.8 }
+      ],
+      'query',
+      (chunkId) => {
+        if (chunkId === 'chunk-1') return { fileId: 'file-abc', fileName: 'notes.txt' }
+        return null
+      }
+    )
+    const first = page.data[0]
+    const second = page.data[1]
+    assert.ok(first)
+    assert.ok(second)
+    // Attributed hit reports the original upload's identity.
+    assert.equal(first.file_id, 'file-abc')
+    assert.equal(first.filename, 'notes.txt')
+    // Unattributed hit falls back to the chunk id (today's behavior).
+    assert.equal(second.file_id, 'chunk-2')
+    assert.equal(second.filename, 'chunk-2')
+  })
+})
+
+describe('parseExpiresAfter', () => {
+  it('returns undefined when missing, null when explicit null', () => {
+    assert.equal(parseExpiresAfter(undefined), undefined)
+    assert.equal(parseExpiresAfter(null), null)
+  })
+
+  it('parses a valid expires_after object', () => {
+    assert.deepEqual(
+      parseExpiresAfter({ anchor: 'last_active_at', days: 30 }),
+      { anchor: 'last_active_at', days: 30 }
+    )
+  })
+
+  it('throws on a wrong anchor or non-integer days', () => {
+    assert.throws(() => parseExpiresAfter({ anchor: 'created_at', days: 7 }), InvalidExpiresAfterError)
+    assert.throws(() => parseExpiresAfter({ anchor: 'last_active_at', days: 0 }), InvalidExpiresAfterError)
+    assert.throws(() => parseExpiresAfter({ anchor: 'last_active_at', days: 1.5 }), InvalidExpiresAfterError)
+  })
+
+  it('throws on non-object inputs', () => {
+    assert.throws(() => parseExpiresAfter('soon'), InvalidExpiresAfterError)
+    assert.throws(() => parseExpiresAfter(['anchor', 'last_active_at']), InvalidExpiresAfterError)
+  })
+})
+
+describe('parseMetadata', () => {
+  it('round-trips a small string-valued object', () => {
+    assert.deepEqual(parseMetadata({ a: '1', b: 'two' }), { a: '1', b: 'two' })
+  })
+
+  it('returns undefined when missing, null when explicit null', () => {
+    assert.equal(parseMetadata(undefined), undefined)
+    assert.equal(parseMetadata(null), null)
+  })
+
+  it('rejects non-string values', () => {
+    assert.throws(() => parseMetadata({ count: 5 }), InvalidMetadataError)
+  })
+
+  it('rejects more than 16 keys', () => {
+    const big: Record<string, string> = {}
+    for (let i = 0; i < 17; i++) big[`k${i}`] = 'v'
+    assert.throws(() => parseMetadata(big), InvalidMetadataError)
+  })
+
+  it('rejects oversized keys or values', () => {
+    assert.throws(() => parseMetadata({ ['x'.repeat(65)]: 'v' }), InvalidMetadataError)
+    assert.throws(() => parseMetadata({ k: 'v'.repeat(513) }), InvalidMetadataError)
   })
 })

@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-# End-to-end tests with real models (LLM, embedding, whisper).
+# End-to-end tests with real models (LLM, embedding, whisper transcription + translation).
 # Requires: npm run build, jq, @qvac/sdk installed as devDependency.
 # These tests download small models and run real inference — expect ~5-10 min on first run.
 
@@ -12,6 +12,7 @@ BASE="http://127.0.0.1:${E2E_PORT}"
 LLM_ALIAS="test-llm"
 EMBED_ALIAS="test-embed"
 WHISPER_ALIAS="test-whisper"
+WHISPER_TRANSLATE_ALIAS="test-whisper-translate"
 
 # ── Server lifecycle (once per file) ──────────────────────────────────
 
@@ -35,6 +36,11 @@ setup_file() {
       },
       "test-whisper": {
         "model": "WHISPER_EN_TINY_Q8_0",
+        "preload": true
+      },
+      "test-whisper-translate": {
+        "model": "WHISPER_EN_TINY_Q8_0",
+        "type": "whispercpp-audio-translation",
         "preload": true
       }
     }
@@ -65,7 +71,7 @@ CONF
   while [[ "${elapsed}" -lt "${max_wait}" ]]; do
     local count
     count=$(curl -sf "${BASE}/v1/models" 2>/dev/null | jq '.data | length' 2>/dev/null || echo 0)
-    [[ "${count}" -ge 3 ]] && break
+    [[ "${count}" -ge 4 ]] && break
     sleep 2
     elapsed=$((elapsed + 2))
   done
@@ -97,15 +103,15 @@ json_post() {
 
 # ── Models ────────────────────────────────────────────────────────────
 
-@test "GET /v1/models lists all 3 loaded models" {
+@test "GET /v1/models lists all 4 loaded models" {
   local body
   body=$(curl -sf "${BASE}/v1/models")
   echo "${body}" | jq -e '.object == "list"' >/dev/null
-  echo "${body}" | jq -e '.data | length == 3' >/dev/null
+  echo "${body}" | jq -e '.data | length == 4' >/dev/null
 
   local ids
   ids=$(echo "${body}" | jq -r '[.data[].id] | sort | join(",")')
-  [[ "${ids}" == "test-embed,test-llm,test-whisper" ]]
+  [[ "${ids}" == "test-embed,test-llm,test-whisper,test-whisper-translate" ]]
 
   echo "${body}" | jq -e '.data | all(.object == "model")' >/dev/null
   echo "${body}" | jq -e '.data | all(.owned_by == "qvac")' >/dev/null
@@ -226,6 +232,180 @@ json_post() {
   ! echo "${body}" | jq -e '.' >/dev/null 2>&1 || [[ $(echo "${body}" | jq -r 'type' 2>/dev/null) == "string" ]]
 }
 
+# ── Translations (Whisper translate-to-English) ─────────────────────
+
+@test "translations: returns JSON with text field" {
+  local body
+  body=$(curl -s "${BASE}/v1/audio/translations" \
+    -F "model=${WHISPER_TRANSLATE_ALIAS}" \
+    -F "file=@${BATS_FILE_TMPDIR}/silence.wav;filename=silence.wav")
+
+  echo "${body}" | jq -e '.text | type == "string"' >/dev/null
+}
+
+@test "translations: response_format=text returns plain text" {
+  local body
+  body=$(curl -s "${BASE}/v1/audio/translations" \
+    -F "model=${WHISPER_TRANSLATE_ALIAS}" \
+    -F "response_format=text" \
+    -F "file=@${BATS_FILE_TMPDIR}/silence.wav;filename=silence.wav")
+
+  ! echo "${body}" | jq -e '.' >/dev/null 2>&1 || [[ $(echo "${body}" | jq -r 'type' 2>/dev/null) == "string" ]]
+}
+
+@test "translations: rejects transcription-only alias" {
+  local body
+  body=$(curl -s "${BASE}/v1/audio/translations" \
+    -F "model=${WHISPER_ALIAS}" \
+    -F "file=@${BATS_FILE_TMPDIR}/silence.wav;filename=silence.wav")
+  assert_error "${body}" "invalid_model_type"
+}
+
+# ── Vector stores ─────────────────────────────────────────────────────
+# Each test is self-contained (creates the store/file it needs and cleans
+# up) so they survive `bats -f <pattern>` filtering and can run in any
+# order. The happy-path "upload → attach → search → delete" lives in a
+# single @test to keep the dependent steps together without leaking state
+# via files.
+
+VS_DOC_FILE="${BATS_FILE_TMPDIR:-/tmp}/vs_doc.txt"
+
+@test "vector_stores: CRUD — create, list, get, update, delete" {
+  local create
+  create=$(json_post "/v1/vector_stores" '{"name":"crud","metadata":{"by":"e2e.bats"}}')
+  echo "${create}" | jq -e '.object == "vector_store"' >/dev/null
+  echo "${create}" | jq -e '.id | startswith("vs_")' >/dev/null
+  echo "${create}" | jq -e '.name == "crud"' >/dev/null
+  local id
+  id=$(echo "${create}" | jq -r '.id')
+
+  local list
+  list=$(curl -sf "${BASE}/v1/vector_stores")
+  echo "${list}" | jq -e '.object == "list"' >/dev/null
+  echo "${list}" | jq -e --arg id "${id}" 'any(.data[]; .id == $id)' >/dev/null
+
+  local get_before
+  get_before=$(curl -sf "${BASE}/v1/vector_stores/${id}")
+  echo "${get_before}" | jq -e --arg id "${id}" '.id == $id' >/dev/null
+  echo "${get_before}" | jq -e '.status == "in_progress"' >/dev/null
+
+  local update
+  update=$(json_post "/v1/vector_stores/${id}" '{"name":"crud-updated"}')
+  echo "${update}" | jq -e '.name == "crud-updated"' >/dev/null
+
+  local del
+  del=$(curl -s -X DELETE "${BASE}/v1/vector_stores/${id}")
+  echo "${del}" | jq -e --arg id "${id}" '.id == $id' >/dev/null
+  echo "${del}" | jq -e '.object == "vector_store.deleted"' >/dev/null
+  echo "${del}" | jq -e '.deleted == true' >/dev/null
+
+  local status_after
+  status_after=$(curl -s -o /dev/null -w "%{http_code}" "${BASE}/v1/vector_stores/${id}")
+  [[ "${status_after}" == "404" ]]
+}
+
+@test "vector_stores: upload → attach → search end-to-end" {
+  cat > "${VS_DOC_FILE}" <<'TXT'
+Local e2e document about planets, moons and the solar system.
+Another note about OpenAI vector stores and RAG.
+TXT
+
+  local vs
+  vs=$(json_post "/v1/vector_stores" '{"name":"flow"}' | jq -r '.id')
+
+  local upload file
+  upload=$(curl -sf "${BASE}/v1/files" \
+    -F "file=@${VS_DOC_FILE};type=text/plain" \
+    -F "purpose=assistants")
+  echo "${upload}" | jq -e '.object == "file"' >/dev/null
+  echo "${upload}" | jq -e '.id | startswith("file-")' >/dev/null
+  echo "${upload}" | jq -e '.status == "uploaded"' >/dev/null
+  echo "${upload}" | jq -e '.purpose == "assistants"' >/dev/null
+  file=$(echo "${upload}" | jq -r '.id')
+
+  curl -sf "${BASE}/v1/files" | jq -e --arg id "${file}" 'any(.data[]; .id == $id)' >/dev/null
+  curl -sf "${BASE}/v1/files/${file}" | jq -e --arg id "${file}" '.id == $id and .object == "file"' >/dev/null
+
+  local attach
+  attach=$(json_post "/v1/vector_stores/${vs}/files" "{\"file_id\":\"${file}\"}")
+  echo "${attach}" | jq -e '.object == "vector_store.file"' >/dev/null
+  echo "${attach}" | jq -e --arg id "${file}" '.id == $id' >/dev/null
+  echo "${attach}" | jq -e --arg vs "${vs}" '.vector_store_id == $vs' >/dev/null
+  echo "${attach}" | jq -e '.status == "completed"' >/dev/null
+  echo "${attach}" | jq -e '.last_error == null' >/dev/null
+  echo "${attach}" | jq -e '.usage_bytes | type == "number"' >/dev/null
+
+  # Bytes are dropped from the in-memory file store after attach.
+  local file_status_after
+  file_status_after=$(curl -s -o /dev/null -w "%{http_code}" "${BASE}/v1/files/${file}")
+  [[ "${file_status_after}" == "404" ]]
+
+  curl -sf "${BASE}/v1/vector_stores/${vs}" | jq -e '.status == "completed"' >/dev/null
+
+  local search
+  search=$(json_post "/v1/vector_stores/${vs}/search" \
+    '{"query":"planets and solar system","max_num_results":5}')
+  echo "${search}" | jq -e '.object == "vector_store.search_results.page"' >/dev/null
+  echo "${search}" | jq -e '.data | type == "array"' >/dev/null
+  echo "${search}" | jq -e '.data | length > 0' >/dev/null
+  echo "${search}" | jq -e '
+    any(.data[];
+      (.content // []) | map(select(.type == "text") | .text // "") | join(" ")
+        | test("planets|moons|OpenAI|vector stores"; "i"))
+  ' >/dev/null
+
+  curl -s -X DELETE "${BASE}/v1/vector_stores/${vs}" >/dev/null
+}
+
+@test "vector_stores: search with missing query returns 400 missing_query" {
+  local vs body
+  vs=$(json_post "/v1/vector_stores" '{}' | jq -r '.id')
+  body=$(json_post "/v1/vector_stores/${vs}/search" '{}')
+  assert_error "${body}" "missing_query"
+  curl -s -X DELETE "${BASE}/v1/vector_stores/${vs}" >/dev/null
+}
+
+@test "vector_stores: attach with unknown file_id returns 404 file_not_found" {
+  local vs body
+  vs=$(json_post "/v1/vector_stores" '{}' | jq -r '.id')
+  body=$(json_post "/v1/vector_stores/${vs}/files" '{"file_id":"file-doesnotexist"}')
+  assert_error "${body}" "file_not_found"
+  curl -s -X DELETE "${BASE}/v1/vector_stores/${vs}" >/dev/null
+}
+
+@test "vector_stores: attach with missing file_id returns 400 missing_file_id" {
+  local vs body
+  vs=$(json_post "/v1/vector_stores" '{}' | jq -r '.id')
+  body=$(json_post "/v1/vector_stores/${vs}/files" '{}')
+  assert_error "${body}" "missing_file_id"
+  curl -s -X DELETE "${BASE}/v1/vector_stores/${vs}" >/dev/null
+}
+
+@test "vector_stores: attach binary upload returns 400 unsupported_file_type" {
+  local vs upload file body
+  vs=$(json_post "/v1/vector_stores" '{"name":"binary-sad"}' | jq -r '.id')
+
+  # PNG magic header — contains NUL bytes so looksBinary catches it.
+  local png_path="${BATS_TEST_TMPDIR}/bin.png"
+  printf '\x89PNG\r\n\x1a\n\x00\x00\x00\x0dIHDR' > "${png_path}"
+
+  upload=$(curl -sf "${BASE}/v1/files" \
+    -F "file=@${png_path};type=image/png" \
+    -F "purpose=assistants")
+  file=$(echo "${upload}" | jq -r '.id')
+
+  body=$(json_post "/v1/vector_stores/${vs}/files" "{\"file_id\":\"${file}\"}")
+  assert_error "${body}" "unsupported_file_type"
+
+  curl -s -X DELETE "${BASE}/v1/vector_stores/${vs}" >/dev/null
+}
+
+@test "vector_stores: invalid id returns 400 invalid_vector_store_id" {
+  local body
+  body=$(curl -s "${BASE}/v1/vector_stores/bad%2Fid")
+  assert_error "${body}" "invalid_vector_store_id"
+}
+
 # ── Cross-endpoint model type validation ──────────────────────────────
 
 @test "cross-type: chat endpoint rejects embedding model" {
@@ -250,11 +430,23 @@ json_post() {
   assert_error "${body}" "invalid_model_type"
 }
 
+@test "cross-type: translations endpoint rejects chat model" {
+  local body
+  body=$(curl -s "${BASE}/v1/audio/translations" \
+    -F "model=${LLM_ALIAS}" \
+    -F "file=@${BATS_FILE_TMPDIR}/silence.wav;filename=audio.wav")
+  assert_error "${body}" "invalid_model_type"
+}
+
 # ── Model lifecycle ───────────────────────────────────────────────────
 # Run last — unloading a model affects subsequent tests.
 
 @test "DELETE /v1/models/:id unloads model" {
   local body
+  body=$(curl -s -X DELETE "${BASE}/v1/models/${WHISPER_TRANSLATE_ALIAS}")
+  echo "${body}" | jq -e ".id == \"${WHISPER_TRANSLATE_ALIAS}\"" >/dev/null
+  echo "${body}" | jq -e '.deleted == true' >/dev/null
+
   body=$(curl -s -X DELETE "${BASE}/v1/models/${WHISPER_ALIAS}")
   echo "${body}" | jq -e ".id == \"${WHISPER_ALIAS}\"" >/dev/null
   echo "${body}" | jq -e '.deleted == true' >/dev/null
@@ -263,4 +455,5 @@ json_post() {
   list=$(curl -sf "${BASE}/v1/models")
   echo "${list}" | jq -e '.data | length == 2' >/dev/null
   echo "${list}" | jq -e "[.data[].id] | index(\"${WHISPER_ALIAS}\") | not" >/dev/null
+  echo "${list}" | jq -e "[.data[].id] | index(\"${WHISPER_TRANSLATE_ALIAS}\") | not" >/dev/null
 }

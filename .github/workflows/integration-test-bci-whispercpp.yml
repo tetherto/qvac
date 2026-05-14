@@ -33,7 +33,7 @@ jobs:
   run-integration-tests:
     timeout-minutes: 60
     continue-on-error: true
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}-integration-tests
 
@@ -51,6 +51,7 @@ jobs:
           - os: ubuntu-22.04
             platform: linux
             arch: x64
+            runner: qvac-ubuntu2204-x64
           - os: ubuntu-24.04-arm
             platform: linux
             arch: arm64
@@ -60,20 +61,17 @@ jobs:
           - os: macos-15-large
             platform: darwin
             arch: x64
-          - os: windows-2022
+          - os: windows-2025
             platform: win32
             arch: x64
+            runner: qvac-win25-x64
 
     steps:
       - name: Setup Node.js
+        if: matrix.platform == 'darwin' || matrix.arch == 'arm64'
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
-
-      - name: Windows - enable git long paths
-        if: ${{ matrix.platform == 'win32' }}
-        shell: powershell
-        run: git config --system core.longpaths true
 
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -86,7 +84,15 @@ jobs:
         working-directory: ${{ inputs.workdir }}
         run: |
           npm install
-          npm install -g bare@1.26.0 bare-make
+
+      - name: Install bare tooling (arm64 and macos)
+        if: matrix.arch == 'arm64' || matrix.platform == 'darwin'
+        run: |
+          npm install -g bare bare-make
+
+      - name: Add bare tooling to PATH (Linux x64)
+        if: (matrix.platform == 'linux' && matrix.arch == 'x64')
+        run: echo "/usr/local/nvm/versions/node/v20.20.2/bin" >> $GITHUB_PATH
 
       - name: Download prebuilds from artifact
         if: ${{ !inputs.prebuild_package }}
@@ -108,10 +114,12 @@ jobs:
         working-directory: ${{ inputs.workdir }}
         shell: bash
         run: |
-          mkdir -p prebuilds
-          npm pack ${{ inputs.prebuild_package }} --pack-destination /tmp
-          tar -xzf /tmp/*.tgz -C /tmp
-          cp -r /tmp/package/prebuilds/* prebuilds/
+          mkdir -p prebuilds "${{ runner.temp }}/tmp"
+          rm -f "${{ runner.temp }}/tmp"/*.tgz
+          rm -rf "${{ runner.temp }}/tmp/package"
+          npm pack ${{ inputs.prebuild_package }} --pack-destination "${{ runner.temp }}/tmp"
+          tar -xzf "${{ runner.temp }}/tmp"/*.tgz -C "${{ runner.temp }}/tmp"
+          cp -r "${{ runner.temp }}/tmp"/package/prebuilds/* prebuilds/
           find prebuilds -type f -name 'tetherto__*' | while read f; do
             mv "$f" "${f/tetherto__/qvac__}"
           done
@@ -122,21 +130,15 @@ jobs:
         shell: powershell
         run: |
           New-Item -ItemType Directory -Force -Path prebuilds | Out-Null
-          npm pack ${{ inputs.prebuild_package }} --pack-destination $env:TEMP
-          $tgz = Get-ChildItem "$env:TEMP\*.tgz" | Select-Object -First 1
-          tar -xzf $tgz.FullName -C $env:TEMP
-          Copy-Item -Path "$env:TEMP\package\prebuilds\*" -Destination prebuilds -Recurse -Force
+          New-Item -ItemType Directory -Force -Path "${{ runner.temp }}\tmp" | Out-Null
+          npm pack ${{ inputs.prebuild_package }} --pack-destination "${{ runner.temp }}\tmp"
+          $tgz = Get-ChildItem "${{ runner.temp }}\tmp\*.tgz" | Select-Object -First 1
+          tar -xzf $tgz.FullName -C "${{ runner.temp }}\tmp"
+          Copy-Item -Path "${{ runner.temp }}\tmp\package\prebuilds\*" -Destination prebuilds -Recurse -Force
           Get-ChildItem -Path prebuilds -Recurse -File -Filter 'tetherto__*' | ForEach-Object {
             $newName = $_.Name -replace 'tetherto__', 'qvac__'
             Rename-Item -Path $_.FullName -NewName $newName
           }
-
-      - name: Linux - install dependencies
-        if: matrix.platform == 'linux' || matrix.platform == 'android'
-        shell: bash
-        run: |
-          sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
-          sudo apt-get install -y libopenblas-dev liblapack-dev libfftw3-dev
 
       - name: macOS - install whisper dependencies
         if: matrix.platform == 'darwin'
@@ -144,12 +146,10 @@ jobs:
         run: |
           brew install --quiet openblas lapack fftw
 
-      - name: Windows - install Vulkan runtime
-        if: matrix.platform == 'win32'
-        uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@0bbdca93da303a0b1634ba14a89cec085621078d
-        with:
-          platform: ${{ matrix.platform }}
-          arch: ${{ matrix.arch }}
+      - if: ${{ matrix.os == 'windows-2025' }}
+        name: Set Vulkan SDK Path on Windows Server 2025
+        working-directory: ${{ env.WORKDIR }}
+        run: echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
 
       - name: Run integration test (Unix)
         if: ${{ matrix.platform != 'win32' }}

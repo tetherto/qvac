@@ -35,12 +35,15 @@ jobs:
         include:
           - os: ubuntu-24.04
             platform: linux
+            runner: qvac-ubuntu2404-x64
+            arch: x64
           - os: macos-14
             platform: darwin
             arch: arm64
-          - os: windows-11
+          - os: windows-2025
             platform: windows
-            runner: ai-run-windows11-gpu
+            runner: qvac-win25-x64
+            arch: x64
 
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
@@ -60,38 +63,16 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'windows-11' }}
-        name: Setup LLVM
-        uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
-
-      - if: ${{ matrix.os == 'ubuntu-24.04' }}
-        name: Install Vulkan SDK on Linux
+      - if: ${{ matrix.os == 'windows-2025' }}
+        name: Set Vulkan SDK Path on Windows
         working-directory: ${{ env.WORKDIR }}
-        run: |
-          wget -qO- https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo tee /etc/apt/trusted.gpg.d/lunarg.asc
-          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-noble.list http://packages.lunarg.com/vulkan/lunarg-vulkan-noble.list
-          sudo apt update
-          sudo apt install vulkan-sdk
+        run: echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
 
-      - if: ${{ matrix.os == 'windows-11' }}
-        name: Configure Windows runner
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          git config --system core.longpaths true
 
-      - if: ${{ matrix.os == 'windows-11' }}
-        name: Install Vulkan SDK on Windows
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          $ProgressPreference = 'SilentlyContinue'
-          Invoke-WebRequest -Uri https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe -OutFile vulkan-sdk.exe
-          ./vulkan-sdk.exe --root C:\VulkanSDK --accept-licenses --default-answer --confirm-command install
-          echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
-
-      - if: ${{ matrix.os == 'windows-11' }}
+      - if: ${{ matrix.os == 'windows-2025' }}
         name: Clone and bootstrap vcpkg (Windows)
         run: |
-          git clone https://github.com/microsoft/vcpkg.git
+          git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git
           ./vcpkg/bootstrap-vcpkg.bat -disableMetrics
           echo ("VCPKG_ROOT=$env:GITHUB_WORKSPACE/vcpkg" -replace '\\', '/') >> $env:GITHUB_ENV
 
@@ -108,11 +89,17 @@ jobs:
           echo "MACOSX_DEPLOYMENT_TARGET=14.0" >> $GITHUB_ENV
 
       - if: ${{ matrix.os == 'ubuntu-24.04' }}
-        name: Configure vcpkg in linux
+        name: Install vcpkg on linux
         working-directory: ${{ env.WORKDIR }}
-        run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
+        shell: bash
+        run: |
+          git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git vcpkg_microsoft
+          cd vcpkg_microsoft & ./bootstrap-vcpkg.sh -disableMetrics
+          VCPKG_ROOT="$(pwd)"
+          echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
+          echo "$VCPKG_ROOT" >> $GITHUB_PATH
 
-      - if: ${{ matrix.os == 'windows-11' }}
+      - if: ${{ matrix.os == 'windows-2025' }}
         name: Configure CMake generator on Windows
         shell: powershell
         working-directory: ${{ env.WORKDIR }}
@@ -122,12 +109,12 @@ jobs:
 
       # mkdir -p is not portable to pwsh; do per-OS
       - name: Create vcpkg cache location (non-Windows)
-        if: ${{ matrix.os != 'windows-11' }}
+        if: ${{ matrix.os != 'windows-2025' }}
         working-directory: ${{ env.WORKDIR }}
         run: mkdir -p vcpkg/cache
 
       - name: Create vcpkg cache location (Windows)
-        if: ${{ matrix.os == 'windows-11' }}
+        if: ${{ matrix.os == 'windows-2025' }}
         shell: powershell
         working-directory: ${{ env.WORKDIR }}
         run: |
@@ -141,6 +128,7 @@ jobs:
           restore-keys: cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-
 
       - name: Setup Node.js
+        if: matrix.platform == 'darwin' || matrix.arch == 'arm64'
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
@@ -221,8 +209,7 @@ jobs:
         shell: bash
         working-directory: ${{ env.WORKDIR }}
         env:
-          # keep as repo-root absolute path to avoid assuming it's copied into workdir
-          LSAN_OPTIONS: suppressions=${{ github.workspace }}/.lsan-suppressions.txt
+          LSAN_OPTIONS: suppressions=${{ github.workspace }}/${{ env.WORKDIR }}/.lsan-suppressions.txt
         run: |
           # Windows build will typically emit addon-test.exe; unix emits addon-test
           EXE="build/test/unit/addon-test"
