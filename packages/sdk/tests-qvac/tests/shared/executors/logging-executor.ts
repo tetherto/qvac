@@ -7,7 +7,7 @@ import {
   diffusion,
   unloadModel,
   SDK_LOG_ID,
-  RequestRejectedByPolicyError,
+  SDK_SERVER_ERROR_CODES,
 } from "@qvac/sdk";
 import { type TestResult } from "@tetherto/qvac-test-suite";
 import { AbstractModelExecutor } from "./abstract-model-executor.js";
@@ -54,8 +54,17 @@ class AddonBusyTimeoutError extends Error {
 
 // "Slot still occupied" surfaces as either the legacy addon throw or, since
 // the `oneAtATimePerModel` registry policy, a typed admission rejection.
+// Errors cross the RPC boundary as `RPCError`, so we match by code, not
+// `instanceof`.
 function isTransientAddonBusy(err: unknown): boolean {
-  if (err instanceof RequestRejectedByPolicyError) return true;
+  if (
+    err !== null
+    && typeof err === "object"
+    && "code" in err
+    && (err as { code?: unknown }).code === SDK_SERVER_ERROR_CODES.REQUEST_REJECTED_BY_POLICY
+  ) {
+    return true;
+  }
   const msg = err instanceof Error ? err.message : String(err);
   return msg.includes(ADDON_BUSY_MARKER);
 }
