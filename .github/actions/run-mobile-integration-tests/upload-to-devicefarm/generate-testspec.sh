@@ -19,9 +19,10 @@
 #   QVAC_PERF_ONLY       — restrict to perf tests only
 #   AFTER_PULLS          — JSON array of {device_path, artifact_name} pairs
 #
-# Optional files:
-#   /tmp/extra-pre-test.sh  — consumer-supplied pre_test commands
-#   /tmp/extra-post-test.sh — consumer-supplied post_test commands
+# Optional files (paths supplied by the caller via env, fall back to
+# /tmp/* for backwards-compat with one-off local runs):
+#   $EXTRA_PRE_TEST_PATH  / /tmp/extra-pre-test.sh  — consumer pre_test commands
+#   $EXTRA_POST_TEST_PATH / /tmp/extra-post-test.sh — consumer post_test commands
 set -euo pipefail
 
 SPEC_FILE="${1:?Usage: generate-testspec.sh <output-file>}"
@@ -91,7 +92,7 @@ emit_extra_commands() {
     printf '      - adb shell mkdir -p /sdcard/Android/data/io.tether.test.qvac/files/ 2>/dev/null || true\n'
   fi
 
-  emit_extra_commands /tmp/extra-pre-test.sh
+  emit_extra_commands "${EXTRA_PRE_TEST_PATH:-/tmp/extra-pre-test.sh}"
 
   if [ "$PLATFORM" = "iOS" ]; then
     printf '      - export DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH=$DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH_V9\n'
@@ -163,7 +164,7 @@ emit_extra_commands() {
   printf '      - echo "Available log files:"\n'
   printf '      - ls -lh $DEVICEFARM_LOG_DIR/ || true\n'
 
-  emit_extra_commands /tmp/extra-post-test.sh
+  emit_extra_commands "${EXTRA_POST_TEST_PATH:-/tmp/extra-post-test.sh}"
 
   # Custom artifact pulls (consumer-supplied JSON array).
   PULL_LINES=$(python3 -c "

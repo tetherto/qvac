@@ -361,9 +361,18 @@ runs:
         # Persist post_test add-ons + after-snippet in temp files so the python
         # heredoc and bash testspec generator can both read them without
         # ordering / quoting problems.
-        printf '%s' "$AFTER_SNIPPET"  > /tmp/wdio-after-snippet.js
-        printf '%s' "$EXTRA_PRE_TEST"  > /tmp/extra-pre-test.sh
-        printf '%s' "$EXTRA_POST_TEST" > /tmp/extra-post-test.sh
+        # Use $RUNNER_TEMP rather than /tmp so we get a per-job
+        # current-user-owned directory — /tmp is shared and stable on
+        # persistent self-hosted runners (qvac-ubuntu*-x64), so a prior
+        # run's fixed-name files block a subsequent job's `>` with
+        # "Permission denied".
+        export AFTER_SNIPPET_PATH="${RUNNER_TEMP}/wdio-after-snippet.js"
+        export EXTRA_PRE_TEST_PATH="${RUNNER_TEMP}/extra-pre-test.sh"
+        export EXTRA_POST_TEST_PATH="${RUNNER_TEMP}/extra-post-test.sh"
+        export WDIO_CONFIG_PATH="${RUNNER_TEMP}/wdio.config.devicefarm.js"
+        printf '%s' "$AFTER_SNIPPET"  > "$AFTER_SNIPPET_PATH"
+        printf '%s' "$EXTRA_PRE_TEST"  > "$EXTRA_PRE_TEST_PATH"
+        printf '%s' "$EXTRA_POST_TEST" > "$EXTRA_POST_TEST_PATH"
 
         # perf-extract.js is a companion module required by wdio.template.js.
         # Unlike the WDIO config, it needs no token substitution — bundleId is
@@ -390,11 +399,11 @@ runs:
 
           # Python rather than sed because PLATFORM_CAPS contains characters that
           # are awkward to escape in sed substitution syntax (newlines, &, |, /).
-          python3 - <<'PY' > /tmp/wdio.config.devicefarm.js
+          python3 - <<'PY' > "$WDIO_CONFIG_PATH"
         import os
         with open(os.environ["TEMPLATE_PATH"]) as f:
             tpl = f.read()
-        with open("/tmp/wdio-after-snippet.js") as f:
+        with open(os.environ["AFTER_SNIPPET_PATH"]) as f:
             after_snippet = f.read()
         repl = {
             "__PLATFORM_CAPABILITIES__": os.environ["PLATFORM_CAPS"],
@@ -418,15 +427,16 @@ runs:
 
           if [ "$IDX" = "0" ]; then
             echo "WDIO config preview (first 80 lines):"
-            head -80 /tmp/wdio.config.devicefarm.js
+            head -80 "$WDIO_CONFIG_PATH"
           fi
 
-          export WDIO_CONFIG_B64=$(base64 < /tmp/wdio.config.devicefarm.js | tr -d '\n')
+          export WDIO_CONFIG_B64=$(base64 < "$WDIO_CONFIG_PATH" | tr -d '\n')
           SPEC_FILE="testspec-${SAFE_NAME}.yml"
 
           # generate-testspec.sh reads the env vars already exported above
-          # and the temp files at /tmp/extra-{pre,post}-test.sh, then writes
-          # the complete Device Farm testspec YAML to $SPEC_FILE.
+          # and the temp files at $EXTRA_{PRE,POST}_TEST_PATH (under
+          # $RUNNER_TEMP), then writes the complete Device Farm testspec
+          # YAML to $SPEC_FILE.
           GENERATE_SCRIPT="${{ github.action_path }}/generate-testspec.sh"
           bash "$GENERATE_SCRIPT" "$SPEC_FILE"
 
