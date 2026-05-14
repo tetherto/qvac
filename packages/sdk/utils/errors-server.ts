@@ -173,12 +173,12 @@ export class TtsReferenceAudioRequiredError extends QvacErrorBase {
   }
 }
 
-export class LegacyParakeetModelDeprecatedError extends QvacErrorBase {
-  constructor(legacyFields: readonly string[], cause?: unknown) {
+export class ParakeetArtifactsRequiredError extends QvacErrorBase {
+  constructor(details?: string, cause?: unknown) {
     super(
       createErrorOptions(
-        SDK_SERVER_ERROR_CODES.LEGACY_PARAKEET_MODEL_DEPRECATED,
-        [legacyFields.join(", ")],
+        SDK_SERVER_ERROR_CODES.PARAKEET_ARTIFACTS_REQUIRED,
+        details ? [details] : undefined,
         cause,
       ),
     );
@@ -318,6 +318,39 @@ export class RequestNotFoundError extends QvacErrorBase {
         cause,
       ),
     );
+  }
+}
+
+/**
+ * Thrown by `RequestRegistry.begin(...)` when a registered concurrency
+ * policy rejects the request (e.g. `oneAtATimePerModel` for the
+ * `completion` kind). Distinct from `RequestIdConflictError`, which
+ * only fires on UUID collisions.
+ */
+export class RequestRejectedByPolicyError extends QvacErrorBase {
+  readonly requestId: string;
+  readonly kind: string;
+  readonly modelId: string;
+  readonly reason: string;
+
+  constructor(
+    requestId: string,
+    kind: string,
+    modelId: string,
+    reason: string,
+    cause?: unknown,
+  ) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.REQUEST_REJECTED_BY_POLICY,
+        [requestId, kind, modelId, reason],
+        cause,
+      ),
+    );
+    this.requestId = requestId;
+    this.kind = kind;
+    this.modelId = modelId;
+    this.reason = reason;
   }
 }
 

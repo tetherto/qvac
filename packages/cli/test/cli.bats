@@ -15,7 +15,7 @@ setup_file() {
   for name in default auth nocors; do
     local dir="${FILE_TMPDIR}/${name}"
     mkdir -p "${dir}"
-    echo '{ "serve": { "models": {} } }' > "${dir}/qvac.config.json"
+    echo '{"serve":{"models":{"fake-transcribe":{"type":"whispercpp-transcription","src":"hyper://example.invalid/model","preload":false}}}}' > "${dir}/qvac.config.json"
   done
 
   cd "${FILE_TMPDIR}/default"
@@ -351,6 +351,56 @@ http_status() {
 @test "transcriptions: unknown model returns 404" {
   local body
   body=$(curl -s "http://127.0.0.1:19920/v1/audio/transcriptions" \
+    -F "model=nonexistent" -F "file=@/dev/null;filename=audio.wav")
+  assert_error "${body}" "model_not_found"
+}
+
+# ── Serve: translations validation ──────────────────────────────────
+
+@test "translations: JSON content-type returns 400" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/audio/translations" \
+    -H "Content-Type: application/json" -d '{"model":"test"}')
+  assert_error "${body}" "invalid_content_type"
+}
+
+@test "translations: missing file returns 400" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/audio/translations" -F "model=test")
+  assert_error "${body}" "missing_file"
+}
+
+@test "translations: missing model returns 400" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/audio/translations" \
+    -F "file=@/dev/null;filename=audio.wav")
+  assert_error "${body}" "missing_model"
+}
+
+@test "translations: language field returns 400" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/audio/translations" \
+    -F "model=fake-transcribe" -F "language=es" -F "file=@/dev/null;filename=audio.wav")
+  assert_error "${body}" "unsupported_param"
+}
+
+@test "translations: unsupported srt format returns 400" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/audio/translations" \
+    -F "model=fake-transcribe" -F "response_format=srt" -F "file=@/dev/null;filename=audio.wav")
+  assert_error "${body}" "unsupported_response_format"
+}
+
+@test "translations: transcription-only model returns invalid_model_type" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/audio/translations" \
+    -F "model=fake-transcribe" -F "file=@/dev/null;filename=audio.wav")
+  assert_error "${body}" "invalid_model_type"
+}
+
+@test "translations: unknown model returns 404" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/audio/translations" \
     -F "model=nonexistent" -F "file=@/dev/null;filename=audio.wav")
   assert_error "${body}" "model_not_found"
 }

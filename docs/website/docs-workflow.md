@@ -2,7 +2,7 @@
 
 How the documentation site works: architecture, local development, CI, deployment, and troubleshooting.
 
-For general contribution guidelines (PR labels, changelog format), see the [root CONTRIBUTING.md](../CONTRIBUTING.md).
+For general contribution guidelines (PR labels, changelog format), see the [root CONTRIBUTING.md](../../CONTRIBUTING.md).
 
 ---
 
