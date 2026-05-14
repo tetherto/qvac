@@ -122,6 +122,9 @@ export const parakeetPlugin = definePlugin({
       requestSchema: transcribeRequestSchema,
       responseSchema: transcribeResponseSchema,
       streaming: true,
+      // Parakeet addon exposes a model-wide hard cancel — compute is
+      // interrupted on the currently-running transcription.
+      cancel: { scope: "model", hard: true },
 
       handler: async function* (request) {
         if (request.metadata === true) {
@@ -167,6 +170,12 @@ export const parakeetPlugin = definePlugin({
       responseSchema: transcribeStreamResponseSchema,
       streaming: true,
       duplex: true,
+      // Same model-wide hard cancel surface as `transcribe` — both
+      // route through the Parakeet addon. AbortSignal plumbing is
+      // tracked in QVAC-17869-followup; the cancel-capability
+      // declaration here advertises the addon surface, not the
+      // current AbortSignal wiring.
+      cancel: { scope: "model", hard: true },
 
       // TODO(QVAC-17869-followup): wire `AbortSignal` through the
       // duplex handler signature so the worker learns about consumer

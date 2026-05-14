@@ -1,6 +1,6 @@
 # Gate merges to docs-production by verifying all docs-related CI workflows are green.
 # Runs on PRs targeting docs-production (i.e. main -> docs-production).
-# See docs/docs-workflow.md for the full deploy strategy.
+# See docs/website/docs-workflow.md for the full deploy strategy.
 name: Docs CI Doctor
 
 on:
