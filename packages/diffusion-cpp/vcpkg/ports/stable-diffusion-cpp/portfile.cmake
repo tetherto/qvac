@@ -17,6 +17,10 @@
 # ESRGAN upscaler (src/upscaler.cpp), which otherwise stayed on compile-time
 # SD_USE_* macros and fell back to CPU when those macros were undefined.
 #
+# sd-upscaler-device-and-query.patch adds new_upscaler_ctx_with_device,
+# get_upscaler_backend_device, SD_CPU_ONLY CPU init fallback to ggml_backend_cpu_init,
+# and explicit CPU/GPU/AUTO preference wiring for RuntimeStats.
+#
 # Pinned to release tag master-514-5792c66 (2026-03-01).
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
@@ -30,6 +34,7 @@ vcpkg_from_github(
         abort-callback.patch
         fix-failure-path-cleanup.patch
         sd-upscaler-generic-backend.patch
+        sd-upscaler-device-and-query.patch
 )
 
 set(SD_FLASH_ATTN OFF)

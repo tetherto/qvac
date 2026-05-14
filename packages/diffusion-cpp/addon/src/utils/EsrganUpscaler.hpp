@@ -16,6 +16,8 @@ inline constexpr int DEFAULT_UPSCALER_TILE_SIZE = 128;
 
 struct EsrganUpscalerConfig {
   std::string esrganPath;
+  /** "cpu", "gpu", or "auto" — post-init truth is exposed via actualBackendDevice(). */
+  std::string device{"gpu"};
   int nThreads{-1};
   int upscalerThreads{-1};
   int upscalerTileSize{DEFAULT_UPSCALER_TILE_SIZE};
@@ -40,6 +42,8 @@ public:
 
   void load();
   [[nodiscard]] bool isLoaded() const noexcept;
+  /** 0 = CPU, 1 = GPU, -1 if not loaded. Reflects actual ggml backend after init. */
+  [[nodiscard]] int actualBackendDevice() const;
   sd_image_t upscaleImage(
       const sd_image_t& inputImage, int repeats,
       const std::function<bool()>& shouldCancel = {});
