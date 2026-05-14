@@ -4,6 +4,7 @@ import type { Logger } from '../../logger.js'
 import type { ChunkAttributionStore } from './openai/chunk-attribution-store.js'
 import type { EphemeralFilesStore } from './openai/ephemeral-files-store.js'
 import type { VectorStoresStore } from './openai/vector-stores-store.js'
+import type { ResponsesStore } from './openai/responses-store.js'
 
 export interface RouteContext {
   registry: ModelRegistry
@@ -12,6 +13,7 @@ export interface RouteContext {
   vectorStores: VectorStoresStore
   ephemeralFiles: EphemeralFilesStore
   chunkAttributions: ChunkAttributionStore
+  responsesStore: ResponsesStore
   /** @internal Unit tests only — replaces sdkTranscribe when set */
   transcribeOverride?: (opts: {
     modelId: string
