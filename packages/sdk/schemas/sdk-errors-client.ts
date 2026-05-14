@@ -37,6 +37,7 @@ export const SDK_CLIENT_ERROR_CODES = {
   CONFIG_VALIDATION_FAILED: 50605,
   PEAR_WORKER_ENTRY_REQUIRED: 50606,
   MULTIPLE_SDK_INSTALLATIONS: 50607,
+  BUNDLE_VERIFICATION_FAILED: 50609,
 
   // Profiler Errors (50,800-50,899)
   PROFILER_INVALID_CAPACITY: 50800,
@@ -173,6 +174,11 @@ const clientErrorDefinitions: ErrorCodesMap = {
     name: "PEAR_WORKER_ENTRY_REQUIRED",
     message: (workerEntry: string) =>
       `No plugins registered. Pear apps must spawn ${workerEntry} as the worker entry. Run \`npx qvac bundle sdk\` to generate it, then spawn the generated file instead of your worker directly.`,
+  },
+  [SDK_CLIENT_ERROR_CODES.BUNDLE_VERIFICATION_FAILED]: {
+    name: "BUNDLE_VERIFICATION_FAILED",
+    message: (bundlePath: string) =>
+      `qvac verify bundle reported error-level issues for ${bundlePath}. See the CLI output above for the failing addons/hosts; resolve them before shipping.`,
   },
 
   // Profiler Errors (50,800-50,899)
