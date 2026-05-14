@@ -456,45 +456,19 @@ function generateParakeetName({
 }: BaseNameInput): string {
   const lower = filename.toLowerCase();
 
-  // Detect model variant from filename first (more specific than path),
-  // then fall back to path-based hints. Filename wins because aggregated
-  // GGUF directories (e.g. `parakeet/` on the registry) can hold every
-  // variant side by side.
+  // Detect model variant from registry path
   let variant = "";
-  if (lower.includes("sortformer")) {
-    variant = "SORTFORMER";
-  } else if (lower.includes("ctc") || lowerPath.includes("parakeet-ctc")) {
-    variant = "CTC";
-  } else if (lower.includes("eou") || lowerPath.includes("parakeet-rs")) {
-    variant = "EOU";
-  } else if (lower.includes("tdt") || lowerPath.includes("parakeet-tdt")) {
+  if (lowerPath.includes("parakeet-tdt") || lowerPath.includes("parakeet/")) {
     variant = "TDT";
+  } else if (lowerPath.includes("parakeet-ctc")) {
+    variant = "CTC";
+  } else if (lowerPath.includes("eou") || lowerPath.includes("parakeet-rs")) {
+    variant = "EOU";
+  } else if (lowerPath.includes("sortformer")) {
+    variant = "SORTFORMER";
   }
 
-  // GGUF checkpoints are single-file, full-model artifacts. Skip file-role
-  // suffixing (encoder/decoder/...) and just attach a parameter-count hint
-  // when the filename embeds one (e.g. `parakeet-tdt-0.6b-v3.q8_0.gguf`).
-  if (lower.endsWith(".gguf")) {
-    const paramsMatch = filename.match(
-      /(?:^|[-_])(\d+(?:\.\d+)?[mb])(?=[-_.])/i,
-    );
-    const versionMatch = filename.match(/[-_]v(\d+)/i);
-    const speakerMatch = filename.match(/(\d+spk)/i);
-    const paramsHint = paramsMatch ? paramsMatch[1]! : "";
-    const versionHint = versionMatch ? `V${versionMatch[1]!}` : "";
-    const speakerHint = speakerMatch ? speakerMatch[1]! : "";
-
-    const nameParts = [
-      variant,
-      paramsHint,
-      speakerHint,
-      versionHint,
-      quantization,
-    ].filter((p) => p && p !== "");
-    return `PARAKEET_${nameParts.map(cleanPart).join("_")}`;
-  }
-
-  // Detect file role from filename for legacy ONNX bundles.
+  // Detect file role from filename
   let fileRole = "";
   if (lower.includes("encoder") && (lower.endsWith(".data") || lower.endsWith(".onnx.data"))) {
     fileRole = "ENCODER_DATA";

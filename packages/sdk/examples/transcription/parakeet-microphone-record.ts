@@ -12,7 +12,10 @@ import {
   loadModel,
   unloadModel,
   transcribe,
-  PARAKEET_TDT_0_6B_V3_Q8_0,
+  PARAKEET_TDT_ENCODER_FP32,
+  PARAKEET_TDT_DECODER_FP32,
+  PARAKEET_TDT_VOCAB,
+  PARAKEET_TDT_PREPROCESSOR_FP32,
 } from "@qvac/sdk";
 import { spawnSync } from "child_process";
 import { startMicrophone } from "../audio/mic-input";
@@ -34,8 +37,14 @@ try {
 
 console.log("Loading Parakeet model...");
 const modelId = await loadModel({
-  modelSrc: PARAKEET_TDT_0_6B_V3_Q8_0,
+  modelSrc: PARAKEET_TDT_ENCODER_FP32,
   modelType: "parakeet",
+  modelConfig: {
+    parakeetEncoderSrc: PARAKEET_TDT_ENCODER_FP32,
+    parakeetDecoderSrc: PARAKEET_TDT_DECODER_FP32,
+    parakeetVocabSrc: PARAKEET_TDT_VOCAB,
+    parakeetPreprocessorSrc: PARAKEET_TDT_PREPROCESSOR_FP32,
+  },
   onProgress: (p) => console.log(`Download: ${p.percentage.toFixed(1)}%`),
 });
 console.log("Model loaded.\n");
