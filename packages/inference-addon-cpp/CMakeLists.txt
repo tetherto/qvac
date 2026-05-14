@@ -63,6 +63,7 @@ if(BUILD_TESTING)
         unit_tests
         tests/blob_stream_test.cpp
         tests/utils_test.cpp
+        tests/transparent_string_map_test.cpp
         tests/js_utils_test.cpp
         tests/js_output_handler_test.cpp
         tests/helpers/stream_buffers.cpp
