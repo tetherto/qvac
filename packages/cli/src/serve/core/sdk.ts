@@ -117,9 +117,24 @@ export interface SDKTool {
   parameters: Record<string, unknown>
 }
 
+export interface SDKToolCall {
+  id: string
+  name: string
+  arguments: string | Record<string, unknown>
+}
+
+/** Subset of SDK completion stats surfaced to OpenAI-compatible usage fields. */
+export interface CompletionRunStats {
+  generatedTokens?: number
+  cacheTokens?: number
+  tokensPerSecond?: number
+  timeToFirstToken?: number
+  backendDevice?: 'cpu' | 'gpu'
+}
+
 export interface CompletionResult {
   text: Promise<string>
-  stats: Promise<Record<string, unknown>>
+  stats: Promise<CompletionRunStats | undefined>
   toolCalls: Promise<SDKToolCall[] | null>
   tokenStream: AsyncIterable<string>
   toolCallStream: AsyncIterable<SDKToolEvent>
@@ -136,12 +151,6 @@ export interface SDKToolCallErrorEvent {
 }
 
 export type SDKToolEvent = SDKToolCallEvent | SDKToolCallErrorEvent
-
-export interface SDKToolCall {
-  id: string
-  name: string
-  arguments: string | Record<string, unknown>
-}
 
 let sdk: SDKModule | null = null
 
