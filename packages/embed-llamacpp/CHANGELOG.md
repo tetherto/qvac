@@ -10,6 +10,8 @@
 ### Fixed
 
 - Context overflow validation now compares tokenized inputs against the active runtime context size (`llama_n_ctx`), which is itself capped to the trained context.
+- `BertModel::setWeightsForFile` now tracks fulfilled GGUF shards in a per-instance `std::atomic<int>` instead of a function-local `static int`, so multiple concurrent `BertInterface` instances no longer share (and miscount) shard-fulfillment state.
+- `readTrainedContextSize` now logs an `ERROR`-level diagnostic when GGUF metadata cannot be read on a non-streaming load (previously failed silently and reverted to llama.cpp's default `ctx_size`).
 
 ## [0.18.0] - 2026-05-29
 

@@ -247,8 +247,10 @@ int getEffectiveContextSize(const llama_model* model, const llama_context* ctx) 
 /// @brief Read the model's trained context size from GGUF metadata without
 /// loading model weights.
 /// @returns The trained context size, or std::nullopt if metadata cannot be
-/// read (e.g. streaming load where the file is not yet on disk, or the GGUF
-/// file lacks the expected keys).
+/// read. Legitimate skips (streaming load, file not yet on disk) are silent;
+/// unexpected metadata failures (read error, missing keys) emit an
+/// ERROR-level log so the silent fallback to llama.cpp's default ctx_size is
+/// diagnosable.
 std::optional<int> readTrainedContextSize(
     const std::string& modelPath, const GGUFShards& shards, bool isStreaming) {
   // Streaming loads consume the GGUF stream during model load; pre-load
@@ -264,15 +266,29 @@ std::optional<int> readTrainedContextSize(
     return std::nullopt;
   }
 
+  auto logMetaFailure = [&sourcePath](const std::string& detail) {
+    qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
+        GGML_LOG_LEVEL_ERROR,
+        string_format(
+            "readTrainedContextSize: %s (path=%s); falling back to llama.cpp "
+            "default ctx_size\n",
+            detail.c_str(),
+            sourcePath.c_str())
+            .c_str(),
+        nullptr);
+  };
+
   metadata_handle_ptr meta;
   if (llama_model_meta_from_file(sourcePath.c_str(), &meta) !=
       MetaResultStatus::SUCCESS) {
+    logMetaFailure("llama_model_meta_from_file failed");
     return std::nullopt;
   }
 
   std::string architecture;
   if (llama_model_meta_get_str(meta, "general.architecture", &architecture) !=
       MetaResultStatus::SUCCESS) {
+    logMetaFailure("missing 'general.architecture' key");
     return std::nullopt;
   }
 
@@ -280,6 +296,7 @@ std::optional<int> readTrainedContextSize(
   const std::string contextLengthKey = architecture + ".context_length";
   if (llama_model_meta_get_u32(meta, contextLengthKey.c_str(), &trainedCtx) !=
       MetaResultStatus::SUCCESS) {
+    logMetaFailure("missing '" + contextLengthKey + "' key");
     return std::nullopt;
   }
 
