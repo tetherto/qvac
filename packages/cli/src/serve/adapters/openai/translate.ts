@@ -579,6 +579,11 @@ export function logResponsesUnsupportedParams (body: Record<string, unknown>, lo
       logger.info(`Ignoring unsupported Responses param: text.verbosity=${JSON.stringify(verbosity)}`)
     }
   }
+  // The Responses spec defines `max_output_tokens`, not `max_tokens`. Accept both for forgiveness
+  // (the route maps `max_tokens` as a fallback) but warn so consumers migrate.
+  if (body['max_tokens'] !== undefined && body['max_output_tokens'] === undefined) {
+    logger.warn('"max_tokens" on /v1/responses is non-spec; use "max_output_tokens".')
+  }
 }
 
 export function validateResponsesStatefulOptions (body: Record<string, unknown>): {

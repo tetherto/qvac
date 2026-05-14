@@ -28,7 +28,7 @@ export interface BuildResponseObjectParams {
   temperature: number | undefined
   topP: number | undefined
   maxOutputTokens: number | undefined
-  parallelToolCalls: boolean | undefined
+  parallelToolCalls: boolean
   previousResponseId: string | null | undefined
   store: boolean
   /** When set (e.g. streaming), must match SSE item ids so finalized response matches the stream. */
@@ -95,7 +95,7 @@ export function buildResponseObject (params: BuildResponseObjectParams): Record<
     output,
     output_text: params.text || '',
     usage,
-    parallel_tool_calls: params.parallelToolCalls ?? true,
+    parallel_tool_calls: params.parallelToolCalls,
     store: params.store
   }
 

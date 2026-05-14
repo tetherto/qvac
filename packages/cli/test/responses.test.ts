@@ -47,7 +47,7 @@ describe('buildResponseObject', () => {
       temperature: undefined,
       topP: undefined,
       maxOutputTokens: undefined,
-      parallelToolCalls: undefined,
+      parallelToolCalls: true,
       previousResponseId: null,
       store: false
     })

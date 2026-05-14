@@ -287,10 +287,9 @@ export async function writeStreamingResponse (
     type: 'response.created',
     response: { id: p.rid, object: 'response', created_at: p.createdAtSec, status: 'in_progress', model: p.modelAlias }
   })
-  sendSSE(res, {
-    type: 'response.in_progress',
-    response: { id: p.rid, object: 'response', created_at: p.createdAtSec, status: 'in_progress', model: p.modelAlias }
-  })
+  // Note: not emitting a duplicate `response.in_progress` event back-to-back with `response.created`
+  // — the OpenAI stream only sends `response.in_progress` after a real state transition, and
+  // emitting it here with identical payload is just noise for strict parsers.
   sendSSE(res, {
     type: 'response.output_item.added',
     output_index: 0,
@@ -438,7 +437,8 @@ export async function writeStreamingResponse (
   }
 
   sendSSE(res, { type: 'response.completed', response: responseObject })
-  endSSE(res)
+  // OpenAI Responses spec ends on `response.completed`; no `[DONE]` sentinel.
+  endSSE(res, { sentinel: false })
   p.ctx.logger.info(`  responses stream done id=${p.rid} stored=${p.storeEnabled}`)
   return responseObject
 }

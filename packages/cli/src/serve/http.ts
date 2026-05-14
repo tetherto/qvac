@@ -78,8 +78,19 @@ export function sendSSE (res: ServerResponse, data: unknown): void {
   res.write(`data: ${json}\n\n`)
 }
 
-export function endSSE (res: ServerResponse): void {
-  res.write('data: [DONE]\n\n')
+export interface EndSSEOptions {
+  /**
+   * Whether to write a `data: [DONE]\n\n` sentinel before closing.
+   * Chat-completions clients expect it; the OpenAI Responses spec does not.
+   * Defaults to true to preserve existing behavior.
+   */
+  sentinel?: boolean
+}
+
+export function endSSE (res: ServerResponse, opts?: EndSSEOptions): void {
+  if (opts?.sentinel !== false) {
+    res.write('data: [DONE]\n\n')
+  }
   res.end()
 }
 

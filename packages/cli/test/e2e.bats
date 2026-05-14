@@ -432,7 +432,8 @@ TXT
   grep -qi 'X-QVAC-Stub: responses-volatile' "${FILE_TMPDIR}/resp.hdr"
   grep -q 'response.created' "${FILE_TMPDIR}/resp.body"
   grep -q 'response.completed' "${FILE_TMPDIR}/resp.body"
-  grep -q 'data: \[DONE\]' "${FILE_TMPDIR}/resp.body"
+  # OpenAI Responses spec terminates on response.completed; no [DONE] sentinel.
+  ! grep -q 'data: \[DONE\]' "${FILE_TMPDIR}/resp.body"
 }
 
 @test "responses: store retrieve delete and input_items" {
