@@ -37,7 +37,16 @@ function MermaidContent({ chart }: { chart: string }) {
 
   mermaid.initialize({
     startOnLoad: false,
-    securityLevel: 'loose',
+    // 'sandbox' renders the diagram inside an `<iframe sandbox="allow-top-
+    // navigation-by-user-activation allow-popups">`. Scripts cannot run
+    // inside the iframe at all (no `allow-scripts`), so even a malicious
+    // diagram (raw HTML / event handler / script tag injected via the
+    // classDef bypasses fixed in 11.15.0) cannot reach the parent DOM,
+    // cookies, localStorage, or run authenticated requests as the docs
+    // origin. The `allow-top-navigation-by-user-activation` permission
+    // keeps `click ...` directives working — see
+    // content/docs/sdk/examples/ai-tasks/voice-assistant.mdx.
+    securityLevel: 'sandbox',
     fontFamily: 'inherit',
     themeCSS: 'margin: 1.5rem auto 0;',
     theme: resolvedTheme === 'dark' ? 'dark' : 'default',
