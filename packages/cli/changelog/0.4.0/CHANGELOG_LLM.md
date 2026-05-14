@@ -1,6 +1,4 @@
-# Changelog
-
-## [0.4.0]
+# Changelog v0.4.0
 
 Release Date: 2026-05-13
 
@@ -136,44 +134,3 @@ Requires `@qvac/sdk@^0.10.0`. Tool-call examples for both dialects live under th
 ## 🧹 Maintenance
 
 The repo-wide PR template consolidation deleted the stale `packages/cli/PULL_REQUEST_TEMPLATE.md` (along with 18 other unused per-package copies). GitHub only ever auto-discovered the two canonical templates at `.github/PULL_REQUEST_TEMPLATE/{sdk-pod,addon}.md`, and the CLI's per-package template was invisible to the GitHub UI; only ad-hoc tooling that read it was ever affected, and that tooling now points at the canonical addon template. No behaviour change for end users of `@qvac/cli`.
-
-## [0.3.0]
-
-Release Date: 2026-04-30
-
-## 🔌 API
-
-- Wire OpenAI's standard `response_format` field through `qvac serve` (POST `/v1/chat/completions`). The body field is parsed, validated, and forwarded to the SDK as `responseFormat`, enabling structured-output requests (`text` / `json_object` / `json_schema`) over the OpenAI-compatible HTTP surface. Requires `@qvac/sdk` `^0.10.0`. (see PR [#1810](https://github.com/tetherto/qvac/pull/1810)) - See [API changes](./changelog/0.3.0/api.md)
-
-## [0.2.4]
-
-Release Date: 2026-04-27
-
-## 🐞 Fixes
-
-- Update `SDKModule.embed` type and `sdkEmbed()` to handle the new `{ embedding, stats? }` return shape introduced in `@qvac/sdk` 0.9+. The CLI's internal `number[] | number[][]` contract is preserved so callers (notably the OpenAI embeddings route) stay unchanged. (see PR [#1596](https://github.com/tetherto/qvac/pull/1596))
-- Extract nested `node_modules` packages when generating the addons manifest in `qvac bundle sdk`, so deeply-hoisted addon dependencies are correctly included in the mobile worker bundle. (see PR [#1731](https://github.com/tetherto/qvac/pull/1731))
-
-## [0.2.2]
-
-Release Date: 2026-03-19
-
-## 🔌 API
-
-- Add OpenAI-compatible REST API server (qvac serve) - Part I. (see PR [#753](https://github.com/tetherto/qvac/pull/753)) - See [API changes](./changelog/0.2.2/api.md)
-- Bump LLM/embed addons and wire per-request generation params. (see PR [#895](https://github.com/tetherto/qvac/pull/895))
-- Add POST /v1/audio/transcriptions to qvac serve OpenAI adapter. (see PR [#915](https://github.com/tetherto/qvac/pull/915)) - See [API changes](./changelog/0.2.2/api.md)
-
-## 🐞 Fixes
-
-- Resolve Windows EFTYPE error when spawning bare-pack. (see PR [#949](https://github.com/tetherto/qvac/pull/949))
-- Normalize composite JSON Schema types in tool parameter validation. (see PR [#964](https://github.com/tetherto/qvac/pull/964))
-
-## 🧹 Chores
-
-- Rename qvac-cli package to cli. (see PR [#644](https://github.com/tetherto/qvac/pull/644))
-- Migrate CLI package from JavaScript to TypeScript. (see PR [#722](https://github.com/tetherto/qvac/pull/722))
-
-## ⚙️ Infrastructure
-
-- Add explicit build step to CLI publish workflow. (see PR [#1010](https://github.com/tetherto/qvac/pull/1010))

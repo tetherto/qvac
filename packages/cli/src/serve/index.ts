@@ -113,6 +113,7 @@ const CATEGORY_ENDPOINTS: Record<string, string[]> = {
   chat: ['POST /v1/chat/completions'],
   embedding: ['POST /v1/embeddings'],
   transcription: ['POST /v1/audio/transcriptions'],
+  'audio-translation': ['POST /v1/audio/translations'],
   image: ['POST /v1/images/generations']
 }
 
@@ -126,6 +127,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   chat: 'chat',
   embedding: 'embedding',
   transcription: 'transcription',
+  'audio-translation': 'audio translation',
   translation: 'translation',
   speech: 'speech',
   ocr: 'ocr',
