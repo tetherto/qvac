@@ -18,7 +18,7 @@ export const SDK_SERVER_ERROR_CODES = {
   VAD_MODEL_REQUIRED: 52205,
   TTS_ARTIFACTS_REQUIRED: 52208,
   TTS_REFERENCE_AUDIO_REQUIRED: 52209,
-  PARAKEET_ARTIFACTS_REQUIRED: 52210,
+  LEGACY_PARAKEET_MODEL_DEPRECATED: 52210,
 
   // Model Operations (52,400-52,799)
   MODEL_UNLOAD_FAILED: 52400,
@@ -38,6 +38,9 @@ export const SDK_SERVER_ERROR_CODES = {
   INVALID_IMAGE_INPUT: 52414,
   TEXT_TO_SPEECH_STREAM_FAILED: 52415,
   MODEL_OPERATION_NOT_SUPPORTED: 52416,
+  REQUEST_ID_CONFLICT: 52417,
+  REQUEST_NOT_FOUND: 52418,
+  INFERENCE_CANCELLED: 52419,
 
   // RAG Operations (52,800-52,999)
   RAG_SAVE_FAILED: 52800,
@@ -85,6 +88,7 @@ export const SDK_SERVER_ERROR_CODES = {
   FFMPEG_NOT_AVAILABLE: 53500,
   AUDIO_PLAYER_FAILED: 53501,
   INVALID_AUDIO_CHUNK_TYPE: 53502,
+  ASYNC_DISPOSE_UNAVAILABLE: 53503,
 
   // RPC/Delegation (Server-side) (53,700-53,849)
   DELEGATE_NO_FINAL_RESPONSE: 53700,
@@ -182,12 +186,18 @@ const serverErrorDefinitions: ErrorCodesMap = {
     message:
       "TTS (Chatterbox) requires referenceAudioSrc (path or URL to a WAV file for voice cloning)",
   },
-  [SDK_SERVER_ERROR_CODES.PARAKEET_ARTIFACTS_REQUIRED]: {
-    name: "PARAKEET_ARTIFACTS_REQUIRED",
-    message:
-      "Parakeet model sources are missing. TDT requires parakeetEncoderSrc, parakeetDecoderSrc, parakeetVocabSrc, parakeetPreprocessorSrc. CTC requires parakeetCtcModelSrc, parakeetTokenizerSrc. Sortformer requires parakeetSortformerSrc.",
+  [SDK_SERVER_ERROR_CODES.LEGACY_PARAKEET_MODEL_DEPRECATED]: {
+    name: "LEGACY_PARAKEET_MODEL_DEPRECATED",
+    message: (legacyFields: string) =>
+      `Legacy parakeet ONNX modelConfig fields are no longer supported (found: ${legacyFields}). ` +
+      `As of @qvac/transcription-parakeet 0.4.0 the addon ships as a single GGUF that auto-detects ` +
+      `TDT / CTC / EOU / Sortformer from GGUF metadata. Remove these fields from modelConfig and ` +
+      `pass the GGUF via the top-level modelSrc, e.g.: ` +
+      `loadModel({ modelSrc: PARAKEET_TDT_0_6B_V3_Q8_0, modelType: "parakeet" }). ` +
+      `The legacy ONNX constants (PARAKEET_TDT_ENCODER_INT8, PARAKEET_CTC_FP32, PARAKEET_SORTFORMER_FP32, ` +
+      `etc.) remain exported for one minor cycle for codemod migrations only and will be removed in a ` +
+      `future release.`,
   },
-
   // Model Operations (52,400-52,799)
   [SDK_SERVER_ERROR_CODES.MODEL_UNLOAD_FAILED]: {
     name: "MODEL_UNLOAD_FAILED",
@@ -283,6 +293,21 @@ const serverErrorDefinitions: ErrorCodesMap = {
         : ` No model registered in this worker bundle exposes ${operation}.`;
       return `Model "${modelId}" (type: ${modelType}) does not support ${operation}.${supportedClause}${suggestionClause}`;
     },
+  },
+  [SDK_SERVER_ERROR_CODES.REQUEST_ID_CONFLICT]: {
+    name: "REQUEST_ID_CONFLICT",
+    message: (requestId: string) =>
+      `Request id "${requestId}" is already in flight; refusing to overwrite the existing context`,
+  },
+  [SDK_SERVER_ERROR_CODES.REQUEST_NOT_FOUND]: {
+    name: "REQUEST_NOT_FOUND",
+    message: (requestId: string) =>
+      `No in-flight request with id "${requestId}"`,
+  },
+  [SDK_SERVER_ERROR_CODES.INFERENCE_CANCELLED]: {
+    name: "INFERENCE_CANCELLED",
+    message: (requestId: string) =>
+      `Inference request "${requestId}" was cancelled before it could complete`,
   },
 
   // RAG Operations (52,800-52,999)
@@ -461,6 +486,11 @@ const serverErrorDefinitions: ErrorCodesMap = {
   [SDK_SERVER_ERROR_CODES.INVALID_AUDIO_CHUNK_TYPE]: {
     name: "INVALID_AUDIO_CHUNK_TYPE",
     message: "Invalid audio chunk type",
+  },
+  [SDK_SERVER_ERROR_CODES.ASYNC_DISPOSE_UNAVAILABLE]: {
+    name: "ASYNC_DISPOSE_UNAVAILABLE",
+    message:
+      "Host runtime does not expose Symbol.asyncDispose; the SDK request-lifecycle primitives require ES2024 `using`/`asyncDispose` support. Verify your runtime (Bare/Expo/Node ≥ 20.4) and any polyfill registration.",
   },
 
   // RPC/Delegation (Server-side) (53,700-53,899)

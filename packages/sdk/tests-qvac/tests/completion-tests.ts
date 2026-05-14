@@ -607,6 +607,28 @@ export const completionResponseFormatJsonSchema: TestDefinition = {
   metadata: { category: "completion", dependency: "llm", estimatedDurationMs: 20000 },
 };
 
+export const completionReasoningBudgetDisabled: TestDefinition = {
+  testId: "completion-reasoning-budget-disabled",
+  params: {
+    history: [{ role: "user", content: "What is 2+2? Answer with only the number." }],
+    stream: false,
+    generationParams: { reasoning_budget: 0, predict: 32 },
+  },
+  expectation: { validation: "type", expectedType: "string" },
+  metadata: { category: "completion", dependency: "llm", estimatedDurationMs: 10000 },
+};
+
+export const completionReasoningBudgetUnrestricted: TestDefinition = {
+  testId: "completion-reasoning-budget-unrestricted",
+  params: {
+    history: [{ role: "user", content: "What is 2+2? Answer with only the number." }],
+    stream: false,
+    generationParams: { reasoning_budget: -1, predict: 32 },
+  },
+  expectation: { validation: "type", expectedType: "string" },
+  metadata: { category: "completion", dependency: "llm", estimatedDurationMs: 10000 },
+};
+
 export const completionResponseFormatWithToolsRejected: TestDefinition = {
   testId: "completion-response-format-with-tools-rejected",
   params: {
@@ -677,4 +699,6 @@ export const completionTests = [
   completionResponseFormatJsonObjectStreaming,
   completionResponseFormatJsonSchema,
   completionResponseFormatWithToolsRejected,
+  completionReasoningBudgetDisabled,
+  completionReasoningBudgetUnrestricted,
 ];

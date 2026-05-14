@@ -177,6 +177,9 @@ Located in `@/utils/errors-server`
 - `AttachmentNotFoundError` - Attachment not found
 - `CancelFailedError` - Cancel failed
 - `TextToSpeechFailedError` - TTS failed
+- `RequestIdConflictError` (52417) - `registry.begin(...)` called with a `requestId` already present
+- `RequestNotFoundError` (52418) - registry lookup miss (no in-flight request for the given id)
+- `InferenceCancelledError` (52419) - cancelled inference run; carries `requestId` + `partial: { text?, toolCalls?, stats? }`. Constructed client-side on `stopReason: "cancelled"` (event stream ends normally; promise-aggregates reject with this). Re-exported from `@qvac/sdk` for `instanceof` checks.
 
 #### RAG Operations (52,800-52,999)
 - `RAGSaveFailedError` - Save failed

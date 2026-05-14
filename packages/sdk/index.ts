@@ -35,6 +35,7 @@ export {
   invokePluginStream,
   diffusion,
   type DiffusionProgressTick,
+  upscale,
   modelRegistryList,
   modelRegistrySearch,
   modelRegistryGetModel,
@@ -106,6 +107,9 @@ export {
   type DiffusionClientParams,
   type DiffusionStreamResponse,
   type DiffusionStats,
+  type UpscaleClientParams,
+  type UpscaleStreamResponse,
+  type UpscaleStats,
   definePlugin,
   defineHandler,
   defineDuplexHandler,
@@ -144,6 +148,14 @@ export { MODEL_TYPES, ModelType } from "./schemas";
 export * from "./models/registry";
 
 export { SUPPORTED_AUDIO_FORMATS } from "./constants/audio";
+
+// Error classes that clients need for `instanceof` checks on rejected
+// promises. `InferenceCancelledError` rides the standard `QvacError`
+// envelope, but consumers reach for it through `instanceof` on
+// `await run.final` / `run.text` / `run.toolCalls` / `run.stats`
+// rejections.
+export { InferenceCancelledError } from "./utils/errors-server";
+export type { InferenceCancelledPartial } from "./utils/errors-server";
 
 // Logging exports
 export { getLogger, SDK_LOG_ID } from "./logging";

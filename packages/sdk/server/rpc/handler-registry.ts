@@ -27,6 +27,7 @@ import { handleFinetune } from "@/server/rpc/handlers/finetune";
 import { handleHeartbeatDelegated } from "@/server/rpc/handlers/heartbeat-delegated";
 import { handleCancelDelegated } from "@/server/rpc/handlers/cancel-delegated";
 import { handleDiffusionStream } from "@/server/rpc/handlers/diffusion-stream";
+import { handleUpscaleStream } from "@/server/rpc/handlers/upscale-stream";
 import {
   handlePluginInvoke,
   handlePluginInvokeStream,
@@ -117,6 +118,7 @@ export const registry: Record<string, HandlerEntry> = {
   textToSpeechStream: { type: "duplex", handler: handleTextToSpeechStream },
   ocrStream: { type: "stream", handler: handleOCRStream },
   diffusionStream: { type: "stream", handler: handleDiffusionStream },
+  upscaleStream: { type: "stream", handler: handleUpscaleStream },
   pluginInvokeStream: { type: "stream", handler: handlePluginInvokeStream },
 
   // Handlers with delegation support

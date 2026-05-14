@@ -108,9 +108,13 @@ try {
         }
         break;
       case "endOfTurn":
-        console.log(
-          `[endOfTurn] silence ${event.silenceDurationMs}ms — turn complete\n`,
-        );
+        if (event.source === "whisper") {
+          console.log(
+            `[endOfTurn] silence ${event.silenceDurationMs}ms — turn complete\n`,
+          );
+        } else {
+          console.log(`[endOfTurn] turn complete (token-driven EOU)\n`);
+        }
         break;
     }
   }
