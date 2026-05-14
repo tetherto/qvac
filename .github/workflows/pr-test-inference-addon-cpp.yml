@@ -70,10 +70,12 @@ jobs:
           - os: ubuntu-22.04
             platform: linux
             arch: x64
+            runner: qvac-ubuntu2204-x64
           - os: ubuntu-22.04
             platform: android
             arch: arm64
             flags: -D ANDROID_STL=c++_shared
+            runner: qvac-ubuntu2204-x64
           - os: macos-14
             platform: ios
             arch: arm64
@@ -85,9 +87,10 @@ jobs:
           - os: macos-14
             platform: darwin
             arch: arm64
-          - os: windows-2022
+          - os: windows-2025
             platform: win32
             arch: x64
+            runner: qvac-win25-x64
 
     runs-on: ${{ matrix.os }}
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
@@ -117,7 +120,7 @@ jobs:
           sudo apt update
           sudo apt install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6-dev-arm64-cross lld
 
-      - if: ${{ matrix.os == 'windows-2022' }}
+      - if: ${{ matrix.os == 'windows-2025' }}
         name: setup cmake windows
         run: |
           cd ..
@@ -138,10 +141,6 @@ jobs:
           cat $GITHUB_PATH >> temp
           mv temp $GITHUB_PATH
 
-      - if: ${{ matrix.os == 'windows-2022' }}
-        name: Longpaths on windows
-        run: git config --system core.longpaths true
-
       - if: ${{ matrix.os == 'macos-14' }}
         name: Install vcpkg in macos
         run: |
@@ -156,21 +155,18 @@ jobs:
         name: Configure vcpkg in linux
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
 
-      - if: ${{ matrix.os == 'windows-2022' }}
+      - if: ${{ matrix.os == 'windows-2025' }}
         name: Configure vcpkg in windows
         run: echo ("VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" -replace '\\', '/') >> $env:GITHUB_ENV
 
-      - if: ${{ matrix.os == 'windows-2022' }}
+      - if: ${{ matrix.os == 'windows-2025' }}
         name: Configure cmake generator in windows
         run: echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> $env:GITHUB_ENV
 
-      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'x64' }}
+      - if: ${{ matrix.os == 'windows-2025' && matrix.arch == 'x64' }}
         run: echo "CMAKE_GENERATOR_PLATFORM=x64" >> $env:GITHUB_ENV
 
-      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'x86' }}
-        run: echo "CMAKE_GENERATOR_PLATFORM=Win32" >> $env:GITHUB_ENV
-
-      - if: ${{ matrix.os == 'windows-2022' && matrix.arch == 'arm64' }}
+      - if: ${{ matrix.os == 'windows-2025' && matrix.arch == 'arm64' }}
         run: echo "CMAKE_GENERATOR_PLATFORM=ARM64" >> $env:GITHUB_ENV
 
       - if: ${{ matrix.platform == 'android' }}

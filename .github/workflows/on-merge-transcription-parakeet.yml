@@ -34,6 +34,26 @@ permissions:
   id-token: write
 
 jobs:
+  label-gate:
+    name: Authorise (label-gate)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      authorised: ${{ steps.gate.outputs.authorised }}
+    steps:
+      - name: Checkout (label-gate action only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/label-gate
+          sparse-checkout-cone-mode: false
+      - name: Run label-gate
+        id: gate
+        uses: ./.github/actions/label-gate
+        with:
+          github-token: ${{ secrets.PAT_TOKEN }}
   publish-logic:
     runs-on: ubuntu-latest
     environment: release
@@ -83,11 +103,13 @@ jobs:
           echo "publish_tmp=$publish_tmp" >> "$GITHUB_OUTPUT"
           echo "gpr_tag=$gpr_tag" >> "$GITHUB_OUTPUT"
 
+    needs:
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true'
   release-merge-guard:
     name: Release Merge Guard
     if: >-
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-      startsWith(github.ref_name, 'release-')
+      needs.label-gate.outputs.authorised == 'true' && ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') && startsWith(github.ref_name, 'release-'))
     runs-on: ubuntu-latest
     environment: release
     steps:
@@ -104,14 +126,15 @@ jobs:
           package-json-path: packages/transcription-parakeet/package.json
           changelog-path: packages/transcription-parakeet/CHANGELOG.md
 
-  # Build prebuilds (build + merge only, no publishing)
+    # Build prebuilds (build + merge only, no publishing)
+    needs:
+      - label-gate
   build:
-    needs: publish-logic
+    needs:
+      - publish-logic
+      - label-gate
     if: >-
-      needs.publish-logic.outputs.publish_main == 'true' ||
-      needs.publish-logic.outputs.publish_release == 'true' ||
-      needs.publish-logic.outputs.publish_feature == 'true' ||
-      needs.publish-logic.outputs.publish_tmp == 'true'
+      needs.label-gate.outputs.authorised == 'true' && (needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_release == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true')
     permissions:
       contents: write
       packages: write
@@ -128,9 +151,7 @@ jobs:
   publish-gpr:
     needs: [build, publish-logic]
     if: >-
-      needs.publish-logic.outputs.publish_main == 'true' ||
-      needs.publish-logic.outputs.publish_feature == 'true' ||
-      needs.publish-logic.outputs.publish_tmp == 'true'
+      needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true'
     continue-on-error: true
     runs-on: ubuntu-latest
     outputs:
@@ -188,12 +209,13 @@ jobs:
 
   # Publish to NPM for release branches
   publish-npm:
-    needs: [build, publish-logic, release-merge-guard]
+    needs:
+      - build
+      - publish-logic
+      - release-merge-guard
+      - label-gate
     if: >-
-      !cancelled() &&
-      needs.build.result == 'success' &&
-      needs.publish-logic.outputs.publish_release == 'true' &&
-      (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')
+      needs.label-gate.outputs.authorised == 'true' && (!cancelled() && needs.build.result == 'success' && needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped'))
     runs-on: ubuntu-latest
     environment: npm
     outputs:
@@ -244,9 +266,7 @@ jobs:
   publish-release:
     needs: [publish-npm]
     if: >-
-      !cancelled() &&
-      needs.publish-npm.result == 'success' &&
-      needs.publish-npm.outputs.published_version != ''
+      !cancelled() && needs.publish-npm.result == 'success' && needs.publish-npm.outputs.published_version != ''
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release.yml
@@ -284,8 +304,10 @@ jobs:
       packages: read
       id-token: write
     uses: ./.github/workflows/integration-test-transcription-parakeet.yml
-    needs: post-build-gate
-    if: needs.post-build-gate.outputs.should_run_tests == 'true'
+    needs:
+      - post-build-gate
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true' && (needs.post-build-gate.outputs.should_run_tests == 'true')
     secrets: inherit
     with:
       repository: ${{ github.repository }}
@@ -293,8 +315,10 @@ jobs:
 
   mobile-integration-tests:
     uses: ./.github/workflows/integration-mobile-test-transcription-parakeet.yml
-    needs: post-build-gate
-    if: needs.post-build-gate.outputs.should_run_tests == 'true'
+    needs:
+      - post-build-gate
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true' && (needs.post-build-gate.outputs.should_run_tests == 'true')
     permissions:
       contents: read
       packages: read

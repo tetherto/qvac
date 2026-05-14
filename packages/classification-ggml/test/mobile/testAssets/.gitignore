@@ -1,0 +1,17 @@
+# Ignore any large model or image files placed here by ad-hoc scripts.
+# `scripts/copy-mobile-test-assets.js` populates this directory at
+# build/test time with:
+#   - the FP16 GGUF weights blob (renamed to `*.gguf.bin` so metro
+#     treats it as a binary asset rather than a JS module)
+#   - the integration test images from `test/images/*.{jpg,jpeg,png}`
+# Both kinds of files are derived artifacts and must not be committed.
+*.gguf
+*.bin
+*.safetensors
+*.ckpt
+*.jpg
+*.jpeg
+*.png
+
+# Keep this directory tracked.
+!.gitignore
