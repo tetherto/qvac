@@ -9,6 +9,7 @@ import {
   AskAIBottomBar,
   AskAISearchToggleLarge,
   AskAISearchToggleSmall,
+  AskAIShell,
   AskAITextSelection,
 } from '@/components/ask-ai';
 
@@ -60,6 +61,16 @@ export default function Layout({ children }: LayoutProps<'/'>) {
         }}
       >
         {children}
+        {/*
+         * Mounted INSIDE `<DocsLayout>` (not as a sibling) so the
+         * desktop sidebar's wrapper becomes a direct child of
+         * `#nd-docs-layout`. That's the prerequisite for the
+         * `lg:in-[#nd-docs-layout]:[grid-area:toc]` Tailwind selector
+         * inside `AskAIShell` to claim the TOC grid cell — which, in
+         * turn, lets the page main column shrink to leave room for
+         * the assistant pane (true "push" behavior on lg+).
+         */}
+        <AskAIShell />
       </DocsLayout>
       <AskAIBottomBar />
       <AskAITextSelection />

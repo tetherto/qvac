@@ -48,20 +48,25 @@ function AskAITrigger({ className, language, containerRef }: AskAITriggerProps) 
     });
   }
 
+  // Icon-only at every viewport. Keeps the toolbar compact (it sits
+  // beside the copy button) and consistent across breakpoints — the
+  // sparkles glyph is sufficient affordance once users have seen the
+  // assistant's brand mark anywhere else on the site. The accessible
+  // name is exposed via `aria-label` for screen readers.
   return (
     <button
       type="button"
       onClick={handleClick}
       aria-label="Ask AI about this code"
+      title="Ask AI about this code"
       className={cn(
-        'inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium text-fd-muted-foreground transition-colors',
+        'inline-flex size-7 items-center justify-center rounded-md text-fd-muted-foreground transition-colors',
         'hover:bg-fd-accent hover:text-fd-accent-foreground',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring',
         className,
       )}
     >
       <Sparkles className="size-3.5" aria-hidden="true" />
-      <span className="hidden sm:inline">Ask AI</span>
     </button>
   );
 }

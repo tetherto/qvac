@@ -147,9 +147,17 @@ export function AskAITextSelection() {
           window.getSelection()?.removeAllRanges();
           dismiss();
         }}
+        // The chip floats directly above selected docs prose, so its
+        // background MUST stay fully opaque in both default and hover
+        // states — otherwise the selection bleeds through and the
+        // affordance becomes unreadable. We avoid `bg-fd-accent` on
+        // hover because the docs site's `global.css` overrides
+        // `--color-fd-accent` with a 0.5-alpha HSLA value, which is
+        // exactly what made the previous version translucent. Both
+        // `bg-fd-popover` and `bg-fd-secondary` are solid HSL tokens.
         className={cn(
           'inline-flex items-center gap-2 rounded-full border bg-fd-popover px-3 py-1.5 text-xs font-medium text-fd-popover-foreground shadow-lg',
-          'hover:bg-fd-accent hover:text-fd-accent-foreground',
+          'hover:bg-fd-secondary',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring',
         )}
       >

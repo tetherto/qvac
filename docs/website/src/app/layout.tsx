@@ -2,7 +2,7 @@ import './global.css';
 import { Inter } from 'next/font/google';
 import type { Metadata } from 'next';
 import { GoogleTagManager } from '@next/third-parties/google';
-import { AskAIProvider, AskAIShell } from '@/components/ask-ai';
+import { AskAIProvider } from '@/components/ask-ai';
 import { Provider } from "./provider";
 import 'katex/dist/katex.css';
 import { docsRootMetadataRobots } from '@/lib/docs-indexing';
@@ -41,9 +41,16 @@ export default function Layout({ children }: LayoutProps<'/'>) {
       </head>
       {gtmId && <GoogleTagManager gtmId={gtmId} />}
       <body className="flex flex-col min-h-screen">
+        {/*
+         * `AskAIProvider` stays at root so the URL deep-link handler
+         * and the `Cmd/Ctrl+I` hotkey are reachable from every route.
+         * `AskAIShell` is mounted inside the `(docs)` layout so the
+         * desktop sidebar lands as a direct grid child of
+         * `#nd-docs-layout` and can claim `grid-area: toc` to push
+         * the page content (see `ask-ai-shell.tsx` + `global.css`).
+         */}
         <AskAIProvider>
           <Provider>{children}</Provider>
-          <AskAIShell />
         </AskAIProvider>
       </body>
     </html>

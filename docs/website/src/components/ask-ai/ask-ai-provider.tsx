@@ -59,14 +59,12 @@ export interface AskAIContextValue {
   /** Open the assistant and queue `snippet` to be prepended to the input. */
   addContext: (snippet: AskAIContextSnippet) => void;
 
-  /** Atomic read+clear for the queued prompt; used by the shell. */
-  takePendingPrompt: () => string | null;
-  /** Atomic read+clear for the queued context; used by the shell. */
-  takePendingContext: () => AskAIContextSnippet | null;
+  /** Clear the queued prompt and/or context. The shell calls this once
+   *  after consuming the values from `pendingPrompt` / `pendingContext`. */
+  clearPending: () => void;
 }
 
 const noop = () => {};
-const takeNoop = () => null;
 
 const defaultValue: AskAIContextValue = {
   isReady: false,
@@ -82,8 +80,7 @@ const defaultValue: AskAIContextValue = {
   toggle: noop,
   openWith: noop,
   addContext: noop,
-  takePendingPrompt: takeNoop,
-  takePendingContext: takeNoop,
+  clearPending: noop,
 };
 
 const AskAIContext = createContext<AskAIContextValue>(defaultValue);
@@ -179,22 +176,17 @@ function AskAIProviderInner({ children }: AskAIProviderInnerProps) {
     [open],
   );
 
-  const takePendingPrompt = useCallback(() => {
-    let value: string | null = null;
-    setPendingPrompt((current) => {
-      value = current;
-      return null;
-    });
-    return value;
-  }, []);
-
-  const takePendingContext = useCallback(() => {
-    let value: AskAIContextSnippet | null = null;
-    setPendingContext((current) => {
-      value = current;
-      return null;
-    });
-    return value;
+  // The shell consumes `pendingPrompt` / `pendingContext` directly from
+  // the context (they're already in the render closure), then calls
+  // `clearPending` to drain the queue. We deliberately do NOT use the
+  // "read+clear in a single call" pattern here: in React 19 concurrent
+  // mode the functional state setter's updater runs on the NEXT render
+  // pass, not synchronously, so any value captured inside the updater
+  // is unavailable to the caller — the previous `takePending*` helpers
+  // always returned `null`, which silently broke every queued prompt.
+  const clearPending = useCallback(() => {
+    setPendingPrompt(null);
+    setPendingContext(null);
   }, []);
 
   // ---------------------------------------------------------------------------
@@ -263,8 +255,7 @@ function AskAIProviderInner({ children }: AskAIProviderInnerProps) {
       toggle,
       openWith,
       addContext,
-      takePendingPrompt,
-      takePendingContext,
+      clearPending,
     }),
     [
       isReady,
@@ -278,8 +269,7 @@ function AskAIProviderInner({ children }: AskAIProviderInnerProps) {
       toggle,
       openWith,
       addContext,
-      takePendingPrompt,
-      takePendingContext,
+      clearPending,
     ],
   );
 
