@@ -32,6 +32,18 @@ export function createOpenAIAdapter (): APIAdapter {
         return true
       }
 
+      if (method === 'POST' && path === '/v1/responses') {
+        const { handlePostResponses } = await import('./routes/responses.js')
+        await handlePostResponses(req, res, ctx)
+        return true
+      }
+
+      if (path.startsWith('/v1/responses/')) {
+        const { routeResponsesId } = await import('./routes/responses-id.js')
+        const handled = await routeResponsesId(req, res, ctx)
+        if (handled) return true
+      }
+
       if (method === 'POST' && path === '/v1/chat/completions') {
         const { handleChatCompletions } = await import('./routes/chat.js')
         await handleChatCompletions(req, res, ctx)

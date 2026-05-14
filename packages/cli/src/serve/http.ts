@@ -28,21 +28,45 @@ export function readBody (req: IncomingMessage): Promise<Record<string, unknown>
   })
 }
 
-export function sendJson (res: ServerResponse, status: number, body: unknown): void {
+export function sendJson (
+  res: ServerResponse,
+  status: number,
+  body: unknown,
+  extraHeaders?: Record<string, string | number>
+): void {
   if (res.headersSent) return
 
   const payload = JSON.stringify(body)
-  res.writeHead(status, {
+  const headers: Record<string, string | number> = {
     'Content-Type': 'application/json',
-    'Content-Length': Buffer.byteLength(payload)
-  })
+    'Content-Length': Buffer.byteLength(payload),
+    ...extraHeaders
+  }
+  res.writeHead(status, headers)
   res.end(payload)
 }
 
-export function sendError (res: ServerResponse, status: number, code: string, message: string): void {
+export interface SendErrorOptions {
+  /**
+   * When the response has already started streaming, controls whether
+   * `endSSE` writes the trailing `data: [DONE]\n\n` sentinel after the
+   * error event. Pass `false` for streams whose spec does not use the
+   * sentinel (e.g. OpenAI Responses, which terminates on `response.error`).
+   * Defaults to `true` to preserve chat-completions behavior.
+   */
+  sseSentinel?: boolean
+}
+
+export function sendError (
+  res: ServerResponse,
+  status: number,
+  code: string,
+  message: string,
+  opts?: SendErrorOptions
+): void {
   if (res.headersSent) {
     sendSSE(res, { error: { message, type: 'server_error', code } })
-    endSSE(res)
+    endSSE(res, { sentinel: opts?.sseSentinel ?? true })
     return
   }
 
@@ -55,11 +79,12 @@ export function sendError (res: ServerResponse, status: number, code: string, me
   })
 }
 
-export function initSSE (res: ServerResponse): void {
+export function initSSE (res: ServerResponse, extraHeaders?: Record<string, string | number>): void {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
-    Connection: 'keep-alive'
+    Connection: 'keep-alive',
+    ...extraHeaders
   })
 }
 
@@ -70,8 +95,19 @@ export function sendSSE (res: ServerResponse, data: unknown): void {
   res.write(`data: ${json}\n\n`)
 }
 
-export function endSSE (res: ServerResponse): void {
-  res.write('data: [DONE]\n\n')
+export interface EndSSEOptions {
+  /**
+   * Whether to write a `data: [DONE]\n\n` sentinel before closing.
+   * Chat-completions clients expect it; the OpenAI Responses spec does not.
+   * Defaults to true to preserve existing behavior.
+   */
+  sentinel?: boolean
+}
+
+export function endSSE (res: ServerResponse, opts?: EndSSEOptions): void {
+  if (opts?.sentinel !== false) {
+    res.write('data: [DONE]\n\n')
+  }
   res.end()
 }
 

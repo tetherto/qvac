@@ -14,7 +14,18 @@ import {
   parseExpiresAfter,
   parseMetadata,
   InvalidExpiresAfterError,
-  InvalidMetadataError
+  InvalidMetadataError,
+  openaiResponsesInputToHistory,
+  openaiResponsesToolsToSdk,
+  extractResponsesGenerationParams,
+  extractResponsesResponseFormat,
+  validateResponsesStatefulOptions,
+  normalizeResponsesInputItemsForStorage,
+  historyPrefixFromStoredResponse,
+  logResponsesUnsupportedParams,
+  UnsupportedToolTypeError,
+  InvalidResponsesConversationError,
+  InvalidResponsesBackgroundError
 } from '../src/serve/adapters/openai/translate.js'
 import type { VectorStoreMeta } from '../src/serve/adapters/openai/vector-stores-store.js'
 
@@ -677,5 +688,221 @@ describe('parseMetadata', () => {
   it('rejects oversized keys or values', () => {
     assert.throws(() => parseMetadata({ ['x'.repeat(65)]: 'v' }), InvalidMetadataError)
     assert.throws(() => parseMetadata({ k: 'v'.repeat(513) }), InvalidMetadataError)
+  })
+})
+
+describe('openaiResponsesInputToHistory', () => {
+  it('maps string input to user message', () => {
+    const h = openaiResponsesInputToHistory('hello', undefined)
+    assert.deepEqual(h, [{ role: 'user', content: 'hello' }])
+  })
+
+  it('prepends instructions as system', () => {
+    const h = openaiResponsesInputToHistory('x', 'sys')
+    assert.deepEqual(h, [{ role: 'system', content: 'sys' }, { role: 'user', content: 'x' }])
+  })
+
+  it('maps message items', () => {
+    const h = openaiResponsesInputToHistory([
+      { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'a' }] }
+    ], undefined)
+    assert.equal(h[0]!.role, 'user')
+    assert.equal(h[0]!.content, 'a')
+  })
+
+  it('maps function_call_output to tool role', () => {
+    const h = openaiResponsesInputToHistory([
+      { type: 'function_call_output', output: '{"ok":true}' }
+    ], undefined)
+    assert.deepEqual(h[0], { role: 'tool', content: '{"ok":true}' })
+  })
+
+  it('maps function_call to synthesized assistant tool markup', () => {
+    const h = openaiResponsesInputToHistory([
+      { type: 'function_call', name: 'x', arguments: '{"a":1}' }
+    ], undefined)
+    assert.equal(h[0]!.role, 'assistant')
+    assert.ok(h[0]!.content.includes('<tool_call>'))
+    assert.ok(h[0]!.content.includes('x'))
+  })
+})
+
+describe('openaiResponsesToolsToSdk', () => {
+  it('maps Responses-style function tools', () => {
+    const t = openaiResponsesToolsToSdk([{
+      type: 'function',
+      name: 'fn',
+      description: 'd',
+      parameters: { type: 'object', properties: {} }
+    }])
+    assert.ok(t && t.length === 1)
+    assert.equal(t[0]!.name, 'fn')
+  })
+
+  it('throws on web_search', () => {
+    assert.throws(
+      () => openaiResponsesToolsToSdk([{ type: 'web_search' }]),
+      UnsupportedToolTypeError
+    )
+  })
+})
+
+describe('extractResponsesGenerationParams', () => {
+  it('maps max_output_tokens to predict', () => {
+    const p = extractResponsesGenerationParams({ max_output_tokens: 64 })
+    assert.equal(p!.predict, 64)
+  })
+})
+
+describe('extractResponsesResponseFormat', () => {
+  it('reads nested text.format', () => {
+    const f = extractResponsesResponseFormat({
+      text: { format: { type: 'json_object' } }
+    })
+    assert.ok(f && f.type === 'json_object')
+  })
+})
+
+describe('validateResponsesStatefulOptions', () => {
+  it('returns previous id and store default true', () => {
+    const r = validateResponsesStatefulOptions({ previous_response_id: 'resp_x', input: '' })
+    assert.equal(r.previousResponseId, 'resp_x')
+    assert.equal(r.storeEnabled, true)
+  })
+
+  it('store false opts out', () => {
+    const r = validateResponsesStatefulOptions({ store: false, input: '' })
+    assert.equal(r.storeEnabled, false)
+  })
+
+  it('throws on conversation', () => {
+    assert.throws(
+      () => validateResponsesStatefulOptions({ conversation: 'c1' }),
+      InvalidResponsesConversationError
+    )
+  })
+
+  it('throws on background true', () => {
+    assert.throws(
+      () => validateResponsesStatefulOptions({ background: true }),
+      InvalidResponsesBackgroundError
+    )
+  })
+})
+
+describe('logResponsesUnsupportedParams', () => {
+  it('does not treat parallel_tool_calls as unsupported', () => {
+    const lines: string[] = []
+    const logger = {
+      info: (msg: string) => lines.push(msg),
+      warn: (): void => {},
+      error: (): void => {},
+      debug: (): void => {}
+    } as Parameters<typeof logResponsesUnsupportedParams>[1]
+    logResponsesUnsupportedParams({ parallel_tool_calls: false, input: '' }, logger)
+    assert.ok(!lines.some((l) => l.includes('parallel_tool_calls')))
+  })
+})
+
+describe('normalizeResponsesInputItemsForStorage', () => {
+  it('wraps string input', () => {
+    const items = normalizeResponsesInputItemsForStorage('hi')
+    assert.equal(items.length, 1)
+    assert.equal((items[0] as { type: string }).type, 'message')
+  })
+})
+
+describe('historyPrefixFromStoredResponse', () => {
+  it('uses output_text when output array is empty', () => {
+    const prefix = historyPrefixFromStoredResponse({
+      inputItems: [{ type: 'message', id: '1', role: 'user', content: [{ type: 'input_text', text: 'u' }] }],
+      responseObject: { output_text: 'assistant reply', output: [] }
+    })
+    assert.deepEqual(prefix, [
+      { role: 'user', content: 'u' },
+      { role: 'assistant', content: 'assistant reply' }
+    ])
+  })
+
+  it('prefers non-empty output array so tool calls are included with assistant text', () => {
+    const prefix = historyPrefixFromStoredResponse({
+      inputItems: [],
+      responseObject: {
+        output_text: 'ignored when structured output present',
+        output: [
+          { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'hello' }] },
+          { type: 'function_call', name: 'f', arguments: '{}', call_id: 'c1' }
+        ]
+      }
+    })
+    const assistantText = prefix.filter((p) => p.role === 'assistant' && !p.content.includes('tool_call'))
+    const toolCalls = prefix.filter((p) => p.role === 'assistant' && p.content.includes('tool_call'))
+    assert.equal(assistantText.length, 1)
+    assert.equal(assistantText[0]!.content, 'hello')
+    assert.equal(toolCalls.length, 1)
+  })
+
+  it('includes function_call_output from stored input items', () => {
+    const prefix = historyPrefixFromStoredResponse({
+      inputItems: [
+        { type: 'function_call_output', output: '{"r":1}' }
+      ],
+      responseObject: { output: [], output_text: '' }
+    })
+    assert.deepEqual(prefix, [{ role: 'tool', content: '{"r":1}' }])
+  })
+
+  it('walks previous_response_id chain so depth-3 carries the grandparent turn', () => {
+    const records: Record<string, { inputItems: unknown[]; responseObject: Record<string, unknown> }> = {
+      resp_1: {
+        inputItems: [
+          { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'A' }] }
+        ],
+        responseObject: { output: [], output_text: 'X' }
+      },
+      resp_2: {
+        inputItems: [
+          { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'B' }] }
+        ],
+        responseObject: { output: [], output_text: 'Y', previous_response_id: 'resp_1' }
+      },
+      resp_3: {
+        inputItems: [
+          { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'C' }] }
+        ],
+        responseObject: { output: [], output_text: 'Z', previous_response_id: 'resp_2' }
+      }
+    }
+    const prefix = historyPrefixFromStoredResponse(
+      records['resp_3']!,
+      (id) => records[id]
+    )
+    assert.deepEqual(prefix, [
+      { role: 'user', content: 'A' }, { role: 'assistant', content: 'X' },
+      { role: 'user', content: 'B' }, { role: 'assistant', content: 'Y' },
+      { role: 'user', content: 'C' }, { role: 'assistant', content: 'Z' }
+    ])
+  })
+
+  it('caps chain walk at maxDepth to bound work on pathological input', () => {
+    const records: Record<string, { inputItems: unknown[]; responseObject: Record<string, unknown> }> = {
+      a: {
+        inputItems: [{ type: 'message', role: 'user', content: [{ type: 'input_text', text: 'aIn' }] }],
+        responseObject: { output: [], output_text: 'aOut' }
+      },
+      b: {
+        inputItems: [{ type: 'message', role: 'user', content: [{ type: 'input_text', text: 'bIn' }] }],
+        responseObject: { output: [], output_text: 'bOut', previous_response_id: 'a' }
+      },
+      c: {
+        inputItems: [{ type: 'message', role: 'user', content: [{ type: 'input_text', text: 'cIn' }] }],
+        responseObject: { output: [], output_text: 'cOut', previous_response_id: 'b' }
+      }
+    }
+    const prefix = historyPrefixFromStoredResponse(records['c']!, (id) => records[id], 1)
+    assert.deepEqual(prefix, [
+      { role: 'user', content: 'bIn' }, { role: 'assistant', content: 'bOut' },
+      { role: 'user', content: 'cIn' }, { role: 'assistant', content: 'cOut' }
+    ])
   })
 })
