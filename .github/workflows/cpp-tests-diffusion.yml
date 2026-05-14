@@ -134,7 +134,15 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: |
           npm install
+
+      - name: Install bare tooling (macos)
+        if: matrix.platform == 'darwin'
+        run: |
           npm install -g bare bare-make
+
+      - name: Add bare tooling to PATH (Linux x64)
+        if: matrix.platform == 'linux'
+        run: echo "/usr/local/nvm/versions/node/v20.20.2/bin" >> $GITHUB_PATH
 
       - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'macos-14' }}
         name: Download SD2 model for C++ tests
