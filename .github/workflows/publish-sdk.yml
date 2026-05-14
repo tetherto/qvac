@@ -43,6 +43,26 @@ permissions:
   contents: read
 
 jobs:
+  label-gate:
+    name: Authorise (label-gate)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      authorised: ${{ steps.gate.outputs.authorised }}
+    steps:
+      - name: Checkout (label-gate action only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/label-gate
+          sparse-checkout-cone-mode: false
+      - name: Run label-gate
+        id: gate
+        uses: ./.github/actions/label-gate
+        with:
+          github-token: ${{ secrets.PAT_TOKEN }}
   authorize:
     runs-on: ubuntu-latest
     permissions:
@@ -62,8 +82,7 @@ jobs:
   release-merge-guard:
     name: Release Merge Guard
     if: >-
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-      startsWith(github.ref_name, 'release-')
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && startsWith(github.ref_name, 'release-')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -80,8 +99,10 @@ jobs:
           changelog-path: packages/sdk/CHANGELOG.md
 
   build:
-    needs: [authorize]
-    if: needs.authorize.outputs.allowed == 'true'
+    needs:
+      - authorize
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true')
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -216,7 +237,7 @@ jobs:
           name: dist
           path: ${{ env.WORKDIR }}/dist/
           retention-days: 1
-      
+
       - name: Determine version and tag
         id: version
         working-directory: ${{ env.WORKDIR }}
@@ -244,7 +265,6 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
       branch: ${{ steps.version.outputs.branch }}
-
 
   publish-logic:
     runs-on: ubuntu-latest
@@ -355,10 +375,13 @@ jobs:
 
   publish-npm:
     name: Publish to NPM
-    needs: [build, publish-logic, release-merge-guard]
+    needs:
+      - build
+      - publish-logic
+      - release-merge-guard
+      - label-gate
     if: >-
-      needs.publish-logic.outputs.publish_release == 'true' &&
-      (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')
+      needs.label-gate.outputs.authorised == 'true' && (needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped'))
     runs-on: ubuntu-latest
     environment: npm
     outputs:
@@ -397,7 +420,7 @@ jobs:
   # Create GitHub release only for actual releases (after NPM publish)
   publish-release:
     needs: [publish-npm]
-    if:  needs.publish-npm.result == 'success' && needs.publish-npm.outputs.published_version != ''
+    if: needs.publish-npm.result == 'success' && needs.publish-npm.outputs.published_version != ''
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release.yml

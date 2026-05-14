@@ -1,0 +1,26 @@
+node_modules/
+package-lock.json
+build/
+prebuilds/
+dist/
+vcpkg_installed/
+.vcpkg/
+vcpkg/buildtrees/
+vcpkg/downloads/
+vcpkg/packages/
+vcpkg/installed/
+compile_commands.json
+.clang-format
+.clang-tidy
+.valgrind.supp
+*.log
+
+# Auto-generated performance report from local test runs (CI uploads its own).
+test/results/
+
+# Internal validation set (confidential, must never be committed).
+test/images/internal/
+proposal/dataset_val/
+
+# Device Farm logs downloaded for local diagnostic; never committed.
+remote_logs/

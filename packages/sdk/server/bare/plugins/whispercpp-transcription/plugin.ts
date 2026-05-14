@@ -187,10 +187,28 @@ export const whisperPlugin = definePlugin({
               continue;
             }
             if (value.type === "endOfTurn") {
-              yield {
-                type: "transcribeStream" as const,
-                endOfTurn: { silenceDurationMs: value.silenceDurationMs },
-              };
+              // The op upstream already discriminates the union by
+              // engine: whisper-engine events arrive tagged
+              // `source: "whisper"` (with `silenceDurationMs`),
+              // parakeet's are surfaced from the parakeet plugin
+              // handler. Forward the typed event verbatim — narrowing
+              // here would mask any future engine that legitimately
+              // routes `endOfTurn` through the whisper plugin (e.g. a
+              // hypothetical multi-engine bundle).
+              if (value.source === "whisper") {
+                yield {
+                  type: "transcribeStream" as const,
+                  endOfTurn: {
+                    source: "whisper",
+                    silenceDurationMs: value.silenceDurationMs,
+                  },
+                };
+              } else {
+                yield {
+                  type: "transcribeStream" as const,
+                  endOfTurn: { source: "parakeet" },
+                };
+              }
               continue;
             }
             continue;

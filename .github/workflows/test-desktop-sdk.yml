@@ -15,7 +15,7 @@ on:
         required: true
         type: string
       platforms:
-        description: 'JSON array of runner labels (e.g., ["ubuntu-latest"] or ["qvac-ubuntu2204-x64-gpu", "mac-mini-m4-gpu"])'
+        description: 'JSON array of runner labels (e.g., ["qvac-ubuntu2404-x64"] or ["qvac-ubuntu2404-x64-gpu", "mac-mini-m4-gpu"])'
         required: true
         type: string
       consumer-timeout:
