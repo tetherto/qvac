@@ -1,4 +1,4 @@
-import { DocsLayout } from 'fumadocs-ui/layouts/docs';
+import { DocsLayout } from 'fumadocs-ui/layouts/notebook';
 import { baseOptions } from '@/lib/layout.shared';
 import type { LinkItemType } from 'fumadocs-ui/layouts/shared';
 import { FaGithub, FaDiscord, FaXTwitter } from 'react-icons/fa6';
@@ -46,10 +46,13 @@ export default function Layout({ children }: LayoutProps<'/'>) {
     },
   ];
 
+  const base = baseOptions();
+
   return (
     <>
       <DocsLayout
-        {...baseOptions()}
+        {...base}
+        nav={{ ...base.nav, mode: 'top' }}
         links={linkItems}
         tree={{ name: 'docs', $id: 'latest', children: customTree }}
         searchToggle={{
