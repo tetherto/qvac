@@ -117,6 +117,13 @@ interface CompletionParams {
   logger: import('../../../../logger.js').Logger
 }
 
+function completionTokensFromStats (text: string, stats: { generatedTokens?: number } | undefined): number {
+  if (typeof stats?.generatedTokens === 'number' && Number.isFinite(stats.generatedTokens)) {
+    return stats.generatedTokens
+  }
+  return text ? text.split(/\s+/).filter(Boolean).length : 0
+}
+
 async function handleBlockingCompletion (res: ServerResponse, params: CompletionParams): Promise<void> {
   const result = await sdkCompletion({
     modelId: params.sdkModelId,
@@ -129,6 +136,7 @@ async function handleBlockingCompletion (res: ServerResponse, params: Completion
 
   const text = await result.text
   const toolCalls = await result.toolCalls
+  const stats = await result.stats
 
   const hasToolCalls = toolCalls !== null && toolCalls !== undefined && toolCalls.length > 0
   const finishReason = hasToolCalls ? 'tool_calls' : 'stop'
@@ -141,7 +149,7 @@ async function handleBlockingCompletion (res: ServerResponse, params: Completion
     message['tool_calls'] = sdkToolCallsToOpenai(toolCalls)
   }
 
-  const completionTokens = text ? text.split(/\s+/).length : 0
+  const completionTokens = completionTokensFromStats(text || '', stats)
 
   params.logger.info(`  completion done tokens=${completionTokens} finish=${finishReason}`)
 
@@ -189,17 +197,18 @@ async function handleStreamingCompletion (res: ServerResponse, params: Completio
 
   sendSSE(res, chunk({ role: 'assistant', content: '' }, null))
 
-  let tokenCount = 0
-
   for await (const token of result.tokenStream) {
-    tokenCount++
     sendSSE(res, chunk({ content: token }, null))
   }
 
-  params.logger.info(`  streaming done tokens=${tokenCount}`)
-
   const toolCalls = await result.toolCalls
   const hasToolCalls = toolCalls !== null && toolCalls !== undefined && toolCalls.length > 0
+
+  const stats = await result.stats
+  const fullText = await result.text
+  const completionTokens = completionTokensFromStats(fullText || '', stats)
+
+  params.logger.info(`  streaming done tokens=${completionTokens}`)
 
   if (hasToolCalls) {
     const openaiToolCalls = sdkToolCallsToOpenaiDeltas(toolCalls)
@@ -207,7 +216,7 @@ async function handleStreamingCompletion (res: ServerResponse, params: Completio
     sendSSE(res, chunk({}, 'tool_calls'))
   } else {
     sendSSE(res, chunk({}, 'stop', {
-      usage: { prompt_tokens: 0, completion_tokens: tokenCount, total_tokens: tokenCount }
+      usage: { prompt_tokens: 0, completion_tokens: completionTokens, total_tokens: completionTokens }
     }))
   }
 
