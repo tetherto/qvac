@@ -1,55 +1,7 @@
 # `@qvac/ocr-ggml` — scripts
 
-Helper scripts for development and packaging. None of these are shipped to npm
-consumers — they are kept here for the repository workflow.
-
-## `pth_to_gguf.py`
-
-Converts EasyOCR PyTorch checkpoints (`.pth`) into GGUF weight files that this
-addon can load. Lifted verbatim from
-[`tetherto/easy-ocr-ggml`](https://github.com/tetherto/easy-ocr-ggml).
-
-### Quick start
-
-```bash
-# 1. Create a venv with the required Python deps
-python -m venv .venv
-source .venv/bin/activate
-pip install -r scripts/requirements.txt
-
-# 2. F32 conversion (default)
-python scripts/pth_to_gguf.py \
-    ~/.EasyOCR/model/craft_mlt_25k.pth \
-    models/craft_mlt_25k.gguf
-
-# 3. Q8_0 quantization
-python scripts/pth_to_gguf.py \
-    ~/.EasyOCR/model/english_g2.pth \
-    models/english_g2_q8_0.gguf \
-    --quantize Q8_0
-
-# 4. Q4_K quantization
-python scripts/pth_to_gguf.py \
-    ~/.EasyOCR/model/english_g2.pth \
-    models/english_g2_q4_k.gguf \
-    --quantize Q4_K
-```
-
-The converter auto-detects model architecture from the filename
-(`craft_mlt_25k.pth` → CRAFT detector; `*_g2.pth` → CRNN gen-2 recognizer).
-For custom checkpoints not listed in `easyocr.config`, pass `--arch
-{craft,crnn_gen2}` explicitly.
-
-### Tip: reuse the upstream EasyOCR venv
-
-If you already have the upstream EasyOCR Python package installed (e.g. to
-generate the canonical reference outputs), just point at that interpreter
-instead of creating a new venv:
-
-```bash
-~/code/EasyOCR/.venv/bin/python scripts/pth_to_gguf.py \
-    ~/.EasyOCR/model/english_g2.pth models/english_g2.gguf
-```
+Helper scripts for development and packaging. These are kept here for the
+repository workflow and are **not** shipped to npm consumers.
 
 ## `check_ggml_backends.sh`
 
@@ -82,3 +34,20 @@ Sections it prints:
 This script does not invoke the addon at runtime — for runtime backend
 selection, instantiate `OcrGgml` and watch the `[OCR MODEL]` log lines
 when called with a `logger` object (see `examples/quickstart.js`).
+
+## Model conversion
+
+GGUF weight conversion from upstream EasyOCR PyTorch checkpoints is performed
+by the converter that ships with
+[`tetherto/easy-ocr-ggml`](https://github.com/tetherto/easy-ocr-ggml/blob/main/scripts/pth_to_gguf.py).
+We deliberately don't carry our own copy: keeping a single source of truth
+for the conversion logic upstream means quantization defaults, GGUF schema
+tweaks, and architecture autodetection stay in lock-step across both
+projects.
+
+```bash
+# Reuse the upstream EasyOCR venv (has torch + easyocr already pinned):
+~/code/EasyOcr-ggml/scripts/pth_to_gguf.py \
+    ~/.EasyOCR/model/english_g2.pth \
+    packages/ocr-ggml/models/english_g2.gguf
+```

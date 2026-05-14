@@ -148,11 +148,12 @@ This is byte-for-byte the same shape `@qvac/ocr-onnx` returns.
 
 ## Models
 
-The C++ implementation expects EasyOCR-compatible GGUF weights. A converter
-(`scripts/pth_to_gguf.py`, lifted from the upstream
-[`tetherto/easy-ocr-ggml`](https://github.com/tetherto/easy-ocr-ggml) repo)
-produces them from EasyOCR PyTorch `.pth` checkpoints — see
-[`scripts/README.md`](./scripts/README.md) for usage.
+The C++ implementation expects EasyOCR-compatible GGUF weights. Use the
+converter in the upstream
+[`tetherto/easy-ocr-ggml`](https://github.com/tetherto/easy-ocr-ggml/blob/main/scripts/pth_to_gguf.py)
+repo (`scripts/pth_to_gguf.py`) to produce them from EasyOCR PyTorch `.pth`
+checkpoints. See [`scripts/README.md`](./scripts/README.md) for an example
+invocation.
 
 Supported in this release:
 
@@ -209,11 +210,11 @@ binary — same flag surface (`--image`, `--detector`, `--recognizer`,
 
 | Script | Purpose |
 |---|---|
-| [`scripts/pth_to_gguf.py`](./scripts/pth_to_gguf.py) | Convert EasyOCR `.pth` → GGUF (F32 / Q8_0 / Q4_K) |
 | [`scripts/check_ggml_backends.sh`](./scripts/check_ggml_backends.sh) | Probe shipped ggml backends + BLAS/Vulkan/OpenCL paths in `prebuilds/` |
 
-Full usage in [`scripts/README.md`](./scripts/README.md). Python deps for
-the converter live in [`scripts/requirements.txt`](./scripts/requirements.txt).
+Full usage in [`scripts/README.md`](./scripts/README.md). For weight
+conversion (PyTorch `.pth` → GGUF), use the upstream converter in
+[`tetherto/easy-ocr-ggml`](https://github.com/tetherto/easy-ocr-ggml/blob/main/scripts/pth_to_gguf.py).
 
 ## Testing
 
@@ -241,7 +242,7 @@ packages/ocr-ggml/
 ├── lib/error.js             # QvacErrorAddonOcrGgml + ERR_CODES
 ├── examples/quickstart.js   # JS code example
 ├── samples/                 # sample fixture images (english.png, …)
-├── scripts/                 # pth_to_gguf.py + check_ggml_backends.sh
+├── scripts/                 # check_ggml_backends.sh diagnostic
 ├── test/{unit,integration}
 └── addon/src/
     ├── js-interface/binding.cpp       # BARE_MODULE entry
