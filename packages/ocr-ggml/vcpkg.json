@@ -1,0 +1,41 @@
+{
+  "name": "qvac-lib-infer-ocr-ggml",
+  "version": "0.1.0",
+  "dependencies": [
+    {
+      "name": "opencv4",
+      "default-features": false,
+      "features": [
+        "jpeg",
+        "png",
+        "quirc",
+        "tiff",
+        "webp"
+      ]
+    },
+    {
+      "name": "qvac-lib-inference-addon-cpp",
+      "version>=": "1.1.7#1"
+    },
+    {
+      "name": "qvac-lint-cpp",
+      "version>=": "1.4.4#3"
+    },
+    {
+      "name": "qvac-fabric",
+      "version>=": "8189.0.2",
+      "default-features": false,
+      "features": [
+        "gpu-backends"
+      ]
+    }
+  ],
+  "features": {
+    "tests": {
+      "description": "Build tests",
+      "dependencies": [
+        "gtest"
+      ]
+    }
+  }
+}

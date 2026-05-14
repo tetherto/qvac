@@ -1,0 +1,29 @@
+.vs/
+build/
+node_modules/
+config.cmake
+.idea/
+prebuilds/
+package-lock.json
+.npmrc
+model/
+models/
+
+.cache
+test/unit/all.js
+test/integration/all.js
+.idea
+.vscode
+
+__pycache__/
+.pytest_cache/
+
+# Added by lint-cpp
+.clang-format
+.clang-tidy
+.valgrind.supp
+
+# Benchmark / debug artifacts
+out/
+*.profraw
+*.profdata
