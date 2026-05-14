@@ -261,6 +261,11 @@ function createPerformanceReporter (opts) {
      * @param {string} [extra.execution_provider] - 'cpu' | 'gpu' (or addon-specific)
      * @param {string} [extra.scenario] - Implementation group: 'image', 'bitnet',
      *                                    'tool-calling', etc. Defaults to 'default'.
+     * @param {string} [extra.model]    - Model identifier for this row (e.g.
+     *                                    'SmolVLM2-500M-Q8_0', 'Qwen3-1.7B-Q4_0').
+     *                                    Surfaces in renderers as a Model column
+     *                                    so reviewers can tell which weights
+     *                                    produced each row.
      * @param {*}      [extra.input]    - Original test input snapshot
      * @param {*}      [extra.output]   - Generated output snapshot
      * @param {Object} [extra.quality]  - Quality metric pairs
@@ -276,6 +281,11 @@ function createPerformanceReporter (opts) {
         // Defaults to 'default' so callers that don't care still
         // produce a row in the aggregated detail table.
         scenario: (extra && extra.scenario) || 'default',
+        // Follow-up to QVAC-17830: optional model id so reports tell
+        // reviewers which weights each row came from. Renderers fall
+        // back to '-' when absent, so call sites that don't set it
+        // still produce valid rows.
+        model: (extra && extra.model) || null,
         execution_provider: (extra && extra.execution_provider) || null,
         metrics: {
           total_time_ms: null,
