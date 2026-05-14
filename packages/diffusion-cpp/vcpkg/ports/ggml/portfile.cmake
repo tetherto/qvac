@@ -31,9 +31,9 @@
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO gianni-cor/ggml
-    REF fb25b0fc74e6b9a6d10e7d3b63f9e3a7b0c45218
-    SHA512 cfcc9df885218b8bde4ae21ff6b53aa0d009acd3a180aa797265142d59a39dc4c8c1bfc92bc71ce5b28d5ce7672455fcc7fc826c6bd270c9064aa47a948df34f
-    HEAD_REF fb25b0fc74e6b9a6d10e7d3b63f9e3a7b0c45218
+    REF 75c1904a
+    SHA512 a126569569f51f316d60a5d79988884474de12de7b0c2ea6d6d37443b5c02b4d0efe8b9703d7c671ec3450c4c8b23bc750b391fcd0c4f23c7fe17a92a06aa649
+    HEAD_REF feat/metal-conv2d-implicit-gemm
 )
 
 # --- GPU feature flags ---
