@@ -30,6 +30,7 @@
 
 #include "easyocr-ggml/pipeline/steps.hpp"
 #include "model-interface/OcrModel.hpp"
+#include "model-interface/DoctrOcrModel.hpp"
 
 namespace qvac_lib_infer_ocr_ggml {
 
@@ -181,9 +182,21 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
     config.backendsDir = optBackendsDir->as<std::string>(env);
   }
 
-  auto model = std::make_unique<OcrModel>(
-      pathDetector, pathRecognizer,
-      std::span<const std::string>(langList), config);
+  std::string pipelineType = "doctr";
+  if (auto optPipeline =
+          args1.getOptionalProperty<js::String>(env, "pipelineType");
+      optPipeline) {
+    pipelineType = optPipeline->as<std::string>(env);
+  }
+
+  std::unique_ptr<qvac_lib_inference_addon_cpp::model::IModel> model;
+  if (pipelineType == "doctr") {
+    model = std::make_unique<DoctrOcrModel>(pathDetector, pathRecognizer, config);
+  } else {
+    model = std::make_unique<OcrModel>(
+        pathDetector, pathRecognizer,
+        std::span<const std::string>(langList), config);
+  }
 
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
   outHandlers.add(std::make_shared<OcrOutputHandler>());

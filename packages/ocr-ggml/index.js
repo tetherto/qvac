@@ -131,7 +131,8 @@ class OcrGgml {
       'contrastRetry',
       'lowConfidenceThreshold',
       'recognizerBatchSize',
-      'nThreads'
+      'nThreads',
+      'pipelineType'
     ]
     for (const field of optionalFields) {
       if (this.params[field] !== undefined) {

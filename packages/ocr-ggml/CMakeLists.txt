@@ -100,6 +100,7 @@ target_sources(
   PRIVATE
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/OcrModel.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/DoctrOcrModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/ggml/gguf_loader.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/ggml/ops.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/ggml/craft_weights.cpp
@@ -111,6 +112,9 @@ target_sources(
     ${PROJECT_SOURCE_DIR}/addon/src/pipeline/step_detection_inference.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/pipeline/step_bounding_box.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/pipeline/step_recognize_text.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/doctr-ggml/MobileNetGraph.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/doctr-ggml/StepDoctrDetectionGGML.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/doctr-ggml/StepDoctrRecognitionGGML.cpp
 )
 
 target_include_directories(

@@ -57,6 +57,7 @@ const DEFAULTS = {
   detector: 'models/craft_mlt_25k.gguf',
   recognizer: 'models/english_g2.gguf',
   lang: 'en',
+  pipelineType: 'easyocr',
   magRatio: 1.5,
   detail: 0,
   outputFormat: 'standard',
@@ -74,8 +75,10 @@ function showHelp () {
     '  bare ocr-ggml-cli [OPTIONS]',
     '',
     'DESCRIPTION:',
-    '  Runs the EasyOCR pipeline (CRAFT detector + CRNN gen-2 recognizer) on a',
-    '  single image, using GGUF weights loaded via the @qvac/ocr-ggml addon.',
+    '  Runs an OCR pipeline on a single image using GGUF weights loaded via the',
+    '  @qvac/ocr-ggml addon. Two pipelines are supported:',
+    '    easyocr  CRAFT detector + CRNN gen-2 recognizer (default)',
+    '    doctr    DBNet detector + doctr recognizer (language-agnostic)',
     '  Output is sorted top-to-bottom by box y-center.',
     '',
     'OPTIONS:',
@@ -84,16 +87,24 @@ function showHelp () {
     '      --image PATH                 Input image (JPEG, PNG, or BMP)',
     `                                   default: ${DEFAULTS.image}`,
     '                                   env var: OCR_GGML_IMAGE',
-    '      --detector PATH              CRAFT detector GGUF file',
+    '      --detector PATH              Detector GGUF file',
+    '                                   easyocr: CRAFT model',
+    '                                   doctr:   DBNet model',
     `                                   default: ${DEFAULTS.detector}`,
     '                                   env var: OCR_GGML_DETECTOR',
-    '      --recognizer PATH            CRNN gen-2 recognizer GGUF file',
+    '      --recognizer PATH            Recognizer GGUF file',
+    '                                   easyocr: CRNN gen-2 model',
+    '                                   doctr:   doctr recognition model',
     `                                   default: ${DEFAULTS.recognizer}`,
     '                                   env var: OCR_GGML_RECOGNIZER',
-    '      --lang CSV                   Comma-separated language codes',
+    '      --pipeline-type easyocr|doctr',
+    '                                   OCR pipeline to use',
+    `                                   default: ${DEFAULTS.pipelineType}`,
+    '                                   env var: OCR_GGML_PIPELINE_TYPE',
+    '      --lang CSV                   Comma-separated language codes (easyocr only)',
     `                                   default: ${DEFAULTS.lang}`,
     '      --paragraph                  Merge nearby boxes into paragraph regions',
-    '      --mag-ratio FLOAT            CRAFT input-image magnification factor',
+    '      --mag-ratio FLOAT            Input-image magnification factor (easyocr only)',
     `                                   default: ${DEFAULTS.magRatio}`,
     '      --detail 0|1                 0 = text only, 1 = #<idx> conf=… box=… text=…',
     `                                   default: ${DEFAULTS.detail}`,
@@ -109,13 +120,20 @@ function showHelp () {
     '      --verbose                    Forward C++ logs to stderr',
     '',
     'ENVIRONMENT VARIABLES:',
-    '  OCR_GGML_IMAGE        Image path (alternative to --image)',
-    '  OCR_GGML_DETECTOR     CRAFT GGUF (alternative to --detector)',
-    '  OCR_GGML_RECOGNIZER   Recognizer GGUF (alternative to --recognizer)',
+    '  OCR_GGML_IMAGE           Image path (alternative to --image)',
+    '  OCR_GGML_DETECTOR        Detector GGUF (alternative to --detector)',
+    '  OCR_GGML_RECOGNIZER      Recognizer GGUF (alternative to --recognizer)',
+    '  OCR_GGML_PIPELINE_TYPE   Pipeline type (alternative to --pipeline-type)',
     '',
     'EXAMPLES:',
-    '  # Default: OCR samples/english.png with bundled English weights',
+    '  # Default: OCR samples/english.png with EasyOCR weights',
     '  bare ocr-ggml-cli',
+    '',
+    '  # Doctr pipeline with DBNet detector + doctr recognizer',
+    '  bare ocr-ggml-cli --pipeline-type doctr \\',
+    '                    --detector models/db_mobilenet_v3_large.gguf \\',
+    '                    --recognizer models/crnn_mobilenet_v3_small.gguf \\',
+    '                    --image /tmp/photo.jpg',
     '',
     '  # Detail mode (index + confidence + box per recognised line)',
     '  bare ocr-ggml-cli --detail 1',
@@ -123,7 +141,7 @@ function showHelp () {
     '  # JSON output (matches EasyOCR Python\'s readtext shape)',
     '  bare ocr-ggml-cli --output-format json | jq .',
     '',
-    '  # Custom image + Q8_0 quantized models',
+    '  # Custom image + Q8_0 quantized EasyOCR models',
     '  bare ocr-ggml-cli --image /tmp/photo.jpg \\',
     '                    --detector models/craft_mlt_25k_q8_0.gguf \\',
     '                    --recognizer models/english_g2_q8_0.gguf',
@@ -207,6 +225,12 @@ function parseArgs () {
         opts.nThreads = v
         break
       }
+      case '--pipeline-type': {
+        const v = requireValue(a)
+        if (v !== 'easyocr' && v !== 'doctr') bail("--pipeline-type must be 'easyocr' or 'doctr'")
+        opts.pipelineType = v
+        break
+      }
       case '--verbose':
         opts.verbose = true; break
       default:
@@ -227,6 +251,14 @@ function applyEnvFallbacks (opts) {
   }
   if (opts.recognizer === DEFAULTS.recognizer && process.env.OCR_GGML_RECOGNIZER) {
     opts.recognizer = process.env.OCR_GGML_RECOGNIZER
+  }
+  if (opts.pipelineType === DEFAULTS.pipelineType && process.env.OCR_GGML_PIPELINE_TYPE) {
+    const v = process.env.OCR_GGML_PIPELINE_TYPE
+    if (v !== 'easyocr' && v !== 'doctr') {
+      console.error(`error: OCR_GGML_PIPELINE_TYPE must be 'easyocr' or 'doctr', got: ${v}`)
+      process.exit(2)
+    }
+    opts.pipelineType = v
   }
 }
 
@@ -339,10 +371,15 @@ async function main () {
 
   const quiet = (opts.outputFormat === 'json')
   if (!quiet) {
+    console.error(`[load]   pipeline=${opts.pipelineType}`)
     console.error(`[load]   image=${opts.image}`)
     console.error(`[load]   detector=${opts.detector}`)
     console.error(`[load]   recognizer=${opts.recognizer}`)
-    console.error(`[load]   langs=[${opts.lang}]  mag-ratio=${opts.magRatio}  n-threads=${describeNThreads(opts.nThreads)}`)
+    if (opts.pipelineType === 'easyocr') {
+      console.error(`[load]   langs=[${opts.lang}]  mag-ratio=${opts.magRatio}  n-threads=${describeNThreads(opts.nThreads)}`)
+    } else {
+      console.error(`[load]   n-threads=${describeNThreads(opts.nThreads)}`)
+    }
   }
 
   const logger = opts.verbose
@@ -359,6 +396,7 @@ async function main () {
       pathDetector: opts.detector,
       pathRecognizer: opts.recognizer,
       langList: opts.lang.split(',').map(s => s.trim()).filter(Boolean),
+      pipelineType: opts.pipelineType,
       magRatio: opts.magRatio,
       nThreads: opts.nThreads
     },
