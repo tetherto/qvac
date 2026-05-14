@@ -135,6 +135,9 @@ export const ocrPlugin = definePlugin({
       requestSchema: ocrStreamRequestSchema,
       responseSchema: ocrStreamResponseSchema,
       streaming: true,
+      // ONNX OCR does not expose a cancel surface — SDK falls back
+      // to soft-cancel.
+      cancel: { scope: "none" },
 
       handler: async function* (request) {
         const stream = ocr({
