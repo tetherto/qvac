@@ -463,6 +463,16 @@ Benchmarks show MLX achieves ~230 tok/s vs llama.cpp ~150 tok/s on Apple Silicon
 
 Ranked by (impact × breadth) ÷ cost. Split by implementation location.
 
+### Implemented Cherry-Picks from Upstream b9025
+
+| RC | Optimization | Implementation | Measured Impact (M4 Mac) | Status |
+|---|---|---|---|---|
+| **RC1** | **Fused Gated Delta Net (GDN) Metal kernel** | Ported 16 files / 563 lines, adding fused `GGML_OP_GATED_DELTA_NET` Metal SIMD kernel (221 lines, `simd_sum`, function constants). Closes the Section 5 rank-1 gap. | Qwen3.5 decode 38.21 → 45.40 t/s (**+18.8%**); graph splits 38→3, nodes 4743→1431 | Done |
+| **RC2** | **Metal MUL_MAT Tensor API restructure** (`d1649047a`) | Cherry-picked Metal matmul restructure (NRA=64→128 B tile, direct device memory read). Closes the Section 5 rank-6 gap. | **0% on M4 Mac** — Metal Tensor API requires M5/A19+; harmless forward-looking change for future devices | Done |
+| **RC3** | **Flash Attention dk512_dv512 template** | Added 19 FA template instantiations across all quant types for 512-dim heads. Gemma4 E2B uses 512-dim heads on every 5th (full-attention) layer; the missing template was globally disabling FA across all 35 layers. Closes the Section 5 rank-2 gap. | Gemma4 decode 41.88 → 49.29 t/s (**+17.7%**); FA enabled, graph splits 2/1 | Done |
+
+**Justification:** RC1, RC2, and RC3 are implemented and cherry-picked from upstream llama.cpp `b9025`. They directly close the top three Metal-kernel gaps identified by the fiber-fork performance audit (Section 5 ranks 1, 2, 6 and Appendix G.3 root causes 1–3). RC1 and RC3 deliver the two largest decode wins on M4 Mac (+18.8% Qwen3.5, +17.7% Gemma4) and together recover Gemma4 to within 2.8% of the b9025 baseline. RC2 is a forward-looking restructure: zero effect on current M4 targets but activates on M5/A19+ devices, so it is retained to avoid re-porting later. See Appendix G.4 for the progressive-fix benchmark table.
+
 ### Top-5 Summary
 
 | Rank | Optimization | Target | Expected Impact | Cost | Status |
