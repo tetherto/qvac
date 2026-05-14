@@ -27,6 +27,26 @@ env:
   PKG_DIR: packages/translation-nmtcpp
 
 jobs:
+  label-gate:
+    name: Authorise (label-gate)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      authorised: ${{ steps.gate.outputs.authorised }}
+    steps:
+      - name: Checkout (label-gate action only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/label-gate
+          sparse-checkout-cone-mode: false
+      - name: Run label-gate
+        id: gate
+        uses: ./.github/actions/label-gate
+        with:
+          github-token: ${{ secrets.PAT_TOKEN }}
   authorize:
     runs-on: ubuntu-latest
     permissions:
@@ -73,8 +93,12 @@ jobs:
         run: 'echo "Verified qvac-fabric version: ${{ steps.lockstep.outputs.version }}"'
 
   sanity-checks:
-    needs: [authorize, changes, verify-fabric-lockstep]
-    if: always() && ((needs.changes.outputs.pkg == 'true' && needs.authorize.outputs.allowed == 'true') || github.event_name == 'workflow_dispatch')
+    needs:
+      - authorize
+      - changes
+      - verify-fabric-lockstep
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true' && (always() && ((needs.changes.outputs.pkg == 'true' && needs.authorize.outputs.allowed == 'true') || github.event_name == 'workflow_dispatch'))
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -113,11 +137,13 @@ jobs:
         run: npm run test:dts
 
   cpp-lint:
-    needs: [authorize, changes, sanity-checks]
-    if: |
-      always() &&
-       needs.authorize.outputs.allowed == 'true' &&
-      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+    needs:
+      - authorize
+      - changes
+      - sanity-checks
+      - label-gate
+    if: |-
+      needs.label-gate.outputs.authorised == 'true' && (always() && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch'))
     uses: ./.github/workflows/cpp-lint.yaml
     secrets: inherit
     with:
@@ -126,16 +152,18 @@ jobs:
       workdir: packages/translation-nmtcpp
 
   cpp-tests:
-    needs: [authorize, changes, sanity-checks]
+    needs:
+      - authorize
+      - changes
+      - sanity-checks
+      - label-gate
     permissions:
       contents: read
       packages: read
       pull-requests: write
       id-token: write
-    if: |
-      always() &&
-      needs.authorize.outputs.allowed == 'true' &&
-      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+    if: |-
+      needs.label-gate.outputs.authorised == 'true' && (always() && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch'))
     uses: ./.github/workflows/reusable-cpp-tests-translation-nmtcpp.yml
     secrets: inherit
     with:
@@ -148,11 +176,13 @@ jobs:
       packages: write
       pull-requests: write
       id-token: write
-    needs: [authorize, changes, sanity-checks]
-    if: |
-      always() &&
-      needs.authorize.outputs.allowed == 'true' &&
-      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+    needs:
+      - authorize
+      - changes
+      - sanity-checks
+      - label-gate
+    if: |-
+      needs.label-gate.outputs.authorised == 'true' && (always() && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch'))
     uses: ./.github/workflows/prebuilds-translation-nmtcpp.yml
     secrets: inherit
     with:
@@ -160,11 +190,14 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref }}
 
   run-integration-tests:
-    needs: [authorize, changes, sanity-checks, prebuild]
-    if: |
-      always() &&
-      needs.authorize.outputs.allowed == 'true' &&
-      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+    needs:
+      - authorize
+      - changes
+      - sanity-checks
+      - prebuild
+      - label-gate
+    if: |-
+      needs.label-gate.outputs.authorised == 'true' && (always() && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch'))
     permissions:
       contents: read
       packages: read
@@ -181,11 +214,14 @@ jobs:
       packages: read
       pull-requests: write # Allow commenting on PRs
       id-token: write
-    needs: [authorize, changes, sanity-checks, prebuild]
-    if: |
-      always() &&
-      needs.authorize.outputs.allowed == 'true' &&
-      (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+    needs:
+      - authorize
+      - changes
+      - sanity-checks
+      - prebuild
+      - label-gate
+    if: |-
+      needs.label-gate.outputs.authorised == 'true' && (always() && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch'))
     uses: ./.github/workflows/integration-mobile-test-translation-nmtcpp.yml
     secrets: inherit
     with:
@@ -193,19 +229,7 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref }}
 
   merge-guard:
-    needs:
-      [
-        authorize,
-        changes,
-        verify-fabric-lockstep,
-        sanity-checks,
-        ts-checks,
-        cpp-lint,
-        cpp-tests,
-        prebuild,
-        run-integration-tests,
-        run-mobile-integration-tests,
-      ]
+    needs: [authorize, changes, verify-fabric-lockstep, sanity-checks, ts-checks, cpp-lint, cpp-tests, prebuild, run-integration-tests, run-mobile-integration-tests]
     if: always() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/public-pr.yml
     with:

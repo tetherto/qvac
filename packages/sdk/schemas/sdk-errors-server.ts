@@ -40,6 +40,8 @@ export const SDK_SERVER_ERROR_CODES = {
   MODEL_OPERATION_NOT_SUPPORTED: 52416,
   REQUEST_ID_CONFLICT: 52417,
   REQUEST_NOT_FOUND: 52418,
+  INFERENCE_CANCELLED: 52419,
+  REQUEST_REJECTED_BY_POLICY: 52420,
 
   // RAG Operations (52,800-52,999)
   RAG_SAVE_FAILED: 52800,
@@ -296,6 +298,21 @@ const serverErrorDefinitions: ErrorCodesMap = {
     name: "REQUEST_NOT_FOUND",
     message: (requestId: string) =>
       `No in-flight request with id "${requestId}"`,
+  },
+  [SDK_SERVER_ERROR_CODES.INFERENCE_CANCELLED]: {
+    name: "INFERENCE_CANCELLED",
+    message: (requestId: string) =>
+      `Inference request "${requestId}" was cancelled before it could complete`,
+  },
+  [SDK_SERVER_ERROR_CODES.REQUEST_REJECTED_BY_POLICY]: {
+    name: "REQUEST_REJECTED_BY_POLICY",
+    message: (
+      requestId: string,
+      kind: string,
+      modelId: string,
+      reason: string,
+    ) =>
+      `Request "${requestId}" (kind: ${kind}, modelId: ${modelId}) was rejected by registry concurrency policy: ${reason}`,
   },
 
   // RAG Operations (52,800-52,999)
