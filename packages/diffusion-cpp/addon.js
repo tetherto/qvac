@@ -22,7 +22,15 @@ function mapAddonEvent (rawEvent, rawData, rawError) {
   }
 
   if (rawData && typeof rawData === 'object') {
-    return { type: 'JobEnded', data: rawData, error: null }
+    const data = { ...rawData }
+    if (typeof data.backendDevice === 'number') {
+      if (data.backendDevice === 0) {
+        data.backendDevice = 'cpu'
+      } else if (data.backendDevice === 1) {
+        data.backendDevice = 'gpu'
+      }
+    }
+    return { type: 'JobEnded', data, error: null }
   }
 
   return null

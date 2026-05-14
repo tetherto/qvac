@@ -73,8 +73,8 @@ export type CacheMode = 'disabled' | 'easycache' | 'ucache' | 'dbcache' | 'taylo
 export interface SdConfig {
   /** Number of CPU threads (-1 = auto) */
   threads?: NumericLike
-  /** Preferred compute device: 'gpu' (Metal/Vulkan) or 'cpu' */
-  device?: 'gpu' | 'cpu'
+  /** Preferred compute device: 'gpu' (try GPU backends), 'cpu', or 'auto' (same as gpu today) */
+  device?: 'gpu' | 'cpu' | 'auto'
   /** Weight quantization type */
   type?: WeightType
   /** RNG type for reproducible generation */
@@ -164,6 +164,12 @@ export interface EsrganUpscalerConfig {
   upscaler_offload_params_to_cpu?: boolean
   /** Number of CPU threads for ESRGAN upscaler (-1 = auto) */
   upscaler_threads?: NumericLike
+  /**
+   * Compute device for the standalone upscaler: `cpu`, `gpu` (try GPU, fall
+   * back to CPU if unavailable), or `auto` (same selection as `gpu`).
+   * `RuntimeStats.backendDevice` reports the device actually used.
+   */
+  device?: 'cpu' | 'gpu' | 'auto'
   /** Logging verbosity: 0=error, 1=warn, 2=info, 3=debug */
   verbosity?: NumericLike
   [key: string]: string | number | boolean | undefined
@@ -329,6 +335,11 @@ export interface RuntimeStats {
   height: number
   /** Seed used for the most recent generation */
   seed: number
+  /**
+   * Actual compute device used for the most recent job (when reported by the
+   * native layer as 0/1, mapped here to 'cpu' / 'gpu').
+   */
+  backendDevice?: 'cpu' | 'gpu'
 }
 
 export interface EsrganRuntimeStats {
@@ -352,6 +363,11 @@ export interface EsrganRuntimeStats {
   height: number
   /** Number of ESRGAN passes used by the most recent upscale job */
   repeats: number
+  /**
+   * Actual compute device used by the ESRGAN upscaler after init / fallback
+   * (native 0/1 mapped to 'cpu' / 'gpu' in JS).
+   */
+  backendDevice?: 'cpu' | 'gpu'
 }
 
 export default class ImgStableDiffusion {

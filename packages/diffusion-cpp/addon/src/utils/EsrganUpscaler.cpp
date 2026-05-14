@@ -16,6 +16,21 @@ namespace qvac_lib_inference_addon_sd {
 
 namespace {
 
+sd_upscaler_device_t deviceStringToSd(const std::string& d) {
+  if (d == "cpu") {
+    return SD_UPSCALER_DEVICE_CPU;
+  }
+  if (d == "gpu") {
+    return SD_UPSCALER_DEVICE_GPU;
+  }
+  if (d == "auto" || d.empty()) {
+    return SD_UPSCALER_DEVICE_AUTO;
+  }
+  throw StatusError(
+      general_error::InvalidArgument,
+      "ESRGAN device must be 'cpu', 'gpu', or 'auto', got: '" + d + "'");
+}
+
 void freeSdImageData(sd_image_t& image) noexcept {
   if (image.data == nullptr) {
     return;
@@ -32,6 +47,7 @@ void freeSdImageData(sd_image_t& image) noexcept {
 EsrganUpscalerConfig makeUpscalerConfig(const SdCtxConfig& config) {
   return EsrganUpscalerConfig{
       .esrganPath = config.esrganPath,
+      .device = config.device,
       .nThreads = config.nThreads,
       .upscalerThreads = config.upscalerThreads,
       .upscalerTileSize = config.upscalerTileSize,
@@ -71,6 +87,14 @@ void EsrganUpscaler::load() {
   ensureContextLocked();
 }
 
+int EsrganUpscaler::actualBackendDevice() const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (ctx_ == nullptr) {
+    return -1;
+  }
+  return get_upscaler_backend_device(ctx_.get());
+}
+
 int EsrganUpscaler::resolveThreads() const {
   if (config_.upscalerThreads == 0 || config_.upscalerThreads < -1) {
     throw StatusError(
@@ -104,12 +128,14 @@ upscaler_ctx_t* EsrganUpscaler::ensureContextLocked() {
   }
 
   const int tileSize = std::max(1, config_.upscalerTileSize);
-  upscaler_ctx_t* raw = new_upscaler_ctx(
+  const sd_upscaler_device_t sdDev = deviceStringToSd(config_.device);
+  upscaler_ctx_t* raw = new_upscaler_ctx_with_device(
       config_.esrganPath.c_str(),
       config_.upscalerOffloadParamsToCpu,
       config_.upscalerDirect,
       resolveThreads(),
-      tileSize);
+      tileSize,
+      sdDev);
 
   if (raw == nullptr) {
     throw StatusError(
