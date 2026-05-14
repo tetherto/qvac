@@ -46,10 +46,27 @@ export function sendJson (
   res.end(payload)
 }
 
-export function sendError (res: ServerResponse, status: number, code: string, message: string): void {
+export interface SendErrorOptions {
+  /**
+   * When the response has already started streaming, controls whether
+   * `endSSE` writes the trailing `data: [DONE]\n\n` sentinel after the
+   * error event. Pass `false` for streams whose spec does not use the
+   * sentinel (e.g. OpenAI Responses, which terminates on `response.error`).
+   * Defaults to `true` to preserve chat-completions behavior.
+   */
+  sseSentinel?: boolean
+}
+
+export function sendError (
+  res: ServerResponse,
+  status: number,
+  code: string,
+  message: string,
+  opts?: SendErrorOptions
+): void {
   if (res.headersSent) {
     sendSSE(res, { error: { message, type: 'server_error', code } })
-    endSSE(res)
+    endSSE(res, { sentinel: opts?.sseSentinel ?? true })
     return
   }
 

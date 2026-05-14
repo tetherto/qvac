@@ -206,7 +206,7 @@ export async function handlePostResponses (req: IncomingMessage, res: ServerResp
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     ctx.logger.error(`Responses error for "${modelAlias}": ${message}`)
-    sendError(res, 500, 'response_error', 'An internal error occurred during response generation.')
+    sendError(res, 500, 'response_error', 'An internal error occurred during response generation.', { sseSentinel: false })
   }
 }
 

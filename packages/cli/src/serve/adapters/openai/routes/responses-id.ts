@@ -45,14 +45,19 @@ export async function routeResponsesId (req: IncomingMessage, res: ServerRespons
   return false
 }
 
-function parseLimit (req: IncomingMessage): number | undefined {
+function parseListInputItemsOpts (req: IncomingMessage): { limit?: number; after?: string } {
   const q = (req.url ?? '').split('?')[1]
-  if (!q) return undefined
+  if (!q) return {}
   const params = new URLSearchParams(q)
-  const raw = params.get('limit')
-  if (!raw) return undefined
-  const n = Number(raw)
-  return Number.isFinite(n) ? n : undefined
+  const out: { limit?: number; after?: string } = {}
+  const rawLimit = params.get('limit')
+  if (rawLimit) {
+    const n = Number(rawLimit)
+    if (Number.isFinite(n)) out.limit = n
+  }
+  const after = params.get('after')
+  if (after) out.after = after
+  return out
 }
 
 async function handleListInputItems (
@@ -62,9 +67,9 @@ async function handleListInputItems (
   id: string
 ): Promise<void> {
   setVolatileHeader(res)
-  const limit = parseLimit(req)
-  const page = limit !== undefined
-    ? ctx.responsesStore.listInputItems(id, { limit })
+  const opts = parseListInputItemsOpts(req)
+  const page = (opts.limit !== undefined || opts.after !== undefined)
+    ? ctx.responsesStore.listInputItems(id, opts)
     : ctx.responsesStore.listInputItems(id)
   if (!page) {
     sendError(res, 404, 'response_not_found', `Response "${id}" not found or expired.`)

@@ -101,6 +101,44 @@ describe('createResponsesStore', () => {
     assert.equal(page!.data.length, 1)
   })
 
+  it('listInputItems paginates with after cursor and reports has_more correctly', () => {
+    const store = createResponsesStore({ maxEntries: 10, ttlMs: 60_000 })
+    const items = Array.from({ length: 5 }, (_, i) => ({
+      type: 'message',
+      id: `i${i + 1}`,
+      role: 'user',
+      content: [{ type: 'input_text', text: `t${i + 1}` }]
+    }))
+    store.put({
+      id: 'resp_p',
+      createdAtSec: 1,
+      expiresAtSec: 2_000_000_000,
+      responseObject: {},
+      inputItems: items,
+      modelAlias: 'm'
+    })
+
+    const page1 = store.listInputItems('resp_p', { limit: 2 })
+    assert.ok(page1)
+    assert.equal(page1!.data.length, 2)
+    assert.equal(page1!.first_id, 'i1')
+    assert.equal(page1!.last_id, 'i2')
+    assert.equal(page1!.has_more, true)
+
+    const page2 = store.listInputItems('resp_p', { limit: 2, after: page1!.last_id! })
+    assert.ok(page2)
+    assert.equal(page2!.data.length, 2)
+    assert.equal(page2!.first_id, 'i3')
+    assert.equal(page2!.last_id, 'i4')
+    assert.equal(page2!.has_more, true)
+
+    const page3 = store.listInputItems('resp_p', { limit: 2, after: page2!.last_id! })
+    assert.ok(page3)
+    assert.equal(page3!.data.length, 1)
+    assert.equal(page3!.first_id, 'i5')
+    assert.equal(page3!.has_more, false)
+  })
+
   it('bannerLine mentions limits', () => {
     const store = createResponsesStore({ maxEntries: 128, ttlMs: 120_000 })
     assert.ok(store.bannerLine().includes('128'))
