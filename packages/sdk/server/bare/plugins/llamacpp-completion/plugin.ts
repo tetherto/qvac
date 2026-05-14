@@ -30,8 +30,12 @@ import { attachModelExecutionMs } from "@/profiling/model-execution";
 import { getModelConfig } from "@/server/bare/registry/model-registry";
 import { createCompletionNormalizer } from "@/server/utils/completion-normalizer";
 import { detectToolDialect } from "@/server/utils/tool-integration";
-import { getRequestRegistry } from "@/server/bare/runtime";
+import {
+  getRequestRegistry,
+  withRequestContext,
+} from "@/server/bare/runtime";
 import { generateServerRequestId } from "@/server/bare/runtime/request-id";
+import { getServerLogger } from "@/logging";
 
 
 function createLlmModel(
@@ -96,6 +100,7 @@ export const llmPlugin = definePlugin({
       requestSchema: completionStreamRequestSchema,
       responseSchema: completionStreamResponseSchema,
       streaming: true,
+      cancel: { scope: "model", hard: true },
 
       handler: async function* (request) {
         const filteredHistory = request.history.map(
@@ -141,6 +146,8 @@ export const llmPlugin = definePlugin({
           modelId: request.modelId,
         });
 
+        const requestLogger = withRequestContext(getServerLogger(), ctx);
+
         const stream = completion(
           {
             history: filteredHistory,
@@ -151,7 +158,7 @@ export const llmPlugin = definePlugin({
             ...(toolsActive && { toolDialect: dialect }),
             ...(request.responseFormat && { responseFormat: request.responseFormat }),
           },
-          { signal: ctx.signal, scope: ctx.scope },
+          { signal: ctx.signal, scope: ctx.scope, logger: requestLogger },
         );
 
         try {
@@ -210,6 +217,7 @@ export const llmPlugin = definePlugin({
       requestSchema: finetuneRequestSchema,
       responseSchema: finetuneResponseSchema,
       streaming: false,
+      cancel: { scope: "none" },
 
       handler: function (request) {
         return finetune(request);
@@ -220,6 +228,7 @@ export const llmPlugin = definePlugin({
       requestSchema: translateRequestSchema,
       responseSchema: translateResponseSchema,
       streaming: true,
+      cancel: { scope: "model", hard: true },
 
       handler: async function* (request) {
         const stream = translate(request);

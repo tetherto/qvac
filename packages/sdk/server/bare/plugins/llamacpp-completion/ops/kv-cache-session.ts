@@ -14,8 +14,12 @@ import {
   logCacheStatus,
 } from "@/server/bare/plugins/llamacpp-completion/ops/cache-logger";
 import { getServerLogger } from "@/logging";
+import type { Logger } from "@/logging/types";
 
-const logger = getServerLogger();
+// Used by cross-model paths that have no `RequestContext` (e.g.
+// `deleteKvCacheState`). Per-session call sites receive a logger from
+// the caller — typically `withRequestContext(...)`.
+const moduleLogger = getServerLogger();
 
 /**
  * Single owner of the three KV-cache bookkeeping layers.
@@ -204,7 +208,17 @@ interface InternalTurnState {
 
 // ----- factory -----
 
-export function createKvCacheSession(modelId: string): KvCacheSession {
+/**
+ * Construct a session bound to one `(modelId, turn-owning request)`
+ * scope. `options.logger` is the per-instance logger the session emits
+ * through (typically `withRequestContext(getServerLogger(), ctx)`);
+ * falls back to the module-scoped logger when omitted.
+ */
+export function createKvCacheSession(
+  modelId: string,
+  options?: { logger?: Logger },
+): KvCacheSession {
+  const logger = options?.logger ?? moduleLogger;
   // Per-session map: each `TurnHandle` carries an opaque entry here. A
   // WeakMap so handles drop their state once the handler scope releases
   // the reference; the module-scoped maps above survive.
@@ -254,7 +268,7 @@ export function createKvCacheSession(modelId: string): KvCacheSession {
 
     if (!exists) {
       await input.primeIfMissing(cachePath);
-      await verifyPrimedFile(cachePath);
+      await verifyPrimedFile(cachePath, logger);
       initializedCaches.add(registryKey);
     }
 
@@ -297,7 +311,7 @@ export function createKvCacheSession(modelId: string): KvCacheSession {
 
     if (!cacheExists) {
       await input.primeIfMissing(cachePath);
-      await verifyPrimedFile(cachePath);
+      await verifyPrimedFile(cachePath, logger);
       initializedCaches.add(registryKey);
     }
 
@@ -453,9 +467,9 @@ export async function deleteKvCacheState(
     const removed = await deleteCacheUtil({ all: true });
     cachedMessageCounts.clear();
     initializedCaches.clear();
-    // `removed` is the kv-cache root dir; logging surfaces it for
-    // ops visibility but isn't part of the contract.
-    logger.debug(`[kv-cache] Cleared all caches under ${removed}`);
+    // `removed` is the kv-cache root dir; surfaces it for ops
+    // visibility but isn't part of the contract.
+    moduleLogger.debug(`[kv-cache] Cleared all caches under ${removed}`);
     return;
   }
 
@@ -512,7 +526,10 @@ export async function deleteKvCacheState(
  * `completion-stream.ts` lets the error propagate up and no
  * `initializedCaches` entry is recorded.
  */
-async function verifyPrimedFile(cachePath: string): Promise<void> {
+async function verifyPrimedFile(
+  cachePath: string,
+  logger: Logger,
+): Promise<void> {
   let stats: { size: number };
   try {
     stats = await fsPromises.stat(cachePath);

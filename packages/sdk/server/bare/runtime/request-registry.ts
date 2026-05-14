@@ -8,7 +8,12 @@ import type {
   RequestKind,
   RequestState,
 } from "@/server/bare/runtime/request-context";
-import { RequestIdConflictError } from "@/utils/errors-server";
+import {
+  RequestIdConflictError,
+  RequestRejectedByPolicyError,
+} from "@/utils/errors-server";
+import { getServerLogger } from "@/logging";
+import type { Logger } from "@/logging/types";
 
 /**
  * Outcome the caller declares when terminating a request through
@@ -45,6 +50,22 @@ export interface CancelByModelId {
 export type CancelTarget = CancelByRequestId | CancelByModelId;
 
 /**
+ * Per-kind admission rule. Kinds without a registered policy have no
+ * admission control (every `begin(...)` is accepted as long as the
+ * request id is unique).
+ */
+export interface ConcurrencyPolicy {
+  kind: RequestKind;
+  /**
+   * When true, at most one in-flight request per `(kind, modelId)`
+   * tuple — a second `begin(...)` rejects with
+   * `RequestRejectedByPolicyError`. Requests without a `modelId` are
+   * unaffected.
+   */
+  oneAtATimePerModel: boolean;
+}
+
+/**
  * `ManagedRequestContext` is the value `begin(...)` returns. It extends
  * `RequestContext` with an async-dispose method so handlers can write:
  *
@@ -61,12 +82,31 @@ export interface ManagedRequestContext extends RequestContext {
 
 export interface RequestRegistry {
   /**
-   * Open a new request. Throws `RequestIdConflictError` if `requestId` is
-   * already present (UUIDv4 collision is astronomically unlikely; the
-   * guard exists so a buggy client retry sending the same id can't
-   * silently overwrite an in-flight request).
+   * Open a new request. Throws:
+   *  - `RequestIdConflictError` if `requestId` is already present
+   *    (UUIDv4 collision is astronomically unlikely; the guard exists
+   *    so a buggy client retry sending the same id can't silently
+   *    overwrite an in-flight request).
+   *  - `RequestRejectedByPolicyError` if a concurrency policy was
+   *    registered for `opts.kind` and the new request would violate
+   *    it (e.g. `oneAtATimePerModel` rejects when another request
+   *    with the same `(kind, modelId)` pair is already in flight).
    */
   begin(opts: BeginOpts): ManagedRequestContext;
+
+  /**
+   * Register or replace the concurrency policy for a `RequestKind`.
+   * Subsequent `begin(...)` calls for that kind run the policy before
+   * allocating a controller / scope. One policy per kind — calling
+   * twice replaces the previous declaration.
+   *
+   * @example
+   *   r.policy({ kind: "completion", oneAtATimePerModel: true });
+   *   await using a = r.begin({ requestId: "r-1", kind: "completion", modelId: "m1" });
+   *   r.begin({ requestId: "r-2", kind: "completion", modelId: "m1" });
+   *   // → throws RequestRejectedByPolicyError (code 52420)
+   */
+  policy(opts: ConcurrencyPolicy): void;
 
   /** Look up an in-flight request by id. */
   get(requestId: string): RequestContext | null;
@@ -116,6 +156,8 @@ interface RegistryEntry {
    * for the lifetime of the worker.
    */
   detachParent: () => void;
+  /** `Date.now()` at `begin(...)` — used for `durationMs` on the end emit. */
+  startedAt: number;
 }
 
 /**
@@ -153,8 +195,31 @@ interface CancelBeforeBeginEntry {
 const CANCEL_BEFORE_BEGIN_MAX_ENTRIES = 128;
 const CANCEL_BEFORE_BEGIN_TTL_MS = 30_000;
 
-export function createRequestRegistry(): RequestRegistry {
+export function createRequestRegistry(options?: {
+  /** Defaults to `getServerLogger()`. Tests inject a stub. */
+  logger?: Logger;
+}): RequestRegistry {
   const entries = new Map<string, RegistryEntry>();
+  const policies = new Map<RequestKind, ConcurrencyPolicy>();
+  const logger = options?.logger ?? getServerLogger();
+
+  function logLifecycle(
+    event: "begin" | "cancel" | "end",
+    ctx: RequestContext,
+    durationMs?: number,
+  ): void {
+    const modelId = ctx.modelId !== undefined ? ctx.modelId : "-";
+    const base = `[request-lifecycle] ${event} requestId=${ctx.requestId} kind=${ctx.kind} modelId=${modelId} state=${ctx.state}`;
+    const line = durationMs !== undefined ? `${base} durationMs=${durationMs}` : base;
+    // `failed` end emits at `warn` so log shippers can alert on
+    // `level>=warn` for this prefix without parsing `state=failed`
+    // out of the message body. Everything else stays at `info`.
+    if (event === "end" && ctx.state === "failed") {
+      logger.warn(line);
+    } else {
+      logger.info(line);
+    }
+  }
 
   /**
    * "Cancelled-before-begin" tripwire. A
@@ -225,6 +290,7 @@ export function createRequestRegistry(): RequestRegistry {
     if (entry.controller.signal.aborted) return false;
     entry.ctx.state = "cancelling";
     entry.controller.abort(reason);
+    logLifecycle("cancel", entry.ctx);
     return true;
   }
 
@@ -235,6 +301,7 @@ export function createRequestRegistry(): RequestRegistry {
     if (entry.scope.disposed) return;
     entry.ctx.state = outcome;
     entry.detachParent();
+    logLifecycle("end", entry.ctx, Date.now() - entry.startedAt);
     // Pull the entry out before unwinding so observers (e.g. a `cancel(...)`
     // racing with dispose) don't see a half-disposed context.
     entries.delete(entry.ctx.requestId);
@@ -244,6 +311,22 @@ export function createRequestRegistry(): RequestRegistry {
   function begin(opts: BeginOpts): ManagedRequestContext {
     if (entries.has(opts.requestId)) {
       throw new RequestIdConflictError(opts.requestId);
+    }
+
+    // Admission control runs before allocation so a rejected begin
+    // leaves no controller / scope behind.
+    const policy = policies.get(opts.kind);
+    if (policy && policy.oneAtATimePerModel && opts.modelId !== undefined) {
+      for (const existing of entries.values()) {
+        if (existing.ctx.kind !== opts.kind) continue;
+        if (existing.ctx.modelId !== opts.modelId) continue;
+        throw new RequestRejectedByPolicyError(
+          opts.requestId,
+          opts.kind,
+          opts.modelId,
+          `another ${opts.kind} request (${existing.ctx.requestId}) is already running on this model`,
+        );
+      }
     }
 
     const controller = new AbortController();
@@ -288,8 +371,15 @@ export function createRequestRegistry(): RequestRegistry {
       state: preCancel || opts.parentSignal?.aborted ? "cancelling" : "running",
     };
 
-    const entry: RegistryEntry = { ctx, controller, scope, detachParent };
+    const entry: RegistryEntry = {
+      ctx,
+      controller,
+      scope,
+      detachParent,
+      startedAt: Date.now(),
+    };
     entries.set(opts.requestId, entry);
+    logLifecycle("begin", ctx);
 
     return {
       get requestId() {
@@ -371,6 +461,10 @@ export function createRequestRegistry(): RequestRegistry {
     await disposeEntry(entry, outcome);
   }
 
+  function policy(opts: ConcurrencyPolicy): void {
+    policies.set(opts.kind, opts);
+  }
+
   return {
     begin,
     get,
@@ -378,6 +472,7 @@ export function createRequestRegistry(): RequestRegistry {
     cancel,
     cancelAll,
     end,
+    policy,
     // Test-only: lets the registry race tests assert the bound
     // invariants on the internal "cancelled-before-begin" set without
     // exposing it as a public surface. Kept off the `RequestRegistry`

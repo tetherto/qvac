@@ -261,6 +261,151 @@ json_post() {
   assert_error "${body}" "invalid_model_type"
 }
 
+# ── Vector stores ─────────────────────────────────────────────────────
+# Each test is self-contained (creates the store/file it needs and cleans
+# up) so they survive `bats -f <pattern>` filtering and can run in any
+# order. The happy-path "upload → attach → search → delete" lives in a
+# single @test to keep the dependent steps together without leaking state
+# via files.
+
+VS_DOC_FILE="${BATS_FILE_TMPDIR:-/tmp}/vs_doc.txt"
+
+@test "vector_stores: CRUD — create, list, get, update, delete" {
+  local create
+  create=$(json_post "/v1/vector_stores" '{"name":"crud","metadata":{"by":"e2e.bats"}}')
+  echo "${create}" | jq -e '.object == "vector_store"' >/dev/null
+  echo "${create}" | jq -e '.id | startswith("vs_")' >/dev/null
+  echo "${create}" | jq -e '.name == "crud"' >/dev/null
+  local id
+  id=$(echo "${create}" | jq -r '.id')
+
+  local list
+  list=$(curl -sf "${BASE}/v1/vector_stores")
+  echo "${list}" | jq -e '.object == "list"' >/dev/null
+  echo "${list}" | jq -e --arg id "${id}" 'any(.data[]; .id == $id)' >/dev/null
+
+  local get_before
+  get_before=$(curl -sf "${BASE}/v1/vector_stores/${id}")
+  echo "${get_before}" | jq -e --arg id "${id}" '.id == $id' >/dev/null
+  echo "${get_before}" | jq -e '.status == "in_progress"' >/dev/null
+
+  local update
+  update=$(json_post "/v1/vector_stores/${id}" '{"name":"crud-updated"}')
+  echo "${update}" | jq -e '.name == "crud-updated"' >/dev/null
+
+  local del
+  del=$(curl -s -X DELETE "${BASE}/v1/vector_stores/${id}")
+  echo "${del}" | jq -e --arg id "${id}" '.id == $id' >/dev/null
+  echo "${del}" | jq -e '.object == "vector_store.deleted"' >/dev/null
+  echo "${del}" | jq -e '.deleted == true' >/dev/null
+
+  local status_after
+  status_after=$(curl -s -o /dev/null -w "%{http_code}" "${BASE}/v1/vector_stores/${id}")
+  [[ "${status_after}" == "404" ]]
+}
+
+@test "vector_stores: upload → attach → search end-to-end" {
+  cat > "${VS_DOC_FILE}" <<'TXT'
+Local e2e document about planets, moons and the solar system.
+Another note about OpenAI vector stores and RAG.
+TXT
+
+  local vs
+  vs=$(json_post "/v1/vector_stores" '{"name":"flow"}' | jq -r '.id')
+
+  local upload file
+  upload=$(curl -sf "${BASE}/v1/files" \
+    -F "file=@${VS_DOC_FILE};type=text/plain" \
+    -F "purpose=assistants")
+  echo "${upload}" | jq -e '.object == "file"' >/dev/null
+  echo "${upload}" | jq -e '.id | startswith("file-")' >/dev/null
+  echo "${upload}" | jq -e '.status == "uploaded"' >/dev/null
+  echo "${upload}" | jq -e '.purpose == "assistants"' >/dev/null
+  file=$(echo "${upload}" | jq -r '.id')
+
+  curl -sf "${BASE}/v1/files" | jq -e --arg id "${file}" 'any(.data[]; .id == $id)' >/dev/null
+  curl -sf "${BASE}/v1/files/${file}" | jq -e --arg id "${file}" '.id == $id and .object == "file"' >/dev/null
+
+  local attach
+  attach=$(json_post "/v1/vector_stores/${vs}/files" "{\"file_id\":\"${file}\"}")
+  echo "${attach}" | jq -e '.object == "vector_store.file"' >/dev/null
+  echo "${attach}" | jq -e --arg id "${file}" '.id == $id' >/dev/null
+  echo "${attach}" | jq -e --arg vs "${vs}" '.vector_store_id == $vs' >/dev/null
+  echo "${attach}" | jq -e '.status == "completed"' >/dev/null
+  echo "${attach}" | jq -e '.last_error == null' >/dev/null
+  echo "${attach}" | jq -e '.usage_bytes | type == "number"' >/dev/null
+
+  # Bytes are dropped from the in-memory file store after attach.
+  local file_status_after
+  file_status_after=$(curl -s -o /dev/null -w "%{http_code}" "${BASE}/v1/files/${file}")
+  [[ "${file_status_after}" == "404" ]]
+
+  curl -sf "${BASE}/v1/vector_stores/${vs}" | jq -e '.status == "completed"' >/dev/null
+
+  local search
+  search=$(json_post "/v1/vector_stores/${vs}/search" \
+    '{"query":"planets and solar system","max_num_results":5}')
+  echo "${search}" | jq -e '.object == "vector_store.search_results.page"' >/dev/null
+  echo "${search}" | jq -e '.data | type == "array"' >/dev/null
+  echo "${search}" | jq -e '.data | length > 0' >/dev/null
+  echo "${search}" | jq -e '
+    any(.data[];
+      (.content // []) | map(select(.type == "text") | .text // "") | join(" ")
+        | test("planets|moons|OpenAI|vector stores"; "i"))
+  ' >/dev/null
+
+  curl -s -X DELETE "${BASE}/v1/vector_stores/${vs}" >/dev/null
+}
+
+@test "vector_stores: search with missing query returns 400 missing_query" {
+  local vs body
+  vs=$(json_post "/v1/vector_stores" '{}' | jq -r '.id')
+  body=$(json_post "/v1/vector_stores/${vs}/search" '{}')
+  assert_error "${body}" "missing_query"
+  curl -s -X DELETE "${BASE}/v1/vector_stores/${vs}" >/dev/null
+}
+
+@test "vector_stores: attach with unknown file_id returns 404 file_not_found" {
+  local vs body
+  vs=$(json_post "/v1/vector_stores" '{}' | jq -r '.id')
+  body=$(json_post "/v1/vector_stores/${vs}/files" '{"file_id":"file-doesnotexist"}')
+  assert_error "${body}" "file_not_found"
+  curl -s -X DELETE "${BASE}/v1/vector_stores/${vs}" >/dev/null
+}
+
+@test "vector_stores: attach with missing file_id returns 400 missing_file_id" {
+  local vs body
+  vs=$(json_post "/v1/vector_stores" '{}' | jq -r '.id')
+  body=$(json_post "/v1/vector_stores/${vs}/files" '{}')
+  assert_error "${body}" "missing_file_id"
+  curl -s -X DELETE "${BASE}/v1/vector_stores/${vs}" >/dev/null
+}
+
+@test "vector_stores: attach binary upload returns 400 unsupported_file_type" {
+  local vs upload file body
+  vs=$(json_post "/v1/vector_stores" '{"name":"binary-sad"}' | jq -r '.id')
+
+  # PNG magic header — contains NUL bytes so looksBinary catches it.
+  local png_path="${BATS_TEST_TMPDIR}/bin.png"
+  printf '\x89PNG\r\n\x1a\n\x00\x00\x00\x0dIHDR' > "${png_path}"
+
+  upload=$(curl -sf "${BASE}/v1/files" \
+    -F "file=@${png_path};type=image/png" \
+    -F "purpose=assistants")
+  file=$(echo "${upload}" | jq -r '.id')
+
+  body=$(json_post "/v1/vector_stores/${vs}/files" "{\"file_id\":\"${file}\"}")
+  assert_error "${body}" "unsupported_file_type"
+
+  curl -s -X DELETE "${BASE}/v1/vector_stores/${vs}" >/dev/null
+}
+
+@test "vector_stores: invalid id returns 400 invalid_vector_store_id" {
+  local body
+  body=$(curl -s "${BASE}/v1/vector_stores/bad%2Fid")
+  assert_error "${body}" "invalid_vector_store_id"
+}
+
 # ── Cross-endpoint model type validation ──────────────────────────────
 
 @test "cross-type: chat endpoint rejects embedding model" {

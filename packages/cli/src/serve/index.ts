@@ -8,6 +8,9 @@ import { createModelRegistry } from './core/model-registry.js'
 import { preloadModels, shutdownSDK } from './core/lifecycle.js'
 import { handleCors, sendError } from './http.js'
 import { createOpenAIAdapter } from './adapters/openai/index.js'
+import { createChunkAttributionStore } from './adapters/openai/chunk-attribution-store.js'
+import { createEphemeralFilesStore } from './adapters/openai/ephemeral-files-store.js'
+import { createVectorStoresStore } from './adapters/openai/vector-stores-store.js'
 import type { APIAdapter, RouteContext } from './adapters/types.js'
 import type { ServeConfig, ResolvedModelEntry } from './core/model-registry.js'
 
@@ -38,7 +41,10 @@ export async function startServer (options: StartServerOptions): Promise<http.Se
     createOpenAIAdapter()
   ]
 
-  const ctx: RouteContext = { registry, serveConfig, logger }
+  const vectorStores = createVectorStoresStore()
+  const ephemeralFiles = createEphemeralFilesStore()
+  const chunkAttributions = createChunkAttributionStore()
+  const ctx: RouteContext = { registry, serveConfig, logger, vectorStores, ephemeralFiles, chunkAttributions }
 
   const server = http.createServer(async (req: IncomingMessage, res: ServerResponse) => {
     const start = performance.now()
@@ -117,6 +123,19 @@ const CATEGORY_ENDPOINTS: Record<string, string[]> = {
   image: ['POST /v1/images/generations']
 }
 
+const VECTOR_STORE_ENDPOINTS = [
+  'POST /v1/files',
+  'GET  /v1/files',
+  'GET  /v1/files/:id',
+  'GET  /v1/vector_stores',
+  'POST /v1/vector_stores',
+  'GET  /v1/vector_stores/:id',
+  'POST /v1/vector_stores/:id',
+  'DELETE /v1/vector_stores/:id',
+  'POST /v1/vector_stores/:id/search',
+  'POST /v1/vector_stores/:id/files'
+]
+
 const MANAGEMENT_ENDPOINTS = [
   'GET  /v1/models',
   'GET  /v1/models/:id',
@@ -170,6 +189,9 @@ function logStartupSummary (serveConfig: ServeConfig, logger: Logger): void {
     if (endpoints) {
       for (const ep of endpoints) logger.info(`  ${ep}`)
     }
+  }
+  if (categories.has('embedding')) {
+    for (const ep of VECTOR_STORE_ENDPOINTS) logger.info(`  ${ep}`)
   }
   for (const ep of MANAGEMENT_ENDPOINTS) logger.info(`  ${ep}`)
   logger.info('')
