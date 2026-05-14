@@ -1,0 +1,150 @@
+name: Integration Tests (OCR-GGML)
+
+# Stub workflow.
+#
+# Builds @qvac/ocr-ggml on the canonical CI matrix and runs `npm run
+# test:integration`. The integration test (`test/integration/smoke.test.js`)
+# auto-skips when OCR_GGML_DETECTOR / OCR_GGML_RECOGNIZER env vars are
+# absent, so this workflow exits green-with-skip while still validating
+# that the prebuild loads on every platform.
+#
+# Model distribution to S3 is tracked as a follow-up subtask (see PR #2050
+# description); when it lands, re-add the AWS OIDC + s3 cp steps here.
+
+on:
+  workflow_dispatch:
+    inputs:
+      prebuild_package:
+        description: "NPM package containing prebuilds (e.g. @qvac/ocr-ggml@0.1.0)"
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      ref:
+        description: "ref"
+        type: string
+        required: false
+      repository:
+        type: string
+        required: false
+        default: "tetherto/qvac"
+      model:
+        type: string
+        required: false
+      workdir:
+        description: "Working directory inside the repo (monorepo package path)"
+        type: string
+        required: false
+        default: "packages/ocr-ggml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PKG_DIR: packages/ocr-ggml
+
+jobs:
+  run-integration-tests:
+    continue-on-error: true
+    timeout-minutes: 30
+    runs-on: ${{ matrix.os }}
+    environment: release
+    name: test-${{ matrix.platform }}-${{ matrix.arch }}
+
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
+          - os: ubuntu-24.04
+            platform: linux
+            arch: x64
+          - os: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
+          - os: ubuntu-22.04-arm
+            platform: linux
+            arch: arm64
+          - os: macos-15-xlarge
+            platform: darwin
+            arch: arm64
+          - os: windows-2022
+            platform: win32
+            arch: x64
+
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Windows - enable git long paths
+        if: ${{ matrix.platform == 'win32' }}
+        shell: bash
+        run: git config --system core.longpaths true
+
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Install NPM dependencies
+        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        shell: bash
+        run: |
+          npm install
+          npm install -g bare bare-make
+
+      - name: Download prebuilds from artifact
+        if: ${{ !inputs.prebuild_package }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: ${{ inputs.workdir || env.PKG_DIR }}/prebuilds
+          merge-multiple: true
+
+      - name: Download prebuilds from package
+        if: ${{ inputs.prebuild_package }}
+        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        shell: bash
+        run: |
+          mkdir -p prebuilds
+          npm pack ${{ inputs.prebuild_package }} --pack-destination /tmp
+          tar -xzf /tmp/*.tgz -C /tmp
+          cp -r /tmp/package/prebuilds/* prebuilds/
+
+      - name: Linux - install dependencies
+        if: matrix.platform == 'linux' || matrix.platform == 'android'
+        shell: bash
+        run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
+
+      - if: ${{ matrix.os == 'ubuntu-24.04' }}
+        name: Update c++ tools to install GLIBC++
+        run: |
+          sudo apt update
+          sudo apt install -y g++-13
+
+      # Models for GGML OCR (CRAFT detector + CRNN gen-2 recognizer) are not
+      # yet distributed via S3 — see the "Model distribution / registry
+      # integration" follow-up subtask in the PR description. Until then,
+      # the integration test auto-skips when OCR_GGML_DETECTOR /
+      # OCR_GGML_RECOGNIZER env vars are unset, so the job still exercises
+      # the build + addon-load path on every platform.
+      - name: Run integration test
+        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        shell: bash
+        run: npm run test:integration
+        env:
+          QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
