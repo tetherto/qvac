@@ -7,7 +7,7 @@ import {
   type Response,
   type RPCOptions,
 } from "@/schemas";
-import { RPCError } from "./rpc-error";
+import { reconstructError } from "./rpc-error";
 import { withTimeout, withTimeoutStream } from "@/utils/withTimeout";
 import { getClientLogger, summarizeRequest } from "@/logging";
 import { getRPC, close as closeRPC, createDuplexSession } from "#rpc";
@@ -46,7 +46,12 @@ function getNextCommandId() {
 
 function checkAndThrowError(response: Response): void {
   if (response.type === "error") {
-    throw new RPCError(response);
+    // Use the typed-error reconstructor map in `rpc-error.ts` so the
+    // original class (e.g. `RequestRejectedByPolicyError`) survives
+    // the RPC boundary intact and `err instanceof <Class>` works in
+    // consumer `catch` blocks. Unknown error names fall back to a
+    // plain `RPCError` wrapper inside `reconstructError`.
+    throw reconstructError(response);
   }
 }
 

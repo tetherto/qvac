@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.0]
+
+Release Date: 2026-05-14
+
+### 🔧 Changed
+
+- **BREAKING (install-time)**: Move `hyperdb` from `dependencies` to `peerDependencies` so consumer apps don't get a duplicate copy of the singleton when installed alongside `@qvac/sdk` (#1905). Most consumers (npm 7+, pnpm, bun) auto-install peers and need no action. Standalone consumers using yarn 1 or `legacy-peer-deps=true` must now add `hyperdb` to their own dependencies.
+
 ## [0.1.2]
 
 Release Date: 2026-03-19

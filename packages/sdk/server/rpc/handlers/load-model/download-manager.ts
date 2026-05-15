@@ -307,6 +307,38 @@ export function startOrJoinDownload(
  * so we don't leak the transfer if a legacy code path holds the only
  * reference.
  */
+/**
+ * Set `clearCache=true` on the transfer that owns the subscriber bound
+ * to `requestId`, so when the registry's targeted cancel removes that
+ * subscriber and we reach last-subscriber teardown, the partial
+ * download file is deleted instead of preserved for automatic resume.
+ *
+ * Lookup is O(transfers * subscribers); transfers are short-lived and
+ * subscriber counts per transfer are tiny in practice, so this is
+ * fine. Returns `true` if a matching subscriber was found, `false`
+ * otherwise — the cancel handler treats both cases identically (the
+ * registry cancel still fires) and the return value is informational.
+ *
+ * Added in 0.11.0 to support `cancel({ requestId, clearCache: true })`
+ * for download requests after the wire schema collapse removed the
+ * `{ operation: "downloadAsset", downloadKey, clearCache }` arm. The
+ * subscriber is the unit of `clearCache` even though the flag lives on
+ * the shared transfer: if any subscriber on the transfer asks for
+ * clearCache, the partial file is deleted when the last subscriber
+ * leaves, matching the pre-collapse behaviour.
+ */
+export function markClearCacheForRequest(requestId: string): boolean {
+  for (const transfer of activeTransfers.values()) {
+    for (const sub of transfer.subscribers.values()) {
+      if (sub.requestId === requestId) {
+        transfer.clearCache = true;
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 export function cancelTransfer(
   downloadKey: string,
   clearCache = false,
