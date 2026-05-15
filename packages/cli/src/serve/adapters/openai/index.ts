@@ -50,6 +50,12 @@ export function createOpenAIAdapter (): APIAdapter {
         return true
       }
 
+      if (method === 'POST' && path === '/v1/completions') {
+        const { handleCompletions } = await import('./routes/completions.js')
+        await handleCompletions(req, res, ctx)
+        return true
+      }
+
       if (method === 'POST' && path === '/v1/embeddings') {
         const { handleEmbeddings } = await import('./routes/embeddings.js')
         await handleEmbeddings(req, res, ctx)
@@ -74,6 +80,12 @@ export function createOpenAIAdapter (): APIAdapter {
         return true
       }
 
+      if (method === 'POST' && path === '/v1/images/edits') {
+        const { handleImagesEdits } = await import('./routes/images.js')
+        await handleImagesEdits(req, res, ctx)
+        return true
+      }
+
       if (method === 'POST' && path === '/v1/files') {
         const { handlePostFile } = await import('./routes/files.js')
         await handlePostFile(req, res, ctx)
@@ -83,6 +95,13 @@ export function createOpenAIAdapter (): APIAdapter {
       if (method === 'GET' && path === '/v1/files') {
         const { handleListFiles } = await import('./routes/files.js')
         handleListFiles(req, res, ctx)
+        return true
+      }
+
+      const fileContentMatch = path.match(/^\/v1\/files\/([^/]+)\/content$/)
+      if (fileContentMatch && method === 'GET') {
+        const { handleGetFileContent } = await import('./routes/files.js')
+        handleGetFileContent(req, res, ctx, fileContentMatch[1] ?? '')
         return true
       }
 
