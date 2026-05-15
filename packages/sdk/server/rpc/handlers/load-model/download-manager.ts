@@ -1,10 +1,38 @@
 import type { ModelProgressUpdate } from "@/schemas";
-import { AbortController } from "bare-abort-controller";
-import { DownloadCancelledError } from "@/utils/errors-server";
+import { AbortController, type AbortSignal } from "bare-abort-controller";
+import {
+  DownloadCancelledError,
+  InferenceCancelledError,
+} from "@/utils/errors-server";
 import { getServerLogger } from "@/logging";
+import { getRequestRegistry } from "@/server/bare/runtime";
+import type { DisposableScope } from "@/server/bare/runtime/disposable-scope";
 import type { DownloadHooks } from "@/server/rpc/handlers/load-model/types";
 
 const logger = getServerLogger();
+
+/**
+ * Per-subscriber binding to a registry-tracked request.
+ * `startOrJoinDownload` is request-aware: each caller (the
+ * `await using ctx = registry.begin(...)` inside `handleLoadModel` /
+ * `handleDownloadAsset`) registers a subscriber bound to its
+ * `requestId`. A `cancel({ requestId })` against the registry aborts
+ * the subscriber's `ctx.signal`, which:
+ *   - rejects this subscriber's promise so the awaiting handler unwinds;
+ *   - removes this subscriber from `transfer.subscribers`;
+ *   - tears down the transfer iff this was the last subscriber.
+ *
+ * The shared-transfer dedup logic in `startOrJoinDownload` is preserved
+ * — two callers requesting the same `downloadKey` still share one
+ * underlying download — but cancel is per-`requestId`-honest:
+ * cancelling one subscriber does not affect siblings on the same
+ * `downloadKey`.
+ */
+export interface SubscriberRequestBinding {
+  signal: AbortSignal;
+  scope: DisposableScope;
+  requestId: string;
+}
 
 export interface Subscriber {
   id: string;
@@ -13,6 +41,8 @@ export interface Subscriber {
   resolve: (path: string) => void;
   reject: (error: unknown) => void;
   promise: Promise<string>;
+  /** Identity of the registry request this subscriber belongs to, if any. */
+  requestId?: string | undefined;
 }
 
 export interface Transfer {
@@ -43,6 +73,7 @@ let nextSubscriberId = 0;
 
 function createSubscriber(
   onProgress?: (progress: ModelProgressUpdate) => void,
+  requestId?: string,
 ): Subscriber {
   let resolve!: (path: string) => void;
   let reject!: (error: unknown) => void;
@@ -58,6 +89,7 @@ function createSubscriber(
     resolve,
     reject,
     promise,
+    requestId,
   };
 }
 
@@ -93,7 +125,7 @@ function deliverProgress(
     });
 
     settleSubscriber(subscriber, error);
-    transfer.subscribers.delete(subscriber.id);
+    removeSubscriber(transfer, subscriber.id);
   }
 }
 
@@ -108,16 +140,96 @@ function broadcastTransferProgress(
   }
 }
 
+/**
+ * Idempotent: remove the subscriber from the transfer's roster and tear
+ * the transfer down iff no subscribers remain. Wired from two places per
+ * subscriber:
+ *
+ *   - the `request.signal.addEventListener("abort", ...)` listener that
+ *     fires when `registry.cancel({ requestId })` aborts the request's
+ *     context — this is the "user clicked Stop" cancel path;
+ *   - `request.scope.defer(...)` which runs at request scope unwind —
+ *     the safety net catching every other unwind path (handler returns,
+ *     handler throws for a non-cancel reason, awaited promise settled
+ *     and the `await using` falls out of scope on the success path).
+ *
+ * Both ends call this helper so an already-cleaned-up subscriber is a
+ * no-op the second time around.
+ */
+function removeSubscriber(transfer: Transfer, subscriberId: string): void {
+  if (!transfer.subscribers.has(subscriberId)) return;
+  transfer.subscribers.delete(subscriberId);
+  maybeCancelTransfer(transfer);
+}
+
+/**
+ * Last-subscriber rule: when every caller has detached (cancel or
+ * progress-callback throw), abort the shared transfer so the underlying
+ * HTTP / hyperdrive download tears down. Until then the transfer keeps
+ * running for the remaining subscribers — the content-addressed dedup
+ * semantics callers rely on.
+ */
+function maybeCancelTransfer(transfer: Transfer): void {
+  if (transfer.subscribers.size > 0) return;
+  if (transfer.abortController.signal.aborted) return;
+  logger.debug(
+    `[download-manager] last subscriber left, aborting transfer ${transfer.downloadKey}`,
+  );
+  transfer.abortController.abort();
+}
+
+function attachRequestBinding(
+  transfer: Transfer,
+  subscriber: Subscriber,
+  request: SubscriberRequestBinding,
+): void {
+  const onAbort = () => {
+    if (!subscriber.settled) {
+      settleSubscriber(
+        subscriber,
+        new InferenceCancelledError(request.requestId),
+      );
+    }
+    removeSubscriber(transfer, subscriber.id);
+  };
+
+  if (request.signal.aborted) {
+    onAbort();
+    return;
+  }
+
+  request.signal.addEventListener("abort", onAbort, { once: true });
+
+  // Safety net: scope unwind on any handler exit path triggers the same
+  // cleanup. If the abort listener already ran it's a no-op. Cleaning
+  // up the abort listener here keeps the parent signal from carrying a
+  // dangling reference into the next request.
+  request.scope.defer(() => {
+    request.signal.removeEventListener("abort", onAbort);
+    if (!subscriber.settled) {
+      settleSubscriber(
+        subscriber,
+        new InferenceCancelledError(request.requestId),
+      );
+    }
+    removeSubscriber(transfer, subscriber.id);
+  });
+}
+
 export function startOrJoinDownload(
   downloadKey: string,
   startDownload: (ctx: DownloadContext) => Promise<string>,
   onProgress?: (progress: ModelProgressUpdate) => void,
+  request?: SubscriberRequestBinding,
 ): StartOrJoinResult {
   const existing = activeTransfers.get(downloadKey);
   if (existing && !existing.abortController.signal.aborted) {
     logger.info(`📥 Reusing existing download for: ${downloadKey}`);
-    const subscriber = createSubscriber(onProgress);
+    const subscriber = createSubscriber(onProgress, request?.requestId);
     existing.subscribers.set(subscriber.id, subscriber);
+    if (request) {
+      attachRequestBinding(existing, subscriber, request);
+    }
 
     if (existing.lastProgress) {
       deliverProgress(existing, subscriber, existing.lastProgress);
@@ -138,9 +250,12 @@ export function startOrJoinDownload(
     clearCache: false,
   };
 
-  const initialSubscriber = createSubscriber(onProgress);
+  const initialSubscriber = createSubscriber(onProgress, request?.requestId);
   transfer.subscribers.set(initialSubscriber.id, initialSubscriber);
   activeTransfers.set(downloadKey, transfer);
+  if (request) {
+    attachRequestBinding(transfer, initialSubscriber, request);
+  }
 
   const downloadPromise = startDownload({
     broadcastProgress: (progress) => {
@@ -180,6 +295,50 @@ export function startOrJoinDownload(
   };
 }
 
+/**
+ * Legacy cancel entry point. Callers (`cancelHandler`'s deprecated
+ * `case "downloadAsset"` arm, the shutdown sweep, intra-resolve
+ * cleanup) call this with a `downloadKey`. The single source of cancel
+ * routing is the request registry, so this function resolves each
+ * subscriber's request via `registry.cancel({ requestId })`.
+ *
+ * Subscribers without a `requestId` (legacy callers that didn't pass a
+ * registry binding) are settled directly with `DownloadCancelledError`
+ * so we don't leak the transfer if a legacy code path holds the only
+ * reference.
+ */
+/**
+ * Set `clearCache=true` on the transfer that owns the subscriber bound
+ * to `requestId`, so when the registry's targeted cancel removes that
+ * subscriber and we reach last-subscriber teardown, the partial
+ * download file is deleted instead of preserved for automatic resume.
+ *
+ * Lookup is O(transfers * subscribers); transfers are short-lived and
+ * subscriber counts per transfer are tiny in practice, so this is
+ * fine. Returns `true` if a matching subscriber was found, `false`
+ * otherwise — the cancel handler treats both cases identically (the
+ * registry cancel still fires) and the return value is informational.
+ *
+ * Added in 0.11.0 to support `cancel({ requestId, clearCache: true })`
+ * for download requests after the wire schema collapse removed the
+ * `{ operation: "downloadAsset", downloadKey, clearCache }` arm. The
+ * subscriber is the unit of `clearCache` even though the flag lives on
+ * the shared transfer: if any subscriber on the transfer asks for
+ * clearCache, the partial file is deleted when the last subscriber
+ * leaves, matching the pre-collapse behaviour.
+ */
+export function markClearCacheForRequest(requestId: string): boolean {
+  for (const transfer of activeTransfers.values()) {
+    for (const sub of transfer.subscribers.values()) {
+      if (sub.requestId === requestId) {
+        transfer.clearCache = true;
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 export function cancelTransfer(
   downloadKey: string,
   clearCache = false,
@@ -188,10 +347,32 @@ export function cancelTransfer(
   if (!transfer) return;
 
   transfer.clearCache = clearCache;
-  transfer.abortController.abort();
 
-  for (const sub of transfer.subscribers.values()) {
+  const registry = getRequestRegistry();
+  const orphanSubs: Subscriber[] = [];
+  for (const sub of Array.from(transfer.subscribers.values())) {
+    if (sub.requestId !== undefined) {
+      registry.cancel({
+        requestId: sub.requestId,
+        reason: "download-transfer-cancel",
+      });
+    } else {
+      orphanSubs.push(sub);
+    }
+  }
+
+  if (orphanSubs.length === 0) {
+    return;
+  }
+
+  // Legacy subscribers (no registry binding): settle each with
+  // `DownloadCancelledError` and route removal through the
+  // `removeSubscriber` helper so the last-subscriber teardown rule is
+  // enforced in one place. Registry-bound subscribers are handled by
+  // their `attachRequestBinding` listener triggered above.
+  for (const sub of orphanSubs) {
     settleSubscriber(sub, new DownloadCancelledError());
+    removeSubscriber(transfer, sub.id);
   }
 }
 

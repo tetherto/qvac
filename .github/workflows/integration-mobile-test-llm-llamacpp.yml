@@ -1693,7 +1693,7 @@ jobs:
 
       - name: Upload Console Logs
         if: always() && steps.schedule_run.outputs.run_count != '0' && steps.schedule_run.outputs.run_count != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: console-logs-${{ matrix.platform }}
           path: console-logs/
@@ -1702,7 +1702,7 @@ jobs:
 
       - name: Upload Full Device Farm Logs
         if: always() && steps.schedule_run.outputs.run_count != '0' && steps.schedule_run.outputs.run_count != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: devicefarm-logs-${{ matrix.platform }}
           path: devicefarm-logs/

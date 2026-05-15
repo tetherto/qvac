@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.5.0]
+
+Release Date: 2026-05-14
+
+### 🔧 Changed
+
+- **BREAKING (install-time)**: Move `corestore`, `hyperblobs`, `hyperdb`, and `hyperswarm` from `dependencies` to `peerDependencies` so consumer apps don't get duplicate copies of these stateful Holepunch singletons when `@qvac/registry-client` is installed alongside `@qvac/sdk` (#1905). Most consumers (npm 7+, pnpm, bun) auto-install peers and need no action. Standalone consumers using yarn 1 or `legacy-peer-deps=true` must now add `corestore`, `hyperblobs`, `hyperdb`, and `hyperswarm` to their own dependencies.
+- Bump `@qvac/registry-schema` to `^0.2.0` (also peers-cleaned in its own release).
+
 ## [0.4.1]
 
 Release Date: 2026-04-22

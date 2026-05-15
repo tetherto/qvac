@@ -17,10 +17,15 @@ import {
 import { stream, duplex, type DuplexReadable } from "@/client/rpc/rpc-client";
 import { getClientLogger } from "@/logging";
 import { TranscriptionFailedError } from "@/utils/errors-client";
+import { decoratePromise } from "@/utils/decorate-promise";
+import { generateClientRequestId } from "@/client/api/client-request-id";
 
 const logger = getClientLogger();
 
-function buildTranscribeRequest(params: TranscribeClientParams): TranscribeRequest {
+function buildTranscribeRequest(
+  params: TranscribeClientParams,
+  requestId: string,
+): TranscribeRequest {
   return {
     type: "transcribe",
     modelId: params.modelId,
@@ -30,6 +35,7 @@ function buildTranscribeRequest(params: TranscribeClientParams): TranscribeReque
         : { type: "base64", value: params.audioChunk.toString("base64") },
     ...(params.prompt && { prompt: params.prompt }),
     ...(params.metadata === true && { metadata: true }),
+    requestId,
   };
 }
 
@@ -45,22 +51,41 @@ function buildTranscribeRequest(params: TranscribeClientParams): TranscribeReque
  *                          segments (`{ text, startMs, endMs, append, id }`)
  *                          instead of joined text. Whisper engine only.
  * @param options - Optional RPC options including per-call profiling
- * @returns The complete transcribed text, or — when `metadata` is true —
- *          the list of transcript segments in emission order.
+ * @returns A promise (decorated with `requestId`) resolving to the
+ *          complete transcribed text, or — when `metadata` is true —
+ *          the list of transcript segments in emission order. The
+ *          `requestId` is reachable synchronously so callers can target
+ *          this in-flight transcription with `cancel({ requestId })`
+ *          before `await` resolves.
  */
 export function transcribe(
   params: TranscribeClientParams & { metadata: true },
   options?: RPCOptions,
-): Promise<TranscribeSegment[]>;
+): Promise<TranscribeSegment[]> & { requestId: string };
 export function transcribe(
   params: TranscribeClientParams,
   options?: RPCOptions,
-): Promise<string>;
-export async function transcribe(
+): Promise<string> & { requestId: string };
+export function transcribe(
   params: TranscribeClientParams,
   options?: RPCOptions,
+): Promise<string | TranscribeSegment[]> & { requestId: string } {
+  // Client-generated id surfaced synchronously on the returned promise
+  // — same shape as `loadModel` / `downloadAsset` / `completion`. The
+  // CLI cancel bridge in `qvac serve` binds `req.on('close')` to
+  // `cancel({ requestId })` immediately after the call returns so a
+  // client disconnect aborts the in-flight transcription.
+  const requestId = generateClientRequestId();
+  const inner = runTranscribe(params, requestId, options);
+  return decoratePromise(inner, { requestId });
+}
+
+async function runTranscribe(
+  params: TranscribeClientParams,
+  requestId: string,
+  options?: RPCOptions,
 ): Promise<string | TranscribeSegment[]> {
-  const request = buildTranscribeRequest(params);
+  const request = buildTranscribeRequest(params, requestId);
 
   if (params.metadata === true) {
     const segments: TranscribeSegment[] = [];
@@ -144,14 +169,6 @@ export function transcribeStream(
   options?: RPCOptions,
 ): Promise<TranscribeStreamConversationSession>;
 export function transcribeStream(
-  params: TranscribeStreamClientParams & {
-    parakeetStreamingConfig: NonNullable<
-      TranscribeStreamClientParams["parakeetStreamingConfig"]
-    >;
-  },
-  options?: RPCOptions,
-): Promise<TranscribeStreamConversationSession>;
-export function transcribeStream(
   params: TranscribeStreamClientParams & { metadata: true },
   options?: RPCOptions,
 ): Promise<TranscribeStreamMetadataSession>;
@@ -179,16 +196,7 @@ export function transcribeStream(
     return transcribeStreamWithAudio(params, options);
   }
   const streamParams = params as TranscribeStreamClientParams;
-  // Parakeet's duplex path emits `endOfTurn` boundary events whenever
-  // the EOU model fires; surfacing them requires the conversation
-  // session shape (`{ type: "text" | "endOfTurn" | ... }`). Treat
-  // `parakeetStreamingConfig` as an implicit conversation-mode opt-in
-  // so callers don't have to flip the whisper-flavoured `emitVadEvents`
-  // knob just to receive parakeet boundary events.
-  if (
-    streamParams.emitVadEvents === true ||
-    streamParams.parakeetStreamingConfig !== undefined
-  ) {
+  if (streamParams.emitVadEvents === true) {
     return transcribeStreamDuplexConversation(streamParams, options);
   }
   if (streamParams.metadata === true) {
@@ -206,7 +214,7 @@ async function* streamTranscribeValues<T>(
   options: RPCOptions | undefined,
   extract: (parsed: TranscribeResponse) => T | undefined,
 ): AsyncGenerator<T> {
-  const request = buildTranscribeRequest(params);
+  const request = buildTranscribeRequest(params, generateClientRequestId());
 
   for await (const response of stream(request, options)) {
     if (response.type === "transcribe") {
@@ -248,9 +256,6 @@ function buildTranscribeStreamRequest(
     }),
     ...(params.vadRunIntervalMs !== undefined && {
       vadRunIntervalMs: params.vadRunIntervalMs,
-    }),
-    ...(params.parakeetStreamingConfig && {
-      parakeetStreamingConfig: params.parakeetStreamingConfig,
     }),
   };
 }
@@ -430,17 +435,10 @@ function processLineConversation(
       };
     }
     if (response.endOfTurn) {
-      // `endOfTurn` is a discriminated union on `source`; whisper
-      // events carry a measured `silenceDurationMs`, parakeet events
-      // are token-driven and carry only the discriminator.
-      if (response.endOfTurn.source === "whisper") {
-        return {
-          type: "endOfTurn",
-          source: "whisper",
-          silenceDurationMs: response.endOfTurn.silenceDurationMs,
-        };
-      }
-      return { type: "endOfTurn", source: "parakeet" };
+      return {
+        type: "endOfTurn",
+        silenceDurationMs: response.endOfTurn.silenceDurationMs,
+      };
     }
     if (wantsMetadata) {
       if (response.segment) {

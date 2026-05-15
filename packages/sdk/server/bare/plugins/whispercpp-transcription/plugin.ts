@@ -101,17 +101,23 @@ export const whisperPlugin = definePlugin({
       handler: async function* (request) {
         const metadata = request.metadata === true;
         const stream = metadata
-          ? transcribe({
-              modelId: request.modelId,
-              audioChunk: request.audioChunk,
-              prompt: request.prompt,
-              metadata: true,
-            })
-          : transcribe({
-              modelId: request.modelId,
-              audioChunk: request.audioChunk,
-              prompt: request.prompt,
-            });
+          ? transcribe(
+              {
+                modelId: request.modelId,
+                audioChunk: request.audioChunk,
+                prompt: request.prompt,
+                metadata: true,
+              },
+              request.requestId,
+            )
+          : transcribe(
+              {
+                modelId: request.modelId,
+                audioChunk: request.audioChunk,
+                prompt: request.prompt,
+              },
+              request.requestId,
+            );
 
         try {
           let result = await stream.next();
@@ -171,6 +177,7 @@ export const whisperPlugin = definePlugin({
               request.prompt,
               true,
               streamOpts,
+              request.requestId,
             )
           : transcribeStream(
               request.modelId,
@@ -178,6 +185,7 @@ export const whisperPlugin = definePlugin({
               request.prompt,
               false,
               streamOpts,
+              request.requestId,
             );
 
         for await (const value of iterator) {
@@ -193,28 +201,10 @@ export const whisperPlugin = definePlugin({
               continue;
             }
             if (value.type === "endOfTurn") {
-              // The op upstream already discriminates the union by
-              // engine: whisper-engine events arrive tagged
-              // `source: "whisper"` (with `silenceDurationMs`),
-              // parakeet's are surfaced from the parakeet plugin
-              // handler. Forward the typed event verbatim — narrowing
-              // here would mask any future engine that legitimately
-              // routes `endOfTurn` through the whisper plugin (e.g. a
-              // hypothetical multi-engine bundle).
-              if (value.source === "whisper") {
-                yield {
-                  type: "transcribeStream" as const,
-                  endOfTurn: {
-                    source: "whisper",
-                    silenceDurationMs: value.silenceDurationMs,
-                  },
-                };
-              } else {
-                yield {
-                  type: "transcribeStream" as const,
-                  endOfTurn: { source: "parakeet" },
-                };
-              }
+              yield {
+                type: "transcribeStream" as const,
+                endOfTurn: { silenceDurationMs: value.silenceDurationMs },
+              };
               continue;
             }
             continue;

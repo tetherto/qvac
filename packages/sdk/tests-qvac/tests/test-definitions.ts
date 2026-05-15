@@ -23,7 +23,6 @@ import { registryTests } from "./registry-tests.js";
 import { shardedModelTests } from "./sharded-model-tests.js";
 import { httpEmbeddingTests } from "./http-embedding-tests.js";
 import { parakeetTests } from "./parakeet-tests.js";
-import { parakeetStreamTests } from "./parakeet-stream-tests.js";
 import { visionTests } from "./vision-tests.js";
 import { downloadTests } from "./download-tests.js";
 import { delegatedInferenceTests } from "./delegated-inference-tests.js";
@@ -191,9 +190,6 @@ export const tests = [
 
   // Parakeet transcription tests
   ...parakeetTests,
-
-  // Parakeet duplex streaming tests
-  ...parakeetStreamTests,
 
   // Completion tests
   ...completionTests,

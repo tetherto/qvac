@@ -202,6 +202,7 @@ function setupCli (): void {
     .option('--model <alias>', 'Model alias to preload (repeatable, must be in config)', collect, [])
     .option('--api-key <key>', 'Require Bearer token authentication')
     .option('--cors', 'Enable CORS headers')
+    .option('--public-base-url <url>', 'Externally reachable origin (required for image response_format=url)')
     .option('-v, --verbose', 'Detailed output')
     .action(async (options: {
       config?: string
@@ -210,6 +211,7 @@ function setupCli (): void {
       model: string[]
       apiKey?: string
       cors?: boolean
+      publicBaseUrl?: string
       verbose?: boolean
     }) => {
       try {
@@ -222,6 +224,7 @@ function setupCli (): void {
           model: options.model.length > 0 ? options.model : undefined,
           apiKey: options.apiKey,
           cors: options.cors,
+          publicBaseUrl: options.publicBaseUrl,
           verbose: options.verbose
         })
       } catch (error: unknown) {
