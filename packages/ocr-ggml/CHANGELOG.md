@@ -27,5 +27,6 @@ Initial release.
 - BMP-in-JS / JPEG-PNG-in-C++ image decoding (same convention as
   `@qvac/ocr-onnx`).
 - Examples (`examples/quickstart.js`), JS unit tests
-  (`test/unit/api.test.js`), and an integration smoke test
-  (`test/integration/smoke.test.js`).
+  (`test/unit/api.test.js`), and per-pipeline integration tests
+  (`test/integration/easyocr.test.js`, `test/integration/doctr.test.js`)
+  sharing a `test/integration/helpers.js` utility module.
