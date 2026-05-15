@@ -43,7 +43,7 @@ setup_file() {
 
   for _ in $(seq 1 20); do
     local code
-    code=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:19921/v1/models" 2>/dev/null)
+    code=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:19921/v1/models" 2>/dev/null || echo "000")
     [[ "${code}" == "401" ]] && break
     sleep 0.25
   done
