@@ -140,9 +140,10 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
 
   const std::string ggufPath = args.getMapEntry(1, "ggufPath");
   const std::string backend = args.getMapEntry(1, "backend");
+  const std::string backendsDir = args.getMapEntry(1, "backendsDir");
   const bool forceCpu = (backend == "cpu");
 
-  auto model = std::make_unique<VlaModel>(ggufPath, forceCpu);
+  auto model = std::make_unique<VlaModel>(ggufPath, forceCpu, backendsDir);
 
   // VLA emits a single Float32Array (the action chunk) per job; runtime
   // stats and errors are added to the handler stack by OutputCallBackJs.

@@ -193,9 +193,12 @@ class VlaModel {
       // Canonical instance lifecycle (mirrors LLM/embed/NMT):
       // createInstance(jsHandle, params, outputCb) — the framework's
       // JobRunner thread consumes runJob() and feeds the outputCb.
+      const backendsDir = (this._config && this._config.backendsDir)
+        ? this._config.backendsDir
+        : path.join(__dirname, 'prebuilds')
       this._handle = binding.createInstance(
         this,
-        { ggufPath, backend },
+        { ggufPath, backend, backendsDir },
         (jsHandle, eventTypeName, outputData, errorData) => {
           this._onAddonEvent(jsHandle, eventTypeName, outputData, errorData)
         }

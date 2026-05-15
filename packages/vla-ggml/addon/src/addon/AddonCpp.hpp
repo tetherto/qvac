@@ -36,9 +36,15 @@ struct VlaInput {
 class VlaModel : public qvac_lib_inference_addon_cpp::model::IModel {
 public:
   // `forceCpu`: skip GPU device selection and run on the CPU backend only.
-  explicit VlaModel(const std::string& ggufPath, bool forceCpu = false)
+  // `backendsDir`: absolute path to the prebuilds folder; forwarded to
+  // smolvla_load_model so ggml backends are loaded from an absolute path
+  // rather than relative to process CWD (required on mobile).
+  explicit VlaModel(
+      const std::string& ggufPath,
+      bool forceCpu = false,
+      std::string backendsDir = {})
       : model_(new smolvla_model()) {
-    if (!smolvla_load_model(ggufPath.c_str(), *model_, forceCpu)) {
+    if (!smolvla_load_model(ggufPath.c_str(), *model_, forceCpu, backendsDir)) {
       throw std::runtime_error(
           "failed to load SmolVLA model from: " + ggufPath);
     }

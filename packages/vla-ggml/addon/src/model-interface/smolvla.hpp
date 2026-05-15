@@ -5,9 +5,9 @@
 //
 // Backend selection is deferred to qvac-fabric's ggml plugin loader: the
 // translation unit does not include any backend-specific headers; instead
-// smolvla_load_model() calls ggml_backend_load_all_from_path(BACKENDS_SUBDIR)
-// and picks the best device (Vulkan on Linux/Windows/Android, Metal on
-// macOS/iOS, CPU everywhere).
+// smolvla_load_model() resolves backendsDir/BACKENDS_SUBDIR to an absolute
+// path and loads plugins from there, then picks the best device (Vulkan on
+// Linux/Windows/Android, Metal on macOS/iOS, CPU everywhere).
 
 #include <cmath>
 #include <cstdint>
@@ -275,10 +275,16 @@ struct ggml_tensor* build_denoise_step_graph(
 void compute_sinusoidal_time_embedding_cached(
     float timestep, const float* inv_periods, int dimension, float* out);
 
-// Load model from GGUF file. `force_cpu`: when true, skip GPU device
-// selection and run on the CPU backend only. Used by the integration
-// test to compare CPU vs GPU on the same runner.
-bool smolvla_load_model(const char* path, smolvla_model& model, bool force_cpu);
+// Load model from GGUF file. `force_cpu`: skip GPU device selection.
+// `backendsDir`: absolute path to the prebuilds folder; BACKENDS_SUBDIR is
+// appended before calling ggml_backend_load_all_from_path so dlopen works
+// regardless of process CWD (critical on mobile). Pass empty string to fall
+// back to ggml_backend_load_all() (static builds / desktop dev).
+bool smolvla_load_model(
+    const char* path,
+    smolvla_model& model,
+    bool force_cpu,
+    const std::string& backendsDir);
 
 // Free model resources. Idempotent — also called from `smolvla_model::~smolvla_model`.
 void smolvla_free_model(smolvla_model& model);
