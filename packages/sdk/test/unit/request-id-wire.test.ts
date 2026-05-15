@@ -107,3 +107,18 @@ test("ragRequestSchema: forwards requestId for reindex (storage-only op)", (t: T
   });
   t.is((parsed as { requestId?: string }).requestId, "client-uuid-reindex");
 });
+
+test("ragRequestSchema: forwards requestId for saveEmbeddings", (t: T) => {
+  const parsed = ragRequestSchema.parse({
+    type: "rag",
+    operation: "saveEmbeddings",
+    workspace: "ws-a",
+    documents: [],
+    requestId: "client-uuid-save",
+  });
+  t.is(
+    (parsed as { requestId?: string }).requestId,
+    "client-uuid-save",
+    "saveEmbeddings envelope must carry the client-generated requestId",
+  );
+});

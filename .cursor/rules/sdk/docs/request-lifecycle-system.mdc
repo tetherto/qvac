@@ -74,7 +74,7 @@ Concretely, Vercel's AI SDK (`streamText`) is a public-codebase example of the s
 
 `request-lifecycle-primitives.mdc` has the worked code examples and the dispatch-level truth table for which `RequestKind`s currently route through the registry.
 
-For kinds that haven't been migrated onto the registry yet, the broad-cancel path (`cancel({ operation: <kind>, modelId })`) falls back to `addon.cancel()` directly — see the fallback in `server/bare/ops/cancel.ts`. The wire contract for non-migrated kinds is unchanged: callers continue to use `cancel({ operation: <kind>, modelId })` exactly as before.
+Every server-side cancellable handler is on the registry as of 0.11.0. The broad-cancel path (`cancel({ modelId, kind? })` and its legacy `{ operation: "inference"|"embeddings", modelId }` aliases) is a single registry walk; the legacy pre-registry addon-cancel fallback in `server/bare/ops/cancel.ts` was removed in 0.11.0. Handlers whose addon declares `cancel: { scope: "none" }` (TTS, OCR, NMT, upscale) still respect a broad cancel at the registry layer — the in-flight call yields when `ctx.signal.aborted` flips on its next yield point — they just don't get a hard mid-decode abort.
 
 ## FAQ
 
@@ -192,8 +192,8 @@ Test coverage: `same-tick cancel-before-begin retroactively aborts the later beg
 | `server/bare/runtime/with-request-context.ts`                              | `withRequestContext(logger, ctx)` — per-request logger wrapper prefixing every emit with the lifecycle correlation tuple |
 | `server/bare/runtime/request-id.ts`                                        | UUID generation helper for caller-provided ids                                                           |
 | `server/bare/runtime/index.ts`                                             | Public re-exports — handlers import from `@/server/bare/runtime`                                         |
-| `server/bare/ops/cancel.ts`                                                | Broad-cancel op: registry-routed with addon fallback for non-migrated handlers                           |
-| `server/rpc/handlers/cancelHandler.ts`                                     | RPC entry point: dispatches by `operation` (inference / embeddings / request / downloadAsset / rag)      |
+| `server/bare/ops/cancel.ts`                                                | Broad-cancel op: pure registry walk, legacy addon-cancel fallback removed in 0.11.0                      |
+| `server/rpc/handlers/cancelHandler.ts`                                     | RPC entry point: 2-arm `request` / `broad` dispatch (5-arm union collapsed in 0.11.0). Targeted `request` goes through `RequestRegistry.cancel({ requestId })` plus an optional `markClearCacheForRequest(...)` for downloads; `broad` delegates to `server/bare/ops/cancel.ts` |
 | `server/rpc/handlers/delete-cache.ts`                                      | Delegates to `deleteKvCacheState(...)` — zero direct references to the three KV-cache layers             |
 | `server/bare/plugins/llamacpp-completion/plugin.ts`                        | Reference plugin manifest; declares `cancel: { scope: "model", hard: true }`; builds `withRequestContext(...)` once per request and threads it into `completion(...)`; `finetune` declares `{ scope: "model", hard: true }`; `translate` handler threads `requestId` into the shared bare op |
 | `server/bare/plugins/llamacpp-completion/ops/completion-stream.ts`         | Reference implementation of the canonical handler shape; uses `KvCacheSession`; accepts a request-scoped `logger` |

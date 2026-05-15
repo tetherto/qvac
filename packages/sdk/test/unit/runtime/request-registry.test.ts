@@ -462,9 +462,8 @@ test("policy: oneAtATimePerModel rejects a second begin on the same (kind, model
   });
   t.is(first.requestId, "r-1");
 
-  // Throws the dedicated policy class (Option A in the M3a brief) —
-  // handler / RPC code can `instanceof` narrow without parsing the
-  // error message.
+  // Throws the dedicated policy class so handler / RPC code can
+  // `instanceof` narrow without parsing the error message.
   await t.exception(() => {
     r.begin({
       requestId: "r-2",
@@ -515,7 +514,7 @@ test("policy: oneAtATimePerModel ignores requests without modelId", async (t: T)
   r.policy({ kind: "completion", oneAtATimePerModel: true });
 
   // Both have no modelId — policy has no key to match against, so
-  // both are admitted. This mirrors the pre-M3a behaviour for
+  // both are admitted. This is the documented behaviour for
   // model-less requests (e.g. handlers that don't yet attach a
   // modelId to their `begin(...)` call).
   await using a = r.begin({ requestId: "r-a", kind: "completion" });
