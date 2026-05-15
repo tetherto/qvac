@@ -1,22 +1,43 @@
 import type { QvacResponse } from '@qvac/infer-base'
 
+/**
+ * OCR pipeline backing the addon.
+ *   - `easyocr` (default): CRAFT detector + CRNN gen-2 recognizer.
+ *     Uses `langList`, `magRatio`, `defaultRotationAngles`, `contrastRetry`,
+ *     `lowConfidenceThreshold`, `recognizerBatchSize`.
+ *   - `doctr`: DBNet detector + doctr recognizer.
+ *     Language-agnostic; EasyOCR-specific knobs (`magRatio`, etc.) are
+ *     ignored.
+ */
+export type OcrGgmlPipelineType = 'easyocr' | 'doctr'
+
 export interface OcrGgmlParams {
-  /** Path to the CRAFT detector GGUF file. */
+  /**
+   * Path to the detector GGUF file.
+   *   - easyocr: CRAFT model (e.g. `craft_mlt_25k.gguf`)
+   *   - doctr:   DBNet model (e.g. `db_mobilenet_v3_large.gguf`)
+   */
   pathDetector: string
-  /** Path to the recognizer GGUF file (e.g. english_g2.gguf). */
+  /**
+   * Path to the recognizer GGUF file.
+   *   - easyocr: CRNN gen-2 (e.g. `english_g2.gguf`, `latin_g2.gguf`)
+   *   - doctr:   doctr recognition model (e.g. `crnn_mobilenet_v3_small.gguf`)
+   */
   pathRecognizer: string
   /** Languages handled by the recognizer (e.g. `['en']`, `['en', 'fr']`). */
   langList: string[]
 
-  /** Detection magnification ratio. Default: 1.5. */
+  /** Pipeline backing the addon. Default: `'easyocr'`. */
+  pipelineType?: OcrGgmlPipelineType
+  /** Detection magnification ratio (easyocr only). Default: 1.5. */
   magRatio?: number
-  /** Rotation angles tried when the primary pass is low-confidence. Default: [90, 270]. */
+  /** Rotation angles tried when the primary pass is low-confidence (easyocr only). Default: [90, 270]. */
   defaultRotationAngles?: number[]
-  /** Retry low-confidence boxes with contrast adjustment. Default: false. */
+  /** Retry low-confidence boxes with contrast adjustment (easyocr only). Default: false. */
   contrastRetry?: boolean
-  /** Threshold below which contrast-retry kicks in. Default: 0.4. */
+  /** Threshold below which contrast-retry kicks in (easyocr only). Default: 0.4. */
   lowConfidenceThreshold?: number
-  /** Recognizer batch size. Default: 32. */
+  /** Recognizer batch size (easyocr only). Default: 32. */
   recognizerBatchSize?: number
   /**
    * GGML CPU thread count:

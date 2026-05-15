@@ -1,15 +1,15 @@
 name: Integration Tests (OCR-GGML)
 
-# Stub workflow.
+# Builds @qvac/ocr-ggml on the canonical CI matrix, pulls the pinned
+# EasyOCR GGUF snapshot from S3, and runs `npm run test:integration`.
 #
-# Builds @qvac/ocr-ggml on the canonical CI matrix and runs `npm run
-# test:integration`. The integration test (`test/integration/smoke.test.js`)
-# auto-skips when OCR_GGML_DETECTOR / OCR_GGML_RECOGNIZER env vars are
-# absent, so this workflow exits green-with-skip while still validating
-# that the prebuild loads on every platform.
+# Models are downloaded into `packages/ocr-ggml/models/` and exposed to
+# the test via `OCR_GGML_DETECTOR` / `OCR_GGML_RECOGNIZER` /
+# `OCR_GGML_RECOGNIZER_LATIN` env vars (smoke test reads these and
+# selects the appropriate pipeline).
 #
-# Model distribution to S3 is tracked as a follow-up subtask (see PR #2050
-# description); when it lands, re-add the AWS OIDC + s3 cp steps here.
+# Doctr GGUFs are not yet distributed; the Doctr code path inside the
+# smoke test auto-skips when the corresponding env vars are unset.
 
 on:
   workflow_dispatch:
@@ -136,15 +136,35 @@ jobs:
           sudo apt update
           sudo apt install -y g++-13
 
-      # Models for GGML OCR (CRAFT detector + CRNN gen-2 recognizer) are not
-      # yet distributed via S3 — see the "Model distribution / registry
-      # integration" follow-up subtask in the PR description. Until then,
-      # the integration test auto-skips when OCR_GGML_DETECTOR /
-      # OCR_GGML_RECOGNIZER env vars are unset, so the job still exercises
-      # the build + addon-load path on every platform.
+      # EasyOCR GGUFs live in S3 under a date-stamped snapshot directory.
+      # Bump the date here when a new snapshot is published.
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - name: Download EasyOCR GGUF model files
+        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        shell: bash
+        run: |
+          mkdir -p models
+          aws s3 cp \
+            "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ocr/gguf/easyocr/2026-05-14/" \
+            models/ \
+            --recursive
+          ls -lh models/
+
+      # Doctr GGUFs (DBNet + CRNN-mobilenet) are not yet in S3; the Doctr
+      # integration tests auto-skip when OCR_GGML_DOCTR_DETECTOR /
+      # OCR_GGML_DOCTR_RECOGNIZER are unset. Add those env entries below
+      # once the Doctr models land in S3.
       - name: Run integration test
         working-directory: ${{ inputs.workdir || env.PKG_DIR }}
         shell: bash
         run: npm run test:integration
         env:
           QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
+          OCR_GGML_DETECTOR: models/craft_mlt_25k.gguf
+          OCR_GGML_RECOGNIZER: models/english_g2.gguf
+          OCR_GGML_RECOGNIZER_LATIN: models/latin_g2.gguf
