@@ -1,4 +1,6 @@
 {
+  "name": "classification-ggml",
+  "version": "1.0.0",
   "dependencies": [
     {
       "name": "qvac-fabric",

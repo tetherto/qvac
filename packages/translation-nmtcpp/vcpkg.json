@@ -1,4 +1,6 @@
 {
+  "name": "translation-nmtcpp",
+  "version": "1.0.0",
   "dependencies": [
     "bergamot-translator",
     {
