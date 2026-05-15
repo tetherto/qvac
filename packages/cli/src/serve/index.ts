@@ -23,6 +23,7 @@ export interface StartServerOptions {
   model?: string[] | undefined
   apiKey?: string | undefined
   cors?: boolean | undefined
+  publicBaseUrl?: string | undefined
   verbose?: boolean | undefined
 }
 
@@ -44,7 +45,11 @@ export async function startServer (options: StartServerOptions): Promise<http.Se
   ]
 
   const vectorStores = createVectorStoresStore()
-  const ephemeralFiles = createEphemeralFilesStore()
+  const ephemeralFiles = createEphemeralFilesStore(undefined, {
+    onEvict: (id, reason) => {
+      logger.warn(`ephemeral file evicted id=${id} reason=${reason}`)
+    }
+  })
   const chunkAttributions = createChunkAttributionStore()
   const ctx: RouteContext = { registry, serveConfig, logger, vectorStores, ephemeralFiles, chunkAttributions, responsesStore }
   logger.warn(responsesStore.bannerLine())
@@ -123,7 +128,7 @@ const CATEGORY_ENDPOINTS: Record<string, string[]> = {
   embedding: ['POST /v1/embeddings'],
   transcription: ['POST /v1/audio/transcriptions'],
   'audio-translation': ['POST /v1/audio/translations'],
-  image: ['POST /v1/images/generations']
+  image: ['POST /v1/images/generations', 'POST /v1/images/edits']
 }
 
 const VECTOR_STORE_ENDPOINTS = [

@@ -25,6 +25,7 @@ const ENDPOINT_CATEGORY: Record<string, string> = {
 interface RawServeConfig {
   serve?: {
     models?: Record<string, string | ConstantModelEntry | ExplicitModelEntry>
+    publicBaseUrl?: string
   }
 }
 
@@ -46,6 +47,7 @@ interface ExplicitModelEntry {
 
 interface CLIServeOptions {
   model?: string | string[] | undefined
+  publicBaseUrl?: string | undefined
 }
 
 interface SDKModelConstant {
@@ -84,10 +86,23 @@ export async function parseServeConfig (rawConfig: RawServeConfig, cliOptions: C
     }
   }
 
+  const publicBaseUrl = normalizePublicBaseUrl(cliOptions.publicBaseUrl ?? serve.publicBaseUrl)
+
   return {
     models,
-    defaults: resolveDefaults(models)
+    defaults: resolveDefaults(models),
+    publicBaseUrl
   }
+}
+
+function normalizePublicBaseUrl (raw: string | undefined): string | null {
+  if (raw === undefined || raw === null) return null
+  const trimmed = raw.trim()
+  if (trimmed.length === 0) return null
+  if (!/^https?:\/\//i.test(trimmed)) {
+    throw new Error(`serve.publicBaseUrl must start with http:// or https:// (got "${trimmed}").`)
+  }
+  return trimmed.replace(/\/+$/, '')
 }
 
 export function normalizeEndpointCategory (sdkType: string): string {

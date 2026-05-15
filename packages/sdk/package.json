@@ -181,7 +181,7 @@
     "@qvac/logging": "^0.1.0",
     "@qvac/ocr-onnx": "^0.5.0",
     "@qvac/rag": "^0.5.0",
-    "@qvac/registry-client": "^0.4.1",
+    "@qvac/registry-client": "^0.5.0",
     "@qvac/transcription-parakeet": "^0.5.0",
     "@qvac/transcription-whispercpp": "^0.7.0",
     "@qvac/translation-nmtcpp": "^3.0.0",

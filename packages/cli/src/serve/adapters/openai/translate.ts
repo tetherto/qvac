@@ -245,6 +245,23 @@ export class InvalidImageBatchCountError extends Error {
   }
 }
 
+export class UnsupportedImageOutputError extends Error {
+  /** OpenAI-style error code returned to the client. */
+  readonly code: string
+  constructor (code: string, message: string) {
+    super(message)
+    this.name = 'UnsupportedImageOutputError'
+    this.code = code
+  }
+}
+
+export class InvalidImageStrengthError extends Error {
+  constructor (message: string) {
+    super(message)
+    this.name = 'InvalidImageStrengthError'
+  }
+}
+
 export type ParsedImageSize =
   | { width: number; height: number }
   | { auto: true }
@@ -323,38 +340,60 @@ export function extractImageGenerationParams (
   return params
 }
 
-const IMAGE_UNSUPPORTED_PARAMS = [
-  'quality', 'style', 'background', 'moderation',
-  'output_compression', 'partial_images', 'user'
+const IMAGE_ADVISORY_PARAMS = [
+  'quality', 'style', 'moderation', 'partial_images', 'user', 'input_fidelity'
 ] as const
 
 /**
- * Log warnings for OpenAI image-generation params we accept but do not forward to the SDK.
+ * Log warnings for OpenAI image params we accept but do not forward to the SDK.
+ * These are advisory hints (style/quality/etc.) — they do not change the bytes
+ * the client receives, so silently ignoring them is acceptable.
  *
- * `output_format` is warned with extra context because the response body is always PNG
- * (the response object echoes `output_format: "png"` so clients can detect mismatch).
- * `stream` is handled by the route itself (single-event SSE), so it is not warned here.
+ * Output-shaping params (`output_format`, `output_compression`, `background`)
+ * are NOT in this list — they would change the bytes, so they are rejected
+ * loudly via {@link assertSupportedImageOutputParams} instead.
+ *
+ * `stream` is handled by each route directly, not warned here.
  */
 export function logImageUnsupportedParams (body: Record<string, unknown>, logger: Logger): void {
-  for (const param of IMAGE_UNSUPPORTED_PARAMS) {
+  for (const param of IMAGE_ADVISORY_PARAMS) {
     if (body[param] !== undefined) {
       logger.warn(`Ignoring unsupported OpenAI image param: ${param}=${JSON.stringify(body[param])}`)
     }
   }
-
-  const outputFormat = body['output_format']
-  if (typeof outputFormat === 'string' && outputFormat !== 'png') {
-    logger.warn(`output_format=${outputFormat} is not supported; returning PNG.`)
-  }
 }
 
 /**
- * Encode raw image bytes as a `data:` URL for `response_format: "url"` requests.
- * Defaults to PNG since the SDK diffusion addon emits PNG.
+ * Reject OpenAI image params we cannot honor without changing the response bytes.
+ * This server only emits PNG with no alpha-control; any of these would silently
+ * produce the wrong output, so we fail loudly with a 4xx instead.
+ *
+ * - `output_format` other than `"png"` (jpeg/webp not supported)
+ * - `output_compression` (only meaningful with jpeg/webp)
+ * - `background` (transparent/opaque/auto — no alpha channel control)
  */
-export function encodeImageDataUrl (buf: Uint8Array, mime: string = 'image/png'): string {
-  const base64 = Buffer.from(buf).toString('base64')
-  return `data:${mime};base64,${base64}`
+export function assertSupportedImageOutputParams (body: Record<string, unknown>): void {
+  const outputFormat = body['output_format']
+  if (outputFormat !== undefined && outputFormat !== null && outputFormat !== 'png') {
+    throw new UnsupportedImageOutputError(
+      'unsupported_output_format',
+      `output_format=${JSON.stringify(outputFormat)} is not supported; this server only emits PNG. Omit the field or pass "png".`
+    )
+  }
+  const outputCompression = body['output_compression']
+  if (outputCompression !== undefined && outputCompression !== null) {
+    throw new UnsupportedImageOutputError(
+      'unsupported_output_compression',
+      'output_compression is not supported; this server only emits PNG (lossless), where output_compression has no meaning.'
+    )
+  }
+  const background = body['background']
+  if (background !== undefined && background !== null) {
+    throw new UnsupportedImageOutputError(
+      'unsupported_background',
+      `background=${JSON.stringify(background)} is not supported; this server has no alpha-channel control.`
+    )
+  }
 }
 
 // ============== Vector Stores ==============
@@ -903,4 +942,80 @@ function extractOutputTextFromMessage (msg: Record<string, unknown>): string {
     if (o['type'] === 'output_text' && typeof o['text'] === 'string') parts.push(o['text'])
   }
   return parts.join('')
+}
+
+// ─── /v1/images/edits (multipart) helpers ─────────────────────────────────
+
+/**
+ * Turn multipart text fields into a JSON-like object so we can reuse
+ * `extractImageGenerationParams` for shared validation and diffusion mapping.
+ */
+export function coerceMultipartFields (fields: Map<string, string>): Record<string, unknown> {
+  const obj: Record<string, unknown> = {}
+  for (const [k, v] of fields.entries()) {
+    const trimmed = v.trim()
+    if (k === 'n' || k === 'seed') {
+      if (/^-?\d+$/.test(trimmed)) {
+        obj[k] = parseInt(trimmed, 10)
+      } else {
+        obj[k] = v
+      }
+      continue
+    }
+    if (k === 'stream') {
+      if (trimmed === 'true' || trimmed === 'false') {
+        obj[k] = trimmed === 'true'
+      } else {
+        obj[k] = v
+      }
+      continue
+    }
+    if (k === 'strength') {
+      const f = parseFloat(trimmed)
+      if (!Number.isNaN(f)) {
+        obj[k] = f
+      } else {
+        obj[k] = v
+      }
+      continue
+    }
+    obj[k] = v
+  }
+  return obj
+}
+
+export function extractImageEditParams (
+  body: Record<string, unknown>,
+  imageBuffer: Uint8Array,
+  modelId: string
+): SDKDiffusionParams {
+  const params = extractImageGenerationParams(body, modelId)
+  params.init_image = imageBuffer
+
+  const strengthRaw = body['strength']
+  if (strengthRaw !== undefined && strengthRaw !== null) {
+    if (typeof strengthRaw !== 'number' || Number.isNaN(strengthRaw)) {
+      throw new InvalidImageStrengthError(
+        `"strength" must be a number in [0, 1] (got ${JSON.stringify(strengthRaw)}).`
+      )
+    }
+    if (strengthRaw < 0 || strengthRaw > 1) {
+      throw new InvalidImageStrengthError(
+        `"strength" must be in [0, 1] (got ${strengthRaw}).`
+      )
+    }
+    params.strength = strengthRaw
+  }
+
+  return params
+}
+
+export function logImageEditExtraWarnings (
+  _body: Record<string, unknown>,
+  opts: { extraImageCount: number },
+  logger: Logger
+): void {
+  if (opts.extraImageCount > 0) {
+    logger.warn(`image[] received ${opts.extraImageCount + 1} files; using only the first`)
+  }
 }
