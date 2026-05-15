@@ -194,8 +194,7 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
     // moe_boundary in normalized timestep [0, 1].
     {"moe_boundary",
      [](SdVidGenConfig& c, const picojson::value& v) {
-       c.moeBoundary =
-           requireFiniteFloatInRange(v, "moe_boundary", 0.0f, 1.0f);
+       c.moeBoundary = requireFiniteFloatInRange(v, "moe_boundary", 0.0f, 1.0f);
      }},
 
     // -- img2vid / flf2vid ---------------------------------------------------

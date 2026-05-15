@@ -228,8 +228,8 @@ std::pair<int, int> parseVaeTileSize(const picojson::value& v) {
   if (w <= 0 || h <= 0)
     throw StatusError(
         general_error::InvalidArgument,
-        "vae_tile_size: both dimensions must be > 0, got: " + std::to_string(w) +
-            "x" + std::to_string(h));
+        "vae_tile_size: both dimensions must be > 0, got: " +
+            std::to_string(w) + "x" + std::to_string(h));
   return {w, h};
 }
 

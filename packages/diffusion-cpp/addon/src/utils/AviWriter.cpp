@@ -132,8 +132,7 @@ std::vector<uint8_t> encodeFramesToAvi(
   // reject overflow rather than wrap-around silently.
   const size_t wSz = static_cast<size_t>(width);
   const size_t hSz = static_cast<size_t>(height);
-  if (wSz > SIZE_MAX / hSz || wSz > SIZE_MAX / 3 ||
-      wSz * hSz > SIZE_MAX / 3) {
+  if (wSz > SIZE_MAX / hSz || wSz > SIZE_MAX / 3 || wSz * hSz > SIZE_MAX / 3) {
     throw StatusError(
         general_error::InvalidArgument,
         "encodeFramesToAvi: frame size " + std::to_string(width) + "x" +

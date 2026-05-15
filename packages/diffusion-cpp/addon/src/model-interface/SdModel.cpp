@@ -738,7 +738,8 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& v) {
   // package that pulls it in via vcpkg).
   if (wasCancelled) {
     throw StatusError(
-        std::string(general_error::GeneralAddonId), "Cancelled",
+        std::string(general_error::GeneralAddonId),
+        "Cancelled",
         "Job cancelled");
   }
 
@@ -997,7 +998,8 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& v) {
   // the 3-arg ctor rationale).
   auto throwCancelled = []() {
     throw StatusError(
-        std::string(general_error::GeneralAddonId), "Cancelled",
+        std::string(general_error::GeneralAddonId),
+        "Cancelled",
         "Job cancelled");
   };
   if (cancelRequested_.load()) {
