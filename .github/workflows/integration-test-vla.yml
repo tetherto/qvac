@@ -336,16 +336,17 @@ jobs:
           ls -la model/vla/
 
       # The prebuilt Windows addon links against ggml-vulkan.dll, which itself
-      # depends on the Vulkan loader (vulkan-1.dll). Without this step the
-      # `bare` runtime fails to load the addon with LoadLibrary error 126
-      # ("The specified module could not be found"). Same pattern used by
-      # integration-test-qvac-lib-infer-whispercpp.yml.
-      - name: Windows - install Vulkan runtime
+      # depends on the Vulkan loader (vulkan-1.dll). The qvac-win25-x64-gpu
+      # self-hosted runner has the Vulkan SDK preinstalled at C:\VulkanSDK
+      # (see PR #2021), so we just export VULKAN_SDK and add Bin to PATH.
+      # Reinstalling via setup-vulkan-sdk fails on self-hosted because
+      # Start-BitsTransfer needs an interactive logon.
+      - name: Windows - set Vulkan SDK path
         if: matrix.platform == 'win32'
-        uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@0bbdca93da303a0b1634ba14a89cec085621078d
-        with:
-          platform: ${{ matrix.platform }}
-          arch: ${{ matrix.arch }}
+        shell: powershell
+        run: |
+          echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
+          echo "C:\VulkanSDK\Bin" >> $Env:GITHUB_PATH
 
       # Diagnostic: dump the prebuilt addon's DLL import table so we can see
       # which dependency LoadLibrary is missing when the addon fails to load.

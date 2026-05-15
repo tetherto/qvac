@@ -171,6 +171,12 @@ jobs:
       - name: Get vcpkg cache (package-local)
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
+          # NOTE: don't include workspace-root 'vcpkg/ports/**' here — the
+          # microsoft/vcpkg clone (pinned to 2025.12.12 above) drops ~4000
+          # port directories into the workspace root, and hashing them on
+          # NTFS exceeds the 120s template-eval cap on qvac-win25-x64.
+          # The pinned microsoft/vcpkg branch is effectively a constant,
+          # so it doesn't need to participate in the cache key.
           key: >-
             cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-${{
               hashFiles(
@@ -178,8 +184,7 @@ jobs:
                 format('{0}/vcpkg-configuration.json', inputs.workdir),
                 format('{0}/vcpkg/ports/**', inputs.workdir),
                 'vcpkg.json',
-                'vcpkg-configuration.json',
-                'vcpkg/ports/**'
+                'vcpkg-configuration.json'
               )
             }}
           path: ${{ github.workspace }}/${{ env.WORKDIR }}/vcpkg/cache
