@@ -190,12 +190,12 @@ the contrast-retry / rotation knobs.
 
 ### CI distribution
 
-CI pulls a pinned snapshot of the EasyOCR GGUFs from S3 (see
-[`.github/workflows/integration-test-ocr-ggml.yml`](../../.github/workflows/integration-test-ocr-ggml.yml))
-and exposes them to the integration test via the `OCR_GGML_DETECTOR`,
-`OCR_GGML_RECOGNIZER`, and `OCR_GGML_RECOGNIZER_LATIN` env vars. Doctr
-GGUFs are not yet distributed; the Doctr test path soft-skips when its
-env vars are unset.
+CI pulls pinned snapshots of both the EasyOCR and Doctr GGUFs from S3
+(see [`.github/workflows/integration-test-ocr-ggml.yml`](../../.github/workflows/integration-test-ocr-ggml.yml))
+and exposes them to the integration suite via the
+`OCR_GGML_DETECTOR` + `OCR_GGML_RECOGNIZER` env vars (EasyOCR) and
+`OCR_GGML_DOCTR_DETECTOR` + `OCR_GGML_DOCTR_RECOGNIZER` env vars
+(Doctr). Both pipelines are exercised end-to-end on every PR.
 
 ## CLI
 

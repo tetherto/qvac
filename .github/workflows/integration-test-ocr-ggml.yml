@@ -1,16 +1,28 @@
 name: Integration Tests (OCR-GGML)
 
 # Builds @qvac/ocr-ggml on the canonical CI matrix, pulls the pinned
-# EasyOCR GGUF snapshot from S3, and runs `npm run test:integration`.
+# EasyOCR + Doctr GGUF snapshots from S3, and runs the two integration
+# tests (`test/integration/easyocr.test.js` and
+# `test/integration/doctr.test.js`).
 #
-# Models are downloaded into `packages/ocr-ggml/models/` and exposed to
-# the test via `OCR_GGML_DETECTOR` / `OCR_GGML_RECOGNIZER` env vars.
-# The recognizer used in CI is `latin_g2.gguf` (Latin-script CRNN, which
-# also handles English glyphs); `english_g2.gguf` is downloaded by the
-# recursive `s3 cp` but currently not exercised by any test case.
+# Models are downloaded into `packages/ocr-ggml/models/` (one flat dir —
+# EasyOCR and Doctr filenames don't collide) and exposed to the tests
+# via these env vars:
 #
-# Doctr GGUFs are not yet distributed; the Doctr code path inside the
-# smoke test auto-skips when the corresponding env vars are unset.
+#   EasyOCR pipeline:
+#     OCR_GGML_DETECTOR        models/craft_mlt_25k.gguf
+#     OCR_GGML_RECOGNIZER      models/latin_g2.gguf
+#                              (Latin-script CRNN — also handles English
+#                              glyphs; `english_g2.gguf` is downloaded
+#                              by the recursive `s3 cp` but not currently
+#                              exercised by any test case)
+#
+#   Doctr pipeline:
+#     OCR_GGML_DOCTR_DETECTOR    models/db_mobilenet_v3_large.gguf
+#     OCR_GGML_DOCTR_RECOGNIZER  models/crnn_mobilenet_v3_small.gguf
+#
+# When a new snapshot is published, bump the date segment in the two
+# `aws s3 cp` commands below.
 
 on:
   workflow_dispatch:
@@ -137,15 +149,16 @@ jobs:
           sudo apt update
           sudo apt install -y g++-13
 
-      # EasyOCR GGUFs live in S3 under a date-stamped snapshot directory.
-      # Bump the date here when a new snapshot is published.
+      # EasyOCR + Doctr GGUFs live in S3 under date-stamped snapshot
+      # directories. Bump the date segments below when new snapshots are
+      # published.
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
 
-      - name: Download EasyOCR GGUF model files
+      - name: Download EasyOCR + Doctr GGUF model files
         working-directory: ${{ inputs.workdir || env.PKG_DIR }}
         shell: bash
         run: |
@@ -154,13 +167,13 @@ jobs:
             "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ocr/gguf/easyocr/2026-05-14/" \
             models/ \
             --recursive
+          aws s3 cp \
+            "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ocr/gguf/doctrf16/2026-05-15/" \
+            models/ \
+            --recursive
           ls -lh models/
 
-      # Doctr GGUFs (DBNet + CRNN-mobilenet) are not yet in S3; the Doctr
-      # integration tests auto-skip when OCR_GGML_DOCTR_DETECTOR /
-      # OCR_GGML_DOCTR_RECOGNIZER are unset. Add those env entries below
-      # once the Doctr models land in S3.
-      - name: Run integration test
+      - name: Run integration tests
         working-directory: ${{ inputs.workdir || env.PKG_DIR }}
         shell: bash
         run: npm run test:integration
@@ -168,3 +181,5 @@ jobs:
           QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
           OCR_GGML_DETECTOR: models/craft_mlt_25k.gguf
           OCR_GGML_RECOGNIZER: models/latin_g2.gguf
+          OCR_GGML_DOCTR_DETECTOR: models/db_mobilenet_v3_large.gguf
+          OCR_GGML_DOCTR_RECOGNIZER: models/crnn_mobilenet_v3_small.gguf
