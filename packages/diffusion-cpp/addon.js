@@ -245,22 +245,19 @@ class SdInterface {
   /**
    * Helper: fill missing dimensions from image buffer, preserving explicit values.
    *
-   * Passes the image's *actual* pixel dimensions through verbatim. We
-   * deliberately do NOT silently round up to a multiple of 8 here, because:
+   * Rounds the auto-detected dimensions up to the nearest multiple of 8.
+   * The native SdGenHandlers validates width/height % 8 == 0 *before* the
+   * downstream alignment in SdModel::processImage gets a chance to run,
+   * so passing raw image dimensions (e.g. 500x627 for the bundled
+   * assets/von-neumann.jpg) makes img2img calls fail with:
+   *   "height must be a positive multiple of 8, got: 627"
    *
-   *   - The image SDEdit path in SdModel::processImage independently aligns
-   *     and resizes init_image to a multiple of 8 (see the alignedW/alignedH
-   *     branch around SdModel.cpp:600), so any rounding done here would be
-   *     redundant on the image path.
-   *   - The FLUX/FLUX2 multi-reference path uses generate_image()'s
-   *     auto_resize_ref_image, which also handles alignment internally.
-   *   - The video path in SdModel::processVideo strict-compares the decoded
-   *     init/end/control frames against vid.width/vid.height -- if we round
-   *     up here (e.g. 100 -> 104) but hand processVideo a 100x100 decoded
-   *     frame, the dimension check throws an error citing 104x104 (a value
-   *     the caller never passed). VideoStableDiffusion._runInternal now
-   *     rejects off-grid init/end/control images at the JS layer instead,
-   *     pointing the caller at the exact mismatched dimensions.
+   * The image path is the only consumer that hits this: the FLUX/FLUX2
+   * multi-reference path uses generate_image()'s auto_resize_ref_image
+   * internally, and the video path (VideoStableDiffusion._runInternal)
+   * pre-validates off-grid init/end/control frames at the JS layer and
+   * rejects them with a clear caller-facing error before this helper
+   * runs, so the ceil() here is a no-op on aligned video inputs.
    *
    * @private
    */
@@ -270,8 +267,9 @@ class SdInterface {
     const dims = readImageDimensions(buf)
     if (!dims) return
 
-    if (!params.width) params.width = dims.width
-    if (!params.height) params.height = dims.height
+    const align8 = (n) => Math.ceil(n / 8) * 8
+    if (!params.width) params.width = align8(dims.width)
+    if (!params.height) params.height = align8(dims.height)
   }
 
   /**
