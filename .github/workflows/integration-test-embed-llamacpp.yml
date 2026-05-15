@@ -78,6 +78,12 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
 
+      - name: Cache HF integration test models
+        if: startsWith(matrix.runner, 'qvac-')
+        uses: ./.github/actions/cache-hf-models
+        with:
+          package: embed-llamacpp
+
       - name: Install NPM dependencies
         working-directory: ${{ env.WORKDIR }}
         run: |

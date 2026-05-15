@@ -1,0 +1,41 @@
+name: Cache HuggingFace integration test models
+description: |
+  Caches an addon's integration test model directory (default
+  packages/<package>/test/model) on the Hetzner self-hosted Linux/Windows
+  x64 runners (`qvac-*` labels). Callers should gate with
+  `if: startsWith(matrix.runner, 'qvac-')` so macOS / GH-hosted ARM jobs
+  are left untouched. Tracks QVAC-18795.
+
+inputs:
+  package:
+    description: Package directory name under `packages/` (e.g. `llm-llamacpp`).
+    required: true
+  cache-version:
+    description: Bump to invalidate every cached entry for this addon.
+    required: false
+    default: v1
+  paths:
+    description: |
+      Optional multi-line override for cached paths. Supports
+      `actions/cache` exclude patterns (lines starting with `!`).
+    required: false
+    default: ''
+  hash-files-glob:
+    description: |
+      Optional override for the glob folded into the cache key. Defaults
+      to all `.js` files under the package's `test/integration/` tree,
+      where the current set of HF-pulling addons declare model URLs.
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Cache HuggingFace integration test models
+      uses: actions/cache@v4
+      with:
+        path: ${{ inputs.paths != '' && inputs.paths || format('packages/{0}/test/model', inputs.package) }}
+        key: hf-models-${{ inputs.package }}-${{ inputs.cache-version }}-${{ hashFiles(inputs.hash-files-glob != '' && inputs.hash-files-glob || format('packages/{0}/test/integration/**/*.js', inputs.package)) }}
+        restore-keys: |
+          hf-models-${{ inputs.package }}-${{ inputs.cache-version }}-
+        enableCrossOsArchive: true
