@@ -12,7 +12,7 @@ QVAC="node ${BATS_TEST_DIRNAME}/../dist/index.js"
 setup_file() {
   export FILE_TMPDIR="${BATS_FILE_TMPDIR}"
 
-  for name in default auth nocors; do
+  for name in default auth nocors puburl; do
     local dir="${FILE_TMPDIR}/${name}"
     mkdir -p "${dir}"
     echo '{"serve":{"models":{"fake-transcribe":{"type":"whispercpp-transcription","src":"hyper://example.invalid/model","preload":false}}}}' > "${dir}/qvac.config.json"
@@ -30,7 +30,11 @@ setup_file() {
   ${QVAC} serve openai -p 19922 &
   echo "$!" > "${FILE_TMPDIR}/pid_nocors"
 
-  for port in 19920 19922; do
+  cd "${FILE_TMPDIR}/puburl"
+  ${QVAC} serve openai -p 19923 --public-base-url "http://127.0.0.1:19923" &
+  echo "$!" > "${FILE_TMPDIR}/pid_puburl"
+
+  for port in 19920 19922 19923; do
     for _ in $(seq 1 20); do
       curl -sf "http://127.0.0.1:${port}/v1/models" >/dev/null 2>&1 && break
       sleep 0.25
@@ -43,10 +47,21 @@ setup_file() {
     [[ "${code}" == "401" ]] && break
     sleep 0.25
   done
+
+  # Minimal 1x1 PNG for multipart /v1/images/edits tests.
+  node -e "
+    const fs = require('fs');
+    const p = '${FILE_TMPDIR}/tiny.png';
+    const b = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      'base64'
+    );
+    fs.writeFileSync(p, b);
+  "
 }
 
 teardown_file() {
-  for name in default auth nocors; do
+  for name in default auth nocors puburl; do
     local pid_file="${BATS_FILE_TMPDIR}/pid_${name}"
     [[ -f "${pid_file}" ]] && kill "$(cat "${pid_file}")" 2>/dev/null || true
   done
@@ -403,6 +418,196 @@ http_status() {
   body=$(curl -s "http://127.0.0.1:19920/v1/audio/translations" \
     -F "model=nonexistent" -F "file=@/dev/null;filename=audio.wav")
   assert_error "${body}" "model_not_found"
+}
+
+# ── Serve: images generations validation (JSON) ───────────────────────
+
+@test "images generations: missing model returns 400" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/images/generations" \
+    -H "Content-Type: application/json" \
+    -d '{"prompt":"a red square"}')
+  assert_error "${body}" "missing_model"
+}
+
+@test "images generations: invalid response_format returns 400" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/images/generations" \
+    -H "Content-Type: application/json" \
+    -d '{"model":"x","prompt":"a red square","response_format":"png"}')
+  assert_error "${body}" "invalid_response_format"
+}
+
+@test "images generations: unknown model returns 404" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/images/generations" \
+    -H "Content-Type: application/json" \
+    -d '{"model":"nonexistent","prompt":"a red square"}')
+  assert_error "${body}" "model_not_found"
+}
+
+@test "images generations: response_format=url without publicBaseUrl returns 400" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/images/generations" \
+    -H "Content-Type: application/json" \
+    -d '{"model":"x","prompt":"a red square","response_format":"url"}')
+  assert_error "${body}" "unsupported_response_format"
+}
+
+@test "images generations: output_format=jpeg returns 400 unsupported_output_format" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/images/generations" \
+    -H "Content-Type: application/json" \
+    -d '{"model":"x","prompt":"p","output_format":"jpeg"}')
+  assert_error "${body}" "unsupported_output_format"
+}
+
+@test "images generations: output_compression returns 400 unsupported_output_compression" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/images/generations" \
+    -H "Content-Type: application/json" \
+    -d '{"model":"x","prompt":"p","output_compression":80}')
+  assert_error "${body}" "unsupported_output_compression"
+}
+
+@test "images generations: background returns 400 unsupported_background" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/images/generations" \
+    -H "Content-Type: application/json" \
+    -d '{"model":"x","prompt":"p","background":"transparent"}')
+  assert_error "${body}" "unsupported_background"
+}
+
+# ── Serve: images edits validation (multipart) ──────────────────────────
+
+@test "images edits: JSON body returns 400 invalid_content_type" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/images/edits" \
+    -H "Content-Type: application/json" \
+    -d '{"model":"test","prompt":"hi"}')
+  assert_error "${body}" "invalid_content_type"
+}
+
+@test "images edits: missing image returns 400" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/images/edits" \
+    -F "model=test" -F "prompt=make it blue")
+  assert_error "${body}" "missing_image"
+}
+
+@test "images edits: mask file returns 400 mask_not_supported" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/images/edits" \
+    -F "image=@${FILE_TMPDIR}/tiny.png" \
+    -F "mask=@${FILE_TMPDIR}/tiny.png" \
+    -F "model=test" -F "prompt=hi")
+  assert_error "${body}" "mask_not_supported"
+}
+
+@test "images edits: missing model returns 400" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/images/edits" \
+    -F "image=@${FILE_TMPDIR}/tiny.png" -F "prompt=make it blue")
+  assert_error "${body}" "missing_model"
+}
+
+@test "images edits: invalid response_format returns 400" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/images/edits" \
+    -F "image=@${FILE_TMPDIR}/tiny.png" \
+    -F "model=nonexistent" \
+    -F "prompt=make it blue" \
+    -F "response_format=png")
+  assert_error "${body}" "invalid_response_format"
+}
+
+@test "images edits: response_format=url without publicBaseUrl returns 400" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/images/edits" \
+    -F "image=@${FILE_TMPDIR}/tiny.png" \
+    -F "model=x" -F "prompt=p" -F "response_format=url")
+  assert_error "${body}" "unsupported_response_format"
+}
+
+@test "images edits: output_format=jpeg returns 400 unsupported_output_format" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/images/edits" \
+    -F "image=@${FILE_TMPDIR}/tiny.png" \
+    -F "model=x" -F "prompt=p" -F "output_format=jpeg")
+  assert_error "${body}" "unsupported_output_format"
+}
+
+@test "images edits: background returns 400 unsupported_background" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/images/edits" \
+    -F "image=@${FILE_TMPDIR}/tiny.png" \
+    -F "model=x" -F "prompt=p" -F "background=transparent")
+  assert_error "${body}" "unsupported_background"
+}
+
+@test "images edits: unknown model returns 404" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/images/edits" \
+    -F "image=@${FILE_TMPDIR}/tiny.png" \
+    -F "model=nonexistent" \
+    -F "prompt=make it blue")
+  assert_error "${body}" "model_not_found"
+}
+
+@test "images edits: stream=true is not rejected before model lookup (parity with /images/generations)" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/images/edits" \
+    -F "image=@${FILE_TMPDIR}/tiny.png" \
+    -F "model=nonexistent" \
+    -F "prompt=p" -F "stream=true")
+  assert_error "${body}" "model_not_found"
+}
+
+# ── Serve: images on the publicBaseUrl-enabled server (port 19923) ────
+
+@test "images generations: response_format=url is ACCEPTED when publicBaseUrl is set (then 404 on unknown model)" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19923/v1/images/generations" \
+    -H "Content-Type: application/json" \
+    -d '{"model":"nonexistent","prompt":"p","response_format":"url"}')
+  assert_error "${body}" "model_not_found"
+}
+
+# ── Serve: files content-download endpoint (no models needed) ────────
+
+@test "GET /v1/files/:id/content returns 404 for unknown id" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/files/file-deadbeef/content")
+  assert_error "${body}" "file_not_found"
+}
+
+@test "GET /v1/files/:id/content returns the bytes after a POST /v1/files upload" {
+  local upload
+  upload=$(curl -s "http://127.0.0.1:19920/v1/files" \
+    -F "file=@${FILE_TMPDIR}/tiny.png" -F "purpose=image_generation")
+  local id
+  id=$(echo "${upload}" | jq -r '.id')
+  [[ "${id}" =~ ^file- ]]
+
+  local out="${FILE_TMPDIR}/dl-${RANDOM}.bin"
+  local code
+  code=$(curl -s -o "${out}" -w "%{http_code}" "http://127.0.0.1:19920/v1/files/${id}/content")
+  [[ "${code}" == "200" ]]
+  cmp -s "${out}" "${FILE_TMPDIR}/tiny.png"
+}
+
+@test "GET /v1/files/:id/content sets Cache-Control private with bounded max-age" {
+  local upload
+  upload=$(curl -s "http://127.0.0.1:19920/v1/files" \
+    -F "file=@${FILE_TMPDIR}/tiny.png" -F "purpose=image_generation")
+  local id
+  id=$(echo "${upload}" | jq -r '.id')
+  local headers
+  headers=$(curl -s -D- -o /dev/null "http://127.0.0.1:19920/v1/files/${id}/content")
+  [[ "${headers}" =~ [Cc]ache-[Cc]ontrol:\ private,\ max-age=([0-9]+) ]]
+  local max_age=${BASH_REMATCH[1]}
+  [[ "${max_age}" -gt 0 ]]
+  [[ "${max_age}" -le 3600 ]]
 }
 
 # ── Serve: routing ────────────────────────────────────────────────────
