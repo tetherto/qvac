@@ -25,6 +25,7 @@ import {
 import { buildDownloadProfilingFields } from "@/server/rpc/handlers/load-model/types";
 import {
   ConfigReloadNotSupportedError,
+  InferenceCancelledError,
   ModelTypeMismatchError,
   ModelIsDelegatedError,
   ModelNotFoundError,
@@ -34,6 +35,11 @@ import {
 } from "@/utils/errors-server";
 import { getServerLogger } from "@/logging";
 import { getPlugin } from "@/server/plugins";
+import {
+  getRequestRegistry,
+  withRequestContext,
+} from "@/server/bare/runtime";
+import { generateServerRequestId } from "@/server/bare/runtime/request-id";
 
 const logger = getServerLogger();
 
@@ -56,6 +62,19 @@ export async function handleLoadModel(
     | { enabled?: boolean; id?: string }
     | undefined;
   const profilingEnabled = profilingMeta?.enabled !== false && !!profilingMeta;
+
+  const requestId = request.requestId ?? generateServerRequestId();
+  // The handler `modelId` is derived from the config hash below — it
+  // isn't known until after `resolveConfig` runs. The registry context
+  // is opened with `modelId: undefined` so a cancel-by-modelId fired
+  // before the load completes is a clean no-op (rather than matching a
+  // half-built entry). Cancel-by-`requestId` works from `begin(...)` on.
+  await using ctx = getRequestRegistry().begin({
+    requestId,
+    kind: "loadModel",
+  });
+  const log = withRequestContext(getServerLogger(), ctx);
+  log.debug(`loadModel start modelSrc=${String(modelSrc ?? "")}`);
 
   try {
     const plugin = getPlugin(canonicalModelType);
@@ -86,6 +105,12 @@ export async function handleLoadModel(
       progressCallback,
       seed,
       profilingEnabled,
+      signal: ctx.signal,
+      requestBinding: {
+        signal: ctx.signal,
+        scope: ctx.scope,
+        requestId,
+      },
     });
 
     const primaryResolve = session.resolvePrimaryModelPath(modelSrc);
@@ -109,6 +134,16 @@ export async function handleLoadModel(
     } catch (error) {
       session.cancelAll();
       throw error;
+    }
+
+    // Phase boundary between download and load. The bare load path
+    // (`plugin.createModel(...)` / `model.load(false)`) does not accept
+    // an abort signal today, so the only honest cancel hook here is the
+    // pre-load gate: if cancel arrived during download / resolveConfig,
+    // surface `InferenceCancelledError` before sinking time into the
+    // addon work.
+    if (ctx.signal.aborted) {
+      throw new InferenceCancelledError(requestId);
     }
 
     const configStr = canonicalConfigString(
@@ -153,6 +188,19 @@ export async function handleLoadModel(
       profilingEnabled ? { collectTiming: true } : undefined,
     );
 
+    // Load phase soft-cancel limitation: `plugin.createModel(...)` and
+    // `model.load(false)` ran without a signal. A cancel that arrived
+    // during the load phase has just landed in the registry but the
+    // model is now loaded and registered. Surface
+    // `InferenceCancelledError` so the caller's promise rejects
+    // consistently — even though the model state is the "loaded"
+    // post-condition. The orphan-model edge case is a known
+    // limitation that requires a per-load cancel surface on the addon
+    // to fix end-to-end.
+    if (ctx.signal.aborted) {
+      throw new InferenceCancelledError(requestId);
+    }
+
     const response: LoadModelResponse = {
       type: "loadModel",
       success: true,
@@ -191,6 +239,16 @@ export async function handleLoadModel(
 
     return response;
   } catch (error) {
+    // `InferenceCancelledError` rides the rejection path verbatim: the
+    // client side wants a typed cancel error on the promise it `await`s,
+    // not a `{ success: false, error }` envelope that surfaces as a
+    // generic `ModelLoadFailedError`. Every other error keeps the
+    // legacy `success: false` shape for backward compat with consumers
+    // that switch on the envelope.
+    if (error instanceof InferenceCancelledError) {
+      log.info(`loadModel cancelled requestId=${requestId}`);
+      throw error;
+    }
     logger.error("Error loading model:", error);
     return {
       type: "loadModel",

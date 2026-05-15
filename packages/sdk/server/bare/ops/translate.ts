@@ -18,6 +18,12 @@ import {
   ModelNotFoundError,
   ModelTypeMismatchError,
 } from "@/utils/errors-server";
+import {
+  getRequestRegistry,
+  withRequestContext,
+} from "@/server/bare/runtime";
+import { generateServerRequestId } from "@/server/bare/runtime/request-id";
+import { getServerLogger } from "@/logging";
 
 export function getLanguage(code: string | undefined): string {
   if (!code) return "";
@@ -62,6 +68,7 @@ function shouldSkipPerCallSampling(modelName: string | undefined): boolean {
 
 export async function* translate(
   params: TranslateParams,
+  requestId?: string,
 ): AsyncGenerator<string, { modelExecutionMs: number; stats?: TranslationStats }, unknown> {
   const { modelId, text, modelType: inputModelType } = params;
 
@@ -92,6 +99,39 @@ export async function* translate(
   const fromLanguage = getLanguage(from);
   const toLanguage = getLanguage(to);
 
+  // Open a request-scoped lifecycle for both engine branches. LLM-
+  // translate inherits llamacpp-completion's `{ scope: "model",
+  // hard: true }` cancel surface; NMT-translate inherits nmtcpp's
+  // `{ scope: "none" }` — so the addon-cancel wiring below only
+  // engages on the LLM path. NMT cancel is purely soft: the loop
+  // exits on `signal.aborted`, scope unwinds, and the addon may run
+  // to completion in the background — acceptable because the result
+  // is dropped either way.
+  await using ctx = getRequestRegistry().begin({
+    requestId: requestId ?? generateServerRequestId(),
+    kind: "translate",
+    modelId,
+  });
+  const requestLogger = withRequestContext(getServerLogger(), ctx);
+
+  if (isLlm) {
+    const onAbort = () => {
+      const addon = model.addon;
+      if (addon?.cancel) {
+        addon.cancel.call(addon).catch((err: unknown) => {
+          requestLogger.warn(
+            `[cancel] addon.cancel() rejected during abort for modelId=${modelId}: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        });
+      }
+    };
+    ctx.signal.addEventListener("abort", onAbort, { once: true });
+    if (ctx.signal.aborted) onAbort();
+    ctx.scope.defer(() => {
+      ctx.signal.removeEventListener("abort", onAbort);
+    });
+  }
+
   // Check if input is an array and model type is NMT
   if (
     Array.isArray(text) &&
@@ -104,8 +144,16 @@ export async function* translate(
     );
     const modelExecutionMs = nowMs() - modelStart;
 
+    // Soft-cancel boundary: if `cancel({ requestId })` landed while
+    // the addon was running the batch, bail before yielding anything.
+    // The addon may have completed its work; the result is dropped.
+    if (ctx.signal.aborted) {
+      return { modelExecutionMs };
+    }
+
     // Yield each translation with a newline separator
     for (let i = 0; i < translations.length; i++) {
+      if (ctx.signal.aborted) break;
       const translation = translations[i]!;
       yield translation;
       if (i < translations.length - 1) {
@@ -159,6 +207,7 @@ export async function* translate(
   ) {
     const llmResponse = response as unknown as LlmResponse;
     for await (const token of llmResponse.iterate()) {
+      if (ctx.signal.aborted) break;
       yield token;
     }
     const modelExecutionMs = nowMs() - modelStart;
@@ -175,6 +224,7 @@ export async function* translate(
 
   const nmtResponse = response as unknown as NmtResponse;
   for await (const token of nmtResponse.iterate()) {
+    if (ctx.signal.aborted) break;
     yield token;
   }
   const modelExecutionMs = nowMs() - modelStart;

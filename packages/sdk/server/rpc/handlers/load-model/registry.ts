@@ -464,6 +464,7 @@ export async function downloadModelFromRegistry(
       return modelPath;
     },
     progressCallback,
+    hooks?.requestBinding,
   );
 
   return applyJoinedDownloadStats(result, hooks);
