@@ -57,11 +57,15 @@ try {
         const pct = total > 0 ? Math.round((current / total) * 100) : 0;
         console.log(`   [${stage}] ${current}/${total} (${pct}%)`);
 
-        // Cancel during embedding stage after a few updates
+        // Cancel during embedding stage after a few updates. In 0.11.0
+        // the rag-by-workspace cancel arm was removed in favour of the
+        // generic `cancel({ modelId, kind })` broad-cancel — the rag
+        // handler registers on the worker `RequestRegistry`, so the
+        // generic surface is enough.
         if (!cancelled && stage === "embedding" && current > 10) {
           console.log("\n🛑 Triggering cancellation...\n");
           cancelled = true;
-          void cancel({ operation: "rag", workspace: WORKSPACE });
+          void cancel({ modelId, kind: "rag" });
         }
       },
     });

@@ -39,7 +39,7 @@ export interface RagSearchResult {
 }
 
 interface SDKModule {
-  loadModel: (opts: { modelSrc: string; modelType: string; modelConfig: Record<string, unknown> }) => Promise<string>
+  loadModel: (opts: { modelSrc: string; modelType: string; modelConfig: Record<string, unknown> }) => Promise<string> & { requestId: string }
   unloadModel: (opts: { modelId: string }) => Promise<void>
   completion: (opts: {
     modelId: string
@@ -48,9 +48,10 @@ interface SDKModule {
     tools?: SDKTool[]
     generationParams?: SDKGenerationParams
     responseFormat?: SDKResponseFormat
-  }) => Promise<CompletionResult>
-  embed: (opts: { modelId: string; text: string | string[] }) => Promise<{ embedding: number[] | number[][]; stats?: Record<string, unknown> }>
-  transcribe: (opts: { modelId: string; audioChunk: string | Buffer; prompt?: string }) => Promise<string>
+  }) => CompletionResult
+  embed: (opts: { modelId: string; text: string | string[] }) => Promise<{ embedding: number[] | number[][]; stats?: Record<string, unknown> }> & { requestId: string }
+  transcribe: (opts: { modelId: string; audioChunk: string | Buffer; prompt?: string }) => Promise<string> & { requestId: string }
+  cancel: (opts: { requestId: string } | { operation: "request"; requestId: string } | { operation: "broad"; modelId: string; kind?: string }) => Promise<void>
   diffusion: (opts: SDKDiffusionParams) => SDKDiffusionResult
   ragListWorkspaces: () => Promise<RagWorkspaceInfo[]>
   ragSearch: (opts: {
@@ -133,6 +134,7 @@ export interface CompletionRunStats {
 }
 
 export interface CompletionResult {
+  requestId: string
   text: Promise<string>
   stats: Promise<CompletionRunStats | undefined>
   toolCalls: Promise<SDKToolCall[] | null>
@@ -248,16 +250,33 @@ export async function sdkCompletion (opts: {
   if (opts.responseFormat) {
     params['responseFormat'] = opts.responseFormat
   }
+  // `completion(...)` returns a `CompletionRun` synchronously — the
+  // client-generated `requestId` is reachable on the result before any
+  // network round-trip, which is what the CLI cancel bridge in
+  // `routes/chat.ts` depends on to bind `req.on('close')` immediately.
   return completion(params as Parameters<SDKModule['completion']>[0])
+}
+
+export interface SDKEmbedRun {
+  requestId: string
+  result: Promise<number[] | number[][]>
 }
 
 export async function sdkEmbed (opts: {
   modelId: string
   text: string | string[]
-}): Promise<number[] | number[][]> {
+}): Promise<SDKEmbedRun> {
   const { embed } = await getSDK()
-  const { embedding } = await embed({ modelId: opts.modelId, text: opts.text })
-  return embedding
+  const op = embed({ modelId: opts.modelId, text: opts.text })
+  return {
+    requestId: op.requestId,
+    result: op.then((r) => r.embedding)
+  }
+}
+
+export interface SDKTranscribeRun {
+  requestId: string
+  result: Promise<string>
 }
 
 export async function sdkTranscribe (opts: {
@@ -265,7 +284,7 @@ export async function sdkTranscribe (opts: {
   audioChunk: Buffer
   fileName: string
   prompt?: string | undefined
-}): Promise<string> {
+}): Promise<SDKTranscribeRun> {
   const fs = await import('node:fs')
   const os = await import('node:os')
   const path = await import('node:path')
@@ -275,16 +294,33 @@ export async function sdkTranscribe (opts: {
   const tmpFile = path.join(os.tmpdir(), `qvac-audio-${id}${ext}`)
   fs.writeFileSync(tmpFile, opts.audioChunk)
 
-  try {
-    const { transcribe } = await getSDK()
-    return await transcribe({
-      modelId: opts.modelId,
-      audioChunk: tmpFile,
-      ...(opts.prompt && { prompt: opts.prompt })
-    })
-  } finally {
+  const { transcribe } = await getSDK()
+  const op = transcribe({
+    modelId: opts.modelId,
+    audioChunk: tmpFile,
+    ...(opts.prompt && { prompt: opts.prompt })
+  })
+
+  // Tie tempfile cleanup to the promise resolution so the synchronous
+  // `requestId` surface stays usable while the underlying transcription
+  // is still in flight.
+  const result = op.finally(() => {
     try { fs.unlinkSync(tmpFile) } catch {}
-  }
+  })
+
+  return { requestId: op.requestId, result }
+}
+
+/**
+ * Targeted cancel by `requestId`. The CLI's per-route disconnect bridges
+ * (`routes/chat.ts`, `routes/embeddings.ts`, `routes/transcriptions.ts`)
+ * call this when the HTTP client disconnects mid-stream so the
+ * underlying SDK request stops running on the worker. Fire-and-forget
+ * from the listener — never `await` inside `req.on('close')`.
+ */
+export async function sdkCancel (opts: { requestId: string }): Promise<void> {
+  const { cancel } = await getSDK()
+  await cancel({ requestId: opts.requestId })
 }
 
 export interface SDKDiffusionRunResult {
