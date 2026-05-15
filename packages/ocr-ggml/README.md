@@ -267,9 +267,8 @@ case only when the corresponding GGUFs are present on disk:
 
 | Env var | Pipeline | Required for which test |
 |---|---|---|
-| `OCR_GGML_DETECTOR` | EasyOCR + Latin | both EasyOCR cases |
-| `OCR_GGML_RECOGNIZER` | EasyOCR | English-recognizer case |
-| `OCR_GGML_RECOGNIZER_LATIN` | EasyOCR | Latin-recognizer case |
+| `OCR_GGML_DETECTOR` | EasyOCR | EasyOCR case |
+| `OCR_GGML_RECOGNIZER` | EasyOCR | EasyOCR case (CI uses `latin_g2.gguf`) |
 | `OCR_GGML_DOCTR_DETECTOR` | Doctr | Doctr case |
 | `OCR_GGML_DOCTR_RECOGNIZER` | Doctr | Doctr case |
 | `OCR_GGML_IMAGE` | — | overrides the default sample image |
@@ -278,7 +277,7 @@ CI sets these automatically; locally you can:
 
 ```bash
 OCR_GGML_DETECTOR=$PWD/models/craft_mlt_25k.gguf \
-OCR_GGML_RECOGNIZER=$PWD/models/english_g2.gguf \
+OCR_GGML_RECOGNIZER=$PWD/models/latin_g2.gguf \
 npm run test:integration
 ```
 
