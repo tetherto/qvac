@@ -5,7 +5,9 @@ import {
   unloadModel,
   heartbeat,
   cancel,
+  downloadAsset,
   LLAMA_3_2_1B_INST_Q4_0,
+  OCR_CYRILLIC_RECOGNIZER,
 } from "@qvac/sdk";
 import {
   BaseExecutor,
@@ -183,13 +185,22 @@ export class DelegatedInferenceExecutor extends BaseExecutor<typeof allTests> {
 
   async cancelDelegatedDownload(): Promise<TestResult> {
     return this.withProvider(async ({ publicKey }) => {
+      // 0.11.0 cancel surface is requestId-based; delegated routing is bound
+      // to the requestId via the registry rather than carried on the wire.
+      // Kick off a delegated downloadAsset to obtain a real requestId (the
+      // begin will fail same-process with DELEGATE_CONNECTION_FAILED, which
+      // is fine — we only need the synchronously-exposed `op.requestId`),
+      // then issue `cancel({ requestId })` and assert the cancel routes
+      // through the delegation path (same expected failure mode).
+      const op = downloadAsset({
+        assetSrc: OCR_CYRILLIC_RECOGNIZER,
+        delegate: { providerPublicKey: publicKey, timeout: DEFAULT_DELEGATE_TIMEOUT },
+      });
+      void op.catch(() => {});
+
       try {
-        await cancel({
-          operation: "downloadAsset",
-          downloadKey: "nonexistent-delegated-download",
-          delegate: { providerPublicKey: publicKey, timeout: DEFAULT_DELEGATE_TIMEOUT },
-        });
-        return { passed: true, output: "Cancel delegated download API accepted" };
+        await cancel({ requestId: op.requestId });
+        return { passed: true, output: "Delegated cancel by requestId accepted" };
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
 
