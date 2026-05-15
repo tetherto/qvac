@@ -198,12 +198,18 @@ export const diffusionPlugin = definePlugin({
       requestSchema: diffusionRequestSchema,
       responseSchema: diffusionStreamResponseSchema,
       streaming: true,
+      // sdcpp diffusion exposes a model-wide hard cancel — compute
+      // is interrupted on the currently-running generation.
+      cancel: { scope: "model", hard: true },
       handler: diffusion,
     }),
     upscaleStream: defineHandler({
       requestSchema: upscaleRequestSchema,
       responseSchema: upscaleStreamResponseSchema,
       streaming: true,
+      // sdcpp upscale path has no cancel surface today — SDK falls
+      // back to soft-cancel.
+      cancel: { scope: "none" },
       handler: upscale,
     }),
   },

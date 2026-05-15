@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.21.0] - 2026-05-13
+
+This release is a pure internal C++ refactor of the addon: the LoRA finetuning pipeline now lives in its own `LlamaFinetuner` class instead of inside `LlamaModel`. There are no JS API changes and no behaviour changes — finetune training, pause/resume, and adapter save go through exactly the same code paths.
+
+## Internals (no behaviour change)
+
+### `LlamaFinetuner` split out of `LlamaModel`
+
+`LlamaModel` previously owned both the inference path and the entire LoRA finetune pipeline (training loop, dataset prep, optimizer/scheduler, pause/resume checkpoint state). All of that finetune-only state and ~20 private helpers have been moved into a dedicated `LlamaFinetuner` class. `LlamaModel` exposes it via a `finetuner()` accessor and delegates the in-`process()` finetune dispatch to `finetuner_.finetune(...)`. Lifetime is guaranteed by composition (the finetuner is declared last and destroyed first), so callers don't need to think about ownership.
+
+`FinetuneTerminalResult` and the `ProgressCallback` alias move with the implementation; `FinetuneConfigOverrides` stays on `LlamaModel` because `reload()` / `tuneConfigMap()` on the inference path still consume it. Method bodies, locking, and the `STANDALONE_TEST_BUILD` guards are all preserved verbatim — this is a pure move, intended to make lifetime and locking on the finetune path easier to reason about and to unblock follow-up cleanups (collapsible clear/pause helpers, dropping the `friend class LlamaFinetuner` once the remaining cross-class accesses get small accessors).
+
+### Deprecated `llama_adapter_lora_free` deleter dropped on resume
+
+The resume path previously attached a custom deleter that called `llama_adapter_lora_free`, which is deprecated upstream ("adapters are now freed together with the associated model"). That deleter was the source of the three `-Wdeprecated-declarations` warnings called out in 0.20.0. Adapters in current llama.cpp are tied to the model's lifetime, and the surrounding `reload(FinetuneConfigOverrides{})` calls on both the happy and error paths already destroy and rebuild the model, so the explicit free is unnecessary and the warnings are gone.
+
+### Misc
+
+- `AddonJs.hpp` now goes through `llamaModel->finetuner().{isFinetuneRunning,requestPause,waitUntilFinetuningPauseComplete}()` and uses `LlamaFinetuner::ProgressCallback`.
+- `CMakeLists.txt` compiles `LlamaFinetuner.cpp` into both the addon and the `cli_tool` targets.
+
+## Pull Requests
+
+- [#1996](https://github.com/tetherto/qvac/pull/1996) - QVAC-18793: split LlamaFinetuner out of LlamaModel
+
 ## [0.20.1] - 2026-05-11
 
 ### Fixed
@@ -16,6 +41,7 @@ The addon now identifies MedPsy models via the GGUF `general.basename` metadata 
 After the fix, MedPsy self-identifies correctly at runtime (e.g. `"I'm MedPsy, a medical and healthcare AI assistant developed by QVAC."`).
 
 The new `qvac_lib_inference_addon_llama::utils::isMedPsyBasename` and `isMedPsyModel` helpers are unit-tested for null, empty, exact match, mixed case, and near-miss strings such as `MedPsy-7B` and `NotMedPsy`.
+
 
 ## [0.20.0] - 2026-05-10
 
