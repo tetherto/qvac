@@ -131,7 +131,7 @@ jobs:
   run-integration-tests:
     if: ${{ inputs.run_integration_tests != false }}
     continue-on-error: true
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
     name: test-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.os_version && format('-{0}', matrix.os_version) || '' }}-${{ matrix.variant }}
     permissions:
@@ -143,26 +143,22 @@ jobs:
       matrix:
         # Only darwin-arm64 (macos-14-xlarge) runs all Chatterbox quantization variants; others use q4 only.
         include:
-          - {os: ubuntu-22.04, variant: q4, platform: linux, arch: x64, os_version: u22}
-          - {os: ubuntu-24.04, variant: q4, platform: linux, arch: x64, os_version: u24}
+          - {os: ubuntu-22.04, runner: qvac-ubuntu2204-x64-gpu, variant: q4, platform: linux, arch: x64, os_version: u22}
+          - {os: ubuntu-24.04, runner: qvac-ubuntu2404-x64-gpu, variant: q4, platform: linux, arch: x64, os_version: u24}
           - {os: ubuntu-24.04-arm, variant: q4, platform: linux, arch: arm64, os_version: u24}
           - {os: macos-14-xlarge, variant: fp32, platform: darwin, arch: arm64, os_version: m14}
           - {os: macos-14-xlarge, variant: fp16, platform: darwin, arch: arm64, os_version: m14}
           - {os: macos-14-xlarge, variant: q4, platform: darwin, arch: arm64, os_version: m14}
           - {os: macos-14-xlarge, variant: q4f16, platform: darwin, arch: arm64, os_version: m14}
           - {os: macos-15-large, variant: q4, platform: darwin, arch: x64, os_version: m15}
-          - {os: windows-2022, variant: q4, platform: win32, arch: x64, os_version: w22,}
+          - {os: windows-2025, runner: qvac-win25-x64-gpu, variant: q4, platform: win32, arch: x64, os_version: w25,}
 
     steps:
       - name: Setup Node.js
+        if: matrix.platform == 'darwin' || matrix.arch == 'arm64'
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
-
-      - name: Windows - enable git long paths
-        if: ${{ matrix.platform == 'win32' }}
-        shell: bash
-        run: git config --system core.longpaths true
 
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -181,7 +177,15 @@ jobs:
         working-directory: ${{ inputs.workdir }}
         run: |
           npm install
+  
+      - name: Install bare tooling (arm64 and macos)
+        if: matrix.arch == 'arm64' || matrix.platform == 'darwin'
+        run: |
           npm install -g bare bare-make
+
+      - name: Add bare tooling to PATH (Linux x64)
+        if: (matrix.platform == 'linux' && matrix.arch == 'x64')
+        run: echo "/usr/local/nvm/versions/node/v20.20.2/bin" >> $GITHUB_PATH
 
       - name: Download prebuilds from artifact
         if: ${{ !inputs.prebuild_package }}
@@ -195,13 +199,15 @@ jobs:
         working-directory: ${{ inputs.workdir }}
         shell: bash
         run: |
-          mkdir -p prebuilds
-          npm pack ${{ inputs.prebuild_package }} --pack-destination /tmp
-          tar -xzf /tmp/*.tgz -C /tmp
-          cp -r /tmp/package/prebuilds/* prebuilds/
+          mkdir -p prebuilds "${{ runner.temp }}/tmp"
+          rm -f "${{ runner.temp }}/tmp"/*.tgz
+          rm -rf "${{ runner.temp }}/tmp/package"
+          npm pack ${{ inputs.prebuild_package }} --pack-destination "${{ runner.temp }}/tmp"
+          tar -xzf "${{ runner.temp }}/tmp"/*.tgz -C "${{ runner.temp }}/tmp"
+          cp -r "${{ runner.temp }}/tmp"/package/prebuilds/* prebuilds/
 
       - name: Linux - install dependencies
-        if: matrix.platform == 'linux' || matrix.platform == 'android'
+        if: (matrix.platform == 'linux' || matrix.platform == 'android') && matrix.arch == 'arm64'
         shell: bash
         run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
 
@@ -240,26 +246,35 @@ jobs:
           - os: ubuntu-22.04
             platform: linux
             arch: x64
-            runner_label: ubuntu-22.04
+            runner_label: qvac-ubuntu2204-x64
             device_label: ubuntu-22.04-x64
             backend: cpu
             use_gpu: false
             run_python: false
             round_trip_test: true
-          - os: ai-run-linux-gpu
+          - os: ubuntu-24.04
             platform: linux
             arch: x64
-            runner_label: ai-run-linux-gpu
-            device_label: ai-run-linux-gpu
+            runner_label: qvac-ubuntu2404-x64
+            device_label: ubuntu-24.04-x64
             backend: cpu
             use_gpu: false
             run_python: false
             round_trip_test: true
-          - os: ai-run-linux-gpu
+          - os: ubuntu-22.04
             platform: linux
             arch: x64
-            runner_label: ai-run-linux-gpu
-            device_label: ai-run-linux-gpu
+            runner_label: qvac-ubuntu2204-x64-gpu
+            device_label: ubuntu-22.04-x64-gpu
+            backend: cuda
+            use_gpu: true
+            run_python: false
+            round_trip_test: true
+          - os: ubuntu-24.04
+            platform: linux
+            arch: x64
+            runner_label: qvac-ubuntu2404-x64-gpu
+            device_label: ubuntu-24.04-x64-gpu
             backend: cuda
             use_gpu: true
             run_python: false
@@ -291,20 +306,20 @@ jobs:
             use_gpu: true
             run_python: false
             round_trip_test: true
-          - os: windows-2022
+          - os: windows-2025
             platform: win32
             arch: x64
-            runner_label: windows-2022
-            device_label: windows-2022-x64
+            runner_label: qvac-win25-x64
+            device_label: windows-2025-x64
             backend: cpu
             use_gpu: false
             run_python: false
             round_trip_test: false
-          - os: windows-2022
+          - os: windows-2025
             platform: win32
             arch: x64
-            runner_label: windows-2022
-            device_label: windows-2022-x64
+            runner_label: qvac-win25-x64-gpu
+            device_label: windows-2025-x64-gpu
             backend: directml
             use_gpu: true
             run_python: false
@@ -312,19 +327,16 @@ jobs:
 
     steps:
       - name: Setup Node.js
+        if: matrix.platform == 'darwin' || matrix.arch == 'arm64'
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
 
       - name: Set up Python
+        if: (matrix.platform == 'linux' || matrix.platform == 'darwin') && matrix.arch == 'arm64'
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
         with:
           python-version: '3.14'
-
-      - name: Windows - enable git long paths
-        if: ${{ matrix.platform == 'win32' }}
-        shell: bash
-        run: git config --system core.longpaths true
 
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -390,7 +402,15 @@ jobs:
         working-directory: ${{ inputs.workdir }}
         run: |
           npm install
+
+      - name: Install bare tooling (arm64 and macos)
+        if: matrix.arch == 'arm64' || matrix.platform == 'darwin'
+        run: |
           npm install -g bare bare-make
+
+      - name: Add bare tooling to PATH (Linux x64)
+        if: (matrix.platform == 'linux' && matrix.arch == 'x64')
+        run: echo "/usr/local/nvm/versions/node/v20.20.2/bin" >> $GITHUB_PATH
 
       - name: Download prebuilds from artifact
         if: ${{ !inputs.prebuild_package }}
@@ -404,10 +424,12 @@ jobs:
         working-directory: ${{ inputs.workdir }}
         shell: bash
         run: |
-          mkdir -p prebuilds
-          npm pack ${{ inputs.prebuild_package }} --pack-destination /tmp
-          tar -xzf /tmp/*.tgz -C /tmp
-          cp -r /tmp/package/prebuilds/* prebuilds/
+          mkdir -p prebuilds "${{ runner.temp }}/tmp"
+          rm -f "${{ runner.temp }}/tmp"/*.tgz
+          rm -rf "${{ runner.temp }}/tmp/package"
+          npm pack ${{ inputs.prebuild_package }} --pack-destination "${{ runner.temp }}/tmp"
+          tar -xzf "${{ runner.temp }}/tmp"/*.tgz -C "${{ runner.temp }}/tmp"
+          cp -r "${{ runner.temp }}/tmp"/package/prebuilds/* prebuilds/
 
       - name: Download prebuilds from package (Windows)
         if: ${{ inputs.prebuild_package && matrix.platform == 'win32' }}
@@ -415,13 +437,14 @@ jobs:
         shell: powershell
         run: |
           New-Item -ItemType Directory -Force -Path prebuilds | Out-Null
-          npm pack ${{ inputs.prebuild_package }} --pack-destination $env:TEMP
-          $tgz = Get-ChildItem "$env:TEMP\*.tgz" | Select-Object -First 1
-          tar -xzf $tgz.FullName -C $env:TEMP
-          Copy-Item -Path "$env:TEMP\package\prebuilds\*" -Destination prebuilds -Recurse -Force
+          New-Item -ItemType Directory -Force -Path "${{ runner.temp }}\tmp" | Out-Null
+          npm pack ${{ inputs.prebuild_package }} --pack-destination "${{ runner.temp }}\tmp"
+          $tgz = Get-ChildItem "${{ runner.temp }}\tmp\*.tgz" | Select-Object -First 1
+          tar -xzf $tgz.FullName -C "${{ runner.temp }}\tmp"
+          Copy-Item -Path "${{ runner.temp }}\tmp\package\prebuilds\*" -Destination prebuilds -Recurse -Force
 
       - name: Linux - install runtime dependencies
-        if: ${{ matrix.platform == 'linux' }}
+        if: ${{ matrix.platform == 'linux' && matrix.arch == 'arm64' }}
         shell: bash
         run: |
           sudo apt-get update
@@ -441,11 +464,15 @@ jobs:
         working-directory: ${{ inputs.workdir }}/benchmarks/server
         run: npm run setup:supertonic
 
+      - name: Install Python pip, setuptools and wheel (arm64 and macos)
+        if: matrix.arch == 'arm64' || matrix.platform == 'darwin'
+        run: |
+          pip install --upgrade pip setuptools wheel
+
       - name: Install Python server dependencies
         if: ${{ inputs.supertonic_run_python && matrix.run_python }}
         working-directory: ${{ inputs.workdir }}/benchmarks/python-server
         run: |
-          pip install --upgrade pip setuptools wheel
           pip install -r requirements-supertonic.txt
 
       - name: Install benchmark client dependencies (Unix)
@@ -453,7 +480,6 @@ jobs:
         working-directory: ${{ inputs.workdir }}/benchmarks/client
         shell: bash
         run: |
-          pip install --upgrade pip setuptools wheel
           pip install -r requirements.txt
           if [ "${{ matrix.round_trip_test && 'true' || 'false' }}" = "true" ]; then
             pip install -r requirements-roundtrip.txt
@@ -464,7 +490,6 @@ jobs:
         working-directory: ${{ inputs.workdir }}/benchmarks/client
         shell: powershell
         run: |
-          pip install --upgrade pip setuptools wheel
           pip install -r requirements.txt
           if ("${{ matrix.round_trip_test && 'true' || 'false' }}" -eq "true") {
             pip install -r requirements-roundtrip.txt

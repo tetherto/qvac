@@ -1,0 +1,178 @@
+name: Integration Tests (GGML Classification)
+
+on:
+  workflow_dispatch:
+    inputs:
+      prebuild_package:
+        description: "NPM package containing prebuilds (e.g. @qvac/classification-ggml@0.1.0)"
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      ref:
+        description: "ref"
+        type: string
+        required: false
+      repository:
+        type: string
+        required: false
+        default: "tetherto/qvac"
+      workdir:
+        description: "Working directory inside the repo (monorepo package path)"
+        type: string
+        required: false
+        default: "packages/classification-ggml"
+      prebuild_package:
+        description: "NPM package containing prebuilds (e.g. @qvac/classification-ggml@0.1.0). When set, prebuilds are downloaded from npm instead of from per-PR build artifacts."
+        type: string
+        required: false
+
+env:
+  PKG_DIR: packages/classification-ggml
+
+jobs:
+  run-integration-tests:
+    timeout-minutes: 30
+    runs-on: ${{ matrix.os }}
+    environment: release
+    name: ${{ matrix.platform }}-${{ matrix.arch }}-integration-tests
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
+          - os: ubuntu-24.04
+            platform: linux
+            arch: x64
+          - os: ubuntu-22.04-arm
+            platform: linux
+            arch: arm64
+          - os: macos-14
+            platform: darwin
+            arch: arm64
+          - os: windows-2022
+            platform: win32
+            arch: x64
+
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Windows — enable git long paths
+        if: ${{ matrix.platform == 'win32' }}
+        shell: bash
+        run: git config --system core.longpaths true
+
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Setup Bare runtime
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@0bbdca93da303a0b1634ba14a89cec085621078d
+
+      - name: Install npm dependencies
+        working-directory: ${{ env.PKG_DIR }}
+        run: npm install --ignore-scripts
+
+      - name: Download prebuild artifacts
+        if: ${{ !inputs.prebuild_package }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: classification-ggml-${{ matrix.platform }}-${{ matrix.arch }}*
+          path: ${{ env.PKG_DIR }}/prebuilds
+          merge-multiple: true
+
+      - name: Download prebuilds from package (Linux/macOS)
+        if: ${{ inputs.prebuild_package && matrix.platform != 'win32' }}
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: |
+          PACKAGE="${{ inputs.prebuild_package }}"
+          echo "Downloading $PACKAGE from npm..."
+
+          if ! npm pack "$PACKAGE" --ignore-scripts; then
+            echo "ERROR: Failed to download $PACKAGE from npm"
+            echo "Please check that the package exists"
+            exit 1
+          fi
+
+          tar -xzf *.tgz
+
+          if [ ! -d "package/prebuilds" ]; then
+            echo "ERROR: No prebuilds directory found in package"
+            echo "The downloaded package may not contain prebuilt binaries"
+            exit 1
+          fi
+
+          mv package/prebuilds ./prebuilds
+          rm -rf package *.tgz
+
+          echo "Prebuilds downloaded from npm successfully"
+          ls -la prebuilds/
+
+      - name: Download prebuilds from package (Windows)
+        if: ${{ inputs.prebuild_package && matrix.platform == 'win32' }}
+        working-directory: ${{ env.PKG_DIR }}
+        shell: powershell
+        run: |
+          $PACKAGE = "${{ inputs.prebuild_package }}"
+          echo "Downloading $PACKAGE from npm..."
+
+          npm pack $PACKAGE --ignore-scripts
+          if ($LASTEXITCODE -ne 0) {
+            echo "ERROR: Failed to download $PACKAGE from npm"
+            echo "Please check that the package exists"
+            exit 1
+          }
+
+          $TARBALL = Get-ChildItem -Filter "*.tgz" | Select-Object -First 1 -ExpandProperty Name
+          if (-not $TARBALL) {
+            echo "ERROR: Could not find downloaded tarball"
+            exit 1
+          }
+
+          echo "Extracting $TARBALL..."
+          tar -xzf $TARBALL
+
+          if (-not (Test-Path "package/prebuilds")) {
+            echo "ERROR: No prebuilds directory found in package"
+            echo "The downloaded package may not contain prebuilt binaries"
+            exit 1
+          }
+
+          Move-Item package/prebuilds ./prebuilds
+          Remove-Item -Recurse -Force package
+          Remove-Item $TARBALL
+
+          echo "Prebuilds downloaded from npm successfully"
+          Get-ChildItem prebuilds/
+
+      - name: Run JS integration tests
+        working-directory: ${{ env.PKG_DIR }}
+        env:
+          # Opt in to the C++ per-inference trace so CI logs contain
+          # raw logits / probs / sorted results for every classification.
+          # Invaluable for debugging platform-specific numerical issues
+          # (noise is bounded to a few lines per sample image).
+          QVAC_CLASSIFICATION_TRACE: "1"
+        run: npm run test:integration
+
+      - name: Upload performance report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # 4.6.2
+        with:
+          name: classification-perf-report-${{ matrix.platform }}-${{ matrix.arch }}
+          path: ${{ env.PKG_DIR }}/test/results/performance-report.json
+          if-no-files-found: ignore
+          retention-days: 30

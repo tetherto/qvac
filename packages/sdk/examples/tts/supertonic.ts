@@ -31,7 +31,7 @@ try {
       language: "en",
       ttsSpeed: 1.05,
       ttsNumInferenceSteps: 5,
-      ttsSupertonicMultilingual: false, //false for English quality.
+      ttsSupertonicMultilingual: true,
       ttsTextEncoderSrc: TTS_SUPERTONIC2_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32.src,
       ttsDurationPredictorSrc: TTS_SUPERTONIC2_OFFICIAL_DURATION_PREDICTOR_SUPERTONE_FP32.src,
       ttsVectorEstimatorSrc: TTS_SUPERTONIC2_OFFICIAL_VECTOR_ESTIMATOR_SUPERTONE_FP32.src,

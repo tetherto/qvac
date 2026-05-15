@@ -161,6 +161,32 @@ export const transcriptionPromptEmpty: TestDefinition = {
   metadata: { category: "transcription", dependency: "whisper", estimatedDurationMs: 30000 },
 };
 
+export const transcriptionMetadataBatch: TestDefinition = {
+  testId: "transcription-metadata-batch",
+  params: { audioFileName: "transcription-short-wav.wav", metadata: true },
+  expectation: { validation: "function", fn: () => true },
+  metadata: {
+    category: "transcription",
+    dependency: "whisper",
+    estimatedDurationMs: 30000,
+  },
+};
+
+export const transcriptionMetadataStreaming: TestDefinition = {
+  testId: "transcription-metadata-streaming",
+  params: {
+    audioFileName: "diarization-sample-16k.wav",
+    trailingSilenceMs: 1500,
+    chunkMs: 100,
+  },
+  expectation: { validation: "function", fn: () => true },
+  metadata: {
+    category: "transcription",
+    dependency: "whisper",
+    estimatedDurationMs: 60000,
+  },
+};
+
 export const transcriptionTests = [
   transcriptionShortWav,
   transcriptionShortMp3,
@@ -177,4 +203,6 @@ export const transcriptionTests = [
   transcriptionPromptPunctuation,
   transcriptionWithoutPrompt,
   transcriptionPromptEmpty,
+  transcriptionMetadataBatch,
+  transcriptionMetadataStreaming,
 ];
