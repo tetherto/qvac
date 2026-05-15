@@ -240,7 +240,7 @@
     "bare-os": "^3.6.2",
     "bare-path": "^3.0.0",
     "bare-process": "^4.2.2",
-    "bare-rpc": "^1.0.0",
+    "bare-rpc": "^1.3.2",
     "bare-runtime": "^1.24.2",
     "bare-stream": "^2.7.0",
     "bare-subprocess": "^5.2.3",
