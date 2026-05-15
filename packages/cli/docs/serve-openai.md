@@ -19,6 +19,12 @@ This document describes the supported routes and how to configure `serve.models`
 | `POST` | `/v1/embeddings` | Embeddings |
 | `POST` | `/v1/audio/transcriptions` | Speech-to-text (source language) |
 | `POST` | `/v1/audio/translations` | Speech-to-text **into English** (Whisper translate task) |
+| `POST` | `/v1/images/generations` | Diffusion txt2img (blocking + SSE) |
+| `POST` | `/v1/images/edits` | Diffusion img2img (multipart; blocking + SSE) |
+| `POST` | `/v1/files` | Upload a file into the in-memory store (used by image URL responses + vector stores) |
+| `GET` | `/v1/files` | List in-memory files |
+| `GET` | `/v1/files/{id}` | File metadata |
+| `GET` | `/v1/files/{id}/content` | Stream the bytes (used by image `response_format=url`) |
 
 Other OpenAI routes may be added over time; this file is updated when they ship.
 
@@ -58,6 +64,148 @@ curl -sS http://127.0.0.1:11434/v1/responses \
   -H "Content-Type: application/json" \
   -d '{"model":"<alias>","input":"and now?","previous_response_id":"resp_..."}'
 ```
+
+## `POST /v1/images/generations` and `POST /v1/images/edits`
+
+OpenAI-compatible image routes backed by the SDK's `diffusion()` primitive. The two endpoints share the same validation, response shape, and error model; `/v1/images/edits` adds a multipart-only `image` (init image, img2img) and an optional `strength`.
+
+### Loaded model
+
+Both routes require an alias whose **endpoint category** is `image`. Built-in SDK addons that resolve to this category are `diffusion` and `sdcpp-generation`. Register a diffusion model in `serve.models` and (typically) `preload: true`:
+
+```json
+{
+  "serve": {
+    "models": {
+      "my-diffusion": {
+        "model": "SD_V2_1_1B_Q8_0",
+        "preload": true,
+        "config": { "prediction": "v" }
+      }
+    }
+  }
+}
+```
+
+> **Drop-in for OpenAI image clients:** alias an OpenAI image-model name (e.g. `gpt-image-2`, `dall-e-2`) to your loaded diffusion model so client SDKs that hard-code the OpenAI name work without code change.
+
+### Compatibility-driven hard fails
+
+This server is intentionally **loud** about every OpenAI image-API field it cannot honor without producing the wrong bytes. Every case below is a `400` with a stable `error.code` so an agent can branch on it instead of silently shipping the wrong output to a user.
+
+| HTTP | `error.code` | Trigger |
+|------|--------------|---------|
+| 400 | `mask_not_supported` | `/v1/images/edits` received a `mask` / `mask[]` field. The diffusion engine has no mask channel, so masked inpainting cannot be honored — it would silently re-render the entire image. Resend without `mask`. |
+| 400 | `unsupported_response_format` | `response_format=url` was requested but the server is not configured with `--public-base-url` (no way to mint a downloadable URL — see below). Use `response_format=b64_json`. |
+| 400 | `invalid_response_format` | Anything other than `b64_json` / `url`. |
+| 400 | `unsupported_output_format` | `output_format` other than `png`. The server only emits PNG. |
+| 400 | `unsupported_output_compression` | `output_compression` is set. Only meaningful with jpeg/webp, which we do not emit. |
+| 400 | `unsupported_background` | `background=transparent|opaque|auto`. The server has no alpha-channel control. |
+| 400 | `invalid_strength` | `/v1/images/edits` received a `strength` outside `[0, 1]` or a non-numeric value. |
+| 400 | `missing_prompt` / `missing_model` / `missing_image` | Required fields absent. |
+| 400 | `invalid_size` | `size` is not `"WIDTHxHEIGHT"` (multiples of 8) or `"auto"`. |
+| 400 | `invalid_n` | `n` is not a positive integer. |
+| 404 | `model_not_found` | Unknown alias. |
+| 400 | `invalid_model_type` | Alias is not an `image` model. |
+| 503 | `model_not_ready` | Model not loaded yet. |
+| 500 | `image_generation_error` / `image_edit_error` | SDK / engine failure. |
+
+The following OpenAI fields are **accepted and silently ignored** (a warning is logged) because they are advisory and would not change the bytes returned: `quality`, `style`, `moderation`, `partial_images`, `user`, `input_fidelity`.
+
+### `response_format`: `b64_json` (default) or `url`
+
+- **`b64_json`** (default) — `data[].b64_json` carries the inline base64 PNG. No server-side state.
+- **`url`** — requires `--public-base-url <origin>` (or `serve.publicBaseUrl` in the config). The image is stored in the in-memory ephemeral files store (`purpose: "image_generation"`, `Content-Type: image/png`) and `data[].url` resolves to `${publicBaseUrl}/v1/files/{id}/content`. Each item also carries `expires_at` (Unix seconds) so clients know exactly when the URL stops working.
+
+> **Caveat — URL mode + `--api-key`:** when bearer auth is enabled, `<img src="…">` cannot render the URL because browsers do not attach `Authorization` to image requests. Either run the server without `--api-key` for URL mode, or have the client fetch the bytes itself (`Authorization` header) and re-host them. Cleaner solutions (per-file URL tokens, presigned redirects) are tracked as follow-up.
+
+### Streaming (`stream: true`)
+
+Both routes support SSE streaming. The response is `text/event-stream` and emits one `image_generation.completed` event per generated image (always carrying inline `b64_json`, regardless of the requested `response_format`), then `[DONE]`.
+
+> The SDK does not surface intermediate image bytes (only step ticks via `progressStream`), so we do not produce `image_generation.partial_image` events. This matches OpenAI's documented behavior for `partial_images: 0`.
+
+### Ephemeral files store (used by URL responses)
+
+Generated images live in process memory only — no disk, no P2P. Defaults: **1 h TTL**, **256 MB** total cap, **256 files** cap, oldest-first eviction. Every eviction logs a `warn` line with the reason (`ttl` / `max_files` / `max_bytes`) so operators can see when caps bite. `GET /v1/files/{id}/content` sets `Cache-Control: private, max-age=<seconds-until-eviction>` so downstream proxies cannot serve bytes the store has dropped.
+
+### Examples
+
+**`b64_json` (default), text-to-image:**
+
+```bash
+curl -sS http://127.0.0.1:11434/v1/images/generations \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "my-diffusion",
+    "prompt": "a watercolor cat at golden hour",
+    "size": "1024x1024",
+    "n": 1
+  }'
+```
+
+```json
+{
+  "created": 1718000000,
+  "output_format": "png",
+  "size": "1024x1024",
+  "data": [{ "b64_json": "iVBORw0KGgoAAAANSUhEUgAA..." }]
+}
+```
+
+**`url` mode (server started with `--public-base-url`):**
+
+```bash
+qvac serve openai --public-base-url "https://api.example.com"
+```
+
+```bash
+curl -sS https://api.example.com/v1/images/generations \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "my-diffusion",
+    "prompt": "a watercolor cat",
+    "response_format": "url"
+  }'
+```
+
+```json
+{
+  "created": 1718000000,
+  "output_format": "png",
+  "data": [
+    {
+      "url": "https://api.example.com/v1/files/file-abcd…/content",
+      "expires_at": 1718003600
+    }
+  ]
+}
+```
+
+**`/v1/images/edits` (img2img, multipart):**
+
+```bash
+curl -sS http://127.0.0.1:11434/v1/images/edits \
+  -F "image=@input.png" \
+  -F "model=my-diffusion" \
+  -F "prompt=oil painting style, warm lighting" \
+  -F "strength=0.65"
+```
+
+Response shape matches `/v1/images/generations`.
+
+### Multipart edits — accepted fields
+
+| Field | Description |
+|-------|-------------|
+| `image` (or `image[]`) | Source image file. **Required.** If multiple files are sent, only the first is used (warning logged). |
+| `model`, `prompt` | Same as JSON variants. **Required.** |
+| `size` | `"WIDTHxHEIGHT"` (multiples of 8) or `"auto"`. |
+| `n` | Positive integer. |
+| `seed` | Integer. |
+| `strength` | SD/SDXL img2img strength in `[0, 1]`. Out-of-range or non-numeric → `400 invalid_strength`. |
+| `response_format` | `b64_json` (default) or `url` (requires `--public-base-url`). |
+| `stream` | When `true`, response is `text/event-stream` (see Streaming above). |
 
 ## `POST /v1/audio/translations`
 
