@@ -29,7 +29,7 @@ const logger = getServerLogger();
  * internal server-side callers that want to know whether anything
  * landed.
  *
- * The M1-era pre-registry addon-cancel fallback was removed in M3d
+ * The legacy pre-registry addon-cancel fallback was removed in 0.11.0
  * once every handler had been migrated onto the registry; the function
  * now does exactly one thing — a registry walk.
  */

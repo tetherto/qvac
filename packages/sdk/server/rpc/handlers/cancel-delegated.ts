@@ -15,9 +15,10 @@ type DelegationTarget = {
 /**
  * Resolve the delegated provider for a cancel request, if any.
  *
- * After M3d the cancel envelope has only two operations. Only `broad`
- * cancels delegate at the cancel layer — see `isCancelDelegated` in
- * `handler-registry.ts` for the policy and the rationale.
+ * After the 0.11.0 wire-schema collapse the cancel envelope has only
+ * two operations. Only `broad` cancels delegate at the cancel layer —
+ * see `isCancelDelegated` in `handler-registry.ts` for the policy and
+ * the rationale.
  *
  * The targeted `request` arm is handled locally because the registry
  * is worker-singleton and already holds the entry for delegated

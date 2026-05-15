@@ -61,7 +61,7 @@ function isModelDelegated(request: Request): boolean {
 /**
  * Should the cancel be forwarded to a delegated provider?
  *
- * After the M3d wire-schema collapse the cancel envelope has two
+ * After the 0.11.0 wire-schema collapse the cancel envelope has two
  * operations:
  *
  *  - `request` — targeted cancel by `requestId`. Always handled

@@ -92,8 +92,8 @@ type ErrorReconstructor = (response: ErrorResponse) => Error;
  * `response.name`. That value is the SCREAMING_SNAKE_CASE error-code
  * name from `sdk-errors-server.ts` (`"REQUEST_REJECTED_BY_POLICY"`),
  * **not** the JS class name (`"RequestRejectedByPolicyError"`). The
- * mismatch was a 0.11.0 bring-up bug fixed in M3d alongside the
- * reconstructor unit tests in `rpc-error-reconstruct.test.ts`.
+ * mismatch was a 0.11.0 bring-up bug fixed alongside the reconstructor
+ * unit tests in `rpc-error-reconstruct.test.ts`.
  *
  * **Maintenance contract.** Every new cross-RPC server-thrown typed
  * error class added in `errors-server.ts` adds a row here in the same

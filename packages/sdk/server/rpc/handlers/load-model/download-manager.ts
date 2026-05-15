@@ -319,7 +319,7 @@ export function startOrJoinDownload(
  * otherwise — the cancel handler treats both cases identically (the
  * registry cancel still fires) and the return value is informational.
  *
- * Added in M3d to support `cancel({ requestId, clearCache: true })`
+ * Added in 0.11.0 to support `cancel({ requestId, clearCache: true })`
  * for download requests after the wire schema collapse removed the
  * `{ operation: "downloadAsset", downloadKey, clearCache }` arm. The
  * subscriber is the unit of `clearCache` even though the flag lives on

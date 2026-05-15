@@ -74,17 +74,16 @@ const cancelByRequestIdParamsSchema = z.object({
  * non-`requestId` cancel surface for model-unload, app-shutdown, and
  * admin sweeps where the caller doesn't have a `requestId` to hand.
  *
- * Replaces the M2-era per-kind discriminator arms (`"inference"`,
+ * Replaces the legacy per-kind discriminator arms (`"inference"`,
  * `"embeddings"`, `"downloadAsset"`, `"rag"`) with a single `"broad"`
  * arm plus an optional `kind` field. The old arms went away as part
- * of the M3d release-gate cleanup once every handler was on the
- * registry; the wire shape collapse is a `[bc]` for any external
- * caller hand-rolling the old RPC envelope. The public-API
- * `cancel(...)` function in `client/api/cancel.ts` keeps the old
- * `{ operation: "inference", modelId }` / `{ operation: "embeddings", modelId }`
- * forms callable and translates them into this new shape at the
- * client boundary, so consumers using the official SDK client see no
- * change.
+ * of the 0.11.0 cleanup once every handler was on the registry; the
+ * wire shape collapse is a `[bc]` for any external caller hand-rolling
+ * the old RPC envelope. The public-API `cancel(...)` function in
+ * `client/api/cancel.ts` keeps the old `{ operation: "inference", modelId }`
+ * / `{ operation: "embeddings", modelId }` forms callable and translates
+ * them into this new shape at the client boundary, so consumers using
+ * the official SDK client see no change.
  */
 const cancelBroadParamsSchema = z.object({
   operation: z.literal("broad").describe("Operation type"),

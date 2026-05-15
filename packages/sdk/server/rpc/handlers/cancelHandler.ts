@@ -8,8 +8,8 @@ const logger = getServerLogger();
 
 /**
  * Cancel RPC entry point. The 5-arm `switch (request.operation)`
- * dispatcher that lived here through 0.10.x was retired in 0.11.0
- * (M3d): every long-running handler now registers itself on the
+ * dispatcher that lived here through 0.10.x was retired in 0.11.0:
+ * every long-running handler now registers itself on the
  * worker-singleton `RequestRegistry`, so the cancel surface narrows to
  * two paths that route through the same registry primitive:
  *
