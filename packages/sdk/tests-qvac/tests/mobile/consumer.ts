@@ -398,6 +398,13 @@ export const executor = createExecutor({
       ], "OCR disabled on iOS (ONNX/CoreML OOM)"),
       new SkipExecutor(/^translation-afriquegemma-/, "AfriqueGemma 4B (~2.7 GB) exceeds iOS memory budget"),
     ] : []),
+    // TODO(QVAC-18941): drop once `holepunchto/bare-rpc` null-guards `_onstreamopen` (race crashes duplex `transcribeStream` under the full Android suite).
+    ...(Platform.OS === "android" ? [
+      new SkipExecutor(
+        /^(transcription-metadata-streaming|transcribe-stream-events-.+)$/,
+        "Android: bare-rpc duplex stream crash — QVAC-18941",
+      ),
+    ] : []),
 
     // Real executors
     new ModelLoadingExecutor(resources),

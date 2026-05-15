@@ -217,7 +217,14 @@ export const llmPlugin = definePlugin({
       requestSchema: finetuneRequestSchema,
       responseSchema: finetuneResponseSchema,
       streaming: false,
-      cancel: { scope: "none" },
+      // Reality matches addon: llama.cpp exposes `model.cancel()` for
+      // the running finetune job, so we flip from `scope: "none"` to
+      // `{ scope: "model", hard: true }`. The `startFinetune` op
+      // forwards the registry's abort signal to that call; the broad
+      // `cancel({ modelId, kind: "finetune" })` and legacy
+      // `cancelFinetune(modelId)` paths both flow through the
+      // registry.
+      cancel: { scope: "model", hard: true },
 
       handler: function (request) {
         return finetune(request);
@@ -231,7 +238,7 @@ export const llmPlugin = definePlugin({
       cancel: { scope: "model", hard: true },
 
       handler: async function* (request) {
-        const stream = translate(request);
+        const stream = translate(request, request.requestId);
         try {
           let result = await stream.next();
 

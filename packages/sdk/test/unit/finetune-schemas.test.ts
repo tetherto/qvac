@@ -16,6 +16,35 @@ test("finetuneValidationSchema: defaults split validation fraction", (t) => {
   t.is(result.type === "split" ? result.fraction : undefined, 0.05);
 });
 
+test("finetuneRequestSchema: accepts an optional requestId on the run shape", (t) => {
+  const baseOptions = {
+    trainDatasetDir: "/tmp/train.jsonl",
+    validation: { type: "none" as const },
+    outputParametersDir: "/tmp/out",
+  };
+  const result = finetuneRequestSchema.safeParse({
+    type: "finetune",
+    modelId: "m1",
+    options: baseOptions,
+    requestId: "req-1",
+  });
+  t.is(result.success, true);
+});
+
+test("finetuneRequestSchema: requestId is optional for run requests", (t) => {
+  const baseOptions = {
+    trainDatasetDir: "/tmp/train.jsonl",
+    validation: { type: "none" as const },
+    outputParametersDir: "/tmp/out",
+  };
+  const result = finetuneRequestSchema.safeParse({
+    type: "finetune",
+    modelId: "m1",
+    options: baseOptions,
+  });
+  t.is(result.success, true);
+});
+
 test("finetuneRequestSchema: accepts run, state, and control operations", (t) => {
   const baseOptions = {
     trainDatasetDir: "/tmp/train.jsonl",
