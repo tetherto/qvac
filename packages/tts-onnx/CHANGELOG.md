@@ -27,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `decodeUtf8`/`encodeCodepoint` are now `static` utility methods; long loops split into focused helpers (`detectSequenceLength`, `extractLeadingBits`, `decodeCodepointAt`, `isContentNode`, `hasReading`, `appendNodeReading`, `buildHiraganaFromNodes`).
 - `package.json` no longer ships any `dict/` folder; the npm tarball stays slim and consumers are expected to materialize a MeCab dictionary out-of-band (e.g. via `scripts/build_mecab_dict.py`).
 - Debug `std::cerr` traces in `ChatterboxEngine.cpp` and `ChatterboxTextPreprocessor.cpp` replaced with `QLOG`/`QLOG_DEBUG` so production stderr stays clean and verbose tracing only compiles in debug builds.
-- Windows linker workaround `/FORCE:MULTIPLE` replaced with targeted `/NODEFAULTLIB:libcmt` and `/NODEFAULTLIB:libcmtd` so duplicate-symbol conflicts from the MeCab static library are resolved by removing the static CRT instead of being silently masked.
+- Windows `/FORCE:MULTIPLE` linker flag kept on the module target but now documented with the exact symbol it resolves: `mecab.lib(libmecab.obj)` and `bare_delay_load.lib(delay-load.c.obj)` both define `DllMain`. The mecab stub is unused; the bare delay-load entry point is required to dispatch `/DELAYLOAD:bare.exe` / `/DELAYLOAD:qvac__onnx.bare`, and it appears first in the link line so `/FORCE:MULTIPLE` deterministically keeps it. Tracking the cleaner upstream fix (patching the mecab port in `qvac-registry-vcpkg` to drop its `DllMain` on static builds) separately so this PR stays scoped to the addon.
 
 ### Fixed
 

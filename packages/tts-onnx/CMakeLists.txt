@@ -263,11 +263,19 @@ if(WIN32)
     PRIVATE
       msvcrt.lib
   )
+  # mecab.lib and bare_delay_load.lib both export DllMain. mecab's
+  # libmecab.cpp:45 defines a stub that returns TRUE; bare_delay_load defines
+  # the real entry point used to dispatch the /DELAYLOAD:bare.exe and
+  # /DELAYLOAD:qvac__onnx.bare imports the module relies on. bare_delay_load.lib
+  # is listed before mecab.lib in the link line, so /FORCE:MULTIPLE makes the
+  # linker pick the bare_delay_load DllMain and discard the mecab stub. The
+  # clean upstream fix is to patch the mecab port in qvac-registry-vcpkg to
+  # skip DllMain on static builds; until that lands we keep this targeted
+  # override for Windows.
   target_link_options(
     ${inference-tts}_module
     PRIVATE
-      /NODEFAULTLIB:libcmt
-      /NODEFAULTLIB:libcmtd
+      /FORCE:MULTIPLE
   )
 endif()
 
