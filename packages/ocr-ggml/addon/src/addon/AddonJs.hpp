@@ -182,7 +182,10 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
     config.backendsDir = optBackendsDir->as<std::string>(env);
   }
 
-  std::string pipelineType = "doctr";
+  // Default matches the JS / TS / CLI / README contract: EasyOCR is the
+  // primary pipeline; callers opt in to Doctr explicitly via
+  // `params.pipelineType: 'doctr'`.
+  std::string pipelineType = "easyocr";
   if (auto optPipeline =
           args1.getOptionalProperty<js::String>(env, "pipelineType");
       optPipeline) {
