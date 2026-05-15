@@ -60,8 +60,10 @@ export const cancelThenResumeKvCache: TestDefinition = {
   params: {
     cacheKey: "cancel-then-resume-kvcache",
     firstUserMessage: "Tell me a long story about wizards.",
-    secondUserMessage: "What is 2+2? Answer with just the number.",
-    expectedAnswerContains: "4",
+    // Repeat-word is the safest deterministic assertion: small chat models follow it
+    // reliably, and `banana` is rare enough in filler text to avoid comparator false positives.
+    secondUserMessage: "Repeat this word: banana",
+    expectedAnswerContains: "banana",
     cancelAfterTokens: 3,
   },
   expectation: { validation: "function", fn: () => true },

@@ -115,10 +115,13 @@ export const embeddingsPlugin = definePlugin({
       cancel: { scope: "model", hard: true },
 
       handler: async function (request) {
-        const embedResult = await embed({
-          modelId: request.modelId,
-          text: request.text,
-        });
+        const embedResult = await embed(
+          {
+            modelId: request.modelId,
+            text: request.text,
+          },
+          request.requestId,
+        );
 
         return forwardModelExecution({
           type: "embed" as const,

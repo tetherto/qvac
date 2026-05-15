@@ -1,3 +1,4 @@
+import type { AbortSignal } from "bare-abort-controller";
 import type { RagRequest, RagResponse, RagProgressUpdate } from "@/schemas";
 import {
   chunk,
@@ -10,9 +11,17 @@ import {
   closeWorkspace,
   deleteWorkspace,
   DEFAULT_WORKSPACE,
-  registerRagOperation,
-  unregisterRagOperation,
+  getActiveRagRequest,
+  setActiveRagRequest,
+  clearActiveRagRequest,
 } from "@/server/bare/rag-hyperdb";
+import {
+  getRequestRegistry,
+  withRequestContext,
+  type ManagedRequestContext,
+} from "@/server/bare/runtime";
+import { generateServerRequestId } from "@/server/bare/runtime/request-id";
+import { getServerLogger } from "@/logging";
 import {
   profileReplyHandler,
   registerOperationMetrics,
@@ -48,10 +57,9 @@ registerOperationMetrics<
 function createHandlerOptions(
   operation: ProgressOperation,
   workspace: string,
+  signal: AbortSignal,
   onProgress?: (update: RagProgressUpdate) => void,
 ): HandlerOptions {
-  const signal = registerRagOperation(workspace, operation);
-
   const options: HandlerOptions = { signal };
 
   if (onProgress) {
@@ -77,6 +85,41 @@ function omitOnProgress<T extends Record<string, unknown>>(
   void onProgress;
   void withProgress;
   return rest;
+}
+
+/**
+ * Begin a registry-tracked RAG context with workspace-level pre-emption.
+ *
+ * Workspace-level admission lives in the dispatcher rather than as a
+ * registry policy primitive (it's a dispatch concern, not a registry
+ * `kind` admission rule). The sequence is **cancel-prior → begin-new**:
+ * if another RAG operation is already running on the same workspace,
+ * cancel it first, then begin the new context. Reversing the order
+ * would cancel the just-installed context.
+ *
+ * The workspace → requestId map is updated after `begin(...)` succeeds
+ * and cleared on scope unwind via `scope.defer(...)`, with a
+ * "still mine?" guard so an older op's deferred cleanup cannot stomp
+ * a newer op's mapping.
+ */
+function beginRagContext(
+  workspace: string,
+  requestId: string,
+): ManagedRequestContext {
+  const registry = getRequestRegistry();
+  const prev = getActiveRagRequest(workspace);
+  if (prev !== undefined && prev !== requestId) {
+    registry.cancel({ requestId: prev, reason: "rag-workspace-preempt" });
+  }
+  const ctx = registry.begin({
+    requestId,
+    kind: "rag",
+  });
+  setActiveRagRequest(workspace, requestId);
+  ctx.scope.defer(() => {
+    clearActiveRagRequest(workspace, requestId);
+  });
+  return ctx;
 }
 
 export async function handleRag(
@@ -105,45 +148,47 @@ async function handleRagInternal(
 
     case "ingest": {
       const workspace = request.workspace ?? DEFAULT_WORKSPACE;
+      const requestId = request.requestId ?? generateServerRequestId();
+      await using ctx = beginRagContext(workspace, requestId);
+      const log = withRequestContext(getServerLogger(), ctx);
+      log.debug("ingest start");
       const handlerOptions = createHandlerOptions(
         "ingest",
         workspace,
+        ctx.signal,
         onProgress,
       );
       const params = omitOnProgress(request);
-      try {
-        const result = await ingest(params, handlerOptions);
-        return {
-          type: "rag",
-          operation: request.operation,
-          success: true,
-          processed: result.processed,
-          droppedIndices: result.droppedIndices,
-        };
-      } finally {
-        unregisterRagOperation(workspace);
-      }
+      const result = await ingest(params, handlerOptions);
+      return {
+        type: "rag",
+        operation: request.operation,
+        success: true,
+        processed: result.processed,
+        droppedIndices: result.droppedIndices,
+      };
     }
 
     case "saveEmbeddings": {
       const workspace = request.workspace ?? DEFAULT_WORKSPACE;
+      const requestId = request.requestId ?? generateServerRequestId();
+      await using ctx = beginRagContext(workspace, requestId);
+      const log = withRequestContext(getServerLogger(), ctx);
+      log.debug("saveEmbeddings start");
       const handlerOptions = createHandlerOptions(
         "saveEmbeddings",
         workspace,
+        ctx.signal,
         onProgress,
       );
       const params = omitOnProgress(request);
-      try {
-        const processed = await saveEmbeddings(params, handlerOptions);
-        return {
-          type: "rag",
-          operation: request.operation,
-          success: true,
-          processed,
-        };
-      } finally {
-        unregisterRagOperation(workspace);
-      }
+      const processed = await saveEmbeddings(params, handlerOptions);
+      return {
+        type: "rag",
+        operation: request.operation,
+        success: true,
+        processed,
+      };
     }
 
     case "search": {
@@ -167,23 +212,24 @@ async function handleRagInternal(
 
     case "reindex": {
       const workspace = request.workspace ?? DEFAULT_WORKSPACE;
+      const requestId = request.requestId ?? generateServerRequestId();
+      await using ctx = beginRagContext(workspace, requestId);
+      const log = withRequestContext(getServerLogger(), ctx);
+      log.debug("reindex start");
       const handlerOptions = createHandlerOptions(
         "reindex",
         workspace,
+        ctx.signal,
         onProgress,
       );
       const params = omitOnProgress(request);
-      try {
-        const result = await reindex(params, handlerOptions);
-        return {
-          type: "rag",
-          operation: request.operation,
-          success: true,
-          result,
-        };
-      } finally {
-        unregisterRagOperation(workspace);
-      }
+      const result = await reindex(params, handlerOptions);
+      return {
+        type: "rag",
+        operation: request.operation,
+        success: true,
+        result,
+      };
     }
 
     case "listWorkspaces": {
