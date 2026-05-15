@@ -25,7 +25,11 @@ import {
   logResponsesUnsupportedParams,
   UnsupportedToolTypeError,
   InvalidResponsesConversationError,
-  InvalidResponsesBackgroundError
+  InvalidResponsesBackgroundError,
+  parseLegacyPrompt,
+  legacyPromptToHistory,
+  logLegacyUnsupportedParams,
+  InvalidPromptError
 } from '../src/serve/adapters/openai/translate.js'
 import type { VectorStoreMeta } from '../src/serve/adapters/openai/vector-stores-store.js'
 
@@ -904,5 +908,115 @@ describe('historyPrefixFromStoredResponse', () => {
       { role: 'user', content: 'bIn' }, { role: 'assistant', content: 'bOut' },
       { role: 'user', content: 'cIn' }, { role: 'assistant', content: 'cOut' }
     ])
+  })
+})
+
+describe('parseLegacyPrompt', () => {
+  it('returns a single prompt for a non-empty string', () => {
+    assert.deepEqual(parseLegacyPrompt('hello'), { kind: 'single', value: 'hello' })
+  })
+
+  it('unwraps a single-element string array to a single prompt', () => {
+    assert.deepEqual(parseLegacyPrompt(['hello']), { kind: 'single', value: 'hello' })
+  })
+
+  it('returns a multi prompt for arrays with two or more strings', () => {
+    assert.deepEqual(parseLegacyPrompt(['a', 'b']), { kind: 'multi', values: ['a', 'b'] })
+    assert.deepEqual(parseLegacyPrompt(['a', 'b', 'c']), { kind: 'multi', values: ['a', 'b', 'c'] })
+  })
+
+  it('throws on missing prompt', () => {
+    assert.throws(() => parseLegacyPrompt(undefined), InvalidPromptError)
+    assert.throws(() => parseLegacyPrompt(null), InvalidPromptError)
+  })
+
+  it('throws on empty string', () => {
+    assert.throws(() => parseLegacyPrompt(''), InvalidPromptError)
+  })
+
+  it('throws on empty array', () => {
+    assert.throws(() => parseLegacyPrompt([]), InvalidPromptError)
+  })
+
+  it('throws on array entries that are not strings (token IDs)', () => {
+    assert.throws(() => parseLegacyPrompt([1, 2, 3]), InvalidPromptError)
+    assert.throws(() => parseLegacyPrompt([[1, 2], [3, 4]]), InvalidPromptError)
+    assert.throws(() => parseLegacyPrompt(['ok', 7]), InvalidPromptError)
+  })
+
+  it('throws on numeric prompt (single token id)', () => {
+    assert.throws(() => parseLegacyPrompt(42), InvalidPromptError)
+  })
+
+  it('throws on array entry that is an empty string', () => {
+    assert.throws(() => parseLegacyPrompt(['ok', '']), InvalidPromptError)
+  })
+
+  it('throws on non-string, non-array, non-numeric prompt', () => {
+    assert.throws(() => parseLegacyPrompt({ text: 'oops' }), InvalidPromptError)
+    assert.throws(() => parseLegacyPrompt(true), InvalidPromptError)
+  })
+})
+
+describe('legacyPromptToHistory', () => {
+  it('wraps a string in a single-turn user history', () => {
+    assert.deepEqual(legacyPromptToHistory('hello'), [{ role: 'user', content: 'hello' }])
+  })
+})
+
+describe('logLegacyUnsupportedParams', () => {
+  function captureWarnings (body: Record<string, unknown>): string[] {
+    const warnings: string[] = []
+    const logger = {
+      info: () => {},
+      warn: (msg: string) => { warnings.push(msg) },
+      error: () => {},
+      debug: () => {}
+    } as unknown as Parameters<typeof logLegacyUnsupportedParams>[1]
+    logLegacyUnsupportedParams(body, logger)
+    return warnings
+  }
+
+  it('warns for legacy-only unsupported params', () => {
+    const warnings = captureWarnings({ echo: true, best_of: 3, suffix: 'end', user: 'u1' })
+    assert.equal(warnings.length, 4)
+    assert.ok(warnings.some((w) => w.includes('echo')))
+    assert.ok(warnings.some((w) => w.includes('best_of')))
+    assert.ok(warnings.some((w) => w.includes('suffix')))
+    assert.ok(warnings.some((w) => w.includes('user')))
+  })
+
+  it('warns for shared unsupported params (logprobs, stop, logit_bias, stream_options)', () => {
+    const warnings = captureWarnings({
+      logprobs: 5,
+      stop: ['\n'],
+      logit_bias: { '50256': -100 },
+      stream_options: { include_usage: true }
+    })
+    assert.ok(warnings.some((w) => w.includes('logprobs')))
+    assert.ok(warnings.some((w) => w.includes('stop')))
+    assert.ok(warnings.some((w) => w.includes('logit_bias')))
+    assert.ok(warnings.some((w) => w.includes('stream_options')))
+  })
+
+  it('warns when response_format is sent (legacy clients should not use it)', () => {
+    const warnings = captureWarnings({ response_format: { type: 'json_object' } })
+    assert.equal(warnings.length, 1)
+    assert.ok(warnings[0]!.includes('response_format'))
+  })
+
+  it('does not warn when n is 1 (default)', () => {
+    const warnings = captureWarnings({ n: 1 })
+    assert.equal(warnings.length, 0)
+  })
+
+  it('warns when n is greater than 1', () => {
+    const warnings = captureWarnings({ n: 4 })
+    assert.equal(warnings.length, 1)
+    assert.ok(warnings[0]!.includes('n=4'))
+  })
+
+  it('is silent for an empty body', () => {
+    assert.deepEqual(captureWarnings({}), [])
   })
 })

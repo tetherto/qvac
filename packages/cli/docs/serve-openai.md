@@ -12,6 +12,7 @@ This document describes the supported routes and how to configure `serve.models`
 | `GET` | `/v1/models/{id}` | Model metadata |
 | `DELETE` | `/v1/models/{id}` | Unload |
 | `POST` | `/v1/chat/completions` | Chat |
+| `POST` | `/v1/completions` | Legacy text completions (single + multi-prompt; blocking + SSE) |
 | `POST` | `/v1/responses` | Responses API (blocking + SSE streaming); volatile, see below |
 | `GET` | `/v1/responses/{id}` | Retrieve a stored response |
 | `DELETE` | `/v1/responses/{id}` | Delete a stored response |
@@ -27,6 +28,96 @@ This document describes the supported routes and how to configure `serve.models`
 | `GET` | `/v1/files/{id}/content` | Stream the bytes (used by image `response_format=url`) |
 
 Other OpenAI routes may be added over time; this file is updated when they ship.
+
+## `POST /v1/completions`
+
+Legacy (pre-chat) OpenAI text-completions endpoint, kept for compatibility with
+older OpenAI clients and SDKs that have not migrated to `/v1/chat/completions`.
+Backed by the same chat-category models and SDK `completion` capability as
+`/v1/chat/completions` — any alias registered with an endpoint category of
+`chat` in `serve.models` serves both endpoints with no extra configuration.
+
+> **Chat-template caveat.** The prompt is wrapped as a single `{ role: 'user' }`
+> chat turn before being fed to the SDK, so the model's chat template (system
+> prompt, role tags) still runs on every call. Legacy clients that expect raw
+> OpenAI text-completion semantics (no system prompt, no role formatting around
+> the prompt) will see template-shaped output. This is a deliberate
+> compatibility trade-off — QVAC has one chat-category capability, not a
+> raw-completion one. Use `/v1/chat/completions` directly if you need explicit
+> control over the message structure.
+
+### Prompt input
+
+- **String prompt** — blocking JSON or SSE streaming. Response object is
+  `text_completion` with `cmpl-` ids and `choices[0].text`.
+- **Single-element string array** — same as a string prompt.
+- **String array of length ≥ 2** (multi-prompt) — fanned out sequentially as
+  N independent completions and returned in `choices` with matching `index`.
+  Blocking only; combining with `"stream": true` returns
+  `400 unsupported_streaming`. Any single prompt failing aborts the whole
+  request — partial results are not emitted.
+- **Token-id prompts** (`number[]`, `number[][]`) and **empty / missing
+  prompts** — `400 invalid_prompt`.
+
+### Examples
+
+```bash
+# Blocking, single prompt
+curl -sS http://127.0.0.1:11434/v1/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"my-llm","prompt":"Say hello in one word.","max_tokens":16}'
+
+# Streaming (single prompt only)
+curl -sN http://127.0.0.1:11434/v1/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"my-llm","prompt":"Say hello in one word.","stream":true}'
+
+# Multi-prompt fan-out (blocking only; stream:true returns 400)
+curl -sS http://127.0.0.1:11434/v1/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"my-llm","prompt":["Reply with alpha.","Reply with beta."],"max_tokens":8}'
+```
+
+Blocking response shape (single prompt):
+
+```json
+{
+  "id": "cmpl-…",
+  "object": "text_completion",
+  "created": 1718000000,
+  "model": "my-llm",
+  "choices": [
+    { "text": "Hello", "index": 0, "logprobs": null, "finish_reason": "stop" }
+  ],
+  "usage": { "prompt_tokens": 0, "completion_tokens": 1, "total_tokens": 1 }
+}
+```
+
+### Generation parameters
+
+Same as `/v1/chat/completions`: `temperature`, `max_tokens`,
+`max_completion_tokens`, `top_p`, `seed`, `frequency_penalty`,
+`presence_penalty`, `reasoning_budget`.
+
+### Ignored parameters (warning logged)
+
+`logprobs`, `echo`, `best_of`, `suffix`, `stop`, `logit_bias`, `stream_options`,
+`user`, `response_format`, and `n` when greater than `1`. Legacy OpenAI
+semantics for these (logprob distributions, prompt echo, best-of-N sampling,
+suffix insertion, multi-choice `n`) are not implemented.
+
+### Errors
+
+| HTTP | `error.code` | When |
+|------|----------------|------|
+| 400 | `invalid_json` | Body is not valid JSON |
+| 400 | `missing_model` | `model` field is missing |
+| 400 | `invalid_prompt` | Prompt is missing, empty, has empty array entries, or is provided as token ids |
+| 400 | `unsupported_streaming` | Multi-prompt input combined with `"stream": true` |
+| 400 | `invalid_model_type` | Alias is not a `chat` model |
+| 404 | `model_not_found` | Unknown alias |
+| 503 | `model_not_ready` | Model not loaded yet |
+| 500 | `completion_error` | SDK / engine failure |
 
 ## `POST /v1/responses`
 

@@ -124,7 +124,7 @@ export async function startServer (options: StartServerOptions): Promise<http.Se
 }
 
 const CATEGORY_ENDPOINTS: Record<string, string[]> = {
-  chat: ['POST /v1/chat/completions', 'POST /v1/responses'],
+  chat: ['POST /v1/chat/completions', 'POST /v1/completions', 'POST /v1/responses'],
   embedding: ['POST /v1/embeddings'],
   transcription: ['POST /v1/audio/transcriptions'],
   'audio-translation': ['POST /v1/audio/translations'],
