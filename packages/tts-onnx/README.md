@@ -557,11 +557,11 @@ The Chatterbox multilingual model supports the following 22 languages:
 
 Some languages require text preprocessing before tokenization. This is handled automatically by the addon when `language` is set:
 
-- **Japanese (`ja`)**: kanji are converted to hiragana using **MeCab** with the IPA dictionary (`dict/mecab-ipadic`, bundled).
+- **Japanese (`ja`)**: kanji are converted to hiragana using **MeCab** with the IPA dictionary. The dictionary is **not bundled** with this package; consumers must materialize it (for example via `python -m pip install ipadic && python scripts/build_mecab_dict.py <out>`) and pass the parent directory through `files.mecabDictPath`. The native layer expects a `mecab-ipadic/` subfolder with a valid `mecabrc` under that path.
 - **Korean (`ko`)**: Hangul syllables are decomposed into Jamo (initial / medial / final) using `utf8proc` NFKD.
 - **Chinese (`zh`)**: not supported in this release.
 
-To select a language at load time, pass `language` to the loader:
+To select a language at load time, pass `language` to the loader. When using `ja`, also pass `files.mecabDictPath`:
 
 ```javascript
 const model = await loadChatterboxTTS({
@@ -570,7 +570,8 @@ const model = await loadChatterboxTTS({
   embedTokensPath: '...',
   conditionalDecoderPath: '...',
   languageModelPath: '...',
-  language: 'ja' // any of the codes above
+  language: 'ja',
+  mecabDictPath: '/path/to/mecab-dict-parent' // required for Japanese
 })
 ```
 

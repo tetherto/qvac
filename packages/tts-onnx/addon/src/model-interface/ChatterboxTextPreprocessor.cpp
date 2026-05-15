@@ -1,6 +1,5 @@
 #include "ChatterboxTextPreprocessor.hpp"
 
-#include <iostream>
 #include <sstream>
 #include <stdexcept>
 
@@ -285,9 +284,8 @@ void ChatterboxTextPreprocessor::loadCangjieTable(
 void ChatterboxTextPreprocessor::loadMeCab(
     const std::filesystem::path &dicPath) {
   std::filesystem::path rcPath = dicPath / "mecabrc";
-  std::cerr << ">>> [MECAB-CPP] loadMeCab called with dicPath='"
-            << dicPath.string() << "' rcPath='" << rcPath.string() << "'"
-            << std::endl;
+  QLOG_DEBUG("loadMeCab dicPath='" + dicPath.string() + "' rcPath='" +
+             rcPath.string() + "'");
   std::vector<std::string> argsStorage = {"mecab", "-r", rcPath.string(), "-d",
                                           dicPath.string()};
   std::vector<char *> argv;
@@ -299,12 +297,11 @@ void ChatterboxTextPreprocessor::loadMeCab(
   if (!mecabTagger_) {
     const char *err = mecab_strerror(nullptr);
     std::string detail = err != nullptr ? err : "unknown";
-    std::cerr << ">>> [MECAB-CPP] mecab_new FAILED: " << detail << std::endl;
+    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
+         "MeCab tagger creation failed: " + detail);
     throw std::runtime_error("Failed to create MeCab tagger with dictionary: " +
                              dicPath.string() + " (" + detail + ")");
   }
-  std::cerr << ">>> [MECAB-CPP] mecab_new OK, tagger=" << mecabTagger_.get()
-            << std::endl;
 }
 
 void ChatterboxTextPreprocessor::reset() {
@@ -366,27 +363,24 @@ std::string ChatterboxTextPreprocessor::buildHiraganaFromNodes(
 
 std::string ChatterboxTextPreprocessor::convertJapaneseWithMeCab(
     const std::string &text) const {
-  std::cerr << ">>> [MECAB-CPP] convertJapaneseWithMeCab input='" << text
-            << "' tagger=" << mecabTagger_.get() << std::endl;
+  QLOG_DEBUG("convertJapaneseWithMeCab input='" + text + "'");
   if (!mecabTagger_) {
-    std::string fallback = convertKatakanaToHiragana(text);
-    std::cerr << ">>> [MECAB-CPP] NO TAGGER, fallback='" << fallback << "'"
-              << std::endl;
-    return fallback;
+    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+         "MeCab tagger not initialized; falling back to katakana->hiragana");
+    return convertKatakanaToHiragana(text);
   }
 
   const mecab_node_t *node =
       mecab_sparse_tonode(mecabTagger_.get(), text.c_str());
   if (!node) {
-    std::string fallback = convertKatakanaToHiragana(text);
-    std::cerr << ">>> [MECAB-CPP] mecab_sparse_tonode returned NULL, fallback='"
-              << fallback << "'" << std::endl;
-    return fallback;
+    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+         "mecab_sparse_tonode returned null; falling back to "
+         "katakana->hiragana");
+    return convertKatakanaToHiragana(text);
   }
 
   std::string result = buildHiraganaFromNodes(node);
-  std::cerr << ">>> [MECAB-CPP] convertJapaneseWithMeCab output='" << result
-            << "'" << std::endl;
+  QLOG_DEBUG("convertJapaneseWithMeCab output='" + result + "'");
   return result;
 }
 

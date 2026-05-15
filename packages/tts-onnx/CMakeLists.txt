@@ -266,7 +266,8 @@ if(WIN32)
   target_link_options(
     ${inference-tts}_module
     PRIVATE
-      /FORCE:MULTIPLE
+      /NODEFAULTLIB:libcmt
+      /NODEFAULTLIB:libcmtd
   )
 endif()
 

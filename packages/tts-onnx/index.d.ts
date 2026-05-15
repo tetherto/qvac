@@ -65,9 +65,12 @@ declare interface ONNXTTSFiles {
   voicesDir?: string
   /**
    * Chatterbox `ja` only: directory containing the MeCab dictionary tree
-   * (expects a `mecab-ipadic/` subfolder with a valid `mecabrc`). When
-   * omitted, defaults to the dictionary bundled with this package
-   * (`<package>/dict`). Ignored for non-Japanese languages and for Supertonic.
+   * (expects a `mecab-ipadic/` subfolder with a valid `mecabrc`).
+   * **Required** when `config.language === 'ja'`. No dictionary is bundled
+   * with the npm package, so consumers must materialize one (e.g. via
+   * `python -m pip install ipadic && python build_mecab_dict.py <out>`) and
+   * point this property at the parent directory. Ignored for non-Japanese
+   * languages and for Supertonic.
    */
   mecabDictPath?: string
   tokenizerPath?: string

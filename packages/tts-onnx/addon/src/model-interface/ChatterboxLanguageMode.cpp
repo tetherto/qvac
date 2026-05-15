@@ -94,9 +94,12 @@ std::string prepareTextForTokenization(const std::string &text,
   if (isEnglishMode || language == "en") {
     return text;
   }
-  const std::string normalized = applyLowercaseNfkd(text);
-  const std::string prefixed = "[" + language + "]" + normalized;
-  return replaceSpacesWithToken(prefixed);
+  if (language == "ja") {
+    const std::string normalized = applyLowercaseNfkd(text);
+    const std::string prefixed = "[" + language + "]" + normalized;
+    return replaceSpacesWithToken(prefixed);
+  }
+  return "[" + language + "]" + text;
 }
 
 } // namespace qvac::ttslib::chatterbox::lang_mode

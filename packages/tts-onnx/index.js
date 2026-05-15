@@ -684,6 +684,13 @@ class ONNXTTS {
   }
 
   _getChatterboxTtsParams () {
+    const language = this._config?.language || 'en'
+    if (language === 'ja' && !this._mecabDictPath) {
+      throw new QvacErrorAddonTTS({
+        code: ERR_CODES.FAILED_TO_LOAD,
+        adds: 'Chatterbox Japanese requires files.mecabDictPath pointing to a directory containing mecab-ipadic/. No dictionary is bundled with @qvac/tts-onnx.'
+      })
+    }
     const params = {
       tokenizerPath: this._tokenizerPath || '',
       speechEncoderPath: this._speechEncoderPath || '',
@@ -691,7 +698,7 @@ class ONNXTTS {
       conditionalDecoderPath: this._conditionalDecoderPath || '',
       languageModelPath: this._languageModelPath || '',
       mecabDictPath: this._mecabDictPath || '',
-      language: this._config?.language || 'en',
+      language,
       useGPU: this._config?.useGPU || false,
       lazySessionLoading: this._lazySessionLoading,
       numThreads: String(this._numThreads || 0)

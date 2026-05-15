@@ -11,7 +11,6 @@
 #include <cstdint>
 #include <cstring>
 #include <fstream>
-#include <iostream>
 #include <numeric>
 #include <sstream>
 #include <stdexcept>
@@ -37,6 +36,15 @@ const int MAX_NEW_TOKENS_SPEECH = 1024;
 const int STOP_FORCE_TOPK = 20;
 const int SPEECH_TO_TEXT_MAX_RATIO = 3;
 const int MIN_SPEECH_TOKENS = 50;
+
+int computeMaxSpeechTokens(int textTokenCount, const std::string &language) {
+  if (language == "ja") {
+    return MAX_NEW_TOKENS_SPEECH;
+  }
+  const int proportional =
+      std::max(MIN_SPEECH_TOKENS, textTokenCount * SPEECH_TO_TEXT_MAX_RATIO);
+  return std::min(proportional, MAX_NEW_TOKENS_SPEECH);
+}
 const int SILENCE_RUN_THRESHOLD = 5;
 const int PATTERN_MAX_LENGTH = 8;
 const int PATTERN_MIN_REPEATS = 3;
@@ -240,6 +248,15 @@ int64_t sampleWithTemperature(std::vector<float> &logits, float temperature,
 
   std::discrete_distribution<int> dist(logits.begin(), logits.end());
   return static_cast<int64_t>(dist(rng));
+}
+
+int64_t selectNextSpeechToken(std::vector<float> &condLogits,
+                              bool forceStopForJapanese, std::mt19937 &rng) {
+  if (forceStopForJapanese &&
+      isStopTokenInTopK(condLogits, STOP_SPEECH_TOKEN, STOP_FORCE_TOPK)) {
+    return STOP_SPEECH_TOKEN;
+  }
+  return sampleWithTemperature(condLogits, TEMPERATURE, MIN_P, rng);
 }
 
 float findPeakAmplitude(const std::vector<float> &wav) {
@@ -908,17 +925,13 @@ AudioResult ChatterboxEngine::synthesize(const std::string &text) {
 }
 
 std::vector<int64_t> ChatterboxEngine::tokenize(const std::string &text) {
-  std::cerr << ">>> [TOKENIZE-CPP] raw input='" << text
-            << "' lang=" << language_ << " isEnglish=" << isEnglish_
-            << std::endl;
+  QLOG_DEBUG("tokenize raw input='" + text + "' lang=" + language_ +
+             " isEnglish=" + (isEnglish_ ? "true" : "false"));
   const std::string preprocessed =
       textPreprocessor_.preprocess(text, language_);
-  std::cerr << ">>> [TOKENIZE-CPP] preprocessed='" << preprocessed << "'"
-            << std::endl;
+  QLOG_DEBUG("tokenize preprocessed='" + preprocessed + "'");
   const std::string preparedText = lang_mode::prepareTextForTokenization(
       preprocessed, language_, isEnglish_);
-  std::cerr << ">>> [TOKENIZE-CPP] preparedText='" << preparedText << "'"
-            << std::endl;
   QLOG(Priority::INFO, "tokenizing text: " + preparedText);
 
   TokenizerEncodeResult result;
@@ -927,13 +940,7 @@ std::vector<int64_t> ChatterboxEngine::tokenize(const std::string &text) {
 
   const std::vector<int64_t> tokens(result.token_ids,
                                     result.token_ids + result.len);
-  std::cerr << ">>> [TOKENIZE-CPP] token count=" << tokens.size() << " ids=[";
-  for (size_t i = 0; i < tokens.size(); ++i) {
-    std::cerr << tokens[i];
-    if (i + 1 < tokens.size())
-      std::cerr << ",";
-  }
-  std::cerr << "]" << std::endl;
+  QLOG_DEBUG("tokenize token count=" + std::to_string(tokens.size()));
   tokenizers_free_encode_results(&result, 1);
 
   return tokens;
@@ -958,12 +965,9 @@ void ChatterboxEngine::loadTextPreprocessor(
 
   if (language_ == "ja") {
     std::filesystem::path mecabDicPath = mecabDictPath / "mecab-ipadic";
-    std::cerr << ">>> [ENGINE-CPP] Loading MeCab dictionary from: "
-              << mecabDicPath.string() << std::endl;
     QLOG(Priority::INFO,
          "Loading MeCab dictionary from: " + mecabDicPath.string());
     textPreprocessor_.loadMeCab(mecabDicPath);
-    std::cerr << ">>> [ENGINE-CPP] MeCab dictionary loaded OK" << std::endl;
     QLOG(Priority::INFO, "MeCab dictionary loaded");
   }
 }
@@ -1218,10 +1222,9 @@ void ChatterboxEngine::runInitialCfgStep(
   penalizeRepetitionLogits(condLogits, generatedTokens,
                            MULTILINGUAL_REPETITION_PENALTY);
 
+  const bool forceStopForJapanese = (language_ == "ja");
   int64_t firstToken =
-      isStopTokenInTopK(condLogits, STOP_SPEECH_TOKEN, STOP_FORCE_TOPK)
-          ? STOP_SPEECH_TOKEN
-          : sampleWithTemperature(condLogits, TEMPERATURE, MIN_P, rng_);
+      selectNextSpeechToken(condLogits, forceStopForJapanese, rng_);
   generatedTokens.push_back(firstToken);
 
   QLOG(Priority::INFO,
@@ -1268,6 +1271,7 @@ void ChatterboxEngine::runCfgGenerationLoop(
     std::unordered_map<std::string, TensorData<float>> &batchedKv,
     int maxSpeechTokens) {
 
+  const bool forceStopForJapanese = (language_ == "ja");
   for (int step = 0; step < maxSpeechTokens - 1; step++) {
     if (shouldStopGeneration(generatedTokens, step)) {
       if (generatedTokens.back() != STOP_SPEECH_TOKEN) {
@@ -1300,9 +1304,7 @@ void ChatterboxEngine::runCfgGenerationLoop(
                              MULTILINGUAL_REPETITION_PENALTY);
 
     int64_t nextToken =
-        isStopTokenInTopK(condLogits, STOP_SPEECH_TOKEN, STOP_FORCE_TOPK)
-            ? STOP_SPEECH_TOKEN
-            : sampleWithTemperature(condLogits, TEMPERATURE, MIN_P, rng_);
+        selectNextSpeechToken(condLogits, forceStopForJapanese, rng_);
     generatedTokens.push_back(nextToken);
 
     positionIds.data = {static_cast<int64_t>(step + 2)};
@@ -1321,7 +1323,7 @@ std::vector<int64_t> ChatterboxEngine::generateSpeechTokensWithCfg(
     TensorData<float> &speakerEmbeddings, TensorData<float> &speakerFeatures) {
 
   int textTokenCount = static_cast<int>(inputIds.size());
-  int maxSpeechTokens = MAX_NEW_TOKENS_SPEECH;
+  int maxSpeechTokens = computeMaxSpeechTokens(textTokenCount, language_);
 
   QLOG(Priority::INFO,
        "Text tokens: " + std::to_string(textTokenCount) +

@@ -5,16 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.9.1]
+## [0.10.0]
+
+> Released as a minor bump (skipping `0.9.1`) to keep the addon clear of the
+> SDK 0.11 release line and signal the breaking change in `files.mecabDictPath`
+> handling for Japanese.
 
 ### Added
 
 - **Japanese (ja) support via MeCab**: word-level morphological preprocessing for Chatterbox multilingual. The addon now extracts phonetic readings from MeCab and converts katakana to hiragana before tokenization, fixing prior hallucinations caused by kanji being mapped to `[UNK]`.
-- Bundled IPAdic dictionary at `dict/mecab-ipadic/` (~50 MB) with a minimal `mecabrc`, used as a fixed location resolved relative to the package. Single little-endian compiled dictionary works on all target platforms (Android, iOS, Windows, Linux x86/x64, macOS).
-- `npm run build:mecab-dict` script (`scripts/build-mecab-dict.sh`) to recompile the IPAdic dictionary from source via `mecab-dict-index`.
 - `mecab` dependency added to `vcpkg.json` / `vcpkg-configuration.json` and linked from desktop, mobile and unit-test CMake targets.
 - New `mecabDictPath` field on the native `ChatterboxConfig`, propagated end-to-end (JS `ONNXTTS` -> `AddonJs` -> `TTSModel` -> `ChatterboxEngine`). The Cangjie table for `zh` keeps being resolved next to the tokenizer.
-- Public `files.mecabDictPath?: string` option on `ONNXTTS` (declared in `index.d.ts`) to override the bundled MeCab dictionary location for Japanese; defaults to `<package>/dict` when omitted.
+- Public `files.mecabDictPath?: string` option on `ONNXTTS` (declared in `index.d.ts`); **required** when `config.language === 'ja'`. The npm package no longer ships a dictionary.
+- `scripts/build_mecab_dict.py` Python helper that materializes the MeCab IPAdic dictionary from the `ipadic` PyPI package into an arbitrary output directory (used by CI before running Japanese tests; consumers can use the same script to populate `files.mecabDictPath`).
 - Japanese (kanji + MeCab) integration test added to `test/integration/addon.test.js` (`Chatterbox Multilingual TTS: Japanese ...`), validating end-to-end synthesis and asserting Whisper CER (`ggml-medium.bin`) `<= 50%`.
 
 ### Changed
@@ -22,7 +25,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refactor: text preprocessing moved from free functions in the `text_preprocess` namespace into a new `class ChatterboxTextPreprocessor` with RAII (`std::unique_ptr<mecab_t, MeCabDeleter>` for the MeCab tagger).
 - `ChatterboxEngine` now owns a single `ChatterboxTextPreprocessor` instead of separate Cangjie/MeCab members; `loadTextPreprocessor(tokenizerPath, mecabDictPath)` replaces the previous loader.
 - `decodeUtf8`/`encodeCodepoint` are now `static` utility methods; long loops split into focused helpers (`detectSequenceLength`, `extractLeadingBits`, `decodeCodepointAt`, `isContentNode`, `hasReading`, `appendNodeReading`, `buildHiraganaFromNodes`).
-- `package.json` ships the new `dict/` folder and exposes the `build:mecab-dict` npm script.
+- `package.json` no longer ships any `dict/` folder; the npm tarball stays slim and consumers are expected to materialize a MeCab dictionary out-of-band (e.g. via `scripts/build_mecab_dict.py`).
+- Debug `std::cerr` traces in `ChatterboxEngine.cpp` and `ChatterboxTextPreprocessor.cpp` replaced with `QLOG`/`QLOG_DEBUG` so production stderr stays clean and verbose tracing only compiles in debug builds.
+- Windows linker workaround `/FORCE:MULTIPLE` replaced with targeted `/NODEFAULTLIB:libcmt` and `/NODEFAULTLIB:libcmtd` so duplicate-symbol conflicts from the MeCab static library are resolved by removing the static CRT instead of being silently masked.
+
+### Fixed
+
+- **Non-Japanese multilingual synthesis regression.** `prepareTextForTokenization` previously applied `applyLowercaseNfkd` + `replaceSpacesWithToken` to every non-English language (es, pt, fr, de, …), silently turning `"[es]Hola Mundo"` into `"[es]hola[SPACE]mundo"`. The NFKD + `[SPACE]` path is now gated to `language == "ja"` only; all other multilingual codes keep the original `"[lang]" + text` form. Unit tests in `ChatterboxLanguageModeTest` pin this behaviour for `pt`, `es`, and `fr`.
+- **`maxSpeechTokens` regression for non-Japanese languages.** `generateSpeechTokensWithCfg` no longer hard-codes the cap to `MAX_NEW_TOKENS_SPEECH (1024)`. A new helper `computeMaxSpeechTokens` restores the previous proportional formula (`min(MAX_NEW_TOKENS_SPEECH, max(MIN_SPEECH_TOKENS, textTokenCount * SPEECH_TO_TEXT_MAX_RATIO))`) for every language except `ja`, which still uses the fixed 1024 cap required to keep MeCab-driven synthesis stable.
+- **`isStopTokenInTopK` forced-stop now Japanese-only.** The new `selectNextSpeechToken` helper short-circuits to `STOP_SPEECH_TOKEN` via `isStopTokenInTopK(..., STOP_FORCE_TOPK)` only when `language_ == "ja"`. Every other language falls back to the previous `sampleWithTemperature` path, so naturalness for already-working languages is not affected by the Japanese hallucination mitigation.
+- **Chinese Cangjie unit tests restored.** The `ChineseCangjieTest` suite (previously removed in commit `d46a21f`) is back in `ChatterboxTextPreprocessorTest.cpp`. The `convertChineseToCangjie` code path is still reachable, so the tests guard it from silent regressions even though `zh` is out of scope for this release.
 
 ## [0.9.0]
 

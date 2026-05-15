@@ -16,8 +16,7 @@ TEST(ChatterboxLanguageModeTest, prefixesPortugueseInMultilingualMode) {
   const std::string text =
       asUtf8String(u8"Olá mundo! Essa é uma demonstração de síntese de texto "
                    u8"para voz usando Chatterbox");
-  const std::string expected =
-      replaceSpacesWithToken("[pt]" + applyLowercaseNfkd(text));
+  const std::string expected = "[pt]" + text;
 
   EXPECT_EQ(prepareTextForTokenization(text, "pt", false), expected);
 }
@@ -94,9 +93,18 @@ TEST(ChatterboxLanguageModeTest,
 }
 
 TEST(ChatterboxLanguageModeTest,
-     TokenizationAppliesLowercaseNfkdAndSpaceTokenForOtherLanguages) {
+     TokenizationAppliesLowercaseNfkdAndSpaceTokenForJapanese) {
+  EXPECT_EQ(lang_mode::prepareTextForTokenization("Hola Mundo", "ja", false),
+            "[ja]hola[SPACE]mundo");
+}
+
+TEST(ChatterboxLanguageModeTest,
+     TokenizationKeepsCasingAndSpacesForNonJapaneseMultilingualLanguages) {
   EXPECT_EQ(lang_mode::prepareTextForTokenization("Hola Mundo", "es", false),
-            "[es]hola[SPACE]mundo");
+            "[es]Hola Mundo");
+  EXPECT_EQ(lang_mode::prepareTextForTokenization("Bonjour le monde", "fr",
+                                                  false),
+            "[fr]Bonjour le monde");
 }
 
 TEST(ChatterboxLanguageModeTest, ApplyLowercaseNfkdHandlesAsciiUppercase) {
