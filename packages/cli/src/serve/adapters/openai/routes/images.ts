@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { readBody, sendJson, sendError, initSSE, sendSSE, endSSE } from '../../../http.js'
 import { readMultipart, type MultipartFile } from '../../../multipart.js'
 import { resolveModelAlias } from '../../../config.js'
-import { sdkDiffusion } from '../../../core/sdk.js'
+import { sdkDiffusion, type SDKDiffusionParams } from '../../../core/sdk.js'
 import {
   extractImageGenerationParams,
   logImageUnsupportedParams,
@@ -56,28 +56,36 @@ function rejectUrlWithoutBaseUrl (res: ServerResponse): void {
   )
 }
 
-export async function handleImagesGenerations (req: IncomingMessage, res: ServerResponse, ctx: RouteContext): Promise<void> {
-  let body: Record<string, unknown>
-  try {
-    body = await readBody(req)
-  } catch {
-    sendError(res, 400, 'invalid_json', 'Request body must be valid JSON.')
-    return
-  }
+interface ResolvedImageRequest {
+  responseFormat: string
+  alias: string
+  sdkModelId: string
+}
 
+/**
+ * Shared validation + model resolution for /v1/images/generations and
+ * /v1/images/edits. Returns null after writing an HTTP error to `res` when
+ * any precondition fails; otherwise returns the resolved request context so
+ * the caller can extract route-specific params.
+ */
+function validateImageRequest (
+  res: ServerResponse,
+  ctx: RouteContext,
+  body: Record<string, unknown>
+): ResolvedImageRequest | null {
   if (!body['model']) {
     sendError(res, 400, 'missing_model', '"model" is required.')
-    return
+    return null
   }
 
   const responseFormat = (body['response_format'] as string | undefined) ?? 'b64_json'
   if (!SUPPORTED_RESPONSE_FORMATS.has(responseFormat)) {
     sendError(res, 400, 'invalid_response_format', `Unknown response_format "${responseFormat}". Use "b64_json" or "url".`)
-    return
+    return null
   }
   if (responseFormat === 'url' && !ctx.serveConfig.publicBaseUrl) {
     rejectUrlWithoutBaseUrl(res)
-    return
+    return null
   }
 
   try {
@@ -85,7 +93,7 @@ export async function handleImagesGenerations (req: IncomingMessage, res: Server
   } catch (err) {
     if (err instanceof UnsupportedImageOutputError) {
       sendError(res, 400, err.code, err.message)
-      return
+      return null
     }
     throw err
   }
@@ -95,48 +103,73 @@ export async function handleImagesGenerations (req: IncomingMessage, res: Server
 
   if (!modelEntry) {
     sendError(res, 404, 'model_not_found', `Model "${modelName}" is not available. Check serve.models config.`)
-    return
+    return null
   }
 
   const endpointCategory = 'endpointCategory' in modelEntry ? modelEntry.endpointCategory : undefined
   if (endpointCategory !== 'image') {
     sendError(res, 400, 'invalid_model_type', `Model "${modelName}" does not support image generation.`)
-    return
+    return null
   }
 
   const alias = 'alias' in modelEntry ? (modelEntry.alias as string) : modelEntry.id
   const registryEntry = ctx.registry.getEntry(alias)
   if (!registryEntry || registryEntry.state !== ctx.registry.STATES.READY) {
     sendError(res, 503, 'model_not_ready', `Model "${modelName}" is not loaded yet.`)
-    return
+    return null
   }
 
   const sdkModelId = registryEntry.sdkModelId ?? registryEntry.id
+  return { responseFormat, alias, sdkModelId }
+}
 
-  let params
-  try {
-    params = extractImageGenerationParams(body, sdkModelId)
-  } catch (err) {
-    if (err instanceof InvalidImagePromptError) {
-      sendError(res, 400, 'missing_prompt', err.message)
-      return
-    }
-    if (err instanceof InvalidImageSizeError) {
-      sendError(res, 400, 'invalid_size', err.message)
-      return
-    }
-    if (err instanceof InvalidImageBatchCountError) {
-      sendError(res, 400, 'invalid_n', err.message)
-      return
-    }
-    throw err
+/**
+ * Map a known image-param error class to its HTTP 400 response. Returns true
+ * when handled (caller should return), false for unknown errors (caller should
+ * rethrow).
+ */
+function mapImageParamError (res: ServerResponse, err: unknown): boolean {
+  if (err instanceof InvalidImagePromptError) {
+    sendError(res, 400, 'missing_prompt', err.message)
+    return true
   }
+  if (err instanceof InvalidImageSizeError) {
+    sendError(res, 400, 'invalid_size', err.message)
+    return true
+  }
+  if (err instanceof InvalidImageBatchCountError) {
+    sendError(res, 400, 'invalid_n', err.message)
+    return true
+  }
+  if (err instanceof InvalidImageStrengthError) {
+    sendError(res, 400, 'invalid_strength', err.message)
+    return true
+  }
+  return false
+}
 
-  logImageUnsupportedParams(body, ctx.logger)
+interface RunImageJobOptions {
+  logLabel: 'image_generate' | 'image_edit'
+  errorCode: 'image_generation_error' | 'image_edit_error'
+  errorVerb: 'generation' | 'editing'
+  alias: string
+  params: SDKDiffusionParams
+  responseFormat: string
+  wantsStream: boolean
+}
 
-  const wantsStream = body['stream'] === true
+/**
+ * Run sdkDiffusion and write the JSON or SSE response. Logs a one-line
+ * completion record and maps thrown SDK errors to a generic 500.
+ */
+async function runDiffusionAndRespond (
+  res: ServerResponse,
+  ctx: RouteContext,
+  opts: RunImageJobOptions
+): Promise<void> {
+  const { logLabel, errorCode, errorVerb, alias, params, responseFormat, wantsStream } = opts
   const dims = params.width && params.height ? `${params.width}x${params.height}` : 'default'
-  ctx.logger.info(`  image_generate model=${alias} prompt_chars=${params.prompt.length} size=${dims} n=${params.batch_count ?? 1} response_format=${responseFormat} stream=${wantsStream}`)
+  ctx.logger.info(`  ${logLabel} model=${alias} prompt_chars=${params.prompt.length} size=${dims} n=${params.batch_count ?? 1} response_format=${responseFormat} stream=${wantsStream}`)
 
   try {
     const { buffers, stats } = await sdkDiffusion({
@@ -147,9 +180,9 @@ export async function handleImagesGenerations (req: IncomingMessage, res: Server
     })
 
     if (stats?.seed != null) {
-      ctx.logger.info(`  image_generate done images=${buffers.length} seed=${stats.seed} ms=${stats.totalGenerationMs ?? stats.totalWallMs ?? 0}`)
+      ctx.logger.info(`  ${logLabel} done images=${buffers.length} seed=${stats.seed} ms=${stats.totalGenerationMs ?? stats.totalWallMs ?? 0}`)
     } else {
-      ctx.logger.info(`  image_generate done images=${buffers.length} ms=${stats?.totalGenerationMs ?? stats?.totalWallMs ?? 0}`)
+      ctx.logger.info(`  ${logLabel} done images=${buffers.length} ms=${stats?.totalGenerationMs ?? stats?.totalWallMs ?? 0}`)
     }
 
     const sizeStr = buildSizeString(params.width, params.height, stats?.width, stats?.height)
@@ -160,7 +193,6 @@ export async function handleImagesGenerations (req: IncomingMessage, res: Server
     }
 
     const data = buildImageData(buffers, responseFormat, ctx.serveConfig.publicBaseUrl ?? '', ctx.ephemeralFiles)
-
     sendJson(res, 200, {
       created: Math.floor(Date.now() / 1000),
       output_format: RESPONSE_OUTPUT_FORMAT,
@@ -169,9 +201,42 @@ export async function handleImagesGenerations (req: IncomingMessage, res: Server
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    ctx.logger.error(`Image generation error for "${alias}": ${message}`)
-    sendError(res, 500, 'image_generation_error', 'An internal error occurred during image generation.')
+    ctx.logger.error(`Image ${errorVerb === 'generation' ? 'generation' : 'edit'} error for "${alias}": ${message}`)
+    sendError(res, 500, errorCode, `An internal error occurred during image ${errorVerb}.`)
   }
+}
+
+export async function handleImagesGenerations (req: IncomingMessage, res: ServerResponse, ctx: RouteContext): Promise<void> {
+  let body: Record<string, unknown>
+  try {
+    body = await readBody(req)
+  } catch {
+    sendError(res, 400, 'invalid_json', 'Request body must be valid JSON.')
+    return
+  }
+
+  const resolved = validateImageRequest(res, ctx, body)
+  if (!resolved) return
+
+  let params
+  try {
+    params = extractImageGenerationParams(body, resolved.sdkModelId)
+  } catch (err) {
+    if (mapImageParamError(res, err)) return
+    throw err
+  }
+
+  logImageUnsupportedParams(body, ctx.logger)
+
+  await runDiffusionAndRespond(res, ctx, {
+    logLabel: 'image_generate',
+    errorCode: 'image_generation_error',
+    errorVerb: 'generation',
+    alias: resolved.alias,
+    params,
+    responseFormat: resolved.responseFormat,
+    wantsStream: body['stream'] === true
+  })
 }
 
 const EDIT_IMAGE_FIELD_NAMES = new Set(['image', 'image[]'])
@@ -224,121 +289,32 @@ export async function handleImagesEdits (req: IncomingMessage, res: ServerRespon
 
   const body = coerceMultipartFields(fields)
 
-  if (!body['model']) {
-    sendError(res, 400, 'missing_model', '"model" is required.')
-    return
-  }
-
-  const responseFormat = (body['response_format'] as string | undefined) ?? 'b64_json'
-  if (!SUPPORTED_RESPONSE_FORMATS.has(responseFormat)) {
-    sendError(res, 400, 'invalid_response_format', `Unknown response_format "${responseFormat}". Use "b64_json" or "url".`)
-    return
-  }
-  if (responseFormat === 'url' && !ctx.serveConfig.publicBaseUrl) {
-    rejectUrlWithoutBaseUrl(res)
-    return
-  }
-
-  try {
-    assertSupportedImageOutputParams(body)
-  } catch (err) {
-    if (err instanceof UnsupportedImageOutputError) {
-      sendError(res, 400, err.code, err.message)
-      return
-    }
-    throw err
-  }
-
-  const modelName = body['model'] as string
-  const modelEntry = resolveModelAlias(ctx.serveConfig, modelName) ?? ctx.registry.getEntry(modelName)
-
-  if (!modelEntry) {
-    sendError(res, 404, 'model_not_found', `Model "${modelName}" is not available. Check serve.models config.`)
-    return
-  }
-
-  const endpointCategory = 'endpointCategory' in modelEntry ? modelEntry.endpointCategory : undefined
-  if (endpointCategory !== 'image') {
-    sendError(res, 400, 'invalid_model_type', `Model "${modelName}" does not support image generation.`)
-    return
-  }
-
-  const alias = 'alias' in modelEntry ? (modelEntry.alias as string) : modelEntry.id
-  const registryEntry = ctx.registry.getEntry(alias)
-  if (!registryEntry || registryEntry.state !== ctx.registry.STATES.READY) {
-    sendError(res, 503, 'model_not_ready', `Model "${modelName}" is not loaded yet.`)
-    return
-  }
-
-  const sdkModelId = registryEntry.sdkModelId ?? registryEntry.id
+  const resolved = validateImageRequest(res, ctx, body)
+  if (!resolved) return
 
   const firstImage = imageFiles[0]!.data
   const extraImageCount = imageFiles.length - 1
 
   let params
   try {
-    params = extractImageEditParams(body, firstImage, sdkModelId)
+    params = extractImageEditParams(body, firstImage, resolved.sdkModelId)
   } catch (err) {
-    if (err instanceof InvalidImagePromptError) {
-      sendError(res, 400, 'missing_prompt', err.message)
-      return
-    }
-    if (err instanceof InvalidImageSizeError) {
-      sendError(res, 400, 'invalid_size', err.message)
-      return
-    }
-    if (err instanceof InvalidImageBatchCountError) {
-      sendError(res, 400, 'invalid_n', err.message)
-      return
-    }
-    if (err instanceof InvalidImageStrengthError) {
-      sendError(res, 400, 'invalid_strength', err.message)
-      return
-    }
+    if (mapImageParamError(res, err)) return
     throw err
   }
 
   logImageUnsupportedParams(body, ctx.logger)
   logImageEditExtraWarnings(body, { extraImageCount }, ctx.logger)
 
-  const wantsStream = body['stream'] === true
-  const dims = params.width && params.height ? `${params.width}x${params.height}` : 'default'
-  ctx.logger.info(`  image_edit model=${alias} prompt_chars=${params.prompt.length} size=${dims} n=${params.batch_count ?? 1} response_format=${responseFormat} stream=${wantsStream}`)
-
-  try {
-    const { buffers, stats } = await sdkDiffusion({
-      params,
-      onProgress: (tick) => {
-        ctx.logger.debug?.(`    diffusion step=${tick.step}/${tick.totalSteps} elapsed=${tick.elapsedMs}ms`)
-      }
-    })
-
-    if (stats?.seed != null) {
-      ctx.logger.info(`  image_edit done images=${buffers.length} seed=${stats.seed} ms=${stats.totalGenerationMs ?? stats.totalWallMs ?? 0}`)
-    } else {
-      ctx.logger.info(`  image_edit done images=${buffers.length} ms=${stats?.totalGenerationMs ?? stats?.totalWallMs ?? 0}`)
-    }
-
-    const sizeStr = buildSizeString(params.width, params.height, stats?.width, stats?.height)
-
-    if (wantsStream) {
-      sendStreamingResponse(res, buffers, sizeStr)
-      return
-    }
-
-    const data = buildImageData(buffers, responseFormat, ctx.serveConfig.publicBaseUrl ?? '', ctx.ephemeralFiles)
-
-    sendJson(res, 200, {
-      created: Math.floor(Date.now() / 1000),
-      output_format: RESPONSE_OUTPUT_FORMAT,
-      ...(sizeStr ? { size: sizeStr } : {}),
-      data
-    })
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    ctx.logger.error(`Image edit error for "${alias}": ${message}`)
-    sendError(res, 500, 'image_edit_error', 'An internal error occurred during image editing.')
-  }
+  await runDiffusionAndRespond(res, ctx, {
+    logLabel: 'image_edit',
+    errorCode: 'image_edit_error',
+    errorVerb: 'editing',
+    alias: resolved.alias,
+    params,
+    responseFormat: resolved.responseFormat,
+    wantsStream: body['stream'] === true
+  })
 }
 
 /**
