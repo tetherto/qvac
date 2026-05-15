@@ -29,6 +29,29 @@ export interface ServeConfig {
    * `response_format=url`. Trailing slash is stripped on parse.
    */
   publicBaseUrl: string | null
+  openai: OpenAIServeOptions
+}
+
+export interface OpenAIServeOptions {
+  audio: {
+    speech: {
+      defaultVoice: string | null
+      /**
+       * Maps an OpenAI `voice` string to a `serve.models` alias. Each alias can
+       * carry its own TTS `config` (e.g. Chatterbox `referenceAudioSrc`, Supertonic
+       * `ttsVoiceStyleSrc`). When set, this is tried before `${model}-${voice}` and
+       * before the bare `model` alias. Keys are normalized to lowercase when parsed.
+       */
+      voices: Record<string, string> | null
+      /**
+       * Maximum allowed character length of `input`. Requests above this are
+       * rejected with `400 input_too_long` before any synthesis runs (the
+       * route otherwise buffers the full WAV in memory — DoS vector).
+       * `null` disables the cap. Defaults to OpenAI's documented 4096.
+       */
+      maxInputChars: number | null
+    }
+  }
 }
 
 export interface ResolvedModelEntry {

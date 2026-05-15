@@ -3,6 +3,7 @@ import { sendJson, sendText, sendError } from '../../../http.js'
 import { readMultipart } from '../../../multipart.js'
 import { resolveModelAlias } from '../../../config.js'
 import { sdkTranscribe } from '../../../core/sdk.js'
+import { bindClientDisconnectCancel } from '../../../core/cancel-bridge.js'
 import type { RouteContext } from '../../types.js'
 
 const SUPPORTED_RESPONSE_FORMATS = new Set(['json', 'text'])
@@ -87,12 +88,19 @@ export async function handleTranscriptions (req: IncomingMessage, res: ServerRes
   ctx.logger.info(`  transcribe model=${alias} file=${file.fileName} size=${fileSizeKB}KB format=${responseFormat}${prompt ? ' prompt=yes' : ''}`)
 
   try {
-    const text = await sdkTranscribe({
+    const op = await sdkTranscribe({
       modelId: sdkModelId,
       audioChunk: file.data,
       fileName: file.fileName,
       prompt
     })
+
+    // Bind the disconnect bridge before awaiting — long audio files
+    // take tens of seconds to transcribe and are one of the highest-
+    // value cancel targets in the CLI.
+    bindClientDisconnectCancel(req, res, op.requestId, ctx.logger)
+
+    const text = await op.result
 
     ctx.logger.info(`  transcribe done chars=${text.length}`)
 

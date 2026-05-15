@@ -20,6 +20,7 @@ This document describes the supported routes and how to configure `serve.models`
 | `POST` | `/v1/embeddings` | Embeddings |
 | `POST` | `/v1/audio/transcriptions` | Speech-to-text (source language) |
 | `POST` | `/v1/audio/translations` | Speech-to-text **into English** (Whisper translate task) |
+| `POST` | `/v1/audio/speech` | Text-to-speech (Chatterbox / Supertonic, `wav` + `pcm` only) |
 | `POST` | `/v1/images/generations` | Diffusion txt2img (blocking + SSE) |
 | `POST` | `/v1/images/edits` | Diffusion img2img (multipart; blocking + SSE) |
 | `POST` | `/v1/files` | Upload a file into the in-memory store (used by image URL responses + vector stores) |
@@ -388,3 +389,146 @@ You normally use the **same** underlying weights for both transcription and tran
 | 404 | `model_not_found` | Unknown alias |
 | 503 | `model_not_ready` | Model not loaded yet |
 | 500 | `translation_error` | SDK / engine failure |
+
+## `POST /v1/audio/speech`
+
+OpenAI-compatible text-to-speech, backed by the SDK's `textToSpeech` capability (`@qvac/sdk` ONNX TTS — Chatterbox or Supertonic). Body is JSON, response body is binary audio.
+
+### Loaded model
+
+The route requires an alias whose **endpoint category** is `speech`. Built-in SDK addons that resolve to this category are `tts` and `onnx-tts`. Register a TTS model in `serve.models` with `preload: true` so the first request does not pay the cold-start tax.
+
+```json
+{
+  "serve": {
+    "models": {
+      "my-tts": {
+        "src": "registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/<sha>/tokenizer.json",
+        "type": "tts",
+        "preload": true,
+        "config": {
+          "ttsEngine": "chatterbox",
+          "language": "en",
+          "ttsTokenizerSrc": "registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/<sha>/tokenizer.json",
+          "ttsSpeechEncoderSrc": "registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/<sha>/onnx/speech_encoder.onnx",
+          "ttsEmbedTokensSrc": "registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/<sha>/onnx/embed_tokens.onnx",
+          "ttsConditionalDecoderSrc": "registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/<sha>/onnx/conditional_decoder.onnx",
+          "ttsLanguageModelSrc": "registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/<sha>/onnx/language_model.onnx",
+          "referenceAudioSrc": "./voices/alloy-ref.wav"
+        }
+      }
+    }
+  }
+}
+```
+
+> **Drop-in for OpenAI clients:** alias an OpenAI TTS model name (`tts-1`, `gpt-4o-mini-tts`, …) to your loaded TTS model so SDKs that hard-code the OpenAI name work without code change.
+
+### Voice → model alias
+
+OpenAI clients select a voice via the request `voice` field. QVAC TTS engines bind voice character to **load-time** config — Chatterbox uses **`referenceAudioSrc`** (a WAV path on disk); Supertonic uses **`ttsVoiceStyleSrc`** (and friends). There is no separate `voiceSrc` field on the wire — map each OpenAI voice to a model alias whose `config` carries the right paths.
+
+The route resolves the backing model alias in this order:
+
+1. **`serve.openai.audio.speech.voices[voice]`** — explicit map from an OpenAI voice string to a `serve.models` alias. Keys are matched **case-insensitively**. When this resolves to a loaded speech model, the request's `model` field is not used for routing (clients can still send a placeholder like `gpt-4o-mini-tts`).
+2. **`serve.models[model + "-" + voice]`** — hyphen alias (e.g. `my-tts-alloy`).
+3. **`serve.models[model]`** — bare model alias.
+4. None of the above — `404 model_not_found`.
+
+When `voice` is omitted, the configured **`serve.openai.audio.speech.defaultVoice`** is used (defaults to `"alloy"`). Set it to `null` to make `voice` strictly required (otherwise `400 missing_voice`).
+
+### Example: voice map + multiple aliases
+
+```json
+{
+  "serve": {
+    "models": {
+      "tts-chatter-alloy": {
+        "src": "registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/<sha>/tokenizer.json",
+        "type": "tts",
+        "preload": true,
+        "config": { "ttsEngine": "chatterbox", "language": "en", "referenceAudioSrc": "./voices/alloy-ref.wav" }
+      },
+      "tts-chatter-echo": {
+        "src": "registry://hf/ResembleAI/chatterbox-turbo-ONNX/resolve/<sha>/tokenizer.json",
+        "type": "tts",
+        "config": { "ttsEngine": "chatterbox", "language": "en", "referenceAudioSrc": "./voices/echo-ref.wav" }
+      }
+    },
+    "openai": {
+      "audio": {
+        "speech": {
+          "defaultVoice": "alloy",
+          "voices": {
+            "alloy": "tts-chatter-alloy",
+            "echo": "tts-chatter-echo"
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+### Request
+
+- **Content-Type:** `application/json`
+- **Fields:**
+  - `model` (required) — alias, resolved as described above
+  - `input` (required) — non-empty string, capped at **`serve.openai.audio.speech.maxInputChars`** (default **4096**, OpenAI's documented limit; set to `null` to disable)
+  - `voice` (optional, defaults to `defaultVoice`)
+  - `response_format` (optional) — `wav` (default) or `pcm` (raw 16-bit signed little-endian PCM, mono). `mp3`, `opus`, `aac`, `flac` return `400 unsupported_response_format` (no audio encoder bundled).
+- **Accepted but ignored:** `speed`, `instructions`, `stream_format` (a warning is logged; ignored keys are echoed in the success response via the `X-QVAC-Ignored-Params` header).
+
+### Response
+
+Binary audio body. Headers always include:
+
+| Header | Description |
+|--------|-------------|
+| `Content-Type` | `audio/wav` for `wav`; **`audio/L16; rate=<sr>; channels=1`** (RFC 2586) for `pcm`. |
+| `Content-Length` | Total bytes. |
+| `X-Audio-Sample-Rate` | Native sample rate of the model output. **24000** Hz for Chatterbox, **44100** Hz for Supertonic. Override by setting `sampleRate` on the alias's `config`. |
+| `X-Audio-Channels` | Always `1` (mono). |
+| `X-Audio-Bits-Per-Sample` | Always `16`. |
+| `X-QVAC-Ignored-Params` | Comma-separated list of accepted-but-dropped OpenAI fields (only present when at least one was sent). |
+
+The route always **buffers the full audio** before responding (chunked HTTP streaming is tracked as a follow-up).
+
+### Examples
+
+**WAV (default), drop-in alias for OpenAI `tts-1`:**
+
+```bash
+curl -sS http://127.0.0.1:11434/v1/audio/speech \
+  -H "Content-Type: application/json" \
+  -d '{"model":"tts-1","voice":"alloy","input":"Hello from QVAC."}' \
+  --output speech.wav
+```
+
+**Raw PCM (RFC 2586 `audio/L16`) — easier for in-process playback:**
+
+```bash
+curl -sS http://127.0.0.1:11434/v1/audio/speech \
+  -H "Content-Type: application/json" \
+  -d '{"model":"my-tts","voice":"echo","input":"PCM body.","response_format":"pcm"}' \
+  --output speech.pcm
+ffplay -f s16le -ar 24000 -ac 1 speech.pcm  # rate/channels come from the response headers
+```
+
+### Errors
+
+| HTTP | `error.code` | When |
+|------|--------------|------|
+| 400 | `invalid_json` | Body is not valid JSON |
+| 400 | `missing_model` | `model` field is missing |
+| 400 | `missing_input` | `input` is missing or empty/whitespace |
+| 400 | `input_too_long` | `input.length` exceeds `maxInputChars` (default 4096) |
+| 400 | `missing_voice` | `voice` not sent and `defaultVoice` is `null` |
+| 400 | `unsupported_response_format` | `mp3` / `opus` / `aac` / `flac` (no encoder bundled) |
+| 400 | `invalid_response_format` | Anything other than `wav` / `pcm` / the unsupported set above |
+| 400 | `invalid_model_type` | Alias is not a `speech` model |
+| 404 | `model_not_found` | No `voices` mapping, no hyphen alias, no bare alias matches |
+| 502 | `speech_empty` | The SDK returned zero samples — surfaced loudly so callers can distinguish "no audio" from "audio body" |
+| 503 | `model_not_ready` | Model not loaded yet |
+| 500 | `speech_error` | SDK / engine failure (message goes to server logs only) |

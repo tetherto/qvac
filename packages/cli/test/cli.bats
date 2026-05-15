@@ -43,7 +43,7 @@ setup_file() {
 
   for _ in $(seq 1 20); do
     local code
-    code=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:19921/v1/models" 2>/dev/null)
+    code=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:19921/v1/models" 2>/dev/null || echo "000")
     [[ "${code}" == "401" ]] && break
     sleep 0.25
   done
@@ -608,6 +608,115 @@ http_status() {
   local max_age=${BASH_REMATCH[1]}
   [[ "${max_age}" -gt 0 ]]
   [[ "${max_age}" -le 3600 ]]
+}
+
+# ── Serve: speech (text-to-speech) validation ─────────────────────────
+
+@test "speech: invalid JSON returns 400" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/audio/speech" \
+    -H "Content-Type: application/json" -d '{not valid json}')
+  assert_error "${body}" "invalid_json"
+}
+
+@test "speech: missing model returns 400" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/audio/speech" \
+    -H "Content-Type: application/json" \
+    -d '{"input":"hello","voice":"alloy"}')
+  assert_error "${body}" "missing_model"
+}
+
+@test "speech: missing input returns 400" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/audio/speech" \
+    -H "Content-Type: application/json" \
+    -d '{"model":"test","voice":"alloy"}')
+  assert_error "${body}" "missing_input"
+}
+
+@test "speech: empty input returns 400" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/audio/speech" \
+    -H "Content-Type: application/json" \
+    -d '{"model":"test","voice":"alloy","input":"   "}')
+  assert_error "${body}" "missing_input"
+}
+
+@test "speech: mp3 response_format returns 400 unsupported_response_format" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/audio/speech" \
+    -H "Content-Type: application/json" \
+    -d '{"model":"test","voice":"alloy","input":"hi","response_format":"mp3"}')
+  assert_error "${body}" "unsupported_response_format"
+}
+
+@test "speech: opus response_format returns 400 unsupported_response_format" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/audio/speech" \
+    -H "Content-Type: application/json" \
+    -d '{"model":"test","voice":"alloy","input":"hi","response_format":"opus"}')
+  assert_error "${body}" "unsupported_response_format"
+}
+
+@test "speech: aac response_format returns 400 unsupported_response_format" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/audio/speech" \
+    -H "Content-Type: application/json" \
+    -d '{"model":"test","voice":"alloy","input":"hi","response_format":"aac"}')
+  assert_error "${body}" "unsupported_response_format"
+}
+
+@test "speech: flac response_format returns 400 unsupported_response_format" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/audio/speech" \
+    -H "Content-Type: application/json" \
+    -d '{"model":"test","voice":"alloy","input":"hi","response_format":"flac"}')
+  assert_error "${body}" "unsupported_response_format"
+}
+
+@test "speech: unknown response_format returns 400 invalid_response_format" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/audio/speech" \
+    -H "Content-Type: application/json" \
+    -d '{"model":"test","voice":"alloy","input":"hi","response_format":"mp4"}')
+  assert_error "${body}" "invalid_response_format"
+}
+
+@test "speech: input over default 4096-char cap returns 400 input_too_long" {
+  # default server inherits the documented default cap (4096).
+  local big body
+  big=$(printf 'a%.0s' $(seq 1 4097))
+  body=$(curl -s "http://127.0.0.1:19920/v1/audio/speech" \
+    -H "Content-Type: application/json" \
+    -d "{\"model\":\"test\",\"voice\":\"alloy\",\"input\":\"${big}\"}")
+  assert_error "${body}" "input_too_long"
+}
+
+@test "speech: unknown model returns 404" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/audio/speech" \
+    -H "Content-Type: application/json" \
+    -d '{"model":"nonexistent","voice":"alloy","input":"hi"}')
+  assert_error "${body}" "model_not_found"
+}
+
+@test "speech: defaults voice to alloy when omitted (still 404 model_not_found)" {
+  # The default voice is "alloy"; with no models loaded the route must reach
+  # alias resolution and return model_not_found, not missing_voice.
+  local body
+  body=$(curl -s "http://127.0.0.1:19920/v1/audio/speech" \
+    -H "Content-Type: application/json" \
+    -d '{"model":"nonexistent","input":"hi"}')
+  assert_error "${body}" "model_not_found"
+}
+
+@test "speech: auth required when api-key set" {
+  local body
+  body=$(curl -s "http://127.0.0.1:19921/v1/audio/speech" \
+    -H "Content-Type: application/json" \
+    -d '{"model":"test","voice":"alloy","input":"hi"}')
+  assert_error "${body}" "invalid_api_key"
 }
 
 # ── Serve: routing ────────────────────────────────────────────────────

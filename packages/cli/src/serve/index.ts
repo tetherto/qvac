@@ -128,6 +128,7 @@ const CATEGORY_ENDPOINTS: Record<string, string[]> = {
   embedding: ['POST /v1/embeddings'],
   transcription: ['POST /v1/audio/transcriptions'],
   'audio-translation': ['POST /v1/audio/translations'],
+  speech: ['POST /v1/audio/speech'],
   image: ['POST /v1/images/generations', 'POST /v1/images/edits']
 }
 

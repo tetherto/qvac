@@ -88,20 +88,20 @@ When a new cache key is used for the first time:
 
 | File | Purpose |
 |------|---------|
-| `server/bare/plugins/llamacpp-completion/ops/kv-cache-session.ts` | **`KvCacheSession` — single owner of the three KV-cache bookkeeping layers** (on-disk `.bin`, `initializedCaches`, `cachedMessageCounts`). Exposes `beginTurn` / `commitTurn` / `rollback` / `dropStaleSavedCount` plus the module-level `deleteKvCacheState(...)` administrative API. M2 (QVAC-18182). |
+| `server/bare/plugins/llamacpp-completion/ops/kv-cache-session.ts` | **`KvCacheSession` — single owner of the three KV-cache bookkeeping layers** (on-disk `.bin`, `initializedCaches`, `cachedMessageCounts`). Exposes `beginTurn` / `commitTurn` / `rollback` / `dropStaleSavedCount` plus the module-level `deleteKvCacheState(...)` administrative API. (QVAC-18182). |
 | `server/bare/plugins/llamacpp-completion/ops/completion-stream.ts` | Completion handler. Calls `session.beginTurn(...)`, registers `scope.defer(() => session.rollback(turn))` once, and calls `session.commitTurn(...)` on the happy path (which suppresses the deferred rollback). No direct references to the three layers. |
 | `server/bare/plugins/llamacpp-completion/ops/kv-cache-state.ts` | Pure `decideCachedHistorySlice(...)` helper used by the session — slice decision for the next addon call. No state. |
 | `server/bare/ops/kv-cache-utils.ts` | Path / hash / fs utilities: `getCacheFilePath`, `generateConfigHash`, `findMatchingCache`, `getCurrentCacheInfo`, `renameCacheFile`, `deleteCache`. No in-memory state. |
 | `server/bare/plugins/llamacpp-completion/ops/cache-logger.ts` | Debug logging for cache operations |
-| `server/rpc/handlers/delete-cache.ts` | `handleDeleteCache` RPC entry point. Delegates to `deleteKvCacheState(...)` — zero direct references to the three layers (M2 deliverable 5). |
+| `server/rpc/handlers/delete-cache.ts` | `handleDeleteCache` RPC entry point. Delegates to `deleteKvCacheState(...)` — zero direct references to the three layers. |
 | `server/utils/cache.ts` | `getKVCacheDir()` base directory |
 | `client/api/delete-cache.ts` | Client-side delete cache API |
 
 ## Key Behaviors
 
-### `KvCacheSession` Ownership (M2)
+### `KvCacheSession` Ownership
 
-Before M2 the completion handler coordinated three independent bookkeeping layers around every cancel/error branch:
+Before 0.11.0 the completion handler coordinated three independent bookkeeping layers around every cancel/error branch:
 
 1. An in-memory `Set<string>` of "initialized caches" (`kv-cache-utils.ts`).
 2. A `Map<string, number>` of saved-message counts (`kv-cache-state.ts`).
@@ -109,7 +109,7 @@ Before M2 the completion handler coordinated three independent bookkeeping layer
 
 Three near-identical cleanup blocks in `completion-stream.ts` had to touch all three on every cancel / zero-token / rename-failed / tool-call exit. Any one of those blocks forgetting a layer produced the drift bugs the pitch documents (QVAC-17780 family).
 
-**M2 collapses this into `KvCacheSession`**, the **single mutation point** for the three layers. The handler's loop is now:
+**0.11.0 collapses this into `KvCacheSession`**, the **single mutation point** for the three layers. The handler's loop is now:
 
 ```typescript
 const session = createKvCacheSession(modelId);
