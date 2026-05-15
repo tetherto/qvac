@@ -22,6 +22,8 @@ import {
 } from "@/utils/errors-client";
 import { assertModelSrcMatchesModelType } from "@/utils/load-model-validation";
 import { getClientLogger } from "@/logging";
+import { decoratePromise } from "@/utils/decorate-promise";
+import { generateClientRequestId } from "@/client/api/client-request-id";
 
 const logger = getClientLogger();
 
@@ -46,7 +48,7 @@ const logger = getClientLogger();
 export function loadModel<S extends ModelDescriptor>(
   options: LoadModelDescriptorParam<S>,
   rpcOptions?: RPCOptions,
-): Promise<string>;
+): Promise<string> & { requestId: string };
 
 /**
  * Loads a machine learning model from a local path, remote URL, or Hyperdrive key.
@@ -143,7 +145,7 @@ export function loadModel<S extends ModelDescriptor>(
 export function loadModel(
   options: LoadModelOptions,
   rpcOptions?: RPCOptions,
-): Promise<string>;
+): Promise<string> & { requestId: string };
 
 /**
  * Loads a custom plugin model (any non-built-in `modelType` string).
@@ -159,7 +161,7 @@ export function loadModel(
 export function loadModel<T extends string>(
   options: LoadCustomPluginModelOptions<T>,
   rpcOptions?: RPCOptions,
-): Promise<string>;
+): Promise<string> & { requestId: string };
 
 /**
  * Hot-reloads configuration on an already loaded model.
@@ -196,14 +198,39 @@ export function loadModel<T extends string>(
 export function loadModel(
   options: ReloadConfigOptions,
   rpcOptions?: RPCOptions,
-): Promise<string>;
+): Promise<string> & { requestId: string };
 
-export async function loadModel(
+export function loadModel(
   options:
     | LoadModelOptions
     | LoadCustomPluginModelOptions<string>
     | LoadModelDescriptorOnlyOptions
     | ReloadConfigOptions,
+  rpcOptions?: RPCOptions,
+): Promise<string> & { requestId: string } {
+  // Generate a stable `requestId` once, synchronously, before kicking
+  // off any async work. The same id is:
+  //   - threaded onto the request envelope (`request.requestId`) so the
+  //     server's `registry.begin(...)` records it on the registry
+  //     entry; and
+  //   - attached to the returned promise via `decoratePromise` so the
+  //     caller can target this exact call with `cancel({ requestId })`
+  //     before `await` resolves. Generating client-side and surfacing
+  //     it synchronously is what closes the "stop-button race" gap for
+  //     `loadModel` / `downloadAsset` callers — same shape as the
+  //     `CompletionRun.requestId` contract.
+  const requestId = generateClientRequestId();
+  const inner = runLoadModel(options, requestId, rpcOptions);
+  return decoratePromise(inner, { requestId });
+}
+
+async function runLoadModel(
+  options:
+    | LoadModelOptions
+    | LoadCustomPluginModelOptions<string>
+    | LoadModelDescriptorOnlyOptions
+    | ReloadConfigOptions,
+  requestId: string,
   rpcOptions?: RPCOptions,
 ): Promise<string> {
   const isReloadConfig = "modelId" in options && !("modelSrc" in options);
@@ -231,6 +258,13 @@ export async function loadModel(
       );
     }
   }
+
+  // Splice the client-generated `requestId` onto the resolved options so
+  // the wire envelope carries it. The server uses the same value as the
+  // registry-entry key — that match is what makes
+  // `cancel({ requestId: op.requestId })` a no-op when no match exists
+  // and a precise abort when it does.
+  resolvedOptions = { ...resolvedOptions, requestId };
 
   const request = isReloadConfig
     ? reloadConfigOptionsToRequestSchema.parse(resolvedOptions)

@@ -1,6 +1,10 @@
 // @ts-expect-error brittle has no type declarations
 import test from "brittle";
-import { embedResponseSchema, embedStatsSchema } from "@/schemas/embed";
+import {
+  embedRequestSchema,
+  embedResponseSchema,
+  embedStatsSchema,
+} from "@/schemas/embed";
 
 test("embedStatsSchema: accepts backendDevice 'cpu' and 'gpu'", (t) => {
   t.is(embedStatsSchema.safeParse({ backendDevice: "cpu" }).success, true);
@@ -37,4 +41,36 @@ test("embedResponseSchema: round-trips backendDevice through stats", (t) => {
   if (result.success) {
     t.is(result.data.stats?.backendDevice, "gpu");
   }
+});
+
+test("embedRequestSchema: accepts an optional requestId", (t) => {
+  const result = embedRequestSchema.safeParse({
+    type: "embed",
+    modelId: "m1",
+    text: "hello",
+    requestId: "req-1",
+  });
+  t.is(result.success, true);
+  if (result.success) {
+    t.is(result.data.requestId, "req-1");
+  }
+});
+
+test("embedRequestSchema: requestId is optional (server falls back to a generated id for older clients)", (t) => {
+  const result = embedRequestSchema.safeParse({
+    type: "embed",
+    modelId: "m1",
+    text: "hello",
+  });
+  t.is(result.success, true);
+});
+
+test("embedRequestSchema: rejects empty-string requestId", (t) => {
+  const result = embedRequestSchema.safeParse({
+    type: "embed",
+    modelId: "m1",
+    text: "hello",
+    requestId: "",
+  });
+  t.is(result.success, false);
 });
