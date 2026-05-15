@@ -373,11 +373,26 @@ function createPerformanceReporter (opts) {
 
       lines.push(`### Performance: ${addon}`)
       lines.push('')
-      lines.push(`> Device: **${device.name}** (${device.platform}/${device.arch}) | ` +
+      // Follow-up to QVAC-17830 (Olya, 14 May): mirror the mobile renderer
+      // by surfacing device.gpu in the subtitle when populated. detectDevice()
+      // already collects it via _detectGpu(); we just weren't rendering it
+      // in the desktop per-job summary so reviewers had no GPU context for
+      // the [GPU] rows. Falls back to the legacy subtitle when gpu is null.
+      const gpuLabel = device.gpu ? ` | GPU: ${device.gpu}` : ''
+      lines.push(`> Device: **${device.name}** (${device.platform}/${device.arch})${gpuLabel} | ` +
                   `Run: ${ci.run_number || 'local'} | ${startedAt}`)
       lines.push('')
 
-      const header = ['Test', 'EP', ...cols.map(c => c.label)]
+      // Follow-up to QVAC-17830: include a Model column when any row in
+      // this report carries a model id so reviewers can tell which weights
+      // produced each row. Mirrors render-step-summary.js so desktop and
+      // mobile per-job summaries share the same column layout. Drop the
+      // column when no row sets it so existing addons stay pixel-identical.
+      const includeModel = results.some(r => r && r.model)
+      const baseHeader = ['Test']
+      if (includeModel) baseHeader.push('Model')
+      baseHeader.push('EP')
+      const header = [...baseHeader, ...cols.map(c => c.label)]
       lines.push('| ' + header.join(' | ') + ' |')
       lines.push('| ' + header.map(() => '---').join(' | ') + ' |')
 
@@ -390,7 +405,10 @@ function createPerformanceReporter (opts) {
           if (typeof v === 'number') return Number.isInteger(v) ? String(v) : v.toFixed(2)
           return String(v)
         })
-        lines.push('| ' + [r.test, ep, ...vals].join(' | ') + ' |')
+        const cells = [r.test]
+        if (includeModel) cells.push(r.model || '-')
+        cells.push(ep, ...vals)
+        lines.push('| ' + cells.join(' | ') + ' |')
       }
 
       lines.push('')
