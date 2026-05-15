@@ -28,8 +28,13 @@ Supported model families and their file layouts:
 - **FLUX.2-klein**: split layout — diffusion model `*.gguf` + LLM text encoder `*.gguf` (via `llmModelSrc`) + VAE `*.safetensors` (via `vaeModelSrc`).
 - **SD1.x, SD2.x**: single all-in-one `*.gguf` file. No companion files needed.
 - **SDXL, SD3**: may require separate CLIP/T5 text encoder files (`clipLModelSrc`, `clipGModelSrc`, `t5XxlModelSrc`) in `modelConfig` depending on the model variant.
+- **ESRGAN** (via `modelConfig.upscaler.model_src`): post-generation upscaler. Model file format: `*.pth` _(optional)_.
 
 For models available as constants, see [SDK — Models](/introduction#models).
+
+<Callout type="info">
+**On upscaling:** ESRGAN is an ancillary model that can be paired with any supported diffusion family to upscale generated images in the same call. Available constants: `REALESRGAN_X4PLUS_ANIME_6B`, `REALESRGAN_X4PLUS`.
+</Callout>
 
 ## Examples
 
@@ -101,6 +106,34 @@ The following script loads FLUX.2-klein in split-layout and transforms an input 
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/diffusion-flux2-klein-img2img.ts title="diffusion-flux2-klein-img2img.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+### Upscaling
+
+Pass `upscale` to `diffusion()` to upscale generated images in the same call. Requires `modelConfig.upscaler = { type: "esrgan", model_src, tile_size? }` at `loadModel()` time. Behavior depends on the value passed:
+
+- `true` (or `{}` / `{ repeats: 1 }`): single pass at the model's native scale factor (e.g. `x4` for RealESRGAN_x4plus).
+- `{ repeats: N }`: N sequential passes — each pass multiplies the output dimensions by the model's scale factor (e.g. `repeats: 2` with an `x4` model → `x16`).
+- When `batch_count > 1`, every output image is upscaled independently.
+
+The following script loads SD 2.1 with an ESRGAN upscaler and generates both a single-pass (`x4`) and a two-pass (`x16`) upscale from the same prompt:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/diffusion-esrgan-upscale.js title="diffusion-esrgan-upscale.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/diffusion-esrgan-upscale.ts title="diffusion-esrgan-upscale.ts" lineNumbers
 ```
 </WrapCode>
 </Tab>
