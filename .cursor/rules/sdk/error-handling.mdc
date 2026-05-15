@@ -177,6 +177,24 @@ Located in `@/utils/errors-server`
 - `AttachmentNotFoundError` - Attachment not found
 - `CancelFailedError` - Cancel failed
 - `TextToSpeechFailedError` - TTS failed
+- `RequestIdConflictError` (52417) - `registry.begin(...)` called with a `requestId` already present. Carries `requestId`. Re-exported from `@qvac/sdk` for `instanceof` checks (reconstructed across RPC by the typed-error reconstructor — see "Typed errors across RPC" below).
+- `RequestNotFoundError` (52418) - registry lookup miss (no in-flight request for the given id). Carries `requestId`. Re-exported from `@qvac/sdk` for `instanceof` checks (reconstructed across RPC).
+- `InferenceCancelledError` (52419) - cancelled inference run; carries `requestId` + `partial: { text?, toolCalls?, stats? }`. Constructed client-side on `stopReason: "cancelled"` (event stream ends normally; promise-aggregates reject with this). Re-exported from `@qvac/sdk` for `instanceof` checks. **Not** RPC-reconstructed — client-side only.
+- `RequestRejectedByPolicyError` (52420) - registry concurrency-policy admission failure (e.g. `oneAtATimePerModel`); carries `requestId`, `kind`, `modelId`, and a `reason` string. Re-exported from `@qvac/sdk` for `instanceof` checks (reconstructed across RPC). See `.cursor/rules/sdk/request-lifecycle-primitives.mdc` for the policy contract.
+
+### Typed errors across RPC
+
+Server-thrown `QvacError` subclasses that need to survive the RPC boundary as their original class (so `err instanceof RequestRejectedByPolicyError` works on the consumer side) are wired through a small reconstructor pipeline:
+
+1. The class extends `QvacErrorBase` and implements `toErrorResponseFields(): Record<string, unknown>` listing the named constructor fields the client needs to rebuild it. The base envelope (`name`, `code`, `message`, `stack`, `timestamp`, `cause`) is already carried by `createErrorResponse(...)`; `typedFields` is the per-class extension.
+2. The class is re-exported from `@qvac/sdk` (root `index.ts`). Forgetting this means consumers can't `import { Foo } from "@qvac/sdk"` even though the reconstructor builds a `Foo` instance, and `instanceof` regresses.
+3. A row is added to the `RECONSTRUCTORS` map in `client/rpc/rpc-error.ts`, keyed by the class `name`. The row reads from `response.typedFields` (defaulting missing fields defensively) and forwards `response.cause`.
+
+`client/rpc/rpc-client.ts` calls `reconstructError(response)` instead of `new RPCError(response)`: a registered class is rebuilt; an unknown `name` falls through to `RPCError` so consumers using `code`-based predicates still work.
+
+Three classes are wired today: `RequestIdConflictError`, `RequestNotFoundError`, `RequestRejectedByPolicyError`. Add new rows whenever a new cross-RPC server-thrown class is introduced — the maintenance contract lives at the top of the `RECONSTRUCTORS` map.
+
+`InferenceCancelledError` is **not** in this map: it's constructed client-side in `client/api/completion-stream.ts` from the aggregated partial state on `stopReason: "cancelled"`. Adding a reconstructor for a client-constructed class creates a parallel construction path and is a smell.
 
 #### RAG Operations (52,800-52,999)
 - `RAGSaveFailedError` - Save failed

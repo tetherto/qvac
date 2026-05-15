@@ -12,7 +12,7 @@ npm install
 npm run docs:generate-api -- 0.9.1 --latest  # writes content/docs/sdk/api/index.mdx
 ```
 
-Full workflow, CLI flags, AI augmentation, determinism guarantees, and troubleshooting are documented in [docs/docs-workflow.md](docs/docs-workflow.md). `docs:generate-api` requires `bun` on PATH (listed as a devDependency of `docs/website`).
+Full workflow, CLI flags, AI augmentation, determinism guarantees, and troubleshooting are documented in [docs/website/docs-workflow.md](docs/website/docs-workflow.md). `docs:generate-api` requires `bun` on PATH (listed as a devDependency of `docs/website`).
 
 ## PR Labels
 

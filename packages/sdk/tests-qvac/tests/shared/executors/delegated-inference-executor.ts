@@ -183,13 +183,30 @@ export class DelegatedInferenceExecutor extends BaseExecutor<typeof allTests> {
 
   async cancelDelegatedDownload(): Promise<TestResult> {
     return this.withProvider(async ({ publicKey }) => {
+      // 0.11.0 cancel surface is requestId-based; delegated routing is
+      // bound to the requestId via the registry rather than carried on
+      // the cancel wire. `downloadAsset` is not delegatable on the
+      // client (the SDK only delegates via `loadModel`), so the
+      // spiritually-equivalent path is: start a delegated `loadModel`
+      // (whose work includes downloading the asset on the provider),
+      // grab the synchronously-exposed `op.requestId`, and cancel by
+      // id. Same-process delegation fails with DELEGATE_CONNECTION_FAILED
+      // before begin completes — which is the asserted success path
+      // (it confirms the cancel routed through the delegation pipe).
+      const op = loadModel({
+        modelSrc: LLAMA_3_2_1B_INST_Q4_0,
+        modelType: "llm",
+        delegate: {
+          providerPublicKey: publicKey,
+          timeout: DEFAULT_DELEGATE_TIMEOUT,
+          fallbackToLocal: false,
+        },
+      });
+      void op.catch(() => {});
+
       try {
-        await cancel({
-          operation: "downloadAsset",
-          downloadKey: "nonexistent-delegated-download",
-          delegate: { providerPublicKey: publicKey, timeout: DEFAULT_DELEGATE_TIMEOUT },
-        });
-        return { passed: true, output: "Cancel delegated download API accepted" };
+        await cancel({ requestId: op.requestId });
+        return { passed: true, output: "Delegated cancel by requestId accepted" };
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
 

@@ -6,6 +6,7 @@ import {
 } from "@tetherto/qvac-test-suite";
 import { AbstractModelExecutor } from "./abstract-model-executor.js";
 import { kvCacheTests } from "../../kv-cache-tests.js";
+import { callWhenAddonIdle } from "../utils/addon-idle.js";
 
 interface ChatMessage {
   role: string;
@@ -52,28 +53,31 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
     }
   }
 
-  private async runCompletion(modelId: string, params: {
+  // Retry on a policy-reject so a slot left by a previously wedged test does not poison this one.
+  private runCompletion(modelId: string, params: {
     history: ChatMessage[];
     stream?: boolean;
     kvCache?: string | boolean;
     tools?: unknown[];
   }): Promise<string> {
-    const result = completion({
-      modelId,
-      history: params.history,
-      stream: params.stream ?? false,
-      kvCache: params.kvCache as never,
-      ...(params.tools ? { tools: params.tools as never } : {}),
-    });
+    return callWhenAddonIdle(async () => {
+      const result = completion({
+        modelId,
+        history: params.history,
+        stream: params.stream ?? false,
+        kvCache: params.kvCache as never,
+        ...(params.tools ? { tools: params.tools as never } : {}),
+      });
 
-    if (params.stream) {
-      let fullText = "";
-      for await (const token of result.tokenStream) {
-        fullText += token;
+      if (params.stream) {
+        let fullText = "";
+        for await (const token of result.tokenStream) {
+          fullText += token;
+        }
+        return fullText;
       }
-      return fullText;
-    }
-    return result.text;
+      return result.text;
+    });
   }
 
   async kvCompletion(

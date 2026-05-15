@@ -231,6 +231,9 @@ export const parakeetPlugin = definePlugin({
       requestSchema: transcribeRequestSchema,
       responseSchema: transcribeResponseSchema,
       streaming: true,
+      // Parakeet addon exposes a model-wide hard cancel — compute is
+      // interrupted on the currently-running transcription.
+      cancel: { scope: "model", hard: true },
 
       handler: async function* (request) {
         if (request.metadata === true) {
@@ -239,11 +242,14 @@ export const parakeetPlugin = definePlugin({
           );
         }
 
-        const stream = transcribe({
-          modelId: request.modelId,
-          audioChunk: request.audioChunk,
-          prompt: request.prompt,
-        });
+        const stream = transcribe(
+          {
+            modelId: request.modelId,
+            audioChunk: request.audioChunk,
+            prompt: request.prompt,
+          },
+          request.requestId,
+        );
 
         try {
           let result = await stream.next();

@@ -14,7 +14,10 @@ import {
   type ToolCallWithCall,
   type RPCOptions,
 } from "@/schemas";
-import { CompletionFailedError } from "@/utils/errors-server";
+import {
+  CompletionFailedError,
+  InferenceCancelledError,
+} from "@/utils/errors-server";
 import { getMcpToolsWithHandlers } from "@/utils/mcp-adapter";
 import {
   validateTools,
@@ -22,6 +25,7 @@ import {
   type ToolInput,
 } from "@/utils/tool-helpers";
 import { buildFinalFromEvents } from "@/utils/aggregate-events";
+import { generateClientRequestId } from "@/client/api/client-request-id";
 
 const logger = getClientLogger();
 
@@ -265,12 +269,31 @@ export function completion(params: CompletionParams): CompletionRun {
           notifyWaiters();
 
           if (streamResponse.done) {
-            const { final, error } = buildFinalFromEvents(
+            const { final, error, cancelled } = buildFinalFromEvents(
               allEvents,
               allHandlers,
             );
             if (error) {
               const err = new CompletionFailedError(error.message, error);
+              finalRejecter(err);
+              statsRejecter(err);
+              toolCallsRejecter(err);
+            } else if (cancelled) {
+              // The wire stream ended with `stopReason: "cancelled"` — the
+              // run was aborted mid-flight. Cancellation contract: `events`
+              // ends normally (consumers iterating `run.events` see the
+              // cancelled `completionDone` and exit naturally), and the
+              // promise-aggregates reject with `InferenceCancelledError`
+              // carrying whatever the aggregator accumulated up to the
+              // cancel point. Consumers do `instanceof
+              // InferenceCancelledError` and read `.partial.text` /
+              // `.partial.toolCalls` / `.partial.stats` if they want the
+              // partial output.
+              const err = new InferenceCancelledError(requestId, {
+                text: final.contentText,
+                toolCalls: final.toolCalls,
+                ...(final.stats && { stats: final.stats }),
+              });
               finalRejecter(err);
               statsRejecter(err);
               toolCallsRejecter(err);
@@ -387,27 +410,3 @@ export function completion(params: CompletionParams): CompletionRun {
   }
 }
 
-/**
- * UUIDv4 generator for client-side request ids. The Web Crypto API ships
- * `crypto.randomUUID` everywhere we run today (Bun, modern Node, modern
- * browsers, React Native via the polyfill that the workbench-desktop /
- * RN runtime config injects). The fallback exists so the SDK never
- * crashes in an exotic JS environment without `crypto.randomUUID` —
- * `requestId` semantics still hold (uniqueness, opaque to the caller),
- * just without the UUIDv4 wire shape.
- */
-function generateClientRequestId(): string {
-  const c = (
-    globalThis as {
-      crypto?: { randomUUID?: () => string };
-    }
-  ).crypto;
-  if (c?.randomUUID) return c.randomUUID();
-  // Fallback: 128 random bits encoded as a hex string. Distinct enough
-  // for in-flight cancel targeting; not a wire-spec UUID.
-  const bytes = new Uint8Array(16);
-  for (let i = 0; i < bytes.length; i++) {
-    bytes[i] = Math.floor(Math.random() * 256);
-  }
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
-}

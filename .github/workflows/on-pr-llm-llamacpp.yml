@@ -16,7 +16,6 @@ on:
       - "packages/llm-llamacpp/**"
       - ".github/workflows/*llamacpp-llm*.yml"
   workflow_dispatch:
-  
   workflow_call:
 
 permissions:
@@ -29,6 +28,26 @@ env:
   PKG_DIR: packages/llm-llamacpp
 
 jobs:
+  label-gate:
+    name: Authorise (label-gate)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      authorised: ${{ steps.gate.outputs.authorised }}
+    steps:
+      - name: Checkout (label-gate action only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/label-gate
+          sparse-checkout-cone-mode: false
+      - name: Run label-gate
+        id: gate
+        uses: ./.github/actions/label-gate
+        with:
+          github-token: ${{ secrets.PAT_TOKEN }}
   authorize:
     runs-on: ubuntu-latest
     permissions:
@@ -61,8 +80,11 @@ jobs:
         run: 'echo "Verified qvac-fabric version: ${{ steps.lockstep.outputs.version }}"'
 
   sanity-checks:
-    if: needs.authorize.outputs.allowed == 'true'
-    needs: [authorize, verify-fabric-lockstep]
+    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true')
+    needs:
+      - authorize
+      - verify-fabric-lockstep
+      - label-gate
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -79,8 +101,11 @@ jobs:
           workdir: packages/llm-llamacpp
 
   cpp-tests:
-    if: needs.authorize.outputs.allowed == 'true'
-    needs: [authorize, sanity-checks]
+    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true')
+    needs:
+      - authorize
+      - sanity-checks
+      - label-gate
     uses: ./.github/workflows/cpp-tests-llm.yml
     secrets: inherit
     with:
@@ -89,9 +114,11 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref }}
 
   cpp-lint:
-    if: needs.authorize.outputs.allowed == 'true'
+    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true')
     uses: ./.github/workflows/cpp-lint.yaml
-    needs: authorize
+    needs:
+      - authorize
+      - label-gate
     secrets: inherit
     with:
       sha: ${{ github.event.pull_request.base.sha }}
@@ -128,8 +155,11 @@ jobs:
           workdir: packages/llm-llamacpp
 
   prebuild:
-    needs: [authorize, sanity-checks]
-    if: needs.authorize.outputs.allowed == 'true'
+    needs:
+      - authorize
+      - sanity-checks
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true')
     permissions:
       contents: write
       packages: write
@@ -142,8 +172,11 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref }}
 
   run-integration-tests:
-    if: needs.authorize.outputs.allowed == 'true'
-    needs: [authorize, prebuild]
+    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true')
+    needs:
+      - authorize
+      - prebuild
+      - label-gate
     permissions:
       contents: read
       packages: read
@@ -160,8 +193,11 @@ jobs:
       packages: read
       pull-requests: write # Allow commenting on PRs
       id-token: write
-    if: needs.authorize.outputs.allowed == 'true'
-    needs: [authorize, prebuild]
+    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true')
+    needs:
+      - authorize
+      - prebuild
+      - label-gate
     uses: ./.github/workflows/integration-mobile-test-llm-llamacpp.yml
     secrets: inherit
     with:
@@ -403,18 +439,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
 
   merge-guard:
-    needs:
-      [
-        authorize,
-        verify-fabric-lockstep,
-        run-integration-tests,
-        run-mobile-integration-tests,
-        sanity-checks,
-        prebuild,
-        cpp-tests,
-        cpp-lint,
-        ts-checks,
-      ]
+    needs: [authorize, verify-fabric-lockstep, run-integration-tests, run-mobile-integration-tests, sanity-checks, prebuild, cpp-tests, cpp-lint, ts-checks]
     if: always()
     uses: ./.github/workflows/public-pr.yml
     with:

@@ -79,8 +79,8 @@ jobs:
       matrix:
         include:
           - platform: Android
-            os: ubuntu-24.04
-            runner: ai-run-linux
+            os: ubuntu-22.04
+            runner: qvac-ubuntu2204-x64
           - platform: iOS
             os: macos-14
             runner: macos-14
@@ -94,28 +94,6 @@ jobs:
             echo "::error::Invalid package scope. Only @qvac/* is allowed."
             exit 1
           fi
-
-      # Free up disk space on Ubuntu runner to prevent "No space left on device" errors
-      - name: Free up disk space
-        if: matrix.platform == 'Android'
-        run: |
-          echo "Disk space before cleanup:"
-          df -h
-          # Remove unnecessary software to free up disk space (|| true to handle self-hosted runners)
-          sudo rm -rf /usr/share/dotnet || true
-          sudo rm -rf /opt/ghc || true
-          sudo rm -rf /opt/hostedtoolcache/CodeQL || true
-          sudo rm -rf /opt/hostedtoolcache/go || true
-          sudo rm -rf /opt/hostedtoolcache/Python || true
-          sudo rm -rf /opt/hostedtoolcache/Ruby || true
-          sudo rm -rf /usr/local/lib/android/sdk/ndk || true
-          sudo rm -rf /usr/local/share/boost || true
-          sudo rm -rf /usr/share/swift || true
-          sudo docker image prune --all --force || true
-          # Clean APT cache
-          sudo apt-get clean || true
-          echo "Disk space after cleanup:"
-          df -h
 
       - name: Checkout addon repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -136,11 +114,13 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Node.js
+        if: matrix.platform == 'iOS'
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Install global dependencies
+        if: matrix.platform == 'iOS'
         run: |
           echo "Installing global dependencies..."
           npm install -g @expo/cli@latest
@@ -1713,7 +1693,7 @@ jobs:
 
       - name: Upload Console Logs
         if: always() && steps.schedule_run.outputs.run_count != '0' && steps.schedule_run.outputs.run_count != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: console-logs-${{ matrix.platform }}
           path: console-logs/
@@ -1722,7 +1702,7 @@ jobs:
 
       - name: Upload Full Device Farm Logs
         if: always() && steps.schedule_run.outputs.run_count != '0' && steps.schedule_run.outputs.run_count != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: devicefarm-logs-${{ matrix.platform }}
           path: devicefarm-logs/

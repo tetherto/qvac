@@ -70,6 +70,7 @@ import { DelegatedInferenceExecutor } from "../shared/executors/delegated-infere
 import { MobileDiffusionExecutor } from "./executors/diffusion-executor.js";
 import { LifecycleExecutor } from "../shared/executors/lifecycle-executor.js";
 import { ConfigExecutor } from "../shared/executors/config-executor.js";
+import { CancellationExecutor } from "../shared/executors/cancellation-executor.js";
 
 const resources = new ResourceManager({
   // Mobile (iOS + Android) needs a tick after each unloadModel for the
@@ -364,6 +365,10 @@ export const executor = createExecutor({
     new SkipExecutor(/^multi-gpu-/, "Multi-GPU tests disabled on mobile (not supported on single-GPU devices)"),
     new SkipExecutor(/^tools-(?!simple-function$|no-function-match$)/, "Tools test disabled on mobile"),
     new SkipExecutor(/^(diffusion-|addon-logging-diffusion$)/, "SD v2.1 1B Q8_0 cold-load is too heavy for Device Farm devices (iOS variable 5–15min, Android blocks JS thread >300s and trips heartbeat)"),
+    new SkipExecutor(
+      /^translation-bergamot-.+-cache-reload$/,
+      "Server-side Bare code path, identical across platforms — desktop coverage is source of truth",
+    ),
     // suspend() hangs the test runner on mobile (the lifecycle coordinator
     // pauses MQTT/network ops and never resumes within the test timeout).
     // Only resume-idempotent is safe -- it does not call suspend().
@@ -392,13 +397,6 @@ export const executor = createExecutor({
         "addon-logging-ocr",
       ], "OCR disabled on iOS (ONNX/CoreML OOM)"),
       new SkipExecutor(/^translation-afriquegemma-/, "AfriqueGemma 4B (~2.7 GB) exceeds iOS memory budget"),
-      // TODO(QVAC-18460): re-enable once iOS transcribe() crash is fixed.
-      new SkipExecutor(/^(transcription-|addon-logging-whisper$)/, "TODO(QVAC-18460): transcription disabled on iOS — transcribe() hard-crashes consumer after FFmpegDecoder unload"),
-      new SkipExecutor(/^transcribe-stream-events-/, "TODO(QVAC-18460): transcribeStream disabled on iOS — same native crash path as transcription-* (Silero VAD + whisper_full)"),
-      skipTests([
-        "config-reload-then-transcribe",
-        "error-transcription-failed",
-      ], "TODO(QVAC-18460): transcribe() hard-crashes consumer on iOS"),
     ] : []),
 
     // Real executors
@@ -428,6 +426,7 @@ export const executor = createExecutor({
     new MobileDiffusionExecutor(resources),
     new LifecycleExecutor(resources),
     new ConfigExecutor(),
+    new CancellationExecutor(resources),
   ],
   profiling: {
     init: () => profiler.enable({ mode: "summary", includeServerBreakdown: true }),

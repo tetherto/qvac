@@ -14,8 +14,11 @@ let modelId: string | undefined;
 let cancelled = false;
 
 try {
-  // Download model with progress tracking and cancellation
-  await downloadAsset({
+  // Download model with progress tracking and cancellation. The
+  // `downloadAsset(...)` call returns a *decorated* promise: the
+  // promise resolves to the modelId, and the same value carries a
+  // synchronous `requestId` field so we can cancel before it settles.
+  const download = downloadAsset({
     assetSrc: LLAMA_3_2_1B_INST_Q4_0,
     onProgress: (progress) => {
       const downloadedMB = (progress.downloaded / 1024 / 1024).toFixed(2);
@@ -35,17 +38,14 @@ try {
         console.log(progress);
         cancelled = true;
 
-        // Use the downloadKey to cancel
-        if (progress.downloadKey) {
-          void cancel({
-            operation: "downloadAsset",
-            downloadKey: progress.downloadKey,
-            // clearCache: true, // Uncomment to delete partial file instead of resuming
-          });
-        }
+        void cancel({
+          requestId: download.requestId,
+          // clearCache: true, // Uncomment to delete partial file instead of resuming
+        });
       }
     },
   });
+  await download;
 
   console.log(`\n✅ Model downloaded successfully! Model ID: ${modelId}`);
   console.log("🎯 Download completed without interruption");
