@@ -144,6 +144,12 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
 
+      - name: Cache HF integration test models
+        if: startsWith(matrix.runner, 'qvac-')
+        uses: ./.github/actions/cache-hf-models
+        with:
+          package: llm-llamacpp
+
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
