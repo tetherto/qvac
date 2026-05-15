@@ -13,7 +13,7 @@
 
 #include "model-interface/smolvla.hpp"
 
-namespace qvac_lib_infer_vla {
+namespace qvac_lib_infer_vla_ggml {
 
 // One inference call's worth of input. The framework's JobRunner runs
 // process() on a worker thread after the JS callback has already returned,
@@ -166,4 +166,4 @@ private:
   int64_t runtimeBackendDevice_ = 0;
 };
 
-} // namespace qvac_lib_infer_vla
+} // namespace qvac_lib_infer_vla_ggml

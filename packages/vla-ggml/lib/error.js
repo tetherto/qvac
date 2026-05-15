@@ -15,7 +15,8 @@ const ERR_CODES = Object.freeze({
   INVALID_INPUT: 30006,
   JOB_ALREADY_RUNNING: 30007,
   INSTANCE_NOT_INITIALIZED: 30008,
-  MODEL_UNLOADED: 30009
+  MODEL_UNLOADED: 30009,
+  INFERENCE_FAILED: 30010
 })
 
 addCodes(
@@ -55,6 +56,10 @@ addCodes(
     [ERR_CODES.MODEL_UNLOADED]: {
       name: 'MODEL_UNLOADED',
       message: () => 'Model was unloaded'
+    },
+    [ERR_CODES.INFERENCE_FAILED]: {
+      name: 'INFERENCE_FAILED',
+      message: message => `Inference failed: ${message}`
     }
   },
   {

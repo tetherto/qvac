@@ -14,6 +14,7 @@ export const ERR_CODES: Readonly<{
   JOB_ALREADY_RUNNING: 30007
   INSTANCE_NOT_INITIALIZED: 30008
   MODEL_UNLOADED: 30009
+  INFERENCE_FAILED: 30010
 }>
 
 export interface VlaHparams {
@@ -99,8 +100,6 @@ export function preprocessImage (
 ): Float32Array
 
 export function padState (state: ArrayLike<number>, targetDim?: number): Float32Array
-
-export function pickPrimaryGgufPath (files: string[]): string
 
 declare const _default: typeof VlaModel
 export default _default

@@ -144,7 +144,7 @@ class VlaModel {
     // aborts before delivering JobEnded/Error.
     if (typeof eventTypeName === 'string' && eventTypeName.includes('Error')) {
       const err = new QvacErrorAddonVla({
-        code: ERR_CODES.INVALID_INPUT,
+        code: ERR_CODES.INFERENCE_FAILED,
         adds: typeof errorData === 'string' ? errorData : 'native error'
       })
       if (this._pending) this._pending.actions = null
@@ -335,6 +335,5 @@ module.exports.VlaModel = VlaModel
 module.exports.preprocessImage = preprocessImage
 module.exports.padState = padState
 module.exports.DEFAULT_IMAGE_SIZE = DEFAULT_IMAGE_SIZE
-module.exports.pickPrimaryGgufPath = pickPrimaryGgufPath
 module.exports.QvacErrorAddonVla = QvacErrorAddonVla
 module.exports.ERR_CODES = ERR_CODES

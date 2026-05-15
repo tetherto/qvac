@@ -18,7 +18,7 @@
 #include "../utils/LoggingMacros.hpp"
 #include "AddonCpp.hpp"
 
-namespace qvac_lib_infer_vla {
+namespace qvac_lib_infer_vla_ggml {
 
 namespace detail {
 
@@ -258,7 +258,7 @@ inline js_value_t* setVerbosity(js_env_t* env, js_callback_info_t* info) try {
   if (level >= 0 && level <= static_cast<int32_t>(Priority::OFF)) {
     p = static_cast<Priority>(level);
   }
-  qvac_lib_infer_vla::logging::g_verbosityLevel = p;
+  qvac_lib_infer_vla_ggml::logging::g_verbosityLevel = p;
 
   js_value_t* undef = nullptr;
   js_get_undefined(env, &undef);
@@ -266,4 +266,4 @@ inline js_value_t* setVerbosity(js_env_t* env, js_callback_info_t* info) try {
 }
 JSCATCH
 
-} // namespace qvac_lib_infer_vla
+} // namespace qvac_lib_infer_vla_ggml

@@ -40,7 +40,6 @@ static double now_ms() {
 // Utility: GGML graph helpers
 // ============================================================
 
-// Cast tensor to F32 if it's not already F32
 static struct ggml_tensor*
 to_f32(struct ggml_context* ctx, struct ggml_tensor* x) {
   if (x && x->type != GGML_TYPE_F32) {
@@ -68,13 +67,12 @@ static struct ggml_tensor* smolvla_rms_norm(
   return x;
 }
 
-// SiLU activation: x * sigmoid(x)
 static struct ggml_tensor*
 smolvla_silu(struct ggml_context* ctx, struct ggml_tensor* x) {
   return ggml_silu(ctx, x);
 }
 
-// GELU with tanh approximation (used by SigLIP)
+// GELU with tanh approximation
 static struct ggml_tensor*
 smolvla_gelu(struct ggml_context* ctx, struct ggml_tensor* x) {
   return ggml_gelu(ctx, x);
@@ -230,7 +228,7 @@ static struct ggml_tensor* build_siglip_transformer(
   return x;
 }
 
-// Full SigLIP: patch embed + transformer (single-backend, for backward compat)
+// Full SigLIP: patch embed + transformer
 struct ggml_tensor* build_siglip_graph(
     struct ggml_context* ctx, smolvla_model& model,
     struct ggml_tensor* pixel_values) {
@@ -372,8 +370,7 @@ static struct ggml_tensor* build_transformer_layer(
 
   // Attention computation. ggml_flash_attn_ext was measured ~3× slower
   // per layer on Intel Iris Xe Vulkan (correct F16-mask + GGML_PREC_F32
-  // recipe). Mobile GPUs (Adreno/Mali) may benefit; revisit on those
-  // backends.
+  // recipe). Not yet benchmarked on Adreno OpenCL or Mali.
   q = ggml_cont(ctx, ggml_permute(ctx, q, 0, 2, 1, 3));
   k_expanded = ggml_cont(ctx, ggml_permute(ctx, k_expanded, 0, 2, 1, 3));
   v_expanded = ggml_cont(ctx, ggml_permute(ctx, v_expanded, 0, 2, 1, 3));
@@ -1826,7 +1823,7 @@ bool smolvla_inference_with_timing(
   double t_vision_start = now_ms();
 
   // Build full SigLIP+connector graph ONCE, reuse per image
-  // Conv2d auto-falls back to CPU via scheduler; rest runs on Vulkan
+  // Conv2d auto-falls back to CPU via scheduler; rest runs on GPU (Vulkan/Metal/OpenCL)
   staged_graph sg_vis = build_staged(model.backend, 256 * 1024 * 1024, 65536);
 
   struct ggml_tensor* g_pixels =

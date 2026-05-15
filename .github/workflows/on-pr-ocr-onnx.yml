@@ -1,7 +1,7 @@
 # TEMPORARY (tmp-vla): contents of this file are temporarily replaced with
-# the VLA on-pr pipeline so that mobile CI for the OpenCL-on-Adreno-800+
-# change in BackendSelection.cpp can be exercised on the S25 Ultra. Revert
-# this file to the OCR workflow body before merging tmp-vla.
+# the VLA on-pr pipeline to enable workflow_dispatch CI runs from this branch
+# (on-pr-vla.yml is not yet registered on main). Revert to the OCR workflow
+# body before merging tmp-vla into main.
 name: On PR Trigger (OCR)
 
 on:

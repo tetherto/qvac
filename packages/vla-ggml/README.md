@@ -88,8 +88,6 @@ const { actions, stats } = await response.await()
 | `VlaModel` | Async model wrapper. Constructor takes `{ files, config?, logger?, opts? }`. Call `await model.load({ backend? })` then `await (await model.run(input)).await()`. |
 | `preprocessImage(pixels, w, h, { size, layout, scale })` | Resize + letterbox + normalize a camera frame to `(3, size, size)` Float32 in `[-1, 1]`. `scale` accepts `1` (already 0..1), `1/255` (input is 0..255), or `'auto'` (default heuristic). |
 | `padState(state, targetDim)` | Zero-pad a robot-state vector to the model's `maxStateDim`. |
-| `pickPrimaryGgufPath(files)` | Resolve the canonical GGUF path from a `files.model` array. |
-
 Full TypeScript types in [`index.d.ts`](./index.d.ts).
 
 ## Backend Selection

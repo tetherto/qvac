@@ -22,8 +22,8 @@ js_value_t* qvacLibInferVlaExports(js_env_t* env, js_value_t* exports) {
   // model lifecycle (createInstance / loadWeights / activate / cancel /
   // destroyInstance) and dispatch (runJob) are handled by the framework's
   // JsInterface; outputs flow back through OutputCallBackJs.
-  V("createInstance", qvac_lib_infer_vla::createInstance)
-  V("runJob", qvac_lib_infer_vla::runJob)
+  V("createInstance", qvac_lib_infer_vla_ggml::createInstance)
+  V("runJob", qvac_lib_infer_vla_ggml::runJob)
   V("loadWeights", qvac_lib_inference_addon_cpp::JsInterface::loadWeights)
   V("activate", qvac_lib_inference_addon_cpp::JsInterface::activate)
   V("cancel", qvac_lib_inference_addon_cpp::JsInterface::cancel)
@@ -35,9 +35,9 @@ js_value_t* qvacLibInferVlaExports(js_env_t* env, js_value_t* exports) {
   // VLA-specific accessors. RuntimeStats covers the numeric `backendDevice`
   // (0/1) but the perf reporter wants the human-readable backend name; the
   // hparams object is needed JS-side for input validation.
-  V("getVlaHparams", qvac_lib_infer_vla::getVlaHparams)
-  V("getVlaBackendName", qvac_lib_infer_vla::getVlaBackendName)
-  V("setVerbosity", qvac_lib_infer_vla::setVerbosity)
+  V("getVlaHparams", qvac_lib_infer_vla_ggml::getVlaHparams)
+  V("getVlaBackendName", qvac_lib_infer_vla_ggml::getVlaBackendName)
+  V("setVerbosity", qvac_lib_infer_vla_ggml::setVerbosity)
 #undef V
   // NOLINTEND(cppcoreguidelines-macro-usage)
 
