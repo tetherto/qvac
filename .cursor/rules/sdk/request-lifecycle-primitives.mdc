@@ -16,7 +16,7 @@ Server-side long-running operations (`completion`, `embeddings`, `transcribe`, `
 - **`RequestContext`** — per-request handle bundling `requestId`, `kind`, `modelId`, `signal`, `scope`, `state`.
 - **`RequestRegistry`** — module-scoped registry that mints contexts via `begin(...)` and routes `cancel(...)` by `requestId` or `modelId`.
 
-The contract below applies to every cancellable server-side handler. The truth table further down ("Truth table for built-in plugins") tracks each handler's addon-level cancel surface; kinds dispatched outside the registry use the broad-cancel fallback in `server/bare/ops/cancel.ts`.
+The contract below applies to every cancellable server-side handler. The truth table further down ("Truth table for built-in plugins") tracks each handler's addon-level cancel surface; the dispatch-level table ("What's on the registry today") tracks which `RequestKind`s are currently routed through the registry. Kinds not on the registry use the broad-cancel fallback in `server/bare/ops/cancel.ts`.
 
 ## Canonical Handler Shape
 
@@ -229,6 +229,24 @@ Omitting the field entirely is equivalent to `{ scope: "none" }`. The runtime sc
 
 The truth table is pinned by `packages/sdk/test/unit/plugin-cancel-capability.test.ts`. When a handler's addon gains a per-request cancel surface, flip its declaration to `{ scope: "request", hard: true }` and update the test row in the same PR.
 
+### What's on the registry today
+
+The truth table above describes the addon-level capability for plugin handlers. The table below tracks the **dispatch-level** state: which request kinds run through `registry.begin(...)` (and therefore expose `cancel({ requestId })`) on this branch.
+
+| `RequestKind`     | Dispatched from                                                  | Cancel reach                                                 | Notes                                                                                                                                                                                              |
+|-------------------|------------------------------------------------------------------|--------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `completion`      | `llamacpp-completion/plugin.ts` → `completion-stream.ts`         | Hard (`addon.cancel()` mid-decode)                            | Reference handler. `oneAtATimePerModel` policy.                                                                                                                                                    |
+| `embeddings`      | `llamacpp-embedding/plugin.ts` → `server/bare/ops/embed.ts`      | Hard (`addon.cancel()` mid-decode)                            | Unary op (no streaming). Single `addon.embedText` call wrapped in the registry context; post-await `signal.aborted` check is the soft-cancel safety net for the gap between `model.run(...)` and `response.await()`. |
+| `transcribe`      | `whispercpp-transcription` / `parakeet-transcription` plugins → `server/bare/ops/transcribe.ts` | Hard (`addon.cancel()` mid-decode); per-iteration soft check on the response loop | `restorePrompt` registered via `scope.defer`; per-iteration `if (ctx.signal.aborted) break;` in the streaming response loop is the canonical soft-cancel pattern. |
+| `translate`       | `llamacpp-completion` / `nmtcpp-translation` plugins → `server/bare/ops/translate.ts` | Mixed: LLM branch hard (`addon.cancel()`), NMT branch soft (`nmtcpp-translation.translate` declares `scope: "none"`) | Both branches share the registry context. LLM branch wires `signal → addon.cancel()`; NMT branch relies on a per-iteration soft-cancel guard around `runBatch(...)` and the early-return path. |
+| `finetune`        | `llamacpp-completion/plugin.ts` → `llamacpp-completion/ops/finetune.ts` | Hard (`model.cancel()` interrupts the running job)           | `clearFinetuneRuntimeState` + `handle.removeListener` registered via `scope.defer`; the legacy `cancelFinetune(modelId)` wrapper is a thin layer over `registry.cancel({ modelId, kind: "finetune" })`. |
+| `loadModel`       | `server/rpc/handlers/load-model/handler.ts`                      | Mixed: download phase hard (signal threaded to `resolveModelPath`); load phase soft (addon `createModel`/`load(false)` has no signal) | The handler checks `ctx.signal.aborted` at the download/load phase boundary and again after the load to surface `InferenceCancelledError`; the orphan-model edge case during load is a documented follow-up. |
+| `downloadAsset`   | `server/rpc/handlers/download-asset.ts`                          | Hard (signal threaded to `resolveModelPath`)                  | Per-`requestId` cancel preserves the content-addressed dedup in `download-manager.ts` — two subscribers on the same `downloadKey` share one transfer, and the transfer aborts only when the **last** subscriber leaves. |
+| `rag`             | `server/rpc/handlers/rag.ts`                                     | Soft (workspace-bound; ingest/saveEmbeddings/reindex)         | Dispatcher-level pre-emption: starting a new RAG op on a workspace cancels the prior in-flight op on the same workspace **before** `registry.begin(...)`. Workspace admission lives in the dispatcher rather than as a registry policy primitive. |
+
+Kinds **not** in this table (e.g. `textToSpeech`, `ocr`, `diffusion`, `upscale`) still use the broad-cancel fallback in `server/bare/ops/cancel.ts`.
+
+
 ## Concurrency Policy
 
 The registry exposes an opt-in admission-control surface on `policy(...)`:
@@ -322,15 +340,20 @@ There are two cancel paths exposed to clients:
 
 ### Targeted (preferred, new in 0.11.0)
 
-Cancel by `requestId`. Pair with the `requestId` field exposed on `CompletionRun` (and equivalent long-running result objects):
+Cancel by `requestId`. Pair with the `requestId` field exposed on `CompletionRun` and the decorated `loadModel(...)` / `downloadAsset(...)` promises:
 
 ```typescript
-// Client side
+// Streaming long-running call
 const run = sdk.completion({ ... });
 console.log(run.requestId); // available synchronously
 
+// Long-running Promise-shaped call (decorated promise)
+const op = sdk.loadModel({ ... });
+console.log(op.requestId); // also synchronously available
+
 // Later, from anywhere with access to the SDK client:
 await sdk.cancel({ requestId: run.requestId });
+await sdk.cancel({ requestId: op.requestId });
 ```
 
 ### Broad (escape hatch)
@@ -342,7 +365,58 @@ await sdk.cancel({ operation: "inference", modelId });
 await sdk.cancel({ operation: "embeddings", modelId });
 ```
 
-Internally, both paths land on `RequestRegistry.cancel(...)`. The broad path falls back to `addon.cancel()` for handler kinds that haven't been registry-migrated yet (everything except llama.cpp completion in 0.11.0).
+Internally, both paths land on `RequestRegistry.cancel(...)`. The broad path falls back to `addon.cancel()` for handler kinds that haven't been registry-migrated yet — see the "What's on the registry today" table above for the current set of registry-routed kinds.
+
+## Decorated-Promise Pattern
+
+`completion(...)` exposes `op.requestId` synchronously by virtue of returning a `CompletionRun` object (not a `Promise`). The same contract applies to `loadModel(...)` and `downloadAsset(...)` — both of which **stay** `Promise<string>` on the unwrap path (so `await loadModel(...)` keeps returning the model id) but carry a synchronously-readable `requestId` field on the returned object.
+
+The helper:
+
+```typescript
+// packages/sdk/utils/decorate-promise.ts
+export function decoratePromise<T, M extends Record<string, unknown>>(
+  promise: Promise<T>,
+  metadata: M,
+): Promise<T> & M {
+  return Object.assign(promise, metadata);
+}
+```
+
+Client-side call sites mint the `requestId` once, thread it onto the wire envelope, and decorate the returned promise:
+
+```typescript
+// packages/sdk/client/api/load-model.ts
+export function loadModel(
+  options: LoadModelOptions,
+  rpcOptions?: RPCOptions,
+): Promise<string> & { requestId: string } {
+  const requestId = generateClientRequestId();
+  const inner = runLoadModel(options, requestId, rpcOptions);
+  return decoratePromise(inner, { requestId });
+}
+```
+
+Callers can grab `op.requestId` before the network round-trip resolves and fire a targeted cancel:
+
+```typescript
+const op = sdk.loadModel({ modelSrc: "https://example.com/big.gguf" });
+// op.requestId is reachable RIGHT NOW — before the download even starts
+stopButton.onclick = () => sdk.cancel({ requestId: op.requestId });
+const modelId = await op; // legacy `Promise<string>` unwrap still works
+```
+
+### Invariants the helper exists to preserve
+
+1. **`await loadModel(...)` still returns `string`.** The decoration mutates the inner promise in place via `Object.assign`; the prototype chain is untouched, so `.then` / `.catch` / `.finally` / async-await unwrapping behave exactly as for a bare `Promise<T>`. Pin this in your call site's tests — if it goes red, the decoration broke the unwrap chain.
+2. **`op.requestId` and the server's registry-entry `requestId` are the same value.** The client generates the id once, the request envelope carries it (`request.requestId`), and the server's `registry.begin({ requestId, kind })` uses it as the registry key. `cancel({ requestId: op.requestId })` is a precise abort against this exact call.
+3. **No prototype-extension shenanigans.** Do **not** add properties via `Promise.prototype` or `Object.setPrototypeOf`. The plain-object approach is intentional — extending `Promise.prototype` would silently affect every promise in the worker. If a future refactor wants to make the wrapper a class, push back.
+4. **Metadata keys must not collide with `Promise` members.** Don't decorate with `{ then: ... }` / `{ catch: ... }` / `{ finally: ... }` — those would shadow the Promise methods and break `await`. `requestId` is safe; new metadata fields go through code review.
+
+### Test surface
+
+- `packages/sdk/test/unit/utils/decorate-promise.test.ts` pins the helper contract: synchronous metadata access, `await` unwrap to `T`, rejection propagation, in-place identity, `.then`/`.finally` chain integrity.
+- `packages/sdk/test/unit/request-id-wire.test.ts` pins the wire envelope: `loadModelOptionsToRequestSchema` / `downloadAssetOptionsToRequestSchema` / `ragRequestSchema` accept and preserve `requestId` (server keys the registry on it) and treat it as optional (legacy clients omit it; server falls back to a server-generated id).
 
 ## Primitives Reference
 
@@ -418,7 +492,7 @@ Four errors are owned by this stack today (all in `@/utils/errors-server`):
 |-------|----------------------------------|----------------------------------------------------------------------------|
 | 52417 | `RequestIdConflictError`         | `registry.begin(...)` called with a `requestId` already present.           |
 | 52419 | `InferenceCancelledError`        | A cancelled inference run's `CompletionRun` promise-aggregates (`final` / `text` / `toolCalls` / `stats`) reject with this carrying the partial state. The `events` stream itself ends normally with `stopReason: "cancelled"`. |
-| 52420 | `RequestRejectedByPolicyError`   | `registry.begin(...)` rejected by a registered concurrency policy (e.g. `oneAtATimePerModel` for `completion`). Carries `requestId`, `kind`, `modelId`, and a human-readable `reason`. |
+| 52420 | `RequestRejectedByPolicyError`   | `registry.begin(...)` rejected by a registered concurrency policy (e.g. `oneAtATimePerModel` for `completion`). Carries `requestId`, `kind`, `modelId`, and a human-readable `reason`.   |
 | 53503 | `AsyncDisposeUnavailableError`   | Module-load guard: host runtime doesn't expose `Symbol.asyncDispose`.      |
 
 `InferenceCancelledError` carries `requestId` plus a `partial: { text?, toolCalls?, stats? }` payload. Construction is **client-side** (`packages/sdk/client/api/completion-stream.ts`): when the event stream ends with `stopReason: "cancelled"`, the client builds the error from its locally-aggregated partial state and rejects the aggregates. The class is server-defined for reusability and re-exported from `@qvac/sdk` so client code can `instanceof`-check it. See `error-handling.mdc`.
@@ -434,6 +508,8 @@ Five unit-test files pin the contract — read them as canonical examples:
 - `packages/sdk/test/unit/runtime/kv-cache-session.test.ts` — `beginTurn` / `commitTurn` / `rollback` semantics in isolation: commit suppresses the deferred rollback, rollback after commit is a no-op, double-rollback is idempotent, and rollback wipes all three layers (file / `initializedCaches` / `cachedMessageCounts`) regardless of who fails along the way.
 - `packages/sdk/test/unit/runtime/request-lifecycle-logging.test.ts` — registry's `[request-lifecycle] begin/cancel/end` line shape, single-emit guarantee on redundant cancels, `cancelAll` fans out one line per active entry, `state=cancelling` on a `parentSignal`-pre-aborted begin, and the `modelId=-` placeholder for model-less requests.
 - `packages/sdk/test/unit/runtime/with-request-context.test.ts` — `withRequestContext` prefix shape across every level, `modelId`-segment dropping when absent, multi-argument preservation, and pass-through of `setLevel` / `getLevel` / `addTransport` / `setConsoleOutput`.
+
+
 
 The cancel-capability truth table is pinned by `packages/sdk/test/unit/plugin-cancel-capability.test.ts` — when a built-in plugin's `cancel` declaration changes, update the truth-table row in the same PR.
 

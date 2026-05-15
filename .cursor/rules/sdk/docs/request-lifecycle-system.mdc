@@ -221,3 +221,4 @@ Test coverage: `same-tick cancel-before-begin retroactively aborts the later beg
 - [`request-lifecycle-primitives.mdc`](../request-lifecycle-primitives.mdc) — canonical handler shape + anti-patterns (this rule fires automatically when editing server-side handlers).
 - [`error-handling.mdc`](../error-handling.mdc) — structured-error placement and the client/server error separation.
 - [`docs/kv-cache-system.mdc`](./kv-cache-system.mdc) — `KvCacheSession` ownership of the three KV-cache bookkeeping layers and its `beginTurn` / `commitTurn` / `rollback` / `deleteKvCacheState` API.
+
