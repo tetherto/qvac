@@ -9,6 +9,8 @@ import {
   StreamEndedError,
   InvalidResponseError,
 } from "@/utils/errors-client";
+import { decoratePromise } from "@/utils/decorate-promise";
+import { generateClientRequestId } from "@/client/api/client-request-id";
 
 export type DownloadAssetOptions = BaseDownloadAssetOptions;
 
@@ -25,7 +27,9 @@ export type DownloadAssetOptions = BaseDownloadAssetOptions;
  *   - onProgress: Optional callback for download progress
  * @param rpcOptions - Optional RPC options including per-call profiling configuration
  *
- * @returns Promise that resolves to the asset ID (either the provided assetSrc or a generated ID)
+ * @returns Promise that resolves to the asset ID (either the provided assetSrc or a generated ID),
+ *   decorated with a synchronous `requestId` field for use with
+ *   `cancel({ requestId: op.requestId })` before the promise resolves.
  *
  * @throws {QvacErrorBase} When asset download fails, with details in the error message
  * @throws {QvacErrorBase} When streaming ends unexpectedly (only when using onProgress)
@@ -46,13 +50,32 @@ export type DownloadAssetOptions = BaseDownloadAssetOptions;
  *     console.log(`Downloaded: ${progress.percentage}%`);
  *   }
  * });
+ *
+ * // Targeted cancel by requestId — grab the id synchronously, then
+ * // cancel before the download resolves.
+ * const op = downloadAsset({ assetSrc: "https://example.com/large.gguf" });
+ * setTimeout(() => cancel({ requestId: op.requestId }), 1000);
+ * await op; // rejects with `InferenceCancelledError`
  * ```
  */
-export async function downloadAsset(
+export function downloadAsset(
   options: DownloadAssetOptions,
   rpcOptions?: RPCOptions,
+): Promise<string> & { requestId: string } {
+  const requestId = generateClientRequestId();
+  const inner = runDownloadAsset(options, requestId, rpcOptions);
+  return decoratePromise(inner, { requestId });
+}
+
+async function runDownloadAsset(
+  options: DownloadAssetOptions,
+  requestId: string,
+  rpcOptions?: RPCOptions,
 ): Promise<string> {
-  const request = downloadAssetOptionsToRequestSchema.parse(options);
+  const request = downloadAssetOptionsToRequestSchema.parse({
+    ...options,
+    requestId,
+  });
 
   if (options.onProgress) {
     // Use streaming for progress updates

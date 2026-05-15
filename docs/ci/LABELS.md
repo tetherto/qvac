@@ -40,7 +40,7 @@ The following labels are recognised by CI workflows but are not part of the `lab
 
 | Label | Purpose | Triggered by | Notes |
 |---|---|---|---|
-| `verify` | Runs integration tests, benchmarks, and model validation against the PR. | `public-reusable-npm.yml`, `pr-test-inference-addon-cpp*.yml` | **Not the same as `verified`.** This one only opts into extra test suites; it does not authorise secret-bearing jobs. |
+| `verified` (see `verify` deprecation note) | Canonical authorisation label — see the [`verified` section above](#verified--secret-bearing-ci-authorisation) for the full trust model. | `label-gate` composite action (108 secret-bearing workflows) | `verify` is a **deprecated** legacy alias for the same intent, still recognised by `public-reusable-npm.yml`, `pr-test-inference-addon-cpp*.yml`, and `pr-models-validation-registry-server.yml` pending migration to `verified`. Do not document `verify` as a recommended action in new tooling. |
 | `safe-to-test` | SDK pod security gate — reviewer has audited `packages/sdk/` package + workflow changes from a fork PR. | `pr-checks-sdk-pod.yml` | Org-wide secret authorisation is now handled by `verified`; `safe-to-test` remains in use for SDK pod check-running. |
 | `staging` | Deploys the PR to the staging environment for smoke testing. | Staging deploy workflows | Apply when a PR needs out-of-band testing on real infrastructure. |
 | `publish` | Triggers a GitHub Packages publish from the PR (pre-release / dev build). | Publish workflows | Use sparingly; consumes a published version slot. |

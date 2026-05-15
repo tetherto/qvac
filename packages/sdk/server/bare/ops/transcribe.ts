@@ -12,7 +12,6 @@ import {
   type TranscribeStreamEvent,
   type WhisperConfig,
   type AudioFormat,
-  type ParakeetStreamingRunConfig,
 } from "@/schemas";
 import { createAudioStream } from "@/server/bare/utils/audio-input";
 import { getServerLogger } from "@/logging";
@@ -25,6 +24,11 @@ import {
   toTranscribeSegment,
   type WhisperAddonSegment,
 } from "@/server/bare/utils/transcribe-metadata";
+import {
+  getRequestRegistry,
+  withRequestContext,
+} from "@/server/bare/runtime";
+import { generateServerRequestId } from "@/server/bare/runtime/request-id";
 
 export {
   assertMetadataSupported,
@@ -32,23 +36,8 @@ export {
   type WhisperAddonSegment,
 };
 
-const logger = getServerLogger();
-
-// Per-engine output shapes from `runStreaming`'s response iterator.
-//
-// Whisper emits arrays of segments interleaved with VAD / end-of-turn
-// event objects. Parakeet emits an array or a single segment with an
-// optional `isEndOfTurn` boundary flag and `startsWord` continuation
-// hint. We treat both segment shapes as the same (whisper's extra
-// fields are ignored downstream and parakeet's extras are surfaced
-// where they matter).
-type StreamingSegment = WhisperAddonSegment & {
-  isEndOfTurn?: boolean;
-  startsWord?: boolean;
-};
 type StreamingModelOutput =
-  | StreamingSegment[]
-  | StreamingSegment
+  | { text: string }[]
   | { type: "vad"; speaking: boolean; probability: number }
   | { type: "endOfTurn"; silenceDurationMs: number };
 
@@ -63,14 +52,10 @@ interface WhisperRunStreamingOpts {
   vadRunIntervalMs?: number;
 }
 
-type ParakeetRunStreamingOpts = ParakeetStreamingRunConfig;
-
-type RunStreamingOpts = WhisperRunStreamingOpts | ParakeetRunStreamingOpts;
-
 interface StreamableModel {
   runStreaming(
     audioStream: AsyncIterable<Buffer>,
-    opts?: RunStreamingOpts,
+    opts?: WhisperRunStreamingOpts,
   ): Promise<StreamingModelResponse>;
 }
 
@@ -143,105 +128,119 @@ type TranscribeReturn = { modelExecutionMs: number; stats?: TranscribeStats };
 
 export function transcribe(
   params: TranscribeParams & { metadata: true },
+  requestId?: string,
 ): AsyncGenerator<TranscribeSegment, TranscribeReturn, void>;
 export function transcribe(
   params: TranscribeParams,
+  requestId?: string,
 ): AsyncGenerator<string, TranscribeReturn, void>;
 export async function* transcribe(
   params: TranscribeParams,
+  requestId?: string,
 ): AsyncGenerator<string | TranscribeSegment, TranscribeReturn, void> {
   const { modelId, metadata } = params;
+
+  // Open a request-scoped lifecycle. The registry routes
+  // `cancel({ requestId })` and `cancel({ modelId, kind: "transcribe" })`
+  // through this context. Falls back to a server-generated id if the
+  // client didn't send one.
+  await using ctx = getRequestRegistry().begin({
+    requestId: requestId ?? generateServerRequestId(),
+    kind: "transcribe",
+    modelId,
+  });
+  const requestLogger = withRequestContext(getServerLogger(), ctx);
+
   const engineType = getEngineModelType(modelId);
   assertMetadataSupported(modelId, engineType, metadata);
   const silenceMarker = SILENCE_MARKERS[engineType] ?? "";
   const audioFormat = getAudioFormat(modelId, engineType);
 
   const originalConfig = await applyPrompt(modelId, params.prompt, engineType);
-  let modelExecutionMs = 0;
-  let response: TranscribeResponse | undefined;
-
-  try {
-    const model = getModel(modelId);
-    const audioStream = await createAudioStream(params.audioChunk, audioFormat);
-
-    const modelStart = nowMs();
-    response = (await model.run(audioStream)) as unknown as TranscribeResponse;
-
-    for await (const output of response.iterate()) {
-      logger.debug("Streaming Transcription Update:", output);
-
-      const chunks = (Array.isArray(output) ? output : [output]) as WhisperAddonSegment[];
-
-      if (metadata) {
-        for (const chunk of chunks) {
-          if (!chunk.text) continue;
-          if (silenceMarker && chunk.text.includes(silenceMarker)) continue;
-          yield toTranscribeSegment(chunk);
-        }
-        continue;
-      }
-
-      const text = chunks
-        .filter(
-          (chunk) => !silenceMarker || !chunk.text.includes(silenceMarker),
-        )
-        .map((chunk) => chunk.text)
-        .join("");
-
-      if (text.trim()) {
-        yield text;
-      }
-    }
-    modelExecutionMs = nowMs() - modelStart;
-  } finally {
-    if (originalConfig) {
-      await restorePrompt(modelId, originalConfig);
-    }
+  if (originalConfig) {
+    // `restorePrompt` runs on every exit path — happy, throw, cancel —
+    // via the scope. LIFO unwinding pairs with the addon-cancel detach
+    // below.
+    ctx.scope.defer(() => restorePrompt(modelId, originalConfig));
   }
 
+  const model = getModel(modelId);
+
+  // Hard-cancel wiring: whisper.cpp / parakeet expose model-wide
+  // `addon.cancel()`. The listener forwards an abort so the
+  // currently-running transcription stops decoding ASAP. The
+  // `if (ctx.signal.aborted) break` guard inside the iterate loop is
+  // the soft-cancel safety net for the case where the abort fires
+  // between the addon flag flipping and the iterator's next pull.
+  const onAbort = () => {
+    const addon = model.addon;
+    if (addon?.cancel) {
+      addon.cancel.call(addon).catch((err: unknown) => {
+        requestLogger.warn(
+          `[cancel] addon.cancel() rejected during abort for modelId=${modelId}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      });
+    }
+  };
+  ctx.signal.addEventListener("abort", onAbort, { once: true });
+  if (ctx.signal.aborted) onAbort();
+  ctx.scope.defer(() => {
+    ctx.signal.removeEventListener("abort", onAbort);
+  });
+
+  const audioStream = await createAudioStream(params.audioChunk, audioFormat);
+
+  const modelStart = nowMs();
+  const response = (await model.run(audioStream)) as unknown as TranscribeResponse;
+
+  for await (const output of response.iterate()) {
+    if (ctx.signal.aborted) break;
+    requestLogger.debug("Streaming Transcription Update:", output);
+
+    const chunks = output as WhisperAddonSegment[];
+
+    if (metadata) {
+      for (const chunk of chunks) {
+        if (!chunk.text) continue;
+        if (silenceMarker && chunk.text.includes(silenceMarker)) continue;
+        yield toTranscribeSegment(chunk);
+      }
+      continue;
+    }
+
+    const text = chunks
+      .filter(
+        (chunk) => !silenceMarker || !chunk.text.includes(silenceMarker),
+      )
+      .map((chunk) => chunk.text)
+      .join("");
+
+    if (text.trim()) {
+      yield text;
+    }
+  }
+  const modelExecutionMs = nowMs() - modelStart;
+
   const stats: TranscribeStats = {
-    ...(response?.stats?.audioDurationMs !== undefined && { audioDuration: response.stats.audioDurationMs }),
-    ...(response?.stats?.realTimeFactor !== undefined && { realTimeFactor: response.stats.realTimeFactor }),
-    ...(response?.stats?.tokensPerSecond !== undefined && { tokensPerSecond: response.stats.tokensPerSecond }),
-    ...(response?.stats?.totalTokens !== undefined && { totalTokens: response.stats.totalTokens }),
-    ...(response?.stats?.totalSegments !== undefined && { totalSegments: response.stats.totalSegments }),
-    ...(response?.stats?.whisperEncodeMs !== undefined && { whisperEncodeTime: response.stats.whisperEncodeMs }),
-    ...(response?.stats?.whisperDecodeMs !== undefined && { whisperDecodeTime: response.stats.whisperDecodeMs }),
-    ...(response?.stats?.encoderMs !== undefined && { encoderTime: response.stats.encoderMs }),
-    ...(response?.stats?.decoderMs !== undefined && { decoderTime: response.stats.decoderMs }),
-    ...(response?.stats?.melSpecMs !== undefined && { melSpecTime: response.stats.melSpecMs }),
+    ...(response.stats?.audioDurationMs !== undefined && { audioDuration: response.stats.audioDurationMs }),
+    ...(response.stats?.realTimeFactor !== undefined && { realTimeFactor: response.stats.realTimeFactor }),
+    ...(response.stats?.tokensPerSecond !== undefined && { tokensPerSecond: response.stats.tokensPerSecond }),
+    ...(response.stats?.totalTokens !== undefined && { totalTokens: response.stats.totalTokens }),
+    ...(response.stats?.totalSegments !== undefined && { totalSegments: response.stats.totalSegments }),
+    ...(response.stats?.whisperEncodeMs !== undefined && { whisperEncodeTime: response.stats.whisperEncodeMs }),
+    ...(response.stats?.whisperDecodeMs !== undefined && { whisperDecodeTime: response.stats.whisperDecodeMs }),
+    ...(response.stats?.encoderMs !== undefined && { encoderTime: response.stats.encoderMs }),
+    ...(response.stats?.decoderMs !== undefined && { decoderTime: response.stats.decoderMs }),
+    ...(response.stats?.melSpecMs !== undefined && { melSpecTime: response.stats.melSpecMs }),
   };
 
   return buildStreamResult(modelExecutionMs, stats);
 }
 
 export interface TranscribeStreamOpts {
-  // Whisper-only knobs (ignored on other engines).
   emitVadEvents?: boolean;
   endOfTurnSilenceMs?: number;
   vadRunIntervalMs?: number;
-  // Parakeet-only per-call streaming overrides (ignored on other engines).
-  parakeetStreamingConfig?: ParakeetStreamingRunConfig;
-}
-
-function buildRunStreamingOpts(
-  engineType: string,
-  opts?: TranscribeStreamOpts,
-): RunStreamingOpts | undefined {
-  if (engineType === ModelType.parakeetTranscription) {
-    return opts?.parakeetStreamingConfig;
-  }
-
-  // Whisper (and any other engine that consumes the legacy whisper opts).
-  const runOpts: WhisperRunStreamingOpts = {};
-  if (opts?.emitVadEvents) runOpts.emitVadEvents = true;
-  if (opts?.endOfTurnSilenceMs !== undefined) {
-    runOpts.endOfTurnSilenceMs = opts.endOfTurnSilenceMs;
-  }
-  if (opts?.vadRunIntervalMs !== undefined) {
-    runOpts.vadRunIntervalMs = opts.vadRunIntervalMs;
-  }
-  return runOpts;
 }
 
 export function transcribeStream(
@@ -250,6 +249,7 @@ export function transcribeStream(
   prompt: string | undefined,
   metadata: true,
   opts?: TranscribeStreamOpts,
+  requestId?: string,
 ): AsyncGenerator<TranscribeSegment | TranscribeStreamEvent, void, void>;
 export function transcribeStream(
   modelId: string,
@@ -257,6 +257,7 @@ export function transcribeStream(
   prompt?: string,
   metadata?: boolean,
   opts?: TranscribeStreamOpts,
+  requestId?: string,
 ): AsyncGenerator<string | TranscribeStreamEvent, void, void>;
 export async function* transcribeStream(
   modelId: string,
@@ -264,108 +265,96 @@ export async function* transcribeStream(
   prompt?: string,
   metadata?: boolean,
   opts?: TranscribeStreamOpts,
+  requestId?: string,
 ): AsyncGenerator<string | TranscribeSegment | TranscribeStreamEvent, void, void> {
+  // Same `kind: "transcribe"` as the unary variant — the registry
+  // doesn't distinguish streaming vs non-streaming variants of the same
+  // operation, so `cancel({ modelId, kind: "transcribe" })` cancels
+  // either shape.
+  await using ctx = getRequestRegistry().begin({
+    requestId: requestId ?? generateServerRequestId(),
+    kind: "transcribe",
+    modelId,
+  });
+  const requestLogger = withRequestContext(getServerLogger(), ctx);
+
   const engineType = getEngineModelType(modelId);
   assertMetadataSupported(modelId, engineType, metadata);
   const silenceMarker = SILENCE_MARKERS[engineType] ?? "";
 
   const originalConfig = await applyPrompt(modelId, prompt, engineType);
+  if (originalConfig) {
+    ctx.scope.defer(() => restorePrompt(modelId, originalConfig));
+  }
 
-  try {
-    const model = getModel(modelId);
+  const model = getModel(modelId);
 
-    if (!hasRunStreaming(model)) {
-      throw new TranscriptionFailedError(
-        `Model ${modelId} does not support streaming transcription`,
-      );
+  if (!hasRunStreaming(model)) {
+    throw new TranscriptionFailedError(
+      `Model ${modelId} does not support streaming transcription`,
+    );
+  }
+
+  const onAbort = () => {
+    const addon = model.addon;
+    if (addon?.cancel) {
+      addon.cancel.call(addon).catch((err: unknown) => {
+        requestLogger.warn(
+          `[cancel] addon.cancel() rejected during abort for modelId=${modelId}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      });
     }
+  };
+  ctx.signal.addEventListener("abort", onAbort, { once: true });
+  if (ctx.signal.aborted) onAbort();
+  ctx.scope.defer(() => {
+    ctx.signal.removeEventListener("abort", onAbort);
+  });
 
-    const runOpts = buildRunStreamingOpts(engineType, opts);
-    const response = await model.runStreaming(audioInputStream, runOpts);
+  const runOpts: WhisperRunStreamingOpts = {};
+  if (opts?.emitVadEvents) runOpts.emitVadEvents = true;
+  if (opts?.endOfTurnSilenceMs !== undefined) {
+    runOpts.endOfTurnSilenceMs = opts.endOfTurnSilenceMs;
+  }
+  if (opts?.vadRunIntervalMs !== undefined) {
+    runOpts.vadRunIntervalMs = opts.vadRunIntervalMs;
+  }
 
-    for await (const output of response.iterate()) {
-      logger.debug("Live Transcription Update:", output);
+  const response = await model.runStreaming(audioInputStream, runOpts);
 
-      if (!Array.isArray(output)) {
-        // Whisper event objects.
-        if ("type" in output) {
-          if (output.type === "vad") {
-            yield {
-              type: "vad",
-              speaking: output.speaking,
-              probability: output.probability,
-            };
-            continue;
-          }
-          if (output.type === "endOfTurn") {
-            // `endOfTurn` events that arrive via the typed-event path
-            // come exclusively from the whisper engine — whisper
-            // measures a trailing silence window and surfaces the
-            // boundary as `{ type: "endOfTurn", silenceDurationMs }`.
-            // Parakeet's EOU is token-driven and is emitted from
-            // `emitSegment` below, tagged `source: "parakeet"`.
-            yield {
-              type: "endOfTurn",
-              source: "whisper",
-              silenceDurationMs: output.silenceDurationMs,
-            };
-            continue;
-          }
-          continue;
-        }
-        // Parakeet sometimes emits a single segment instead of an array.
-        yield* emitSegment(output, metadata, silenceMarker);
+  for await (const output of response.iterate()) {
+    if (ctx.signal.aborted) break;
+    requestLogger.debug("Live Transcription Update:", output);
+
+    if (!Array.isArray(output)) {
+      if (output.type === "vad") {
+        yield {
+          type: "vad",
+          speaking: output.speaking,
+          probability: output.probability,
+        };
         continue;
       }
+      if (output.type === "endOfTurn") {
+        yield {
+          type: "endOfTurn",
+          silenceDurationMs: output.silenceDurationMs,
+        };
+        continue;
+      }
+      continue;
+    }
 
-      for (const segment of output) {
-        yield* emitSegment(segment, metadata, silenceMarker);
+    for (const segment of output as WhisperAddonSegment[]) {
+      if (!segment.text) continue;
+      if (silenceMarker && segment.text.includes(silenceMarker)) continue;
+      if (metadata) {
+        yield toTranscribeSegment(segment);
+        continue;
+      }
+      if (segment.text.trim()) {
+        yield segment.text;
       }
     }
-  } finally {
-    if (originalConfig) {
-      await restorePrompt(modelId, originalConfig);
-    }
   }
 }
-
-/**
- * Emit a single addon segment as either a metadata `TranscribeSegment`
- * (whisper only), a plain text chunk, or a synthetic `endOfTurn` event
- * (parakeet's EOU model surfaces end-of-utterance via the
- * `isEndOfTurn` flag on the same segment that carries the trailing
- * speech tokens).
- *
- * Parakeet's EOU is token-driven, so the synthesized event carries
- * `source: "parakeet"` and no measured silence window. Whisper's own
- * `endOfTurn` events (emitted upstream as `{ type: "endOfTurn",
- * silenceDurationMs }`) are tagged `source: "whisper"` in the typed-
- * event branch above and are not routed through this helper.
- */
-function* emitSegment(
-  segment: StreamingSegment,
-  metadata: boolean | undefined,
-  silenceMarker: string,
-): Generator<string | TranscribeSegment | TranscribeStreamEvent> {
-  if (!segment.text) {
-    if (segment.isEndOfTurn) {
-      yield { type: "endOfTurn", source: "parakeet" };
-    }
-    return;
-  }
-  if (silenceMarker && segment.text.includes(silenceMarker)) {
-    if (segment.isEndOfTurn) {
-      yield { type: "endOfTurn", source: "parakeet" };
-    }
-    return;
-  }
-  if (metadata) {
-    yield toTranscribeSegment(segment);
-  } else if (segment.text.trim()) {
-    yield segment.text;
-  }
-  if (segment.isEndOfTurn) {
-    yield { type: "endOfTurn", source: "parakeet" };
-  }
-}
-
