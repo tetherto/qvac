@@ -14,7 +14,7 @@ on:
       - tmp-*
     paths:
       - "packages/ocr-onnx/**"
-      - ".github/workflows/*ocr*.yml"
+      - ".github/workflows/*ocr-onnx*.yml"
   workflow_dispatch:
   workflow_call:
 
@@ -79,7 +79,7 @@ jobs:
           filters: |
             pkg:
               - "packages/ocr-onnx/**"
-              - ".github/workflows/*ocr*.yml"
+              - ".github/workflows/*ocr-onnx*.yml"
 
   sanity-checks:
     needs:
