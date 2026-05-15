@@ -11,16 +11,16 @@ import {
 // -----------------------------------------------------------------------------
 // PluginHandlerDefinition.cancel — declarative cancel-capability tests.
 //
-// Covers Deliverable 1 of the M3a brief:
+// Pins the cancel-capability contract:
 //   - Runtime schema accepts an absent `cancel`, every valid `scope`, and
 //     rejects invalid scopes.
 //   - `defineHandler` / `defineDuplexHandler` thread the field through
 //     unmodified.
-//   - Every built-in plugin manifest carries the brief's truth-table
-//     value for its addon's cancel surface — guards against silent
-//     regressions where a future plugin manifest tweak forgets to keep
-//     `cancel` in sync with the addon (e.g. adding a hard-cancel call
-//     to nmtcpp without flipping its declaration off `"none"`).
+//   - Every built-in plugin manifest carries the truth-table value for
+//     its addon's cancel surface — guards against silent regressions
+//     where a future plugin manifest tweak forgets to keep `cancel` in
+//     sync with the addon (e.g. adding a hard-cancel call to nmtcpp
+//     without flipping its declaration off `"none"`).
 //
 // ---- Runtime gating ----
 //
@@ -152,10 +152,9 @@ test("defineDuplexHandler: preserves cancel field on the returned definition", (
 // =============================================================================
 // Built-in plugin truth table (bare-only — addon bindings require Bare)
 //
-// The brief (m3a-implementation-brief.md §3 D1) enumerates the cancel
-// surface each addon exposes today. These assertions lock that table in
-// — if a future change flips a plugin's `cancel` declaration without
-// the corresponding code path landing, this test fails loudly.
+// Locks the cancel-capability truth table in — if a future change flips
+// a plugin's `cancel` declaration without the corresponding code path
+// landing, this test fails loudly.
 // =============================================================================
 
 bareTest(
@@ -184,7 +183,11 @@ bareTest(
     const truthTable: Record<string, Record<string, PluginHandlerCancel>> = {
       [llmPlugin.modelType]: {
         completionStream: { scope: "model", hard: true },
-        finetune: { scope: "none" },
+        // `finetune` declares `{ scope: "model", hard: true }`: the
+        // addon exposes `model.cancel()` for the running finetune job,
+        // and `startFinetune` wires it through the registry's abort
+        // signal.
+        finetune: { scope: "model", hard: true },
         translate: { scope: "model", hard: true },
       },
       [embeddingsPlugin.modelType]: {

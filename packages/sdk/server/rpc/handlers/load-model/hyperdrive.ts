@@ -864,6 +864,7 @@ export async function downloadModelFromHyperdrive(
       return modelPath;
     },
     progressCallback,
+    hooks?.requestBinding,
   );
 
   return applyJoinedDownloadStats(result, hooks);
