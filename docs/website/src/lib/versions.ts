@@ -1,7 +1,7 @@
 /**
  * Section-scoped version manifest. Only the API summary and the release
- * notes are versioned in the docs site — everything else (about, guides,
- * tutorials, cli, etc.) lives at
+ * notes are versioned in the docs site — everything else (about-qvac,
+ * getting-started, examples, tutorials, addons, cli, http-server) lives at
  * a single bare path that always reflects the current SDK.
  *
  * Each section is a single content folder under `content/docs/<basePath>/`:
@@ -30,7 +30,7 @@ export const API_SECTION: VersionedSection = {
   latest: 'v0.10.2',
   versions: [
     { label: 'v0.10.2 (latest)', value: 'v0.10.2', isLatest: true },
-    { label: 'v0.9.1', value: 'v0.9.1' },
+    { label: 'v0.9.2', value: 'v0.9.2' },
     { label: 'v0.8.0', value: 'v0.8.0' },
     { label: 'v0.7.0', value: 'v0.7.0' },
   ],
@@ -41,7 +41,7 @@ export const RELEASE_NOTES_SECTION: VersionedSection = {
   latest: 'v0.10.2',
   versions: [
     { label: 'v0.10.2 (latest)', value: 'v0.10.2', isLatest: true },
-    { label: 'v0.9.1', value: 'v0.9.1' },
+    { label: 'v0.9.2', value: 'v0.9.2' },
     { label: 'v0.8.0', value: 'v0.8.0' },
     { label: 'v0.7.0', value: 'v0.7.0' },
   ],
