@@ -1,32 +1,524 @@
 name: Benchmark RTF (ONNX TTS)
 
-# Stub workflow registered on `main` so that `workflow_dispatch` shows up in
-# the GitHub Actions UI and `gh workflow run` can target this filename.
+# Self-contained benchmark orchestrator for the ONNX TTS RTF + streaming
+# benchmarks. Lives separately from `Integration Tests (TTS)` so a normal PR
+# integration run never pays the benchmark cost; this workflow is dispatched
+# manually (or weekly via cron) and is the only place that runs the
+# benchmarks.
 #
-# The full orchestrator (context -> prebuild -> desktop-benchmarks -> summarize)
-# is being added under PR #1677 (QVAC-17092). Once that PR merges, this stub
-# is replaced by the real workflow. Until then, dispatching this workflow
-# with `--ref <branch>` runs the *branch's* version of the YAML, not this
-# stub — that is exactly what we need to validate the orchestrator on a
-# feature branch before it merges into main.
+# Mobile RTF benchmarks (Android / iOS via AWS Device Farm) are tracked
+# separately under QVAC-18544 and are intentionally NOT wired here yet.
 
 on:
   workflow_dispatch:
     inputs:
+      repository:
+        description: "Repository to benchmark (defaults to current)"
+        required: false
+        type: string
       ref:
         description: "Git ref (branch/tag/SHA) to benchmark"
         required: false
+        type: string
+      benchmark_matrix_json:
+        description: "Optional JSON array overriding the per-runner benchmark matrix for all runners"
+        required: false
+        type: string
+  # Weekly baseline run (Monday 06:00 UTC). Picks up main, produces fresh
+  # cross-platform findings so regressions show up without a manual trigger.
+  schedule:
+    - cron: '0 6 * * 1'
+
+permissions:
+  contents: read
+  packages: read
+  id-token: write
+
+env:
+  ADDON_DIR: packages/tts-onnx
 
 jobs:
-  noop:
-    name: Stub - real orchestrator lives on QVAC-17092 branch
+  context:
     runs-on: ubuntu-latest
+    outputs:
+      repository: ${{ steps.ctx.outputs.repository }}
+      ref: ${{ steps.ctx.outputs.ref }}
     steps:
-      - name: Explain
+      - id: ctx
+        shell: bash
+        env:
+          INPUT_REPO: ${{ inputs.repository }}
+          INPUT_REF: ${{ inputs.ref }}
+          REPO: ${{ github.repository }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
-          echo "This is a stub on main. The real benchmark orchestrator"
-          echo "is wired in PR #1677 (QVAC-17092)."
-          echo ""
-          echo "To run the real benchmark, dispatch this workflow with"
-          echo "  --ref QVAC-17092-Benchmark-performance-of-chatterbox-model"
-          echo "or pick that branch in the GitHub Actions 'Run workflow' UI."
+          repo="${INPUT_REPO:-$REPO}"
+          ref="${INPUT_REF:-$REF_NAME}"
+          echo "repository=$repo" >> "$GITHUB_OUTPUT"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+  prebuild:
+    needs: context
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/prebuilds-tts-onnx.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+
+  # GitHub-hosted RTF + streaming benchmark matrix.
+  # Only includes platforms that currently produce reliable RTF numbers
+  # (linux x64, linux arm64, win32 x64). macOS RTF is gated until the
+  # chatterbox-en q4 cpu hang on darwin runners is fixed.
+  benchmarks-github-hosted:
+    needs: [context, prebuild]
+    continue-on-error: true
+    runs-on: ${{ matrix.os }}
+    environment: release
+    name: benchmark-${{ matrix.os }}-${{ matrix.os_version }}
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            variant: q4
+            platform: linux
+            arch: x64
+            os_version: u22
+            benchmark_matrix_json: >-
+              [{"engine":"chatterbox-en","useGPU":false,"backendHint":"cpu"},{"engine":"chatterbox-multi","useGPU":false,"backendHint":"cpu"},{"engine":"supertonic","useGPU":false,"backendHint":"cpu"}]
+          - os: ubuntu-24.04-arm
+            variant: q4
+            platform: linux
+            arch: arm64
+            os_version: u24
+            benchmark_matrix_json: >-
+              [{"engine":"chatterbox-en","useGPU":false,"backendHint":"cpu"},{"engine":"chatterbox-multi","useGPU":false,"backendHint":"cpu"},{"engine":"supertonic","useGPU":false,"backendHint":"cpu"}]
+          - os: windows-2022
+            variant: q4
+            platform: win32
+            arch: x64
+            os_version: w22
+            benchmark_matrix_json: >-
+              [{"engine":"chatterbox-en","useGPU":false,"backendHint":"cpu"},{"engine":"chatterbox-multi","useGPU":false,"backendHint":"cpu"},{"engine":"supertonic","useGPU":false,"backendHint":"cpu"},{"engine":"chatterbox-en","useGPU":true,"backendHint":"directml"},{"engine":"chatterbox-multi","useGPU":true,"backendHint":"directml"},{"engine":"supertonic","useGPU":true,"backendHint":"directml"}]
+
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Windows - enable git long paths
+        if: ${{ matrix.platform == 'win32' }}
+        shell: bash
+        run: git config --system core.longpaths true
+
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ needs.context.outputs.repository }}
+          ref: ${{ needs.context.outputs.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - name: Install NPM dependencies
+        working-directory: ${{ env.ADDON_DIR }}
+        run: |
+          npm install
+          npm install -g bare bare-make
+
+      - name: Download prebuilds from artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: ${{ env.ADDON_DIR }}/prebuilds
+          merge-multiple: true
+
+      - name: Linux - install dependencies
+        if: matrix.platform == 'linux'
+        shell: bash
+        run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
+
+      # `continue-on-error` is intentionally absent: if the benchmark crashes
+      # (e.g. ADDON_NOT_FOUND on win32, prebuild incompatibility) the matrix
+      # entry must turn red so the failure is visible. The downstream
+      # `summarize` job uses `if: always()`, so one failed matrix entry no
+      # longer blocks aggregation.
+      - name: Run RTF benchmark matrix
+        shell: bash
+        working-directory: ${{ env.ADDON_DIR }}
+        run: node scripts/run-rtf-benchmark-matrix.js
+        env:
+          QVAC_ONNX_TTS_BENCHMARK_VARIANT: ${{ matrix.variant }}
+          QVAC_ONNX_TTS_BENCHMARK_DEVICE: ${{ matrix.os }}
+          QVAC_ONNX_TTS_BENCHMARK_RUNNER: github-hosted-${{ matrix.os }}
+          QVAC_ONNX_TTS_BENCHMARK_MATRIX_JSON: ${{ inputs.benchmark_matrix_json || matrix.benchmark_matrix_json }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_WORKFLOW: ${{ github.workflow }}
+          GITHUB_JOB: ${{ github.job }}
+          GITHUB_SERVER_URL: ${{ github.server_url }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+
+      # Defence-in-depth: an `npm run` exit-zero alone does not guarantee that
+      # any rtf-benchmark-*.json files were actually produced (the matrix
+      # runner catches per-entry errors and keeps going). If every entry fell
+      # over (e.g. ADDON_NOT_FOUND on win32), uploads silently produced no
+      # artifact. Loudly fail the matrix entry instead.
+      - name: Verify benchmark output exists
+        if: always()
+        shell: bash
+        working-directory: ${{ env.ADDON_DIR }}
+        run: |
+          set -euo pipefail
+          results_dir="benchmarks/results"
+          mkdir -p "$results_dir"
+          rtf_count=$(find "$results_dir" -maxdepth 1 -type f -name 'rtf-benchmark-*.json' | wc -l)
+          stream_count=$(find "$results_dir" -maxdepth 1 -type f -name 'streaming-benchmark-*.json' | wc -l)
+          echo "Benchmark output in $results_dir:"
+          ls -la "$results_dir" || true
+          echo
+          echo "rtf-benchmark-*.json: $rtf_count"
+          echo "streaming-benchmark-*.json: $stream_count"
+          {
+            echo "### Benchmark output — ${{ matrix.os }} (${{ matrix.platform }}-${{ matrix.arch }})"
+            echo "- rtf-benchmark JSON files: \`$rtf_count\`"
+            echo "- streaming-benchmark JSON files: \`$stream_count\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$rtf_count" -eq 0 ]; then
+            echo "::error title=No RTF benchmark output::Step \`Run RTF benchmark matrix\` produced zero rtf-benchmark-*.json files. Check the matrix runner log above for ADDON_NOT_FOUND, prebuild path issues, or per-entry crashes."
+            exit 1
+          fi
+
+      - name: Upload RTF results
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: rtf-results-tts-${{ matrix.os }}-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.os_version }}
+          path: |
+            ${{ env.ADDON_DIR }}/benchmarks/results/rtf-benchmark-*.json
+            ${{ env.ADDON_DIR }}/benchmarks/results/streaming-benchmark-*.json
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Add RTF summary to step summary
+        if: always()
+        continue-on-error: true
+        shell: bash
+        working-directory: ${{ env.ADDON_DIR }}
+        run: |
+          echo "### TTS RTF — ${{ matrix.os }} (${{ matrix.platform }}-${{ matrix.arch }})" >> $GITHUB_STEP_SUMMARY
+          node -e "
+            const fs = require('fs');
+            const path = require('path');
+            const resultsDir = path.resolve('benchmarks/results');
+            if (!fs.existsSync(resultsDir)) process.exit(0);
+            const files = fs.readdirSync(resultsDir)
+              .filter(file => file.startsWith('rtf-benchmark-') && file.endsWith('.json'))
+              .sort();
+            if (files.length === 0) process.exit(0);
+            const lines = [
+              '| Engine | Variant | GPU | Backend | Label | Mean RTF | P50 | P95 | Cold RTF | Mean Wall (ms) | Load (ms) | Peak RSS (MB) | Noisy |',
+              '|--------|---------|-----|---------|-------|----------|-----|-----|----------|----------------|-----------|---------------|-------|'
+            ];
+            for (const file of files) {
+              const report = JSON.parse(fs.readFileSync(path.join(resultsDir, file), 'utf8'));
+              const summary = report.summary || {};
+              const rtf = summary.rtf || {};
+              const wallMs = summary.wallMs || {};
+              const useGPU = report.requested && report.requested.useGPU;
+              const noisy = summary.noisy === true;
+              const coldRtf = summary.coldRtf;
+              const loadMs = summary.modelLoadMs;
+              const peakRss = summary.peakRssBytes;
+              const label = (report.labels && report.labels.label) || '';
+              lines.push(
+                '| ' + (report.engine || 'unknown') +
+                ' | ' + ((report.model && report.model.variant) || 'q4') +
+                ' | ' + (useGPU ? 'yes' : 'no') +
+                ' | ' + ((report.labels && report.labels.backend) || (report.requested && report.requested.backendHint) || 'n/a') +
+                ' | ' + (label || '-') +
+                ' | ' + (rtf.mean !== undefined ? Number(rtf.mean).toFixed(4) : 'n/a') +
+                ' | ' + (rtf.p50 !== undefined ? Number(rtf.p50).toFixed(4) : 'n/a') +
+                ' | ' + (rtf.p95 !== undefined ? Number(rtf.p95).toFixed(4) : 'n/a') +
+                ' | ' + (coldRtf !== undefined && coldRtf !== null ? Number(coldRtf).toFixed(4) : 'n/a') +
+                ' | ' + (wallMs.mean !== undefined ? Math.round(Number(wallMs.mean)) : 'n/a') +
+                ' | ' + (loadMs !== undefined && loadMs !== null ? Math.round(Number(loadMs)) : 'n/a') +
+                ' | ' + (peakRss !== undefined && peakRss !== null ? Math.round(Number(peakRss) / 1024 / 1024) : 'n/a') +
+                ' | ' + (noisy ? '⚠' : '-') +
+                ' |'
+              );
+            }
+            console.log(lines.join('\n'));
+          " >> $GITHUB_STEP_SUMMARY
+
+  # Self-hosted RTF + streaming benchmark matrix. Covers the CUDA gap and
+  # provides a stable CPU baseline free of GitHub-hosted noisy-neighbour
+  # effects.
+  benchmarks-self-hosted:
+    needs: [context, prebuild]
+    continue-on-error: true
+    runs-on: ${{ matrix.os }}
+    environment: release
+    name: benchmark-${{ matrix.os }}
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ai-run-ubuntu-22.04
+            variant: q4
+            platform: linux
+            arch: x64
+            os_version: u22-self-hosted
+            device_label: ai-run-ubuntu-22.04 (stable-baseline)
+            benchmark_matrix_json: >-
+              [{"engine":"chatterbox-en","useGPU":false,"backendHint":"cpu"},{"engine":"chatterbox-multi","useGPU":false,"backendHint":"cpu"},{"engine":"supertonic","useGPU":false,"backendHint":"cpu"}]
+          - os: ai-run-linux-gpu
+            variant: q4
+            platform: linux
+            arch: x64
+            os_version: cuda
+            device_label: ai-run-linux-gpu (cuda)
+            benchmark_matrix_json: >-
+              [{"engine":"chatterbox-en","useGPU":false,"backendHint":"cpu"},{"engine":"chatterbox-multi","useGPU":false,"backendHint":"cpu"},{"engine":"supertonic","useGPU":false,"backendHint":"cpu"},{"engine":"chatterbox-en","useGPU":true,"backendHint":"cuda"},{"engine":"chatterbox-multi","useGPU":true,"backendHint":"cuda"},{"engine":"supertonic","useGPU":true,"backendHint":"cuda"}]
+
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ needs.context.outputs.repository }}
+          ref: ${{ needs.context.outputs.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Configure scoped registry for @tetherto and @qvac packages
+        env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+        shell: bash
+        working-directory: ${{ env.ADDON_DIR }}
+        run: |
+          set -eu
+          cat > ~/.npmrc <<NPMRC
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
+          NPMRC
+
+          if [ -n "${GIT_PAT:-}" ]; then
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
+          else
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
+            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "git@github.com:"
+          fi
+
+      - name: Install NPM dependencies
+        working-directory: ${{ env.ADDON_DIR }}
+        run: |
+          npm install
+          npm install -g bare bare-make
+
+      - name: Download prebuilds from artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: ${{ env.ADDON_DIR }}/prebuilds
+          merge-multiple: true
+
+      - name: Linux - install dependencies
+        shell: bash
+        run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers libgomp1
+
+      - name: Run RTF benchmark matrix
+        shell: bash
+        working-directory: ${{ env.ADDON_DIR }}
+        run: node scripts/run-rtf-benchmark-matrix.js
+        env:
+          QVAC_ONNX_TTS_BENCHMARK_VARIANT: ${{ matrix.variant }}
+          QVAC_ONNX_TTS_BENCHMARK_DEVICE: ${{ matrix.device_label || matrix.os }}
+          QVAC_ONNX_TTS_BENCHMARK_RUNNER: self-hosted-${{ matrix.os }}
+          QVAC_ONNX_TTS_BENCHMARK_MATRIX_JSON: ${{ inputs.benchmark_matrix_json || matrix.benchmark_matrix_json }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_WORKFLOW: ${{ github.workflow }}
+          GITHUB_JOB: ${{ github.job }}
+          GITHUB_SERVER_URL: ${{ github.server_url }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+
+      - name: Verify benchmark output exists
+        if: always()
+        shell: bash
+        working-directory: ${{ env.ADDON_DIR }}
+        run: |
+          set -euo pipefail
+          results_dir="benchmarks/results"
+          mkdir -p "$results_dir"
+          rtf_count=$(find "$results_dir" -maxdepth 1 -type f -name 'rtf-benchmark-*.json' | wc -l)
+          stream_count=$(find "$results_dir" -maxdepth 1 -type f -name 'streaming-benchmark-*.json' | wc -l)
+          echo "Benchmark output in $results_dir:"
+          ls -la "$results_dir" || true
+          echo
+          echo "rtf-benchmark-*.json: $rtf_count"
+          echo "streaming-benchmark-*.json: $stream_count"
+          {
+            echo "### Benchmark output — ${{ matrix.os }} (${{ matrix.platform }}-${{ matrix.arch }})"
+            echo "- rtf-benchmark JSON files: \`$rtf_count\`"
+            echo "- streaming-benchmark JSON files: \`$stream_count\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$rtf_count" -eq 0 ]; then
+            echo "::error title=No RTF benchmark output (self-hosted)::Step \`Run RTF benchmark matrix\` produced zero rtf-benchmark-*.json files on self-hosted runner ${{ matrix.os }}."
+            exit 1
+          fi
+
+      - name: Upload RTF results
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: rtf-results-tts-${{ matrix.os }}-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.os_version }}
+          path: |
+            ${{ env.ADDON_DIR }}/benchmarks/results/rtf-benchmark-*.json
+            ${{ env.ADDON_DIR }}/benchmarks/results/streaming-benchmark-*.json
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Add RTF summary to step summary
+        if: always()
+        continue-on-error: true
+        shell: bash
+        working-directory: ${{ env.ADDON_DIR }}
+        run: |
+          echo "### TTS RTF — ${{ matrix.os }} (${{ matrix.platform }}-${{ matrix.arch }})" >> $GITHUB_STEP_SUMMARY
+          node -e "
+            const fs = require('fs');
+            const path = require('path');
+            const resultsDir = path.resolve('benchmarks/results');
+            if (!fs.existsSync(resultsDir)) process.exit(0);
+            const files = fs.readdirSync(resultsDir)
+              .filter(file => file.startsWith('rtf-benchmark-') && file.endsWith('.json'))
+              .sort();
+            if (files.length === 0) process.exit(0);
+            const lines = [
+              '| Engine | Variant | GPU | Backend | Label | Mean RTF | P50 | P95 | Cold RTF | Mean Wall (ms) | Load (ms) | Peak RSS (MB) | Noisy |',
+              '|--------|---------|-----|---------|-------|----------|-----|-----|----------|----------------|-----------|---------------|-------|'
+            ];
+            for (const file of files) {
+              const report = JSON.parse(fs.readFileSync(path.join(resultsDir, file), 'utf8'));
+              const summary = report.summary || {};
+              const rtf = summary.rtf || {};
+              const wallMs = summary.wallMs || {};
+              const useGPU = report.requested && report.requested.useGPU;
+              const noisy = summary.noisy === true;
+              const coldRtf = summary.coldRtf;
+              const loadMs = summary.modelLoadMs;
+              const peakRss = summary.peakRssBytes;
+              const label = (report.labels && report.labels.label) || '';
+              lines.push(
+                '| ' + (report.engine || 'unknown') +
+                ' | ' + ((report.model && report.model.variant) || 'q4') +
+                ' | ' + (useGPU ? 'yes' : 'no') +
+                ' | ' + ((report.labels && report.labels.backend) || (report.requested && report.requested.backendHint) || 'n/a') +
+                ' | ' + (label || '-') +
+                ' | ' + (rtf.mean !== undefined ? Number(rtf.mean).toFixed(4) : 'n/a') +
+                ' | ' + (rtf.p50 !== undefined ? Number(rtf.p50).toFixed(4) : 'n/a') +
+                ' | ' + (rtf.p95 !== undefined ? Number(rtf.p95).toFixed(4) : 'n/a') +
+                ' | ' + (coldRtf !== undefined && coldRtf !== null ? Number(coldRtf).toFixed(4) : 'n/a') +
+                ' | ' + (wallMs.mean !== undefined ? Math.round(Number(wallMs.mean)) : 'n/a') +
+                ' | ' + (loadMs !== undefined && loadMs !== null ? Math.round(Number(loadMs)) : 'n/a') +
+                ' | ' + (peakRss !== undefined && peakRss !== null ? Math.round(Number(peakRss) / 1024 / 1024) : 'n/a') +
+                ' | ' + (noisy ? '⚠' : '-') +
+                ' |'
+              );
+            }
+            console.log(lines.join('\n'));
+          " >> $GITHUB_STEP_SUMMARY
+
+  summarize:
+    needs: [context, benchmarks-github-hosted, benchmarks-self-hosted]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ needs.context.outputs.repository }}
+          ref: ${{ needs.context.outputs.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Download benchmark artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: rtf-results-tts-*
+          path: benchmark-artifacts/desktop
+          merge-multiple: true
+        continue-on-error: true
+
+      - name: Generate consolidated benchmark report
+        run: |
+          mkdir -p benchmark-artifacts
+          node scripts/perf-report/aggregate-onnx-tts-rtf.js \
+            --dir benchmark-artifacts \
+            --manual-dir packages/tts-onnx/benchmarks/manual-results \
+            --output benchmark-artifacts/onnx-tts-performance-findings.md \
+            --output-json benchmark-artifacts/onnx-tts-performance-findings.json
+
+      - name: Add summary
+        if: always()
+        run: |
+          if [ -f "benchmark-artifacts/onnx-tts-performance-findings.md" ]; then
+            cat benchmark-artifacts/onnx-tts-performance-findings.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "_No consolidated benchmark report was produced._" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### GPU coverage map" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Backend | Coverage | How |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---------|----------|-----|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| cpu | linux x64/arm64, win32 x64 | GitHub-hosted + self-hosted runners |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| cuda | linux x64 | self-hosted ai-run-linux-gpu |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| directml | win32 x64 | windows-2022 |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| coreml | not on CI (darwin runner hang) | drop JSON into packages/tts-onnx/benchmarks/manual-results/ |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| rocm | not on CI | drop JSON into packages/tts-onnx/benchmarks/manual-results/ |" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload consolidated benchmark report
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: onnx-tts-performance-findings
+          path: |
+            benchmark-artifacts/onnx-tts-performance-findings.md
+            benchmark-artifacts/onnx-tts-performance-findings.json
+          retention-days: 30
+          if-no-files-found: ignore
