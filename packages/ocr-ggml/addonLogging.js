@@ -1,6 +1,4 @@
-const binding = require('./binding')
-
 module.exports = {
-  setLogger: binding.setLogger,
-  releaseLogger: binding.releaseLogger
+  get setLogger () { return require('./binding').setLogger },
+  get releaseLogger () { return require('./binding').releaseLogger }
 }

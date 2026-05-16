@@ -1,6 +1,5 @@
 'use strict'
 
-const binding = require('./binding')
 const { QvacErrorAddonOcrGgml, ERR_CODES } = require('./lib/error')
 
 /**
@@ -15,8 +14,9 @@ class OcrGgmlInterface {
    *   `info`/`warn`/`error`/`debug` methods. When provided, C++ log lines are
    *   forwarded via `binding.setLogger`.
    */
-  constructor (configurationParams, outputCb, transitionCb = null) {
-    this._handle = binding.createInstance(
+  constructor (binding, configurationParams, outputCb, transitionCb = null) {
+    this._binding = binding
+    this._handle = this._binding.createInstance(
       this,
       configurationParams,
       outputCb
@@ -24,7 +24,7 @@ class OcrGgmlInterface {
 
     this._loggerInitialized = false
     if (transitionCb && typeof transitionCb === 'object') {
-      binding.setLogger((priority, message) => {
+      this._binding.setLogger((priority, message) => {
         const levels = ['error', 'warn', 'info', 'debug']
         const level = levels[priority] || 'info'
         if (typeof transitionCb[level] === 'function') {
@@ -48,7 +48,7 @@ class OcrGgmlInterface {
    */
   async activate () {
     try {
-      binding.activate(this._handle)
+      this._binding.activate(this._handle)
     } catch (err) {
       throw new QvacErrorAddonOcrGgml({
         code: ERR_CODES.FAILED_TO_ACTIVATE,
@@ -60,7 +60,7 @@ class OcrGgmlInterface {
 
   async cancel () {
     try {
-      await binding.cancel(this._handle)
+      await this._binding.cancel(this._handle)
     } catch (err) {
       throw new QvacErrorAddonOcrGgml({
         code: ERR_CODES.FAILED_TO_CANCEL,
@@ -83,7 +83,7 @@ class OcrGgmlInterface {
    */
   async runJob (data) {
     try {
-      return binding.runJob(this._handle, data)
+      return this._binding.runJob(this._handle, data)
     } catch (err) {
       throw new QvacErrorAddonOcrGgml({
         code: ERR_CODES.FAILED_TO_RUN_JOB,
@@ -100,11 +100,11 @@ class OcrGgmlInterface {
 
     try {
       if (this._loggerInitialized) {
-        binding.releaseLogger()
+        this._binding.releaseLogger()
         this._loggerInitialized = false
       }
 
-      binding.destroyInstance(this._handle)
+      this._binding.destroyInstance(this._handle)
       this._handle = null
     } catch (err) {
       throw new QvacErrorAddonOcrGgml({

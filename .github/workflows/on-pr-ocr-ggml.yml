@@ -90,44 +90,27 @@ jobs:
               - ".github/workflows/*ocr-ggml*.yml"
 
   sanity-checks:
-    needs: [authorize, changes, label-gate]
     if: |-
       needs.label-gate.outputs.authorised == 'true' && ((needs.changes.outputs.pkg == 'true' && needs.authorize.outputs.allowed == 'true') || github.event_name == 'workflow_dispatch')
-    runs-on: ubuntu-22.04
+    needs: 
+      - authorize
+      - changes
+      - label-gate
+    runs-on: ubuntu-latest
     timeout-minutes: 30
-    env:
-      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/ocr-ggml/vcpkg/cache,readwrite"
-      PKG_DIR: packages/ocr-ggml
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-          ref: ${{ github.event.pull_request.head.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
           fetch-depth: 0
 
-      - name: Fetch PR head and target branch
-        id: fetch_pr
-        if: github.event_name == 'pull_request_target' || github.event_name == 'pull_request'
-        continue-on-error: true
-        env:
-          BASE_REF: ${{ github.event.pull_request.base.ref }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          git fetch origin "$BASE_REF:refs/remotes/origin/$BASE_REF"
-          git fetch origin "$HEAD_SHA:refs/pr/head"
-
-      - name: Check PR Status with Target Branch
-        continue-on-error: true
-        id: target_branch_checks
-        if: github.event_name == 'pull_request_target' || github.event_name == 'pull_request'
-        env:
-          TARGET_SHA: ${{ github.event.pull_request.base.sha }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          if ! git merge-base --is-ancestor "$TARGET_SHA" "$PR_HEAD_SHA"; then
-            echo "::error title=PR is not up to date::This PR is not up to date with target branch"
-          fi
+      - name: Run Sanity checks
+        uses: ./github/actions/sanity-checks
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
+          workdir: packages/ocr-ggml
 
       - name: Verify that yaml files are formatted
         id: yamlfmt
@@ -136,62 +119,35 @@ jobs:
           workdir: ${{ env.PKG_DIR }}
         continue-on-error: true
 
-      - name: Check for disallowed dependencies
-        id: check_dependencies
-        continue-on-error: true
-        working-directory: ${{ env.PKG_DIR }}
-        run: |
-          deps=$(jq -r '.dependencies, .devDependencies // {} | to_entries[] | .value' package.json)
-          if echo "$deps" | grep -Eq '^(git\+https:\/\/github.com|[0-9]+\.[0-9]+\.[0-9]+-(dev|tmp)[^"]*)$'; then
-            echo "::error title=Disallowed dependency detected::Do not use git URLs or dev/tmp versions in dependencies"
-          fi
-
-      - name: Run JavaScript tests
-        id: run_js_tests
-        continue-on-error: true
-        uses: ./.github/actions/run-lint-and-unit-tests
-        with:
-          gpr-token: ${{ secrets.GITHUB_TOKEN }}
-          registry-type: gpr
-          workdir: ${{ env.PKG_DIR }}
-
-      - name: Check for errors
-        run: |
-          count=0
-          if [ "${{ steps.run_js_tests.outcome }}" = "failure" ]; then
-            echo "::error::Step - Lint or unit tests failed"
-            count=$((count + 1))
-          fi
-          if [ "${{ steps.yamlfmt.outcome }}" = "failure" ]; then
-            echo "::error::Step - Verify that yaml files are formatted failed"
-            count=$((count + 1))
-          fi
-          if [ "${{ steps.check_dependencies.outcome }}" = "failure" ]; then
-            echo "::error::Step - Check for disallowed dependencies failed"
-            count=$((count + 1))
-          fi
-          if [ "${{ steps.target_branch_checks.outcome }}" = "failure" ]; then
-            echo "::error::Step - Check PR Status with Target Branch failed"
-            count=$((count + 1))
-          fi
-          if [ "${{ steps.fetch_pr.outcome }}" = "failure" ]; then
-            echo "::error::Step - Fetch PR head and target branch failed"
-            count=$((count + 1))
-          fi
-          if [ $count -gt 0 ]; then
-            echo "::error::There were $count failed checks"
-            exit 1
-          fi
-
   cpp-lint:
     needs: [authorize, changes, label-gate]
     if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/cpp-lint.yaml
     secrets: inherit
     with:
-      sha: ${{ github.event.pull_request.base.sha || github.sha }}
+      sha: ${{ github.event.pull_request.base.sha }}
       pr_head_sha: ${{ github.event.pull_request.head.sha }}
       workdir: packages/ocr-ggml
+
+  ts-checks:
+    needs: authorize
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: packages/llm-llamacpp
+        run: npm install
+
+      - name: Type declaration check
+        working-directory: packages/llm-llamacpp
+        run: npm run test:dts
 
   prebuild:
     permissions:

@@ -5,12 +5,7 @@ const fs = require('bare-fs')
 const QvacLogger = require('@qvac/logging')
 const { createJobHandler, exclusiveRunQueue } = require('@qvac/infer-base')
 
-const { OcrGgmlInterface } = require('./ocr-ggml')
 const { QvacErrorAddonOcrGgml, ERR_CODES } = require('./lib/error')
-
-const binding = require('./binding')
-const addonLogging = require('./addonLogging')
-const addon = require.addon.resolve('.')
 
 /**
  * GGML-backed OCR implementation.
@@ -146,15 +141,22 @@ class OcrGgml {
         : path.join(__dirname, 'prebuilds')
 
     this.logger.info('Creating ocr-ggml addon')
-    this.addon = new OcrGgmlInterface(
-      configurationParams,
-      this._addonOutputCallback.bind(this),
-      this.logger
-    )
+    this.addon = this._createAddon(configurationParams)
     await this.addon.activate()
     this.state.configLoaded = true
     this.state.weightsLoaded = true
     this.logger.info('ocr-ggml model loaded')
+  }
+
+  _createAddon (configurationParams) {
+    const binding = require('./binding')
+    const { OcrGgmlInterface } = require('./ocr-ggml')
+    return new OcrGgmlInterface(
+      binding,
+      configurationParams,
+      this._addonOutputCallback.bind(this),
+      this.logger
+    )
   }
 
   async _runInternal (input) {
@@ -309,9 +311,9 @@ class OcrGgml {
 module.exports = {
   OcrGgml,
   modelClass: OcrGgml,
-  modelFile: addon,
+  get modelFile () { return require.addon.resolve('.') },
   QvacErrorAddonOcrGgml,
   ERR_CODES,
-  binding,
-  addonLogging
+  get binding () { return require('./binding') },
+  get addonLogging () { return require('./addonLogging') }
 }
