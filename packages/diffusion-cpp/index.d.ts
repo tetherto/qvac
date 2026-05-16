@@ -405,4 +405,12 @@ export class EsrganUpscaler {
   getState(): { configLoaded: boolean }
 }
 
+export { default as VideoStableDiffusion } from './video'
+export type {
+  VideoDiffusionFiles,
+  VideoStableDiffusionArgs,
+  VideoGenerationParams,
+  VideoRuntimeStats
+} from './video'
+
 export { QvacResponse, RuntimeStats, EsrganRuntimeStats }

@@ -678,4 +678,5 @@ class EsrganUpscaler {
 
 module.exports = ImgStableDiffusion
 module.exports.ImgStableDiffusion = ImgStableDiffusion
+module.exports.VideoStableDiffusion = require('./video')
 module.exports.EsrganUpscaler = EsrganUpscaler
