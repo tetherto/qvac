@@ -41,24 +41,20 @@ export class DownloadExecutor extends BaseExecutor<typeof downloadTests> {
     );
 
     let progressEvents = 0;
-    const cancelledPromise = downloadAsset({
+    const cancelledOp = downloadAsset({
       assetSrc: OCR_CYRILLIC_RECOGNIZER,
       onProgress: (p: { downloadKey?: string; percentage: number }) => {
         progressEvents++;
-        if (
-          !cancelTriggered &&
-          p.downloadKey &&
-          p.percentage >= cancelThreshold
-        ) {
+        if (!cancelTriggered && p.percentage >= cancelThreshold) {
           cancelTriggered = true;
           void cancel({
-            operation: "downloadAsset",
-            downloadKey: p.downloadKey,
+            requestId: cancelledOp.requestId,
             clearCache: true,
           });
         }
       },
-    }).then(
+    });
+    const cancelledPromise = cancelledOp.then(
       (id: string) => ({ status: "ok" as const, id }),
       (err: unknown) => ({
         status: "fail" as const,

@@ -50,6 +50,12 @@ export function createOpenAIAdapter (): APIAdapter {
         return true
       }
 
+      if (method === 'POST' && path === '/v1/completions') {
+        const { handleCompletions } = await import('./routes/completions.js')
+        await handleCompletions(req, res, ctx)
+        return true
+      }
+
       if (method === 'POST' && path === '/v1/embeddings') {
         const { handleEmbeddings } = await import('./routes/embeddings.js')
         await handleEmbeddings(req, res, ctx)
@@ -65,6 +71,12 @@ export function createOpenAIAdapter (): APIAdapter {
       if (method === 'POST' && path === '/v1/audio/translations') {
         const { handleTranslations } = await import('./routes/translations.js')
         await handleTranslations(req, res, ctx)
+        return true
+      }
+
+      if (method === 'POST' && path === '/v1/audio/speech') {
+        const { handleAudioSpeech } = await import('./routes/speech.js')
+        await handleAudioSpeech(req, res, ctx)
         return true
       }
 

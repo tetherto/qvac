@@ -1019,3 +1019,85 @@ export function logImageEditExtraWarnings (
     logger.warn(`image[] received ${opts.extraImageCount + 1} files; using only the first`)
   }
 }
+
+// ─── /v1/completions (legacy) helpers ───────────────────────────────────────
+
+export class InvalidPromptError extends Error {
+  constructor (message: string) {
+    super(message)
+    this.name = 'InvalidPromptError'
+  }
+}
+
+export type LegacyPrompt =
+  | { kind: 'single'; value: string }
+  | { kind: 'multi'; values: string[] }
+
+export function parseLegacyPrompt (raw: unknown): LegacyPrompt {
+  if (raw === undefined || raw === null) {
+    throw new InvalidPromptError('"prompt" is required.')
+  }
+
+  if (typeof raw === 'string') {
+    if (raw.length === 0) {
+      throw new InvalidPromptError('"prompt" must be a non-empty string.')
+    }
+    return { kind: 'single', value: raw }
+  }
+
+  if (typeof raw === 'number') {
+    throw new InvalidPromptError('Token-id prompts are not supported. Pass a string.')
+  }
+
+  if (Array.isArray(raw)) {
+    if (raw.length === 0) {
+      throw new InvalidPromptError('"prompt" array must not be empty.')
+    }
+
+    if (raw.every((p) => typeof p === 'string')) {
+      const values = raw as string[]
+      if (values.some((v) => v.length === 0)) {
+        throw new InvalidPromptError('"prompt" array entries must be non-empty strings.')
+      }
+      if (values.length === 1) {
+        return { kind: 'single', value: values[0]! }
+      }
+      return { kind: 'multi', values }
+    }
+
+    throw new InvalidPromptError('Token-id prompts are not supported. Pass a string or an array of strings.')
+  }
+
+  throw new InvalidPromptError('"prompt" must be a string or an array of strings.')
+}
+
+/**
+ * Wraps a legacy completions prompt as a single `user` turn so it can be fed
+ * to the same SDK `completion` capability that backs `/v1/chat/completions`.
+ *
+ * Caveat: the SDK's chat template (system prompt + role tags) still runs on
+ * every `/v1/completions` call. Legacy OpenAI clients that expect raw
+ * completion semantics (no system prompt, no role formatting around the
+ * prompt) will see template-shaped output. This is a deliberate compatibility
+ * trade-off — we have one chat-category capability, not a raw-completion one.
+ */
+export function legacyPromptToHistory (prompt: string): Array<{ role: string; content: string }> {
+  return [{ role: 'user', content: prompt }]
+}
+
+const LEGACY_UNSUPPORTED_PARAMS = [
+  'logprobs', 'echo', 'best_of', 'suffix',
+  'stop', 'logit_bias', 'stream_options', 'user',
+  'response_format'
+] as const
+
+export function logLegacyUnsupportedParams (body: Record<string, unknown>, logger: Logger): void {
+  for (const param of LEGACY_UNSUPPORTED_PARAMS) {
+    if (body[param] !== undefined) {
+      logger.warn(`Ignoring unsupported OpenAI legacy-completions param: ${param}=${JSON.stringify(body[param])}`)
+    }
+  }
+  if (typeof body['n'] === 'number' && body['n'] !== 1) {
+    logger.warn(`Ignoring unsupported OpenAI legacy-completions param: n=${JSON.stringify(body['n'])}`)
+  }
+}
