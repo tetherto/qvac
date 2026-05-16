@@ -29,7 +29,7 @@ const os = require('bare-os')
 const proc = require('bare-process')
 const test = require('brittle')
 const binding = require('../../binding')
-const VideoStableDiffusion = require('../../video')
+const VideoStableDiffusion = require('@qvac/diffusion-cpp/video')
 const { detectPlatform, setupJsLogger } = require('./utils')
 
 const isMobile = os.platform() === 'ios' || os.platform() === 'android'
