@@ -39,7 +39,7 @@ export interface RagSearchResult {
 }
 
 interface SDKModule {
-  loadModel: (opts: { modelSrc: string; modelType: string; modelConfig: Record<string, unknown> }) => Promise<string>
+  loadModel: (opts: { modelSrc: string; modelType: string; modelConfig: Record<string, unknown> }) => Promise<string> & { requestId: string }
   unloadModel: (opts: { modelId: string }) => Promise<void>
   completion: (opts: {
     modelId: string
@@ -48,9 +48,11 @@ interface SDKModule {
     tools?: SDKTool[]
     generationParams?: SDKGenerationParams
     responseFormat?: SDKResponseFormat
-  }) => Promise<CompletionResult>
-  embed: (opts: { modelId: string; text: string | string[] }) => Promise<{ embedding: number[] | number[][]; stats?: Record<string, unknown> }>
-  transcribe: (opts: { modelId: string; audioChunk: string | Buffer; prompt?: string }) => Promise<string>
+  }) => CompletionResult
+  embed: (opts: { modelId: string; text: string | string[] }) => Promise<{ embedding: number[] | number[][]; stats?: Record<string, unknown> }> & { requestId: string }
+  transcribe: (opts: { modelId: string; audioChunk: string | Buffer; prompt?: string }) => Promise<string> & { requestId: string }
+  textToSpeech: (opts: { modelId: string; text: string; inputType?: string; stream?: boolean }) => TtsResult
+  cancel: (opts: { requestId: string } | { operation: "request"; requestId: string } | { operation: "broad"; modelId: string; kind?: string }) => Promise<void>
   diffusion: (opts: SDKDiffusionParams) => SDKDiffusionResult
   ragListWorkspaces: () => Promise<RagWorkspaceInfo[]>
   ragSearch: (opts: {
@@ -85,6 +87,10 @@ export interface SDKDiffusionParams {
   guidance?: number
   sampling_method?: string
   scheduler?: string
+  /** Base image for img2img / image edits (SDK `diffusion()`). */
+  init_image?: Uint8Array
+  /** SD/SDXL denoising strength in [0, 1]; ignored by FLUX.2. */
+  strength?: number
 }
 
 export interface SDKDiffusionStats {
@@ -133,11 +139,18 @@ export interface CompletionRunStats {
 }
 
 export interface CompletionResult {
+  requestId: string
   text: Promise<string>
   stats: Promise<CompletionRunStats | undefined>
   toolCalls: Promise<SDKToolCall[] | null>
   tokenStream: AsyncIterable<string>
   toolCallStream: AsyncIterable<SDKToolEvent>
+}
+
+export interface TtsResult {
+  bufferStream: AsyncIterable<number>
+  buffer: Promise<number[]>
+  done: Promise<boolean>
 }
 
 export interface SDKToolCallEvent {
@@ -248,16 +261,33 @@ export async function sdkCompletion (opts: {
   if (opts.responseFormat) {
     params['responseFormat'] = opts.responseFormat
   }
+  // `completion(...)` returns a `CompletionRun` synchronously — the
+  // client-generated `requestId` is reachable on the result before any
+  // network round-trip, which is what the CLI cancel bridge in
+  // `routes/chat.ts` depends on to bind `req.on('close')` immediately.
   return completion(params as Parameters<SDKModule['completion']>[0])
+}
+
+export interface SDKEmbedRun {
+  requestId: string
+  result: Promise<number[] | number[][]>
 }
 
 export async function sdkEmbed (opts: {
   modelId: string
   text: string | string[]
-}): Promise<number[] | number[][]> {
+}): Promise<SDKEmbedRun> {
   const { embed } = await getSDK()
-  const { embedding } = await embed({ modelId: opts.modelId, text: opts.text })
-  return embedding
+  const op = embed({ modelId: opts.modelId, text: opts.text })
+  return {
+    requestId: op.requestId,
+    result: op.then((r) => r.embedding)
+  }
+}
+
+export interface SDKTranscribeRun {
+  requestId: string
+  result: Promise<string>
 }
 
 export async function sdkTranscribe (opts: {
@@ -265,7 +295,7 @@ export async function sdkTranscribe (opts: {
   audioChunk: Buffer
   fileName: string
   prompt?: string | undefined
-}): Promise<string> {
+}): Promise<SDKTranscribeRun> {
   const fs = await import('node:fs')
   const os = await import('node:os')
   const path = await import('node:path')
@@ -275,16 +305,33 @@ export async function sdkTranscribe (opts: {
   const tmpFile = path.join(os.tmpdir(), `qvac-audio-${id}${ext}`)
   fs.writeFileSync(tmpFile, opts.audioChunk)
 
-  try {
-    const { transcribe } = await getSDK()
-    return await transcribe({
-      modelId: opts.modelId,
-      audioChunk: tmpFile,
-      ...(opts.prompt && { prompt: opts.prompt })
-    })
-  } finally {
+  const { transcribe } = await getSDK()
+  const op = transcribe({
+    modelId: opts.modelId,
+    audioChunk: tmpFile,
+    ...(opts.prompt && { prompt: opts.prompt })
+  })
+
+  // Tie tempfile cleanup to the promise resolution so the synchronous
+  // `requestId` surface stays usable while the underlying transcription
+  // is still in flight.
+  const result = op.finally(() => {
     try { fs.unlinkSync(tmpFile) } catch {}
-  }
+  })
+
+  return { requestId: op.requestId, result }
+}
+
+/**
+ * Targeted cancel by `requestId`. The CLI's per-route disconnect bridges
+ * (`routes/chat.ts`, `routes/embeddings.ts`, `routes/transcriptions.ts`)
+ * call this when the HTTP client disconnects mid-stream so the
+ * underlying SDK request stops running on the worker. Fire-and-forget
+ * from the listener — never `await` inside `req.on('close')`.
+ */
+export async function sdkCancel (opts: { requestId: string }): Promise<void> {
+  const { cancel } = await getSDK()
+  await cancel({ requestId: opts.requestId })
 }
 
 export interface SDKDiffusionRunResult {
@@ -371,6 +418,34 @@ export async function sdkRagIngest (opts: {
   }
   if (opts.workspace !== undefined) params.workspace = opts.workspace
   return ragIngest(params)
+}
+
+export async function sdkTextToSpeech (opts: {
+  modelId: string
+  text: string
+}): Promise<{ samples: number[] }> {
+  const { textToSpeech } = await getSDK()
+  // Stream from the SDK so synthesis can start producing samples while we
+  // accumulate them into a single buffer for the HTTP response. The CLI
+  // currently buffers the full audio payload (WAV needs a header with the
+  // total length); chunked HTTP streaming is tracked as a follow-up.
+  const result = textToSpeech({
+    modelId: opts.modelId,
+    text: opts.text,
+    inputType: 'text',
+    stream: true
+  })
+
+  const samples: number[] = []
+  for await (const sample of result.bufferStream) {
+    samples.push(sample)
+  }
+  // Surface any pipeline error that the bufferStream may have settled
+  // through .done rather than the iterator (the SDK may resolve done after
+  // the iterator returns cleanly).
+  await result.done
+
+  return { samples }
 }
 
 export async function sdkClose (): Promise<void> {
