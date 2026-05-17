@@ -233,6 +233,26 @@ function _detectGpu (platform) {
       const m = sp.match(/Chipset Model:\s*(.+)$/m)
       if (m) return m[1].trim()
     }
+    // Follow-up to QVAC-17830 (Olya, 17 May): GitHub-hosted macOS
+    // runners are virtualised Macs (macos-15-arm64 = M2 Pro VM with
+    // an `apple paravirtual device` GPU). SPDisplaysDataType returns
+    // no `Chipset Model:` line on those VMs because the paravirtual
+    // device isn't a real display, so we fall back to the host chip
+    // identity. On Apple Silicon, the chip name implies the GPU
+    // (M2 Pro -> integrated 19-core GPU, M4 Pro -> integrated 20-core,
+    // etc.) which is what reviewers want to know anyway. SPHardware
+    // first (returns "Chip: Apple M2 Pro" on Apple Silicon or
+    // "Processor Name: ..." on Intel); sysctl second as a fast pure
+    // fallback.
+    const hw = _safeExec('system_profiler SPHardwareDataType')
+    if (hw) {
+      const chip = hw.match(/^\s*Chip:\s*(.+)$/m)
+      if (chip) return chip[1].trim()
+      const proc = hw.match(/^\s*Processor Name:\s*(.+)$/m)
+      if (proc) return proc[1].trim()
+    }
+    const cpu = _safeExec('sysctl -n machdep.cpu.brand_string')
+    if (cpu) return cpu
     const vk = _parseVulkaninfoSummary(_safeExec('vulkaninfo --summary'))
     if (vk) return vk
     return null
