@@ -276,8 +276,25 @@ function generateDeviceDetailTables (aggregated, addonType) {
 function generateMarkdownReport (aggregated, opts) {
   const options = opts || {}
   const lines = []
-  const { addon, generated_at, run_numbers, devices, quality } = aggregated
+  const { addon, generated_at, run_numbers, devices, quality, device_meta: deviceMeta = {} } = aggregated
   const iterCount = _maxIterationCount(devices)
+
+  // Follow-up to QVAC-17830 (Olya, 17 May): the per-device detail block
+  // already shows `GPU: ...` next to each device heading, but the
+  // cross-device mean comparison tables (PART A) only used the bare
+  // device short name as the column header. Annotate the header with
+  // the GPU on a second line when meta.gpu is populated so reviewers
+  // can tell which GPU produced each column without scrolling down to
+  // the per-device detail block. `<br>` is honoured inside GitHub
+  // Markdown table cells. Device name stays primary; GPU is appended
+  // below it. Falls back to plain device name when meta.gpu is null
+  // (mobile Device Farm rows, headless Linux runners, etc.) so the
+  // pre-change layout is preserved for those columns.
+  function _columnHeader (devName) {
+    const short = _shortDeviceName(devName)
+    const gpu = deviceMeta[devName] && deviceMeta[devName].gpu
+    return gpu ? `${short}<br>${gpu}` : short
+  }
 
   lines.push(`## ${addon} Performance Report`)
   lines.push(`Generated: ${generated_at} | CI Runs: ${run_numbers.join(', ')} | Iterations: ${iterCount}`)
@@ -293,7 +310,7 @@ function generateMarkdownReport (aggregated, opts) {
   const deviceNames = Object.keys(devices)
   if (!deviceNames.length) return lines.join('\n') + '\n'
 
-  const shortNames = deviceNames.map(_shortDeviceName)
+  const shortNames = deviceNames.map(_columnHeader)
 
   const allTests = new Set()
   for (const tests of Object.values(devices)) {
@@ -389,7 +406,7 @@ function generateMarkdownReport (aggregated, opts) {
       })
       if (!scopedDeviceNames.length) continue
 
-      const scopedShortNames = scopedDeviceNames.map(_shortDeviceName)
+      const scopedShortNames = scopedDeviceNames.map(_columnHeader)
 
       if (showScenarioHeading) {
         lines.push(`#### ${_scenarioLabel(scn)}`)
