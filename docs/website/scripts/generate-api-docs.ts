@@ -52,6 +52,7 @@ import * as path from "path";
 import { fileURLToPath } from "node:url";
 import { extractApiData } from "./api-docs/extract.js";
 import { renderApiDocs } from "./api-docs/render.js";
+import { rewriteFrontmatterTitleLine } from "./lib/release-shared.js";
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const API_DATA_PATH = path.join(SCRIPT_DIR, "api-docs", "api-data.json");
@@ -156,12 +157,14 @@ async function generateApiDocs(version: string, options: GenerateOptions) {
  * MDX file without touching the body. Used by `--title-only` so a patch
  * release bumps the displayed version label without re-running TypeDoc.
  *
- * Constraints:
- *   - File must exist (errors otherwise — the caller is the patch flow,
- *     which means the minor was already released).
- *   - File must start with `---` frontmatter (regression guard).
- *   - We replace exactly one line matching `^title:` inside the
- *     frontmatter block (the first one closing at the second `---`).
+ * The full title format is kept in lockstep with the title template in
+ * `scripts/api-docs/templates/single-page.njk` so title-only patches
+ * produce byte-identical headers to a full render at the same version.
+ *
+ * Thin wrapper around `rewriteFrontmatterTitleLine` from
+ * `lib/release-shared.ts`: the wrapper owns the "API Summary — ..." prefix
+ * so the lib stays prefix-agnostic and the release-notes generator can
+ * reuse the same helper with its own prefix.
  *
  * Exported so unit tests can validate the body-preserving behaviour
  * without spinning up the full TypeDoc pipeline.
@@ -170,37 +173,10 @@ export async function rewriteFrontmatterTitle(
   filePath: string,
   versionLabel: string,
 ): Promise<void> {
-  const existing = await fs.readFile(filePath, "utf-8");
-  if (!existing.startsWith("---\n")) {
-    throw new Error(
-      `--title-only requires an existing MDX with frontmatter: ${filePath}`,
-    );
-  }
-  const closing = existing.indexOf("\n---", 4);
-  if (closing < 0) {
-    throw new Error(
-      `--title-only: could not find frontmatter terminator in ${filePath}`,
-    );
-  }
-  // Frontmatter spans [0 .. closing+4) (the second `---` line included).
-  const frontmatter = existing.slice(0, closing + 4);
-  const body = existing.slice(closing + 4);
-
-  // Keep this in lockstep with the title template in
-  // `scripts/api-docs/templates/single-page.njk` so title-only patches
-  // produce byte-identical headers to a full render at the same version.
-  const newTitle = `title: API Summary — ${versionLabel}`;
-  // Match a `title:` line (with or without quoting) inside the
-  // frontmatter only. We keep this conservative — don't touch a `title:`
-  // that might appear in code-fenced examples in the body.
-  const titleRe = /^title:.*$/m;
-  if (!titleRe.test(frontmatter)) {
-    throw new Error(
-      `--title-only: no \`title:\` line found in frontmatter of ${filePath}`,
-    );
-  }
-  const newFrontmatter = frontmatter.replace(titleRe, newTitle);
-  await fs.writeFile(filePath, newFrontmatter + body, "utf-8");
+  await rewriteFrontmatterTitleLine(
+    filePath,
+    `API Summary — ${versionLabel}`,
+  );
 }
 
 /**

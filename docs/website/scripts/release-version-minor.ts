@@ -13,6 +13,13 @@
  * Steps (each delegated to the existing focused scripts):
  *   1. `create-version-bundle.ts <outgoing>` — copies `index.mdx` into a
  *      `v<outgoing>.mdx` sibling for both API and release-notes sections.
+ *  1a. `generate-api-docs.ts <outgoing> --target=v<outgoing>.mdx --title-only`
+ *  1b. `generate-release-notes.ts <outgoing> --target=v<outgoing>.mdx --title-only`
+ *      The freeze in step 1 is a raw file copy, so each snapshot inherits
+ *      the outgoing `index.mdx` title verbatim — which still advertises
+ *      `(latest)` and may carry a stale version label. Steps 1a / 1b
+ *      relabel the snapshots to the canonical archived form (`vX.Y.Z`
+ *      without `(latest)`) without re-rendering their bodies.
  *   2. `generate-api-docs.ts <new> --latest --no-ai` — runs TypeDoc + render
  *      and writes the new `index.mdx`. The release pipeline always passes
  *      `--no-ai`: AI augmentation is intentionally not part of this
@@ -83,6 +90,24 @@ async function releaseMinor(newVersion: string, options: MinorOptions) {
     runStep(
       `1️⃣  Freezing outgoing ${outgoing}...`,
       `bun run scripts/create-version-bundle.ts ${outgoingNumeric}`,
+    );
+
+    // The freeze above is a raw `fs.copyFile` of `index.mdx` into the
+    // sibling snapshot, so the snapshot inherits the outgoing index's
+    // frontmatter title verbatim. That title still advertises the
+    // outgoing as `(latest)` and may even carry a stale version label
+    // (e.g. when the index was hand-edited between releases). Relabel
+    // both snapshots to the canonical archived form (`vX.Y.Z`, no
+    // `(latest)`) using the dedicated title-only mode so the body is
+    // preserved byte-for-byte.
+    const snapshotTarget = `v${outgoingNumeric}.mdx`;
+    runStep(
+      `1️⃣a Relabeling archived API snapshot title (${snapshotTarget})...`,
+      `bun run scripts/generate-api-docs.ts ${outgoingNumeric} --target=${snapshotTarget} --title-only`,
+    );
+    runStep(
+      `1️⃣b Relabeling archived release-notes snapshot title (${snapshotTarget})...`,
+      `bun run scripts/generate-release-notes.ts ${outgoingNumeric} --target=${snapshotTarget} --title-only`,
     );
   } else {
     console.log(

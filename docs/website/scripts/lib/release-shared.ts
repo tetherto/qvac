@@ -184,3 +184,61 @@ export async function gitMove(
 function shellQuote(s: string): string {
   return `'${s.replace(/'/g, `'\\''`)}'`;
 }
+
+/**
+ * Rewrite the single `title:` line inside the frontmatter block of an
+ * existing MDX file, preserving the body byte-for-byte. The caller passes
+ * the **full title value** (everything after `title: `), not just the
+ * version label — keeping the prefix decision (`"API Summary — ..."` vs
+ * `"SDK Release Notes — ..."`) at the call site.
+ *
+ * Used by:
+ *   - the patch flow, to bump a patch version in-place without re-running
+ *     TypeDoc / re-rendering release notes (must not introduce new public
+ *     API surface by definition);
+ *   - the minor flow, to relabel a freshly-frozen `vX.Y.Z.mdx` snapshot
+ *     so the herdaded `title:` from the outgoing `index.mdx` (which still
+ *     advertised `(latest)` and possibly a different version number) is
+ *     replaced with the canonical archived label.
+ *
+ * Failure modes are surfaced as exceptions so the orchestrator fails fast
+ * instead of silently producing a stale title:
+ *   - file must exist and begin with `---\n`;
+ *   - frontmatter terminator (`\n---`) must be present;
+ *   - frontmatter must contain a `title:` line.
+ *
+ * Exported so unit tests can validate the body-preserving behaviour
+ * without spinning up the full TypeDoc pipeline.
+ */
+export async function rewriteFrontmatterTitleLine(
+  filePath: string,
+  fullTitle: string,
+): Promise<void> {
+  const existing = await fs.readFile(filePath, "utf-8");
+  if (!existing.startsWith("---\n")) {
+    throw new Error(
+      `Title rewrite requires an existing MDX with frontmatter: ${filePath}`,
+    );
+  }
+  const closing = existing.indexOf("\n---", 4);
+  if (closing < 0) {
+    throw new Error(
+      `Title rewrite: could not find frontmatter terminator in ${filePath}`,
+    );
+  }
+  // Frontmatter spans [0 .. closing+4) (the second `---` line included).
+  const frontmatter = existing.slice(0, closing + 4);
+  const body = existing.slice(closing + 4);
+
+  // Match a `title:` line (with or without quoting) inside the frontmatter
+  // only. We keep this conservative — don't touch a `title:` that might
+  // appear in code-fenced examples in the body.
+  const titleRe = /^title:.*$/m;
+  if (!titleRe.test(frontmatter)) {
+    throw new Error(
+      `Title rewrite: no \`title:\` line found in frontmatter of ${filePath}`,
+    );
+  }
+  const newFrontmatter = frontmatter.replace(titleRe, `title: ${fullTitle}`);
+  await fs.writeFile(filePath, newFrontmatter + body, "utf-8");
+}
