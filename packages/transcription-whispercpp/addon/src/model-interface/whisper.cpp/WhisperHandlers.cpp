@@ -277,7 +277,7 @@ const std::unordered_map<std::string, HandlerFunction<whisper_full_params>>
            }
 
            // handle detect language if set to true but language is not auto
-           if (detectLanguage && currentLanguage != "auto" && !currentLanguage.empty()) {
+           if (detectLanguage && currentLanguage != "auto") {
              throw qvac_errors::StatusError(
                  qvac_errors::general_error::InvalidArgument,
                  "detect_language must be false if language is not auto");
