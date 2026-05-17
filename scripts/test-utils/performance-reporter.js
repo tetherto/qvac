@@ -78,9 +78,13 @@ function getEnvVar (name) {
 // back to null on any failure — runs once per `createPerformanceReporter`
 // so the subprocess cost is paid at most once per test suite.
 //
-// Lazy-requires child_process so the file still loads cleanly under
-// the Bare runtime (where child_process isn't available) — bare
-// callers see gpu=null which the aggregator handles gracefully.
+// Subprocess driver:
+//   * Node — auto-loads `child_process.execSync` via _ensureNodeDefaults().
+//   * Bare — caller must pass `subprocess: require('bare-subprocess')`
+//     to configure(); this file's directory can't resolve bare-subprocess
+//     from its own node_modules walk, so the require has to happen in
+//     the caller's scope (see packages/llm-llamacpp/test/integration/
+//     _perf-helper.js for the canonical wiring).
 function _detectGpu (platform) {
   // The subprocess driver is resolved at configure() time so the
   // require lookup happens in the CALLER's directory (where
