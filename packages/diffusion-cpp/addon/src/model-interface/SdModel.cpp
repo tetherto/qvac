@@ -31,11 +31,13 @@ struct ProgressCtx {
   std::chrono::steady_clock::time_point startTime;
 };
 
-thread_local ProgressCtx tl_progressCtx;
+// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables,bugprone-throwing-static-initialization)
+thread_local ProgressCtx g_progressCtx;
 // Thread-local model pointer for abort callback routing -- same pattern as
-// tl_progressCtx for progress.  Avoids relying on the process-global
+// g_progressCtx for progress.  Avoids relying on the process-global
 // sd_abort_cb_data when multiple SdModel instances could coexist.
-thread_local const SdModel* tl_abortModel = nullptr;
+thread_local const SdModel* g_abortModel = nullptr;
+// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables,bugprone-throwing-static-initialization)
 
 std::string preferredBackendToString(enum sd_backend_preference_t pref) {
   switch (pref) {
@@ -53,27 +55,28 @@ std::string preferredBackendToString(enum sd_backend_preference_t pref) {
 }
 
 void sdProgressCallback(int step, int steps, float /*time*/, void* /*data*/) {
-  if (!tl_progressCtx.job || !tl_progressCtx.job->progressCallback)
+  if (g_progressCtx.job == nullptr || !g_progressCtx.job->progressCallback) {
     return;
+  }
 
   const auto elapsed =
       std::chrono::duration_cast<std::chrono::milliseconds>(
-          std::chrono::steady_clock::now() - tl_progressCtx.startTime)
+          std::chrono::steady_clock::now() - g_progressCtx.startTime)
           .count();
 
   std::ostringstream oss;
   oss << R"({"step":)" << step << R"(,"total":)" << steps << R"(,"elapsed_ms":)"
       << elapsed << "}";
 
-  tl_progressCtx.job->progressCallback(oss.str());
+  g_progressCtx.job->progressCallback(oss.str());
 }
 
 // Abort callback -- wired into sd_set_abort_callback() so that
 // generate_image() can be interrupted mid-denoising.
-// Reads from thread-local tl_abortModel (not the global sd_abort_cb_data)
+// Reads from thread-local g_abortModel (not the global sd_abort_cb_data)
 // to avoid concurrency issues when multiple SdModel instances coexist.
 bool sdAbortCallback(void* /*data*/) {
-  return tl_abortModel && tl_abortModel->isCancelRequested();
+  return (g_abortModel != nullptr) && g_abortModel->isCancelRequested();
 }
 
 // RAII wrapper for the sd_image_t* array returned by generate_image().
@@ -85,11 +88,14 @@ class SdImageBatch {
 public:
   SdImageBatch(sd_image_t* data, int count) : data_(data), count_(count) {}
   ~SdImageBatch() {
-    if (!data_)
+    if (data_ == nullptr) {
       return;
-    for (int i = 0; i < count_; ++i) {
-      free(data_[i].data);
     }
+    for (int idx = 0; idx < count_; ++idx) {
+      // NOLINTNEXTLINE(cppcoreguidelines-no-malloc,cppcoreguidelines-owning-memory,cppcoreguidelines-pro-bounds-pointer-arithmetic)
+      free(data_[idx].data);
+    }
+    // NOLINTNEXTLINE(cppcoreguidelines-no-malloc,cppcoreguidelines-owning-memory)
     free(data_);
   }
 
@@ -99,18 +105,23 @@ public:
   SdImageBatch& operator=(SdImageBatch&&) = delete;
 
   [[nodiscard]] int count() const { return count_; }
-  [[nodiscard]] const sd_image_t& operator[](int i) const {
-    if (!data_)
+  [[nodiscard]] const sd_image_t& operator[](int idx) const {
+    if (data_ == nullptr) {
       throw std::runtime_error("SdImageBatch: null data");
-    return data_[i];
+    }
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+    return data_[idx];
   }
 
-  // Release pixel buffer for image i immediately after it has been consumed.
-  void release(int i) {
-    if (!data_)
+  // Release pixel buffer for image idx immediately after it has been consumed.
+  void release(int idx) {
+    if (data_ == nullptr) {
       return;
-    free(data_[i].data);
-    data_[i].data = nullptr;
+    }
+    // NOLINTNEXTLINE(cppcoreguidelines-no-malloc,cppcoreguidelines-owning-memory,cppcoreguidelines-pro-bounds-pointer-arithmetic)
+    free(data_[idx].data);
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+    data_[idx].data = nullptr;
   }
 
 private:
@@ -136,7 +147,7 @@ PreparedLoras prepareLoras(const std::string& loraPath) {
 
   sd_lora_t item{};
   item.is_high_noise = false;
-  item.multiplier = 1.0f;
+  item.multiplier = 1.0F;
   item.path = prepared.paths.back().c_str();
   prepared.items.push_back(item);
 
@@ -167,8 +178,9 @@ SdModel::~SdModel() = default;
 // ---------------------------------------------------------------------------
 
 void SdModel::load() {
-  if (isLoaded())
+  if (isLoaded()) {
     return;
+  }
 
   const auto tLoadStart = std::chrono::steady_clock::now();
 
@@ -184,9 +196,9 @@ void SdModel::load() {
   // -- Model paths ------------------------------------------------------------
   // For FLUX.2 [klein] the GGUF contains only diffusion weights with no SD
   // version metadata KV pairs, so we must use diffusion_model_path.
-  // Classic all-in-one SD1.x / SDXL checkpoints use model_path.
-  auto optPath = [](const std::string& s) -> const char* {
-    return s.empty() ? nullptr : s.c_str();
+  // Classic all-in-one SD2.x / SDXL checkpoints use model_path.
+  auto optPath = [](const std::string& str) -> const char* {
+    return str.empty() ? nullptr : str.c_str();
   };
   params.model_path = optPath(config_.modelPath);
   params.diffusion_model_path = optPath(config_.diffusionModelPath);
@@ -230,13 +242,14 @@ void SdModel::load() {
     params.preferred_gpu_backend = SD_BACKEND_PREF_GPU;
   }
 
+  // NOLINTNEXTLINE(cppcoreguidelines-avoid-do-while)
   QLOG_IF(
       qvac_lib_inference_addon_cpp::logger::Priority::INFO,
       "Preferred backend passed to stable-diffusion: " +
           preferredBackendToString(params.preferred_gpu_backend) + " (" +
           std::to_string(static_cast<int>(params.preferred_gpu_backend)) + ")");
 
-#if defined(__APPLE__)
+#ifdef __APPLE__
   // The ggml Metal backend does not fully support GGML_OP_NORM for
   // non-contiguous tensors (the CLIP text encoder hits this path).
   // Force CLIP to CPU on Apple to avoid a Metal encoder abort.
@@ -269,7 +282,7 @@ void SdModel::load() {
   params.free_params_immediately = config_.freeParamsImmediately;
 
   sd_ctx_t* raw = new_sd_ctx(&params);
-  if (!raw) {
+  if (raw == nullptr) {
     const std::string path = config_.diffusionModelPath.empty()
                                  ? config_.modelPath
                                  : config_.diffusionModelPath;
@@ -291,6 +304,7 @@ void SdModel::load() {
 // process() -- applies SdGenHandlers to JSON params, then calls generate_image
 // ---------------------------------------------------------------------------
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 std::any SdModel::process(const std::any& input) {
   if (!isLoaded()) {
     throw StatusError(
@@ -301,45 +315,59 @@ std::any SdModel::process(const std::any& input) {
   const auto& job = std::any_cast<const GenerationJob&>(input);
 
   cancelRequested_.store(false);
-  tl_progressCtx.job = &job;
-  tl_progressCtx.startTime = std::chrono::steady_clock::now();
+  g_progressCtx.job = &job;
+  g_progressCtx.startTime = std::chrono::steady_clock::now();
   sd_set_progress_callback(sdProgressCallback, nullptr);
-  tl_abortModel = this;
+  g_abortModel = this;
   sd_set_abort_callback(sdAbortCallback, nullptr);
 
   // Scope guard: clear process-global callbacks on any exit path (including
   // early exceptions from parsing/validation before generate_image runs).
   auto clearCallbacks = [&]() {
-    tl_progressCtx.job = nullptr;
-    tl_abortModel = nullptr;
+    g_progressCtx.job = nullptr;
+    g_abortModel = nullptr;
     sd_set_progress_callback(nullptr, nullptr);
     sd_set_abort_callback(nullptr, nullptr);
   };
   struct CallbackGuard {
     std::function<void()> fn;
-    ~CallbackGuard() { fn(); }
-  } guard{clearCallbacks};
+    explicit CallbackGuard(std::function<void()> callback) noexcept
+        : fn(std::move(callback)) {}
+    CallbackGuard(const CallbackGuard&) = delete;
+    CallbackGuard& operator=(const CallbackGuard&) = delete;
+    CallbackGuard(CallbackGuard&&) = delete;
+    CallbackGuard& operator=(CallbackGuard&&) = delete;
+    ~CallbackGuard() noexcept {
+      try {
+        fn();
+      } catch (...) { // NOLINT(bugprone-empty-catch)
+      }
+    }
+  } guard(clearCallbacks);
 
   // -- Parse JSON params -----------------------------------------------------
-  picojson::value v;
-  const std::string parseErr = picojson::parse(v, job.paramsJson);
-  if (!parseErr.empty())
+  picojson::value jsonRoot;
+  const std::string parseErr = picojson::parse(jsonRoot, job.paramsJson);
+  if (!parseErr.empty()) {
     throw StatusError(
         general_error::InvalidArgument,
         "Failed to parse generation params JSON: " + parseErr);
-  if (!v.is<picojson::object>())
+  }
+  if (!jsonRoot.is<picojson::object>()) {
     throw StatusError(
         general_error::InvalidArgument, "Params must be a JSON object");
+  }
 
   // -- Build SdGenConfig from handlers ---------------------------------------
   qvac_lib_inference_addon_sd::SdGenConfig gen{};
   qvac_lib_inference_addon_sd::applySdGenHandlers(
-      gen, v.get<picojson::object>());
+      gen, jsonRoot.get<picojson::object>());
 
-  if (gen.mode != "txt2img" && gen.mode != "img2img")
+  if (gen.mode != "txt2img" && gen.mode != "img2img") {
     throw StatusError(
         general_error::InvalidArgument,
         "Unsupported mode: '" + gen.mode + "'. Supported: txt2img, img2img.");
+  }
 
   if (gen.upscale && config_.esrganPath.empty()) {
     throw StatusError(
@@ -370,7 +398,7 @@ std::any SdModel::process(const std::any& input) {
   genParams.sample_params.guidance.txt_cfg = gen.cfgScale;
   genParams.sample_params.guidance.distilled_guidance = gen.guidance;
   genParams.sample_params.guidance.img_cfg =
-      gen.imgCfgScale < 0.0f ? gen.cfgScale : gen.imgCfgScale;
+      gen.imgCfgScale < 0.0F ? gen.cfgScale : gen.imgCfgScale;
   genParams.sample_params.eta = gen.eta;
   genParams.sample_params.flow_shift = config_.flowShift;
 
@@ -383,12 +411,15 @@ std::any SdModel::process(const std::any& input) {
   // -- Step-caching ----------------------------------------------------------
   sd_cache_params_init(&genParams.cache);
   genParams.cache.mode = gen.cacheMode;
-  if (gen.cacheThreshold > 0.0f)
+  if (gen.cacheThreshold > 0.0F) {
     genParams.cache.reuse_threshold = gen.cacheThreshold;
-  if (gen.cacheStart > 0.0f)
+  }
+  if (gen.cacheStart > 0.0F) {
     genParams.cache.start_percent = gen.cacheStart;
-  if (gen.cacheEnd > 0.0f)
+  }
+  if (gen.cacheEnd > 0.0F) {
     genParams.cache.end_percent = gen.cacheEnd;
+  }
 
   // -- img2img --------------------------------------------------------------
   //
@@ -403,11 +434,7 @@ std::any SdModel::process(const std::any& input) {
   //     a fully new image. N>=2 is "fusion" mode -- addressable in the prompt
   //     as @image1, @image2, ...
   //
-  //   FLUX (FLUX_FLOW_PRED) with a single reference image:
-  //     Same ref_images path as FLUX2, just a single ref. Multi-image is
-  //     rejected here because only FLUX2 defines the @imageN placeholders.
-  //
-  //   All other models (SD1.x, SD2.x, SDXL, SD3):
+  //   All other models (SD2.x, SDXL, SD3):
   //     Uses init_image -- traditional SDEdit. The input image is noised to
   //     the level specified by `strength`, then denoised for the remaining
   //     steps. Lower strength = closer to the original image. Multi-image
@@ -419,23 +446,25 @@ std::any SdModel::process(const std::any& input) {
   // RAII wrapper for multi-image FLUX fusion reference images. Automatically
   // frees pixel buffers on scope exit (normal or exceptional) using a custom
   // deleter that iterates the vector and frees each sd_image_t.data pointer.
-  auto refImgsDeleter = [](std::vector<sd_image_t>* v) {
-    if (!v)
+  auto refImgsDeleter = [](std::vector<sd_image_t>* ptr) {
+    if (ptr == nullptr) {
       return;
-    for (auto& img : *v) {
-      if (img.data) {
+    }
+    for (auto& img : *ptr) {
+      if (img.data != nullptr) {
+        // NOLINTNEXTLINE(cppcoreguidelines-no-malloc,cppcoreguidelines-owning-memory)
         free(img.data);
         img.data = nullptr;
       }
     }
-    delete v;
+    // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
+    delete ptr;
   };
   std::unique_ptr<std::vector<sd_image_t>, decltype(refImgsDeleter)> refImgs(
-      new std::vector<sd_image_t>(), refImgsDeleter);
+      new std::vector<sd_image_t>(), refImgsDeleter); // NOLINT
 
   if (gen.mode == "img2img") {
-    const bool isFluxFamily = config_.prediction == FLUX2_FLOW_PRED ||
-                              config_.prediction == FLUX_FLOW_PRED;
+    const bool isFluxFamily = config_.prediction == FLUX2_FLOW_PRED;
     const bool isFlux2 = config_.prediction == FLUX2_FLOW_PRED;
     const size_t nMulti = job.initImagesBytes.size();
 
@@ -444,52 +473,58 @@ std::any SdModel::process(const std::any& input) {
     // These checks mirror the JS-layer validation in index.js but are
     // duplicated here so the C++ API stays safe when called directly from
     // unit tests or bindings that bypass index.js.
-    if (!job.initImageBytes.empty() && nMulti > 0)
+    if (!job.initImageBytes.empty() && nMulti > 0) {
       throw StatusError(
           general_error::InvalidArgument,
           "img2img: init_image and init_images are mutually exclusive -- "
           "pick one. Use init_images (with FLUX2) for multi-reference "
           "fusion, or init_image for single-image conditioning.");
+    }
 
-    if (nMulti > 0 && !isFlux2)
+    if (nMulti > 0 && !isFlux2) {
       throw StatusError(
           general_error::InvalidArgument,
           "img2img: init_images (multi-reference fusion) requires a FLUX2 "
           "model with prediction='flux2_flow'. The current model does not "
           "support @image1/@imageN in-context references.");
+    }
 
     // -- Multi-image (FLUX2 "fusion" mode) ---------------------------------
     if (nMulti > 0) {
       refImgs->reserve(nMulti);
-      for (size_t i = 0; i < nMulti; ++i) {
-        if (job.initImagesBytes[i].empty())
+      for (size_t idx = 0; idx < nMulti; ++idx) {
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+        if (job.initImagesBytes[idx].empty()) {
           throw StatusError(
               general_error::InvalidArgument,
-              "img2img: init_images[" + std::to_string(i) +
+              "img2img: init_images[" + std::to_string(idx) +
                   "] is empty -- every reference must be a non-empty "
                   "PNG/JPEG buffer.");
+        }
 
-        sd_image_t decoded = image_codec::decodeImage(job.initImagesBytes[i]);
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+        sd_image_t decoded = image_codec::decodeImage(job.initImagesBytes[idx]);
         if (decoded.data == nullptr) {
           throw StatusError(
               general_error::InvalidArgument,
-              "img2img: failed to decode init_images[" + std::to_string(i) +
+              "img2img: failed to decode init_images[" + std::to_string(idx) +
                   "] (corrupt or unsupported format; supported: PNG, JPEG)");
         }
         refImgs->push_back(decoded);
       }
 
-      // Output dimensions come from the JS shim (addon.js::_fillDimsFromImage,
-      // which falls back to the first reference's size when the caller omits
-      // width/height). C++ callers using the binding directly must supply
-      // both dimensions explicitly. auto_resize_ref_image handles the
-      // remaining refs.
+      // index.js defaults FLUX img2img (fusion and single-ref) to 1024×1024
+      // when the caller omits width/height, so addon.js::_fillDimsFromImage
+      // is a no-op for that path. Direct C++ callers should supply explicit
+      // dimensions; otherwise the SdGenConfig 512×512 default is used.
+      // auto_resize_ref_image handles the remaining refs.
 
       // clang-format off
       // NOTE: Homebrew and apt.llvm.org builds of clang-format-19 disagree on
       // whether the std::string(...) branches of this ternary should hang the
       // call open-paren on its own line. Pinning the layout here keeps local
       // and CI bit-for-bit.
+      // NOLINTNEXTLINE(cppcoreguidelines-avoid-do-while)
       QLOG_IF(
           qvac_lib_inference_addon_cpp::logger::Priority::INFO,
           "img2img: entering FLUX2 *fusion* mode -- " + std::to_string(nMulti) +
@@ -516,13 +551,17 @@ std::any SdModel::process(const std::any& input) {
       // -- Single-image path (existing behaviour) --------------------------
       if (!job.initImageBytes.empty()) {
         initPng = job.initImageBytes;
-      } else if (auto it = v.get<picojson::object>().find("init_image_bytes");
-                 it != v.get<picojson::object>().end() &&
-                 it->second.is<picojson::array>()) {
-        const auto& arr = it->second.get<picojson::array>();
-        initPng.reserve(arr.size());
-        for (const auto& el : arr)
-          initPng.push_back(static_cast<uint8_t>(el.get<double>()));
+      } else {
+        const auto& jsonObj = jsonRoot.get<picojson::object>();
+        auto initBytesIt = jsonObj.find("init_image_bytes");
+        if (initBytesIt != jsonObj.end() &&
+            initBytesIt->second.is<picojson::array>()) {
+          const auto& arr = initBytesIt->second.get<picojson::array>();
+          initPng.reserve(arr.size());
+          for (const auto& elem : arr) {
+            initPng.push_back(static_cast<uint8_t>(elem.get<double>()));
+          }
+        }
       }
       if (!initPng.empty()) {
         initImg = image_codec::decodeImage(initPng);
@@ -539,16 +578,12 @@ std::any SdModel::process(const std::any& input) {
       const int imgH = static_cast<int>(initImg.height);
 
       if (isFluxFamily) {
-        // FLUX in-context conditioning: ref_images handles its own resizing
-        // via auto_resize_ref_image, so only override genParams dimensions
-        // when they are still at the 512x512 default.
-        if (gen.width == 512 && gen.height == 512) {
-          genParams.width = imgW;
-          genParams.height = imgH;
-        }
-        gen.width = genParams.width;
-        gen.height = genParams.height;
+        // genParams.width/height are already assigned from gen earlier in this
+        // function. index.js defaults any missing FLUX img2img axis to 1024;
+        // direct C++ callers should supply explicit dimensions, otherwise the
+        // SdGenConfig 512×512 default is used.
 
+        // NOLINTNEXTLINE(cppcoreguidelines-avoid-do-while)
         QLOG_IF(
             qvac_lib_inference_addon_cpp::logger::Priority::INFO,
             "img2img: " + std::to_string(imgW) + "x" + std::to_string(imgH) +
@@ -573,6 +608,7 @@ std::any SdModel::process(const std::any& input) {
         gen.height = alignedH;
 
         if (imgW != alignedW || imgH != alignedH) {
+          // NOLINTNEXTLINE(cppcoreguidelines-avoid-do-while)
           QLOG_IF(
               qvac_lib_inference_addon_cpp::logger::Priority::INFO,
               "img2img: resizing " + std::to_string(imgW) + "x" +
@@ -582,16 +618,19 @@ std::any SdModel::process(const std::any& input) {
 
           sd_image_t resized =
               image_utils::resizeSdImage(initImg, alignedW, alignedH);
-          if (!resized.data)
+          if (resized.data == nullptr) {
             throw StatusError(
                 general_error::InternalError,
                 "Failed to resize init_image from " + std::to_string(imgW) +
                     "x" + std::to_string(imgH) + " to " +
                     std::to_string(alignedW) + "x" + std::to_string(alignedH));
+          }
+          // NOLINTNEXTLINE(cppcoreguidelines-no-malloc,cppcoreguidelines-owning-memory)
           free(initImg.data);
           initImg = resized;
         }
 
+        // NOLINTNEXTLINE(cppcoreguidelines-avoid-do-while)
         QLOG_IF(
             qvac_lib_inference_addon_cpp::logger::Priority::INFO,
             "img2img: " + std::to_string(alignedW) + "x" +
@@ -604,17 +643,21 @@ std::any SdModel::process(const std::any& input) {
         // sd_image_to_ggml_tensor() on mask_image (even when no mask was
         // provided), which asserts mask_image dimensions match the tensor.
         // Provide an all-white mask (= denoise everywhere) to satisfy it.
-        if (!genParams.mask_image.data) {
+        if (genParams.mask_image.data == nullptr) {
           const size_t maskSize =
               static_cast<size_t>(alignedW) * static_cast<size_t>(alignedH);
+          // NOLINTNEXTLINE(cppcoreguidelines-no-malloc,cppcoreguidelines-owning-memory)
           auto* maskData = static_cast<uint8_t*>(malloc(maskSize));
-          if (!maskData)
+          if (maskData == nullptr) {
             throw StatusError(
                 general_error::InternalError,
                 "Failed to allocate " + std::to_string(maskSize) +
                     " bytes for SDEdit mask (" + std::to_string(alignedW) +
                     "x" + std::to_string(alignedH) + ")");
+          }
+          // NOLINTNEXTLINE(readability-magic-numbers,cppcoreguidelines-avoid-magic-numbers)
           memset(maskData, 255, maskSize);
+          // NOLINTNEXTLINE(modernize-use-designated-initializers)
           genParams.mask_image = {
               static_cast<uint32_t>(alignedW),
               static_cast<uint32_t>(alignedH),
@@ -626,15 +669,17 @@ std::any SdModel::process(const std::any& input) {
   } // end gen.mode == "img2img"
 
   // -- Generate --------------------------------------------------------------
-  const auto t0 = std::chrono::steady_clock::now();
+  const auto genStart = std::chrono::steady_clock::now();
 
   SdImageBatch results(
       generate_image(sdCtx_.get(), &genParams), gen.batchCount);
 
-  if (initImg.data) {
+  if (initImg.data != nullptr) {
+    // NOLINTNEXTLINE(cppcoreguidelines-no-malloc,cppcoreguidelines-owning-memory)
     free(initImg.data);
   }
-  if (genParams.mask_image.data) {
+  if (genParams.mask_image.data != nullptr) {
+    // NOLINTNEXTLINE(cppcoreguidelines-no-malloc,cppcoreguidelines-owning-memory)
     free(genParams.mask_image.data);
   }
 
@@ -645,18 +690,21 @@ std::any SdModel::process(const std::any& input) {
   auto statsWidth = static_cast<int64_t>(gen.width);
   auto statsHeight = static_cast<int64_t>(gen.height);
   bool wasCancelled = false;
-  for (int i = 0; i < results.count(); ++i) {
+  for (int idx = 0; idx < results.count(); ++idx) {
     if (cancelRequested_.load()) {
       wasCancelled = true;
       break;
     }
 
-    if (results[i].data != nullptr) {
-      sd_image_t imageForOutput = results[i];
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    if (results[idx].data != nullptr) {
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+      sd_image_t imageForOutput = results[idx];
       std::unique_ptr<uint8_t, image_codec::FreeDeleter> upscaledData(nullptr);
 
       if (gen.upscale) {
-        sd_image_t upscaled = upscaleImage(results[i], gen.upscaleRepeats);
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+        sd_image_t upscaled = upscaleImage(results[idx], gen.upscaleRepeats);
         imageForOutput = upscaled;
         upscaledData.reset(upscaled.data);
       }
@@ -677,7 +725,7 @@ std::any SdModel::process(const std::any& input) {
       }
     }
     results.release(
-        i); // free pixel buffer immediately; destructor handles the rest
+        idx); // free pixel buffer immediately; destructor handles the rest
     if (cancelRequested_.load()) {
       wasCancelled = true;
     }
@@ -697,11 +745,18 @@ std::any SdModel::process(const std::any& input) {
     throw std::runtime_error("Job cancelled");
   }
 
-  const auto t1 = std::chrono::steady_clock::now();
+  if (outputCount == 0) {
+    throw StatusError(
+        general_error::InternalError,
+        "Image generation produced no output. The VAE decode likely failed "
+        "(out of device memory). Try enabling vae_tiling in run() params.");
+  }
+
+  const auto genEnd = std::chrono::steady_clock::now();
 
   // -- Accumulate cumulative counters -----------------------------------------
   const int64_t genMsI = static_cast<int64_t>(
-      std::chrono::duration<double, std::milli>(t1 - t0).count());
+      std::chrono::duration<double, std::milli>(genEnd - genStart).count());
   stats_.totalGenerationMs += genMsI;
   stats_.totalWallMs += genMsI;
   stats_.totalSteps += gen.steps;

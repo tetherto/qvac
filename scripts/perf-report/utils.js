@@ -61,7 +61,13 @@ const METRIC_LABELS = {
   wall_time_ms: 'Wall time',
   encoder_time_ms: 'Encoder time',
   decoder_time_ms: 'Decoder time',
-  audio_duration_ms: 'Audio duration'
+  audio_duration_ms: 'Audio duration',
+  rtf_p50: 'P50 RTF',
+  rtf_p95: 'P95 RTF',
+  cold_rtf: 'Cold RTF',
+  model_load_ms: 'Load time',
+  ttfa_ms: 'TTFA',
+  inter_chunk_p95_ms: 'Inter-chunk P95'
 }
 
 function metricLabel (key) {
@@ -72,7 +78,9 @@ function formatMetricValue (key, value) {
   if (value === null || value === undefined) return '-'
   if (key.endsWith('_ms')) return `${Math.round(value)}ms`
   if (key === 'tps') return `${value.toFixed(2)} t/s`
-  if (key === 'real_time_factor') return value.toFixed(2)
+  if (key === 'real_time_factor' || key === 'rtf_p50' || key === 'rtf_p95' || key === 'cold_rtf') {
+    return value.toFixed(4)
+  }
   if (Number.isInteger(value)) return String(value)
   return value.toFixed(2)
 }
