@@ -105,7 +105,7 @@ jobs:
           fetch-depth: 0
 
       - name: Run Sanity checks
-        uses: ./github/actions/sanity-checks
+        uses: ./.github/actions/sanity-checks
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.PAT_TOKEN }}
