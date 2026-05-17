@@ -90,6 +90,61 @@ function _detectGpu (platform) {
     return m ? m[1].trim() : null
   }
 
+  // Follow-up to QVAC-17830 (Olya, 17 May): the original Linux probe
+  // only tried `nvidia-smi -L` then `lspci`, which both return null on
+  // minimal self-hosted runner containers (e.g. qvac-ubuntu2404-x64-gpu-runner)
+  // even when the GPU itself is healthy and Vulkan inference is running
+  // against it. `vulkaninfo --summary` is present wherever the Vulkan
+  // ICD is installed (which is exactly when the [GPU] rows have data
+  // to show), so it's a high-signal fallback for that case. Returns
+  // null when vulkaninfo is missing or reports zero devices.
+  function _parseVulkaninfoSummary (out) {
+    if (!out) return null
+    const m = out.match(/deviceName\s*=\s*(.+)$/m)
+    return m ? m[1].trim() : null
+  }
+
+  // Sysfs PCI vendor fallback for Linux. Always present on physical
+  // hardware (and most cloud VMs) without needing nvidia-smi / lspci /
+  // vulkaninfo installed. Returns "<vendor> GPU (PCI <vendor:device>)"
+  // when we can read it. Coarser than the named probes above but
+  // beats `null` for runners that ship without any of the userspace
+  // GPU tools.
+  function _readLinuxSysfsGpu () {
+    let fs, path
+    try {
+      fs = require('fs')
+      path = require('path')
+    } catch (_) {
+      return null
+    }
+    const drm = '/sys/class/drm'
+    let entries
+    try {
+      entries = fs.readdirSync(drm).filter(n => /^card\d+$/.test(n))
+    } catch (_) {
+      return null
+    }
+    const vendorMap = {
+      '0x10de': 'NVIDIA',
+      '0x8086': 'Intel',
+      '0x1002': 'AMD',
+      '0x1af4': 'VirtIO',
+      '0x1234': 'QEMU'
+    }
+    for (const card of entries) {
+      try {
+        const vendor = fs.readFileSync(path.join(drm, card, 'device', 'vendor'), 'utf8').trim()
+        const device = fs.readFileSync(path.join(drm, card, 'device', 'device'), 'utf8').trim()
+        const label = vendorMap[vendor] || `PCI ${vendor}`
+        return `${label} GPU (PCI ${vendor}:${device})`
+      } catch (_) {
+        continue
+      }
+    }
+    return null
+  }
+
   if (platform === 'linux') {
     const nv = _parseNvidiaSmi(_safeExec('nvidia-smi -L'))
     if (nv) return nv
@@ -101,6 +156,10 @@ function _detectGpu (platform) {
         if (m) return m[1].trim()
       }
     }
+    const vk = _parseVulkaninfoSummary(_safeExec('vulkaninfo --summary'))
+    if (vk) return vk
+    const sysfs = _readLinuxSysfsGpu()
+    if (sysfs) return sysfs
     return null
   }
 
@@ -112,6 +171,8 @@ function _detectGpu (platform) {
       const lines = wmic.split('\n').slice(1).map(l => l.trim()).filter(Boolean)
       if (lines.length) return lines[0]
     }
+    const vk = _parseVulkaninfoSummary(_safeExec('vulkaninfo --summary'))
+    if (vk) return vk
     return null
   }
 
@@ -121,6 +182,8 @@ function _detectGpu (platform) {
       const m = sp.match(/Chipset Model:\s*(.+)$/m)
       if (m) return m[1].trim()
     }
+    const vk = _parseVulkaninfoSummary(_safeExec('vulkaninfo --summary'))
+    if (vk) return vk
     return null
   }
 
