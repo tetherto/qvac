@@ -14,7 +14,7 @@
 // Runtime modules — set via configure() for Bare, auto-detected for Node.js
 // ---------------------------------------------------------------------------
 
-let fs, pathMod, processMod, osMod
+let fs, pathMod, processMod, osMod, subprocessMod
 let _configured = false
 
 function _ensureNodeDefaults () {
@@ -23,6 +23,10 @@ function _ensureNodeDefaults () {
   pathMod = require('path')
   processMod = process
   osMod = require('os')
+  // Node's child_process is always available; Bare callers inject
+  // bare-subprocess via configure() because this file's location
+  // can't resolve bare-subprocess from its own node_modules walk.
+  try { subprocessMod = require('child_process') } catch (_) {}
 }
 
 /**
@@ -31,16 +35,29 @@ function _ensureNodeDefaults () {
  * because Bare cannot resolve bare-fs/bare-path from this file's location.
  *
  * @param {Object} mods
- * @param {Object} mods.fs       - bare-fs or Node fs
- * @param {Object} mods.path     - bare-path or Node path
- * @param {Object} mods.process  - bare-process or Node process
- * @param {Object} mods.os       - bare-os or Node os
+ * @param {Object} mods.fs         - bare-fs or Node fs
+ * @param {Object} mods.path       - bare-path or Node path
+ * @param {Object} mods.process    - bare-process or Node process
+ * @param {Object} mods.os         - bare-os or Node os
+ * @param {Object} [mods.subprocess] - bare-subprocess (Bare) or
+ *                                     child_process (Node). Optional;
+ *                                     enables GPU probe under Bare since
+ *                                     this file's directory has no
+ *                                     bare-subprocess in node_modules.
  */
 function configure (mods) {
   fs = mods.fs
   pathMod = mods.path
   processMod = mods.process
   osMod = mods.os
+  if (mods.subprocess) {
+    subprocessMod = mods.subprocess
+  } else if (!subprocessMod) {
+    // No explicit subprocess injection — try child_process for Node
+    // callers (Bare callers always set mods.subprocess to bare-subprocess
+    // since require('child_process') throws there).
+    try { subprocessMod = require('child_process') } catch (_) {}
+  }
   _configured = true
 }
 
@@ -65,20 +82,47 @@ function getEnvVar (name) {
 // the Bare runtime (where child_process isn't available) — bare
 // callers see gpu=null which the aggregator handles gracefully.
 function _detectGpu (platform) {
-  let execSync
-  try {
-    execSync = require('child_process').execSync
-  } catch (_) {
-    return null
-  }
+  // The subprocess driver is resolved at configure() time so the
+  // require lookup happens in the CALLER's directory (where
+  // bare-subprocess actually lives) rather than this file's
+  // directory (which has no node_modules). Falls back to null when
+  // neither runtime module is loadable. Both Node's child_process
+  // and bare-subprocess expose a synchronous variant we adapt below.
+  if (!subprocessMod) return null
+  const nodeExecSync = subprocessMod.execSync || null
+  const bareSpawnSync = !nodeExecSync && subprocessMod.spawnSync
+    ? subprocessMod.spawnSync
+    : null
+  if (!nodeExecSync && !bareSpawnSync) return null
 
   function _safeExec (cmd) {
+    if (nodeExecSync) {
+      try {
+        return nodeExecSync(cmd, {
+          encoding: 'utf-8',
+          stdio: ['pipe', 'pipe', 'pipe'],
+          timeout: 5000
+        }).trim()
+      } catch (_) {
+        return null
+      }
+    }
+    // Bare path: spawnSync takes (bin, args[]). All commands we shell
+    // out to here are flat (no shell metacharacters, no quoting) so a
+    // simple split-on-whitespace is safe.
     try {
-      return execSync(cmd, {
-        encoding: 'utf-8',
-        stdio: ['pipe', 'pipe', 'pipe'],
+      const parts = cmd.split(/\s+/).filter(Boolean)
+      if (!parts.length) return null
+      const res = bareSpawnSync(parts[0], parts.slice(1), {
+        stdio: ['ignore', 'pipe', 'pipe'],
         timeout: 5000
-      }).trim()
+      })
+      if (!res || res.status !== 0) return null
+      const out = res.stdout
+      const str = out && typeof out.toString === 'function'
+        ? out.toString('utf-8')
+        : String(out || '')
+      return str.trim()
     } catch (_) {
       return null
     }
@@ -111,17 +155,24 @@ function _detectGpu (platform) {
   // beats `null` for runners that ship without any of the userspace
   // GPU tools.
   function _readLinuxSysfsGpu () {
-    let fs, path
-    try {
-      fs = require('fs')
-      path = require('path')
-    } catch (_) {
-      return null
+    // Prefer the runtime-configured fs/path modules so this works under
+    // Bare (bare-fs / bare-path) without needing a separate require.
+    // Falls back to Node's built-ins for callers that haven't run
+    // configure() yet.
+    let fsM = fs
+    let pathM = pathMod
+    if (!fsM || !pathM) {
+      try {
+        fsM = fsM || require('fs')
+        pathM = pathM || require('path')
+      } catch (_) {
+        return null
+      }
     }
     const drm = '/sys/class/drm'
     let entries
     try {
-      entries = fs.readdirSync(drm).filter(n => /^card\d+$/.test(n))
+      entries = fsM.readdirSync(drm).filter(n => /^card\d+$/.test(n))
     } catch (_) {
       return null
     }
@@ -134,8 +185,8 @@ function _detectGpu (platform) {
     }
     for (const card of entries) {
       try {
-        const vendor = fs.readFileSync(path.join(drm, card, 'device', 'vendor'), 'utf8').trim()
-        const device = fs.readFileSync(path.join(drm, card, 'device', 'device'), 'utf8').trim()
+        const vendor = fsM.readFileSync(pathM.join(drm, card, 'device', 'vendor'), 'utf8').trim()
+        const device = fsM.readFileSync(pathM.join(drm, card, 'device', 'device'), 'utf8').trim()
         const label = vendorMap[vendor] || `PCI ${vendor}`
         return `${label} GPU (PCI ${vendor}:${device})`
       } catch (_) {
