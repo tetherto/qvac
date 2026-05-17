@@ -186,3 +186,11 @@ test('Accuracy test - Russian', { timeout: 300000 }, async (t) => {
 test('Accuracy test - Japanese', { timeout: 300000 }, async (t) => {
   await runLanguageAccuracyTest(t, LANGUAGE_TESTS.ja)
 })
+
+test('Accuracy test - German (auto-detect)', { timeout: 300000 }, async (t) => {
+  await runLanguageAccuracyTest(t, { ...LANGUAGE_TESTS.de, name: 'German (auto-detect)', code: 'auto' })
+})
+
+test('Accuracy test - Russian (auto-detect)', { timeout: 300000 }, async (t) => {
+  await runLanguageAccuracyTest(t, { ...LANGUAGE_TESTS.ru, name: 'Russian (auto-detect)', code: 'auto' })
+})
