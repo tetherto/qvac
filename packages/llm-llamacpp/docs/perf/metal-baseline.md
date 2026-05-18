@@ -91,7 +91,7 @@ Android build configs: see [Appendix G](#appendix-g-android-gpu-results).
 
 ## 2. Primary Results Matrix
 
-All results use elephant.jpg (612 x 408). Peak RSS captured via `/usr/bin/time -l` on Mac M4 (2026-05-13 run). iPhone and Android Peak RSS remain TODO.
+All results use elephant.jpg (612 x 408). Peak RSS captured via `/usr/bin/time -l` on Mac M4 (2026-05-13 run). iPhone 16e/16 Pro RSS captured via in-process `mach_task_basic_info` (2026-05-18 runs). Android Peak RSS remains TODO.
 
 ### Mac M4
 
@@ -134,18 +134,9 @@ All results use elephant.jpg (612 x 408). Peak RSS captured via `/usr/bin/time -
 
 ### iPhone 16e (A18)
 
-> Only Gemma4-E2B Q4_K_M fits in 8 GB RAM. Gemma4-E2B Q8_0, Gemma4-E4B Q4_K_M, Gemma4-E4B Q8_0 all OOM (see [Appendix A](#appendix-a-iphone-16e-oom-detail)). Run-2 (2026-05-07) values shown; run-1 validated within 2%. Fiber: not benchmarked on iPhone 16e.
-
-| Backend | Model | Quant | Vision (ms) | Prefill (t/s) | Decode (t/s) | TTFT (ms) | Peak RSS |
-|---------|-------|-------|------------|---------------|-------------|----------|----------|
-| Metal | Gemma4-E2B | Q4_K_M | 1,236 | 125.92 | 27.24 | 3,492 | **TODO** |
-| CPU | Gemma4-E2B | Q4_K_M | 1,151 | 160.96 | 25.37 | 2,916 | **TODO** |
-| Metal | Qwen3.5-2B | Q4_K_M | 1,012 [^1] | 133.66 | 24.33 | 2,995 [^1] | **TODO** |
-| Metal | Gemma4-E2B | Q8_0 | N/A | N/A | N/A | N/A | — OOM (`kIOGPUCommandBufferCallbackErrorOutOfMemory`) |
-| Metal | Gemma4-E4B | Q4_K_M | N/A | N/A | N/A | N/A | — OOM (`kIOGPUCommandBufferCallbackErrorOutOfMemory`) |
-| Metal | Gemma4-E4B | Q8_0 | N/A | N/A | N/A | N/A | — OOM (`mmap failed: Cannot allocate memory`) |
-
-[^1]: Profiling run only (1 run, not 3-run median). Vision = encode 829 ms + projection 183 ms. **TODO**: Formal 3-run matrix entry.
+> Phase 1 b9025-only measurements (2026-05-07) moved to [Appendix K](#appendix-k-iphone-16e-phase-1-measurements).
+> Full fiber vs b9025 matrix below (2026-05-18, local device, controlled thermal).
+> OOM detail: [Appendix A](#appendix-a-iphone-16e-oom-detail).
 
 Android device results: see [Appendix G](#appendix-g-android-gpu-results).
 
@@ -346,11 +337,11 @@ Items required by the Asana ticket (QVAC-18293) but not yet delivered:
 | # | Item | Status | Reason |
 |---|------|--------|--------|
 | 1 | **Peak RSS (MB) — Mac M4** | **Done** | Captured via `/usr/bin/time -l` (2026-05-13 run). See [Section 2](#2-primary-results-matrix) and [Appendix D.1c](#d1c-peak-rss-comparison-mb) |
-| 1b | **Peak RSS (MB) — iPhone 16e** | Not captured | Requires Xcode Memory Gauge or Instruments — not available in CLI harness |
+| 1b | **Peak RSS (MB) — iPhone 16e** | **Partial** | In-process `mach_task_basic_info` RSS captured (2026-05-18 local matrix). Note: measures XCTest host process RSS, not standalone binary — includes test framework overhead (~50-100 MB). See [iPhone 16e full matrix](#iphone-16e-a18--local-device-full-matrix-added-2026-05-18) |
 | 2 | **iPhone 16 Pro** | **Done** | Firebase Test Lab `DEVICE_CAPACITY_LOW` (2026-05-18). Fiber + b9025, Metal-only, 4 models with data, 4 Jetsam. See [Section 2, iPhone 16 Pro](#iphone-16-pro-a18-pro--firebase-test-lab-added-2026-05-18) |
 | 3 | **iPhone 17** | Not tested | Firebase Test Lab: not in device catalog (2026-05-18) |
 | 4 | **Apple profiler evidence screenshots** | Not included | Metal System Traces captured but detailed shader/memory analysis pending |
-| 5 | **iPhone 16e Qwen3.5-2B** | Profiling run only | 1 run during Metal profiling; formal 3-run median entry not collected |
+| 5 | **iPhone 16e Qwen3.5-2B** | **Done** | Full 3-run matrix collected (2026-05-18 local). Fiber: 8.22 t/s, b9025: 27.69 t/s. See [iPhone 16e full matrix](#iphone-16e-a18--local-device-full-matrix-added-2026-05-18) |
 | 6 | **Raw traces as Asana attachments** | Not uploaded | 6 trace files (~2.1 GB total) — too large for Asana attachment; stored locally |
 | 7 | **Executive summary comment** | Not posted | Pending report PR merge |
 | 8 | **Report PR reviewed and merged** | Pending | PR #1923 opened on `feat/QVAC-18293-profile-gemma4-vl-mobile-gpus` |
@@ -1110,3 +1101,23 @@ cd packages/qvac-lib-infer-llamacpp-llm
 bare benchmarks/qvac-18297-vlm-cache-bench.js
 # --device cpu to force CPU; default is GPU on Mac arm64
 ```
+
+### Appendix K: iPhone 16e Phase 1 Measurements (b9025 only, 2026-05-07)
+
+> Original Phase 1 baseline measurements on iPhone 16e. These used b9025
+> (`eff06702b`) via `xcrun devicectl` with `--predict 128`. Superseded by
+> the full fiber vs b9025 matrix in [Section 2, iPhone 16e full matrix](#iphone-16e-a18--local-device-full-matrix-added-2026-05-18)
+> which uses `--predict 256` and in-process inference.
+
+| Backend | Model | Quant | Vision (ms) | Prefill (t/s) | Decode (t/s) | TTFT (ms) | Notes |
+|---------|-------|-------|------------|---------------|-------------|----------|-------|
+| Metal | Gemma4-E2B | Q4_K_M | 1,236 | 125.92 | 27.24 | 3,492 | Run-2 (2026-05-07), validated within 2% of run-1 |
+| CPU | Gemma4-E2B | Q4_K_M | 1,151 | 160.96 | 25.37 | 2,916 | CPU prefill faster than Metal (Gemma4-specific) |
+| Metal | Qwen3.5-2B | Q4_K_M | 1,012 | 133.66 | 24.33 | 2,995 | Profiling run only (1 run). Vision = encode 829 ms + projection 183 ms |
+| Metal | Gemma4-E2B | Q8_0 | — | — | — | — | OOM: `kIOGPUCommandBufferCallbackErrorOutOfMemory` |
+| Metal | Gemma4-E4B | Q4_K_M | — | — | — | — | OOM: `kIOGPUCommandBufferCallbackErrorOutOfMemory` |
+| Metal | Gemma4-E4B | Q8_0 | — | — | — | — | OOM: `mmap failed: Cannot allocate memory` |
+
+These measurements predate the fiber regression discovery and used `--predict 128`
+(not 256) to avoid OOM on smaller context. The full matrix (Section 2) uses
+`--predict 256` with in-process inference and captures both fiber and b9025.
