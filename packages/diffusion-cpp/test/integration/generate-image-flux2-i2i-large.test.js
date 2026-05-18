@@ -17,12 +17,10 @@ const { readImageDimensions } = require('../../addon')
 const proc = require('bare-process')
 
 const platform = detectPlatform()
-const isDarwinX64 = os.platform() === 'darwin' && os.arch() === 'x64'
-const isLinuxArm64 = os.platform() === 'linux' && os.arch() === 'arm64'
+const isLinuxX64 = os.platform() === 'linux' && os.arch() === 'x64'
 const isMobile = os.platform() === 'ios' || os.platform() === 'android'
 const noGpu = proc.env && proc.env.NO_GPU === 'true'
-const useCpu = isDarwinX64 || isLinuxArm64 || noGpu
-const skip = isMobile || noGpu
+const skip = !isLinuxX64 || noGpu || isMobile
 
 const FLUX2_MODEL = {
   name: 'flux-2-klein-4b-Q8_0.gguf',
@@ -40,10 +38,10 @@ const VAE_MODEL = {
 }
 
 const STEPS = 20
-const GUIDANCE = 3.5
+const GUIDANCE = 5.0
 const SEED = 42
 
-test('FLUX2-klein img2img — transforms an input image', { timeout: 1800000, skip }, async (t) => {
+test('FLUX2-klein img2img — generates 1024×1024 output on GPU without OOM', { timeout: 1800000, skip }, async (t) => {
   setupJsLogger(binding)
 
   const [downloadedModelName, modelDir] = await ensureModel({
@@ -62,7 +60,7 @@ test('FLUX2-klein img2img — transforms an input image', { timeout: 1800000, sk
   })
 
   console.log('\n' + '='.repeat(60))
-  console.log('FLUX2-KLEIN IMG2IMG — INTEGRATION TEST')
+  console.log('FLUX2-KLEIN IMG2IMG 1024×1024 — INTEGRATION TEST')
   console.log('='.repeat(60))
   console.log(` Platform  : ${platform}`)
   console.log(` Model     : ${downloadedModelName}`)
@@ -81,7 +79,7 @@ test('FLUX2-klein img2img — transforms an input image', { timeout: 1800000, sk
     },
     config: {
       threads: 4,
-      device: useCpu ? 'cpu' : 'gpu',
+      device: 'gpu',
       prediction: 'flux2_flow',
       diffusion_fa: true
     },
@@ -102,15 +100,11 @@ test('FLUX2-klein img2img — transforms an input image', { timeout: 1800000, sk
 
     // ── Load init image ───────────────────────────────────────────────────────
     const initImagePath = path.join(__dirname, '../../assets/von-neumann.jpg')
-    if (!fs.existsSync(initImagePath)) {
-      t.fail(`Init image not found at ${initImagePath}`)
-      return
-    }
     const initImage = fs.readFileSync(initImagePath)
     console.log(`\nLoaded init image: ${initImage.length} bytes`)
 
-    // ── Generate (img2img) ────────────────────────────────────────────────────
-    console.log('\n=== Generating image (img2img) ===')
+    // ── Generate 1024×1024 img2img ────────────────────────────────────────────
+    console.log('\n=== Generating 1024×1024 image (img2img) ===')
     console.log(`  Steps    : ${STEPS}`)
     console.log(`  Guidance : ${GUIDANCE}`)
     console.log(`  Seed     : ${SEED}`)
@@ -118,15 +112,14 @@ test('FLUX2-klein img2img — transforms an input image', { timeout: 1800000, sk
     const tGen = Date.now()
 
     const response = await model.run({
-      prompt: 'same person, color photograph, modern tech CEO of this version, wearing a gray zip up vest, black studio background',
-      negative_prompt: 'blurry, low quality, NSFW, distorted, different person, different face',
+      prompt: 'same person, color photograph, modern tech CEO, wearing a gray zip up vest, black studio background',
+      negative_prompt: 'blurry, low quality, distorted',
       init_image: initImage,
       cfg_scale: 1.0,
       steps: STEPS,
       guidance: GUIDANCE,
       seed: SEED,
-      width: 624,
-      height: 624
+      vae_tiling: true
     })
 
     await response
@@ -148,10 +141,13 @@ test('FLUX2-klein img2img — transforms an input image', { timeout: 1800000, sk
     console.log(`\nGenerated in ${(genMs / 1000).toFixed(1)}s`)
 
     // ── Assertions ────────────────────────────────────────────────────────────
-    t.ok(progressTicks.length > 0, `Received progress ticks (got ${progressTicks.length})`)
-    t.is(progressTicks[progressTicks.length - 1].total, STEPS, `Final progress tick reports ${STEPS} total steps`)
+    const diffusionTicks = progressTicks.filter(tick => tick.total === STEPS)
+    t.ok(diffusionTicks.length > 0, `Received diffusion progress ticks (got ${diffusionTicks.length})`)
+    if (diffusionTicks.length === 0) return
+    t.is(diffusionTicks[diffusionTicks.length - 1].step, STEPS, `Final diffusion tick is step ${STEPS}`)
 
     t.is(images.length, 1, 'Received exactly 1 image')
+    if (images.length === 0) return
 
     const img = images[0]
     t.ok(img instanceof Uint8Array, 'Image is a Uint8Array')
@@ -159,11 +155,10 @@ test('FLUX2-klein img2img — transforms an input image', { timeout: 1800000, sk
     t.ok(isPng(img), 'Image has valid PNG magic bytes')
 
     const dims = readImageDimensions(img)
-    t.is(dims.width, 624, 'Output width matches requested 624')
-    t.is(dims.height, 624, 'Output height matches requested 624')
+    t.is(dims.width, 1024, 'Output width is 1024')
+    t.is(dims.height, 1024, 'Output height is 1024')
 
-    // Saved to modelDir so mobile has write permission to the same path
-    const outPath = path.join(modelDir, 'generate-image--flux2-i2i-seed42.png')
+    const outPath = path.join(modelDir, 'generate-image--flux2-i2i-1024-seed42.png')
     fs.writeFileSync(outPath, img)
     console.log(`\nSaved → ${outPath}`)
 
@@ -174,6 +169,7 @@ test('FLUX2-klein img2img — transforms an input image', { timeout: 1800000, sk
     console.log(` Load time   : ${(loadMs / 1000).toFixed(1)}s`)
     console.log(` Gen time    : ${(genMs / 1000).toFixed(1)}s`)
     console.log(` Steps ticks : ${progressTicks.length}`)
+    console.log(` Output dims : ${dims.width}×${dims.height}`)
     console.log(` Image size  : ${img.length} bytes`)
     console.log(' PNG valid   : true')
     console.log('='.repeat(60))

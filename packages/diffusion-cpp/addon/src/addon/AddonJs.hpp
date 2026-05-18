@@ -66,7 +66,7 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
 
   // -- Step 1: Extract model file paths from JS args[1] --------------------
   // index.js selects which field to populate based on model family:
-  //   "path"               -> model_path          (SD1.x / SDXL all-in-one
+  //   "path"               -> model_path          (SD2.x / SDXL all-in-one
   //   checkpoint) "diffusionModelPath" -> diffusion_model_path (FLUX.2 [klein]
   //   standalone GGUF; Wan 2.1 single expert; Wan 2.2 low-noise expert)
   //   "highNoiseDiffusionModelPath" -> high_noise_diffusion_model_path (Wan

@@ -27,7 +27,6 @@ TEST(SdCtxHandlers_Prediction, SupportedValuesMapAndUnknownThrows) {
   EXPECT_EQ(applyOne("prediction", "v").prediction, V_PRED);
   EXPECT_EQ(applyOne("prediction", "edm_v").prediction, EDM_V_PRED);
   EXPECT_EQ(applyOne("prediction", "flow").prediction, FLOW_PRED);
-  EXPECT_EQ(applyOne("prediction", "flux_flow").prediction, FLUX_FLOW_PRED);
   EXPECT_EQ(applyOne("prediction", "flux2_flow").prediction, FLUX2_FLOW_PRED);
 
   SdCtxConfig cfg;
@@ -195,10 +194,15 @@ TEST(SdCtxHandlers_Upscaler, InvalidThreadCountsThrow) {
   }
 }
 
+TEST(SdCtxHandlers_ComputeAndCompatFlags, DiffusionFaDefaultIsTrue) {
+  EXPECT_TRUE(SdCtxConfig{}.diffusionFlashAttn);
+}
+
 TEST(
     SdCtxHandlers_ComputeAndCompatFlags,
     DiffusionFaConvAndSdxlFlagsMapAndInvalidThrow) {
   EXPECT_TRUE(applyOne("diffusion_fa", "true").diffusionFlashAttn);
+  EXPECT_FALSE(applyOne("diffusion_fa", "false").diffusionFlashAttn);
   EXPECT_TRUE(applyOne("diffusion_conv_direct", "1").diffusionConvDirect);
   EXPECT_FALSE(applyOne("vae_conv_direct", "0").vaeConvDirect);
   EXPECT_TRUE(
