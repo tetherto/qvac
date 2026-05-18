@@ -248,7 +248,17 @@ function generateDeviceDetailTables (aggregated, addonType) {
         lines.push('')
       }
 
-      const header = ['Test', 'EP', ..._VISION_DETAIL_COLUMNS.map(c => c.label)]
+      // Follow-up to QVAC-17830: emit a Model column when any row in
+      // this scenario has a model id stashed on the categorical map.
+      // Drop it when no row sets one so existing reports stay
+      // pixel-identical for addons that haven't started plumbing it.
+      const scnHasModel = buckets[scn].some(name => {
+        const c = (categorical[devName] && categorical[devName][name]) || {}
+        return Boolean(c.model)
+      })
+      const header = ['Test']
+      if (scnHasModel) header.push('Model')
+      header.push('EP', ..._VISION_DETAIL_COLUMNS.map(c => c.label))
       lines.push('| ' + header.join(' | ') + ' |')
       lines.push('| ' + header.map(() => '---').join(' | ') + ' |')
 
@@ -256,7 +266,9 @@ function generateDeviceDetailTables (aggregated, addonType) {
         const metrics = tests[testName] || {}
         const cats = (categorical[devName] && categorical[devName][testName]) || {}
         const ep = cats.execution_provider || '-'
-        const row = [testName, ep]
+        const row = [testName]
+        if (scnHasModel) row.push(cats.model || '-')
+        row.push(ep)
         for (const col of _VISION_DETAIL_COLUMNS) {
           row.push(_formatDetailCell(col.key, metrics[col.key], cats[col.key]))
         }
@@ -272,8 +284,25 @@ function generateDeviceDetailTables (aggregated, addonType) {
 function generateMarkdownReport (aggregated, opts) {
   const options = opts || {}
   const lines = []
-  const { addon, generated_at, run_numbers, devices, quality } = aggregated
+  const { addon, generated_at, run_numbers, devices, quality, device_meta: deviceMeta = {} } = aggregated
   const iterCount = _maxIterationCount(devices)
+
+  // Follow-up to QVAC-17830 (Olya, 17 May): the per-device detail block
+  // already shows `GPU: ...` next to each device heading, but the
+  // cross-device mean comparison tables (PART A) only used the bare
+  // device short name as the column header. Annotate the header with
+  // the GPU on a second line when meta.gpu is populated so reviewers
+  // can tell which GPU produced each column without scrolling down to
+  // the per-device detail block. `<br>` is honoured inside GitHub
+  // Markdown table cells. Device name stays primary; GPU is appended
+  // below it. Falls back to plain device name when meta.gpu is null
+  // (mobile Device Farm rows, headless Linux runners, etc.) so the
+  // pre-change layout is preserved for those columns.
+  function _columnHeader (devName) {
+    const short = _shortDeviceName(devName)
+    const gpu = deviceMeta[devName] && deviceMeta[devName].gpu
+    return gpu ? `${short}<br>${gpu}` : short
+  }
 
   lines.push(`## ${addon} Performance Report`)
   lines.push(`Generated: ${generated_at} | CI Runs: ${run_numbers.join(', ')} | Iterations: ${iterCount}`)
@@ -289,7 +318,7 @@ function generateMarkdownReport (aggregated, opts) {
   const deviceNames = Object.keys(devices)
   if (!deviceNames.length) return lines.join('\n') + '\n'
 
-  const shortNames = deviceNames.map(_shortDeviceName)
+  const shortNames = deviceNames.map(_columnHeader)
 
   const allTests = new Set()
   for (const tests of Object.values(devices)) {
@@ -385,7 +414,7 @@ function generateMarkdownReport (aggregated, opts) {
       })
       if (!scopedDeviceNames.length) continue
 
-      const scopedShortNames = scopedDeviceNames.map(_shortDeviceName)
+      const scopedShortNames = scopedDeviceNames.map(_columnHeader)
 
       if (showScenarioHeading) {
         lines.push(`#### ${_scenarioLabel(scn)}`)
@@ -561,6 +590,14 @@ function aggregateReports (reports) {
 
       if (result.execution_provider != null) {
         categorical[deviceName][testKey].execution_provider = String(result.execution_provider)
+      }
+
+      // Follow-up to QVAC-17830: stash the model id on the categorical
+      // map so per-device detail tables can render a Model column.
+      // First non-null wins per (device, test) so sibling matrix legs
+      // that share the same test all converge on the same label.
+      if (result.model != null && !categorical[deviceName][testKey].model) {
+        categorical[deviceName][testKey].model = String(result.model)
       }
 
       // First non-default scenario wins per (device, test). Sibling
@@ -821,7 +858,17 @@ function _buildHtmlDetailSections (aggregated, addonType) {
 
     let scenarioBlocks = ''
     for (const scn of orderedScenarios) {
-      const headerCells = ['Test', 'EP', ..._VISION_DETAIL_COLUMNS.map(c => c.label)]
+      // Follow-up to QVAC-17830: emit a Model column only when any row
+      // in this scenario has a model id. Mirrors the markdown branch
+      // above so the HTML + Markdown artifacts stay in lockstep.
+      const scnHasModel = buckets[scn].some(name => {
+        const c = (categorical[devName] && categorical[devName][name]) || {}
+        return Boolean(c.model)
+      })
+      const headerLabels = ['Test']
+      if (scnHasModel) headerLabels.push('Model')
+      headerLabels.push('EP', ..._VISION_DETAIL_COLUMNS.map(c => c.label))
+      const headerCells = headerLabels
         .map(h => `<th>${escapeHtml(h)}</th>`).join('')
 
       let bodyRows = ''
@@ -829,7 +876,9 @@ function _buildHtmlDetailSections (aggregated, addonType) {
         const metrics = tests[testName] || {}
         const cats = (categorical[devName] && categorical[devName][testName]) || {}
         const ep = cats.execution_provider || '-'
-        const cells = [escapeHtml(testName), escapeHtml(ep)]
+        const cells = [escapeHtml(testName)]
+        if (scnHasModel) cells.push(escapeHtml(cats.model || '-'))
+        cells.push(escapeHtml(ep))
         for (const col of _VISION_DETAIL_COLUMNS) {
           cells.push(escapeHtml(_formatDetailCell(col.key, metrics[col.key], cats[col.key])))
         }
