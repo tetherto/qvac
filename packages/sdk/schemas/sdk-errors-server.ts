@@ -38,6 +38,10 @@ export const SDK_SERVER_ERROR_CODES = {
   INVALID_IMAGE_INPUT: 52414,
   TEXT_TO_SPEECH_STREAM_FAILED: 52415,
   MODEL_OPERATION_NOT_SUPPORTED: 52416,
+  REQUEST_ID_CONFLICT: 52417,
+  REQUEST_NOT_FOUND: 52418,
+  INFERENCE_CANCELLED: 52419,
+  REQUEST_REJECTED_BY_POLICY: 52420,
 
   // RAG Operations (52,800-52,999)
   RAG_SAVE_FAILED: 52800,
@@ -85,6 +89,7 @@ export const SDK_SERVER_ERROR_CODES = {
   FFMPEG_NOT_AVAILABLE: 53500,
   AUDIO_PLAYER_FAILED: 53501,
   INVALID_AUDIO_CHUNK_TYPE: 53502,
+  ASYNC_DISPOSE_UNAVAILABLE: 53503,
 
   // RPC/Delegation (Server-side) (53,700-53,849)
   DELEGATE_NO_FINAL_RESPONSE: 53700,
@@ -284,6 +289,31 @@ const serverErrorDefinitions: ErrorCodesMap = {
       return `Model "${modelId}" (type: ${modelType}) does not support ${operation}.${supportedClause}${suggestionClause}`;
     },
   },
+  [SDK_SERVER_ERROR_CODES.REQUEST_ID_CONFLICT]: {
+    name: "REQUEST_ID_CONFLICT",
+    message: (requestId: string) =>
+      `Request id "${requestId}" is already in flight; refusing to overwrite the existing context`,
+  },
+  [SDK_SERVER_ERROR_CODES.REQUEST_NOT_FOUND]: {
+    name: "REQUEST_NOT_FOUND",
+    message: (requestId: string) =>
+      `No in-flight request with id "${requestId}"`,
+  },
+  [SDK_SERVER_ERROR_CODES.INFERENCE_CANCELLED]: {
+    name: "INFERENCE_CANCELLED",
+    message: (requestId: string) =>
+      `Inference request "${requestId}" was cancelled before it could complete`,
+  },
+  [SDK_SERVER_ERROR_CODES.REQUEST_REJECTED_BY_POLICY]: {
+    name: "REQUEST_REJECTED_BY_POLICY",
+    message: (
+      requestId: string,
+      kind: string,
+      modelId: string,
+      reason: string,
+    ) =>
+      `Request "${requestId}" (kind: ${kind}, modelId: ${modelId}) was rejected by registry concurrency policy: ${reason}`,
+  },
 
   // RAG Operations (52,800-52,999)
   [SDK_SERVER_ERROR_CODES.RAG_SAVE_FAILED]: {
@@ -461,6 +491,11 @@ const serverErrorDefinitions: ErrorCodesMap = {
   [SDK_SERVER_ERROR_CODES.INVALID_AUDIO_CHUNK_TYPE]: {
     name: "INVALID_AUDIO_CHUNK_TYPE",
     message: "Invalid audio chunk type",
+  },
+  [SDK_SERVER_ERROR_CODES.ASYNC_DISPOSE_UNAVAILABLE]: {
+    name: "ASYNC_DISPOSE_UNAVAILABLE",
+    message:
+      "Host runtime does not expose Symbol.asyncDispose; the SDK request-lifecycle primitives require ES2024 `using`/`asyncDispose` support. Verify your runtime (Bare/Expo/Node ≥ 20.4) and any polyfill registration.",
   },
 
   // RPC/Delegation (Server-side) (53,700-53,899)

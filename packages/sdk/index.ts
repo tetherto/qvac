@@ -35,6 +35,7 @@ export {
   invokePluginStream,
   diffusion,
   type DiffusionProgressTick,
+  upscale,
   modelRegistryList,
   modelRegistrySearch,
   modelRegistryGetModel,
@@ -106,6 +107,9 @@ export {
   type DiffusionClientParams,
   type DiffusionStreamResponse,
   type DiffusionStats,
+  type UpscaleClientParams,
+  type UpscaleStreamResponse,
+  type UpscaleStats,
   definePlugin,
   defineHandler,
   defineDuplexHandler,
@@ -144,6 +148,32 @@ export { MODEL_TYPES, ModelType } from "./schemas";
 export * from "./models/registry";
 
 export { SUPPORTED_AUDIO_FORMATS } from "./constants/audio";
+
+// Error classes that clients need for `instanceof` checks on rejected
+// promises. `InferenceCancelledError` rides the standard `QvacError`
+// envelope, but consumers reach for it through `instanceof` on
+// `await run.final` / `run.text` / `run.toolCalls` / `run.stats`
+// rejections. `RequestRejectedByPolicyError` is thrown by
+// `RequestRegistry.begin(...)` when a registered concurrency policy
+// (e.g. `oneAtATimePerModel` on `completion`) rejects a new request;
+// it propagates out through the worker so the client can distinguish
+// "the request collided with another one" from "the request failed".
+//
+// `RequestIdConflictError` and `RequestNotFoundError` are thrown by
+// `RequestRegistry.begin(...)` / `.end(...)` on UUID collisions and
+// missing-target cancels. They're surfaced here so consumers using
+// the decorated-promise `requestId` can pattern-match on rejected
+// cancel paths. All three classes round-trip the RPC boundary via
+// the typed-error reconstructor in `client/rpc/rpc-error.ts` so
+// `err instanceof <Class>` works on the consumer side, not just on
+// the worker side.
+export { InferenceCancelledError } from "./utils/errors-server";
+export type { InferenceCancelledPartial } from "./utils/errors-server";
+export {
+  RequestIdConflictError,
+  RequestNotFoundError,
+  RequestRejectedByPolicyError,
+} from "./utils/errors-server";
 
 // Logging exports
 export { getLogger, SDK_LOG_ID } from "./logging";

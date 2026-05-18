@@ -27,6 +27,7 @@ import { handleFinetune } from "@/server/rpc/handlers/finetune";
 import { handleHeartbeatDelegated } from "@/server/rpc/handlers/heartbeat-delegated";
 import { handleCancelDelegated } from "@/server/rpc/handlers/cancel-delegated";
 import { handleDiffusionStream } from "@/server/rpc/handlers/diffusion-stream";
+import { handleUpscaleStream } from "@/server/rpc/handlers/upscale-stream";
 import {
   handlePluginInvoke,
   handlePluginInvokeStream,
@@ -57,18 +58,31 @@ function isModelDelegated(request: Request): boolean {
   return entry?.isDelegated ?? false;
 }
 
+/**
+ * Should the cancel be forwarded to a delegated provider?
+ *
+ * After the 0.11.0 wire-schema collapse the cancel envelope has two
+ * operations:
+ *
+ *  - `request` — targeted cancel by `requestId`. Always handled
+ *    locally: the worker-singleton `RequestRegistry` is the source of
+ *    truth for active requests (delegated handlers register their own
+ *    requests on it the same way local handlers do), so a `requestId`
+ *    cancel always lands on the right worker without needing a hop
+ *    through the provider. Returning `false` here keeps the cancel on
+ *    the local cancel handler, where it routes through the registry
+ *    and (for downloads) the `markClearCacheForRequest` helper.
+ *
+ *  - `broad` — abort every in-flight request on a model. Forwarded to
+ *    the delegated provider iff the targeted model itself is
+ *    delegated; the provider then runs the same broad-cancel sweep
+ *    server-side. Local broad cancels for non-delegated models stay
+ *    on this worker.
+ */
 function isCancelDelegated(request: Request): boolean {
   if (request.type !== "cancel") return false;
-
-  if (request.operation === "inference" || request.operation === "embeddings") {
-    return isModelDelegated(request);
-  }
-
-  if (request.operation === "downloadAsset") {
-    return !!request.delegate;
-  }
-
-  return false;
+  if (request.operation !== "broad") return false;
+  return isModelDelegated(request);
 }
 
 export const registry: Record<string, HandlerEntry> = {
@@ -117,6 +131,7 @@ export const registry: Record<string, HandlerEntry> = {
   textToSpeechStream: { type: "duplex", handler: handleTextToSpeechStream },
   ocrStream: { type: "stream", handler: handleOCRStream },
   diffusionStream: { type: "stream", handler: handleDiffusionStream },
+  upscaleStream: { type: "stream", handler: handleUpscaleStream },
   pluginInvokeStream: { type: "stream", handler: handlePluginInvokeStream },
 
   // Handlers with delegation support

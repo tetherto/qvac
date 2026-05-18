@@ -22,6 +22,10 @@ async function runGenerateImageFlux2FusionTest (options = {}) { // eslint-disabl
   return runIntegrationModule('../integration/generate-image-flux2-fusion.test.js', options)
 }
 
+async function runGenerateImageFlux2I2iLargeTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/generate-image-flux2-i2i-large.test.js', options)
+}
+
 async function runGenerateImageFlux2I2iTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/generate-image-flux2-i2i.test.js', options)
 }
@@ -63,6 +67,7 @@ module.exports = {
   runGenerateImageEsrganUpscaleTest,
   runGenerateImageFlux2FusionSurjectiveTest,
   runGenerateImageFlux2FusionTest,
+  runGenerateImageFlux2I2iLargeTest,
   runGenerateImageFlux2I2iTest,
   runGenerateImageFlux2Test,
   runGenerateImageSd3I2iTest,

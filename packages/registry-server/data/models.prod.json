@@ -4315,26 +4315,25 @@
     "tags": [
       "tts",
       "chatterbox",
-      "gguf",
       "s3gen",
-      "multilingual"
+      "multilingual",
+      "gguf"
     ],
     "notes": ""
   },
   {
     "source": "s3:///qvac_models_compiled/chatterbox/2026-05-08/chatterbox-t3-turbo.gguf",
     "engine": "@qvac/tts-ggml",
-    "description": "Chatterbox T3 turbo language model (GGUF)",
+    "description": "Chatterbox T3 turbo language model (GGUF, English)",
     "quantization": "",
     "params": "",
     "licenseId": "MIT",
     "tags": [
       "tts",
       "chatterbox",
-      "gguf",
-      "t3",
-      "turbo",
-      "en"
+      "t3-turbo",
+      "en",
+      "gguf"
     ],
     "notes": ""
   },
@@ -4348,9 +4347,9 @@
     "tags": [
       "tts",
       "chatterbox",
-      "gguf",
       "s3gen",
-      "en"
+      "en",
+      "gguf"
     ],
     "notes": ""
   },
@@ -4364,9 +4363,9 @@
     "tags": [
       "tts",
       "chatterbox",
-      "gguf",
       "t3",
       "multilingual",
+      "gguf",
       "en",
       "es",
       "it",
@@ -4377,13 +4376,14 @@
   {
     "source": "s3:///qvac_models_compiled/supertonic/2026-05-08/supertonic.gguf",
     "engine": "@qvac/tts-ggml",
-    "description": "Supertonic TTS (GGUF)",
+    "description": "Supertonic TTS (GGUF, English)",
     "quantization": "",
     "params": "",
     "licenseId": "openrail",
     "tags": [
       "tts",
       "supertonic",
+      "en",
       "gguf"
     ],
     "notes": ""
@@ -4391,14 +4391,14 @@
   {
     "source": "s3:///qvac_models_compiled/supertonic/2026-05-08/supertonic2.gguf",
     "engine": "@qvac/tts-ggml",
-    "description": "Supertonic 2 TTS (GGUF)",
+    "description": "Supertonic 2 TTS (GGUF, multilingual)",
     "quantization": "",
     "params": "",
     "licenseId": "openrail",
     "tags": [
       "tts",
-      "supertonic",
       "supertonic2",
+      "multilingual",
       "gguf"
     ],
     "notes": ""
@@ -6484,7 +6484,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enaz"
   },
   {
-    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enbg/2025-12-18/lex.50.50.enbg.s2t.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enbg/2026-04-28/lex.50.50.enbg.s2t.bin",
     "description": "Bergamot lexical shortlist en-bg",
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
@@ -6500,7 +6500,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enbg"
   },
   {
-    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enbg/2025-12-18/metadata.json",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enbg/2026-04-28/metadata.json",
     "description": "Bergamot metadata en-bg",
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
@@ -6516,7 +6516,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enbg"
   },
   {
-    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enbg/2025-12-18/model.enbg.intgemm.alphas.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enbg/2026-04-28/model.enbg.intgemm.alphas.bin",
     "description": "Bergamot NMT model en-bg",
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
@@ -6532,7 +6532,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enbg"
   },
   {
-    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enbg/2025-12-18/vocab.enbg.spm",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enbg/2026-04-28/vocab.enbg.spm",
     "description": "Bergamot vocabulary en-bg",
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
@@ -7252,7 +7252,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enhi"
   },
   {
-    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enhr/2025-12-18/lex.50.50.enhr.s2t.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enhr/2026-04-28/lex.50.50.enhr.s2t.bin",
     "description": "Bergamot lexical shortlist en-hr",
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
@@ -7268,7 +7268,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enhr"
   },
   {
-    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enhr/2025-12-18/metadata.json",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enhr/2026-04-28/metadata.json",
     "description": "Bergamot metadata en-hr",
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
@@ -7284,7 +7284,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enhr"
   },
   {
-    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enhr/2025-12-18/model.enhr.intgemm.alphas.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enhr/2026-04-28/model.enhr.intgemm.alphas.bin",
     "description": "Bergamot NMT model en-hr",
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
@@ -7300,7 +7300,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enhr"
   },
   {
-    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enhr/2025-12-18/vocab.enhr.spm",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enhr/2026-04-28/vocab.enhr.spm",
     "description": "Bergamot vocabulary en-hr",
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
@@ -7908,7 +7908,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enms"
   },
   {
-    "source": "s3:///qvac_models_compiled/bergamot/bergamot-ennl/2025-12-18/lex.50.50.ennl.s2t.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-ennl/2026-04-28/lex.50.50.ennl.s2t.bin",
     "description": "Bergamot lexical shortlist en-nl",
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
@@ -7924,7 +7924,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/ennl"
   },
   {
-    "source": "s3:///qvac_models_compiled/bergamot/bergamot-ennl/2025-12-18/metadata.json",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-ennl/2026-04-28/metadata.json",
     "description": "Bergamot metadata en-nl",
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
@@ -7940,7 +7940,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/ennl"
   },
   {
-    "source": "s3:///qvac_models_compiled/bergamot/bergamot-ennl/2025-12-18/model.ennl.intgemm.alphas.bin",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-ennl/2026-04-28/model.ennl.intgemm.alphas.bin",
     "description": "Bergamot NMT model en-nl",
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
@@ -7956,7 +7956,7 @@
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/ennl"
   },
   {
-    "source": "s3:///qvac_models_compiled/bergamot/bergamot-ennl/2025-12-18/vocab.ennl.spm",
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-ennl/2026-04-28/vocab.ennl.spm",
     "description": "Bergamot vocabulary en-nl",
     "engine": "@qvac/translation-nmtcpp",
     "quantization": "",
@@ -10658,6 +10658,726 @@
     ],
     "notes": "",
     "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/vien"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enbs/2026-04-28/lex.50.50.enbs.s2t.bin",
+    "description": "Bergamot lexical shortlist en-bs",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "enbs"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enbs"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enbs/2026-04-28/metadata.json",
+    "description": "Bergamot metadata en-bs",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "enbs"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enbs"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enbs/2026-04-28/model.enbs.intgemm.alphas.bin",
+    "description": "Bergamot NMT model en-bs",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "enbs"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enbs"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enbs/2026-04-28/vocab.enbs.spm",
+    "description": "Bergamot vocabulary en-bs",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "enbs"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enbs"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-ennb/2026-04-28/lex.50.50.ennb.s2t.bin",
+    "description": "Bergamot lexical shortlist en-nb",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "ennb"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/ennb"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-ennb/2026-04-28/metadata.json",
+    "description": "Bergamot metadata en-nb",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "ennb"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/ennb"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-ennb/2026-04-28/model.ennb.intgemm.alphas.bin",
+    "description": "Bergamot NMT model en-nb",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "ennb"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/ennb"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-ennb/2026-04-28/vocab.ennb.spm",
+    "description": "Bergamot vocabulary en-nb",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "ennb"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/ennb"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enno/2026-04-28/lex.50.50.enno.s2t.bin",
+    "description": "Bergamot lexical shortlist en-no",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "enno"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/enno"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enno/2026-04-28/metadata.json",
+    "description": "Bergamot metadata en-no",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "enno"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/enno"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enno/2026-04-28/model.enno.intgemm.alphas.bin",
+    "description": "Bergamot NMT model en-no",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "enno"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/enno"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enno/2026-04-28/vocab.enno.spm",
+    "description": "Bergamot vocabulary en-no",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "enno"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/enno"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-ensr/2026-04-28/lex.50.50.ensr.s2t.bin",
+    "description": "Bergamot lexical shortlist en-sr",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "ensr"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/ensr"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-ensr/2026-04-28/metadata.json",
+    "description": "Bergamot metadata en-sr",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "ensr"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/ensr"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-ensr/2026-04-28/model.ensr.intgemm.alphas.bin",
+    "description": "Bergamot NMT model en-sr",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "ensr"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/ensr"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-ensr/2026-04-28/vocab.ensr.spm",
+    "description": "Bergamot vocabulary en-sr",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "ensr"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/ensr"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enth/2026-04-28/lex.50.50.enth.s2t.bin",
+    "description": "Bergamot lexical shortlist en-th",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "enth"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enth"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enth/2026-04-28/metadata.json",
+    "description": "Bergamot metadata en-th",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "enth"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enth"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enth/2026-04-28/model.enth.intgemm.alphas.bin",
+    "description": "Bergamot NMT model en-th",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "enth"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enth"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enth/2026-04-28/vocab.enth.spm",
+    "description": "Bergamot vocabulary en-th",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "enth"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enth"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-envi/2026-04-28/lex.50.50.envi.s2t.bin",
+    "description": "Bergamot lexical shortlist en-vi",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "envi"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/envi"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-envi/2026-04-28/metadata.json",
+    "description": "Bergamot metadata en-vi",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "envi"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/envi"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-envi/2026-04-28/model.envi.intgemm.alphas.bin",
+    "description": "Bergamot NMT model en-vi",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "envi"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/envi"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-envi/2026-04-28/vocab.envi.spm",
+    "description": "Bergamot vocabulary en-vi",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "envi"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/envi"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enzh/2025-12-18/lex.50.50.enzh.s2t.bin",
+    "description": "Bergamot lexical shortlist en-zh",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "enzh"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enzh"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enzh/2025-12-18/metadata.json",
+    "description": "Bergamot metadata en-zh",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "enzh"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enzh"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enzh/2025-12-18/model.enzh.intgemm.alphas.bin",
+    "description": "Bergamot NMT model en-zh",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "enzh"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enzh"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enzh/2025-12-18/srcvocab.enzh.spm",
+    "description": "Bergamot source vocabulary en-zh",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "enzh"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enzh"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-enzh/2025-12-18/trgvocab.enzh.spm",
+    "description": "Bergamot target vocabulary en-zh",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "enzh"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enzh"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-hbsen/2026-04-28/lex.50.50.hbsen.s2t.bin",
+    "description": "Bergamot lexical shortlist hbs-en",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "hbsen"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/hbsen"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-hbsen/2026-04-28/metadata.json",
+    "description": "Bergamot metadata hbs-en",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "hbsen"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/hbsen"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-hbsen/2026-04-28/model.hbsen.intgemm.alphas.bin",
+    "description": "Bergamot NMT model hbs-en",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "hbsen"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/hbsen"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-hbsen/2026-04-28/vocab.hbsen.spm",
+    "description": "Bergamot vocabulary hbs-en",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "hbsen"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/hbsen"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-noen/2026-04-28/lex.50.50.noen.s2t.bin",
+    "description": "Bergamot lexical shortlist no-en",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "noen"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/noen"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-noen/2026-04-28/metadata.json",
+    "description": "Bergamot metadata no-en",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "noen"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/noen"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-noen/2026-04-28/model.noen.intgemm.alphas.bin",
+    "description": "Bergamot NMT model no-en",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "noen"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/noen"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-noen/2026-04-28/vocab.noen.spm",
+    "description": "Bergamot vocabulary no-en",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "noen"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/noen"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-then/2026-04-28/lex.50.50.then.s2t.bin",
+    "description": "Bergamot lexical shortlist th-en",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "then"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/then"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-then/2026-04-28/metadata.json",
+    "description": "Bergamot metadata th-en",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "then"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/then"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-then/2026-04-28/model.then.intgemm.alphas.bin",
+    "description": "Bergamot NMT model th-en",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "then"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/then"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-then/2026-04-28/vocab.then.spm",
+    "description": "Bergamot vocabulary th-en",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "then"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/then"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-zhen/2025-12-18/lex.50.50.zhen.s2t.bin",
+    "description": "Bergamot lexical shortlist zh-en",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "zhen"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/zhen"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-zhen/2025-12-18/metadata.json",
+    "description": "Bergamot metadata zh-en",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "zhen"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/zhen"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-zhen/2025-12-18/model.zhen.intgemm.alphas.bin",
+    "description": "Bergamot NMT model zh-en",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "zhen"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/zhen"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/bergamot/bergamot-zhen/2025-12-18/vocab.zhen.spm",
+    "description": "Bergamot vocabulary zh-en",
+    "engine": "@qvac/translation-nmtcpp",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MPL-2.0",
+    "tags": [
+      "translation",
+      "nmt",
+      "bergamot",
+      "zhen"
+    ],
+    "notes": "",
+    "link": "https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/zhen"
   },
   {
     "source": "s3:///qvac_models_compiled/bci-whispercpp/2026-05-07/bci-embedder.bin",

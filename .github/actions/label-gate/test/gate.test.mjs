@@ -80,7 +80,14 @@ test('normaliseLogin: trims and lowercases', () => {
 
 // --- trusted event sources ---------------------------------------------------
 
-for (const eventName of ['push', 'workflow_dispatch', 'workflow_call', 'schedule', 'release']) {
+for (const eventName of [
+  'push',
+  'workflow_dispatch',
+  'workflow_call',
+  'schedule',
+  'release',
+  'repository_dispatch',
+]) {
   test(`trusted event: ${eventName} -> authorised, no API calls`, async () => {
     const client = makeClient();
     const payload = await loadFixture(eventName === 'push' ? 'push' : 'workflow-dispatch');

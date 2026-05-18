@@ -1,4 +1,5 @@
 import { completion } from "@qvac/sdk";
+import type { ToolDialect } from "@qvac/sdk";
 import {
   ValidationHelpers,
   type TestResult,
@@ -24,9 +25,11 @@ export class ToolsExecutor extends AbstractModelExecutor<typeof toolsTests> {
         parameters: Record<string, unknown>;
       }>;
       toolsMode?: "static" | "dynamic";
+      toolDialect?: ToolDialect;
+      resourceKey?: string;
       stream?: boolean;
     };
-    const resourceKey = p.toolsMode === "dynamic" ? "tools-dynamic" : "tools";
+    const resourceKey = p.resourceKey ?? (p.toolsMode === "dynamic" ? "tools-dynamic" : "tools");
     const toolsModelId = await this.resources.ensureLoaded(resourceKey);
 
     try {
@@ -35,6 +38,7 @@ export class ToolsExecutor extends AbstractModelExecutor<typeof toolsTests> {
         history: p.history,
         tools: p.tools as never,
         stream: p.stream ?? false,
+        ...(p.toolDialect && { toolDialect: p.toolDialect }),
       });
 
       const text = await result.text;

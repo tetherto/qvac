@@ -1,6 +1,17 @@
 // Completion test definitions
 import type { TestDefinition } from "@tetherto/qvac-test-suite";
 
+interface GenerationParams {
+  temp?: number;
+  top_p?: number;
+  top_k?: number;
+  predict?: number;
+  seed?: number;
+  frequency_penalty?: number;
+  presence_penalty?: number;
+  repeat_penalty?: number;
+}
+
 // Helper for creating completion tests with common structure
 const createCompletionTest = (
   testId: string,
@@ -14,6 +25,7 @@ const createCompletionTest = (
     presencePenalty?: number;
     seed?: number;
     stopSequences?: string[];
+    generationParams?: GenerationParams;
   },
   expectation:
     | { validation: "contains-all" | "contains-any"; contains: string[] }
@@ -328,12 +340,12 @@ export const completionTopK = createCompletionTest(
   "completion-top-k",
   {
     history: [
-      { role: "user", content: "What is 10 + 5? Answer with just the number." },
+      { role: "user", content: "What is 2 + 3? Answer with just the number." },
     ],
     stream: false,
-    temperature: 0.5,
+    generationParams: { temp: 0, top_k: 1, seed: 42 },
   },
-  { validation: "contains-all", contains: ["15"] },
+  { validation: "contains-all", contains: ["5"] },
   8000,
 );
 
@@ -607,6 +619,28 @@ export const completionResponseFormatJsonSchema: TestDefinition = {
   metadata: { category: "completion", dependency: "llm", estimatedDurationMs: 20000 },
 };
 
+export const completionReasoningBudgetDisabled: TestDefinition = {
+  testId: "completion-reasoning-budget-disabled",
+  params: {
+    history: [{ role: "user", content: "What is 2+2? Answer with only the number." }],
+    stream: false,
+    generationParams: { reasoning_budget: 0, predict: 32 },
+  },
+  expectation: { validation: "type", expectedType: "string" },
+  metadata: { category: "completion", dependency: "llm", estimatedDurationMs: 10000 },
+};
+
+export const completionReasoningBudgetUnrestricted: TestDefinition = {
+  testId: "completion-reasoning-budget-unrestricted",
+  params: {
+    history: [{ role: "user", content: "What is 2+2? Answer with only the number." }],
+    stream: false,
+    generationParams: { reasoning_budget: -1, predict: 32 },
+  },
+  expectation: { validation: "type", expectedType: "string" },
+  metadata: { category: "completion", dependency: "llm", estimatedDurationMs: 10000 },
+};
+
 export const completionResponseFormatWithToolsRejected: TestDefinition = {
   testId: "completion-response-format-with-tools-rejected",
   params: {
@@ -677,4 +711,6 @@ export const completionTests = [
   completionResponseFormatJsonObjectStreaming,
   completionResponseFormatJsonSchema,
   completionResponseFormatWithToolsRejected,
+  completionReasoningBudgetDisabled,
+  completionReasoningBudgetUnrestricted,
 ];

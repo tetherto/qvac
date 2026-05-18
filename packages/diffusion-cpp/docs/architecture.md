@@ -1,6 +1,6 @@
 # Architecture Documentation
 
-**Package:** `@qvac/diffusion-cpp` v0.3.0
+**Package:** `@qvac/diffusion-cpp` v0.6.0
 **Stack:** JavaScript, C++20, stable-diffusion.cpp, Bare Runtime, CMake, vcpkg
 **License:** Apache-2.0
 
@@ -49,11 +49,11 @@
 ## Key Features
 
 - **Cross-platform**: macOS, Linux, Windows, iOS, Android
-- **Disk-local models**: Files must be present on disk; the caller passes absolute file paths via `files.{model,clipL,clipG,t5Xxl,llm,vae}` to the constructor
+- **Disk-local models**: Files must be present on disk; the caller passes absolute file paths via `files.{model,clipL,clipG,t5Xxl,llm,vae,esrgan}` to the constructor
 - **Progress tracking**: Step-by-step generation progress callbacks
 - **GPU acceleration**: Metal, Vulkan, OpenCL
 - **Quantized models**: GGUF, safetensors, checkpoint formats
-- **Diffusion models**: SD1.x, SD2.x, SDXL, SD3, FLUX.2 [klein]
+- **Diffusion models**: SD2.x, SDXL, SD3, FLUX.2 [klein]
 - **Generation modes**: txt2img, img2img
 
 ## Target Platforms
@@ -67,8 +67,8 @@
 | Windows | x64 | 10+ | ✅ Tier 1 | Vulkan |
 
 **Dependencies:**
-- inference-addon-cpp (≥1.1.2): C++ addon framework (single-job runner, runJob/activate/cancel/destroyInstance)
-- stable-diffusion.cpp: Diffusion inference engine
+- inference-addon-cpp (≥1.1.5#1): C++ addon framework (single-job runner, runJob/activate/cancel/destroyInstance)
+- stable-diffusion.cpp (2026-03-01#2 via vcpkg): Diffusion inference engine
 - Bare Runtime (≥1.24.0): JavaScript runtime
 - Ubuntu-22 requires g++-13 installed
 
@@ -123,8 +123,8 @@ graph TB
 | Package | Type | Version | Purpose |
 |---------|------|---------|---------|
 | @qvac/infer-base | Framework | ^0.4.0 | Composition utilities (`createJobHandler`, `exclusiveRunQueue`, `QvacResponse`) |
-| inference-addon-cpp | Native | ≥1.1.2 | C++ addon framework (single-job runner) |
-| stable-diffusion.cpp | Native | latest | Diffusion inference engine |
+| inference-addon-cpp | Native | ≥1.1.5#1 | C++ addon framework (single-job runner) |
+| stable-diffusion.cpp | Native | 2026-03-01#2 | Diffusion inference engine |
 | Bare Runtime | Runtime | ≥1.24.0 | JavaScript execution |
 
 **Integration Points:**
@@ -233,9 +233,9 @@ graph TB
     
     subgraph "Layer 4: Model"
         SDMODEL["SdModel<br/>(model-interface/SdModel.cpp)"]
-        TXT2IMG["Txt2ImgContext<br/>(model-interface/Txt2ImgContext.cpp)"]
-        IMG2IMG["Img2ImgContext<br/>(model-interface/Img2ImgContext.cpp)"]
-        VIDGEN["VideoGenContext<br/>(model-interface/VideoGenContext.cpp)"]
+        CTXHANDLERS["SdCtxHandlers<br/>(handlers/SdCtxHandlers.cpp)"]
+        GENHANDLERS["SdGenHandlers<br/>(handlers/SdGenHandlers.cpp)"]
+        UTILS["BackendSelection / ImageUtils<br/>(utils + handlers)"]
     end
     
     subgraph "Layer 5: Backend"
@@ -255,12 +255,11 @@ graph TB
     JSINTERFACE --> ADDONCPP
     ADDONCPP --> SDMODEL
     
-    SDMODEL --> TXT2IMG
-    SDMODEL --> IMG2IMG
-    SDMODEL --> VIDGEN
-    TXT2IMG --> SDCPP
-    IMG2IMG --> SDCPP
-    VIDGEN --> SDCPP
+    SDMODEL --> CTXHANDLERS
+    SDMODEL --> GENHANDLERS
+    SDMODEL --> UTILS
+    CTXHANDLERS --> SDCPP
+    GENHANDLERS --> SDCPP
     
     SDCPP --> GGML
     GGML --> GPU
@@ -281,7 +280,7 @@ graph TB
 | 1. JavaScript API | ImgStableDiffusion, `createJobHandler` / `exclusiveRunQueue` (from `@qvac/infer-base`), QvacResponse | High-level API, error handling | JS | Ergonomic API for npm consumers |
 | 2. Bridge | SdInterface, binding.js | JS↔C++ communication | JS wrapper | Lifecycle management, handle safety |
 | 3. C++ Addon | JsInterface, AddonCpp/AddonJs | Single-job runner, threading, callbacks | C++ | Performance, native integration |
-| 4. Model | SdModel, Contexts | Diffusion logic, sampling | C++ | Direct stable-diffusion.cpp integration |
+| 4. Model | SdModel, SdCtxHandlers, SdGenHandlers, BackendSelection, ImageUtils | Diffusion context setup, generation dispatch, image handling | C++ | Direct stable-diffusion.cpp integration |
 | 5. Backend | stable-diffusion.cpp, GGML | Tensor ops, GPU kernels | C++ | Optimized inference |
 
 **Data Flow Through Layers:**
@@ -306,7 +305,7 @@ graph TB
 
 #### **ImgStableDiffusion (index.js)**
 
-**Responsibility:** Main API class, orchestrates model lifecycle and inference
+**Responsibility:** Main API class, orchestrates model lifecycle and inference. It composes `createJobHandler` and `exclusiveRunQueue`, maps addon events from `addon.js`, and forwards caller-supplied file paths through `_load()`.
 
 **Why JavaScript:**
 - High-level API ergonomics for npm consumers
@@ -316,7 +315,7 @@ graph TB
 
 #### **SdInterface (addon.js)**
 
-**Responsibility:** JavaScript wrapper around native addon, manages handle lifecycle
+**Responsibility:** JavaScript wrapper around native addon, manages handle lifecycle and maps native output events into progress/image/stat callbacks.
 
 **Why JavaScript:**
 - Clean JavaScript API over raw C++ bindings
@@ -345,7 +344,7 @@ graph TB
 - Thread-safe job submission and cancellation (IModelCancel)
 - Output dispatching via uv_async
 
-**IMG specialization:** createInstance builds SdModel with config; runJob parses generation params (prompt, negative_prompt, cfg_scale, steps, etc.)
+**IMG specialization:** createInstance builds `SdModel` with config and file paths; `runJob` accepts JSON generation params plus optional init-image buffers for img2img.
 
 #### **BackendSelection (utils/BackendSelection.cpp)**
 
@@ -356,21 +355,19 @@ graph TB
 - Vulkan as cross-platform GPU backend
 - OpenCL for Adreno GPUs on Android
 
-#### **SamplerManager (model-interface/SamplerManager.cpp)**
+#### **SdCtxHandlers / SdGenHandlers (addon/src/handlers)**
 
-**Responsibility:** Manages diffusion sampling methods
+**Responsibility:** Convert JS configuration and generation parameters into stable-diffusion.cpp context and generation structures.
 
-- Supports multiple samplers: Euler, Euler A, Heun, DPM2, DPM++ 2M, DPM++ 2S a, LCM
-- Configurable CFG scale, steps, seed
-- Scheduler selection (Karras, linear, etc.)
+- Covers model companion paths, including optional `esrganPath`
+- Parses sampler, scheduler, prediction, cache, seed, image size, and init-image related options
 
-#### **LoraManager (model-interface/LoraManager.cpp)**
+#### **BackendSelection / ImageUtils**
 
-**Responsibility:** LoRA weight loading and application
+**Responsibility:** Backend selection and image conversion helpers used by the model and handlers.
 
-- Loads LoRA weights from safetensors/GGUF
-- Applies LoRA to UNet and text encoder
-- Supports multiple simultaneous LoRAs with configurable weights
+- Selects CPU/GPU backend behavior per platform
+- Converts generated/native image data for JS output
 
 ---
 
@@ -463,7 +460,7 @@ sequenceDiagram
 ### Context
 
 Need high-performance, cross-platform diffusion model inference for resource-constrained environments (laptops, mobile devices) with support for:
-- Various model architectures (SD1.x, SD2.x, SDXL, SD3, FLUX, Wan, etc.)
+- Various model architectures (SD2.x, SDXL, SD3, FLUX, Wan, etc.)
 - Quantization for reduced memory footprint
 - GPU acceleration on diverse hardware
 - Both image and video generation
@@ -482,10 +479,10 @@ Use stable-diffusion.cpp as the core inference engine instead of Python diffuser
 
 **Model Support:**
 - Comprehensive support for diffusion models:
-  - SD1.x, SD2.x, SD-Turbo
+  - SD2.x, SD-Turbo
   - SDXL, SDXL-Turbo
   - SD3/SD3.5
-  - FLUX.1-dev/schnell, FLUX.2-dev/klein
+  - FLUX.2-dev/klein
   - Wan2.1/Wan2.2 (video generation)
   - Qwen Image, Z-Image
 - LoRA, ControlNet support
@@ -549,7 +546,7 @@ See [inference-addon-cpp Decision 4: Why Bare Runtime](https://github.com/tether
 <details>
 <summary>⚡ TL;DR</summary>
 
-**Chose:** Require model files to already exist on disk; the caller passes absolute paths via `files.{model,clipL,clipG,t5Xxl,llm,vae}`
+**Chose:** Require model files to already exist on disk; the caller passes absolute paths via `files.{model,clipL,clipG,t5Xxl,llm,vae,esrgan}`
 **Why:** Simplicity — the addon loads files directly from disk, no streaming/download layer needed and no loader abstraction
 **Cost:** Caller must ensure files are present and supply absolute paths before calling `load()`
 
@@ -563,7 +560,7 @@ Unlike the LLM addon which historically used WeightsProvider for streaming weigh
 
 ### Decision
 
-Require all model files to be present on disk before `load()` is called. The constructor accepts a single `files` object whose entries are absolute paths (`files.model` is required; `files.clipL`, `files.clipG`, `files.t5Xxl`, `files.llm`, `files.vae` are optional companions). `_load()` reads `this._files` and forwards the paths directly to stable-diffusion.cpp.
+Require all model files to be present on disk before `load()` is called. The constructor accepts a single `files` object whose entries are absolute paths (`files.model` is required; `files.clipL`, `files.clipG`, `files.t5Xxl`, `files.llm`, `files.vae`, and `files.esrgan` are optional companions). `_load()` reads `this._files` and forwards the paths directly to stable-diffusion.cpp.
 
 ### Rationale
 
@@ -573,9 +570,9 @@ Require all model files to be present on disk before `load()` is called. The con
 - Direct file paths to stable-diffusion.cpp
 
 **Split-model support:**
-- Diffusion models may have multiple components (diffusion GGUF, CLIP-L, CLIP-G, T5-XXL, LLM encoder, VAE)
+- Diffusion models may have multiple components (diffusion GGUF, CLIP-L, CLIP-G, T5-XXL, LLM encoder, VAE, optional ESRGAN upscaler)
 - The caller supplies each component as an absolute path on `files`
-- Split vs all-in-one layout is detected via heuristic in `_load()` (`isSplitLayout = !!this._files.llm || !!this._files.t5Xxl || !!this._files.clipL || !!this._files.clipG`). Any caller-supplied separate encoder implies the primary file is the standalone diffusion model rather than an all-in-one checkpoint, so FLUX.1 (`{ model, clipL, clipG, vae }` without `t5Xxl`) is also routed correctly.
+- Split vs all-in-one layout is detected via heuristic in `_load()` (`isSplitLayout = !!this._files.llm || !!this._files.t5Xxl || !!this._files.clipL || !!this._files.clipG`). Any caller-supplied separate encoder implies the primary file is the standalone diffusion model rather than an all-in-one checkpoint.
 
 ### Trade-offs
 - ✅ Simple, no abstraction overhead
@@ -611,10 +608,11 @@ Pass absolute file paths directly to stable-diffusion.cpp rather than using buff
 - No JavaScript reference lifecycle concerns
 
 **Split-model routing:**
-- All-in-one checkpoints (SD1.x, SD2.x, SDXL) → `model_path`
+- All-in-one checkpoints (SD2.x, SDXL) → `model_path`
 - Standalone diffusion GGUFs (FLUX.2, SD3 split) → `diffusion_model_path`
 - Separate encoders → `clipLPath`, `clipGPath`, `t5XxlPath`, `llmPath`
 - VAE → `vaePath`
+- ESRGAN upscaler → `esrganPath`
 
 ### Trade-offs
 - ✅ No buffer management complexity
@@ -672,7 +670,7 @@ interface GenerationParams {
   width?: number;             // default: 512
   height?: number;            // default: 512
   steps?: number;             // default: 20
-  cfg_scale?: number;         // CFG scale (SD1/SD2/SDXL/SD3)
+  cfg_scale?: number;         // CFG scale (SD2/SDXL/SD3)
   guidance?: number;          // Distilled guidance (FLUX.2)
   sampling_method?: string;   // 'euler' | 'euler_a' | 'dpm++_2m' | etc.
   scheduler?: string;         // 'default' | 'karras' | 'exponential' | etc.
@@ -680,6 +678,8 @@ interface GenerationParams {
   batch_count?: number;       // default: 1
   vae_tiling?: boolean;       // Enable VAE tiling (for large images)
   cache_preset?: string;      // 'slow' | 'medium' | 'fast' | 'ultra'
+  // See index.d.ts for the full current surface, including img2img,
+  // sampler, scheduler, prediction, cache, and ControlNet options.
 }
 ```
 
@@ -702,7 +702,7 @@ Diffusion generation takes significant time (seconds to minutes). Without coordi
 
 ### Decision
 
-Use the `exclusiveRunQueue()` helper from `@qvac/infer-base`. The constructor stores the queue as `this._run`, and `load()`, `run()`, and `unload()` wrap their bodies with `this._run(() => …)`. `cancel()` is intentionally **not** queued — it must be able to interrupt an in-flight `run()` to terminate it, so it bypasses the queue and delegates straight to `addon.cancel()` (which is itself a no-op when there is no active job). This replaces the previous `BaseInference._withExclusiveRun()` template-method approach with a small composable utility.
+Use the `exclusiveRunQueue()` helper from `@qvac/infer-base`. The constructor stores the queue as `this._run`, and `load()`, `run()`, and `unload()` wrap their bodies with `this._run(() => …)`. `cancel()` is intentionally **not** queued — it must be able to interrupt an in-flight `run()` to terminate it, so it bypasses the queue and delegates straight to `addon.cancel()` (which is itself a no-op when there is no active job). This replaces the previous inheritance-based template-method approach with a small composable utility.
 
 ### Rationale
 
@@ -771,4 +771,4 @@ Provide hand-written TypeScript definitions in `index.d.ts`.
 
 ---
 
-**Last Updated:** 2026-04-16
+**Last Updated:** 2026-05-07

@@ -150,10 +150,11 @@ class SdInterface {
     }
 
     // ── Multi-reference ("fusion") path ─────────────────────────────────────
-    // FLUX2 in-context conditioning with N reference images. Dimensions are
-    // auto-resized inside generate_image() via auto_resize_ref_image, so we
-    // don't pre-align width/height here — the first reference's dimensions
-    // are used by SdModel::process() as the output default.
+    // FLUX2 in-context conditioning with N reference images. index.js defaults
+    // width/height to 1024 for FLUX img2img before this point, so
+    // _fillDimsFromImage is a no-op when both axes are already set.
+    // auto_resize_ref_image handles per-reference resizing inside
+    // generate_image() for the remaining refs.
     if (Array.isArray(params.init_images) && params.init_images.length > 0) {
       const serializable = { ...params }
       const imgBufs = serializable.init_images

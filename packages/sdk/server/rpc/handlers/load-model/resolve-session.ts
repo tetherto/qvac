@@ -1,3 +1,4 @@
+import type { AbortSignal } from "bare-abort-controller";
 import type { ModelProgressUpdate, ResolveContext } from "@/schemas";
 import {
   resolveModelPath,
@@ -5,6 +6,7 @@ import {
 } from "@/server/rpc/handlers/load-model/resolve";
 import { cancelTransfer } from "@/server/rpc/handlers/load-model/download-manager";
 import type {
+  DownloadRequestBinding,
   ResolveResult,
   DownloadHooks,
 } from "@/server/rpc/handlers/load-model/types";
@@ -14,6 +16,24 @@ export interface ResolveSessionOptions {
   progressCallback?: ((update: ModelProgressUpdate) => void) | undefined;
   seed?: boolean | undefined;
   profilingEnabled: boolean;
+  /**
+   * Optional cancel signal — typically `ctx.signal` from the surrounding
+   * `await using ctx = registry.begin(...)` block. When provided,
+   * `resolveModelPath` short-circuits with `InferenceCancelledError` if the
+   * signal is already aborted on entry; the same signal also propagates
+   * to in-progress transfers via the request binding below so cancel
+   * tears them down end-to-end.
+   */
+  signal?: AbortSignal | undefined;
+  /**
+   * Optional per-request binding threaded into every `startOrJoinDownload`
+   * call. The download manager wires a per-subscriber abort listener
+   * against `binding.signal`, registers a scope-defer cleanup, and stamps
+   * the subscriber with `binding.requestId` so the legacy
+   * `cancelTransfer(downloadKey)` path can route through
+   * `registry.cancel({ requestId })`.
+   */
+  requestBinding?: DownloadRequestBinding | undefined;
 }
 
 export interface ResolveSession {
@@ -28,7 +48,8 @@ export interface ResolveSession {
 }
 
 export function createResolveSession(options: ResolveSessionOptions): ResolveSession {
-  const { progressCallback, seed, profilingEnabled } = options;
+  const { progressCallback, seed, profilingEnabled, signal, requestBinding } =
+    options;
   let primaryResult: ResolveResult | undefined;
   const resolveResults: ResolveResult[] = [];
   const activeDownloadKeys = new Set<string>();
@@ -37,6 +58,7 @@ export function createResolveSession(options: ResolveSessionOptions): ResolveSes
     onDownloadKey(key: string) {
       activeDownloadKeys.add(key);
     },
+    ...(requestBinding !== undefined && { requestBinding }),
   };
 
   async function resolvePrimaryModelPath(modelSrc: unknown) {
@@ -45,13 +67,20 @@ export function createResolveSession(options: ResolveSessionOptions): ResolveSes
         modelSrc,
         progressCallback,
         seed,
+        signal,
         downloadHooks,
       );
       primaryResult = result;
       resolveResults.push(result);
       return result.path;
     }
-    return resolveModelPath(modelSrc, progressCallback, seed, downloadHooks);
+    return resolveModelPath(
+      modelSrc,
+      progressCallback,
+      seed,
+      signal,
+      downloadHooks,
+    );
   }
 
   async function resolveForPlugin(src: unknown) {
@@ -60,12 +89,19 @@ export function createResolveSession(options: ResolveSessionOptions): ResolveSes
         src,
         progressCallback,
         seed,
+        signal,
         downloadHooks,
       );
       resolveResults.push(result);
       return result.path;
     }
-    return resolveModelPath(src, progressCallback, seed, downloadHooks);
+    return resolveModelPath(
+      src,
+      progressCallback,
+      seed,
+      signal,
+      downloadHooks,
+    );
   }
 
   function createResolveContext(

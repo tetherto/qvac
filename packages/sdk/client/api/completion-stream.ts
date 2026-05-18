@@ -14,7 +14,10 @@ import {
   type ToolCallWithCall,
   type RPCOptions,
 } from "@/schemas";
-import { CompletionFailedError } from "@/utils/errors-server";
+import {
+  CompletionFailedError,
+  InferenceCancelledError,
+} from "@/utils/errors-server";
 import { getMcpToolsWithHandlers } from "@/utils/mcp-adapter";
 import {
   validateTools,
@@ -22,6 +25,7 @@ import {
   type ToolInput,
 } from "@/utils/tool-helpers";
 import { buildFinalFromEvents } from "@/utils/aggregate-events";
+import { generateClientRequestId } from "@/client/api/client-request-id";
 
 const logger = getClientLogger();
 
@@ -54,7 +58,7 @@ type CompletionParams = Omit<CompletionClientParams, "tools"> & {
  * @param params.mcp - Optional array of MCP client inputs for tool integration
  * @param params.captureThinking - Best-effort parsing of `<think>` blocks into `thinkingDelta` events; `final.raw.fullText` always preserves the original output
  * @param params.emitRawDeltas - When true, every raw model token is also emitted as a `rawDelta` event
- * @param params.toolDialect - Override the SDK's name-based dialect detection. Use when your model emits a known format (`"hermes"`, `"pythonic"`, or `"json"`) the auto-router doesn't recognise. Drives both streaming frame detection and finalization parsing.
+ * @param params.toolDialect - Override the SDK's name-based dialect detection. Supported values: `"hermes"`, `"pythonic"`, `"json"`, `"harmony"`, `"qwen35"` (Qwen3.5/3.6), `"gemma4"`. Use when the auto-router doesn't recognise your model name. Drives both streaming frame detection and finalization parsing.
  * Common override case: Llama 3.x tool-calling fine-tunes that emit the native pythonic header (`<|start_header_id|>tool_call<|end_header_id|>...<|eot_id|>`).
  * @param params.responseFormat - Optional structured-output constraint applied to the model's output:
  *   - `{ type: "text" }` — no constraint (default behavior)
@@ -129,6 +133,14 @@ type CompletionParams = Omit<CompletionClientParams, "tools"> & {
  * ```
  */
 export function completion(params: CompletionParams): CompletionRun {
+  // Stable identity for this run, generated client-side so it's
+  // available synchronously the moment we return — before the first
+  // network round-trip and therefore before the user could possibly
+  // have a "stop" handler. Surfaced on the returned `CompletionRun`
+  // (`run.requestId`) so callers can `cancel({ requestId })` at any
+  // point during the stream.
+  const requestId = generateClientRequestId();
+
   let statsResolver: (value: CompletionStats | undefined) => void = () => {};
   let statsRejecter: (error: unknown) => void = () => {};
   const statsPromise = new Promise<CompletionStats | undefined>(
@@ -226,6 +238,7 @@ export function completion(params: CompletionParams): CompletionRun {
         emitRawDeltas: params.emitRawDeltas,
         toolDialect: params.toolDialect,
         responseFormat: params.responseFormat,
+        requestId,
       };
 
       const responses: AsyncGenerator<unknown> = streamRpc(
@@ -256,12 +269,31 @@ export function completion(params: CompletionParams): CompletionRun {
           notifyWaiters();
 
           if (streamResponse.done) {
-            const { final, error } = buildFinalFromEvents(
+            const { final, error, cancelled } = buildFinalFromEvents(
               allEvents,
               allHandlers,
             );
             if (error) {
               const err = new CompletionFailedError(error.message, error);
+              finalRejecter(err);
+              statsRejecter(err);
+              toolCallsRejecter(err);
+            } else if (cancelled) {
+              // The wire stream ended with `stopReason: "cancelled"` — the
+              // run was aborted mid-flight. Cancellation contract: `events`
+              // ends normally (consumers iterating `run.events` see the
+              // cancelled `completionDone` and exit naturally), and the
+              // promise-aggregates reject with `InferenceCancelledError`
+              // carrying whatever the aggregator accumulated up to the
+              // cancel point. Consumers do `instanceof
+              // InferenceCancelledError` and read `.partial.text` /
+              // `.partial.toolCalls` / `.partial.stats` if they want the
+              // partial output.
+              const err = new InferenceCancelledError(requestId, {
+                text: final.contentText,
+                toolCalls: final.toolCalls,
+                ...(final.stats && { stats: final.stats }),
+              });
               finalRejecter(err);
               statsRejecter(err);
               toolCallsRejecter(err);
@@ -347,6 +379,7 @@ export function completion(params: CompletionParams): CompletionRun {
     })();
 
     return {
+      requestId,
       events: eventStream,
       final: finalPromise,
       tokenStream,
@@ -365,6 +398,7 @@ export function completion(params: CompletionParams): CompletionRun {
     })() as AsyncGenerator<ToolCallEvent>;
 
     return {
+      requestId,
       events: eventStream,
       final: finalPromise,
       tokenStream,
@@ -375,3 +409,4 @@ export function completion(params: CompletionParams): CompletionRun {
     };
   }
 }
+

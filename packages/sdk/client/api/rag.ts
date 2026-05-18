@@ -31,6 +31,8 @@ import {
   RAGCloseWorkspaceFailedError,
   RAGListWorkspacesFailedError,
 } from "@/utils/errors-client";
+import { generateClientRequestId } from "@/client/api/client-request-id";
+import { decoratePromise } from "@/utils/decorate-promise";
 
 // ============== Chunk ==============
 
@@ -125,8 +127,20 @@ export async function ragChunk(
  * });
  * ```
  */
-export async function ragIngest(
+export function ragIngest(
   params: RagIngestParams,
+  options?: RPCOptions,
+): Promise<{ processed: RagSaveEmbeddingsResult[]; droppedIndices: number[] }> & {
+  requestId: string;
+} {
+  const requestId = generateClientRequestId();
+  const inner = runRagIngest(params, requestId, options);
+  return decoratePromise(inner, { requestId });
+}
+
+async function runRagIngest(
+  params: RagIngestParams,
+  requestId: string,
   options?: RPCOptions,
 ): Promise<{ processed: RagSaveEmbeddingsResult[]; droppedIndices: number[] }> {
   const { onProgress, ...requestParams } = params;
@@ -137,6 +151,7 @@ export async function ragIngest(
     ...requestParams,
     chunk: requestParams.chunk ?? true,
     withProgress: onProgress ? true : undefined,
+    requestId,
   };
 
   if (onProgress) {
@@ -221,8 +236,18 @@ export async function ragIngest(
  * });
  * ```
  */
-export async function ragSaveEmbeddings(
+export function ragSaveEmbeddings(
   params: RagSaveEmbeddingsParams,
+  options?: RPCOptions,
+): Promise<RagSaveEmbeddingsResult[]> & { requestId: string } {
+  const requestId = generateClientRequestId();
+  const inner = runRagSaveEmbeddings(params, requestId, options);
+  return decoratePromise(inner, { requestId });
+}
+
+async function runRagSaveEmbeddings(
+  params: RagSaveEmbeddingsParams,
+  requestId: string,
   options?: RPCOptions,
 ): Promise<RagSaveEmbeddingsResult[]> {
   const { onProgress, ...requestParams } = params;
@@ -232,6 +257,7 @@ export async function ragSaveEmbeddings(
     operation: "saveEmbeddings",
     ...requestParams,
     withProgress: onProgress ? true : undefined,
+    requestId,
   };
 
   if (onProgress) {
@@ -420,8 +446,18 @@ export async function ragDeleteEmbeddings(
  * });
  * ```
  */
-export async function ragReindex(
+export function ragReindex(
   params: RagReindexParams,
+  options?: RPCOptions,
+): Promise<RagReindexResult> & { requestId: string } {
+  const requestId = generateClientRequestId();
+  const inner = runRagReindex(params, requestId, options);
+  return decoratePromise(inner, { requestId });
+}
+
+async function runRagReindex(
+  params: RagReindexParams,
+  requestId: string,
   options?: RPCOptions,
 ): Promise<RagReindexResult> {
   const { onProgress, ...requestParams } = params;
@@ -431,6 +467,7 @@ export async function ragReindex(
     operation: "reindex",
     ...requestParams,
     withProgress: onProgress ? true : undefined,
+    requestId,
   };
 
   if (onProgress) {

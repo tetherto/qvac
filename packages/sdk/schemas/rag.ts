@@ -183,16 +183,25 @@ const ragDeleteWorkspaceOperationSchema = ragDeleteWorkspaceParamsSchema.extend(
 
 // ============== Unified Request Schema ==============
 
+// `requestId` is threaded onto every RAG operation as an optional field so
+// the request registry can correlate the in-flight context with the
+// client-side decorated-promise (`op.requestId`). Optional on the wire
+// so legacy clients keep working — the server falls back to a
+// server-generated id when the field is missing.
+const ragRequestIdField = {
+  requestId: z.string().min(1).optional(),
+};
+
 export const ragRequestSchema = z.discriminatedUnion("operation", [
-  ragChunkOperationSchema,
-  ragIngestOperationSchema,
-  ragSaveEmbeddingsOperationSchema,
-  ragSearchOperationSchema,
-  ragDeleteEmbeddingsOperationSchema,
-  ragReindexOperationSchema,
-  ragListWorkspacesOperationSchema,
-  ragCloseWorkspaceOperationSchema,
-  ragDeleteWorkspaceOperationSchema,
+  ragChunkOperationSchema.extend(ragRequestIdField),
+  ragIngestOperationSchema.extend(ragRequestIdField),
+  ragSaveEmbeddingsOperationSchema.extend(ragRequestIdField),
+  ragSearchOperationSchema.extend(ragRequestIdField),
+  ragDeleteEmbeddingsOperationSchema.extend(ragRequestIdField),
+  ragReindexOperationSchema.extend(ragRequestIdField),
+  ragListWorkspacesOperationSchema.extend(ragRequestIdField),
+  ragCloseWorkspaceOperationSchema.extend(ragRequestIdField),
+  ragDeleteWorkspaceOperationSchema.extend(ragRequestIdField),
 ]);
 
 // ============== Response Schemas ==============

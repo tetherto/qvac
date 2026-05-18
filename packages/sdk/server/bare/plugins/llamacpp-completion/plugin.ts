@@ -12,7 +12,6 @@ import {
   ModelType,
   llmConfigBaseSchema,
   ADDON_LLM,
-  TOOLS_MODE,
   type CompletionEvent,
   type CreateModelParams,
   type PluginCapabilities,
@@ -26,49 +25,18 @@ import { expandGGUFIntoShards } from "@/server/utils";
 import { completion } from "@/server/bare/plugins/llamacpp-completion/ops/completion-stream";
 import { finetune } from "@/server/bare/plugins/llamacpp-completion/ops/finetune";
 import { translate } from "@/server/bare/ops/translate";
+import { transformLlmConfig } from "@/server/bare/plugins/llamacpp-completion/transform";
 import { attachModelExecutionMs } from "@/profiling/model-execution";
 import { getModelConfig } from "@/server/bare/registry/model-registry";
 import { createCompletionNormalizer } from "@/server/utils/completion-normalizer";
 import { detectToolDialect } from "@/server/utils/tool-integration";
+import {
+  getRequestRegistry,
+  withRequestContext,
+} from "@/server/bare/runtime";
+import { generateServerRequestId } from "@/server/bare/runtime/request-id";
+import { getServerLogger } from "@/logging";
 
-function transformLlmConfig(llmConfig: LlmConfig) {
-  const transformed = JSON.parse(
-    JSON.stringify(llmConfig, (key: string, v: unknown) =>
-      key === "modelType"
-        ? undefined
-        : key === "stop_sequences"
-          ? Array.isArray(v)
-            ? v.join(", ")
-            : v
-          : typeof v === "number" || typeof v === "boolean"
-            ? String(v)
-            : v,
-    ).replace(
-      /"([a-z][A-Za-z]*)":/g,
-      (_, key: string) =>
-        `"${key.replace(/[A-Z]/g, (l: string) => `_${l.toLowerCase()}`)}":`,
-    ),
-  ) as Record<string, string>;
-
-  if ("stop_sequences" in transformed) {
-    transformed["reverse_prompt"] = transformed["stop_sequences"];
-    delete transformed["stop_sequences"];
-  }
-
-  if ("opencl_cache_dir" in transformed) {
-    transformed["openclCacheDir"] = transformed["opencl_cache_dir"];
-    delete transformed["opencl_cache_dir"];
-  }
-
-  if ("tools_mode" in transformed) {
-    if (transformed["tools_mode"] === TOOLS_MODE.dynamic) {
-      transformed["tools_compact"] = "true";
-    }
-    delete transformed["tools_mode"];
-  }
-
-  return transformed;
-}
 
 function createLlmModel(
   modelId: string,
@@ -132,6 +100,7 @@ export const llmPlugin = definePlugin({
       requestSchema: completionStreamRequestSchema,
       responseSchema: completionStreamResponseSchema,
       streaming: true,
+      cancel: { scope: "model", hard: true },
 
       handler: async function* (request) {
         const filteredHistory = request.history.map(
@@ -165,15 +134,32 @@ export const llmPlugin = definePlugin({
           toolDialect: dialect,
         });
 
-        const stream = completion({
-          history: filteredHistory,
+        // Open a request-scoped lifecycle. The registry is the single
+        // source of truth for "is this turn cancelled?" — we plumb the
+        // signal into `completion()` and expose `requestId` so the
+        // client can target this run with `cancel({ requestId })`.
+        // Falls back to a server-generated id if the client (e.g. an
+        // older release) didn't send one.
+        await using ctx = getRequestRegistry().begin({
+          requestId: request.requestId ?? generateServerRequestId(),
+          kind: "completion",
           modelId: request.modelId,
-          kvCache: request.kvCache,
-          ...(toolsActive && request.tools && { tools: request.tools }),
-          ...(request.generationParams && { generationParams: request.generationParams }),
-          ...(toolsActive && { toolDialect: dialect }),
-          ...(request.responseFormat && { responseFormat: request.responseFormat }),
         });
+
+        const requestLogger = withRequestContext(getServerLogger(), ctx);
+
+        const stream = completion(
+          {
+            history: filteredHistory,
+            modelId: request.modelId,
+            kvCache: request.kvCache,
+            ...(toolsActive && request.tools && { tools: request.tools }),
+            ...(request.generationParams && { generationParams: request.generationParams }),
+            ...(toolsActive && { toolDialect: dialect }),
+            ...(request.responseFormat && { responseFormat: request.responseFormat }),
+          },
+          { signal: ctx.signal, scope: ctx.scope, logger: requestLogger },
+        );
 
         try {
           const batchedEvents: CompletionEvent[] = [];
@@ -194,9 +180,17 @@ export const llmPlugin = definePlugin({
           }
 
           const { modelExecutionMs, stats, toolCalls } = result.value;
+          // `stopReason: "cancelled"` rides the success-done path: the
+          // events stream ends normally, the cancellation is observable
+          // via the last event's `stopReason`, and the client-side
+          // `CompletionRun` aggregates (`final` / `text` / `toolCalls` /
+          // `stats`) reject with `InferenceCancelledError` carrying the
+          // partial state.
+          const cancelled = ctx.signal.aborted;
           const terminalEvents = normalizer.finish({
             ...(stats && { stats }),
             ...(toolCalls.length > 0 && { toolCalls }),
+            ...(cancelled && { stopReason: "cancelled" as const }),
           });
 
           if (!request.stream) {
@@ -223,6 +217,14 @@ export const llmPlugin = definePlugin({
       requestSchema: finetuneRequestSchema,
       responseSchema: finetuneResponseSchema,
       streaming: false,
+      // Reality matches addon: llama.cpp exposes `model.cancel()` for
+      // the running finetune job, so we flip from `scope: "none"` to
+      // `{ scope: "model", hard: true }`. The `startFinetune` op
+      // forwards the registry's abort signal to that call; the broad
+      // `cancel({ modelId, kind: "finetune" })` and legacy
+      // `cancelFinetune(modelId)` paths both flow through the
+      // registry.
+      cancel: { scope: "model", hard: true },
 
       handler: function (request) {
         return finetune(request);
@@ -233,9 +235,10 @@ export const llmPlugin = definePlugin({
       requestSchema: translateRequestSchema,
       responseSchema: translateResponseSchema,
       streaming: true,
+      cancel: { scope: "model", hard: true },
 
       handler: async function* (request) {
-        const stream = translate(request);
+        const stream = translate(request, request.requestId);
         try {
           let result = await stream.next();
 

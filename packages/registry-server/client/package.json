@@ -1,6 +1,6 @@
 {
   "name": "@qvac/registry-client",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "QVAC Registry client library for read-only queries via Hyperswarm",
   "license": "Apache-2.0",
   "repository": {
@@ -53,7 +53,7 @@
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",
-    "@qvac/registry-schema": "^0.1.2",
+    "@qvac/registry-schema": "^0.2.0",
     "b4a": "^1.6.7",
     "bare-fs": "^4.5.2",
     "bare-os": "^3.6.2",

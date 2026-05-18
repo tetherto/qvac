@@ -1,0 +1,122 @@
+# Release-driven docs pipeline for **patch** SDK releases.
+#
+# Triggers on `release-sdk-X.Y.Z` pushes that touch the SDK's changelog
+# folder, but excludes `*.*.0` so it doesn't double-fire alongside
+# `docs-release-minor.yml`. Include + exclude globs are mutually
+# exclusive by construction — pushes to `release-sdk-X.Y.0` only fire the
+# minor workflow.
+#
+# `release-version-patch.ts` then decides at runtime whether this is a
+# "patch-latest" (incoming X.Y matches latest in versions.ts → edit the
+# bare `index.mdx` files) or "patch-archived" (older minor → rename the
+# archived sibling `v<old>.mdx` → `v<new>.mdx` and update inside it).
+name: Docs Release - Patch
+
+on:
+  push:
+    branches:
+      - 'release-sdk-*'
+      - '!release-sdk-*.*.0'
+    paths:
+      - 'packages/sdk/changelog/**'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'SDK version (semver X.Y.Z where Z >= 1, e.g. 0.10.3)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-release-patch-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DOCS_DIR: docs/website
+
+jobs:
+  label-gate:
+    name: Authorise (label-gate)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      authorised: ${{ steps.gate.outputs.authorised }}
+    steps:
+      - name: Checkout (label-gate action only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/label-gate
+          sparse-checkout-cone-mode: false
+      - name: Run label-gate
+        id: gate
+        uses: ./.github/actions/label-gate
+        with:
+          github-token: ${{ secrets.PAT_TOKEN }}
+
+  generate-and-publish:
+    name: Generate docs and open PR
+    needs:
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true' && (!vars.DOCS_SYNC_BOT_USER || github.actor != vars.DOCS_SYNC_BOT_USER)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Setup docs release environment
+        id: setup
+        uses: ./.github/actions/docs-release-setup
+        with:
+          input-version: ${{ inputs.version }}
+
+      - name: Release patch docs version
+        # release-version-patch.ts inspects src/lib/versions.ts to decide:
+        #   - patch-latest  -> edits index.mdx (title-only API + append-patch RN)
+        #   - patch-archived -> git mv v<old>.mdx -> v<new>.mdx, then edits
+        # See script for full flow. Patch never re-runs TypeDoc.
+        working-directory: main-tree/${{ env.DOCS_DIR }}
+        env:
+          SDK_PATH: ${{ github.workspace }}/release-tree/packages/sdk
+          CHANGELOG_REPO_ROOT: ${{ github.workspace }}/release-tree
+          VERSION: ${{ steps.setup.outputs.version }}
+        run: |
+          bun run scripts/release-version-patch.ts "$VERSION"
+
+      - name: Run link validation tests
+        working-directory: main-tree/${{ env.DOCS_DIR }}
+        run: bun run vitest run tests/link-integrity.test.ts
+
+      - name: Open pull request against main
+        uses: peter-evans/create-pull-request@c0f553fe549906ede9cf27b5156039d195d2ece0 # 8.1.0
+        with:
+          path: main-tree
+          token: ${{ secrets.DOCS_SYNC_PAT || secrets.GITHUB_TOKEN }}
+          branch: docs/release-sdk-v${{ steps.setup.outputs.version }}
+          base: main
+          delete-branch: true
+          commit-message: "doc[notask]: release docs v${{ steps.setup.outputs.version }} (patch)"
+          title: "doc[notask]: release docs v${{ steps.setup.outputs.version }} (patch)"
+          add-paths: |
+            docs/website/content/docs/reference/api/**
+            docs/website/content/docs/reference/release-notes/**
+            docs/website/src/lib/versions.ts
+          labels: documentation, auto-generated
+          body: |
+            ## Auto-generated patch release docs
+
+            Updates docs for SDK patch **v${{ steps.setup.outputs.version }}**.
+
+            The script auto-detected whether this patch targets the current latest
+            minor (in which case the bare `index.mdx` files are updated in place —
+            title-only API summary + appended release-notes section) or an archived
+            minor (in which case the previous `v<X.Y.Z-1>.mdx` siblings were
+            renamed to `v${{ steps.setup.outputs.version }}.mdx`).
+
+            Release notes were appended from `packages/sdk/changelog/${{ steps.setup.outputs.version }}/CHANGELOG_LLM.md`.
+
+            Produced by the `Docs Release - Patch` workflow.

@@ -8,8 +8,30 @@ import {
   extractGenerationParams,
   extractResponseFormat,
   InvalidResponseFormatError,
-  logUnsupportedParams
+  logUnsupportedParams,
+  vectorStoreToOpenAI,
+  searchResultsToOpenAI,
+  parseExpiresAfter,
+  parseMetadata,
+  InvalidExpiresAfterError,
+  InvalidMetadataError,
+  openaiResponsesInputToHistory,
+  openaiResponsesToolsToSdk,
+  extractResponsesGenerationParams,
+  extractResponsesResponseFormat,
+  validateResponsesStatefulOptions,
+  normalizeResponsesInputItemsForStorage,
+  historyPrefixFromStoredResponse,
+  logResponsesUnsupportedParams,
+  UnsupportedToolTypeError,
+  InvalidResponsesConversationError,
+  InvalidResponsesBackgroundError,
+  parseLegacyPrompt,
+  legacyPromptToHistory,
+  logLegacyUnsupportedParams,
+  InvalidPromptError
 } from '../src/serve/adapters/openai/translate.js'
+import type { VectorStoreMeta } from '../src/serve/adapters/openai/vector-stores-store.js'
 
 describe('openaiMessagesToHistory', () => {
   it('converts simple user/assistant messages', () => {
@@ -344,6 +366,23 @@ describe('extractGenerationParams', () => {
     assert.equal(params.presence_penalty, 0.1)
   })
 
+  it('extracts reasoning_budget true', () => {
+    const params = extractGenerationParams({ reasoning_budget: true })
+    assert.ok(params)
+    assert.equal(params.reasoning_budget, true)
+  })
+
+  it('extracts reasoning_budget false', () => {
+    const params = extractGenerationParams({ reasoning_budget: false })
+    assert.ok(params)
+    assert.equal(params.reasoning_budget, false)
+  })
+
+  it('ignores non-boolean reasoning_budget', () => {
+    const params = extractGenerationParams({ reasoning_budget: -1 })
+    assert.equal(params, undefined)
+  })
+
   it('ignores non-number values', () => {
     const params = extractGenerationParams({ temperature: 'hot', max_tokens: '100' })
     assert.equal(params, undefined)
@@ -485,5 +524,499 @@ describe('extractResponseFormat', () => {
       }),
       InvalidResponseFormatError
     )
+  })
+})
+
+function fixtureMeta (overrides: Partial<VectorStoreMeta> = {}): VectorStoreMeta {
+  return {
+    id: 'vs_abc123',
+    createdAt: 1_700_000_000_000,
+    name: 'docs',
+    metadata: { topic: 'rag' },
+    expiresAfter: null,
+    expiresAt: null,
+    lastActiveAt: 1_700_000_000_000,
+    ...overrides
+  }
+}
+
+describe('vectorStoreToOpenAI', () => {
+  it('produces the OpenAI vector_store shape with second-precision timestamps', () => {
+    const out = vectorStoreToOpenAI(fixtureMeta())
+    assert.equal(out.object, 'vector_store')
+    assert.equal(out.id, 'vs_abc123')
+    assert.equal(out.created_at, 1_700_000_000)
+    assert.equal(out.name, 'docs')
+    assert.equal(out.usage_bytes, 0)
+    assert.deepEqual(out.file_counts, {
+      in_progress: 0,
+      completed: 0,
+      failed: 0,
+      cancelled: 0,
+      total: 0
+    })
+    assert.equal(out.last_active_at, 1_700_000_000)
+    assert.deepEqual(out.metadata, { topic: 'rag' })
+  })
+
+  it('reports status="in_progress" when no underlying RAG workspace exists', () => {
+    const out = vectorStoreToOpenAI(fixtureMeta())
+    assert.equal(out.status, 'in_progress')
+  })
+
+  it('reports status="completed" once a workspace exists', () => {
+    const out = vectorStoreToOpenAI(fixtureMeta(), { exists: true, open: true })
+    assert.equal(out.status, 'completed')
+  })
+
+  it('preserves expires_after and converts expires_at to seconds', () => {
+    const out = vectorStoreToOpenAI(fixtureMeta({
+      expiresAfter: { anchor: 'last_active_at', days: 7 },
+      expiresAt: 1_700_604_800_000
+    }))
+    assert.deepEqual(out.expires_after, { anchor: 'last_active_at', days: 7 })
+    assert.equal(out.expires_at, 1_700_604_800)
+  })
+
+  it('keeps null name (no synthetic fallback)', () => {
+    const out = vectorStoreToOpenAI(fixtureMeta({ name: null }))
+    assert.equal(out.name, null)
+  })
+
+  it('clones metadata so mutations on the response do not leak', () => {
+    const meta = fixtureMeta()
+    const out = vectorStoreToOpenAI(meta)
+    out.metadata['topic'] = 'mutated'
+    assert.equal(meta.metadata['topic'], 'rag')
+  })
+})
+
+describe('searchResultsToOpenAI', () => {
+  it('returns an empty page on no results', () => {
+    const page = searchResultsToOpenAI([], 'find me')
+    assert.equal(page.object, 'vector_store.search_results.page')
+    assert.equal(page.search_query, 'find me')
+    assert.deepEqual(page.data, [])
+    assert.equal(page.has_more, false)
+    assert.equal(page.next_page, null)
+  })
+
+  it('maps RAG results to OpenAI search items preserving score', () => {
+    const page = searchResultsToOpenAI(
+      [
+        { id: 'doc-1', content: 'first chunk text', score: 0.92 },
+        { id: 'doc-2', content: 'second chunk text', score: 0.81 }
+      ],
+      'embedding query'
+    )
+    assert.equal(page.data.length, 2)
+    const first = page.data[0]
+    assert.ok(first)
+    assert.equal(first.file_id, 'doc-1')
+    assert.equal(first.filename, 'doc-1')
+    assert.equal(first.score, 0.92)
+    assert.deepEqual(first.attributes, {})
+    assert.deepEqual(first.content, [{ type: 'text', text: 'first chunk text' }])
+  })
+
+  it('uses the attribution lookup for file_id and filename when available', () => {
+    const page = searchResultsToOpenAI(
+      [
+        { id: 'chunk-1', content: 'first chunk', score: 0.9 },
+        { id: 'chunk-2', content: 'second chunk', score: 0.8 }
+      ],
+      'query',
+      (chunkId) => {
+        if (chunkId === 'chunk-1') return { fileId: 'file-abc', fileName: 'notes.txt' }
+        return null
+      }
+    )
+    const first = page.data[0]
+    const second = page.data[1]
+    assert.ok(first)
+    assert.ok(second)
+    // Attributed hit reports the original upload's identity.
+    assert.equal(first.file_id, 'file-abc')
+    assert.equal(first.filename, 'notes.txt')
+    // Unattributed hit falls back to the chunk id (today's behavior).
+    assert.equal(second.file_id, 'chunk-2')
+    assert.equal(second.filename, 'chunk-2')
+  })
+})
+
+describe('parseExpiresAfter', () => {
+  it('returns undefined when missing, null when explicit null', () => {
+    assert.equal(parseExpiresAfter(undefined), undefined)
+    assert.equal(parseExpiresAfter(null), null)
+  })
+
+  it('parses a valid expires_after object', () => {
+    assert.deepEqual(
+      parseExpiresAfter({ anchor: 'last_active_at', days: 30 }),
+      { anchor: 'last_active_at', days: 30 }
+    )
+  })
+
+  it('throws on a wrong anchor or non-integer days', () => {
+    assert.throws(() => parseExpiresAfter({ anchor: 'created_at', days: 7 }), InvalidExpiresAfterError)
+    assert.throws(() => parseExpiresAfter({ anchor: 'last_active_at', days: 0 }), InvalidExpiresAfterError)
+    assert.throws(() => parseExpiresAfter({ anchor: 'last_active_at', days: 1.5 }), InvalidExpiresAfterError)
+  })
+
+  it('throws on non-object inputs', () => {
+    assert.throws(() => parseExpiresAfter('soon'), InvalidExpiresAfterError)
+    assert.throws(() => parseExpiresAfter(['anchor', 'last_active_at']), InvalidExpiresAfterError)
+  })
+})
+
+describe('parseMetadata', () => {
+  it('round-trips a small string-valued object', () => {
+    assert.deepEqual(parseMetadata({ a: '1', b: 'two' }), { a: '1', b: 'two' })
+  })
+
+  it('returns undefined when missing, null when explicit null', () => {
+    assert.equal(parseMetadata(undefined), undefined)
+    assert.equal(parseMetadata(null), null)
+  })
+
+  it('rejects non-string values', () => {
+    assert.throws(() => parseMetadata({ count: 5 }), InvalidMetadataError)
+  })
+
+  it('rejects more than 16 keys', () => {
+    const big: Record<string, string> = {}
+    for (let i = 0; i < 17; i++) big[`k${i}`] = 'v'
+    assert.throws(() => parseMetadata(big), InvalidMetadataError)
+  })
+
+  it('rejects oversized keys or values', () => {
+    assert.throws(() => parseMetadata({ ['x'.repeat(65)]: 'v' }), InvalidMetadataError)
+    assert.throws(() => parseMetadata({ k: 'v'.repeat(513) }), InvalidMetadataError)
+  })
+})
+
+describe('openaiResponsesInputToHistory', () => {
+  it('maps string input to user message', () => {
+    const h = openaiResponsesInputToHistory('hello', undefined)
+    assert.deepEqual(h, [{ role: 'user', content: 'hello' }])
+  })
+
+  it('prepends instructions as system', () => {
+    const h = openaiResponsesInputToHistory('x', 'sys')
+    assert.deepEqual(h, [{ role: 'system', content: 'sys' }, { role: 'user', content: 'x' }])
+  })
+
+  it('maps message items', () => {
+    const h = openaiResponsesInputToHistory([
+      { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'a' }] }
+    ], undefined)
+    assert.equal(h[0]!.role, 'user')
+    assert.equal(h[0]!.content, 'a')
+  })
+
+  it('maps function_call_output to tool role', () => {
+    const h = openaiResponsesInputToHistory([
+      { type: 'function_call_output', output: '{"ok":true}' }
+    ], undefined)
+    assert.deepEqual(h[0], { role: 'tool', content: '{"ok":true}' })
+  })
+
+  it('maps function_call to synthesized assistant tool markup', () => {
+    const h = openaiResponsesInputToHistory([
+      { type: 'function_call', name: 'x', arguments: '{"a":1}' }
+    ], undefined)
+    assert.equal(h[0]!.role, 'assistant')
+    assert.ok(h[0]!.content.includes('<tool_call>'))
+    assert.ok(h[0]!.content.includes('x'))
+  })
+})
+
+describe('openaiResponsesToolsToSdk', () => {
+  it('maps Responses-style function tools', () => {
+    const t = openaiResponsesToolsToSdk([{
+      type: 'function',
+      name: 'fn',
+      description: 'd',
+      parameters: { type: 'object', properties: {} }
+    }])
+    assert.ok(t && t.length === 1)
+    assert.equal(t[0]!.name, 'fn')
+  })
+
+  it('throws on web_search', () => {
+    assert.throws(
+      () => openaiResponsesToolsToSdk([{ type: 'web_search' }]),
+      UnsupportedToolTypeError
+    )
+  })
+})
+
+describe('extractResponsesGenerationParams', () => {
+  it('maps max_output_tokens to predict', () => {
+    const p = extractResponsesGenerationParams({ max_output_tokens: 64 })
+    assert.equal(p!.predict, 64)
+  })
+})
+
+describe('extractResponsesResponseFormat', () => {
+  it('reads nested text.format', () => {
+    const f = extractResponsesResponseFormat({
+      text: { format: { type: 'json_object' } }
+    })
+    assert.ok(f && f.type === 'json_object')
+  })
+})
+
+describe('validateResponsesStatefulOptions', () => {
+  it('returns previous id and store default true', () => {
+    const r = validateResponsesStatefulOptions({ previous_response_id: 'resp_x', input: '' })
+    assert.equal(r.previousResponseId, 'resp_x')
+    assert.equal(r.storeEnabled, true)
+  })
+
+  it('store false opts out', () => {
+    const r = validateResponsesStatefulOptions({ store: false, input: '' })
+    assert.equal(r.storeEnabled, false)
+  })
+
+  it('throws on conversation', () => {
+    assert.throws(
+      () => validateResponsesStatefulOptions({ conversation: 'c1' }),
+      InvalidResponsesConversationError
+    )
+  })
+
+  it('throws on background true', () => {
+    assert.throws(
+      () => validateResponsesStatefulOptions({ background: true }),
+      InvalidResponsesBackgroundError
+    )
+  })
+})
+
+describe('logResponsesUnsupportedParams', () => {
+  it('does not treat parallel_tool_calls as unsupported', () => {
+    const lines: string[] = []
+    const logger = {
+      info: (msg: string) => lines.push(msg),
+      warn: (): void => {},
+      error: (): void => {},
+      debug: (): void => {}
+    } as Parameters<typeof logResponsesUnsupportedParams>[1]
+    logResponsesUnsupportedParams({ parallel_tool_calls: false, input: '' }, logger)
+    assert.ok(!lines.some((l) => l.includes('parallel_tool_calls')))
+  })
+})
+
+describe('normalizeResponsesInputItemsForStorage', () => {
+  it('wraps string input', () => {
+    const items = normalizeResponsesInputItemsForStorage('hi')
+    assert.equal(items.length, 1)
+    assert.equal((items[0] as { type: string }).type, 'message')
+  })
+})
+
+describe('historyPrefixFromStoredResponse', () => {
+  it('uses output_text when output array is empty', () => {
+    const prefix = historyPrefixFromStoredResponse({
+      inputItems: [{ type: 'message', id: '1', role: 'user', content: [{ type: 'input_text', text: 'u' }] }],
+      responseObject: { output_text: 'assistant reply', output: [] }
+    })
+    assert.deepEqual(prefix, [
+      { role: 'user', content: 'u' },
+      { role: 'assistant', content: 'assistant reply' }
+    ])
+  })
+
+  it('prefers non-empty output array so tool calls are included with assistant text', () => {
+    const prefix = historyPrefixFromStoredResponse({
+      inputItems: [],
+      responseObject: {
+        output_text: 'ignored when structured output present',
+        output: [
+          { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'hello' }] },
+          { type: 'function_call', name: 'f', arguments: '{}', call_id: 'c1' }
+        ]
+      }
+    })
+    const assistantText = prefix.filter((p) => p.role === 'assistant' && !p.content.includes('tool_call'))
+    const toolCalls = prefix.filter((p) => p.role === 'assistant' && p.content.includes('tool_call'))
+    assert.equal(assistantText.length, 1)
+    assert.equal(assistantText[0]!.content, 'hello')
+    assert.equal(toolCalls.length, 1)
+  })
+
+  it('includes function_call_output from stored input items', () => {
+    const prefix = historyPrefixFromStoredResponse({
+      inputItems: [
+        { type: 'function_call_output', output: '{"r":1}' }
+      ],
+      responseObject: { output: [], output_text: '' }
+    })
+    assert.deepEqual(prefix, [{ role: 'tool', content: '{"r":1}' }])
+  })
+
+  it('walks previous_response_id chain so depth-3 carries the grandparent turn', () => {
+    const records: Record<string, { inputItems: unknown[]; responseObject: Record<string, unknown> }> = {
+      resp_1: {
+        inputItems: [
+          { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'A' }] }
+        ],
+        responseObject: { output: [], output_text: 'X' }
+      },
+      resp_2: {
+        inputItems: [
+          { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'B' }] }
+        ],
+        responseObject: { output: [], output_text: 'Y', previous_response_id: 'resp_1' }
+      },
+      resp_3: {
+        inputItems: [
+          { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'C' }] }
+        ],
+        responseObject: { output: [], output_text: 'Z', previous_response_id: 'resp_2' }
+      }
+    }
+    const prefix = historyPrefixFromStoredResponse(
+      records['resp_3']!,
+      (id) => records[id]
+    )
+    assert.deepEqual(prefix, [
+      { role: 'user', content: 'A' }, { role: 'assistant', content: 'X' },
+      { role: 'user', content: 'B' }, { role: 'assistant', content: 'Y' },
+      { role: 'user', content: 'C' }, { role: 'assistant', content: 'Z' }
+    ])
+  })
+
+  it('caps chain walk at maxDepth to bound work on pathological input', () => {
+    const records: Record<string, { inputItems: unknown[]; responseObject: Record<string, unknown> }> = {
+      a: {
+        inputItems: [{ type: 'message', role: 'user', content: [{ type: 'input_text', text: 'aIn' }] }],
+        responseObject: { output: [], output_text: 'aOut' }
+      },
+      b: {
+        inputItems: [{ type: 'message', role: 'user', content: [{ type: 'input_text', text: 'bIn' }] }],
+        responseObject: { output: [], output_text: 'bOut', previous_response_id: 'a' }
+      },
+      c: {
+        inputItems: [{ type: 'message', role: 'user', content: [{ type: 'input_text', text: 'cIn' }] }],
+        responseObject: { output: [], output_text: 'cOut', previous_response_id: 'b' }
+      }
+    }
+    const prefix = historyPrefixFromStoredResponse(records['c']!, (id) => records[id], 1)
+    assert.deepEqual(prefix, [
+      { role: 'user', content: 'bIn' }, { role: 'assistant', content: 'bOut' },
+      { role: 'user', content: 'cIn' }, { role: 'assistant', content: 'cOut' }
+    ])
+  })
+})
+
+describe('parseLegacyPrompt', () => {
+  it('returns a single prompt for a non-empty string', () => {
+    assert.deepEqual(parseLegacyPrompt('hello'), { kind: 'single', value: 'hello' })
+  })
+
+  it('unwraps a single-element string array to a single prompt', () => {
+    assert.deepEqual(parseLegacyPrompt(['hello']), { kind: 'single', value: 'hello' })
+  })
+
+  it('returns a multi prompt for arrays with two or more strings', () => {
+    assert.deepEqual(parseLegacyPrompt(['a', 'b']), { kind: 'multi', values: ['a', 'b'] })
+    assert.deepEqual(parseLegacyPrompt(['a', 'b', 'c']), { kind: 'multi', values: ['a', 'b', 'c'] })
+  })
+
+  it('throws on missing prompt', () => {
+    assert.throws(() => parseLegacyPrompt(undefined), InvalidPromptError)
+    assert.throws(() => parseLegacyPrompt(null), InvalidPromptError)
+  })
+
+  it('throws on empty string', () => {
+    assert.throws(() => parseLegacyPrompt(''), InvalidPromptError)
+  })
+
+  it('throws on empty array', () => {
+    assert.throws(() => parseLegacyPrompt([]), InvalidPromptError)
+  })
+
+  it('throws on array entries that are not strings (token IDs)', () => {
+    assert.throws(() => parseLegacyPrompt([1, 2, 3]), InvalidPromptError)
+    assert.throws(() => parseLegacyPrompt([[1, 2], [3, 4]]), InvalidPromptError)
+    assert.throws(() => parseLegacyPrompt(['ok', 7]), InvalidPromptError)
+  })
+
+  it('throws on numeric prompt (single token id)', () => {
+    assert.throws(() => parseLegacyPrompt(42), InvalidPromptError)
+  })
+
+  it('throws on array entry that is an empty string', () => {
+    assert.throws(() => parseLegacyPrompt(['ok', '']), InvalidPromptError)
+  })
+
+  it('throws on non-string, non-array, non-numeric prompt', () => {
+    assert.throws(() => parseLegacyPrompt({ text: 'oops' }), InvalidPromptError)
+    assert.throws(() => parseLegacyPrompt(true), InvalidPromptError)
+  })
+})
+
+describe('legacyPromptToHistory', () => {
+  it('wraps a string in a single-turn user history', () => {
+    assert.deepEqual(legacyPromptToHistory('hello'), [{ role: 'user', content: 'hello' }])
+  })
+})
+
+describe('logLegacyUnsupportedParams', () => {
+  function captureWarnings (body: Record<string, unknown>): string[] {
+    const warnings: string[] = []
+    const logger = {
+      info: () => {},
+      warn: (msg: string) => { warnings.push(msg) },
+      error: () => {},
+      debug: () => {}
+    } as unknown as Parameters<typeof logLegacyUnsupportedParams>[1]
+    logLegacyUnsupportedParams(body, logger)
+    return warnings
+  }
+
+  it('warns for legacy-only unsupported params', () => {
+    const warnings = captureWarnings({ echo: true, best_of: 3, suffix: 'end', user: 'u1' })
+    assert.equal(warnings.length, 4)
+    assert.ok(warnings.some((w) => w.includes('echo')))
+    assert.ok(warnings.some((w) => w.includes('best_of')))
+    assert.ok(warnings.some((w) => w.includes('suffix')))
+    assert.ok(warnings.some((w) => w.includes('user')))
+  })
+
+  it('warns for shared unsupported params (logprobs, stop, logit_bias, stream_options)', () => {
+    const warnings = captureWarnings({
+      logprobs: 5,
+      stop: ['\n'],
+      logit_bias: { '50256': -100 },
+      stream_options: { include_usage: true }
+    })
+    assert.ok(warnings.some((w) => w.includes('logprobs')))
+    assert.ok(warnings.some((w) => w.includes('stop')))
+    assert.ok(warnings.some((w) => w.includes('logit_bias')))
+    assert.ok(warnings.some((w) => w.includes('stream_options')))
+  })
+
+  it('warns when response_format is sent (legacy clients should not use it)', () => {
+    const warnings = captureWarnings({ response_format: { type: 'json_object' } })
+    assert.equal(warnings.length, 1)
+    assert.ok(warnings[0]!.includes('response_format'))
+  })
+
+  it('does not warn when n is 1 (default)', () => {
+    const warnings = captureWarnings({ n: 1 })
+    assert.equal(warnings.length, 0)
+  })
+
+  it('warns when n is greater than 1', () => {
+    const warnings = captureWarnings({ n: 4 })
+    assert.equal(warnings.length, 1)
+    assert.ok(warnings[0]!.includes('n=4'))
+  })
+
+  it('is silent for an empty body', () => {
+    assert.deepEqual(captureWarnings({}), [])
   })
 })
