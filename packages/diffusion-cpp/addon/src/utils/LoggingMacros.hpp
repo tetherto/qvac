@@ -5,10 +5,10 @@
 
 #include "inference-addon-cpp/Logger.hpp"
 
-namespace qvac_lib_inference_addon_sd {
-namespace logging {
+namespace qvac_lib_inference_addon_sd::logging {
 
 // Global verbosity level shared across all SD model instances
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 extern qvac_lib_inference_addon_cpp::logger::Priority g_verbosityLevel;
 
 /**
@@ -17,8 +17,7 @@ extern qvac_lib_inference_addon_cpp::logger::Priority g_verbosityLevel;
  */
 void setVerbosityLevel(std::unordered_map<std::string, std::string>& configMap);
 
-} // namespace logging
-} // namespace qvac_lib_inference_addon_sd
+} // namespace qvac_lib_inference_addon_sd::logging
 
 // Conditional log macro - only emits if priority <= current global level
 // NOLINTNEXTLINE(cppcoreguidelines-macro-usage)

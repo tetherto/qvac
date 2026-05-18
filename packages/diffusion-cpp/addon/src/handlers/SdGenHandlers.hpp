@@ -29,24 +29,28 @@ struct SdGenConfig {
   std::string loraPath;
 
   // -- Image dimensions -----------------------------------------------------
+  // NOLINTNEXTLINE(readability-magic-numbers,cppcoreguidelines-avoid-magic-numbers)
   int width = 512; // must be a positive multiple of 8
+  // NOLINTNEXTLINE(readability-magic-numbers,cppcoreguidelines-avoid-magic-numbers)
   int height = 512;
 
   // -- Sampling --------------------------------------------------------------
   // SAMPLE_METHOD_COUNT / SCHEDULER_COUNT = "auto" -- stable-diffusion.cpp
   // selects the correct default for each model family at runtime:
-  //   DiT / FLUX -> euler + karras   SD1/SD2 -> euler_a + discrete
+  //   DiT / FLUX -> euler + karras   SD2/SDXL -> euler_a + discrete
+  // NOLINTNEXTLINE(readability-magic-numbers,cppcoreguidelines-avoid-magic-numbers)
   int steps = 20;
   sample_method_t sampleMethod = SAMPLE_METHOD_COUNT; // auto
   scheduler_t scheduler = SCHEDULER_COUNT;            // auto
-  float eta = 0.0f; // stochasticity for DDIM / TCD samplers
+  float eta = 0.0F; // stochasticity for DDIM / TCD samplers
 
   // -- Guidance -------------------------------------------------------------
-  float cfgScale =
-      7.0f; // txt_cfg  -- CFG (Classifier-Free Guidance) for SD1/SD2
-  float guidance = 3.5f; // distilled_guidance -- FLUX.2 flow-matching scale
+  // NOLINTNEXTLINE(readability-magic-numbers,cppcoreguidelines-avoid-magic-numbers)
+  float cfgScale = 7.0F; // txt_cfg -- CFG (Classifier-Free Guidance) SD2/SDXL
+  // NOLINTNEXTLINE(readability-magic-numbers,cppcoreguidelines-avoid-magic-numbers)
+  float guidance = 3.5F; // distilled_guidance -- FLUX.2 flow-matching scale
   float imgCfgScale =
-      -1.0f; // img_cfg  -- image guidance for img2img/inpaint; -1 = cfgScale
+      -1.0F; // img_cfg  -- image guidance for img2img/inpaint; -1 = cfgScale
 
   // -- Reproducibility -------------------------------------------------------
   int64_t seed = -1; // -1 = random
@@ -55,9 +59,9 @@ struct SdGenConfig {
   int batchCount = 1;
 
   // -- img2img / inpaint -----------------------------------------------------
-  float strength = 0.75f; // denoising strength: 0 = keep init, 1 = ignore it
-  int clipSkip =
-      -1; // skip last N CLIP encoder layers (SD1.x / SD2.x); -1 = auto
+  // NOLINTNEXTLINE(readability-magic-numbers,cppcoreguidelines-avoid-magic-numbers)
+  float strength = 0.75F; // denoising strength: 0 = keep init, 1 = ignore it
+  int clipSkip = -1;      // skip last N CLIP encoder layers (SD2.x); -1 = auto
 
   // -- Multi-reference (FLUX/FLUX2 "fusion") --------------------------------
   // Maps to sd_img_gen_params_t.increase_ref_index. This default matches the
@@ -87,9 +91,12 @@ struct SdGenConfig {
   // -- VAE tiling -- required for images > ~768px on 16 GB machines ----------
   // Maps to sd_img_gen_params_t.vae_tiling_params
   bool vaeTiling = false;
+  // NOLINTNEXTLINE(readability-magic-numbers,cppcoreguidelines-avoid-magic-numbers)
   int vaeTileSizeX = 512;      // tile width  in pixels
+  // NOLINTNEXTLINE(readability-magic-numbers,cppcoreguidelines-avoid-magic-numbers)
   int vaeTileSizeY = 512;      // tile height in pixels
-  float vaeTileOverlap = 0.5f; // fraction of tile used as overlap seam (0-1)
+  // NOLINTNEXTLINE(readability-magic-numbers,cppcoreguidelines-avoid-magic-numbers)
+  float vaeTileOverlap = 0.5F; // fraction of tile used as overlap seam (0-1)
 
   // -- Step-caching (cuts FLUX generation time by 30-50%) -------------------
   // Maps to sd_img_gen_params_t.cache
@@ -98,9 +105,9 @@ struct SdGenConfig {
   // cache_preset: "slow", "medium", "fast", "ultra" (shorthand for threshold)
   // cache_threshold: direct override for reuse_threshold (0 = library default)
   sd_cache_mode_t cacheMode = SD_CACHE_DISABLED;
-  float cacheThreshold = 0.0f; // reuse_threshold; 0 = use library default
-  float cacheStart = 0.0f;     // start_percent;   0 = use library default
-  float cacheEnd = 0.0f;       // end_percent;     0 = use library default
+  float cacheThreshold = 0.0F; // reuse_threshold; 0 = use library default
+  float cacheStart = 0.0F;     // start_percent;   0 = use library default
+  float cacheEnd = 0.0F;       // end_percent;     0 = use library default
 
   // ── Post-generation ESRGAN upscale ────────────────────────────────────────
   bool upscale = false;

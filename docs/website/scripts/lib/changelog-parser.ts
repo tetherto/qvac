@@ -1,3 +1,6 @@
+import { existsSync, readFileSync } from "fs";
+import { join } from "path";
+
 export const CATEGORY_MAP: Record<string, string> = {
   "breaking changes": "Breaking Changes",
   "new apis": "Features",
@@ -186,6 +189,52 @@ export function mergeChangelogs(changelogs: PackageChangelog[]): MergedCategory[
   }
 
   return ordered;
+}
+
+/**
+ * Read a polished per-version changelog folder (Fonte B) and turn it into
+ * the same `PackageChangelog` shape that `parseChangelog` produces from the
+ * aggregated root CHANGELOG.md (Fonte A).
+ *
+ * Folder layout under `packages/<pkg>/changelog/<version>/`:
+ *   - `CHANGELOG_LLM.md` — human + LLM curated copy, preferred.
+ *   - `CHANGELOG.md`     — raw fallback, used only when `CHANGELOG_LLM.md`
+ *                          is missing (e.g. when the `/sdk-changelog` skill
+ *                          hasn't been run yet).
+ *
+ * The H1 heading is conventionally `# QVAC SDK v<X.Y.Z> Release Notes` and
+ * is stripped before delegating to `parseVersionBlock`, which already knows
+ * how to interpret the rest (preamble + `##` / `###` category sections).
+ *
+ * Returns `null` when neither file exists.
+ */
+export function parseChangelogFolder(
+  folderPath: string,
+  pkg: string,
+): PackageChangelog | null {
+  const llmPath = join(folderPath, "CHANGELOG_LLM.md");
+  const rawPath = join(folderPath, "CHANGELOG.md");
+  let content: string;
+  if (existsSync(llmPath)) {
+    content = readFileSync(llmPath, "utf-8");
+  } else if (existsSync(rawPath)) {
+    content = readFileSync(rawPath, "utf-8");
+  } else {
+    return null;
+  }
+
+  // Strip the H1 `# QVAC SDK v<X.Y.Z> Release Notes` heading (if present)
+  // so `parseVersionBlock` doesn't promote it into the preamble. Only the
+  // first H1 is removed; subsequent ones (rare) are preserved as body.
+  // Allowing any trailing label (e.g. "Release Notes", "Hotfix Release")
+  // — we only anchor on the `QVAC SDK v…` prefix.
+  const stripped = content.replace(
+    /^#\s+QVAC\s+SDK\s+v\d+\.\d+\.\d+[^\n]*\n+/,
+    "",
+  );
+
+  const { preamble, sections } = parseVersionBlock(stripped);
+  return { pkg, preamble, sections };
 }
 
 export function parseOverridesContent(content: string): OverrideSection[] {

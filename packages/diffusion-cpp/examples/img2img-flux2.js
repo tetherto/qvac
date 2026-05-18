@@ -39,7 +39,8 @@ async function main () {
     config: {
       threads: 4,
       device: 'gpu', // or 'cpu' for MacBook Air
-      prediction: 'flux2_flow'
+      prediction: 'flux2_flow',
+      diffusion_fa: true
     },
     logger: console
   })
@@ -75,6 +76,8 @@ async function main () {
       // prompt: 'same person, a mountain climber posing for a magazine photo, with a climbing backpack, and climbing axes, black studio background, studio lighting',
       negative_prompt: 'blurry, low quality, NSFW, distorted, different person, different face',
       init_image: initImage,
+      width: 1024,
+      height: 1024,
       cfg_scale: 1.0,
       steps: STEPS,
       guidance: GUIDANCE,
