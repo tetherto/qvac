@@ -96,6 +96,7 @@ jobs:
           fi
       - name: Manual Workspace Cleanup
         run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
         if: startsWith(matrix.runner, 'qvac-')
 
       - name: Checkout addon repository

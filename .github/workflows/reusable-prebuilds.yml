@@ -180,6 +180,7 @@ jobs:
         uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
       - name: Manual Workspace Cleanup
         run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
         if: startsWith(matrix.runner, 'qvac-')
 
       - name: Checkout repository
