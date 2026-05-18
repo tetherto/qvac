@@ -613,15 +613,15 @@ TEST_F(SdWanHappyPathTest, Img2VidProducesValidAvi) {
 // ---------------------------------------------------------------------------
 
 TEST_F(SdWanHappyPathTest, Img2VidWithVonNeumannSavesOutput) {
-  // Load and resize von-neumann.jpg to 832x480 for Wan compatibility
+  // Load von-neumann-colorized.jpg (landscape, no stretching needed)
   const std::string models_dir = std::string(PROJECT_ROOT) + "/models";
-  std::string init_image_path = models_dir + "/../assets/von-neumann.jpg";
+  std::string init_image_path = models_dir + "/../assets/von-neumann-colorized.jpg";
   
   if (!std::filesystem::exists(init_image_path)) {
-    GTEST_SKIP() << "von-neumann.jpg not found at " << init_image_path;
+    GTEST_SKIP() << "von-neumann-colorized.jpg not found at " << init_image_path;
   }
 
-  // Load and resize image to 832x480
+  // Load image
   std::ifstream init_file(init_image_path, std::ios::binary);
   std::vector<uint8_t> image_bytes((std::istreambuf_iterator<char>(init_file)),
                                     std::istreambuf_iterator<char>());
@@ -630,10 +630,10 @@ TEST_F(SdWanHappyPathTest, Img2VidWithVonNeumannSavesOutput) {
   unsigned char* pixels = stbi_load_from_memory(image_bytes.data(), image_bytes.size(),
                                                  &w, &h, &channels, 3);
   if (!pixels) {
-    GTEST_SKIP() << "Failed to decode von-neumann.jpg";
+    GTEST_SKIP() << "Failed to decode von-neumann-colorized.jpg";
   }
 
-  // Resize to 832x480 using simple nearest-neighbor
+  // Resize to 832x480 (aspect-aware)
   const int target_w = 832, target_h = 480;
   std::vector<unsigned char> resized(target_w * target_h * 3);
   for (int y = 0; y < target_h; ++y) {
@@ -695,7 +695,7 @@ TEST_F(SdWanHappyPathTest, Img2VidWithVonNeumannSavesOutput) {
         ++frameFanout;
       };
 
-  std::cout << "Running img2vid with von-neumann.jpg resized (81 frames, 5.06s @ 16fps, 30 steps)...\n";
+  std::cout << "Running img2vid with von-neumann-colorized.jpg (81 frames, 5.06s @ 16fps, 30 steps)...\n";
   EXPECT_NO_THROW(model->process(std::any(job)));
 
   EXPECT_FALSE(avi.empty()) << "outputCallback should fire once with AVI bytes";
@@ -709,7 +709,7 @@ TEST_F(SdWanHappyPathTest, Img2VidWithVonNeumannSavesOutput) {
   // Save output file
   std::string output_dir = std::string(PROJECT_ROOT) + "/output";
   std::filesystem::create_directories(output_dir);
-  std::string output_path = output_dir + "/wan_img2vid_cpp_von_neumann_5sec.avi";
+  std::string output_path = output_dir + "/wan_img2vid_cpp_von_neumann_colorized_5sec.avi";
   
   std::ofstream output_file(output_path, std::ios::binary);
   if (output_file.is_open()) {
