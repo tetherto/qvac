@@ -15,23 +15,25 @@ using namespace qvac_errors;
 // -- JSON value helpers
 // --------------------------------------------------------
 
-static double requireNum(const picojson::value& v, const std::string& key) {
-  if (!v.is<double>())
+static double requireNum(const picojson::value& val, const std::string& key) {
+  if (!val.is<double>()) {
     throw StatusError(
         general_error::InvalidArgument, key + " must be a number");
-  return v.get<double>();
+  }
+  return val.get<double>();
 }
 
 static std::string
-requireStr(const picojson::value& v, const std::string& key) {
-  if (!v.is<std::string>())
+requireStr(const picojson::value& val, const std::string& key) {
+  if (!val.is<std::string>()) {
     throw StatusError(
         general_error::InvalidArgument, key + " must be a string");
-  return v.get<std::string>();
+  }
+  return val.get<std::string>();
 }
 
-static int parseUpscaleRepeats(const picojson::value& v) {
-  const double raw = requireNum(v, "upscale.repeats");
+static int parseUpscaleRepeats(const picojson::value& val) {
+  const double raw = requireNum(val, "upscale.repeats");
   // No policy cap: repeated x4 upscales are memory-bound, so only guard the
   // native int storage used for the loop count.
   if (raw < 1.0 || raw > static_cast<double>(std::numeric_limits<int>::max())) {
@@ -68,8 +70,8 @@ static sample_method_t parseSampler(const std::string& name) {
       {"res_multistep", RES_MULTISTEP_SAMPLE_METHOD},
       {"res_2s", RES_2S_SAMPLE_METHOD},
   };
-  if (auto it = samplers.find(name); it != samplers.end()) {
-    return it->second;
+  if (auto iter = samplers.find(name); iter != samplers.end()) {
+    return iter->second;
   }
   throw StatusError(
       general_error::InvalidArgument,
@@ -93,8 +95,8 @@ static scheduler_t parseScheduler(const std::string& name) {
       {"kl_optimal", KL_OPTIMAL_SCHEDULER},
       {"bong_tangent", BONG_TANGENT_SCHEDULER},
   };
-  if (auto it = schedulers.find(name); it != schedulers.end()) {
-    return it->second;
+  if (auto iter = schedulers.find(name); iter != schedulers.end()) {
+    return iter->second;
   }
   throw StatusError(
       general_error::InvalidArgument,
@@ -105,38 +107,42 @@ static scheduler_t parseScheduler(const std::string& name) {
 
 // Parses "vae_tile_size": accepts either an integer (applied to both axes)
 // or a "WxH" string (e.g. "128x64").
-static std::pair<int, int> parseVaeTileSize(const picojson::value& v) {
-  if (v.is<double>()) {
-    int sz = static_cast<int>(v.get<double>());
-    return {sz, sz};
+static std::pair<int, int> parseVaeTileSize(const picojson::value& val) {
+  if (val.is<double>()) {
+    int size = static_cast<int>(val.get<double>());
+    return {size, size};
   }
-  if (!v.is<std::string>()) {
+  if (!val.is<std::string>()) {
     throw StatusError(
         general_error::InvalidArgument,
         "vae_tile_size must be a number or 'WxH' string");
   }
 
-  const std::string_view s = v.get<std::string>();
-  const auto xPos = s.find('x');
+  const std::string_view tileStr = val.get<std::string>();
+  const auto xPos = tileStr.find('x');
   if (xPos == std::string_view::npos) {
     throw StatusError(
         general_error::InvalidArgument,
-        "vae_tile_size string must be 'WxH', got: '" + std::string(s) + "'");
+        "vae_tile_size string must be 'WxH', got: '" + std::string(tileStr) +
+            "'");
   }
 
-  int w{}, h{};
-  const auto wSv = s.substr(0, xPos);
-  const auto hSv = s.substr(xPos + 1);
-  if (std::from_chars(wSv.data(), wSv.data() + wSv.size(), w).ec !=
+  int tileW{};
+  int tileH{};
+  const auto wSv = tileStr.substr(0, xPos);
+  const auto hSv = tileStr.substr(xPos + 1);
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+  if (std::from_chars(wSv.data(), wSv.data() + wSv.size(), tileW).ec !=
           std::errc{} ||
-      std::from_chars(hSv.data(), hSv.data() + hSv.size(), h).ec !=
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+      std::from_chars(hSv.data(), hSv.data() + hSv.size(), tileH).ec !=
           std::errc{}) {
     throw StatusError(
         general_error::InvalidArgument,
-        "vae_tile_size: could not parse dimensions from '" + std::string(s) +
-            "'");
+        "vae_tile_size: could not parse dimensions from '" +
+            std::string(tileStr) + "'");
   }
-  return {w, h};
+  return {tileW, tileH};
 }
 
 static sd_cache_mode_t parseCacheMode(const std::string& name) {
@@ -149,8 +155,8 @@ static sd_cache_mode_t parseCacheMode(const std::string& name) {
       {"taylorseer", SD_CACHE_TAYLORSEER},
       {"cache-dit", SD_CACHE_CACHE_DIT},
   };
-  if (auto it = cacheModes.find(name); it != cacheModes.end()) {
-    return it->second;
+  if (auto iter = cacheModes.find(name); iter != cacheModes.end()) {
+    return iter->second;
   }
   throw StatusError(
       general_error::InvalidArgument,
@@ -159,168 +165,180 @@ static sd_cache_mode_t parseCacheMode(const std::string& name) {
           "cache-dit");
 }
 
+// Minimum alignment for image dimensions required by all supported model
+// families (SD2.x, SDXL, SD3, FLUX.2). The latent space uses 8-pixel blocks.
+static constexpr int DIM_ALIGNMENT = 8;
+
 // -- Handler map
 // ---------------------------------------------------------------
 
+// NOLINTNEXTLINE(bugprone-throwing-static-initialization)
 const SdGenHandlersMap SD_GEN_HANDLERS = {
 
     // -- Mode
     // --------------------------------------------------------------------
 
     {"mode",
-     [](SdGenConfig& c, const picojson::value& v) {
-       const auto mode = requireStr(v, "mode");
-       if (mode != "txt2img" && mode != "img2img")
+     [](SdGenConfig& cfg, const picojson::value& val) {
+       const auto mode = requireStr(val, "mode");
+       if (mode != "txt2img" && mode != "img2img") {
          throw StatusError(
              general_error::InvalidArgument,
              "mode must be 'txt2img' or 'img2img', got: '" + mode + "'");
-       c.mode = mode;
+       }
+       cfg.mode = mode;
      }},
 
     // -- Prompt
     // ------------------------------------------------------------------
 
     {"prompt",
-     [](SdGenConfig& c, const picojson::value& v) {
-       c.prompt = requireStr(v, "prompt");
+     [](SdGenConfig& cfg, const picojson::value& val) {
+       cfg.prompt = requireStr(val, "prompt");
      }},
     {"negative_prompt",
-     [](SdGenConfig& c, const picojson::value& v) {
-       c.negativePrompt = requireStr(v, "negative_prompt");
+     [](SdGenConfig& cfg, const picojson::value& val) {
+       cfg.negativePrompt = requireStr(val, "negative_prompt");
      }},
     {"lora",
-     [](SdGenConfig& c, const picojson::value& v) {
-       c.loraPath = requireStr(v, "lora");
+     [](SdGenConfig& cfg, const picojson::value& val) {
+       cfg.loraPath = requireStr(val, "lora");
      }},
 
     // -- Image dimensions
     // --------------------------------------------------------
 
     {"width",
-     [](SdGenConfig& c, const picojson::value& v) {
-       int w = static_cast<int>(requireNum(v, "width"));
-       if (w <= 0 || w % 8 != 0)
+     [](SdGenConfig& cfg, const picojson::value& val) {
+       int width = static_cast<int>(requireNum(val, "width"));
+       if (width <= 0 || width % DIM_ALIGNMENT != 0) {
          throw StatusError(
              general_error::InvalidArgument,
              "width must be a positive multiple of 8, got: " +
-                 std::to_string(w));
-       c.width = w;
+                 std::to_string(width));
+       }
+       cfg.width = width;
      }},
 
     {"height",
-     [](SdGenConfig& c, const picojson::value& v) {
-       int h = static_cast<int>(requireNum(v, "height"));
-       if (h <= 0 || h % 8 != 0)
+     [](SdGenConfig& cfg, const picojson::value& val) {
+       int height = static_cast<int>(requireNum(val, "height"));
+       if (height <= 0 || height % DIM_ALIGNMENT != 0) {
          throw StatusError(
              general_error::InvalidArgument,
              "height must be a positive multiple of 8, got: " +
-                 std::to_string(h));
-       c.height = h;
+                 std::to_string(height));
+       }
+       cfg.height = height;
      }},
 
     // -- Sampling
     // ----------------------------------------------------------------
 
     {"steps",
-     [](SdGenConfig& c, const picojson::value& v) {
-       int s = static_cast<int>(requireNum(v, "steps"));
-       if (s <= 0)
+     [](SdGenConfig& cfg, const picojson::value& val) {
+       int steps = static_cast<int>(requireNum(val, "steps"));
+       if (steps <= 0) {
          throw StatusError(general_error::InvalidArgument, "steps must be > 0");
-       c.steps = s;
+       }
+       cfg.steps = steps;
      }},
 
     // Both "sampling_method" and "sampler" are accepted.
     {"sampling_method",
-     [](SdGenConfig& c, const picojson::value& v) {
-       c.sampleMethod = parseSampler(requireStr(v, "sampling_method"));
+     [](SdGenConfig& cfg, const picojson::value& val) {
+       cfg.sampleMethod = parseSampler(requireStr(val, "sampling_method"));
      }},
     {"sampler",
-     [](SdGenConfig& c, const picojson::value& v) {
-       c.sampleMethod = parseSampler(requireStr(v, "sampler"));
+     [](SdGenConfig& cfg, const picojson::value& val) {
+       cfg.sampleMethod = parseSampler(requireStr(val, "sampler"));
      }},
 
     {"scheduler",
-     [](SdGenConfig& c, const picojson::value& v) {
-       c.scheduler = parseScheduler(requireStr(v, "scheduler"));
+     [](SdGenConfig& cfg, const picojson::value& val) {
+       cfg.scheduler = parseScheduler(requireStr(val, "scheduler"));
      }},
 
     {"eta",
-     [](SdGenConfig& c, const picojson::value& v) {
-       c.eta = static_cast<float>(requireNum(v, "eta"));
+     [](SdGenConfig& cfg, const picojson::value& val) {
+       cfg.eta = static_cast<float>(requireNum(val, "eta"));
      }},
 
     // -- Guidance
     // ----------------------------------------------------------------
 
     {"cfg_scale",
-     [](SdGenConfig& c, const picojson::value& v) {
-       c.cfgScale = static_cast<float>(requireNum(v, "cfg_scale"));
+     [](SdGenConfig& cfg, const picojson::value& val) {
+       cfg.cfgScale = static_cast<float>(requireNum(val, "cfg_scale"));
      }},
 
     // distilled_guidance -- FLUX.2 specific; separate from cfg_scale.
     // Default 3.5 is the FLUX recommendation. Too low = washed out, too high =
     // over-saturated.
     {"guidance",
-     [](SdGenConfig& c, const picojson::value& v) {
-       c.guidance = static_cast<float>(requireNum(v, "guidance"));
+     [](SdGenConfig& cfg, const picojson::value& val) {
+       cfg.guidance = static_cast<float>(requireNum(val, "guidance"));
      }},
 
     // img_cfg -- image guidance for img2img / inpaint workflows; -1 = use
     // cfg_scale.
     {"img_cfg_scale",
-     [](SdGenConfig& c, const picojson::value& v) {
-       c.imgCfgScale = static_cast<float>(requireNum(v, "img_cfg_scale"));
+     [](SdGenConfig& cfg, const picojson::value& val) {
+       cfg.imgCfgScale = static_cast<float>(requireNum(val, "img_cfg_scale"));
      }},
 
     // -- Reproducibility
     // ---------------------------------------------------------
 
     {"seed",
-     [](SdGenConfig& c, const picojson::value& v) {
-       c.seed = static_cast<int64_t>(requireNum(v, "seed"));
+     [](SdGenConfig& cfg, const picojson::value& val) {
+       cfg.seed = static_cast<int64_t>(requireNum(val, "seed"));
      }},
 
     // -- Batching
     // ----------------------------------------------------------------
 
     {"batch_count",
-     [](SdGenConfig& c, const picojson::value& v) {
-       int b = static_cast<int>(requireNum(v, "batch_count"));
-       if (b <= 0)
+     [](SdGenConfig& cfg, const picojson::value& val) {
+       int batchSize = static_cast<int>(requireNum(val, "batch_count"));
+       if (batchSize <= 0) {
          throw StatusError(
              general_error::InvalidArgument, "batch_count must be > 0");
-       c.batchCount = b;
+       }
+       cfg.batchCount = batchSize;
      }},
 
     // -- img2img
     // -----------------------------------------------------------------
 
     {"strength",
-     [](SdGenConfig& c, const picojson::value& v) {
-       float s = static_cast<float>(requireNum(v, "strength"));
-       if (s < 0.0f || s > 1.0f)
+     [](SdGenConfig& cfg, const picojson::value& val) {
+       float strength = static_cast<float>(requireNum(val, "strength"));
+       if (strength < 0.0F || strength > 1.0F) {
          throw StatusError(
              general_error::InvalidArgument,
-             "strength must be in [0, 1], got: " + std::to_string(s));
-       c.strength = s;
+             "strength must be in [0, 1], got: " + std::to_string(strength));
+       }
+       cfg.strength = strength;
      }},
 
-    // clip_skip -- skip last N CLIP layers. Used by SD1.x / SD2.x fine-tunes.
-    // -1 = auto (1 for SD1, 2 for SD2). Ignored for FLUX.
+    // clip_skip -- skip last N CLIP layers. Used by SD2.x fine-tunes.
+    // -1 = auto (SD2 default is 2). Ignored for FLUX.
     {"clip_skip",
-     [](SdGenConfig& c, const picojson::value& v) {
-       c.clipSkip = static_cast<int>(requireNum(v, "clip_skip"));
+     [](SdGenConfig& cfg, const picojson::value& val) {
+       cfg.clipSkip = static_cast<int>(requireNum(val, "clip_skip"));
      }},
 
     // -- VAE tiling
     // --------------------------------------------------------------
 
     {"vae_tiling",
-     [](SdGenConfig& c, const picojson::value& v) {
-       if (!v.is<bool>())
+     [](SdGenConfig& cfg, const picojson::value& val) {
+       if (!val.is<bool>()) {
          throw StatusError(
              general_error::InvalidArgument, "vae_tiling must be a boolean");
-       c.vaeTiling = v.get<bool>();
+       }
+       cfg.vaeTiling = val.get<bool>();
      }},
 
     // -- Multi-reference (FLUX/FLUX2 fusion) ------------------------------
@@ -335,41 +353,44 @@ const SdGenHandlersMap SD_GEN_HANDLERS = {
     // auto_resize_ref_image: when true (default), each ref image is resized to
     //   the target width/height before being VAE-encoded.
     {"increase_ref_index",
-     [](SdGenConfig& c, const picojson::value& v) {
-       if (!v.is<bool>())
+     [](SdGenConfig& cfg, const picojson::value& val) {
+       if (!val.is<bool>()) {
          throw StatusError(
              general_error::InvalidArgument,
              "increase_ref_index must be a boolean");
-       c.increaseRefIndex = v.get<bool>();
+       }
+       cfg.increaseRefIndex = val.get<bool>();
      }},
 
     {"auto_resize_ref_image",
-     [](SdGenConfig& c, const picojson::value& v) {
-       if (!v.is<bool>())
+     [](SdGenConfig& cfg, const picojson::value& val) {
+       if (!val.is<bool>()) {
          throw StatusError(
              general_error::InvalidArgument,
              "auto_resize_ref_image must be a boolean");
-       c.autoResizeRefImage = v.get<bool>();
+       }
+       cfg.autoResizeRefImage = val.get<bool>();
      }},
 
     // vae_tile_size accepts either an integer (applied to both axes) or "WxH"
     // string.
     {"vae_tile_size",
-     [](SdGenConfig& c, const picojson::value& v) {
-       auto [w, h] = parseVaeTileSize(v);
-       c.vaeTileSizeX = w;
-       c.vaeTileSizeY = h;
+     [](SdGenConfig& cfg, const picojson::value& val) {
+       auto [tileW, tileH] = parseVaeTileSize(val);
+       cfg.vaeTileSizeX = tileW;
+       cfg.vaeTileSizeY = tileH;
      }},
 
     {"vae_tile_overlap",
-     [](SdGenConfig& c, const picojson::value& v) {
-       float overlap = static_cast<float>(requireNum(v, "vae_tile_overlap"));
-       if (overlap < 0.0f || overlap >= 1.0f)
+     [](SdGenConfig& cfg, const picojson::value& val) {
+       float overlap = static_cast<float>(requireNum(val, "vae_tile_overlap"));
+       if (overlap < 0.0F || overlap >= 1.0F) {
          throw StatusError(
              general_error::InvalidArgument,
              "vae_tile_overlap must be in [0, 1), got: " +
                  std::to_string(overlap));
-       c.vaeTileOverlap = overlap;
+       }
+       cfg.vaeTileOverlap = overlap;
      }},
 
     // -- Step-caching
@@ -378,27 +399,27 @@ const SdGenHandlersMap SD_GEN_HANDLERS = {
     // that sets both the mode and sensible threshold defaults.
 
     {"cache_mode",
-     [](SdGenConfig& c, const picojson::value& v) {
-       c.cacheMode = parseCacheMode(requireStr(v, "cache_mode"));
+     [](SdGenConfig& cfg, const picojson::value& val) {
+       cfg.cacheMode = parseCacheMode(requireStr(val, "cache_mode"));
      }},
 
     // cache_preset -- shorthand for "easycache + threshold".
     {"cache_preset",
-     [](SdGenConfig& c, const picojson::value& v) {
+     [](SdGenConfig& cfg, const picojson::value& val) {
        // Approximate threshold values mirroring the stable-diffusion.cpp CLI
        // presets:  slow ~= 0.60 (~10% speed-up)  medium ~= 0.40 (~25%)
        //           fast ~= 0.25 (~40%)            ultra  ~= 0.15 (fastest)
        using Preset = std::pair<sd_cache_mode_t, float>;
        static const std::unordered_map<std::string, Preset> presets{
-           {"slow", {SD_CACHE_EASYCACHE, 0.60f}},
-           {"medium", {SD_CACHE_EASYCACHE, 0.40f}},
-           {"fast", {SD_CACHE_EASYCACHE, 0.25f}},
-           {"ultra", {SD_CACHE_EASYCACHE, 0.15f}},
+           {"slow", {SD_CACHE_EASYCACHE, 0.60F}},
+           {"medium", {SD_CACHE_EASYCACHE, 0.40F}},
+           {"fast", {SD_CACHE_EASYCACHE, 0.25F}},
+           {"ultra", {SD_CACHE_EASYCACHE, 0.15F}},
        };
-       const auto preset = requireStr(v, "cache_preset");
-       if (auto it = presets.find(preset); it != presets.end()) {
-         c.cacheMode = it->second.first;
-         c.cacheThreshold = it->second.second;
+       const auto preset = requireStr(val, "cache_preset");
+       if (auto iter = presets.find(preset); iter != presets.end()) {
+         cfg.cacheMode = iter->second.first;
+         cfg.cacheThreshold = iter->second.second;
        } else {
          throw StatusError(
              general_error::InvalidArgument,
@@ -409,33 +430,34 @@ const SdGenHandlersMap SD_GEN_HANDLERS = {
     // cache_threshold -- direct override for reuse_threshold; 0 = library
     // default.
     {"cache_threshold",
-     [](SdGenConfig& c, const picojson::value& v) {
-       c.cacheThreshold = static_cast<float>(requireNum(v, "cache_threshold"));
+     [](SdGenConfig& cfg, const picojson::value& val) {
+       cfg.cacheThreshold =
+           static_cast<float>(requireNum(val, "cache_threshold"));
      }},
 
     // ── Post-generation ESRGAN upscale
     // ──────────────────────────────────────
 
     {"upscale",
-     [](SdGenConfig& c, const picojson::value& v) {
-       if (v.is<bool>()) {
-         c.upscale = v.get<bool>();
-         c.upscaleRepeats = 1;
+     [](SdGenConfig& cfg, const picojson::value& val) {
+       if (val.is<bool>()) {
+         cfg.upscale = val.get<bool>();
+         cfg.upscaleRepeats = 1;
          return;
        }
 
-       if (!v.is<picojson::object>()) {
+       if (!val.is<picojson::object>()) {
          throw StatusError(
              general_error::InvalidArgument,
              "upscale must be a boolean or an object");
        }
 
-       c.upscale = true;
-       c.upscaleRepeats = 1;
+       cfg.upscale = true;
+       cfg.upscaleRepeats = 1;
 
-       const auto& obj = v.get<picojson::object>();
-       if (auto it = obj.find("repeats"); it != obj.end()) {
-         c.upscaleRepeats = parseUpscaleRepeats(it->second);
+       const auto& obj = val.get<picojson::object>();
+       if (auto iter = obj.find("repeats"); iter != obj.end()) {
+         cfg.upscaleRepeats = parseUpscaleRepeats(iter->second);
        }
      }},
 
@@ -445,8 +467,8 @@ const SdGenHandlersMap SD_GEN_HANDLERS = {
 
 void applySdGenHandlers(SdGenConfig& config, const picojson::object& obj) {
   for (const auto& [key, value] : obj) {
-    if (auto it = SD_GEN_HANDLERS.find(key); it != SD_GEN_HANDLERS.end()) {
-      it->second(config, value);
+    if (auto iter = SD_GEN_HANDLERS.find(key); iter != SD_GEN_HANDLERS.end()) {
+      iter->second(config, value);
     }
     // Unknown keys are silently ignored for forward compatibility.
   }

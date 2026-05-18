@@ -7,8 +7,8 @@ import { withRequestContext } from "@/server/bare/runtime/with-request-context";
 // -----------------------------------------------------------------------------
 // withRequestContext — handler-side per-request logger wrapper.
 //
-// Covers the M3a brief's Deliverable 3 acceptance criteria for the
-// `withRequestContext` helper:
+// Covers the acceptance criteria for the `withRequestContext`
+// helper:
 //   - Every emit (debug/info/warn/error/trace) gets prefixed with
 //     `[request-lifecycle <kind> requestId=<id> modelId=<id>]`.
 //   - The prefix shape drops `modelId=...` when the request has no

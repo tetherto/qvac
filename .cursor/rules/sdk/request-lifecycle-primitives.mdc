@@ -16,7 +16,7 @@ Server-side long-running operations (`completion`, `embeddings`, `transcribe`, `
 - **`RequestContext`** — per-request handle bundling `requestId`, `kind`, `modelId`, `signal`, `scope`, `state`.
 - **`RequestRegistry`** — module-scoped registry that mints contexts via `begin(...)` and routes `cancel(...)` by `requestId` or `modelId`.
 
-The contract below applies to every cancellable server-side handler. The truth table further down ("Truth table for built-in plugins") tracks each handler's addon-level cancel surface; the dispatch-level table ("What's on the registry today") tracks which `RequestKind`s are currently routed through the registry. Kinds not on the registry use the broad-cancel fallback in `server/bare/ops/cancel.ts`.
+The contract below applies to every cancellable server-side handler. The truth table further down ("Truth table for built-in plugins") tracks each handler's addon-level cancel surface; the dispatch-level table ("What's on the registry today") tracks which `RequestKind`s are currently routed through the registry. As of 0.11.0 every handler in the SDK is registered — the legacy pre-registry addon-cancel fallback in `server/bare/ops/cancel.ts` has been removed.
 
 ## Canonical Handler Shape
 
@@ -244,7 +244,7 @@ The truth table above describes the addon-level capability for plugin handlers. 
 | `downloadAsset`   | `server/rpc/handlers/download-asset.ts`                          | Hard (signal threaded to `resolveModelPath`)                  | Per-`requestId` cancel preserves the content-addressed dedup in `download-manager.ts` — two subscribers on the same `downloadKey` share one transfer, and the transfer aborts only when the **last** subscriber leaves. |
 | `rag`             | `server/rpc/handlers/rag.ts`                                     | Soft (workspace-bound; ingest/saveEmbeddings/reindex)         | Dispatcher-level pre-emption: starting a new RAG op on a workspace cancels the prior in-flight op on the same workspace **before** `registry.begin(...)`. Workspace admission lives in the dispatcher rather than as a registry policy primitive. |
 
-Kinds **not** in this table (e.g. `textToSpeech`, `ocr`, `diffusion`, `upscale`) still use the broad-cancel fallback in `server/bare/ops/cancel.ts`.
+Kinds **not** in this table (e.g. `textToSpeech`, `ocr`, `diffusion`, `upscale`) declare `cancel: { scope: "none" }` at the addon level — they do not expose a hard mid-decode abort surface but still respect `cancel({ requestId })` and `cancel({ modelId })` at the registry layer (the in-flight call yields when `ctx.signal.aborted` flips on the next yield point). The broad-cancel path is a single registry walk; the per-kind fallback was removed in 0.11.0.
 
 
 ## Concurrency Policy
@@ -361,11 +361,17 @@ await sdk.cancel({ requestId: op.requestId });
 Cancel every in-flight request matching a `modelId` — for model unload, app shutdown, admin sweeps. Kept stable from pre-0.11.0:
 
 ```typescript
+// Generic broad-cancel — preferred shape going forward (0.11.0+).
+await sdk.cancel({ modelId });
+await sdk.cancel({ modelId, kind: "completion" });
+await sdk.cancel({ modelId, kind: "embeddings" });
+
+// Legacy per-kind sugars — still supported via the client wrapper.
 await sdk.cancel({ operation: "inference", modelId });
 await sdk.cancel({ operation: "embeddings", modelId });
 ```
 
-Internally, both paths land on `RequestRegistry.cancel(...)`. The broad path falls back to `addon.cancel()` for handler kinds that haven't been registry-migrated yet — see the "What's on the registry today" table above for the current set of registry-routed kinds.
+Internally every path lands on `RequestRegistry.cancel(...)`. The legacy pre-registry addon-cancel fallback in `server/bare/ops/cancel.ts` was removed in 0.11.0 — every handler is now on the registry, so a broad cancel is one registry walk and nothing else. See the "What's on the registry today" table above; it lists "all kinds" because the migration is complete in 0.11.0.
 
 ## Decorated-Promise Pattern
 
