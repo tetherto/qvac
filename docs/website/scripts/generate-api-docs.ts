@@ -3,8 +3,10 @@
  * Generate the API summary MDX for one SDK version.
  *
  * Output target:
- *   - latest:  content/docs/sdk/api/index.mdx
- *   - older:   content/docs/sdk/api/v<X.Y.Z>.mdx
+ *   - latest:  content/docs/reference/api/index.mdx
+ *   - older:   content/docs/reference/api/v<X.Y.Z>.mdx
+ *   - --target=<file>: content/docs/reference/api/<file> (override; used by
+ *     the patch-archived flow to write into a renamed sibling).
  *
  * The pipeline is:
  *   1. Phase 1 — Extract: TypeDoc walks the SDK and writes api-data.json
@@ -15,13 +17,25 @@
  *      with `--no-ai` and disabled by default in CI to keep output reproducible.
  *   3. Phase 2 — Render: writes a single MDX through `single-page.njk`.
  *
+ * Title-only mode (`--title-only`) skips Phase 1 + Phase 1.5 + the full
+ * render. It opens the existing target MDX, rewrites only the frontmatter
+ * `title:` line to the new version label, and keeps the body verbatim.
+ * Used by the patch flow so we never re-run TypeDoc for a patch (patches
+ * must not change the public API surface — that would be a minor).
+ *
  * Usage:
  *   bun run scripts/generate-api-docs.ts <version> [--no-ai] [--force-extract]
  *   bun run scripts/generate-api-docs.ts <version> --latest
+ *   bun run scripts/generate-api-docs.ts <version> --title-only [--latest|--target=<file>]
  *
  * Flags:
  *   --latest          Mark this version as the latest. Writes to index.mdx
  *                     instead of v<X.Y.Z>.mdx.
+ *   --target=<file>   Override the output filename inside the API section
+ *                     directory (e.g. `--target=v0.8.2.mdx`). Mutually
+ *                     exclusive with `--latest`.
+ *   --title-only      Skip TypeDoc + AI + render. Only rewrite the
+ *                     frontmatter title of the existing target file.
  *   --no-ai           Skip the AI augmentation phase (CI default).
  *   --force-extract   Bypass mtime-based extraction cache.
  *
@@ -38,6 +52,7 @@ import * as path from "path";
 import { fileURLToPath } from "node:url";
 import { extractApiData } from "./api-docs/extract.js";
 import { renderApiDocs } from "./api-docs/render.js";
+import { rewriteFrontmatterTitleLine } from "./lib/release-shared.js";
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const API_DATA_PATH = path.join(SCRIPT_DIR, "api-docs", "api-data.json");
@@ -54,6 +69,8 @@ interface GenerateOptions {
   isLatest: boolean;
   forceExtract: boolean;
   noAi: boolean;
+  titleOnly: boolean;
+  target: string | null;
 }
 
 async function generateApiDocs(version: string, options: GenerateOptions) {
@@ -63,7 +80,38 @@ async function generateApiDocs(version: string, options: GenerateOptions) {
     );
   }
 
+  if (options.isLatest && options.target) {
+    throw new Error(
+      `--latest and --target=<file> are mutually exclusive: --latest implies index.mdx`,
+    );
+  }
+
   const versionLabel = options.isLatest ? `v${version} (latest)` : `v${version}`;
+
+  const apiDir = path.join(
+    DOCS_WEBSITE_DIR,
+    "content",
+    "docs",
+    "reference",
+    "api",
+  );
+
+  const outputFile = path.join(
+    apiDir,
+    options.target ??
+      (options.isLatest ? "index.mdx" : `v${version}.mdx`),
+  );
+
+  if (options.titleOnly) {
+    console.log(`📝 Title-only update for ${versionLabel}...`);
+    console.log(`   Target: ${outputFile}`);
+    await rewriteFrontmatterTitle(outputFile, versionLabel);
+    await smokeTest(outputFile);
+    console.log(`✅ Title-only update complete (${versionLabel})`);
+    console.log(`   Location: ${outputFile}`);
+    return;
+  }
+
   console.log(`📚 Generating API summary for ${versionLabel}...`);
   console.log(`   SDK path: ${SDK_PATH}`);
 
@@ -93,13 +141,6 @@ async function generateApiDocs(version: string, options: GenerateOptions) {
     }
   }
 
-  // Phase 2: Render to a single MDX file.
-  const apiDir = path.join(DOCS_WEBSITE_DIR, "content", "docs", "sdk", "api");
-  const outputFile = path.join(
-    apiDir,
-    options.isLatest ? "index.mdx" : `v${version}.mdx`,
-  );
-
   await renderApiDocs(API_DATA_PATH, {
     versionLabel,
     outputFile,
@@ -109,6 +150,33 @@ async function generateApiDocs(version: string, options: GenerateOptions) {
 
   console.log(`✅ API docs generation complete for ${versionLabel}`);
   console.log(`   Location: ${outputFile}`);
+}
+
+/**
+ * Rewrite the `title:` line inside the frontmatter block of an existing
+ * MDX file without touching the body. Used by `--title-only` so a patch
+ * release bumps the displayed version label without re-running TypeDoc.
+ *
+ * The full title format is kept in lockstep with the title template in
+ * `scripts/api-docs/templates/single-page.njk` so title-only patches
+ * produce byte-identical headers to a full render at the same version.
+ *
+ * Thin wrapper around `rewriteFrontmatterTitleLine` from
+ * `lib/release-shared.ts`: the wrapper owns the "API Summary — ..." prefix
+ * so the lib stays prefix-agnostic and the release-notes generator can
+ * reuse the same helper with its own prefix.
+ *
+ * Exported so unit tests can validate the body-preserving behaviour
+ * without spinning up the full TypeDoc pipeline.
+ */
+export async function rewriteFrontmatterTitle(
+  filePath: string,
+  versionLabel: string,
+): Promise<void> {
+  await rewriteFrontmatterTitleLine(
+    filePath,
+    `API Summary — ${versionLabel}`,
+  );
 }
 
 /**
@@ -143,35 +211,54 @@ async function smokeTest(filePath: string): Promise<void> {
   console.log(`✅ Smoke test passed`);
 }
 
-// CLI
-const args = process.argv.slice(2);
-const versionArg = args.find((arg) => !arg.startsWith("--"));
-const isLatest = args.includes("--latest");
-const forceExtract = args.includes("--force-extract");
-const noAi = args.includes("--no-ai");
+// CLI — only runs when this module is invoked directly (not when imported
+// for unit tests). `import.meta.main` is true under both Bun and Node 24+.
+if (import.meta.main) {
+  const args = process.argv.slice(2);
+  const versionArg = args.find((arg) => !arg.startsWith("--"));
+  const isLatest = args.includes("--latest");
+  const forceExtract = args.includes("--force-extract");
+  const noAi = args.includes("--no-ai");
+  const titleOnly = args.includes("--title-only");
+  const targetFlag = args.find((arg) => arg.startsWith("--target="));
+  const target = targetFlag ? targetFlag.slice("--target=".length) : null;
 
-if (!versionArg) {
-  console.error("❌ Error: Version argument required\n");
-  console.error("Usage:");
-  console.error("  bun run scripts/generate-api-docs.ts <version> [flags]\n");
-  console.error("Flags:");
-  console.error(
-    "  --latest          Write to index.mdx instead of v<version>.mdx",
-  );
-  console.error("  --no-ai           Skip AI augmentation (CI default)");
-  console.error(
-    "  --force-extract   Bypass mtime cache and re-run TypeDoc extraction\n",
-  );
-  console.error("Examples:");
-  console.error("  bun run scripts/generate-api-docs.ts 0.9.1 --latest");
-  console.error("  bun run scripts/generate-api-docs.ts 0.8.0 --no-ai");
-  process.exit(1);
-} else {
-  generateApiDocs(versionArg, { isLatest, forceExtract, noAi }).catch(
-    (error) => {
+  if (!versionArg) {
+    console.error("❌ Error: Version argument required\n");
+    console.error("Usage:");
+    console.error("  bun run scripts/generate-api-docs.ts <version> [flags]\n");
+    console.error("Flags:");
+    console.error(
+      "  --latest          Write to index.mdx instead of v<version>.mdx",
+    );
+    console.error(
+      "  --target=<file>   Override output filename inside api/ (mutually exclusive with --latest)",
+    );
+    console.error(
+      "  --title-only      Rewrite frontmatter title in-place (skips TypeDoc + render)",
+    );
+    console.error("  --no-ai           Skip AI augmentation (CI default)");
+    console.error(
+      "  --force-extract   Bypass mtime cache and re-run TypeDoc extraction\n",
+    );
+    console.error("Examples:");
+    console.error("  bun run scripts/generate-api-docs.ts 0.9.1 --latest");
+    console.error("  bun run scripts/generate-api-docs.ts 0.8.0 --no-ai");
+    console.error(
+      "  bun run scripts/generate-api-docs.ts 0.8.2 --target=v0.8.2.mdx --title-only",
+    );
+    process.exit(1);
+  } else {
+    generateApiDocs(versionArg, {
+      isLatest,
+      forceExtract,
+      noAi,
+      titleOnly,
+      target,
+    }).catch((error) => {
       console.error("❌ Error generating API docs:", error.message);
       if (error.stack) console.error("\nStack trace:", error.stack);
       process.exit(1);
-    },
-  );
+    });
+  }
 }
