@@ -41,7 +41,9 @@ namespace qvac_lib_inference_addon_sd {
  * @throws qvac_errors::StatusError on: numFrames == 0, fps <= 0, unsupported
  *         channel count, or JPEG encode failure.
  */
-std::vector<uint8_t> encodeFramesToAvi(const sd_image_t *frames, int numFrames,
-                                       int fps, int jpegQuality = 90);
+std::vector<uint8_t> encodeFramesToAvi(
+    const sd_image_t* frames, int numFrames, int fps,
+    // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
+    int jpegQuality = 90);
 
 } // namespace qvac_lib_inference_addon_sd
