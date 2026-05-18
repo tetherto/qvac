@@ -65,6 +65,7 @@ async function setupModel (t) {
       vae_on_cpu: isAndroid,
       threads: 4,
       prediction: 'v',
+      diffusion_fa: true,
       verbosity: '2'
     },
     logger: console
@@ -206,7 +207,11 @@ test('run() before load() throws clear initialization error', { timeout: 60000 }
 
   const model = new ImgStableDiffusion({
     files: { model: path.join(modelDir, MODEL.name) },
-    config: { device: useCpu ? 'cpu' : 'gpu', threads: 4 },
+    config: {
+      device: useCpu ? 'cpu' : 'gpu',
+      threads: 4,
+      diffusion_fa: true
+    },
     logger: console,
     opts: { stats: true }
   })

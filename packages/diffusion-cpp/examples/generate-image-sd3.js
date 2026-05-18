@@ -64,6 +64,7 @@ async function main () {
     },
     config: {
       threads: 4,
+      diffusion_fa: true,
       // SD3 uses flow-matching. The safetensors metadata allows auto-detection,
       // but we set these explicitly as safety overrides.
       prediction: 'flow', // FLOW_PRED — SD3 flow-matching

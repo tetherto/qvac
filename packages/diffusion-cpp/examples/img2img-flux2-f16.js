@@ -38,7 +38,8 @@ async function main () {
     config: {
       threads: 4,
       device: 'gpu',
-      prediction: 'flux2_flow'
+      prediction: 'flux2_flow',
+      diffusion_fa: true
     },
     logger: console
   })
@@ -72,6 +73,8 @@ async function main () {
       prompt: 'a modern tech CEO version of this person, professional headshot, studio lighting',
       negative_prompt: 'blurry, low quality, distorted',
       init_image: initImage,
+      width: 1024,
+      height: 1024,
       strength: STRENGTH,
       cfg_scale: 1.0,
       steps: STEPS,

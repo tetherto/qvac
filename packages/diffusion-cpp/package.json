@@ -1,6 +1,6 @@
 {
   "name": "@qvac/diffusion-cpp",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "stable-diffusion.cpp addon for qvac image/video generation",
   "addon": true,
   "scripts": {
@@ -13,6 +13,9 @@
     "generate:esrgan": "bare examples/generate-image-esrgan-upscale.js",
     "generate:sdxl": "bare examples/generate-image-sdxl.js",
     "generate:sd3": "bare examples/generate-image-sd3.js",
+    "generate:video": "bare examples/generate-video-wan.js",
+    "generate:img2vid": "bare examples/img2vid-wan.js",
+    "generate:flf2vid": "bare examples/flf2vid-wan.js",
     "build:pack": "mkdir -p dist && npm pack --pack-destination dist",
     "mobile:copy-prebuilds": "cp -r prebuilds/android-arm64 prebuilds/android-ia32 || echo 'Warning: Failed to copy sd prebuilds to android-ia32'; cp -r prebuilds/android-arm64 prebuilds/android-arm || echo 'Warning: Failed to copy sd prebuilds to android-arm'; cp -r prebuilds/android-arm64 prebuilds/android-x64 || echo 'Warning: Failed to copy sd prebuilds to android-x64'; cp -r prebuilds/ios-arm64 prebuilds/ios-arm64-simulator 2>/dev/null || echo 'iOS prebuilds already present'; cp -r prebuilds/ios-arm64 prebuilds/ios-x64-simulator 2>/dev/null || echo 'iOS prebuilds already present'",
     "lint": "standard --ignore \"addon/**\"",
@@ -44,11 +47,13 @@
   "files": [
     "binding.js",
     "index.js",
+    "video.js",
     "addon.js",
     "addonLogging.js",
     "addonLogging.d.ts",
     "prebuilds",
     "index.d.ts",
+    "video.d.ts",
     "LICENSE",
     "NOTICE"
   ],
@@ -90,13 +95,18 @@
       "types": "./index.d.ts",
       "default": "./index.js"
     },
+    "./video": {
+      "types": "./video.d.ts",
+      "default": "./video.js"
+    },
     "./addonLogging": {
       "types": "./addonLogging.d.ts",
       "default": "./addonLogging.js"
     },
     "./addonLogging.js": "./addonLogging.js",
     "./addon.js": "./addon.js",
-    "./binding.js": "./binding.js"
+    "./binding.js": "./binding.js",
+    "./video.js": "./video.js"
   },
   "types": "index.d.ts"
 }

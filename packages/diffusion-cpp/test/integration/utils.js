@@ -228,6 +228,19 @@ function isPng (buf) {
   )
 }
 
+const test = require('brittle')
+
+function safeTest (name, opts, fn) {
+  test(name, opts, async (t) => {
+    try {
+      await fn(t)
+    } catch (err) {
+      console.error(err)
+      t.fail(`${name}: ${err.message}`)
+    }
+  })
+}
+
 module.exports = {
   GeneratedImageSaver,
   ensureModel,
@@ -236,5 +249,6 @@ module.exports = {
   makeOutputCollector,
   detectPlatform,
   setupJsLogger,
-  isPng
+  isPng,
+  safeTest
 }
