@@ -1,5 +1,5 @@
 ---
-title: API Summary — v0.11.0 (latest)
+title: API Summary — v0.10.0
 description: One-page reference of all public functions and objects exported by @qvac/sdk
 ---
 
@@ -12,7 +12,7 @@ description: One-page reference of all public functions and objects exported by 
 > **Fields intentionally omitted**: parameter descriptions, return field descriptions
 > (covered by IDE hover and `.d.ts` declarations).
 >
-> **Scope**: 39 functions in `packages/sdk/client/api/` plus the `profiler` object.
+> **Scope**: 38 functions in `packages/sdk/client/api/` plus the `profiler` object.
 
 ---
 
@@ -22,43 +22,49 @@ description: One-page reference of all public functions and objects exported by 
 
 Cancels an ongoing operation.
 
-Two cancel paths are supported:
- - **By `requestId`** (primary) — pass the `requestId` exposed on
-   the result of a long-running call (`completion(...)`,
-   `loadModel(...)`, `downloadAsset(...)`, `embed(...)`,
-   `transcribe(...)`, `ragIngest(...)`, etc.) to cancel exactly
-   that request. A cancel that races the originating call is
-   recorded and applied retroactively when the begin arrives.
- - **Broad by `modelId`** (escape hatch) — `{ modelId, kind? }`
-   cancels every in-flight request on that model. Useful for
-   model unload, app shutdown, or admin sweeps where the caller
-   doesn't have a `requestId` to hand.
-
-The legacy `{ operation: "inference" | "embeddings", modelId }`
-sugars remain callable for source compatibility. For migration off
-the removed `{ operation: "downloadAsset" | "rag" }` shapes, see
-the 0.11.0 changelog / release notes.
-
 **Signature**:
 
 ```ts
-function cancel(params: CancelClientInput): Promise<void>;
+function cancel(params: CancelParams): Promise<void>;
 ```
 
 **Throws**:
 
-- `QvacErrorBase` — When the response type is invalid or the cancellation fails.
+- `QvacErrorBase` — When the response type is invalid or when the cancellation fails
 
 **Examples**:
 ```ts
-// Cancel by requestId (primary path)
-const run = completion({ ... });
-await cancel({ requestId: run.requestId });
+// Cancel inference
+await cancel({ operation: "inference", modelId: "model-123" });
 ```
 
 ```ts
-// Broad-cancel every inference running on a model
-await cancel({ modelId: "model-123", kind: "completion" });
+// Pause download (preserves partial file for automatic resume)
+await cancel({ operation: "downloadAsset", downloadKey: "download-key" });
+```
+
+```ts
+// Cancel download completely (deletes partial file)
+await cancel({ operation: "downloadAsset", downloadKey: "download-key", clearCache: true });
+```
+
+```ts
+// Cancel delegated remote download
+await cancel({
+  operation: "downloadAsset",
+  downloadKey: "download-key",
+  delegate: { providerPublicKey: "peerHex" },
+});
+```
+
+```ts
+// Cancel RAG operation on default workspace
+await cancel({ operation: "rag" });
+```
+
+```ts
+// Cancel RAG operation on specific workspace
+await cancel({ operation: "rag", workspace: "my-workspace" });
 ```
 
 ---
@@ -177,52 +183,6 @@ const { outputs } = diffusion({ modelId, prompt: "oil painting style", init_imag
 // modelConfig: { prediction: "flux2_flow" } })`).
 const { outputs } = diffusion({ modelId, prompt: "turn into watercolor", init_image: initImage });
 
-// FLUX.2 multi-reference fusion
-// IMPORTANT: requires the model loaded with `modelConfig: { prediction: "flux2_flow" }`
-// and a Qwen3 text encoder via `llmModelSrc` (same loadModel requirements as the
-// FLUX.2 img2img example above). `init_image` and `init_images` are mutually
-// exclusive — pass one or the other, not both.
-const refA = fs.readFileSync("scientist-a.jpg");
-const refB = fs.readFileSync("scientist-b.jpg");
-const { outputs } = diffusion({
-  modelId,
-  prompt: "a portrait using most visual traits from @image1 and the eyes from @image2",
-  init_images: [refA, refB],
-  width: 768,
-  height: 768,
-});
-
-// LoRA adapter for this generation (absolute path required).
-// Persistence across subsequent diffusion() calls is controlled at
-// loadModel time via `modelConfig.lora_apply_mode`.
-const { outputs } = diffusion({
-  modelId,
-  prompt: "a watercolor cat",
-  lora: "/home/user/loras/watercolor.safetensors",
-});
-
-// ESRGAN upscale; requires the model to be loaded with `modelConfig.upscaler.model_src` set.
-const { outputs: singleOutputs } = diffusion({
-  modelId,
-  prompt: "a fox portrait",
-  width: 128,
-  height: 128,
-  upscale: true, // one native-scale pass
-});
-const single = await singleOutputs;
-fs.writeFileSync("upscaled.png", single[0]);
-
-// Repeat upscale passes when needed.
-const { outputs: hiresOutputs } = diffusion({
-  modelId,
-  prompt: "a fox portrait",
-  width: 128,
-  height: 128,
-  upscale: { repeats: 2 },
-});
-const hires = await hiresOutputs;
-fs.writeFileSync("hires.png", hires[0]);
-
 // With progress tracking
 const { progressStream, outputs } = diffusion({ modelId, prompt: "a cat" });
 for await (const { step, totalSteps } of progressStream) {
@@ -244,7 +204,7 @@ Use this for download-only operations instead of loadModel for better semantic c
 **Signature**:
 
 ```ts
-function downloadAsset(options: DownloadAssetOptions, rpcOptions?: RPCOptions): Promise<string> & { requestId: string };
+function downloadAsset(options: DownloadAssetOptions, rpcOptions?: RPCOptions): Promise<string>;
 ```
 
 **Throws**:
@@ -268,12 +228,6 @@ const assetId = await downloadAsset({
     console.log(`Downloaded: ${progress.percentage}%`);
   }
 });
-
-// Targeted cancel by requestId — grab the id synchronously, then
-// cancel before the download resolves.
-const op = downloadAsset({ assetSrc: "https://example.com/large.gguf" });
-setTimeout(() => cancel({ requestId: op.requestId }), 1000);
-await op; // rejects with `InferenceCancelledError`
 ```
 
 ---
@@ -288,7 +242,7 @@ Generates embeddings for a single text using a specified model.
 **Signature**:
 
 ```ts
-function embed(params: { modelId: string; text: string }, options?: RPCOptions): Promise<{ embedding: number[]; stats?: { backendDevice?: "gpu" | "cpu"; tokensPerSecond?: number; totalTime?: number; totalTokens?: number } }> & { requestId: string };
+function embed(params: { modelId: string; text: string }, options?: RPCOptions): Promise<{ embedding: number[]; stats?: EmbedStats }>;
 ```
 
 **Throws**:
@@ -301,7 +255,7 @@ Generates embeddings for multiple texts using a specified model.
 **Signature**:
 
 ```ts
-function embed(params: { modelId: string; text: string[] }, options?: RPCOptions): Promise<{ embedding: number[][]; stats?: { backendDevice?: "gpu" | "cpu"; tokensPerSecond?: number; totalTime?: number; totalTokens?: number } }> & { requestId: string };
+function embed(params: { modelId: string; text: string[] }, options?: RPCOptions): Promise<{ embedding: number[][]; stats?: EmbedStats }>;
 ```
 
 **Throws**:
@@ -460,7 +414,7 @@ otherwise falls back to a permissive shape.
 **Signature**:
 
 ```ts
-function loadModel(options: LoadModelDescriptorParam<S>, rpcOptions?: RPCOptions): Promise<string> & { requestId: string };
+function loadModel(options: LoadModelDescriptorParam<S>, rpcOptions?: RPCOptions): Promise<string>;
 ```
 
 **Throws**:
@@ -485,7 +439,7 @@ Otherwise, it uses a simple request-response pattern for faster execution.
 **Signature**:
 
 ```ts
-function loadModel(options: LoadModelOptions, rpcOptions?: RPCOptions): Promise<string> & { requestId: string };
+function loadModel(options: LoadModelOptions, rpcOptions?: RPCOptions): Promise<string>;
 ```
 
 **Throws**:
@@ -569,7 +523,7 @@ Loads a custom plugin model (any non-built-in `modelType` string).
 **Signature**:
 
 ```ts
-function loadModel(options: LoadCustomPluginModelOptions<T>, rpcOptions?: RPCOptions): Promise<string> & { requestId: string };
+function loadModel(options: LoadCustomPluginModelOptions<T>, rpcOptions?: RPCOptions): Promise<string>;
 ```
 
 #### Overload 4 — Hot-reload config
@@ -578,7 +532,7 @@ Hot-reloads configuration on an already loaded model.
 **Signature**:
 
 ```ts
-function loadModel(options: ReloadConfigOptions, rpcOptions?: RPCOptions): Promise<string> & { requestId: string };
+function loadModel(options: ReloadConfigOptions, rpcOptions?: RPCOptions): Promise<string>;
 ```
 
 **Throws**:
@@ -826,7 +780,7 @@ The workspace remains open until closed.
 **Signature**:
 
 ```ts
-function ragIngest(params: RagIngestParams, options?: RPCOptions): Promise<{ droppedIndices: number[]; processed: SaveEmbeddingsResult[] }> & { requestId: string };
+function ragIngest(params: RagIngestParams, options?: RPCOptions): Promise<{ processed: RagSaveEmbeddingsResult[]; droppedIndices: number[] }>;
 ```
 
 **Throws**:
@@ -895,7 +849,7 @@ For HyperDB, this is 16 documents by default. If there are insufficient document
 **Signature**:
 
 ```ts
-function ragReindex(params: RagReindexParams, options?: RPCOptions): Promise<ReindexResult> & { requestId: string };
+function ragReindex(params: RagReindexParams, options?: RPCOptions): Promise<RagReindexResult>;
 ```
 
 **Throws**:
@@ -937,7 +891,7 @@ The workspace remains open until closed.
 **Signature**:
 
 ```ts
-function ragSaveEmbeddings(params: RagSaveEmbeddingsParams, options?: RPCOptions): Promise<SaveEmbeddingsResult[]> & { requestId: string };
+function ragSaveEmbeddings(params: RagSaveEmbeddingsParams, options?: RPCOptions): Promise<RagSaveEmbeddingsResult[]>;
 ```
 
 **Throws**:
@@ -1211,7 +1165,7 @@ path or an audio buffer.
 **Signature**:
 
 ```ts
-function transcribe(params: TranscribeClientParams & { metadata: true }, options?: RPCOptions): Promise<{ append: boolean; endMs: number; id: number; startMs: number; text: string }[]> & { requestId: string };
+function transcribe(params: TranscribeClientParams & { metadata: true }, options?: RPCOptions): Promise<TranscribeSegment[]>;
 ```
 
 #### Overload 2
@@ -1221,7 +1175,7 @@ path or an audio buffer.
 **Signature**:
 
 ```ts
-function transcribe(params: TranscribeClientParams, options?: RPCOptions): Promise<string> & { requestId: string };
+function transcribe(params: TranscribeClientParams, options?: RPCOptions): Promise<string>;
 ```
 
 ---
@@ -1234,7 +1188,7 @@ removed in the next major version.
 Streaming transcription with upfront audio: sends full audio, yields text
 chunks as they arrive.
 
-Has 5 overloads.
+Has 4 overloads.
 
 #### Overload 1 — Upfront audio (deprecated)
 > ⚠️ **Deprecated**: Pass audio via `transcribe()` instead. This overload will be
@@ -1273,23 +1227,10 @@ time will throw a `TranscriptionFailedError`.
 **Signature**:
 
 ```ts
-function transcribeStream(params: TranscribeStreamClientParams & { emitVadEvents: true }, options?: RPCOptions): Promise<TranscribeStreamConversationSession>;
-```
-
-#### Overload 4 — Upfront audio (deprecated)
-> ⚠️ **Deprecated**: Pass audio via `transcribe()` instead. This overload will be
-removed in the next major version.
-
-Streaming transcription with upfront audio: sends full audio, yields text
-chunks as they arrive.
-
-**Signature**:
-
-```ts
 function transcribeStream(params: TranscribeStreamClientParams & { metadata: true }, options?: RPCOptions): Promise<TranscribeStreamMetadataSession>;
 ```
 
-#### Overload 5 — Upfront audio (deprecated)
+#### Overload 4 — Upfront audio (deprecated)
 > ⚠️ **Deprecated**: Pass audio via `transcribe()` instead. This overload will be
 removed in the next major version.
 
@@ -1353,11 +1294,10 @@ console.log(await response.text);
 
 Unloads a previously loaded model from the server.
 
-When the last model is unloaded (no more models remain), this function
-automatically closes the RPC connection on Node/Electron, allowing the
-process to exit naturally without requiring manual cleanup. On Bare the
-connection is left open by default so long-lived workers survive a routine
-unload; pass `autoClose: true` to opt in to closing.
+When no models or providers remain active, the SDK can auto-close the RPC
+connection so the host process exits naturally. The default flips by
+runtime: **on** for Node/Electron, **off** for Bare. Pass `autoClose` to
+override.
 
 **Signature**:
 
@@ -1369,46 +1309,16 @@ function unloadModel(params: UnloadModelParams): Promise<void>;
 
 - `QvacErrorBase` — When the response type is invalid or when the unload operation fails
 
----
-
-### `upscale`
-
-Runs standalone ESRGAN upscaling on an arbitrary PNG/JPEG image.
-
-The model must have been loaded with `modelType: "diffusion"` and
-`modelConfig.mode: "upscale"` — calling `upscale()` against a model
-loaded in default (`mode: "diffusion"`) mode throws
-`ModelOperationNotSupportedError` upfront.
-
-`outputs` always resolves to length 1: `repeats` runs N passes
-internally and emits a single final image at `source * scale^repeats`
-dimensions. The `Uint8Array[]` shape reserves headroom for future
-multi-output variants.
-
-**Signature**:
-
-```ts
-function upscale(params: UpscaleClientParams): UpscaleResult;
-```
-
-**Throws**:
-
-- `ModelOperationNotSupportedError` — If the model was not loaded
-  with `mode: "upscale"`.
-- `StreamEndedError` — If the RPC stream closes without emitting a
-  terminal `done` chunk.
-
 **Example**:
+
 ```ts
-const modelId = await loadModel(REALESRGAN_X4PLUS_ANIME_6B, {
-  modelType: "diffusion",
-  modelConfig: { mode: "upscale", upscaler: { tile_size: 128 } },
-});
-const pngBytes = fs.readFileSync("input.png");
-const { outputs, stats } = upscale({ modelId, image: pngBytes, repeats: 2 });
-const [upscaledPng] = await outputs;
-fs.writeFileSync("upscaled.png", upscaledPng);
-console.log(await stats);
+await unloadModel({ modelId });
+
+// Force close on Bare
+await unloadModel({ modelId, autoClose: true });
+
+// Keep the connection open on Node/Electron
+await unloadModel({ modelId, autoClose: false });
 ```
 
 ---
@@ -1498,7 +1408,6 @@ and read `error.code` / `error.cause`. Code ranges:
 | `CONFIG_VALIDATION_FAILED` | 50605 | Config validation failed: … |
 | `PEAR_WORKER_ENTRY_REQUIRED` | 50606 | No plugins registered. Pear apps must spawn … as the worker entry. Run \\ |
 | `MULTIPLE_SDK_INSTALLATIONS` | 50607 | Multiple QVAC SDK installations found: …. Remove all but one to avoid conflicts. |
-| `BUNDLE_VERIFICATION_FAILED` | 50609 | qvac verify bundle reported error-level issues for …. See the CLI output above for the failing addons/hosts; resolve them before shipping. |
 | `PROFILER_INVALID_CAPACITY` | 50800 | Ring buffer capacity must be at least … |
 
 ### Server errors
@@ -1536,10 +1445,6 @@ and read `error.code` / `error.cause`. Code ranges:
 | `INVALID_IMAGE_INPUT` | 52414 | Invalid image input type provided |
 | `TEXT_TO_SPEECH_STREAM_FAILED` | 52415 | Text-to-speech stream operation failed… |
 | `MODEL_OPERATION_NOT_SUPPORTED` | 52416 | Supported operations on this model: …. |
-| `REQUEST_ID_CONFLICT` | 52417 | Request id "…" is already in flight; refusing to overwrite the existing context |
-| `REQUEST_NOT_FOUND` | 52418 | No in-flight request with id "…" |
-| `INFERENCE_CANCELLED` | 52419 | Inference request "…" was cancelled before it could complete |
-| `REQUEST_REJECTED_BY_POLICY` | 52420 | Request "…" (kind: …, modelId: …) was rejected by registry concurrency policy: … |
 | `RAG_SAVE_FAILED` | 52800 | Failed to save embeddings… |
 | `RAG_SEARCH_FAILED` | 52801 | Failed to search embeddings… |
 | `RAG_DELETE_FAILED` | 52802 | Failed to delete embeddings… |
@@ -1577,7 +1482,6 @@ and read `error.code` / `error.cause`. Code ranges:
 | `FFMPEG_NOT_AVAILABLE` | 53500 | FFmpeg is not available on this system |
 | `AUDIO_PLAYER_FAILED` | 53501 | Audio player failed: … |
 | `INVALID_AUDIO_CHUNK_TYPE` | 53502 | Invalid audio chunk type |
-| `ASYNC_DISPOSE_UNAVAILABLE` | 53503 | Host runtime does not expose Symbol.asyncDispose; the SDK request-lifecycle primitives require ES2024 `using`/`asyncDispose` support. Verify your runtime (Bare/Expo/Node ≥ 20.4) and any polyfill registration. |
 | `DELEGATE_NO_FINAL_RESPONSE` | 53700 | No final response received from delegated provider |
 | `DELEGATE_CONNECTION_FAILED` | 53701 | Failed to connect to delegated provider: … |
 | `DELEGATE_PROVIDER_ERROR` | 53702 | Delegated provider error: … |
