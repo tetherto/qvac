@@ -164,11 +164,25 @@ jobs:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
+  run-mobile-integration-tests:
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    needs: [authorize, prebuild, label-gate]
+    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch')
+    uses: ./.github/workflows/integration-mobile-test-ocr-ggml.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      ref: ${{ github.event.pull_request.head.ref || github.ref }}
+
   merge-guard:
-    needs: [authorize, sanity-checks, prebuild, run-integration-tests, label-gate]
+    needs: [authorize, sanity-checks, prebuild, run-integration-tests, run-mobile-integration-tests, label-gate]
     if: always() && needs.label-gate.outputs.authorised == 'true'
     uses: ./.github/workflows/public-pr.yml
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
       build-status: ${{ needs.prebuild.result == 'success' }}
-      integration-tests-status: ${{ needs.run-integration-tests.result == 'success' }}
+      integration-tests-status: ${{ (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') && (needs.run-mobile-integration-tests.result == 'success' || needs.run-mobile-integration-tests.result == 'skipped') }}
