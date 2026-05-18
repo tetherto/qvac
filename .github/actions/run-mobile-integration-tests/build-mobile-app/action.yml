@@ -96,11 +96,6 @@ runs:
         echo "Mobile test files found:"
         ls -la test/mobile/*.cjs
 
-    # PR #2021 policy: skip global tooling installs on self-hosted
-    # runners. macOS-14 (github-hosted) needs `brew install ninja` for
-    # the iOS bare runtime build; future self-hosted Macs are expected
-    # to ship Ninja pre-installed (alongside Node + bare tooling +
-    # Expo + CocoaPods) so we just verify it on PATH.
     - name: Install Ninja build tool (iOS, github-hosted only)
       if: inputs.platform == 'iOS' && runner.environment == 'github-hosted'
       shell: bash
@@ -279,11 +274,6 @@ runs:
 
     # ---- iOS build path -----------------------------------------------------
 
-    # PR #2021 policy: only `sudo xcode-select` on github-hosted macOS,
-    # where /Applications hosts every available Xcode and the runner
-    # user has sudo. Self-hosted Macs are expected to be pre-pinned to
-    # the right Xcode (no global switch needed); we just verify SDK
-    # availability without mutating system state.
     - name: Set up Xcode version (iOS, github-hosted only)
       if: inputs.platform == 'iOS' && runner.environment == 'github-hosted'
       shell: bash
@@ -319,10 +309,6 @@ runs:
           exit 1
         fi
 
-    # PR #2021 policy: github-hosted macOS requires `sudo gem install`
-    # because system Ruby's gem dir isn't user-writable. Self-hosted
-    # Macs are expected to ship CocoaPods (and pinned Ruby) pre-installed;
-    # we just verify pod is on PATH.
     - name: Install CocoaPods (iOS, github-hosted only)
       if: inputs.platform == 'iOS' && runner.environment == 'github-hosted'
       shell: bash
