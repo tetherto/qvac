@@ -34,7 +34,7 @@ You can load any [`llama.cpp`](https://github.com/ggml-org/llama.cpp)-compatible
 
 ## Features
 
-* Event stream: `completion()` exposes a single ordered `events` async iterable plus an aggregated `final` promise. Events are discriminated by `type` — `contentDelta`, `thinkingDelta`, `toolCall`, `toolError`, `completionStats`, `completionDone`, `rawDelta`.
+* Event stream: `completion()` exposes a single ordered `events` async iterable plus an aggregated `final` promise. Events are discriminated by `type` — `contentDelta`, `thinkingDelta`, `toolCall`, `toolError`, `completionStats`, `completionDone`, `rawDelta`. The terminal `completionDone` event carries a `stopReason` (e.g. `"eos"`, `"length"`, `"cancelled"`).
 * Thinking content: models that emit `<think>` blocks surface them as dedicated `thinkingDelta` events (enable with `captureThinking: true`), so consumers don't have to parse tags from raw text.
 * Tool calls: the model emits structured tool calls as `toolCall` events ordered alongside content and thinking in the same stream.
 * MCP: plug MCP servers into `completion()` so the model can use external tools (e.g., web search) via the same tool-call mechanism.

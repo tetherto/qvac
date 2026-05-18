@@ -9,7 +9,10 @@ export interface MultipartFile {
 
 export interface MultipartResult {
   fields: Map<string, string>
+  /** First file part in document order (back-compat with single-file routes). */
   file: MultipartFile | null
+  /** Every file part in document order (for routes that accept multiple files). */
+  files: MultipartFile[]
 }
 
 const MAX_MULTIPART_SIZE = 25 * 1024 * 1024
@@ -52,12 +55,13 @@ export function readMultipart (req: IncomingMessage): Promise<MultipartResult> {
 function parseMultipartBody (body: Buffer, boundary: string): MultipartResult {
   const fields = new Map<string, string>()
   let file: MultipartFile | null = null
+  const files: MultipartFile[] = []
 
   const delimiter = Buffer.from(`--${boundary}`)
   const closeDelimiter = Buffer.from(`--${boundary}--`)
 
   let start = indexOf(body, delimiter, 0)
-  if (start === -1) return { fields, file }
+  if (start === -1) return { fields, file, files: [] }
   start += delimiter.length
 
   while (start < body.length) {
@@ -84,12 +88,14 @@ function parseMultipartBody (body: Buffer, boundary: string): MultipartResult {
     const ctMatch = headerBlock.match(/Content-Type:\s*(\S+)/i)
 
     if (filenameMatch && nameMatch) {
-      file = {
+      const partFile: MultipartFile = {
         fieldName: nameMatch[1]!,
         fileName: filenameMatch[1]!,
         contentType: ctMatch?.[1] ?? 'application/octet-stream',
         data: Buffer.from(partData)
       }
+      files.push(partFile)
+      if (!file) file = partFile
     } else if (nameMatch) {
       fields.set(nameMatch[1]!, partData.toString('utf8'))
     }
@@ -97,7 +103,7 @@ function parseMultipartBody (body: Buffer, boundary: string): MultipartResult {
     start = nextBoundary + delimiter.length
   }
 
-  return { fields, file }
+  return { fields, file, files }
 }
 
 function indexOf (buf: Buffer, needle: Buffer, from: number): number {
