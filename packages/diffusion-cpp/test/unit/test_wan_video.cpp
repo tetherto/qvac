@@ -613,19 +613,10 @@ TEST_F(SdWanHappyPathTest, Img2VidProducesValidAvi) {
 // ---------------------------------------------------------------------------
 
 TEST_F(SdWanHappyPathTest, Img2VidWithVonNeumannSavesOutput) {
-  // Get paths from existing helpers
-  const std::string models_dir = std::string(PROJECT_ROOT) + "/models";
-  std::string init_image_path = models_dir + "/../assets/von-neumann.jpg";
-  
-  // Skip test if image doesn't exist
-  if (!std::filesystem::exists(init_image_path)) {
-    GTEST_SKIP() << "von-neumann.jpg not found at " << init_image_path;
-  }
-
-  // Load init image
-  std::ifstream init_file(init_image_path, std::ios::binary);
-  std::vector<uint8_t> init_image_bytes((std::istreambuf_iterator<char>(init_file)),
-                                        std::istreambuf_iterator<char>());
+  // Use synthetic 832x480 image matching Wan training resolution
+  // (von-neumann.jpg is 500x627 and doesn't match required multiples of 8)
+  const std::vector<uint8_t> init_image_bytes =
+      wan_helpers::makeSolidPng(832, 480, 100, 110, 120);
 
   SdModel::GenerationJob job;
   job.paramsJson = R"({
@@ -673,9 +664,9 @@ TEST_F(SdWanHappyPathTest, Img2VidWithVonNeumannSavesOutput) {
       << "frameCallback should fire exactly 33 times";
 
   // Save output file
-  std::string output_dir = models_dir + "/../output";
+  std::string output_dir = std::string(PROJECT_ROOT) + "/output";
   std::filesystem::create_directories(output_dir);
-  std::string output_path = output_dir + "/wan_img2vid_cpp_von_neumann.avi";
+  std::string output_path = output_dir + "/wan_img2vid_cpp_synthetic_init.avi";
   
   std::ofstream output_file(output_path, std::ios::binary);
   if (output_file.is_open()) {
