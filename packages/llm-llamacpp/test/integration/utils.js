@@ -5,7 +5,16 @@ const https = require('bare-https')
 const os = require('bare-os')
 const process = require('bare-process')
 
-async function downloadFile (url, dest) {
+// A flaky CDN once stalled an Android Device Farm slot for the full 10-min
+// test budget, then the bare runtime SIGABRT'd on the uncaught rejection.
+// Apply per-attempt idle timeout + retry so a slow connection re-tries
+// instead of burning the whole test.
+const DOWNLOAD_IDLE_TIMEOUT_MS = 90 * 1000
+const DOWNLOAD_MAX_ATTEMPTS = 3
+const GGUF_MAGIC = Buffer.from('GGUF', 'utf8')
+
+async function downloadFile (url, dest, opts = {}) {
+  const idleTimeoutMs = opts.idleTimeoutMs ?? DOWNLOAD_IDLE_TIMEOUT_MS
   return new Promise((resolve, reject) => {
     let settled = false
     // Once a redirect has handed off `dest` to a recursive call, this call
@@ -14,15 +23,25 @@ async function downloadFile (url, dest) {
     // by the recursive call, leaving a "successful" promise but an empty
     // disk path.
     let handedOff = false
+    let idleTimer = null
+
+    const clearIdleTimer = () => {
+      if (idleTimer) {
+        clearTimeout(idleTimer)
+        idleTimer = null
+      }
+    }
 
     const safeResolve = () => {
       if (settled) return
       settled = true
+      clearIdleTimer()
       resolve()
     }
     const safeReject = (err) => {
       if (settled) return
       settled = true
+      clearIdleTimer()
       reject(err)
     }
     // Unlink only when this call still owns `dest`. Skip if a redirect already
@@ -56,7 +75,7 @@ async function downloadFile (url, dest) {
           const redirectUrl = new URL(response.headers.location, url).href
           handedOff = true
 
-          downloadFile(redirectUrl, dest)
+          downloadFile(redirectUrl, dest, { idleTimeoutMs })
             .then(safeResolve)
             .catch(safeReject)
         })
@@ -68,6 +87,19 @@ async function downloadFile (url, dest) {
         cleanupAndReject(new Error(`Download failed: HTTP ${response.statusCode} from ${url}`))
         return
       }
+
+      // Reset on every chunk; reject if the socket goes silent for idleTimeoutMs.
+      // Re-armed inside `data` so a slow start gets the full window each chunk.
+      const resetIdle = () => {
+        clearIdleTimer()
+        idleTimer = setTimeout(() => {
+          try { req.destroy(new Error('idle-timeout')) } catch (_) {}
+          file.destroy()
+          cleanupAndReject(new Error(`Download stalled (no bytes for ${idleTimeoutMs}ms) from ${url}`))
+        }, idleTimeoutMs)
+      }
+      resetIdle()
+      response.on('data', resetIdle)
 
       response.on('error', (err) => {
         file.destroy()
@@ -91,23 +123,65 @@ async function downloadFile (url, dest) {
   })
 }
 
+// GGUF magic-byte sniff. Lets us catch CDN truncations / HTML error bodies
+// served as "200 OK" before they reach llama.cpp and crash the loader.
+function isValidGgufFile (filePath) {
+  let fd = -1
+  try {
+    const stats = fs.statSync(filePath)
+    if (stats.size < 16) return false
+    fd = fs.openSync(filePath, 'r')
+    const buf = Buffer.alloc(4)
+    fs.readSync(fd, buf, 0, 4, 0)
+    return buf.equals(GGUF_MAGIC)
+  } catch (_) {
+    return false
+  } finally {
+    if (fd !== -1) {
+      try { fs.closeSync(fd) } catch (_) {}
+    }
+  }
+}
+
 async function ensureModel ({ modelName, downloadUrl }) {
   const modelDir = path.resolve(__dirname, '../model')
 
   const modelPath = path.join(modelDir, modelName)
 
+  const isGguf = modelName.endsWith('.gguf')
   if (fs.existsSync(modelPath)) {
-    return [modelName, modelDir]
+    if (!isGguf || isValidGgufFile(modelPath)) {
+      return [modelName, modelDir]
+    }
+    // Corrupt cached download, drop it so the retry path below re-fetches.
+    console.warn(`Cached model ${modelName} failed GGUF validation, re-downloading...`)
+    try { fs.unlinkSync(modelPath) } catch (_) {}
   }
 
   fs.mkdirSync(modelDir, { recursive: true })
-  console.log(`Downloading test model ${modelName}...`)
 
-  await downloadFile(downloadUrl, modelPath)
-
-  const stats = fs.statSync(modelPath)
-  console.log(`Model ready: ${(stats.size / 1024 / 1024).toFixed(1)}MB`)
-  return [modelName, modelDir]
+  let lastErr
+  for (let attempt = 1; attempt <= DOWNLOAD_MAX_ATTEMPTS; attempt++) {
+    try {
+      console.log(`Downloading test model ${modelName}... (attempt ${attempt}/${DOWNLOAD_MAX_ATTEMPTS})`)
+      await downloadFile(downloadUrl, modelPath)
+      if (isGguf && !isValidGgufFile(modelPath)) {
+        try { fs.unlinkSync(modelPath) } catch (_) {}
+        throw new Error(`Downloaded ${modelName} has bad GGUF magic (truncated or wrong content-type)`)
+      }
+      const stats = fs.statSync(modelPath)
+      console.log(`Model ready: ${(stats.size / 1024 / 1024).toFixed(1)}MB`)
+      return [modelName, modelDir]
+    } catch (err) {
+      lastErr = err
+      console.warn(`Download attempt ${attempt} for ${modelName} failed: ${err.message}`)
+      if (attempt < DOWNLOAD_MAX_ATTEMPTS) {
+        const backoffMs = 2000 * attempt
+        await new Promise(resolve => setTimeout(resolve, backoffMs))
+      }
+    }
+  }
+  throw new Error(`Failed to download ${modelName} after ${DOWNLOAD_MAX_ATTEMPTS} attempts: ${lastErr && lastErr.message}`)
 }
 
 async function ensureModelPath ({ modelName, downloadUrl }) {
