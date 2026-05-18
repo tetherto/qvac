@@ -7,15 +7,17 @@
 #include <utility>
 #include <vector>
 
-#include <picojson/picojson.h>
 #include <inference-addon-cpp/Errors.hpp>
 #include <inference-addon-cpp/Logger.hpp>
+#include <picojson/picojson.h>
 
+#include "utils/AviWriter.hpp"
 #include "utils/BackendLoader.hpp"
 #include "utils/BackendSelection.hpp"
 #include "utils/ImageCodec.hpp"
 #include "utils/ImageUtils.hpp"
 #include "utils/LoggingMacros.hpp"
+#include "utils/SdVideoFrames.hpp"
 
 using namespace qvac_lib_inference_addon_cpp;
 using namespace qvac_errors;
@@ -202,6 +204,8 @@ void SdModel::load() {
   };
   params.model_path = optPath(config_.modelPath);
   params.diffusion_model_path = optPath(config_.diffusionModelPath);
+  params.high_noise_diffusion_model_path =
+      optPath(config_.highNoiseDiffusionModelPath);
   params.clip_l_path = optPath(config_.clipLPath);
   params.clip_g_path = optPath(config_.clipGPath);
   params.t5xxl_path = optPath(config_.t5XxlPath);
@@ -301,7 +305,8 @@ void SdModel::load() {
 }
 
 // ---------------------------------------------------------------------------
-// process() -- applies SdGenHandlers to JSON params, then calls generate_image
+// process() -- parses mode, sets up callbacks + guard, dispatches to
+// processImage() (generate_image) or processVideo() (generate_video).
 // ---------------------------------------------------------------------------
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
@@ -358,10 +363,38 @@ std::any SdModel::process(const std::any& input) {
         general_error::InvalidArgument, "Params must be a JSON object");
   }
 
+  // -- Peek top-level mode to choose dispatch branch -------------------------
+  // Default is "txt2img" for backwards compatibility: a JSON payload that
+  // omits "mode" keeps behaving as an image generation job.
+  std::string mode = "txt2img";
+  const auto &obj = jsonRoot.get<picojson::object>();
+  if (auto it = obj.find("mode"); it != obj.end()) {
+    if (!it->second.is<std::string>())
+      throw StatusError(general_error::InvalidArgument,
+                        "mode must be a string");
+    mode = it->second.get<std::string>();
+  }
+
+  const bool isVideo =
+      (mode == "txt2vid" || mode == "img2vid" || mode == "flf2vid");
+  if (isVideo) {
+    return processVideo(job, jsonRoot);
+  }
+  return processImage(job, jsonRoot);
+}
+
+// ---------------------------------------------------------------------------
+// processImage() -- applies SdGenHandlers, fills sd_img_gen_params_t, runs
+// generate_image(). Assumes callbacks + guard are already set up by
+// process().
+// ---------------------------------------------------------------------------
+
+std::any SdModel::processImage(const GenerationJob &job,
+                               const picojson::value &v) {
   // -- Build SdGenConfig from handlers ---------------------------------------
   qvac_lib_inference_addon_sd::SdGenConfig gen{};
-  qvac_lib_inference_addon_sd::applySdGenHandlers(
-      gen, jsonRoot.get<picojson::object>());
+  qvac_lib_inference_addon_sd::applySdGenHandlers(gen,
+                                                  v.get<picojson::object>());
 
   if (gen.mode != "txt2img" && gen.mode != "img2img") {
     throw StatusError(
@@ -552,7 +585,7 @@ std::any SdModel::process(const std::any& input) {
       if (!job.initImageBytes.empty()) {
         initPng = job.initImageBytes;
       } else {
-        const auto& jsonObj = jsonRoot.get<picojson::object>();
+        const auto &jsonObj = v.get<picojson::object>();
         auto initBytesIt = jsonObj.find("init_image_bytes");
         if (initBytesIt != jsonObj.end() &&
             initBytesIt->second.is<picojson::array>()) {
@@ -741,8 +774,19 @@ std::any SdModel::process(const std::any& input) {
   // on cancel (partial text output is still useful).  Diffusion produces no
   // partial images, so a "successful" completion with output_count=0 would
   // be misleading -- throwing gives the JS caller an explicit cancel signal.
+  // We tag the StatusError with localCodeMsg="Cancelled" so the JS layer
+  // can discriminate cancel from real internal failures via the status
+  // code (codeString() == "[ General :: Cancelled ]") instead of
+  // string-matching the exception message.
+  //
+  // Note: we use the 3-arg StatusError ctor with explicit addonId +
+  // localCodeMsg instead of adding `Cancelled` to general_error's enum
+  // so this PR doesn't have to touch the shared inference-addon-cpp
+  // header (which would force a coordinated update across every other
+  // package that pulls it in via vcpkg).
   if (wasCancelled) {
-    throw std::runtime_error("Job cancelled");
+    throw StatusError(std::string(general_error::GeneralAddonId), "Cancelled",
+                      "Job cancelled");
   }
 
   if (outputCount == 0) {
@@ -789,6 +833,299 @@ std::any SdModel::process(const std::any& input) {
 
   // Return empty -- images are already delivered via outputCallback,
   // and stats are emitted by queueJobEnded() -> runtimeStats().
+  return std::any{};
+}
+
+// ---------------------------------------------------------------------------
+// processVideo() -- applies SdVidGenHandlers, fills sd_vid_gen_params_t,
+// runs generate_video(), encodes the returned sd_image_t* frames as an
+// in-memory MJPG AVI via encodeFramesToAvi() and fires the outputCallback
+// once. Optionally fan out per-frame PNGs to frameCallback.
+//
+// Assumes callbacks + guard are already set up by process().
+// ---------------------------------------------------------------------------
+
+std::any SdModel::processVideo(const GenerationJob &job,
+                               const picojson::value &v) {
+  // -- Build SdVidGenConfig from handlers ------------------------------------
+  qvac_lib_inference_addon_sd::SdVidGenConfig vid{};
+  qvac_lib_inference_addon_sd::applySdVidGenHandlers(vid,
+                                                     v.get<picojson::object>());
+
+  if (vid.mode != "txt2vid" && vid.mode != "img2vid" && vid.mode != "flf2vid")
+    throw StatusError(general_error::InvalidArgument,
+                      "processVideo: unsupported mode '" + vid.mode +
+                          "' (expected txt2vid, img2vid, or flf2vid)");
+
+  // -- Mode-vs-inputs invariants --------------------------------------------
+  // These checks mirror the JS-layer validation but are duplicated here so
+  // the C++ API stays safe when called directly from unit tests or bindings
+  // that bypass the JS shim.
+  if (vid.mode == "img2vid" && job.initImageBytes.empty())
+    throw StatusError(
+        general_error::InvalidArgument,
+        "img2vid: init_image is required (the first frame to animate)");
+
+  if (vid.mode == "flf2vid") {
+    if (job.initImageBytes.empty())
+      throw StatusError(general_error::InvalidArgument,
+                        "flf2vid: init_image (first frame) is required");
+    if (job.endImageBytes.empty())
+      throw StatusError(general_error::InvalidArgument,
+                        "flf2vid: end_image (last frame) is required");
+  }
+
+  if (!job.endImageBytes.empty() && vid.mode != "flf2vid")
+    throw StatusError(general_error::InvalidArgument,
+                      "end_image is only valid for mode='flf2vid', got mode='" +
+                          vid.mode + "'");
+
+  if (vid.mode == "txt2vid" && !job.initImageBytes.empty())
+    throw StatusError(
+        general_error::InvalidArgument,
+        "txt2vid does not accept init_image; use img2vid or flf2vid instead");
+
+  // -- Decode init / end / control-frame images -----------------------------
+  // sd_image_t::data is allocated by stb_image via malloc(), so we wrap each
+  // pixel buffer in unique_ptr with image_codec::FreeDeleter to guarantee
+  // release on every exit path (including exceptions from generate_video()
+  // or the AVI muxer). The sd_image_t structs themselves stay plain values
+  // so we can pass them straight to the C ABI.
+  sd_image_t initImg{};
+  sd_image_t endImg{};
+  std::vector<sd_image_t> controlFrames;
+
+  using PixelBuffer = std::unique_ptr<uint8_t, image_codec::FreeDeleter>;
+  PixelBuffer initData;
+  PixelBuffer endData;
+  std::vector<PixelBuffer> controlData;
+
+  if (!job.initImageBytes.empty()) {
+    initImg = image_codec::decodeImage(job.initImageBytes);
+    if (!initImg.data)
+      throw StatusError(general_error::InvalidArgument,
+                        "processVideo: failed to decode init_image (corrupt or "
+                        "unsupported format; supported: PNG, JPEG)");
+    // Take ownership *before* the dimension check so a mismatch can't leak
+    // the freshly-decoded pixel buffer (mirrors the control_frames path).
+    initData.reset(initImg.data);
+    // generate_video() takes a single (width, height) for the whole pipeline;
+    // mixing an init_image of a different size with a width/height the user
+    // declared elsewhere produces inconsistent frame data downstream. Reject
+    // explicitly here -- consistent with the end_image / control_frames
+    // checks below, all three compare against vid.width / vid.height as the
+    // single source of truth for the video's final dimensions.
+    if (static_cast<int>(initImg.width) != vid.width ||
+        static_cast<int>(initImg.height) != vid.height)
+      throw StatusError(general_error::InvalidArgument,
+                        "processVideo: init_image dimensions " +
+                            std::to_string(initImg.width) + "x" +
+                            std::to_string(initImg.height) +
+                            " do not match video dimensions " +
+                            std::to_string(vid.width) + "x" +
+                            std::to_string(vid.height));
+  }
+
+  if (!job.endImageBytes.empty()) {
+    endImg = image_codec::decodeImage(job.endImageBytes);
+    if (!endImg.data)
+      throw StatusError(
+          general_error::InvalidArgument,
+          "processVideo: failed to decode end_image (corrupt or unsupported "
+          "format; supported: PNG, JPEG)");
+    endData.reset(endImg.data);
+    if (static_cast<int>(endImg.width) != vid.width ||
+        static_cast<int>(endImg.height) != vid.height)
+      throw StatusError(
+          general_error::InvalidArgument,
+          "processVideo: end_image dimensions " + std::to_string(endImg.width) +
+              "x" + std::to_string(endImg.height) +
+              " do not match video dimensions " + std::to_string(vid.width) +
+              "x" + std::to_string(vid.height));
+  }
+
+  if (!job.controlFramesBytes.empty()) {
+    controlFrames.reserve(job.controlFramesBytes.size());
+    controlData.reserve(job.controlFramesBytes.size());
+    for (size_t i = 0; i < job.controlFramesBytes.size(); ++i) {
+      sd_image_t decoded = image_codec::decodeImage(job.controlFramesBytes[i]);
+      if (!decoded.data)
+        throw StatusError(
+            general_error::InvalidArgument,
+            "processVideo: failed to decode control_frames[" +
+                std::to_string(i) +
+                "] (corrupt or unsupported format; supported: PNG, JPEG)");
+      // Take ownership *before* the dimension check so a mismatch can't leak
+      // the freshly-decoded pixel buffer.
+      PixelBuffer owned(decoded.data);
+      if (static_cast<int>(decoded.width) != vid.width ||
+          static_cast<int>(decoded.height) != vid.height) {
+        throw StatusError(general_error::InvalidArgument,
+                          "processVideo: control_frames[" + std::to_string(i) +
+                              "] dimensions " + std::to_string(decoded.width) +
+                              "x" + std::to_string(decoded.height) +
+                              " do not match video dimensions " +
+                              std::to_string(vid.width) + "x" +
+                              std::to_string(vid.height));
+      }
+      controlData.push_back(std::move(owned));
+      controlFrames.push_back(decoded);
+    }
+  }
+
+  // -- Build sd_vid_gen_params_t --------------------------------------------
+  sd_vid_gen_params_t vidParams{};
+  sd_vid_gen_params_init(&vidParams);
+
+  vidParams.prompt = vid.prompt.c_str();
+  vidParams.negative_prompt = vid.negativePrompt.c_str();
+  vidParams.width = vid.width;
+  vidParams.height = vid.height;
+  vidParams.seed = vid.seed;
+  vidParams.video_frames = vid.videoFrames;
+  vidParams.strength = vid.strength;
+  vidParams.vace_strength = vid.vaceStrength;
+  vidParams.moe_boundary = vid.moeBoundary;
+
+  if (initImg.data)
+    vidParams.init_image = initImg;
+  if (endImg.data)
+    vidParams.end_image = endImg;
+  if (!controlFrames.empty()) {
+    vidParams.control_frames = controlFrames.data();
+    vidParams.control_frames_size = static_cast<int>(controlFrames.size());
+  }
+
+  // Low-noise / only-expert sample params
+  vidParams.sample_params.sample_method = vid.sampleMethod;
+  vidParams.sample_params.scheduler = vid.scheduler;
+  vidParams.sample_params.sample_steps = vid.sampleSteps;
+  vidParams.sample_params.guidance.txt_cfg = vid.cfgScale;
+  // Per-job flow_shift overrides ctx-level flowShift; 0.0 falls through to
+  // the ctx default (SdCtxConfig::flowShift, which is infinity / embedded).
+  if (vid.flowShift > 0.0f) {
+    vidParams.sample_params.flow_shift = vid.flowShift;
+  } else {
+    vidParams.sample_params.flow_shift = config_.flowShift;
+  }
+
+  // High-noise expert sample params (Wan 2.2 only; ignored by the library
+  // when highNoiseDiffusionModelPath is empty)
+  vidParams.high_noise_sample_params.sample_method = vid.highNoiseSampleMethod;
+  vidParams.high_noise_sample_params.scheduler = vid.highNoiseScheduler;
+  vidParams.high_noise_sample_params.sample_steps = vid.highNoiseSteps;
+  vidParams.high_noise_sample_params.guidance.txt_cfg = vid.highNoiseCfgScale;
+  if (vid.highNoiseFlowShift > 0.0f) {
+    vidParams.high_noise_sample_params.flow_shift = vid.highNoiseFlowShift;
+  } else {
+    vidParams.high_noise_sample_params.flow_shift = config_.flowShift;
+  }
+
+  // VAE tiling (strongly recommended for Wan)
+  vidParams.vae_tiling_params.enabled = vid.vaeTiling;
+  vidParams.vae_tiling_params.tile_size_x = vid.vaeTileSizeX;
+  vidParams.vae_tiling_params.tile_size_y = vid.vaeTileSizeY;
+  vidParams.vae_tiling_params.target_overlap = vid.vaeTileOverlap;
+
+  // Step-caching
+  sd_cache_params_init(&vidParams.cache);
+  vidParams.cache.mode = vid.cacheMode;
+  if (vid.cacheThreshold > 0.0f)
+    vidParams.cache.reuse_threshold = vid.cacheThreshold;
+
+  // -- Generate -------------------------------------------------------------
+  const auto t0 = std::chrono::steady_clock::now();
+
+  int numFramesOut = 0;
+  qvac_lib_inference_addon_sd::SdVideoFrames frames(
+      generate_video(sdCtx_.get(), &vidParams, &numFramesOut), numFramesOut);
+
+  // If cancelled during the sampler, surface as an exception for the same
+  // reason as the image path: a "successful" completion with zero frames
+  // would be misleading. Typed Cancelled status (see image path above for
+  // the 3-arg ctor rationale).
+  auto throwCancelled = []() {
+    throw StatusError(std::string(general_error::GeneralAddonId), "Cancelled",
+                      "Job cancelled");
+  };
+  if (cancelRequested_.load()) {
+    throwCancelled();
+  }
+
+  if (frames.empty())
+    throw StatusError(general_error::InternalError,
+                      "processVideo: generate_video() returned no frames");
+
+  // -- Fan out per-frame PNGs (opt-in) --------------------------------------
+  // PNG encoding for an 81-frame 832x480 video can take multiple seconds; we
+  // re-check cancelRequested_ at the top of each iteration so a user pressing
+  // cancel during the fan-out gets a prompt signal instead of waiting for
+  // the AVI mux to finish.
+  if (job.frameCallback) {
+    for (int i = 0; i < frames.count(); ++i) {
+      if (cancelRequested_.load())
+        throwCancelled();
+      if (!frames[i].data)
+        continue;
+      auto png = image_codec::encodeToPng(frames[i]);
+      if (!png.empty()) {
+        job.frameCallback(png, i, frames.count());
+      }
+    }
+  }
+
+  // One last cancellation check before the MJPG mux: encodeFramesToAvi can
+  // also take multiple seconds on large videos, and it has no cancellation
+  // hook of its own.
+  if (cancelRequested_.load())
+    throwCancelled();
+
+  // -- Encode AVI and deliver ----------------------------------------------
+  auto avi = qvac_lib_inference_addon_sd::encodeFramesToAvi(
+      frames.data(), frames.count(), vid.fps);
+
+  if (!avi.empty() && job.outputCallback) {
+    job.outputCallback(avi);
+  }
+
+  const auto t1 = std::chrono::steady_clock::now();
+
+  // -- Accumulate cumulative counters ---------------------------------------
+  const int64_t genMsI = static_cast<int64_t>(
+      std::chrono::duration<double, std::milli>(t1 - t0).count());
+  stats_.totalGenerationMs += genMsI;
+  stats_.totalWallMs += genMsI;
+  // totalSteps accumulates both experts for Wan 2.2 runs; for Wan 2.1 the
+  // high-noise expert isn't loaded, so highNoiseSteps goes to waste counting
+  // here but isn't actually consumed. Keep it simple and sum both.
+  stats_.totalSteps += vid.sampleSteps;
+  if (!config_.highNoiseDiffusionModelPath.empty())
+    stats_.totalSteps += vid.highNoiseSteps;
+  stats_.totalGenerations++;
+  stats_.totalVideos++;
+  stats_.totalVideoFrames += frames.count();
+  // Count pixels over all frames -- useful for megapixel/s rate derivation.
+  stats_.totalPixels += static_cast<int64_t>(vid.width) *
+                        static_cast<int64_t>(vid.height) * frames.count();
+
+  // -- Build runtime stats --------------------------------------------------
+  lastStats_.clear();
+  lastStats_.emplace_back("modelLoadMs", stats_.modelLoadMs);
+  lastStats_.emplace_back("generationMs", genMsI);
+  lastStats_.emplace_back("totalGenerationMs", stats_.totalGenerationMs);
+  lastStats_.emplace_back("totalWallMs", stats_.totalWallMs);
+  lastStats_.emplace_back("totalSteps", stats_.totalSteps);
+  lastStats_.emplace_back("totalGenerations", stats_.totalGenerations);
+  lastStats_.emplace_back("totalImages", stats_.totalImages);
+  lastStats_.emplace_back("totalPixels", stats_.totalPixels);
+  lastStats_.emplace_back("totalVideos", stats_.totalVideos);
+  lastStats_.emplace_back("totalVideoFrames", stats_.totalVideoFrames);
+  lastStats_.emplace_back("width", static_cast<int64_t>(vid.width));
+  lastStats_.emplace_back("height", static_cast<int64_t>(vid.height));
+  lastStats_.emplace_back("seed", vid.seed);
+  lastStats_.emplace_back("videoFrames", static_cast<int64_t>(frames.count()));
+  lastStats_.emplace_back("fps", static_cast<int64_t>(vid.fps));
+
   return std::any{};
 }
 

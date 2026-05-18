@@ -50,6 +50,10 @@ async function runGenerateImageTest (options = {}) { // eslint-disable-line no-u
   return runIntegrationModule('../integration/generate-image.test.js', options)
 }
 
+async function runGenerateVideoWanTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/generate-video-wan.test.js', options)
+}
+
 async function runInputValidationTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/input-validation.test.js', options)
 }
@@ -74,6 +78,7 @@ module.exports = {
   runGenerateImageSd3Test,
   runGenerateImageSdxlTest,
   runGenerateImageTest,
+  runGenerateVideoWanTest,
   runInputValidationTest,
   runLoraBridgeTest,
   runModelLoadingTest

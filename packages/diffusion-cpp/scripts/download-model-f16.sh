@@ -24,14 +24,7 @@ HF="https://huggingface.co"
 
 mkdir -p "$OUT"
 
-dl() {
-  local url="$1" dest="$2"
-  [[ -f "$dest" ]] && echo "exists: $(basename "$dest")" && return
-  echo "downloading: $(basename "$dest")"
-  # -C - resumes a partial download; --retry retries on transient errors
-  curl -fL --progress-bar --retry 5 --retry-delay 3 --retry-connrefused -C - -o "$dest" "$url" \
-    || { rm -f "$dest"; exit 1; }
-}
+source "$SCRIPT_DIR/dl-functions.sh"
 
 # FLUX-2-klein-4B F16 — main diffusion model (8GB, full precision)
 echo "Downloading FLUX-2-klein-4B F16 (full precision, ~8GB)..."
