@@ -5,7 +5,15 @@ const QvacLogger = require('@qvac/logging')
 const { createJobHandler, exclusiveRunQueue } = require('@qvac/infer-base')
 const { SdInterface, EsrganUpscalerInterface, mapAddonEvent } = require('./addon')
 
-const COMPANION_FILE_KEYS = ['clipL', 'clipG', 't5Xxl', 'llm', 'vae', 'esrgan']
+const COMPANION_FILE_KEYS = [
+  'clipL',
+  'clipG',
+  't5Xxl',
+  'llm',
+  'vae',
+  'esrgan',
+  'highNoiseDiffusionModel'
+]
 
 function assertAbsolute (key, value) {
   if (typeof value !== 'string' || value.length === 0) {
@@ -62,6 +70,7 @@ class ImgStableDiffusion {
    * @param {string} [args.files.llm] - LLM text encoder (FLUX.2 klein, absolute path)
    * @param {string} [args.files.vae] - VAE file (absolute path)
    * @param {string} [args.files.esrgan] - ESRGAN upscaler model (absolute path)
+   * @param {string} [args.files.highNoiseDiffusionModel] - Wan 2.2 high-noise expert (absolute path); omit for all other models
    * @param {object} [args.config] - SD context configuration (threads, device, type, etc.).
    *   Optional — when omitted, the addon forwards an empty config and the C++ layer falls
    *   back to stable-diffusion.cpp defaults for every parameter.
@@ -114,6 +123,7 @@ class ImgStableDiffusion {
     const configurationParams = {
       path: isSplitLayout ? '' : this._files.model,
       diffusionModelPath: isSplitLayout ? this._files.model : '',
+      highNoiseDiffusionModelPath: this._files.highNoiseDiffusionModel || '',
       clipLPath: this._files.clipL || '',
       clipGPath: this._files.clipG || '',
       t5XxlPath: this._files.t5Xxl || '',
@@ -680,5 +690,6 @@ class EsrganUpscaler {
 
 module.exports = ImgStableDiffusion
 module.exports.ImgStableDiffusion = ImgStableDiffusion
+module.exports.VideoStableDiffusion = require('./video')
 module.exports.EsrganUpscaler = EsrganUpscaler
 module.exports.applyFluxImg2ImgDimDefaults = applyFluxImg2ImgDimDefaults

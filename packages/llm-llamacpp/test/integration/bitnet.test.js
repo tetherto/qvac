@@ -106,7 +106,8 @@ test('bitnet model can run simple inference', { timeout: 900_000, skip: !isAndro
         _output: output,
         stats,
         deviceId: 'gpu',
-        scenario: 'bitnet'
+        scenario: 'bitnet',
+        model: BITNET_MODEL.name.replace(/\.gguf$/i, '')
       }))
     }
 
