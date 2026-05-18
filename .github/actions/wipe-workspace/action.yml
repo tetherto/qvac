@@ -1,0 +1,23 @@
+name: Wipe self-hosted workspace
+description: >-
+  Wipe $GITHUB_WORKSPACE clean on self-hosted Linux x64 runners before
+  actions/checkout, to defend against state left over from a previous job
+  (modified tracked files, stale .git/index entries) that would cause the
+  next checkout to abort with "Path '...' not uptodate; will not remove from
+  working tree." Safe no-op on macOS, Windows, and github-hosted runners.
+
+  Place this step before actions/checkout. Because the action lives inside
+  this repo, callers must reference it by full path with a ref so the runner
+  fetches it before any checkout, e.g.
+    uses: tetherto/qvac/.github/actions/wipe-workspace@main
+
+runs:
+  using: composite
+  steps:
+    - if: ${{ runner.os == 'Linux' && runner.arch == 'X64' && !contains(runner.name, 'GitHub Actions') }}
+      name: Wipe workspace
+      shell: bash
+      run: |
+        set -euo pipefail
+        shopt -s dotglob nullglob
+        rm -rf -- "${GITHUB_WORKSPACE:?}"/*
