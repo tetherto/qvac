@@ -1,0 +1,411 @@
+name: Integration Tests (Vla)
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "ref"
+        type: string
+      repository:
+        type: string
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref (branch/tag/SHA) to test"
+        type: string
+        required: false
+        default: main
+      prebuild_package:
+        description: "NPM package containing prebuilds (e.g. @qvac/vla-ggml@1.0.0)"
+        type: string
+        required: true
+
+jobs:
+  run-integration-tests:
+    runs-on: ${{ matrix.runner || matrix.os }}
+    environment: release
+    name: ${{ matrix.platform }}-${{ matrix.arch }}-integration-tests
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+
+    env:
+      WORKDIR: packages/vla-ggml
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # One row per runner. The integration test itself runs the model twice
+        # — once on the runner's preferred backend (Metal/Vulkan/…) and once
+        # forced onto CPU — so the perf-report artifact for each row carries
+        # both numbers without doubling the model download or addon install.
+        include:
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
+            runner: qvac-ubuntu2204-x64
+          - os: ubuntu-24.04
+            platform: linux
+            arch: x64
+            runner: qvac-ubuntu2404-x64-gpu
+          - os: ubuntu-22.04-arm
+            platform: linux
+            arch: arm64
+            runner: ubuntu-22.04-arm
+          - os: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
+            runner: ubuntu-24.04-arm
+          - os: mac-mini-m4
+            platform: darwin
+            arch: arm64
+            runner: mac-mini-m4-gpu
+          - os: macos-15-large
+            platform: darwin
+            arch: x64
+            runner: macos-15-large
+          - os: windows-2025
+            platform: win32
+            arch: x64
+            runner: qvac-win25-x64-gpu
+
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Configure scoped registry for @tetherto and @qvac packages (Linux/macOS)
+        if: ${{ matrix.platform != 'win32' }}
+        working-directory: ${{ env.WORKDIR }}
+        env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          echo "Configuring scoped registry for @tetherto and @qvac packages..."
+          set -eu
+          echo "Writing .npmrc for dual registry install…"
+          cat > .npmrc <<NPMRC
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
+          NPMRC
+
+          # Optional: make private git deps work without prompting
+          if [ -n "${GIT_PAT:-}" ]; then
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
+          else
+            # Using the workflow's GITHUB_TOKEN for git clones when possible
+            git config --global url."https://${GH_TOKEN}:@github.com/".insteadOf "https://github.com/"
+          fi
+
+      - name: Configure scoped registry for @tetherto and @qvac packages (Windows)
+        if: ${{ matrix.platform == 'win32' }}
+        working-directory: ${{ env.WORKDIR }}
+        env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "=== Configuring scoped registry for @tetherto and @qvac packages ==="
+          echo "Writing .npmrc for dual registry install…"
+          @"
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=$env:NPM_TOKEN
+          //npm.pkg.github.com/:_authToken=$env:GPR_TOKEN
+          "@ | Out-File -FilePath .npmrc -Encoding utf8
+
+          # Optional: make private git deps work without prompting
+          if ($env:GIT_PAT) {
+            git config --global url."https://$env:GIT_PAT:@github.com/".insteadOf "https://github.com/"
+          } else {
+            git config --global url."https://$env:GH_TOKEN:@github.com/".insteadOf "https://github.com/"
+          }
+        shell: powershell
+
+      - name: Install NPM dependencies
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          npm install
+          npm install -g bare bare-make bare-runtime bare-https brittle
+
+      - name: Download prebuilds (from artifacts)
+        if: ${{ !inputs.prebuild_package }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: ${{ runner.temp }}/prebuilds-staging
+          merge-multiple: true
+
+      - name: Move prebuilds from staging to workspace (Unix)
+        if: ${{ !inputs.prebuild_package && matrix.platform != 'win32' }}
+        shell: bash
+        run: |
+          mkdir -p ${{ env.WORKDIR }}/prebuilds
+          cp -r ${{ runner.temp }}/prebuilds-staging/* ${{ env.WORKDIR }}/prebuilds/
+          echo "Prebuilds moved from staging area"
+          ls -la ${{ env.WORKDIR }}/prebuilds/
+
+      # Windows path: bash cp -r mangles `${{ runner.temp }}` (= "C:\a\_temp")
+      # because Git Bash interprets `\a`/`\_` as escape sequences, so the
+      # source path becomes invalid and the copy silently no-ops. Use
+      # PowerShell Copy-Item with native Windows paths.
+      - name: Move prebuilds from staging to workspace (Windows)
+        if: ${{ !inputs.prebuild_package && matrix.platform == 'win32' }}
+        shell: powershell
+        run: |
+          $dst = "${{ env.WORKDIR }}/prebuilds"
+          New-Item -ItemType Directory -Force -Path $dst | Out-Null
+          Copy-Item -Recurse -Force "${{ runner.temp }}\prebuilds-staging\*" $dst
+          Write-Host "Prebuilds moved from staging area"
+          Get-ChildItem -Recurse $dst | Select-Object FullName | Format-Table -AutoSize
+
+      - name: Download prebuilds from package (Linux/macOS)
+        if: ${{ inputs.prebuild_package && matrix.platform != 'win32' }}
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          PACKAGE="${{ inputs.prebuild_package }}"
+          echo "Downloading $PACKAGE from npm..."
+
+          # Download package from npm with error handling
+          if ! npm pack $PACKAGE; then
+            echo "ERROR: Failed to download $PACKAGE from npm"
+            echo "Please check that the package exists"
+            exit 1
+          fi
+
+          # Extract the tarball
+          tar -xzf *.tgz
+
+          # Validate prebuilds directory exists
+          if [ ! -d "package/prebuilds" ]; then
+            echo "ERROR: No prebuilds directory found in package"
+            echo "The downloaded package may not contain prebuilt binaries"
+            exit 1
+          fi
+
+          # Move prebuilds to expected location
+          mv package/prebuilds ./prebuilds
+
+          # Cleanup
+          rm -rf package *.tgz
+
+          echo "Prebuilds downloaded from npm successfully"
+          ls -la prebuilds/
+
+      - name: Download prebuilds from package (Windows)
+        if: ${{ inputs.prebuild_package && matrix.platform == 'win32' }}
+        working-directory: ${{ env.WORKDIR }}
+        shell: powershell
+        run: |
+          $PACKAGE = "${{ inputs.prebuild_package }}"
+
+          echo "Downloading $PACKAGE from npm..."
+
+          # Download package from npm with error handling
+          npm pack $PACKAGE
+          if ($LASTEXITCODE -ne 0) {
+            echo "ERROR: Failed to download $PACKAGE from npm"
+            echo "Please check that the package exists"
+            exit 1
+          }
+
+          # Find the downloaded tarball
+          $TARBALL = Get-ChildItem -Filter "*.tgz" | Select-Object -First 1 -ExpandProperty Name
+          if (-not $TARBALL) {
+            echo "ERROR: Could not find downloaded tarball"
+            exit 1
+          }
+
+          echo "Extracting $TARBALL..."
+          tar -xzf $TARBALL
+
+          # Validate prebuilds directory exists
+          if (-not (Test-Path "package/prebuilds")) {
+            echo "ERROR: No prebuilds directory found in package"
+            echo "The downloaded package may not contain prebuilt binaries"
+            exit 1
+          }
+
+          # Move prebuilds to expected location
+          Move-Item package/prebuilds ./prebuilds
+
+          # Cleanup
+          Remove-Item -Recurse -Force package
+          Remove-Item $TARBALL
+
+          echo "Prebuilds downloaded from npm successfully"
+          Get-ChildItem prebuilds/
+
+      - name: Print run state
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          echo "node version: $(node -v)"
+          echo "npm version: $(npm -v)"
+          echo "bare version: $(bare -v)"
+          echo "bare-make version: $(bare-make --version)"
+          npm list --depth=0
+        continue-on-error: true
+
+      - name: Print run state
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          echo "node version: $(node -v)"
+          echo "npm version: $(npm -v)"
+          echo "bare version: $(bare -v)"
+          echo "bare-make version: $(bare-make --version)"
+          ls -la prebuilds || true
+          tree prebuilds || true
+        continue-on-error: true
+
+      - name: Linux - install mesa-vulkan-drivers (GitHub-hosted arm runners only)
+        if: matrix.os == 'ubuntu-22.04-arm' || matrix.os == 'ubuntu-24.04-arm'
+        shell: bash
+        run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
+
+      - if: ${{ matrix.platform == 'darwin' && matrix.arch == 'arm64' }}
+        name: Install AWS CLI on macOS (user-local, no sudo — covers self-hosted mac-mini-m4)
+        shell: bash
+        run: |
+          # 1. Already on PATH?
+          if command -v aws >/dev/null 2>&1; then
+            echo "AWS CLI already on PATH: $(command -v aws)"
+            aws --version
+            exit 0
+          fi
+          # 2. Any known install location?
+          for p in /opt/homebrew/bin/aws /usr/local/bin/aws "$HOME/.local/aws-cli/aws"; do
+            if [ -x "$p" ]; then
+              echo "AWS CLI at $p; adding $(dirname "$p") to PATH"
+              echo "$(dirname "$p")" >> "$GITHUB_PATH"
+              "$p" --version
+              exit 0
+            fi
+          done
+          # 3. User-local install (self-hosted mac-mini-m4 has no passwordless
+          # sudo, so we extract AWSCLIV2.pkg into $HOME instead of using
+          # `installer -target /`).
+          echo "Installing AWS CLI v2 user-local..."
+          curl -sSL "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o /tmp/AWSCLIV2.pkg
+          rm -rf /tmp/awscli-expanded
+          pkgutil --expand-full /tmp/AWSCLIV2.pkg /tmp/awscli-expanded
+          mkdir -p "$HOME/.local"
+          rm -rf "$HOME/.local/aws-cli"
+          mv /tmp/awscli-expanded/aws-cli.pkg/Payload/aws-cli "$HOME/.local/aws-cli"
+          rm -rf /tmp/awscli-expanded /tmp/AWSCLIV2.pkg
+          echo "$HOME/.local/aws-cli" >> "$GITHUB_PATH"
+          "$HOME/.local/aws-cli/aws" --version
+
+      - name: Configure AWS credentials via OIDC
+        # Intel-mac runners use the Apple Paravirtual GPU which has ~1 GB of
+        # working set — too small for the 4 GB SmolVLA model. Skip S3 download
+        # and e2e there; the surface/rejects tests still run below.
+        if: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') }}
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - name: Download SmolVLA model from S3
+        if: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') }}
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          echo "Downloading SmolVLA LIBERO model from S3..."
+          mkdir -p model/vla
+          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/vla/smolvla-libero/2026-04-30/smolvla-libero-vision-q8.gguf" model/vla/smolvla-libero-vision-q8.gguf
+          echo "SmolVLA model files:"
+          ls -la model/vla/
+
+      # The prebuilt Windows addon links against ggml-vulkan.dll, which itself
+      # depends on the Vulkan loader (vulkan-1.dll). The qvac-win25-x64-gpu
+      # self-hosted runner has the Vulkan SDK preinstalled at C:\VulkanSDK
+      # (see PR #2021), so we just export VULKAN_SDK and add Bin to PATH.
+      # Reinstalling via setup-vulkan-sdk fails on self-hosted because
+      # Start-BitsTransfer needs an interactive logon.
+      - name: Windows - set Vulkan SDK path
+        if: matrix.platform == 'win32'
+        shell: powershell
+        run: |
+          echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
+          echo "C:\VulkanSDK\Bin" >> $Env:GITHUB_PATH
+
+      # Diagnostic: dump the prebuilt addon's DLL import table so we can see
+      # which dependency LoadLibrary is missing when the addon fails to load.
+      # `dumpbin /dependents` is shipped with Visual Studio Build Tools, which
+      # the qvac-win25-x64-gpu runner has installed.
+      - name: Windows - dump addon DLL imports (diagnostic)
+        if: matrix.platform == 'win32'
+        working-directory: ${{ env.WORKDIR }}
+        shell: powershell
+        run: |
+          $addon = Get-ChildItem -Recurse -Filter 'qvac__vla*.bare' prebuilds/ | Select-Object -First 1
+          if (-not $addon) { Write-Host "no .bare in prebuilds/"; exit 0 }
+          Write-Host "addon: $($addon.FullName)"
+          $vsdir = Get-ChildItem -Path "C:\Program Files\Microsoft Visual Studio\2022" -Filter dumpbin.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $vsdir) {
+            $vsdir = Get-ChildItem -Path "C:\Program Files (x86)\Microsoft Visual Studio" -Filter dumpbin.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          }
+          if (-not $vsdir) { Write-Host "dumpbin not found"; exit 0 }
+          & $vsdir.FullName /dependents $addon.FullName
+
+      - name: Run integration test (Linux/macOS)
+        if: ${{ matrix.platform != 'win32' }}
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        env:
+          QVAC_VLA_MODEL: ${{ (matrix.platform == 'darwin' && matrix.arch == 'x64') && '' || format('{0}/{1}/model/vla/smolvla-libero-vision-q8.gguf', github.workspace, env.WORKDIR) }}
+        run: |
+          set +e
+          # Stream test output AND capture it so we can inspect the TAP summary
+          # if the process exits with a non-zero code. Some GPU configurations
+          # (qvac-ubuntu2404-x64-gpu with NVIDIA RTX 4000 SFF Ada + Vulkan)
+          # crash with SIGSEGV (exit code 139) during static-destructor teardown
+          # AFTER all tests have passed. Tolerate that specific case, but surface
+          # any real failure.
+          TESTLOG=$(mktemp)
+          npm run test:integration ${{ matrix.platform }}-${{ matrix.arch }} 2>&1 | tee "$TESTLOG"
+          EXIT=${PIPESTATUS[0]}
+          if [ "$EXIT" -eq 0 ]; then
+            exit 0
+          fi
+          if [ "$EXIT" -eq 139 ] && grep -qE '^# ok$' "$TESTLOG" && grep -qE '^# tests = [0-9]+/[0-9]+ pass$' "$TESTLOG"; then
+            echo "::warning::Tests all passed but process crashed at teardown with SIGSEGV (exit 139) on $(uname -srvmo). Known ggml/Vulkan static-destructor issue; treating as pass."
+            exit 0
+          fi
+          exit "$EXIT"
+
+      - name: Run integration test (Windows)
+        if: ${{ matrix.platform == 'win32' }}
+        working-directory: ${{ env.WORKDIR }}
+        shell: powershell
+        env:
+          QVAC_VLA_MODEL: ${{ github.workspace }}/${{ env.WORKDIR }}/model/vla/smolvla-libero-vision-q8.gguf
+        run: npm run test:integration ${{ matrix.platform }}-${{ matrix.arch }}
+
+      - name: Upload performance report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: vla-perf-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.os }}
+          path: ${{ env.WORKDIR }}/test/results/performance-report.json
+          if-no-files-found: ignore
+          retention-days: 14

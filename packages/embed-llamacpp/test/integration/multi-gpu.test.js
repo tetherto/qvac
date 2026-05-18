@@ -1,9 +1,8 @@
 'use strict'
 
-const test = require('brittle')
 const process = require('bare-process')
 const GGMLBert = require('../../index.js')
-const { ensureModel } = require('./utils')
+const { ensureModel, safeTest } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
 const path = require('bare-path')
 
@@ -73,19 +72,19 @@ function assertSingleDevice (t, devices) {
   t.ok(devices.size <= 1, `layers should stay on a single device (found: ${[...devices].join(', ')})`)
 }
 
-test('multi-gpu: split-mode=layer distributes layers across GPUs', { timeout: 600_000 }, async t => {
+safeTest('multi-gpu: split-mode=layer distributes layers across GPUs', { timeout: 600_000 }, async t => {
   await runMultiGpuTest(t, { 'split-mode': 'layer' }, assertMultiDevice('layers'))
 })
 
-test('multi-gpu: split-mode=row distributes tensors across GPUs', { timeout: 600_000 }, async t => {
+safeTest('multi-gpu: split-mode=row distributes tensors across GPUs', { timeout: 600_000 }, async t => {
   await runMultiGpuTest(t, { 'split-mode': 'row' }, assertMultiDevice('tensors'))
 })
 
-test('multi-gpu: default (no split-mode) pins layers to a single device', { timeout: 600_000 }, async t => {
+safeTest('multi-gpu: default (no split-mode) pins layers to a single device', { timeout: 600_000 }, async t => {
   await runMultiGpuTest(t, {}, assertSingleDevice)
 })
 
-test('multi-gpu: split-mode=layer with tensor-split and main-gpu', { timeout: 600_000 }, async t => {
+safeTest('multi-gpu: split-mode=layer with tensor-split and main-gpu', { timeout: 600_000 }, async t => {
   await runMultiGpuTest(
     t,
     { 'split-mode': 'layer', 'tensor-split': '1,1', 'main-gpu': '0' },

@@ -211,7 +211,8 @@ test('[tools] prompt scenarios', { timeout: 1_800_000, skip: isDarwinX64 }, asyn
         _output: firstRun.text,
         stats: firstRun.stats,
         deviceId,
-        scenario: 'tool-calling'
+        scenario: 'tool-calling',
+        model: modelVariant.modelName.replace(/\.gguf$/i, '')
       }))
 
       const secondRun = await runPrompt(model, buildPrompt2(firstRun.text))
@@ -222,7 +223,8 @@ test('[tools] prompt scenarios', { timeout: 1_800_000, skip: isDarwinX64 }, asyn
         _output: secondRun.text,
         stats: secondRun.stats,
         deviceId,
-        scenario: 'tool-calling'
+        scenario: 'tool-calling',
+        model: modelVariant.modelName.replace(/\.gguf$/i, '')
       }))
     } finally {
       await release()
