@@ -12,10 +12,11 @@ const { setLogger } = require('../addonLogging')
 const MODELS_DIR = path.resolve(__dirname, '../models')
 const OUTPUT_DIR = path.resolve(__dirname, '../output')
 
-// Dedicated Wan 2.1 I2V 14B checkpoint (480p) gives proper image-to-video
-// motion. Fetch it via ./scripts/download-model-wan-i2v.sh (defaults to the
-// fp8_scaled variant used here -- ~16 GB on disk, ~20-24 GB at runtime).
-const DIFFUSION_MODEL = 'wan2.1_i2v_480p_14B_fp8_scaled.safetensors'
+// Dedicated Wan 2.1 I2V 14B checkpoint (480p) needs CLIP vision encoder
+// support not yet available in this build. Fall back to Wan 2.1 T2V 1.3B,
+// which also accepts img2vid and works with existing setup (T2V, VAE, UMT5).
+// For production I2V with motion preservation, consider Wan-Fun 1.3B I2V.
+const DIFFUSION_MODEL = 'wan2.1_t2v_1.3B_fp16.safetensors'
 const VAE_MODEL = 'wan_2.1_vae.safetensors'
 const T5XXL_MODEL = 'umt5_xxl_fp16.safetensors'
 
@@ -32,9 +33,7 @@ const PROMPT = 'the man slowly turns his head and blinks, soft natural lighting,
 const NEG_PROMPT = 'blurry, distorted, low quality, jittery, static, frozen, ' +
   'watermark, double face, extra limbs'
 
-// von-neumann.jpg is 500x627 (~4:5 portrait). Snap to the 480p I2V model's
-// training short side (480) and align to multiples of 8 -> 480x608. The C++
-// side resizes the init image to match these dims.
+// Portrait (~4:5 aspect ratio). Snap to multiples of 8 for compatibility.
 const WIDTH = 480
 const HEIGHT = 608
 
@@ -63,8 +62,8 @@ async function main () {
 
   const initImage = fs.readFileSync(INIT_IMAGE_PATH)
 
-  console.log('Wan 2.1 I2V 14B (480p) — image-to-video inference')
-  console.log('=================================================')
+  console.log('Wan 2.1 T2V 1.3B — image-to-video inference (img2vid mode)')
+  console.log('===========================================================')
   console.log('Model      :', DIFFUSION_MODEL)
   console.log('Init image :', INIT_IMAGE_PATH, `(${initImage.length.toLocaleString()} bytes)`)
   console.log('Prompt     :', PROMPT)
