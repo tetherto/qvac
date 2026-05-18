@@ -4,6 +4,8 @@
 #include <string>
 #include <unordered_map>
 
+#include <stable-diffusion.h>
+
 namespace sd_backend_selection {
 
 enum class BackendDevice : uint8_t { CPU, GPU };
@@ -42,5 +44,12 @@ BackendDevice resolveBackendForDevice(BackendDevice preferred);
  * This only applies when preferred is GPU. CPU preference always returns false.
  */
 bool shouldPreferOpenClForAdreno(BackendDevice preferred);
+
+/**
+ * Map config.device ("cpu", "gpu", or "auto") to stable-diffusion.cpp
+ * preferred_gpu_backend, using the same Adreno/OpenCL rules as SdModel::load().
+ */
+sd_backend_preference_t preferredGpuBackendForConfigDevice(
+    const std::string& device);
 
 } // namespace sd_backend_selection

@@ -50,3 +50,18 @@ TEST_F(SdBackendSelectionTest, ResolveBackendCpuPreferenceReturnsCPU) {
 TEST_F(SdBackendSelectionTest, CpuPreferenceDoesNotPreferOpenCl) {
   EXPECT_FALSE(shouldPreferOpenClForAdreno(BackendDevice::CPU));
 }
+
+TEST_F(SdBackendSelectionTest, PreferredGpuBackendCpuDevice) {
+  EXPECT_EQ(preferredGpuBackendForConfigDevice("cpu"), SD_BACKEND_PREF_CPU);
+}
+
+TEST_F(SdBackendSelectionTest, PreferredGpuBackendAutoDevice) {
+  EXPECT_EQ(preferredGpuBackendForConfigDevice("auto"), SD_BACKEND_PREF_AUTO);
+}
+
+TEST_F(SdBackendSelectionTest, PreferredGpuBackendGpuDeviceIsGpuOrCpu) {
+  const auto pref = preferredGpuBackendForConfigDevice("gpu");
+  EXPECT_TRUE(
+      pref == SD_BACKEND_PREF_GPU || pref == SD_BACKEND_PREF_OPENCL ||
+      pref == SD_BACKEND_PREF_CPU);
+}

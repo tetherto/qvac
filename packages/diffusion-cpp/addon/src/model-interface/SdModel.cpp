@@ -227,24 +227,8 @@ void SdModel::load() {
   params.enable_mmap = config_.mmap;
   params.offload_params_to_cpu = config_.offloadToCpu;
 
-  // Resolve the effective backend based on GPU capabilities.
-  // Adreno 800+ uses GPU (OpenCL), Adreno 600/700 is forced to CPU,
-  // everything else uses GPU (Vulkan).
-  auto preferredDevice = config_.device == "cpu"
-                             ? sd_backend_selection::BackendDevice::CPU
-                             : sd_backend_selection::BackendDevice::GPU;
-  auto effectiveDevice =
-      sd_backend_selection::resolveBackendForDevice(preferredDevice);
-  const bool preferOpenClForAdreno =
-      sd_backend_selection::shouldPreferOpenClForAdreno(preferredDevice);
-
-  if (effectiveDevice == sd_backend_selection::BackendDevice::CPU) {
-    params.preferred_gpu_backend = SD_BACKEND_PREF_CPU;
-  } else if (preferOpenClForAdreno) {
-    params.preferred_gpu_backend = SD_BACKEND_PREF_OPENCL;
-  } else {
-    params.preferred_gpu_backend = SD_BACKEND_PREF_GPU;
-  }
+  params.preferred_gpu_backend =
+      sd_backend_selection::preferredGpuBackendForConfigDevice(config_.device);
 
   // NOLINTNEXTLINE(cppcoreguidelines-avoid-do-while)
   QLOG_IF(

@@ -175,4 +175,24 @@ bool shouldPreferOpenClForAdreno(BackendDevice preferred) {
   return preferOpenCl;
 }
 
+sd_backend_preference_t preferredGpuBackendForConfigDevice(
+    const std::string& device) {
+  if (device == "cpu") {
+    return SD_BACKEND_PREF_CPU;
+  }
+  if (device == "auto") {
+    return SD_BACKEND_PREF_AUTO;
+  }
+
+  const BackendDevice preferred = BackendDevice::GPU;
+  const BackendDevice effective = resolveBackendForDevice(preferred);
+  if (effective == BackendDevice::CPU) {
+    return SD_BACKEND_PREF_CPU;
+  }
+  if (shouldPreferOpenClForAdreno(preferred)) {
+    return SD_BACKEND_PREF_OPENCL;
+  }
+  return SD_BACKEND_PREF_GPU;
+}
+
 } // namespace sd_backend_selection
