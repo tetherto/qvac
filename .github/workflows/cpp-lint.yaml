@@ -70,6 +70,7 @@ jobs:
 
       # - name: Setup LLVM
       #   uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
+      - uses: AutoModality/action-clean@v1
 
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2

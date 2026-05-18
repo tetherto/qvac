@@ -92,6 +92,8 @@ jobs:
             runner: macos-14
 
     steps:
+      - uses: AutoModality/action-clean@v1
+        if: startsWith(matrix.runner, 'qvac-')
       - name: Checkout addon repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
