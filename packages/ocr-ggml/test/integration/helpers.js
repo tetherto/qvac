@@ -69,8 +69,8 @@ try {
         }
       },
       writeReport () {
-        var json = JSON.stringify(this.toJSON())
-        var dirs = []
+        const json = JSON.stringify(this.toJSON())
+        const dirs = []
         if (global.testDir) dirs.push(global.testDir)
         if (platform === 'android') {
           dirs.push('/sdcard/Android/data/io.tether.test.qvac/files')
@@ -78,10 +78,10 @@ try {
           dirs.push('/data/local/tmp')
         }
         dirs.push('/tmp')
-        for (var di = 0; di < dirs.length; di++) {
+        for (let di = 0; di < dirs.length; di++) {
           try {
             try { fs.mkdirSync(dirs[di], { recursive: true }) } catch (_) {}
-            var p = path.join(dirs[di], 'perf-report.json')
+            const p = path.join(dirs[di], 'perf-report.json')
             fs.writeFileSync(p, json)
             console.log('[PERF_REPORT_PATH]' + p)
             return
@@ -94,15 +94,15 @@ try {
       writeStepSummary () {},
       writeToConsole (opts) {
         try {
-          var data = this.toJSON()
-          var json = JSON.stringify(data)
-          var CHUNK = 800
+          const data = this.toJSON()
+          const json = JSON.stringify(data)
+          const CHUNK = 800
           if (json.length <= CHUNK) {
             console.log('[PERF_REPORT_START]' + json + '[PERF_REPORT_END]')
           } else {
-            var id = Date.now().toString(36)
-            var n = Math.ceil(json.length / CHUNK)
-            for (var i = 0; i < n; i++) {
+            const id = Date.now().toString(36)
+            const n = Math.ceil(json.length / CHUNK)
+            for (let i = 0; i < n; i++) {
               console.log('[PERF_CHUNK:' + id + ':' + i + ':' + n + ']' + json.substring(i * CHUNK, (i + 1) * CHUNK))
             }
           }
@@ -256,7 +256,7 @@ function defaultSampleImage () {
       if (mapped) return _stripFileUrl(mapped)
     }
     throw new Error(
-      "Mobile asset not found in global.assetPaths: english.png. " +
+      'Mobile asset not found in global.assetPaths: english.png. ' +
       "Did 'npm run mobile:copy-prebuilds' run during test setup?"
     )
   }
