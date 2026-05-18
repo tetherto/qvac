@@ -8,13 +8,13 @@ Single source of truth for every label that affects CI behaviour in this repo.
 
 ## `verified` — secret-bearing CI authorisation
 
-This is the label that gates every secret-bearing PR job in the repo.
+This is the **single** label that gates every privileged PR job in the repo. The legacy `verify` label has been retired — `verified` is now the only authorisation label CI reads.
 
 | | |
 |---|---|
-| **Purpose** | Authorise the `label-gate` composite action so that secret-bearing jobs (sanity-checks, prebuilds, publish, deploy, etc.) are allowed to run on a PR. |
+| **Purpose** | Authorise the `label-gate` composite action (secret-bearing jobs) and the `validate-pr` / addon-cpp / npm-publish gates (non-secret heavy CI). One label, one ceremony. |
 | **Who can apply** | Active member of `@tetherto/qvac-internal-dev`, `@tetherto/qvac-internal-merge`, or `@tetherto/qvac-internal-release`. See [TEAMS.md](TEAMS.md). |
-| **What it gates** | Every secret-bearing workflow under `.github/workflows/` (108 workflows as of QVAC-18612). Specifically, every job downstream of `needs: [..., label-gate]` whose `if:` includes `needs.label-gate.outputs.authorised == 'true'`. |
+| **What it gates** | Every secret-bearing workflow under `.github/workflows/` (108 workflows as of QVAC-18612), plus the per-package `validate-pr` merge assertion (`public-pr.yml`), the `inference-addon-cpp` native + JS test matrices, the `public-reusable-npm.yml` integration-test step, and `pr-models-validation-registry-server.yml`'s validate/test jobs. Specifically, every job downstream of `needs: [..., label-gate]` whose `if:` includes `needs.label-gate.outputs.authorised == 'true'`, plus every `if: contains(..., 'verified')` check. |
 | **Behaviour on `synchronize`** | When a non-trusted actor pushes new commits to a verified PR, `label-gate` strips the label automatically. A trusted actor must re-apply it after reviewing the new commits. This prevents authorisation from silently inheriting across content changes by an untrusted contributor. |
 | **Behaviour on apply by non-trusted actor** | The label is stripped immediately and the gate denies. This avoids a "look, it's verified" social signal that doesn't actually mean the PR is authorised. |
 | **Approval bot tier** | Recognised as **tier 1** by `approval-check-worker`. |
@@ -40,7 +40,7 @@ The following labels are recognised by CI workflows but are not part of the `lab
 
 | Label | Purpose | Triggered by | Notes |
 |---|---|---|---|
-| `verified` (see `verify` deprecation note) | Canonical authorisation label — see the [`verified` section above](#verified--secret-bearing-ci-authorisation) for the full trust model. | `label-gate` composite action (108 secret-bearing workflows) | `verify` is a **deprecated** legacy alias for the same intent, still recognised by `public-reusable-npm.yml`, `pr-test-inference-addon-cpp*.yml`, and `pr-models-validation-registry-server.yml` pending migration to `verified`. Do not document `verify` as a recommended action in new tooling. |
+| `verified` | Canonical authorisation label — see the [`verified` section above](#verified--secret-bearing-ci-authorisation) for the full trust model. | `label-gate` composite action plus the `public-pr.yml`, `public-reusable-npm.yml`, `pr-test-inference-addon-cpp*.yml`, and `pr-models-validation-registry-server.yml` non-secret gates. | Replaces the legacy `verify` label, which was retired in favour of a single authorisation ceremony. |
 | `safe-to-test` | SDK pod security gate — reviewer has audited `packages/sdk/` package + workflow changes from a fork PR. | `pr-checks-sdk-pod.yml` | Org-wide secret authorisation is now handled by `verified`; `safe-to-test` remains in use for SDK pod check-running. |
 | `staging` | Deploys the PR to the staging environment for smoke testing. | Staging deploy workflows | Apply when a PR needs out-of-band testing on real infrastructure. |
 | `publish` | Triggers a GitHub Packages publish from the PR (pre-release / dev build). | Publish workflows | Use sparingly; consumes a published version slot. |

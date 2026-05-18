@@ -27,34 +27,30 @@ jobs:
         env:
           EVENT: ${{ github.event_name }}
           ACTION: ${{ github.event.action }}
-          LABEL_NAME: ${{ github.event.label.name }}
-          HAS_VERIFY_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'verify') }}
+          IS_FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
+          HAS_VERIFIED_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'verified') }}
         run: |
           if [ "$EVENT" != "pull_request" ]; then
             echo "allowed=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          if [ "$ACTION" = "synchronize" ]; then
-            echo "::notice::New commits pushed; re-apply the verify label after review to run JS tests."
+          # Fork sync: deny pending re-review. label-gate (in sibling pull_request_target
+          # workflows) will strip 'verified' shortly anyway; this just makes the JS
+          # matrix skip immediately rather than racing the strip.
+          if [ "$IS_FORK" = "true" ] && [ "$ACTION" = "synchronize" ]; then
+            echo "::notice::Fork PR synchronize: JS tests skipped pending re-application of 'verified'."
             echo "allowed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          if [ "$ACTION" != "labeled" ] || [ "$LABEL_NAME" != "verify" ]; then
-            echo "::notice::JS tests run only when the verify label is freshly applied."
-            echo "allowed=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          if [ "$HAS_VERIFY_LABEL" = "true" ]; then
+          if [ "$HAS_VERIFIED_LABEL" = "true" ]; then
             echo "allowed=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          echo "::error::JS tests require the verify label."
+          echo "::notice::JS tests require the 'verified' label. A trusted reviewer must apply it after reviewing the diff."
           echo "allowed=false" >> "$GITHUB_OUTPUT"
-          exit 1
 
   run-js-tests:
     needs: authorize-js-tests

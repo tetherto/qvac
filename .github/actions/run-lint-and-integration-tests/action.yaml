@@ -1,5 +1,5 @@
 name: Run lint & integration tests
-description: "Run linting and integration tests when verify label is present"
+description: "Run linting and integration tests when the 'verified' label is present"
 
 inputs:
   npm-token:
