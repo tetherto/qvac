@@ -92,7 +92,7 @@ test('run | throws when lora is an empty string', async (t) => {
     files: {
       model: '/tmp/stable-diffusion-v2-1-Q4_0.gguf'
     },
-    config: { threads: 1 },
+    config: { threads: 1, diffusion_fa: true },
     logger: console
   })
 
@@ -113,7 +113,7 @@ test('run | throws when lora is not a string', async (t) => {
     files: {
       model: '/tmp/stable-diffusion-v2-1-Q4_0.gguf'
     },
-    config: { threads: 1 },
+    config: { threads: 1, diffusion_fa: true },
     logger: console
   })
 
@@ -134,7 +134,7 @@ test('run | throws when lora is a relative path', async (t) => {
     files: {
       model: '/tmp/stable-diffusion-v2-1-Q4_0.gguf'
     },
-    config: { threads: 1 },
+    config: { threads: 1, diffusion_fa: true },
     logger: console
   })
 
@@ -157,7 +157,7 @@ test('run | throws when ESRGAN upscale is requested without files.esrgan', async
     files: {
       model: '/tmp/stable-diffusion-v2-1-Q4_0.gguf'
     },
-    config: { threads: 1 },
+    config: { threads: 1, diffusion_fa: true },
     logger: console
   })
 
@@ -178,7 +178,7 @@ test('run | forwards ESRGAN upscale params when files.esrgan is provided', async
       model: '/tmp/stable-diffusion-v2-1-Q4_0.gguf',
       esrgan: '/tmp/RealESRGAN_x4plus_anime_6B.pth'
     },
-    config: { threads: 1 },
+    config: { threads: 1, diffusion_fa: true },
     logger: console
   })
 
@@ -367,7 +367,7 @@ test('FLUX img2img | throws when prediction is omitted', async (t) => {
       model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
       llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
     },
-    config: { threads: 1 },
+    config: { threads: 1, diffusion_fa: true },
     logger: console
   })
 
@@ -394,7 +394,7 @@ test('FLUX img2img | throws when prediction is "auto"', async (t) => {
       model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
       llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
     },
-    config: { threads: 1, prediction: 'auto' },
+    config: { threads: 1, prediction: 'auto', diffusion_fa: true },
     logger: console
   })
 
@@ -417,7 +417,7 @@ test('FLUX img2img | does NOT throw for txt2img even without prediction', async 
       model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
       llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
     },
-    config: { threads: 1 },
+    config: { threads: 1, diffusion_fa: true },
     logger: console
   })
 
@@ -440,7 +440,7 @@ test('non-FLUX model | does NOT throw for img2img without prediction', async (t)
     files: {
       model: '/tmp/stable-diffusion-v2-1-Q4_0.gguf'
     },
-    config: { threads: 1 },
+    config: { threads: 1, diffusion_fa: true },
     logger: console
   })
 
@@ -464,7 +464,7 @@ test('init_images | rejects combining init_image + init_images', async (t) => {
       model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
       llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
     },
-    config: { threads: 1, prediction: 'flux2_flow' },
+    config: { threads: 1, prediction: 'flux2_flow', diffusion_fa: true },
     logger: console
   })
 
@@ -488,7 +488,7 @@ test('init_images | rejects non-FLUX.2 model (no files.llm)', async (t) => {
     files: {
       model: '/tmp/stable-diffusion-v2-1-Q4_0.gguf'
     },
-    config: { threads: 1 },
+    config: { threads: 1, diffusion_fa: true },
     logger: console
   })
 
@@ -512,7 +512,7 @@ test('init_images | rejects FLUX.2 model without prediction=flux2_flow', async (
       model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
       llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
     },
-    config: { threads: 1 /* no prediction */ },
+    config: { threads: 1, diffusion_fa: true /* no prediction */ },
     logger: console
   })
 
@@ -536,7 +536,7 @@ test('init_images | rejects non-Uint8Array entries', async (t) => {
       model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
       llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
     },
-    config: { threads: 1, prediction: 'flux2_flow' },
+    config: { threads: 1, prediction: 'flux2_flow', diffusion_fa: true },
     logger: console
   })
 
@@ -560,7 +560,7 @@ test('init_images | rejects empty Uint8Array entry', async (t) => {
       model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
       llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
     },
-    config: { threads: 1, prediction: 'flux2_flow' },
+    config: { threads: 1, prediction: 'flux2_flow', diffusion_fa: true },
     logger: console
   })
 
@@ -592,7 +592,7 @@ test('init_images | warns when prompt is missing all @imageN placeholders', asyn
       model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
       llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
     },
-    config: { threads: 1, prediction: 'flux2_flow' },
+    config: { threads: 1, prediction: 'flux2_flow', diffusion_fa: true },
     logger
   })
 
@@ -626,7 +626,7 @@ test('init_images | warns when prompt references only some @imageN', async (t) =
       model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
       llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
     },
-    config: { threads: 1, prediction: 'flux2_flow' },
+    config: { threads: 1, prediction: 'flux2_flow', diffusion_fa: true },
     logger
   })
 
@@ -659,7 +659,7 @@ test('init_images | logs "fusion" mode info message', async (t) => {
       model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
       llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
     },
-    config: { threads: 1, prediction: 'flux2_flow' },
+    config: { threads: 1, prediction: 'flux2_flow', diffusion_fa: true },
     logger
   })
 
@@ -684,7 +684,7 @@ test('init_image | still works on FLUX.2 (regression — single-image path uncha
       model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
       llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
     },
-    config: { threads: 1, prediction: 'flux2_flow' },
+    config: { threads: 1, prediction: 'flux2_flow', diffusion_fa: true },
     logger: console
   })
 
