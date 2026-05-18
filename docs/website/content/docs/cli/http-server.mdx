@@ -2,6 +2,7 @@
 title: HTTP server
 description: Run a local HTTP server that exposes an OpenAI-compatible API.
 schemaType: TechArticle
+tocMaxDepth: 3
 ---
 
 ## Overview
@@ -11,13 +12,13 @@ To run the server, you need the `@qvac/sdk` and `@qvac/cli` npm packages install
 ### AI capabilities
 
 At the moment, the HTTP server supports the following QVAC AI capabilities:
-* [Completion](/ai-capabilities/text-generation) — via `/v1/chat/completions`, `/v1/responses` (modern), or `/v1/completions` (legacy).
-* [Text embeddings](/ai-capabilities/text-embeddings) — via `/v1/embeddings`.
-* [Transcription](/ai-capabilities/transcription) — via `/v1/audio/transcriptions`.
-* [Translation](/ai-capabilities/translation) (audio-to-English only) — via `/v1/audio/translations` (Whisper translate task).
-* [Text-to-speech](/ai-capabilities/text-to-speech) — via `/v1/audio/speech`.
-* [Image generation](/ai-capabilities/image-generation) — via `/v1/images/generations` and `/v1/images/edits`.
-* [RAG](/ai-capabilities/rag) — via the `/v1/files` and `/v1/vector_stores` endpoints.
+* Text generation — via [Chat](#chat) (`/v1/chat/completions`), [Responses](#responses) (`/v1/responses`, modern), or [Legacy completions](#legacy-completions) (`/v1/completions`).
+* [Text embeddings](#embeddings) — via `/v1/embeddings`.
+* RAG — via [Files](#files) (`/v1/files`) and [Vector stores](#vector-stores) (`/v1/vector_stores`).
+* [Image generation](#images) — via `/v1/images/generations` and `/v1/images/edits`.
+* Transcription — via [Audio](#audio) (`/v1/audio/transcriptions`).
+* Text-to-speech — via [Audio](#audio) (`/v1/audio/speech`).
+* Translation (audio-to-English only) — via [Audio](#audio) (`/v1/audio/translations`, Whisper translate task).
 
 ### Compatible tools
 
@@ -144,38 +145,42 @@ All endpoints follow the [OpenAI API](https://platform.openai.com/docs/api-refer
 
 | Resource | Method | Path |
 | --- | --- | --- |
-| Models | `GET` | `/v1/models` |
-| | `GET` | `/v1/models/:id` |
-| | `DELETE` | `/v1/models/:id` |
-| Chat | `POST` | `/v1/chat/completions` |
-| Responses | `POST` | `/v1/responses` |
-| | `GET` | `/v1/responses/:id` |
-| | `DELETE` | `/v1/responses/:id` |
-| | `GET` | `/v1/responses/:id/input_items` |
-| Legacy completions | `POST` | `/v1/completions` |
-| Embeddings | `POST` | `/v1/embeddings` |
-| Audio | `POST` | `/v1/audio/transcriptions` |
-| | `POST` | `/v1/audio/translations` |
-| | `POST` | `/v1/audio/speech` |
-| Images | `POST` | `/v1/images/generations` |
-| | `POST` | `/v1/images/edits` |
-| Files | `POST` | `/v1/files` |
-| | `GET` | `/v1/files` |
-| | `GET` | `/v1/files/:id` |
-| | `GET` | `/v1/files/:id/content` |
-| Vector stores | `GET` | `/v1/vector_stores` |
-| | `POST` | `/v1/vector_stores` |
-| | `GET` | `/v1/vector_stores/:id` |
-| | `POST` | `/v1/vector_stores/:id` |
-| | `DELETE` | `/v1/vector_stores/:id` |
-| | `POST` | `/v1/vector_stores/:id/search` |
-| | `POST` | `/v1/vector_stores/:id/files` |
+| [Models](#models) | `GET` | [`/v1/models`](#get-v1models) |
+| | `GET` | [`/v1/models/:id`](#get-v1modelsid) |
+| | `DELETE` | [`/v1/models/:id`](#delete-v1modelsid) |
+| [Chat](#chat) | `POST` | [`/v1/chat/completions`](#post-v1chatcompletions) |
+| [Responses](#responses) | `POST` | [`/v1/responses`](#post-v1responses) |
+| | `GET` | [`/v1/responses/:id`](#get-v1responsesid) |
+| | `DELETE` | [`/v1/responses/:id`](#delete-v1responsesid) |
+| | `GET` | [`/v1/responses/:id/input_items`](#get-v1responsesidinput_items) |
+| [Legacy completions](#legacy-completions) | `POST` | [`/v1/completions`](#post-v1completions) |
+| [Embeddings](#embeddings) | `POST` | [`/v1/embeddings`](#post-v1embeddings) |
+| [Audio](#audio) | `POST` | [`/v1/audio/transcriptions`](#post-v1audiotranscriptions) |
+| | `POST` | [`/v1/audio/translations`](#post-v1audiotranslations) |
+| | `POST` | [`/v1/audio/speech`](#post-v1audiospeech) |
+| [Images](#images) | `POST` | [`/v1/images/generations`](#post-v1imagesgenerations) |
+| | `POST` | [`/v1/images/edits`](#post-v1imagesedits) |
+| [Files](#files) | `POST` | [`/v1/files`](#post-v1files) |
+| | `GET` | [`/v1/files`](#get-v1files) |
+| | `GET` | [`/v1/files/:id`](#get-v1filesid) |
+| | `GET` | [`/v1/files/:id/content`](#get-v1filesidcontent) |
+| [Vector stores](#vector-stores) | `GET` | [`/v1/vector_stores`](#get-v1vector_stores) |
+| | `POST` | [`/v1/vector_stores`](#post-v1vector_stores) |
+| | `GET` | [`/v1/vector_stores/:id`](#get-v1vector_storesid) |
+| | `POST` | [`/v1/vector_stores/:id`](#post-v1vector_storesid) |
+| | `DELETE` | [`/v1/vector_stores/:id`](#delete-v1vector_storesid) |
+| | `POST` | [`/v1/vector_stores/:id/search`](#post-v1vector_storesidsearch) |
+| | `POST` | [`/v1/vector_stores/:id/files`](#post-v1vector_storesidfiles) |
 
 <Callout type="info">
 All multipart endpoints (`/v1/audio/*`, `/v1/images/edits`, `/v1/files`) cap the request body at **25 MB**.
 </Callout>
 
-### `GET /v1/models`
+### Models
+
+Inspect and unload models registered in `serve.models`.
+
+#### `GET /v1/models`
 
 List all loaded models.
 
@@ -194,7 +199,7 @@ Response:
 }
 ```
 
-### `GET /v1/models/:id`
+#### `GET /v1/models/:id`
 
 Get details of a specific loaded model.
 
@@ -202,7 +207,7 @@ Get details of a specific loaded model.
 curl http://localhost:11434/v1/models/my-llm
 ```
 
-### `DELETE /v1/models/:id`
+#### `DELETE /v1/models/:id`
 
 Unload a model, releasing its resources.
 
@@ -216,7 +221,11 @@ Response:
 { "id": "my-llm", "object": "model", "deleted": true }
 ```
 
-### `POST /v1/chat/completions`
+### Chat
+
+OpenAI-compatible chat completions backed by any alias whose endpoint category is `chat` in `serve.models`.
+
+#### `POST /v1/chat/completions`
 
 Generate a chat completion. Supports both blocking and streaming (SSE) modes, tool/function calling, structured output, and per-request generation parameters.
 
@@ -315,9 +324,13 @@ Structured output (`json_object` / `json_schema`) cannot be combined with `tools
 
 The following OpenAI parameters are accepted but ignored (a warning is logged): `n`, `logprobs`, `stop`, `top_logprobs`, `logit_bias`, `parallel_tool_calls`, `stream_options`.
 
-### `POST /v1/responses`
+### Responses
 
 OpenAI-compatible Responses API. Supports blocking, SSE streaming, retrieval by id, and `previous_response_id` chaining for multi-turn conversations. Backed by the same chat models registered under `serve.models` (any alias whose endpoint category is `chat`).
+
+#### `POST /v1/responses`
+
+Create a response.
 
 **Blocking request:**
 
@@ -387,9 +400,13 @@ Paginate the original `input` items of a stored response. Accepts `limit` and `a
 curl "http://localhost:11434/v1/responses/resp_abc123/input_items?limit=20"
 ```
 
-### `POST /v1/completions`
+### Legacy completions
 
 Legacy (pre-chat) OpenAI text-completions endpoint, kept for compatibility with older OpenAI clients and SDKs that have not migrated to `/v1/chat/completions`. Backed by the same chat-category models — any alias registered with endpoint category `chat` in `serve.models` serves both endpoints with no extra configuration.
+
+#### `POST /v1/completions`
+
+Generate a text completion from a raw prompt.
 
 **Blocking, single prompt:**
 
@@ -427,7 +444,11 @@ curl http://localhost:11434/v1/completions \
 
 The same generation parameters as `/v1/chat/completions` are accepted. The following OpenAI fields are accepted and ignored (warning logged): `logprobs`, `echo`, `best_of`, `suffix`, `stop`, `logit_bias`, `stream_options`, `user`, `response_format`, and `n` when greater than `1`.
 
-### `POST /v1/embeddings`
+### Embeddings
+
+Generate vector embeddings backed by any alias whose endpoint category is `embedding`.
+
+#### `POST /v1/embeddings`
 
 Generate text embeddings. Accepts a single string or a batch of strings.
 
@@ -470,7 +491,11 @@ Response:
 `encoding_format` (only `float` is supported) and `dimensions` are accepted but ignored.
 </Callout>
 
-### `POST /v1/audio/transcriptions`
+### Audio
+
+Transcription, translation, and text-to-speech endpoints. Transcription and translation use `multipart/form-data`; speech accepts JSON and returns binary audio.
+
+#### `POST /v1/audio/transcriptions`
 
 Transcribe audio using Whisper or Parakeet models. Uses `multipart/form-data`. Returns text in the source language.
 
@@ -503,7 +528,7 @@ curl http://localhost:11434/v1/audio/transcriptions \
   -F "prompt=President Kennedy speech about space exploration"
 ```
 
-#### Parameters
+##### Parameters
 
 | Parameter | Description | Required |
 | --- | --- | --- |
@@ -518,7 +543,7 @@ Unsupported `response_format` values (`srt`, `vtt`, `verbose_json`) return a `40
 `language` and `temperature` are accepted but currently only configurable at model load time (via `serve.models` config), not per-request. A warning is logged when these are sent.
 </Callout>
 
-### `POST /v1/audio/translations`
+#### `POST /v1/audio/translations`
 
 Translate audio into **English** text. Maps to Whisper's translate task (not "transcribe then run a text translator"). Uses `multipart/form-data`.
 
@@ -531,7 +556,7 @@ curl http://localhost:11434/v1/audio/translations \
 
 Response: `{ "text": "..." }` for `json`; raw UTF-8 body for `text`.
 
-#### Parameters
+##### Parameters
 
 | Parameter | Description | Required |
 | --- | --- | --- |
@@ -542,7 +567,7 @@ Response: `{ "text": "..." }` for `json`; raw UTF-8 body for `text`.
 
 The `language` field is **not supported** — output is always English. Use `/v1/audio/transcriptions` if you need non-English text.
 
-#### Registering a translation model
+##### Registering a translation model
 
 Use the virtual SDK type **`whispercpp-audio-translation`** in `serve.models`. The CLI resolves it to the `whispercpp-transcription` engine and forces `translate: true` on the load-time `modelConfig`. You can register the same Whisper weights twice — once for transcription, once for translation:
 
@@ -561,7 +586,7 @@ Use the virtual SDK type **`whispercpp-audio-translation`** in `serve.models`. T
 }
 ```
 
-### `POST /v1/audio/speech`
+#### `POST /v1/audio/speech`
 
 OpenAI-compatible text-to-speech, backed by the SDK's `textToSpeech` capability (Chatterbox or Supertonic). Body is JSON, response body is binary audio.
 
@@ -572,7 +597,7 @@ curl http://localhost:11434/v1/audio/speech \
   --output speech.wav
 ```
 
-#### Loaded model
+##### Loaded model
 
 Register a TTS model in `serve.models` with `type: "tts"` (and typically `preload: true` to avoid cold-start latency):
 
@@ -604,7 +629,7 @@ Register a TTS model in `serve.models` with `type: "tts"` (and typically `preloa
 **Drop-in for OpenAI clients:** alias an OpenAI TTS model name (`tts-1`, `gpt-4o-mini-tts`) to your loaded TTS model so SDKs that hard-code the OpenAI name work without code change.
 </Callout>
 
-#### Voice → model alias
+##### Voice → model alias
 
 OpenAI clients select a voice via the `voice` field. QVAC TTS engines bind voice character to **load-time** config — Chatterbox uses `referenceAudioSrc`; Supertonic uses `ttsVoiceStyleSrc`. The route resolves the backing model in this order:
 
@@ -633,7 +658,7 @@ When `voice` is omitted, the configured **`serve.openai.audio.speech.defaultVoic
 }
 ```
 
-#### Request
+##### Request
 
 | Field | Description | Required |
 | --- | --- | --- |
@@ -644,7 +669,7 @@ When `voice` is omitted, the configured **`serve.openai.audio.speech.defaultVoic
 
 `mp3`, `opus`, `aac`, and `flac` return `400 unsupported_response_format` (no audio encoder is bundled). `speed`, `instructions`, and `stream_format` are accepted but ignored — dropped fields are echoed back in the `X-QVAC-Ignored-Params` response header.
 
-#### Response
+##### Response
 
 The response body is binary audio. Headers always include:
 
@@ -658,7 +683,11 @@ The response body is binary audio. Headers always include:
 
 The route always **buffers the full audio** before responding (chunked HTTP streaming is tracked as a follow-up).
 
-### `POST /v1/images/generations`
+### Images
+
+Text-to-image and image-to-image endpoints backed by any alias whose endpoint category is `image` (built-in addons that resolve to this category are `diffusion` and `sdcpp-generation`).
+
+#### `POST /v1/images/generations`
 
 Text-to-image generation backed by the SDK's `diffusion()` primitive.
 
@@ -684,7 +713,7 @@ Response:
 }
 ```
 
-#### Loaded model
+##### Loaded model
 
 Register an alias whose endpoint category is `image` (built-in addons that resolve to this category are `diffusion` and `sdcpp-generation`):
 
@@ -706,7 +735,7 @@ Register an alias whose endpoint category is `image` (built-in addons that resol
 **Drop-in for OpenAI clients:** alias an OpenAI image-model name (`gpt-image-2`, `dall-e-2`) to your loaded diffusion model.
 </Callout>
 
-#### `response_format`: `b64_json` (default) or `url`
+##### `response_format`: `b64_json` (default) or `url`
 
 - **`b64_json`** (default) — `data[].b64_json` carries the inline base64 PNG. No server-side state.
 - **`url`** — requires `--public-base-url <origin>` (or `serve.publicBaseUrl` in the config). The image is stored in the in-memory ephemeral files store and `data[].url` resolves to `${publicBaseUrl}/v1/files/{id}/content`. Each item also carries `expires_at` (Unix seconds) so clients know exactly when the URL stops working.
@@ -734,13 +763,13 @@ curl https://api.example.com/v1/images/generations \
 }
 ```
 
-#### Streaming (`stream: true`)
+##### Streaming (`stream: true`)
 
 The response is `text/event-stream` and emits one `image_generation.completed` event per generated image (always carrying inline `b64_json`, regardless of the requested `response_format`), then `[DONE]`.
 
 The SDK does not surface intermediate image bytes (only step ticks via `progressStream`), so `image_generation.partial_image` events are not produced. This matches OpenAI's documented behavior for `partial_images: 0`.
 
-#### Hard fails (`400`)
+##### Hard fails (`400`)
 
 The server is intentionally loud about every OpenAI image-API field it cannot honor without producing the wrong bytes:
 
@@ -757,7 +786,7 @@ The server is intentionally loud about every OpenAI image-API field it cannot ho
 
 The following OpenAI fields are accepted and silently ignored (warning logged) because they are advisory: `quality`, `style`, `moderation`, `partial_images`, `user`, `input_fidelity`.
 
-### `POST /v1/images/edits`
+#### `POST /v1/images/edits`
 
 Image-to-image (img2img) edits. Uses `multipart/form-data`. Shares the same validation, response shape, and `response_format` rules as `/v1/images/generations`.
 
@@ -769,7 +798,7 @@ curl http://localhost:11434/v1/images/edits \
   -F "strength=0.65"
 ```
 
-#### Multipart fields
+##### Multipart fields
 
 | Field | Description |
 | --- | --- |
@@ -790,14 +819,9 @@ curl http://localhost:11434/v1/images/edits \
 
 The `/v1/files` endpoints expose an **in-memory** ephemeral file store used as the backing storage for image `url` responses and for vector-store ingestion. There is no disk or P2P persistence; entries are evicted by TTL or capacity.
 
-| Method | Path | Purpose |
-| --- | --- | --- |
-| `POST` | `/v1/files` | Upload bytes (multipart). |
-| `GET` | `/v1/files` | List files currently held in memory. |
-| `GET` | `/v1/files/:id` | File metadata. |
-| `GET` | `/v1/files/:id/content` | Raw bytes with the stored `Content-Type` (used by image `response_format=url`). |
+#### `POST /v1/files`
 
-**Upload:**
+Upload bytes (multipart).
 
 ```bash
 curl http://localhost:11434/v1/files \
@@ -819,6 +843,18 @@ Response:
 }
 ```
 
+#### `GET /v1/files`
+
+List files currently held in memory.
+
+#### `GET /v1/files/:id`
+
+Retrieve file metadata.
+
+#### `GET /v1/files/:id/content`
+
+Return the raw bytes with the stored `Content-Type` (used by image `response_format=url`).
+
 #### Eviction
 
 Defaults: **1 h TTL**, **256 MB** total cap, **256 files** cap, oldest-first eviction. Every eviction logs a `warn` line with the reason (`ttl` / `max_files` / `max_bytes`). Files are also removed automatically when attached to a vector store via `POST /v1/vector_stores/:id/files`. `GET /v1/files/:id/content` sets `Cache-Control: private, max-age=<seconds-until-eviction>` so downstream proxies cannot serve bytes the store has dropped.
@@ -827,15 +863,33 @@ Defaults: **1 h TTL**, **256 MB** total cap, **256 files** cap, oldest-first evi
 
 OpenAI-compatible vector-store endpoints backed by the SDK's RAG primitives. Each vector store maps 1:1 to a RAG workspace.
 
-| Method | Path | Purpose |
-| --- | --- | --- |
-| `GET` | `/v1/vector_stores` | List all stores (merged with on-disk RAG workspaces). |
-| `POST` | `/v1/vector_stores` | Create a new store. |
-| `GET` | `/v1/vector_stores/:id` | Retrieve store metadata. |
-| `POST` | `/v1/vector_stores/:id` | Update `name`, `expires_after`, or `metadata`. |
-| `DELETE` | `/v1/vector_stores/:id` | Delete the store and the underlying RAG workspace. |
-| `POST` | `/v1/vector_stores/:id/search` | Embed `query` and run top-K similarity search. |
-| `POST` | `/v1/vector_stores/:id/files` | Attach a previously-uploaded `/v1/files` entry (UTF-8 text content). |
+#### `GET /v1/vector_stores`
+
+List all stores (merged with on-disk RAG workspaces).
+
+#### `POST /v1/vector_stores`
+
+Create a new store.
+
+#### `GET /v1/vector_stores/:id`
+
+Retrieve store metadata.
+
+#### `POST /v1/vector_stores/:id`
+
+Update `name`, `expires_after`, or `metadata`.
+
+#### `DELETE /v1/vector_stores/:id`
+
+Delete the store and the underlying RAG workspace.
+
+#### `POST /v1/vector_stores/:id/search`
+
+Embed `query` and run top-K similarity search.
+
+#### `POST /v1/vector_stores/:id/files`
+
+Attach a previously-uploaded `/v1/files` entry (UTF-8 text content).
 
 **End-to-end ingest + search:**
 
@@ -877,7 +931,7 @@ Once a vector store has been ingested with a particular embedding model, subsequ
 
 Search returns OpenAI-shaped `vector_store.search_results.page` objects. Each chunk's `attributes` include the originating `file_id` and `filename` when they were attached through the file flow.
 
-## Authentication
+### Authentication
 
 By default, the server accepts unauthenticated requests on `127.0.0.1`. To require a Bearer token, run the server with the `--api-key` flag:
 
