@@ -83,33 +83,10 @@ jobs:
       - name: Report verified version
         run: 'echo "Verified qvac-fabric version: ${{ steps.lockstep.outputs.version }}"'
 
-  # Gate the workflow so label events (and other PR_target quirks) don't trigger unrelated packages.
-  changes:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      pkg: ${{ steps.filter.outputs.pkg }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          fetch-depth: 0
-
-      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # 4.0.1
-        id: filter
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          filters: |
-            pkg:
-              - "packages/ocr-ggml/**"
-              - ".github/workflows/*ocr-ggml*.yml"
-
   sanity-checks:
-    if: |-
-      needs.label-gate.outputs.authorised == 'true' && ((needs.changes.outputs.pkg == 'true' && needs.authorize.outputs.allowed == 'true') || github.event_name == 'workflow_dispatch')
-    needs: 
+    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch')
+    needs:
       - authorize
-      - changes
       - label-gate
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -135,7 +112,7 @@ jobs:
         continue-on-error: true
 
   cpp-lint:
-    needs: [authorize, changes, label-gate]
+    needs: [authorize, label-gate]
     if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/cpp-lint.yaml
     secrets: inherit
@@ -170,9 +147,8 @@ jobs:
       pull-requests: write
       packages: write
       id-token: write
-    needs: [authorize, changes, label-gate]
-    if: |-
-      needs.label-gate.outputs.authorised == 'true' && ((needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') && ( github.event_name == 'workflow_dispatch' || needs.authorize.outputs.allowed == 'true' ))
+    needs: [authorize, label-gate]
+    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/prebuilds-ocr-ggml.yml
     secrets: inherit
     with:
@@ -184,9 +160,8 @@ jobs:
       contents: read
       packages: read
       id-token: write
-    needs: [authorize, changes, prebuild, label-gate]
-    if: |-
-      needs.label-gate.outputs.authorised == 'true' && ((needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') && ( github.event_name == 'workflow_dispatch' || needs.authorize.outputs.allowed == 'true' ))
+    needs: [authorize, prebuild, label-gate]
+    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/integration-test-ocr-ggml.yml
     secrets: inherit
     with:
@@ -194,8 +169,8 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
   merge-guard:
-    needs: [authorize, changes, sanity-checks, prebuild, run-integration-tests, label-gate]
-    if: always() && needs.label-gate.outputs.authorised == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
+    needs: [authorize, sanity-checks, prebuild, run-integration-tests, label-gate]
+    if: always() && needs.label-gate.outputs.authorised == 'true'
     uses: ./.github/workflows/public-pr.yml
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
