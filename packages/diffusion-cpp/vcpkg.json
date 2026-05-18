@@ -15,7 +15,7 @@
     },
     {
       "name": "stable-diffusion-cpp",
-      "version>=": "2026-03-01#4"
+      "version>=": "2026-03-01#5"
     },
     "stb"
   ],

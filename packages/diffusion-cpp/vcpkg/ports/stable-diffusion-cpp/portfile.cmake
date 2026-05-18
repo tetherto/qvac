@@ -21,6 +21,9 @@
 # get_upscaler_backend_device, SD_CPU_ONLY CPU init fallback to ggml_backend_cpu_init,
 # and explicit CPU/GPU/AUTO preference wiring for RuntimeStats.
 #
+# sd-upscaler-backend-preference.patch wires sd_backend_preference_t (CPU/GPU/OpenCL)
+# into ESRGAN init, aligned with StableDiffusionGGML::init_backend().
+#
 # Pinned to release tag master-514-5792c66 (2026-03-01).
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
@@ -35,6 +38,7 @@ vcpkg_from_github(
         fix-failure-path-cleanup.patch
         sd-upscaler-generic-backend.patch
         sd-upscaler-device-and-query.patch
+        sd-upscaler-backend-preference.patch
 )
 
 set(SD_FLASH_ATTN OFF)
