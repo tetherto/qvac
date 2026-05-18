@@ -60,7 +60,7 @@ jobs:
   run-integration-tests:
     continue-on-error: true
     timeout-minutes: 30
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner }}
     environment: release
     name: test-${{ matrix.platform }}-${{ matrix.arch }}
 
@@ -76,21 +76,27 @@ jobs:
           - os: ubuntu-22.04
             platform: linux
             arch: x64
+            runner: qvac-ubuntu2204-x64
           - os: ubuntu-24.04
             platform: linux
             arch: x64
+            runner: qvac-ubuntu2404-x64-gpu
           - os: ubuntu-24.04-arm
             platform: linux
             arch: arm64
+            runner: ubuntu-24.04-arm
           - os: ubuntu-22.04-arm
             platform: linux
             arch: arm64
+            runner: ubuntu-22.04-arm
           - os: macos-15-xlarge
             platform: darwin
             arch: arm64
-          - os: windows-2022
+            runner: macos-15-xlarge
+          - os: windows-2025
             platform: win32
             arch: x64
+            runner: qvac-win25-x64-gpu
 
     steps:
       - name: Setup Node.js
