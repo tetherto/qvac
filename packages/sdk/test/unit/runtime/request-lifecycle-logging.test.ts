@@ -12,7 +12,7 @@ import { createRequestRegistry } from "@/server/bare/runtime/request-registry";
 // emits at `begin` / `cancel` / `end`. The lines are the only log
 // surface downstream consumers can grep for "what happened on
 // requestId=X" without instrumenting every handler — so the shape is
-// part of the M3a contract.
+// part of the 0.11.0 request-lifecycle contract.
 //
 // Tests use the `options.logger` injection on `createRequestRegistry`
 // to capture every `info(...)` call without touching the SDK's
