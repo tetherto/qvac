@@ -150,7 +150,7 @@ export function extractPackageNamesFromResolutions (resolutions: Record<string, 
   return names
 }
 
-function buildNestedPathIndex (
+export function buildNestedPathIndex (
   resolutions: Record<string, unknown>,
   projectRoot: string
 ): Map<string, Set<string>> {
@@ -159,9 +159,9 @@ function buildNestedPathIndex (
     for (const match of key.matchAll(NODE_MODULES_RE)) {
       const pkgName = match[1]
       if (!pkgName) continue
+      const idx = match.index
+      if (idx === undefined) continue
       const marker = `/node_modules/${pkgName}/`
-      const idx = key.indexOf(marker)
-      if (idx === -1) continue
       const candidate = path.join(
         projectRoot,
         key.slice(1, idx + marker.length),

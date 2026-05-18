@@ -3,6 +3,7 @@ import { readBody, sendJson, sendError, initSSE, sendSSE, endSSE } from '../../.
 import { resolveModelAlias } from '../../../config.js'
 import { sdkCompletion } from '../../../core/sdk.js'
 import type { SDKTool, SDKGenerationParams, SDKResponseFormat } from '../../../core/sdk.js'
+import { bindClientDisconnectCancel } from '../../../core/cancel-bridge.js'
 import {
   openaiMessagesToHistory,
   openaiToolsToSdk,
@@ -96,9 +97,9 @@ export async function handleChatCompletions (req: IncomingMessage, res: ServerRe
 
   try {
     if (streaming) {
-      await handleStreamingCompletion(res, { sdkModelId, history, tools, generationParams, responseFormat, modelAlias, logger: ctx.logger })
+      await handleStreamingCompletion(req, res, { sdkModelId, history, tools, generationParams, responseFormat, modelAlias, logger: ctx.logger })
     } else {
-      await handleBlockingCompletion(res, { sdkModelId, history, tools, generationParams, responseFormat, modelAlias, logger: ctx.logger })
+      await handleBlockingCompletion(req, res, { sdkModelId, history, tools, generationParams, responseFormat, modelAlias, logger: ctx.logger })
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
@@ -117,7 +118,14 @@ interface CompletionParams {
   logger: import('../../../../logger.js').Logger
 }
 
-async function handleBlockingCompletion (res: ServerResponse, params: CompletionParams): Promise<void> {
+function completionTokensFromStats (text: string, stats: { generatedTokens?: number } | undefined): number {
+  if (typeof stats?.generatedTokens === 'number' && Number.isFinite(stats.generatedTokens)) {
+    return stats.generatedTokens
+  }
+  return text ? text.split(/\s+/).filter(Boolean).length : 0
+}
+
+async function handleBlockingCompletion (req: IncomingMessage, res: ServerResponse, params: CompletionParams): Promise<void> {
   const result = await sdkCompletion({
     modelId: params.sdkModelId,
     history: params.history,
@@ -127,8 +135,15 @@ async function handleBlockingCompletion (res: ServerResponse, params: Completion
     responseFormat: params.responseFormat
   })
 
+  // Bridge HTTP client disconnect → SDK cancel. Bound after the
+  // wrapper await but before any `await` on the result aggregates,
+  // so a fetch-abort mid-completion lands on the in-flight requestId
+  // before tokens have fully resolved.
+  bindClientDisconnectCancel(req, res, result.requestId, params.logger)
+
   const text = await result.text
   const toolCalls = await result.toolCalls
+  const stats = await result.stats
 
   const hasToolCalls = toolCalls !== null && toolCalls !== undefined && toolCalls.length > 0
   const finishReason = hasToolCalls ? 'tool_calls' : 'stop'
@@ -141,7 +156,7 @@ async function handleBlockingCompletion (res: ServerResponse, params: Completion
     message['tool_calls'] = sdkToolCallsToOpenai(toolCalls)
   }
 
-  const completionTokens = text ? text.split(/\s+/).length : 0
+  const completionTokens = completionTokensFromStats(text || '', stats)
 
   params.logger.info(`  completion done tokens=${completionTokens} finish=${finishReason}`)
 
@@ -163,7 +178,7 @@ async function handleBlockingCompletion (res: ServerResponse, params: Completion
   })
 }
 
-async function handleStreamingCompletion (res: ServerResponse, params: CompletionParams): Promise<void> {
+async function handleStreamingCompletion (req: IncomingMessage, res: ServerResponse, params: CompletionParams): Promise<void> {
   const result = await sdkCompletion({
     modelId: params.sdkModelId,
     history: params.history,
@@ -172,6 +187,13 @@ async function handleStreamingCompletion (res: ServerResponse, params: Completio
     generationParams: params.generationParams,
     responseFormat: params.responseFormat
   })
+
+  // Bridge HTTP client disconnect → SDK cancel. The synchronous
+  // `result.requestId` (decorated on the `CompletionRun`) is what makes
+  // this work: we can bind the listener before the first SSE frame
+  // streams, so a fetch-abort during inference aborts the in-flight
+  // SDK request rather than letting it run to natural completion.
+  bindClientDisconnectCancel(req, res, result.requestId, params.logger)
 
   initSSE(res)
 
@@ -189,17 +211,18 @@ async function handleStreamingCompletion (res: ServerResponse, params: Completio
 
   sendSSE(res, chunk({ role: 'assistant', content: '' }, null))
 
-  let tokenCount = 0
-
   for await (const token of result.tokenStream) {
-    tokenCount++
     sendSSE(res, chunk({ content: token }, null))
   }
 
-  params.logger.info(`  streaming done tokens=${tokenCount}`)
-
   const toolCalls = await result.toolCalls
   const hasToolCalls = toolCalls !== null && toolCalls !== undefined && toolCalls.length > 0
+
+  const stats = await result.stats
+  const fullText = await result.text
+  const completionTokens = completionTokensFromStats(fullText || '', stats)
+
+  params.logger.info(`  streaming done tokens=${completionTokens}`)
 
   if (hasToolCalls) {
     const openaiToolCalls = sdkToolCallsToOpenaiDeltas(toolCalls)
@@ -207,7 +230,7 @@ async function handleStreamingCompletion (res: ServerResponse, params: Completio
     sendSSE(res, chunk({}, 'tool_calls'))
   } else {
     sendSSE(res, chunk({}, 'stop', {
-      usage: { prompt_tokens: 0, completion_tokens: tokenCount, total_tokens: tokenCount }
+      usage: { prompt_tokens: 0, completion_tokens: completionTokens, total_tokens: completionTokens }
     }))
   }
 

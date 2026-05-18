@@ -11,6 +11,7 @@ import {
 import { type TestResult } from "@tetherto/qvac-test-suite";
 import { AbstractModelExecutor } from "./abstract-model-executor.js";
 import { loggingTests } from "../../logging-tests.js";
+import { callWhenAddonIdle } from "../utils/addon-idle.js";
 
 // Mirror of `LoggingStreamResponse` from @qvac/sdk (not currently exported).
 export interface LogEntry {
@@ -38,39 +39,6 @@ const INVALID_ID_TIMEOUT_MS = 3_000;
 const DURING_INFERENCE_DRAIN_MS = 1_000;
 const CONCURRENT_DRAIN_MS = 3_000;
 const RELOAD_DRAIN_MS = 5_000;
-const ADDON_BUSY_TIMEOUT_MS = 30_000;
-const ADDON_BUSY_POLL_MS = 250;
-
-// Documented busy throw from infer-llamacpp-llm; we retry until idle.
-const ADDON_BUSY_MARKER = "a job is already set or being processed";
-
-class AddonBusyTimeoutError extends Error {
-  constructor(timeoutMs: number, cause: unknown) {
-    super(`Addon stayed busy: waited ${timeoutMs}ms`, { cause });
-    this.name = "AddonBusyTimeoutError";
-  }
-}
-
-export async function callWhenAddonIdle<T>(
-  fn: () => Promise<T>,
-  timeoutMs = ADDON_BUSY_TIMEOUT_MS,
-  intervalMs = ADDON_BUSY_POLL_MS,
-): Promise<T> {
-  const deadline = Date.now() + timeoutMs;
-  while (true) {
-    try {
-      return await fn();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes(ADDON_BUSY_MARKER)) {
-        if (Date.now() >= deadline) throw new AddonBusyTimeoutError(timeoutMs, err);
-        await sleep(intervalMs);
-        continue;
-      }
-      throw err;
-    }
-  }
-}
 
 const TRIGGER_KEYS = [
   "llm", "embed", "tts", "nmt", "diffusion",
@@ -89,6 +57,8 @@ const HANDLER_KEYS = [
   "concurrent",
   "reload",
 ] as const;
+
+type HandlerKey = typeof HANDLER_KEYS[number];
 
 const isHandlerKey = makeKeyGuard(HANDLER_KEYS);
 
@@ -134,16 +104,37 @@ export class LoggingExecutor extends AbstractModelExecutor<typeof loggingTests> 
       throw new Error(`Test "${testId}" has missing/invalid params.handler: ${String(handler)}`);
     }
 
+    let result: TestResult;
     try {
-      switch (handler) {
-        case "addon-logging":     return await this.runAddonLogging(testId, params);
-        case "invalid-model-id":  return await this.runInvalidModelId(requireInvalidModelIdParams(params));
-        case "during-inference":  return await this.runDuringInference(testId, params as DuringInferenceParams);
-        case "concurrent":        return await this.runConcurrent(testId, requireOperationsParams(params));
-        case "reload":            return await this.runReload(testId);
-      }
+      result = await this.runHandler(handler, testId, params);
     } catch (error) {
-      return wrapError(testId, error);
+      result = wrapError(testId, error);
+    }
+
+    // Break the busy cascade: evict the dep on any failure so the next test reloads a fresh model.
+    if (!result.passed) {
+      await this.evictTestDeps(testId);
+    }
+    return result;
+  }
+
+  private runHandler(handler: HandlerKey, testId: string, params: AnyParams): Promise<TestResult> {
+    switch (handler) {
+      case "addon-logging":     return this.runAddonLogging(testId, params);
+      case "invalid-model-id":  return this.runInvalidModelId(requireInvalidModelIdParams(params));
+      case "during-inference":  return this.runDuringInference(testId, params as DuringInferenceParams);
+      case "concurrent":        return this.runConcurrent(testId, requireOperationsParams(params));
+      case "reload":            return this.runReload(testId);
+    }
+  }
+
+  private async evictTestDeps(testId: string): Promise<void> {
+    const dep = getMeta(testId)["dependency"];
+    if (typeof dep !== "string" || dep.length === 0 || dep === "none") return;
+    try {
+      await this.resources.evict(dep);
+    } catch (error) {
+      console.warn(`LoggingExecutor: failed to evict dep "${dep}" after failure: ${error}`);
     }
   }
 
@@ -248,13 +239,24 @@ export class LoggingExecutor extends AbstractModelExecutor<typeof loggingTests> 
     }
 
     const reloadedModelId = await this.resources.ensureLoaded(dep);
-    return collectLogs({
+
+    // Join the trigger before returning so the next test cannot race the open completion slot.
+    let triggerPromise: Promise<void> = Promise.resolve();
+    const result = await collectLogs({
       testId,
       targetId: reloadedModelId,
       target: 1,
       postTriggerWaitMs: RELOAD_DRAIN_MS,
-      trigger: () => callWhenAddonIdle(() => runCompletion(reloadedModelId, "Post-reload test", false)),
+      trigger: () => {
+        triggerPromise = callWhenAddonIdle(() =>
+          runCompletion(reloadedModelId, "Post-reload test", false),
+        );
+        return triggerPromise;
+      },
     });
+
+    await triggerPromise.catch(() => {});
+    return result;
   }
 
   protected triggerLlm(modelId: string): Promise<void> {

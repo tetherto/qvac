@@ -35,7 +35,7 @@ jobs:
   run-integration-tests:
     timeout-minutes: 60
     continue-on-error: true
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
     name: ${{ matrix.os }}-${{ matrix.platform }}-${{ matrix.arch }}-integration-tests
     env:
@@ -48,13 +48,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ai-run-ubuntu-22.04
+          - os: ubuntu-22.04
             platform: linux
             arch: x64
+            runner: qvac-ubuntu2204-x64
             no_gpu: 'true'
-          - os: ai-run-linux-gpu
+          - os: ubuntu-24.04
             platform: linux
             arch: x64
+            runner: qvac-ubuntu2404-x64-gpu
           - os: ubuntu-24.04-arm
             platform: linux
             arch: arm64
@@ -67,21 +69,18 @@ jobs:
             platform: darwin
             arch: x64
             no_gpu: 'true'
-          - os: windows-2022
+          - os: windows-2025
             platform: win32
             arch: x64
+            runner: qvac-win25-x64
             no_gpu: 'true'
 
     steps:
       - name: Setup Node.js
+        if: matrix.platform == 'darwin' || matrix.arch == 'arm64'
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
-
-      - name: Windows - enable git long paths
-        if: ${{ matrix.platform == 'win32' }}
-        shell: bash
-        run: git config --system core.longpaths true
 
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -94,7 +93,15 @@ jobs:
         working-directory: ${{ github.workspace }}/packages/transcription-parakeet
         run: |
           npm install
+
+      - name: Install bare tooling (arm64 and macos)
+        if: matrix.arch == 'arm64' || matrix.platform == 'darwin'
+        run: |
           npm install -g bare bare-make
+
+      - name: Add bare tooling to PATH (Linux x64)
+        if: (matrix.platform == 'linux' && matrix.arch == 'x64')
+        run: echo "/usr/local/nvm/versions/node/v20.20.2/bin" >> $GITHUB_PATH
 
       - run: mkdir -p "${{ runner.temp }}/transcription-parakeet"
         shell: bash
@@ -133,21 +140,12 @@ jobs:
             mv "$file" "$dir/$newbase"
           done
 
-      - name: Linux - install dependencies
-        if: matrix.platform == 'linux' || matrix.platform == 'android'
-        shell: bash
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgomp1 mesa-vulkan-drivers
-
-      - name: Windows - install Vulkan runtime
-        if: matrix.platform == 'win32'
-        uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@0bbdca93da303a0b1634ba14a89cec085621078d
-        with:
-          platform: ${{ matrix.platform }}
-          arch: ${{ matrix.arch }}
+      - if: ${{ matrix.os == 'windows-2025' }}
+        name: Set Vulkan SDK Path on Windows Server 2025
+        run: echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
 
       - name: Setup Python (for .nemo -> .gguf conversion)
+        if: matrix.arch == 'arm64' || matrix.platform == 'darwin'
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'

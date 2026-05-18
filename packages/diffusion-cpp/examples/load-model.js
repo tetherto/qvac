@@ -31,7 +31,8 @@ async function main () {
       vae: path.join(MODELS_DIR, VAE_MODEL)
     },
     config: {
-      threads: 8 // Metal handles GPU; threads are for CPU fallback ops
+      threads: 8, // Metal handles GPU; threads are for CPU fallback ops
+      diffusion_fa: true
     },
     logger: console
   })

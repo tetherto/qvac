@@ -26,10 +26,11 @@ export interface VersionedSection {
 }
 
 export const API_SECTION: VersionedSection = {
-  basePath: '/sdk/api',
-  latest: 'v0.10.0',
+  basePath: '/reference/api',
+  latest: 'v0.11.0',
   versions: [
-    { label: 'v0.10.0 (latest)', value: 'v0.10.0', isLatest: true },
+    { label: 'v0.11.0 (latest)', value: 'v0.11.0', isLatest: true },
+    { label: 'v0.10.0', value: 'v0.10.0' },
     { label: 'v0.9.1', value: 'v0.9.1' },
     { label: 'v0.8.0', value: 'v0.8.0' },
     { label: 'v0.7.0', value: 'v0.7.0' },
@@ -37,10 +38,11 @@ export const API_SECTION: VersionedSection = {
 };
 
 export const RELEASE_NOTES_SECTION: VersionedSection = {
-  basePath: '/sdk/release-notes',
-  latest: 'v0.10.0',
+  basePath: '/reference/release-notes',
+  latest: 'v0.11.0',
   versions: [
-    { label: 'v0.10.0 (latest)', value: 'v0.10.0', isLatest: true },
+    { label: 'v0.11.0 (latest)', value: 'v0.11.0', isLatest: true },
+    { label: 'v0.10.0', value: 'v0.10.0' },
     { label: 'v0.9.1', value: 'v0.9.1' },
     { label: 'v0.8.0', value: 'v0.8.0' },
     { label: 'v0.7.0', value: 'v0.7.0' },

@@ -23,6 +23,26 @@ permissions:
   id-token: write
 
 jobs:
+  label-gate:
+    name: Authorise (label-gate)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      authorised: ${{ steps.gate.outputs.authorised }}
+    steps:
+      - name: Checkout (label-gate action only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/label-gate
+          sparse-checkout-cone-mode: false
+      - name: Run label-gate
+        id: gate
+        uses: ./.github/actions/label-gate
+        with:
+          github-token: ${{ secrets.PAT_TOKEN }}
   context:
     runs-on: ubuntu-latest
     outputs:
@@ -46,7 +66,9 @@ jobs:
           echo "include_desktop=${INPUT_INCLUDE_DESKTOP}" >> "$GITHUB_OUTPUT"
 
   prebuild:
-    needs: context
+    needs:
+      - context
+      - label-gate
     permissions:
       contents: write
       packages: write
@@ -58,9 +80,13 @@ jobs:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
 
+    if: needs.label-gate.outputs.authorised == 'true'
   desktop-benchmarks:
-    needs: [context, prebuild]
-    if: needs.context.outputs.include_desktop != 'false'
+    needs:
+      - context
+      - prebuild
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true' && (needs.context.outputs.include_desktop != 'false')
     permissions:
       contents: read
       packages: read
@@ -73,10 +99,12 @@ jobs:
       run_integration_tests: false
       run_rtf_benchmarks: true
 
-
   summarize:
-    needs: [context, desktop-benchmarks]
-    if: always()
+    needs:
+      - context
+      - desktop-benchmarks
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true' && (always())
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -95,7 +123,6 @@ jobs:
           pattern: rtf-results-*
           path: benchmark-artifacts/desktop
           merge-multiple: true
-
 
       - name: Generate consolidated benchmark report
         run: |

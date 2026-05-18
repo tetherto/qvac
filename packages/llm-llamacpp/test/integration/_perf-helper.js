@@ -18,6 +18,16 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const os = require('bare-os')
 const process = require('bare-process')
+// Follow-up to QVAC-17830 (Olya, 17 May): inject bare-subprocess so
+// performance-reporter.js's _detectGpu() can shell out to nvidia-smi /
+// vulkaninfo / system_profiler under Bare. Resolving from this caller
+// file works (it lives next to llm-llamacpp/node_modules); resolving
+// from inside scripts/test-utils/ does not because that directory has
+// no node_modules walk. Mobile path doesn't need this — the inline
+// fallback below leaves gpu=null on Device Farm where the probes
+// wouldn't work anyway.
+let _subprocess = null
+try { _subprocess = require('bare-subprocess') } catch (_) {}
 
 const platform = os.platform()
 const arch = os.arch()
@@ -39,7 +49,7 @@ let createPerformanceReporter
 const _scriptBase = path.join('..', '..', '..', '..', 'scripts', 'test-utils')
 try {
   const perfReporterMod = require(path.join(_scriptBase, 'performance-reporter'))
-  perfReporterMod.configure({ fs, path, process, os })
+  perfReporterMod.configure({ fs, path, process, os, subprocess: _subprocess })
   createPerformanceReporter = perfReporterMod.createPerformanceReporter
 } catch (_) {
   // Hard cap on how much of the model's text output we keep in-memory
@@ -87,6 +97,11 @@ try {
           // scenario so the report can split rows by implementation
           // when multiple test families share the same device column.
           scenario: (extra && extra.scenario) || 'default',
+          // Follow-up to QVAC-17830: optional model id so per-row
+          // breakdowns show which weights produced the timings.
+          // Renderer falls back to '-' if null, so mobile rows that
+          // forget to pass it still produce valid output.
+          model: (extra && extra.model) || null,
           execution_provider: (extra && extra.execution_provider) || null,
           metrics: Object.assign({
             backend: null,
@@ -159,6 +174,7 @@ try {
           data.results = rows.map(r => ({
             test: r.test,
             scenario: r.scenario || 'default',
+            model: r.model || null,
             execution_provider: r.execution_provider,
             metrics: r.metrics,
             output: lightweight ? null : r.output
@@ -249,6 +265,10 @@ function _num (v) {
  *                                  'bitnet', 'tool-calling', ... .
  *                                  Defaults to 'default' so every row
  *                                  is groupable in the detail table.
+ * @param {string} [extra.model]    Short model id for this row (e.g.
+ *                                  'SmolVLM2-500M-Q8_0',
+ *                                  'Qwen3-1.7B-Q4_0'). Surfaces as the
+ *                                  Model column in the perf renderer.
  * @param {string} [extra._output]  Generated text (will be capped for mobile).
  */
 function recordPerformance (label, totalTime, extra) {
@@ -292,6 +312,7 @@ function recordPerformance (label, totalTime, extra) {
     tps: tps !== null ? Number(tps.toFixed(2)) : null
   }, {
     scenario: (extra && extra.scenario) || 'default',
+    model: (extra && extra.model) || null,
     execution_provider: effectiveDevice,
     output: (extra && extra._output) || null
   })

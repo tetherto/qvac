@@ -7,6 +7,7 @@
 #include <vector>
 
 #include <gtest/gtest.h>
+#include <inference-addon-cpp/Errors.hpp>
 
 #include "model-interface/SdModel.hpp"
 #include "test_common.hpp"
@@ -124,11 +125,15 @@ TEST_F(SdCancelContextTest, CancelDuringGenerationThrowsJobCancelled) {
   try {
     model->process(std::any(job));
     FAIL() << "process() should have thrown on cancel";
-  } catch (const std::runtime_error& e) {
+  } catch (const qvac_errors::StatusError &e) {
+    // Typed cancel surfaced as general_error::Cancelled so JS can
+    // discriminate it from real internal failures via the status code
+    // instead of string-matching the exception message.
     EXPECT_STREQ(e.what(), "Job cancelled");
+    EXPECT_EQ(e.codeString(), "[ General :: Cancelled ]");
   } catch (...) {
     cancelThread.join();
-    FAIL() << "Unexpected exception type";
+    FAIL() << "Unexpected exception type (expected StatusError)";
   }
 
   cancelThread.join();

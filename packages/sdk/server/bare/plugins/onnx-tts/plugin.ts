@@ -292,6 +292,9 @@ export const ttsPlugin = definePlugin({
       requestSchema: ttsRequestSchema,
       responseSchema: ttsResponseSchema,
       streaming: true,
+      // ONNX TTS does not expose a cancel surface — SDK falls back
+      // to soft-cancel.
+      cancel: { scope: "none" },
 
       handler: async function* (request) {
         const stream = textToSpeech(request);
@@ -332,6 +335,9 @@ export const ttsPlugin = definePlugin({
       responseSchema: textToSpeechStreamResponseSchema,
       streaming: true,
       duplex: true,
+      // ONNX TTS does not expose a cancel surface — SDK falls back
+      // to soft-cancel.
+      cancel: { scope: "none" },
 
       handler: async function* (request, inputStream) {
         const stream = textToSpeechStream(request, inputStream);

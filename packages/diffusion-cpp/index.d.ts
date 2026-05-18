@@ -62,7 +62,7 @@ export type ScheduleType =
   | 'bong_tangent'
 
 /** Supported noise prediction types */
-export type PredictionType = 'auto' | 'eps' | 'v' | 'edm_v' | 'flow' | 'flux_flow' | 'flux2_flow'
+export type PredictionType = 'auto' | 'eps' | 'v' | 'edm_v' | 'flow' | 'flux2_flow'
 
 /** LoRA application mode */
 export type LoraApplyMode = 'auto' | 'immediately' | 'at_runtime'
@@ -89,7 +89,7 @@ export interface SdConfig {
   vae_tiling?: boolean
   /** Enable flash attention for memory efficiency */
   flash_attn?: boolean
-  /** Enable flash attention for diffusion model specifically */
+  /** Enable flash attention for diffusion model only. Defaults to true (required for FLUX2 to avoid materialising the full Q·Kᵀ matrix; safe for all families — falls back on unsupported backends). */
   diffusion_fa?: boolean
   /** Use memory-mapped model loading */
   mmap?: boolean
@@ -144,6 +144,12 @@ export interface DiffusionFiles {
   vae?: string
   /** Absolute path to ESRGAN upscaler model */
   esrgan?: string
+  /**
+   * Wan 2.2 only: high-noise diffusion expert. Omit for Wan 2.1 and all
+   * image models (FLUX, SD, etc.); native layer still expects the path key to
+   * be present as an empty string when unset.
+   */
+  highNoiseDiffusionModel?: string
 }
 
 export interface EsrganFiles {
@@ -207,10 +213,12 @@ export interface GenerationParams {
   lora?: string
   /** Post-generation ESRGAN upscale. Requires files.esrgan. */
   upscale?: boolean | { repeats?: number }
+  /** Output width (multiple of 8). FLUX img2img defaults to 1024 when omitted. */
   width?: number
+  /** Output height (multiple of 8). FLUX img2img defaults to 1024 when omitted. */
   height?: number
   steps?: number
-  /** CFG scale (SD1/SD2/SDXL/SD3) */
+  /** CFG scale (SD2/SDXL/SD3) */
   cfg_scale?: number
   /** Distilled guidance (FLUX.2) */
   guidance?: number
@@ -238,12 +246,12 @@ export interface GenerationParams {
   eta?: number
   /** Image CFG scale for img2img/inpaint (-1 = use cfg_scale) */
   img_cfg_scale?: number
-  /** Skip last N CLIP encoder layers (SD1.x/SD2.x) */
+  /** Skip last N CLIP encoder layers (SD2.x) */
   clip_skip?: number
   /**
    * Input image as PNG/JPEG bytes for img2img.
    *   - FLUX.2 → in-context conditioning (single `ref_image`). `strength` is ignored.
-   *   - SD1.x / SD2.x / SDXL / SD3 → SDEdit (noised init + `strength`-controlled denoise).
+   *   - SD2.x / SDXL / SD3 → SDEdit (noised init + `strength`-controlled denoise).
    *
    * Mutually exclusive with `init_images`.
    */
@@ -286,7 +294,7 @@ export interface GenerationParams {
   auto_resize_ref_image?: boolean
   /**
    * img2img denoising strength (0.0 to 1.0). 0 = keep source, 1 = ignore source.
-   * SD1.x/SD2.x/SDXL/SD3 only. FLUX.2 ignores `strength` and routes `init_image`
+   * SD2.x/SDXL/SD3 only. FLUX.2 ignores `strength` and routes `init_image`
    * (or `init_images`) through in-context conditioning instead.
    */
   strength?: number
@@ -399,4 +407,18 @@ export class EsrganUpscaler {
   getState(): { configLoaded: boolean }
 }
 
+export { default as VideoStableDiffusion } from './video'
+export type {
+  VideoDiffusionFiles,
+  VideoStableDiffusionArgs,
+  VideoGenerationParams,
+  VideoRuntimeStats
+} from './video'
+
 export { QvacResponse, RuntimeStats, EsrganRuntimeStats }
+
+export function applyFluxImg2ImgDimDefaults(
+  params: GenerationParams,
+  pred: string,
+  hasInitImages: boolean
+): GenerationParams

@@ -30,8 +30,12 @@ import { attachModelExecutionMs } from "@/profiling/model-execution";
 import { getModelConfig } from "@/server/bare/registry/model-registry";
 import { createCompletionNormalizer } from "@/server/utils/completion-normalizer";
 import { detectToolDialect } from "@/server/utils/tool-integration";
-import { getRequestRegistry } from "@/server/bare/runtime";
+import {
+  getRequestRegistry,
+  withRequestContext,
+} from "@/server/bare/runtime";
 import { generateServerRequestId } from "@/server/bare/runtime/request-id";
+import { getServerLogger } from "@/logging";
 
 
 function createLlmModel(
@@ -96,6 +100,7 @@ export const llmPlugin = definePlugin({
       requestSchema: completionStreamRequestSchema,
       responseSchema: completionStreamResponseSchema,
       streaming: true,
+      cancel: { scope: "model", hard: true },
 
       handler: async function* (request) {
         const filteredHistory = request.history.map(
@@ -141,6 +146,8 @@ export const llmPlugin = definePlugin({
           modelId: request.modelId,
         });
 
+        const requestLogger = withRequestContext(getServerLogger(), ctx);
+
         const stream = completion(
           {
             history: filteredHistory,
@@ -151,7 +158,7 @@ export const llmPlugin = definePlugin({
             ...(toolsActive && { toolDialect: dialect }),
             ...(request.responseFormat && { responseFormat: request.responseFormat }),
           },
-          { signal: ctx.signal },
+          { signal: ctx.signal, scope: ctx.scope, logger: requestLogger },
         );
 
         try {
@@ -173,9 +180,17 @@ export const llmPlugin = definePlugin({
           }
 
           const { modelExecutionMs, stats, toolCalls } = result.value;
+          // `stopReason: "cancelled"` rides the success-done path: the
+          // events stream ends normally, the cancellation is observable
+          // via the last event's `stopReason`, and the client-side
+          // `CompletionRun` aggregates (`final` / `text` / `toolCalls` /
+          // `stats`) reject with `InferenceCancelledError` carrying the
+          // partial state.
+          const cancelled = ctx.signal.aborted;
           const terminalEvents = normalizer.finish({
             ...(stats && { stats }),
             ...(toolCalls.length > 0 && { toolCalls }),
+            ...(cancelled && { stopReason: "cancelled" as const }),
           });
 
           if (!request.stream) {
@@ -202,6 +217,14 @@ export const llmPlugin = definePlugin({
       requestSchema: finetuneRequestSchema,
       responseSchema: finetuneResponseSchema,
       streaming: false,
+      // Reality matches addon: llama.cpp exposes `model.cancel()` for
+      // the running finetune job, so we flip from `scope: "none"` to
+      // `{ scope: "model", hard: true }`. The `startFinetune` op
+      // forwards the registry's abort signal to that call; the broad
+      // `cancel({ modelId, kind: "finetune" })` and legacy
+      // `cancelFinetune(modelId)` paths both flow through the
+      // registry.
+      cancel: { scope: "model", hard: true },
 
       handler: function (request) {
         return finetune(request);
@@ -212,9 +235,10 @@ export const llmPlugin = definePlugin({
       requestSchema: translateRequestSchema,
       responseSchema: translateResponseSchema,
       streaming: true,
+      cancel: { scope: "model", hard: true },
 
       handler: async function* (request) {
-        const stream = translate(request);
+        const stream = translate(request, request.requestId);
         try {
           let result = await stream.next();
 

@@ -1,5 +1,5 @@
 ---
-description: Request Lifecycle System - design rationale, migration roadmap, and FAQ for RequestRegistry / RequestContext / DisposableScope
+description: Request Lifecycle System - design rationale and FAQ for RequestRegistry / RequestContext / DisposableScope
 alwaysApply: false
 ---
 
@@ -35,9 +35,9 @@ The pre-0.11.0 wire contract was `cancel({ operation: "inference", modelId })` �
 2. A `Map<string, number>` of saved-message counts (`kv-cache-state.ts`).
 3. The on-disk `.bin` files written by the addon.
 
-Each cancel/error branch had to: `unlink` the file, `clearCacheRegistry({ cacheKey, modelId })`, `cachedMessageCounts.delete(...)`. The three branches duplicated this trio; any one of them could drift from the others on a partial failure. Search for `clearCacheRegistry` in `completion-stream.ts` to see the duplication.
+Each cancel/error branch had to: `unlink` the file, `clearCacheRegistry({ cacheKey, modelId })`, `cachedMessageCounts.delete(...)`. The three branches duplicated this trio; any one of them could drift from the others on a partial failure.
 
-`DisposableScope` collapses this into one place (commit-on-success, rollback through `Symbol.asyncDispose` on anything else). **M2** introduces `KvCacheSession` as the single owner of the three layers and replaces the duplicated cleanup blocks.
+`KvCacheSession` (`server/bare/plugins/llamacpp-completion/ops/kv-cache-session.ts`) is the single owner of all three layers. The completion handler calls `session.beginTurn(...)`, registers `scope.defer(() => session.rollback(turn))` once, and calls `session.commitTurn(...)` on the happy path (which suppresses the deferred rollback). The maps that back `clearCacheRegistry` and `cachedMessageCounts` are private to the session module. Cross-model administrative cleanups go through the module-level `deleteKvCacheState(...)`, which `handleDeleteCache` delegates to.
 
 ### 3. Cancellation tracked via side counters
 
@@ -69,24 +69,12 @@ Concretely, Vercel's AI SDK (`streamText`) is a public-codebase example of the s
 | Manual cleanup in `if (signal.aborted) { ... }`       | Duplicated rollback on cancel and error paths   | `ctx.scope.defer(...)` or `await using` rollback              |
 | Side counter (`cancelCounter++`) for cancel tracking  | Truth drifts from `signal.aborted`              | Read `signal.aborted` synchronously when needed               |
 | Passing `AbortController` between handlers            | Multiple owners, no single revoke               | Handlers receive `ctx.signal` from `registry.begin(...)`      |
-| `throw new Error("cancelled")`                        | Loses partial state across RPC                  | Structured error (`InferenceCancelledError` in M2)            |
+| `throw new Error("cancelled")`                        | Loses partial state across RPC                  | `InferenceCancelledError` from `@/utils/errors-server` (re-exported from `@qvac/sdk`); carries `requestId` + `partial: { text, toolCalls, stats }` and is constructed client-side from the `stopReason: "cancelled"` event |
+| Reaching into `cachedMessageCounts` / `clearCacheRegistry` / `fsPromises.unlink` together | Drift across the three KV-cache layers | `KvCacheSession` (`session.beginTurn` + `scope.defer(session.rollback)` + `session.commitTurn`) — see `docs/kv-cache-system.mdc` |
 
-`request-lifecycle-primitives.mdc` has the worked code examples.
+`request-lifecycle-primitives.mdc` has the worked code examples and the dispatch-level truth table for which `RequestKind`s currently route through the registry.
 
-## Migration Roadmap
-
-The full milestone breakdown lives in `tasks/release-0.11.0-planning/pitch-2-tasks.md` (workspace-local; not committed to the repo). Headline:
-
-| Milestone | Wire contract                                                                 | Handlers migrated                                                                  |
-|-----------|-------------------------------------------------------------------------------|------------------------------------------------------------------------------------|
-| **M1**    | `cancel({ requestId })` lands; old `cancel({ modelId })` still works         | llama.cpp completion                                                               |
-| **M2**    | Typed cancel outcomes; `KvCacheSession` replaces three-layer cancel bookkeeping; closes the same-tick cancel-before-begin race  | (M2 introduces `InferenceCancelledError`; no new handlers)                         |
-| **M3a**   | Migrate embeddings handler                                                    | embeddings                                                                         |
-| **M3b**   | Migrate audio/text handlers                                                   | transcribe, translate                                                              |
-| **M3c**   | Migrate decoder / OCR / TTS                                                   | diffusion, ocr, tts                                                                |
-| **M3d**   | Migrate downloadAsset / loadModel                                             | downloadAsset, loadModel                                                           |
-
-Until a handler is registry-migrated, the broad-cancel path (`cancel({ operation: <kind>, modelId })`) falls back to `addon.cancel()` directly — see the fallback in `server/bare/ops/cancel.ts`. The wire contract for non-migrated kinds is therefore unchanged: callers continue to use `cancel({ operation: <kind>, modelId })` exactly as before, and behavior is preserved through the migration.
+Every server-side cancellable handler is on the registry as of 0.11.0. The broad-cancel path (`cancel({ modelId, kind? })` and its legacy `{ operation: "inference"|"embeddings", modelId }` aliases) is a single registry walk; the legacy pre-registry addon-cancel fallback in `server/bare/ops/cancel.ts` was removed in 0.11.0. Handlers whose addon declares `cancel: { scope: "none" }` (TTS, OCR, NMT, upscale) still respect a broad cancel at the registry layer — the in-flight call yields when `ctx.signal.aborted` flips on its next yield point — they just don't get a hard mid-decode abort.
 
 ## FAQ
 
@@ -137,30 +125,100 @@ Extend the `CancelTarget` discriminated union in `request-registry.ts`. Today su
 
 The addon (`@qvac/llm-llamacpp` and friends) exposes a synchronous `cancel(jobId?)` that signals the C++ side to stop decoding ASAP. The SDK wires `signal.addEventListener("abort", onAbort, { once: true })` so a registry cancel fires `addon.cancel()` at the binding leaf — but the SDK's source of truth for "was this cancelled" is still `signal.aborted`, not addon state. This keeps the SDK decoupled from per-addon cancel semantics; an addon without a `cancel()` method still gets best-effort cancellation through the SDK's signal-propagated termination of the streaming loop.
 
-### Known gap: same-tick "cancel-before-begin" race
+### Why declare cancel capability on the plugin manifest?
 
-If a client cancels via `cancel({ requestId })` before the server's `registry.begin({ requestId })` has run for that id, the cancel finds zero matches and returns. The later `begin(...)` opens a fresh context that the cancel didn't reach. M1 documents this with a tripwire unit test (`registry: same-tick cancel-before-begin returns 0 and does not retroactively abort the later begin()`); M2 closes the race with a bounded "cancelled-before-begin" set the registry consults from inside `begin(...)`. See `pitch-2-tasks.md` (M2 scope).
+`PluginHandlerDefinition.cancel` makes "what cancel does for this handler" explicit on the manifest, so the framework knows the addon surface at registration time and reviewers can read a single field instead of inferring from the handler body, the addon source, and the broad-cancel fallback.
+
+Three scope values express the addon's truth today:
+
+- `"request"` — addon accepts a `requestId` (or equivalent token) on its cancel call. Future code can route a per-request cancel directly through the addon without any cross-talk between in-flight requests on the same model.
+- `"model"` — addon cancels "the thing currently running on this model." Sufficient when a concurrency policy (e.g. `oneAtATimePerModel`) guarantees at most one in-flight request per model.
+- `"none"` — addon has no cancel surface. SDK falls back to soft-cancel: the registry aborts the signal, the handler's stream stops yielding, and the result is discarded — the C++ work runs to completion in the background. No correctness issue because the result is no longer observed; just wasted compute until the work naturally ends.
+
+`hard: true` documents that `addon.cancel()` interrupts compute (the llama.cpp / whisper.cpp / parakeet / sdcpp-diffusion path). `hard: false` (or omitted) means cancel is best-effort and compute may run to completion even when the addon accepts the call.
+
+The truth-table cell for each built-in plugin is pinned by `test/unit/plugin-cancel-capability.test.ts`.
+
+### Why a concurrency policy on the registry?
+
+The llama.cpp addon owns one KV-cache + one decode loop per model. Two concurrent `completionStream` requests against the same model interleave their token streams on the same logical session — observably "the wrong tokens for my prompt" from the client's point of view, with the cache layer also drifting because two `KvCacheSession.beginTurn(...)` calls would race for the same `cachePath`.
+
+The registry exposes an admission-control hook so callers don't have to externally enforce "one completion per model":
+
+```typescript
+registry.policy({ kind: "completion", oneAtATimePerModel: true });
+```
+
+`oneAtATimePerModel` rejects the second `begin({ kind: "completion", modelId: "m1" })` with `RequestRejectedByPolicyError` (52420) — a typed error that propagates through the RPC boundary and gives the client a clean signal to either retry after the first one ends or surface "model busy" to the user. The error is structured (carries `requestId`, `kind`, `modelId`, `reason`) rather than a generic 500, so clients can `instanceof` narrow.
+
+Other kinds (`embeddings`, `transcribe`, `translate`, `finetune`) intentionally do **not** register a `oneAtATimePerModel` policy: those addons tolerate concurrent requests against the same model (embeddings is genuinely concurrent on the addon side; the streaming kinds share the addon's job-state but the registry's per-request lifecycle is sufficient for cancel routing without admission control). Per-kind policies can be registered if and when an addon's concurrency invariants change.
+
+The policy runs **before** controller / scope allocation in `begin(...)`, so a rejected `begin` leaves no registry entry behind. Disposing the holder of the in-flight slot releases admission for the next request — `await using` makes this automatic.
+
+### Why structured `[request-lifecycle]` logs?
+
+Logs are the only cross-handler observability surface the worker has — there's no APM agent inside Bare. The registry emits three lines per request with a fixed shape so "what happened on requestId X" is a single grep instead of free-form line tailing:
+
+```
+[request-lifecycle] begin  requestId=<id> kind=<kind> modelId=<id|"-"> state=running
+[request-lifecycle] cancel requestId=<id> kind=<kind> modelId=<id|"-"> state=cancelling
+[request-lifecycle] end    requestId=<id> kind=<kind> modelId=<id|"-"> state=<terminal> durationMs=<n>
+```
+
+`grep "requestId=abc-123"` now returns every line the SDK emitted for that request, ordered chronologically, and `durationMs=` lets log shippers compute per-request latency without diffing timestamps. `withRequestContext(getServerLogger(), ctx)` extends the same prefix to handler-level emits (KV-cache turn lifecycle, addon-cancel rejections, prime failures), so consumers can correlate the full per-turn story without instrumenting individual handlers.
+
+Levels are `info` everywhere except the failure case: an `end` with `state=failed` fires at `warn` so ops alerting can predicate on `level>=warn` for the prefix without parsing the message body — the prefix stays consistent, only the level lifts to signal "this needs attention." A `cancelEntry` guard suppresses duplicate cancel emits when the same `cancel({ requestId })` fires twice (already-aborted entries skip the abort path) — one line per logical event.
+
+### Same-tick "cancel-before-begin" race (Stop-button race)
+
+Without special handling, if a client cancelled via `cancel({ requestId })` before the server's `registry.begin({ requestId })` had run for that id, the cancel would find zero matches, return, and the later `begin(...)` would open a fresh context the cancel didn't reach. A user's "Stop" button click could silently no-op when it raced the round-trip of the original `completion(...)` request.
+
+The registry tracks `requestId`s whose `cancel(...)` arrived before a matching `begin(...)`. The next `begin(...)` for one of those ids aborts the new controller before returning, with the recorded reason forwarded to `signal.reason`. The context is observable in state `"cancelling"` from the outset — no momentary `"running"` snapshot with an already-aborted signal.
+
+Bound: at most `CANCEL_BEFORE_BEGIN_MAX_ENTRIES = 128` entries, evicted FIFO when full, with a `CANCEL_BEFORE_BEGIN_TTL_MS = 30_000` time-to-live so a stale id never decides a later, unrelated `begin(...)` even if the size cap isn't reached. Both constants are exported via `__requestRegistryTestHooks` for test pinning. A malicious client cannot grow the map unbounded.
+
+Wire surface: **unchanged.** `cancel({ requestId })` still returns 0 when there's no in-flight match (the truth on the wire — no request was *matched and aborted by this call*); the effective cancel lands when the begin arrives. The wire contract for `CancelResponse` does not carry a `matched: boolean` field.
+
+Test coverage: `same-tick cancel-before-begin retroactively aborts the later begin() (Stop-button race close)` and `bounded cancel-before-begin set does not grow past its cap (TTL + size eviction)` in `test/unit/runtime/request-registry.test.ts`.
 
 ## Implementation Files
 
-| File                                                              | Purpose                                                                                                  |
-|-------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------|
-| `server/bare/runtime/disposable-scope.ts`                         | `DisposableScope` factory + module-load `Symbol.asyncDispose` guard                                      |
-| `server/bare/runtime/request-context.ts`                          | `RequestContext`, `RequestKind`, `RequestState` types                                                    |
-| `server/bare/runtime/request-registry.ts`                         | `createRequestRegistry()`, `ManagedRequestContext`, `RequestOutcome`, cancel/begin/end/list logic        |
-| `server/bare/runtime/request-registry-singleton.ts`               | `getRequestRegistry()` worker-scoped accessor                                                            |
-| `server/bare/runtime/request-id.ts`                               | UUID generation helper for caller-provided ids                                                           |
-| `server/bare/runtime/index.ts`                                    | Public re-exports — handlers import from `@/server/bare/runtime`                                         |
-| `server/bare/ops/cancel.ts`                                       | Broad-cancel op: registry-routed with addon fallback for non-migrated handlers                           |
-| `server/rpc/handlers/cancelHandler.ts`                            | RPC entry point: dispatches by `operation` (inference / embeddings / request / downloadAsset / rag)      |
-| `server/bare/plugins/llamacpp-completion/ops/completion-stream.ts`| First handler migrated — reference implementation of the canonical shape                                 |
-| `test/unit/runtime/disposable-scope.test.ts`                      | Scope contract: LIFO, idempotency, error aggregation, late-defer                                         |
-| `test/unit/runtime/request-registry.test.ts`                      | Registry contract: begin/cancel/end, parent-signal composition, listener detach, cancel-before-begin    |
-| `schemas/cancel.ts`                                               | `CancelRequest` discriminated union + `cancelByRequestIdSugarSchema` for `sdk.cancel({ requestId })`     |
-| `utils/errors-server.ts`                                          | `RequestIdConflictError` (52417), `AsyncDisposeUnavailableError` (53503)                                 |
+| File                                                                       | Purpose                                                                                                  |
+|----------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------|
+| `server/bare/runtime/disposable-scope.ts`                                  | `DisposableScope` factory + module-load `Symbol.asyncDispose` guard                                      |
+| `server/bare/runtime/request-context.ts`                                   | `RequestContext`, `RequestKind`, `RequestState` types                                                    |
+| `server/bare/runtime/request-registry.ts`                                  | `createRequestRegistry()`, `ManagedRequestContext`, `RequestOutcome`, cancel/begin/end/list logic, bounded `cancelled-before-begin` race-close map, `ConcurrencyPolicy` + `[request-lifecycle]` structured logging |
+| `server/bare/runtime/request-registry-singleton.ts`                        | `getRequestRegistry()` worker-scoped accessor; installs the `completion` → `oneAtATimePerModel` policy on first use |
+| `server/bare/runtime/with-request-context.ts`                              | `withRequestContext(logger, ctx)` — per-request logger wrapper prefixing every emit with the lifecycle correlation tuple |
+| `server/bare/runtime/request-id.ts`                                        | UUID generation helper for caller-provided ids                                                           |
+| `server/bare/runtime/index.ts`                                             | Public re-exports — handlers import from `@/server/bare/runtime`                                         |
+| `server/bare/ops/cancel.ts`                                                | Broad-cancel op: pure registry walk, legacy addon-cancel fallback removed in 0.11.0                      |
+| `server/rpc/handlers/cancelHandler.ts`                                     | RPC entry point: 2-arm `request` / `broad` dispatch (5-arm union collapsed in 0.11.0). Targeted `request` goes through `RequestRegistry.cancel({ requestId })` plus an optional `markClearCacheForRequest(...)` for downloads; `broad` delegates to `server/bare/ops/cancel.ts` |
+| `server/rpc/handlers/delete-cache.ts`                                      | Delegates to `deleteKvCacheState(...)` — zero direct references to the three KV-cache layers             |
+| `server/bare/plugins/llamacpp-completion/plugin.ts`                        | Reference plugin manifest; declares `cancel: { scope: "model", hard: true }`; builds `withRequestContext(...)` once per request and threads it into `completion(...)`; `finetune` declares `{ scope: "model", hard: true }`; `translate` handler threads `requestId` into the shared bare op |
+| `server/bare/plugins/llamacpp-completion/ops/completion-stream.ts`         | Reference implementation of the canonical handler shape; uses `KvCacheSession`; accepts a request-scoped `logger` |
+| `server/bare/plugins/llamacpp-completion/ops/finetune.ts`                  | `startFinetune` opens a registry context (kind `"finetune"`), wires `signal → model.cancel()`, registers `scope.defer` cleanups for `clearFinetuneRuntimeState` + `handle.removeListener`; `cancelFinetune` is a thin wrapper over `registry.cancel({ modelId, kind: "finetune" })` |
+| `server/bare/plugins/llamacpp-completion/ops/kv-cache-session.ts`          | `KvCacheSession` factory + `deleteKvCacheState`: single owner of the three KV-cache layers; accepts a per-instance logger |
+| `server/bare/ops/embed.ts`                                                 | Registry-routed (kind `"embeddings"`, `scope: "model", hard: true`); accepts an optional `requestId`, falls back to a server-generated UUID |
+| `server/bare/ops/transcribe.ts`                                            | `transcribe` + `transcribeStream` registry-routed (kind `"transcribe"`); `restorePrompt` runs via `scope.defer`; per-iteration `if (ctx.signal.aborted) break;` in the response loop |
+| `server/bare/ops/translate.ts`                                             | Registry-routed (kind `"translate"`); LLM-translate branch wires `signal → addon.cancel()` (hard); NMT-translate branch is soft-cancel only (the `nmtcpp-translation.translate` handler declares `scope: "none"`); covers the `runBatch(...)` early-return path |
+| `server/bare/plugins/{llamacpp-embedding,whispercpp-transcription,parakeet-transcription,nmtcpp-translation,onnx-tts,onnx-ocr,sdcpp-generation}/plugin.ts` | Built-in plugin manifests — each handler declares its `cancel: { scope, hard? }` truth-table row; inference handlers thread `requestId` from the request envelope into the shared bare ops |
+| `schemas/plugin.ts`                                                        | `PluginHandlerCancel` / `PluginHandlerCancelScope` types + runtime schema validation on `pluginHandlerDefinitionRuntimeSchema` |
+| `client/api/completion-stream.ts`                                          | Client-side construction of `InferenceCancelledError` on `stopReason: "cancelled"`                       |
+| `schemas/completion-event.ts`                                              | `stopReason` enum carries `"cancelled"`                                                                  |
+| `test/unit/runtime/disposable-scope.test.ts`                               | Scope contract: LIFO, idempotency, error aggregation, late-defer                                         |
+| `test/unit/runtime/request-registry.test.ts`                               | Registry contract: begin/cancel/end, parent-signal composition, listener detach, Stop-button race close, bounded-set invariants, `oneAtATimePerModel` admission rule |
+| `test/unit/runtime/kv-cache-session.test.ts`                               | `KvCacheSession` contract: begin/commit/rollback semantics, double-rollback idempotency, delete-by-scope |
+| `test/unit/runtime/with-request-context.test.ts`                           | `withRequestContext` prefix shape and underlying-logger pass-through                                     |
+| `test/unit/runtime/request-lifecycle-logging.test.ts`                      | `[request-lifecycle] begin/cancel/end` line shape, single-emit guarantee, `cancelAll` fan-out            |
+| `test/unit/plugin-cancel-capability.test.ts`                               | Runtime-schema + truth-table pinning for every built-in plugin's `cancel` declaration                    |
+| `test/unit/inference-handler-migrations.test.ts`                           | Schema-level coverage for the optional `requestId` on embed/transcribe/translate/finetune requests, plus `[request-lifecycle]` log shape assertions across all four registry-routed inference kinds. The op-level cancel-by-requestId / cancel-by-modelId integration tests are bare-runtime-gated for the same reason `finetune-ops.test.disabled.ts` is — the registry-routed ops pull `bare-crypto` and `bare-fs` transitively and won't load under Bun |
+| `schemas/cancel.ts`                                                        | `CancelRequest` discriminated union + `cancelByRequestIdSugarSchema` for `sdk.cancel({ requestId })`     |
+| `utils/errors-server.ts`                                                   | `RequestIdConflictError` (52417), `InferenceCancelledError` (52419), `RequestRejectedByPolicyError` (52420), `AsyncDisposeUnavailableError` (53503) |
 
 ## See Also
 
 - [`request-lifecycle-primitives.mdc`](../request-lifecycle-primitives.mdc) — canonical handler shape + anti-patterns (this rule fires automatically when editing server-side handlers).
 - [`error-handling.mdc`](../error-handling.mdc) — structured-error placement and the client/server error separation.
-- [`docs/kv-cache-system.mdc`](./kv-cache-system.mdc) — the bookkeeping layers that `KvCacheSession` (M2) will consolidate.
+- [`docs/kv-cache-system.mdc`](./kv-cache-system.mdc) — `KvCacheSession` ownership of the three KV-cache bookkeeping layers and its `beginTurn` / `commitTurn` / `rollback` / `deleteKvCacheState` API.
+

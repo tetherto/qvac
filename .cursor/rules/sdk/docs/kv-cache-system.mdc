@@ -88,33 +88,96 @@ When a new cache key is used for the first time:
 
 | File | Purpose |
 |------|---------|
-| `server/bare/plugins/llamacpp-completion/ops/completion-stream.ts` | Main completion handler with cache logic (string-key flow, auto-generated flow) |
-| `server/bare/ops/kv-cache-utils.ts` | Cache utilities: path generation, config hash, in-memory registry, file ops |
+| `server/bare/plugins/llamacpp-completion/ops/kv-cache-session.ts` | **`KvCacheSession` — single owner of the three KV-cache bookkeeping layers** (on-disk `.bin`, `initializedCaches`, `cachedMessageCounts`). Exposes `beginTurn` / `commitTurn` / `rollback` / `dropStaleSavedCount` plus the module-level `deleteKvCacheState(...)` administrative API. (QVAC-18182). |
+| `server/bare/plugins/llamacpp-completion/ops/completion-stream.ts` | Completion handler. Calls `session.beginTurn(...)`, registers `scope.defer(() => session.rollback(turn))` once, and calls `session.commitTurn(...)` on the happy path (which suppresses the deferred rollback). No direct references to the three layers. |
+| `server/bare/plugins/llamacpp-completion/ops/kv-cache-state.ts` | Pure `decideCachedHistorySlice(...)` helper used by the session — slice decision for the next addon call. No state. |
+| `server/bare/ops/kv-cache-utils.ts` | Path / hash / fs utilities: `getCacheFilePath`, `generateConfigHash`, `findMatchingCache`, `getCurrentCacheInfo`, `renameCacheFile`, `deleteCache`. No in-memory state. |
 | `server/bare/plugins/llamacpp-completion/ops/cache-logger.ts` | Debug logging for cache operations |
+| `server/rpc/handlers/delete-cache.ts` | `handleDeleteCache` RPC entry point. Delegates to `deleteKvCacheState(...)` — zero direct references to the three layers. |
 | `server/utils/cache.ts` | `getKVCacheDir()` base directory |
 | `client/api/delete-cache.ts` | Client-side delete cache API |
 
 ## Key Behaviors
 
-### In-Memory Cache Registry
+### `KvCacheSession` Ownership
 
-`kv-cache-utils.ts` maintains a `Set<string>` of initialized caches to avoid redundant filesystem checks. `customCacheExists()` checks the in-memory set first, then falls back to async filesystem check. When a cache file is found on disk (from a previous run), it also marks it as initialized in the in-memory registry.
+Before 0.11.0 the completion handler coordinated three independent bookkeeping layers around every cancel/error branch:
 
-### Cache Initialization (initSystemPromptCache)
+1. An in-memory `Set<string>` of "initialized caches" (`kv-cache-utils.ts`).
+2. A `Map<string, number>` of saved-message counts (`kv-cache-state.ts`).
+3. The on-disk `.bin` files written by the addon.
 
-Primes a new cache by sending system prompt + tools through `runModel` with `{ cacheKey: cachePath, saveCacheToDisk: true, prefill: true }`. The prompt is ingested into the KV cache and persisted to disk without producing any output tokens, so the call resolves as soon as priming finishes.
+Three near-identical cleanup blocks in `completion-stream.ts` had to touch all three on every cancel / zero-token / rename-failed / tool-call exit. Any one of those blocks forgetting a layer produced the drift bugs the pitch documents (QVAC-17780 family).
 
-### Message Preparation (prepareMessagesForCache)
+**0.11.0 collapses this into `KvCacheSession`**, the **single mutation point** for the three layers. The handler's loop is now:
 
-When cache exists and history is non-empty, sends only the new messages (since last cached count). Otherwise sends full history minus the system prompt. The cache file path is passed via `runOptions.cacheKey`, not embedded in the message array.
+```typescript
+const session = createKvCacheSession(modelId);
+const turn = await session.beginTurn({ ... });          // primes cache if missing, returns handle
+scope.defer(() => session.rollback(turn));              // ONE cleanup hook for every exit path
+// ... run model ...
+if (shouldCommit) await session.commitTurn(turn, ...);  // suppresses the deferred rollback
+```
+
+`commitTurn` flips an internal flag on the turn handle; `rollback` reads the flag and short-circuits. The happy path commits and the deferred rollback becomes a no-op. Every other exit path (cancel, zero-token, addon error, rename failure, tool-call turn) lets `scope[Symbol.asyncDispose]` run the deferred rollback, which atomically unlinks the `.bin` file, deletes the `initializedCaches` entry, and forgets the `cachedMessageCounts` entry.
+
+The maps that backed `clearCacheRegistry` and `cachedMessageCounts` are **private to `kv-cache-session.ts`**. No other module reads or writes them.
+
+### Cache Initialization (primeIfMissing) and Addon Non-Transactional Save
+
+`beginTurn` injects a `primeIfMissing(cachePath)` closure that the session calls when the cache doesn't exist in-memory and on-disk. The closure (constructed by the completion handler) sends system prompt + (static) tools through `runModel` with `{ cacheKey: cachePath, saveCacheToDisk: true, prefill: true }`.
+
+**Addon contract today (non-transactional):** the llama.cpp addon's save path is `CacheManager::writeCacheFile` → `llama_state_save_file(...)`, and the addon **discards** the bool return value. `maybeSaveCacheToDisk` is the very last call on the prefill path, so any earlier throw means no save was attempted. As a result, the prime closure's outcomes from the SDK's perspective are:
+
+| Scenario | Closure result | Disk state |
+|---|---|---|
+| Eval interrupted (cancel mid-prefill) | resolves cleanly | no file (early return before save) |
+| Eval succeeds, save succeeds | resolves cleanly | full file |
+| Eval succeeds, save fails (return value swallowed) | **resolves cleanly** | empty or partial file |
+| `validatePrompt` / `loadMedia` / similar throws (pre-eval) | rejects | no file |
+
+Critically: there is **no path** where the closure rejects AND a partial file exists on disk. Any rejected prime is by construction "no save was attempted".
+
+**SDK-side defenses (matched access-probes):**
+
+- **`verifyPrimedFile(cachePath)` at prime time** — after `primeIfMissing` resolves, `fsPromises.stat` the canonical path. If missing or zero-size, best-effort unlink the empty leftover and throw so the session does NOT mark the cache initialized. Catches the cancelled-mid-prime and addon-silent-empty-write rows above.
+- **`verifySaveAndRecord(cachePath, count)` at commit time** — same `access` probe applied before recording the new saved-message count. A missing file triggers `runRollback(...)` instead of recording a phantom commit.
+
+**What the SDK probes do NOT catch:** a partial-but-nonzero file. Closing that gap requires either a structural integrity check the SDK can't currently compute, or — the right answer — an addon-layer change so the addon throws on save failure.
+
+**Pending addon-layer fix:** `CacheManager::writeCacheFile` should check `llama_state_save_file`'s return value and throw `qvac_errors::StatusError(ADDON_ID, "UnableToSaveSessionFile", ...)` on failure (and ideally write atomically inside the addon — temp + rename around the existing save call). When that lands, **both `verifyPrimedFile` and `verifySaveAndRecord` collapse**: the prime closure's rejection becomes the authoritative signal, the rollback hook handles cleanup, and both access-probes can be retired together. Tracked as `[tech-debt] llama.cpp addon: throw on llama_state_save_file failure` in the SDK Asana board (gid `1214778658064488`).
+
+Injecting the prime via closure keeps `kv-cache-session.ts` free of model-registry / addon dependencies — the session is unit-testable without a real model.
+
+### Saved-Count Slicing & Stale-Boundary Recovery (decideCachedHistorySlice)
+
+`TurnHandle.savedCount` carries the on-disk message-count snapshot at `beginTurn` time. `prepareMessagesForCache` calls the pure `decideCachedHistorySlice(savedCount, cacheExists, history)` to pick what the addon receives next:
+
+- Cache miss or empty history → send the whole history minus the system message.
+- Cache hit with a valid `savedCount` → send only the unsaved tail (`history.slice(savedCount)`).
+- Cache hit but the slice would be empty (stale boundary — QVAC-17780) → fall back to the full non-system history and tell the session via `session.dropStaleSavedCount(turn)` so the bad boundary doesn't propagate. The on-disk file is left intact (it's still usable); only the boundary count is wrong.
 
 ### Config Hash Generation (generateConfigHash)
 
-Cache validity is tied to a SHA-256 hash of system prompt content + sorted tool names. Model config is NOT included (per addon team: doesn't affect cache validity). Changing tools mid-session creates a new cache with the new tools anchored.
+Cache validity is tied to a SHA-256 hash of system prompt content + sorted tool names. Model config is NOT included (per addon team: doesn't affect cache validity). Changing tools mid-session creates a new cache with the new tools anchored. Dynamic-mode tools intentionally do NOT participate in the hash so the cache can survive per-turn tool sets.
 
-### Auto-Generated Cache Flow
+### Auto-Cache Rename Flow
 
-When `kvCache: true`, the cache key is derived from a hash of the conversation history. `findMatchingCache()` checks if a cache exists for `history[0..n-1]`. After completion, the cache file is renamed to reflect the updated history hash.
+When `kvCache: true`, `beginTurn` resolves the pre-response cache path (key derived from `history.slice(0, -1)`) via `findMatchingCache(...)` (cache hit) or `getCurrentCacheInfo(...)` (cache miss). On the happy path, the handler computes the post-response key from `result.responseText`, then calls `session.commitTurn(turn, { kind: "autoRename", targetCachePath, messageCount })` which renames the file and records the new saved count at the destination. A rename failure (or any other commit failure) falls through to the deferred rollback — single cleanup path, no drift.
+
+### Atomic Cache Deletion (`deleteKvCacheState`)
+
+```typescript
+import { deleteCache } from "@qvac/sdk";
+
+await deleteCache({ all: true });                              // wipe and recreate the kv-cache root
+await deleteCache({ kvCacheKey: "session-a" });                // remove session-a across every model
+await deleteCache({ kvCacheKey: "session-a", modelId: "..." }); // remove only one model's session-a cache
+```
+
+`handleDeleteCache` delegates to `deleteKvCacheState(...)` — a module-level export from `kv-cache-session.ts` that owns the same three layers. It removes the matching on-disk directory tree, prefix-cleans `cachedMessageCounts` against the removed path, and scope-clears `initializedCaches` by `(kvCacheKey[, modelId])`. The RPC handler itself has **zero direct references** to `fsPromises.unlink`, the in-memory `initializedCaches` set, or the `cachedMessageCounts` map.
+
+See `schemas/delete-cache.ts` for the request schema.
 
 ## Cache Persistence
 
@@ -122,18 +185,6 @@ When `kvCache: true`, the cache key is derived from a hash of the conversation h
 - **Session switch** — when a different `cacheKey` is passed, the addon auto-saves the old session before loading the new one
 - **Omitting `cacheKey`** — the addon auto-saves the active session and clears it
 - **Model unload** — all active caches flushed
-
-### Deleting Caches
-
-```typescript
-import { deleteCache } from "@qvac/sdk";
-
-await deleteCache({ all: true });                              // Delete all
-await deleteCache({ kvCacheKey: "session-a" });                // Delete specific key
-await deleteCache({ kvCacheKey: "session-a", modelId: "..." }); // Delete specific model's cache
-```
-
-See `schemas/delete-cache.ts` for the request schema.
 
 ## Context Overflow with KV Cache
 
