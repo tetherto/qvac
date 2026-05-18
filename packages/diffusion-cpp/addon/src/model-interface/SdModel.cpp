@@ -367,7 +367,7 @@ std::any SdModel::process(const std::any& input) {
   // Default is "txt2img" for backwards compatibility: a JSON payload that
   // omits "mode" keeps behaving as an image generation job.
   std::string mode = "txt2img";
-  const auto& obj = v.get<picojson::object>();
+  const auto& obj = jsonRoot.get<picojson::object>();
   if (auto it = obj.find("mode"); it != obj.end()) {
     if (!it->second.is<std::string>())
       throw StatusError(
@@ -378,9 +378,9 @@ std::any SdModel::process(const std::any& input) {
   const bool isVideo =
       (mode == "txt2vid" || mode == "img2vid" || mode == "flf2vid");
   if (isVideo) {
-    return processVideo(job, v);
+    return processVideo(job, jsonRoot);
   }
-  return processImage(job, v);
+  return processImage(job, jsonRoot);
 }
 
 // ---------------------------------------------------------------------------
@@ -394,7 +394,7 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& v) {
   // -- Build SdGenConfig from handlers ---------------------------------------
   qvac_lib_inference_addon_sd::SdGenConfig gen{};
   qvac_lib_inference_addon_sd::applySdGenHandlers(
-      gen, jsonRoot.get<picojson::object>());
+      gen, v.get<picojson::object>());
 
   if (gen.mode != "txt2img" && gen.mode != "img2img") {
     throw StatusError(
@@ -585,7 +585,7 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& v) {
       if (!job.initImageBytes.empty()) {
         initPng = job.initImageBytes;
       } else {
-        const auto& jsonObj = jsonRoot.get<picojson::object>();
+        const auto& jsonObj = v.get<picojson::object>();
         auto initBytesIt = jsonObj.find("init_image_bytes");
         if (initBytesIt != jsonObj.end() &&
             initBytesIt->second.is<picojson::array>()) {
