@@ -4325,7 +4325,7 @@
     "source": "s3:///qvac_models_compiled/chatterbox/2026-05-08/chatterbox-t3-turbo.gguf",
     "engine": "@qvac/tts-ggml",
     "description": "Chatterbox T3 turbo language model (GGUF, English)",
-    "quantization": "",
+    "quantization": "fp16",
     "params": "",
     "licenseId": "MIT",
     "tags": [
@@ -4357,7 +4357,7 @@
     "source": "s3:///qvac_models_compiled/chatterbox/2026-05-08/chatterbox-t3-mtl.gguf",
     "engine": "@qvac/tts-ggml",
     "description": "Chatterbox T3 language model (GGUF, multilingual)",
-    "quantization": "",
+    "quantization": "fp16",
     "params": "",
     "licenseId": "MIT",
     "tags": [
@@ -4374,10 +4374,112 @@
     "notes": ""
   },
   {
+    "source": "s3:///qvac_models_compiled/ggml/chatterbox/2026-05-18/chatterbox-t3-mtl-q4_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Chatterbox T3 language model (GGUF, multilingual)",
+    "quantization": "q4_0",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "t3",
+      "multilingual",
+      "gguf",
+      "en",
+      "es",
+      "it",
+      "pt"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/chatterbox/2026-05-18/chatterbox-t3-mtl-q8_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Chatterbox T3 language model (GGUF, multilingual)",
+    "quantization": "q8_0",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "t3",
+      "multilingual",
+      "gguf",
+      "en",
+      "es",
+      "it",
+      "pt"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/chatterbox/2026-05-18/chatterbox-t3-turbo-q4_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Chatterbox T3 turbo language model (GGUF, English)",
+    "quantization": "q4_0",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "t3-turbo",
+      "en",
+      "gguf"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/chatterbox/2026-05-18/chatterbox-t3-turbo-q8_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Chatterbox T3 turbo language model (GGUF, English)",
+    "quantization": "q8_0",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "t3-turbo",
+      "en",
+      "gguf"
+    ],
+    "notes": ""
+  },
+  {
     "source": "s3:///qvac_models_compiled/supertonic/2026-05-08/supertonic.gguf",
     "engine": "@qvac/tts-ggml",
     "description": "Supertonic TTS (GGUF, English)",
-    "quantization": "",
+    "quantization": "fp16",
+    "params": "",
+    "licenseId": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "en",
+      "gguf"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/supertonic/2026-05-18/supertonic-q4_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Supertonic TTS (GGUF, English)",
+    "quantization": "q4_0",
+    "params": "",
+    "licenseId": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "en",
+      "gguf"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/supertonic/2026-05-18/supertonic-q8_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Supertonic TTS (GGUF, English)",
+    "quantization": "q8_0",
     "params": "",
     "licenseId": "openrail",
     "tags": [
@@ -4392,7 +4494,37 @@
     "source": "s3:///qvac_models_compiled/supertonic/2026-05-08/supertonic2.gguf",
     "engine": "@qvac/tts-ggml",
     "description": "Supertonic 2 TTS (GGUF, multilingual)",
-    "quantization": "",
+    "quantization": "fp16",
+    "params": "",
+    "licenseId": "openrail",
+    "tags": [
+      "tts",
+      "supertonic2",
+      "multilingual",
+      "gguf"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/supertonic/2026-05-18/supertonic2-q4_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Supertonic 2 TTS (GGUF, multilingual)",
+    "quantization": "q4_0",
+    "params": "",
+    "licenseId": "openrail",
+    "tags": [
+      "tts",
+      "supertonic2",
+      "multilingual",
+      "gguf"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/supertonic/2026-05-18/supertonic2-q8_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Supertonic 2 TTS (GGUF, multilingual)",
+    "quantization": "q8_0",
     "params": "",
     "licenseId": "openrail",
     "tags": [
