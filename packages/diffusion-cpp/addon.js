@@ -21,7 +21,13 @@ function mapAddonEvent (rawEvent, rawData, rawError) {
     return { type: 'Output', data: rawData, error: null }
   }
 
-  if (rawData && typeof rawData === 'object') {
+  // JobEnded carries a plain runtime-stats POJO. Excluding typed-array views
+  // here keeps future per-frame typed-array handlers (e.g. when
+  // SdModel::GenerationJob::frameCallback wires through to JS) from being
+  // misclassified as JobEnded and prematurely closing the response stream.
+  // `ArrayBuffer.isView` is true for every TypedArray + DataView, false for
+  // plain objects -- exactly the discrimination we want.
+  if (rawData && typeof rawData === 'object' && !ArrayBuffer.isView(rawData)) {
     return { type: 'JobEnded', data: rawData, error: null }
   }
 
@@ -136,66 +142,124 @@ class SdInterface {
    * @returns {Promise<boolean>} true if job was accepted, false if busy
    */
   async runJob (params) {
-    // Pass init_image / init_images Uint8Array(s) directly to C++ as
-    // typed-array properties (avoids JSON-encoding every byte as a number).
+    // Pass init_image / init_images / end_image / control_frames Uint8Array(s)
+    // directly to C++ as typed-array properties (avoids JSON-encoding every
+    // byte as a number).
     //
-    // Mutual-exclusion is enforced in index.js before we get here and in
-    // SdModel::process() on the C++ side, but we still guard against both
-    // being set at this boundary so a misuse of addon.js directly doesn't
-    // silently drop one of the buffers.
+    // Mutual-exclusion is enforced in the wrapper classes before we get here
+    // and in SdModel::process() on the C++ side, but we still guard against
+    // both init_image and init_images being set at this boundary so a direct
+    // misuse of addon.js doesn't silently drop one of the buffers.
     if (params.init_image && Array.isArray(params.init_images) && params.init_images.length > 0) {
       throw new Error(
         'addon.runJob: init_image and init_images are mutually exclusive — pick one.'
       )
     }
 
+    // ── Video-specific buffers ───────────────────────────────────────────
+    // `end_image` -- flf2vid (first-last-frame interpolation).
+    // `control_frames` -- VACE-guided video generation (array of Uint8Array,
+    //                     one per frame).
+    // These are always forwarded as dedicated typed-array properties to the
+    // native runJob so they bypass JSON serialisation the same way
+    // `initImageBuffer(s)` do. Both are optional and can appear alongside a
+    // single `init_image` (img2vid / flf2vid); SdModel::processVideo()
+    // enforces the final mode-vs-inputs invariants.
+    const endImageBuf = params.end_image
+    const controlFramesBufs = Array.isArray(params.control_frames)
+      ? params.control_frames
+      : null
+
     // ── Multi-reference ("fusion") path ─────────────────────────────────────
-    // FLUX2 in-context conditioning with N reference images. Dimensions are
-    // auto-resized inside generate_image() via auto_resize_ref_image, so we
-    // don't pre-align width/height here — the first reference's dimensions
-    // are used by SdModel::process() as the output default.
+    // FLUX2 in-context conditioning with N reference images. index.js defaults
+    // width/height to 1024 for FLUX img2img before this point, so
+    // _fillDimsFromImage is a no-op when both axes are already set.
+    // auto_resize_ref_image handles per-reference resizing inside
+    // generate_image() for the remaining refs.
     if (Array.isArray(params.init_images) && params.init_images.length > 0) {
       const serializable = { ...params }
       const imgBufs = serializable.init_images
       delete serializable.init_images
+      delete serializable.end_image
+      delete serializable.control_frames
 
       this._fillDimsFromImage(serializable, imgBufs[0])
 
       const paramsJson = JSON.stringify(serializable)
-      return this._binding.runJob(this._handle, {
+      const jobArgs = {
         type: 'text',
         input: paramsJson,
         initImageBuffers: imgBufs
-      })
+      }
+      if (endImageBuf) jobArgs.endImageBuffer = endImageBuf
+      if (controlFramesBufs) jobArgs.controlFramesBuffers = controlFramesBufs
+      return this._binding.runJob(this._handle, jobArgs)
     }
 
-    // ── Single-image path (unchanged) ──────────────────────────────────────
+    // ── Single-image path ──────────────────────────────────────────────────
+    // Used by:
+    //   - image mode: img2img (SDEdit or FLUX.2 single ref)
+    //   - video mode: img2vid (first frame) or flf2vid (first frame; `end_image`
+    //                 provides the last frame)
     // Auto-detect width/height from the image header so the C++ tensor
     // dimensions always match the decoded image — without this, generate_image()
-    // hits GGML_ASSERT(image.width == tensor->ne[0]).
+    // hits GGML_ASSERT(image.width == tensor->ne[0]). The same auto-detect
+    // is useful for img2vid / flf2vid so Wan's expected video dimensions
+    // match the first frame without the caller having to specify them.
     if (params.init_image) {
       const serializable = { ...params }
       const imgBuf = serializable.init_image
       delete serializable.init_image
+      delete serializable.end_image
+      delete serializable.control_frames
 
       this._fillDimsFromImage(serializable, imgBuf)
 
       const paramsJson = JSON.stringify(serializable)
-      return this._binding.runJob(this._handle, {
+      const jobArgs = {
         type: 'text',
         input: paramsJson,
         initImageBuffer: imgBuf
-      })
+      }
+      if (endImageBuf) jobArgs.endImageBuffer = endImageBuf
+      if (controlFramesBufs) jobArgs.controlFramesBuffers = controlFramesBufs
+      return this._binding.runJob(this._handle, jobArgs)
     }
 
-    const paramsJson = JSON.stringify(params)
-    return this._binding.runJob(this._handle, { type: 'text', input: paramsJson })
+    // ── Prompt-only path (txt2img / txt2vid) ──────────────────────────────
+    // txt2vid may still ship control_frames for VACE-guided generation even
+    // without an init_image, so forward those too. Both keys are stripped
+    // from the JSON payload above and re-attached as raw typed arrays on
+    // jobArgs below -- this is the *only* supported transport for these
+    // buffers; passing them inside the JSON would JSON.stringify each byte
+    // into a decimal number (~3-4x bloat) and break native deserialization.
+    const serializable = { ...params }
+    delete serializable.end_image
+    delete serializable.control_frames
+    const paramsJson = JSON.stringify(serializable)
+    const jobArgs = { type: 'text', input: paramsJson }
+    if (endImageBuf) jobArgs.endImageBuffer = endImageBuf
+    if (controlFramesBufs) jobArgs.controlFramesBuffers = controlFramesBufs
+    return this._binding.runJob(this._handle, jobArgs)
   }
 
   /**
    * Helper: fill missing dimensions from image buffer, preserving explicit values.
-   * If neither width nor height is set, read from the image and align to 8-pixel boundary.
-   * If one axis is set, only fill the missing axis from the image.
+   *
+   * Rounds the auto-detected dimensions up to the nearest multiple of 8.
+   * The native SdGenHandlers validates width/height % 8 == 0 *before* the
+   * downstream alignment in SdModel::processImage gets a chance to run,
+   * so passing raw image dimensions (e.g. 500x627 for the bundled
+   * assets/von-neumann.jpg) makes img2img calls fail with:
+   *   "height must be a positive multiple of 8, got: 627"
+   *
+   * The image path is the only consumer that hits this: the FLUX/FLUX2
+   * multi-reference path uses generate_image()'s auto_resize_ref_image
+   * internally, and the video path (VideoStableDiffusion._runInternal)
+   * pre-validates off-grid init/end/control frames at the JS layer and
+   * rejects them with a clear caller-facing error before this helper
+   * runs, so the ceil() here is a no-op on aligned video inputs.
+   *
    * @private
    */
   _fillDimsFromImage (params, buf) {
@@ -204,12 +268,9 @@ class SdInterface {
     const dims = readImageDimensions(buf)
     if (!dims) return
 
-    if (!params.width) {
-      params.width = Math.ceil(dims.width / 8) * 8
-    }
-    if (!params.height) {
-      params.height = Math.ceil(dims.height / 8) * 8
-    }
+    const align8 = (n) => Math.ceil(n / 8) * 8
+    if (!params.width) params.width = align8(dims.width)
+    if (!params.height) params.height = align8(dims.height)
   }
 
   /**

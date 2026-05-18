@@ -522,6 +522,109 @@ TXT
   assert_error "${body}" "invalid_model_type"
 }
 
+# ── Legacy completions (blocking) ────────────────────────────────────
+
+@test "legacy completions: blocking returns text_completion shape" {
+  local body
+  body=$(json_post "/v1/completions" \
+    "{\"model\":\"${LLM_ALIAS}\",\"prompt\":\"Say hello and nothing else.\",\"max_tokens\":16}")
+
+  echo "${body}" | jq -e '.id | startswith("cmpl-")' >/dev/null
+  echo "${body}" | jq -e '.object == "text_completion"' >/dev/null
+  echo "${body}" | jq -e ".model == \"${LLM_ALIAS}\"" >/dev/null
+  echo "${body}" | jq -e '.choices | length == 1' >/dev/null
+  echo "${body}" | jq -e '.choices[0].index == 0' >/dev/null
+  echo "${body}" | jq -e '.choices[0].text | type == "string"' >/dev/null
+  echo "${body}" | jq -e '.choices[0].text | length > 0' >/dev/null
+  echo "${body}" | jq -e '.choices[0].logprobs == null' >/dev/null
+  echo "${body}" | jq -e '.choices[0].finish_reason == "stop"' >/dev/null
+  echo "${body}" | jq -e '.usage.completion_tokens | type == "number"' >/dev/null
+}
+
+@test "legacy completions: respects max_tokens" {
+  local body
+  body=$(json_post "/v1/completions" \
+    "{\"model\":\"${LLM_ALIAS}\",\"prompt\":\"Write a very long story about a cat.\",\"max_tokens\":8}")
+
+  echo "${body}" | jq -e '.choices[0].text | length > 0' >/dev/null
+}
+
+# ── Legacy completions (multi-prompt fan-out) ────────────────────────
+
+@test "legacy completions: multi-prompt blocking returns N choices with matching indices" {
+  local body
+  body=$(json_post "/v1/completions" \
+    "{\"model\":\"${LLM_ALIAS}\",\"prompt\":[\"Reply with the word \\\"alpha\\\".\",\"Reply with the word \\\"beta\\\".\"],\"max_tokens\":8}")
+
+  echo "${body}" | jq -e '.object == "text_completion"' >/dev/null
+  echo "${body}" | jq -e '.choices | length == 2' >/dev/null
+  echo "${body}" | jq -e '.choices[0].index == 0' >/dev/null
+  echo "${body}" | jq -e '.choices[1].index == 1' >/dev/null
+  echo "${body}" | jq -e '.choices[0].text | length > 0' >/dev/null
+  echo "${body}" | jq -e '.choices[1].text | length > 0' >/dev/null
+  echo "${body}" | jq -e '.choices[0].finish_reason == "stop"' >/dev/null
+  echo "${body}" | jq -e '.choices[1].finish_reason == "stop"' >/dev/null
+}
+
+@test "legacy completions: multi-prompt with stream:true returns 400 unsupported_streaming" {
+  local body
+  body=$(json_post "/v1/completions" \
+    "{\"model\":\"${LLM_ALIAS}\",\"prompt\":[\"a\",\"b\"],\"stream\":true,\"max_tokens\":4}")
+  assert_error "${body}" "unsupported_streaming"
+}
+
+@test "legacy completions: rejects token-id prompts" {
+  local body
+  body=$(json_post "/v1/completions" \
+    "{\"model\":\"${LLM_ALIAS}\",\"prompt\":[15496,11,995],\"max_tokens\":4}")
+  assert_error "${body}" "invalid_prompt"
+}
+
+@test "legacy completions: rejects missing prompt" {
+  local body
+  body=$(json_post "/v1/completions" \
+    "{\"model\":\"${LLM_ALIAS}\",\"max_tokens\":4}")
+  assert_error "${body}" "invalid_prompt"
+}
+
+# ── Legacy completions (streaming / SSE) ─────────────────────────────
+
+@test "legacy completions: SSE stream returns valid text_completion chunks" {
+  local raw
+  raw=$(curl -sN "${BASE}/v1/completions" \
+    -H "Content-Type: application/json" \
+    -d "{\"model\":\"${LLM_ALIAS}\",\"prompt\":\"Say hi.\",\"stream\":true,\"max_tokens\":16}")
+
+  echo "${raw}" | grep -q "data: \[DONE\]"
+
+  local first_chunk
+  first_chunk=$(echo "${raw}" | grep "^data: {" | head -1 | sed 's/^data: //')
+  echo "${first_chunk}" | jq -e '.id | startswith("cmpl-")' >/dev/null
+  echo "${first_chunk}" | jq -e '.object == "text_completion"' >/dev/null
+  echo "${first_chunk}" | jq -e ".model == \"${LLM_ALIAS}\"" >/dev/null
+  echo "${first_chunk}" | jq -e '.choices[0].text | type == "string"' >/dev/null
+  echo "${first_chunk}" | jq -e '.choices[0].logprobs == null' >/dev/null
+
+  local last_chunk
+  last_chunk=$(echo "${raw}" | grep "^data: {" | tail -1 | sed 's/^data: //')
+  echo "${last_chunk}" | jq -e '.choices[0].finish_reason == "stop"' >/dev/null
+  echo "${last_chunk}" | jq -e '.usage.completion_tokens | type == "number"' >/dev/null
+
+  local content_count
+  content_count=$(echo "${raw}" | grep "^data: {" | sed 's/^data: //' | \
+    jq -r 'select(.choices[0].text != null and .choices[0].text != "") | .choices[0].text' 2>/dev/null | wc -l)
+  [[ "${content_count}" -gt 0 ]]
+}
+
+# ── Legacy completions: cross-type rejection ─────────────────────────
+
+@test "cross-type: legacy completions endpoint rejects embedding model" {
+  local body
+  body=$(json_post "/v1/completions" \
+    "{\"model\":\"${EMBED_ALIAS}\",\"prompt\":\"hi\"}")
+  assert_error "${body}" "invalid_model_type"
+}
+
 @test "cross-type: embedding endpoint rejects chat model" {
   local body
   body=$(json_post "/v1/embeddings" \

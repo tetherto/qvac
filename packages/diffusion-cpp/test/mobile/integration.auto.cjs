@@ -22,6 +22,10 @@ async function runGenerateImageFlux2FusionTest (options = {}) { // eslint-disabl
   return runIntegrationModule('../integration/generate-image-flux2-fusion.test.js', options)
 }
 
+async function runGenerateImageFlux2I2iLargeTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/generate-image-flux2-i2i-large.test.js', options)
+}
+
 async function runGenerateImageFlux2I2iTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/generate-image-flux2-i2i.test.js', options)
 }
@@ -46,6 +50,10 @@ async function runGenerateImageTest (options = {}) { // eslint-disable-line no-u
   return runIntegrationModule('../integration/generate-image.test.js', options)
 }
 
+async function runGenerateVideoWanTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/generate-video-wan.test.js', options)
+}
+
 async function runInputValidationTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/input-validation.test.js', options)
 }
@@ -63,12 +71,14 @@ module.exports = {
   runGenerateImageEsrganUpscaleTest,
   runGenerateImageFlux2FusionSurjectiveTest,
   runGenerateImageFlux2FusionTest,
+  runGenerateImageFlux2I2iLargeTest,
   runGenerateImageFlux2I2iTest,
   runGenerateImageFlux2Test,
   runGenerateImageSd3I2iTest,
   runGenerateImageSd3Test,
   runGenerateImageSdxlTest,
   runGenerateImageTest,
+  runGenerateVideoWanTest,
   runInputValidationTest,
   runLoraBridgeTest,
   runModelLoadingTest

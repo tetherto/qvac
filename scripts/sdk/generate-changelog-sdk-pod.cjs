@@ -34,52 +34,35 @@ const SECTIONS = [
 ];
 
 /**
+ * Per-package PR exclusion list. The path-scope filter in
+ * `getPRNumbers(...)` picks up any PR whose diff touches `packages/<pkg>/**`,
+ * but cross-cutting monorepo chores (path renames, repo-wide reformats, etc.)
+ * often touch one tiny SDK-side file (a test executor, a historical changelog
+ * doc) and get pulled in as if they were SDK release items. Those PRs belong
+ * in the devops changelog, not the SDK changelog.
+ *
+ * The first-line defence is for the PR author to tag the title `[skiplog]` —
+ * that's free and retroactive only if the PR is still open. For already-merged
+ * cross-cutting PRs, list them here with a short rationale so future
+ * contributors understand why the exclusion exists.
+ *
+ * Keyed by package name. Values are `{ <prNumber>: "<rationale>" }`.
+ */
+const EXCLUDED_PRS = {
+  sdk: {
+    1860:
+      "Monorepo-wide path simplification across 26+ packages; only " +
+      "incidentally touched packages/sdk via a test executor and a " +
+      "historical changelog doc. Devops chore, not an SDK release item.",
+  },
+};
+
+/**
  * Maximum number of model entries to inline per section (Added/Updated/Removed)
  * in the main CHANGELOG.md. Anything beyond is collapsed to "(and N more)" and
  * the reader is expected to follow the link to models.md for the full list.
  */
 const MAX_INLINE_MODELS = 5;
-
-/**
- * Maximum number of bullets to include per section in the Slack announcement
- * post. Anything beyond is collapsed to "... And much more, see full list in
- * changelog :memo:". Sections with 10 or fewer entries are emitted verbatim;
- * the "And much more" suffix only appears when a section has *more than 10*
- * entries.
- */
-const MAX_ANNOUNCEMENT_BULLETS = 10;
-
-/**
- * Map of section keys to Slack-style emoji headings used in the
- * announcement-post.txt template. Slack does not render the unicode emojis
- * we use in CHANGELOG.md, so we translate to shortcodes here.
- */
-const SLACK_SECTION_HEADINGS = {
-  feat: ":sparkles: Features",
-  api: ":electric_plug: API",
-  fix: ":ladybug: Fixes",
-  mod: ":package: Models",
-  doc: ":blue_book: Docs",
-  test: ":test_tube: Tests",
-  chore: ":broom: Chores",
-  infra: ":gear: Infrastructure",
-};
-
-/**
- * Map from the unicode emoji used in CHANGELOG.md headings back to the
- * internal section key, so the announcement generator can parse a freshly
- * written CHANGELOG.md without re-running the upstream PR fetch.
- */
-const CHANGELOG_HEADING_TO_KEY = {
-  "✨": "feat",
-  "🔌": "api",
-  "🐞": "fix",
-  "📦": "mod",
-  "📘": "doc",
-  "🧪": "test",
-  "🧹": "chore",
-  "⚙️": "infra",
-};
 
 /**
  * Extract code blocks from markdown
@@ -790,12 +773,22 @@ function isBackmergeSubject(subject) {
 /**
  * Process raw PRs with SDK-specific validation and filtering
  * @param {Array<{number: number, title: string, body: string, url: string}>} rawPRs
+ * @param {string} [packageName] - Package being released; used to apply per-package
+ *   PR exclusions from `EXCLUDED_PRS`.
  * @returns {Array} Validated PRs with parsed metadata
  */
-function processSDKPRs(rawPRs) {
+function processSDKPRs(rawPRs, packageName) {
   const prs = [];
+  const exclusions = (packageName && EXCLUDED_PRS[packageName]) || {};
 
   for (const pr of rawPRs) {
+    if (Object.prototype.hasOwnProperty.call(exclusions, pr.number)) {
+      console.log(
+        `  ⏭️  PR #${pr.number} is on the ${packageName} exclusion list, excluding from changelog: ${exclusions[pr.number]}`,
+      );
+      continue;
+    }
+
     const validation = validatePR(pr.title, pr.body);
 
     if (!validation.valid) {
@@ -803,6 +796,18 @@ function processSDKPRs(rawPRs) {
         `  ⚠️  PR #${pr.number} has invalid format: ${validation.error}`,
       );
       console.warn(`      Skipping...`);
+      continue;
+    }
+
+    // PR titles that match validator exceptions (Merge / Revert / Squash /
+    // Version-bump / Release-PR) bypass format parsing entirely — `parsed`
+    // is undefined for these. They carry no structured metadata, so we have
+    // nothing meaningful to render in the changelog and skip them with a
+    // warning rather than crashing downstream.
+    if (!validation.parsed) {
+      console.warn(
+        `  ⏭️  PR #${pr.number} bypassed format validation (e.g. revert/merge/version bump), excluding from changelog: ${pr.title}`,
+      );
       continue;
     }
 
@@ -916,151 +921,18 @@ function rebuildRootChangelog(packageName) {
 }
 
 /**
- * Parse a generated CHANGELOG.md into structured sections with bullet entries.
- * Used by the announcement-post generator so it can transform the canonical
- * release changelog without re-fetching PRs from GitHub.
+ * Generate `announcement-post.txt` for a release.
  *
- * @param {string} markdown - Contents of CHANGELOG.md
- * @returns {{
- *   version: string|null,
- *   releaseDate: string|null,
- *   sections: Array<{ key: string, heading: string, bullets: Array<{
- *     text: string,
- *     prNumber: string|null,
- *     prUrl: string|null,
- *     isBreaking: boolean,
- *     isApi: boolean,
- *     isModels: boolean,
- *   }> }>,
- * }}
- */
-function parseChangelogMarkdown(markdown) {
-  const out = { version: null, releaseDate: null, sections: [] };
-
-  const versionMatch = markdown.match(/^# Changelog v(\d+\.\d+\.\d+)/m);
-  if (versionMatch) out.version = versionMatch[1];
-
-  const dateMatch = markdown.match(/^Release Date:\s*(\S+)/m);
-  if (dateMatch) out.releaseDate = dateMatch[1];
-
-  const lines = markdown.split("\n");
-  let current = null;
-  let currentBullet = null;
-
-  for (const rawLine of lines) {
-    const line = rawLine.replace(/\r$/, "");
-
-    // ## <emoji> <Title>
-    const headingMatch = line.match(/^##\s+(\S+)\s+(.+?)\s*$/);
-    if (headingMatch) {
-      const [, emoji, title] = headingMatch;
-      const key = CHANGELOG_HEADING_TO_KEY[emoji];
-      if (key) {
-        current = { key, heading: `${emoji} ${title}`, bullets: [] };
-        out.sections.push(current);
-        currentBullet = null;
-        continue;
-      }
-      // Unknown heading — close the current section so stray bullets don't
-      // get attached to a previous, unrelated section.
-      current = null;
-      currentBullet = null;
-      continue;
-    }
-
-    if (!current) continue;
-
-    if (line.startsWith("- ")) {
-      // New bullet; flush the running bullet reference.
-      const prMatch = line.match(/\(see PR \[#(\d+)\]\(([^)]+)\)\)/);
-      const prNumber = prMatch ? prMatch[1] : null;
-      const prUrl = prMatch ? prMatch[2] : null;
-
-      let text = line.slice(2);
-      if (prMatch) {
-        text = text.slice(0, prMatch.index - 2).trim();
-      }
-      text = text.replace(/\s*-\s*See\s+\[.*$/, "").trim();
-      text = text.replace(/\.+$/, "").trim();
-
-      const linkSuffix = line.slice(
-        prMatch ? prMatch.index + prMatch[0].length : 0,
-      );
-      const isBreaking = /\[breaking changes\]/i.test(linkSuffix);
-      const isApi = /\[API changes\]/i.test(linkSuffix);
-      const isModels = /\[model changes\]/i.test(linkSuffix);
-
-      currentBullet = {
-        text,
-        prNumber,
-        prUrl,
-        isBreaking,
-        isApi,
-        isModels,
-        continuation: [],
-      };
-      current.bullets.push(currentBullet);
-      continue;
-    }
-
-    // Indented continuation line (markdown convention: 2+ leading spaces or
-    // tab under the bullet). Preserve trimmed content so the announcement
-    // formatter can re-indent for Slack.
-    if (currentBullet && /^(\s{2,}|\t)/.test(line) && line.trim().length > 0) {
-      currentBullet.continuation.push(line.trim());
-      continue;
-    }
-
-    // Blank line or other content — close the running bullet so subsequent
-    // indented text doesn't accidentally attach to an unrelated bullet.
-    if (line.trim().length === 0) {
-      currentBullet = null;
-    }
-  }
-
-  return out;
-}
-
-/**
- * Format a single bullet for the Slack announcement post.
- *
- * Continuation lines (e.g. `Added: …` / `Removed: …` for [mod] PRs) are
- * preserved as separate lines indented by two spaces under the bullet.
- *
- * @param {{
- *   text: string,
- *   prUrl: string|null,
- *   isBreaking: boolean,
- *   continuation?: string[],
- * }} bullet
- * @returns {string}
- */
-function formatAnnouncementBullet(bullet) {
-  let line = `• ${bullet.text}`;
-  if (bullet.prUrl) line += ` (<${bullet.prUrl}>)`;
-  if (bullet.isBreaking) line += ` :boom: breaking`;
-
-  if (bullet.continuation && bullet.continuation.length > 0) {
-    for (const cont of bullet.continuation) {
-      line += `\n  ${cont}`;
-    }
-  }
-
-  return line;
-}
-
-/**
- * Generate `announcement-post.txt` from a per-version CHANGELOG.md.
- *
- * The output is plaintext sized to be copy-pasted into Slack: shortcode
- * emojis, `<url>` link wrapping (suppresses Slack unfurl), bullet rows kept
- * on a single line, sections capped at MAX_ANNOUNCEMENT_BULLETS with an
- * "...And much more" suffix when truncated.
+ * Short Slack-ready plaintext: header, three links (NPM / GitHub release /
+ * full changelog tree), an optional breaking-changes block when `breaking.md`
+ * exists in the version folder, and a thanks footer. Per-section bullet lists
+ * are intentionally omitted — readers follow the full-changelog link for the
+ * detail.
  *
  * @param {string} packageName
  * @param {string} version
- * @returns {string|null} The output path on success, or null if CHANGELOG.md
- *   for the requested version wasn't found.
+ * @returns {string|null} The output path on success, or null if the version
+ *   folder doesn't exist yet (run the main generator first).
  */
 function generateAnnouncementPost(packageName, version) {
   const repoRoot = getRepoRoot();
@@ -1071,17 +943,11 @@ function generateAnnouncementPost(packageName, version) {
     "changelog",
     version,
   );
-  const changelogPath = path.join(versionDir, "CHANGELOG.md");
 
-  if (!fs.existsSync(changelogPath)) {
-    console.warn(`⚠️ No CHANGELOG.md found at ${changelogPath}`);
+  if (!fs.existsSync(versionDir)) {
+    console.warn(`⚠️ No changelog directory found at ${versionDir}`);
     return null;
   }
-
-  const markdown = fs.readFileSync(changelogPath, "utf8");
-  const parsed = parseChangelogMarkdown(markdown);
-  const releaseDate =
-    parsed.releaseDate || new Date().toISOString().split("T")[0];
 
   const repoUrl = "https://github.com/tetherto/qvac";
   const npmName = `@qvac/${packageName}`;
@@ -1091,49 +957,21 @@ function generateAnnouncementPost(packageName, version) {
   const releaseTagUrl = `${repoUrl}/releases/tag/${tagName}`;
   const npmUrl = `https://www.npmjs.com/package/${npmName}/v/${version}`;
 
-  const hasBreaking = parsed.sections.some((s) =>
-    s.bullets.some((b) => b.isBreaking),
-  );
+  // The breaking-changes block only appears when there are breaking PRs.
+  // `breaking.md` is only written by `generateChangelogFiles` when at least
+  // one PR carries the [bc] tag, so its presence on disk is the authoritative
+  // signal — no need to re-parse CHANGELOG.md to figure it out.
+  const hasBreaking = fs.existsSync(path.join(versionDir, "breaking.md"));
 
   let post = "";
-
-  // Header
   post += `:qvac: SDK ${version} :rocket: NPM Public release\n\n`;
-
-  // Links
   post += `:package: NPM: ${npmUrl}\n`;
   post += `:technologist: Github release: ${releaseTagUrl}\n`;
   post += `:page_facing_up: Full Changelog: ${changelogTreeUrl}\n\n`;
 
-  // Breaking
   if (hasBreaking) {
     post += `:warning: Breaking Changes\n`;
     post += `See full migration guide: ${breakingMdUrl}\n\n`;
-  }
-
-  post += `Release Date: ${releaseDate}\n\n`;
-
-  // Sections — preserve the canonical order from SECTIONS, render only the
-  // ones that have bullets in the parsed changelog.
-  for (const section of SECTIONS) {
-    const heading = SLACK_SECTION_HEADINGS[section.key];
-    if (!heading) continue;
-
-    const matched = parsed.sections.find((s) => s.key === section.key);
-    if (!matched || matched.bullets.length === 0) continue;
-
-    post += `${heading}\n`;
-
-    const shown = matched.bullets.slice(0, MAX_ANNOUNCEMENT_BULLETS);
-    for (const bullet of shown) {
-      post += formatAnnouncementBullet(bullet) + "\n";
-    }
-
-    if (matched.bullets.length > MAX_ANNOUNCEMENT_BULLETS) {
-      post += `... And much more, see full list in changelog :memo:\n`;
-    }
-
-    post += "\n";
   }
 
   post += `Thanks to everyone on QVAC team :green_heart: :qvac: :green_heart:\n`;
@@ -1232,7 +1070,7 @@ async function main() {
 
     // Apply SDK-specific validation and filtering
     console.log("🔍 Validating PR formats...");
-    const validPRs = processSDKPRs(data.prs);
+    const validPRs = processSDKPRs(data.prs, packageName);
 
     console.log(`\n✅ ${validPRs.length} valid PRs for changelog\n`);
 
@@ -1273,7 +1111,6 @@ module.exports = {
   generateChangelogEntry,
   generateChangelogFiles,
   processSDKPRs,
-  parseChangelogMarkdown,
   generateAnnouncementPost,
   SECTIONS,
 };

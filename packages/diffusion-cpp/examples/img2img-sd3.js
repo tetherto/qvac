@@ -80,6 +80,7 @@ async function main () {
     config: {
       threads: 4,
       device: 'gpu',
+      diffusion_fa: true,
       prediction: 'flow', // SD3 rectified flow-matching (not flux2_flow)
       flow_shift: '3.0' // SD3 Medium default; controls noise schedule shift
     },

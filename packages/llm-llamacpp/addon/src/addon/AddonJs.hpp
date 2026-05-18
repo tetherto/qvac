@@ -29,7 +29,7 @@ makeQueueOutputCallback(qvac_lib_inference_addon_cpp::AddonJs& instance) {
   };
 }
 
-inline LlamaModel::ProgressCallback
+inline LlamaFinetuner::ProgressCallback
 makeQueueProgressCallback(qvac_lib_inference_addon_cpp::AddonJs& instance) {
   return [&instance](const llama_finetuning_helpers::FinetuneProgressStats& s) {
     instance.addonCpp->outputQueue->queueResult(std::any(s));
@@ -426,9 +426,9 @@ inline js_value_t* cancel(js_env_t* env, js_callback_info_t* info) try {
   auto* addonCpp = instance.addonCpp.get();
 
   return js::JsAsyncTask::run(env, [llamaModel, addonCpp]() {
-    if (llamaModel && llamaModel->isFinetuneRunning() &&
-        llamaModel->requestPause()) {
-      llamaModel->waitUntilFinetuningPauseComplete();
+    if (llamaModel && llamaModel->finetuner().isFinetuneRunning() &&
+        llamaModel->finetuner().requestPause()) {
+      llamaModel->finetuner().waitUntilFinetuningPauseComplete();
     } else {
       addonCpp->cancelJob();
     }

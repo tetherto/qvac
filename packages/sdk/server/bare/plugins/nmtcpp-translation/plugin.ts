@@ -201,7 +201,7 @@ export const nmtPlugin = definePlugin({
       cancel: { scope: "none" },
 
       handler: async function* (request) {
-        const stream = translate(request);
+        const stream = translate(request, request.requestId);
         try {
           let result = await stream.next();
 

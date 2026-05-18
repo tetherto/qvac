@@ -1,454 +1,671 @@
 ---
-title: SDK Release Notes — v0.10.0
+title: SDK Release Notes — v0.11.0 (latest)
 description: QVAC SDK release notes
 ---
 
-📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.10.0
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.11.0
 
-This release lands a redesigned completion API built on a unified event stream, a generic
-companion-set system that handles multi-file models in parallel, and a much stronger model
-type/capability system that catches mis-routed calls at compile time. It also rewires
-delegated inference to direct DHT connections, expands the addon surface (img2img,
-structured output, dynamic tools, tool dialects, per-segment whisper metadata,
-sentence-streaming TTS), and reshapes the model registry around companion sets.
+This release completes the request-lifecycle and cancellation overhaul that began in
+0.10.0: every long-running SDK call — `completion`, `embed`, `transcribe`,
+`transcribeStream`, `translate`, `finetune`, `loadModel`, `downloadAsset`, and the
+cancellable `rag` operations — now flows through a unified `RequestRegistry`, exposes
+its `requestId` synchronously on the returned promise, and can be cancelled
+individually with `cancel({ requestId })`. The wire envelope for `cancel(...)` is
+consolidated to two shapes, two legacy call signatures are removed, and the SDK gains
+typed `instanceof` for policy/cancel errors across the RPC boundary. Alongside the
+lifecycle work, this release adds Harmony / Qwen3.5 / Gemma4 tool-call dialects,
+FLUX.2 multi-reference fusion and per-call LoRA on diffusion, ESRGAN upscaling (both
+as a post-step and as a standalone `upscale()` API), Whisper VAD and end-of-turn
+events, multi-GPU `split-mode` / `tensor-split` / `main-gpu` on the LLM and embed
+plugins, a `reasoning_budget` knob for Qwen/Gemma reasoning, and a fresh Parakeet
+0.4.0 GGUF backend with duplex streaming. The mobile build flow now auto-verifies the
+worker bundle through `qvac verify bundle`, and the model registry was regenerated
+against the upstream `base-memory` Bergamot fix (dropping the deprecated Marian Opus
+constants on the way).
 
 ## Breaking Changes
 
 ### @qvac/sdk
 
-### Unified `CompletionEvent` stream
+### `unloadModel` no longer auto-closes the Bare worker
 
-`completion()` now returns a `CompletionRun` with a single canonical `events` stream that
-carries content, thinking, tool calls, stats, and completion in one ordered, sequenced
-sequence. The legacy `tokenStream`/`stats` fields still work as derived views, but the
-event stream is the authoritative API going forward and is what enables features like
-captured thinking and structured tool framing.
+On Bare, `unloadModel` used to call `close()` whenever no models or providers were
+left, which terminated the worker host on every routine unload. Long-lived Bare
+workers either had to avoid `unloadModel` or work around the auto-close.
+
+The default now flips by runtime: Node and Electron preserve the existing
+auto-close behaviour (`autoClose: true` by default), while Bare leaves the
+connection open (`autoClose: false` by default). Pass the field explicitly to
+override.
+
+**Before (Bare):**
+
+```typescript
+import { unloadModel } from "@qvac/sdk";
+
+await unloadModel({ modelId });
+// RPC connection closed → Bare worker host terminated.
+```
+
+**After (Bare):**
+
+```typescript
+import { unloadModel } from "@qvac/sdk";
+
+await unloadModel({ modelId });
+// Worker survives; opt in to closing explicitly:
+await unloadModel({ modelId, autoClose: true });
+```
+
+### Parakeet plugin moves to the 0.4.0 single-file GGUF API
+
+`@qvac/transcription-parakeet` 0.4.0 replaced the legacy multi-file ONNX bundle
+(encoder + decoder + vocab + preprocessor, plus the CTC / Sortformer variants)
+with a single GGUF backed by `qvac-parakeet.cpp`. The SDK plugin now follows
+suit: every per-variant `parakeet*Src` field on `modelConfig` is gone, the
+`modelType` discriminator is gone, and the addon auto-detects TDT / CTC / EOU /
+Sortformer from GGUF metadata.
 
 **Before:**
 
 ```typescript
-const result = completion({ modelId, history, stream: true });
-for await (const token of result.tokenStream) { /* ... */ }
-const stats = await result.stats;
+await loadModel({
+  modelSrc: PARAKEET_TDT_ENCODER_INT8,
+  modelType: "parakeet",
+  modelConfig: {
+    parakeetEncoderSrc: PARAKEET_TDT_ENCODER_INT8,
+    parakeetDecoderSrc: PARAKEET_TDT_DECODER_INT8,
+    parakeetVocabSrc: PARAKEET_TDT_VOCAB,
+    parakeetPreprocessorSrc: PARAKEET_TDT_PREPROCESSOR_INT8,
+  },
+});
+
+await loadModel({
+  modelSrc: PARAKEET_CTC_FP32,
+  modelType: "parakeet",
+  modelConfig: {
+    modelType: "ctc",
+    parakeetCtcModelSrc: PARAKEET_CTC_FP32,
+    parakeetTokenizerSrc: PARAKEET_CTC_TOKENIZER,
+  },
+});
 ```
 
 **After:**
 
 ```typescript
-const run = completion({ modelId, history, stream: true, captureThinking: true });
-for await (const event of run.events) {
-  if (event.type === "contentDelta") process.stdout.write(event.text);
-  if (event.type === "toolCall") console.log(event.call.name);
-}
-const result = await run.final;
-// result.contentText, result.thinkingText, result.toolCalls, result.stats, result.raw.fullText
+await loadModel({
+  modelSrc: PARAKEET_TDT_0_6B_V3_Q8_0,
+  modelType: "parakeet",
+});
+
+await loadModel({
+  modelSrc: PARAKEET_CTC_0_6B_Q8_0,
+  modelType: "parakeet",
+});
 ```
 
-### Model type & capability system overhaul
+The new GGUF constants (`PARAKEET_TDT_0_6B_V3_Q8_0`, `PARAKEET_CTC_0_6B_Q8_0`,
+`PARAKEET_SORTFORMER_4SPK_V1_Q8_0`, `PARAKEET_EOU_120M_V1_Q8_0`) are added in
+this release; the legacy multi-file constants are gone.
 
-`LoadModelOptions` is no longer a single catch-all. Custom plugins must use the new
-`LoadCustomPluginModelOptions<"plugin-name">` generic so the literal plugin string is
-pinned at the type level. Built-in model types continue to pick the right overload
-automatically when the annotation is dropped.
+### Two legacy `cancel(...)` call shapes are removed
 
-At runtime, built-in SDK operations now throw `MODEL_OPERATION_NOT_SUPPORTED` when called
-against the wrong model type — with a message that lists the requested operation, the
-loaded model's type, and the supported operations on it. The lower-level `pluginInvoke`
-and `pluginInvokeStream` paths still surface `PLUGIN_HANDLER_NOT_FOUND` as before.
+`cancel({ operation: "downloadAsset", downloadKey, clearCache })` and
+`cancel({ operation: "rag", workspace })` are removed because neither carried a
+`requestId` and neither can be mechanically back-mapped onto the new two-arm
+cancel wire envelope. Callers must migrate to the `requestId`-targeted cancel
+path (the primary one in 0.11.0) or to the broad cancel-by-`modelId` escape
+hatch.
 
-`translate(...)` now routes by the loaded model's registered type. Passing a mismatched
-`modelType` throws `ModelTypeMismatchError` instead of silently mis-routing the call.
-
-**Before:**
+**Before — downloadAsset:**
 
 ```typescript
-import type { LoadModelOptions } from "@qvac/sdk";
+import { downloadAsset, cancel } from "@qvac/sdk";
 
-const opts: LoadModelOptions = {
-  modelSrc: "/path/foo",
-  modelType: "my-custom-plugin",
-  modelConfig: { whatever: 1 },
-};
-await loadModel(opts);
+const op = downloadAsset({ assetSrc, onProgress });
+await cancel({ operation: "downloadAsset", downloadKey: assetSrc.key, clearCache: true });
 ```
 
-**After:**
+**After — downloadAsset:** the decorated promise now exposes `op.requestId`
+synchronously, and `clearCache` is honoured on the `requestId` path.
 
 ```typescript
-import type { LoadCustomPluginModelOptions } from "@qvac/sdk";
+import { downloadAsset, cancel } from "@qvac/sdk";
 
-const opts: LoadCustomPluginModelOptions<"my-custom-plugin"> = {
-  modelSrc: "/path/foo",
-  modelType: "my-custom-plugin",
-  modelConfig: { whatever: 1 },
-};
-await loadModel(opts);
-// Or just drop the annotation — TS picks the right overload.
+const op = downloadAsset({ assetSrc, onProgress });
+await cancel({ requestId: op.requestId, clearCache: true });
 ```
+
+**Before — rag:**
 
 ```typescript
-import { SDK_SERVER_ERROR_CODES } from "@qvac/sdk";
+import { ragIngest, cancel } from "@qvac/sdk";
 
-try {
-  await transcribe({ modelId: llmModelId /* ... */ });
-} catch (e) {
-  if ((e as { code?: number })?.code === SDK_SERVER_ERROR_CODES.MODEL_OPERATION_NOT_SUPPORTED) {
-    // Includes requested operation, loaded model type, supported operations,
-    // and suggested model types.
-  }
-}
+ragIngest({ workspace: "my-workspace", documents });
+await cancel({ operation: "rag", workspace: "my-workspace" });
 ```
 
-### Companion-set download progress field
-
-Multi-file model downloads (ONNX, future formats) now report progress through a generic
-`fileSetInfo` field instead of the ONNX-specific `onnxInfo`. The shape is identical, only
-the field name changed.
-
-**Before:**
+**After — rag (primary path, by `requestId`):**
 
 ```typescript
-onProgress: (progress) => {
-  if (progress.onnxInfo) {
-    console.log(`[${progress.onnxInfo.currentFile}] ${progress.onnxInfo.overallPercentage.toFixed(1)}%`);
-  }
-}
+import { ragIngest, cancel } from "@qvac/sdk";
+
+const op = ragIngest({ workspace: "my-workspace", documents });
+await cancel({ requestId: op.requestId });
 ```
 
-**After:**
+**After — rag (broad escape hatch, no `requestId` to hand):**
 
 ```typescript
-onProgress: (progress) => {
-  if (progress.fileSetInfo) {
-    console.log(`[${progress.fileSetInfo.currentFile}] ${progress.fileSetInfo.overallPercentage.toFixed(1)}%`);
-  }
-}
+import { cancel } from "@qvac/sdk";
+
+// Cancel every in-flight RAG operation running on the embedding model:
+await cancel({ modelId: ragEmbeddingModelId, kind: "rag" });
 ```
 
-### Delegated inference uses direct DHT connect
-
-Delegation no longer rendezvous over a shared topic. Consumers connect directly to a
-provider's public key via `swarm.dht.connect(publicKey)`, and providers bind the DHT
-server with `swarm.listen()` instead of announcing a topic. This removes a class of
-discovery-flake failures and shortens connect time. Callers using the high-level
-delegation API see no surface change; integrators driving Hyperswarm directly should
-update their join/listen logic.
-
-### Plugin constructor migration
-
-SDK plugins (`definePlugin`) now use the new addon constructor shape. Plugin authors
-need to migrate their `createModel` implementation to match — the SDK in this release
-ships with all first-party plugins already migrated.
+Every other `cancel(...)` shape still works: `cancel({ operation: "inference",
+modelId })`, `cancel({ operation: "embeddings", modelId })`, `cancel({ modelId
+})`, `cancel({ modelId, kind })`, and `cancel({ requestId })` are all preserved
+by the client-side normalisation layer.
 
 ## New APIs and Capabilities
 
-### `getLoadedModelInfo` for runtime introspection
+### `requestId` exposed synchronously on every cancellable call
 
-A new `getLoadedModelInfo` API returns metadata for a loaded `modelId`, discriminated on
-`isDelegated`. Local models expose their authoritative handler list and `modelType`;
-delegated models defer to the provider. Useful for preflighting a built-in SDK call
-before issuing the RPC.
+Every long-running SDK call now returns a decorated promise (or run handle) that
+carries a `requestId` you can read on the same tick the call is dispatched.
+That lets you wire a Stop button to a specific in-flight call without racing the
+network round-trip. The pattern covers `completion`, `loadModel`, `embed`,
+`transcribe`, `transcribeStream`, `translate`, `finetune`, `downloadAsset`, and
+the three cancellable RAG ops (`ragIngest`, `ragSaveEmbeddings`, `ragReindex`).
 
 ```typescript
-import { getLoadedModelInfo, transcribe } from "@qvac/sdk";
+import {
+  completion,
+  loadModel,
+  embed,
+  downloadAsset,
+  ragIngest,
+  cancel,
+} from "@qvac/sdk";
 
-const info = await getLoadedModelInfo({ modelId });
+const run = completion({ modelId, history });
+console.log(run.requestId);
 
-if (info.isDelegated || info.handlers.includes("transcribeStream")) {
-  await transcribe({ modelId /* ... */ });
+const op = loadModel({ modelSrc: "..." });
+console.log(op.requestId);                    // synchronously, before await
+const modelId = await op;                     // legacy unwrap still works
+
+const handle = embed({ modelId, text: "hello" });
+console.log(handle.requestId);
+await handle;
+
+const download = downloadAsset({ assetSrc, onProgress });
+stopButton.onclick = () => cancel({ requestId: download.requestId });
+await download;                                // rejects with InferenceCancelledError if cancelled
+
+const ingest = ragIngest({ workspace: "ws-a", modelId, documents });
+console.log(ingest.requestId);
+await ingest;
+```
+
+The non-cancellable RAG ops (`ragChunk`, `ragSearch`, `ragDeleteEmbeddings`,
+`ragListWorkspaces`, `ragCloseWorkspace`, `ragDeleteWorkspace`) intentionally do
+not decorate — they're fast-path operations that don't register with the
+server-side request registry, so a `requestId` would point at nothing.
+
+### Typed errors that survive the RPC boundary
+
+`InferenceCancelledError`, `RequestRejectedByPolicyError`,
+`RequestIdConflictError`, and `RequestNotFoundError` are now re-exported from
+`@qvac/sdk` and reconstructed on the client side with their typed fields
+intact, so `err instanceof RequestRejectedByPolicyError` actually narrows and
+`err.modelId` / `err.reason` / `err.requestId` are populated from the
+server-side throw.
+
+`RequestRejectedByPolicyError` (code 52420) fires when an admission policy
+blocks the request — for example, the worker's default
+`oneAtATimePerModel: true` rule for `completion` kind, which promotes the
+llama.cpp addon's opaque "job already set" error into a typed framework-level
+rejection.
+
+```typescript
+import { completion, RequestRejectedByPolicyError } from "@qvac/sdk";
+
+try {
+  const run = completion({ modelId, history });
+  for await (const event of run.events) { /* ... */ }
+} catch (err) {
+  if (err instanceof RequestRejectedByPolicyError) {
+    showBusy({ modelId: err.modelId, reason: err.reason });
+    return;
+  }
+  throw err;
 }
 ```
 
-### Structured output (`responseFormat`)
+### New broad-cancel sugar and consolidated wire envelope
 
-`completion()` now accepts a `responseFormat` option that constrains the model to emit
-schema-valid JSON. The output is guaranteed to parse against the supplied JSON Schema.
+The `cancel` wire envelope shrinks to two shapes — request-targeted (`{
+operation: "request", requestId }`) and broad-by-model (`{ operation: "broad",
+modelId, kind? }`). Two new client sugars wrap the broad shape so callers don't
+have to think about the wire representation:
 
 ```typescript
-const run = completion({
-  modelId,
-  history: [{ role: "user", content: "Extract: I'm Alice, 30, data engineer." }],
-  stream: true,
-  responseFormat: {
-    type: "json_schema",
-    json_schema: {
-      name: "Person",
-      schema: {
-        type: "object",
-        properties: {
-          name: { type: "string" },
-          age: { type: "integer" },
-          occupation: { type: "string" },
-        },
-        required: ["name", "age", "occupation"],
-        additionalProperties: false,
-      },
-    },
+import { cancel } from "@qvac/sdk";
+
+await cancel({ modelId: "llama-3.2-1b", kind: "completion" });
+await cancel({ modelId: "llama-3.2-1b" });
+```
+
+### Plugin authors: declare cancel scope per handler
+
+`PluginHandlerDefinition` gains an optional `cancel: { scope, hard? }` field so
+plugin authors can declare upfront whether each handler accepts a per-request
+cancel token, whether it cancels by model, or whether it has no addon-level
+cancel surface at all (soft-cancel only — the registry aborts the signal, the
+stream stops yielding, the C++ work runs to completion in the background).
+
+`scope` is `"request" | "model" | "none"`; `hard: true` documents that the
+addon-side cancel actually interrupts compute. Plugin manifests that omit the
+field still load — it's optional.
+
+```typescript
+import { definePlugin, defineHandler } from "@qvac/sdk";
+
+definePlugin({
+  manifestVersion: 1,
+  handlers: {
+    myStream: defineHandler({
+      requestSchema,
+      responseSchema,
+      streaming: true,
+      cancel: { scope: "model", hard: true },
+      handler: async function* (request, ctx) { /* ... */ },
+    }),
   },
 });
-
-for await (const event of run.events) {
-  if (event.type === "contentDelta") process.stdout.write(event.text);
-}
-const final = await run.final;
-JSON.parse(final.contentText); // schema-valid
 ```
 
-### Dynamic tools mode
+### Multi-GPU `split-mode`, `tensor-split`, and `main-gpu` on LLM and embed
 
-LLM models can now opt into a `dynamic` tools mode at load time. Subsequent
-`completion()` calls can pass an entirely different `tools` array on each turn, and the
-addon trims the previous tool block from the KV cache so rotation is free — no need to
-invalidate the cache or pin the tool set per-session.
+LLM and embed model configs now expose the underlying llamacpp multi-GPU knobs.
+LLM uses the canonical hyphenated keys (`"split-mode"`, `"tensor-split"`,
+`"main-gpu"`) to mirror the llama.cpp CLI; embed uses the existing camelCase
+convention (`splitMode`, `tensorSplit`, `mainGpu`).
 
 ```typescript
-import { loadModel, completion, TOOLS_MODE, QWEN3_1_7B_INST_Q4 } from "@qvac/sdk";
-
-const modelId = await loadModel({
-  modelSrc: QWEN3_1_7B_INST_Q4,
+// LLM
+await loadModel({
+  modelSrc: LLAMA_3_2_1B_INST_Q4_0,
   modelType: "llm",
   modelConfig: {
-    ctx_size: 4096,
-    tools: true,
-    toolsMode: TOOLS_MODE.dynamic,
+    "split-mode": "layer",        // "none" | "layer" | "row"
+    "tensor-split": "1,1",        // proportional split across GPUs
+    "main-gpu": 0,                // integer index or "integrated" | "dedicated"
   },
 });
 
-// Turn 1 — weather tools.
-const turn1 = completion({
-  modelId, history, kvCache, stream: true,
-  tools: [{ name: "get_weather", description: "...", parameters: weatherSchema }],
-});
-
-// Turn 2 — same kvCache, different tools. Free rotation.
-const turn2 = completion({
-  modelId, history, kvCache, stream: true,
-  tools: [{ name: "get_horoscope", description: "...", parameters: horoscopeSchema }],
+// Embed
+await loadModel({
+  modelSrc: EMBEDDING_GEMMA_300M_Q8_0,
+  modelType: "embed",
+  modelConfig: {
+    splitMode: "layer",
+    tensorSplit: "1,1",
+    mainGpu: 0,
+  },
 });
 ```
 
-### Tool-call dialect routing
+### Whisper VAD and end-of-turn events on `transcribeStream`
 
-Tool-call parsing is now dialect-aware. The SDK auto-detects between `hermes`,
-`pythonic`, and `json` framings, and a new `toolDialect` parameter lets you force a
-specific parser when auto-detection picks the wrong path — common for Llama 3.x
-fine-tunes that emit native pythonic headers, which the auto-router defaults to `hermes`
-for empirical reasons.
+`transcribeStream` gains a conversational mode opted into via `emitVadEvents:
+true`. The session yields a discriminated event stream that includes live
+voice-activity probabilities and turn boundaries, so apps can build push-to-talk
+or barge-in UX without poll-the-text hacks.
+
+```typescript
+import { transcribeStream } from "@qvac/sdk";
+
+const session = await transcribeStream({
+  modelId: "whisper-base",
+  emitVadEvents: true,
+  endOfTurnSilenceMs: 800,
+  vadRunIntervalMs: 100,
+});
+
+for await (const event of session) {
+  if (event.type === "vad") console.log("speaking:", event.speaking, event.probability);
+  else if (event.type === "endOfTurn") console.log("turn ended after", event.silenceDurationMs, "ms");
+  else if (event.type === "text") process.stdout.write(event.text);
+}
+
+session.write(audioChunk);
+session.end();
+```
+
+`TranscribeStreamEvent`, `VadStateEvent`, `EndOfTurnEvent`, and
+`TranscribeStreamConversationSession` are new exported types. The existing
+text-only, segment, and audio-chunk overloads are unchanged.
+
+### Parakeet duplex streaming with EOU events
+
+The new parakeet plugin (see Breaking Changes) ships a duplex
+`transcribeStream` session that mirrors the whisper one. EOU model checkpoints
+surface as `{ type: "endOfTurn" }` events on the same iterator as `{ type:
+"text" }`.
+
+```typescript
+const session = await transcribeStream({
+  modelId,
+  parakeetStreamingConfig: {
+    chunkMs: 1000,
+    emitPartials: true,
+  },
+});
+
+ffmpeg.stdout.on("data", (chunk: Buffer) => session.write(chunk));
+
+for await (const event of session) {
+  switch (event.type) {
+    case "text":
+      process.stdout.write(event.text);
+      break;
+    case "endOfTurn":
+      console.log("\n[endOfTurn] turn boundary detected\n");
+      break;
+  }
+}
+```
+
+Per-call streaming overrides — `chunkMs`, `historyMs`, `leftContextMs`,
+`rightLookaheadMs`, `emitPartials`, `emitEnergyVad` — are accepted on
+`parakeetStreamingConfig` and fall back to their `parakeetConfig.streaming*`
+load-time counterparts.
+
+### Harmony, Qwen3.5, and Gemma4 tool-call dialects
+
+`toolDialect` now covers `"hermes" | "pythonic" | "json" | "harmony"`, plus
+auto-detected `qwen35` and `gemma4` parsers. Harmony adds first-class support
+for GPT-OSS models — including streaming the final-channel content
+incrementally instead of buffering until `<|return|>`, so long GPT-OSS responses
+no longer stall — and fixes a regression where protocol markers
+(`<|channel|>analysis<|message|>...`, `<|start|>assistant`, `<|return|>`) were
+leaking into `contentDelta`. Qwen3.5 covers the Pythonic-XML
+`<tool_call><function=NAME><parameter=KEY>...</parameter></function></tool_call>`
+framing; Gemma4 covers the native
+`<|tool_call>call:NAME{key:<|"|>val<|"|>,...}<tool_call|>` framing.
 
 ```typescript
 import { completion, type ToolDialect } from "@qvac/sdk";
 
 const result = completion({
-  modelId, history, tools, stream: true,
-  toolDialect: "pythonic", // "hermes" | "pythonic" | "json"
+  modelId,                         // gpt-oss-20b-Q4_K_M auto-routes to "harmony"
+  history,
+  tools,
+  toolDialect: "harmony",          // optional explicit override
+});
+
+const dialect: ToolDialect = "harmony";
+```
+
+Qwen3.5 / Qwen3.6 and Gemma4 are auto-detected from the model name; the parsers
+ship without any caller-side wiring. The `harmony` parser also surfaces
+malformed-JSON, unknown-tool, and non-object payloads as structured
+`ToolCallError`s instead of silently dropping the event.
+
+### `reasoning_budget` knob for thinking models
+
+`@qvac/llm-llamacpp@0.20.0` introduced a `reasoning_budget` parameter that gates
+how much "thinking" a reasoning model is allowed to produce: `-1` =
+unrestricted, `0` = disabled. The SDK exposes it both as a load-time default on
+`LlmConfig` and as a per-request override on `GenerationParams`.
+
+```typescript
+import { loadModel, completion } from "@qvac/sdk";
+
+const modelId = await loadModel({
+  modelSrc: "/models/Qwen3.5-7B-Instruct-Q4_K_M.gguf",
+  modelType: "llm",
+  modelConfig: { ctx_size: 4096, reasoning_budget: -1 },
+});
+
+const run = completion({
+  modelId,
+  history: [{ role: "user", content: "Think step by step." }],
+  generationParams: { reasoning_budget: 0 }, // override per-request
 });
 ```
 
-### img2img for diffusion models
+The same bump fixes a regression where `system_prompt` (a JS-only
+`completion-stream.ts` field) was being forwarded to the C++ arg parser as
+`--system-prompt`, which had been removed in llamacpp 8189+ — model loads were
+failing outright until this fix landed.
 
-The diffusion API now accepts an `init_image` for SDEdit-style image-to-image on
-SD/SDXL, and in-context conditioning on FLUX.2. `strength` controls how much of the
-source is preserved on SD/SDXL; FLUX.2 ignores it (the path is purely conditional).
+### FLUX.2 multi-reference fusion and per-call LoRA for diffusion
+
+The diffusion API gains FLUX.2 multi-reference fusion (`init_images:
+Uint8Array[]`, mutually exclusive with the existing single `init_image`), FLUX.2
+reference-image tunables (`increase_ref_index`, `auto_resize_ref_image`), and a
+per-call `lora` field that takes an absolute filesystem path. A new load-time
+`lora_apply_mode` controls whether the adapter is fused permanently into the
+model or applied per-call (`"auto" | "immediately" | "at_runtime"`).
 
 ```typescript
-const initImage = new Uint8Array(fs.readFileSync("input.png"));
+const refA = fs.readFileSync("scientist-a.jpg");
+const refB = fs.readFileSync("scientist-b.jpg");
 const { outputs } = diffusion({
   modelId,
-  prompt: "oil painting style, vibrant colors",
-  init_image: initImage,
-  strength: 0.5, // 0 = keep source, 1 = ignore source
+  prompt: "a portrait using most visual traits from @image1 and the eyes from @image2",
+  init_images: [refA, refB],
+  width: 768,
+  height: 768,
+});
+
+const { outputs: loraOutputs } = diffusion({
+  modelId,
+  prompt: "a watercolor cat",
+  lora: "/home/user/loras/watercolor.safetensors",
+});
+
+await loadModel(modelSrc, {
+  modelType: "diffusion",
+  modelConfig: { prediction: "flux2_flow", lora_apply_mode: "immediately" },
 });
 ```
 
-### Sentence-level TTS streaming
+Relative LoRA paths are rejected: the SDK runs across processes with differing
+cwds, so absolute paths (POSIX, Windows drive-letter, or UNC) are the only safe
+shape.
 
-Onnx text-to-speech can now stream output one sentence at a time, either as a
-self-contained `textToSpeech({ stream: true, sentenceStream: true })` call or via a
-duplex `textToSpeechStream` session that you can pipe a streaming LLM into. Each chunk
-exposes the int16 PCM samples plus the source sentence and chunk index.
+### ESRGAN upscaling — post-step and standalone
+
+Two new paths land for ESRGAN upscalers. The first attaches an upscaler to a
+diffusion model and runs it as a post-step on every generated image. The second
+loads an ESRGAN file as a standalone `upscale()`-only model so consumers can
+feed an arbitrary PNG or JPEG into the SDK and get an upscaled image back —
+without standing up a full diffusion pipeline.
 
 ```typescript
-const session = await textToSpeechStream({
-  modelId: ttsModelId,
-  inputType: "text",
-  accumulateSentences: true,
-  sentenceDelimiterPreset: "latin", // "latin" | "cjk" | "multilingual"
-  flushAfterMs: 400,
+// Post-step upscale during diffusion
+const modelId = await loadModel({
+  modelSrc: SD_V2_1_1B_Q8_0,
+  modelType: "diffusion",
+  modelConfig: {
+    prediction: "v",
+    upscaler: {
+      type: "esrgan",
+      model_src: "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth",
+      tile_size: 128,
+    },
+  },
 });
 
-(async () => {
-  for await (const delta of completion({ modelId: llmModelId /* ... */ }).tokenStream) {
-    session.write(delta);
-  }
-  session.end();
-})();
-
-for await (const chunk of session) {
-  // chunk.buffer / chunk.chunkIndex / chunk.sentenceChunk
-  if (chunk.done) break;
-}
-```
-
-### Per-segment whisper metadata
-
-Both `transcribe` (batch) and `transcribeStream` (duplex) now return structured
-`TranscribeSegment` objects with start/end timestamps, segment IDs, and an `append`
-flag — enabling proper subtitle generation and timeline alignment instead of raw text
-concatenation.
-
-```typescript
-const segments = await transcribe({ modelId, audioChunk: audioFilePath, metadata: true });
-for (const s of segments) {
-  console.log(`[${s.startMs}ms → ${s.endMs}ms] id=${s.id} append=${s.append} ${s.text}`);
-}
-```
-
-### Suspend lifecycle gate and `state()`
-
-`suspend()` is now serialized through a lifecycle gate that prevents overlapping
-suspend/resume races. A new `state()` API reports the current lifecycle phase:
-`active`, `suspending`, `suspended`, or `resuming`.
-
-```typescript
-import { state, suspend, resume, type LifecycleState } from "@qvac/sdk";
-
-await suspend();
-const current: LifecycleState = await state();
-if (current !== "active") {
-  await resume();
-}
-```
-
-### Registry download retries and configurable stream timeout
-
-Two new SDK config knobs cover slow/unstable links: `registryDownloadMaxRetries` retries
-`REQUEST_TIMEOUT` failures (set to `0` to disable), and `registryStreamTimeoutMs`
-extends the per-block stream timeout beyond the default 60s.
-
-```typescript
-import { setSDKConfig } from "@qvac/sdk";
-
-setSDKConfig({
-  registryDownloadMaxRetries: 5,
-  registryStreamTimeoutMs: 180_000,
+const { outputs } = diffusion({
+  modelId,
+  prompt: "an illustrated red fox portrait",
+  width: 128,
+  height: 128,
+  upscale: { repeats: 2 },
 });
 ```
 
-### Auto KV-cache: replay the canonical assistant turn
-
-When auto KV-cache is enabled, the completion result now exposes
-`final.cacheableAssistantContent` — the exact assistant string the SDK persisted to the
-cache key on this turn. Push it back into `history` verbatim on the next turn to
-guarantee a cache hit. Tool-call turns aren't auto-cached today and omit the field;
-fall back to `final.contentText` in that case.
-
 ```typescript
-const run = completion({ modelId, history, kvCache: true });
-for await (const _ of run.tokenStream) { /* stream */ }
-const final = await run.final;
-const nextHistory = [
-  ...history,
-  { role: "assistant", content: final.cacheableAssistantContent ?? final.contentText },
-  { role: "user", content: "follow-up question" },
-];
+// Standalone upscale — no diffusion model required
+import { upscale, loadModel, REALESRGAN_X4PLUS_ANIME_6B } from "@qvac/sdk";
+
+const modelId = await loadModel(REALESRGAN_X4PLUS_ANIME_6B, {
+  modelType: "diffusion",
+  modelConfig: {
+    mode: "upscale",
+    upscaler: { tile_size: 128 },
+  },
+});
+
+const { outputs, stats } = upscale({
+  modelId,
+  image: pngBytes,        // Uint8Array (PNG/JPEG)
+  repeats: 1,             // each pass multiplies dims by the model's native scale factor
+});
+
+const [upscaledPng] = await outputs;
+console.log(await stats); // { upscaleMs, totalUpscaleMs, width, height, totalPixels, repeats, ... }
 ```
 
-### LLM-addon cache API plumbed through SDK
+Calling `upscale()` against a model that wasn't loaded with `mode: "upscale"`
+raises `ModelOperationNotSupportedError` upfront, and loading a diffusion model
+with `modelConfig.upscaler` set but `model_src` missing fails fast with a
+structured `ModelLoadFailedError` instead of letting the native addon error
+mid-load.
 
-The SDK now wires through the LLM addon's first-class cache API — including explicit
-`deleteCache({ kvCacheKey })` for evicting a named cache key — so consumers can manage
-KV-cache lifetimes alongside `loadModel`/`unloadModel`.
+### Mobile build flow auto-verifies the worker bundle
 
-### NMTcpp 2.0.1 surface
+Expo prebuild now runs `qvac verify bundle` against the emitted
+`worker.mobile.bundle.js` before copying it into the SDK's `dist/`. The flow is
+`runBundler → assert bundle exists → runVerifier → copyFileSync`, so the SDK
+`dist/worker.mobile.bundle.js` only updates when verification passes. Failure
+preserves the last known-good artifact and fails Expo prebuild fast with a new
+`BundleVerificationFailedError` (code 50609).
 
-The SDK NMT plugin now targets `@qvac/translation-nmtcpp 2.0.1` with a structured
-constructor that distinguishes primary and pivot model files, vocab files, and pivot
-config (beam size, top-k). Bergamot models are also picked up via path-based vocab
-resolution and grouped into companion sets, which lets the cache and download paths
-treat them like any other multi-file model.
+If a `qvac.config.{json,js,mjs,ts}` is present, ABI checks are pinned to its
+`bareRuntimeVersion`; without config, the CLI auto-detects from `node_modules`
+(`bare-runtime` → `bare`) and falls through to a warning only when neither is
+installed. `@qvac/cli` peer dep range moves from `^0.2.4` to `^0.4.0` — the
+first version that ships `qvac verify bundle` — with the existing npx fallback
+still in place for consumers that don't pin the dep.
 
-## Features
+Pear consumers aren't auto-wired yet — run `qvac verify bundle --addons-source
+./node_modules --host <host> --config qvac.config.json` manually before `pear
+stage` / `pear run`.
 
-### @qvac/sdk
+### `cancelFinetune` is now fire-and-forget
 
-### Parallel orchestration and download dedupe
-
-Model loading is now genuinely parallel where it can be: the primary model and any
-companion files (vision projection, vocab, etc.) download concurrently, and concurrent
-requests for the same asset are deduplicated to a single transfer. Cancellation cleans
-up all active transfers atomically with no leaked state. Profiling fields
-(`sourceType`, `cacheHit`, `sharedTransfer`, `totalLoadTime`,
-`modelInitializationTime`, `checksumValidationTime`) are populated correctly across
-both primary and companion downloads, with aggregate stats merged at the run level.
-
-The companion pipeline is also generic: `companions.ts` is the only format-aware piece,
-and adding a new multi-file format is a matter of dropping in a detection function and
-registering it with `groupCompanionSets`. Everything downstream — codegen, resolver,
-cache probing, storage cleanup — handles it automatically.
-
-### Real-time voice assistant example
-
-A new end-to-end example demonstrates a real-time voice assistant pipeline (whisper →
-LLM → TTS) wired together using the SDK's streaming primitives.
+`cancelFinetune(modelId)` used to await the addon's cancel flip before
+resolving. It now fires a synchronous registry cancel and returns immediately;
+the actual `model.cancel()` runs out-of-band via the new context's abort
+listener. The result shape is unchanged (`status: "CANCELLED"` still
+populated), but workbench / CLI / external consumers that gated subsequent
+calls on cancel-resolution timing should switch to `await cancel({ requestId
+})`, which has been synchronous-after-abort since the lifecycle work began.
 
 ## Added
 
 ### @qvac/sdk
 
 ```
-NMT_Q0F16 through NMT_Q0F16_9 (10 entries)
-NMT_Q4_0 through NMT_Q4_0_12+ (22 entries)
+PARAKEET_TDT_0_6B_V3_Q8_0
+PARAKEET_CTC_0_6B_Q8_0
+PARAKEET_SORTFORMER_4SPK_V1_Q8_0
+PARAKEET_EOU_120M_V1_Q8_0
 ```
-
-### Removed (now companion-only or renamed)
-
-```
-*_DATA (32 entries — companion-only, e.g. PARAKEET_TDT_ENCODER_DATA_FP32, TTS_*_DATA)
-BERGAMOT_*_LEX (93 entries — companion-only)
-BERGAMOT_*_VOCAB (93 entries — companion-only)
-BERGAMOT_METADATA_* (87 entries — companion-only)
-MARIAN_OPUS_* (32 entries — renamed to NMT_*)
-```
-
-## Documentation, Tests, and Infrastructure
-
-- Diffusion documentation was extended to cover the new img2img flows (SDEdit on
-  SD/SDXL, in-context conditioning on FLUX.2).
-- Android sharded-model-resume tests no longer trip Scudo OOM — the test harness now
-  bounds memory more conservatively on long-running resume scenarios.
-- The tests-qvac docs, tooling, and CI workflow job names were refreshed for the new
-  suite filtering and PR-triggered e2e workflows. Suite filtering plus PR-trigger labels
-  let CI run targeted SDK e2e subsets on demand instead of always running the full grid.
-- A pre-terminate cleanup hook stabilises mobile smoke: the mobile auto-close path now
-  awaits worker cleanup acknowledgement before terminating the worklet.
-- `DataLoader` cleanup logic was scoped down to `packages/rag` so the SDK no longer
-  carries that surface.
 
 ## Bug Fixes
 
 ### @qvac/sdk
 
-- RPC initialization in the Node runtime now has an explicit timeout, so a wedged
-  transport can no longer hang `loadModel`/`unloadModel` indefinitely.
-- The registry client now opens its corestore with `wait: true`, eliminating a startup
-  race where downloads could begin before replication was ready.
-- KV-cache `savedCount` is no longer incremented on cancelled or zero-token turns,
-  preventing inflated cache stats.
-- `delete-cache` RPC now scopes invalidation to the deleted key only instead of wiping
-  unrelated entries.
-- Delegated transports strip the `__profiling` envelope before zod validation, fixing a
-  spurious validation error when profiling is enabled on the consumer side.
-- Replaced `z.xor` with `z.union` and bumped the zod floor to `^4.3.0` to track upstream
-  breaking changes.
-- LLM-based translation now uses deterministic decoding so the same input produces the
-  same output across runs.
-- Inflight delegation requests that get rejected now run their cleanup chain to
-  completion instead of leaking pending promises.
+### Delegated inference connect is fast again
+
+The `loadModel.delegation.connection` regression introduced in 0.10.0 — where
+`@qvac/sdk` 0.9.0 → 0.10.0 took the consumer-side connect from ≈2.5s to ≈8.3s
+on first delegated call — is fixed by dropping the explicit `await
+swarm.dht.fullyBootstrapped()` block before `dht.connect()` in
+`ensureRPCConnection`. The SDK's normal init path already warms the routing
+table via `getSwarm()` during registry initialisation, so the explicit guard
+was redundant. Measured cold-start connect mean drops from 3.82s back down to
+1.18s (≈3.2× faster) on the same hardware and network.
+
+### KV cache priming no longer wastes a token
+
+`initSystemPromptCache` used to start generation and then race the first output
+token against a cancel. That always produced one token of unnecessary work and
+relied on a fragile output/cancel race. The SDK now uses the addon's new
+`prefill: true` runtime option (in `@qvac/llm-llamacpp ^0.17.3`) so priming
+ingests the prompt and tools into the KV cache without producing any output
+tokens. `initSystemPromptCache` resolves as soon as priming finishes.
+
+### React Native duplex RPC no longer uses Node-only `Buffer`
+
+The RN duplex RPC path was using Node's `Buffer` global, which isn't available
+on Hermes. The path now uses `Uint8Array` end-to-end so mobile consumers can
+use duplex streaming (transcribe, parakeet, tts) without hitting `Buffer is
+not defined`.
+
+### SDK bundles its own `worker.js` for packaged consumers
+
+Apps consuming the SDK from a bundler (Metro, esbuild, webpack) were missing
+`worker.js` from the published package, so consumers had to hand-copy it. The
+package now ships `worker.js` alongside `worker.mobile.bundle.js` so packaged
+consumers no longer need extra bundling steps.
+
+### Dedup of stateful Holepunch singletons
+
+The SDK and `@qvac/registry-client` had drifting declarations for
+`corestore`, `hyperblobs`, `hyperdb`, and `hyperswarm`: the SDK declared them
+as `peerDependencies`, the registry client declared them as hard
+`dependencies`, and the version ranges didn't match. The mismatch caused npm
+to install duplicate copies, producing separate DHT nodes and broken
+connectivity. Bumping `@qvac/registry-client` to `^0.5.0` (where those libs
+move to `peerDependencies`) and `@qvac/embed-llamacpp` to `^0.16.0` and
+`@qvac/transcription-whispercpp` to `^0.7.0` completes the dedup chain.
 
 ## Model Registry Changes
 
-The model registry was regenerated around companion-set metadata. The user-facing surface
-is leaner: families that used to live as separate `*_DATA`, `*_LEX`, `*_VOCAB`, and
-`METADATA_*` constants are now companion-only — they're still downloaded, but they're
-not addressable as standalone model sources. Marian Opus models were renamed under the
-`NMT_*` namespace to match the rest of the NMT family.
+The Bergamot translation pairs `BERGAMOT_EN_IT` and `BERGAMOT_ES_EN` were
+pinned to the buggy `tiny` variant, which caused leading `"- "` hallucinations
+on short inputs and an en→it quality regression (~3 pp `chrF++` drop direct,
+~33 pp via Spanish pivot). The registry was regenerated against the upstream
+`base-memory` Bergamot fix (synced to the DHT on 2026-05-05); paths now point
+at `bergamot-{enit,esen}/2026-04-28/...` and `expectedSize` flipped from
+17.1 MB to 30.1 MB on both pairs, confirming the switch landed.
+
+The regeneration also picked up the auto-deprecation of the 32 Marian Opus NMT
+entries (`NMT_Q0F16` through `NMT_Q0F16_9`, `NMT_Q4_0` through `NMT_Q4_0_21`)
+that were superseded earlier in the release line. A separate fix corrects the
+Bergamot vocab being re-downloaded on every `loadModel` for shared-vocab pairs
+— the shared vocab is now cached and reused.
+
+## Removed
+
+### @qvac/sdk
+
+```
+NMT_Q0F16 through NMT_Q0F16_9 (10 entries)
+NMT_Q4_0 through NMT_Q4_0_21 (22 entries)
+```
+
+The legacy multi-file Parakeet constants (`PARAKEET_TDT_ENCODER_INT8`,
+`PARAKEET_TDT_DECODER_INT8`, `PARAKEET_TDT_VOCAB`, `PARAKEET_TDT_PREPROCESSOR_INT8`,
+`PARAKEET_CTC_FP32`, `PARAKEET_CTC_TOKENIZER`, etc.) are gone alongside the
+plugin migration — see Breaking Changes above for the migration path.
+
+## Tests and Infrastructure
+
+- E2E bootstrap was scoped down to only the dependencies required by the
+  filtered test set, shortening cold CI runs.
+- Multi-GPU integration tests are now skipped on mobile (real multi-GPU hardware
+  isn't represented in the mobile farm; tests are validated against the
+  shared-dev `2× RTX 5090` rig in CI logs).
+- `@qvac/tts-onnx` bumped to `0.9.0` and `@qvac/transcription-parakeet` to
+  `0.5.0` to match the addon-side releases that land in this SDK version.

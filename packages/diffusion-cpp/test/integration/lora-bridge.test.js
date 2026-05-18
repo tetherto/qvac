@@ -65,7 +65,8 @@ test('SD2.1 txt2img with LoRA — generates a valid PNG image', { timeout: 60000
     config: {
       threads: 4,
       device: useCpu ? 'cpu' : 'gpu',
-      prediction: 'v' // SD2.1 uses v-prediction
+      prediction: 'v', // SD2.1 uses v-prediction
+      diffusion_fa: true
     },
     logger: console
   })

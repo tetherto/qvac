@@ -22,7 +22,9 @@ import {
   downloadModelFromRegistryWithStats,
 } from "./download-stats";
 import type { ResolveResult, DownloadResult, DownloadHooks } from "./types";
+import type { AbortSignal } from "bare-abort-controller";
 import {
+  InferenceCancelledError,
   ModelLoadFailedError,
   ModelNotFoundError,
   SeedingNotSupportedError,
@@ -123,8 +125,14 @@ async function resolveModelPathCore(
   progressCallback: ((progress: ModelProgressUpdate) => void) | undefined,
   seed: boolean | undefined,
   mode: ResolveMode,
+  signal: AbortSignal | undefined,
   hooks?: DownloadHooks,
 ): Promise<ResolveResult> {
+  if (signal?.aborted) {
+    throw new InferenceCancelledError(
+      hooks?.requestBinding?.requestId ?? "unknown",
+    );
+  }
   const srcString = modelInputToSrcSchema.parse(modelSrc);
 
   // Parse hyperdrive URLs if present
@@ -215,9 +223,17 @@ export async function resolveModelPath(
   modelSrc: unknown,
   progressCallback?: (progress: ModelProgressUpdate) => void,
   seed?: boolean,
+  signal?: AbortSignal,
   hooks?: DownloadHooks,
 ): Promise<string> {
-  const result = await resolveModelPathCore(modelSrc, progressCallback, seed, "base", hooks);
+  const result = await resolveModelPathCore(
+    modelSrc,
+    progressCallback,
+    seed,
+    "base",
+    signal,
+    hooks,
+  );
   return result.path;
 }
 
@@ -225,7 +241,15 @@ export async function resolveModelPathWithStats(
   modelSrc: unknown,
   progressCallback?: (progress: ModelProgressUpdate) => void,
   seed?: boolean,
+  signal?: AbortSignal,
   hooks?: DownloadHooks,
 ): Promise<ResolveResult> {
-  return resolveModelPathCore(modelSrc, progressCallback, seed, "stats", hooks);
+  return resolveModelPathCore(
+    modelSrc,
+    progressCallback,
+    seed,
+    "stats",
+    signal,
+    hooks,
+  );
 }

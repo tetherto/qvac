@@ -20,7 +20,7 @@ export interface RouteContext {
     audioChunk: Buffer
     fileName: string
     prompt?: string | undefined
-  }) => Promise<string>
+  }) => Promise<{ requestId: string; result: Promise<string> }>
 }
 
 export type RouteHandler = (req: IncomingMessage, res: ServerResponse, ctx: RouteContext) => Promise<void> | void

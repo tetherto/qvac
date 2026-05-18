@@ -3,6 +3,7 @@ import { sendJson, sendText, sendError } from '../../../http.js'
 import { readMultipart } from '../../../multipart.js'
 import { resolveModelAlias } from '../../../config.js'
 import { sdkTranscribe } from '../../../core/sdk.js'
+import { bindClientDisconnectCancel } from '../../../core/cancel-bridge.js'
 import type { RouteContext } from '../../types.js'
 
 const SUPPORTED_RESPONSE_FORMATS = new Set(['json', 'text'])
@@ -100,12 +101,14 @@ export async function handleTranslations (req: IncomingMessage, res: ServerRespo
   const transcribe = ctx.transcribeOverride ?? sdkTranscribe
 
   try {
-    const text = await transcribe({
+    const op = await transcribe({
       modelId: sdkModelId,
       audioChunk: file.data,
       fileName: file.fileName,
       prompt
     })
+    bindClientDisconnectCancel(req, res, op.requestId, ctx.logger)
+    const text = await op.result
 
     ctx.logger.info(`  translate done chars=${text.length}`)
 
