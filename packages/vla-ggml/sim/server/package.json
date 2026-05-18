@@ -1,0 +1,14 @@
+{
+  "name": "vla-server",
+  "private": true,
+  "version": "0.0.1",
+  "main": "server.js",
+  "scripts": {
+    "start": "bare server.js"
+  },
+  "dependencies": {
+    "@qvac/vla-ggml": "*",
+    "bare-http1": "^4.5.6",
+    "bare-process": "^4.4.1"
+  }
+}
