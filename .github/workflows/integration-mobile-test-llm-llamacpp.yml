@@ -1295,27 +1295,61 @@ jobs:
             eval "echo \"  Run $i: \$RUN_ARN_$i\""
           done
           echo ""
+          echo "::group::Legend (Device Farm run-level + per-job fields)"
+          echo "Run-level status (AWS Device Farm Run.status):"
+          echo "  PENDING / PENDING_CONCURRENCY / PENDING_DEVICE  waiting in queue"
+          echo "  SCHEDULING / PREPARING                          AWS reserving + warming the device"
+          echo "  RUNNING                                         coarse 'work in progress' bucket"
+          echo "  COMPLETED                                       run finished (see result)"
+          echo "Run-level result (AWS Device Farm Run.result):"
+          echo "  PENDING                                         still in progress (any non-terminal status)"
+          echo "  PASSED / FAILED / ERRORED / WARNED / SKIPPED    terminal outcomes"
+          echo "  STOPPED                                         cut short by stop-run / timeout"
+          echo "Status line format:"
+          echo "  ⏳ Run N: <status> (<result>) | ...             one segment per slot, refreshed every 30s"
+          echo "Deep dive (per-Job fields from list-jobs, every ${DEEP_DIVE_INTERVAL}s):"
+          echo "  device=<phone name> os=<ver>                    actual hardware AWS picked from the pool"
+          echo "  state=<Job.status>                              per-device state inside the run-level RUNNING bucket"
+          echo "    PENDING_DEVICE  waiting on an actual phone        PROCESSING  installing IPA/APK"
+          echo "    SCHEDULING / PREPARING  warming up                RUNNING     test code is executing"
+          echo "  result=<Job.result>                             PENDING until job ends, then PASSED/FAILED/..."
+          echo "  counters=<P>P/<F>F/<E>E/<S>S of <T>             test entity tally for this device"
+          echo "    P passed   F failed   E errored   S skipped   T total tests in the slot"
+          echo "  started=<timestamp>                             when this device started executing"
+          echo "  msg=<short>                                     first ~120 chars of Device Farm's status message"
+          echo "Transition notices (::notice::, shown at top of job UI):"
+          echo "  '<state> -> RUNNING after <Q>s of queue time'   slot acquired a device"
+          echo "  'queued <Q>s | executed <X>s | total <T>s'      slot finished; T == Q + X"
+          echo "::endgroup::"
+          echo ""
 
           MAX_WAIT_TIME=7200
           ELAPSED=0
-          # Number of consecutive aws_retry failures we tolerate per slot
-          # before marking it ERRORED. At a 30s poll cadence, 10 ~= 5 min
-          # of solid API failure, which is past any normal STS / Device
-          # Farm transient and signals a real outage or expired session.
           MAX_CONSECUTIVE_FAILURES=10
-          # Pre-mark empty slots as DONE so perf-only mode (where some
-          # slots are intentionally not scheduled) doesn't try to
-          # poll them with an empty ARN.
+          # Run-level RUNNING is a coarse bucket. Every DEEP_DIVE_INTERVAL
+          # seconds drill into list-jobs to see per-device state
+          # (PENDING_DEVICE / PROCESSING / PREPARING / RUNNING / ...)
+          # plus test counters. Schema: AWS Device Farm Job + Counters.
+          DEEP_DIVE_INTERVAL=180
+          LAST_DEEP_DIVE=-1
+          # Empty slots get pre-marked DONE so perf-only mode (which
+          # intentionally leaves some ARNs blank) doesn't poll them.
+          # PREV_STATUS / RUNNING_AT track per-slot state for transition
+          # notices and queued-vs-executed timing breakdowns.
           for i in $(seq 1 "$RUN_COUNT"); do
             eval "arn=\$RUN_ARN_$i"
             if [ -z "$arn" ]; then
               eval "DONE_$i=true"
               eval "STATUS_$i=\"SKIPPED\""
+              eval "PREV_STATUS_$i=\"SKIPPED\""
+              eval "RUNNING_AT_$i=\"\""
               eval "RESULT_$i=\"-\""
               eval "FAIL_$i=0"
             else
               eval "DONE_$i=false"
               eval "STATUS_$i=\"PENDING\""
+              eval "PREV_STATUS_$i=\"\""
+              eval "RUNNING_AT_$i=\"\""
               eval "RESULT_$i=\"-\""
               eval "FAIL_$i=0"
             fi
@@ -1350,10 +1384,74 @@ jobs:
                   eval "RESULT_$i=\"$RESULT_VAL\""
                   if [[ "$STATUS_VAL" == "COMPLETED" ]]; then eval "DONE_$i=true"; fi
                 fi
+
+                # Emit state-transition signals. RUNNING / COMPLETED get
+                # promoted to ::notice:: so they surface at the top of
+                # the job UI; everything else goes to a plain echo.
+                eval "prev_status=\$PREV_STATUS_$i"
+                eval "cur_status=\$STATUS_$i"
+                if [ -n "$cur_status" ] && [ "$cur_status" != "$prev_status" ]; then
+                  TS=$(date -u +%H:%M:%S)
+                  if [ -z "$prev_status" ]; then
+                    # First observation. We don't know the real
+                    # transition time so just announce the attach.
+                    echo "🔌 Monitor attached: Run $i starting from state=$cur_status (t=${ELAPSED}s)"
+                    if [ "$cur_status" = "RUNNING" ]; then
+                      eval "RUNNING_AT_$i=$ELAPSED"
+                    fi
+                  elif [ "$cur_status" = "RUNNING" ]; then
+                    eval "running_at=\$RUNNING_AT_$i"
+                    if [ -z "$running_at" ]; then
+                      eval "RUNNING_AT_$i=$ELAPSED"
+                      echo "::notice title=Device Farm Run $i acquired device::[$TS] $prev_status -> RUNNING after ${ELAPSED}s of queue time"
+                    fi
+                  elif [ "$cur_status" = "COMPLETED" ]; then
+                    eval "running_at=\$RUNNING_AT_$i"
+                    if [ -n "$running_at" ]; then
+                      exec_time=$((ELAPSED - running_at))
+                      echo "::notice title=Device Farm Run $i finished::[$TS] result=$RESULT_VAL | queued ${running_at}s | executed ${exec_time}s | total ${ELAPSED}s"
+                    else
+                      echo "::notice title=Device Farm Run $i finished::[$TS] result=$RESULT_VAL | total ${ELAPSED}s (no RUNNING window observed)"
+                    fi
+                  else
+                    echo "🔄 Run $i: $prev_status -> $cur_status (elapsed ${ELAPSED}s)"
+                  fi
+                  eval "PREV_STATUS_$i=\"$cur_status\""
+                fi
               fi
               eval "STATUS_LINE=\"\$STATUS_LINE Run $i: \$STATUS_$i (\$RESULT_$i) |\""
             done
             echo "$STATUS_LINE ${ELAPSED}s"
+
+            # Periodic per-device drill-down. For every slot currently
+            # in RUNNING, dump each child job's device + state + counters
+            # so we can tell whether the slot is waiting on PENDING_DEVICE,
+            # stuck in PROCESSING (app install), or genuinely executing.
+            if [ $((ELAPSED - LAST_DEEP_DIVE)) -ge $DEEP_DIVE_INTERVAL ]; then
+              LAST_DEEP_DIVE=$ELAPSED
+              ANY_RUNNING=false
+              for i in $(seq 1 "$RUN_COUNT"); do
+                eval "cur=\$STATUS_$i"
+                if [ "$cur" = "RUNNING" ]; then ANY_RUNNING=true; fi
+              done
+              if [ "$ANY_RUNNING" = "true" ]; then
+                echo "::group::Deep dive: per-job state inside RUNNING slots (t=${ELAPSED}s)"
+                for i in $(seq 1 "$RUN_COUNT"); do
+                  eval "cur=\$STATUS_$i"
+                  if [ "$cur" = "RUNNING" ]; then
+                    eval "arn=\$RUN_ARN_$i"
+                    JOBS_JSON=$(aws_retry aws devicefarm list-jobs --arn "$arn" --output json) || true
+                    if [ -n "$JOBS_JSON" ]; then
+                      echo "Run $i:"
+                      echo "$JOBS_JSON" | jq -r '.jobs[]? | "  device=\(.device.name // "?") os=\(.device.os // "?") | state=\(.status // "?") result=\(.result // "?") | counters=\((.counters // {}).passed // 0)P/\((.counters // {}).failed // 0)F/\((.counters // {}).errored // 0)E/\((.counters // {}).skipped // 0)S of \((.counters // {}).total // 0) | started=\(.started // "-") msg=\((.message // "") | gsub("\n"; " ") | .[0:120])"' || echo "  (jq parse failed)"
+                    else
+                      echo "Run $i: list-jobs returned empty / API error"
+                    fi
+                  fi
+                done
+                echo "::endgroup::"
+              fi
+            fi
 
             ALL_DONE=true
             for i in $(seq 1 "$RUN_COUNT"); do

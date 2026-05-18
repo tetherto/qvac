@@ -20,17 +20,24 @@ add_executable(
   test_cancel_stale_flag.cpp
   test_img2img.cpp
   test_sd_gen_handlers.cpp
+  test_sd_vid_gen_handlers.cpp
+  test_sd_video_frames.cpp
   test_stb_image_security.cpp
+  test_wan_video.cpp
+  test_avi_writer.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/BackendLoader.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/EsrganUpscaler.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/ImageCodec.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/ImageUtils.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/utils/AviWriter.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/EsrganUpscalerModel.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/SdModel.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/handlers/SdCtxHandlers.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/handlers/SdGenHandlers.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/handlers/SdParsers.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/handlers/SdVidGenHandlers.cpp
 )
 
 target_compile_options(
