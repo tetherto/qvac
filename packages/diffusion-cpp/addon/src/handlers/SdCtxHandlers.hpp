@@ -35,13 +35,19 @@ struct SdCtxConfig {
   std::string modelPath;          // model_path            -- SD2.x/SDXL/SD3
                                   // all-in-one checkpoint
   std::string diffusionModelPath; // diffusion_model_path  -- FLUX.2 [klein] or
-                                  // SD3 pure diffusion GGUF
+                                  // SD3 pure diffusion GGUF. For Wan 2.1 this
+                                  // holds the single expert; for Wan 2.2 this
+                                  // holds the low-noise expert.
+  std::string highNoiseDiffusionModelPath; // high_noise_diffusion_model_path
+                                           // -- Wan 2.2 high-noise expert.
+                                           // Leave empty for Wan 2.1 / all
+                                           // non-Wan models.
   std::string clipLPath; // clip_l_path           -- CLIP-L text encoder (SD3
                          // split / SDXL)
   std::string clipGPath; // clip_g_path           -- CLIP-G text encoder (SD3
                          // split / SDXL)
-  std::string
-      t5XxlPath; // t5xxl_path            -- T5-XXL text encoder (SD3 split)
+  std::string t5XxlPath; // t5xxl_path            -- T5-XXL text encoder (SD3
+                         // split) or UMT5-XXL text encoder (Wan 2.1 / Wan 2.2)
   std::string
       llmPath; // llm_path              -- LLM text encoder (FLUX.2 -> Qwen3)
   std::string
@@ -102,6 +108,31 @@ struct SdCtxConfig {
 
   // -- SDXL compatibility ----------------------------------------------------
   bool forceSDXLVaeConvScale = false; // force SDXL VAE conv scale (compat fix)
+
+  // -- Preview callback -------------------------------------------------------
+  // TODO(QVAC-18026 follow-up): wire to sd_set_preview_callback() in
+  //   SdModel::process(). The four config keys (preview_mode, preview_interval,
+  //   preview_denoised, preview_noisy) and their SdCtxHandlers entries below
+  //   already parse, validate, and store values into this struct, but no
+  //   reader exists yet -- a grep across packages/diffusion-cpp/ for
+  //   sd_set_preview_callback currently returns zero matches, so today the
+  //   four keys are a silent no-op end-to-end. Pick one of:
+  //     (a) install sd_set_preview_callback() in SdModel::process() next to
+  //         sd_set_abort_callback (~SdModel.cpp:312), forward the preview
+  //         sd_image_t to JS as PNG bytes via outputCallback, and add an
+  //         integration test asserting at least one preview event fires; OR
+  //     (b) remove the handlers + fields + tests until the wiring lands.
+  //
+  // Modes (preview_t from stable-diffusion.h):
+  //   PREVIEW_NONE  -- disabled (default; zero overhead, also today's behaviour
+  //                    regardless of the user-supplied preview_mode)
+  //   PREVIEW_PROJ  -- cheap linear projection of latents (fast, blurry)
+  //   PREVIEW_TAE   -- Tiny AutoEncoder (requires taesdPath; mid quality)
+  //   PREVIEW_VAE   -- full VAE decode every N steps (slowest, highest quality)
+  preview_t previewMode = PREVIEW_NONE;
+  int previewInterval = 1;     // fire every N diffusion steps (>= 1)
+  bool previewDenoised = true; // include denoised x0 preview
+  bool previewNoisy = false;   // also include noisy xT preview
 
   // -- ESRGAN upscaler -------------------------------------------------------
   // NOLINTNEXTLINE(readability-magic-numbers,cppcoreguidelines-avoid-magic-numbers)

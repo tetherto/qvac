@@ -76,7 +76,8 @@ test('FLUX.2 klein txt2img — generates a valid PNG image', { timeout: 1800000,
     },
     config: {
       threads: 4,
-      device: useCpu ? 'cpu' : 'gpu'
+      device: useCpu ? 'cpu' : 'gpu',
+      diffusion_fa: true
     },
     logger: console
   })

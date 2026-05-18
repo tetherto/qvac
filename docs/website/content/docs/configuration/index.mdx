@@ -180,13 +180,21 @@ Model types (allowed keys): `llm` | `embeddings` | `whisper` | `parakeet` | `nmt
 
 ### `ServeConfig`
 
-The `serve.models` field is a map of model aliases to model entries. Keys are the **model aliases** — the names that HTTP clients use in the `model` field of their requests. Values can be either a **string** (SDK model constant name, e.g., `"QWEN3_600M_INST_Q4"`) or a **`ModelEntry` object**:
+| Field | Description | Type | Required | Default |
+| --- | --- | --- | --- | --- |
+| `models` | Map of model aliases to model entries (see [`ModelEntry`](#modelentry) below). Required when running the server. | `Record<string, string \| ModelEntry>` | Yes | — |
+| `publicBaseUrl` | Externally reachable origin (e.g., `"https://api.example.com"`). Required for image `response_format=url`. Must start with `http://` or `https://`. The CLI flag `--public-base-url` overrides this value. | `string` | No | — |
+| `openai` | OpenAI-adapter–specific options. See [`OpenAIOptions`](#openaioptions). | `OpenAIOptions` | No | — |
+
+#### `ModelEntry`
+
+The `serve.models` field is a map of model aliases to model entries. Keys are the **model aliases** — the names that HTTP clients use in the `model` field of their requests. Values can be either a **string** (SDK model constant name, e.g., `"QWEN3_600M_INST_Q4"`) or a `ModelEntry` object:
 
 | Field | Description | Type | Required |
 | --- | --- | --- | --- |
 | `model` | SDK model constant name. | `string` | Yes (unless using `src` + `type`) |
 | `src` | Explicit model source (URL or path). | `string` | Yes (if no `model`) |
-| `type` | Model type: `llm` \| `embeddings` \| `whisper` \| `parakeet` \| `nmt` \| `tts` \| `ocr`. | `string` | Yes (if using `src`) |
+| `type` | Model type: `llm` \| `embeddings` \| `whisper` \| `parakeet` \| `nmt` \| `tts` \| `ocr` \| `whispercpp-audio-translation` \| `diffusion`. | `string` | Yes (if using `src`) |
 | `default` | Use as the default model for its endpoint category. | `boolean` | No (`false`) |
 | `preload` | Load model into memory on server startup. | `boolean` | No (`true` for constant entries, `false` for explicit) |
 | `config` | Model config overrides (same as [`modelConfig` in `loadModel()`](/reference/api#loadmodel)). | `object` | No |
@@ -204,6 +212,38 @@ Example:
         "config": { "ctx_size": 8192 }
       },
       "my-embed": "GTE_LARGE_FP16"
+    }
+  }
+}
+```
+
+#### `OpenAIOptions`
+
+Optional OpenAI-adapter settings. Currently only `audio.speech` is configurable:
+
+| Field | Description | Type | Required | Default |
+| --- | --- | --- | --- | --- |
+| `audio.speech.defaultVoice` | Voice id used by `/v1/audio/speech` when the request omits `voice`. Set to `null` to make `voice` strictly required (otherwise the route returns `400 missing_voice`). | `string \| null` | No | `"alloy"` |
+| `audio.speech.voices` | Map from OpenAI `voice` strings to `serve.models` aliases (case-insensitive keys). Lets clients keep using OpenAI voice names while the server routes them to QVAC TTS aliases. See [HTTP server — `POST /v1/audio/speech`](/cli/http-server). | `Record<string, string>` | No | — |
+| `audio.speech.maxInputChars` | Hard cap on the `input` length (characters) accepted by `/v1/audio/speech`. Set to `null` to disable. Matches OpenAI's documented limit and bounds memory usage since the route buffers the full WAV before responding. | `number \| null` | No | `4096` |
+
+Example:
+
+```json
+{
+  "serve": {
+    "publicBaseUrl": "https://api.example.com",
+    "openai": {
+      "audio": {
+        "speech": {
+          "defaultVoice": "alloy",
+          "voices": {
+            "alloy": "tts-chatter-alloy",
+            "echo": "tts-chatter-echo"
+          },
+          "maxInputChars": 4096
+        }
+      }
     }
   }
 }
