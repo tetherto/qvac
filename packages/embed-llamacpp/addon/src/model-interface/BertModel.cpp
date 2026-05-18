@@ -254,9 +254,11 @@ int getEffectiveContextSize(const llama_model* model, const llama_context* ctx) 
 /// diagnosable.
 std::optional<int> readTrainedContextSize(
     const std::string& modelPath, const GGUFShards& shards, bool isStreaming) {
-  // Streaming loads consume the GGUF stream during model load; pre-load
-  // metadata inspection is not supported on this path. Callers fall back to
-  // the llama.cpp default in that case.
+  // Intentional: sharded / streamed loads (setWeightsForFile path) consume the
+  // GGUF stream during model load, so pre-load metadata inspection isn't
+  // possible. Returning nullopt skips adjustEmbeddingContextSize, so the
+  // ctx_size default-/cap-to-n_ctx_train behavior does NOT apply on this path
+  // — streamed loads fall through to llama.cpp's built-in default ctx_size.
   if (isStreaming) {
     return std::nullopt;
   }
