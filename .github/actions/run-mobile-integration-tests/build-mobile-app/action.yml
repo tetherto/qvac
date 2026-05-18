@@ -96,12 +96,27 @@ runs:
         echo "Mobile test files found:"
         ls -la test/mobile/*.cjs
 
-    - name: Install Ninja build tool (iOS)
-      if: inputs.platform == 'iOS'
+    # PR #2021 policy: skip global tooling installs on self-hosted
+    # runners. macOS-14 (github-hosted) needs `brew install ninja` for
+    # the iOS bare runtime build; future self-hosted Macs are expected
+    # to ship Ninja pre-installed (alongside Node + bare tooling +
+    # Expo + CocoaPods) so we just verify it on PATH.
+    - name: Install Ninja build tool (iOS, github-hosted only)
+      if: inputs.platform == 'iOS' && runner.environment == 'github-hosted'
       shell: bash
       run: |
         echo "Installing Ninja..."
         brew install ninja
+        ninja --version
+
+    - name: Verify Ninja on PATH (iOS, self-hosted)
+      if: inputs.platform == 'iOS' && runner.environment != 'github-hosted'
+      shell: bash
+      run: |
+        if ! command -v ninja >/dev/null 2>&1; then
+          echo "ERROR: ninja not found on self-hosted runner — must be pre-installed."
+          exit 1
+        fi
         ninja --version
 
     - name: Install addon dependencies
@@ -264,8 +279,13 @@ runs:
 
     # ---- iOS build path -----------------------------------------------------
 
-    - name: Set up Xcode version (iOS)
-      if: inputs.platform == 'iOS'
+    # PR #2021 policy: only `sudo xcode-select` on github-hosted macOS,
+    # where /Applications hosts every available Xcode and the runner
+    # user has sudo. Self-hosted Macs are expected to be pre-pinned to
+    # the right Xcode (no global switch needed); we just verify SDK
+    # availability without mutating system state.
+    - name: Set up Xcode version (iOS, github-hosted only)
+      if: inputs.platform == 'iOS' && runner.environment == 'github-hosted'
       shell: bash
       run: |
         echo "Available Xcode versions:"
@@ -285,11 +305,39 @@ runs:
         xcodebuild -version
         xcodebuild -showsdks | grep -i ios
 
-    - name: Install CocoaPods (iOS)
-      if: inputs.platform == 'iOS'
+    - name: Verify Xcode + iOS SDK (iOS, self-hosted)
+      if: inputs.platform == 'iOS' && runner.environment != 'github-hosted'
+      shell: bash
+      run: |
+        if ! command -v xcodebuild >/dev/null 2>&1; then
+          echo "ERROR: xcodebuild not found on self-hosted Mac — must be pre-installed."
+          exit 1
+        fi
+        xcodebuild -version
+        if ! xcodebuild -showsdks | grep -qi ios; then
+          echo "ERROR: no iOS SDK in xcodebuild -showsdks output."
+          exit 1
+        fi
+
+    # PR #2021 policy: github-hosted macOS requires `sudo gem install`
+    # because system Ruby's gem dir isn't user-writable. Self-hosted
+    # Macs are expected to ship CocoaPods (and pinned Ruby) pre-installed;
+    # we just verify pod is on PATH.
+    - name: Install CocoaPods (iOS, github-hosted only)
+      if: inputs.platform == 'iOS' && runner.environment == 'github-hosted'
       shell: bash
       run: |
         sudo gem install cocoapods
+        pod --version
+
+    - name: Verify CocoaPods on PATH (iOS, self-hosted)
+      if: inputs.platform == 'iOS' && runner.environment != 'github-hosted'
+      shell: bash
+      run: |
+        if ! command -v pod >/dev/null 2>&1; then
+          echo "ERROR: CocoaPods (pod) not found on self-hosted Mac — must be pre-installed."
+          exit 1
+        fi
         pod --version
 
     - name: Create Keychain and Import Certificate (iOS)
