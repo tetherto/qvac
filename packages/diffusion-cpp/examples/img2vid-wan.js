@@ -4,6 +4,7 @@ const path = require('bare-path')
 const process = require('bare-process')
 const fs = require('bare-fs')
 const VideoStableDiffusion = require('../video')
+const { setLogger } = require('../addonLogging')
 
 // ---------------------------------------------------------------------------
 // Model files — downloaded via: ./scripts/download-model-wan.sh
@@ -11,37 +12,49 @@ const VideoStableDiffusion = require('../video')
 const MODELS_DIR = path.resolve(__dirname, '../models')
 const OUTPUT_DIR = path.resolve(__dirname, '../output')
 
-// NOTE: wan2.1_t2v_1.3B is *trained* for T2V but also accepts img2vid in the
-// library; for production img2vid you'll typically want a dedicated Wan I2V
-// checkpoint. This example reuses the T2V file so the download-model-wan.sh
-// flow is sufficient to run it.
-const DIFFUSION_MODEL = 'wan2.1_t2v_1.3B_fp16.safetensors'
+// Dedicated Wan 2.1 I2V 14B checkpoint (480p) gives proper image-to-video
+// motion. Fetch it via ./scripts/download-model-wan-i2v.sh (defaults to the
+// fp8_scaled variant used here -- ~16 GB on disk, ~20-24 GB at runtime).
+const DIFFUSION_MODEL = 'wan2.1_i2v_480p_14B_fp8_scaled.safetensors'
 const VAE_MODEL = 'wan_2.1_vae.safetensors'
 const T5XXL_MODEL = 'umt5_xxl_fp16.safetensors'
 
-// First-frame source — reuses the headshot shipped with the repo for
-// consistency with the FLUX img2img examples.
 const INIT_IMAGE_PATH = path.resolve(__dirname, '../assets/von-neumann.jpg')
 
 // ---------------------------------------------------------------------------
 // Generation params — edit freely
 // ---------------------------------------------------------------------------
-const PROMPT = 'a subtle breeze moves through the scene, gentle camera push-in, cinematic lighting'
-const NEG_PROMPT = 'blurry, distorted, low quality, jittery'
+// Motion-led prompt (verb-first, no "portrait/standing/still"). The 480p I2V
+// checkpoint preserves face identity from the init image, so we focus the
+// prompt entirely on the motion we want layered on top.
+const PROMPT = 'the man slowly turns his head and blinks, soft natural lighting, ' +
+  'subtle camera push-in, fine film grain, cinematic'
+const NEG_PROMPT = 'blurry, distorted, low quality, jittery, static, frozen, ' +
+  'watermark, double face, extra limbs'
+
+// von-neumann.jpg is 500x627 (~4:5 portrait). Snap to the 480p I2V model's
+// training short side (480) and align to multiples of 8 -> 480x608. The C++
+// side resizes the init image to match these dims.
+const WIDTH = 480
+const HEIGHT = 608
 
 const VIDEO_FRAMES = 33
 const FPS = 16
 const STEPS = 30
 const CFG_SCALE = 6.0
-// Wan 2.1 needs flow_shift = 3.0 for actual frame-to-frame motion; higher
-// values flatten the trajectory and produce near-static output. See the
-// long comment in generate-video-wan.js.
 const FLOW_SHIFT = 3.0
 const STRENGTH = 0.8
 const SEED = 42
 
 async function main () {
   fs.mkdirSync(OUTPUT_DIR, { recursive: true })
+
+  const LOG_PRIORITIES = ['ERROR', 'WARNING', 'INFO', 'DEBUG']
+  setLogger((priority, message) => {
+    const label = LOG_PRIORITIES[priority] || `UNKNOWN(${priority})`
+    process.stdout.write(`[C++ ${label}] ${message}`)
+    if (!message.endsWith('\n')) process.stdout.write('\n')
+  })
 
   if (!fs.existsSync(INIT_IMAGE_PATH)) {
     console.error(`Init image not found at ${INIT_IMAGE_PATH}`)
@@ -50,15 +63,16 @@ async function main () {
 
   const initImage = fs.readFileSync(INIT_IMAGE_PATH)
 
-  console.log('Wan 2.1 T2V 1.3B — image-to-video inference')
-  console.log('==========================================')
+  console.log('Wan 2.1 I2V 14B (480p) — image-to-video inference')
+  console.log('=================================================')
+  console.log('Model      :', DIFFUSION_MODEL)
   console.log('Init image :', INIT_IMAGE_PATH, `(${initImage.length.toLocaleString()} bytes)`)
   console.log('Prompt     :', PROMPT)
+  console.log('Size       :', `${WIDTH}x${HEIGHT}`)
   console.log('Frames     :', VIDEO_FRAMES, `(@${FPS} fps → ${(VIDEO_FRAMES / FPS).toFixed(2)}s)`)
   console.log('Steps      :', STEPS)
   console.log('Strength   :', STRENGTH)
   console.log('Seed       :', SEED)
-  console.log('Note       : dimensions are auto-detected from the init image.')
   console.log()
 
   const model = new VideoStableDiffusion({
@@ -92,6 +106,8 @@ async function main () {
       prompt: PROMPT,
       negative_prompt: NEG_PROMPT,
       init_image: initImage,
+      width: WIDTH,
+      height: HEIGHT,
       video_frames: VIDEO_FRAMES,
       fps: FPS,
       steps: STEPS,
