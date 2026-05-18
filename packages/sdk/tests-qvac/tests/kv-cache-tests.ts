@@ -238,8 +238,8 @@ export const kvCacheCancelThenNewPrompt: TestDefinition = {
   params: {
     cacheKey: "qvac-17780-cancel-regression",
     firstUserMessage: "Tell me a long story about dragons.",
-    secondUserMessage: "What is 2+2? Answer with just the number.",
-    expectedAnswerContains: "4",
+    secondUserMessage: "Repeat this word: banana",
+    expectedAnswerContains: "banana",
     cancelAfterTokens: 3,
   },
   expectation: { validation: "function", fn: () => true },

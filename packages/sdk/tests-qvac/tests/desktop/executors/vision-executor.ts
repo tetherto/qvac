@@ -7,6 +7,7 @@ import {
 } from "@tetherto/qvac-test-suite";
 import { AbstractModelExecutor } from "../../shared/executors/abstract-model-executor.js";
 import { visionTests } from "../../vision-tests.js";
+import { callWhenAddonIdle } from "../../shared/utils/addon-idle.js";
 
 type VisionParams = {
   history: Array<{ role: string; content: string; attachments?: Array<{ path: string }> }>;
@@ -49,13 +50,9 @@ export class VisionExecutor extends AbstractModelExecutor<typeof visionTests> {
     const history = this.resolveAttachments(p.history);
 
     try {
-      const result = completion({
-        modelId: visionModelId,
-        history,
-        stream: false,
-      });
-
-      const text = await result.text;
+      const text = await callWhenAddonIdle(() =>
+        completion({ modelId: visionModelId, history, stream: false }).text,
+      );
       return ValidationHelpers.validate(text, expectation);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
@@ -72,16 +69,14 @@ export class VisionExecutor extends AbstractModelExecutor<typeof visionTests> {
     const history = this.resolveAttachments(p.history);
 
     try {
-      const result = completion({
-        modelId: visionModelId,
-        history,
-        stream: true,
+      const tokens = await callWhenAddonIdle(async () => {
+        const result = completion({ modelId: visionModelId, history, stream: true });
+        const acc: string[] = [];
+        for await (const token of result.tokenStream) {
+          acc.push(token);
+        }
+        return acc;
       });
-
-      const tokens: string[] = [];
-      for await (const token of result.tokenStream) {
-        tokens.push(token);
-      }
 
       if (tokens.length === 0) {
         return { passed: false, output: "Streaming produced zero tokens" };
@@ -105,14 +100,10 @@ export class VisionExecutor extends AbstractModelExecutor<typeof visionTests> {
     const history = this.resolveAttachments(p.history);
 
     try {
-      const result = completion({
-        modelId: visionModelId,
-        history,
-        stream: false,
+      const { text, stats } = await callWhenAddonIdle(async () => {
+        const result = completion({ modelId: visionModelId, history, stream: false });
+        return { text: await result.text, stats: await result.stats };
       });
-
-      const text = await result.text;
-      const stats = await result.stats;
 
       const textValidation = ValidationHelpers.validate(text, expectation);
       if (!textValidation.passed) return textValidation;

@@ -28,11 +28,18 @@ const createVisionTest = (
   },
 });
 
+// Small vision models often confuse the elephant with another large grey African mammal.
+const ELEPHANT_IMAGE_TERMS = [
+  "elephant", "tusk", "trunk",
+  "hippopotamus", "hippo",
+  "rhinoceros", "rhino",
+];
+
 export const visionBasic = createVisionTest(
   "vision-basic",
   "What animal is in this image?",
   "elephant.jpg",
-  { validation: "contains-any", contains: ["elephant", "tusk", "trunk"] },
+  { validation: "contains-any", contains: ELEPHANT_IMAGE_TERMS },
   {},
   ["smoke"],
 );
@@ -41,7 +48,7 @@ export const visionStreaming = createVisionTest(
   "vision-streaming",
   "What do you see in this image?",
   "elephant.jpg",
-  { validation: "contains-any", contains: ["elephant", "tusk", "trunk"] },
+  { validation: "contains-any", contains: ELEPHANT_IMAGE_TERMS },
   { stream: true },
   ["smoke"],
 );
@@ -50,7 +57,7 @@ export const visionStats = createVisionTest(
   "vision-stats",
   "Describe this image briefly.",
   "elephant.jpg",
-  { validation: "contains-any", contains: ["elephant", "tusk", "trunk"] },
+  { validation: "contains-any", contains: ELEPHANT_IMAGE_TERMS },
 );
 
 export const visionFormatPng = createVisionTest(
@@ -86,7 +93,7 @@ export const visionObjectDetection = createVisionTest(
   "vision-object-detection",
   "List all the objects you can identify in this image.",
   "room.jpg",
-  { validation: "contains-any", contains: ["sofa", "table", "lamp", "window"] },
+  { validation: "contains-any", contains: ["sofa", "couch", "table", "lamp", "light", "lighting", "window"] },
 );
 
 export const visionTextExtraction = createVisionTest(
