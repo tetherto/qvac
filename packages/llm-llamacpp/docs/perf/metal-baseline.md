@@ -149,6 +149,54 @@ All results use elephant.jpg (612 x 408). Peak RSS captured via `/usr/bin/time -
 
 Android device results: see [Appendix G](#appendix-g-android-gpu-results).
 
+### iPhone 16e (A18) — Local Device, Full Matrix (added 2026-05-18)
+
+> Metal-only (`ngl=99`). In-process inference via static-linked llama.cpp.
+> Median of 3 measured runs, 1 warmup, 60s cool-down, 5 min between models,
+> 10 min between sessions. Local device via `xcodebuild test-without-building`.
+> Models > ~3.8 GB total Jetsam-killed (same as Firebase 16 Pro).
+
+**Fiber** (`tetherto/temp-8189`, `f686a1324`):
+
+| Model | Quant | Image | Vision (ms) | img_decode (ms) | Prefill (t/s) | Decode (t/s) |
+|-------|-------|-------|------------|----------------|---------------|-------------|
+| Gemma4-E2B | Q4_K_M | elephant | 1,200 | 1,122 | 206.8 | 17.01 |
+| Gemma4-E2B | Q4_K_M | fruitPlate | 1,225 | 1,126 | 207.8 | 16.95 |
+| Qwen3.5-2B | Q4_K_M | elephant | 783 | 820 | 133.8 | 8.22 |
+| Qwen3.5-2B | Q8_0 | elephant | 785 | 779 | 137.4 | 7.23 |
+| Qwen3.5-4B | Q4_K_M | elephant | 787 | 2,133 | 69.2 | 3.98 |
+
+**b9025** (upstream tag `eff06702b`):
+
+| Model | Quant | Image | Vision (ms) | img_decode (ms) | Prefill (t/s) | Decode (t/s) |
+|-------|-------|-------|------------|----------------|---------------|-------------|
+| Gemma4-E2B | Q4_K_M | elephant | 1,285 | 38 | 122.7 | 27.26 |
+| Gemma4-E2B | Q4_K_M | fruitPlate | 1,317 | 40 | 123.4 | 27.29 |
+| Qwen3.5-2B | Q4_K_M | elephant | 927 | 9 | 150.0 | 27.69 |
+| Qwen3.5-2B | Q8_0 | elephant | 924 | 9 | 154.3 | 21.86 |
+| Qwen3.5-4B | Q4_K_M | elephant | 1,058 | 10 | 82.7 | 12.28 |
+
+**Fiber vs b9025 — iPhone 16e regression:**
+
+| Model | Quant | Fiber decode (t/s) | b9025 decode (t/s) | Delta | Fiber img_decode (ms) | b9025 img_decode (ms) |
+|-------|-------|-------------------|-------------------|-------|----------------------|----------------------|
+| Gemma4-E2B | Q4_K_M | 17.0 | 27.3 | **-37.7%** | 1,122 | 38 |
+| Qwen3.5-2B | Q4_K_M | 8.2 | 27.7 | **-70.4%** | 820 | 9 |
+| Qwen3.5-2B | Q8_0 | 7.2 | 21.9 | **-67.1%** | 779 | 9 |
+| Qwen3.5-4B | Q4_K_M | 4.0 | 12.3 | **-67.5%** | 2,133 | 10 |
+
+**Critical finding**: Fiber fork has a catastrophic Metal regression on iPhone 16e
+(5-core A18), far worse than on Mac M4 (-7 to -38%) or iPhone 16 Pro (-3%).
+The regression is most severe for Qwen3.5 models (-67 to -70%) where the
+`img_decode` step takes 80-210x longer on fiber vs b9025 (820-2,133 ms vs 9-38 ms).
+The img_decode regression dominates Gemma4 too (1,122 ms vs 38 ms, 30x slower)
+but Gemma4's decode throughput is less affected (-38% vs -70%) because Gemma4
+spends proportionally less time in the projection path.
+
+This strongly suggests the fiber fork's Metal image projection kernel is
+missing an optimization that b9025 has — possibly the same deepstack/GDN
+Metal kernel gap documented in `QVAC-18297-fiber-b9025-gap.md`.
+
 ### iPhone 16 Pro (A18 Pro) — Firebase Test Lab (added 2026-05-18)
 
 > Metal-only (`ngl=99`). In-process inference via static-linked llama.cpp
