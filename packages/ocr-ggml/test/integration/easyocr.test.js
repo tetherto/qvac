@@ -29,6 +29,8 @@ const {
   defaultSampleImage
 } = require('./helpers')
 
+const TEST_TIMEOUT = 120 * 1000
+
 const detector = process.env.OCR_GGML_DETECTOR
 const recognizer = process.env.OCR_GGML_RECOGNIZER
 const image = process.env.OCR_GGML_IMAGE || defaultSampleImage()
@@ -36,7 +38,7 @@ const image = process.env.OCR_GGML_IMAGE || defaultSampleImage()
 const ready = detector && recognizer && modelsPresent([detector, recognizer, image])
 
 test('easyocr pipeline produces an array of [box, text, conf] triples',
-  { skip: !ready }, async t => {
+  { timeout: TEST_TIMEOUT, skip: !ready }, async t => {
     const ocr = new OcrGgml({
       params: {
         pathDetector: detector,
