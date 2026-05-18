@@ -1,0 +1,171 @@
+---
+title: Cancellation
+description: Cancel any in-flight long-running SDK operation by requestId, or broad-cancel by modelId.
+schemaType: HowTo
+---
+
+## Overview
+
+Every long-running SDK operation that goes through the request registry can be cancelled at any point during execution. Coverage spans inference (`completion()`, `embed()`, `transcribe()`, `translate()`, `textToSpeech()`, `ocr()`, `diffusion()`, `upscale()`), workspace operations (`rag*()`), and resource-acquisition calls (`loadModel()`, `downloadAsset()`). The cancel surface differs by operation — see the coverage callout below for which path applies to which call.
+
+The mental model is: **the primary path is `requestId`** — pass the run's `requestId` to `cancel()` to stop that exact call. **The `modelId` path is an escape hatch** — use it for model unload, app shutdown, admin sweeps, or for ops whose addons cannot interrupt mid-decode (`translate`, `textToSpeech`, `ocr`, `diffusion`, `upscale`).
+
+<Callout title="Coverage" type="info">
+**Targeted cancel by `requestId`** works for: `completion()`, `loadModel()`, `embed()`, `transcribe()`, `downloadAsset()`, and `rag*()` (`ragIngest`, `ragSaveEmbeddings`, `ragReindex`).
+
+**Broad cancel by `modelId`** additionally covers `translate()`, `textToSpeech()`, `ocr()`, `diffusion()`, and `upscale()`. These accept `cancel({ modelId })` but their addons cannot interrupt mid-decode — the in-flight call stops yielding when `signal.aborted` flips on the next yield point, and the C++ work runs to completion in the background.
+
+**Duplex sessions** — `transcribeStream(...)` and `textToSpeechStream(...)` use `.destroy()` on the returned session.
+
+**Finetune** — keeps its own cancel surface: `finetune({ operation: "cancel", ... })`. See [Fine-tuning](/ai-capabilities/fine-tuning).
+</Callout>
+
+## Functions
+
+1. [`completion()`](/reference/api#completion) — returns a `CompletionRun` that exposes a synchronous `requestId` field.
+2. [`loadModel()`](/reference/api#loadmodel), [`downloadAsset()`](/reference/api#downloadasset), [`embed()`](/reference/api#embed), [`transcribe()`](/reference/api#transcribe), and the [`rag*()`](/ai-capabilities/rag) workspace operations (`ragIngest`, `ragSaveEmbeddings`, `ragReindex`) — return a decorated promise (`Promise<T> & { requestId: string }`) that exposes a synchronous `requestId` field before the first await resolves.
+3. [`cancel()`](/reference/api#cancel) — cancel by `requestId` (targeted) or by `modelId` (broad, optionally narrowed by `kind`).
+
+For how to use each function, see [SDK — API reference](/reference/api/).
+
+## Where `requestId` comes from
+
+Two shapes show up across the SDK surface:
+
+- **`completion()`** — returns a `CompletionRun` with `run.requestId` (UUIDv4 generated client-side, available synchronously on the returned run).
+- **`loadModel()`, `downloadAsset()`, `embed()`, `transcribe()`, `ragIngest()`, `ragSaveEmbeddings()`, `ragReindex()`** — return `Promise<T> & { requestId: string }`. The await result is unchanged (`await loadModel(...)` still resolves to the model id, `await embed(...)` still resolves to the embedding vector, etc.), but `op.requestId` is available synchronously *before* `await` resolves so a stop button can be wired immediately.
+
+```ts
+// Pattern 1 — completion: requestId is on the returned run
+const run = completion({ modelId, history, stream: true });
+await cancel({ requestId: run.requestId });
+
+// Pattern 2 — decorated promise: op.requestId is synchronously available
+const op = loadModel({ modelSrc: "..." });
+op.requestId; // synchronously available, before await
+stopButton.onclick = () => cancel({ requestId: op.requestId });
+const id = await op; // legacy unwrap still returns the modelId
+```
+
+## Targeted cancel by `requestId`
+
+Once you have a `requestId` (via either of the two patterns above), cancel is a single call. The `requestId` is available **synchronously** — before the first network round-trip — so you can wire a stop button to it immediately, without waiting for the first chunk to arrive.
+
+There are two equivalent forms:
+
+```ts
+const run = completion({ modelId, history, stream: true });
+
+// Sugar form (recommended for most callers)
+await cancel({ requestId: run.requestId });
+
+// Explicit form (same behavior)
+await cancel({ operation: "request", requestId: run.requestId });
+```
+
+Outcome on the consumer side (using `completion()` as the reference):
+
+- The `events` async iterable closes cleanly.
+- The terminal `completionDone` event carries `stopReason: "cancelled"`.
+- The `final` promise rejects with [`InferenceCancelledError`](/reference/api#errors) (code `52419`).
+
+Other operations that go through `cancel({ requestId })` (`loadModel`, `downloadAsset`, `embed`, `transcribe`, `rag*`) all reject their returned promise with the same `InferenceCancelledError` (code `52419`) — the error class is reused across non-inference handlers, no new code was added.
+
+Only the targeted call is affected — other in-flight calls on the same `modelId` keep running. To cancel `translate`, `textToSpeech`, `ocr`, `diffusion`, or `upscale` — or to sweep every in-flight call on a model in one shot — use the broad-cancel form below.
+
+## Broad cancel by `modelId` (escape hatch)
+
+When you don't have a `requestId` — typically because you're unloading the model, shutting down the app, or sweeping stale requests from admin code — use the broad-cancel form. The canonical 0.11.0 shape is `{ modelId, kind? }`:
+
+```ts
+// Cancel every in-flight request on this model, regardless of kind
+await cancel({ modelId });
+
+// Narrow to a specific kind
+await cancel({ modelId, kind: "completion" });
+await cancel({ modelId, kind: "embeddings" });
+await cancel({ modelId, kind: "transcribe" });
+await cancel({ modelId, kind: "translate" });
+
+// Legacy per-kind sugars — still supported via the client wrapper.
+await cancel({ operation: "inference", modelId });
+await cancel({ operation: "embeddings", modelId });
+```
+
+Broad cancel terminates **every** in-flight request matching the target on the model simultaneously. Prefer the targeted `{ requestId }` form when you do have a `requestId` — it scopes the cancellation precisely and avoids killing unrelated work that happens to share the model.
+
+For ops whose addon does not support mid-decode abort (`translate`, `textToSpeech`, `ocr`, `diffusion`, `upscale`), broad cancel by `modelId` is the only cancel path, and it is **soft** — the in-flight call stops yielding when `signal.aborted` flips on the next yield point, but the underlying C++ work runs to completion in the background. The client's promise still rejects with `InferenceCancelledError`; just don't expect the model to stop computing immediately.
+
+<Callout type="info">
+`loadModel` is per-`requestId` only: the registry slot for an in-progress load is keyed by `requestId` (the model id isn't known until the config hash is computed inside the handler), so `cancel({ modelId })` is a no-op against an in-progress load.
+</Callout>
+
+## Soft-cancel caveat for `loadModel`
+
+The download phase of `loadModel()` honors `cancel({ requestId })` end-to-end. The subsequent **addon load phase** (`plugin.createModel(...)` / `model.load(false)`) does not accept a cancellation signal today — a cancel that lands during the load phase still rejects the client's promise with `InferenceCancelledError`, but the addon finishes loading the model into memory in the background.
+
+The result is an **orphan model**: registered as loaded server-side, but the client believes the call failed. If you re-trigger `loadModel()` shortly after a cancel, prefer calling `unloadModel({ modelId })` first (using the model id you can derive deterministically from `modelSrc`) to avoid leaking RAM. A per-load cancel surface on the addon would close this gap; tracked as a follow-up.
+
+## `cancelFinetune` timing change
+
+`finetune({ operation: "cancel", modelId })` (the legacy domain-specific cancel surface for fine-tunes) now returns `{ status: "CANCELLED" }` immediately — the cancel is dispatched synchronously through the registry and the addon's `model.cancel()` runs out-of-band on the in-flight `startFinetune` promise. Previously, the call awaited the addon ack before resolving.
+
+Functionally cancel still lands; observably, `await finetune({ operation: "cancel", ... })` now resolves before the addon has acknowledged. If you previously gated subsequent calls on the cancel-resolution timing, switch to awaiting the original `finetune(...)` handle's `result` to observe the actual training-side termination. The `cancel({ requestId })` path is unchanged across milestones — it has always been synchronous-after-abort.
+
+## History-trim
+
+A cancelled assistant turn is **partial** — the model stopped mid-decode, so its content cuts off in the middle of a thought. Drop it (or mark it as partial) before appending the next user turn to `history` on the follow-up `completion()`. Otherwise the model sees a truncated assistant message as if it were complete, which biases subsequent generations:
+
+```ts
+const run = completion({ modelId, history, stream: true });
+let cancelled = false;
+
+for await (const event of run.events) {
+  if (event.type === "completionDone" && event.stopReason === "cancelled") {
+    cancelled = true;
+  }
+}
+
+const nextHistory = cancelled
+  ? history // drop the partial assistant turn
+  : [...history, { role: "assistant", content: (await run.final).contentText }];
+```
+
+<Callout type="info">
+The same partial-turn rule applies if you abort the `events` iterator early (e.g., `break` out of the `for await` loop) without calling `cancel()`. The model still committed a truncated turn — treat it as partial.
+</Callout>
+
+## Example
+
+The following script loads a model, starts a streaming `completion()`, cancels it shortly after by `requestId`, and prints how many content deltas streamed before the cancel took effect:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/cancel-by-request-id.js title="cancel-by-request-id.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/cancel-by-request-id.ts title="cancel-by-request-id.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/quickstart).
+</Callout>
+
+## Errors
+
+- `InferenceCancelledError` (code `52419`) — expected on the `final` promise (and any aggregate promise) after a consumer-initiated cancel. Treat it as a normal outcome, not a failure. Carries `requestId` plus a `partial: { text?, toolCalls?, stats? }` payload with whatever was accumulated before the cancel point.
+- `RequestNotFoundError` (code `52418`) — registry lookup miss for the given `requestId`. Rare in practice because `cancel({ requestId })` against an already-terminated id is a no-op on the handler (returns `success: true, cancelled: 0`); consumer code that narrows by class will see this for other call sites that look up a request by id.
+- `RequestIdConflictError` (code `52417`) — two requests landed with the same `requestId`. Astronomically unlikely with UUIDv4; if you see it, report.
+- `RequestRejectedByPolicyError` (code `52420`) — the registry's concurrency policy rejected the request before it began (e.g. `oneAtATimePerModel` for `completion` — the second concurrent completion against the same model is admissibility-rejected). Carries `requestId`, `kind`, `modelId`, and a human-readable `reason`.
+- `AsyncDisposeUnavailableError` (code `53503`) — the runtime is missing `Symbol.asyncDispose` (older Bare builds). Upgrade Bare.
+

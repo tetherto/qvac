@@ -18,6 +18,16 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const os = require('bare-os')
 const process = require('bare-process')
+// Follow-up to QVAC-17830 (Olya, 17 May): inject bare-subprocess so
+// performance-reporter.js's _detectGpu() can shell out to nvidia-smi /
+// vulkaninfo / system_profiler under Bare. Resolving from this caller
+// file works (it lives next to llm-llamacpp/node_modules); resolving
+// from inside scripts/test-utils/ does not because that directory has
+// no node_modules walk. Mobile path doesn't need this — the inline
+// fallback below leaves gpu=null on Device Farm where the probes
+// wouldn't work anyway.
+let _subprocess = null
+try { _subprocess = require('bare-subprocess') } catch (_) {}
 
 const platform = os.platform()
 const arch = os.arch()
@@ -39,7 +49,7 @@ let createPerformanceReporter
 const _scriptBase = path.join('..', '..', '..', '..', 'scripts', 'test-utils')
 try {
   const perfReporterMod = require(path.join(_scriptBase, 'performance-reporter'))
-  perfReporterMod.configure({ fs, path, process, os })
+  perfReporterMod.configure({ fs, path, process, os, subprocess: _subprocess })
   createPerformanceReporter = perfReporterMod.createPerformanceReporter
 } catch (_) {
   // Hard cap on how much of the model's text output we keep in-memory

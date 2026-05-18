@@ -27,6 +27,27 @@ env:
   PKG_DIR: packages/classification-ggml
 
 jobs:
+  label-gate:
+    name: Authorise (label-gate)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      authorised: ${{ steps.gate.outputs.authorised }}
+    steps:
+      - name: Checkout (label-gate action only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/label-gate
+          sparse-checkout-cone-mode: false
+      - name: Run label-gate
+        id: gate
+        uses: ./.github/actions/label-gate
+        with:
+          github-token: ${{ secrets.PAT_TOKEN }}
+
   authorize:
     runs-on: ubuntu-latest
     permissions:
@@ -59,8 +80,8 @@ jobs:
               - ".github/workflows/*classification-ggml*.yml"
 
   sanity-checks:
-    needs: [authorize, changes]
-    if: always() && ((needs.changes.outputs.pkg == 'true' && needs.authorize.outputs.allowed == 'true') || github.event_name == 'workflow_dispatch')
+    needs: [authorize, changes, label-gate]
+    if: always() && needs.label-gate.outputs.authorised == 'true' && ((needs.changes.outputs.pkg == 'true' && needs.authorize.outputs.allowed == 'true') || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -96,10 +117,11 @@ jobs:
         run: npm run test:dts
 
   cpp-lint:
-    needs: [authorize, changes, sanity-checks]
+    needs: [authorize, changes, sanity-checks, label-gate]
     if: |
       always() &&
-       needs.authorize.outputs.allowed == 'true' &&
+      needs.label-gate.outputs.authorised == 'true' &&
+      needs.authorize.outputs.allowed == 'true' &&
       (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/cpp-lint.yaml
     secrets: inherit
@@ -109,9 +131,10 @@ jobs:
       workdir: packages/classification-ggml
 
   cpp-tests:
-    needs: [authorize, changes, sanity-checks]
+    needs: [authorize, changes, sanity-checks, label-gate]
     if: |
       always() &&
+      needs.label-gate.outputs.authorised == 'true' &&
       needs.authorize.outputs.allowed == 'true' &&
       (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/cpp-tests-classification.yml
@@ -127,9 +150,10 @@ jobs:
       packages: write
       pull-requests: write
       id-token: write
-    needs: [authorize, changes, sanity-checks]
+    needs: [authorize, changes, sanity-checks, label-gate]
     if: |
       always() &&
+      needs.label-gate.outputs.authorised == 'true' &&
       needs.authorize.outputs.allowed == 'true' &&
       (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/prebuilds-classification-ggml.yml
@@ -139,9 +163,10 @@ jobs:
       ref: ${{ github.event.pull_request.head.ref }}
 
   run-integration-tests:
-    needs: [authorize, changes, sanity-checks, prebuild]
+    needs: [authorize, changes, sanity-checks, prebuild, label-gate]
     if: |
       always() &&
+      needs.label-gate.outputs.authorised == 'true' &&
       needs.authorize.outputs.allowed == 'true' &&
       (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     permissions:
@@ -160,9 +185,10 @@ jobs:
       packages: read
       pull-requests: write # Allow commenting on PRs
       id-token: write
-    needs: [authorize, changes, sanity-checks, prebuild]
+    needs: [authorize, changes, sanity-checks, prebuild, label-gate]
     if: |
       always() &&
+      needs.label-gate.outputs.authorised == 'true' &&
       needs.authorize.outputs.allowed == 'true' &&
       (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/integration-mobile-test-classification-ggml.yml

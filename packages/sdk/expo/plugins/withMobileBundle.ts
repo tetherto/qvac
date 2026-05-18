@@ -4,6 +4,7 @@ import type { ExpoConfig } from "expo/config";
 import * as fs from "fs";
 import * as path from "path";
 import { resolveSDKPackageDir } from "./resolve-sdk-package-dir";
+import { BundleVerificationFailedError } from "@/utils/errors-client";
 
 const { withDangerousMod } = configPlugins;
 
@@ -24,11 +25,11 @@ const MOBILE_HOSTS = [
 ];
 
 /**
- * Expo plugin that automatically generates the mobile worker bundle during build.
+ * Expo plugin: bundle, verify, then copy the mobile worker bundle.
  *
- * Runs qvac CLI (prefers local @qvac/cli, falls back to npx).
- * Uses qvac.config.* if exists, else includes all built-in plugins.
- * Output: node_modules/<sdk-package>/dist/worker.mobile.bundle.js
+ * Flow: `bundle sdk` -> assert `qvac/worker.bundle.js` exists ->
+ * `verify bundle` -> copy to `<sdkPackageDir>/dist/worker.mobile.bundle.js`.
+ * Requires a local `@qvac/cli` install. Uses `qvac.config.*` if present.
  */
 function withMobileBundle(config: ExpoConfig): ExpoConfig {
   function buildMobileBundle(
@@ -69,9 +70,13 @@ function withMobileBundle(config: ExpoConfig): ExpoConfig {
           `Check qvac CLI output above for errors.`,
       );
     }
+
+    // Verify before copying so the dist artifact only updates on success.
+    runVerifier(projectRoot, generatedBundle, configPath);
+
     fs.copyFileSync(generatedBundle, outputPath);
 
-    console.log("🫡 QVAC: Mobile bundle generated");
+    console.log("🫡 QVAC: Mobile bundle generated and verified");
     return config;
   }
 
@@ -97,7 +102,7 @@ function findConfigFile(projectRoot: string): string | null {
  * Prefers local @qvac/cli installation for version consistency,
  * falls back to npx for convenience when CLI is not installed.
  */
-function resolveCliCommand(projectRoot: string): string {
+export function resolveCliCommand(projectRoot: string): string {
   const cliPath = path.join(
     projectRoot,
     "node_modules",
@@ -118,6 +123,55 @@ function resolveCliCommand(projectRoot: string): string {
     "   Tip: Add @qvac/cli as a dependency for consistent versioning",
   );
   return "npx --package=@qvac/cli qvac";
+}
+
+/** Builds the `qvac verify bundle` command string (pure helper for tests). */
+export function buildVerifyBundleCommand(opts: {
+  cliCommand: string;
+  bundlePath: string;
+  hosts: string[];
+  configPath?: string;
+}): string {
+  const hostFlags = opts.hosts.map((h) => `--host ${h}`).join(" ");
+  const configFlag = opts.configPath ? ` --config "${opts.configPath}"` : "";
+  return `${opts.cliCommand} verify bundle --addons-source "${opts.bundlePath}" ${hostFlags}${configFlag}`;
+}
+
+/**
+ * Runs `qvac verify bundle` against the freshly generated worker bundle.
+ * Passes the discovered `qvac.config.*` so the CLI reads `bareRuntimeVersion`
+ * and pins ABI checks deterministically. Without a config, the CLI falls back
+ * to auto-detecting Bare runtime from `node_modules` (`bare-runtime`, then
+ * `bare`); ABI checks stay strict when that lookup succeeds, and only skip
+ * (with an `unknown-runtime-version` warning) when neither is installed.
+ */
+function runVerifier(
+  projectRoot: string,
+  generatedBundle: string,
+  configPath: string | null,
+) {
+  const cliCommand = resolveCliCommand(projectRoot);
+
+  if (!configPath) {
+    console.log(
+      "⚠️ QVAC: no qvac.config.* found — Bare runtime will be auto-detected " +
+        "from node_modules (bare-runtime, then bare). Add qvac.config.json " +
+        'with `bareRuntimeVersion` to pin ABI checks deterministically.',
+    );
+  }
+
+  const verifyCommand = buildVerifyBundleCommand({
+    cliCommand,
+    bundlePath: generatedBundle,
+    hosts: MOBILE_HOSTS,
+    ...(configPath ? { configPath } : {}),
+  });
+
+  try {
+    execSync(verifyCommand, { stdio: "inherit", cwd: projectRoot });
+  } catch (error) {
+    throw new BundleVerificationFailedError(generatedBundle, error);
+  }
 }
 
 /** Runs qvac CLI with mobile-specific options */
@@ -195,5 +249,7 @@ function patchBareKitLinkers(projectRoot: string, qvacSdkPath: string) {
     console.log(`⚠️ QVAC: iOS linker patch not found (${iosPatch})`);
   }
 }
+
+export { MOBILE_HOSTS };
 
 export default withMobileBundle;

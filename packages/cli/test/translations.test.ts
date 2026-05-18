@@ -337,7 +337,7 @@ describe('handleTranslations', () => {
       registry,
       serveConfig,
       logger,
-      transcribeOverride: async () => 'hello'
+      transcribeOverride: async () => ({ requestId: 'rid-test', result: Promise.resolve('hello') })
     })
     assert.equal(res.getStatus(), 200)
     const j = JSON.parse(res.getPayload()) as { text: string }
@@ -365,7 +365,7 @@ describe('handleTranslations', () => {
       registry,
       serveConfig,
       logger: makeLogger(),
-      transcribeOverride: async () => 'out'
+      transcribeOverride: async () => ({ requestId: 'rid-test', result: Promise.resolve('out') })
     })
     assert.equal(res.getStatus(), 200)
     const j = JSON.parse(res.getPayload()) as { text: string }
@@ -396,7 +396,7 @@ describe('handleTranslations', () => {
       registry,
       serveConfig,
       logger: makeLogger(),
-      transcribeOverride: async () => 'plain'
+      transcribeOverride: async () => ({ requestId: 'rid-test', result: Promise.resolve('plain') })
     })
     assert.equal(res.getStatus(), 200)
     assert.equal(res.getPayload(), 'plain')

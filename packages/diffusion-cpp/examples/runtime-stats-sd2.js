@@ -65,7 +65,8 @@ async function main () {
     },
     config: {
       threads: 4,
-      prediction: 'v'
+      prediction: 'v',
+      diffusion_fa: true
     },
     logger: console,
     opts: { stats: true }

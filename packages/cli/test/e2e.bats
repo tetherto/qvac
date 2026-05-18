@@ -63,7 +63,7 @@ CONF
   '
 
   cd "${FILE_TMPDIR}/project"
-  ${QVAC} serve openai -p "${E2E_PORT}" --cors &
+  ${QVAC} serve openai -p "${E2E_PORT}" --cors >"${FILE_TMPDIR}/serve.log" 2>&1 &
   echo "$!" > "${FILE_TMPDIR}/server_pid"
 
   local max_wait=300
@@ -99,6 +99,10 @@ assert_error() {
 
 json_post() {
   curl -s "${BASE}$1" -H "Content-Type: application/json" -d "$2"
+}
+
+json_post_capture() {
+  curl -sS -D "${FILE_TMPDIR}/resp.hdr" -o "${FILE_TMPDIR}/resp.body" "${BASE}$1" -H "Content-Type: application/json" -d "$2"
 }
 
 # ── Models ────────────────────────────────────────────────────────────
@@ -261,12 +265,363 @@ json_post() {
   assert_error "${body}" "invalid_model_type"
 }
 
+# ── Vector stores ─────────────────────────────────────────────────────
+# Each test is self-contained (creates the store/file it needs and cleans
+# up) so they survive `bats -f <pattern>` filtering and can run in any
+# order. The happy-path "upload → attach → search → delete" lives in a
+# single @test to keep the dependent steps together without leaking state
+# via files.
+
+VS_DOC_FILE="${BATS_FILE_TMPDIR:-/tmp}/vs_doc.txt"
+
+@test "vector_stores: CRUD — create, list, get, update, delete" {
+  local create
+  create=$(json_post "/v1/vector_stores" '{"name":"crud","metadata":{"by":"e2e.bats"}}')
+  echo "${create}" | jq -e '.object == "vector_store"' >/dev/null
+  echo "${create}" | jq -e '.id | startswith("vs_")' >/dev/null
+  echo "${create}" | jq -e '.name == "crud"' >/dev/null
+  local id
+  id=$(echo "${create}" | jq -r '.id')
+
+  local list
+  list=$(curl -sf "${BASE}/v1/vector_stores")
+  echo "${list}" | jq -e '.object == "list"' >/dev/null
+  echo "${list}" | jq -e --arg id "${id}" 'any(.data[]; .id == $id)' >/dev/null
+
+  local get_before
+  get_before=$(curl -sf "${BASE}/v1/vector_stores/${id}")
+  echo "${get_before}" | jq -e --arg id "${id}" '.id == $id' >/dev/null
+  echo "${get_before}" | jq -e '.status == "in_progress"' >/dev/null
+
+  local update
+  update=$(json_post "/v1/vector_stores/${id}" '{"name":"crud-updated"}')
+  echo "${update}" | jq -e '.name == "crud-updated"' >/dev/null
+
+  local del
+  del=$(curl -s -X DELETE "${BASE}/v1/vector_stores/${id}")
+  echo "${del}" | jq -e --arg id "${id}" '.id == $id' >/dev/null
+  echo "${del}" | jq -e '.object == "vector_store.deleted"' >/dev/null
+  echo "${del}" | jq -e '.deleted == true' >/dev/null
+
+  local status_after
+  status_after=$(curl -s -o /dev/null -w "%{http_code}" "${BASE}/v1/vector_stores/${id}")
+  [[ "${status_after}" == "404" ]]
+}
+
+@test "vector_stores: upload → attach → search end-to-end" {
+  cat > "${VS_DOC_FILE}" <<'TXT'
+Local e2e document about planets, moons and the solar system.
+Another note about OpenAI vector stores and RAG.
+TXT
+
+  local vs
+  vs=$(json_post "/v1/vector_stores" '{"name":"flow"}' | jq -r '.id')
+
+  local upload file
+  upload=$(curl -sf "${BASE}/v1/files" \
+    -F "file=@${VS_DOC_FILE};type=text/plain" \
+    -F "purpose=assistants")
+  echo "${upload}" | jq -e '.object == "file"' >/dev/null
+  echo "${upload}" | jq -e '.id | startswith("file-")' >/dev/null
+  echo "${upload}" | jq -e '.status == "uploaded"' >/dev/null
+  echo "${upload}" | jq -e '.purpose == "assistants"' >/dev/null
+  file=$(echo "${upload}" | jq -r '.id')
+
+  curl -sf "${BASE}/v1/files" | jq -e --arg id "${file}" 'any(.data[]; .id == $id)' >/dev/null
+  curl -sf "${BASE}/v1/files/${file}" | jq -e --arg id "${file}" '.id == $id and .object == "file"' >/dev/null
+
+  local attach
+  attach=$(json_post "/v1/vector_stores/${vs}/files" "{\"file_id\":\"${file}\"}")
+  echo "${attach}" | jq -e '.object == "vector_store.file"' >/dev/null
+  echo "${attach}" | jq -e --arg id "${file}" '.id == $id' >/dev/null
+  echo "${attach}" | jq -e --arg vs "${vs}" '.vector_store_id == $vs' >/dev/null
+  echo "${attach}" | jq -e '.status == "completed"' >/dev/null
+  echo "${attach}" | jq -e '.last_error == null' >/dev/null
+  echo "${attach}" | jq -e '.usage_bytes | type == "number"' >/dev/null
+
+  # Bytes are dropped from the in-memory file store after attach.
+  local file_status_after
+  file_status_after=$(curl -s -o /dev/null -w "%{http_code}" "${BASE}/v1/files/${file}")
+  [[ "${file_status_after}" == "404" ]]
+
+  curl -sf "${BASE}/v1/vector_stores/${vs}" | jq -e '.status == "completed"' >/dev/null
+
+  local search
+  search=$(json_post "/v1/vector_stores/${vs}/search" \
+    '{"query":"planets and solar system","max_num_results":5}')
+  echo "${search}" | jq -e '.object == "vector_store.search_results.page"' >/dev/null
+  echo "${search}" | jq -e '.data | type == "array"' >/dev/null
+  echo "${search}" | jq -e '.data | length > 0' >/dev/null
+  echo "${search}" | jq -e '
+    any(.data[];
+      (.content // []) | map(select(.type == "text") | .text // "") | join(" ")
+        | test("planets|moons|OpenAI|vector stores"; "i"))
+  ' >/dev/null
+
+  curl -s -X DELETE "${BASE}/v1/vector_stores/${vs}" >/dev/null
+}
+
+@test "vector_stores: search with missing query returns 400 missing_query" {
+  local vs body
+  vs=$(json_post "/v1/vector_stores" '{}' | jq -r '.id')
+  body=$(json_post "/v1/vector_stores/${vs}/search" '{}')
+  assert_error "${body}" "missing_query"
+  curl -s -X DELETE "${BASE}/v1/vector_stores/${vs}" >/dev/null
+}
+
+@test "vector_stores: attach with unknown file_id returns 404 file_not_found" {
+  local vs body
+  vs=$(json_post "/v1/vector_stores" '{}' | jq -r '.id')
+  body=$(json_post "/v1/vector_stores/${vs}/files" '{"file_id":"file-doesnotexist"}')
+  assert_error "${body}" "file_not_found"
+  curl -s -X DELETE "${BASE}/v1/vector_stores/${vs}" >/dev/null
+}
+
+@test "vector_stores: attach with missing file_id returns 400 missing_file_id" {
+  local vs body
+  vs=$(json_post "/v1/vector_stores" '{}' | jq -r '.id')
+  body=$(json_post "/v1/vector_stores/${vs}/files" '{}')
+  assert_error "${body}" "missing_file_id"
+  curl -s -X DELETE "${BASE}/v1/vector_stores/${vs}" >/dev/null
+}
+
+@test "vector_stores: attach binary upload returns 400 unsupported_file_type" {
+  local vs upload file body
+  vs=$(json_post "/v1/vector_stores" '{"name":"binary-sad"}' | jq -r '.id')
+
+  # PNG magic header — contains NUL bytes so looksBinary catches it.
+  local png_path="${BATS_TEST_TMPDIR}/bin.png"
+  printf '\x89PNG\r\n\x1a\n\x00\x00\x00\x0dIHDR' > "${png_path}"
+
+  upload=$(curl -sf "${BASE}/v1/files" \
+    -F "file=@${png_path};type=image/png" \
+    -F "purpose=assistants")
+  file=$(echo "${upload}" | jq -r '.id')
+
+  body=$(json_post "/v1/vector_stores/${vs}/files" "{\"file_id\":\"${file}\"}")
+  assert_error "${body}" "unsupported_file_type"
+
+  curl -s -X DELETE "${BASE}/v1/vector_stores/${vs}" >/dev/null
+}
+
+@test "vector_stores: invalid id returns 400 invalid_vector_store_id" {
+  local body
+  body=$(curl -s "${BASE}/v1/vector_stores/bad%2Fid")
+  assert_error "${body}" "invalid_vector_store_id"
+}
+
+# ── Responses API ─────────────────────────────────────────────────────
+
+@test "responses: startup log documents volatile store" {
+  grep -q 'responses: in-memory only' "${FILE_TMPDIR}/serve.log"
+}
+
+@test "responses: blocking completion returns response shape and stub header" {
+  json_post_capture "/v1/responses" "{\"model\":\"${LLM_ALIAS}\",\"input\":\"Reply with exactly OK.\"}"
+  grep -qi 'X-QVAC-Stub: responses-volatile' "${FILE_TMPDIR}/resp.hdr"
+  jq -e '.id | startswith("resp_")' "${FILE_TMPDIR}/resp.body" >/dev/null
+  jq -e '.object == "response"' "${FILE_TMPDIR}/resp.body" >/dev/null
+  jq -e '.output_text | length > 0' "${FILE_TMPDIR}/resp.body" >/dev/null
+  jq -e '.usage.output_tokens | type == "number"' "${FILE_TMPDIR}/resp.body" >/dev/null
+}
+
+@test "responses: streaming returns response.completed and stub header" {
+  curl -sN -D "${FILE_TMPDIR}/resp.hdr" -o "${FILE_TMPDIR}/resp.body" "${BASE}/v1/responses" \
+    -H "Content-Type: application/json" \
+    -d "{\"model\":\"${LLM_ALIAS}\",\"input\":\"Say hi.\",\"stream\":true,\"max_output_tokens\":24}"
+  grep -qi 'X-QVAC-Stub: responses-volatile' "${FILE_TMPDIR}/resp.hdr"
+  grep -q 'response.created' "${FILE_TMPDIR}/resp.body"
+  grep -q 'response.completed' "${FILE_TMPDIR}/resp.body"
+  # OpenAI Responses spec terminates on response.completed; no [DONE] sentinel.
+  ! grep -q 'data: \[DONE\]' "${FILE_TMPDIR}/resp.body"
+}
+
+@test "responses: store retrieve delete and input_items" {
+  json_post_capture "/v1/responses" "{\"model\":\"${LLM_ALIAS}\",\"input\":\"ping\",\"store\":true}"
+  local rid
+  rid=$(jq -r '.id' "${FILE_TMPDIR}/resp.body")
+  [[ "${rid}" == resp_* ]]
+
+  curl -sS -D "${FILE_TMPDIR}/g.hdr" -o "${FILE_TMPDIR}/g.body" "${BASE}/v1/responses/${rid}"
+  grep -qi 'X-QVAC-Stub: responses-volatile' "${FILE_TMPDIR}/g.hdr"
+  jq -e ".id == \"${rid}\"" "${FILE_TMPDIR}/g.body" >/dev/null
+
+  curl -sS -D "${FILE_TMPDIR}/i.hdr" -o "${FILE_TMPDIR}/i.body" "${BASE}/v1/responses/${rid}/input_items"
+  grep -qi 'X-QVAC-Stub: responses-volatile' "${FILE_TMPDIR}/i.hdr"
+  jq -e '.object == "list"' "${FILE_TMPDIR}/i.body" >/dev/null
+  jq -e '.data | length >= 1' "${FILE_TMPDIR}/i.body" >/dev/null
+
+  curl -sS -D "${FILE_TMPDIR}/d.hdr" -o "${FILE_TMPDIR}/d.body" -X DELETE "${BASE}/v1/responses/${rid}"
+  jq -e '.deleted == true' "${FILE_TMPDIR}/d.body" >/dev/null
+
+  local gone
+  gone=$(curl -s "${BASE}/v1/responses/${rid}")
+  assert_error "${gone}" "response_not_found"
+}
+
+@test "responses: previous_response_id chains context" {
+  # Pin sampling (temperature=0, seed) and give a generous token budget so the tiny reasoning
+  # LLM has room for both its <think> block and an actual answer. Test exercises chain wiring,
+  # not the model's creativity, so XYZZY recall must be deterministic.
+  json_post_capture "/v1/responses" "{\"model\":\"${LLM_ALIAS}\",\"input\":\"Remember the code word is XYZZY.\",\"store\":true,\"max_output_tokens\":512,\"temperature\":0,\"seed\":1}"
+  local rid
+  rid=$(jq -r '.id' "${FILE_TMPDIR}/resp.body")
+
+  local body2
+  body2=$(json_post "/v1/responses" "{\"model\":\"${LLM_ALIAS}\",\"previous_response_id\":\"${rid}\",\"input\":\"What is the code word? Reply with one word only.\",\"max_output_tokens\":512,\"temperature\":0,\"seed\":1}")
+  echo "${body2}" | jq -e '(.output_text | test("XYZZY"; "i"))' >/dev/null
+}
+
+@test "responses: previous_response_id walks deeper than one step (chain depth 3)" {
+  # Each StoredResponse only carries its own NEW input items, so without a recursive walk
+  # depth-3 chains would silently lose the grandparent turn. This test asserts the resp_1
+  # fact (XYZZY) survives through resp_2 (innocuous) into resp_3.
+  json_post_capture "/v1/responses" "{\"model\":\"${LLM_ALIAS}\",\"input\":\"Remember the code word is XYZZY.\",\"store\":true,\"max_output_tokens\":512,\"temperature\":0,\"seed\":1}"
+  local rid1
+  rid1=$(jq -r '.id' "${FILE_TMPDIR}/resp.body")
+
+  json_post_capture "/v1/responses" "{\"model\":\"${LLM_ALIAS}\",\"previous_response_id\":\"${rid1}\",\"input\":\"Got it.\",\"store\":true,\"max_output_tokens\":256,\"temperature\":0,\"seed\":1}"
+  local rid2
+  rid2=$(jq -r '.id' "${FILE_TMPDIR}/resp.body")
+
+  local body3
+  body3=$(json_post "/v1/responses" "{\"model\":\"${LLM_ALIAS}\",\"previous_response_id\":\"${rid2}\",\"input\":\"What is the code word? Reply with one word only.\",\"max_output_tokens\":512,\"temperature\":0,\"seed\":1}")
+  echo "${body3}" | jq -e '(.output_text | test("XYZZY"; "i"))' >/dev/null
+}
+
+@test "responses: bogus previous_response_id returns 404" {
+  local body
+  body=$(json_post "/v1/responses" "{\"model\":\"${LLM_ALIAS}\",\"previous_response_id\":\"resp_nonexistent123\",\"input\":\"hi\"}")
+  assert_error "${body}" "previous_response_not_found"
+}
+
+@test "responses: rejects conversation id" {
+  local body
+  body=$(json_post "/v1/responses" "{\"model\":\"${LLM_ALIAS}\",\"conversation\":\"conv_1\",\"input\":\"hi\"}")
+  assert_error "${body}" "conversation_not_supported"
+}
+
+@test "responses: rejects background mode" {
+  local body
+  body=$(json_post "/v1/responses" "{\"model\":\"${LLM_ALIAS}\",\"background\":true,\"input\":\"hi\"}")
+  assert_error "${body}" "background_not_supported"
+}
+
+@test "responses: rejects built-in web_search tool" {
+  local body
+  body=$(json_post "/v1/responses" "{\"model\":\"${LLM_ALIAS}\",\"input\":\"hi\",\"tools\":[{\"type\":\"web_search\"}]}")
+  assert_error "${body}" "invalid_tool_type"
+}
+
 # ── Cross-endpoint model type validation ──────────────────────────────
 
 @test "cross-type: chat endpoint rejects embedding model" {
   local body
   body=$(json_post "/v1/chat/completions" \
     "{\"model\":\"${EMBED_ALIAS}\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}")
+  assert_error "${body}" "invalid_model_type"
+}
+
+# ── Legacy completions (blocking) ────────────────────────────────────
+
+@test "legacy completions: blocking returns text_completion shape" {
+  local body
+  body=$(json_post "/v1/completions" \
+    "{\"model\":\"${LLM_ALIAS}\",\"prompt\":\"Say hello and nothing else.\",\"max_tokens\":16}")
+
+  echo "${body}" | jq -e '.id | startswith("cmpl-")' >/dev/null
+  echo "${body}" | jq -e '.object == "text_completion"' >/dev/null
+  echo "${body}" | jq -e ".model == \"${LLM_ALIAS}\"" >/dev/null
+  echo "${body}" | jq -e '.choices | length == 1' >/dev/null
+  echo "${body}" | jq -e '.choices[0].index == 0' >/dev/null
+  echo "${body}" | jq -e '.choices[0].text | type == "string"' >/dev/null
+  echo "${body}" | jq -e '.choices[0].text | length > 0' >/dev/null
+  echo "${body}" | jq -e '.choices[0].logprobs == null' >/dev/null
+  echo "${body}" | jq -e '.choices[0].finish_reason == "stop"' >/dev/null
+  echo "${body}" | jq -e '.usage.completion_tokens | type == "number"' >/dev/null
+}
+
+@test "legacy completions: respects max_tokens" {
+  local body
+  body=$(json_post "/v1/completions" \
+    "{\"model\":\"${LLM_ALIAS}\",\"prompt\":\"Write a very long story about a cat.\",\"max_tokens\":8}")
+
+  echo "${body}" | jq -e '.choices[0].text | length > 0' >/dev/null
+}
+
+# ── Legacy completions (multi-prompt fan-out) ────────────────────────
+
+@test "legacy completions: multi-prompt blocking returns N choices with matching indices" {
+  local body
+  body=$(json_post "/v1/completions" \
+    "{\"model\":\"${LLM_ALIAS}\",\"prompt\":[\"Reply with the word \\\"alpha\\\".\",\"Reply with the word \\\"beta\\\".\"],\"max_tokens\":8}")
+
+  echo "${body}" | jq -e '.object == "text_completion"' >/dev/null
+  echo "${body}" | jq -e '.choices | length == 2' >/dev/null
+  echo "${body}" | jq -e '.choices[0].index == 0' >/dev/null
+  echo "${body}" | jq -e '.choices[1].index == 1' >/dev/null
+  echo "${body}" | jq -e '.choices[0].text | length > 0' >/dev/null
+  echo "${body}" | jq -e '.choices[1].text | length > 0' >/dev/null
+  echo "${body}" | jq -e '.choices[0].finish_reason == "stop"' >/dev/null
+  echo "${body}" | jq -e '.choices[1].finish_reason == "stop"' >/dev/null
+}
+
+@test "legacy completions: multi-prompt with stream:true returns 400 unsupported_streaming" {
+  local body
+  body=$(json_post "/v1/completions" \
+    "{\"model\":\"${LLM_ALIAS}\",\"prompt\":[\"a\",\"b\"],\"stream\":true,\"max_tokens\":4}")
+  assert_error "${body}" "unsupported_streaming"
+}
+
+@test "legacy completions: rejects token-id prompts" {
+  local body
+  body=$(json_post "/v1/completions" \
+    "{\"model\":\"${LLM_ALIAS}\",\"prompt\":[15496,11,995],\"max_tokens\":4}")
+  assert_error "${body}" "invalid_prompt"
+}
+
+@test "legacy completions: rejects missing prompt" {
+  local body
+  body=$(json_post "/v1/completions" \
+    "{\"model\":\"${LLM_ALIAS}\",\"max_tokens\":4}")
+  assert_error "${body}" "invalid_prompt"
+}
+
+# ── Legacy completions (streaming / SSE) ─────────────────────────────
+
+@test "legacy completions: SSE stream returns valid text_completion chunks" {
+  local raw
+  raw=$(curl -sN "${BASE}/v1/completions" \
+    -H "Content-Type: application/json" \
+    -d "{\"model\":\"${LLM_ALIAS}\",\"prompt\":\"Say hi.\",\"stream\":true,\"max_tokens\":16}")
+
+  echo "${raw}" | grep -q "data: \[DONE\]"
+
+  local first_chunk
+  first_chunk=$(echo "${raw}" | grep "^data: {" | head -1 | sed 's/^data: //')
+  echo "${first_chunk}" | jq -e '.id | startswith("cmpl-")' >/dev/null
+  echo "${first_chunk}" | jq -e '.object == "text_completion"' >/dev/null
+  echo "${first_chunk}" | jq -e ".model == \"${LLM_ALIAS}\"" >/dev/null
+  echo "${first_chunk}" | jq -e '.choices[0].text | type == "string"' >/dev/null
+  echo "${first_chunk}" | jq -e '.choices[0].logprobs == null' >/dev/null
+
+  local last_chunk
+  last_chunk=$(echo "${raw}" | grep "^data: {" | tail -1 | sed 's/^data: //')
+  echo "${last_chunk}" | jq -e '.choices[0].finish_reason == "stop"' >/dev/null
+  echo "${last_chunk}" | jq -e '.usage.completion_tokens | type == "number"' >/dev/null
+
+  local content_count
+  content_count=$(echo "${raw}" | grep "^data: {" | sed 's/^data: //' | \
+    jq -r 'select(.choices[0].text != null and .choices[0].text != "") | .choices[0].text' 2>/dev/null | wc -l)
+  [[ "${content_count}" -gt 0 ]]
+}
+
+# ── Legacy completions: cross-type rejection ─────────────────────────
+
+@test "cross-type: legacy completions endpoint rejects embedding model" {
+  local body
+  body=$(json_post "/v1/completions" \
+    "{\"model\":\"${EMBED_ALIAS}\",\"prompt\":\"hi\"}")
   assert_error "${body}" "invalid_model_type"
 }
 
@@ -290,6 +645,12 @@ json_post() {
   body=$(curl -s "${BASE}/v1/audio/translations" \
     -F "model=${LLM_ALIAS}" \
     -F "file=@${BATS_FILE_TMPDIR}/silence.wav;filename=audio.wav")
+  assert_error "${body}" "invalid_model_type"
+}
+
+@test "cross-type: responses endpoint rejects embedding model" {
+  local body
+  body=$(json_post "/v1/responses" "{\"model\":\"${EMBED_ALIAS}\",\"input\":\"hello\"}")
   assert_error "${body}" "invalid_model_type"
 }
 
