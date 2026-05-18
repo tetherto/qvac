@@ -129,28 +129,22 @@ local working artifact, not a committed deliverable. Never `git add` it.
 node scripts/sdk/generate-changelog-sdk-pod.cjs --package=<name> --generate-announcement-post
 ```
 
-The script parses `CHANGELOG.md` for the package's current version (from
-`package.json`) and emits the Slack template:
+The script emits the short Slack template — header + three links + optional
+breaking-changes block + footer. Per-section bullet lists are intentionally
+omitted; readers follow the full-changelog link for the detail.
+
+Layout:
 
 - `:qvac: SDK <version> :rocket: NPM Public release` header.
 - NPM, GitHub release, and full-changelog tree links.
-- `:warning: Breaking Changes` section (with link to `breaking.md`) — only if any
-  PR is breaking.
-- `Release Date: YYYY-MM-DD`.
-- One Slack section per CHANGELOG.md section (`:sparkles: Features`,
-  `:electric_plug: API`, `:ladybug: Fixes`, `:package: Models`, `:blue_book: Docs`,
-  `:test_tube: Tests`, `:broom: Chores`, `:gear: Infrastructure`).
-- Each bullet uses `•`, wraps the PR URL in `<...>` (suppresses Slack unfurl), and
-  appends ` :boom: breaking` when the bullet is breaking.
-- Sections are capped at `MAX_ANNOUNCEMENT_BULLETS` (currently **10**). The
-  `... And much more, see full list in changelog :memo:` line is only added
-  when a section has *more than 10* entries; anything 10 or fewer is emitted
-  verbatim.
+- `:warning: Breaking Changes` section with link to `breaking.md` — emitted
+  only when `breaking.md` exists in the version folder (i.e. at least one PR
+  carries the `[bc]` tag). Detected by file presence, not by parsing
+  CHANGELOG.md.
 - Footer: `Thanks to everyone on QVAC team :green_heart: :qvac: :green_heart:`.
 
-If the post needs hand-tuning (e.g. the Models section needs custom count summaries
-that the parser can't infer), edit the file directly. It's gitignored, so changes
-won't pollute the diff.
+If the post needs hand-tuning (e.g. a custom note for a specific release),
+edit the file directly. It's gitignored, so changes won't pollute the diff.
 
 ### Step 6: Update NOTICE file for the target package
 

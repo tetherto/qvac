@@ -15,15 +15,16 @@
 #include "handlers/SdGenHandlers.hpp"
 #include "utils/EsrganUpscaler.hpp"
 
+// clang-format off
 /**
  * Core stable-diffusion.cpp model wrapper.
  *
  * Supported model families:
- *   SD1.x  -- all-in-one .ckpt / .safetensors via modelPath
- *   SD2.x  -- same as SD1; set prediction="v" in context config
- *   SDXL   -- all-in-one + optional split CLIP-G; set force_sdxl_vae_conv_scale
- * if needed FLUX.2 [klein] -- split: diffusionModelPath + llmPath (Qwen3) +
- * vaeModel
+ *   SD2.x          -- all-in-one .ckpt / .safetensors via modelPath; set prediction="v"
+ *   SDXL           -- all-in-one + optional split CLIP-G; set force_sdxl_vae_conv_scale if needed
+ *   SD3 Medium     -- all-in-one GGUF via modelPath (CLIP-L, CLIP-G, T5-XXL baked in)
+ *                     OR split layout: diffusionModelPath + clipLPath + clipGPath + t5XxlPath
+ *   FLUX.2 [klein] -- split: diffusionModelPath + llmPath (Qwen3) + vaePath
  *
  * Video generation (txt2vid) is intentionally unsupported.
  *
@@ -34,6 +35,7 @@
  *   4. Destroy    -- destructor calls free_sd_ctx() and releases all GPU/CPU
  *                   memory; to unload simply let the object go out of scope
  */
+// clang-format on
 class SdModel : public qvac_lib_inference_addon_cpp::model::IModel,
                 public qvac_lib_inference_addon_cpp::model::IModelCancel {
 public:
@@ -121,7 +123,7 @@ private:
   std::unique_ptr<sd_ctx_t, decltype(&free_sd_ctx)> sdCtx_;
   qvac_lib_inference_addon_sd::EsrganUpscaler upscaler_;
   mutable std::atomic<bool> cancelRequested_{false};
-  mutable qvac_lib_inference_addon_cpp::RuntimeStats lastStats_{};
+  mutable qvac_lib_inference_addon_cpp::RuntimeStats lastStats_;
 
   // -- Cumulative stats ------------------------------------------------------
   struct CumulativeStats {

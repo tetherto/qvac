@@ -6,8 +6,8 @@
  * selector.
  *
  * Sections snapshotted by this script:
- *   - `content/docs/sdk/api/index.mdx`           → `v<version>.mdx`
- *   - `content/docs/sdk/release-notes/index.mdx` → `v<version>.mdx`
+ *   - `content/docs/reference/api/index.mdx`           → `v<version>.mdx`
+ *   - `content/docs/reference/release-notes/index.mdx` → `v<version>.mdx`
  *
  * Usage:
  *   bun run scripts/create-version-bundle.ts <outgoing-version>
@@ -31,8 +31,11 @@ const DOCS_WEBSITE_DIR = path.resolve(SCRIPT_DIR, "..");
 const CONTENT_DOCS = path.join(DOCS_WEBSITE_DIR, "content", "docs");
 
 const SECTIONS = [
-  { name: "API summary", dir: path.join(CONTENT_DOCS, "sdk", "api") },
-  { name: "release notes", dir: path.join(CONTENT_DOCS, "sdk", "release-notes") },
+  { name: "API summary", dir: path.join(CONTENT_DOCS, "reference", "api") },
+  {
+    name: "release notes",
+    dir: path.join(CONTENT_DOCS, "reference", "release-notes"),
+  },
 ];
 
 async function fileExists(p: string): Promise<boolean> {

@@ -1,4 +1,7 @@
 import { describe, it, expect } from 'vitest'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import * as os from 'node:os'
+import * as path from 'node:path'
 import {
   stripEmoji,
   normalizeCategory,
@@ -6,6 +9,7 @@ import {
   escapeRegExp,
   extractVersionBlock,
   parseVersionBlock,
+  parseChangelogFolder,
   mergeChangelogs,
   parseOverridesContent,
   CATEGORY_ORDER,
@@ -734,6 +738,143 @@ describe('end-to-end: parse and merge', () => {
     expect(names).toEqual(['Features', 'Chores'])
     expect(merged.find(c => c.name === 'Features')!.packages).toHaveLength(1)
     expect(merged.find(c => c.name === 'Chores')!.packages).toHaveLength(1)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// parseChangelogFolder — Fonte B (per-version folder)
+// ---------------------------------------------------------------------------
+
+describe('parseChangelogFolder', () => {
+  // Each test gets its own scratch directory so failures don't bleed
+  // across cases. Using OS temp keeps it portable (CI runners on Linux
+  // and dev machines on macOS).
+  function makeFolder(): string {
+    return mkdtempSync(path.join(os.tmpdir(), 'qvac-changelog-folder-'))
+  }
+
+  it('returns null when neither CHANGELOG_LLM.md nor CHANGELOG.md exists', () => {
+    const folder = makeFolder()
+    try {
+      expect(parseChangelogFolder(folder, 'sdk')).toBeNull()
+    } finally {
+      rmSync(folder, { recursive: true, force: true })
+    }
+  })
+
+  it('reads CHANGELOG_LLM.md, strips the H1 release-notes heading, parses categories', () => {
+    const folder = makeFolder()
+    try {
+      writeFileSync(
+        path.join(folder, 'CHANGELOG_LLM.md'),
+        [
+          '# QVAC SDK v0.10.2 Release Notes',
+          '',
+          '📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.10.2',
+          '',
+          'This is a hotfix release.',
+          '',
+          '## Bug Fixes',
+          '',
+          '### Delegated connect',
+          '',
+          'Description body for the fix.',
+        ].join('\n'),
+      )
+      const parsed = parseChangelogFolder(folder, 'sdk')!
+      expect(parsed.pkg).toBe('sdk')
+      // H1 is stripped → preamble starts at the NPM line
+      expect(parsed.preamble).toContain('📦 **NPM:**')
+      expect(parsed.preamble).toContain('hotfix release')
+      expect(parsed.preamble).not.toContain('QVAC SDK v0.10.2 Release Notes')
+      // ## Bug Fixes is a known category
+      expect(parsed.sections).toHaveLength(1)
+      expect(parsed.sections[0].category).toBe('Bug Fixes')
+      expect(parsed.sections[0].content).toContain('### Delegated connect')
+      expect(parsed.sections[0].content).toContain('Description body for the fix.')
+    } finally {
+      rmSync(folder, { recursive: true, force: true })
+    }
+  })
+
+  it('falls back to CHANGELOG.md when CHANGELOG_LLM.md is missing', () => {
+    const folder = makeFolder()
+    try {
+      writeFileSync(
+        path.join(folder, 'CHANGELOG.md'),
+        [
+          '# Raw changelog',
+          '',
+          'Some preamble.',
+          '',
+          '## Features',
+          '',
+          '- Raw feature',
+        ].join('\n'),
+      )
+      const parsed = parseChangelogFolder(folder, 'sdk')!
+      // The H1 strip regex anchors on `QVAC SDK v…` so the raw
+      // "# Raw changelog" heading stays. parseVersionBlock then promotes
+      // it into the preamble because it's not a known category.
+      expect(parsed.preamble).toContain('Raw changelog')
+      expect(parsed.preamble).toContain('Some preamble.')
+      expect(parsed.sections).toHaveLength(1)
+      expect(parsed.sections[0].category).toBe('Features')
+      expect(parsed.sections[0].content).toBe('- Raw feature')
+    } finally {
+      rmSync(folder, { recursive: true, force: true })
+    }
+  })
+
+  it('prefers CHANGELOG_LLM.md when both files exist', () => {
+    const folder = makeFolder()
+    try {
+      writeFileSync(
+        path.join(folder, 'CHANGELOG_LLM.md'),
+        [
+          '# QVAC SDK v0.10.0 Release Notes',
+          '',
+          '## Features',
+          '',
+          '- LLM-curated feature',
+        ].join('\n'),
+      )
+      writeFileSync(
+        path.join(folder, 'CHANGELOG.md'),
+        [
+          '## Features',
+          '',
+          '- Raw feature (should be ignored)',
+        ].join('\n'),
+      )
+      const parsed = parseChangelogFolder(folder, 'sdk')!
+      expect(parsed.sections[0].content).toBe('- LLM-curated feature')
+    } finally {
+      rmSync(folder, { recursive: true, force: true })
+    }
+  })
+
+  it('handles H1 variants beyond "Release Notes" suffix', () => {
+    const folder = makeFolder()
+    try {
+      writeFileSync(
+        path.join(folder, 'CHANGELOG_LLM.md'),
+        [
+          '# QVAC SDK v0.11.0 — Hotfix release',
+          '',
+          'Body content.',
+          '',
+          '## Bug Fixes',
+          '',
+          '- A fix.',
+        ].join('\n'),
+      )
+      const parsed = parseChangelogFolder(folder, 'sdk')!
+      expect(parsed.preamble).toBe('Body content.')
+      expect(parsed.sections[0].category).toBe('Bug Fixes')
+    } finally {
+      rmSync(folder, { recursive: true, force: true })
+    }
   })
 })
 

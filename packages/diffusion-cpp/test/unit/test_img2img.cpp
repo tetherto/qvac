@@ -182,18 +182,8 @@ TEST(SdImg2ImgDiagnostics, PrintHeadshotDimensions) {
             << " bytes\n"
             << "[Diagnostic] Decoded dimensions : " << w << " x " << h << "\n"
             << "[Diagnostic] SdGenConfig default: 512 x 512\n"
-            << "[Diagnostic] Dimension match    : "
-            << (w == 512 && h == 512 ? "YES" : "NO") << "\n";
-
-  if (w != 512 || h != 512) {
-    std::cout << "[Diagnostic] ROOT CAUSE: init_image is " << w << "x" << h
-              << " but genParams.width/height default to 512x512.\n"
-              << "             GGML_ASSERT(image.width == tensor->ne[0]) fires "
-              << "because " << w << " != 512.\n"
-              << "             FIX: SdModel::process() must set "
-                 "genParams.width/height\n"
-              << "             from the decoded init_image dimensions.\n";
-  }
+            << "[Diagnostic] Note: index.js defaults FLUX img2img to 1024x1024 "
+               "when dims are omitted; direct C++ callers use 512x512.\n";
 
   EXPECT_GT(w, 0) << "Failed to decode headshot width";
   EXPECT_GT(h, 0) << "Failed to decode headshot height";
@@ -240,12 +230,12 @@ TEST_F(SdImg2ImgTest, Img2Img_512x512_ExplicitDimensions_Succeeds) {
         << "Output must be valid PNG";
 }
 
-// ── Real headshot: auto-detected dimensions
-// ─────────────────────────────────── This test verifies the fix:
-// genParams.width/height are auto-set from the decoded init_image, so no
-// explicit width/height is required.
+// ── Real headshot: no explicit width/height supplied ────────────────────────
+// Verifies that C++ correctly uses whatever dimensions arrive in paramsJson.
+// The JS layer (index.js) defaults FLUX img2img to 1024x1024 when the caller
+// omits both axes; this test exercises the C++ path with a real image file.
 
-TEST_F(SdImg2ImgTest, Img2Img_Headshot_AutoDetectedDimensions_Succeeds) {
+TEST_F(SdImg2ImgTest, Img2Img_Headshot_NoExplicitDimensions_Succeeds) {
   const auto path = img2img_helpers::headshotPath();
   if (!std::filesystem::exists(path))
     GTEST_SKIP() << "Headshot not found at: " << path;
@@ -255,15 +245,12 @@ TEST_F(SdImg2ImgTest, Img2Img_Headshot_AutoDetectedDimensions_Succeeds) {
 
   const auto [dw, dh] = img2img_helpers::decodeDimensions(initBytes);
   std::cout << "\n[Test] Headshot dimensions: " << dw << "x" << dh << "\n"
-            << "[Test] Passing NO explicit width/height — relying on "
-               "auto-detect fix\n";
+            << "[Test] Passing NO explicit width/height in paramsJson\n";
 
   std::vector<std::vector<uint8_t>> images;
   std::mutex mu;
 
   SdModel::GenerationJob job;
-  // No width/height in params — the fix in SdModel::process() should
-  // auto-detect them from the decoded init_image.
   job.paramsJson = img2img_helpers::makeImg2ImgParams(
       initBytes, /*w=*/0, /*h=*/0, /*steps=*/1);
 
