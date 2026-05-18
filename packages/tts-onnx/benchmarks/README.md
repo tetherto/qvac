@@ -1,5 +1,12 @@
 # TTS Benchmark Suite
 
+> **Two separate benchmark tracks live under this directory:**
+>
+> - **Quality / accuracy** comparison vs Python native (what this file documents): servers in `server/` + `python-server/`, client in `client/`. Useful for side-by-side WER / RTF of the addon against the upstream Python model.
+> - **Cross-device RTF + streaming latency** in CI ([`RTF-BENCHMARKS.md`](./RTF-BENCHMARKS.md)): `test/benchmark/rtf-benchmark.test.js` + `test/benchmark/streaming-benchmark.test.js`, wired into the `Benchmark Performance (ONNX TTS)` GitHub Actions workflow. This is the "what's the RTF on each CI runner" table driven by the aggregator under `scripts/perf-report/`.
+>
+> If you're looking for the per-platform RTF / TTFA numbers or you want to drop a manual ROCm / QNN result, start with [`RTF-BENCHMARKS.md`](./RTF-BENCHMARKS.md) and [`manual-results/README.md`](./manual-results/README.md).
+
 A benchmark suite comparing **TTS ONNX Addon** (@qvac/tts-onnx) against **Python native** (chatterbox-tts) implementation.
 
 ## Features

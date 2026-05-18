@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /**
- * Refresh `src/lib/versions.ts` from the contents of `content/docs/sdk/api/`
- * and `content/docs/sdk/release-notes/`.
+ * Refresh `src/lib/versions.ts` from the contents of `content/docs/reference/api/`
+ * and `content/docs/reference/release-notes/`.
  *
  * The site has two versioned sections (API summary, release notes), each
  * served as a single MDX file per version:
@@ -96,14 +96,14 @@ async function updateVersionsList(latestOverride?: string) {
     DOCS_WEBSITE_DIR,
     "content",
     "docs",
-    "sdk",
+    "reference",
     "api",
   );
   const releaseNotesDir = path.join(
     DOCS_WEBSITE_DIR,
     "content",
     "docs",
-    "sdk",
+    "reference",
     "release-notes",
   );
 
@@ -123,9 +123,9 @@ async function updateVersionsList(latestOverride?: string) {
     `   Release notes older versions: ${releaseNotesOlder.join(", ") || "(none)"}`,
   );
 
-  const apiSection = buildSectionLiteral("/sdk/api", latest, apiOlder);
+  const apiSection = buildSectionLiteral("/reference/api", latest, apiOlder);
   const releaseNotesSection = buildSectionLiteral(
-    "/sdk/release-notes",
+    "/reference/release-notes",
     latest,
     releaseNotesOlder,
   );
@@ -215,6 +215,54 @@ export function computeSectionVersionUrl(
 ): string {
   if (targetVersion === section.latest) return section.basePath;
   return \`\${section.basePath}/\${targetVersion}\`;
+}
+
+/**
+ * Props consumed by the client-side \`<VersionSelector>\` popover. All values
+ * are precomputed at build time from the page slug so the client component
+ * can stay a pure presentation layer (no \`usePathname()\`, no version-list
+ * lookups in the browser).
+ */
+export interface VersionSelectorProps {
+  versions: VersionEntry[];
+  currentVersion: string;
+  currentLabel: string;
+  /**
+   * Map of version \`value\` → absolute URL the user should land on when
+   * picking that version. Keyed by \`version.value\` to avoid recomputing
+   * \`computeSectionVersionUrl\` in the browser.
+   */
+  versionUrls: Record<string, string>;
+}
+
+/**
+ * Compute the props for \`<VersionSelector>\` from a static page slug. Returns
+ * \`null\` when the slug is not inside a versioned section so the page can
+ * skip rendering (and importing) the component entirely.
+ */
+export function getVersionSelectorProps(
+  slug: readonly string[],
+): VersionSelectorProps | null {
+  const pathname = \`/\${slug.join('/')}\`;
+  const section = getVersionedSection(pathname);
+  if (!section) return null;
+
+  const currentVersion = getCurrentVersion(pathname, section);
+  const currentLabel =
+    section.versions.find((v) => v.value === currentVersion)?.label ??
+    currentVersion;
+
+  const versionUrls: Record<string, string> = {};
+  for (const version of section.versions) {
+    versionUrls[version.value] = computeSectionVersionUrl(section, version.value);
+  }
+
+  return {
+    versions: section.versions,
+    currentVersion,
+    currentLabel,
+    versionUrls,
+  };
 }
 `;
 
