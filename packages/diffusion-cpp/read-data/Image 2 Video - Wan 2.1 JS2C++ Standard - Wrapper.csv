@@ -1,0 +1,40 @@
+JS,C++,Comments
+,arrow signs i think pointer to structus on C++ tab,
+"mode == ""txt2vid""|""img2vid""|""flf2vid""",SdVidGenConfig::mode,Branch in SdModel::process() chooses generate_video() vs generate_image().
+files.diffusionModel,SdCtxConfig::diffusionModelPath -> sd_ctx_params_t::diffusion_model_path,Already wired. For Wan = the low-noise expert (or the only expert in 2.1).
+files.highNoiseDiffusionModel,SdCtxConfig::highNoiseDiffusionModelPath -> sd_ctx_params_t::high_noise_diffusion_model_path,NEW field on SdCtxConfig. Passed straight through to new_sd_ctx().
+files.t5Xxl,SdCtxConfig::t5XxlPath -> sd_ctx_params_t::t5xxl_path,Reused. Wan uses umt5-xxl loaded via the t5xxl_path slot.
+files.vae,SdCtxConfig::vaePath -> sd_ctx_params_t::vae_path,Reused.
+config.diffusionFlashAttn,SdCtxConfig::diffusionFlashAttn -> sd_ctx_params_t::diffusion_flash_attn,Reused. Strongly recommended ON for Wan on Metal/CUDA.
+config.offloadToCpu,SdCtxConfig::offloadToCpu -> sd_ctx_params_t::offload_params_to_cpu,Reused. Often required on <=24 GB VRAM for Wan 14B.
+prompt,SdVidGenConfig::prompt -> sd_vid_gen_params_t::prompt,Same field as image path.
+negativePrompt,SdVidGenConfig::negativePrompt -> sd_vid_gen_params_t::negative_prompt,Same.
+width,SdVidGenConfig::width -> sd_vid_gen_params_t::width,Same. Wan 2.1 1.3B: typically 832.
+height,SdVidGenConfig::height -> sd_vid_gen_params_t::height,Same. Wan 2.1 1.3B: typically 480.
+seed,SdVidGenConfig::seed -> sd_vid_gen_params_t::seed,Same. -1 = random.
+videoFrames,SdVidGenConfig::videoFrames -> sd_vid_gen_params_t::video_frames,NEW. Validated as (4*k + 1).
+fps,SdVidGenConfig::fps,NEW. NOT in sd_vid_gen_params_t -- consumed only by the AVI muxer in addon::encodeFramesToAvi().
+steps,SdVidGenConfig::sampleParams.sample_steps -> sd_vid_gen_params_t::sample_params.sample_steps,Reused. Wan 2.1 sweet spot: 30-50.
+sampler,SdVidGenConfig::sampleParams.sample_method,"Reused enum (parseSampler). Wan default: ""euler""."
+scheduler,SdVidGenConfig::sampleParams.scheduler,"Reused enum (parseScheduler). Wan default: ""simple""."
+cfgScale,SdVidGenConfig::sampleParams.guidance.txt_cfg -> sd_vid_gen_params_t::sample_params.guidance.txt_cfg,Reused. Wan default ~6.0.
+flowShift,SdVidGenConfig::sampleParams.shifted_timestep / flow_shift -> sd_sample_params_t::flow_shift,NEW per-job override of ctx-level flowShift. Wan T2V 1.3B: 5.0-8.0.
+moeBoundary,SdVidGenConfig::moeBoundary -> sd_vid_gen_params_t::moe_boundary,NEW. Wan 2.2 only.
+highNoiseSampler,SdVidGenConfig::highNoiseSampleParams.sample_method -> sd_vid_gen_params_t::high_noise_sample_params.sample_method,NEW.
+highNoiseScheduler,SdVidGenConfig::highNoiseSampleParams.scheduler -> sd_vid_gen_params_t::high_noise_sample_params.scheduler,NEW.
+highNoiseSteps,SdVidGenConfig::highNoiseSampleParams.sample_steps -> sd_vid_gen_params_t::high_noise_sample_params.sample_steps,NEW.
+highNoiseCfgScale,SdVidGenConfig::highNoiseSampleParams.guidance.txt_cfg -> sd_vid_gen_params_t::high_noise_sample_params.guidance.txt_cfg,NEW.
+highNoiseFlowShift,SdVidGenConfig::highNoiseSampleParams.flow_shift -> sd_vid_gen_params_t::high_noise_sample_params.flow_shift,NEW.
+strength,SdVidGenConfig::strength -> sd_vid_gen_params_t::strength,Reused. Used only for img2vid / flf2vid.
+vaceStrength,SdVidGenConfig::vaceStrength -> sd_vid_gen_params_t::vace_strength,NEW.
+vaeTiling,SdVidGenConfig::vaeTiling -> sd_vid_gen_params_t::vae_tiling_params.enabled,Reused. Strongly recommended ON for Wan VAE.
+vaeTileSize,SdVidGenConfig::vaeTileSizeX / Y -> sd_vid_gen_params_t::vae_tiling_params.tile_size_x / y,Reused.
+vaeTileOverlap,SdVidGenConfig::vaeTileOverlap -> sd_vid_gen_params_t::vae_tiling_params.target_overlap,Reused.
+cacheMode,SdVidGenConfig::cacheMode -> sd_vid_gen_params_t::cache.mode,Reused (sd_cache_mode_t enum).
+cacheThreshold,SdVidGenConfig::cacheThreshold -> sd_vid_gen_params_t::cache.reuse_threshold,Reused.
+GenerationJob.initImageBytes (decoded),SdVidGenConfig::initImage -> sd_vid_gen_params_t::init_image,Reused decode path (decodePng()). Used by img2vid / flf2vid.
+GenerationJob.endImageBytes (decoded),SdVidGenConfig::endImage -> sd_vid_gen_params_t::end_image,NEW decode path. Required for flf2vid.
+GenerationJob.controlFramesBytes (decoded),SdVidGenConfig::controlFrames -> sd_vid_gen_params_t::control_frames + control_frames_size,NEW. Each Uint8Array decoded into one sd_image_t.
+GenerationJob.progressCallback,sd_progress_cb_t set on sd_ctx_params_t,Reused. Already wired.
+GenerationJob.videoCallback,"New code path in SdModel::process(): receives sd_image_t* frames from generate_video(), encodes via stb_image_write + AVI muxer, fires once with bytes",NEW.
+GenerationJob.frameCallback,Optional per-frame PNG fan-out using existing encodeToPng() helper,NEW.

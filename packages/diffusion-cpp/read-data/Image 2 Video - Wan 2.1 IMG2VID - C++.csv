@@ -1,0 +1,50 @@
+Type,Name,Comment
+Context Parameters,sd_ctx_params_t,
+const char*,--diffusion-model → sd_ctx_params_t.diffusion_model_path,"Path to the Wan I2V transformer (e.g. wan2.1_i2v_14B_480p_fp16.safetensors or wan2.1_fun_i2v_1.3B_fp16.safetensors). MUST be an I2V build, not T2V."
+const char*,--t5xxl → sd_ctx_params_t.t5xxl_path,Path to the UMT5-XXL text encoder used by Wan (e.g. umt5_xxl_fp16.safetensors).
+const char*,--vae → sd_ctx_params_t.vae_path,Path to the Wan VAE (e.g. wan_2.1_vae.safetensors).
+const char*,--high-noise-diffusion-model → sd_ctx_params_t.high_noise_diffusion_model_path,Wan 2.2 MoE I2V only — second expert weights. Leave empty for Wan 2.1 / Wan-Fun.
+int,-t / --threads → sd_ctx_params_t.n_threads,CPU thread count for non-GPU work. -1 = auto.
+enum prediction_t,--prediction → sd_ctx_params_t.prediction,Velocity/noise prediction type. Auto-detected as FLOW_PRED for Wan; only set explicitly to override.
+bool,--offload-to-cpu → sd_ctx_params_t.offload_params_to_cpu,Stream weights from CPU during inference. Strongly recommended on <=24 GB VRAM for Wan 14B I2V.
+bool,--diffusion-fa → sd_ctx_params_t.diffusion_flash_attn,Enable flash-attention for the diffusion transformer. Big speedup on Wan I2V; recommended ON.
+enum sd_type_t,--type → sd_ctx_params_t.wtype,Quantization weight type override. Leave default (SD_TYPE_COUNT) to use whatever the file declares.
+Generation-level inputs,sd_vid_gen_params_t,
+const char*,--prompt → sd_vid_gen_params_t.prompt,Text prompt describing the desired motion / scene continuation from the init image.
+const char*,--negative-prompt → sd_vid_gen_params_t.negative_prompt,Negative prompt. Useful for I2V to suppress motion artefacts (e.g. ""blurry, distorted, low quality"").
+int,--width → sd_vid_gen_params_t.width,"Output width. Wan-Fun 1.3B / I2V 480p: 832. I2V 720p: 1280."
+int,--height → sd_vid_gen_params_t.height,"Output height. Wan-Fun 1.3B / I2V 480p: 480. I2V 720p: 720."
+int,--video-frames → sd_vid_gen_params_t.video_frames,"Total frames. Must satisfy (4*k + 1). Sweet spot: 81 (~5s @ 16fps)."
+int64_t,--seed → sd_vid_gen_params_t.seed,Random seed. -1 = random.
+float,--strength → sd_vid_gen_params_t.strength,"I2V denoising strength on init_image, [0, 1]. 1.0 = full re-noise. 0.6-0.85 preserves more of the seed frame. New surface for the img2vid path."
+sd_image_t,--init-image → sd_vid_gen_params_t.init_image,REQUIRED for img2vid. Decoded seed frame (RGB).
+sd_image_t,--end-image → sd_vid_gen_params_t.end_image,Unused for img2vid (flf2vid only). Leave zeroed.
+sd_image_t*,--control-frames → sd_vid_gen_params_t.control_frames,Optional VACE control frames. Pair with control_frames_size.
+int,(N/A) → sd_vid_gen_params_t.control_frames_size,Number of entries in control_frames. 0 disables VACE.
+float,--vace-strength → sd_vid_gen_params_t.vace_strength,"VACE control strength [0, 1]. Default 1.0 when control_frames provided."
+float,--moe-boundary → sd_vid_gen_params_t.moe_boundary,Wan 2.2 MoE I2V only. Timestep boundary for high-noise expert switchover. Default 0.875.
+Sampler sub-struct,sd_sample_params_t,
+enum sample_method_t,--sampling-method → sd_sample_params_t.sample_method,"Sampler. Wan I2V recommended: EULER_SAMPLE_METHOD (CLI: euler)."
+enum scheduler_t,--scheduler → sd_sample_params_t.scheduler,"Sigma schedule. ""simple"" works for Wan I2V; only override if you know why."
+int,--steps → sd_sample_params_t.sample_steps,"Denoising steps. Wan I2V sweet spot: 30-50. More = sharper but linear time cost."
+float,--flow-shift → sd_sample_params_t.flow_shift,"CRITICAL for Wan I2V: 480p = 3.0, 720p = 5.0, Wan-Fun 1.3B = 3.0. Different from T2V. Wrong value -> dim/dark output."
+float,--cfg-scale → sd_sample_params_t.guidance.txt_cfg,Classifier-free-guidance scale on the text prompt. Wan I2V sweet spot: 5.0-6.5.
+float,--img-cfg → sd_sample_params_t.guidance.img_cfg,"CFG on the image conditioning. ACTIVE for img2vid. Default 1.0-1.5; raise to push harder toward the seed frame."
+High-noise sub-struct,sd_sample_params_t (high_noise_sample_params),"Wan 2.2 MoE I2V only. Mirrors the main sampler block; unset fields fall back to the low-noise values."
+enum sample_method_t,--high-noise-sampling-method → high_noise_sample_params.sample_method,Sampler used during the high-noise phase.
+enum scheduler_t,--high-noise-scheduler → high_noise_sample_params.scheduler,Scheduler for high-noise phase.
+int,--high-noise-steps → high_noise_sample_params.sample_steps,Step count for high-noise phase. 0 = mirror sample_steps.
+float,--high-noise-flow-shift → high_noise_sample_params.flow_shift,flow_shift for high-noise phase. 0 = mirror low-noise flow_shift.
+float,--high-noise-cfg-scale → high_noise_sample_params.guidance.txt_cfg,Text CFG for the high-noise phase. 0 = mirror low-noise txt_cfg.
+VAE Tiling,sd_vae_tiling_params_t (on sd_vid_gen_params_t.vae_tiling_params),Recommended ON for Wan VAE at I2V resolutions.
+bool,--vae-tiling → vae_tiling_params.enabled,Strongly recommended ON. Wan VAE blows VRAM at 832x480+ otherwise.
+int,--vae-tile-size-x → vae_tiling_params.tile_size_x,VAE tile width. Sensible default 256.
+int,--vae-tile-size-y → vae_tiling_params.tile_size_y,VAE tile height. Sensible default 256.
+float,--vae-tile-overlap → vae_tiling_params.target_overlap,Overlap fraction between tiles. Default 0.5.
+Cache,sd_cache_params_t (on sd_vid_gen_params_t.cache),
+enum sd_cache_mode_t,--cache-mode → cache.mode,"Diffusion-step cache strategy (none / per-step / etc.)."
+float,--cache-threshold → cache.reuse_threshold,Reuse threshold for the cache.
+CLI Level No Internal,,
+int,--fps → SDGenerationParams.fps,"Encoder-side fps only — passed to the MJPG-AVI muxer at write time, never to the model. The model itself is fps-agnostic."
+std::string,-o / --output → SDCliParams.output_path,Output path. The vid_gen muxer always appends .avi regardless of extension.
+SDMode,-M / --mode → SDCliParams.mode,"Picks the call target: VID_GEN → generate_video() with img2vid branch (init_image populated, end_image empty)."

@@ -1,0 +1,71 @@
+
+---
+events:
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/Users/user030/.local/homebrew/share/cmake/Modules/CMakeDetermineSystem.cmake:12 (find_program)"
+      - "CMakeLists.txt:3 (project)"
+    mode: "program"
+    variable: "CMAKE_UNAME"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "FIRST"
+      SearchAppBundle: "FIRST"
+      CMAKE_FIND_USE_CMAKE_PATH: true
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "uname"
+    candidate_directories:
+      - "/Users/user030/.local/homebrew/opt/llvm/bin/"
+      - "/Users/user030/.local/homebrew/bin/"
+      - "/Users/user030/.nvm/versions/node/v22.18.0/bin/"
+      - "/usr/local/bin/"
+      - "/System/Cryptexes/App/usr/bin/"
+      - "/usr/bin/"
+      - "/bin/"
+      - "/usr/sbin/"
+      - "/sbin/"
+      - "/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin/"
+      - "/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin/"
+      - "/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin/"
+      - "/Library/Apple/usr/bin/"
+      - "/opt/homebrew/bin/"
+      - "/Users/user030/.cursor-server/bin/darwin-arm64/0cf8b06883f54e26bb4f0fb8647c9500ccb43310/"
+      - "/Users/user030/.cursor-server/bin/darwin-arm64/0cf8b06883f54e26bb4f0fb8647c9500ccb43310/bin/remote-cli/"
+      - "/Users/user030/Documents/qvac-ext-stable-diffusion.cpp/build/bin/"
+    searched_directories:
+      - "/Users/user030/.local/homebrew/opt/llvm/bin/uname"
+      - "/Users/user030/.local/homebrew/bin/uname"
+      - "/Users/user030/.nvm/versions/node/v22.18.0/bin/uname"
+      - "/usr/local/bin/uname"
+      - "/System/Cryptexes/App/usr/bin/uname"
+    found: "/usr/bin/uname"
+    search_context:
+      ENV{PATH}:
+        - "/Users/user030/.local/homebrew/opt/llvm/bin"
+        - "/Users/user030/.local/homebrew/bin"
+        - "/Users/user030/.nvm/versions/node/v22.18.0/bin"
+        - "/Users/user030/.nvm/versions/node/v22.18.0/bin"
+        - "/usr/local/bin"
+        - "/System/Cryptexes/App/usr/bin"
+        - "/usr/bin"
+        - "/bin"
+        - "/usr/sbin"
+        - "/sbin"
+        - "/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin"
+        - "/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin"
+        - "/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin"
+        - "/Library/Apple/usr/bin"
+        - "/opt/homebrew/bin"
+        - "/Users/user030/.cursor-server/bin/darwin-arm64/0cf8b06883f54e26bb4f0fb8647c9500ccb43310"
+        - "/Users/user030/.cursor-server/bin/darwin-arm64/0cf8b06883f54e26bb4f0fb8647c9500ccb43310/bin/remote-cli"
+        - "/Users/user030/.local/homebrew/opt/llvm/bin"
+        - "/Users/user030/.local/homebrew/bin"
+        - "/Users/user030/.nvm/versions/node/v22.18.0/bin"
+        - "/Users/user030/Documents/qvac-ext-stable-diffusion.cpp/build/bin"
+        - "/Users/user030/Documents/qvac-ext-stable-diffusion.cpp/build/bin"
+...

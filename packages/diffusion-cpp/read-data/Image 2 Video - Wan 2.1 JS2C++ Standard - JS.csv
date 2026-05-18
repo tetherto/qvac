@@ -1,0 +1,20 @@
+Type,Name,Comment
+string,mode,"Extend existing enum: ""txt2img"" | ""img2img"" | ""txt2vid"" | ""img2vid"" | ""flf2vid"". ""txt2vid"" is the default Wan path. ""img2vid"" enables Wan-Fun image-to-video. ""flf2vid"" enables first-last-frame (Wan-Fun FLF) where both initImageBytes and endImageBytes are required."
+string,files.diffusionModel,"Path to Wan 2.1 transformer GGUF (e.g. wan2.1-t2v-1.3b-Q8_0.gguf). Already exists in addon -- reused, just documented here for completeness."
+string,files.highNoiseDiffusionModel,NEW. Path to Wan 2.2 MoE high-noise expert GGUF. Leave undefined for Wan 2.1 (single-expert).
+string,files.t5Xxl,Path to umt5-xxl encoder GGUF used by Wan. Reused from existing ctx.
+string,files.vae,Path to Wan VAE GGUF. Reused.
+Uint8Array,endImageBytes,"NEW. Raw PNG/JPEG bytes for the final frame. Required for ""flf2vid"". Optional for ""img2vid"". Sibling field to the existing initImageBytes on GenerationJob."
+Uint8Array[],controlFramesBytes,"NEW. Optional VACE control frames (one Uint8Array per frame, in order). Used by Wan VACE control. Empty / undefined disables VACE."
+number,videoFrames,NEW. Total output frames. Wan 2.1 T2V 1.3B sweet spot: 81 frames @ 16 fps == ~5 s. Must be (4*k + 1).
+number,fps,NEW. Output framerate written into the AVI container header. Does NOT affect denoising; only encoder metadata. Default 16.
+number,flowShift,NEW. Rectified-flow timestep shift. Wan 2.1 T2V 1.3B recommended: 5.0-8.0 (CLI default 3.0 looks washed out / black). Set per-job.
+number,vaceStrength,"NEW. VACE control strength in [0, 1]. 0 = ignore controlFramesBytes. Default 1.0 when control frames are provided."
+number,moeBoundary,"NEW (Wan 2.2 only). Timestep boundary in [0, 1] at which sampling switches from low-noise to high-noise expert. Ignored if highNoiseDiffusionModel is unset. Default 0.875."
+string,highNoiseSampler,NEW (Wan 2.2 only). Same enum as sampler. Sampler used during the high-noise phase. Defaults to sampler when unset.
+string,highNoiseScheduler,NEW (Wan 2.2 only). Same enum as scheduler. Scheduler for high-noise phase.
+number,highNoiseSteps,NEW (Wan 2.2 only). Step count for high-noise phase. 0 / unset = mirror steps.
+number,highNoiseCfgScale,NEW (Wan 2.2 only). CFG scale for high-noise phase. 0 / unset = mirror cfgScale.
+number,highNoiseFlowShift,NEW (Wan 2.2 only). flow_shift for high-noise phase. 0 / unset = mirror flowShift.
+function,videoCallback,NEW. Fires once when the AVI is fully encoded; receives a Uint8Array of MJPG-AVI bytes. Caller writes to disk or pipes to ffmpeg. Mutually exclusive with outputCallback in vid modes.
+function,frameCallback,"NEW (optional). Per-frame PNG callback: (frameIdx, totalFrames, pngBytes) => void. Useful when the caller wants to assemble the video themselves (H.264 via ffmpeg, etc.)."

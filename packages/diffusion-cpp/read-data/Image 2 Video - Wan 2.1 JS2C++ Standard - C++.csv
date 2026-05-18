@@ -1,0 +1,32 @@
+Type,Name,Comment
+Context Parameters,sd_ctx_params_t,
+const char*,--diffusion-model → sd_ctx_params_t.diffusion_model_path,Path to the Wan 2.1 transformer weights (e.g. wan2.1_t2v_1.3B_fp16.safetensors).
+const char*,--t5xxl → sd_ctx_params_t.t5xxl_path,Path to the UMT5-XXL text encoder used by Wan (e.g. umt5_xxl_fp16.safetensors).
+const char*,--vae → sd_ctx_params_t.vae_path,Path to the Wan VAE (e.g. wan_2.1_vae.safetensors).
+const char*,--high-noise-diffusion-model → sd_ctx_params_t.high_noise_diffusion_model_path,Wan 2.2 MoE only — second expert weights. Leave empty for Wan 2.1.
+int,-t / --threads → sd_ctx_params_t.n_threads,CPU thread count for non-GPU work. -1 = auto.
+enum prediction_t,--prediction → sd_ctx_params_t.prediction,Velocity/noise prediction type. Auto-detected as FLOW_PRED for Wan; only set explicitly to override.
+bool,--offload-to-cpu → sd_ctx_params_t.offload_params_to_cpu,Stream weights from CPU during inference. Useful on Apple unified memory; omit on discrete GPUs.
+bool,--diffusion-fa → sd_ctx_params_t.diffusion_flash_attn,Enable flash-attention for the diffusion transformer. Big speedup on Wan; recommended ON.
+enum sd_type_t,--type → sd_ctx_params_t.wtype,Quantization weight type override. Leave default (SD_TYPE_COUNT) to use whatever the file declares.
+Generation-level inputs, sd_vid_gen_params_t,
+const char*,--diffusion-model → sd_ctx_params_t.diffusion_model_path,Path to the Wan 2.1 transformer weights (e.g. wan2.1_t2v_1.3B_fp16.safetensors).
+const char*,--t5xxl → sd_ctx_params_t.t5xxl_path,Path to the UMT5-XXL text encoder used by Wan (e.g. umt5_xxl_fp16.safetensors).
+const char*,--vae → sd_ctx_params_t.vae_path,Path to the Wan VAE (e.g. wan_2.1_vae.safetensors).
+const char*,--high-noise-diffusion-model → sd_ctx_params_t.high_noise_diffusion_model_path,Wan 2.2 MoE only — second expert weights. Leave empty for Wan 2.1.
+int,-t / --threads → sd_ctx_params_t.n_threads,CPU thread count for non-GPU work. -1 = auto.
+enum prediction_t,--prediction → sd_ctx_params_t.prediction,Velocity/noise prediction type. Auto-detected as FLOW_PRED for Wan; only set explicitly to override.
+bool,--offload-to-cpu → sd_ctx_params_t.offload_params_to_cpu,Stream weights from CPU during inference. Useful on Apple unified memory; omit on discrete GPUs.
+bool,--diffusion-fa → sd_ctx_params_t.diffusion_flash_attn,Enable flash-attention for the diffusion transformer. Big speedup on Wan; recommended ON.
+enum sd_type_t,--type → sd_ctx_params_t.wtype,Quantization weight type override. Leave default (SD_TYPE_COUNT) to use whatever the file declares.
+Sampler sub-struct,sd_sample_params_t,
+enum sample_method_t,--sampling-method → sd_sample_params_t.sample_method,Sampler. Wan 2.1 recommended: EULER_SAMPLE_METHOD (CLI: euler).
+enum scheduler_t,--scheduler → sd_sample_params_t.scheduler,Sigma schedule. Default works for Wan; only override if you know why.
+int,--steps → sd_sample_params_t.sample_steps,Denoising steps. Wan 2.1 1.3B sweet spot: 20–30. More = sharper but linear time cost.
+float,--flow-shift → sd_sample_params_t.flow_shift,"Rectified-flow timestep shift. Critical for Wan: T2V 1.3B = 5.0, I2V 480p = 3.0, I2V 720p = 5.0. Wrong value → dim/dark output."
+float,--cfg-scale → sd_sample_params_t.guidance.txt_cfg,Classifier-free-guidance scale on the text prompt. Wan 2.1 sweet spot: 6.0–7.5.
+float,--img-cfg → sd_sample_params_t.guidance.img_cfg,CFG on the image conditioning (I2V/FLF2V only).
+CLI Level No Internal ,,
+int,--fps → SDGenerationParams.fps,"Encoder-side fps only — passed to the MJPG-AVI muxer at write time, never to the model. The model itself is fps-agnostic."
+std::string,-o / --output → SDCliParams.output_path,Output path. The vid_gen muxer always appends .avi regardless of extension.
+SDMode,-M / --mode → SDCliParams.mode,"Picks the call target: VID_GEN → generate_video(), IMG_GEN → generate_image()."

@@ -1,0 +1,24 @@
+Type,Name,Comment
+string,mode,"Locked to ""img2vid"" for this flow. Enables Wan-Fun image-to-video (or Wan 2.1 14B I2V 480P/720P). initImageBytes is REQUIRED; endImageBytes is ignored (that's flf2vid)."
+string,files.diffusionModel,"Path to the I2V transformer GGUF. Wan-Fun 1.3B: wan2.1-fun-i2v-1.3b-Q8_0.gguf. Wan 2.1 14B: wan2.1-i2v-14b-480p-Q8_0.gguf or wan2.1-i2v-14b-720p-Q8_0.gguf. MUST be an I2V variant -- a T2V GGUF here will silently produce garbage."
+string,files.highNoiseDiffusionModel,"Optional. Path to Wan 2.2 MoE high-noise expert (I2V variant). Leave undefined for Wan 2.1 / Wan-Fun (single-expert)."
+string,files.t5Xxl,Path to umt5-xxl encoder GGUF used by Wan. Reused from existing ctx.
+string,files.vae,Path to Wan VAE GGUF. Reused.
+Uint8Array,initImageBytes,"REQUIRED. Raw PNG/JPEG bytes for the seed (first) frame. Decoded via decodePng() and handed to sd_vid_gen_params_t::init_image. Resolution should match width x height (or it gets resized)."
+Uint8Array,endImageBytes,"IGNORED for img2vid (flf2vid only). Leave undefined."
+Uint8Array[],controlFramesBytes,"Optional VACE control frames (one Uint8Array per frame, in order). Empty / undefined disables VACE. Works alongside initImageBytes."
+number,videoFrames,"Total output frames. Wan-Fun 1.3B sweet spot: 81 frames @ 16 fps == ~5 s. Must be (4*k + 1). Same constraint as txt2vid."
+number,fps,Output framerate written into the AVI container header only. Does NOT affect denoising. Default 16.
+number,strength,"NEW for this flow (was reused). Denoising strength on the init image, [0, 1]. 1.0 = full re-noise (most motion / least adherence). 0.6-0.85 keeps the seed frame recognisable. Default 1.0."
+number,cfgScale,"Text-prompt CFG. Wan I2V sweet spot: 5.0-6.5 (slightly lower than T2V). Default 5.0."
+number,imgCfg,"NEW JS field. CFG scale on the image conditioning. Maps to sd_sample_params_t.guidance.img_cfg. Wan I2V default: 1.0-1.5; raise to push harder toward the seed frame."
+number,flowShift,"Rectified-flow timestep shift. Wan I2V 480p = 3.0, Wan I2V 720p = 5.0, Wan-Fun 1.3B I2V = 3.0. Different from T2V (5.0-8.0). Wrong value -> dim/dark output."
+number,vaceStrength,"VACE control strength in [0, 1]. 0 = ignore controlFramesBytes. Default 1.0 when control frames are provided."
+number,moeBoundary,"Wan 2.2 MoE I2V only. Timestep boundary in [0, 1] at which sampling switches from low-noise to high-noise expert. Ignored if highNoiseDiffusionModel is unset. Default 0.875."
+string,highNoiseSampler,Wan 2.2 MoE I2V only. Same enum as sampler. Defaults to sampler when unset.
+string,highNoiseScheduler,Wan 2.2 MoE I2V only. Same enum as scheduler.
+number,highNoiseSteps,Wan 2.2 MoE I2V only. Step count for high-noise phase. 0 / unset = mirror steps.
+number,highNoiseCfgScale,Wan 2.2 MoE I2V only. CFG scale for high-noise phase. 0 / unset = mirror cfgScale.
+number,highNoiseFlowShift,Wan 2.2 MoE I2V only. flow_shift for high-noise phase. 0 / unset = mirror flowShift.
+function,videoCallback,"Fires once when the AVI is fully encoded; receives a Uint8Array of MJPG-AVI bytes. Caller writes to disk or pipes to ffmpeg. Mutually exclusive with outputCallback."
+function,frameCallback,"Optional per-frame PNG callback: (frameIdx, totalFrames, pngBytes) => void. Useful when the caller wants to assemble the video themselves (H.264 via ffmpeg, etc.)."

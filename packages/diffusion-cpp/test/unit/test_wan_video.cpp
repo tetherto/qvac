@@ -1,6 +1,7 @@
 #include <any>
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
 #include <memory>
 #include <string>
 #include <vector>
@@ -605,6 +606,86 @@ TEST_F(SdWanHappyPathTest, Img2VidProducesValidAvi) {
       << "progressCallback should fire during denoising";
   EXPECT_EQ(frameFanout, 5)
       << "frameCallback should fire exactly video_frames times";
+}
+
+// ---------------------------------------------------------------------------
+// img2vid with von-neumann.jpg and file output
+// ---------------------------------------------------------------------------
+
+TEST_F(SdWanHappyPathTest, Img2VidWithVonNeumannSavesOutput) {
+  // Get paths from existing helpers
+  const std::string models_dir = std::string(PROJECT_ROOT) + "/models";
+  std::string init_image_path = models_dir + "/../assets/von-neumann.jpg";
+  
+  // Skip test if image doesn't exist
+  if (!std::filesystem::exists(init_image_path)) {
+    GTEST_SKIP() << "von-neumann.jpg not found at " << init_image_path;
+  }
+
+  // Load init image
+  std::ifstream init_file(init_image_path, std::ios::binary);
+  std::vector<uint8_t> init_image_bytes((std::istreambuf_iterator<char>(init_file)),
+                                        std::istreambuf_iterator<char>());
+
+  SdModel::GenerationJob job;
+  job.paramsJson = R"({
+    "mode": "img2vid",
+    "prompt": "the man slowly turns his head and blinks, soft natural lighting, subtle camera push-in, fine film grain, cinematic",
+    "negative_prompt": "blurry, distorted, low quality, jittery, static, frozen, watermark, double face, extra limbs",
+    "width": 832,
+    "height": 480,
+    "video_frames": 33,
+    "fps": 16,
+    "steps": 30,
+    "cfg_scale": 6.0,
+    "img_cfg_scale": 1.5,
+    "strength": 0.8,
+    "flow_shift": 3.0,
+    "seed": 42
+  })";
+  job.initImageBytes = init_image_bytes;
+
+  std::vector<uint8_t> avi;
+  int progressTicks = 0;
+  int frameFanout = 0;
+  
+  job.progressCallback = [&](const std::string&) { ++progressTicks; };
+  job.outputCallback = [&](const std::vector<uint8_t>& bytes) { avi = bytes; };
+  job.frameCallback =
+      [&](const std::vector<uint8_t>& png, int idx, int total) {
+        EXPECT_FALSE(png.empty());
+        EXPECT_EQ(total, 33);
+        if (idx == 0 || idx == 32) {
+          std::cout << "  Frame " << idx << "/" << total << "\n";
+        }
+        ++frameFanout;
+      };
+
+  std::cout << "Running img2vid with von-neumann.jpg (33 frames, 30 steps)...\n";
+  EXPECT_NO_THROW(model->process(std::any(job)));
+
+  EXPECT_FALSE(avi.empty()) << "outputCallback should fire once with AVI bytes";
+  EXPECT_TRUE(wan_helpers::isAvi(avi))
+      << "Output must be a valid RIFF/AVI container";
+  EXPECT_GT(progressTicks, 0)
+      << "progressCallback should fire during denoising";
+  EXPECT_EQ(frameFanout, 33)
+      << "frameCallback should fire exactly 33 times";
+
+  // Save output file
+  std::string output_dir = models_dir + "/../output";
+  std::filesystem::create_directories(output_dir);
+  std::string output_path = output_dir + "/wan_img2vid_cpp_von_neumann.avi";
+  
+  std::ofstream output_file(output_path, std::ios::binary);
+  if (output_file.is_open()) {
+    output_file.write(reinterpret_cast<const char*>(avi.data()), avi.size());
+    output_file.close();
+    std::cout << "✓ Saved output AVI: " << output_path << " (" << avi.size()
+              << " bytes)\n";
+  } else {
+    ADD_FAILURE() << "Failed to open output file: " << output_path;
+  }
 }
 
 // ---------------------------------------------------------------------------
