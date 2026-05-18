@@ -54,8 +54,8 @@ async function buildFileIndex(dir: string): Promise<Set<string>> {
  * Resolve an internal link path against the pre-built file index.
  *
  * Every URL maps to a bare path under `content/docs/`. A link to
- * `/sdk/api/v0.8.0` resolves to either `sdk/api/v0.8.0.mdx` or
- * `sdk/api/v0.8.0/index.mdx`.
+ * `/reference/api/v0.8.0` resolves to either `reference/api/v0.8.0.mdx` or
+ * `reference/api/v0.8.0/index.mdx`.
  */
 function resolveLink(linkPath: string, fileIndex: Set<string>): boolean {
   const cleaned = linkPath.replace(/\/$/, "").replace(/^\//, "");

@@ -18,13 +18,13 @@ describe('extractInternalLinks', () => {
   })
 
   it('extracts markdown links', () => {
-    expect(extractInternalLinks('see [Errors](/sdk/api/errors) for details'))
-      .toEqual(['/sdk/api/errors'])
+    expect(extractInternalLinks('see [Errors](/reference/api/errors) for details'))
+      .toEqual(['/reference/api/errors'])
   })
 
   it('strips hash fragments', () => {
-    expect(extractInternalLinks('see [type](/sdk/api/completion#completionparams)'))
-      .toEqual(['/sdk/api/completion'])
+    expect(extractInternalLinks('see [type](/reference/api/completion#completionparams)'))
+      .toEqual(['/reference/api/completion'])
   })
 
   it('ignores pure hash links', () => {
