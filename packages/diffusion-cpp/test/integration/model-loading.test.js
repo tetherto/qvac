@@ -34,7 +34,8 @@ test('model loading - load and unload', { timeout: testTimeout }, async t => {
   const config = {
     threads: '4',
     device: useCpu ? 'cpu' : 'gpu',
-    prediction: 'v'
+    prediction: 'v',
+    diffusion_fa: true
   }
 
   const addon = new ImgStableDiffusion({

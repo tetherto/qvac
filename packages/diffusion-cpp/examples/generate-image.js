@@ -48,7 +48,8 @@ async function main () {
       vae: path.join(MODELS_DIR, VAE_MODEL)
     },
     config: {
-      threads: 4
+      threads: 4,
+      diffusion_fa: true
     },
     logger: console
   })
