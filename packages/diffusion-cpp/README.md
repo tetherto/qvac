@@ -1,6 +1,6 @@
 # diffusion-cpp
 
-Native C++ addon for text-to-image generation using [qvac-ext-stable-diffusion.cpp](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp), built for the Bare Runtime. Supports **Stable Diffusion 1.x / 2.x / XL / 3** and **FLUX.2 [klein]**.
+Native C++ addon for text-to-image generation using [qvac-ext-stable-diffusion.cpp](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp), built for the Bare Runtime. Supports **Stable Diffusion 2.x / XL / 3** and **FLUX.2 [klein]**.
 
 ## Table of Contents
 
@@ -29,7 +29,7 @@ Native C++ addon for text-to-image generation using [qvac-ext-stable-diffusion.c
   - [Standalone ESRGAN Upscaler](#standalone-esrgan-upscaler)
   - [Model File Reference](#model-file-reference)
     - [FLUX.2 \[klein\] 4B (recommended for 16 GB machines)](#flux2-klein-4b-recommended-for-16-gb-machines)
-    - [Stable Diffusion 1.x / 2.x](#stable-diffusion-1x--2x)
+    - [Stable Diffusion 2.x / SDXL / SD3](#stable-diffusion-2x--sdxl--sd3)
   - [FLUX.2 Implementation Notes](#flux2-implementation-notes)
     - [1. Metal GPU backend not activated (macOS)](#1-metal-gpu-backend-not-activated-macos)
     - [2. Noise output instead of image — wrong prediction type default](#2-noise-output-instead-of-image--wrong-prediction-type-default)
@@ -210,7 +210,7 @@ const args = {
 | Property | Required | Description |
 |----------|----------|-------------|
 | `files` | ✅ | Object of absolute paths to model files (see below) |
-| `files.model` | ✅ | Absolute path to diffusion model file (all-in-one for SD1.x/2.x; diffusion-only GGUF for FLUX.2) |
+| `files.model` | ✅ | Absolute path to diffusion model file (all-in-one for SD2.x; diffusion-only GGUF for FLUX.2) |
 | `files.clipL` | — | Absolute path to separate CLIP-L text encoder (SD3) |
 | `files.clipG` | — | Absolute path to separate CLIP-G text encoder (SDXL / SD3) |
 | `files.t5Xxl` | — | Absolute path to separate T5-XXL text encoder (SD3) |
@@ -242,7 +242,8 @@ Config values are coerced to strings internally. Generation parameters (prompt, 
 | `rng` | `'cpu'` \| `'cuda'` \| `'std_default'` | `'cuda'` | RNG backend (`'cuda'` = philox RNG — not GPU-specific despite the name; recommended) |
 | `clip_on_cpu` | `true` \| `false` | `false` | Force CLIP encoder to run on CPU |
 | `vae_on_cpu` | `true` \| `false` | `false` | Force VAE to run on CPU |
-| `flash_attn` | `true` \| `false` | `false` | Enable flash attention (reduces memory) |
+| `flash_attn` | `true` \| `false` | `false` | Enable flash attention for all components (text encoder, diffusion model, VAE) |
+| `diffusion_fa` | `true` \| `false` | `true` | Enable flash attention for the diffusion model only. FLUX2 requires this to avoid materialising the full Q·Kᵀ matrix in VRAM. Safe for all model families — falls back to standard attention on backends that don't support it. Opt out with `false`. |
 | `upscaler_tile_size` | number | `128` | ESRGAN upscaler tile size |
 
 ### 4. Create a Model Instance
@@ -301,12 +302,12 @@ require('bare-fs').writeFileSync('output.png', images[0])
 |-----------|------|---------|-------------|
 | `prompt` | string | — | Text prompt |
 | `negative_prompt` | string | `''` | Things to avoid in the output |
-| `width` | number | `512` | Output width in pixels (multiple of 8) |
-| `height` | number | `512` | Output height in pixels (multiple of 8) |
+| `width` | number | `512` (FLUX img2img: `1024`) | Output width in pixels (multiple of 8) |
+| `height` | number | `512` (FLUX img2img: `1024`) | Output height in pixels (multiple of 8) |
 | `steps` | number | `20` | Number of diffusion steps |
 | `guidance` | number | `3.5` | Distilled guidance scale (FLUX.2) |
-| `cfg_scale` | number | `7.0` | Classifier-free guidance scale (SD1.x / SD2.x) |
-| `sampling_method` | string | auto | Sampler name; auto-selects `euler` for FLUX.2, `euler_a` for SD1.x |
+| `cfg_scale` | number | `7.0` | Classifier-free guidance scale (SD2.x / SDXL / SD3) |
+| `sampling_method` | string | auto | Sampler name; auto-selects `euler` for FLUX.2, `euler_a` for SD2.x |
 | `scheduler` | string | auto | Scheduler; auto-selected per model family |
 | `seed` | number | `-1` | Random seed (-1 for random) |
 | `batch_count` | number | `1` | Number of images to generate |
@@ -318,14 +319,14 @@ require('bare-fs').writeFileSync('output.png', images[0])
 
 #### Image-to-image (`init_image`)
 
-Pass `init_image` (a `Uint8Array` of PNG or JPEG bytes) to transform an existing image with a text prompt. Width and height are auto-detected from the image header and rounded to the nearest multiple of 8.
+Pass `init_image` (a `Uint8Array` of PNG or JPEG bytes) to transform an existing image with a text prompt. For SDEdit models (SD2.x / SDXL / SD3) `width` and `height` default to the input image's pixel dimensions (rounded up to the next multiple of 8). For FLUX.2 models the output size is independent of the reference image — omit `width`/`height` to get the default 1024×1024 output, or supply them explicitly.
 
 The addon automatically selects the correct img2img strategy based on the model's prediction type:
 
 | Model family | Prediction type | Strategy | How it works |
 |-------------|----------------|----------|-------------|
-| FLUX.2 | `flux2_flow` / `flux_flow` | In-context conditioning (`ref_images`) | Input image is VAE-encoded into separate latent tokens; the transformer attends to them via joint attention with distinct RoPE positions. The target starts from pure noise, so the model preserves features while generating a fully new image. |
-| SD1.x / SD2.x / SDXL / SD3 | All others | SDEdit (`init_image`) | Input image is noised according to `strength` (0.0–1.0), then denoised with the text prompt. Lower strength preserves more of the original; higher strength allows more creative freedom. |
+| FLUX.2 | `flux2_flow` | In-context conditioning (`ref_images`) | Input image is VAE-encoded into separate latent tokens; the transformer attends to them via joint attention with distinct RoPE positions. The target starts from pure noise, so the model preserves features while generating a fully new image. |
+| SD2.x / SDXL / SD3 | All others | SDEdit (`init_image`) | Input image is noised according to `strength` (0.0–1.0), then denoised with the text prompt. Lower strength preserves more of the original; higher strength allows more creative freedom. |
 
 **FLUX.2 example (in-context conditioning):**
 
@@ -513,7 +514,7 @@ For a complete runnable example, see [`examples/standalone-esrgan-upscale.js`](.
 | Text encoder | `Qwen3-4B-Q4_K_M.gguf` | [unsloth/Qwen3-4B-GGUF](https://huggingface.co/unsloth/Qwen3-4B-GGUF) |
 | VAE | `flux2-vae.safetensors` | [black-forest-labs/FLUX.2-klein-4B](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B) |
 
-### Stable Diffusion 1.x / 2.x
+### Stable Diffusion 2.x / SDXL / SD3
 
 Pass an all-in-one checkpoint absolute path as `files.model`. No separate encoders needed.
 
@@ -551,7 +552,7 @@ to:
 
 **Symptom:** Generation completed all 20 steps and produced a PNG, but the image was pure coloured noise (TV static).
 
-**Root cause:** `SdCtxConfig::prediction` defaulted to `EPS_PRED` (the classic SD1.x epsilon-prediction denoiser). When `SdModel::load()` passed this to `sd_ctx_params_t.prediction`, it overrode `qvac-ext-stable-diffusion.cpp`'s auto-detection, forcing the wrong denoiser on a FLUX.2 flow-matching model. The correct sentinel value for auto-detection is `PREDICTION_COUNT`.
+**Root cause:** `SdCtxConfig::prediction` defaulted to `EPS_PRED` (the epsilon-prediction denoiser). When `SdModel::load()` passed this to `sd_ctx_params_t.prediction`, it overrode `qvac-ext-stable-diffusion.cpp`'s auto-detection, forcing the wrong denoiser on a FLUX.2 flow-matching model. The correct sentinel value for auto-detection is `PREDICTION_COUNT`.
 
 **Fix:** Changed the default in `addon/src/handlers/SdCtxHandlers.hpp`:
 
@@ -597,11 +598,11 @@ sample_method_t sampleMethod = EULER_A_SAMPLE_METHOD;
 scheduler_t     scheduler    = DISCRETE_SCHEDULER;
 
 // After
-sample_method_t sampleMethod = SAMPLE_METHOD_COUNT;  // auto (euler for FLUX, euler_a for SD1.x)
+sample_method_t sampleMethod = SAMPLE_METHOD_COUNT;  // auto (euler for FLUX, euler_a for SD2.x)
 scheduler_t     scheduler    = SCHEDULER_COUNT;      // auto
 ```
 
-With these sentinel values, `qvac-ext-stable-diffusion.cpp` selects `euler` for DiT/FLUX models and `euler_a` for SD1.x/SD2.x automatically.
+With these sentinel values, `qvac-ext-stable-diffusion.cpp` selects `euler` for DiT/FLUX models and `euler_a` for SD2.x automatically.
 
 ---
 
@@ -631,7 +632,7 @@ The underlying pattern across all these fixes is the same: our C++ config struct
 
 | Field | Wrong default | Correct default | Effect of wrong value |
 |-------|--------------|-----------------|----------------------|
-| `prediction` | `EPS_PRED` | `PREDICTION_COUNT` | Forces SD1.x epsilon denoiser on FLUX.2 → noise |
+| `prediction` | `EPS_PRED` | `PREDICTION_COUNT` | Forces epsilon denoiser on FLUX.2 → noise |
 | `flow_shift` | `0.0f` | `INFINITY` | Disables flow-shifting → broken noise schedule |
 | `sample_method` | `EULER_A_SAMPLE_METHOD` | `SAMPLE_METHOD_COUNT` | Wrong sampler for flow-matching models → noise |
 | `scheduler` | `DISCRETE_SCHEDULER` | `SCHEDULER_COUNT` | Wrong schedule for FLUX.2 |
