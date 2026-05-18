@@ -613,19 +613,62 @@ TEST_F(SdWanHappyPathTest, Img2VidProducesValidAvi) {
 // ---------------------------------------------------------------------------
 
 TEST_F(SdWanHappyPathTest, Img2VidWithVonNeumannSavesOutput) {
-  // Use synthetic 832x480 image matching Wan training resolution
-  // (von-neumann.jpg is 500x627 and doesn't match required multiples of 8)
-  const std::vector<uint8_t> init_image_bytes =
-      wan_helpers::makeSolidPng(832, 480, 100, 110, 120);
+  // Load and resize von-neumann.jpg to 832x480 for Wan compatibility
+  const std::string models_dir = std::string(PROJECT_ROOT) + "/models";
+  std::string init_image_path = models_dir + "/../assets/von-neumann.jpg";
+  
+  if (!std::filesystem::exists(init_image_path)) {
+    GTEST_SKIP() << "von-neumann.jpg not found at " << init_image_path;
+  }
 
+  // Load and resize image to 832x480
+  std::ifstream init_file(init_image_path, std::ios::binary);
+  std::vector<uint8_t> image_bytes((std::istreambuf_iterator<char>(init_file)),
+                                    std::istreambuf_iterator<char>());
+  
+  int w, h, channels;
+  unsigned char* pixels = stbi_load_from_memory(image_bytes.data(), image_bytes.size(),
+                                                 &w, &h, &channels, 3);
+  if (!pixels) {
+    GTEST_SKIP() << "Failed to decode von-neumann.jpg";
+  }
+
+  // Resize to 832x480 using simple nearest-neighbor
+  const int target_w = 832, target_h = 480;
+  std::vector<unsigned char> resized(target_w * target_h * 3);
+  for (int y = 0; y < target_h; ++y) {
+    for (int x = 0; x < target_w; ++x) {
+      int src_x = (x * w) / target_w;
+      int src_y = (y * h) / target_h;
+      src_x = std::min(src_x, w - 1);
+      src_y = std::min(src_y, h - 1);
+      
+      int src_idx = (src_y * w + src_x) * 3;
+      int dst_idx = (y * target_w + x) * 3;
+      resized[dst_idx] = pixels[src_idx];
+      resized[dst_idx + 1] = pixels[src_idx + 1];
+      resized[dst_idx + 2] = pixels[src_idx + 2];
+    }
+  }
+  stbi_image_free(pixels);
+
+  // Encode to PNG
+  std::vector<unsigned char> png_bytes;
+  auto png_writer = [](void* context, void* data, int size) {
+    auto* v = (std::vector<unsigned char>*)context;
+    v->insert(v->end(), (unsigned char*)data, (unsigned char*)data + size);
+  };
+  stbi_write_png_to_func(png_writer, &png_bytes, target_w, target_h, 3, resized.data(), 0);
+  
   SdModel::GenerationJob job;
+  // 81 frames = 5.06 seconds @ 16 fps (Wan's recommended max)
   job.paramsJson = R"({
     "mode": "img2vid",
     "prompt": "the man slowly turns his head and blinks, soft natural lighting, subtle camera push-in, fine film grain, cinematic",
     "negative_prompt": "blurry, distorted, low quality, jittery, static, frozen, watermark, double face, extra limbs",
     "width": 832,
     "height": 480,
-    "video_frames": 33,
+    "video_frames": 81,
     "fps": 16,
     "steps": 30,
     "cfg_scale": 6.0,
@@ -634,7 +677,7 @@ TEST_F(SdWanHappyPathTest, Img2VidWithVonNeumannSavesOutput) {
     "flow_shift": 3.0,
     "seed": 42
   })";
-  job.initImageBytes = init_image_bytes;
+  job.initImageBytes = png_bytes;
 
   std::vector<uint8_t> avi;
   int progressTicks = 0;
@@ -645,14 +688,14 @@ TEST_F(SdWanHappyPathTest, Img2VidWithVonNeumannSavesOutput) {
   job.frameCallback =
       [&](const std::vector<uint8_t>& png, int idx, int total) {
         EXPECT_FALSE(png.empty());
-        EXPECT_EQ(total, 33);
-        if (idx == 0 || idx == 32) {
+        EXPECT_EQ(total, 81);
+        if (idx == 0 || idx == 40 || idx == 80) {
           std::cout << "  Frame " << idx << "/" << total << "\n";
         }
         ++frameFanout;
       };
 
-  std::cout << "Running img2vid with von-neumann.jpg (33 frames, 30 steps)...\n";
+  std::cout << "Running img2vid with von-neumann.jpg resized (81 frames, 5.06s @ 16fps, 30 steps)...\n";
   EXPECT_NO_THROW(model->process(std::any(job)));
 
   EXPECT_FALSE(avi.empty()) << "outputCallback should fire once with AVI bytes";
@@ -660,20 +703,20 @@ TEST_F(SdWanHappyPathTest, Img2VidWithVonNeumannSavesOutput) {
       << "Output must be a valid RIFF/AVI container";
   EXPECT_GT(progressTicks, 0)
       << "progressCallback should fire during denoising";
-  EXPECT_EQ(frameFanout, 33)
-      << "frameCallback should fire exactly 33 times";
+  EXPECT_EQ(frameFanout, 81)
+      << "frameCallback should fire exactly 81 times";
 
   // Save output file
   std::string output_dir = std::string(PROJECT_ROOT) + "/output";
   std::filesystem::create_directories(output_dir);
-  std::string output_path = output_dir + "/wan_img2vid_cpp_synthetic_init.avi";
+  std::string output_path = output_dir + "/wan_img2vid_cpp_von_neumann_5sec.avi";
   
   std::ofstream output_file(output_path, std::ios::binary);
   if (output_file.is_open()) {
     output_file.write(reinterpret_cast<const char*>(avi.data()), avi.size());
     output_file.close();
     std::cout << "✓ Saved output AVI: " << output_path << " (" << avi.size()
-              << " bytes)\n";
+              << " bytes, 5.06 seconds)\n";
   } else {
     ADD_FAILURE() << "Failed to open output file: " << output_path;
   }
