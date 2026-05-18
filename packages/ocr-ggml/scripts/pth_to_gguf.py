@@ -188,8 +188,8 @@ def convert(
     try:
         import easyocr
         writer.add_string("easyocr.version", getattr(easyocr, "__version__", "unknown"))
-    except Exception:
-        pass
+    except (ImportError, AttributeError):
+        writer.add_string("easyocr.version", "unknown")
 
     if info.get("kind") == "recognition":
         chars = info["characters"]
