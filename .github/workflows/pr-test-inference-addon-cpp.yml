@@ -92,10 +92,12 @@ jobs:
             arch: x64
             runner: qvac-win25-x64
 
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner || matrix.os }}
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
     steps:
+      - uses: AutoModality/action-clean@v1
+        if: startsWith(matrix.runner, 'qvac-')
       - name: Checkout source
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
