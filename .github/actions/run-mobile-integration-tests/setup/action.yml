@@ -46,8 +46,14 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Free up disk space (Android)
-      if: inputs.platform == 'Android'
+    # PR #2021 (self-hosted runner alignment): the qvac-ubuntu*-x64
+    # self-hosted runners don't have /usr/share/dotnet,
+    # /opt/hostedtoolcache, /usr/local/lib/android/sdk/ndk, etc. — and
+    # don't always allow passwordless sudo — so the cleanup is a noisy
+    # no-op there. Keep it as a generic safety net for future addons
+    # that may still run Android on github-hosted ubuntu-24.04.
+    - name: Free up disk space (Android, github-hosted only)
+      if: inputs.platform == 'Android' && runner.environment == 'github-hosted'
       shell: bash
       run: |
         echo "Disk space before cleanup:"
@@ -75,12 +81,20 @@ runs:
         path: test-framework
         fetch-depth: 0
 
+    # PR #2021: skip both `setup-node` and the global `@expo/cli`
+    # install on self-hosted runners. The qvac-ubuntu*-x64 runners
+    # ship with a pinned Node + bare runtime + Expo CLI pre-installed
+    # on PATH; running `actions/setup-node` here clobbers that PATH
+    # and `npm install -g` writes to a directory the action user may
+    # not own. iOS (macos-14, github-hosted) still needs both.
     - name: Setup Node.js
+      if: runner.environment == 'github-hosted'
       uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
       with:
         node-version: lts/*
 
     - name: Install global dependencies
+      if: runner.environment == 'github-hosted'
       shell: bash
       run: |
         echo "Installing global dependencies..."
