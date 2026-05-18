@@ -13,5 +13,5 @@
     "strict": true,
     "noEmit": true
   },
-  "include": ["index.d.ts", "addonLogging.d.ts"]
+  "include": ["index.d.ts", "video.d.ts", "addonLogging.d.ts"]
 }

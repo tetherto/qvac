@@ -58,6 +58,7 @@ test('SD3 Medium img2img — transforms an input image', { timeout: 1800000, ski
     config: {
       threads: 4,
       device: useCpu ? 'cpu' : 'gpu',
+      diffusion_fa: true,
       vae_on_cpu: true,
       prediction: 'flow',
       flow_shift: '3.0'

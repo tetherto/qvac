@@ -59,6 +59,7 @@
   "homepage": "https://github.com/tetherto/qvac/tree/main/packages/llm-llamacpp#readme",
   "devDependencies": {
     "@types/node": "^24.2.1",
+    "bare-subprocess": "^5.2.3",
     "bare-url": "^2.1.6",
     "brittle": "^3.16.5",
     "cmake-bare": "1.7.5",

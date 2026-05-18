@@ -291,3 +291,95 @@ TEST(SdCtxHandlers_UnknownKeys, AreIgnored) {
   EXPECT_EQ(cfg.device, "gpu");
   EXPECT_EQ(cfg.nThreads, -1);
 }
+
+// -----------------------------------------------------------------------------
+// Wan support additions -- high_noise_diffusion_model_path (Wan 2.2 only) and
+// preview callback configuration (optional intermediate frames during denoise).
+// -----------------------------------------------------------------------------
+
+TEST(SdCtxHandlers_HighNoisePath, DefaultsToEmptyAndIsCopied) {
+  // Default: empty string -- SdModel::load() will pass nullptr to the library
+  // so Wan 2.1 and all non-Wan models load unchanged.
+  SdCtxConfig cfg;
+  EXPECT_TRUE(cfg.highNoiseDiffusionModelPath.empty());
+
+  // There is no SD_CTX_HANDLERS entry for the high-noise path -- it is read
+  // directly from the JS args map by AddonJs::createInstance(). The only
+  // invariant the handler layer enforces is that applySdCtxHandlers() does
+  // not clobber a path that was set before it ran.
+  cfg.highNoiseDiffusionModelPath = "/tmp/high-noise.gguf";
+  applySdCtxHandlers(
+      cfg, std::unordered_map<std::string, std::string>{{"threads", "4"}});
+  EXPECT_EQ(cfg.highNoiseDiffusionModelPath, "/tmp/high-noise.gguf");
+  EXPECT_EQ(cfg.nThreads, 4);
+}
+
+TEST(SdCtxHandlers_PreviewMode, SupportedValuesMapAndUnknownThrows) {
+  EXPECT_EQ(applyOne("preview_mode", "").previewMode, PREVIEW_NONE);
+  EXPECT_EQ(applyOne("preview_mode", "none").previewMode, PREVIEW_NONE);
+  EXPECT_EQ(applyOne("preview_mode", "proj").previewMode, PREVIEW_PROJ);
+  EXPECT_EQ(applyOne("preview_mode", "tae").previewMode, PREVIEW_TAE);
+  EXPECT_EQ(applyOne("preview_mode", "vae").previewMode, PREVIEW_VAE);
+
+  SdCtxConfig cfg;
+  EXPECT_THROW(applySdCtxHandlers(cfg,
+                                  std::unordered_map<std::string, std::string>{
+                                      {"preview_mode", "bogus"}}),
+               StatusError);
+}
+
+TEST(SdCtxHandlers_PreviewInterval, AcceptsPositiveRejectsZeroAndNegative) {
+  EXPECT_EQ(applyOne("preview_interval", "1").previewInterval, 1);
+  EXPECT_EQ(applyOne("preview_interval", "5").previewInterval, 5);
+  EXPECT_EQ(applyOne("preview_interval", "100").previewInterval, 100);
+
+  SdCtxConfig cfg0;
+  EXPECT_THROW(applySdCtxHandlers(cfg0,
+                                  std::unordered_map<std::string, std::string>{
+                                      {"preview_interval", "0"}}),
+               StatusError);
+
+  SdCtxConfig cfgNeg;
+  EXPECT_THROW(applySdCtxHandlers(cfgNeg,
+                                  std::unordered_map<std::string, std::string>{
+                                      {"preview_interval", "-1"}}),
+               StatusError);
+
+  SdCtxConfig cfgBad;
+  EXPECT_THROW(applySdCtxHandlers(cfgBad,
+                                  std::unordered_map<std::string, std::string>{
+                                      {"preview_interval", "abc"}}),
+               StatusError);
+}
+
+TEST(SdCtxHandlers_PreviewBoolFlags, DenoisedAndNoisyMapAndInvalidThrow) {
+  // preview_denoised: defaults to true, can be toggled off
+  EXPECT_TRUE(applyOne("preview_denoised", "true").previewDenoised);
+  EXPECT_FALSE(applyOne("preview_denoised", "false").previewDenoised);
+  EXPECT_TRUE(applyOne("preview_denoised", "1").previewDenoised);
+  EXPECT_FALSE(applyOne("preview_denoised", "0").previewDenoised);
+
+  // preview_noisy: defaults to false, can be toggled on
+  EXPECT_TRUE(applyOne("preview_noisy", "true").previewNoisy);
+  EXPECT_FALSE(applyOne("preview_noisy", "false").previewNoisy);
+
+  SdCtxConfig cfgA;
+  EXPECT_THROW(applySdCtxHandlers(cfgA,
+                                  std::unordered_map<std::string, std::string>{
+                                      {"preview_denoised", "maybe"}}),
+               StatusError);
+
+  SdCtxConfig cfgB;
+  EXPECT_THROW(applySdCtxHandlers(cfgB,
+                                  std::unordered_map<std::string, std::string>{
+                                      {"preview_noisy", "maybe"}}),
+               StatusError);
+}
+
+TEST(SdCtxHandlers_PreviewDefaults, AreNoneOneTrueFalse) {
+  SdCtxConfig cfg;
+  EXPECT_EQ(cfg.previewMode, PREVIEW_NONE);
+  EXPECT_EQ(cfg.previewInterval, 1);
+  EXPECT_TRUE(cfg.previewDenoised);
+  EXPECT_FALSE(cfg.previewNoisy);
+}

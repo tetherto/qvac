@@ -280,6 +280,49 @@ const SdCtxHandlersMap SD_CTX_HANDLERS = {
        cfg.forceSDXLVaeConvScale = parseBool(val, "force_sdxl_vae_conv_scale");
      }},
 
+    // -- Preview callback
+    // ------------------------------------------------------------
+    // preview_mode maps strings to preview_t enum. Accepts "none", "proj",
+    // "tae", "vae". Empty string / "none" disables previews (default).
+    // Note: "tae" additionally requires taesdPath to be set at context load.
+
+    {"preview_mode",
+     [](SdCtxConfig& c, const std::string& v) {
+       if (v.empty() || v == "none")
+         c.previewMode = PREVIEW_NONE;
+       else if (v == "proj")
+         c.previewMode = PREVIEW_PROJ;
+       else if (v == "tae")
+         c.previewMode = PREVIEW_TAE;
+       else if (v == "vae")
+         c.previewMode = PREVIEW_VAE;
+       else
+         throw StatusError(
+             general_error::InvalidArgument,
+             "preview_mode must be 'none', 'proj', 'tae', or 'vae', got: '" +
+                 v + "'");
+     }},
+
+    {"preview_interval",
+     [](SdCtxConfig& c, const std::string& v) {
+       int n = parseInt(v, "preview_interval");
+       if (n < 1)
+         throw StatusError(
+             general_error::InvalidArgument,
+             "preview_interval must be >= 1, got: " + std::to_string(n));
+       c.previewInterval = n;
+     }},
+
+    {"preview_denoised",
+     [](SdCtxConfig& c, const std::string& v) {
+       c.previewDenoised = parseBool(v, "preview_denoised");
+     }},
+
+    {"preview_noisy",
+     [](SdCtxConfig& c, const std::string& v) {
+       c.previewNoisy = parseBool(v, "preview_noisy");
+     }},
+
     // -- ESRGAN upscaler
     // ------------------------------------------------------------
 

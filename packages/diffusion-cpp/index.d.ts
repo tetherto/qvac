@@ -144,6 +144,12 @@ export interface DiffusionFiles {
   vae?: string
   /** Absolute path to ESRGAN upscaler model */
   esrgan?: string
+  /**
+   * Wan 2.2 only: high-noise diffusion expert. Omit for Wan 2.1 and all
+   * image models (FLUX, SD, etc.); native layer still expects the path key to
+   * be present as an empty string when unset.
+   */
+  highNoiseDiffusionModel?: string
 }
 
 export interface EsrganFiles {
@@ -400,6 +406,14 @@ export class EsrganUpscaler {
 
   getState(): { configLoaded: boolean }
 }
+
+export { default as VideoStableDiffusion } from './video'
+export type {
+  VideoDiffusionFiles,
+  VideoStableDiffusionArgs,
+  VideoGenerationParams,
+  VideoRuntimeStats
+} from './video'
 
 export { QvacResponse, RuntimeStats, EsrganRuntimeStats }
 

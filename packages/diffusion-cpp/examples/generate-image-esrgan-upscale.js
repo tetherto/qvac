@@ -116,6 +116,7 @@ async function main () {
     config: {
       threads: 8,
       prediction: 'v',
+      diffusion_fa: true,
       upscaler_tile_size: 128
     },
     logger: console
