@@ -21,7 +21,10 @@
     "test:dts": "tsc -p tsconfig.dts.json",
     "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target addon-test",
     "test:cpp:run": "cd build/addon/tests/ && ./addon-test --gtest_output=xml:cpp-test-results.xml",
-    "test:cpp": "npm run test:cpp:build && npm run test:cpp:run"
+    "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
+    "setup:venv": "bash scripts/setup-venv.sh",
+    "convert-model": "bash scripts/convert-model.sh",
+    "setup-models": "bash scripts/setup-venv.sh"
   },
   "files": [
     "addonLogging.js",

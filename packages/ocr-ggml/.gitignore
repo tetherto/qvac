@@ -15,6 +15,10 @@ test/integration/all.js
 .idea
 .vscode
 
+# Python dev tooling (scripts/setup-venv.sh creates ./venv).
+# venv/ is the local dev venv for the .pth -> .gguf converter (~1.4 GiB
+# of torch + easyocr binaries); never commit it.
+venv/
 __pycache__/
 .pytest_cache/
 
