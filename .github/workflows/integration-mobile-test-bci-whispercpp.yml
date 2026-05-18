@@ -96,7 +96,8 @@ jobs:
           else
             echo "Prebuild source: workflow artifacts (current run)"
           fi
-      - uses: AutoModality/action-clean@v1
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
         if: startsWith(matrix.runner, 'qvac-')
 
       - name: Checkout addon repository

@@ -84,7 +84,8 @@ jobs:
           sudo apt-get clean || true
           echo "Disk space after cleanup:"
           df -h
-      - uses: AutoModality/action-clean@v1
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
         if: startsWith(matrix.runner, 'qvac-')
 
       - name: Checkout monorepo (addon package lives under workdir)

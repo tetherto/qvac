@@ -86,7 +86,8 @@ jobs:
           git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "https://github.com/"
           git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "git@github.com:"
         shell: powershell
-      - uses: AutoModality/action-clean@v1
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
         if: startsWith(matrix.runner, 'qvac-')
 
       - name: Checkout code
