@@ -40,8 +40,8 @@ struct SyntheticFrames {
   std::vector<std::vector<uint8_t>> buffers;
 };
 
-static SyntheticFrames makeFrames(
-    int count, uint32_t w, uint32_t h, uint32_t channels, uint8_t color) {
+static SyntheticFrames makeFrames(int count, uint32_t w, uint32_t h,
+                                  uint32_t channels, uint8_t color) {
   SyntheticFrames out;
   out.frames.reserve(count);
   out.buffers.reserve(count);
@@ -59,8 +59,8 @@ static SyntheticFrames makeFrames(
 
 // Search for a 4-byte ASCII marker in a byte buffer. Returns the index of the
 // first byte of the match, or -1 if not found.
-static std::ptrdiff_t findFourCC(
-    const std::vector<uint8_t>& buf, const char tag[4], size_t start = 0) {
+static std::ptrdiff_t findFourCC(const std::vector<uint8_t> &buf,
+                                 const char tag[4], size_t start = 0) {
   if (buf.size() < 4)
     return -1;
   for (size_t i = start; i + 4 <= buf.size(); ++i) {
@@ -74,7 +74,7 @@ static std::ptrdiff_t findFourCC(
   return -1;
 }
 
-static uint32_t readU32LE(const std::vector<uint8_t>& buf, size_t offset) {
+static uint32_t readU32LE(const std::vector<uint8_t> &buf, size_t offset) {
   return static_cast<uint32_t>(buf[offset]) |
          (static_cast<uint32_t>(buf[offset + 1]) << 8) |
          (static_cast<uint32_t>(buf[offset + 2]) << 16) |
@@ -157,7 +157,7 @@ TEST(AviWriter, FirstEmbeddedJpegDecodesToExpectedDimensions) {
   ASSERT_LE(static_cast<size_t>(frameOff) + 8 + jpegSize, avi.size());
 
   int w = 0, h = 0, c = 0;
-  uint8_t* decoded = stbi_load_from_memory(
+  uint8_t *decoded = stbi_load_from_memory(
       avi.data() + frameOff + 8, static_cast<int>(jpegSize), &w, &h, &c, 0);
   ASSERT_NE(decoded, nullptr);
   EXPECT_EQ(w, 64);
@@ -204,14 +204,14 @@ TEST(AviWriter, RejectsNegativeFps) {
 
 TEST(AviWriter, RejectsQualityBelow1) {
   auto fixture = makeFrames(2, 16, 16, 3, 0);
-  EXPECT_THROW(
-      encodeFramesToAvi(fixture.frames.data(), 2, 24, /*q=*/0), StatusError);
+  EXPECT_THROW(encodeFramesToAvi(fixture.frames.data(), 2, 24, /*q=*/0),
+               StatusError);
 }
 
 TEST(AviWriter, RejectsQualityAbove100) {
   auto fixture = makeFrames(2, 16, 16, 3, 0);
-  EXPECT_THROW(
-      encodeFramesToAvi(fixture.frames.data(), 2, 24, /*q=*/101), StatusError);
+  EXPECT_THROW(encodeFramesToAvi(fixture.frames.data(), 2, 24, /*q=*/101),
+               StatusError);
 }
 
 TEST(AviWriter, AcceptsBoundaryQualities) {

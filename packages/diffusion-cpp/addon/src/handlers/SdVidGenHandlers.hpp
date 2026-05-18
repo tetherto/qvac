@@ -127,7 +127,7 @@ struct SdVidGenConfig {
  * Throws qvac_errors::StatusError on invalid input.
  */
 using SdVidGenHandlerFn =
-    std::function<void(SdVidGenConfig&, const picojson::value&)>;
+    std::function<void(SdVidGenConfig &, const picojson::value &)>;
 using SdVidGenHandlersMap = std::unordered_map<std::string, SdVidGenHandlerFn>;
 
 /** All supported per-job video generation param keys and their handlers. */
@@ -137,6 +137,6 @@ extern const SdVidGenHandlersMap SD_VID_GEN_HANDLERS;
  * Apply SD_VID_GEN_HANDLERS to a parsed JSON params object, writing into
  * config. Unknown keys are silently ignored (forward compatibility).
  */
-void applySdVidGenHandlers(SdVidGenConfig& config, const picojson::object& obj);
+void applySdVidGenHandlers(SdVidGenConfig &config, const picojson::object &obj);
 
 } // namespace qvac_lib_inference_addon_sd

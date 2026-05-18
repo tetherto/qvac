@@ -42,23 +42,23 @@ using namespace qvac_errors;
 
 namespace {
 
-picojson::object makeObj(const std::string& key, const picojson::value& val) {
+picojson::object makeObj(const std::string &key, const picojson::value &val) {
   picojson::object obj;
   obj[key] = val;
   return obj;
 }
 
-picojson::value str(const std::string& s) { return picojson::value(s); }
+picojson::value str(const std::string &s) { return picojson::value(s); }
 picojson::value num(double n) { return picojson::value(n); }
 picojson::value boolean(bool b) { return picojson::value(b); }
 
-SdVidGenConfig applyOne(const std::string& key, const picojson::value& val) {
+SdVidGenConfig applyOne(const std::string &key, const picojson::value &val) {
   SdVidGenConfig cfg;
   applySdVidGenHandlers(cfg, makeObj(key, val));
   return cfg;
 }
 
-void expectThrows(const std::string& key, const picojson::value& val) {
+void expectThrows(const std::string &key, const picojson::value &val) {
   SdVidGenConfig cfg;
   EXPECT_THROW(applySdVidGenHandlers(cfg, makeObj(key, val)), StatusError);
 }
@@ -93,9 +93,8 @@ TEST(SdVidGenHandlers_Mode, RejectsNonString) {
 
 TEST(SdVidGenHandlers_Prompt, PromptAndNegativePrompt) {
   EXPECT_EQ(applyOne("prompt", str("a cat")).prompt, "a cat");
-  EXPECT_EQ(
-      applyOne("negative_prompt", str("bad quality")).negativePrompt,
-      "bad quality");
+  EXPECT_EQ(applyOne("negative_prompt", str("bad quality")).negativePrompt,
+            "bad quality");
 }
 
 TEST(SdVidGenHandlers_Prompt, EmptyPromptAccepted) {
@@ -251,11 +250,10 @@ TEST(SdVidGenHandlers_Steps, ZeroAndNegativeRejected) {
 }
 
 TEST(SdVidGenHandlers_Sampler, SupportedNamesMap) {
-  EXPECT_EQ(
-      applyOne("sampler", str("euler")).sampleMethod, EULER_SAMPLE_METHOD);
-  EXPECT_EQ(
-      applyOne("sampling_method", str("euler_a")).sampleMethod,
-      EULER_A_SAMPLE_METHOD);
+  EXPECT_EQ(applyOne("sampler", str("euler")).sampleMethod,
+            EULER_SAMPLE_METHOD);
+  EXPECT_EQ(applyOne("sampling_method", str("euler_a")).sampleMethod,
+            EULER_A_SAMPLE_METHOD);
   EXPECT_EQ(applyOne("sampler", str("heun")).sampleMethod, HEUN_SAMPLE_METHOD);
 }
 
@@ -298,9 +296,8 @@ TEST(SdVidGenHandlers_HighNoiseSteps, ZeroOrNegativeRejected) {
 }
 
 TEST(SdVidGenHandlers_HighNoiseSampler, SupportedNamesMap) {
-  EXPECT_EQ(
-      applyOne("high_noise_sampler", str("euler")).highNoiseSampleMethod,
-      EULER_SAMPLE_METHOD);
+  EXPECT_EQ(applyOne("high_noise_sampler", str("euler")).highNoiseSampleMethod,
+            EULER_SAMPLE_METHOD);
   EXPECT_EQ(
       applyOne("high_noise_sampler", str("dpm++2m")).highNoiseSampleMethod,
       DPMPP2M_SAMPLE_METHOD);
@@ -311,17 +308,15 @@ TEST(SdVidGenHandlers_HighNoiseSampler, UnknownRejected) {
 }
 
 TEST(SdVidGenHandlers_HighNoiseScheduler, SupportedNamesMap) {
-  EXPECT_EQ(
-      applyOne("high_noise_scheduler", str("simple")).highNoiseScheduler,
-      SIMPLE_SCHEDULER);
-  EXPECT_EQ(
-      applyOne("high_noise_scheduler", str("karras")).highNoiseScheduler,
-      KARRAS_SCHEDULER);
+  EXPECT_EQ(applyOne("high_noise_scheduler", str("simple")).highNoiseScheduler,
+            SIMPLE_SCHEDULER);
+  EXPECT_EQ(applyOne("high_noise_scheduler", str("karras")).highNoiseScheduler,
+            KARRAS_SCHEDULER);
 }
 
 TEST(SdVidGenHandlers_HighNoiseCfgScale, SetsValue) {
-  EXPECT_FLOAT_EQ(
-      applyOne("high_noise_cfg_scale", num(6.5)).highNoiseCfgScale, 6.5f);
+  EXPECT_FLOAT_EQ(applyOne("high_noise_cfg_scale", num(6.5)).highNoiseCfgScale,
+                  6.5f);
 }
 
 TEST(SdVidGenHandlers_HighNoiseFlowShift, SetsValue) {
@@ -435,8 +430,8 @@ TEST(SdVidGenHandlers_VaeTileSize, StringFormRejectsZeroAndNegativeDims) {
 TEST(SdVidGenHandlers_VaeTileOverlap, AcceptsRangeZeroToAlmostOne) {
   EXPECT_FLOAT_EQ(applyOne("vae_tile_overlap", num(0.0)).vaeTileOverlap, 0.0f);
   EXPECT_FLOAT_EQ(applyOne("vae_tile_overlap", num(0.5)).vaeTileOverlap, 0.5f);
-  EXPECT_FLOAT_EQ(
-      applyOne("vae_tile_overlap", num(0.99)).vaeTileOverlap, 0.99f);
+  EXPECT_FLOAT_EQ(applyOne("vae_tile_overlap", num(0.99)).vaeTileOverlap,
+                  0.99f);
 }
 
 TEST(SdVidGenHandlers_VaeTileOverlap, OneOrAboveRejected) {
@@ -451,12 +446,12 @@ TEST(SdVidGenHandlers_VaeTileOverlap, OneOrAboveRejected) {
 
 TEST(SdVidGenHandlers_CacheMode, SupportedValuesMap) {
   EXPECT_EQ(applyOne("cache_mode", str("")).cacheMode, SD_CACHE_DISABLED);
-  EXPECT_EQ(
-      applyOne("cache_mode", str("disabled")).cacheMode, SD_CACHE_DISABLED);
-  EXPECT_EQ(
-      applyOne("cache_mode", str("easycache")).cacheMode, SD_CACHE_EASYCACHE);
-  EXPECT_EQ(
-      applyOne("cache_mode", str("cache-dit")).cacheMode, SD_CACHE_CACHE_DIT);
+  EXPECT_EQ(applyOne("cache_mode", str("disabled")).cacheMode,
+            SD_CACHE_DISABLED);
+  EXPECT_EQ(applyOne("cache_mode", str("easycache")).cacheMode,
+            SD_CACHE_EASYCACHE);
+  EXPECT_EQ(applyOne("cache_mode", str("cache-dit")).cacheMode,
+            SD_CACHE_CACHE_DIT);
 }
 
 TEST(SdVidGenHandlers_CacheMode, UnknownRejected) {

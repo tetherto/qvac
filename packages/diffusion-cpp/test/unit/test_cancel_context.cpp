@@ -125,7 +125,7 @@ TEST_F(SdCancelContextTest, CancelDuringGenerationThrowsJobCancelled) {
   try {
     model->process(std::any(job));
     FAIL() << "process() should have thrown on cancel";
-  } catch (const qvac_errors::StatusError& e) {
+  } catch (const qvac_errors::StatusError &e) {
     // Typed cancel surfaced as general_error::Cancelled so JS can
     // discriminate it from real internal failures via the status code
     // instead of string-matching the exception message.

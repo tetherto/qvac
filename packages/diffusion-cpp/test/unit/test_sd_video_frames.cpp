@@ -30,13 +30,13 @@ namespace {
  * pointing at a zero-initialised malloc()'d pixel buffer sized for
  * `width x height` RGB8. Matches generate_video() semantics.
  */
-sd_image_t* makeFrameArray(int count, uint32_t width, uint32_t height) {
-  auto* arr = static_cast<sd_image_t*>(malloc(sizeof(sd_image_t) * count));
+sd_image_t *makeFrameArray(int count, uint32_t width, uint32_t height) {
+  auto *arr = static_cast<sd_image_t *>(malloc(sizeof(sd_image_t) * count));
   if (!arr)
     return nullptr;
   for (int i = 0; i < count; ++i) {
     const size_t bytes = static_cast<size_t>(width) * height * 3;
-    auto* pixels = static_cast<uint8_t*>(malloc(bytes));
+    auto *pixels = static_cast<uint8_t *>(malloc(bytes));
     // Fill with a per-frame sentinel so the destructor visibly frees
     // distinct allocations under ASan.
     if (pixels)
@@ -81,7 +81,7 @@ TEST(SdVideoFramesTest, NullDataWithNonZeroCountIsStillEmpty) {
 // ---------------------------------------------------------------------------
 
 TEST(SdVideoFramesTest, DestroysSingleFrameWithoutLeak) {
-  sd_image_t* arr = makeFrameArray(1, 64, 64);
+  sd_image_t *arr = makeFrameArray(1, 64, 64);
   ASSERT_NE(arr, nullptr);
   ASSERT_NE(arr[0].data, nullptr);
   {
@@ -96,7 +96,7 @@ TEST(SdVideoFramesTest, DestroysSingleFrameWithoutLeak) {
 
 TEST(SdVideoFramesTest, DestroysMultipleFramesWithoutLeak) {
   const int kN = 16;
-  sd_image_t* arr = makeFrameArray(kN, 32, 32);
+  sd_image_t *arr = makeFrameArray(kN, 32, 32);
   ASSERT_NE(arr, nullptr);
   {
     SdVideoFrames frames(arr, kN);
@@ -110,7 +110,7 @@ TEST(SdVideoFramesTest, DestroysFramesWith4kPlus1Count) {
   // video_frames follows the 4k+1 rule in SdVidGenHandlers; verify the
   // RAII wrapper handles the typical production counts (5, 9, 33, 81).
   for (int count : {5, 9, 33, 81}) {
-    sd_image_t* arr = makeFrameArray(count, 16, 16);
+    sd_image_t *arr = makeFrameArray(count, 16, 16);
     ASSERT_NE(arr, nullptr);
     SdVideoFrames frames(arr, count);
     EXPECT_EQ(frames.count(), count);
@@ -124,10 +124,10 @@ TEST(SdVideoFramesTest, HandlesFrameWithNullPixelBuffer) {
   // On mid-run decode failure the library may leave an individual frame's
   // data pointer null. The destructor must tolerate free(NULL) gracefully
   // (which is standard C) instead of assuming every frame has pixels.
-  auto* arr = static_cast<sd_image_t*>(malloc(sizeof(sd_image_t) * 3));
+  auto *arr = static_cast<sd_image_t *>(malloc(sizeof(sd_image_t) * 3));
   ASSERT_NE(arr, nullptr);
   arr[0] = sd_image_t{16, 16, 3, nullptr};
-  auto* goodPixels = static_cast<uint8_t*>(malloc(16 * 16 * 3));
+  auto *goodPixels = static_cast<uint8_t *>(malloc(16 * 16 * 3));
   arr[1] = sd_image_t{16, 16, 3, goodPixels};
   arr[2] = sd_image_t{16, 16, 3, nullptr};
   {
@@ -142,7 +142,7 @@ TEST(SdVideoFramesTest, HandlesFrameWithNullPixelBuffer) {
 // ---------------------------------------------------------------------------
 
 TEST(SdVideoFramesTest, DataReturnsUnderlyingPointer) {
-  sd_image_t* arr = makeFrameArray(4, 8, 8);
+  sd_image_t *arr = makeFrameArray(4, 8, 8);
   ASSERT_NE(arr, nullptr);
   SdVideoFrames frames(arr, 4);
   EXPECT_EQ(frames.data(), arr);
@@ -150,11 +150,11 @@ TEST(SdVideoFramesTest, DataReturnsUnderlyingPointer) {
 
 TEST(SdVideoFramesTest, IndexOperatorReturnsSameFrame) {
   const int kN = 3;
-  sd_image_t* arr = makeFrameArray(kN, 16, 16);
+  sd_image_t *arr = makeFrameArray(kN, 16, 16);
   ASSERT_NE(arr, nullptr);
   SdVideoFrames frames(arr, kN);
   for (int i = 0; i < kN; ++i) {
-    const sd_image_t& f = frames[i];
+    const sd_image_t &f = frames[i];
     EXPECT_EQ(f.width, 16u);
     EXPECT_EQ(f.height, 16u);
     EXPECT_EQ(f.channel, 3u);
@@ -170,7 +170,7 @@ TEST(SdVideoFramesTest, IndexOperatorThrowsOnNullData) {
 }
 
 TEST(SdVideoFramesTest, IndexOperatorThrowsOnOutOfRange) {
-  sd_image_t* arr = makeFrameArray(2, 8, 8);
+  sd_image_t *arr = makeFrameArray(2, 8, 8);
   ASSERT_NE(arr, nullptr);
   SdVideoFrames frames(arr, 2);
   EXPECT_THROW((void)frames[-1], std::out_of_range);

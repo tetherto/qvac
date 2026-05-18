@@ -322,12 +322,10 @@ TEST(SdCtxHandlers_PreviewMode, SupportedValuesMapAndUnknownThrows) {
   EXPECT_EQ(applyOne("preview_mode", "vae").previewMode, PREVIEW_VAE);
 
   SdCtxConfig cfg;
-  EXPECT_THROW(
-      applySdCtxHandlers(
-          cfg,
-          std::unordered_map<std::string, std::string>{
-              {"preview_mode", "bogus"}}),
-      StatusError);
+  EXPECT_THROW(applySdCtxHandlers(cfg,
+                                  std::unordered_map<std::string, std::string>{
+                                      {"preview_mode", "bogus"}}),
+               StatusError);
 }
 
 TEST(SdCtxHandlers_PreviewInterval, AcceptsPositiveRejectsZeroAndNegative) {
@@ -336,28 +334,22 @@ TEST(SdCtxHandlers_PreviewInterval, AcceptsPositiveRejectsZeroAndNegative) {
   EXPECT_EQ(applyOne("preview_interval", "100").previewInterval, 100);
 
   SdCtxConfig cfg0;
-  EXPECT_THROW(
-      applySdCtxHandlers(
-          cfg0,
-          std::unordered_map<std::string, std::string>{
-              {"preview_interval", "0"}}),
-      StatusError);
+  EXPECT_THROW(applySdCtxHandlers(cfg0,
+                                  std::unordered_map<std::string, std::string>{
+                                      {"preview_interval", "0"}}),
+               StatusError);
 
   SdCtxConfig cfgNeg;
-  EXPECT_THROW(
-      applySdCtxHandlers(
-          cfgNeg,
-          std::unordered_map<std::string, std::string>{
-              {"preview_interval", "-1"}}),
-      StatusError);
+  EXPECT_THROW(applySdCtxHandlers(cfgNeg,
+                                  std::unordered_map<std::string, std::string>{
+                                      {"preview_interval", "-1"}}),
+               StatusError);
 
   SdCtxConfig cfgBad;
-  EXPECT_THROW(
-      applySdCtxHandlers(
-          cfgBad,
-          std::unordered_map<std::string, std::string>{
-              {"preview_interval", "abc"}}),
-      StatusError);
+  EXPECT_THROW(applySdCtxHandlers(cfgBad,
+                                  std::unordered_map<std::string, std::string>{
+                                      {"preview_interval", "abc"}}),
+               StatusError);
 }
 
 TEST(SdCtxHandlers_PreviewBoolFlags, DenoisedAndNoisyMapAndInvalidThrow) {
@@ -372,20 +364,16 @@ TEST(SdCtxHandlers_PreviewBoolFlags, DenoisedAndNoisyMapAndInvalidThrow) {
   EXPECT_FALSE(applyOne("preview_noisy", "false").previewNoisy);
 
   SdCtxConfig cfgA;
-  EXPECT_THROW(
-      applySdCtxHandlers(
-          cfgA,
-          std::unordered_map<std::string, std::string>{
-              {"preview_denoised", "maybe"}}),
-      StatusError);
+  EXPECT_THROW(applySdCtxHandlers(cfgA,
+                                  std::unordered_map<std::string, std::string>{
+                                      {"preview_denoised", "maybe"}}),
+               StatusError);
 
   SdCtxConfig cfgB;
-  EXPECT_THROW(
-      applySdCtxHandlers(
-          cfgB,
-          std::unordered_map<std::string, std::string>{
-              {"preview_noisy", "maybe"}}),
-      StatusError);
+  EXPECT_THROW(applySdCtxHandlers(cfgB,
+                                  std::unordered_map<std::string, std::string>{
+                                      {"preview_noisy", "maybe"}}),
+               StatusError);
 }
 
 TEST(SdCtxHandlers_PreviewDefaults, AreNoneOneTrueFalse) {
