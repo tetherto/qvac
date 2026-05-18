@@ -352,11 +352,12 @@ std::any SdModel::process(const std::any& input) {
   // omits "mode" keeps behaving as an image generation job.
   std::string mode = "txt2img";
   const auto &obj = jsonRoot.get<picojson::object>();
-  if (auto it = obj.find("mode"); it != obj.end()) {
-    if (!it->second.is<std::string>())
-      throw StatusError(general_error::InvalidArgument,
-                        "mode must be a string");
-    mode = it->second.get<std::string>();
+  if (const auto modeEntry = obj.find("mode"); modeEntry != obj.end()) {
+    if (!modeEntry->second.is<std::string>()) {
+      throw StatusError(
+          general_error::InvalidArgument, "mode must be a string");
+    }
+    mode = modeEntry->second.get<std::string>();
   }
 
   const bool isVideo =
@@ -373,12 +374,13 @@ std::any SdModel::process(const std::any& input) {
 // process().
 // ---------------------------------------------------------------------------
 
+// NOLINTBEGIN(readability-function-cognitive-complexity,readability-identifier-length,google-readability-braces-around-statements,readability-braces-around-statements,readability-implicit-bool-conversion,readability-uppercase-literal-suffix)
 std::any SdModel::processImage(const GenerationJob &job,
-                               const picojson::value &v) {
+                               const picojson::value &parsed) {
   // -- Build SdGenConfig from handlers ---------------------------------------
   qvac_lib_inference_addon_sd::SdGenConfig gen{};
-  qvac_lib_inference_addon_sd::applySdGenHandlers(gen,
-                                                  v.get<picojson::object>());
+  qvac_lib_inference_addon_sd::applySdGenHandlers(
+      gen, parsed.get<picojson::object>());
 
   if (gen.mode != "txt2img" && gen.mode != "img2img") {
     throw StatusError(
@@ -569,7 +571,7 @@ std::any SdModel::processImage(const GenerationJob &job,
       if (!job.initImageBytes.empty()) {
         initPng = job.initImageBytes;
       } else {
-        const auto &jsonObj = v.get<picojson::object>();
+        const auto &jsonObj = parsed.get<picojson::object>();
         auto initBytesIt = jsonObj.find("init_image_bytes");
         if (initBytesIt != jsonObj.end() &&
             initBytesIt->second.is<picojson::array>()) {
@@ -819,6 +821,7 @@ std::any SdModel::processImage(const GenerationJob &job,
   // and stats are emitted by queueJobEnded() -> runtimeStats().
   return std::any{};
 }
+// NOLINTEND(readability-function-cognitive-complexity,readability-identifier-length,google-readability-braces-around-statements,readability-braces-around-statements,readability-implicit-bool-conversion,readability-uppercase-literal-suffix)
 
 // ---------------------------------------------------------------------------
 // processVideo() -- applies SdVidGenHandlers, fills sd_vid_gen_params_t,
@@ -829,12 +832,13 @@ std::any SdModel::processImage(const GenerationJob &job,
 // Assumes callbacks + guard are already set up by process().
 // ---------------------------------------------------------------------------
 
+// NOLINTBEGIN(readability-function-cognitive-complexity,readability-identifier-length,google-readability-braces-around-statements,readability-braces-around-statements,readability-implicit-bool-conversion,readability-uppercase-literal-suffix)
 std::any SdModel::processVideo(const GenerationJob &job,
-                               const picojson::value &v) {
+                               const picojson::value &parsed) {
   // -- Build SdVidGenConfig from handlers ------------------------------------
   qvac_lib_inference_addon_sd::SdVidGenConfig vid{};
-  qvac_lib_inference_addon_sd::applySdVidGenHandlers(vid,
-                                                     v.get<picojson::object>());
+  qvac_lib_inference_addon_sd::applySdVidGenHandlers(
+      vid, parsed.get<picojson::object>());
 
   if (vid.mode != "txt2vid" && vid.mode != "img2vid" && vid.mode != "flf2vid")
     throw StatusError(general_error::InvalidArgument,
@@ -1112,6 +1116,7 @@ std::any SdModel::processVideo(const GenerationJob &job,
 
   return std::any{};
 }
+// NOLINTEND(readability-function-cognitive-complexity,readability-identifier-length,google-readability-braces-around-statements,readability-braces-around-statements,readability-implicit-bool-conversion,readability-uppercase-literal-suffix)
 
 // ---------------------------------------------------------------------------
 // cancel / runtimeStats

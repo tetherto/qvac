@@ -10,6 +10,7 @@ using namespace sd_backend_selection;
 
 class SdBackendSelectionTest : public ::testing::Test {
 protected:
+  // NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
   std::unordered_map<std::string, std::string> configMap;
 
   void SetUp() override { configMap.clear(); }
