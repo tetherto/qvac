@@ -27,8 +27,8 @@ Android mobile GPU results (Samsung S25 Adreno 830, Pixel 9 Pro Mali-G715) are i
 |--------|-----|-----|-----------|--------|-------------|-----|--------|
 | Mac (local) | Apple M4 | Apple M4 GPU | 8 | 16 GB unified | Metal | macOS 26.4.1 | **Tested** |
 | iPhone 16e | Apple A18 | Apple A18 GPU | 5 | 8 GB (~5.7 GB usable) | Metal | iOS 18.5 | **Tested** |
-| iPhone 16 Pro | Apple A18 Pro | Apple A18 Pro GPU | 6 | — | — | — | **TODO**: not tested (Firebase `DEVICE_CAPACITY_NONE`) |
-| iPhone 17 | Apple A19 Pro | — | — | — | — | — | **TODO**: not tested (Firebase `DEVICE_CAPACITY_NONE`) |
+| iPhone 16 Pro | Apple A18 Pro | Apple A18 Pro GPU | 6 | 8 GB (~5.3 GB Metal working set) | Metal | iOS 18.3.2 | **Tested** (Firebase `DEVICE_CAPACITY_LOW`, 2026-05-18) |
+| iPhone 17 | Apple A19 Pro | — | — | — | — | — | **TODO**: not in Firebase catalog (2026-05-18) |
 
 Android devices: see [Appendix G](#appendix-g-android-gpu-results).
 
@@ -149,6 +149,82 @@ All results use elephant.jpg (612 x 408). Peak RSS captured via `/usr/bin/time -
 
 Android device results: see [Appendix G](#appendix-g-android-gpu-results).
 
+### iPhone 16 Pro (A18 Pro) — Firebase Test Lab (added 2026-05-18)
+
+> Metal-only (`ngl=99`). In-process inference via static-linked llama.cpp
+> (posix_spawn not available on iOS sandbox). Median of 3 measured runs,
+> 1 warmup, 60s cool-down. Models > ~3.8 GB total (model+mmproj) Jetsam-killed
+> due to in-process memory overhead. Sequential sessions: fiber first, then b9025.
+> Qwen3.5 fruitPlate skipped (context overflow).
+
+**Fiber** (`tetherto/temp-8189`, `f686a1324`):
+
+| Model | Quant | Image | Vision (ms) | Prefill (t/s) | Decode (t/s) | Total (ms) |
+|-------|-------|-------|------------|---------------|-------------|-----------|
+| Gemma4-E2B | Q4_K_M | elephant | 883 | 174.4 | 30.9 | 10,467 |
+| Gemma4-E2B | Q4_K_M | fruitPlate | 898 | 175.2 | 30.4 | 10,635 |
+| Gemma4-E2B | Q8_0 | — | — | — | — | Jetsam (5.6 GB) |
+| Gemma4-E4B | Q4_K_M | — | — | — | — | Jetsam (5.5 GB) |
+| Gemma4-E4B | Q8_0 | — | — | — | — | Jetsam (8.5 GB) |
+| Qwen3.5-2B | Q4_K_M | elephant | 555 | 231.1 | 31.4 | 10,467 |
+| Qwen3.5-2B | Q8_0 | elephant | 570 | 237.2 | 22.6 | 14,152 |
+| Qwen3.5-4B | Q4_K_M | elephant | 638 | 124.3 | 14.4 | 21,906 |
+| Qwen3.5-4B | Q8_0 | — | — | — | — | Jetsam (4.8 GB) |
+
+**b9025** (upstream tag `eff06702b`):
+
+| Model | Quant | Image | Vision (ms) | Prefill (t/s) | Decode (t/s) | Total (ms) |
+|-------|-------|-------|------------|---------------|-------------|-----------|
+| Gemma4-E2B | Q4_K_M | elephant | 879 | 176.2 | 30.0 | 10,815 |
+| Gemma4-E2B | Q4_K_M | fruitPlate | 896 | 179.5 | 30.0 | 10,787 |
+| Qwen3.5-2B | Q4_K_M | elephant | 591 | 222.2 | 31.0 | 10,705 |
+| Qwen3.5-2B | Q8_0 | elephant | 549 | 241.5 | 23.2 | 13,633 |
+| Qwen3.5-4B | Q4_K_M | elephant | 647 | 124.4 | 14.6 | 21,549 |
+
+**Fiber vs b9025 — Anchor variant (Gemma4-E2B-Q4 Metal elephant):**
+
+| Metric | Fiber | b9025 | Delta |
+|--------|-------|-------|-------|
+| Vision (ms) | 883 | 879 | -0.5% |
+| Prefill (t/s) | 174.4 | 176.2 | +1.0% |
+| Decode (t/s) | 30.9 | 30.0 | -2.9% |
+
+Anchor delta within 3% — no significant thermal drift between sessions.
+
+**Fiber vs b9025 — All models:**
+
+| Model | Quant | Fiber decode (t/s) | b9025 decode (t/s) | Delta |
+|-------|-------|--------------------|--------------------| ------|
+| Gemma4-E2B | Q4_K_M | 30.9 | 30.0 | -2.9% |
+| Qwen3.5-2B | Q4_K_M | 31.4 | 31.0 | -1.3% |
+| Qwen3.5-2B | Q8_0 | 22.6 | 23.2 | +2.7% |
+| Qwen3.5-4B | Q4_K_M | 14.4 | 14.6 | +1.4% |
+
+All deltas within ±3% — fiber and b9025 are equivalent on iPhone 16 Pro Metal
+for these models. The decode ceiling is ~31 t/s (2B Q4) / ~23 t/s (2B Q8) /
+~15 t/s (4B Q4), consistent with the A18 Pro's ~60 GB/s memory bandwidth.
+
+**Caveat — Firebase Test Lab thermal and external factors:** These results are
+directionally reliable for establishing per-model baselines but not precise
+enough to detect <5% branch deltas. Firebase does not expose device thermal
+state, does not guarantee the same physical device across sessions, and shares
+devices with other users between invocations. The anchor variant shows -2.9%
+(borderline on the 3% noise threshold), which could reflect thermal carryover,
+different device hardware, or background process interference. For precise
+branch-to-branch comparison (<5% deltas), local device testing with
+`powermetrics` thermal monitoring is required.
+
+**Cross-platform comparison (Gemma4-E2B Q4_K_M Metal elephant, fiber):**
+
+| Device | Vision (ms) | Prefill (t/s) | Decode (t/s) |
+|--------|------------|---------------|-------------|
+| Mac M4 (16 GB, 8 cores) | 630 | 259.6 | 51.3 |
+| iPhone 16 Pro (8 GB, 6 cores) | 883 | 174.4 | 30.9 |
+| iPhone 16e (8 GB, 5 cores) | 1,236 | 125.9 | 27.2 |
+
+iPhone 16 Pro sits between Mac M4 and iPhone 16e as expected — 6 GPU cores vs
+5 (16e) and 8 (M4), ~60 GB/s vs ~50 GB/s vs ~120 GB/s bandwidth.
+
 ---
 
 ## 3. Top-3 Bottlenecks per Platform
@@ -223,8 +299,8 @@ Items required by the Asana ticket (QVAC-18293) but not yet delivered:
 |---|------|--------|--------|
 | 1 | **Peak RSS (MB) — Mac M4** | **Done** | Captured via `/usr/bin/time -l` (2026-05-13 run). See [Section 2](#2-primary-results-matrix) and [Appendix D.1c](#d1c-peak-rss-comparison-mb) |
 | 1b | **Peak RSS (MB) — iPhone 16e** | Not captured | Requires Xcode Memory Gauge or Instruments — not available in CLI harness |
-| 2 | **iPhone 16 Pro** | Not tested | Firebase Test Lab: `DEVICE_CAPACITY_NONE` for `iphone16pro,version=18.3` |
-| 3 | **iPhone 17** | Not tested | Firebase Test Lab: `DEVICE_CAPACITY_NONE` |
+| 2 | **iPhone 16 Pro** | **Done** | Firebase Test Lab `DEVICE_CAPACITY_LOW` (2026-05-18). Fiber + b9025, Metal-only, 4 models with data, 4 Jetsam. See [Section 2, iPhone 16 Pro](#iphone-16-pro-a18-pro--firebase-test-lab-added-2026-05-18) |
+| 3 | **iPhone 17** | Not tested | Firebase Test Lab: not in device catalog (2026-05-18) |
 | 4 | **Apple profiler evidence screenshots** | Not included | Metal System Traces captured but detailed shader/memory analysis pending |
 | 5 | **iPhone 16e Qwen3.5-2B** | Profiling run only | 1 run during Metal profiling; formal 3-run median entry not collected |
 | 6 | **Raw traces as Asana attachments** | Not uploaded | 6 trace files (~2.1 GB total) — too large for Asana attachment; stored locally |
