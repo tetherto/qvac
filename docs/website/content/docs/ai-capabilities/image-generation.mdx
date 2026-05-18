@@ -8,7 +8,7 @@ schemaType: HowTo
 
 Image generation runs on a **customized Diffusion engine** ([`qvac-ext-stable-diffusion.cpp`](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp)). Load a supported model using `modelType: "diffusion"`. Then, provide a text `prompt` describing the image to generate.
 
-For image-to-image, also pass `init_image` (a `Uint8Array` of PNG bytes) — the model transforms the input guided by the prompt instead of starting from noise. `diffusion()` returns one or more PNG images as `Uint8Array` buffers. Use `progressStream` to track generation progress step-by-step.
+For image-to-image, also pass `init_image` (a `Uint8Array` of PNG or JPEG bytes) — the model transforms the input guided by the prompt instead of starting from noise. `diffusion()` returns one or more PNG images as `Uint8Array` buffers. Use `progressStream` to track generation progress step-by-step.
 
 For higher-resolution outputs, you can chain a Real-ESRGAN upscaler. Either attach it as a post-processing step at load time and trigger it per generation via `diffusion({ upscale })`, or load an ESRGAN model standalone with `modelConfig.mode: "upscale"` and call `upscale()` on any PNG/JPEG buffer — generated or not. Both paths return PNG `Uint8Array` buffers and accept a `repeats` option that compounds the scale factor across sequential passes.
 
@@ -28,7 +28,9 @@ Supported model families and their file layouts:
 - **FLUX.2-klein**: split layout — diffusion model `*.gguf` + LLM text encoder `*.gguf` (via `llmModelSrc`) + VAE `*.safetensors` (via `vaeModelSrc`).
 - **SD1.x, SD2.x**: single all-in-one `*.gguf` file. No companion files needed.
 - **SDXL, SD3**: may require separate CLIP/T5 text encoder files (`clipLModelSrc`, `clipGModelSrc`, `t5XxlModelSrc`) in `modelConfig` depending on the model variant.
-- **ESRGAN** (via `modelConfig.upscaler.model_src`): post-generation upscaler. Model file format: `*.pth`; required when `modelConfig.upscaler` is configured.
+- **ESRGAN**: post-generation upscaler, `*.pth` format. Two ways to load:
+  - **Paired with a diffusion model** — set `modelConfig.upscaler.model_src` at `loadModel()` time alongside the diffusion `modelSrc`.
+  - **Standalone** — pass the ESRGAN model as the top-level `modelSrc` with `modelConfig.mode: "upscale"`.
 
 For models available as constants, see [SDK — Models](/introduction#models).
 
@@ -153,6 +155,8 @@ const modelId = await loadModel(REALESRGAN_X4PLUS_ANIME_6B, {
 const { outputs } = upscale({ modelId, image: pngBytes, repeats: 2 });
 const [upscaledPng] = await outputs;
 ```
+
+`tile_size` defaults to 128. Increase it to reduce tile seams on large inputs, at the cost of more memory per pass.
 
 <Callout type="success">
 **Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/quickstart).
