@@ -19,5 +19,6 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        shopt -s dotglob nullglob
-        rm -rf -- "${GITHUB_WORKSPACE:?}"/*
+        # find is a no-op when the dir is empty; rm -rf $WS/* would fail.
+        mkdir -p "${GITHUB_WORKSPACE:?}"
+        find "${GITHUB_WORKSPACE}" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +

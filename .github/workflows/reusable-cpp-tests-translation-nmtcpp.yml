@@ -29,6 +29,9 @@ jobs:
       id-token: write
       pull-requests: write
     steps:
+      - name: Wipe self-hosted workspace
+        uses: tetherto/qvac/.github/actions/wipe-workspace@add-wipe-workspace-action
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ inputs.repository || github.event.pull_request.head.repo.full_name }}

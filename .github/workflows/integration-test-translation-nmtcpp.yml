@@ -70,6 +70,9 @@ jobs:
         with:
           node-version: lts/*
 
+      - name: Wipe self-hosted workspace
+        uses: tetherto/qvac/.github/actions/wipe-workspace@add-wipe-workspace-action
+
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
