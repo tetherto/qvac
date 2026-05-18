@@ -64,7 +64,7 @@ export function loadTeam(pod) {
 }
 
 // Discover every pod registered under .github/teams/. Used by cross-pod
-// modes (e.g. /pr-mine) where the user's PRs may span multiple pods.
+// modes (e.g. /qv-pr-mine) where the user's PRs may span multiple pods.
 // Returns an array of team objects (same shape as loadTeam(pod)).
 export function discoverPods() {
   const dir = teamsDir();
