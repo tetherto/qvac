@@ -1,10 +1,9 @@
 # VLM Metal Baseline Performance Report
 
 **Date**: 2026-05-13
-**Tasks**: QVAC-18293 (profiling baseline), QVAC-18297 (optimization PR 1)
-**Assignee**: Ian Cris Lomugdang
+**Tasks**: QVAC-18293 (profiling baseline)
 
-This report consolidates VLM inference benchmark and profiling results from the QVAC-18293 investigation on Apple Metal devices (Mac M4, iPhone 16e). It includes branch comparison data (upstream b9025 vs U1 deepstack prealloc vs Fiber fork) and the fiber regression fix progression (RC1-RC4) from QVAC-18297.
+This report consolidates VLM inference benchmark and profiling results from the QVAC-18293 investigation on Apple Metal devices (Mac M4, iPhone 16e, iPhone 16Pro).
 
 Android mobile GPU results (Samsung S25 Adreno 830, Pixel 9 Pro Mali-G715) are in [Appendix G](#appendix-g-android-gpu-results). Full Android analysis will continue under a separate ticket and dedicated report document.
 
@@ -96,6 +95,12 @@ All results use elephant.jpg (612 x 408). Peak RSS captured via `/usr/bin/time -
 ### Mac M4
 
 > Fiber = `tetherto/temp-8189` (build 8412). Full 8-model × 2-backend matrix tested for both b9025 and Fiber (2026-05-13). See [Appendix D](#appendix-d-branch-comparison--b9025-vs-u1-vs-fiber) for detailed branch comparison. Coherence validated: all configs produce correct image descriptions.
+>
+> **Date**: 2026-05-13 (run group T1856)
+> **Raw logs**: `vlm-benchmark/results/raw/b9025-mac-2026-05-13T1856/` and `vlm-benchmark/results/raw/fiber-mac-2026-05-13T1856/`
+> **Parsed**: `vlm-benchmark/results/parsed/b9025-mac-2026-05-13T1856.json` and `vlm-benchmark/results/parsed/fiber-mac-2026-05-13T1856.json`
+> **Metal traces**: `vlm-benchmark/results/traces/` (multiple dates; see [Appendix F](#appendix-f-metal-profiling--gpu-analysis))
+> **Peak RSS**: via `/usr/bin/time -l` (`peak_mem_mb` field in parsed JSON)
 
 | Branch | Backend | Model | Quant | Vision (ms) | Prefill (t/s) | Decode (t/s) | TTFT (ms) | Total (ms) | Peak RSS (MB) |
 |--------|---------|-------|-------|------------|---------------|-------------|----------|-----------|----------|
@@ -132,40 +137,36 @@ All results use elephant.jpg (612 x 408). Peak RSS captured via `/usr/bin/time -
 | b9025 | CPU | Qwen3.5-4B | Q8_0 | 3,698 | 66.21 | 12.80 | 7,700 | 24,300 | 5,361 |
 | Fiber | CPU | Qwen3.5-4B | Q8_0 | 4,031 | 58.37 | 13.25 | 8,571 | 24,063 | 5,374 |
 
-### iPhone 16e (A18)
-
-> Phase 1 b9025-only measurements (2026-05-07) moved to [Appendix K](#appendix-k-iphone-16e-phase-1-measurements).
-> Full fiber vs b9025 matrix below (2026-05-18, local device, controlled thermal).
-> OOM detail: [Appendix A](#appendix-a-iphone-16e-oom-detail).
-
-Android device results: see [Appendix G](#appendix-g-android-gpu-results).
-
-### iPhone 16e (A18) — Local Device, Full Matrix (added 2026-05-18)
+### iPhone 16e (A18) — Local Device, Full Matrix
 
 > Metal-only (`ngl=99`). In-process inference via static-linked llama.cpp.
 > Median of 3 measured runs, 1 warmup, 60s cool-down, 5 min between models,
 > 10 min between sessions. Local device via `xcodebuild test-without-building`.
 > Models > ~3.8 GB total Jetsam-killed (same as Firebase 16 Pro).
+>
+> **Date**: 2026-05-18 (run group T1659)
+> **Raw logs**: `vlm-benchmark/results/raw/ios-local-{fiber,b9025}-{model}-2026-05-18T1659/xcodebuild.log`
+> **RSS**: via in-process `mach_task_basic_info` (run=2 values; includes XCTest host overhead ~50-100 MB)
 
 **Fiber** (`tetherto/temp-8189`, `f686a1324`):
 
-| Model | Quant | Image | Vision (ms) | img_decode (ms) | Prefill (t/s) | Decode (t/s) |
-|-------|-------|-------|------------|----------------|---------------|-------------|
-| Gemma4-E2B | Q4_K_M | elephant | 1,200 | 1,122 | 206.8 | 17.01 |
-| Gemma4-E2B | Q4_K_M | fruitPlate | 1,225 | 1,126 | 207.8 | 16.95 |
-| Qwen3.5-2B | Q4_K_M | elephant | 783 | 820 | 133.8 | 8.22 |
-| Qwen3.5-2B | Q8_0 | elephant | 785 | 779 | 137.4 | 7.23 |
-| Qwen3.5-4B | Q4_K_M | elephant | 787 | 2,133 | 69.2 | 3.98 |
+| Model | Quant | Image | Vision (ms) | img_decode (ms) | Prefill (t/s) | Decode (t/s) | RSS (MB) |
+|-------|-------|-------|------------|----------------|---------------|-------------|----------|
+| Gemma4-E2B | Q4_K_M | elephant | 1,200 | 1,122 | 206.8 | 17.01 | 1,284 |
+| Gemma4-E2B | Q4_K_M | fruitPlate | 1,225 | 1,126 | 207.8 | 16.95 | 1,306 |
+| Qwen3.5-2B | Q4_K_M | elephant | 783 | 820 | 133.8 | 8.22 | 1,328 |
+| Qwen3.5-2B | Q8_0 | elephant | 785 | 779 | 137.4 | 7.23 | 1,474 |
+| Qwen3.5-4B | Q4_K_M | elephant | 787 | 2,133 | 69.2 | 3.98 | 1,422 |
 
 **b9025** (upstream tag `eff06702b`):
 
-| Model | Quant | Image | Vision (ms) | img_decode (ms) | Prefill (t/s) | Decode (t/s) |
-|-------|-------|-------|------------|----------------|---------------|-------------|
-| Gemma4-E2B | Q4_K_M | elephant | 1,285 | 38 | 122.7 | 27.26 |
-| Gemma4-E2B | Q4_K_M | fruitPlate | 1,317 | 40 | 123.4 | 27.29 |
-| Qwen3.5-2B | Q4_K_M | elephant | 927 | 9 | 150.0 | 27.69 |
-| Qwen3.5-2B | Q8_0 | elephant | 924 | 9 | 154.3 | 21.86 |
-| Qwen3.5-4B | Q4_K_M | elephant | 1,058 | 10 | 82.7 | 12.28 |
+| Model | Quant | Image | Vision (ms) | img_decode (ms) | Prefill (t/s) | Decode (t/s) | RSS (MB) |
+|-------|-------|-------|------------|----------------|---------------|-------------|----------|
+| Gemma4-E2B | Q4_K_M | elephant | 1,285 | 38 | 122.7 | 27.26 | 1,071 |
+| Gemma4-E2B | Q4_K_M | fruitPlate | 1,317 | 40 | 123.4 | 27.29 | 1,096 |
+| Qwen3.5-2B | Q4_K_M | elephant | 927 | 9 | 150.0 | 27.69 | 1,575 |
+| Qwen3.5-2B | Q8_0 | elephant | 924 | 9 | 154.3 | 21.86 | 1,305 |
+| Qwen3.5-4B | Q4_K_M | elephant | 1,058 | 10 | 82.7 | 12.28 | 956 |
 
 **Fiber vs b9025 — iPhone 16e regression:**
 
@@ -188,37 +189,45 @@ This strongly suggests the fiber fork's Metal image projection kernel is
 missing an optimization that b9025 has — possibly the same deepstack/GDN
 Metal kernel gap documented in `QVAC-18297-fiber-b9025-gap.md`.
 
-### iPhone 16 Pro (A18 Pro) — Firebase Test Lab (added 2026-05-18)
+### iPhone 16 Pro (A18 Pro) — Firebase Test Lab
 
 > Metal-only (`ngl=99`). In-process inference via static-linked llama.cpp
 > (posix_spawn not available on iOS sandbox). Median of 3 measured runs,
 > 1 warmup, 60s cool-down. Models > ~3.8 GB total (model+mmproj) Jetsam-killed
 > due to in-process memory overhead. Sequential sessions: fiber first, then b9025.
 > Qwen3.5 fruitPlate skipped (context overflow).
+>
+> **Date**: 2026-05-18 (fiber session T1505, b9025 session T1545)
+> **Fiber logs**: `gs://qvac-vlm-benchmark-results/ios-fiber-{model}-2026-05-18T1505/iphone16pro-18.3-en-portrait/syslog.txt`
+> **b9025 logs**: `gs://qvac-vlm-benchmark-results/ios-b9025-{model}-2026-05-18T1545/iphone16pro-18.3-en-portrait/syslog.txt`
+> **RSS**: via in-process `mach_task_basic_info` (run=2 values). Firebase RSS values
+> (75-135 MB) are significantly lower than local iPhone 16e (956-1575 MB) — Firebase
+> `mach_task_basic_info` may not account for Metal GPU buffer allocations mapped
+> outside the process address space.
 
 **Fiber** (`tetherto/temp-8189`, `f686a1324`):
 
-| Model | Quant | Image | Vision (ms) | Prefill (t/s) | Decode (t/s) | Total (ms) |
-|-------|-------|-------|------------|---------------|-------------|-----------|
-| Gemma4-E2B | Q4_K_M | elephant | 883 | 174.4 | 30.9 | 10,467 |
-| Gemma4-E2B | Q4_K_M | fruitPlate | 898 | 175.2 | 30.4 | 10,635 |
-| Gemma4-E2B | Q8_0 | — | — | — | — | Jetsam (5.6 GB) |
-| Gemma4-E4B | Q4_K_M | — | — | — | — | Jetsam (5.5 GB) |
-| Gemma4-E4B | Q8_0 | — | — | — | — | Jetsam (8.5 GB) |
-| Qwen3.5-2B | Q4_K_M | elephant | 555 | 231.1 | 31.4 | 10,467 |
-| Qwen3.5-2B | Q8_0 | elephant | 570 | 237.2 | 22.6 | 14,152 |
-| Qwen3.5-4B | Q4_K_M | elephant | 638 | 124.3 | 14.4 | 21,906 |
-| Qwen3.5-4B | Q8_0 | — | — | — | — | Jetsam (4.8 GB) |
+| Model | Quant | Image | Vision (ms) | Prefill (t/s) | Decode (t/s) | Total (ms) | RSS (MB) |
+|-------|-------|-------|------------|---------------|-------------|-----------|----------|
+| Gemma4-E2B | Q4_K_M | elephant | 883 | 174.4 | 30.9 | 10,467 | 96 |
+| Gemma4-E2B | Q4_K_M | fruitPlate | 898 | 175.2 | 30.4 | 10,635 | 75 |
+| Gemma4-E2B | Q8_0 | — | — | — | — | Jetsam (5.6 GB) | — |
+| Gemma4-E4B | Q4_K_M | — | — | — | — | Jetsam (5.5 GB) | — |
+| Gemma4-E4B | Q8_0 | — | — | — | — | Jetsam (8.5 GB) | — |
+| Qwen3.5-2B | Q4_K_M | elephant | 555 | 231.1 | 31.4 | 10,467 | 135 |
+| Qwen3.5-2B | Q8_0 | elephant | 570 | 237.2 | 22.6 | 14,152 | 78 |
+| Qwen3.5-4B | Q4_K_M | elephant | 638 | 124.3 | 14.4 | 21,906 | 97 |
+| Qwen3.5-4B | Q8_0 | — | — | — | — | Jetsam (4.8 GB) | — |
 
 **b9025** (upstream tag `eff06702b`):
 
-| Model | Quant | Image | Vision (ms) | Prefill (t/s) | Decode (t/s) | Total (ms) |
-|-------|-------|-------|------------|---------------|-------------|-----------|
-| Gemma4-E2B | Q4_K_M | elephant | 879 | 176.2 | 30.0 | 10,815 |
-| Gemma4-E2B | Q4_K_M | fruitPlate | 896 | 179.5 | 30.0 | 10,787 |
-| Qwen3.5-2B | Q4_K_M | elephant | 591 | 222.2 | 31.0 | 10,705 |
-| Qwen3.5-2B | Q8_0 | elephant | 549 | 241.5 | 23.2 | 13,633 |
-| Qwen3.5-4B | Q4_K_M | elephant | 647 | 124.4 | 14.6 | 21,549 |
+| Model | Quant | Image | Vision (ms) | Prefill (t/s) | Decode (t/s) | Total (ms) | RSS (MB) |
+|-------|-------|-------|------------|---------------|-------------|-----------|----------|
+| Gemma4-E2B | Q4_K_M | elephant | 879 | 176.2 | 30.0 | 10,815 | 96 |
+| Gemma4-E2B | Q4_K_M | fruitPlate | 896 | 179.5 | 30.0 | 10,787 | 96 |
+| Qwen3.5-2B | Q4_K_M | elephant | 591 | 222.2 | 31.0 | 10,705 | 128 |
+| Qwen3.5-2B | Q8_0 | elephant | 549 | 241.5 | 23.2 | 13,633 | 114 |
+| Qwen3.5-4B | Q4_K_M | elephant | 647 | 124.4 | 14.6 | 21,549 | 107 |
 
 **Fiber vs b9025 — Anchor variant (Gemma4-E2B-Q4 Metal elephant):**
 
@@ -253,13 +262,15 @@ different device hardware, or background process interference. For precise
 branch-to-branch comparison (<5% deltas), local device testing with
 `powermetrics` thermal monitoring is required.
 
-**Cross-platform comparison (Gemma4-E2B Q4_K_M Metal elephant, fiber):**
+**Cross-platform comparison (Gemma4-E2B Q4_K_M Metal elephant):**
 
-| Device | Vision (ms) | Prefill (t/s) | Decode (t/s) |
-|--------|------------|---------------|-------------|
-| Mac M4 (16 GB, 8 cores) | 630 | 259.6 | 51.3 |
-| iPhone 16 Pro (8 GB, 6 cores) | 883 | 174.4 | 30.9 |
-| iPhone 16e (8 GB, 5 cores) | 1,236 | 125.9 | 27.2 |
+| Device | Branch | Vision (ms) | Prefill (t/s) | Decode (t/s) | Peak RSS (MB) | RSS method |
+|--------|--------|------------|---------------|-------------|--------------|------------|
+| Mac M4 (16 GB, 8 cores) | b9025 | 632 | 260.3 | 50.7 | 1,266 | `/usr/bin/time -l` |
+| iPhone 16 Pro (8 GB, 6 cores) | fiber | 883 | 174.4 | 30.9 | 96 | `mach_task_basic_info` [^2] |
+| iPhone 16e (8 GB, 5 cores) | b9025 | 1,285 | 122.7 | 27.3 | 1,071 | `mach_task_basic_info` |
+
+[^2]: Firebase RSS values are not comparable to local measurements — see iPhone 16 Pro notes above.
 
 iPhone 16 Pro sits between Mac M4 and iPhone 16e as expected — 6 GPU cores vs
 5 (16e) and 8 (M4), ~60 GB/s vs ~50 GB/s vs ~120 GB/s bandwidth.
@@ -1108,6 +1119,10 @@ bare benchmarks/qvac-18297-vlm-cache-bench.js
 > (`eff06702b`) via `xcrun devicectl` with `--predict 128`. Superseded by
 > the full fiber vs b9025 matrix in [Section 2, iPhone 16e full matrix](#iphone-16e-a18--local-device-full-matrix-added-2026-05-18)
 > which uses `--predict 256` and in-process inference.
+>
+> **Date**: 2026-05-07 (run-2)
+> **Raw logs**: Not preserved in vlm-benchmark repo (predates structured log collection).
+> **Peak RSS**: Not captured (no `/usr/bin/time -l` on iOS CLI path at that time).
 
 | Backend | Model | Quant | Vision (ms) | Prefill (t/s) | Decode (t/s) | TTFT (ms) | Notes |
 |---------|-------|-------|------------|---------------|-------------|----------|-------|
