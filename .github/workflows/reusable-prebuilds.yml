@@ -213,13 +213,8 @@ jobs:
           rm -rf $VCPKG_ROOT/buildtrees/*
           rm -rf $VCPKG_ROOT/packages/*
 
-      - name: Setup Bare tooling (Linux ARM and macOS)
-        if: matrix.arch == 'arm64' || matrix.os == 'macos-15' || matrix.os == 'macos-15-intel'
+      - name: Setup Bare tooling
         uses: tetherto/qvac/.github/actions/setup-bare-tooling@0bbdca93da303a0b1634ba14a89cec085621078d
-
-      - name: Add linux x64 Bare tooling to PATH
-        if: matrix.os == 'ubuntu-22.04' && matrix.arch == 'x64'
-        run: echo "/usr/local/nvm/versions/node/v20.20.2/bin" >> $GITHUB_PATH
 
       - name: Setup Apple Clang
         uses: tetherto/qvac/.github/actions/setup-apple-clang@1d9b2165867d03c6edd675e402ee101a5d48a6d8
