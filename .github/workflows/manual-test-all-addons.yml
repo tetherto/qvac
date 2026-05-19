@@ -1,0 +1,373 @@
+name: Manual — Test All Inference Addons
+
+# Manually fan-out all per-addon integration test workflows. Intended for
+# validating changes in shared dependencies (notably `inference-addon-cpp`)
+# across every consumer addon at once. Not wired into PR/push triggers — it
+# is too expensive to gate on every change and is meant to be dispatched on
+# demand from the Actions tab.
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref (branch/tag/SHA) of qvac to test. Empty = workflow's own ref."
+        type: string
+        required: false
+      repository:
+        description: "Repository to checkout. Empty = current repo."
+        type: string
+        required: false
+      addons:
+        description: "Comma-separated addon slugs to run, or 'all'. Slugs match the integration-test-<slug>.yml workflow names."
+        type: string
+        required: false
+        default: "all"
+      include_mobile:
+        description: "Also run the integration-mobile-test-<addon>.yml suite (slow; needs device farm runners)."
+        type: boolean
+        required: false
+        default: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      bci-whispercpp: ${{ steps.gate.outputs.bci-whispercpp }}
+      classification-ggml: ${{ steps.gate.outputs.classification-ggml }}
+      decoder-audio: ${{ steps.gate.outputs.decoder-audio }}
+      diffusion-cpp: ${{ steps.gate.outputs.diffusion-cpp }}
+      embed-llamacpp: ${{ steps.gate.outputs.embed-llamacpp }}
+      llm-llamacpp: ${{ steps.gate.outputs.llm-llamacpp }}
+      ocr-onnx: ${{ steps.gate.outputs.ocr-onnx }}
+      transcription-parakeet: ${{ steps.gate.outputs.transcription-parakeet }}
+      transcription-whispercpp: ${{ steps.gate.outputs.transcription-whispercpp }}
+      translation-nmtcpp: ${{ steps.gate.outputs.translation-nmtcpp }}
+      tts-ggml: ${{ steps.gate.outputs.tts-ggml }}
+      tts-onnx: ${{ steps.gate.outputs.tts-onnx }}
+      vla: ${{ steps.gate.outputs.vla }}
+    steps:
+      - name: Resolve addon selection
+        id: gate
+        env:
+          ADDONS_INPUT: ${{ inputs.addons }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ADDONS=(
+            bci-whispercpp
+            classification-ggml
+            decoder-audio
+            diffusion-cpp
+            embed-llamacpp
+            llm-llamacpp
+            ocr-onnx
+            transcription-parakeet
+            transcription-whispercpp
+            translation-nmtcpp
+            tts-ggml
+            tts-onnx
+            vla
+          )
+          INPUT="${ADDONS_INPUT:-all}"
+          NORMALIZED=",$(echo "$INPUT" | tr -d '[:space:]'),"
+          for addon in "${ADDONS[@]}"; do
+            if [ "$INPUT" = "all" ] || [[ "$NORMALIZED" == *",${addon},"* ]]; then
+              echo "${addon}=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "${addon}=false" >> "$GITHUB_OUTPUT"
+            fi
+          done
+
+  bci-whispercpp:
+    needs: plan
+    if: needs.plan.outputs.bci-whispercpp == 'true'
+    uses: ./.github/workflows/integration-test-bci-whispercpp.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  classification-ggml:
+    needs: plan
+    if: needs.plan.outputs.classification-ggml == 'true'
+    uses: ./.github/workflows/integration-test-classification-ggml.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  decoder-audio:
+    needs: plan
+    if: needs.plan.outputs.decoder-audio == 'true'
+    uses: ./.github/workflows/integration-test-decoder-audio.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  diffusion-cpp:
+    needs: plan
+    if: needs.plan.outputs.diffusion-cpp == 'true'
+    uses: ./.github/workflows/integration-test-diffusion-cpp.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  embed-llamacpp:
+    needs: plan
+    if: needs.plan.outputs.embed-llamacpp == 'true'
+    uses: ./.github/workflows/integration-test-embed-llamacpp.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  llm-llamacpp:
+    needs: plan
+    if: needs.plan.outputs.llm-llamacpp == 'true'
+    uses: ./.github/workflows/integration-test-llm-llamacpp.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  ocr-onnx:
+    needs: plan
+    if: needs.plan.outputs.ocr-onnx == 'true'
+    uses: ./.github/workflows/integration-test-ocr-onnx.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  transcription-parakeet:
+    needs: plan
+    if: needs.plan.outputs.transcription-parakeet == 'true'
+    uses: ./.github/workflows/integration-test-transcription-parakeet.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  transcription-whispercpp:
+    needs: plan
+    if: needs.plan.outputs.transcription-whispercpp == 'true'
+    uses: ./.github/workflows/integration-test-transcription-whispercpp.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  translation-nmtcpp:
+    needs: plan
+    if: needs.plan.outputs.translation-nmtcpp == 'true'
+    uses: ./.github/workflows/integration-test-translation-nmtcpp.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  tts-ggml:
+    needs: plan
+    if: needs.plan.outputs.tts-ggml == 'true'
+    uses: ./.github/workflows/integration-test-tts-ggml.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  tts-onnx:
+    needs: plan
+    if: needs.plan.outputs.tts-onnx == 'true'
+    uses: ./.github/workflows/integration-test-tts-onnx.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  vla:
+    needs: plan
+    if: needs.plan.outputs.vla == 'true'
+    uses: ./.github/workflows/integration-test-vla.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  bci-whispercpp-mobile:
+    needs: plan
+    if: ${{ inputs.include_mobile && needs.plan.outputs.bci-whispercpp == 'true' }}
+    uses: ./.github/workflows/integration-mobile-test-bci-whispercpp.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  classification-ggml-mobile:
+    needs: plan
+    if: ${{ inputs.include_mobile && needs.plan.outputs.classification-ggml == 'true' }}
+    uses: ./.github/workflows/integration-mobile-test-classification-ggml.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  decoder-audio-mobile:
+    needs: plan
+    if: ${{ inputs.include_mobile && needs.plan.outputs.decoder-audio == 'true' }}
+    uses: ./.github/workflows/integration-mobile-test-decoder-audio.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  diffusion-cpp-mobile:
+    needs: plan
+    if: ${{ inputs.include_mobile && needs.plan.outputs.diffusion-cpp == 'true' }}
+    uses: ./.github/workflows/integration-mobile-test-diffusion-cpp.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  embed-llamacpp-mobile:
+    needs: plan
+    if: ${{ inputs.include_mobile && needs.plan.outputs.embed-llamacpp == 'true' }}
+    uses: ./.github/workflows/integration-mobile-test-embed-llamacpp.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  llm-llamacpp-mobile:
+    needs: plan
+    if: ${{ inputs.include_mobile && needs.plan.outputs.llm-llamacpp == 'true' }}
+    uses: ./.github/workflows/integration-mobile-test-llm-llamacpp.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  ocr-onnx-mobile:
+    needs: plan
+    if: ${{ inputs.include_mobile && needs.plan.outputs.ocr-onnx == 'true' }}
+    uses: ./.github/workflows/integration-mobile-test-ocr-onnx.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  transcription-parakeet-mobile:
+    needs: plan
+    if: ${{ inputs.include_mobile && needs.plan.outputs.transcription-parakeet == 'true' }}
+    uses: ./.github/workflows/integration-mobile-test-transcription-parakeet.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  transcription-whispercpp-mobile:
+    needs: plan
+    if: ${{ inputs.include_mobile && needs.plan.outputs.transcription-whispercpp == 'true' }}
+    uses: ./.github/workflows/integration-mobile-test-transcription-whispercpp.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  translation-nmtcpp-mobile:
+    needs: plan
+    if: ${{ inputs.include_mobile && needs.plan.outputs.translation-nmtcpp == 'true' }}
+    uses: ./.github/workflows/integration-mobile-test-translation-nmtcpp.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  tts-ggml-mobile:
+    needs: plan
+    if: ${{ inputs.include_mobile && needs.plan.outputs.tts-ggml == 'true' }}
+    uses: ./.github/workflows/integration-mobile-test-tts-ggml.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  tts-onnx-mobile:
+    needs: plan
+    if: ${{ inputs.include_mobile && needs.plan.outputs.tts-onnx == 'true' }}
+    uses: ./.github/workflows/integration-mobile-test-tts-onnx.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  vla-mobile:
+    needs: plan
+    if: ${{ inputs.include_mobile && needs.plan.outputs.vla == 'true' }}
+    uses: ./.github/workflows/integration-mobile-test-vla.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  summary:
+    if: ${{ always() }}
+    needs:
+      - bci-whispercpp
+      - classification-ggml
+      - decoder-audio
+      - diffusion-cpp
+      - embed-llamacpp
+      - llm-llamacpp
+      - ocr-onnx
+      - transcription-parakeet
+      - transcription-whispercpp
+      - translation-nmtcpp
+      - tts-ggml
+      - tts-onnx
+      - vla
+      - bci-whispercpp-mobile
+      - classification-ggml-mobile
+      - decoder-audio-mobile
+      - diffusion-cpp-mobile
+      - embed-llamacpp-mobile
+      - llm-llamacpp-mobile
+      - ocr-onnx-mobile
+      - transcription-parakeet-mobile
+      - transcription-whispercpp-mobile
+      - translation-nmtcpp-mobile
+      - tts-ggml-mobile
+      - tts-onnx-mobile
+      - vla-mobile
+    runs-on: ubuntu-latest
+    steps:
+      - name: Render results table
+        env:
+          RESULTS_JSON: ${{ toJSON(needs) }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "## Manual addon test results"
+            echo ""
+            echo "| Addon | Result |"
+            echo "|-------|--------|"
+            echo "$RESULTS_JSON" | python3 -c '
+          import json, os, sys
+          data = json.load(sys.stdin)
+          for name in sorted(data.keys()):
+              result = data[name].get("result", "skipped")
+              icon = {
+                "success": ":white_check_mark:",
+                "failure": ":x:",
+                "cancelled": ":no_entry:",
+                "skipped": ":fast_forward:",
+              }.get(result, result)
+              print(f"| {name} | {icon} {result} |")
+          '
+          } >> "$GITHUB_STEP_SUMMARY"
