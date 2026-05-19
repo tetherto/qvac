@@ -217,6 +217,15 @@ test('Gemma 4 can describe an image', {
   // need the <|channel>thought ...<channel|> preamble. Without this, Gemma 4
   // happily generates 8k+ tokens of CoT for a vision question and the
   // generation loop overflows ctx_size before reaching <eos>.
+  // ubatch-size: 320 the LLM's Metal compute buffer is sized by n_ubatch
+  // (default 512), and at default it lands around 830 MiB for Gemma 4.
+  // Together with the ~1 GB base model and ~941 MB bf16 mmproj that pushes
+  // iPhone 17/16 over its per-process jetsam ceiling and the app hangs
+  // (sometimes). Lowering ubatch shrinks the compute buffer proportionally.
+  // CLIP's vision encoder uses non-causal attention which asserts
+  // n_ubatch >= n_tokens_per_call, and elephant.jpg encodes to ~260 mtmd image
+  // tokens, so 320 is the smallest 64-aligned value that still fits the image
+  // in one call while saving ~40% of the compute buffer vs the default 512.
   const config = {
     device: useCpu ? 'cpu' : 'gpu',
     gpu_layers: '98',
