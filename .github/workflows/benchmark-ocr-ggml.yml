@@ -1,0 +1,492 @@
+name: Benchmark (OCR GGML)
+
+on:
+  workflow_dispatch:
+    inputs:
+      pipeline:
+        description: 'GGML pipeline(s) to evaluate (easyocr, doctr, or both)'
+        required: false
+        default: 'both'
+        type: choice
+        options:
+          - both
+          - easyocr
+          - doctr
+      tasks:
+        description: 'Tasks to run (fullpage, spotting, or both)'
+        required: false
+        default: 'fullpage,spotting'
+        type: string
+      limit:
+        description: 'Limit samples per task (0 = all)'
+        required: false
+        default: '0'
+        type: string
+      skip_existing:
+        description: 'Skip already processed samples'
+        required: false
+        default: true
+        type: boolean
+
+env:
+  PKG_DIR: packages/ocr-ggml
+  EASYOCR_S3_PREFIX: qvac_models_compiled/ocr/gguf/easyocr/2026-05-14
+  DOCTR_S3_PREFIX: qvac_models_compiled/ocr/gguf/doctrf16/2026-05-15
+
+permissions:
+  contents: read
+
+jobs:
+  label-gate:
+    name: Authorise (label-gate)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      authorised: ${{ steps.gate.outputs.authorised }}
+    steps:
+      - name: Checkout (label-gate action only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/label-gate
+          sparse-checkout-cone-mode: false
+      - name: Run label-gate
+        id: gate
+        uses: ./.github/actions/label-gate
+        with:
+          github-token: ${{ secrets.PAT_TOKEN }}
+
+  build:
+    needs: label-gate
+    if: needs.label-gate.outputs.authorised == 'true'
+    runs-on: ubuntu-24.04
+    environment: release
+    timeout-minutes: 120
+    name: Build QVAC OCR GGML addon
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          submodules: recursive
+
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Install global dependencies
+        run: npm install -g bare-make bare-runtime
+
+      - name: Configure vcpkg
+        run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
+
+      - name: Cache vcpkg packages
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          key: vcpkg-linux-x64-ocr-ggml-${{ hashFiles('packages/ocr-ggml/**/vcpkg.json', 'packages/ocr-ggml/**/CMakeLists.txt') }}
+          path: |
+            ${{ env.VCPKG_ROOT }}/installed
+            ${{ env.VCPKG_ROOT }}/packages
+            ~/.cache/vcpkg
+          restore-keys: vcpkg-linux-x64-ocr-ggml-
+
+      - name: Cache ccache
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          key: ccache-linux-x64-ocr-ggml-${{ github.sha }}
+          path: ~/.ccache
+          restore-keys: ccache-linux-x64-ocr-ggml-
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake wget build-essential ccache
+
+      - name: Configure ccache
+        run: |
+          ccache --set-config=max_size=500M
+          ccache --set-config=compression=true
+          ccache -z
+
+      - name: Cache npm dependencies
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          key: npm-ocr-ggml-${{ hashFiles('packages/ocr-ggml/package-lock.json') }}
+          path: ~/.npm
+          restore-keys: npm-ocr-ggml-
+
+      - name: Install npm dependencies
+        working-directory: ${{ env.PKG_DIR }}
+        run: npm install
+
+      - name: Build addon
+        working-directory: ${{ env.PKG_DIR }}
+        env:
+          CMAKE_C_COMPILER_LAUNCHER: ccache
+          CMAKE_CXX_COMPILER_LAUNCHER: ccache
+        run: |
+          bare-make generate --platform linux --arch x64
+          bare-make build
+          bare-make install
+
+      - name: Show ccache stats
+        run: ccache -s
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: qvac-ocr-ggml-build
+          path: |
+            ${{ env.PKG_DIR }}/prebuilds/
+            ${{ env.PKG_DIR }}/node_modules/
+          retention-days: 1
+
+  evaluate:
+    needs:
+      - build
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true' && needs.build.result == 'success'
+    runs-on: ubuntu-24.04
+    environment: release
+    timeout-minutes: 180
+    name: Run Evaluation
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          submodules: recursive
+
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 20
+
+      - name: Install bare-runtime
+        run: npm install -g bare-runtime
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        with:
+          python-version: '3.14'
+          cache: pip
+
+      - name: Download build artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: qvac-ocr-ggml-build
+          path: ${{ env.PKG_DIR }}
+
+      - name: Install npm dependencies
+        working-directory: ${{ env.PKG_DIR }}
+        run: npm install
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mesa-vulkan-drivers
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - name: Download EasyOCR GGML models
+        if: inputs.pipeline == 'easyocr' || inputs.pipeline == 'both'
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          mkdir -p models/ocr/gguf/easyocr
+          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/${{ env.EASYOCR_S3_PREFIX }}/craft_mlt_25k.gguf models/ocr/gguf/easyocr/
+          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/${{ env.EASYOCR_S3_PREFIX }}/latin_g2.gguf models/ocr/gguf/easyocr/
+          echo "Downloaded EasyOCR GGML models:"
+          ls -la models/ocr/gguf/easyocr/
+
+      - name: Download DocTR GGML models
+        if: inputs.pipeline == 'doctr' || inputs.pipeline == 'both'
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          mkdir -p models/ocr/gguf/doctr
+          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/${{ env.DOCTR_S3_PREFIX }}/db_mobilenet_v3_large.gguf models/ocr/gguf/doctr/
+          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/${{ env.DOCTR_S3_PREFIX }}/crnn_mobilenet_v3_small.gguf models/ocr/gguf/doctr/
+          echo "Downloaded DocTR GGML models:"
+          ls -la models/ocr/gguf/doctr/
+
+      - name: Download OCRBench_v2 dataset
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          mkdir -p benchmarks/quality_eval/data
+          echo "Downloading OCRBench_v2 dataset from S3..."
+          aws s3 sync s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_datasets/ocr/OCRBench_v2/ benchmarks/quality_eval/data/OCRBench_v2/ --exclude "*.zip"
+          echo "Dataset downloaded:"
+          ls -la benchmarks/quality_eval/data/OCRBench_v2/ | head -20
+
+      - name: Free up disk space
+        run: |
+          echo "Disk space before cleanup:"
+          df -h
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force
+          sudo apt-get clean
+          echo "Disk space after cleanup:"
+          df -h
+
+      - name: Install Python dependencies
+        working-directory: ${{ env.PKG_DIR }}/benchmarks/quality_eval
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build common evaluate args
+        id: eval-args
+        shell: bash
+        run: |
+          SKIP_FLAG=""
+          if [ "${{ inputs.skip_existing }}" = "true" ]; then
+            SKIP_FLAG="--skip-existing"
+          else
+            SKIP_FLAG="--no-skip-existing"
+          fi
+
+          LIMIT_ARG=""
+          if [ "${{ inputs.limit }}" != "0" ]; then
+            LIMIT_ARG="--limit ${{ inputs.limit }}"
+          fi
+
+          PIPELINE_ARG="--pipeline ${{ inputs.pipeline }}"
+
+          EASYOCR_ARGS=""
+          if [ "${{ inputs.pipeline }}" = "easyocr" ] || [ "${{ inputs.pipeline }}" = "both" ]; then
+            EASYOCR_ARGS="--detector $(pwd)/${{ env.PKG_DIR }}/models/ocr/gguf/easyocr/craft_mlt_25k.gguf --recognizer $(pwd)/${{ env.PKG_DIR }}/models/ocr/gguf/easyocr/latin_g2.gguf"
+          fi
+
+          DOCTR_ARGS=""
+          if [ "${{ inputs.pipeline }}" = "doctr" ] || [ "${{ inputs.pipeline }}" = "both" ]; then
+            DOCTR_ARGS="--doctr-detector $(pwd)/${{ env.PKG_DIR }}/models/ocr/gguf/doctr/db_mobilenet_v3_large.gguf --doctr-recognizer $(pwd)/${{ env.PKG_DIR }}/models/ocr/gguf/doctr/crnn_mobilenet_v3_small.gguf"
+          fi
+
+          echo "skip_flag=$SKIP_FLAG" >> $GITHUB_OUTPUT
+          echo "limit_arg=$LIMIT_ARG" >> $GITHUB_OUTPUT
+          echo "pipeline_arg=$PIPELINE_ARG" >> $GITHUB_OUTPUT
+          echo "easyocr_args=$EASYOCR_ARGS" >> $GITHUB_OUTPUT
+          echo "doctr_args=$DOCTR_ARGS" >> $GITHUB_OUTPUT
+
+      - name: Run Full-page OCR benchmark (HierText)
+        if: contains(inputs.tasks, 'fullpage')
+        timeout-minutes: 90
+        working-directory: ${{ env.PKG_DIR }}/benchmarks/quality_eval
+        run: |
+          python evaluate.py \
+            --dataset-path "data/OCRBench_v2" \
+            ${{ steps.eval-args.outputs.pipeline_arg }} \
+            ${{ steps.eval-args.outputs.easyocr_args }} \
+            ${{ steps.eval-args.outputs.doctr_args }} \
+            --task-types "full-page OCR en" \
+            --dataset-filter "HierText" \
+            --results-dir "results/full-page-ocr" \
+            --qvac-addon-path "$(pwd)/../.." \
+            ${{ steps.eval-args.outputs.skip_flag }} \
+            ${{ steps.eval-args.outputs.limit_arg }}
+        env:
+          PYTHONUNBUFFERED: 1
+
+      - name: Run Text Spotting benchmark (IC15)
+        if: contains(inputs.tasks, 'spotting')
+        timeout-minutes: 90
+        working-directory: ${{ env.PKG_DIR }}/benchmarks/quality_eval
+        run: |
+          python evaluate.py \
+            --dataset-path "data/OCRBench_v2" \
+            ${{ steps.eval-args.outputs.pipeline_arg }} \
+            ${{ steps.eval-args.outputs.easyocr_args }} \
+            ${{ steps.eval-args.outputs.doctr_args }} \
+            --task-types "text spotting en" \
+            --dataset-filter "IC15" \
+            --results-dir "results/text-spotting" \
+            --qvac-addon-path "$(pwd)/../.." \
+            ${{ steps.eval-args.outputs.skip_flag }} \
+            ${{ steps.eval-args.outputs.limit_arg }}
+        env:
+          PYTHONUNBUFFERED: 1
+
+      - name: Upload evaluation results
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        if: always()
+        with:
+          name: ocr-ggml-benchmark-results
+          path: ${{ env.PKG_DIR }}/benchmarks/quality_eval/results/*
+          retention-days: 30
+
+      - name: Upload evaluation logs
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        if: failure()
+        with:
+          name: ocr-ggml-benchmark-logs
+          path: |
+            ${{ env.PKG_DIR }}/benchmarks/quality_eval/*.log
+          retention-days: 7
+
+  summarize:
+    needs: evaluate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: always()
+
+    steps:
+      - name: Download results
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        continue-on-error: true
+        with:
+          name: ocr-ggml-benchmark-results
+          path: results
+
+      - name: Skip summary if results are missing
+        if: ${{ !hashFiles('results/**') }}
+        run: |
+          echo "No ocr-ggml-benchmark-results artifact found; skipping summary."
+          exit 0
+
+      - name: Generate results summary
+        run: |
+          python3 << 'PYTHON_SCRIPT' >> $GITHUB_STEP_SUMMARY
+          import json
+          from pathlib import Path
+
+          def load_aggregate(results_dir, backend, task_type):
+              task_dir = task_type.replace(" ", "_")
+              path = Path(results_dir) / backend / task_dir / "aggregate.json"
+              if path.exists():
+                  with open(path) as f:
+                      return json.load(f)
+              return None
+
+          def pick_winner(val_a, val_b, name_a, name_b, lower_is_better=True):
+              if val_a is None or val_b is None:
+                  return "N/A", "N/A", "-"
+              if lower_is_better:
+                  a_wins = val_a < val_b
+              else:
+                  a_wins = val_a > val_b
+              a_str = f"**{val_a:.4f}**" if a_wins else f"{val_a:.4f}"
+              b_str = f"**{val_b:.4f}**" if not a_wins else f"{val_b:.4f}"
+              winner = name_a if a_wins else name_b
+              return a_str, b_str, winner
+
+          print("# OCR GGML Benchmark Results\n")
+          print("**Configuration:**")
+          print("- Pipeline: `${{ inputs.pipeline }}`")
+          print("- Tasks: `${{ inputs.tasks }}`")
+          print("- Sample Limit: `${{ inputs.limit }}`\n")
+
+          pipeline = "${{ inputs.pipeline }}"
+          run_easyocr = pipeline in ("easyocr", "both")
+          run_doctr = pipeline in ("doctr", "both")
+
+          # Full-page OCR (HierText)
+          print("## Full-page OCR (HierText)\n")
+          for task_type in ["full-page OCR en"]:
+              if run_easyocr:
+                  qvac_e = load_aggregate("results/full-page-ocr", "qvac-easyocr", task_type)
+                  easyocr = load_aggregate("results/full-page-ocr", "easyocr", task_type)
+                  if qvac_e and easyocr:
+                      print("### EasyOCR pipeline vs Python EasyOCR\n")
+                      print("| Metric | QVAC EasyOCR | EasyOCR Python | Winner |")
+                      print("|--------|-------------|----------------|--------|")
+                      for label, key, lib in [("CER ↓", "cer", True), ("WER ↓", "wer", True), ("ANLS ↑", "anls", False)]:
+                          qv = qvac_e["metrics"].get(key, {}).get("mean")
+                          ev = easyocr["metrics"].get(key, {}).get("mean")
+                          a, b, w = pick_winner(qv, ev, "QVAC EasyOCR", "EasyOCR Python", lib)
+                          print(f"| {label} | {a} | {b} | {w} |")
+                      if qvac_e.get("speed") and easyocr.get("speed"):
+                          qs = qvac_e["speed"]["mean_time_per_image"]
+                          es = easyocr["speed"]["mean_time_per_image"]
+                          speedup = es / qs if qs > 0 else 0
+                          winner = f"QVAC ({speedup:.1f}x)" if qs < es else f"EasyOCR ({1/speedup:.1f}x)"
+                          q_s = f"**{qs:.1f}s**" if qs < es else f"{qs:.1f}s"
+                          e_s = f"**{es:.1f}s**" if es < qs else f"{es:.1f}s"
+                          print(f"| Speed | {q_s}/img | {e_s}/img | {winner} |")
+                      print(f"\n*Samples: {qvac_e['total_samples']}*\n")
+
+              if run_doctr:
+                  qvac_d = load_aggregate("results/full-page-ocr", "qvac-doctr", task_type)
+                  doctr = load_aggregate("results/full-page-ocr", "doctr", task_type)
+                  if qvac_d and doctr:
+                      print("### DocTR pipeline vs python-doctr\n")
+                      print("| Metric | QVAC DocTR | DocTR Python | Winner |")
+                      print("|--------|-----------|--------------|--------|")
+                      for label, key, lib in [("CER ↓", "cer", True), ("WER ↓", "wer", True), ("ANLS ↑", "anls", False)]:
+                          qv = qvac_d["metrics"].get(key, {}).get("mean")
+                          dv = doctr["metrics"].get(key, {}).get("mean")
+                          a, b, w = pick_winner(qv, dv, "QVAC DocTR", "DocTR Python", lib)
+                          print(f"| {label} | {a} | {b} | {w} |")
+                      if qvac_d.get("speed") and doctr.get("speed"):
+                          qs = qvac_d["speed"]["mean_time_per_image"]
+                          ds = doctr["speed"]["mean_time_per_image"]
+                          speedup = ds / qs if qs > 0 else 0
+                          winner = f"QVAC ({speedup:.1f}x)" if qs < ds else f"DocTR ({1/speedup:.1f}x)"
+                          q_s = f"**{qs:.1f}s**" if qs < ds else f"{qs:.1f}s"
+                          d_s = f"**{ds:.1f}s**" if ds < qs else f"{ds:.1f}s"
+                          print(f"| Speed | {q_s}/img | {d_s}/img | {winner} |")
+                      print(f"\n*Samples: {qvac_d['total_samples']}*\n")
+
+          # Text Spotting (IC15)
+          print("## Text Spotting (IC15)\n")
+          for task_type in ["text spotting en"]:
+              if run_easyocr:
+                  qvac_e = load_aggregate("results/text-spotting", "qvac-easyocr", task_type)
+                  easyocr = load_aggregate("results/text-spotting", "easyocr", task_type)
+                  if qvac_e and easyocr:
+                      print("### EasyOCR pipeline vs Python EasyOCR\n")
+                      print("| Metric | QVAC EasyOCR | EasyOCR Python | Winner |")
+                      print("|--------|-------------|----------------|--------|")
+                      for label, key, lib in [
+                          ("E2E F1 ↑", "e2e_f1", False),
+                          ("E2E Precision ↑", "e2e_precision", False),
+                          ("E2E Recall ↑", "e2e_recall", False),
+                          ("Detection F1 ↑", "det_f1", False),
+                          ("Avg CER ↓", "avg_cer", True),
+                          ("Avg ANLS ↑", "avg_anls", False),
+                      ]:
+                          qv = qvac_e["metrics"].get(key, {}).get("mean")
+                          ev = easyocr["metrics"].get(key, {}).get("mean")
+                          a, b, w = pick_winner(qv, ev, "QVAC EasyOCR", "EasyOCR Python", lib)
+                          print(f"| {label} | {a} | {b} | {w} |")
+                      print(f"\n*Samples: {qvac_e['total_samples']}*\n")
+
+              if run_doctr:
+                  qvac_d = load_aggregate("results/text-spotting", "qvac-doctr", task_type)
+                  doctr = load_aggregate("results/text-spotting", "doctr", task_type)
+                  if qvac_d and doctr:
+                      print("### DocTR pipeline vs python-doctr\n")
+                      print("| Metric | QVAC DocTR | DocTR Python | Winner |")
+                      print("|--------|-----------|--------------|--------|")
+                      for label, key, lib in [
+                          ("E2E F1 ↑", "e2e_f1", False),
+                          ("E2E Precision ↑", "e2e_precision", False),
+                          ("E2E Recall ↑", "e2e_recall", False),
+                          ("Detection F1 ↑", "det_f1", False),
+                          ("Avg CER ↓", "avg_cer", True),
+                          ("Avg ANLS ↑", "avg_anls", False),
+                      ]:
+                          qv = qvac_d["metrics"].get(key, {}).get("mean")
+                          dv = doctr["metrics"].get(key, {}).get("mean")
+                          a, b, w = pick_winner(qv, dv, "QVAC DocTR", "DocTR Python", lib)
+                          print(f"| {label} | {a} | {b} | {w} |")
+                      print(f"\n*Samples: {qvac_d['total_samples']}*\n")
+          PYTHON_SCRIPT
+
+      - name: Upload consolidated results
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: ocr-ggml-benchmark-consolidated
+          path: results
+          retention-days: 90

@@ -1,0 +1,5 @@
+results/
+data/
+OCRBench_v2/
+__pycache__/
+*.pyc
