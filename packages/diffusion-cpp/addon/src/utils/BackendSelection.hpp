@@ -10,6 +10,15 @@ namespace sd_backend_selection {
 
 enum class BackendDevice : uint8_t { CPU, GPU };
 
+/** Validated config.device values shared by SD and ESRGAN upscaler paths. */
+enum class ConfigDevice : uint8_t { Cpu, Gpu, Auto };
+
+/**
+ * Parse config.device. Accepts `cpu`, `gpu`, `auto`, and `""` (treated as auto).
+ * Throws StatusError on any other value.
+ */
+ConfigDevice parseConfigDeviceString(const std::string& device);
+
 /**
  * Parse the "device" key from a config map.
  * Returns CPU or GPU. Throws StatusError on unknown value.
@@ -53,8 +62,8 @@ sd_backend_preference_t
 preferredGpuBackendForConfigDevice(const std::string& device);
 
 /**
- * Expected RuntimeStats.backendDevice ("cpu" or "gpu") after ESRGAN load when
- * config.device is @p device. Mirrors resolveBackendForDevice() policy:
+ * Expected EsrganRuntimeStats.backendDevice ("cpu" or "gpu") after ESRGAN load
+ * when config.device is @p device. Mirrors resolveBackendForDevice() policy:
  * Adreno 600/700 + config gpu -> "cpu"; Adreno 800+ and other GPUs -> "gpu".
  */
 std::string expectedEsrganBackendDeviceForConfig(const std::string& device);

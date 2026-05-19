@@ -18,19 +18,16 @@ namespace qvac_lib_inference_addon_sd {
 namespace {
 
 sd_upscaler_device_t deviceStringToSd(const std::string& deviceStr) {
-  if (deviceStr == "cpu") {
+  using sd_backend_selection::ConfigDevice;
+  using sd_backend_selection::parseConfigDeviceString;
+  switch (parseConfigDeviceString(deviceStr)) {
+  case ConfigDevice::Cpu:
     return SD_UPSCALER_DEVICE_CPU;
-  }
-  if (deviceStr == "gpu") {
+  case ConfigDevice::Gpu:
     return SD_UPSCALER_DEVICE_GPU;
-  }
-  if (deviceStr == "auto" || deviceStr.empty()) {
+  case ConfigDevice::Auto:
     return SD_UPSCALER_DEVICE_AUTO;
   }
-  throw StatusError(
-      general_error::InvalidArgument,
-      "ESRGAN device must be 'cpu', 'gpu', or 'auto', got: '" + deviceStr +
-          "'");
 }
 
 void freeSdImageData(sd_image_t& image) noexcept {

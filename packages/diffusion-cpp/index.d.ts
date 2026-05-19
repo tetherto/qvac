@@ -173,7 +173,7 @@ export interface EsrganUpscalerConfig {
   /**
    * Compute device for the standalone upscaler: `cpu`, `gpu` (try GPU, fall
    * back to CPU if unavailable), or `auto` (same selection as `gpu`).
-   * `RuntimeStats.backendDevice` reports the device actually used.
+   * `EsrganRuntimeStats.backendDevice` reports the device actually used.
    */
   device?: 'cpu' | 'gpu' | 'auto'
   /** Logging verbosity: 0=error, 1=warn, 2=info, 3=debug */
@@ -343,12 +343,6 @@ export interface RuntimeStats {
   height: number
   /** Seed used for the most recent generation */
   seed: number
-  /**
-   * Standalone ESRGAN upscaler only: actual ggml compute device used for the
-   * most recent upscale (native 0/1 mapped to 'cpu' / 'gpu' in JS). Not set for
-   * diffusion `ImgStableDiffusion.run()` stats until the native layer reports it.
-   */
-  backendDevice?: 'cpu' | 'gpu'
 }
 
 export interface EsrganRuntimeStats {
