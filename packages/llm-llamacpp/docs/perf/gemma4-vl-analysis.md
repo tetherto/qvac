@@ -1,6 +1,6 @@
 # Gemma4-VL Architecture & Optimization Opportunity Analysis
 
-**QVAC-18295 | Phase 2 — LLM-Addon 0.18.0 VLM Optimization**
+**Phase 2 — LLM-Addon 0.18.0 VLM Optimization**
 
 Target platforms:
 - Android Adreno (primary) — Samsung S25, Snapdragon 8 Elite, Adreno 830
@@ -267,7 +267,7 @@ Metal GPU memory footprint (Gemma 4 E2B Q4_K_M, Mac M4):
 
 ## 6. MLX Cross-Reference
 
-### MLX Optimizations (from Asana 1214117968658871: "Qwen3.5-VL on Apple Silicon")
+### Prior Art: MLX Optimization Cross-Reference
 
 | MLX Optimization | Description | Portable to Vulkan/OpenCL (Adreno + Mali)? | Notes |
 |------------------|-------------|---------------------------------------------|-------|
@@ -293,7 +293,7 @@ Metal GPU memory footprint (Gemma 4 E2B Q4_K_M, Mac M4):
 
 ### Phase 1 Validation: CPU Prefill > GPU on Apple Silicon (Gemma 4)
 
-The MLX cross-reference predicted that Apple's Accelerate BLAS would compete with GPU for batch operations. Phase 1 confirms this on both Apple Silicon platforms:
+Phase 1 measurements corroborate a pattern observed in MLX: Apple's Accelerate BLAS competes with GPU for batch operations. Phase 1 confirms this on both Apple Silicon platforms:
 
 | Device | CPU Prefill (t/s) | Metal Prefill (t/s) | CPU advantage |
 |--------|------------------|---------------------|---------------|
@@ -380,7 +380,7 @@ The largest gains come from vision prefix caching (multi-turn) and the Mali-opti
 
 - FLOP counts use the standard formula: 2*M*N*K for matrix multiplication (multiply-accumulate counted as 2 ops)
 - "Expected speed-up" estimates are based on: memory bandwidth reduction (quantization), kernel dispatch reduction (fusion), and compute utilization improvement (custom kernels)
-- Phase 1 evidence referenced throughout from three QVAC-18293 baseline profiling reports (llama.cpp b9025):
+- Phase 1 evidence referenced throughout from three baseline profiling reports (llama.cpp b9025):
   1. `gemma4-vl-baseline.md` — Mobile benchmarks: Samsung S25 (Adreno 830), Pixel 9 Pro (Mali-G715), iPhone 16e (A18). CPU, Vulkan, OpenCL, Metal backends. Run-1 + Run-2 validation.
   2. `metal-baseline.md` — Apple Metal GPU benchmarks: Mac M4 + iPhone 16e cross-device Metal comparison, Metal System Traces (4 trace files, ~1.55 GB), GPU memory allocation breakdown, per-phase timing.
   3. `vlm-mac-baseline.md` — Mac M4 full CPU+Metal benchmark matrix: all Gemma 4 variants (E2B/E4B, Q4_K_M/Q8_0) plus Qwen3.5-2B comparison.
@@ -392,7 +392,7 @@ The largest gains come from vision prefix caching (multi-turn) and the Mali-opti
 
 ## Appendix B: Out of Scope
 
-- **Imagination IMG DXT (Pixel 10)** — deferred per task spec; architecture not yet publicly documented
+- **Imagination IMG DXT (Pixel 10)** — deferred; architecture not yet publicly documented
 - **Training/fine-tuning optimizations** — inference-only focus
 - **Server/cloud deployment** — mobile-first scope
 - **Speculative decoding** — orthogonal optimization, tracked separately

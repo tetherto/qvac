@@ -1,10 +1,10 @@
 # Metal VLM Architecture & Optimization Analysis
 
-**QVAC-18295 | Phase 2 — LLM-Addon 0.18.0 VLM Optimization (Metal Focus)**
+**Phase 2 — LLM-Addon 0.18.0 VLM Optimization (Metal Focus)**
 
 Companion to `gemma4-vl-analysis.md` (cross-platform). This document focuses exclusively on Metal backend optimization for Apple Silicon — Mac M4 as the reference ceiling, iPhone 16e as the deployment target. Covers both Gemma4-VL and Qwen3.5-VL.
 
-Feeds into Phase 3 implementation: QVAC iOS Metal task (top-2 VLM optimizations + MLX cross-pollination).
+Feeds into Phase 3 implementation: iOS Metal task (top-2 VLM optimizations + MLX cross-pollination).
 
 ---
 
@@ -199,8 +199,6 @@ Per-layer: ~510M×N. Vision prefill (N=256): ~130.6G/layer → **34 layers: ~4,4
 | LLM decode (per token) | 4.0G | 4.0G | 17.3G | 17.3G |
 
 ### 2.4 Qwen3.5-VL Detailed Architecture
-
-> Referenced from: [Qwen3.5-VL architecture & optimization opportunity analysis](https://app.asana.com/1/45238840754660/project/1214153063536860/task/1214457570656508?focus=true)
 
 #### Text Model Configuration
 
@@ -442,7 +440,7 @@ Metal-specific kernel optimization targets. References Phase 1 Metal System Trac
 
 ## 6. MLX Cross-Reference
 
-### 6.1 MLX Cross-Pollination (QVAC-18297 DoD)
+### 6.1 MLX Cross-Pollination
 
 | MLX Optimization | What We Ported | Status |
 |---|---|---|
@@ -561,8 +559,6 @@ Qwen3.5 is the fastest model on Mac Metal — 32% faster vision, 10.5× faster p
 ### A.3 iPhone 16 Pro — b9025 Baseline (Metal, Firebase, 2026-05-18)
 
 > Firebase Test Lab (`DEVICE_CAPACITY_LOW`, iOS 18.3.2). Full 3-run median.
-> Source: `gs://qvac-vlm-benchmark-results/ios-b9025-{model}-2026-05-18T1545/`
-
 | Model | Vision (ms) | Prefill (t/s) | Decode (t/s) |
 |-------|------------|---------------|-------------|
 | Gemma4 E2B Q4_K_M | 879 | 176.2 | 30.0 |
@@ -746,7 +742,7 @@ No software optimization can meaningfully improve decode throughput.
 
 ---
 
-## Appendix F: Phase 3 Optimization Status (QVAC-18297)
+## Appendix F: Phase 3 Optimization Status
 
 ### F.1 Implemented
 
@@ -865,7 +861,6 @@ was a fiber-specific artifact, not a hardware limitation. On b9025, the projecti
 9 ms on both iPhone models.
 
 **Source logs**:
-- iPhone 16 Pro: `gs://qvac-vlm-benchmark-results/ios-{fiber,b9025}-*-2026-05-18T15*/`
 - iPhone 16e: `vlm-benchmark/results/raw/ios-local-{fiber,b9025}-*-2026-05-18T1659/`
 
 ### G.6 Remaining Qwen3.5 Gap (−14.0% on Mac M4)
@@ -903,7 +898,7 @@ U1 is identical to b9025 on Mac M4 (expected — iPhone-specific fix).
 
 ## Appendix H: Methodology & Sources
 
-### H.1 Source Reports (QVAC-18293)
+### H.1 Source Reports
 
 | Report | Content | Devices |
 |--------|---------|---------|
@@ -932,7 +927,7 @@ U1 is identical to b9025 on Mac M4 (expected — iPhone-specific fix).
 
 ### H.4 Code References
 
-- Upstream llama.cpp: `qvac-fabric-llm.cpp/tools/mtmd/` (clip.cpp, clip-impl.h, mtmd.cpp, mtmd-helper.cpp)
+- Upstream llama.cpp: `tools/mtmd/` (clip.cpp, clip-impl.h, mtmd.cpp, mtmd-helper.cpp)
 - Addon integration: `packages/qvac-lib-infer-llamacpp-llm/addon/src/model-interface/MtmdLlmContext.cpp`
 - llama.cpp version: b9025
 - Reproducibility: Run-2 validation shows ±2% variance
@@ -975,7 +970,7 @@ WWDC 2025 introduced Metal 4 with features relevant to LLM/VLM inference on futu
 
 ## Appendix J: Qwen3.5-VL Cross-Platform Architecture Reference
 
-Reference material from the Qwen3.5-VL cross-platform analysis (Asana task 1214457570656508, Kartik Sain). Included here for completeness — primary platforms are Android Adreno/Mali; Metal is secondary in that analysis.
+Reference material from the Qwen3.5-VL cross-platform analysis. Included here for completeness — primary platforms are Android Adreno/Mali; Metal is secondary in that analysis.
 
 ### J.1 Evidence Corrections
 
