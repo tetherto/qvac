@@ -778,7 +778,7 @@ jobs:
             WDIO_CONFIG="$WDIO_IOS"
           fi
 
-          WDIO_CONFIG_B64=$(echo "$WDIO_CONFIG" | base64 | tr -d '\n')
+          WDIO_CONFIG_B64=$(echo "$WDIO_CONFIG" | sed "s#__MOCHA_GREP__#.#" | base64 | tr -d '\n')
 
           {
             printf 'version: 0.1\n'
