@@ -1,9 +1,8 @@
 # VLM Metal Baseline Performance Report
 
 **Date**: 2026-05-13 (Mac M4, iPhone 16e Phase 1), 2026-05-18 (iPhone 16e full matrix, iPhone 16 Pro)
-**Tasks**: QVAC-18293 (profiling baseline)
 
-This report consolidates VLM inference benchmark and profiling results from the QVAC-18293 investigation on Apple Metal devices (Mac M4, iPhone 16e, iPhone 16 Pro).
+This report consolidates VLM inference benchmark and profiling results on Apple Metal devices (Mac M4, iPhone 16e, iPhone 16 Pro).
 
 Android mobile GPU results (Samsung S25 Adreno 830, Pixel 9 Pro Mali-G715) are in [Appendix G](#appendix-g-android-gpu-results). Full Android analysis will continue under a separate ticket and dedicated report document.
 
@@ -198,8 +197,6 @@ Metal kernel gap documented in `QVAC-18297-fiber-b9025-gap.md`.
 > Qwen3.5 fruitPlate skipped (context overflow).
 >
 > **Date**: 2026-05-18 (fiber session T1505, b9025 session T1545)
-> **Fiber logs**: `gs://qvac-vlm-benchmark-results/ios-fiber-{model}-2026-05-18T1505/iphone16pro-18.3-en-portrait/syslog.txt`
-> **b9025 logs**: `gs://qvac-vlm-benchmark-results/ios-b9025-{model}-2026-05-18T1545/iphone16pro-18.3-en-portrait/syslog.txt`
 > **RSS**: via in-process `mach_task_basic_info` (run=2 values). Firebase RSS values
 > (75-135 MB) are significantly lower than local iPhone 16e (956-1575 MB) — Firebase
 > `mach_task_basic_info` may not account for Metal GPU buffer allocations mapped
@@ -343,7 +340,7 @@ Android-specific findings: see [Appendix G, Section G.8](#g8-android-key-finding
 
 ## 5. TODO / Missing Items
 
-Items required by the Asana ticket (QVAC-18293) but not yet delivered:
+Items not yet delivered:
 
 | # | Item | Status | Reason |
 |---|------|--------|--------|
@@ -353,7 +350,7 @@ Items required by the Asana ticket (QVAC-18293) but not yet delivered:
 | 3 | **iPhone 17** | Not tested | Firebase Test Lab: not in device catalog (2026-05-18) |
 | 4 | **Apple profiler evidence screenshots** | Not included | Metal System Traces captured but detailed shader/memory analysis pending |
 | 5 | **iPhone 16e Qwen3.5-2B** | **Done** | Full 3-run matrix collected (2026-05-18 local). Fiber: 8.22 t/s, b9025: 27.69 t/s. See [iPhone 16e full matrix](#iphone-16e-a18--local-device-full-matrix-added-2026-05-18) |
-| 6 | **Raw traces as Asana attachments** | Not uploaded | 6 trace files (~2.1 GB total) — too large for Asana attachment; stored locally |
+| 6 | **Raw traces** | Not uploaded | 6 trace files (~2.1 GB total) — stored locally |
 | 7 | **Executive summary comment** | Not posted | Pending report PR merge |
 | 8 | **Report PR reviewed and merged** | Pending | PR #1923 opened on `feat/QVAC-18293-profile-gemma4-vl-mobile-gpus` |
 
@@ -761,7 +758,7 @@ CLI traces stored in `vlm-benchmark/results/traces/`. Addon traces in `vlm-bench
 
 ### Appendix G: Android GPU Results
 
-> Android GPU benchmarking will continue under a **separate ticket and dedicated report document**. The data below was collected during the QVAC-18293 Metal baseline investigation and is preserved here for reference.
+> Android GPU benchmarking will continue under a **separate dedicated report document**. The data below was collected during the Metal baseline investigation and is preserved here for reference.
 
 #### G.1 Android Devices
 
@@ -947,12 +944,6 @@ All paths relative to `vlm-benchmark/` in the working directory.
 | P9P E4B Q4 CPU | `results/raw/benchmark-p9p-e4b-q4-cpu/` |
 | P9P E4B Q4 GPU | `results/raw/benchmark-p9p-e4b-q4-gpu/` |
 | P9P E4B Q8 GPU | `results/raw/benchmark-p9p-e4b-q8-gpu/` |
-| GCS results bucket | `gs://qvac-vlm-benchmark-results/` |
-| GCS: S25 OpenCL run | `gs://qvac-vlm-benchmark-results/gpu-opencl-s25-20260506/` |
-| GCS: P9P all backends | `gs://qvac-vlm-benchmark-results/gpu-pixel9-20260506/` |
-| GCS: Qwen3.5 P9P VK | `gs://qvac-vlm-benchmark-results/qwen35-p9p-vulkan-20260507/` |
-| GCS: Qwen3.5 P9P CPU+OCL | `gs://qvac-vlm-benchmark-results/qwen35-p9p-cpu-opencl-20260507/` |
-
 **Firebase APK wrappers:**
 
 | Data Set | Path |
@@ -960,7 +951,7 @@ All paths relative to `vlm-benchmark/` in the working directory.
 | Android CPU APK | `firebase-benchmark/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk` |
 | Android GPU APK | `firebase-benchmark-gpu/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk` |
 | iOS XCTest wrapper | `firebase-benchmark-ios/` |
-| GCS models bucket | `gs://qvac-vlm-benchmark-models/` (private; was public `allUsers:objectViewer` until 2026-05-18 — use `gsutil signurl` for time-limited access) |
+| GCS models bucket | Private (use `gsutil signurl` for time-limited access) |
 
 #### G.11 How to Reproduce (Android)
 
@@ -1047,7 +1038,7 @@ All paths relative to `packages/qvac-lib-infer-llamacpp-llm/` (or `packages/llm-
 | `benchmarks/performance/` | Parameter sweep suite (JS): `llm-parameter-sweep.js`, `case-runner.js`, `run-param-sweep.js` |
 | `benchmarks/performance/models.manifest.json` | Model registry for sweep |
 | `benchmarks/performance/README.md` | Sweep documentation (dimensions, flags, resumability) |
-| `benchmarks/qvac-18297-vlm-cache-bench.js` | Vision prefix cache bench (QVAC-18297) |
+| `benchmarks/qvac-18297-vlm-cache-bench.js` | Vision prefix cache bench |
 | `benchmarks/client/evaluate_llama.py` | Python evaluation harness |
 | `benchmarks/client/comparative_evaluator.py` | Addon vs HuggingFace Transformers comparison |
 | `test/unit/test_vision_prefix_cache.cpp` | Vision cache unit tests (16 GoogleTest cases) |
@@ -1105,7 +1096,7 @@ xcrun xctrace record --template "Metal System Trace" \
   -p "Describe this image in detail."
 ```
 
-#### Addon Cache Bench (QVAC-18297)
+#### Addon Cache Bench
 
 ```
 cd packages/qvac-lib-infer-llamacpp-llm
