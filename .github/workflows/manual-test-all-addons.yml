@@ -1,28 +1,23 @@
 name: Manual — Test All Inference Addons
 
-# Manually fan-out the full per-addon PR CI surface across every consumer
-# of `inference-addon-cpp`. Intended for validating changes in shared
+# Manually fan-out the full per-addon CI sweep across every consumer of
+# `inference-addon-cpp`. Intended for validating changes in shared
 # dependencies across all addons at once. Not wired into PR/push triggers:
 # it is too expensive to gate on every change and is meant to be dispatched
 # on demand from the Actions tab.
 #
-# Mirrors what `on-pr-<addon>.yml` runs:
-#   - cpp-lint                (skipped for decoder-audio — pure JS)
-#   - sanity-checks           (JS lint + unit tests via ./.github/actions/run-lint-and-unit-tests)
-#   - ts-checks               (6 addons: classification, diffusion, embed, llm, translation, vla)
-#   - verify-fabric-lockstep  (4 addons: embed, llm, translation, vla)
+# Per addon, runs:
+#   - prebuilds               (skipped for decoder-audio — pure JS)
 #   - cpp-tests / coverage    (skipped for decoder-audio and ocr-onnx)
-#   - prebuilds               (skipped for decoder-audio — no native build)
-#   - integration-test
-#   - integration-mobile-test
+#   - unit-tests              (JS unit tests — `npm run test:unit`)
+#   - integration-test        (desktop e2e)
+#   - integration-mobile-test (mobile e2e)
 #
-# All jobs that exercise package code (sanity-checks, ts-checks, integration,
-# mobile) wait on `prebuilds-<addon>` so the native artifacts are available
-# in the workspace before tests run.
+# Lint, type-decl checks, fabric-lockstep checks, and publish steps are
+# intentionally out of scope here — they belong to per-PR / on-merge CI.
 #
-# To test a single addon, dispatch its own per-addon workflow (e.g.
-# `integration-test-transcription-whispercpp.yml`) directly — this one
-# always runs everything.
+# cpp-tests + unit-tests + integration + mobile wait on `prebuilds-<addon>`
+# so the native artifacts are available before tests run (where applicable).
 
 permissions:
   contents: read
@@ -41,10 +36,11 @@ on:
 
 jobs:
   # ---------- bci-whispercpp ----------
-  cpp-lint-bci-whispercpp:
-    uses: ./.github/workflows/cpp-lint.yaml
+  prebuilds-bci-whispercpp:
+    uses: ./.github/workflows/prebuilds-bci-whispercpp.yml
     with:
-      workdir: packages/bci-whispercpp
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
     secrets: inherit
 
   cpp-tests-bci-whispercpp:
@@ -54,14 +50,7 @@ jobs:
       repository: ${{ inputs.repository }}
     secrets: inherit
 
-  prebuilds-bci-whispercpp:
-    uses: ./.github/workflows/prebuilds-bci-whispercpp.yml
-    with:
-      ref: ${{ inputs.ref }}
-      repository: ${{ inputs.repository }}
-    secrets: inherit
-
-  sanity-checks-bci-whispercpp:
+  unit-tests-bci-whispercpp:
     needs: prebuilds-bci-whispercpp
     runs-on: ubuntu-latest
     steps:
@@ -70,16 +59,38 @@ jobs:
           repository: ${{ inputs.repository }}
           ref: ${{ inputs.ref }}
           token: ${{ secrets.PAT_TOKEN }}
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: "18.x"
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           path: packages/bci-whispercpp/prebuilds
           merge-multiple: true
-      - uses: ./.github/actions/run-lint-and-unit-tests
-        with:
-          gpr-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
-          registry-type: gpr
-          workdir: packages/bci-whispercpp
+      - name: Configure .npmrc
+        shell: bash
+        working-directory: packages/bci-whispercpp
+        env:
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          : > .npmrc
+          echo "registry=https://registry.npmjs.org/" >> .npmrc
+          echo "@qvac:registry=https://registry.npmjs.org/" >> .npmrc
+          if [ -n "${PAT_TOKEN}" ]; then
+            echo "@tetherto:registry=https://npm.pkg.github.com/" >> .npmrc
+            echo "//npm.pkg.github.com/:_authToken=${PAT_TOKEN}" >> .npmrc
+            git config --global url."https://${PAT_TOKEN}:@github.com/".insteadOf "https://github.com/"
+          fi
+      - name: Install dependencies
+        shell: bash
+        working-directory: packages/bci-whispercpp
+        run: npm install
+      - name: Install bare
+        shell: bash
+        run: npm install -g --force bare
+      - name: Run unit tests
+        shell: bash
+        working-directory: packages/bci-whispercpp
+        run: npm run test:unit --if-present
 
   bci-whispercpp:
     needs: prebuilds-bci-whispercpp
@@ -90,10 +101,11 @@ jobs:
     secrets: inherit
 
   # ---------- classification-ggml ----------
-  cpp-lint-classification-ggml:
-    uses: ./.github/workflows/cpp-lint.yaml
+  prebuilds-classification-ggml:
+    uses: ./.github/workflows/prebuilds-classification-ggml.yml
     with:
-      workdir: packages/classification-ggml
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
     secrets: inherit
 
   cpp-tests-classification-ggml:
@@ -103,34 +115,7 @@ jobs:
       repository: ${{ inputs.repository }}
     secrets: inherit
 
-  prebuilds-classification-ggml:
-    uses: ./.github/workflows/prebuilds-classification-ggml.yml
-    with:
-      ref: ${{ inputs.ref }}
-      repository: ${{ inputs.repository }}
-    secrets: inherit
-
-  sanity-checks-classification-ggml:
-    needs: prebuilds-classification-ggml
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          repository: ${{ inputs.repository }}
-          ref: ${{ inputs.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
-        with:
-          path: packages/classification-ggml/prebuilds
-          merge-multiple: true
-      - uses: ./.github/actions/run-lint-and-unit-tests
-        with:
-          gpr-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
-          registry-type: gpr
-          workdir: packages/classification-ggml
-
-  ts-checks-classification-ggml:
+  unit-tests-classification-ggml:
     needs: prebuilds-classification-ggml
     runs-on: ubuntu-latest
     steps:
@@ -141,21 +126,36 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
-          node-version: 20
+          node-version: "18.x"
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           path: packages/classification-ggml/prebuilds
           merge-multiple: true
-      - run: npm install
+      - name: Configure .npmrc
+        shell: bash
         working-directory: packages/classification-ggml
-      - run: npm run test:dts
+        env:
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          : > .npmrc
+          echo "registry=https://registry.npmjs.org/" >> .npmrc
+          echo "@qvac:registry=https://registry.npmjs.org/" >> .npmrc
+          if [ -n "${PAT_TOKEN}" ]; then
+            echo "@tetherto:registry=https://npm.pkg.github.com/" >> .npmrc
+            echo "//npm.pkg.github.com/:_authToken=${PAT_TOKEN}" >> .npmrc
+            git config --global url."https://${PAT_TOKEN}:@github.com/".insteadOf "https://github.com/"
+          fi
+      - name: Install dependencies
+        shell: bash
         working-directory: packages/classification-ggml
-      - uses: ./.github/actions/run-lint-and-unit-tests
-        with:
-          gpr-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
-          registry-type: gpr
-          workdir: packages/classification-ggml
+        run: npm install
+      - name: Install bare
+        shell: bash
+        run: npm install -g --force bare
+      - name: Run unit tests
+        shell: bash
+        working-directory: packages/classification-ggml
+        run: npm run test:unit --if-present
 
   classification-ggml:
     needs: prebuilds-classification-ggml
@@ -165,8 +165,8 @@ jobs:
       repository: ${{ inputs.repository }}
     secrets: inherit
 
-  # ---------- decoder-audio (pure JS, no native build) ----------
-  sanity-checks-decoder-audio:
+  # ---------- decoder-audio ----------
+  unit-tests-decoder-audio:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -174,12 +174,34 @@ jobs:
           repository: ${{ inputs.repository }}
           ref: ${{ inputs.ref }}
           token: ${{ secrets.PAT_TOKEN }}
-      - uses: ./.github/actions/run-lint-and-unit-tests
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
-          gpr-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
-          registry-type: gpr
-          workdir: packages/decoder-audio
+          node-version: "18.x"
+      - name: Configure .npmrc
+        shell: bash
+        working-directory: packages/decoder-audio
+        env:
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          : > .npmrc
+          echo "registry=https://registry.npmjs.org/" >> .npmrc
+          echo "@qvac:registry=https://registry.npmjs.org/" >> .npmrc
+          if [ -n "${PAT_TOKEN}" ]; then
+            echo "@tetherto:registry=https://npm.pkg.github.com/" >> .npmrc
+            echo "//npm.pkg.github.com/:_authToken=${PAT_TOKEN}" >> .npmrc
+            git config --global url."https://${PAT_TOKEN}:@github.com/".insteadOf "https://github.com/"
+          fi
+      - name: Install dependencies
+        shell: bash
+        working-directory: packages/decoder-audio
+        run: npm install
+      - name: Install bare
+        shell: bash
+        run: npm install -g --force bare
+      - name: Run unit tests
+        shell: bash
+        working-directory: packages/decoder-audio
+        run: npm run test:unit --if-present
 
   decoder-audio:
     uses: ./.github/workflows/integration-test-decoder-audio.yml
@@ -189,10 +211,11 @@ jobs:
     secrets: inherit
 
   # ---------- diffusion-cpp ----------
-  cpp-lint-diffusion-cpp:
-    uses: ./.github/workflows/cpp-lint.yaml
+  prebuilds-diffusion-cpp:
+    uses: ./.github/workflows/prebuilds-diffusion-cpp.yml
     with:
-      workdir: packages/diffusion-cpp
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
     secrets: inherit
 
   cpp-tests-diffusion-cpp:
@@ -202,34 +225,7 @@ jobs:
       repository: ${{ inputs.repository }}
     secrets: inherit
 
-  prebuilds-diffusion-cpp:
-    uses: ./.github/workflows/prebuilds-diffusion-cpp.yml
-    with:
-      ref: ${{ inputs.ref }}
-      repository: ${{ inputs.repository }}
-    secrets: inherit
-
-  sanity-checks-diffusion-cpp:
-    needs: prebuilds-diffusion-cpp
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          repository: ${{ inputs.repository }}
-          ref: ${{ inputs.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
-        with:
-          path: packages/diffusion-cpp/prebuilds
-          merge-multiple: true
-      - uses: ./.github/actions/run-lint-and-unit-tests
-        with:
-          gpr-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
-          registry-type: gpr
-          workdir: packages/diffusion-cpp
-
-  ts-checks-diffusion-cpp:
+  unit-tests-diffusion-cpp:
     needs: prebuilds-diffusion-cpp
     runs-on: ubuntu-latest
     steps:
@@ -240,21 +236,36 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
-          node-version: 20
+          node-version: "18.x"
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           path: packages/diffusion-cpp/prebuilds
           merge-multiple: true
-      - run: npm install
+      - name: Configure .npmrc
+        shell: bash
         working-directory: packages/diffusion-cpp
-      - run: npm run test:dts
+        env:
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          : > .npmrc
+          echo "registry=https://registry.npmjs.org/" >> .npmrc
+          echo "@qvac:registry=https://registry.npmjs.org/" >> .npmrc
+          if [ -n "${PAT_TOKEN}" ]; then
+            echo "@tetherto:registry=https://npm.pkg.github.com/" >> .npmrc
+            echo "//npm.pkg.github.com/:_authToken=${PAT_TOKEN}" >> .npmrc
+            git config --global url."https://${PAT_TOKEN}:@github.com/".insteadOf "https://github.com/"
+          fi
+      - name: Install dependencies
+        shell: bash
         working-directory: packages/diffusion-cpp
-      - uses: ./.github/actions/run-lint-and-unit-tests
-        with:
-          gpr-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
-          registry-type: gpr
-          workdir: packages/diffusion-cpp
+        run: npm install
+      - name: Install bare
+        shell: bash
+        run: npm install -g --force bare
+      - name: Run unit tests
+        shell: bash
+        working-directory: packages/diffusion-cpp
+        run: npm run test:unit --if-present
 
   diffusion-cpp:
     needs: prebuilds-diffusion-cpp
@@ -265,10 +276,11 @@ jobs:
     secrets: inherit
 
   # ---------- embed-llamacpp ----------
-  cpp-lint-embed-llamacpp:
-    uses: ./.github/workflows/cpp-lint.yaml
+  prebuilds-embed-llamacpp:
+    uses: ./.github/workflows/prebuilds-embed-llamacpp.yml
     with:
-      workdir: packages/embed-llamacpp
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
     secrets: inherit
 
   cpp-tests-embed-llamacpp:
@@ -278,44 +290,7 @@ jobs:
       repository: ${{ inputs.repository }}
     secrets: inherit
 
-  prebuilds-embed-llamacpp:
-    uses: ./.github/workflows/prebuilds-embed-llamacpp.yml
-    with:
-      ref: ${{ inputs.ref }}
-      repository: ${{ inputs.repository }}
-    secrets: inherit
-
-  verify-fabric-lockstep-embed-llamacpp:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          repository: ${{ inputs.repository }}
-          ref: ${{ inputs.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
-      - uses: ./.github/actions/verify-qvac-fabric-lockstep
-
-  sanity-checks-embed-llamacpp:
-    needs: prebuilds-embed-llamacpp
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          repository: ${{ inputs.repository }}
-          ref: ${{ inputs.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
-        with:
-          path: packages/embed-llamacpp/prebuilds
-          merge-multiple: true
-      - uses: ./.github/actions/run-lint-and-unit-tests
-        with:
-          gpr-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
-          registry-type: gpr
-          workdir: packages/embed-llamacpp
-
-  ts-checks-embed-llamacpp:
+  unit-tests-embed-llamacpp:
     needs: prebuilds-embed-llamacpp
     runs-on: ubuntu-latest
     steps:
@@ -326,21 +301,36 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
-          node-version: 20
+          node-version: "18.x"
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           path: packages/embed-llamacpp/prebuilds
           merge-multiple: true
-      - run: npm install
+      - name: Configure .npmrc
+        shell: bash
         working-directory: packages/embed-llamacpp
-      - run: npm run test:dts
+        env:
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          : > .npmrc
+          echo "registry=https://registry.npmjs.org/" >> .npmrc
+          echo "@qvac:registry=https://registry.npmjs.org/" >> .npmrc
+          if [ -n "${PAT_TOKEN}" ]; then
+            echo "@tetherto:registry=https://npm.pkg.github.com/" >> .npmrc
+            echo "//npm.pkg.github.com/:_authToken=${PAT_TOKEN}" >> .npmrc
+            git config --global url."https://${PAT_TOKEN}:@github.com/".insteadOf "https://github.com/"
+          fi
+      - name: Install dependencies
+        shell: bash
         working-directory: packages/embed-llamacpp
-      - uses: ./.github/actions/run-lint-and-unit-tests
-        with:
-          gpr-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
-          registry-type: gpr
-          workdir: packages/embed-llamacpp
+        run: npm install
+      - name: Install bare
+        shell: bash
+        run: npm install -g --force bare
+      - name: Run unit tests
+        shell: bash
+        working-directory: packages/embed-llamacpp
+        run: npm run test:unit --if-present
 
   embed-llamacpp:
     needs: prebuilds-embed-llamacpp
@@ -351,10 +341,11 @@ jobs:
     secrets: inherit
 
   # ---------- llm-llamacpp ----------
-  cpp-lint-llm-llamacpp:
-    uses: ./.github/workflows/cpp-lint.yaml
+  prebuilds-llm-llamacpp:
+    uses: ./.github/workflows/prebuilds-llm-llamacpp.yml
     with:
-      workdir: packages/llm-llamacpp
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
     secrets: inherit
 
   cpp-tests-llm-llamacpp:
@@ -364,44 +355,7 @@ jobs:
       repository: ${{ inputs.repository }}
     secrets: inherit
 
-  prebuilds-llm-llamacpp:
-    uses: ./.github/workflows/prebuilds-llm-llamacpp.yml
-    with:
-      ref: ${{ inputs.ref }}
-      repository: ${{ inputs.repository }}
-    secrets: inherit
-
-  verify-fabric-lockstep-llm-llamacpp:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          repository: ${{ inputs.repository }}
-          ref: ${{ inputs.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
-      - uses: ./.github/actions/verify-qvac-fabric-lockstep
-
-  sanity-checks-llm-llamacpp:
-    needs: prebuilds-llm-llamacpp
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          repository: ${{ inputs.repository }}
-          ref: ${{ inputs.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
-        with:
-          path: packages/llm-llamacpp/prebuilds
-          merge-multiple: true
-      - uses: ./.github/actions/run-lint-and-unit-tests
-        with:
-          gpr-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
-          registry-type: gpr
-          workdir: packages/llm-llamacpp
-
-  ts-checks-llm-llamacpp:
+  unit-tests-llm-llamacpp:
     needs: prebuilds-llm-llamacpp
     runs-on: ubuntu-latest
     steps:
@@ -412,21 +366,36 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
-          node-version: 20
+          node-version: "18.x"
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           path: packages/llm-llamacpp/prebuilds
           merge-multiple: true
-      - run: npm install
+      - name: Configure .npmrc
+        shell: bash
         working-directory: packages/llm-llamacpp
-      - run: npm run test:dts
+        env:
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          : > .npmrc
+          echo "registry=https://registry.npmjs.org/" >> .npmrc
+          echo "@qvac:registry=https://registry.npmjs.org/" >> .npmrc
+          if [ -n "${PAT_TOKEN}" ]; then
+            echo "@tetherto:registry=https://npm.pkg.github.com/" >> .npmrc
+            echo "//npm.pkg.github.com/:_authToken=${PAT_TOKEN}" >> .npmrc
+            git config --global url."https://${PAT_TOKEN}:@github.com/".insteadOf "https://github.com/"
+          fi
+      - name: Install dependencies
+        shell: bash
         working-directory: packages/llm-llamacpp
-      - uses: ./.github/actions/run-lint-and-unit-tests
-        with:
-          gpr-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
-          registry-type: gpr
-          workdir: packages/llm-llamacpp
+        run: npm install
+      - name: Install bare
+        shell: bash
+        run: npm install -g --force bare
+      - name: Run unit tests
+        shell: bash
+        working-directory: packages/llm-llamacpp
+        run: npm run test:unit --if-present
 
   llm-llamacpp:
     needs: prebuilds-llm-llamacpp
@@ -437,12 +406,6 @@ jobs:
     secrets: inherit
 
   # ---------- ocr-onnx ----------
-  cpp-lint-ocr-onnx:
-    uses: ./.github/workflows/cpp-lint.yaml
-    with:
-      workdir: packages/ocr-onnx
-    secrets: inherit
-
   prebuilds-ocr-onnx:
     uses: ./.github/workflows/prebuilds-ocr-onnx.yml
     with:
@@ -450,7 +413,7 @@ jobs:
       repository: ${{ inputs.repository }}
     secrets: inherit
 
-  sanity-checks-ocr-onnx:
+  unit-tests-ocr-onnx:
     needs: prebuilds-ocr-onnx
     runs-on: ubuntu-latest
     steps:
@@ -459,16 +422,38 @@ jobs:
           repository: ${{ inputs.repository }}
           ref: ${{ inputs.ref }}
           token: ${{ secrets.PAT_TOKEN }}
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: "18.x"
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           path: packages/ocr-onnx/prebuilds
           merge-multiple: true
-      - uses: ./.github/actions/run-lint-and-unit-tests
-        with:
-          gpr-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
-          registry-type: gpr
-          workdir: packages/ocr-onnx
+      - name: Configure .npmrc
+        shell: bash
+        working-directory: packages/ocr-onnx
+        env:
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          : > .npmrc
+          echo "registry=https://registry.npmjs.org/" >> .npmrc
+          echo "@qvac:registry=https://registry.npmjs.org/" >> .npmrc
+          if [ -n "${PAT_TOKEN}" ]; then
+            echo "@tetherto:registry=https://npm.pkg.github.com/" >> .npmrc
+            echo "//npm.pkg.github.com/:_authToken=${PAT_TOKEN}" >> .npmrc
+            git config --global url."https://${PAT_TOKEN}:@github.com/".insteadOf "https://github.com/"
+          fi
+      - name: Install dependencies
+        shell: bash
+        working-directory: packages/ocr-onnx
+        run: npm install
+      - name: Install bare
+        shell: bash
+        run: npm install -g --force bare
+      - name: Run unit tests
+        shell: bash
+        working-directory: packages/ocr-onnx
+        run: npm run test:unit --if-present
 
   ocr-onnx:
     needs: prebuilds-ocr-onnx
@@ -479,10 +464,11 @@ jobs:
     secrets: inherit
 
   # ---------- transcription-parakeet ----------
-  cpp-lint-transcription-parakeet:
-    uses: ./.github/workflows/cpp-lint.yaml
+  prebuilds-transcription-parakeet:
+    uses: ./.github/workflows/prebuilds-transcription-parakeet.yml
     with:
-      workdir: packages/transcription-parakeet
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
     secrets: inherit
 
   cpp-tests-transcription-parakeet:
@@ -492,14 +478,7 @@ jobs:
       repository: ${{ inputs.repository }}
     secrets: inherit
 
-  prebuilds-transcription-parakeet:
-    uses: ./.github/workflows/prebuilds-transcription-parakeet.yml
-    with:
-      ref: ${{ inputs.ref }}
-      repository: ${{ inputs.repository }}
-    secrets: inherit
-
-  sanity-checks-transcription-parakeet:
+  unit-tests-transcription-parakeet:
     needs: prebuilds-transcription-parakeet
     runs-on: ubuntu-latest
     steps:
@@ -508,16 +487,38 @@ jobs:
           repository: ${{ inputs.repository }}
           ref: ${{ inputs.ref }}
           token: ${{ secrets.PAT_TOKEN }}
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: "18.x"
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           path: packages/transcription-parakeet/prebuilds
           merge-multiple: true
-      - uses: ./.github/actions/run-lint-and-unit-tests
-        with:
-          gpr-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
-          registry-type: gpr
-          workdir: packages/transcription-parakeet
+      - name: Configure .npmrc
+        shell: bash
+        working-directory: packages/transcription-parakeet
+        env:
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          : > .npmrc
+          echo "registry=https://registry.npmjs.org/" >> .npmrc
+          echo "@qvac:registry=https://registry.npmjs.org/" >> .npmrc
+          if [ -n "${PAT_TOKEN}" ]; then
+            echo "@tetherto:registry=https://npm.pkg.github.com/" >> .npmrc
+            echo "//npm.pkg.github.com/:_authToken=${PAT_TOKEN}" >> .npmrc
+            git config --global url."https://${PAT_TOKEN}:@github.com/".insteadOf "https://github.com/"
+          fi
+      - name: Install dependencies
+        shell: bash
+        working-directory: packages/transcription-parakeet
+        run: npm install
+      - name: Install bare
+        shell: bash
+        run: npm install -g --force bare
+      - name: Run unit tests
+        shell: bash
+        working-directory: packages/transcription-parakeet
+        run: npm run test:unit --if-present
 
   transcription-parakeet:
     needs: prebuilds-transcription-parakeet
@@ -528,10 +529,11 @@ jobs:
     secrets: inherit
 
   # ---------- transcription-whispercpp ----------
-  cpp-lint-transcription-whispercpp:
-    uses: ./.github/workflows/cpp-lint.yaml
+  prebuilds-transcription-whispercpp:
+    uses: ./.github/workflows/prebuilds-transcription-whispercpp.yml
     with:
-      workdir: packages/transcription-whispercpp
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
     secrets: inherit
 
   cpp-tests-transcription-whispercpp:
@@ -541,14 +543,7 @@ jobs:
       repository: ${{ inputs.repository }}
     secrets: inherit
 
-  prebuilds-transcription-whispercpp:
-    uses: ./.github/workflows/prebuilds-transcription-whispercpp.yml
-    with:
-      ref: ${{ inputs.ref }}
-      repository: ${{ inputs.repository }}
-    secrets: inherit
-
-  sanity-checks-transcription-whispercpp:
+  unit-tests-transcription-whispercpp:
     needs: prebuilds-transcription-whispercpp
     runs-on: ubuntu-latest
     steps:
@@ -557,16 +552,38 @@ jobs:
           repository: ${{ inputs.repository }}
           ref: ${{ inputs.ref }}
           token: ${{ secrets.PAT_TOKEN }}
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: "18.x"
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           path: packages/transcription-whispercpp/prebuilds
           merge-multiple: true
-      - uses: ./.github/actions/run-lint-and-unit-tests
-        with:
-          gpr-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
-          registry-type: gpr
-          workdir: packages/transcription-whispercpp
+      - name: Configure .npmrc
+        shell: bash
+        working-directory: packages/transcription-whispercpp
+        env:
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          : > .npmrc
+          echo "registry=https://registry.npmjs.org/" >> .npmrc
+          echo "@qvac:registry=https://registry.npmjs.org/" >> .npmrc
+          if [ -n "${PAT_TOKEN}" ]; then
+            echo "@tetherto:registry=https://npm.pkg.github.com/" >> .npmrc
+            echo "//npm.pkg.github.com/:_authToken=${PAT_TOKEN}" >> .npmrc
+            git config --global url."https://${PAT_TOKEN}:@github.com/".insteadOf "https://github.com/"
+          fi
+      - name: Install dependencies
+        shell: bash
+        working-directory: packages/transcription-whispercpp
+        run: npm install
+      - name: Install bare
+        shell: bash
+        run: npm install -g --force bare
+      - name: Run unit tests
+        shell: bash
+        working-directory: packages/transcription-whispercpp
+        run: npm run test:unit --if-present
 
   transcription-whispercpp:
     needs: prebuilds-transcription-whispercpp
@@ -577,10 +594,11 @@ jobs:
     secrets: inherit
 
   # ---------- translation-nmtcpp ----------
-  cpp-lint-translation-nmtcpp:
-    uses: ./.github/workflows/cpp-lint.yaml
+  prebuilds-translation-nmtcpp:
+    uses: ./.github/workflows/prebuilds-translation-nmtcpp.yml
     with:
-      workdir: packages/translation-nmtcpp
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
     secrets: inherit
 
   cpp-tests-translation-nmtcpp:
@@ -590,44 +608,7 @@ jobs:
       repository: ${{ inputs.repository }}
     secrets: inherit
 
-  prebuilds-translation-nmtcpp:
-    uses: ./.github/workflows/prebuilds-translation-nmtcpp.yml
-    with:
-      ref: ${{ inputs.ref }}
-      repository: ${{ inputs.repository }}
-    secrets: inherit
-
-  verify-fabric-lockstep-translation-nmtcpp:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          repository: ${{ inputs.repository }}
-          ref: ${{ inputs.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
-      - uses: ./.github/actions/verify-qvac-fabric-lockstep
-
-  sanity-checks-translation-nmtcpp:
-    needs: prebuilds-translation-nmtcpp
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          repository: ${{ inputs.repository }}
-          ref: ${{ inputs.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
-        with:
-          path: packages/translation-nmtcpp/prebuilds
-          merge-multiple: true
-      - uses: ./.github/actions/run-lint-and-unit-tests
-        with:
-          gpr-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
-          registry-type: gpr
-          workdir: packages/translation-nmtcpp
-
-  ts-checks-translation-nmtcpp:
+  unit-tests-translation-nmtcpp:
     needs: prebuilds-translation-nmtcpp
     runs-on: ubuntu-latest
     steps:
@@ -638,21 +619,36 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
-          node-version: 20
+          node-version: "18.x"
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           path: packages/translation-nmtcpp/prebuilds
           merge-multiple: true
-      - run: npm install
+      - name: Configure .npmrc
+        shell: bash
         working-directory: packages/translation-nmtcpp
-      - run: npm run test:dts
+        env:
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          : > .npmrc
+          echo "registry=https://registry.npmjs.org/" >> .npmrc
+          echo "@qvac:registry=https://registry.npmjs.org/" >> .npmrc
+          if [ -n "${PAT_TOKEN}" ]; then
+            echo "@tetherto:registry=https://npm.pkg.github.com/" >> .npmrc
+            echo "//npm.pkg.github.com/:_authToken=${PAT_TOKEN}" >> .npmrc
+            git config --global url."https://${PAT_TOKEN}:@github.com/".insteadOf "https://github.com/"
+          fi
+      - name: Install dependencies
+        shell: bash
         working-directory: packages/translation-nmtcpp
-      - uses: ./.github/actions/run-lint-and-unit-tests
-        with:
-          gpr-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
-          registry-type: gpr
-          workdir: packages/translation-nmtcpp
+        run: npm install
+      - name: Install bare
+        shell: bash
+        run: npm install -g --force bare
+      - name: Run unit tests
+        shell: bash
+        working-directory: packages/translation-nmtcpp
+        run: npm run test:unit --if-present
 
   translation-nmtcpp:
     needs: prebuilds-translation-nmtcpp
@@ -663,10 +659,11 @@ jobs:
     secrets: inherit
 
   # ---------- tts-ggml ----------
-  cpp-lint-tts-ggml:
-    uses: ./.github/workflows/cpp-lint.yaml
+  prebuilds-tts-ggml:
+    uses: ./.github/workflows/prebuilds-tts-ggml.yml
     with:
-      workdir: packages/tts-ggml
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
     secrets: inherit
 
   cpp-tests-tts-ggml:
@@ -676,14 +673,7 @@ jobs:
       repository: ${{ inputs.repository }}
     secrets: inherit
 
-  prebuilds-tts-ggml:
-    uses: ./.github/workflows/prebuilds-tts-ggml.yml
-    with:
-      ref: ${{ inputs.ref }}
-      repository: ${{ inputs.repository }}
-    secrets: inherit
-
-  sanity-checks-tts-ggml:
+  unit-tests-tts-ggml:
     needs: prebuilds-tts-ggml
     runs-on: ubuntu-latest
     steps:
@@ -692,16 +682,38 @@ jobs:
           repository: ${{ inputs.repository }}
           ref: ${{ inputs.ref }}
           token: ${{ secrets.PAT_TOKEN }}
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: "18.x"
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           path: packages/tts-ggml/prebuilds
           merge-multiple: true
-      - uses: ./.github/actions/run-lint-and-unit-tests
-        with:
-          gpr-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
-          registry-type: gpr
-          workdir: packages/tts-ggml
+      - name: Configure .npmrc
+        shell: bash
+        working-directory: packages/tts-ggml
+        env:
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          : > .npmrc
+          echo "registry=https://registry.npmjs.org/" >> .npmrc
+          echo "@qvac:registry=https://registry.npmjs.org/" >> .npmrc
+          if [ -n "${PAT_TOKEN}" ]; then
+            echo "@tetherto:registry=https://npm.pkg.github.com/" >> .npmrc
+            echo "//npm.pkg.github.com/:_authToken=${PAT_TOKEN}" >> .npmrc
+            git config --global url."https://${PAT_TOKEN}:@github.com/".insteadOf "https://github.com/"
+          fi
+      - name: Install dependencies
+        shell: bash
+        working-directory: packages/tts-ggml
+        run: npm install
+      - name: Install bare
+        shell: bash
+        run: npm install -g --force bare
+      - name: Run unit tests
+        shell: bash
+        working-directory: packages/tts-ggml
+        run: npm run test:unit --if-present
 
   tts-ggml:
     needs: prebuilds-tts-ggml
@@ -712,10 +724,11 @@ jobs:
     secrets: inherit
 
   # ---------- tts-onnx ----------
-  cpp-lint-tts-onnx:
-    uses: ./.github/workflows/cpp-lint.yaml
+  prebuilds-tts-onnx:
+    uses: ./.github/workflows/prebuilds-tts-onnx.yml
     with:
-      workdir: packages/tts-onnx
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
     secrets: inherit
 
   cpp-tests-tts-onnx:
@@ -725,14 +738,7 @@ jobs:
       repository: ${{ inputs.repository }}
     secrets: inherit
 
-  prebuilds-tts-onnx:
-    uses: ./.github/workflows/prebuilds-tts-onnx.yml
-    with:
-      ref: ${{ inputs.ref }}
-      repository: ${{ inputs.repository }}
-    secrets: inherit
-
-  sanity-checks-tts-onnx:
+  unit-tests-tts-onnx:
     needs: prebuilds-tts-onnx
     runs-on: ubuntu-latest
     steps:
@@ -741,16 +747,38 @@ jobs:
           repository: ${{ inputs.repository }}
           ref: ${{ inputs.ref }}
           token: ${{ secrets.PAT_TOKEN }}
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: "18.x"
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           path: packages/tts-onnx/prebuilds
           merge-multiple: true
-      - uses: ./.github/actions/run-lint-and-unit-tests
-        with:
-          gpr-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
-          registry-type: gpr
-          workdir: packages/tts-onnx
+      - name: Configure .npmrc
+        shell: bash
+        working-directory: packages/tts-onnx
+        env:
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          : > .npmrc
+          echo "registry=https://registry.npmjs.org/" >> .npmrc
+          echo "@qvac:registry=https://registry.npmjs.org/" >> .npmrc
+          if [ -n "${PAT_TOKEN}" ]; then
+            echo "@tetherto:registry=https://npm.pkg.github.com/" >> .npmrc
+            echo "//npm.pkg.github.com/:_authToken=${PAT_TOKEN}" >> .npmrc
+            git config --global url."https://${PAT_TOKEN}:@github.com/".insteadOf "https://github.com/"
+          fi
+      - name: Install dependencies
+        shell: bash
+        working-directory: packages/tts-onnx
+        run: npm install
+      - name: Install bare
+        shell: bash
+        run: npm install -g --force bare
+      - name: Run unit tests
+        shell: bash
+        working-directory: packages/tts-onnx
+        run: npm run test:unit --if-present
 
   tts-onnx:
     needs: prebuilds-tts-onnx
@@ -761,10 +789,11 @@ jobs:
     secrets: inherit
 
   # ---------- vla ----------
-  cpp-lint-vla:
-    uses: ./.github/workflows/cpp-lint.yaml
+  prebuilds-vla:
+    uses: ./.github/workflows/prebuilds-vla.yml
     with:
-      workdir: packages/vla-ggml
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
     secrets: inherit
 
   cpp-tests-vla:
@@ -774,44 +803,7 @@ jobs:
       repository: ${{ inputs.repository }}
     secrets: inherit
 
-  prebuilds-vla:
-    uses: ./.github/workflows/prebuilds-vla.yml
-    with:
-      ref: ${{ inputs.ref }}
-      repository: ${{ inputs.repository }}
-    secrets: inherit
-
-  verify-fabric-lockstep-vla:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          repository: ${{ inputs.repository }}
-          ref: ${{ inputs.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
-      - uses: ./.github/actions/verify-qvac-fabric-lockstep
-
-  sanity-checks-vla:
-    needs: prebuilds-vla
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          repository: ${{ inputs.repository }}
-          ref: ${{ inputs.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
-        with:
-          path: packages/vla-ggml/prebuilds
-          merge-multiple: true
-      - uses: ./.github/actions/run-lint-and-unit-tests
-        with:
-          gpr-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
-          registry-type: gpr
-          workdir: packages/vla-ggml
-
-  ts-checks-vla:
+  unit-tests-vla:
     needs: prebuilds-vla
     runs-on: ubuntu-latest
     steps:
@@ -822,21 +814,36 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
-          node-version: 20
+          node-version: "18.x"
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           path: packages/vla-ggml/prebuilds
           merge-multiple: true
-      - run: npm install
+      - name: Configure .npmrc
+        shell: bash
         working-directory: packages/vla-ggml
-      - run: npm run test:dts
+        env:
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          : > .npmrc
+          echo "registry=https://registry.npmjs.org/" >> .npmrc
+          echo "@qvac:registry=https://registry.npmjs.org/" >> .npmrc
+          if [ -n "${PAT_TOKEN}" ]; then
+            echo "@tetherto:registry=https://npm.pkg.github.com/" >> .npmrc
+            echo "//npm.pkg.github.com/:_authToken=${PAT_TOKEN}" >> .npmrc
+            git config --global url."https://${PAT_TOKEN}:@github.com/".insteadOf "https://github.com/"
+          fi
+      - name: Install dependencies
+        shell: bash
         working-directory: packages/vla-ggml
-      - uses: ./.github/actions/run-lint-and-unit-tests
-        with:
-          gpr-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
-          registry-type: gpr
-          workdir: packages/vla-ggml
+        run: npm install
+      - name: Install bare
+        shell: bash
+        run: npm install -g --force bare
+      - name: Run unit tests
+        shell: bash
+        working-directory: packages/vla-ggml
+        run: npm run test:unit --if-present
 
   vla:
     needs: prebuilds-vla
@@ -846,7 +853,7 @@ jobs:
       repository: ${{ inputs.repository }}
     secrets: inherit
 
-  # ---------- mobile (opt-in) ----------
+  # ---------- mobile ----------
   bci-whispercpp-mobile:
     needs: prebuilds-bci-whispercpp
     uses: ./.github/workflows/integration-mobile-test-bci-whispercpp.yml
@@ -953,76 +960,54 @@ jobs:
   summary:
     if: ${{ always() }}
     needs:
-      - cpp-lint-bci-whispercpp
-      - cpp-lint-classification-ggml
-      - cpp-lint-diffusion-cpp
-      - cpp-lint-embed-llamacpp
-      - cpp-lint-llm-llamacpp
-      - cpp-lint-ocr-onnx
-      - cpp-lint-transcription-parakeet
-      - cpp-lint-transcription-whispercpp
-      - cpp-lint-translation-nmtcpp
-      - cpp-lint-tts-ggml
-      - cpp-lint-tts-onnx
-      - cpp-lint-vla
-      - cpp-tests-bci-whispercpp
-      - cpp-tests-classification-ggml
-      - cpp-tests-diffusion-cpp
-      - cpp-tests-embed-llamacpp
-      - cpp-tests-llm-llamacpp
-      - cpp-tests-transcription-parakeet
-      - cpp-tests-transcription-whispercpp
-      - cpp-tests-translation-nmtcpp
-      - cpp-tests-tts-ggml
-      - cpp-tests-tts-onnx
-      - cpp-tests-vla
       - prebuilds-bci-whispercpp
-      - prebuilds-classification-ggml
-      - prebuilds-diffusion-cpp
-      - prebuilds-embed-llamacpp
-      - prebuilds-llm-llamacpp
-      - prebuilds-ocr-onnx
-      - prebuilds-transcription-parakeet
-      - prebuilds-transcription-whispercpp
-      - prebuilds-translation-nmtcpp
-      - prebuilds-tts-ggml
-      - prebuilds-tts-onnx
-      - prebuilds-vla
-      - sanity-checks-bci-whispercpp
-      - sanity-checks-classification-ggml
-      - sanity-checks-decoder-audio
-      - sanity-checks-diffusion-cpp
-      - sanity-checks-embed-llamacpp
-      - sanity-checks-llm-llamacpp
-      - sanity-checks-ocr-onnx
-      - sanity-checks-transcription-parakeet
-      - sanity-checks-transcription-whispercpp
-      - sanity-checks-translation-nmtcpp
-      - sanity-checks-tts-ggml
-      - sanity-checks-tts-onnx
-      - sanity-checks-vla
-      - ts-checks-classification-ggml
-      - ts-checks-diffusion-cpp
-      - ts-checks-embed-llamacpp
-      - ts-checks-llm-llamacpp
-      - ts-checks-translation-nmtcpp
-      - ts-checks-vla
-      - verify-fabric-lockstep-embed-llamacpp
-      - verify-fabric-lockstep-llm-llamacpp
-      - verify-fabric-lockstep-translation-nmtcpp
-      - verify-fabric-lockstep-vla
+      - cpp-tests-bci-whispercpp
+      - unit-tests-bci-whispercpp
       - bci-whispercpp
+      - prebuilds-classification-ggml
+      - cpp-tests-classification-ggml
+      - unit-tests-classification-ggml
       - classification-ggml
+      - unit-tests-decoder-audio
       - decoder-audio
+      - prebuilds-diffusion-cpp
+      - cpp-tests-diffusion-cpp
+      - unit-tests-diffusion-cpp
       - diffusion-cpp
+      - prebuilds-embed-llamacpp
+      - cpp-tests-embed-llamacpp
+      - unit-tests-embed-llamacpp
       - embed-llamacpp
+      - prebuilds-llm-llamacpp
+      - cpp-tests-llm-llamacpp
+      - unit-tests-llm-llamacpp
       - llm-llamacpp
+      - prebuilds-ocr-onnx
+      - unit-tests-ocr-onnx
       - ocr-onnx
+      - prebuilds-transcription-parakeet
+      - cpp-tests-transcription-parakeet
+      - unit-tests-transcription-parakeet
       - transcription-parakeet
+      - prebuilds-transcription-whispercpp
+      - cpp-tests-transcription-whispercpp
+      - unit-tests-transcription-whispercpp
       - transcription-whispercpp
+      - prebuilds-translation-nmtcpp
+      - cpp-tests-translation-nmtcpp
+      - unit-tests-translation-nmtcpp
       - translation-nmtcpp
+      - prebuilds-tts-ggml
+      - cpp-tests-tts-ggml
+      - unit-tests-tts-ggml
       - tts-ggml
+      - prebuilds-tts-onnx
+      - cpp-tests-tts-onnx
+      - unit-tests-tts-onnx
       - tts-onnx
+      - prebuilds-vla
+      - cpp-tests-vla
+      - unit-tests-vla
       - vla
       - bci-whispercpp-mobile
       - classification-ggml-mobile
