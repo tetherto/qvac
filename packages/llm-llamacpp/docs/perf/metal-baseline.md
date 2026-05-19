@@ -1,9 +1,9 @@
 # VLM Metal Baseline Performance Report
 
-**Date**: 2026-05-13
+**Date**: 2026-05-13 (Mac M4, iPhone 16e Phase 1), 2026-05-18 (iPhone 16e full matrix, iPhone 16 Pro)
 **Tasks**: QVAC-18293 (profiling baseline)
 
-This report consolidates VLM inference benchmark and profiling results from the QVAC-18293 investigation on Apple Metal devices (Mac M4, iPhone 16e, iPhone 16Pro).
+This report consolidates VLM inference benchmark and profiling results from the QVAC-18293 investigation on Apple Metal devices (Mac M4, iPhone 16e, iPhone 16 Pro).
 
 Android mobile GPU results (Samsung S25 Adreno 830, Pixel 9 Pro Mali-G715) are in [Appendix G](#appendix-g-android-gpu-results). Full Android analysis will continue under a separate ticket and dedicated report document.
 
@@ -56,7 +56,7 @@ Android devices: see [Appendix G](#appendix-g-android-gpu-results).
 | Parameter | Value |
 |-----------|-------|
 | Context size | 4096 |
-| Predicted tokens | 256 (Mac Metal), 128 (iPhone — 256 triggers OOM) |
+| Predicted tokens | 256 (Mac Metal, iPhone 16e/16 Pro 2026-05-18), 128 (iPhone 16e Phase 1 only — 256 triggers OOM via CLI) |
 | Threads | 4 |
 | Temperature | 0 |
 | Seed | 42 |
@@ -262,13 +262,13 @@ different device hardware, or background process interference. For precise
 branch-to-branch comparison (<5% deltas), local device testing with
 `powermetrics` thermal monitoring is required.
 
-**Cross-platform comparison (Gemma4-E2B Q4_K_M Metal elephant):**
+**Cross-platform comparison (Gemma4-E2B Q4_K_M Metal elephant, b9025):**
 
-| Device | Branch | Vision (ms) | Prefill (t/s) | Decode (t/s) | Peak RSS (MB) | RSS method |
-|--------|--------|------------|---------------|-------------|--------------|------------|
-| Mac M4 (16 GB, 8 cores) | b9025 | 632 | 260.3 | 50.7 | 1,266 | `/usr/bin/time -l` |
-| iPhone 16 Pro (8 GB, 6 cores) | fiber | 883 | 174.4 | 30.9 | 96 | `mach_task_basic_info` [^2] |
-| iPhone 16e (8 GB, 5 cores) | b9025 | 1,285 | 122.7 | 27.3 | 1,071 | `mach_task_basic_info` |
+| Device | Vision (ms) | Prefill (t/s) | Decode (t/s) | Peak RSS (MB) | RSS method |
+|--------|------------|---------------|-------------|--------------|------------|
+| Mac M4 (16 GB, 8 cores) | 632 | 260.3 | 50.7 | 1,266 | `/usr/bin/time -l` |
+| iPhone 16 Pro (8 GB, 6 cores) | 879 | 176.2 | 30.0 | 96 | `mach_task_basic_info` [^2] |
+| iPhone 16e (8 GB, 5 cores) | 1,285 | 122.7 | 27.3 | 1,071 | `mach_task_basic_info` |
 
 [^2]: Firebase RSS values are not comparable to local measurements — see iPhone 16 Pro notes above.
 
@@ -960,7 +960,7 @@ All paths relative to `vlm-benchmark/` in the working directory.
 | Android CPU APK | `firebase-benchmark/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk` |
 | Android GPU APK | `firebase-benchmark-gpu/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk` |
 | iOS XCTest wrapper | `firebase-benchmark-ios/` |
-| GCS models bucket | `gs://qvac-vlm-benchmark-models/` |
+| GCS models bucket | `gs://qvac-vlm-benchmark-models/` (public read: `allUsers:objectViewer`) |
 
 #### G.11 How to Reproduce (Android)
 
