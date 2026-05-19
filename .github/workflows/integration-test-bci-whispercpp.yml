@@ -1,0 +1,183 @@
+name: Integration Tests (BCI Whispercpp)
+
+on:
+  workflow_dispatch:
+    inputs:
+      prebuild_package:
+        description: "NPM package containing prebuilds (e.g. @qvac/bci-whispercpp@0.1.0)"
+        required: false
+        type: string
+      workdir:
+        description: "Relative path to package directory in monorepo"
+        type: string
+        required: false
+        default: "packages/bci-whispercpp"
+  workflow_call:
+    inputs:
+      ref:
+        description: "ref"
+        type: string
+      repository:
+        type: string
+      prebuild_package:
+        description: "NPM package containing prebuilds (e.g. @qvac/bci-whispercpp@0.1.0)"
+        required: false
+        type: string
+      workdir:
+        description: "Relative path to package directory in monorepo"
+        required: false
+        default: "packages/bci-whispercpp"
+        type: string
+
+jobs:
+  run-integration-tests:
+    timeout-minutes: 60
+    continue-on-error: true
+    runs-on: ${{ matrix.runner || matrix.os }}
+    environment: release
+    name: ${{ matrix.platform }}-${{ matrix.arch }}-integration-tests
+
+    env:
+      GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+
+    permissions:
+      contents: read
+      packages: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
+            runner: qvac-ubuntu2204-x64
+          - os: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
+          - os: macos-14-xlarge
+            platform: darwin
+            arch: arm64
+          - os: macos-15-large
+            platform: darwin
+            arch: x64
+          - os: windows-2025
+            platform: win32
+            arch: x64
+            runner: qvac-win25-x64
+
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        if: startsWith(matrix.runner, 'qvac-')
+
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Install NPM dependencies
+        working-directory: ${{ inputs.workdir }}
+        run: |
+          npm install
+
+      - name: Install bare tooling
+        run: npm install -g --force bare bare-make
+
+      - name: Download prebuilds from artifact
+        if: ${{ !inputs.prebuild_package }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: ${{ runner.temp }}/prebuilds-staging
+          merge-multiple: true
+
+      - name: Move prebuilds from staging to workspace
+        if: ${{ !inputs.prebuild_package }}
+        run: |
+          mkdir -p ${{ inputs.workdir }}/prebuilds
+          cp -r ${{ runner.temp }}/prebuilds-staging/* ${{ inputs.workdir }}/prebuilds/ 2>/dev/null || true
+          echo "Prebuilds moved from staging area"
+        shell: bash
+
+      - name: Download prebuilds from package (Unix)
+        if: ${{ inputs.prebuild_package && matrix.platform != 'win32' }}
+        working-directory: ${{ inputs.workdir }}
+        shell: bash
+        run: |
+          mkdir -p prebuilds "${{ runner.temp }}/tmp"
+          rm -f "${{ runner.temp }}/tmp"/*.tgz
+          rm -rf "${{ runner.temp }}/tmp/package"
+          npm pack ${{ inputs.prebuild_package }} --pack-destination "${{ runner.temp }}/tmp"
+          tar -xzf "${{ runner.temp }}/tmp"/*.tgz -C "${{ runner.temp }}/tmp"
+          cp -r "${{ runner.temp }}/tmp"/package/prebuilds/* prebuilds/
+          find prebuilds -type f -name 'tetherto__*' | while read f; do
+            mv "$f" "${f/tetherto__/qvac__}"
+          done
+
+      - name: Download prebuilds from package (Windows)
+        if: ${{ inputs.prebuild_package && matrix.platform == 'win32' }}
+        working-directory: ${{ inputs.workdir }}
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path prebuilds | Out-Null
+          New-Item -ItemType Directory -Force -Path "${{ runner.temp }}\tmp" | Out-Null
+          npm pack ${{ inputs.prebuild_package }} --pack-destination "${{ runner.temp }}\tmp"
+          $tgz = Get-ChildItem "${{ runner.temp }}\tmp\*.tgz" | Select-Object -First 1
+          tar -xzf $tgz.FullName -C "${{ runner.temp }}\tmp"
+          Copy-Item -Path "${{ runner.temp }}\tmp\package\prebuilds\*" -Destination prebuilds -Recurse -Force
+          Get-ChildItem -Path prebuilds -Recurse -File -Filter 'tetherto__*' | ForEach-Object {
+            $newName = $_.Name -replace 'tetherto__', 'qvac__'
+            Rename-Item -Path $_.FullName -NewName $newName
+          }
+
+      - name: macOS - install whisper dependencies
+        if: matrix.platform == 'darwin'
+        shell: bash
+        run: |
+          brew install --quiet openblas lapack fftw
+
+      - if: ${{ matrix.os == 'windows-2025' }}
+        name: Set Vulkan SDK Path on Windows Server 2025
+        working-directory: ${{ env.WORKDIR }}
+        run: echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
+
+      - name: Run integration test (Unix)
+        if: ${{ matrix.platform != 'win32' }}
+        working-directory: ${{ inputs.workdir }}
+        shell: bash
+        run: npm run test:integration
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+
+      - name: Run integration test (Windows)
+        if: ${{ matrix.platform == 'win32' }}
+        working-directory: ${{ inputs.workdir }}
+        shell: powershell
+        run: npm run test:integration
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+
+      - name: Print run state (Unix)
+        if: ${{ matrix.platform != 'win32' }}
+        working-directory: ${{ inputs.workdir }}
+        shell: bash
+        run: |
+          ls -la prebuilds || true
+          tree prebuilds || true
+        continue-on-error: true
+
+      - name: Print run state (Windows)
+        if: ${{ matrix.platform == 'win32' }}
+        working-directory: ${{ inputs.workdir }}
+        shell: powershell
+        run: |
+          Get-ChildItem prebuilds -ErrorAction SilentlyContinue
+          tree prebuilds /F 2>$null
+        continue-on-error: true

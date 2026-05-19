@@ -1,7 +1,6 @@
 import type {
   Request,
   Response,
-  QvacConfig,
   RuntimeContext,
   CanonicalModelType,
 } from "@/schemas";
@@ -26,7 +25,9 @@ import { getAllPlugins } from "@/server/plugins";
 import {
   initializeWorkerCore,
   shutdownBareDirectWorker,
+  cleanupForTerminate,
 } from "@/server/worker-core";
+import { assertLifecycleAllowed } from "@/server/bare/runtime-lifecycle";
 
 const logger = getClientLogger();
 
@@ -97,10 +98,55 @@ function applyDeviceDefaultsToLoadModel<T extends Request>(request: T): T {
   const rawConfig = (request.modelConfig as Record<string, unknown>) ?? {};
   const configWithDefaults = resolveModelConfig(canonicalType, rawConfig);
 
-  return { ...request, modelConfig: configWithDefaults } as T;
+  return { ...request, modelConfig: configWithDefaults };
+}
+
+function supportsProgressStreaming(request: Request) {
+  return (
+    "withProgress" in request &&
+    request.withProgress &&
+    ["loadModel", "downloadAsset", "rag", "finetune"].includes(request.type)
+  );
+}
+
+async function* streamWithProgress(
+  request: Request,
+  handler: (
+    req: Request,
+    callback: (update: Response) => void,
+  ) => Promise<Response>,
+) {
+  const queue: Response[] = [];
+  const errors: Error[] = [];
+  let done = false;
+
+  handler(request, (update) => queue.push(update))
+    .then((final) => {
+      queue.push(final);
+      done = true;
+    })
+    .catch((error: Error) => {
+      errors.push(error);
+      done = true;
+    });
+
+  while (!done || queue.length > 0) {
+    if (queue.length > 0) {
+      yield queue.shift()!;
+    } else {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
+
+  const handlerError = errors[0];
+  if (handlerError) {
+    throw handlerError;
+  }
 }
 
 export async function send<T extends Request>(request: T): Promise<Response> {
+  assertLifecycleAllowed(request);
+
   const handler = getHandler(request.type);
   if (!handler) throw new RPCNoHandlerError(request.type);
 
@@ -109,78 +155,20 @@ export async function send<T extends Request>(request: T): Promise<Response> {
 }
 
 async function* stream<T extends Request>(request: T) {
+  assertLifecycleAllowed(request);
+
   const handler = getHandler(request.type);
   if (!handler) throw new RPCNoHandlerError(request.type);
 
-  // Special handling for loadModel with progress
-  if (
-    request.type === "loadModel" &&
-    "withProgress" in request &&
-    request.withProgress
-  ) {
+  if (supportsProgressStreaming(request)) {
     const processedRequest = applyDeviceDefaultsToLoadModel(request);
-
-    async function* streamWithProgress() {
-      const queue: Response[] = [];
-      let done = false;
-
-      const loadModelHandler = handler as (
+    yield* streamWithProgress(
+      processedRequest,
+      handler as (
         req: Request,
         callback: (update: Response) => void,
-      ) => Promise<Response>;
-      loadModelHandler(processedRequest, (update) => queue.push(update))
-        .then((final) => {
-          queue.push(final);
-          done = true;
-        })
-        .catch((error) => {
-          done = true;
-          throw error;
-        });
-
-      while (!done || queue.length > 0) {
-        if (queue.length > 0) {
-          yield queue.shift()!;
-        } else {
-          await new Promise((resolve) => setTimeout(resolve, 10));
-        }
-      }
-    }
-
-    yield* streamWithProgress();
-  } else if (
-    request.type === "downloadAsset" &&
-    "withProgress" in request &&
-    request.withProgress
-  ) {
-    async function* streamWithProgress() {
-      const queue: Response[] = [];
-      let done = false;
-
-      const downloadAssetHandler = handler as (
-        req: Request,
-        callback: (update: Response) => void,
-      ) => Promise<Response>;
-      downloadAssetHandler(request, (update) => queue.push(update))
-        .then((final) => {
-          queue.push(final);
-          done = true;
-        })
-        .catch((error) => {
-          done = true;
-          throw error;
-        });
-
-      while (!done || queue.length > 0) {
-        if (queue.length > 0) {
-          yield queue.shift()!;
-        } else {
-          await new Promise((resolve) => setTimeout(resolve, 10));
-        }
-      }
-    }
-
-    yield* streamWithProgress();
+      ) => Promise<Response>,
+    );
   } else {
     const result = handler(request);
 
@@ -224,11 +212,32 @@ function createMockRPCRequest() {
             runtimeContext?: RuntimeContext;
           };
           if (initData.config) {
-            setSDKConfig(initData.config as QvacConfig);
+            setSDKConfig(initData.config);
           }
           if (initData.runtimeContext) {
             setRuntimeContext(initData.runtimeContext);
           }
+          return Buffer.from(JSON.stringify({ success: true }));
+        } catch (error) {
+          return Buffer.from(
+            JSON.stringify({
+              success: false,
+              error: error instanceof Error ? error.message : String(error),
+            }),
+          );
+        }
+      }
+
+      // Handle special pre-terminate cleanup signal. In direct mode the
+      // bare runtime is the host JS context, so we run cleanup but never
+      // exit the process here.
+      if (
+        typeof requestData === "object" &&
+        "type" in requestData &&
+        requestData.type === "__shutdown__"
+      ) {
+        try {
+          await cleanupForTerminate();
           return Buffer.from(JSON.stringify({ success: true }));
         } catch (error) {
           return Buffer.from(
@@ -274,7 +283,7 @@ export async function getRPC() {
   if (!configInitialized) {
     const runtimeContext: RuntimeContext = {
       runtime: "bare",
-      platform: os.platform() as "darwin" | "linux" | "win32",
+      platform: os.platform(),
     };
     await initializeConfig(mockRPC, resolveConfig, runtimeContext);
     configInitialized = true;
@@ -293,6 +302,8 @@ export async function createDuplexSession(payload: string, _commandId: number) {
 
   const { PassThrough } = await import("bare-stream");
   const request = JSON.parse(payload) as Request;
+
+  assertLifecycleAllowed(request);
 
   const entry = registry[request.type];
   if (!entry || entry.type !== "duplex") {

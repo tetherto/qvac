@@ -36,6 +36,12 @@ export const SDK_SERVER_ERROR_CODES = {
   OCR_FAILED: 52412,
   IMAGE_FILE_NOT_FOUND: 52413,
   INVALID_IMAGE_INPUT: 52414,
+  TEXT_TO_SPEECH_STREAM_FAILED: 52415,
+  MODEL_OPERATION_NOT_SUPPORTED: 52416,
+  REQUEST_ID_CONFLICT: 52417,
+  REQUEST_NOT_FOUND: 52418,
+  INFERENCE_CANCELLED: 52419,
+  REQUEST_REJECTED_BY_POLICY: 52420,
 
   // RAG Operations (52,800-52,999)
   RAG_SAVE_FAILED: 52800,
@@ -83,6 +89,7 @@ export const SDK_SERVER_ERROR_CODES = {
   FFMPEG_NOT_AVAILABLE: 53500,
   AUDIO_PLAYER_FAILED: 53501,
   INVALID_AUDIO_CHUNK_TYPE: 53502,
+  ASYNC_DISPOSE_UNAVAILABLE: 53503,
 
   // RPC/Delegation (Server-side) (53,700-53,849)
   DELEGATE_NO_FINAL_RESPONSE: 53700,
@@ -102,6 +109,11 @@ export const SDK_SERVER_ERROR_CODES = {
   PLUGIN_DEFINITION_INVALID: 53857,
   PLUGIN_MODEL_TYPE_RESERVED: 53858,
   PLUGIN_LOAD_CONFIG_VALIDATION_FAILED: 53859,
+
+  // Lifecycle (53,600-53,610)
+  LIFECYCLE_SUSPEND_FAILED: 53600,
+  LIFECYCLE_RESUME_FAILED: 53601,
+  LIFECYCLE_OPERATION_BLOCKED: 53602,
 
   // Security (53,900-53,949)
   PATH_TRAVERSAL: 53900,
@@ -230,6 +242,11 @@ const serverErrorDefinitions: ErrorCodesMap = {
     message: (details?: string) =>
       `Text-to-speech operation failed${details ? `: ${details}` : ""}`,
   },
+  [SDK_SERVER_ERROR_CODES.TEXT_TO_SPEECH_STREAM_FAILED]: {
+    name: "TEXT_TO_SPEECH_STREAM_FAILED",
+    message: (details?: string) =>
+      `Text-to-speech stream operation failed${details ? `: ${details}` : ""}`,
+  },
   [SDK_SERVER_ERROR_CODES.CONFIG_RELOAD_NOT_SUPPORTED]: {
     name: "CONFIG_RELOAD_NOT_SUPPORTED",
     message: (modelId: string) =>
@@ -253,6 +270,49 @@ const serverErrorDefinitions: ErrorCodesMap = {
   [SDK_SERVER_ERROR_CODES.INVALID_IMAGE_INPUT]: {
     name: "INVALID_IMAGE_INPUT",
     message: "Invalid image input type provided",
+  },
+  [SDK_SERVER_ERROR_CODES.MODEL_OPERATION_NOT_SUPPORTED]: {
+    name: "MODEL_OPERATION_NOT_SUPPORTED",
+    message: (
+      modelId: string,
+      modelType: string,
+      operation: string,
+      supportedOperations: string,
+      suggestedModelTypes: string,
+    ) => {
+      const supportedClause = supportedOperations
+        ? ` Supported operations on this model: ${supportedOperations}.`
+        : " This model does not expose any operations.";
+      const suggestionClause = suggestedModelTypes
+        ? ` To use ${operation}, load a model of type: ${suggestedModelTypes}.`
+        : ` No model registered in this worker bundle exposes ${operation}.`;
+      return `Model "${modelId}" (type: ${modelType}) does not support ${operation}.${supportedClause}${suggestionClause}`;
+    },
+  },
+  [SDK_SERVER_ERROR_CODES.REQUEST_ID_CONFLICT]: {
+    name: "REQUEST_ID_CONFLICT",
+    message: (requestId: string) =>
+      `Request id "${requestId}" is already in flight; refusing to overwrite the existing context`,
+  },
+  [SDK_SERVER_ERROR_CODES.REQUEST_NOT_FOUND]: {
+    name: "REQUEST_NOT_FOUND",
+    message: (requestId: string) =>
+      `No in-flight request with id "${requestId}"`,
+  },
+  [SDK_SERVER_ERROR_CODES.INFERENCE_CANCELLED]: {
+    name: "INFERENCE_CANCELLED",
+    message: (requestId: string) =>
+      `Inference request "${requestId}" was cancelled before it could complete`,
+  },
+  [SDK_SERVER_ERROR_CODES.REQUEST_REJECTED_BY_POLICY]: {
+    name: "REQUEST_REJECTED_BY_POLICY",
+    message: (
+      requestId: string,
+      kind: string,
+      modelId: string,
+      reason: string,
+    ) =>
+      `Request "${requestId}" (kind: ${kind}, modelId: ${modelId}) was rejected by registry concurrency policy: ${reason}`,
   },
 
   // RAG Operations (52,800-52,999)
@@ -432,6 +492,11 @@ const serverErrorDefinitions: ErrorCodesMap = {
     name: "INVALID_AUDIO_CHUNK_TYPE",
     message: "Invalid audio chunk type",
   },
+  [SDK_SERVER_ERROR_CODES.ASYNC_DISPOSE_UNAVAILABLE]: {
+    name: "ASYNC_DISPOSE_UNAVAILABLE",
+    message:
+      "Host runtime does not expose Symbol.asyncDispose; the SDK request-lifecycle primitives require ES2024 `using`/`asyncDispose` support. Verify your runtime (Bare/Expo/Node ≥ 20.4) and any polyfill registration.",
+  },
 
   // RPC/Delegation (Server-side) (53,700-53,899)
   [SDK_SERVER_ERROR_CODES.DELEGATE_NO_FINAL_RESPONSE]: {
@@ -510,6 +575,23 @@ const serverErrorDefinitions: ErrorCodesMap = {
     name: "PLUGIN_LOAD_CONFIG_VALIDATION_FAILED",
     message: (modelType: string, details: string) =>
       `modelConfig validation failed for "${modelType}": ${details}`,
+  },
+
+  // Lifecycle (53,600-53,610)
+  [SDK_SERVER_ERROR_CODES.LIFECYCLE_SUSPEND_FAILED]: {
+    name: "LIFECYCLE_SUSPEND_FAILED",
+    message: (details?: string) =>
+      `Runtime suspend failed${details ? `: ${details}` : ""}`,
+  },
+  [SDK_SERVER_ERROR_CODES.LIFECYCLE_RESUME_FAILED]: {
+    name: "LIFECYCLE_RESUME_FAILED",
+    message: (details?: string) =>
+      `Runtime resume failed${details ? `: ${details}` : ""}`,
+  },
+  [SDK_SERVER_ERROR_CODES.LIFECYCLE_OPERATION_BLOCKED]: {
+    name: "LIFECYCLE_OPERATION_BLOCKED",
+    message: (requestType: string, lifecycleState: string) =>
+      `Operation "${requestType}" is blocked while runtime state is "${lifecycleState}"`,
   },
 
   // Security (53,900-53,949)

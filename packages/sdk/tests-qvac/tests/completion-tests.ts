@@ -1,6 +1,17 @@
 // Completion test definitions
 import type { TestDefinition } from "@tetherto/qvac-test-suite";
 
+interface GenerationParams {
+  temp?: number;
+  top_p?: number;
+  top_k?: number;
+  predict?: number;
+  seed?: number;
+  frequency_penalty?: number;
+  presence_penalty?: number;
+  repeat_penalty?: number;
+}
+
 // Helper for creating completion tests with common structure
 const createCompletionTest = (
   testId: string,
@@ -14,6 +25,7 @@ const createCompletionTest = (
     presencePenalty?: number;
     seed?: number;
     stopSequences?: string[];
+    generationParams?: GenerationParams;
   },
   expectation:
     | { validation: "contains-all" | "contains-any"; contains: string[] }
@@ -23,10 +35,12 @@ const createCompletionTest = (
         expectedType: "string" | "number" | "array";
       },
   estimatedDurationMs: number = 10000,
+  suites?: string[],
 ): TestDefinition => ({
   testId,
   params,
   expectation,
+  ...(suites && { suites }),
   metadata: { category: "completion", dependency: "llm", estimatedDurationMs },
 });
 
@@ -40,6 +54,8 @@ export const completionStreaming = createCompletionTest(
     stream: true,
   },
   { validation: "contains-all", contains: ["4"] },
+  10000,
+  ["smoke"],
 );
 
 export const completionEmptyPrompt = createCompletionTest(
@@ -50,6 +66,7 @@ export const completionEmptyPrompt = createCompletionTest(
   },
   { validation: "type", expectedType: "string" },
   5000,
+  ["smoke"],
 );
 
 export const completionMultiTurn = createCompletionTest(
@@ -67,6 +84,8 @@ export const completionMultiTurn = createCompletionTest(
     stream: false,
   },
   { validation: "contains-all", contains: ["42"] },
+  10000,
+  ["smoke"],
 );
 
 export const completionSpecialChars: TestDefinition = {
@@ -98,6 +117,7 @@ export const completionTemperature00 = createCompletionTest(
   },
   { validation: "contains-all", contains: ["10"] },
   8000,
+  ["smoke"],
 );
 
 export const completionTemperature05 = createCompletionTest(
@@ -169,6 +189,7 @@ export const completionTopP01 = createCompletionTest(
   },
   { validation: "contains-all", contains: ["1", "2", "3", "4", "5"] },
   8000,
+  ["smoke"],
 );
 
 export const completionTopP05 = createCompletionTest(
@@ -269,7 +290,7 @@ export const completionTemperature09 = createCompletionTest(
 export const completionStopSequences = createCompletionTest(
   "completion-stop-sequences",
   {
-    history: [{ role: "user", content: "List 10 fruits, one per line." }],
+    history: [{ role: "user", content: "Repeat exactly the following words separated by spaces: apple banana cherry" }],
     stream: false,
     stopSequences: ["banana"],
   },
@@ -319,12 +340,12 @@ export const completionTopK = createCompletionTest(
   "completion-top-k",
   {
     history: [
-      { role: "user", content: "What is 10 + 5? Answer with just the number." },
+      { role: "user", content: "What is 2 + 3? Answer with just the number." },
     ],
     stream: false,
-    temperature: 0.5,
+    generationParams: { temp: 0, top_k: 1, seed: 42 },
   },
-  { validation: "contains-all", contains: ["15"] },
+  { validation: "contains-all", contains: ["5"] },
   8000,
 );
 
@@ -418,6 +439,7 @@ export const completionConcurrentRequests = createCompletionTest(
   { history: [{ role: "user", content: "What is 3 + 3?" }], stream: false },
   { validation: "contains-all", contains: ["6"] },
   15000,
+  ["smoke"],
 );
 
 export const completionRepeatedTokens = createCompletionTest(
@@ -456,6 +478,8 @@ export const completionJsonFormat = createCompletionTest(
     stream: false,
   },
   { validation: "contains-all", contains: ["25", "{", "}"] },
+  10000,
+  ["smoke"],
 );
 
 export const completionCodeGeneration = createCompletionTest(
@@ -496,6 +520,8 @@ export const completionQaFromContext = createCompletionTest(
     stream: false,
   },
   { validation: "contains-all", contains: ["blue"] },
+  10000,
+  ["smoke"],
 );
 
 export const completionSimpleYesNo: TestDefinition = {
@@ -517,6 +543,127 @@ export const completionSentenceCompletion = createCompletionTest(
   },
   { validation: "type", expectedType: "string" },
 );
+
+export const completionResponseFormatText: TestDefinition = {
+  testId: "completion-response-format-text",
+  params: {
+    history: [{ role: "user", content: "Reply with only the word APPLE." }],
+    stream: false,
+    responseFormat: { type: "text" },
+    generationParams: { temp: 0, seed: 42 },
+  },
+  expectation: { validation: "contains-any", contains: ["APPLE", "apple"] },
+  metadata: { category: "completion", dependency: "llm", estimatedDurationMs: 10000 },
+};
+
+export const completionResponseFormatJsonObject: TestDefinition = {
+  testId: "completion-response-format-json-object",
+  params: {
+    history: [
+      { role: "system", content: "Reply with a single valid JSON object only. No markdown, no prose." },
+      { role: "user", content: "Return an object with a single key 'ok' set to the boolean true." },
+    ],
+    stream: false,
+    responseFormat: { type: "json_object" },
+    generationParams: { temp: 0, seed: 42, predict: 64 },
+  },
+  expectation: { validation: "type", expectedType: "string" },
+  metadata: { category: "completion", dependency: "llm", estimatedDurationMs: 15000 },
+};
+
+export const completionResponseFormatJsonObjectStreaming: TestDefinition = {
+  testId: "completion-response-format-json-object-streaming",
+  params: {
+    history: [
+      { role: "system", content: "Reply with a single valid JSON object only. No markdown, no prose." },
+      { role: "user", content: "Return an object with a single key 'ok' set to the boolean true." },
+    ],
+    stream: true,
+    responseFormat: { type: "json_object" },
+    generationParams: { temp: 0, seed: 42, predict: 64 },
+  },
+  expectation: { validation: "type", expectedType: "string" },
+  metadata: { category: "completion", dependency: "llm", estimatedDurationMs: 15000 },
+};
+
+export const completionResponseFormatJsonSchema: TestDefinition = {
+  testId: "completion-response-format-json-schema",
+  params: {
+    history: [
+      {
+        role: "user",
+        content:
+          "Extract the person info as JSON. Person: Alice, age 30, occupation data engineer.",
+      },
+    ],
+    stream: false,
+    responseFormat: {
+      type: "json_schema",
+      json_schema: {
+        name: "Person",
+        schema: {
+          type: "object",
+          properties: {
+            name: { type: "string" },
+            age: { type: "integer" },
+            occupation: { type: "string" },
+          },
+          required: ["name", "age", "occupation"],
+          additionalProperties: false,
+        },
+      },
+    },
+    generationParams: { temp: 0, seed: 42, predict: 128 },
+  },
+  expectation: { validation: "type", expectedType: "string" },
+  metadata: { category: "completion", dependency: "llm", estimatedDurationMs: 20000 },
+};
+
+export const completionReasoningBudgetDisabled: TestDefinition = {
+  testId: "completion-reasoning-budget-disabled",
+  params: {
+    history: [{ role: "user", content: "What is 2+2? Answer with only the number." }],
+    stream: false,
+    generationParams: { reasoning_budget: 0, predict: 32 },
+  },
+  expectation: { validation: "type", expectedType: "string" },
+  metadata: { category: "completion", dependency: "llm", estimatedDurationMs: 10000 },
+};
+
+export const completionReasoningBudgetUnrestricted: TestDefinition = {
+  testId: "completion-reasoning-budget-unrestricted",
+  params: {
+    history: [{ role: "user", content: "What is 2+2? Answer with only the number." }],
+    stream: false,
+    generationParams: { reasoning_budget: -1, predict: 32 },
+  },
+  expectation: { validation: "type", expectedType: "string" },
+  metadata: { category: "completion", dependency: "llm", estimatedDurationMs: 10000 },
+};
+
+export const completionResponseFormatWithToolsRejected: TestDefinition = {
+  testId: "completion-response-format-with-tools-rejected",
+  params: {
+    history: [{ role: "user", content: "irrelevant" }],
+    stream: false,
+    responseFormat: { type: "json_object" },
+    tools: [
+      {
+        type: "function",
+        name: "get_weather",
+        description: "Get weather for a city",
+        parameters: {
+          type: "object",
+          properties: { city: { type: "string" } },
+          required: ["city"],
+        },
+      },
+    ],
+    generationParams: { temp: 0, seed: 42, predict: 64 },
+  },
+  expectation: { validation: "throws-error", errorContains: "responseFormat" },
+  metadata: { category: "completion", dependency: "none", estimatedDurationMs: 5000 },
+};
 
 export const completionTests = [
   completionStreaming,
@@ -559,4 +706,11 @@ export const completionTests = [
   completionQaFromContext,
   completionSimpleYesNo,
   completionSentenceCompletion,
+  completionResponseFormatText,
+  completionResponseFormatJsonObject,
+  completionResponseFormatJsonObjectStreaming,
+  completionResponseFormatJsonSchema,
+  completionResponseFormatWithToolsRejected,
+  completionReasoningBudgetDisabled,
+  completionReasoningBudgetUnrestricted,
 ];

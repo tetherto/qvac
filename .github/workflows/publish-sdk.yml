@@ -30,6 +30,11 @@ on:
         description: "Tag for publishing (optional override for GPR)"
         required: false
         default: "dev"
+      npm_tag:
+        description: "NPM dist-tag (default: latest). e.g. release-1.x"
+        required: false
+        default: ""
+        type: string
 
 env:
   WORKDIR: packages/sdk
@@ -38,6 +43,26 @@ permissions:
   contents: read
 
 jobs:
+  label-gate:
+    name: Authorise (label-gate)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      authorised: ${{ steps.gate.outputs.authorised }}
+    steps:
+      - name: Checkout (label-gate action only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/label-gate
+          sparse-checkout-cone-mode: false
+      - name: Run label-gate
+        id: gate
+        uses: ./.github/actions/label-gate
+        with:
+          github-token: ${{ secrets.PAT_TOKEN }}
   authorize:
     runs-on: ubuntu-latest
     permissions:
@@ -57,8 +82,7 @@ jobs:
   release-merge-guard:
     name: Release Merge Guard
     if: >-
-      github.event_name == 'push' &&
-      startsWith(github.ref_name, 'release-')
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && startsWith(github.ref_name, 'release-')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -75,8 +99,10 @@ jobs:
           changelog-path: packages/sdk/CHANGELOG.md
 
   build:
-    needs: [authorize]
-    if: needs.authorize.outputs.allowed == 'true'
+    needs:
+      - authorize
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true')
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -107,8 +133,6 @@ jobs:
 
       - name: Configure scoped registry for @tetherto and @qvac packages
         env:
-          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           GIT_PAT: ${{ secrets.PAT_TOKEN }}
         shell: bash
         working-directory: ${{ env.WORKDIR }}
@@ -120,7 +144,6 @@ jobs:
           registry=https://registry.npmjs.org/
           @qvac:registry=https://registry.npmjs.org/
           @tetherto:registry=https://npm.pkg.github.com/
-          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
           //npm.pkg.github.com/:_authToken=${GIT_PAT}
           NPMRC
 
@@ -139,11 +162,10 @@ jobs:
 
           [install.scopes]
           "@tetherto" = { token = "${{ env.READ_NPM_TOKEN }}", url = "https://npm.pkg.github.com" }
-          "@qvac" = { token = "${NPM_TOKEN}", url = "https://registry.npmjs.org" }
           EOF
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: bun install
         working-directory: ${{ env.WORKDIR }}
 
       - name: Modify package name for branch-based builds
@@ -215,7 +237,7 @@ jobs:
           name: dist
           path: ${{ env.WORKDIR }}/dist/
           retention-days: 1
-      
+
       - name: Determine version and tag
         id: version
         working-directory: ${{ env.WORKDIR }}
@@ -243,7 +265,6 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
       branch: ${{ steps.version.outputs.branch }}
-
 
   publish-logic:
     runs-on: ubuntu-latest
@@ -345,7 +366,7 @@ jobs:
 
       - name: Publish to GitHub Package Registry
         id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.8
+        uses: ./.github/actions/publish-library-to-gpr
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ inputs.tag || github.event.inputs.tag || needs.publish-logic.outputs.gpr_tag || 'dev'}}
@@ -354,12 +375,15 @@ jobs:
 
   publish-npm:
     name: Publish to NPM
-    needs: [build, publish-logic, release-merge-guard]
+    needs:
+      - build
+      - publish-logic
+      - release-merge-guard
+      - label-gate
     if: >-
-      needs.publish-logic.outputs.publish_release == 'true' &&
-      (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')
+      needs.label-gate.outputs.authorised == 'true' && (needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped'))
     runs-on: ubuntu-latest
-    environment: release
+    environment: npm
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
     permissions:
@@ -367,6 +391,16 @@ jobs:
       packages: write
       id-token: write
     steps:
+      - name: Validate npm_tag input
+        if: inputs.npm_tag != ''
+        shell: bash
+        run: |
+          tag="${{ inputs.npm_tag }}"
+          if ! echo "$tag" | grep -qE '^[a-zA-Z0-9][a-zA-Z0-9._-]*$'; then
+            echo "::error::Invalid npm dist-tag '$tag'. Must match ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ (e.g. release-1.x)"
+            exit 1
+          fi
+
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
 
@@ -378,18 +412,15 @@ jobs:
 
       - name: Publish to NPM Package Registry
         id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm-oidc@v1.1.8
+        uses: ./.github/actions/publish-library-to-npm
         with:
-          secret-token: ${{ secrets.NPM_TOKEN }}
-          tag: "latest"
-          git-token: ${{ secrets.GITHUB_TOKEN }}
-          repo_name: sdk
+          tag: ${{ inputs.npm_tag }}
           workdir: ${{ env.WORKDIR }}
 
   # Create GitHub release only for actual releases (after NPM publish)
   publish-release:
     needs: [publish-npm]
-    if:  needs.publish-npm.result == 'success' && needs.publish-npm.outputs.published_version != ''
+    if: needs.publish-npm.result == 'success' && needs.publish-npm.outputs.published_version != ''
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release.yml

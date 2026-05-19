@@ -89,6 +89,30 @@ export class OCRFailedError extends QvacErrorBase {
   }
 }
 
+export class ModelTypeRequiredError extends QvacErrorBase {
+  constructor(cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.MODEL_TYPE_REQUIRED,
+        undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+export class ModelSrcTypeMismatchError extends QvacErrorBase {
+  constructor(inferred: string, resolved: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.MODEL_SRC_TYPE_MISMATCH,
+        [inferred, resolved],
+        cause,
+      ),
+    );
+  }
+}
+
 // ============== RPC Communication Errors ==============
 
 export class RPCNoHandlerError extends QvacErrorBase {
@@ -133,6 +157,18 @@ export class RPCConnectionFailedError extends QvacErrorBase {
       createErrorOptions(
         SDK_CLIENT_ERROR_CODES.RPC_CONNECTION_FAILED,
         [details],
+        cause,
+      ),
+    );
+  }
+}
+
+export class RPCInitTimeoutError extends QvacErrorBase {
+  constructor(timeoutMs: number, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.RPC_INIT_TIMEOUT,
+        [timeoutMs],
         cause,
       ),
     );
@@ -251,6 +287,18 @@ export class PearWorkerEntryRequiredError extends QvacErrorBase {
   }
 }
 
+export class BundleVerificationFailedError extends QvacErrorBase {
+  constructor(bundlePath: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.BUNDLE_VERIFICATION_FAILED,
+        [bundlePath],
+        cause,
+      ),
+    );
+  }
+}
+
 export class ConfigFileNotFoundError extends QvacErrorBase {
   constructor(searchPaths: string, cause?: unknown) {
     super(
@@ -332,6 +380,18 @@ export class TranscriptionFailedError extends QvacErrorBase {
     super(
       createErrorOptions(
         SDK_SERVER_ERROR_CODES.TRANSCRIPTION_FAILED,
+        details ? [details] : undefined,
+        cause,
+      ),
+    );
+  }
+}
+
+export class TextToSpeechStreamFailedError extends QvacErrorBase {
+  constructor(details?: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.TEXT_TO_SPEECH_STREAM_FAILED,
         details ? [details] : undefined,
         cause,
       ),

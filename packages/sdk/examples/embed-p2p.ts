@@ -24,7 +24,7 @@ try {
   console.log("\n📝 Example 1: Single Text Embedding");
   console.log("=".repeat(50));
 
-  const singleEmbedding = await embed({ modelId, text: "Hello, world!" });
+  const { embedding: singleEmbedding } = await embed({ modelId, text: "Hello, world!" });
 
   console.log("Input: 'Hello, world!'");
   console.log("Embedding dimensions:", singleEmbedding.length);
@@ -39,7 +39,7 @@ try {
     "Python is a programming language",
   ];
 
-  const batchEmbeddings = await embed({ modelId, text: texts });
+  const { embedding: batchEmbeddings } = await embed({ modelId, text: texts });
 
   console.log("Input: Array of", texts.length, "texts");
   console.log("Output: Array of", batchEmbeddings.length, "embeddings");

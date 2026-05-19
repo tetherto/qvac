@@ -1,10 +1,15 @@
 import { source } from '@/lib/source';
 import { LATEST_VERSION } from '@/lib/versions';
+import { isArchivedVersionSlug } from '@/lib/docs-open-graph';
 
 export const revalidate = false;
 
 export function GET() {
-  const pages = source.getPages();
+  // Non-canonical bundles (dev + vX.Y.Z) are excluded so the LLM index
+  // only advertises the latest canonical documentation.
+  const pages = source
+    .getPages()
+    .filter((page) => !isArchivedVersionSlug(page.slugs));
   const index = [
     '# QVAC Documentation (llms.txt)',
     '',

@@ -24,7 +24,7 @@ Built-in plugins cover:
 - **Transcription** (whisper.cpp) — Speech-to-text with VAD support
 - **Transcription** (Parakeet) — Speech-to-text (NVIDIA NeMo ONNX)
 - **Embeddings** (llama.cpp) — Text embeddings for RAG
-- **Translation** (nmtcpp) — Neural machine translation (Marian, IndicTrans2, Bergamot)
+- **Translation** (nmtcpp) — Neural machine translation (IndicTrans2, Bergamot)
 - **Text-to-Speech** (ONNX/Piper, Chatterbox, Supertonic) — Speech synthesis
 - **OCR** (ONNX) — Optical character recognition
 
@@ -220,12 +220,12 @@ The SDK includes a client for the QVAC Model Registry (`@qvac/registry-client`),
 
 # Native Addons Architecture
 
-- [C++ Addon Framework](../packages/qvac-lib-inference-addon-cpp/docs/architecture.md)
-- [LLM Completion — llama.cpp](../packages/qvac-lib-infer-llamacpp-llm/docs/architecture.md)
-- [Embeddings — llama.cpp](../packages/qvac-lib-infer-llamacpp-embed/docs/architecture.md)
-- [Transcription — whisper.cpp](../packages/qvac-lib-infer-whispercpp/docs/architecture.md)
-- [Translation — nmt.cpp](../packages/qvac-lib-infer-nmtcpp/docs/architecture.md)
-- [TTS — ONNX](../packages/qvac-lib-infer-onnx-tts/docs/architecture.md)
+- [C++ Addon Framework](../packages/inference-addon-cpp/docs/architecture.md)
+- [LLM Completion — llama.cpp](../packages/llm-llamacpp/docs/architecture.md)
+- [Embeddings — llama.cpp](../packages/embed-llamacpp/docs/architecture.md)
+- [Transcription — whisper.cpp](../packages/transcription-whispercpp/docs/architecture.md)
+- [Translation — nmt.cpp](../packages/translation-nmtcpp/docs/architecture.md)
+- [TTS — ONNX](../packages/tts-onnx/docs/architecture.md)
 - [OCR — ONNX](../packages/ocr-onnx/docs/architecture.md)
 
 ---
@@ -256,27 +256,27 @@ All packages live in this monorepo under `packages/`:
 
 | Directory | Package | Purpose |
 |-----------|---------|---------|
-| `qvac-lib-infer-llamacpp-llm` | `@qvac/llm-llamacpp` | LLM completion (llama.cpp) |
-| `qvac-lib-infer-llamacpp-embed` | `@qvac/embed-llamacpp` | Text embeddings (llama.cpp) |
-| `qvac-lib-infer-whispercpp` | `@qvac/transcription-whispercpp` | Speech-to-text (whisper.cpp) |
-| `qvac-lib-infer-parakeet` | `@qvac/transcription-parakeet` | Speech-to-text (Parakeet) |
-| `qvac-lib-infer-nmtcpp` | `@qvac/translation-nmtcpp` | Translation (nmt.cpp) |
-| `qvac-lib-infer-onnx-tts` | `@qvac/tts-onnx` | Text-to-speech (ONNX) |
+| `llm-llamacpp` | `@qvac/llm-llamacpp` | LLM completion (llama.cpp) |
+| `embed-llamacpp` | `@qvac/embed-llamacpp` | Text embeddings (llama.cpp) |
+| `transcription-whispercpp` | `@qvac/transcription-whispercpp` | Speech-to-text (whisper.cpp) |
+| `transcription-parakeet` | `@qvac/transcription-parakeet` | Speech-to-text (Parakeet) |
+| `translation-nmtcpp` | `@qvac/translation-nmtcpp` | Translation (nmt.cpp) |
+| `tts-onnx` | `@qvac/tts-onnx` | Text-to-speech (ONNX) |
 | `ocr-onnx` | `@qvac/ocr-onnx` | OCR (ONNX) |
 
 **Support Libraries**
 
 | Directory | Package | Purpose |
 |-----------|---------|---------|
-| `qvac-lib-rag` | `@qvac/rag` | RAG with HyperDB |
+| `rag` | `@qvac/rag` | RAG with HyperDB |
 | `dl-base` | `@qvac/dl-base` | Base data loader |
-| `qvac-lib-dl-hyperdrive` | `@qvac/dl-hyperdrive` | Hyperdrive data loader |
-| `qvac-lib-dl-filesystem` | `@qvac/dl-filesystem` | Filesystem data loader |
-| `qvac-lib-infer-base` | `@qvac/infer-base` | Base inference client |
-| `qvac-lib-decoder-audio` | `@qvac/decoder-audio` | Audio decoding |
-| `qvac-lib-logging` | `@qvac/logging` | Logging utilities |
-| `qvac-lib-error-base` | `@qvac/error` | Base error types |
-| `qvac-lib-langdetect-text` | `@qvac/langdetect-text` | Language detection |
-| `qvac-lib-registry-server` | `@qvac/registry-server` | Model registry server |
+| `dl-hyperdrive` | `@qvac/dl-hyperdrive` | Hyperdrive data loader |
+| `dl-filesystem` | `@qvac/dl-filesystem` | Filesystem data loader |
+| `infer-base` | `@qvac/infer-base` | Base inference client |
+| `decoder-audio` | `@qvac/decoder-audio` | Audio decoding |
+| `logging` | `@qvac/logging` | Logging utilities |
+| `error-base` | `@qvac/error` | Base error types |
+| `langdetect-text` | `@qvac/langdetect-text` | Language detection |
+| `registry-server` | `@qvac/registry-server` | Model registry server |
 
 

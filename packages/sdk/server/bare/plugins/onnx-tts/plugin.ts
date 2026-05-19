@@ -4,8 +4,11 @@ import ONNXTTS from "@qvac/tts-onnx";
 import {
   definePlugin,
   defineHandler,
+  defineDuplexHandler,
   ttsRequestSchema,
   ttsResponseSchema,
+  textToSpeechStreamRequestSchema,
+  textToSpeechStreamResponseSchema,
   ModelType,
   ttsConfigSchema,
   ADDON_TTS,
@@ -24,6 +27,7 @@ import {
   TtsReferenceAudioRequiredError,
 } from "@/utils/errors-server";
 import { textToSpeech } from "@/server/bare/plugins/onnx-tts/ops/text-to-speech";
+import { textToSpeechStream } from "@/server/bare/plugins/onnx-tts/ops/text-to-speech-stream";
 import { attachModelExecutionMs } from "@/profiling/model-execution";
 import { loadReferenceAudioAt24k } from "@/server/bare/plugins/onnx-tts/wav-helper";
 
@@ -92,39 +96,48 @@ async function resolveSupertonicConfig(
   ctx: ResolveContext,
 ) {
   const {
-    ttsTokenizerSrc,
     ttsTextEncoderSrc,
-    ttsLatentDenoiserSrc,
-    ttsVoiceDecoderSrc,
-    ttsVoiceSrc,
+    ttsDurationPredictorSrc,
+    ttsVectorEstimatorSrc,
+    ttsVocoderSrc,
+    ttsUnicodeIndexerSrc,
+    ttsTtsConfigSrc,
+    ttsVoiceStyleSrc,
     ttsSpeed,
     ttsNumInferenceSteps,
+    ttsSupertonicMultilingual,
     language,
   } = config;
 
   if (
-    !ttsTokenizerSrc ||
     !ttsTextEncoderSrc ||
-    !ttsLatentDenoiserSrc ||
-    !ttsVoiceDecoderSrc ||
-    !ttsVoiceSrc
+    !ttsDurationPredictorSrc ||
+    !ttsVectorEstimatorSrc ||
+    !ttsVocoderSrc ||
+    !ttsUnicodeIndexerSrc ||
+    !ttsTtsConfigSrc ||
+    !ttsVoiceStyleSrc
   ) {
     throw new TtsArtifactsRequiredError();
   }
 
   const resolve = ctx.resolveModelPath;
   const [
-    tokenizerPath,
     textEncoderPath,
-    latentDenoiserPath,
-    voiceDecoderPath,
-    voicePath,
+    durationPredictorPath,
+    vectorEstimatorPath,
+    vocoderPath,
+    unicodeIndexerPath,
+    ttsConfigPath,
+    voiceStylePath,
   ] = await Promise.all([
-    resolve(ttsTokenizerSrc),
     resolve(ttsTextEncoderSrc),
-    resolve(ttsLatentDenoiserSrc),
-    resolve(ttsVoiceDecoderSrc),
-    resolve(ttsVoiceSrc),
+    resolve(ttsDurationPredictorSrc),
+    resolve(ttsVectorEstimatorSrc),
+    resolve(ttsVocoderSrc),
+    resolve(ttsUnicodeIndexerSrc),
+    resolve(ttsTtsConfigSrc),
+    resolve(ttsVoiceStyleSrc),
   ]);
 
   return {
@@ -133,13 +146,16 @@ async function resolveSupertonicConfig(
       language,
       ttsSpeed,
       ttsNumInferenceSteps,
+      ttsSupertonicMultilingual,
     } as TtsSupertonicRuntimeConfig,
     artifacts: {
-      tokenizerPath,
       textEncoderPath,
-      latentDenoiserPath,
-      voiceDecoderPath,
-      voicePath,
+      durationPredictorPath,
+      vectorEstimatorPath,
+      vocoderPath,
+      unicodeIndexerPath,
+      ttsConfigPath,
+      voiceStylePath,
     },
   };
 }
@@ -172,19 +188,22 @@ function createChatterboxModel(
   const logger = createStreamLogger(modelId, ModelType.onnxTts);
   registerAddonLogger(modelId, ModelType.onnxTts, logger);
   const referenceAudio = loadReferenceAudioAt24k(referenceAudioPath);
-  const args = {
-    tokenizerPath,
-    speechEncoderPath,
-    embedTokensPath,
-    conditionalDecoderPath,
-    languageModelPath,
+  const model = new ONNXTTS({
+    files: {
+      tokenizerPath,
+      speechEncoderPath,
+      embedTokensPath,
+      conditionalDecoderPath,
+      languageModelPath,
+    },
+    engine: "chatterbox",
+    config: { language: config.language ?? "en", useGPU: false },
     referenceAudio,
     logger,
     opts: { stats: true },
-  };
-  const modelConfig = { language: config.language ?? "en", useGPU: false };
-  const model = new ONNXTTS(args as never, modelConfig);
-  return { model, loader: undefined };
+    exclusiveRun: true,
+  } as never);
+  return { model };
 }
 
 function createSupertonicModel(
@@ -192,41 +211,50 @@ function createSupertonicModel(
   config: TtsSupertonicRuntimeConfig,
   artifacts: Record<string, string | undefined>,
 ): PluginModelResult {
-  const tokenizerPath = artifacts["tokenizerPath"];
   const textEncoderPath = artifacts["textEncoderPath"];
-  const latentDenoiserPath = artifacts["latentDenoiserPath"];
-  const voiceDecoderPath = artifacts["voiceDecoderPath"];
-  const voicePath = artifacts["voicePath"];
+  const durationPredictorPath = artifacts["durationPredictorPath"];
+  const vectorEstimatorPath = artifacts["vectorEstimatorPath"];
+  const vocoderPath = artifacts["vocoderPath"];
+  const unicodeIndexerPath = artifacts["unicodeIndexerPath"];
+  const ttsConfigPath = artifacts["ttsConfigPath"];
+  const voiceStylePath = artifacts["voiceStylePath"];
 
   if (
-    !tokenizerPath ||
     !textEncoderPath ||
-    !latentDenoiserPath ||
-    !voiceDecoderPath ||
-    !voicePath
+    !durationPredictorPath ||
+    !vectorEstimatorPath ||
+    !vocoderPath ||
+    !unicodeIndexerPath ||
+    !ttsConfigPath ||
+    !voiceStylePath
   ) {
     throw new TtsArtifactsRequiredError();
   }
 
   const logger = createStreamLogger(modelId, ModelType.onnxTts);
   registerAddonLogger(modelId, ModelType.onnxTts, logger);
-  const voicesDir = path.dirname(voicePath);
-  const voiceName = path.basename(voicePath).replace(/\.bin$/i, "") || "voice";
-  const args = {
-    tokenizerPath,
-    textEncoderPath,
-    latentDenoiserPath,
-    voiceDecoderPath,
-    voicesDir,
+  const voiceName = path.basename(voiceStylePath).replace(/\.json$/i, "") || "F1";
+  const model = new ONNXTTS({
+    files: {
+      textEncoderPath,
+      durationPredictorPath,
+      vectorEstimatorPath,
+      vocoderPath,
+      unicodeIndexerPath,
+      ttsConfigPath,
+      voiceStyleJsonPath: voiceStylePath,
+    },
+    engine: "supertonic",
     voiceName,
     speed: config.ttsSpeed ?? 1,
     numInferenceSteps: config.ttsNumInferenceSteps ?? 5,
+    supertonicMultilingual: config.ttsSupertonicMultilingual !== false,
+    config: { language: config.language ?? "en" },
     logger,
     opts: { stats: true },
-  };
-  const modelConfig = { language: config.language ?? "en" };
-  const model = new ONNXTTS(args as never, modelConfig);
-  return { model, loader: undefined };
+    exclusiveRun: true,
+  } as never);
+  return { model };
 }
 
 export const ttsPlugin = definePlugin({
@@ -264,6 +292,9 @@ export const ttsPlugin = definePlugin({
       requestSchema: ttsRequestSchema,
       responseSchema: ttsResponseSchema,
       streaming: true,
+      // ONNX TTS does not expose a cancel surface — SDK falls back
+      // to soft-cancel.
+      cancel: { scope: "none" },
 
       handler: async function* (request) {
         const stream = textToSpeech(request);
@@ -275,6 +306,13 @@ export const ttsPlugin = definePlugin({
               type: "textToSpeech" as const,
               buffer: result.value.buffer,
               done: false,
+              ...(result.value.chunkIndex !== undefined
+                ? { chunkIndex: result.value.chunkIndex }
+                : {}),
+              ...(typeof result.value.sentenceChunk === "string" &&
+              result.value.sentenceChunk.length > 0
+                ? { sentenceChunk: result.value.sentenceChunk }
+                : {}),
             };
             result = await stream.next();
           }
@@ -286,6 +324,52 @@ export const ttsPlugin = definePlugin({
             done: true,
             ...(stats && { stats }),
           }, modelExecutionMs);
+        } finally {
+          await stream.return?.(undefined as never);
+        }
+      },
+    }),
+
+    textToSpeechStream: defineDuplexHandler({
+      requestSchema: textToSpeechStreamRequestSchema,
+      responseSchema: textToSpeechStreamResponseSchema,
+      streaming: true,
+      duplex: true,
+      // ONNX TTS does not expose a cancel surface — SDK falls back
+      // to soft-cancel.
+      cancel: { scope: "none" },
+
+      handler: async function* (request, inputStream) {
+        const stream = textToSpeechStream(request, inputStream);
+        try {
+          let result = await stream.next();
+
+          while (!result.done) {
+            yield {
+              type: "textToSpeechStream" as const,
+              buffer: result.value.buffer,
+              done: false,
+              ...(result.value.chunkIndex !== undefined
+                ? { chunkIndex: result.value.chunkIndex }
+                : {}),
+              ...(typeof result.value.sentenceChunk === "string" &&
+              result.value.sentenceChunk.length > 0
+                ? { sentenceChunk: result.value.sentenceChunk }
+                : {}),
+            };
+            result = await stream.next();
+          }
+
+          const { modelExecutionMs, stats } = result.value;
+          yield attachModelExecutionMs(
+            {
+              type: "textToSpeechStream" as const,
+              buffer: [],
+              done: true,
+              ...(stats && { stats }),
+            },
+            modelExecutionMs,
+          );
         } finally {
           await stream.return?.(undefined as never);
         }

@@ -3,7 +3,6 @@ import type {
   LoadModelResponse,
   ModelProgressUpdate,
   ReloadConfigRequest,
-  ResolveContext,
 } from "@/schemas";
 import {
   normalizeModelType,
@@ -12,11 +11,7 @@ import {
   type OperationEvent,
 } from "@/schemas";
 import { loadModel } from "@/server/bare/ops/load-model";
-import {
-  resolveModelPath,
-  resolveModelPathWithStats,
-} from "@/server/rpc/handlers/load-model/resolve";
-import type { ResolveResult } from "./types";
+import { createResolveSession } from "@/server/rpc/handlers/load-model/resolve-session";
 import { nowMs, generateProfileId } from "@/profiling/clock";
 import {
   getModelEntry,
@@ -27,8 +22,10 @@ import {
   canonicalConfigString,
   transformConfigForReload,
 } from "@/server/utils";
+import { buildDownloadProfilingFields } from "@/server/rpc/handlers/load-model/types";
 import {
   ConfigReloadNotSupportedError,
+  InferenceCancelledError,
   ModelTypeMismatchError,
   ModelIsDelegatedError,
   ModelNotFoundError,
@@ -38,6 +35,11 @@ import {
 } from "@/utils/errors-server";
 import { getServerLogger } from "@/logging";
 import { getPlugin } from "@/server/plugins";
+import {
+  getRequestRegistry,
+  withRequestContext,
+} from "@/server/bare/runtime";
+import { generateServerRequestId } from "@/server/bare/runtime/request-id";
 
 const logger = getServerLogger();
 
@@ -61,16 +63,26 @@ export async function handleLoadModel(
     | undefined;
   const profilingEnabled = profilingMeta?.enabled !== false && !!profilingMeta;
 
+  const requestId = request.requestId ?? generateServerRequestId();
+  // The handler `modelId` is derived from the config hash below — it
+  // isn't known until after `resolveConfig` runs. The registry context
+  // is opened with `modelId: undefined` so a cancel-by-modelId fired
+  // before the load completes is a clean no-op (rather than matching a
+  // half-built entry). Cancel-by-`requestId` works from `begin(...)` on.
+  await using ctx = getRequestRegistry().begin({
+    requestId,
+    kind: "loadModel",
+  });
+  const log = withRequestContext(getServerLogger(), ctx);
+  log.debug(`loadModel start modelSrc=${String(modelSrc ?? "")}`);
+
   try {
     const plugin = getPlugin(canonicalModelType);
     if (!plugin) {
       throw new PluginNotFoundError(canonicalModelType);
     }
 
-    let resolvedModelConfig = (request.modelConfig ?? {}) as Record<
-      string,
-      unknown
-    >;
+    let resolvedModelConfig = (request.modelConfig ?? {});
 
     const parseResult = plugin.loadConfigSchema.safeParse(resolvedModelConfig);
     if (!parseResult.success) {
@@ -89,54 +101,73 @@ export async function handleLoadModel(
 
     const totalLoadStart = profilingEnabled ? nowMs() : 0;
 
-    let resolveResult: ResolveResult | undefined;
-    let resolvedModelPath: string;
+    const session = createResolveSession({
+      progressCallback,
+      seed,
+      profilingEnabled,
+      signal: ctx.signal,
+      requestBinding: {
+        signal: ctx.signal,
+        scope: ctx.scope,
+        requestId,
+      },
+    });
 
-    if (profilingEnabled) {
-      resolveResult = await resolveModelPathWithStats(
-        modelSrc,
-        progressCallback,
-        seed,
-      );
-      resolvedModelPath = resolveResult.path;
-    } else {
-      resolvedModelPath = await resolveModelPath(
-        modelSrc,
-        progressCallback,
-        seed,
-      );
+    const primaryResolve = session.resolvePrimaryModelPath(modelSrc);
+
+    let resolvedModelPath: string;
+    let pluginResolveResult: Awaited<ReturnType<NonNullable<typeof plugin.resolveConfig>>> | undefined;
+
+    try {
+      const pluginResolve = plugin.resolveConfig
+        ? Promise.resolve().then(() =>
+            plugin.resolveConfig!(
+              resolvedModelConfig,
+              session.createResolveContext(modelSrc, canonicalModelType, modelName),
+            ),
+          )
+        : undefined;
+
+      [resolvedModelPath, pluginResolveResult] = pluginResolve
+        ? await Promise.all([primaryResolve, pluginResolve])
+        : [await primaryResolve, undefined];
+    } catch (error) {
+      session.cancelAll();
+      throw error;
     }
 
-    let pluginArtifacts: Record<string, string> = {};
-    if (plugin.resolveConfig) {
-      const ctx: ResolveContext = {
-        resolveModelPath: (src) =>
-          resolveModelPath(src, progressCallback, seed),
-        modelSrc,
-        modelType: canonicalModelType,
-        ...(modelName !== undefined && { modelName }),
-      };
-      const result = await plugin.resolveConfig(resolvedModelConfig, ctx);
-      resolvedModelConfig = result.config;
-      if (result.artifacts) {
-        pluginArtifacts = result.artifacts as Record<string, string>;
-      }
+    // Phase boundary between download and load. The bare load path
+    // (`plugin.createModel(...)` / `model.load(false)`) does not accept
+    // an abort signal today, so the only honest cancel hook here is the
+    // pre-load gate: if cancel arrived during download / resolveConfig,
+    // surface `InferenceCancelledError` before sinking time into the
+    // addon work.
+    if (ctx.signal.aborted) {
+      throw new InferenceCancelledError(requestId);
     }
 
     const configStr = canonicalConfigString(
-      request.modelConfig as Record<string, unknown> | undefined,
+      request.modelConfig,
     );
     const modelHashInput = `${request.modelType}:${modelSrc}:${configStr}`;
     const modelId = generateShortHash(modelHashInput);
 
-    if ("modelPath" in pluginArtifacts) {
-      logger.warn(
-        "Plugin returned 'modelPath' artifact which was overridden by core",
-      );
+    let pluginArtifacts: Record<string, string> = {};
+    if (pluginResolveResult) {
+      resolvedModelConfig = pluginResolveResult.config;
+      if (pluginResolveResult.artifacts) {
+        pluginArtifacts = pluginResolveResult.artifacts as Record<
+          string,
+          string
+        >;
+      }
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { modelPath: _, ...artifacts } = pluginArtifacts;
+    if ("modelPath" in pluginArtifacts) {
+      throw new ModelLoadFailedError(
+        "Plugin returned reserved key \"modelPath\" in artifacts; primary model resolution is core-owned",
+      );
+    }
 
     if (!resolvedModelPath) {
       throw new ModelLoadFailedError("modelPath resolution failed");
@@ -151,11 +182,24 @@ export async function handleLoadModel(
           modelType: canonicalModelType,
           modelConfig: resolvedModelConfig,
         },
-        artifacts: Object.keys(artifacts).length > 0 ? artifacts : undefined,
+        artifacts: Object.keys(pluginArtifacts).length > 0 ? pluginArtifacts : undefined,
         modelName,
       },
       profilingEnabled ? { collectTiming: true } : undefined,
     );
+
+    // Load phase soft-cancel limitation: `plugin.createModel(...)` and
+    // `model.load(false)` ran without a signal. A cancel that arrived
+    // during the load phase has just landed in the registry but the
+    // model is now loaded and registered. Surface
+    // `InferenceCancelledError` so the caller's promise rejects
+    // consistently — even though the model state is the "loaded"
+    // post-condition. The orphan-model edge case is a known
+    // limitation that requires a per-load cancel surface on the addon
+    // to fix end-to-end.
+    if (ctx.signal.aborted) {
+      throw new InferenceCancelledError(requestId);
+    }
 
     const response: LoadModelResponse = {
       type: "loadModel",
@@ -167,38 +211,18 @@ export async function handleLoadModel(
       const totalLoadTimeMs = nowMs() - totalLoadStart;
       const profileId = profilingMeta?.id ?? generateProfileId();
 
-      const gauges: Record<string, number> = {
-        totalLoadTime: totalLoadTimeMs,
-      };
+      const resolveResult = session.getAggregateResult();
+      const { gauges, tags } = buildDownloadProfilingFields(
+        resolveResult?.downloadStats,
+        resolveResult?.sourceType,
+      );
+      gauges["totalLoadTime"] = totalLoadTimeMs;
       if (loadResult.timing?.modelInitializationTimeMs !== undefined) {
         gauges["modelInitializationTime"] =
           loadResult.timing.modelInitializationTimeMs;
       }
-      if (resolveResult?.downloadStats) {
-        const ds = resolveResult.downloadStats;
-        if (ds.downloadTimeMs !== undefined) {
-          gauges["downloadTime"] = ds.downloadTimeMs;
-        }
-        if (ds.totalBytesDownloaded !== undefined) {
-          gauges["totalBytesDownloaded"] = ds.totalBytesDownloaded;
-        }
-        if (ds.downloadSpeedBps !== undefined) {
-          gauges["downloadSpeedBps"] = ds.downloadSpeedBps;
-        }
-        if (ds.checksumValidationTimeMs !== undefined) {
-          gauges["checksumValidationTime"] = ds.checksumValidationTimeMs;
-        }
-      }
-
-      const tags: Record<string, string> = {};
       if (canonicalModelType) {
         tags["modelType"] = canonicalModelType;
-      }
-      if (resolveResult?.sourceType) {
-        tags["sourceType"] = resolveResult.sourceType;
-      }
-      if (resolveResult?.downloadStats?.cacheHit !== undefined) {
-        tags["cacheHit"] = resolveResult.downloadStats.cacheHit ? "true" : "false";
       }
 
       const operationEvent: OperationEvent = {
@@ -215,6 +239,16 @@ export async function handleLoadModel(
 
     return response;
   } catch (error) {
+    // `InferenceCancelledError` rides the rejection path verbatim: the
+    // client side wants a typed cancel error on the promise it `await`s,
+    // not a `{ success: false, error }` envelope that surfaces as a
+    // generic `ModelLoadFailedError`. Every other error keeps the
+    // legacy `success: false` shape for backward compat with consumers
+    // that switch on the envelope.
+    if (error instanceof InferenceCancelledError) {
+      log.info(`loadModel cancelled requestId=${requestId}`);
+      throw error;
+    }
     logger.error("Error loading model:", error);
     return {
       type: "loadModel",
@@ -239,14 +273,14 @@ async function handleConfigReload(
       throw new ModelIsDelegatedError(modelId);
     }
 
-    const storedModelType = entry.local!.modelType;
+    const storedModelType = entry.local.modelType;
     const normalizedRequestType = normalizeModelType(modelType);
     if (storedModelType !== normalizedRequestType) {
       throw new ModelTypeMismatchError(storedModelType, normalizedRequestType);
     }
 
-    const model = entry.local!.model;
-    const currentConfig = entry.local!.config;
+    const model = entry.local.model;
+    const currentConfig = entry.local.config;
 
     if (typeof model.reload !== "function") {
       throw new ConfigReloadNotSupportedError(modelId);
@@ -285,3 +319,4 @@ function isReloadConfigRequest(
 ): request is ReloadConfigRequest {
   return "modelId" in request && !("modelSrc" in request);
 }
+

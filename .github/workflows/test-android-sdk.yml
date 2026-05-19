@@ -23,6 +23,14 @@ on:
         description: "Filter tests by category or testId prefix (comma-separated)"
         required: false
         type: string
+      suite:
+        description: "Suite filter (e.g. 'smoke'). Empty = all tests."
+        required: false
+        type: string
+      exclude-suite:
+        description: "Exclude suites (comma-separated)"
+        required: false
+        type: string
       device-farm-timeout:
         description: "Maximum time in minutes to keep Device Farm session alive."
         required: false
@@ -46,34 +54,68 @@ on:
         type: boolean
         default: false
     secrets:
+      # MQTT_* and NPM_TOKEN are typically provided via the release environment
+      # (see jobs with `environment: release`). They are declared required: false
+      # here so `secrets: inherit` from a caller with no repo-level values does
+      # not fail at the workflow_call boundary; the jobs that consume them have
+      # environment access. AWS auth uses OIDC via AWS_OIDC_ROLE_ARN, so
+      # AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY are not declared.
       PAT_TOKEN:
         required: true
       NPM_TOKEN:
-        required: true
+        required: false
       MQTT_PROTOCOL:
-        required: true
+        required: false
       MQTT_HOST:
-        required: true
+        required: false
       MQTT_PORT:
-        required: true
+        required: false
       MQTT_USERNAME:
-        required: true
+        required: false
       MQTT_PASSWORD:
-        required: true
+        required: false
       MQTT_CA_CERT:
         required: false
-      AWS_ACCESS_KEY_ID:
+      AWS_OIDC_ROLE_ARN:
         required: true
-      AWS_SECRET_ACCESS_KEY:
-        required: true
+      # Only consumed when `cache-models=true`. Declared optional so callers
+      # that don't enable the cache don't need to provision it.
+      MODEL_S3_BUCKET:
+        required: false
 
 permissions:
+  actions: read
   id-token: write
   contents: read
 
 jobs:
+  report-start:
+    name: "[android] report-start"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      comment-ids: ${{ steps.report.outputs.comment-ids }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: .github/actions/sdk-e2e-report-start
+          sparse-checkout-cone-mode: false
+
+      - name: Post running comment
+        id: report
+        uses: ./.github/actions/sdk-e2e-report-start
+        with:
+          family: android
+          platforms: '["android"]'
+          suite: ${{ inputs.suite }}
+          filter: ${{ inputs.filter }}
+          exclude-suite: ${{ inputs.exclude-suite }}
+
   build:
-    runs-on: ai-run-linux
+    name: "[android] build"
+    runs-on: qvac-ubuntu2204-x64
     environment: release
     timeout-minutes: 60
     outputs:
@@ -89,6 +131,9 @@ jobs:
       MQTT_USERNAME: ${{ secrets.MQTT_USERNAME }}
       MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
     steps:
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
@@ -113,16 +158,71 @@ jobs:
       - name: Generate runId
         id: runid
         shell: node {0}
+        env:
+          EXPECTED_JOB_NAME: "[android] build"
+          PR_NUMBER: ${{ github.event.pull_request.number || '' }}
+          CHECKOUT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           const fs = require('fs');
-          const repoName = process.env.GITHUB_REPOSITORY.split('/').pop();
-          const refName = process.env.GITHUB_REF_NAME.replace(/\//g, '-');
-          const sha = process.env.GITHUB_SHA.substring(0, 7);
-          const timestamp = Math.floor(Date.now() / 1000);
-          const runId = `mobile-${repoName}-${refName}-${sha}-${timestamp}`;
+
+          (async () => {
+          async function fetchJobs(page) {
+            const url =
+              `https://api.github.com/repos/${process.env.GITHUB_REPOSITORY}` +
+              `/actions/runs/${process.env.GITHUB_RUN_ID}` +
+              `/attempts/${process.env.GITHUB_RUN_ATTEMPT}/jobs?per_page=100&page=${page}`;
+            const res = await fetch(url, {
+              headers: {
+                Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+                Accept: 'application/vnd.github+json',
+                'X-GitHub-Api-Version': '2022-11-28',
+              },
+            });
+            if (!res.ok) {
+              throw new Error(`Failed to list workflow jobs: ${res.status} ${await res.text()}`);
+            }
+            return res.json();
+          }
+
+          const jobs = [];
+          for (let page = 1; ; page++) {
+            const data = await fetchJobs(page);
+            jobs.push(...(data.jobs || []));
+            if (!data.jobs || data.jobs.length < 100) break;
+          }
+
+          const matches = jobs.filter(
+            (job) => job.name === process.env.EXPECTED_JOB_NAME ||
+              job.name.endsWith(` / ${process.env.EXPECTED_JOB_NAME}`),
+          );
+          const runnerMatches = matches.filter((job) => job.runner_name === process.env.RUNNER_NAME);
+          const job = runnerMatches.length === 1 ? runnerMatches[0] : matches[0];
+          if (!job) {
+            throw new Error(`Could not resolve current job id for ${process.env.EXPECTED_JOB_NAME}`);
+          }
+
+          const sha = (process.env.CHECKOUT_SHA || process.env.GITHUB_SHA).substring(0, 7);
+          const refPart = process.env.PR_NUMBER ? `pr${process.env.PR_NUMBER}-${sha}` : sha;
+          // Base36-encode the numeric job.id so the literal decimal digits
+          // no longer appear in the runId. GitHub's secret masker does a
+          // substring match against masked secret values; if a short numeric
+          // secret (e.g. `secrets.MQTT_PORT`) happens to appear as a
+          // substring of the decimal job.id, the masker will both redact
+          // the runId in logs and silently drop the job-level output with a
+          // "Skip output 'runId' since it may contain secret." warning,
+          // breaking every downstream `needs.build.outputs.runId` consumer.
+          // Encoding job.id as base36 keeps the value unique and stable
+          // while structurally eliminating numeric-substring collisions.
+          const jobIdEncoded = BigInt(job.id).toString(36);
+          const runId = `android-${refPart}-${jobIdEncoded}`;
 
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `runId=${runId}\n`, 'utf8');
           console.log(`Generated runId: ${runId}`);
+          })().catch((err) => {
+            console.error(err);
+            process.exit(1);
+          });
 
       - name: Configure npm registries
         shell: node {0}
@@ -302,11 +402,12 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: mobile-consumer-apk
+          name: consumer-apk-android
           path: ${{ inputs.working-directory }}/build/consumers/android/consumer.apk
           retention-days: 7
 
   device-farm:
+    name: "[android] device-farm"
     needs: build
     runs-on: ubuntu-latest
     environment: release
@@ -324,7 +425,7 @@ jobs:
       - name: Download APK artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          name: mobile-consumer-apk
+          name: consumer-apk-android
           path: ./apk
 
       - name: Configure AWS credentials
@@ -402,6 +503,10 @@ jobs:
           echo '{"name":"qvac-test-stub","version":"1.0.0"}' > /tmp/dummy-test-pkg/package.json
           cp "${{ inputs.working-directory }}/device-farm/gen-junit.py" /tmp/dummy-test-pkg/
 
+          # When `cache-models=true`, ship the presigned-URL manifest inside
+          # the test package. `test-spec-android.yml`'s pre_test step reads
+          # it from `$DEVICEFARM_TEST_PACKAGE_PATH/models-manifest.json` and
+          # falls through silently when absent.
           if [ -f "/tmp/models-manifest.json" ]; then
             cp /tmp/models-manifest.json /tmp/dummy-test-pkg/
             echo "models-manifest.json included in test package"
@@ -515,6 +620,7 @@ jobs:
           retention-days: 1
 
   run-producer:
+    name: "[android] run-producer"
     needs: build
     runs-on: ubuntu-latest
     environment: release
@@ -624,41 +730,134 @@ jobs:
           echo "   Run ID: ${{ needs.build.outputs.runId }}"
           echo "   Consumer timeout: ${{ inputs.consumer-timeout }}s"
           echo "   Filter: ${{ inputs.filter || '(none)' }}"
+          echo "   Suite: ${{ inputs.suite || '(all)' }}"
+          echo "   Exclude suite: ${{ inputs.exclude-suite || '(none)' }}"
 
           FILTER_ARG=""
           if [ -n "${{ inputs.filter }}" ]; then
             FILTER_ARG="--filter=${{ inputs.filter }}"
           fi
 
+          SUITE_ARG=""
+          if [ -n "${{ inputs.suite }}" ]; then
+            SUITE_ARG="--suite=${{ inputs.suite }}"
+          fi
+
+          EXCLUDE_SUITE_ARG=""
+          if [ -n "${{ inputs.exclude-suite }}" ]; then
+            EXCLUDE_SUITE_ARG="--exclude-suite=${{ inputs.exclude-suite }}"
+          fi
+
           npx qvac-test run:producer \
             --runId "${{ needs.build.outputs.runId }}" \
             --consumer-timeout "${{ inputs.consumer-timeout }}" \
             --config . \
-            $FILTER_ARG
+            --report-dir=./reports \
+            $FILTER_ARG \
+            $SUITE_ARG \
+            $EXCLUDE_SUITE_ARG
 
       - name: Upload results
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: mobile-results-${{ github.run_number }}
+          name: results-android
           path: ${{ inputs.working-directory }}/reports/
           retention-days: 30
+
+      - name: Download baseline (best-effort)
+        if: always() && github.event.pull_request.base.ref != ''
+        uses: dawidd6/action-download-artifact@20319c5641d495c8a52e688b7dc5fada6c3a9fbc # v8
+        continue-on-error: true
+        with:
+          workflow: test-android-sdk.yml
+          branch: ${{ github.event.pull_request.base.ref }}
+          name: baseline-android
+          path: ${{ inputs.working-directory }}/baseline
+          github_token: ${{ github.token }}
+          if_no_artifact_found: warn
+
+      - name: Compare vs baseline
+        if: always()
+        working-directory: ${{ inputs.working-directory }}
+        shell: node {0}
+        run: |
+          const fs = require('fs');
+          const path = require('path');
+          const { execSync } = require('child_process');
+
+          if (!fs.existsSync('baseline')) {
+            console.log('No baseline directory - skipping compare.');
+            process.exit(0);
+          }
+          const baselineFiles = fs.readdirSync('baseline').filter((f) => f.endsWith('.json'));
+          if (baselineFiles.length === 0) {
+            console.log('Baseline directory contains no json files - skipping compare.');
+            process.exit(0);
+          }
+          if (!fs.existsSync('reports')) {
+            console.log('No reports directory - skipping compare.');
+            process.exit(0);
+          }
+          const currentFiles = fs.readdirSync('reports')
+            .filter((f) => f.startsWith('results-') && f.endsWith('.json'));
+          if (currentFiles.length === 0) {
+            console.log('No current results json - skipping compare.');
+            process.exit(0);
+          }
+
+          const baseline = path.join('baseline', baselineFiles[0]);
+          const current = path.join('reports', currentFiles[0]);
+          execSync(
+            `npx qvac-test report:compare --baseline "${baseline}" --current "${current}" --output "comparison-android.json"`,
+            { stdio: 'inherit' }
+          );
+
+      - name: Format comparison
+        if: always()
+        working-directory: ${{ inputs.working-directory }}
+        shell: node {0}
+        run: |
+          const fs = require('fs');
+          const { execSync } = require('child_process');
+
+          const input = 'comparison-android.json';
+          if (!fs.existsSync(input)) {
+            console.log('No comparison json - skipping format.');
+            process.exit(0);
+          }
+          execSync(
+            `npx qvac-test report:format --input "${input}" --format markdown --output "section-android.md"`,
+            { stdio: 'inherit' }
+          );
+
+      - name: Upload report section
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: report-section-android
+          path: |
+            ${{ inputs.working-directory }}/section-*.md
+            ${{ inputs.working-directory }}/comparison-*.json
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Upload baseline (main/develop only)
         if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: mobile-baseline
+          name: baseline-android
           path: ${{ inputs.working-directory }}/reports/results-*.json
           retention-days: 90
           overwrite: true
 
   cleanup-device-farm:
+    name: "[android] cleanup-device-farm"
     needs: [build, run-producer, device-farm]
     if: always()
     runs-on: ubuntu-latest
     environment: release
-    timeout-minutes: 5
+    timeout-minutes: 35
     steps:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
@@ -673,9 +872,10 @@ jobs:
           path: ./run-arns
           merge-multiple: true
 
-      - name: Stop Device Farm runs
+      - name: Stop Device Farm runs and download artifacts
         run: |
           echo "Cleaning up Device Farm runs for runId: ${{ needs.build.outputs.runId }}"
+          mkdir -p ./device-farm-logs
 
           for arn_file in run-arns/*.txt; do
             if [ -f "$arn_file" ]; then
@@ -688,185 +888,100 @@ jobs:
               if [ "$STATUS" = "RUNNING" ] || [ "$STATUS" = "PENDING" ]; then
                 echo "Stopping run: $RUN_ARN"
                 aws devicefarm stop-run --arn "$RUN_ARN" || true
-              else
-                echo "Run already finished ($STATUS), skipping"
               fi
+
+              echo "Waiting for run to finish: $DEVICE_NAME (up to 30 min)..."
+              for attempt in $(seq 1 120); do
+                STATUS=$(aws devicefarm get-run --arn "$RUN_ARN" --query 'run.status' --output text 2>/dev/null || echo "UNKNOWN")
+                if [ "$STATUS" = "COMPLETED" ] || [ "$STATUS" = "STOPPED" ] || [ "$STATUS" = "ERRORED" ]; then
+                  echo "Run $DEVICE_NAME finished with status: $STATUS"
+                  break
+                fi
+                if [ $((attempt % 6)) -eq 0 ]; then
+                  echo "Run $DEVICE_NAME still $STATUS (${attempt}/120, $((attempt * 15))s elapsed)..."
+                fi
+                sleep 15
+              done
+
+              DEVICE_DIR="./device-farm-logs/$DEVICE_NAME"
+              mkdir -p "$DEVICE_DIR"
+
+              echo "Downloading Customer Artifacts for $DEVICE_NAME..."
+              JOBS=$(aws devicefarm list-jobs --arn "$RUN_ARN" --query 'jobs[*].arn' --output text 2>/dev/null || echo "")
+              for JOB_ARN in $JOBS; do
+                aws devicefarm list-artifacts \
+                  --arn "$JOB_ARN" \
+                  --type FILE \
+                  --query "artifacts[?contains(name,'Customer')].[name,extension,url]" \
+                  --output text 2>/dev/null \
+                | while IFS=$'\t' read -r NAME EXT URL; do
+                    if [ -z "$URL" ] || [ "$URL" = "None" ]; then
+                      continue
+                    fi
+                    SAFE_NAME=$(echo "$NAME" | tr ' /' '__')
+                    echo "  Downloading ${SAFE_NAME}.${EXT}"
+                    curl -sS -o "$DEVICE_DIR/${SAFE_NAME}.${EXT}" "$URL" || echo "  Failed: ${SAFE_NAME}.${EXT}"
+                  done
+              done
+
+              echo "Artifacts for $DEVICE_NAME:"
+              ls -lh "$DEVICE_DIR" 2>/dev/null || echo "  (empty)"
             fi
           done
 
-  compare-results:
-    needs: [build, run-producer]
-    if: github.event_name == 'pull_request'
+      - name: Upload Device Farm logs
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: device-farm-logs-android-${{ needs.build.outputs.runId }}
+          path: ./device-farm-logs/
+          retention-days: 30
+
+  report-finalize:
+    name: "[android] report-finalize"
+    needs: [report-start, run-producer]
+    if: always()
     runs-on: ubuntu-latest
-    environment: release
-    env:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     permissions:
+      actions: read
+      contents: read
       pull-requests: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
-          token: ${{ secrets.PAT_TOKEN }}
-          sparse-checkout: ${{ inputs.project-directory }}
+          sparse-checkout: .github/actions/sdk-e2e-report-finalize
+          sparse-checkout-cone-mode: false
 
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+      - uses: ./.github/actions/sdk-e2e-report-finalize
         with:
-          node-version: 22
+          family: android
+          platforms: '["android"]'
+          comment-ids: ${{ needs.report-start.outputs.comment-ids }}
+          suite: ${{ inputs.suite }}
+          filter: ${{ inputs.filter }}
+          exclude-suite: ${{ inputs.exclude-suite }}
 
-      - name: Configure npm registries
-        shell: node {0}
-        run: |
-          const fs = require('fs');
-          const path = require('path');
-
-          const lines = [
-            'registry=https://registry.npmjs.org/',
-            '@qvac:registry=https://registry.npmjs.org/',
-            '@tetherto:registry=https://npm.pkg.github.com/',
-            `//registry.npmjs.org/:_authToken=${process.env.NPM_TOKEN}`,
-            `//npm.pkg.github.com/:_authToken=${process.env.PAT_TOKEN}`
-          ];
-          const npmrc = lines.join('\n');
-          const target = path.join('${{ inputs.project-directory }}', '.npmrc');
-          fs.writeFileSync(target, npmrc, 'utf8');
-
-      - name: Copy .npmrc to consumer directory
-        shell: node {0}
-        run: |
-          const fs = require('fs');
-          const path = require('path');
-          const projectDir = '${{ inputs.project-directory }}';
-          const consumerDir = '${{ inputs.working-directory }}';
-          if (consumerDir !== projectDir) {
-            const source = path.join(projectDir, '.npmrc');
-            const npmrcContent = fs.readFileSync(source, 'utf8');
-            fs.writeFileSync(path.join(consumerDir, '.npmrc'), npmrcContent, 'utf8');
-          }
-
-      - name: Install dependencies
-        working-directory: ${{ inputs.working-directory }}
-        run: npm install --install-links --ignore-scripts
-
-      - name: Download current results
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+  report-artifacts-refresh:
+    name: "[android] report-artifacts-refresh"
+    needs: [report-start, run-producer, cleanup-device-farm]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          pattern: mobile-results-*
-          path: ${{ inputs.working-directory }}/current-results/
-          merge-multiple: true
+          sparse-checkout: .github/actions/sdk-e2e-report-finalize
+          sparse-checkout-cone-mode: false
 
-      - name: Download baseline results
-        id: download-baseline
-        uses: dawidd6/action-download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
-        continue-on-error: true
+      - uses: ./.github/actions/sdk-e2e-report-finalize
         with:
-          workflow: test-android-sdk.yml
-          branch: ${{ github.event.pull_request.base.ref }}
-          name: mobile-baseline
-          path: ${{ inputs.working-directory }}/baseline-results/
-          if_no_artifact_found: warn
-
-      - name: Check baseline availability
-        id: check-baseline
-        shell: node {0}
-        run: |
-          const fs = require('fs');
-          const path = require('path');
-          const baselineDir = path.join('${{ inputs.working-directory }}', 'baseline-results');
-          let hasBaseline = false;
-          if (fs.existsSync(baselineDir)) {
-            const files = fs.readdirSync(baselineDir).filter(f => f.endsWith('.json'));
-            hasBaseline = files.length > 0;
-          }
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `has_baseline=${hasBaseline}\n`, 'utf8');
-          console.log(`Baseline available: ${hasBaseline}`);
-
-      - name: Compare results
-        if: steps.check-baseline.outputs.has_baseline == 'true'
-        working-directory: ${{ inputs.working-directory }}
-        shell: node {0}
-        run: |
-          const { execSync } = require('child_process');
-          const fs = require('fs');
-          const path = require('path');
-
-          const currentFiles = fs.existsSync('current-results')
-            ? fs.readdirSync('current-results').filter(f => f.endsWith('.json'))
-            : [];
-          const baselineFiles = fs.existsSync('baseline-results')
-            ? fs.readdirSync('baseline-results').filter(f => f.endsWith('.json'))
-            : [];
-
-          if (currentFiles.length > 0 && baselineFiles.length > 0) {
-            const current = path.join('current-results', currentFiles[0]);
-            const baseline = path.join('baseline-results', baselineFiles[0]);
-            console.log(`Comparing mobile: ${baseline} vs ${current}`);
-            execSync(`npx qvac-test report:compare --baseline "${baseline}" --current "${current}" --output "comparison-mobile.json"`, { stdio: 'inherit' });
-          } else {
-            console.log('No files to compare');
-          }
-
-      - name: Format comparison
-        working-directory: ${{ inputs.working-directory }}
-        shell: node {0}
-        run: |
-          const { execSync } = require('child_process');
-          const fs = require('fs');
-          const path = require('path');
-
-          let comment = '# QVAC Mobile Test Results\n\n';
-          const sha = '${{ github.event.pull_request.head.sha }}'.substring(0, 7);
-          comment += `**Branch**: \`${{ github.head_ref }}\` | **Commit**: \`${sha}\` | **Base**: \`${{ github.event.pull_request.base.ref }}\`\n\n`;
-          comment += `**Run ID**: \`${{ needs.build.outputs.runId }}\`\n\n`;
-
-          if ("${{ steps.check-baseline.outputs.has_baseline }}" === "false") {
-            comment += '**No baseline found** - showing current results only\n\n';
-            comment += '| Platform | Passed | Failed | Total | Rate | Duration |\n';
-            comment += '|----------|--------|--------|-------|------|----------|\n';
-
-            if (fs.existsSync('current-results')) {
-              const results = fs.readdirSync('current-results').filter(f => f.endsWith('.json'));
-              for (const result of results) {
-                try {
-                  const json = JSON.parse(fs.readFileSync(path.join('current-results', result), 'utf8'));
-                  const platform = json.system?.platform || 'mobile';
-                  comment += `| ${platform} | ${json.summary.passed} | ${json.summary.failed} | ${json.summary.total} | ${json.summary.successRate}% | ${json.summary.duration}s |\n`;
-                } catch (e) {
-                  console.log(`Failed to parse ${result}: ${e.message}`);
-                }
-              }
-            }
-          } else {
-            if (fs.existsSync('comparison-mobile.json')) {
-              execSync('npx qvac-test report:format --input "comparison-mobile.json" --format markdown --output "comparison-mobile.md"', { stdio: 'inherit' });
-              comment += '## Mobile (Android)\n';
-              comment += fs.readFileSync('comparison-mobile.md', 'utf8') + '\n';
-            }
-          }
-
-          comment += '\n### Artifacts\n\n';
-          comment += `[View workflow run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})\n`;
-
-          fs.writeFileSync('comment.md', comment, 'utf8');
-
-      - name: Comment on PR
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
-        with:
-          script: |
-            const fs = require('fs');
-            const commentPath = '${{ inputs.working-directory }}/comment.md';
-
-            if (!fs.existsSync(commentPath)) {
-              console.log('No comment file generated');
-              return;
-            }
-
-            const body = fs.readFileSync(commentPath, 'utf8');
-
-            await github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: body
-            });
+          family: android
+          platforms: '["android"]'
+          comment-ids: ${{ needs.report-start.outputs.comment-ids }}
+          suite: ${{ inputs.suite }}
+          filter: ${{ inputs.filter }}
+          exclude-suite: ${{ inputs.exclude-suite }}
+          update-summary: "false"

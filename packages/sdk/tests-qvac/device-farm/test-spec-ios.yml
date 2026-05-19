@@ -59,7 +59,7 @@ phases:
             \"capabilities\": {
               \"alwaysMatch\": {
                 \"platformName\": \"iOS\",
-                \"appium:automationName\": \"XCUITest\",
+                \                "appium:automationName\": \"XCUITest\",
                 \"appium:app\": \"$DEVICEFARM_APP_PATH\",
                 \"appium:bundleId\": \"$DEVICEFARM_APP_BUNDLE_ID\",
                 \"appium:udid\": \"$DEVICEFARM_DEVICE_UDID\",
@@ -82,8 +82,16 @@ phases:
         fi
         echo "App launched via Appium (session: $SESSION_ID)"
 
-      # Start pymobiledevice3 syslog capture BEFORE model push so we capture
-      # the app's polling logs during the push.
+      - sleep 10
+
+      # Start pymobiledevice3 syslog capture in background (filtered to app
+      # process). Captures ALL log levels including DEBUG (where React
+      # Native `console.log` goes via os_log); Appium's syslog_relay only
+      # captures ERROR level, which is why we need this.
+      #
+      # Ordering matters: we start the syslog tap BEFORE the S3 push step
+      # below so the consumer's "📦 Cache enabled, waiting for models
+      # manifest..." polling logs are captured for debugging push hangs.
       - echo "Starting pymobiledevice3 syslog capture..."
       - |-
         mkdir -p "$HOME/.pymobiledevice3"
@@ -99,10 +107,16 @@ phases:
         LINES=$(wc -l < "$DEVICEFARM_LOG_DIR/testconsumer.log" 2>/dev/null || echo 0)
         echo "Initial syslog lines captured: $LINES"
 
-      # Download models from S3 and push to app container via pymobiledevice3.
-      # Mirrors the Android hybrid approach: host downloads (fast server-to-server),
-      # then pushes into the app sandbox. Manifest is pushed LAST so the app's
-      # bootstrap() poll treats it as a "models ready" signal.
+      # ------------------------------------------------------------------
+      # S3-backed model pre-cache for iOS (no-op when `cache-models` is
+      # disabled). Mirrors the Android hybrid approach: the macOS test
+      # host downloads each blob from our same-region S3 bucket (fast
+      # server-to-server) and pushes it into the app sandbox at
+      # `Documents/` via `pymobiledevice3 apps push`. The manifest file
+      # is pushed LAST so the consumer's `copyModelsFromCache` poll
+      # treats the manifest's appearance as the "models ready" signal.
+      # Per-model timing surfaces `dl_time / push_time` and MB/s rates so
+      # we can attribute latency to network vs USB-over-MUX hop.
       - |-
         MANIFEST="$DEVICEFARM_TEST_PACKAGE_PATH/models-manifest.json"
         if [ -f "$MANIFEST" ]; then

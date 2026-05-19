@@ -4,9 +4,23 @@ android_test_host: amazon_linux_2
 phases:
   pre_test:
     commands:
-      # Download models from S3 (fast, server-to-server) and push to device via adb.
-      # The app then copies from /data/local/tmp/ to its own cache dir at bootstrap,
-      # bypassing SELinux write restrictions on /data/local/tmp/.
+      # ------------------------------------------------------------------
+      # S3-backed model pre-cache (no-op when `cache-models` is disabled).
+      #
+      # When CI uploads `models-manifest.json` into the test package, this
+      # block downloads every listed model from our same-region (us-west-2)
+      # S3 bucket onto the Device Farm host, then `adb push`-es each blob
+      # into `/data/local/tmp/qvac-models/`. The mobile consumer copies
+      # them out of `/data/local/tmp/` and into the app sandbox at
+      # bootstrap (see `copyModelsFromCache` in `tests/mobile/consumer.ts`)
+      # — that staging hop avoids SELinux write restrictions on
+      # `/data/local/tmp`. When the manifest is absent we fall through
+      # silently so local / cache-disabled runs behave like before.
+      #
+      # Timing visibility: each model logs `dl_time / push_time` and a
+      # MB/s rate, plus aggregate `S3 download` and `device push` totals
+      # at the end. This is the data Lauri asked us to surface when we
+      # were debugging cross-region latency.
       - |-
         MANIFEST="$DEVICEFARM_TEST_PACKAGE_PATH/models-manifest.json"
         if [ -f "$MANIFEST" ]; then
@@ -80,7 +94,7 @@ phases:
           echo "No models manifest (cache-models not enabled)"
         fi
 
-      # Install and launch the app
+      # Install and launch the app (custom test spec doesn't do this automatically)
       - |-
         echo "Installing app..."
         adb install -r "$DEVICEFARM_APP_PATH"
@@ -88,6 +102,15 @@ phases:
         adb shell am start -n io.tether.qvac_test_consumer_mobile/.MainActivity
         sleep 5
         echo "App launched"
+
+      # Clear logcat buffer and start continuous background capture (unfiltered)
+      # Captures everything; filtering happens post-test when extracting subsets
+      - |-
+        adb logcat -c
+        adb logcat -v threadtime \
+          >> "$DEVICEFARM_LOG_DIR/testconsumer.log" 2>&1 &
+        echo $! > "$DEVICEFARM_LOG_DIR/logcat-pid.txt"
+        echo "Background logcat capture started (pid: $(cat $DEVICEFARM_LOG_DIR/logcat-pid.txt))"
 
       # Periodic screenshots every 30s in the background
       - |-
@@ -100,7 +123,7 @@ phases:
 
   test:
     commands:
-      # Stream logcat, track test progress in real-time, detect completion
+      # Poll the background log file for test progress and completion
       - |-
         TIMEOUT=${DEVICEFARM_TIMEOUT:-5400}
         START=$(date +%s)
@@ -109,14 +132,17 @@ phases:
         COMPLETED=0
         EXPECTED="?"
         RESULTS_FILE="$DEVICEFARM_LOG_DIR/test-results.txt"
+        LOGFILE="$DEVICEFARM_LOG_DIR/testconsumer.log"
 
         touch "$RESULTS_FILE"
-        adb logcat -c
 
-        echo "Monitoring app logcat for test results (timeout: ${TIMEOUT}s)..."
+        echo "Monitoring app logs for test results (timeout: ${TIMEOUT}s)..."
 
-        adb logcat ReactNativeJS:I *:S | while IFS= read -r line; do
+        tail -f "$LOGFILE" | while IFS= read -r line; do
           case "$line" in
+            # Surface cache-staging + bootstrap progress so a stuck device
+            # is obvious from the live log (saved us 30min of guessing
+            # while iterating on the iOS pymobiledevice3 push path).
             *"📦"*)
               echo "[CACHE] $line"
               ;;
@@ -163,8 +189,26 @@ phases:
 
   post_test:
     commands:
-      # Capture full logcat
-      - adb logcat -d ReactNativeJS:I *:S > "$DEVICEFARM_LOG_DIR/app-console.log"
+      # Stop background logcat capture
+      - |-
+        if [ -f "$DEVICEFARM_LOG_DIR/logcat-pid.txt" ]; then
+          kill $(cat "$DEVICEFARM_LOG_DIR/logcat-pid.txt") 2>/dev/null || true
+          echo "Background logcat stopped"
+        fi
+
+      # Extract React Native JS logs into a separate file
+      - |-
+        grep "ReactNativeJS" "$DEVICEFARM_LOG_DIR/testconsumer.log" \
+          > "$DEVICEFARM_LOG_DIR/react-native-logs.log" 2>/dev/null || true
+        RN_LINES=$(wc -l < "$DEVICEFARM_LOG_DIR/react-native-logs.log" 2>/dev/null || echo 0)
+        echo "=== React Native logs: ${RN_LINES} lines ==="
+        tail -50 "$DEVICEFARM_LOG_DIR/react-native-logs.log" 2>/dev/null || echo "(none)"
+
+      - echo "=== Full logcat summary ==="
+      - wc -l "$DEVICEFARM_LOG_DIR/testconsumer.log" 2>/dev/null || echo "No logs captured"
+
+      - echo "Available log files:"
+      - ls -lh $DEVICEFARM_LOG_DIR/ || true
 
       # Final screenshot
       - adb shell screencap -p > "$DEVICEFARM_SCREENSHOT_PATH/final.png" 2>/dev/null

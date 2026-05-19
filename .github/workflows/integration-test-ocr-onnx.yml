@@ -32,7 +32,8 @@ env:
 jobs:
   run-integration-tests:
     continue-on-error: true
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner || matrix.os }}
+    timeout-minutes: 30
     environment: release
     name: test-${{ matrix.platform }}-${{ matrix.arch }}
 
@@ -48,9 +49,11 @@ jobs:
           - os: ubuntu-22.04
             platform: linux
             arch: x64
+            runner: qvac-ubuntu2204-x64
           - os: ubuntu-24.04
             platform: linux
             arch: x64
+            runner: qvac-ubuntu2404-x64
           - os: ubuntu-24.04-arm
             platform: linux
             arch: arm64
@@ -60,20 +63,20 @@ jobs:
           - os: macos-15-xlarge
             platform: darwin
             arch: arm64
-          - os: windows-2022
+          - os: windows-2025
             platform: win32
             arch: x64
+            runner: qvac-win25-x64
 
     steps:
       - name: Setup Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
-
-      - name: Windows - enable git long paths
-        if: ${{ matrix.platform == 'win32' }}
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
         shell: bash
-        run: git config --system core.longpaths true
+        if: startsWith(matrix.runner, 'qvac-')
 
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -82,40 +85,14 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
 
-      - name: Configure scoped registry for @tetherto and @qvac packages
-        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
-        env:
-          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
-        shell: bash
-        run: |
-          echo "Configuring scoped registry for @tetherto and @qvac packages..."
-          set -eu
-          echo "Writing .npmrc for dual registry install…"
-          cat > .npmrc <<NPMRC
-          always-auth=true
-          registry=https://registry.npmjs.org/
-          @qvac:registry=https://registry.npmjs.org/
-          @tetherto:registry=https://npm.pkg.github.com/
-          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
-          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
-          NPMRC
-
-          if [ -n "${GIT_PAT:-}" ]; then
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
-            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "git@github.com:"
-          else
-            # Using the workflow's GITHUB_TOKEN for git clones when possible
-            git config --global url."https://${{ github.token }}:@github.com/".insteadOf "https://github.com/"
-          fi
-
       - name: Install NPM dependencies
         working-directory: ${{ inputs.workdir || env.PKG_DIR }}
         shell: bash
         run: |
           npm install
-          npm install -g bare bare-make
+
+      - name: Install bare tooling
+        run: npm install -g --force bare bare-make
 
       - name: Download prebuilds from artifact
         if: ${{ !inputs.prebuild_package }}
@@ -129,17 +106,19 @@ jobs:
         working-directory: ${{ inputs.workdir || env.PKG_DIR }}
         shell: bash
         run: |
-          mkdir -p prebuilds
-          npm pack ${{ inputs.prebuild_package }} --pack-destination /tmp
-          tar -xzf /tmp/*.tgz -C /tmp
-          cp -r /tmp/package/prebuilds/* prebuilds/
+          mkdir -p prebuilds "${{ runner.temp }}/tmp"
+          rm -f "${{ runner.temp }}/tmp"/*.tgz
+          rm -rf "${{ runner.temp }}/tmp/package"
+          npm pack ${{ inputs.prebuild_package }} --pack-destination "${{ runner.temp }}/tmp"
+          tar -xzf "${{ runner.temp }}/tmp"/*.tgz -C "${{ runner.temp }}/tmp"
+          cp -r "${{ runner.temp }}/tmp"/package/prebuilds/* prebuilds/
 
       - name: Linux - install dependencies
-        if: matrix.platform == 'linux' || matrix.platform == 'android'
+        if: (matrix.platform == 'linux' || matrix.platform == 'android') && matrix.arch == 'arm64'
         shell: bash
         run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' }}
+      - if: ${{ matrix.os == 'ubuntu-24.04-arm' }}
         name: Update c++ tools to install GLIBC++
         run: |
           sudo apt update
@@ -166,3 +145,33 @@ jobs:
         run: npm run test:integration
         env:
           QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
+
+      - name: Generate HTML performance report
+        if: always()
+        working-directory: ${{ inputs.workdir || env.PKG_DIR }}
+        shell: bash
+        run: |
+          echo "Checking for performance report..."
+          ls -la test/results/ 2>/dev/null || echo "test/results/ directory not found"
+          if [ -f test/results/performance-report.json ]; then
+            echo "Found performance-report.json, generating HTML..."
+            node ../../scripts/perf-report/aggregate.js \
+              --dir test/results \
+              --output-html test/results/performance-report.html \
+              --output-json test/results/performance-summary.json \
+              --output test/results/performance-report.md
+          else
+            echo "performance-report.json not found — skipping HTML generation"
+          fi
+
+      - name: Upload performance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-report-ocr-${{ matrix.os }}-${{ matrix.arch }}-${{ github.run_number }}
+          path: |
+            ${{ inputs.workdir || env.PKG_DIR }}/test/results/performance-report.json
+            ${{ inputs.workdir || env.PKG_DIR }}/test/results/performance-report.html
+            ${{ inputs.workdir || env.PKG_DIR }}/test/results/performance-summary.json
+          retention-days: 90
+          if-no-files-found: ignore

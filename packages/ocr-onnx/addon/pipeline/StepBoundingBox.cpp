@@ -9,7 +9,7 @@
 #include <iterator>
 
 #include <cmath>
-#include "qvac-lib-inference-addon-cpp/Logger.hpp"
+#include "inference-addon-cpp/Logger.hpp"
 
 namespace qvac_lib_inference_addon_onnx_ocr_fasttext {
 

@@ -2,6 +2,24 @@ import { z } from "zod";
 import type { ModelSrcInput } from "./model-src-utils";
 
 /**
+ * Granularity at which the addon can cancel.
+ *  - `"request"` — addon cancels a specific in-flight `requestId`.
+ *  - `"model"` — addon cancels whatever is running on the model.
+ *  - `"none"` — no addon cancel surface; SDK falls back to soft-cancel
+ *    (stop yielding, drop result; the C++ work runs to completion).
+ */
+export type PluginHandlerCancelScope = "request" | "model" | "none";
+
+export interface PluginHandlerCancel {
+  scope: PluginHandlerCancelScope;
+  /**
+   * `true` — `addon.cancel()` interrupts compute; otherwise it's
+   * best-effort. Only meaningful for `scope: "model" | "request"`.
+   */
+  hard?: boolean;
+}
+
+/**
  * Definition for a plugin handler with explicit Zod schemas.
  * Each handler must define its request/response schemas for validation.
  */
@@ -21,6 +39,11 @@ export interface PluginHandlerDefinition<
         ) => Promise<O> | AsyncGenerator<O>
       : never
     : never;
+  /**
+   * Cancel surface this handler advertises. Omitting is equivalent
+   * to `{ scope: "none" }` (soft-cancel fallback).
+   */
+  cancel?: PluginHandlerCancel;
 }
 
 /**
@@ -43,6 +66,8 @@ export interface DuplexPluginHandlerDefinition<
         ) => AsyncGenerator<O>
       : never
     : never;
+  /** See `PluginHandlerDefinition.cancel`. */
+  cancel?: PluginHandlerCancel;
 }
 
 /**
@@ -83,7 +108,6 @@ export interface PluginModel {
 
 export interface PluginModelResult {
   model: PluginModel;
-  loader: unknown;
 }
 
 export interface PluginLogging {
@@ -186,7 +210,14 @@ export type PluginInvokeStreamResponse = z.infer<
 
 /**
  * Helper function to define a plugin with full type inference.
- * This is an identity function that provides type checking.
+ *
+ * Identity function whose only role is to constrain `plugin` to the
+ * `QvacPlugin` shape so consumers get accurate autocompletion and type
+ * errors for plugin manifests without having to write an explicit type
+ * annotation.
+ *
+ * @param plugin - The plugin manifest to register.
+ * @returns The same `plugin` value, typed as the caller's `T`.
  */
 export function definePlugin<T extends QvacPlugin>(plugin: T): T {
   return plugin;
@@ -194,7 +225,14 @@ export function definePlugin<T extends QvacPlugin>(plugin: T): T {
 
 /**
  * Helper function to define a handler with full type inference.
- * This is an identity function that provides type checking.
+ *
+ * Identity function whose only role is to constrain `definition` to a
+ * `PluginHandlerDefinition<TRequest, TResponse>` so the Zod request /
+ * response schemas flow through to the handler body without an explicit
+ * type annotation on the caller side.
+ *
+ * @param definition - The plugin handler definition (request/response schemas and handler function).
+ * @returns The same `definition` value, typed as `PluginHandlerDefinition<TRequest, TResponse>`.
  */
 export function defineHandler<
   TRequest extends z.ZodType,
@@ -205,6 +243,17 @@ export function defineHandler<
   return definition;
 }
 
+/**
+ * Helper function to define a duplex (bidirectional streaming) handler with full type inference.
+ *
+ * Identity function whose only role is to constrain `definition` to a
+ * `DuplexPluginHandlerDefinition` and cast it to the unified
+ * `PluginHandlerDefinition` shape. This bridges TS function-parameter
+ * contravariance so duplex handlers can be registered alongside unary ones.
+ *
+ * @param definition - The duplex plugin handler definition (request/response schemas and streaming handler function).
+ * @returns The same `definition` value, typed as `PluginHandlerDefinition<TRequest, TResponse>`.
+ */
 export function defineDuplexHandler<
   TRequest extends z.ZodType,
   TResponse extends z.ZodType,
@@ -230,6 +279,15 @@ const zodSchemaLikeRuntimeSchema = z
   })
   .catchall(z.unknown());
 
+const pluginHandlerCancelRuntimeSchema = z
+  .object({
+    scope: z.enum(["request", "model", "none"], {
+      error: "cancel.scope must be 'request', 'model', or 'none'",
+    }),
+    hard: z.boolean().optional(),
+  })
+  .catchall(z.unknown());
+
 export const pluginHandlerDefinitionRuntimeSchema = z
   .object({
     requestSchema: zodSchemaLikeRuntimeSchema,
@@ -237,6 +295,7 @@ export const pluginHandlerDefinitionRuntimeSchema = z
     streaming: z.boolean({ error: "streaming must be a boolean" }),
     duplex: z.boolean().optional(),
     handler: functionRuntimeSchema,
+    cancel: pluginHandlerCancelRuntimeSchema.optional(),
   })
   .catchall(z.unknown());
 
@@ -316,7 +375,7 @@ export const PLUGIN_OCR = "@qvac/sdk/onnx-ocr/plugin" as const;
 
 /**
  * Image generation plugin (stable-diffusion.cpp).
- * Provides: text-to-image generation.
+ * Provides: text-to-image generation and standalone ESRGAN image upscaling.
  */
 export const PLUGIN_DIFFUSION =
   "@qvac/sdk/sdcpp-generation/plugin" as const;

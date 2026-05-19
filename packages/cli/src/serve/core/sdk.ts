@@ -1,4 +1,4 @@
-const MIN_SDK_VERSION = '0.8.0'
+const MIN_SDK_VERSION = '0.11.0'
 const SDK_SPECIFIER = '@qvac/sdk'
 const SDK_PACKAGE_SPECIFIER = '@qvac/sdk/package'
 
@@ -11,10 +11,35 @@ export interface SDKGenerationParams {
   frequency_penalty?: number
   presence_penalty?: number
   repeat_penalty?: number
+  reasoning_budget?: boolean
+}
+
+export type SDKResponseFormat =
+  | { type: 'text' }
+  | { type: 'json_object' }
+  | {
+      type: 'json_schema'
+      json_schema: {
+        name: string
+        description?: string
+        schema: Record<string, unknown>
+        strict?: boolean
+      }
+    }
+
+export interface RagWorkspaceInfo {
+  name: string
+  open: boolean
+}
+
+export interface RagSearchResult {
+  id: string
+  content: string
+  score: number
 }
 
 interface SDKModule {
-  loadModel: (opts: { modelSrc: string; modelType: string; modelConfig: Record<string, unknown> }) => Promise<string>
+  loadModel: (opts: { modelSrc: string; modelType: string; modelConfig: Record<string, unknown> }) => Promise<string> & { requestId: string }
   unloadModel: (opts: { modelId: string }) => Promise<void>
   completion: (opts: {
     modelId: string
@@ -22,11 +47,73 @@ interface SDKModule {
     stream: boolean
     tools?: SDKTool[]
     generationParams?: SDKGenerationParams
-  }) => Promise<CompletionResult>
-  embed: (opts: { modelId: string; text: string | string[] }) => Promise<number[] | number[][]>
-  transcribe: (opts: { modelId: string; audioChunk: string | Buffer; prompt?: string }) => Promise<string>
+    responseFormat?: SDKResponseFormat
+  }) => CompletionResult
+  embed: (opts: { modelId: string; text: string | string[] }) => Promise<{ embedding: number[] | number[][]; stats?: Record<string, unknown> }> & { requestId: string }
+  transcribe: (opts: { modelId: string; audioChunk: string | Buffer; prompt?: string }) => Promise<string> & { requestId: string }
+  textToSpeech: (opts: { modelId: string; text: string; inputType?: string; stream?: boolean }) => TtsResult
+  cancel: (opts: { requestId: string } | { operation: "request"; requestId: string } | { operation: "broad"; modelId: string; kind?: string }) => Promise<void>
+  diffusion: (opts: SDKDiffusionParams) => SDKDiffusionResult
+  ragListWorkspaces: () => Promise<RagWorkspaceInfo[]>
+  ragSearch: (opts: {
+    modelId: string
+    query: string
+    topK?: number
+    n?: number
+    workspace?: string
+  }) => Promise<RagSearchResult[]>
+  ragDeleteWorkspace: (opts: { workspace: string }) => Promise<void>
+  ragCloseWorkspace: (opts: { workspace?: string; deleteOnClose?: boolean }) => Promise<void>
+  ragIngest: (opts: {
+    modelId: string
+    documents: string | string[]
+    workspace?: string
+    chunk?: boolean
+  }) => Promise<{ processed: unknown[]; droppedIndices: number[] }>
   close: () => Promise<void>
   [key: string]: unknown
+}
+
+export interface SDKDiffusionParams {
+  modelId: string
+  prompt: string
+  negative_prompt?: string
+  width?: number
+  height?: number
+  steps?: number
+  seed?: number
+  batch_count?: number
+  cfg_scale?: number
+  guidance?: number
+  sampling_method?: string
+  scheduler?: string
+  /** Base image for img2img / image edits (SDK `diffusion()`). */
+  init_image?: Uint8Array
+  /** SD/SDXL denoising strength in [0, 1]; ignored by FLUX.2. */
+  strength?: number
+}
+
+export interface SDKDiffusionStats {
+  width?: number
+  height?: number
+  seed?: number
+  totalSteps?: number
+  totalImages?: number
+  generationMs?: number
+  totalGenerationMs?: number
+  totalWallMs?: number
+}
+
+export interface SDKDiffusionProgressTick {
+  step: number
+  totalSteps: number
+  elapsedMs: number
+}
+
+export interface SDKDiffusionResult {
+  progressStream: AsyncIterable<SDKDiffusionProgressTick>
+  outputs: Promise<Uint8Array[]>
+  stats: Promise<SDKDiffusionStats | undefined>
 }
 
 export interface SDKTool {
@@ -36,12 +123,34 @@ export interface SDKTool {
   parameters: Record<string, unknown>
 }
 
+export interface SDKToolCall {
+  id: string
+  name: string
+  arguments: string | Record<string, unknown>
+}
+
+/** Subset of SDK completion stats surfaced to OpenAI-compatible usage fields. */
+export interface CompletionRunStats {
+  generatedTokens?: number
+  cacheTokens?: number
+  tokensPerSecond?: number
+  timeToFirstToken?: number
+  backendDevice?: 'cpu' | 'gpu'
+}
+
 export interface CompletionResult {
+  requestId: string
   text: Promise<string>
-  stats: Promise<Record<string, unknown>>
+  stats: Promise<CompletionRunStats | undefined>
   toolCalls: Promise<SDKToolCall[] | null>
   tokenStream: AsyncIterable<string>
   toolCallStream: AsyncIterable<SDKToolEvent>
+}
+
+export interface TtsResult {
+  bufferStream: AsyncIterable<number>
+  buffer: Promise<number[]>
+  done: Promise<boolean>
 }
 
 export interface SDKToolCallEvent {
@@ -55,12 +164,6 @@ export interface SDKToolCallErrorEvent {
 }
 
 export type SDKToolEvent = SDKToolCallEvent | SDKToolCallErrorEvent
-
-export interface SDKToolCall {
-  id: string
-  name: string
-  arguments: string | Record<string, unknown>
-}
 
 let sdk: SDKModule | null = null
 
@@ -136,6 +239,7 @@ export async function sdkCompletion (opts: {
   stream: boolean
   tools?: SDKTool[] | undefined
   generationParams?: SDKGenerationParams | undefined
+  responseFormat?: SDKResponseFormat | undefined
 }): Promise<CompletionResult> {
   const { completion } = await getSDK()
   const params: Record<string, unknown> = {
@@ -147,17 +251,43 @@ export async function sdkCompletion (opts: {
     params['tools'] = opts.tools
   }
   if (opts.generationParams) {
-    params['generationParams'] = opts.generationParams
+    const { reasoning_budget, ...rest } = opts.generationParams
+    const sdkGenParams: Record<string, unknown> = { ...rest }
+    if (reasoning_budget !== undefined) {
+      sdkGenParams['reasoning_budget'] = reasoning_budget ? -1 : 0
+    }
+    params['generationParams'] = sdkGenParams
   }
+  if (opts.responseFormat) {
+    params['responseFormat'] = opts.responseFormat
+  }
+  // `completion(...)` returns a `CompletionRun` synchronously — the
+  // client-generated `requestId` is reachable on the result before any
+  // network round-trip, which is what the CLI cancel bridge in
+  // `routes/chat.ts` depends on to bind `req.on('close')` immediately.
   return completion(params as Parameters<SDKModule['completion']>[0])
+}
+
+export interface SDKEmbedRun {
+  requestId: string
+  result: Promise<number[] | number[][]>
 }
 
 export async function sdkEmbed (opts: {
   modelId: string
   text: string | string[]
-}): Promise<number[] | number[][]> {
+}): Promise<SDKEmbedRun> {
   const { embed } = await getSDK()
-  return embed({ modelId: opts.modelId, text: opts.text })
+  const op = embed({ modelId: opts.modelId, text: opts.text })
+  return {
+    requestId: op.requestId,
+    result: op.then((r) => r.embedding)
+  }
+}
+
+export interface SDKTranscribeRun {
+  requestId: string
+  result: Promise<string>
 }
 
 export async function sdkTranscribe (opts: {
@@ -165,7 +295,7 @@ export async function sdkTranscribe (opts: {
   audioChunk: Buffer
   fileName: string
   prompt?: string | undefined
-}): Promise<string> {
+}): Promise<SDKTranscribeRun> {
   const fs = await import('node:fs')
   const os = await import('node:os')
   const path = await import('node:path')
@@ -175,16 +305,147 @@ export async function sdkTranscribe (opts: {
   const tmpFile = path.join(os.tmpdir(), `qvac-audio-${id}${ext}`)
   fs.writeFileSync(tmpFile, opts.audioChunk)
 
-  try {
-    const { transcribe } = await getSDK()
-    return await transcribe({
-      modelId: opts.modelId,
-      audioChunk: tmpFile,
-      ...(opts.prompt && { prompt: opts.prompt })
-    })
-  } finally {
+  const { transcribe } = await getSDK()
+  const op = transcribe({
+    modelId: opts.modelId,
+    audioChunk: tmpFile,
+    ...(opts.prompt && { prompt: opts.prompt })
+  })
+
+  // Tie tempfile cleanup to the promise resolution so the synchronous
+  // `requestId` surface stays usable while the underlying transcription
+  // is still in flight.
+  const result = op.finally(() => {
     try { fs.unlinkSync(tmpFile) } catch {}
+  })
+
+  return { requestId: op.requestId, result }
+}
+
+/**
+ * Targeted cancel by `requestId`. The CLI's per-route disconnect bridges
+ * (`routes/chat.ts`, `routes/embeddings.ts`, `routes/transcriptions.ts`)
+ * call this when the HTTP client disconnects mid-stream so the
+ * underlying SDK request stops running on the worker. Fire-and-forget
+ * from the listener — never `await` inside `req.on('close')`.
+ */
+export async function sdkCancel (opts: { requestId: string }): Promise<void> {
+  const { cancel } = await getSDK()
+  await cancel({ requestId: opts.requestId })
+}
+
+export interface SDKDiffusionRunResult {
+  buffers: Uint8Array[]
+  stats: SDKDiffusionStats | undefined
+}
+
+export async function sdkDiffusion (opts: {
+  params: SDKDiffusionParams
+  onProgress?: (tick: SDKDiffusionProgressTick) => void
+}): Promise<SDKDiffusionRunResult> {
+  const { diffusion } = await getSDK()
+  const result = diffusion(opts.params)
+
+  const drainProgress = async (): Promise<void> => {
+    try {
+      for await (const tick of result.progressStream) {
+        if (opts.onProgress) opts.onProgress(tick)
+      }
+    } catch {
+      // Progress drain errors are reported via outputs/stats below.
+    }
   }
+
+  const [buffers, stats] = await Promise.all([
+    result.outputs,
+    result.stats,
+    drainProgress()
+  ])
+
+  return { buffers, stats }
+}
+
+export async function sdkRagListWorkspaces (): Promise<RagWorkspaceInfo[]> {
+  const { ragListWorkspaces } = await getSDK()
+  return ragListWorkspaces()
+}
+
+export async function sdkRagSearch (opts: {
+  modelId: string
+  query: string
+  topK?: number | undefined
+  n?: number | undefined
+  workspace?: string | undefined
+}): Promise<RagSearchResult[]> {
+  const { ragSearch } = await getSDK()
+  const params: Parameters<SDKModule['ragSearch']>[0] = {
+    modelId: opts.modelId,
+    query: opts.query
+  }
+  if (opts.topK !== undefined) params.topK = opts.topK
+  if (opts.n !== undefined) params.n = opts.n
+  if (opts.workspace !== undefined) params.workspace = opts.workspace
+  return ragSearch(params)
+}
+
+export async function sdkRagDeleteWorkspace (opts: { workspace: string }): Promise<void> {
+  const { ragDeleteWorkspace } = await getSDK()
+  await ragDeleteWorkspace({ workspace: opts.workspace })
+}
+
+export async function sdkRagCloseWorkspace (opts: {
+  workspace?: string | undefined
+  deleteOnClose?: boolean | undefined
+}): Promise<void> {
+  const { ragCloseWorkspace } = await getSDK()
+  const params: Parameters<SDKModule['ragCloseWorkspace']>[0] = {}
+  if (opts.workspace !== undefined) params.workspace = opts.workspace
+  if (opts.deleteOnClose !== undefined) params.deleteOnClose = opts.deleteOnClose
+  await ragCloseWorkspace(params)
+}
+
+export async function sdkRagIngest (opts: {
+  modelId: string
+  documents: string | string[]
+  workspace?: string | undefined
+  chunk?: boolean | undefined
+}): Promise<{ processed: unknown[]; droppedIndices: number[] }> {
+  const { ragIngest } = await getSDK()
+  const params: Parameters<SDKModule['ragIngest']>[0] = {
+    modelId: opts.modelId,
+    documents: opts.documents,
+    chunk: opts.chunk ?? true
+  }
+  if (opts.workspace !== undefined) params.workspace = opts.workspace
+  return ragIngest(params)
+}
+
+export async function sdkTextToSpeech (opts: {
+  modelId: string
+  text: string
+}): Promise<{ samples: number[] }> {
+  const { textToSpeech } = await getSDK()
+  // Stream from the SDK so synthesis can start producing samples while we
+  // accumulate them into a single buffer for the HTTP response. The CLI
+  // currently buffers the full audio payload (WAV needs a header with the
+  // total length); chunked HTTP streaming is tracked as a follow-up.
+  const result = textToSpeech({
+    modelId: opts.modelId,
+    text: opts.text,
+    inputType: 'text',
+    stream: true
+  })
+
+  const samples: number[] = []
+  for await (const sample of result.bufferStream) {
+    samples.push(sample)
+  }
+  // Surface any pipeline error that the bufferStream may have settled
+  // through .done rather than the iterator (the SDK may resolve done after
+  // the iterator returns cleanly).
+  await result.done
+
+  return { samples }
 }
 
 export async function sdkClose (): Promise<void> {

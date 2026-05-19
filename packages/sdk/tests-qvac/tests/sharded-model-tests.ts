@@ -4,6 +4,7 @@ export const shardedModelLoad: TestDefinition = {
   testId: "sharded-model-load",
   params: {},
   expectation: { validation: "type", expectedType: "string" },
+  suites: ["smoke"],
   metadata: { category: "sharded-model", dependency: "none", estimatedDurationMs: 120000 },
 };
 
@@ -11,14 +12,15 @@ export const shardedModelDetection: TestDefinition = {
   testId: "sharded-model-detection",
   params: {},
   expectation: { validation: "type", expectedType: "string" },
-  metadata: { category: "sharded-model", dependency: "none", estimatedDurationMs: 120000 },
+  suites: ["smoke"],
+  metadata: { category: "sharded-model", dependency: "sharded-embeddings", estimatedDurationMs: 120000 },
 };
 
 export const shardedModelHashValidation: TestDefinition = {
   testId: "sharded-model-hash-validation",
   params: {},
   expectation: { validation: "type", expectedType: "string" },
-  metadata: { category: "sharded-model", dependency: "none", estimatedDurationMs: 120000 },
+  metadata: { category: "sharded-model", dependency: "sharded-embeddings", estimatedDurationMs: 120000 },
 };
 
 export const shardedModelBackwardCompatibility: TestDefinition = {
@@ -32,27 +34,28 @@ export const shardedModelProgress: TestDefinition = {
   testId: "sharded-model-progress",
   params: {},
   expectation: { validation: "type", expectedType: "string" },
-  metadata: { category: "sharded-model", dependency: "none", estimatedDurationMs: 120000 },
+  metadata: { category: "sharded-model", dependency: "sharded-embeddings", estimatedDurationMs: 120000 },
 };
 
 export const shardedModelResume: TestDefinition = {
   testId: "sharded-model-resume",
   params: {},
   expectation: { validation: "type", expectedType: "string" },
-  metadata: { category: "sharded-model", dependency: "none", estimatedDurationMs: 180000 },
+  metadata: { category: "sharded-model", dependency: "sharded-embeddings", estimatedDurationMs: 180000 },
 };
 
 export const shardedModelCancellation: TestDefinition = {
   testId: "sharded-model-cancellation",
   params: {},
   expectation: { validation: "type", expectedType: "string" },
-  metadata: { category: "sharded-model", dependency: "none", estimatedDurationMs: 60000 },
+  metadata: { category: "sharded-model", dependency: "sharded-embeddings", estimatedDurationMs: 60000 },
 };
 
 export const shardedModelInference: TestDefinition = {
   testId: "sharded-model-inference",
   params: { text: "This is a test sentence for embedding generation using a sharded model." },
   expectation: { validation: "type", expectedType: "array" },
+  suites: ["smoke"],
   metadata: { category: "sharded-model", dependency: "sharded-embeddings", estimatedDurationMs: 45000 },
 };
 

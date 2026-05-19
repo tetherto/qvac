@@ -62,7 +62,7 @@ function loadModels () {
 function toAttribution (record) {
   return {
     name: extractModelName(record),
-    license: record.license || 'Unknown',
+    license: record.licenseId || record.license || 'Unknown',
     url: extractModelUrl(record),
     engine: record.engine || ''
   }

@@ -1,0 +1,37 @@
+{
+  "dependencies": [
+    "bergamot-translator",
+    {
+      "name": "qvac-lib-inference-addon-cpp",
+      "version>=": "1.2.0"
+    },
+    {
+      "name": "qvac-lint-cpp",
+      "version>=": "1.4.4#3"
+    },
+    "sentencepiece",
+    "ssplit",
+    {
+      "name": "qvac-fabric",
+      "version>=": "8189.0.2",
+      "default-features": false,
+      "features": [
+        "gpu-backends"
+      ]
+    }
+  ],
+  "features": {
+    "tests": {
+      "description": "Build tests",
+      "dependencies": [
+        "gtest"
+      ]
+    }
+  },
+  "overrides": [
+    {
+      "name": "flatbuffers",
+      "version": "23.5.26"
+    }
+  ]
+}

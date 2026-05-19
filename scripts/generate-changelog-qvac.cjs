@@ -69,18 +69,46 @@ function getGitHubToken() {
 }
 
 /**
- * Find the latest tag for a package
+ * Find the latest tag for a package.
+ *
+ * In "minor" mode, returns the latest x.y.0 tag — the correct base for
+ * minor/major releases where patches ship on separate release branches.
+ * In "patch" mode, returns the absolute latest tag (current behavior).
+ *
  * @param {string} packageName - e.g., "sdk"
- * @returns {string|null} - e.g., "sdk-v1.0.0" or null
+ * @param {"minor"|"patch"} releaseType - which tag lineage to follow
+ * @returns {string|null} - e.g., "sdk-v0.8.0" or null
  */
-function getLatestTag(packageName) {
+function getLatestTag(packageName, releaseType = "minor") {
   try {
     const tags = git(`tag --list "${packageName}-v*" --sort=-v:refname`);
     if (!tags) return null;
-    return tags.split("\n")[0].trim() || null;
+
+    const allTags = tags.split("\n").map((t) => t.trim()).filter(Boolean);
+    if (allTags.length === 0) return null;
+
+    if (releaseType === "minor") {
+      const minorTags = allTags.filter((t) => t.match(/-v\d+\.\d+\.0$/));
+      return minorTags[0] || allTags[0] || null;
+    }
+
+    return allTags[0] || null;
   } catch (error) {
     return null;
   }
+}
+
+/**
+ * Auto-detect release type from a semver version string.
+ * If the patch component is 0 (e.g. "0.9.0"), it's a minor release.
+ * Otherwise (e.g. "0.8.3"), it's a patch release.
+ * @param {string} version - e.g., "0.9.0"
+ * @returns {"minor"|"patch"}
+ */
+function detectReleaseType(version) {
+  const parts = version.split(".");
+  const patch = parseInt(parts[2] || "0", 10);
+  return patch === 0 ? "minor" : "patch";
 }
 
 /**
@@ -98,13 +126,14 @@ function extractVersionFromTag(tag) {
  * Resolve the base reference (commit/tag) for changelog generation
  * @param {string} packageName
  * @param {string|null} baseCommit - CLI override
+ * @param {"minor"|"patch"} releaseType
  * @returns {string|null}
  */
-function resolveBaseRef(packageName, baseCommit) {
+function resolveBaseRef(packageName, baseCommit, releaseType = "minor") {
   if (baseCommit) {
     return baseCommit;
   }
-  return getLatestTag(packageName);
+  return getLatestTag(packageName, releaseType);
 }
 
 /**
@@ -267,6 +296,7 @@ function parseArgs(argv) {
  * @param {string} options.packageName - e.g., "sdk"
  * @param {string} [options.baseCommit] - Override tag lookup with a commit SHA
  * @param {string} [options.baseVersion] - Version label for display
+ * @param {"minor"|"patch"} [options.releaseType] - Overrides auto-detection from package.json version
  * @param {boolean} [options.dryRun] - If true, don't write files
  * @returns {Promise<{packageName: string, baseRef: string|null, baseVersion: string|null, version: string, prs: Array}>}
  */
@@ -281,16 +311,31 @@ async function generateChangelog(options) {
     throw new Error("Not a git repository");
   }
 
-  // Fetch tags
+  // Fetch tags — try upstream first (fork workflow), then origin
   console.log("📥 Fetching tags...");
-  try {
-    git("fetch origin --tags");
-  } catch (error) {
-    console.warn("⚠️  Failed to fetch tags from origin, using local tags");
+  let tagsFetched = false;
+  for (const remote of ["upstream", "origin"]) {
+    try {
+      git(`fetch ${remote} --tags`);
+      tagsFetched = true;
+      break;
+    } catch (error) {
+      // Remote doesn't exist or unreachable, try next
+    }
+  }
+  if (!tagsFetched) {
+    console.warn("⚠️  Failed to fetch tags from any remote, using local tags");
   }
 
+  // Get current version from package.json
+  const version = getPackageVersion(packagePath);
+
+  // Determine release type: explicit override > auto-detect from version
+  const releaseType = options.releaseType || detectReleaseType(version);
+  console.log(`📦 Current version: ${version} (${releaseType} release)`);
+
   // Resolve base reference
-  const baseRef = resolveBaseRef(packageName, baseCommit || null);
+  const baseRef = resolveBaseRef(packageName, baseCommit || null, releaseType);
   if (!baseRef) {
     throw new Error(
       `No tags found for ${packageName} and no --base-commit provided.\n` +
@@ -305,10 +350,7 @@ async function generateChangelog(options) {
   if (resolvedBaseVersion) {
     console.log(`📌 Base version: ${resolvedBaseVersion}`);
   }
-
-  // Get current version from package.json
-  const version = getPackageVersion(packagePath);
-  console.log(`📦 Current version: ${version}\n`);
+  console.log("");
 
   // Get PR numbers scoped to package path
   console.log("🔍 Finding merged PRs...");
@@ -443,6 +485,7 @@ async function main() {
       "  --base-commit    Initial commit SHA (overrides tag lookup)",
     );
     console.error("  --base-version   Version label for base commit");
+    console.error("  --release-type   minor or patch (auto-detected from package.json version)");
     console.error("  --dry-run        Show output without writing files");
     process.exit(1);
   }
@@ -454,6 +497,7 @@ async function main() {
       packageName: params.package,
       baseCommit: params["base-commit"] || undefined,
       baseVersion: params["base-version"] || undefined,
+      releaseType: params["release-type"] || undefined,
       dryRun: params["dry-run"] !== undefined,
     });
 
@@ -480,6 +524,7 @@ module.exports = {
   generateChangelog,
   getLatestTag,
   extractVersionFromTag,
+  detectReleaseType,
   resolveBaseRef,
   getPRNumbers,
   fetchPRMetadata,

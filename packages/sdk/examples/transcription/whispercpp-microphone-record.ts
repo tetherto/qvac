@@ -15,28 +15,10 @@ import {
   WHISPER_TINY,
   VAD_SILERO_5_1_2,
 } from "@qvac/sdk";
-import { spawn, spawnSync } from "child_process";
-import { platform } from "os";
+import { spawnSync } from "child_process";
+import { startMicrophone } from "../audio/mic-input";
 
 const SAMPLE_RATE = 16000;
-
-function getAudioInputArgs(): string[] {
-  switch (platform()) {
-    case "darwin":
-      return ["-f", "avfoundation", "-i", ":0"];
-    case "win32":
-      return [
-        "-f",
-        "dshow",
-        "-i",
-        "audio=@device_cm_{33D9A762-90C8-11D0-BD43-00A0C911CE86}\\wave_{58C07110-A4FD-4FF8-BA10-5A3C14389F71}",
-      ];
-    case "linux":
-      return ["-f", "pulse", "-i", "default"];
-    default:
-      throw new Error(`Unsupported platform: ${platform()}`);
-  }
-}
 
 // ── Main ──
 
@@ -73,19 +55,10 @@ const modelId = await loadModel({
 });
 console.log("Model loaded.\n");
 
-const ffmpeg = spawn(
-  "ffmpeg",
-  [
-    ...getAudioInputArgs(),
-    "-ar", String(SAMPLE_RATE),
-    "-ac", "1",
-    "-sample_fmt", "flt",
-    "-f", "f32le",
-    "pipe:1",
-  ],
-  { stdio: ["ignore", "pipe", "ignore"] },
-);
-if (!ffmpeg.stdout) throw new Error("Failed to open microphone");
+const ffmpeg = startMicrophone({
+  sampleRate: SAMPLE_RATE,
+  format: "f32le",
+});
 
 const session = await transcribeStream({ modelId });
 

@@ -5,6 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-05-11
+
+### Fixed
+
+- Bumped `@qvac/onnx` to `^0.15.0` to track the renamed `inference-addon-cpp` include path. Earlier `0.14.x` versions ship `Logger.hpp` with `#include <qvac-lib-inference-addon-cpp/JsLogger.hpp>`, which no longer matches the vcpkg port `qvac-lib-inference-addon-cpp@1.1.7#1` (post QVAC-16441 rename, headers now install under `include/inference-addon-cpp/`). Followup to QVAC-16441 / #1860. Released as a minor bump (`0.4.5` → `0.5.0`) instead of a patch to avoid version-range conflicts with the upcoming SDK 0.10 release line.
+
+## [0.4.5] - 2026-05-08
+
+### Added
+
+- Info-level addon-logger entries on `_load()` and `_runInternal()` paths, aligning with all other inference addons
+- Unit test for addon logging lifecycle contract (`addon-logging.test.js`)
+
+## [0.4.4] - 2026-04-27
+
+### Fixed
+
+- `_runInternal` now calls `_job.start()` before awaiting `addon.runJob(...)`, matching the documented `createJobHandler` contract and the TTS reference implementation. Previously, native callbacks fired synchronously by the binding during `runJob` could land while the job handler had no active `QvacResponse`, silently dropping streaming output, stats, and early errors. Failures from `getImage()` and `runJob()` are now routed through `_job.fail(error)` to clear the active response. Fixes [#1756](https://github.com/tetherto/qvac/issues/1756).
+
+## [0.4.3] - 2026-04-15
+
+### Added
+
+- Exported `RuntimeStats` interface in `index.d.ts` with fields: `totalTime`, `detectionTime`, `recognitionTime`, `textRegionsCount`. Matches C++ backend output for SDK type-safety.
+
+## [0.4.2] - 2026-04-14
+
+### Fixed
+
+- Updated README to use current package name (`@qvac/ocr-onnx`) and monorepo paths
+- Removed redundant `ensure-npm-public` job from on-merge workflow
+
+## [0.4.1] - 2026-04-14
+
+### Fixed
+
+- SIGABRT crash on process exit in OCR addon
+- Use HTTPS instead of SSH for vcpkg registry URLs
+
+### Changed
+
+- Updated OCR integration tests for `createJobHandler` migration
+- Removed hyperdrive references and dependencies
+- Renamed `dl-hyperdrive` and `dl-filesystem` package references
+- Migrated qvac-devops to oss-action
+
 ## [0.4.0] - 2026-04-08
 
 ### Changed
@@ -27,7 +73,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Bumped `qvac-lib-inference-addon-cpp` vcpkg dependency to >=1.1.5
+- Bumped `inference-addon-cpp` vcpkg dependency to >=1.1.5
 - DocTR models now download directly from OnnxTR GitHub releases on all platforms
 - Removed legacy `scripts/generate-doctr-presigned-urls.sh`
 
@@ -41,7 +87,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Updated `@qvac/onnx` dependency to ^0.14.0 (ONNX Runtime 1.24.2)
-- Pinned `qvac-lib-inference-addon-cpp` >= 1.1.4 to pick up cancel race condition fix
+- Pinned `inference-addon-cpp` >= 1.1.4 to pick up cancel race condition fix
 - Disabled XNNPACK on Windows CI tests, consistent with all other platforms
 
 ## [0.3.3]

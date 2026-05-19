@@ -1,6 +1,7 @@
 import { Platform } from "react-native";
 import { File, Directory, Paths } from "expo-file-system";
 import { createExecutor, SkipExecutor } from "@tetherto/qvac-test-suite/mobile";
+import type { TestDefinition } from "@tetherto/qvac-test-suite";
 import {
   profiler,
   LLAMA_3_2_1B_INST_Q4_0,
@@ -10,9 +11,6 @@ import {
   VAD_SILERO_5_1_2,
   QWEN3_1_7B_INST_Q4,
   OCR_LATIN_RECOGNIZER_1,
-  MARIAN_OPUS_DE_EN_Q4_0,
-  MARIAN_OPUS_EN_ES_Q4_0,
-  MARIAN_OPUS_ES_EN_Q4_0,
   BERGAMOT_EN_FR,
   BERGAMOT_EN_ES,
   BERGAMOT_ES_EN,
@@ -24,11 +22,13 @@ import {
   TTS_EMBED_TOKENS_EN_CHATTERBOX_FP32,
   TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP32,
   TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP32,
-  TTS_TOKENIZER_SUPERTONIC,
-  TTS_TEXT_ENCODER_SUPERTONIC_FP32,
-  TTS_LATENT_DENOISER_SUPERTONIC_FP32,
-  TTS_VOICE_DECODER_SUPERTONIC_FP32,
-  TTS_VOICE_STYLE_SUPERTONIC,
+  TTS_SUPERTONIC2_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32,
+  TTS_SUPERTONIC2_OFFICIAL_DURATION_PREDICTOR_SUPERTONE_FP32,
+  TTS_SUPERTONIC2_OFFICIAL_VECTOR_ESTIMATOR_SUPERTONE_FP32,
+  TTS_SUPERTONIC2_OFFICIAL_VOCODER_SUPERTONE_FP32,
+  TTS_SUPERTONIC2_OFFICIAL_UNICODE_INDEXER_SUPERTONE_FP32,
+  TTS_SUPERTONIC2_OFFICIAL_TTS_CONFIG_SUPERTONE,
+  TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE,
   PARAKEET_TDT_ENCODER_INT8,
   PARAKEET_TDT_DECODER_INT8,
   PARAKEET_TDT_PREPROCESSOR_INT8,
@@ -43,6 +43,8 @@ import {
   SD_V2_1_1B_Q8_0,
 } from "@qvac/sdk";
 import { ResourceManager } from "../shared/resource-manager.js";
+import { collectTestDeps } from "../shared/collect-test-deps.js";
+import { resolveBundledAssetUri } from "./asset-uri.js";
 import { ModelLoadingExecutor } from "../shared/executors/model-loading-executor.js";
 import { CompletionExecutor } from "../shared/executors/completion-executor.js";
 import { EmbeddingExecutor } from "../shared/executors/embedding-executor.js";
@@ -51,11 +53,13 @@ import { TranslationExecutor } from "../shared/executors/translation-executor.js
 import { ShardedModelExecutor } from "../shared/executors/sharded-model-executor.js";
 import { HttpEmbeddingExecutor } from "../shared/executors/http-embedding-executor.js";
 import { KvCacheExecutor } from "../shared/executors/kv-cache-executor.js";
-import { LoggingExecutor } from "../shared/executors/logging-executor.js";
+import { MobileLoggingExecutor } from "./executors/logging-executor.js";
 import { RegistryExecutor } from "../shared/executors/registry-executor.js";
 import { ModelInfoExecutor } from "../shared/executors/model-info-executor.js";
+import { WrongModelExecutor } from "../shared/executors/wrong-model-executor.js";
 import { ErrorExecutor } from "../shared/executors/error-executor.js";
 import { MobileTranscriptionExecutor } from "./executors/transcription-executor.js";
+import { MobileTranscribeStreamEventsExecutor } from "./executors/transcribe-stream-events-executor.js";
 import { MobileParakeetExecutor } from "./executors/parakeet-executor.js";
 import { MobileVisionExecutor } from "./executors/vision-executor.js";
 import { MobileOcrExecutor } from "./executors/ocr-executor.js";
@@ -63,9 +67,21 @@ import { MobileRagExecutor } from "./executors/rag-executor.js";
 import { MobileConfigReloadExecutor } from "./executors/config-reload-executor.js";
 import { MobileTtsExecutor } from "./executors/tts-executor.js";
 import { DownloadExecutor } from "../shared/executors/download-executor.js";
-import { DiffusionExecutor } from "../shared/executors/diffusion-executor.js";
+import { DelegatedInferenceExecutor } from "../shared/executors/delegated-inference-executor.js";
+import { MobileDiffusionExecutor } from "./executors/diffusion-executor.js";
+import { LifecycleExecutor } from "../shared/executors/lifecycle-executor.js";
+import { ConfigExecutor } from "../shared/executors/config-executor.js";
+import { CancellationExecutor } from "../shared/executors/cancellation-executor.js";
 
-const resources = new ResourceManager();
+const resources = new ResourceManager({
+  // Mobile (iOS + Android) needs a tick after each unloadModel for the
+  // kernel to actually release pages / reclaim mmap regions — without
+  // it, the next test's load arrives while the previous model's RSS is
+  // still resident and either the GGML allocator crashes (iOS) or
+  // Scudo's mmap fails with "internal map failure" (Android). Empirically
+  // 200ms is enough; desktop doesn't need it.
+  unloadSettleMs: 200,
+});
 
 resources.define("llm", {
   constant: LLAMA_3_2_1B_INST_Q4_0,
@@ -109,6 +125,12 @@ resources.define("tools", {
   config: { ctx_size: 4096, tools: true },
 });
 
+resources.define("tools-dynamic", {
+  constant: QWEN3_1_7B_INST_Q4,
+  type: "llm",
+  config: { ctx_size: 4096, tools: true, toolsMode: "dynamic" },
+});
+
 resources.define("ocr", {
   constant: OCR_LATIN_RECOGNIZER_1,
   type: "ocr",
@@ -119,51 +141,6 @@ resources.define("sharded-embeddings", {
   constant: GTE_LARGE_335M_FP16_SHARD,
   type: "embeddings",
   skipPreDownload: true,
-});
-
-resources.define("marian-de-en", {
-  constant: MARIAN_OPUS_DE_EN_Q4_0,
-  type: "nmt",
-  config: {
-    engine: "Opus",
-    from: "de",
-    to: "en",
-    beamsize: 4,
-    lengthpenalty: 1.0,
-    maxlength: 512,
-    temperature: 0.3,
-    norepeatngramsize: 3,
-  },
-});
-
-resources.define("marian-en-es", {
-  constant: MARIAN_OPUS_EN_ES_Q4_0,
-  type: "nmt",
-  config: {
-    engine: "Opus",
-    from: "en",
-    to: "es",
-    beamsize: 4,
-    lengthpenalty: 1.0,
-    maxlength: 512,
-    temperature: 0.3,
-    norepeatngramsize: 3,
-  },
-});
-
-resources.define("marian-es-en", {
-  constant: MARIAN_OPUS_ES_EN_Q4_0,
-  type: "nmt",
-  config: {
-    engine: "Opus",
-    from: "es",
-    to: "en",
-    beamsize: 4,
-    lengthpenalty: 1.0,
-    maxlength: 512,
-    temperature: 0.3,
-    norepeatngramsize: 3,
-  },
 });
 
 resources.define("indictrans-en-hi", {
@@ -242,12 +219,27 @@ resources.define("afriquegemma", {
   },
 });
 
+/** Look up a bundled audio file by name and resolve it to a POSIX path. */
+async function resolveBundledAudioUri(filename: string): Promise<string | undefined> {
+  // @ts-ignore - assets.ts generated at consumer build time (consumer root, 3 levels up from dist/tests/mobile/)
+  const assets = await import("../../../assets");
+  const assetModule = assets.audio?.[filename];
+  if (!assetModule) {
+    console.warn(`[tts-chatterbox] reference audio not in registry: ${filename}`);
+    return undefined;
+  }
+  try {
+    return await resolveBundledAssetUri(assetModule);
+  } catch (err) {
+    console.warn(`[tts-chatterbox] failed to resolve ${filename}:`, err);
+    return undefined;
+  }
+}
 
 resources.define("tts-chatterbox", {
   constant: TTS_TOKENIZER_EN_CHATTERBOX,
   type: "tts",
-  skipPreDownload: true,
-  config: {
+  config: async () => ({
     ttsEngine: "chatterbox",
     language: "en",
     ttsTokenizerSrc: TTS_TOKENIZER_EN_CHATTERBOX,
@@ -255,21 +247,37 @@ resources.define("tts-chatterbox", {
     ttsEmbedTokensSrc: TTS_EMBED_TOKENS_EN_CHATTERBOX_FP32,
     ttsConditionalDecoderSrc: TTS_CONDITIONAL_DECODER_EN_CHATTERBOX_FP32,
     ttsLanguageModelSrc: TTS_LANGUAGE_MODEL_EN_CHATTERBOX_FP32,
+    referenceAudioSrc: await resolveBundledAudioUri("transcription-short-wav.wav"),
+  }),
+});
+
+const ttsSupertonicBaseConfig = {
+  ttsEngine: "supertonic",
+  ttsTextEncoderSrc: TTS_SUPERTONIC2_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32,
+  ttsDurationPredictorSrc: TTS_SUPERTONIC2_OFFICIAL_DURATION_PREDICTOR_SUPERTONE_FP32,
+  ttsVectorEstimatorSrc: TTS_SUPERTONIC2_OFFICIAL_VECTOR_ESTIMATOR_SUPERTONE_FP32,
+  ttsVocoderSrc: TTS_SUPERTONIC2_OFFICIAL_VOCODER_SUPERTONE_FP32,
+  ttsUnicodeIndexerSrc: TTS_SUPERTONIC2_OFFICIAL_UNICODE_INDEXER_SUPERTONE_FP32,
+  ttsTtsConfigSrc: TTS_SUPERTONIC2_OFFICIAL_TTS_CONFIG_SUPERTONE,
+  ttsVoiceStyleSrc: TTS_SUPERTONIC2_OFFICIAL_VOICE_STYLE_SUPERTONE,
+};
+
+resources.define("tts-supertonic", {
+  constant: TTS_SUPERTONIC2_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32,
+  type: "onnx-tts",
+  config: {
+    ...ttsSupertonicBaseConfig,
+    language: "en",
   },
 });
 
-resources.define("tts-supertonic", {
-  constant: TTS_TOKENIZER_SUPERTONIC,
-  type: "tts",
-  skipPreDownload: true,
+resources.define("tts-supertonic-multilingual", {
+  constant: TTS_SUPERTONIC2_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32,
+  type: "onnx-tts",
   config: {
-    ttsEngine: "supertonic",
-    language: "en",
-    ttsTokenizerSrc: TTS_TOKENIZER_SUPERTONIC,
-    ttsTextEncoderSrc: TTS_TEXT_ENCODER_SUPERTONIC_FP32,
-    ttsLatentDenoiserSrc: TTS_LATENT_DENOISER_SUPERTONIC_FP32,
-    ttsVoiceDecoderSrc: TTS_VOICE_DECODER_SUPERTONIC_FP32,
-    ttsVoiceSrc: TTS_VOICE_STYLE_SUPERTONIC,
+    ...ttsSupertonicBaseConfig,
+    language: "es",
+    supertonicMultilingual: true,
   },
 });
 
@@ -277,7 +285,6 @@ resources.define("tts-supertonic", {
 resources.define("parakeet-tdt", {
   constant: PARAKEET_TDT_ENCODER_INT8,
   type: "parakeet",
-  skipPreDownload: true,
   config: {
     parakeetEncoderSrc: PARAKEET_TDT_ENCODER_INT8,
     parakeetDecoderSrc: PARAKEET_TDT_DECODER_INT8,
@@ -290,7 +297,6 @@ resources.define("parakeet-tdt", {
 resources.define("parakeet-ctc", {
   constant: PARAKEET_CTC_FP32,
   type: "parakeet",
-  skipPreDownload: true,
   config: {
     modelType: "ctc",
     parakeetCtcModelSrc: PARAKEET_CTC_FP32,
@@ -302,7 +308,6 @@ resources.define("parakeet-ctc", {
 resources.define("parakeet-sortformer", {
   constant: PARAKEET_SORTFORMER_FP32,
   type: "parakeet",
-  skipPreDownload: true,
   config: {
     modelType: "sortformer",
     parakeetSortformerSrc: PARAKEET_SORTFORMER_FP32,
@@ -312,7 +317,6 @@ resources.define("parakeet-sortformer", {
 resources.define("vision", {
   constant: SMOLVLM2_500M_MULTIMODAL_Q8_0,
   type: "llm",
-  skipPreDownload: true,
   config: {
     ctx_size: 1024,
     projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
@@ -465,9 +469,19 @@ async function copyModelsFromCache(): Promise<boolean> {
   }
 }
 
-export async function bootstrap() {
+export async function bootstrap(filteredTests?: TestDefinition[]) {
+  // Stage 1 (mobile-only addition): if CI prepared an S3-backed bundle of
+  // models on the device, copy them into the SDK cache and pin
+  // `qvac.config.json` to that directory. When the bundle is absent (local
+  // run, `cache-models=false`, or push failed) we silently fall through.
   await copyModelsFromCache();
-  await resources.downloadAllOnce(console.log);
+  // Stage 2 (in sync with desktop's bootstrap path): `filteredTests`, when
+  // present, is the producer's post-filter test list delivered via
+  // register-ack; passing the collected deps to `downloadAllOnce` keeps the
+  // device from warming models that no test in the active suite needs.
+  // Absence preserves the legacy "warm everything" behaviour.
+  const allowedDeps = filteredTests ? collectTestDeps(filteredTests) : undefined;
+  await resources.downloadAllOnce(console.log, { allowedDeps });
 }
 
 export const executor = createExecutor({
@@ -480,7 +494,24 @@ export const executor = createExecutor({
       "http-archive-embed-progress",
       "http-archive-embed-inference",
     ], "HTTP test disabled on mobile (OOM)"),
+    new SkipExecutor(/^finetune-/, "Finetune tests disabled on mobile"),
+    new SkipExecutor(/^multi-gpu-/, "Multi-GPU tests disabled on mobile (not supported on single-GPU devices)"),
     new SkipExecutor(/^tools-(?!simple-function$|no-function-match$)/, "Tools test disabled on mobile"),
+    new SkipExecutor(/^(diffusion-|addon-logging-diffusion$)/, "SD v2.1 1B Q8_0 cold-load is too heavy for Device Farm devices (iOS variable 5–15min, Android blocks JS thread >300s and trips heartbeat)"),
+    new SkipExecutor(
+      /^translation-bergamot-.+-cache-reload$/,
+      "Server-side Bare code path, identical across platforms — desktop coverage is source of truth",
+    ),
+    // suspend() hangs the test runner on mobile (the lifecycle coordinator
+    // pauses MQTT/network ops and never resumes within the test timeout).
+    // Only resume-idempotent is safe -- it does not call suspend().
+    skipTests([
+      "lifecycle-suspend-resume-basic",
+      "lifecycle-suspend-idempotent",
+      "lifecycle-suspend-resume-inference",
+      "lifecycle-rapid-toggle",
+      "lifecycle-suspend-during-inference",
+    ], "suspend() hangs the runner on mobile"),
     ...(Platform.OS === "ios" ? [
       skipTests([
         "ocr-sign-image",
@@ -496,16 +527,20 @@ export const executor = createExecutor({
         "ocr-misaligned-text",
         "ocr-multi-sized-text",
         "ocr-multiple-fonts",
+        "addon-logging-ocr",
       ], "OCR disabled on iOS (ONNX/CoreML OOM)"),
+      new SkipExecutor(/^translation-afriquegemma-/, "AfriqueGemma 4B (~2.7 GB) exceeds iOS memory budget"),
     ] : []),
 
     // Real executors
     new ModelLoadingExecutor(resources),
     new CompletionExecutor(resources),
     new MobileTranscriptionExecutor(resources),
+    new MobileTranscribeStreamEventsExecutor(resources),
     new EmbeddingExecutor(resources),
     new MobileRagExecutor(resources),
     new ModelInfoExecutor(resources),
+    new WrongModelExecutor(resources),
     new ErrorExecutor(resources),
     new ToolsExecutor(resources),
     new TranslationExecutor(resources),
@@ -513,14 +548,18 @@ export const executor = createExecutor({
     new MobileOcrExecutor(resources),
     new MobileTtsExecutor(resources),
     new MobileConfigReloadExecutor(resources),
-    new LoggingExecutor(resources),
+    new MobileLoggingExecutor(resources),
     new RegistryExecutor(resources),
     new HttpEmbeddingExecutor(resources),
     new KvCacheExecutor(resources),
     new MobileParakeetExecutor(resources),
     new MobileVisionExecutor(resources),
     new DownloadExecutor(),
-    new DiffusionExecutor(resources),
+    new DelegatedInferenceExecutor(),
+    new MobileDiffusionExecutor(resources),
+    new LifecycleExecutor(resources),
+    new ConfigExecutor(),
+    new CancellationExecutor(resources),
   ],
   profiling: {
     init: () => profiler.enable({ mode: "summary", includeServerBreakdown: true }),

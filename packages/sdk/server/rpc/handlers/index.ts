@@ -13,16 +13,23 @@ import { handleRag } from "./rag";
 import { cancelHandler } from "./cancelHandler";
 import { handleDeleteCache } from "./delete-cache";
 import { handleTextToSpeech } from "./text-to-speech";
+import { handleTextToSpeechStream } from "./text-to-speech-stream";
 import { handleGetModelInfo } from "./get-model-info";
+import { handleGetLoadedModelInfo } from "./get-loaded-model-info";
+import { handleFinetune } from "./finetune";
 import { handleOCRStream } from "./ocr-stream";
 import { handleHeartbeat } from "./heartbeat";
 import { handleDiffusionStream } from "./diffusion-stream";
+import { handleUpscaleStream } from "./upscale-stream";
 import { handlePluginInvoke, handlePluginInvokeStream } from "./plugin-invoke";
 import {
   handleModelRegistryList,
   handleModelRegistrySearch,
   handleModelRegistryGetModel,
 } from "./registry";
+import { handleSuspend } from "./suspend";
+import { handleResume } from "./resume";
+import { handleState } from "./state";
 
 export const handlers = {
   heartbeat: handleHeartbeat,
@@ -41,12 +48,19 @@ export const handlers = {
   rag: handleRag,
   cancel: cancelHandler,
   textToSpeech: handleTextToSpeech,
+  textToSpeechStream: handleTextToSpeechStream,
   getModelInfo: handleGetModelInfo,
+  getLoadedModelInfo: handleGetLoadedModelInfo,
+  finetune: handleFinetune,
   ocrStream: handleOCRStream,
   diffusionStream: handleDiffusionStream,
+  upscaleStream: handleUpscaleStream,
   pluginInvoke: handlePluginInvoke,
   pluginInvokeStream: handlePluginInvokeStream,
   modelRegistryList: handleModelRegistryList,
   modelRegistrySearch: handleModelRegistrySearch,
   modelRegistryGetModel: handleModelRegistryGetModel,
+  suspend: handleSuspend,
+  resume: handleResume,
+  state: handleState,
 };

@@ -1,0 +1,39 @@
+{
+  "dependencies": [
+    {
+      "name": "opencl",
+      "platform": "android"
+    },
+    {
+      "name": "qvac-fabric",
+      "version>=": "8189.0.2"
+    },
+    {
+      "name": "qvac-lib-inference-addon-cpp",
+      "version>=": "1.2.0"
+    },
+    {
+      "name": "qvac-lint-cpp",
+      "version>=": "1.4.4#3"
+    }
+  ],
+  "features": {
+    "tests": {
+      "description": "Build and run unit tests",
+      "dependencies": [
+        "gtest"
+      ]
+    },
+    "vk-profiling": {
+      "description": "Force vk performance logging in qvac-fabric",
+      "dependencies": [
+        {
+          "name": "qvac-fabric",
+          "features": [
+            "force-profiler"
+          ]
+        }
+      ]
+    }
+  }
+}

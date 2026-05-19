@@ -7,7 +7,7 @@ import {
   type Response,
   type RPCOptions,
 } from "@/schemas";
-import { RPCError } from "./rpc-error";
+import { reconstructError } from "./rpc-error";
 import { withTimeout, withTimeoutStream } from "@/utils/withTimeout";
 import { getClientLogger, summarizeRequest } from "@/logging";
 import { getRPC, close as closeRPC, createDuplexSession } from "#rpc";
@@ -46,7 +46,12 @@ function getNextCommandId() {
 
 function checkAndThrowError(response: Response): void {
   if (response.type === "error") {
-    throw new RPCError(response);
+    // Use the typed-error reconstructor map in `rpc-error.ts` so the
+    // original class (e.g. `RequestRejectedByPolicyError`) survives
+    // the RPC boundary intact and `err instanceof <Class>` works in
+    // consumer `catch` blocks. Unknown error names fall back to a
+    // plain `RPCError` wrapper inside `reconstructError`.
+    throw reconstructError(response);
   }
 }
 
@@ -59,7 +64,7 @@ async function getRPCInstance(): Promise<RPCResult> {
   if (rpcInstance) return { rpc: await rpcInstance };
 
   const connectionStart = firstConnectionPending ? nowMs() : null;
-  rpcInstance = getRPC() as unknown as Promise<RPC>;
+  rpcInstance = getRPC();
   const rpc = await rpcInstance;
 
   if (connectionStart !== null && firstConnectionPending) {
@@ -119,7 +124,7 @@ async function sendBase<T extends Request>(
   logger.debug("RPC Client sending:", summarizeRequest(request));
   const payloadObj = signalDisable
     ? injectProfilingMetaIntoObject(
-        parsedRequest as Record<string, unknown>,
+        parsedRequest,
         createProfilingDisabledMeta(),
       )
     : parsedRequest;
@@ -158,7 +163,7 @@ async function sendProfiled<T extends Request>(
 
     const profilingMeta = createProfilingMeta(profileId, includeServer);
     const requestWithMeta = injectProfilingMetaIntoObject(
-      parsedRequest as Record<string, unknown>,
+      parsedRequest,
       profilingMeta,
     );
 
@@ -233,7 +238,7 @@ async function* streamBase<T extends Request>(
   logger.debug("RPC Client streaming:", summarizeRequest(request));
   const payloadObj = signalDisable
     ? injectProfilingMetaIntoObject(
-        parsedRequest as Record<string, unknown>,
+        parsedRequest,
         createProfilingDisabledMeta(),
       )
     : parsedRequest;
@@ -293,7 +298,7 @@ async function* streamProfiled<T extends Request>(
 
     const requestMeta = createProfilingMeta(profileId, includeServer);
     const requestWithMeta = injectProfilingMetaIntoObject(
-      parsedRequest as Record<string, unknown>,
+      parsedRequest,
       requestMeta,
     );
 
@@ -368,12 +373,12 @@ async function* streamProfiled<T extends Request>(
 }
 
 export interface DuplexWritable {
-  write(chunk: Buffer): void;
+  write(chunk: Uint8Array): void;
   end(): void;
   destroy(): void;
 }
 
-export interface DuplexReadable extends AsyncIterable<Buffer> {
+export interface DuplexReadable extends AsyncIterable<Buffer | string> {
   destroy(): void;
 }
 
@@ -404,7 +409,7 @@ async function duplexBase<T extends Request>(
 
   const payloadObj = signalDisable
     ? injectProfilingMetaIntoObject(
-        parsedRequest as Record<string, unknown>,
+        parsedRequest,
         createProfilingDisabledMeta(),
       )
     : parsedRequest;
@@ -412,7 +417,7 @@ async function duplexBase<T extends Request>(
   const sessionPromise = createDuplexSession(payload, getNextCommandId());
   const session = await withTimeout(sessionPromise, timeout);
   return {
-    requestStream: session.requestStream as DuplexWritable,
+    requestStream: session.requestStream,
     responseStream: session.responseStream as DuplexReadable,
   };
 }
@@ -437,7 +442,7 @@ async function duplexProfiled<T extends Request>(
 
     const requestMeta = createProfilingMeta(profileId, includeServer);
     const requestWithMeta = injectProfilingMetaIntoObject(
-      parsedRequest as Record<string, unknown>,
+      parsedRequest,
       requestMeta,
     );
 
@@ -463,7 +468,7 @@ async function duplexProfiled<T extends Request>(
 
   const rawReadable = session.responseStream as DuplexReadable;
 
-  async function* profiledResponseStream(): AsyncGenerator<Buffer> {
+  async function* profiledResponseStream(): AsyncGenerator<string> {
     let lineBuffer = "";
     try {
       for await (const chunk of rawReadable) {
@@ -504,13 +509,14 @@ async function duplexProfiled<T extends Request>(
 
         if (outputParts.length > 0) {
           timings.chunkCount += outputParts.length;
-          yield Buffer.from(outputParts.join("\n") + "\n");
+          // Yield strings (not Buffer) — RN/Hermes has no global `Buffer`; consumers call `.toString()` either way.
+          yield outputParts.join("\n") + "\n";
         }
       }
 
       if (lineBuffer.trim()) {
         timings.chunkCount++;
-        yield Buffer.from(lineBuffer + "\n");
+        yield lineBuffer + "\n";
       }
     } catch (error) {
       if (timings.requestEnd === undefined) {
@@ -542,7 +548,7 @@ async function duplexProfiled<T extends Request>(
   };
 
   return {
-    requestStream: session.requestStream as DuplexWritable,
+    requestStream: session.requestStream,
     responseStream: wrappedResponseStream,
   };
 }

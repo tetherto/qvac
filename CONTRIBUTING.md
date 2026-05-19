@@ -2,16 +2,21 @@
 
 We welcome contributions! Feel free to open a pull request, report bugs, or share ideas through issues and discussions.
 
+## API Reference Docs
+
+The SDK's public API summary (`content/docs/sdk/api/index.mdx`) is generated from TypeScript source by a pipeline under `docs/website/scripts/`. To regenerate it locally:
+
+```bash
+cd docs/website
+npm install
+npm run docs:generate-api -- 0.9.1 --latest  # writes content/docs/sdk/api/index.mdx
+```
+
+Full workflow, CLI flags, AI augmentation, determinism guarantees, and troubleshooting are documented in [docs/website/docs-workflow.md](docs/website/docs-workflow.md). `docs:generate-api` requires `bun` on PATH (listed as a devDependency of `docs/website`).
+
 ## PR Labels
 
-Labels that control CI workflows:
-
-- `verify` - Adding `verify` label to an open PR runs integration tests, benchmarks, model validation
-- `safe-to-test` - Security gate for external fork PRs
-- `staging` - Deploys to staging environment
--  Commenting`review` or `/review` within a PR - Triggers approval check
-- `tier1`, `tier2` - Approval groups
-- `nlp` - NLP-related changes
+CI behaviour is driven by PR labels. The `verified` label is the security gate that authorises every secret-bearing job to run on a PR — see [`docs/ci/LABELS.md`](docs/ci/LABELS.md) for the full reference (purpose, who can apply, behaviour on push), and [`docs/ci/TEAMS.md`](docs/ci/TEAMS.md) for the teams that can apply it.
 
 ## Changelog
 

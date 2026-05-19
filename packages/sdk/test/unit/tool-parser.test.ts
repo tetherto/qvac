@@ -1,9 +1,13 @@
 // @ts-expect-error brittle has no type declarations
 import test from "brittle";
 import type { Tool } from "@/schemas";
-import { parseToolCalls } from "@/server/utils/tool-parser";
-import { checkForToolEvents } from "@/server/utils/tool-integration";
-
+import {
+  parseToolCalls,
+  detectToolDialectFromName,
+} from "@/server/utils/tools";
+import { parseHarmonyFormat } from "@/server/utils/tools/parsers/harmony";
+import { parseQwen35Format } from "@/server/utils/tools/parsers/qwen35";
+import { parseGemma4NativeFormat } from "@/server/utils/tools/parsers/gemma4native";
 const weatherTool: Tool = {
   type: "function",
   name: "weather",
@@ -32,6 +36,35 @@ const skillsGetTool: Tool = {
 };
 
 const tools: Tool[] = [weatherTool, skillsGetTool];
+
+const getWeatherTool: Tool = {
+  type: "function",
+  name: "get_weather",
+  description: "Get current weather for a city",
+  parameters: {
+    type: "object",
+    properties: {
+      city: { type: "string" },
+      country: { type: "string" },
+    },
+    required: ["city"],
+  },
+};
+
+const getHoroscopeTool: Tool = {
+  type: "function",
+  name: "get_horoscope",
+  description: "Get today's horoscope for an astrological sign",
+  parameters: {
+    type: "object",
+    properties: {
+      sign: { type: "string" },
+    },
+    required: ["sign"],
+  },
+};
+
+const pythonicTools: Tool[] = [getWeatherTool, getHoroscopeTool];
 
 test("normal: tool_call outside think → parsed", (t) => {
   const text = `<think>
@@ -74,16 +107,6 @@ Let me call the weather tool.
   t.is(toolCalls.length, 0);
 });
 
-test("no think tags: single tool_call → parsed normally", (t) => {
-  const text = `<tool_call>
-{"name": "weather", "arguments": {"args": ["Paris"]}}
-</tool_call>`;
-
-  const { toolCalls } = parseToolCalls(text, tools);
-  t.is(toolCalls.length, 1);
-  t.alike(toolCalls[0]?.arguments.args, ["Paris"]);
-});
-
 test("two distinct tool calls outside think → both parsed", (t) => {
   const text = `<think>
 Planning two calls.
@@ -100,19 +123,6 @@ Planning two calls.
   t.is(toolCalls.length, 2);
   t.is(toolCalls[0]?.name, "skills_get");
   t.is(toolCalls[1]?.name, "weather");
-});
-
-test("empty think block → tool_call after it parsed", (t) => {
-  const text = `<think>
-</think>
-
-<tool_call>
-{"name": "weather", "arguments": {"args": ["Curitiba"], "timeoutMs": 3000}}
-</tool_call>`;
-
-  const { toolCalls } = parseToolCalls(text, tools);
-  t.is(toolCalls.length, 1);
-  t.is(toolCalls[0]?.name, "weather");
 });
 
 test("no tools provided → empty result", (t) => {
@@ -136,25 +146,962 @@ test("two same-name tools with different args → both parsed", (t) => {
   t.is(toolCalls.length, 2);
 });
 
-test("streaming: no events emitted while inside open <think> block", (t) => {
-  const accumulated = `<think>\n<tool_call>\n{"name": "weather", "arguments": {"args": ["Curitiba"]}}`;
-  const emitted = new Set<number>();
-  const events = checkForToolEvents(accumulated, "}", tools, emitted);
-  t.is(events.length, 0);
+test("matched-but-failed: malformed JSON inside Hermes frame surfaces PARSE_ERROR", (t) => {
+  const text = `<tool_call>
+{name: "weather", arguments: {args: ["Paris"]}}
+</tool_call>`;
+
+  const { toolCalls, errors } = parseToolCalls(text, tools);
+  t.is(toolCalls.length, 0);
+  t.is(errors.length, 1);
+  t.is(errors[0]?.code, "PARSE_ERROR");
 });
 
-test("streaming: events emitted after <think> is closed", (t) => {
-  const accumulated = `<think>\nreasoning\n</think>\n\n<tool_call>\n{"name": "weather", "arguments": {"args": ["Curitiba"]}}\n</tool_call>`;
-  const emitted = new Set<number>();
-  const events = checkForToolEvents(accumulated, "</tool_call>", tools, emitted);
-  t.is(events.length, 1);
-  t.is(events[0]?.call?.name, "weather");
+test("matched-but-failed: malformed Gemma tool_calls entry surfaces PARSE_ERROR", (t) => {
+  const text = JSON.stringify({
+    tool_calls: [
+      { arguments: { args: ["Paris"] } },
+      { name: "weather", arguments: { args: ["London"] } },
+    ],
+  });
+
+  const { toolCalls, errors } = parseToolCalls(text, tools);
+  t.is(toolCalls.length, 1);
+  t.is(toolCalls[0]?.name, "weather");
+  t.is(errors.length, 1);
+  t.is(errors[0]?.code, "PARSE_ERROR");
 });
 
-test("streaming: events emitted when no think tags present", (t) => {
-  const accumulated = `<tool_call>\n{"name": "weather", "arguments": {"args": ["London"]}}\n</tool_call>`;
-  const emitted = new Set<number>();
-  const events = checkForToolEvents(accumulated, "</tool_call>", tools, emitted);
-  t.is(events.length, 1);
-  t.is(events[0]?.call?.name, "weather");
+// Token-limit cutoff / abort / connection drop produces an open `<tool_call>`
+// with no close. parseHermesFormat now recovers the inner buffer directly
+// (the JSON / generic fallbacks downstream can't, because they JSON.parse the
+// whole text and the `<tool_call>` prefix makes that throw).
+test("incomplete Hermes frame: open without close recovers inner JSON", (t) => {
+  const text = `<tool_call>
+{"name": "weather", "arguments": {"args": ["Paris"]}}`;
+
+  const { toolCalls, errors } = parseToolCalls(text, tools);
+  t.is(toolCalls.length, 1);
+  t.is(toolCalls[0]?.name, "weather");
+  t.alike(toolCalls[0]?.arguments, { args: ["Paris"] });
+  t.is(errors.length, 0);
+});
+
+// Same path also handles a truncated close-marker tail like `</tool` from a
+// mid-token cutoff — strip the partial tag, then parse the inner JSON.
+test("incomplete Hermes frame: truncated close-marker tail still recovers", (t) => {
+  const text = `<tool_call>
+{"name": "weather", "arguments": {"args": ["Paris"]}}
+</tool`;
+
+  const { toolCalls, errors } = parseToolCalls(text, tools);
+  t.is(toolCalls.length, 1);
+  t.is(toolCalls[0]?.name, "weather");
+  t.is(errors.length, 0);
+});
+
+// Regression guard for the fix: fully-framed payload (open + close present)
+// with broken inner JSON must still surface as `matched: true` + PARSE_ERROR
+// — the open-without-close fall-through must NOT weaken the matched-but-
+// failed semantics for complete frames.
+test("matched-but-failed: complete Hermes frame with broken JSON keeps PARSE_ERROR", (t) => {
+  const text = `<tool_call>
+{"name": "weather", "arguments": {"args": ["Paris"],}}
+</tool_call>`;
+
+  const { toolCalls, errors } = parseToolCalls(text, tools);
+  t.is(toolCalls.length, 0);
+  t.is(errors.length, 1);
+  t.is(errors[0]?.code, "PARSE_ERROR");
+});
+
+test("detectToolDialectFromName: LFM names and paths → pythonic", (t) => {
+  const cases: Array<[string | undefined, string]> = [
+    [
+      "LFM_2_5_1_2B_INST_Q4_K_M",
+      "/Users/x/.qvac/models/abc_lfm-2.5-1.2b-instruct-Q4_K_M.gguf",
+    ],
+    [
+      undefined,
+      "/Users/x/.qvac/models/23238f141f948551_LFM2-1.2B-Tool-Q4_K_M.gguf",
+    ],
+    [undefined, "/cache/abc_lfm3-7b-tool.gguf"],
+    [undefined, "/cache/abc_LFM-4-Instruct.gguf"],
+  ];
+
+  for (const [name, path] of cases) {
+    t.is(detectToolDialectFromName(name, path), "pythonic");
+  }
+});
+
+// Single negative pin: with the explicit qwen|hermes|mistral allowlist gone,
+// every non-LFM model (Qwen, Hermes, Mistral, Llama tool-calling fine-tunes,
+// unknowns, empty paths) routes to "hermes" via the catch-all. The hermes
+// parser chain is the catch-all; it also covers unknown JSON-payload models.
+test("detectToolDialectFromName: non-LFM models default to hermes", (t) => {
+  const cases: Array<[string | undefined, string]> = [
+    [
+      "QWEN3_1_7B_INST_Q4",
+      "/Users/x/.qvac/models/abc_Qwen3-1.7B-Q4_K_M.gguf",
+    ],
+    [undefined, "/cache/foo_qwen3-1.7b.gguf"],
+    [
+      "Hermes-2-Pro-Mistral-7B",
+      "/Users/x/.qvac/models/abc_Hermes-2-Pro-Mistral-7B-Q4_K_M.gguf",
+    ],
+    [
+      "MISTRAL_7B_INSTRUCT",
+      "/Users/x/.qvac/models/abc_Mistral-7B-Instruct-v0.3-Q4_K_M.gguf",
+    ],
+    [undefined, "/cache/abc_Mistral-Nemo-Instruct-2407.gguf"],
+    // Llama tool-calling fine-tunes (mav23, nguyenthanhthuan, etc.)
+    // empirically emit OpenAI-style JSON, not pythonic, so they fall through
+    // the catch-all rather than being auto-routed to pythonic. Callers with
+    // a pythonic-emitting Llama variant should use `completion({ toolDialect:
+    // "pythonic" })` to opt in.
+    [
+      "LLAMA_TOOL_CALLING_1B_INST_Q4_K",
+      "/Users/x/.qvac/models/abc_llama_3.2_1b_intruct_tool_calling_v2.Q4_K.gguf",
+    ],
+    [
+      "LLAMA_3_2_1B_INST_Q4_0",
+      "/Users/x/.qvac/models/abc_Llama-3.2-1B-Instruct-Q4_0.gguf",
+    ],
+    [undefined, "/cache/abc_Llama-3.3-70B-Instruct-Tool-Calling.gguf"],
+    [undefined, ""],
+    ["", ""],
+    // Gemma 3 models (including 4B size variant) must not be detected as Gemma 4
+    [undefined, "/cache/abc_gemma3-Q4_K_M.gguf"],
+    ["GEMMA3_Q4", "/Users/x/.qvac/models/abc_gemma-3-4b-q4_k_m.gguf"],
+    // Qwen3 5B (5 billion params) must not be mistaken for Qwen3.5 (model version 3.5)
+    [undefined, "/cache/abc_Qwen3-5B-Instruct-Q4_K_M.gguf"],
+    ["QWEN3_5B_INST", "/Users/x/.qvac/models/abc_qwen3-5b-instruct.gguf"],
+    [undefined, "/cache/abc_Qwen3-50B-Instruct-Q4_K_M.gguf"],
+    ["QWEN3_50B_INST", "/Users/x/.qvac/models/abc_qwen3-50b-instruct.gguf"],
+    [undefined, "/cache/abc_Qwen3-60B-Instruct-Q4_K_M.gguf"],
+    ["QWEN3_60B_INST", "/Users/x/.qvac/models/abc_qwen3-60b-instruct.gguf"],
+    // gemma-40b contains 'gemma-4' as a substring but the trailing '0' (digit) blocks the gemma4 lookahead
+    [undefined, "/cache/abc_gemma-40b-Q4_K_M.gguf"],
+  ];
+
+  for (const [name, path] of cases) {
+    t.is(detectToolDialectFromName(name, path), "hermes");
+  }
+});
+
+// Regression: catch-all "hermes" dialect must still recover Gemma /
+// bare-llamacpp JSON with nested arguments via the chain's JSON fallbacks
+// (the generic regex alone stops at the first nested `}`).
+test("hermes (catch-all) recovers Gemma {tool_calls:[]} with nested arguments", (t) => {
+  const text = `{"tool_calls":[{"name":"weather","arguments":{"args":["Paris"]}}]}`;
+  const { toolCalls, errors } = parseToolCalls(text, tools, "hermes");
+  t.is(errors.length, 0);
+  t.is(toolCalls.length, 1);
+  t.is(toolCalls[0]?.name, "weather");
+  t.alike(toolCalls[0]?.arguments, { args: ["Paris"] });
+});
+
+test("hermes (catch-all) recovers bare llamacpp {name,arguments} with nested arguments", (t) => {
+  const text = `{"name":"weather","arguments":{"args":["Paris"]}}`;
+  const { toolCalls, errors } = parseToolCalls(text, tools, "hermes");
+  t.is(errors.length, 0);
+  t.is(toolCalls.length, 1);
+  t.is(toolCalls[0]?.name, "weather");
+  t.alike(toolCalls[0]?.arguments, { args: ["Paris"] });
+});
+
+test("json dialect recovers Gemma {tool_calls:[]} with nested arguments", (t) => {
+  const text = `{"tool_calls":[{"name":"weather","arguments":{"args":["Paris"]}}]}`;
+  const { toolCalls, errors } = parseToolCalls(text, tools, "json");
+  t.is(errors.length, 0);
+  t.is(toolCalls.length, 1);
+  t.is(toolCalls[0]?.name, "weather");
+  t.alike(toolCalls[0]?.arguments, { args: ["Paris"] });
+});
+
+test("json dialect recovers bare llamacpp {name,arguments} with nested arguments", (t) => {
+  const text = `{"name":"weather","arguments":{"args":["Paris"]}}`;
+  const { toolCalls, errors } = parseToolCalls(text, tools, "json");
+  t.is(errors.length, 0);
+  t.is(toolCalls.length, 1);
+  t.is(toolCalls[0]?.name, "weather");
+  t.alike(toolCalls[0]?.arguments, { args: ["Paris"] });
+});
+
+// Pins why the structured-JSON fallbacks are needed: the generic regex's
+// lazy `\}` matches the first nested `}` inside `arguments`.
+test("parseGenericFormat alone CANNOT recover nested arguments (chain ordering matters)", (t) => {
+  // Pythonic dialect skips JSON parsers, forcing the generic-only path.
+  const text = `{"name":"weather","arguments":{"args":["Paris"]}}`;
+  const { toolCalls } = parseToolCalls(text, tools, "pythonic");
+  t.is(
+    toolCalls.length,
+    0,
+    "generic regex fallback drops the outer brace on nested args",
+  );
+});
+
+// Real LFM2-Tool output shape — bare `[func(...), func(...)]` array.
+test("pythonic: bare LFM-style multi-call → 2 calls with correct names + args", (t) => {
+  const text = `[get_weather(city="Tokyo", country="JP"), get_horoscope(sign="Aquarius")]`;
+
+  const { toolCalls, errors } = parseToolCalls(text, pythonicTools);
+  t.is(errors.length, 0);
+  t.is(toolCalls.length, 2);
+  t.is(toolCalls[0]?.name, "get_weather");
+  t.alike(toolCalls[0]?.arguments, { city: "Tokyo", country: "JP" });
+  t.is(toolCalls[1]?.name, "get_horoscope");
+  t.alike(toolCalls[1]?.arguments, { sign: "Aquarius" });
+});
+
+test("pythonic: single-quoted strings supported", (t) => {
+  const text = `[get_weather(city='Paris', country='FR')]`;
+  const { toolCalls } = parseToolCalls(text, pythonicTools);
+  t.is(toolCalls.length, 1);
+  t.alike(toolCalls[0]?.arguments, { city: "Paris", country: "FR" });
+});
+
+test("pythonic: True/False/None coerce to true/false/null", (t) => {
+  const text = `[weather(args=[True, False, None])]`;
+  const { toolCalls, errors } = parseToolCalls(text, tools);
+  t.is(errors.length, 0);
+  t.is(toolCalls.length, 1);
+  t.alike(toolCalls[0]?.arguments.args, [true, false, null]);
+});
+
+test("pythonic: nested list and dict args preserved", (t) => {
+  const text = `[weather(args=[1, 2, [3, 4], {"a": 1, "b": "two"}])]`;
+  const { toolCalls, errors } = parseToolCalls(text, tools);
+  t.is(errors.length, 0);
+  t.is(toolCalls.length, 1);
+  t.alike(toolCalls[0]?.arguments.args, [1, 2, [3, 4], { a: 1, b: "two" }]);
+});
+
+test("pythonic: numeric args (negative, float, scientific)", (t) => {
+  const text = `[weather(args=[-1, 3.14, 1e3, -2.5e-2])]`;
+  const { toolCalls, errors } = parseToolCalls(text, tools);
+  t.is(errors.length, 0);
+  t.alike(toolCalls[0]?.arguments.args, [-1, 3.14, 1000, -0.025]);
+});
+
+test("pythonic: wrapped call forms supported", (t) => {
+  const cases = [
+    `<|tool_call_start|>[get_weather(city="Paris")]<|tool_call_end|>`,
+    `<|start_header_id|>tool_call<|end_header_id|>[get_weather(city="Paris")]<|eot_id|>`,
+  ];
+
+  for (const text of cases) {
+    const { toolCalls } = parseToolCalls(text, pythonicTools);
+    t.is(toolCalls.length, 1);
+    t.alike(toolCalls[0]?.arguments, { city: "Paris" });
+  }
+});
+
+test("pythonic: empty array → matched, no calls, no errors", (t) => {
+  const text = `[]`;
+  const { toolCalls, errors } = parseToolCalls(text, pythonicTools);
+  t.is(toolCalls.length, 0);
+  t.is(errors.length, 0);
+});
+
+test("pythonic: malformed (unclosed paren) → matched + PARSE_ERROR", (t) => {
+  const text = `[get_weather(city="Paris"]`;
+  const { toolCalls, errors } = parseToolCalls(text, pythonicTools);
+  t.is(toolCalls.length, 0);
+  t.is(errors.length, 1);
+  t.is(errors[0]?.code, "PARSE_ERROR");
+});
+
+test("pythonic: malformed (positional arg without =) → matched + PARSE_ERROR", (t) => {
+  const text = `[get_weather("Paris")]`;
+  const { toolCalls, errors } = parseToolCalls(text, pythonicTools);
+  t.is(toolCalls.length, 0);
+  t.is(errors.length, 1);
+  t.is(errors[0]?.code, "PARSE_ERROR");
+});
+
+test("pythonic: unknown tool → matched + UNKNOWN_TOOL error", (t) => {
+  const text = `[unknown_tool(x=1)]`;
+  const { toolCalls, errors } = parseToolCalls(text, pythonicTools);
+  t.is(toolCalls.length, 0);
+  t.is(errors.length, 1);
+  t.is(errors[0]?.code, "UNKNOWN_TOOL");
+});
+
+test("pythonic: no array shape in text → matched=false, falls through", (t) => {
+  const text = `Sorry, I can't help with that.`;
+  const { toolCalls, errors } = parseToolCalls(text, pythonicTools);
+  t.is(toolCalls.length, 0);
+  t.is(errors.length, 0);
+});
+
+test("pythonic: bare locator and forgiving string forms", (t) => {
+  const cases: Array<[string, string]> = [
+    [`[get_weather(city="Paris")]`, "Paris"],
+    [`Sure, let me check that.\n[get_weather(city="Paris")]`, "Paris"],
+    [`[get_weather(city="say \\"hi\\"")]`, 'say "hi"'],
+    [`[get_weather(city=Paris)]`, "Paris"],
+    [`[get_weather(city="Paris",)]`, "Paris"],
+  ];
+
+  for (const [text, city] of cases) {
+    const { toolCalls, errors } = parseToolCalls(text, pythonicTools);
+    t.is(errors.length, 0);
+    t.is(toolCalls.length, 1);
+    t.is(toolCalls[0]?.arguments.city, city);
+  }
+});
+
+// Some Llama tool-calling fine-tunes emit JSON answers instead of Pythonic;
+// the locator must not falsely match this shape.
+test("pythonic: does not eat top-level JSON tool-call shapes", (t) => {
+  const text = `{
+  "weather": "Partly cloudy",
+  "horoscope": "Today is a great day."
+}`;
+  const { toolCalls, errors } = parseToolCalls(text, pythonicTools);
+  t.is(toolCalls.length, 0);
+  t.is(errors.length, 0);
+});
+
+// Override semantics: parseToolCalls must respect the supplied dialect, not
+// re-detect from text shape. This pins the contract behind the public
+// `completion({ toolDialect })` override — given a dialect, the chain only
+// runs the parsers scoped to that dialect.
+test("parseToolCalls(dialect=pythonic): bare Pythonic parses, JSON shapes ignored", (t) => {
+  // Bare Pythonic — must parse via parsePythonicFormat.
+  const pythonicText = `[get_weather(city="Lima")]`;
+  const pythonicResult = parseToolCalls(pythonicText, pythonicTools, "pythonic");
+  t.is(pythonicResult.toolCalls.length, 1, "pythonic parses bare call");
+  t.is(pythonicResult.toolCalls[0]?.name, "get_weather");
+
+  // JSON tool-call shape — must NOT match in the pythonic chain (no JSON
+  // parsers are wired for "pythonic"), confirming dialect scoping is honoured.
+  const jsonText = `{"name":"get_weather","arguments":{"city":"Lima"}}`;
+  const jsonResult = parseToolCalls(jsonText, pythonicTools, "pythonic");
+  t.is(jsonResult.toolCalls.length, 0, "pythonic chain does not pick up JSON shape");
+});
+
+test("parseToolCalls(dialect=hermes): Hermes wrap and bare JSON both parse, Pythonic ignored", (t) => {
+  // Hermes-wrapped JSON.
+  const hermesText = `<tool_call>{"name":"get_weather","arguments":{"city":"Lima"}}</tool_call>`;
+  const hermesResult = parseToolCalls(hermesText, pythonicTools, "hermes");
+  t.is(hermesResult.toolCalls.length, 1, "hermes parses wrapped JSON");
+
+  // Bare JSON falls through to the JSON parsers in the hermes chain.
+  const jsonText = `{"name":"get_weather","arguments":{"city":"Lima"}}`;
+  const jsonResult = parseToolCalls(jsonText, pythonicTools, "hermes");
+  t.is(jsonResult.toolCalls.length, 1, "hermes chain recovers bare JSON via fallback");
+
+  // Pythonic-only payload — must NOT match in the hermes chain.
+  const pythonicText = `[get_weather(city="Lima")]`;
+  const pythonicResult = parseToolCalls(pythonicText, pythonicTools, "hermes");
+  t.is(pythonicResult.toolCalls.length, 0, "hermes chain does not pick up pythonic shape");
+});
+
+// Harmony dialect — GPT-OSS native tool-call frame format.
+test("parseToolCalls(dialect=harmony): single Harmony frame parses", (t) => {
+  const text = `<|channel|>commentary to=functions.get_weather <|constrain|>json<|message|>{"city":"Tokyo","country":"JP"}<|call|>`;
+  const { toolCalls, errors } = parseToolCalls(text, pythonicTools, "harmony");
+  t.is(errors.length, 0);
+  t.is(toolCalls.length, 1);
+  t.is(toolCalls[0]?.name, "get_weather");
+  t.alike(toolCalls[0]?.arguments, { city: "Tokyo", country: "JP" });
+});
+
+test("parseToolCalls(dialect=harmony): with surrounding analysis frame", (t) => {
+  const text =
+    `<|channel|>analysis<|message|>The user wants weather. I'll call get_weather.<|end|>` +
+    `<|channel|>commentary to=functions.get_weather <|constrain|>json<|message|>{"city":"Lima"}<|call|>`;
+  const { toolCalls, errors } = parseToolCalls(text, pythonicTools, "harmony");
+  t.is(errors.length, 0);
+  t.is(toolCalls.length, 1);
+  t.is(toolCalls[0]?.name, "get_weather");
+  t.alike(toolCalls[0]?.arguments, { city: "Lima" });
+});
+
+// `<|channel|>` alone (analysis/final frames) must not promote the parser
+// to `matched: true` — only `to=functions.` is uniquely Harmony.
+test("parseHarmonyFormat: <|channel|> alone (no to=functions.) returns matched: false", (t) => {
+  const text = `<|channel|>analysis<|message|>thinking only<|end|>`;
+  const result = parseHarmonyFormat(text, pythonicTools);
+  t.is(result.matched, false, "no to=functions. → matched=false");
+  t.is(result.toolCalls.length, 0);
+  t.is(result.errors.length, 0);
+});
+
+test("parseHarmonyFormat: to=functions. without <|channel|> still matches and parses", (t) => {
+  const text = `to=functions.get_weather <|constrain|>json<|message|>{"city":"Paris"}<|call|>`;
+  const result = parseHarmonyFormat(text, pythonicTools);
+  t.is(result.matched, true);
+  t.is(result.toolCalls.length, 1);
+  t.is(result.toolCalls[0]?.name, "get_weather");
+});
+
+test("parseToolCalls(default): analysis-only buffer falls through to fallbacks (no Harmony short-circuit)", (t) => {
+  const text = `<|channel|>analysis<|message|>I should think about this.<|end|>`;
+  const { toolCalls, errors } = parseToolCalls(text, pythonicTools);
+  t.is(toolCalls.length, 0);
+  t.is(errors.length, 0);
+});
+
+// `to=functions.X` without the full `<|constrain|>json<|message|>...<|call|>`
+// shape must fall through, not short-circuit the chain.
+test("parseHarmonyFormat: to=functions. without complete frame returns matched: false", (t) => {
+  const text = `Some preamble mentioning to=functions.get_weather without the constrain marker.`;
+  const result = parseHarmonyFormat(text, pythonicTools);
+  t.is(result.matched, false, "no extracted frames → matched=false");
+  t.is(result.toolCalls.length, 0);
+  t.is(result.errors.length, 0);
+});
+
+// Hyphenated names are valid per OpenAI's `[a-zA-Z0-9_-]{1,64}` and pass
+// the SDK's `name: z.string()` schema — must not silently drop.
+test("parseHarmonyFormat: hyphenated function names parse", (t) => {
+  const hyphenTool: Tool = {
+    type: "function",
+    name: "get-weather",
+    description: "Get current weather",
+    parameters: {
+      type: "object",
+      properties: { city: { type: "string" } },
+      required: ["city"],
+    },
+  };
+  const text = `<|channel|>commentary to=functions.get-weather <|constrain|>json<|message|>{"city":"Tokyo"}<|call|>`;
+  const result = parseHarmonyFormat(text, [hyphenTool]);
+  t.is(result.matched, true);
+  t.is(result.toolCalls.length, 1);
+  t.is(result.toolCalls[0]?.name, "get-weather");
+  t.alike(result.toolCalls[0]?.arguments, { city: "Tokyo" });
+  t.is(result.errors.length, 0);
+});
+
+// Complete frame whose payload fails JSON.parse: matched=true (the parser
+// recognised its format) but the call surfaces as a PARSE_ERROR rather than
+// a silently dropped frame.
+test("parseHarmonyFormat: complete frame with malformed JSON surfaces PARSE_ERROR", (t) => {
+  const text = `<|channel|>commentary to=functions.get_weather <|constrain|>json<|message|>{"city":"Tokyo",}<|call|>`;
+  const result = parseHarmonyFormat(text, pythonicTools);
+  t.is(result.matched, true);
+  t.is(result.toolCalls.length, 0);
+  t.is(result.errors.length, 1);
+  t.is(result.errors[0]?.code, "PARSE_ERROR");
+});
+
+test("parseToolCalls(default): Harmony frame in default chain still parses", (t) => {
+  // Default chain (with parseHarmonyFormat first) must still pick up Harmony
+  // frames so unrouted models that emit them are recovered.
+  const text = `<|channel|>commentary to=functions.get_weather <|constrain|>json<|message|>{"city":"Paris"}<|call|>`;
+  const { toolCalls } = parseToolCalls(text, pythonicTools);
+  t.is(toolCalls.length, 1);
+  t.is(toolCalls[0]?.name, "get_weather");
+  t.alike(toolCalls[0]?.arguments, { city: "Paris" });
+});
+
+test("detectToolDialectFromName: GPT-OSS variants → harmony", (t) => {
+  const cases: Array<[string | undefined, string]> = [
+    ["gpt-oss-20b", "/cache/gpt-oss-20b-Q4_K_M.gguf"],
+    [
+      "GPT_OSS_120B_INST_Q4_K_M",
+      "/Users/x/.qvac/models/abc_gpt-oss-120b-Q4_K_M.gguf",
+    ],
+    [undefined, "/cache/abc_gpt_oss_20b_q4.gguf"],
+    [undefined, "/cache/abc_gpt-oss-20b.gguf"],
+    ["GPTOSS-20B", "/cache/gptoss-20b.gguf"],
+  ];
+
+  for (const [name, path] of cases) {
+    t.is(detectToolDialectFromName(name, path), "harmony", `name=${name} path=${path}`);
+  }
+});
+
+test("detectToolDialectFromName: Qwen3.5 variants → qwen35", (t) => {
+  const cases: Array<[string | undefined, string]> = [
+    [undefined, "/cache/abc_Qwen3.5-7B-Instruct-Q4_K_M.gguf"],
+    ["QWEN3_5_7B_INST_Q4", "/Users/x/.qvac/models/abc_qwen3.5-7b-instruct.gguf"],
+    [undefined, "/cache/abc_qwen3-5-7b.gguf"],
+    // Qwen3.6 shares the same Pythonic-XML tool-call format as Qwen3.5
+    [undefined, "/cache/abc_Qwen3.6-7B-Instruct-Q4_K_M.gguf"],
+    ["QWEN3_6_7B_INST", "/Users/x/.qvac/models/abc_qwen3.6-7b-instruct.gguf"],
+  ];
+
+  for (const [name, path] of cases) {
+    t.is(detectToolDialectFromName(name, path), "qwen35", `name=${name} path=${path}`);
+  }
+});
+
+test("detectToolDialectFromName: Gemma 4 variants → gemma4", (t) => {
+  const cases: Array<[string | undefined, string]> = [
+    [undefined, "/cache/abc_gemma4-9b-it-Q4_K_M.gguf"],
+    ["GEMMA4_27B_IT_Q4", "/Users/x/.qvac/models/abc_gemma-4-27b-it.gguf"],
+    [undefined, "/cache/abc_gemma4-27b.gguf"],
+  ];
+
+  for (const [name, path] of cases) {
+    t.is(detectToolDialectFromName(name, path), "gemma4", `name=${name} path=${path}`);
+  }
+});
+
+test("parseQwen35Format: single function call with parameters", (t) => {
+  const text = `<tool_call>
+<function=get_weather>
+<parameter=city>Paris</parameter>
+<parameter=unit>celsius</parameter>
+</function>
+</tool_call>`;
+  const result = parseQwen35Format(text, pythonicTools);
+  t.is(result.matched, true);
+  t.is(result.toolCalls.length, 1);
+  t.is(result.toolCalls[0]?.name, "get_weather");
+  t.alike(result.toolCalls[0]?.arguments, { city: "Paris", unit: "celsius" });
+  t.is(result.errors.length, 0);
+});
+
+test("parseQwen35Format: no tool_call markers → matched=false", (t) => {
+  const result = parseQwen35Format("No tool call here.", pythonicTools);
+  t.is(result.matched, false);
+  t.is(result.toolCalls.length, 0);
+});
+
+test("parseQwen35Format: missing function tag → PARSE_ERROR", (t) => {
+  const text = `<tool_call>some plain content</tool_call>`;
+  const result = parseQwen35Format(text, pythonicTools);
+  t.is(result.matched, true);
+  t.is(result.toolCalls.length, 0);
+  t.is(result.errors.length, 1);
+  t.is(result.errors[0]?.code, "PARSE_ERROR");
+});
+
+test("parseToolCalls(dialect=qwen35): parses Qwen3.5 XML format", (t) => {
+  const text = `<tool_call><function=get_weather><parameter=city>Tokyo</parameter></function></tool_call>`;
+  const { toolCalls, errors } = parseToolCalls(text, pythonicTools, "qwen35");
+  t.is(errors.length, 0);
+  t.is(toolCalls.length, 1);
+  t.is(toolCalls[0]?.name, "get_weather");
+  t.alike(toolCalls[0]?.arguments, { city: "Tokyo" });
+});
+
+test("parseGemma4NativeFormat: single call with string values", (t) => {
+  const text = `<|tool_call>call:get_weather{city:<|"|>Paris<|"|>,country:<|"|>FR<|"|>}<tool_call|>`;
+  const result = parseGemma4NativeFormat(text, pythonicTools);
+  t.is(result.matched, true);
+  t.is(result.toolCalls.length, 1);
+  t.is(result.toolCalls[0]?.name, "get_weather");
+  t.alike(result.toolCalls[0]?.arguments, { city: "Paris", country: "FR" });
+  t.is(result.errors.length, 0);
+});
+
+test("parseGemma4NativeFormat: no open marker → matched=false", (t) => {
+  const result = parseGemma4NativeFormat("No gemma call here.", pythonicTools);
+  t.is(result.matched, false);
+  t.is(result.toolCalls.length, 0);
+});
+
+test("parseGemma4NativeFormat: multiline string value is parsed correctly", (t) => {
+  const text = `<|tool_call>call:get_weather{city:<|"|>line1\nline2<|"|>}<tool_call|>`;
+  const result = parseGemma4NativeFormat(text, pythonicTools);
+  t.is(result.matched, true);
+  t.is(result.errors.length, 0);
+  t.is(result.toolCalls.length, 1);
+  t.is(result.toolCalls[0]?.arguments?.city, "line1\nline2");
+});
+
+test("parseToolCalls(dialect=gemma4): parses Gemma4 native format", (t) => {
+  const text = `<|tool_call>call:get_weather{city:<|"|>Berlin<|"|>}<tool_call|>`;
+  const { toolCalls, errors } = parseToolCalls(text, pythonicTools, "gemma4");
+  t.is(errors.length, 0);
+  t.is(toolCalls.length, 1);
+  t.is(toolCalls[0]?.name, "get_weather");
+  t.alike(toolCalls[0]?.arguments, { city: "Berlin" });
+});
+
+// --- qwen35 coercion and error-surface tests ---
+
+test("parseQwen35Format: integer param is coerced to number", (t) => {
+  const typedTool: Tool = {
+    type: "function",
+    name: "typed",
+    description: "typed",
+    parameters: {
+      type: "object",
+      properties: { count: { type: "integer" }, label: { type: "string" } },
+      required: ["count"],
+    },
+  };
+  const text = `<tool_call><function=typed><parameter=count>42</parameter><parameter=label>hello</parameter></function></tool_call>`;
+  const result = parseQwen35Format(text, [typedTool]);
+  t.is(result.matched, true);
+  t.is(result.errors.length, 0);
+  t.is(result.toolCalls.length, 1);
+  t.is(result.toolCalls[0]?.arguments?.count, 42);
+  t.is(result.toolCalls[0]?.arguments?.label, "hello");
+});
+
+test("parseQwen35Format: boolean param 'true' coerces to true", (t) => {
+  const typedTool: Tool = {
+    type: "function",
+    name: "typed",
+    description: "typed",
+    parameters: {
+      type: "object",
+      properties: { count: { type: "integer" }, flag: { type: "boolean" } },
+      required: ["count"],
+    },
+  };
+  const text = `<tool_call><function=typed><parameter=count>1</parameter><parameter=flag>true</parameter></function></tool_call>`;
+  const result = parseQwen35Format(text, [typedTool]);
+  t.is(result.matched, true);
+  t.is(result.errors.length, 0);
+  t.is(result.toolCalls[0]?.arguments?.flag, true);
+});
+
+test("parseQwen35Format: boolean param 'false' coerces to false", (t) => {
+  const typedTool: Tool = {
+    type: "function",
+    name: "typed",
+    description: "typed",
+    parameters: {
+      type: "object",
+      properties: { count: { type: "integer" }, flag: { type: "boolean" } },
+      required: ["count"],
+    },
+  };
+  const text = `<tool_call><function=typed><parameter=count>1</parameter><parameter=flag>false</parameter></function></tool_call>`;
+  const result = parseQwen35Format(text, [typedTool]);
+  t.is(result.matched, true);
+  t.is(result.errors.length, 0);
+  t.is(result.toolCalls[0]?.arguments?.flag, false);
+});
+
+test("parseQwen35Format: boolean param 'True' (uppercase) surfaces PARSE_ERROR", (t) => {
+  const typedTool: Tool = {
+    type: "function",
+    name: "typed",
+    description: "typed",
+    parameters: {
+      type: "object",
+      properties: { count: { type: "integer" }, flag: { type: "boolean" } },
+      required: ["count"],
+    },
+  };
+  const text = `<tool_call><function=typed><parameter=count>1</parameter><parameter=flag>True</parameter></function></tool_call>`;
+  const result = parseQwen35Format(text, [typedTool]);
+  t.is(result.matched, true);
+  t.is(result.toolCalls.length, 0);
+  t.is(result.errors.length, 1);
+  t.is(result.errors[0]?.code, "PARSE_ERROR");
+});
+
+test("parseQwen35Format: integer param 'not-a-number' surfaces PARSE_ERROR", (t) => {
+  const typedTool: Tool = {
+    type: "function",
+    name: "typed",
+    description: "typed",
+    parameters: {
+      type: "object",
+      properties: { count: { type: "integer" } },
+      required: ["count"],
+    },
+  };
+  const text = `<tool_call><function=typed><parameter=count>not-a-number</parameter></function></tool_call>`;
+  const result = parseQwen35Format(text, [typedTool]);
+  t.is(result.matched, true);
+  t.is(result.toolCalls.length, 0);
+  t.is(result.errors.length, 1);
+  t.is(result.errors[0]?.code, "PARSE_ERROR");
+});
+
+test("parseQwen35Format: integer param '1.5' (non-integer) surfaces PARSE_ERROR", (t) => {
+  const typedTool: Tool = {
+    type: "function",
+    name: "typed",
+    description: "typed",
+    parameters: {
+      type: "object",
+      properties: { count: { type: "integer" } },
+      required: ["count"],
+    },
+  };
+  const text = `<tool_call><function=typed><parameter=count>1.5</parameter></function></tool_call>`;
+  const result = parseQwen35Format(text, [typedTool]);
+  t.is(result.matched, true);
+  t.is(result.toolCalls.length, 0);
+  t.is(result.errors.length, 1);
+  t.is(result.errors[0]?.code, "PARSE_ERROR");
+});
+
+test("parseQwen35Format: malformed array param surfaces PARSE_ERROR (no raw-string fallback)", (t) => {
+  const typedTool: Tool = {
+    type: "function",
+    name: "typed",
+    description: "typed",
+    parameters: {
+      type: "object",
+      properties: { count: { type: "integer" }, tags: { type: "array" } },
+      required: ["count"],
+    },
+  };
+  const text = `<tool_call><function=typed><parameter=count>1</parameter><parameter=tags>[1,2</parameter></function></tool_call>`;
+  const result = parseQwen35Format(text, [typedTool]);
+  t.is(result.matched, true);
+  t.is(result.toolCalls.length, 0);
+  t.is(result.errors.length, 1);
+  t.is(result.errors[0]?.code, "PARSE_ERROR");
+});
+
+test("parseQwen35Format: malformed object param surfaces PARSE_ERROR (no raw-string fallback)", (t) => {
+  const typedTool: Tool = {
+    type: "function",
+    name: "typed",
+    description: "typed",
+    parameters: {
+      type: "object",
+      properties: { count: { type: "integer" }, meta: { type: "object" } },
+      required: ["count"],
+    },
+  };
+  const text = `<tool_call><function=typed><parameter=count>1</parameter><parameter=meta>{bad json</parameter></function></tool_call>`;
+  const result = parseQwen35Format(text, [typedTool]);
+  t.is(result.matched, true);
+  t.is(result.toolCalls.length, 0);
+  t.is(result.errors.length, 1);
+  t.is(result.errors[0]?.code, "PARSE_ERROR");
+});
+
+test("parseQwen35Format: array param is parsed from JSON", (t) => {
+  const typedTool: Tool = {
+    type: "function",
+    name: "typed",
+    description: "typed",
+    parameters: {
+      type: "object",
+      properties: { count: { type: "integer" }, tags: { type: "array" } },
+      required: ["count"],
+    },
+  };
+  const text = `<tool_call><function=typed><parameter=count>1</parameter><parameter=tags>["a","b","c"]</parameter></function></tool_call>`;
+  const result = parseQwen35Format(text, [typedTool]);
+  t.is(result.matched, true);
+  t.is(result.errors.length, 0);
+  t.alike(result.toolCalls[0]?.arguments?.tags, ["a", "b", "c"]);
+});
+
+test("parseQwen35Format: multiple tool calls are all parsed", (t) => {
+  const text = `<tool_call><function=get_weather><parameter=city>Paris</parameter></function></tool_call>
+<tool_call><function=get_horoscope><parameter=sign>Aries</parameter></function></tool_call>`;
+  const result = parseQwen35Format(text, pythonicTools);
+  t.is(result.matched, true);
+  t.is(result.errors.length, 0);
+  t.is(result.toolCalls.length, 2);
+  t.is(result.toolCalls[0]?.name, "get_weather");
+  t.is(result.toolCalls[1]?.name, "get_horoscope");
+});
+
+test("parseQwen35Format: unknown tool name surfaces UNKNOWN_TOOL", (t) => {
+  const text = `<tool_call><function=unknown_fn><parameter=x>1</parameter></function></tool_call>`;
+  const result = parseQwen35Format(text, pythonicTools);
+  t.is(result.matched, true);
+  t.is(result.toolCalls.length, 0);
+  t.is(result.errors.length, 1);
+  t.is(result.errors[0]?.code, "UNKNOWN_TOOL");
+});
+
+test("parseQwen35Format: missing required param surfaces VALIDATION_ERROR", (t) => {
+  const text = `<tool_call><function=get_weather><parameter=country>FR</parameter></function></tool_call>`;
+  const result = parseQwen35Format(text, pythonicTools);
+  t.is(result.matched, true);
+  t.is(result.toolCalls.length, 0);
+  t.is(result.errors.length, 1);
+  t.is(result.errors[0]?.code, "VALIDATION_ERROR");
+});
+
+test("parseToolCalls(dialect=qwen35): JSON inside tool_call falls through to hermes parser", (t) => {
+  const text = `<tool_call>
+{"name": "get_weather", "arguments": {"city": "Seoul"}}
+</tool_call>`;
+  const { toolCalls, errors } = parseToolCalls(text, pythonicTools, "qwen35");
+  t.is(errors.length, 0);
+  t.is(toolCalls.length, 1);
+  t.is(toolCalls[0]?.name, "get_weather");
+  t.alike(toolCalls[0]?.arguments, { city: "Seoul" });
+});
+
+// --- gemma4 structural and error-surface tests ---
+
+test("parseGemma4NativeFormat: bare numeric arg is parsed as number", (t) => {
+  const numTool: Tool = {
+    type: "function",
+    name: "typed",
+    description: "typed",
+    parameters: { type: "object", properties: { count: { type: "integer" } }, required: ["count"] },
+  };
+  const text = `<|tool_call>call:typed{count:7}<tool_call|>`;
+  const result = parseGemma4NativeFormat(text, [numTool]);
+  t.is(result.matched, true);
+  t.is(result.errors.length, 0);
+  t.is(result.toolCalls[0]?.arguments?.count, 7);
+});
+
+test("parseGemma4NativeFormat: bare boolean arg is parsed as boolean", (t) => {
+  const boolTool: Tool = {
+    type: "function",
+    name: "toggle",
+    description: "toggle",
+    parameters: { type: "object", properties: { enabled: { type: "boolean" } }, required: ["enabled"] },
+  };
+  const text = `<|tool_call>call:toggle{enabled:true}<tool_call|>`;
+  const result = parseGemma4NativeFormat(text, [boolTool]);
+  t.is(result.matched, true);
+  t.is(result.errors.length, 0);
+  t.is(result.toolCalls[0]?.arguments?.enabled, true);
+});
+
+test("parseGemma4NativeFormat: nested object arg is parsed correctly", (t) => {
+  const searchTool: Tool = {
+    type: "function",
+    name: "search",
+    description: "search",
+    parameters: {
+      type: "object",
+      properties: { query: { type: "string" }, filters: { type: "object" } },
+      required: ["query"],
+    },
+  };
+  const text = `<|tool_call>call:search{query:<|"|>test<|"|>,filters:{active:true,limit:10}}<tool_call|>`;
+  const result = parseGemma4NativeFormat(text, [searchTool]);
+  t.is(result.matched, true);
+  t.is(result.errors.length, 0);
+  t.alike(result.toolCalls[0]?.arguments?.filters, { active: true, limit: 10 });
+  t.is(result.toolCalls[0]?.arguments?.query, "test");
+});
+
+test("parseGemma4NativeFormat: nested array arg is parsed correctly", (t) => {
+  const arrayTool: Tool = {
+    type: "function",
+    name: "get_weather",
+    description: "weather",
+    parameters: {
+      type: "object",
+      properties: { city: { type: "string" }, ids: { type: "array" } },
+      required: ["city"],
+    },
+  };
+  const text = `<|tool_call>call:get_weather{city:<|"|>Paris<|"|>,ids:[1,2,3]}<tool_call|>`;
+  const result = parseGemma4NativeFormat(text, [arrayTool]);
+  t.is(result.matched, true);
+  t.is(result.errors.length, 0);
+  t.alike(result.toolCalls[0]?.arguments?.ids, [1, 2, 3]);
+});
+
+test("parseGemma4NativeFormat: tab char in string value round-trips correctly", (t) => {
+  const text = `<|tool_call>call:get_weather{city:<|"|>col1\tcol2<|"|>}<tool_call|>`;
+  const result = parseGemma4NativeFormat(text, pythonicTools);
+  t.is(result.matched, true);
+  t.is(result.errors.length, 0);
+  t.is(result.toolCalls[0]?.arguments?.city, "col1\tcol2");
+});
+
+test("parseGemma4NativeFormat: CR char in string value round-trips correctly", (t) => {
+  const text = `<|tool_call>call:get_weather{city:<|"|>line1\rline2<|"|>}<tool_call|>`;
+  const result = parseGemma4NativeFormat(text, pythonicTools);
+  t.is(result.matched, true);
+  t.is(result.errors.length, 0);
+  t.is(result.toolCalls[0]?.arguments?.city, "line1\rline2");
+});
+
+test("parseGemma4NativeFormat: multiple tool calls are all parsed", (t) => {
+  const text = `<|tool_call>call:get_weather{city:<|"|>London<|"|>}<tool_call|>
+<|tool_call>call:get_horoscope{sign:<|"|>Leo<|"|>}<tool_call|>`;
+  const result = parseGemma4NativeFormat(text, pythonicTools);
+  t.is(result.matched, true);
+  t.is(result.errors.length, 0);
+  t.is(result.toolCalls.length, 2);
+  t.is(result.toolCalls[0]?.name, "get_weather");
+  t.is(result.toolCalls[1]?.name, "get_horoscope");
+});
+
+test("parseGemma4NativeFormat: unknown tool name surfaces UNKNOWN_TOOL", (t) => {
+  const text = `<|tool_call>call:unknown_fn{x:<|"|>y<|"|>}<tool_call|>`;
+  const result = parseGemma4NativeFormat(text, pythonicTools);
+  t.is(result.matched, true);
+  t.is(result.toolCalls.length, 0);
+  t.is(result.errors.length, 1);
+  t.is(result.errors[0]?.code, "UNKNOWN_TOOL");
+});
+
+test("parseGemma4NativeFormat: malformed args (trailing comma) surface PARSE_ERROR", (t) => {
+  const text = `<|tool_call>call:get_weather{city:<|"|>Paris<|"|>,}<tool_call|>`;
+  const result = parseGemma4NativeFormat(text, pythonicTools);
+  t.is(result.matched, true);
+  t.is(result.toolCalls.length, 0);
+  t.is(result.errors.length, 1);
+  t.is(result.errors[0]?.code, "PARSE_ERROR");
+});
+
+test("parseQwen35Format: empty integer param surfaces PARSE_ERROR (not 0)", (t) => {
+  const typedTool: Tool = {
+    type: "function",
+    name: "typed",
+    description: "typed",
+    parameters: {
+      type: "object",
+      properties: { count: { type: "integer" } },
+      required: ["count"],
+    },
+  };
+  const text = `<tool_call><function=typed><parameter=count></parameter></function></tool_call>`;
+  const result = parseQwen35Format(text, [typedTool]);
+  t.is(result.matched, true);
+  t.is(result.toolCalls.length, 0);
+  t.is(result.errors.length, 1);
+  t.is(result.errors[0]?.code, "PARSE_ERROR");
+});
+
+test("parseQwen35Format: whitespace-only number param surfaces PARSE_ERROR (not 0)", (t) => {
+  const typedTool: Tool = {
+    type: "function",
+    name: "typed",
+    description: "typed",
+    parameters: {
+      type: "object",
+      properties: { score: { type: "number" } },
+      required: ["score"],
+    },
+  };
+  const text = `<tool_call><function=typed><parameter=score>   </parameter></function></tool_call>`;
+  const result = parseQwen35Format(text, [typedTool]);
+  t.is(result.matched, true);
+  t.is(result.toolCalls.length, 0);
+  t.is(result.errors.length, 1);
+  t.is(result.errors[0]?.code, "PARSE_ERROR");
+});
+
+test("parseGemma4NativeFormat: hyphenated tool name parses correctly", (t) => {
+  const hyphenTool: Tool = {
+    type: "function",
+    name: "get-weather",
+    description: "Get current weather",
+    parameters: {
+      type: "object",
+      properties: { city: { type: "string" } },
+      required: ["city"],
+    },
+  };
+  const text = `<|tool_call>call:get-weather{city:<|"|>Tokyo<|"|>}<tool_call|>`;
+  const result = parseGemma4NativeFormat(text, [hyphenTool]);
+  t.is(result.matched, true);
+  t.is(result.errors.length, 0);
+  t.is(result.toolCalls.length, 1);
+  t.is(result.toolCalls[0]?.name, "get-weather");
+  t.alike(result.toolCalls[0]?.arguments, { city: "Tokyo" });
+});
+
+test("parseToolCalls(default): Qwen3.5 XML format is recovered without explicit dialect", (t) => {
+  const text = `<tool_call><function=get_weather><parameter=city>Berlin</parameter></function></tool_call>`;
+  const { toolCalls, errors } = parseToolCalls(text, pythonicTools);
+  t.is(errors.length, 0);
+  t.is(toolCalls.length, 1);
+  t.is(toolCalls[0]?.name, "get_weather");
+  t.alike(toolCalls[0]?.arguments, { city: "Berlin" });
 });

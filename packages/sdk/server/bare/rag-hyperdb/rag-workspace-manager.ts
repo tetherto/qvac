@@ -14,6 +14,10 @@ import {
   RAG_NAMESPACE,
 } from "@/logging";
 import { cancelAllRagOperations } from "@/server/bare/rag-hyperdb/rag-operation-manager";
+import {
+  registerCorestore,
+  unregisterCorestore,
+} from "@/server/bare/runtime-lifecycle";
 
 const logger = getServerLogger();
 
@@ -64,6 +68,11 @@ async function getOrCreateWorkspaceEntry(workspace?: string) {
   });
 
   await dbAdapter.ready();
+
+  registerCorestore(corestore, {
+    label: `rag-workspace:${key}`,
+    createdAt: Date.now(),
+  });
 
   const entry: RagWorkspaceEntry = {
     corestore,
@@ -122,6 +131,7 @@ export async function closeRagInstance(workspace?: string) {
   }
   await entry.dbAdapter.close();
   await entry.corestore.close();
+  unregisterCorestore(entry.corestore);
   ragWorkspaces.delete(key);
 }
 
@@ -141,6 +151,7 @@ export async function closeAllRagInstances() {
         }
         await entry.dbAdapter.close();
         await entry.corestore.close();
+        unregisterCorestore(entry.corestore);
         ragWorkspaces.delete(key);
       },
     );

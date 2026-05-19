@@ -15,12 +15,51 @@ import {
 } from "@/server/bare/registry/logging-stream-registry";
 import { clearAllAddonLoggers, getServerLogger, SDK_LOG_ID } from "@/logging";
 import { clearPlugins } from "@/server/plugins";
+import {
+  acquireWorkerLock,
+  releaseWorkerLock,
+} from "@/server/utils/worker-lock";
 
 let coreInitialized = false;
 let rpcInitialized = false;
+// Set true when the cleanup body has run at least once. Lets both
+// cleanupForTerminate (pre-terminate path) and shutdownBareDirectWorker
+// (signal/exit path) call runCleanup() without doing duplicate work.
+let cleanupRan = false;
+// Set true when shutdownBareDirectWorker is in flight. Distinct from
+// cleanupRan: cleanupForTerminate must NOT set this, otherwise a later
+// SIGTERM/SIGINT/uncaught-exception would early-return at the guard
+// in shutdownBareDirectWorker and skip releaseWorkerLock + process.exit.
 let isShuttingDown = false;
 
 const logger = getServerLogger();
+
+// Defense-in-depth grace period for the SIGKILL safety net armed before
+// process.exit() in shutdownBareDirectWorker. If process.exit cannot
+// terminate the worker within this window — typically because some path
+// holds a non-cancellable native handle (e.g. a libuv worker thread
+// blocked on flock; see QVAC-18197) — we force-kill the OS process to
+// guarantee bounded shutdown time.
+const FORCE_EXIT_GRACE_MS = 3_000;
+
+function scheduleForceExit(): void {
+  const timer: unknown = setTimeout(() => {
+    logger.error(
+      `process.exit did not terminate the worker within ${FORCE_EXIT_GRACE_MS}ms — ` +
+        `force-killing self (likely blocked native handle)`,
+    );
+    try {
+      process.kill(process.pid, "SIGKILL");
+    } catch {
+      // best-effort — if SIGKILL itself fails, there's nothing more to do
+    }
+  }, FORCE_EXIT_GRACE_MS);
+  // Don't let the safety-net timer keep the process alive on the happy
+  // path. Bare returns an object (not a number) from setTimeout.
+  if (timer && typeof timer === "object" && "unref" in timer) {
+    (timer as { unref: () => void }).unref();
+  }
+}
 
 export function initializeWorkerCore(): { hasRPCConfig: boolean } {
   if (coreInitialized) {
@@ -32,6 +71,7 @@ export function initializeWorkerCore(): { hasRPCConfig: boolean } {
 
   const { hasRPCConfig } = initEnv();
 
+  acquireWorkerLock();
   setupShutdownHandlers();
 
   coreInitialized = true;
@@ -57,7 +97,9 @@ export function ensureRPCSetup() {
       logger.info(
         `Running in desktop mode, connecting to IPC socket: ${ipcSocketPath}`,
       );
-      const rpc = createIPCClient(ipcSocketPath);
+      const rpc = createIPCClient(ipcSocketPath, {
+        onDisconnect: () => void shutdownBareDirectWorker("ipc-disconnect"),
+      });
       logger.debug("Desktop IPC client created?", !!rpc);
     } else {
       logger.info("Running in BareKit IPC mode");
@@ -82,7 +124,67 @@ function clearRegistries() {
   clearPlugins();
 }
 
-export type BareDirectShutdownReason = "signal" | "rpc-close";
+export type BareDirectShutdownReason =
+  | "signal"
+  | "rpc-close"
+  | "uncaught-exception"
+  | "unhandled-rejection"
+  | "ipc-disconnect";
+
+/**
+ * Run the cleanup body shared by terminal and graceful-shutdown paths.
+ * Clears plugin registries (which calls each addon's `releaseLogger` →
+ * frees env-bound js_ref_t state), unloads all loaded models (which calls
+ * each addon's `destroyInstance`), and closes infra (swarm, rag, downloads,
+ * registry client). Does NOT touch the worker lock or call `process.exit`.
+ *
+ * Idempotent: subsequent calls are no-ops via the `cleanupRan` flag. The
+ * underlying clearPlugins / unloadAllModels / closers are also idempotent
+ * on empty registries, but the flag avoids the redundant log noise and
+ * allocator churn.
+ */
+async function runCleanup(): Promise<void> {
+  if (cleanupRan) return;
+  cleanupRan = true;
+  clearRegistries();
+  await Promise.allSettled([
+    destroySwarm(),
+    closeAllRagInstances(),
+    cleanupDownloads(),
+    unloadAllModels(),
+    closeRegistryClient(),
+  ]);
+}
+
+/**
+ * Pre-terminate cleanup, callable while the worker is still alive.
+ *
+ * On platforms where the worker lives in the same OS process as the JS host
+ * (i.e. mobile via react-native-bare-kit Worklet), `process.exit()` would
+ * kill the entire app. This path runs the same registry/model cleanup as
+ * `shutdownBareDirectWorker` but skips the lock release + exit, leaving the
+ * caller (typically the SDK client about to call `worklet.terminate()`)
+ * responsible for tearing the worker down.
+ *
+ * Critical for clean termination: addons hold static state with js_ref_t
+ * handles into the current V8 isolate; without this cleanup, those refs
+ * survive into the next worklet's isolate and crash on first access.
+ */
+export async function cleanupForTerminate(): Promise<void> {
+  // Intentionally does NOT set isShuttingDown — that flag is reserved for
+  // shutdownBareDirectWorker so a later SIGTERM/SIGINT still gets to run
+  // the lock release + process.exit path. runCleanup is idempotent on its
+  // own, so a follow-up shutdownBareDirectWorker call won't redo the body.
+  if (cleanupRan) return;
+
+  logger.info("🧹 Pre-terminate cleanup starting...");
+  try {
+    await runCleanup();
+    logger.info("✅ Pre-terminate cleanup completed");
+  } catch (error) {
+    logger.error("❌ Error during pre-terminate cleanup:", error);
+  }
+}
 
 export async function shutdownBareDirectWorker(
   reason: BareDirectShutdownReason,
@@ -90,32 +192,42 @@ export async function shutdownBareDirectWorker(
   if (isShuttingDown) return;
   isShuttingDown = true;
 
-  const message =
-    reason === "signal"
-      ? "🐻 Bare worker shutdown signal received, cleaning up..."
-      : "🧹 Bare direct mode RPC closed, cleaning up...";
-  logger.info(message);
+  const messages: Record<BareDirectShutdownReason, string> = {
+    signal: "🐻 Bare worker shutdown signal received, cleaning up...",
+    "rpc-close": "🧹 Bare direct mode RPC closed, cleaning up...",
+    "uncaught-exception": "💥 Uncaught exception, cleaning up...",
+    "unhandled-rejection": "💥 Unhandled rejection, cleaning up...",
+    "ipc-disconnect": "🔌 Parent IPC disconnected, cleaning up...",
+  };
+  logger.info(messages[reason]);
 
   try {
-    clearRegistries();
-    await Promise.allSettled([
-      destroySwarm(),
-      closeAllRagInstances(),
-      cleanupDownloads(),
-      unloadAllModels(),
-      closeRegistryClient(),
-    ]);
+    // Idempotent: if cleanupForTerminate already ran, this is a no-op.
+    await runCleanup();
     logger.info("✅ Cleanup completed successfully");
   } catch (error) {
     logger.error("❌ Error during shutdown cleanup:", error);
   }
 
-  process.exit(0);
+  releaseWorkerLock();
+
+  scheduleForceExit();
+
+  const isGraceful = reason === "signal" || reason === "rpc-close";
+  process.exit(isGraceful ? 0 : 1);
 }
 
 function setupShutdownHandlers() {
-  process.once("SIGTERM", () =>
-    void shutdownBareDirectWorker("signal"),
-  );
+  process.once("SIGTERM", () => void shutdownBareDirectWorker("signal"));
   process.once("SIGINT", () => void shutdownBareDirectWorker("signal"));
+
+  process.on("uncaughtException", (err) => {
+    logger.error("Uncaught exception in worker:", err);
+    void shutdownBareDirectWorker("uncaught-exception");
+  });
+
+  process.on("unhandledRejection", (reason) => {
+    logger.error("Unhandled rejection in worker:", reason);
+    void shutdownBareDirectWorker("unhandled-rejection");
+  });
 }

@@ -8,7 +8,6 @@ import {
 import {
   whisperConfigSchema,
   parakeetConfigSchema,
-  type WhisperConfig,
 } from "./transcription-config";
 import { delegateSchema } from "./delegate";
 import { nmtConfigSchema } from "./translation-config";
@@ -18,6 +17,7 @@ import {
   modelSrcInputSchema,
   modelInputToSrcSchema,
   modelInputToNameSchema,
+  type ModelDescriptor,
 } from "./model-src-utils";
 import {
   llmModelTypeSchema,
@@ -30,6 +30,8 @@ import {
   diffusionModelTypeSchema,
   ModelType,
   ModelTypeAliases,
+  type CanonicalModelType,
+  type ModelTypeInput,
 } from "./model-types";
 import { sdcppConfigSchema } from "./sdcpp-config";
 
@@ -50,10 +52,12 @@ const loadModelCommonFields = {
 const loadModelRequestCommonFields = {
   ...loadModelCommonFields,
   onProgress: z.unknown().optional(),
+  logger: z.unknown().optional(),
   withProgress: z.boolean().optional(),
+  requestId: z.string().min(1).optional(),
 };
 
-export const loadModelOptionsBaseSchema = z.union([
+export const loadBuiltinModelOptionsBaseSchema = z.union([
   z
     .object({
       ...loadModelCommonFields,
@@ -110,14 +114,20 @@ export const loadModelOptionsBaseSchema = z.union([
       modelConfig: sdcppConfigSchema.strict().optional(),
     })
     .strict(),
-  // Custom plugin catch-all: accepts any modelType string EXCEPT built-ins
-  z.object({
-    ...loadModelCommonFields,
-    modelType: z.string().refine((val) => !builtInModelTypes.has(val), {
-      message: "Built-in model types must use their specific schema",
-    }),
-    modelConfig: z.record(z.string(), z.unknown()).optional(),
+]);
+
+// Custom plugin catch-all: any modelType string EXCEPT built-ins.
+export const loadCustomPluginModelOptionsBaseSchema = z.object({
+  ...loadModelCommonFields,
+  modelType: z.string().refine((val) => !builtInModelTypes.has(val), {
+    message: "Built-in model types must use their specific schema",
   }),
+  modelConfig: z.record(z.string(), z.unknown()).optional(),
+});
+
+export const loadModelOptionsBaseSchema = z.union([
+  loadBuiltinModelOptionsBaseSchema,
+  loadCustomPluginModelOptionsBaseSchema,
 ]);
 
 export const loadModelOptionsSchema = loadModelOptionsBaseSchema.transform(
@@ -144,6 +154,7 @@ const loadModelOptionsToRequestBaseSchema = z.union([
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,
+      ...(data.requestId !== undefined && { requestId: data.requestId }),
     })),
   z
     .object({
@@ -157,10 +168,11 @@ const loadModelOptionsToRequestBaseSchema = z.union([
       modelType: ModelType.whispercppTranscription,
       modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
       modelName: modelInputToNameSchema.parse(data.modelSrc),
-      modelConfig: (data.modelConfig ?? {}) as WhisperConfig,
+      modelConfig: (data.modelConfig ?? {}),
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,
+      ...(data.requestId !== undefined && { requestId: data.requestId }),
     })),
   z
     .object({
@@ -178,6 +190,7 @@ const loadModelOptionsToRequestBaseSchema = z.union([
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,
+      ...(data.requestId !== undefined && { requestId: data.requestId }),
     })),
   z
     .object({
@@ -195,6 +208,7 @@ const loadModelOptionsToRequestBaseSchema = z.union([
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,
+      ...(data.requestId !== undefined && { requestId: data.requestId }),
     })),
   z
     .object({
@@ -208,16 +222,22 @@ const loadModelOptionsToRequestBaseSchema = z.union([
       modelType: ModelType.nmtcppTranslation,
       modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
       modelName: modelInputToNameSchema.parse(data.modelSrc),
-        modelConfig: (data.modelConfig.engine === "Bergamot" && data.modelConfig.pivotModel) ? {
-            ...data.modelConfig,
-            pivotModel: {
+      modelConfig:
+        data.modelConfig.engine === "Bergamot" && data.modelConfig.pivotModel
+          ? {
+              ...data.modelConfig,
+              pivotModel: {
                 ...data.modelConfig.pivotModel,
-                modelSrc: modelInputToSrcSchema.parse(data.modelConfig.pivotModel.modelSrc),
-            },
-        } : data.modelConfig,
+                modelSrc: modelInputToSrcSchema.parse(
+                  data.modelConfig.pivotModel.modelSrc,
+                ),
+              },
+            }
+          : data.modelConfig,
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,
+      ...(data.requestId !== undefined && { requestId: data.requestId }),
     })),
   z
     .object({
@@ -235,6 +255,7 @@ const loadModelOptionsToRequestBaseSchema = z.union([
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,
+      ...(data.requestId !== undefined && { requestId: data.requestId }),
     })),
   z
     .object({
@@ -248,10 +269,11 @@ const loadModelOptionsToRequestBaseSchema = z.union([
       modelType: ModelType.onnxOcr,
       modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
       modelName: modelInputToNameSchema.parse(data.modelSrc),
-      modelConfig: (data.modelConfig ?? {}) as z.infer<typeof ocrConfigSchema>,
+      modelConfig: (data.modelConfig ?? {}),
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,
+      ...(data.requestId !== undefined && { requestId: data.requestId }),
     })),
   z
     .object({
@@ -269,6 +291,7 @@ const loadModelOptionsToRequestBaseSchema = z.union([
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,
+      ...(data.requestId !== undefined && { requestId: data.requestId }),
     })),
   z
     .object({
@@ -287,6 +310,7 @@ const loadModelOptionsToRequestBaseSchema = z.union([
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,
+      ...(data.requestId !== undefined && { requestId: data.requestId }),
     })),
 ]);
 
@@ -300,6 +324,13 @@ const commonModelConfigSchema = z.object({
   withProgress: z.boolean().optional(),
   seed: z.boolean().optional(),
   delegate: delegateSchema,
+  requestId: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
+    ),
 });
 
 // Request schemas for each model type (use canonical types since transforms normalize)
@@ -417,8 +448,9 @@ export const modelProgressUpdateSchema = z.object({
       overallPercentage: z.number(),
     })
     .optional(),
-  onnxInfo: z
+  fileSetInfo: z
     .object({
+      setKey: z.string(),
       currentFile: z.string(),
       fileIndex: z.number(),
       totalFiles: z.number(),
@@ -477,7 +509,88 @@ export type LoadModelSrcRequest = z.infer<typeof loadModelSrcRequestSchema>;
 export type LoadModelRequest = z.infer<typeof loadModelRequestSchema>;
 export type LoadModelResponse = z.infer<typeof loadModelResponseSchema>;
 export type ModelProgressUpdate = z.infer<typeof modelProgressUpdateSchema>;
-export type LoadModelOptions = z.input<typeof loadModelOptionsSchema> & {
+/**
+ * `loadModel` options for built-in model types.
+ * Custom plugin types use {@link LoadCustomPluginModelOptions}.
+ */
+export type LoadModelOptions = z.input<typeof loadBuiltinModelOptionsBaseSchema> & {
   onProgress?: (progress: ModelProgressUpdate) => void;
   logger?: Logger;
 };
+
+/**
+ * `loadModel` options for custom plugin model types (any non-built-in string).
+ * Built-in model types use {@link LoadModelOptions}.
+ */
+export type LoadCustomPluginModelOptions<T extends string> = Omit<
+  z.input<typeof loadCustomPluginModelOptionsBaseSchema>,
+  "modelType"
+> & {
+  modelType: T extends ModelTypeInput ? never : T;
+  onProgress?: (progress: ModelProgressUpdate) => void;
+  logger?: Logger;
+};
+
+/**
+ * `loadModel` options when `modelType` is inferred from `modelSrc`.
+ * `modelConfig` is broad; pass a descriptor with a literal `engine` for
+ * per-engine narrowing.
+ */
+export type LoadModelDescriptorOnlyOptions = {
+  modelSrc: ModelDescriptor;
+  modelType?: never;
+  modelConfig?: Record<string, unknown>;
+  seed?: boolean;
+  delegate?: z.input<typeof delegateSchema>;
+  onProgress?: (progress: ModelProgressUpdate) => void;
+  logger?: Logger;
+};
+
+/**
+ * Maps `S["engine"]` (canonical literal) to the matching `modelConfig` input
+ * shape. Engines without a known literal fall through to
+ * `Record<string, unknown>` (handled by {@link LoadModelDescriptorParam}).
+ */
+export type InferredConfig<S> = S extends {
+  engine: typeof ModelType.llamacppCompletion;
+}
+  ? z.input<typeof llmConfigBaseSchema>
+  : S extends { engine: typeof ModelType.whispercppTranscription }
+    ? Partial<z.input<typeof whisperConfigSchema>>
+    : S extends { engine: typeof ModelType.llamacppEmbedding }
+      ? z.input<typeof embedConfigBaseSchema>
+      : S extends { engine: typeof ModelType.nmtcppTranslation }
+        ? z.input<typeof nmtConfigSchema>
+        : S extends { engine: typeof ModelType.onnxTts }
+          ? z.input<typeof ttsConfigSchema>
+          : S extends { engine: typeof ModelType.onnxOcr }
+            ? Partial<z.input<typeof ocrConfigSchema>>
+            : S extends { engine: typeof ModelType.parakeetTranscription }
+              ? z.input<typeof parakeetConfigSchema>
+              : S extends { engine: typeof ModelType.sdcppGeneration }
+                ? z.input<typeof sdcppConfigSchema>
+                : Record<string, unknown>;
+
+/**
+ * `loadModel` options for descriptors that preserve a literal `engine`.
+ * `modelConfig` narrows via {@link InferredConfig}.
+ */
+export type LoadModelDescriptorInferredOptions<S extends ModelDescriptor> = {
+  modelSrc: S;
+  modelType?: never;
+  modelConfig?: InferredConfig<S>;
+  seed?: boolean;
+  delegate?: z.input<typeof delegateSchema>;
+  onProgress?: (progress: ModelProgressUpdate) => void;
+  logger?: Logger;
+};
+
+/**
+ * Resolves to {@link LoadModelDescriptorInferredOptions} when `S["engine"]` is
+ * a known canonical literal, otherwise widens to {@link LoadModelDescriptorOnlyOptions}.
+ */
+export type LoadModelDescriptorParam<S extends ModelDescriptor> = S extends {
+  engine: CanonicalModelType;
+}
+  ? LoadModelDescriptorInferredOptions<S>
+  : Omit<LoadModelDescriptorOnlyOptions, "modelSrc"> & { modelSrc: S };

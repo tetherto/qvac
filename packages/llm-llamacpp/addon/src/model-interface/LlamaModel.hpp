@@ -1,0 +1,293 @@
+#pragma once
+#include <atomic>
+#include <cstdint>
+#include <functional>
+#include <map>
+#include <memory>
+#include <mutex>
+#include <optional>
+#include <shared_mutex>
+#include <string>
+#include <string_view>
+#include <unordered_map>
+#include <vector>
+
+#include <llama.h>
+#include <picojson/picojson.h>
+
+#include "AsyncWeightsLoader.hpp"
+#include "CacheManager.hpp"
+#include "LlamaFinetuner.hpp"
+#include "LlamaFinetuningHelpers.hpp"
+#include "LlamaFinetuningParams.hpp"
+#include "LlamaLazyInitializeBackend.hpp"
+#include "LlmContext.hpp"
+#include "ModelMetadata.hpp"
+#include "ToolsCompactController.hpp"
+#include "common/chat.h"
+#include "inference-addon-cpp/BlobsStream.hpp"
+#include "inference-addon-cpp/GGUFShards.hpp"
+#include "inference-addon-cpp/InitLoader.hpp"
+#include "inference-addon-cpp/Logger.hpp"
+#include "inference-addon-cpp/ModelInterfaces.hpp"
+#include "inference-addon-cpp/RuntimeStats.hpp"
+
+using namespace qvac_lib_inference_addon_cpp::model;
+
+struct FinetuneConfigOverrides {
+  bool active{false};
+  int64_t batchSize{128};
+  int64_t microBatchSize{128};
+  int64_t contextLength{128};
+  bool gpuSupportsF16OutProd{true};
+  bool flashAttn{false};
+};
+
+class LlamaModel : public IModel, public IModelAsyncLoad, public IModelCancel {
+public:
+  LlamaModel(const LlamaModel&) = delete;
+  LlamaModel& operator=(const LlamaModel&) = delete;
+  LlamaModel(LlamaModel&&) = delete;
+  LlamaModel& operator=(LlamaModel&&) = delete;
+
+  /// @brief Resolves shard basenames in-place to absolute paths relative to
+  /// the parent directory of @p modelPath.
+  static void
+  resolveShardPaths(GGUFShards& shards, const std::string& modelPath);
+
+  /// @brief Apply specific parameter defaults based on model metadata
+  /// and detected Adreno GPU version by inserting entries into configFilemap.
+  /// Must be called before commonParamsParse so inserted entries are processed.
+  ///
+  /// @param configFilemap The user-supplied config map (will be written to).
+  /// @param metadata Model metadata (architecture, quantization info).
+  /// @param adrenoVersion Detected Adreno GPU version, if any.
+  /// @param finetuneOverrides If set, finetuning mode is active with these
+  /// context/batch params and GPU caps.
+  /// @param isOpenCl True when the chosen GPU backend is OpenCL; used to
+  /// disable flash-attn by default since it is not reliably supported on
+  /// the OpenCL backend.
+  static void tuneConfigMap(
+      std::unordered_map<std::string, std::string>& configFilemap,
+      const ModelMetaData& metadata, const std::optional<int>& adrenoVersion,
+      const FinetuneConfigOverrides& finetuneOverrides = {},
+      bool isOpenCl = false);
+
+  /**
+   * The Constructor for llama model.
+   * @param modelPath - path to the model file.
+   * @param projectionPath - path to the projector file.
+   * @param configFilemap - map of configuration files.
+   */
+  LlamaModel(
+      std::string&& modelPath, std::string&& projectionPath,
+      std::unordered_map<std::string, std::string>&& configFilemap);
+
+  struct ConstructionArgs {
+    std::string modelPath;
+    std::string projectionPath;
+    std::unordered_map<std::string, std::string> configFilemap;
+    InitLoader::LOADER_TYPE loaderType = InitLoader::LOADER_TYPE::DELAYED;
+  };
+
+  /**
+   * The Destructor for llama model.
+   * Members are destroyed in reverse order of declaration, ensuring
+   * llmContext_ is destroyed before backendsHandle_.
+   */
+  ~LlamaModel() override = default;
+
+  std::string getName() const final { return "LlamaModel"; }
+  void setWeightsForFile(
+      const std::string& filename,
+      std::unique_ptr<std::basic_streambuf<char>>&& shard) final;
+  void cancel() const final;
+
+  struct Prompt {
+    std::string input;
+    bool prefill = false;
+    GenerationParams generationParams;
+    std::vector<std::vector<uint8_t>> media;
+    std::function<void(const std::string&)> outputCallback;
+    LlamaFinetuner::ProgressCallback progressCallback;
+    std::optional<qvac_lib_inference_addon_llama::LlamaFinetuningParams>
+        finetuningParams;
+
+    std::string cacheKey;
+    bool saveCacheToDisk = false;
+  };
+
+  std::any process(const std::any& input) final;
+  std::string processPrompt(const Prompt& prompt);
+
+  /**
+   * The Reset method.
+   */
+  void reset() {
+    std::shared_lock lock(stateMtx_);
+    resetState();
+  }
+
+  /// @brief Rebuilds reloadable model state using stored construction args.
+  /// Acquires exclusive lock on stateMtx_; tries to cancel and blocks until
+  /// any in-flight operation that access the state finishes, then safely swaps
+  /// the state.
+  /// @param newFinetuneOverrides  When provided, pendingFinetuneOverrides_ is
+  ///   atomically replaced under the exclusive lock before the reload proceeds.
+  ///   Omit (or std::nullopt) to leave pendingFinetuneOverrides_ unchanged.
+  void reload(
+      std::optional<FinetuneConfigOverrides> newFinetuneOverrides =
+          std::nullopt);
+
+  /**
+   * Check if model is loaded.
+   */
+  bool isLoaded();
+
+  /**
+   * Get the nPast position before tool evaluation.
+   * This is used to find the boundary in the KV cache after evaluating
+   * conversation tokens but before tool tokens.
+   * @return the nPast position, or -1 if not set.
+   */
+  llama_pos getNPastBeforeTools() const;
+
+  void waitForLoadInitialization() final {
+    std::shared_ptr<ReloadableState> localState;
+    {
+      std::shared_lock lock(stateMtx_);
+      localState = state_;
+    }
+    localState->initLoader_.waitForLoadInitialization();
+  }
+
+  llama_context* getContext();
+  llama_model* getModel();
+  common_params& getCommonParams();
+
+  qvac_lib_inference_addon_cpp::RuntimeStats runtimeStats() const final;
+  qvac_lib_inference_addon_cpp::RuntimeStats runtimeDebugStats() const;
+  static void
+  llamaLogCallback(ggml_log_level level, const char* text, void* userData);
+
+  /// @brief Access the LoRA finetuner that owns finetune state and lifecycle
+  /// for this model. The reference remains valid for the lifetime of the
+  /// `LlamaModel` instance.
+  LlamaFinetuner& finetuner() { return finetuner_; }
+  const LlamaFinetuner& finetuner() const { return finetuner_; }
+
+private:
+  friend class LlamaFinetuner;
+
+  // Impl without mutexes
+  std::string processPromptImpl(const Prompt& prompt);
+  void cancelImpl() const;
+
+  struct ReloadableState {
+    ReloadableState(
+        const ConstructionArgs& args, const std::string& loadingContext,
+        ModelMetaData& metadata)
+        : shards_(GGUFShards::expandGGUFIntoShards(args.modelPath)),
+          asyncWeightsLoader_(shards_, initLoader_, loadingContext, &metadata) {
+    }
+
+    GGUFShards shards_;
+    friend class InitLoader;
+    InitLoader initLoader_;
+    AsyncWeightsLoader asyncWeightsLoader_;
+
+    bool isTextLlm_ = false;
+
+    // Backend handle must be declared before llmContext_ to ensure
+    // llmContext_ is destroyed first (members destroyed in reverse order)
+    std::optional<LlamaBackendsHandle> backendsHandle_;
+
+    // tools_compact controller - owned by ReloadableState, lifetime matches
+    // the state. Must be declared before llmContext_ so it is destroyed
+    // after contexts that hold references to it.
+    std::unique_ptr<ToolsCompactController> toolsCompact_;
+
+    // Store the appropriate context (TextLlmContext or MtmdLlmContext)
+    // Destroyed before backendsHandle_ to avoid use-after-free
+    std::unique_ptr<LlmContext> llmContext_;
+
+    // configuration values parsed from configFilemap
+    llama_pos configuredNDiscarded_ = 0;
+    std::optional<CacheManager> cacheManager_;
+
+    bool lastRunWasPrefill_ = false;
+  };
+
+  struct ResolvedPrompt {
+    std::vector<common_chat_msg> chatMsgs;
+    std::vector<common_chat_tool> tools;
+    PromptLayout layout;
+    bool isCacheLoaded = false;
+    bool shouldResetAfterInference = false;
+  };
+
+  enum class ToolsCompactResolution {
+    NotRequested,
+    RequestedUnsupported,
+    RequestedSupported
+  };
+
+  struct ResolvedToolsCompactConfig {
+    ToolsCompactResolution resolution = ToolsCompactResolution::NotRequested;
+    std::optional<ToolsCompactProfile> profile;
+  };
+
+  ResolvedPrompt resolveChatAndTools(const Prompt& prompt);
+  ResolvedToolsCompactConfig
+  resolveToolsCompactConfig(bool toolsCompactRequested) const;
+
+  void commonParamsParse(
+      const std::string& modelPath,
+      std::unordered_map<std::string, std::string>& configFilemap,
+      common_params& params, std::optional<int>& outAdrenoVersion,
+      ResolvedToolsCompactConfig& outToolsCompactConfig);
+
+  /**
+   * The Format prompt method. It formats the prompt json to chat messages.
+   *
+   * @param input - input prompt.
+   * @return formatted chat messages and tools.
+   */
+  ParsedPromptPayload formatPrompt(const std::string& input);
+  void resetState(bool resetStats = true);
+  std::unique_ptr<LlmContext> createContext(
+      std::string&& projectionPath, common_params& params,
+      common_init_result_ptr llamaInit, ToolsCompactController& tools);
+
+  bool loadMedia(const std::vector<uint8_t>& input);
+
+  void setInitLoader(
+      std::optional<InitLoader::LOADER_TYPE> loaderType = std::nullopt,
+      std::optional<FinetuneConfigOverrides> newFinetuneOverrides =
+          std::nullopt);
+
+  void init(bool acquireLock);
+
+  const std::string loadingContext_;
+  ModelMetaData metadata_;
+  ConstructionArgs constructionArgs_;
+
+  /// Shared lock for all methods that read/use state_ members; exclusive lock
+  /// only in reload()
+  mutable std::shared_mutex stateMtx_;
+  std::shared_ptr<ReloadableState> state_;
+  int64_t runtimeBackendDevice_ = 0;
+
+  bool isBitnetModel() const;
+  void validateBitnetQuantization();
+
+  // Guarded by stateMtx_: written and read exclusively inside
+  // setInitLoader() / init() → commonParamsParse(), both of which run
+  // under the stateMtx_ unique_lock. Callers set it via reload()'s
+  // newFinetuneOverrides parameter to avoid any unsynchronised window.
+  FinetuneConfigOverrides pendingFinetuneOverrides_;
+
+  // Declared last so it is destroyed first; the finetuner stores a
+  // reference back to this model.
+  LlamaFinetuner finetuner_{*this};
+};

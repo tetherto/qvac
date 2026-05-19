@@ -19,6 +19,7 @@ const {
   generateChangelog,
   getRepoRoot,
   parseArgs,
+  git,
 } = require("../generate-changelog-qvac.cjs");
 
 const SECTIONS = [
@@ -31,6 +32,37 @@ const SECTIONS = [
   { key: "chore", title: "🧹 Chores" },
   { key: "infra", title: "⚙️ Infrastructure" },
 ];
+
+/**
+ * Per-package PR exclusion list. The path-scope filter in
+ * `getPRNumbers(...)` picks up any PR whose diff touches `packages/<pkg>/**`,
+ * but cross-cutting monorepo chores (path renames, repo-wide reformats, etc.)
+ * often touch one tiny SDK-side file (a test executor, a historical changelog
+ * doc) and get pulled in as if they were SDK release items. Those PRs belong
+ * in the devops changelog, not the SDK changelog.
+ *
+ * The first-line defence is for the PR author to tag the title `[skiplog]` —
+ * that's free and retroactive only if the PR is still open. For already-merged
+ * cross-cutting PRs, list them here with a short rationale so future
+ * contributors understand why the exclusion exists.
+ *
+ * Keyed by package name. Values are `{ <prNumber>: "<rationale>" }`.
+ */
+const EXCLUDED_PRS = {
+  sdk: {
+    1860:
+      "Monorepo-wide path simplification across 26+ packages; only " +
+      "incidentally touched packages/sdk via a test executor and a " +
+      "historical changelog doc. Devops chore, not an SDK release item.",
+  },
+};
+
+/**
+ * Maximum number of model entries to inline per section (Added/Updated/Removed)
+ * in the main CHANGELOG.md. Anything beyond is collapsed to "(and N more)" and
+ * the reader is expected to follow the link to models.md for the full list.
+ */
+const MAX_INLINE_MODELS = 5;
 
 /**
  * Extract code blocks from markdown
@@ -136,6 +168,162 @@ function extractModelsSection(body) {
 }
 
 /**
+ * Parse a model history file into structured data.
+ * Files live in packages/<pkg>/models/history/<sha>.txt and contain:
+ *   commit=<sha>
+ *   timestamp=<iso>
+ *   previous_count=N
+ *   new_count=N
+ *   [added]
+ *   MODEL_A
+ *   MODEL_B
+ *   [removed]   (optional)
+ *   MODEL_C
+ *
+ * @param {string} filePath
+ * @returns {{ commit: string, previousCount: number, newCount: number, added: string[], removed: string[] } | null}
+ */
+function parseModelHistoryFile(filePath) {
+  try {
+    const content = fs.readFileSync(filePath, "utf8");
+    const lines = content.split("\n").map((l) => l.trim()).filter(Boolean);
+
+    const meta = {};
+    let section = null;
+    const added = [];
+    const removed = [];
+
+    for (const line of lines) {
+      if (line.startsWith("commit=")) {
+        meta.commit = line.slice("commit=".length);
+      } else if (line.startsWith("previous_count=")) {
+        meta.previousCount = parseInt(line.slice("previous_count=".length), 10);
+      } else if (line.startsWith("new_count=")) {
+        meta.newCount = parseInt(line.slice("new_count=".length), 10);
+      } else if (line.startsWith("timestamp=")) {
+        continue;
+      } else if (line === "[added]") {
+        section = "added";
+      } else if (line === "[removed]") {
+        section = "removed";
+      } else if (section === "added") {
+        added.push(line);
+      } else if (section === "removed") {
+        removed.push(line);
+      }
+    }
+
+    return { commit: meta.commit || "", previousCount: meta.previousCount || 0, newCount: meta.newCount || 0, added, removed };
+  } catch (error) {
+    return null;
+  }
+}
+
+/**
+ * Find model history files added between baseRef and HEAD,
+ * parse them, and aggregate into a single added/removed summary.
+ *
+ * @param {string} packageName
+ * @param {string} baseRef - tag or commit SHA
+ * @returns {{ added: string[], removed: string[], previousCount: number, newCount: number } | null}
+ */
+function getModelChangesFromHistory(packageName, baseRef) {
+  const historyPath = `packages/${packageName}/models/history`;
+  const repoRoot = getRepoRoot();
+  const historyDir = path.join(repoRoot, historyPath);
+
+  if (!fs.existsSync(historyDir)) return null;
+
+  let newFiles;
+  try {
+    const diff = git(`diff --name-only ${baseRef}..HEAD -- ":(top)${historyPath}"`);
+    if (!diff) return null;
+    newFiles = diff.split("\n").map((f) => f.trim()).filter(Boolean);
+  } catch (error) {
+    return null;
+  }
+
+  if (newFiles.length === 0) return null;
+
+  const allAdded = new Set();
+  const allRemoved = new Set();
+  let firstPreviousCount = null;
+  let lastNewCount = null;
+
+  for (const relPath of newFiles) {
+    const fullPath = path.join(repoRoot, relPath);
+    const parsed = parseModelHistoryFile(fullPath);
+    if (!parsed) continue;
+
+    if (firstPreviousCount === null) {
+      firstPreviousCount = parsed.previousCount;
+    }
+    lastNewCount = parsed.newCount;
+
+    for (const m of parsed.added) allAdded.add(m);
+    for (const m of parsed.removed) allRemoved.add(m);
+  }
+
+  // Net out: if added and removed, treat as update (remove from both)
+  for (const model of [...allAdded]) {
+    if (allRemoved.has(model)) {
+      allAdded.delete(model);
+      allRemoved.delete(model);
+    }
+  }
+
+  if (allAdded.size === 0 && allRemoved.size === 0) return null;
+
+  return {
+    added: [...allAdded].sort(),
+    removed: [...allRemoved].sort(),
+    previousCount: firstPreviousCount || 0,
+    newCount: lastNewCount || 0,
+  };
+}
+
+/**
+ * Generate models.md from model history files (fallback when no [mod] PRs).
+ *
+ * @param {string} packageName
+ * @param {string} version
+ * @param {string} baseRef
+ * @param {string} changelogDir
+ * @returns {boolean} true if models.md was generated
+ */
+function generateModelsFromHistory(packageName, version, baseRef, changelogDir) {
+  const changes = getModelChangesFromHistory(packageName, baseRef);
+  if (!changes) return false;
+
+  let modelsMd = `# 📦 Model Changes v${version}\n\n`;
+  modelsMd += `Total model constants: ${changes.previousCount} → ${changes.newCount}`;
+  const delta = changes.newCount - changes.previousCount;
+  if (delta !== 0) {
+    modelsMd += ` (${delta > 0 ? "+" : ""}${delta})`;
+  }
+  modelsMd += "\n\n";
+  modelsMd += `_Generated from model history files (no \\[mod\\] tagged PRs found)._\n\n`;
+
+  if (changes.added.length > 0) {
+    modelsMd += `## Added Models\n\n`;
+    modelsMd += "```\n";
+    modelsMd += changes.added.join("\n") + "\n";
+    modelsMd += "```\n\n";
+  }
+
+  if (changes.removed.length > 0) {
+    modelsMd += `## Removed Models\n\n`;
+    modelsMd += "```\n";
+    modelsMd += changes.removed.join("\n") + "\n";
+    modelsMd += "```\n\n";
+  }
+
+  fs.writeFileSync(path.join(changelogDir, "models.md"), modelsMd);
+  console.log(`✅ Generated ${changelogDir}/models.md (from model history fallback)`);
+  return true;
+}
+
+/**
  * Capitalize first letter of string
  * @param {string} str
  * @returns {string}
@@ -143,6 +331,105 @@ function extractModelsSection(body) {
 function capitalize(str) {
   if (!str) return str;
   return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+/**
+ * Detect a companion entry in a Models section line. Companions (vocab files,
+ * lexicons, raw data shards, metadata blobs, etc.) ship alongside a primary
+ * model but aren't independently usable models, so we exclude them from the
+ * changelog and announcement post — only first-class models should be
+ * surfaced to readers.
+ *
+ * Recognises both:
+ *   - Constant-name suffixes: `*_LEX`, `*_VOCAB`, `*_DATA`, `*_METADATA`
+ *   - Free-form descriptions containing the word "companion"
+ *
+ * @param {string} entry - One Added/Updated/Removed list line
+ * @returns {boolean}
+ */
+function isCompanionEntry(entry) {
+  if (!entry) return false;
+  if (/companion/i.test(entry)) return true;
+  if (/_lex\b/i.test(entry)) return true;
+  if (/_vocab\b/i.test(entry)) return true;
+  if (/_data\b/i.test(entry)) return true;
+  if (/_metadata\b/i.test(entry)) return true;
+  return false;
+}
+
+/**
+ * Strip "(N entries …)" / "(N entries — …)" suffixes commonly used in
+ * free-form Models sections (e.g. PR #1700-style summaries). The reader can
+ * find exact counts in models.md if they need them; the changelog should
+ * stay focused on the model identities themselves.
+ *
+ * @param {string} entry
+ * @returns {string}
+ */
+function stripEntryCount(entry) {
+  if (!entry) return entry;
+  return entry
+    .replace(/\s*\(\s*\d+\s*entries?(?:\s*[—–-][^)]*)?\)\s*/gi, "")
+    .trim();
+}
+
+/**
+ * Apply changelog model-section policy to a raw list of entries: drop
+ * companions, strip entry-count suffixes, drop empty results.
+ *
+ * @param {string[]} entries
+ * @returns {string[]}
+ */
+function cleanModelEntries(entries) {
+  if (!entries || entries.length === 0) return [];
+  return entries
+    .filter((e) => !isCompanionEntry(e))
+    .map((e) => stripEntryCount(e))
+    .filter((e) => e && e.length > 0);
+}
+
+/**
+ * Format a single model section (Added / Updated / Removed) for inline display
+ * in the main CHANGELOG.md. Trims to MAX_INLINE_MODELS entries with a
+ * "(and N more)" suffix. Returns null if the section is empty.
+ *
+ * Companions and entry counts are filtered upstream by `cleanModelEntries`.
+ *
+ * @param {string} label - e.g. "Added", "Updated", "Removed"
+ * @param {string[]} names
+ * @returns {string|null}
+ */
+function summarizeModelList(label, names) {
+  const cleaned = cleanModelEntries(names);
+  if (cleaned.length === 0) return null;
+  const shown = cleaned.slice(0, MAX_INLINE_MODELS);
+  const extra = cleaned.length - shown.length;
+  let summary = `${label}: ${shown.join(", ")}`;
+  if (extra > 0) summary += ` (and ${extra} more)`;
+  return summary;
+}
+
+/**
+ * Build a per-section summary (Added / Updated / Removed) of the model lists
+ * from a PR body, suitable for use as indented continuation lines under a
+ * CHANGELOG.md bullet. Returns null if the PR has no Models section or all
+ * sections are empty after companion/entry-count filtering.
+ *
+ * Returns an array of lines (one per non-empty section). The caller is
+ * responsible for indenting them appropriately under the bullet.
+ *
+ * @param {string} prBody
+ * @returns {string[]|null}
+ */
+function buildInlineModelSummary(prBody) {
+  const models = extractModelsSection(prBody);
+  if (!models) return null;
+  const parts = [
+    summarizeModelList("Added", models.added),
+    summarizeModelList("Updated", models.updated),
+    summarizeModelList("Removed", models.removed),
+  ].filter(Boolean);
+  return parts.length > 0 ? parts : null;
 }
 
 /**
@@ -180,16 +467,32 @@ function generateChangelogEntry(
     entry += ` - See ${links.join(", ")}`;
   }
 
+  // For [mod] PRs, append the trimmed Added/Updated/Removed model lists as
+  // indented continuation lines under the bullet. Companions and entry-count
+  // suffixes are filtered out by `buildInlineModelSummary`, so what shows up
+  // here are first-class model identities only — the full list (including
+  // companions, if the PR author chose to keep them) lives in models.md.
+  if (parsed.tags.includes("mod")) {
+    const modelLines = buildInlineModelSummary(pr.body);
+    if (modelLines) {
+      for (const line of modelLines) {
+        entry += `\n  ${line}`;
+      }
+    }
+  }
+
   return entry;
 }
 
 /**
  * Generate SDK-specific changelog files
+ * @param {string} packageName
  * @param {string} version
  * @param {Array} prs - Array of PR objects with parsed titles
  * @param {string} [outputDir] - Override output directory (for testing)
+ * @param {string} [baseRef] - Base tag/commit for model history fallback
  */
-function generateChangelogFiles(packageName, version, prs, outputDir) {
+function generateChangelogFiles(packageName, version, prs, outputDir, baseRef) {
   const changelogDir =
     outputDir || path.join(getRepoRoot(), "packages", packageName, "changelog", version);
 
@@ -327,10 +630,12 @@ function generateChangelogFiles(packageName, version, prs, outputDir) {
       }
     }
 
-    // Sort alphabetically
-    const addedList = [...allAdded].sort();
-    const updatedList = [...allUpdated].sort();
-    const removedList = [...allRemoved].sort();
+    // Apply the changelog model-section policy: drop companions, strip
+    // entry-count suffixes. Keeps models.md aligned with what the main
+    // CHANGELOG.md surfaces — only first-class model identities.
+    const addedList = cleanModelEntries([...allAdded].sort());
+    const updatedList = cleanModelEntries([...allUpdated].sort());
+    const removedList = cleanModelEntries([...allRemoved].sort());
 
     let modelsMd = `# 📦 Model Changes v${version}\n\n`;
 
@@ -369,17 +674,121 @@ function generateChangelogFiles(packageName, version, prs, outputDir) {
     fs.writeFileSync(path.join(changelogDir, "models.md"), modelsMd);
     console.log(`✅ Generated ${changelogDir}/models.md`);
   }
+
+  // Fallback: if no [mod] PRs found, try model history files
+  if (modelChanges.length === 0 && baseRef) {
+    const changes = getModelChangesFromHistory(packageName, baseRef);
+    if (changes) {
+      generateModelsFromHistory(packageName, version, baseRef, changelogDir);
+
+      const changelogPath = path.join(changelogDir, "CHANGELOG.md");
+      let existing = fs.readFileSync(changelogPath, "utf8");
+
+      let section = `## 📦 Models\n\n`;
+      section += `- Model registry updated: ${changes.previousCount} → ${changes.newCount}`;
+      const delta = changes.newCount - changes.previousCount;
+      if (delta !== 0) {
+        section += ` (${delta > 0 ? "+" : ""}${delta})`;
+      }
+      section += `. See [model changes](./models.md) for full list.\n`;
+
+      if (changes.added.length > 0) {
+        const groups = groupModelsByPrefix(changes.added);
+        for (const [prefix, names] of Object.entries(groups)) {
+          section += `- Added ${names.length} ${prefix} model${names.length === 1 ? "" : "s"}.\n`;
+        }
+      }
+
+      if (changes.removed.length > 0) {
+        section += `- Removed ${changes.removed.length} model${changes.removed.length === 1 ? "" : "s"}.\n`;
+      }
+
+      section += "\n";
+      existing += section;
+      fs.writeFileSync(changelogPath, existing);
+      console.log(`  ℹ️  No [mod] tagged PRs — used model history files as fallback`);
+    }
+  }
+}
+
+/**
+ * Group model constant names by their addon/category prefix.
+ * e.g. "SD_V2_1_1B_Q4_0" → "SD", "BERGAMOT_EN_DE" → "Bergamot",
+ *      "TTS_SUPERTONIC_OFFICIAL_*" → "TTS Supertonic"
+ *
+ * @param {string[]} names
+ * @returns {Record<string, string[]>}
+ */
+function groupModelsByPrefix(names) {
+  const groups = {};
+
+  for (const name of names) {
+    let prefix;
+    if (name.startsWith("BERGAMOT_")) {
+      prefix = "Bergamot translation";
+    } else if (name.startsWith("TTS_SUPERTONIC")) {
+      prefix = "TTS Supertonic";
+    } else if (name.startsWith("SD_") || name.startsWith("SDXL_")) {
+      prefix = "Stable Diffusion";
+    } else if (name.startsWith("FLUX_")) {
+      prefix = "FLUX";
+    } else if (name.startsWith("PARAKEET_")) {
+      prefix = "Parakeet";
+    } else if (name.startsWith("WHISPER_")) {
+      prefix = "Whisper";
+    } else if (name.startsWith("OCR_")) {
+      prefix = "OCR";
+    } else if (name.startsWith("EMBEDDINGS_")) {
+      prefix = "Embeddings";
+    } else {
+      prefix = "LLM";
+    }
+
+    if (!groups[prefix]) groups[prefix] = [];
+    groups[prefix].push(name);
+  }
+
+  return groups;
+}
+
+/**
+ * Detect a backmerge PR subject.
+ *
+ * Backmerges merge a release branch back into main; their content is already
+ * documented in the release branch's own changelog, so listing them here is
+ * noise. Recognises the QVAC convention (`Backmerge release sdk 0.9.1`) plus
+ * common variants like `Merge release-sdk-0.9.1 into main`.
+ *
+ * @param {string} subject - PR subject (after prefix/tags)
+ * @returns {boolean}
+ */
+function isBackmergeSubject(subject) {
+  if (!subject) return false;
+  const s = subject.trim().toLowerCase();
+  if (s.startsWith("backmerge")) return true;
+  if (/^merge\s+release[\s-]/.test(s)) return true;
+  return false;
 }
 
 /**
  * Process raw PRs with SDK-specific validation and filtering
  * @param {Array<{number: number, title: string, body: string, url: string}>} rawPRs
+ * @param {string} [packageName] - Package being released; used to apply per-package
+ *   PR exclusions from `EXCLUDED_PRS`.
  * @returns {Array} Validated PRs with parsed metadata
  */
-function processSDKPRs(rawPRs) {
+function processSDKPRs(rawPRs, packageName) {
   const prs = [];
+  const exclusions = (packageName && EXCLUDED_PRS[packageName]) || {};
 
   for (const pr of rawPRs) {
+    if (Object.prototype.hasOwnProperty.call(exclusions, pr.number)) {
+      console.log(
+        `  ⏭️  PR #${pr.number} is on the ${packageName} exclusion list, excluding from changelog: ${exclusions[pr.number]}`,
+      );
+      continue;
+    }
+
     const validation = validatePR(pr.title, pr.body);
 
     if (!validation.valid) {
@@ -390,9 +799,28 @@ function processSDKPRs(rawPRs) {
       continue;
     }
 
+    // PR titles that match validator exceptions (Merge / Revert / Squash /
+    // Version-bump / Release-PR) bypass format parsing entirely — `parsed`
+    // is undefined for these. They carry no structured metadata, so we have
+    // nothing meaningful to render in the changelog and skip them with a
+    // warning rather than crashing downstream.
+    if (!validation.parsed) {
+      console.warn(
+        `  ⏭️  PR #${pr.number} bypassed format validation (e.g. revert/merge/version bump), excluding from changelog: ${pr.title}`,
+      );
+      continue;
+    }
+
     if (validation.parsed.tags.includes("skiplog")) {
       console.log(
         `  ⏭️  PR #${pr.number} has [skiplog] tag, excluding from changelog`,
+      );
+      continue;
+    }
+
+    if (isBackmergeSubject(validation.parsed.subject)) {
+      console.log(
+        `  ⏭️  PR #${pr.number} is a backmerge, excluding from changelog`,
       );
       continue;
     }
@@ -493,6 +921,85 @@ function rebuildRootChangelog(packageName) {
 }
 
 /**
+ * Generate `announcement-post.txt` for a release.
+ *
+ * Short Slack-ready plaintext: header, three links (NPM / GitHub release /
+ * full changelog tree), an optional breaking-changes block when `breaking.md`
+ * exists in the version folder, and a thanks footer. Per-section bullet lists
+ * are intentionally omitted — readers follow the full-changelog link for the
+ * detail.
+ *
+ * @param {string} packageName
+ * @param {string} version
+ * @returns {string|null} The output path on success, or null if the version
+ *   folder doesn't exist yet (run the main generator first).
+ */
+function generateAnnouncementPost(packageName, version) {
+  const repoRoot = getRepoRoot();
+  const versionDir = path.join(
+    repoRoot,
+    "packages",
+    packageName,
+    "changelog",
+    version,
+  );
+
+  if (!fs.existsSync(versionDir)) {
+    console.warn(`⚠️ No changelog directory found at ${versionDir}`);
+    return null;
+  }
+
+  const repoUrl = "https://github.com/tetherto/qvac";
+  const npmName = `@qvac/${packageName}`;
+  const tagName = `${packageName}-v${version}`;
+  const changelogTreeUrl = `${repoUrl}/tree/main/packages/${packageName}/changelog/${version}`;
+  const breakingMdUrl = `${repoUrl}/blob/main/packages/${packageName}/changelog/${version}/breaking.md`;
+  const releaseTagUrl = `${repoUrl}/releases/tag/${tagName}`;
+  const npmUrl = `https://www.npmjs.com/package/${npmName}/v/${version}`;
+
+  // The breaking-changes block only appears when there are breaking PRs.
+  // `breaking.md` is only written by `generateChangelogFiles` when at least
+  // one PR carries the [bc] tag, so its presence on disk is the authoritative
+  // signal — no need to re-parse CHANGELOG.md to figure it out.
+  const hasBreaking = fs.existsSync(path.join(versionDir, "breaking.md"));
+
+  let post = "";
+  post += `:qvac: SDK ${version} :rocket: NPM Public release\n\n`;
+  post += `:package: NPM: ${npmUrl}\n`;
+  post += `:technologist: Github release: ${releaseTagUrl}\n`;
+  post += `:page_facing_up: Full Changelog: ${changelogTreeUrl}\n\n`;
+
+  if (hasBreaking) {
+    post += `:warning: Breaking Changes\n`;
+    post += `See full migration guide: ${breakingMdUrl}\n\n`;
+  }
+
+  post += `Thanks to everyone on QVAC team :green_heart: :qvac: :green_heart:\n`;
+
+  const outPath = path.join(versionDir, "announcement-post.txt");
+  fs.writeFileSync(outPath, post);
+  console.log(`✅ Generated ${outPath}`);
+  return outPath;
+}
+
+/**
+ * Resolve the current package version from package.json.
+ *
+ * @param {string} packageName
+ * @returns {string}
+ */
+function readPackageVersion(packageName) {
+  const pkgPath = path.join(
+    getRepoRoot(),
+    "packages",
+    packageName,
+    "package.json",
+  );
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+  return pkg.version;
+}
+
+/**
  * Main function
  */
 async function main() {
@@ -508,6 +1015,17 @@ async function main() {
     process.exit(0);
   }
 
+  if ("generate-announcement-post" in params) {
+    if (!params.package) {
+      console.error("--package is required with --generate-announcement-post");
+      process.exit(1);
+    }
+
+    const version = params.version || readPackageVersion(params.package);
+    const out = generateAnnouncementPost(params.package, version);
+    process.exit(out ? 0 : 1);
+  }
+
   if (!params.package) {
     console.error("Usage:");
     console.error(
@@ -520,7 +1038,14 @@ async function main() {
       "  --base-commit    Initial commit SHA (overrides tag lookup)",
     );
     console.error("  --base-version   Version label for base commit");
-    console.error("  --update-root-changelog  Update root CHANGELOG.md");
+    console.error("  --release-type   minor or patch (auto-detected from package.json version)");
+    console.error("  --update-root-changelog       Update root CHANGELOG.md");
+    console.error(
+      "  --generate-announcement-post  Generate announcement-post.txt for the package's current version",
+    );
+    console.error(
+      "  --version                     Override version when used with --generate-announcement-post",
+    );
     process.exit(1);
   }
 
@@ -534,6 +1059,7 @@ async function main() {
       packageName,
       baseCommit: params["base-commit"] || undefined,
       baseVersion: params["base-version"] || undefined,
+      releaseType: params["release-type"] || undefined,
       dryRun: true, // Don't let generic script write files
     });
 
@@ -544,7 +1070,7 @@ async function main() {
 
     // Apply SDK-specific validation and filtering
     console.log("🔍 Validating PR formats...");
-    const validPRs = processSDKPRs(data.prs);
+    const validPRs = processSDKPRs(data.prs, packageName);
 
     console.log(`\n✅ ${validPRs.length} valid PRs for changelog\n`);
 
@@ -555,7 +1081,7 @@ async function main() {
 
     // Generate SDK-specific changelog files
     console.log("📝 Generating changelog files...");
-    generateChangelogFiles(packageName, data.version, validPRs);
+    generateChangelogFiles(packageName, data.version, validPRs, undefined, data.baseRef);
     rebuildRootChangelog(packageName);
 
     console.log("\n🎉 Changelog generation complete!");
@@ -578,9 +1104,13 @@ module.exports = {
   extractBeforeAfter,
   extractModelNames,
   extractModelsSection,
+  parseModelHistoryFile,
+  getModelChangesFromHistory,
+  generateModelsFromHistory,
   capitalize,
   generateChangelogEntry,
   generateChangelogFiles,
   processSDKPRs,
+  generateAnnouncementPost,
   SECTIONS,
 };

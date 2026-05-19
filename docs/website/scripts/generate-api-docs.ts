@@ -1,801 +1,264 @@
 #!/usr/bin/env bun
 /**
- * Generate API documentation from TypeScript source (TypeDoc → MDX).
- * Production implementation per API-DOCS-AUTOMATION-COMPLETE-GUIDE Appendix E.
+ * Generate the API summary MDX for one SDK version.
+ *
+ * Output target:
+ *   - latest:  content/docs/reference/api/index.mdx
+ *   - older:   content/docs/reference/api/v<X.Y.Z>.mdx
+ *   - --target=<file>: content/docs/reference/api/<file> (override; used by
+ *     the patch-archived flow to write into a renamed sibling).
+ *
+ * The pipeline is:
+ *   1. Phase 1 — Extract: TypeDoc walks the SDK and writes api-data.json
+ *      (signatures, top-level descriptions, throws, examples, deprecated,
+ *      errors). Scope is restricted to functions re-exported from
+ *      `packages/sdk/client/api/index.ts` plus the `profiler` object.
+ *   2. Phase 1.5 — AI augmentation (optional): fills in missing prose. Skipped
+ *      with `--no-ai` and disabled by default in CI to keep output reproducible.
+ *   3. Phase 2 — Render: writes a single MDX through `single-page.njk`.
+ *
+ * Title-only mode (`--title-only`) skips Phase 1 + Phase 1.5 + the full
+ * render. It opens the existing target MDX, rewrites only the frontmatter
+ * `title:` line to the new version label, and keeps the body verbatim.
+ * Used by the patch flow so we never re-run TypeDoc for a patch (patches
+ * must not change the public API surface — that would be a minor).
  *
  * Usage:
- *   bun run scripts/generate-api-docs.ts <version> [--no-update-latest]
- *   bun run scripts/generate-api-docs.ts --dev
- *   bun run scripts/generate-api-docs.ts --rollback
+ *   bun run scripts/generate-api-docs.ts <version> [--no-ai] [--force-extract]
+ *   bun run scripts/generate-api-docs.ts <version> --latest
+ *   bun run scripts/generate-api-docs.ts <version> --title-only [--latest|--target=<file>]
  *
- * --dev writes to content/docs/dev/sdk/api/ without creating a versioned folder
- * or updating (latest). Use during day-to-day development of the next version.
+ * Flags:
+ *   --latest          Mark this version as the latest. Writes to index.mdx
+ *                     instead of v<X.Y.Z>.mdx.
+ *   --target=<file>   Override the output filename inside the API section
+ *                     directory (e.g. `--target=v0.8.2.mdx`). Mutually
+ *                     exclusive with `--latest`.
+ *   --title-only      Skip TypeDoc + AI + render. Only rewrite the
+ *                     frontmatter title of the existing target file.
+ *   --no-ai           Skip the AI augmentation phase (CI default).
+ *   --force-extract   Bypass mtime-based extraction cache.
  *
- * Path format: content/docs/v{X.Y.Z}/sdk/api/ and content/docs/(latest)/sdk/api/
- * SDK path: Set SDK_PATH env to point to sdk package (default: ../../packages/sdk from cwd).
+ * SDK_PATH env: override the SDK source root (default: ../../../packages/sdk
+ * relative to this script).
+ *
+ * SOURCE_DATE_EPOCH env: when set, ApiData.generatedAt becomes a deterministic
+ * ISO timestamp (reproducible-builds convention). When unset it falls back to
+ * the literal string "unspecified" so byte-identity tests pass without env.
  */
 
 import * as fs from "fs/promises";
 import * as path from "path";
-import { Application } from "typedoc";
-import { ReflectionKind } from "typedoc";
-import type { DeclarationReflection, SignatureReflection } from "typedoc";
-import type { ApiFunction, ExpandedType, TypeField, ErrorEntry, GenerateOptions } from "./api-docs/types.js";
+import { fileURLToPath } from "node:url";
+import { extractApiData } from "./api-docs/extract.js";
+import { renderApiDocs } from "./api-docs/render.js";
+import { rewriteFrontmatterTitleLine } from "./lib/release-shared.js";
 
+const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
+const API_DATA_PATH = path.join(SCRIPT_DIR, "api-docs", "api-data.json");
+
+// Resolve paths relative to this script's location (docs/website/scripts/)
+// rather than process.cwd() so the generator works whether invoked from the
+// repo root, from docs/website, or via `npm run` proxies.
+const DOCS_WEBSITE_DIR = path.resolve(SCRIPT_DIR, "..");
 const SDK_PATH =
   process.env.SDK_PATH ||
-  path.join(process.cwd(), "..", "..", "packages", "sdk");
+  path.resolve(SCRIPT_DIR, "..", "..", "..", "packages", "sdk");
 
-async function generateApiDocs(
-  version: string,
-  options: GenerateOptions = { updateLatest: true }
-) {
-  if (!options.devMode && !/^\d+\.\d+\.\d+$/.test(version)) {
+interface GenerateOptions {
+  isLatest: boolean;
+  forceExtract: boolean;
+  noAi: boolean;
+  titleOnly: boolean;
+  target: string | null;
+}
+
+async function generateApiDocs(version: string, options: GenerateOptions) {
+  if (!/^\d+\.\d+\.\d+$/.test(version)) {
     throw new Error(
-      `Invalid version format: "${version}"\nExpected semver: X.Y.Z (e.g., 0.6.1)`
+      `Invalid version format: "${version}"\nExpected semver: X.Y.Z (e.g., 0.9.1)`,
     );
   }
 
-  const label = options.devMode ? "dev" : `v${version}`;
-  console.log(`📚 Generating API docs for ${label}...`);
-  if (!options.devMode) {
-    console.log(
-      `   Update latest: ${options.updateLatest ? "yes" : "no (backfill mode)"}`
-    );
-  }
-  console.log(`   SDK path: ${SDK_PATH}`);
-
-  const entryPoint = path.join(SDK_PATH, "index.ts").replace(/\\/g, "/");
-  const tsconfigPath = path.join(SDK_PATH, "tsconfig.json").replace(/\\/g, "/");
-
-  try {
-    await fs.stat(entryPoint);
-  } catch {
+  if (options.isLatest && options.target) {
     throw new Error(
-      `SDK entry point not found: ${entryPoint}\n\n` +
-        `Either:\n` +
-        `  1. Ensure the sdk package exists at: ${SDK_PATH}\n` +
-        `  2. Or set SDK_PATH to your SDK root, e.g.:\n` +
-        `     set SDK_PATH=C:\\path\\to\\sdk   (Windows)\n` +
-        `     export SDK_PATH=/path/to/sdk     (Linux/macOS)\n` +
-        `  Then run: bun run scripts/generate-api-docs.ts 0.7.0`
+      `--latest and --target=<file> are mutually exclusive: --latest implies index.mdx`,
     );
   }
 
-  const app = await Application.bootstrapWithPlugins({
-    entryPoints: [entryPoint],
-    tsconfig: tsconfigPath,
-    excludePrivate: true,
-    excludeProtected: true,
-    excludeExternals: true,
-    skipErrorChecking: true,
-  });
+  const versionLabel = options.isLatest ? `v${version} (latest)` : `v${version}`;
 
-  const project = await app.convert();
-  if (!project) {
-    throw new Error("TypeDoc failed to convert project");
-  }
-
-  console.log(`✓ TypeDoc analysis complete`);
-
-  const apiFunctions = extractApiFunctions(project);
-  console.log(`✓ Extracted ${apiFunctions.length} API functions`);
-
-  if (apiFunctions.length === 0) {
-    throw new Error(
-      "No API functions extracted. Check that:\n" +
-        "  1. Functions are exported in index.ts\n" +
-        "  2. Functions have JSDoc comments\n" +
-        "  3. TypeScript compiles without errors"
-    );
-  }
-
-  console.log(`🔍 Validating extracted functions...`);
-  for (const fn of apiFunctions) {
-    validateApiFunction(fn);
-  }
-  console.log(`✓ Validation passed for all ${apiFunctions.length} functions`);
-
-  const outputFolder = options.devMode ? "dev" : `v${version}`;
-  const outputDir = path.join(
-    process.cwd(),
+  const apiDir = path.join(
+    DOCS_WEBSITE_DIR,
     "content",
     "docs",
-    outputFolder,
-    "sdk",
-    "api"
-  );
-  await fs.mkdir(outputDir, { recursive: true });
-
-  await Promise.all(
-    apiFunctions.map(async (fn) => {
-      const mdx = generateMDXForFunction(fn);
-      const sanitized = mdx.replace(/\bundefined\b/g, "—").trim();
-      if (!sanitized.startsWith("---")) {
-        throw new Error(`Generated invalid MDX for ${fn.name} (missing frontmatter)`);
-      }
-      await fs.writeFile(
-        path.join(outputDir, `${fn.name}.mdx`),
-        sanitized,
-        "utf-8"
-      );
-    })
+    "reference",
+    "api",
   );
 
-  console.log(`✓ Generated ${apiFunctions.length} MDX files`);
-
-  const indexMDX = generateIndexMDX(apiFunctions, label);
-  await fs.writeFile(path.join(outputDir, "index.mdx"), indexMDX, "utf-8");
-  console.log(`✓ Generated index.mdx`);
-
-  await generateErrorsPage(SDK_PATH, outputDir);
-
-  if (!options.devMode && options.updateLatest) {
-    await updateLatestSafely(version);
-  } else if (!options.devMode) {
-    console.log(`⏭️  Skipping latest update (--no-update-latest flag)`);
-  }
-
-  await smokeTestDir(outputDir);
-
-  console.log(`✅ API docs generation complete for ${label}`);
-  console.log(`   Location: ${outputDir}`);
-  console.log(
-    `   Files: ${apiFunctions.length + 2} (${apiFunctions.length} functions + index + errors)`
+  const outputFile = path.join(
+    apiDir,
+    options.target ??
+      (options.isLatest ? "index.mdx" : `v${version}.mdx`),
   );
-}
 
-function validateApiFunction(fn: ApiFunction): void {
-  const errors: string[] = [];
-  if (!fn.name?.trim()) errors.push("Missing name");
-  if (
-    !fn.description?.trim() ||
-    fn.description === "undefined" ||
-    fn.description === "null"
-  ) {
-    errors.push(
-      `Missing or invalid description (add JSDoc comment in source)`
-    );
-  }
-  if (!fn.signature?.trim()) errors.push("Missing signature");
-  if (
-    fn.description &&
-    (fn.description.includes("undefined") ||
-      fn.description.includes("[object Object]"))
-  ) {
-    errors.push(
-      `Description contains invalid placeholder: "${fn.description}"`
-    );
-  }
-  if (errors.length > 0) {
-    throw new Error(
-      `Validation failed for function "${fn.name || "unknown"}":\n` +
-        errors.map((e) => `  - ${e}`).join("\n")
-    );
-  }
-}
-
-function extractApiFunctions(project: any): ApiFunction[] {
-  const functions: ApiFunction[] = [];
-  const allFunctions = project.getReflectionsByKind(ReflectionKind.Function) as DeclarationReflection[];
-  for (const refl of allFunctions) {
-    const decl = refl as DeclarationReflection;
-    const sig = (decl.signatures?.[0] ?? decl.children?.find((c: any) => c.kind === ReflectionKind.CallSignature)) as SignatureReflection | undefined;
-    if (!sig) continue;
-    const comment = decl.comment ?? (sig as any).comment;
-    const summary = comment?.summary ?? (sig as any).comment?.summary;
-    const blockTags = comment?.blockTags ?? (sig as any).comment?.blockTags ?? [];
-    const sourcePath = (decl.sources?.[0]?.fullFileName ?? (decl as any).sources?.[0]?.file?.fullFileName ?? "") as string;
-    const normalizedPath = sourcePath.replace(/\\/g, "/");
-    if (normalizedPath && (normalizedPath.includes("/server/") || normalizedPath.includes("/examples/"))) continue;
-    functions.push({
-      name: decl.name,
-      signature: formatSignature(sig),
-      description: extractComment(summary) || "No description available",
-      parameters: ((sig as any).parameters || []).map((p: any) => ({
-        name: p.name,
-        type: formatType(p.type),
-        required: !p.flags?.isOptional,
-        description: extractComment(p.comment?.summary) || "",
-      })),
-      expandedParams: ((sig as any).parameters || [])
-        .map((p: any) => {
-          const typeName = getResolvableTypeName(p.type)
-            ?? (p.type?.type === "array" ? getResolvableTypeName(p.type.elementType) : null);
-          if (!typeName) return null;
-          const visited = new Set<string>([typeName]);
-          const target = p.type?.type === "array" ? p.type.elementType : p.type;
-          return resolveExpandedType(target, typeName, visited, 0);
-        })
-        .filter(Boolean) as ExpandedType[],
-      returns: {
-        type: formatType((sig as any).type),
-        description: extractComment((comment as any)?.returns ?? (sig as any).comment?.returns) || "",
-      },
-      returnFields: (() => {
-        const retType = (sig as any).type;
-        const props = extractTypeProperties(retType, new Set());
-        if (!props) return [];
-        return props.map((p: any) => ({
-          name: p.name,
-          type: formatType(p.type),
-          required: !p.flags?.isOptional,
-          description: extractComment(p.comment?.summary),
-        }));
-      })(),
-      expandedReturns: (() => {
-        const retType = (sig as any).type;
-        const results: ExpandedType[] = [];
-        const props = extractTypeProperties(retType, new Set());
-        if (props) {
-          for (const prop of props) {
-            const childName = getResolvableTypeName(prop.type)
-              ?? (prop.type?.type === "array" ? getResolvableTypeName(prop.type.elementType) : null);
-            if (!childName) continue;
-            const visited = new Set<string>([childName]);
-            const target = prop.type?.type === "array" ? prop.type.elementType : prop.type;
-            const expanded = resolveExpandedType(target, childName, visited, 0);
-            if (expanded) results.push(expanded);
-          }
-        }
-        return results;
-      })(),
-      throws: blockTags
-        .filter((tag: any) => tag.tag === "@throws")
-        .map((tag: any) => {
-          const text = extractComment(tag.content);
-          const match = text.match(/^\{([^}]+)\}\s*(.*)/);
-          if (match) return { error: match[1], description: match[2] };
-          return { error: text, description: "" };
-        })
-        .filter((t: any) => t.error) || [],
-      examples: blockTags
-        .filter((tag: any) => tag.tag === "@example")
-        .map((tag: any) => extractComment(tag.content)) || [],
-      deprecated: (() => {
-        const depTag = blockTags.find((tag: any) => tag.tag === "@deprecated");
-        if (depTag) return extractComment(depTag.content) || "This function is deprecated.";
-        if (comment?.isDeprecated) return "This function is deprecated.";
-        return undefined;
-      })(),
-    });
-  }
-  return functions.sort((a, b) => a.name.localeCompare(b.name));
-}
-
-function formatType(type: any): string {
-  if (!type) return "unknown";
-  if (type.type === "intrinsic") return type.name;
-  if (type.type === "reference") return type.name;
-  if (type.type === "union") {
-    return type.types.map((t: any) => formatType(t)).join(" | ");
-  }
-  if (type.type === "array") {
-    return `${formatType(type.elementType)}[]`;
-  }
-  return type.toString?.() ?? "unknown";
-}
-
-function formatSignature(signature: any): string {
-  const params = (signature.parameters || [])
-    .map(
-      (p: any) =>
-        `${p.name}${p.flags?.isOptional ? "?" : ""}: ${formatType(p.type)}`
-    )
-    .join(", ");
-  return `function ${signature.name}(${params}): ${formatType(signature.type)}`;
-}
-
-function extractComment(nodes: any): string {
-  if (!nodes) return "";
-  if (Array.isArray(nodes)) {
-    return nodes.map((node: any) => node.text || "").join("");
-  }
-  return nodes.text || "";
-}
-
-function resolveExpandedType(
-  type: any,
-  typeName: string,
-  visited: Set<string>,
-  depth: number,
-): ExpandedType | null {
-  if (depth > 4) return null;
-
-  const props = extractTypeProperties(type, visited);
-  if (!props || props.length === 0) return null;
-
-  const expanded: ExpandedType = { typeName, fields: [], children: [] };
-
-  for (const prop of props) {
-    expanded.fields.push({
-      name: prop.name,
-      type: formatType(prop.type),
-      required: !prop.flags?.isOptional,
-      defaultValue: prop.defaultValue ?? undefined,
-      description: extractComment(prop.comment?.summary),
-    });
-
-    const childTypeName = getResolvableTypeName(prop.type);
-    if (childTypeName && !visited.has(childTypeName)) {
-      const childVisited = new Set(visited);
-      childVisited.add(childTypeName);
-      const child = resolveExpandedType(prop.type, childTypeName, childVisited, depth + 1);
-      if (child) expanded.children.push(child);
-    }
-
-    if (prop.type?.type === "array" && prop.type.elementType) {
-      const elName = getResolvableTypeName(prop.type.elementType);
-      if (elName && !visited.has(elName)) {
-        const childVisited = new Set(visited);
-        childVisited.add(elName);
-        const child = resolveExpandedType(prop.type.elementType, elName, childVisited, depth + 1);
-        if (child) expanded.children.push(child);
-      }
-    }
-  }
-
-  return expanded;
-}
-
-function extractTypeProperties(type: any, visited: Set<string>): any[] | null {
-  if (!type) return null;
-
-  if (type.type === "reference") {
-    const refl = type.reflection ?? type.target;
-    if (refl && typeof refl === "object") {
-      if (refl.children) return refl.children;
-      if (refl.type) return extractTypeProperties(refl.type, visited);
-    }
-    return null;
-  }
-
-  if (type.type === "reflection" && type.declaration) {
-    if (type.declaration.children) return type.declaration.children;
-    if (type.declaration.signatures) {
-      return null;
-    }
-  }
-
-  if (type.type === "intersection" && type.types) {
-    const allProps: any[] = [];
-    for (const t of type.types) {
-      const props = extractTypeProperties(t, visited);
-      if (props) allProps.push(...props);
-    }
-    return allProps.length > 0 ? allProps : null;
-  }
-
-  return null;
-}
-
-function getResolvableTypeName(type: any): string | null {
-  if (!type) return null;
-  if (type.type === "reference" && type.reflection?.children) return type.reflection.name ?? type.name;
-  if (type.type === "reference" && type.target?.children) return type.target.name ?? type.name;
-  if (type.type === "reflection" && type.declaration?.children) return null;
-  return null;
-}
-
-function renderExpandedTypes(types: ExpandedType[], baseDepth: number): string {
-  const sections: string[] = [];
-
-  for (const expanded of types) {
-    const heading = "#".repeat(Math.min(baseDepth, 5));
-
-    sections.push(`${heading} \`${expanded.typeName}\`
-
-| Field | Type | Required? | Description |
-| --- | --- | :---: | --- |
-${expanded.fields
-  .map((f) => {
-    const typeStr = f.type.replace(/\{/g, "\\{").replace(/\}/g, "\\}").replace(/\|/g, "\\|");
-    return `| \`${f.name}\` | \`${typeStr}\` | ${f.required ? "✓" : "✗"} | ${(f.description || "—").replace(/\{/g, "\\{").replace(/\}/g, "\\}").replace(/\|/g, "\\|")} |`;
-  })
-  .join("\n")}`);
-
-    if (expanded.children.length > 0) {
-      sections.push(renderExpandedTypes(expanded.children, baseDepth + 1));
-    }
-  }
-
-  return sections.join("\n\n");
-}
-
-function generateMDXForFunction(fn: ApiFunction): string {
-  const expandedParamsSection = fn.expandedParams.length > 0
-    ? "\n\n" + renderExpandedTypes(fn.expandedParams, 3)
-    : "";
-
-  const parametersTable =
-    fn.parameters.length > 0
-      ? `## Parameters
-
-| Name | Type | Required? | Description |
-| --- | --- | :---: | --- |
-${fn.parameters
-  .map(
-    (p) => {
-      const typeStr = p.type.replace(/\{/g, "\\{").replace(/\}/g, "\\}");
-      const anchor = p.type.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-      const hasExpansion = fn.expandedParams.some(
-        (e) => e.typeName.toLowerCase() === p.type.toLowerCase()
-      );
-      const typeCell = hasExpansion ? `[\`${typeStr}\`](#${anchor})` : `\`${typeStr}\``;
-      return `| \`${p.name}\` | ${typeCell} | ${p.required ? "✓" : "✗"} | ${(p.description || "No description").replace(/\{/g, "\\{").replace(/\}/g, "\\}")} |`;
-    }
-  )
-  .join("\n")}${expandedParamsSection}`
-      : "";
-
-  const examplesSection = fn.examples?.length
-    ? `## Example
-
-${fn.examples
-  .map(
-    (ex) => {
-      const stripped = ex.replace(/^```\w*\n?/, "").replace(/\n?```\s*$/, "");
-      return `\`\`\`typescript\n${stripped}\n\`\`\``;
-    }
-  )
-  .join("\n\n")}`
-    : "";
-
-  const desc = String(fn.description ?? "No description available").replace(/"/g, '\\"').replace(/\bundefined\b/g, "—");
-  const returnsDesc = String(fn.returns?.description ?? "No description available").replace(/\bundefined\b/g, "—");
-
-  const deprecationCallout = fn.deprecated
-    ? `<Callout type="warn" title="Deprecated">\n${fn.deprecated}\n</Callout>\n\n`
-    : "";
-
-  const throwsSection = fn.throws?.length
-    ? `## Throws
-
-| Error | When |
-| --- | --- |
-${fn.throws.map((t) => `| \`${t.error}\` | ${t.description} |`).join("\n")}`
-    : "";
-
-  const returnFieldsTable = fn.returnFields.length > 0
-    ? `\n\n| Field | Type | Description |
-| --- | --- | --- |
-${fn.returnFields
-  .map((f) => {
-    const typeStr = f.type.replace(/\{/g, "\\{").replace(/\}/g, "\\}").replace(/\|/g, "\\|");
-    return `| \`${f.name}\` | \`${typeStr}\` | ${(f.description || "—").replace(/\{/g, "\\{").replace(/\}/g, "\\}").replace(/\|/g, "\\|")} |`;
-  })
-  .join("\n")}`
-    : "";
-
-  const expandedReturnsSection = fn.expandedReturns.length > 0
-    ? "\n\n" + renderExpandedTypes(fn.expandedReturns, 3)
-    : "";
-
-  return `---
-title: "${fn.name}( )"
-titleStyle: code
-description: "${desc}"
----
-
-${deprecationCallout}\`\`\`typescript
-${fn.signature}
-\`\`\`
-
-${parametersTable}
-
-## Returns
-
-\`\`\`typescript
-${fn.returns?.type ?? "unknown"}
-\`\`\`
-
-${returnsDesc}${returnFieldsTable}${expandedReturnsSection}
-
-${throwsSection}
-
-${examplesSection}
-`.trim();
-}
-
-function formatShortSignature(fn: ApiFunction): string {
-  const sig = fn.signature.replace(/^function\s+/, "");
-  return sig.replace(/\|/g, "\\|");
-}
-
-function generateIndexMDX(functions: ApiFunction[], versionLabel: string): string {
-  const firstSentence = (text: string) => {
-    const match = text.match(/^[^.!?]+[.!?]/);
-    return match ? match[0] : text;
-  };
-
-  return `---
-title: "@qvac/sdk"
-titleStyle: code
-description: API reference — ${versionLabel}
----
-
-## Overview
-
-\`@qvac/sdk\` npm package exposes a function-centric, typed JS API.
-
-## Functions
-
-| Function | Summary | Signature |
-| --- | --- | --- |
-${functions
-  .map((fn) => {
-    const summary = firstSentence(fn.description).replace(/\|/g, "\\|");
-    const sig = formatShortSignature(fn);
-    return `| [\`${fn.name}()\`](./${fn.name}) | ${summary} | \`${sig}\` |`;
-  })
-  .join("\n")}
-
-## Errors
-
-See [Errors](./errors) for the full list of SDK error codes.
-`;
-}
-
-function parseErrorCodes(source: string, constantName: string): ErrorEntry[] {
-  const codesBlockRe = new RegExp(
-    `${constantName}\\s*=\\s*\\{([\\s\\S]*?)\\}\\s*as\\s*const`
-  );
-  const codesMatch = source.match(codesBlockRe);
-  if (!codesMatch) return [];
-
-  const entries: ErrorEntry[] = [];
-  const lineRe = /(\w+):\s*(\d+)/g;
-  let m: RegExpExecArray | null;
-  while ((m = lineRe.exec(codesMatch[1])) !== null) {
-    entries.push({ name: m[1], code: parseInt(m[2], 10), summary: "" });
-  }
-
-  for (const entry of entries) {
-    const blockRe = new RegExp(
-      `\\[${constantName}\\.${entry.name}\\]:\\s*\\{[\\s\\S]*?message:\\s*([\\s\\S]*?)\\n\\s*\\},`
-    );
-    const blockMatch = source.match(blockRe);
-    if (blockMatch) {
-      const messagePart = blockMatch[1].trim();
-      let raw = "";
-      const stringMatch = messagePart.match(/^"([^"]+)"/);
-      const singleMatch = messagePart.match(/^'([^']+)'/);
-      if (stringMatch) {
-        raw = stringMatch[1];
-      } else if (singleMatch) {
-        raw = singleMatch[1];
-      } else {
-        const arrowBodyMatch = messagePart.match(/=>\s*([\s\S]*)/);
-        if (arrowBodyMatch) {
-          const body = arrowBodyMatch[1].trim();
-          const tlMatch = body.match(/`([^`]*)`/);
-          const strMatch = body.match(/"([^"]*)"/);
-          raw = tlMatch?.[1] ?? strMatch?.[1] ?? "";
-        }
-      }
-      if (raw) {
-        entry.summary = raw
-          .replace(/\$\{[^}]*\}/g, "…")
-          .replace(/\$\{.*$/g, "…")
-          .replace(/\s*\+\s*\([\s\S]*?\)/g, "")
-          .trim();
-      }
-    }
-    if (!entry.summary) {
-      entry.summary = entry.name
-        .replace(/_/g, " ")
-        .toLowerCase()
-        .replace(/^./, (c) => c.toUpperCase());
-    }
-  }
-
-  return entries;
-}
-
-async function generateErrorsPage(sdkPath: string, outputDir: string): Promise<void> {
-  const schemasDir = path.join(sdkPath, "schemas");
-  let clientSource = "";
-  let serverSource = "";
-
-  try {
-    clientSource = await fs.readFile(path.join(schemasDir, "sdk-errors-client.ts"), "utf-8");
-  } catch {
-    console.log("⚠️  sdk-errors-client.ts not found, skipping client errors");
-  }
-  try {
-    serverSource = await fs.readFile(path.join(schemasDir, "sdk-errors-server.ts"), "utf-8");
-  } catch {
-    console.log("⚠️  sdk-errors-server.ts not found, skipping server errors");
-  }
-
-  const clientErrors = parseErrorCodes(clientSource, "SDK_CLIENT_ERROR_CODES");
-  const serverErrors = parseErrorCodes(serverSource, "SDK_SERVER_ERROR_CODES");
-
-  if (clientErrors.length === 0 && serverErrors.length === 0) {
-    console.log("⚠️  No error codes found, skipping errors.mdx");
+  if (options.titleOnly) {
+    console.log(`📝 Title-only update for ${versionLabel}...`);
+    console.log(`   Target: ${outputFile}`);
+    await rewriteFrontmatterTitle(outputFile, versionLabel);
+    await smokeTest(outputFile);
+    console.log(`✅ Title-only update complete (${versionLabel})`);
+    console.log(`   Location: ${outputFile}`);
     return;
   }
 
-  function renderTable(errors: ErrorEntry[]): string {
-    return `| Error | Code | Summary |
-| --- | --- | --- |
-${errors.map((e) => `| \`${e.name}\` | ${e.code} | ${e.summary.replace(/\|/g, "\\|").replace(/[{}]/g, "\\$&")} |`).join("\n")}`;
-  }
+  console.log(`📚 Generating API summary for ${versionLabel}...`);
+  console.log(`   SDK path: ${SDK_PATH}`);
 
-  const sections: string[] = [];
+  // Phase 1: Extract
+  await extractApiData(SDK_PATH, version, {
+    forceExtract: options.forceExtract,
+  });
 
-  sections.push(`---
-title: Errors
-description: SDK error codes reference
----
-
-## Example
-
-\`\`\`typescript
-import { SDK_CLIENT_ERROR_CODES, SDK_SERVER_ERROR_CODES } from "@qvac/sdk";
-
-try {
-  await loadModel({ modelSrc: "/path/to/model.gguf", modelType: "llm" });
-} catch (error) {
-  if (error.code === SDK_SERVER_ERROR_CODES.MODEL_LOAD_FAILED) {
-    // handle model load failure
-  }
-}
-\`\`\``);
-
-  if (clientErrors.length > 0) {
-    sections.push(`## Client errors
-
-Thrown on the client side (response validation, RPC, provider). Access via \`SDK_CLIENT_ERROR_CODES.{ERROR_NAME}\`.
-
-${renderTable(clientErrors)}`);
-  }
-
-  if (serverErrors.length > 0) {
-    sections.push(`## Server errors
-
-Thrown by the server (model operations, downloads, cache, RAG). Access via \`SDK_SERVER_ERROR_CODES.{ERROR_NAME}\`.
-
-${renderTable(serverErrors)}`);
-  }
-
-  await fs.writeFile(
-    path.join(outputDir, "errors.mdx"),
-    sections.join("\n\n") + "\n",
-    "utf-8"
-  );
-  console.log(`✓ Generated errors.mdx (${clientErrors.length} client + ${serverErrors.length} server errors)`);
-}
-
-async function updateLatestSafely(version: string) {
-  const docsBase = path.join(process.cwd(), "content", "docs");
-  const latestApiDir = path.join(docsBase, "(latest)", "sdk", "api");
-  const versionApiDir = path.join(docsBase, `v${version}`, "sdk", "api");
-  const backupDir = path.join(docsBase, ".latest-api-backup");
-
-  console.log(`📌 Updating (latest)/sdk/api/ to match v${version}...`);
-
-  try {
-    const stat = await fs.stat(latestApiDir);
-    if (stat.isDirectory()) {
-      await fs.rm(backupDir, { recursive: true, force: true });
-      await fs.cp(latestApiDir, backupDir, { recursive: true });
-      console.log("✓ Backed up current (latest)/sdk/api/ → .latest-api-backup");
+  // Phase 1.5: AI augmentation (optional, non-fatal on failure)
+  if (!options.noAi) {
+    try {
+      const { isAugmentConfigured, augmentApiData } = await import(
+        "./api-docs/ai-augment.js"
+      );
+      if (isAugmentConfigured()) {
+        console.log("🤖 Running AI augmentation...");
+        const result = await augmentApiData(API_DATA_PATH);
+        console.log(
+          `✓ AI augmentation: ${result.augmented} augmented, ${result.skipped} skipped`,
+        );
+      } else {
+        console.log("⏭️  Skipping AI augmentation (env vars not configured)");
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.log(`⚠️  AI augmentation failed (non-fatal): ${msg}`);
     }
-  } catch {
-    console.log("✓ No previous (latest)/sdk/api/ to backup (first generation)");
   }
 
-  await fs.rm(latestApiDir, { recursive: true, force: true });
-  await fs.cp(versionApiDir, latestApiDir, { recursive: true });
-  console.log(`✓ Updated (latest)/sdk/api/ → v${version}`);
+  await renderApiDocs(API_DATA_PATH, {
+    versionLabel,
+    outputFile,
+  });
+
+  await smokeTest(outputFile);
+
+  console.log(`✅ API docs generation complete for ${versionLabel}`);
+  console.log(`   Location: ${outputFile}`);
 }
 
-async function smokeTestDir(apiDir: string): Promise<void> {
+/**
+ * Rewrite the `title:` line inside the frontmatter block of an existing
+ * MDX file without touching the body. Used by `--title-only` so a patch
+ * release bumps the displayed version label without re-running TypeDoc.
+ *
+ * The full title format is kept in lockstep with the title template in
+ * `scripts/api-docs/templates/single-page.njk` so title-only patches
+ * produce byte-identical headers to a full render at the same version.
+ *
+ * Thin wrapper around `rewriteFrontmatterTitleLine` from
+ * `lib/release-shared.ts`: the wrapper owns the "API Summary — ..." prefix
+ * so the lib stays prefix-agnostic and the release-notes generator can
+ * reuse the same helper with its own prefix.
+ *
+ * Exported so unit tests can validate the body-preserving behaviour
+ * without spinning up the full TypeDoc pipeline.
+ */
+export async function rewriteFrontmatterTitle(
+  filePath: string,
+  versionLabel: string,
+): Promise<void> {
+  await rewriteFrontmatterTitleLine(
+    filePath,
+    `API Summary — ${versionLabel}`,
+  );
+}
+
+/**
+ * Verify the generated file is well-formed MDX with the structural markers
+ * the website depends on. Catches accidental template breakage in CI before
+ * a broken doc reaches production.
+ */
+async function smokeTest(filePath: string): Promise<void> {
   console.log(`🧪 Running smoke test...`);
 
-  const indexPath = path.join(apiDir, "index.mdx");
-  await fs.stat(indexPath);
-
-  const files = await fs.readdir(apiDir);
-  const mdxFiles = files.filter(
-    (f) => f.endsWith(".mdx") && f !== "index.mdx"
-  );
-  if (mdxFiles.length === 0) {
-    throw new Error("Smoke test failed: No function docs generated");
-  }
-
-  for (const file of mdxFiles) {
-    const content = await fs.readFile(
-      path.join(apiDir, file),
-      "utf-8"
+  const content = await fs.readFile(filePath, "utf-8");
+  if (!content.startsWith("---\n")) {
+    throw new Error(
+      `Smoke test failed: ${path.basename(filePath)} is missing frontmatter`,
     );
-    if (!content.startsWith("---\n")) {
+  }
+  for (const required of ["title:", "description:"]) {
+    if (!content.includes(required)) {
       throw new Error(
-        `Smoke test failed: Invalid MDX in ${file} (missing frontmatter)`
+        `Smoke test failed: ${path.basename(filePath)} is missing ${required}`,
       );
     }
-    if (!content.includes("title:") || !content.includes("description:")) {
+  }
+  for (const heading of ["## Functions", "## Errors"]) {
+    if (!content.includes(heading)) {
       throw new Error(
-        `Smoke test failed: Invalid MDX in ${file} (missing required fields)`
+        `Smoke test failed: ${path.basename(filePath)} is missing ${heading} section`,
       );
     }
   }
 
-  console.log(`✅ Smoke test passed (${mdxFiles.length} files verified)`);
+  console.log(`✅ Smoke test passed`);
 }
 
-async function rollbackLatest(): Promise<void> {
-  const docsBase = path.join(process.cwd(), "content", "docs");
-  const latestApiDir = path.join(docsBase, "(latest)", "sdk", "api");
-  const backupDir = path.join(docsBase, ".latest-api-backup");
+// CLI — only runs when this module is invoked directly (not when imported
+// for unit tests). `import.meta.main` is true under both Bun and Node 24+.
+if (import.meta.main) {
+  const args = process.argv.slice(2);
+  const versionArg = args.find((arg) => !arg.startsWith("--"));
+  const isLatest = args.includes("--latest");
+  const forceExtract = args.includes("--force-extract");
+  const noAi = args.includes("--no-ai");
+  const titleOnly = args.includes("--title-only");
+  const targetFlag = args.find((arg) => arg.startsWith("--target="));
+  const target = targetFlag ? targetFlag.slice("--target=".length) : null;
 
-  const backupExists = await fs
-    .stat(backupDir)
-    .then(() => true)
-    .catch(() => false);
-  if (!backupExists) {
-    console.log("⚠️  No backup available to rollback to");
-    return;
-  }
-
-  await fs.rm(latestApiDir, { recursive: true, force: true });
-  await fs.cp(backupDir, latestApiDir, { recursive: true });
-  await fs.rm(backupDir, { recursive: true, force: true });
-  console.log("✅ Rolled back (latest)/sdk/api/ to previous version");
-}
-
-// CLI
-const args = process.argv.slice(2);
-const versionArg = args.find((arg) => !arg.startsWith("--"));
-const updateLatest = !args.includes("--no-update-latest");
-const rollback = args.includes("--rollback");
-const devMode = args.includes("--dev");
-
-if (rollback) {
-  rollbackLatest()
-    .then(() => process.exit(0))
-    .catch((err) => {
-      console.error("❌ Rollback failed:", err);
+  if (!versionArg) {
+    console.error("❌ Error: Version argument required\n");
+    console.error("Usage:");
+    console.error("  bun run scripts/generate-api-docs.ts <version> [flags]\n");
+    console.error("Flags:");
+    console.error(
+      "  --latest          Write to index.mdx instead of v<version>.mdx",
+    );
+    console.error(
+      "  --target=<file>   Override output filename inside api/ (mutually exclusive with --latest)",
+    );
+    console.error(
+      "  --title-only      Rewrite frontmatter title in-place (skips TypeDoc + render)",
+    );
+    console.error("  --no-ai           Skip AI augmentation (CI default)");
+    console.error(
+      "  --force-extract   Bypass mtime cache and re-run TypeDoc extraction\n",
+    );
+    console.error("Examples:");
+    console.error("  bun run scripts/generate-api-docs.ts 0.9.1 --latest");
+    console.error("  bun run scripts/generate-api-docs.ts 0.8.0 --no-ai");
+    console.error(
+      "  bun run scripts/generate-api-docs.ts 0.8.2 --target=v0.8.2.mdx --title-only",
+    );
+    process.exit(1);
+  } else {
+    generateApiDocs(versionArg, {
+      isLatest,
+      forceExtract,
+      noAi,
+      titleOnly,
+      target,
+    }).catch((error) => {
+      console.error("❌ Error generating API docs:", error.message);
+      if (error.stack) console.error("\nStack trace:", error.stack);
       process.exit(1);
     });
-} else if (devMode) {
-  generateApiDocs("dev", { updateLatest: false, devMode: true }).catch((error) => {
-    console.error("❌ Error generating dev API docs:", error.message);
-    if (error.stack) console.error("\nStack trace:", error.stack);
-    process.exit(1);
-  });
-} else if (!versionArg) {
-  console.error("❌ Error: Version argument required (or use --dev)\n");
-  console.error("Usage:");
-  console.error("  bun run scripts/generate-api-docs.ts <version> [flags]");
-  console.error("  bun run scripts/generate-api-docs.ts --dev\n");
-  console.error("Flags:");
-  console.error(
-    "  --dev                 Generate into dev/sdk/api/ (no versioned folder)"
-  );
-  console.error(
-    "  --no-update-latest    Skip updating latest/ (use for backfills)"
-  );
-  console.error("  --rollback            Restore previous version of latest/\n");
-  console.error("Examples:");
-  console.error("  bun run scripts/generate-api-docs.ts --dev");
-  console.error("  bun run scripts/generate-api-docs.ts 0.6.1");
-  console.error(
-    "  bun run scripts/generate-api-docs.ts 0.5.0 --no-update-latest"
-  );
-  console.error("  bun run scripts/generate-api-docs.ts --rollback");
-  process.exit(1);
-} else {
-  generateApiDocs(versionArg, { updateLatest }).catch((error) => {
-    console.error("❌ Error generating API docs:", error.message);
-    if (error.stack) console.error("\nStack trace:", error.stack);
-    if (updateLatest) {
-      console.log("\n🔄 Attempting rollback...");
-      rollbackLatest().catch((e) =>
-        console.error("❌ Rollback also failed:", e)
-      );
-    }
-    process.exit(1);
-  });
+  }
 }

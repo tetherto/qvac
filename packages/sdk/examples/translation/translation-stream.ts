@@ -2,17 +2,17 @@ import {
   loadModel,
   translate,
   unloadModel,
-  MARIAN_OPUS_EN_IT_Q4_0,
+  BERGAMOT_EN_ES,
 } from "@qvac/sdk";
 
 try {
   const modelId = await loadModel({
-    modelSrc: MARIAN_OPUS_EN_IT_Q4_0,
+    modelSrc: BERGAMOT_EN_ES,
     modelType: "nmt",
     modelConfig: {
-      engine: "Opus",
+      engine: "Bergamot",
       from: "en",
-      to: "it",
+      to: "es",
     },
   });
 
@@ -29,7 +29,7 @@ try {
     stream: true,
   });
 
-  process.stdout.write("Translated text EN -> IT: ");
+  process.stdout.write("Translated text EN -> ES: ");
   for await (const token of streamResult.tokenStream) {
     process.stdout.write(token);
   }

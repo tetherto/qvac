@@ -49,7 +49,7 @@ export class ShardedModelExecutor extends AbstractModelExecutor<typeof shardedMo
     const modelId = await this.resources.ensureLoaded("sharded-embeddings");
 
     try {
-      const embeddings = await embed({ modelId, text: p.text });
+      const { embedding: embeddings } = await embed({ modelId, text: p.text });
       return ValidationHelpers.validate(embeddings, expectation as Expectation);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
@@ -64,7 +64,7 @@ export class ShardedModelExecutor extends AbstractModelExecutor<typeof shardedMo
     try {
       const embeddings = [];
       for (const text of p.texts) {
-        const embedding = await embed({ modelId, text });
+        const { embedding } = await embed({ modelId, text });
         embeddings.push(embedding);
       }
       return ValidationHelpers.validate(embeddings, expectation as Expectation);

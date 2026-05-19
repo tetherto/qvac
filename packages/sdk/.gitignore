@@ -12,3 +12,4 @@ tests-qvac/reports/*
 .artifacts
 qvac/
 PR_DESCRIPTION.md
+examples/finetune/results/

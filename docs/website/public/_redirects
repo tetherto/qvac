@@ -1,11 +1,126 @@
-# Workaround: Sevalla CDN pathMap does not resolve directory-to-index.html
-# for path segments containing dots (e.g. v0.7.0). Placeholder rewrites
-# force the CDN to serve the correct index.html for versioned pages.
+# Sevalla CDN does not resolve directory-to-index.html for path segments
+# containing dots (e.g. `v0.7.0`). The new versioning model serves each
+# older version as a single sibling MDX (`/reference/api/v0.7.0`), so we
+# rewrite those paths to their `index.html` explicitly.
 
-/v0.7.0/sdk/api/:page/ /v0.7.0/sdk/api/:page/index.html 200
-/v0.7.0/sdk/api/:page /v0.7.0/sdk/api/:page/index.html 200
-/v0.7.0/sdk/api/ /v0.7.0/sdk/api/index.html 200
+/reference/api/v0.7.0/   /reference/api/v0.7.0/index.html   200
+/reference/api/v0.7.0    /reference/api/v0.7.0/index.html   200
 
-/v0.8.0/sdk/api/:page/ /v0.8.0/sdk/api/:page/index.html 200
-/v0.8.0/sdk/api/:page /v0.8.0/sdk/api/:page/index.html 200
-/v0.8.0/sdk/api/ /v0.8.0/sdk/api/index.html 200
+/reference/api/v0.8.0/   /reference/api/v0.8.0/index.html   200
+/reference/api/v0.8.0    /reference/api/v0.8.0/index.html   200
+
+/reference/api/v0.9.1/   /reference/api/v0.9.1/index.html   200
+/reference/api/v0.9.1    /reference/api/v0.9.1/index.html   200
+
+/reference/api/v0.10.0/   /reference/api/v0.10.0/index.html   200
+/reference/api/v0.10.0    /reference/api/v0.10.0/index.html   200
+
+/reference/release-notes/v0.7.0/   /reference/release-notes/v0.7.0/index.html   200
+/reference/release-notes/v0.7.0    /reference/release-notes/v0.7.0/index.html   200
+
+/reference/release-notes/v0.8.0/   /reference/release-notes/v0.8.0/index.html   200
+/reference/release-notes/v0.8.0    /reference/release-notes/v0.8.0/index.html   200
+
+/reference/release-notes/v0.9.1/   /reference/release-notes/v0.9.1/index.html   200
+/reference/release-notes/v0.9.1    /reference/release-notes/v0.9.1/index.html   200
+
+/reference/release-notes/v0.10.0/   /reference/release-notes/v0.10.0/index.html   200
+/reference/release-notes/v0.10.0    /reference/release-notes/v0.10.0/index.html   200
+
+# Legacy paths — links from qvac.tether.io and older bookmarks (301 → current IA).
+
+# Section rename: /about-qvac/* → /about/* (+ deletions folded into home)
+/about-qvac/welcome/         /                            301
+/about-qvac/welcome          /                            301
+/about-qvac/flagship-apps/   /                            301
+/about-qvac/flagship-apps    /                            301
+/about-qvac/how-it-works/    /about/how-it-works/         301
+/about-qvac/how-it-works     /about/how-it-works/         301
+/about-qvac/public-launch/   /about/public-launch/        301
+/about-qvac/public-launch    /about/public-launch/        301
+/about-qvac/vision/          /about/vision/               301
+/about-qvac/vision           /about/vision/               301
+
+# Section rename: /sdk/getting-started/* → top-level guides
+/sdk/getting-started/                /introduction/    301
+/sdk/getting-started                 /introduction/    301
+/sdk/getting-started/quickstart/     /quickstart/      301
+/sdk/getting-started/quickstart      /quickstart/      301
+/sdk/getting-started/installation/   /installation/    301
+/sdk/getting-started/installation    /installation/    301
+/sdk/getting-started/configuration/  /configuration/   301
+/sdk/getting-started/configuration   /configuration/   301
+
+# Section rename: /sdk/examples/ai-tasks/* → /ai-capabilities/*
+/sdk/examples/ai-tasks/completion/         /ai-capabilities/text-generation/    301
+/sdk/examples/ai-tasks/completion          /ai-capabilities/text-generation/    301
+/sdk/examples/ai-tasks/fine-tuning/        /ai-capabilities/fine-tuning/        301
+/sdk/examples/ai-tasks/fine-tuning         /ai-capabilities/fine-tuning/        301
+/sdk/examples/ai-tasks/image-generation/   /ai-capabilities/image-generation/   301
+/sdk/examples/ai-tasks/image-generation    /ai-capabilities/image-generation/   301
+/sdk/examples/ai-tasks/multimodal/         /ai-capabilities/multimodal/         301
+/sdk/examples/ai-tasks/multimodal          /ai-capabilities/multimodal/         301
+/sdk/examples/ai-tasks/ocr/                /ai-capabilities/ocr/                301
+/sdk/examples/ai-tasks/ocr                 /ai-capabilities/ocr/                301
+/sdk/examples/ai-tasks/rag/                /ai-capabilities/rag/                301
+/sdk/examples/ai-tasks/rag                 /ai-capabilities/rag/                301
+/sdk/examples/ai-tasks/text-embeddings/    /ai-capabilities/text-embeddings/    301
+/sdk/examples/ai-tasks/text-embeddings     /ai-capabilities/text-embeddings/    301
+/sdk/examples/ai-tasks/text-to-speech/     /ai-capabilities/text-to-speech/     301
+/sdk/examples/ai-tasks/text-to-speech      /ai-capabilities/text-to-speech/     301
+/sdk/examples/ai-tasks/transcription/      /ai-capabilities/transcription/      301
+/sdk/examples/ai-tasks/transcription       /ai-capabilities/transcription/      301
+/sdk/examples/ai-tasks/translation/        /ai-capabilities/translation/        301
+/sdk/examples/ai-tasks/translation         /ai-capabilities/translation/        301
+/sdk/examples/ai-tasks/voice-assistant/    /ai-capabilities/voice-assistant/    301
+/sdk/examples/ai-tasks/voice-assistant     /ai-capabilities/voice-assistant/    301
+
+# Section rename: /sdk/examples/p2p/* → /p2p-capabilities/*
+/sdk/examples/p2p/blind-relays/          /p2p-capabilities/blind-relays/          301
+/sdk/examples/p2p/blind-relays           /p2p-capabilities/blind-relays/          301
+/sdk/examples/p2p/delegated-inference/   /p2p-capabilities/delegated-inference/   301
+/sdk/examples/p2p/delegated-inference    /p2p-capabilities/delegated-inference/   301
+
+# Section rename: /sdk/examples/utilities/* → /runtime/*, /models/*, /configuration/plugins/*
+/sdk/examples/utilities/logging/              /runtime/logging/                          301
+/sdk/examples/utilities/logging               /runtime/logging/                          301
+/sdk/examples/utilities/profiler/             /runtime/profiler/                         301
+/sdk/examples/utilities/profiler              /runtime/profiler/                         301
+/sdk/examples/utilities/runtime-lifecycle/    /runtime/lifecycle/                        301
+/sdk/examples/utilities/runtime-lifecycle     /runtime/lifecycle/                        301
+/sdk/examples/utilities/download-lifecycle/   /models/download-lifecycle/                301
+/sdk/examples/utilities/download-lifecycle    /models/download-lifecycle/                301
+/sdk/examples/utilities/sharded-models/       /models/sharded-models/                    301
+/sdk/examples/utilities/sharded-models        /models/sharded-models/                    301
+/sdk/examples/utilities/plugin-system/        /configuration/plugins/                    301
+/sdk/examples/utilities/plugin-system         /configuration/plugins/                    301
+/sdk/examples/utilities/write-custom-plugin/  /configuration/plugins/write-custom-plugin/  301
+/sdk/examples/utilities/write-custom-plugin   /configuration/plugins/write-custom-plugin/  301
+
+# Section rename: /sdk/api → /reference/api, /sdk/release-notes → /reference/release-notes
+/sdk/api/                       /reference/api/                       301
+/sdk/api                        /reference/api/                       301
+/sdk/api/v0.7.0/                /reference/api/v0.7.0/                301
+/sdk/api/v0.7.0                 /reference/api/v0.7.0/                301
+/sdk/api/v0.8.0/                /reference/api/v0.8.0/                301
+/sdk/api/v0.8.0                 /reference/api/v0.8.0/                301
+/sdk/api/v0.9.1/                /reference/api/v0.9.1/                301
+/sdk/api/v0.9.1                 /reference/api/v0.9.1/                301
+/sdk/release-notes/             /reference/release-notes/             301
+/sdk/release-notes              /reference/release-notes/             301
+/sdk/release-notes/v0.7.0/      /reference/release-notes/v0.7.0/      301
+/sdk/release-notes/v0.7.0       /reference/release-notes/v0.7.0/      301
+/sdk/release-notes/v0.8.0/      /reference/release-notes/v0.8.0/      301
+/sdk/release-notes/v0.8.0       /reference/release-notes/v0.8.0/      301
+/sdk/release-notes/v0.9.1/      /reference/release-notes/v0.9.1/      301
+/sdk/release-notes/v0.9.1       /reference/release-notes/v0.9.1/      301
+
+# Section rename: /sdk/tutorials/* → /tutorials/*
+/sdk/tutorials/electron/   /tutorials/electron/   301
+/sdk/tutorials/electron    /tutorials/electron/   301
+/sdk/tutorials/expo/       /tutorials/expo/       301
+/sdk/tutorials/expo        /tutorials/expo/       301
+
+# Section rename: /http-server → /cli/http-server
+/http-server/   /cli/http-server/   301
+/http-server    /cli/http-server/   301

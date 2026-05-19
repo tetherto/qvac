@@ -1,0 +1,106 @@
+name: CPP Tests (GGML Classification)
+
+on:
+  workflow_dispatch:
+    inputs:
+      workdir:
+        description: "Working directory"
+        type: string
+        required: false
+        default: "packages/classification-ggml"
+  workflow_call:
+    inputs:
+      ref:
+        description: "Git ref to checkout"
+        type: string
+        required: false
+      repository:
+        description: "Repository to checkout"
+        type: string
+        required: false
+      workdir:
+        description: "Working directory"
+        type: string
+        required: false
+        default: "packages/classification-ggml"
+
+permissions:
+  contents: read
+
+jobs:
+  test-cpp:
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
+          - os: macos-15
+            platform: darwin
+            arch: arm64
+          - os: windows-2022
+            platform: win32
+            arch: x64
+
+    runs-on: ${{ matrix.os }}
+    environment: release
+    name: cpp-tests-${{ matrix.platform }}-${{ matrix.arch }}
+
+    env:
+      WORKDIR: ${{ inputs.workdir }}
+
+    steps:
+      - name: Setup build host
+        uses: tetherto/qvac/.github/actions/setup-build-host@1d9b2165867d03c6edd675e402ee101a5d48a6d8
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Setup AWS + Windows CLI
+        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@0bbdca93da303a0b1634ba14a89cec085621078d
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+
+      - name: Setup vcpkg
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@1d9b2165867d03c6edd675e402ee101a5d48a6d8
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        with:
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+
+      - name: Cleanup vcpkg
+        shell: bash
+        run: |
+          rm -rf $VCPKG_ROOT/buildtrees/*
+          rm -rf $VCPKG_ROOT/packages/*
+
+      - name: Setup Bare tooling
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@926f6f14092fbacaa3606ea475457fddf37d9838
+
+      - name: Setup Apple Clang
+        if: ${{ matrix.platform == 'darwin' }}
+        uses: tetherto/qvac/.github/actions/setup-apple-clang@1d9b2165867d03c6edd675e402ee101a5d48a6d8
+
+      - name: Install npm dependencies
+        working-directory: ${{ env.WORKDIR }}
+        run: npm install --ignore-scripts
+
+      - name: Build C++ tests
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run test:cpp:build
+
+      - name: Run C++ tests
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run test:cpp:run

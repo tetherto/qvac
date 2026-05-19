@@ -1,3 +1,14 @@
+/**
+ * OCR example using the QVAC SDK.
+ *
+ * Usage:
+ *   bun examples/ocr-fasttext.ts [path-to-image]
+ *
+ * This example requires a test image (default: examples/image/basic_test.bmp).
+ * Sample images are available in the QVAC source repository, but not included in the published npm package.
+ * Pass a custom image path, or download the default image into examples/image/:
+ *   https://github.com/tetherto/qvac/blob/main/packages/sdk/examples/image/basic_test.bmp
+ */
 import {
   close,
   loadModel,

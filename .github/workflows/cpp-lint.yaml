@@ -1,0 +1,218 @@
+name: cpp-lint
+
+on:
+  workflow_call:
+    inputs:
+      sha:
+        required: false
+        description: >-
+          Base ref/SHA to diff against for clang-format. When empty (e.g. on
+          workflow_dispatch runs without a PR context), the workflow falls
+          back to `github.event.before` and finally to `HEAD~1`.
+        type: string
+      pr_head_sha:
+        required: false
+        description: >-
+          PR head SHA to checkout. When empty, falls back to `github.sha`.
+        type: string
+      workdir:
+        default: "."
+        type: string
+      include-vulkan-sdk:
+        description: "Run the setup-vulkan-sdk action before generating the build system"
+        type: boolean
+        required: false
+        default: true
+
+jobs:
+  cpp-lint:
+    runs-on: qvac-ubuntu2204-x64
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      WORKDIR: ${{ inputs.workdir }}
+    steps:
+      - name: Resolve refs
+        shell: bash
+        env:
+          INPUT_SHA: ${{ inputs.sha }}
+          INPUT_PR_HEAD_SHA: ${{ inputs.pr_head_sha }}
+          EVENT_BEFORE: ${{ github.event.before }}
+          PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          GH_REPO: ${{ github.repository }}
+          GH_REF: ${{ github.ref }}
+          GH_SHA: ${{ github.sha }}
+        run: |
+          BASE_SHA="${INPUT_SHA:-${EVENT_BEFORE:-HEAD~1}}"
+          HEAD_SHA="${INPUT_PR_HEAD_SHA:-$GH_SHA}"
+          HEAD_REPO="${PR_HEAD_REPO:-$GH_REPO}"
+          HEAD_REF="${PR_HEAD_REF:-$GH_REF}"
+          {
+            echo "BASE_SHA=$BASE_SHA"
+            echo "HEAD_SHA=$HEAD_SHA"
+            echo "HEAD_REPO=$HEAD_REPO"
+            echo "HEAD_REF=$HEAD_REF"
+          } >> "$GITHUB_ENV"
+          echo "Resolved:"
+          echo "  BASE_SHA=$BASE_SHA"
+          echo "  HEAD_SHA=$HEAD_SHA"
+          echo "  HEAD_REPO=$HEAD_REPO"
+          echo "  HEAD_REF=$HEAD_REF"
+
+      # - name: Setup build host
+      #   uses: tetherto/qvac/.github/actions/setup-build-host@df55c85d7b8004961e430557e85b6ec1b15cf170
+      #   with:
+      #     platform: linux
+      #     arch: x64
+
+      # - name: Setup LLVM
+      #   uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+          submodules: recursive
+          repository: ${{ env.HEAD_REPO }}
+          ref: ${{ env.HEAD_REF }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Setup AWS + Windows CLI
+        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@0bbdca93da303a0b1634ba14a89cec085621078d
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+
+      - name: Setup vcpkg
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@1d9b2165867d03c6edd675e402ee101a5d48a6d8
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        with:
+          platform: linux
+          arch: x64
+
+      - name: Cleanup vcpkg
+        shell: bash
+        run: |
+          rm -rf $VCPKG_ROOT/buildtrees/*
+          rm -rf $VCPKG_ROOT/packages/*
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Install bare tooling
+        run: npm install -g --force bare bare-make
+
+      # - if: ${{ inputs.include-vulkan-sdk }}
+      #   name: Setup Vulkan SDK
+      #   uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@0bbdca93da303a0b1634ba14a89cec085621078d
+      #   env:
+      #     MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+      #   with:
+      #     platform: linux
+      #     arch: x64
+      #     aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+      #     aws-region: eu-central-1
+
+      - if: ${{ inputs.include-vulkan-sdk }}
+        name: Set Vulkan SDK path in Linux x64
+        shell: bash
+        run: |
+          echo "VULKAN_SDK=/opt/vulkansdk/x86_64" >> "$GITHUB_ENV"
+
+      - name: Install npm dependencies
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: npm install
+
+      - name: Generate build system
+        id: bare_make_generate
+        working-directory: ${{ env.WORKDIR }}
+        run: bare-make generate -D ENABLE_VULKAN=OFF
+
+      - name: Check C++ files format
+        id: cpp_files_fmt
+        continue-on-error: true
+        run: |
+          if ! git-clang-format --binary clang-format --extensions c,cc,cpp,cxx,h,hh,hpp,hxx --diff "$BASE_SHA" -- "${{ inputs.workdir }}"; then
+            echo "::error title=Unformatted C++ files::Please format your C++ files with 'git-clang-format --binary clang-format --extensions c,cc,cpp,cxx,h,hh,hpp,hxx $BASE_SHA -- ${{ inputs.workdir }}'"
+            exit 1
+          fi
+
+      - name: Run C++ clang-tidy
+        id: run_cpp_clang_tidy
+        continue-on-error: true
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          set -uo pipefail
+
+          mapfile -t CHANGED < <(
+            git diff --name-only --diff-filter=ACMR --relative "$BASE_SHA" HEAD -- . \
+              | grep -E '\.(c|cc|cpp|cxx)$' || true
+          )
+          if [ ${#CHANGED[@]} -eq 0 ]; then
+            echo "No C/C++ source files modified in this package; skipping clang-tidy."
+            exit 0
+          fi
+
+          helper="$(find build -name clang-tidy-helper.py -print -quit)"
+          if [ -z "$helper" ]; then
+            echo "::error::clang-tidy-helper.py not found in build/"
+            exit 1
+          fi
+
+          mapfile -t TUS < <("$helper" build/compile_commands.json --files)
+          declare -A TU_SET
+          for f in "${TUS[@]}"; do TU_SET["$f"]=1; done
+
+          SELECTED=()
+          for f in "${CHANGED[@]}"; do
+            [ -n "${TU_SET[$f]:-}" ] && SELECTED+=("$f")
+          done
+
+          if [ ${#SELECTED[@]} -eq 0 ]; then
+            echo "Changed sources are not in compile_commands.json; skipping clang-tidy."
+            exit 0
+          fi
+
+          BASE_CMD=$("$helper" build/compile_commands.json --clang-tidy-cmd)
+          BUILD_DIR=$(echo "$BASE_CMD" | sed -nE 's/^clang-tidy -p ([^ ]+).*/\1/p')
+          HEADER_FILTER_VAL=$(echo "$BASE_CMD" | sed -nE "s/.*--header-filter='([^']+)'.*/\1/p")
+
+          echo "Linting ${#SELECTED[@]} changed file(s):"
+          printf '  %s\n' "${SELECTED[@]}"
+
+          # `--warnings-as-errors='*'` promotes every enabled check (per
+          # `.clang-tidy`'s `Checks:`) into an error so the exit code reflects
+          # diagnostics; without it clang-tidy exits 0 even when it prints
+          # warnings, since `WarningsAsErrors:` is empty in the shared config.
+          if clang-tidy -p "$BUILD_DIR" "${SELECTED[@]}" --header-filter="$HEADER_FILTER_VAL" --warnings-as-errors='*'; then
+            echo "OK: clang-tidy passed without errors."
+          else
+            echo "::error title=Static analysis failed::clang-tidy found issues."
+            exit 1
+          fi
+
+      - name: Check for errors
+        run: |
+          count=0
+          if [ "${{ steps.cpp_files_fmt.outcome }}" = "failure" ]; then
+            echo "::error::Step - Check C++ files format failed"
+            count=$((count + 1))
+          fi
+          if [ "${{ steps.run_cpp_clang_tidy.outcome }}" = "failure" ]; then
+            echo "::error::Step - Run C++ clang-tidy failed"
+            count=$((count + 1))
+          fi
+          if [ $count -gt 0 ]; then
+            echo "::error::There were $count failed checks"
+            exit 1
+          fi

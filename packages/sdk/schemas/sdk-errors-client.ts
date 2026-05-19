@@ -10,12 +10,15 @@ export const SDK_CLIENT_ERROR_CODES = {
   INVALID_TOOLS_ARRAY: 50005,
   INVALID_TOOL_SCHEMA: 50006,
   OCR_FAILED: 50007,
+  MODEL_TYPE_REQUIRED: 50008,
+  MODEL_SRC_TYPE_MISMATCH: 50009,
 
   // RPC Communication Errors (50,200-50,399)
   RPC_NO_HANDLER: 50200,
   RPC_REQUEST_NOT_SENT: 50201,
   RPC_RESPONSE_STREAM_NOT_CREATED: 50202,
   RPC_CONNECTION_FAILED: 50203,
+  RPC_INIT_TIMEOUT: 50204,
 
   // Provider/Delegation Errors (50,400-50,599)
   PROVIDER_START_FAILED: 50400,
@@ -34,6 +37,7 @@ export const SDK_CLIENT_ERROR_CODES = {
   CONFIG_VALIDATION_FAILED: 50605,
   PEAR_WORKER_ENTRY_REQUIRED: 50606,
   MULTIPLE_SDK_INSTALLATIONS: 50607,
+  BUNDLE_VERIFICATION_FAILED: 50609,
 
   // Profiler Errors (50,800-50,899)
   PROFILER_INVALID_CAPACITY: 50800,
@@ -71,6 +75,16 @@ const clientErrorDefinitions: ErrorCodesMap = {
     message: (details?: string) =>
       `OCR operation failed${details ? `: ${details}` : ""}`,
   },
+  [SDK_CLIENT_ERROR_CODES.MODEL_TYPE_REQUIRED]: {
+    name: "MODEL_TYPE_REQUIRED",
+    message:
+      'modelType is required: modelSrc is a plain string or lacks an engine/addon descriptor that can be inferred. Pass an explicit canonical modelType (e.g. "llamacpp-completion", "whispercpp-transcription", "nmtcpp-translation", "llamacpp-embedding", "onnx-tts", "onnx-ocr", "parakeet-transcription", "sdcpp-generation") or use a model constant that carries engine metadata.',
+  },
+  [SDK_CLIENT_ERROR_CODES.MODEL_SRC_TYPE_MISMATCH]: {
+    name: "MODEL_SRC_TYPE_MISMATCH",
+    message: (inferred: string, resolved: string) =>
+      `modelSrc describes "${inferred}", but modelType resolves to "${resolved}". Omit modelType to infer it automatically, or pass a matching modelType.`,
+  },
 
   // RPC Communication Errors (50,200-50,399)
   [SDK_CLIENT_ERROR_CODES.RPC_NO_HANDLER]: {
@@ -89,6 +103,11 @@ const clientErrorDefinitions: ErrorCodesMap = {
   [SDK_CLIENT_ERROR_CODES.RPC_CONNECTION_FAILED]: {
     name: "RPC_CONNECTION_FAILED",
     message: (details: string) => `RPC connection failed: ${details}`,
+  },
+  [SDK_CLIENT_ERROR_CODES.RPC_INIT_TIMEOUT]: {
+    name: "RPC_INIT_TIMEOUT",
+    message: (timeoutMs: number) =>
+      `RPC initialization timed out after ${timeoutMs}ms — the worker process may have failed to start`,
   },
 
   // Provider/Delegation Errors (50,400-50,599)
@@ -156,6 +175,11 @@ const clientErrorDefinitions: ErrorCodesMap = {
     message: (workerEntry: string) =>
       `No plugins registered. Pear apps must spawn ${workerEntry} as the worker entry. Run \`npx qvac bundle sdk\` to generate it, then spawn the generated file instead of your worker directly.`,
   },
+  [SDK_CLIENT_ERROR_CODES.BUNDLE_VERIFICATION_FAILED]: {
+    name: "BUNDLE_VERIFICATION_FAILED",
+    message: (bundlePath: string) =>
+      `qvac verify bundle reported error-level issues for ${bundlePath}. See the CLI output above for the failing addons/hosts; resolve them before shipping.`,
+  },
 
   // Profiler Errors (50,800-50,899)
   [SDK_CLIENT_ERROR_CODES.PROFILER_INVALID_CAPACITY]: {
@@ -165,6 +189,6 @@ const clientErrorDefinitions: ErrorCodesMap = {
   },
 };
 
-addCodes(clientErrorDefinitions, { name: "qvac-sdk-client", version: "1.1.0" });
+addCodes(clientErrorDefinitions, { name: "qvac-sdk-client", version: "1.2.0" });
 
 export { clientErrorDefinitions as SDK_CLIENT_ERROR_DEFINITIONS };

@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { readBody, sendJson, sendError } from '../../../http.js'
 import { resolveModelAlias } from '../../../config.js'
 import { sdkEmbed } from '../../../core/sdk.js'
+import { bindClientDisconnectCancel } from '../../../core/cancel-bridge.js'
 import type { RouteContext } from '../../types.js'
 
 export async function handleEmbeddings (req: IncomingMessage, res: ServerResponse, ctx: RouteContext): Promise<void> {
@@ -60,10 +61,17 @@ export async function handleEmbeddings (req: IncomingMessage, res: ServerRespons
   ctx.logger.info(`  embed model=${modelAlias} inputs=${inputs.length}`)
 
   try {
-    const embeddings = await sdkEmbed({
+    const op = await sdkEmbed({
       modelId: sdkModelId,
       text: inputs.length === 1 ? inputs[0]! : inputs
     })
+
+    // Bind the disconnect bridge before awaiting the result so a
+    // client-abort during a long batch embed lands on the in-flight
+    // requestId rather than completing the whole batch.
+    bindClientDisconnectCancel(req, res, op.requestId, ctx.logger)
+
+    const embeddings = await op.result
 
     const isBatch = Array.isArray(embeddings[0])
     const vectors = isBatch ? embeddings as number[][] : [embeddings as number[]]

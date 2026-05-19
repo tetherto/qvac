@@ -64,7 +64,7 @@ try {
 
   console.log("📚 Embedding documents...");
   for (const sample of samples) {
-    const embedding = await embed({ modelId, text: sample.text });
+    const { embedding } = await embed({ modelId, text: sample.text });
     db.exec({
       sql: "INSERT INTO documents VALUES (?, ?, vector_as_f32(?))",
       bind: [sample.id, sample.text, JSON.stringify(embedding)],
@@ -84,7 +84,7 @@ try {
 
   // Search for similar documents
   console.log("🔎 Searching for similar documents...");
-  const queryEmbedding = await embed({ modelId, text: query });
+  const { embedding: queryEmbedding } = await embed({ modelId, text: query });
 
   const results: Array<{
     id: number;

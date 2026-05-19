@@ -1,0 +1,22 @@
+{
+  "overlay-ports": [
+    "vcpkg/ports"
+  ],
+  "default-registry": {
+    "kind": "git",
+    "baseline": "d1b2497b1707baf7bd1f352eb08097c7f9d5cfd9",
+    "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git"
+  },
+  "registries": [
+    {
+      "kind": "git",
+      "baseline": "16c71a39e5a0fc0bdb3fad03beef8f38ee00ee3b",
+      "repository": "https://github.com/microsoft/vcpkg",
+      "packages": [
+        "gtest",
+        "picojson",
+        "stb"
+      ]
+    }
+  ]
+}

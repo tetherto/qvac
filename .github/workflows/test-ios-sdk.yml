@@ -22,6 +22,14 @@ on:
         description: "Filter tests by category or testId prefix (comma-separated)"
         required: false
         type: string
+      suite:
+        description: "Suite filter (e.g. 'smoke'). Empty = all tests."
+        required: false
+        type: string
+      exclude-suite:
+        description: "Exclude suites (comma-separated)"
+        required: false
+        type: string
       device-farm-timeout:
         description: "Maximum time in minutes to keep Device Farm session alive."
         required: false
@@ -40,54 +48,103 @@ on:
         required: false
         type: string
       cache-models:
-        description: "Pre-cache models between runs (S3-backed, manifest pushed to app via Appium)"
+        description: |
+          When true, pre-cache the full mobile model bundle in S3 (us-west-2,
+          same region as Device Farm) and pass a presigned-URL manifest to
+          each device through the Appium NODE test package. The on-device
+          `copyModelsFromCache` hook stages those blobs into the SDK cache
+          before bootstrap, replacing the cold-cache Hyperdrive DHT pull.
+          When false (default), behaviour matches a stock CI run.
         required: false
         type: boolean
         default: false
     secrets:
+      # MQTT_*, NPM_TOKEN, and Apple signing secrets (TEST_APP_APPLE_*,
+      # APPLE_P12_PASSWORD, APPLE_KEYCHAIN_PASSWORD) are typically provided
+      # via the release environment (see jobs with `environment: release`).
+      # They are declared required: false here so `secrets: inherit` from a
+      # caller with no repo-level values does not fail at the workflow_call
+      # boundary; the jobs that consume them have environment access.
+      # PAT_TOKEN and AWS_OIDC_ROLE_ARN remain required:true because they are
+      # repo-level.
       PAT_TOKEN:
         required: true
       NPM_TOKEN:
-        required: true
+        required: false
       MQTT_PROTOCOL:
-        required: true
+        required: false
       MQTT_HOST:
-        required: true
+        required: false
       MQTT_PORT:
-        required: true
+        required: false
       MQTT_USERNAME:
-        required: true
+        required: false
       MQTT_PASSWORD:
-        required: true
+        required: false
       MQTT_CA_CERT:
         required: false
       AWS_OIDC_ROLE_ARN:
         required: true
+      # Only consumed when `cache-models=true`. Declared optional so callers
+      # that don't enable the cache don't need to provision it.
+      MODEL_S3_BUCKET:
+        required: false
       TEST_APP_APPLE_DISTRIBUTION_CERTIFICATE:
-        required: true
+        required: false
       APPLE_P12_PASSWORD:
-        required: true
+        required: false
       TEST_APP_APPLE_PROVISIONING_PROFILE:
-        required: true
+        required: false
       APPLE_KEYCHAIN_PASSWORD:
-        required: true
+        required: false
       APPLE_TEAM_ID:
-        required: true
+        required: false
 
 env:
   APP_BUNDLE_ID: "io.tether.test.qvac"
 
 permissions:
+  actions: read
   id-token: write
   contents: read
 
 jobs:
+  report-start:
+    name: "[ios] report-start"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      comment-ids: ${{ steps.report.outputs.comment-ids }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: .github/actions/sdk-e2e-report-start
+          sparse-checkout-cone-mode: false
+
+      - name: Post running comment
+        id: report
+        uses: ./.github/actions/sdk-e2e-report-start
+        with:
+          family: ios
+          platforms: '["ios"]'
+          suite: ${{ inputs.suite }}
+          filter: ${{ inputs.filter }}
+          exclude-suite: ${{ inputs.exclude-suite }}
+
   build:
+    name: "[ios] build"
     runs-on: macos-14
     environment: release
-    timeout-minutes: 90
+    timeout-minutes: 60
     outputs:
       runId: ${{ steps.runid.outputs.runId }}
+      # Forwarded to the `device-farm` job so it can build the presigned-URL
+      # manifest the on-device hook reads. `s3-models-key` is empty when
+      # `cache-models=false` (the upload step is gated on the same flag) —
+      # the manifest-generation step in `device-farm` is therefore also
+      # gated and the dummy test package falls back to the legacy path.
       s3-models-key: ${{ steps.s3-upload.outputs.s3-key }}
       cache-models: ${{ inputs.cache-models }}
     env:
@@ -217,16 +274,71 @@ jobs:
       - name: Generate runId
         id: runid
         shell: node {0}
+        env:
+          EXPECTED_JOB_NAME: "[ios] build"
+          PR_NUMBER: ${{ github.event.pull_request.number || '' }}
+          CHECKOUT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           const fs = require('fs');
-          const repoName = process.env.GITHUB_REPOSITORY.split('/').pop();
-          const refName = process.env.GITHUB_REF_NAME.replace(/\//g, '-');
-          const sha = process.env.GITHUB_SHA.substring(0, 7);
-          const timestamp = Math.floor(Date.now() / 1000);
-          const runId = `ios-${repoName}-${refName}-${sha}-${timestamp}`;
+
+          (async () => {
+          async function fetchJobs(page) {
+            const url =
+              `https://api.github.com/repos/${process.env.GITHUB_REPOSITORY}` +
+              `/actions/runs/${process.env.GITHUB_RUN_ID}` +
+              `/attempts/${process.env.GITHUB_RUN_ATTEMPT}/jobs?per_page=100&page=${page}`;
+            const res = await fetch(url, {
+              headers: {
+                Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+                Accept: 'application/vnd.github+json',
+                'X-GitHub-Api-Version': '2022-11-28',
+              },
+            });
+            if (!res.ok) {
+              throw new Error(`Failed to list workflow jobs: ${res.status} ${await res.text()}`);
+            }
+            return res.json();
+          }
+
+          const jobs = [];
+          for (let page = 1; ; page++) {
+            const data = await fetchJobs(page);
+            jobs.push(...(data.jobs || []));
+            if (!data.jobs || data.jobs.length < 100) break;
+          }
+
+          const matches = jobs.filter(
+            (job) => job.name === process.env.EXPECTED_JOB_NAME ||
+              job.name.endsWith(` / ${process.env.EXPECTED_JOB_NAME}`),
+          );
+          const runnerMatches = matches.filter((job) => job.runner_name === process.env.RUNNER_NAME);
+          const job = runnerMatches.length === 1 ? runnerMatches[0] : matches[0];
+          if (!job) {
+            throw new Error(`Could not resolve current job id for ${process.env.EXPECTED_JOB_NAME}`);
+          }
+
+          const sha = (process.env.CHECKOUT_SHA || process.env.GITHUB_SHA).substring(0, 7);
+          const refPart = process.env.PR_NUMBER ? `pr${process.env.PR_NUMBER}-${sha}` : sha;
+          // Base36-encode the numeric job.id so the literal decimal digits
+          // no longer appear in the runId. GitHub's secret masker does a
+          // substring match against masked secret values; if a short numeric
+          // secret (e.g. `secrets.MQTT_PORT`) happens to appear as a
+          // substring of the decimal job.id, the masker will both redact
+          // the runId in logs and silently drop the job-level output with a
+          // "Skip output 'runId' since it may contain secret." warning,
+          // breaking every downstream `needs.build.outputs.runId` consumer.
+          // Encoding job.id as base36 keeps the value unique and stable
+          // while structurally eliminating numeric-substring collisions.
+          const jobIdEncoded = BigInt(job.id).toString(36);
+          const runId = `ios-${refPart}-${jobIdEncoded}`;
 
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `runId=${runId}\n`, 'utf8');
           console.log(`Generated runId: ${runId}`);
+          })().catch((err) => {
+            console.error(err);
+            process.exit(1);
+          });
 
       - name: Configure npm registries
         shell: node {0}
@@ -311,7 +423,45 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
         run: bun run build
 
-      # --- Model pre-caching (only when cache-models is enabled) ---
+      # ------------------------------------------------------------------
+      # Model pre-caching (S3-backed, opt-in via `cache-models`).
+      #
+      # Why this lives in the iOS build job and not a shared one:
+      # the SDK cache is a binary blob ~10–15 GiB once warmed, so we run the
+      # download on the same macos-14 runner that's already going to build
+      # the IPA — keeping the disk footprint local and the GH-cache key
+      # scoped to a host that can actually share with future iOS jobs.
+      # ------------------------------------------------------------------
+
+      - name: Free disk space (macOS, only when caching)
+        if: inputs.cache-models
+        run: |
+          set -uo pipefail
+          # macos-14 hosted runners ship with ~14 GiB free which the SDK
+          # cache fills on its own; `actions/cache/save` then tars the dir
+          # for upload and doubles the footprint. We previously hit
+          # `gtar exit code 2 — No space left on device` here, so before
+          # downloading anything we evict every Xcode version we are NOT
+          # actively using (the one `xcode-select -p` points at stays).
+          # Also delete the Android SDK (this is an iOS pipeline) and a
+          # handful of language toolchains the consumer build never invokes.
+          echo "=== Disk usage before cleanup ==="
+          df -h /
+          SELECTED_XCODE=$(xcode-select -p | sed -E 's|/Contents/Developer$||')
+          echo "Keeping selected Xcode: $SELECTED_XCODE"
+          for app in /Applications/Xcode*.app; do
+            if [ "$app" != "$SELECTED_XCODE" ]; then
+              echo "Removing unused Xcode: $app"
+              sudo rm -rf "$app"
+            fi
+          done
+          if [ -n "${ANDROID_HOME:-}" ] && [ -d "$ANDROID_HOME" ]; then
+            sudo rm -rf "$ANDROID_HOME"
+          fi
+          [ -d "$HOME/Library/Android" ] && sudo rm -rf "$HOME/Library/Android" || true
+          sudo rm -rf /Users/runner/.ghcup /Users/runner/.dotnet || true
+          echo "=== Disk usage after cleanup ==="
+          df -h /
 
       - name: Configure SDK cache directory
         if: inputs.cache-models
@@ -319,34 +469,42 @@ jobs:
         run: |
           const fs = require('fs');
           const path = require('path');
+          // Pin the SDK to a *workspace-local* cache so it lines up with
+          // the `actions/cache` path below and gets cleaned between jobs.
           const cacheDir = path.resolve('${{ inputs.working-directory }}', '.qvac-cache');
           fs.mkdirSync(cacheDir, { recursive: true });
           const config = { cacheDirectory: cacheDir };
           const configPath = path.resolve('${{ inputs.working-directory }}', 'qvac.config.json');
           fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
           fs.appendFileSync(process.env.GITHUB_ENV, `QVAC_CONFIG_PATH=${configPath}\n`);
+          fs.appendFileSync(process.env.GITHUB_ENV, `QVAC_MOBILE_CACHE_DIR=${cacheDir}\n`);
           console.log(`SDK cache dir: ${cacheDir}`);
           console.log(`Config written to: ${configPath}`);
 
-      - name: Restore models cache
+      - name: Restore models cache (GitHub Actions)
         id: models-cache
         if: inputs.cache-models
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@2f8e54208210a422b2efd51efaa6bd6d7ca8920f # v4.3.0
         with:
           path: ${{ inputs.working-directory }}/.qvac-cache
+          # Mirrors desktop's `qvac-models-<hash>` key with a distinct
+          # mobile namespace; sharing the same `hashFiles` source keeps
+          # desktop & mobile in lockstep when the registry rev's.
           key: qvac-mobile-models-${{ hashFiles('packages/sdk/models/registry/models.ts') }}
+          enableCrossOsArchive: true
 
       - name: Download models for cache
         if: inputs.cache-models && steps.models-cache.outputs.cache-hit != 'true'
         working-directory: ${{ inputs.working-directory }}
         run: bun run scripts/download-mobile-models.ts
 
-      - name: Save models cache
+      - name: Save models cache (GitHub Actions)
         if: inputs.cache-models && steps.models-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@2f8e54208210a422b2efd51efaa6bd6d7ca8920f # v4.3.0
         with:
           path: ${{ inputs.working-directory }}/.qvac-cache
           key: qvac-mobile-models-${{ hashFiles('packages/sdk/models/registry/models.ts') }}
+          enableCrossOsArchive: true
 
       - name: Configure AWS credentials (for S3 model cache)
         if: inputs.cache-models
@@ -360,12 +518,15 @@ jobs:
         if: inputs.cache-models
         shell: bash
         run: |
+          set -euo pipefail
+          # Content-addressed S3 key: every distinct `models.ts` produces a
+          # unique prefix, so jobs racing on the same hash share the result
+          # and never collide. `--size-only` makes re-uploads idempotent.
           MODELS_HASH=$(shasum -a 256 packages/sdk/models/registry/models.ts | cut -c1-16)
           S3_KEY="qvac-models/mobile-${MODELS_HASH}"
           BUCKET="${{ secrets.MODEL_S3_BUCKET }}"
           CACHE_DIR="${{ inputs.working-directory }}/.qvac-cache"
-
-          echo "s3-key=${S3_KEY}" >> $GITHUB_OUTPUT
+          echo "s3-key=${S3_KEY}" >> "$GITHUB_OUTPUT"
 
           EXISTING=$(aws s3 ls "s3://${BUCKET}/${S3_KEY}/files/" 2>/dev/null | head -1 || true)
           if [ -n "$EXISTING" ]; then
@@ -378,7 +539,7 @@ jobs:
             echo "S3 upload complete"
           fi
 
-      # --- End model pre-caching ---
+      # --- End model pre-caching --------------------------------------
 
       - name: Build iOS consumer IPA
         working-directory: ${{ inputs.working-directory }}
@@ -411,11 +572,12 @@ jobs:
       - name: Upload IPA artifact
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: mobile-consumer-ipa
+          name: consumer-ipa-ios
           path: ${{ inputs.working-directory }}/build/consumers/ios/consumer.ipa
           retention-days: 7
 
   device-farm:
+    name: "[ios] device-farm"
     needs: build
     runs-on: ubuntu-latest
     environment: release
@@ -433,7 +595,7 @@ jobs:
       - name: Download IPA artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          name: mobile-consumer-ipa
+          name: consumer-ipa-ios
           path: ./ipa
 
       - name: Configure AWS credentials
@@ -490,6 +652,14 @@ jobs:
         id: models-manifest
         if: needs.build.outputs.cache-models == 'true'
         run: |
+          set -euo pipefail
+          # The presigned URLs are short-lived (6h); we generate them just
+          # before scheduling so the device has a fresh window. URLs MUST be
+          # region-aware — `aws s3 presign` signs against the caller's
+          # default region by default, but if the bucket is in a different
+          # region S3 will reject the signature. We probe the bucket region
+          # via an unauthenticated HEAD on the bucket endpoint and pass it
+          # through with `--region`.
           S3_KEY="${{ needs.build.outputs.s3-models-key }}"
           BUCKET="${{ secrets.MODEL_S3_BUCKET }}"
           BUCKET_REGION=$(curl -sI "https://${BUCKET}.s3.amazonaws.com/" | grep -i 'x-amz-bucket-region' | awk '{print $2}' | tr -d '\r\n')
@@ -509,7 +679,7 @@ jobs:
           echo "$MANIFEST" | jq . > /tmp/models-manifest.json
           MANIFEST_SIZE=$(wc -c < /tmp/models-manifest.json)
           echo "Manifest: ${FILE_COUNT} files, ${MANIFEST_SIZE} bytes"
-          echo "has-manifest=true" >> $GITHUB_OUTPUT
+          echo "has-manifest=true" >> "$GITHUB_OUTPUT"
 
       - name: Create and upload dummy test package
         id: upload-test-pkg
@@ -517,12 +687,14 @@ jobs:
           mkdir -p /tmp/dummy-test-pkg
           echo '{"name":"qvac-test-stub","version":"1.0.0"}' > /tmp/dummy-test-pkg/package.json
           cp "${{ inputs.working-directory }}/device-farm/gen-junit.py" /tmp/dummy-test-pkg/
-
+          # When `cache-models=true`, ship the presigned-URL manifest inside
+          # the test package. `test-spec-ios.yml`'s pre_test step reads it
+          # from `$DEVICEFARM_TEST_PACKAGE_PATH/models-manifest.json` and
+          # falls through silently when absent.
           if [ -f "/tmp/models-manifest.json" ]; then
             cp /tmp/models-manifest.json /tmp/dummy-test-pkg/
             echo "models-manifest.json included in test package"
           fi
-
           (cd /tmp/dummy-test-pkg && zip -r /tmp/dummy-test-pkg.zip .)
 
           PKG_RESPONSE=$(aws devicefarm create-upload \
@@ -631,6 +803,7 @@ jobs:
           retention-days: 1
 
   run-producer:
+    name: "[ios] run-producer"
     needs: build
     runs-on: ubuntu-latest
     environment: release
@@ -740,41 +913,134 @@ jobs:
           echo "   Run ID: ${{ needs.build.outputs.runId }}"
           echo "   Consumer timeout: ${{ inputs.consumer-timeout }}s"
           echo "   Filter: ${{ inputs.filter || '(none)' }}"
+          echo "   Suite: ${{ inputs.suite || '(all)' }}"
+          echo "   Exclude suite: ${{ inputs.exclude-suite || '(none)' }}"
 
           FILTER_ARG=""
           if [ -n "${{ inputs.filter }}" ]; then
             FILTER_ARG="--filter=${{ inputs.filter }}"
           fi
 
+          SUITE_ARG=""
+          if [ -n "${{ inputs.suite }}" ]; then
+            SUITE_ARG="--suite=${{ inputs.suite }}"
+          fi
+
+          EXCLUDE_SUITE_ARG=""
+          if [ -n "${{ inputs.exclude-suite }}" ]; then
+            EXCLUDE_SUITE_ARG="--exclude-suite=${{ inputs.exclude-suite }}"
+          fi
+
           npx qvac-test run:producer \
             --runId "${{ needs.build.outputs.runId }}" \
             --consumer-timeout "${{ inputs.consumer-timeout }}" \
             --config . \
-            $FILTER_ARG
+            --report-dir=./reports \
+            $FILTER_ARG \
+            $SUITE_ARG \
+            $EXCLUDE_SUITE_ARG
 
       - name: Upload results
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: ios-results-${{ github.run_number }}
+          name: results-ios
           path: ${{ inputs.working-directory }}/reports/
           retention-days: 30
+
+      - name: Download baseline (best-effort)
+        if: always() && github.event.pull_request.base.ref != ''
+        uses: dawidd6/action-download-artifact@20319c5641d495c8a52e688b7dc5fada6c3a9fbc # v8
+        continue-on-error: true
+        with:
+          workflow: test-ios-sdk.yml
+          branch: ${{ github.event.pull_request.base.ref }}
+          name: baseline-ios
+          path: ${{ inputs.working-directory }}/baseline
+          github_token: ${{ github.token }}
+          if_no_artifact_found: warn
+
+      - name: Compare vs baseline
+        if: always()
+        working-directory: ${{ inputs.working-directory }}
+        shell: node {0}
+        run: |
+          const fs = require('fs');
+          const path = require('path');
+          const { execSync } = require('child_process');
+
+          if (!fs.existsSync('baseline')) {
+            console.log('No baseline directory - skipping compare.');
+            process.exit(0);
+          }
+          const baselineFiles = fs.readdirSync('baseline').filter((f) => f.endsWith('.json'));
+          if (baselineFiles.length === 0) {
+            console.log('Baseline directory contains no json files - skipping compare.');
+            process.exit(0);
+          }
+          if (!fs.existsSync('reports')) {
+            console.log('No reports directory - skipping compare.');
+            process.exit(0);
+          }
+          const currentFiles = fs.readdirSync('reports')
+            .filter((f) => f.startsWith('results-') && f.endsWith('.json'));
+          if (currentFiles.length === 0) {
+            console.log('No current results json - skipping compare.');
+            process.exit(0);
+          }
+
+          const baseline = path.join('baseline', baselineFiles[0]);
+          const current = path.join('reports', currentFiles[0]);
+          execSync(
+            `npx qvac-test report:compare --baseline "${baseline}" --current "${current}" --output "comparison-ios.json"`,
+            { stdio: 'inherit' }
+          );
+
+      - name: Format comparison
+        if: always()
+        working-directory: ${{ inputs.working-directory }}
+        shell: node {0}
+        run: |
+          const fs = require('fs');
+          const { execSync } = require('child_process');
+
+          const input = 'comparison-ios.json';
+          if (!fs.existsSync(input)) {
+            console.log('No comparison json - skipping format.');
+            process.exit(0);
+          }
+          execSync(
+            `npx qvac-test report:format --input "${input}" --format markdown --output "section-ios.md"`,
+            { stdio: 'inherit' }
+          );
+
+      - name: Upload report section
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: report-section-ios
+          path: |
+            ${{ inputs.working-directory }}/section-*.md
+            ${{ inputs.working-directory }}/comparison-*.json
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Upload baseline (main/develop only)
         if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: ios-baseline
+          name: baseline-ios
           path: ${{ inputs.working-directory }}/reports/results-*.json
           retention-days: 90
           overwrite: true
 
   cleanup-device-farm:
+    name: "[ios] cleanup-device-farm"
     needs: [build, run-producer, device-farm]
     if: always()
     runs-on: ubuntu-latest
     environment: release
-    timeout-minutes: 10
+    timeout-minutes: 35
     steps:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
@@ -789,9 +1055,10 @@ jobs:
           path: ./run-arns
           merge-multiple: true
 
-      - name: Stop Device Farm runs
+      - name: Stop Device Farm runs and download artifacts
         run: |
           echo "Cleaning up Device Farm runs for runId: ${{ needs.build.outputs.runId }}"
+          mkdir -p ./device-farm-logs
 
           for arn_file in run-arns/*.txt; do
             if [ -f "$arn_file" ]; then
@@ -804,30 +1071,19 @@ jobs:
               if [ "$STATUS" = "RUNNING" ] || [ "$STATUS" = "PENDING" ]; then
                 echo "Stopping run: $RUN_ARN"
                 aws devicefarm stop-run --arn "$RUN_ARN" || true
-              else
-                echo "Run already finished ($STATUS), skipping"
               fi
-            fi
-          done
 
-      - name: Download Device Farm artifacts
-        run: |
-          mkdir -p ./device-farm-logs
-
-          for arn_file in run-arns/*.txt; do
-            if [ -f "$arn_file" ]; then
-              RUN_ARN=$(cat "$arn_file")
-              DEVICE_NAME=$(basename "$arn_file" .txt)
-
-              echo "Waiting for run to finish: $DEVICE_NAME"
-              for attempt in $(seq 1 30); do
+              echo "Waiting for run to finish: $DEVICE_NAME (up to 30 min)..."
+              for attempt in $(seq 1 120); do
                 STATUS=$(aws devicefarm get-run --arn "$RUN_ARN" --query 'run.status' --output text 2>/dev/null || echo "UNKNOWN")
                 if [ "$STATUS" = "COMPLETED" ] || [ "$STATUS" = "STOPPED" ] || [ "$STATUS" = "ERRORED" ]; then
                   echo "Run $DEVICE_NAME finished with status: $STATUS"
                   break
                 fi
-                echo "Run $DEVICE_NAME still $STATUS (attempt $attempt/30)..."
-                sleep 10
+                if [ $((attempt % 6)) -eq 0 ]; then
+                  echo "Run $DEVICE_NAME still $STATUS (${attempt}/120, $((attempt * 15))s elapsed)..."
+                fi
+                sleep 15
               done
 
               DEVICE_DIR="./device-farm-logs/$DEVICE_NAME"
@@ -863,3 +1119,52 @@ jobs:
           name: device-farm-logs-ios-${{ needs.build.outputs.runId }}
           path: ./device-farm-logs/
           retention-days: 30
+
+  report-finalize:
+    name: "[ios] report-finalize"
+    needs: [report-start, run-producer]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: .github/actions/sdk-e2e-report-finalize
+          sparse-checkout-cone-mode: false
+
+      - uses: ./.github/actions/sdk-e2e-report-finalize
+        with:
+          family: ios
+          platforms: '["ios"]'
+          comment-ids: ${{ needs.report-start.outputs.comment-ids }}
+          suite: ${{ inputs.suite }}
+          filter: ${{ inputs.filter }}
+          exclude-suite: ${{ inputs.exclude-suite }}
+
+  report-artifacts-refresh:
+    name: "[ios] report-artifacts-refresh"
+    needs: [report-start, run-producer, cleanup-device-farm]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: .github/actions/sdk-e2e-report-finalize
+          sparse-checkout-cone-mode: false
+
+      - uses: ./.github/actions/sdk-e2e-report-finalize
+        with:
+          family: ios
+          platforms: '["ios"]'
+          comment-ids: ${{ needs.report-start.outputs.comment-ids }}
+          suite: ${{ inputs.suite }}
+          filter: ${{ inputs.filter }}
+          exclude-suite: ${{ inputs.exclude-suite }}
+          update-summary: "false"

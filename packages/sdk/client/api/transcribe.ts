@@ -2,20 +2,30 @@ import {
   transcribeResponseSchema,
   transcribeStreamResponseSchema,
   type TranscribeRequest,
+  type TranscribeResponse,
   type TranscribeClientParams,
   type RPCOptions,
+  type TranscribeSegment,
   type TranscribeStreamRequest,
   type TranscribeStreamClientParams,
   type TranscribeStreamSession,
+  type TranscribeStreamMetadataSession,
+  type TranscribeStreamConversationSession,
+  type TranscribeStreamEvent,
   type TranscribeStreamResponse,
 } from "@/schemas";
 import { stream, duplex, type DuplexReadable } from "@/client/rpc/rpc-client";
 import { getClientLogger } from "@/logging";
 import { TranscriptionFailedError } from "@/utils/errors-client";
+import { decoratePromise } from "@/utils/decorate-promise";
+import { generateClientRequestId } from "@/client/api/client-request-id";
 
 const logger = getClientLogger();
 
-function buildTranscribeRequest(params: TranscribeClientParams): TranscribeRequest {
+function buildTranscribeRequest(
+  params: TranscribeClientParams,
+  requestId: string,
+): TranscribeRequest {
   return {
     type: "transcribe",
     modelId: params.modelId,
@@ -24,6 +34,8 @@ function buildTranscribeRequest(params: TranscribeClientParams): TranscribeReque
         ? { type: "filePath", value: params.audioChunk }
         : { type: "base64", value: params.audioChunk.toString("base64") },
     ...(params.prompt && { prompt: params.prompt }),
+    ...(params.metadata === true && { metadata: true }),
+    requestId,
   };
 }
 
@@ -31,17 +43,67 @@ function buildTranscribeRequest(params: TranscribeClientParams): TranscribeReque
  * Transcribe audio and return the complete text. Accepts either a file
  * path or an audio buffer.
  *
+ * @param params - Transcription parameters.
  * @param params.modelId - The identifier of the transcription model to use
  * @param params.audioChunk - Audio input as either a file path (string) or audio buffer
  * @param params.prompt - Optional initial prompt to guide the transcription
+ * @param params.metadata - When true, resolves to an array of transcript
+ *                          segments (`{ text, startMs, endMs, append, id }`)
+ *                          instead of joined text. Whisper engine only.
  * @param options - Optional RPC options including per-call profiling
- * @returns The complete transcribed text
+ * @returns A promise (decorated with `requestId`) resolving to the
+ *          complete transcribed text, or — when `metadata` is true —
+ *          the list of transcript segments in emission order. The
+ *          `requestId` is reachable synchronously so callers can target
+ *          this in-flight transcription with `cancel({ requestId })`
+ *          before `await` resolves.
  */
-export async function transcribe(
+export function transcribe(
+  params: TranscribeClientParams & { metadata: true },
+  options?: RPCOptions,
+): Promise<TranscribeSegment[]> & { requestId: string };
+export function transcribe(
   params: TranscribeClientParams,
   options?: RPCOptions,
-): Promise<string> {
-  const request = buildTranscribeRequest(params);
+): Promise<string> & { requestId: string };
+export function transcribe(
+  params: TranscribeClientParams,
+  options?: RPCOptions,
+): Promise<string | TranscribeSegment[]> & { requestId: string } {
+  // Client-generated id surfaced synchronously on the returned promise
+  // — same shape as `loadModel` / `downloadAsset` / `completion`. The
+  // CLI cancel bridge in `qvac serve` binds `req.on('close')` to
+  // `cancel({ requestId })` immediately after the call returns so a
+  // client disconnect aborts the in-flight transcription.
+  const requestId = generateClientRequestId();
+  const inner = runTranscribe(params, requestId, options);
+  return decoratePromise(inner, { requestId });
+}
+
+async function runTranscribe(
+  params: TranscribeClientParams,
+  requestId: string,
+  options?: RPCOptions,
+): Promise<string | TranscribeSegment[]> {
+  const request = buildTranscribeRequest(params, requestId);
+
+  if (params.metadata === true) {
+    const segments: TranscribeSegment[] = [];
+    for await (const response of stream(request, options)) {
+      if (response.type === "transcribe") {
+        const parsed = transcribeResponseSchema.parse(response);
+
+        if (parsed.segment) {
+          segments.push(parsed.segment);
+        }
+
+        if (parsed.done) {
+          break;
+        }
+      }
+    }
+    return segments;
+  }
 
   let fullText = "";
   for await (const response of stream(request, options)) {
@@ -66,7 +128,16 @@ export async function transcribe(
  *
  * Streaming transcription with upfront audio: sends full audio, yields text
  * chunks as they arrive.
+ *
+ * @overloadLabel "Upfront audio (deprecated)"
+ * @param params - Transcription parameters including audio source.
+ * @param options - Optional RPC options including per-call profiling.
+ * @returns An async generator yielding text chunks as they become available.
  */
+export function transcribeStream(
+  params: TranscribeClientParams & { metadata: true },
+  options?: RPCOptions,
+): AsyncGenerator<TranscribeSegment>;
 export function transcribeStream(
   params: TranscribeClientParams,
   options?: RPCOptions,
@@ -80,12 +151,27 @@ export function transcribeStream(
  * The returned session is single-use. Attempting to iterate a second
  * time will throw a `TranscriptionFailedError`.
  *
+ * @overloadLabel "Bidirectional session"
+ * @param params - Streaming transcription parameters.
  * @param params.modelId - The loaded transcription model to use
  * @param params.prompt - Optional initial prompt to guide transcription
- * @returns A session object: call `write(buffer)` to feed audio,
- *          iterate with `for await (const text of session)` to receive
- *          transcription, and `end()` to signal end of audio.
+ * @param params.metadata - When true, the session yields transcript segment
+ *                          objects (`{ text, startMs, endMs, append, id }`)
+ *                          instead of plain text. Whisper engine only.
+ * @param options - Optional RPC options including per-call profiling.
+ * @returns A session object: call `write(audioChunk)` with a `Uint8Array`
+ *          (Node `Buffer` is a `Uint8Array` subtype) to feed audio,
+ *          iterate with `for await (...)` to receive transcription, and
+ *          `end()` to signal end of audio.
  */
+export function transcribeStream(
+  params: TranscribeStreamClientParams & { emitVadEvents: true },
+  options?: RPCOptions,
+): Promise<TranscribeStreamConversationSession>;
+export function transcribeStream(
+  params: TranscribeStreamClientParams & { metadata: true },
+  options?: RPCOptions,
+): Promise<TranscribeStreamMetadataSession>;
 export function transcribeStream(
   params: TranscribeStreamClientParams,
   options?: RPCOptions,
@@ -94,48 +180,111 @@ export function transcribeStream(
 export function transcribeStream(
   params: TranscribeClientParams | TranscribeStreamClientParams,
   options?: RPCOptions,
-): AsyncGenerator<string> | Promise<TranscribeStreamSession> {
+):
+  | AsyncGenerator<string>
+  | AsyncGenerator<TranscribeSegment>
+  | Promise<TranscribeStreamSession>
+  | Promise<TranscribeStreamMetadataSession>
+  | Promise<TranscribeStreamConversationSession> {
   if ("audioChunk" in params && params.audioChunk !== undefined) {
     logger.warn(
       "transcribeStream() with audioChunk is deprecated — use transcribe() instead.",
     );
+    if (params.metadata === true) {
+      return transcribeStreamWithAudioMetadata(params, options);
+    }
     return transcribeStreamWithAudio(params, options);
   }
-  return transcribeStreamDuplex(params as TranscribeStreamClientParams, options);
+  const streamParams = params as TranscribeStreamClientParams;
+  if (streamParams.emitVadEvents === true) {
+    return transcribeStreamDuplexConversation(streamParams, options);
+  }
+  if (streamParams.metadata === true) {
+    return transcribeStreamDuplexMetadata(streamParams, options);
+  }
+  return transcribeStreamDuplex(streamParams, options);
 }
 
-async function* transcribeStreamWithAudio(
+/**
+ * Streams `transcribe` wire responses for an upfront-audio request and yields
+ * the value extracted from each response frame until `done` is seen.
+ */
+async function* streamTranscribeValues<T>(
   params: TranscribeClientParams,
-  options?: RPCOptions,
-): AsyncGenerator<string> {
-  const request = buildTranscribeRequest(params);
+  options: RPCOptions | undefined,
+  extract: (parsed: TranscribeResponse) => T | undefined,
+): AsyncGenerator<T> {
+  const request = buildTranscribeRequest(params, generateClientRequestId());
 
   for await (const response of stream(request, options)) {
     if (response.type === "transcribe") {
       const parsed = transcribeResponseSchema.parse(response);
-      if (parsed.text) yield parsed.text;
+      const value = extract(parsed);
+      if (value !== undefined) yield value;
       if (parsed.done) break;
     }
   }
 }
 
-async function transcribeStreamDuplex(
-  params: TranscribeStreamClientParams,
+function transcribeStreamWithAudio(
+  params: TranscribeClientParams,
   options?: RPCOptions,
-): Promise<TranscribeStreamSession> {
-  const request: TranscribeStreamRequest = {
+): AsyncGenerator<string> {
+  return streamTranscribeValues(params, options, (parsed) =>
+    parsed.text ? parsed.text : undefined,
+  );
+}
+
+function transcribeStreamWithAudioMetadata(
+  params: TranscribeClientParams,
+  options?: RPCOptions,
+): AsyncGenerator<TranscribeSegment> {
+  return streamTranscribeValues(params, options, (parsed) => parsed.segment);
+}
+
+function buildTranscribeStreamRequest(
+  params: TranscribeStreamClientParams,
+): TranscribeStreamRequest {
+  return {
     type: "transcribeStream",
     modelId: params.modelId,
     ...(params.prompt && { prompt: params.prompt }),
+    ...(params.metadata === true && { metadata: true }),
+    ...(params.emitVadEvents === true && { emitVadEvents: true }),
+    ...(params.endOfTurnSilenceMs !== undefined && {
+      endOfTurnSilenceMs: params.endOfTurnSilenceMs,
+    }),
+    ...(params.vadRunIntervalMs !== undefined && {
+      vadRunIntervalMs: params.vadRunIntervalMs,
+    }),
   };
+}
+
+/**
+ * Shared duplex session factory. The per-call line processor decides whether
+ * to surface strings or segments; `sessionName` is only used to label the
+ * "already iterated" error so callers see the correct session type.
+ */
+async function createTranscribeStreamSession<T>(
+  params: TranscribeStreamClientParams,
+  options: RPCOptions | undefined,
+  process: (line: string) => T | undefined | null,
+  sessionName: string,
+): Promise<{
+  write(audioChunk: Uint8Array): void;
+  end(): void;
+  destroy(): void;
+  [Symbol.asyncIterator](): AsyncIterator<T>;
+}> {
+  const request = buildTranscribeStreamRequest(params);
 
   const { requestStream, responseStream } = await duplex(request, options);
 
-  const responses = parseResponseLines(responseStream);
+  const responses = parseLines(responseStream, process);
   let consumed = false;
 
   return {
-    write(audioChunk: Buffer) {
+    write(audioChunk: Uint8Array) {
       requestStream.write(audioChunk);
     },
     end() {
@@ -148,7 +297,7 @@ async function transcribeStreamDuplex(
     [Symbol.asyncIterator]() {
       if (consumed) {
         throw new TranscriptionFailedError(
-          "TranscribeStreamSession can only be iterated once",
+          `${sessionName} can only be iterated once`,
         );
       }
       consumed = true;
@@ -157,9 +306,52 @@ async function transcribeStreamDuplex(
   };
 }
 
-async function* parseResponseLines(
+function transcribeStreamDuplex(
+  params: TranscribeStreamClientParams,
+  options?: RPCOptions,
+): Promise<TranscribeStreamSession> {
+  return createTranscribeStreamSession(
+    params,
+    options,
+    processLine,
+    "TranscribeStreamSession",
+  );
+}
+
+function transcribeStreamDuplexMetadata(
+  params: TranscribeStreamClientParams,
+  options?: RPCOptions,
+): Promise<TranscribeStreamMetadataSession> {
+  return createTranscribeStreamSession(
+    params,
+    options,
+    processLineMetadata,
+    "TranscribeStreamMetadataSession",
+  );
+}
+
+function transcribeStreamDuplexConversation(
+  params: TranscribeStreamClientParams,
+  options?: RPCOptions,
+): Promise<TranscribeStreamConversationSession> {
+  const wantsMetadata = params.metadata === true;
+  return createTranscribeStreamSession(
+    params,
+    options,
+    (line) => processLineConversation(line, wantsMetadata),
+    "TranscribeStreamConversationSession",
+  );
+}
+
+/**
+ * Line-delimited parser: reads newline-separated frames from a duplex
+ * response stream, passes each non-empty line through `process`, and yields
+ * whatever values it returns. `null` from `process` terminates the stream.
+ */
+async function* parseLines<T>(
   responseStream: DuplexReadable,
-): AsyncGenerator<string> {
+  process: (line: string) => T | undefined | null,
+): AsyncGenerator<T> {
   let buf = "";
 
   for await (const chunk of responseStream) {
@@ -168,7 +360,7 @@ async function* parseResponseLines(
     buf = lines.pop() || "";
 
     for (const line of lines) {
-      const result = processLine(line);
+      const result = process(line);
       if (result === null) return;
       if (result !== undefined) yield result;
     }
@@ -176,20 +368,20 @@ async function* parseResponseLines(
 
   // Process any residual data after stream ends
   if (buf.trim()) {
-    const result = processLine(buf);
+    const result = process(buf);
     if (result !== null && result !== undefined) yield result;
   }
 }
 
-function processLine(line: string): string | undefined | null {
-  if (!line.trim()) return undefined;
+function parseResponseLine(line: string): TranscribeStreamResponse | null {
+  if (!line.trim()) return null;
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(line);
   } catch {
     logger.warn("transcribeStream: malformed JSON from server:", line);
-    return undefined;
+    return null;
   }
 
   const obj = parsed as Record<string, unknown>;
@@ -199,12 +391,65 @@ function processLine(line: string): string | undefined | null {
     );
   }
 
-  const response: TranscribeStreamResponse =
-    transcribeStreamResponseSchema.parse(parsed);
+  return transcribeStreamResponseSchema.parse(parsed);
+}
 
+/**
+ * Shared wire-frame decoder. Returns `null` for the terminal `done` frame,
+ * `undefined` for frames the caller should skip, or the value extracted from
+ * the frame.
+ */
+function processWith<T>(
+  line: string,
+  extract: (response: TranscribeStreamResponse) => T | undefined,
+): T | undefined | null {
+  const response = parseResponseLine(line);
+  if (response === null) return undefined;
   if (response.error) throw new TranscriptionFailedError(response.error);
   if (response.done) return null;
-  if (response.text?.trim()) return response.text;
-  return undefined;
+  return extract(response);
+}
+
+function processLine(line: string): string | undefined | null {
+  return processWith(line, (response) =>
+    response.text?.trim() ? response.text : undefined,
+  );
+}
+
+function processLineMetadata(
+  line: string,
+): TranscribeSegment | undefined | null {
+  return processWith(line, (response) => response.segment);
+}
+
+function processLineConversation(
+  line: string,
+  wantsMetadata: boolean,
+): TranscribeStreamEvent | undefined | null {
+  return processWith(line, (response) => {
+    if (response.vad) {
+      return {
+        type: "vad",
+        speaking: response.vad.speaking,
+        probability: response.vad.probability,
+      };
+    }
+    if (response.endOfTurn) {
+      return {
+        type: "endOfTurn",
+        silenceDurationMs: response.endOfTurn.silenceDurationMs,
+      };
+    }
+    if (wantsMetadata) {
+      if (response.segment) {
+        return { type: "segment", segment: response.segment };
+      }
+      return undefined;
+    }
+    if (response.text && response.text.trim()) {
+      return { type: "text", text: response.text };
+    }
+    return undefined;
+  });
 }
 

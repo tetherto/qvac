@@ -168,7 +168,7 @@ export class ErrorExecutor extends AbstractModelExecutor<typeof errorTests> {
     const p = params as { text: string };
     const embeddingModelId = await this.resources.ensureLoaded("embeddings");
     try {
-      const result = await embed({ modelId: embeddingModelId, text: p.text });
+      const { embedding: result } = await embed({ modelId: embeddingModelId, text: p.text });
       return ValidationHelpers.validate(result, expectation as Expectation);
     } catch (error) {
       return { passed: true, output: `SDK correctly rejected empty input: ${error}` };

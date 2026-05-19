@@ -16,11 +16,10 @@ import {
   type CreateModelParams,
   type PluginModelResult,
   type ResolveContext,
+  type TranscribeSegment,
   type WhisperConfig,
 } from "@/schemas";
 import { createStreamLogger, registerAddonLogger } from "@/logging";
-import { parseModelPath } from "@/server/utils";
-import FilesystemDL from "@qvac/dl-filesystem";
 import { transcribe, transcribeStream } from "@/server/bare/ops/transcribe";
 import { attachModelExecutionMs } from "@/profiling/model-execution";
 
@@ -30,24 +29,15 @@ function createWhisperModel(
   whisperConfig: WhisperConfig,
   vadModelPath?: string,
 ) {
-  const { dirPath, basePath } = parseModelPath(modelPath);
-
-  let vadModelName = "";
-  if (vadModelPath) {
-    const vadParsed = parseModelPath(vadModelPath);
-    vadModelName = vadParsed.basePath;
-  }
-
-  const loader = new FilesystemDL({ dirPath });
   const logger = createStreamLogger(modelId, ModelType.whispercppTranscription);
   registerAddonLogger(modelId, ModelType.whispercppTranscription, logger);
 
   const args = {
-    loader,
+    files: {
+      model: modelPath,
+      ...(vadModelPath && { vadModel: vadModelPath }),
+    },
     logger,
-    modelName: basePath,
-    diskPath: dirPath,
-    vadModelName,
     opts: {
       stats: true,
     },
@@ -63,7 +53,7 @@ function createWhisperModel(
 
   const model = new TranscriptionWhispercpp(args, config);
 
-  return { model, loader };
+  return { model };
 }
 
 export const whisperPlugin = definePlugin({
@@ -89,14 +79,14 @@ export const whisperPlugin = definePlugin({
   createModel(params: CreateModelParams): PluginModelResult {
     const whisperConfig = (params.modelConfig ?? {}) as WhisperConfig;
 
-    const { model, loader } = createWhisperModel(
+    const { model } = createWhisperModel(
       params.modelId,
       params.modelPath,
       whisperConfig,
       params.artifacts?.["vadModelPath"],
     );
 
-    return { model, loader };
+    return { model };
   },
 
   handlers: {
@@ -104,21 +94,43 @@ export const whisperPlugin = definePlugin({
       requestSchema: transcribeRequestSchema,
       responseSchema: transcribeResponseSchema,
       streaming: true,
+      // whisper.cpp addon exposes a model-wide hard cancel — compute
+      // is interrupted on the currently-running transcription.
+      cancel: { scope: "model", hard: true },
 
       handler: async function* (request) {
-        const stream = transcribe({
-          modelId: request.modelId,
-          audioChunk: request.audioChunk,
-          prompt: request.prompt,
-        });
+        const metadata = request.metadata === true;
+        const stream = metadata
+          ? transcribe(
+              {
+                modelId: request.modelId,
+                audioChunk: request.audioChunk,
+                prompt: request.prompt,
+                metadata: true,
+              },
+              request.requestId,
+            )
+          : transcribe(
+              {
+                modelId: request.modelId,
+                audioChunk: request.audioChunk,
+                prompt: request.prompt,
+              },
+              request.requestId,
+            );
 
         try {
           let result = await stream.next();
           while (!result.done) {
-            yield {
-              type: "transcribe" as const,
-              text: result.value,
-            };
+            yield metadata
+              ? {
+                  type: "transcribe" as const,
+                  segment: result.value as TranscribeSegment,
+                }
+              : {
+                  type: "transcribe" as const,
+                  text: result.value as string,
+                };
             result = await stream.next();
           }
 
@@ -140,17 +152,72 @@ export const whisperPlugin = definePlugin({
       responseSchema: transcribeStreamResponseSchema,
       streaming: true,
       duplex: true,
+      // Same model-wide hard cancel surface as `transcribe` — both
+      // route through the whisper.cpp addon.
+      cancel: { scope: "model", hard: true },
 
       handler: async function* (request, inputStream) {
-        for await (const text of transcribeStream(
-          request.modelId,
-          inputStream,
-          request.prompt,
-        )) {
-          yield {
-            type: "transcribeStream" as const,
-            text,
-          };
+        const streamOpts = {
+          ...(request.emitVadEvents !== undefined && {
+            emitVadEvents: request.emitVadEvents,
+          }),
+          ...(request.endOfTurnSilenceMs !== undefined && {
+            endOfTurnSilenceMs: request.endOfTurnSilenceMs,
+          }),
+          ...(request.vadRunIntervalMs !== undefined && {
+            vadRunIntervalMs: request.vadRunIntervalMs,
+          }),
+        };
+
+        const metadata = request.metadata === true;
+        const iterator = metadata
+          ? transcribeStream(
+              request.modelId,
+              inputStream,
+              request.prompt,
+              true,
+              streamOpts,
+              request.requestId,
+            )
+          : transcribeStream(
+              request.modelId,
+              inputStream,
+              request.prompt,
+              false,
+              streamOpts,
+              request.requestId,
+            );
+
+        for await (const value of iterator) {
+          if (typeof value === "object" && value !== null && "type" in value) {
+            if (value.type === "vad") {
+              yield {
+                type: "transcribeStream" as const,
+                vad: {
+                  speaking: value.speaking,
+                  probability: value.probability,
+                },
+              };
+              continue;
+            }
+            if (value.type === "endOfTurn") {
+              yield {
+                type: "transcribeStream" as const,
+                endOfTurn: { silenceDurationMs: value.silenceDurationMs },
+              };
+              continue;
+            }
+            continue;
+          }
+          yield metadata
+            ? {
+                type: "transcribeStream" as const,
+                segment: value as TranscribeSegment,
+              }
+            : {
+                type: "transcribeStream" as const,
+                text: value as string,
+              };
         }
 
         yield {

@@ -7,7 +7,7 @@ on:
         description: "Working directory"
         type: string
         required: false
-        default: "packages/lib-infer-diffusion"
+        default: "packages/diffusion-cpp"
   workflow_call:
     inputs:
       ref:
@@ -22,7 +22,7 @@ on:
         description: "Working directory"
         type: string
         required: false
-        default: "packages/lib-infer-diffusion"
+        default: "packages/diffusion-cpp"
 
 permissions:
   contents: read
@@ -40,10 +40,11 @@ jobs:
           - os: ubuntu-24.04
             platform: linux
             arch: x64
-            runner: ai-run-linux-gpu
-          - os: windows-11
+            runner: qvac-ubuntu2404-x64
+          - os: windows-2025
             platform: windows
-            runner: ai-run-windows11-gpu
+            runner: qvac-win25-x64
+            arch: x64
 
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
@@ -55,6 +56,10 @@ jobs:
       GIT_TERMINAL_PROMPT: "0"
 
     steps:
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        if: startsWith(matrix.runner, 'qvac-')
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -62,50 +67,15 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' }}
-        name: Install llvm-19 on Linux
+      - if: ${{ matrix.os == 'windows-2025' }}
+        name: Set Vulkan SDK Path on Windows Server 2025
         working-directory: ${{ env.WORKDIR }}
-        run: |
-          curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor | sudo tee /usr/share/keyrings/llvm-archive-keyring.gpg > /dev/null
-          sudo chmod 644 /usr/share/keyrings/llvm-archive-keyring.gpg
-          echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg] http://apt.llvm.org/noble/ llvm-toolchain-noble-19 main" | sudo tee /etc/apt/sources.list.d/llvm-toolchain-noble-19.list > /dev/null
-          sudo apt-get update
-          sudo apt-get install -y llvm-19 llvm-19-tools llvm-19-dev clang-19 clang-tidy-19 clang-format-19 lld-19 llvm-19-runtime libc++-19-dev libc++abi-19-dev pkg-config
+        run: echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
 
-      - if: ${{ matrix.os == 'ubuntu-24.04' }}
-        name: Install Vulkan SDK on Linux
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          sudo rm -f /etc/apt/sources.list.d/lunarg-vulkan-noble.list
-          sudo rm -f /etc/apt/sources.list.d/archive_uri-https_packages_lunarg_com_vulkan-*.list
-          sudo rm -f /etc/apt/trusted.gpg.d/lunarg.asc
-
-          curl -fsSL https://packages.lunarg.com/lunarg-signing-key-pub.asc | gpg --dearmor | sudo tee /usr/share/keyrings/lunarg-archive-keyring.gpg > /dev/null
-          sudo chmod 644 /usr/share/keyrings/lunarg-archive-keyring.gpg
-          echo "deb [signed-by=/usr/share/keyrings/lunarg-archive-keyring.gpg] https://packages.lunarg.com/vulkan/ noble main" | sudo tee /etc/apt/sources.list.d/lunarg-vulkan-noble.list > /dev/null
-          sudo apt-get update
-          sudo apt-get install -y vulkan-sdk
-
-      - if: ${{ matrix.os == 'windows-11' }}
-        name: Configure Windows runner
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          git config --system core.longpaths true
-          choco upgrade llvm -y
-
-      - if: ${{ matrix.os == 'windows-11' }}
-        name: Install Vulkan SDK on Windows
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          $ProgressPreference = 'SilentlyContinue'
-          Invoke-WebRequest -Uri https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe -OutFile vulkan-sdk.exe
-          ./vulkan-sdk.exe --root C:\VulkanSDK --accept-licenses --default-answer --confirm-command install
-          echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
-
-      - if: ${{ matrix.os == 'windows-11' }}
+      - if: ${{ matrix.os == 'windows-2025' }}
         name: Clone and bootstrap vcpkg (Windows)
         run: |
-          git clone https://github.com/microsoft/vcpkg.git
+          git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git
           ./vcpkg/bootstrap-vcpkg.bat -disableMetrics
           echo ("VCPKG_ROOT=$env:GITHUB_WORKSPACE/vcpkg" -replace '\\', '/') >> $env:GITHUB_ENV
 
@@ -121,21 +91,24 @@ jobs:
           echo "MACOSX_DEPLOYMENT_TARGET=14.0" >> $GITHUB_ENV
 
       - if: ${{ matrix.os == 'ubuntu-24.04' }}
-        name: Configure vcpkg in linux
+        name: Install vcpkg on linux
+        working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: |
-          if [ -n "${VCPKG_INSTALLATION_ROOT:-}" ] && [ -d "$VCPKG_INSTALLATION_ROOT" ]; then
-            echo "Using pre-installed vcpkg at $VCPKG_INSTALLATION_ROOT"
-            echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> "$GITHUB_ENV"
-          else
-            sudo apt-get update
-            sudo apt-get install -y zip unzip tar curl
-            git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git /tmp/vcpkg
-            /tmp/vcpkg/bootstrap-vcpkg.sh -disableMetrics
-            echo "VCPKG_ROOT=/tmp/vcpkg" >> "$GITHUB_ENV"
-          fi
+          git clone --branch 2025.12.12 --single-branch https://github.com/microsoft/vcpkg.git vcpkg_microsoft
+          cd vcpkg_microsoft && ./bootstrap-vcpkg.sh -disableMetrics
+          VCPKG_ROOT="$(pwd)"
+          echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
+          echo "$VCPKG_ROOT" >> $GITHUB_PATH
 
-      - if: ${{ matrix.os == 'windows-11' }}
+      - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'windows-2025' }}
+        name: Cleanup vcpkg
+        shell: bash
+        run: |
+          rm -rf $VCPKG_ROOT/buildtrees/*
+          rm -rf $VCPKG_ROOT/packages/*
+
+      - if: ${{ matrix.os == 'windows-2025' }}
         name: Configure CMake generator on Windows
         shell: powershell
         working-directory: ${{ env.WORKDIR }}
@@ -144,12 +117,12 @@ jobs:
           echo "CMAKE_GENERATOR_PLATFORM=x64" >> $env:GITHUB_ENV
 
       - name: Create vcpkg cache location (non-Windows)
-        if: ${{ matrix.os != 'windows-11' }}
+        if: ${{ matrix.os != 'windows-2025' }}
         working-directory: ${{ env.WORKDIR }}
         run: mkdir -p vcpkg/cache
 
       - name: Create vcpkg cache location (Windows)
-        if: ${{ matrix.os == 'windows-11' }}
+        if: ${{ matrix.os == 'windows-2025' }}
         shell: powershell
         working-directory: ${{ env.WORKDIR }}
         run: |
@@ -167,25 +140,13 @@ jobs:
         with:
           node-version: lts/*
 
-      - name: Configure scoped registry for @tetherto and @qvac packages
-        shell: bash
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          cat > .npmrc <<NPMRC
-          registry=https://registry.npmjs.org/
-          @qvac:registry=https://registry.npmjs.org/
-          @tetherto:registry=https://npm.pkg.github.com/
-          //registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}
-          //npm.pkg.github.com/:_authToken=${{ secrets.PAT_TOKEN }}
-          NPMRC
-          git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "https://github.com/"
-          git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "git@github.com:"
-
       - name: Install NPM dependencies
         working-directory: ${{ env.WORKDIR }}
         run: |
           npm install
-          npm install -g bare bare-make
+
+      - name: Install bare tooling
+        run: npm install -g --force bare bare-make
 
       - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'macos-14' }}
         name: Download SD2 model for C++ tests
@@ -199,6 +160,18 @@ jobs:
           cp "$MODEL_PATH" ./test/model/stable-diffusion-v2-1-Q8_0.gguf
           test -f ./test/model/stable-diffusion-v2-1-Q8_0.gguf
 
+      - if: ${{ matrix.os == 'windows-2025' }}
+        name: Download SD2 model for C++ tests (Windows)
+        working-directory: ${{ env.WORKDIR }}
+        shell: powershell
+        run: |
+          & .\scripts\download-model-sd2.ps1
+          $modelPath = Get-ChildItem -Path . -Filter "stable-diffusion-v2-1-Q8_0.gguf" -Recurse | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $modelPath) { throw "Model file not found" }
+          New-Item -ItemType Directory -Force -Path ".\test\model" | Out-Null
+          Copy-Item -Path $modelPath -Destination ".\test\model\stable-diffusion-v2-1-Q8_0.gguf" -Force
+          if (-not (Test-Path ".\test\model\stable-diffusion-v2-1-Q8_0.gguf")) { throw "Failed to copy model file" }
+
       - if: ${{ matrix.platform == 'darwin' }}
         name: Use Apple clang for Apple platform builds
         run: |
@@ -210,8 +183,8 @@ jobs:
         if: ${{ matrix.os == 'ubuntu-24.04' }}
         working-directory: ${{ env.WORKDIR }}
         env:
-          CC: clang-19
-          CXX: clang++-19
+          CC: clang
+          CXX: clang++
         run: |
           bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} -D BUILD_TESTING=ON -D ENABLE_COVERAGE=ON
           bare-make build --target addon-test
@@ -228,8 +201,8 @@ jobs:
         env:
           SD_TEST_MODEL_PATH: ${{ github.workspace }}/${{ env.WORKDIR }}/test/model/stable-diffusion-v2-1-Q8_0.gguf
         run: |
-          if [ -f "${{ github.workspace }}/.lsan-suppressions.txt" ]; then
-            export LSAN_OPTIONS="suppressions=${{ github.workspace }}/.lsan-suppressions.txt"
+          if [ -f "${{ github.workspace }}/${{ env.WORKDIR }}/.lsan-suppressions.txt" ]; then
+            export LSAN_OPTIONS="suppressions=${{ github.workspace }}/${{ env.WORKDIR }}/.lsan-suppressions.txt"
           fi
           echo "SD_TEST_MODEL_PATH=$SD_TEST_MODEL_PATH"
           ls -lh "$SD_TEST_MODEL_PATH"

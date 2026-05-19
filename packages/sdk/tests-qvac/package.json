@@ -5,16 +5,21 @@
   "type": "module",
   "description": "SDK tests using QVAC test framework",
   "scripts": {
+    "prepare:sdk": "cd .. && (bun i && bun run build); cd tests-qvac",
     "build": "npm run clean && tsc",
+    "install:build": "npm install --install-links && npm run build",
+    "install:build:full": "npm run prepare:sdk && npm run clean:sdk-snapshot && npm run install:build",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
+    "clean:sdk-snapshot": "rm -rf node_modules/@qvac/sdk build/consumers/ios/node_modules/@qvac/sdk build/consumers/android/node_modules/@qvac/sdk",
     "consumer:desktop:run": "qvac-test run:consumer:desktop"
   },
   "dependencies": {
     "@qvac/sdk": "file:..",
-    "@tetherto/qvac-test-suite": "0.5.1-tmp.pr-64.runid-24240480440",
+    "@tetherto/qvac-test-suite": "^0.6.3",
     "mqtt": "^5.14.1",
-    "react-native-bare-kit": "^0.11.4"
+    "react-native": "0.81.5",
+    "react-native-bare-kit": "^0.14.0"
   },
   "devDependencies": {
     "typescript": "^5.9.3"

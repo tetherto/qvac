@@ -12,7 +12,7 @@ Workflow files live in `.github/workflows/` and fall into distinct categories by
 
 ### Native Addons (C++ packages)
 
-Packages: `qvac-lib-infer-llamacpp-llm`, `qvac-lib-infer-llamacpp-embed`, `qvac-lib-infer-onnx-tts`, `qvac-lib-infer-whispercpp`, `qvac-lib-infer-parakeet`, `qvac-lib-infer-nmtcpp`, `qvac-lib-decoder-audio`, `ocr-onnx`
+Packages: `llm-llamacpp`, `embed-llamacpp`, `tts-onnx`, `transcription-whispercpp`, `transcription-parakeet`, `translation-nmtcpp`, `decoder-audio`, `ocr-onnx`
 
 Each addon has a full suite of per-package workflows:
 
@@ -24,14 +24,14 @@ Each addon has a full suite of per-package workflows:
 | Prebuilds | `prebuilds-<pkg>.yml` | Build native bindings for 9 platform targets |
 | On merge | `on-merge-<pkg>.yml` | Publish to GPR (main/feature/tmp) or npm (release) |
 | C++ tests | `cpp-tests-<pkg>.yml` or `reusable-cpp-tests-<pkg>.yml` | GoogleTest unit tests |
-| C++ coverage | `cpp-test-coverage-<pkg>.yml` | llvm-cov-19 coverage reports |
+| C++ coverage | `cpp-test-coverage-<pkg>.yml` | llvm-cov coverage reports |
 | Benchmarks | `benchmark-<pkg>.yml` | Performance benchmarks |
 | Release notes | `release-notes-check-<pkg>.yml` | Verify CHANGELOG matches version bumps |
 | GitHub release | `create-github-release-<pkg>.yml` | Create GitHub release on npm publish |
 
 ### SDK Pod (TypeScript packages)
 
-Packages: `qvac-sdk`, `qvac-cli`, `qvac-lib-rag`, `qvac-lib-logging`, `qvac-lib-error-base`, `docs`
+Packages: `qvac-sdk`, `qvac-cli`, `rag`, `logging`, `error-base`, `docs`
 
 | Workflow | File | Purpose |
 |----------|------|---------|
@@ -44,7 +44,7 @@ Packages: `qvac-sdk`, `qvac-cli`, `qvac-lib-rag`, `qvac-lib-logging`, `qvac-lib-
 
 ### Simple Libraries with Unit Tests
 
-Packages: `qvac-lib-logging`, `qvac-lib-error-base`
+Packages: `logging`, `error-base`
 
 These have unit tests (`npm run test:unit`) but use simple publish workflows for CI.
 
@@ -54,13 +54,13 @@ These have unit tests (`npm run test:unit`) but use simple publish workflows for
 
 ### Simple Libraries (pure JS, no native code)
 
-Packages: `qvac-lib-dl-filesystem`, `qvac-lib-dl-hyperdrive`, `dl-base`, `qvac-lib-infer-base`, `qvac-lib-langdetect-text`, `qvac-cli`
+Packages: `dl-filesystem`, `dl-hyperdrive`, `dl-base`, `infer-base`, `langdetect-text`, `qvac-cli`
 
 | Workflow | File pattern | Purpose |
 |----------|-------------|---------|
 | Publish | `trigger-reusable-lib-<pkg>.yml` | Publish to GPR/npm on merge (no tests, no builds) |
 
-These delegate to `tetherto/qvac-devops` reusable workflows for publishing.
+These delegate to `tetherto/qvac` reusable workflows for publishing.
 
 ## Trigger Mechanisms
 
@@ -81,14 +81,14 @@ These are the native addon packages that have full CI workflows. The **short nam
 
 | Short name | Package directory | Workflow trigger name |
 |---|---|---|
-| `LLM` | `packages/qvac-lib-infer-llamacpp-llm` | `On PR Trigger (LLM)` |
-| `Embed` | `packages/qvac-lib-infer-llamacpp-embed` | `On PR Trigger (Embed)` |
+| `LLM` | `packages/llm-llamacpp` | `On PR Trigger (LLM)` |
+| `Embed` | `packages/embed-llamacpp` | `On PR Trigger (Embed)` |
 | `OCR` | `packages/ocr-onnx` | `On PR Trigger (OCR)` |
-| `TTS` | `packages/qvac-lib-infer-onnx-tts` | `On PR Trigger (TTS)` |
-| `Whispercpp` | `packages/qvac-lib-infer-whispercpp` | `On PR Trigger (Whispercpp)` |
-| `Parakeet` | `packages/qvac-lib-infer-parakeet` | `On PR Trigger (Parakeet)` |
-| `NMTCPP` | `packages/qvac-lib-infer-nmtcpp` | `On PR Trigger (NMTCPP)` |
-| `Decoder-audio` | `packages/qvac-lib-decoder-audio` | `On PR Trigger (Decoder-audio)` |
+| `TTS` | `packages/tts-onnx` | `On PR Trigger (TTS)` |
+| `Whispercpp` | `packages/transcription-whispercpp` | `On PR Trigger (Whispercpp)` |
+| `Parakeet` | `packages/transcription-parakeet` | `On PR Trigger (Parakeet)` |
+| `NMTCPP` | `packages/translation-nmtcpp` | `On PR Trigger (NMTCPP)` |
+| `Decoder-audio` | `packages/decoder-audio` | `On PR Trigger (Decoder-audio)` |
 
 ### How to trigger manually
 
@@ -186,7 +186,7 @@ These are environment/configuration issues, not code bugs:
 | Disk space error | Runner out of space (common on Ubuntu) | Disk cleanup step may need updating |
 | Xcode version not found | iOS runner missing required Xcode | Update Xcode version selection in mobile workflow |
 | Android SDK / Gradle failure | Build tools version mismatch | Check `setup-android` and JDK version |
-| `merge-guard` failure | External `qvac-devops` workflow issue | Check `tetherto/qvac-devops@monorepo_update` ref |
+| `merge-guard` failure | Internal `qvac` workflow issue | Check `qvac@main` ref |
 | Workflow syntax error | YAML issue in workflow file | Validate YAML; check `gh workflow list` for errors |
 
 ### Code logic failures (implementer must fix)
@@ -274,7 +274,7 @@ Mobile tests use a two-repo checkout (`addon/` + `test-framework/` from `qvac-te
 
 ### Per addon package
 
-Replace `<pkg>` with the package directory name (e.g., `qvac-lib-infer-llamacpp-llm`):
+Replace `<pkg>` with the package directory name (e.g., `llm-llamacpp`):
 
 | What | File |
 |------|------|
@@ -304,7 +304,7 @@ Replace `<pkg>` with the package directory name (e.g., `qvac-lib-infer-llamacpp-
 
 ### External dependencies
 
-- **Reusable workflows/actions**: `tetherto/qvac-devops@monorepo_update`
+- **Reusable workflows/actions**: `qvac@main`
 - **Mobile test framework**: `tetherto/qvac-test-addon-mobile`
 - **Merge guard**: `.github/actions/release-merge-guard` (local action)
 - **Release notes script**: `.github/scripts/release-notes-check.js`

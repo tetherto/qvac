@@ -3,6 +3,7 @@ import Hyperswarm from "hyperswarm";
 import crypto from "bare-crypto";
 import { envSchema, type FirewallConfig } from "@/schemas/provide";
 import { getSDKConfig } from "@/server/bare/registry/config-registry";
+import { registerSwarm, unregisterSwarm } from "@/server/bare/runtime-lifecycle";
 import { getServerLogger } from "@/logging";
 
 const logger = getServerLogger();
@@ -80,9 +81,13 @@ function createSwarm(firewallConfig?: FirewallConfig) {
   return new Hyperswarm(swarmOptions);
 }
 
-let swarm: Hyperswarm;
+let swarm: Hyperswarm | null = null;
 
-const activeProviderTopics = new Set<string>();
+// Delegation is always 1:1 (single provider service per SDK instance), but we
+// still use a counter to be resilient against duplicate provide/stopProvide
+// calls and to avoid ever reporting "no active providers" while one is still
+// running.
+let activeProviderCount = 0;
 
 export function getSwarm({
   firewallConfig,
@@ -93,24 +98,34 @@ export function getSwarm({
     return swarm;
   }
   swarm = createSwarm(firewallConfig);
+  registerSwarm(swarm, { label: "shared-swarm", createdAt: Date.now() });
   return swarm;
 }
 
-export function registerProviderTopic(topic: string) {
-  activeProviderTopics.add(topic);
+export function registerProvider() {
+  activeProviderCount++;
 }
 
-export function unregisterProviderTopic(topic: string) {
-  activeProviderTopics.delete(topic);
+export function unregisterProvider() {
+  if (activeProviderCount > 0) activeProviderCount--;
 }
 
 export function hasActiveProviders(): boolean {
-  return activeProviderTopics.size > 0;
+  return activeProviderCount > 0;
 }
 
 export async function destroySwarm() {
-  if (swarm) {
-    activeProviderTopics.clear();
-    return swarm.destroy();
+  if (!swarm) return;
+
+  const ref = swarm;
+  swarm = null;
+
+  try {
+    await ref.destroy();
+    unregisterSwarm(ref);
+    activeProviderCount = 0;
+  } catch (error) {
+    if (swarm === null) swarm = ref;
+    throw error;
   }
 }

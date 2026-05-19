@@ -1,0 +1,46 @@
+---
+title: Troubleshooting
+description: Resolve common issues when using QVAC.
+schemaType: HowTo
+tocMaxDepth: 2
+---
+
+## CLI error: command not found
+
+### Situation
+
+You ran a `qvac` command (e.g., `qvac doctor`) and the shell responded with:
+
+```
+zsh: command not found: qvac
+```
+
+(On bash: `bash: qvac: command not found`.)
+
+### Cause
+
+The `qvac` binary is shipped by the `@qvac/cli` npm package. It is only added to your shell `PATH` when `@qvac/cli` is installed globally. Without a global install, the binary is not discoverable by name from your shell.
+
+### Solution
+
+Install `@qvac/cli` globally:
+
+```bash
+npm install -g @qvac/cli
+```
+
+Then re-run your command. For example:
+
+```bash
+qvac doctor
+```
+
+<Callout type="success">
+**Tip:** If you cannot install the CLI globally, you can run it with `npx` instead:
+
+```bash
+npx --package "@qvac/cli" qvac doctor
+```
+</Callout>
+
+See [CLI → Usage](/cli#usage) for the full setup, including installing `@qvac/sdk` in your project.

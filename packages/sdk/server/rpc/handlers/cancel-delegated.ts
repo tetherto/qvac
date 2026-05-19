@@ -8,51 +8,41 @@ import type { DelegatedHandlerOptions } from "@/server/rpc/profiling";
 const logger = getServerLogger();
 
 type DelegationTarget = {
-  topic: string;
   providerPublicKey: string;
   timeout?: number;
 };
 
+/**
+ * Resolve the delegated provider for a cancel request, if any.
+ *
+ * After the 0.11.0 wire-schema collapse the cancel envelope has only
+ * two operations. Only `broad` cancels delegate at the cancel layer —
+ * see `isCancelDelegated` in `handler-registry.ts` for the policy and
+ * the rationale.
+ *
+ * The targeted `request` arm is handled locally because the registry
+ * is worker-singleton and already holds the entry for delegated
+ * requests (the delegated handler registers its own context on the
+ * provider-facing side). For pre-0.11.0 behaviour where a `requestId`
+ * cancel against a delegated model needed to round-trip to the
+ * provider, hold onto the delegated `loadModel(...).requestId` and
+ * fire a broad cancel against the model id instead.
+ */
 function resolveDelegationTarget(
   request: CancelRequest,
 ): DelegationTarget | null {
-  if (request.operation === "inference") {
-    const entry = getModelEntry(request.modelId);
-    if (!entry?.isDelegated || !entry.delegated) {
-      return null;
-    }
-    const target: DelegationTarget = {
-      topic: entry.delegated.topic,
-      providerPublicKey: entry.delegated.providerPublicKey,
-    };
-    if (entry.delegated.timeout !== undefined) {
-      target.timeout = entry.delegated.timeout;
-    }
-    return target;
+  if (request.operation !== "broad") return null;
+
+  const entry = getModelEntry(request.modelId);
+  if (!entry?.isDelegated) return null;
+
+  const target: DelegationTarget = {
+    providerPublicKey: entry.delegated.providerPublicKey,
+  };
+  if (entry.delegated.timeout !== undefined) {
+    target.timeout = entry.delegated.timeout;
   }
-
-  if (request.operation === "downloadAsset" && request.delegate) {
-    const target: DelegationTarget = {
-      topic: request.delegate.topic,
-      providerPublicKey: request.delegate.providerPublicKey,
-    };
-    if (request.delegate.timeout !== undefined) {
-      target.timeout = request.delegate.timeout;
-    }
-    return target;
-  }
-
-  return null;
-}
-
-function toProviderCancelRequest(request: CancelRequest): CancelRequest {
-  if (request.operation !== "downloadAsset") {
-    return request;
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { delegate: _delegate, ...providerRequest } = request;
-  return providerRequest as CancelRequest;
+  return target;
 }
 
 export async function handleCancelDelegated(
@@ -68,7 +58,7 @@ export async function handleCancelDelegated(
   }
 
   try {
-    const rpc = await getRPC(target.topic, target.providerPublicKey, {
+    const rpc = await getRPC(target.providerPublicKey, {
       timeout: target.timeout,
     });
 
@@ -82,7 +72,7 @@ export async function handleCancelDelegated(
       delegateOpts.profilingMeta = options.profilingMeta;
     }
 
-    await send(toProviderCancelRequest(request), rpc, delegateOpts);
+    await send(request, rpc, delegateOpts);
     return { type: "cancel", success: true };
   } catch (error) {
     logger.error("Error during delegated cancellation:", error);

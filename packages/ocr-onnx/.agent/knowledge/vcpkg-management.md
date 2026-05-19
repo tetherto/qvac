@@ -53,14 +53,14 @@ Every addon package uses two registries configured in `vcpkg-configuration.json`
   "default-registry": {
     "kind": "git",
     "baseline": "<commit-sha>",
-    "repository": "git@github.com:tetherto/qvac-registry-vcpkg.git"
+    "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git"
   }
 }
 ```
 
-Hosts QVAC-specific packages: `qvac-fabric`, `qvac-lib-inference-addon-cpp`, `qvac-lint-cpp`, `onnxruntime`, `whisper-cpp`, `tokenizers-cpp`, `bergamot-translator`, `sentencepiece`, `ssplit`, and others.
+Hosts QVAC-specific packages: `qvac-fabric`, `inference-addon-cpp`, `lint-cpp`, `onnxruntime`, `whisper-cpp`, `tokenizers-cpp`, `bergamot-translator`, `sentencepiece`, `ssplit`, and others.
 
-**Authentication**: Requires `GH_TOKEN` (GitHub PAT) with read access to `tetherto/qvac-registry-vcpkg`. In CI, git credentials are configured automatically. Locally, SSH key access to the repo is needed (note the `git@github.com:` URL).
+**Authentication**: Requires `GH_TOKEN` (GitHub PAT) with read access to `tetherto/qvac-registry-vcpkg`. In CI, git credentials are configured automatically. Locally, HTTPS access works with token-based auth or credential helpers.
 
 ### 2. Microsoft Upstream Registry
 
@@ -203,12 +203,15 @@ Packages can override standard triplets for specific build requirements. Overrid
 set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 ```
 
-#### LLM / Embed — Clang-19 Toolchain
+#### LLM / Embed — Clang Toolchain
 
-Location: `packages/qvac-lib-infer-llamacpp-llm/vcpkg/triplets/`
+Location: `packages/llm-llamacpp/vcpkg/triplets/`
 
 Custom `x64-linux.cmake` and `arm64-linux.cmake` that enforce:
-- clang-19 compiler via custom toolchain file
+- Unversioned `clang` / `clang++` compiler via custom toolchain file
+  (the LLVM major is pinned globally by `.github/actions/setup-llvm` in CI;
+  on dev machines, `update-alternatives` should point `clang`/`clang++` at
+  the matching major — currently 22)
 - Static linking (`VCPKG_LIBRARY_LINKAGE static`)
 - libc++ stdlib (`-stdlib=libc++`)
 - Position-independent code (`-fPIC`)
@@ -248,7 +251,7 @@ Overlay ports let a package override a registry port with a local version. They 
 
 ### qvac-fabric Local Dev Pattern (LLM / Embed)
 
-Location: `packages/qvac-lib-infer-llamacpp-llm/vcpkg/ports/qvac-fabric/`
+Location: `packages/llm-llamacpp/vcpkg/ports/qvac-fabric/`
 
 When developing against a local build of `qvac-fabric` (the llama.cpp fork):
 1. The overlay port's `portfile.cmake` points to a local source directory (e.g., `/home/olya/claude_folders/addons_folders/fabric/qvac-fabric-llm.cpp`)
@@ -261,7 +264,7 @@ When developing against a local build of `qvac-fabric` (the llama.cpp fork):
 
 ### NMT Overlay Ports (7 ports)
 
-Location: `packages/qvac-lib-infer-nmtcpp/vcpkg-overlays/`
+Location: `packages/translation-nmtcpp/vcpkg-overlays/`
 
 NMT has the most overlay ports of any package, each building a specific fork or patched version:
 
@@ -299,21 +302,21 @@ The llama.cpp fork maintained in `qvac-registry-vcpkg`. This is the core LLM inf
 - Platform-specific backends: Metal (macOS/iOS), Vulkan (Linux/Android), CPU fallback
 - Current version: `7248.1.2+` (version tracks llama.cpp upstream commits)
 
-### qvac-lib-inference-addon-cpp
+### inference-addon-cpp
 
 Shared C++ addon framework providing the JS<->C++ binding interface (`JsInterface.hpp`).
 
 - Used by: all addon packages
 - Current version: `1.1.2`
-- Provides: `find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/JsInterface.hpp")`
+- Provides: `find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/JsInterface.hpp")`
 
-### qvac-lint-cpp
+### lint-cpp
 
 Shared C++ linting configuration (`.clang-format`, `.clang-tidy`).
 
 - Used by: all addon packages
 - Current version: `1.4.4`
-- Provides: `find_path(VCPKG_INSTALLED_PATH share/qvac-lint-cpp/.clang-format REQUIRED)`
+- Provides: `find_path(VCPKG_INSTALLED_PATH share/lint-cpp/.clang-format REQUIRED)`
 
 ### onnxruntime
 
@@ -416,8 +419,8 @@ find_package(GTest CONFIG REQUIRED)
 
 # find_path for header-only or non-config packages
 find_path(PICOJSON_INCLUDE_DIRS "picojson/picojson.h")
-find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "qvac-lib-inference-addon-cpp/JsInterface.hpp")
-find_path(VCPKG_INSTALLED_PATH share/qvac-lint-cpp/.clang-format REQUIRED)
+find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/JsInterface.hpp")
+find_path(VCPKG_INSTALLED_PATH share/lint-cpp/.clang-format REQUIRED)
 ```
 
 ### Linux-Specific Linking
@@ -497,7 +500,7 @@ If ONNX Runtime symbols conflict at runtime:
 
 If `bare-make generate` fails with git authentication errors:
 - Verify `GH_TOKEN` is set and has read access to `tetherto/qvac-registry-vcpkg`
-- For local dev with SSH: verify `git@github.com:tetherto/qvac-registry-vcpkg.git` is accessible
+- For local dev with SSH: verify `https://github.com/tetherto/qvac-registry-vcpkg.git` is accessible
 - In CI: check that the `.npmrc` setup step and git credential configuration ran successfully
 - Set `GIT_TERMINAL_PROMPT=0` to prevent hanging on auth prompts
 
@@ -513,13 +516,13 @@ If a package can't be resolved:
 
 | Addon Package | vcpkg Dependencies | Overlay Ports | Custom Triplets |
 |--------------|-------------------|---------------|-----------------|
-| `qvac-lib-infer-llamacpp-llm` | qvac-fabric, qvac-lib-inference-addon-cpp, qvac-lint-cpp, picojson, opencl (Android) | qvac-fabric (local dev) | Linux clang-19 |
-| `qvac-lib-infer-llamacpp-embed` | qvac-fabric, qvac-lib-inference-addon-cpp, qvac-lint-cpp, opencl (Android) | qvac-fabric (local dev) | Linux clang-19 |
-| `ocr-onnx` | onnxruntime (platform EPs), opencv4, qvac-lib-inference-addon-cpp, qvac-lint-cpp | None | Release-only |
-| `qvac-lib-infer-onnx-tts` | onnxruntime (platform EPs), fmt, spdlog, tokenizers-cpp, qvac-lib-inference-addon-cpp, qvac-lint-cpp | None | Release-only (macOS/iOS) |
-| `qvac-lib-infer-parakeet` | onnxruntime, qvac-lib-inference-addon-cpp | None | Release-only |
-| `qvac-lib-infer-onnx` | onnxruntime (platform EPs), qvac-lib-inference-addon-cpp, qvac-lint-cpp | None | None |
-| `qvac-lib-infer-whispercpp` | whisper-cpp, qvac-lib-inference-addon-cpp, qvac-lint-cpp | None | None |
-| `qvac-lib-infer-nmtcpp` | bergamot-translator, sentencepiece, ssplit, whisper-cpp, qvac-lib-inference-addon-cpp, qvac-lint-cpp | 7 ports (bergamot, marian-dev, intgemm, ruy, simd-utils, ssplit, whisper-cpp) | None |
-| `qvac-lib-inference-addon-cpp` | qvac-lint-cpp | None | None |
-| `qvac-lint-cpp` | (none — self-contained) | None | None |
+| `llm-llamacpp` | qvac-fabric, inference-addon-cpp, qvac-lint-cpp, picojson, opencl (Android) | qvac-fabric (local dev) | Linux clang (unversioned, pinned via setup-llvm) |
+| `embed-llamacpp` | qvac-fabric, inference-addon-cpp, qvac-lint-cpp, opencl (Android) | qvac-fabric (local dev) | Linux clang (unversioned, pinned via setup-llvm) |
+| `ocr-onnx` | onnxruntime (platform EPs), opencv4, inference-addon-cpp, qvac-lint-cpp | None | Release-only |
+| `tts-onnx` | onnxruntime (platform EPs), fmt, spdlog, tokenizers-cpp, inference-addon-cpp, qvac-lint-cpp | None | Release-only (macOS/iOS) |
+| `transcription-parakeet` | onnxruntime, inference-addon-cpp | None | Release-only |
+| `onnx` | onnxruntime (platform EPs), inference-addon-cpp, qvac-lint-cpp | None | None |
+| `transcription-whispercpp` | whisper-cpp, inference-addon-cpp, qvac-lint-cpp | None | None |
+| `translation-nmtcpp` | bergamot-translator, sentencepiece, ssplit, whisper-cpp, inference-addon-cpp, qvac-lint-cpp | 7 ports (bergamot, marian-dev, intgemm, ruy, simd-utils, ssplit, whisper-cpp) | None |
+| `inference-addon-cpp` | lint-cpp | None | None |
+| `lint-cpp` | (none — self-contained) | None | None |

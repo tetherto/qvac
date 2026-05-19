@@ -22,7 +22,7 @@ Usage: node generate-notice.js [--all | <package-dir-name>] [--dry-run]
 
   --all                     Generate NOTICE for all packages
   <package-dir-name>        Generate NOTICE for a specific package
-                            e.g. sdk, qvac-lib-registry-server/client
+                            e.g. sdk, registry-server/client
   --dry-run                 Run all scans but do not write any files.
                             Prints NOTICE previews to stdout instead.
 
@@ -40,7 +40,7 @@ Examples:
   source .env && node generate-notice.js --all --dry-run
   source .env && node generate-notice.js --all
   source .env && node generate-notice.js sdk
-  source .env && node generate-notice.js qvac-lib-infer-llamacpp-embed --dry-run
+  source .env && node generate-notice.js embed-llamacpp --dry-run
 `)
 }
 

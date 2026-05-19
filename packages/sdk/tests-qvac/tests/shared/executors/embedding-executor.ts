@@ -24,7 +24,7 @@ export class EmbeddingExecutor extends AbstractModelExecutor<
       if (p.texts) {
         const embeddings = [];
         for (const text of p.texts) {
-          const embedding = await embed({ modelId: embeddingModelId, text });
+          const { embedding } = await embed({ modelId: embeddingModelId, text });
           embeddings.push(embedding);
         }
         return ValidationHelpers.validate(
@@ -34,7 +34,7 @@ export class EmbeddingExecutor extends AbstractModelExecutor<
       }
 
       const text = p.text || "";
-      const embedding = await embed({ modelId: embeddingModelId, text });
+      const { embedding } = await embed({ modelId: embeddingModelId, text });
       return ValidationHelpers.validate(embedding, expectation as Expectation);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);

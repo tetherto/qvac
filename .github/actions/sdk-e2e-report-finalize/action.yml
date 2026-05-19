@@ -1,0 +1,323 @@
+name: SDK E2E Report Finalize
+description: >
+  Aggregates per-platform SDK e2e results produced by the test jobs of a
+  single run, writes GITHUB_STEP_SUMMARY for every platform (always), and
+  when run in PR context updates the per-platform comments posted earlier by
+  sdk-e2e-report-start. Expects each test job to have uploaded a results
+  artifact (results-<family>[-<platform>]). Does not npm install and does not
+  invoke the qvac-test CLI.
+
+inputs:
+  family:
+    description: "SDK e2e family: desktop | android | ios"
+    required: true
+  platforms:
+    description: >
+      JSON array of platform keys that participated in this run, e.g.
+      ["linux","windows","macos"] for desktop or ["android"] / ["ios"].
+    required: true
+  comment-ids:
+    description: >
+      JSON object mapping platform key -> PR comment id (output of
+      sdk-e2e-report-start). Pass '{}' for non-PR runs.
+    required: false
+    default: "{}"
+  suite:
+    description: "Suite filter used for the run (empty = full)"
+    required: false
+    default: ""
+  filter:
+    description: "Test filter used for the run (empty = all)"
+    required: false
+    default: ""
+  exclude-suite:
+    description: "Exclude-suite filter used for the run"
+    required: false
+    default: ""
+  update-summary:
+    description: "Whether to append the rendered report to GITHUB_STEP_SUMMARY"
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve artifact patterns
+      id: patterns
+      shell: bash
+      env:
+        FAMILY: ${{ inputs.family }}
+      run: |
+        case "$FAMILY" in
+          desktop)
+            echo "results-pattern=results-desktop-*" >> "$GITHUB_OUTPUT"
+            ;;
+          android)
+            echo "results-pattern=results-android" >> "$GITHUB_OUTPUT"
+            ;;
+          ios)
+            echo "results-pattern=results-ios" >> "$GITHUB_OUTPUT"
+            ;;
+          *)
+            echo "Unknown family: $FAMILY" >&2
+            exit 1
+            ;;
+        esac
+
+    - name: Download current results
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+      with:
+        pattern: ${{ steps.patterns.outputs.results-pattern }}
+        path: .sdk-e2e-report/current-results
+
+    - name: Build and publish reports
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
+      env:
+        FAMILY: ${{ inputs.family }}
+        PLATFORMS: ${{ inputs.platforms }}
+        COMMENT_IDS: ${{ inputs.comment-ids }}
+        SUITE: ${{ inputs.suite }}
+        FILTER: ${{ inputs.filter }}
+        EXCLUDE_SUITE: ${{ inputs.exclude-suite }}
+        UPDATE_SUMMARY: ${{ inputs.update-summary }}
+      with:
+        script: |
+          const fs = require('fs');
+          const path = require('path');
+
+          const family = process.env.FAMILY;
+          const platforms = JSON.parse(process.env.PLATFORMS || '[]');
+          const commentIds = JSON.parse(process.env.COMMENT_IDS || '{}');
+          const suite = process.env.SUITE || '';
+          const filter = process.env.FILTER || '';
+          const excludeSuite = process.env.EXCLUDE_SUITE || '';
+          const updateSummary = process.env.UPDATE_SUMMARY !== 'false';
+
+          const pr = context.payload.pull_request?.number;
+          const runUrl =
+            `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}` +
+            `/actions/runs/${context.runId}`;
+
+          const resultsRoot = '.sdk-e2e-report/current-results';
+
+          const artifactDir = (platform) =>
+            family === 'desktop' ? `results-desktop-${platform}` : `results-${family}`;
+          const marker = (platform) =>
+            `<!-- sdk-e2e-report:pr=${pr ?? 'none'}:family=${family}:platform=${platform} -->`;
+
+          const fmt = (v) => (v && v.length > 0 ? `\`${v}\`` : '`(none)`');
+          const configLine =
+            `**Config:** suite=${fmt(suite)} · filter=${fmt(filter)} · exclude=${fmt(excludeSuite)}`;
+
+          const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            run_id: context.runId,
+            per_page: 100,
+          });
+          const artifactsByName = new Map(artifacts.map((artifact) => [artifact.name, artifact]));
+
+          function artifactUrl(artifact) {
+            return `${runUrl}/artifacts/${artifact.id}`;
+          }
+
+          function artifactSpecs(platform) {
+            const specs = [{ name: artifactDir(platform), label: 'reports' }];
+
+            if (family !== 'desktop') {
+              const logPrefix = `device-farm-logs-${family}-`;
+              for (const artifact of artifacts) {
+                if (artifact.name.startsWith(logPrefix)) {
+                  specs.push({ name: artifact.name, label: 'Device Farm logs' });
+                }
+              }
+            }
+
+            return specs;
+          }
+
+          function buildLinksLine(platform) {
+            const artifactLinks = [];
+            for (const spec of artifactSpecs(platform)) {
+              const artifact = artifactsByName.get(spec.name);
+              if (artifact) {
+                artifactLinks.push(`[${spec.label}](${artifactUrl(artifact)})`);
+              }
+            }
+
+            if (artifactLinks.length === 0) {
+              return `[View run](${runUrl})`;
+            }
+            return `[View run](${runUrl}) · Artifacts: ${artifactLinks.join(' · ')}`;
+          }
+
+          // actions/download-artifact@v8 extracts a single matched artifact directly
+          // into `path` instead of `path/<artifact-name>/` (the per-artifact subdir is
+          // only created when the pattern matches >=2 artifacts). For families with one
+          // platform (android, ios) we therefore probe both layouts. Desktop always has
+          // multiple platforms so the per-artifact subdir is created and is preferred.
+          function findResultsJson(platform) {
+            const candidates = [
+              path.join(resultsRoot, artifactDir(platform)),
+              resultsRoot,
+            ];
+            for (const dir of candidates) {
+              if (!fs.existsSync(dir)) continue;
+              const files = fs.readdirSync(dir)
+                .filter((f) => f.endsWith('.json') && f.startsWith('results-'));
+              if (files.length === 0) continue;
+              return path.join(dir, files[0]);
+            }
+            return null;
+          }
+
+          function truncate(s, n) {
+            if (!s) return '';
+            const first = s.split('\n')[0].trim();
+            return first.length > n ? `${first.slice(0, n - 1)}…` : first;
+          }
+
+          function failureMessage(test) {
+            return truncate(test.error || 'no error message', 200);
+          }
+
+          function formatAffectedTests(tests) {
+            const shown = tests.slice(0, 5).map((t) => `\`${t.testId}\``).join(', ');
+            const remaining = tests.length - 5;
+            return remaining > 0 ? `${shown}, and ${remaining} more` : shown;
+          }
+
+          function buildBody(platform, results) {
+            const mark = marker(platform);
+            const linksLine = buildLinksLine(platform);
+            const summary = results.summary || {};
+            const total = Number(summary.total || 0);
+            const passed = Number(summary.passed || 0);
+            const failed = Number(summary.failed || 0);
+            const duration = Math.round(Number(summary.duration || 0));
+            const rate = summary.successRate ?? '0.0';
+            const categories = results.categories || {};
+            const tests = Array.isArray(results.tests) ? results.tests : [];
+
+            if (failed === 0) {
+              const lines = [
+                mark,
+                `### QVAC E2E — \`${platform}\` — ✅ all tests passed (${passed}/${total}, ${duration}s)`,
+                configLine,
+                linksLine,
+              ];
+              return lines.join('\n');
+            }
+
+            const lines = [
+              mark,
+              `### QVAC E2E — \`${platform}\` — ❌ failed`,
+              `**Totals:** ${passed}/${total} passed · ${failed} failed · ${rate}% · ${duration}s`,
+              configLine,
+              linksLine,
+              '',
+              '**Results by section**',
+            ];
+
+            const failingCats = Object.entries(categories)
+              .filter(([, c]) => Number(c.failed || 0) > 0)
+              .sort(([a], [b]) => a.localeCompare(b));
+            if (failingCats.length === 0) {
+              lines.push('- (no category breakdown available)');
+            } else {
+              for (const [cat, c] of failingCats) {
+                lines.push(`- ${cat}: ${c.passed}/${c.total} ❌`);
+              }
+            }
+
+            lines.push('');
+            lines.push('**Failed tests**');
+            const failedTests = tests.filter((t) => t.outcome === 'failure');
+            if (failedTests.length === 0) {
+              lines.push('- (no per-test details available)');
+            } else {
+              const byError = new Map();
+              for (const t of failedTests) {
+                const error = failureMessage(t);
+                if (!byError.has(error)) byError.set(error, []);
+                byError.get(error).push(t);
+              }
+              const collapsedErrors = new Set(
+                [...byError.entries()]
+                  .filter(([, list]) => list.length > 5)
+                  .map(([error]) => error),
+              );
+              const emittedCollapsedErrors = new Set();
+              const byCat = new Map();
+              for (const t of failedTests) {
+                const cat = String(t.testId || '').split('-')[0] || 'uncategorized';
+                if (!byCat.has(cat)) byCat.set(cat, []);
+                byCat.get(cat).push(t);
+              }
+              for (const [, list] of [...byCat.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+                for (const t of list) {
+                  const error = failureMessage(t);
+                  if (collapsedErrors.has(error)) {
+                    if (emittedCollapsedErrors.has(error)) {
+                      continue;
+                    }
+                    const affected = byError.get(error);
+                    lines.push(`- ${affected.length} tests: ${error}`);
+                    lines.push(`  Affected: ${formatAffectedTests(affected)}`);
+                    emittedCollapsedErrors.add(error);
+                    continue;
+                  }
+                  lines.push(`- \`${t.testId}\`: ${error}`);
+                }
+              }
+            }
+
+            return lines.join('\n');
+          }
+
+          const summaryPath = process.env.GITHUB_STEP_SUMMARY;
+
+          for (const platform of platforms) {
+            const resultsPath = findResultsJson(platform);
+            let body;
+            if (!resultsPath) {
+              const linksLine = buildLinksLine(platform);
+              body = [
+                marker(platform),
+                `### QVAC E2E — \`${platform}\` — ⚠️ no results`,
+                configLine,
+                linksLine,
+                '',
+                'The test job did not produce a results artifact. Check the run for job-level failures.',
+              ].join('\n');
+            } else {
+              let results;
+              try {
+                results = JSON.parse(fs.readFileSync(resultsPath, 'utf8'));
+              } catch (err) {
+                core.warning(`Failed to parse results JSON for ${platform}: ${err.message}`);
+                results = { summary: {}, categories: {}, tests: [] };
+              }
+              body = buildBody(platform, results);
+            }
+
+            if (summaryPath && updateSummary) {
+              fs.appendFileSync(summaryPath, `${body}\n\n`);
+            }
+
+            if (pr && commentIds[platform]) {
+              try {
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: commentIds[platform],
+                  body,
+                });
+                core.info(`Updated comment for ${platform} (id=${commentIds[platform]}).`);
+              } catch (err) {
+                core.warning(`Failed to update comment for ${platform}: ${err.message}`);
+              }
+            } else if (pr) {
+              core.info(`No comment-id recorded for ${platform}; skipping update.`);
+            }
+          }

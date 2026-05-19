@@ -61,6 +61,8 @@ Third-Party Model Licenses
 
 --- apache-2.0 (Apache License 2.0) ---
 
+  bci-embedder
+    https://github.com/tetherto/qvac/releases/download/bci-test-assets-v0.1.0/bci-embedder.bin
   crnn_mobilenet_v3_small
     https://github.com/felixdittrich92/OnnxTR
   db_mobilenet_v3_large
@@ -83,46 +85,14 @@ Third-Party Model Licenses
     https://huggingface.co/personalizedrefrigerator/whisper-base-fr
   fr-tiny-ggml-model-f16
     https://huggingface.co/JaepaX/whisper-tiny-fr
-  ggml-opus-ar-en
-    https://huggingface.co/Helsinki-NLP/opus-mt-ar-en
-  ggml-opus-de-en
-    https://huggingface.co/Helsinki-NLP/opus-mt-de-en
-  ggml-opus-de-fr
-    https://huggingface.co/Helsinki-NLP/opus-mt-de-fr
-  ggml-opus-en-ar
-    https://huggingface.co/Helsinki-NLP/opus-mt-en-ar
-  ggml-opus-en-es
-    https://huggingface.co/Helsinki-NLP/opus-mt-en-es
-  ggml-opus-en-fr
-    https://huggingface.co/Helsinki-NLP/opus-mt-en-fr
-  ggml-opus-en-it
-    https://huggingface.co/Helsinki-NLP/opus-mt-en-it
-  ggml-opus-en-roa
-    https://huggingface.co/Helsinki-NLP/opus-mt-en-roa
-  ggml-opus-en-ru
-    https://huggingface.co/Helsinki-NLP/opus-mt-en-ru
-  ggml-opus-en-zh
-    https://huggingface.co/Helsinki-NLP/opus-mt-en-zh
-  ggml-opus-es-en
-    https://huggingface.co/Helsinki-NLP/opus-mt-es-en
-  ggml-opus-es-fr
-    https://huggingface.co/Helsinki-NLP/opus-mt-es-fr
-  ggml-opus-fr-de
-    https://huggingface.co/Helsinki-NLP/opus-mt-fr-de
-  ggml-opus-fr-en
-    https://huggingface.co/Helsinki-NLP/opus-mt-fr-en
-  ggml-opus-fr-es
-    https://huggingface.co/Helsinki-NLP/opus-mt-fr-es
-  ggml-opus-it-en
-    https://huggingface.co/Helsinki-NLP/opus-mt-it-en
-  ggml-opus-ja-en
-    https://huggingface.co/Helsinki-NLP/opus-mt-ja-en
-  ggml-opus-mt-en-roa-f16
-    https://huggingface.co/Helsinki-NLP/opus-mt-en-roa
-  ggml-opus-mt-roa-en-f16
-    https://huggingface.co/Helsinki-NLP/opus-mt-roa-en
-  ggml-opus-roa-en
-    https://huggingface.co/Helsinki-NLP/opus-mt-roa-en
+  ggml-bci-windowed
+    https://github.com/tetherto/qvac/releases/download/bci-test-assets-v0.1.0/ggml-bci-windowed.bin
+  google_gemma-4-31B-it-GGUF
+    https://huggingface.co/bartowski/google_gemma-4-31B-it-GGUF
+  google_gemma-4-E2B-it-GGUF
+    https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF
+  google_gemma-4-E4B-it-GGUF
+    https://huggingface.co/bartowski/google_gemma-4-E4B-it-GGUF
   gpt-oss-120b-Q4_K_M-00001-of-00002
     https://huggingface.co/unsloth/gpt-oss-120b-GGUF
   gpt-oss-20b-GGUF
@@ -163,6 +133,18 @@ Third-Party Model Licenses
     https://huggingface.co/Qwen/Qwen3-8B-GGUF
   Qwen3-VL-2B-Instruct-GGUF
     https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF
+  Qwen3.5-0.8B-GGUF
+    https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF
+  Qwen3.5-2B-GGUF
+    https://huggingface.co/unsloth/Qwen3.5-2B-GGUF
+  Qwen3.5-4B-GGUF
+    https://huggingface.co/unsloth/Qwen3.5-4B-GGUF
+  Qwen3.5-9B-GGUF
+    https://huggingface.co/unsloth/Qwen3.5-9B-GGUF
+  Qwen3.6-27B-GGUF
+    https://huggingface.co/unsloth/Qwen3.6-27B-GGUF
+  Qwen3.6-35B-A3B-GGUF
+    https://huggingface.co/unsloth/Qwen3.6-35B-A3B-GGUF
   recognizer_arabic
     https://www.jaided.ai/easyocr/modelhub/
   recognizer_bengali
@@ -202,38 +184,41 @@ Third-Party Model Licenses
   SmolVLM2-500M-Video-Instruct-GGUF
     https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF
 
+--- bsd-3-clause (BSD 3-Clause License) ---
+
+  RealESRGAN_x4plus
+    https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth
+  RealESRGAN_x4plus_anime_6B
+    https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth
+  RealESRNet_x4plus
+    https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.1/RealESRNet_x4plus.pth
+
 --- cc-by-4.0 (Creative Commons Attribution 4.0 International) ---
 
   AfriqueGemma-4B-GGUF
     https://huggingface.co/mradermacher/AfriqueGemma-4B-GGUF
-  decoder_joint_int8
-    https://huggingface.co/nasedkinpv/parakeet-tdt-0.6b-v3-onnx-int8
   decoder_joint-model
     https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx
   diar_streaming_sortformer_4spk-v2-onnx
     https://huggingface.co/cgus/diar_streaming_sortformer_4spk-v2-onnx
-  encoder_int8
-    https://huggingface.co/nasedkinpv/parakeet-tdt-0.6b-v3-onnx-int8
   encoder-model
     https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx
-  ggml-opus-en-de
-    https://huggingface.co/Helsinki-NLP/opus-mt-en-de
-  ggml-opus-en-pt
-    https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-en-pt
-  ggml-opus-ru-en
-    https://huggingface.co/Helsinki-NLP/opus-mt-ru-en
-  ggml-opus-zh-en
-    https://huggingface.co/Helsinki-NLP/opus-mt-zh-en
   parakeet-ctc-0.6b-ONNX
     https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX
+  parakeet-ctc-0.6b.q8_0
+    https://huggingface.co/nvidia/parakeet-ctc-0.6b
+  parakeet-eou-120m-v1.q8_0
+    https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1
   parakeet-rs
     https://huggingface.co/altunenes/parakeet-rs
   parakeet-tdt-0.6b-v3-onnx
     https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx
+  parakeet-tdt-0.6b-v3.q8_0
+    https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3
   preprocessor
     https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx
-  sortformer_int8
-    https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2
+  sortformer-4spk-v1.q8_0
+    https://huggingface.co/nvidia/diar_sortformer_4spk-v1
 
 --- gemma (Gemma Terms of Use) ---
 
@@ -266,10 +251,28 @@ Third-Party Model Licenses
     https://huggingface.co/1bitLLM/bitnet_b1_58-xl
   chatterbox-multilingual-ONNX
     https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX
+  chatterbox-s3gen
+    s3:///qvac_models_compiled/chatterbox/2026-05-08/chatterbox-s3gen.gguf
+  chatterbox-s3gen-mtl
+    s3:///qvac_models_compiled/chatterbox/2026-05-08/chatterbox-s3gen-mtl.gguf
+  chatterbox-t3-mtl
+    s3:///qvac_models_compiled/chatterbox/2026-05-08/chatterbox-t3-mtl.gguf
+  chatterbox-t3-turbo
+    s3:///qvac_models_compiled/chatterbox/2026-05-08/chatterbox-t3-turbo.gguf
   chatterbox-turbo-ONNX
     https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX
   de-base-ggml-model-f16
     https://huggingface.co/aware-ai/whisper-base-german
+  denoiser_core_legacy_fixed63
+    s3:///qvac_models_compiled/onnx/lavasr/2026-04-03/denoiser_core_legacy_fixed63.onnx
+  enhancer_backbone
+    s3:///qvac_models_compiled/onnx/lavasr/2026-04-03/enhancer_backbone.onnx
+  enhancer_backbone.onnx
+    s3:///qvac_models_compiled/onnx/lavasr/2026-04-03/enhancer_backbone.onnx.data
+  enhancer_spec_head
+    s3:///qvac_models_compiled/onnx/lavasr/2026-04-03/enhancer_spec_head.onnx
+  enhancer_spec_head.onnx
+    s3:///qvac_models_compiled/onnx/lavasr/2026-04-03/enhancer_spec_head.onnx.data
   es-tiny-ggml-model-f16
     https://huggingface.co/JaepaX/whisper-tiny-es
   ggml-indictrans2-en-indic-1B-f16
@@ -303,45 +306,199 @@ Third-Party Model Licenses
 
   model.aren.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/aren
+  model.azen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/azen
+  model.been.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/been
+  model.bgen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/bgen
+  model.bnen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/bnen
+  model.bsen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/bsen
+  model.caen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/caen
   model.csen.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/csen
+  model.daen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/daen
+  model.deen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/deen
+  model.elen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/elen
   model.enar.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enar
+  model.enaz.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enaz
+  model.enbg.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enbg
+  model.enbn.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enbn
+  model.enca.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enca
   model.encs.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/encs
+  model.enda.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enda
+  model.ende.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/ende
+  model.enel.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enel
   model.enes.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enes
+  model.enet.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enet
+  model.enfa.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enfa
+  model.enfi.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enfi
   model.enfr.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enfr
+  model.engu.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/engu
+  model.enhe.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enhe
+  model.enhi.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enhi
+  model.enhr.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enhr
+  model.enhu.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enhu
+  model.enid.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enid
+  model.enis.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enis
   model.enit.intgemm.alphas
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/enit
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enit
   model.enja.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enja
+  model.enkn.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enkn
+  model.enko.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enko
+  model.enlt.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enlt
+  model.enlv.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enlv
+  model.enml.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enml
+  model.enms.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enms
+  model.ennl.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/ennl
+  model.enpl.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enpl
   model.enpt.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enpt
+  model.enro.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enro
   model.enru.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enru
-  model.enzh.intgemm.alphas
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enzh
+  model.ensk.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/ensk
+  model.ensl.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/ensl
+  model.ensq.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/ensq
+  model.ensv.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/ensv
+  model.enta.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enta
+  model.ente.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/ente
+  model.entr.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/entr
+  model.enuk.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enuk
   model.esen.intgemm.alphas
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/esen
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/esen
+  model.eten.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/eten
+  model.faen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/faen
+  model.fien.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/fien
   model.fren.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/fren
+  model.guen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/guen
+  model.heen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/heen
+  model.hien.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/hien
+  model.hren.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/hren
+  model.huen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/huen
+  model.iden.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/iden
+  model.isen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/isen
   model.iten.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/iten
   model.jaen.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/jaen
+  model.knen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/knen
+  model.koen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/koen
+  model.lten.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/lten
+  model.lven.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/lven
+  model.mlen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/mlen
+  model.msen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/msen
+  model.mten.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/mten
+  model.nben.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/nben
+  model.nlen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/nlen
+  model.nnen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/nnen
+  model.plen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/plen
   model.pten.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/pten
+  model.roen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/roen
   model.ruen.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/tiny/ruen
-  model.zhen.intgemm.alphas
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/zhen
+  model.sken.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/sken
+  model.slen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/slen
+  model.sqen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/sqen
+  model.sren.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/sren
+  model.sven.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/sven
+  model.taen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/taen
+  model.teen.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/teen
+  model.tren.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/tren
+  model.uken.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/uken
+  model.vien.intgemm.alphas
+    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/vien
 
 --- openrail ---
 
+  supertonic
+    s3:///qvac_models_compiled/supertonic/2026-05-08/supertonic.gguf
+  supertonic
+    https://huggingface.co/Supertone/supertonic
+  supertonic-2
+    https://huggingface.co/Supertone/supertonic-2
   Supertonic-TTS-ONNX
     https://huggingface.co/onnx-community/Supertonic-TTS-ONNX
+  supertonic2
+    s3:///qvac_models_compiled/supertonic/2026-05-08/supertonic2.gguf
 
 --- openrail++ ---
 
@@ -371,37 +528,52 @@ JavaScript Dependencies
 
   @hyperswarm/secret-stream@6.9.1
     https://github.com/holepunchto/hyperswarm-secret-stream
-  @qvac/decoder-audio@0.3.3
-  @qvac/dl-base@0.2.0
-  @qvac/dl-filesystem@0.2.0
-  @qvac/dl-hyperdrive@0.2.0
-  @qvac/embed-llamacpp@0.12.0
-    https://github.com/tetherto/qvac-lib-infer-llamacpp-embed
+  @qvac/decoder-audio@0.3.7
+    https://github.com/tetherto/qvac
+  @qvac/diagnostics@0.1.1
+  @qvac/diffusion-cpp@0.7.0
+    https://github.com/tetherto/qvac
+  @qvac/dl-base@0.1.1
+  @qvac/dl-hyperdrive@0.1.1
+  @qvac/embed-llamacpp@0.16.0
+    https://github.com/tetherto/qvac
   @qvac/error@0.1.1
   @qvac/infer-base@0.1.1
-  @qvac/infer-base@0.2.2
-  @qvac/langdetect-text@0.1.1
-  @qvac/llm-llamacpp@0.12.2
-    https://github.com/tetherto/qvac-lib-infer-llamacpp-llm
+  @qvac/infer-base@0.4.0
+    https://github.com/tetherto/qvac
+  @qvac/infer-base@0.4.1
+    https://github.com/tetherto/qvac
+  @qvac/langdetect-text@0.1.2
+    https://github.com/tetherto/qvac
+  @qvac/llm-llamacpp@0.20.1
+    https://github.com/tetherto/qvac
   @qvac/logging@0.1.0
-  @qvac/ocr-onnx@0.2.0
-    https://github.com/tetherto/qvac-lib-inference-addon-onnx-ocr-fasttext
-  @qvac/rag@0.4.2
-  @qvac/registry-client@0.2.1
-  @qvac/registry-schema@0.1.1
+  @qvac/ocr-onnx@0.5.0
+    https://github.com/tetherto/qvac
+  @qvac/onnx@0.15.0
+    https://github.com/tetherto/qvac
+  @qvac/rag@0.5.0
+    https://github.com/tetherto/qvac
+  @qvac/registry-client@0.5.0
+    https://github.com/tetherto/qvac
+  @qvac/registry-schema@0.2.0
+    https://github.com/tetherto/qvac
   @qvac/response@0.1.2
-  @qvac/transcription-parakeet@0.2.0
+  @qvac/transcription-parakeet@0.5.0
     https://github.com/tetherto/qvac
-  @qvac/transcription-whispercpp@0.5.0
+  @qvac/transcription-whispercpp@0.7.0
     https://github.com/tetherto/qvac
-  @qvac/translation-nmtcpp@0.6.1
-    https://github.com/tetherto/qvac-lib-infer-nmtcpp
-  @qvac/tts-onnx@0.6.1
+  @qvac/translation-nmtcpp@3.0.0
+    https://github.com/tetherto/qvac
+  @qvac/tts-onnx@0.9.0
+    https://github.com/tetherto/qvac
   adaptive-timeout@1.0.1
     https://github.com/holepunchto/adaptive-timeout
-  b4a@1.7.5
+  b4a@1.8.0
     https://github.com/holepunchto/b4a
-  bare-abort-controller@1.0.0
+  bare-abort@2.0.13
+    https://github.com/holepunchto/bare-abort
+  bare-abort-controller@1.1.1
     https://github.com/holepunchto/bare-abort-controller
   bare-addon-resolve@1.10.0
     https://github.com/holepunchto/bare-addon-resolve
@@ -409,13 +581,13 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-ansi-escapes
   bare-assert@1.2.0
     https://github.com/holepunchto/bare-assert
-  bare-buffer@3.4.4
+  bare-buffer@3.6.0
     https://github.com/holepunchto/bare-buffer
   bare-bundle@1.10.0
     https://github.com/holepunchto/bare-bundle
   bare-channel@5.2.3
     https://github.com/holepunchto/bare-channel
-  bare-crypto@1.13.0
+  bare-crypto@1.13.4
     https://github.com/holepunchto/bare-crypto
   bare-dns@2.1.4
     https://github.com/holepunchto/bare-dns
@@ -425,27 +597,27 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-events
   bare-events@2.8.2
     https://github.com/holepunchto/bare-events
-  bare-fetch@2.5.1
+  bare-fetch@2.8.1
     https://github.com/holepunchto/bare-fetch
-  bare-ffmpeg@1.1.0
+  bare-ffmpeg@1.2.2
     https://github.com/holepunchto/bare-ffmpeg
-  bare-form-data@1.1.6
+  bare-form-data@1.2.1
     https://github.com/holepunchto/bare-form-data
-  bare-fs@4.5.4
+  bare-fs@4.6.0
     https://github.com/holepunchto/bare-fs
   bare-hrtime@2.1.1
     https://github.com/holepunchto/bare-hrtime
-  bare-http-parser@1.0.1
+  bare-http-parser@1.1.3
     https://github.com/holepunchto/bare-http-parser
-  bare-http1@4.2.3
+  bare-http1@4.5.5
     https://github.com/holepunchto/bare-http1
-  bare-https@2.1.2
+  bare-https@2.1.3
     https://github.com/holepunchto/bare-https
   bare-inspect@3.1.4
     https://github.com/holepunchto/bare-inspect
-  bare-lief@0.1.4
+  bare-lief@0.2.3
     https://github.com/holepunchto/bare-lief
-  bare-link@2.1.10
+  bare-link@3.2.1
     https://github.com/holepunchto/bare-link
   bare-module@6.1.3
     https://github.com/holepunchto/bare-module
@@ -455,47 +627,49 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-module-resolve
   bare-module-traverse@2.0.1
     https://github.com/holepunchto/bare-module-traverse
-  bare-net@2.2.0
+  bare-net@2.3.1
     https://github.com/holepunchto/bare-net
   bare-node-stream@1.0.0
     https://github.com/holepunchto/bare-node
   bare-node-worker-threads@1.0.0
     https://github.com/holepunchto/bare-node
-  bare-os@3.6.2
+  bare-os@3.8.7
     https://github.com/holepunchto/bare-os
   bare-path@3.0.0
     https://github.com/holepunchto/bare-path
-  bare-pipe@4.1.3
+  bare-pipe@4.1.5
     https://github.com/holepunchto/bare-pipe
-  bare-process@4.2.2
+  bare-process@4.4.1
     https://github.com/holepunchto/bare-process
-  bare-rpc@1.1.0
+  bare-rpc@1.3.2
     https://github.com/holepunchto/bare-rpc
-  bare-runtime@1.27.0
+  bare-runtime@1.28.1
     https://github.com/holepunchto/bare-runtime
-  bare-runtime-darwin-arm64@1.27.0
+  bare-runtime-darwin-arm64@1.28.1
     https://github.com/holepunchto/bare-runtime
   bare-semver@1.0.2
     https://github.com/holepunchto/bare-semver
   bare-signals@4.2.0
     https://github.com/holepunchto/bare-signals
-  bare-stream@2.8.0
+  bare-stdio@1.0.2
+    https://github.com/holepunchto/bare-stdio
+  bare-stream@2.12.0
     https://github.com/holepunchto/bare-stream
-  bare-structured-clone@1.5.2
+  bare-structured-clone@1.5.3
     https://github.com/holepunchto/bare-structured-clone
-  bare-subprocess@5.2.2
+  bare-subprocess@5.2.3
     https://github.com/holepunchto/bare-subprocess
   bare-tcp@2.2.7
     https://github.com/holepunchto/bare-tcp
-  bare-thread@1.1.6
+  bare-thread@1.2.0
     https://github.com/holepunchto/bare-thread
-  bare-tls@2.1.7
+  bare-tls@2.2.1
     https://github.com/holepunchto/bare-tls
-  bare-tty@5.0.3
+  bare-tty@5.1.0
     https://github.com/holepunchto/bare-tty
   bare-type@1.1.0
     https://github.com/holepunchto/bare-type
-  bare-url@2.3.2
+  bare-url@2.4.0
     https://github.com/holepunchto/bare-url
   bare-worker@4.1.6
     https://github.com/holepunchto/bare-worker
@@ -503,8 +677,10 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-zlib
   blind-relay@1.4.0
     https://github.com/holepunchto/blind-relay
-  compact-encoding@2.19.0
-    https://github.com/compact-encoding/compact-encoding
+  compact-encoding@2.19.2
+    https://github.com/holepunchto/compact-encoding
+  compact-encoding@3.0.1
+    https://github.com/holepunchto/compact-encoding
   device-file@2.3.1
     https://github.com/holepunchto/device-file
   events-universal@1.0.1
@@ -513,31 +689,44 @@ JavaScript Dependencies
     https://github.com/holepunchto/fd-lock
   fs-native-extensions@1.4.5
     https://github.com/holepunchto/fs-native-extensions
-  hyperblobs@2.9.0
+  hyperblobs@2.11.1
     https://github.com/holepunchto/hyperblobs
   hypercore-errors@1.5.0
     https://github.com/holepunchto/hypercore-errors
   hypercore-id-encoding@1.3.0
     https://github.com/holepunchto/hypercore-id-encoding
-  hypercore-storage@2.4.1
+  hypercore-stats@2.4.0
+    https://github.com/holepunchto/hypercore-stats
+  hypercore-storage@2.8.0
+    https://github.com/holepunchto/hypercore-storage
   hyperdb@4.22.3
     https://github.com/holepunchto/hyperdb
-  hyperdispatch@1.4.4
+  hyperdht-stats@1.10.0
+    https://github.com/holepunchto/hyperdht-stats
+  hyperdispatch@1.6.0
     https://github.com/holepunchto/hyperdispatch
-  hyperdrive@13.3.0
+  hyperdrive@13.3.2
     https://github.com/holepunchto/hyperdrive
   hyperschema@1.20.1
     https://github.com/holepunchto/hyperschema
-  index-encoder@3.4.0
+  hyperswarm-stats@1.3.0
+    https://github.com/holepunchto/hyperswarm-stats
+  index-encoder@3.5.0
     https://github.com/holepunchto/index-encoder
-  mirror-drive@1.12.0
+  mirror-drive@1.14.1
     https://github.com/holepunchto/mirror-drive
   noise-handshake@4.2.0
     https://github.com/holepunchto/noise-handshake
-  paparam@1.10.0
+  paparam@1.10.1
     https://github.com/holepunchto/paparam
+  passive-core-watcher@1.0.1
+    https://github.com/holepunchto/passive-core-watcher
   quickbit-native@2.4.8
     https://github.com/holepunchto/quickbit-native
+  rabin-native@2.0.0
+    https://github.com/holepunchto/rabin-native
+  rabin-stream@2.0.0
+    https://github.com/holepunchto/rabin-stream
   rache@1.0.0
     https://github.com/holepunchto/rache
   refcounter@1.0.0
@@ -548,7 +737,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/require-asset
   resource-on-exit@1.0.0
     https://github.com/holepunchto/bare-teardown
-  rocksdb-native@3.13.0
+  rocksdb-native@3.15.0
     https://github.com/holepunchto/rocksdb-native
   scope-lock@1.2.4
     https://github.com/holepunchto/scope-lock
@@ -592,11 +781,11 @@ JavaScript Dependencies
     https://github.com/mafintosh/bogon
   codecs@3.1.0
     https://github.com/mafintosh/codecs
-  corestore@7.8.0
+  corestore@7.9.2
     https://github.com/holepunchto/corestore
   debounceify@1.1.0
     https://github.com/mafintosh/debounceify
-  dht-rpc@6.26.2
+  dht-rpc@6.26.3
     https://github.com/mafintosh/dht-rpc
   events@3.3.0
     https://github.com/Gozala/events
@@ -612,13 +801,13 @@ JavaScript Dependencies
     https://github.com/mafintosh/generate-string
   hyperbee@2.27.3
     https://github.com/holepunchto/hyperbee
-  hypercore@11.26.0
+  hypercore@11.28.1
     https://github.com/holepunchto/hypercore
   hypercore-crypto@3.6.1
     https://github.com/mafintosh/hypercore-crypto
-  hyperdht@6.29.0
+  hyperdht@6.29.6
     https://github.com/holepunchto/hyperdht
-  hyperswarm@4.16.0
+  hyperswarm@4.17.0
     https://github.com/holepunchto/hyperswarm
   is-options@1.0.2
     https://github.com/mafintosh/is-options
@@ -646,7 +835,7 @@ JavaScript Dependencies
     https://github.com/mafintosh/record-cache
   resolve-reject-promise@1.1.0
     https://github.com/mafintosh/resolve-reject-promise
-  safety-catch@1.0.2
+  safety-catch@1.0.3
     https://github.com/mafintosh/safety-catch
   same-data@1.0.0
     https://github.com/mafintosh/same-data
@@ -656,7 +845,7 @@ JavaScript Dependencies
     https://github.com/mafintosh/signal-promise
   signed-varint@2.0.1
     https://github.com/dominictarr/signed-varint
-  sodium-native@5.0.10
+  sodium-native@5.1.0
     https://github.com/holepunchto/sodium-native
   sodium-secretstream@1.2.0
     https://github.com/mafintosh/sodium-secretstream
@@ -664,9 +853,9 @@ JavaScript Dependencies
     https://github.com/holepunchto/sodium-universal
   speedometer@1.1.0
     https://github.com/mafintosh/speedometer
-  streamx@2.23.0
+  streamx@2.25.0
     https://github.com/mafintosh/streamx
-  tar-stream@3.1.7
+  tar-stream@3.1.8
     https://github.com/mafintosh/tar-stream
   teex@1.0.1
     https://github.com/mafintosh/teex
@@ -676,14 +865,14 @@ JavaScript Dependencies
     https://github.com/mafintosh/time-ordered-set
   timeout-refresh@2.0.1
     https://github.com/mafintosh/timeout-refresh
+  tiny-byte-size@1.1.0
+    https://github.com/mafintosh/tiny-byte-size
   tinyld@1.3.4
     https://github.com/komodojp/tinyld
   unix-path-resolve@1.0.2
     https://github.com/mafintosh/unix-path-resolve
   unordered-set@2.0.1
     https://github.com/mafintosh/unordered-set
-  uuid-random@1.3.2
-    https://github.com/jchook/uuid-random
   varint@5.0.0
     https://github.com/chrisdickinson/varint
   xache@1.2.1

@@ -1,0 +1,172 @@
+name: C++ Tests with Coverage (NMTCPP)
+
+on:
+  workflow_call:    
+    inputs:
+      ref:
+        description: "Git ref to checkout"
+        type: string
+        required: false
+      repository:
+        description: "Repository to checkout"
+        type: string
+        required: false
+
+env:
+  WORKDIR: packages/translation-nmtcpp
+
+jobs:
+  cpp-tests:
+    runs-on: qvac-ubuntu2204-x64
+    environment: release
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: ${{ env.WORKDIR }}
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+      pull-requests: write
+    steps:
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.event.pull_request.head.repo.full_name }}
+          ref: ${{ inputs.ref || github.event.pull_request.head.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+          submodules: recursive
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Install NPM dependencies
+        run: |
+          npm install
+
+      - name: Install bare tooling
+        run: npm install -g --force bare bare-make
+
+      - name: Configure vcpkg
+        run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
+
+      - name: Cleanup vcpkg
+        shell: bash
+        run: |
+          rm -rf $VCPKG_ROOT/buildtrees/*
+          rm -rf $VCPKG_ROOT/packages/*
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Download models from S3
+        run: |
+          echo "Creating models directory..."
+          mkdir -p models/unit-test
+          echo "Downloading models from S3..."
+          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-dist-200M/2026-01-01/ggml-indictrans2-en-indic-dist-200M-q4_0.bin models/unit-test/
+          echo "Verifying downloaded models..."
+          ls -lh models/unit-test/
+          du -sh models/unit-test/*
+
+      - name: Create config.cmake to disable Bergamot for tests
+        run: |
+          # Disable Bergamot for C++ tests because TranslationModel.cpp includes
+          # bergamot function calls that can't be linked without bergamot-translator,
+          # but linking bergamot-translator causes header conflicts with gtest.
+          echo "set(USE_BERGAMOT OFF CACHE BOOL \"Disable Bergamot for tests\" FORCE)" > config.cmake
+          cat config.cmake
+
+      - name: Build C++ tests with coverage
+        run: npm run coverage:cpp:build
+
+      - name: Run C++ tests
+        id: cpp-tests
+        run: |
+          if [ ! -f "build/addon/tests/addon-test" ]; then
+            echo "ERROR: Test executable not found at build/addon/tests/addon-test"
+            exit 1
+          fi
+
+          cd build/addon/tests/ && ./addon-test --gtest_output=xml:cpp-test-results.xml
+
+          # Verify that tests were actually executed
+          if [ -f cpp-test-results.xml ]; then
+            test_count=$(grep -c '<testcase' cpp-test-results.xml || echo "0")
+            if [ "$test_count" -eq 0 ]; then
+              echo "ERROR: No tests were executed! Test count: $test_count"
+              exit 1
+            fi
+            echo "✓ Successfully executed $test_count test(s)"
+          else
+            echo "ERROR: Test results file not generated"
+            exit 1
+          fi
+
+      - name: Generate Coverage Report
+        if: always()
+        run: |
+          npm run coverage:cpp:report
+          COVERAGE=$(grep 'TOTAL' coverage-summary.txt | awk '{print $10}')
+          echo "LINE_COVERAGE_PERCENTAGE=${COVERAGE}" >> $GITHUB_ENV
+
+      - name: Archive Coverage Results
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: coverage-report
+          path: |
+            ${{ env.WORKDIR }}/build/addon/tests/coverage-html/
+            ${{ env.WORKDIR }}/build/addon/tests/lcov.info
+            ${{ env.WORKDIR }}/build/addon/tests/coverage-summary.txt
+            ${{ env.WORKDIR }}/build/addon/tests/cpp-test-results.xml
+          retention-days: 30
+
+      - name: Comment Coverage on PR
+        if: github.event_name == 'pull_request_target' && always()
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
+        with:
+          script: |
+            const fs = require('fs');
+            const path = '${{ env.WORKDIR }}/build/addon/tests/coverage-summary.txt';
+            if (fs.existsSync(path)) {
+              const coverage = fs.readFileSync(path, 'utf8');
+              const body = `## 🧪 C++ Test Coverage Report
+
+              **Coverage:** ${process.env.LINE_COVERAGE_PERCENTAGE}
+
+              <details>
+              <summary>📊 Detailed Coverage</summary>
+
+              \`\`\`
+              ${coverage}
+              \`\`\`
+
+              </details>`;
+
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: body
+              });
+            }
+
+      - name: Coverage Summary
+        if: always()
+        run: |
+          echo "## 🎯 C++ Test Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          echo "**Coverage:** ${{ env.LINE_COVERAGE_PERCENTAGE }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f build/addon/tests/coverage-summary.txt ]; then
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            cat build/addon/tests/coverage-summary.txt >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          fi

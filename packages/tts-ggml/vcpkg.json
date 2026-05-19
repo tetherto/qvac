@@ -1,0 +1,33 @@
+{
+  "dependencies": [
+    {
+      "name": "qvac-lib-inference-addon-cpp",
+      "version>=": "1.2.0"
+    },
+    {
+      "name": "qvac-lint-cpp",
+      "version>=": "1.4.4#3"
+    },
+    {
+      "name": "tts-cpp",
+      "version>=": "2026-05-07#1"
+    }
+  ],
+  "features": {
+    "tests": {
+      "description": "Build C++ unit tests",
+      "dependencies": [
+        "gtest"
+      ]
+    },
+    "vulkan": {
+      "description": "Enable Vulkan GPU acceleration",
+      "dependencies": [
+        {
+          "name": "tts-cpp",
+          "features": ["vulkan"]
+        }
+      ]
+    }
+  }
+}

@@ -18,12 +18,16 @@ import { stopProvideHandler } from "./handlers/stopProvideHandler";
 import { handleRag } from "@/server/rpc/handlers/rag";
 import { handleDeleteCache } from "@/server/rpc/handlers/delete-cache";
 import { handleTextToSpeech } from "@/server/rpc/handlers/text-to-speech";
+import { handleTextToSpeechStream } from "@/server/rpc/handlers/text-to-speech-stream";
 import { handleGetModelInfo } from "@/server/rpc/handlers/get-model-info";
+import { handleGetLoadedModelInfo } from "@/server/rpc/handlers/get-loaded-model-info";
 import { handleOCRStream } from "@/server/rpc/handlers/ocr-stream";
 import { handleHeartbeat } from "@/server/rpc/handlers/heartbeat";
+import { handleFinetune } from "@/server/rpc/handlers/finetune";
 import { handleHeartbeatDelegated } from "@/server/rpc/handlers/heartbeat-delegated";
 import { handleCancelDelegated } from "@/server/rpc/handlers/cancel-delegated";
 import { handleDiffusionStream } from "@/server/rpc/handlers/diffusion-stream";
+import { handleUpscaleStream } from "@/server/rpc/handlers/upscale-stream";
 import {
   handlePluginInvoke,
   handlePluginInvokeStream,
@@ -33,11 +37,19 @@ import {
   handleModelRegistrySearch,
   handleModelRegistryGetModel,
 } from "@/server/rpc/handlers/registry";
+import { handleSuspend } from "@/server/rpc/handlers/suspend";
+import { handleResume } from "@/server/rpc/handlers/resume";
+import { handleState } from "@/server/rpc/handlers/state";
 import type { HandlerEntry } from "./handler-utils";
 
 function ragSupportsProgress(request: Request): boolean {
   if (request.type !== "rag") return false;
   return ["ingest", "saveEmbeddings", "reindex"].includes(request.operation);
+}
+
+function finetuneSupportsProgress(request: Request): boolean {
+  if (request.type !== "finetune") return false;
+  return ["start", "resume", undefined].includes(request.operation);
 }
 
 function isModelDelegated(request: Request): boolean {
@@ -46,18 +58,31 @@ function isModelDelegated(request: Request): boolean {
   return entry?.isDelegated ?? false;
 }
 
+/**
+ * Should the cancel be forwarded to a delegated provider?
+ *
+ * After the 0.11.0 wire-schema collapse the cancel envelope has two
+ * operations:
+ *
+ *  - `request` — targeted cancel by `requestId`. Always handled
+ *    locally: the worker-singleton `RequestRegistry` is the source of
+ *    truth for active requests (delegated handlers register their own
+ *    requests on it the same way local handlers do), so a `requestId`
+ *    cancel always lands on the right worker without needing a hop
+ *    through the provider. Returning `false` here keeps the cancel on
+ *    the local cancel handler, where it routes through the registry
+ *    and (for downloads) the `markClearCacheForRequest` helper.
+ *
+ *  - `broad` — abort every in-flight request on a model. Forwarded to
+ *    the delegated provider iff the targeted model itself is
+ *    delegated; the provider then runs the same broad-cancel sweep
+ *    server-side. Local broad cancels for non-delegated models stay
+ *    on this worker.
+ */
 function isCancelDelegated(request: Request): boolean {
   if (request.type !== "cancel") return false;
-
-  if (request.operation === "inference") {
-    return isModelDelegated(request);
-  }
-
-  if (request.operation === "downloadAsset") {
-    return !!request.delegate;
-  }
-
-  return false;
+  if (request.operation !== "broad") return false;
+  return isModelDelegated(request);
 }
 
 export const registry: Record<string, HandlerEntry> = {
@@ -85,6 +110,7 @@ export const registry: Record<string, HandlerEntry> = {
   stopProvide: { type: "reply", handler: stopProvideHandler },
   deleteCache: { type: "reply", handler: handleDeleteCache },
   getModelInfo: { type: "reply", handler: handleGetModelInfo },
+  getLoadedModelInfo: { type: "reply", handler: handleGetLoadedModelInfo },
   pluginInvoke: { type: "reply", handler: handlePluginInvoke },
   modelRegistryList: { type: "reply", handler: handleModelRegistryList },
   modelRegistrySearch: { type: "reply", handler: handleModelRegistrySearch },
@@ -92,6 +118,9 @@ export const registry: Record<string, HandlerEntry> = {
     type: "reply",
     handler: handleModelRegistryGetModel,
   },
+  suspend: { type: "reply", handler: handleSuspend },
+  resume: { type: "reply", handler: handleResume },
+  state: { type: "reply", handler: handleState },
 
   // Simple Stream handlers
   transcribe: { type: "stream", handler: handleTranscribe },
@@ -99,8 +128,10 @@ export const registry: Record<string, HandlerEntry> = {
   loggingStream: { type: "stream", handler: handleLoggingStream },
   translate: { type: "stream", handler: handleTranslate },
   textToSpeech: { type: "stream", handler: handleTextToSpeech },
+  textToSpeechStream: { type: "duplex", handler: handleTextToSpeechStream },
   ocrStream: { type: "stream", handler: handleOCRStream },
   diffusionStream: { type: "stream", handler: handleDiffusionStream },
+  upscaleStream: { type: "stream", handler: handleUpscaleStream },
   pluginInvokeStream: { type: "stream", handler: handlePluginInvokeStream },
 
   // Handlers with delegation support
@@ -130,5 +161,11 @@ export const registry: Record<string, HandlerEntry> = {
     type: "reply",
     handler: handleRag,
     supportsProgress: ragSupportsProgress,
+  },
+
+  finetune: {
+    type: "reply",
+    handler: handleFinetune,
+    supportsProgress: finetuneSupportsProgress,
   },
 };

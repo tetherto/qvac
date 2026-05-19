@@ -20,6 +20,11 @@ on:
       custom_input_3:
         required: false
         type: string
+      npm_tag:
+        description: "NPM dist-tag (default: latest). e.g. release-1.x"
+        required: false
+        default: ""
+        type: string
 
 env:
   WORKDIR: packages/cli
@@ -28,11 +33,30 @@ permissions:
   contents: read
 
 jobs:
+  label-gate:
+    name: Authorise (label-gate)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      authorised: ${{ steps.gate.outputs.authorised }}
+    steps:
+      - name: Checkout (label-gate action only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/label-gate
+          sparse-checkout-cone-mode: false
+      - name: Run label-gate
+        id: gate
+        uses: ./.github/actions/label-gate
+        with:
+          github-token: ${{ secrets.PAT_TOKEN }}
   release-merge-guard:
     name: Release Merge Guard
     if: >-
-      github.event_name == 'push' &&
-      startsWith(github.ref_name, 'release-')
+      github.event_name == 'push' && startsWith(github.ref_name, 'release-')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -123,8 +147,11 @@ jobs:
           echo "gpr_tag=$gpr_tag" >> "$GITHUB_OUTPUT"
 
   publish-main-gpr-dev:
-    needs: [build, publish-logic]
-    if: needs.publish-logic.outputs.publish_main == 'true'
+    needs:
+      - build
+      - publish-logic
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true' && (needs.publish-logic.outputs.publish_main == 'true')
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -145,22 +172,24 @@ jobs:
         uses: ./.github/actions/cli-rewrite-sdk-scope-for-gpr
 
       - name: Publish to GitHub Packages (dev)
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.8
+        uses: ./.github/actions/publish-library-to-gpr
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
           workdir: packages/cli
           name-suffix: "-mono"
 
   publish-release-npm:
-    needs: [build, publish-logic, release-merge-guard]
+    needs:
+      - build
+      - publish-logic
+      - release-merge-guard
+      - label-gate
     if: >-
-      needs.publish-logic.outputs.publish_release == 'true' &&
-      (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')
+      needs.label-gate.outputs.authorised == 'true' && (needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped'))
     runs-on: ubuntu-latest
-    environment: release
+    environment: npm
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
     permissions:
@@ -168,6 +197,16 @@ jobs:
       packages: write
       id-token: write
     steps:
+      - name: Validate npm_tag input
+        if: inputs.npm_tag != ''
+        shell: bash
+        run: |
+          tag="${{ inputs.npm_tag }}"
+          if ! echo "$tag" | grep -qE '^[a-zA-Z0-9][a-zA-Z0-9._-]*$'; then
+            echo "::error::Invalid npm dist-tag '$tag'. Must match ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ (e.g. release-1.x)"
+            exit 1
+          fi
+
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
 
@@ -179,12 +218,9 @@ jobs:
 
       - name: Publish to NPM
         id: publish
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-npm-oidc@v1.1.8
+        uses: ./.github/actions/publish-library-to-npm
         with:
-          secret-token: ${{ secrets.NPM_TOKEN }}
-          tag: "latest"
-          git-token: ${{ secrets.GITHUB_TOKEN }}
-          repo_name: cli
+          tag: ${{ inputs.npm_tag }}
           workdir: ${{ env.WORKDIR }}
 
   publish-release:
@@ -201,8 +237,11 @@ jobs:
       workdir: "packages/cli"
 
   publish-feature-gpr:
-    needs: [build, publish-logic]
-    if: needs.publish-logic.outputs.publish_feature == 'true'
+    needs:
+      - build
+      - publish-logic
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true' && (needs.publish-logic.outputs.publish_feature == 'true')
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -223,18 +262,20 @@ jobs:
         uses: ./.github/actions/cli-rewrite-sdk-scope-for-gpr
 
       - name: Publish to GitHub Packages (feature)
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.8
+        uses: ./.github/actions/publish-library-to-gpr
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
           workdir: packages/cli
           name-suffix: "-mono"
 
   publish-tmp-gpr:
-    needs: [build, publish-logic]
-    if: needs.publish-logic.outputs.publish_tmp == 'true'
+    needs:
+      - build
+      - publish-logic
+      - label-gate
+    if: needs.label-gate.outputs.authorised == 'true' && (needs.publish-logic.outputs.publish_tmp == 'true')
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -255,10 +296,9 @@ jobs:
         uses: ./.github/actions/cli-rewrite-sdk-scope-for-gpr
 
       - name: Publish to GitHub Packages (tmp)
-        uses: tetherto/qvac-devops/.github/actions/publish-library-to-gpr@v1.1.8
+        uses: ./.github/actions/publish-library-to-gpr
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
           tag: ${{ needs.publish-logic.outputs.gpr_tag }}
           workdir: packages/cli

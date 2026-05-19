@@ -33,6 +33,8 @@ declare module "corestore" {
 
     ready(): Promise<void>;
     close(): Promise<void>;
+    suspend(): Promise<void>;
+    resume(): Promise<void>;
 
     get(key: Buffer): Core;
     namespace(name: string): Corestore;
