@@ -147,6 +147,11 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: |
           npm install
+
+
+      - name: Install bare tooling (macos and arm64 linux)
+        if: matrix.platform == 'darwin' || matrix.arch == 'arm64'
+        run: |
           npm install -g bare bare-make bare-runtime bare-https brittle
 
       - name: Download prebuilds (from artifacts)

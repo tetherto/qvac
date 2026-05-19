@@ -141,6 +141,10 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: |
           npm install
+
+      - name: Install bare tooling (macos)
+        if: matrix.platform == 'darwin'
+        run: |
           npm install -g bare bare-make
 
       - name: Download test models

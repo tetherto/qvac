@@ -122,6 +122,10 @@ jobs:
         shell: bash
         run: |
           npm install
+
+      - name: Install bare tooling (macos)
+        if: matrix.platform == 'darwin'
+        run: |
           npm install -g bare bare-make
 
       - if: ${{ matrix.os == 'ubuntu-24.04' }}
