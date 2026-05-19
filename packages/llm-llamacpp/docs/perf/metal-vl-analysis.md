@@ -10,25 +10,31 @@ Feeds into Phase 3 implementation: QVAC iOS Metal task (top-2 VLM optimizations 
 
 ## 1. Target Platforms & Constraints
 
-| Property | Mac M4 (reference ceiling) | iPhone 16e (deployment target) |
-|----------|---------------------------|-------------------------------|
-| SoC | Apple M4 | Apple A18 |
-| GPU cores | 8 | 5 |
-| RAM | 16 GB unified | 8 GB (~5.7 GB usable) |
-| GPU memory limit | 12.7 GB | ~5.7 GB |
-| Metal feature set | Apple GPU Family 9 | Apple GPU Family 9 |
-| Memory bandwidth | ~120 GB/s | ~60 GB/s (est.) |
+| Property | Mac M4 (reference ceiling) | iPhone 16 Pro | iPhone 16e (deployment target) |
+|----------|---------------------------|---------------|-------------------------------|
+| SoC | Apple M4 | Apple A18 Pro | Apple A18 |
+| GPU cores | 8 | 6 | 5 |
+| RAM | 16 GB unified | 8 GB (~5.3 GB Metal working set) | 8 GB (~5.7 GB usable) |
+| GPU memory limit | 12.7 GB | ~5.3 GB | ~5.7 GB |
+| Metal feature set | Apple GPU Family 9 | Apple GPU Family 9 | Apple GPU Family 9 |
+| Memory bandwidth | ~120 GB/s | ~60 GB/s (est.) | ~50 GB/s (est.) |
+| Status | **Tested** (local, 2026-05-13) | **Tested** (Firebase, 2026-05-18) | **Tested** (local, 2026-05-18) |
 
-**Model feasibility on iPhone 16e:**
+**Model feasibility on iPhone (16e and 16 Pro, in-process XCTest):**
 
-| Model | GPU memory | Fits iPhone? |
+| Model | Total Size | Fits iPhone? |
 |-------|-----------|-------------|
-| Gemma4 E2B Q4_K_M | ~3,758 MiB | Yes |
-| Gemma4 E2B Q8_0 | ~5,200 MiB | No (OOM) |
-| Gemma4 E4B Q4_K_M | ~6,500 MiB | No (OOM) |
-| Qwen3.5-2B Q4_K_M | ~1,990 MiB | Yes |
+| Qwen3.5-2B Q4_K_M | ~1.8 GB | Yes |
+| Qwen3.5-2B Q8_0 | ~2.5 GB | Yes |
+| Qwen3.5-4B Q4_K_M | ~3.2 GB | Yes |
+| Gemma4 E2B Q4_K_M | ~3.8 GB | Yes (largest viable) |
+| Qwen3.5-4B Q8_0 | ~4.8 GB | No (Jetsam) |
+| Gemma4 E4B Q4_K_M | ~5.5 GB | No (Jetsam) |
+| Gemma4 E2B Q8_0 | ~5.6 GB | No (Jetsam) |
+| Gemma4 E4B Q8_0 | ~8.5 GB | No (Jetsam) |
 
-Only E2B Q4_K_M and Qwen3.5-2B Q4_K_M are viable on iPhone. E4B and Q8_0 variants are Mac-only.
+In-process Jetsam threshold is ~3.8 GB model+mmproj (XCTest host consumes ~1-2 GB overhead).
+E4B and Q8_0 Gemma variants are Mac-only.
 
 ---
 
@@ -332,13 +338,21 @@ ViT output [n_embd=1152, n_pos]
 
 #### iPhone Projection Anomaly
 
-| Device | Gemma4 Projection | Qwen3.5 Projection | Cross-Model Ratio |
-|--------|-------------------|---------------------|-------------------|
-| Mac M4 | 19 ms | 2 ms | Qwen3.5 9.5× faster |
-| iPhone 16e | 36 ms | 183 ms | Qwen3.5 5.1× slower |
-| **Cross-Device Ratio** | **1.89×** | **91.5×** | |
+| Device | Branch | Gemma4 img_decode | Qwen3.5 img_decode | Cross-Model Ratio |
+|--------|--------|-------------------|---------------------|-------------------|
+| Mac M4 | b9025 | 19 ms | 2 ms | Qwen3.5 9.5× faster |
+| iPhone 16 Pro | b9025 | 38 ms | 9 ms | Qwen3.5 4.2× faster |
+| iPhone 16 Pro | fiber | 132 ms | 9 ms | Gemma4 14.7× slower |
+| iPhone 16e | b9025 | 38 ms | 9 ms | Qwen3.5 4.2× faster |
+| iPhone 16e | fiber | 1,122 ms | 820 ms | Both catastrophic |
+| **Mac↔16e ratio (b9025)** | | **2.0×** | **4.5×** | |
+| **Mac↔16e ratio (fiber)** | | **59×** | **410×** | |
 
-The ~48× relative performance inversion between Mac and iPhone for Qwen3.5 projection is the most anomalous finding in Phase 1 benchmarking.
+The original Phase 1 anomaly (183 ms Qwen3.5 projection on iPhone 16e) was measured
+with the fiber fork. New b9025 data (2026-05-18) shows the projection is only 9 ms
+on b9025 — the anomaly was a **fiber-specific regression**, not a hardware limitation.
+The fiber regression is catastrophic on iPhone 16e (5-core A18) but negligible on
+iPhone 16 Pro (6-core A18 Pro), suggesting a GPU occupancy threshold effect.
 
 **Hypothesis 1: Deepstack concat buffer reallocation** — `ggml_concat` accumulates features across deepstack layers, requiring growing GPU memory allocation. On Mac M4, the 12.7 GB limit and larger cache hierarchy absorb this. On iPhone 16e, the smaller ~5.7 GB limit may force buffer eviction and reallocation.
 
@@ -531,21 +545,40 @@ All benchmarks: llama.cpp b9025, elephant.jpg (single tile), 256 predict tokens 
 
 Qwen3.5 is the fastest model on Mac Metal — 32% faster vision, 10.5× faster projection, and identical decode ceiling to Gemma4 E2B.
 
-### A.2 iPhone 16e — Feasible Models (Metal Backend)
+### A.2 iPhone 16e — b9025 Baseline (Metal, local, 2026-05-18)
 
-| Model | Vision (ms) | Projection (ms) | Prefill (t/s) | Decode (t/s) | TTFT (ms) |
-|-------|------------|-----------------|---------------|-------------|----------|
-| Gemma4 E2B Q4_K_M | 1,236 | 36 | 125.9 | 27.24 | 3,492 |
-| Qwen3.5-2B Q4_K_M | 829 | **183** | 133.6 | 24.34 | — |
+> Full 3-run median matrix. Source: `vlm-benchmark/results/raw/ios-local-b9025-{model}-2026-05-18T1659/`
 
-Gemma4 E2B Q4_K_M validated with Run-2 (27.24 t/s ±2.1% from Run-1's 26.66 t/s).
+| Model | Vision (ms) | img_decode (ms) | Prefill (t/s) | Decode (t/s) |
+|-------|------------|----------------|---------------|-------------|
+| Gemma4 E2B Q4_K_M | 1,285 | 38 | 122.7 | 27.26 |
+| Qwen3.5-2B Q4_K_M | 927 | 9 | 150.0 | 27.69 |
+| Qwen3.5-2B Q8_0 | 924 | 9 | 154.3 | 21.86 |
+| Qwen3.5-4B Q4_K_M | 1,058 | 10 | 82.7 | 12.28 |
+
+> Phase 1 reference (b9025, 2026-05-07, `--predict 128`): Gemma4 E2B Q4_K_M 27.24 t/s, Qwen3.5-2B Q4_K_M 24.34 t/s. Phase 1 Qwen3.5 projection anomaly (183 ms) was measured on fiber, not b9025.
+
+### A.3 iPhone 16 Pro — b9025 Baseline (Metal, Firebase, 2026-05-18)
+
+> Firebase Test Lab (`DEVICE_CAPACITY_LOW`, iOS 18.3.2). Full 3-run median.
+> Source: `gs://qvac-vlm-benchmark-results/ios-b9025-{model}-2026-05-18T1545/`
+
+| Model | Vision (ms) | Prefill (t/s) | Decode (t/s) |
+|-------|------------|---------------|-------------|
+| Gemma4 E2B Q4_K_M | 879 | 176.2 | 30.0 |
+| Qwen3.5-2B Q4_K_M | 591 | 222.2 | 31.0 |
+| Qwen3.5-2B Q8_0 | 549 | 241.5 | 23.2 |
+| Qwen3.5-4B Q4_K_M | 647 | 124.4 | 14.6 |
+
+> Caveat: Firebase RSS values (75-135 MB via `mach_task_basic_info`) are not
+> comparable to local measurements. Firebase does not expose thermal state.
 
 ### A.3 Metal vs CPU — Per-Phase Dispatch Analysis
 
 | Phase | Gemma4 E2B | Qwen3.5-2B | Optimal Dispatch |
 |-------|-----------|-----------|-----------------|
 | **Vision encode** | Metal 3.4× faster (630 vs 2,113 ms) | Metal 4.6× faster (417 vs 1,922 ms) | Metal (both) |
-| **Projection** | Metal (19 ms vs ~100 ms CPU est.) | Metal on Mac (2 ms), anomalous on iPhone (183 ms) | Metal Mac / investigate iPhone |
+| **Projection** | Metal (19 ms vs ~100 ms CPU est.) | Metal on Mac (2 ms), 183 ms on iPhone 16e fiber (9 ms on b9025 — fiber-specific) | Metal Mac / investigate iPhone |
 | **Prefill** | **CPU 1.63× faster** (424 vs 260 t/s) | **Metal 2.54× faster** (324 vs 127 t/s) | **Model-dependent!** |
 | **Decode** | Metal 1.32× faster (51.3 vs 38.7 t/s) | Metal 1.58× faster (51.8 vs 32.7 t/s) | Metal (both) |
 
@@ -573,19 +606,19 @@ Q4_K_M provides 1.5–1.7× faster decode than Q8_0 on both CPU and Metal. Qwen3
 | Gemma4 E4B Q8_0 | 3,881 | 827 | 4.69× |
 | Qwen3.5-2B Q4_K_M | 1,922 | 417 | 4.61× |
 
-### A.6 Cross-Device Metal Comparison
+### A.6 Cross-Device Metal Comparison (b9025)
 
-| Metric | Mac M4 | iPhone 16e | Mac/iPhone Ratio |
-|--------|--------|-----------|-----------------|
-| Gemma4 decode | 51.28 t/s | 27.24 t/s | 1.88× |
-| Gemma4 vision | 630 ms | 1,236 ms | 1.96× |
-| Gemma4 TTFT | 1,724 ms | 3,492 ms | 2.03× |
-| Gemma4 projection | 19 ms | 36 ms | 1.89× |
-| Qwen3.5 decode | 51.83 t/s | 24.34 t/s | 2.13× |
-| Qwen3.5 vision | 417 ms | 829 ms | 1.99× |
-| **Qwen3.5 projection** | **2 ms** | **183 ms** | **91.5×** |
+| Metric | Mac M4 (8 cores) | iPhone 16 Pro (6 cores) | iPhone 16e (5 cores) | Mac/16e Ratio |
+|--------|--------|------------|-----------|-----------------|
+| Gemma4 E2B decode | 50.73 t/s | 30.0 t/s | 27.26 t/s | 1.86× |
+| Gemma4 E2B vision | 632 ms | 879 ms | 1,285 ms | 2.03× |
+| Qwen3.5-2B decode | 39.79 t/s | 31.0 t/s | 27.69 t/s | 1.44× |
+| Qwen3.5-2B vision | 537 ms | 591 ms | 927 ms | 1.73× |
+| Qwen3.5-4B decode | 17.60 t/s | 14.6 t/s | 12.28 t/s | 1.43× |
 
-Most phases scale ~2× between Mac M4 (8 cores) and iPhone 16e (5 cores). Qwen3.5 projection is the sole outlier at 91.5× (see Section 2.5).
+iPhone 16 Pro sits between Mac M4 and iPhone 16e as expected — 6 GPU cores vs
+5 (16e) and 8 (M4). All b9025 img_decode values are 9-40 ms across all devices.
+The original 183 ms Qwen3.5 projection anomaly was fiber-specific (see Section 2.5).
 
 ---
 
@@ -630,17 +663,21 @@ Most phases scale ~2× between Mac M4 (8 cores) and iPhone 16e (5 cores). Qwen3.
 
 Both models hit the same decode ceiling (~51.5 t/s) — M4's memory bandwidth limit (~120 GB/s).
 
-### C.2 iPhone 16e — Full Pipeline (elephant.jpg, 128 predict)
+### C.2 iPhone 16e — Full Pipeline (elephant.jpg, 128 predict, Phase 1 b9025)
+
+> Phase 1 data (2026-05-07, b9025 via `xcrun devicectl`). The 183 ms Qwen3.5
+> projection value was from a fiber measurement — b9025 projection is 9 ms
+> (see Section 2.5 and Appendix G.5 for the corrected analysis).
 
 | Phase | Gemma4 E2B Q4_K_M | Qwen3.5-2B Q4_K_M | Δ |
 |-------|-------------------|---------------------|---|
 | Vision encode | 1,272 ms | 829 ms | Qwen3.5 35% faster |
-| Image projection | 36 ms | **183 ms** | **Qwen3.5 5.1× slower** |
+| Image projection | 36 ms | **183 ms** (fiber) | **Qwen3.5 5.1× slower** (fiber only; b9025 = 9 ms) |
 | Prefill | 2,330 ms (284 tok, 122 t/s) | 1,983 ms (265 tok, 134 t/s) | Qwen3.5 15% faster |
 | Decode | 5,478 ms (127 tok, 23.2 t/s) | 5,220 ms (127 tok, 24.3 t/s) | Qwen3.5 5% faster |
 | **Total** | **9,885 ms** | **8,086 ms** | Qwen3.5 18% faster overall |
 
-Despite the projection anomaly, Qwen3.5 is faster end-to-end on iPhone.
+Despite the projection anomaly (fiber-specific), Qwen3.5 is faster end-to-end on iPhone.
 
 ### C.3 Phase Cost Distribution (iPhone 16e, % of total)
 
@@ -697,7 +734,7 @@ No software optimization can meaningfully improve decode throughput.
 - Coherent output on Metal (validated; garbled on Android Vulkan/OpenCL)
 
 ### E.2 Weaknesses on Metal
-- **Projection anomaly on iPhone** (183ms vs 2ms Mac) — **resolved by U1** (183→11ms)
+- **Projection anomaly on iPhone** (183ms fiber vs 9ms b9025 vs 2ms Mac) — **resolved by U1** (183→11ms on fiber); b9025 has no anomaly (9ms)
 - **Context overflow risk** — large images produce 4,015 tokens, nearly filling 4,096 context — **guarded by A3**
 - **No iPhone Qwen3.5 TTFT baseline** — explicit measurement needed
 - SSM recurrent state (19 MiB RS buffer) adds memory overhead not present in Gemma4
@@ -745,8 +782,10 @@ Independent benchmark of each llama.cpp branch vs b9025 baseline. Metal, elephan
 ### F.4 Remaining Validation
 
 - [ ] iPhone 16e benchmarks for A2+A3 (cache hit/miss delta)
-- [ ] iPhone 16/17 benchmarks for full perf delta vs Phase 1 baseline
-- [ ] Text-only LLM regression test (≤ 2% threshold)
+- [x] iPhone 16 Pro benchmarks (Firebase, fiber + b9025, 4 models) — 2026-05-18
+- [x] iPhone 16e full matrix (local, fiber + b9025, 4 models) — 2026-05-18
+- [ ] iPhone 17 — not in Firebase catalog (2026-05-18)
+- [ ] Text-only LLM regression test (≤ 2% threshold) — llama-bench bridge not yet implemented
 - [ ] F6 trace analysis in Instruments — identify top-5 bottleneck Metal kernels in vision encode
 - [ ] F4 multi-turn validation with `llama-server`
 
@@ -800,14 +839,43 @@ Verified across 3 independent benchmark sessions. Intra-session variance <1%. Bi
 **RC3 (FA dk512)**: Largest improvement for Gemma4. Gemma4 E2B uses 512-dim heads for full-attention layers; missing dk512_dv512 template caused global FA disable. Added 19 template instantiations. +17.7%.
 **RC4**: Both `9e4530f51` (view_4d→reshape_4d) and `6aff83a75` (Metal buffer fallback) are no-ops on M4 Mac during single-token decode.
 
-### G.5 Remaining Qwen3.5 Gap (−14.0%)
+### G.5 Fiber Regression is Device-Dependent (added 2026-05-18)
+
+iPhone 16 Pro and iPhone 16e full-matrix benchmarks (2026-05-18) reveal that the
+fiber Metal regression is **dramatically amplified on iPhone 16e but negligible on
+iPhone 16 Pro**, despite both having 8 GB RAM and Apple GPU Family 9.
+
+| Device | Model | Fiber decode (t/s) | b9025 decode (t/s) | Delta | Fiber img_decode (ms) | b9025 img_decode (ms) |
+|--------|-------|-------------------|-------------------|-------|----------------------|----------------------|
+| **iPhone 16 Pro** | Gemma4-E2B Q4 | 30.9 | 30.0 | −2.9% | 132 | 38 |
+| **iPhone 16 Pro** | Qwen3.5-2B Q4 | 31.4 | 31.0 | −1.3% | 9 | 9 |
+| **iPhone 16e** | Gemma4-E2B Q4 | 17.0 | 27.3 | **−37.7%** | 1,122 | 38 |
+| **iPhone 16e** | Qwen3.5-2B Q4 | 8.2 | 27.7 | **−70.4%** | 820 | 9 |
+| **iPhone 16e** | Qwen3.5-4B Q4 | 4.0 | 12.3 | **−67.5%** | 2,133 | 10 |
+| Mac M4 | Gemma4-E2B Q4 | 31.45 | 50.73 | −38.0% | — | — |
+| Mac M4 | Qwen3.5-2B Q4 | 32.56 | 39.79 | −18.2% | — | — |
+
+The `img_decode` (projection) step is the smoking gun: 30-210× slower on fiber vs
+b9025 on iPhone 16e, but only 3.5× on iPhone 16 Pro and unmeasured on Mac. This
+suggests a GPU occupancy threshold — fiber's unoptimized projection path saturates
+the 5-core A18 GPU but has enough headroom on the 6-core A18 Pro.
+
+The original Phase 1 "Qwen3.5 projection anomaly" (183 ms on iPhone 16e, Section 2.5)
+was a fiber-specific artifact, not a hardware limitation. On b9025, the projection is
+9 ms on both iPhone models.
+
+**Source logs**:
+- iPhone 16 Pro: `gs://qvac-vlm-benchmark-results/ios-{fiber,b9025}-*-2026-05-18T15*/`
+- iPhone 16e: `vlm-benchmark/results/raw/ios-local-{fiber,b9025}-*-2026-05-18T1659/`
+
+### G.6 Remaining Qwen3.5 Gap (−14.0% on Mac M4)
 
 Possible causes after all fixes:
 1. Extra graph split: fiber has 3 splits (decode) vs b9025's 2 — one additional GPU↔CPU sync per token
 2. State layout transpose overhead: `ggml_cont(ggml_transpose(s))` on input + `ggml_transpose(s_new)` on output — 2 extra ops per GDN layer
 3. Upstream micro-optimizations between merge base (4d828bd1a) and b9025 (836 commits) not yet ported
 
-### G.6 Three-Way CLI Comparison: b9025 vs U1 vs Fiber
+### G.7 Three-Way CLI Comparison: b9025 vs U1 vs Fiber
 
 | Metric | b9025 | U1 (deepstack) | Δ U1 | Fiber | Δ Fiber |
 |--------|-------|----------------|------|-------|---------|
@@ -820,7 +888,7 @@ Possible causes after all fixes:
 
 U1 is identical to b9025 on Mac M4 (expected — iPhone-specific fix).
 
-### G.7 Upstream Commits Cherry-Picked
+### G.8 Upstream Commits Cherry-Picked
 
 | Commit | Description | Files |
 |--------|-------------|-------|
