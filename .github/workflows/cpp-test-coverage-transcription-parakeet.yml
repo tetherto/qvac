@@ -79,6 +79,12 @@ jobs:
         name: Configure vcpkg in linux
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
 
+      - name: Cleanup vcpkg
+        shell: bash
+        run: |
+          rm -rf $VCPKG_ROOT/buildtrees/*
+          rm -rf $VCPKG_ROOT/packages/*
+
       - name: Generate and build unit tests
         working-directory: ${{ env.PKG_DIR }}
         run: |
