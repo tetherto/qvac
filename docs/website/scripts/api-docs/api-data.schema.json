@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/tetherto/qvac/docs/website/scripts/api-docs/api-data.schema.json",
   "title": "QVAC SDK ApiData",
-  "description": "Intermediate representation of the QVAC SDK's public API summary. Produced by `scripts/generate-api-docs.ts` after TypeDoc extraction + Zod `.describe()` merging + (optional) AI augmentation. Consumed by `single-page.njk` to render `content/docs/sdk/api/index.mdx` (or sibling `vX.Y.Z.mdx`).",
+  "description": "Intermediate representation of the QVAC SDK's public API summary. Produced by `scripts/generate-api-docs.ts` after TypeDoc extraction + Zod `.describe()` merging + (optional) AI augmentation. Consumed by `single-page.njk` to render `content/docs/reference/api/index.mdx` (or sibling `vX.Y.Z.mdx`).",
   "type": "object",
   "additionalProperties": false,
   "required": ["version", "generatedAt", "functions", "errors"],
