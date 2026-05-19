@@ -197,3 +197,8 @@ function stringifyForLog (value: unknown): string {
     return String(value)
   }
 }
+
+export const META = {
+  endpoints: ['POST /v1/audio/speech'],
+  caveats: ['response is raw audio bytes (wav/pcm/etc.)']
+} as const

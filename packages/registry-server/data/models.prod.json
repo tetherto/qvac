@@ -3420,7 +3420,8 @@
       "tokenizer",
       "en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
   },
   {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder.onnx",
@@ -3435,7 +3436,8 @@
       "speech-encoder",
       "en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
   },
   {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder.onnx_data",
@@ -3450,7 +3452,8 @@
       "speech-encoder",
       "en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
   },
   {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens.onnx",
@@ -3465,7 +3468,8 @@
       "embed-tokens",
       "en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
   },
   {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens.onnx_data",
@@ -3480,7 +3484,8 @@
       "embed-tokens",
       "en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
   },
   {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder.onnx",
@@ -3495,7 +3500,8 @@
       "conditional-decoder",
       "en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
   },
   {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder.onnx_data",
@@ -3510,7 +3516,8 @@
       "conditional-decoder",
       "en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
   },
   {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model.onnx",
@@ -3525,7 +3532,8 @@
       "language-model",
       "en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
   },
   {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model.onnx_data",
@@ -3540,7 +3548,8 @@
       "language-model",
       "en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
   },
   {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_fp16.onnx",
@@ -3555,7 +3564,8 @@
       "speech-encoder",
       "en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
   },
   {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_fp16.onnx_data",
@@ -3570,7 +3580,8 @@
       "speech-encoder",
       "en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
   },
   {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_fp16.onnx",
@@ -3585,7 +3596,8 @@
       "embed-tokens",
       "en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
   },
   {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_fp16.onnx_data",
@@ -3600,7 +3612,8 @@
       "embed-tokens",
       "en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
   },
   {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_fp16.onnx",
@@ -3615,7 +3628,8 @@
       "conditional-decoder",
       "en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
   },
   {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_fp16.onnx_data",
@@ -3630,7 +3644,8 @@
       "conditional-decoder",
       "en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
   },
   {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_fp16.onnx",
@@ -3645,7 +3660,8 @@
       "language-model",
       "en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
   },
   {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_fp16.onnx_data",
@@ -3660,7 +3676,8 @@
       "language-model",
       "en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
   },
   {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_q4.onnx",
@@ -3675,7 +3692,8 @@
       "speech-encoder",
       "en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
   },
   {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_q4.onnx_data",
@@ -3690,7 +3708,8 @@
       "speech-encoder",
       "en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
   },
   {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_q4.onnx",
@@ -3705,7 +3724,8 @@
       "embed-tokens",
       "en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
   },
   {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_q4.onnx_data",
@@ -3720,7 +3740,8 @@
       "embed-tokens",
       "en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
   },
   {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_q4.onnx",
@@ -3735,7 +3756,8 @@
       "conditional-decoder",
       "en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
   },
   {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_q4.onnx_data",
@@ -3750,7 +3772,8 @@
       "conditional-decoder",
       "en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
   },
   {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_q4.onnx",
@@ -3765,7 +3788,8 @@
       "language-model",
       "en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
   },
   {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_q4.onnx_data",
@@ -3780,7 +3804,8 @@
       "language-model",
       "en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
   },
   {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_quantized.onnx",
@@ -3795,7 +3820,8 @@
       "speech-encoder",
       "en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
   },
   {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_quantized.onnx_data",
@@ -3810,7 +3836,8 @@
       "speech-encoder",
       "en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
   },
   {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_quantized.onnx",
@@ -3825,7 +3852,8 @@
       "embed-tokens",
       "en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
   },
   {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_quantized.onnx_data",
@@ -3840,7 +3868,8 @@
       "embed-tokens",
       "en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
   },
   {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_quantized.onnx",
@@ -3855,7 +3884,8 @@
       "conditional-decoder",
       "en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
   },
   {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_quantized.onnx_data",
@@ -3870,7 +3900,8 @@
       "conditional-decoder",
       "en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
   },
   {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_quantized.onnx",
@@ -3885,7 +3916,8 @@
       "language-model",
       "en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
   },
   {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_quantized.onnx_data",
@@ -3900,7 +3932,8 @@
       "language-model",
       "en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
   },
   {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_q4f16.onnx",
@@ -3915,7 +3948,8 @@
       "speech-encoder",
       "en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
   },
   {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/speech_encoder_q4f16.onnx_data",
@@ -3930,7 +3964,8 @@
       "speech-encoder",
       "en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
   },
   {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_q4f16.onnx",
@@ -3945,7 +3980,8 @@
       "embed-tokens",
       "en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
   },
   {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/embed_tokens_q4f16.onnx_data",
@@ -3960,7 +3996,8 @@
       "embed-tokens",
       "en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
   },
   {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_q4f16.onnx",
@@ -3975,7 +4012,8 @@
       "conditional-decoder",
       "en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
   },
   {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/conditional_decoder_q4f16.onnx_data",
@@ -3990,7 +4028,8 @@
       "conditional-decoder",
       "en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
   },
   {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_q4f16.onnx",
@@ -4005,7 +4044,8 @@
       "language-model",
       "en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
   },
   {
     "source": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/resolve/d21799bd0354adb85e348b8a0442a8405110a2cf/onnx/language_model_q4f16.onnx_data",
@@ -4020,7 +4060,8 @@
       "language-model",
       "en"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX/"
   },
   {
     "source": "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/452d3f434aa592098f1eedac9099f33642ab2da5/onnx/conditional_decoder.onnx",
@@ -4325,7 +4366,7 @@
     "source": "s3:///qvac_models_compiled/chatterbox/2026-05-08/chatterbox-t3-turbo.gguf",
     "engine": "@qvac/tts-ggml",
     "description": "Chatterbox T3 turbo language model (GGUF, English)",
-    "quantization": "",
+    "quantization": "fp16",
     "params": "",
     "licenseId": "MIT",
     "tags": [
@@ -4357,7 +4398,7 @@
     "source": "s3:///qvac_models_compiled/chatterbox/2026-05-08/chatterbox-t3-mtl.gguf",
     "engine": "@qvac/tts-ggml",
     "description": "Chatterbox T3 language model (GGUF, multilingual)",
-    "quantization": "",
+    "quantization": "fp16",
     "params": "",
     "licenseId": "MIT",
     "tags": [
@@ -4374,10 +4415,112 @@
     "notes": ""
   },
   {
+    "source": "s3:///qvac_models_compiled/ggml/chatterbox/2026-05-18/chatterbox-t3-mtl-q4_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Chatterbox T3 language model (GGUF, multilingual)",
+    "quantization": "q4_0",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "t3",
+      "multilingual",
+      "gguf",
+      "en",
+      "es",
+      "it",
+      "pt"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/chatterbox/2026-05-18/chatterbox-t3-mtl-q8_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Chatterbox T3 language model (GGUF, multilingual)",
+    "quantization": "q8_0",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "t3",
+      "multilingual",
+      "gguf",
+      "en",
+      "es",
+      "it",
+      "pt"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/chatterbox/2026-05-18/chatterbox-t3-turbo-q4_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Chatterbox T3 turbo language model (GGUF, English)",
+    "quantization": "q4_0",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "t3-turbo",
+      "en",
+      "gguf"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/chatterbox/2026-05-18/chatterbox-t3-turbo-q8_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Chatterbox T3 turbo language model (GGUF, English)",
+    "quantization": "q8_0",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": [
+      "tts",
+      "chatterbox",
+      "t3-turbo",
+      "en",
+      "gguf"
+    ],
+    "notes": ""
+  },
+  {
     "source": "s3:///qvac_models_compiled/supertonic/2026-05-08/supertonic.gguf",
     "engine": "@qvac/tts-ggml",
     "description": "Supertonic TTS (GGUF, English)",
-    "quantization": "",
+    "quantization": "fp16",
+    "params": "",
+    "licenseId": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "en",
+      "gguf"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/supertonic/2026-05-18/supertonic-q4_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Supertonic TTS (GGUF, English)",
+    "quantization": "q4_0",
+    "params": "",
+    "licenseId": "openrail",
+    "tags": [
+      "tts",
+      "supertonic",
+      "en",
+      "gguf"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/supertonic/2026-05-18/supertonic-q8_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Supertonic TTS (GGUF, English)",
+    "quantization": "q8_0",
     "params": "",
     "licenseId": "openrail",
     "tags": [
@@ -4392,7 +4535,37 @@
     "source": "s3:///qvac_models_compiled/supertonic/2026-05-08/supertonic2.gguf",
     "engine": "@qvac/tts-ggml",
     "description": "Supertonic 2 TTS (GGUF, multilingual)",
-    "quantization": "",
+    "quantization": "fp16",
+    "params": "",
+    "licenseId": "openrail",
+    "tags": [
+      "tts",
+      "supertonic2",
+      "multilingual",
+      "gguf"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/supertonic/2026-05-18/supertonic2-q4_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Supertonic 2 TTS (GGUF, multilingual)",
+    "quantization": "q4_0",
+    "params": "",
+    "licenseId": "openrail",
+    "tags": [
+      "tts",
+      "supertonic2",
+      "multilingual",
+      "gguf"
+    ],
+    "notes": ""
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/supertonic/2026-05-18/supertonic2-q8_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Supertonic 2 TTS (GGUF, multilingual)",
+    "quantization": "q8_0",
     "params": "",
     "licenseId": "openrail",
     "tags": [
@@ -4415,7 +4588,8 @@
       "supertonic",
       "tokenizer"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/"
   },
   {
     "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/text_encoder.onnx",
@@ -4429,7 +4603,8 @@
       "supertonic",
       "text-encoder"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/"
   },
   {
     "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/text_encoder.onnx_data",
@@ -4443,7 +4618,8 @@
       "supertonic",
       "text-encoder"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/"
   },
   {
     "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/latent_denoiser.onnx",
@@ -4457,7 +4633,8 @@
       "supertonic",
       "latent-denoiser"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/"
   },
   {
     "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/latent_denoiser.onnx_data",
@@ -4471,7 +4648,8 @@
       "supertonic",
       "latent-denoiser"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/"
   },
   {
     "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/voice_decoder.onnx",
@@ -4485,7 +4663,8 @@
       "supertonic",
       "voice-decoder"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/"
   },
   {
     "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/onnx/voice_decoder.onnx_data",
@@ -4499,7 +4678,8 @@
       "supertonic",
       "voice-decoder"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/"
   },
   {
     "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/F1.bin",
@@ -4513,7 +4693,8 @@
       "supertonic",
       "voice-style"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/"
   },
   {
     "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/F2.bin",
@@ -4527,7 +4708,8 @@
       "supertonic",
       "voice-style"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/"
   },
   {
     "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/F3.bin",
@@ -4541,7 +4723,8 @@
       "supertonic",
       "voice-style"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/"
   },
   {
     "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/F4.bin",
@@ -4555,7 +4738,8 @@
       "supertonic",
       "voice-style"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/"
   },
   {
     "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/F5.bin",
@@ -4569,7 +4753,8 @@
       "supertonic",
       "voice-style"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/"
   },
   {
     "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/M1.bin",
@@ -4583,7 +4768,8 @@
       "supertonic",
       "voice-style"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/"
   },
   {
     "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/M2.bin",
@@ -4597,7 +4783,8 @@
       "supertonic",
       "voice-style"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/"
   },
   {
     "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/M3.bin",
@@ -4611,7 +4798,8 @@
       "supertonic",
       "voice-style"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/"
   },
   {
     "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/M4.bin",
@@ -4625,7 +4813,8 @@
       "supertonic",
       "voice-style"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/"
   },
   {
     "source": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/cff123c84b0655d9d647641f1b532c3cbb8f7faa/voices/M5.bin",
@@ -4639,7 +4828,8 @@
       "supertonic",
       "voice-style"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/"
   },
   {
     "source": "https://huggingface.co/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/onnx/tts.json",
@@ -4654,7 +4844,8 @@
       "supertonic-official",
       "tts-config"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Supertone/supertonic/"
   },
   {
     "source": "https://huggingface.co/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/onnx/unicode_indexer.json",
@@ -4669,7 +4860,8 @@
       "supertonic-official",
       "unicode-indexer"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Supertone/supertonic/"
   },
   {
     "source": "https://huggingface.co/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/onnx/text_encoder.onnx",
@@ -4685,7 +4877,8 @@
       "text-encoder",
       "fp32"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Supertone/supertonic/"
   },
   {
     "source": "https://huggingface.co/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/onnx/duration_predictor.onnx",
@@ -4701,7 +4894,8 @@
       "duration-predictor",
       "fp32"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Supertone/supertonic/"
   },
   {
     "source": "https://huggingface.co/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/onnx/vector_estimator.onnx",
@@ -4717,7 +4911,8 @@
       "vector-estimator",
       "fp32"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Supertone/supertonic/"
   },
   {
     "source": "https://huggingface.co/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/onnx/vocoder.onnx",
@@ -4733,7 +4928,8 @@
       "vocoder",
       "fp32"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Supertone/supertonic/"
   },
   {
     "source": "https://huggingface.co/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/voice_styles/F1.json",
@@ -4748,7 +4944,8 @@
       "supertonic-official",
       "voice-style"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Supertone/supertonic/"
   },
   {
     "source": "https://huggingface.co/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/voice_styles/F2.json",
@@ -4763,7 +4960,8 @@
       "supertonic-official",
       "voice-style"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Supertone/supertonic/"
   },
   {
     "source": "https://huggingface.co/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/voice_styles/F3.json",
@@ -4778,7 +4976,8 @@
       "supertonic-official",
       "voice-style"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Supertone/supertonic/"
   },
   {
     "source": "https://huggingface.co/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/voice_styles/F4.json",
@@ -4793,7 +4992,8 @@
       "supertonic-official",
       "voice-style"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Supertone/supertonic/"
   },
   {
     "source": "https://huggingface.co/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/voice_styles/F5.json",
@@ -4808,7 +5008,8 @@
       "supertonic-official",
       "voice-style"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Supertone/supertonic/"
   },
   {
     "source": "https://huggingface.co/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/voice_styles/M1.json",
@@ -4823,7 +5024,8 @@
       "supertonic-official",
       "voice-style"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Supertone/supertonic/"
   },
   {
     "source": "https://huggingface.co/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/voice_styles/M2.json",
@@ -4838,7 +5040,8 @@
       "supertonic-official",
       "voice-style"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Supertone/supertonic/"
   },
   {
     "source": "https://huggingface.co/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/voice_styles/M3.json",
@@ -4853,7 +5056,8 @@
       "supertonic-official",
       "voice-style"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Supertone/supertonic/"
   },
   {
     "source": "https://huggingface.co/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/voice_styles/M4.json",
@@ -4868,7 +5072,8 @@
       "supertonic-official",
       "voice-style"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Supertone/supertonic/"
   },
   {
     "source": "https://huggingface.co/Supertone/supertonic/resolve/b6856d033f622c63ea29441795be266a1133e227/voice_styles/M5.json",
@@ -4883,7 +5088,8 @@
       "supertonic-official",
       "voice-style"
     ],
-    "notes": ""
+    "notes": "",
+    "link": "https://huggingface.co/Supertone/supertonic/"
   },
   {
     "source": "https://huggingface.co/Supertone/supertonic-2/resolve/75e6727618a02f323c720cba9478152d4bc16ca4/onnx/tts.json",

@@ -100,10 +100,16 @@ jobs:
           node-version: lts/*
 
       - name: Install global dependencies
-        run: npm install -g bare-make bare-runtime
+        run: npm install -g --force bare-make bare-runtime
 
       - name: Configure vcpkg
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
+
+      - name: Cleanup vcpkg
+        shell: bash
+        run: |
+          rm -rf $VCPKG_ROOT/buildtrees/*
+          rm -rf $VCPKG_ROOT/packages/*
 
       - name: Cache vcpkg packages
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
@@ -198,7 +204,7 @@ jobs:
 
       - name: Install bare-runtime
         if: needs.setup.outputs.qvac_needed == 'true'
-        run: npm install -g bare-runtime
+        run: npm install -g --force bare-runtime
 
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0

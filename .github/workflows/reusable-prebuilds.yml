@@ -178,6 +178,10 @@ jobs:
       - name: Setup LLVM (Linux arm and macOS)
         if: matrix.arch == 'arm64' || matrix.os == 'macos-15' || matrix.os == 'macos-15-intel'
         uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        if: startsWith(matrix.runner, 'qvac-')
 
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -203,13 +207,14 @@ jobs:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
 
-      - name: Setup Bare tooling (Linux ARM and macOS)
-        if: matrix.arch == 'arm64' || matrix.os == 'macos-15' || matrix.os == 'macos-15-intel'
-        uses: tetherto/qvac/.github/actions/setup-bare-tooling@0bbdca93da303a0b1634ba14a89cec085621078d
+      - name: Cleanup vcpkg
+        shell: bash
+        run: |
+          rm -rf $VCPKG_ROOT/buildtrees/*
+          rm -rf $VCPKG_ROOT/packages/*
 
-      - name: Add linux x64 Bare tooling to PATH
-        if: matrix.os == 'ubuntu-22.04' && matrix.arch == 'x64'
-        run: echo "/usr/local/nvm/versions/node/v20.20.2/bin" >> $GITHUB_PATH
+      - name: Setup Bare tooling
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@926f6f14092fbacaa3606ea475457fddf37d9838
 
       - name: Setup Apple Clang
         uses: tetherto/qvac/.github/actions/setup-apple-clang@1d9b2165867d03c6edd675e402ee101a5d48a6d8
