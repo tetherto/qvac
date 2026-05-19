@@ -33,7 +33,7 @@ cd ..
 # Setup OCR addon
 git clone https://github.com/tetherto/inference-addon-onnx-ocr-fasttext.git
 cd inference-addon-onnx-ocr-fasttext/
-npm install -g bare bare-make
+npm install -g --force bare bare-make
 npm install
 
 # Build addon

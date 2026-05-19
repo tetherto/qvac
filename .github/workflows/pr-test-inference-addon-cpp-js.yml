@@ -111,13 +111,12 @@ jobs:
           workdir: ${{ env.PKG_DIR }}
 
       - name: Setup Node.js
-        if: matrix.platform == 'darwin' || matrix.arch == 'arm64'
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # 4.4.0
         with:
           node-version: 22
 
       - name: Install Bare tooling
-        run: npm install -g bare bare-make
+        run: npm install -g --force bare bare-make
 
       - if: ${{ matrix.platform == 'win32' }}
         name: Setup CMake on Windows
