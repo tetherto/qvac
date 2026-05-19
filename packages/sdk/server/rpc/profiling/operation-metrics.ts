@@ -11,6 +11,7 @@ import {
   type EmbedStats,
   type TtsStats,
   type DiffusionStats,
+  type VideoStats,
 } from "@/schemas";
 import { readModelExecutionMs } from "@/profiling/model-execution";
 import type { ProfilingEvent, ProfilingEventKind } from "@/profiling/types";
@@ -284,6 +285,29 @@ registerOperationMetrics<{ modelId?: string }, { stats?: DiffusionStats }>({
       gauges["totalImages"] = res.stats.totalImages;
     if (res.stats.totalPixels !== undefined)
       gauges["totalPixels"] = res.stats.totalPixels;
+    return Object.keys(gauges).length > 0 ? gauges : undefined;
+  },
+});
+
+registerOperationMetrics<{ modelId?: string }, { stats?: VideoStats }>({
+  op: "videoStream",
+  kind: "handler",
+  getTags: (req) => (req.modelId ? { modelId: req.modelId } : {}),
+  fromFinalChunk: (res) => {
+    if (!res.stats) return undefined;
+    const gauges: Record<string, number> = {};
+    if (res.stats.generationMs !== undefined)
+      gauges["generationMs"] = res.stats.generationMs;
+    if (res.stats.totalSteps !== undefined)
+      gauges["totalSteps"] = res.stats.totalSteps;
+    if (res.stats.totalVideos !== undefined)
+      gauges["totalVideos"] = res.stats.totalVideos;
+    if (res.stats.totalVideoFrames !== undefined)
+      gauges["totalVideoFrames"] = res.stats.totalVideoFrames;
+    if (res.stats.videoFrames !== undefined)
+      gauges["videoFrames"] = res.stats.videoFrames;
+    if (res.stats.fps !== undefined)
+      gauges["fps"] = res.stats.fps;
     return Object.keys(gauges).length > 0 ? gauges : undefined;
   },
 });

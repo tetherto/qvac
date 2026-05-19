@@ -73,6 +73,7 @@ import { VisionExecutor } from "./executors/vision-executor.js";
 import { DownloadExecutor } from "../shared/executors/download-executor.js";
 import { DelegatedInferenceExecutor } from "./executors/delegated-inference-executor.js";
 import { DesktopDiffusionExecutor } from "./executors/diffusion-executor.js";
+import { VideoExecutor } from "./executors/video-executor.js";
 import { FinetuneExecutor } from "./executors/finetune-executor.js";
 import { LifecycleExecutor } from "../shared/executors/lifecycle-executor.js";
 import { ConfigExecutor } from "../shared/executors/config-executor.js";
@@ -437,6 +438,7 @@ export const executor = createExecutor({
     new DownloadExecutor(),
     new DelegatedInferenceExecutor(),
     new DesktopDiffusionExecutor(resources),
+    new VideoExecutor(resources),
     new FinetuneExecutor(resources),
     new LifecycleExecutor(resources),
     new ConfigExecutor(),
