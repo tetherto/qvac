@@ -47,13 +47,18 @@ jobs:
       - name: Install NPM dependencies
         run: |
           npm install
-          # npm install -g bare bare-make
 
-      - name: Add bare tooling to PATH
-        run: echo "/usr/local/nvm/versions/node/v20.20.2/bin" >> $GITHUB_PATH
+      - name: Install bare tooling
+        run: npm install -g --force bare bare-make
 
       - name: Configure vcpkg
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
+
+      - name: Cleanup vcpkg
+        shell: bash
+        run: |
+          rm -rf $VCPKG_ROOT/buildtrees/*
+          rm -rf $VCPKG_ROOT/packages/*
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0

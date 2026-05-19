@@ -21,4 +21,4 @@ runs:
 
     - name: Install global dependencies
       shell: bash
-      run: npm install -g bare-runtime bare-make ${{ inputs.extra-packages }}
+      run: npm install -g --force bare-runtime bare-make ${{ inputs.extra-packages }}

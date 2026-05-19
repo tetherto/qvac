@@ -189,7 +189,10 @@ function touchesOwnedPaths(files, ownedPaths) {
   return files.some((file) => ownedPaths.some((path) => file.path.startsWith(path)));
 }
 
-export function collectPRActivity({ mode = "team", pod = null } = {}) {
+export function collectPRActivity({ mode = "team", pod = null, authorScope = "any" } = {}) {
+  if (!["any", "pod"].includes(authorScope)) {
+    throw new Error(`Invalid authorScope: ${authorScope}. Use "any" or "pod".`);
+  }
   const config = loadConfig();
   const repoConfig = splitRepo(config.github.repo);
   const staleDays = config.github.staleDays || 3;
@@ -208,9 +211,19 @@ export function collectPRActivity({ mode = "team", pod = null } = {}) {
     members: [],
     allTeam: [],
   };
+  // authorScope === "pod" filters relevantPRs to pod-roster authors only.
+  // PRs that touch pod paths but were authored outside the roster are surfaced
+  // separately as excludedPRs so the skill can still display them for context.
+  // Only applied to mode === "team"; "my" already filters by currentUser, and
+  // "review" intentionally surfaces cross-pod authors whose review is owed.
+  const enforceAuthorScope = authorScope === "pod" && mode === "team";
+  const rosterLogins = enforceAuthorScope
+    ? new Set(pods.flatMap((p) => [...p.leads, ...p.members]))
+    : null;
   const { allPRs, pageNum } = fetchOpenPRs(repoConfig);
   const isCrossPodMy = mode === "my" && pod === null;
   const relevantPRs = [];
+  const excludedPRs = [];
 
   for (const pr of allPRs) {
     if (pr.isDraft) continue;
@@ -221,15 +234,21 @@ export function collectPRActivity({ mode = "team", pod = null } = {}) {
     const reviews = pr.reviews?.nodes || [];
     const reviewState = getReviewState(reviews);
     const ready = readySince(pr);
-    relevantPRs.push({
+    const enriched = {
       ...pr,
       files,
       reviewState,
       ready,
       stale: now - new Date(ready).getTime() > staleMs,
-    });
+    };
+    if (enforceAuthorScope && !rosterLogins.has(pr.author.login)) {
+      excludedPRs.push(enriched);
+      continue;
+    }
+    relevantPRs.push(enriched);
   }
   relevantPRs.sort((a, b) => new Date(a.ready).getTime() - new Date(b.ready).getTime());
+  excludedPRs.sort((a, b) => new Date(a.ready).getTime() - new Date(b.ready).getTime());
 
   return {
     config,
@@ -240,6 +259,8 @@ export function collectPRActivity({ mode = "team", pod = null } = {}) {
     roles,
     allPRs,
     relevantPRs,
+    excludedPRs,
+    authorScope,
     pageNum,
     isCrossPodMy,
   };

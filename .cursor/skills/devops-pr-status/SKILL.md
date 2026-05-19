@@ -1,12 +1,12 @@
 ---
 name: devops-pr-status
-description: Team-wide PR dashboard for the DevOps pod. Shows open PRs touching DevOps-owned paths, grouped into needs-your-re-review / stale (>3d) / needs-review, with merge-conflict warnings. Use when checking DevOps pod PR status, asking about stale PRs, or invoking /devops-pr-status.
+description: Team-wide PR dashboard for the DevOps pod, scoped to PRs authored by pod-roster members. Shows open PRs touching DevOps-owned paths and authored by DevOps leads/members, grouped into needs-your-re-review / stale (>3d) / needs-review, with merge-conflict warnings and a separate Excluded section for non-roster authors. Use when checking DevOps pod PR status, asking about stale PRs, or invoking /devops-pr-status.
 disable-model-invocation: true
 ---
 
 # DevOps Pod PR Status
 
-Thin wrapper over the shared pr-skills library, pinned to the DevOps pod.
+Thin wrapper over the shared pr-skills library, pinned to the DevOps pod and scoped to PRs authored by DevOps roster members (`leads ∪ members` in [.github/teams/devops.json](.github/teams/devops.json)).
 
 ## When to use this skill
 
@@ -27,19 +27,21 @@ Thin wrapper over the shared pr-skills library, pinned to the DevOps pod.
 
 ```bash
 DATE="$(date -u +%Y-%m-%d)"
-node .cursor/skills/_lib/pr-skills/pr-status.mjs --pod devops --mode team \
+node .cursor/skills/_lib/pr-skills/pr-status.mjs --pod devops --mode team --authors pod \
   2> /tmp/devops-pr-status-${DATE}.stderr \
   | tee "/tmp/devops-pr-status-${DATE}.txt"
 ```
 
-For the personal review queue scoped to DevOps PRs, use `--mode review`. The script and its output format are documented in [.cursor/skills/_lib/pr-skills/README.md](.cursor/skills/_lib/pr-skills/README.md).
+`--authors pod` restricts the main dashboard to PRs authored by DevOps roster members. PRs that touch DevOps-owned paths but are authored outside the roster are surfaced in a separate "Excluded" section at the bottom of the same dashboard, so the pod still has visibility into cross-pod work hitting its paths without those PRs polluting the queue. See [.cursor/skills/_lib/pr-skills/README.md](.cursor/skills/_lib/pr-skills/README.md) for the flag's full behavior.
+
+For the personal review queue scoped to DevOps PRs, use `--mode review` (without `--authors pod` — review queue intentionally includes cross-pod authors whose review the user owes).
 
 ## Workflow
 
-1. Run the script with `--pod devops --mode team`, **teeing stdout to `/tmp/devops-pr-status-<YYYY-MM-DD>.txt`** so the dashboard is available for paste afterwards. Redirect stderr to a sibling `.stderr` file (it contains progress / `SLACK_VALIDATION_REQUIRED` notices, not dashboard content).
-2. Present the grouped output to the user.
-3. Surface the summary header counts (need your re-review / stale / merge conflicts) prominently.
-4. **Print the paste-ready copy commands.** The dashboard is plain text with two-space indent — when pasted into a Slack thread, Slack auto-renders the indented lines as nested bullets and turns `#<num>` into PR auto-links (with the em-dash separator). No re-formatting is needed.
+1. Run the script with `--pod devops --mode team --authors pod`, **teeing stdout to `/tmp/devops-pr-status-<YYYY-MM-DD>.txt`** so the dashboard is available for paste afterwards. Redirect stderr to a sibling `.stderr` file (it contains progress / `SLACK_VALIDATION_REQUIRED` notices, not dashboard content).
+2. Present the dashboard to the user in the **chat presentation format** (see below) — not as a raw paste of the script output.
+3. Surface the summary header counts (need your re-review / stale / merge conflicts / excluded) prominently.
+4. **Print the paste-ready copy commands.** The dashboard at `/tmp/devops-pr-status-<DATE>.txt` is plain text with two-space indent — when pasted into a Slack thread, Slack auto-renders the indented lines as nested bullets and turns `#<num>` into PR auto-links. No re-formatting is needed.
 
    ```bash
    pbcopy < /tmp/devops-pr-status-${DATE}.txt   # macOS
@@ -48,6 +50,45 @@ For the personal review queue scoped to DevOps PRs, use `--mode review`. The scr
    ```
 
 5. After showing results, offer: "Want me to review any of these? Provide the PR URL and I'll run `/devops-pr-review` (or `/pr-review` for the generic flow)."
+
+## Chat presentation format
+
+The in-chat rendering uses Markdown with hyperlinked PR numbers. This is distinct from the paste-ready Slack form (auto-linked plain text) saved to the temp file. Both must be produced on every run.
+
+Required layout (in this exact order):
+
+1. **Title line** — `## DevOps Pod — PR Status (authors scoped to roster)`.
+2. **Headline summary** — one bold line restating the script summary counts (`N PRs need attention · X fully approved · Y need your re-review · Z stale`).
+3. **Roster line** — one-line listing of the roster:
+   ```
+   Roster: `Proletter` (lead) + `darkynt`, `GiacomoSorbiWork`, `sidj-thr`, `tamer-hassan-tether`, `yauhenipankratovich-web`.
+   ```
+   Refresh from [.github/teams/devops.json](.github/teams/devops.json) on every run; do not hardcode if the file has drifted.
+4. **Headline analysis** — one short paragraph identifying the highest-leverage cluster in the queue (e.g., "Four `QVAC-18047` PRs all sit on team-lead approval only — fastest path to drain the queue."). Skip when the queue is empty.
+5. **`### :red_circle: Stale (>3d) — N`** — one bullet per stale PR.
+6. **`### :large_yellow_circle: Needs Review — N`** — one bullet per active PR.
+7. **`### :repeat: Needs your re-review — N`** — only if the section is non-empty.
+8. **`### Excluded (non-roster authors)`** — populated from the script's "EXCLUDED" section. One bullet per PR. Acts as a quick visibility list, not a review queue.
+9. **`### Paste-ready`** — the `pbcopy` / `xclip` / `wl-copy` block.
+
+Bullet format for the active sections (Stale / Needs Review / Re-review):
+
+```
+- [#<num>](<url>) — <title> · `<author-login>` · <age> · <approvals/notes> · **<blockers/labels>**
+```
+
+- `[#<num>](<url>)` — Markdown link, never bare `#<num>`.
+- `<title>` is the PR title verbatim, no truncation.
+- `<author-login>` is wrapped in backticks.
+- `<age>` is the script's age string (e.g., `4d 13h`).
+- `<approvals/notes>` lists `:white_check_mark: <login>` / `:x: <login>` / `:arrows_counterclockwise: <login>` for any non-pending reviews on the PR (from the script's `Reviews:` / `Other:` lines).
+- `<blockers/notes>` is bolded — "needs team-lead approval", "needs team-member approval", "needs team-member + team-lead approval", or any `:warning: merge conflicts` flag. Include labels in plain backticks (e.g., `` `verified` ``) when present.
+
+Bullet format for the Excluded section (compact — these are not the pod's review queue):
+
+```
+- [#<num>](<url>) `<author-login>`
+```
 
 ## References
 

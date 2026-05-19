@@ -112,7 +112,7 @@ jobs:
       - name: Install global dependencies
         run: |
           echo "Installing global dependencies..."
-          npm install -g @expo/cli@latest --ignore-scripts
+          npm install -g --force @expo/cli@latest --ignore-scripts
 
       - name: Download Android prebuilds (from artifacts)
         if: matrix.platform == 'Android' && !inputs.package

@@ -163,6 +163,13 @@ jobs:
         name: Configure vcpkg in windows
         run: echo ("VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" -replace '\\', '/') >> $env:GITHUB_ENV
 
+      - if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'windows-2025' }}
+        name: Cleanup vcpkg
+        shell: bash
+        run: |
+          rm -rf $VCPKG_ROOT/buildtrees/*
+          rm -rf $VCPKG_ROOT/packages/*
+
       - if: ${{ matrix.os == 'windows-2025' }}
         name: Configure cmake generator in windows
         run: echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> $env:GITHUB_ENV
