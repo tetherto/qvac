@@ -1,10 +1,28 @@
 name: Manual — Test All Inference Addons
 
-# Manually fan-out all per-addon integration test workflows. Intended for
-# validating changes in shared dependencies (notably `inference-addon-cpp`)
-# across every consumer addon at once. Not wired into PR/push triggers — it
-# is too expensive to gate on every change and is meant to be dispatched on
-# demand from the Actions tab.
+# Manually fan-out the full per-addon PR CI surface across every consumer
+# of `inference-addon-cpp`. Intended for validating changes in shared
+# dependencies across all addons at once. Not wired into PR/push triggers:
+# it is too expensive to gate on every change and is meant to be dispatched
+# on demand from the Actions tab.
+#
+# Mirrors what `on-pr-<addon>.yml` runs:
+#   - cpp-lint                (skipped for decoder-audio — pure JS)
+#   - sanity-checks           (JS lint + unit tests via ./.github/actions/run-lint-and-unit-tests)
+#   - ts-checks               (6 addons: classification, diffusion, embed, llm, translation, vla)
+#   - verify-fabric-lockstep  (4 addons: embed, llm, translation, vla)
+#   - cpp-tests / coverage    (skipped for decoder-audio and ocr-onnx)
+#   - prebuilds               (skipped for decoder-audio — no native build)
+#   - integration-test
+#   - integration-mobile-test
+#
+# All jobs that exercise package code (sanity-checks, ts-checks, integration,
+# mobile) wait on `prebuilds-<addon>` so the native artifacts are available
+# in the workspace before tests run.
+#
+# To test a single addon, dispatch its own per-addon workflow (e.g.
+# `integration-test-transcription-whispercpp.yml`) directly — this one
+# always runs everything.
 
 permissions:
   contents: read
@@ -20,187 +38,817 @@ on:
         description: "Repository to checkout. Empty = current repo."
         type: string
         required: false
-      addons:
-        description: "Comma-separated addon slugs to run, or 'all'. Slugs match the integration-test-<slug>.yml workflow names."
-        type: string
-        required: false
-        default: "all"
-      include_mobile:
-        description: "Also run the integration-mobile-test-<addon>.yml suite (slow; needs device farm runners)."
-        type: boolean
-        required: false
-        default: false
 
 jobs:
-  plan:
+  # ---------- bci-whispercpp ----------
+  cpp-lint-bci-whispercpp:
+    uses: ./.github/workflows/cpp-lint.yaml
+    with:
+      workdir: packages/bci-whispercpp
+    secrets: inherit
+
+  cpp-tests-bci-whispercpp:
+    uses: ./.github/workflows/cpp-test-coverage-bci-whispercpp.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  prebuilds-bci-whispercpp:
+    uses: ./.github/workflows/prebuilds-bci-whispercpp.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  sanity-checks-bci-whispercpp:
+    needs: prebuilds-bci-whispercpp
     runs-on: ubuntu-latest
-    outputs:
-      bci-whispercpp: ${{ steps.gate.outputs.bci-whispercpp }}
-      classification-ggml: ${{ steps.gate.outputs.classification-ggml }}
-      decoder-audio: ${{ steps.gate.outputs.decoder-audio }}
-      diffusion-cpp: ${{ steps.gate.outputs.diffusion-cpp }}
-      embed-llamacpp: ${{ steps.gate.outputs.embed-llamacpp }}
-      llm-llamacpp: ${{ steps.gate.outputs.llm-llamacpp }}
-      ocr-onnx: ${{ steps.gate.outputs.ocr-onnx }}
-      transcription-parakeet: ${{ steps.gate.outputs.transcription-parakeet }}
-      transcription-whispercpp: ${{ steps.gate.outputs.transcription-whispercpp }}
-      translation-nmtcpp: ${{ steps.gate.outputs.translation-nmtcpp }}
-      tts-ggml: ${{ steps.gate.outputs.tts-ggml }}
-      tts-onnx: ${{ steps.gate.outputs.tts-onnx }}
-      vla: ${{ steps.gate.outputs.vla }}
     steps:
-      - name: Resolve addon selection
-        id: gate
-        env:
-          ADDONS_INPUT: ${{ inputs.addons }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          ADDONS=(
-            bci-whispercpp
-            classification-ggml
-            decoder-audio
-            diffusion-cpp
-            embed-llamacpp
-            llm-llamacpp
-            ocr-onnx
-            transcription-parakeet
-            transcription-whispercpp
-            translation-nmtcpp
-            tts-ggml
-            tts-onnx
-            vla
-          )
-          INPUT="${ADDONS_INPUT:-all}"
-          NORMALIZED=",$(echo "$INPUT" | tr -d '[:space:]'),"
-          for addon in "${ADDONS[@]}"; do
-            if [ "$INPUT" = "all" ] || [[ "$NORMALIZED" == *",${addon},"* ]]; then
-              echo "${addon}=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "${addon}=false" >> "$GITHUB_OUTPUT"
-            fi
-          done
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: packages/bci-whispercpp/prebuilds
+          merge-multiple: true
+      - uses: ./.github/actions/run-lint-and-unit-tests
+        with:
+          gpr-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          registry-type: gpr
+          workdir: packages/bci-whispercpp
 
   bci-whispercpp:
-    needs: plan
-    if: needs.plan.outputs.bci-whispercpp == 'true'
+    needs: prebuilds-bci-whispercpp
     uses: ./.github/workflows/integration-test-bci-whispercpp.yml
     with:
       ref: ${{ inputs.ref }}
       repository: ${{ inputs.repository }}
     secrets: inherit
 
+  # ---------- classification-ggml ----------
+  cpp-lint-classification-ggml:
+    uses: ./.github/workflows/cpp-lint.yaml
+    with:
+      workdir: packages/classification-ggml
+    secrets: inherit
+
+  cpp-tests-classification-ggml:
+    uses: ./.github/workflows/cpp-tests-classification.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  prebuilds-classification-ggml:
+    uses: ./.github/workflows/prebuilds-classification-ggml.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  sanity-checks-classification-ggml:
+    needs: prebuilds-classification-ggml
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: packages/classification-ggml/prebuilds
+          merge-multiple: true
+      - uses: ./.github/actions/run-lint-and-unit-tests
+        with:
+          gpr-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          registry-type: gpr
+          workdir: packages/classification-ggml
+
+  ts-checks-classification-ggml:
+    needs: prebuilds-classification-ggml
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 20
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: packages/classification-ggml/prebuilds
+          merge-multiple: true
+      - run: npm install
+        working-directory: packages/classification-ggml
+      - run: npm run test:dts
+        working-directory: packages/classification-ggml
+      - uses: ./.github/actions/run-lint-and-unit-tests
+        with:
+          gpr-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          registry-type: gpr
+          workdir: packages/classification-ggml
+
   classification-ggml:
-    needs: plan
-    if: needs.plan.outputs.classification-ggml == 'true'
+    needs: prebuilds-classification-ggml
     uses: ./.github/workflows/integration-test-classification-ggml.yml
     with:
       ref: ${{ inputs.ref }}
       repository: ${{ inputs.repository }}
     secrets: inherit
 
+  # ---------- decoder-audio (pure JS, no native build) ----------
+  sanity-checks-decoder-audio:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+      - uses: ./.github/actions/run-lint-and-unit-tests
+        with:
+          gpr-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          registry-type: gpr
+          workdir: packages/decoder-audio
+
   decoder-audio:
-    needs: plan
-    if: needs.plan.outputs.decoder-audio == 'true'
     uses: ./.github/workflows/integration-test-decoder-audio.yml
     with:
       ref: ${{ inputs.ref }}
       repository: ${{ inputs.repository }}
     secrets: inherit
 
+  # ---------- diffusion-cpp ----------
+  cpp-lint-diffusion-cpp:
+    uses: ./.github/workflows/cpp-lint.yaml
+    with:
+      workdir: packages/diffusion-cpp
+    secrets: inherit
+
+  cpp-tests-diffusion-cpp:
+    uses: ./.github/workflows/cpp-tests-diffusion.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  prebuilds-diffusion-cpp:
+    uses: ./.github/workflows/prebuilds-diffusion-cpp.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  sanity-checks-diffusion-cpp:
+    needs: prebuilds-diffusion-cpp
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: packages/diffusion-cpp/prebuilds
+          merge-multiple: true
+      - uses: ./.github/actions/run-lint-and-unit-tests
+        with:
+          gpr-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          registry-type: gpr
+          workdir: packages/diffusion-cpp
+
+  ts-checks-diffusion-cpp:
+    needs: prebuilds-diffusion-cpp
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 20
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: packages/diffusion-cpp/prebuilds
+          merge-multiple: true
+      - run: npm install
+        working-directory: packages/diffusion-cpp
+      - run: npm run test:dts
+        working-directory: packages/diffusion-cpp
+      - uses: ./.github/actions/run-lint-and-unit-tests
+        with:
+          gpr-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          registry-type: gpr
+          workdir: packages/diffusion-cpp
+
   diffusion-cpp:
-    needs: plan
-    if: needs.plan.outputs.diffusion-cpp == 'true'
+    needs: prebuilds-diffusion-cpp
     uses: ./.github/workflows/integration-test-diffusion-cpp.yml
     with:
       ref: ${{ inputs.ref }}
       repository: ${{ inputs.repository }}
     secrets: inherit
 
+  # ---------- embed-llamacpp ----------
+  cpp-lint-embed-llamacpp:
+    uses: ./.github/workflows/cpp-lint.yaml
+    with:
+      workdir: packages/embed-llamacpp
+    secrets: inherit
+
+  cpp-tests-embed-llamacpp:
+    uses: ./.github/workflows/cpp-tests-embed.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  prebuilds-embed-llamacpp:
+    uses: ./.github/workflows/prebuilds-embed-llamacpp.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  verify-fabric-lockstep-embed-llamacpp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+      - uses: ./.github/actions/verify-qvac-fabric-lockstep
+
+  sanity-checks-embed-llamacpp:
+    needs: prebuilds-embed-llamacpp
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: packages/embed-llamacpp/prebuilds
+          merge-multiple: true
+      - uses: ./.github/actions/run-lint-and-unit-tests
+        with:
+          gpr-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          registry-type: gpr
+          workdir: packages/embed-llamacpp
+
+  ts-checks-embed-llamacpp:
+    needs: prebuilds-embed-llamacpp
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 20
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: packages/embed-llamacpp/prebuilds
+          merge-multiple: true
+      - run: npm install
+        working-directory: packages/embed-llamacpp
+      - run: npm run test:dts
+        working-directory: packages/embed-llamacpp
+      - uses: ./.github/actions/run-lint-and-unit-tests
+        with:
+          gpr-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          registry-type: gpr
+          workdir: packages/embed-llamacpp
+
   embed-llamacpp:
-    needs: plan
-    if: needs.plan.outputs.embed-llamacpp == 'true'
+    needs: prebuilds-embed-llamacpp
     uses: ./.github/workflows/integration-test-embed-llamacpp.yml
     with:
       ref: ${{ inputs.ref }}
       repository: ${{ inputs.repository }}
     secrets: inherit
 
+  # ---------- llm-llamacpp ----------
+  cpp-lint-llm-llamacpp:
+    uses: ./.github/workflows/cpp-lint.yaml
+    with:
+      workdir: packages/llm-llamacpp
+    secrets: inherit
+
+  cpp-tests-llm-llamacpp:
+    uses: ./.github/workflows/cpp-tests-llm.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  prebuilds-llm-llamacpp:
+    uses: ./.github/workflows/prebuilds-llm-llamacpp.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  verify-fabric-lockstep-llm-llamacpp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+      - uses: ./.github/actions/verify-qvac-fabric-lockstep
+
+  sanity-checks-llm-llamacpp:
+    needs: prebuilds-llm-llamacpp
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: packages/llm-llamacpp/prebuilds
+          merge-multiple: true
+      - uses: ./.github/actions/run-lint-and-unit-tests
+        with:
+          gpr-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          registry-type: gpr
+          workdir: packages/llm-llamacpp
+
+  ts-checks-llm-llamacpp:
+    needs: prebuilds-llm-llamacpp
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 20
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: packages/llm-llamacpp/prebuilds
+          merge-multiple: true
+      - run: npm install
+        working-directory: packages/llm-llamacpp
+      - run: npm run test:dts
+        working-directory: packages/llm-llamacpp
+      - uses: ./.github/actions/run-lint-and-unit-tests
+        with:
+          gpr-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          registry-type: gpr
+          workdir: packages/llm-llamacpp
+
   llm-llamacpp:
-    needs: plan
-    if: needs.plan.outputs.llm-llamacpp == 'true'
+    needs: prebuilds-llm-llamacpp
     uses: ./.github/workflows/integration-test-llm-llamacpp.yml
     with:
       ref: ${{ inputs.ref }}
       repository: ${{ inputs.repository }}
     secrets: inherit
 
+  # ---------- ocr-onnx ----------
+  cpp-lint-ocr-onnx:
+    uses: ./.github/workflows/cpp-lint.yaml
+    with:
+      workdir: packages/ocr-onnx
+    secrets: inherit
+
+  prebuilds-ocr-onnx:
+    uses: ./.github/workflows/prebuilds-ocr-onnx.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  sanity-checks-ocr-onnx:
+    needs: prebuilds-ocr-onnx
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: packages/ocr-onnx/prebuilds
+          merge-multiple: true
+      - uses: ./.github/actions/run-lint-and-unit-tests
+        with:
+          gpr-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          registry-type: gpr
+          workdir: packages/ocr-onnx
+
   ocr-onnx:
-    needs: plan
-    if: needs.plan.outputs.ocr-onnx == 'true'
+    needs: prebuilds-ocr-onnx
     uses: ./.github/workflows/integration-test-ocr-onnx.yml
     with:
       ref: ${{ inputs.ref }}
       repository: ${{ inputs.repository }}
     secrets: inherit
 
+  # ---------- transcription-parakeet ----------
+  cpp-lint-transcription-parakeet:
+    uses: ./.github/workflows/cpp-lint.yaml
+    with:
+      workdir: packages/transcription-parakeet
+    secrets: inherit
+
+  cpp-tests-transcription-parakeet:
+    uses: ./.github/workflows/cpp-test-coverage-transcription-parakeet.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  prebuilds-transcription-parakeet:
+    uses: ./.github/workflows/prebuilds-transcription-parakeet.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  sanity-checks-transcription-parakeet:
+    needs: prebuilds-transcription-parakeet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: packages/transcription-parakeet/prebuilds
+          merge-multiple: true
+      - uses: ./.github/actions/run-lint-and-unit-tests
+        with:
+          gpr-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          registry-type: gpr
+          workdir: packages/transcription-parakeet
+
   transcription-parakeet:
-    needs: plan
-    if: needs.plan.outputs.transcription-parakeet == 'true'
+    needs: prebuilds-transcription-parakeet
     uses: ./.github/workflows/integration-test-transcription-parakeet.yml
     with:
       ref: ${{ inputs.ref }}
       repository: ${{ inputs.repository }}
     secrets: inherit
 
+  # ---------- transcription-whispercpp ----------
+  cpp-lint-transcription-whispercpp:
+    uses: ./.github/workflows/cpp-lint.yaml
+    with:
+      workdir: packages/transcription-whispercpp
+    secrets: inherit
+
+  cpp-tests-transcription-whispercpp:
+    uses: ./.github/workflows/cpp-test-coverage-transcription-whispercpp.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  prebuilds-transcription-whispercpp:
+    uses: ./.github/workflows/prebuilds-transcription-whispercpp.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  sanity-checks-transcription-whispercpp:
+    needs: prebuilds-transcription-whispercpp
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: packages/transcription-whispercpp/prebuilds
+          merge-multiple: true
+      - uses: ./.github/actions/run-lint-and-unit-tests
+        with:
+          gpr-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          registry-type: gpr
+          workdir: packages/transcription-whispercpp
+
   transcription-whispercpp:
-    needs: plan
-    if: needs.plan.outputs.transcription-whispercpp == 'true'
+    needs: prebuilds-transcription-whispercpp
     uses: ./.github/workflows/integration-test-transcription-whispercpp.yml
     with:
       ref: ${{ inputs.ref }}
       repository: ${{ inputs.repository }}
     secrets: inherit
 
+  # ---------- translation-nmtcpp ----------
+  cpp-lint-translation-nmtcpp:
+    uses: ./.github/workflows/cpp-lint.yaml
+    with:
+      workdir: packages/translation-nmtcpp
+    secrets: inherit
+
+  cpp-tests-translation-nmtcpp:
+    uses: ./.github/workflows/reusable-cpp-tests-translation-nmtcpp.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  prebuilds-translation-nmtcpp:
+    uses: ./.github/workflows/prebuilds-translation-nmtcpp.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  verify-fabric-lockstep-translation-nmtcpp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+      - uses: ./.github/actions/verify-qvac-fabric-lockstep
+
+  sanity-checks-translation-nmtcpp:
+    needs: prebuilds-translation-nmtcpp
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: packages/translation-nmtcpp/prebuilds
+          merge-multiple: true
+      - uses: ./.github/actions/run-lint-and-unit-tests
+        with:
+          gpr-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          registry-type: gpr
+          workdir: packages/translation-nmtcpp
+
+  ts-checks-translation-nmtcpp:
+    needs: prebuilds-translation-nmtcpp
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 20
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: packages/translation-nmtcpp/prebuilds
+          merge-multiple: true
+      - run: npm install
+        working-directory: packages/translation-nmtcpp
+      - run: npm run test:dts
+        working-directory: packages/translation-nmtcpp
+      - uses: ./.github/actions/run-lint-and-unit-tests
+        with:
+          gpr-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          registry-type: gpr
+          workdir: packages/translation-nmtcpp
+
   translation-nmtcpp:
-    needs: plan
-    if: needs.plan.outputs.translation-nmtcpp == 'true'
+    needs: prebuilds-translation-nmtcpp
     uses: ./.github/workflows/integration-test-translation-nmtcpp.yml
     with:
       ref: ${{ inputs.ref }}
       repository: ${{ inputs.repository }}
     secrets: inherit
 
+  # ---------- tts-ggml ----------
+  cpp-lint-tts-ggml:
+    uses: ./.github/workflows/cpp-lint.yaml
+    with:
+      workdir: packages/tts-ggml
+    secrets: inherit
+
+  cpp-tests-tts-ggml:
+    uses: ./.github/workflows/cpp-test-coverage-tts-ggml.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  prebuilds-tts-ggml:
+    uses: ./.github/workflows/prebuilds-tts-ggml.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  sanity-checks-tts-ggml:
+    needs: prebuilds-tts-ggml
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: packages/tts-ggml/prebuilds
+          merge-multiple: true
+      - uses: ./.github/actions/run-lint-and-unit-tests
+        with:
+          gpr-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          registry-type: gpr
+          workdir: packages/tts-ggml
+
   tts-ggml:
-    needs: plan
-    if: needs.plan.outputs.tts-ggml == 'true'
+    needs: prebuilds-tts-ggml
     uses: ./.github/workflows/integration-test-tts-ggml.yml
     with:
       ref: ${{ inputs.ref }}
       repository: ${{ inputs.repository }}
     secrets: inherit
 
+  # ---------- tts-onnx ----------
+  cpp-lint-tts-onnx:
+    uses: ./.github/workflows/cpp-lint.yaml
+    with:
+      workdir: packages/tts-onnx
+    secrets: inherit
+
+  cpp-tests-tts-onnx:
+    uses: ./.github/workflows/cpp-test-coverage-tts-onnx.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  prebuilds-tts-onnx:
+    uses: ./.github/workflows/prebuilds-tts-onnx.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  sanity-checks-tts-onnx:
+    needs: prebuilds-tts-onnx
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: packages/tts-onnx/prebuilds
+          merge-multiple: true
+      - uses: ./.github/actions/run-lint-and-unit-tests
+        with:
+          gpr-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          registry-type: gpr
+          workdir: packages/tts-onnx
+
   tts-onnx:
-    needs: plan
-    if: needs.plan.outputs.tts-onnx == 'true'
+    needs: prebuilds-tts-onnx
     uses: ./.github/workflows/integration-test-tts-onnx.yml
     with:
       ref: ${{ inputs.ref }}
       repository: ${{ inputs.repository }}
     secrets: inherit
 
+  # ---------- vla ----------
+  cpp-lint-vla:
+    uses: ./.github/workflows/cpp-lint.yaml
+    with:
+      workdir: packages/vla-ggml
+    secrets: inherit
+
+  cpp-tests-vla:
+    uses: ./.github/workflows/cpp-tests-vla.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  prebuilds-vla:
+    uses: ./.github/workflows/prebuilds-vla.yml
+    with:
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
+    secrets: inherit
+
+  verify-fabric-lockstep-vla:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+      - uses: ./.github/actions/verify-qvac-fabric-lockstep
+
+  sanity-checks-vla:
+    needs: prebuilds-vla
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: packages/vla-ggml/prebuilds
+          merge-multiple: true
+      - uses: ./.github/actions/run-lint-and-unit-tests
+        with:
+          gpr-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          registry-type: gpr
+          workdir: packages/vla-ggml
+
+  ts-checks-vla:
+    needs: prebuilds-vla
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 20
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: packages/vla-ggml/prebuilds
+          merge-multiple: true
+      - run: npm install
+        working-directory: packages/vla-ggml
+      - run: npm run test:dts
+        working-directory: packages/vla-ggml
+      - uses: ./.github/actions/run-lint-and-unit-tests
+        with:
+          gpr-token: ${{ secrets.GITHUB_TOKEN }}
+          pat-token: ${{ secrets.PAT_TOKEN }}
+          registry-type: gpr
+          workdir: packages/vla-ggml
+
   vla:
-    needs: plan
-    if: needs.plan.outputs.vla == 'true'
+    needs: prebuilds-vla
     uses: ./.github/workflows/integration-test-vla.yml
     with:
       ref: ${{ inputs.ref }}
       repository: ${{ inputs.repository }}
     secrets: inherit
 
+  # ---------- mobile (opt-in) ----------
   bci-whispercpp-mobile:
-    needs: plan
-    if: ${{ inputs.include_mobile && needs.plan.outputs.bci-whispercpp == 'true' }}
+    needs: prebuilds-bci-whispercpp
     uses: ./.github/workflows/integration-mobile-test-bci-whispercpp.yml
     with:
       ref: ${{ inputs.ref }}
@@ -208,8 +856,7 @@ jobs:
     secrets: inherit
 
   classification-ggml-mobile:
-    needs: plan
-    if: ${{ inputs.include_mobile && needs.plan.outputs.classification-ggml == 'true' }}
+    needs: prebuilds-classification-ggml
     uses: ./.github/workflows/integration-mobile-test-classification-ggml.yml
     with:
       ref: ${{ inputs.ref }}
@@ -217,8 +864,6 @@ jobs:
     secrets: inherit
 
   decoder-audio-mobile:
-    needs: plan
-    if: ${{ inputs.include_mobile && needs.plan.outputs.decoder-audio == 'true' }}
     uses: ./.github/workflows/integration-mobile-test-decoder-audio.yml
     with:
       ref: ${{ inputs.ref }}
@@ -226,8 +871,7 @@ jobs:
     secrets: inherit
 
   diffusion-cpp-mobile:
-    needs: plan
-    if: ${{ inputs.include_mobile && needs.plan.outputs.diffusion-cpp == 'true' }}
+    needs: prebuilds-diffusion-cpp
     uses: ./.github/workflows/integration-mobile-test-diffusion-cpp.yml
     with:
       ref: ${{ inputs.ref }}
@@ -235,8 +879,7 @@ jobs:
     secrets: inherit
 
   embed-llamacpp-mobile:
-    needs: plan
-    if: ${{ inputs.include_mobile && needs.plan.outputs.embed-llamacpp == 'true' }}
+    needs: prebuilds-embed-llamacpp
     uses: ./.github/workflows/integration-mobile-test-embed-llamacpp.yml
     with:
       ref: ${{ inputs.ref }}
@@ -244,8 +887,7 @@ jobs:
     secrets: inherit
 
   llm-llamacpp-mobile:
-    needs: plan
-    if: ${{ inputs.include_mobile && needs.plan.outputs.llm-llamacpp == 'true' }}
+    needs: prebuilds-llm-llamacpp
     uses: ./.github/workflows/integration-mobile-test-llm-llamacpp.yml
     with:
       ref: ${{ inputs.ref }}
@@ -253,8 +895,7 @@ jobs:
     secrets: inherit
 
   ocr-onnx-mobile:
-    needs: plan
-    if: ${{ inputs.include_mobile && needs.plan.outputs.ocr-onnx == 'true' }}
+    needs: prebuilds-ocr-onnx
     uses: ./.github/workflows/integration-mobile-test-ocr-onnx.yml
     with:
       ref: ${{ inputs.ref }}
@@ -262,8 +903,7 @@ jobs:
     secrets: inherit
 
   transcription-parakeet-mobile:
-    needs: plan
-    if: ${{ inputs.include_mobile && needs.plan.outputs.transcription-parakeet == 'true' }}
+    needs: prebuilds-transcription-parakeet
     uses: ./.github/workflows/integration-mobile-test-transcription-parakeet.yml
     with:
       ref: ${{ inputs.ref }}
@@ -271,8 +911,7 @@ jobs:
     secrets: inherit
 
   transcription-whispercpp-mobile:
-    needs: plan
-    if: ${{ inputs.include_mobile && needs.plan.outputs.transcription-whispercpp == 'true' }}
+    needs: prebuilds-transcription-whispercpp
     uses: ./.github/workflows/integration-mobile-test-transcription-whispercpp.yml
     with:
       ref: ${{ inputs.ref }}
@@ -280,8 +919,7 @@ jobs:
     secrets: inherit
 
   translation-nmtcpp-mobile:
-    needs: plan
-    if: ${{ inputs.include_mobile && needs.plan.outputs.translation-nmtcpp == 'true' }}
+    needs: prebuilds-translation-nmtcpp
     uses: ./.github/workflows/integration-mobile-test-translation-nmtcpp.yml
     with:
       ref: ${{ inputs.ref }}
@@ -289,8 +927,7 @@ jobs:
     secrets: inherit
 
   tts-ggml-mobile:
-    needs: plan
-    if: ${{ inputs.include_mobile && needs.plan.outputs.tts-ggml == 'true' }}
+    needs: prebuilds-tts-ggml
     uses: ./.github/workflows/integration-mobile-test-tts-ggml.yml
     with:
       ref: ${{ inputs.ref }}
@@ -298,8 +935,7 @@ jobs:
     secrets: inherit
 
   tts-onnx-mobile:
-    needs: plan
-    if: ${{ inputs.include_mobile && needs.plan.outputs.tts-onnx == 'true' }}
+    needs: prebuilds-tts-onnx
     uses: ./.github/workflows/integration-mobile-test-tts-onnx.yml
     with:
       ref: ${{ inputs.ref }}
@@ -307,8 +943,7 @@ jobs:
     secrets: inherit
 
   vla-mobile:
-    needs: plan
-    if: ${{ inputs.include_mobile && needs.plan.outputs.vla == 'true' }}
+    needs: prebuilds-vla
     uses: ./.github/workflows/integration-mobile-test-vla.yml
     with:
       ref: ${{ inputs.ref }}
@@ -318,6 +953,64 @@ jobs:
   summary:
     if: ${{ always() }}
     needs:
+      - cpp-lint-bci-whispercpp
+      - cpp-lint-classification-ggml
+      - cpp-lint-diffusion-cpp
+      - cpp-lint-embed-llamacpp
+      - cpp-lint-llm-llamacpp
+      - cpp-lint-ocr-onnx
+      - cpp-lint-transcription-parakeet
+      - cpp-lint-transcription-whispercpp
+      - cpp-lint-translation-nmtcpp
+      - cpp-lint-tts-ggml
+      - cpp-lint-tts-onnx
+      - cpp-lint-vla
+      - cpp-tests-bci-whispercpp
+      - cpp-tests-classification-ggml
+      - cpp-tests-diffusion-cpp
+      - cpp-tests-embed-llamacpp
+      - cpp-tests-llm-llamacpp
+      - cpp-tests-transcription-parakeet
+      - cpp-tests-transcription-whispercpp
+      - cpp-tests-translation-nmtcpp
+      - cpp-tests-tts-ggml
+      - cpp-tests-tts-onnx
+      - cpp-tests-vla
+      - prebuilds-bci-whispercpp
+      - prebuilds-classification-ggml
+      - prebuilds-diffusion-cpp
+      - prebuilds-embed-llamacpp
+      - prebuilds-llm-llamacpp
+      - prebuilds-ocr-onnx
+      - prebuilds-transcription-parakeet
+      - prebuilds-transcription-whispercpp
+      - prebuilds-translation-nmtcpp
+      - prebuilds-tts-ggml
+      - prebuilds-tts-onnx
+      - prebuilds-vla
+      - sanity-checks-bci-whispercpp
+      - sanity-checks-classification-ggml
+      - sanity-checks-decoder-audio
+      - sanity-checks-diffusion-cpp
+      - sanity-checks-embed-llamacpp
+      - sanity-checks-llm-llamacpp
+      - sanity-checks-ocr-onnx
+      - sanity-checks-transcription-parakeet
+      - sanity-checks-transcription-whispercpp
+      - sanity-checks-translation-nmtcpp
+      - sanity-checks-tts-ggml
+      - sanity-checks-tts-onnx
+      - sanity-checks-vla
+      - ts-checks-classification-ggml
+      - ts-checks-diffusion-cpp
+      - ts-checks-embed-llamacpp
+      - ts-checks-llm-llamacpp
+      - ts-checks-translation-nmtcpp
+      - ts-checks-vla
+      - verify-fabric-lockstep-embed-llamacpp
+      - verify-fabric-lockstep-llm-llamacpp
+      - verify-fabric-lockstep-translation-nmtcpp
+      - verify-fabric-lockstep-vla
       - bci-whispercpp
       - classification-ggml
       - decoder-audio
@@ -355,8 +1048,8 @@ jobs:
           {
             echo "## Manual addon test results"
             echo ""
-            echo "| Addon | Result |"
-            echo "|-------|--------|"
+            echo "| Job | Result |"
+            echo "|-----|--------|"
             echo "$RESULTS_JSON" | python3 -c '
           import json, os, sys
           data = json.load(sys.stdin)
