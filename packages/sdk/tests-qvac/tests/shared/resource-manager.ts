@@ -10,7 +10,45 @@ interface ModelDefinition {
   /** Static config or async resolver (cached per-dep) for runtime-only fields like RN asset URIs. */
   config?: ModelConfig | ModelConfigResolver;
   skipPreDownload?: boolean;
-  preLoadUnload?: true;
+}
+
+function isModelConstant(value: unknown): value is ModelConstant {
+  if (value == null || typeof value !== "object") return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.name === "string" &&
+    typeof v.src === "string" &&
+    typeof v.modelId === "string" &&
+    typeof v.sha256Checksum === "string"
+  );
+}
+
+/**
+ * Recursively walks `value` and adds every `ModelConstant`-shaped object it
+ * encounters to `out`, keyed by `modelId`. Used so a single definition with
+ * companion models (e.g. chatterbox T3 + s3gen, whisper + VAD,
+ * diffusion + VAE + LLM, bergamot pivot, ESRGAN upscaler) contributes its
+ * full set to the pre-download list — not just the root `constant`.
+ */
+function collectModelConstants(
+  value: unknown,
+  out: Map<string, ModelConstant>,
+  seen: WeakSet<object>,
+): void {
+  if (value == null || typeof value !== "object") return;
+  if (isModelConstant(value)) {
+    if (!out.has(value.modelId)) out.set(value.modelId, value);
+    return;
+  }
+  if (seen.has(value)) return;
+  seen.add(value);
+  if (Array.isArray(value)) {
+    for (const item of value) collectModelConstants(item, out, seen);
+    return;
+  }
+  for (const inner of Object.values(value as Record<string, unknown>)) {
+    collectModelConstants(inner, out, seen);
+  }
 }
 
 interface TrackedModel {
@@ -65,11 +103,20 @@ export class ResourceManager {
   }
 
   /**
-   * Pre-download (and pre-load+unload for `preLoadUnload` entries) every
-   * registered model. `options.allowedDeps`, if given, narrows the work
-   * to that subset; omit it to keep the legacy "warm everything" path.
-   * Idempotent on `downloaded` — pass the full filter on the first call;
-   * later calls with a different filter are a no-op.
+   * Pre-download every model constant referenced by every registered
+   * definition, including constants buried inside `config` (companion
+   * models, pivot models, upscaler/VAE/projection/etc.). Per-test
+   * `ensureLoaded` then mmaps from the already-cached files.
+   *
+   * Behaviour:
+   *  - `options.allowedDeps`, if given, narrows the set of *root* defs
+   *    that contribute constants to the pre-download list.
+   *  - A root def with `skipPreDownload: true` contributes nothing — not
+   *    its root `constant` and not anything its `config` references. A
+   *    constant that is *also* referenced by a non-skipped def will still
+   *    be downloaded via that other def.
+   *  - Idempotent on `downloaded`. Pass the full filter on the first
+   *    call; later calls with a different filter are a no-op.
    */
   async downloadAllOnce(
     log?: (msg: string) => void,
@@ -82,8 +129,6 @@ export class ResourceManager {
     const isAllowed = (dep: string) => allowed === undefined || allowed.has(dep);
 
     const allDefinitions = Array.from(this.definitions.entries());
-    const entries = allDefinitions.filter(([dep, def]) => !def.skipPreDownload && isAllowed(dep));
-    const preLoadUnload = allDefinitions.filter(([dep, def]) => def.preLoadUnload && isAllowed(dep));
 
     if (allowed !== undefined) {
       const filteredOut = allDefinitions.filter(([dep]) => !isAllowed(dep)).length;
@@ -92,37 +137,73 @@ export class ResourceManager {
       );
     }
 
-    const skipped = allDefinitions.filter(([dep, def]) => def.skipPreDownload && isAllowed(dep)).length;
-    if (skipped > 0) log?.(`⏭️  Skipping ${skipped} models marked skipPreDownload`);
+    const skipped = allDefinitions.filter(([dep, def]) => def.skipPreDownload && isAllowed(dep));
+    if (skipped.length > 0) {
+      log?.(
+        `⏭️  Skipping ${skipped.length} def(s) marked skipPreDownload: ${skipped.map(([dep]) => dep).join(", ")}`,
+      );
+    }
 
-    log?.(`📥 Downloading ${entries.length} models in parallel...`);
+    // Discover every constant referenced by every contributing def, keyed
+    // by `modelId` so the same constant referenced by multiple defs (or
+    // listed both as the root `constant` and inside `config`) is only
+    // downloaded once.
+    const contributors = allDefinitions.filter(
+      ([dep, def]) => !def.skipPreDownload && isAllowed(dep),
+    );
+    const constants = new Map<string, ModelConstant>();
+    const owners = new Map<string, string[]>();
+    const addConstant = (c: ModelConstant, dep: string) => {
+      if (!constants.has(c.modelId)) constants.set(c.modelId, c);
+      const list = owners.get(c.modelId) ?? [];
+      if (!list.includes(dep)) list.push(dep);
+      owners.set(c.modelId, list);
+    };
+
+    for (const [dep, def] of contributors) {
+      addConstant(def.constant, dep);
+      const cfg = await this.resolveConfig(dep, def);
+      if (cfg) {
+        const found = new Map<string, ModelConstant>();
+        collectModelConstants(cfg, found, new WeakSet<object>());
+        for (const c of found.values()) addConstant(c, dep);
+      }
+    }
+
+    const downloadList = Array.from(constants.values());
+    log?.(
+      `📥 Pre-downloading ${downloadList.length} unique model constant(s) from ${contributors.length} def(s) in parallel...`,
+    );
 
     const active = new Set<string>();
-    let leftToCheck = entries.length + preLoadUnload.length;
+    let leftToCheck = downloadList.length;
     let maxConcurrent = 0;
     let parallelDetected = false;
 
     const results = await Promise.allSettled(
-      entries.map(async ([dep, def]) => {
-        log?.(`📥 ${dep}: ${def.constant.name}...`);
+      downloadList.map(async (constant) => {
+        const ownerLabel = (owners.get(constant.modelId) ?? []).join(",") || "?";
+        log?.(`📥 ${constant.name} (used by: ${ownerLabel})...`);
         await downloadAsset({
-          assetSrc: def.constant as never,
+          assetSrc: constant as never,
           onProgress: () => {
-            active.add(dep);
+            active.add(constant.modelId);
             if (active.size > maxConcurrent) {
               maxConcurrent = active.size;
             }
             if (!parallelDetected && active.size >= 2) {
               parallelDetected = true;
-              const names = Array.from(active).join(", ");
+              const names = Array.from(active)
+                .map((id) => constants.get(id)?.name ?? id)
+                .join(", ");
               log?.(`🔀 Parallel downloads confirmed (active: ${names})`);
             }
           },
         });
-        active.delete(dep);
+        active.delete(constant.modelId);
         leftToCheck--;
-        log?.(`✅ ${dep} cached - still processing: ${leftToCheck}`);
-        return dep;
+        log?.(`✅ ${constant.name} cached - still processing: ${leftToCheck}`);
+        return constant.modelId;
       }),
     );
 
@@ -131,25 +212,11 @@ export class ResourceManager {
       for (const f of failed) {
         log?.(`❌ download failed: ${(f as PromiseRejectedResult).reason}`);
       }
-      throw new Error(`${failed.length}/${entries.length} downloads failed`);
-    }
-
-    log?.(`🔄 pre-loading ${preLoadUnload.length} models (models with companion models)...`);
-    for (const [dep, def] of preLoadUnload) {
-      log?.(`🔄 pre-loading ${dep}: ${def.constant.name}...`);
-      const modelId = await loadModel({
-        modelSrc: def.constant as never,
-        modelType: def.type,
-        modelConfig: await this.resolveConfig(dep, def),
-      });
-      log?.(`✅ pre-loaded ${dep}: ${def.constant.name} - unloading...`);
-      await unloadModel({ modelId });
-      leftToCheck--;
-      log?.(`✅ unloaded ${dep}: ${def.constant.name} - still processing: ${leftToCheck}`);
+      throw new Error(`${failed.length}/${downloadList.length} downloads failed`);
     }
 
     log?.(
-      `📦 All ${entries.length} models pre-cached (max concurrent: ${maxConcurrent})`,
+      `📦 All ${downloadList.length} constant(s) pre-cached (max concurrent: ${maxConcurrent})`,
     );
   }
 
