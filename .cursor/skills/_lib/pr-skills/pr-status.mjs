@@ -38,8 +38,21 @@ const pod = (() => {
   return val;
 })();
 
+const authorScope = (() => {
+  const val = readArg("--authors") ?? "any";
+  if (!["any", "pod"].includes(val)) {
+    console.error(`Unknown --authors value: ${val}. Use any|pod.`);
+    process.exit(1);
+  }
+  if (val === "pod" && mode !== "team") {
+    console.error(`--authors pod is only honored in --mode team (got ${mode}); ignoring.`);
+    return "any";
+  }
+  return val;
+})();
+
 const jsonOutput = process.argv.includes("--json");
-const state = collectPRActivity({ mode, pod });
+const state = collectPRActivity({ mode, pod, authorScope });
 
 let slackState = { map: {}, pendingReview: [] };
 if (mode === "my") {
@@ -119,25 +132,34 @@ function jsonPRs(prs) {
   return prs.map(toJsonablePR);
 }
 
+function renderExcludedLine(pr) {
+  const author = pr.author.name || pr.author.login;
+  return `  #${pr.number} — ${pr.title}\n    ${pr.url}\n    by ${author} (@${pr.author.login}) · ${formatAge(pr.ready)} old`;
+}
+
 function modeTeam() {
   const groups = classifyTeamPRs(state);
+  const excludedPRs = state.excludedPRs ?? [];
   if (jsonOutput) {
     console.log(JSON.stringify({
       mode,
       repo: state.repo,
       currentUser: state.currentUser,
       staleDays: state.staleDays,
+      authorScope: state.authorScope,
       summary: {
         needsAction: groups.needsAction.length,
         fullyApprovedHidden: groups.skipped,
         reReview: groups.reReviewPRs.length,
         stale: groups.stalePRs.length,
         conflicts: groups.conflictCount,
+        excluded: excludedPRs.length,
       },
       groups: {
         reReview: jsonPRs(groups.reReviewPRs),
         stale: jsonPRs(groups.stalePRs),
         needsReview: jsonPRs(groups.activePRs),
+        excluded: jsonPRs(excludedPRs),
       },
     }, null, 2));
     return;
@@ -145,12 +167,22 @@ function modeTeam() {
   const conflictNote = groups.conflictCount > 0
     ? ` · ${groups.conflictCount} ⚠️ merge conflicts`
     : "";
+  const scopeNote = state.authorScope === "pod"
+    ? ` (scoped to pod-roster authors${excludedPRs.length ? `; ${excludedPRs.length} excluded` : ""})`
+    : "";
   console.log(
-    `${groups.needsAction.length} PRs need attention · ${groups.skipped} fully approved (hidden) · ${groups.reReviewPRs.length} need your re-review · ${groups.stalePRs.length} stale${conflictNote}\n`,
+    `${groups.needsAction.length} PRs need attention · ${groups.skipped} fully approved (hidden) · ${groups.reReviewPRs.length} need your re-review · ${groups.stalePRs.length} stale${conflictNote}${scopeNote}\n`,
   );
   printSection("🔁 NEEDS YOUR RE-REVIEW (commits since your last review)", groups.reReviewPRs, renderPRLine);
   printSection(`🔴 STALE (>${state.staleDays}d)`, groups.stalePRs, renderPRLine);
   printSection("🟡 NEEDS REVIEW", groups.activePRs, renderPRLine);
+  if (state.authorScope === "pod" && excludedPRs.length > 0) {
+    printSection(
+      "⏭️  EXCLUDED (touches pod paths · author outside roster)",
+      excludedPRs,
+      renderExcludedLine,
+    );
+  }
   if (groups.needsAction.length === 0) {
     console.log("All clear — every PR has team + lead approval.");
   }

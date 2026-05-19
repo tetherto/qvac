@@ -46,7 +46,7 @@ which will fall through to the standard `not currently applied` deny.
 | Name           | Required | Default                                                                            | Description                                                                                                                                  |
 | -------------- | :------: | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | `label`        |    no    | `verified`                                                                         | Label name required for PR-event authorisation.                                                                                              |
-| `teams`        |    no    | `qvac-internal-dev`, `qvac-internal-merge`, `qvac-internal-release`                | Comma- and/or newline-separated team slugs (within the repository owner's org). Empty allowed if `users` is non-empty.                       |
+| `teams`        |    no    | `qvac-internal-dev`, `qvac-internal-merge`, `qvac-internal-release`, `qvac-collabora`                       | Comma- and/or newline-separated team slugs (within the repository owner's org). Empty allowed if `users` is non-empty.                       |
 | `users`        |    no    | `""`                                                                               | Comma- and/or newline-separated user logins. Authorised regardless of team membership. Login comparison is case-insensitive.                 |
 | `github-token` |  **yes** | —                                                                                  | PAT with `read:org` (team membership lookups) and write access to PR labels (for stripping the label on non-trusted apply OR non-trusted synchronize). |
 
@@ -90,6 +90,7 @@ jobs:
             qvac-internal-dev
             qvac-internal-merge
             qvac-internal-release
+            qvac-collabora
           users: |
             release-bot
           github-token: ${{ secrets.PAT_TOKEN }}

@@ -58,7 +58,8 @@ async function main () {
       // No vae — the VAE is baked into the checkpoint.
     },
     config: {
-      threads: 4
+      threads: 4,
+      diffusion_fa: true
       // No prediction override — SDXL uses eps-prediction and the GGUF
       // has the correct metadata for auto-detection.
     },

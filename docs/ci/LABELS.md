@@ -13,7 +13,7 @@ This is the label that gates every secret-bearing PR job in the repo.
 | | |
 |---|---|
 | **Purpose** | Authorise the `label-gate` composite action so that secret-bearing jobs (sanity-checks, prebuilds, publish, deploy, etc.) are allowed to run on a PR. |
-| **Who can apply** | Active member of `@tetherto/qvac-internal-dev`, `@tetherto/qvac-internal-merge`, or `@tetherto/qvac-internal-release`. See [TEAMS.md](TEAMS.md). |
+| **Who can apply** | Active member of `@tetherto/qvac-internal-dev`, `@tetherto/qvac-internal-merge`, `@tetherto/qvac-internal-release`, or `@tetherto/qvac-collabora`. See [TEAMS.md](TEAMS.md). |
 | **What it gates** | Every secret-bearing workflow under `.github/workflows/` (108 workflows as of QVAC-18612). Specifically, every job downstream of `needs: [..., label-gate]` whose `if:` includes `needs.label-gate.outputs.authorised == 'true'`. |
 | **Behaviour on `synchronize`** | When a non-trusted actor pushes new commits to a verified PR, `label-gate` strips the label automatically. A trusted actor must re-apply it after reviewing the new commits. This prevents authorisation from silently inheriting across content changes by an untrusted contributor. |
 | **Behaviour on apply by non-trusted actor** | The label is stripped immediately and the gate denies. This avoids a "look, it's verified" social signal that doesn't actually mean the PR is authorised. |
@@ -22,7 +22,7 @@ This is the label that gates every secret-bearing PR job in the repo.
 
 ### When CI is blocked by `label-gate`
 
-If your PR's secret-bearing jobs are skipping with a `label-gate.outputs.authorised != 'true'` condition, ask any member of the three teams above to apply `verified`. There is intentionally no self-service path — the whole point of the gate is that someone other than the PR author signs off.
+If your PR's secret-bearing jobs are skipping with a `label-gate.outputs.authorised != 'true'` condition, ask any member of the trusted teams above to apply `verified`. There is intentionally no self-service path — the whole point of the gate is that someone other than the PR author signs off.
 
 ---
 

@@ -1,12 +1,11 @@
 'use strict'
 
-const test = require('brittle')
 const path = require('bare-path')
 const os = require('bare-os')
 const proc = require('bare-process')
 
 const ImgStableDiffusion = require('../../index.js')
-const { ensureModel } = require('./utils.js')
+const { ensureModel, safeTest } = require('./utils.js')
 
 const platform = os.platform()
 const arch = os.arch()
@@ -25,34 +24,40 @@ const DEFAULT_MODEL = {
   url: 'https://huggingface.co/gpustack/stable-diffusion-v2-1-GGUF/resolve/main/stable-diffusion-v2-1-Q8_0.gguf'
 }
 
-test('model loading - load and unload', { timeout: testTimeout }, async t => {
-  const [downloadedModelName, modelDir] = await ensureModel({
-    modelName: DEFAULT_MODEL.name,
-    downloadUrl: DEFAULT_MODEL.url
-  })
+safeTest('model loading - load and unload', { timeout: testTimeout }, async t => {
+  let addon = null
+  try {
+    const [downloadedModelName, modelDir] = await ensureModel({
+      modelName: DEFAULT_MODEL.name,
+      downloadUrl: DEFAULT_MODEL.url
+    })
 
-  const config = {
-    threads: '4',
-    device: useCpu ? 'cpu' : 'gpu',
-    prediction: 'v'
+    const config = {
+      threads: '4',
+      device: useCpu ? 'cpu' : 'gpu',
+      prediction: 'v',
+      diffusion_fa: true
+    }
+
+    addon = new ImgStableDiffusion({
+      files: {
+        model: path.join(modelDir, downloadedModelName)
+      },
+      config,
+      logger: console
+    })
+
+    await addon.load()
+    t.pass('model loaded successfully')
+
+    await addon.unload()
+    t.pass('model unloaded successfully')
+
+    await addon.unload().catch(() => {})
+    t.pass('second unload is idempotent')
+  } finally {
+    if (addon) await addon.unload().catch(() => {})
   }
-
-  const addon = new ImgStableDiffusion({
-    files: {
-      model: path.join(modelDir, downloadedModelName)
-    },
-    config,
-    logger: console
-  })
-
-  await addon.load()
-  t.pass('model loaded successfully')
-
-  await addon.unload()
-  t.pass('model unloaded successfully')
-
-  await addon.unload().catch(() => {})
-  t.pass('second unload is idempotent')
 })
 
 // Keep event loop alive briefly to let pending async operations complete
