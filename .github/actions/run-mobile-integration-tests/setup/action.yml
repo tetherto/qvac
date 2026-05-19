@@ -46,6 +46,14 @@ inputs:
 runs:
   using: composite
   steps:
+    # PR #2107: wipe the runner workspace before checkout on persistent
+    # self-hosted runners. Stale files from a prior job (node_modules,
+    # build caches, leftover .tgz) can confuse npm install / bare-make.
+    - name: Clean self-hosted workspace
+      if: startsWith(matrix.runner, 'qvac-')
+      shell: bash
+      run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+
     - name: Free up disk space (Android, github-hosted only)
       if: inputs.platform == 'Android' && runner.environment == 'github-hosted'
       shell: bash
@@ -76,17 +84,15 @@ runs:
         fetch-depth: 0
 
     - name: Setup Node.js
-      if: runner.environment == 'github-hosted'
       uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
       with:
         node-version: lts/*
 
     - name: Install global dependencies
-      if: runner.environment == 'github-hosted'
       shell: bash
       run: |
         echo "Installing global dependencies..."
-        npm install -g @expo/cli@latest
+        npm install -g --force @expo/cli@latest
 
     - name: Download Android prebuilds (from artifacts)
       if: inputs.platform == 'Android' && github.event_name != 'workflow_dispatch'

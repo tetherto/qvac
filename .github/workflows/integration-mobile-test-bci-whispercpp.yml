@@ -120,13 +120,11 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Node.js
-        if: matrix.platform == 'iOS'
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Install global dependencies
-        if: matrix.platform == 'iOS'
         run: |
           echo "Installing global dependencies..."
           npm install -g --force @expo/cli@latest

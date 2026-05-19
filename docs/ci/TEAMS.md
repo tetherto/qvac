@@ -1,6 +1,6 @@
 # GitHub Teams — CI access reference
 
-The four teams that show up in this repo's CI configuration. This doc names them and what they're for; everything else (membership, permission tiers, internal escalation, on-call) lives off-repo.
+The teams that show up in this repo's CI configuration. This doc names them and what they're for; everything else (membership, permission tiers, internal escalation, on-call) lives off-repo.
 
 > **Membership and access** — managed in GitHub at <https://github.com/orgs/tetherto/teams>. This file does not enumerate members; the source of truth is GitHub.
 
@@ -14,6 +14,7 @@ The four teams that show up in this repo's CI configuration. This doc names them
 | `@tetherto/qvac-internal-merge` | Internal reviewers / merge approvers (tier-1 reviewer slot). |
 | `@tetherto/qvac-internal-release` | Release approvers — sign off on npm publishes and `release-*` branch operations. |
 | `@tetherto/qvac-external` | External contributors. Open PRs from forks; do not authorise secret-bearing CI. |
+| `@tetherto/qvac-collabora` | Collabora engineers contributing to QVAC. Trusted to apply the `verified` label and to push without deauthorising it. |
 
 ---
 
