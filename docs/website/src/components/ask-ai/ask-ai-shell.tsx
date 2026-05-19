@@ -45,42 +45,94 @@ const AI_AVATAR = '/favicon.ico';
 const INPUT_PLACEHOLDER = 'Ask a question\u2026';
 
 // CSS injected into Inkeep's Shadow DOM via `baseSettings.theme.styles`.
-// The widget renders inside an isolated Shadow DOM, so styles defined in
-// the docs site's normal stylesheets cannot reach these elements; the
-// `theme.styles` channel is the documented hook for this. Two purposes:
+// The widget renders inside an isolated Shadow DOM, so styles defined
+// in the docs site's normal stylesheets cannot reach these elements;
+// `theme.styles` is the documented hook for that.
 //
-//  1. Make the sidebar's drag handle visible at rest. Inkeep ships the
-//     resizer with `opacity-0 hover:opacity-100`, so a first-time user
-//     has no visual cue that the sidebar can be resized. We bump the
-//     resting opacity so the handle is always discoverable, mirroring
-//     the "pull handle" affordance Cursor's docs use.
+// Inkeep does not publish a stable class-name contract, so every rule
+// uses a triple-fallback selector list:
+//   - `[data-_id="..."]`  - Inkeep's primitive id (most stable)
+//   - `[class*="..."]`    - partial class match (camelCase variant)
+//   - `.ikp-...`          - bare kebab-case class from older builds
+// If any single selector misses upstream, the rest still apply; if all
+// three miss, the rule is inert rather than breaking the widget.
 //
-//  2. Hide the default greeting / intro message. We also pass an empty
-//     `introMessage` on `aiChatSettings`, but Inkeep is known to fall
-//     back to its built-in welcome bubble when the prop is empty; this
-//     CSS belt-and-suspenders guarantees no greeting renders.
+// The five blocks below address the "clunky" feedback on the sidepane:
+//   1. Resizer: revert to hover-only so the drag handle stops competing
+//      with the page border for the user's attention.
+//   2. Sidebar left edge: snap to `--color-fd-border` so it reads as a
+//      continuation of the docs sidebar's right edge instead of a
+//      third-party widget bolted on.
+//   3. Header chrome: shrink the close button to ghost-density.
+//   4. Assistant-message avatar: hide so messages render flush-left,
+//      avoiding the "panel-inside-a-panel" look.
+//   5. Spacing + input: pull the gutters in to match the docs density
+//      and round the chat input into a soft pill that picks up our
+//      `--color-fd-border` token.
 //
-// Selectors are intentionally defensive (multiple alternatives joined
-// with `,`) because Inkeep does not publish stable class names. If the
-// upstream component IDs change, the rules are inert rather than
-// breaking the chat.
+// Belt-and-suspenders intro-message hide stays too: we also set
+// `aiChatSettings.introMessage: ''` below, but Inkeep is known to fall
+// back to a default greeting when the prop is empty.
 const INKEEP_CUSTOM_CSS = `
+  /* 1. Drag handle: hover-only (revert to Inkeep's native opacity-0). */
   .ikp-sidebar-chat__resizer,
   [class*="sidebarChat__Resizer"],
   [data-_id="sidebarChat__Resizer"] {
-    opacity: 0.5 !important;
-    transition: opacity 0.2s ease;
+    opacity: 0 !important;
+    transition: opacity 0.15s ease !important;
   }
   .ikp-sidebar-chat__resizer:hover,
   [class*="sidebarChat__Resizer"]:hover,
   [data-_id="sidebarChat__Resizer"]:hover {
     opacity: 1 !important;
   }
+
+  /* 2. Sidebar left edge: match the docs divider token. */
+  [data-sidebar][data-position="right"] {
+    border-inline-start-color: var(--color-fd-border, currentColor) !important;
+    border-inline-start-width: 1px !important;
+  }
+
+  /* 3. Header chrome: smaller, ghost-style close button. */
+  .ikp-sidebar-chat__close-button,
+  [class*="sidebarChat__CloseButton"],
+  [data-_id="sidebarChat__CloseButton"] {
+    width: 1.75rem !important;
+    height: 1.75rem !important;
+    color: var(--color-fd-muted-foreground, currentColor) !important;
+    opacity: 0.85;
+  }
+  .ikp-sidebar-chat__close-button:hover,
+  [class*="sidebarChat__CloseButton"]:hover,
+  [data-_id="sidebarChat__CloseButton"]:hover {
+    opacity: 1;
+  }
+
+  /* 4. Drop the heavyweight assistant avatar bubble in messages.
+     Locked to EXACT-match selectors only - the partial-match form
+     [class*="..."] proved too aggressive and was matching non-avatar
+     elements inside the input subtree, breaking typing. */
+  .ikp-ai-chat__assistant-avatar,
+  [data-_id="aiChat__AssistantAvatar"],
+  [data-_id="aiChat__assistantAvatar"] {
+    display: none !important;
+  }
+
+  /* 5. Tighten the sidebar-chat header gutter to match the docs
+     content density. Message-rail / input-container padding are
+     intentionally left at Inkeep defaults - the partial-match
+     selectors required to target them reliably also matched the
+     input itself and disrupted focus handling. */
+  .ikp-sidebar-chat__header,
+  [data-_id="sidebarChat__Header"] {
+    padding: 0.5rem 0.75rem !important;
+  }
+
+  /* Intro-message belt-and-suspenders (kept from prior round).
+     Limited to exact-match selectors for the same reason as above. */
   .ikp-ai-chat-intro-message,
-  [class*="ai-chat__intro-message"],
-  [class*="aiChat__IntroMessage"],
-  [data-_id*="IntroMessage"],
-  [data-_id*="introMessage"] {
+  [data-_id="aiChat__IntroMessage"],
+  [data-_id="aiChat__introMessage"] {
     display: none !important;
   }
 `;
