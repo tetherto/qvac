@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <string>
+#include <string_view>
 
 #include <ggml-backend.h>
 #include <inference-addon-cpp/Errors.hpp>
@@ -13,7 +14,7 @@ using namespace qvac_errors;
 
 namespace {
 
-constexpr int K_ADRENO_PREFIX_LENGTH = 6;
+constexpr std::string_view K_ADRENO_TOKEN = "adreno";
 constexpr int K_ADRENO_OPEN_CL_MIN_MODEL = 800;
 constexpr int K_ADRENO_CPU_FALLBACK_MIN_MODEL = 600;
 
@@ -28,13 +29,13 @@ int parseAdrenoModel(const std::string& description) {
   std::string lower = description;
   std::transform(lower.begin(), lower.end(), lower.begin(), toLowerAscii);
 
-  const auto pos = lower.find("adreno");
+  const auto pos = lower.find(K_ADRENO_TOKEN);
   if (pos == std::string::npos) {
     return 0;
   }
 
   // Scan forward from "adreno" to find the first digit sequence
-  for (size_t idx = pos + K_ADRENO_PREFIX_LENGTH; idx < lower.size(); ++idx) {
+  for (size_t idx = pos + K_ADRENO_TOKEN.size(); idx < lower.size(); ++idx) {
     if (std::isdigit(static_cast<unsigned char>(lower[idx])) != 0) {
       return std::stoi(lower.substr(idx));
     }
@@ -65,6 +66,29 @@ int parseAdrenoModelFromGpuDevice(ggml_backend_dev_t dev) {
 } // namespace
 
 namespace sd_backend_selection {
+
+namespace {
+
+[[noreturn]] void throwInvalidConfigDevice(const std::string& device) {
+  throw StatusError(
+      general_error::InvalidArgument,
+      "device must be 'cpu', 'gpu', or 'auto', got: '" + device + "'");
+}
+
+} // namespace
+
+ConfigDevice parseConfigDeviceString(const std::string& device) {
+  if (device.empty() || device == "auto") {
+    return ConfigDevice::Auto;
+  }
+  if (device == "cpu") {
+    return ConfigDevice::Cpu;
+  }
+  if (device == "gpu") {
+    return ConfigDevice::Gpu;
+  }
+  throwInvalidConfigDevice(device);
+}
 
 BackendDevice preferredDeviceFromMap(
     const std::unordered_map<std::string, std::string>& configMap) {
@@ -194,38 +218,36 @@ bool shouldPreferOpenClForAdreno(BackendDevice preferred) {
 
 sd_backend_preference_t
 preferredGpuBackendForConfigDevice(const std::string& device) {
-  if (device == "cpu") {
+  switch (parseConfigDeviceString(device)) {
+  case ConfigDevice::Cpu:
     return SD_BACKEND_PREF_CPU;
-  }
-  if (device == "auto") {
+  case ConfigDevice::Auto:
     return SD_BACKEND_PREF_AUTO;
+  case ConfigDevice::Gpu: {
+    const BackendDevice preferred = BackendDevice::GPU;
+    const BackendDevice effective = resolveBackendForDevice(preferred);
+    if (effective == BackendDevice::CPU) {
+      return SD_BACKEND_PREF_CPU;
+    }
+    if (shouldPreferOpenClForAdreno(preferred)) {
+      return SD_BACKEND_PREF_OPENCL;
+    }
+    return SD_BACKEND_PREF_GPU;
   }
-
-  const BackendDevice preferred = BackendDevice::GPU;
-  const BackendDevice effective = resolveBackendForDevice(preferred);
-  if (effective == BackendDevice::CPU) {
-    return SD_BACKEND_PREF_CPU;
   }
-  if (shouldPreferOpenClForAdreno(preferred)) {
-    return SD_BACKEND_PREF_OPENCL;
-  }
-  return SD_BACKEND_PREF_GPU;
 }
 
 std::string expectedEsrganBackendDeviceForConfig(const std::string& device) {
-  if (device == "cpu") {
+  switch (parseConfigDeviceString(device)) {
+  case ConfigDevice::Cpu:
     return "cpu";
-  }
-  if (device == "auto" || device == "gpu") {
+  case ConfigDevice::Auto:
+  case ConfigDevice::Gpu: {
     const BackendDevice effective =
         resolveBackendForDevice(BackendDevice::GPU);
     return effective == BackendDevice::CPU ? "cpu" : "gpu";
   }
-  throw StatusError(
-      general_error::InvalidArgument,
-      "expectedEsrganBackendDeviceForConfig: device must be 'cpu', 'gpu', or "
-      "'auto', got: '" +
-          device + "'");
+  }
 }
 
 } // namespace sd_backend_selection
