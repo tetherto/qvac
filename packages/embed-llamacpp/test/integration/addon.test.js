@@ -11,7 +11,8 @@ const {
   setupErrorHandlers,
   removeErrorHandlers,
   cleanupResources,
-  getModelConfigs
+  getModelConfigs,
+  safeTest
 } = require('./utils')
 
 const platform = os.platform()
@@ -67,7 +68,12 @@ function createDeviceModelTest (testName, testFn) {
       const fullTestName = `${testName} [${modelName}] [${device.toUpperCase()}]`
       test(fullTestName, async (t) => {
         t.timeout(TEST_TIMEOUT)
-        await testFn(t, modelName, config, device)
+        try {
+          await testFn(t, modelName, config, device)
+        } catch (error) {
+          console.error(error)
+          t.fail(`${fullTestName}: ${error.message}`)
+        }
       })
     }
   }
@@ -593,7 +599,7 @@ async function setupModelApiBehavior (t) {
   return { inference }
 }
 
-test('idle | run: allowed, returns QvacResponse', { timeout: TEST_TIMEOUT }, async t => {
+safeTest('idle | run: allowed, returns QvacResponse', { timeout: TEST_TIMEOUT }, async t => {
   const { inference } = await setupModelApiBehavior(t)
   const response = await inference.run('Hello world')
   t.ok(response, 'run() returns a response')
@@ -606,13 +612,13 @@ test('idle | run: allowed, returns QvacResponse', { timeout: TEST_TIMEOUT }, asy
   )
 })
 
-test('idle | cancel: allowed, no-op', { timeout: TEST_TIMEOUT }, async t => {
+safeTest('idle | cancel: allowed, no-op', { timeout: TEST_TIMEOUT }, async t => {
   const { inference } = await setupModelApiBehavior(t)
   await inference.cancel()
   t.pass('cancel when idle does not throw')
 })
 
-test('run | cancel: allowed, cancels current job', { timeout: TEST_TIMEOUT }, async t => {
+safeTest('run | cancel: allowed, cancels current job', { timeout: TEST_TIMEOUT }, async t => {
   const { inference } = await setupModelApiBehavior(t)
   const sequences = Array.from({ length: 2 }, (_, i) => `Sequence ${i} for cancel test.`)
   const response = await inference.run(sequences)
@@ -626,7 +632,7 @@ test('run | cancel: allowed, cancels current job', { timeout: TEST_TIMEOUT }, as
   t.pass('cancel during run resolves and stops job')
 })
 
-test('run | response.cancel(): equivalent to model.cancel(), resolves when job stopped', { timeout: TEST_TIMEOUT }, async t => {
+safeTest('run | response.cancel(): equivalent to model.cancel(), resolves when job stopped', { timeout: TEST_TIMEOUT }, async t => {
   const { inference } = await setupModelApiBehavior(t)
   const sequences = Array.from({ length: 24 }, (_, i) => `Sequence ${i} for response.cancel test.`)
   const response = await inference.run(sequences)
@@ -640,7 +646,7 @@ test('run | response.cancel(): equivalent to model.cancel(), resolves when job s
   t.pass('response.cancel() resolves when job has stopped')
 })
 
-test('run | run: second run() throws busy error', { timeout: TEST_TIMEOUT }, async t => {
+safeTest('run | run: second run() throws busy error', { timeout: TEST_TIMEOUT }, async t => {
   const { inference } = await setupModelApiBehavior(t)
   const sequences = Array.from({ length: 16 }, (_, i) => `Sequence ${i}.`)
   const firstResponse = await inference.run(sequences)
