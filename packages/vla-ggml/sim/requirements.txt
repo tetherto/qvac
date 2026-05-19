@@ -1,0 +1,36 @@
+# Python 3.12 — pinned to what was used on the dev server (see README.md §1).
+#
+# torch is hardware-specific. Install it BEFORE this file, e.g.:
+#   pip install torch==2.10.0 torchvision==0.25.0 \
+#       --index-url https://download.pytorch.org/whl/cu128
+#
+# lerobot has SmolVLA-specific extras, hence the [smolvla] selector. The
+# eval pipeline (`lerobot.scripts.lerobot_eval`) lives in this package.
+lerobot[smolvla]==0.5.2
+
+# LIBERO benchmark + the sim stack it drives.
+libero==0.1.1
+robosuite==1.4.0
+mujoco==3.7.0
+gymnasium==1.2.3
+
+# SmolVLA's text tower needs the SmolVLM2 tokenizer and the safetensors
+# normalization stats; transformers also pulls accelerate as a dep.
+transformers==5.3.0
+tokenizers==0.22.2
+accelerate==1.13.0
+safetensors==0.7.0
+huggingface-hub
+
+# GGUF reading (tensor-name introspection, etc.) and image / video IO
+# used by the eval driver and the LIBERO video writer.
+gguf
+imageio==2.37.3
+imageio-ffmpeg==0.6.0
+opencv-python-headless==4.13.0.92
+
+# Pinned because lerobot 0.5.2 has an upper bound (<2.3) on numpy.
+numpy==2.2.6
+
+# CLI parsing used by lerobot's eval entry point.
+draccus==0.10.0
