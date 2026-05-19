@@ -255,6 +255,65 @@ jobs:
         continue-on-error: true
         run: npm run --if-present test:e2e
 
+      # Validates the SDK tarball installs cleanly for end consumers:
+      #   1. zero peer-dependency warnings on install
+      #   2. shared P2P packages resolve to a single copy
+      #   3. `import('@qvac/sdk')` resolves from a vanilla install
+      - name: Setup Node (for consumer install check)
+        if: matrix.package == 'sdk'
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 22
+
+      - name: Consumer install check
+        id: run_consumer_install
+        if: matrix.package == 'sdk'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -eo pipefail
+
+          # Pack the tarball produced by the preceding build step.
+          bun pm pack --destination dist/
+          tarball=$(ls dist/qvac-sdk-*.tgz | head -n1)
+          test -n "$tarball" || { echo "::error::No SDK tarball found after pack"; exit 1; }
+          tarball_abs="$(pwd)/$tarball"
+
+          # Install into a fresh consumer dir at info log level so peer warnings surface.
+          consumer=$(mktemp -d)
+          cd "$consumer"
+          npm init -y > /dev/null
+          npm pkg set type=module > /dev/null
+          npm install --no-fund --no-audit --ignore-scripts --loglevel=info \
+            "$tarball_abs" 2>&1 | tee install.log
+
+          # Fail on any peer-dependency warning or resolution error.
+          if grep -Eq "ERESOLVE|npm warn peer" install.log; then
+            echo "::error title=Peer dependency drift::SDK consumer install surfaced peer warnings"
+            grep -E "ERESOLVE|npm warn peer" install.log || true
+            exit 1
+          fi
+          echo "::notice::Consumer install: 0 peer warnings"
+
+          # Fail if any shared P2P package resolves to more than one copy.
+          fail=0
+          for pkg in corestore hyperswarm hyperdrive hyperdb hyperblobs hyperdht; do
+            tree=$(npm ls "$pkg" --all 2>&1)
+            copies=$(printf '%s\n' "$tree" | grep -E "[─ ]${pkg}@" | grep -vc "deduped" || true)
+            if [ "$copies" != "1" ]; then
+              echo "::error::${pkg} resolved to ${copies} copies (expected 1)"
+              printf '%s\n' "$tree"
+              fail=1
+            else
+              echo "  ok  ${pkg} = 1 copy"
+            fi
+          done
+          [ "$fail" = "0" ] || exit 1
+          echo "::notice::Single-copy invariant holds for shared P2P packages"
+
+          # Smoke import from the freshly installed package.
+          node -e "import('@qvac/sdk').then(m => { if (Object.keys(m).length < 50) { console.error('FAIL: too few exports'); process.exit(1); } console.log('import ok:', Object.keys(m).length, 'exports'); }).catch(e => { console.error('FAIL:', e.message); process.exit(1); })"
+
       - name: Check for errors
         shell: bash
         run: |
@@ -277,6 +336,10 @@ jobs:
           fi
           if [ "${{ steps.run_e2e_tests.outcome }}" = "failure" ]; then
             echo "::error::E2E tests failed"
+            count=$((count + 1))
+          fi
+          if [ "${{ steps.run_consumer_install.outcome }}" = "failure" ]; then
+            echo "::error::Consumer install check failed"
             count=$((count + 1))
           fi
           if [ "${{ steps.check_dependencies.outcome }}" = "failure" ]; then
