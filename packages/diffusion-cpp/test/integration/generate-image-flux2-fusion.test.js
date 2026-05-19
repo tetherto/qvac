@@ -3,14 +3,14 @@
 const fs = require('bare-fs')
 const path = require('bare-path')
 const os = require('bare-os')
-const test = require('brittle')
 const binding = require('../../binding')
 const ImgStableDiffusion = require('../../index')
 const {
   ensureModel,
   detectPlatform,
   setupJsLogger,
-  isPng
+  isPng,
+  safeTest
 } = require('./utils')
 
 const proc = require('bare-process')
@@ -42,55 +42,56 @@ const STEPS = 10
 const GUIDANCE = 3.5
 const SEED = 10
 
-test('FLUX2-klein fusion — fuses multiple reference images', { timeout: 1800000, skip }, async (t) => {
+safeTest('FLUX2-klein fusion — fuses multiple reference images', { timeout: 1800000, skip }, async (t) => {
   setupJsLogger(binding)
 
-  const [downloadedModelName, modelDir] = await ensureModel({
-    modelName: FLUX2_MODEL.name,
-    downloadUrl: FLUX2_MODEL.url
-  })
-
-  const [qwenName] = await ensureModel({
-    modelName: QWEN3_MODEL.name,
-    downloadUrl: QWEN3_MODEL.url
-  })
-
-  const [vaeName] = await ensureModel({
-    modelName: VAE_MODEL.name,
-    downloadUrl: VAE_MODEL.url
-  })
-
-  console.log('\n' + '='.repeat(60))
-  console.log('FLUX2-KLEIN FUSION — INTEGRATION TEST')
-  console.log('='.repeat(60))
-  console.log(` Platform  : ${platform}`)
-  console.log(` Model     : ${downloadedModelName}`)
-  console.log(` Text Enc  : ${qwenName}`)
-  console.log(` VAE       : ${vaeName}`)
-  console.log(` Models dir: ${modelDir}`)
-
-  const modelPath = path.join(modelDir, downloadedModelName)
-  t.ok(fs.existsSync(modelPath), 'Model file exists on disk')
-
-  const model = new ImgStableDiffusion({
-    files: {
-      model: path.join(modelDir, downloadedModelName),
-      llm: path.join(modelDir, qwenName),
-      vae: path.join(modelDir, vaeName)
-    },
-    config: {
-      threads: 4,
-      device: useCpu ? 'cpu' : 'gpu',
-      prediction: 'flux2_flow',
-      diffusion_fa: true
-    },
-    logger: console
-  })
-
-  const images = []
-  const progressTicks = []
-
+  let model = null
   try {
+    const [downloadedModelName, modelDir] = await ensureModel({
+      modelName: FLUX2_MODEL.name,
+      downloadUrl: FLUX2_MODEL.url
+    })
+
+    const [qwenName] = await ensureModel({
+      modelName: QWEN3_MODEL.name,
+      downloadUrl: QWEN3_MODEL.url
+    })
+
+    const [vaeName] = await ensureModel({
+      modelName: VAE_MODEL.name,
+      downloadUrl: VAE_MODEL.url
+    })
+
+    console.log('\n' + '='.repeat(60))
+    console.log('FLUX2-KLEIN FUSION — INTEGRATION TEST')
+    console.log('='.repeat(60))
+    console.log(` Platform  : ${platform}`)
+    console.log(` Model     : ${downloadedModelName}`)
+    console.log(` Text Enc  : ${qwenName}`)
+    console.log(` VAE       : ${vaeName}`)
+    console.log(` Models dir: ${modelDir}`)
+
+    const modelPath = path.join(modelDir, downloadedModelName)
+    t.ok(fs.existsSync(modelPath), 'Model file exists on disk')
+
+    model = new ImgStableDiffusion({
+      files: {
+        model: path.join(modelDir, downloadedModelName),
+        llm: path.join(modelDir, qwenName),
+        vae: path.join(modelDir, vaeName)
+      },
+      config: {
+        threads: 4,
+        device: useCpu ? 'cpu' : 'gpu',
+        prediction: 'flux2_flow',
+        diffusion_fa: true
+      },
+      logger: console
+    })
+
+    const images = []
+    const progressTicks = []
+
     // ── Load ─────────────────────────────────────────────────────────────────
     console.log('\n=== Loading model ===')
     const tLoad = Date.now()
@@ -183,7 +184,7 @@ test('FLUX2-klein fusion — fuses multiple reference images', { timeout: 180000
     console.log('='.repeat(60))
   } finally {
     console.log('\n=== Cleanup ===')
-    await model.unload().catch(() => {})
+    if (model) await model.unload().catch(() => {})
     try {
       binding.releaseLogger()
     } catch (_) {}
