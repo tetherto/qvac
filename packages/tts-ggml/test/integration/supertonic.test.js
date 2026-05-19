@@ -2,7 +2,7 @@
 
 // Supertonic engine integration smoke + basic config / cancel coverage.
 // Mirrors the per-engine integration shape used in
-// qvac-lib-infer-onnx-tts/test/unit/supertonic.inference.test.js but
+// tts-onnx/test/unit/supertonic.inference.test.js but
 // runs against the real native ggml backend instead of the JS mock.
 
 const os = require('bare-os')
