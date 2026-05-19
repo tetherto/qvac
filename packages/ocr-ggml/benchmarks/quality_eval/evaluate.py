@@ -575,6 +575,7 @@ def main(
 
     # Store all results for summary
     all_results: Dict[str, Dict[str, Dict[str, Any]]] = {}
+    failed_backends: List[str] = []
 
     for backend, backend_name in backend_pairs:
         print(f"\n{'=' * 60}")
@@ -586,7 +587,8 @@ def main(
         try:
             backend.initialize()
         except Exception as e:
-            print(f"Error initializing {backend_name}: {e}")
+            print(f"Error initializing {backend_name}: {e}", file=sys.stderr)
+            failed_backends.append(backend_name)
             continue
 
         try:
@@ -606,6 +608,14 @@ def main(
     with open(summary_file, 'w', encoding='utf-8') as f:
         json.dump(all_results, f, indent=2, ensure_ascii=False)
     print(f"\nResults saved to {results_path}")
+
+    if failed_backends:
+        print(
+            f"\nError: {len(failed_backends)} backend(s) failed to initialize: "
+            f"{', '.join(failed_backends)}",
+            file=sys.stderr
+        )
+        sys.exit(1)
 
 
 if __name__ == "__main__":

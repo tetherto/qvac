@@ -52,6 +52,11 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           sparse-checkout: .github/actions/label-gate
           sparse-checkout-cone-mode: false
+      - name: Harden Runner
+        uses: step-security/harden-runner@eb238132180c530e368e5b3b6e49a45f8571da2b # v2.10.4
+        with:
+          egress-policy: audit
+
       - name: Run label-gate
         id: gate
         uses: ./.github/actions/label-gate
@@ -67,6 +72,11 @@ jobs:
     name: Build QVAC OCR GGML addon
 
     steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@eb238132180c530e368e5b3b6e49a45f8571da2b # v2.10.4
+        with:
+          egress-policy: audit
+
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -158,6 +168,11 @@ jobs:
       id-token: write
 
     steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@eb238132180c530e368e5b3b6e49a45f8571da2b # v2.10.4
+        with:
+          egress-policy: audit
+
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -201,29 +216,35 @@ jobs:
       - name: Download EasyOCR GGML models
         if: inputs.pipeline == 'easyocr' || inputs.pipeline == 'both'
         working-directory: ${{ env.PKG_DIR }}
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         run: |
           mkdir -p models/ocr/gguf/easyocr
-          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/${{ env.EASYOCR_S3_PREFIX }}/craft_mlt_25k.gguf models/ocr/gguf/easyocr/
-          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/${{ env.EASYOCR_S3_PREFIX }}/latin_g2.gguf models/ocr/gguf/easyocr/
+          aws s3 cp s3://$MODEL_S3_BUCKET/${{ env.EASYOCR_S3_PREFIX }}/craft_mlt_25k.gguf models/ocr/gguf/easyocr/
+          aws s3 cp s3://$MODEL_S3_BUCKET/${{ env.EASYOCR_S3_PREFIX }}/latin_g2.gguf models/ocr/gguf/easyocr/
           echo "Downloaded EasyOCR GGML models:"
           ls -la models/ocr/gguf/easyocr/
 
       - name: Download DocTR GGML models
         if: inputs.pipeline == 'doctr' || inputs.pipeline == 'both'
         working-directory: ${{ env.PKG_DIR }}
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         run: |
           mkdir -p models/ocr/gguf/doctr
-          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/${{ env.DOCTR_S3_PREFIX }}/db_mobilenet_v3_large.gguf models/ocr/gguf/doctr/
-          aws s3 cp s3://${{ secrets.MODEL_S3_BUCKET }}/${{ env.DOCTR_S3_PREFIX }}/crnn_mobilenet_v3_small.gguf models/ocr/gguf/doctr/
+          aws s3 cp s3://$MODEL_S3_BUCKET/${{ env.DOCTR_S3_PREFIX }}/db_mobilenet_v3_large.gguf models/ocr/gguf/doctr/
+          aws s3 cp s3://$MODEL_S3_BUCKET/${{ env.DOCTR_S3_PREFIX }}/crnn_mobilenet_v3_small.gguf models/ocr/gguf/doctr/
           echo "Downloaded DocTR GGML models:"
           ls -la models/ocr/gguf/doctr/
 
       - name: Download OCRBench_v2 dataset
         working-directory: ${{ env.PKG_DIR }}
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         run: |
           mkdir -p benchmarks/quality_eval/data
           echo "Downloading OCRBench_v2 dataset from S3..."
-          aws s3 sync s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_datasets/ocr/OCRBench_v2/ benchmarks/quality_eval/data/OCRBench_v2/ --exclude "*.zip"
+          aws s3 sync s3://$MODEL_S3_BUCKET/qvac_datasets/ocr/OCRBench_v2/ benchmarks/quality_eval/data/OCRBench_v2/ --exclude "*.zip"
           echo "Dataset downloaded:"
           ls -la benchmarks/quality_eval/data/OCRBench_v2/ | head -20
 
@@ -342,6 +363,11 @@ jobs:
     if: always()
 
     steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@eb238132180c530e368e5b3b6e49a45f8571da2b # v2.10.4
+        with:
+          egress-policy: audit
+
       - name: Download results
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         continue-on-error: true
