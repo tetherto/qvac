@@ -292,7 +292,7 @@ jobs:
 
       - name: Install bare runtime
         working-directory: ${{ inputs.workdir }}
-        run: npm install -g bare
+        run: npm install -g --force bare
 
       - name: Get vcpkg cache
         if: inputs.addon_version == ''
@@ -318,7 +318,7 @@ jobs:
           sudo rm -rf /opt/hostedtoolcache/CodeQL /opt/ghc /usr/share/dotnet /usr/local/lib/android
           df -h
 
-          npm install -g bare-make
+          npm install -g --force bare-make
 
           echo "VCPKG_INSTALLATION_ROOT=$VCPKG_INSTALLATION_ROOT"
           if [ -n "${VCPKG_INSTALLATION_ROOT:-}" ] && [ -d "$VCPKG_INSTALLATION_ROOT" ]; then

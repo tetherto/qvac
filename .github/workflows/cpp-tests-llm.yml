@@ -139,7 +139,6 @@ jobs:
           restore-keys: cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-
 
       - name: Setup Node.js
-        if: matrix.platform == 'darwin' || matrix.arch == 'arm64'
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
@@ -149,10 +148,8 @@ jobs:
         run: |
           npm install
 
-      - name: Install bare tooling (macos)
-        if: matrix.platform == 'darwin'
-        run: |
-          npm install -g bare bare-make
+      - name: Install bare tooling
+        run: npm install -g --force bare bare-make
 
       - name: Download test models
         shell: bash

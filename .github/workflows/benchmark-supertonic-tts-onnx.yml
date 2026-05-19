@@ -101,8 +101,8 @@ jobs:
 
       - name: Install Bare runtime
         run: |
-          npm install -g bare-dev
-          npm install -g bare bare-make
+          npm install -g --force bare-dev
+          npm install -g --force bare bare-make
 
       - name: Determine addon version
         id: version

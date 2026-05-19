@@ -355,3 +355,11 @@ function buildSizeString (
   }
   return null
 }
+
+export const META = {
+  endpoints: [
+    'POST /v1/images/generations',
+    'POST /v1/images/edits'
+  ],
+  caveats: ['response_format=url requires --public-base-url on the server']
+} as const
