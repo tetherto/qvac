@@ -17,10 +17,6 @@ import type { AskAIContextSnippet } from './types';
 
 /** Default sidebar width (matches `defaultWidth` passed to Inkeep). */
 const DESKTOP_DEFAULT_WIDTH = 420;
-/** CSS custom property the Fumadocs grid reads to know how much room
- *  to leave for the assistant pane. See [global.css] for the `:has()`
- *  rule that maps this to `--fd-toc-width` on `#nd-docs-layout`. */
-const PANE_WIDTH_VAR = '--qvac-ai-pane-width';
 
 // `@inkeep/cxkit-react` weighs ~1.35 MB minified. Loading it via
 // `next/dynamic` with `ssr: false` keeps it out of the critical-path
@@ -246,7 +242,6 @@ interface DesktopSidebarProps {
 function DesktopSidebar({ baseSettings, aiChatSettings }: DesktopSidebarProps) {
   const askAI = useAskAI();
   const chatFunctionsRef = useRef<AIChatFunctions | null>(null);
-  const wrapperRef = useRef<HTMLDivElement | null>(null);
 
   // Drain queued prompt / context whenever EITHER the sidebar opens OR
   // a new pending payload arrives while it's already open. We read the
@@ -265,70 +260,22 @@ function DesktopSidebar({ baseSettings, aiChatSettings }: DesktopSidebarProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [askAI.sidebarOpen, askAI.pendingPrompt, askAI.pendingContext]);
 
-  // Track the sidebar's live width and publish it to a global CSS var
-  // so the Fumadocs grid can shrink the main column to make room (see
-  // the `:has()` rule in `global.css`). Without this, the sidebar
-  // would still overlay the page even though it lives at
-  // `grid-area: toc` — Inkeep sets its width via an internal CSS var
-  // on its own element, so the surrounding grid only sees the column's
-  // intrinsic width if we measure and forward it.
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const root = document.documentElement;
-    if (!askAI.sidebarOpen) {
-      root.style.removeProperty(PANE_WIDTH_VAR);
-      return;
-    }
-    const node = wrapperRef.current;
-    if (!node) return;
-
-    const writeWidth = (width: number) => {
-      // Round to whole pixels — sub-pixel writes cause unnecessary
-      // grid reflows during the resize drag.
-      root.style.setProperty(PANE_WIDTH_VAR, `${Math.round(width)}px`);
-    };
-
-    writeWidth(node.getBoundingClientRect().width);
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (entry) writeWidth(entry.contentRect.width);
-    });
-    observer.observe(node);
-
-    return () => {
-      observer.disconnect();
-      root.style.removeProperty(PANE_WIDTH_VAR);
-    };
-  }, [askAI.sidebarOpen]);
-
-  // The wrapper has two layout personalities:
-  //
-  // - `< lg` (tablet / mobile): a viewport-fixed overlay anchored to
-  //   the right edge. We never want to push the page sideways on
-  //   small screens because there isn't enough horizontal room.
-  // - `>= lg`: a real grid child of `#nd-docs-layout`, placed at
-  //   `grid-area: toc`. Combined with the `:has()` rule in
-  //   `global.css` and the `--qvac-ai-pane-width` write above, this
-  //   makes the docs page main column shrink to leave room for the
-  //   sidebar — i.e. true "push", not overlay.
+  // The wrapper is a viewport-fixed overlay anchored to the right
+  // edge. It does NOT participate in the Fumadocs grid and does NOT
+  // push the docs main column to the left — the assistant pane sits
+  // ABOVE the page instead. This matches the requested UX: opening
+  // the assistant should leave the underlying page layout intact.
   //
   // The `[data-sidebar]` attribute keeps Inkeep's `[data-sidebar] &`
-  // descendant utility selectors happy. `data-qvac-ai-pane-open` is
-  // the hook the global CSS uses to flip `--fd-toc-width`.
+  // descendant utility selectors happy. The width is whatever Inkeep
+  // hands us (resizable via the drag handle), and `h-screen` lets it
+  // span the full viewport height regardless of scroll position.
   return (
     <div
-      ref={wrapperRef}
       data-sidebar=""
       data-ask-ai-sidebar-shell=""
-      data-qvac-ai-pane-open={askAI.sidebarOpen ? '' : undefined}
       className={cn(
-        'flex',
-        'max-lg:fixed max-lg:inset-y-0 max-lg:right-0 max-lg:z-40 max-lg:h-screen',
-        // `grid-area: toc` places us into the named area Fumadocs reserves
-        // for the table of contents — that area already spans the three
-        // grid rows (header / toc-popover / main), so no explicit row-span
-        // is needed.
-        'lg:sticky lg:top-0 lg:h-dvh lg:ms-auto lg:in-[#nd-docs-layout]:[grid-area:toc]',
+        'fixed inset-y-0 right-0 z-40 flex h-screen',
       )}
     >
       <InkeepSidebarChat

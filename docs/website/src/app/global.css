@@ -199,27 +199,3 @@
   }
 }
 
-/* ===========================================
-  ASK-AI PANE: PUSH THE PAGE INSTEAD OF OVERLAYING
-  =========================================== */
-/*
- * The desktop assistant pane mounts as a direct grid child of
- * `#nd-docs-layout` at `grid-area: toc` (see `ask-ai-shell.tsx` —
- * `lg:in-[#nd-docs-layout]:[grid-area:toc]`). The Fumadocs grid
- * computes the main column width from `--fd-toc-width`, so for the
- * grid to actually shrink the page main column to make room for the
- * pane we forward the assistant pane's measured width into
- * `--fd-toc-width` whenever the pane is open.
- *
- * `--qvac-ai-pane-width` is written by a `ResizeObserver` inside
- * `DesktopSidebar` while the sidebar is open, then removed when the
- * sidebar closes. The `:has()` rule below scopes the override so the
- * default Fumadocs TOC width (~268 px on xl+) is restored as soon as
- * the assistant is dismissed.
- */
-@media (min-width: 1024px) {
-  #nd-docs-layout:has([data-qvac-ai-pane-open]) {
-    --fd-toc-width: var(--qvac-ai-pane-width, 420px);
-  }
-}
-
