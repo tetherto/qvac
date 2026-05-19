@@ -374,7 +374,6 @@ std::any SdModel::process(const std::any& input) {
 // process().
 // ---------------------------------------------------------------------------
 
-// NOLINTBEGIN(readability-function-cognitive-complexity,readability-identifier-length,google-readability-braces-around-statements,readability-braces-around-statements,readability-implicit-bool-conversion,readability-uppercase-literal-suffix)
 std::any SdModel::processImage(const GenerationJob &job,
                                const picojson::value &parsed) {
   // -- Build SdGenConfig from handlers ---------------------------------------
@@ -821,7 +820,6 @@ std::any SdModel::processImage(const GenerationJob &job,
   // and stats are emitted by queueJobEnded() -> runtimeStats().
   return std::any{};
 }
-// NOLINTEND(readability-function-cognitive-complexity,readability-identifier-length,google-readability-braces-around-statements,readability-braces-around-statements,readability-implicit-bool-conversion,readability-uppercase-literal-suffix)
 
 // ---------------------------------------------------------------------------
 // processVideo() -- applies SdVidGenHandlers, fills sd_vid_gen_params_t,
@@ -832,7 +830,6 @@ std::any SdModel::processImage(const GenerationJob &job,
 // Assumes callbacks + guard are already set up by process().
 // ---------------------------------------------------------------------------
 
-// NOLINTBEGIN(readability-function-cognitive-complexity,readability-identifier-length,google-readability-braces-around-statements,readability-braces-around-statements,readability-implicit-bool-conversion,readability-uppercase-literal-suffix)
 std::any SdModel::processVideo(const GenerationJob &job,
                                const picojson::value &parsed) {
   // -- Build SdVidGenConfig from handlers ------------------------------------
@@ -1116,7 +1113,6 @@ std::any SdModel::processVideo(const GenerationJob &job,
 
   return std::any{};
 }
-// NOLINTEND(readability-function-cognitive-complexity,readability-identifier-length,google-readability-braces-around-statements,readability-braces-around-statements,readability-implicit-bool-conversion,readability-uppercase-literal-suffix)
 
 // ---------------------------------------------------------------------------
 // cancel / runtimeStats

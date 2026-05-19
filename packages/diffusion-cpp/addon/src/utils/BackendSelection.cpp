@@ -26,7 +26,6 @@ unsigned char toLowerAscii(unsigned char character) {
 // Example: "Adreno (TM) 830" -> 830, "Adreno (TM) 740" -> 740
 int parseAdrenoModel(const std::string& description) {
   std::string lower = description;
-  // NOLINTNEXTLINE(modernize-use-ranges)
   std::transform(lower.begin(), lower.end(), lower.begin(), toLowerAscii);
 
   const auto pos = lower.find("adreno");
@@ -44,9 +43,23 @@ int parseAdrenoModel(const std::string& description) {
 }
 
 std::string toLowerCopy(std::string str) {
-  // NOLINTNEXTLINE(modernize-use-ranges)
   std::transform(str.begin(), str.end(), str.begin(), toLowerAscii);
   return str;
+}
+
+int parseAdrenoModelFromGpuDevice(ggml_backend_dev_t dev) {
+  if (dev == nullptr) {
+    return 0;
+  }
+  const char* descPtr = ggml_backend_dev_description(dev);
+  const std::string desc = descPtr != nullptr ? descPtr : "";
+  int model = parseAdrenoModel(desc);
+  if (model > 0) {
+    return model;
+  }
+  const char* namePtr = ggml_backend_dev_name(dev);
+  const std::string name = namePtr != nullptr ? namePtr : "";
+  return parseAdrenoModel(name);
 }
 
 } // namespace
@@ -86,18 +99,15 @@ int threadsFromMap(
   }
 }
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 BackendDevice resolveBackendForDevice(BackendDevice preferred) {
   using Priority = qvac_lib_inference_addon_cpp::logger::Priority;
 
   if (preferred == BackendDevice::CPU) {
-    // NOLINTNEXTLINE(cppcoreguidelines-avoid-do-while)
     QLOG_IF(Priority::INFO, "Backend selection: user requested CPU");
     return BackendDevice::CPU;
   }
 
   const size_t nDevices = ggml_backend_dev_count();
-  // NOLINTNEXTLINE(cppcoreguidelines-avoid-do-while)
   QLOG_IF(
       Priority::INFO,
       "Backend selection: " + std::to_string(nDevices) + " device(s)");
@@ -112,33 +122,28 @@ BackendDevice resolveBackendForDevice(BackendDevice preferred) {
 
     const char* desc = ggml_backend_dev_description(dev);
     const char* name = ggml_backend_dev_name(dev);
-    // NOLINTNEXTLINE(cppcoreguidelines-avoid-do-while)
     QLOG_IF(
         Priority::INFO,
         std::string("Backend selection: GPU device '") + desc +
             "' (backend: " + name + ")");
 
-    const int model = parseAdrenoModel(desc);
+    const int model = parseAdrenoModelFromGpuDevice(dev);
     if (model > 0) {
-      // NOLINTNEXTLINE(cppcoreguidelines-avoid-do-while)
       QLOG_IF(
           Priority::INFO,
           "Backend selection: Adreno model " + std::to_string(model));
     }
 
     if (model >= K_ADRENO_OPEN_CL_MIN_MODEL) {
-      // NOLINTNEXTLINE(cppcoreguidelines-avoid-do-while)
       QLOG_IF(Priority::INFO, "Backend selection: Adreno 800+ -> GPU (OpenCL)");
       return BackendDevice::GPU;
     }
     if (model >= K_ADRENO_CPU_FALLBACK_MIN_MODEL) {
-      // NOLINTNEXTLINE(cppcoreguidelines-avoid-do-while)
       QLOG_IF(Priority::INFO, "Backend selection: Adreno 600/700 -> CPU");
       return BackendDevice::CPU;
     }
   }
 
-  // NOLINTNEXTLINE(cppcoreguidelines-avoid-do-while)
   QLOG_IF(Priority::INFO, "Backend selection: non-Adreno -> GPU (Vulkan)");
   return BackendDevice::GPU;
 }
@@ -167,7 +172,7 @@ bool shouldPreferOpenClForAdreno(BackendDevice preferred) {
     const char* namePtr = ggml_backend_dev_name(dev);
     const std::string backendName = namePtr != nullptr ? namePtr : "";
 
-    const int model = parseAdrenoModel(desc);
+    const int model = parseAdrenoModelFromGpuDevice(dev);
     if (model >= K_ADRENO_OPEN_CL_MIN_MODEL) {
       hasAdreno800Plus = true;
     }
@@ -179,7 +184,6 @@ bool shouldPreferOpenClForAdreno(BackendDevice preferred) {
 
   const bool preferOpenCl = hasAdreno800Plus && hasOpenClGpu;
   if (preferOpenCl) {
-    // NOLINTNEXTLINE(cppcoreguidelines-avoid-do-while)
     QLOG_IF(
         Priority::INFO,
         "Backend selection: Adreno 800+ with OpenCL backend available -> "
@@ -206,6 +210,22 @@ preferredGpuBackendForConfigDevice(const std::string& device) {
     return SD_BACKEND_PREF_OPENCL;
   }
   return SD_BACKEND_PREF_GPU;
+}
+
+std::string expectedEsrganBackendDeviceForConfig(const std::string& device) {
+  if (device == "cpu") {
+    return "cpu";
+  }
+  if (device == "auto" || device == "gpu") {
+    const BackendDevice effective =
+        resolveBackendForDevice(BackendDevice::GPU);
+    return effective == BackendDevice::CPU ? "cpu" : "gpu";
+  }
+  throw StatusError(
+      general_error::InvalidArgument,
+      "expectedEsrganBackendDeviceForConfig: device must be 'cpu', 'gpu', or "
+      "'auto', got: '" +
+          device + "'");
 }
 
 } // namespace sd_backend_selection

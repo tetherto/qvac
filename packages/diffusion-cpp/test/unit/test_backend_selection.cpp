@@ -10,7 +10,6 @@ using namespace sd_backend_selection;
 
 class SdBackendSelectionTest : public ::testing::Test {
 protected:
-  // NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
   std::unordered_map<std::string, std::string> configMap;
 
   void SetUp() override { configMap.clear(); }
@@ -65,4 +64,19 @@ TEST_F(SdBackendSelectionTest, PreferredGpuBackendGpuDeviceIsGpuOrCpu) {
   EXPECT_TRUE(
       pref == SD_BACKEND_PREF_GPU || pref == SD_BACKEND_PREF_OPENCL ||
       pref == SD_BACKEND_PREF_CPU);
+}
+
+TEST_F(SdBackendSelectionTest, ExpectedEsrganBackendCpuConfig) {
+  EXPECT_EQ(expectedEsrganBackendDeviceForConfig("cpu"), "cpu");
+}
+
+TEST_F(SdBackendSelectionTest, ExpectedEsrganBackendGpuConfigIsCpuOrGpu) {
+  const std::string expected = expectedEsrganBackendDeviceForConfig("gpu");
+  EXPECT_TRUE(expected == "cpu" || expected == "gpu");
+  const auto pref = preferredGpuBackendForConfigDevice("gpu");
+  if (pref == SD_BACKEND_PREF_CPU) {
+    EXPECT_EQ(expected, "cpu");
+  } else {
+    EXPECT_EQ(expected, "gpu");
+  }
 }

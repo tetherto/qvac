@@ -2,6 +2,7 @@
 
 const fs = require('bare-fs')
 const path = require('bare-path')
+const os = require('bare-os')
 const proc = require('bare-process')
 const b4a = require('b4a')
 const test = require('brittle')
@@ -10,6 +11,7 @@ const { EsrganUpscaler } = require('../../index')
 const { ensureModel, setupJsLogger } = require('./utils')
 
 const noGpu = proc.env && proc.env.NO_GPU === 'true'
+const isAndroid = os.platform() === 'android'
 
 const ESRGAN_MODEL = {
   name: 'RealESRGAN_x4plus_anime_6B.pth',
@@ -26,6 +28,28 @@ function tinyPng16x16 () {
 }
 
 const JOB_TIMEOUT_MS = 120000
+const BACKENDS_DIR = path.join(__dirname, '../../prebuilds')
+
+function queryExpectedBackendDevice (configDevice) {
+  if (typeof binding.getExpectedEsrganBackendDevice !== 'function') {
+    throw new Error(
+      'binding.getExpectedEsrganBackendDevice is required for backend policy tests'
+    )
+  }
+  return binding.getExpectedEsrganBackendDevice(configDevice, BACKENDS_DIR)
+}
+
+function logBackendPolicy (configDevice, expected, actual) {
+  console.log(
+    '[esrgan-backend-device] platform=' +
+      os.platform() +
+      ' config.device=' +
+      configDevice +
+      ' expected backendDevice=' +
+      expected +
+      (actual != null ? ' actual=' + actual : '')
+  )
+}
 
 async function ensureEsrganModelPath () {
   const [esrganName, modelDir] = await ensureModel({
@@ -40,6 +64,10 @@ test(
   { timeout: JOB_TIMEOUT_MS },
   async t => {
     setupJsLogger(binding)
+    const expected = queryExpectedBackendDevice('cpu')
+    t.is(expected, 'cpu', 'native policy always maps config cpu -> cpu')
+    logBackendPolicy('cpu', expected)
+
     const { esrganPath } = await ensureEsrganModelPath()
     t.ok(fs.existsSync(esrganPath), 'ESRGAN weights exist')
 
@@ -47,7 +75,8 @@ test(
       files: { esrgan: esrganPath },
       config: {
         device: 'cpu',
-        upscaler_tile_size: 64
+        upscaler_tile_size: 64,
+        backendsDir: BACKENDS_DIR
       },
       opts: { stats: true },
       logger: console
@@ -57,7 +86,12 @@ test(
       await upscaler.load()
       const response = await upscaler.upscale(tinyPng16x16(), { repeats: 1 })
       await response.onUpdate(() => {}).await()
-      t.is(response.stats.backendDevice, 'cpu', 'native CPU path maps to stats')
+      logBackendPolicy('cpu', expected, response.stats.backendDevice)
+      t.is(
+        response.stats.backendDevice,
+        expected,
+        'native CPU path maps to stats'
+      )
     } finally {
       await upscaler.unload().catch(() => {})
       try {
@@ -68,10 +102,17 @@ test(
 )
 
 test(
-  'ESRGAN standalone — config.device gpu reports backendDevice gpu in RuntimeStats',
+  'ESRGAN standalone — config.device gpu reports policy-aligned backendDevice in RuntimeStats',
   { timeout: JOB_TIMEOUT_MS, skip: noGpu },
   async t => {
     setupJsLogger(binding)
+    const expected = queryExpectedBackendDevice('gpu')
+    t.ok(
+      expected === 'cpu' || expected === 'gpu',
+      'native policy returns cpu or gpu for config gpu'
+    )
+    logBackendPolicy('gpu', expected)
+
     const { esrganPath } = await ensureEsrganModelPath()
     t.ok(fs.existsSync(esrganPath), 'ESRGAN weights exist')
 
@@ -79,7 +120,8 @@ test(
       files: { esrgan: esrganPath },
       config: {
         device: 'gpu',
-        upscaler_tile_size: 64
+        upscaler_tile_size: 64,
+        backendsDir: BACKENDS_DIR
       },
       opts: { stats: true },
       logger: console
@@ -89,16 +131,26 @@ test(
       await upscaler.load()
       const response = await upscaler.upscale(tinyPng16x16(), { repeats: 1 })
       await response.onUpdate(() => {}).await()
+      const actual = response.stats.backendDevice
+      logBackendPolicy('gpu', expected, actual)
+
       t.is(
-        response.stats.backendDevice,
-        'gpu',
-        'GPU integration runners expect ggml GPU backend for ESRGAN'
+        actual,
+        expected,
+        expected === 'cpu'
+          ? 'Adreno 600/700 policy: config gpu may run on CPU backend'
+          : 'GPU policy: expect accelerated backend (OpenCL on Adreno 800+, Vulkan elsewhere)'
       )
     } finally {
       await upscaler.unload().catch(() => {})
       try {
         binding.releaseLogger()
       } catch (_) {}
+      if (isAndroid) {
+        console.log(
+          '[esrgan-backend-device] Android run complete; check native logs for OpenCL/GPU init'
+        )
+      }
     }
   }
 )

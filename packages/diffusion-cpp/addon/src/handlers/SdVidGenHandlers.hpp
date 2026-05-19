@@ -23,7 +23,6 @@ namespace qvac_lib_inference_addon_sd {
  *   highNoiseDiffusionModelPath = high-noise expert, set moeBoundary, and
  *   configure highNoise* sample params.
  */
-// NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers,readability-uppercase-literal-suffix)
 struct SdVidGenConfig {
 
   // -- Mode ------------------------------------------------------------------
@@ -119,7 +118,6 @@ struct SdVidGenConfig {
   sd_cache_mode_t cacheMode = SD_CACHE_DISABLED;
   float cacheThreshold = 0.0f; // 0 = library default
 };
-// NOLINTEND(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers,readability-uppercase-literal-suffix)
 
 // -----------------------------------------------------------------------------
 

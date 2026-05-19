@@ -52,4 +52,11 @@ bool shouldPreferOpenClForAdreno(BackendDevice preferred);
 sd_backend_preference_t
 preferredGpuBackendForConfigDevice(const std::string& device);
 
+/**
+ * Expected RuntimeStats.backendDevice ("cpu" or "gpu") after ESRGAN load when
+ * config.device is @p device. Mirrors resolveBackendForDevice() policy:
+ * Adreno 600/700 + config gpu -> "cpu"; Adreno 800+ and other GPUs -> "gpu".
+ */
+std::string expectedEsrganBackendDeviceForConfig(const std::string& device);
+
 } // namespace sd_backend_selection
