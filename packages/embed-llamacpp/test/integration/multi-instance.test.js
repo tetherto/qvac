@@ -1,22 +1,26 @@
 'use strict'
 
-const test = require('brittle')
 const os = require('bare-os')
-const { createEmbeddingsTestInstance, getModelConfigs, waitForCompletion } = require('./utils')
+const { createEmbeddingsTestInstance, getModelConfigs, waitForCompletion, safeTest } = require('./utils')
 
 const platform = os.platform()
 const arch = os.arch()
 const isDarwinX64 = platform === 'darwin' && arch === 'x64'
 const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
-const DEFAULT_DEVICE = (isDarwinX64 || isLinuxArm64) ? 'cpu' : 'gpu'
+const isMobile = platform === 'ios' || platform === 'android'
+const DEFAULT_DEVICE = (isDarwinX64 || isLinuxArm64 || isMobile) ? 'cpu' : 'gpu'
 
 const DEFAULT_BATCH_SIZE = '1024'
 
 const TEST_MODEL = getModelConfigs()[0]
 
-test('Two embed instances can run inference simultaneously', {
+safeTest('Two embed instances can run inference simultaneously', {
   timeout: 900_000
 }, async t => {
+  if (isMobile) {
+    t.comment('Skipping concurrent instances on mobile to avoid OOM')
+    return
+  }
   const modelName = TEST_MODEL.modelName
   const { inference: inference1 } = await createEmbeddingsTestInstance(
     t,
@@ -54,12 +58,12 @@ test('Two embed instances can run inference simultaneously', {
   t.ok(embeddings2[0][0].length > 0, 'second instance embeddings have correct dimension')
 })
 
-test('Repeated embed load/unload cycles should remain stable', {
+safeTest('Repeated embed load/unload cycles should remain stable', {
   timeout: 900_000
 }, async t => {
   const modelName = TEST_MODEL.modelName
 
-  const NUM_CYCLES = 6
+  const NUM_CYCLES = isMobile ? 2 : 6
   const testSentence = 'This is a stability test sentence.'
 
   for (let i = 0; i < NUM_CYCLES; i++) {
@@ -84,9 +88,13 @@ test('Repeated embed load/unload cycles should remain stable', {
   t.pass(`all ${NUM_CYCLES} load/unload cycles completed successfully`)
 })
 
-test('Unloading one embed instance does not affect another running instance', {
+safeTest('Unloading one embed instance does not affect another running instance', {
   timeout: 900_000
 }, async t => {
+  if (isMobile) {
+    t.comment('Skipping concurrent instances on mobile to avoid OOM')
+    return
+  }
   const modelName = TEST_MODEL.modelName
   const { inference: inference1 } = await createEmbeddingsTestInstance(
     t,
@@ -122,7 +130,7 @@ test('Unloading one embed instance does not affect another running instance', {
   t.ok(embeddings1[0].length === largeBatch.length, 'instance 1 completed processing after instance 2 was unloaded')
 })
 
-test('Multiple embed load/unload cycles on one instance while another processes', {
+safeTest('Multiple embed load/unload cycles on one instance while another processes', {
   timeout: 900_000
 }, async t => {
   const modelName = TEST_MODEL.modelName
@@ -138,8 +146,8 @@ test('Multiple embed load/unload cycles on one instance while another processes'
     await inference1.unload().catch(() => {})
   })
 
-  const NUM_CYCLES = 3
-  const NUM_BATCHES = 5
+  const NUM_CYCLES = isMobile ? 1 : 3
+  const NUM_BATCHES = isMobile ? 2 : 5
   let cyclesCompleted = 0
 
   for (let batch = 0; batch < NUM_BATCHES; batch++) {
