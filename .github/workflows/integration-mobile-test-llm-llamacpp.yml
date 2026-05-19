@@ -127,7 +127,7 @@ jobs:
         if: matrix.platform == 'iOS'
         run: |
           echo "Installing global dependencies..."
-          npm install -g @expo/cli@latest
+          npm install -g --force @expo/cli@latest
 
       - name: Download Android prebuilds (from artifacts)
         if: matrix.platform == 'Android' && !inputs.package

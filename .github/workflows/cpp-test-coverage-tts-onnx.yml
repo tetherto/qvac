@@ -82,7 +82,7 @@ jobs:
           node-version: lts/*
 
       - name: Install bare tooling
-        run: npm install -g bare bare-make
+        run: npm install -g --force bare bare-make
 
       - name: Install NPM dependencies
         working-directory: ${{ env.WORKDIR }}

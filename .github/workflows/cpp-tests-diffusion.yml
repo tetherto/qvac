@@ -146,7 +146,7 @@ jobs:
           npm install
 
       - name: Install bare tooling
-        run: npm install -g bare bare-make
+        run: npm install -g --force bare bare-make
 
       - if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'macos-14' }}
         name: Download SD2 model for C++ tests

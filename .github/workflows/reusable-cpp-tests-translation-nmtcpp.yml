@@ -49,7 +49,7 @@ jobs:
           npm install
 
       - name: Install bare tooling
-        run: npm install -g bare bare-make
+        run: npm install -g --force bare bare-make
 
       - name: Configure vcpkg
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV

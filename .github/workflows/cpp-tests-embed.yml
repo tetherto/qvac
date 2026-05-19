@@ -97,7 +97,7 @@ jobs:
           npm install
       
       - name: Install bare tooling
-        run: npm install -g bare bare-make
+        run: npm install -g --force bare bare-make
 
 
       - if: ${{ matrix.os == 'windows-2025' }}

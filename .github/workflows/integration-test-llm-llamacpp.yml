@@ -156,7 +156,7 @@ jobs:
           npm install
 
       - name: Install bare tooling
-        run: npm install -g bare bare-make bare-runtime bare-https brittle
+        run: npm install -g --force bare bare-make bare-runtime bare-https brittle
 
       - name: Download prebuilds (from artifacts)
         if: ${{ !inputs.prebuild_package }}
