@@ -71,6 +71,27 @@ declare interface ParakeetConfig {
    * (2000 ms). ASR sessions only.
    */
   streamingRightLookaheadMs?: number
+  /**
+   * Directory the native addon scans for dynamically-loaded ggml
+   * backend libraries (`libqvac-speech-ggml-vulkan.so`,
+   * `libqvac-speech-ggml-opencl.so`, per-arch
+   * `libqvac-speech-ggml-cpu-android_armv*_*.so`). Defaults to the
+   * package's own `prebuilds/` folder where cmake-bare installs them
+   * next to the `.bare` module on Android / Linux. Pass an explicit
+   * path when the host bundles the prebuilds elsewhere (e.g. an
+   * Android APK's `nativeLibraryDir`). No-op on Apple targets
+   * (statically linked ggml core; no .so backends to discover).
+   */
+  backendsDir?: string
+  /**
+   * Persistent directory for ggml-opencl's `clCreateProgramWithBinary`
+   * cache. Sets `$GGML_OPENCL_CACHE_DIR` before the first backend
+   * init so subsequent process starts skip the cold `clBuildProgram`
+   * cost (which dominates first-utterance latency on Adreno).
+   * Android-only; ignored on every other platform. Pass the host
+   * app's cache directory (e.g. Android `Context.getCacheDir()`).
+   */
+  openclCacheDir?: string
 }
 
 /**

@@ -14,7 +14,7 @@ const { pathToFileURL } = require('bare-url')
 // the same off-switch on Device Farm. Drop or gate this assignment when
 // the parakeet-cpp mobile GPU paths are stable enough for strict CI
 // coverage on Adreno / Apple Silicon devices.
-proc.env.NO_GPU = 'true'
+proc.env.NO_GPU = 'false'
 
 if (typeof Bare !== 'undefined' && typeof Bare.on === 'function') {
   Bare.on('unhandledRejection', (reason) => {

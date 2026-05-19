@@ -51,6 +51,74 @@ if(WIN32)
   add_definitions( -DNOMINMAX -DWIN32_LEAN_AND_MEAN -DNOGDI )
 endif()
 
+# Bare module subfolder for dynamically-loadable ggml backends. Same
+# shape qvac/packages/llm-llamacpp uses: cmake-bare derives the
+# subdir from `<bare_target>/<module_name>` (e.g.
+# `android-arm64/qvac__transcription-parakeet`) and installs the
+# .so / .dll / .dylib backend files there. The runtime resolves the
+# directory via the same shape on the JS side
+# (`path.join(__dirname, 'prebuilds')`), then ParakeetConfig.backendsDir
+# is forwarded to parakeet::EngineOptions::backends_dir which calls
+# `ggml_backend_load_all_from_path()` against it. The C++ define
+# below tells the addon what relative subdir to scan under that root.
+bare_target(bare_target_value)
+bare_module_target("." unused_target NAME module_name VERSION unused_version)
+set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/${module_name}")
+message(STATUS "Building qvac_lib_infer_parakeet with BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VALUE}'")
+
+# Collect every dynamically-loadable ggml backend that the ggml-speech
+# port produced ($CURRENT_PACKAGES_DIR/lib/libqvac-speech-ggml-*.so on
+# Android; nothing on Apple/static-only platforms). cmake-bare's
+# `add_bare_module(... EXPORTS INSTALL TARGET <tgt>)` bundles each
+# IMPORTED ggml::<backend> target into the per-arch prebuilds folder
+# next to the `.bare` module. Mirrors qvac/packages/llm-llamacpp/
+# CMakeLists.txt lines 56-64 verbatim for the IMPORTED targets path.
+#
+# Hybrid-mode caveat: the ggml-speech vcpkg port builds Android with
+# GGML_BACKEND_DL=ON + GGML_CPU_STATIC=ON, so only the CPU backend
+# ships as a static archive AND as an IMPORTED ggml::ggml-cpu target;
+# Vulkan / OpenCL get built as MODULE .so files at
+# `${VCPKG_INSTALLED_PATH}/lib/libqvac-speech-ggml-{vulkan,opencl}.so`
+# but ggml-config.cmake.in deliberately leaves them out of
+# GGML_AVAILABLE_BACKENDS' IMPORTED set (the loader is expected to
+# find them via `ggml_backend_load_all_from_path()` at runtime).
+# We pick those up with an explicit `install(FILES ...)` below so
+# the runtime scan against BACKENDS_SUBDIR actually finds them next
+# to the .bare module.
+set(BACKEND_DL_LIBS "")
+if((ANDROID OR UNIX) AND NOT APPLE)
+  foreach(_backend ${GGML_AVAILABLE_BACKENDS})
+    if(TARGET ggml::${_backend})
+      list(APPEND BACKEND_DL_LIBS INSTALL TARGET ggml::${_backend})
+    endif()
+  endforeach()
+endif()
+
+# Loose-file pickup for MODULE backends that aren't surfaced as
+# IMPORTED targets by find_package(ggml). On Android this is what
+# actually delivers Vulkan + OpenCL into the prebuilds folder; we
+# do the same on Linux as a fallback for any future hybrid build
+# there. Glob runs at configure time -- the .so files come from
+# ggml-speech's `file(INSTALL ...)` step in its portfile, which has
+# already completed by the time vcpkg hands control back to us. Apple
+# / Windows static-only configs return an empty list and skip the
+# install rule.
+set(BACKEND_DL_LOOSE_SOS "")
+if((ANDROID OR UNIX) AND NOT APPLE)
+  if(NOT VCPKG_INSTALLED_PATH OR NOT EXISTS "${VCPKG_INSTALLED_PATH}/lib")
+    message(WARNING "qvac_lib_infer_parakeet: VCPKG_INSTALLED_PATH "
+      "('${VCPKG_INSTALLED_PATH}') has no lib/ dir; skipping loose "
+      "ggml backend .so pickup -- the runtime may fail to find "
+      "Vulkan / OpenCL backends.")
+  else()
+    file(GLOB BACKEND_DL_LOOSE_SOS
+      "${VCPKG_INSTALLED_PATH}/lib/libqvac-speech-ggml-*.so")
+    foreach(_lib IN LISTS BACKEND_DL_LOOSE_SOS)
+      message(STATUS "qvac_lib_infer_parakeet: will stage ggml backend ${_lib}")
+    endforeach()
+  endif()
+endif()
+
 set(LIB_NAME parakeet_model_core)
 set(LIB_SRCS_PATH ${PROJECT_SOURCE_DIR}/addon/src/model-interface)
 
@@ -75,7 +143,22 @@ target_include_directories(${LIB_NAME} PUBLIC
         ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
 )
 
-add_bare_module(qvac_lib_infer_parakeet EXPORTS)
+add_bare_module(qvac_lib_infer_parakeet EXPORTS ${BACKEND_DL_LIBS})
+
+# Stage every loose MODULE backend (Vulkan / OpenCL on Android, ...)
+# into the same per-host/per-module subdir cmake-bare's INSTALL TARGET
+# branch uses for IMPORTED targets (see cmake-bare.cmake lines 458-472:
+# `DESTINATION ${host}/${name}` -- e.g. `android-arm64/qvac__transcription-parakeet`).
+# Keeping the destinations identical means
+# `ggml_backend_load_all_from_path(backendsDir / BACKENDS_SUBDIR)`
+# on the C++ side discovers IMPORTED-target CPU and loose-file
+# GPU backends with a single scan.
+if(BACKEND_DL_LOOSE_SOS)
+  install(
+    FILES ${BACKEND_DL_LOOSE_SOS}
+    DESTINATION ${bare_target_value}/${module_name}
+  )
+endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   target_link_options(${qvac_lib_infer_parakeet}_module PRIVATE -Wl,--exclude-libs,ALL)
@@ -97,6 +180,13 @@ target_include_directories(
 )
 
 target_compile_definitions(${qvac_lib_infer_parakeet} PUBLIC JS_LOGGER)
+# Same value the JS side appends to the host-provided `backendsDir`
+# default (`path.join(__dirname, 'prebuilds', <subdir>)`). Defining
+# it here lets the addon compute the full backends path from a
+# host-provided prebuilds root without the host needing to know the
+# `<bare-target>/<module-name>` shape itself.
+target_compile_definitions(${qvac_lib_infer_parakeet} PRIVATE
+  BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}")
 
 target_link_libraries(${LIB_NAME} PRIVATE
     parakeet::parakeet
