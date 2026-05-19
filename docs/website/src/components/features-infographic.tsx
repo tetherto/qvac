@@ -752,6 +752,22 @@ export function FeaturesInfographic({
             <path d={Q_PATH} fill="currentColor" stroke="none" />
           </g>
 
+          {/* ----- Q hover halo: solid 1.5px ring at R_INNER that fades in
+                  on hover. Mirrors the `group-hover:ring-1` effect on the
+                  inner dashed circle that the original HTML/foreignObject
+                  implementation had. Rendered AFTER the dashed inner ring
+                  so it paints on top. ----- */}
+          <circle
+            cx={CENTER_X}
+            cy={CENTER_Y}
+            r={R_INNER}
+            fill="none"
+            stroke={qHovered ? 'currentColor' : 'transparent'}
+            strokeWidth={1.5}
+            pointerEvents="none"
+            style={{ transition: 'stroke 200ms ease' }}
+          />
+
           {/* ----- Sparkles around the Q (pointer-events: none → never blocks clicks) -----
               Each sparkle is wrapped in a <g> whose SVG `transform` carries
               the position (CSS animations on SVG can't compose with the SVG
@@ -909,24 +925,31 @@ export function FeaturesInfographic({
                   positioned ABOVE the icon, tight foreignObject sized like
                   a feature card so WebKit paints it correctly).
 
-                  Layout uses NATURAL FLOW (no position:absolute) — that's
-                  important: WebKit (Safari/Epiphany) mis-paints absolutely
-                  positioned HTML inside foreignObject (offset + unscaled).
-                  Q's tooltip works correctly because it doesn't use
-                  absolute positioning; the platform tooltips now follow the
-                  same pattern. We size the foreignObject just enough for
-                  the longest description and let the rounded box live at
-                  its natural top of the foreignObject. The 120 ms hover
-                  grace period configured above bridges the small visual
-                  gap between icon and tooltip. ----- */}
+                  Layout uses FLEXBOX align-end (no position:absolute) —
+                  that's important: WebKit (Safari/Epiphany) mis-paints
+                  absolutely positioned HTML inside foreignObject (offset +
+                  unscaled). Flexbox lays the tooltip out via the normal
+                  flow algorithm, so the bug doesn't trigger. The
+                  align-end column pushes the rounded box against the
+                  BOTTOM of the foreignObject. We then position the
+                  foreignObject so its bottom sits 8 SVG units above the
+                  icon's visible top — matching the original Tailwind
+                  `bottom: calc(50% + 48px)` placement and giving the
+                  tooltip the "hugs the icon" feel it had before. The
+                  120 ms hover grace period configured above bridges the
+                  small visual gap as the cursor crosses between icon and
+                  tooltip. ----- */}
           {(() => {
             if (!hoveredPlatformId) return null;
             const p = platforms.find((pp) => pp.id === hoveredPlatformId);
             if (!p || !p.description) return null;
             const pos = polar(p.angle, R_PLATFORMS);
-            const GAP = 8;
+            const GAP_TO_ICON = 8;
             const foY =
-              pos.y - PLATFORM_HIT_RADIUS - GAP - PLATFORM_TOOLTIP_H;
+              pos.y -
+              PLATFORM_ICON_RADIUS -
+              GAP_TO_ICON -
+              PLATFORM_TOOLTIP_H;
             return (
               <foreignObject
                 x={pos.x - PLATFORM_TOOLTIP_W / 2}
@@ -935,7 +958,16 @@ export function FeaturesInfographic({
                 height={PLATFORM_TOOLTIP_H}
                 pointerEvents="none"
               >
-                <div {...{ xmlns: HTML_NS }}>
+                <div
+                  {...{ xmlns: HTML_NS }}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'flex-end',
+                    height: '100%',
+                    pointerEvents: 'none',
+                  }}
+                >
                   <div
                     role="tooltip"
                     style={{ pointerEvents: 'auto' }}
