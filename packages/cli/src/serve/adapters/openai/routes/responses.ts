@@ -442,3 +442,10 @@ export async function writeStreamingResponse (
   p.ctx.logger.info(`  responses stream done id=${p.rid} stored=${p.storeEnabled}`)
   return responseObject
 }
+
+export const META = {
+  endpoints: ['POST /v1/responses'],
+  caveats: [
+    'in-memory store for retrieve/delete/input_items; not durable across restarts'
+  ]
+} as const

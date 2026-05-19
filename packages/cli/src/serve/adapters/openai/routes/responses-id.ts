@@ -97,3 +97,12 @@ async function handleDeleteResponse (res: ServerResponse, ctx: RouteContext, id:
   }
   sendJson(res, 200, { id, object: 'response.deleted', deleted: true })
 }
+
+export const META = {
+  endpoints: [
+    'GET /v1/responses/{response_id}',
+    'DELETE /v1/responses/{response_id}',
+    'GET /v1/responses/{response_id}/input_items'
+  ],
+  caveats: ['in-memory only', 'X-QVAC-Stub: responses-volatile']
+} as const

@@ -27,7 +27,7 @@ This directory does not contain a `SKILL.md`; it is not a Cursor skill itself. T
 
 | Mode | Pod scope | What it shows | Used by |
 |---|---|---|---|
-| `team` | required (`--pod`) | All open PRs touching the pod's `ownedPaths` that still need reviews. Three sections: needs-your-re-review, stale (>3d), needs-review. PRs with `mergeable: CONFLICTING` are flagged with `⚠️ MERGE CONFLICTS!`. | `<pod>-pr-status` |
+| `team` | required (`--pod`) | All open PRs touching the pod's `ownedPaths` that still need reviews. Three sections: needs-your-re-review, stale (>3d), needs-review. PRs with `mergeable: CONFLICTING` are flagged with `⚠️ MERGE CONFLICTS!`. Pass `--authors pod` to additionally scope the dashboard to PRs authored by pod-roster members; non-roster authors touching pod paths are surfaced in a separate "Excluded" section. | `<pod>-pr-status` |
 | `review` | required (`--pod`) | The current user's personal review queue: PRs needing their first review, plus PRs where their review was dismissed. | (currently unused; available for a future skill) |
 | `my` | optional (`--pod`); cross-pod by default | The current user's own open PRs grouped by merge readiness. Per-PR pod resolution drives ping logic. Emits copy-paste Slack ping messages for missing reviewers. | `pr-mine` |
 
@@ -36,6 +36,10 @@ This directory does not contain a `SKILL.md`; it is not a Cursor skill itself. T
 ```bash
 # pod-scoped
 node .cursor/skills/_lib/pr-skills/pr-status.mjs --pod <name> --mode <team|review>
+
+# pod-scoped, restricted to PRs authored by pod-roster members
+# (non-roster authors who touch pod paths are surfaced as an Excluded section)
+node .cursor/skills/_lib/pr-skills/pr-status.mjs --pod <name> --mode team --authors pod
 
 # cross-pod (auto-detects per-PR pod from .github/teams/*.json)
 node .cursor/skills/_lib/pr-skills/pr-status.mjs --mode my
@@ -46,6 +50,11 @@ node .cursor/skills/_lib/pr-skills/pr-status.mjs --pod <name> --mode my
 # machine-readable output
 node .cursor/skills/_lib/pr-skills/pr-status.mjs --pod <name> --mode team --json
 ```
+
+`--authors` accepts:
+
+- `any` (default) — original behavior, all PRs touching pod paths are listed regardless of author.
+- `pod` — only PRs authored by `leads ∪ members` from the pod's team JSON. PRs touching pod paths but authored outside the roster are surfaced as a separate "Excluded" section so the pod can still see them for context. Only honored with `--mode team`; ignored (with a warning on stderr) for other modes.
 
 `pr-status.mjs` reads `~/.config/qvac-pr-skills/config.json` when present for
 GitHub repo and stale-day settings. If config is missing, the repo is inferred
