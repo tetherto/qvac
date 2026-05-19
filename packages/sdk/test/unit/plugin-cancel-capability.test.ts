@@ -213,6 +213,7 @@ bareTest(
       },
       [diffusionPlugin.modelType]: {
         diffusionStream: { scope: "model", hard: true },
+        videoStream: { scope: "model", hard: true },
         upscaleStream: { scope: "none" },
       },
     };
