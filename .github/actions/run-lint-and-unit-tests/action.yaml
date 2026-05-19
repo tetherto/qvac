@@ -70,7 +70,7 @@ runs:
       working-directory: ${{ inputs.workdir }}
     - name: Install bare
       shell: bash
-      run: npm install -g bare
+      run: npm install -g --force bare
       working-directory: ${{ inputs.workdir }}
     - name: Run tests
       shell: bash

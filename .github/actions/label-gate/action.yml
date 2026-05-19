@@ -21,6 +21,7 @@ inputs:
       qvac-internal-dev
       qvac-internal-merge
       qvac-internal-release
+      qvac-collabora
   users:
     description: >
       Comma- and/or newline-separated list of GitHub user logins that are

@@ -713,3 +713,16 @@ function pickDefaultEmbedding (serveConfig: ServeConfig): PickEmbeddingResult {
   if (embeddings.length === 0) return { kind: 'none' }
   return { kind: 'ambiguous', aliases: embeddings.map((e) => e.alias) }
 }
+
+export const META = {
+  endpoints: [
+    'GET /v1/vector_stores',
+    'POST /v1/vector_stores',
+    'GET /v1/vector_stores/{vector_store_id}',
+    'POST /v1/vector_stores/{vector_store_id}',
+    'DELETE /v1/vector_stores/{vector_store_id}',
+    'POST /v1/vector_stores/{vector_store_id}/search',
+    'POST /v1/vector_stores/{vector_store_id}/files'
+  ],
+  caveats: ['in-memory metadata; survives process lifetime only']
+} as const
