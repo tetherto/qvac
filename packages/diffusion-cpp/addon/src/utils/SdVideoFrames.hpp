@@ -32,7 +32,6 @@ namespace qvac_lib_inference_addon_sd {
  * instance across threads; per-job exclusivity is already enforced one
  * level up by the run queue.
  */
-// NOLINTBEGIN(readability-implicit-bool-conversion,google-readability-braces-around-statements,readability-braces-around-statements,cppcoreguidelines-no-malloc,cppcoreguidelines-owning-memory,cppcoreguidelines-pro-bounds-pointer-arithmetic,readability-identifier-length)
 class SdVideoFrames {
 public:
   SdVideoFrames() : data_(nullptr), count_(0) {}
@@ -77,6 +76,5 @@ private:
   sd_image_t *const data_;
   const int count_;
 };
-// NOLINTEND(readability-implicit-bool-conversion,google-readability-braces-around-statements,readability-braces-around-statements,cppcoreguidelines-no-malloc,cppcoreguidelines-owning-memory,cppcoreguidelines-pro-bounds-pointer-arithmetic,readability-identifier-length)
 
 } // namespace qvac_lib_inference_addon_sd
