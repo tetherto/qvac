@@ -30,10 +30,18 @@ export interface CategorySummary {
   percent: number
 }
 
+export interface UnknownLabelCount {
+  label: string
+  kind: 'tag' | 'group'
+  count: number
+}
+
 export interface CoverageSummary {
   byCategory: Record<CoverageCategory, CategorySummary>
   consumerPrimary: CategorySummary
   full: CategorySummary
+  /** Present when any operation remains in the unknown category. */
+  unknownBreakdown?: UnknownLabelCount[]
 }
 
 export interface CoverageReport {

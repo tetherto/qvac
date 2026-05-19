@@ -5,7 +5,10 @@ import { fileURLToPath } from 'node:url'
 import { buildCoverageReport } from '../src/openai/coverage/build-report.js'
 import { categorize } from '../src/openai/coverage/categorize.js'
 import { collectMeta } from '../src/openai/coverage/collect-meta.js'
-import { filterCoverageRows } from '../src/openai/coverage/format.js'
+import {
+  filterCoverageRows,
+  formatCoverageReportHuman
+} from '../src/openai/coverage/format.js'
 import { parseRouter } from '../src/openai/coverage/parse-router.js'
 import { parseSpec } from '../src/openai/coverage/parse-spec.js'
 import { CONSUMER_PRIMARY_ENDPOINTS } from '../src/openai/coverage/primary.js'
@@ -20,6 +23,20 @@ describe('openai coverage categorize', () => {
     assert.equal(categorize({ tags: ['Models'] }), 'ai-secondary')
     assert.equal(categorize({ tags: ['Assistants'] }), 'platform')
     assert.equal(categorize({ tags: ['NewlyAddedThing'] }), 'unknown')
+  })
+
+  it('maps x-oaiMeta.group slugs and tags case-insensitively', () => {
+    assert.equal(categorize({ tags: [], group: 'containers' }), 'platform')
+    assert.equal(categorize({ tags: [], group: 'chatkit' }), 'platform')
+    assert.equal(
+      categorize({ tags: ['Certificates'], group: 'administration' }),
+      'platform'
+    )
+    assert.equal(
+      categorize({ tags: [], group: 'responses' }),
+      'primary-ai'
+    )
+    assert.equal(categorize({ tags: ['chat'] }), 'primary-ai')
   })
 })
 
@@ -78,6 +95,80 @@ describe('openai coverage live report (fixture)', () => {
     assert.ok(filtered.length > 0)
     for (const row of filtered) {
       assert.equal(CONSUMER_PRIMARY_ENDPOINTS.has(row.key), true)
+    }
+  })
+
+  it('includes unknown breakdown when fixture has unknown ops', async () => {
+    const report = await buildCoverageReport({
+      specPath: FIXTURE_SPEC,
+      routerPath: FIXTURE_ROUTER
+    })
+    assert.ok(report.summary.unknownBreakdown)
+    assert.ok(
+      report.summary.unknownBreakdown.some((x) => x.label === 'NewlyAddedThing')
+    )
+  })
+
+  it('omits unknown section and category line when nothing is unmapped', () => {
+    const report = {
+      fetchedAt: '2026-01-01T00:00:00.000Z',
+      specSource: 'test',
+      routerSource: 'test',
+      implementedCount: 1,
+      rows: [
+        {
+          method: 'POST' as const,
+          path: '/v1/chat/completions',
+          key: 'POST /v1/chat/completions',
+          category: 'primary-ai' as const,
+          consumerPrimary: true,
+          implemented: true,
+          caveats: [],
+          deprecated: false,
+          tags: ['Chat']
+        }
+      ],
+      summary: {
+        byCategory: {
+          'primary-ai': { implemented: 1, total: 1, percent: 100 },
+          'ai-secondary': { implemented: 0, total: 0, percent: 0 },
+          platform: { implemented: 0, total: 0, percent: 0 },
+          unknown: { implemented: 0, total: 0, percent: 0 }
+        },
+        consumerPrimary: { implemented: 1, total: 1, percent: 100 },
+        full: { implemented: 1, total: 1, percent: 100 }
+      }
+    }
+    const text = formatCoverageReportHuman(report, report.rows)
+    assert.ok(!text.includes('Unmapped OpenAI spec labels'))
+    assert.ok(!text.match(/^  unknown\s/m))
+  })
+
+  it('prints unmapped notice at top of human report when unknown ops exist', async () => {
+    const report = await buildCoverageReport({
+      specPath: FIXTURE_SPEC,
+      routerPath: FIXTURE_ROUTER
+    })
+    const text = formatCoverageReportHuman(report, report.rows)
+    const titleIdx = text.indexOf('qvac serve openai — coverage')
+    const noticeIdx = text.indexOf('Unmapped OpenAI spec labels')
+    const specIdx = text.indexOf('Spec:')
+    assert.ok(titleIdx >= 0)
+    assert.ok(noticeIdx > titleIdx)
+    assert.ok(specIdx > noticeIdx)
+    assert.match(text, /do not map to any coverage category/)
+    assert.match(text, /tag: NewlyAddedThing/)
+  })
+
+  it('filters unknown category rows', async () => {
+    const report = await buildCoverageReport({
+      specPath: FIXTURE_SPEC,
+      routerPath: FIXTURE_ROUTER
+    })
+    const filtered = filterCoverageRows(report, { unknown: true })
+    assert.ok(filtered.length > 0)
+    for (const row of filtered) {
+      assert.equal(row.category, 'unknown')
     }
   })
 

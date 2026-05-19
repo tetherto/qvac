@@ -1,6 +1,6 @@
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { categorize } from './categorize.js'
+import { categorize, summarizeUnknownLabels } from './categorize.js'
 import { collectMeta } from './collect-meta.js'
 import { parseRouter } from './parse-router.js'
 import { parseSpec } from './parse-spec.js'
@@ -10,7 +10,8 @@ import type {
   CoverageCategory,
   CoverageReport,
   CoverageRow,
-  CoverageSummary
+  CoverageSummary,
+  SpecEntry
 } from './types.js'
 
 const COVERAGE_DIR = dirname(fileURLToPath(import.meta.url))
@@ -58,7 +59,7 @@ function summarizeRows (rows: CoverageRow[]): CoverageSummary {
   const consumerImplemented = consumerRows.filter((r) => r.implemented).length
   const fullImplemented = rows.filter((r) => r.implemented).length
 
-  return {
+  const summary: CoverageSummary = {
     byCategory,
     consumerPrimary: {
       implemented: consumerImplemented,
@@ -71,6 +72,21 @@ function summarizeRows (rows: CoverageRow[]): CoverageSummary {
       percent: percent(fullImplemented, rows.length)
     }
   }
+
+  if (byCategory.unknown.total > 0) {
+    const unknownEntries = rows
+      .filter((r) => r.category === 'unknown')
+      .map((r) => {
+        const entry: Pick<SpecEntry, 'tags' | 'group'> = {
+          tags: r.tags
+        }
+        if (r.group !== undefined) entry.group = r.group
+        return entry
+      })
+    summary.unknownBreakdown = summarizeUnknownLabels(unknownEntries)
+  }
+
+  return summary
 }
 
 export async function buildCoverageReport (options: {

@@ -16,6 +16,32 @@ function formatCategoryLine (
   return `  ${label.padEnd(14)} ${impl} / ${total}   (${pct}%)`
 }
 
+function appendUnknownNotice (lines: string[], report: CoverageReport): void {
+  const unknownTotal = report.summary.byCategory.unknown.total
+  if (unknownTotal === 0 || !report.summary.unknownBreakdown?.length) return
+
+  const opWord = unknownTotal === 1 ? 'operation' : 'operations'
+  lines.push('Unmapped OpenAI spec labels')
+  lines.push('')
+  lines.push(
+    `${unknownTotal} ${opWord} in the upstream OpenAPI spec do not map to any coverage category (primary-ai, ai-secondary, platform). They are counted under "unknown" below until categorize.ts is updated.`
+  )
+  lines.push('')
+  lines.push('Labels not in our category tables (OpenAPI tag or x-oaiMeta.group):')
+  for (const item of report.summary.unknownBreakdown) {
+    const kind = item.kind === 'tag' ? 'tag' : 'x-oaiMeta.group'
+    lines.push(
+      `  ${String(item.count).padStart(3)}  ${kind}: ${item.label}`
+    )
+  }
+  lines.push('')
+  lines.push(
+    '  Extend PRIMARY_TAGS / AI_SECONDARY_TAGS / PLATFORM_TAGS or GROUP_CATEGORY in src/openai/coverage/categorize.ts'
+  )
+  lines.push('  List affected endpoints: qvac openai coverage --unknown')
+  lines.push('')
+}
+
 export function formatCoverageReportHuman (
   report: CoverageReport,
   rows: CoverageRow[]
@@ -23,6 +49,7 @@ export function formatCoverageReportHuman (
   const lines: string[] = []
   lines.push('qvac serve openai — coverage')
   lines.push('')
+  appendUnknownNotice(lines, report)
   lines.push(`Spec: ${report.specSource} (${report.rows.length} endpoints)`)
   lines.push(
     `Router: ${report.routerSource} (${report.implementedCount} implemented)`
@@ -32,9 +59,11 @@ export function formatCoverageReportHuman (
   const cats: Array<{ key: CoverageCategory; label: string }> = [
     { key: 'primary-ai', label: 'primary-ai' },
     { key: 'ai-secondary', label: 'ai-secondary' },
-    { key: 'platform', label: 'platform' },
-    { key: 'unknown', label: 'unknown' }
+    { key: 'platform', label: 'platform' }
   ]
+  if (report.summary.byCategory.unknown.total > 0) {
+    cats.push({ key: 'unknown', label: 'unknown' })
+  }
   for (const { key, label } of cats) {
     lines.push(formatCategoryLine(label, report.summary.byCategory[key]))
   }
@@ -64,11 +93,15 @@ export function filterCoverageRows (
   report: CoverageReport,
   options: {
     unsupported?: boolean
+    unknown?: boolean
     primaryAi?: boolean
     consumerPrimary?: boolean
   }
 ): CoverageRow[] {
   let rows = report.rows
+  if (options.unknown) {
+    rows = rows.filter((r) => r.category === 'unknown')
+  }
   if (options.primaryAi) {
     rows = rows.filter((r) => r.category === 'primary-ai')
   }

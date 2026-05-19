@@ -198,6 +198,7 @@ function setupCli (): void {
     .description('Show OpenAI endpoint coverage for qvac serve openai')
     .option('--json', 'Output JSON report')
     .option('--unsupported', 'List only unsupported endpoints')
+    .option('--unknown', 'List only uncategorized (unknown) endpoints')
     .option(
       '--primary-ai',
       'Restrict to spec-derived primary AI inference surface (Chat, Audio, Images, …)'
@@ -210,6 +211,7 @@ function setupCli (): void {
     .action(async (options: {
       json?: boolean
       unsupported?: boolean
+      unknown?: boolean
       primaryAi?: boolean
       consumerPrimary?: boolean
       offline?: boolean
@@ -219,6 +221,7 @@ function setupCli (): void {
         const covOpts: Parameters<typeof runOpenAiCoverage>[0] = {}
         if (options.json) covOpts.json = true
         if (options.unsupported) covOpts.unsupported = true
+        if (options.unknown) covOpts.unknown = true
         if (options.primaryAi) covOpts.primaryAi = true
         if (options.consumerPrimary) covOpts.consumerPrimary = true
         if (options.offline) covOpts.offline = true

@@ -7,6 +7,7 @@ import {
 export interface RunOpenAiCoverageOptions {
   json?: boolean
   unsupported?: boolean
+  unknown?: boolean
   primaryAi?: boolean
   consumerPrimary?: boolean
   offline?: boolean
@@ -21,6 +22,7 @@ export async function runOpenAiCoverage (
 
   const filterOpts: Parameters<typeof filterCoverageRows>[1] = {}
   if (options.unsupported) filterOpts.unsupported = true
+  if (options.unknown) filterOpts.unknown = true
   if (options.primaryAi) filterOpts.primaryAi = true
   if (options.consumerPrimary) filterOpts.consumerPrimary = true
   const filtered = filterCoverageRows(report, filterOpts)
@@ -33,7 +35,10 @@ export async function runOpenAiCoverage (
   }
 
   const listOnlyUnsupported =
-    options.unsupported && !options.primaryAi && !options.consumerPrimary
+    options.unsupported &&
+    !options.unknown &&
+    !options.primaryAi &&
+    !options.consumerPrimary
   if (listOnlyUnsupported) {
     for (const row of filtered) {
       const caveat = row.caveats.length
