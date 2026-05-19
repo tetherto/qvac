@@ -334,6 +334,8 @@ jobs:
           fi
           echo "VCPKG_ROOT=$VCPKG_ROOT"
           echo "VCPKG_ROOT=$VCPKG_ROOT" >> $GITHUB_ENV
+          rm -rf $VCPKG_ROOT/buildtrees/*
+          rm -rf $VCPKG_ROOT/packages/*
           mkdir -p vcpkg/cache
 
           echo "Installing system dependencies..."
