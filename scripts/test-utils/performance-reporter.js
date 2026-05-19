@@ -321,6 +321,11 @@ const QUALITY_COLUMNS = {
     { key: 'wer', label: 'WER' },
     { key: 'keyword_detection_rate', label: 'Keyword Rate' },
     { key: 'key_value_accuracy', label: 'KV Accuracy' }
+  ],
+  vla: [
+    { key: 'action_max_abs_diff', label: 'Max \\|Δ\\|', unit: 'raw' },
+    { key: 'action_mean_abs_diff', label: 'Mean \\|Δ\\|', unit: 'raw' },
+    { key: 'action_cos_sim', label: 'Cosine Sim', unit: 'cos-sim' }
   ]
 }
 
@@ -355,6 +360,13 @@ const METRIC_COLUMNS = {
     { key: 'tps', label: 'Tokens/sec' },
     { key: 'real_time_factor', label: 'RTF' },
     { key: 'sample_count', label: 'Samples' }
+  ],
+  vla: [
+    { key: 'total_time_ms', label: 'Total Time (ms)' },
+    { key: 'vision_time_ms', label: 'Vision (ms)' },
+    { key: 'smollm2_compute_time_ms', label: 'SmolLM2 Compute (ms)' },
+    { key: 'smollm2_total_time_ms', label: 'SmolLM2 Total (ms)' },
+    { key: 'ode_time_ms', label: 'ODE (ms)' }
   ],
   parakeet: [
     { key: 'real_time_factor', label: 'RTF' },
@@ -455,6 +467,10 @@ function createPerformanceReporter (opts) {
           real_time_factor: null,
           sample_count: null,
           duration_ms: null,
+          vision_time_ms: null,
+          smollm2_compute_time_ms: null,
+          smollm2_total_time_ms: null,
+          ode_time_ms: null,
           backend: null,
           platform: null,
           ...metrics
@@ -579,7 +595,11 @@ function createPerformanceReporter (opts) {
           const vals = qCols.map(c => {
             const v = r.quality[c.key]
             if (v === null || v === undefined) return '-'
-            if (typeof v === 'number') return (v * 100).toFixed(1) + '%'
+            if (typeof v === 'number') {
+              if (c.unit === 'raw') return v.toFixed(4)
+              if (c.unit === 'cos-sim') return v.toFixed(8)
+              return (v * 100).toFixed(1) + '%'
+            }
             return String(v)
           })
           lines.push('| ' + [r.test, ...vals].join(' | ') + ' |')
