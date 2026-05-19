@@ -155,7 +155,6 @@ jobs:
 
     steps:
       - name: Setup Node.js
-        if: matrix.platform == 'darwin' || matrix.arch == 'arm64'
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
@@ -182,14 +181,8 @@ jobs:
         run: |
           npm install
   
-      - name: Install bare tooling (arm64 and macos)
-        if: matrix.arch == 'arm64' || matrix.platform == 'darwin'
-        run: |
-          npm install -g bare bare-make
-
-      - name: Add bare tooling to PATH (Linux x64)
-        if: (matrix.platform == 'linux' && matrix.arch == 'x64')
-        run: echo "/usr/local/nvm/versions/node/v20.20.2/bin" >> $GITHUB_PATH
+      - name: Install bare tooling
+        run: npm install -g --force bare bare-make
 
       - name: Download prebuilds from artifact
         if: ${{ !inputs.prebuild_package }}
@@ -331,7 +324,6 @@ jobs:
 
     steps:
       - name: Setup Node.js
-        if: matrix.platform == 'darwin' || matrix.arch == 'arm64'
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
@@ -407,14 +399,8 @@ jobs:
         run: |
           npm install
 
-      - name: Install bare tooling (arm64 and macos)
-        if: matrix.arch == 'arm64' || matrix.platform == 'darwin'
-        run: |
-          npm install -g bare bare-make
-
-      - name: Add bare tooling to PATH (Linux x64)
-        if: (matrix.platform == 'linux' && matrix.arch == 'x64')
-        run: echo "/usr/local/nvm/versions/node/v20.20.2/bin" >> $GITHUB_PATH
+      - name: Install bare tooling
+        run: npm install -g --force bare bare-make
 
       - name: Download prebuilds from artifact
         if: ${{ !inputs.prebuild_package }}
