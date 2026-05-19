@@ -92,10 +92,14 @@ jobs:
             arch: x64
             runner: qvac-win25-x64
 
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner || matrix.os }}
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
     steps:
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        if: startsWith(matrix.runner, 'qvac-')
       - name: Checkout source
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -158,6 +162,13 @@ jobs:
       - if: ${{ matrix.os == 'windows-2025' }}
         name: Configure vcpkg in windows
         run: echo ("VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" -replace '\\', '/') >> $env:GITHUB_ENV
+
+      - if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'windows-2025' }}
+        name: Cleanup vcpkg
+        shell: bash
+        run: |
+          rm -rf $VCPKG_ROOT/buildtrees/*
+          rm -rf $VCPKG_ROOT/packages/*
 
       - if: ${{ matrix.os == 'windows-2025' }}
         name: Configure cmake generator in windows
