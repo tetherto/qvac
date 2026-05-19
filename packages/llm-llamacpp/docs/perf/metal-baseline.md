@@ -960,7 +960,7 @@ All paths relative to `vlm-benchmark/` in the working directory.
 | Android CPU APK | `firebase-benchmark/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk` |
 | Android GPU APK | `firebase-benchmark-gpu/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk` |
 | iOS XCTest wrapper | `firebase-benchmark-ios/` |
-| GCS models bucket | `gs://qvac-vlm-benchmark-models/` (public read: `allUsers:objectViewer`) |
+| GCS models bucket | `gs://qvac-vlm-benchmark-models/` (private; was public `allUsers:objectViewer` until 2026-05-18 — use `gsutil signurl` for time-limited access) |
 
 #### G.11 How to Reproduce (Android)
 
