@@ -46,14 +46,6 @@ inputs:
 runs:
   using: composite
   steps:
-    # PR #2107: wipe the runner workspace before checkout on persistent
-    # self-hosted runners. Stale files from a prior job (node_modules,
-    # build caches, leftover .tgz) can confuse npm install / bare-make.
-    - name: Clean self-hosted workspace
-      if: startsWith(matrix.runner, 'qvac-')
-      shell: bash
-      run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
-
     - name: Free up disk space (Android, github-hosted only)
       if: inputs.platform == 'Android' && runner.environment == 'github-hosted'
       shell: bash
