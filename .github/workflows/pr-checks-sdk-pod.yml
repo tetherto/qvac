@@ -279,40 +279,58 @@ jobs:
           test -n "$tarball" || { echo "::error::No SDK tarball found after pack"; exit 1; }
           tarball_abs="$(pwd)/$tarball"
 
-          # Install into a fresh consumer dir at info log level so peer warnings surface.
-          consumer=$(mktemp -d)
-          cd "$consumer"
+          # Run the same three checks (peer warnings, Holepunch dedup, smoke import)
+          # against a freshly installed consumer dir. install.log must already exist.
+          check_consumer() {
+            local consumer="$1" label="$2"
+            cd "$consumer"
+
+            if grep -Eq "ERESOLVE|npm warn peer" install.log; then
+              echo "::error title=Peer dependency drift (${label})::SDK consumer install surfaced peer warnings"
+              grep -E "ERESOLVE|npm warn peer" install.log || true
+              return 1
+            fi
+            echo "::notice::[${label}] 0 peer warnings"
+
+            local fail=0 tree copies
+            for pkg in corestore hyperswarm hyperdrive hyperdb hyperblobs hyperdht; do
+              tree=$(npm ls "$pkg" --all 2>&1)
+              copies=$(printf '%s\n' "$tree" | grep -E "[─ ]${pkg}@" | grep -vc "deduped" || true)
+              if [ "$copies" != "1" ]; then
+                echo "::error::[${label}] ${pkg} resolved to ${copies} copies (expected 1)"
+                printf '%s\n' "$tree"
+                fail=1
+              else
+                echo "  ok  [${label}] ${pkg} = 1 copy"
+              fi
+            done
+            [ "$fail" = "0" ] || return 1
+            echo "::notice::[${label}] Single-copy invariant holds for shared P2P packages"
+
+            node -e "import('@qvac/sdk').then(m => { if (Object.keys(m).length < 50) { console.error('FAIL: too few exports'); process.exit(1); } console.log('[${label}] import ok:', Object.keys(m).length, 'exports'); }).catch(e => { console.error('[${label}] FAIL:', e.message); process.exit(1); })"
+          }
+
+          # Scenario 1: default install (plug-n-play) — all optionalDependencies present.
+          # Catches Keet-style ERESOLVE from optional deps' peer ranges colliding with
+          # other deps, and validates the mobile/Pear consumer profile.
+          consumer_default=$(mktemp -d)
+          cd "$consumer_default"
           npm init -y > /dev/null
           npm pkg set type=module > /dev/null
           npm install --no-fund --no-audit --ignore-scripts --loglevel=info \
             "$tarball_abs" 2>&1 | tee install.log
+          check_consumer "$consumer_default" "default" || exit 1
 
-          # Fail on any peer-dependency warning or resolution error.
-          if grep -Eq "ERESOLVE|npm warn peer" install.log; then
-            echo "::error title=Peer dependency drift::SDK consumer install surfaced peer warnings"
-            grep -E "ERESOLVE|npm warn peer" install.log || true
-            exit 1
-          fi
-          echo "::notice::Consumer install: 0 peer warnings"
-
-          # Fail if any shared P2P package resolves to more than one copy.
-          fail=0
-          for pkg in corestore hyperswarm hyperdrive hyperdb hyperblobs hyperdht; do
-            tree=$(npm ls "$pkg" --all 2>&1)
-            copies=$(printf '%s\n' "$tree" | grep -E "[─ ]${pkg}@" | grep -vc "deduped" || true)
-            if [ "$copies" != "1" ]; then
-              echo "::error::${pkg} resolved to ${copies} copies (expected 1)"
-              printf '%s\n' "$tree"
-              fail=1
-            else
-              echo "  ok  ${pkg} = 1 copy"
-            fi
-          done
-          [ "$fail" = "0" ] || exit 1
-          echo "::notice::Single-copy invariant holds for shared P2P packages"
-
-          # Smoke import from the freshly installed package.
-          node -e "import('@qvac/sdk').then(m => { if (Object.keys(m).length < 50) { console.error('FAIL: too few exports'); process.exit(1); } console.log('import ok:', Object.keys(m).length, 'exports'); }).catch(e => { console.error('FAIL:', e.message); process.exit(1); })"
+          # Scenario 2: lean backend install (--omit=optional) — no optionalDependencies.
+          # Catches (a) backend-required packages accidentally classified as optional,
+          # (b) SDK entry-point eagerly importing an optional module.
+          consumer_lean=$(mktemp -d)
+          cd "$consumer_lean"
+          npm init -y > /dev/null
+          npm pkg set type=module > /dev/null
+          npm install --no-fund --no-audit --ignore-scripts --omit=optional --loglevel=info \
+            "$tarball_abs" 2>&1 | tee install.log
+          check_consumer "$consumer_lean" "lean (--omit=optional)" || exit 1
 
       - name: Check for errors
         shell: bash
