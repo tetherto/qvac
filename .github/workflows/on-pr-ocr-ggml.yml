@@ -16,6 +16,18 @@ on:
       - "packages/ocr-ggml/**"
       - ".github/workflows/*ocr-ggml*.yml"
   workflow_dispatch:
+    inputs:
+      base_sha:
+        description: >-
+          Optional base SHA for cpp-lint (clang-format + clang-tidy) to diff
+          against. When empty, the reusable cpp-lint workflow falls back to
+          HEAD~1, so only files touched by the current commit get linted.
+          Set this to a commit further back (e.g. 14e7c83e, the last commit
+          before the clang-tidy buckets) to re-lint every C++ file we have
+          touched since.
+        type: string
+        required: false
+        default: ""
   workflow_call:
 
 permissions:
@@ -113,7 +125,7 @@ jobs:
     uses: ./.github/workflows/cpp-lint.yaml
     secrets: inherit
     with:
-      sha: ${{ github.event.pull_request.base.sha }}
+      sha: ${{ inputs.base_sha || github.event.pull_request.base.sha }}
       pr_head_sha: ${{ github.event.pull_request.head.sha }}
       workdir: packages/ocr-ggml
 
