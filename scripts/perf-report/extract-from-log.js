@@ -344,14 +344,38 @@ function deriveDeviceName (filePath, logDir) {
   const rel = path.relative(logDir, filePath)
   const firstSeg = rel.split(path.sep)[0]
   if (firstSeg && firstSeg !== path.basename(filePath)) {
-    return firstSeg.replace(/_/g, ' ')
+    return _stripRunPrefix(firstSeg.replace(/_/g, ' '))
   }
   // Flat layout: extract "Apple_iPhone_16_Pro" from
   // "Apple_iPhone_16_Pro_Tests_Suite_Test_spec_output.txt".
   const base = path.basename(filePath)
   const m = base.match(/^(.+?)_(?:Tests_Suite|Setup_Suite|Teardown_Suite|job)_/)
-  if (m && m[1]) return m[1].replace(/_/g, ' ')
+  if (m && m[1]) return _stripRunPrefix(m[1].replace(/_/g, ' '))
   return null
+}
+
+/**
+ * Device Farm run names produced by schedule-test-run follow:
+ *   (Manual|PR)-<n>-(Android|iOS)[-<suffix>]*
+ * where <suffix> is sharding (-Perf, -Regular, -Bench) or dual-flagship
+ * (-Samsung, -Pixel, -iPhone17). The refactored collect-and-upload-logs
+ * composite groups artifacts under "<RUN>_<DEVICE>" so multiple Device
+ * Farm runs targeting the same device pool don't collide on disk. Once
+ * the joining underscore is converted back to a space, the first space
+ * marks the boundary between run name and device name.
+ *
+ * Older mobile workflows on main kept artifacts under just the device
+ * name, so the combined report's column headers read cleanly. Strip the
+ * canonical run prefix here so the new layout produces the same labels.
+ *
+ * Non-matching inputs are returned unchanged.
+ */
+function _stripRunPrefix (name) {
+  if (!name) return name
+  return name.replace(
+    /^(?:Manual|PR)-\d+-(?:Android|iOS)(?:-[A-Za-z0-9]+)*\s+/,
+    ''
+  )
 }
 
 function parseArgs () {

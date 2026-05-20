@@ -64,10 +64,7 @@
     "brittle": "^3.17.0",
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
-    "fs": "npm:bare-fs",
-    "os": "npm:bare-os@^3.6.2",
     "standard": "^17.1.2",
-    "tty": "npm:bare-node-tty",
     "typescript": "^5.9.2"
   },
   "dependencies": {
@@ -75,8 +72,7 @@
     "@qvac/infer-base": "^0.4.0",
     "@qvac/logging": "^0.1.0",
     "bare-fs": "^4.5.1",
-    "bare-path": "^3.0.0",
-    "path": "npm:bare-path"
+    "bare-path": "^3.0.0"
   },
   "exports": {
     "./package": "./package.json",
