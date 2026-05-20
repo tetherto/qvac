@@ -12,9 +12,9 @@ This is the **single** label that gates every privileged PR job in the repo. The
 
 | | |
 |---|---|
-| **Purpose** | Authorise the `label-gate` composite action (secret-bearing jobs) and the `validate-pr` / addon-cpp / npm-publish gates (non-secret heavy CI). One label, one ceremony. |
-| **Who can apply** | Active member of `@tetherto/qvac-internal-dev`, `@tetherto/qvac-internal-merge`, or `@tetherto/qvac-internal-release`. See [TEAMS.md](TEAMS.md). |
-| **What it gates** | Every secret-bearing workflow under `.github/workflows/` (108 workflows as of QVAC-18612), plus the per-package `validate-pr` merge assertion (`public-pr.yml`), the `inference-addon-cpp` native + JS test matrices, the `public-reusable-npm.yml` integration-test step, and `pr-models-validation-registry-server.yml`'s validate/test jobs. Specifically, every job downstream of `needs: [..., label-gate]` whose `if:` includes `needs.label-gate.outputs.authorised == 'true'`, plus every `if: contains(..., 'verified')` check. |
+| **Purpose** | Authorise the `label-gate` composite action so that secret-bearing jobs (sanity-checks, prebuilds, publish, deploy, etc.) are allowed to run on a PR. |
+| **Who can apply** | Active member of `@tetherto/qvac-internal-dev`, `@tetherto/qvac-internal-merge`, `@tetherto/qvac-internal-release`, or `@tetherto/qvac-collabora`. See [TEAMS.md](TEAMS.md). |
+| **What it gates** | Every secret-bearing workflow under `.github/workflows/` (108 workflows as of QVAC-18612). Specifically, every job downstream of `needs: [..., label-gate]` whose `if:` includes `needs.label-gate.outputs.authorised == 'true'`. |
 | **Behaviour on `synchronize`** | When a non-trusted actor pushes new commits to a verified PR, `label-gate` strips the label automatically. A trusted actor must re-apply it after reviewing the new commits. This prevents authorisation from silently inheriting across content changes by an untrusted contributor. |
 | **Behaviour on apply by non-trusted actor** | The label is stripped immediately and the gate denies. This avoids a "look, it's verified" social signal that doesn't actually mean the PR is authorised. |
 | **Approval bot tier** | Recognised as **tier 1** by `approval-check-worker`. |
@@ -22,7 +22,7 @@ This is the **single** label that gates every privileged PR job in the repo. The
 
 ### When CI is blocked by `label-gate`
 
-If your PR's secret-bearing jobs are skipping with a `label-gate.outputs.authorised != 'true'` condition, ask any member of the three teams above to apply `verified`. There is intentionally no self-service path — the whole point of the gate is that someone other than the PR author signs off.
+If your PR's secret-bearing jobs are skipping with a `label-gate.outputs.authorised != 'true'` condition, ask any member of the trusted teams above to apply `verified`. There is intentionally no self-service path — the whole point of the gate is that someone other than the PR author signs off.
 
 ---
 

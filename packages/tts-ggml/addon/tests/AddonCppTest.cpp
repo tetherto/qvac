@@ -8,7 +8,7 @@
 //   - busy rejection when a job is already in flight
 //   - cooperative cancel + restart
 //
-// Mirrors the pattern in qvac-lib-infer-parakeet/addon/tests/AddonCppTest.cpp.
+// Mirrors the pattern in transcription-parakeet/addon/tests/AddonCppTest.cpp.
 
 #include <gtest/gtest.h>
 

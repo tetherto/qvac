@@ -1,8 +1,7 @@
 'use strict'
 
-const test = require('brittle')
 const path = require('bare-path')
-const { ensureModel } = require('./utils')
+const { ensureModel, safeTest } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
 const os = require('bare-os')
 const LlmLlamacpp = require('../../index.js')
@@ -126,7 +125,7 @@ function createFollowUpMessages (initialMessages, previousResponse) {
     }
   ]
 }
-test('reasoning tag EOS replacement works with tools=false', {
+safeTest('reasoning tag EOS replacement works with tools=false', {
   skip: isDarwinX64 || isWindowsX64, // TODO: unskip isWindowsX64 once we have GPU, takes too long
   timeout: 600_000
 }, async t => {
@@ -149,7 +148,7 @@ test('reasoning tag EOS replacement works with tools=false', {
   verifyContinuedAfterReasoning(t, response2, 'tools=false')
 })
 
-test('reasoning tag EOS replacement works with tools=true', {
+safeTest('reasoning tag EOS replacement works with tools=true', {
   skip: isDarwinX64 || isWindowsX64, // TODO: unskip isWindowsX64 once we have GPU, takes too long
   timeout: 600_000
 }, async t => {
@@ -172,7 +171,7 @@ test('reasoning tag EOS replacement works with tools=true', {
   verifyContinuedAfterReasoning(t, response2, 'tools=true')
 })
 
-test('Qwen3 reasoning-budget=0 disables thinking', {
+safeTest('Qwen3 reasoning-budget=0 disables thinking', {
   skip: isDarwinX64 || isWindowsX64,
   timeout: 600_000
 }, async t => {

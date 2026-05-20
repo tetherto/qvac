@@ -208,7 +208,7 @@ if(APPLE)
   # Long-term this belongs in cmake-bare itself so every bare module
   # is robust against `-undefined,dynamic_lookup` swallowing
   # compiler-rt builtins. Same fix will be needed in
-  # qvac-lib-infer-llamacpp-llm / -whispercpp / -tts-ggml the moment
+  # llm-llamacpp / transcription-whispercpp / tts-ggml the moment
   # any of them gets rebuilt under Xcode 16+.
   # Map the active CMake target to (a) the xcrun SDK name we'll ask
   # Xcode's clang about and (b) clang's libclang_rt filename suffix.

@@ -11,13 +11,7 @@
   "files": [
     "binding.js",
     "index.js",
-    "silerovad.js",
-    "prebuilds",
-    "index.d.ts",
-    "utils",
-    "prebuilds",
-    "model",
-    "lib"
+    "prebuilds"
   ],
   "exports": {
     "./package": "./package.json",
@@ -30,7 +24,6 @@
   "keywords": [
     "tether",
     "addon",
-    "silero",
     "qvac"
   ],
   "license": "Apache-2.0",

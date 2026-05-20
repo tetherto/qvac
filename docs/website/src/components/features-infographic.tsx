@@ -211,32 +211,23 @@ const R_OUTER = 290;      // outermost dotted circle (where feature pins live)
 const VIEWBOX_TOP = -20;
 const VIEWBOX_HEIGHT = VIEW_H - VIEWBOX_TOP;
 
-const PLATFORM_BOX = 80;   // visible circular wrapper holding each platform icon
-const PLATFORM_HIT_BOX = 120; // hover-sensitive square around the visible icon
+const PLATFORM_ICON_RADIUS = 40;   // visible circular wrapper around each platform icon (r in SVG units)
+const PLATFORM_HIT_RADIUS = 60;    // hover-sensitive circle around the visible icon (slightly larger)
+const PLATFORM_TOOLTIP_W = 280;
+// Sized just above the longest platform description rendered at text-[18px]
+// inside 280-px-wide foreignObject with p-4. The 120 ms hover grace period
+// bridges the small visual gap between icon hit-zone and tooltip for shorter
+// descriptions.
+const PLATFORM_TOOLTIP_H = 140;
 
-// The foreignObject around each platform icon is intentionally much larger than
-// the visible 80px circle, to give the "hidden card" tooltip room to render at
-// the same font size as feature card descriptions (text-[18px], p-4, rounded
-// border, etc.). The icon stays visually centered at its native 80px diameter;
-// only the bounding box of the foreignObject grows. The foreignObject element
-// itself carries pointerEvents="none" (SVG attribute) so the giant transparent
-// area never intercepts hover from adjacent icons — CSS pointer-events:none on
-// inner HTML alone is not enough because the foreignObject's default SVG
-// pointer-events is "visiblePainted", which makes the whole bounding box act
-// as a hit target. With pointerEvents="none" at the SVG level, only descendants
-// with explicit pointer-events:auto receive events (the 120px hit area).
-const PLATFORM_HOVER_BOX_W = 360;
-const PLATFORM_HOVER_BOX_H = 400;
-
-// The Q (center) gets its own much larger foreignObject. The "Key
-// differentiators" tooltip wraps over multiple lines and needs space below the
-// Q (where the open-source card sits — the tooltip overlaps it visually when
-// hovered, but pointerEvents="none" on the wrapper means it never blocks card
-// hover). overflow:visible is set as an extra safety net; Safari ignores it
-// inside foreignObject, hence the deliberately oversized box.
-const Q_HOVER_DIAMETER = 190;   // same diameter as the inner dashed ring
-const Q_HOVER_BOX_W = 700;
-const Q_HOVER_BOX_H = 800;
+// The Q hit-zone is a perfect inscribed circle at R_INNER. The tooltip uses
+// its own properly-sized foreignObject sized like a feature card — keeping
+// HTML content inside foreignObjects similarly sized in width/height avoids
+// the WebKit rendering bug where over-sized foreignObjects paint HTML content
+// at offset positions (Safari/Epiphany; feature cards render correctly because
+// their foreignObjects are tightly fit to their content).
+const Q_TOOLTIP_W = 500;
+const Q_TOOLTIP_H = 260;
 
 type FeatureCardLayout = {
   x: number;
@@ -409,7 +400,7 @@ type Sparkle = {
 //     centre)
 //
 // The outer band stops at r=140 to stay clear of each platform icon's
-// foreignObject box (PLATFORM_BOX=80 centred on R_PLATFORMS=180 spans
+// halo (PLATFORM_ICON_RADIUS=40 centred on R_PLATFORMS=180 spans
 // r=140 → r=220 on its ray).
 const INNER_OUT_DELAY = 750; // ms — outer pair follows the inner pair
 const INTRA_DELAY = 220;     // ms — A → B within a tier
@@ -572,6 +563,52 @@ export function FeaturesInfographic({
   const [hoveredPlatformId, setHoveredPlatformId] = React.useState<
     string | null
   >(null);
+  const [qHovered, setQHovered] = React.useState(false);
+
+  // A small grace period bridges the gap between leaving the icon's
+  // hit-zone and entering the tooltip's hit-zone. Without it, browsers
+  // that fire mouseleave + mouseenter in separate render ticks would
+  // unmount the tooltip before the user's cursor reaches it.
+  const platformLeaveTimeout = React.useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const qLeaveTimeout = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const enterPlatform = React.useCallback((id: string) => {
+    if (platformLeaveTimeout.current) {
+      clearTimeout(platformLeaveTimeout.current);
+      platformLeaveTimeout.current = null;
+    }
+    setHoveredPlatformId(id);
+  }, []);
+
+  const leavePlatform = React.useCallback((id: string) => {
+    if (platformLeaveTimeout.current) clearTimeout(platformLeaveTimeout.current);
+    platformLeaveTimeout.current = setTimeout(() => {
+      setHoveredPlatformId((current) => (current === id ? null : current));
+    }, 120);
+  }, []);
+
+  const enterQ = React.useCallback(() => {
+    if (qLeaveTimeout.current) {
+      clearTimeout(qLeaveTimeout.current);
+      qLeaveTimeout.current = null;
+    }
+    setQHovered(true);
+  }, []);
+
+  const leaveQ = React.useCallback(() => {
+    if (qLeaveTimeout.current) clearTimeout(qLeaveTimeout.current);
+    qLeaveTimeout.current = setTimeout(() => setQHovered(false), 120);
+  }, []);
+
+  React.useEffect(
+    () => () => {
+      if (platformLeaveTimeout.current) clearTimeout(platformLeaveTimeout.current);
+      if (qLeaveTimeout.current) clearTimeout(qLeaveTimeout.current);
+    },
+    [],
+  );
 
   const orderedPlatforms = React.useMemo(() => {
     if (!hoveredPlatformId) return platforms;
@@ -715,6 +752,22 @@ export function FeaturesInfographic({
             <path d={Q_PATH} fill="currentColor" stroke="none" />
           </g>
 
+          {/* ----- Q hover halo: solid 1.5px ring at R_INNER that fades in
+                  on hover. Mirrors the `group-hover:ring-1` effect on the
+                  inner dashed circle that the original HTML/foreignObject
+                  implementation had. Rendered AFTER the dashed inner ring
+                  so it paints on top. ----- */}
+          <circle
+            cx={CENTER_X}
+            cy={CENTER_Y}
+            r={R_INNER}
+            fill="none"
+            stroke={qHovered ? 'currentColor' : 'transparent'}
+            strokeWidth={1.5}
+            pointerEvents="none"
+            style={{ transition: 'stroke 200ms ease' }}
+          />
+
           {/* ----- Sparkles around the Q (pointer-events: none → never blocks clicks) -----
               Each sparkle is wrapped in a <g> whose SVG `transform` carries
               the position (CSS animations on SVG can't compose with the SVG
@@ -780,173 +833,192 @@ export function FeaturesInfographic({
             );
           })}
 
-          {/* ----- Platform icons + "hidden card" tooltip (rendered AFTER
-                  feature cards so the tooltip paints on top in overlap
-                  regions). Notable details:
-                  - pointerEvents="none" on the foreignObject itself (SVG
-                    attribute) — without this, the foreignObject's enlarged
-                    bounding box would intercept hover from adjacent icons,
-                    causing some tooltips to misfire (the bug we saw on the
-                    earliest-rendered platforms, e.g. mobile).
-                  - overflow:visible (style) — extra safety so tooltips that
-                    exceed the box are still rendered in Chrome/FF. Safari
-                    ignores this inside foreignObject; we cope by oversizing
-                    the box (PLATFORM_HOVER_BOX_W/H).
-                  - The "group" wrapper is the 120×120 hover-sensitive area,
-                    larger than the visible 80px icon — i.e. the user can
-                    hover slightly outside the icon and still trigger.
-                  - The tooltip is a DOM CHILD of the group AND has
-                    pointer-events:auto. This lets the user move the mouse
-                    onto the tooltip without it disappearing (because :hover
-                    on a descendant keeps the ancestor's :hover active). ----- */}
+          {/* ----- Platform icons (rendered AFTER feature cards so the icon
+                  paints on top in overlap regions).
+
+                  Why pure SVG instead of foreignObject:
+                  WebKit (Safari/Epiphany) paints HTML content inside an
+                  over-sized `foreignObject` at a visible offset from where
+                  `getBoundingClientRect` reports the layout box. Feature
+                  cards render correctly because their foreignObjects are
+                  tightly sized to the content. By rendering the icon as
+                  pure SVG and reserving foreignObject for the tooltip (with
+                  a feature-card-style tight bounding box), we sidestep the
+                  bug entirely while preserving identical visuals in Chrome.
+
+                  Each platform is a `<g>` containing:
+                    - a background `<circle>` (visible white halo), scaled
+                      and stroked on hover
+                    - the Tabler icon SVG, positioned via translate
+                    - a transparent hit-zone `<circle>` (slightly larger than
+                      the visible icon) that owns the pointer events.
+                  The reorder driven by `hoveredPlatformId` keeps the
+                  hovered icon's scaled halo painting on top of neighbours. ----- */}
           {orderedPlatforms.map((p) => {
             const pos = polar(p.angle, R_PLATFORMS);
+            const isHovered = hoveredPlatformId === p.id;
+            return (
+              <g key={p.id}>
+                {/* Visible icon (no pointer events; hit-zone below owns hover). */}
+                <g pointerEvents="none" aria-hidden="true">
+                  <g
+                    transform={`translate(${pos.x} ${pos.y})${isHovered ? ' scale(1.1)' : ''}`}
+                    style={{ transition: 'transform 200ms ease' }}
+                  >
+                    <circle
+                      cx={0}
+                      cy={0}
+                      r={PLATFORM_ICON_RADIUS}
+                      fill="var(--color-fd-background)"
+                      stroke={isHovered ? 'currentColor' : 'transparent'}
+                      strokeWidth={1.5}
+                      style={{ transition: 'stroke 200ms ease' }}
+                    />
+                    <g transform="translate(-24, -24)">
+                      <p.Icon
+                        size={48}
+                        stroke={1.25}
+                        className="text-fd-primary"
+                      />
+                    </g>
+                  </g>
+                </g>
+                {/* Hit-zone — transparent circle slightly larger than the
+                    visible icon. Owns the pointer events. `stroke="none"`
+                    is required: without it the circle inherits the parent
+                    SVG's `stroke="currentColor"` and renders a visible
+                    outline around every icon. */}
+                <circle
+                  cx={pos.x}
+                  cy={pos.y}
+                  r={PLATFORM_HIT_RADIUS}
+                  fill="transparent"
+                  stroke="none"
+                  pointerEvents="all"
+                  aria-label={p.label}
+                  onMouseEnter={() => enterPlatform(p.id)}
+                  onMouseLeave={() => leavePlatform(p.id)}
+                />
+              </g>
+            );
+          })}
+
+          {/* ----- Q hover area (transparent SVG circle that owns hover for
+                  the inner ring). Rendered BEFORE the platform tooltip so
+                  that when a platform tooltip extends over the inner ring
+                  region (bottom-side platforms), the tooltip wins paint
+                  order — the user can mouse onto the tooltip without the
+                  Q hit-zone hijacking the hover. ----- */}
+          <circle
+            cx={CENTER_X}
+            cy={CENTER_Y}
+            r={R_INNER}
+            fill="transparent"
+            stroke="none"
+            pointerEvents="all"
+            aria-label="What makes QVAC different?"
+            onMouseEnter={enterQ}
+            onMouseLeave={leaveQ}
+          />
+
+          {/* ----- Platform tooltip (only the hovered platform is rendered;
+                  positioned ABOVE the icon, tight foreignObject sized like
+                  a feature card so WebKit paints it correctly).
+
+                  Layout uses FLEXBOX align-end (no position:absolute) —
+                  that's important: WebKit (Safari/Epiphany) mis-paints
+                  absolutely positioned HTML inside foreignObject (offset +
+                  unscaled). Flexbox lays the tooltip out via the normal
+                  flow algorithm, so the bug doesn't trigger. The
+                  align-end column pushes the rounded box against the
+                  BOTTOM of the foreignObject. We then position the
+                  foreignObject so its bottom sits 8 SVG units above the
+                  icon's visible top — matching the original Tailwind
+                  `bottom: calc(50% + 48px)` placement and giving the
+                  tooltip the "hugs the icon" feel it had before. The
+                  120 ms hover grace period configured above bridges the
+                  small visual gap as the cursor crosses between icon and
+                  tooltip. ----- */}
+          {(() => {
+            if (!hoveredPlatformId) return null;
+            const p = platforms.find((pp) => pp.id === hoveredPlatformId);
+            if (!p || !p.description) return null;
+            const pos = polar(p.angle, R_PLATFORMS);
+            const GAP_TO_ICON = 8;
+            const foY =
+              pos.y -
+              PLATFORM_ICON_RADIUS -
+              GAP_TO_ICON -
+              PLATFORM_TOOLTIP_H;
             return (
               <foreignObject
-                key={p.id}
+                x={pos.x - PLATFORM_TOOLTIP_W / 2}
+                y={foY}
+                width={PLATFORM_TOOLTIP_W}
+                height={PLATFORM_TOOLTIP_H}
                 pointerEvents="none"
-                x={pos.x - PLATFORM_HOVER_BOX_W / 2}
-                y={pos.y - PLATFORM_HOVER_BOX_H / 2}
-                width={PLATFORM_HOVER_BOX_W}
-                height={PLATFORM_HOVER_BOX_H}
-                style={{ overflow: 'visible' }}
               >
                 <div
                   {...{ xmlns: HTML_NS }}
-                  className="flex h-full w-full items-center justify-center"
-                  style={{ overflow: 'visible' }}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'flex-end',
+                    height: '100%',
+                    pointerEvents: 'none',
+                  }}
                 >
-                  {/* Group: expanded hover area (120×120). Pointer events
-                      re-enabled so the 20px transparent ring around the
-                      visible icon is also hover-sensitive. `relative` so
-                      the tooltip below positions against the group center.
-                      onMouseEnter/Leave drive the React reorder above; CSS
-                      group-hover continues to drive the visual halo/tooltip
-                      transitions for snappy feedback. */}
                   <div
-                    className="group pointer-events-auto relative flex items-center justify-center"
-                    style={{ width: PLATFORM_HIT_BOX, height: PLATFORM_HIT_BOX }}
-                    onMouseEnter={() => setHoveredPlatformId(p.id)}
-                    onMouseLeave={() =>
-                      setHoveredPlatformId((current) =>
-                        current === p.id ? null : current,
-                      )
-                    }
+                    role="tooltip"
+                    style={{ pointerEvents: 'auto' }}
+                    className="whitespace-normal rounded-md border border-fd-primary/40 bg-fd-background p-4 text-left text-[18px] leading-snug text-fd-foreground shadow-md"
+                    onMouseEnter={() => enterPlatform(p.id)}
+                    onMouseLeave={() => leavePlatform(p.id)}
                   >
-                    {/* Visible icon — scales up + primary ring on group hover. */}
-                    <div
-                      className="flex h-20 w-20 items-center justify-center rounded-full bg-fd-background ring-0 ring-fd-primary transition-all duration-200 group-hover:scale-110 group-hover:ring-1"
-                      aria-label={p.label}
-                    >
-                      <p.Icon size={48} stroke={1.25} className="text-fd-primary" />
-                    </div>
-                    {/* Tooltip — "hidden card": same visual language as
-                        feature card description boxes. Positioned above the
-                        icon (8px gap). pointer-events:auto so the user can
-                        move the mouse into it without losing the hover. */}
-                    {p.description ? (
-                      <div
-                        role="tooltip"
-                        className="pointer-events-auto absolute left-1/2 z-10 -translate-x-1/2 whitespace-normal rounded-md border border-fd-primary/40 bg-fd-background p-4 text-left text-[18px] leading-snug text-fd-foreground opacity-0 shadow-md transition-opacity duration-150 group-hover:opacity-100"
-                        style={{ bottom: 'calc(50% + 48px)', width: 280 }}
-                      >
-                        {p.description}
-                      </div>
-                    ) : null}
+                    {p.description}
                   </div>
                 </div>
               </foreignObject>
             );
-          })}
+          })()}
 
-          {/* ----- Q hover area + "Key differentiators" tooltip (rendered
-                  LAST so it paints on top of everything, including platform
-                  icons that would otherwise occlude the longer Q tooltip).
-                  Uses the same pattern as platform icons: pointerEvents="none"
-                  on the SVG element, pointer-events:auto on the inner hit
-                  area, tooltip as a DOM child of the group so the hover
-                  bridge works. The hit area matches the inner dashed ring's
-                  diameter (R_INNER * 2). ----- */}
-          <foreignObject
-            pointerEvents="none"
-            x={CENTER_X - Q_HOVER_BOX_W / 2}
-            y={CENTER_Y - Q_HOVER_BOX_H / 2}
-            width={Q_HOVER_BOX_W}
-            height={Q_HOVER_BOX_H}
-            style={{ overflow: 'visible' }}
-          >
-            <div
-              {...{ xmlns: HTML_NS }}
-              className="flex h-full w-full items-center justify-center"
-              style={{ overflow: 'visible' }}
+          {/* ----- Q tooltip (only rendered when Q is hovered; positioned
+                  BELOW the Q). ----- */}
+          {qHovered ? (
+            <foreignObject
+              x={CENTER_X - Q_TOOLTIP_W / 2}
+              y={CENTER_Y + R_INNER + 8}
+              width={Q_TOOLTIP_W}
+              height={Q_TOOLTIP_H}
+              pointerEvents="none"
             >
-              {/* Group: rectangular wrapper, NO clip-path here (otherwise the
-                  tooltip below would also be clipped). The group itself has
-                  no pointer events; only its descendants do. The DOM-ancestor
-                  relationship is what makes group-hover work — when any
-                  descendant with pointer-events:auto is hovered, :hover
-                  propagates up to the group regardless of the cursor's
-                  geometric position relative to the group's bounding box. */}
-              <div
-                className="group relative"
-                style={{ width: Q_HOVER_DIAMETER, height: Q_HOVER_DIAMETER }}
-              >
-                {/* Visual halo: rounded-full + ring on hover. No clip-path
-                    here, so the box-shadow that backs `ring-1` is fully
-                    visible around the circle. No pointer events, since this
-                    element is purely decorative — hit testing happens on the
-                    sibling hit-zone below. */}
+              <div {...{ xmlns: HTML_NS }}>
                 <div
-                  className="pointer-events-none absolute inset-0 rounded-full ring-0 ring-fd-primary transition-shadow duration-200 group-hover:ring-1"
-                  aria-hidden="true"
-                />
-                {/* Hit-zone: clipped to a perfect inscribed circle. The
-                    clip-path constrains BOTH the visual rendering AND the
-                    hit testing — mouse outside the circle is NOT considered
-                    to be on this element, so hover never triggers when the
-                    user is just "near" the inner ring. */}
-                <div
-                  className="pointer-events-auto absolute inset-0"
-                  style={{ clipPath: 'circle(50%)' }}
-                  aria-label="What makes QVAC different?"
-                />
-                {/* Tooltip wrapper — sibling of the hit-zone (NOT inside it,
-                    to escape the clip-path). Default pointer-events:none so
-                    the area below the Q doesn't capture hover by itself.
-                    When the group becomes hovered (via the circular hit-zone
-                    above), pointer-events flips to auto, enabling the bridge
-                    that keeps the tooltip visible while the cursor moves
-                    from the circle down onto the card. paddingTop forms an
-                    invisible vertical bridge between hit-zone and card. */}
-                <div
-                  className="pointer-events-none absolute left-1/2 z-20 -translate-x-1/2 opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100"
-                  style={{ top: '100%', paddingTop: 8 }}
+                  role="tooltip"
+                  style={{ pointerEvents: 'auto' }}
+                  className="whitespace-normal rounded-md border border-fd-primary/40 bg-fd-background p-4 text-left text-[18px] leading-snug text-fd-foreground shadow-md"
+                  onMouseEnter={enterQ}
+                  onMouseLeave={leaveQ}
                 >
-                  <div
-                    role="tooltip"
-                    className="whitespace-normal rounded-md border border-fd-primary/40 bg-fd-background p-4 text-left text-[18px] leading-snug text-fd-foreground shadow-md"
-                    style={{ width: 500 }}
-                  >
-                    <p className="m-0 mb-2 text-[22px] font-medium leading-tight text-fd-primary">
-                      What makes QVAC different?
-                    </p>
-                    <ul className="m-0 list-disc space-y-2 pl-5">
-                      <li className="leading-snug">
-                        <strong>Unified approach:</strong> other local AI
-                        solutions solve parts of the puzzle; QVAC provides a
-                        complete local AI solution that runs on any platform.
-                      </li>
-                      <li className="leading-snug">
-                        <strong>Out-of-the-box P2P:</strong> share and run AI
-                        models with peers, with no extra setup or prior
-                        knowledge required.
-                      </li>
-                    </ul>
-                  </div>
+                  <p className="m-0 mb-2 text-[22px] font-medium leading-tight text-fd-primary">
+                    What makes QVAC different?
+                  </p>
+                  <ul className="m-0 list-disc space-y-2 pl-5">
+                    <li className="leading-snug">
+                      <strong>Unified approach:</strong> other local AI
+                      solutions solve parts of the puzzle; QVAC provides a
+                      complete local AI solution that runs on any platform.
+                    </li>
+                    <li className="leading-snug">
+                      <strong>Out-of-the-box P2P:</strong> share and run AI
+                      models with peers, with no extra setup or prior
+                      knowledge required.
+                    </li>
+                  </ul>
                 </div>
               </div>
-            </div>
-          </foreignObject>
+            </foreignObject>
+          ) : null}
         </svg>
       </div>
     </div>
