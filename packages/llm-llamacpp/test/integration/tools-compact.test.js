@@ -1,10 +1,9 @@
 'use strict'
 
-const test = require('brittle')
 const path = require('bare-path')
 const fs = require('bare-fs')
 const LlmLlamacpp = require('../../index.js')
-const { ensureModel } = require('./utils')
+const { ensureModel, safeTest } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
 const os = require('bare-os')
 
@@ -246,7 +245,7 @@ async function runExpectingNoPromptValidationError (t, model, prompt, runOptions
   )
 }
 
-test('[tools-compact] multi-turn session with wrong tools provided', { timeout: 600_000 }, async t => {
+safeTest('[tools-compact] multi-turn session with wrong tools provided', { timeout: 600_000 }, async t => {
   const { model, dirPath, logs } = await setupModel(t)
   if (!await ensureToolsSupportOrSkip(t, model, logs)) return
   const sessionName = path.join(dirPath, 'tools-compact-changing.bin')
@@ -284,16 +283,16 @@ test('[tools-compact] multi-turn session with wrong tools provided', { timeout: 
   const naiveAccumulation = r1.stats.CacheTokens + r2.stats.promptTokens + r2.stats.generatedTokens + r3.stats.promptTokens + r3.stats.generatedTokens
   t.ok(
     r3.stats.CacheTokens < naiveAccumulation,
-    `CacheTokens after 3 turns (${r3.stats.CacheTokens}) should be less than naive accumulation (${naiveAccumulation}) — proves old tools are trimmed`
+  `CacheTokens after 3 turns (${r3.stats.CacheTokens}) should be less than naive accumulation (${naiveAccumulation}) — proves old tools are trimmed`
   )
 
   t.ok(
     r3.stats.CacheTokens < 2 * r1.stats.CacheTokens,
-    `CacheTokens after 3 turns (${r3.stats.CacheTokens}) should be less than 2x turn 1 (${2 * r1.stats.CacheTokens}) — tools are replaced, not accumulated`
+  `CacheTokens after 3 turns (${r3.stats.CacheTokens}) should be less than 2x turn 1 (${2 * r1.stats.CacheTokens}) — tools are replaced, not accumulated`
   )
 })
 
-test('[tools-compact] multi-turn session with same tools and cut LLM output', { timeout: 600_000 }, async t => {
+safeTest('[tools-compact] multi-turn session with same tools and cut LLM output', { timeout: 600_000 }, async t => {
   if (cachedToolsSupport === false) {
     t.comment('Skipping tools_compact behavior assertions: model/template runtime does not support tools in this environment')
     t.pass('tools unsupported in runtime; assertions skipped')
@@ -325,7 +324,7 @@ test('[tools-compact] multi-turn session with same tools and cut LLM output', { 
   t.end()
 })
 
-test('[tools-compact] multi-turn session with same tools works correctly', { timeout: 600_000 }, async t => {
+safeTest('[tools-compact] multi-turn session with same tools works correctly', { timeout: 600_000 }, async t => {
   if (cachedToolsSupport === false) {
     t.comment('Skipping tools_compact behavior assertions: model/template runtime does not support tools in this environment')
     t.pass('tools unsupported in runtime; assertions skipped')
@@ -384,7 +383,7 @@ test('[tools-compact] multi-turn session with same tools works correctly', { tim
   )
 })
 
-test('[tools-compact] single-shot with tools works without session', { timeout: 600_000 }, async t => {
+safeTest('[tools-compact] single-shot with tools works without session', { timeout: 600_000 }, async t => {
   if (cachedToolsSupport === false) {
     t.comment('Skipping tools_compact behavior assertions: model/template runtime does not support tools in this environment')
     t.pass('tools unsupported in runtime; assertions skipped')
@@ -405,7 +404,7 @@ test('[tools-compact] single-shot with tools works without session', { timeout: 
   t.ok(r.stats.generatedTokens > 0, 'generated tokens tracked')
 })
 
-test('[tools-compact] rejects invalid prompt shapes', { timeout: 600_000 }, async t => {
+safeTest('[tools-compact] rejects invalid prompt shapes', { timeout: 600_000 }, async t => {
   if (cachedToolsSupport === false) {
     t.comment('Skipping strict tools_compact invalid-shape assertions: model/template runtime does not support tools in this environment')
     t.pass('tools unsupported in runtime; assertions skipped')
@@ -428,7 +427,7 @@ test('[tools-compact] rejects invalid prompt shapes', { timeout: 600_000 }, asyn
   )
 })
 
-test('[tools-compact] cache-aware empty-tools contract', { timeout: 600_000 }, async t => {
+safeTest('[tools-compact] cache-aware empty-tools contract', { timeout: 600_000 }, async t => {
   if (cachedToolsSupport === false) {
     t.comment('Skipping strict tools_compact invalid-shape assertions: model/template runtime does not support tools in this environment')
     t.pass('tools unsupported in runtime; assertions skipped')
@@ -505,7 +504,7 @@ test('[tools-compact] cache-aware empty-tools contract', { timeout: 600_000 }, a
   )
 })
 
-test('[tools-compact] prefill with tools persists cache and loads on fresh model', { timeout: 600_000 }, async t => {
+safeTest('[tools-compact] prefill with tools persists cache and loads on fresh model', { timeout: 600_000 }, async t => {
   if (cachedToolsSupport === false) {
     t.comment('Skipping tools_compact behavior assertions: model/template runtime does not support tools in this environment')
     t.pass('tools unsupported in runtime; assertions skipped')

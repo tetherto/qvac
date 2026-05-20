@@ -1,12 +1,20 @@
 'use strict'
 
 /**
- * Combined ASR + diarization example.
+ * Combined ASR + diarization example (offline).
  *
  * Runs Sortformer to find speaker time-segments, then transcribes
  * each speaker's audio slice with the ASR model. Output is a
  * "Speaker N: ..." per-segment transcript. Both engines run
  * through the public `TranscriptionParakeet` class.
+ *
+ * Recommended `--diar-model`: the v1 Sortformer GGUF
+ * (`sortformer-4spk-v1.q8_0.gguf`). v2.1 also works but the AOSC
+ * speaker cache it brings is a *streaming* optimisation -- in batch /
+ * offline mode the entire clip is available at once, so AOSC's slot
+ * stability across silence/re-entry provides no additional benefit
+ * over v1. For live capture, use `examples/live-mic-diarized.js`
+ * (or `examples/live-mic-diarized-aosc.js`) with the v2.1 GGUF.
  *
  * Usage:
  *   bare examples/diarized-transcribe.js \

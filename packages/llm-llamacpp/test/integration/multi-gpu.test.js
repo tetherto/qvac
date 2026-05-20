@@ -1,9 +1,8 @@
 'use strict'
 
-const test = require('brittle')
 const process = require('bare-process')
 const LlmLlamacpp = require('../../index.js')
-const { ensureModel } = require('./utils')
+const { ensureModel, safeTest } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
 const path = require('bare-path')
 
@@ -48,22 +47,22 @@ async function runMultiGpuTest (t, extraConfig, assertDevices) {
     return
   }
 
-  const [modelName, dirPath] = await ensureModel({
-    modelName: MODEL.name,
-    downloadUrl: MODEL.url
-  })
-
-  const modelPath = path.join(dirPath, modelName)
+  let addon = null
   const specLogger = attachSpecLogger({ forwardToConsole: true })
-
-  const addon = new LlmLlamacpp({
-    files: { model: [modelPath] },
-    config: { ...BASE_CONFIG, ...extraConfig },
-    logger: null,
-    opts: { stats: true }
-  })
-
   try {
+    const [modelName, dirPath] = await ensureModel({
+      modelName: MODEL.name,
+      downloadUrl: MODEL.url
+    })
+
+    const modelPath = path.join(dirPath, modelName)
+    addon = new LlmLlamacpp({
+      files: { model: [modelPath] },
+      config: { ...BASE_CONFIG, ...extraConfig },
+      logger: null,
+      opts: { stats: true }
+    })
+
     await addon.load()
     const response = await addon.run(PROMPT)
     const output = await collectResponse(response)
@@ -74,9 +73,12 @@ async function runMultiGpuTest (t, extraConfig, assertDevices) {
 
     const devices = extractBufferDevices(specLogger.logs)
     assertDevices(t, devices)
+  } catch (error) {
+    console.error(error)
+    t.fail('multi-gpu test failed: ' + error.message)
   } finally {
     specLogger.release()
-    await addon.unload().catch(() => {})
+    if (addon) await addon.unload().catch(() => {})
   }
 }
 
@@ -90,19 +92,19 @@ function assertSingleDevice (t, devices) {
   t.ok(devices.size <= 1, `layers should stay on a single device (found: ${[...devices].join(', ')})`)
 }
 
-test('multi-gpu: split-mode=layer distributes layers across GPUs', { timeout: 600_000 }, async t => {
+safeTest('multi-gpu: split-mode=layer distributes layers across GPUs', { timeout: 600_000 }, async t => {
   await runMultiGpuTest(t, { 'split-mode': 'layer' }, assertMultiDevice('layers'))
 })
 
-test('multi-gpu: split-mode=row distributes tensors across GPUs', { timeout: 600_000 }, async t => {
+safeTest('multi-gpu: split-mode=row distributes tensors across GPUs', { timeout: 600_000 }, async t => {
   await runMultiGpuTest(t, { 'split-mode': 'row' }, assertMultiDevice('tensors'))
 })
 
-test('multi-gpu: default (no split-mode) pins layers to a single device', { timeout: 600_000 }, async t => {
+safeTest('multi-gpu: default (no split-mode) pins layers to a single device', { timeout: 600_000 }, async t => {
   await runMultiGpuTest(t, {}, assertSingleDevice)
 })
 
-test('multi-gpu: split-mode=layer with tensor-split and main-gpu', { timeout: 600_000 }, async t => {
+safeTest('multi-gpu: split-mode=layer with tensor-split and main-gpu', { timeout: 600_000 }, async t => {
   await runMultiGpuTest(
     t,
     { 'split-mode': 'layer', 'tensor-split': '1,1', 'main-gpu': '0' },

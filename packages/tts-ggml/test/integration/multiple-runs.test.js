@@ -1,8 +1,8 @@
 'use strict'
 
 // Sequential / fresh-instance / reload stability tests for both engines.
-// Mirrors qvac-lib-infer-parakeet/test/integration/multiple-transcriptions.test.js
-// and qvac-lib-infer-onnx-tts's lifecycle assertions, adapted to the
+// Mirrors transcription-parakeet/test/integration/multiple-transcriptions.test.js
+// and tts-onnx's lifecycle assertions, adapted to the
 // tts-ggml engine API.  These exercise:
 //
 //   1. N back-to-back run() calls on the SAME loaded instance

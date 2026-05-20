@@ -7,8 +7,9 @@
 - **80+ Language Support**: Detects a wide range of languages compared to TinyLD's limited coverage
 - **High Performance**: ~10× faster than similar language detection tools
 - **Production Proven**: Built on CLD2, originally developed for Chromium/Google
-- **ISO Standards**: Uses `iso-language-codes` for standardized language code mappings
+- **ISO Standards**: Uses `language-tags` for standardized language code mappings
 - **Compatible API**: Maintains the same API as `@qvac/langdetect-text` (with async functions)
+- **Bare Runtime**: Designed for and tested under the [Bare](https://bare.pears.com) runtime
 
 ## Usage
 
@@ -19,7 +20,7 @@
 #### Import:
 
 ```javascript
-const { detectOne, detectMultiple, getLangName, getISO2FromName } = require("@qvac/langdetect-text-cld2");
+import { detectOne, detectMultiple, getLangName, getISO2FromName } from '@qvac/langdetect-text-cld2'
 ```
 
 #### Functions:
@@ -62,7 +63,7 @@ const { detectOne, detectMultiple, getLangName, getISO2FromName } = require("@qv
 Below is an example of how the package can be used to detect the language of a given text:
 
 ```javascript
-const { detectOne, detectMultiple, getLangName, getISO2FromName } = require("@qvac/langdetect-text-cld2");
+import { detectOne, detectMultiple, getLangName, getISO2FromName } from '@qvac/langdetect-text-cld2'
 
 async function example() {
   const text = "This is a sample text for language detection.";
@@ -135,8 +136,8 @@ npm test
 ## Technical Details
 
 - **Language Detector**: Google's Compact Language Detector 2 (CLD2)
-- **Node Bindings**: Uses `cld` npm package for Node.js integration
-- **ISO Standards**: Uses `iso-language-codes` for ISO 639 language code mappings
+- **Runtime**: Bare (>=1.0.0)
+- **ISO Standards**: Uses `language-tags` for ISO 639 language code mappings
 - **Binary Size**: ~1.8MB optimized binary
 - **Classification Method**: N-gram–based Naive Bayes classifier (quadgrams for most languages, unigrams for CJK)
 

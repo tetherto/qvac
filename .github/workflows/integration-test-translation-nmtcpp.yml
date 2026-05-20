@@ -24,7 +24,7 @@ on:
         default: "packages/translation-nmtcpp"
 
 env:
-  PKG_DIR: packages/qvac-lib-infer-nmtcpp
+  PKG_DIR: packages/translation-nmtcpp
 
 jobs:
   run-integration-tests:

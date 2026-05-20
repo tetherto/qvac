@@ -5,10 +5,9 @@ const test = require('brittle')
 const ONNXTTS = require('../../index.js')
 const { TTSInterface } = require('../../tts.js')
 const MockedBinding = require('../mock/MockedBinding.js')
-const process = require('process')
+const process = require('bare-process')
 
 global.process = process
-const sinon = require('sinon')
 
 function createMockedChatterboxModel ({ onOutput = () => { }, binding = undefined, exclusiveRun = false } = {}) {
   const model = new ONNXTTS({
@@ -24,7 +23,7 @@ function createMockedChatterboxModel ({ onOutput = () => { }, binding = undefine
     exclusiveRun
   })
 
-  sinon.stub(model, '_createAddon').callsFake((configurationParams, outputCb) => {
+  model._createAddon = (configurationParams, outputCb) => {
     const _binding = binding || new MockedBinding()
     const addon = new TTSInterface(_binding, configurationParams, outputCb)
 
@@ -33,7 +32,7 @@ function createMockedChatterboxModel ({ onOutput = () => { }, binding = undefine
     }
 
     return addon
-  })
+  }
   return model
 }
 
