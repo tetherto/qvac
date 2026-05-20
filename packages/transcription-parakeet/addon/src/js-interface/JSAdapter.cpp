@@ -107,6 +107,25 @@ auto JSAdapter::loadFromJSObject(js::Object jsObject, js_env_t* env)
         streamingRightLookaheadMsOpt.value().as<int32_t>(env);
   }
 
+  // Dynamic-backend loading knobs. Both forwarded to
+  // parakeet::EngineOptions and consumed once per-process on the
+  // first Engine construction (the ggml-backend registry + the
+  // ggml-opencl program-binary cache are both process singletons --
+  // see parakeet::set_backends_directory / set_opencl_cache_dir for
+  // the detailed lifetime contract). Empty -> leave the existing
+  // setting alone.
+  auto backendsDirOpt =
+      jsObject.getOptionalProperty<js::String>(env, "backendsDir");
+  if (backendsDirOpt.has_value()) {
+    config.backendsDir = backendsDirOpt.value().as<std::string>(env);
+  }
+
+  auto openclCacheDirOpt =
+      jsObject.getOptionalProperty<js::String>(env, "openclCacheDir");
+  if (openclCacheDirOpt.has_value()) {
+    config.openclCacheDir = openclCacheDirOpt.value().as<std::string>(env);
+  }
+
   auto innerConfigOpt = jsObject.getOptionalProperty<js::Object>(env, "config");
   if (innerConfigOpt.has_value()) {
     loadModelParams(innerConfigOpt.value(), env, config);

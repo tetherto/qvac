@@ -57,14 +57,31 @@ struct ParakeetConfig {
   int  streamingLeftContextMs    = -1;
   int  streamingRightLookaheadMs = -1;
 
+  // ── Dynamic-backend loading ────────────────────────────────────────────
+  // Forwarded to parakeet::EngineOptions::backends_dir /
+  // opencl_cache_dir. On Android (and any other GGML_BACKEND_DL=ON
+  // build) the ggml core is statically linked into this addon's
+  // `.bare` module while the GPU backends ship as separately
+  // dlopen()'d `.so` files (libqvac-speech-ggml-{vulkan,opencl}.so
+  // plus the per-arch CPU variants under
+  // libqvac-speech-ggml-cpu-android_armv*_*.so). The JS layer
+  // resolves `backendsDir` to that prebuild folder at construction
+  // time so `ggml_backend_load_all_from_path()` finds them at
+  // runtime; `openclCacheDir` sets `$GGML_OPENCL_CACHE_DIR` for
+  // ggml-opencl's program-binary cache (Android-only, ignored
+  // elsewhere). Both default to empty -> let parakeet-cpp fall back
+  // to its own resolution (ggml's compile-time default search path
+  // for backends; whatever the env var holds for the OpenCL cache).
+  std::string backendsDir;
+  std::string openclCacheDir;
+
   ParakeetConfig() = default;
   explicit ParakeetConfig(const std::string& path) : modelPath(path) {}
 
   bool operator==(const ParakeetConfig& other) const {
-    return modelPath == other.modelPath &&
-           modelType == other.modelType && maxThreads == other.maxThreads &&
-           useGPU == other.useGPU && sampleRate == other.sampleRate &&
-           channels == other.channels &&
+    return modelPath == other.modelPath && modelType == other.modelType &&
+           maxThreads == other.maxThreads && useGPU == other.useGPU &&
+           sampleRate == other.sampleRate && channels == other.channels &&
            captionEnabled == other.captionEnabled &&
            timestampsEnabled == other.timestampsEnabled && seed == other.seed &&
            streaming == other.streaming &&
@@ -73,7 +90,9 @@ struct ParakeetConfig {
            streamingEmitPartials == other.streamingEmitPartials &&
            streamingEnergyVad == other.streamingEnergyVad &&
            streamingLeftContextMs == other.streamingLeftContextMs &&
-           streamingRightLookaheadMs == other.streamingRightLookaheadMs;
+           streamingRightLookaheadMs == other.streamingRightLookaheadMs &&
+           backendsDir == other.backendsDir &&
+           openclCacheDir == other.openclCacheDir;
   }
 
   bool operator!=(const ParakeetConfig& other) const { return !(*this == other); }

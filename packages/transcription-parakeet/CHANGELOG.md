@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+Update Android prebuild to ship Vulkan and OpenCL as separately-loadable MODULE `.so` files (qvac-ext-ggml@speech's `GGML_BACKEND_DL=ON`) discovered at runtime via `ggml_backend_load_all_from_path()`, as well as per-arch CPU variants (`libqvac-speech-ggml-cpu-android_armv{8.0,8.2,8.6,9.0,9.2}_*.so`).
+
+### Added
+
+- **`backendsDir` ParakeetConfig field.** Directory the native addon scans for dynamically-loaded ggml backend libraries (`libqvac-speech-ggml-vulkan.so`, `libqvac-speech-ggml-opencl.so`, per-arch `libqvac-speech-ggml-cpu-android_armv*_*.so`).
+- **`openclCacheDir` ParakeetConfig field.** Persistent directory for ggml-opencl's `clCreateProgramWithBinary` cache. 
+- **CMake install plumbing for dynamic ggml backends.** Two complementary install paths cover the full backend set that the `ggml-speech` vcpkg port emits on Android.
+- **`BACKENDS_SUBDIR` compile define** on the addon target. Derived from cmake-bare's `bare_target()` + `bare_module_target()` so the addon can join `<bare-target>/<module-name>` onto the host-provided `backendsDir` root without the host needing to know the per-target shape.
+- **Mobile dynamic-backend coverage.** `test/mobile/integration-runtime.cjs` now sets `NO_GPU=false` so Device Farm runs `gpu-smoke` and `mobile-perf-*-gpu` tests that exercise backend dlopen / discovery (Vulkan, OpenCL, and per-arch CPU `.so` loading). On Android, inference still runs on CPU (`useGPU` is overridden at the engine boundary and gpu-smoke passes early); iOS may engage Metal when `useGPU: true`.
+
 ## [0.4.0]
 
 In this release, we have replaced the onnxruntime backend with a pure C++/ggml engine, added a duplex-streaming entry point that bypasses the framework's batch-then-process lifecycle for live use cases, and surfaced two new per-segment signals (`isEndOfTurn`, `startsWord`) so consumers can build cleaner live transcripts. The release also exposes per-engine backend stats (`backendDevice`, `backendId`) so callers can verify the GPU path actually engaged, and consolidates the examples / docs / mock fixtures into a single duplex-aware surface.
