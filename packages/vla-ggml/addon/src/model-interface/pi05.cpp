@@ -288,7 +288,9 @@ struct ggml_tensor* pi05_build_gemma_vlm_block_graph(
     int head_dim,
     int seq_len,
     float rms_norm_eps,
-    float rope_freq_base) {
+    float rope_freq_base,
+    struct ggml_tensor** out_k_post_rope,
+    struct ggml_tensor** out_v) {
   if (ctx == nullptr || x == nullptr || positions == nullptr ||
       w.pre_attn_norm_scale == nullptr || w.attn_q_w == nullptr ||
       w.attn_k_w == nullptr || w.attn_v_w == nullptr ||
@@ -338,6 +340,23 @@ struct ggml_tensor* pi05_build_gemma_vlm_block_graph(
   k = ggml_cont(ctx, ggml_permute(ctx, k, 0, 2, 1, 3));
   v = ggml_cont(ctx, ggml_permute(ctx, v, 0, 2, 1, 3));
 
+  // Expose post-RoPE K/V to callers that want to cache them for the
+  // expert path's joint attention. Layout is ne=[head_dim, seq,
+  // n_kv_heads] — identical to what `pi05_build_expert_block_graph`
+  // accepts as cached_k/cached_v. `ggml_set_output` is critical: it
+  // prevents `ggml_gallocr` from reusing the K/V buffers after their
+  // last in-graph consumer (the joint softmax / attn matmul), which
+  // would otherwise corrupt them by the time the caller reads back via
+  // `ggml_backend_tensor_get`.
+  if (out_k_post_rope != nullptr) {
+    ggml_set_output(k);
+    *out_k_post_rope = k;
+  }
+  if (out_v != nullptr) {
+    ggml_set_output(v);
+    *out_v = v;
+  }
+
   // Attention: softmax(K^T · Q / sqrt(head_dim) + mask) · V.
   // mul_mat(K, Q) broadcasts K's kv_heads=1 across Q's n_heads=8.
   struct ggml_tensor* logits = ggml_mul_mat(ctx, k, q);
@@ -383,19 +402,37 @@ struct ggml_tensor* pi05_build_vlm_prefill_graph(
     int head_dim,
     int seq_len,
     float rms_norm_eps,
-    float rope_freq_base) {
+    float rope_freq_base,
+    std::vector<struct ggml_tensor*>* out_keys,
+    std::vector<struct ggml_tensor*>* out_values) {
   if (ctx == nullptr || x == nullptr || positions == nullptr ||
       blocks.empty() || final_norm_scale == nullptr) {
     return nullptr;
   }
+  if (out_keys != nullptr) {
+    out_keys->assign(blocks.size(), nullptr);
+  }
+  if (out_values != nullptr) {
+    out_values->assign(blocks.size(), nullptr);
+  }
   struct ggml_tensor* h = x;
-  for (const auto& bw : blocks) {
+  for (size_t i = 0; i < blocks.size(); ++i) {
+    struct ggml_tensor* k_out = nullptr;
+    struct ggml_tensor* v_out = nullptr;
     h = pi05_build_gemma_vlm_block_graph(
-        ctx, h, positions, attn_mask, bw,
+        ctx, h, positions, attn_mask, blocks[i],
         hidden, n_heads, n_kv_heads, head_dim,
-        seq_len, rms_norm_eps, rope_freq_base);
+        seq_len, rms_norm_eps, rope_freq_base,
+        (out_keys != nullptr) ? &k_out : nullptr,
+        (out_values != nullptr) ? &v_out : nullptr);
     if (h == nullptr) {
       return nullptr;
+    }
+    if (out_keys != nullptr) {
+      (*out_keys)[i] = k_out;
+    }
+    if (out_values != nullptr) {
+      (*out_values)[i] = v_out;
     }
   }
   return pi05_gemma_rms_norm(ctx, h, final_norm_scale, rms_norm_eps);

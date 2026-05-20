@@ -212,6 +212,10 @@ struct Pi05GemmaBlockWeights {
   struct ggml_tensor* mlp_down_w;           // (intermediate, hidden)
 };
 
+// Optional out parameters `out_k_post_rope` and `out_v` let M3.13's
+// end-to-end path tap the post-RoPE per-layer K/V cache (ne=
+// [head_dim, seq_len, n_kv_heads]) for downstream joint attention.
+// They default to nullptr so M3.5/M3.6's tests don't pay anything.
 struct ggml_tensor* pi05_build_gemma_vlm_block_graph(
     struct ggml_context* ctx,
     struct ggml_tensor* x,            // ne=[hidden, seq_len]
@@ -224,7 +228,9 @@ struct ggml_tensor* pi05_build_gemma_vlm_block_graph(
     int head_dim,
     int seq_len,
     float rms_norm_eps,
-    float rope_freq_base);
+    float rope_freq_base,
+    struct ggml_tensor** out_k_post_rope = nullptr,
+    struct ggml_tensor** out_v = nullptr);
 
 // M3.7 — time-step → adaRMSNorm conditioning vector.
 //
@@ -429,6 +435,10 @@ Pi05ExpertODEStepOutputs pi05_build_expert_ode_step_graph(
 // `blocks.size()` determines depth (18 for pi05_base). Returns
 // nullptr if any required weight is missing or the block list is
 // empty.
+// `out_keys` / `out_values`, if non-null, are populated with per-layer
+// post-RoPE K/V tensor pointers — exactly the shape and layout the
+// expert-side ODE step's joint attention consumes
+// (ne=[head_dim, seq_len, n_kv_heads]).
 struct ggml_tensor* pi05_build_vlm_prefill_graph(
     struct ggml_context* ctx,
     struct ggml_tensor* x,
@@ -442,7 +452,9 @@ struct ggml_tensor* pi05_build_vlm_prefill_graph(
     int head_dim,
     int seq_len,
     float rms_norm_eps,
-    float rope_freq_base);
+    float rope_freq_base,
+    std::vector<struct ggml_tensor*>* out_keys = nullptr,
+    std::vector<struct ggml_tensor*>* out_values = nullptr);
 
 
 class Pi05Model final : public IVlaModel {
