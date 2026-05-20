@@ -19,8 +19,9 @@
 
 const test = require('brittle')
 const fs = require('bare-fs')
+const path = require('bare-path')
 const process = require('bare-process')
-const { VlaModel } = require('../..')
+const { VlaModel, preprocessImage, padState } = require('../..')
 
 const HAS_ASSETS =
   process.env.PI05_TEST_GGUF &&
@@ -188,4 +189,113 @@ test('pi05 integration: VlaModel.run() matches PyTorch actions_final', { timeout
   t.ok(rel < 0.05, `rel max diff ${rel} < 0.05`)
 
   await model.unload()
+})
+
+// ── Error-path tests (architecture-neutral but kept here for shape
+//    symmetry with addon.test.js — see plan §5 "integration parity"). ──
+
+test('pi05 integration: module exports expected surface', (t) => {
+  t.is(typeof VlaModel, 'function')
+  t.is(typeof preprocessImage, 'function')
+  t.is(typeof padState, 'function')
+})
+
+test('pi05 integration: VlaModel rejects missing/invalid files.model', (t) => {
+  // Same shell as the smolvla equivalent — VlaModel's validator lives
+  // above the architecture dispatch so its behaviour is identical for
+  // pi05 callers. Re-asserted here so the pi05 suite reads stand-alone.
+  let err1 = null
+  try { const m = new VlaModel({ files: { model: [] } }); t.absent(m) } catch (e) { err1 = e }
+  t.ok(err1 && /non-empty array/.test(err1.message))
+
+  let err2 = null
+  try { const m = new VlaModel(); t.absent(m) } catch (e) { err2 = e }
+  t.ok(err2 && /non-empty array/.test(err2.message))
+
+  let err3 = null
+  try { const m = new VlaModel({ files: { model: ['relative/path.gguf'] } }); t.absent(m) } catch (e) { err3 = e }
+  t.ok(err3 && /absolute path/.test(err3.message))
+})
+
+test('pi05 integration: VlaModel.load rejects missing GGUF file', async (t) => {
+  const m = new VlaModel({ files: { model: ['/definitely/does/not/exist/pi05.gguf'] } })
+  let err = null
+  try { await m.load() } catch (e) { err = e }
+  t.ok(err, 'expected an error for missing GGUF')
+})
+
+test('pi05 integration: img-shape mismatch rejects cleanly and leaves model usable (needs GGUF)', { timeout: 300000 }, async (t) => {
+  if (!HAS_ASSETS) {
+    t.comment('skipping: ' + SKIP_REASON)
+    return
+  }
+
+  const model = new VlaModel({
+    files: { model: [path.resolve(process.env.PI05_TEST_GGUF)] },
+    config: { verbosity: 1 }
+  })
+  try {
+    await model.load({ backend: 'cpu' })
+    const hp = model.hparams
+    const size = hp.visionImageSize
+    // pi05_base lives at 224 → pick 256 as the "wrong" size; pi05 ignores
+    // anything other than 224 and the validator should catch it before any
+    // C++ inference runs.
+    const wrongSize = size === 224 ? 256 : 224
+
+    // Pixel buffer sized for the (wrong) imgWidth/Height so we don't trip
+    // the upstream "pixel.length === 3*imgW*imgH" check first.
+    const dummyPixels = new Float32Array(3 * wrongSize * wrongSize)
+    const tokens = new Int32Array(hp.tokenizerMaxLength)
+    const mask = new Uint8Array(hp.tokenizerMaxLength)
+    tokens[0] = 1
+    mask[0] = 1
+    const badInput = {
+      images: [dummyPixels, dummyPixels, dummyPixels],
+      imgWidth: wrongSize,
+      imgHeight: wrongSize,
+      state: new Float32Array(0), // pi05 ignores `state`
+      tokens,
+      mask
+    }
+
+    let rejectErr = null
+    try { await model.run(badInput) } catch (e) { rejectErr = e }
+    t.ok(rejectErr, 'expected run() to reject on img-shape mismatch')
+    t.ok(
+      rejectErr && /imgWidth.*imgHeight|visionImageSize/i.test(rejectErr.message || ''),
+      `error mentions imgWidth/imgHeight/visionImageSize (got: ${rejectErr && rejectErr.message})`
+    )
+
+    // Verify the model is still usable after rejection. If the rejection
+    // had wedged `_hasActiveResponse`, the next run() would immediately
+    // throw JOB_ALREADY_RUNNING — same regression smolvla's equivalent
+    // test guards against.
+    const fixture = loadSafetensors(process.env.PI05_TEST_FIXTURE)
+    const allImages = fixture.get('fixture.images')
+    const perCam = 3 * 224 * 224
+    const goodInput = {
+      images: [
+        allImages.subarray(0, perCam),
+        allImages.subarray(perCam, 2 * perCam),
+        allImages.subarray(2 * perCam, 3 * perCam)
+      ],
+      imgWidth: 224,
+      imgHeight: 224,
+      state: new Float32Array(0),
+      tokens: fixture.get('fixture.tokens'),
+      mask: fixture.get('fixture.mask'),
+      noise: fixture.get('fixture.noise')
+    }
+    const response = await model.run(goodInput)
+    const { actions } = await response.await()
+    t.ok(actions instanceof Float32Array, 'follow-up run produced actions')
+    t.is(
+      actions.length,
+      hp.chunkSize * hp.actionDim,
+      'follow-up run actions length matches chunk_size*action_dim'
+    )
+  } finally {
+    await model.unload().catch(() => {})
+  }
 })
