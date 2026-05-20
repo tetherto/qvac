@@ -226,6 +226,32 @@ struct ggml_tensor* pi05_build_gemma_vlm_block_graph(
     float rms_norm_eps,
     float rope_freq_base);
 
+// M3.6 — full VLM prefill stack.
+//
+// Chains N Gemma-1 blocks (M3.5) and applies the model's final
+// `(1+scale)` RMSNorm. Used during prefill to produce
+// `vlm.final_out`; the per-layer K/V is produced as a side-effect of
+// each block but not surfaced here (callers that need the cache for
+// the ODE step build their own version with KV taps, M3.9+).
+//
+// `blocks.size()` determines depth (18 for pi05_base). Returns
+// nullptr if any required weight is missing or the block list is
+// empty.
+struct ggml_tensor* pi05_build_vlm_prefill_graph(
+    struct ggml_context* ctx,
+    struct ggml_tensor* x,
+    struct ggml_tensor* positions,
+    struct ggml_tensor* attn_mask,
+    const std::vector<Pi05GemmaBlockWeights>& blocks,
+    struct ggml_tensor* final_norm_scale,
+    int hidden,
+    int n_heads,
+    int n_kv_heads,
+    int head_dim,
+    int seq_len,
+    float rms_norm_eps,
+    float rope_freq_base);
+
 
 class Pi05Model final : public IVlaModel {
 public:

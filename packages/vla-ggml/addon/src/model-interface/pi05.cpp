@@ -369,6 +369,38 @@ struct ggml_tensor* pi05_build_gemma_vlm_block_graph(
   return ggml_add(ctx, down, residual);
 }
 
+// ── M3.6: full VLM prefill (18 blocks + final RMSNorm) ──────────────────
+struct ggml_tensor* pi05_build_vlm_prefill_graph(
+    struct ggml_context* ctx,
+    struct ggml_tensor* x,
+    struct ggml_tensor* positions,
+    struct ggml_tensor* attn_mask,
+    const std::vector<Pi05GemmaBlockWeights>& blocks,
+    struct ggml_tensor* final_norm_scale,
+    int hidden,
+    int n_heads,
+    int n_kv_heads,
+    int head_dim,
+    int seq_len,
+    float rms_norm_eps,
+    float rope_freq_base) {
+  if (ctx == nullptr || x == nullptr || positions == nullptr ||
+      blocks.empty() || final_norm_scale == nullptr) {
+    return nullptr;
+  }
+  struct ggml_tensor* h = x;
+  for (const auto& bw : blocks) {
+    h = pi05_build_gemma_vlm_block_graph(
+        ctx, h, positions, attn_mask, bw,
+        hidden, n_heads, n_kv_heads, head_dim,
+        seq_len, rms_norm_eps, rope_freq_base);
+    if (h == nullptr) {
+      return nullptr;
+    }
+  }
+  return pi05_gemma_rms_norm(ctx, h, final_norm_scale, rms_norm_eps);
+}
+
 Pi05Model::Pi05Model(
     const std::string& /*ggufPath*/,
     bool /*forceCpu*/,

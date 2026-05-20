@@ -10,6 +10,7 @@ add_executable(
   test_pi05_m3_3_siglip_tower.cpp
   test_pi05_m3_4_vlm_embed.cpp
   test_pi05_m3_5_vlm_block.cpp
+  test_pi05_m3_6_vlm_prefill.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/smolvla.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/smolvla_adapter.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/pi05.cpp
