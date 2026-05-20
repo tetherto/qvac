@@ -2,7 +2,7 @@
 //   - namespace renamed to `easyocr::ggml::pipeline`,
 //   - the Windows ORT-leak workaround removed (no Ort::Session here).
 
-#include "easyocr-ggml/pipeline/steps.hpp"
+#include "steps.hpp"
 
 #include <algorithm>
 #include <cmath>

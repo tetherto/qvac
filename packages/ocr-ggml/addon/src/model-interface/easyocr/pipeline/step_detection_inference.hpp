@@ -13,7 +13,7 @@
 //   - One `process()` call rebuilds a graph for the input's spatial size
 //     (so any image dim is supported).  Not thread-safe.
 
-#include "easyocr-ggml/pipeline/steps.hpp"
+#include "steps.hpp"
 
 #include <memory>
 #include <string>

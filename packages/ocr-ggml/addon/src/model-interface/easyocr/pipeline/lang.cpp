@@ -1,7 +1,7 @@
 // Lifted verbatim from @qvac/ocr-onnx's addon/pipeline/Lang.cpp. Only changes
 // are the include path and the namespace.
 
-#include "easyocr-ggml/pipeline/lang.hpp"
+#include "lang.hpp"
 
 #include <algorithm>
 #include <array>

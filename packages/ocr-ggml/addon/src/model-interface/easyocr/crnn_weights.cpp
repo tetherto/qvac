@@ -1,6 +1,6 @@
-#include "easyocr-ggml/crnn_weights.hpp"
+#include "crnn_weights.hpp"
 
-#include "easyocr-ggml/gguf_loader.hpp"
+#include "gguf_loader.hpp"
 
 #include "ggml.h"
 #include "ggml-backend.h"

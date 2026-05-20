@@ -10,9 +10,9 @@
 #include <inference-addon-cpp/ModelInterfaces.hpp>
 #include <inference-addon-cpp/RuntimeStats.hpp>
 
-#include "doctr-ggml/StepDoctrDetectionGGML.hpp"
-#include "doctr-ggml/StepDoctrRecognitionGGML.hpp"
-#include "easyocr-ggml/pipeline/steps.hpp"
+#include "doctr/StepDoctrDetectionGGML.hpp"
+#include "doctr/StepDoctrRecognitionGGML.hpp"
+#include "easyocr/pipeline/steps.hpp"
 #include "OcrModel.hpp"
 
 namespace qvac_lib_infer_ocr_ggml {

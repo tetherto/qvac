@@ -1,7 +1,7 @@
-#include "easyocr-ggml/crnn.hpp"
+#include "crnn.hpp"
 
-#include "easyocr-ggml/crnn_weights.hpp"
-#include "easyocr-ggml/ops.hpp"
+#include "crnn_weights.hpp"
+#include "ops.hpp"
 
 #include "ggml.h"
 

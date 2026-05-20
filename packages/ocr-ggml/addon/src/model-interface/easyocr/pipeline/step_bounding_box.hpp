@@ -6,7 +6,7 @@
 //   - the `CONSTRUCT_FROM_TUPLE(StepBoundingBox)` macro use is dropped
 //     (this repo does not use the step-template construction pattern).
 
-#include "easyocr-ggml/pipeline/steps.hpp"
+#include "steps.hpp"
 
 #include <opencv2/imgproc.hpp>
 

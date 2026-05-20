@@ -22,7 +22,7 @@
 // type ocr-onnx exposes, so downstream code (paragraph merge, etc.) works
 // unchanged.
 
-#include "easyocr-ggml/pipeline/steps.hpp"
+#include "steps.hpp"
 
 #include <array>
 #include <atomic>

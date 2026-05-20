@@ -89,32 +89,32 @@ endif()
 # ------------------------------------------------------------------
 # Source files
 # ------------------------------------------------------------------
-# Mirrors EasyOcr-ggml's three library boundaries (loader / craft+crnn /
-# pipeline) collapsed into a single bare module:
-#   - addon/src/ggml/*        gguf loader, ops, craft, crnn, weights
-#   - addon/src/pipeline/*    lift of @qvac/ocr-onnx pipeline + GGML inference
-#   - addon/src/model-interface/*  IModel adapter (composes the three steps)
-#   - addon/src/js-interface/*     N-API / bare binding entry point
+# Source layout under addon/src/:
+#   - model-interface/          IModel adapter (OcrModel, DoctrOcrModel)
+#   - model-interface/doctr/    DocTR GGML detector + recognizer steps
+#   - model-interface/easyocr/  GGUF loader, ops, CRAFT, CRNN weights+inference
+#   - model-interface/easyocr/pipeline/  OCR pipeline steps
+#   - js-interface/             N-API / bare binding entry point
 target_sources(
   ${ocr-ggml}
   PRIVATE
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/OcrModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/DoctrOcrModel.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/ggml/gguf_loader.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/ggml/ops.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/ggml/craft_weights.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/ggml/craft.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/ggml/crnn_weights.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/ggml/crnn.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/pipeline/steps.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/pipeline/lang.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/pipeline/step_detection_inference.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/pipeline/step_bounding_box.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/pipeline/step_recognize_text.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/doctr-ggml/MobileNetGraph.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/doctr-ggml/StepDoctrDetectionGGML.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/doctr-ggml/StepDoctrRecognitionGGML.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/easyocr/gguf_loader.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/easyocr/ops.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/easyocr/craft_weights.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/easyocr/craft.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/easyocr/crnn_weights.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/easyocr/crnn.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/easyocr/pipeline/steps.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/easyocr/pipeline/lang.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/easyocr/pipeline/step_detection_inference.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/easyocr/pipeline/step_bounding_box.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/easyocr/pipeline/step_recognize_text.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/doctr/MobileNetGraph.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/doctr/StepDoctrDetectionGGML.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/doctr/StepDoctrRecognitionGGML.cpp
 )
 
 target_include_directories(

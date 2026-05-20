@@ -5,7 +5,7 @@
 
 #include <opencv2/core.hpp>
 
-#include "easyocr-ggml/pipeline/steps.hpp"
+#include "model-interface/easyocr/pipeline/steps.hpp"
 
 namespace doctr::ggml::pipeline {
 

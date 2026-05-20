@@ -28,7 +28,7 @@
 #include <inference-addon-cpp/handlers/OutputHandler.hpp>
 #include <inference-addon-cpp/queue/OutputCallbackJs.hpp>
 
-#include "easyocr-ggml/pipeline/steps.hpp"
+#include "model-interface/easyocr/pipeline/steps.hpp"
 #include "model-interface/OcrModel.hpp"
 #include "model-interface/DoctrOcrModel.hpp"
 

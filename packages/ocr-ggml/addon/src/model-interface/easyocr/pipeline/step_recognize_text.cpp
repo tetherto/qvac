@@ -14,12 +14,12 @@
 // consulted for the LTR flag and the ignore-mask, and asserted against
 // the GGUF vocab to catch drift.
 
-#include "easyocr-ggml/pipeline/step_recognize_text.hpp"
+#include "step_recognize_text.hpp"
 
-#include "easyocr-ggml/pipeline/lang.hpp"
-#include "easyocr-ggml/crnn.hpp"
-#include "easyocr-ggml/crnn_weights.hpp"
-#include "easyocr-ggml/gguf_loader.hpp"
+#include "lang.hpp"
+#include "model-interface/easyocr/crnn.hpp"
+#include "model-interface/easyocr/crnn_weights.hpp"
+#include "model-interface/easyocr/gguf_loader.hpp"
 
 #include "ggml.h"
 #include "ggml-alloc.h"

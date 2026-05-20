@@ -12,11 +12,11 @@
 //     `build_craft` pipeline (init backend, allocate gallocr, run graph,
 //     copy NHWC output back into two cv::Mat planes).
 
-#include "easyocr-ggml/pipeline/step_detection_inference.hpp"
+#include "step_detection_inference.hpp"
 
-#include "easyocr-ggml/craft.hpp"
-#include "easyocr-ggml/craft_weights.hpp"
-#include "easyocr-ggml/gguf_loader.hpp"
+#include "model-interface/easyocr/craft.hpp"
+#include "model-interface/easyocr/craft_weights.hpp"
+#include "model-interface/easyocr/gguf_loader.hpp"
 #include "qlog.hpp"
 
 #include "ggml.h"

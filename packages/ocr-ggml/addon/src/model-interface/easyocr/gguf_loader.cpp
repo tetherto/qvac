@@ -1,4 +1,4 @@
-#include "easyocr-ggml/gguf_loader.hpp"
+#include "gguf_loader.hpp"
 
 #include "ggml.h"
 #include "gguf.h"

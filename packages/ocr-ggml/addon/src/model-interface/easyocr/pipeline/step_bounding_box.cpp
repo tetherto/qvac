@@ -6,7 +6,7 @@
 // Everything else is byte-for-byte identical so a future fix in ocr-onnx
 // can be cherry-picked with `git diff` against this file.
 
-#include "easyocr-ggml/pipeline/step_bounding_box.hpp"
+#include "step_bounding_box.hpp"
 
 #include <opencv2/opencv.hpp>
 

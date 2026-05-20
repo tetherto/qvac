@@ -13,8 +13,8 @@
 #include <ggml.h>
 #include <opencv2/opencv.hpp>
 
-#include "pipeline/qlog.hpp"
-#include "easyocr-ggml/pipeline/steps.hpp"
+#include "model-interface/easyocr/pipeline/qlog.hpp"
+#include "model-interface/easyocr/pipeline/steps.hpp"
 
 namespace doctr::ggml::pipeline {
 

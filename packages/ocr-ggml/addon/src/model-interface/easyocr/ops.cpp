@@ -1,4 +1,4 @@
-#include "easyocr-ggml/ops.hpp"
+#include "ops.hpp"
 
 #include "ggml.h"
 

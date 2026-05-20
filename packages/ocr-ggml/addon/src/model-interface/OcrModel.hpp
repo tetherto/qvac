@@ -24,10 +24,10 @@
 #include <inference-addon-cpp/ModelInterfaces.hpp>
 #include <inference-addon-cpp/RuntimeStats.hpp>
 
-#include "easyocr-ggml/pipeline/step_bounding_box.hpp"
-#include "easyocr-ggml/pipeline/step_detection_inference.hpp"
-#include "easyocr-ggml/pipeline/step_recognize_text.hpp"
-#include "easyocr-ggml/pipeline/steps.hpp"
+#include "easyocr/pipeline/step_bounding_box.hpp"
+#include "easyocr/pipeline/step_detection_inference.hpp"
+#include "easyocr/pipeline/step_recognize_text.hpp"
+#include "easyocr/pipeline/steps.hpp"
 
 typedef struct ggml_backend* ggml_backend_t;
 

@@ -20,7 +20,7 @@
 #include <gguf.h>
 #include <opencv2/opencv.hpp>
 
-#include "pipeline/qlog.hpp"
+#include "model-interface/easyocr/pipeline/qlog.hpp"
 
 namespace doctr::ggml::pipeline {
 

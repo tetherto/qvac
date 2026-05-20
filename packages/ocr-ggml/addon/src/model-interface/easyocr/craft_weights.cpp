@@ -1,6 +1,6 @@
-#include "easyocr-ggml/craft_weights.hpp"
+#include "craft_weights.hpp"
 
-#include "easyocr-ggml/gguf_loader.hpp"
+#include "gguf_loader.hpp"
 
 #include "ggml.h"
 #include "ggml-backend.h"

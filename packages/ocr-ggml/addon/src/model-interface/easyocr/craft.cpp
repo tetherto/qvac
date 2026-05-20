@@ -1,7 +1,7 @@
-#include "easyocr-ggml/craft.hpp"
+#include "craft.hpp"
 
-#include "easyocr-ggml/craft_weights.hpp"
-#include "easyocr-ggml/ops.hpp"
+#include "craft_weights.hpp"
+#include "ops.hpp"
 
 #include "ggml.h"
 
