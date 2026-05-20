@@ -55,8 +55,14 @@ TEST_F(SdBackendSelectionTest, PreferredGpuBackendCpuDevice) {
   EXPECT_EQ(preferredGpuBackendForConfigDevice("cpu"), SD_BACKEND_PREF_CPU);
 }
 
-TEST_F(SdBackendSelectionTest, PreferredGpuBackendAutoDevice) {
-  EXPECT_EQ(preferredGpuBackendForConfigDevice("auto"), SD_BACKEND_PREF_AUTO);
+TEST_F(SdBackendSelectionTest, PreferredGpuBackendAutoMatchesGpuPolicy) {
+  const auto gpuPref = preferredGpuBackendForConfigDevice("gpu");
+  const auto autoPref = preferredGpuBackendForConfigDevice("auto");
+  EXPECT_EQ(autoPref, gpuPref);
+  EXPECT_TRUE(
+      autoPref == SD_BACKEND_PREF_GPU || autoPref == SD_BACKEND_PREF_OPENCL ||
+      autoPref == SD_BACKEND_PREF_CPU);
+  EXPECT_NE(autoPref, SD_BACKEND_PREF_AUTO);
 }
 
 TEST_F(SdBackendSelectionTest, PreferredGpuBackendGpuDeviceIsGpuOrCpu) {
@@ -81,9 +87,25 @@ TEST_F(SdBackendSelectionTest, ExpectedEsrganBackendGpuConfigIsCpuOrGpu) {
   }
 }
 
+TEST_F(SdBackendSelectionTest, ExpectedEsrganBackendAutoMatchesGpu) {
+  EXPECT_EQ(
+      expectedEsrganBackendDeviceForConfig("auto"),
+      expectedEsrganBackendDeviceForConfig("gpu"));
+  const auto gpuPref = preferredGpuBackendForConfigDevice("gpu");
+  const auto autoPref = preferredGpuBackendForConfigDevice("auto");
+  EXPECT_EQ(autoPref, gpuPref);
+  if (gpuPref == SD_BACKEND_PREF_CPU) {
+    EXPECT_EQ(expectedEsrganBackendDeviceForConfig("auto"), "cpu");
+  } else {
+    EXPECT_EQ(expectedEsrganBackendDeviceForConfig("auto"), "gpu");
+  }
+}
+
 TEST_F(SdBackendSelectionTest, ParseConfigDeviceEmptyIsAuto) {
   EXPECT_EQ(parseConfigDeviceString(""), ConfigDevice::Auto);
-  EXPECT_EQ(preferredGpuBackendForConfigDevice(""), SD_BACKEND_PREF_AUTO);
+  EXPECT_EQ(
+      preferredGpuBackendForConfigDevice(""),
+      preferredGpuBackendForConfigDevice("gpu"));
 }
 
 TEST_F(SdBackendSelectionTest, PreferredGpuBackendInvalidDeviceThrows) {

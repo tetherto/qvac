@@ -24,7 +24,7 @@ index 1111111..2222222 100644
  #include <cstdlib>
  
  struct UpscalerGGML {
-@@ -23,50 +24,102 @@ struct UpscalerGGML {
+@@ -23,50 +24,114 @@ struct UpscalerGGML {
            tile_size(tile_size) {
      }
  
@@ -78,6 +78,17 @@ index 1111111..2222222 100644
 +        }
 +
 +        if (preferred_backend == SD_BACKEND_PREF_OPENCL) {
++#if defined(__ANDROID__)
++            // Per-device ggml_backend_dev_init() can hang on Device Farm Adreno
++            // drivers; registry GPU init still selects OpenCL when available.
++            LOG_INFO("ESRGAN upscaler OpenCL preference: registry GPU init on Android");
++            backend = ggml_backend_init_by_type(GGML_BACKEND_DEVICE_TYPE_GPU, NULL);
++            if (backend) {
++                LOG_INFO("ESRGAN upscaler: initialized GPU registry backend for OpenCL preference on Android");
++                return true;
++            }
++            LOG_WARN("ESRGAN upscaler: Android OpenCL registry init failed; falling back");
++#else
 +            const size_t n_devices = ggml_backend_dev_count();
 +            bool found_opencl_device = false;
 +            bool failed_opencl_init = false;
@@ -122,6 +133,7 @@ index 1111111..2222222 100644
 +            } else if (failed_opencl_init) {
 +                LOG_WARN("ESRGAN upscaler: OpenCL init failed; falling back to generic GPU");
              }
++#endif
 +        }
 +
 +        backend = ggml_backend_init_by_type(GGML_BACKEND_DEVICE_TYPE_GPU, NULL);
@@ -156,7 +168,7 @@ index 1111111..2222222 100644
              LOG_ERROR("ESRGAN upscaler: could not create any compute backend");
              return false;
          }
-@@ -148,7 +201,8 @@ upscaler_ctx_t* new_upscaler_ctx_with_device(const char* esrgan_path_c_str,
+@@ -148,7 +212,8 @@ upscaler_ctx_t* new_upscaler_ctx_with_device(const char* esrgan_path_c_str,
                                              bool direct,
                                              int n_threads,
                                              int tile_size,
@@ -166,7 +178,7 @@ index 1111111..2222222 100644
      upscaler_ctx_t* upscaler_ctx = (upscaler_ctx_t*)malloc(sizeof(upscaler_ctx_t));
      if (upscaler_ctx == nullptr) {
          return nullptr;
-@@ -161,7 +215,8 @@ upscaler_ctx_t* new_upscaler_ctx_with_device(const char* esrgan_path_c_str,
+@@ -161,7 +226,8 @@ upscaler_ctx_t* new_upscaler_ctx_with_device(const char* esrgan_path_c_str,
          return nullptr;
      }
  
@@ -176,7 +188,7 @@ index 1111111..2222222 100644
          delete upscaler_ctx->upscaler;
          upscaler_ctx->upscaler = nullptr;
          free(upscaler_ctx);
-@@ -176,7 +231,8 @@ upscaler_ctx_t* new_upscaler_ctx(const char* esrgan_path_c_str,
+@@ -176,7 +242,8 @@ upscaler_ctx_t* new_upscaler_ctx(const char* esrgan_path_c_str,
                                   int n_threads,
                                   int tile_size) {
      return new_upscaler_ctx_with_device(

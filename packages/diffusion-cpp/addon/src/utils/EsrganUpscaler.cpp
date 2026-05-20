@@ -128,16 +128,8 @@ upscaler_ctx_t* EsrganUpscaler::ensureContextLocked() {
 
   const int tileSize = std::max(1, config_.upscalerTileSize);
   const sd_upscaler_device_t sdDev = deviceStringToSd(config_.device);
-  sd_backend_preference_t backendPref =
+  const sd_backend_preference_t backendPref =
       sd_backend_selection::preferredGpuBackendForConfigDevice(config_.device);
-#if defined(__ANDROID__)
-  // ESRGAN overlay OpenCL path probes ggml_backend_dev_init() per device, which
-  // can hang on Device Farm Adreno drivers. Generic GPU init still selects
-  // OpenCL from the registry when available.
-  if (backendPref == SD_BACKEND_PREF_OPENCL) {
-    backendPref = SD_BACKEND_PREF_GPU;
-  }
-#endif
   upscaler_ctx_t* raw = new_upscaler_ctx_with_device(
       config_.esrganPath.c_str(),
       config_.upscalerOffloadParamsToCpu,

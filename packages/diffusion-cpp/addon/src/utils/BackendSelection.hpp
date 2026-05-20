@@ -55,8 +55,8 @@ BackendDevice resolveBackendForDevice(BackendDevice preferred);
 bool shouldPreferOpenClForAdreno(BackendDevice preferred);
 
 /**
- * Map config.device ("cpu", "gpu", or "auto") to stable-diffusion.cpp
- * preferred_gpu_backend, using the same Adreno/OpenCL rules as SdModel::load().
+ * Map config.device to stable-diffusion.cpp preferred_gpu_backend.
+ * `auto` uses the same Adreno/OpenCL selection as `gpu` (not SD_BACKEND_PREF_AUTO).
  */
 sd_backend_preference_t
 preferredGpuBackendForConfigDevice(const std::string& device);
