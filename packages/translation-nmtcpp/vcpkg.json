@@ -13,7 +13,7 @@
     "ssplit",
     {
       "name": "qvac-fabric",
-      "version>=": "8189.0.2",
+      "version>=": "8189.0.2#1",
       "default-features": false,
       "features": [
         "gpu-backends"
@@ -25,6 +25,19 @@
       "description": "Build tests",
       "dependencies": [
         "gtest"
+      ]
+    },
+    "kleidiai": {
+      "description": "Enable ARM KleidiAI optimized kernels for Android ARM64",
+      "dependencies": [
+        {
+          "name": "qvac-fabric",
+          "version>=": "8189.0.2#1",
+          "features": [
+            "kleidiai"
+          ],
+          "platform": "android"
+        }
       ]
     }
   },
