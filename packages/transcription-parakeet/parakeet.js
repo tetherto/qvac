@@ -59,6 +59,20 @@ class ParakeetInterface {
    *   left context (parakeet default 10000 ms; -1 keeps the engine default).
    * @param {number} [configurationParams.streamingRightLookaheadMs] - ASR encoder
    *   right lookahead (parakeet default 2000 ms; -1 keeps the engine default).
+   * @param {boolean} [configurationParams.streamingSpkCacheEnable=true] - AOSC:
+   *   enable v2.1 Sortformer speaker-cache streaming. Ignored on v1/v2 GGUFs
+   *   and on non-Sortformer models. Set false to force the v1 sliding-window
+   *   path on a v2.1 model (A/B comparison).
+   * @param {number} [configurationParams.streamingSpkCacheLen=188] - AOSC:
+   *   long-term speaker-cache rows (~15 s of encoder frames).
+   * @param {number} [configurationParams.streamingFifoLen=188] - AOSC: FIFO
+   *   warmup buffer rows.
+   * @param {number} [configurationParams.streamingChunkLeftContextMs=80] -
+   *   AOSC: encoder left-context window (ms; ~1 encoder frame).
+   * @param {number} [configurationParams.streamingChunkRightContextMs=560] -
+   *   AOSC: encoder right-context window (ms; ~7 encoder frames).
+   * @param {number} [configurationParams.streamingSpkCacheUpdatePeriod=144] -
+   *   AOSC: FIFO-overflow pop-out count.
    * @param {string} [configurationParams.backendsDir] - root directory
    *   for dynamically-loaded ggml backends. JS defaults to
    *   `<package_dir>/prebuilds`; the native addon appends
@@ -494,6 +508,12 @@ class ParakeetInterface {
    * @param {number} [config.rightLookaheadMs] - ASR encoder right lookahead (overrides cfg.streamingRightLookaheadMs)
    * @param {boolean} [config.emitPartials] - emit partial segments on chunk boundaries
    * @param {boolean} [config.emitEnergyVad] - surface energy-VAD events for CTC/TDT
+   * @param {boolean} [config.spkCacheEnable] - AOSC: enable/disable v2.1 speaker cache (overrides cfg.streamingSpkCacheEnable)
+   * @param {number} [config.spkCacheLen] - AOSC: long-term speaker-cache rows (overrides cfg.streamingSpkCacheLen)
+   * @param {number} [config.fifoLen] - AOSC: FIFO warmup buffer rows (overrides cfg.streamingFifoLen)
+   * @param {number} [config.chunkLeftContextMs] - AOSC: encoder left-context window in ms (overrides cfg.streamingChunkLeftContextMs)
+   * @param {number} [config.chunkRightContextMs] - AOSC: encoder right-context window in ms (overrides cfg.streamingChunkRightContextMs)
+   * @param {number} [config.spkCacheUpdatePeriod] - AOSC: FIFO-overflow pop-out count (overrides cfg.streamingSpkCacheUpdatePeriod)
    * @returns {Promise<number>} jobId assigned to the streaming session
    */
   async startStreaming (config = {}) {

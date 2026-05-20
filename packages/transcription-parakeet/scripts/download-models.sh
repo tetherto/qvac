@@ -12,7 +12,8 @@
 #   ./scripts/download-models.sh [flags]
 #
 # Flags:
-#   --type, -t <ctc|tdt|eou|sortformer|all>   Which model(s) (default: all)
+#   --type, -t <ctc|tdt|eou|sortformer|sortformer-streaming-v2.1|all>
+#                                             Which model(s) (default: all)
 #   --output, -o <path>                       Destination dir (default: ./models/nemo)
 #   --force, -f                               Re-download even if present
 #   --help, -h                                Show this help
@@ -43,8 +44,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$TYPE" in
-  ctc|tdt|eou|sortformer|all) ;;
-  *) echo "Error: --type must be ctc|tdt|eou|sortformer|all" >&2; exit 2;;
+  ctc|tdt|eou|sortformer|sortformer-streaming-v2.1|all) ;;
+  *) echo "Error: --type must be ctc|tdt|eou|sortformer|sortformer-streaming-v2.1|all" >&2; exit 2;;
 esac
 
 # Map model type -> { hf_repo, nemo_filename }
@@ -54,6 +55,7 @@ nemo_url() {
     tdt)        echo "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3/resolve/main/parakeet-tdt-0.6b-v3.nemo";;
     eou)        echo "https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1/resolve/main/parakeet_realtime_eou_120m-v1.nemo";;
     sortformer) echo "https://huggingface.co/nvidia/diar_sortformer_4spk-v1/resolve/main/diar_sortformer_4spk-v1.nemo";;
+    sortformer-streaming-v2.1) echo "https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1/resolve/main/diar_streaming_sortformer_4spk-v2.1.nemo";;
   esac
 }
 nemo_filename() {
@@ -95,7 +97,7 @@ echo "Output: ${OUTPUT_DIR}"
 echo
 
 if [[ "$TYPE" == "all" ]]; then
-  for t in ctc tdt eou sortformer; do
+  for t in ctc tdt eou sortformer sortformer-streaming-v2.1; do
     fetch_nemo "$t"
   done
 else
