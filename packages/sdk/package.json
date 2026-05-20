@@ -219,6 +219,8 @@
     "@types/tar-stream": "^3.1.4",
     "bare-pack": "^2.0.1",
     "bare-readline": "^1.2.0",
+    "bare-subprocess": "^6.0.0",
+    "bare-url": "^2.4.3",
     "brittle": "^3.19.1",
     "chromadb": "^3.0.14",
     "eslint": "^9.33.0",
