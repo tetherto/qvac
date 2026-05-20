@@ -1,0 +1,95 @@
+/**
+ * SmolVLA (vision-language-action) example using the QVAC SDK.
+ *
+ * Loads the SmolVLA-LIBERO GGUF model, runs a single inference pass with
+ * synthetic inputs (zero-filled gray images + BOS-only tokens + zero state +
+ * zero noise), and prints the produced action chunk + per-stage timings.
+ *
+ * Usage:
+ *   bun examples/vla-smolvla.ts <path-to-smolvla.gguf>
+ *
+ * The model file is not bundled with the SDK; download the GGUF from
+ * https://huggingface.co/HuggingFaceVLA/smolvla_libero (or the QVAC
+ * registry once a VLA entry is registered) and pass the absolute path on
+ * the command line.
+ */
+import {
+  close,
+  loadModel,
+  unloadModel,
+  vla,
+  vlaHparams,
+  vlaPadState,
+  vlaPreprocessImage,
+} from "@qvac/sdk";
+
+const modelPath = process.argv[2];
+if (!modelPath) {
+  console.error(
+    "Usage: bun examples/vla-smolvla.ts <path-to-smolvla.gguf>\n" +
+      "Download from https://huggingface.co/HuggingFaceVLA/smolvla_libero",
+  );
+  process.exit(1);
+}
+
+try {
+  console.log("Loading SmolVLA model...");
+  const modelId = await loadModel({
+    modelSrc: modelPath,
+    modelType: "vla",
+    modelConfig: { backend: "cpu" },
+  });
+  console.log(`Model loaded: ${modelId}`);
+
+  const { hparams, backendName } = await vlaHparams({ modelId });
+  console.log(`Backend: ${backendName ?? "(unknown)"}`);
+  console.log("Hparams:", hparams);
+
+  // Build synthetic inputs sized to the model's expectations. A real
+  // consumer would: read camera frames, tokenize the instruction with the
+  // SmolVLM2 tokenizer, and read the robot's current end-effector pose.
+  const size = hparams.visionImageSize;
+  const dummyPixels = new Uint8Array(size * size * 3).fill(128);
+  const front = vlaPreprocessImage(dummyPixels, size, size, { size });
+  const wrist = vlaPreprocessImage(dummyPixels, size, size, { size });
+
+  const tokens = new Int32Array(hparams.tokenizerMaxLength);
+  const mask = new Uint8Array(hparams.tokenizerMaxLength);
+  // BOS-only "instruction" for the smoke test.
+  tokens[0] = 1;
+  mask[0] = 1;
+
+  const state = vlaPadState([0, 0, 0, 0, 0, 0], hparams.maxStateDim);
+  const noise = new Float32Array(hparams.chunkSize * hparams.maxActionDim);
+
+  console.log("Running VLA inference...");
+  const { actions, actionDim, chunkSize, stats } = await vla({
+    modelId,
+    images: [front, wrist],
+    imgWidth: size,
+    imgHeight: size,
+    state,
+    tokens,
+    mask,
+    noise,
+  });
+
+  console.log(`Got ${chunkSize} action steps of dim ${actionDim}.`);
+  console.log("First step:", Array.from(actions.subarray(0, actionDim)));
+  if (stats) {
+    console.log(
+      `Timing: vision=${stats.vision_ms?.toFixed(0)}ms ` +
+        `smollm2=${stats.smollm2_total_ms?.toFixed(0)}ms ` +
+        `ode=${stats.ode_ms?.toFixed(0)}ms ` +
+        `total=${stats.total_ms?.toFixed(0)}ms`,
+    );
+  }
+
+  await unloadModel({ modelId, clearStorage: false });
+  console.log("Model unloaded.");
+  process.exit(0);
+} catch (error) {
+  console.error("VLA example failed:", error);
+  await close();
+  process.exit(1);
+}

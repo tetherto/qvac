@@ -18,6 +18,7 @@ export type RequestKind =
   | "diffusion"
   | "tts"
   | "ocr"
+  | "vla"
   | "finetune"
   | "loadModel"
   | "downloadAsset"

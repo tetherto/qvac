@@ -100,6 +100,10 @@
       "types": "./dist/server/bare/plugins/sdcpp-generation/plugin.d.ts",
       "import": "./dist/server/bare/plugins/sdcpp-generation/plugin.js"
     },
+    "./ggml-vla/plugin": {
+      "types": "./dist/server/bare/plugins/ggml-vla/plugin.d.ts",
+      "import": "./dist/server/bare/plugins/ggml-vla/plugin.js"
+    },
     "./plugin-utils": {
       "types": "./dist/schemas/plugin.d.ts",
       "import": "./dist/schemas/plugin.js"
@@ -186,6 +190,7 @@
     "@qvac/transcription-whispercpp": "^0.7.0",
     "@qvac/translation-nmtcpp": "^3.0.0",
     "@qvac/tts-onnx": "^0.9.0",
+    "@qvac/vla-ggml": "^0.1.0",
     "bare-abort-controller": "^1.0.0",
     "bare-crypto": "^1.13.4",
     "bare-fetch": "^2.5.1",
