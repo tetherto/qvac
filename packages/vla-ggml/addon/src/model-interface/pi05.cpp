@@ -401,6 +401,58 @@ struct ggml_tensor* pi05_build_vlm_prefill_graph(
   return pi05_gemma_rms_norm(ctx, h, final_norm_scale, rms_norm_eps);
 }
 
+// ── M3.7a: sin-cos time embedding ───────────────────────────────────────
+//
+// Reference: openpi `create_sinusoidal_pos_embedding`
+// (lerobot/pi05/modeling_pi05.py:81). The reference computes
+// internally in float64 and casts the output to F32; we do the same
+// to avoid F32 cancellation between `t / period` and
+// `2π · t / period` at the tiniest periods (4 ms × 1 → tens of
+// thousands of radians, where F32 loses precision).
+void pi05_compute_time_sincos(
+    float t, int dim, float min_period, float max_period, float* out) {
+  if (out == nullptr || dim <= 0 || (dim & 1) != 0) {
+    return;
+  }
+  const int n = dim / 2;
+  const double td = static_cast<double>(t);
+  const double log_min = std::log(static_cast<double>(min_period));
+  const double log_max = std::log(static_cast<double>(max_period));
+  const double two_pi = 2.0 * 3.14159265358979323846;
+  for (int i = 0; i < n; ++i) {
+    const double fraction =
+        (n > 1) ? (static_cast<double>(i) / static_cast<double>(n - 1))
+                : 0.0;
+    const double period = std::exp(log_min + fraction * (log_max - log_min));
+    const double phase = (two_pi / period) * td;
+    out[i] = static_cast<float>(std::sin(phase));
+    out[n + i] = static_cast<float>(std::cos(phase));
+  }
+}
+
+// ── M3.7b: MLP + swish chain ────────────────────────────────────────────
+struct ggml_tensor* pi05_build_time_mlp_graph(
+    struct ggml_context* ctx,
+    struct ggml_tensor* time_emb,
+    struct ggml_tensor* time_mlp_in_w,
+    struct ggml_tensor* time_mlp_in_b,
+    struct ggml_tensor* time_mlp_out_w,
+    struct ggml_tensor* time_mlp_out_b) {
+  if (ctx == nullptr || time_emb == nullptr ||
+      time_mlp_in_w == nullptr || time_mlp_in_b == nullptr ||
+      time_mlp_out_w == nullptr || time_mlp_out_b == nullptr) {
+    return nullptr;
+  }
+  // Linear → SiLU → Linear → SiLU. SiLU is swish (x * sigmoid(x)) —
+  // openpi uses `nn.swish` which is JAX's alias for SiLU; ggml_silu
+  // matches.
+  struct ggml_tensor* h = pi05_linear(ctx, time_emb, time_mlp_in_w, time_mlp_in_b);
+  h = ggml_silu(ctx, h);
+  h = pi05_linear(ctx, h, time_mlp_out_w, time_mlp_out_b);
+  h = ggml_silu(ctx, h);
+  return h;
+}
+
 Pi05Model::Pi05Model(
     const std::string& /*ggufPath*/,
     bool /*forceCpu*/,

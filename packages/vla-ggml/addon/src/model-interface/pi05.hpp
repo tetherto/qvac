@@ -226,6 +226,39 @@ struct ggml_tensor* pi05_build_gemma_vlm_block_graph(
     float rms_norm_eps,
     float rope_freq_base);
 
+// M3.7 — time-step → adaRMSNorm conditioning vector.
+//
+// Two pieces:
+//   * `pi05_compute_time_sincos`: plain C++ that fills a `(dim,)`
+//     float buffer with `[sin(2π·t/period_0), ..., sin(2π·t/period_{N-1}),
+//                          cos(2π·t/period_0), ..., cos(2π·t/period_{N-1})]`
+//     where `period_i = min_period · (max_period/min_period)^(i/(N-1))`
+//     and `N = dim/2`. Exact port of openpi's
+//     `create_sinusoidal_pos_embedding` (lerobot/pi05/modeling_pi05.py:81)
+//     including the float64 internal precision.
+//   * `pi05_build_time_mlp_graph`: ggml graph for
+//     `silu(Linear(silu(Linear(time_emb))))`, producing the (dim,)
+//     vector the expert path uses as `adarms_cond`.
+//
+// Splitting them keeps the graph helper portable across backends — the
+// sin-cos table is tiny (1024 floats per ODE step) and trivially
+// computed CPU-side once per step. For pi05_base, `dim` is 1024 and
+// `min_period`/`max_period` are 4e-3 and 4.0 (plan §2).
+void pi05_compute_time_sincos(
+    float t,
+    int dim,
+    float min_period,
+    float max_period,
+    float* out);
+
+struct ggml_tensor* pi05_build_time_mlp_graph(
+    struct ggml_context* ctx,
+    struct ggml_tensor* time_emb,        // (dim,) F32
+    struct ggml_tensor* time_mlp_in_w,   // (dim, dim)
+    struct ggml_tensor* time_mlp_in_b,   // (dim,)
+    struct ggml_tensor* time_mlp_out_w,  // (dim, dim)
+    struct ggml_tensor* time_mlp_out_b); // (dim,)
+
 // M3.6 — full VLM prefill stack.
 //
 // Chains N Gemma-1 blocks (M3.5) and applies the model's final
