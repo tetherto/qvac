@@ -126,6 +126,18 @@ class TranscriptionParakeet {
       streamingEnergyVad: this.params.streamingEnergyVad === true,
       streamingLeftContextMs: this.params.streamingLeftContextMs ?? -1,
       streamingRightLookaheadMs: this.params.streamingRightLookaheadMs ?? -1,
+      // AOSC (v2.1+ Sortformer only). parakeet-cpp ignores these on
+      // non-Sortformer engines and on v1/v2 GGUFs. Defaults mirror the
+      // C++ ParakeetConfig defaults; passing the field explicitly (vs
+      // letting C++ pick its own default) ensures user overrides at
+      // the JS layer reach the native engine instead of being silently
+      // discarded by _buildConfigurationParams.
+      streamingSpkCacheEnable: this.params.streamingSpkCacheEnable !== false,
+      streamingSpkCacheLen: this.params.streamingSpkCacheLen ?? 188,
+      streamingFifoLen: this.params.streamingFifoLen ?? 188,
+      streamingChunkLeftContextMs: this.params.streamingChunkLeftContextMs ?? 80,
+      streamingChunkRightContextMs: this.params.streamingChunkRightContextMs ?? 560,
+      streamingSpkCacheUpdatePeriod: this.params.streamingSpkCacheUpdatePeriod ?? 144,
       // Forwarded as-is; ParakeetInterface fills in a per-package
       // default for `backendsDir` (`path.join(__dirname, 'prebuilds')`)
       // when the host doesn't pass one, so explicit `undefined`
