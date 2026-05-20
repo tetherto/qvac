@@ -108,17 +108,22 @@ TEST(VlaModelFactory, SniffThrowsOnMissingFile) {
 // SmolVLA adapter throws "failed to load SmolVLA model …" while the
 // π₀.₅ stub throws "pi05 … not yet implemented".
 
-TEST(VlaModelFactory, DispatchesPi05ArchitectureToPi05Stub) {
+TEST(VlaModelFactory, DispatchesPi05ArchitectureToPi05Loader) {
+  // The metadata-only GGUF doesn't carry any of the 848 tensors pi05
+  // needs, so the loader throws "tensor missing from GGUF: …" — that's
+  // the signature the factory dispatch picked the Pi05Model branch and
+  // got past the architecture check. Bare-metal proof of dispatch
+  // without needing a real ~6 GB checkpoint in the unit-test harness.
   const std::string path = writeTempGguf("pi05");
   ASSERT_FALSE(path.empty());
   try {
     (void)createVlaModelFromGguf(path, /*forceCpu=*/true, /*backendsDir=*/"");
-    FAIL() << "pi05 factory dispatch should have thrown (stub)";
+    FAIL() << "pi05 factory dispatch should have thrown (no tensors)";
   } catch (const std::runtime_error& e) {
     const std::string what = e.what();
-    EXPECT_NE(what.find("pi05"), std::string::npos)
+    EXPECT_NE(what.find("pi05_load_model"), std::string::npos)
         << "exception did not come from Pi05Model: " << what;
-    EXPECT_NE(what.find("not yet implemented"), std::string::npos) << what;
+    EXPECT_NE(what.find("tensor missing"), std::string::npos) << what;
   }
   cleanupTempFile(path);
 }

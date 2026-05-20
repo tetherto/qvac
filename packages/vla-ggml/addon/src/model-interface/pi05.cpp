@@ -1,9 +1,20 @@
 #include "model-interface/pi05.hpp"
 
+#include <algorithm>
+#include <chrono>
 #include <cmath>
+#include <cstdint>
+#include <cstring>
+#include <mutex>
 #include <stdexcept>
+#include <string>
+#include <vector>
 
 #include <ggml.h>
+#include <ggml-alloc.h>
+#include <ggml-backend.h>
+#include <ggml-cpu.h>
+#include <gguf.h>
 
 namespace qvac_lib_infer_vla_ggml {
 
@@ -717,44 +728,706 @@ struct ggml_tensor* pi05_build_euler_step_graph(
   return ggml_add(ctx, x_t, ggml_scale(ctx, v_t, dt));
 }
 
-Pi05Model::Pi05Model(
-    const std::string& /*ggufPath*/,
-    bool /*forceCpu*/,
-    const std::string& /*backendsDir*/) {
-  // Pre-populate sentinel hparams matching the spec in plan §2 so any
-  // accessor that fires before this throw — e.g. an over-eager unit test —
-  // sees the right shape. Once the load path is implemented, these will be
-  // overwritten from the GGUF metadata keys (pi05.action_horizon,
-  // pi05.image_resolution, pi05.num_cameras, …).
-  hparams_.chunk_size = 50;
-  hparams_.action_dim = 32;
-  hparams_.max_action_dim = 32;
-  hparams_.max_state_dim = 32;
-  hparams_.tokenizer_max_length = 200;
-  hparams_.vision_image_size = 224;
-  hparams_.num_cameras = 3;
-  hparams_.state_input_mode = VlaHparamsGeneric::StateInputMode::Discrete;
+// ─────────────────────────────────────────────────────────────────────────
+// Production loader, inference, and Pi05Model wiring.
+//
+// The implementation composes the Phase-3 milestone helpers (M3.1–M3.13)
+// into a single `IVlaModel` entry point. Per-camera SigLIP towers,
+// PaliGemma embedding lookup, VLM prefill with K/V taps, and the 10-step
+// ODE loop all happen in a single `infer()` call.
+//
+// First-cut limitations (suitable for the Phase-5 integration test, to
+// be tightened in follow-ups):
+//   * Backends: only CPU is initialised. GPU device selection is left
+//     for the Phase-6 hardening pass — the math is verified, but
+//     joint-attention shader compatibility on Vulkan / Metal / OpenCL
+//     needs its own sweep (plan §7 risk row "MQA + RoPE under Vulkan").
+//   * Attention masks: the inference fast-path slices the prefix to its
+//     leading-contiguous valid range and runs the VLM prefill /
+//     joint-attn without a softmax mask. Same trick the M3.5/M3.6/M3.13
+//     tests use. Holes in the middle of `lang_mask` are rejected up
+//     front. Adding a proper additive attention mask is a follow-up.
+//   * No mmap fast path. `gguf_init_from_file` with `no_alloc=false`
+//     drops weights into a malloc'd `ggml_context`. Adds a few hundred
+//     MB to the resident set vs the smolvla mmap path; not a blocker
+//     for the desktop integration test, will revisit for mobile.
+// ─────────────────────────────────────────────────────────────────────────
 
-  throw std::runtime_error(
-      "pi05 model loading not yet implemented (Phase 1 stub); "
-      "see plan.md Phase 3 for the milestone breakdown");
+struct pi05_model {
+  // hparams (also mirrored into Pi05Model::hparams_)
+  int vision_image_size = 224;
+  int vision_patch_size = 14;
+  int vision_n_patches = 256;
+  int vision_n_layers = 27;
+  int vision_hidden = 1152;
+  int vision_n_heads = 16;
+  int vision_proj_dim = 2048;
+  float vision_layer_norm_eps = 1e-6f;
+
+  int vlm_n_layers = 18;
+  int vlm_hidden = 2048;
+  int vlm_n_heads = 8;
+  int vlm_n_kv_heads = 1;
+  int vlm_head_dim = 256;
+  int vlm_vocab_size = 257152;
+
+  int expert_n_layers = 18;
+  int expert_hidden = 1024;
+  int expert_n_heads = 8;
+  int expert_n_kv_heads = 1;
+  int expert_head_dim = 256;
+
+  int action_dim = 32;
+  int action_horizon = 50;
+  int max_token_len = 200;
+  int num_cameras = 3;
+  int cond_dim = 1024;
+  int n_inference_steps = 10;
+  float rms_norm_eps = 1e-6f;
+  float rope_freq_base = 10000.0f;
+  float min_period = 4e-3f;
+  float max_period = 4.0f;
+
+  // weight pointers — all owned by `ctx_w` below.
+  struct ggml_tensor* vision_patch_embed_w = nullptr;
+  struct ggml_tensor* vision_patch_embed_b = nullptr;
+  struct ggml_tensor* vision_pos_embed = nullptr;
+  std::vector<Pi05SiglipBlockWeights> vision_blocks;
+  struct ggml_tensor* vision_post_ln_w = nullptr;
+  struct ggml_tensor* vision_post_ln_b = nullptr;
+  struct ggml_tensor* vision_head_w = nullptr;
+  struct ggml_tensor* vision_head_b = nullptr;
+
+  struct ggml_tensor* vlm_embed_tokens = nullptr;
+  std::vector<Pi05GemmaBlockWeights> vlm_blocks;
+  struct ggml_tensor* vlm_final_norm_w = nullptr;
+
+  std::vector<Pi05ExpertBlockWeights> expert_blocks;
+  struct ggml_tensor* expert_final_norm_ada_w = nullptr;
+  struct ggml_tensor* expert_final_norm_ada_b = nullptr;
+
+  struct ggml_tensor* action_in_w = nullptr;
+  struct ggml_tensor* action_in_b = nullptr;
+  struct ggml_tensor* action_out_w = nullptr;
+  struct ggml_tensor* action_out_b = nullptr;
+  struct ggml_tensor* time_mlp_in_w = nullptr;
+  struct ggml_tensor* time_mlp_in_b = nullptr;
+  struct ggml_tensor* time_mlp_out_w = nullptr;
+  struct ggml_tensor* time_mlp_out_b = nullptr;
+
+  // backends + memory
+  struct gguf_context* gguf = nullptr;
+  struct ggml_context* ctx_w = nullptr;
+  ggml_backend_t backend = nullptr;
+  ggml_backend_t backend_cpu = nullptr;
+  bool has_gpu = false;
+  std::string backend_name = "none";
+
+  ~pi05_model() {
+    // gguf_free first — the GGUF context owns the tensor data buffer
+    // backing ctx_w, so free in reverse-construction order.
+    if (gguf != nullptr) {
+      gguf_free(gguf);
+      gguf = nullptr;
+    }
+    if (ctx_w != nullptr) {
+      ggml_free(ctx_w);
+      ctx_w = nullptr;
+    }
+    // Only free the GPU backend if it's a distinct handle.
+    if (backend != nullptr && backend != backend_cpu) {
+      ggml_backend_free(backend);
+    }
+    if (backend_cpu != nullptr) {
+      ggml_backend_free(backend_cpu);
+    }
+  }
+};
+
+namespace {
+
+void load_backends_once(const std::string& backends_dir) {
+  static std::once_flag s_flag;
+  std::call_once(s_flag, [&backends_dir]() {
+    if (!backends_dir.empty()) {
+      ggml_backend_load_all_from_path(backends_dir.c_str());
+    } else {
+      ggml_backend_load_all();
+    }
+  });
 }
 
+uint32_t gguf_get_u32_or(
+    struct gguf_context* g, const char* key, uint32_t dflt) {
+  int64_t idx = gguf_find_key(g, key);
+  if (idx < 0) {
+    return dflt;
+  }
+  return gguf_get_val_u32(g, idx);
+}
+
+std::string gguf_get_str_or(
+    struct gguf_context* g, const char* key, const std::string& dflt) {
+  int64_t idx = gguf_find_key(g, key);
+  if (idx < 0) {
+    return dflt;
+  }
+  return std::string(gguf_get_val_str(g, idx));
+}
+
+} // namespace
+
+// pi05_load_model — opens the GGUF, allocates backends, populates the
+// model struct's tensor pointers. Throws std::runtime_error on any
+// missing tensor or wrong architecture key.
+static std::unique_ptr<pi05_model> pi05_load_model(
+    const std::string& ggufPath, bool forceCpu,
+    const std::string& backendsDir) {
+  load_backends_once(backendsDir);
+  auto m = std::make_unique<pi05_model>();
+
+  ggml_backend_dev_t cpu_dev =
+      ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+  if (cpu_dev == nullptr) {
+    throw std::runtime_error("pi05_load_model: no CPU backend available");
+  }
+  m->backend_cpu = ggml_backend_dev_init(cpu_dev, nullptr);
+  if (m->backend_cpu == nullptr) {
+    throw std::runtime_error("pi05_load_model: failed to init CPU backend");
+  }
+  m->backend = m->backend_cpu;
+  m->backend_name = "cpu";
+  m->has_gpu = false;
+  (void)forceCpu; // GPU selection is a Phase-6 follow-up.
+
+  struct gguf_init_params gp{};
+  gp.no_alloc = false;
+  gp.ctx = &m->ctx_w;
+  m->gguf = gguf_init_from_file(ggufPath.c_str(), gp);
+  if (m->gguf == nullptr) {
+    throw std::runtime_error(
+        "pi05_load_model: gguf_init_from_file failed for " + ggufPath);
+  }
+
+  const std::string arch =
+      gguf_get_str_or(m->gguf, "general.architecture", "");
+  if (arch != "pi05") {
+    throw std::runtime_error(
+        "pi05_load_model: expected general.architecture=pi05, got '" +
+        arch + "'");
+  }
+
+  // hparams (all keys per the Phase-2 converter's stamp_metadata).
+  m->vision_image_size =
+      gguf_get_u32_or(m->gguf, "pi05.image_resolution", 224);
+  m->vision_n_layers =
+      gguf_get_u32_or(m->gguf, "pi05.vision.num_layers", 27);
+  m->vlm_n_layers = gguf_get_u32_or(m->gguf, "pi05.vlm.num_layers", 18);
+  m->vlm_vocab_size = gguf_get_u32_or(m->gguf, "pi05.vocab_size", 257152);
+  m->expert_hidden =
+      gguf_get_u32_or(m->gguf, "pi05.expert.hidden_size", 1024);
+  m->expert_n_layers =
+      gguf_get_u32_or(m->gguf, "pi05.expert.num_layers", 18);
+  m->action_dim = gguf_get_u32_or(m->gguf, "pi05.action_dim", 32);
+  m->action_horizon = gguf_get_u32_or(m->gguf, "pi05.action_horizon", 50);
+  m->max_token_len =
+      gguf_get_u32_or(m->gguf, "pi05.max_token_len", 200);
+  m->num_cameras = gguf_get_u32_or(m->gguf, "pi05.num_cameras", 3);
+  m->vision_n_patches =
+      (m->vision_image_size / m->vision_patch_size) *
+      (m->vision_image_size / m->vision_patch_size);
+
+  auto must_get = [&](const std::string& name) -> struct ggml_tensor* {
+    struct ggml_tensor* t = ggml_get_tensor(m->ctx_w, name.c_str());
+    if (t == nullptr) {
+      throw std::runtime_error(
+          "pi05_load_model: tensor missing from GGUF: " + name);
+    }
+    return t;
+  };
+
+  // Vision
+  m->vision_patch_embed_w = must_get("vision.patch_embed.weight");
+  m->vision_patch_embed_b = must_get("vision.patch_embed.bias");
+  m->vision_pos_embed = must_get("vision.pos_embed");
+  m->vision_post_ln_w = must_get("vision.post_ln.weight");
+  m->vision_post_ln_b = must_get("vision.post_ln.bias");
+  m->vision_head_w = must_get("vision.head.weight");
+  m->vision_head_b = must_get("vision.head.bias");
+  m->vision_blocks.resize(m->vision_n_layers);
+  for (int i = 0; i < m->vision_n_layers; ++i) {
+    const std::string b = "vision.blk." + std::to_string(i);
+    auto& bw = m->vision_blocks[i];
+    bw.ln1_w = must_get(b + ".ln1.weight");
+    bw.ln1_b = must_get(b + ".ln1.bias");
+    bw.attn_q_w = must_get(b + ".attn_q.weight");
+    bw.attn_q_b = must_get(b + ".attn_q.bias");
+    bw.attn_k_w = must_get(b + ".attn_k.weight");
+    bw.attn_k_b = must_get(b + ".attn_k.bias");
+    bw.attn_v_w = must_get(b + ".attn_v.weight");
+    bw.attn_v_b = must_get(b + ".attn_v.bias");
+    bw.attn_out_w = must_get(b + ".attn_out.weight");
+    bw.attn_out_b = must_get(b + ".attn_out.bias");
+    bw.ln2_w = must_get(b + ".ln2.weight");
+    bw.ln2_b = must_get(b + ".ln2.bias");
+    bw.fc1_w = must_get(b + ".fc1.weight");
+    bw.fc1_b = must_get(b + ".fc1.bias");
+    bw.fc2_w = must_get(b + ".fc2.weight");
+    bw.fc2_b = must_get(b + ".fc2.bias");
+  }
+
+  // VLM
+  m->vlm_embed_tokens = must_get("vlm.embed_tokens");
+  m->vlm_final_norm_w = must_get("vlm.final_norm.scale");
+  m->vlm_blocks.resize(m->vlm_n_layers);
+  for (int i = 0; i < m->vlm_n_layers; ++i) {
+    const std::string b = "vlm.blk." + std::to_string(i);
+    auto& bw = m->vlm_blocks[i];
+    bw.pre_attn_norm_scale = must_get(b + ".pre_attn_norm.scale");
+    bw.attn_q_w = must_get(b + ".attn.q.weight");
+    bw.attn_k_w = must_get(b + ".attn.k.weight");
+    bw.attn_v_w = must_get(b + ".attn.v.weight");
+    bw.attn_o_w = must_get(b + ".attn.o.weight");
+    bw.pre_ffw_norm_scale = must_get(b + ".pre_ffw_norm.scale");
+    bw.mlp_gate_w = must_get(b + ".mlp.gate.weight");
+    bw.mlp_up_w = must_get(b + ".mlp.up.weight");
+    bw.mlp_down_w = must_get(b + ".mlp.down.weight");
+  }
+
+  // Expert
+  m->expert_final_norm_ada_w = must_get("expert.final_norm.ada.weight");
+  m->expert_final_norm_ada_b = must_get("expert.final_norm.ada.bias");
+  m->expert_blocks.resize(m->expert_n_layers);
+  for (int i = 0; i < m->expert_n_layers; ++i) {
+    const std::string b = "expert.blk." + std::to_string(i);
+    auto& bw = m->expert_blocks[i];
+    bw.pre_attn_ada_w = must_get(b + ".pre_attn_norm.ada.weight");
+    bw.pre_attn_ada_b = must_get(b + ".pre_attn_norm.ada.bias");
+    bw.pre_ffw_ada_w = must_get(b + ".pre_ffw_norm.ada.weight");
+    bw.pre_ffw_ada_b = must_get(b + ".pre_ffw_norm.ada.bias");
+    bw.attn_q_w = must_get(b + ".attn.q.weight");
+    bw.attn_k_w = must_get(b + ".attn.k.weight");
+    bw.attn_v_w = must_get(b + ".attn.v.weight");
+    bw.attn_o_w = must_get(b + ".attn.o.weight");
+    bw.mlp_gate_w = must_get(b + ".mlp.gate.weight");
+    bw.mlp_up_w = must_get(b + ".mlp.up.weight");
+    bw.mlp_down_w = must_get(b + ".mlp.down.weight");
+  }
+
+  // Projections
+  m->action_in_w = must_get("proj.action_in.weight");
+  m->action_in_b = must_get("proj.action_in.bias");
+  m->action_out_w = must_get("proj.action_out.weight");
+  m->action_out_b = must_get("proj.action_out.bias");
+  m->time_mlp_in_w = must_get("proj.time_mlp_in.weight");
+  m->time_mlp_in_b = must_get("proj.time_mlp_in.bias");
+  m->time_mlp_out_w = must_get("proj.time_mlp_out.weight");
+  m->time_mlp_out_b = must_get("proj.time_mlp_out.bias");
+
+  return m;
+}
+
+// pi05_inference — composes M3.1 (vision per cam) + M3.4 (embedder)
+// + M3.6 (VLM prefill with KV taps) + M3.12 (ODE loop) into a single
+// pass. Returns true on success.
+static bool pi05_inference(
+    pi05_model& m,
+    const float** images,
+    int n_images,
+    const int32_t* lang_tokens,
+    const bool* lang_mask,
+    int lang_len,
+    const float* noise,
+    float* actions_out,
+    int* n_actions_out,
+    VlaTimingGeneric* timing_out) {
+  const auto t_start = std::chrono::steady_clock::now();
+  if (n_images < 1 || n_images > m.num_cameras) {
+    return false;
+  }
+  if (lang_len != m.max_token_len) {
+    return false;
+  }
+  // Find leading-contiguous valid range; reject holes.
+  int valid_lang = 0;
+  while (valid_lang < lang_len && lang_mask[valid_lang]) {
+    ++valid_lang;
+  }
+  for (int i = valid_lang; i < lang_len; ++i) {
+    if (lang_mask[i]) {
+      return false;
+    }
+  }
+  const int prefix_len = n_images * m.vision_n_patches + valid_lang;
+
+  // ── Vision tower per camera ────────────────────────────────────────
+  const auto t_vis_start = std::chrono::steady_clock::now();
+  const int H = m.vision_image_size;
+  const size_t per_image_out =
+      static_cast<size_t>(m.vision_n_patches) * m.vision_proj_dim;
+  std::vector<std::vector<float>> image_features(n_images);
+  std::vector<float> permuted(3 * H * H);
+  for (int cam = 0; cam < n_images; ++cam) {
+    // (C, H, W) row-major → ggml's (W, H, C, N) fast-dim-first.
+    for (int c = 0; c < 3; ++c) {
+      for (int h = 0; h < H; ++h) {
+        for (int w = 0; w < H; ++w) {
+          const size_t src = static_cast<size_t>(c) * H * H + h * H + w;
+          const size_t dst = w + h * H + static_cast<size_t>(c) * H * H;
+          permuted[dst] = images[cam][src];
+        }
+      }
+    }
+
+    const size_t ctx_mem = size_t{32} * 1024 * 1024;
+    std::vector<uint8_t> mem_buf(ctx_mem);
+    struct ggml_init_params gp{ctx_mem, mem_buf.data(), /*no_alloc=*/true};
+    struct ggml_context* ctx_g = ggml_init(gp);
+    if (ctx_g == nullptr) {
+      return false;
+    }
+    struct ggml_tensor* pixels =
+        ggml_new_tensor_4d(ctx_g, GGML_TYPE_F32, H, H, 3, 1);
+
+    Pi05VisionTowerWeights tw{};
+    tw.patch_embed_w = m.vision_patch_embed_w;
+    tw.patch_embed_b = m.vision_patch_embed_b;
+    tw.pos_embed = m.vision_pos_embed;
+    tw.blocks = m.vision_blocks;
+    tw.post_ln_w = m.vision_post_ln_w;
+    tw.post_ln_b = m.vision_post_ln_b;
+    tw.head_w = m.vision_head_w;
+    tw.head_b = m.vision_head_b;
+
+    auto outs = pi05_build_siglip_tower_graph(
+        ctx_g, pixels, tw, m.vision_n_patches, m.vision_hidden,
+        m.vision_proj_dim, m.vision_n_heads, m.vision_patch_size,
+        m.vision_layer_norm_eps);
+    if (outs.head_out == nullptr) {
+      ggml_free(ctx_g);
+      return false;
+    }
+    struct ggml_cgraph* gf = ggml_new_graph_custom(ctx_g, 8192, false);
+    ggml_build_forward_expand(gf, outs.head_out);
+
+    ggml_gallocr_t allocr = ggml_gallocr_new(
+        ggml_backend_get_default_buffer_type(m.backend));
+    if (allocr == nullptr || !ggml_gallocr_alloc_graph(allocr, gf)) {
+      if (allocr != nullptr) {
+        ggml_gallocr_free(allocr);
+      }
+      ggml_free(ctx_g);
+      return false;
+    }
+    ggml_backend_tensor_set(pixels, permuted.data(), 0,
+                            permuted.size() * sizeof(float));
+    if (ggml_backend_graph_compute(m.backend, gf) != GGML_STATUS_SUCCESS) {
+      ggml_gallocr_free(allocr);
+      ggml_free(ctx_g);
+      return false;
+    }
+    image_features[cam].resize(per_image_out);
+    ggml_backend_tensor_get(outs.head_out, image_features[cam].data(), 0,
+                            per_image_out * sizeof(float));
+    ggml_gallocr_free(allocr);
+    ggml_free(ctx_g);
+  }
+  const auto t_vis_end = std::chrono::steady_clock::now();
+
+  // ── Language embedding (valid tokens only) ─────────────────────────
+  std::vector<float> lang_embeds(
+      static_cast<size_t>(valid_lang) * m.vlm_hidden);
+  {
+    const size_t ctx_mem = size_t{32} * 1024 * 1024;
+    std::vector<uint8_t> mem_buf(ctx_mem);
+    struct ggml_init_params gp{ctx_mem, mem_buf.data(), /*no_alloc=*/true};
+    struct ggml_context* ctx_g = ggml_init(gp);
+    if (ctx_g == nullptr) {
+      return false;
+    }
+    struct ggml_tensor* tok =
+        ggml_new_tensor_1d(ctx_g, GGML_TYPE_I32, valid_lang);
+    struct ggml_tensor* emb = pi05_build_vlm_embed_graph(
+        ctx_g, tok, m.vlm_embed_tokens, m.vlm_hidden);
+    if (emb == nullptr) {
+      ggml_free(ctx_g);
+      return false;
+    }
+    struct ggml_cgraph* gf = ggml_new_graph(ctx_g);
+    ggml_build_forward_expand(gf, emb);
+    ggml_gallocr_t allocr = ggml_gallocr_new(
+        ggml_backend_get_default_buffer_type(m.backend));
+    if (allocr == nullptr || !ggml_gallocr_alloc_graph(allocr, gf)) {
+      if (allocr != nullptr) {
+        ggml_gallocr_free(allocr);
+      }
+      ggml_free(ctx_g);
+      return false;
+    }
+    ggml_backend_tensor_set(tok, lang_tokens, 0,
+                            static_cast<size_t>(valid_lang) *
+                                sizeof(int32_t));
+    if (ggml_backend_graph_compute(m.backend, gf) != GGML_STATUS_SUCCESS) {
+      ggml_gallocr_free(allocr);
+      ggml_free(ctx_g);
+      return false;
+    }
+    ggml_backend_tensor_get(emb, lang_embeds.data(), 0,
+                            lang_embeds.size() * sizeof(float));
+    ggml_gallocr_free(allocr);
+    ggml_free(ctx_g);
+  }
+
+  // ── Concat prefix (images + lang) ──────────────────────────────────
+  std::vector<float> prefix(
+      static_cast<size_t>(prefix_len) * m.vlm_hidden);
+  {
+    size_t off = 0;
+    for (int cam = 0; cam < n_images; ++cam) {
+      std::memcpy(prefix.data() + off, image_features[cam].data(),
+                  image_features[cam].size() * sizeof(float));
+      off += image_features[cam].size();
+    }
+    std::memcpy(prefix.data() + off, lang_embeds.data(),
+                lang_embeds.size() * sizeof(float));
+  }
+
+  // ── VLM prefill with K/V taps ──────────────────────────────────────
+  const auto t_prefill_start = std::chrono::steady_clock::now();
+  const size_t per_layer_kv =
+      static_cast<size_t>(m.vlm_head_dim) * prefix_len * m.vlm_n_kv_heads;
+  std::vector<std::vector<float>> k_cache(m.vlm_n_layers);
+  std::vector<std::vector<float>> v_cache(m.vlm_n_layers);
+  for (int L = 0; L < m.vlm_n_layers; ++L) {
+    k_cache[L].resize(per_layer_kv);
+    v_cache[L].resize(per_layer_kv);
+  }
+  {
+    const size_t ctx_mem = size_t{64} * 1024 * 1024;
+    std::vector<uint8_t> mem_buf(ctx_mem);
+    struct ggml_init_params gp{ctx_mem, mem_buf.data(), /*no_alloc=*/true};
+    struct ggml_context* ctx_g = ggml_init(gp);
+    if (ctx_g == nullptr) {
+      return false;
+    }
+    struct ggml_tensor* x = ggml_new_tensor_2d(
+        ctx_g, GGML_TYPE_F32, m.vlm_hidden, prefix_len);
+    struct ggml_tensor* pos =
+        ggml_new_tensor_1d(ctx_g, GGML_TYPE_I32, prefix_len);
+
+    std::vector<struct ggml_tensor*> out_keys;
+    std::vector<struct ggml_tensor*> out_values;
+    struct ggml_tensor* final_out = pi05_build_vlm_prefill_graph(
+        ctx_g, x, pos, /*attn_mask=*/nullptr, m.vlm_blocks,
+        m.vlm_final_norm_w, m.vlm_hidden, m.vlm_n_heads,
+        m.vlm_n_kv_heads, m.vlm_head_dim, prefix_len, m.rms_norm_eps,
+        m.rope_freq_base, &out_keys, &out_values);
+    if (final_out == nullptr) {
+      ggml_free(ctx_g);
+      return false;
+    }
+    struct ggml_cgraph* gf = ggml_new_graph_custom(ctx_g, 65536, false);
+    ggml_build_forward_expand(gf, final_out);
+    for (auto* k_t : out_keys) {
+      ggml_build_forward_expand(gf, k_t);
+    }
+    for (auto* v_t : out_values) {
+      ggml_build_forward_expand(gf, v_t);
+    }
+    ggml_gallocr_t allocr = ggml_gallocr_new(
+        ggml_backend_get_default_buffer_type(m.backend));
+    if (allocr == nullptr || !ggml_gallocr_alloc_graph(allocr, gf)) {
+      if (allocr != nullptr) {
+        ggml_gallocr_free(allocr);
+      }
+      ggml_free(ctx_g);
+      return false;
+    }
+    std::vector<int32_t> pos_data(prefix_len);
+    for (int i = 0; i < prefix_len; ++i) {
+      pos_data[i] = i;
+    }
+    ggml_backend_tensor_set(x, prefix.data(), 0,
+                            prefix.size() * sizeof(float));
+    ggml_backend_tensor_set(pos, pos_data.data(), 0,
+                            pos_data.size() * sizeof(int32_t));
+    if (ggml_backend_graph_compute(m.backend, gf) != GGML_STATUS_SUCCESS) {
+      ggml_gallocr_free(allocr);
+      ggml_free(ctx_g);
+      return false;
+    }
+    for (int L = 0; L < m.vlm_n_layers; ++L) {
+      ggml_backend_tensor_get(out_keys[L], k_cache[L].data(), 0,
+                              per_layer_kv * sizeof(float));
+      ggml_backend_tensor_get(out_values[L], v_cache[L].data(), 0,
+                              per_layer_kv * sizeof(float));
+    }
+    ggml_gallocr_free(allocr);
+    ggml_free(ctx_g);
+  }
+  const auto t_prefill_end = std::chrono::steady_clock::now();
+
+  // ── ODE loop (10 steps) ────────────────────────────────────────────
+  const auto t_ode_start = std::chrono::steady_clock::now();
+  const float dt = -1.0f / m.n_inference_steps;
+  std::vector<float> x_t(
+      static_cast<size_t>(m.action_horizon) * m.action_dim);
+  std::memcpy(x_t.data(), noise, x_t.size() * sizeof(float));
+  std::vector<float> sincos_buf(m.cond_dim);
+  std::vector<int32_t> act_pos_data(m.action_horizon);
+  for (int i = 0; i < m.action_horizon; ++i) {
+    act_pos_data[i] = prefix_len + i;
+  }
+  std::vector<float> x_next_buf(x_t.size());
+
+  for (int step = 0; step < m.n_inference_steps; ++step) {
+    const float t = 1.0f + step * dt;
+    pi05_compute_time_sincos(t, m.cond_dim, m.min_period, m.max_period,
+                             sincos_buf.data());
+
+    const size_t ctx_mem = size_t{96} * 1024 * 1024;
+    std::vector<uint8_t> mem_buf(ctx_mem);
+    struct ggml_init_params gp{ctx_mem, mem_buf.data(), /*no_alloc=*/true};
+    struct ggml_context* ctx_g = ggml_init(gp);
+    if (ctx_g == nullptr) {
+      return false;
+    }
+    struct ggml_tensor* x_t_t = ggml_new_tensor_2d(
+        ctx_g, GGML_TYPE_F32, m.action_dim, m.action_horizon);
+    struct ggml_tensor* sincos_t =
+        ggml_new_tensor_1d(ctx_g, GGML_TYPE_F32, m.cond_dim);
+    struct ggml_tensor* act_pos_t =
+        ggml_new_tensor_1d(ctx_g, GGML_TYPE_I32, m.action_horizon);
+    std::vector<struct ggml_tensor*> cached_k_t(m.expert_n_layers);
+    std::vector<struct ggml_tensor*> cached_v_t(m.expert_n_layers);
+    for (int L = 0; L < m.expert_n_layers; ++L) {
+      cached_k_t[L] = ggml_new_tensor_3d(
+          ctx_g, GGML_TYPE_F32, m.expert_head_dim, prefix_len,
+          m.expert_n_kv_heads);
+      cached_v_t[L] = ggml_new_tensor_3d(
+          ctx_g, GGML_TYPE_F32, m.expert_head_dim, prefix_len,
+          m.expert_n_kv_heads);
+    }
+
+    struct ggml_tensor* cond = pi05_build_time_mlp_graph(
+        ctx_g, sincos_t, m.time_mlp_in_w, m.time_mlp_in_b,
+        m.time_mlp_out_w, m.time_mlp_out_b);
+
+    struct ggml_tensor* x_exp_t =
+        ggml_mul_mat(ctx_g, m.action_in_w, x_t_t);
+    x_exp_t = ggml_add(
+        ctx_g, x_exp_t, ggml_cast(ctx_g, m.action_in_b, GGML_TYPE_F32));
+
+    auto outs = pi05_build_expert_ode_step_graph(
+        ctx_g, x_exp_t, act_pos_t, cached_k_t, cached_v_t, cond,
+        m.expert_blocks, m.expert_final_norm_ada_w,
+        m.expert_final_norm_ada_b, m.action_out_w, m.action_out_b,
+        m.expert_hidden, m.expert_n_heads, m.expert_n_kv_heads,
+        m.expert_head_dim, prefix_len, m.action_horizon,
+        m.rms_norm_eps, m.rope_freq_base);
+    if (outs.v_t == nullptr) {
+      ggml_free(ctx_g);
+      return false;
+    }
+    struct ggml_tensor* x_next =
+        pi05_build_euler_step_graph(ctx_g, x_t_t, outs.v_t, dt);
+    struct ggml_cgraph* gf = ggml_new_graph_custom(ctx_g, 32768, false);
+    ggml_build_forward_expand(gf, x_next);
+
+    ggml_gallocr_t allocr = ggml_gallocr_new(
+        ggml_backend_get_default_buffer_type(m.backend));
+    if (allocr == nullptr || !ggml_gallocr_alloc_graph(allocr, gf)) {
+      if (allocr != nullptr) {
+        ggml_gallocr_free(allocr);
+      }
+      ggml_free(ctx_g);
+      return false;
+    }
+    ggml_backend_tensor_set(x_t_t, x_t.data(), 0,
+                            x_t.size() * sizeof(float));
+    ggml_backend_tensor_set(sincos_t, sincos_buf.data(), 0,
+                            sincos_buf.size() * sizeof(float));
+    ggml_backend_tensor_set(act_pos_t, act_pos_data.data(), 0,
+                            act_pos_data.size() * sizeof(int32_t));
+    for (int L = 0; L < m.expert_n_layers; ++L) {
+      ggml_backend_tensor_set(cached_k_t[L], k_cache[L].data(), 0,
+                              k_cache[L].size() * sizeof(float));
+      ggml_backend_tensor_set(cached_v_t[L], v_cache[L].data(), 0,
+                              v_cache[L].size() * sizeof(float));
+    }
+    if (ggml_backend_graph_compute(m.backend, gf) != GGML_STATUS_SUCCESS) {
+      ggml_gallocr_free(allocr);
+      ggml_free(ctx_g);
+      return false;
+    }
+    ggml_backend_tensor_get(x_next, x_next_buf.data(), 0,
+                            x_next_buf.size() * sizeof(float));
+    std::swap(x_t, x_next_buf);
+    ggml_gallocr_free(allocr);
+    ggml_free(ctx_g);
+  }
+  const auto t_ode_end = std::chrono::steady_clock::now();
+
+  std::memcpy(actions_out, x_t.data(), x_t.size() * sizeof(float));
+  *n_actions_out = m.action_horizon;
+
+  if (timing_out != nullptr) {
+    const auto t_end = std::chrono::steady_clock::now();
+    auto to_ms = [](auto a, auto b) {
+      return std::chrono::duration<double, std::milli>(b - a).count();
+    };
+    timing_out->vision_ms = to_ms(t_vis_start, t_vis_end);
+    timing_out->prefill_compute_ms = to_ms(t_prefill_start, t_prefill_end);
+    timing_out->prefill_total_ms = to_ms(t_prefill_start, t_prefill_end);
+    timing_out->ode_ms = to_ms(t_ode_start, t_ode_end);
+    timing_out->total_ms = to_ms(t_start, t_end);
+  }
+  return true;
+}
+
+Pi05Model::Pi05Model(
+    const std::string& ggufPath, bool forceCpu,
+    const std::string& backendsDir) {
+  impl_ = pi05_load_model(ggufPath, forceCpu, backendsDir);
+  hparams_.chunk_size = impl_->action_horizon;
+  hparams_.action_dim = impl_->action_dim;
+  hparams_.max_action_dim = impl_->action_dim;
+  hparams_.max_state_dim = impl_->action_dim;
+  hparams_.tokenizer_max_length = impl_->max_token_len;
+  hparams_.vision_image_size = impl_->vision_image_size;
+  hparams_.num_cameras = impl_->num_cameras;
+  hparams_.state_input_mode =
+      VlaHparamsGeneric::StateInputMode::Discrete;
+}
+
+Pi05Model::~Pi05Model() = default;
+
+std::string Pi05Model::backendName() const {
+  return impl_ ? impl_->backend_name : std::string("none");
+}
+
+bool Pi05Model::hasGpu() const { return impl_ && impl_->has_gpu; }
+
 bool Pi05Model::infer(
-    const float** /*images*/,
-    int /*n_images*/,
+    const float** images,
+    int n_images,
     int /*img_width*/,
     int /*img_height*/,
-    const float* /*state*/,
+    const float* /*state*/, // pi05 uses discrete state in the prompt
     int /*state_dim*/,
-    const int32_t* /*lang_tokens*/,
-    const bool* /*lang_mask*/,
-    int /*lang_len*/,
-    const float* /*noise*/,
-    float* /*actions_out*/,
-    int* /*n_actions_out*/,
-    VlaTimingGeneric* /*timing_out*/) {
-  throw std::runtime_error("pi05 inference not yet implemented");
+    const int32_t* lang_tokens,
+    const bool* lang_mask,
+    int lang_len,
+    const float* noise,
+    float* actions_out,
+    int* n_actions_out,
+    VlaTimingGeneric* timing_out) {
+  if (!impl_) {
+    return false;
+  }
+  return pi05_inference(*impl_, images, n_images, lang_tokens, lang_mask,
+                         lang_len, noise, actions_out, n_actions_out,
+                         timing_out);
 }
 
 } // namespace qvac_lib_infer_vla_ggml

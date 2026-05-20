@@ -6,6 +6,7 @@
 // (SigLIP-So400m, Gemma-1 2B VLM, Gemma-1 300M action expert, joint
 // attention, adaRMSNorm, …) per plan §4.
 
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -14,6 +15,13 @@
 #include "model-interface/vla_model.hpp"
 
 namespace qvac_lib_infer_vla_ggml {
+
+// Forward-declared internal model struct — defined in pi05.cpp. Pi05Model
+// holds it via a unique_ptr so the public header doesn't need to drag in
+// all the per-section weight tables and backend handles. The destructor
+// is intentionally out-of-line (defined in pi05.cpp where pi05_model is
+// complete) so unique_ptr<pi05_model> compiles without leaking the type.
+struct pi05_model;
 
 // ── Phase 3 milestone helpers ────────────────────────────────────────────
 // Each milestone (M3.1 … M3.13) exposes a small C++ entry point so the
@@ -457,28 +465,34 @@ struct ggml_tensor* pi05_build_vlm_prefill_graph(
     std::vector<struct ggml_tensor*>* out_values = nullptr);
 
 
+// Production π₀.₅ implementation. The constructor opens the GGUF,
+// allocates backends, maps all 848 weight tensor pointers, and
+// populates `hparams_` from `pi05.*` metadata keys. `infer()` runs
+// the full SigLIP-tower + VLM-prefill + 10-step-ODE pipeline using
+// the Phase-3 milestone helpers as building blocks.
 class Pi05Model final : public IVlaModel {
 public:
-  // Phase 1 stub: constructing a Pi05Model immediately throws so callers
-  // who try to use the factory against a `general.architecture=pi05` GGUF
-  // get a clear, early failure rather than a corrupt half-loaded model.
-  // Phase 3 will replace this with `pi05_load_model(...)`.
+  // Throws std::runtime_error if the GGUF is missing required
+  // tensors or the architecture key isn't `pi05`. `forceCpu` skips
+  // GPU device selection (always uses the CPU backend); `backendsDir`
+  // is the absolute path to the prebuild directory containing the
+  // ggml backend plugin shared libs (.so/.dylib/.dll).
   Pi05Model(
       const std::string& ggufPath,
       bool forceCpu,
       const std::string& backendsDir);
 
-  ~Pi05Model() override = default;
+  // Out-of-line because `pi05_model` is forward-declared above;
+  // unique_ptr's destructor needs the complete type, which lives in
+  // pi05.cpp.
+  ~Pi05Model() override;
 
   Pi05Model(const Pi05Model&) = delete;
   Pi05Model& operator=(const Pi05Model&) = delete;
 
-  // IVlaModel — these are unreachable in Phase 1 because the constructor
-  // throws, but they exist so the symbol table is complete and Phase 3
-  // can fill them in without churning the addon layer.
   const VlaHparamsGeneric& hparams() const override { return hparams_; }
-  std::string backendName() const override { return "none"; }
-  bool hasGpu() const override { return false; }
+  std::string backendName() const override;
+  bool hasGpu() const override;
 
   bool infer(
       const float** images,
@@ -497,6 +511,7 @@ public:
 
 private:
   VlaHparamsGeneric hparams_{};
+  std::unique_ptr<pi05_model> impl_;
 };
 
 } // namespace qvac_lib_infer_vla_ggml
