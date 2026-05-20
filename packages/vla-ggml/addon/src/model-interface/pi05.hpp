@@ -259,6 +259,35 @@ struct ggml_tensor* pi05_build_time_mlp_graph(
     struct ggml_tensor* time_mlp_out_w,  // (dim, dim)
     struct ggml_tensor* time_mlp_out_b); // (dim,)
 
+// M3.8 — adaRMSNorm modulation split.
+//
+// Per-block expert path uses a learned `Dense(cond_dim → 3·hidden)`
+// driven by the M3.7 cond vector to produce the (scale, shift, gate)
+// modulation triple. See openpi/gemma.py:128 — `nn.Dense(3·hidden, …)
+// (cond)` followed by `chunk(3)`. For pi05 cond_dim == hidden == 1024
+// (i.e. expert hidden = expert adarms cond dim = 1024).
+//
+// Returns three (hidden,) tensors aliasing slices of the (3·hidden,)
+// modulation output. The caller wires them into the expert block:
+//   * scale: applied as `normed * (1 + scale) + shift`
+//             (combined with the base `pre_*_norm.scale` weight,
+//              which the converter materialises as zeros for the
+//              expert path — see _optional_pt_keys_with_shape).
+//   * shift: same.
+//   * gate:  applied to the block's residual as `x + gate * out`.
+struct Pi05AdaSplit {
+  struct ggml_tensor* scale;  // (hidden,)
+  struct ggml_tensor* shift;
+  struct ggml_tensor* gate;
+};
+
+Pi05AdaSplit pi05_build_adarms_split_graph(
+    struct ggml_context* ctx,
+    struct ggml_tensor* cond,         // (cond_dim,) F32
+    struct ggml_tensor* ada_dense_w,  // (cond_dim, 3·hidden)
+    struct ggml_tensor* ada_dense_b,  // (3·hidden,)
+    int hidden);
+
 // M3.6 — full VLM prefill stack.
 //
 // Chains N Gemma-1 blocks (M3.5) and applies the model's final

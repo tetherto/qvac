@@ -12,6 +12,7 @@ add_executable(
   test_pi05_m3_5_vlm_block.cpp
   test_pi05_m3_6_vlm_prefill.cpp
   test_pi05_m3_7_time_cond.cpp
+  test_pi05_m3_8_adarms_split.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/smolvla.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/smolvla_adapter.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/pi05.cpp

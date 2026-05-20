@@ -453,6 +453,30 @@ struct ggml_tensor* pi05_build_time_mlp_graph(
   return h;
 }
 
+// ── M3.8: adaRMSNorm split (scale, shift, gate) ─────────────────────────
+Pi05AdaSplit pi05_build_adarms_split_graph(
+    struct ggml_context* ctx,
+    struct ggml_tensor* cond,
+    struct ggml_tensor* ada_dense_w,
+    struct ggml_tensor* ada_dense_b,
+    int hidden) {
+  Pi05AdaSplit out{nullptr, nullptr, nullptr};
+  if (ctx == nullptr || cond == nullptr || ada_dense_w == nullptr ||
+      ada_dense_b == nullptr || hidden <= 0) {
+    return out;
+  }
+  // modulation = cond @ W^T + b  →  (3*hidden,)
+  struct ggml_tensor* mod = pi05_linear(ctx, cond, ada_dense_w, ada_dense_b);
+  // Chunk into three contiguous (hidden,) slices. `mod` is 1-D
+  // (ne[0] = 3*hidden), so a 1-D view with the right offset suffices.
+  const size_t es = ggml_element_size(mod);
+  out.scale = ggml_view_1d(ctx, mod, hidden, /*offset=*/0);
+  out.shift = ggml_view_1d(ctx, mod, hidden, /*offset=*/hidden * es);
+  out.gate = ggml_view_1d(
+      ctx, mod, hidden, /*offset=*/2 * hidden * es);
+  return out;
+}
+
 Pi05Model::Pi05Model(
     const std::string& /*ggufPath*/,
     bool /*forceCpu*/,
