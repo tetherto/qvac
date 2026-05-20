@@ -73,7 +73,7 @@
     "bare-process": "^4.2.2",
     "bare-url": "^2.1.6",
     "brittle": "^3.19.1",
-    "cmake-bare": "1.7.5",
+    "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
     "standard": "^17.0.0",
     "typescript": "^5.9.2"
