@@ -1,9 +1,21 @@
 'use strict'
 
+/* global Bare */
+
 const path = require('bare-path')
 const fs = require('bare-fs')
 const os = require('bare-os')
 const { pathToFileURL } = require('bare-url')
+
+// Last-resort containment: unhandled rejections must not silently crash the process
+if (typeof Bare !== 'undefined' && typeof Bare.on === 'function') {
+  Bare.on('unhandledRejection', (reason) => {
+    console.error('[integration-runner] Unhandled rejection:', reason instanceof Error ? reason.stack : reason)
+  })
+  Bare.on('uncaughtException', (err) => {
+    console.error('[integration-runner] Uncaught exception:', err instanceof Error ? err.stack : err)
+  })
+}
 
 // ---------------------------------------------------------------------------
 // Test filter – allows CI to restrict which tests actually execute.
@@ -138,7 +150,24 @@ async function runIntegrationModule (relativeModulePath, options = {}) {
   }
 
   const moduleUrl = pathToFileURL(modulePath).href
-  await import(moduleUrl)
+  try {
+    await import(moduleUrl)
+  } catch (error) {
+    console.error(`[integration-runner] Module failed to load or run: ${error.message}`)
+    return {
+      modulePath,
+      summary: {
+        total: 1,
+        passed: 0,
+        failed: 1,
+        error: {
+          message: error.message,
+          code: error.code,
+          stack: error.stack
+        }
+      }
+    }
+  }
   return { modulePath, summary: null }
 }
 
