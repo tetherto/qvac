@@ -73,4 +73,4 @@ Use `lib/logger.js`. Avoid logging sensitive information (keys, tokens).
 
 ### Autobase + HyperDB Multi-Writer Patterns
 
-When working with Autobase, HyperDB, multi-writer patterns, or peer discovery, use the `registry-autobase-patterns` skill.
+When working with Autobase, HyperDB, multi-writer patterns, or peer discovery, use the `qv-registry-autobase-patterns` skill.

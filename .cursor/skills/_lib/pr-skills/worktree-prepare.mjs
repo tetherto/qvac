@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 //
-// CLI entry for the default-on worktree mode of /pr-review.
+// CLI entry for the default-on worktree mode of /qv-pr-review.
 //
 // Usage:
 //   node worktree-prepare.mjs <PR-URL>
