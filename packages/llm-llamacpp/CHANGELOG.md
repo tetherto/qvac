@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.22.0] - 2026-05-20
+
+### Changed
+
+- **Multi-GPU params rejected on Android/iOS**: passing `split-mode` (non-`none`), `main-gpu`, or `tensor-split` on a mobile device now throws `InvalidArgument` immediately in `commonParamsParse`, before any backend selection occurs. Previously these parameters could reach the Adreno OpenCL backend and trigger a native `ggml_abort` (SIGABRT) after a full inference suite. Use single-GPU config (`split-mode: "none"` or omit the field) on mobile.
+
+## Pull Requests
+
+- [#2147](https://github.com/tetherto/qvac/pull/2147) - QVAC-18802: reject multi-GPU config on Android/iOS
+
 ## [0.21.0] - 2026-05-13
 
 This release is a pure internal C++ refactor of the addon: the LoRA finetuning pipeline now lives in its own `LlamaFinetuner` class instead of inside `LlamaModel`. There are no JS API changes and no behaviour changes — finetune training, pause/resume, and adapter save go through exactly the same code paths.
