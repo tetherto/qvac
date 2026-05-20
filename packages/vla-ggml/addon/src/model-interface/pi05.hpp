@@ -288,6 +288,78 @@ Pi05AdaSplit pi05_build_adarms_split_graph(
     struct ggml_tensor* ada_dense_b,  // (3·hidden,)
     int hidden);
 
+// M3.9 — one Gemma-1 300M expert block with joint attention.
+//
+// The expert path differs from the VLM block (M3.5) in three ways:
+//   * Each RMSNorm is an adaRMSNorm — modulated by `cond` via a
+//     per-block Dense (M3.8 split). The pre_*_norm.scale weights
+//     stored alongside are zero on `pi05_base` (the converter
+//     materialises them so the GGUF schema stays uniform with the
+//     VLM side; the openpi adaRMSNorm formula doesn't actually use
+//     a base scale, so we ignore them — see plan §2 RMSNorm row).
+//   * Attention concatenates the expert's freshly-computed K/V with
+//     the cached prefix K/V from the VLM at the same layer. Same
+//     head_dim (256) and same n_kv_heads (1, MQA), so the concat
+//     is a straight glue on the seq axis. Each expert query
+//     attends to (prefix_len + n_act) keys in one softmax.
+//   * Residuals are *gated*: `x + ada_gate * out` rather than
+//     `x + out`. The gate slice of the ada split rides each
+//     residual add. With the dense initialised to zero (training
+//     start) the expert path is identity, so the model is born
+//     learning the action expert from scratch on top of a frozen
+//     VLM — which is exactly the openpi design.
+//
+// The cached prefix K/V layout matches the dump's
+// `vlm.kv_cache_full.{keys,values}` per-layer slice:
+// ne=[head_dim, prefix_len, n_kv_heads]. They are *already RoPE-
+// rotated* — the VLM applied RoPE at prefill time. Expert K still
+// needs RoPE applied here (with positions starting at
+// `prefix_offset`).
+struct Pi05ExpertBlockWeights {
+  // ada modulator densities (M3.8 reuses these as `ada_dense_*`)
+  struct ggml_tensor* pre_attn_ada_w;   // (cond_dim, 3·hidden)
+  struct ggml_tensor* pre_attn_ada_b;   // (3·hidden,)
+  struct ggml_tensor* pre_ffw_ada_w;
+  struct ggml_tensor* pre_ffw_ada_b;
+  // attn projections
+  struct ggml_tensor* attn_q_w;         // (hidden, n_heads*head_dim)
+  struct ggml_tensor* attn_k_w;         // (hidden, n_kv_heads*head_dim)
+  struct ggml_tensor* attn_v_w;
+  struct ggml_tensor* attn_o_w;         // (n_heads*head_dim, hidden)
+  // GeGLU MLP
+  struct ggml_tensor* mlp_gate_w;       // (hidden, intermediate)
+  struct ggml_tensor* mlp_up_w;
+  struct ggml_tensor* mlp_down_w;       // (intermediate, hidden)
+};
+
+// Build one expert block on top of `x_exp` (ne=[expert_hidden, n_act]).
+//
+// `cached_k` / `cached_v` are the VLM's per-layer K/V cache slices
+// for the matching layer — ne=[head_dim, prefix_len, n_kv_heads].
+// `cond` is (cond_dim,) from M3.7. `act_positions` is the I32 RoPE
+// position vector for the action tokens, typically
+// `[prefix_offset, prefix_offset+1, ..., prefix_offset+n_act-1]`.
+//
+// Returns nullptr on missing weights. Shape of the returned tensor
+// is ne=[expert_hidden, n_act] — feedable straight into the next
+// expert block (M3.10) or `action_out_proj` (M3.10).
+struct ggml_tensor* pi05_build_expert_block_graph(
+    struct ggml_context* ctx,
+    struct ggml_tensor* x_exp,
+    struct ggml_tensor* act_positions,
+    struct ggml_tensor* cached_k,
+    struct ggml_tensor* cached_v,
+    struct ggml_tensor* cond,
+    const Pi05ExpertBlockWeights& w,
+    int expert_hidden,
+    int n_heads,
+    int n_kv_heads,
+    int head_dim,
+    int prefix_len,
+    int n_act,
+    float rms_norm_eps,
+    float rope_freq_base);
+
 // M3.6 — full VLM prefill stack.
 //
 // Chains N Gemma-1 blocks (M3.5) and applies the model's final

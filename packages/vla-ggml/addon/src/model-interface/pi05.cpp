@@ -477,6 +477,141 @@ Pi05AdaSplit pi05_build_adarms_split_graph(
   return out;
 }
 
+// ── adaRMSNorm application: `(1 + ada_scale) * rms_norm(x) + ada_shift` ─
+// Per openpi/gemma.py:130. The base `.scale` weight is *not* used in the
+// adaptive branch (the formula doesn't reference it). For pi05_base the
+// converter writes that weight as zeros anyway — see the rationale in
+// `_optional_pt_keys_with_shape` in convert_pi05_to_gguf.py.
+static struct ggml_tensor* pi05_adarms_apply(
+    struct ggml_context* ctx, struct ggml_tensor* x,
+    struct ggml_tensor* ada_scale, struct ggml_tensor* ada_shift,
+    float eps) {
+  struct ggml_tensor* normed = ggml_rms_norm(ctx, x, eps);
+  // normed * (1 + ada_scale) = normed + normed * ada_scale
+  struct ggml_tensor* s = ggml_add(
+      ctx, normed, ggml_mul(ctx, normed, ada_scale));
+  return ggml_add(ctx, s, ada_shift);
+}
+
+// ── M3.9: one expert block (Gemma-1 300M) with joint attention ──────────
+struct ggml_tensor* pi05_build_expert_block_graph(
+    struct ggml_context* ctx,
+    struct ggml_tensor* x_exp,
+    struct ggml_tensor* act_positions,
+    struct ggml_tensor* cached_k,
+    struct ggml_tensor* cached_v,
+    struct ggml_tensor* cond,
+    const Pi05ExpertBlockWeights& w,
+    int expert_hidden,
+    int n_heads,
+    int n_kv_heads,
+    int head_dim,
+    int prefix_len,
+    int n_act,
+    float rms_norm_eps,
+    float rope_freq_base) {
+  if (ctx == nullptr || x_exp == nullptr || act_positions == nullptr ||
+      cached_k == nullptr || cached_v == nullptr || cond == nullptr ||
+      w.pre_attn_ada_w == nullptr || w.pre_attn_ada_b == nullptr ||
+      w.pre_ffw_ada_w == nullptr || w.pre_ffw_ada_b == nullptr ||
+      w.attn_q_w == nullptr || w.attn_k_w == nullptr ||
+      w.attn_v_w == nullptr || w.attn_o_w == nullptr ||
+      w.mlp_gate_w == nullptr || w.mlp_up_w == nullptr ||
+      w.mlp_down_w == nullptr) {
+    return nullptr;
+  }
+
+  // ── Pre-attn adaRMSNorm + per-block ada split ──────────────────────
+  Pi05AdaSplit a = pi05_build_adarms_split_graph(
+      ctx, cond, w.pre_attn_ada_w, w.pre_attn_ada_b, expert_hidden);
+  if (a.scale == nullptr) {
+    return nullptr;
+  }
+
+  struct ggml_tensor* h =
+      pi05_adarms_apply(ctx, x_exp, a.scale, a.shift, rms_norm_eps);
+
+  // ── Q, K, V projections (Gemma-1 expert has no attn bias) ─────────
+  struct ggml_tensor* q = pi05_linear(ctx, h, w.attn_q_w, nullptr);
+  struct ggml_tensor* k_exp = pi05_linear(ctx, h, w.attn_k_w, nullptr);
+  struct ggml_tensor* v_exp = pi05_linear(ctx, h, w.attn_v_w, nullptr);
+
+  // Reshape to per-head layout. Q goes through 8-head expansion; K/V
+  // stay at 1 head (MQA).
+  q = ggml_reshape_3d(ctx, q, head_dim, n_heads, n_act);
+  k_exp = ggml_reshape_3d(ctx, k_exp, head_dim, n_kv_heads, n_act);
+  v_exp = ggml_reshape_3d(ctx, v_exp, head_dim, n_kv_heads, n_act);
+
+  // RoPE on Q and expert K (NEOX, base 10000 like the VLM). The
+  // cached prefix K from the VLM was already RoPE-rotated at prefill
+  // time and uses positions 0..prefix_len-1; the expert's positions
+  // continue from there (act_positions).
+  const int n_rot = head_dim;
+  const int rope_mode = GGML_ROPE_TYPE_NEOX;
+  q = ggml_rope_ext(
+      ctx, q, act_positions, /*freq_factors=*/nullptr,
+      n_rot, rope_mode, 0, rope_freq_base, 1.0f, 0.0f, 1.0f, 32.0f, 1.0f);
+  k_exp = ggml_rope_ext(
+      ctx, k_exp, act_positions, /*freq_factors=*/nullptr,
+      n_rot, rope_mode, 0, rope_freq_base, 1.0f, 0.0f, 1.0f, 32.0f, 1.0f);
+
+  // Permute Q/K/V to ggml's attention layout (head_dim, seq, heads).
+  q = ggml_cont(ctx, ggml_permute(ctx, q, 0, 2, 1, 3));
+  k_exp = ggml_cont(ctx, ggml_permute(ctx, k_exp, 0, 2, 1, 3));
+  v_exp = ggml_cont(ctx, ggml_permute(ctx, v_exp, 0, 2, 1, 3));
+
+  // The cached prefix K/V is stored ne=[head_dim, prefix_len, n_kv_heads]
+  // already — no permute needed, just `ggml_cont` so we can concat with
+  // the expert tensors. (cached_k/v come straight from the caller; if
+  // they're already contiguous this is a cheap no-op in ggml.)
+  struct ggml_tensor* k_cached_c = ggml_cont(ctx, cached_k);
+  struct ggml_tensor* v_cached_c = ggml_cont(ctx, cached_v);
+
+  // Concatenate on the seq axis (ggml dim 1). Both halves are
+  // ne=[head_dim, seq_*, n_kv_heads]; the joint K/V is
+  // ne=[head_dim, prefix_len + n_act, n_kv_heads].
+  struct ggml_tensor* k_joint = ggml_concat(ctx, k_cached_c, k_exp, /*dim=*/1);
+  struct ggml_tensor* v_joint = ggml_concat(ctx, v_cached_c, v_exp, /*dim=*/1);
+
+  // Joint softmax. mul_mat(K_joint, Q) broadcasts kv_heads=1 across
+  // Q's n_heads=8, producing ne=[seq_k, seq_q, n_heads].
+  struct ggml_tensor* logits = ggml_mul_mat(ctx, k_joint, q);
+  const float scale = 1.0f / std::sqrt(static_cast<float>(head_dim));
+  struct ggml_tensor* attn = ggml_soft_max_ext(
+      ctx, logits, /*mask=*/nullptr, scale, /*max_bias=*/0.0f);
+
+  // V_joint^T then mul_mat with attn → ne=[head_dim, seq_q, n_heads].
+  struct ggml_tensor* attn_out = ggml_mul_mat(
+      ctx, ggml_cont(ctx, ggml_transpose(ctx, v_joint)), attn);
+  // Back to (head_dim*n_heads, n_act) = (expert_q_dim, n_act). The
+  // expert's o_proj reads (n_heads*head_dim, expert_hidden), so we
+  // reshape to ne=[n_heads*head_dim, n_act].
+  attn_out = ggml_cont(ctx, ggml_permute(ctx, attn_out, 0, 2, 1, 3));
+  attn_out = ggml_reshape_2d(
+      ctx, attn_out, n_heads * head_dim, n_act);
+
+  // O-proj + gated residual.
+  struct ggml_tensor* proj = pi05_linear(ctx, attn_out, w.attn_o_w, nullptr);
+  // Gated residual: x + ada_gate * proj  (per-channel multiply,
+  // broadcasts the (expert_hidden,) gate across n_act).
+  h = ggml_add(ctx, x_exp, ggml_mul(ctx, proj, a.gate));
+
+  // ── Pre-FFW adaRMSNorm + GeGLU MLP + gated residual ────────────────
+  Pi05AdaSplit b = pi05_build_adarms_split_graph(
+      ctx, cond, w.pre_ffw_ada_w, w.pre_ffw_ada_b, expert_hidden);
+  if (b.scale == nullptr) {
+    return nullptr;
+  }
+  struct ggml_tensor* normed_ffw =
+      pi05_adarms_apply(ctx, h, b.scale, b.shift, rms_norm_eps);
+  struct ggml_tensor* gate = pi05_linear(ctx, normed_ffw, w.mlp_gate_w, nullptr);
+  struct ggml_tensor* up = pi05_linear(ctx, normed_ffw, w.mlp_up_w, nullptr);
+  gate = ggml_gelu(ctx, gate);
+  struct ggml_tensor* ff = ggml_mul(ctx, gate, up);
+  struct ggml_tensor* down = pi05_linear(ctx, ff, w.mlp_down_w, nullptr);
+  return ggml_add(ctx, h, ggml_mul(ctx, down, b.gate));
+}
+
 Pi05Model::Pi05Model(
     const std::string& /*ggufPath*/,
     bool /*forceCpu*/,
