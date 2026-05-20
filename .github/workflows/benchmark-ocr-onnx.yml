@@ -106,6 +106,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y cmake wget build-essential ccache
 
+      - name: Setup LLVM
+        uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
+
       - name: Configure ccache
         run: |
           ccache --set-config=max_size=500M
