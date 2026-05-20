@@ -25,8 +25,8 @@
 // FeatureExtractor's spatial downsampling (input W must satisfy
 // `(W / 4) - 1 >= 1`, i.e. W >= 8).
 
-#include <unordered_map>
 #include <string>
+#include <unordered_map>
 
 struct ggml_context;
 struct ggml_tensor;
@@ -36,17 +36,16 @@ namespace easyocr::ggml {
 class CrnnGen2Weights;
 
 namespace crnn_taps {
-inline constexpr const char* kVisual    = "visual_feature";   // post-FeatureExtraction
-inline constexpr const char* kSequence  = "sequence_input";   // post-AAP+squeeze
-inline constexpr const char* kBilstm0   = "bilstm0";          // post-SequenceModeling.0
-inline constexpr const char* kBilstm1   = "bilstm1";          // post-SequenceModeling.1
-inline constexpr const char* kLogits    = "logits";           // final
-}  // namespace crnn_taps
+inline constexpr const char* kVisual =
+    "visual_feature"; // post-FeatureExtraction
+inline constexpr const char* kSequence = "sequence_input"; // post-AAP+squeeze
+inline constexpr const char* kBilstm0 = "bilstm0"; // post-SequenceModeling.0
+inline constexpr const char* kBilstm1 = "bilstm1"; // post-SequenceModeling.1
+inline constexpr const char* kLogits = "logits";   // final
+} // namespace crnn_taps
 
 ::ggml_tensor* build_crnn_gen2(
-    ::ggml_context* ctx,
-    const CrnnGen2Weights& weights,
-    ::ggml_tensor* x,
+    ::ggml_context* ctx, const CrnnGen2Weights& weights, ::ggml_tensor* x,
     std::unordered_map<std::string, ::ggml_tensor*>* taps = nullptr);
 
-}  // namespace easyocr::ggml
+} // namespace easyocr::ggml

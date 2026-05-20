@@ -15,10 +15,10 @@
 
 namespace qvac_lib_inference_addon_cpp {
 namespace logger {
-enum Priority { DEBUG, INFO, WARN, ERROR_ };  // ERROR clashes with windows.h
-}  // namespace logger
-}  // namespace qvac_lib_inference_addon_cpp
+enum Priority { DEBUG, INFO, WARN, ERROR_ }; // ERROR clashes with windows.h
+} // namespace logger
+} // namespace qvac_lib_inference_addon_cpp
 
-#define QLOG(_prio, _msg)   ((void)(_prio), (void)(_msg))
-#define ALOG_DEBUG(_msg)    ((void)(_msg))
-#define ALOG_INFO(_msg)     ((void)(_msg))
+#define QLOG(_prio, _msg) ((void)(_prio), (void)(_msg))
+#define ALOG_DEBUG(_msg) ((void)(_msg))
+#define ALOG_INFO(_msg) ((void)(_msg))

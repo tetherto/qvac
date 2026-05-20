@@ -31,37 +31,37 @@ class GgufLoader;
 
 class CrnnGen2Weights {
 public:
-    CrnnGen2Weights(const GgufLoader& loader, ggml_backend_t backend);
-    ~CrnnGen2Weights();
+  CrnnGen2Weights(const GgufLoader& loader, ggml_backend_t backend);
+  ~CrnnGen2Weights();
 
-    CrnnGen2Weights(const CrnnGen2Weights&)            = delete;
-    CrnnGen2Weights& operator=(const CrnnGen2Weights&) = delete;
+  CrnnGen2Weights(const CrnnGen2Weights&) = delete;
+  CrnnGen2Weights& operator=(const CrnnGen2Weights&) = delete;
 
-    bool ok() const noexcept { return err_.empty(); }
-    const std::string& err() const noexcept { return err_; }
+  bool ok() const noexcept { return err_.empty(); }
+  const std::string& err() const noexcept { return err_; }
 
-    // Conv2d / Linear kernel + bias by PyTorch state-dict path
-    // (e.g. "FeatureExtraction.ConvNet.0", "Prediction").
-    ::ggml_tensor* w(const std::string& path) const noexcept;
-    ::ggml_tensor* b(const std::string& path) const noexcept;
+  // Conv2d / Linear kernel + bias by PyTorch state-dict path
+  // (e.g. "FeatureExtraction.ConvNet.0", "Prediction").
+  ::ggml_tensor* w(const std::string& path) const noexcept;
+  ::ggml_tensor* b(const std::string& path) const noexcept;
 
-    // LSTM tensors by full state-dict path
-    // (e.g. "SequenceModeling.0.rnn.weight_ih_l0_reverse",
-    //       "SequenceModeling.0.rnn.bias_hh_l0").
-    // Returns nullptr if absent.
-    ::ggml_tensor* t(const std::string& path) const noexcept;
+  // LSTM tensors by full state-dict path
+  // (e.g. "SequenceModeling.0.rnn.weight_ih_l0_reverse",
+  //       "SequenceModeling.0.rnn.bias_hh_l0").
+  // Returns nullptr if absent.
+  ::ggml_tensor* t(const std::string& path) const noexcept;
 
-    int n_loaded() const noexcept;
+  int n_loaded() const noexcept;
 
 private:
-    void build_(const GgufLoader& loader, ggml_backend_t backend);
+  void build_(const GgufLoader& loader, ggml_backend_t backend);
 
-    std::unordered_map<std::string, ::ggml_tensor*> w_;
-    std::unordered_map<std::string, ::ggml_tensor*> b_;
-    std::unordered_map<std::string, ::ggml_tensor*> t_;
-    ::ggml_context*         ctx_ = nullptr;
-    ::ggml_backend_buffer_t buf_ = nullptr;
-    std::string             err_;
+  std::unordered_map<std::string, ::ggml_tensor*> w_;
+  std::unordered_map<std::string, ::ggml_tensor*> b_;
+  std::unordered_map<std::string, ::ggml_tensor*> t_;
+  ::ggml_context* ctx_ = nullptr;
+  ::ggml_backend_buffer_t buf_ = nullptr;
+  std::string err_;
 };
 
-}  // namespace easyocr::ggml
+} // namespace easyocr::ggml

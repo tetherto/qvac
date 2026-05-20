@@ -134,7 +134,8 @@ void fp16ToFp32(const void* src, float* out, size_t count) {
   }
 }
 
-std::vector<float> tensorToF32(struct ggml_tensor* tensor, const std::string& name) {
+std::vector<float>
+tensorToF32(struct ggml_tensor* tensor, const std::string& name) {
   if (tensor == nullptr) {
     raise("missing tensor: " + name);
   }
@@ -145,7 +146,9 @@ std::vector<float> tensorToF32(struct ggml_tensor* tensor, const std::string& na
   } else if (tensor->type == GGML_TYPE_F16) {
     fp16ToFp32(tensor->data, out.data(), count);
   } else {
-    raise("unsupported tensor dtype for " + name + ": " + ggml_type_name(tensor->type));
+    raise(
+        "unsupported tensor dtype for " + name + ": " +
+        ggml_type_name(tensor->type));
   }
   return out;
 }
@@ -166,7 +169,8 @@ struct ggml_tensor* cloneRaw(
 struct ggml_tensor* newF32Tensor(
     struct ggml_context* ctx, const std::string& name, int nDims,
     const int64_t* shape) {
-  struct ggml_tensor* tensor = ggml_new_tensor(ctx, GGML_TYPE_F32, nDims, shape);
+  struct ggml_tensor* tensor =
+      ggml_new_tensor(ctx, GGML_TYPE_F32, nDims, shape);
   ggml_set_name(tensor, name.c_str());
   return tensor;
 }
@@ -180,13 +184,9 @@ struct ggml_tensor* newF16TensorLike(
   return tensor;
 }
 
-int samePadding(int kernel) {
-  return (kernel - 1) / 2;
-}
+int samePadding(int kernel) { return (kernel - 1) / 2; }
 
-float sigmoid(float value) {
-  return 1.0F / (1.0F + std::exp(-value));
-}
+float sigmoid(float value) { return 1.0F / (1.0F + std::exp(-value)); }
 
 struct LstmWeights {
   std::vector<float> weightIh;
@@ -209,9 +209,7 @@ struct GraphResources {
   struct ggml_tensor* input = nullptr;
   struct ggml_tensor* features = nullptr;
 
-  ~GraphResources() {
-    reset();
-  }
+  ~GraphResources() { reset(); }
 
   void reset() {
     graph = nullptr;
@@ -251,7 +249,8 @@ struct GraphBuilder {
     return useHardswish ? ggml_hardswish(ctx, x) : ggml_relu(ctx, x);
   }
 
-  struct ggml_tensor* applyBn(struct ggml_tensor* x, const std::string& bnPrefix) {
+  struct ggml_tensor*
+  applyBn(struct ggml_tensor* x, const std::string& bnPrefix) {
     struct ggml_tensor* scaled = ggml_mul(ctx, x, t(bnPrefix + ".scale"));
     return ggml_add(ctx, scaled, t(bnPrefix + ".shift"));
   }
@@ -261,8 +260,15 @@ struct GraphBuilder {
       const std::string& bnPrefix, int strideW, int strideH, int kernel,
       bool applyActivation, bool useHardswish) {
     struct ggml_tensor* conv = ggml_conv_2d(
-        ctx, t(convPrefix + ".weight"), x, strideW, strideH,
-        samePadding(kernel), samePadding(kernel), 1, 1);
+        ctx,
+        t(convPrefix + ".weight"),
+        x,
+        strideW,
+        strideH,
+        samePadding(kernel),
+        samePadding(kernel),
+        1,
+        1);
     conv = applyBn(conv, bnPrefix);
     return applyActivation ? activate(conv, useHardswish) : conv;
   }
@@ -272,8 +278,15 @@ struct GraphBuilder {
       const std::string& bnPrefix, int strideW, int strideH, int kernel,
       bool useHardswish) {
     struct ggml_tensor* conv = ggml_conv_2d_dw(
-        ctx, t(convPrefix + ".weight"), x, strideW, strideH,
-        samePadding(kernel), samePadding(kernel), 1, 1);
+        ctx,
+        t(convPrefix + ".weight"),
+        x,
+        strideW,
+        strideH,
+        samePadding(kernel),
+        samePadding(kernel),
+        1,
+        1);
     conv = applyBn(conv, bnPrefix);
     return activate(conv, useHardswish);
   }
@@ -281,24 +294,34 @@ struct GraphBuilder {
   struct ggml_tensor* convBiasAct(
       struct ggml_tensor* x, const std::string& convPrefix,
       bool applyActivation, bool useHardswish) {
-    struct ggml_tensor* conv = ggml_conv_2d(
-        ctx, t(convPrefix + ".weight"), x, 1, 1, 0, 0, 1, 1);
+    struct ggml_tensor* conv =
+        ggml_conv_2d(ctx, t(convPrefix + ".weight"), x, 1, 1, 0, 0, 1, 1);
     conv = ggml_add(ctx, conv, t(convPrefix + ".bias_br"));
     return applyActivation ? activate(conv, useHardswish) : conv;
   }
 
-  struct ggml_tensor* seBlock(struct ggml_tensor* x, const std::string& sePrefix) {
+  struct ggml_tensor*
+  seBlock(struct ggml_tensor* x, const std::string& sePrefix) {
     struct ggml_tensor* pooled = ggml_pool_2d(
-        ctx, x, GGML_OP_POOL_AVG, static_cast<int>(x->ne[0]),
-        static_cast<int>(x->ne[1]), static_cast<int>(x->ne[0]),
-        static_cast<int>(x->ne[1]), 0, 0);
-    struct ggml_tensor* fc1 = convBiasAct(pooled, sePrefix + ".fc1", true, false);
+        ctx,
+        x,
+        GGML_OP_POOL_AVG,
+        static_cast<int>(x->ne[0]),
+        static_cast<int>(x->ne[1]),
+        static_cast<int>(x->ne[0]),
+        static_cast<int>(x->ne[1]),
+        0,
+        0);
+    struct ggml_tensor* fc1 =
+        convBiasAct(pooled, sePrefix + ".fc1", true, false);
     struct ggml_tensor* fc2 = convBiasAct(fc1, sePrefix + ".fc2", false, false);
     return ggml_mul(ctx, x, ggml_hardsigmoid(ctx, fc2));
   }
 
-  struct ggml_tensor* invertedResidual(struct ggml_tensor* x, const BlockConfig& cfg) {
-    const std::string base = "crnn.features." + std::to_string(cfg.featureIndex);
+  struct ggml_tensor*
+  invertedResidual(struct ggml_tensor* x, const BlockConfig& cfg) {
+    const std::string base =
+        "crnn.features." + std::to_string(cfg.featureIndex);
     const bool hasExpand = cfg.expansionChannels != cfg.inputChannels;
     int dwBlockIdx = 0;
     int seBlockIdx = -1;
@@ -307,7 +330,13 @@ struct GraphBuilder {
     struct ggml_tensor* y = x;
     if (hasExpand) {
       y = convBnAct(
-          y, base + ".block.0.0", base + ".block.0.1", 1, 1, 1, true,
+          y,
+          base + ".block.0.0",
+          base + ".block.0.1",
+          1,
+          1,
+          1,
+          true,
           cfg.useHardswish);
       dwBlockIdx = 1;
       if (cfg.useSe) {
@@ -325,17 +354,22 @@ struct GraphBuilder {
 
     const std::string dwBase = base + ".block." + std::to_string(dwBlockIdx);
     y = dwConvBnAct(
-        y, dwBase + ".0", dwBase + ".1", cfg.strideW, cfg.strideH,
-        cfg.kernel, cfg.useHardswish);
+        y,
+        dwBase + ".0",
+        dwBase + ".1",
+        cfg.strideW,
+        cfg.strideH,
+        cfg.kernel,
+        cfg.useHardswish);
 
     if (cfg.useSe) {
       y = seBlock(y, base + ".block." + std::to_string(seBlockIdx));
     }
 
-    const std::string projBase = base + ".block." + std::to_string(projBlockIdx);
+    const std::string projBase =
+        base + ".block." + std::to_string(projBlockIdx);
     y = convBnAct(
-        y, projBase + ".0", projBase + ".1", 1, 1, 1, false,
-        cfg.useHardswish);
+        y, projBase + ".0", projBase + ".1", 1, 1, 1, false, cfg.useHardswish);
 
     if (cfg.strideW == 1 && cfg.strideH == 1 &&
         cfg.inputChannels == cfg.outputChannels) {
@@ -349,13 +383,12 @@ struct GraphBuilder {
 
 struct StepDoctrRecognitionGGML::Impl {
   GraphResources graph;
-  std::array<std::array<LstmWeights, kLstmDirectionCount>, kLstmLayerCount> lstm{};
+  std::array<std::array<LstmWeights, kLstmDirectionCount>, kLstmLayerCount>
+      lstm{};
   std::vector<float> linearWeight;
   std::vector<float> linearBias;
 
-  explicit Impl(const std::string& pathRecognizer) {
-    load(pathRecognizer);
-  }
+  explicit Impl(const std::string& pathRecognizer) { load(pathRecognizer); }
 
   void load(const std::string& pathRecognizer) {
     graph.reset();
@@ -370,8 +403,10 @@ struct StepDoctrRecognitionGGML::Impl {
     if (gguf == nullptr) {
       raise("failed to open GGUF file: " + pathRecognizer);
     }
-    std::unique_ptr<gguf_context, decltype(&gguf_free)> ggufGuard(gguf, gguf_free);
-    std::unique_ptr<struct ggml_context, decltype(&ggml_free)> srcCtx(ggufGgmlCtx, ggml_free);
+    std::unique_ptr<gguf_context, decltype(&gguf_free)> ggufGuard(
+        gguf, gguf_free);
+    std::unique_ptr<struct ggml_context, decltype(&ggml_free)> srcCtx(
+        ggufGgmlCtx, ggml_free);
 
     loadGraphWeights(srcCtx.get());
     loadRecurrentWeights(srcCtx.get());
@@ -385,17 +420,20 @@ struct StepDoctrRecognitionGGML::Impl {
     const ggml_status status =
         ggml_backend_graph_compute(graph.backend, graph.graph);
     if (status != GGML_STATUS_SUCCESS) {
-      raise("ggml backend graph compute failed with status " +
-            std::to_string(static_cast<int>(status)));
+      raise(
+          "ggml backend graph compute failed with status " +
+          std::to_string(static_cast<int>(status)));
     }
 
-    std::vector<float> features(static_cast<size_t>(ggml_nelements(graph.features)));
+    std::vector<float> features(
+        static_cast<size_t>(ggml_nelements(graph.features)));
     ggml_backend_tensor_get(
         graph.features, features.data(), 0, features.size() * sizeof(float));
     return features;
   }
 
-  std::vector<float> runLstmLinear(const std::vector<float>& featureWhcn) const {
+  std::vector<float>
+  runLstmLinear(const std::vector<float>& featureWhcn) const {
     std::vector<float> layerInput(kSequenceLength * kFeatureChannels);
     for (int t = 0; t < kSequenceLength; ++t) {
       for (int c = 0; c < kFeatureChannels; ++c) {
@@ -406,20 +444,27 @@ struct StepDoctrRecognitionGGML::Impl {
 
     std::vector<float> layerOutput;
     for (int layer = 0; layer < kLstmLayerCount; ++layer) {
-      const int inputSize = (layer == 0) ? kFeatureChannels : kLstmHiddenSize * kLstmDirectionCount;
-      layerOutput.assign(kSequenceLength * kLstmHiddenSize * kLstmDirectionCount, 0.0F);
-      runLstmDirection(layerInput, layerOutput, lstm[layer][0], inputSize, false);
-      runLstmDirection(layerInput, layerOutput, lstm[layer][1], inputSize, true);
+      const int inputSize = (layer == 0)
+                                ? kFeatureChannels
+                                : kLstmHiddenSize * kLstmDirectionCount;
+      layerOutput.assign(
+          kSequenceLength * kLstmHiddenSize * kLstmDirectionCount, 0.0F);
+      runLstmDirection(
+          layerInput, layerOutput, lstm[layer][0], inputSize, false);
+      runLstmDirection(
+          layerInput, layerOutput, lstm[layer][1], inputSize, true);
       layerInput.swap(layerOutput);
     }
 
     std::vector<float> logits(kSequenceLength * kVocabSize);
     constexpr int finalFeatureSize = kLstmHiddenSize * kLstmDirectionCount;
     for (int t = 0; t < kSequenceLength; ++t) {
-      const float* x = layerInput.data() + static_cast<size_t>(t * finalFeatureSize);
+      const float* x =
+          layerInput.data() + static_cast<size_t>(t * finalFeatureSize);
       for (int cls = 0; cls < kVocabSize; ++cls) {
         float value = linearBias[static_cast<size_t>(cls)];
-        const float* w = linearWeight.data() + static_cast<size_t>(cls * finalFeatureSize);
+        const float* w =
+            linearWeight.data() + static_cast<size_t>(cls * finalFeatureSize);
         for (int i = 0; i < finalFeatureSize; ++i) {
           value += w[i] * x[i];
         }
@@ -443,12 +488,14 @@ private:
 
       for (int gate = 0; gate < kLstmGateCount * kLstmHiddenSize; ++gate) {
         float value = weights.biasIh[static_cast<size_t>(gate)] +
-            weights.biasHh[static_cast<size_t>(gate)];
-        const float* wIh = weights.weightIh.data() + static_cast<size_t>(gate * inputSize);
+                      weights.biasHh[static_cast<size_t>(gate)];
+        const float* wIh =
+            weights.weightIh.data() + static_cast<size_t>(gate * inputSize);
         for (int i = 0; i < inputSize; ++i) {
           value += wIh[i] * x[i];
         }
-        const float* wHh = weights.weightHh.data() + static_cast<size_t>(gate * kLstmHiddenSize);
+        const float* wHh = weights.weightHh.data() +
+                           static_cast<size_t>(gate * kLstmHiddenSize);
         for (int i = 0; i < kLstmHiddenSize; ++i) {
           value += wHh[i] * hidden[static_cast<size_t>(i)];
         }
@@ -457,9 +504,12 @@ private:
 
       for (int i = 0; i < kLstmHiddenSize; ++i) {
         const float inputGate = sigmoid(gates[static_cast<size_t>(i)]);
-        const float forgetGate = sigmoid(gates[static_cast<size_t>(kLstmHiddenSize + i)]);
-        const float cellGate = std::tanh(gates[static_cast<size_t>(2 * kLstmHiddenSize + i)]);
-        const float outputGate = sigmoid(gates[static_cast<size_t>(3 * kLstmHiddenSize + i)]);
+        const float forgetGate =
+            sigmoid(gates[static_cast<size_t>(kLstmHiddenSize + i)]);
+        const float cellGate =
+            std::tanh(gates[static_cast<size_t>(2 * kLstmHiddenSize + i)]);
+        const float outputGate =
+            sigmoid(gates[static_cast<size_t>(3 * kLstmHiddenSize + i)]);
         cell[static_cast<size_t>(i)] =
             forgetGate * cell[static_cast<size_t>(i)] + inputGate * cellGate;
         hidden[static_cast<size_t>(i)] =
@@ -467,16 +517,20 @@ private:
       }
 
       const int directionOffset = reverse ? kLstmHiddenSize : 0;
-      float* out = output.data() +
-          static_cast<size_t>(t * kLstmHiddenSize * kLstmDirectionCount + directionOffset);
+      float* out =
+          output.data() +
+          static_cast<size_t>(
+              t * kLstmHiddenSize * kLstmDirectionCount + directionOffset);
       std::memcpy(out, hidden.data(), kLstmHiddenSize * sizeof(float));
     }
   }
 
   void loadGraphWeights(struct ggml_context* srcCtx) {
-    graph.weightsCtx = std::unique_ptr<struct ggml_context, decltype(&ggml_free)>(
-        ggml_init({ggml_tensor_overhead() * 2048, nullptr, /*no_alloc=*/true}),
-        ggml_free);
+    graph.weightsCtx =
+        std::unique_ptr<struct ggml_context, decltype(&ggml_free)>(
+            ggml_init(
+                {ggml_tensor_overhead() * 2048, nullptr, /*no_alloc=*/true}),
+            ggml_free);
     if (!graph.weightsCtx) {
       raise("failed to allocate GGML weights context");
     }
@@ -492,31 +546,49 @@ private:
       if (src == nullptr) {
         raise("missing GGUF tensor: " + name);
       }
-      struct ggml_tensor* dst = newF16TensorLike(graph.weightsCtx.get(), src, name);
+      struct ggml_tensor* dst =
+          newF16TensorLike(graph.weightsCtx.get(), src, name);
       graph.weights.emplace(name, dst);
       return dst;
     };
 
     auto addBiasBroadcast = [&](const std::string& name) {
-      const std::vector<float> values = tensorToF32(ggml_get_tensor(srcCtx, name.c_str()), name);
+      const std::vector<float> values =
+          tensorToF32(ggml_get_tensor(srcCtx, name.c_str()), name);
       const int64_t shape[4] = {1, 1, static_cast<int64_t>(values.size()), 1};
-      graph.weights.emplace(name + "_br", newF32Tensor(graph.weightsCtx.get(), name + "_br", 4, shape));
+      graph.weights.emplace(
+          name + "_br",
+          newF32Tensor(graph.weightsCtx.get(), name + "_br", 4, shape));
     };
 
     auto addBnAffine = [&](const std::string& prefix) {
-      const std::vector<float> weight = tensorToF32(ggml_get_tensor(srcCtx, (prefix + ".weight").c_str()), prefix + ".weight");
-      const std::vector<float> bias = tensorToF32(ggml_get_tensor(srcCtx, (prefix + ".bias").c_str()), prefix + ".bias");
-      const std::vector<float> mean = tensorToF32(ggml_get_tensor(srcCtx, (prefix + ".running_mean").c_str()), prefix + ".running_mean");
-      const std::vector<float> var = tensorToF32(ggml_get_tensor(srcCtx, (prefix + ".running_var").c_str()), prefix + ".running_var");
-      if (weight.size() != bias.size() || weight.size() != mean.size() || weight.size() != var.size()) {
+      const std::vector<float> weight = tensorToF32(
+          ggml_get_tensor(srcCtx, (prefix + ".weight").c_str()),
+          prefix + ".weight");
+      const std::vector<float> bias = tensorToF32(
+          ggml_get_tensor(srcCtx, (prefix + ".bias").c_str()),
+          prefix + ".bias");
+      const std::vector<float> mean = tensorToF32(
+          ggml_get_tensor(srcCtx, (prefix + ".running_mean").c_str()),
+          prefix + ".running_mean");
+      const std::vector<float> var = tensorToF32(
+          ggml_get_tensor(srcCtx, (prefix + ".running_var").c_str()),
+          prefix + ".running_var");
+      if (weight.size() != bias.size() || weight.size() != mean.size() ||
+          weight.size() != var.size()) {
         raise("BatchNorm tensor size mismatch for " + prefix);
       }
       const int64_t shape[4] = {1, 1, static_cast<int64_t>(weight.size()), 1};
-      graph.weights.emplace(prefix + ".scale", newF32Tensor(graph.weightsCtx.get(), prefix + ".scale", 4, shape));
-      graph.weights.emplace(prefix + ".shift", newF32Tensor(graph.weightsCtx.get(), prefix + ".shift", 4, shape));
+      graph.weights.emplace(
+          prefix + ".scale",
+          newF32Tensor(graph.weightsCtx.get(), prefix + ".scale", 4, shape));
+      graph.weights.emplace(
+          prefix + ".shift",
+          newF32Tensor(graph.weightsCtx.get(), prefix + ".shift", 4, shape));
     };
 
-    auto addConvBn = [&](const std::string& convPrefix, const std::string& bnPrefix) {
+    auto addConvBn = [&](const std::string& convPrefix,
+                         const std::string& bnPrefix) {
       addConvWeight(convPrefix + ".weight");
       addBnAffine(bnPrefix);
     };
@@ -529,7 +601,8 @@ private:
 
     addConvBn("crnn.features.0.0", "crnn.features.0.1");
     for (const BlockConfig& cfg : kBlocks) {
-      const std::string base = "crnn.features." + std::to_string(cfg.featureIndex);
+      const std::string base =
+          "crnn.features." + std::to_string(cfg.featureIndex);
       const bool hasExpand = cfg.expansionChannels != cfg.inputChannels;
       int dwBlockIdx = 0;
       int seBlockIdx = -1;
@@ -553,11 +626,13 @@ private:
       const std::string dwBase = base + ".block." + std::to_string(dwBlockIdx);
       addConvBn(dwBase + ".0", dwBase + ".1");
       if (cfg.useSe) {
-        const std::string seBase = base + ".block." + std::to_string(seBlockIdx);
+        const std::string seBase =
+            base + ".block." + std::to_string(seBlockIdx);
         addConvBias(seBase + ".fc1");
         addConvBias(seBase + ".fc2");
       }
-      const std::string projBase = base + ".block." + std::to_string(projBlockIdx);
+      const std::string projBase =
+          base + ".block." + std::to_string(projBlockIdx);
       addConvBn(projBase + ".0", projBase + ".1");
     }
     addConvBn("crnn.features.12.0", "crnn.features.12.1");
@@ -571,7 +646,8 @@ private:
         graph.weightsBuffer, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
 
     for (const auto& [name, dst] : graph.weights) {
-      if (name.ends_with(".scale") || name.ends_with(".shift") || name.ends_with("_br")) {
+      if (name.ends_with(".scale") || name.ends_with(".shift") ||
+          name.ends_with("_br")) {
         continue;
       }
       struct ggml_tensor* src = ggml_get_tensor(srcCtx, name.c_str());
@@ -584,9 +660,11 @@ private:
         const size_t count = ggml_nelements(src);
         std::vector<ggml_fp16_t> values(count);
         ggml_fp32_to_fp16_row(
-            static_cast<const float*>(src->data), values.data(),
+            static_cast<const float*>(src->data),
+            values.data(),
             static_cast<int64_t>(count));
-        ggml_backend_tensor_set(dst, values.data(), 0, values.size() * sizeof(ggml_fp16_t));
+        ggml_backend_tensor_set(
+            dst, values.data(), 0, values.size() * sizeof(ggml_fp16_t));
       } else {
         raise("unsupported tensor dtype conversion while uploading: " + name);
       }
@@ -596,40 +674,59 @@ private:
       if (!name.ends_with("_br")) {
         continue;
       }
-      const std::string srcName = name.substr(0, name.size() - std::string("_br").size());
-      const std::vector<float> values = tensorToF32(ggml_get_tensor(srcCtx, srcName.c_str()), srcName);
-      ggml_backend_tensor_set(dst, values.data(), 0, values.size() * sizeof(float));
+      const std::string srcName =
+          name.substr(0, name.size() - std::string("_br").size());
+      const std::vector<float> values =
+          tensorToF32(ggml_get_tensor(srcCtx, srcName.c_str()), srcName);
+      ggml_backend_tensor_set(
+          dst, values.data(), 0, values.size() * sizeof(float));
     }
 
     for (const auto& [name, dst] : graph.weights) {
       if (!name.ends_with(".scale")) {
         continue;
       }
-      const std::string prefix = name.substr(0, name.size() - std::string(".scale").size());
-      const std::vector<float> weight = tensorToF32(ggml_get_tensor(srcCtx, (prefix + ".weight").c_str()), prefix + ".weight");
-      const std::vector<float> var = tensorToF32(ggml_get_tensor(srcCtx, (prefix + ".running_var").c_str()), prefix + ".running_var");
+      const std::string prefix =
+          name.substr(0, name.size() - std::string(".scale").size());
+      const std::vector<float> weight = tensorToF32(
+          ggml_get_tensor(srcCtx, (prefix + ".weight").c_str()),
+          prefix + ".weight");
+      const std::vector<float> var = tensorToF32(
+          ggml_get_tensor(srcCtx, (prefix + ".running_var").c_str()),
+          prefix + ".running_var");
       std::vector<float> scale(weight.size());
       for (size_t i = 0; i < weight.size(); ++i) {
         scale[i] = weight[i] / std::sqrt(var[i] + kBatchNormEps);
       }
-      ggml_backend_tensor_set(dst, scale.data(), 0, scale.size() * sizeof(float));
+      ggml_backend_tensor_set(
+          dst, scale.data(), 0, scale.size() * sizeof(float));
     }
 
     for (const auto& [name, dst] : graph.weights) {
       if (!name.ends_with(".shift")) {
         continue;
       }
-      const std::string prefix = name.substr(0, name.size() - std::string(".shift").size());
-      const std::vector<float> bias = tensorToF32(ggml_get_tensor(srcCtx, (prefix + ".bias").c_str()), prefix + ".bias");
-      const std::vector<float> mean = tensorToF32(ggml_get_tensor(srcCtx, (prefix + ".running_mean").c_str()), prefix + ".running_mean");
-      const std::vector<float> weight = tensorToF32(ggml_get_tensor(srcCtx, (prefix + ".weight").c_str()), prefix + ".weight");
-      const std::vector<float> var = tensorToF32(ggml_get_tensor(srcCtx, (prefix + ".running_var").c_str()), prefix + ".running_var");
+      const std::string prefix =
+          name.substr(0, name.size() - std::string(".shift").size());
+      const std::vector<float> bias = tensorToF32(
+          ggml_get_tensor(srcCtx, (prefix + ".bias").c_str()),
+          prefix + ".bias");
+      const std::vector<float> mean = tensorToF32(
+          ggml_get_tensor(srcCtx, (prefix + ".running_mean").c_str()),
+          prefix + ".running_mean");
+      const std::vector<float> weight = tensorToF32(
+          ggml_get_tensor(srcCtx, (prefix + ".weight").c_str()),
+          prefix + ".weight");
+      const std::vector<float> var = tensorToF32(
+          ggml_get_tensor(srcCtx, (prefix + ".running_var").c_str()),
+          prefix + ".running_var");
       std::vector<float> shift(bias.size());
       for (size_t i = 0; i < bias.size(); ++i) {
         const float scale = weight[i] / std::sqrt(var[i] + kBatchNormEps);
         shift[i] = bias[i] - mean[i] * scale;
       }
-      ggml_backend_tensor_set(dst, shift.data(), 0, shift.size() * sizeof(float));
+      ggml_backend_tensor_set(
+          dst, shift.data(), 0, shift.size() * sizeof(float));
     }
   }
 
@@ -642,12 +739,18 @@ private:
       for (int direction = 0; direction < kLstmDirectionCount; ++direction) {
         const std::string suffix = direction == 0 ? "" : "_reverse";
         const std::string base = "crnn.decoder.";
-        LstmWeights& dst = lstm[static_cast<size_t>(layer)][static_cast<size_t>(direction)];
-        dst.weightIh = loadTensor(base + "weight_ih_l" + std::to_string(layer) + suffix);
-        dst.weightHh = loadTensor(base + "weight_hh_l" + std::to_string(layer) + suffix);
-        dst.biasIh = loadTensor(base + "bias_ih_l" + std::to_string(layer) + suffix);
-        dst.biasHh = loadTensor(base + "bias_hh_l" + std::to_string(layer) + suffix);
-        dst.inputSize = layer == 0 ? kFeatureChannels : kLstmHiddenSize * kLstmDirectionCount;
+        LstmWeights& dst =
+            lstm[static_cast<size_t>(layer)][static_cast<size_t>(direction)];
+        dst.weightIh =
+            loadTensor(base + "weight_ih_l" + std::to_string(layer) + suffix);
+        dst.weightHh =
+            loadTensor(base + "weight_hh_l" + std::to_string(layer) + suffix);
+        dst.biasIh =
+            loadTensor(base + "bias_ih_l" + std::to_string(layer) + suffix);
+        dst.biasHh =
+            loadTensor(base + "bias_hh_l" + std::to_string(layer) + suffix);
+        dst.inputSize = layer == 0 ? kFeatureChannels
+                                   : kLstmHiddenSize * kLstmDirectionCount;
       }
     }
     linearWeight = loadTensor("crnn.linear.weight");
@@ -656,7 +759,10 @@ private:
 
   void buildGraph() {
     graph.graphCtx = std::unique_ptr<struct ggml_context, decltype(&ggml_free)>(
-        ggml_init({ggml_tensor_overhead() * 4096 + ggml_graph_overhead(), nullptr, /*no_alloc=*/true}),
+        ggml_init(
+            {ggml_tensor_overhead() * 4096 + ggml_graph_overhead(),
+             nullptr,
+             /*no_alloc=*/true}),
         ggml_free);
     if (!graph.graphCtx) {
       raise("failed to allocate GGML graph context");
@@ -670,8 +776,14 @@ private:
 
     GraphBuilder gb{.ctx = ctx, .w = graph.weights};
     struct ggml_tensor* x = gb.convBnAct(
-        graph.input, "crnn.features.0.0", "crnn.features.0.1", 2, 2, 3,
-        true, true);
+        graph.input,
+        "crnn.features.0.0",
+        "crnn.features.0.1",
+        2,
+        2,
+        3,
+        true,
+        true);
     for (const BlockConfig& cfg : kBlocks) {
       x = gb.invertedResidual(x, cfg);
     }
@@ -694,16 +806,17 @@ private:
 
 StepDoctrRecognitionGGML::StepDoctrRecognitionGGML(
     const std::string& pathRecognizer, int batchSize, DecodingMethod decoding)
-    : impl_(std::make_unique<Impl>(pathRecognizer)),
-      batchSize_(batchSize),
-      decodingMethod_(decoding),
-      vocabChars_(parseVocabToChars(VOCAB)) {
-  const std::string decodingStr = (decoding == DecodingMethod::CTC) ? "CTC" : "ATTENTION";
+    : impl_(std::make_unique<Impl>(pathRecognizer)), batchSize_(batchSize),
+      decodingMethod_(decoding), vocabChars_(parseVocabToChars(VOCAB)) {
+  const std::string decodingStr =
+      (decoding == DecodingMethod::CTC) ? "CTC" : "ATTENTION";
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::INFO,
       "[DoctrRecognitionGGML] GGML CPU recognizer loaded, batchSize=" +
           std::to_string(batchSize) + ", decoding=" + decodingStr);
-  ALOG_INFO(std::string("[DoctrRecognitionGGML] GGML CPU recognizer loaded, decoding=" + decodingStr));
+  ALOG_INFO(std::string(
+      "[DoctrRecognitionGGML] GGML CPU recognizer loaded, decoding=" +
+      decodingStr));
 }
 
 StepDoctrRecognitionGGML::~StepDoctrRecognitionGGML() = default;
@@ -717,11 +830,15 @@ cv::Mat StepDoctrRecognitionGGML::preprocessCrop(
 
   const int cropH = crop.rows;
   const int cropW = crop.cols;
-  const float scaleH = static_cast<float>(RECOG_HEIGHT) / static_cast<float>(cropH);
-  const float scaleW = static_cast<float>(RECOG_WIDTH) / static_cast<float>(cropW);
+  const float scaleH =
+      static_cast<float>(RECOG_HEIGHT) / static_cast<float>(cropH);
+  const float scaleW =
+      static_cast<float>(RECOG_WIDTH) / static_cast<float>(cropW);
   const float cropScale = std::min(scaleH, scaleW);
-  const int newH = std::max(1, static_cast<int>(static_cast<float>(cropH) * cropScale));
-  const int newW = std::max(1, static_cast<int>(static_cast<float>(cropW) * cropScale));
+  const int newH =
+      std::max(1, static_cast<int>(static_cast<float>(cropH) * cropScale));
+  const int newW =
+      std::max(1, static_cast<int>(static_cast<float>(cropW) * cropScale));
 
   cv::Mat resized;
   cv::resize(crop, resized, cv::Size(newW, newH), 0, 0, cv::INTER_LINEAR);
@@ -744,7 +861,8 @@ cv::Mat StepDoctrRecognitionGGML::runSingleInference(const cv::Mat& image) {
     for (int x = 0; x < RECOG_WIDTH; ++x) {
       const cv::Vec3f pixel = image.at<cv::Vec3f>(y, x);
       for (int c = 0; c < kInputChannels; ++c) {
-        inputBuffer_[static_cast<size_t>(x + RECOG_WIDTH * (y + RECOG_HEIGHT * c))] =
+        inputBuffer_[static_cast<size_t>(
+            x + RECOG_WIDTH * (y + RECOG_HEIGHT * c))] =
             pixel[static_cast<int>(c)];
       }
     }
@@ -760,7 +878,8 @@ StepDoctrRecognitionGGML::SoftmaxResult StepDoctrRecognitionGGML::softmaxArgmax(
     const cv::Mat& preds, int batchIdx, int timestep, int vocabSize) {
   const size_t batchStride = preds.step[0] / sizeof(float);
   const size_t seqStride = preds.step[1] / sizeof(float);
-  const float* row = preds.ptr<float>() + batchIdx * batchStride + timestep * seqStride;
+  const float* row =
+      preds.ptr<float>() + batchIdx * batchStride + timestep * seqStride;
 
   float maxVal = -std::numeric_limits<float>::infinity();
   for (int v = 0; v < vocabSize; v++) {
@@ -781,8 +900,8 @@ StepDoctrRecognitionGGML::SoftmaxResult StepDoctrRecognitionGGML::softmaxArgmax(
   return {bestIdx, bestExp / sumExp};
 }
 
-std::pair<std::string, float> StepDoctrRecognitionGGML::decodeAttention(
-    const cv::Mat& preds, int batchIdx) {
+std::pair<std::string, float>
+StepDoctrRecognitionGGML::decodeAttention(const cv::Mat& preds, int batchIdx) {
   const int seqLen = preds.size[1];
   const int vocabSize = preds.size[2];
   std::string decodedText;
@@ -800,11 +919,13 @@ std::pair<std::string, float> StepDoctrRecognitionGGML::decodeAttention(
       numChars++;
     }
   }
-  return {decodedText, numChars > 0 ? confidenceSum / static_cast<float>(numChars) : 0.0F};
+  return {
+      decodedText,
+      numChars > 0 ? confidenceSum / static_cast<float>(numChars) : 0.0F};
 }
 
-std::pair<std::string, float> StepDoctrRecognitionGGML::decodeCTC(
-    const cv::Mat& preds, int batchIdx) {
+std::pair<std::string, float>
+StepDoctrRecognitionGGML::decodeCTC(const cv::Mat& preds, int batchIdx) {
   const int seqLen = preds.size[1];
   const int vocabSize = preds.size[2];
   std::string decodedText;
@@ -856,8 +977,8 @@ StepDoctrRecognitionGGML::Output StepDoctrRecognitionGGML::process(
       cv::Mat crop = preprocessCrop(origImg, input.polygons[i]);
       cv::Mat preds = runSingleInference(crop);
       auto [text, confidence] = (decodingMethod_ == DecodingMethod::CTC)
-          ? decodeCTC(preds, 0)
-          : decodeAttention(preds, 0);
+                                    ? decodeCTC(preds, 0)
+                                    : decodeAttention(preds, 0);
 
       std::array<cv::Point2f, 4> polygon = input.polygons[i];
       if (input.context.initialResizeRatio != 1.0F) {

@@ -22,8 +22,6 @@
 // type ocr-onnx exposes, so downstream code (paragraph merge, etc.) works
 // unchanged.
 
-#include "steps.hpp"
-
 #include <array>
 #include <atomic>
 #include <codecvt>
@@ -35,6 +33,8 @@
 #include <vector>
 
 #include <opencv2/imgproc.hpp>
+
+#include "steps.hpp"
 
 typedef struct ggml_backend* ggml_backend_t;
 
@@ -50,7 +50,8 @@ namespace pipeline {
 //
 // Field semantics:
 //   populateMs     populateImageList + expandImgListWithRotatedImgs
-//                  (perspective-warp + crop + rotation expansion, all CPU/OpenCV)
+//                  (perspective-warp + crop + rotation expansion, all
+//                  CPU/OpenCV)
 //   batchPrepMs    cumulative alignAndCollate (resize + normalize) across all
 //                  batches in processImgList (primary + contrast-retry pass)
 //   inferenceMs    cumulative runBatchInference (GGML compute side) across
@@ -62,102 +63,105 @@ namespace pipeline {
 //   numBatches     number of runBatchInference invocations (primary pass)
 //   numContrastRetryBatches    number of contrast-retry runBatchInference calls
 struct RecognitionStageTimings {
-    double populateMs              = 0.0;
-    double batchPrepMs             = 0.0;
-    double inferenceMs             = 0.0;
-    double ctcDecodeMs             = 0.0;
-    double paragraphMs             = 0.0;
-    int    numBoxes                = 0;
-    int    numBatches              = 0;
-    int    numContrastRetryBatches = 0;
+  double populateMs = 0.0;
+  double batchPrepMs = 0.0;
+  double inferenceMs = 0.0;
+  double ctcDecodeMs = 0.0;
+  double paragraphMs = 0.0;
+  int numBoxes = 0;
+  int numBatches = 0;
+  int numContrastRetryBatches = 0;
 
-    double totalMs() const {
-        return populateMs + batchPrepMs + inferenceMs + ctcDecodeMs + paragraphMs;
-    }
+  double totalMs() const {
+    return populateMs + batchPrepMs + inferenceMs + ctcDecodeMs + paragraphMs;
+  }
 };
 
 class StepRecognizeText {
 public:
-    using Input  = StepBoundingBoxesOutput;
-    using Output = std::vector<InferredText>;
+  using Input = StepBoundingBoxesOutput;
+  using Output = std::vector<InferredText>;
 
-    struct SubImage {
-        std::array<cv::Point2f, 4> coords;
-        cv::Mat                    image;
-        bool                       isMultiCharacter;
-        std::string                text;
-        double                     confidenceScore{};
+  struct SubImage {
+    std::array<cv::Point2f, 4> coords;
+    cv::Mat image;
+    bool isMultiCharacter;
+    std::string text;
+    double confidenceScore{};
 
-        SubImage(std::array<cv::Point2f, 4> coords, cv::Mat image, bool isMultiCharacterFlag)
-            : coords{coords}
-            , image{std::move(image)}
-            , isMultiCharacter{isMultiCharacterFlag} {}
-    };
+    SubImage(
+        std::array<cv::Point2f, 4> coords, cv::Mat image,
+        bool isMultiCharacterFlag)
+        : coords{coords}, image{std::move(image)},
+          isMultiCharacter{isMultiCharacterFlag} {}
+  };
 
-    struct Config {
-        std::vector<int> defaultRotationAngles;
-        bool             contrastRetry{false};
-        float            lowConfidenceThreshold{0.4F};
-        int              recognizerBatchSize{32};
+  struct Config {
+    std::vector<int> defaultRotationAngles;
+    bool contrastRetry{false};
+    float lowConfidenceThreshold{0.4F};
+    int recognizerBatchSize{32};
 
-        Config() : defaultRotationAngles{90, 270} {}
-        Config(std::vector<int> angles, bool retry, float threshold, int batchSize = 32)
-            : defaultRotationAngles(std::move(angles)), contrastRetry(retry),
-              lowConfidenceThreshold(threshold), recognizerBatchSize(batchSize) {}
-    };
+    Config() : defaultRotationAngles{90, 270} {}
+    Config(
+        std::vector<int> angles, bool retry, float threshold,
+        int batchSize = 32)
+        : defaultRotationAngles(std::move(angles)), contrastRetry(retry),
+          lowConfidenceThreshold(threshold), recognizerBatchSize(batchSize) {}
+  };
 
-    // Construct with the recognizer GGUF, a list of language codes for vocab
-    // / LTR / ignore-list lookup, and a CPU backend the step does NOT take
-    // ownership of — to allow sharing one backend with the detector step.
-    StepRecognizeText(const std::string& gguf_path,
-                      std::span<const std::string> langList,
-                      ggml_backend_t backend,
-                      const Config& config = Config{});
-    ~StepRecognizeText();
+  // Construct with the recognizer GGUF, a list of language codes for vocab
+  // / LTR / ignore-list lookup, and a CPU backend the step does NOT take
+  // ownership of — to allow sharing one backend with the detector step.
+  StepRecognizeText(
+      const std::string& gguf_path, std::span<const std::string> langList,
+      ggml_backend_t backend, const Config& config = Config{});
+  ~StepRecognizeText();
 
-    StepRecognizeText(const StepRecognizeText&)            = delete;
-    StepRecognizeText& operator=(const StepRecognizeText&) = delete;
+  StepRecognizeText(const StepRecognizeText&) = delete;
+  StepRecognizeText& operator=(const StepRecognizeText&) = delete;
 
-    Output process(Input input,
-                   const std::atomic<bool>* cancelFlag = nullptr);
+  Output process(Input input, const std::atomic<bool>* cancelFlag = nullptr);
 
-    // Wall-clock timings from the most recent process() call.  Stable
-    // between calls; reset on every process().
-    const RecognitionStageTimings& lastTimings() const { return lastTimings_; }
+  // Wall-clock timings from the most recent process() call.  Stable
+  // between calls; reset on every process().
+  const RecognitionStageTimings& lastTimings() const { return lastTimings_; }
 
 private:
-    Config config_;
+  Config config_;
 
-    // GGML state: a loader (kept alive so the GGUF mmap remains valid),
-    // BN-folded weights uploaded to the shared backend, plus the backend
-    // pointer (non-owning).
-    std::unique_ptr<GgufLoader>             loader_;
-    std::unique_ptr<CrnnGen2Weights>        gen2_weights_;
-    ggml_backend_t                          backend_    = nullptr;
+  // GGML state: a loader (kept alive so the GGUF mmap remains valid),
+  // BN-folded weights uploaded to the shared backend, plus the backend
+  // pointer (non-owning).
+  std::unique_ptr<GgufLoader> loader_;
+  std::unique_ptr<CrnnGen2Weights> gen2_weights_;
+  ggml_backend_t backend_ = nullptr;
 
-    std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> converter_;
-    std::u32string_view                                          utf32Characters_;
-    std::u32string                                               utf32Owned_;  // backs the view when sourced from GGUF
-    std::vector<bool>                                            ignoreChars_;
-    bool                                                         isLeftToRightScript_;
+  std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> converter_;
+  std::u32string_view utf32Characters_;
+  std::u32string utf32Owned_; // backs the view when sourced from GGUF
+  std::vector<bool> ignoreChars_;
+  bool isLeftToRightScript_;
 
-    std::vector<std::vector<SubImage>> imgListOfLists_;
-    std::vector<float>                 batchBuffer_;
-    RecognitionStageTimings            lastTimings_{};
+  std::vector<std::vector<SubImage>> imgListOfLists_;
+  std::vector<float> batchBuffer_;
+  RecognitionStageTimings lastTimings_{};
 
-    void populateImageList(const Input& input);
-    void expandImgListWithRotatedImgs(std::optional<std::vector<int>>& rotationAngles);
+  void populateImageList(const Input& input);
+  void
+  expandImgListWithRotatedImgs(std::optional<std::vector<int>>& rotationAngles);
 
-    std::pair<std::string, float>
-    getTextAndConfidenceFromPreds(const cv::Mat& preds, int batchIdx = 0);
+  std::pair<std::string, float>
+  getTextAndConfidenceFromPreds(const cv::Mat& preds, int batchIdx = 0);
 
-    cv::Mat runInferenceOnImg(const cv::Mat& img);
-    cv::Mat runBatchInference(const std::vector<cv::Mat>& images, int dynamicWidth);
+  cv::Mat runInferenceOnImg(const cv::Mat& img);
+  cv::Mat
+  runBatchInference(const std::vector<cv::Mat>& images, int dynamicWidth);
 
-    void                       processImg(SubImage& subImage);
-    std::vector<InferredText>  processImgList(const std::atomic<bool>* cancelFlag);
-    std::string                decodeGreedy(const std::vector<size_t>& textIndex);
+  void processImg(SubImage& subImage);
+  std::vector<InferredText> processImgList(const std::atomic<bool>* cancelFlag);
+  std::string decodeGreedy(const std::vector<size_t>& textIndex);
 };
 
-}  // namespace pipeline
-}  // namespace easyocr::ggml
+} // namespace pipeline
+} // namespace easyocr::ggml

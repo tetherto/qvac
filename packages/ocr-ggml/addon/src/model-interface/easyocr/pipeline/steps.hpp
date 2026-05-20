@@ -25,60 +25,60 @@
 namespace easyocr::ggml::pipeline {
 
 struct PipelineContext {
-    cv::Mat origImg;
-    bool paragraph{false};
-    std::optional<std::vector<int>> rotationAngles;
-    float boxMarginMultiplier{};
-    float initialResizeRatio{1.0F};
+  cv::Mat origImg;
+  bool paragraph{false};
+  std::optional<std::vector<int>> rotationAngles;
+  float boxMarginMultiplier{};
+  float initialResizeRatio{1.0F};
 };
 
 struct StepDetectionInferenceOutput {
-    PipelineContext context;
-    cv::Mat textMap;
-    cv::Mat linkMap;
-    float imgResizeRatio;
+  PipelineContext context;
+  cv::Mat textMap;
+  cv::Mat linkMap;
+  float imgResizeRatio;
 };
 
 struct AlignedBox {
-    std::array<float, 4> coords{};
-    bool isMultiCharacter{false};
+  std::array<float, 4> coords{};
+  bool isMultiCharacter{false};
 
-    AlignedBox() = default;
-    AlignedBox(const std::array<float, 4>& c, bool multi)
-        : coords(c), isMultiCharacter(multi) {}
+  AlignedBox() = default;
+  AlignedBox(const std::array<float, 4>& c, bool multi)
+      : coords(c), isMultiCharacter(multi) {}
 };
 
 struct UnalignedBox {
-    std::array<cv::Point2f, 4> coords;
-    bool isMultiCharacter{false};
+  std::array<cv::Point2f, 4> coords;
+  bool isMultiCharacter{false};
 
-    UnalignedBox() = default;
-    UnalignedBox(const std::array<cv::Point2f, 4>& c, bool multi)
-        : coords(c), isMultiCharacter(multi) {}
+  UnalignedBox() = default;
+  UnalignedBox(const std::array<cv::Point2f, 4>& c, bool multi)
+      : coords(c), isMultiCharacter(multi) {}
 };
 
 struct StepBoundingBoxesOutput {
-    PipelineContext context;
-    std::vector<AlignedBox>   alignedBoxes;
-    std::vector<UnalignedBox> unalignedBoxes;
+  PipelineContext context;
+  std::vector<AlignedBox> alignedBoxes;
+  std::vector<UnalignedBox> unalignedBoxes;
 };
 
 struct InferredText {
-    std::array<cv::Point2f, 4> boxCoordinates;
-    std::string                 text;
-    double                      confidenceScore;
+  std::array<cv::Point2f, 4> boxCoordinates;
+  std::string text;
+  double confidenceScore;
 
-    [[nodiscard]] std::string toString() const;
+  [[nodiscard]] std::string toString() const;
 
-    InferredText(const std::array<cv::Point2f, 4>& coords, std::string text,
-                 double confidenceScore)
-        : boxCoordinates{coords}
-        , text{std::move(text)}
-        , confidenceScore{confidenceScore} {}
+  InferredText(
+      const std::array<cv::Point2f, 4>& coords, std::string text,
+      double confidenceScore)
+      : boxCoordinates{coords}, text{std::move(text)},
+        confidenceScore{confidenceScore} {}
 };
 
-cv::Mat fourPointTransform(const cv::Mat& image,
-                           const std::array<cv::Point2f, 4>& rect);
+cv::Mat fourPointTransform(
+    const cv::Mat& image, const std::array<cv::Point2f, 4>& rect);
 
 // Pick a sensible default thread count for GGML's CPU backend on this host.
 //
@@ -99,4 +99,4 @@ cv::Mat fourPointTransform(const cv::Mat& image,
 // non-x86 platforms) belongs in this one function.
 int defaultPhysicalThreadCount();
 
-}  // namespace easyocr::ggml::pipeline
+} // namespace easyocr::ggml::pipeline

@@ -45,39 +45,39 @@ class GgufLoader;
 
 class CraftWeights {
 public:
-    // Constructs the weights and uploads them to the given backend.  After
-    // construction, ok() reports success.  On failure, the error string is
-    // available via err().
-    //
-    // The loader must have been opened with load_tensor_data=true so that
-    // raw weight bytes are accessible.
-    CraftWeights(const GgufLoader& loader, ggml_backend_t backend);
-    ~CraftWeights();
+  // Constructs the weights and uploads them to the given backend.  After
+  // construction, ok() reports success.  On failure, the error string is
+  // available via err().
+  //
+  // The loader must have been opened with load_tensor_data=true so that
+  // raw weight bytes are accessible.
+  CraftWeights(const GgufLoader& loader, ggml_backend_t backend);
+  ~CraftWeights();
 
-    CraftWeights(const CraftWeights&)            = delete;
-    CraftWeights& operator=(const CraftWeights&) = delete;
+  CraftWeights(const CraftWeights&) = delete;
+  CraftWeights& operator=(const CraftWeights&) = delete;
 
-    bool ok() const noexcept { return err_.empty(); }
-    const std::string& err() const noexcept { return err_; }
+  bool ok() const noexcept { return err_.empty(); }
+  const std::string& err() const noexcept { return err_; }
 
-    // Returns the (folded) kernel tensor for the conv at `path`, or nullptr
-    // if absent. `path` must NOT include a trailing ".weight" suffix.
-    ::ggml_tensor* w(const std::string& path) const noexcept;
+  // Returns the (folded) kernel tensor for the conv at `path`, or nullptr
+  // if absent. `path` must NOT include a trailing ".weight" suffix.
+  ::ggml_tensor* w(const std::string& path) const noexcept;
 
-    // Returns the (folded) bias tensor for the conv at `path`, or nullptr.
-    ::ggml_tensor* b(const std::string& path) const noexcept;
+  // Returns the (folded) bias tensor for the conv at `path`, or nullptr.
+  ::ggml_tensor* b(const std::string& path) const noexcept;
 
-    // Diagnostic accessors.
-    int n_loaded() const noexcept;
+  // Diagnostic accessors.
+  int n_loaded() const noexcept;
 
 private:
-    void build_(const GgufLoader& loader, ggml_backend_t backend);
+  void build_(const GgufLoader& loader, ggml_backend_t backend);
 
-    std::unordered_map<std::string, ::ggml_tensor*> w_;
-    std::unordered_map<std::string, ::ggml_tensor*> b_;
-    ::ggml_context*        ctx_ = nullptr;
-    ::ggml_backend_buffer_t buf_ = nullptr;
-    std::string            err_;
+  std::unordered_map<std::string, ::ggml_tensor*> w_;
+  std::unordered_map<std::string, ::ggml_tensor*> b_;
+  ::ggml_context* ctx_ = nullptr;
+  ::ggml_backend_buffer_t buf_ = nullptr;
+  std::string err_;
 };
 
-}  // namespace easyocr::ggml
+} // namespace easyocr::ggml

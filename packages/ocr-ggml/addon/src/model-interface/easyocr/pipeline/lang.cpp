@@ -933,9 +933,15 @@ std::set<std::string_view> toSet(std::span<const std::string_view> vec) {
   return {vec.begin(), vec.end()};
 }
 
-std::set<std::string_view> setDifference(const std::set<std::string> &setA, const std::set<std::string_view> &setB) {
+std::set<std::string_view> setDifference(
+    const std::set<std::string>& setA, const std::set<std::string_view>& setB) {
   std::set<std::string_view> diff;
-  std::set_difference(setA.begin(), setA.end(), setB.begin(), setB.end(), std::inserter(diff, diff.end()));
+  std::set_difference(
+      setA.begin(),
+      setA.end(),
+      setB.begin(),
+      setB.end(),
+      std::inserter(diff, diff.end()));
   return diff;
 }
 
@@ -972,19 +978,24 @@ bool isOtherLang(std::string_view lang) {
 }
 
 bool isValidLang(std::string_view lang) {
-  return isLatinLang(lang) || isArabicLang(lang) || isBengaliLang(lang) || isCyrillicLang(lang) || isDevanagariLang(lang) || isOtherLang(lang);
+  return isLatinLang(lang) || isArabicLang(lang) || isBengaliLang(lang) ||
+         isCyrillicLang(lang) || isDevanagariLang(lang) || isOtherLang(lang);
 }
 
-void validateSimultaneousSupportedLanguages(std::string_view language,
-                                            std::span<const std::string> &receivedLangList,
-                                            const std::set<std::string_view> &allowedLangSet,
-                                            const std::string &suggestedLangList) {
+void validateSimultaneousSupportedLanguages(
+    std::string_view language, std::span<const std::string>& receivedLangList,
+    const std::set<std::string_view>& allowedLangSet,
+    const std::string& suggestedLangList) {
   std::set<std::string> receivedLangSet = toSet(receivedLangList);
-  std::set<std::string_view> diff = setDifference(receivedLangSet, allowedLangSet);
+  std::set<std::string_view> diff =
+      setDifference(receivedLangSet, allowedLangSet);
   if (!diff.empty()) {
     auto capitalizedLanguage = std::string(language);
-    capitalizedLanguage[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(language[0])));
-    throw std::invalid_argument(capitalizedLanguage + " is only compatible with English, try langList=" + suggestedLangList);
+    capitalizedLanguage[0] = static_cast<char>(
+        std::toupper(static_cast<unsigned char>(language[0])));
+    throw std::invalid_argument(
+        capitalizedLanguage +
+        " is only compatible with English, try langList=" + suggestedLangList);
   }
 }
 
@@ -994,63 +1005,103 @@ void validateSimultaneousSupportedLanguages(std::string_view language,
  * @param langList : the language list received for model creation
  * @return LangGroupInfo : information about the language group
  */
-LangGroupInfo validateAndGetInfoFromLangList(std::span<const std::string> langList) {
+LangGroupInfo
+validateAndGetInfoFromLangList(std::span<const std::string> langList) {
   if (contains(langList, "th")) {
-    validateSimultaneousSupportedLanguages("thai", langList, std::set<std::string_view>{"th", "en"}, R"(["th","en"])");
+    validateSimultaneousSupportedLanguages(
+        "thai",
+        langList,
+        std::set<std::string_view>{"th", "en"},
+        R"(["th","en"])");
     return RECOGNITION_MODELS.at("gen1").at("thai_g1");
   }
   if (contains(langList, "ch_tra")) {
-    validateSimultaneousSupportedLanguages("chinese_tra", langList, std::set<std::string_view>{"ch_tra", "en"}, R"(["ch_tra","en"])");
+    validateSimultaneousSupportedLanguages(
+        "chinese_tra",
+        langList,
+        std::set<std::string_view>{"ch_tra", "en"},
+        R"(["ch_tra","en"])");
     return RECOGNITION_MODELS.at("gen1").at("zh_tra_g1");
   }
   if (contains(langList, "ch_sim")) {
-    validateSimultaneousSupportedLanguages("chinese_sim", langList, std::set<std::string_view>{"ch_sim", "en"}, R"(["ch_sim","en"])");
+    validateSimultaneousSupportedLanguages(
+        "chinese_sim",
+        langList,
+        std::set<std::string_view>{"ch_sim", "en"},
+        R"(["ch_sim","en"])");
     return RECOGNITION_MODELS.at("gen2").at("zh_sim_g2");
   }
   if (contains(langList, "ja")) {
-    validateSimultaneousSupportedLanguages("japanese", langList, std::set<std::string_view>{"ja", "en"}, R"(["ja","en"])");
+    validateSimultaneousSupportedLanguages(
+        "japanese",
+        langList,
+        std::set<std::string_view>{"ja", "en"},
+        R"(["ja","en"])");
     return RECOGNITION_MODELS.at("gen2").at("japanese_g2");
   }
   if (contains(langList, "ko")) {
-    validateSimultaneousSupportedLanguages("korean", langList, std::set<std::string_view>{"ko", "en"}, R"(["ko","en"])");
+    validateSimultaneousSupportedLanguages(
+        "korean",
+        langList,
+        std::set<std::string_view>{"ko", "en"},
+        R"(["ko","en"])");
     return RECOGNITION_MODELS.at("gen2").at("korean_g2");
   }
   if (contains(langList, "ta")) {
-    validateSimultaneousSupportedLanguages("tamil", langList, std::set<std::string_view>{"ta", "en"}, R"(["ta","en"])");
+    validateSimultaneousSupportedLanguages(
+        "tamil",
+        langList,
+        std::set<std::string_view>{"ta", "en"},
+        R"(["ta","en"])");
     return RECOGNITION_MODELS.at("gen1").at("tamil_g1");
   }
   if (contains(langList, "te")) {
-    validateSimultaneousSupportedLanguages("telugu", langList, std::set<std::string_view>{"te", "en"}, R"(["te","en"])");
+    validateSimultaneousSupportedLanguages(
+        "telugu",
+        langList,
+        std::set<std::string_view>{"te", "en"},
+        R"(["te","en"])");
     return RECOGNITION_MODELS.at("gen2").at("telugu_g2");
   }
   if (contains(langList, "kn")) {
-    validateSimultaneousSupportedLanguages("kannada", langList, std::set<std::string_view>{"kn", "en"}, R"(["kn","en"])");
+    validateSimultaneousSupportedLanguages(
+        "kannada",
+        langList,
+        std::set<std::string_view>{"kn", "en"},
+        R"(["kn","en"])");
     return RECOGNITION_MODELS.at("gen2").at("kannada_g2");
   }
 
-  for (const auto &lang : langList) {
+  for (const auto& lang : langList) {
     if (contains(BENGALI_LANG_LIST, lang)) {
       std::set<std::string_view> allowed = toSet(BENGALI_LANG_LIST);
       allowed.insert("en");
-      validateSimultaneousSupportedLanguages("bengali", langList, allowed, R"(["bn","as","en"])");
+      validateSimultaneousSupportedLanguages(
+          "bengali", langList, allowed, R"(["bn","as","en"])");
       return RECOGNITION_MODELS.at("gen1").at("bengali_g1");
     }
     if (contains(ARABIC_LANG_LIST, lang)) {
       std::set<std::string_view> allowed = toSet(ARABIC_LANG_LIST);
       allowed.insert("en");
-      validateSimultaneousSupportedLanguages("arabic", langList, allowed, R"(["ar","fa","ur","ug","en"])");
+      validateSimultaneousSupportedLanguages(
+          "arabic", langList, allowed, R"(["ar","fa","ur","ug","en"])");
       return RECOGNITION_MODELS.at("gen1").at("arabic_g1");
     }
     if (contains(DEVANAGARI_LANG_LIST, lang)) {
       std::set<std::string_view> allowed = toSet(DEVANAGARI_LANG_LIST);
       allowed.insert("en");
-      validateSimultaneousSupportedLanguages("devanagari", langList, allowed, R"(["hi","mr","ne","en"])");
+      validateSimultaneousSupportedLanguages(
+          "devanagari", langList, allowed, R"(["hi","mr","ne","en"])");
       return RECOGNITION_MODELS.at("gen1").at("devanagari_g1");
     }
     if (contains(CYRILLIC_LANG_LIST, lang)) {
       std::set<std::string_view> allowed = toSet(CYRILLIC_LANG_LIST);
       allowed.insert("en");
-      validateSimultaneousSupportedLanguages("cyrillic", langList, allowed, R"(["ru","rs_cyrillic","be","bg","uk","mn","en"])");
+      validateSimultaneousSupportedLanguages(
+          "cyrillic",
+          langList,
+          allowed,
+          R"(["ru","rs_cyrillic","be","bg","uk","mn","en"])");
       return RECOGNITION_MODELS.at("gen2").at("cyrillic_g2");
     }
   }
@@ -1059,17 +1110,23 @@ LangGroupInfo validateAndGetInfoFromLangList(std::span<const std::string> langLi
 }
 
 /**
- * @brief for each char in fullCharList, sets ignoreIndex[i]=true if fullCharList[i] is not a character of any language in langList nor of symbols
+ * @brief for each char in fullCharList, sets ignoreIndex[i]=true if
+ * fullCharList[i] is not a character of any language in langList nor of symbols
  *
- * @param ignoreIndex : vector to be populated if the char entry is not present in any language in langList
+ * @param ignoreIndex : vector to be populated if the char entry is not present
+ * in any language in langList
  * @param fullCharList : full range of characters
  * @param symbols : symbol characters (such as [], {}, &, etc.)
- * @param langList : languages list (which is mapped internally to the characters present in each language)
+ * @param langList : languages list (which is mapped internally to the
+ * characters present in each language)
  */
-std::vector<bool> populateIgnoreIndexVector(std::u32string_view fullCharList, std::u32string_view symbols, /* NOLINT(bugprone-easily-swappable-parameters) */ std::span<const std::string> langList) {
+std::vector<bool> populateIgnoreIndexVector(
+    std::u32string_view fullCharList, std::u32string_view symbols,
+    /* NOLINT(bugprone-easily-swappable-parameters) */
+    std::span<const std::string> langList) {
   std::unordered_set<char32_t> langCharsSet(symbols.begin(), symbols.end());
 
-  for (const auto &lang : langList) {
+  for (const auto& lang : langList) {
     const std::u32string_view& langChars = LANG_TO_CHARS_MAP.at(lang);
     langCharsSet.insert(langChars.begin(), langChars.end());
   }
@@ -1088,7 +1145,7 @@ std::vector<bool> populateIgnoreIndexVector(std::u32string_view fullCharList, st
 
 void validateUnknownLanguages(std::span<const std::string> langList) {
   std::string invalidLanguages;
-  for (const auto &lang : langList) {
+  for (const auto& lang : langList) {
     if (!isValidLang(lang)) {
       if (!invalidLanguages.empty()) {
         invalidLanguages += ", ";
@@ -1097,14 +1154,18 @@ void validateUnknownLanguages(std::span<const std::string> langList) {
     }
   }
   if (!invalidLanguages.empty()) {
-    throw std::invalid_argument{"Received unsupported languages for the OCR addon: [" + invalidLanguages + "]"};
+    throw std::invalid_argument{
+        "Received unsupported languages for the OCR addon: [" +
+        invalidLanguages + "]"};
   }
 }
 
-std::tuple<std::u32string_view, std::vector<bool>, bool> getCharsInfoFromLangList(std::span<const std::string> langList) {
+std::tuple<std::u32string_view, std::vector<bool>, bool>
+getCharsInfoFromLangList(std::span<const std::string> langList) {
   LangGroupInfo langInfo = validateAndGetInfoFromLangList(langList);
-  std::vector<bool> ignoreChars = populateIgnoreIndexVector(langInfo.characters, langInfo.symbols, langList);
+  std::vector<bool> ignoreChars = populateIgnoreIndexVector(
+      langInfo.characters, langInfo.symbols, langList);
   return {langInfo.characters, ignoreChars, langInfo.lang != "arabic"};
 }
 
-}  // namespace easyocr::ggml::pipeline
+} // namespace easyocr::ggml::pipeline

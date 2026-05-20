@@ -15,8 +15,8 @@
 // Optional `taps` lets a test harness capture intermediate activations for
 // per-layer comparison against the PyTorch oracle.
 
-#include <unordered_map>
 #include <string>
+#include <unordered_map>
 
 struct ggml_context;
 struct ggml_tensor;
@@ -35,20 +35,19 @@ inline constexpr const char* kBasenetSlice2 = "basenet_slice2";
 inline constexpr const char* kBasenetSlice3 = "basenet_slice3";
 inline constexpr const char* kBasenetSlice4 = "basenet_slice4";
 inline constexpr const char* kBasenetSlice5 = "basenet_slice5";
-inline constexpr const char* kUpconv1       = "upconv1";
-inline constexpr const char* kInterp2       = "interp2";   // diagnostic: interp before upconv2
-inline constexpr const char* kCat2          = "cat2";      // diagnostic: cat before upconv2
-inline constexpr const char* kUpconv2       = "upconv2";
-inline constexpr const char* kUpconv3       = "upconv3";
-inline constexpr const char* kUpconv4       = "upconv4";   // == `feature` (NCHW)
-inline constexpr const char* kConvCls       = "conv_cls";  // NCHW [1, 2, H/2, W/2]
-inline constexpr const char* kOutputNhwc    = "output_nhwc";
-}  // namespace craft_taps
+inline constexpr const char* kUpconv1 = "upconv1";
+inline constexpr const char* kInterp2 =
+    "interp2"; // diagnostic: interp before upconv2
+inline constexpr const char* kCat2 = "cat2"; // diagnostic: cat before upconv2
+inline constexpr const char* kUpconv2 = "upconv2";
+inline constexpr const char* kUpconv3 = "upconv3";
+inline constexpr const char* kUpconv4 = "upconv4";  // == `feature` (NCHW)
+inline constexpr const char* kConvCls = "conv_cls"; // NCHW [1, 2, H/2, W/2]
+inline constexpr const char* kOutputNhwc = "output_nhwc";
+} // namespace craft_taps
 
 ::ggml_tensor* build_craft(
-    ::ggml_context* ctx,
-    const CraftWeights& weights,
-    ::ggml_tensor* x,
+    ::ggml_context* ctx, const CraftWeights& weights, ::ggml_tensor* x,
     std::unordered_map<std::string, ::ggml_tensor*>* taps = nullptr);
 
-}  // namespace easyocr::ggml
+} // namespace easyocr::ggml

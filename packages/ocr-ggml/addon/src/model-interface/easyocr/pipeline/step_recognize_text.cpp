@@ -16,31 +16,29 @@
 
 #include "step_recognize_text.hpp"
 
-#include "lang.hpp"
-#include "model-interface/easyocr/crnn.hpp"
-#include "model-interface/easyocr/crnn_weights.hpp"
-#include "model-interface/easyocr/gguf_loader.hpp"
-
-#include "ggml.h"
-#include "ggml-alloc.h"
-#include "ggml-backend.h"
-#include "ggml-cpu.h"
-
-#include <opencv2/opencv.hpp>
-
 #include <algorithm>
 #include <cassert>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <future>
+#include <mutex>
 #include <span>
 #include <stdexcept>
 #include <string>
 #include <thread>
-#include <future>
-#include <mutex>
 
+#include <opencv2/opencv.hpp>
+
+#include "ggml-alloc.h"
+#include "ggml-backend.h"
+#include "ggml-cpu.h"
+#include "ggml.h"
+#include "lang.hpp"
+#include "model-interface/easyocr/crnn.hpp"
+#include "model-interface/easyocr/crnn_weights.hpp"
+#include "model-interface/easyocr/gguf_loader.hpp"
 #include "qlog.hpp"
 
 namespace easyocr::ggml::pipeline {
@@ -54,17 +52,19 @@ namespace {
 constexpr int RECOGNIZER_MODEL_HEIGHT = 64;
 
 // not present in python
-// specific per recognizer model. Had to be fixed since ONNX does not support exporting dynamic image width
+// specific per recognizer model. Had to be fixed since ONNX does not support
+// exporting dynamic image width
 constexpr int RECOGNIZER_MODEL_WIDTH = 512;
 constexpr int ANGLE_90 = 90;
 constexpr int ANGLE_180 = 180;
 constexpr int ANGLE_270 = 270;
 constexpr float HALF = 0.5F;
 
-
 // contrast_ths in python
-// ext box with contrast lower than this value will be passed into model 2 times. First is with original image and second with contrast adjusted to
-// 'adjust_contrast' value. The one with more confident level will be returned as a result.
+// ext box with contrast lower than this value will be passed into model 2
+// times. First is with original image and second with contrast adjusted to
+// 'adjust_contrast' value. The one with more confident level will be returned
+// as a result.
 constexpr float LOW_CONF_THRESHOLD_FOR_INCREASED_CONTRAST = 0.8F;
 
 // adjust_contrast in python
@@ -97,17 +97,21 @@ float calculateRatio(float width, float height) {
 }
 
 /**
- * @brief resizes the image according to RECOGNIZER_MODEL_HEIGHT and keeping the ratio betwen width and height
+ * @brief resizes the image according to RECOGNIZER_MODEL_HEIGHT and keeping the
+ * ratio betwen width and height
  *
- * If the width is smaller than the height, the width is set as RECOGNIZER_MODEL_HEIGHT, and height is adjusted according to the ratio.
- * Otherwise, if width is greater than height, the height is set as RECOGNIZER_MODEL_HEIGHT, and width is adjusted according to the ratio
+ * If the width is smaller than the height, the width is set as
+ * RECOGNIZER_MODEL_HEIGHT, and height is adjusted according to the ratio.
+ * Otherwise, if width is greater than height, the height is set as
+ * RECOGNIZER_MODEL_HEIGHT, and width is adjusted according to the ratio
  *
  * @param img : image to be resized (not modified)
  * @param width : image width
  * @param height : image height
  * @return cv::Mat : the resized image
  */
-cv::Mat resizeImgForRecognizerInput(const cv::Mat &img, float width, float height) {
+cv::Mat
+resizeImgForRecognizerInput(const cv::Mat& img, float width, float height) {
   float ratioLocal = width / height;
   cv::Mat resizedImg;
   if (ratioLocal < 1.0F) {
@@ -143,13 +147,13 @@ cv::Mat resizeImgForRecognizerInput(const cv::Mat &img, float width, float heigh
  * @param predsMaxProb : recognizer prediction probability vector
  * @return float : the calculated final probability
  */
-float getConfidenceScoreFromPredsProb(const std::vector<float> &predsMaxProb) {
+float getConfidenceScoreFromPredsProb(const std::vector<float>& predsMaxProb) {
   if (predsMaxProb.empty()) {
     return 0.0F;
   }
   float prod = 1.0F;
   int size = 0;
-  for (const auto &prob : predsMaxProb) {
+  for (const auto& prob : predsMaxProb) {
     if (prob > 0) {
       prod *= prob;
       size++;
@@ -158,7 +162,8 @@ float getConfidenceScoreFromPredsProb(const std::vector<float> &predsMaxProb) {
   if (size == 0) {
     return 0.0F;
   }
-  float exponent = CONF_EXPONENT_NUM / static_cast<float>(std::sqrt(static_cast<double>(size)));
+  float exponent = CONF_EXPONENT_NUM /
+                   static_cast<float>(std::sqrt(static_cast<double>(size)));
   return std::pow(prod, exponent);
 }
 
@@ -171,14 +176,16 @@ float getConfidenceScoreFromPredsProb(const std::vector<float> &predsMaxProb) {
  *  - 90% percentile of brightness values (high)
  *  - 10% percentile of brightness values (low)
  */
-std::tuple<double, double, double> contrastGrey(const cv::Mat &img) {
+std::tuple<double, double, double> contrastGrey(const cv::Mat& img) {
   CV_Assert(img.channels() == 1);
   std::vector<uchar> pixels;
   if (img.isContinuous()) {
     pixels.assign(img.datastart, img.dataend);
   } else {
     for (int i = 0; i < img.rows; i++) {
-      pixels.insert(pixels.end(), img.ptr<uchar>(i), img.ptr<uchar>(i) + img.cols); /* NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic) */
+      pixels.insert(
+          pixels.end(), img.ptr<uchar>(i), img.ptr<uchar>(i) + img.cols); /* NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+                                                                           */
     }
   }
   std::sort(pixels.begin(), pixels.end());
@@ -198,7 +205,8 @@ std::tuple<double, double, double> contrastGrey(const cv::Mat &img) {
  * @param target : target contrast value
  * @return cv::Mat : image with contrast adjusted
  */
-cv::Mat adjustContrastGrey(const cv::Mat &img, double target = PARAGRAPH_Y_DELTA) {
+cv::Mat
+adjustContrastGrey(const cv::Mat& img, double target = PARAGRAPH_Y_DELTA) {
   double contrast = 0.0;
   double high = 0.0;
   double low = 0.0;
@@ -217,7 +225,8 @@ cv::Mat adjustContrastGrey(const cv::Mat &img, double target = PARAGRAPH_Y_DELTA
 }
 
 /**
- * @brief normalizes image with absolute black/white values, and pads the last column so it reaches maxWidth
+ * @brief normalizes image with absolute black/white values, and pads the last
+ * column so it reaches maxWidth
  *
  * @param img : source image (not modified)
  * @param channels : target number of channels
@@ -227,10 +236,12 @@ cv::Mat adjustContrastGrey(const cv::Mat &img, double target = PARAGRAPH_Y_DELTA
  */
 constexpr double PIXEL_MAX_DOUBLE = 255.0;
 
-cv::Mat normalizeAndPad(const cv::Mat &img, int channels, int height, int maxWidth) {
+cv::Mat
+normalizeAndPad(const cv::Mat& img, int channels, int height, int maxWidth) {
   cv::Mat gray;
   if (img.channels() == 3 && channels == 1) {
-    // Use RGB2GRAY since image is in RGB format (converted from BGR in Pipeline.cpp)
+    // Use RGB2GRAY since image is in RGB format (converted from BGR in
+    // Pipeline.cpp)
     cv::cvtColor(img, gray, cv::COLOR_RGB2GRAY);
   } else {
     gray = img;
@@ -264,8 +275,8 @@ cv::Mat normalizeAndPad(const cv::Mat &img, int channels, int height, int maxWid
 /**
  * @brief calculates the proportional width for EasyOCR-style resizing
  *
- * Always scales height to RECOGNIZER_MODEL_HEIGHT, width is proportional to aspect ratio.
- * This matches EasyOCR's preprocessing approach.
+ * Always scales height to RECOGNIZER_MODEL_HEIGHT, width is proportional to
+ * aspect ratio. This matches EasyOCR's preprocessing approach.
  *
  * @param width : original image width
  * @param height : original image height
@@ -274,7 +285,7 @@ cv::Mat normalizeAndPad(const cv::Mat &img, int channels, int height, int maxWid
 int calculateProportionalWidth(int width, int height) {
   float ratio = static_cast<float>(width) / static_cast<float>(height);
   int newWidth = static_cast<int>(std::ceil(RECOGNIZER_MODEL_HEIGHT * ratio));
-  return std::max(1, newWidth);  // Ensure at least 1 pixel width
+  return std::max(1, newWidth); // Ensure at least 1 pixel width
 }
 
 /**
@@ -290,7 +301,8 @@ int calculateProportionalWidth(int width, int height) {
  * @param adjustContrast : target contrast
  * @return adjusted image
  */
-cv::Mat alignAndCollate(const SubImage &subImage, int targetWidth, double adjustContrast = 0.0) {
+cv::Mat alignAndCollate(
+    const SubImage& subImage, int targetWidth, double adjustContrast = 0.0) {
   cv::Mat image = subImage.image;
   int width = image.cols;
   int height = image.rows;
@@ -304,7 +316,8 @@ cv::Mat alignAndCollate(const SubImage &subImage, int targetWidth, double adjust
     image = adjustContrastGrey(image, adjustContrast);
   }
 
-  // EasyOCR-style resize: always scale height to model height, width proportional
+  // EasyOCR-style resize: always scale height to model height, width
+  // proportional
   int proportionalWidth = calculateProportionalWidth(width, height);
 
   cv::Mat resizedImage;
@@ -316,13 +329,15 @@ cv::Mat alignAndCollate(const SubImage &subImage, int targetWidth, double adjust
       0,
       cv::INTER_LINEAR);
 
-  return normalizeAndPad(resizedImage, 1 /*grayscale*/, RECOGNIZER_MODEL_HEIGHT, targetWidth);
+  return normalizeAndPad(
+      resizedImage, 1 /*grayscale*/, RECOGNIZER_MODEL_HEIGHT, targetWidth);
 }
 
 /**
- * @brief Legacy version for backward compatibility - uses fixed RECOGNIZER_MODEL_WIDTH
+ * @brief Legacy version for backward compatibility - uses fixed
+ * RECOGNIZER_MODEL_WIDTH
  */
-cv::Mat alignAndCollate(const SubImage &subImage, double adjustContrast = 0.0) {
+cv::Mat alignAndCollate(const SubImage& subImage, double adjustContrast = 0.0) {
   return alignAndCollate(subImage, RECOGNIZER_MODEL_WIDTH, adjustContrast);
 }
 
@@ -330,11 +345,14 @@ cv::Mat alignAndCollate(const SubImage &subImage, double adjustContrast = 0.0) {
  * @brief Groups results into paragraphs based on box proximity
  *
  * @param rawResult : per-line results
- * @param isLeftToRightScript : mode to group boxes (left to right or right to left)
- * @return std::vector<InferredText> : the adjusted results grouped into paragraphs
+ * @param isLeftToRightScript : mode to group boxes (left to right or right to
+ * left)
+ * @return std::vector<InferredText> : the adjusted results grouped into
+ * paragraphs
  */
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
-std::vector<InferredText> getParagraph(const std::vector<InferredText> &rawResult, bool isLeftToRightScript) {
+std::vector<InferredText> getParagraph(
+    const std::vector<InferredText>& rawResult, bool isLeftToRightScript) {
   struct BoxGroup {
     std::string text;
     int minX{};
@@ -350,13 +368,13 @@ std::vector<InferredText> getParagraph(const std::vector<InferredText> &rawResul
   std::vector<BoxGroup> boxGroupList;
   boxGroupList.reserve(rawResult.size());
 
-  for (const auto &res : rawResult) {
+  for (const auto& res : rawResult) {
     BoxGroup boxGroup;
     int minX = std::numeric_limits<int>::max();
     int maxX = std::numeric_limits<int>::min();
     int minY = std::numeric_limits<int>::max();
     int maxY = std::numeric_limits<int>::min();
-    for (const auto &point : res.boxCoordinates) {
+    for (const auto& point : res.boxCoordinates) {
       int pointX = static_cast<int>(std::round(point.x));
       int pointY = static_cast<int>(std::round(point.y));
       minX = std::min(minX, pointX);
@@ -378,49 +396,88 @@ std::vector<InferredText> getParagraph(const std::vector<InferredText> &rawResul
 
   int currentGroup = 1;
   // Group boxes until every box has been assigned a group
-  while (std::any_of(boxGroupList.begin(), boxGroupList.end(), [](const BoxGroup &boxGroup) { return boxGroup.group == 0; })) {
-    std::vector<BoxGroup *> unassigned;
-    for (auto &boxGroup : boxGroupList) {
+  while (std::any_of(
+      boxGroupList.begin(), boxGroupList.end(), [](const BoxGroup& boxGroup) {
+        return boxGroup.group == 0;
+      })) {
+    std::vector<BoxGroup*> unassigned;
+    for (auto& boxGroup : boxGroupList) {
       if (boxGroup.group == 0) {
         unassigned.push_back(&boxGroup);
       }
     }
 
-    bool hasCurrent =
-        std::any_of(boxGroupList.begin(), boxGroupList.end(), [currentGroup](const BoxGroup &boxGroup) { return boxGroup.group == currentGroup; });
+    bool hasCurrent = std::any_of(
+        boxGroupList.begin(),
+        boxGroupList.end(),
+        [currentGroup](const BoxGroup& boxGroup) {
+          return boxGroup.group == currentGroup;
+        });
     if (!hasCurrent && !unassigned.empty()) {
       unassigned[0]->group = currentGroup;
     } else {
-      std::vector<BoxGroup *> currentBoxes;
-      for (auto &boxGroup : boxGroupList) {
+      std::vector<BoxGroup*> currentBoxes;
+      for (auto& boxGroup : boxGroupList) {
         if (boxGroup.group == currentGroup) {
           currentBoxes.push_back(&boxGroup);
         }
       }
       float sumHeight = 0.0F;
-      for (auto *boxGroup : currentBoxes) {
+      for (auto* boxGroup : currentBoxes) {
         sumHeight += static_cast<float>(boxGroup->height);
       }
       float meanHeight = sumHeight / static_cast<float>(currentBoxes.size());
 
-      int groupMinX =
-          (*std::min_element(currentBoxes.begin(), currentBoxes.end(), [](const BoxGroup *boxA, const BoxGroup *boxB) { return boxA->minX < boxB->minX; }))->minX;
-      int groupMaxX =
-          (*std::max_element(currentBoxes.begin(), currentBoxes.end(), [](const BoxGroup *boxA, const BoxGroup *boxB) { return boxA->maxX < boxB->maxX; }))->maxX;
-      int groupMinY =
-          (*std::min_element(currentBoxes.begin(), currentBoxes.end(), [](const BoxGroup *boxA, const BoxGroup *boxB) { return boxA->minY < boxB->minY; }))->minY;
-      int groupMaxY =
-          (*std::max_element(currentBoxes.begin(), currentBoxes.end(), [](const BoxGroup *boxA, const BoxGroup *boxB) { return boxA->maxY < boxB->maxY; }))->maxY;
+      int groupMinX = (*std::min_element(
+                           currentBoxes.begin(),
+                           currentBoxes.end(),
+                           [](const BoxGroup* boxA, const BoxGroup* boxB) {
+                             return boxA->minX < boxB->minX;
+                           }))
+                          ->minX;
+      int groupMaxX = (*std::max_element(
+                           currentBoxes.begin(),
+                           currentBoxes.end(),
+                           [](const BoxGroup* boxA, const BoxGroup* boxB) {
+                             return boxA->maxX < boxB->maxX;
+                           }))
+                          ->maxX;
+      int groupMinY = (*std::min_element(
+                           currentBoxes.begin(),
+                           currentBoxes.end(),
+                           [](const BoxGroup* boxA, const BoxGroup* boxB) {
+                             return boxA->minY < boxB->minY;
+                           }))
+                          ->minY;
+      int groupMaxY = (*std::max_element(
+                           currentBoxes.begin(),
+                           currentBoxes.end(),
+                           [](const BoxGroup* boxA, const BoxGroup* boxB) {
+                             return boxA->maxY < boxB->maxY;
+                           }))
+                          ->maxY;
 
-      const int minGx = groupMinX - static_cast<int>(X_THRESHOLD_FOR_PARAGRAPH_MERGE * meanHeight);
-      const int maxGx = groupMaxX + static_cast<int>(X_THRESHOLD_FOR_PARAGRAPH_MERGE * meanHeight);
-      const int minGy = groupMinY - static_cast<int>(Y_THRESHOLD_FOR_PARAGRAPH_MERGE * meanHeight);
-      const int maxGy = groupMaxY + static_cast<int>(Y_THRESHOLD_FOR_PARAGRAPH_MERGE * meanHeight);
+      const int minGx =
+          groupMinX -
+          static_cast<int>(X_THRESHOLD_FOR_PARAGRAPH_MERGE * meanHeight);
+      const int maxGx =
+          groupMaxX +
+          static_cast<int>(X_THRESHOLD_FOR_PARAGRAPH_MERGE * meanHeight);
+      const int minGy =
+          groupMinY -
+          static_cast<int>(Y_THRESHOLD_FOR_PARAGRAPH_MERGE * meanHeight);
+      const int maxGy =
+          groupMaxY +
+          static_cast<int>(Y_THRESHOLD_FOR_PARAGRAPH_MERGE * meanHeight);
 
       bool added = false;
-      for (auto *boxGroup : unassigned) {
-        bool sameHorizontal = (minGx <= boxGroup->minX && boxGroup->minX <= maxGx) || (minGx <= boxGroup->maxX && boxGroup->maxX <= maxGx);
-        bool sameVertical = (minGy <= boxGroup->minY && boxGroup->minY <= maxGy) || (minGy <= boxGroup->maxY && boxGroup->maxY <= maxGy);
+      for (auto* boxGroup : unassigned) {
+        bool sameHorizontal =
+            (minGx <= boxGroup->minX && boxGroup->minX <= maxGx) ||
+            (minGx <= boxGroup->maxX && boxGroup->maxX <= maxGx);
+        bool sameVertical =
+            (minGy <= boxGroup->minY && boxGroup->minY <= maxGy) ||
+            (minGy <= boxGroup->maxY && boxGroup->maxY <= maxGy);
         if (sameHorizontal && sameVertical) {
           boxGroup->group = currentGroup;
           added = true;
@@ -435,12 +492,12 @@ std::vector<InferredText> getParagraph(const std::vector<InferredText> &rawResul
 
   std::vector<InferredText> result;
   std::set<int> groups;
-  for (const auto &boxGroup : boxGroupList) {
+  for (const auto& boxGroup : boxGroupList) {
     groups.insert(boxGroup.group);
   }
   for (int grp : groups) {
-    std::vector<BoxGroup *> groupBoxes;
-    for (auto &boxGroup : boxGroupList) {
+    std::vector<BoxGroup*> groupBoxes;
+    for (auto& boxGroup : boxGroupList) {
       if (boxGroup.group == grp) {
         groupBoxes.push_back(&boxGroup);
       }
@@ -450,7 +507,7 @@ std::vector<InferredText> getParagraph(const std::vector<InferredText> &rawResul
     int groupMinY = groupBoxes[0]->minY;
     int groupMaxY = groupBoxes[0]->maxY;
     float sumHeight = 0.0F;
-    for (auto *boxGroup : groupBoxes) {
+    for (auto* boxGroup : groupBoxes) {
       groupMinX = std::min(groupMinX, boxGroup->minX);
       groupMaxX = std::max(groupMaxX, boxGroup->maxX);
       groupMinY = std::min(groupMinY, boxGroup->minY);
@@ -461,27 +518,39 @@ std::vector<InferredText> getParagraph(const std::vector<InferredText> &rawResul
 
     std::string combinedText;
     float finalConfidence = 1.0F;
-    std::vector<BoxGroup *> remaining = groupBoxes;
+    std::vector<BoxGroup*> remaining = groupBoxes;
     while (!remaining.empty()) {
       float lowest = remaining[0]->yCenter;
-      for (auto *boxGroup : remaining) {
+      for (auto* boxGroup : remaining) {
         lowest = std::min(lowest, boxGroup->yCenter);
       }
-      std::vector<BoxGroup *> candidates;
-      for (auto *boxGroup : remaining) {
+      std::vector<BoxGroup*> candidates;
+      for (auto* boxGroup : remaining) {
         if (boxGroup->yCenter < lowest + PARAGRAPH_Y_DELTA * meanHeight) {
           candidates.push_back(boxGroup);
         }
       }
-      BoxGroup *bestBox = nullptr;
+      BoxGroup* bestBox = nullptr;
       if (isLeftToRightScript) {
-        bestBox = *std::min_element(candidates.begin(), candidates.end(), [](const BoxGroup *boxA, const BoxGroup *boxB) { return boxA->minX < boxB->minX; });
+        bestBox = *std::min_element(
+            candidates.begin(),
+            candidates.end(),
+            [](const BoxGroup* boxA, const BoxGroup* boxB) {
+              return boxA->minX < boxB->minX;
+            });
       } else {
-        bestBox = *std::max_element(candidates.begin(), candidates.end(), [](const BoxGroup *boxA, const BoxGroup *boxB) { return boxA->maxX < boxB->maxX; });
+        bestBox = *std::max_element(
+            candidates.begin(),
+            candidates.end(),
+            [](const BoxGroup* boxA, const BoxGroup* boxB) {
+              return boxA->maxX < boxB->maxX;
+            });
       }
       combinedText += " " + bestBox->text;
       finalConfidence = std::min(finalConfidence, bestBox->confidence);
-      remaining.erase(std::remove(remaining.begin(), remaining.end(), bestBox), remaining.end());
+      remaining.erase(
+          std::remove(remaining.begin(), remaining.end(), bestBox),
+          remaining.end());
     }
     if (!combinedText.empty() && combinedText.front() == ' ') {
       combinedText.erase(0, 1);
@@ -490,7 +559,14 @@ std::vector<InferredText> getParagraph(const std::vector<InferredText> &rawResul
       finalConfidence = 0.0F;
     }
     std::array<cv::Point2f, 4> finalBox = {
-        cv::Point2f(static_cast<float>(groupMinX), static_cast<float>(groupMinY)), cv::Point2f(static_cast<float>(groupMaxX), static_cast<float>(groupMinY)), cv::Point2f(static_cast<float>(groupMaxX), static_cast<float>(groupMaxY)), cv::Point2f(static_cast<float>(groupMinX), static_cast<float>(groupMaxY))};
+        cv::Point2f(
+            static_cast<float>(groupMinX), static_cast<float>(groupMinY)),
+        cv::Point2f(
+            static_cast<float>(groupMaxX), static_cast<float>(groupMinY)),
+        cv::Point2f(
+            static_cast<float>(groupMaxX), static_cast<float>(groupMaxY)),
+        cv::Point2f(
+            static_cast<float>(groupMinX), static_cast<float>(groupMaxY))};
     result.emplace_back(finalBox, combinedText, finalConfidence);
   }
   return result;
@@ -499,13 +575,15 @@ std::vector<InferredText> getParagraph(const std::vector<InferredText> &rawResul
 /**
  * @brief shifts the box coordinates based on angle
  *
- * Required so box[0] always points to the top-left most point in relation to the text
+ * Required so box[0] always points to the top-left most point in relation to
+ * the text
  *
  * @param box : source box (assumed to be in horizontal position)
  * @param angle : angle to rotate (one of 90, 180, 270)
  * @return std::array<cv::Point2f, 4> : the rotated box
  */
-std::array<cv::Point2f, 4> rotateBox(const std::array<cv::Point2f, 4> &box, int angle) {
+std::array<cv::Point2f, 4>
+rotateBox(const std::array<cv::Point2f, 4>& box, int angle) {
   std::array<cv::Point2f, 4> newBox;
   if (angle == ANGLE_90) {
     newBox[0] = box[3];
@@ -532,79 +610,81 @@ StepRecognizeText::StepRecognizeText(
     const std::string& gguf_path, std::span<const std::string> langList,
     ggml_backend_t backend, const Config& config)
     : config_(config), backend_(backend), isLeftToRightScript_{true} {
-    if (backend_ == nullptr) {
-        throw std::runtime_error(
-            "StepRecognizeText: backend is null");
+  if (backend_ == nullptr) {
+    throw std::runtime_error("StepRecognizeText: backend is null");
+  }
+
+  loader_ = std::make_unique<easyocr::ggml::GgufLoader>(
+      gguf_path, /*load_tensor_data=*/true);
+  if (!loader_->ok()) {
+    throw std::runtime_error(
+        "StepRecognizeText: failed to open GGUF: " + gguf_path);
+  }
+
+  // Gen-2-only runtime: this binary supports english_g2/latin_g2-family
+  // recognizers and always constructs the VGG-backed weights.
+  gen2_weights_ =
+      std::make_unique<easyocr::ggml::CrnnGen2Weights>(*loader_, backend_);
+  if (!gen2_weights_->ok()) {
+    throw std::runtime_error(
+        "StepRecognizeText: CrnnGen2Weights load failed: " +
+        gen2_weights_->err());
+  }
+
+  validateUnknownLanguages(langList);
+  std::u32string_view langChars;
+  std::tie(langChars, ignoreChars_, isLeftToRightScript_) =
+      getCharsInfoFromLangList(langList);
+
+  // Source the runtime vocab from the GGUF.  The Lang.cpp
+  // table for `langList` is asserted to match — if a future custom GGUF
+  // is loaded against a wrong language list we want a loud failure.
+  if (auto vocab_utf8 = loader_->get_string("crnn.vocab")) {
+    // ocr-onnx's Lang.cpp character strings start with a leading space
+    // at index 0 as the CTC blank placeholder; decodeGreedy maps index 0
+    // to blank (skips it) and index N to characters_[N]. The GGUF
+    // crnn.vocab is the bare character set without that leading blank, so
+    // we prepend U' ' to make the indices line up.
+    utf32Owned_ = U" "; // blank at position 0
+    utf32Owned_ += converter_.from_bytes(
+        vocab_utf8->data(), vocab_utf8->data() + vocab_utf8->size());
+    utf32Characters_ = utf32Owned_;
+
+    if (utf32Characters_ != langChars) {
+      // We don't hard-fail in release builds — the lang table may be
+      // a superset/subset for some script families. Log loud and
+      // trust the GGUF (which is what the model was trained on).
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::WARN,
+          std::string("[Recognition] GGUF crnn.vocab differs from "
+                      "Lang.cpp table for the requested language "
+                      "list (sizes: gguf=") +
+              std::to_string(utf32Characters_.size()) +
+              ", lang=" + std::to_string(langChars.size()) +
+              ") — using GGUF as the runtime vocab.");
     }
-
-    loader_ = std::make_unique<easyocr::ggml::GgufLoader>(
-        gguf_path, /*load_tensor_data=*/true);
-    if (!loader_->ok()) {
-        throw std::runtime_error(
-            "StepRecognizeText: failed to open GGUF: " + gguf_path);
-    }
-
-    // Gen-2-only runtime: this binary supports english_g2/latin_g2-family
-    // recognizers and always constructs the VGG-backed weights.
-    gen2_weights_ = std::make_unique<easyocr::ggml::CrnnGen2Weights>(
-        *loader_, backend_);
-    if (!gen2_weights_->ok()) {
-        throw std::runtime_error(
-            "StepRecognizeText: CrnnGen2Weights load failed: " +
-            gen2_weights_->err());
-    }
-
-    validateUnknownLanguages(langList);
-    std::u32string_view langChars;
-    std::tie(langChars, ignoreChars_, isLeftToRightScript_) =
-        getCharsInfoFromLangList(langList);
-
-    // Source the runtime vocab from the GGUF.  The Lang.cpp
-    // table for `langList` is asserted to match — if a future custom GGUF
-    // is loaded against a wrong language list we want a loud failure.
-    if (auto vocab_utf8 = loader_->get_string("crnn.vocab")) {
-        // ocr-onnx's Lang.cpp character strings start with a leading space
-        // at index 0 as the CTC blank placeholder; decodeGreedy maps index 0
-        // to blank (skips it) and index N to characters_[N]. The GGUF
-        // crnn.vocab is the bare character set without that leading blank, so
-        // we prepend U' ' to make the indices line up.
-        utf32Owned_ = U" ";  // blank at position 0
-        utf32Owned_ += converter_.from_bytes(
-            vocab_utf8->data(), vocab_utf8->data() + vocab_utf8->size());
-        utf32Characters_ = utf32Owned_;
-
-        if (utf32Characters_ != langChars) {
-            // We don't hard-fail in release builds — the lang table may be
-            // a superset/subset for some script families. Log loud and
-            // trust the GGUF (which is what the model was trained on).
-            QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARN,
-                 std::string("[Recognition] GGUF crnn.vocab differs from "
-                             "Lang.cpp table for the requested language "
-                             "list (sizes: gguf=") +
-                     std::to_string(utf32Characters_.size()) + ", lang=" +
-                     std::to_string(langChars.size()) +
-                     ") — using GGUF as the runtime vocab.");
-        }
-    } else {
-        // GGUF didn't carry crnn.vocab — fall back to the Lang table.
-        utf32Characters_ = langChars;
-    }
+  } else {
+    // GGUF didn't carry crnn.vocab — fall back to the Lang table.
+    utf32Characters_ = langChars;
+  }
 }
 
 StepRecognizeText::~StepRecognizeText() {
-    gen2_weights_.reset();
-    loader_.reset();
-    // We do not own backend_; the caller (e.g. ocr-cli.cpp) frees it.
+  gen2_weights_.reset();
+  loader_.reset();
+  // We do not own backend_; the caller (e.g. ocr-cli.cpp) frees it.
 }
 
-StepRecognizeText::Output StepRecognizeText::process(StepRecognizeText::Input input,
-                                                     const std::atomic<bool>* cancelFlag) {
+StepRecognizeText::Output StepRecognizeText::process(
+    StepRecognizeText::Input input, const std::atomic<bool>* cancelFlag) {
   using clock = std::chrono::high_resolution_clock;
-  using msd   = std::chrono::duration<double, std::milli>;
+  using msd = std::chrono::duration<double, std::milli>;
 
   lastTimings_ = RecognitionStageTimings{};
 
-  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, "[Recognition] process() called - starting recognition");
+  QLOG(
+      qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+      "[Recognition] process() called - starting recognition");
   const auto tPopulate0 = clock::now();
   populateImageList(input);
   expandImgListWithRotatedImgs(input.context.rotationAngles);
@@ -633,120 +713,155 @@ StepRecognizeText::Output StepRecognizeText::process(StepRecognizeText::Input in
         point.y *= scaleBack;
       }
     }
-    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-         "[Recognition] Scaled coordinates back by factor " + std::to_string(scaleBack));
+    QLOG(
+        qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+        "[Recognition] Scaled coordinates back by factor " +
+            std::to_string(scaleBack));
   }
 
-  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-       "[Recognition] process() completed - returning " + std::to_string(inferenceResult.size()) + " results");
+  QLOG(
+      qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+      "[Recognition] process() completed - returning " +
+          std::to_string(inferenceResult.size()) + " results");
   return inferenceResult;
 }
 
-void StepRecognizeText::populateImageList(const Input &input) {
-  const cv::Mat &img = input.context.origImg;
+void StepRecognizeText::populateImageList(const Input& input) {
+  const cv::Mat& img = input.context.origImg;
   int maximumY = img.rows;
   int maximumX = img.cols;
 
   imgListOfLists_.clear();
-  imgListOfLists_.reserve(input.unalignedBoxes.size() + input.alignedBoxes.size());
+  imgListOfLists_.reserve(
+      input.unalignedBoxes.size() + input.alignedBoxes.size());
 
-  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-       "[Recognition] populateImageList: processing " + std::to_string(input.unalignedBoxes.size()) +
-       " unaligned, " + std::to_string(input.alignedBoxes.size()) + " aligned boxes");
+  QLOG(
+      qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+      "[Recognition] populateImageList: processing " +
+          std::to_string(input.unalignedBoxes.size()) + " unaligned, " +
+          std::to_string(input.alignedBoxes.size()) + " aligned boxes");
 
-  for (const auto &box : input.unalignedBoxes) {
+  for (const auto& box : input.unalignedBoxes) {
     cv::Mat transformedImg = fourPointTransform(img, box.coords);
-    float ratioLocal = calculateRatio(static_cast<float>(transformedImg.cols), static_cast<float>(transformedImg.rows));
+    float ratioLocal = calculateRatio(
+        static_cast<float>(transformedImg.cols),
+        static_cast<float>(transformedImg.rows));
     int newWidth = static_cast<int>(RECOGNIZER_MODEL_HEIGHT * ratioLocal);
     if (newWidth == 0) {
-      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-           "[Recognition] Skipped unaligned box: newWidth=0 (ratio=" + std::to_string(ratioLocal) + ")");
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+          "[Recognition] Skipped unaligned box: newWidth=0 (ratio=" +
+              std::to_string(ratioLocal) + ")");
       continue;
     }
 
-    auto cropImg = resizeImgForRecognizerInput(transformedImg, static_cast<float>(transformedImg.cols), static_cast<float>(transformedImg.rows));
+    auto cropImg = resizeImgForRecognizerInput(
+        transformedImg,
+        static_cast<float>(transformedImg.cols),
+        static_cast<float>(transformedImg.rows));
     std::vector<SubImage> imgList;
     imgList.emplace_back(box.coords, cropImg, box.isMultiCharacter);
     imgListOfLists_.push_back(imgList);
   }
 
-  for (const auto &box : input.alignedBoxes) {
+  for (const auto& box : input.alignedBoxes) {
     int xMin = std::max(0, static_cast<int>(box.coords[0]));
     int xMax = std::min(static_cast<int>(box.coords[1]), maximumX);
     int yMin = std::max(0, static_cast<int>(box.coords[2]));
     int yMax = std::min(static_cast<int>(box.coords[3]), maximumY);
     if (xMax <= xMin || yMax <= yMin) {
-      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-           "[Recognition] Skipped aligned box: invalid coords xMin=" + std::to_string(xMin) +
-           " xMax=" + std::to_string(xMax) + " yMin=" + std::to_string(yMin) + " yMax=" + std::to_string(yMax));
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+          "[Recognition] Skipped aligned box: invalid coords xMin=" +
+              std::to_string(xMin) + " xMax=" + std::to_string(xMax) +
+              " yMin=" + std::to_string(yMin) +
+              " yMax=" + std::to_string(yMax));
       continue;
     }
 
     int width = xMax - xMin;
     int height = yMax - yMin;
-    float ratioLocal = calculateRatio(static_cast<float>(width), static_cast<float>(height));
+    float ratioLocal =
+        calculateRatio(static_cast<float>(width), static_cast<float>(height));
     int newWidth = static_cast<int>(RECOGNIZER_MODEL_HEIGHT * ratioLocal);
     if (newWidth == 0) {
-      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-           "[Recognition] Skipped aligned box: newWidth=0 (w=" + std::to_string(width) +
-           " h=" + std::to_string(height) + " ratio=" + std::to_string(ratioLocal) + ")");
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+          "[Recognition] Skipped aligned box: newWidth=0 (w=" +
+              std::to_string(width) + " h=" + std::to_string(height) +
+              " ratio=" + std::to_string(ratioLocal) + ")");
       continue;
     }
 
     cv::Rect roi(xMin, yMin, xMax - xMin, yMax - yMin);
     cv::Mat cropImg = img(roi);
-    cv::Mat resizedImg = resizeImgForRecognizerInput(cropImg, static_cast<float>(width), static_cast<float>(height));
-    std::array<cv::Point2f, 4> rect = {{cv::Point2f(static_cast<float>(xMin), static_cast<float>(yMin)),
-                                        cv::Point2f(static_cast<float>(xMax), static_cast<float>(yMin)),
-                                        cv::Point2f(static_cast<float>(xMax), static_cast<float>(yMax)),
-                                        cv::Point2f(static_cast<float>(xMin), static_cast<float>(yMax))}};
+    cv::Mat resizedImg = resizeImgForRecognizerInput(
+        cropImg, static_cast<float>(width), static_cast<float>(height));
+    std::array<cv::Point2f, 4> rect = {
+        {cv::Point2f(static_cast<float>(xMin), static_cast<float>(yMin)),
+         cv::Point2f(static_cast<float>(xMax), static_cast<float>(yMin)),
+         cv::Point2f(static_cast<float>(xMax), static_cast<float>(yMax)),
+         cv::Point2f(static_cast<float>(xMin), static_cast<float>(yMax))}};
     std::vector<SubImage> imgList;
     imgList.emplace_back(rect, resizedImg, box.isMultiCharacter);
     imgListOfLists_.push_back(imgList);
   }
 
-  // Sort boxes in reading order: top-to-bottom, left-to-right (matches EasyOCR ordering)
-  // First, calculate mean box height for row threshold
+  // Sort boxes in reading order: top-to-bottom, left-to-right (matches EasyOCR
+  // ordering) First, calculate mean box height for row threshold
   float sumHeight = 0.0F;
-  for (const auto &imgList : imgListOfLists_) {
-    const auto &coords = imgList[0].coords;
+  for (const auto& imgList : imgListOfLists_) {
+    const auto& coords = imgList[0].coords;
     float height = coords[3].y - coords[0].y; // bottom.y - top.y
     sumHeight += height;
   }
-  float meanHeight = imgListOfLists_.empty() ? 1.0F : sumHeight / static_cast<float>(imgListOfLists_.size());
+  float meanHeight =
+      imgListOfLists_.empty()
+          ? 1.0F
+          : sumHeight / static_cast<float>(imgListOfLists_.size());
   constexpr float yCenterThreshold = 0.5F; // Same as EasyOCR's ycenter_ths
   float rowThreshold = yCenterThreshold * meanHeight;
 
   // Sort by y_center first, then by x for boxes on same row
-  std::sort(imgListOfLists_.begin(), imgListOfLists_.end(), [rowThreshold](const std::vector<SubImage> &listA, const std::vector<SubImage> &listB) {
-    const auto &coordsA = listA[0].coords;
-    const auto &coordsB = listB[0].coords;
-    float yCenterA = (coordsA[0].y + coordsA[3].y) / 2.0F;
-    float yCenterB = (coordsB[0].y + coordsB[3].y) / 2.0F;
-    // If y_centers are within threshold, consider them on same row and sort by x
-    if (std::abs(yCenterA - yCenterB) < rowThreshold) {
-      return coordsA[0].x < coordsB[0].x;
-    }
-    // Otherwise sort by y_center
-    return yCenterA < yCenterB;
-  });
+  std::sort(
+      imgListOfLists_.begin(),
+      imgListOfLists_.end(),
+      [rowThreshold](
+          const std::vector<SubImage>& listA,
+          const std::vector<SubImage>& listB) {
+        const auto& coordsA = listA[0].coords;
+        const auto& coordsB = listB[0].coords;
+        float yCenterA = (coordsA[0].y + coordsA[3].y) / 2.0F;
+        float yCenterB = (coordsB[0].y + coordsB[3].y) / 2.0F;
+        // If y_centers are within threshold, consider them on same row and sort
+        // by x
+        if (std::abs(yCenterA - yCenterB) < rowThreshold) {
+          return coordsA[0].x < coordsB[0].x;
+        }
+        // Otherwise sort by y_center
+        return yCenterA < yCenterB;
+      });
 
-  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-       "[Recognition] populateImageList: result=" + std::to_string(imgListOfLists_.size()) + " image lists");
+  QLOG(
+      qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+      "[Recognition] populateImageList: result=" +
+          std::to_string(imgListOfLists_.size()) + " image lists");
 }
 
-void StepRecognizeText::expandImgListWithRotatedImgs(std::optional<std::vector<int>> &rotationAngles) {
+void StepRecognizeText::expandImgListWithRotatedImgs(
+    std::optional<std::vector<int>>& rotationAngles) {
   constexpr int ratioDifferenceToIgnoreRotation = 5;
   bool canBypassRotations = !rotationAngles.has_value();
   constexpr int angle90 = 90;
   constexpr int angle180 = 180;
   constexpr int angle270 = 270;
   // Use per-image rotationAngles if provided, otherwise use config default
-  const std::vector<int> &angles = rotationAngles ? *rotationAngles : config_.defaultRotationAngles;
+  const std::vector<int>& angles =
+      rotationAngles ? *rotationAngles : config_.defaultRotationAngles;
 
   for (int angle : angles) {
-    for (auto &imageList : imgListOfLists_) {
-      cv::Mat &baseImg = imageList[0].image;
+    for (auto& imageList : imgListOfLists_) {
+      cv::Mat& baseImg = imageList[0].image;
       cv::Mat rotatedImg;
       if (angle == angle90) {
         if (canBypassRotations && imageList[0].isMultiCharacter &&
@@ -767,17 +882,22 @@ void StepRecognizeText::expandImgListWithRotatedImgs(std::optional<std::vector<i
         }
         cv::rotate(baseImg, rotatedImg, cv::ROTATE_90_COUNTERCLOCKWISE);
       } else {
-        throw std::invalid_argument("Unexpected angle " + std::to_string(angle) +
-                                    " received with rotationAngles. Angles must be one of [90, 180, 270]");
+        throw std::invalid_argument(
+            "Unexpected angle " + std::to_string(angle) +
+            " received with rotationAngles. Angles must be one of [90, 180, "
+            "270]");
       }
-      std::array<cv::Point2f, 4> rotatedBox = rotateBox(imageList[0].coords, angle);
-      imageList.emplace_back(rotatedBox, rotatedImg, imageList[0].isMultiCharacter);
+      std::array<cv::Point2f, 4> rotatedBox =
+          rotateBox(imageList[0].coords, angle);
+      imageList.emplace_back(
+          rotatedBox, rotatedImg, imageList[0].isMultiCharacter);
     }
   }
 }
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
-std::pair<std::string, float> StepRecognizeText::getTextAndConfidenceFromPreds(const cv::Mat &preds, int batchIdx) {
+std::pair<std::string, float> StepRecognizeText::getTextAndConfidenceFromPreds(
+    const cv::Mat& preds, int batchIdx) {
   assert(preds.dims == 3);
   const int imgSubcolumnsSize = preds.size[1];
   const int charSpaceSize = preds.size[2];
@@ -869,50 +989,50 @@ namespace {
 // Templated single-image runner.
 // Returns a [T, num_classes] cv::Mat.
 template <class W>
-cv::Mat ggml_run_one_T(ggml_backend_t backend, const W& weights,
-                       const float* input_data, int height, int width,
-                       size_t graph_size);
+cv::Mat ggml_run_one_T(
+    ggml_backend_t backend, const W& weights, const float* input_data,
+    int height, int width, size_t graph_size);
 
 template <>
 cv::Mat ggml_run_one_T<easyocr::ggml::CrnnGen2Weights>(
     ggml_backend_t backend, const easyocr::ggml::CrnnGen2Weights& weights,
     const float* input_data, int height, int width, size_t graph_size) {
-    const size_t graph_ctx_size =
-        ggml_tensor_overhead() * graph_size +
-        ggml_graph_overhead_custom(graph_size, false);
-    std::vector<uint8_t> graph_buf(graph_ctx_size);
-    ggml_init_params init{
-        /* .mem_size   = */ graph_ctx_size,
-        /* .mem_buffer = */ graph_buf.data(),
-        /* .no_alloc   = */ true,
-    };
-    ggml_context* gctx = ggml_init(init);
-    auto* x = ggml_new_tensor_4d(gctx, GGML_TYPE_F32, width, height, 1, 1);
-    auto* out = easyocr::ggml::build_crnn_gen2(gctx, weights, x, nullptr);
-    ggml_set_output(out);
-    auto* gf = ggml_new_graph_custom(gctx, graph_size, false);
-    ggml_build_forward_expand(gf, out);
-    auto* gallocr = ggml_gallocr_new(ggml_backend_get_default_buffer_type(backend));
-    if (!ggml_gallocr_alloc_graph(gallocr, gf)) {
-        ggml_gallocr_free(gallocr);
-        ggml_free(gctx);
-        throw std::runtime_error(
-            "StepRecognizeText: ggml_gallocr_alloc_graph failed");
-    }
-    ggml_backend_tensor_set(x, input_data, 0, ggml_nbytes(x));
-    if (ggml_backend_graph_compute(backend, gf) != GGML_STATUS_SUCCESS) {
-        ggml_gallocr_free(gallocr);
-        ggml_free(gctx);
-        throw std::runtime_error(
-            "StepRecognizeText: ggml_backend_graph_compute failed");
-    }
-    const int num_classes = static_cast<int>(out->ne[0]);
-    const int T           = static_cast<int>(out->ne[1]);
-    cv::Mat preds(T, num_classes, CV_32F);
-    ggml_backend_tensor_get(out, preds.ptr<float>(), 0, ggml_nbytes(out));
+  const size_t graph_ctx_size = ggml_tensor_overhead() * graph_size +
+                                ggml_graph_overhead_custom(graph_size, false);
+  std::vector<uint8_t> graph_buf(graph_ctx_size);
+  ggml_init_params init{
+      /* .mem_size   = */ graph_ctx_size,
+      /* .mem_buffer = */ graph_buf.data(),
+      /* .no_alloc   = */ true,
+  };
+  ggml_context* gctx = ggml_init(init);
+  auto* x = ggml_new_tensor_4d(gctx, GGML_TYPE_F32, width, height, 1, 1);
+  auto* out = easyocr::ggml::build_crnn_gen2(gctx, weights, x, nullptr);
+  ggml_set_output(out);
+  auto* gf = ggml_new_graph_custom(gctx, graph_size, false);
+  ggml_build_forward_expand(gf, out);
+  auto* gallocr =
+      ggml_gallocr_new(ggml_backend_get_default_buffer_type(backend));
+  if (!ggml_gallocr_alloc_graph(gallocr, gf)) {
     ggml_gallocr_free(gallocr);
     ggml_free(gctx);
-    return preds;
+    throw std::runtime_error(
+        "StepRecognizeText: ggml_gallocr_alloc_graph failed");
+  }
+  ggml_backend_tensor_set(x, input_data, 0, ggml_nbytes(x));
+  if (ggml_backend_graph_compute(backend, gf) != GGML_STATUS_SUCCESS) {
+    ggml_gallocr_free(gallocr);
+    ggml_free(gctx);
+    throw std::runtime_error(
+        "StepRecognizeText: ggml_backend_graph_compute failed");
+  }
+  const int num_classes = static_cast<int>(out->ne[0]);
+  const int T = static_cast<int>(out->ne[1]);
+  cv::Mat preds(T, num_classes, CV_32F);
+  ggml_backend_tensor_get(out, preds.ptr<float>(), 0, ggml_nbytes(out));
+  ggml_gallocr_free(gallocr);
+  ggml_free(gctx);
+  return preds;
 }
 
 // build_crnn_gen2 currently collapses the batch axis at the AAP
@@ -920,102 +1040,119 @@ cv::Mat ggml_run_one_T<easyocr::ggml::CrnnGen2Weights>(
 // optimisation: keep the batch axis through AAP so we can do one graph
 // for the whole batch.
 template <class W>
-cv::Mat ggml_run_recognizer_t(ggml_backend_t backend, const W& weights,
-                              const float* input_data,
-                              int batch_size, int height, int width,
-                              size_t graph_size) {
-    if (batch_size <= 0) return cv::Mat();
+cv::Mat ggml_run_recognizer_t(
+    ggml_backend_t backend, const W& weights, const float* input_data,
+    int batch_size, int height, int width, size_t graph_size) {
+  if (batch_size <= 0)
+    return cv::Mat();
 
-    cv::Mat first = ggml_run_one_T<W>(
-        backend, weights, input_data, height, width, graph_size);
-    const int T           = first.rows;
-    const int num_classes = first.cols;
-    const size_t per_img_floats = static_cast<size_t>(height) * width;
-    const size_t per_img_logits = static_cast<size_t>(T) * num_classes;
+  cv::Mat first = ggml_run_one_T<W>(
+      backend, weights, input_data, height, width, graph_size);
+  const int T = first.rows;
+  const int num_classes = first.cols;
+  const size_t per_img_floats = static_cast<size_t>(height) * width;
+  const size_t per_img_logits = static_cast<size_t>(T) * num_classes;
 
-    std::array<int, 3> dims = {batch_size, T, num_classes};
-    cv::Mat preds(3, dims.data(), CV_32F);
-    std::memcpy(preds.ptr<float>(), first.ptr<float>(),
-                per_img_logits * sizeof(float));
-    for (int b = 1; b < batch_size; ++b) {
-        cv::Mat one = ggml_run_one_T<W>(
-            backend, weights,
-            input_data + b * per_img_floats, height, width, graph_size);
-        std::memcpy(preds.ptr<float>() + b * per_img_logits,
-                    one.ptr<float>(),
-                    per_img_logits * sizeof(float));
-    }
-    return preds;
+  std::array<int, 3> dims = {batch_size, T, num_classes};
+  cv::Mat preds(3, dims.data(), CV_32F);
+  std::memcpy(
+      preds.ptr<float>(), first.ptr<float>(), per_img_logits * sizeof(float));
+  for (int b = 1; b < batch_size; ++b) {
+    cv::Mat one = ggml_run_one_T<W>(
+        backend,
+        weights,
+        input_data + b * per_img_floats,
+        height,
+        width,
+        graph_size);
+    std::memcpy(
+        preds.ptr<float>() + b * per_img_logits,
+        one.ptr<float>(),
+        per_img_logits * sizeof(float));
+  }
+  return preds;
 }
 
-}  // unnamed namespace
+} // unnamed namespace
 
 cv::Mat StepRecognizeText::runInferenceOnImg(const cv::Mat& img) {
-    int height      = img.rows;
-    int width       = img.cols;
-    int numChannels = img.channels();
-    CV_Assert(numChannels == 1);
-    CV_Assert(img.isContinuous());
-    CV_Assert(img.type() == CV_32F);
+  int height = img.rows;
+  int width = img.cols;
+  int numChannels = img.channels();
+  CV_Assert(numChannels == 1);
+  CV_Assert(img.isContinuous());
+  CV_Assert(img.type() == CV_32F);
 
-    return ggml_run_recognizer_t(backend_, *gen2_weights_, img.ptr<float>(),
-                                 /*batch_size=*/1, height, width,
-                                 /*graph_size=*/32 * 1024);
+  return ggml_run_recognizer_t(
+      backend_,
+      *gen2_weights_,
+      img.ptr<float>(),
+      /*batch_size=*/1,
+      height,
+      width,
+      /*graph_size=*/32 * 1024);
 }
 
 cv::Mat StepRecognizeText::runBatchInference(
     const std::vector<cv::Mat>& images, int dynamicWidth) {
-    auto t0 = std::chrono::high_resolution_clock::now();
-    if (images.empty()) {
-        return cv::Mat();
-    }
+  auto t0 = std::chrono::high_resolution_clock::now();
+  if (images.empty()) {
+    return cv::Mat();
+  }
 
-    const int batchSize   = static_cast<int>(images.size());
-    const int height      = RECOGNIZER_MODEL_HEIGHT;
-    const int width       = dynamicWidth;
-    const int numChannels = 1;
+  const int batchSize = static_cast<int>(images.size());
+  const int height = RECOGNIZER_MODEL_HEIGHT;
+  const int width = dynamicWidth;
+  const int numChannels = 1;
 
-    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-         "[Recognition] runBatchInference called with batch_size=" +
-             std::to_string(batchSize) + ", dynamic_width=" +
-             std::to_string(width));
+  QLOG(
+      qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+      "[Recognition] runBatchInference called with batch_size=" +
+          std::to_string(batchSize) +
+          ", dynamic_width=" + std::to_string(width));
 
-    batchBuffer_.resize(static_cast<size_t>(batchSize) * numChannels *
-                        height * width);
-    for (int b = 0; b < batchSize; b++) {
-        const cv::Mat& img = images[b];
-        CV_Assert(img.rows == height && img.cols == width &&
-                  img.channels() == numChannels);
-        CV_Assert(img.type() == CV_32F);
-        const float* imgPtr  = img.ptr<float>();
-        float*       destPtr = batchBuffer_.data() +
-                                static_cast<size_t>(b) * numChannels *
-                                    height * width;
-        std::memcpy(destPtr, imgPtr, sizeof(float) * height * width);
-    }
+  batchBuffer_.resize(
+      static_cast<size_t>(batchSize) * numChannels * height * width);
+  for (int b = 0; b < batchSize; b++) {
+    const cv::Mat& img = images[b];
+    CV_Assert(
+        img.rows == height && img.cols == width &&
+        img.channels() == numChannels);
+    CV_Assert(img.type() == CV_32F);
+    const float* imgPtr = img.ptr<float>();
+    float* destPtr = batchBuffer_.data() +
+                     static_cast<size_t>(b) * numChannels * height * width;
+    std::memcpy(destPtr, imgPtr, sizeof(float) * height * width);
+  }
 
-    cv::Mat preds = ggml_run_recognizer_t(backend_, *gen2_weights_,
-                                          batchBuffer_.data(),
-                                          batchSize, height, width, 32 * 1024);
+  cv::Mat preds = ggml_run_recognizer_t(
+      backend_,
+      *gen2_weights_,
+      batchBuffer_.data(),
+      batchSize,
+      height,
+      width,
+      32 * 1024);
 
-    auto t1 = std::chrono::high_resolution_clock::now();
-    auto batchMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-                       t1 - t0)
-                       .count();
-    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-         "[Recognition] runBatchInference took " + std::to_string(batchMs) +
-             " ms for batch_size=" + std::to_string(batchSize));
-    return preds;
+  auto t1 = std::chrono::high_resolution_clock::now();
+  auto batchMs =
+      std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
+  QLOG(
+      qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+      "[Recognition] runBatchInference took " + std::to_string(batchMs) +
+          " ms for batch_size=" + std::to_string(batchSize));
+  return preds;
 }
 
-void StepRecognizeText::processImg(SubImage &subImage) {
+void StepRecognizeText::processImg(SubImage& subImage) {
   cv::Mat resizedImg = alignAndCollate(subImage, 0.0);
-  cv::Mat preds      = runInferenceOnImg(resizedImg);
-  std::tie(subImage.text, subImage.confidenceScore) = getTextAndConfidenceFromPreds(preds);
+  cv::Mat preds = runInferenceOnImg(resizedImg);
+  std::tie(subImage.text, subImage.confidenceScore) =
+      getTextAndConfidenceFromPreds(preds);
 
   if (subImage.confidenceScore < LOW_CONF_THRESHOLD_FOR_INCREASED_CONTRAST) {
     cv::Mat resizedImg = alignAndCollate(subImage, TARGET_ADJUSTED_CONTRAST);
-    cv::Mat preds      = runInferenceOnImg(resizedImg);
+    cv::Mat preds = runInferenceOnImg(resizedImg);
     auto [newText, newConfidenceScore] = getTextAndConfidenceFromPreds(preds);
     if (newConfidenceScore > subImage.confidenceScore) {
       subImage.text = newText;
@@ -1029,9 +1166,12 @@ void StepRecognizeText::processImg(SubImage &subImage) {
   }
 }
 
-std::vector<InferredText> StepRecognizeText::processImgList(const std::atomic<bool>* cancelFlag) {
-  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-       "[Recognition] processImgList: starting with " + std::to_string(imgListOfLists_.size()) + " image lists");
+std::vector<InferredText>
+StepRecognizeText::processImgList(const std::atomic<bool>* cancelFlag) {
+  QLOG(
+      qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+      "[Recognition] processImgList: starting with " +
+          std::to_string(imgListOfLists_.size()) + " image lists");
   auto t0 = std::chrono::high_resolution_clock::now();
   std::vector<InferredText> inferredTextList;
   inferredTextList.reserve(imgListOfLists_.size());
@@ -1044,63 +1184,77 @@ std::vector<InferredText> StepRecognizeText::processImgList(const std::atomic<bo
   std::vector<BatchIndex> allIndices;
 
   for (size_t listIdx = 0; listIdx < imgListOfLists_.size(); listIdx++) {
-    auto &imgList = imgListOfLists_[listIdx];
+    auto& imgList = imgListOfLists_[listIdx];
     for (size_t imgIdx = 0; imgIdx < imgList.size(); imgIdx++) {
       allIndices.push_back({listIdx, imgIdx});
     }
   }
 
   if (allIndices.empty()) {
-    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, "[Recognition] processImgList: no images to process, returning early");
+    QLOG(
+        qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+        "[Recognition] processImgList: no images to process, returning early");
     return inferredTextList;
   }
 
   // Process in batches - prepare images ON-DEMAND to prevent OOM
   const int batchSize = config_.recognizerBatchSize;
-  std::string batchInfoMsg = "[Recognition] Processing " + std::to_string(allIndices.size()) + " items in batches of " + std::to_string(batchSize) + " (on-demand preparation)";
+  std::string batchInfoMsg =
+      "[Recognition] Processing " + std::to_string(allIndices.size()) +
+      " items in batches of " + std::to_string(batchSize) +
+      " (on-demand preparation)";
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO, batchInfoMsg);
   ALOG_INFO(batchInfoMsg);
 
-  for (size_t batchStart = 0; batchStart < allIndices.size(); batchStart += batchSize) {
+  for (size_t batchStart = 0; batchStart < allIndices.size();
+       batchStart += batchSize) {
     // Check for cancellation between batches — break and return partial results
     if (cancelFlag != nullptr && cancelFlag->load(std::memory_order_relaxed)) {
-      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-           "[Recognition] Cancelled between batches at batch offset " + std::to_string(batchStart));
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+          "[Recognition] Cancelled between batches at batch offset " +
+              std::to_string(batchStart));
       break;
     }
 
-    size_t batchEnd = std::min(batchStart + static_cast<size_t>(batchSize), allIndices.size());
+    size_t batchEnd = std::min(
+        batchStart + static_cast<size_t>(batchSize), allIndices.size());
     size_t currentBatchSize = batchEnd - batchStart;
 
-    // Calculate max proportional width for this batch (EasyOCR-style dynamic batching)
+    // Calculate max proportional width for this batch (EasyOCR-style dynamic
+    // batching)
     int maxProportionalWidth = 0;
     for (size_t i = batchStart; i < batchEnd; i++) {
-      auto &idx = allIndices[i];
-      auto &subImage = imgListOfLists_[idx.listIdx][idx.imgIdx];
-      int propWidth = calculateProportionalWidth(subImage.image.cols, subImage.image.rows);
+      auto& idx = allIndices[i];
+      auto& subImage = imgListOfLists_[idx.listIdx][idx.imgIdx];
+      int propWidth =
+          calculateProportionalWidth(subImage.image.cols, subImage.image.rows);
       maxProportionalWidth = std::max(maxProportionalWidth, propWidth);
     }
     // Ensure minimum width for model stability
-    maxProportionalWidth = std::max(maxProportionalWidth, RECOGNIZER_MODEL_HEIGHT);
+    maxProportionalWidth =
+        std::max(maxProportionalWidth, RECOGNIZER_MODEL_HEIGHT);
 
     // Prepare images ONLY for this batch, using dynamic max width
     using clock = std::chrono::high_resolution_clock;
-    using msd   = std::chrono::duration<double, std::milli>;
+    using msd = std::chrono::duration<double, std::milli>;
 
     std::vector<cv::Mat> preparedImages;
     preparedImages.reserve(currentBatchSize);
     const auto tPrep0 = clock::now();
     for (size_t i = batchStart; i < batchEnd; i++) {
-      auto &idx = allIndices[i];
-      auto &subImage = imgListOfLists_[idx.listIdx][idx.imgIdx];
-      cv::Mat preparedImg = alignAndCollate(subImage, maxProportionalWidth, 0.0);
+      auto& idx = allIndices[i];
+      auto& subImage = imgListOfLists_[idx.listIdx][idx.imgIdx];
+      cv::Mat preparedImg =
+          alignAndCollate(subImage, maxProportionalWidth, 0.0);
       preparedImages.push_back(preparedImg);
     }
     const auto tPrep1 = clock::now();
     lastTimings_.batchPrepMs += msd(tPrep1 - tPrep0).count();
 
     const auto tInf0 = clock::now();
-    cv::Mat batchPreds = runBatchInference(preparedImages, maxProportionalWidth);
+    cv::Mat batchPreds =
+        runBatchInference(preparedImages, maxProportionalWidth);
     const auto tInf1 = clock::now();
     lastTimings_.inferenceMs += msd(tInf1 - tInf0).count();
     lastTimings_.numBatches += 1;
@@ -1108,8 +1262,8 @@ std::vector<InferredText> StepRecognizeText::processImgList(const std::atomic<bo
     // Decode results and populate SubImages for this batch
     const auto tDec0 = clock::now();
     for (size_t i = 0; i < currentBatchSize; i++) {
-      auto &idx = allIndices[batchStart + i];
-      auto &subImage = imgListOfLists_[idx.listIdx][idx.imgIdx];
+      auto& idx = allIndices[batchStart + i];
+      auto& subImage = imgListOfLists_[idx.listIdx][idx.imgIdx];
       std::tie(subImage.text, subImage.confidenceScore) =
           getTextAndConfidenceFromPreds(batchPreds, static_cast<int>(i));
     }
@@ -1120,8 +1274,12 @@ std::vector<InferredText> StepRecognizeText::processImgList(const std::atomic<bo
     preparedImages.clear();
     preparedImages.shrink_to_fit();
 
-    std::string batchProgressMsg = "[Recognition] Processed batch " + std::to_string(batchStart) + "-" + std::to_string(batchEnd) + " of " + std::to_string(allIndices.size());
-    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG, batchProgressMsg);
+    std::string batchProgressMsg =
+        "[Recognition] Processed batch " + std::to_string(batchStart) + "-" +
+        std::to_string(batchEnd) + " of " + std::to_string(allIndices.size());
+    QLOG(
+        qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+        batchProgressMsg);
     ALOG_DEBUG(batchProgressMsg);
   }
 
@@ -1129,63 +1287,76 @@ std::vector<InferredText> StepRecognizeText::processImgList(const std::atomic<bo
   if (config_.contrastRetry) {
     std::vector<BatchIndex> lowConfidenceIndices;
     for (size_t i = 0; i < allIndices.size(); i++) {
-      auto &idx = allIndices[i];
-      auto &subImage = imgListOfLists_[idx.listIdx][idx.imgIdx];
+      auto& idx = allIndices[i];
+      auto& subImage = imgListOfLists_[idx.listIdx][idx.imgIdx];
       if (subImage.confidenceScore < config_.lowConfidenceThreshold) {
         lowConfidenceIndices.push_back(idx);
       }
     }
 
     if (!lowConfidenceIndices.empty()) {
-      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
-           "[Recognition] Processing " + std::to_string(lowConfidenceIndices.size()) + " low-confidence items with contrast adjustment");
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+          "[Recognition] Processing " +
+              std::to_string(lowConfidenceIndices.size()) +
+              " low-confidence items with contrast adjustment");
 
       // Process contrast retries in batches too
-      for (size_t batchStart = 0; batchStart < lowConfidenceIndices.size(); batchStart += batchSize) {
+      for (size_t batchStart = 0; batchStart < lowConfidenceIndices.size();
+           batchStart += batchSize) {
         // Check for cancellation between contrast retry batches
-        if (cancelFlag != nullptr && cancelFlag->load(std::memory_order_relaxed)) {
-          QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-               "[Recognition] Cancelled during contrast retry at batch offset " + std::to_string(batchStart));
+        if (cancelFlag != nullptr &&
+            cancelFlag->load(std::memory_order_relaxed)) {
+          QLOG(
+              qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+              "[Recognition] Cancelled during contrast retry at batch offset " +
+                  std::to_string(batchStart));
           break;
         }
 
-        size_t batchEnd = std::min(batchStart + static_cast<size_t>(batchSize), lowConfidenceIndices.size());
+        size_t batchEnd = std::min(
+            batchStart + static_cast<size_t>(batchSize),
+            lowConfidenceIndices.size());
 
         // Calculate max proportional width for contrast batch
         int maxProportionalWidth = 0;
         for (size_t j = batchStart; j < batchEnd; j++) {
-          auto &idx = lowConfidenceIndices[j];
-          auto &subImage = imgListOfLists_[idx.listIdx][idx.imgIdx];
-          int propWidth = calculateProportionalWidth(subImage.image.cols, subImage.image.rows);
+          auto& idx = lowConfidenceIndices[j];
+          auto& subImage = imgListOfLists_[idx.listIdx][idx.imgIdx];
+          int propWidth = calculateProportionalWidth(
+              subImage.image.cols, subImage.image.rows);
           maxProportionalWidth = std::max(maxProportionalWidth, propWidth);
         }
-        maxProportionalWidth = std::max(maxProportionalWidth, RECOGNIZER_MODEL_HEIGHT);
+        maxProportionalWidth =
+            std::max(maxProportionalWidth, RECOGNIZER_MODEL_HEIGHT);
 
         using clock = std::chrono::high_resolution_clock;
-        using msd   = std::chrono::duration<double, std::milli>;
+        using msd = std::chrono::duration<double, std::milli>;
 
         std::vector<cv::Mat> contrastImages;
         contrastImages.reserve(batchEnd - batchStart);
         const auto tPrep0 = clock::now();
         for (size_t j = batchStart; j < batchEnd; j++) {
-          auto &idx = lowConfidenceIndices[j];
-          auto &subImage = imgListOfLists_[idx.listIdx][idx.imgIdx];
-          cv::Mat contrastImg = alignAndCollate(subImage, maxProportionalWidth, TARGET_ADJUSTED_CONTRAST);
+          auto& idx = lowConfidenceIndices[j];
+          auto& subImage = imgListOfLists_[idx.listIdx][idx.imgIdx];
+          cv::Mat contrastImg = alignAndCollate(
+              subImage, maxProportionalWidth, TARGET_ADJUSTED_CONTRAST);
           contrastImages.push_back(contrastImg);
         }
         const auto tPrep1 = clock::now();
         lastTimings_.batchPrepMs += msd(tPrep1 - tPrep0).count();
 
         const auto tInf0 = clock::now();
-        cv::Mat contrastPreds = runBatchInference(contrastImages, maxProportionalWidth);
+        cv::Mat contrastPreds =
+            runBatchInference(contrastImages, maxProportionalWidth);
         const auto tInf1 = clock::now();
         lastTimings_.inferenceMs += msd(tInf1 - tInf0).count();
         lastTimings_.numContrastRetryBatches += 1;
 
         const auto tDec0 = clock::now();
         for (size_t j = 0; j < contrastImages.size(); j++) {
-          auto &idx = lowConfidenceIndices[batchStart + j];
-          auto &subImage = imgListOfLists_[idx.listIdx][idx.imgIdx];
+          auto& idx = lowConfidenceIndices[batchStart + j];
+          auto& subImage = imgListOfLists_[idx.listIdx][idx.imgIdx];
           auto [newText, newConfidenceScore] =
               getTextAndConfidenceFromPreds(contrastPreds, static_cast<int>(j));
           if (newConfidenceScore > subImage.confidenceScore) {
@@ -1205,12 +1376,12 @@ std::vector<InferredText> StepRecognizeText::processImgList(const std::atomic<bo
 
   // Apply single-character filter and find best result per imgList
   for (size_t listIdx = 0; listIdx < imgListOfLists_.size(); listIdx++) {
-    auto &imgList = imgListOfLists_[listIdx];
+    auto& imgList = imgListOfLists_[listIdx];
     double highestConfidence = 0.0;
     size_t highestConfidenceIndex = 0;
 
     for (size_t i = 0; i < imgList.size(); i++) {
-      auto &subImage = imgList[i];
+      auto& subImage = imgList[i];
 
       // Apply single-character filter
       std::u32string utf32Text = converter_.from_bytes(subImage.text);
@@ -1224,20 +1395,25 @@ std::vector<InferredText> StepRecognizeText::processImgList(const std::atomic<bo
       }
     }
 
-    const auto &bestImg = imgList[highestConfidenceIndex];
-    inferredTextList.emplace_back(bestImg.coords, bestImg.text, bestImg.confidenceScore);
+    const auto& bestImg = imgList[highestConfidenceIndex];
+    inferredTextList.emplace_back(
+        bestImg.coords, bestImg.text, bestImg.confidenceScore);
   }
 
   auto t1 = std::chrono::high_resolution_clock::now();
-  auto recognitionMs = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
-  std::string timingMsg = "[Recognition] Total recognition time: " + std::to_string(recognitionMs) + " ms for " + std::to_string(inferredTextList.size()) + " text regions";
+  auto recognitionMs =
+      std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
+  std::string timingMsg =
+      "[Recognition] Total recognition time: " + std::to_string(recognitionMs) +
+      " ms for " + std::to_string(inferredTextList.size()) + " text regions";
   QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO, timingMsg);
   ALOG_INFO(timingMsg);
 
   return inferredTextList;
 }
 
-std::string StepRecognizeText::decodeGreedy(const std::vector<size_t> &textIndex) {
+std::string
+StepRecognizeText::decodeGreedy(const std::vector<size_t>& textIndex) {
   std::u32string text;
   if (!textIndex.empty()) {
     size_t first = textIndex[0];
@@ -1259,4 +1435,4 @@ std::string StepRecognizeText::decodeGreedy(const std::vector<size_t> &textIndex
   return converter_.to_bytes(text);
 }
 
-}  // namespace easyocr::ggml::pipeline
+} // namespace easyocr::ggml::pipeline

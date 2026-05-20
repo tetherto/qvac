@@ -9,21 +9,21 @@
 
 namespace doctr::ggml::pipeline {
 
-using easyocr::ggml::pipeline::PipelineContext;
-using easyocr::ggml::pipeline::InferredText;
 using easyocr::ggml::pipeline::fourPointTransform;
+using easyocr::ggml::pipeline::InferredText;
+using easyocr::ggml::pipeline::PipelineContext;
 
 enum class DecodingMethod { CTC, ATTENTION };
 
 struct StepDoctrDetectionOutput {
-    PipelineContext context;
-    std::vector<std::array<cv::Point2f, 4>> polygons;
-    std::vector<float> polygonConfidences;
-    cv::Mat probMap;
-    int paddedW{0};
-    int paddedH{0};
-    int padLeft{0};
-    int padTop{0};
+  PipelineContext context;
+  std::vector<std::array<cv::Point2f, 4>> polygons;
+  std::vector<float> polygonConfidences;
+  cv::Mat probMap;
+  int paddedW{0};
+  int paddedH{0};
+  int padLeft{0};
+  int padTop{0};
 };
 
 } // namespace doctr::ggml::pipeline

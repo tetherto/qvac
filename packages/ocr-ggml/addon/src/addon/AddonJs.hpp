@@ -28,9 +28,9 @@
 #include <inference-addon-cpp/handlers/OutputHandler.hpp>
 #include <inference-addon-cpp/queue/OutputCallbackJs.hpp>
 
-#include "model-interface/easyocr/pipeline/steps.hpp"
-#include "model-interface/OcrModel.hpp"
 #include "model-interface/DoctrOcrModel.hpp"
+#include "model-interface/OcrModel.hpp"
+#include "model-interface/easyocr/pipeline/steps.hpp"
 
 namespace qvac_lib_infer_ocr_ggml {
 
