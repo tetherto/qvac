@@ -48,7 +48,7 @@
           "features": [
             "kleidiai"
           ],
-          "platform": "android"
+          "platform": "arm64"
         }
       ]
     }

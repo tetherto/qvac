@@ -92,7 +92,7 @@ else()
   set(DL_BACKENDS OFF)
 endif()
 
-if(VCPKG_TARGET_IS_ANDROID AND "kleidiai" IN_LIST FEATURES)
+if(VCPKG_TARGET_ARCHITECTURE STREQUAL "arm64" AND "kleidiai" IN_LIST FEATURES)
   message(STATUS "qvac-fabric: kleidiai feature ON — building with ARM KleidiAI optimized kernels")
 
   # Pre-download Kleidiai so FetchContent doesn't need network access
