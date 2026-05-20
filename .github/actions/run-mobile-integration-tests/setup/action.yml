@@ -26,6 +26,14 @@ inputs:
     description: "Prefix used for prebuild artifact names (empty if none)"
     required: false
     default: ""
+  skip-prebuilds:
+    description: |
+      When 'true', skip every prebuild handling step (artifact download,
+      npm fallback, verify, prune). Used by addons whose native code is
+      provided transitively (e.g. decoder-audio relies on bare-ffmpeg's
+      prebuilds, not its own).
+    required: false
+    default: "false"
   pat-token:
     description: "GitHub PAT used to clone qvac-test-addon-mobile"
     required: true
@@ -87,7 +95,7 @@ runs:
         npm install -g --force @expo/cli@latest
 
     - name: Download Android prebuilds (from artifacts)
-      if: inputs.platform == 'Android' && github.event_name != 'workflow_dispatch'
+      if: inputs.skip-prebuilds != 'true' && inputs.platform == 'Android' && github.event_name != 'workflow_dispatch'
       uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
       with:
         path: addon/${{ inputs.addon-workdir }}/prebuilds
@@ -96,7 +104,7 @@ runs:
       continue-on-error: true
 
     - name: Download iOS prebuilds (from artifacts)
-      if: inputs.platform == 'iOS' && github.event_name != 'workflow_dispatch'
+      if: inputs.skip-prebuilds != 'true' && inputs.platform == 'iOS' && github.event_name != 'workflow_dispatch'
       uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
       with:
         path: addon/${{ inputs.addon-workdir }}/prebuilds
@@ -105,7 +113,7 @@ runs:
       continue-on-error: true
 
     - name: Download prebuilds (from npm - workflow_dispatch)
-      if: github.event_name == 'workflow_dispatch'
+      if: inputs.skip-prebuilds != 'true' && github.event_name == 'workflow_dispatch'
       shell: bash
       working-directory: addon/${{ inputs.addon-workdir }}
       env:
@@ -130,6 +138,7 @@ runs:
         ls -la prebuilds/
 
     - name: Verify and prepare prebuilds
+      if: inputs.skip-prebuilds != 'true'
       shell: bash
       working-directory: addon/${{ inputs.addon-workdir }}
       run: |
@@ -156,6 +165,7 @@ runs:
         ls -la prebuilds/
 
     - name: Remove desktop prebuilds to save disk space
+      if: inputs.skip-prebuilds != 'true'
       shell: bash
       working-directory: addon/${{ inputs.addon-workdir }}
       run: |

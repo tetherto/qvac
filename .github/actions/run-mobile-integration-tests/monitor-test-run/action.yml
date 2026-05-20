@@ -18,6 +18,10 @@ inputs:
     description: "Number of scheduled runs (echoed for logging only)"
     required: false
     default: ""
+  max-wait-time-seconds:
+    description: "Polling-loop hard ceiling. Default 7200 (2h). Addons whose Device Farm runs exceed 2h pass a larger value here."
+    required: false
+    default: "7200"
 
 outputs:
   test-result:
@@ -50,6 +54,7 @@ runs:
       shell: bash
       env:
         RUN_ARNS_JSON: ${{ inputs.run-arns }}
+        MAX_WAIT_TIME_SECONDS: ${{ inputs.max-wait-time-seconds }}
       run: |
         # ── helpers ──────────────────────────────────────────────────
         # Bash 3.2 compat: no mapfile, no declare -A.
@@ -115,7 +120,7 @@ runs:
         echo ""
 
         # ── polling loop ─────────────────────────────────────────────
-        MAX_WAIT_TIME=7200
+        MAX_WAIT_TIME="${MAX_WAIT_TIME_SECONDS:-7200}"
         ELAPSED=0
         DONE_COUNT=0
         DONE=()
