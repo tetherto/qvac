@@ -185,6 +185,7 @@ jobs:
         uses: ./.github/actions/run-mobile-integration-tests/extract-addon-perf
         with:
           platform: ${{ matrix.platform }}
+          filter: 'supertonic'
           step-summary-title: 'Mobile Performance: tts-onnx (${{ matrix.platform }} / ${{ matrix.variant }})'
           artifact-name: perf-report-onnx-tts-${{ matrix.platform }}-${{ matrix.variant }}-${{ github.run_number }}
 

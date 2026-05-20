@@ -138,6 +138,7 @@ jobs:
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_WHISPERCPP }}
           enables-perf: 'false'
+          mocha-timeout-ms: '900000'
 
       - name: Schedule Device Farm test runs
         id: schedule

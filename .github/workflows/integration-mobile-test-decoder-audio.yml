@@ -129,6 +129,7 @@ jobs:
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_DECODER_AUDIO }}
           enables-perf: 'false'
+          mocha-timeout-ms: '600000'
 
       - name: Schedule Device Farm test run
         id: schedule
