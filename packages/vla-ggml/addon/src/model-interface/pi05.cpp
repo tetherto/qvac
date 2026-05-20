@@ -239,6 +239,26 @@ Pi05VisionTowerOutputs pi05_build_siglip_tower_graph(
   return out;
 }
 
+// ── M3.4: PaliGemma token embedder + sqrt(hidden) scaling ────────────────
+struct ggml_tensor* pi05_build_vlm_embed_graph(
+    struct ggml_context* ctx,
+    struct ggml_tensor* tokens,
+    struct ggml_tensor* embed_tokens,
+    int hidden) {
+  if (ctx == nullptr || tokens == nullptr || embed_tokens == nullptr) {
+    return nullptr;
+  }
+  // Embedding lookup: row[i] = embed_tokens[tokens[i]]. ggml_get_rows
+  // produces ne=[hidden, n_tokens] (it picks columns of the I32 indices
+  // out of `embed_tokens` whose ne=[hidden, vocab]).
+  struct ggml_tensor* e = ggml_get_rows(ctx, embed_tokens, tokens);
+  // Gemma-1 embedding scale. Pre-norm RMSNorm divides by sqrt(mean(x²)),
+  // so without this scale every block sees inputs ≈ 1/sqrt(hidden)
+  // smaller than the checkpoint expects.
+  const float scale = std::sqrt(static_cast<float>(hidden));
+  return ggml_scale(ctx, e, scale);
+}
+
 Pi05Model::Pi05Model(
     const std::string& /*ggufPath*/,
     bool /*forceCpu*/,

@@ -159,6 +159,27 @@ Pi05VisionTowerOutputs pi05_build_siglip_tower_graph(
     int patch_size,
     float layer_norm_eps);
 
+// M3.4 — PaliGemma token embedder + Gemma-style scale.
+//
+// Looks up each token id in the (hidden, vocab) embedding matrix and
+// scales the result by `sqrt(hidden)`. The sqrt scale is a Gemma-1
+// convention (see `openpi/src/openpi/models/gemma.py:150` and
+// llama.cpp's `llm_build_gemma`); without it every downstream
+// LayerNorm/RMSNorm sees inputs that are too small by ~45×.
+//
+// Returns ne=[hidden, n_tokens] — byte-equivalent to numpy
+// (n_tokens, hidden) row-major, which is how the Phase-0 dump stores
+// `vlm.embed_out`.
+//
+// `tokens` must be a GGML_TYPE_I32 tensor of shape (n_tokens,) and
+// `embed_tokens` must have ne[0] == hidden. Returns nullptr on
+// missing weights.
+struct ggml_tensor* pi05_build_vlm_embed_graph(
+    struct ggml_context* ctx,
+    struct ggml_tensor* tokens,
+    struct ggml_tensor* embed_tokens,
+    int hidden);
+
 
 class Pi05Model final : public IVlaModel {
 public:
