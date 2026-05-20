@@ -1,9 +1,8 @@
 'use strict'
 
-const test = require('brittle')
 const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
-const { ensureModel } = require('./utils')
+const { ensureModel, safeTest } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
 const { recordPerformance } = require('./_perf-helper.js')
 
@@ -61,7 +60,7 @@ async function runBitnetInference (addon, prompt) {
   }
 }
 
-test('bitnet model can run simple inference', { timeout: 900_000, skip: !isAndroid }, async t => {
+safeTest('bitnet model can run simple inference', { timeout: 900_000, skip: !isAndroid }, async t => {
   const [modelName, dirPath] = await ensureModel({
     modelName: BITNET_MODEL.name,
     downloadUrl: BITNET_MODEL.url
