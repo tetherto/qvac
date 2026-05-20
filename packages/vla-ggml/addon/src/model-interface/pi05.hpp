@@ -68,6 +68,49 @@ Pi05PatchPosOutputs pi05_build_siglip_patch_pos_graph(
     struct ggml_tensor* pos_embed,
     int patch_size);
 
+// M3.2 — one SigLIP transformer block.
+//
+// Standard pre-LN transformer block as implemented by HF's
+// SiglipEncoderLayer: LayerNorm → MHSA → residual → LayerNorm → MLP
+// (fc1 + GELU-tanh + fc2) → residual. Attention is *not* MQA for
+// SigLIP — every block has the full per-head Q/K/V (16 heads × 72
+// head_dim = 1152 for SigLIP-So400m/14). Mirrors the loop body of
+// `smolvla.cpp::build_siglip_transformer` but pulled out as a single
+// reusable per-block helper that the M3.2/M3.3 unit tests can drive
+// directly.
+struct Pi05SiglipBlockWeights {
+  struct ggml_tensor* ln1_w;       // (hidden,)
+  struct ggml_tensor* ln1_b;       // (hidden,)
+  struct ggml_tensor* attn_q_w;    // (hidden, hidden)
+  struct ggml_tensor* attn_q_b;    // (hidden,)
+  struct ggml_tensor* attn_k_w;
+  struct ggml_tensor* attn_k_b;
+  struct ggml_tensor* attn_v_w;
+  struct ggml_tensor* attn_v_b;
+  struct ggml_tensor* attn_out_w;
+  struct ggml_tensor* attn_out_b;
+  struct ggml_tensor* ln2_w;
+  struct ggml_tensor* ln2_b;
+  struct ggml_tensor* fc1_w;       // (intermediate, hidden)
+  struct ggml_tensor* fc1_b;       // (intermediate,)
+  struct ggml_tensor* fc2_w;       // (hidden, intermediate)
+  struct ggml_tensor* fc2_b;       // (hidden,)
+};
+
+// Build one SigLIP block on top of `x` (ne=[hidden, n_patches]; same
+// byte layout as the M3.1 outputs). Returns the post-residual hidden
+// state with the same ne — feedable straight into the next block.
+//
+// Returns nullptr if any required weight in `w` is missing.
+struct ggml_tensor* pi05_build_siglip_block_graph(
+    struct ggml_context* ctx,
+    struct ggml_tensor* x,
+    const Pi05SiglipBlockWeights& w,
+    int n_patches,
+    int hidden,
+    int n_heads,
+    float layer_norm_eps);
+
 
 class Pi05Model final : public IVlaModel {
 public:

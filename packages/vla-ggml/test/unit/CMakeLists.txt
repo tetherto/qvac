@@ -6,6 +6,7 @@ add_executable(
   test_backend_selection.cpp
   test_model_factory.cpp
   test_pi05_m3_1_siglip.cpp
+  test_pi05_m3_2_siglip_block.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/smolvla.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/smolvla_adapter.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/pi05.cpp
