@@ -1,12 +1,11 @@
 'use strict'
 
 const test = require('brittle')
-const sinon = require('sinon')
 const { buildSentenceEndTester } = require('../../lib/textStreamAccumulator.js')
 const TTSGgml = require('../../index.js')
 const { TTSInterface } = require('../../tts.js')
 const MockedBinding = require('../mock/MockedBinding.js')
-const process = require('process')
+const process = require('bare-process')
 
 global.process = process
 
@@ -20,14 +19,28 @@ function createStubbedModel (opts = {}) {
     opts: { stats: true },
     ...opts
   })
-  sinon.stub(model, '_createAddon').callsFake((configurationParams, outputCb) => {
+  model._createAddon = (configurationParams, outputCb) => {
     return new TTSInterface(new MockedBinding({ jobDelayMs: 5 }), configurationParams, outputCb)
-  })
+  }
   return model
 }
 
+const origRunJob = MockedBinding.prototype.runJob
+
+function spyRunJob () {
+  let callCount = 0
+  MockedBinding.prototype.runJob = function (...args) {
+    callCount++
+    return origRunJob.apply(this, args)
+  }
+  return {
+    get callCount () { return callCount },
+    restore () { MockedBinding.prototype.runJob = origRunJob }
+  }
+}
+
 test('runStream runs multiple native jobs and enriches output (onUpdate + await)', async (t) => {
-  const runJobSpy = sinon.spy(MockedBinding.prototype, 'runJob')
+  const runJobSpy = spyRunJob()
   const model = createStubbedModel()
   await model.load()
   const text =
@@ -48,7 +61,7 @@ test('runStream runs multiple native jobs and enriches output (onUpdate + await)
 })
 
 test('run({ streamOutput: true }) matches chunked runStream behavior', async (t) => {
-  const runJobSpy = sinon.spy(MockedBinding.prototype, 'runJob')
+  const runJobSpy = spyRunJob()
   const model = createStubbedModel()
   await model.load()
   const text =
@@ -73,7 +86,7 @@ test('run({ streamOutput: true }) matches chunked runStream behavior', async (t)
 })
 
 test('runStreaming accumulate merges token stream into one job when sentence completes', async (t) => {
-  const runJobSpy = sinon.spy(MockedBinding.prototype, 'runJob')
+  const runJobSpy = spyRunJob()
   const model = createStubbedModel()
   await model.load()
   async function * tokens () {
@@ -88,7 +101,7 @@ test('runStreaming accumulate merges token stream into one job when sentence com
 })
 
 test('runStreaming accumulateSentences false runs one job per yield', async (t) => {
-  const runJobSpy = sinon.spy(MockedBinding.prototype, 'runJob')
+  const runJobSpy = spyRunJob()
   const model = createStubbedModel()
   await model.load()
   async function * tokens () {
@@ -102,7 +115,7 @@ test('runStreaming accumulateSentences false runs one job per yield', async (t) 
 })
 
 test('runStreaming accumulate hard-splits when buffer exceeds maxBufferScalars', async (t) => {
-  const runJobSpy = sinon.spy(MockedBinding.prototype, 'runJob')
+  const runJobSpy = spyRunJob()
   const model = createStubbedModel()
   await model.load()
   async function * oneBig () {
@@ -115,7 +128,7 @@ test('runStreaming accumulate hard-splits when buffer exceeds maxBufferScalars',
 })
 
 test('runStreaming maxBufferScalars 0 falls back to default (no infinite loop)', async (t) => {
-  const runJobSpy = sinon.spy(MockedBinding.prototype, 'runJob')
+  const runJobSpy = spyRunJob()
   const model = createStubbedModel()
   await model.load()
   async function * oneBig () {
@@ -135,7 +148,7 @@ test('buildSentenceEndTester resets global delimiter lastIndex before each test'
 })
 
 test('runStreaming custom sentenceDelimiter with /g still flushes each fragment', async (t) => {
-  const runJobSpy = sinon.spy(MockedBinding.prototype, 'runJob')
+  const runJobSpy = spyRunJob()
   const model = createStubbedModel()
   await model.load()
   const delimiter = /[.!?]\s*$/g
@@ -150,7 +163,7 @@ test('runStreaming custom sentenceDelimiter with /g still flushes each fragment'
 })
 
 test('runStreaming yields multiple jobs from async text chunks', async (t) => {
-  const runJobSpy = sinon.spy(MockedBinding.prototype, 'runJob')
+  const runJobSpy = spyRunJob()
   const model = createStubbedModel()
   await model.load()
 
@@ -176,7 +189,7 @@ test('runStreaming yields multiple jobs from async text chunks', async (t) => {
 })
 
 test('plain run() uses single job', async (t) => {
-  const runJobSpy = sinon.spy(MockedBinding.prototype, 'runJob')
+  const runJobSpy = spyRunJob()
   const model = createStubbedModel()
   await model.load()
   const response = await model.run({

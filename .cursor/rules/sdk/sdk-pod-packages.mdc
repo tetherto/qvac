@@ -30,8 +30,10 @@ globs:
 
 ## Skill Naming Convention
 
-Skills for SDK pod should use the `sdk-` prefix:
+Skills for SDK pod should use the `qv-sdk-` prefix:
 
-- `sdk-pr-create`
-- `sdk-changelog`
-- `sdk-release`
+- `qv-sdk-pr-create`
+- `qv-sdk-changelog`
+- `qv-sdk-backmerge`
+- `qv-sdk-e2e-create`
+- `qv-sdk-pr-status`

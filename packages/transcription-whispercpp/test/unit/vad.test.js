@@ -6,18 +6,11 @@ const MockedBinding = require('../mocks/MockedBinding.js')
 const { wait, transitionCb } = require('../mocks/utils.js')
 const { WhisperInterface } = require('../../whisper')
 
-const process = require('process')
+const process = require('bare-process')
 global.process = process
-const sinon = require('sinon')
 
-/**
- * Helper function to create test model with common configuration
- */
 function createTestModel ({ onOutput = () => { }, vadModelPath = 'ggml-silero-v5.1.2.bin' } = {}) {
-  // Restore any existing stub first
-  TranscriptionWhispercpp.prototype.validateModelFiles?.restore?.()
-  // Mock validateModelFiles on the prototype BEFORE creating instance
-  sinon.stub(TranscriptionWhispercpp.prototype, 'validateModelFiles').returns(undefined)
+  TranscriptionWhispercpp.prototype.validateModelFiles = () => undefined
 
   const args = {
     files: {
@@ -32,12 +25,12 @@ function createTestModel ({ onOutput = () => { }, vadModelPath = 'ggml-silero-v5
   const model = new TranscriptionWhispercpp(args, config)
   let capturedConfigResolve
   const capturedConfig = new Promise(resolve => { capturedConfigResolve = resolve })
-  sinon.stub(model, '_createAddon').callsFake(configurationParams => {
+  model._createAddon = configurationParams => {
     capturedConfigResolve(configurationParams)
     const binding = new MockedBinding()
-    binding.enableVadTestMode() // Enable VAD-specific test behavior
+    binding.enableVadTestMode()
     return new WhisperInterface(binding, configurationParams, onOutput, transitionCb)
-  })
+  }
   return [model, capturedConfig]
 }
 
