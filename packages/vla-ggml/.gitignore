@@ -18,3 +18,7 @@ test/results/
 .valgrind.supp
 
 *.log
+
+# Phase-0 PyTorch parity oracle dumps (large; reproducible via
+# scripts/dump_pi05_activations.py).
+scripts/oracle_dump/
