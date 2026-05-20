@@ -41,7 +41,9 @@ import {
   FLUX_2_KLEIN_4B_VAE,
   QWEN3_4B_Q4_K_M,
   SD_V2_1_1B_Q8_0,
-  REALESRGAN_X4PLUS_ANIME_6B
+  REALESRGAN_X4PLUS_ANIME_6B,
+  QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
+  GEMMA4_2B_MULTIMODAL_Q4_K_M,
 } from "@qvac/sdk";
 import * as path from "node:path";
 import { ResourceManager } from "../shared/resource-manager.js";
@@ -132,6 +134,18 @@ resources.define("tools-dynamic", {
   constant: QWEN3_1_7B_INST_Q4,
   type: "llm",
   config: { ctx_size: 4096, tools: true, toolsMode: "dynamic" },
+});
+
+resources.define("tools-qwen35", {
+  constant: QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
+  type: "llm",
+  config: { ctx_size: 4096, tools: true },
+});
+
+resources.define("tools-gemma4", {
+  constant: GEMMA4_2B_MULTIMODAL_Q4_K_M,
+  type: "llm",
+  config: { ctx_size: 4096, tools: true },
 });
 
 resources.define("ocr", {
@@ -321,6 +335,32 @@ resources.define("diffusion", {
     prediction: "flux2_flow",
     llmModelSrc: QWEN3_4B_Q4_K_M,
     vaeModelSrc: FLUX_2_KLEIN_4B_VAE,
+  },
+});
+
+resources.define("diffusion-fa", {
+  constant: FLUX_2_KLEIN_4B_Q4_0,
+  type: "diffusion",
+  config: {
+    device: "gpu",
+    threads: 4,
+    prediction: "flux2_flow",
+    llmModelSrc: QWEN3_4B_Q4_K_M,
+    vaeModelSrc: FLUX_2_KLEIN_4B_VAE,
+    diffusion_fa: true,
+  },
+});
+
+resources.define("diffusion-fa-disabled", {
+  constant: FLUX_2_KLEIN_4B_Q4_0,
+  type: "diffusion",
+  config: {
+    device: "gpu",
+    threads: 4,
+    prediction: "flux2_flow",
+    llmModelSrc: QWEN3_4B_Q4_K_M,
+    vaeModelSrc: FLUX_2_KLEIN_4B_VAE,
+    diffusion_fa: false,
   },
 });
 

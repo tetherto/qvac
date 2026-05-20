@@ -5620,6 +5620,63 @@
     "notes": "Q8_0 GGUF conversion of nvidia/diar_sortformer_4spk-v1"
   },
   {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-05-20/diar_streaming_sortformer_4spk-v2.1.f16.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1",
+    "description": "Parakeet Streaming Sortformer 4SPK v2.1 GGUF",
+    "quantization": "f16",
+    "params": "123M",
+    "licenseId": "nvidia-open-model-license",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "sortformer",
+      "streaming",
+      "4spk",
+      "ggml",
+      "en"
+    ],
+    "notes": "F16 GGUF conversion of nvidia/diar_streaming_sortformer_4spk-v2.1"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-05-20/diar_streaming_sortformer_4spk-v2.1.q8_0.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1",
+    "description": "Parakeet Streaming Sortformer 4SPK v2.1 GGUF",
+    "quantization": "q8_0",
+    "params": "123M",
+    "licenseId": "nvidia-open-model-license",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "sortformer",
+      "streaming",
+      "4spk",
+      "ggml",
+      "en"
+    ],
+    "notes": "Q8_0 GGUF conversion of nvidia/diar_streaming_sortformer_4spk-v2.1"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-05-20/diar_streaming_sortformer_4spk-v2.1.q4_0.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1",
+    "description": "Parakeet Streaming Sortformer 4SPK v2.1 GGUF",
+    "quantization": "q4_0",
+    "params": "123M",
+    "licenseId": "nvidia-open-model-license",
+    "tags": [
+      "transcription",
+      "parakeet",
+      "sortformer",
+      "streaming",
+      "4spk",
+      "ggml",
+      "en"
+    ],
+    "notes": "Q4_0 GGUF conversion of nvidia/diar_streaming_sortformer_4spk-v2.1"
+  },
+  {
     "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-05-11/parakeet-ctc-0.6b.q8_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/parakeet-ctc-0.6b",
