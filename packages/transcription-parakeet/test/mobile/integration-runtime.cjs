@@ -7,7 +7,7 @@ const { pathToFileURL } = require('bare-url')
 
 // Force the gpu-smoke + mobile-perf-*-gpu integration tests to skip on
 // Device Farm. The desktop integration-test workflow toggles this via
-// matrix `no_gpu: 'true'` -> job env (matching qvac-lib-infer-llamacpp-llm),
+// matrix `no_gpu: 'true'` -> job env (matching llm-llamacpp),
 // but mobile bundles execute on real devices where workflow env vars do
 // not propagate. Setting it here means every test that reads
 // `process.env.NO_GPU` (gpu-smoke.test.js, mobile-perf-runner.js) sees

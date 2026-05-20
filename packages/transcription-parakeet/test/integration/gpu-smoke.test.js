@@ -62,7 +62,7 @@ const RELAX = process.env && process.env.QVAC_PARAKEET_GPU_SMOKE_RELAX === '1'
 // NO_GPU=true to skip every GPU smoke entry. Real GPU runners
 // (`ai-run-linux-gpu`, etc.) and local developer machines leave NO_GPU
 // unset so the strict assertions still fire there. Pattern lifted from
-// qvac-lib-infer-llamacpp-llm's integration tests.
+// llm-llamacpp's integration tests.
 const NO_GPU = process.env && process.env.NO_GPU === 'true'
 
 function backendIdToName (id) {
