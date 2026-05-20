@@ -164,12 +164,13 @@ startStreaming(js_env_t* env, js_callback_info_t* info) try {
   config.leftContextMs      = parakeetModel.getStreamingLeftContextMs();
   config.rightLookaheadMs   = parakeetModel.getStreamingRightLookaheadMs();
   // AOSC defaults sourced from the model's load-time ParakeetConfig.
-  config.spkCacheEnable       = parakeetModel.getStreamingSpkCacheEnable();
-  config.spkCacheLen          = parakeetModel.getStreamingSpkCacheLen();
-  config.fifoLen              = parakeetModel.getStreamingFifoLen();
-  config.chunkLeftContextMs   = parakeetModel.getStreamingChunkLeftContextMs();
-  config.chunkRightContextMs  = parakeetModel.getStreamingChunkRightContextMs();
-  config.spkCacheUpdatePeriod = parakeetModel.getStreamingSpkCacheUpdatePeriod();
+  config.spkCacheEnable = parakeetModel.getStreamingSpkCacheEnable();
+  config.spkCacheLen = parakeetModel.getStreamingSpkCacheLen();
+  config.fifoLen = parakeetModel.getStreamingFifoLen();
+  config.chunkLeftContextMs = parakeetModel.getStreamingChunkLeftContextMs();
+  config.chunkRightContextMs = parakeetModel.getStreamingChunkRightContextMs();
+  config.spkCacheUpdatePeriod =
+      parakeetModel.getStreamingSpkCacheUpdatePeriod();
 
   if (auto chunkMs =
           configObj.getOptionalProperty<js::Number>(env, "chunkMs");
@@ -215,31 +216,37 @@ startStreaming(js_env_t* env, js_callback_info_t* info) try {
           configObj.getOptionalProperty<js::Number>(env, "spkCacheLen");
       spkCacheLen.has_value()) {
     const auto v = static_cast<int>(spkCacheLen.value().as<double>(env));
-    if (v > 0) config.spkCacheLen = v;
+    if (v > 0)
+      config.spkCacheLen = v;
   }
-  if (auto fifoLen =
-          configObj.getOptionalProperty<js::Number>(env, "fifoLen");
+  if (auto fifoLen = configObj.getOptionalProperty<js::Number>(env, "fifoLen");
       fifoLen.has_value()) {
     const auto v = static_cast<int>(fifoLen.value().as<double>(env));
-    if (v > 0) config.fifoLen = v;
+    if (v > 0)
+      config.fifoLen = v;
   }
   if (auto chunkLeftContextMs =
           configObj.getOptionalProperty<js::Number>(env, "chunkLeftContextMs");
       chunkLeftContextMs.has_value()) {
     const auto v = static_cast<int>(chunkLeftContextMs.value().as<double>(env));
-    if (v >= 0) config.chunkLeftContextMs = v;
+    if (v >= 0)
+      config.chunkLeftContextMs = v;
   }
   if (auto chunkRightContextMs =
           configObj.getOptionalProperty<js::Number>(env, "chunkRightContextMs");
       chunkRightContextMs.has_value()) {
-    const auto v = static_cast<int>(chunkRightContextMs.value().as<double>(env));
-    if (v >= 0) config.chunkRightContextMs = v;
+    const auto v =
+        static_cast<int>(chunkRightContextMs.value().as<double>(env));
+    if (v >= 0)
+      config.chunkRightContextMs = v;
   }
-  if (auto spkCacheUpdatePeriod =
-          configObj.getOptionalProperty<js::Number>(env, "spkCacheUpdatePeriod");
+  if (auto spkCacheUpdatePeriod = configObj.getOptionalProperty<js::Number>(
+          env, "spkCacheUpdatePeriod");
       spkCacheUpdatePeriod.has_value()) {
-    const auto v = static_cast<int>(spkCacheUpdatePeriod.value().as<double>(env));
-    if (v > 0) config.spkCacheUpdatePeriod = v;
+    const auto v =
+        static_cast<int>(spkCacheUpdatePeriod.value().as<double>(env));
+    if (v > 0)
+      config.spkCacheUpdatePeriod = v;
   }
 
   {

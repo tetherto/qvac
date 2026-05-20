@@ -60,12 +60,12 @@ public:
     // `parakeet.model_variant` metadata tag). parakeet-cpp ignores these
     // fields on v1/v2 GGUFs and on non-Sortformer engines, so they are
     // always safe to forward.
-    bool spkCacheEnable         = true;
-    int  spkCacheLen            = 188;
-    int  fifoLen                = 188;
-    int  chunkLeftContextMs     = 80;
-    int  chunkRightContextMs    = 560;
-    int  spkCacheUpdatePeriod   = 144;
+    bool spkCacheEnable = true;
+    int spkCacheLen = 188;
+    int fifoLen = 188;
+    int chunkLeftContextMs = 80;
+    int chunkRightContextMs = 560;
+    int spkCacheUpdatePeriod = 144;
   };
 
   ParakeetStreamingProcessor(

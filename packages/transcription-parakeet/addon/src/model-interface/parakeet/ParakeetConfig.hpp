@@ -71,12 +71,12 @@ struct ParakeetConfig {
   //
   // Setting streamingSpkCacheEnable = false on a v2.1 model forces the
   // v1 sliding-window code path (useful for regression comparison).
-  bool streamingSpkCacheEnable        = true;
-  int  streamingSpkCacheLen           = 188;   // long-term speaker rows (~15s)
-  int  streamingFifoLen               = 188;   // FIFO warmup buffer rows
-  int  streamingChunkLeftContextMs    = 80;    // encoder left context  (~1 frame)
-  int  streamingChunkRightContextMs   = 560;   // encoder right context (~7 frames)
-  int  streamingSpkCacheUpdatePeriod  = 144;   // FIFO-overflow pop-out count
+  bool streamingSpkCacheEnable = true;
+  int streamingSpkCacheLen = 188;          // long-term speaker rows (~15s)
+  int streamingFifoLen = 188;              // FIFO warmup buffer rows
+  int streamingChunkLeftContextMs = 80;    // encoder left context  (~1 frame)
+  int streamingChunkRightContextMs = 560;  // encoder right context (~7 frames)
+  int streamingSpkCacheUpdatePeriod = 144; // FIFO-overflow pop-out count
 
   // ── Dynamic-backend loading ────────────────────────────────────────────
   // Forwarded to parakeet::EngineOptions::backends_dir /
@@ -117,7 +117,8 @@ struct ParakeetConfig {
            streamingFifoLen == other.streamingFifoLen &&
            streamingChunkLeftContextMs == other.streamingChunkLeftContextMs &&
            streamingChunkRightContextMs == other.streamingChunkRightContextMs &&
-           streamingSpkCacheUpdatePeriod == other.streamingSpkCacheUpdatePeriod &&
+           streamingSpkCacheUpdatePeriod ==
+               other.streamingSpkCacheUpdatePeriod &&
            backendsDir == other.backendsDir &&
            openclCacheDir == other.openclCacheDir;
   }

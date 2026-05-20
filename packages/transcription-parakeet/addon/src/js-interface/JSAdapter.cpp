@@ -108,8 +108,9 @@ auto JSAdapter::loadFromJSObject(js::Object jsObject, js_env_t* env)
   }
 
   // AOSC (v2.1+ Sortformer only). All optional; unspecified values keep
-  // ParakeetConfig's defaults. Forwarded into parakeet::SortformerStreamingOptions
-  // by ParakeetModel / ParakeetStreamingProcessor; ignored for v1/v2/non-Sortformer.
+  // ParakeetConfig's defaults. Forwarded into
+  // parakeet::SortformerStreamingOptions by ParakeetModel /
+  // ParakeetStreamingProcessor; ignored for v1/v2/non-Sortformer.
   auto streamingSpkCacheEnableOpt =
       jsObject.getOptionalProperty<js::Boolean>(env, "streamingSpkCacheEnable");
   if (streamingSpkCacheEnableOpt.has_value()) {

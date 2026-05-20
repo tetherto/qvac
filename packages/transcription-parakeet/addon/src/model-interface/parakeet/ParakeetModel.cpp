@@ -723,10 +723,10 @@ void ParakeetModel::openStreamingSession_() {
     // AOSC (v2.1+ Sortformer only; ignored for v1/v2 GGUFs). The engine
     // detects v2.1 via the GGUF metadata tag `parakeet.model_variant` and
     // only consults these fields then -- safe to forward unconditionally.
-    opts.spkcache_enable        = cfg_.streamingSpkCacheEnable;
-    opts.spkcache_len           = cfg_.streamingSpkCacheLen;
-    opts.fifo_len               = cfg_.streamingFifoLen;
-    opts.chunk_left_context_ms  = cfg_.streamingChunkLeftContextMs;
+    opts.spkcache_enable = cfg_.streamingSpkCacheEnable;
+    opts.spkcache_len = cfg_.streamingSpkCacheLen;
+    opts.fifo_len = cfg_.streamingFifoLen;
+    opts.chunk_left_context_ms = cfg_.streamingChunkLeftContextMs;
     opts.chunk_right_context_ms = cfg_.streamingChunkRightContextMs;
     opts.spkcache_update_period = cfg_.streamingSpkCacheUpdatePeriod;
 

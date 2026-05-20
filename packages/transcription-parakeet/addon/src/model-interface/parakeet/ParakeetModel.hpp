@@ -142,22 +142,18 @@ public:
   // AOSC accessors (v2.1+ Sortformer only). Forwarded verbatim from
   // ParakeetConfig; parakeet-cpp ignores them for non-Sortformer engines
   // and for v1/v2 Sortformer GGUFs.
-  bool                getStreamingSpkCacheEnable() const {
+  bool getStreamingSpkCacheEnable() const {
     return cfg_.streamingSpkCacheEnable;
   }
-  int                 getStreamingSpkCacheLen() const {
-    return cfg_.streamingSpkCacheLen;
-  }
-  int                 getStreamingFifoLen() const {
-    return cfg_.streamingFifoLen;
-  }
-  int                 getStreamingChunkLeftContextMs() const {
+  int getStreamingSpkCacheLen() const { return cfg_.streamingSpkCacheLen; }
+  int getStreamingFifoLen() const { return cfg_.streamingFifoLen; }
+  int getStreamingChunkLeftContextMs() const {
     return cfg_.streamingChunkLeftContextMs;
   }
-  int                 getStreamingChunkRightContextMs() const {
+  int getStreamingChunkRightContextMs() const {
     return cfg_.streamingChunkRightContextMs;
   }
-  int                 getStreamingSpkCacheUpdatePeriod() const {
+  int getStreamingSpkCacheUpdatePeriod() const {
     return cfg_.streamingSpkCacheUpdatePeriod;
   }
   bool                isSortformer() const {

@@ -49,10 +49,10 @@ ParakeetStreamingProcessor::ParakeetStreamingProcessor(
     // AOSC (v2.1+ Sortformer only). parakeet-cpp ignores these fields for
     // v1/v2 GGUFs (variant detected from `parakeet.model_variant` metadata
     // or the encoder shape heuristic), so always-forward is safe.
-    opts.spkcache_enable        = config_.spkCacheEnable;
-    opts.spkcache_len           = config_.spkCacheLen;
-    opts.fifo_len               = config_.fifoLen;
-    opts.chunk_left_context_ms  = config_.chunkLeftContextMs;
+    opts.spkcache_enable = config_.spkCacheEnable;
+    opts.spkcache_len = config_.spkCacheLen;
+    opts.fifo_len = config_.fifoLen;
+    opts.chunk_left_context_ms = config_.chunkLeftContextMs;
     opts.chunk_right_context_ms = config_.chunkRightContextMs;
     opts.spkcache_update_period = config_.spkCacheUpdatePeriod;
 
