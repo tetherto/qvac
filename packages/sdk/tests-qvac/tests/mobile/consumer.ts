@@ -362,6 +362,10 @@ export const executor = createExecutor({
       /^translation-bergamot-.+-cache-reload$/,
       "Server-side Bare code path, identical across platforms — desktop coverage is source of truth",
     ),
+    new SkipExecutor(
+      /^cancel-(broad|by-requestid)-transcribe$/,
+      "Server-side Bare cancel path is identical across platforms — desktop is source of truth.",
+    ),
     // suspend() hangs the test runner on mobile (the lifecycle coordinator
     // pauses MQTT/network ops and never resumes within the test timeout).
     // Only resume-idempotent is safe -- it does not call suspend().
