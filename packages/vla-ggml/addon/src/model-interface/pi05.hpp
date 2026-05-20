@@ -7,6 +7,7 @@
 // attention, adaRMSNorm, …) per plan §4.
 
 #include <string>
+#include <vector>
 
 #include <ggml.h>
 
@@ -109,6 +110,53 @@ struct ggml_tensor* pi05_build_siglip_block_graph(
     int n_patches,
     int hidden,
     int n_heads,
+    float layer_norm_eps);
+
+// M3.3 — full SigLIP-So400m/14 vision tower.
+//
+// Composition: patch_embed (M3.1) → pos_embed (M3.1) → N
+// transformer blocks (M3.2) → post-LayerNorm → head Linear
+// (hidden → proj_dim). For pi05 the head is the "connector" —
+// `_siglip.Module(num_classes=2048, pool_type="none")` — that maps
+// from SigLIP's 1152-channel patch tokens to the VLM's 2048-channel
+// input width. No pixel-shuffle, no separate connector module
+// (plan §2 row "Vision connector").
+struct Pi05VisionTowerWeights {
+  // M3.1 — patch + pos embed.
+  struct ggml_tensor* patch_embed_w;  // (kw=14, kh=14, in=3, out=1152)
+  struct ggml_tensor* patch_embed_b;  // (1152,)
+  struct ggml_tensor* pos_embed;      // (1152, 256) in ggml = numpy (256, 1152)
+
+  // M3.2 — per-block tensors. Caller fills 27 entries for pi05_base.
+  std::vector<Pi05SiglipBlockWeights> blocks;
+
+  // M3.3 — post-LN + head Linear.
+  struct ggml_tensor* post_ln_w;      // (hidden,)
+  struct ggml_tensor* post_ln_b;
+  struct ggml_tensor* head_w;         // (hidden=1152, proj=2048)
+  struct ggml_tensor* head_b;         // (proj=2048,)
+};
+
+struct Pi05VisionTowerOutputs {
+  // Final tower output: ne=[proj_dim=2048, n_patches=256]. Byte-equivalent
+  // to numpy (n_patches, proj_dim) row-major, which is how the Phase-0
+  // dump stores `vision.head_out[cam_i]`.
+  struct ggml_tensor* head_out;
+};
+
+// Build the SigLIP tower on top of a (3, image_size, image_size) F32
+// pixel tensor. `w.blocks.size()` determines depth (27 for SigLIP-
+// So400m). Returns `{nullptr}` if any required weight is missing or
+// the block list is empty.
+Pi05VisionTowerOutputs pi05_build_siglip_tower_graph(
+    struct ggml_context* ctx,
+    struct ggml_tensor* pixel_values,
+    const Pi05VisionTowerWeights& w,
+    int n_patches,
+    int hidden,
+    int proj_dim,
+    int n_heads,
+    int patch_size,
     float layer_norm_eps);
 
 

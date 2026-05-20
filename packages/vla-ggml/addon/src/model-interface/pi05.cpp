@@ -189,6 +189,56 @@ struct ggml_tensor* pi05_build_siglip_block_graph(
   return ggml_add(ctx, h, residual);
 }
 
+// ── M3.3: full SigLIP-So400m/14 vision tower ────────────────────────────
+Pi05VisionTowerOutputs pi05_build_siglip_tower_graph(
+    struct ggml_context* ctx,
+    struct ggml_tensor* pixel_values,
+    const Pi05VisionTowerWeights& w,
+    int n_patches,
+    int hidden,
+    int proj_dim,
+    int n_heads,
+    int patch_size,
+    float layer_norm_eps) {
+  Pi05VisionTowerOutputs out{nullptr};
+  if (ctx == nullptr || pixel_values == nullptr || w.blocks.empty() ||
+      w.post_ln_w == nullptr || w.post_ln_b == nullptr ||
+      w.head_w == nullptr || w.head_b == nullptr) {
+    return out;
+  }
+
+  // Patch + pos embed (M3.1).
+  Pi05PatchPosOutputs pp = pi05_build_siglip_patch_pos_graph(
+      ctx, pixel_values, w.patch_embed_w, w.patch_embed_b,
+      w.pos_embed, patch_size);
+  if (pp.pos_embed_out == nullptr) {
+    return out;
+  }
+  struct ggml_tensor* x = pp.pos_embed_out;
+
+  // Transformer stack (M3.2 × N).
+  for (const auto& bw : w.blocks) {
+    x = pi05_build_siglip_block_graph(
+        ctx, x, bw, n_patches, hidden, n_heads, layer_norm_eps);
+    if (x == nullptr) {
+      return out;
+    }
+  }
+
+  // Post-LayerNorm — the LeRobot SigLIP wrapper applies this
+  // immediately before the head Linear; HF naming is
+  // `vision_model.post_layernorm`.
+  x = pi05_layer_norm(ctx, x, w.post_ln_w, w.post_ln_b, layer_norm_eps);
+
+  // "Connector" head — Linear(hidden → proj_dim). For pi05_base this
+  // is the `_siglip.Module(num_classes=2048, pool_type="none")` head,
+  // i.e. just a single Linear, no pixel-shuffle (plan §2).
+  out.head_out = pi05_linear(ctx, x, w.head_w, w.head_b);
+  (void)proj_dim; // shape is inferred from head_w — kept in the signature
+                  //  for documentation + caller-side sanity-checking.
+  return out;
+}
+
 Pi05Model::Pi05Model(
     const std::string& /*ggufPath*/,
     bool /*forceCpu*/,
