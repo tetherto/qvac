@@ -612,6 +612,62 @@ struct ggml_tensor* pi05_build_expert_block_graph(
   return ggml_add(ctx, h, ggml_mul(ctx, down, b.gate));
 }
 
+// ── M3.10: full expert pass (18 blocks + final adaRMSNorm + action_out) ─
+Pi05ExpertODEStepOutputs pi05_build_expert_ode_step_graph(
+    struct ggml_context* ctx,
+    struct ggml_tensor* x_exp,
+    struct ggml_tensor* act_positions,
+    const std::vector<struct ggml_tensor*>& cached_k,
+    const std::vector<struct ggml_tensor*>& cached_v,
+    struct ggml_tensor* cond,
+    const std::vector<Pi05ExpertBlockWeights>& blocks,
+    struct ggml_tensor* final_norm_ada_w,
+    struct ggml_tensor* final_norm_ada_b,
+    struct ggml_tensor* action_out_proj_w,
+    struct ggml_tensor* action_out_proj_b,
+    int expert_hidden,
+    int n_heads,
+    int n_kv_heads,
+    int head_dim,
+    int prefix_len,
+    int n_act,
+    float rms_norm_eps,
+    float rope_freq_base) {
+  Pi05ExpertODEStepOutputs out{nullptr, nullptr};
+  if (ctx == nullptr || x_exp == nullptr || act_positions == nullptr ||
+      cond == nullptr || blocks.empty() ||
+      cached_k.size() != blocks.size() ||
+      cached_v.size() != blocks.size() ||
+      final_norm_ada_w == nullptr || final_norm_ada_b == nullptr ||
+      action_out_proj_w == nullptr || action_out_proj_b == nullptr) {
+    return out;
+  }
+  struct ggml_tensor* h = x_exp;
+  for (size_t i = 0; i < blocks.size(); ++i) {
+    h = pi05_build_expert_block_graph(
+        ctx, h, act_positions, cached_k[i], cached_v[i], cond,
+        blocks[i],
+        expert_hidden, n_heads, n_kv_heads, head_dim,
+        prefix_len, n_act, rms_norm_eps, rope_freq_base);
+    if (h == nullptr) {
+      return out;
+    }
+  }
+  // Final adaRMSNorm — same modulation form as the per-block norms.
+  Pi05AdaSplit fin = pi05_build_adarms_split_graph(
+      ctx, cond, final_norm_ada_w, final_norm_ada_b, expert_hidden);
+  if (fin.scale == nullptr) {
+    return out;
+  }
+  out.final_out = pi05_adarms_apply(
+      ctx, h, fin.scale, fin.shift, rms_norm_eps);
+
+  // action_out_proj — Linear(expert_hidden → action_dim).
+  out.v_t = pi05_linear(
+      ctx, out.final_out, action_out_proj_w, action_out_proj_b);
+  return out;
+}
+
 Pi05Model::Pi05Model(
     const std::string& /*ggufPath*/,
     bool /*forceCpu*/,

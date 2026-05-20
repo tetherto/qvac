@@ -360,6 +360,49 @@ struct ggml_tensor* pi05_build_expert_block_graph(
     float rms_norm_eps,
     float rope_freq_base);
 
+// M3.10 — full expert pass for one ODE step.
+//
+// Chains N expert blocks (M3.9) over the cached prefix KV per layer,
+// applies the final adaRMSNorm (also modulated by `cond` — the
+// expert's `expert.final_norm.ada.{weight,bias}` plays the same role
+// as the per-block ada densities), then runs `action_out_proj` to
+// produce `v_t` — the flow-matching velocity prediction for the
+// current timestep.
+//
+// `cached_k[i]` / `cached_v[i]` must have ne=[head_dim, prefix_len,
+// n_kv_heads] for each of the `blocks.size()` layers. `blocks.size()`
+// determines depth (18 for pi05_base).
+struct Pi05ExpertODEStepOutputs {
+  // ne=[expert_hidden, n_act] — post-final-norm hidden state.
+  // Same byte layout as numpy (n_act, expert_hidden), matching the
+  // dump's `expert.final_out[t=...]`.
+  struct ggml_tensor* final_out;
+  // ne=[action_dim, n_act] — flow-matching velocity. Same byte
+  // layout as numpy (n_act, action_dim), matching `expert.v_t[t=...]`.
+  struct ggml_tensor* v_t;
+};
+
+Pi05ExpertODEStepOutputs pi05_build_expert_ode_step_graph(
+    struct ggml_context* ctx,
+    struct ggml_tensor* x_exp,                                  // (expert_hidden, n_act)
+    struct ggml_tensor* act_positions,                          // I32 (n_act,)
+    const std::vector<struct ggml_tensor*>& cached_k,           // per-layer
+    const std::vector<struct ggml_tensor*>& cached_v,
+    struct ggml_tensor* cond,                                   // (cond_dim,)
+    const std::vector<Pi05ExpertBlockWeights>& blocks,
+    struct ggml_tensor* final_norm_ada_w,                       // (cond_dim, 3·hidden)
+    struct ggml_tensor* final_norm_ada_b,                       // (3·hidden,)
+    struct ggml_tensor* action_out_proj_w,                      // (expert_hidden, action_dim)
+    struct ggml_tensor* action_out_proj_b,                      // (action_dim,)
+    int expert_hidden,
+    int n_heads,
+    int n_kv_heads,
+    int head_dim,
+    int prefix_len,
+    int n_act,
+    float rms_norm_eps,
+    float rope_freq_base);
+
 // M3.6 — full VLM prefill stack.
 //
 // Chains N Gemma-1 blocks (M3.5) and applies the model's final
