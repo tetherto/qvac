@@ -109,6 +109,12 @@ jobs:
       - name: Setup LLVM
         uses: tetherto/qvac/.github/actions/setup-llvm@0c819dd1110e4902223b1f7646cc0f1be2c9bc5c
 
+      - name: Setup Vulkan SDK
+        uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@0bbdca93da303a0b1634ba14a89cec085621078d
+        with:
+          platform: linux
+          arch: x64
+
       - name: Configure ccache
         run: |
           ccache --set-config=max_size=500M
