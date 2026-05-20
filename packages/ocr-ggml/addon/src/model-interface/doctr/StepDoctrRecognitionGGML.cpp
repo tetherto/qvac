@@ -314,7 +314,12 @@ struct GraphResources {
   struct ggml_tensor* input = nullptr;
   struct ggml_tensor* features = nullptr;
 
+  GraphResources() = default;
   ~GraphResources() { reset(); }
+  GraphResources(const GraphResources&) = delete;
+  GraphResources& operator=(const GraphResources&) = delete;
+  GraphResources(GraphResources&&) = delete;
+  GraphResources& operator=(GraphResources&&) = delete;
 
   void reset() {
     graph = nullptr;
@@ -340,6 +345,7 @@ struct GraphResources {
 
 struct GraphBuilder {
   struct ggml_context* ctx;
+  // NOLINTNEXTLINE(cppcoreguidelines-avoid-const-or-ref-data-members) - GraphBuilder is a stateless one-shot helper that never outlives its caller; storing the weight map by reference avoids a deep copy on every graph build
   const std::unordered_map<std::string, struct ggml_tensor*>& w;
 
   [[nodiscard]] struct ggml_tensor* t(const std::string& name) const {
@@ -350,12 +356,13 @@ struct GraphBuilder {
     return it->second;
   }
 
-  struct ggml_tensor* activate(struct ggml_tensor* x, bool useHardswish) {
+  struct ggml_tensor*
+  activate(struct ggml_tensor* x, bool useHardswish) const {
     return useHardswish ? ggml_hardswish(ctx, x) : ggml_relu(ctx, x);
   }
 
   struct ggml_tensor*
-  applyBn(struct ggml_tensor* x, const std::string& bnPrefix) {
+  applyBn(struct ggml_tensor* x, const std::string& bnPrefix) const {
     struct ggml_tensor* scaled = ggml_mul(ctx, x, t(bnPrefix + ".scale"));
     return ggml_add(ctx, scaled, t(bnPrefix + ".shift"));
   }
@@ -518,7 +525,8 @@ struct StepDoctrRecognitionGGML::Impl {
     buildGraph();
   }
 
-  std::vector<float> runFeatureExtractor(const std::vector<float>& inputWhcn) {
+  [[nodiscard]] std::vector<float>
+  runFeatureExtractor(const std::vector<float>& inputWhcn) const {
     ggml_backend_tensor_set(
         graph.input, inputWhcn.data(), 0, inputWhcn.size() * sizeof(float));
 
@@ -584,9 +592,9 @@ struct StepDoctrRecognitionGGML::Impl {
   }
 
 private:
-  void runLstmDirection(
+  static void runLstmDirection(
       const std::vector<float>& input, std::vector<float>& output,
-      const LstmWeights& weights, int inputSize, bool reverse) const {
+      const LstmWeights& weights, int inputSize, bool reverse) {
     std::vector<float> hidden(kLstmHiddenSize, 0.0F);
     std::vector<float> cell(kLstmHiddenSize, 0.0F);
     std::array<float, static_cast<size_t>(kLstmGateCount) * kLstmHiddenSize>
@@ -858,14 +866,19 @@ private:
         const std::string base = "crnn.decoder.";
         LstmWeights& dst =
             lstm[static_cast<size_t>(layer)][static_cast<size_t>(direction)];
-        dst.weightIh =
-            loadTensor(base + "weight_ih_l" + std::to_string(layer) + suffix);
-        dst.weightHh =
-            loadTensor(base + "weight_hh_l" + std::to_string(layer) + suffix);
-        dst.biasIh =
-            loadTensor(base + "bias_ih_l" + std::to_string(layer) + suffix);
-        dst.biasHh =
-            loadTensor(base + "bias_hh_l" + std::to_string(layer) + suffix);
+        const std::string layerStr = std::to_string(layer);
+        std::string weightIhPath = base;
+        weightIhPath.append("weight_ih_l").append(layerStr).append(suffix);
+        std::string weightHhPath = base;
+        weightHhPath.append("weight_hh_l").append(layerStr).append(suffix);
+        std::string biasIhPath = base;
+        biasIhPath.append("bias_ih_l").append(layerStr).append(suffix);
+        std::string biasHhPath = base;
+        biasHhPath.append("bias_hh_l").append(layerStr).append(suffix);
+        dst.weightIh = loadTensor(weightIhPath);
+        dst.weightHh = loadTensor(weightHhPath);
+        dst.biasIh = loadTensor(biasIhPath);
+        dst.biasHh = loadTensor(biasHhPath);
         dst.inputSize = layer == 0 ? kFeatureChannels
                                    : kLstmHiddenSize * kLstmDirectionCount;
       }

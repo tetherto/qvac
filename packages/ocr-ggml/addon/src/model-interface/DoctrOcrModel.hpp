@@ -26,11 +26,13 @@ public:
 
     DoctrOcrModel(std::string pathDetector,
                   std::string pathRecognizer,
-                  const OcrConfig& config);
+                  OcrConfig config);
     ~DoctrOcrModel() override;
 
     DoctrOcrModel(const DoctrOcrModel&)            = delete;
     DoctrOcrModel& operator=(const DoctrOcrModel&) = delete;
+    DoctrOcrModel(DoctrOcrModel&&)                 = delete;
+    DoctrOcrModel& operator=(DoctrOcrModel&&)      = delete;
 
     std::any process(const std::any& input) override;
 

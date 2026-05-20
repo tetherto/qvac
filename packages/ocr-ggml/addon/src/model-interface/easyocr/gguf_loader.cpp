@@ -1,12 +1,14 @@
 #include "gguf_loader.hpp"
 
+#include <utility>
+
 #include "ggml.h"
 #include "gguf.h"
 
 namespace easyocr::ggml {
 
-GgufLoader::GgufLoader(const std::string& path, bool load_tensor_data)
-    : path_(path) {
+GgufLoader::GgufLoader(std::string path, bool load_tensor_data)
+    : path_(std::move(path)) {
   gguf_init_params params{
       .no_alloc = !load_tensor_data,
       .ctx = &meta_ctx_,

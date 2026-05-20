@@ -69,12 +69,14 @@ public:
   OcrModel(std::string pathDetector,
            std::string pathRecognizer,
            std::span<const std::string> langList,
-           const OcrConfig& config);
+           OcrConfig config);
 
   ~OcrModel() override;
 
   OcrModel(const OcrModel&) = delete;
   OcrModel& operator=(const OcrModel&) = delete;
+  OcrModel(OcrModel&&) = delete;
+  OcrModel& operator=(OcrModel&&) = delete;
 
   std::any process(const std::any& input) override;
 

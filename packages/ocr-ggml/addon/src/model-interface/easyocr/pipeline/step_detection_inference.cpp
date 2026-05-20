@@ -167,9 +167,10 @@ cv::Mat StepDetectionInference::preprocess(
 
 StepDetectionInference::StepDetectionInference(
     const std::string& gguf_path, float magRatio, int nThreads)
-    : magRatio_(magRatio) {
-  ggml_backend_load_all();
-  backend_ = ggml_backend_init_by_type(GGML_BACKEND_DEVICE_TYPE_CPU, nullptr);
+    : magRatio_(magRatio),
+      backend_(
+          (ggml_backend_load_all(),
+           ggml_backend_init_by_type(GGML_BACKEND_DEVICE_TYPE_CPU, nullptr))) {
   if (backend_ == nullptr) {
     throw std::runtime_error(
         "StepDetectionInference: ggml_backend_init_by_type(CPU) failed");

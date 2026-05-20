@@ -58,11 +58,11 @@ private:
   std::vector<float> inputBuffer_;
   std::vector<float> logitsBuffer_;
 
-  cv::Mat preprocessCrop(
+  static cv::Mat preprocessCrop(
       const cv::Mat& origImg, const std::array<cv::Point2f, 4>& polygon);
   cv::Mat runSingleInference(const cv::Mat& image);
 
-  SoftmaxResult softmaxArgmax(
+  static SoftmaxResult softmaxArgmax(
       const cv::Mat& preds, int batchIdx, int timestep, int vocabSize);
   std::pair<std::string, float>
   decodeAttention(const cv::Mat& preds, int batchIdx);

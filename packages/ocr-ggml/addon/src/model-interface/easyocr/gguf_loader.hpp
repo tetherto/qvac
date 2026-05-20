@@ -31,7 +31,7 @@ public:
   // only, leaving each tensor's `data` pointer null. Pass true to also
   // mmap/read the tensor blobs into a backing ggml_context — required if
   // callers want to read weight values via `get_tensor(name)->data`.
-  explicit GgufLoader(const std::string& path, bool load_tensor_data = false);
+  explicit GgufLoader(std::string path, bool load_tensor_data = false);
   ~GgufLoader();
 
   GgufLoader(const GgufLoader&) = delete;

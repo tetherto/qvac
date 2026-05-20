@@ -145,6 +145,7 @@ struct ggml_tensor* applyFoldedBn(
 
 struct GraphBuilder {
   struct ggml_context* ctx;
+  // NOLINTNEXTLINE(cppcoreguidelines-avoid-const-or-ref-data-members) - GraphBuilder is a stateless one-shot helper that never outlives its caller; storing the weight map by reference avoids a deep copy on every graph build
   const std::unordered_map<std::string, struct ggml_tensor*>& w;
 
   [[nodiscard]] struct ggml_tensor* t(const std::string& name) const {
@@ -157,7 +158,8 @@ struct GraphBuilder {
 
   /// Activation selection: HardSwish for later blocks, ReLU for early
   /// layers, matching torchvision's MobileNetV3-Large config.
-  struct ggml_tensor* activate(struct ggml_tensor* x, bool useHardswish) {
+  struct ggml_tensor*
+  activate(struct ggml_tensor* x, bool useHardswish) const {
     return useHardswish ? ggml_hardswish(ctx, x) : ggml_relu(ctx, x);
   }
 
@@ -280,8 +282,9 @@ struct GraphBuilder {
 
   /// Squeeze-and-excite block: global avg pool → 1x1 conv (reduce) → ReLU →
   /// 1x1 conv (expand) → HardSigmoid → element-wise multiply with input.
-  struct ggml_tensor*
-  seBlock(struct ggml_tensor* x, const std::string& sePrefix, int spatialHw) {
+  struct ggml_tensor* seBlock(
+      struct ggml_tensor* x, const std::string& sePrefix,
+      int spatialHw) const {
     // Global avg pool: kernel = full spatial extent, stride = same.
     struct ggml_tensor* pooled = ggml_pool_2d(
         ctx,

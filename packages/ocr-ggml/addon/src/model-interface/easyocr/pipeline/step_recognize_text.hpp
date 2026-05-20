@@ -115,11 +115,13 @@ public:
   // ownership of — to allow sharing one backend with the detector step.
   StepRecognizeText(
       const std::string& gguf_path, std::span<const std::string> langList,
-      ggml_backend_t backend, const Config& config = Config{});
+      ggml_backend_t backend, Config config = Config{});
   ~StepRecognizeText();
 
   StepRecognizeText(const StepRecognizeText&) = delete;
   StepRecognizeText& operator=(const StepRecognizeText&) = delete;
+  StepRecognizeText(StepRecognizeText&&) = delete;
+  StepRecognizeText& operator=(StepRecognizeText&&) = delete;
 
   Output process(Input input, const std::atomic<bool>* cancelFlag = nullptr);
 
@@ -146,7 +148,7 @@ private:
   std::u32string_view utf32Characters_;
   std::u32string utf32Owned_; // backs the view when sourced from GGUF
   std::vector<bool> ignoreChars_;
-  bool isLeftToRightScript_;
+  bool isLeftToRightScript_{true};
 
   std::vector<std::vector<SubImage>> imgListOfLists_;
   std::vector<float> batchBuffer_;

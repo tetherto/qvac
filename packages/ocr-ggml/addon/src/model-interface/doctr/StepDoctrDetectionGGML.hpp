@@ -49,7 +49,7 @@ private:
 
   // Resize + symmetric-pad to DBNET_INPUT_SIZE × DBNET_INPUT_SIZE, normalise.
   // Returns {processedMat, scale, newW, newH, padLeft, padTop}.
-  std::tuple<cv::Mat, float, int, int, int, int>
+  static std::tuple<cv::Mat, float, int, int, int, int>
   preprocessImage(const cv::Mat& img);
 
   // Run the GGML DBNet graph on a preprocessed 1024×1024 float mat.
@@ -57,7 +57,7 @@ private:
   cv::Mat runInference(const cv::Mat& preprocessed);
 
   // Post-process the probability map to axis-aligned quad polygons.
-  std::pair<std::vector<std::array<cv::Point2f, 4>>, std::vector<float>>
+  static std::pair<std::vector<std::array<cv::Point2f, 4>>, std::vector<float>>
   extractPolygons(
       const cv::Mat& probMap, float scale, int paddedW, int paddedH,
       int padLeft, int padTop, int origW, int origH);

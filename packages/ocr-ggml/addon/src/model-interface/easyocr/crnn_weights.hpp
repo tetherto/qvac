@@ -36,6 +36,8 @@ public:
 
   CrnnGen2Weights(const CrnnGen2Weights&) = delete;
   CrnnGen2Weights& operator=(const CrnnGen2Weights&) = delete;
+  CrnnGen2Weights(CrnnGen2Weights&&) = delete;
+  CrnnGen2Weights& operator=(CrnnGen2Weights&&) = delete;
 
   [[nodiscard]] bool ok() const noexcept { return err_.empty(); }
   [[nodiscard]] const std::string& err() const noexcept { return err_; }

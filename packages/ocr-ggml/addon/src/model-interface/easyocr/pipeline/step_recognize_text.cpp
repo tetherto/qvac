@@ -605,8 +605,8 @@ rotateBox(const std::array<cv::Point2f, 4>& box, int angle) {
 
 StepRecognizeText::StepRecognizeText(
     const std::string& gguf_path, std::span<const std::string> langList,
-    ggml_backend_t backend, const Config& config)
-    : config_(config), backend_(backend), isLeftToRightScript_{true} {
+    ggml_backend_t backend, Config config)
+    : config_(std::move(config)), backend_(backend) {
   if (backend_ == nullptr) {
     throw std::runtime_error("StepRecognizeText: backend is null");
   }

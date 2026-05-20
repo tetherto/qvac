@@ -17,8 +17,12 @@ namespace {
 
 cv::Mat decodeOrWrapImage(const OcrInput& input) {
   if (input.isEncoded) {
-    cv::Mat encoded(1, static_cast<int>(input.data.size()), CV_8UC1,
-                    const_cast<uint8_t*>(input.data.data()));
+    cv::Mat encoded(
+        1,
+        static_cast<int>(input.data.size()),
+        CV_8UC1,
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast) - cv::Mat constructor wants non-const void* but cv::imdecode does not write through it
+        const_cast<uint8_t*>(input.data.data()));
     cv::Mat decoded = cv::imdecode(encoded, cv::IMREAD_COLOR);
     if (decoded.empty()) {
       throw std::runtime_error("ocr-ggml: failed to decode image (unsupported "
@@ -36,8 +40,12 @@ cv::Mat decodeOrWrapImage(const OcrInput& input) {
 
   // Raw RGB bytes — wrap without copying, then clone so OcrInput can be safely
   // destroyed afterwards.
-  cv::Mat raw(input.imageHeight, input.imageWidth, CV_8UC3,
-              const_cast<uint8_t*>(input.data.data()));
+  cv::Mat raw(
+      input.imageHeight,
+      input.imageWidth,
+      CV_8UC3,
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast) - cv::Mat wants non-const void* but we clone() before mutating
+      const_cast<uint8_t*>(input.data.data()));
   return raw.clone();
 }
 
@@ -52,8 +60,8 @@ double elapsedMs(std::chrono::steady_clock::time_point start) {
 OcrModel::OcrModel(std::string pathDetector,
                    std::string pathRecognizer,
                    std::span<const std::string> langList,
-                   const OcrConfig& config)
-    : config_(config) {
+                   OcrConfig config)
+    : config_(std::move(config)) {
   // Make every available ggml backend visible to the runtime. When backendsDir
   // is set, prefer the explicit search path (matches translation-nmtcpp's
   // NmtBackendsHandle behaviour); otherwise fall back to ggml's default lookup.

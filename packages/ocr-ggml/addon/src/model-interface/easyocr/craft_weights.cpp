@@ -96,11 +96,11 @@ CraftWeights::CraftWeights(const GgufLoader& loader, ggml_backend_t backend) {
 }
 
 CraftWeights::~CraftWeights() {
-  if (buf_) {
+  if (buf_ != nullptr) {
     ggml_backend_buffer_free(buf_);
     buf_ = nullptr;
   }
-  if (ctx_) {
+  if (ctx_ != nullptr) {
     ggml_free(ctx_);
     ctx_ = nullptr;
   }
@@ -209,7 +209,7 @@ void CraftWeights::build_(const GgufLoader& loader, ggml_backend_t backend) {
 
     const std::vector<float> w_src_f32 = to_f32_vector(w_src);
     const std::vector<float> b_src_f32 =
-        b_src ? to_f32_vector(b_src) : std::vector<float>{};
+        b_src != nullptr ? to_f32_vector(b_src) : std::vector<float>{};
     const float* W = w_src_f32.data();
     const float* B = b_src_f32.empty() ? nullptr : b_src_f32.data();
 

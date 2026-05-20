@@ -99,6 +99,8 @@ public:
 
   StepDetectionInference(const StepDetectionInference&) = delete;
   StepDetectionInference& operator=(const StepDetectionInference&) = delete;
+  StepDetectionInference(StepDetectionInference&&) = delete;
+  StepDetectionInference& operator=(StepDetectionInference&&) = delete;
 
   /**
    * @brief Run the detector on a real image: resize -> normalize ->

@@ -16,8 +16,12 @@ namespace {
 
 cv::Mat decodeOrWrapImageDoctr(const OcrInput& input) {
     if (input.isEncoded) {
-        cv::Mat encoded(1, static_cast<int>(input.data.size()), CV_8UC1,
-                        const_cast<uint8_t*>(input.data.data()));
+        cv::Mat encoded(
+            1,
+            static_cast<int>(input.data.size()),
+            CV_8UC1,
+            // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast) - cv::Mat ctor wants non-const void* but cv::imdecode does not write through it
+            const_cast<uint8_t*>(input.data.data()));
         cv::Mat decoded = cv::imdecode(encoded, cv::IMREAD_COLOR);
         if (decoded.empty()) {
             throw std::runtime_error(
@@ -30,8 +34,12 @@ cv::Mat decodeOrWrapImageDoctr(const OcrInput& input) {
         throw std::runtime_error(
             "doctr-ocr-ggml: raw image requires positive width/height and data");
     }
-    cv::Mat raw(input.imageHeight, input.imageWidth, CV_8UC3,
-                const_cast<uint8_t*>(input.data.data()));
+    cv::Mat raw(
+        input.imageHeight,
+        input.imageWidth,
+        CV_8UC3,
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast) - cv::Mat wants non-const void* but we clone() before mutating
+        const_cast<uint8_t*>(input.data.data()));
     return raw.clone();
 }
 
@@ -46,8 +54,8 @@ double elapsedMs(std::chrono::steady_clock::time_point start) {
 
 DoctrOcrModel::DoctrOcrModel(std::string pathDetector,
                              std::string pathRecognizer,
-                             const OcrConfig& config)
-    : config_(config) {
+                             OcrConfig config)
+    : config_(std::move(config)) {
     if (!config_.backendsDir.empty()) {
         ggml_backend_load_all_from_path(config_.backendsDir.c_str());
     } else {

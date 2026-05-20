@@ -56,6 +56,8 @@ public:
 
   CraftWeights(const CraftWeights&) = delete;
   CraftWeights& operator=(const CraftWeights&) = delete;
+  CraftWeights(CraftWeights&&) = delete;
+  CraftWeights& operator=(CraftWeights&&) = delete;
 
   [[nodiscard]] bool ok() const noexcept { return err_.empty(); }
   [[nodiscard]] const std::string& err() const noexcept { return err_; }
