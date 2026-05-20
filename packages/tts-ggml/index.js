@@ -297,19 +297,6 @@ class TTSGgml {
     // Per-platform fallback for `backendsDir` when the host didn't
     // pass one. Mirrors the qvac/packages/llm-llamacpp +
     // transcription-parakeet resolution shape
-    // (`path.join(__dirname, 'prebuilds')`) so a host that already
-    // threads `prebuilds/` through one of those addons doesn't need
-    // to special-case tts-ggml. The native addon expects the
-    // directory that *contains* the per-arch / per-module subdir;
-    // cmake-bare installs the backend `.so` files under
-    // `prebuilds/<bare-target>/qvac__tts-ggml/`, but the addon-side
-    // `BACKENDS_SUBDIR` compile define joins the
-    // `<bare-target>/qvac__tts-ggml` shape on its own. Keep this in
-    // sync with the `BACKENDS_SUBDIR_VALUE` derivation in
-    // CMakeLists.txt. Allow `config.backendsDir` /
-    // `config.openclCacheDir` as a secondary location so callers
-    // who already pack runtime knobs under `config: { useGPU, ... }`
-    // can keep them grouped there.
     this._backendsDir = firstNonEmpty(
       backendsDir,
       this._config?.backendsDir,

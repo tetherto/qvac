@@ -211,42 +211,6 @@ if(APPLE)
   # Force-load clang's compiler-rt builtins archive so the
   # `__isPlatformVersionAtLeast` symbol that lowers every Objective-C
   # `@available(...)` runtime check resolves at link time.
-  #
-  # Why this is needed:
-  #   Xcode 16 / iOS SDK 18 changed clang's `@available` lowering
-  #   from a direct call to libSystem's `_availability_version_check`
-  #   to a compiler-rt wrapper called `__isPlatformVersionAtLeast`
-  #   (clang commit D90367). Older SDKs (e.g. 17.5, what the
-  #   currently published whispercpp / llama prebuilds were built
-  #   against) still emit the libSystem variant, which is always
-  #   resolvable at runtime; SDK 18 builds emit the compiler-rt
-  #   wrapper instead, which only lives in libclang_rt.<platform>.a.
-  #
-  #   cmake-bare links every Apple bare module with
-  #   `-Wl,-undefined,dynamic_lookup`, telling ld it's fine to leave
-  #   any external undefined and defer it to dyld at load time. With
-  #   that flag in effect, neither `-fapple-link-rtlib` (which only
-  #   adds `-lclang_rt.<platform>` to the link line) nor
-  #   `-Wl,-u,___isPlatformVersionAtLeast` (which adds the symbol as
-  #   a "demand") manages to pull the wrapper out: ld sees the demand
-  #   as already satisfiable via dynamic_lookup and skips compiler-rt
-  #   entirely. dyld then can't find the symbol either (compiler-rt
-  #   is a *static* archive, not a dyld-loadable image) and leaves
-  #   it bound to NULL. The first `@available` call from inside the
-  #   loaded module then jumps to PC=0 and the bare runtime aborts.
-  #
-  #   `-Wl,-force_load,<archive>` is the only ld primitive that
-  #   bypasses `-undefined,dynamic_lookup`: it's a positive directive
-  #   ("include every .o from this archive") rather than a demand
-  #   that dynamic_lookup can defer. We resolve the right
-  #   libclang_rt variant at configure time -- iossim / ios / osx /
-  #   maccatalyst / etc. -- by walking clang's resource dir, then
-  #   force-load just that one archive.
-  #
-  # Long-term this belongs in cmake-bare itself so every bare module
-  # is robust against `-undefined,dynamic_lookup` swallowing
-  # compiler-rt builtins. Mirror lives in qvac/packages/transcription-
-  # parakeet/CMakeLists.txt.
   if(IOS)
     if(CMAKE_OSX_SYSROOT MATCHES "Simulator")
       set(_qvac_rtlib_variant "iossim")

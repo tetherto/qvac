@@ -74,25 +74,9 @@ declare interface TTSGgmlOptions {
   speed?: number
   /** Supertonic: optional path to a .npy initial-noise tensor (byte-exact reference reproduction). */
   noiseNpyPath?: string
-  /**
-   * Directory the addon scans for dynamically-loaded ggml backends
-   * (`libqvac-speech-ggml-vulkan.so`, `libqvac-speech-ggml-opencl.so`,
-   * per-arch `libqvac-speech-ggml-cpu-*.so`). Defaults to
-   * `<package_dir>/prebuilds`, under which the per-bare-target +
-   * `qvac__tts-ggml` subdir installed by CMake holds the `.so`
-   * files. Apple / Windows static-only builds ignore this knob.
-   * Mirrors the parakeet / llm-llamacpp `backendsDir` shape so a
-   * host already passing `path.join(__dirname, 'prebuilds')` through
-   * one of those addons doesn't need to special-case tts-ggml.
-   */
+  /** Directory the addon scans for dynamically-loaded ggml backends */
   backendsDir?: string
-  /**
-   * Directory where ggml-opencl persists its compiled program-binary
-   * cache (sets `$GGML_OPENCL_CACHE_DIR`). Only honoured on Android;
-   * empty string keeps whatever value the process env already holds.
-   * Pass the host platform's app cache directory to skip the cold
-   * `clBuildProgram` cost on every process restart.
-   */
+  /** Directory where ggml-opencl persists its compiled program-binary */
   openclCacheDir?: string
   opts?: object
   exclusiveRun?: boolean

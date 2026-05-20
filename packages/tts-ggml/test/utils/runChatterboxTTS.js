@@ -216,16 +216,5 @@ module.exports = {
   runChatterboxTTS,
   runChatterboxTTSWithSplit,
   runChatterboxStreaming,
-  // Exported so callers that build their own `new TTSGgml({...})` outside
-  // `loadChatterboxTTS` (e.g. tests 3-5 in addon.test.js that exercise
-  // outputSampleRate / streamChunkTokens / runStreaming options not
-  // covered by the helper) can still resolve the reference audio via
-  // the same mobile-aware fallback. On Bare/iOS the test app stages
-  // `jfk.wav` into `Library/Caches/` (via `global.assetPaths`); the
-  // bare `__dirname / ../reference-audio/jfk.wav` path inside the app
-  // bundle is not readable by the native `std::filesystem::exists`
-  // check in ChatterboxModel::validateConfig, so direct callers must
-  // route through this helper or they'll trip `ModelFileNotFound`
-  // immediately after `model.load()`.
   resolveRefWavPath
 }
