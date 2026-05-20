@@ -15,6 +15,7 @@
 #include "addon/TTSErrors.hpp"
 #include "model-interface/BackendUtils.hpp"
 #include "inference-addon-cpp/Errors.hpp"
+#include "inference-addon-cpp/Logger.hpp"
 
 namespace qvac::ttsggml::chatterbox {
 
@@ -24,6 +25,7 @@ using qvac_errors::createTTSError;
 using qvac_errors::StatusError;
 using qvac_errors::tts_error::TTSErrorCode;
 namespace general_error = qvac_errors::general_error;
+namespace logger = qvac_lib_inference_addon_cpp::logger;
 
 tts_cpp::chatterbox::EngineOptions toEngineOptions(const ChatterboxConfig& cfg) {
   tts_cpp::chatterbox::EngineOptions opts;
@@ -180,6 +182,25 @@ void ChatterboxModel::reload() {
 
 void ChatterboxModel::loadLocked() {
   if (engine_) return;
+
+  // Force useGPU to false on Android until Vulkan (Mali) and OpenCL (Adreno)
+  // stabilize for the Chatterbox graph.
+#ifdef __ANDROID__
+  {
+    const bool wantsGpu =
+        cfg_.useGpu.value_or(false) ||
+        (cfg_.nGpuLayers.has_value() && *cfg_.nGpuLayers != 0);
+    if (wantsGpu) {
+      QLOG(logger::Priority::WARNING,
+           "Chatterbox: useGPU=true is currently ignored on Android "
+           "(GPU backends disabled at engine boundary pending Vulkan/Mali "
+           "and OpenCL/Adreno driver fixes); falling back to CPU.");
+    }
+    cfg_.useGpu     = false;
+    cfg_.nGpuLayers = 0;
+  }
+#endif
+
   try {
     engine_ = std::make_shared<tts_cpp::chatterbox::Engine>(toEngineOptions(cfg_));
   } catch (const std::exception& e) {

@@ -20,7 +20,6 @@
 const fs = require('bare-fs')
 const os = require('bare-os')
 const path = require('bare-path')
-const proc = require('bare-process')
 const test = require('brittle')
 
 const { loadChatterboxTTS, runChatterboxTTS, resolveRefWavPath } = require('../utils/runChatterboxTTS')
@@ -32,7 +31,11 @@ const {
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
-const NO_GPU = proc.env && proc.env.NO_GPU === 'true'
+
+// Lifecycle / sequential-run test, not a GPU policy test: rely on the
+// package default (`useGPU: false`) and the Android C++-side override
+// in ChatterboxModel::loadLocked rather than opting into GPU here.
+// Tests that *are* about GPU live in gpu-smoke.test.js.
 
 function getBaseDir () {
   return isMobile && global.testDir ? global.testDir : '.'
@@ -61,8 +64,7 @@ test('Chatterbox: multiple sequential runs reuse the same engine instance', { ti
   const model = await loadChatterboxTTS({
     modelDir: download.targetDir,
     refWavPath,
-    language: 'en',
-    useGPU: !NO_GPU
+    language: 'en'
   })
   try {
     const timings = []
@@ -154,8 +156,7 @@ test('Chatterbox: fresh instance per run (app-restart simulation)', { timeout: 1
     const model = await loadChatterboxTTS({
       modelDir: download.targetDir,
       refWavPath,
-      language: 'en',
-      useGPU: !NO_GPU
+      language: 'en'
     })
     const loadMs = Date.now() - t0
     try {
@@ -221,8 +222,7 @@ test('Chatterbox: reload() between runs preserves stability', { timeout: 1800000
   const model = await loadChatterboxTTS({
     modelDir: download.targetDir,
     refWavPath,
-    language: 'en',
-    useGPU: !NO_GPU
+    language: 'en'
   })
   try {
     const r1 = await runChatterboxTTS(model, { text: 'First run before reload.' }, { minSamples: 5000 })
@@ -280,7 +280,7 @@ test('Engine swap: chatterbox -> supertonic -> chatterbox in separate instances'
   const refWavPath = resolveRefWavPath({})
   if (!fs.existsSync(refWavPath)) { t.pass('Skipped: reference audio missing'); return }
 
-  const c1 = await loadChatterboxTTS({ modelDir: cb.targetDir, refWavPath, language: 'en', useGPU: !NO_GPU })
+  const c1 = await loadChatterboxTTS({ modelDir: cb.targetDir, refWavPath, language: 'en' })
   try {
     const r = await runChatterboxTTS(c1, { text: 'Hello from chatterbox.' }, { minSamples: 5000 })
     t.ok(r.passed, 'first chatterbox instance OK')
@@ -292,7 +292,7 @@ test('Engine swap: chatterbox -> supertonic -> chatterbox in separate instances'
     t.ok(r.passed, 'supertonic instance OK')
   } finally { try { await s1.unload() } catch (_e) {} }
 
-  const c2 = await loadChatterboxTTS({ modelDir: cb.targetDir, refWavPath, language: 'en', useGPU: !NO_GPU })
+  const c2 = await loadChatterboxTTS({ modelDir: cb.targetDir, refWavPath, language: 'en' })
   try {
     const r = await runChatterboxTTS(c2, { text: 'Hello from chatterbox again.' }, { minSamples: 5000 })
     t.ok(r.passed, 'second chatterbox instance OK after supertonic swap')

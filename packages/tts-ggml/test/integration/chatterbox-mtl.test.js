@@ -11,7 +11,6 @@
 const fs = require('bare-fs')
 const os = require('bare-os')
 const path = require('bare-path')
-const proc = require('bare-process')
 const test = require('brittle')
 
 const TTSGgml = require('@qvac/tts-ggml')
@@ -21,7 +20,11 @@ const { ensureChatterboxMtlModels } = require('../utils/downloadModel')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
-const NO_GPU = proc.env && proc.env.NO_GPU === 'true'
+
+// Language coverage test, not a GPU policy test: rely on the package
+// default (`useGPU: false`) and the Android C++-side override in
+// ChatterboxModel::loadLocked rather than opting into GPU here.
+// Tests that *are* about GPU live in gpu-smoke.test.js.
 
 function getBaseDir () {
   return isMobile && global.testDir ? global.testDir : '.'
@@ -75,8 +78,7 @@ test('Chatterbox MTL TTS (ggml): synthesizes across es/fr/de/pt with shared engi
 
   const model = await loadChatterboxMtlTTS({
     modelDir: download.targetDir,
-    language: MTL_SENTENCES[0].lang,
-    useGPU: !NO_GPU
+    language: MTL_SENTENCES[0].lang
   })
   try {
     for (let i = 0; i < MTL_SENTENCES.length; i++) {
@@ -112,8 +114,7 @@ test('Chatterbox MTL TTS (ggml): backendDevice + backendId surfaced in stats', {
 
   const model = await loadChatterboxMtlTTS({
     modelDir: download.targetDir,
-    language: 'es',
-    useGPU: !NO_GPU
+    language: 'es'
   })
   try {
     const result = await runTTS(
