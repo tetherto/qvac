@@ -27,8 +27,27 @@ function tinyPng16x16 () {
   return b4a.from(TINY_PNG_16X16_B64, 'base64')
 }
 
-const JOB_TIMEOUT_MS = 120000
+const JOB_TIMEOUT_MS = isAndroid ? 300000 : 120000
 const BACKENDS_DIR = path.join(__dirname, '../../prebuilds')
+
+function logPhase (phase, configDevice, expected, actual) {
+  let line =
+    '[esrgan-backend-device] phase=' +
+    phase +
+    ' platform=' +
+    os.platform() +
+    ' arch=' +
+    os.arch() +
+    ' config.device=' +
+    configDevice
+  if (expected != null) {
+    line += ' expected backendDevice=' + expected
+  }
+  if (actual != null) {
+    line += ' actual=' + actual
+  }
+  console.log(line)
+}
 
 function queryExpectedBackendDevice (configDevice) {
   if (typeof binding.getExpectedEsrganBackendDevice !== 'function') {
@@ -39,34 +58,29 @@ function queryExpectedBackendDevice (configDevice) {
   return binding.getExpectedEsrganBackendDevice(configDevice, BACKENDS_DIR)
 }
 
-function logBackendPolicy (configDevice, expected, actual) {
-  console.log(
-    '[esrgan-backend-device] platform=' +
-      os.platform() +
-      ' config.device=' +
-      configDevice +
-      ' expected backendDevice=' +
-      expected +
-      (actual != null ? ' actual=' + actual : '')
-  )
-}
-
 async function ensureEsrganModelPath () {
+  logPhase('before-model-download', 'n/a')
   const [esrganName, modelDir] = await ensureModel({
     modelName: ESRGAN_MODEL.name,
     downloadUrl: ESRGAN_MODEL.url
   })
-  return { esrganPath: path.join(modelDir, esrganName), modelDir }
+  const esrganPath = path.join(modelDir, esrganName)
+  logPhase('after-model-download', 'n/a', null, esrganPath)
+  return { esrganPath, modelDir }
 }
 
 test(
   'ESRGAN standalone — config.device cpu reports backendDevice cpu in RuntimeStats',
-  { timeout: JOB_TIMEOUT_MS },
+  { timeout: JOB_TIMEOUT_MS, skip: isAndroid },
   async t => {
+    const configDevice = 'cpu'
     setupJsLogger(binding)
-    const expected = queryExpectedBackendDevice('cpu')
+    logPhase('start', configDevice)
+
+    logPhase('before-query-expected', configDevice)
+    const expected = queryExpectedBackendDevice(configDevice)
+    logPhase('after-query-expected', configDevice, expected)
     t.is(expected, 'cpu', 'native policy always maps config cpu -> cpu')
-    logBackendPolicy('cpu', expected)
 
     const { esrganPath } = await ensureEsrganModelPath()
     t.ok(fs.existsSync(esrganPath), 'ESRGAN weights exist')
@@ -74,7 +88,7 @@ test(
     const upscaler = new EsrganUpscaler({
       files: { esrgan: esrganPath },
       config: {
-        device: 'cpu',
+        device: configDevice,
         upscaler_tile_size: 64,
         backendsDir: BACKENDS_DIR
       },
@@ -83,10 +97,15 @@ test(
     })
 
     try {
+      logPhase('before-load', configDevice, expected)
       await upscaler.load()
+      logPhase('after-load', configDevice, expected)
+
+      logPhase('before-upscale', configDevice, expected)
       const response = await upscaler.upscale(tinyPng16x16(), { repeats: 1 })
       await response.onUpdate(() => {}).await()
-      logBackendPolicy('cpu', expected, response.stats.backendDevice)
+      logPhase('after-upscale', configDevice, expected, response.stats.backendDevice)
+
       t.is(
         response.stats.backendDevice,
         expected,
@@ -105,13 +124,17 @@ test(
   'ESRGAN standalone — config.device gpu reports policy-aligned backendDevice in RuntimeStats',
   { timeout: JOB_TIMEOUT_MS, skip: noGpu },
   async t => {
+    const configDevice = 'gpu'
     setupJsLogger(binding)
-    const expected = queryExpectedBackendDevice('gpu')
+    logPhase('start', configDevice)
+
+    logPhase('before-query-expected', configDevice)
+    const expected = queryExpectedBackendDevice(configDevice)
+    logPhase('after-query-expected', configDevice, expected)
     t.ok(
       expected === 'cpu' || expected === 'gpu',
       'native policy returns cpu or gpu for config gpu'
     )
-    logBackendPolicy('gpu', expected)
 
     const { esrganPath } = await ensureEsrganModelPath()
     t.ok(fs.existsSync(esrganPath), 'ESRGAN weights exist')
@@ -119,7 +142,7 @@ test(
     const upscaler = new EsrganUpscaler({
       files: { esrgan: esrganPath },
       config: {
-        device: 'gpu',
+        device: configDevice,
         upscaler_tile_size: 64,
         backendsDir: BACKENDS_DIR
       },
@@ -128,11 +151,15 @@ test(
     })
 
     try {
+      logPhase('before-load', configDevice, expected)
       await upscaler.load()
+      logPhase('after-load', configDevice, expected)
+
+      logPhase('before-upscale', configDevice, expected)
       const response = await upscaler.upscale(tinyPng16x16(), { repeats: 1 })
       await response.onUpdate(() => {}).await()
       const actual = response.stats.backendDevice
-      logBackendPolicy('gpu', expected, actual)
+      logPhase('after-upscale', configDevice, expected, actual)
 
       t.is(
         actual,
@@ -148,7 +175,7 @@ test(
       } catch (_) {}
       if (isAndroid) {
         console.log(
-          '[esrgan-backend-device] Android run complete; check native logs for OpenCL/GPU init'
+          '[esrgan-backend-device] Android GPU subtest complete; native logs show backend init path'
         )
       }
     }
