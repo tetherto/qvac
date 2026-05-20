@@ -254,6 +254,30 @@ SKIP_PT_KEYS_EXACT = {
 }
 
 
+def _optional_pt_keys_with_shape() -> dict[str, tuple[int, ...]]:
+    """PT keys we *would* like in the state dict but which legitimately may
+    be absent in released checkpoints — synthesised as zeros if missing.
+
+    The expert path's plain RMSNorm ``.weight`` scales fall here. In an
+    adaRMSNorm layer the effective per-element multiplier is
+    ``(1 + base_scale) * (1 + ada_scale) + ada_shift`` (plan §2, RMSNorm
+    formula). Released ``pi05_base`` only stores ``input_layernorm.dense.*``
+    / ``post_attention_layernorm.dense.*`` / ``norm.dense.*`` — the plain
+    ``.weight`` is omitted because it would have been zero anyway. We
+    materialise zeros so the GGUF schema stays uniform (pi05.cpp can always
+    read ``expert.blk.N.pre_attn_norm.scale`` etc., with no
+    "tensor may be missing" branch).
+    """
+    pt_base = "model.paligemma_with_expert.gemma_expert.model.layers"
+    pre_exp = "model.paligemma_with_expert.gemma_expert.model"
+    out: dict[str, tuple[int, ...]] = {}
+    for i in range(SPEC.expert_layers):
+        out[f"{pt_base}.{i}.input_layernorm.weight"] = (SPEC.expert_hidden,)
+        out[f"{pt_base}.{i}.post_attention_layernorm.weight"] = (SPEC.expert_hidden,)
+    out[f"{pre_exp}.norm.weight"] = (SPEC.expert_hidden,)
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Quantisation policy. Returns the target GGML dtype for a GGUF tensor name +
 # its numpy dtype/shape. Order matters: norms before linears so the F32
@@ -456,12 +480,36 @@ def convert(
         written[gg_name] = (target, tuple(arr.shape))
 
     missing_pt = expected_pt_keys - seen_pt_keys
-    if missing_pt:
+
+    # Expert RMSNorm `.weight` scales are absent in released pi05_base —
+    # synthesise zeros for them so the GGUF schema stays uniform. See
+    # `_optional_pt_keys_with_shape` for the rationale.
+    optional = _optional_pt_keys_with_shape()
+    synthesised = missing_pt & optional.keys()
+    truly_missing = missing_pt - optional.keys()
+
+    if synthesised:
+        log.info(
+            "synthesising %d zero tensors for expert norm scales absent in "
+            "the checkpoint (adaRMSNorm convention; see comment on "
+            "_optional_pt_keys_with_shape)",
+            len(synthesised),
+        )
+        for pt_name in sorted(synthesised):
+            gg_name = name_map[pt_name]
+            shape = optional[pt_name]
+            arr = np.zeros(shape, dtype=np.float32)
+            target = select_target_dtype(gg_name, arr)
+            payload, raw_dtype = encode_for_gguf(arr, target)
+            writer.add_tensor(gg_name, payload, raw_dtype=raw_dtype)
+            written[gg_name] = (target, shape)
+
+    if truly_missing:
         log.error(
             "%d expected PyTorch tensors are missing from the state dict:",
-            len(missing_pt),
+            len(truly_missing),
         )
-        for k in sorted(missing_pt):
+        for k in sorted(truly_missing):
             log.error("  - %s", k)
         raise RuntimeError(
             "conversion aborted: state dict is missing tensors the converter expected"
