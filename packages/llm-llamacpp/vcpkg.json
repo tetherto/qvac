@@ -19,6 +19,7 @@
       "version>=": "1.4.4#3"
     }
   ],
+  "default-features": ["kleidiai"],  
   "features": {
     "tests": {
       "description": "Build tests",
