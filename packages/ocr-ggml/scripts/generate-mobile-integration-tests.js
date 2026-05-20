@@ -25,7 +25,7 @@ function getIntegrationFiles () {
 }
 
 function toFunctionName (fileName) {
-  const base = fileName.replace(/\.test\.js$/, '')
+  const base = fileName.replace(/\.js$/, '')
   const parts = base.split(/[^a-zA-Z0-9]+/).filter(Boolean)
   const suffix = parts.map(part => part.charAt(0).toUpperCase() + part.slice(1)).join('')
   return `run${suffix}`
@@ -35,6 +35,9 @@ function buildFileContents (files) {
   const lines = []
   lines.push("'use strict'")
   lines.push("require('./integration-runtime.cjs')")
+  lines.push('')
+  lines.push('// AUTO-GENERATED FILE. Run `npm run test:mobile:generate` to update.')
+  lines.push('// Each function mirrors a single file under test/integration/.')
   lines.push('')
   lines.push('/* global runIntegrationModule */')
   lines.push('')
