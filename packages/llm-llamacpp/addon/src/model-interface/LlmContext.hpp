@@ -60,7 +60,7 @@ class LlamaBatch {
 public:
   LlamaBatch() noexcept : batch_{}, initialized_(false) {}
 
-  // NOLINTNEXTLINE(readability-identifier-naming) -- llama.cpp upstream naming convention
+  // NOLINTNEXTLINE(readability-identifier-naming)
   LlamaBatch(int32_t n_tokens, int32_t embd, int32_t n_seq_max)
       : batch_(llama_batch_init(n_tokens, embd, n_seq_max)),
         initialized_(true) {}
