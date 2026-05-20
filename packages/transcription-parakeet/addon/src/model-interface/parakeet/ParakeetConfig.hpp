@@ -79,10 +79,9 @@ struct ParakeetConfig {
   explicit ParakeetConfig(const std::string& path) : modelPath(path) {}
 
   bool operator==(const ParakeetConfig& other) const {
-    return modelPath == other.modelPath &&
-           modelType == other.modelType && maxThreads == other.maxThreads &&
-           useGPU == other.useGPU && sampleRate == other.sampleRate &&
-           channels == other.channels &&
+    return modelPath == other.modelPath && modelType == other.modelType &&
+           maxThreads == other.maxThreads && useGPU == other.useGPU &&
+           sampleRate == other.sampleRate && channels == other.channels &&
            captionEnabled == other.captionEnabled &&
            timestampsEnabled == other.timestampsEnabled && seed == other.seed &&
            streaming == other.streaming &&
