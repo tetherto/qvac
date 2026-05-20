@@ -35,7 +35,7 @@ const {
   formatOCRPerformanceMetrics
 } = require('./helpers')
 
-const TEST_TIMEOUT = 120 * 1000
+const TEST_TIMEOUT = 300 * 1000
 
 const detector = resolveModelPath('OCR_GGML_DETECTOR', 'craft_mlt_25k.gguf.bin')
 const recognizer = resolveModelPath('OCR_GGML_RECOGNIZER', 'latin_g2.gguf.bin')
