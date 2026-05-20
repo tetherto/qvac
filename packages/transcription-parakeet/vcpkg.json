@@ -1,6 +1,6 @@
 {
   "name": "transcription-parakeet",
-  "version": "0.5.0",
+  "version": "0.4.0",
   "dependencies": [
     {
       "name": "parakeet-cpp",

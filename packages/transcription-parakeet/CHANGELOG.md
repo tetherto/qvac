@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.5.0]
+## [Unreleased]
 
 In this release we expose the v2.1 streaming Sortformer model with NeMo-port AOSC (Audio-Online Speaker Cache) through the addon's public API. AOSC anchors each speaker to a stable cache slot across silence and re-entry, fixing the per-chunk permutation-invariance drift v1's sliding-window streaming exhibits once two voices have been seen. v2.1 becomes the recommended streaming Sortformer; v1 stays the offline-batch default. Six new optional config knobs surface the cache geometry for tuning and A/B comparison; defaults mirror parakeet-cpp's NeMo-port tuning so a bare `streaming: true` against a v2.1 GGUF Just Works.
 
