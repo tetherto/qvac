@@ -8,7 +8,7 @@
 
 ## Pull Requests
 
-- [#2148](https://github.com/tetherto/qvac/pull/2148) - QVAC-18802: reject multi-GPU config on Android/iOS
+- [#2151](https://github.com/tetherto/qvac/pull/2151) - QVAC-18802: reject multi-GPU config on Android/iOS
 
 ## [0.16.0] - 2026-05-10
 
