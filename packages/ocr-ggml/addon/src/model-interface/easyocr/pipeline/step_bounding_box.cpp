@@ -362,14 +362,12 @@ StepBoundingBox::turnPolysIntoBoxes(
       int margin = static_cast<int>(
           MARGIN_SCALE * boxMarginMultiplier * std::min(widthVal, heightVal));
 
-      const float theta13 = std::abs(
-          std::atan(
-              (poly[0].y - poly[2].y) /
-              std::max(MIN_DELTA_FOR_SLOPE, poly[0].x - poly[2].x)));
-      const float theta24 = std::abs(
-          std::atan(
-              (poly[1].y - poly[3].y) /
-              std::max(MIN_DELTA_FOR_SLOPE, poly[1].x - poly[3].x)));
+      const float theta13 = std::abs(std::atan(
+          (poly[0].y - poly[2].y) /
+          std::max(MIN_DELTA_FOR_SLOPE, poly[0].x - poly[2].x)));
+      const float theta24 = std::abs(std::atan(
+          (poly[1].y - poly[3].y) /
+          std::max(MIN_DELTA_FOR_SLOPE, poly[1].x - poly[3].x)));
 
       const float xOne =
           poly[0].x - (std::cos(theta13) * static_cast<float>(margin));
@@ -396,8 +394,15 @@ StepBoundingBox::turnPolysIntoBoxes(
     }
   }
 
+  // clang-analyzer-cplusplus.Move false positive: the analyzer traces
+  // through libc++'s std::sort introsort partition (which uses
+  // __iter_move(__first) to extract a pivot value) and incorrectly
+  // attributes the moved-from state to the comparator's by-const-ref
+  // arguments. The lambda only reads boxA/boxB[IDX_Y_CENTER]; no actual
+  // use-after-move occurs. Same root cause hits in step_recognize_text.cpp.
   auto isSmallerYCenter = [](const std::array<float, ALIGNED_META_SIZE>& boxA,
                              const std::array<float, ALIGNED_META_SIZE>& boxB) {
+    // NOLINTNEXTLINE(clang-analyzer-cplusplus.Move)
     return boxA[IDX_Y_CENTER] < boxB[IDX_Y_CENTER];
   };
   std::ranges::sort(alignedBoxes, isSmallerYCenter);

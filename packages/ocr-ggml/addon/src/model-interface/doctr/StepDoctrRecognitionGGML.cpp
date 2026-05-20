@@ -983,10 +983,9 @@ StepDoctrRecognitionGGML::StepDoctrRecognitionGGML(
       qvac_lib_inference_addon_cpp::logger::Priority::INFO,
       "[DoctrRecognitionGGML] GGML CPU recognizer loaded, batchSize=" +
           std::to_string(batchSize) + ", decoding=" + decodingStr);
-  ALOG_INFO(
-      std::string(
-          "[DoctrRecognitionGGML] GGML CPU recognizer loaded, decoding=" +
-          decodingStr));
+  ALOG_INFO(std::string(
+      "[DoctrRecognitionGGML] GGML CPU recognizer loaded, decoding=" +
+      decodingStr));
 }
 
 StepDoctrRecognitionGGML::~StepDoctrRecognitionGGML() = default;

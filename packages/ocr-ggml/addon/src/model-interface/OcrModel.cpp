@@ -31,9 +31,8 @@ cv::Mat decodeOrWrapImage(const OcrInput& input) {
             input.data.data()));
     cv::Mat decoded = cv::imdecode(encoded, cv::IMREAD_COLOR);
     if (decoded.empty()) {
-      throw std::runtime_error(
-          "ocr-ggml: failed to decode image (unsupported "
-          "format or corrupt data)");
+      throw std::runtime_error("ocr-ggml: failed to decode image (unsupported "
+                               "format or corrupt data)");
     }
     // cv::imdecode returns BGR; the EasyOCR pre-processing expects RGB.
     cv::cvtColor(decoded, decoded, cv::COLOR_BGR2RGB);

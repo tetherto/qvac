@@ -675,10 +675,9 @@ StepRecognizeText::StepRecognizeText(
       // trust the GGUF (which is what the model was trained on).
       QLOG(
           qvac_lib_inference_addon_cpp::logger::Priority::WARN,
-          std::string(
-              "[Recognition] GGUF crnn.vocab differs from "
-              "Lang.cpp table for the requested language "
-              "list (sizes: gguf=") +
+          std::string("[Recognition] GGUF crnn.vocab differs from "
+                      "Lang.cpp table for the requested language "
+                      "list (sizes: gguf=") +
               std::to_string(utf32Characters_.size()) +
               ", lang=" + std::to_string(langChars.size()) +
               ") — using GGUF as the runtime vocab.");
@@ -845,11 +844,18 @@ void StepRecognizeText::populateImageList(const Input& input) {
   // Sort by y_center first, then by x for boxes on same row
   std::ranges::sort(
       imgListOfLists_,
+      // clang-analyzer-cplusplus.Move false positive: the analyzer traces
+      // through libc++'s std::sort introsort partition (which uses
+      // __iter_move(__first) to extract a pivot value) and incorrectly
+      // attributes the moved-from state to the comparator's by-const-ref
+      // arguments. The lambda only reads listA/listB[0].coords; no actual
+      // use-after-move occurs. Same root cause hits step_bounding_box.cpp.
       [rowThreshold](
           const std::vector<SubImage>& listA,
           const std::vector<SubImage>& listB) {
         constexpr float kQuadEdgeMidpointDivisor = 2.0F;
         const auto& coordsA = listA[0].coords;
+        // NOLINTNEXTLINE(clang-analyzer-cplusplus.Move)
         const auto& coordsB = listB[0].coords;
         float yCenterA =
             (coordsA[0].y + coordsA[3].y) / kQuadEdgeMidpointDivisor;
