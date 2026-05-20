@@ -93,16 +93,9 @@
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
     "fflate": "^0.8.2",
-    "fs": "npm:bare-fs",
     "husky": "^9.1.7",
-    "os": "npm:bare-os@^3.6.2",
-    "process": "npm:bare-process",
-    "sinon": "^21.0.0",
     "standard": "^17.0.0",
-    "stream": "npm:bare-node-stream",
-    "tty": "npm:bare-node-tty",
-    "typescript": "^6.0.3",
-    "util": "npm:bare-utils@^1.5.1"
+    "typescript": "^6.0.3"
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",

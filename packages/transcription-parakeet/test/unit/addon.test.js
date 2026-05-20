@@ -8,13 +8,9 @@ const { ParakeetInterface } = require('../../parakeet')
 
 const process = require('bare-process')
 global.process = process
-const sinon = require('sinon')
 
 function createMockedModel ({ onOutput = () => { }, binding = undefined } = {}) {
-  // Restore any existing stub first
-  TranscriptionParakeet.prototype.validateModelFiles?.restore?.()
-  // Mock validateModelFiles on the prototype BEFORE creating instance
-  const validateStub = sinon.stub(TranscriptionParakeet.prototype, 'validateModelFiles').returns(undefined)
+  TranscriptionParakeet.prototype.validateModelFiles = () => undefined
 
   const model = new TranscriptionParakeet({
     files: { model: './models/parakeet-tdt-0.6b-v3.q8_0.gguf' },
@@ -29,7 +25,7 @@ function createMockedModel ({ onOutput = () => { }, binding = undefined } = {}) 
     }
   })
 
-  sinon.stub(model, '_createAddon').callsFake(configurationParams => {
+  model._createAddon = configurationParams => {
     const _binding = binding || new MockedBinding()
     const addon = new ParakeetInterface(_binding, configurationParams, (addon, event, jobId, output, error) => {
       model._outputCallback(addon, event, jobId, output, error)
@@ -37,10 +33,7 @@ function createMockedModel ({ onOutput = () => { }, binding = undefined } = {}) 
     }, transitionCb)
 
     return addon
-  })
-
-  // Store stub reference for cleanup
-  model._validateStub = validateStub
+  }
 
   return model
 }

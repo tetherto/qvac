@@ -79,12 +79,8 @@
     "cmake-vcpkg": "^1.1.0",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.7",
-    "os": "npm:bare-os@^3.6.2",
-    "sinon": "^21.0.0",
     "standard": "^17.1.2",
-    "tty": "npm:bare-node-tty",
-    "typescript": "^6.0.3",
-    "util": "npm:bare-utils@^1.5.1"
+    "typescript": "^6.0.3"
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",
