@@ -16,4 +16,3 @@ export {
   findBundleConfigFile,
   loadBundleConfig,
 } from "@/commands/config";
-export { DEFAULT_HOSTS, DEFAULT_SDK_NAME } from "@/commands/bundle/constants";
