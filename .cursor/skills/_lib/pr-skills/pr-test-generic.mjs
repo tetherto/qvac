@@ -229,10 +229,7 @@ function scoreTestScript(name) {
 }
 
 export function classifyGenericPackage(packagePath, packageJson) {
-  if (
-    packageJson.addon === true ||
-    packagePath.startsWith("packages/qvac-lib-infer-")
-  ) {
+  if (packageJson.addon === true) {
     return "addon";
   }
   return "other";

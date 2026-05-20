@@ -386,7 +386,7 @@ jobs:
 
       - name: Install bare globally
         shell: bash
-        run: npm install -g bare
+        run: npm install -g --force bare
 
       - name: Lint
         working-directory: ${{ env.PKG_DIR }}/client

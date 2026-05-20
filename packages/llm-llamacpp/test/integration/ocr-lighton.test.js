@@ -1,9 +1,8 @@
 'use strict'
 // test/integration/ocr-lighton.test.js
-const test = require('brittle')
 const fs = require('bare-fs')
 const path = require('bare-path')
-const { ensureModel, getMediaPath } = require('./utils')
+const { ensureModel, getMediaPath, safeTest } = require('./utils')
 const LlmLlamacpp = require('../../index.js')
 const os = require('bare-os')
 
@@ -103,7 +102,7 @@ async function runOcr (inference, imageFilePath) {
 }
 
 // Test: LightON OCR-2 can extract text from a newspaper document image
-test('LightON OCR-2 can extract text from document image', { timeout: TEST_CONSTANTS.timeout, skip: isMobile }, async t => {
+safeTest('LightON OCR-2 can extract text from document image', { timeout: TEST_CONSTANTS.timeout, skip: isMobile }, async t => {
   for (const deviceConfig of DEVICE_CONFIGS) {
     const label = `[${deviceConfig.id.toUpperCase()}]`
 

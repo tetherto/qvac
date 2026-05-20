@@ -75,7 +75,6 @@ jobs:
           echo "workdir=$INPUT_WORKDIR"
 
       - name: Setup Node.js
-        if: matrix.platform == 'darwin' || matrix.arch == 'arm64'
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
@@ -97,14 +96,8 @@ jobs:
         run: |
           npm install
       
-      - name: Set Bare tooling on MacOS
-        if: matrix.platform == 'darwin'
-        run: |
-          npm install -g bare bare-make
-
-      - name: Add bare tooling to PATH (Linux x64)
-        if: ${{ matrix.os == 'ubuntu-24.04' }}
-        run: echo "/usr/local/nvm/versions/node/v20.20.2/bin" >> $GITHUB_PATH
+      - name: Install bare tooling
+        run: npm install -g --force bare bare-make
 
 
       - if: ${{ matrix.os == 'windows-2025' }}
