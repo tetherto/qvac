@@ -41,7 +41,9 @@ import {
   FLUX_2_KLEIN_4B_VAE,
   QWEN3_4B_Q4_K_M,
   SD_V2_1_1B_Q8_0,
-  REALESRGAN_X4PLUS_ANIME_6B
+  REALESRGAN_X4PLUS_ANIME_6B,
+  QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
+  GEMMA4_2B_MULTIMODAL_Q4_K_M,
 } from "@qvac/sdk";
 import * as path from "node:path";
 import { ResourceManager } from "../shared/resource-manager.js";
@@ -132,6 +134,18 @@ resources.define("tools-dynamic", {
   constant: QWEN3_1_7B_INST_Q4,
   type: "llm",
   config: { ctx_size: 4096, tools: true, toolsMode: "dynamic" },
+});
+
+resources.define("tools-qwen35", {
+  constant: QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
+  type: "llm",
+  config: { ctx_size: 4096, tools: true },
+});
+
+resources.define("tools-gemma4", {
+  constant: GEMMA4_2B_MULTIMODAL_Q4_K_M,
+  type: "llm",
+  config: { ctx_size: 4096, tools: true },
 });
 
 resources.define("ocr", {
@@ -228,7 +242,6 @@ const referenceAudioPath = path.resolve(process.cwd(), "assets/audio/transcripti
 resources.define("tts-chatterbox", {
   constant: TTS_TOKENIZER_EN_CHATTERBOX,
   type: "tts",
-  preLoadUnload: true,
   config: {
     ttsEngine: "chatterbox",
     language: "en",
@@ -255,7 +268,6 @@ const ttsSupertonicBaseConfig = {
 resources.define("tts-supertonic", {
   constant: TTS_SUPERTONIC2_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32,
   type: "onnx-tts",
-  preLoadUnload: true,
   config: {
     ...ttsSupertonicBaseConfig,
     language: "en",
@@ -265,7 +277,6 @@ resources.define("tts-supertonic", {
 resources.define("tts-supertonic-multilingual", {
   constant: TTS_SUPERTONIC2_OFFICIAL_TEXT_ENCODER_SUPERTONE_FP32,
   type: "onnx-tts",
-  preLoadUnload: true,
   config: {
     ...ttsSupertonicBaseConfig,
     language: "es",
@@ -277,7 +288,6 @@ resources.define("tts-supertonic-multilingual", {
 resources.define("parakeet-tdt", {
   constant: PARAKEET_TDT_ENCODER_INT8,
   type: "parakeet",
-  preLoadUnload: true,
   config: {
     parakeetEncoderSrc: PARAKEET_TDT_ENCODER_INT8,
     parakeetDecoderSrc: PARAKEET_TDT_DECODER_INT8,
@@ -290,7 +300,6 @@ resources.define("parakeet-tdt", {
 resources.define("parakeet-ctc", {
   constant: PARAKEET_CTC_FP32,
   type: "parakeet",
-  preLoadUnload: true,
   config: {
     modelType: "ctc",
     parakeetCtcModelSrc: PARAKEET_CTC_FP32,
@@ -302,7 +311,6 @@ resources.define("parakeet-ctc", {
 resources.define("parakeet-sortformer", {
   constant: PARAKEET_SORTFORMER_FP32,
   type: "parakeet",
-  preLoadUnload: true,
   config: {
     modelType: "sortformer",
     parakeetSortformerSrc: PARAKEET_SORTFORMER_FP32,
@@ -312,7 +320,6 @@ resources.define("parakeet-sortformer", {
 resources.define("vision", {
   constant: SMOLVLM2_500M_MULTIMODAL_Q8_0,
   type: "llm",
-  preLoadUnload: true,
   config: {
     ctx_size: 1024,
     projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
@@ -322,7 +329,6 @@ resources.define("vision", {
 resources.define("diffusion", {
   constant: FLUX_2_KLEIN_4B_Q4_0,
   type: "diffusion",
-  preLoadUnload: true,
   config: {
     device: "gpu",
     threads: 4,
@@ -332,11 +338,36 @@ resources.define("diffusion", {
   },
 });
 
+resources.define("diffusion-fa", {
+  constant: FLUX_2_KLEIN_4B_Q4_0,
+  type: "diffusion",
+  config: {
+    device: "gpu",
+    threads: 4,
+    prediction: "flux2_flow",
+    llmModelSrc: QWEN3_4B_Q4_K_M,
+    vaeModelSrc: FLUX_2_KLEIN_4B_VAE,
+    diffusion_fa: true,
+  },
+});
+
+resources.define("diffusion-fa-disabled", {
+  constant: FLUX_2_KLEIN_4B_Q4_0,
+  type: "diffusion",
+  config: {
+    device: "gpu",
+    threads: 4,
+    prediction: "flux2_flow",
+    llmModelSrc: QWEN3_4B_Q4_K_M,
+    vaeModelSrc: FLUX_2_KLEIN_4B_VAE,
+    diffusion_fa: false,
+  },
+});
+
 // Isolated from "diffusion" so ESRGAN load failures don't affect the rest of the suite.
 resources.define("diffusion-esrgan", {
   constant: SD_V2_1_1B_Q8_0,
   type: "diffusion",
-  preLoadUnload: true,
   config: {
     device: "gpu",
     threads: 4,
@@ -353,7 +384,6 @@ resources.define("diffusion-esrgan", {
 resources.define("upscaler", {
   constant: REALESRGAN_X4PLUS_ANIME_6B,
   type: "diffusion",
-  preLoadUnload: true,
   config: {
     mode: "upscale",
     upscaler: {

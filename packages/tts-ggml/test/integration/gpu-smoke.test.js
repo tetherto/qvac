@@ -2,7 +2,7 @@
 
 // GPU smoke tests for both tts-ggml engines (chatterbox + supertonic).
 //
-// Mirrors qvac-lib-infer-parakeet/test/integration/gpu-smoke.test.js's
+// Mirrors transcription-parakeet/test/integration/gpu-smoke.test.js's
 // strict-on-CPU policy: a useGPU=true request that resolves to the CPU
 // backend on a GPU-capable platform is treated as a regression because
 // it usually means a build / linkage / kernel-init drift that CI must
