@@ -227,9 +227,55 @@ const additionalToolsTests: TestDefinition[] = toolsTestIds.map((testId) => ({
   },
 }));
 
+export const toolsSimpleFunctionQwen35 = createToolsTest(
+  "tools-simple-function-qwen35",
+  "What's 25 degrees Celsius in Fahrenheit?",
+  [
+    {
+      type: "function",
+      name: "convert_temperature",
+      description: "Convert temperature between Celsius and Fahrenheit",
+      parameters: {
+        type: "object",
+        properties: {
+          value: { type: "number", description: "Temperature value" },
+          from_unit: { type: "string", enum: ["celsius", "fahrenheit"], description: "Source unit" },
+          to_unit: { type: "string", enum: ["celsius", "fahrenheit"], description: "Target unit" },
+        },
+        required: ["value", "from_unit", "to_unit"],
+      },
+    },
+  ],
+  { toolDialect: "qwen35", resourceKey: "tools-qwen35" },
+);
+
+export const toolsSimpleFunctionGemma4 = createToolsTest(
+  "tools-simple-function-gemma4",
+  "What's 25 degrees Celsius in Fahrenheit?",
+  [
+    {
+      type: "function",
+      name: "convert_temperature",
+      description: "Convert temperature between Celsius and Fahrenheit",
+      parameters: {
+        type: "object",
+        properties: {
+          value: { type: "number", description: "Temperature value" },
+          from_unit: { type: "string", enum: ["celsius", "fahrenheit"], description: "Source unit" },
+          to_unit: { type: "string", enum: ["celsius", "fahrenheit"], description: "Target unit" },
+        },
+        required: ["value", "from_unit", "to_unit"],
+      },
+    },
+  ],
+  { toolDialect: "gemma4", resourceKey: "tools-gemma4" },
+);
+
 export const toolsTests = [
   toolsSimpleFunction,
   toolsSimpleFunctionDynamic,
   toolsMultipleFunctions,
+  toolsSimpleFunctionQwen35,
+  toolsSimpleFunctionGemma4,
   ...additionalToolsTests,
 ];
