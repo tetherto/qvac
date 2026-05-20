@@ -7,28 +7,17 @@ import type {
   InkeepBaseSettings,
 } from '@inkeep/cxkit-types';
 import type {
+  InkeepEmbeddedChatProps,
   InkeepModalSearchAndChatProps,
-  InkeepSidebarChatProps,
 } from '@inkeep/cxkit-react';
 
-import { cn } from '@/lib/cn';
 import { useAskAI } from './ask-ai-provider';
+import { AskAIDesktopShell } from './ask-ai-desktop-shell';
 import type { AskAIContextSnippet } from './types';
 
-/** Default sidebar width (matches `defaultWidth` passed to Inkeep). */
-const DESKTOP_DEFAULT_WIDTH = 420;
-
-// `@inkeep/cxkit-react` weighs ~1.35 MB minified. Loading it via
-// `next/dynamic` with `ssr: false` keeps it out of the critical-path
-// bundle: the chat surfaces arrive in their own async chunk after
-// hydration, so docs pages become interactive without waiting on the
-// chat widget to parse. Same defer technique that was landed in commit
-// d9572c014 for the previous floating chat button.
-const InkeepSidebarChat = dynamic(
-  () => import('@inkeep/cxkit-react').then((m) => ({ default: m.InkeepSidebarChat })),
-  { ssr: false, loading: () => null },
-);
-
+// `@inkeep/cxkit-react` weighs ~1.35 MB minified. The mobile
+// full-screen modal is also lazy-loaded so the docs page becomes
+// interactive without waiting on the chat widget to parse.
 const InkeepModalSearchAndChat = dynamic(
   () =>
     import('@inkeep/cxkit-react').then((m) => ({ default: m.InkeepModalSearchAndChat })),
@@ -45,87 +34,25 @@ const INPUT_PLACEHOLDER = 'Ask a question\u2026';
 // in the docs site's normal stylesheets cannot reach these elements;
 // `theme.styles` is the documented hook for that.
 //
-// Inkeep does not publish a stable class-name contract, so every rule
-// uses a triple-fallback selector list:
-//   - `[data-_id="..."]`  - Inkeep's primitive id (most stable)
-//   - `[class*="..."]`    - partial class match (camelCase variant)
-//   - `.ikp-...`          - bare kebab-case class from older builds
-// If any single selector misses upstream, the rest still apply; if all
-// three miss, the rule is inert rather than breaking the widget.
+// All selectors are intentionally limited to exact `[data-_id="..."]`
+// and `.ikp-...` (kebab-case bare class) forms. The earlier
+// `[class*="..."]` partial-match form proved too aggressive and
+// matched non-target elements inside the input subtree, breaking
+// typing in the chat.
 //
-// The five blocks below address the "clunky" feedback on the sidepane:
-//   1. Resizer: revert to hover-only so the drag handle stops competing
-//      with the page border for the user's attention.
-//   2. Sidebar left edge: snap to `--color-fd-border` so it reads as a
-//      continuation of the docs sidebar's right edge instead of a
-//      third-party widget bolted on.
-//   3. Header chrome: shrink the close button to ghost-density.
-//   4. Assistant-message avatar: hide so messages render flush-left,
-//      avoiding the "panel-inside-a-panel" look.
-//   5. Spacing + input: pull the gutters in to match the docs density
-//      and round the chat input into a soft pill that picks up our
-//      `--color-fd-border` token.
-//
-// Belt-and-suspenders intro-message hide stays too: we also set
-// `aiChatSettings.introMessage: ''` below, but Inkeep is known to fall
-// back to a default greeting when the prop is empty.
+// Two rules in play:
+//   1. Hide the default intro greeting (we also set introMessage: ''
+//      on aiChatSettings, but Inkeep falls back to a default bubble
+//      when the prop is empty - belt-and-suspenders).
+//   2. Hide the assistant-message avatar so messages render flush-left
+//      without a panel-inside-a-panel feel.
 const INKEEP_CUSTOM_CSS = `
-  /* 1. Drag handle: hover-only (revert to Inkeep's native opacity-0). */
-  .ikp-sidebar-chat__resizer,
-  [class*="sidebarChat__Resizer"],
-  [data-_id="sidebarChat__Resizer"] {
-    opacity: 0 !important;
-    transition: opacity 0.15s ease !important;
-  }
-  .ikp-sidebar-chat__resizer:hover,
-  [class*="sidebarChat__Resizer"]:hover,
-  [data-_id="sidebarChat__Resizer"]:hover {
-    opacity: 1 !important;
-  }
-
-  /* 2. Sidebar left edge: match the docs divider token. */
-  [data-sidebar][data-position="right"] {
-    border-inline-start-color: var(--color-fd-border, currentColor) !important;
-    border-inline-start-width: 1px !important;
-  }
-
-  /* 3. Header chrome: smaller, ghost-style close button. */
-  .ikp-sidebar-chat__close-button,
-  [class*="sidebarChat__CloseButton"],
-  [data-_id="sidebarChat__CloseButton"] {
-    width: 1.75rem !important;
-    height: 1.75rem !important;
-    color: var(--color-fd-muted-foreground, currentColor) !important;
-    opacity: 0.85;
-  }
-  .ikp-sidebar-chat__close-button:hover,
-  [class*="sidebarChat__CloseButton"]:hover,
-  [data-_id="sidebarChat__CloseButton"]:hover {
-    opacity: 1;
-  }
-
-  /* 4. Drop the heavyweight assistant avatar bubble in messages.
-     Locked to EXACT-match selectors only - the partial-match form
-     [class*="..."] proved too aggressive and was matching non-avatar
-     elements inside the input subtree, breaking typing. */
   .ikp-ai-chat__assistant-avatar,
   [data-_id="aiChat__AssistantAvatar"],
   [data-_id="aiChat__assistantAvatar"] {
     display: none !important;
   }
 
-  /* 5. Tighten the sidebar-chat header gutter to match the docs
-     content density. Message-rail / input-container padding are
-     intentionally left at Inkeep defaults - the partial-match
-     selectors required to target them reliably also matched the
-     input itself and disrupted focus handling. */
-  .ikp-sidebar-chat__header,
-  [data-_id="sidebarChat__Header"] {
-    padding: 0.5rem 0.75rem !important;
-  }
-
-  /* Intro-message belt-and-suspenders (kept from prior round).
-     Limited to exact-match selectors for the same reason as above. */
   .ikp-ai-chat-intro-message,
   [data-_id="aiChat__IntroMessage"],
   [data-_id="aiChat__introMessage"] {
@@ -134,10 +61,11 @@ const INKEEP_CUSTOM_CSS = `
 `;
 
 /**
- * Hook that resolves to `document.documentElement` after the first client
- * render. Used so Inkeep can mirror the docs site's `class="dark"` /
- * `class="light"` theme attribute. Returning `null` until then prevents
- * Inkeep from being rendered with a stale SSR target.
+ * Hook that resolves to `document.documentElement` after the first
+ * client render. Used so Inkeep can mirror the docs site's
+ * `class="dark"` / `class="light"` theme attribute. Returning `null`
+ * until then prevents Inkeep from being rendered with a stale SSR
+ * target.
  */
 function useColorModeSyncTarget(): HTMLElement | null {
   const [target, setTarget] = useState<HTMLElement | null>(null);
@@ -164,32 +92,10 @@ function renderContextBlock(context: AskAIContextSnippet): string {
 }
 
 /**
- * Best-effort flush of a queued prompt / context snippet into a freshly
- * opened chat surface.
- *
- * Why this is fiddlier than it looks:
- *
- *  1. The Inkeep `chatFunctionsRef` is only populated after Inkeep
- *     mounts inside its Shadow DOM. On the very first open the heavy
- *     `@inkeep/cxkit-react` chunk also has to download/parse, the
- *     Shadow DOM has to bootstrap, and Radix Presence has to finish
- *     its open animation. Any of these can push readiness past a few
- *     hundred milliseconds, so a short rAF budget would silently drop
- *     the prompt. We poll for ~3 seconds before giving up.
- *
- *  2. `submitMessage()` (no argument) reads Inkeep's internal `input`
- *     state via closure. If we call it on the same tick that Inkeep
- *     just mounted, the state may still hold the empty initial value —
- *     even after we just called `updateInputMessage`, because that
- *     setter is queued asynchronously by React and the imperative
- *     handle's closure captured the prior value. The fix is to pass
- *     the composed text DIRECTLY to `submitMessage(text)`, which
- *     accepts an override and bypasses the `input` state entirely.
- *
- * We still call `updateInputMessage` first, so if `submitMessage`
- * itself ever fails (rare — only the loading-disabled gate or a hard
- * Inkeep error would trip it) the user at least sees their text staged
- * in the chat input and can press send manually.
+ * Best-effort flush of a queued prompt / context snippet into the
+ * mobile full-screen modal. Same logic as the desktop-shell flush
+ * (retries on rAF until `chatFunctionsRef.current` is populated, then
+ * stages text via `updateInputMessage` and submits explicitly).
  */
 function flushPending(
   ref: React.RefObject<AIChatFunctions | null>,
@@ -199,9 +105,7 @@ function flushPending(
   if (!prompt && !context) return;
 
   let attempts = 0;
-  // ~3 seconds at 60 fps; covers the cold-start path where the Inkeep
-  // chunk is being downloaded and parsed for the first time.
-  const MAX_ATTEMPTS = 180;
+  const MAX_ATTEMPTS = 180; // ~3 s at 60 fps
 
   function tick() {
     const fns = ref.current;
@@ -213,83 +117,13 @@ function flushPending(
     const contextBlock = context ? renderContextBlock(context) : '';
     const composed = `${contextBlock}${prompt ?? ''}`;
 
-    // Stage the composed text in the input first. Even if `submitMessage`
-    // were to fail (rare — Inkeep's loading-disabled gate is the only
-    // common path), the user still sees their text staged in the chat
-    // input and can press send manually.
     fns.updateInputMessage(composed);
     fns.focusInput();
-
     if (!prompt) return;
-
-    // Submit with an EXPLICIT override so we don't depend on Inkeep's
-    // internal `input` state being in sync with our `updateInputMessage`
-    // call (the imperative-handle closure may have captured a prior
-    // value of the input state). Inkeep's `submitMessage(e)` falls back
-    // to its internal state when `e` is undefined, but accepts a string
-    // override that bypasses the lookup entirely.
     fns.submitMessage(composed);
   }
 
   requestAnimationFrame(tick);
-}
-
-interface DesktopSidebarProps {
-  baseSettings: InkeepBaseSettings;
-  aiChatSettings: NonNullable<InkeepSidebarChatProps['aiChatSettings']>;
-}
-
-function DesktopSidebar({ baseSettings, aiChatSettings }: DesktopSidebarProps) {
-  const askAI = useAskAI();
-  const chatFunctionsRef = useRef<AIChatFunctions | null>(null);
-
-  // Drain queued prompt / context whenever EITHER the sidebar opens OR
-  // a new pending payload arrives while it's already open. We read the
-  // values directly off the render-captured context (they cannot change
-  // between this render and the start of this effect) and only call
-  // `clearPending` AFTER kicking off the flush — this avoids the React
-  // 19 concurrent-mode trap where a functional state-setter's updater
-  // runs on the next render pass instead of synchronously.
-  useEffect(() => {
-    if (!askAI.sidebarOpen) return;
-    const prompt = askAI.pendingPrompt;
-    const context = askAI.pendingContext;
-    if (!prompt && !context) return;
-    flushPending(chatFunctionsRef, prompt, context);
-    askAI.clearPending();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [askAI.sidebarOpen, askAI.pendingPrompt, askAI.pendingContext]);
-
-  // The wrapper is a viewport-fixed overlay anchored to the right
-  // edge. It does NOT participate in the Fumadocs grid and does NOT
-  // push the docs main column to the left — the assistant pane sits
-  // ABOVE the page instead. This matches the requested UX: opening
-  // the assistant should leave the underlying page layout intact.
-  //
-  // The `[data-sidebar]` attribute keeps Inkeep's `[data-sidebar] &`
-  // descendant utility selectors happy. The width is whatever Inkeep
-  // hands us (resizable via the drag handle), and `h-screen` lets it
-  // span the full viewport height regardless of scroll position.
-  return (
-    <div
-      data-sidebar=""
-      data-ask-ai-sidebar-shell=""
-      className={cn(
-        'fixed inset-y-0 right-0 z-40 flex h-screen',
-      )}
-    >
-      <InkeepSidebarChat
-        baseSettings={baseSettings}
-        aiChatSettings={{ ...aiChatSettings, chatFunctionsRef }}
-        position="right"
-        defaultWidth={DESKTOP_DEFAULT_WIDTH}
-        minWidth={320}
-        maxWidth={600}
-        isOpen={askAI.sidebarOpen}
-        onOpenChange={askAI.setSidebarOpen}
-      />
-    </div>
-  );
 }
 
 interface MobileModalProps {
@@ -302,14 +136,14 @@ function MobileModal({ baseSettings, aiChatSettings }: MobileModalProps) {
   const chatFunctionsRef = useRef<AIChatFunctions | null>(null);
 
   useEffect(() => {
-    if (!askAI.modalOpen) return;
+    if (!askAI.mobileModalOpen) return;
     const prompt = askAI.pendingPrompt;
     const context = askAI.pendingContext;
     if (!prompt && !context) return;
     flushPending(chatFunctionsRef, prompt, context);
     askAI.clearPending();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [askAI.modalOpen, askAI.pendingPrompt, askAI.pendingContext]);
+  }, [askAI.mobileModalOpen, askAI.pendingPrompt, askAI.pendingContext]);
 
   return (
     <InkeepModalSearchAndChat
@@ -318,11 +152,11 @@ function MobileModal({ baseSettings, aiChatSettings }: MobileModalProps) {
       defaultView="chat"
       forceDefaultView
       modalSettings={{
-        isOpen: askAI.modalOpen,
-        onOpenChange: askAI.setModalOpen,
+        isOpen: askAI.mobileModalOpen,
+        onOpenChange: askAI.setMobileModalOpen,
         // Disable Inkeep's auto-open on `[data-inkeep-modal-trigger]`
-        // clicks. All opens go through `useAskAI()` so multiple triggers
-        // never race each other.
+        // clicks. All opens go through `useAskAI()` so multiple
+        // triggers never race each other.
         triggerSelector: '[data-inkeep-ask-ai-mobile-trigger]',
       }}
     />
@@ -331,9 +165,9 @@ function MobileModal({ baseSettings, aiChatSettings }: MobileModalProps) {
 
 /**
  * Mounts both assistant surfaces simultaneously. The Tailwind wrappers
- * make sure only one is visible per viewport — the desktop sidebar is
+ * make sure only one is visible per viewport - the desktop shell is
  * hidden below `md` and the mobile chat modal is hidden at `md` and up.
- * Because both surfaces are controlled via separate booleans on the
+ * Because the two surfaces are controlled by separate state on the
  * `AskAIProvider`, leaving them both mounted has no UX impact: the
  * hidden one never opens.
  */
@@ -367,11 +201,11 @@ export function AskAIShell() {
   }, [apiKey, colorModeSyncTarget]);
 
   // Strip the default greeting and example-questions row so the chat
-  // surface opens straight to the input — matches the reviewed UX. The
+  // surface opens straight to the input - matches the reviewed UX. The
   // empty `introMessage` covers the welcome bubble; `exampleQuestions:
   // []` removes the suggestion chips above it. `placeholder` overrides
-  // the built-in "How do I get started…" hint.
-  const aiChatSettings = useMemo(
+  // the built-in "How do I get started..." hint.
+  const aiChatSettings = useMemo<NonNullable<InkeepEmbeddedChatProps['aiChatSettings']>>(
     () => ({
       aiAssistantAvatar: AI_AVATAR,
       placeholder: INPUT_PLACEHOLDER,
@@ -386,7 +220,7 @@ export function AskAIShell() {
   return (
     <>
       <div className="hidden md:contents">
-        <DesktopSidebar baseSettings={baseSettings} aiChatSettings={aiChatSettings} />
+        <AskAIDesktopShell baseSettings={baseSettings} aiChatSettings={aiChatSettings} />
       </div>
       <div className="contents md:hidden">
         <MobileModal baseSettings={baseSettings} aiChatSettings={aiChatSettings} />

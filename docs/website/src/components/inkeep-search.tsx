@@ -63,10 +63,11 @@ export default function CustomDialog(props: SharedProps) {
       // search should be left to the modal.
       if (view !== 'chat') return;
 
-      // On desktop, route every chat into the persistent sidebar so the
-      // user keeps a single conversation across surfaces. On mobile,
-      // keep the in-modal chat experience because no sidebar exists.
-      if (askAI.surface !== 'sidebar') return;
+      // On desktop, route every chat into the centered AskAI modal so
+      // the user keeps a single conversation across surfaces. On mobile
+      // we let the in-modal chat experience take over (no separate
+      // desktop modal exists there).
+      if (askAI.surface !== 'desktop') return;
 
       onOpenChange(false);
       const trimmed = query?.trim();

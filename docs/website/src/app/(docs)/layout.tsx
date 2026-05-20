@@ -6,7 +6,6 @@ import { SiHuggingface } from '@icons-pack/react-simple-icons';
 import { KeetIcon } from '@/components/keet-icon';
 import { customTree } from '@/lib/custom-tree';
 import {
-  AskAIBottomBar,
   AskAISearchToggleLarge,
   AskAISearchToggleSmall,
   AskAIShell,
@@ -61,18 +60,14 @@ export default function Layout({ children }: LayoutProps<'/'>) {
         }}
       >
         {children}
-        {/*
-         * Mounted INSIDE `<DocsLayout>` (not as a sibling) so the
-         * desktop sidebar's wrapper becomes a direct child of
-         * `#nd-docs-layout`. That's the prerequisite for the
-         * `lg:in-[#nd-docs-layout]:[grid-area:toc]` Tailwind selector
-         * inside `AskAIShell` to claim the TOC grid cell — which, in
-         * turn, lets the page main column shrink to leave room for
-         * the assistant pane (true "push" behavior on lg+).
-         */}
-        <AskAIShell />
       </DocsLayout>
-      <AskAIBottomBar />
+      {/*
+       * `AskAIShell` mounts the desktop bar/modal and the mobile
+       * full-screen chat. It's `position: fixed` so it doesn't need to
+       * be inside `<DocsLayout>` to position correctly. Keeping it as
+       * a sibling avoids any interaction with Fumadocs's grid template.
+       */}
+      <AskAIShell />
       <AskAITextSelection />
     </>
   );

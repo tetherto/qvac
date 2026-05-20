@@ -16,14 +16,31 @@ import type { AskAIContextSnippet } from './types';
 
 /**
  * Tailwind `md` breakpoint. Mirrors `md:` used in the rest of the app so
- * the JS-side switch lines up with the CSS-side hide/show on the shell
- * components (`InkeepSidebarChat` desktop / `InkeepModalSearchAndChat`
- * mobile). Hardcoding the value here keeps the provider free of any
- * Tailwind config dependency.
+ * the JS-side switch lines up with the CSS-side hide/show on the desktop
+ * shell vs mobile `InkeepModalSearchAndChat`. Hardcoding the value here
+ * keeps the provider free of any Tailwind config dependency.
  */
 const DESKTOP_MEDIA_QUERY = '(min-width: 768px)';
 
-export type AskAISurface = 'sidebar' | 'modal';
+export type AskAISurface = 'desktop' | 'mobile';
+
+/**
+ * Desktop chat surface state machine:
+ *
+ *  - `closed`   - only the bottom-anchored bar is showing. The user can
+ *                 type a question into the bar's input, which submits
+ *                 and transitions to `open`.
+ *  - `open`     - bar morphs into a modal with the chat history above
+ *                 the input. Modal width matches the docs body column;
+ *                 the input stays in the same screen position so the
+ *                 transition reads as the bar growing.
+ *  - `expanded` - same modal, expanded to fill the viewport.
+ *
+ * The conversation is preserved across `open` <-> `closed` because the
+ * `InkeepEmbeddedChat` instance inside the shell stays mounted; only
+ * the wrapper's CSS state changes.
+ */
+export type AskAIDesktopState = 'closed' | 'open' | 'expanded';
 
 export interface AskAIContextValue {
   /** True once the provider has run on the client; before that, do not
@@ -33,26 +50,34 @@ export interface AskAIContextValue {
   /** Which surface the provider is currently routing triggers to. */
   surface: AskAISurface;
 
-  /** Whether the desktop sidebar is currently open. */
-  sidebarOpen: boolean;
-  setSidebarOpen: (open: boolean) => void;
+  /** Desktop chat surface state. */
+  desktopState: AskAIDesktopState;
+  /** Open the desktop modal in body-width state. No-op on mobile. */
+  openModal: () => void;
+  /** Collapse the desktop modal back to the bar. No-op on mobile. */
+  closeModal: () => void;
+  /** Toggle between `open` and `expanded`. Only meaningful when the
+   *  desktop modal is already open. */
+  toggleExpand: () => void;
 
   /** Whether the mobile chat-first modal is currently open. */
-  modalOpen: boolean;
-  setModalOpen: (open: boolean) => void;
+  mobileModalOpen: boolean;
+  setMobileModalOpen: (open: boolean) => void;
 
   /** Queued prompt that should be auto-submitted as soon as the active
-   *  surface is mounted and ready. Consumed by the shell with `take*`. */
+   *  surface is mounted and ready. Drained by the shell. */
   pendingPrompt: string | null;
   /** Queued context (selected text or code snippet) to prepend to the
-   *  next user input. Consumed by the shell with `take*`. */
+   *  next user input. Drained by the shell. */
   pendingContext: AskAIContextSnippet | null;
 
-  /** Open the assistant on whichever surface the viewport calls for. */
+  /** Open the assistant on whichever surface the viewport calls for.
+   *  Desktop -> `openModal()`; mobile -> `setMobileModalOpen(true)`. */
   open: () => void;
   /** Close every assistant surface. */
   close: () => void;
-  /** Toggle the active surface open/closed. */
+  /** Toggle the active surface open/closed (between `closed` and `open`
+   *  on desktop; never targets `expanded`). */
   toggle: () => void;
   /** Open the assistant and queue `prompt` to be auto-submitted. */
   openWith: (prompt: string) => void;
@@ -68,11 +93,13 @@ const noop = () => {};
 
 const defaultValue: AskAIContextValue = {
   isReady: false,
-  surface: 'sidebar',
-  sidebarOpen: false,
-  setSidebarOpen: noop,
-  modalOpen: false,
-  setModalOpen: noop,
+  surface: 'desktop',
+  desktopState: 'closed',
+  openModal: noop,
+  closeModal: noop,
+  toggleExpand: noop,
+  mobileModalOpen: false,
+  setMobileModalOpen: noop,
   pendingPrompt: null,
   pendingContext: null,
   open: noop,
@@ -125,12 +152,12 @@ interface AskAIProviderInnerProps {
 
 function AskAIProviderInner({ children }: AskAIProviderInnerProps) {
   const { isReady, isDesktop } = useIsDesktop();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [modalOpen, setModalOpen] = useState(false);
+  const [desktopState, setDesktopState] = useState<AskAIDesktopState>('closed');
+  const [mobileModalOpen, setMobileModalOpen] = useState(false);
   const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
   const [pendingContext, setPendingContext] = useState<AskAIContextSnippet | null>(null);
 
-  const surface: AskAISurface = isDesktop ? 'sidebar' : 'modal';
+  const surface: AskAISurface = isDesktop ? 'desktop' : 'mobile';
 
   // Refs let `open`/`close`/`toggle` stay stable across re-renders while
   // still reading the freshest viewport / open-state values. Without
@@ -138,25 +165,60 @@ function AskAIProviderInner({ children }: AskAIProviderInnerProps) {
   // (which there are many of: header button, bottom bar, hotkey listener,
   // URL handler, code block, text-selection popup).
   const isDesktopRef = useRef(isDesktop);
-  const sidebarOpenRef = useRef(sidebarOpen);
-  const modalOpenRef = useRef(modalOpen);
+  const desktopStateRef = useRef(desktopState);
+  const mobileModalOpenRef = useRef(mobileModalOpen);
   isDesktopRef.current = isDesktop;
-  sidebarOpenRef.current = sidebarOpen;
-  modalOpenRef.current = modalOpen;
+  desktopStateRef.current = desktopState;
+  mobileModalOpenRef.current = mobileModalOpen;
 
+  // ---------------------------------------------------------------------------
+  // Desktop-specific actions
+  // ---------------------------------------------------------------------------
+  const openModal = useCallback(() => {
+    // Always open into 'open' state (body-width). Per the agreed UX,
+    // triggers never jump straight to 'expanded'; the user opts in via
+    // the expand affordance inside the modal.
+    setDesktopState((current) => (current === 'expanded' ? current : 'open'));
+  }, []);
+
+  const closeModal = useCallback(() => {
+    setDesktopState('closed');
+  }, []);
+
+  const toggleExpand = useCallback(() => {
+    setDesktopState((current) => {
+      if (current === 'open') return 'expanded';
+      if (current === 'expanded') return 'open';
+      // From 'closed': open into expanded would surprise users; ignore.
+      return current;
+    });
+  }, []);
+
+  // ---------------------------------------------------------------------------
+  // Cross-surface convenience helpers used by triggers that don't care
+  // which viewport is active (header button, hotkey, deep link, code
+  // block, text selection, page-actions popover).
+  // ---------------------------------------------------------------------------
   const open = useCallback(() => {
-    if (isDesktopRef.current) setSidebarOpen(true);
-    else setModalOpen(true);
+    if (isDesktopRef.current) {
+      // Same logic as openModal but inline to avoid a callback dep.
+      setDesktopState((current) => (current === 'expanded' ? current : 'open'));
+    } else {
+      setMobileModalOpen(true);
+    }
   }, []);
 
   const close = useCallback(() => {
-    setSidebarOpen(false);
-    setModalOpen(false);
+    setDesktopState('closed');
+    setMobileModalOpen(false);
   }, []);
 
   const toggle = useCallback(() => {
-    if (isDesktopRef.current) setSidebarOpen((v) => !v);
-    else setModalOpen((v) => !v);
+    if (isDesktopRef.current) {
+      setDesktopState((current) => (current === 'closed' ? 'open' : 'closed'));
+    } else {
+      setMobileModalOpen((v) => !v);
+    }
   }, []);
 
   const openWith = useCallback(
@@ -182,17 +244,15 @@ function AskAIProviderInner({ children }: AskAIProviderInnerProps) {
   // "read+clear in a single call" pattern here: in React 19 concurrent
   // mode the functional state setter's updater runs on the NEXT render
   // pass, not synchronously, so any value captured inside the updater
-  // is unavailable to the caller — the previous `takePending*` helpers
-  // always returned `null`, which silently broke every queued prompt.
+  // is unavailable to the caller.
   const clearPending = useCallback(() => {
     setPendingPrompt(null);
     setPendingContext(null);
   }, []);
 
   // ---------------------------------------------------------------------------
-  // Cmd/Ctrl+I global hotkey. Mirrors Mintlify's keyboard shortcut and
-  // does not collide with Fumadocs's own Cmd/Ctrl+K (which still opens
-  // the search modal via fumadocs-ui's RootProvider).
+  // Cmd/Ctrl+I global hotkey. Toggles the assistant between `closed` and
+  // `open` (never targets `expanded`).
   // ---------------------------------------------------------------------------
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -231,8 +291,7 @@ function AskAIProviderInner({ children }: AskAIProviderInnerProps) {
       openWith(trimmed);
     }
 
-    // Strip the param from the URL bar without triggering a navigation,
-    // matching Mintlify's behavior where a deep link does not stick.
+    // Strip the param from the URL bar without triggering a navigation.
     if (typeof window !== 'undefined') {
       const url = new URL(window.location.href);
       url.searchParams.delete('assistant');
@@ -244,10 +303,12 @@ function AskAIProviderInner({ children }: AskAIProviderInnerProps) {
     () => ({
       isReady,
       surface,
-      sidebarOpen,
-      setSidebarOpen,
-      modalOpen,
-      setModalOpen,
+      desktopState,
+      openModal,
+      closeModal,
+      toggleExpand,
+      mobileModalOpen,
+      setMobileModalOpen,
       pendingPrompt,
       pendingContext,
       open,
@@ -260,8 +321,11 @@ function AskAIProviderInner({ children }: AskAIProviderInnerProps) {
     [
       isReady,
       surface,
-      sidebarOpen,
-      modalOpen,
+      desktopState,
+      openModal,
+      closeModal,
+      toggleExpand,
+      mobileModalOpen,
       pendingPrompt,
       pendingContext,
       open,
