@@ -1,4 +1,4 @@
-// Worktree helpers for the /pr-review skill (sync mode).
+// Worktree helpers for the /qv-pr-review skill (sync mode).
 //
 // One worktree per PR num at ~/.cache/qvac-pr-review/pr-<num>, kept in sync
 // with refs/pr/<num>/head via fetch + reset --hard. Concurrency safety via
@@ -8,7 +8,7 @@
 // <worktree> reset --hard`, and `git -C <worktree> clean -fdx` calls in this
 // module are intentionally scoped to the cache directory and to fork-PR-head
 // refs. The agent itself never runs reset / switch / checkout / stash etc. —
-// see pr-review/SKILL.md "Safety rules".
+// see qv-pr-review/SKILL.md "Safety rules".
 
 import { execFileSync } from "node:child_process";
 import {
@@ -192,7 +192,7 @@ export function lockPR(num) {
       if (Date.now() - start > LOCK_TIMEOUT_MS) {
         throw new Error(
           `Could not acquire lock ${lockPath} within ${LOCK_TIMEOUT_MS}ms ` +
-            `(another /pr-review may be running on this PR)`,
+            `(another /qv-pr-review may be running on this PR)`,
         );
       }
       sleepMs(LOCK_RETRY_MS);
@@ -364,7 +364,7 @@ export function ensureWorktreeSynced({ num, sha }) {
   if (headNow !== sha) {
     try {
       git(["-C", path, "reset", "--hard", PR_REF(num)]);
-      // Drop build/test artifacts from the old PR head so the next /pr-test
+      // Drop build/test artifacts from the old PR head so the next /qv-pr-test
       // setup starts from a clean artifact state for the new commit.
       git(["-C", path, "clean", "-fdx"]);
     } catch {
