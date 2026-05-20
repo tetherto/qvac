@@ -5,9 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.6.0]
 
-In this release we expose the v2.1 streaming Sortformer model with NeMo-port AOSC (Audio-Online Speaker Cache) through the addon's public API and overhaul the Android prebuild to ship the ggml backends as separately-loadable MODULE `.so` files. AOSC anchors each speaker to a stable cache slot across silence and re-entry, fixing the per-chunk permutation-invariance drift v1's sliding-window streaming exhibits once two voices have been seen — v2.1 becomes the recommended streaming Sortformer; v1 stays the offline-batch default. Six new optional config knobs surface the cache geometry for tuning and A/B comparison; defaults mirror parakeet-cpp's NeMo-port tuning so a bare `streaming: true` against a v2.1 GGUF Just Works. On the Android side, Vulkan and OpenCL ship as runtime-discovered `.so` files (qvac-ext-ggml@speech's `GGML_BACKEND_DL=ON`), alongside per-arch CPU variants (`libqvac-speech-ggml-cpu-android_armv{8.0,8.2,8.6,9.0,9.2}_*.so`); inference still runs on CPU there pending Vulkan/Mali + OpenCL/Adreno driver fixes (`useGPU` is overridden at the engine boundary), but the GPU `.so` files are in place for when the override is lifted.
+In this release we reestablish the GGML implementation from `0.4.0` with extra additions. The main features are exposing the v2.1 streaming Sortformer model with NeMo-port AOSC (Audio-Online Speaker Cache) through the addon's public API and overhaul the Android prebuild to ship the ggml backends as separately-loadable MODULE `.so` files. v2.1 becomes the recommended streaming Sortformer model; v1 stays the offline-batch default. On the Android side, Vulkan and OpenCL ship as runtime-discovered `.so` files (qvac-ext-ggml@speech's `GGML_BACKEND_DL=ON`), alongside per-arch CPU variants (`libqvac-speech-ggml-cpu-android_armv{8.0,8.2,8.6,9.0,9.2}_*.so`); inference still runs on CPU there pending Vulkan/Mali + OpenCL/Adreno driver fixes (`useGPU` is overridden at the engine boundary), but the GPU `.so` files are in place for when the override is lifted.
 
 ### Added
 - **AOSC config knobs.** `ParakeetConfig` gains six optional fields — `streamingSpkCacheEnable` (default `true`), `streamingSpkCacheLen` (188), `streamingFifoLen` (188), `streamingChunkLeftContextMs` (80), `streamingChunkRightContextMs` (560), `streamingSpkCacheUpdatePeriod` (144) — forwarded into `parakeet::SortformerStreamingOptions` for both the in-process Mode-3 streaming path (`ParakeetModel::runStreamingProcess_`) and the duplex `runStreaming()` processor (`ParakeetStreamingProcessor`). Mirrored as per-call overrides on `StreamingRunConfig` (`spkCacheEnable`, `spkCacheLen`, `fifoLen`, `chunkLeftContextMs`, `chunkRightContextMs`, `spkCacheUpdatePeriod`). parakeet-cpp ignores these on v1 / v2 Sortformer GGUFs and on non-Sortformer engines, so always-forward is safe.
@@ -27,6 +27,12 @@ In this release we expose the v2.1 streaming Sortformer model with NeMo-port AOS
 - **`examples/live-mic-diarized.js`** header: recommends the v2.1 GGUF as `--diar-model` and notes that `streamingHistoryMs` is superseded by AOSC on v2.1 models (kept for v1 back-compat). Points to the new `live-mic-diarized-aosc.js` for explicit knob control.
 - **`examples/diarized-transcribe.js`** header: notes v1 remains the recommended OFFLINE diarization model — AOSC's slot-stability benefit only applies to continuous streaming and is wasted in batch mode.
 - **`README.md`** — extended Model Variants table with v1 (offline default) and v2.1 + AOSC (streaming default) rows; new `streamingSpkCache*` rows in the ParakeetConfig table; dedicated "Sortformer Streaming Diarization (v2.1 + AOSC)" section explaining the v1-drift problem AOSC solves, the model-variant auto-detection, and when to leave the defaults alone.
+
+## [0.5.0]
+
+- Temporarily reverted back to ONNX implementation of `0.3.3` to ensure stability in SDK `0.11.*`.
+- Bumped `inference-addon-cpp` dependency version to `1.1.7#1`.
+- Bumped `onnx` dependency version to `0.15.0`.
 
 ## [0.4.0]
 
