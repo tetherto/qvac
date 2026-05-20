@@ -57,6 +57,27 @@ struct ParakeetConfig {
   int  streamingLeftContextMs    = -1;
   int  streamingRightLookaheadMs = -1;
 
+  // === AOSC (Audio-Online Speaker Cache; v2.1+ Sortformer only) ───────────
+  // Forwarded to parakeet::SortformerStreamingOptions.spkcache_* /
+  // fifo_len / chunk_{left,right}_context_ms / spkcache_update_period.
+  // Ignored on non-Sortformer models and on v1/v2 Sortformer GGUFs;
+  // parakeet-cpp auto-enables AOSC for v2.1 via the GGUF metadata tag
+  // `parakeet.model_variant == "sortformer-streaming-v2.1-aosc"`.
+  //
+  // The cache anchors speaker-slot identity across silence and re-entry,
+  // fixing the per-chunk permutation-invariance drift that v1's sliding
+  // window suffers from. Defaults mirror parakeet-cpp's own (NeMo-port
+  // tuning); override only when A/B comparing or for specialised audio.
+  //
+  // Setting streamingSpkCacheEnable = false on a v2.1 model forces the
+  // v1 sliding-window code path (useful for regression comparison).
+  bool streamingSpkCacheEnable        = true;
+  int  streamingSpkCacheLen           = 188;   // long-term speaker rows (~15s)
+  int  streamingFifoLen               = 188;   // FIFO warmup buffer rows
+  int  streamingChunkLeftContextMs    = 80;    // encoder left context  (~1 frame)
+  int  streamingChunkRightContextMs   = 560;   // encoder right context (~7 frames)
+  int  streamingSpkCacheUpdatePeriod  = 144;   // FIFO-overflow pop-out count
+
   ParakeetConfig() = default;
   explicit ParakeetConfig(const std::string& path) : modelPath(path) {}
 
@@ -73,7 +94,13 @@ struct ParakeetConfig {
            streamingEmitPartials == other.streamingEmitPartials &&
            streamingEnergyVad == other.streamingEnergyVad &&
            streamingLeftContextMs == other.streamingLeftContextMs &&
-           streamingRightLookaheadMs == other.streamingRightLookaheadMs;
+           streamingRightLookaheadMs == other.streamingRightLookaheadMs &&
+           streamingSpkCacheEnable == other.streamingSpkCacheEnable &&
+           streamingSpkCacheLen == other.streamingSpkCacheLen &&
+           streamingFifoLen == other.streamingFifoLen &&
+           streamingChunkLeftContextMs == other.streamingChunkLeftContextMs &&
+           streamingChunkRightContextMs == other.streamingChunkRightContextMs &&
+           streamingSpkCacheUpdatePeriod == other.streamingSpkCacheUpdatePeriod;
   }
 
   bool operator!=(const ParakeetConfig& other) const { return !(*this == other); }

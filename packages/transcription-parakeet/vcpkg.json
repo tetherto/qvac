@@ -1,22 +1,22 @@
 {
   "name": "transcription-parakeet",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "dependencies": [
     {
       "name": "parakeet-cpp",
-      "version>=": "2026-05-05#1",
+      "version>=": "2026-05-20",
       "features": ["metal"],
       "platform": "osx | ios"
     },
     {
       "name": "parakeet-cpp",
-      "version>=": "2026-05-05#1",
+      "version>=": "2026-05-20",
       "features": ["vulkan", "opencl"],
       "platform": "android"
     },
     {
       "name": "parakeet-cpp",
-      "version>=": "2026-05-05#1",
+      "version>=": "2026-05-20",
       "features": ["vulkan"],
       "platform": "!(osx | ios | android)"
     },
