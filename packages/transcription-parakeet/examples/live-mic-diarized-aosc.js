@@ -1,44 +1,63 @@
 'use strict'
 
 /**
- * Live-mic transcription + diarization example (duplex streaming).
+ * Live-mic transcription + diarization example with full AOSC control.
  *
- * Captures the default input device via `sox -d`, fans each chunk
- * out to two pushable async-iterables, and feeds both to
- * `model.runStreaming()` -- one ASR session, one Sortformer session.
- * The diarization side updates `lastSpeaker` from the latest emitted
- * Sortformer segment; the ASR side tags each printed transcript with
- * `lastSpeaker`. Press Ctrl-C to flush and exit.
+ * This is the v2.1-focused counterpart of `examples/live-mic-diarized.js`.
+ * Both files share the same duplex pattern (two `runStreaming()`
+ * sessions fanned from a single sox capture, with the ASR transcript
+ * tagged by the latest Sortformer speaker_id). What this file adds is
+ * explicit CLI control of the AOSC (Audio-Online Speaker Cache) knobs
+ * parakeet-cpp exposes for v2.1 Sortformer streaming:
  *
- * Recommended `--diar-model`: the v2.1 Sortformer GGUF
- * (`diar_streaming_sortformer_4spk-v2.1.q8_0.gguf`). parakeet-cpp
- * detects v2.1 from the GGUF metadata tag
- * `parakeet.model_variant == "sortformer-streaming-v2.1-aosc"` and
- * enables AOSC (Audio-Online Speaker Cache) automatically, which
- * anchors speaker slots across silence and re-entry and largely
- * removes the drift caveat described below.
+ *   --spk-cache-enable {true|false}     Toggle AOSC. Defaults to true.
+ *                                       Set false to force a v2.1 GGUF
+ *                                       onto the v1 sliding-window
+ *                                       path (A/B comparison).
+ *   --spk-cache-len <rows>              Long-term speaker-cache rows
+ *                                       (default 188 ≈ 15 s).
+ *   --fifo-len <rows>                   FIFO warmup buffer rows
+ *                                       (default 188).
+ *   --chunk-left-context-ms <ms>        Encoder left context, ~1 frame
+ *                                       (default 80).
+ *   --chunk-right-context-ms <ms>       Encoder right context, ~7 frames
+ *                                       (default 560). Adds directly to
+ *                                       per-chunk emission latency.
+ *   --spk-cache-update-period <count>   FIFO-overflow pop-out count
+ *                                       (default 144). How many frames
+ *                                       get promoted into the long-term
+ *                                       cache each time the FIFO fills.
  *
- * For an AOSC-aware variant that also exposes the speaker-cache
- * tuning knobs from the CLI, see `examples/live-mic-diarized-aosc.js`.
+ * Background -- what AOSC fixes:
+ * v1 / v2 Sortformer streams use a fixed-size sliding-history window
+ * inside the engine. Once two voices have been seen, the model's
+ * per-chunk decisions are permutation-invariant; if one speaker goes
+ * silent long enough to roll out of the window, its slot identity can
+ * silently drift onto a different physical voice when it returns. v2.1
+ * replaces the sliding window with a NeMo-port speaker cache that
+ * anchors each slot to its accumulated embedding, so the same physical
+ * speaker comes back to the same `Speaker N` tag across silences.
  *
- * v1 caveat (kept for users running the older v1 GGUF): Sortformer's
- * streaming session is permutation-invariant per chunk and prone to
- * occasional speaker-ID drift on continuous single-speaker stretches
- * once two voices have been seen in the rolling-history window.
- * parakeet-cpp documents this behaviour in
- * `parakeet-cpp/include/parakeet/diarization.h:80-82`. Fixing it
- * properly required per-segment voice embeddings (now solved by v2.1's
- * AOSC) -- this example therefore renders the raw Sortformer ID and
- * accepts the occasional mis-tag rather than try to second-guess the
- * model in JS.
+ * For the upstream API + algorithm details, see
+ * `parakeet-cpp/include/parakeet/diarization.h` and the upstream PRs
+ * that introduced this feature in qvac-ext-lib-whisper.cpp (PR #22
+ * commit e6ba38c, PR #24 commit 08df2e7).
  *
  * Usage:
- *   bare examples/live-mic-diarized.js \
- *        --asr-model <gguf> --diar-model <gguf> \
- *        [--accumulate] [--chunk-ms <ms>] [--capture "<sox cmd>"]
+ *   bare examples/live-mic-diarized-aosc.js \
+ *        --asr-model <ctc-or-tdt-gguf> \
+ *        --diar-model <v2.1-sortformer-gguf> \
+ *        [--accumulate] [--chunk-ms <ms>] [--capture "<sox cmd>"] \
+ *        [--spk-cache-enable {true|false}] [--spk-cache-len <rows>] \
+ *        [--fifo-len <rows>] [--chunk-left-context-ms <ms>] \
+ *        [--chunk-right-context-ms <ms>] [--spk-cache-update-period <count>]
  *
- * On Windows, if sox exits without producing audio, override capture:
- *   --capture "sox -t waveaudio default -t raw -r 16000 -b 16 -c 1 -e signed-integer -L -"
+ * Notes:
+ *  - The AOSC knobs are silently ignored on v1/v2 GGUFs and on
+ *    non-Sortformer models. The engine detects v2.1 via the GGUF
+ *    metadata tag `parakeet.model_variant`.
+ *  - On Windows, if sox exits without producing audio, override capture:
+ *      --capture "sox -t waveaudio default -t raw -r 16000 -b 16 -c 1 -e signed-integer -L -"
  */
 
 /* global Bare */
@@ -62,11 +81,6 @@ function isSilenceText (text) {
   return text.length === 0 || SILENCE_SENTINELS.has(text)
 }
 
-// Streaming TDT/CTC sometimes emits a word as two segments straddling
-// a chunk boundary; parakeet-cpp surfaces a per-segment `startsWord`
-// flag we use to gate the inserted separator so "see" + "if" stays
-// "see if" while "pun" + "ctuation" rejoins into "punctuation". See
-// live-mic.js for full rationale.
 function buildSegmentText (items) {
   let text = ''
   let firstStartsWord = true
@@ -85,13 +99,44 @@ function buildSegmentText (items) {
   return { text: text.replace(/\s+/g, ' '), firstStartsWord }
 }
 
+function parseSortformerSpeakerId (text) {
+  const m = typeof text === 'string'
+    ? text.match(/Speaker\s+(\d+)/)
+    : null
+  return m ? parseInt(m[1], 10) : -1
+}
+
+function parseBoolFlag (value) {
+  if (value === undefined || value === null) return undefined
+  const normalised = String(value).toLowerCase()
+  if (normalised === 'true' || normalised === '1' || normalised === 'yes') return true
+  if (normalised === 'false' || normalised === '0' || normalised === 'no') return false
+  return undefined
+}
+
+function parsePositiveInt (value) {
+  const n = parseInt(value, 10)
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
+function parseNonNegativeInt (value) {
+  const n = parseInt(value, 10)
+  return Number.isFinite(n) && n >= 0 ? n : null
+}
+
 function parseArgs () {
   const args = {
     asrModel: null,
     diarModel: null,
     accumulate: false,
     capture: null,
-    chunkMs: null
+    chunkMs: null,
+    spkCacheEnable: undefined,
+    spkCacheLen: null,
+    fifoLen: null,
+    chunkLeftContextMs: null,
+    chunkRightContextMs: null,
+    spkCacheUpdatePeriod: null
   }
   const argv = Bare.argv.slice(2)
   for (let i = 0; i < argv.length; i++) {
@@ -101,38 +146,50 @@ function parseArgs () {
     else if (a === '--accumulate') args.accumulate = true
     else if (a === '--capture' || a === '-c') args.capture = argv[++i]
     else if (a === '--chunk-ms') {
-      const v = parseInt(argv[++i], 10)
-      if (Number.isFinite(v) && v >= 200) args.chunkMs = v
-    }
+      const v = parsePositiveInt(argv[++i])
+      if (v !== null && v >= 200) args.chunkMs = v
+    } else if (a === '--spk-cache-enable') {
+      const v = parseBoolFlag(argv[++i])
+      if (v !== undefined) args.spkCacheEnable = v
+    } else if (a === '--spk-cache-len') args.spkCacheLen = parsePositiveInt(argv[++i])
+    else if (a === '--fifo-len') args.fifoLen = parsePositiveInt(argv[++i])
+    else if (a === '--chunk-left-context-ms') args.chunkLeftContextMs = parseNonNegativeInt(argv[++i])
+    else if (a === '--chunk-right-context-ms') args.chunkRightContextMs = parseNonNegativeInt(argv[++i])
+    else if (a === '--spk-cache-update-period') args.spkCacheUpdatePeriod = parsePositiveInt(argv[++i])
   }
   return args
 }
 
-// Pin the Sortformer rolling-history window at parakeet-cpp's default
-// (30 s). Pushing past it on a v1 GGUF puts the input outside the
-// window the underlying model was trained on, which empirically causes
-// the engine to collapse all voices onto sortformer_0.
-//
-// On a v2.1 GGUF, AOSC is auto-enabled and supersedes this rolling
-// window with a NeMo-port speaker cache. parakeet-cpp ignores
-// `history_ms` for v2.1 sessions, so this constant is harmless either
-// way and is kept for backwards compatibility with v1 GGUFs.
-const STREAMING_HISTORY_MS = 30000
+function buildDiarConfig (args) {
+  const config = {
+    streaming: true,
+    streamingChunkMs: args.chunkMs ?? 2000,
+    useGPU: true
+  }
+  if (args.spkCacheEnable !== undefined) config.streamingSpkCacheEnable = args.spkCacheEnable
+  if (args.spkCacheLen !== null) config.streamingSpkCacheLen = args.spkCacheLen
+  if (args.fifoLen !== null) config.streamingFifoLen = args.fifoLen
+  if (args.chunkLeftContextMs !== null) config.streamingChunkLeftContextMs = args.chunkLeftContextMs
+  if (args.chunkRightContextMs !== null) config.streamingChunkRightContextMs = args.chunkRightContextMs
+  if (args.spkCacheUpdatePeriod !== null) config.streamingSpkCacheUpdatePeriod = args.spkCacheUpdatePeriod
+  return config
+}
 
-// Pull the Sortformer speaker_id out of the addon's segment text
-// ("Speaker N: HH:MM:SS.fff - HH:MM:SS.fff"). Returns -1 if the text
-// doesn't match the expected format.
-function parseSortformerSpeakerId (text) {
-  const m = typeof text === 'string'
-    ? text.match(/Speaker\s+(\d+)/)
-    : null
-  return m ? parseInt(m[1], 10) : -1
+function describeAoscConfig (config) {
+  const parts = []
+  if ('streamingSpkCacheEnable' in config) parts.push(`spkCacheEnable=${config.streamingSpkCacheEnable}`)
+  if ('streamingSpkCacheLen' in config) parts.push(`spkCacheLen=${config.streamingSpkCacheLen}`)
+  if ('streamingFifoLen' in config) parts.push(`fifoLen=${config.streamingFifoLen}`)
+  if ('streamingChunkLeftContextMs' in config) parts.push(`chunkLeftContextMs=${config.streamingChunkLeftContextMs}`)
+  if ('streamingChunkRightContextMs' in config) parts.push(`chunkRightContextMs=${config.streamingChunkRightContextMs}`)
+  if ('streamingSpkCacheUpdatePeriod' in config) parts.push(`spkCacheUpdatePeriod=${config.streamingSpkCacheUpdatePeriod}`)
+  return parts.length === 0 ? '(all AOSC defaults)' : parts.join(' ')
 }
 
 async function main () {
   const args = parseArgs()
   if (!args.asrModel || !args.diarModel) {
-    console.error('Usage: bare examples/live-mic-diarized.js --asr-model <gguf> --diar-model <gguf> [--accumulate] [--chunk-ms <ms>] [--capture "<sox cmd>"]')
+    console.error('Usage: bare examples/live-mic-diarized-aosc.js --asr-model <gguf> --diar-model <v2.1-gguf> [--accumulate] [--chunk-ms <ms>] [--capture "<sox cmd>"] [--spk-cache-enable {true|false}] [--spk-cache-len <rows>] [--fifo-len <rows>] [--chunk-left-context-ms <ms>] [--chunk-right-context-ms <ms>] [--spk-cache-update-period <count>]')
     process.exit(1)
   }
 
@@ -144,8 +201,11 @@ async function main () {
   if (!validatePaths({ model: asrPath })) { addonLogging.releaseLogger(); process.exit(1) }
   if (!validatePaths({ model: diarPath })) { addonLogging.releaseLogger(); process.exit(1) }
 
-  console.log(`Loading ${asrPath}...`)
-  console.log(`Loading ${diarPath}...`)
+  console.log(`Loading ASR: ${asrPath}`)
+  console.log(`Loading DIAR: ${diarPath}`)
+
+  const diarConfig = buildDiarConfig(args)
+  console.log(`AOSC config: ${describeAoscConfig(diarConfig)}`)
 
   const asr = new TranscriptionParakeet({
     files: { model: asrPath },
@@ -159,14 +219,7 @@ async function main () {
   })
   const diar = new TranscriptionParakeet({
     files: { model: diarPath },
-    config: {
-      parakeetConfig: {
-        streaming: true,
-        streamingChunkMs: args.chunkMs ?? 2000,
-        streamingHistoryMs: STREAMING_HISTORY_MS,
-        useGPU: true
-      }
-    }
+    config: { parakeetConfig: diarConfig }
   })
 
   await asr.load()
@@ -250,10 +303,6 @@ async function main () {
     await response
       .onUpdate(out => {
         const items = Array.isArray(out) ? out : [out]
-        // Update lastSpeaker from the latest non-silence segment in
-        // the batch. We tag the ASR transcript with whatever ID
-        // Sortformer reported; see the file header for the caveat
-        // about engine-side drift.
         for (let i = items.length - 1; i >= 0; i--) {
           const s = items[i]
           if (!s || !s.text || isSilenceText(s.text)) continue
