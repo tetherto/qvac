@@ -125,21 +125,21 @@ export async function suspendRuntime(): Promise<void> {
     const storeSnapshot = Array.from(stores.entries());
 
     await runPhase(
-      swarmSnapshot,
-      swarms,
-      async (swarm) => {
-        if (!swarm.suspended) await swarm.suspend();
-      },
-      "suspend-swarm",
-    );
-
-    await runPhase(
       storeSnapshot,
       stores,
       async (store) => {
         await store.suspend();
       },
       "suspend-store",
+    );
+
+    await runPhase(
+      swarmSnapshot,
+      swarms,
+      async (swarm) => {
+        if (!swarm.suspended) await swarm.suspend();
+      },
+      "suspend-swarm",
     );
   })()
     .then(() => {
