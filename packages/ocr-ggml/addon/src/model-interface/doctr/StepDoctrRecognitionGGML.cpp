@@ -24,6 +24,7 @@
 
 namespace doctr::ggml::pipeline {
 
+// NOLINTNEXTLINE(bugprone-throwing-static-initialization)
 const std::string StepDoctrRecognitionGGML::VOCAB =
     "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
     "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
@@ -73,9 +74,11 @@ constexpr int kLstmGateCount = 4;
 constexpr float kBatchNormEps = 1e-5F;
 constexpr double kPixelMax = 255.0;
 
+// NOLINTBEGIN(bugprone-throwing-static-initialization)
 // NOLINTNEXTLINE(modernize-use-std-numbers) - dataset-derived RGB normalization
 const cv::Scalar DOCTR_RECO_MEAN(0.694, 0.695, 0.693);
 const cv::Scalar DOCTR_RECO_STD(0.299, 0.296, 0.301);
+// NOLINTEND(bugprone-throwing-static-initialization)
 
 struct BlockConfig {
   int featureIndex;
@@ -523,11 +526,12 @@ struct StepDoctrRecognitionGGML::Impl {
 
   [[nodiscard]] std::vector<float>
   runLstmLinear(const std::vector<float>& featureWhcn) const {
-    std::vector<float> layerInput(kSequenceLength * kFeatureChannels);
+    std::vector<float> layerInput(
+        static_cast<size_t>(kSequenceLength) * kFeatureChannels);
     for (int t = 0; t < kSequenceLength; ++t) {
       for (int c = 0; c < kFeatureChannels; ++c) {
-        layerInput[static_cast<size_t>((t * kFeatureChannels) + c)] =
-            featureWhcn[static_cast<size_t>(t + (kSequenceLength * c))];
+        layerInput[(static_cast<size_t>(t) * kFeatureChannels) + c] =
+            featureWhcn[t + (static_cast<size_t>(kSequenceLength) * c)];
       }
     }
 
@@ -537,7 +541,9 @@ struct StepDoctrRecognitionGGML::Impl {
                                 ? kFeatureChannels
                                 : kLstmHiddenSize * kLstmDirectionCount;
       layerOutput.assign(
-          kSequenceLength * kLstmHiddenSize * kLstmDirectionCount, 0.0F);
+          static_cast<size_t>(kSequenceLength) * kLstmHiddenSize *
+              kLstmDirectionCount,
+          0.0F);
       runLstmDirection(
           layerInput, layerOutput, lstm[layer][0], inputSize, false);
       runLstmDirection(
@@ -545,19 +551,20 @@ struct StepDoctrRecognitionGGML::Impl {
       layerInput.swap(layerOutput);
     }
 
-    std::vector<float> logits(kSequenceLength * kVocabSize);
+    std::vector<float> logits(
+        static_cast<size_t>(kSequenceLength) * kVocabSize);
     constexpr int finalFeatureSize = kLstmHiddenSize * kLstmDirectionCount;
     for (int t = 0; t < kSequenceLength; ++t) {
       const float* x =
-          layerInput.data() + static_cast<size_t>(t * finalFeatureSize);
+          layerInput.data() + (static_cast<size_t>(t) * finalFeatureSize);
       for (int cls = 0; cls < kVocabSize; ++cls) {
         float value = linearBias[static_cast<size_t>(cls)];
         const float* w =
-            linearWeight.data() + static_cast<size_t>(cls * finalFeatureSize);
+            linearWeight.data() + (static_cast<size_t>(cls) * finalFeatureSize);
         for (int i = 0; i < finalFeatureSize; ++i) {
           value += w[i] * x[i];
         }
-        logits[static_cast<size_t>((t * kVocabSize) + cls)] = value;
+        logits[(static_cast<size_t>(t) * kVocabSize) + cls] = value;
       }
     }
     return logits;
@@ -569,22 +576,23 @@ private:
       const LstmWeights& weights, int inputSize, bool reverse) const {
     std::vector<float> hidden(kLstmHiddenSize, 0.0F);
     std::vector<float> cell(kLstmHiddenSize, 0.0F);
-    std::array<float, kLstmGateCount * kLstmHiddenSize> gates{};
+    std::array<float, static_cast<size_t>(kLstmGateCount) * kLstmHiddenSize>
+        gates{};
 
     for (int step = 0; step < kSequenceLength; ++step) {
       const int t = reverse ? (kSequenceLength - 1 - step) : step;
-      const float* x = input.data() + static_cast<size_t>(t * inputSize);
+      const float* x = input.data() + (static_cast<size_t>(t) * inputSize);
 
       for (int gate = 0; gate < kLstmGateCount * kLstmHiddenSize; ++gate) {
         float value = weights.biasIh[static_cast<size_t>(gate)] +
                       weights.biasHh[static_cast<size_t>(gate)];
         const float* wIh =
-            weights.weightIh.data() + static_cast<size_t>(gate * inputSize);
+            weights.weightIh.data() + (static_cast<size_t>(gate) * inputSize);
         for (int i = 0; i < inputSize; ++i) {
           value += wIh[i] * x[i];
         }
         const float* wHh = weights.weightHh.data() +
-                           static_cast<size_t>(gate * kLstmHiddenSize);
+                           (static_cast<size_t>(gate) * kLstmHiddenSize);
         for (int i = 0; i < kLstmHiddenSize; ++i) {
           value += wHh[i] * hidden[static_cast<size_t>(i)];
         }
@@ -594,11 +602,11 @@ private:
       for (int i = 0; i < kLstmHiddenSize; ++i) {
         const float inputGate = sigmoid(gates[static_cast<size_t>(i)]);
         const float forgetGate =
-            sigmoid(gates[static_cast<size_t>(kLstmHiddenSize + i)]);
+            sigmoid(gates[kLstmHiddenSize + static_cast<size_t>(i)]);
         const float cellGate =
-            std::tanh(gates[static_cast<size_t>((2 * kLstmHiddenSize) + i)]);
+            std::tanh(gates[(static_cast<size_t>(2) * kLstmHiddenSize) + i]);
         const float outputGate =
-            sigmoid(gates[static_cast<size_t>((3 * kLstmHiddenSize) + i)]);
+            sigmoid(gates[(static_cast<size_t>(3) * kLstmHiddenSize) + i]);
         cell[static_cast<size_t>(i)] =
             (forgetGate * cell[static_cast<size_t>(i)]) +
             (inputGate * cellGate);
@@ -949,14 +957,15 @@ cv::Mat StepDoctrRecognitionGGML::preprocessCrop(
 
 cv::Mat StepDoctrRecognitionGGML::runSingleInference(const cv::Mat& image) {
   CV_Assert(image.rows == RECOG_HEIGHT && image.cols == RECOG_WIDTH);
-  inputBuffer_.assign(RECOG_WIDTH * RECOG_HEIGHT * kInputChannels, 0.0F);
+  inputBuffer_.assign(
+      static_cast<size_t>(RECOG_WIDTH) * RECOG_HEIGHT * kInputChannels, 0.0F);
   for (int y = 0; y < RECOG_HEIGHT; ++y) {
     for (int x = 0; x < RECOG_WIDTH; ++x) {
-      const cv::Vec3f pixel = image.at<cv::Vec3f>(y, x);
+      const auto& pixel = image.at<cv::Vec3f>(y, x);
       for (int c = 0; c < kInputChannels; ++c) {
-        inputBuffer_[static_cast<size_t>(
-            x + (RECOG_WIDTH * (y + (RECOG_HEIGHT * c))))] =
-            pixel[static_cast<int>(c)];
+        inputBuffer_
+            [x + (static_cast<size_t>(RECOG_WIDTH) *
+                  (y + (static_cast<size_t>(RECOG_HEIGHT) * c)))] = pixel[c];
       }
     }
   }

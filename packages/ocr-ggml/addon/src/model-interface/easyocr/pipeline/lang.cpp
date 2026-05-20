@@ -41,8 +41,10 @@ struct LangGroupInfo {
 using LangToLangGroupInfoMap = std::map<std::string_view, LangGroupInfo, std::less<>>;
 using GenToModelCharacteristicsMap = std::map<std::string_view, LangToLangGroupInfoMap, std::less<>>;
 
-// NOLINTBEGIN(modernize-use-designated-initializers) - dense data tables
-// lifted verbatim from upstream; positional init preserves the source layout.
+// NOLINTBEGIN(modernize-use-designated-initializers,bugprone-throwing-static-initialization)
+// dense data tables lifted verbatim from upstream; positional init preserves
+// the source layout and the namespace-scope `const std::map` initialization is
+// intentional.
 const GenToModelCharacteristicsMap RECOGNITION_MODELS = {
     {"gen1",
      {
@@ -529,8 +531,9 @@ const GenToModelCharacteristicsMap RECOGNITION_MODELS = {
            "ћЌќЎўЏџҐґҒғҚқҮүҲҳҶҷӀӏӢӣӨөӮӯ",
            U"0123456789!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~ €₽"}},
      }}};
-// NOLINTEND(modernize-use-designated-initializers)
+// NOLINTEND(modernize-use-designated-initializers,bugprone-throwing-static-initialization)
 
+// NOLINTNEXTLINE(bugprone-throwing-static-initialization)
 const std::map<std::string_view, std::u32string_view> LANG_TO_CHARS_MAP = {
     {"ab", U"АБВГӶҔДЕЖЗӠИКҚҞЛМНОПԤҦРСТҬУФХҲЦҴЧҶҼҾШЫҨЏЬӘабвгӷҕдежзӡикқҟлмнопԥҧрстҭуфхҳцҵчҷҽҿшыҩџьә"},
     {"abq", U"АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюяI"},

@@ -22,8 +22,10 @@ namespace {
 
 // DocTR detection normalisation constants (from HuggingFace db_resnet50
 // config).
+// NOLINTBEGIN(bugprone-throwing-static-initialization)
 const cv::Scalar DOCTR_DET_MEAN(0.798, 0.785, 0.772);
 const cv::Scalar DOCTR_DET_STD(0.264, 0.2749, 0.287);
+// NOLINTEND(bugprone-throwing-static-initialization)
 constexpr double PIXEL_MAX = 255.0;
 
 // Mean probability inside a bounding rectangle (assume_straight_pages=True).
@@ -55,7 +57,7 @@ StepDoctrDetectionGGML::StepDoctrDetectionGGML(
     ggml_backend_cpu_set_n_threads(cpuBackend, nThreads);
   } else if (nThreads == 0) {
     ggml_backend_cpu_set_n_threads(
-        cpuBackend, std::thread::hardware_concurrency());
+        cpuBackend, static_cast<int>(std::thread::hardware_concurrency()));
   }
   backends_.push_back(cpuBackend);
 

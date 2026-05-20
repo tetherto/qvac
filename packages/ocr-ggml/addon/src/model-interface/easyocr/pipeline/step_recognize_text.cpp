@@ -900,11 +900,14 @@ std::pair<std::string, float> StepRecognizeText::getTextAndConfidenceFromPreds(
   const float* batchBase = preds.ptr<float>() + (batchIdx * batchStride);
 
   // Use flat vector instead of vector<vector<float>> to reduce allocations
-  std::vector<float> predsProb(imgSubcolumnsSize * charSpaceSize, 0.0F);
+  std::vector<float> predsProb(
+      static_cast<size_t>(imgSubcolumnsSize) * charSpaceSize, 0.0F);
 
   for (int subcolumn = 0; subcolumn < imgSubcolumnsSize; subcolumn++) {
-    const float* subcolBase = batchBase + (subcolumn * subcolStride);
-    float* probRow = predsProb.data() + (subcolumn * charSpaceSize);
+    const float* subcolBase =
+        batchBase + (static_cast<size_t>(subcolumn) * subcolStride);
+    float* probRow =
+        predsProb.data() + (static_cast<size_t>(subcolumn) * charSpaceSize);
 
     float maxVal = -std::numeric_limits<float>::infinity();
     for (int charIndex = 0; charIndex < charSpaceSize; charIndex++) {
@@ -923,7 +926,8 @@ std::pair<std::string, float> StepRecognizeText::getTextAndConfidenceFromPreds(
   }
 
   for (int subcolumn = 0; subcolumn < imgSubcolumnsSize; subcolumn++) {
-    float* probRow = predsProb.data() + (subcolumn * charSpaceSize);
+    float* probRow =
+        predsProb.data() + (static_cast<size_t>(subcolumn) * charSpaceSize);
     for (int charIndex = 0; charIndex < charSpaceSize; charIndex++) {
       if (ignoreChars_[charIndex]) {
         probRow[charIndex] = 0.0F;
@@ -943,7 +947,8 @@ std::pair<std::string, float> StepRecognizeText::getTextAndConfidenceFromPreds(
   std::vector<size_t> predsIndex(imgSubcolumnsSize, 0);
   std::vector<float> predsMaxProb(imgSubcolumnsSize, 0.0F);
   for (int subcolumn = 0; subcolumn < imgSubcolumnsSize; subcolumn++) {
-    const float* probRow = predsProb.data() + (subcolumn * charSpaceSize);
+    const float* probRow =
+        predsProb.data() + (static_cast<size_t>(subcolumn) * charSpaceSize);
     size_t charIndexMax = 0;
     float maxProbVal = probRow[0];
     for (size_t charIndex = 1; std::cmp_less(charIndex, charSpaceSize);
@@ -1083,7 +1088,7 @@ cv::Mat StepRecognizeText::runInferenceOnImg(const cv::Mat& img) {
       /*batch_size=*/1,
       height,
       width,
-      /*graph_size=*/32 * 1024);
+      /*graph_size=*/static_cast<size_t>(32) * 1024);
 }
 
 cv::Mat StepRecognizeText::runBatchInference(
@@ -1125,7 +1130,7 @@ cv::Mat StepRecognizeText::runBatchInference(
       batchSize,
       height,
       width,
-      32 * 1024);
+      static_cast<size_t>(32) * 1024);
 
   auto t1 = std::chrono::high_resolution_clock::now();
   auto batchMs =

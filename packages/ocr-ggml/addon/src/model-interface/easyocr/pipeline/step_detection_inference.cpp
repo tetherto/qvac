@@ -46,8 +46,10 @@ constexpr int MAX_IMAGE_SIZE = 2560;
 constexpr float RATIO_DETECTOR_NET = 2.0F;
 
 constexpr int SIZE_MULTIPLE = 32;
+// NOLINTBEGIN(bugprone-throwing-static-initialization)
 const cv::Scalar DEFAULT_MEAN(0.485, 0.456, 0.406);
 const cv::Scalar DEFAULT_VARIANCE(0.229, 0.224, 0.225);
+// NOLINTEND(bugprone-throwing-static-initialization)
 constexpr double PIXEL_INTENSITY_MAX = 255.0;
 
 /**

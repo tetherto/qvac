@@ -139,6 +139,9 @@ private:
   std::unique_ptr<CrnnGen2Weights> gen2_weights_;
   ggml_backend_t backend_ = nullptr;
 
+  // NOLINTNEXTLINE(clang-diagnostic-deprecated-declarations) - std::wstring_convert
+  // is deprecated in C++17+ but there is no drop-in replacement before C++26;
+  // switching to ICU/iconv is a separate refactor.
   std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> converter_;
   std::u32string_view utf32Characters_;
   std::u32string utf32Owned_; // backs the view when sourced from GGUF

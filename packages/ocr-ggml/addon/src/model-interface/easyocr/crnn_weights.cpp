@@ -85,7 +85,8 @@ std::string upload_weights(
     std::unordered_map<std::string, ::ggml_tensor*>& b_,
     std::unordered_map<std::string, ::ggml_tensor*>& t_) {
 
-  std::vector<float> w_folded, b_folded;
+  std::vector<float> w_folded;
+  std::vector<float> b_folded;
 
   for (const auto& d : convs) {
     auto* w_src = loader.get_tensor(d.conv_path + ".weight");

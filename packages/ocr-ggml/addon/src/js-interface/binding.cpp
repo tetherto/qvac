@@ -11,7 +11,7 @@
 namespace {
 struct OpenCVSingleThread {
   OpenCVSingleThread() { cv::setNumThreads(1); }
-} g_opencvInit; // NOLINT(cert-err58-cpp)
+} g_opencvInit; // NOLINT(cert-err58-cpp,bugprone-throwing-static-initialization)
 } // namespace
 
 js_value_t*

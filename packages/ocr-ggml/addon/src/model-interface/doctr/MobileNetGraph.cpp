@@ -68,7 +68,7 @@ void fp16ToFp32(const void* src, float* out, size_t count) {
 struct ggml_tensor* cloneRaw(
     struct ggml_context* bundleCtx, const gguf_context* ggufCtx,
     struct ggml_context* ggmlCtx, const char* name) {
-  const int idx = gguf_find_tensor(ggufCtx, name);
+  const int64_t idx = gguf_find_tensor(ggufCtx, name);
   if (idx < 0) {
     raise(std::string("Missing tensor in GGUF: ") + name);
   }
@@ -189,7 +189,8 @@ struct GraphBuilder {
   struct ggml_tensor* fpnUpsampleAdd(
       struct ggml_tensor* topDown, struct ggml_tensor* lateral) const {
     constexpr uint32_t upsampleMode =
-        GGML_SCALE_MODE_BILINEAR | GGML_SCALE_FLAG_ALIGN_CORNERS;
+        static_cast<uint32_t>(GGML_SCALE_MODE_BILINEAR) |
+        static_cast<uint32_t>(GGML_SCALE_FLAG_ALIGN_CORNERS);
     struct ggml_tensor* upsampled = ggml_interpolate(
         ctx,
         topDown,
@@ -217,7 +218,8 @@ struct GraphBuilder {
         /*useHardswish=*/false);
 
     constexpr uint32_t upsampleMode =
-        GGML_SCALE_MODE_BILINEAR | GGML_SCALE_FLAG_ALIGN_CORNERS;
+        static_cast<uint32_t>(GGML_SCALE_MODE_BILINEAR) |
+        static_cast<uint32_t>(GGML_SCALE_FLAG_ALIGN_CORNERS);
     return ggml_interpolate(
         ctx,
         output,
@@ -614,28 +616,12 @@ WeightsBundle loadWeights(
     tensors.emplace(bnPrefix + ".shift", shift);
   };
 
-  // Classifier linear weights kept as F32 for numerical stability of the tiny
+  // Classifier linear weights kept as F16 for numerical stability of the tiny
   // 3-element logits tail.
-  auto addFcWeightFp32 = [&](const std::string& name, int in, int out) {
-    const int64_t shape[2] = {in, out};
-    struct ggml_tensor* t =
-        cloneAsFp32(bundle.ctx.get(), name.c_str(), 2, shape);
-    logTensorLoad(name, t);
-    tensors.emplace(name, t);
-  };
-
   auto addFcWeightFp16 = [&](const std::string& name, int in, int out) {
     const int64_t shape[2] = {in, out};
     struct ggml_tensor* t =
         cloneAsFp16(bundle.ctx.get(), name.c_str(), 2, shape);
-    logTensorLoad(name, t);
-    tensors.emplace(name, t);
-  };
-
-  auto addFcBiasFp32 = [&](const std::string& name, int out) {
-    const int64_t shape[1] = {out};
-    struct ggml_tensor* t =
-        cloneAsFp32(bundle.ctx.get(), name.c_str(), 1, shape);
     logTensorLoad(name, t);
     tensors.emplace(name, t);
   };
@@ -769,6 +755,9 @@ WeightsBundle loadWeights(
     ggml_backend_tensor_set(dst, src->data, 0, ggml_nbytes(src));
   }
 
+  // NOLINTNEXTLINE(clang-analyzer-deadcode.DeadStores) - kept for the
+  // future classifier-bytes upload path (see commented-out
+  // uploadClassifierTensor block at the bottom of this function)
   auto uploadTensorBytes = [&](struct ggml_tensor* dst,
                                const std::string& srcName) {
     struct ggml_tensor* src = ggml_get_tensor(ggmlCtx, srcName.c_str());
@@ -961,6 +950,8 @@ ComputeGraph buildGraph(
       break;
     case 12:
       cg.output_3 = x;
+      break;
+    default:
       break;
     }
     ++graphFeatureIndex;
