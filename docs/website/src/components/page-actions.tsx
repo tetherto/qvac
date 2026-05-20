@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
+
 import { Check, ChevronDown, ExternalLinkIcon, MessageSquare, Sparkles, Tag } from 'lucide-react';
 import { cn } from '../lib/cn';
 import { buttonVariants } from './ui/button';
@@ -231,7 +232,11 @@ export function ViewOptions({
           }),
         )}
       >
-        <Sparkles className="size-3.5 text-fd-muted-foreground" />
+        {/* `pointer-events-none` ensures `event.target === <button>`. Inkeep
+            CXKit matches `data-inkeep-modal-trigger` against the exact event
+            target (not via `closest()`), so clicks that land on the inner SVG
+            would otherwise be silently ignored. */}
+        <Sparkles className="size-3.5 text-fd-muted-foreground pointer-events-none" />
       </button>
 
       <Popover>
@@ -254,7 +259,8 @@ export function ViewOptions({
               data-inkeep-modal-trigger="chat"
               className={cn(optionVariants())}
             >
-              <MessageSquare className="text-fd-muted-foreground" />
+              {/* See Sparkles note above — same Inkeep strict-target gotcha. */}
+              <MessageSquare className="text-fd-muted-foreground pointer-events-none" />
               Ask our AI assistant
             </button>
           </PopoverClose>
