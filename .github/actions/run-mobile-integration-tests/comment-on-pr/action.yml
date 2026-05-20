@@ -1,0 +1,119 @@
+name: Mobile Test — Comment on PR
+description: |
+  Phase 7 of the mobile integration test pipeline (optional).
+
+  Posts a sticky comment on the originating PR with the device-farm
+  pass/fail summary. Uses a marker comment so re-runs update in place
+  rather than spamming the PR. Skipped automatically when the event
+  payload has no pull_request context (works for both pull_request
+  triggers and workflow_call invoked from a PR workflow).
+
+inputs:
+  addon-npm-name:
+    description: "NPM package name (used in comment header + marker)"
+    required: true
+  platform:
+    description: "Android | iOS"
+    required: true
+  enabled:
+    description: "Set to 'false' to skip the comment entirely"
+    required: false
+    default: "true"
+  test-result:
+    description: "PASSED | FAILED"
+    required: true
+  test-total:
+    description: "Total test cases"
+    required: false
+    default: "0"
+  test-passed:
+    description: "Test cases passed"
+    required: false
+    default: "0"
+  test-failed:
+    description: "Test cases failed"
+    required: false
+    default: "0"
+  test-skipped:
+    description: "Test cases skipped"
+    required: false
+    default: "0"
+  user-test-passed:
+    description: "Devices passed"
+    required: false
+    default: "0"
+  user-test-failed:
+    description: "Devices failed"
+    required: false
+    default: "0"
+
+runs:
+  using: composite
+  steps:
+    - name: Comment results on PR
+      if: |
+        always()
+        && inputs.enabled == 'true'
+        && github.event.pull_request.number
+        && inputs.test-result != ''
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # 7.1.1
+      env:
+        ADDON_NAME: ${{ inputs.addon-npm-name }}
+        PLATFORM: ${{ inputs.platform }}
+        TEST_RESULT: ${{ inputs.test-result }}
+        TEST_TOTAL: ${{ inputs.test-total }}
+        TEST_PASSED: ${{ inputs.test-passed }}
+        TEST_FAILED: ${{ inputs.test-failed }}
+        TEST_SKIPPED: ${{ inputs.test-skipped }}
+        USER_PASSED: ${{ inputs.user-test-passed }}
+        USER_FAILED: ${{ inputs.user-test-failed }}
+      with:
+        script: |
+          const {
+            ADDON_NAME, PLATFORM, TEST_RESULT,
+            TEST_TOTAL, TEST_PASSED, TEST_FAILED, TEST_SKIPPED,
+            USER_PASSED, USER_FAILED,
+          } = process.env;
+
+          const status = TEST_RESULT === 'PASSED' ? 'passed' : 'failed';
+          const marker = `<!-- mobile-integration-test:${ADDON_NAME}:${PLATFORM} -->`;
+          const body = [
+            marker,
+            `### Mobile integration tests — ${ADDON_NAME} (${PLATFORM})`,
+            ``,
+            `Result: **${status}**`,
+            ``,
+            `| metric | value |`,
+            `| --- | --- |`,
+            `| Devices passed | ${USER_PASSED || 0} |`,
+            `| Devices failed | ${USER_FAILED || 0} |`,
+            `| Test cases total | ${TEST_TOTAL || 0} |`,
+            `| Test cases passed | ${TEST_PASSED || 0} |`,
+            `| Test cases failed | ${TEST_FAILED || 0} |`,
+            `| Test cases skipped | ${TEST_SKIPPED || 0} |`,
+            ``,
+            `[View workflow run](${context.payload.repository.html_url}/actions/runs/${context.runId})`,
+          ].join('\n');
+
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.payload.pull_request.number,
+            per_page: 100,
+          });
+          const existing = comments.find((c) => c.body && c.body.includes(marker));
+          if (existing) {
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: existing.id,
+              body,
+            });
+          } else {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body,
+            });
+          }
