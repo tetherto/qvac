@@ -68,15 +68,18 @@ jobs:
           path: ~/.cache/ccache
           restore-keys: ccache-cpp-coverage-tts-ggml-${{ matrix.platform }}-${{ matrix.arch }}-
 
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Install bare tooling
+        run: npm install -g --force bare bare-make
+
       - name: Install NPM dependencies
         working-directory: ${{ env.PKG_DIR }}
         run: |
           npm install
-          # npm install -g bare bare-make
-
-      - name: Add bare tooling to PATH (Linux x64)
-        if: ${{ matrix.os == 'ubuntu-22.04' }}
-        run: echo "/usr/local/nvm/versions/node/v20.20.2/bin" >> $GITHUB_PATH
           
       - if: ${{ matrix.os == 'ubuntu-22.04' }}
         name: Configure vcpkg in linux

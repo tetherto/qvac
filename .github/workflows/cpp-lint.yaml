@@ -102,12 +102,13 @@ jobs:
           rm -rf $VCPKG_ROOT/buildtrees/*
           rm -rf $VCPKG_ROOT/packages/*
 
-      # - name: Setup Bare tooling
-      #   uses: tetherto/qvac/.github/actions/setup-bare-tooling@0bbdca93da303a0b1634ba14a89cec085621078d
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
 
-      - name: Add bare tooling to PATH
-        run: echo "/usr/local/nvm/versions/node/v20.20.2/bin" >> $GITHUB_PATH
-
+      - name: Install bare tooling
+        run: npm install -g --force bare bare-make
 
       # - if: ${{ inputs.include-vulkan-sdk }}
       #   name: Setup Vulkan SDK

@@ -76,11 +76,18 @@ jobs:
           lfs: true
           fetch-depth: 0
 
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Install bare tooling
+        run: npm install -g --force bare bare-make
+
       - name: Install NPM dependencies
         working-directory: ${{ env.WORKDIR }}
         run: |
           npm install
-          # npm install -g bare bare-make
 
       - if: ${{ matrix.os == 'ubuntu-22.04' }}
         name: Configure vcpkg in linux
@@ -91,10 +98,6 @@ jobs:
         run: |
           rm -rf $VCPKG_ROOT/buildtrees/*
           rm -rf $VCPKG_ROOT/packages/*
-
-      - name: Add bare tooling to PATH (Linux x64)
-        if: ${{ matrix.os == 'ubuntu-22.04' }}
-        run: echo "/usr/local/nvm/versions/node/v20.20.2/bin" >> $GITHUB_PATH
 
       - name: Generate and build unit tests
         working-directory: ${{ env.WORKDIR }}

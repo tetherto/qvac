@@ -131,3 +131,13 @@ export function handleGetFileContent (
   })
   res.end(record.data)
 }
+
+export const META = {
+  endpoints: [
+    'GET /v1/files',
+    'POST /v1/files',
+    'GET /v1/files/{file_id}',
+    'GET /v1/files/{file_id}/content'
+  ],
+  caveats: ['ephemeral in-memory store']
+} as const

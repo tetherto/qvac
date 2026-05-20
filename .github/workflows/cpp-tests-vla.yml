@@ -123,10 +123,8 @@ jobs:
         run: |
           npm install
 
-      - name: Install bare tooling (macos)
-        if: matrix.platform == 'darwin'
-        run: |
-          npm install -g bare bare-make
+      - name: Install bare tooling
+        run: npm install -g --force bare bare-make
 
       - if: ${{ matrix.os == 'ubuntu-24.04' }}
         name: Set Vulkan SDK Path on Linux

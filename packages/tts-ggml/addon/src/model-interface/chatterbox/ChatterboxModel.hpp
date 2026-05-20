@@ -51,7 +51,7 @@ public:
    * each chunk's PCM (already converted to 16-bit) plus its 0-based index
    * and an `isLast` flag.  Wired from the JS binding onto
    * addonCpp->outputQueue so every chunk materialises as an onUpdate
-   * event on the JS side (same pattern as qvac-lib-infer-llamacpp-llm's
+   * event on the JS side (same pattern as llm-llamacpp's
    * per-token outputCallback).
    */
   using ChunkCallback = std::function<
