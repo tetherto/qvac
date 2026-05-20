@@ -10,6 +10,7 @@ const {
   detectPlatform,
   setupJsLogger,
   getTestPaths,
+  getAssetPath,
   ensureWhisperModel,
   createAudioStream,
   isMobile,
@@ -17,7 +18,7 @@ const {
 } = require('./helpers.js')
 
 const platform = detectPlatform()
-const { modelsDir, samplesDir } = getTestPaths()
+const { modelsDir } = getTestPaths()
 const NUM_TRANSCRIPTIONS = 3
 const SAMPLE_RATE = 16000
 const NO_GPU = proc.env && proc.env.NO_GPU === 'true'
@@ -30,8 +31,12 @@ function getTimeMs () {
 function locateSampleAudio () {
   const candidates = ['sample.raw', 'short_en.raw']
   for (const name of candidates) {
-    const samplePath = path.join(samplesDir, name)
-    if (fs.existsSync(samplePath)) return samplePath
+    try {
+      const samplePath = getAssetPath(name)
+      if (samplePath && fs.existsSync(samplePath)) return samplePath
+    } catch (_) {
+      // Asset manifest may not contain this name on mobile — try next candidate.
+    }
   }
   return null
 }
@@ -79,7 +84,7 @@ async function runMobilePerfCase (t, opts) {
 
     const samplePath = locateSampleAudio()
     if (!samplePath) {
-      t.pass('Test skipped - sample audio not found in ' + samplesDir)
+      t.pass('Test skipped - sample audio not found via getAssetPath')
       return
     }
     const rawBuffer = fs.readFileSync(samplePath)
