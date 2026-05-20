@@ -116,6 +116,11 @@ async function runToolsCompactTest (options = {}) { // eslint-disable-line no-un
   return runIntegrationModule('../integration/tools-compact.test.js', options)
 }
 
+async function runTurboquantTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runTurboquantTest')) return __FILTERED
+  return runIntegrationModule('../integration/turboquant.test.js', options)
+}
+
 async function runUtf8OutputTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runUtf8OutputTest')) return __FILTERED
   return runIntegrationModule('../integration/utf8-output.test.js', options)

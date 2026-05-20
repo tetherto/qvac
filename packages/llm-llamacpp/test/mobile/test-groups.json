@@ -24,6 +24,7 @@
       "runMultiGpuTest",
       "runMultiInstanceTest",
       "runQwen35Test",
+      "runTurboquantTest",
       "runUtf8OutputTest"
     ]
   },
@@ -49,6 +50,7 @@
       "runReasoningTest",
       "runSlidingContextTest",
       "runToolCallingTest",
+      "runTurboquantTest",
       "runUtf8OutputTest"
     ],
     "groupImagesPerf": [
