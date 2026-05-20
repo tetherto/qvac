@@ -52,10 +52,6 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           sparse-checkout: .github/actions/label-gate
           sparse-checkout-cone-mode: false
-      - name: Harden Runner
-        uses: step-security/harden-runner@eb238132180c530e368e5b3b6e49a45f8571da2b # v2.10.4
-        with:
-          egress-policy: audit
 
       - name: Run label-gate
         id: gate
@@ -72,11 +68,6 @@ jobs:
     name: Build QVAC OCR GGML addon
 
     steps:
-      - name: Harden Runner
-        uses: step-security/harden-runner@eb238132180c530e368e5b3b6e49a45f8571da2b # v2.10.4
-        with:
-          egress-policy: audit
-
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -168,11 +159,6 @@ jobs:
       id-token: write
 
     steps:
-      - name: Harden Runner
-        uses: step-security/harden-runner@eb238132180c530e368e5b3b6e49a45f8571da2b # v2.10.4
-        with:
-          egress-policy: audit
-
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -363,11 +349,6 @@ jobs:
     if: always()
 
     steps:
-      - name: Harden Runner
-        uses: step-security/harden-runner@eb238132180c530e368e5b3b6e49a45f8571da2b # v2.10.4
-        with:
-          egress-policy: audit
-
       - name: Download results
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         continue-on-error: true
