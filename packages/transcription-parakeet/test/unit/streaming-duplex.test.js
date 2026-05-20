@@ -36,17 +36,13 @@ const { ParakeetInterface } = require('../../parakeet')
 
 const process = require('bare-process')
 global.process = process
-const sinon = require('sinon')
 
 function createMockedModel ({
   onOutput = () => {},
   binding = undefined,
   parakeetConfig = {}
 } = {}) {
-  TranscriptionParakeet.prototype.validateModelFiles?.restore?.()
-  const validateStub = sinon
-    .stub(TranscriptionParakeet.prototype, 'validateModelFiles')
-    .returns(undefined)
+  TranscriptionParakeet.prototype.validateModelFiles = () => undefined
 
   const model = new TranscriptionParakeet({
     files: { model: './models/parakeet-tdt-0.6b-v3.q8_0.gguf' },
@@ -61,7 +57,7 @@ function createMockedModel ({
 
   const _binding = binding || new MockedBinding()
 
-  sinon.stub(model, '_createAddon').callsFake(configurationParams => {
+  model._createAddon = configurationParams => {
     const addon = new ParakeetInterface(
       _binding,
       configurationParams,
@@ -72,9 +68,8 @@ function createMockedModel ({
       transitionCb
     )
     return addon
-  })
+  }
 
-  model._validateStub = validateStub
   model._mockedBinding = _binding
   return model
 }
