@@ -259,6 +259,116 @@ struct ggml_tensor* pi05_build_vlm_embed_graph(
   return ggml_scale(ctx, e, scale);
 }
 
+// Gemma-1 RMSNorm: `(1 + scale) * normed`. The Phase-2 converter
+// copies the raw PyTorch tensor as `.scale`, so the `+1` happens
+// here on the graph side. We compute `normed * scale + normed` to
+// avoid needing a one-tensor.
+static struct ggml_tensor* pi05_gemma_rms_norm(
+    struct ggml_context* ctx, struct ggml_tensor* x,
+    struct ggml_tensor* scale, float eps) {
+  struct ggml_tensor* normed = ggml_rms_norm(ctx, x, eps);
+  if (scale == nullptr) {
+    return normed;
+  }
+  struct ggml_tensor* scale_f32 = to_f32(ctx, scale);
+  // (1 + scale) * normed = normed + normed * scale
+  return ggml_add(ctx, normed, ggml_mul(ctx, normed, scale_f32));
+}
+
+// ── M3.5: one Gemma-1 VLM block ─────────────────────────────────────────
+struct ggml_tensor* pi05_build_gemma_vlm_block_graph(
+    struct ggml_context* ctx,
+    struct ggml_tensor* x,
+    struct ggml_tensor* positions,
+    struct ggml_tensor* attn_mask,
+    const Pi05GemmaBlockWeights& w,
+    int hidden,
+    int n_heads,
+    int n_kv_heads,
+    int head_dim,
+    int seq_len,
+    float rms_norm_eps,
+    float rope_freq_base) {
+  if (ctx == nullptr || x == nullptr || positions == nullptr ||
+      w.pre_attn_norm_scale == nullptr || w.attn_q_w == nullptr ||
+      w.attn_k_w == nullptr || w.attn_v_w == nullptr ||
+      w.attn_o_w == nullptr || w.pre_ffw_norm_scale == nullptr ||
+      w.mlp_gate_w == nullptr || w.mlp_up_w == nullptr ||
+      w.mlp_down_w == nullptr) {
+    return nullptr;
+  }
+
+  // ── Pre-attn RMSNorm ───────────────────────────────────────────────
+  struct ggml_tensor* residual = x;
+  struct ggml_tensor* h =
+      pi05_gemma_rms_norm(ctx, x, w.pre_attn_norm_scale, rms_norm_eps);
+
+  // ── Q, K, V projections (Gemma-1 has no attn bias) ────────────────
+  struct ggml_tensor* q = pi05_linear(ctx, h, w.attn_q_w, nullptr);
+  struct ggml_tensor* k = pi05_linear(ctx, h, w.attn_k_w, nullptr);
+  struct ggml_tensor* v = pi05_linear(ctx, h, w.attn_v_w, nullptr);
+
+  // Reshape to per-head views. MQA: Q is split into n_heads, K/V into
+  // n_kv_heads (1 for pi05). ggml broadcasts the kv-head dim against
+  // the q-head dim when n_kv_heads < n_heads.
+  q = ggml_reshape_3d(ctx, q, head_dim, n_heads, seq_len);
+  k = ggml_reshape_3d(ctx, k, head_dim, n_kv_heads, seq_len);
+  v = ggml_reshape_3d(ctx, v, head_dim, n_kv_heads, seq_len);
+
+  // RoPE on Q and K (NEOX style, Gemma-1 freq_base = 10000). Per-head
+  // — ggml_rope_ext walks the seq dim using `positions`.
+  const int n_rot = head_dim;
+  const int rope_mode = GGML_ROPE_TYPE_NEOX;
+  q = ggml_rope_ext(
+      ctx, q, positions, /*freq_factors=*/nullptr,
+      n_rot, rope_mode, /*n_ctx_orig=*/0,
+      rope_freq_base, /*freq_scale=*/1.0f,
+      /*ext_factor=*/0.0f, /*attn_factor=*/1.0f,
+      /*beta_fast=*/32.0f, /*beta_slow=*/1.0f);
+  k = ggml_rope_ext(
+      ctx, k, positions, /*freq_factors=*/nullptr,
+      n_rot, rope_mode, /*n_ctx_orig=*/0,
+      rope_freq_base, /*freq_scale=*/1.0f,
+      /*ext_factor=*/0.0f, /*attn_factor=*/1.0f,
+      /*beta_fast=*/32.0f, /*beta_slow=*/1.0f);
+
+  // Permute to (head_dim, seq, heads) — the layout ggml_mul_mat
+  // consumes per-head as independent (seq × head_dim) batches.
+  q = ggml_cont(ctx, ggml_permute(ctx, q, 0, 2, 1, 3));
+  k = ggml_cont(ctx, ggml_permute(ctx, k, 0, 2, 1, 3));
+  v = ggml_cont(ctx, ggml_permute(ctx, v, 0, 2, 1, 3));
+
+  // Attention: softmax(K^T · Q / sqrt(head_dim) + mask) · V.
+  // mul_mat(K, Q) broadcasts K's kv_heads=1 across Q's n_heads=8.
+  struct ggml_tensor* logits = ggml_mul_mat(ctx, k, q);
+  const float scale = 1.0f / std::sqrt(static_cast<float>(head_dim));
+  struct ggml_tensor* attn =
+      ggml_soft_max_ext(ctx, logits, attn_mask, scale, /*max_bias=*/0.0f);
+  // V^T: (n_patches, head_dim, n_kv_heads). mul_mat with attn (n_k, n_q, n_heads)
+  // → (head_dim, n_q, n_heads).
+  struct ggml_tensor* attn_out = ggml_mul_mat(
+      ctx, ggml_cont(ctx, ggml_transpose(ctx, v)), attn);
+  // Back to (hidden, seq_q).
+  attn_out = ggml_cont(ctx, ggml_permute(ctx, attn_out, 0, 2, 1, 3));
+  attn_out = ggml_reshape_2d(ctx, attn_out, hidden, seq_len);
+
+  // O proj + residual.
+  struct ggml_tensor* proj = pi05_linear(ctx, attn_out, w.attn_o_w, nullptr);
+  h = ggml_add(ctx, proj, residual);
+
+  // ── Pre-FFW RMSNorm + GeGLU MLP + residual ────────────────────────
+  residual = h;
+  h = pi05_gemma_rms_norm(ctx, h, w.pre_ffw_norm_scale, rms_norm_eps);
+  struct ggml_tensor* gate = pi05_linear(ctx, h, w.mlp_gate_w, nullptr);
+  struct ggml_tensor* up = pi05_linear(ctx, h, w.mlp_up_w, nullptr);
+  // GeGLU: gelu(gate) * up. ggml_gelu is the tanh approximation —
+  // matches PyTorch's `gelu_pytorch_tanh` (lerobot pi05 hidden_act).
+  gate = ggml_gelu(ctx, gate);
+  struct ggml_tensor* ff = ggml_mul(ctx, gate, up);
+  struct ggml_tensor* down = pi05_linear(ctx, ff, w.mlp_down_w, nullptr);
+  return ggml_add(ctx, down, residual);
+}
+
 Pi05Model::Pi05Model(
     const std::string& /*ggufPath*/,
     bool /*forceCpu*/,

@@ -180,6 +180,52 @@ struct ggml_tensor* pi05_build_vlm_embed_graph(
     struct ggml_tensor* embed_tokens,
     int hidden);
 
+// M3.5 — one Gemma-1 transformer block on the VLM side.
+//
+// Standard pre-RMSNorm Gemma block: RMSNorm((1+scale)·x) → MQA
+// (n_heads × head_dim Q, n_kv_heads × head_dim K/V) with NEOX-style
+// RoPE on Q and K → softmax(Q·K^T / sqrt(head_dim) + mask) ·V → o_proj
+// → residual → RMSNorm → GeGLU MLP (gate, up, gelu-tanh, down) →
+// residual.
+//
+// Implementation choices come from cross-referencing llama.cpp's
+// `llm_build_gemma` (gemma.cpp) and openpi's `gemma.py`. Specifically:
+//   * RMSNorm scale is applied as `(1 + scale)` (openpi/gemma.py:122).
+//     The Phase-2 converter copies the raw PyTorch tensor, so we apply
+//     the `+1` at graph-build time.
+//   * Hidden activation is GELU with the tanh approximation
+//     (lerobot/pi05's `hidden_activation = "gelu_pytorch_tanh"`).
+//   * RoPE freq_base is the Gemma-1 default 10000, NEOX-style (llama-
+//     model.cpp:9309).
+//
+// `attn_mask` may be nullptr — in which case no positions are masked
+// out (slice the input to its valid range instead).
+struct Pi05GemmaBlockWeights {
+  struct ggml_tensor* pre_attn_norm_scale;  // (hidden,)
+  struct ggml_tensor* attn_q_w;             // (hidden, n_heads * head_dim)
+  struct ggml_tensor* attn_k_w;             // (hidden, n_kv_heads * head_dim)
+  struct ggml_tensor* attn_v_w;
+  struct ggml_tensor* attn_o_w;             // (n_heads * head_dim, hidden)
+  struct ggml_tensor* pre_ffw_norm_scale;
+  struct ggml_tensor* mlp_gate_w;           // (hidden, intermediate)
+  struct ggml_tensor* mlp_up_w;
+  struct ggml_tensor* mlp_down_w;           // (intermediate, hidden)
+};
+
+struct ggml_tensor* pi05_build_gemma_vlm_block_graph(
+    struct ggml_context* ctx,
+    struct ggml_tensor* x,            // ne=[hidden, seq_len]
+    struct ggml_tensor* positions,    // I32 (seq_len,) — RoPE indices
+    struct ggml_tensor* attn_mask,    // F32 (seq_k, seq_q) or nullptr
+    const Pi05GemmaBlockWeights& w,
+    int hidden,
+    int n_heads,
+    int n_kv_heads,
+    int head_dim,
+    int seq_len,
+    float rms_norm_eps,
+    float rope_freq_base);
+
 
 class Pi05Model final : public IVlaModel {
 public:
