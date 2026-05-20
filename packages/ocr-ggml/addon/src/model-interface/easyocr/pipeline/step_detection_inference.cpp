@@ -64,9 +64,7 @@ resizeAspectRatio(const cv::Mat& img, float magRatio) {
 
   float targetSize = magRatio * static_cast<float>(std::max(height, width));
 
-  if (targetSize > MAX_IMAGE_SIZE) {
-    targetSize = MAX_IMAGE_SIZE;
-  }
+  targetSize = std::min(targetSize, static_cast<float>(MAX_IMAGE_SIZE));
 
   float inputResizeRatio =
       targetSize / static_cast<float>(std::max(height, width));
@@ -79,10 +77,10 @@ resizeAspectRatio(const cv::Mat& img, float magRatio) {
   int targetH32 = targetH;
   int targetW32 = targetW;
   if (targetH % SIZE_MULTIPLE != 0) {
-    targetH32 = targetH + (SIZE_MULTIPLE - targetH % SIZE_MULTIPLE);
+    targetH32 = targetH + (SIZE_MULTIPLE - (targetH % SIZE_MULTIPLE));
   }
   if (targetW % SIZE_MULTIPLE != 0) {
-    targetW32 = targetW + (SIZE_MULTIPLE - targetW % SIZE_MULTIPLE);
+    targetW32 = targetW + (SIZE_MULTIPLE - (targetW % SIZE_MULTIPLE));
   }
 
   cv::Mat resized;
@@ -126,7 +124,7 @@ cv::Mat normalizeAndBuildCHW(const cv::Mat& img) {
       chwBlob.ptr<float>(0), chwBlob.ptr<float>(1), chwBlob.ptr<float>(2)};
 
   if (img.depth() == CV_8U) {
-    const uint8_t* src = img.ptr<uint8_t>();
+    const auto* src = img.ptr<uint8_t>();
     for (size_t i = 0; i < totalPixels; ++i) {
       const size_t si = i * 3;
       planes[0][i] =
@@ -137,7 +135,7 @@ cv::Mat normalizeAndBuildCHW(const cv::Mat& img) {
           (static_cast<float>(src[si + 2]) - meanVals[2]) * invVarVals[2];
     }
   } else {
-    const float* src = img.ptr<float>();
+    const auto* src = img.ptr<float>();
     for (size_t i = 0; i < totalPixels; ++i) {
       const size_t si = i * 3;
       planes[0][i] = (src[si] - meanVals[0]) * invVarVals[0];
@@ -220,7 +218,8 @@ StepDetectionInference::runInference(const cv::Mat& inputBlob) {
   // ---- Stage: graph build ----
   const auto tBuild0 = clock::now();
   const size_t graph_ctx_size =
-      ggml_tensor_overhead() * GGML_DEFAULT_GRAPH_SIZE + ggml_graph_overhead();
+      (ggml_tensor_overhead() * GGML_DEFAULT_GRAPH_SIZE) +
+      ggml_graph_overhead();
   std::vector<uint8_t> graph_buf(graph_ctx_size);
   ggml_init_params init{
       .mem_size = graph_ctx_size,
@@ -285,11 +284,11 @@ StepDetectionInference::runInference(const cv::Mat& inputBlob) {
   cv::Mat linkMap(outH, outW, CV_32F);
   const float* p = nhwc.data();
   for (int y = 0; y < outH; ++y) {
-    float* tRow = textMap.ptr<float>(y);
-    float* lRow = linkMap.ptr<float>(y);
+    auto* tRow = textMap.ptr<float>(y);
+    auto* lRow = linkMap.ptr<float>(y);
     for (int xCol = 0; xCol < outW; ++xCol) {
-      tRow[xCol] = p[(y * outW + xCol) * 2 + 0];
-      lRow[xCol] = p[(y * outW + xCol) * 2 + 1];
+      tRow[xCol] = p[(((y * outW) + xCol) * 2) + 0];
+      lRow[xCol] = p[(((y * outW) + xCol) * 2) + 1];
     }
   }
   const auto tDeinterleave1 = clock::now();
@@ -308,10 +307,8 @@ std::vector<BlockTiming> StepDetectionInference::profileBlocks(
   using clock = std::chrono::high_resolution_clock;
   using msd = std::chrono::duration<double, std::milli>;
 
-  if (runsPerTap < 1)
-    runsPerTap = 1;
-  if (warmupPerTap < 0)
-    warmupPerTap = 0;
+  runsPerTap = std::max(runsPerTap, 1);
+  warmupPerTap = std::max(warmupPerTap, 0);
 
   auto [imgResized, _imgResizeRatio] =
       resizeAspectRatio(input.origImg, magRatio_);
@@ -333,7 +330,7 @@ std::vector<BlockTiming> StepDetectionInference::profileBlocks(
     // ggml backend: the input tensor data persists, intermediate
     // tensors are simply recomputed in place each call.
     const size_t graph_ctx_size =
-        ggml_tensor_overhead() * GGML_DEFAULT_GRAPH_SIZE +
+        (ggml_tensor_overhead() * GGML_DEFAULT_GRAPH_SIZE) +
         ggml_graph_overhead();
     std::vector<uint8_t> graph_buf(graph_ctx_size);
     ggml_init_params init{
@@ -399,8 +396,7 @@ std::vector<BlockTiming> StepDetectionInference::profileBlocks(
     // Report min as the canonical cumulative cost (see header for why).
     double minSample = samples.empty() ? 0.0 : samples.front();
     for (double s : samples) {
-      if (s < minSample)
-        minSample = s;
+      minSample = std::min(s, minSample);
     }
 
     out.push_back(

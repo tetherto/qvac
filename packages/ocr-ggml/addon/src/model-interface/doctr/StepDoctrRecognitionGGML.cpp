@@ -526,8 +526,8 @@ struct StepDoctrRecognitionGGML::Impl {
     std::vector<float> layerInput(kSequenceLength * kFeatureChannels);
     for (int t = 0; t < kSequenceLength; ++t) {
       for (int c = 0; c < kFeatureChannels; ++c) {
-        layerInput[static_cast<size_t>(t * kFeatureChannels + c)] =
-            featureWhcn[static_cast<size_t>(t + kSequenceLength * c)];
+        layerInput[static_cast<size_t>((t * kFeatureChannels) + c)] =
+            featureWhcn[static_cast<size_t>(t + (kSequenceLength * c))];
       }
     }
 
@@ -557,7 +557,7 @@ struct StepDoctrRecognitionGGML::Impl {
         for (int i = 0; i < finalFeatureSize; ++i) {
           value += w[i] * x[i];
         }
-        logits[static_cast<size_t>(t * kVocabSize + cls)] = value;
+        logits[static_cast<size_t>((t * kVocabSize) + cls)] = value;
       }
     }
     return logits;
@@ -596,11 +596,12 @@ private:
         const float forgetGate =
             sigmoid(gates[static_cast<size_t>(kLstmHiddenSize + i)]);
         const float cellGate =
-            std::tanh(gates[static_cast<size_t>(2 * kLstmHiddenSize + i)]);
+            std::tanh(gates[static_cast<size_t>((2 * kLstmHiddenSize) + i)]);
         const float outputGate =
-            sigmoid(gates[static_cast<size_t>(3 * kLstmHiddenSize + i)]);
+            sigmoid(gates[static_cast<size_t>((3 * kLstmHiddenSize) + i)]);
         cell[static_cast<size_t>(i)] =
-            forgetGate * cell[static_cast<size_t>(i)] + inputGate * cellGate;
+            (forgetGate * cell[static_cast<size_t>(i)]) +
+            (inputGate * cellGate);
         hidden[static_cast<size_t>(i)] =
             outputGate * std::tanh(cell[static_cast<size_t>(i)]);
       }
@@ -609,7 +610,7 @@ private:
       float* out =
           output.data() +
           static_cast<size_t>(
-              t * kLstmHiddenSize * kLstmDirectionCount + directionOffset);
+              (t * kLstmHiddenSize * kLstmDirectionCount) + directionOffset);
       std::memcpy(out, hidden.data(), kLstmHiddenSize * sizeof(float));
     }
   }
@@ -814,7 +815,7 @@ private:
       std::vector<float> shift(bias.size());
       for (size_t i = 0; i < bias.size(); ++i) {
         const float scale = weight[i] / std::sqrt(var[i] + kBatchNormEps);
-        shift[i] = bias[i] - mean[i] * scale;
+        shift[i] = bias[i] - (mean[i] * scale);
       }
       ggml_backend_tensor_set(
           dst, shift.data(), 0, shift.size() * sizeof(float));
@@ -852,7 +853,7 @@ private:
     graph.graphCtx = std::unique_ptr<struct ggml_context, decltype(&ggml_free)>(
         ggml_init(
             {.mem_size =
-                 ggml_tensor_overhead() * 4096 + ggml_graph_overhead(),
+                 (ggml_tensor_overhead() * 4096) + ggml_graph_overhead(),
              .mem_buffer = nullptr,
              .no_alloc = true}),
         ggml_free);
@@ -954,7 +955,7 @@ cv::Mat StepDoctrRecognitionGGML::runSingleInference(const cv::Mat& image) {
       const cv::Vec3f pixel = image.at<cv::Vec3f>(y, x);
       for (int c = 0; c < kInputChannels; ++c) {
         inputBuffer_[static_cast<size_t>(
-            x + RECOG_WIDTH * (y + RECOG_HEIGHT * c))] =
+            x + (RECOG_WIDTH * (y + (RECOG_HEIGHT * c))))] =
             pixel[static_cast<int>(c)];
       }
     }
@@ -963,15 +964,15 @@ cv::Mat StepDoctrRecognitionGGML::runSingleInference(const cv::Mat& image) {
   std::vector<float> features = impl_->runFeatureExtractor(inputBuffer_);
   logitsBuffer_ = impl_->runLstmLinear(features);
   const int sizes[3] = {1, kSequenceLength, kVocabSize};
-  return cv::Mat(3, sizes, CV_32F, logitsBuffer_.data());
+  return {3, sizes, CV_32F, logitsBuffer_.data()};
 }
 
 StepDoctrRecognitionGGML::SoftmaxResult StepDoctrRecognitionGGML::softmaxArgmax(
     const cv::Mat& preds, int batchIdx, int timestep, int vocabSize) {
   const size_t batchStride = preds.step[0] / sizeof(float);
   const size_t seqStride = preds.step[1] / sizeof(float);
-  const float* row =
-      preds.ptr<float>() + batchIdx * batchStride + timestep * seqStride;
+  const float* row = preds.ptr<float>() + (batchIdx * batchStride) +
+                     (timestep * seqStride);
 
   float maxVal = -std::numeric_limits<float>::infinity();
   for (int v = 0; v < vocabSize; v++) {
@@ -1005,7 +1006,7 @@ StepDoctrRecognitionGGML::decodeAttention(const cv::Mat& preds, int batchIdx) {
     if (bestIdx >= SPECIAL_TOKEN_IDX) {
       break;
     }
-    if (bestIdx >= 0 && bestIdx < static_cast<int>(vocabChars_.size())) {
+    if (bestIdx >= 0 && std::cmp_less(bestIdx, vocabChars_.size())) {
       decodedText += vocabChars_[static_cast<size_t>(bestIdx)];
       confidenceSum += std::min(bestProb, 1.0F);
       numChars++;
@@ -1034,7 +1035,7 @@ StepDoctrRecognitionGGML::decodeCTC(const cv::Mat& preds, int batchIdx) {
     if (bestIdx == prevIdx) {
       continue;
     }
-    if (bestIdx >= 0 && bestIdx < static_cast<int>(vocabChars_.size())) {
+    if (bestIdx >= 0 && std::cmp_less(bestIdx, vocabChars_.size())) {
       decodedText += vocabChars_[static_cast<size_t>(bestIdx)];
     }
     prevIdx = bestIdx;

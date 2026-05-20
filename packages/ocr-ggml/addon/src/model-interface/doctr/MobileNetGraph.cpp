@@ -549,7 +549,7 @@ WeightsBundle loadWeights(
   // identical; the BN shift absorbs the offset.
   auto addBiasBroadcast = [&](const std::string& name) {
     const std::string brName = name + "_br";
-    if (tensors.find(brName) != tensors.end()) {
+    if (tensors.contains(brName)) {
       return;
     }
 
@@ -841,7 +841,7 @@ WeightsBundle loadWeights(
     for (size_t i = 0; i < n; ++i) {
       const float invStd = 1.0F / std::sqrt(v[i] + eps);
       scale[i] = w[i] * invStd;
-      shift[i] = b[i] - m[i] * scale[i];
+      shift[i] = b[i] - (m[i] * scale[i]);
     }
     uploadF32(tensors.at(bnPrefix + ".scale"), scale);
     uploadF32(tensors.at(bnPrefix + ".shift"), shift);
@@ -916,7 +916,8 @@ WeightsBundle loadWeights(
 ComputeGraph buildGraph(
     const WeightsBundle& weights, std::vector<ggml_backend_t>& backends) {
   ComputeGraph cg;
-  const size_t ctxSize = ggml_tensor_overhead() * 4096 + ggml_graph_overhead();
+  const size_t ctxSize =
+      (ggml_tensor_overhead() * 4096) + ggml_graph_overhead();
   cg.ctx = std::unique_ptr<struct ggml_context, decltype(&ggml_free)>(
       ggml_init(
           {.mem_size = ctxSize, .mem_buffer = nullptr, .no_alloc = true}),

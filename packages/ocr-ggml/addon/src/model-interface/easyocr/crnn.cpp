@@ -182,11 +182,13 @@ ggml_tensor* lstm_one_direction(
   };
 
   if (reverse) {
-    for (int64_t t = T - 1; t >= 0; --t)
+    for (int64_t t = T - 1; t >= 0; --t) {
       step_iter(t);
+    }
   } else {
-    for (int64_t t = 0; t < T; ++t)
+    for (int64_t t = 0; t < T; ++t) {
       step_iter(t);
+    }
   }
   return out; // ggml ne [hidden, T]
 }

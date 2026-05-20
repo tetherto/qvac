@@ -55,7 +55,7 @@ cv::Mat fourPointTransform(
       std::max(static_cast<int>(heightA), static_cast<int>(heightB));
 
   if (maxWidth <= 0 || maxHeight <= 0) {
-    return cv::Mat();
+    return {};
   }
 
   std::array<cv::Point2f, 4> destination = {

@@ -71,7 +71,7 @@ std::vector<float> to_f32_vector(const ::ggml_tensor* t) {
   std::vector<float> out(static_cast<size_t>(ne0 * nrows), 0.0F);
   const auto* traits = ggml_get_type_traits(t->type);
   for (int64_t r = 0; r < nrows; ++r) {
-    const char* src_row = static_cast<const char*>(t->data) + r * t->nb[1];
+    const char* src_row = static_cast<const char*>(t->data) + (r * t->nb[1]);
     float* dst_row = out.data() + static_cast<size_t>(r * ne0);
     if (t->type == GGML_TYPE_F32) {
       std::memcpy(dst_row, src_row, static_cast<size_t>(ne0) * sizeof(float));
@@ -128,7 +128,7 @@ void CraftWeights::build_(const GgufLoader& loader, ggml_backend_t backend) {
   // --- Step 1: declare every destination tensor in our own ctx --------------
   // We need 2 tensors per conv (W + b) and a small headroom margin.
   ggml_init_params ctx_params{
-      .mem_size = ggml_tensor_overhead() * (kNumConvs * 2 + 16),
+      .mem_size = ggml_tensor_overhead() * ((kNumConvs * 2) + 16),
       .mem_buffer = nullptr,
       .no_alloc = true,
   };
@@ -138,8 +138,7 @@ void CraftWeights::build_(const GgufLoader& loader, ggml_backend_t backend) {
     return;
   }
 
-  for (size_t i = 0; i < kNumConvs; ++i) {
-    const auto& d = kConvInventory[i];
+  for (const auto& d : kConvInventory) {
     auto* w_src = loader.get_tensor(std::string(d.conv) + ".weight");
     if (w_src == nullptr) {
       std::ostringstream os;
@@ -173,8 +172,7 @@ void CraftWeights::build_(const GgufLoader& loader, ggml_backend_t backend) {
   // --- Step 3: compute folded weights + upload -----------------------------
   std::vector<float> w_folded;
   std::vector<float> b_folded;
-  for (size_t i = 0; i < kNumConvs; ++i) {
-    const auto& d = kConvInventory[i];
+  for (const auto& d : kConvInventory) {
     const std::string conv_path = d.conv;
 
     auto* w_src = loader.get_tensor(conv_path + ".weight");
@@ -245,12 +243,12 @@ void CraftWeights::build_(const GgufLoader& loader, ggml_backend_t backend) {
         const float b_orig = B != nullptr ? B[o] : 0.0F;
         // OC is the slowest-varying axis in row-major [OC,IC,KH,KW] data;
         // a per-OC scalar multiplies one contiguous span of length per_oc.
-        const float* w_in = W + o * per_oc;
-        float* w_out = w_folded.data() + o * per_oc;
+        const float* w_in = W + (o * per_oc);
+        float* w_out = w_folded.data() + (o * per_oc);
         for (int64_t k = 0; k < per_oc; ++k) {
           w_out[k] = w_in[k] * scale;
         }
-        b_folded[static_cast<size_t>(o)] = (b_orig - mu[o]) * scale + beta[o];
+        b_folded[static_cast<size_t>(o)] = ((b_orig - mu[o]) * scale) + beta[o];
       }
     }
 

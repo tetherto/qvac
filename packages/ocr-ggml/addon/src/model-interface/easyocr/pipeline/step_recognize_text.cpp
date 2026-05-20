@@ -24,6 +24,7 @@
 #include <cstring>
 #include <future>
 #include <mutex>
+#include <ranges>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -191,7 +192,7 @@ std::tuple<double, double, double> contrastGrey(const cv::Mat& img) {
                           */
     }
   }
-  std::sort(pixels.begin(), pixels.end());
+  std::ranges::sort(pixels);
   const int numPixels = static_cast<int>(pixels.size());
   const int idx10 = static_cast<int>(0.1 * (numPixels - 1));
   const int idx90 = static_cast<int>(0.9 * (numPixels - 1));
@@ -399,10 +400,9 @@ std::vector<InferredText> getParagraph(
 
   int currentGroup = 1;
   // Group boxes until every box has been assigned a group
-  while (std::any_of(
-      boxGroupList.begin(), boxGroupList.end(), [](const BoxGroup& boxGroup) {
-        return boxGroup.group == 0;
-      })) {
+  while (std::ranges::any_of(boxGroupList, [](const BoxGroup& boxGroup) {
+    return boxGroup.group == 0;
+  })) {
     std::vector<BoxGroup*> unassigned;
     for (auto& boxGroup : boxGroupList) {
       if (boxGroup.group == 0) {
@@ -410,10 +410,8 @@ std::vector<InferredText> getParagraph(
       }
     }
 
-    bool hasCurrent = std::any_of(
-        boxGroupList.begin(),
-        boxGroupList.end(),
-        [currentGroup](const BoxGroup& boxGroup) {
+    bool hasCurrent = std::ranges::any_of(
+        boxGroupList, [currentGroup](const BoxGroup& boxGroup) {
           return boxGroup.group == currentGroup;
         });
     if (!hasCurrent && !unassigned.empty()) {
@@ -431,30 +429,26 @@ std::vector<InferredText> getParagraph(
       }
       float meanHeight = sumHeight / static_cast<float>(currentBoxes.size());
 
-      int groupMinX = (*std::min_element(
-                           currentBoxes.begin(),
-                           currentBoxes.end(),
+      int groupMinX = (*std::ranges::min_element(
+                           currentBoxes,
                            [](const BoxGroup* boxA, const BoxGroup* boxB) {
                              return boxA->minX < boxB->minX;
                            }))
                           ->minX;
-      int groupMaxX = (*std::max_element(
-                           currentBoxes.begin(),
-                           currentBoxes.end(),
+      int groupMaxX = (*std::ranges::max_element(
+                           currentBoxes,
                            [](const BoxGroup* boxA, const BoxGroup* boxB) {
                              return boxA->maxX < boxB->maxX;
                            }))
                           ->maxX;
-      int groupMinY = (*std::min_element(
-                           currentBoxes.begin(),
-                           currentBoxes.end(),
+      int groupMinY = (*std::ranges::min_element(
+                           currentBoxes,
                            [](const BoxGroup* boxA, const BoxGroup* boxB) {
                              return boxA->minY < boxB->minY;
                            }))
                           ->minY;
-      int groupMaxY = (*std::max_element(
-                           currentBoxes.begin(),
-                           currentBoxes.end(),
+      int groupMaxY = (*std::ranges::max_element(
+                           currentBoxes,
                            [](const BoxGroup* boxA, const BoxGroup* boxB) {
                              return boxA->maxY < boxB->maxY;
                            }))
@@ -529,31 +523,26 @@ std::vector<InferredText> getParagraph(
       }
       std::vector<BoxGroup*> candidates;
       for (auto* boxGroup : remaining) {
-        if (boxGroup->yCenter < lowest + PARAGRAPH_Y_DELTA * meanHeight) {
+        if (boxGroup->yCenter < lowest + (PARAGRAPH_Y_DELTA * meanHeight)) {
           candidates.push_back(boxGroup);
         }
       }
       BoxGroup* bestBox = nullptr;
       if (isLeftToRightScript) {
-        bestBox = *std::min_element(
-            candidates.begin(),
-            candidates.end(),
-            [](const BoxGroup* boxA, const BoxGroup* boxB) {
+        bestBox = *std::ranges::min_element(
+            candidates, [](const BoxGroup* boxA, const BoxGroup* boxB) {
               return boxA->minX < boxB->minX;
             });
       } else {
-        bestBox = *std::max_element(
-            candidates.begin(),
-            candidates.end(),
-            [](const BoxGroup* boxA, const BoxGroup* boxB) {
+        bestBox = *std::ranges::max_element(
+            candidates, [](const BoxGroup* boxA, const BoxGroup* boxB) {
               return boxA->maxX < boxB->maxX;
             });
       }
       combinedText += " " + bestBox->text;
       finalConfidence = std::min(finalConfidence, bestBox->confidence);
-      remaining.erase(
-          std::remove(remaining.begin(), remaining.end(), bestBox),
-          remaining.end());
+      const auto eraseRange = std::ranges::remove(remaining, bestBox);
+      remaining.erase(eraseRange.begin(), eraseRange.end());
     }
     if (!combinedText.empty() && combinedText.front() == ' ') {
       combinedText.erase(0, 1);
@@ -826,9 +815,8 @@ void StepRecognizeText::populateImageList(const Input& input) {
   float rowThreshold = yCenterThreshold * meanHeight;
 
   // Sort by y_center first, then by x for boxes on same row
-  std::sort(
-      imgListOfLists_.begin(),
-      imgListOfLists_.end(),
+  std::ranges::sort(
+      imgListOfLists_,
       [rowThreshold](
           const std::vector<SubImage>& listA,
           const std::vector<SubImage>& listB) {
@@ -909,14 +897,14 @@ std::pair<std::string, float> StepRecognizeText::getTextAndConfidenceFromPreds(
   // Use pointer arithmetic instead of .at<>() for performance
   const size_t batchStride = preds.step[0] / sizeof(float);
   const size_t subcolStride = preds.step[1] / sizeof(float);
-  const float* batchBase = preds.ptr<float>() + batchIdx * batchStride;
+  const float* batchBase = preds.ptr<float>() + (batchIdx * batchStride);
 
   // Use flat vector instead of vector<vector<float>> to reduce allocations
   std::vector<float> predsProb(imgSubcolumnsSize * charSpaceSize, 0.0F);
 
   for (int subcolumn = 0; subcolumn < imgSubcolumnsSize; subcolumn++) {
-    const float* subcolBase = batchBase + subcolumn * subcolStride;
-    float* probRow = predsProb.data() + subcolumn * charSpaceSize;
+    const float* subcolBase = batchBase + (subcolumn * subcolStride);
+    float* probRow = predsProb.data() + (subcolumn * charSpaceSize);
 
     float maxVal = -std::numeric_limits<float>::infinity();
     for (int charIndex = 0; charIndex < charSpaceSize; charIndex++) {
@@ -935,7 +923,7 @@ std::pair<std::string, float> StepRecognizeText::getTextAndConfidenceFromPreds(
   }
 
   for (int subcolumn = 0; subcolumn < imgSubcolumnsSize; subcolumn++) {
-    float* probRow = predsProb.data() + subcolumn * charSpaceSize;
+    float* probRow = predsProb.data() + (subcolumn * charSpaceSize);
     for (int charIndex = 0; charIndex < charSpaceSize; charIndex++) {
       if (ignoreChars_[charIndex]) {
         probRow[charIndex] = 0.0F;
@@ -955,10 +943,10 @@ std::pair<std::string, float> StepRecognizeText::getTextAndConfidenceFromPreds(
   std::vector<size_t> predsIndex(imgSubcolumnsSize, 0);
   std::vector<float> predsMaxProb(imgSubcolumnsSize, 0.0F);
   for (int subcolumn = 0; subcolumn < imgSubcolumnsSize; subcolumn++) {
-    const float* probRow = predsProb.data() + subcolumn * charSpaceSize;
+    const float* probRow = predsProb.data() + (subcolumn * charSpaceSize);
     size_t charIndexMax = 0;
     float maxProbVal = probRow[0];
-    for (size_t charIndex = 1; charIndex < static_cast<size_t>(charSpaceSize);
+    for (size_t charIndex = 1; std::cmp_less(charIndex, charSpaceSize);
          charIndex++) {
       if (probRow[charIndex] > maxProbVal) {
         maxProbVal = probRow[charIndex];
@@ -1000,8 +988,9 @@ template <>
 cv::Mat ggml_run_one_T<easyocr::ggml::CrnnGen2Weights>(
     ggml_backend_t backend, const easyocr::ggml::CrnnGen2Weights& weights,
     const float* input_data, int height, int width, size_t graph_size) {
-  const size_t graph_ctx_size = ggml_tensor_overhead() * graph_size +
-                                ggml_graph_overhead_custom(graph_size, false);
+  const size_t graph_ctx_size =
+      (ggml_tensor_overhead() * graph_size) +
+      ggml_graph_overhead_custom(graph_size, false);
   std::vector<uint8_t> graph_buf(graph_ctx_size);
   ggml_init_params init{
       .mem_size = graph_ctx_size,
@@ -1046,8 +1035,9 @@ template <class W>
 cv::Mat ggml_run_recognizer_t(
     ggml_backend_t backend, const W& weights, const float* input_data,
     int batch_size, int height, int width, size_t graph_size) {
-  if (batch_size <= 0)
-    return cv::Mat();
+  if (batch_size <= 0) {
+    return {};
+  }
 
   cv::Mat first = ggml_run_one_T<W>(
       backend, weights, input_data, height, width, graph_size);
@@ -1064,12 +1054,12 @@ cv::Mat ggml_run_recognizer_t(
     cv::Mat one = ggml_run_one_T<W>(
         backend,
         weights,
-        input_data + b * per_img_floats,
+        input_data + (b * per_img_floats),
         height,
         width,
         graph_size);
     std::memcpy(
-        preds.ptr<float>() + b * per_img_logits,
+        preds.ptr<float>() + (b * per_img_logits),
         one.ptr<float>(),
         per_img_logits * sizeof(float));
   }
@@ -1100,10 +1090,10 @@ cv::Mat StepRecognizeText::runBatchInference(
     const std::vector<cv::Mat>& images, int dynamicWidth) {
   auto t0 = std::chrono::high_resolution_clock::now();
   if (images.empty()) {
-    return cv::Mat();
+    return {};
   }
 
-  const int batchSize = static_cast<int>(images.size());
+  const auto batchSize = static_cast<int>(images.size());
   const int height = RECOGNIZER_MODEL_HEIGHT;
   const int width = dynamicWidth;
   const int numChannels = 1;
@@ -1122,9 +1112,9 @@ cv::Mat StepRecognizeText::runBatchInference(
         img.rows == height && img.cols == width &&
         img.channels() == numChannels);
     CV_Assert(img.type() == CV_32F);
-    const float* imgPtr = img.ptr<float>();
+    const auto* imgPtr = img.ptr<float>();
     float* destPtr = batchBuffer_.data() +
-                     static_cast<size_t>(b) * numChannels * height * width;
+                     (static_cast<size_t>(b) * numChannels * height * width);
     std::memcpy(destPtr, imgPtr, sizeof(float) * height * width);
   }
 
@@ -1289,8 +1279,7 @@ StepRecognizeText::processImgList(const std::atomic<bool>* cancelFlag) {
   // Second pass: handle low confidence with contrast adjustment (if enabled)
   if (config_.contrastRetry) {
     std::vector<BatchIndex> lowConfidenceIndices;
-    for (size_t i = 0; i < allIndices.size(); i++) {
-      auto& idx = allIndices[i];
+    for (auto& idx : allIndices) {
       auto& subImage = imgListOfLists_[idx.listIdx][idx.imgIdx];
       if (subImage.confidenceScore < config_.lowConfidenceThreshold) {
         lowConfidenceIndices.push_back(idx);
@@ -1378,12 +1367,12 @@ StepRecognizeText::processImgList(const std::atomic<bool>* cancelFlag) {
   }
 
   // Apply single-character filter and find best result per imgList
-  for (size_t listIdx = 0; listIdx < imgListOfLists_.size(); listIdx++) {
-    auto& imgList = imgListOfLists_[listIdx];
+  for (auto& imgList : imgListOfLists_) {
     double highestConfidence = 0.0;
     size_t highestConfidenceIndex = 0;
 
-    for (size_t i = 0; i < imgList.size(); i++) {
+    for (size_t i = 0; i < imgList.size();
+         i++) { // NOLINT(modernize-loop-convert) - index `i` is tracked
       auto& subImage = imgList[i];
 
       // Apply single-character filter
@@ -1421,7 +1410,7 @@ StepRecognizeText::decodeGreedy(const std::vector<size_t>& textIndex) {
   if (!textIndex.empty()) {
     size_t first = textIndex[0];
     if (first != 0) {
-      assert(first >= 0 && first < utf32Characters_.size());
+      assert(first < utf32Characters_.size());
       text.push_back(utf32Characters_[first]);
     }
 
@@ -1429,7 +1418,7 @@ StepRecognizeText::decodeGreedy(const std::vector<size_t>& textIndex) {
       size_t prev = textIndex[i - 1];
       size_t curr = textIndex[i];
       if (curr != prev && curr != 0) {
-        assert(curr >= 0 && curr < utf32Characters_.size());
+        assert(curr < utf32Characters_.size());
         text.push_back(utf32Characters_[curr]);
       }
     }

@@ -32,7 +32,7 @@ std::vector<float> to_f32_vector(const ::ggml_tensor* t) {
   std::vector<float> out(static_cast<size_t>(ne0 * nrows), 0.0F);
   const auto* traits = ggml_get_type_traits(t->type);
   for (int64_t r = 0; r < nrows; ++r) {
-    const char* src_row = static_cast<const char*>(t->data) + r * t->nb[1];
+    const char* src_row = static_cast<const char*>(t->data) + (r * t->nb[1]);
     float* dst_row = out.data() + static_cast<size_t>(r * ne0);
     if (t->type == GGML_TYPE_F32) {
       std::memcpy(dst_row, src_row, static_cast<size_t>(ne0) * sizeof(float));
@@ -91,8 +91,9 @@ std::string upload_weights(
     auto* w_src = loader.get_tensor(d.conv_path + ".weight");
     auto* b_src = loader.get_tensor(d.conv_path + ".bias"); // may be null
 
-    if (w_src == nullptr)
+    if (w_src == nullptr) {
       return "missing tensor: " + d.conv_path + ".weight";
+    }
     if (w_src->data == nullptr) {
       return "tensor data not loaded for " + d.conv_path +
              ".weight (open the GgufLoader with load_tensor_data=true)";
@@ -141,12 +142,12 @@ std::string upload_weights(
       for (int64_t o = 0; o < oc; ++o) {
         const float scale = gamma[o] / std::sqrt(var[o] + kBnEps);
         const float b_orig = B != nullptr ? B[o] : 0.0F;
-        const float* w_in = W + o * per_oc;
-        float* w_out = w_folded.data() + o * per_oc;
+        const float* w_in = W + (o * per_oc);
+        float* w_out = w_folded.data() + (o * per_oc);
         for (int64_t k = 0; k < per_oc; ++k) {
           w_out[k] = w_in[k] * scale;
         }
-        b_folded[static_cast<size_t>(o)] = (b_orig - mu[o]) * scale + beta[o];
+        b_folded[static_cast<size_t>(o)] = ((b_orig - mu[o]) * scale) + beta[o];
       }
     }
 
@@ -158,24 +159,23 @@ std::string upload_weights(
 
   for (const auto& full_name : verbatim_paths) {
     auto* src = loader.get_tensor(full_name);
-    if (src == nullptr)
+    if (src == nullptr) {
       return "missing tensor: " + full_name;
-    if (src->data == nullptr)
+    }
+    if (src->data == nullptr) {
       return "tensor data not loaded for " + full_name;
+    }
     ::ggml_tensor* dst = nullptr;
-    if (auto it = t_.find(full_name); it != t_.end())
+    if (auto it = t_.find(full_name); it != t_.end()) {
       dst = it->second;
-    else if (
-        full_name.size() > 7 &&
-        full_name.compare(full_name.size() - 7, 7, ".weight") == 0) {
+    } else if (full_name.ends_with(".weight")) {
       dst = w_[full_name.substr(0, full_name.size() - 7)];
-    } else if (
-        full_name.size() > 5 &&
-        full_name.compare(full_name.size() - 5, 5, ".bias") == 0) {
+    } else if (full_name.ends_with(".bias")) {
       dst = b_[full_name.substr(0, full_name.size() - 5)];
     }
-    if (dst == nullptr)
+    if (dst == nullptr) {
       return "internal: no destination for " + full_name;
+    }
     const std::vector<float> src_f32 = to_f32_vector(src);
     ggml_backend_tensor_set(dst, src_f32.data(), 0, ggml_nbytes(dst));
   }
@@ -195,8 +195,9 @@ std::string declare_weights(
 
   for (const auto& d : convs) {
     auto* w_src = loader.get_tensor(d.conv_path + ".weight");
-    if (w_src == nullptr)
+    if (w_src == nullptr) {
       return "missing tensor: " + d.conv_path + ".weight";
+    }
     const int64_t kw = w_src->ne[0];
     const int64_t kh = w_src->ne[1];
     const int64_t ic = w_src->ne[2];
@@ -210,23 +211,22 @@ std::string declare_weights(
   }
   for (const auto& full_name : verbatim_paths) {
     auto* src = loader.get_tensor(full_name);
-    if (src == nullptr)
+    if (src == nullptr) {
       return "missing tensor: " + full_name;
+    }
     ::ggml_tensor* dst = nullptr;
     const int n_dims = ggml_n_dims(src);
-    if (n_dims == 1)
+    if (n_dims == 1) {
       dst = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, src->ne[0]);
-    else if (n_dims == 2)
+    } else if (n_dims == 2) {
       dst = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, src->ne[0], src->ne[1]);
-    else
+    } else {
       return "unsupported tensor rank for " + full_name;
+    }
     ggml_set_name(dst, full_name.c_str());
 
-    const bool is_w =
-        full_name.size() > 7 &&
-        full_name.compare(full_name.size() - 7, 7, ".weight") == 0;
-    const bool is_b = full_name.size() > 5 &&
-                      full_name.compare(full_name.size() - 5, 5, ".bias") == 0;
+    const bool is_w = full_name.ends_with(".weight");
+    const bool is_b = full_name.ends_with(".bias");
     const bool is_lstm = full_name.find(".rnn.") != std::string::npos;
     if (is_w && !is_lstm) {
       w_[full_name.substr(0, full_name.size() - 7)] = dst;
@@ -310,7 +310,7 @@ void build_crnn_weights_impl(
 
   const auto& verbatim = verbatim_paths_after_feature_extractor();
 
-  const size_t n_dst_estimate = convs.size() * 2 + verbatim.size() + 16;
+  const size_t n_dst_estimate = (convs.size() * 2) + verbatim.size() + 16;
   ggml_init_params ctx_params{
       .mem_size = ggml_tensor_overhead() * n_dst_estimate,
       .mem_buffer = nullptr,

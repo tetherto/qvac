@@ -6,7 +6,9 @@
 #include <algorithm>
 #include <array>
 #include <iostream>
+#include <iterator>
 #include <map>
+#include <ranges>
 #include <set>
 #include <unordered_set>
 
@@ -921,11 +923,11 @@ const std::map<std::string_view, std::u32string_view> LANG_TO_CHARS_MAP = {
 // clang-format on
 
 bool contains(std::span<const std::string> vec, std::string_view str) {
-  return std::find(vec.begin(), vec.end(), str) != vec.end();
+  return std::ranges::find(vec, str) != vec.end();
 }
 
 bool contains(std::span<const std::string_view> vec, std::string_view str) {
-  return std::find(vec.begin(), vec.end(), str) != vec.end();
+  return std::ranges::find(vec, str) != vec.end();
 }
 
 std::set<std::string> toSet(std::span<const std::string> vec) {
@@ -939,45 +941,34 @@ std::set<std::string_view> toSet(std::span<const std::string_view> vec) {
 std::set<std::string_view> setDifference(
     const std::set<std::string>& setA, const std::set<std::string_view>& setB) {
   std::set<std::string_view> diff;
-  std::set_difference(
-      setA.begin(),
-      setA.end(),
-      setB.begin(),
-      setB.end(),
-      std::inserter(diff, diff.end()));
+  std::ranges::set_difference(setA, setB, std::inserter(diff, diff.end()));
   return diff;
 }
 
 bool isLatinLang(std::string_view lang) {
-  return std::find(LATIN_LANG_LIST.begin(), LATIN_LANG_LIST.end(), lang) !=
-         LATIN_LANG_LIST.end();
+  return std::ranges::find(LATIN_LANG_LIST, lang) != LATIN_LANG_LIST.end();
 }
 
 bool isArabicLang(std::string_view lang) {
-  return std::find(ARABIC_LANG_LIST.begin(), ARABIC_LANG_LIST.end(), lang) !=
-         ARABIC_LANG_LIST.end();
+  return std::ranges::find(ARABIC_LANG_LIST, lang) != ARABIC_LANG_LIST.end();
 }
 
 bool isBengaliLang(std::string_view lang) {
-  return std::find(BENGALI_LANG_LIST.begin(), BENGALI_LANG_LIST.end(), lang) !=
-         BENGALI_LANG_LIST.end();
+  return std::ranges::find(BENGALI_LANG_LIST, lang) != BENGALI_LANG_LIST.end();
 }
 
 bool isCyrillicLang(std::string_view lang) {
-  return std::find(
-             CYRILLIC_LANG_LIST.begin(), CYRILLIC_LANG_LIST.end(), lang) !=
+  return std::ranges::find(CYRILLIC_LANG_LIST, lang) !=
          CYRILLIC_LANG_LIST.end();
 }
 
 bool isDevanagariLang(std::string_view lang) {
-  return std::find(
-             DEVANAGARI_LANG_LIST.begin(), DEVANAGARI_LANG_LIST.end(), lang) !=
+  return std::ranges::find(DEVANAGARI_LANG_LIST, lang) !=
          DEVANAGARI_LANG_LIST.end();
 }
 
 bool isOtherLang(std::string_view lang) {
-  return std::find(OTHER_LANG_LIST.begin(), OTHER_LANG_LIST.end(), lang) !=
-         OTHER_LANG_LIST.end();
+  return std::ranges::find(OTHER_LANG_LIST, lang) != OTHER_LANG_LIST.end();
 }
 
 bool isValidLang(std::string_view lang) {
@@ -1137,7 +1128,7 @@ std::vector<bool> populateIgnoreIndexVector(
   std::vector<bool> ignoreChars;
   ignoreChars.reserve(fullCharList.size());
   for (char32_t character : fullCharList) {
-    bool ignore = langCharsSet.find(character) == langCharsSet.end();
+    bool ignore = !langCharsSet.contains(character);
     ignoreChars.push_back(ignore);
   }
 

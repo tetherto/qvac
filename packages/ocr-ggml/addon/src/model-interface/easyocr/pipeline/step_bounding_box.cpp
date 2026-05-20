@@ -13,6 +13,7 @@
 #include <iterator>
 #include <limits>
 #include <numeric>
+#include <ranges>
 #include <string>
 
 #include <opencv2/opencv.hpp>
@@ -111,7 +112,7 @@ void makeClockwiseOrder(std::array<cv::Point2f, 4>& box) {
       startIndex = i;
     }
   }
-  std::rotate(box.begin(), box.begin() + startIndex, box.end());
+  std::ranges::rotate(box, box.begin() + startIndex);
 }
 
 /**
@@ -129,15 +130,13 @@ void alignDiamondShape(
   const double boxRatio =
       std::max(width, height) / (std::min(width, height) + 1e-5);
   if (std::abs(1.0 - boxRatio) <= DIAMOND_RATIO_TOL /* NOLINT(readability-magic-numbers,cppcoreguidelines-avoid-magic-numbers) */) {
-    const auto [minXIt, maxXIt] = std::minmax_element(
-        segMapPoints.begin(),
-        segMapPoints.end(),
+    const auto [minXIt, maxXIt] = std::ranges::minmax_element(
+        segMapPoints,
         [](const cv::Point& pointA, const cv::Point& pointB) {
           return pointA.x < pointB.x;
         });
-    const auto [minYIt, maxYIt] = std::minmax_element(
-        segMapPoints.begin(),
-        segMapPoints.end(),
+    const auto [minYIt, maxYIt] = std::ranges::minmax_element(
+        segMapPoints,
         [](const cv::Point& pointA, const cv::Point& pointB) {
           return pointA.y < pointB.y;
         });
@@ -189,8 +188,9 @@ StepBoundingBox::Output StepBoundingBox::process(StepBoundingBox::Input input) {
     size_t total = labels_.total();
     for (size_t p = 0; p < total; ++p) {
       int label = labelsPtr[p];
-      if (label > 0 && textPtr[p] > maxPerLabel[label])
+      if (label > 0 && textPtr[p] > maxPerLabel[label]) {
         maxPerLabel[label] = textPtr[p];
+      }
     }
   }
 
@@ -264,7 +264,7 @@ StepBoundingBox::getBoxFromComponent(Input& input, int component) {
       [4]; /* NOLINT(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays,hicpp-avoid-c-arrays)
             */
   rectangle.points(tmp); /* NOLINT(hicpp-no-array-decay) */
-  std::copy(std::begin(tmp), std::end(tmp), box.begin());
+  std::ranges::copy(tmp, box.begin());
 
   alignDiamondShape(box, nonZeroPoints);
   std::array<cv::Point2f, 4> convertedBox = box;
@@ -364,21 +364,21 @@ StepBoundingBox::turnPolysIntoBoxes(
           std::max(MIN_DELTA_FOR_SLOPE, poly[1].x - poly[3].x)));
 
       const float xOne =
-          poly[0].x - std::cos(theta13) * static_cast<float>(margin);
+          poly[0].x - (std::cos(theta13) * static_cast<float>(margin));
       const float yOne =
-          poly[0].y - std::sin(theta13) * static_cast<float>(margin);
+          poly[0].y - (std::sin(theta13) * static_cast<float>(margin));
       const float xTwo =
-          poly[1].x + std::cos(theta24) * static_cast<float>(margin);
+          poly[1].x + (std::cos(theta24) * static_cast<float>(margin));
       const float yTwo =
-          poly[1].y - std::sin(theta24) * static_cast<float>(margin);
+          poly[1].y - (std::sin(theta24) * static_cast<float>(margin));
       const float xThree =
-          poly[2].x + std::cos(theta13) * static_cast<float>(margin);
+          poly[2].x + (std::cos(theta13) * static_cast<float>(margin));
       const float yThree =
-          poly[2].y + std::sin(theta13) * static_cast<float>(margin);
+          poly[2].y + (std::sin(theta13) * static_cast<float>(margin));
       const float xFour =
-          poly[3].x - std::cos(theta24) * static_cast<float>(margin);
+          poly[3].x - (std::cos(theta24) * static_cast<float>(margin));
       const float yFour =
-          poly[3].y + std::sin(theta24) * static_cast<float>(margin);
+          poly[3].y + (std::sin(theta24) * static_cast<float>(margin));
 
       unalignedBoxes.push_back(
           {cv::Point2f(xOne, yOne),
@@ -392,7 +392,7 @@ StepBoundingBox::turnPolysIntoBoxes(
                              const std::array<float, ALIGNED_META_SIZE>& boxB) {
     return boxA[IDX_Y_CENTER] < boxB[IDX_Y_CENTER];
   };
-  std::sort(alignedBoxes.begin(), alignedBoxes.end(), isSmallerYCenter);
+  std::ranges::sort(alignedBoxes, isSmallerYCenter);
 
   return {alignedBoxes, unalignedBoxes};
 }
@@ -456,9 +456,8 @@ std::vector<std::array<float, 4>> StepBoundingBox::groupAndMergeAlignedBoxes(
            box[2] - static_cast<float>(margin),
            box[3] + static_cast<float>(margin)});
     } else {
-      std::sort(
-          boxes.begin(),
-          boxes.end(),
+      std::ranges::sort(
+          boxes,
           [](const std::array<float, ALIGNED_META_SIZE>& boxA,
              const std::array<float, ALIGNED_META_SIZE>& boxB) {
             return boxA[0] < boxB[0];
@@ -530,18 +529,10 @@ std::vector<std::array<float, 4>> StepBoundingBox::groupAndMergeAlignedBoxes(
           float yMin = group[0][2];
           float yMax = group[0][3];
           for (const auto& boxMeta : group) {
-            if (boxMeta[0] < xMin) {
-              xMin = boxMeta[0];
-            }
-            if (boxMeta[1] > xMax) {
-              xMax = boxMeta[1];
-            }
-            if (boxMeta[2] < yMin) {
-              yMin = boxMeta[2];
-            }
-            if (boxMeta[3] > yMax) {
-              yMax = boxMeta[3];
-            }
+            xMin = std::min(xMin, boxMeta[0]);
+            xMax = std::max(xMax, boxMeta[1]);
+            yMin = std::min(yMin, boxMeta[2]);
+            yMax = std::max(yMax, boxMeta[3]);
           }
           const float boxWidth = xMax - xMin;
           const float boxHeight = yMax - yMin;

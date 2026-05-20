@@ -147,7 +147,7 @@ cv::Mat StepDoctrDetectionGGML::runInference(const cv::Mat& preprocessed) {
 
   // The graph outputs raw logits (sigmoid is commented-out in buildGraph).
   // Apply sigmoid here: prob = 1 / (1 + exp(-logit)).
-  const size_t nElems =
+  const auto nElems =
       static_cast<size_t>(ggml_nelements(computeGraph_.output_4));
   std::vector<float> logitBuf(nElems);
   ggml_backend_tensor_get(
@@ -218,12 +218,12 @@ StepDoctrDetectionGGML::extractPolygons(
     // Remove symmetric-padding bias (OnnxTR _remove_padding logic).
     if (origH > origW) {
       const float ratio = static_cast<float>(origH) / static_cast<float>(origW);
-      nx0 = (nx0 - 0.5F) * ratio + 0.5F;
-      nx1 = (nx1 - 0.5F) * ratio + 0.5F;
+      nx0 = ((nx0 - 0.5F) * ratio) + 0.5F;
+      nx1 = ((nx1 - 0.5F) * ratio) + 0.5F;
     } else if (origW > origH) {
       const float ratio = static_cast<float>(origW) / static_cast<float>(origH);
-      ny0 = (ny0 - 0.5F) * ratio + 0.5F;
-      ny1 = (ny1 - 0.5F) * ratio + 0.5F;
+      ny0 = ((ny0 - 0.5F) * ratio) + 0.5F;
+      ny1 = ((ny1 - 0.5F) * ratio) + 0.5F;
     }
 
     nx0 = std::clamp(nx0, 0.0F, 1.0F);
