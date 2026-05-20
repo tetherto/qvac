@@ -54,6 +54,23 @@ export class BarePackError extends Error {
   }
 }
 
+export class WorkerEntryNotFoundError extends Error {
+  workerEntry: string
+  resolvedPath: string
+  constructor (workerEntry: string, resolvedPath: string) {
+    super(
+      'Custom worker entry not found.\n\n' +
+      `  Specified: ${workerEntry}\n` +
+      `  Resolved:  ${resolvedPath}\n\n` +
+      '  Set workerEntry in qvac.config.* or pass --entry <path>.\n' +
+      '  Paths are resolved relative to the project root.'
+    )
+    this.name = 'WorkerEntryNotFoundError'
+    this.workerEntry = workerEntry
+    this.resolvedPath = resolvedPath
+  }
+}
+
 export class BareImportsMapNotFoundError extends Error {
   sdkName: string
   expectedPath: string
@@ -75,6 +92,7 @@ const ERROR_LABELS: Record<string, string> = {
   InvalidPluginSpecifierError: 'Plugin Error',
   BarePackNotInstalledError: 'Bundler Error',
   BarePackError: 'Bundle Failed',
+  WorkerEntryNotFoundError: 'Worker Entry Error',
   BareImportsMapNotFoundError: 'SDK Error',
   LockfileReadError: 'Lockfile Error',
   LockfileNotFoundAtRefError: 'Lockfile Error',

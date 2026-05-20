@@ -113,6 +113,7 @@ qvac bundle sdk [options]
 | `--config, -c <path>` | Config file path (default: auto-detect `qvac.config.*`) |
 | `--host <target>` | Target host (repeatable, default: all platforms) |
 | `--defer <module>` | Defer a module (repeatable, for mobile targets) |
+| `--entry <path>` | Use a custom worker entry file instead of generating one. Path is resolved against the project root (absolute paths are honored as-is). The entry must register its own plugins. Overrides `workerEntry` in `qvac.config.*`. |
 | `--quiet, -q` | Minimal output |
 | `--verbose, -v` | Detailed output |
 
@@ -130,17 +131,22 @@ qvac bundle sdk --config ./my-config.json
 
 # Verbose output for debugging
 qvac bundle sdk --verbose
+
+# Bundle a custom worker entry
+qvac bundle sdk --entry your-worker-entry.js
 ```
 
 **Output:**
 
 | File | Description |
 |------|-------------|
-| `qvac/worker.entry.mjs` | Standalone/Electron worker with RPC + lifecycle |
+| `qvac/worker.entry.mjs` | Standalone/Electron worker with RPC + lifecycle. **Not generated when `--entry` / `workerEntry` is set** — the custom entry is bundled directly. |
 | `qvac/worker.bundle.js` | Final bundle for mobile runtimes (Expo/BareKit) |
 | `qvac/addons.manifest.json` | Native addon allowlist for tree-shaking |
 
 > **Note:** Your project must have `@qvac/sdk` installed.
+
+> **Custom entry contract:** when `--entry` (or `workerEntry`) is set, `plugins` in `qvac.config.*` is ignored and the custom entry must call `registerPlugin()` for every plugin it depends on. Use `hasPlugin(modelType)` to guard against duplicate registration if your entry might be re-used by hosts that pre-register plugins.
 
 ### `verify deps`
 
@@ -316,13 +322,16 @@ If no config file is found, the CLI bundles all built-in plugins.
 
 > **Note:** `qvac.config.ts` is supported via `tsx` internally (no user setup required).
 
-This file is primarily the SDK runtime config, but `qvac bundle sdk` also reads this **bundler-only** key (ignored by the SDK at runtime):
+This file is primarily the SDK runtime config, but `qvac bundle sdk` also reads these **bundler-only** keys (ignored by the SDK at runtime):
 
 | Key | Type | Required | Description |
 |-----|------|----------|-------------|
-| `plugins` | `string[]` | No | Module specifiers, each ending with `/plugin` (defaults to all built-in plugins) |
+| `plugins` | `string[]` | No | Module specifiers, each ending with `/plugin` (defaults to all built-in plugins). Ignored when `workerEntry` is set. |
+| `workerEntry` | `string` | No | Path to a custom Bare worker entry, resolved relative to the project root (absolute paths honored as-is). When set, `qvac/worker.entry.mjs` is **not** generated and the custom entry is bundled directly. The CLI `--entry` flag overrides this value. |
 
 > **Custom plugin contract:** custom `*/plugin` modules must **default-export** the plugin object.
+
+> **Custom entry contract:** see the `bundle sdk` section above. The entry is responsible for calling `registerPlugin()` for every plugin it needs.
 
 **Built-in plugins:**
 

@@ -108,6 +108,7 @@ http_status() {
   [[ "${status}" -eq 0 ]]
   [[ "${output}" =~ "--config" ]]
   [[ "${output}" =~ "--sdk-path" ]]
+  [[ "${output}" =~ "--entry" ]]
 }
 
 @test "qvac verify deps --help shows options" {

@@ -3,7 +3,7 @@ import path from 'node:path'
 import { DEFAULT_HOSTS, DEFAULT_SDK_NAME } from './constants.js'
 import { createLogger } from '../logger.js'
 import { findConfigFile, loadConfig, CONFIG_CANDIDATES } from '../config.js'
-import { BareImportsMapNotFoundError } from '../errors.js'
+import { BareImportsMapNotFoundError, WorkerEntryNotFoundError } from '../errors.js'
 import { resolvePluginSpecifiers, parseBuiltinSpecifier } from './plugins.js'
 import { generateWorkerEntry } from './entry-gen.js'
 import { runBarePack } from './bare-pack.js'
@@ -15,6 +15,7 @@ export interface BundleSdkOptions {
   sdkPath?: string | undefined
   hosts?: string[] | undefined
   defer?: string[] | undefined
+  workerEntry?: string | undefined
   quiet?: boolean | undefined
   verbose?: boolean | undefined
 }
@@ -23,8 +24,14 @@ interface BundleSdkResult {
   bundlePath: string
   plugins: string[]
   addons: string[]
-  entryPaths: { worker: string }
+  entryPaths: { worker: string; generated: boolean }
   manifestPath: string
+}
+
+function resolveWorkerEntry (projectRoot: string, workerEntry: string): string {
+  return path.isAbsolute(workerEntry)
+    ? workerEntry
+    : path.resolve(projectRoot, workerEntry)
 }
 
 function resolveSdkPath (projectRoot: string, explicitSdkPath?: string): string {
@@ -67,7 +74,7 @@ export async function bundleSdk (options: BundleSdkOptions = {}): Promise<Bundle
 
   const projectRoot = options.projectRoot ?? process.cwd()
   const outputDir = path.join(projectRoot, 'qvac')
-  const entryPath = path.join(outputDir, 'worker.entry.mjs')
+  const generatedEntryPath = path.join(outputDir, 'worker.entry.mjs')
   const bundlePath = path.join(outputDir, 'worker.bundle.js')
 
   let logLevel = 'info'
@@ -80,10 +87,10 @@ export async function bundleSdk (options: BundleSdkOptions = {}): Promise<Bundle
 
   const configPath = findConfigFile(projectRoot, options.configPath)
 
-  let config: { plugins?: string[] } = {}
+  let config: { plugins?: string[]; workerEntry?: string } = {}
   if (configPath) {
     logger.info(`📄 Config: ${path.relative(projectRoot, configPath)}`)
-    config = await loadConfig(configPath) as { plugins?: string[] }
+    config = await loadConfig(configPath) as { plugins?: string[]; workerEntry?: string }
   } else {
     logger.info('📄 Config: (none)')
     logger.warn('No config file found — continuing with defaults.')
@@ -94,6 +101,10 @@ export async function bundleSdk (options: BundleSdkOptions = {}): Promise<Bundle
     )
   }
 
+  // CLI flag takes precedence over config.
+  const workerEntryOption = options.workerEntry ?? config.workerEntry
+  const usingCustomEntry = typeof workerEntryOption === 'string' && workerEntryOption.length > 0
+
   const sdkPath = resolveSdkPath(projectRoot, options.sdkPath)
   const sdkName = await resolveSdkName(sdkPath)
   logger.info(`📦 SDK: ${sdkName}`)
@@ -101,13 +112,23 @@ export async function bundleSdk (options: BundleSdkOptions = {}): Promise<Bundle
 
   const importsMapPath = resolveImportsMapPath(sdkPath, sdkName)
 
-  const pluginSpecifiers = resolvePluginSpecifiers(config, sdkName, logger)
-  logger.info(`\n📦 Plugins to include (${pluginSpecifiers.length}):`)
-  for (const spec of pluginSpecifiers) {
-    const label = parseBuiltinSpecifier(spec, sdkName)
-      ? '✓ built-in'
-      : '⊕ custom'
-    logger.info(`   ${label}: ${spec}`)
+  let pluginSpecifiers: string[] = []
+  if (usingCustomEntry) {
+    if (config.plugins && config.plugins.length > 0) {
+      logger.warn(
+        "workerEntry is set — 'plugins' from config will be ignored.\n" +
+        '   Your worker entry must call registerPlugin() for every plugin it needs.\n'
+      )
+    }
+  } else {
+    pluginSpecifiers = resolvePluginSpecifiers(config, sdkName, logger)
+    logger.info(`\n📦 Plugins to include (${pluginSpecifiers.length}):`)
+    for (const spec of pluginSpecifiers) {
+      const label = parseBuiltinSpecifier(spec, sdkName)
+        ? '✓ built-in'
+        : '⊕ custom'
+      logger.info(`   ${label}: ${spec}`)
+    }
   }
 
   const hosts =
@@ -117,11 +138,23 @@ export async function bundleSdk (options: BundleSdkOptions = {}): Promise<Bundle
 
   await fsp.mkdir(outputDir, { recursive: true })
 
-  logger.info('\n📝 Generating worker entry...')
-  const workerEntry = generateWorkerEntry(pluginSpecifiers, sdkName)
-  await fsp.writeFile(entryPath, workerEntry, 'utf8')
-  logger.info(`   Created: ${path.relative(projectRoot, entryPath)}`)
-  logger.info(`   Using: ${path.relative(projectRoot, importsMapPath)}`)
+  let entryPath: string
+  if (usingCustomEntry) {
+    const resolved = resolveWorkerEntry(projectRoot, workerEntryOption)
+    if (!fs.existsSync(resolved)) {
+      throw new WorkerEntryNotFoundError(workerEntryOption, resolved)
+    }
+    entryPath = resolved
+    logger.info(`\n📝 Worker entry: ${path.relative(projectRoot, entryPath)} (custom)`)
+    logger.info(`   Using: ${path.relative(projectRoot, importsMapPath)}`)
+  } else {
+    entryPath = generatedEntryPath
+    logger.info('\n📝 Generating worker entry...')
+    const workerEntrySource = generateWorkerEntry(pluginSpecifiers, sdkName)
+    await fsp.writeFile(entryPath, workerEntrySource, 'utf8')
+    logger.info(`   Created: ${path.relative(projectRoot, entryPath)}`)
+    logger.info(`   Using: ${path.relative(projectRoot, importsMapPath)}`)
+  }
 
   logger.info('\n🔨 Bundling with bare-pack...')
   logger.debug(`   Hosts: ${hosts.join(', ')}`)
@@ -154,24 +187,33 @@ export async function bundleSdk (options: BundleSdkOptions = {}): Promise<Bundle
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(2)
   logger.info(`\n🎉 Done in ${elapsed}s!\n`)
   logger.info('Generated files:')
-  logger.info(
-    '  - qvac/worker.entry.mjs    (standalone worker with RPC + lifecycle)'
-  )
+  if (!usingCustomEntry) {
+    logger.info(
+      '  - qvac/worker.entry.mjs    (standalone worker with RPC + lifecycle)'
+    )
+  }
   logger.info(
     '  - qvac/worker.bundle.js    (mobile bundle for Expo/React Native BareKit)'
   )
   logger.info('  - qvac/addons.manifest.json\n')
   logger.info('Mobile: Expo plugin auto-configures worker.bundle.js')
-  logger.info(
-    'Standalone: Import qvac/worker.entry.mjs for full worker with RPC\n'
-  )
+  if (usingCustomEntry) {
+    logger.info(
+      `Custom entry: ${path.relative(projectRoot, entryPath)} (provided by you)\n`
+    )
+  } else {
+    logger.info(
+      'Standalone: Import qvac/worker.entry.mjs for full worker with RPC\n'
+    )
+  }
 
   return {
     bundlePath,
     plugins: pluginSpecifiers,
     addons: manifestResult.addons,
     entryPaths: {
-      worker: entryPath
+      worker: entryPath,
+      generated: !usingCustomEntry
     },
     manifestPath: manifestResult.manifestPath
   }

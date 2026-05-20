@@ -31,6 +31,12 @@ function setupCli (): void {
     .option('--sdk-path <path>', 'Path to SDK package (default: auto-detect in node_modules)')
     .option('--host <target>', 'Target host (repeatable)', collect, [])
     .option('--defer <module>', 'Defer a module (repeatable)', collect, [])
+    .option(
+      '--entry <path>',
+      'Use a custom worker entry file instead of generating one. ' +
+      'The entry must register its own plugins and (optionally) call ensureRPCSetup(). ' +
+      'Overrides workerEntry in qvac.config.*'
+    )
     .option('-q, --quiet', 'Minimal output')
     .option('-v, --verbose', 'Detailed output')
     .action(async (options: {
@@ -38,6 +44,7 @@ function setupCli (): void {
       sdkPath?: string
       host: string[]
       defer: string[]
+      entry?: string
       quiet?: boolean
       verbose?: boolean
     }) => {
@@ -48,6 +55,7 @@ function setupCli (): void {
           sdkPath: options.sdkPath,
           hosts: options.host.length > 0 ? options.host : undefined,
           defer: options.defer.length > 0 ? options.defer : undefined,
+          workerEntry: options.entry,
           quiet: options.quiet,
           verbose: options.verbose
         })
