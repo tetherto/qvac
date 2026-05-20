@@ -173,7 +173,7 @@ jobs:
           node-version: lts/*
 
       - name: Install global dependencies
-        run: npm install -g bare-make bare-runtime
+        run: npm install -g --force bare-make bare-runtime
 
       - name: Replace bare-make's CMake with compatible version
         shell: bash
@@ -194,6 +194,12 @@ jobs:
 
       - name: Configure vcpkg
         run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
+
+      - name: Cleanup vcpkg
+        shell: bash
+        run: |
+          rm -rf $VCPKG_ROOT/buildtrees/*
+          rm -rf $VCPKG_ROOT/packages/*
 
       - name: Update apt sources
         run: sudo apt-get update
@@ -345,7 +351,7 @@ jobs:
           node-version: 20
 
       - name: Install bare-runtime
-        run: npm install -g bare-runtime
+        run: npm install -g --force bare-runtime
 
       - name: Download build artifact
         if: needs.build.result == 'success'

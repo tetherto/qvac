@@ -61,6 +61,8 @@ Third-Party Model Licenses
 
 --- apache-2.0 (Apache License 2.0) ---
 
+  bci-embedder
+    https://github.com/tetherto/qvac/releases/download/bci-test-assets-v0.1.0/bci-embedder.bin
   crnn_mobilenet_v3_small
     https://github.com/felixdittrich92/OnnxTR
   db_mobilenet_v3_large
@@ -83,6 +85,14 @@ Third-Party Model Licenses
     https://huggingface.co/personalizedrefrigerator/whisper-base-fr
   fr-tiny-ggml-model-f16
     https://huggingface.co/JaepaX/whisper-tiny-fr
+  ggml-bci-windowed
+    https://github.com/tetherto/qvac/releases/download/bci-test-assets-v0.1.0/ggml-bci-windowed.bin
+  google_gemma-4-31B-it-GGUF
+    https://huggingface.co/bartowski/google_gemma-4-31B-it-GGUF
+  google_gemma-4-E2B-it-GGUF
+    https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF
+  google_gemma-4-E4B-it-GGUF
+    https://huggingface.co/bartowski/google_gemma-4-E4B-it-GGUF
   gpt-oss-120b-Q4_K_M-00001-of-00002
     https://huggingface.co/unsloth/gpt-oss-120b-GGUF
   gpt-oss-20b-GGUF
@@ -123,6 +133,18 @@ Third-Party Model Licenses
     https://huggingface.co/Qwen/Qwen3-8B-GGUF
   Qwen3-VL-2B-Instruct-GGUF
     https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF
+  Qwen3.5-0.8B-GGUF
+    https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF
+  Qwen3.5-2B-GGUF
+    https://huggingface.co/unsloth/Qwen3.5-2B-GGUF
+  Qwen3.5-4B-GGUF
+    https://huggingface.co/unsloth/Qwen3.5-4B-GGUF
+  Qwen3.5-9B-GGUF
+    https://huggingface.co/unsloth/Qwen3.5-9B-GGUF
+  Qwen3.6-27B-GGUF
+    https://huggingface.co/unsloth/Qwen3.6-27B-GGUF
+  Qwen3.6-35B-A3B-GGUF
+    https://huggingface.co/unsloth/Qwen3.6-35B-A3B-GGUF
   recognizer_arabic
     https://www.jaided.ai/easyocr/modelhub/
   recognizer_bengali
@@ -162,30 +184,41 @@ Third-Party Model Licenses
   SmolVLM2-500M-Video-Instruct-GGUF
     https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF
 
+--- bsd-3-clause (BSD 3-Clause License) ---
+
+  RealESRGAN_x4plus
+    https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth
+  RealESRGAN_x4plus_anime_6B
+    https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth
+  RealESRNet_x4plus
+    https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.1/RealESRNet_x4plus.pth
+
 --- cc-by-4.0 (Creative Commons Attribution 4.0 International) ---
 
   AfriqueGemma-4B-GGUF
     https://huggingface.co/mradermacher/AfriqueGemma-4B-GGUF
-  decoder_joint_int8
-    https://huggingface.co/nasedkinpv/parakeet-tdt-0.6b-v3-onnx-int8
   decoder_joint-model
     https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx
   diar_streaming_sortformer_4spk-v2-onnx
     https://huggingface.co/cgus/diar_streaming_sortformer_4spk-v2-onnx
-  encoder_int8
-    https://huggingface.co/nasedkinpv/parakeet-tdt-0.6b-v3-onnx-int8
   encoder-model
     https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx
   parakeet-ctc-0.6b-ONNX
     https://huggingface.co/onnx-community/parakeet-ctc-0.6b-ONNX
+  parakeet-ctc-0.6b.q8_0
+    https://huggingface.co/nvidia/parakeet-ctc-0.6b
+  parakeet-eou-120m-v1.q8_0
+    https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1
   parakeet-rs
     https://huggingface.co/altunenes/parakeet-rs
   parakeet-tdt-0.6b-v3-onnx
     https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx
+  parakeet-tdt-0.6b-v3.q8_0
+    https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3
   preprocessor
     https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx
-  sortformer_int8
-    https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2
+  sortformer-4spk-v1.q8_0
+    https://huggingface.co/nvidia/diar_sortformer_4spk-v1
 
 --- gemma (Gemma Terms of Use) ---
 
@@ -218,6 +251,14 @@ Third-Party Model Licenses
     https://huggingface.co/1bitLLM/bitnet_b1_58-xl
   chatterbox-multilingual-ONNX
     https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX
+  chatterbox-s3gen
+    s3:///qvac_models_compiled/chatterbox/2026-05-08/chatterbox-s3gen.gguf
+  chatterbox-s3gen-mtl
+    s3:///qvac_models_compiled/chatterbox/2026-05-08/chatterbox-s3gen-mtl.gguf
+  chatterbox-t3-mtl
+    s3:///qvac_models_compiled/chatterbox/2026-05-08/chatterbox-t3-mtl.gguf
+  chatterbox-t3-turbo
+    s3:///qvac_models_compiled/chatterbox/2026-05-08/chatterbox-t3-turbo.gguf
   chatterbox-turbo-ONNX
     https://huggingface.co/ResembleAI/chatterbox-turbo-ONNX
   de-base-ggml-model-f16
@@ -369,8 +410,6 @@ Third-Party Model Licenses
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/entr
   model.enuk.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enuk
-  model.enzh.intgemm.alphas
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/enzh
   model.esen.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/esen
   model.eten.intgemm.alphas
@@ -379,8 +418,6 @@ Third-Party Model Licenses
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/faen
   model.fien.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/fien
-  model.fire.intgemm.alphas
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/fire
   model.fren.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/fren
   model.guen.intgemm.alphas
@@ -449,17 +486,19 @@ Third-Party Model Licenses
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/uken
   model.vien.intgemm.alphas
     https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/vien
-  model.zhen.intgemm.alphas
-    https://github.com/mozilla/firefox-translations-models/tree/main/models/base-memory/zhen
 
 --- openrail ---
 
+  supertonic
+    s3:///qvac_models_compiled/supertonic/2026-05-08/supertonic.gguf
   supertonic
     https://huggingface.co/Supertone/supertonic
   supertonic-2
     https://huggingface.co/Supertone/supertonic-2
   Supertonic-TTS-ONNX
     https://huggingface.co/onnx-community/Supertonic-TTS-ONNX
+  supertonic2
+    s3:///qvac_models_compiled/supertonic/2026-05-08/supertonic2.gguf
 
 --- openrail++ ---
 
@@ -492,38 +531,41 @@ JavaScript Dependencies
   @qvac/decoder-audio@0.3.7
     https://github.com/tetherto/qvac
   @qvac/diagnostics@0.1.1
-  @qvac/diffusion-cpp@0.3.0
+  @qvac/diffusion-cpp@0.7.0
     https://github.com/tetherto/qvac
   @qvac/dl-base@0.1.1
   @qvac/dl-hyperdrive@0.1.1
-  @qvac/embed-llamacpp@0.14.0
+  @qvac/embed-llamacpp@0.16.0
     https://github.com/tetherto/qvac
   @qvac/error@0.1.1
   @qvac/infer-base@0.1.1
+  @qvac/infer-base@0.4.0
+    https://github.com/tetherto/qvac
   @qvac/infer-base@0.4.1
     https://github.com/tetherto/qvac
   @qvac/langdetect-text@0.1.2
     https://github.com/tetherto/qvac
-  @qvac/llm-llamacpp@0.17.3
+  @qvac/llm-llamacpp@0.20.1
     https://github.com/tetherto/qvac
   @qvac/logging@0.1.0
-  @qvac/ocr-onnx@0.4.2
+  @qvac/ocr-onnx@0.5.0
     https://github.com/tetherto/qvac
-  @qvac/onnx@0.14.0
+  @qvac/onnx@0.15.0
     https://github.com/tetherto/qvac
-  @qvac/rag@0.4.4
+  @qvac/rag@0.5.0
     https://github.com/tetherto/qvac
-  @qvac/registry-client@0.4.1
+  @qvac/registry-client@0.5.0
     https://github.com/tetherto/qvac
-  @qvac/registry-schema@0.1.2
+  @qvac/registry-schema@0.2.0
+    https://github.com/tetherto/qvac
   @qvac/response@0.1.2
-  @qvac/transcription-parakeet@0.3.2
+  @qvac/transcription-parakeet@0.5.0
     https://github.com/tetherto/qvac
-  @qvac/transcription-whispercpp@0.6.7
+  @qvac/transcription-whispercpp@0.7.0
     https://github.com/tetherto/qvac
-  @qvac/translation-nmtcpp@2.1.0
+  @qvac/translation-nmtcpp@3.0.0
     https://github.com/tetherto/qvac
-  @qvac/tts-onnx@0.8.5
+  @qvac/tts-onnx@0.9.0
     https://github.com/tetherto/qvac
   adaptive-timeout@1.0.1
     https://github.com/holepunchto/adaptive-timeout
@@ -555,19 +597,19 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-events
   bare-events@2.8.2
     https://github.com/holepunchto/bare-events
-  bare-fetch@2.9.0
+  bare-fetch@2.8.1
     https://github.com/holepunchto/bare-fetch
   bare-ffmpeg@1.2.2
     https://github.com/holepunchto/bare-ffmpeg
   bare-form-data@1.2.1
     https://github.com/holepunchto/bare-form-data
-  bare-fs@4.7.1
+  bare-fs@4.6.0
     https://github.com/holepunchto/bare-fs
   bare-hrtime@2.1.1
     https://github.com/holepunchto/bare-hrtime
   bare-http-parser@1.1.3
     https://github.com/holepunchto/bare-http-parser
-  bare-http1@4.5.6
+  bare-http1@4.5.5
     https://github.com/holepunchto/bare-http1
   bare-https@2.1.3
     https://github.com/holepunchto/bare-https
@@ -577,9 +619,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-lief
   bare-link@3.2.1
     https://github.com/holepunchto/bare-link
-  bare-mime@1.0.0
-    https://github.com/holepunchto/bare-mime
-  bare-module@6.2.0
+  bare-module@6.1.3
     https://github.com/holepunchto/bare-module
   bare-module-lexer@1.4.7
     https://github.com/holepunchto/bare-module-lexer
@@ -593,7 +633,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-node
   bare-node-worker-threads@1.0.0
     https://github.com/holepunchto/bare-node
-  bare-os@3.9.0
+  bare-os@3.8.7
     https://github.com/holepunchto/bare-os
   bare-path@3.0.0
     https://github.com/holepunchto/bare-path
@@ -601,43 +641,45 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-pipe
   bare-process@4.4.1
     https://github.com/holepunchto/bare-process
-  bare-rpc@1.2.0
+  bare-rpc@1.3.2
     https://github.com/holepunchto/bare-rpc
-  bare-runtime@1.28.4
+  bare-runtime@1.28.1
     https://github.com/holepunchto/bare-runtime
-  bare-runtime-darwin-arm64@1.28.4
+  bare-runtime-darwin-arm64@1.28.1
     https://github.com/holepunchto/bare-runtime
-  bare-semver@1.0.3
+  bare-semver@1.0.2
     https://github.com/holepunchto/bare-semver
   bare-signals@4.2.0
     https://github.com/holepunchto/bare-signals
   bare-stdio@1.0.2
     https://github.com/holepunchto/bare-stdio
-  bare-stream@2.13.1
+  bare-stream@2.12.0
     https://github.com/holepunchto/bare-stream
-  bare-structured-clone@1.5.4
+  bare-structured-clone@1.5.3
     https://github.com/holepunchto/bare-structured-clone
   bare-subprocess@5.2.3
     https://github.com/holepunchto/bare-subprocess
-  bare-tcp@2.2.12
+  bare-tcp@2.2.7
     https://github.com/holepunchto/bare-tcp
   bare-thread@1.2.0
     https://github.com/holepunchto/bare-thread
-  bare-tls@2.2.3
+  bare-tls@2.2.1
     https://github.com/holepunchto/bare-tls
   bare-tty@5.1.0
     https://github.com/holepunchto/bare-tty
   bare-type@1.1.0
     https://github.com/holepunchto/bare-type
-  bare-url@2.4.2
+  bare-url@2.4.0
     https://github.com/holepunchto/bare-url
   bare-worker@4.1.6
     https://github.com/holepunchto/bare-worker
-  bare-zlib@1.3.3
+  bare-zlib@1.3.1
     https://github.com/holepunchto/bare-zlib
-  blind-relay@1.5.0
+  blind-relay@1.4.0
     https://github.com/holepunchto/blind-relay
   compact-encoding@2.19.2
+    https://github.com/holepunchto/compact-encoding
+  compact-encoding@3.0.1
     https://github.com/holepunchto/compact-encoding
   device-file@2.3.1
     https://github.com/holepunchto/device-file
@@ -645,7 +687,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/events-universal
   fd-lock@2.1.1
     https://github.com/holepunchto/fd-lock
-  fs-native-extensions@1.5.0
+  fs-native-extensions@1.4.5
     https://github.com/holepunchto/fs-native-extensions
   hyperblobs@2.11.1
     https://github.com/holepunchto/hyperblobs
@@ -659,11 +701,9 @@ JavaScript Dependencies
     https://github.com/holepunchto/hypercore-storage
   hyperdb@4.22.3
     https://github.com/holepunchto/hyperdb
-  hyperdht-address@1.0.1
-    https://github.com/holepunchto/hyperdht-address
   hyperdht-stats@1.10.0
     https://github.com/holepunchto/hyperdht-stats
-  hyperdispatch@1.5.1
+  hyperdispatch@1.6.0
     https://github.com/holepunchto/hyperdispatch
   hyperdrive@13.3.2
     https://github.com/holepunchto/hyperdrive
@@ -673,7 +713,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/hyperswarm-stats
   index-encoder@3.5.0
     https://github.com/holepunchto/index-encoder
-  mirror-drive@1.14.2
+  mirror-drive@1.14.1
     https://github.com/holepunchto/mirror-drive
   noise-handshake@4.2.0
     https://github.com/holepunchto/noise-handshake
@@ -745,8 +785,8 @@ JavaScript Dependencies
     https://github.com/holepunchto/corestore
   debounceify@1.1.0
     https://github.com/mafintosh/debounceify
-  dht-rpc@6.26.4
-    https://github.com/holepunchto/dht-rpc
+  dht-rpc@6.26.3
+    https://github.com/mafintosh/dht-rpc
   events@3.3.0
     https://github.com/Gozala/events
   fast-fifo@1.3.2
@@ -765,7 +805,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/hypercore
   hypercore-crypto@3.6.1
     https://github.com/mafintosh/hypercore-crypto
-  hyperdht@6.30.0
+  hyperdht@6.29.6
     https://github.com/holepunchto/hyperdht
   hyperswarm@4.17.0
     https://github.com/holepunchto/hyperswarm
@@ -783,8 +823,8 @@ JavaScript Dependencies
     https://github.com/mafintosh/nat-sampler
   protocol-buffers-encodings@1.2.0
     https://github.com/mafintosh/protocol-buffers-encodings
-  protomux@3.10.3
-    https://github.com/holepunchto/protomux
+  protomux@3.10.1
+    https://github.com/mafintosh/protomux
   queue-tick@1.0.1
     https://github.com/mafintosh/queue-tick
   random-array-iterator@1.0.0
@@ -833,8 +873,6 @@ JavaScript Dependencies
     https://github.com/mafintosh/unix-path-resolve
   unordered-set@2.0.1
     https://github.com/mafintosh/unordered-set
-  uuid-random@1.3.2
-    https://github.com/jchook/uuid-random
   varint@5.0.0
     https://github.com/chrisdickinson/varint
   xache@1.2.1

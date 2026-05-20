@@ -18,7 +18,6 @@ interface CollectedEvent {
   text?: string;
   speaking?: boolean;
   probability?: number;
-  source?: "whisper" | "parakeet";
   silenceDurationMs?: number;
 }
 
@@ -151,26 +150,6 @@ function assertEvents(
       passed: false,
       output: `expected at least one endOfTurn event, got: ${summary}`,
     };
-  }
-  // Per-event sanity for whisper: every endOfTurn event MUST carry
-  // `source: "whisper"` and a numeric `silenceDurationMs`. The
-  // discriminated `endOfTurnEventSchema` keeps these fields
-  // statically present; an upstream regression dropping them would
-  // fall through Zod and surface as a runtime test failure here.
-  for (const ev of events) {
-    if (ev.type !== "endOfTurn") continue;
-    if (ev.source !== "whisper") {
-      return {
-        passed: false,
-        output: `whisper endOfTurn must declare source="whisper", got: ${JSON.stringify(ev)}`,
-      };
-    }
-    if (typeof ev.silenceDurationMs !== "number") {
-      return {
-        passed: false,
-        output: `whisper endOfTurn must carry silenceDurationMs, got: ${JSON.stringify(ev)}`,
-      };
-    }
   }
   if (!counts["text"]) {
     return {

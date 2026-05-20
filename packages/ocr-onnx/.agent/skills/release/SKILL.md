@@ -30,8 +30,8 @@ Where:
    ```
 3. If the local version is **not higher** than the npm version, stop and ask the user to bump the version first.
 4. Check that `packages/<package>/CHANGELOG.md` has a section matching the current version (`## [X.Y.Z]`). If missing, generate it first then continue:
-   - For addon packages (native C++): run `/addon-changelog`
-   - For SDK pod packages (TypeScript): run `/sdk-changelog`
+   - For addon packages (native C++): run `/qv-addon-changelog`
+   - For SDK pod packages (TypeScript): run `/qv-sdk-changelog`
 
 ### Step 2: Confirm with user
 

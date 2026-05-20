@@ -14,14 +14,10 @@ JavaScript Dependencies
 
   b4a@1.8.0
     https://github.com/holepunchto/b4a
-  bare-abort-controller@1.1.1
+  bare-abort-controller@1.1.0
     https://github.com/holepunchto/bare-abort-controller
   bare-addon-resolve@1.10.0
     https://github.com/holepunchto/bare-addon-resolve
-  bare-ansi-escapes@2.2.3
-    https://github.com/holepunchto/bare-ansi-escapes
-  bare-assert@1.2.0
-    https://github.com/holepunchto/bare-assert
   bare-buffer@3.6.0
     https://github.com/holepunchto/bare-buffer
   bare-bundle@1.10.0
@@ -32,31 +28,27 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-events
   bare-fs@4.7.1
     https://github.com/holepunchto/bare-fs
-  bare-inspect@3.1.4
-    https://github.com/holepunchto/bare-inspect
   bare-module-lexer@1.4.7
     https://github.com/holepunchto/bare-module-lexer
   bare-module-resolve@1.12.1
     https://github.com/holepunchto/bare-module-resolve
   bare-module-traverse@2.0.1
     https://github.com/holepunchto/bare-module-traverse
-  bare-os@3.8.0
+  bare-os@3.9.1
     https://github.com/holepunchto/bare-os
-  bare-pack@2.0.1
+  bare-pack@2.0.0
     https://github.com/holepunchto/bare-pack
   bare-path@3.0.0
     https://github.com/holepunchto/bare-path
   bare-semver@1.0.2
     https://github.com/holepunchto/bare-semver
-  bare-stream@2.13.1
+  bare-stream@2.10.0
     https://github.com/holepunchto/bare-stream
-  bare-type@1.1.0
-    https://github.com/holepunchto/bare-type
   bare-url@2.4.3
     https://github.com/holepunchto/bare-url
   events-universal@1.0.1
     https://github.com/holepunchto/events-universal
-  paparam@1.10.1
+  paparam@1.10.0
     https://github.com/holepunchto/paparam
   require-addon@1.2.0
     https://github.com/holepunchto/require-addon
@@ -65,13 +57,18 @@ JavaScript Dependencies
   which-runtime@1.3.2
     https://github.com/holepunchto/which-runtime
 
+--- isc (ISC License) ---
+
+  semver@7.8.0
+    https://github.com/npm/node-semver
+
 --- mit (MIT License) ---
 
-  @esbuild/darwin-arm64@0.27.4
+  @esbuild/darwin-arm64@0.27.3
     https://github.com/evanw/esbuild
   commander@14.0.3
     https://github.com/tj/commander.js
-  esbuild@0.27.4
+  esbuild@0.27.3
     https://github.com/evanw/esbuild
   fast-fifo@1.3.2
     https://github.com/mafintosh/fast-fifo
@@ -83,7 +80,7 @@ JavaScript Dependencies
     https://github.com/mafintosh/promaphore
   resolve-pkg-maps@1.0.0
     https://github.com/privatenumber/resolve-pkg-maps
-  sodium-native@5.1.0
+  sodium-native@5.0.10
     https://github.com/holepunchto/sodium-native
   streamx@2.25.0
     https://github.com/mafintosh/streamx

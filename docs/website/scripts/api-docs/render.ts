@@ -3,8 +3,8 @@
  * API-summary MDX file (functions + objects + folded errors).
  *
  * The output target is one of:
- *   - `content/docs/sdk/api/index.mdx`  (latest version)
- *   - `content/docs/sdk/api/v<X.Y.Z>.mdx`  (frozen older version)
+ *   - `content/docs/reference/api/index.mdx`  (latest version)
+ *   - `content/docs/reference/api/v<X.Y.Z>.mdx`  (frozen older version)
  *
  * Page assembly uses a single Nunjucks template at
  * `scripts/api-docs/templates/single-page.njk`.
@@ -25,8 +25,8 @@ export interface RenderOptions {
   /**
    * Absolute path of the file to write (parent directory will be created
    * automatically). Examples:
-   *   - .../content/docs/sdk/api/index.mdx
-   *   - .../content/docs/sdk/api/v0.8.0.mdx
+   *   - .../content/docs/reference/api/index.mdx
+   *   - .../content/docs/reference/api/v0.8.0.mdx
    */
   outputFile: string;
 }

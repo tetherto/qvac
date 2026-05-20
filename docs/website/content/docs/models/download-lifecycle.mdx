@@ -6,24 +6,50 @@ schemaType: HowTo
 
 ## Overview
 
-Downloads in QVAC are _resumable by default_. When you download an asset via [`downloadAsset()`](/reference/api#downloadasset) or [`loadModel()`](/reference/api#loadmodel)), the SDK writes partial files to disk so the next run can continue from where it left off. The progress callback provides a `downloadKey`. Persist it if you want to programmatically pause/cancel the download.
+Downloads in QVAC are _resumable by default_. When you download an asset via [`downloadAsset()`](/reference/api#downloadasset) or [`loadModel()`](/reference/api#loadmodel)), the SDK writes partial files to disk so the next run can continue from where it left off. The progress callback provides a `downloadKey` that identifies the underlying transfer (useful for dedup and cache identification), but cancellation is targeted by `requestId`.
+
+Both `downloadAsset()` and `loadModel()` return a decorated promise (`Promise<string> & { requestId: string }`) that exposes a synchronous `requestId` field, so you can wire a stop button to a specific in-flight call without waiting for the first progress event. See [Cancel a specific call by `requestId`](#cancel-a-specific-call-by-requestid) below.
 
 ## Functions
 
-1. [`downloadAsset()`](/reference/api#downloadasset) or [`loadModel()`](/reference/api#loadmodel) — with `onProgress` for progress tracking
-2. [`cancel()`](/reference/api#cancel) — pause/cancel a download using the `downloadKey`
+1. [`downloadAsset()`](/reference/api#downloadasset) or [`loadModel()`](/reference/api#loadmodel) — with `onProgress` for progress tracking; both return a decorated promise that exposes `op.requestId` synchronously.
+2. [`cancel()`](/reference/api#cancel) — either:
+   - `cancel({ requestId: op.requestId })` — pause this specific call (preserves the partial file for automatic resume on the next run).
+   - `cancel({ requestId: op.requestId, clearCache: true })` — discard the partial file along with the cancel.
+   - `cancel({ modelId })` — broad sweep that cancels every in-flight request on the given model, including non-download ops. See [Cancellation — broad cancel by `modelId`](/runtime/cancellation#broad-cancel-by-modelid-escape-hatch).
 
 For how to use each function, see [SDK — API reference](/reference/api/).
 
+## Cancel a specific call by `requestId`
+
+Both `downloadAsset()` and `loadModel()` return `Promise<string> & { requestId: string }`. The await result is unchanged (the asset path or model id, respectively), but `op.requestId` is available **synchronously** before `await` resolves — so a stop button can be wired immediately, before the first progress event arrives:
+
+```ts
+const op = downloadAsset({ assetSrc: "https://example.com/big.gguf" });
+op.requestId; // synchronously available, before await
+
+// Pause: preserves the partial file for automatic resume on the next call.
+stopButton.onclick = () => cancel({ requestId: op.requestId });
+
+// Or: discard the partial file along with the cancel.
+clearButton.onclick = () => cancel({ requestId: op.requestId, clearCache: true });
+
+await op; // rejects with InferenceCancelledError if cancelled
+```
+
+When two callers request the same artifact, the SDK deduplicates them onto a single underlying transfer. `cancel({ requestId })` rejects only the cancelling subscriber's promise; the underlying transfer keeps running to serve any other subscribers. The transfer is aborted only when the **last** subscriber leaves.
+
+For the broader cancellation contract (errors, decorated-promise pattern across other SDK operations, broad cancel by `modelId`), see [Cancellation](/runtime/cancellation).
+
 ## Flow
 
-- Pause: call [`cancel()`](/reference/api#cancel) with `operation: "downloadAsset"` and the `downloadKey` from progress events.
+- Pause: call [`cancel()`](/reference/api#cancel) with `requestId: op.requestId` from the decorated promise returned by `downloadAsset()` / `loadModel()`.
 - Resume: run the same `downloadAsset()` / `loadModel()` call again — the SDK will reuse the partial file and continue downloading.
-- Discard partial file: call `cancel({ ..., clearCache: true })`.
+- Discard partial file: call `cancel({ requestId: op.requestId, clearCache: true })`.
 
 ## Example
 
-The following script shows an example of pausing and resuming a download using `cancel()` + `downloadKey`:
+The following script shows an example of pausing and resuming a download using `cancel({ requestId })` + the decorated-promise pattern:
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>

@@ -5,7 +5,15 @@ const QvacLogger = require('@qvac/logging')
 const { createJobHandler, exclusiveRunQueue } = require('@qvac/infer-base')
 const { SdInterface, EsrganUpscalerInterface, mapAddonEvent } = require('./addon')
 
-const COMPANION_FILE_KEYS = ['clipL', 'clipG', 't5Xxl', 'llm', 'vae', 'esrgan']
+const COMPANION_FILE_KEYS = [
+  'clipL',
+  'clipG',
+  't5Xxl',
+  'llm',
+  'vae',
+  'esrgan',
+  'highNoiseDiffusionModel'
+]
 
 function assertAbsolute (key, value) {
   if (typeof value !== 'string' || value.length === 0) {
@@ -36,9 +44,20 @@ function normalizeUpscaleRepeats (options) {
   return repeats
 }
 
+function applyFluxImg2ImgDimDefaults (params, pred, hasInitImages) {
+  const isFluxImg2Img = (params.init_image || hasInitImages) &&
+    (pred === 'flux2_flow')
+  if (!isFluxImg2Img) return params
+  const defaultDim = 1024
+  if (!params.width && !params.height) return { ...params, width: defaultDim, height: defaultDim }
+  if (!params.width) return { ...params, width: defaultDim }
+  if (!params.height) return { ...params, height: defaultDim }
+  return params
+}
+
 /**
  * Text-to-image and image-to-image generation using stable-diffusion.cpp.
- * Supports SD1.x, SD2.x, SDXL, SD3, and FLUX.2 [klein].
+ * Supports SD2.x, SDXL, SD3, and FLUX.2 [klein].
  */
 class ImgStableDiffusion {
   /**
@@ -51,6 +70,7 @@ class ImgStableDiffusion {
    * @param {string} [args.files.llm] - LLM text encoder (FLUX.2 klein, absolute path)
    * @param {string} [args.files.vae] - VAE file (absolute path)
    * @param {string} [args.files.esrgan] - ESRGAN upscaler model (absolute path)
+   * @param {string} [args.files.highNoiseDiffusionModel] - Wan 2.2 high-noise expert (absolute path); omit for all other models
    * @param {object} [args.config] - SD context configuration (threads, device, type, etc.).
    *   Optional — when omitted, the addon forwards an empty config and the C++ layer falls
    *   back to stable-diffusion.cpp defaults for every parameter.
@@ -93,10 +113,9 @@ class ImgStableDiffusion {
     this.logger.info('Starting stable-diffusion model load')
 
     // Route the primary model file to the correct stable-diffusion.cpp param:
-    //   path              — all-in-one checkpoints (SD1.x, SD2.x, SDXL, SD3 all-in-one GGUF)
+    //   path              — all-in-one checkpoints (SD2.x, SDXL, SD3 all-in-one GGUF)
     //   diffusionModelPath — standalone diffusion weights requiring separate encoders
-    //                        (FLUX.2 klein → llm, SD3 pure GGUF → t5Xxl + clipL + clipG,
-    //                         FLUX.1 → t5Xxl + clipL, etc.)
+    //                        (FLUX.2 klein → llm, SD3 pure GGUF → t5Xxl + clipL + clipG)
     // Any caller-supplied separate encoder implies the primary file is the standalone
     // diffusion model, not an all-in-one checkpoint.
     const isSplitLayout = !!this._files.llm || !!this._files.t5Xxl ||
@@ -104,6 +123,7 @@ class ImgStableDiffusion {
     const configurationParams = {
       path: isSplitLayout ? '' : this._files.model,
       diffusionModelPath: isSplitLayout ? this._files.model : '',
+      highNoiseDiffusionModelPath: this._files.highNoiseDiffusionModel || '',
       clipLPath: this._files.clipL || '',
       clipGPath: this._files.clipG || '',
       t5XxlPath: this._files.t5Xxl || '',
@@ -186,7 +206,7 @@ class ImgStableDiffusion {
    *     attention with distinct RoPE positions. The target starts from pure noise,
    *     preserving features (skin tone, structure, etc.).
    *
-   *   SD1.x / SD2.x / SDXL / SD3 (all other prediction types):
+   *   SD2.x / SDXL / SD3 (all other prediction types):
    *     Uses traditional SDEdit (init_image). The input image is noised to the
    *     level set by `strength`, then denoised for the remaining steps. Lower
    *     strength = closer to the original image.
@@ -199,10 +219,10 @@ class ImgStableDiffusion {
    * @param {string} params.prompt                  - Text prompt
    * @param {string} [params.negative_prompt]       - Negative prompt
    * @param {number} [params.steps=20]              - Denoising step count
-   * @param {number} [params.width=512]             - Output width (multiple of 8)
-   * @param {number} [params.height=512]            - Output height (multiple of 8)
+   * @param {number} [params.width]                 - Output width (multiple of 8). FLUX img2img defaults to 1024 when omitted.
+   * @param {number} [params.height]                - Output height (multiple of 8). FLUX img2img defaults to 1024 when omitted.
    * @param {number} [params.guidance=3.5]          - Distilled guidance (FLUX.2)
-   * @param {number} [params.cfg_scale=7.0]         - CFG scale (SD1/SD2)
+   * @param {number} [params.cfg_scale=7.0]         - CFG scale (SD2/SDXL/SD3)
    * @param {string} [params.sampling_method]       - Sampler name
    * @param {string} [params.scheduler]             - Scheduler name
    * @param {number} [params.seed=-1]               - RNG seed; -1 = random
@@ -311,7 +331,7 @@ class ImgStableDiffusion {
         throw new Error(
           'init_images (multi-reference fusion) requires a FLUX.2 model. ' +
           "Load a FLUX.2 [klein] checkpoint with files.llm set and pass config.prediction: 'flux2_flow'. " +
-          'Other architectures (SD1.x, SD2.x, SDXL, SD3, single-image FLUX.2) do not support ' +
+          'Other architectures (SD2.x, SDXL, SD3, single-image FLUX.2) do not support ' +
           '@image1/@imageN in-context references.'
         )
       }
@@ -399,13 +419,13 @@ class ImgStableDiffusion {
       throw new Error('ESRGAN upscale requested but files.esrgan was not provided')
     }
 
-    // FLUX models require an explicit prediction type for img2img (single ref).
+    // FLUX.2 requires an explicit prediction type for img2img (single ref).
     // The C++ addon auto-detects the model family at load time, but
     // SdModel::process() only enters the FLUX ref_images path when
-    // config_.prediction is FLUX_FLOW_PRED or FLUX2_FLOW_PRED. Without
-    // an explicit value the addon silently falls back to SDEdit.
+    // config_.prediction is FLUX2_FLOW_PRED. Without an explicit value
+    // the addon silently falls back to SDEdit.
     if (params.init_image && this._files.llm) {
-      if (pred !== 'flux2_flow' && pred !== 'flux_flow') {
+      if (pred !== 'flux2_flow') {
         throw new Error(
           'FLUX img2img requires an explicit prediction type in config. ' +
           "Set prediction: 'flux2_flow' (FLUX.2). " +
@@ -426,11 +446,13 @@ class ImgStableDiffusion {
       throw new Error(RUN_BUSY_ERROR_MESSAGE)
     }
 
+    const runParams = applyFluxImg2ImgDimDefaults(params, pred, hasInitImages)
+
     const response = this._job.start()
 
     let accepted
     try {
-      accepted = await this.addon.runJob({ ...params, mode })
+      accepted = await this.addon.runJob({ ...runParams, mode })
     } catch (error) {
       this._job.fail(error)
       throw error
@@ -668,4 +690,6 @@ class EsrganUpscaler {
 
 module.exports = ImgStableDiffusion
 module.exports.ImgStableDiffusion = ImgStableDiffusion
+module.exports.VideoStableDiffusion = require('./video')
 module.exports.EsrganUpscaler = EsrganUpscaler
+module.exports.applyFluxImg2ImgDimDefaults = applyFluxImg2ImgDimDefaults

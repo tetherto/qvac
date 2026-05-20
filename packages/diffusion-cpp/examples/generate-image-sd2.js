@@ -57,6 +57,7 @@ async function main () {
     },
     config: {
       threads: 8,
+      diffusion_fa: true,
       // SD2.1 uses v-prediction. This safetensors file has no GGUF metadata so
       // auto-detection cannot determine the prediction type; set it explicitly.
       prediction: 'v'

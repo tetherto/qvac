@@ -3,15 +3,16 @@
 const fs = require('bare-fs')
 const path = require('bare-path')
 const os = require('bare-os')
-const test = require('brittle')
 const binding = require('../../binding')
 const ImgStableDiffusion = require('../../index')
 const {
   ensureModel,
   detectPlatform,
   setupJsLogger,
-  isPng
+  isPng,
+  safeTest
 } = require('./utils')
+const { readImageDimensions } = require('../../addon')
 
 const proc = require('bare-process')
 
@@ -42,54 +43,56 @@ const STEPS = 20
 const GUIDANCE = 3.5
 const SEED = 42
 
-test('FLUX2-klein img2img — transforms an input image', { timeout: 1800000, skip }, async (t) => {
+safeTest('FLUX2-klein img2img — transforms an input image', { timeout: 1800000, skip }, async (t) => {
   setupJsLogger(binding)
 
-  const [downloadedModelName, modelDir] = await ensureModel({
-    modelName: FLUX2_MODEL.name,
-    downloadUrl: FLUX2_MODEL.url
-  })
-
-  const [qwenName] = await ensureModel({
-    modelName: QWEN3_MODEL.name,
-    downloadUrl: QWEN3_MODEL.url
-  })
-
-  const [vaeName] = await ensureModel({
-    modelName: VAE_MODEL.name,
-    downloadUrl: VAE_MODEL.url
-  })
-
-  console.log('\n' + '='.repeat(60))
-  console.log('FLUX2-KLEIN IMG2IMG — INTEGRATION TEST')
-  console.log('='.repeat(60))
-  console.log(` Platform  : ${platform}`)
-  console.log(` Model     : ${downloadedModelName}`)
-  console.log(` Text Enc  : ${qwenName}`)
-  console.log(` VAE       : ${vaeName}`)
-  console.log(` Models dir: ${modelDir}`)
-
-  const modelPath = path.join(modelDir, downloadedModelName)
-  t.ok(fs.existsSync(modelPath), 'Model file exists on disk')
-
-  const model = new ImgStableDiffusion({
-    files: {
-      model: path.join(modelDir, downloadedModelName),
-      llm: path.join(modelDir, qwenName),
-      vae: path.join(modelDir, vaeName)
-    },
-    config: {
-      threads: 4,
-      device: useCpu ? 'cpu' : 'gpu',
-      prediction: 'flux2_flow'
-    },
-    logger: console
-  })
-
-  const images = []
-  const progressTicks = []
-
+  let model = null
   try {
+    const [downloadedModelName, modelDir] = await ensureModel({
+      modelName: FLUX2_MODEL.name,
+      downloadUrl: FLUX2_MODEL.url
+    })
+
+    const [qwenName] = await ensureModel({
+      modelName: QWEN3_MODEL.name,
+      downloadUrl: QWEN3_MODEL.url
+    })
+
+    const [vaeName] = await ensureModel({
+      modelName: VAE_MODEL.name,
+      downloadUrl: VAE_MODEL.url
+    })
+
+    console.log('\n' + '='.repeat(60))
+    console.log('FLUX2-KLEIN IMG2IMG — INTEGRATION TEST')
+    console.log('='.repeat(60))
+    console.log(` Platform  : ${platform}`)
+    console.log(` Model     : ${downloadedModelName}`)
+    console.log(` Text Enc  : ${qwenName}`)
+    console.log(` VAE       : ${vaeName}`)
+    console.log(` Models dir: ${modelDir}`)
+
+    const modelPath = path.join(modelDir, downloadedModelName)
+    t.ok(fs.existsSync(modelPath), 'Model file exists on disk')
+
+    model = new ImgStableDiffusion({
+      files: {
+        model: path.join(modelDir, downloadedModelName),
+        llm: path.join(modelDir, qwenName),
+        vae: path.join(modelDir, vaeName)
+      },
+      config: {
+        threads: 4,
+        device: useCpu ? 'cpu' : 'gpu',
+        prediction: 'flux2_flow',
+        diffusion_fa: true
+      },
+      logger: console
+    })
+
+    const images = []
+    const progressTicks = []
+
     // ── Load ─────────────────────────────────────────────────────────────────
     console.log('\n=== Loading model ===')
     const tLoad = Date.now()
@@ -122,7 +125,9 @@ test('FLUX2-klein img2img — transforms an input image', { timeout: 1800000, sk
       cfg_scale: 1.0,
       steps: STEPS,
       guidance: GUIDANCE,
-      seed: SEED
+      seed: SEED,
+      width: 624,
+      height: 624
     })
 
     await response
@@ -154,6 +159,10 @@ test('FLUX2-klein img2img — transforms an input image', { timeout: 1800000, sk
     t.ok(img.length > 1000, `Image has meaningful size (${img.length} bytes)`)
     t.ok(isPng(img), 'Image has valid PNG magic bytes')
 
+    const dims = readImageDimensions(img)
+    t.is(dims.width, 624, 'Output width matches requested 624')
+    t.is(dims.height, 624, 'Output height matches requested 624')
+
     // Saved to modelDir so mobile has write permission to the same path
     const outPath = path.join(modelDir, 'generate-image--flux2-i2i-seed42.png')
     fs.writeFileSync(outPath, img)
@@ -171,7 +180,7 @@ test('FLUX2-klein img2img — transforms an input image', { timeout: 1800000, sk
     console.log('='.repeat(60))
   } finally {
     console.log('\n=== Cleanup ===')
-    await model.unload().catch(() => {})
+    if (model) await model.unload().catch(() => {})
     try {
       binding.releaseLogger()
     } catch (_) {}

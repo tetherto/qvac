@@ -13,7 +13,7 @@ This is the label that gates every secret-bearing PR job in the repo.
 | | |
 |---|---|
 | **Purpose** | Authorise the `label-gate` composite action so that secret-bearing jobs (sanity-checks, prebuilds, publish, deploy, etc.) are allowed to run on a PR. |
-| **Who can apply** | Active member of `@tetherto/qvac-internal-dev`, `@tetherto/qvac-internal-merge`, or `@tetherto/qvac-internal-release`. See [TEAMS.md](TEAMS.md). |
+| **Who can apply** | Active member of `@tetherto/qvac-internal-dev`, `@tetherto/qvac-internal-merge`, `@tetherto/qvac-internal-release`, or `@tetherto/qvac-collabora`. See [TEAMS.md](TEAMS.md). |
 | **What it gates** | Every secret-bearing workflow under `.github/workflows/` (108 workflows as of QVAC-18612). Specifically, every job downstream of `needs: [..., label-gate]` whose `if:` includes `needs.label-gate.outputs.authorised == 'true'`. |
 | **Behaviour on `synchronize`** | When a non-trusted actor pushes new commits to a verified PR, `label-gate` strips the label automatically. A trusted actor must re-apply it after reviewing the new commits. This prevents authorisation from silently inheriting across content changes by an untrusted contributor. |
 | **Behaviour on apply by non-trusted actor** | The label is stripped immediately and the gate denies. This avoids a "look, it's verified" social signal that doesn't actually mean the PR is authorised. |
@@ -22,7 +22,7 @@ This is the label that gates every secret-bearing PR job in the repo.
 
 ### When CI is blocked by `label-gate`
 
-If your PR's secret-bearing jobs are skipping with a `label-gate.outputs.authorised != 'true'` condition, ask any member of the three teams above to apply `verified`. There is intentionally no self-service path — the whole point of the gate is that someone other than the PR author signs off.
+If your PR's secret-bearing jobs are skipping with a `label-gate.outputs.authorised != 'true'` condition, ask any member of the trusted teams above to apply `verified`. There is intentionally no self-service path — the whole point of the gate is that someone other than the PR author signs off.
 
 ---
 
@@ -40,7 +40,7 @@ The following labels are recognised by CI workflows but are not part of the `lab
 
 | Label | Purpose | Triggered by | Notes |
 |---|---|---|---|
-| `verify` | Runs integration tests, benchmarks, and model validation against the PR. | `public-reusable-npm.yml`, `pr-test-inference-addon-cpp*.yml` | **Not the same as `verified`.** This one only opts into extra test suites; it does not authorise secret-bearing jobs. |
+| `verified` (see `verify` deprecation note) | Canonical authorisation label — see the [`verified` section above](#verified--secret-bearing-ci-authorisation) for the full trust model. | `label-gate` composite action (108 secret-bearing workflows) | `verify` is a **deprecated** legacy alias for the same intent, still recognised by `public-reusable-npm.yml`, `pr-test-inference-addon-cpp*.yml`, and `pr-models-validation-registry-server.yml` pending migration to `verified`. Do not document `verify` as a recommended action in new tooling. |
 | `safe-to-test` | SDK pod security gate — reviewer has audited `packages/sdk/` package + workflow changes from a fork PR. | `pr-checks-sdk-pod.yml` | Org-wide secret authorisation is now handled by `verified`; `safe-to-test` remains in use for SDK pod check-running. |
 | `staging` | Deploys the PR to the staging environment for smoke testing. | Staging deploy workflows | Apply when a PR needs out-of-band testing on real infrastructure. |
 | `publish` | Triggers a GitHub Packages publish from the PR (pre-release / dev build). | Publish workflows | Use sparingly; consumes a published version slot. |
