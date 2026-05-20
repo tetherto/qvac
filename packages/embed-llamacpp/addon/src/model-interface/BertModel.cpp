@@ -10,6 +10,9 @@
 #include <llama.h>
 #include <llama/common/arg.h>
 #include <inference-addon-cpp/Errors.hpp>
+#ifdef __APPLE__
+#include <TargetConditionals.h>
+#endif
 
 #include "BackendSelection.hpp"
 #include "LlamaLazyInitializeBackend.hpp"
@@ -299,6 +302,20 @@ common_params setupParams(
   configVector.emplace_back(modelGgufPath);
 
   llama_split_mode splitMode = parseSplitMode(configFilemap);
+
+#if defined(__ANDROID__) || (defined(__APPLE__) && defined(TARGET_OS_IOS) && TARGET_OS_IOS)
+  if (splitMode != LLAMA_SPLIT_MODE_NONE ||
+      configFilemap.count("main-gpu") > 0 ||
+      configFilemap.count("main_gpu") > 0 ||
+      configFilemap.count("tensor-split") > 0) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        "Multi-GPU parameters (split-mode, main-gpu, tensor-split) are not "
+        "supported on mobile (single-GPU device).");
+  }
+#endif
 
   auto deviceIt = configFilemap.find("device");
   if (deviceIt == configFilemap.end()) {
