@@ -382,6 +382,21 @@ struct Pi05ExpertODEStepOutputs {
   struct ggml_tensor* v_t;
 };
 
+// M3.11 — one explicit-Euler ODE step.
+//
+//   x ← x + dt · v_t
+//
+// Trivial scalar update, factored out as its own helper so the
+// caller (M3.12's loop) reads as `x = pi05_build_euler_step_graph
+// (ctx, x, v_t, dt)` rather than open-coding two ggml ops inline.
+// `dt` is typically `-1/N_steps` (negative — integrating from the
+// noise side `t=1` down to the action side `t=0`).
+struct ggml_tensor* pi05_build_euler_step_graph(
+    struct ggml_context* ctx,
+    struct ggml_tensor* x_t,
+    struct ggml_tensor* v_t,
+    float dt);
+
 Pi05ExpertODEStepOutputs pi05_build_expert_ode_step_graph(
     struct ggml_context* ctx,
     struct ggml_tensor* x_exp,                                  // (expert_hidden, n_act)

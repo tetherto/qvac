@@ -668,6 +668,18 @@ Pi05ExpertODEStepOutputs pi05_build_expert_ode_step_graph(
   return out;
 }
 
+// ── M3.11: explicit-Euler ODE step ──────────────────────────────────────
+struct ggml_tensor* pi05_build_euler_step_graph(
+    struct ggml_context* ctx,
+    struct ggml_tensor* x_t,
+    struct ggml_tensor* v_t,
+    float dt) {
+  if (ctx == nullptr || x_t == nullptr || v_t == nullptr) {
+    return nullptr;
+  }
+  return ggml_add(ctx, x_t, ggml_scale(ctx, v_t, dt));
+}
+
 Pi05Model::Pi05Model(
     const std::string& /*ggufPath*/,
     bool /*forceCpu*/,
