@@ -79,7 +79,7 @@ TEST_F(SdBackendSelectionTest, ExpectedEsrganBackendCpuConfig) {
 TEST_F(SdBackendSelectionTest, ExpectedEsrganBackendGpuConfigIsCpuOrGpu) {
   const std::string expected = expectedEsrganBackendDeviceForConfig("gpu");
   EXPECT_TRUE(expected == "cpu" || expected == "gpu");
-  const auto pref = preferredGpuBackendForConfigDevice("gpu");
+  const auto pref = preferredEsrganBackendForConfigDevice("gpu");
   if (pref == SD_BACKEND_PREF_CPU) {
     EXPECT_EQ(expected, "cpu");
   } else {
@@ -91,8 +91,8 @@ TEST_F(SdBackendSelectionTest, ExpectedEsrganBackendAutoMatchesGpu) {
   EXPECT_EQ(
       expectedEsrganBackendDeviceForConfig("auto"),
       expectedEsrganBackendDeviceForConfig("gpu"));
-  const auto gpuPref = preferredGpuBackendForConfigDevice("gpu");
-  const auto autoPref = preferredGpuBackendForConfigDevice("auto");
+  const auto gpuPref = preferredEsrganBackendForConfigDevice("gpu");
+  const auto autoPref = preferredEsrganBackendForConfigDevice("auto");
   EXPECT_EQ(autoPref, gpuPref);
   if (gpuPref == SD_BACKEND_PREF_CPU) {
     EXPECT_EQ(expectedEsrganBackendDeviceForConfig("auto"), "cpu");
@@ -100,6 +100,16 @@ TEST_F(SdBackendSelectionTest, ExpectedEsrganBackendAutoMatchesGpu) {
     EXPECT_EQ(expectedEsrganBackendDeviceForConfig("auto"), "gpu");
   }
 }
+
+#if defined(__ANDROID__)
+TEST_F(SdBackendSelectionTest, AndroidEsrganGpuConfigForcesCpu) {
+  EXPECT_EQ(expectedEsrganBackendDeviceForConfig("gpu"), "cpu");
+  EXPECT_EQ(expectedEsrganBackendDeviceForConfig("auto"), "cpu");
+  EXPECT_EQ(preferredEsrganBackendForConfigDevice("gpu"), SD_BACKEND_PREF_CPU);
+  EXPECT_EQ(preferredEsrganBackendForConfigDevice("auto"), SD_BACKEND_PREF_CPU);
+  EXPECT_EQ(preferredEsrganBackendForConfigDevice("cpu"), SD_BACKEND_PREF_CPU);
+}
+#endif
 
 TEST_F(SdBackendSelectionTest, ParseConfigDeviceEmptyIsAuto) {
   EXPECT_EQ(parseConfigDeviceString(""), ConfigDevice::Auto);

@@ -239,15 +239,40 @@ preferredGpuBackendForConfigDevice(const std::string& device) {
   }
 }
 
+sd_backend_preference_t
+preferredEsrganBackendForConfigDevice(const std::string& device) {
+#if defined(__ANDROID__)
+  switch (parseConfigDeviceString(device)) {
+  case ConfigDevice::Cpu:
+  case ConfigDevice::Auto:
+  case ConfigDevice::Gpu: {
+    using Priority = qvac_lib_inference_addon_cpp::logger::Priority;
+    QLOG_IF(
+        Priority::INFO,
+        "Backend selection: Android ESRGAN gpu/auto -> CPU (unstable GPU/OpenCL "
+        "path)");
+    return SD_BACKEND_PREF_CPU;
+  }
+  }
+#else
+  return preferredGpuBackendForConfigDevice(device);
+#endif
+}
+
 std::string expectedEsrganBackendDeviceForConfig(const std::string& device) {
   switch (parseConfigDeviceString(device)) {
   case ConfigDevice::Cpu:
     return "cpu";
   case ConfigDevice::Auto:
-  case ConfigDevice::Gpu: {
+  case ConfigDevice::Gpu:
+#if defined(__ANDROID__)
+    return "cpu";
+#else
+  {
     const BackendDevice effective = resolveBackendForDevice(BackendDevice::GPU);
     return effective == BackendDevice::CPU ? "cpu" : "gpu";
   }
+#endif
   }
 }
 
