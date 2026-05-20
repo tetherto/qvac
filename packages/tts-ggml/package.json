@@ -84,11 +84,8 @@
   "devDependencies": {
     "@qvac/langdetect-text": "^0.1.2",
     "@qvac/transcription-whispercpp": "^0.5.5",
-    "bare-buffer": "^3.4.2",
-    "bare-node-stream": "^1.0.0",
     "bare-process": "^4.2.2",
     "bare-subprocess": "^5.2.1",
-    "bare-tty": "^5.0.3",
     "brittle": "^3.17.0",
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
