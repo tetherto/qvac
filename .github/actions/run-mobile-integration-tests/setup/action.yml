@@ -95,7 +95,7 @@ runs:
         npm install -g --force @expo/cli@latest
 
     - name: Download Android prebuilds (from artifacts)
-      if: inputs.skip-prebuilds != 'true' && inputs.platform == 'Android' && github.event_name != 'workflow_dispatch'
+      if: inputs.skip-prebuilds != 'true' && inputs.platform == 'Android'
       uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
       with:
         path: addon/${{ inputs.addon-workdir }}/prebuilds
@@ -104,7 +104,7 @@ runs:
       continue-on-error: true
 
     - name: Download iOS prebuilds (from artifacts)
-      if: inputs.skip-prebuilds != 'true' && inputs.platform == 'iOS' && github.event_name != 'workflow_dispatch'
+      if: inputs.skip-prebuilds != 'true' && inputs.platform == 'iOS'
       uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
       with:
         path: addon/${{ inputs.addon-workdir }}/prebuilds
@@ -112,16 +112,21 @@ runs:
         merge-multiple: true
       continue-on-error: true
 
-    - name: Download prebuilds (from npm - workflow_dispatch)
-      if: inputs.skip-prebuilds != 'true' && github.event_name == 'workflow_dispatch'
+    - name: Download prebuilds (from npm — fallback when no artifacts found)
+      if: inputs.skip-prebuilds != 'true'
       shell: bash
       working-directory: addon/${{ inputs.addon-workdir }}
       env:
         ADDON_NPM_NAME: ${{ inputs.addon-npm-name }}
         PACKAGE_VERSION: ${{ inputs.package-version }}
       run: |
+        if [ -d "prebuilds" ] && [ -n "$(ls -A prebuilds 2>/dev/null)" ]; then
+          echo "Prebuilds already present from artifacts — skipping npm fallback"
+          ls -la prebuilds/
+          exit 0
+        fi
         VERSION="${PACKAGE_VERSION:-latest}"
-        echo "Downloading $ADDON_NPM_NAME@$VERSION from npm for manual trigger..."
+        echo "No prebuilds from artifacts — downloading $ADDON_NPM_NAME@$VERSION from npm..."
         if ! npm pack "$ADDON_NPM_NAME@$VERSION"; then
           echo "ERROR: Failed to download version $VERSION from npm"
           echo "Please check that the version exists at https://www.npmjs.com/package/$ADDON_NPM_NAME"
