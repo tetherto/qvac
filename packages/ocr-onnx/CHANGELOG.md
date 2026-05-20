@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-05-19
+
+### Removed
+
+- `@qvac/response` from `dependencies`. The addon already imports `QvacResponse` and `createJobHandler` from `@qvac/infer-base` since 0.4.0 (#1387), so the direct `@qvac/response` dependency was an unused leftover (QVAC-18453).
+
 ## [0.5.0] - 2026-05-11
 
 ### Fixed
