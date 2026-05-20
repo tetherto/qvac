@@ -5,10 +5,16 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 #include <filesystem>
+#include <fstream>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
+
+#include <unistd.h>
 
 #include <tts-cpp/chatterbox/engine.h>
 
@@ -151,16 +157,83 @@ void ChatterboxModel::reload() {
   loadLocked();
 }
 
+// DEBUG: capture stderr during Engine construction so tts-cpp's
+// fprintf-only failure modes (voice_encoder_embed: gallocr_reserve failed,
+// size mismatch, mel extraction failed, backend weight alloc failed, ...)
+// are surfaced through the SDK's error path on iOS, where Bare's stderr
+// goes to /dev/null.  Remove once chatterbox load reliability is sorted on
+// device.
+namespace {
+struct StderrCapture {
+  int    saved_fd = -1;
+  std::string tmp_path;
+
+  StderrCapture() {
+    const char* tmpdir = std::getenv("TMPDIR");
+    if (!tmpdir || !*tmpdir) tmpdir = "/tmp";
+    tmp_path = std::string(tmpdir) + "/qvac_chatterbox_stderr_XXXXXX";
+    std::vector<char> buf(tmp_path.begin(), tmp_path.end());
+    buf.push_back('\0');
+    int fd = ::mkstemp(buf.data());
+    if (fd < 0) return;
+    tmp_path.assign(buf.data());
+    std::fflush(stderr);
+    saved_fd = ::dup(::fileno(stderr));
+    if (saved_fd < 0 || ::dup2(fd, ::fileno(stderr)) < 0) {
+      if (saved_fd >= 0) ::close(saved_fd);
+      saved_fd = -1;
+      ::close(fd);
+      ::unlink(tmp_path.c_str());
+      tmp_path.clear();
+      return;
+    }
+    ::close(fd);
+  }
+
+  std::string restore_and_read() {
+    if (saved_fd < 0) return {};
+    std::fflush(stderr);
+    ::dup2(saved_fd, ::fileno(stderr));
+    ::close(saved_fd);
+    saved_fd = -1;
+    std::ifstream in(tmp_path);
+    std::stringstream ss;
+    ss << in.rdbuf();
+    in.close();
+    ::unlink(tmp_path.c_str());
+    tmp_path.clear();
+    return ss.str();
+  }
+
+  ~StderrCapture() {
+    if (saved_fd >= 0) {
+      ::dup2(saved_fd, ::fileno(stderr));
+      ::close(saved_fd);
+    }
+    if (!tmp_path.empty()) ::unlink(tmp_path.c_str());
+  }
+};
+}  // namespace
+
 void ChatterboxModel::loadLocked() {
   if (engine_) return;
+
+  StderrCapture capture;
   try {
     engine_ = std::make_shared<tts_cpp::chatterbox::Engine>(toEngineOptions(cfg_));
   } catch (const std::exception& e) {
     engine_.reset();
-    throw createTTSError(
-        TTSErrorCode::InitializationFailed,
-        std::string("ChatterboxModel::load: ") + e.what());
+    std::string captured = capture.restore_and_read();
+    std::string msg = std::string("ChatterboxModel::load: ") + e.what();
+    if (!captured.empty()) {
+      msg += " | engine stderr: ";
+      msg += captured;
+    }
+    throw createTTSError(TTSErrorCode::InitializationFailed, msg);
   }
+  // Discard captured stderr on the happy path — tts-cpp prints various
+  // benign progress messages here during a successful load.
+  (void) capture.restore_and_read();
 
   backendName_   = engine_->backend_name();
   backendDevice_ = backendDeviceCode(engine_->backend_device());
