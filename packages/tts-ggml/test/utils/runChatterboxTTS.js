@@ -50,14 +50,12 @@ async function loadChatterboxTTS (params = {}) {
     config.useGPU = params.useGPU
   } else if (proc.env && proc.env.NO_GPU === 'true') {
     // Honour the workflow matrix's `no_gpu: 'true'` flag (which sets the
-    // NO_GPU env var on the job).  Without this the addon's
-    // index.js::_validateConfig defaults Chatterbox to `useGPU = true`,
-    // which on runners without a Vulkan-capable driver (e.g. windows-2022,
-    // ubuntu-22.04 without a discrete GPU) crashes during the addon's
-    // ggml_backend_vk_init probe with `vk::createInstance:
-    // ErrorIncompatibleDriver`.  Forcing CPU here keeps the no-GPU
-    // matrix entries on the CPU code path that load_model_gguf actually
-    // exercises with n_gpu_layers=0.
+    // NO_GPU env var on the job).  Defensive override -- as of tts-ggml
+    // 0.1.2 the addon's `index.js::_validateConfig` defaults Chatterbox
+    // to `useGPU = false`, so an unset value already lands on CPU, but
+    // pinning it here makes the no-GPU matrix entries' contract
+    // explicit at the test layer and survives any future flip back to
+    // an opt-out GPU default.
     config.useGPU = false
   }
 
@@ -217,5 +215,17 @@ module.exports = {
   loadChatterboxTTS,
   runChatterboxTTS,
   runChatterboxTTSWithSplit,
-  runChatterboxStreaming
+  runChatterboxStreaming,
+  // Exported so callers that build their own `new TTSGgml({...})` outside
+  // `loadChatterboxTTS` (e.g. tests 3-5 in addon.test.js that exercise
+  // outputSampleRate / streamChunkTokens / runStreaming options not
+  // covered by the helper) can still resolve the reference audio via
+  // the same mobile-aware fallback. On Bare/iOS the test app stages
+  // `jfk.wav` into `Library/Caches/` (via `global.assetPaths`); the
+  // bare `__dirname / ../reference-audio/jfk.wav` path inside the app
+  // bundle is not readable by the native `std::filesystem::exists`
+  // check in ChatterboxModel::validateConfig, so direct callers must
+  // route through this helper or they'll trip `ModelFileNotFound`
+  // immediately after `model.load()`.
+  resolveRefWavPath
 }

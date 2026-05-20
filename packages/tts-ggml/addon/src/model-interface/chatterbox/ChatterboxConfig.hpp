@@ -55,6 +55,35 @@ struct ChatterboxConfig {
   std::optional<int> streamFirstChunkTokens;
   /** CFM Euler steps for streaming chunks.  0 = library default (2). */
   std::optional<int> streamCfmSteps;
+
+  /**
+   * Forwarded to `tts_cpp::chatterbox::EngineOptions::backends_dir` /
+   * `opencl_cache_dir`. On Android (and any other `GGML_BACKEND_DL=ON`
+   * build) the addon ships the per-backend `.so` files under
+   * `<package_dir>/prebuilds/<bare-target>/qvac__tts-ggml/`; the JS
+   * layer (`index.js`) resolves `backendsDir` to that prebuild folder
+   * at construction time. The C++ side joins
+   * `backendsDir / BACKENDS_SUBDIR` before forwarding so a host that
+   * already passes `path.join(__dirname, 'prebuilds')` (the qvac
+   * llm-llamacpp / transcription-parakeet convention) gets identical
+   * resolution semantics here.
+   *
+   * On Apple / Windows static-only builds these are no-ops:
+   * `GGML_BACKEND_DL=OFF` makes every backend statically linked into
+   * libtts-cpp.a, so the registry walk never touches the filesystem.
+   *
+   * `openclCacheDir` sets `$GGML_OPENCL_CACHE_DIR` for ggml-opencl's
+   * program-binary cache (Android-only; the program-binary cache
+   * patch only ships in the qvac-ext-ggml/speech Android build).
+   * Pass the host platform's app cache directory to skip the cold
+   * `clBuildProgram` cost on every process restart.
+   *
+   * Empty string -> leave the parakeet-style default in place (the
+   * library falls back to ggml's compile-time search path, and
+   * `$GGML_OPENCL_CACHE_DIR` is left alone).
+   */
+  std::string backendsDir;
+  std::string openclCacheDir;
 };
 
 } // namespace qvac::ttsggml::chatterbox

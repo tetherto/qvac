@@ -16,6 +16,7 @@ const test = require('brittle')
 
 const TTSGgml = require('@qvac/tts-ggml')
 const { runTTS } = require('../utils/runTTS')
+const { resolveRefWavPath } = require('../utils/runChatterboxTTS')
 const { ensureChatterboxMtlModels } = require('../utils/downloadModel')
 
 const platform = os.platform()
@@ -36,7 +37,13 @@ const MTL_SENTENCES = [
 ]
 
 async function loadChatterboxMtlTTS (params) {
-  const refWavPath = params.refWavPath || path.join(__dirname, '..', 'reference-audio', 'jfk.wav')
+  // Route through `resolveRefWavPath` so the mobile-asset path (staged
+  // into `Library/Caches/jfk.wav` via `global.assetPaths`) is preferred
+  // over the in-bundle `test/reference-audio/jfk.wav`; the bundled
+  // path is not readable from native code on iOS, which previously
+  // tripped `ChatterboxModel::validateConfig` with `ModelFileNotFound`
+  // the moment `model.load()` reached the C++ constructor.
+  const refWavPath = resolveRefWavPath(params)
   if (!fs.existsSync(refWavPath)) {
     throw new Error('[Chatterbox MTL] reference audio not found at ' + refWavPath)
   }

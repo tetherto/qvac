@@ -23,7 +23,8 @@ is enabled by default; falls back to CPU if no GPU backend is available.
   S3Gen+HiFT output; sub-second first-audio-out inside a single
   utterance.
 - **Voice cloning** from a reference wav (or a pre-baked profile dir).
-- **GPU-by-default**, CPU selectable via `config.useGPU: false`.
+- **CPU by default**, GPU (Metal / Vulkan / CUDA / OpenCL) opt-in via
+  `config.useGPU: true` on GPU-capable hosts.
 - **Cancellation** via `model.cancel()` — stops T3 decode on the next
   token; in-flight S3Gen chunk runs to completion.
 
@@ -208,7 +209,7 @@ from `referenceAudio`.
 | `streamFirstChunkTokens`  | number     | = streamChunkTokens | Smaller first chunk for low first-audio-out |
 | `cfmSteps`                | number     | 2          | 1 = faster (halved CFM cost) |
 | `config.language`         | string     | `"en"`     | Only English today |
-| `config.useGPU`           | boolean    | `true`     | Route through Metal / Vulkan / CUDA if available |
+| `config.useGPU`           | boolean    | `false`    | Set to `true` to route through Metal / Vulkan / CUDA / OpenCL if available |
 | `config.outputSampleRate` | number     | 24000      | Resample native 24 kHz output |
 | `opts.stats`              | boolean    | `false`    | Populate `response.stats` with RTF etc. |
 | `opts.exclusiveRun`       | boolean    | `false`    | Serialize overlapping streaming runs |
@@ -339,9 +340,9 @@ the reference wav is likely < 5 s of clean speech.  Make it longer
 assertion** — you're running on a build *before* the `s3gen_unload()`
 teardown fix; bump the `tts-cpp` port to `>= 2026-04-21` port-version.
 
-**Slower-than-expected RTF on darwin** — double-check that the port
-was built with the `metal` feature (default) and that you're not
-overriding `useGPU: false`.  Also confirm your reference wav's mel
+**Slower-than-expected RTF on darwin** — set `config: { useGPU: true }`
+(the default is now CPU; see "Configuration knobs" above) and confirm
+the port was built with the `metal` feature.  Also confirm your reference wav's mel
 was baked (`Using C++ VoiceEncoder` / `C++ S3TokenizerV2` messages in
 the log) — if voice conditioning falls back to CPU, a chunk of the
 first-call overhead is visible in RTF.

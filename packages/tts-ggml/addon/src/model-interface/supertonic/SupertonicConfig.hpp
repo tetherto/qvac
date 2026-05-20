@@ -31,6 +31,20 @@ struct SupertonicConfig {
    */
   std::optional<bool> useGpu;
   std::string noiseNpyPath;
+
+  /**
+   * Forwarded to `tts_cpp::supertonic::EngineOptions::backends_dir` /
+   * `opencl_cache_dir`. Same semantics + JS-side resolution as
+   * ChatterboxConfig::backendsDir / openclCacheDir; see that header
+   * for the long-form docs. Today the Supertonic engine is CPU-only
+   * (see `tts-cpp include/tts-cpp/supertonic/engine.h`: "CPU only
+   * today"), so `backendsDir` mostly serves to point the registry
+   * walk at the prebuilt CPU backend `.so` files on Android/Linux
+   * dynamic-load builds; the GPU paths are skipped at the engine
+   * level until the Vulkan vector-estimator + vocoder paths land.
+   */
+  std::string backendsDir;
+  std::string openclCacheDir;
 };
 
 }

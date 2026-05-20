@@ -208,6 +208,8 @@ class TTSGgml {
       numInferenceSteps,
       speed,
       noiseNpyPath,
+      backendsDir,
+      openclCacheDir,
       opts,
       exclusiveRun
     } = options
@@ -292,6 +294,32 @@ class TTSGgml {
     this._speed = speed
     this._noiseNpyPath = noiseNpyPath
 
+    // Per-platform fallback for `backendsDir` when the host didn't
+    // pass one. Mirrors the qvac/packages/llm-llamacpp +
+    // transcription-parakeet resolution shape
+    // (`path.join(__dirname, 'prebuilds')`) so a host that already
+    // threads `prebuilds/` through one of those addons doesn't need
+    // to special-case tts-ggml. The native addon expects the
+    // directory that *contains* the per-arch / per-module subdir;
+    // cmake-bare installs the backend `.so` files under
+    // `prebuilds/<bare-target>/qvac__tts-ggml/`, but the addon-side
+    // `BACKENDS_SUBDIR` compile define joins the
+    // `<bare-target>/qvac__tts-ggml` shape on its own. Keep this in
+    // sync with the `BACKENDS_SUBDIR_VALUE` derivation in
+    // CMakeLists.txt. Allow `config.backendsDir` /
+    // `config.openclCacheDir` as a secondary location so callers
+    // who already pack runtime knobs under `config: { useGPU, ... }`
+    // can keep them grouped there.
+    this._backendsDir = firstNonEmpty(
+      backendsDir,
+      this._config?.backendsDir,
+      path.join(__dirname, 'prebuilds')
+    )
+    this._openclCacheDir = firstNonEmpty(
+      openclCacheDir,
+      this._config?.openclCacheDir
+    )
+
     // Run the conflict check before any engine-specific GPU policy so a
     // caller passing { useGPU:false, nGpuLayers:99 } gets the precise
     // conflict message instead of, e.g., the Supertonic "GPU not
@@ -335,14 +363,15 @@ class TTSGgml {
           'because the Vulkan path of the supertonic vector-estimator + vocoder is ' +
           'not yet validated.  Pass config: { useGPU: false } (and leave nGpuLayers ' +
           'unset, or set it to 0) when constructing a Supertonic model. ' +
-          'Chatterbox engine remains GPU-enabled by default.'
+          'Chatterbox also defaults to CPU now; opt in with ' +
+          'config: { useGPU: true } on GPU-capable hosts.'
         )
       }
       if (this._config.useGPU === undefined) {
         this._config.useGPU = false
       }
     } else if (this._config.useGPU === undefined && this._nGpuLayers == null) {
-      this._config.useGPU = true
+      this._config.useGPU = false
     }
   }
 
@@ -739,6 +768,8 @@ class TTSGgml {
     if (this._config?.useGPU != null) {
       params.useGPU = !!this._config.useGPU
     }
+    if (this._backendsDir) params.backendsDir = this._backendsDir
+    if (this._openclCacheDir) params.openclCacheDir = this._openclCacheDir
     return params
   }
 
@@ -761,6 +792,8 @@ class TTSGgml {
       params.useGPU = !!this._config.useGPU
     }
     if (this._noiseNpyPath) params.noiseNpyPath = this._noiseNpyPath
+    if (this._backendsDir) params.backendsDir = this._backendsDir
+    if (this._openclCacheDir) params.openclCacheDir = this._openclCacheDir
     return params
   }
 

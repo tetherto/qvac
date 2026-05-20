@@ -23,7 +23,7 @@ const path = require('bare-path')
 const proc = require('bare-process')
 const test = require('brittle')
 
-const { loadChatterboxTTS, runChatterboxTTS } = require('../utils/runChatterboxTTS')
+const { loadChatterboxTTS, runChatterboxTTS, resolveRefWavPath } = require('../utils/runChatterboxTTS')
 const { loadSupertonicTTS, runSupertonicTTS } = require('../utils/runSupertonicTTS')
 const {
   ensureChatterboxModels,
@@ -49,7 +49,13 @@ test('Chatterbox: multiple sequential runs reuse the same engine instance', { ti
   const download = await ensureChatterboxModels({ targetDir: path.join(baseDir, 'models') })
   if (!download.success) { t.pass('Skipped: Chatterbox GGUFs not available'); return }
 
-  const refWavPath = path.join(__dirname, '..', 'reference-audio', 'jfk.wav')
+  // Mobile-aware resolution: on iOS / Android the asset is staged into
+  // `Library/Caches/jfk.wav` via `global.assetPaths`; on desktop falls
+  // back to the in-tree `test/reference-audio/jfk.wav`. The bundled
+  // path is not readable from native code on iOS, which would trip
+  // `ModelFileNotFound` the moment `model.load()` reaches the C++
+  // `ChatterboxModel::validateConfig` check.
+  const refWavPath = resolveRefWavPath({})
   if (!fs.existsSync(refWavPath)) { t.pass('Skipped: reference audio missing'); return }
 
   const model = await loadChatterboxTTS({
@@ -132,7 +138,13 @@ test('Chatterbox: fresh instance per run (app-restart simulation)', { timeout: 1
   const download = await ensureChatterboxModels({ targetDir: path.join(baseDir, 'models') })
   if (!download.success) { t.pass('Skipped: Chatterbox GGUFs not available'); return }
 
-  const refWavPath = path.join(__dirname, '..', 'reference-audio', 'jfk.wav')
+  // Mobile-aware resolution: on iOS / Android the asset is staged into
+  // `Library/Caches/jfk.wav` via `global.assetPaths`; on desktop falls
+  // back to the in-tree `test/reference-audio/jfk.wav`. The bundled
+  // path is not readable from native code on iOS, which would trip
+  // `ModelFileNotFound` the moment `model.load()` reaches the C++
+  // `ChatterboxModel::validateConfig` check.
+  const refWavPath = resolveRefWavPath({})
   if (!fs.existsSync(refWavPath)) { t.pass('Skipped: reference audio missing'); return }
 
   const N = 2
@@ -197,7 +209,13 @@ test('Chatterbox: reload() between runs preserves stability', { timeout: 1800000
   const download = await ensureChatterboxModels({ targetDir: path.join(baseDir, 'models') })
   if (!download.success) { t.pass('Skipped: Chatterbox GGUFs not available'); return }
 
-  const refWavPath = path.join(__dirname, '..', 'reference-audio', 'jfk.wav')
+  // Mobile-aware resolution: on iOS / Android the asset is staged into
+  // `Library/Caches/jfk.wav` via `global.assetPaths`; on desktop falls
+  // back to the in-tree `test/reference-audio/jfk.wav`. The bundled
+  // path is not readable from native code on iOS, which would trip
+  // `ModelFileNotFound` the moment `model.load()` reaches the C++
+  // `ChatterboxModel::validateConfig` check.
+  const refWavPath = resolveRefWavPath({})
   if (!fs.existsSync(refWavPath)) { t.pass('Skipped: reference audio missing'); return }
 
   const model = await loadChatterboxTTS({
@@ -253,7 +271,13 @@ test('Engine swap: chatterbox -> supertonic -> chatterbox in separate instances'
   const st = await ensureSupertonicModel({ targetDir: path.join(baseDir, 'models') })
   if (!cb.success || !st.success) { t.pass('Skipped: not all engines have models locally'); return }
 
-  const refWavPath = path.join(__dirname, '..', 'reference-audio', 'jfk.wav')
+  // Mobile-aware resolution: on iOS / Android the asset is staged into
+  // `Library/Caches/jfk.wav` via `global.assetPaths`; on desktop falls
+  // back to the in-tree `test/reference-audio/jfk.wav`. The bundled
+  // path is not readable from native code on iOS, which would trip
+  // `ModelFileNotFound` the moment `model.load()` reaches the C++
+  // `ChatterboxModel::validateConfig` check.
+  const refWavPath = resolveRefWavPath({})
   if (!fs.existsSync(refWavPath)) { t.pass('Skipped: reference audio missing'); return }
 
   const c1 = await loadChatterboxTTS({ modelDir: cb.targetDir, refWavPath, language: 'en', useGPU: !NO_GPU })

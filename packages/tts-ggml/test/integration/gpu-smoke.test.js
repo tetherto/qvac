@@ -28,7 +28,7 @@ const path = require('bare-path')
 const proc = require('bare-process')
 const test = require('brittle')
 
-const { loadChatterboxTTS, runChatterboxTTS } = require('../utils/runChatterboxTTS')
+const { loadChatterboxTTS, runChatterboxTTS, resolveRefWavPath } = require('../utils/runChatterboxTTS')
 const { loadSupertonicTTS, runSupertonicTTS } = require('../utils/runSupertonicTTS')
 const { ensureChatterboxModels, ensureSupertonicModel } = require('../utils/downloadModel')
 
@@ -132,7 +132,8 @@ test('Chatterbox GPU smoke - useGPU=true must engage the GPU backend on GPU-capa
     return
   }
 
-  const refWavPath = path.join(__dirname, '..', 'reference-audio', 'jfk.wav')
+  // Mobile-aware resolution: see multiple-runs.test.js for rationale.
+  const refWavPath = resolveRefWavPath({})
   if (!fs.existsSync(refWavPath)) {
     t.pass('Skipped: reference audio missing')
     return
@@ -198,7 +199,8 @@ test('Chatterbox CPU smoke - useGPU=false must run on the CPU backend', { timeou
     return
   }
 
-  const refWavPath = path.join(__dirname, '..', 'reference-audio', 'jfk.wav')
+  // Mobile-aware resolution: see multiple-runs.test.js for rationale.
+  const refWavPath = resolveRefWavPath({})
   if (!fs.existsSync(refWavPath)) {
     t.pass('Skipped: reference audio missing')
     return

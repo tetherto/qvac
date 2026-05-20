@@ -123,6 +123,18 @@ chatterbox::ChatterboxConfig JSAdapter::buildChatterboxConfig(
   // conflicts, and toEngineOptions translates explicit-false into
   // n_gpu_layers=0 so CPU is actually forced.
   cfg.useGpu                  = readOptionalBool(configurationParams, env, "useGPU");
+
+  // Dynamic-backend loading knobs. Both forwarded to
+  // tts_cpp::chatterbox::EngineOptions and consumed once per-process
+  // on the first Engine construction (the ggml-backend registry +
+  // ggml-opencl program-binary cache are both process singletons --
+  // see tts_cpp::detail::set_backends_directory /
+  // set_opencl_cache_dir for the detailed lifetime contract). Empty
+  // -> leave the existing setting alone. Mirrors the parakeet-cpp
+  // addon's JSAdapter shape so a host that already threads these
+  // through that addon doesn't need to special-case tts-ggml.
+  cfg.backendsDir    = readOptionalString(configurationParams, env, "backendsDir");
+  cfg.openclCacheDir = readOptionalString(configurationParams, env, "openclCacheDir");
   return cfg;
 }
 
@@ -143,6 +155,13 @@ supertonic::SupertonicConfig JSAdapter::buildSupertonicConfig(
   cfg.outputSampleRate  = readOptionalInt(configurationParams, env, "outputSampleRate");
   cfg.useGpu            = readOptionalBool(configurationParams, env, "useGPU");
   cfg.noiseNpyPath      = readOptionalString(configurationParams, env, "noiseNpyPath");
+  // Mirrors the chatterbox JS->C++ wiring above. Today supertonic is
+  // CPU-only at the engine level, so `backendsDir` only matters for
+  // dynamic-load builds that need to discover the CPU backend `.so`
+  // via `ggml_backend_load_all_from_path()`; `openclCacheDir` is a
+  // no-op until the supertonic GPU paths land.
+  cfg.backendsDir       = readOptionalString(configurationParams, env, "backendsDir");
+  cfg.openclCacheDir    = readOptionalString(configurationParams, env, "openclCacheDir");
   return cfg;
 }
 
