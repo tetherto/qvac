@@ -4,12 +4,10 @@ import { createRequire } from "node:module";
 import { DEFAULT_HOSTS, DEFAULT_SDK_NAME } from "@/commands/bundle/constants";
 import {
   CONFIG_CANDIDATES,
-  findBundleConfigFile,
-  loadBundleConfig,
-} from "@/commands/config";
+  resolveConfigForProject,
+} from "@/client/config-loader/resolve-config.node";
 import { getClientLogger } from "@/logging";
 import type { Logger } from "@/logging/types";
-import type { QvacConfig } from "@/schemas/sdk-config";
 import { BareImportsMapNotFoundError } from "@/utils/errors-client";
 import {
   resolvePluginSpecifiers,
@@ -106,12 +104,13 @@ export async function bundleSdk(
 
   logger.info("🔧 QVAC SDK Worker Bundler\n");
 
-  const configPath = findBundleConfigFile(projectRoot, options.configPath);
+  const { configPath, config } = await resolveConfigForProject(
+    projectRoot,
+    options.configPath,
+  );
 
-  let config: QvacConfig = {};
   if (configPath) {
     logger.info(`📄 Config: ${path.relative(projectRoot, configPath)}`);
-    config = await loadBundleConfig(configPath);
   } else {
     logger.info("📄 Config: (none)");
     logger.warn("No config file found — continuing with defaults.");

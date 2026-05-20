@@ -1,9 +1,9 @@
 import { promises as fsp } from 'node:fs'
 import path from 'node:path'
 import {
-  findBundleConfigFile,
-  loadBundleConfig,
-} from "@/commands/config";
+  resolveConfigFileInProject,
+  loadConfigFromPath,
+} from "@/client/config-loader/resolve-config.node";
 import {
   createCollectDiagnostics,
   formatAddonId,
@@ -142,9 +142,12 @@ export async function verifyBundle (
   let resolvedConfigPath: string | null = null
   let configLoadFailed: ConfigLoadFailedIssue | null = null
   try {
-    resolvedConfigPath = findBundleConfigFile(projectRoot, configPath ?? undefined)
+    resolvedConfigPath = await resolveConfigFileInProject(
+      projectRoot,
+      configPath ?? undefined,
+    )
     if (resolvedConfigPath !== null) {
-      const config = await loadBundleConfig(resolvedConfigPath)
+      const config = await loadConfigFromPath(resolvedConfigPath)
       if (typeof config.bareRuntimeVersion === "string") {
         configRuntimeVersion = config.bareRuntimeVersion;
       }
