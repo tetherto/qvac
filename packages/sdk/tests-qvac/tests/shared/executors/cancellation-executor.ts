@@ -10,6 +10,7 @@ import {
   ragIngest,
   RequestRejectedByPolicyError,
   SDK_SERVER_ERROR_CODES,
+  transcribe,
   translate,
 } from "@qvac/sdk";
 import {
@@ -28,7 +29,7 @@ import {
   policyRejectConcurrentCompletion,
 } from "../../cancellation-tests.js";
 
-type CancelForm = "broad" | "requestId";
+export type CancelForm = "broad" | "requestId";
 type StopReason = "stop" | "length" | "cancelled" | "error";
 
 interface MidStreamParams {
@@ -73,6 +74,11 @@ interface RagIngestParams {
   chunkSize: number;
   chunkOverlap: number;
   registryBeginGraceMs: number;
+}
+
+export interface TranscribeCancelParams {
+  audioFileName: string;
+  cancelAfterMs: number;
 }
 
 const INFERENCE_CANCELLED_CODE = SDK_SERVER_ERROR_CODES.INFERENCE_CANCELLED;
@@ -791,6 +797,56 @@ export class CancellationExecutor extends AbstractModelExecutor<
       await ragDeleteWorkspace({ workspace });
     } catch {
       // workspace may not exist yet or be mid-flight; either case is harmless
+    }
+  }
+
+  // Shared transcribe-cancel flow. Subclasses resolve `audioPath` per
+  // platform (FS path on desktop, bundled-asset URI on mobile) and delegate
+  // here for the actual cancel + assertion logic.
+  protected async transcribeWithCancel(
+    audioPath: string,
+    cancelForm: CancelForm,
+    cancelAfterMs: number,
+  ): Promise<TestResult> {
+    const modelId = await this.resources.ensureLoaded("whisper");
+    const op = markHandled(transcribe({ modelId, audioChunk: audioPath }));
+    const startMs = Date.now();
+    await sleep(cancelAfterMs);
+
+    try {
+      if (cancelForm === "broad") {
+        await cancel({ modelId, kind: "transcribe" });
+      } else {
+        await cancel({ requestId: op.requestId });
+      }
+    } catch (err) {
+      return {
+        passed: false,
+        output: `cancel(${cancelForm}) for transcribe rejected: ${describeError(err)}`,
+      };
+    }
+
+    try {
+      const text = await op;
+      const elapsedMs = Date.now() - startMs;
+      return {
+        passed: false,
+        output:
+          `transcribe resolved with ${text.length} chars after cancel(${cancelForm}) ` +
+          `(elapsed=${elapsedMs}ms). Pick a longer audio source for reliable coverage.`,
+      };
+    } catch (err) {
+      const elapsedMs = Date.now() - startMs;
+      if (err instanceof Error && isCancellationError(err)) {
+        return {
+          passed: true,
+          output: `transcribe cancel(${cancelForm}) OK: ${describeError(err)} (elapsed=${elapsedMs}ms)`,
+        };
+      }
+      return {
+        passed: false,
+        output: `transcribe rejected with non-cancellation error on cancel(${cancelForm}): ${describeError(err)}`,
+      };
     }
   }
 }

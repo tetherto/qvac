@@ -70,7 +70,7 @@ import { DelegatedInferenceExecutor } from "../shared/executors/delegated-infere
 import { MobileDiffusionExecutor } from "./executors/diffusion-executor.js";
 import { LifecycleExecutor } from "../shared/executors/lifecycle-executor.js";
 import { ConfigExecutor } from "../shared/executors/config-executor.js";
-import { CancellationExecutor } from "../shared/executors/cancellation-executor.js";
+import { MobileCancellationExecutor } from "./executors/cancellation-executor.js";
 
 const resources = new ResourceManager({
   // Mobile (iOS + Android) needs a tick after each unloadModel for the
@@ -362,10 +362,6 @@ export const executor = createExecutor({
       /^translation-bergamot-.+-cache-reload$/,
       "Server-side Bare code path, identical across platforms — desktop coverage is source of truth",
     ),
-    new SkipExecutor(
-      /^cancel-(broad|by-requestid)-transcribe$/,
-      "Server-side Bare cancel path is identical across platforms — desktop is source of truth.",
-    ),
     // suspend() hangs the test runner on mobile (the lifecycle coordinator
     // pauses MQTT/network ops and never resumes within the test timeout).
     // Only resume-idempotent is safe -- it does not call suspend().
@@ -423,7 +419,7 @@ export const executor = createExecutor({
     new MobileDiffusionExecutor(resources),
     new LifecycleExecutor(resources),
     new ConfigExecutor(),
-    new CancellationExecutor(resources),
+    new MobileCancellationExecutor(resources),
   ],
   profiling: {
     init: () => profiler.enable({ mode: "summary", includeServerBreakdown: true }),
