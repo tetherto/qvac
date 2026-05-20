@@ -1,9 +1,8 @@
 'use strict'
 
-const test = require('brittle')
 const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
-const { ensureModel } = require('./utils')
+const { ensureModel, safeTest } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
 const os = require('bare-os')
 
@@ -62,7 +61,7 @@ async function collectResponse (response) {
   return chunks.join('')
 }
 
-test('generationParams | predict controls output length', { timeout: 600_000 }, async t => {
+safeTest('generationParams | predict controls output length', { timeout: 600_000 }, async t => {
   const { model } = await setupModel(t, { seed: '42' })
 
   const responseShort = await model.run(PROMPT, {
@@ -84,7 +83,7 @@ test('generationParams | predict controls output length', { timeout: 600_000 }, 
   t.ok(outputLong.length > outputShort.length, 'longer predict produces longer text output')
 })
 
-test('generationParams | load-time defaults restored after override', { timeout: 600_000 }, async t => {
+safeTest('generationParams | load-time defaults restored after override', { timeout: 600_000 }, async t => {
   const { model } = await setupModel(t, { n_predict: '32', seed: '42' })
 
   const responseOverride = await model.run(PROMPT, {

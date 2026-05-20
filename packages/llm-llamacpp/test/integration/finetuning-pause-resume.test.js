@@ -1,6 +1,5 @@
 'use strict'
 
-const test = require('brittle')
 const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
 const {
@@ -9,7 +8,8 @@ const {
   verifyPauseCheckpoint,
   handleEarlyCompletion,
   verifyFinalStatus,
-  cleanupCheckpoints
+  cleanupCheckpoints,
+  safeTest
 } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
 const os = require('bare-os')
@@ -114,7 +114,7 @@ async function runLoraInference (t, modelVariant, modelName, modelDir, loraAdapt
   }
 }
 
-test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: skipFinetuning }, async t => {
+safeTest('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: skipFinetuning }, async t => {
   for (const modelVariant of FINETUNE_MODELS) {
     if (modelVariant.skip) {
       t.comment(`[${modelVariant.id}] skipped on ${platform}-${arch}`)
@@ -270,7 +270,7 @@ test('finetuning pause and resume', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: sk
   }
 })
 
-test('cancel() stops finetuning and removes pause checkpoint', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: skipFinetuning }, async t => {
+safeTest('cancel() stops finetuning and removes pause checkpoint', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: skipFinetuning }, async t => {
   const modelVariant = FINETUNE_MODELS[0]
   const [modelName, modelDir] = await ensureModel({
     modelName: modelVariant.name,
@@ -333,7 +333,7 @@ test('cancel() stops finetuning and removes pause checkpoint', { timeout: PAUSE_
   }
 })
 
-test('inference with session cache works after finetuning', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: skipFinetuning }, async t => {
+safeTest('inference with session cache works after finetuning', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: skipFinetuning }, async t => {
   const modelVariant = FINETUNE_MODELS[0]
   const [modelName, modelDir] = await ensureModel({
     modelName: modelVariant.name,
@@ -407,7 +407,7 @@ test('inference with session cache works after finetuning', { timeout: PAUSE_RES
   }
 })
 
-test('microBatchSize override changes backend batch geometry', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: skipFinetuning }, async t => {
+safeTest('microBatchSize override changes backend batch geometry', { timeout: PAUSE_RESUME_TIMEOUT_MS, skip: skipFinetuning }, async t => {
   const modelVariant = FINETUNE_MODELS[0]
   const [modelName, modelDir] = await ensureModel({
     modelName: modelVariant.name,

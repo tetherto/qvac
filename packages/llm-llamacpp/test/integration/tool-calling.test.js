@@ -1,9 +1,8 @@
 'use strict'
 
-const test = require('brittle')
 const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
-const { ensureModel } = require('./utils')
+const { ensureModel, safeTest } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
 const { recordPerformance } = require('./_perf-helper.js')
 const os = require('bare-os')
@@ -191,12 +190,15 @@ async function runPrompt (model, prompt) {
 const epTag = useCpu ? 'CPU' : 'GPU'
 const deviceId = useCpu ? 'cpu' : 'gpu'
 
-test('[tools] prompt scenarios', { timeout: 1_800_000, skip: isDarwinX64 }, async t => {
+safeTest('[tools] prompt scenarios', { timeout: 1_800_000, skip: isDarwinX64 }, async t => {
   for (const modelVariant of TOOL_MODEL_VARIANTS) {
-    const { model, release } = await createToolModel(modelVariant)
-    const label = `[${modelVariant.id}]`
-
+    let release = null
     try {
+      const result = await createToolModel(modelVariant)
+      release = result.release
+      const model = result.model
+      const label = `[${modelVariant.id}]`
+
       // QVAC-17830: record one perf row per (model_variant x prompt)
       // cell, scenario='tool-calling'. prompt1 is the cold inference
       // (KV cache empty, function-spec prefill heavy); prompt2 reuses
@@ -227,7 +229,7 @@ test('[tools] prompt scenarios', { timeout: 1_800_000, skip: isDarwinX64 }, asyn
         model: modelVariant.modelName.replace(/\.gguf$/i, '')
       }))
     } finally {
-      await release()
+      if (release) await release()
     }
   }
 })
