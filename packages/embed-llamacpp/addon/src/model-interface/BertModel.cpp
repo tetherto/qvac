@@ -308,7 +308,8 @@ common_params setupParams(
   if (splitMode != LLAMA_SPLIT_MODE_NONE ||
       configFilemap.count("main-gpu") > 0 ||
       configFilemap.count("main_gpu") > 0 ||
-      configFilemap.count("tensor-split") > 0) {
+      configFilemap.count("tensor-split") > 0 ||
+      configFilemap.count("tensor_split") > 0) {
     throw qvac_errors::StatusError(
         ADDON_ID,
         qvac_errors::general_error::toString(
