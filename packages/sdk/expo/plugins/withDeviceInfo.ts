@@ -2,6 +2,7 @@ import type { ExpoConfig } from "expo/config";
 import * as fs from "fs";
 import * as path from "path";
 import { resolveSDKPackageDir } from "./resolve-sdk-package-dir";
+import { getProjectRootFromBaseConfig } from "./get-project-root";
 
 let didRun = false;
 
@@ -16,7 +17,7 @@ function withDeviceInfo(config: ExpoConfig): ExpoConfig {
     return config;
   }
   didRun = true;
-  const projectRoot = config._internal?.["projectRoot"] as string | undefined;
+  const projectRoot = getProjectRootFromBaseConfig(config);
   if (!projectRoot) {
     return config;
   }

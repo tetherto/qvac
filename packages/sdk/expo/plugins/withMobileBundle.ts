@@ -4,6 +4,7 @@ import type { ExpoConfig } from "expo/config";
 import * as fs from "fs";
 import * as path from "path";
 import { resolveSDKPackageDir } from "./resolve-sdk-package-dir";
+import { getProjectRootFromMod } from "./get-project-root";
 import { BundleVerificationFailedError } from "@/utils/errors-client";
 
 const { withDangerousMod } = configPlugins;
@@ -35,7 +36,7 @@ function withMobileBundle(config: ExpoConfig): ExpoConfig {
   function buildMobileBundle(
     config: configPlugins.ExportedConfigWithProps<unknown>,
   ) {
-    const projectRoot = config.modRequest.projectRoot;
+    const projectRoot = getProjectRootFromMod(config);
     const sdkPackage = resolveSDKPackageDir(projectRoot);
     const outputPath = path.join(
       sdkPackage.dir,
@@ -156,7 +157,7 @@ function runVerifier(
     console.log(
       "⚠️ QVAC: no qvac.config.* found — Bare runtime will be auto-detected " +
         "from node_modules (bare-runtime, then bare). Add qvac.config.json " +
-        'with `bareRuntimeVersion` to pin ABI checks deterministically.',
+        "with `bareRuntimeVersion` to pin ABI checks deterministically.",
     );
   }
 
