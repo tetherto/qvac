@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { createRequire } from 'node:module'
-import { DEFAULT_SDK_NAME } from '../constants.js'
+import { DEFAULT_SDK_NAME } from '@qvac/sdk/commands'
 import type { Check } from '../check.js'
 
 // Locate @qvac/sdk the same way a consumer project's runtime would, so
