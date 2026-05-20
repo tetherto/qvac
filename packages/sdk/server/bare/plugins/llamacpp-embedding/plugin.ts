@@ -17,7 +17,7 @@ import { expandGGUFIntoShards } from "@/server/utils";
 import { embed } from "@/server/bare/ops/embed";
 import { forwardModelExecution } from "@/profiling/model-execution";
 import { isMobile } from "@/server/bare/registry/runtime-context-registry";
-import { stripMultiGpuKeys } from "@/server/bare/plugins/utils/multi-gpu-mobile";
+import { stripMultiGpuKeys } from "@/server/utils/multi-gpu-mobile";
 
 function transformEmbedConfig(embedConfig: EmbedConfig): GGMLConfig {
   const config: GGMLConfig = {
@@ -78,7 +78,7 @@ function createEmbeddingsModel(
 
   const config = transformEmbedConfig(embedConfig);
 
-  // Device patterns can't override user input; multi-GPU causes Adreno OpenCL SIGABRT on mobile.
+  // Mobile is single-GPU; multi-GPU params trigger Adreno OpenCL SIGABRT.
   if (isMobile()) {
     const stripped = stripMultiGpuKeys(config);
     if (stripped.length > 0) {
